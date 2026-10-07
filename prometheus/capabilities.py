@@ -195,12 +195,12 @@ _REPLIES = {
         "pull a new one, or cut an existing one.",
         []),
     'billing': (
-        "I can't change billing or move credits from here. The Crosswalk "
-        "team handles refunds, credit top-ups, invoices, and plan changes. "
+        "I can't change billing or move funds from here. The Crosswalk "
+        "team handles refunds, top-ups, invoices, and plan changes. "
         "I have passed your note to them, and they will reach you at the "
         "email on your account. I can tell you what any pull costs before "
         "it runs.",
-        ['What do credits cost?']),
+        ['What does each pull cost?']),
     'library_edit': (
         "I can't rename, delete, or change the image on a profile from "
         "here. The Crosswalk team manages the library and the card "

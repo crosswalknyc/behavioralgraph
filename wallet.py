@@ -106,7 +106,7 @@ DEFAULT_PRICING = {
         # with no MODULE_CATALOG fallback, so an unlisted key silently
         # falls to $0). 2026-09-09 defence-in-depth add.
         "api_profile_iq_cut": 100.0,
-        "api_subscriber_iq_build": 1000.0,
+        "api_subscriber_iq_build": 500.0,
         "api_chatbot_profile_iq_build": 300.0,
         # Analysis / journey / attribution modules (default 0 = free
         # until the admin sets a value). Every key here MUST have a
@@ -171,6 +171,13 @@ DEFAULT_PRICING = {
     "top_up_packs_usd": [5000.0, 10000.0, 15000.0],
     "top_up_min_custom_usd": 5000.0,
     "prometheus_markup_multiplier": 2.10,
+    # Published Prometheus meter (Jenna 2026-10-07, verbatim: "All
+    # Prometheus (chat bot) usage is billed at a metered rate of
+    # $10.50 / $52.50 per million in/out, plus $0.021 per search.").
+    # Session billing prices tokens at THESE rates, whatever model
+    # answered; cache reads and cache writes count as input tokens.
+    "prometheus_meter_usd": {"input_per_m": 10.50, "output_per_m": 52.50,
+                             "search": 0.021},
     # 2026-09-14 (Jenna, verbatim: "nothing should EVER be free. if it
     # doesnt have a set price it but is answerable from what's already
     # there that should all be the metered usage."). Billed USD per
@@ -897,6 +904,16 @@ def save_pricing(new_pricing: dict) -> dict:
                     and isinstance(v, (int, float)):
                 # Alias so the admin UI can POST either spelling.
                 merged["prometheus_markup_multiplier"] = float(v)
+            elif k == "prometheus_meter_usd" and isinstance(v, dict):
+                cur = dict(merged.get("prometheus_meter_usd")
+                           or DEFAULT_PRICING["prometheus_meter_usd"])
+                for kk in ("input_per_m", "output_per_m", "search"):
+                    try:
+                        if kk in v and float(v[kk]) > 0:
+                            cur[kk] = float(v[kk])
+                    except (TypeError, ValueError):
+                        pass
+                merged["prometheus_meter_usd"] = cur
             elif k in ("auto_reload_defaults",
                        "monthly_invoice_defaults") \
                     and isinstance(v, dict):
@@ -1527,6 +1544,28 @@ def prometheus_markup() -> float:
     billing. Default 2.10 per Jenna's 110%-markup mandate."""
     p = load_pricing()
     return float(p.get("prometheus_markup_multiplier", 2.10))
+
+
+def prometheus_meter() -> dict:
+    """Published Prometheus meter: dollars per million input tokens,
+    per million output tokens, and per web search (Jenna 2026-10-07:
+    $10.50 / $52.50 / $0.021). Admin-tunable in pricing.json under
+    prometheus_meter_usd; a missing or non-positive entry falls back
+    to the published rate so usage can never bill nothing."""
+    d = dict(DEFAULT_PRICING["prometheus_meter_usd"])
+    try:
+        p = load_pricing()
+        v = p.get("prometheus_meter_usd")
+        if isinstance(v, dict):
+            for k in d:
+                try:
+                    if float(v.get(k, 0)) > 0:
+                        d[k] = float(v[k])
+                except (TypeError, ValueError):
+                    pass
+    except Exception:
+        pass
+    return d
 
 
 def metered_answer_usd() -> float:

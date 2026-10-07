@@ -20016,7 +20016,7 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
             <h2>Your credits.</h2>
             <div class="credits-info">
                 <div class="credits-info-row">
-                    <span class="credits-info-label" id="modalCreditsAvailableLabel">{% if paying_customer|default(false) and credits != -1 %}Available{% else %}Available Credits{% endif %}</span>
+                    <span class="credits-info-label" id="modalCreditsAvailableLabel">Available</span>
                     <span class="credits-info-value" id="modalCreditsAvailable">{% if credits == -1 %}Unlimited{% elif paying_customer|default(false) %}${{ '{:,.2f}'.format(wallet_balance_usd|default(0)) }}{% else %}{{ credits }}{% endif %}</span>
                 </div>
                 <div class="credits-info-row credits-used-row" id="creditsUsedRow" onclick="toggleCreditUsageDetail()" style="cursor: pointer;" title="Click to see what each dollar went to">
@@ -20060,7 +20060,7 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
                     Top up your wallet and the funds land on this account straight away. Prepaid purchases are non-refundable. Unused funds have no cash value and cannot be refunded or transferred.
                 </p>
                 <button class="request-credits-btn" id="requestCreditsBtn" onclick="goBuyMoreCredits()">
-                    Buy more credits
+                    Add funds
                 </button>
                 <p class="credits-subnote">Opens the secure payment page.</p>
                 {% else %}
@@ -20070,7 +20070,7 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
             
             <div id="creditsSuccessMessage" class="credits-success-message" style="display: none;">
                 <p style="margin: 0 0 0.5rem 0; font-weight: 700;">Request sent.</p>
-                <p style="margin: 0; font-size: 0.85rem;">Your request for more credits has been sent. Someone will reach out to you shortly.</p>
+                <p style="margin: 0; font-size: 0.85rem;">Your request for more funds has been sent. Someone will reach out to you shortly.</p>
             </div>
             
             <div class="credits-contact-info">
@@ -20238,9 +20238,9 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
             </div>
             <div class="header-right-section">
                 <div class="user-info-bar">
-                    <div class="credits-display" id="creditsDisplay" onclick="openCreditsModal()" title="Click to view credits and buy more">
+                    <div class="credits-display" id="creditsDisplay" onclick="openCreditsModal()" title="Click to view your balance and add funds">
                         <span class="credits-icon">💳</span>
-                        <span class="credits-label" id="creditsLabel">{% if paying_customer|default(false) and credits != -1 %}Wallet:{% else %}Credits:{% endif %}</span>
+                        <span class="credits-label" id="creditsLabel">{% if paying_customer|default(false) and credits != -1 %}Wallet:{% else %}Balance:{% endif %}</span>
                         <span class="credits-value" id="creditsValue">{% if credits == -1 %}Unlimited{% elif paying_customer|default(false) %}${{ '{:,.2f}'.format(wallet_balance_usd|default(0)) }}{% else %}{{ credits }}{% endif %}</span>
                     </div>
                     <div class="user-menu">
@@ -20415,7 +20415,7 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
             <div class="main-grid">
                 <div class="card">
                     <h2>📊 Analysis Parameters</h2>
-                    <div style="margin: 0 0 0.75rem 0; font-size: 0.85rem; font-weight: 500; color: var(--text-secondary); font-style: italic;">5 Credits Per Analysis</div>
+                    <div style="margin: 0 0 0.75rem 0; font-size: 0.85rem; font-weight: 500; color: var(--text-secondary); font-style: italic;">$300 per profile</div>
                     <p style="margin: 0 0 1rem 0; font-size: 0.85rem; color: var(--text-secondary); line-height: 1.45;">Custom pull your own profile on any talent, brand, property or thing you can think of. This pulls a profile of all panelists who are actively engaged with your profile's subject. It uses our signature 5 touch point accuracy method of capturing panelists who don't just know of your profile's subject but go out of their way to engage with them. This means they have interacted with your subject via social media, retail, owned and operated web sites, read/watched/listened to media about them or search. This is capturing digital behavior only.</p>
                     <form id="analysisForm">
                         <div class="form-section">
@@ -20764,7 +20764,7 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
                        endpoint left intact. Re-enable by uncommenting this block. #}
                     {% if 'svod' in analysis_iq_modules or role == 'super_admin' %}
                     <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('svod-acquisition')" id="customAnalysisTabSVODAcquisition">
-                        📺 Subscriber IQ <span style="font-size: 0.7em; opacity: 0.9;">(10 credits)</span>
+                        📺 Subscriber IQ <span style="font-size: 0.7em; opacity: 0.9;">($500)</span>
                     </button>
                     {% endif %}
                     {# Ticket Sales Tracker tab hidden 2026-06-16 per user request.
@@ -20772,7 +20772,7 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
                        endpoint left intact. Re-enable by uncommenting this block. #}
                     {% if 'sf_lf_conversion' in analysis_iq_modules or role == 'super_admin' %}
                     <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('sf-lf-conversion')" id="customAnalysisTabSFLFConversion">
-                        🔄 SF-LF Conversion <span style="font-size: 0.7em; opacity: 0.9;">(10 credits)</span>
+                        🔄 SF-LF Conversion <span style="font-size: 0.7em; opacity: 0.9;">($500)</span>
                     </button>
                     {% endif %}
                     {# Talent Fit Assessment tab hidden 2026-06-16 per user request.
@@ -20787,22 +20787,22 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
                     #}
                     {% if 'journey_iq' in analysis_iq_modules or has_journey_iq_access or role == 'super_admin' or role == 'admin' %}
                     <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('journey-iq')" id="customAnalysisTabJourneyIQ">
-                        🗺️ Digital Journey IQ <span style="font-size: 0.7em; opacity: 0.9;">(10 credits)</span>
+                        🗺️ Digital Journey IQ <span style="font-size: 0.7em; opacity: 0.9;">($500)</span>
                     </button>
                     {% endif %}
                     {% if 'digital_journey' in analysis_iq_modules or 'journey_iq' in analysis_iq_modules or has_journey_iq_access or role == 'super_admin' or role == 'admin' %}
                     <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('digital-journey')" id="customAnalysisTabDigitalJourney">
-                        🧭 Digital Journey <span style="font-size: 0.7em; opacity: 0.9;">(10 credits)</span>
+                        🧭 Digital Journey <span style="font-size: 0.7em; opacity: 0.9;">($500)</span>
                     </button>
                     {% endif %}
                     {% if 'intent_ingest' in analysis_iq_modules or role == 'super_admin' or role == 'admin' %}
                     <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('intent-ingest')" id="customAnalysisTabIntentIngest">
-                        🎯 Build Attribution IQ Campaign <span style="font-size: 0.7em; opacity: 0.9;">(50 credits)</span>
+                        🎯 Build Attribution IQ Campaign <span style="font-size: 0.7em; opacity: 0.9;">($500 + $100 a day tracked)</span>
                     </button>
                     {% endif %}
                     {% if 'flywheel_conversion' in analysis_iq_modules or role == 'super_admin' %}
                     <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('flywheel-conversion')" id="customAnalysisTabFlywheelConversion">
-                        🔄 Flywheel Conversion <span style="font-size: 0.7em; opacity: 0.9;">(25 credits)</span>
+                        🔄 Flywheel Conversion <span style="font-size: 0.7em; opacity: 0.9;">($500)</span>
                     </button>
                     {% endif %}
                     {% if role == 'super_admin' or role == 'admin' %}
@@ -20821,7 +20821,7 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
                     {% endif %}
                     {% if has_chatbot_profile_iq_access or role == 'super_admin' %}
                     <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('chatbot-profile-iq')" id="customAnalysisTabChatbotProfileIQ">
-                        💬 Prometheus <span style="font-size: 0.7em; opacity: 0.9;">(5 credits)</span>
+                        💬 Prometheus <span style="font-size: 0.7em; opacity: 0.9;">(metered)</span>
                     </button>
                     {% endif %}
                 </div>
@@ -20842,7 +20842,7 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
                         <div class="card" id="profileRerunChoiceCard">
                             <div id="profileNewAnalysisFlow">
                             <h2>🎯 Profile Analysis</h2>
-                            <div style="margin: 0 0 0.75rem 0; font-size: 0.85rem; font-weight: 500; color: var(--text-secondary); font-style: italic;">5 Credits Per Analysis</div>
+                            <div style="margin: 0 0 0.75rem 0; font-size: 0.85rem; font-weight: 500; color: var(--text-secondary); font-style: italic;">$300 per profile</div>
                             <p style="margin: 0 0 1rem 0; font-size: 0.85rem; color: var(--text-secondary); line-height: 1.45;">Custom pull your own profile on any talent, brand, property or thing you can think of. This pulls a profile of all panelists who are actively engaged with your profile's subject. It uses our signature 5 touch point accuracy method of capturing panelists who don't just know of your profile's subject but go out of their way to engage with them. This means they have interacted with your subject via social media, retail, owned and operated web sites, read/watched/listened to media about them or search. This is capturing digital behavior only.</p>
                             <form id="analysisForm">
                                 <div class="form-section">
@@ -21243,7 +21243,7 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
                     <div class="main-grid">
                     <div class="card">
                         <h2>🎬 Ticket Sales IQ</h2>
-                        <div style="margin: 0 0 0.75rem 0; font-size: 0.85rem; font-weight: 500; color: var(--text-secondary); font-style: italic;">10 Credits Per Analysis</div>
+                        <div style="margin: 0 0 0.75rem 0; font-size: 0.85rem; font-weight: 500; color: var(--text-secondary); font-style: italic;">$500 per analysis</div>
                         <p class="section-description" style="margin-bottom: 2rem;">Track what percent of ticket sales at digital ticket retailers came from specific talent. This tool takes all confirmed ticket purchases for an event and calculates the percent of panelists who engaged with the specified talent (using our signature 5 touch point engagement method) prior to purchasing tickets during your specified window.</p>
                         
                         <form id="customTalentTheaterForm">
@@ -21354,7 +21354,7 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
                     <div class="main-grid">
                         <div class="card">
                             <h2>📺 Subscriber IQ</h2>
-                            <div style="margin: 0 0 0.75rem 0; font-size: 0.85rem; font-weight: 500; color: var(--text-secondary); font-style: italic;">10 Credits Per Analysis</div>
+                            <div style="margin: 0 0 0.75rem 0; font-size: 0.85rem; font-weight: 500; color: var(--text-secondary); font-style: italic;">$500 per analysis</div>
                             <p class="section-description">Track show-to-platform attribution with episode tracking</p>
                             
                             <form id="customSVODAcquisitionForm">
@@ -21620,7 +21620,7 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
                     <div class="main-grid">
                         <div class="card">
                             <h2>🎬 Ticket Sales Tracker</h2>
-                            <div style="margin: 0 0 0.75rem 0; font-size: 0.85rem; font-weight: 500; color: var(--text-secondary); font-style: italic;">10 Credits Per Analysis</div>
+                            <div style="margin: 0 0 0.75rem 0; font-size: 0.85rem; font-weight: 500; color: var(--text-secondary); font-style: italic;">$500 per analysis</div>
                             <p class="section-description">Profiles of verified digital ticket sales across FANDANGO, AMC THEATRES, ALAMO DRAFTHOUSE, CINEMARK THEATRES, REGAL CINEMAS platforms.</p>
                             <form id="customTicketSalesTrackerForm">
                                 <div class="form-section">
@@ -21701,7 +21701,7 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
                     <div class="main-grid">
                         <div class="card">
                             <h2>🔄 Short Form to Long Form Conversion</h2>
-                            <div style="margin: 0 0 0.75rem 0; font-size: 0.85rem; font-weight: 500; color: var(--text-secondary); font-style: italic;">10 Credits Per Analysis</div>
+                            <div style="margin: 0 0 0.75rem 0; font-size: 0.85rem; font-weight: 500; color: var(--text-secondary); font-style: italic;">$500 per analysis</div>
                             <p class="section-description">Analyze how short-form content (clips, trailers, social videos) drives viewership of long-form content. Track conversion rates, timing, and audience demographics.</p>
                             <form id="sflfConversionForm" onsubmit="event.preventDefault(); submitSFLFConversion();">
                                 <div class="form-section">
@@ -21800,7 +21800,7 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
                     <div class="main-grid">
                         <div class="card">
                             <h2>🗺️ Digital Journey IQ</h2>
-                            <div style="margin: 0 0 0.75rem 0; font-size: 0.85rem; font-weight: 500; color: var(--text-secondary); font-style: italic;">10 Credits Per Analysis</div>
+                            <div style="margin: 0 0 0.75rem 0; font-size: 0.85rem; font-weight: 500; color: var(--text-secondary); font-style: italic;">$500 per analysis</div>
                             <p class="section-description">Pick a target (a brand, movie, show, retailer - anything that gets mentioned in the panel's clickstream) and a date range. We find every user who mentioned it, reconstruct the journey they took before AND after the mention, and surface the funnel, conversion rate, drop-off cliffs, where non-converters detoured to, and &quot;interesting facts&quot; - same shape as the Bridgestone/Firestone deck. Results render under the <strong>Digital Journey IQ</strong> entry in the SELECT PRODUCT dropdown.</p>
                             <form id="jiqForm" onsubmit="event.preventDefault(); submitJourneyIq();">
                                 <div style="margin-bottom: 1rem;">
@@ -21954,7 +21954,7 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
                     <div class="main-grid">
                         <div class="card">
                             <h2>🎯 Build Attribution IQ Campaign</h2>
-                            <div style="margin: 0 0 0.75rem 0; font-size: 0.85rem; font-weight: 500; color: var(--text-secondary); font-style: italic;">5 Credits Per Build</div>
+                            <div style="margin: 0 0 0.75rem 0; font-size: 0.85rem; font-weight: 500; color: var(--text-secondary); font-style: italic;">$300 per build</div>
                             <p class="section-description">Turn a brand-campaign brief into a fully-formed Attribution IQ dashboard in minutes. Paste the campaign asset URLs (YouTube / TikTok / Instagram / Facebook / X / owned media). An agent scrapes each URL for OG metadata, identifies featured talent, builds 4-6 audience cohorts and 3-6 audience cards appropriate for the brand and category, groups assets into campaign phases, and applies brand-specific dashboard terminology (chime.com visits instead of ticketing, etc.). The completed title appears in the Attribution IQ dropdown as soon as the job finishes.</p>
                             <form id="iiingForm" onsubmit="event.preventDefault(); submitIntentIngest();">
                                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
@@ -22043,7 +22043,7 @@ https://www.instagram.com/p/..."></textarea>
                     <div class="main-grid">
                         <div class="card">
                             <h2>🧭 Digital Journey</h2>
-                            <div style="margin: 0 0 0.75rem 0; font-size: 0.85rem; font-weight: 500; color: var(--text-secondary); font-style: italic;">10 Credits Per Analysis</div>
+                            <div style="margin: 0 0 0.75rem 0; font-size: 0.85rem; font-weight: 500; color: var(--text-secondary); font-style: italic;">$500 per analysis</div>
                             <p class="section-description">Pick a brand and one or more ending URLs, tell us if it's Content, Subscription, or Purchase, and Crosswalk's AI agent will research the brand externally and synthesize a defensible Discovery → Consideration → Conversion journey — audience size, per-stage duration, top touchpoints, and endpoint mix. Results render inline below when the run completes.</p>
                             <form id="djForm" onsubmit="event.preventDefault(); submitDigitalJourney();">
                                 <div style="margin-bottom: 1rem;">
@@ -22065,7 +22065,7 @@ https://www.instagram.com/p/..."></textarea>
                                     <textarea id="djEndingUrls" rows="4" required placeholder="amazon.com/dp/B08XYZ&#10;target.com/p/recess-mood-6pk&#10;brand.com/subscribe" style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 13px; font-family: monospace; resize: vertical;"></textarea>
                                     <small style="color: var(--text-secondary); font-size: 0.7rem;">One URL per line (or comma-separated). These are the conversion endpoints where the journey terminates &mdash; the checkout page, watch page, or signup page. Every URL will appear in the endpoint mix in the result.</small>
                                 </div>
-                                <button type="submit" id="djSubmitBtn" class="btn btn-primary" style="width: 100%;">Run Digital Journey (10 credits)</button>
+                                <button type="submit" id="djSubmitBtn" class="btn btn-primary" style="width: 100%;">Run Digital Journey ($500)</button>
                             </form>
                             <div id="djStatus" style="display: none; margin-top: 1rem; padding: 1rem; border-radius: 8px; background: var(--bg-secondary); text-align: center;">
                                 <div id="djStatusText" style="font-weight: 600; margin-bottom: 4px;"></div>
@@ -22164,7 +22164,7 @@ https://www.instagram.com/p/..."></textarea>
                     <div class="main-grid">
                         <div class="card">
                             <h2>🔄 Flywheel Conversion Analysis</h2>
-                            <div style="margin: 0 0 0.75rem 0; font-size: 0.85rem; font-weight: 500; color: var(--text-secondary); font-style: italic;">25 Credits Per Analysis</div>
+                            <div style="margin: 0 0 0.75rem 0; font-size: 0.85rem; font-weight: 500; color: var(--text-secondary); font-style: italic;">$500 per analysis</div>
                             <p class="section-description">Analyze how users flow through your conversion flywheel. Track entry points and measure conversion through each subsequent touchpoint. Results are boosted by 150x and projected to US Gen Pop.</p>
                             <form id="flywheelConversionForm" onsubmit="event.preventDefault(); submitFlywheelConversion();">
                                 <div class="form-section">
@@ -22349,7 +22349,7 @@ https://www.instagram.com/p/..."></textarea>
                     <div class="main-grid">
                         <div class="card">
                             <h2>🔍 Incidence Check</h2>
-                            <div style="margin: 0 0 0.75rem 0; font-size: 0.85rem; font-weight: 500; color: var(--text-secondary); font-style: italic;">No credits required</div>
+                            <div style="margin: 0 0 0.75rem 0; font-size: 0.85rem; font-weight: 500; color: var(--text-secondary); font-style: italic;">No charge</div>
                             <p style="margin: 0 0 1rem 0; font-size: 0.85rem; color: var(--text-secondary); line-height: 1.45;">Quickly check the sample size and incidence rate for any search terms before running a full profile analysis. This runs only the universe scan and sample size pipeline (with all boosts applied) so you can see how many panelists match your criteria.</p>
                             <form id="incidenceCheckForm" onsubmit="return false;">
                                 <div class="form-section">
@@ -23087,11 +23087,11 @@ https://www.instagram.com/p/..."></textarea>
                 </div>
             </div>
             <div id="prometheusBody">
-                <div id="prometheusFundsLock" role="alertdialog" aria-label="Buy credits to use Prometheus">
+                <div id="prometheusFundsLock" role="alertdialog" aria-label="Add funds to use Prometheus">
                     <div class="pm-funds-card">
-                        <div class="pm-funds-title">Buy credits to use Prometheus.</div>
+                        <div class="pm-funds-title">Add funds to use Prometheus.</div>
                         <div class="pm-funds-sub">Your balance is $0, so this chat stays paused until funding lands.</div>
-                        <button type="button" class="pm-funds-btn" onclick="goBuyMoreCredits()">Buy credits</button>
+                        <button type="button" class="pm-funds-btn" onclick="goBuyMoreCredits()">Add funds</button>
                     </div>
                 </div>
                 <div id="synthChatMessages" style="flex: 1; overflow-y: auto; min-height: 260px;">
@@ -55168,7 +55168,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 <div class="dashboard-tab-content" style="padding: 2rem;">
                     <div class="card">
                         <h2>🎬 Ticket Sales IQ</h2>
-                        <div style="margin: 0 0 0.75rem 0; font-size: 0.85rem; font-weight: 500; color: var(--text-secondary); font-style: italic;">10 Credits Per Analysis</div>
+                        <div style="margin: 0 0 0.75rem 0; font-size: 0.85rem; font-weight: 500; color: var(--text-secondary); font-style: italic;">$500 per analysis</div>
                         <p class="section-description" style="margin-bottom: 2rem;">Track what percent of ticket sales at digital ticket retailers came from specific talent. This tool takes all confirmed ticket purchases for an event and calculates the percent of panelists who engaged with the specified talent (using our signature 5 touch point engagement method) prior to purchasing tickets during your specified window.</p>
                         
                         <form id="talentTheaterForm">
@@ -78486,7 +78486,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (input) {
                     input.disabled = !!blocked;
                     input.placeholder = blocked
-                        ? 'Buy credits to use Prometheus'
+                        ? 'Add funds to use Prometheus'
                         : 'Ask something else about this audience...';
                 }
                 if (btn) btn.disabled = !!blocked;
@@ -78494,9 +78494,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             window._pmShowNoFundsReply = function(data) {
                 window._pmSetFundsLock(true);
                 var url = (data && data.top_up_url) || '/wallet';
-                var lbl = (data && data.top_up_label) || 'Buy credits';
+                var lbl = (data && data.top_up_label) || 'Add funds';
                 var reply = (data && data.reply) ||
-                    'Your balance is $0. Buy credits to use Prometheus.';
+                    'Your balance is $0. Add funds to use Prometheus.';
                 if (typeof _synthChatPushTurnWithMeta === 'function') {
                     _synthChatPushTurnWithMeta('agent', reply, {
                         options: [{ label: lbl, chipAction: 'buy_credits', url: url }]
@@ -79667,7 +79667,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         function _pmPushGuidanceTurn(text, data) {
             var url = data && data.top_up_url;
             if (url) {
-                var lbl = (data && data.top_up_label) || 'Buy more credits';
+                var lbl = (data && data.top_up_label) || 'Add funds';
                 _synthChatPushTurnWithMeta('agent', text, {
                     options: [{ label: '💳 ' + lbl,
                                 chipAction: 'buy_credits',
@@ -84239,10 +84239,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 // 2026-08-25: one-click Profile IQ add-on for the
                 // same title audience.
                 var _suD = (d && d.subiq_upsell_data) || {};
-                var _suC = _suD.profile_credits || 5;
                 return [
-                    {label: 'Add the Profile IQ (+' + _suC +
-                        ' credits)', send: 'add it'},
+                    {label: 'Add the Profile IQ (+' + _synthChatProfilePriceLabel(d) + ')', send: 'add it'},
                     {label: 'Just the Subscriber IQ',
                      send: 'just the tracker'}
                 ];
@@ -84567,7 +84565,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var _epBuilt = String(_epData.built_label || '').trim();
                 return 'There is an existing ' + _epName + ' profile' +
                     (_epBuilt ? ' (' + _epBuilt + ')' : '') +
-                    '. Use it as-is (ready now, no credits), or ' +
+                    '. Use it as-is (ready now, no charge), or ' +
                     'pull fresh with different dates or qualifiers?';
             }
             if (step === 'qualifier_match') {
@@ -84584,7 +84582,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 return 'We have ' + _qmName +
                     (_qmBuilt ? ' (' + _qmBuilt + ')' : '') +
                     ' - is that what you meant? Yes uses it as-is ' +
-                    '(ready now, no credits); no builds ' + _qmSubj +
+                    '(ready now, no charge); no builds ' + _qmSubj +
                     ' fresh, exactly as you described it.';
             }
             if (step === 'ip_scope') {
@@ -84716,7 +84714,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     'cut of data we already have' +
                     (_plLabel ? ' (' + _plLabel + ')' : '') +
                     ' - linking it keeps the numbers laddering up ' +
-                    'to the parent and runs at 3 credits ' +
+                    'to the parent and runs at the cut price (' + _synthChatCutPriceLabel(null) + ') ' +
                     'instead of a full build.'];
                 if (_plCands.length) {
                     _plLines.push('');
@@ -84801,10 +84799,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var _suQ = _suQD.subiq_upsell_data || {};
                 var _suLbl = String(_suQ.label || _suQ.title ||
                     _suQD.subject || 'this title');
-                var _suPC = _suQ.profile_credits || 5;
                 return 'Want a Profile IQ for the ' + _suLbl +
-                    ' audience alongside it (+' + _suPC +
-                    ' credits)? It builds on the same viewers, so ' +
+                    ' audience alongside it (+' + _synthChatProfilePriceLabel(_suQD) +
+                    ')? It builds on the same viewers, so ' +
                     'demographics and audience size match across ' +
                     'both.';
             }
@@ -84817,7 +84814,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             if (step === 'strategy') {
                 return 'Want any add-on cuts? Female only, male ' +
                     'only, by generation, an age band, or a specific ' +
-                    'market - 3 credits per cut, every cut ' +
+                    'market - ' + _synthChatCutPriceLabel(null) + ' per cut, every cut ' +
                     'derived from the national build. Name them, or ' +
                     'say none.';
             }
@@ -84825,13 +84822,13 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 return 'Want any additional cuts beyond the ' +
                     'standard build? Female only, male only, by ' +
                     'generation, an age band, or a specific market. ' +
-                    '3 credits per cut - name the ones you want, ' +
+                    _synthChatCutPriceLabel(null) + ' per cut - name the ones you want, ' +
                     'or say none.';
             }
             return 'Is this for a regional business? The total ' +
                 'universe and avid always build national - name the ' +
                 'markets you care about (e.g. "LA and San Diego") ' +
-                'and each becomes its own 3-credit cut, or ' +
+                'and each becomes its own ' + _synthChatCutPriceLabel(null) + ' cut, or ' +
                 'reply national.';
         }
 
@@ -84963,7 +84960,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     st.phase = 'strategy';
                     _synthChatPushQuestion((data.message || 'Noted.') +
                         '\n\nAny cuts you pick apply to every profile in this batch - ' +
-                        '3 credits per cut per profile. Name the ones you want, or say none.',
+                        _synthChatCutPriceLabel(null) + ' per cut per profile. Name the ones you want, or say none.',
                         'strategy', st.draft0);
                 } catch (e) {
                     console.error('[brief-chat] batch clarify failed', e);
@@ -85197,6 +85194,17 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             return line + '\n\nApprove to run, or send another message to adjust.';
         }
 
+        // Standard pricing in dollars, never credits (Jenna 2026-10-07).
+        // Reads the price table the server stamps on a draft when one
+        // is in hand; the published rate card is the fallback.
+        function _synthChatCutPriceLabel(d) {
+            var pt = (d && d.price_table) || (synthChatCurrentDraft && synthChatCurrentDraft.price_table) || null;
+            return _synthChatUsd(pt && pt.addon_cut != null ? pt.addon_cut : 100);
+        }
+        function _synthChatProfilePriceLabel(d) {
+            var pt = (d && d.price_table) || (synthChatCurrentDraft && synthChatCurrentDraft.price_table) || null;
+            return _synthChatUsd(pt && pt.new_build != null ? pt.new_build : 300);
+        }
         function _synthChatUsd(v) {
             var n = Math.round(Number(v) || 0);
             return '$' + n.toLocaleString('en-US');
@@ -143393,7 +143401,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 } else { 
                     console.error('❌ Submit failed:', data);
                     if (response.status === 403 && data.credits_left === 0) {
-                        if (confirm('You\u2019re out of credits. Buy more credits now?')) { try { window.location.href = '/wallet'; } catch (_) { window.open('/wallet', '_blank'); } }
+                        if (confirm('Your account cannot cover this run. Add funds now?')) { try { window.location.href = '/wallet'; } catch (_) { window.open('/wallet', '_blank'); } }
                         updateCreditsDisplay(0);
                     } else {
                         alert(data.error || 'Failed to submit analysis'); 
@@ -143419,8 +143427,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             const paying = !!(data && data.paying_customer);
             if (left === -1) {
                 if (availEl) availEl.textContent = 'Unlimited';
-                if (labelEl) labelEl.textContent = 'Available Credits';
-                if (headerLabel) headerLabel.textContent = 'Credits:';
+                if (labelEl) labelEl.textContent = 'Available';
+                if (headerLabel) headerLabel.textContent = 'Balance:';
                 updateCreditsDisplay(-1);
                 return;
             }
@@ -143433,8 +143441,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 return;
             }
             if (availEl && left !== null) availEl.textContent = left;
-            if (labelEl) labelEl.textContent = 'Available Credits';
-            if (headerLabel) headerLabel.textContent = 'Credits:';
+            if (labelEl) labelEl.textContent = 'Available';
+            if (headerLabel) headerLabel.textContent = 'Balance:';
             if (left !== null) updateCreditsDisplay(left);
         }
 
@@ -186807,7 +186815,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             const requestBtn = document.getElementById('requestCreditsBtn');
             if (requestBtn) {
                 requestBtn.disabled = false;
-                requestBtn.textContent = '💳 Buy more credits';
+                requestBtn.textContent = '💳 Add funds';
             }
             // Live-refresh the counters so usage recorded since page
             // load (chatbot runs, analyses, decks) shows immediately -

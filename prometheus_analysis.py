@@ -5231,16 +5231,16 @@ def build_profile_required_reply(subject):
             "which audience it is about. Name the person, brand, title, "
             "or group and I will build the Total Universe profile, then "
             "read it any way you need: age bands, parent cohorts, buyer "
-            "overlaps, category mixes. The build takes 5 credits and "
-            "lands in your Select Profile dropdown when it finishes."
+            "overlaps, category mixes. The build is $300 and lands in "
+            "your Select Profile dropdown when it finishes."
         )
         return scrub_user_text(reply), ["Build a profile for ..."]
     reply = (
         f"That read needs the {subj} profile built first. Once the "
         f"{subj} Total Universe profile is in your library, I can read "
         f"it any way you need: age bands, parent cohorts, buyer "
-        f"overlaps, category mixes. The build takes 5 credits and "
-        f"lands in your Select Profile dropdown when it finishes."
+        f"overlaps, category mixes. The build is $300 and lands in "
+        f"your Select Profile dropdown when it finishes."
     )
     followups = [f"Build the {subj} profile"[:160]]
     return scrub_user_text(reply), followups
@@ -5309,7 +5309,7 @@ def build_panel_report_offer(subject, price_label, question=''):
     reply += (
         f"\n\nIf you want the complete {subj} profile in your Select "
         f"Profile dropdown instead (every category, every cut on "
-        f"tap), the 5-credit build is the better buy."
+        f"tap), the $300 build is the better buy."
     )
     followups = [run_chip,
                  f"Build the {subj} profile instead"[:160],

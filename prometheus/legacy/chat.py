@@ -3157,7 +3157,7 @@ def _synth_chat_cut_strategist(draft):
     fallback_msg = (
         "Want any add-on cuts beyond the standard build? Female "
         "only, male only, by generation, an age band, or a specific "
-        f"market. {_H.ADDON_CUT_CREDITS} credits per cut - every cut "
+        f"market. {_pm_usd_label(_pm_usd('profile_iq_derived_cut', 100.0))} per cut - every cut "
         "derives from the national total-universe build. Name the "
         "ones you want, or say 'none'.")
 
@@ -3170,7 +3170,7 @@ def _synth_chat_cut_strategist(draft):
         "would genuinely sharpen their business goal, and which cuts "
         "would NOT add a story. Be a consultant, not a menu.\n\n"
         "Available cut types (each cut costs "
-        f"{_H.ADDON_CUT_CREDITS} credits):\n"
+        f"{_pm_usd_label(_pm_usd('profile_iq_derived_cut', 100.0))}):\n"
         "  - gender: id 'female' or 'male'\n"
         "  - generation: id 'gen_z' (18-24), 'millennials' (25-44), "
         "'gen_x' (45-64), 'boomers' (65+)\n"
@@ -3293,7 +3293,7 @@ def _synth_chat_cut_strategist(draft):
 
     lines = ["Here's how I'd cut this"
              + (f" for {goal.rstrip('.')}" if goal else "")
-             + f" (each cut is {_H.ADDON_CUT_CREDITS} credits, derived "
+             + f" (each cut is {_pm_usd_label(_pm_usd('profile_iq_derived_cut', 100.0))}, derived "
              "from the national build):", ""]
     for i, r in enumerate(recs, 1):
         ln = f"{i}. {r.get('label')} (+{_H.ADDON_CUT_CREDITS})"
@@ -3312,7 +3312,7 @@ def _synth_chat_cut_strategist(draft):
     lines.append("Reply with the ones you want (\"1 and 3\", "
                  "\"all\", or by name), add any market by name "
                  "(each market is its own "
-                 f"{_H.ADDON_CUT_CREDITS}-credit cut), or say none. "
+                 f"{_pm_usd_label(_pm_usd('profile_iq_derived_cut', 100.0))} cut), or say none. "
                  "The total universe and avid stay national either "
                  "way.")
     return recs, skips, "\n".join(lines)
@@ -3329,10 +3329,10 @@ _PM_PRICING_COPY = (
     "Profile - $300\n"
     "Subscriber Acquisition - $500\n"
     "Flywheel - $500\n"
-    "Brand Partnership - $1000\n"
-    "Add Attribution - $500 for the initial pull and $100 x day to "
-    "track per campaign\n"
-    "Trends, Rankers, Fin - starts at $5000/mo\n\n"
+    "Brand Partnership - $500 + $500 Control for a $1,000 total\n"
+    "Ad Attribution - $500 for the initial pull and an optional $100 x "
+    "day to track per campaign\n"
+    "Trends, Rankers, Fin - starts at $5,000/mo\n\n"
     "All Prometheus (chat bot) usage is billed at a metered rate of "
     "$10.50 / $52.50 per million in/out, plus $0.021 per search.")
 
@@ -3586,16 +3586,19 @@ def api_synth_chat_clarify():
         if cuts or qcuts:
             cut_lines = "\n".join(
                 [f"  - {c.get('label') or c.get('cut_id')} "
-                 f"(+{_H.ADDON_CUT_CREDITS} credits)" for c in cuts]
+                 f"(+{_pm_usd_label(_pm_usd('profile_iq_derived_cut', 100.0))})" for c in cuts]
                 + [f"  - {q['label']} quarter read "
                    f"({_H._ew_format_label(q.get('start'), q.get('end'))})"
-                   f" (+{_H.ADDON_CUT_CREDITS} credits)" for q in qcuts])
+                   f" (+{_pm_usd_label(_pm_usd('profile_iq_derived_cut', 100.0))})" for q in qcuts])
+            _cut_usd = _pm_usd('profile_iq_derived_cut', 100.0)
+            _base_usd = _pm_usd('chatbot_profile_iq_build', 300.0)
             msg = (f"Locked in {n_all} cut"
                    f"{'s' if n_all != 1 else ''}:\n{cut_lines}\n\n"
-                   f"Total: {total} credits (base {base_credits} "
+                   f"Total: {_pm_usd_label(_base_usd + _cut_usd * n_all)} "
+                   f"(base {_pm_usd_label(_base_usd)} "
                    f"covers the national {_pm_universe_phrase(draft)} "
                    f"+ avid; "
-                   f"{n_all} x {_H.ADDON_CUT_CREDITS} for the cuts, "
+                   f"{n_all} x {_pm_usd_label(_cut_usd)} for the cuts, "
                    "each derived from that national parent so the "
                    "numbers ladder up"
                    + (" - every quarter ships as its own dated file"
@@ -4261,6 +4264,8 @@ def api_synth_chat_clarify():
         label = str(data.get('label') or subiq.get('deliverable_label')
                     or subject).strip()
         subiq_credits = int(data.get('subiq_credits') or _H.CREDITS_SVOD)
+        _usd_sub = _pm_usd('subscriber_iq_build', 500.0)
+        _usd_prof = _pm_usd('chatbot_profile_iq_build', 300.0)
         prof_credits = int(data.get('profile_credits')
                            or _H.CREDITS_PROFILE_ANALYSIS)
         low = answer.lower().strip()
@@ -4282,9 +4287,9 @@ def api_synth_chat_clarify():
                 'message': (f"Added - a Profile IQ for this audience "
                             f"builds alongside the tracker, on the "
                             f"same viewer universe so the two always "
-                            f"agree. Total: {total} credits "
-                            f"({subiq_credits} Subscriber IQ + "
-                            f"{prof_credits} Profile IQ). Review the "
+                            f"agree. Total: {_pm_usd_label(_usd_sub + _usd_prof)} "
+                            f"({_pm_usd_label(_usd_sub)} Subscriber IQ + "
+                            f"{_pm_usd_label(_usd_prof)} Profile IQ). Review the "
                             f"brief below and approve to start the build."),
                 'next_step': 'approve'})
         if said_no:
@@ -4295,14 +4300,14 @@ def api_synth_chat_clarify():
             return jsonify({
                 'success': True, 'draft': draft,
                 'message': (f"Just the Subscriber IQ - "
-                            f"{subiq_credits} credits. Review the "
+                            f"{_pm_usd_label(_usd_sub)}. Review the "
                             f"brief below and approve to start the build."),
                 'next_step': 'approve'})
         return jsonify({
             'success': True, 'draft': draft,
             'message': (f"Want a Profile IQ for the {label} audience "
-                        f"alongside the tracker (+{prof_credits} "
-                        f"credits)? It builds on the same viewers, so "
+                        f"alongside the tracker (+{_pm_usd_label(_usd_prof)})? "
+                        f"It builds on the same viewers, so "
                         f"demographics and audience size match across "
                         f"both. Reply add it or just the tracker."),
             'next_step': 'subiq_upsell'})
@@ -5007,12 +5012,12 @@ def api_synth_chat_clarify():
         n_cuts = len(draft['addon_cuts'])
         draft['estimated_credits'] = base_credits \
             + _H.ADDON_CUT_CREDITS * n_cuts
+        _cut_usd = _pm_usd_label(_pm_usd('profile_iq_derived_cut', 100.0))
         parts = [
             "The total universe and avid always build national - "
             "each market you named becomes its own "
-            f"{_H.ADDON_CUT_CREDITS}-credit cut from that parent:\n"
-            + "\n".join(f"  - {c['label']} (+{_H.ADDON_CUT_CREDITS} "
-                        "credits)" for c in dma_cuts)]
+            f"{_cut_usd} cut from that parent:\n"
+            + "\n".join(f"  - {c['label']} (+{_cut_usd})" for c in dma_cuts)]
         if unresolved:
             parts.append(f"(For {', '.join(unresolved)}, tell me "
                          "the metro if you want them added.)")
@@ -8497,8 +8502,8 @@ def api_synth_chat_approve():
             _err = (f"This run costs ${_usd:.2f}. Wallet balance is "
                     f"${_wallet:.2f}. Top up to keep going.")
         else:
-            _err = (f"You're out of credits for this run - {price} needed, "
-                    f"{_left} remaining. Top up to keep going.")
+            _err = (f"This run costs {_pm_usd_label(_usd)} and your account "
+                    f"cannot cover it right now. Top up to keep going.")
         return jsonify({
             'success': False,
             'guidance': True,
@@ -8507,7 +8512,7 @@ def api_synth_chat_approve():
             'credits_remaining': _left,
             'wallet_balance_usd': _wallet,
             'top_up_url': '/wallet',
-            'top_up_label': 'Buy more credits',
+            'top_up_label': 'Add funds',
         }), 402
 
     # Thread the commissioning user + their exact ask onto the job so a
@@ -10235,7 +10240,7 @@ def _pm_subiq_lookup_answer(user, title):
             others = ', '.join(r[0] for r in rows[1:])
             lead += f" {others} {'is' if len(rows) == 2 else 'are'} there too."
         reply = (lead + " Open it from the Subscriber IQ tab, or ask me "
-                 "about it here. No credits to view it.")
+                 "about it here. No charge to view it.")
         return reply, [f"Analyze {show}",
                        f"Top 3 insights on {show}"]
     # Not in the library: still building?
@@ -10247,8 +10252,9 @@ def _pm_subiq_lookup_answer(user, title):
         return _pm_status_reply_for_runs(runs), []
     nice = title if title != '*' else 'that title'
     return (f"I do not see a Subscriber IQ for {nice} yet. I can build "
-            f"it: {_H.CREDITS_SVOD} credits on approval, and it lands in "
-            f"the Subscriber IQ tab when it finishes.",
+            f"it: {_pm_usd_label(_pm_usd('subscriber_iq_build', 500.0))} "
+            f"on approval, and it lands in the Subscriber IQ tab when it "
+            f"finishes.",
             [f"Pull Subscriber IQ for {nice}"] if title != '*' else [])
 
 
@@ -10401,12 +10407,12 @@ def _pm_workorder_reply(user, text, intent):
                 ok, st = False, ''
             if ok and st == 'cancelled':
                 return (f"Stopped. {subj} was cancelled before it "
-                        f"started and the credits come back to your "
+                        f"started and the charge comes back to your "
                         f"balance automatically. Nothing else was "
                         f"touched.")
             if ok:
                 return (f"Stopping {subj} now. It unwinds at the next "
-                        f"safe point and the credits come back to "
+                        f"safe point and the charge comes back to "
                         f"your balance automatically. Nothing else "
                         f"was touched.")
             _H._chatbot_error_email(
@@ -10981,7 +10987,7 @@ def _pm_funds_gate(user):
             'followups': [],
             'no_funds': True,
             'top_up_url': '/wallet',
-            'top_up_label': 'Buy credits',
+            'top_up_label': 'Add funds',
             'offer_deck': False, 'deck_angle': None})
     except Exception:
         traceback.print_exc()
@@ -12708,26 +12714,11 @@ def _pm_panel_price_label(username):
                             or _H.CREDITS_PANEL_REPORT)
     except Exception:
         pass
-    try:
-        data = _H.load_users() or {}
-        u = (data.get('users') or {}).get(str(username or '')) or {}
-        bal = _H._numeric_credits_balance(u)
-        if bal == -1 or bal >= credits_price:
-            return f"{credits_price} credits", credits_price
-        company = (u.get('company') or '').strip()
-        pool = _H._get_company_pool(data, company)
-        if pool is not None and u.get('credit_source') != 'personal':
-            return f"{credits_price} credits", credits_price
-        import wallet as _w
-        if _w.is_paying_customer(u):
-            usd = float(_w.tool_price_usd('panel_report')
-                        or _H.PANEL_REPORT_USD)
-            label = (f"${usd:,.0f}" if usd == int(usd)
-                     else f"${usd:,.2f}")
-            return label, credits_price
-    except Exception:
-        traceback.print_exc()
-    return f"{credits_price} credits", credits_price
+    # Standard pricing, never credits (Jenna 2026-10-07): everyone sees
+    # the dollar price; the charge still consumes the internal units.
+    usd = _pm_usd('panel_report', float(getattr(_H, 'PANEL_REPORT_USD', 550.0) or 550.0),
+                  username=username)
+    return _pm_usd_label(usd), credits_price
 
 
 def _pm_panel_refund(panel_charge):
@@ -13166,10 +13157,10 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
                     return jsonify({
                         'success': False, 'guidance': True,
                         'analysis_read': True,
-                        'error': (f"You're out of credits for this "
-                                  f"one - the {subj_name} read runs "
-                                  f"{_pr_label}. Top up or ask your "
-                                  f"admin, and I'll pick it right "
+                        'error': (f"The {subj_name} read runs "
+                                  f"{_pr_label} and your account cannot "
+                                  f"cover it right now. Top up or ask "
+                                  f"your admin, and I'll pick it right "
                                   f"back up."),
                         'followups': []})
                 base = {'subject': subj_name, 's3_key': '',
@@ -15553,8 +15544,11 @@ def _pm_analyze_core(user, body, text, history):
                 credits_used=_atotal):
             return jsonify({
                 'success': True, 'action': 'answer',
-                'reply': (f'That tracking package needs {_atotal} '
-                          'credits and your account cannot cover it '
+                'reply': ('That tracking package comes to '
+                          + _pm_usd_label(
+                              _pm_usd('attribution_iq_setup', 500.0)
+                              + _pm_usd('attribution_iq_daily', 100.0) * _adays)
+                          + ' and your account cannot cover it '
                           'right now. Add funds or ask your admin, '
                           'and I will set it up the moment you are '
                           'set.'),
@@ -18687,6 +18681,8 @@ from prometheus.legacy.watch import (  # noqa: E402,F401
     _pm_gate_options,
     _pm_open_status_line,
     _pm_price_table,
+    _pm_usd,
+    _pm_usd_label,
 )
 # Screen warm-up route (2026-10-02 S7): /api/brief-chat/warm primes
 # the digest caches when a profile loads so the first ask skips the

@@ -120,9 +120,23 @@ def answer_text(payload):
         sentence = str(draft.get('estimated_audience_sentence') or '').strip()
         if sentence:
             lines.append(sentence)
-        credits = payload.get('estimated_credits')
-        if credits is not None:
-            lines.append(f"Credits on approval: {credits}")
+        # Money, never credits (Jenna 2026-10-07): price the draft from
+        # the table the interpret step stamps on it.
+        pt = draft.get('price_table') if isinstance(draft.get('price_table'), dict) else None
+        if pt:
+            dk = str(draft.get('decision') or 'new_build').lower()
+            cuts = len(draft.get('addon_cuts') or []) if isinstance(draft.get('addon_cuts'), list) else 0
+            cut = float(pt.get('addon_cut') or 0)
+            if dk == 'existing_match':
+                usd = 0.0
+            elif dk == 'derive_cut':
+                usd = cut * max(cuts, 1)
+            elif dk == 'cut_needs_parent':
+                usd = float(pt.get('cut_needs_parent') or 0) + cut * max(cuts - 1, 0)
+            else:
+                usd = float(pt.get(dk, pt.get('new_build')) or 0) + cut * cuts
+            lines.append(f"Cost on approval: ${usd:,.0f}" if abs(usd - round(usd)) < 0.009
+                         else f"Cost on approval: ${usd:,.2f}")
         return '\n'.join(lines)[:4000]
     if payload.get('success') is False:
         # Guidance shape (2026-10-01): 'guidance' is a boolean FLAG in

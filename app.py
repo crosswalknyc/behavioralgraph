@@ -2174,6 +2174,61 @@ def save_pricing_settings(settings):
         return False
 
 
+_CREDIT_CONST_TOOL_KEYS = {
+    'CREDITS_PROFILE_ANALYSIS': 'profile_iq_build',
+    'CREDITS_SVOD': 'subscriber_iq_build',
+    'CREDITS_JOURNEY_IQ': 'journey_iq',
+    'CREDITS_TICKET_SALES': 'ticket_sales',
+    'CREDITS_TICKET_SALES_TRACKER': 'ticket_sales_tracker',
+    'CREDITS_SF_LF_CONVERSION': 'sf_lf_conversion',
+    'CREDITS_FLYWHEEL_CONVERSION': 'flywheel_conversion',
+    'CREDITS_CAMPAIGN_ROI': 'campaign_roi',
+    'CREDITS_ROAS_IQ': 'roas_iq',
+    'CREDITS_INTENT_INGEST': 'intent_iq',
+    'CREDITS_SENTIMENT_IQ': 'sentiment_iq',
+}
+
+
+def _usd_label(v):
+    try:
+        v = float(v)
+    except Exception:
+        return ''
+    return f"${v:,.0f}" if abs(v - round(v)) < 0.009 else f"${v:,.2f}"
+
+
+def _funds_short_error(tool_label, tool_key=None, username=None):
+    """User-facing copy when a pull cannot be covered. Standard pricing
+    in dollars, never credits (Jenna 2026-10-07: "credits dont exist
+    anymore just currency"). Company rates ride through the caller's
+    billing subject. Never raises."""
+    usd = 0.0
+    try:
+        import wallet as _w
+        subject = None
+        uname = (username or '').strip()
+        if not uname:
+            try:
+                uname = (session.get('username') or '').strip()
+            except Exception:
+                uname = ''
+        if uname:
+            data = load_users()
+            user = (data.get('users') or {}).get(uname) or {}
+            if user:
+                subject, _k, _n = _w.resolve_billing_subject(user, data)
+        if tool_key:
+            usd = float(_w.tool_price_usd(tool_key, subject=subject) or 0)
+    except Exception:
+        usd = 0.0
+    label = str(tool_label or 'This run').strip()
+    if usd > 0:
+        return (f"{label} costs {_usd_label(usd)} and your account cannot "
+                f"cover it right now. Add funds or ask your admin.")
+    return (f"Your account cannot cover {label} right now. Add funds or "
+            f"ask your admin.")
+
+
 def get_credit_cost(analysis_type):
     """Get the credit cost for an analysis type from pricing settings."""
     pricing = load_pricing_settings()
@@ -16079,7 +16134,7 @@ def submit_rerun():
         if not has_credits_for(username, CREDITS_PROFILE_ANALYSIS):
             _, credits_left = check_user_credits(username)
             return jsonify({
-                'error': f'Profile Analysis requires {CREDITS_PROFILE_ANALYSIS} credits. You have {"no" if credits_left == 0 else credits_left} remaining.',
+                'error': _funds_short_error('Profile Analysis', 'profile_iq_build'),
                 'credits_left': 0 if credits_left != -1 else -1
             }), 403
         data = request.json
@@ -24563,7 +24618,7 @@ def submit_analysis():
         if not has_credits_for(username, CREDITS_PROFILE_ANALYSIS):
             _, credits_left = check_user_credits(username)
             return jsonify({
-                'error': f'Profile Analysis requires {CREDITS_PROFILE_ANALYSIS} credits. You have {"no" if credits_left == 0 else credits_left} remaining. Please contact an administrator to get more credits.',
+                'error': _funds_short_error('Profile Analysis', 'profile_iq_build'),
                 'credits_left': 0 if credits_left != -1 else -1
             }), 403
         
@@ -29484,7 +29539,7 @@ def _handle_low_universe_skip(job_id, project_name, err):
     ui_msg = (
         f"Sample size too low for an accurate profile "
         f"({raw:,} eligible users → ~{inflated:,} after inflation; need ≥ {thresh:,}). "
-        f"Try a broader date range or a more popular brand. No credits were consumed."
+        f"Try a broader date range or a more popular brand. Nothing was charged."
     )
     try:
         update_job_status(job_id, status='failed', error=ui_msg, message=ui_msg, progress=100)
@@ -32056,7 +32111,7 @@ def submit_talent_theater():
         if not has_credits_for(username, CREDITS_TICKET_SALES):
             _, credits_left = check_user_credits(username)
             return jsonify({
-                'error': f'Ticket Sales requires {CREDITS_TICKET_SALES} credits. You have {"no" if credits_left == 0 else credits_left} remaining.',
+                'error': _funds_short_error('Ticket Sales', 'ticket_sales'),
                 'credits_left': 0 if credits_left != -1 else -1
             }), 403
         
@@ -32086,7 +32141,7 @@ def submit_talent_theater():
         # Consume credits and start job
         desc = f"{talent_name} / {movie_name} ({start_date}–{end_date})"
         if not consume_credit(username, description=desc, job_id=job_id, pull_type='Ticket Sales', credits_used=CREDITS_TICKET_SALES):
-            return jsonify({'error': 'Insufficient credits.'}), 403
+            return jsonify({'error': _funds_short_error('this run')}), 403
         spawn_heavy_analysis(run_talent_theater, args=(job_id,),
                              tool='talent_theater', job_id=job_id, username=username)
         
@@ -32858,7 +32913,7 @@ def submit_ticket_sales_tracker():
         if not has_credits_for(username, CREDITS_TICKET_SALES_TRACKER):
             _, credits_left = check_user_credits(username)
             return jsonify({
-                'error': f'Ticket Sales Tracker requires {CREDITS_TICKET_SALES_TRACKER} credits. You have {"no" if credits_left == 0 else credits_left} remaining.',
+                'error': _funds_short_error('Ticket Sales Tracker', 'ticket_sales_tracker'),
                 'credits_left': 0 if credits_left != -1 else -1
             }), 403
         job_id = str(uuid.uuid4())
@@ -32882,7 +32937,7 @@ def submit_ticket_sales_tracker():
         }
         desc = f"{movie_name} / {genre} ({start_date}–{end_date})"
         if not consume_credit(username, description=desc, job_id=job_id, pull_type='Ticket Sales Tracker', credits_used=CREDITS_TICKET_SALES_TRACKER):
-            return jsonify({'error': 'Insufficient credits.'}), 403
+            return jsonify({'error': _funds_short_error('this run')}), 403
         spawn_heavy_analysis(run_ticket_sales_tracker, args=(job_id,),
                              tool='ticket_sales_tracker', job_id=job_id, username=username)
         return jsonify({'job_id': job_id, 'message': 'Ticket Sales Tracker job submitted successfully', 'status': 'queued'})
@@ -33026,7 +33081,7 @@ def submit_sf_lf_conversion():
         if not has_credits_for(username, CREDITS_SF_LF_CONVERSION):
             _, credits_left = check_user_credits(username)
             return jsonify({
-                'error': f'SF-LF Conversion requires {CREDITS_SF_LF_CONVERSION} credits. You have {"no" if credits_left == 0 else credits_left} remaining.',
+                'error': _funds_short_error('SF-LF Conversion', 'sf_lf_conversion'),
                 'credits_left': 0 if credits_left != -1 else -1
             }), 403
         
@@ -33060,7 +33115,7 @@ def submit_sf_lf_conversion():
 
         desc = f"{project_name} ({start_date}–{end_date})"
         if not consume_credit(username, description=desc, job_id=job_id, pull_type='SF-LF Conversion', credits_used=CREDITS_SF_LF_CONVERSION):
-            return jsonify({'error': 'Insufficient credits.'}), 403
+            return jsonify({'error': _funds_short_error('this run')}), 403
         
         spawn_heavy_analysis(run_sf_lf_conversion, args=(job_id,),
                              tool='sf_lf_conversion', job_id=job_id, username=username)
@@ -35944,7 +35999,7 @@ def submit_flywheel_conversion():
         if not has_credits_for(username, CREDITS_FLYWHEEL_CONVERSION):
             _, credits_left = check_user_credits(username)
             return jsonify({
-                'error': f'Flywheel Conversion requires {CREDITS_FLYWHEEL_CONVERSION} credits. You have {"no" if credits_left == 0 else credits_left} remaining.',
+                'error': _funds_short_error('Flywheel Conversion', 'flywheel_conversion'),
                 'credits_left': 0 if credits_left != -1 else -1
             }), 403
         
@@ -35980,7 +36035,7 @@ def submit_flywheel_conversion():
         compare_suffix = f" vs {compare_start_date}–{compare_end_date}" if compare_start_date else ""
         desc = f"{project_name} ({start_date}–{end_date}{compare_suffix})"
         if not consume_credit(username, description=desc, job_id=job_id, pull_type='Flywheel Conversion', credits_used=CREDITS_FLYWHEEL_CONVERSION):
-            return jsonify({'error': 'Insufficient credits.'}), 403
+            return jsonify({'error': _funds_short_error('this run')}), 403
         
         spawn_heavy_analysis(run_flywheel_conversion, args=(job_id,),
                              tool='flywheel_conversion', job_id=job_id, username=username)
@@ -37115,7 +37170,7 @@ def submit_svod_acquisition():
         if not has_credits_for(username, CREDITS_SVOD):
             _, credits_left = check_user_credits(username)
             return jsonify({
-                'error': f'Subscriber IQ requires {CREDITS_SVOD} credits. You have {"no" if credits_left == 0 else credits_left} remaining.',
+                'error': _funds_short_error('Subscriber IQ', 'subscriber_iq_build'),
                 'credits_left': 0 if credits_left != -1 else -1
             }), 403
         
@@ -37159,7 +37214,7 @@ def submit_svod_acquisition():
         
         desc = f"{project_name} ({campaign_start}–{campaign_end})"
         if not consume_credit(username, description=desc, job_id=job_id, pull_type='SVOD', credits_used=CREDITS_SVOD):
-            return jsonify({'error': 'Insufficient credits.'}), 403
+            return jsonify({'error': _funds_short_error('this run')}), 403
         spawn_heavy_analysis(run_svod_acquisition, args=(job_id,),
                              tool='svod_acquisition', job_id=job_id, username=username)
         
@@ -37214,7 +37269,7 @@ def submit_campaign_roi():
         if not has_credits_for(username, CREDITS_CAMPAIGN_ROI):
             _, credits_left = check_user_credits(username)
             return jsonify({
-                'error': f'Campaign ROI requires {CREDITS_CAMPAIGN_ROI} credits. You have {"no" if credits_left == 0 else credits_left} remaining.',
+                'error': _funds_short_error('Campaign ROI', 'campaign_roi'),
                 'credits_left': 0 if credits_left != -1 else -1
             }), 403
         
@@ -37248,7 +37303,7 @@ def submit_campaign_roi():
         
         desc = f"{project_name} ({campaign_start}–{campaign_end})"
         if not consume_credit(username, description=desc, job_id=job_id, pull_type='Campaign ROI', credits_used=CREDITS_CAMPAIGN_ROI):
-            return jsonify({'error': 'Insufficient credits.'}), 403
+            return jsonify({'error': _funds_short_error('this run')}), 403
         spawn_heavy_analysis(run_campaign_roi, args=(job_id,),
                              tool='campaign_roi', job_id=job_id, username=username)
         
@@ -37712,7 +37767,7 @@ def submit_watch_time():
         
         desc = f"Watch Time ({start_date}–{end_date})"
         if not consume_credit(username, description=desc, job_id=job_id, pull_type='Watch Time', credits_used=CREDITS_WATCH_TIME):
-            return jsonify({'error': 'Insufficient credits.'}), 403
+            return jsonify({'error': _funds_short_error('this run')}), 403
         spawn_heavy_analysis(run_watch_time, args=(job_id,),
                              tool='watch_time', job_id=job_id, username=username)
         
@@ -38644,7 +38699,7 @@ def submit_roas_iq():
 
         desc = f"ROAS IQ: {project_name} ({start_date}–{end_date})"
         if not consume_credit(username, description=desc, job_id=job_id, pull_type='ROAS IQ', credits_used=CREDITS_ROAS_IQ):
-            return jsonify({'error': f'ROAS IQ requires {CREDITS_ROAS_IQ} credits. Insufficient credits.'}), 403
+            return jsonify({'error': _funds_short_error('ROAS IQ', 'roas_iq')}), 403
 
         spawn_heavy_analysis(_run_roas_iq, args=(job_id,),
                              tool='roas_iq', job_id=job_id, username=username)
@@ -40416,7 +40471,7 @@ def submit_brand_partnership_iq():
         if not consume_credit(username, description=desc, job_id=job_id,
                               pull_type='Brand Partnership IQ',
                               credits_used=CREDITS_BRAND_PARTNERSHIP_IQ):
-            return jsonify({'error': 'Insufficient credits.'}), 403
+            return jsonify({'error': _funds_short_error('this run')}), 403
 
         spawn_heavy_analysis(_run_brand_partnership_iq, args=(job_id,),
                              tool='brand_partnership_iq',
@@ -41004,8 +41059,7 @@ def submit_journey_iq():
         if not has_credits_for(username, CREDITS_JOURNEY_IQ):
             _, credits_left = check_user_credits(username)
             return jsonify({
-                'error': (f'Digital Journey IQ requires {CREDITS_JOURNEY_IQ} credits. '
-                          f'You have {"no" if credits_left == 0 else credits_left} remaining.'),
+                'error': _funds_short_error('Digital Journey IQ', 'journey_iq'),
                 'credits_left': 0 if credits_left != -1 else -1,
             }), 403
 
@@ -41046,7 +41100,7 @@ def submit_journey_iq():
         if not consume_credit(username, description=desc, job_id=job_id,
                               pull_type='Digital Journey IQ',
                               credits_used=CREDITS_JOURNEY_IQ):
-            return jsonify({'error': 'Insufficient credits.'}), 403
+            return jsonify({'error': _funds_short_error('this run')}), 403
 
         spawn_heavy_analysis(_run_journey_iq, args=(job_id,),
                              tool='journey_iq',
@@ -41196,8 +41250,7 @@ def submit_intent_ingest():
         if not has_credits_for(username, CREDITS_INTENT_INGEST):
             _, credits_left = check_user_credits(username)
             return jsonify({
-                'error': (f'Intent Ingest requires {CREDITS_INTENT_INGEST} credits. '
-                          f'You have {"no" if credits_left == 0 else credits_left} remaining.'),
+                'error': _funds_short_error('Intent Ingest', 'intent_iq'),
                 'credits_left': 0 if credits_left != -1 else -1,
             }), 403
 
@@ -41232,7 +41285,7 @@ def submit_intent_ingest():
         if not consume_credit(username, description=desc, job_id=job_id,
                               pull_type='Attribution IQ Ingest',
                               credits_used=CREDITS_INTENT_INGEST):
-            return jsonify({'error': 'Insufficient credits.'}), 403
+            return jsonify({'error': _funds_short_error('this run')}), 403
 
         spawn_heavy_analysis(_run_intent_ingest, args=(job_id,),
                              tool='intent_ingest',
@@ -41856,8 +41909,7 @@ def submit_sentiment_iq():
             if not has_credits_for(username, CREDITS_SENTIMENT_IQ):
                 _, credits_left = check_user_credits(username)
                 return jsonify({
-                    'error': f'Sentiment IQ requires {CREDITS_SENTIMENT_IQ} credits to start a tracker. '
-                             f'You have {"no" if credits_left == 0 else credits_left} remaining.',
+                    'error': _funds_short_error('Sentiment IQ tracking', 'sentiment_iq'),
                     'credits_left': 0 if credits_left != -1 else -1,
                 }), 403
 
@@ -41902,7 +41954,7 @@ def submit_sentiment_iq():
             if not consume_credit(username, description=desc, job_id=job_id,
                                   pull_type='Sentiment IQ',
                                   credits_used=CREDITS_SENTIMENT_IQ):
-                return jsonify({'error': 'Insufficient credits.'}), 403
+                return jsonify({'error': _funds_short_error('this run')}), 403
             spawn_heavy_analysis(_run_sentiment_iq_job,
                                  args=(job_id, tracker_id),
                                  kwargs={'mode': 'full'},
@@ -51479,7 +51531,7 @@ _V1_USD_FALLBACK = {
     'time_shifted_refresh': 300.0,
     'new_build':            300.0,
     'cut_needs_parent':     400.0,   # parent build + cut
-    'subscriber_iq':        1000.0,
+    'subscriber_iq':        500.0,   # Subscriber Acquisition (Jenna 2026-10-07)
 }
 
 _V1_USD_ADDON_CUT_FALLBACK = 100.0   # api_profile_iq_cut
@@ -52825,7 +52877,7 @@ def _maybe_promote_embedded_cuts_to_parent(draft, catalog=None,
         note = (f"Found existing total universe '{parent_display}' - "
                 f"no rebuild; deriving {n} cut"
                 f"{'s' if n != 1 else ''} off it "
-                f"({ADDON_CUT_CREDITS} credits each)")
+                f"({_usd_label(_v1_price_usd_for_cut())} each)")
         assumptions = draft.get('assumptions')
         if isinstance(assumptions, list):
             assumptions.append(note)

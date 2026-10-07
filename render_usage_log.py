@@ -207,6 +207,34 @@ def cost_usd(model: str, usage: Any) -> float:
     return round(total / 1_000_000 + searches * WEB_SEARCH_USD, 6)
 
 
+def _published_meter() -> dict:
+    """The published Prometheus meter from pricing.json (wallet), with
+    the standard rates as the fallback."""
+    try:
+        import wallet as _wallet
+        m = _wallet.prometheus_meter()
+        if isinstance(m, dict) and m:
+            return m
+    except Exception:
+        pass
+    return {'input_per_m': 10.50, 'output_per_m': 52.50, 'search': 0.021}
+
+
+def billed_usd(in_tok: int, out_tok: int, cache_read_tok: int = 0,
+               cache_write_tok: int = 0, searches: int = 0) -> float:
+    """What the customer is billed for one call: the PUBLISHED meter
+    (Jenna 2026-10-07: $10.50 / $52.50 per million in/out, plus
+    $0.021 per search), not cost times markup. Cache reads and cache
+    writes are input tokens to the customer."""
+    m = _published_meter()
+    inp = (int(in_tok or 0) + int(cache_read_tok or 0)
+           + int(cache_write_tok or 0))
+    total = (inp * float(m['input_per_m'])
+             + int(out_tok or 0) * float(m['output_per_m'])) / 1_000_000
+    total += int(searches or 0) * float(m['search'])
+    return round(total, 6)
+
+
 def _put_record(record: dict) -> None:
     day = record['ts'][:10].replace('-', '_')
     key = (f"{CALLS_PREFIX}{day}/"
@@ -259,6 +287,7 @@ def record_call(surface: str, origin: str, model: str,
         # a live pricing.json update propagates to the next call. Never
         # falls below the 2.10 default per Jenna's mandate.
         markup = _current_ppu_markup()
+        billed = billed_usd(in_tok, out_tok, cr_tok, cw_tok, searches)
         record = {
             'ts': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
             'surface': str(surface or 'other')[:32],
@@ -270,8 +299,9 @@ def record_call(surface: str, origin: str, model: str,
             'cache_creation_input_tokens': cw_tok,
             'web_search_requests': searches,
             'cost_usd': cost,
-            'billed_usd': round(cost * markup, 6),
+            'billed_usd': billed,
             'markup_applied': round(markup, 4),
+            'meter': 'published',
         }
         try:
             if duration_s is not None and float(duration_s) > 0:

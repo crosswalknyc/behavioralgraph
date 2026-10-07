@@ -17,7 +17,7 @@ from flask import session
 
 from prometheus.legacy import H as _H, C as _C  # noqa: E402
 
-__all__ = ['_PM_WATCH_FLAGGED', '_PM_USER_BLOCK_CACHE', '_PM_USER_BLOCK_LOCK', '_pm_user_block', '_pm_catalog_block', '_pm_ask_log_user', '_pm_probe_caller', '_pm_is_probe_user', '_PM_COMMON_IDENTITY_WORDS', '_pm_thread_confirmed_page', '_pm_watch_flag', '_pm_record_held_reply', '_pm_gate_options', '_pm_open_status_line', '_pm_price_table']
+__all__ = ['_PM_WATCH_FLAGGED', '_PM_USER_BLOCK_CACHE', '_PM_USER_BLOCK_LOCK', '_pm_user_block', '_pm_catalog_block', '_pm_ask_log_user', '_pm_probe_caller', '_pm_is_probe_user', '_PM_COMMON_IDENTITY_WORDS', '_pm_thread_confirmed_page', '_pm_watch_flag', '_pm_record_held_reply', '_pm_gate_options', '_pm_open_status_line', '_pm_price_table', '_pm_usd', '_pm_usd_label']
 
 
 _PM_WATCH_FLAGGED = frozenset({'clarified_repeat', 'empty', 'faulted', 'error',
@@ -346,3 +346,33 @@ def _pm_price_table():
         return out or None
     except Exception:
         return None
+
+
+def _pm_usd_label(v):
+    """$300 / $1,000 / $12.50 - whole dollars when they are whole."""
+    try:
+        v = float(v)
+    except Exception:
+        return ''
+    return f"${v:,.0f}" if abs(v - round(v)) < 0.009 else f"${v:,.2f}"
+
+
+def _pm_usd(tool_key, fallback_usd, username=None):
+    """Dollar price of one tool for the caller (company rates through
+    the billing subject), as a float. Standard pricing, never credits
+    (Jenna 2026-10-07). Falls back to the published rate."""
+    try:
+        import wallet as _w
+        uname = (username or '').strip() or (session.get('username') or '').strip()
+        subject = None
+        if uname:
+            data = _H.load_users()
+            user = (data.get('users') or {}).get(uname) or {}
+            if user:
+                subject, _k, _n = _w.resolve_billing_subject(user, data)
+        v = float(_w.tool_price_usd(tool_key, subject=subject) or 0)
+        if v > 0:
+            return v
+    except Exception:
+        pass
+    return float(fallback_usd)

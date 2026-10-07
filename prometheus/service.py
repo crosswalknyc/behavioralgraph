@@ -475,7 +475,7 @@ def ask(user, body, *, via='session'):
                 copy = ''
             if copy:
                 raw = {'success': True, 'action': 'answer', 'reply': copy,
-                       'followups': ['How many credits do I have left?'],
+                       'followups': ['What is my balance?'],
                        'offer_deck': False, 'deck_angle': None}
                 decision = {'surface': 'analyze', 'mode': None,
                             'reason': 'product_fact', 'client_hint': None}

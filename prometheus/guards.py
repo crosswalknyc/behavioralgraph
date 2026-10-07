@@ -707,13 +707,28 @@ _CAP_DEMO_RX = re.compile(
     re.I)
 
 
-def capability_answer(text, cut_credits=3):
+def _cut_price_label():
+    """Dollar price of a derived cut from the live table ($100
+    standard); never credits (Jenna 2026-10-07)."""
+    try:
+        import wallet as _w
+        v = float(_w.tool_price_usd('profile_iq_derived_cut') or 0)
+        if v > 0:
+            return f"${v:,.0f}" if abs(v - round(v)) < 0.009 else f"${v:,.2f}"
+    except Exception:
+        pass
+    return '$100'
+
+
+def capability_answer(text, cut_credits=None):
     """A plain answer for a question about what the product can do,
     or None when the ask is not one of the families answered here.
     Only fires on capability-shaped questions (see
     is_capability_question) so a real build or read never lands
-    here."""
+    here. ``cut_credits`` is accepted for old callers and ignored:
+    prices read in dollars from the live table."""
     t = str(text or '').strip()
+    cut_price = _cut_price_label()
     if not t or not is_capability_question(t):
         return None
     win = time_window_cut_ask(t)
@@ -725,7 +740,7 @@ def capability_answer(text, cut_credits=3):
             base = ('A profile reads a 12 month window by default. For '
                     'quarters I run one dated read per quarter on the '
                     'same audience, so the numbers line up quarter to '
-                    'quarter, and the brief shows the credits before '
+                    'quarter, and the brief shows the price before '
                     'anything runs. ')
             if named:
                 lst = ', '.join(
@@ -750,7 +765,7 @@ def capability_answer(text, cut_credits=3):
                 f'Yes. A profile reads a 12 month window by default. For a '
                 f'{unit} view I run one dated read per {unit} on the same '
                 'audience, so the numbers line up period to period, and '
-                'the brief shows the credits before anything runs. Name '
+                'the brief shows the price before anything runs. Name '
                 f'the {unit}s you want and I will set it up.'),
             'followups': [], 'family': 'time_window_cut'}
     if _CAP_CUT_RX.search(t) and _CAP_DEMO_RX.search(t):
@@ -758,7 +773,7 @@ def capability_answer(text, cut_credits=3):
             'reply': (
                 'Yes. Any finished profile can be cut by gender, age or '
                 'generation, market, income, parents, or a behavior, at '
-                f'{cut_credits} credits per cut, each derived from the '
+                f'{cut_price} per cut, each derived from the '
                 'parent so the numbers ladder up. Tell me the profile and '
                 'the cut, for example "cut Apple TV+ by gender".'),
             'followups': [], 'family': 'cut'}
