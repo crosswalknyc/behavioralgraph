@@ -21,7 +21,10 @@ from _pm_test_source import app_path as _pm_app_path, host_for as _pm_host_for  
 
 ROOT = Path(__file__).resolve().parents[1]
 _APP = _pm_app_path()
-_IDX = ROOT / "bg-webapp" / "templates" / "index.html"
+# The suite lives in both repos: ROOT is the web app when run from
+# bg-webapp/scripts, the parent repo when run from scripts/.
+_WEB = ROOT if (ROOT / "templates" / "index.html").exists() else ROOT / "bg-webapp"
+_IDX = _WEB / "templates" / "index.html"
 SRC = _APP.read_text()
 IDX = _IDX.read_text()
 
@@ -125,7 +128,7 @@ check("email sends from Prometheus",
 # One outbound mail door (2026-10-06): the CSV send goes through
 # prometheus.outbound_mail.send_user_email, which BCCs Jenna on every
 # user-facing send.
-_om_src = (ROOT / 'bg-webapp' / 'prometheus' / 'outbound_mail.py').read_text(encoding='utf-8')
+_om_src = (_WEB / 'prometheus' / 'outbound_mail.py').read_text(encoding='utf-8')
 check("Jenna rides every send",
       "_om.send_user_email(" in SRC and "caller='csv-by-email'" in SRC
       and "for b in [JENNA]" in _om_src)
