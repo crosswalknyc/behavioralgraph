@@ -497,8 +497,9 @@
           <div>
             <h2 style="margin: 0;">Model spend</h2>
             <p style="color: #6B7280; font-size: 13px; margin: 6px 0 0 0;">
-              What each user cost us that month. Filter by company or
-              person and download the current view as a CSV.
+              What each user cost us that month. Spend that could not
+              be assigned to a person is the system row. Filter by
+              company or person and download the current view as a CSV.
             </p>
           </div>
           <button id="ms-download">Download CSV</button>
@@ -2477,10 +2478,15 @@
         if ([...uSel.options].some(o => o.value === keepU))
           uSel.value = keepU;
         const t = d.totals || {};
-        $('ms-totals').textContent =
-          (t.users || 0) + ' users · Anthropic '
-          + fmtUsd(t.total_anthropic_spend || 0)
+        let msLine = (t.users || 0) + ' users · assigned '
+          + fmtUsd(t.user_anthropic_spend != null
+                   ? t.user_anthropic_spend
+                   : t.total_anthropic_spend || 0);
+        if (t.system_anthropic_spend)
+          msLine += ' · system ' + fmtUsd(t.system_anthropic_spend);
+        msLine += ' · Anthropic ' + fmtUsd(t.total_anthropic_spend || 0)
           + ' · OpenAI ' + fmtUsd(t.total_openai_spend || 0);
+        $('ms-totals').textContent = msLine;
         if (!(d.rows || []).length) {
           tbl.innerHTML = '<p style="color:#6B7280;">No spend in this month.</p>';
           return;
