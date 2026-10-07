@@ -3254,6 +3254,75 @@ def admin_export_user_usage_csv(target_username):
 
 
 # ---------------------------------------------------------------------------
+# Model spend (Jenna 2026-10-06): our Anthropic + OpenAI cost per user.
+# Same dollars as the ops completion-email "Anthropic cost" line.
+# Downloadable by person or company from /admin/billing.
+# ---------------------------------------------------------------------------
+
+def _model_spend_payload():
+    import user_model_spend as ums
+    from app import load_users
+    month = (request.args.get("month") or "").strip()
+    if month:
+        year, mo = ums.parse_month(month)
+    else:
+        year, mo = ums.previous_month()
+    users = ((load_users() or {}).get("users") or {})
+    username = (request.args.get("username") or "").strip()
+    company = (request.args.get("company") or "").strip()
+    return ums.build_month(year, mo, users=users,
+                           username=username or None,
+                           company=company or None)
+
+
+@billing_bp.route("/api/admin/model-spend", methods=["GET"])
+def admin_model_spend():
+    _, _, err = _require_super_admin()
+    if err:
+        return err
+    try:
+        payload = _model_spend_payload()
+    except ValueError:
+        return jsonify({"error": "bad_month"}), 400
+    except Exception as e:
+        print(f"[billing] model-spend load failed: {e}")
+        return jsonify({"error": "unavailable"}), 500
+    return jsonify({"success": True, **payload})
+
+
+@billing_bp.route("/api/admin/model-spend.csv", methods=["GET"])
+def admin_model_spend_csv():
+    _, _, err = _require_super_admin()
+    if err:
+        return err
+    try:
+        import user_model_spend as ums
+        payload = _model_spend_payload()
+    except ValueError:
+        return jsonify({"error": "bad_month"}), 400
+    except Exception as e:
+        print(f"[billing] model-spend csv failed: {e}")
+        return jsonify({"error": "unavailable"}), 500
+    body = ums.csv_text(payload.get("rows") or [])
+    uname = (request.args.get("username") or "").strip()
+    company = (request.args.get("company") or "").strip()
+    bits = [payload["month_key"]]
+    if company:
+        bits.append(company.replace(" ", "_")[:40])
+    if uname:
+        bits.append(uname[:40])
+    fname = "user_model_spend_" + "_".join(bits) + ".csv"
+    return Response(
+        body,
+        mimetype="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{fname}"',
+            "Cache-Control": "private, no-store, max-age=0",
+        },
+    )
+
+
+# ---------------------------------------------------------------------------
 # Admin-generated top-up links (Jenna 2026-09-10)
 #
 # "add where you can click to generate a link for a user to click on to

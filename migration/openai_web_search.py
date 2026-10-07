@@ -145,6 +145,7 @@ def openai_web_search_call(prompt: str,
                 )
                 text = (getattr(resp, 'output_text', '') or '').strip()
                 if text:
+                    _record_openai_usage(m, resp)
                     return text
                 print(f'[openai-web-search] {m} returned empty '
                       f'output_text; trying next model')
@@ -157,6 +158,48 @@ def openai_web_search_call(prompt: str,
               'falling back to Claude web search')
         return _claude_web_search_fallback(prompt, timeout)
     return ''
+
+
+def _openai_usage_tokens(resp) -> tuple[int, int]:
+    u = getattr(resp, 'usage', None)
+    if u is None:
+        return 0, 0
+    if isinstance(u, dict):
+        inn = int(u.get('input_tokens') or u.get('prompt_tokens') or 0)
+        out = int(u.get('output_tokens') or u.get('completion_tokens') or 0)
+        return inn, out
+    inn = int(getattr(u, 'input_tokens', 0)
+              or getattr(u, 'prompt_tokens', 0) or 0)
+    out = int(getattr(u, 'output_tokens', 0)
+              or getattr(u, 'completion_tokens', 0) or 0)
+    return inn, out
+
+
+def _openai_web_search_calls(resp) -> int:
+    n = 0
+    for item in (getattr(resp, 'output', None) or []):
+        t = (item.get('type') if isinstance(item, dict)
+             else getattr(item, 'type', None))
+        if t == 'web_search_call':
+            n += 1
+    return n
+
+
+def _record_openai_usage(model: str, resp) -> None:
+    """Best-effort: never raise into a live search call."""
+    try:
+        try:
+            from migration import usage_tracker as _ut
+        except Exception:
+            import usage_tracker as _ut  # type: ignore
+        inn, out = _openai_usage_tokens(resp)
+        ws = _openai_web_search_calls(resp)
+        _ut.record_openai(model, {
+            'input_tokens': inn,
+            'output_tokens': out,
+        }, web_search_calls=ws)
+    except Exception:
+        pass
 
 
 __all__ = ['openai_web_search_call', 'DEFAULT_MODEL_CASCADE',

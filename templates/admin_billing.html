@@ -302,6 +302,7 @@
       <button class="tab" data-tab="companies">Companies</button>
       <button class="tab" data-tab="pricing">Pricing</button>
       <button class="tab" data-tab="ledger">Usage Ledger</button>
+      <button class="tab" data-tab="modelspend">Model spend</button>
     </div>
 
     <div id="tab-users" class="tab-panel">
@@ -483,6 +484,42 @@
             <button id="save-packs">Save packs</button>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- Model spend: our Anthropic + OpenAI cost per user (2026-10-06).
+         Same dollars as the ops completion-email cost line. -->
+    <div id="tab-modelspend" class="tab-panel" style="display: none;">
+      <div class="card">
+        <div style="display: flex; justify-content: space-between;
+                    align-items: center; flex-wrap: wrap; gap: 10px;
+                    margin-bottom: 12px;">
+          <div>
+            <h2 style="margin: 0;">Model spend</h2>
+            <p style="color: #6B7280; font-size: 13px; margin: 6px 0 0 0;">
+              What each user cost us that month. Filter by company or
+              person and download the current view as a CSV.
+            </p>
+          </div>
+          <button id="ms-download">Download CSV</button>
+        </div>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap;
+                    margin-bottom: 12px; align-items: center;">
+          <label style="margin: 0; font-size: 13px;">Month
+            <input id="ms-month" type="month" style="margin-left: 6px;">
+          </label>
+          <select id="ms-company" style="min-width: 200px;">
+            <option value="">All companies</option>
+          </select>
+          <select id="ms-user" style="min-width: 200px;">
+            <option value="">All users</option>
+          </select>
+          <button id="ms-refresh">Refresh</button>
+          <span id="ms-totals" style="color: #6B7280;
+                font-size: 13px;"></span>
+        </div>
+        <div id="ms-table" style="max-height: 520px;
+             overflow-y: auto;"></div>
       </div>
     </div>
 
@@ -830,6 +867,7 @@
         if (t.dataset.tab === 'companies') loadCompanies();
         if (t.dataset.tab === 'pricing') loadPricing();
         if (t.dataset.tab === 'ledger') loadLedger();
+        if (t.dataset.tab === 'modelspend') loadModelSpend();
       });
     });
 
@@ -2385,6 +2423,96 @@
       } catch (e) {
         msg.textContent = e.message; msg.style.color = '#DC2626';
       }
+    });
+
+    // ── Model spend (2026-10-06) ────────────────────────────────────
+    function _msDefaultMonth() {
+      const d = new Date();
+      d.setUTCDate(1);
+      d.setUTCMonth(d.getUTCMonth() - 1);
+      const y = d.getUTCFullYear();
+      const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+      return y + '-' + m;
+    }
+    function _msQuery() {
+      const month = $('ms-month').value || _msDefaultMonth();
+      const c = $('ms-company').value || '';
+      const u = $('ms-user').value || '';
+      const q = ['month=' + encodeURIComponent(month)];
+      if (c) q.push('company=' + encodeURIComponent(c));
+      if (u) q.push('username=' + encodeURIComponent(u));
+      return q.join('&');
+    }
+    async function loadModelSpend() {
+      const tbl = $('ms-table');
+      if (!$('ms-month').value) $('ms-month').value = _msDefaultMonth();
+      tbl.innerHTML = '<p style="color:#6B7280;">Loading…</p>';
+      try {
+        const r = await fetch('/api/admin/model-spend?' + _msQuery(),
+                              { credentials: 'same-origin',
+                                cache: 'no-store' });
+        const d = await r.json();
+        if (!d.success) throw new Error(d.error || 'load failed');
+        const cSel = $('ms-company'), uSel = $('ms-user');
+        const companies = [...new Set((d.rows || [])
+          .map(x => x.company || '').filter(Boolean))].sort();
+        if (cSel.options.length <= 1 && companies.length) {
+          companies.forEach(c => {
+            const o = document.createElement('option');
+            o.value = c; o.textContent = c; cSel.appendChild(o);
+          });
+        }
+        const keepU = uSel.value || '';
+        const comp = cSel.value || '';
+        uSel.innerHTML = '<option value="">All users</option>';
+        (d.rows || [])
+          .filter(x => !comp || (x.company || '') === comp)
+          .forEach(x => {
+            const o = document.createElement('option');
+            o.value = x.username;
+            o.textContent = x.username
+              + (x.company ? ' (' + x.company + ')' : '');
+            uSel.appendChild(o);
+          });
+        if ([...uSel.options].some(o => o.value === keepU))
+          uSel.value = keepU;
+        const t = d.totals || {};
+        $('ms-totals').textContent =
+          (t.users || 0) + ' users · Anthropic '
+          + fmtUsd(t.total_anthropic_spend || 0)
+          + ' · OpenAI ' + fmtUsd(t.total_openai_spend || 0);
+        if (!(d.rows || []).length) {
+          tbl.innerHTML = '<p style="color:#6B7280;">No spend in this month.</p>';
+          return;
+        }
+        let html = '<table class="txn-list"><thead><tr>'
+          + '<th>Username</th><th>Company</th>'
+          + '<th style="text-align:right;">Anthropic</th>'
+          + '<th style="text-align:right;">OpenAI</th>'
+          + '</tr></thead><tbody>';
+        (d.rows || []).forEach(row => {
+          html += '<tr><td>' + esc(row.username) + '</td><td>'
+            + esc(row.company || '') + '</td>'
+            + '<td class="amount">' + fmtUsd(row.total_anthropic_spend)
+            + '</td><td class="amount">'
+            + fmtUsd(row.total_openai_spend) + '</td></tr>';
+        });
+        html += '</tbody></table>';
+        tbl.innerHTML = html;
+      } catch (e) {
+        tbl.innerHTML = '<p style="color:#DC2626;">'
+          + esc(e.message) + '</p>';
+      }
+    }
+    $('ms-refresh').addEventListener('click', loadModelSpend);
+    $('ms-month').addEventListener('change', loadModelSpend);
+    $('ms-company').addEventListener('change', () => {
+      $('ms-user').value = '';
+      loadModelSpend();
+    });
+    $('ms-user').addEventListener('change', loadModelSpend);
+    $('ms-download').addEventListener('click', () => {
+      window.location = '/api/admin/model-spend.csv?' + _msQuery();
     });
   </script>
 </body>
