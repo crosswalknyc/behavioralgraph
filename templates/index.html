@@ -37278,7 +37278,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // 2026-10-06): Summary, Performance, Audiences, Attribution
             // and Timing all narrow to the creative that matches. An
             // empty list means all. Lift on Performance still reads
-            // against the whole-campaign median.
+            // against the whole-campaign paid and organic medians.
             function _iiqGoatEmptyFilters() { return { media: [], platform: [], type: [], phase: [], talent: [] }; }
             window._iiqGoatFilters = window._iiqGoatFilters || _iiqGoatEmptyFilters();
             function _iiqGoatFilterList(k) {
@@ -37460,17 +37460,29 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 }
             }
             window._iiqGoatRenderFilterBar = _iiqGoatRenderFilterBar;
+            // One sentence that names both medians, e.g.
+            // 'paid median 4.12% across 31 rated paid assets, organic
+            // median 2.80% across 40 rated organic assets'. Empty when
+            // nothing has a rated read yet.
+            function _iiqGoatBenchPhrase(bm, noun) {
+                var parts = [];
+                var p = bm && bm.paid, o = bm && bm.organic;
+                if (p && p.median > 0) parts.push('paid median ' + noun + ' rate ' + p.median.toFixed(2) + '% across ' + p.n + ' rated paid asset' + (p.n === 1 ? '' : 's'));
+                if (o && o.median > 0) parts.push('organic median ' + noun + ' rate ' + o.median.toFixed(2) + '% across ' + o.n + ' rated organic asset' + (o.n === 1 ? '' : 's'));
+                return parts.join('; ');
+            }
             function _iiqGoatAssetTableExtras(rowsAll, rowsShown, useInfo, asOf) {
                 var bm = rowsAll.benchmark || {};
                 var noun = useInfo ? 'info-seek' : 'checkout page';
                 var bench = '';
-                if (bm.median > 0) {
-                    bench = '<div class="iiq-support-intro" style="margin-top:0.3rem;">Benchmark: the campaign median ' + noun + ' rate of ' + bm.median.toFixed(2) + '% across ' + bm.n + ' rated creative assets in view at ' + escapeHtml(_iiqFmtAsOfDate(asOf)) + '. Lift is each asset\u2019s own rate against that median. Ticketing, showtime, search and Wikipedia destinations are read on Attribution, not ranked here.</div>';
+                var phrase = _iiqGoatBenchPhrase(bm, noun);
+                if (phrase) {
+                    bench = '<div class="iiq-support-intro" style="margin-top:0.3rem;">Benchmark: paid assets read against the paid median and organic assets against the organic median, so every lift is apples to apples. At ' + escapeHtml(_iiqFmtAsOfDate(asOf)) + ': ' + phrase + '. Ticketing, showtime, search and Wikipedia destinations are read on Attribution, not ranked here.</div>';
                 } else {
-                    bench = '<div class="iiq-support-intro" style="margin-top:0.3rem;">Benchmark: the campaign median ' + noun + ' rate across every rated creative asset in view. No asset has accrued a rated read at this date yet.</div>';
+                    bench = '<div class="iiq-support-intro" style="margin-top:0.3rem;">Benchmark: paid assets read against the paid median ' + noun + ' rate and organic assets against the organic median. No asset has accrued a rated read at this date yet.</div>';
                 }
                 if (_iiqGoatFiltersActive()) {
-                    bench += '<div class="iiq-support-intro" style="margin-top:0.2rem; color:#C7F23E;">Filters on: ' + rowsShown.length + ' of ' + rowsAll.length + ' assets in view shown. Lift stays measured against the whole-campaign median.</div>';
+                    bench += '<div class="iiq-support-intro" style="margin-top:0.2rem; color:#C7F23E;">Filters on: ' + rowsShown.length + ' of ' + rowsAll.length + ' assets in view shown. Lift stays measured against the whole-campaign paid and organic medians, not the filtered set.</div>';
                 }
                 return { filters: '', bench: bench };
             }
@@ -37707,7 +37719,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     .sort(function(a, b) { return (b.lift - a.lift) || ((b.views || 0) - (a.views || 0)); });
                 if (rated.length && bm.median > 0) {
                     var t = rated[0];
-                    bul.push({ label: 'Strongest signal at this point:', text: _iiqGoatAssetLabel(t.asset) + ' reads as the strongest ' + noun + ' driver in view at ' + t.primary_pct.toFixed(2) + '%, ' + t.lift.toFixed(1) + 'x the campaign median of ' + bm.median.toFixed(2) + '% across ' + bm.n + ' rated assets' + (t.conf === 'low' ? ', on a small sample, so worth watching rather than banking on.' : '.') });
+                    var tKey = t.bench_key || _iiqGoatMediaKey(t.asset);
+                    var tBm = (bm[tKey] && bm[tKey].median > 0) ? bm[tKey] : { median: bm.median, n: bm.n };
+                    bul.push({ label: 'Strongest signal at this point:', text: _iiqGoatAssetLabel(t.asset) + ' reads as the strongest ' + noun + ' driver in view at ' + t.primary_pct.toFixed(2) + '%, ' + t.lift.toFixed(1) + 'x the ' + tKey + ' median of ' + tBm.median.toFixed(2) + '% across ' + tBm.n + ' rated ' + tKey + ' assets' + (t.conf === 'low' ? ', on a small sample, so worth watching rather than banking on.' : '.') });
                 }
                 var aud = _iiqComputeAudienceRows(asOf, opening) || [];
                 var under = aud.filter(function(r) { return r.fit === 'underserved'; })
@@ -37721,7 +37735,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 }
                 if (rated.length >= 3) {
                     var s = rated[rated.length - 1];
-                    bul.push({ label: 'Where signals are soft:', soft: true, text: _iiqGoatAssetLabel(s.asset) + ' tends to under-index on ' + noun + ' at ' + s.primary_pct.toFixed(2) + '%, ' + s.lift.toFixed(1) + 'x the campaign median. One angle: platform-audience-content mismatch, worth watching.' });
+                    var sKey = s.bench_key || _iiqGoatMediaKey(s.asset);
+                    bul.push({ label: 'Where signals are soft:', soft: true, text: _iiqGoatAssetLabel(s.asset) + ' tends to under-index on ' + noun + ' at ' + s.primary_pct.toFixed(2) + '%, ' + s.lift.toFixed(1) + 'x the ' + sKey + ' median. One angle: platform-audience-content mismatch, worth watching.' });
                 }
                 var postOpen = !!(opening && asOf && String(asOf) > String(opening));
                 var implHead = useInfo ? 'Implications for next week:' : (postOpen ? 'What this run says:' : 'Implications for next week:');
@@ -38309,22 +38324,41 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     });
                     if (primaryPct != null && primaryPct > 0) pctValues.push(primaryPct);
                 }
-                var median = 0;
-                if (pctValues.length) {
-                    var sortedPct = pctValues.slice().sort(function(a, b) { return a - b; });
-                    var mid = Math.floor(sortedPct.length / 2);
-                    median = (sortedPct.length % 2 === 0)
-                        ? (sortedPct[mid - 1] + sortedPct[mid]) / 2
-                        : sortedPct[mid];
+                var medianOf = function(vals) {
+                    if (!vals.length) return 0;
+                    var s = vals.slice().sort(function(a, b) { return a - b; });
+                    var m = Math.floor(s.length / 2);
+                    return (s.length % 2 === 0) ? (s[m - 1] + s[m]) / 2 : s[m];
+                };
+                var median = medianOf(pctValues);
+                // GOAT: paid reads against the paid median and organic
+                // against the organic median, so lift is always apples to
+                // apples (Jenna 2026-10-06). Never against the whole
+                // campaign.
+                var splitBench = null;
+                if (_iiqGoatMode()) {
+                    var byMedia = { paid: [], organic: [] };
+                    for (var g = 0; g < rows.length; g++) {
+                        var rg = rows[g];
+                        if (rg.primary_pct != null && rg.primary_pct > 0) byMedia[_iiqGoatMediaKey(rg.asset)].push(rg.primary_pct);
+                    }
+                    splitBench = {
+                        paid:    { median: medianOf(byMedia.paid),    n: byMedia.paid.length },
+                        organic: { median: medianOf(byMedia.organic), n: byMedia.organic.length }
+                    };
                 }
-                if (median > 0) {
-                    for (var j = 0; j < rows.length; j++) {
-                        var r = rows[j];
-                        if (r.primary_pct != null && r.primary_pct > 0) {
-                            var raw = r.primary_pct / median;
-                            var key = r.asset.asset_id || r.asset.url || r.asset.action_label || j;
-                            r.lift = _iiqLiftJitter(String(key), raw);
-                        }
+                for (var j = 0; j < rows.length; j++) {
+                    var r = rows[j];
+                    var rowMedian = median;
+                    if (splitBench) {
+                        r.bench_key = _iiqGoatMediaKey(r.asset);
+                        rowMedian = splitBench[r.bench_key].median;
+                        r.bench_median = rowMedian;
+                    }
+                    if (rowMedian > 0 && r.primary_pct != null && r.primary_pct > 0) {
+                        var raw = r.primary_pct / rowMedian;
+                        var key = r.asset.asset_id || r.asset.url || r.asset.action_label || j;
+                        r.lift = _iiqLiftJitter(String(key), raw);
                     }
                 }
                 var state = window._iiqAssetTable || { key: 'lift', dir: 'desc' };
@@ -38363,6 +38397,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     rows = rows.filter(function(r) { return _iiqGoatFilterMatch(r.asset); });
                 }
                 rows.benchmark = { median: median, n: pctValues.length, use_info: _iiqPhaseUsesInfo(asOfIso, openingIso) };
+                if (splitBench) { rows.benchmark.paid = splitBench.paid; rows.benchmark.organic = splitBench.organic; rows.benchmark.split = true; }
                 return rows;
             }
 
@@ -38794,7 +38829,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var assetTip = 'The individual campaign asset. Channel glyph + title + posted date. Click any row to open the detail view with the daily curve.';
                 var exposureTip = 'How many viewers have seen the asset so far, filtered by the as-of date. Never exceeds the platform\'s real view count.';
                 var primaryTip = 'Of the viewers exposed to this asset, what share took the downstream action within the 7-day attribution window. The label switches at T-14, 14 days pre-launch: info-seek before, ticketing site after.';
-                var liftTip = 'How this asset\'s response rate compares to the campaign median. Strong is 1.3x or higher, on pace lands near median, soft under-indexes. Nudged off the exact bucket edge so ties don\'t cluster.';
+                var liftTip = _iiqGoatMode()
+                    ? 'How this asset\'s response rate compares to the median for its own media type: paid assets against the paid median, organic assets against the organic median. Strong is 1.3x or higher, on pace lands near median, soft under-indexes. Nudged off the exact bucket edge so ties don\'t cluster.'
+                    : 'How this asset\'s response rate compares to the campaign median. Strong is 1.3x or higher, on pace lands near median, soft under-indexes. Nudged off the exact bucket edge so ties don\'t cluster.';
                 var sampleTip = 'Raw count of viewers who could have taken the action. Bigger sample = more confidence the response rate is real, not noise.';
                 var confTip = 'Simplified read of sample size. High is 100K or more, Medium is 25K to 100K, Low is under 25K. A Strong lift chip on a Low confidence asset is worth watching but not banking on.';
 
@@ -38874,6 +38911,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                             else if (bucket === 'onpace') { chipBg = 'rgba(183,179,216,0.14)'; chipBorder = 'rgba(183,179,216,0.45)'; chipFg = '#B7B3D8'; chipLabel = 'On pace'; }
                             else                          { chipBg = 'rgba(248,113,113,0.14)'; chipBorder = 'rgba(248,113,113,0.45)'; chipFg = '#f87171'; chipLabel = 'Soft'; }
                             liftCell = '<span style="display:inline-block; background:' + chipBg + '; border:1px solid ' + chipBorder + '; color:' + chipFg + '; font-size:0.72rem; font-weight:700; padding:0.2rem 0.55rem; border-radius:999px; white-space:nowrap;">' + chipLabel + ' · ' + r.lift.toFixed(1) + 'x</span>';
+                            if (r.bench_key) liftCell += '<div style="color:#797F81; font-size:0.68rem; margin-top:0.15rem;">vs ' + r.bench_key + ' median</div>';
                         }
 
                         var sampleJit = _iiqCountJitter(slug, 'row_sample_' + rowKey, r.views);
@@ -38961,7 +38999,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     +       '<p><b>Asset.</b> The individual campaign asset. Channel glyph + title + posted date. Click any row to open the detail view with the daily curve.</p>'
                     +       '<p><b>Exposure.</b> How many viewers have seen the asset so far, filtered by the as-of date. Never exceeds the platform\'s real view count.</p>'
                     +       '<p><b>Response %</b> (Info-seek before T-14, Ticketing site after). Of the viewers exposed to this asset, what share took the downstream action within the 7-day attribution window. The label switches at T-14, 14 days pre-launch: info-seek before, ticketing site after.</p>'
-                    +       '<p><b>Lift vs benchmark.</b> How this asset\'s response rate compares to the campaign median. Strong is 1.3x or higher, on pace lands near median, soft under-indexes. Nudged off the exact bucket edge so ties don\'t cluster.</p>'
+                    +       '<p><b>Lift vs benchmark.</b> ' + escapeHtml(liftTip) + '</p>'
                     +       '<p><b>Sample size.</b> Raw count of viewers who could have taken the action. Bigger sample = more confidence the response rate is real, not noise.</p>'
                     +       '<p><b>Confidence.</b> Simplified read of sample size. High is 100K or more, Medium is 25K to 100K, Low is under 25K. A Strong lift chip on a Low confidence asset is worth watching but not banking on.</p>'
                     +       '<div class="iiq-help-close">Default sort is Lift vs benchmark, high to low. Click any header to re-sort. Click Show all to see every asset in the campaign.</div>'
@@ -40699,8 +40737,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                             return '<strong ' + (b.soft ? 'class="iiq-soft-label"' : 'style="color:#E9E8E1;"') + '>' + escapeHtml(b.label) + '</strong> <span style="color:#9AA09B;">' + escapeHtml(b.text) + '</span>';
                         });
                         var gbm = gf.benchmark || {};
-                        goatBenchHelp = '<p><b>Benchmark.</b> The campaign median ' + (gf.use_info ? 'info-seek' : 'ticketing site visit') + ' rate across every rated creative asset in view at this date'
-                            + (gbm.median > 0 ? (': ' + gbm.median.toFixed(2) + '% across ' + gbm.n + ' assets') : '') + '. Lift on the Performance page is each asset\u2019s own rate against it.</p>'
+                        var gbPhrase = _iiqGoatBenchPhrase(gbm, gf.use_info ? 'info-seek' : 'ticketing site visit');
+                        goatBenchHelp = '<p><b>Benchmark.</b> Paid assets read against the paid median and organic assets against the organic median, so every lift is apples to apples'
+                            + (gbPhrase ? (': ' + gbPhrase) : '') + '. Lift on the Performance page is each asset\u2019s own rate against the median for its own media type.</p>'
                             + '<p><b>One week, one number.</b> New viewers reached in the last 7 days, against the 7 days before. The WoW chip, the biggest mover, the movers list, the exposure tile and the trajectory all read from it.</p>';
                     } catch (_gse) { }
                 }
