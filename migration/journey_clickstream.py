@@ -1,9 +1,9 @@
-"""Clickstream last tab for every Digital Journey.
+"""Clickstream last tab for The Influencer Project.
 
-Movie / song journeys already ship a last tab of 8 to 13 steps with
-6 to 10 public URLs on each step (people + share of that step). This
-module is the shared builder so Prometheus and every nest use the
-same shape.
+Music to Long Form keeps its own nest. Other Digital Journeys do not
+ship this tab. When this builder runs for TIP it still uses 8 to 13
+steps with 6 to 10 public URLs on each step (people + share of that
+step). Same shape as Music to Long Form.
 
 URL people overlap and do not sum to the step. Steps decrease. Counts
 are messy. TikTok video IDs are never invented: search, tag, and
@@ -1378,9 +1378,25 @@ def _rewrite_step_urls(cs: dict, subject: str, platform: str, seed: str,
     return {'steps': out}
 
 
+def clickstream_allowed(subject: str = '', platform: str = '') -> bool:
+    """Clickstream last tab ships only on The Influencer Project.
+
+    Music to Long Form has its own nest and is not built here.
+    """
+    return 'influencer project' in f'{subject} {platform}'.lower()
+
+
+def _drop_clickstream(payload: dict) -> dict:
+    payload.pop('clickstream', None)
+    blob = payload.get('fragrance_shop_journey')
+    if isinstance(blob, dict):
+        blob.pop('clickstream', None)
+    return payload
+
+
 def attach_clickstream(payload: dict, prim: Optional[dict] = None,
                        inputs: Optional[dict] = None) -> dict:
-    """Put clickstream on the payload and on the nest blob. Always."""
+    """Put clickstream on The Influencer Project only."""
     inputs = inputs or {}
     prim = prim or {}
     blob = (payload.get('fragrance_shop_journey')
@@ -1395,6 +1411,8 @@ def attach_clickstream(payload: dict, prim: Optional[dict] = None,
                       or meta.get('project_name') or 'this journey'))
     platform = (str(inputs.get('platform') or '')
                 or str(meta.get('platform') or ''))
+    if not clickstream_allowed(subject, platform):
+        return _drop_clickstream(payload)
     window = str((blob.get('meta') or {}).get('window')
                  or meta.get('window')
                  or f"{meta.get('start_date') or ''} to {meta.get('end_date') or ''}")
