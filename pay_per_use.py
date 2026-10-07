@@ -718,7 +718,12 @@ def _apply_ppu_wallet_deduction(summary: dict) -> dict:
             post = (post_data.get('companies') or {}).get(s_key) or {}
         else:
             post = (post_data.get('users') or {}).get(s_key) or {}
-        _wallet.try_auto_reload(s_key, post)
+        _ar = _wallet.try_auto_reload(
+            s_key, post,
+            subject_kind=s_kind,
+            billed_via_username=target_username)
+        if _ar.get("error"):
+            print(f"[pay-per-use] auto-reload not fired: {_ar.get('error')}")
     except Exception as e:
         print(f"[pay-per-use] auto-reload skipped: {e}")
 
