@@ -37497,6 +37497,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     var share = Math.max(0, Math.min(0.97, (Number(r.bp) || 0) / 100));
                     r.reached = Math.round(totalExposed * share);
                     r.responded = Math.round(r.reached * (Number(r.response_pct) || 0) / 100);
+                    r.info_responded = r.info_pct == null ? 0 : Math.round(r.reached * r.info_pct / 100);
+                    r.ticket_responded = r.ticket_pct == null ? 0 : Math.round(r.reached * r.ticket_pct / 100);
                     sumReached += r.reached;
                     sumResp += r.responded;
                 });
@@ -37538,18 +37540,22 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var DEF = 8;
                 var showAll = !!window._iiqAudienceTable_showAll;
                 var shown = showAll ? rows : rows.slice(0, DEF);
+                var notOnSale = _iiqGoatTicketsNotOnSale(asOf);
+                var audInfoTip = 'Of the viewers reached in this cohort, the share who searched for or read about the film inside the 7-day window.' + (useInfo ? ' Share of response and Served read on this column at this date.' : '');
+                var audTicketTip = 'Of the viewers reached in this cohort, the share who went to a ticketing site or app inside the 7-day window.' + (notOnSale ? ' Tickets were not on sale at this date, so this column has nothing to read yet.' : '') + (useInfo ? '' : ' Share of response and Served read on this column at this date.');
                 var headerHtml = '<thead><tr>'
                     + _iiqAudTh('Audience', 'audience', 'left')
                     + _iiqAudTh('Share of exposure', 'overlap', 'right', 'This cohort\u2019s share of every viewer the campaign creative in view has reached at the as-of date. The ~N line is the viewer count.')
-                    + _iiqAudTh(noun + ' %', 'response', 'right', 'Of the viewers reached in this cohort, the share who took the downstream action inside the 7-day window. The label switches at T-14: info-seek before, ticketing site after.')
+                    + _iiqAudTh('Info-seek %' + (useInfo ? ' \u2022' : ''), 'info', 'right', audInfoTip)
+                    + _iiqAudTh('Ticketing site visit %' + (useInfo ? '' : ' \u2022'), 'ticket', 'right', audTicketTip)
                     + _iiqAudTh('Share of response', 'share', 'right', 'This cohort\u2019s share of every ' + nounLower + ' response the campaign has earned at the as-of date.')
                     + _iiqAudTh('Served', 'served', 'right', 'Share of exposure divided by share of response. Under 0.77x reads under-served, over 1.30x over-served, between reads balanced.')
                     + '</tr></thead>';
                 var bodyHtml;
                 if (!rows.length) {
-                    bodyHtml = '<tbody><tr><td colspan="5" style="padding: 1.4rem 1rem; text-align:center; color:#797F81; font-size:0.82rem;">No audience cohorts in this campaign.</td></tr></tbody>';
+                    bodyHtml = '<tbody><tr><td colspan="6" style="padding: 1.4rem 1rem; text-align:center; color:#797F81; font-size:0.82rem;">No audience cohorts in this campaign.</td></tr></tbody>';
                 } else if (rows[0].in_view_n <= 0 || !(rows[0].total_exposed > 0)) {
-                    bodyHtml = '<tbody><tr><td colspan="5" style="padding: 1.4rem 1rem; text-align:center; color:#797F81; font-size:0.82rem;">Move the as-of picker forward to see audience response to the first campaign moment.</td></tr></tbody>';
+                    bodyHtml = '<tbody><tr><td colspan="6" style="padding: 1.4rem 1rem; text-align:center; color:#797F81; font-size:0.82rem;">Move the as-of picker forward to see audience response to the first campaign moment.</td></tr></tbody>';
                 } else {
                     bodyHtml = '<tbody>' + shown.map(function(r, idx) {
                         var display = r.display || r.subject_key;
@@ -37568,20 +37574,30 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                             + '</div>';
                         var expCell = '<div style="color:#E9E8E1; font-size:0.9rem; font-weight:600;">' + r.share_exposure_pct.toFixed(2) + '%</div>'
                             + '<div style="color:#797F81; font-size:0.7rem; margin-top:0.1rem;">~' + fmtCompact(reachedJit) + ' viewers reached</div>';
-                        var respCell = '<div style="color:#E9E8E1; font-size:0.9rem; font-weight:600;">' + r.response_pct.toFixed(2) + '%</div>'
-                            + '<div style="color:#797F81; font-size:0.7rem; margin-top:0.1rem;">~' + fmtCompact(respondedJit) + ' responded</div>';
-                        var shareCell = '<div style="color:#E9E8E1; font-size:0.9rem; font-weight:600;">' + r.share_response_pct.toFixed(2) + '%</div>';
+                        var audRate = function(pct, n, jitKey, primary) {
+                            if (pct == null) return '<div style="color:#797F81; font-size:0.82rem;">\u2014</div>';
+                            var nJ = _iiqCountJitter(slug, jitKey + rowKey, n);
+                            return '<div style="color:' + (primary ? '#E9E8E1' : '#B7B3D8') + '; font-size:0.9rem; font-weight:600;">' + pct.toFixed(2) + '%</div>'
+                                + '<div style="color:#797F81; font-size:0.7rem; margin-top:0.1rem;">~' + fmtCompact(nJ) + ' responded</div>';
+                        };
+                        var infoCell = audRate(r.info_pct, r.info_responded, 'goat_aud_info_', useInfo);
+                        var ticketCell = notOnSale
+                            ? '<div style="color:#797F81; font-size:0.82rem;">\u2014</div><div style="color:#797F81; font-size:0.68rem; margin-top:0.1rem;">not on sale yet</div>'
+                            : audRate(r.ticket_pct, r.ticket_responded, 'goat_aud_ticket_', !useInfo);
+                        var shareCell = '<div style="color:#E9E8E1; font-size:0.9rem; font-weight:600;">' + r.share_response_pct.toFixed(2) + '%</div>'
+                            + '<div style="color:#797F81; font-size:0.7rem; margin-top:0.1rem;">~' + fmtCompact(respondedJit) + ' ' + nounLower + '</div>';
                         return '<tr onclick="iiqAudienceTableRowClick(' + idx + ')" style="cursor:pointer; transition: background 0.12s ease;" onmouseover="this.style.background=\'rgba(199,242,62,0.04)\'" onmouseout="this.style.background=\'\'">'
                             + '<td style="padding: 0.75rem; border-bottom:1px solid #182528; height:56px; vertical-align:middle;">' + audCell + '</td>'
                             + '<td style="padding: 0.75rem; border-bottom:1px solid #182528; text-align:right; vertical-align:middle;">' + expCell + '</td>'
-                            + '<td style="padding: 0.75rem; border-bottom:1px solid #182528; text-align:right; vertical-align:middle;">' + respCell + '</td>'
+                            + '<td style="padding: 0.75rem; border-bottom:1px solid #182528; text-align:right; vertical-align:middle;">' + infoCell + '</td>'
+                            + '<td style="padding: 0.75rem; border-bottom:1px solid #182528; text-align:right; vertical-align:middle;">' + ticketCell + '</td>'
                             + '<td style="padding: 0.75rem; border-bottom:1px solid #182528; text-align:right; vertical-align:middle;">' + shareCell + '</td>'
                             + '<td style="padding: 0.75rem; border-bottom:1px solid #182528; text-align:right; vertical-align:middle;">' + _iiqGoatServedChip(r) + '</td>'
                             + '</tr>';
                     }).join('') + '</tbody>';
                 }
                 var sortState = window._iiqAudienceTable || { key: 'fit', dir: 'desc' };
-                var sortLabelMap = { fit: 'served', overlap: 'share of exposure', response: nounLower + ' %', share: 'share of response', served: 'served', index: 'response index', audience: 'audience name' };
+                var sortLabelMap = { fit: 'served', overlap: 'share of exposure', response: nounLower + ' %', info: 'info-seek %', ticket: 'ticketing site visit %', share: 'share of response', served: 'served', index: 'response index', audience: 'audience name' };
                 var sortLabel = sortLabelMap[sortState.key] || sortState.key;
                 var dirLabel = (sortState.key === 'fit')
                     ? (sortState.dir === 'desc' ? 'under-served first' : 'over-served first')
@@ -37654,8 +37670,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     +     '<summary><span>How to read this.</span></summary>'
                     +     '<div class="iiq-help-body">'
                     +       '<p><b>Share of exposure.</b> The cohort\u2019s share of every viewer the creative in view has reached at the as-of date. Reach here is the campaign\u2019s own exposure, so it can never exceed what the assets delivered.</p>'
-                    +       '<p><b>' + noun + ' %.</b> Of the viewers reached in the cohort, the share who took the downstream action inside the 7-day window. Info-seek before T-14, ticketing site after.</p>'
-                    +       '<p><b>Share of response.</b> The cohort\u2019s share of every response the campaign has earned at this date.</p>'
+                    +       '<p><b>Info-seek %.</b> Of the viewers reached in the cohort, the share who searched for or read about the film inside the 7-day window.</p>'
+                    +       '<p><b>Ticketing site visit %.</b> Of the viewers reached in the cohort, the share who went to a ticketing site or app inside the 7-day window. Reads blank until tickets go on sale.</p>'
+                    +       '<p><b>Share of response.</b> The cohort\u2019s share of every ' + nounLower + ' response the campaign has earned at this date. Share of response and Served read on info-seek until 14 days before opening and on ticketing site visit from then on. The dot in the header marks which one at this date.</p>'
                     +       '<p><b>Served.</b> Share of exposure divided by share of response. Under 0.77x is under-served: the cohort responds harder than it is being reached, so it is where extra reach pays. Over 1.30x is over-served: the cohort takes more of the exposure than of the response. Between the two is balanced.</p>'
                     +       '<p><b>Over time.</b> Move the as-of date or use the T-90 to T+30 presets. The served read at T-30 against T-7 is the under-served list closing or widening.</p>'
                     +       '<div class="iiq-help-close">Default sort is Served, under-served first. Cohorts overlap, so shares are read side by side rather than summed.</div>'
@@ -38236,6 +38253,31 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 return isFinite(pct) ? pct : null;
             }
 
+            // Both funnel rates for one asset, regardless of phase. GOAT
+            // shows them side by side (Jenna 2026-10-06); lift still reads
+            // on the phase's primary metric.
+            function _iiqAssetBothPcts(asset, asOfIso) {
+                var v = _iiqAssetPitViews(asset, asOfIso);
+                if (v <= 0) return { info: null, ticket: null, info_n: 0, ticket_n: 0 };
+                var proj = iiqAssetFunnelProjection(asset);
+                if (!proj) return { info: null, ticket: null, info_n: 0, ticket_n: 0 };
+                var ip = Number(proj.info_pct), tp = Number(proj.ticket_pct);
+                ip = isFinite(ip) ? ip : null;
+                tp = isFinite(tp) ? tp : null;
+                return {
+                    info: ip, ticket: tp,
+                    info_n: ip == null ? 0 : Math.max(0, Math.round(v * ip / 100)),
+                    ticket_n: tp == null ? 0 : Math.max(0, Math.round(v * tp / 100))
+                };
+            }
+            // True when tickets were not yet on sale at the as-of date, so
+            // a ticketing site column has nothing to read.
+            function _iiqGoatTicketsNotOnSale(asOfIso) {
+                var ov = (window.__intentIQ && window.__intentIQ.overview) || {};
+                var tOpen = String(ov.ticketing_open_date || '').slice(0, 10);
+                return !!(tOpen && asOfIso && String(asOfIso) < tOpen);
+            }
+
             // Raw N of viewers who took the primary funnel action, at as-of.
             function _iiqAssetPrimaryRawN(asset, asOfIso, openingIso) {
                 var v = _iiqAssetPitViews(asset, asOfIso);
@@ -38314,11 +38356,16 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     var views = _iiqAssetPitViews(a, asOfIso);
                     var primaryPct = _iiqAssetPrimaryPct(a, asOfIso, openingIso);
                     var rawN = _iiqAssetPrimaryRawN(a, asOfIso, openingIso);
+                    var both = _iiqAssetBothPcts(a, asOfIso);
                     rows.push({
                         asset: a,
                         views: views,
                         primary_pct: primaryPct,
                         raw_n: rawN,
+                        info_pct: both.info,
+                        info_raw_n: both.info_n,
+                        ticket_pct: both.ticket,
+                        ticket_raw_n: both.ticket_n,
                         lift: null,
                         conf: _iiqAssetConfBucket(views)
                     });
@@ -38377,6 +38424,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                             return ((a.views || 0) - (b.views || 0)) * dir;
                         case 'primary':
                             return (((a.primary_pct == null ? -1 : a.primary_pct)) - ((b.primary_pct == null ? -1 : b.primary_pct))) * dir;
+                        case 'info':
+                            return (((a.info_pct == null ? -1 : a.info_pct)) - ((b.info_pct == null ? -1 : b.info_pct))) * dir;
+                        case 'ticket':
+                            return (((a.ticket_pct == null ? -1 : a.ticket_pct)) - ((b.ticket_pct == null ? -1 : b.ticket_pct))) * dir;
                         case 'lift':
                             // Tie-break by exposure descending so bigger
                             // audiences rise inside the same lift tier.
@@ -38835,10 +38886,20 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var sampleTip = 'Raw count of viewers who could have taken the action. Bigger sample = more confidence the response rate is real, not noise.';
                 var confTip = 'Simplified read of sample size. High is 100K or more, Medium is 25K to 100K, Low is under 25K. A Strong lift chip on a Low confidence asset is worth watching but not banking on.';
 
+                // GOAT: both funnel rates side by side. Lift keeps reading
+                // on the phase's primary metric (Jenna 2026-10-06).
+                var goatBoth = _iiqGoatMode();
+                var goatNotOnSale = goatBoth && _iiqGoatTicketsNotOnSale(asOf);
+                var infoTip = 'Of the viewers exposed to this asset, the share who searched for or read about the film inside the 7-day window.';
+                var ticketTip = 'Of the viewers exposed to this asset, the share who went to a ticketing site or app inside the 7-day window.' + (goatNotOnSale ? ' Tickets were not on sale at this date, so this column has nothing to read yet.' : '');
+                var colCount = goatBoth ? 7 : 6;
                 var headerHtml = '<thead><tr>'
                     + _iiqAssetTh('Asset',              'asset',    'left',  assetTip)
                     + _iiqAssetTh('Exposure',           'exposure', 'right', exposureTip)
-                    + _iiqAssetTh(primaryHeader,        'primary',  'right', primaryTip)
+                    + (goatBoth
+                        ? (_iiqAssetTh('Info-seek %' + (useInfo ? ' \u2022' : ''), 'info', 'right', infoTip + (useInfo ? ' Lift reads on this column at this date.' : ''))
+                          + _iiqAssetTh('Ticketing site visit %' + (useInfo ? '' : ' \u2022'), 'ticket', 'right', ticketTip + (useInfo ? '' : ' Lift reads on this column at this date.')))
+                        : _iiqAssetTh(primaryHeader,    'primary',  'right', primaryTip))
                     + _iiqAssetTh('Lift vs benchmark',  'lift',     'right', liftTip)
                     + _iiqAssetTh('Sample size',        'sample',   'right', sampleTip)
                     + _iiqAssetTh('Confidence',         'conf',     'right', confTip)
@@ -38846,7 +38907,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
 
                 var bodyHtml;
                 if (!rows.length) {
-                    bodyHtml = '<tbody><tr><td colspan="6" style="padding: 1.4rem 1rem; text-align:center; color:#797F81; font-size:0.82rem;">' + (_iiqGoatMode() && _iiqGoatFiltersActive() ? 'No assets match these filters at this as-of date. Clear a filter or move the picker forward.' : 'No assets in view at this as-of date. Move the picker forward to see the first campaign moment.') + '</td></tr></tbody>';
+                    bodyHtml = '<tbody><tr><td colspan="' + colCount + '" style="padding: 1.4rem 1rem; text-align:center; color:#797F81; font-size:0.82rem;">' + (_iiqGoatMode() && _iiqGoatFiltersActive() ? 'No assets match these filters at this as-of date. Clear a filter or move the picker forward.' : 'No assets in view at this as-of date. Move the picker forward to see the first campaign moment.') + '</td></tr></tbody>';
                 } else {
                     bodyHtml = '<tbody>' + displayAssetRows.map(function(r, idx) {
                         var a = r.asset;
@@ -38900,6 +38961,19 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                             pctCell = '<div style="color:#E9E8E1; font-size:0.9rem; font-weight:600;">' + r.primary_pct.toFixed(2) + '%</div>'
                                 + '<div style="color:#797F81; font-size:0.7rem; margin-top:0.1rem;">~' + fmtCompact(rawNJit) + ' viewers</div>';
                         }
+                        var infoCell = '', ticketCell = '';
+                        if (goatBoth) {
+                            var rateCell = function(pct, n, jitKey, primary) {
+                                if (pct == null) return '<div style="color:#797F81; font-size:0.82rem;">—</div>';
+                                var nJ = _iiqCountJitter(slug, jitKey + rowKey, n);
+                                return '<div style="color:' + (primary ? '#E9E8E1' : '#B7B3D8') + '; font-size:0.9rem; font-weight:600;">' + pct.toFixed(2) + '%</div>'
+                                    + '<div style="color:#797F81; font-size:0.7rem; margin-top:0.1rem;">~' + fmtCompact(nJ) + ' viewers</div>';
+                            };
+                            infoCell = rateCell(r.info_pct, r.info_raw_n, 'row_info_', useInfo);
+                            ticketCell = goatNotOnSale
+                                ? '<div style="color:#797F81; font-size:0.82rem;">—</div><div style="color:#797F81; font-size:0.68rem; margin-top:0.1rem;">not on sale yet</div>'
+                                : rateCell(r.ticket_pct, r.ticket_raw_n, 'row_ticket_', !useInfo);
+                        }
 
                         var liftCell;
                         if (r.lift == null) {
@@ -38933,14 +39007,17 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         var mainTr = '<tr onclick="iiqAssetTableRowClick(' + idx + ')" style="cursor:pointer; transition: background 0.12s ease;" onmouseover="this.style.background=\'rgba(199,242,62,0.04)\'" onmouseout="this.style.background=\'\'">'
                             + '<td style="padding: 0.75rem; border-bottom:1px solid #182528; height:52px; vertical-align:middle;">' + assetCellWithChev + '</td>'
                             + '<td style="padding: 0.75rem; border-bottom:1px solid #182528; text-align:right; vertical-align:middle;">' + exposureCell + '</td>'
-                            + '<td style="padding: 0.75rem; border-bottom:1px solid #182528; text-align:right; vertical-align:middle;">' + pctCell + '</td>'
+                            + (goatBoth
+                                ? ('<td style="padding: 0.75rem; border-bottom:1px solid #182528; text-align:right; vertical-align:middle;">' + infoCell + '</td>'
+                                  + '<td style="padding: 0.75rem; border-bottom:1px solid #182528; text-align:right; vertical-align:middle;">' + ticketCell + '</td>')
+                                : ('<td style="padding: 0.75rem; border-bottom:1px solid #182528; text-align:right; vertical-align:middle;">' + pctCell + '</td>'))
                             + '<td style="padding: 0.75rem; border-bottom:1px solid #182528; text-align:right; vertical-align:middle;">' + liftCell + '</td>'
                             + '<td style="padding: 0.75rem; border-bottom:1px solid #182528; text-align:right; vertical-align:middle;">' + sampleCell + '</td>'
                             + '<td style="padding: 0.75rem; border-bottom:1px solid #182528; text-align:right; vertical-align:middle;">' + confCell + '</td>'
                             + '</tr>';
                         var drillTr = '';
                         if (_drillExp) {
-                            drillTr = '<tr><td colspan="6" style="padding: 0; background: #0C1618; border-bottom:1px solid #182528;">' + _iiqRenderAssetAudienceDrill(a, asOf, opening, slug) + '</td></tr>';
+                            drillTr = '<tr><td colspan="' + colCount + '" style="padding: 0; background: #0C1618; border-bottom:1px solid #182528;">' + _iiqRenderAssetAudienceDrill(a, asOf, opening, slug) + '</td></tr>';
                         }
                         return mainTr + drillTr;
                     }).join('') + '</tbody>';
@@ -38949,6 +39026,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var sortState = window._iiqAssetTable || { key: 'lift', dir: 'desc' };
                 var sortLabelMap = {
                     lift: 'lift vs benchmark', exposure: 'exposure', primary: (useInfo ? 'info-seek %' : 'ticketing site visit %'),
+                    info: 'info-seek %', ticket: 'ticketing site visit %',
                     sample: 'sample size', conf: 'confidence', asset: 'asset title'
                 };
                 var sortLabel = sortLabelMap[sortState.key] || sortState.key;
@@ -38998,7 +39076,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     +     '<div class="iiq-help-body">'
                     +       '<p><b>Asset.</b> The individual campaign asset. Channel glyph + title + posted date. Click any row to open the detail view with the daily curve.</p>'
                     +       '<p><b>Exposure.</b> How many viewers have seen the asset so far, filtered by the as-of date. Never exceeds the platform\'s real view count.</p>'
-                    +       '<p><b>Response %</b> (Info-seek before T-14, Ticketing site after). Of the viewers exposed to this asset, what share took the downstream action within the 7-day attribution window. The label switches at T-14, 14 days pre-launch: info-seek before, ticketing site after.</p>'
+                    +       (goatBoth
+                        ? ('<p><b>Info-seek %.</b> ' + escapeHtml(infoTip) + '</p>'
+                          + '<p><b>Ticketing site visit %.</b> ' + escapeHtml(ticketTip) + '</p>'
+                          + '<p><b>Which one lift reads on.</b> Info-seek until 14 days before opening, ticketing site visit from then on. The dot in the header marks the column lift is reading at this date.</p>')
+                        : '<p><b>Response %</b> (Info-seek before T-14, Ticketing site after). Of the viewers exposed to this asset, what share took the downstream action within the 7-day attribution window. The label switches at T-14, 14 days pre-launch: info-seek before, ticketing site after.</p>')
                     +       '<p><b>Lift vs benchmark.</b> ' + escapeHtml(liftTip) + '</p>'
                     +       '<p><b>Sample size.</b> Raw count of viewers who could have taken the action. Bigger sample = more confidence the response rate is real, not noise.</p>'
                     +       '<p><b>Confidence.</b> Simplified read of sample size. High is 100K or more, Medium is 25K to 100K, Low is under 25K. A Strong lift chip on a Low confidence asset is worth watching but not banking on.</p>'
@@ -39146,8 +39228,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // pct at the current as-of. Weighted by PIT views so bigger
             // assets pull the mean toward their rate. Returns 0 when
             // nothing is in view.
-            function _iiqCampaignWeightedResponse(inViewAssets, asOfIso, openingIso) {
-                var useInfo = _iiqPhaseUsesInfo(asOfIso, openingIso);
+            function _iiqCampaignWeightedResponse(inViewAssets, asOfIso, openingIso, metric) {
+                var useInfo = metric ? (metric === 'info') : _iiqPhaseUsesInfo(asOfIso, openingIso);
                 var wSum = 0, pSum = 0;
                 for (var i = 0; i < inViewAssets.length; i++) {
                     var a = inViewAssets[i];
@@ -39187,6 +39269,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
 
                 var useInfo = _iiqPhaseUsesInfo(asOfIso, openingIso);
                 var campaignPct = _iiqCampaignWeightedResponse(inView, asOfIso, openingIso);
+                // GOAT carries both funnel rates per cohort so the table
+                // can show Info-seek % and Ticketing site visit % side by
+                // side (Jenna 2026-10-06).
+                var goatBoth = _iiqGoatMode();
+                var campaignInfoPct = goatBoth ? _iiqCampaignWeightedResponse(inView, asOfIso, openingIso, 'info') : 0;
+                var campaignTicketPct = goatBoth ? _iiqCampaignWeightedResponse(inView, asOfIso, openingIso, 'ticket') : 0;
 
                 var bps = cards.map(function(c) { return Number(c.overlap_bp) || 0; });
                 var minBp = Math.min.apply(null, bps);
@@ -39207,6 +39295,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     var idxRaw = (campaignPct > 0) ? (responsePct / campaignPct) : null;
                     var idx = (idxRaw != null) ? _iiqAudienceIndexJitter(subjectKey, idxRaw) : null;
                     var fit = _iiqAudienceFit(overlapPct, idx != null ? idx : 0);
+                    var infoPct = null, ticketPct = null;
+                    if (goatBoth) {
+                        infoPct = campaignInfoPct > 0 ? campaignInfoPct * _iiqAudienceTilt(subjectKey, norm, true) : null;
+                        ticketPct = campaignTicketPct > 0 ? campaignTicketPct * _iiqAudienceTilt(subjectKey, norm, false) : null;
+                    }
 
                     return {
                         card: c,
@@ -39219,6 +39312,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         reached: reached,
                         response_pct: responsePct,
                         responded: responded,
+                        info_pct: infoPct,
+                        ticket_pct: ticketPct,
                         campaign_pct: campaignPct,
                         tilt: tilt,
                         index: idx,
@@ -39258,6 +39353,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                             return (ai - bi) * dir;
                         case 'share':
                             return ((a.share_response_pct || 0) - (b.share_response_pct || 0)) * dir;
+                        case 'info':
+                            return ((a.info_pct || 0) - (b.info_pct || 0)) * dir;
+                        case 'ticket':
+                            return ((a.ticket_pct || 0) - (b.ticket_pct || 0)) * dir;
                         case 'served':
                             var sa = (a.served == null) ? Infinity : a.served;
                             var sb = (b.served == null) ? Infinity : b.served;
