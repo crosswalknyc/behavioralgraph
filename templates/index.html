@@ -33825,6 +33825,25 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #intentIQView .aiq-promoted #iiqQNav { display: none !important; }
         #intentIQView .aiq-controls .aiq-aud-pick { margin: 0 !important; background: transparent !important; border: 0 !important; padding: 0 !important; }
         #intentIQView .aiq-controls .aiq-aud-pick select { max-width: 340px; }
+        /* GOAT campaign filters: one bar under the tab rail, read by every tab. */
+        #intentIQView .aiq-goat-filters { display: none; flex-wrap: wrap; gap: 0.45rem; align-items: center; margin: -0.9rem 0 1.5rem; }
+        #intentIQView .iiq-goat-ms-eyebrow { color: #7C878A; font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.06em; margin-right: 0.15rem; }
+        #intentIQView .iiq-goat-ms { position: relative; display: inline-block; }
+        #intentIQView .iiq-goat-ms-btn { background: #15252A; color: #E9E8E1; border: 1px solid #27393D; border-radius: 999px; font-size: 0.72rem; padding: 0.24rem 0.75rem; cursor: pointer; white-space: nowrap; max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
+        #intentIQView .iiq-goat-ms-btn:hover { border-color: #3E5257; }
+        #intentIQView .iiq-goat-ms-btn.is-active { border-color: #C7F23E; color: #C7F23E; }
+        #intentIQView .iiq-goat-ms-btn i { font-style: normal; color: #7C878A; margin-left: 0.2rem; }
+        #intentIQView .iiq-goat-ms-pop { display: none; position: absolute; top: calc(100% + 5px); left: 0; z-index: 60; min-width: 230px; max-width: 340px; max-height: 280px; overflow-y: auto; background: #15252A; border: 1px solid #27393D; border-radius: 10px; padding: 0.45rem 0.5rem; box-shadow: 0 10px 28px rgba(0,0,0,0.45); }
+        #intentIQView .iiq-goat-ms.is-open .iiq-goat-ms-pop { display: block; }
+        #intentIQView .iiq-goat-ms-hint { color: #7C878A; font-size: 0.64rem; padding: 0.1rem 0.3rem 0.35rem; }
+        #intentIQView .iiq-goat-ms-item { display: flex; align-items: center; gap: 0.45rem; padding: 0.22rem 0.3rem; border-radius: 6px; color: #E9E8E1; font-size: 0.74rem; cursor: pointer; white-space: nowrap; }
+        #intentIQView .iiq-goat-ms-item:hover { background: rgba(255,255,255,0.04); }
+        #intentIQView .iiq-goat-ms-item input { accent-color: #C7F23E; margin: 0; flex: 0 0 auto; }
+        #intentIQView .iiq-goat-ms-item span { overflow: hidden; text-overflow: ellipsis; }
+        #intentIQView .iiq-goat-ms-reset { margin: 0.35rem 0.3rem 0.1rem; background: transparent; color: #B7B3D8; border: 1px solid rgba(183,179,216,0.35); border-radius: 999px; font-size: 0.68rem; padding: 0.18rem 0.6rem; cursor: pointer; }
+        #intentIQView .iiq-goat-ms-clear { background: transparent; color: #B7B3D8; border: 1px solid rgba(183,179,216,0.35); border-radius: 999px; font-size: 0.7rem; padding: 0.2rem 0.65rem; cursor: pointer; }
+        #intentIQView .iiq-goat-ms-status { color: #7C878A; font-size: 0.7rem; margin-left: 0.3rem; }
+        #intentIQView .iiq-goat-ms-status.is-on { color: #C7F23E; }
         /* The Multi-touch slab's own picker is replaced by the audience filter beside the title. */
         #intentIQView .aiq-wrap .iiq-mta-aud-row { display: none !important; }
         #intentIQView .aiq-aud-note { font-size: 0.74rem; color: #9AA09B; padding: 0.45rem 0.7rem; margin: 0 0 0.8rem;
@@ -37250,8 +37269,20 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var t = new Date(String(iso).slice(0, 10) + 'T12:00:00Z').getTime();
                 return isNaN(t) ? null : Math.round(t / 86400000);
             }
-            // --- Performance filters: media, platform, type, phase, talent
-            window._iiqGoatFilters = window._iiqGoatFilters || { media: '', platform: '', type: '', phase: '', talent: '' };
+            // --- Campaign filters: media, platform, asset type, phase,
+            // talent. Multi-select, and every tab reads them (Jenna
+            // 2026-10-06): Summary, Performance, Audiences, Attribution
+            // and Timing all narrow to the creative that matches. An
+            // empty list means all. Lift on Performance still reads
+            // against the whole-campaign median.
+            function _iiqGoatEmptyFilters() { return { media: [], platform: [], type: [], phase: [], talent: [] }; }
+            window._iiqGoatFilters = window._iiqGoatFilters || _iiqGoatEmptyFilters();
+            function _iiqGoatFilterList(k) {
+                var f = window._iiqGoatFilters || {};
+                var v = f[k];
+                if (Array.isArray(v)) return v.filter(Boolean);
+                return v ? [String(v)] : [];
+            }
             function _iiqGoatTalentTags(a) {
                 var t = a && a.talent_tags;
                 if (!t) return [];
@@ -37262,41 +37293,46 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 return String((a && a.paid_or_organic) || 'organic').toLowerCase() === 'paid' ? 'paid' : 'organic';
             }
             function _iiqGoatFilterMatch(a) {
-                var f = window._iiqGoatFilters || {};
-                if (f.media && _iiqGoatMediaKey(a) !== f.media) return false;
-                if (f.platform && String(a.channel || '') !== f.platform) return false;
-                if (f.type && String(a.asset_type || '') !== f.type) return false;
-                if (f.phase && String(a.phase_name || '') !== f.phase) return false;
-                if (f.talent && _iiqGoatTalentTags(a).indexOf(f.talent) < 0) return false;
+                if (!a) return false;
+                var m = _iiqGoatFilterList('media');
+                if (m.length && m.indexOf(_iiqGoatMediaKey(a)) < 0) return false;
+                var p = _iiqGoatFilterList('platform');
+                if (p.length && p.indexOf(String(a.channel || '')) < 0) return false;
+                var t = _iiqGoatFilterList('type');
+                if (t.length && t.indexOf(String(a.asset_type || '')) < 0) return false;
+                var ph = _iiqGoatFilterList('phase');
+                if (ph.length && ph.indexOf(String(a.phase_name || '')) < 0) return false;
+                var tl = _iiqGoatFilterList('talent');
+                if (tl.length) {
+                    var tags = _iiqGoatTalentTags(a), hit = false;
+                    for (var i = 0; i < tl.length; i++) { if (tags.indexOf(tl[i]) >= 0) { hit = true; break; } }
+                    if (!hit) return false;
+                }
                 return true;
             }
             function _iiqGoatFiltersActive() {
-                var f = window._iiqGoatFilters || {};
-                return !!(f.media || f.platform || f.type || f.phase || f.talent);
+                return ['media', 'platform', 'type', 'phase', 'talent'].some(function(k) { return _iiqGoatFilterList(k).length > 0; });
             }
-            window.iiqGoatFilterChange = function(el) {
-                var f = window._iiqGoatFilters || {};
-                f[el.getAttribute('data-k')] = el.value || '';
-                window._iiqGoatFilters = f;
-                window._iiqAssetTable_showAll = false;
-                try { _iiqRenderAssetTable(); } catch (e) { }
-            };
-            window.iiqGoatFilterClear = function() {
-                window._iiqGoatFilters = { media: '', platform: '', type: '', phase: '', talent: '' };
-                try { _iiqRenderAssetTable(); } catch (e) { }
-            };
-            function _iiqGoatSelect(key, label, values, current) {
-                var opts = '<option value="">' + escapeHtml(label) + ': all</option>';
-                values.forEach(function(v) {
-                    opts += '<option value="' + escapeHtml(v[0]) + '"' + (v[0] === current ? ' selected' : '') + '>' + escapeHtml(v[1]) + '</option>';
-                });
-                return '<select class="iiq-goat-filter" data-k="' + key + '" onchange="iiqGoatFilterChange(this)" style="background:#15252A; color:#E9E8E1; border:1px solid ' + (current ? '#C7F23E' : '#27393D') + '; border-radius:999px; font-size:0.72rem; padding:0.22rem 0.7rem; max-width:220px;">' + opts + '</select>';
+            function _iiqGoatAllCreative() {
+                var stash = window.__intentIQAssetsRaw;
+                var all = (stash && Array.isArray(stash.cardsAll || stash.cards)) ? (stash.cardsAll || stash.cards) : [];
+                return _iiqGoatCreative(all);
             }
-            function _iiqGoatAssetTableExtras(rowsAll, rowsShown, useInfo, asOf) {
-                var f = window._iiqGoatFilters || {};
+            // The attribution cuts name channels (TikTok, Instagram,
+            // YouTube, Search, X, Other); a platform pick maps onto them.
+            function _iiqGoatAttrChannel(ch) {
+                var c = String(ch || '').toLowerCase().trim();
+                if (!c) return 'other';
+                if (c.indexOf('search') >= 0 || c === 'google') return 'search';
+                if (c === 'tiktok' || c === 'instagram' || c === 'youtube' || c === 'x' || c === 'facebook' || c === 'twitter') return c === 'twitter' ? 'x' : c;
+                return 'other';
+            }
+            function _iiqGoatFilterOptions() {
+                var ov = (window.__intentIQ && window.__intentIQ.overview) || {};
+                var all = _iiqGoatAllCreative();
                 var plat = {}, type = {}, phase = {}, talent = {}, media = {};
-                rowsAll.forEach(function(r) {
-                    var a = r.asset || {};
+                all.forEach(function(a) {
+                    if (!a) return;
                     media[_iiqGoatMediaKey(a)] = 1;
                     if (a.channel) plat[a.channel] = 1;
                     if (a.asset_type) type[a.asset_type] = 1;
@@ -37304,20 +37340,125 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     _iiqGoatTalentTags(a).forEach(function(t) { talent[t] = 1; });
                 });
                 function keys(o) { return Object.keys(o).sort().map(function(k) { return [k, k]; }); }
+                var order = {};
+                ((ov && ov.phases) || []).forEach(function(p, i) {
+                    if (p && p.phase_name && order[p.phase_name] == null) order[p.phase_name] = String(p.start_date || '') + '|' + ('00' + i).slice(-3);
+                });
+                var phaseVals = Object.keys(phase).sort(function(a, b) {
+                    var ka = order[a] || ('~' + a), kb = order[b] || ('~' + b);
+                    return ka < kb ? -1 : (ka > kb ? 1 : 0);
+                }).map(function(k) { return [k, k]; });
                 var mediaVals = [];
                 if (media.paid) mediaVals.push(['paid', 'Paid']);
                 if (media.organic) mediaVals.push(['organic', 'Organic']);
-                var filters = '<div style="display:flex; flex-wrap:wrap; gap:0.45rem; align-items:center; margin:0.7rem 0 0.35rem;">'
-                    + '<span style="color:#7C878A; font-size:0.66rem; text-transform:uppercase; letter-spacing:0.06em;">Filter</span>'
-                    + _iiqGoatSelect('media', 'Media', mediaVals, f.media || '')
-                    + _iiqGoatSelect('platform', 'Platform', keys(plat), f.platform || '')
-                    + _iiqGoatSelect('type', 'Asset type', keys(type), f.type || '')
-                    + (Object.keys(phase).length ? _iiqGoatSelect('phase', 'Phase', keys(phase), f.phase || '') : '')
-                    + (Object.keys(talent).length ? _iiqGoatSelect('talent', 'Talent', keys(talent), f.talent || '') : '')
-                    + (_iiqGoatFiltersActive() ? '<button type="button" onclick="iiqGoatFilterClear()" style="background:transparent; color:#B7B3D8; border:1px solid rgba(183,179,216,0.35); border-radius:999px; font-size:0.7rem; padding:0.2rem 0.65rem; cursor:pointer;">Clear filters</button>' : '')
+                return { media: mediaVals, platform: keys(plat), type: keys(type), phase: phaseVals, talent: keys(talent), total: all.length };
+            }
+            // Every GOAT slab redraws from the same filter state, the way
+            // iiqOnAsOfChange redraws them for a new date.
+            function _iiqGoatRerenderAll() {
+                window._iiqAssetTable_showAll = false;
+                try { _iiqGoatRenderFilterBar(); } catch (e) { }
+                try { _iiqRenderWeeklySummary(); } catch (e) { }
+                try { _iiqRenderAssetTable(); } catch (e) { }
+                try { _iiqRenderAudienceTable(); } catch (e) { }
+                try { _iiqRenderTrendModule(); } catch (e) { }
+                if (typeof window._iiqRenderAssetsGrid === 'function') { try { window._iiqRenderAssetsGrid(); } catch (e) { } }
+                try {
+                    var c = window.__iiqMTACache;
+                    var s = (window.__intentIQ && window.__intentIQ.currentSlug) || '';
+                    if (c && c.data && c.slug === s) _iiqMTARender(c.data);
+                } catch (e) { }
+            }
+            window.iiqGoatMsToggle = function(ev, key) {
+                if (ev && ev.stopPropagation) ev.stopPropagation();
+                window._iiqGoatMsOpen = (window._iiqGoatMsOpen === key) ? '' : key;
+                try { _iiqGoatRenderFilterBar(); } catch (e) { }
+            };
+            window.iiqGoatMsCheck = function(key, el) {
+                var v = el.getAttribute('data-v') || '';
+                var list = _iiqGoatFilterList(key).slice();
+                var at = list.indexOf(v);
+                if (el.checked && at < 0) list.push(v);
+                if (!el.checked && at >= 0) list.splice(at, 1);
+                window._iiqGoatFilters = window._iiqGoatFilters || _iiqGoatEmptyFilters();
+                window._iiqGoatFilters[key] = list;
+                window._iiqGoatMsOpen = key;
+                _iiqGoatRerenderAll();
+            };
+            window.iiqGoatMsReset = function(key) {
+                window._iiqGoatFilters = window._iiqGoatFilters || _iiqGoatEmptyFilters();
+                window._iiqGoatFilters[key] = [];
+                window._iiqGoatMsOpen = key;
+                _iiqGoatRerenderAll();
+            };
+            window.iiqGoatFilterClear = function() {
+                window._iiqGoatFilters = _iiqGoatEmptyFilters();
+                window._iiqGoatMsOpen = '';
+                _iiqGoatRerenderAll();
+            };
+            window._iiqGoatResetFilters = function() {
+                window._iiqGoatFilters = _iiqGoatEmptyFilters();
+                window._iiqGoatMsOpen = '';
+            };
+            function _iiqGoatMsPill(key, label, values) {
+                var sel = _iiqGoatFilterList(key);
+                var labels = {};
+                values.forEach(function(v) { labels[v[0]] = v[1]; });
+                var txt;
+                if (!sel.length) txt = label + ': all';
+                else if (sel.length === 1) txt = label + ': ' + (labels[sel[0]] || sel[0]);
+                else txt = label + ': ' + sel.length + ' selected';
+                var open = window._iiqGoatMsOpen === key;
+                var items = values.map(function(v) {
+                    var on = sel.indexOf(v[0]) >= 0;
+                    return '<label class="iiq-goat-ms-item"><input type="checkbox" data-v="' + escapeHtml(v[0]) + '"' + (on ? ' checked' : '') + ' onchange="iiqGoatMsCheck(\'' + key + '\', this)"><span>' + escapeHtml(v[1]) + '</span></label>';
+                }).join('');
+                return '<div class="iiq-goat-ms' + (open ? ' is-open' : '') + '" data-k="' + key + '">'
+                    + '<button type="button" class="iiq-goat-ms-btn' + (sel.length ? ' is-active' : '') + '" onclick="iiqGoatMsToggle(event, \'' + key + '\')" aria-expanded="' + (open ? 'true' : 'false') + '" title="' + escapeHtml(label) + ': pick one or more">' + escapeHtml(txt) + ' <i>' + (open ? '\u25B4' : '\u25BE') + '</i></button>'
+                    + '<div class="iiq-goat-ms-pop" onclick="event.stopPropagation()">'
+                    +   '<div class="iiq-goat-ms-hint">Pick one or more. Nothing picked means all.</div>'
+                    +   items
+                    +   (sel.length ? '<button type="button" class="iiq-goat-ms-reset" onclick="iiqGoatMsReset(\'' + key + '\')">Reset to all</button>' : '')
+                    + '</div>'
                     + '</div>';
+            }
+            // One filter bar, under the tab rail, visible on every GOAT tab.
+            function _iiqGoatRenderFilterBar() {
+                var wrap = document.getElementById('intentIQView');
+                var host = wrap ? wrap.querySelector('.aiq-goat-filters') : null;
+                if (!host) return;
+                if (!_iiqGoatMode()) { host.innerHTML = ''; host.style.display = 'none'; return; }
+                var o = _iiqGoatFilterOptions();
+                if (!o.total) { host.innerHTML = ''; host.style.display = 'none'; return; }
+                var active = _iiqGoatFiltersActive();
+                var matched = active ? _iiqGoatAllCreative().filter(_iiqGoatFilterMatch).length : o.total;
+                var status = active
+                    ? '<span class="iiq-goat-ms-status is-on">' + matched + ' of ' + o.total + ' creative assets match. Every tab reads this set.</span>'
+                    : '<span class="iiq-goat-ms-status">Applies to every tab. Pick more than one in any list.</span>';
+                host.innerHTML = '<span class="iiq-goat-ms-eyebrow">Filter</span>'
+                    + _iiqGoatMsPill('media', 'Media', o.media)
+                    + _iiqGoatMsPill('platform', 'Platform', o.platform)
+                    + _iiqGoatMsPill('type', 'Asset type', o.type)
+                    + (o.phase.length ? _iiqGoatMsPill('phase', 'Phase', o.phase) : '')
+                    + (o.talent.length ? _iiqGoatMsPill('talent', 'Talent', o.talent) : '')
+                    + (active ? '<button type="button" class="iiq-goat-ms-clear" onclick="iiqGoatFilterClear()">Clear filters</button>' : '')
+                    + status;
+                host.style.display = 'flex';
+                if (!window.__iiqGoatMsDocBound) {
+                    window.__iiqGoatMsDocBound = true;
+                    document.addEventListener('click', function(ev) {
+                        if (!window._iiqGoatMsOpen) return;
+                        var t = ev.target;
+                        if (t && t.closest && t.closest('.iiq-goat-ms')) return;
+                        window._iiqGoatMsOpen = '';
+                        try { _iiqGoatRenderFilterBar(); } catch (e) { }
+                    });
+                }
+            }
+            window._iiqGoatRenderFilterBar = _iiqGoatRenderFilterBar;
+            function _iiqGoatAssetTableExtras(rowsAll, rowsShown, useInfo, asOf) {
                 var bm = rowsAll.benchmark || {};
-                var noun = useInfo ? 'info-seek' : 'ticketing site visit';
+                var noun = useInfo ? 'info-seek' : 'checkout page';
                 var bench = '';
                 if (bm.median > 0) {
                     bench = '<div class="iiq-support-intro" style="margin-top:0.3rem;">Benchmark: the campaign median ' + noun + ' rate of ' + bm.median.toFixed(2) + '% across ' + bm.n + ' rated creative assets in view at ' + escapeHtml(_iiqFmtAsOfDate(asOf)) + '. Lift is each asset\u2019s own rate against that median. Ticketing, showtime, search and Wikipedia destinations are read on Attribution, not ranked here.</div>';
@@ -37325,9 +37466,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     bench = '<div class="iiq-support-intro" style="margin-top:0.3rem;">Benchmark: the campaign median ' + noun + ' rate across every rated creative asset in view. No asset has accrued a rated read at this date yet.</div>';
                 }
                 if (_iiqGoatFiltersActive()) {
-                    bench += '<div class="iiq-support-intro" style="margin-top:0.2rem; color:#C7F23E;">Filters on: ' + rowsShown.length + ' of ' + rowsAll.length + ' assets shown. Lift stays measured against the whole-campaign median.</div>';
+                    bench += '<div class="iiq-support-intro" style="margin-top:0.2rem; color:#C7F23E;">Filters on: ' + rowsShown.length + ' of ' + rowsAll.length + ' assets in view shown. Lift stays measured against the whole-campaign median.</div>';
                 }
-                return { filters: filters, bench: bench };
+                return { filters: '', bench: bench };
             }
             // --- Audience rows, GOAT shape: reach is a share of campaign
             // exposure, never a share of the US population; served reads
@@ -37553,8 +37694,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         : (mvLabel + ' reads as the biggest mover with ' + mvCurr + ' new viewers this week, ' + (mv.delta_pct >= 0 ? 'up ' : 'down ') + Math.abs(mv.delta_pct).toFixed(1) + '% on the 7 days before.');
                     bul.push({ label: 'Biggest mover this week:', text: mvBody });
                 }
-                var rows = _iiqComputeAssetRows(asOf, opening, { unfiltered: true }) || [];
-                var bm = rows.benchmark || {};
+                var rowsAll = _iiqComputeAssetRows(asOf, opening, { unfiltered: true }) || [];
+                var bm = rowsAll.benchmark || {};
+                // Filters narrow the assets the summary speaks about; the
+                // median they are measured against stays whole-campaign.
+                var rows = _iiqGoatFiltersActive() ? (_iiqComputeAssetRows(asOf, opening) || []) : rowsAll;
                 var rated = rows.filter(function(r) { return r.lift != null && r.primary_pct != null; })
                     .sort(function(a, b) { return (b.lift - a.lift) || ((b.views || 0) - (a.views || 0)); });
                 if (rated.length && bm.median > 0) {
@@ -37610,13 +37754,20 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (!all.length) return active;
                 var sumV = 0, sumVp = 0, sumI = 0, sumIp = 0, sumT = 0, sumTp = 0;
                 var idsAll = {}, idsIn = {};
+                // The campaign filters narrow this read like every other
+                // tab: creative outside the pick carries no weight.
+                var filtersOn = _iiqGoatFiltersActive(), matchedN = 0, totalN = 0;
                 for (var i = 0; i < all.length; i++) {
                     var a = all[i];
                     if (!a) continue;
+                    totalN++;
+                    var isMatch = _iiqGoatFilterMatch(a);
+                    if (isMatch) matchedN++;
                     if (a.asset_id) idsAll[String(a.asset_id)] = true;
                     var v = Number(a.ext_view_count) || 0;
                     if (v <= 0) continue;
                     var pit = _iiqPitFactor(a, asOf);
+                    if (!isMatch) pit = 0;
                     if (pit > 0 && a.asset_id) idsIn[String(a.asset_id)] = true;
                     var proj = null;
                     try { proj = iiqAssetFunnelProjection(a); } catch (e) { proj = null; }
@@ -37672,6 +37823,24 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 ['first_touch', 'last_touch', 'assists'].forEach(function(k) {
                     (attr[k] || []).forEach(function(r, i) { r.us_accounts = sc(r.us_accounts, fTix, k + i); });
                 });
+                // A platform pick keeps only those channels in the three
+                // attribution cuts; the two partitions re-share to 100.
+                var platPick = _iiqGoatFilterList('platform');
+                if (platPick.length) {
+                    var want = {};
+                    platPick.forEach(function(p) { want[_iiqGoatAttrChannel(p)] = 1; });
+                    ['first_touch', 'last_touch', 'assists'].forEach(function(k) {
+                        var rows = attr[k];
+                        if (!Array.isArray(rows)) return;
+                        var kept = rows.filter(function(r) { return want[_iiqGoatAttrChannel(r.touchpoint)]; });
+                        if (k !== 'assists') {
+                            var tot = 0;
+                            kept.forEach(function(r) { tot += Number(r.us_accounts) || 0; });
+                            kept.forEach(function(r) { r.pct = tot > 0 ? (Number(r.us_accounts) || 0) / tot * 100 : 0; });
+                        }
+                        attr[k] = kept;
+                    });
+                }
                 (paths.time_to_conversion || []).forEach(function(r, i) { r.us_accounts = sc(r.us_accounts, fTix, 'ttc' + i); });
                 (paths.path_archetypes || []).forEach(function(r, i) { r.us_accounts = sc(r.us_accounts, fTix, 'arch' + i); });
                 (paths.leaks || []).forEach(function(r, i) { r.us_accounts = sc(r.us_accounts, fExp, 'leak' + i); });
@@ -37681,8 +37850,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     paths.time_to_conversion = [];
                     paths.path_archetypes = [];
                     paths.asof_note = 'Tickets were not on sale at this date, so the ticketing site stages read zero. The attribution cuts, time to convert and path archetypes open with ticketing' + (tOpen ? (' on ' + _iiqFmtAsOfDate(tOpen)) : '') + '.';
-                } else if (fExp < 0.999) {
+                } else if (fExp < 0.999 && !filtersOn) {
                     paths.asof_note = 'Read as of ' + _iiqFmtAsOfDate(asOf) + ': ' + Math.round(fExp * 100) + '% of the campaign\u2019s creative exposure had accrued by this date.';
+                } else if (fExp < 0.999) {
+                    paths.asof_note = 'Read as of ' + _iiqFmtAsOfDate(asOf) + ' on the filtered creative: ' + Math.round(fExp * 100) + '% of the campaign\u2019s creative exposure sits in this set at this date.';
+                }
+                if (filtersOn) {
+                    var fNote = 'Filters on: ' + matchedN + ' of ' + totalN + ' creative assets in this read.';
+                    paths.asof_note = paths.asof_note ? (fNote + ' ' + paths.asof_note) : fNote;
                 }
                 out.paths = paths;
                 out.sample_size = sc(active.sample_size, fExp, 'sample');
@@ -37699,9 +37874,15 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // film gate up-front but this is defense-in-depth so brand views
             // never accidentally hide content. On GOAT the destination
             // surfaces leave here too, so every derived read agrees.
-            function _iiqFilterAssetsByAsOf(cards, asOfIso, isFilm) {
+            function _iiqFilterAssetsByAsOf(cards, asOfIso, isFilm, opts) {
                 if (!cards || !cards.length) return cards || [];
                 cards = _iiqGoatCreative(cards);
+                // GOAT: the campaign filters narrow every derived read.
+                // Callers that need the whole campaign (the Performance
+                // benchmark, the N-of-M chip) pass { unfiltered: true }.
+                if (_iiqGoatMode() && !(opts && opts.unfiltered) && _iiqGoatFiltersActive()) {
+                    cards = cards.filter(_iiqGoatFilterMatch);
+                }
                 if (!isFilm) return cards;
                 if (!asOfIso) return cards;
                 var out = [];
@@ -38098,7 +38279,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             function _iiqComputeAssetRows(asOfIso, openingIso, opts) {
                 var stash = window.__intentIQAssetsRaw;
                 if (!stash || !Array.isArray(stash.cards)) return [];
-                var inView = _iiqFilterAssetsByAsOf(stash.cards, asOfIso, true);
+                var inView = _iiqFilterAssetsByAsOf(stash.cards, asOfIso, true, { unfiltered: true });
                 var rows = [];
                 var pctValues = [];
                 for (var i = 0; i < inView.length; i++) {
@@ -38583,6 +38764,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         var rowsAllGoat = _iiqComputeAssetRows(asOf, opening, { unfiltered: true });
                         goatExtras = _iiqGoatAssetTableExtras(rowsAllGoat, rows, _iiqPhaseUsesInfo(asOf, opening), asOf);
                     } catch (_ge) { goatExtras = { filters: '', bench: '' }; }
+                    try { _iiqGoatRenderFilterBar(); } catch (_gf) { }
                 }
                 // Progressive disclosure. Top 5 by default (already sorted
                 // by the active sort state which starts at Lift desc);
@@ -40253,7 +40435,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 }
                 var asOf = _iiqAsOfGet();
                 var M = _iiqGoatCreative(stash.cards).length;
-                var filtered = _iiqFilterAssetsByAsOf(stash.cards, asOf, true);
+                var filtered = _iiqFilterAssetsByAsOf(stash.cards, asOf, true, { unfiltered: true });
                 var N = filtered.length;
                 var pending = M - N;
                 var label = N + ' of ' + M + ' assets in view';
@@ -134745,6 +134927,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // The lifted audience picker lists the prior title's cohorts.
             var pick = wrap.querySelector('.aiq-controls .aiq-aud-pick');
             if (pick) pick.remove();
+            // GOAT's campaign filters belong to the title they were set on.
+            if (typeof window._iiqGoatResetFilters === 'function') { try { window._iiqGoatResetFilters(); } catch (e) { } }
+            var gfb = wrap.querySelector('.aiq-goat-filters');
+            if (gfb) { gfb.innerHTML = ''; gfb.style.display = 'none'; }
             // The MTA host still shows the prior title's tiles until it
             // redraws; the rail would read them.
             var mta = document.getElementById('iiqMTAContent');
@@ -134802,13 +134988,18 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             tabs.className = 'aiq-tabs';
             var panels = document.createElement('div');
             panels.className = 'aiq-panels';
+            // GOAT's campaign filter bar sits under the tab rail so every
+            // tab shows it; it stays empty and hidden on other titles.
+            var goatFilters = document.createElement('div');
+            goatFilters.className = 'aiq-goat-filters';
             var attic = document.createElement('div');
             attic.className = 'aiq-attic';
             wrap.insertBefore(banner, wrap.firstChild);
             wrap.insertBefore(controls, banner.nextSibling);
             wrap.insertBefore(rail, controls.nextSibling);
             wrap.insertBefore(tabs, rail.nextSibling);
-            wrap.insertBefore(panels, tabs.nextSibling);
+            wrap.insertBefore(goatFilters, tabs.nextSibling);
+            wrap.insertBefore(panels, goatFilters.nextSibling);
             wrap.appendChild(attic);
             var madePanels = {};
             _AIQ_TABS.forEach(function (t) {
@@ -134825,6 +135016,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // than being removed: the renderers still address them.
             var hdr = wrap.querySelector('.iiq-header');
             if (hdr) attic.appendChild(hdr);
+            if (typeof window._iiqGoatRenderFilterBar === 'function') { try { window._iiqGoatRenderFilterBar(); } catch (e) { } }
             return panels;
         }
 
