@@ -155,6 +155,14 @@ def api_synth_chat_read_status(job_id):
     uname = (user.get('username') or user.get('email') or '').strip()
     if not _pm_job_owner_ok(payload.get('user'), user):
         return jsonify({'success': False, 'error': 'not your job'}), 403
+    # A read a deploy stranded is picked back up from the poll itself,
+    # and a resumed read's result answers under the original job id.
+    try:
+        from prometheus import read_recovery as _rr
+        payload = _rr.follow(payload)
+    except Exception:
+        traceback.print_exc()
+    payload.pop('resume', None)
     return jsonify({'success': True, **payload})
 
 

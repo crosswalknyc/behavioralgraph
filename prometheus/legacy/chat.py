@@ -13063,7 +13063,8 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
                 # customer's wallet absorbs the pull at the dollar
                 # price when credits are out (consume_credit handles
                 # both, plus unlimited users, in one call).
-                if not _pm_user or not _H.consume_credit(
+                _rc = panel_confirm.get('resume_charge')   # read_recovery
+                if not isinstance(_rc, dict) and (not _pm_user or not _H.consume_credit(
                         _pm_user,
                         description=((f'Viewership read ({_pr_qty} yr) - '
                                       if _pr_kind == 'viewership'
@@ -13071,7 +13072,7 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
                                      + f'{subj_name}'),
                         pull_type=_pr_pull_type,
                         credits_used=_pr_credits,
-                        quantity=_pr_qty):
+                        quantity=_pr_qty)):
                     _pm_ask_hint(outcome='panel_out_of_credits',
                                  subject=subj_name)
                     return jsonify({
@@ -13085,9 +13086,9 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
                         'followups': []})
                 base = {'subject': subj_name, 's3_key': '',
                         'source': 'panel'}
-                panel_charge = {'user': _pm_user,
-                                'credits': _pr_credits,
-                                'subject': subj_name}
+                panel_charge = _rc if isinstance(_rc, dict) else {
+                    'user': _pm_user, 'credits': _pr_credits,
+                    'subject': subj_name}
                 print(f"[pm-panel] charged {_pr_credits} credits to "
                       f"{_pm_user} for {subj_name}")
             else:
@@ -13253,7 +13254,11 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
         _pm_read_status_write(job_id, {
             'job_id': job_id, 'user': _pm_user, 'status': 'working',
             'stage': 'reading the data', 'probe': _probe,
-            'question': text[:300], 'started_at': time.time()})
+            'question': text[:300], 'started_at': time.time(),
+            'resume': _rr.resume_record(          # survives a deploy
+                text=text, history=history, base=base,
+                panel_charge=panel_charge, probe=_probe,
+                switch_page=switch_page, bind_cohort=bind_cohort)})
         _pm_read_inflight_mark(_pm_user, text, job_id)
         _pm_job_bind_thread(job_id, _pm_user)
         threading.Thread(
@@ -14410,6 +14415,8 @@ def _pm_run_read_job(job_id, pm_user, pm_ppu, text, history, mr, base,
     no Flask request context."""
     head = {'job_id': job_id, 'user': pm_user, 'probe': bool(probe),
             'question': text[:300], 'started_at': time.time()}
+    head = _rr.carry_resume(job_id, head)   # keep the launch's resume record
+    _beat = _rr.start_heartbeat(job_id, head)
 
     def _stage(label):
         try:
@@ -14480,6 +14487,8 @@ def _pm_run_read_job(job_id, pm_user, pm_ppu, text, history, mr, base,
         _pm_notify_delete(job_id)
         if panel_charge:
             _pm_panel_refund(panel_charge)
+    finally:
+        _beat.set()
 
 
 @_H.app.route('/api/brief-chat/notify-when-done', methods=['POST'])
@@ -18684,3 +18693,5 @@ from prometheus.legacy.watch import (  # noqa: E402,F401
 # the digest caches when a profile loads so the first ask skips the
 # five-second digest stage.
 import prometheus.warm  # noqa: E402,F401
+from prometheus import read_recovery as _rr  # noqa: E402  (orphaned reads)
+_rr.start_background()

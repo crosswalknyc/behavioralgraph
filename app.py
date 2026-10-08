@@ -2135,8 +2135,9 @@ DEFAULT_PRICING = {
     'journey_iq': 30,            # Digital Journey - 2026-08-14 Jenna: 10 -> 30
     'cross_show': 5,             # 2026-08-14 new tile
     'intent_ingest': 10,         # 2026-08-14 new tile (module added 2026-08-12)
-    'panel_report': 6,           # 2026-09-14 Prometheus research report
-                                 # (credits twin of the $550 wallet price)
+    'panel_report': 5,           # custom ask: internal-unit twin of the 500 price
+                                 # (Jenna 2026-10-08: every custom ask is 500)
+    'viewership_read': 5,        # viewership over time: 5 per year of window (500/yr)
 }
 
 _pricing_cache = {'data': None, 'loaded_at': 0}
