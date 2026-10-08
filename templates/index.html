@@ -115118,25 +115118,60 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 html += '<div class="jiq-song-pad"><div class="jiq-frag-kpis">'
                     + '<div class="jiq-frag-kpi"><div class="jiq-frag-kpi-l">Age</div>'
                     + '<div class="jiq-frag-kpi-v">' + _jiqMusicEsc(String(d.age || '')) + '</div></div>'
-                    + '<div class="jiq-frag-kpi"><div class="jiq-frag-kpi-l">Household</div>'
+                    + '<div class="jiq-frag-kpi"><div class="jiq-frag-kpi-l">Home</div>'
                     + '<div class="jiq-frag-kpi-v">' + _jiqMusicEsc(d.household || d.income || '') + '</div></div>'
                     + '</div>'
                     + _jiqMusicRead(j.outcome || '')
                     + '</div>';
             }
-            html += '<div class="jiq-music-walk">';
+            html += '<div class="jiq-music-walk jiq-person-walk">';
             steps.forEach(function(st, i) {
-                html += '<div class="jiq-frag-step' + (i === steps.length - 1 ? ' is-terminal' : '') + '">'
-                    + '<div class="jiq-frag-rail"><i></i></div><div class="jiq-frag-body">'
+                var last = i === steps.length - 1;
+                html += '<div class="jiq-person-step' + (last ? ' is-terminal' : '') + '">'
+                    + '<div class="jiq-person-rail">' + _jiqMusicSurfaceIcon(st.surface) + '</div>'
+                    + '<div class="jiq-frag-body">'
                     + '<div class="jiq-frag-line"><span class="jiq-frag-label">'
                     + _jiqMusicEsc(st.action || '') + '</span>'
                     + '<span class="jiq-frag-count">' + _jiqMusicEsc(st.date || '') + '</span></div>'
-                    + '<div class="jiq-frag-doing">' + _jiqMusicEsc(st.surface || '')
-                    + (st.detail ? ' · ' + _jiqMusicEsc(st.detail) : '') + '</div>'
+                    + '<div class="jiq-frag-doing"><span class="jiq-person-surface">' + _jiqMusicEsc(st.surface || '') + '</span>'
+                    + (st.detail ? ' \u00b7 ' + _jiqMusicEsc(st.detail) : '') + '</div>'
                     + '</div></div>';
             });
             html += '</div>';
             return html;
+        }
+
+        // Brand mark for the app or site a step happened on. Real favicon when the
+        // browser can fetch it, the first letter in a tile when it cannot.
+        var _JIQ_MUSIC_SURFACE_DOMAINS = {
+            'tiktok': 'tiktok.com', 'spotify': 'open.spotify.com', 'google': 'google.com',
+            'youtube': 'youtube.com', 'netflix': 'netflix.com', 'reddit': 'reddit.com',
+            'prime video': 'primevideo.com', 'amazon prime video': 'primevideo.com', 'fandango': 'fandango.com',
+            'showtimes and tickets': 'fandango.com', 'ticketing': 'fandango.com', 'hulu': 'hulu.com',
+            'paramount+': 'paramountplus.com', 'apple tv': 'tv.apple.com', 'apple tv+': 'tv.apple.com',
+            'peacock': 'peacocktv.com', 'hbo max': 'hbomax.com', 'max': 'hbomax.com', 'disney+': 'disneyplus.com',
+            'amazon': 'amazon.com', 'instagram': 'instagram.com', 'shazam': 'shazam.com',
+            'apple music': 'music.apple.com', 'x': 'x.com', 'twitter': 'x.com', 'letterboxd': 'letterboxd.com',
+            'imdb': 'imdb.com', 'genius': 'genius.com', 'ticketmaster': 'ticketmaster.com',
+            'amc': 'amctheatres.com', 'digital store': 'tv.apple.com', 'press': '', 'web': ''
+        };
+        function _jiqMusicSurfaceIcon(surface) {
+            var name = String(surface || '').trim();
+            var key = name.toLowerCase();
+            var dom = _JIQ_MUSIC_SURFACE_DOMAINS[key];
+            if (dom === undefined) {
+                var slug = key.replace(/[^a-z0-9]/g, '');
+                dom = slug ? slug + '.com' : '';
+            }
+            var letter = (name.charAt(0) || '?').toUpperCase();
+            var fallback = '<b>' + _jiqMusicEsc(letter) + '</b>';
+            if (!dom) {
+                return '<span class="jiq-person-ico is-text" title="' + _jiqMusicEsc(name) + '">' + fallback + '</span>';
+            }
+            return '<span class="jiq-person-ico" title="' + _jiqMusicEsc(name) + '">'
+                + '<img src="https://www.google.com/s2/favicons?domain=' + encodeURIComponent(dom) + '&amp;sz=128" alt="" loading="lazy"'
+                + ' onerror="this.parentNode.classList.add(\'is-text\');this.remove();">'
+                + fallback + '</span>';
         }
 
         function _jiqMusicRenderClips(a, t) {
@@ -191014,6 +191049,21 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
     .jiq-frag-art.is-hr img { object-position: center 32%; }
     .jiq-frag-art.is-barbie img { object-position: center 22%; }
     .jiq-music-walk { margin: 0 34px; }
+    .jiq-person-step { display: grid; grid-template-columns: 38px 1fr; gap: 16px; }
+    .jiq-person-step .jiq-frag-body { padding: 9px 0 19px; }
+    .jiq-person-rail { position: relative; }
+    .jiq-person-rail::before { content: ''; position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: var(--cw-border, #2C4148); transform: translateX(-50%); }
+    body[data-theme="light"] .jiq-person-rail::before { background: #C9C6BA; }
+    .jiq-person-step.is-terminal .jiq-person-rail::before { bottom: 50%; }
+    .jiq-person-ico { position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; width: 38px; height: 38px; margin-top: 4px; border-radius: 11px; background: #15252A; border: 1px solid rgba(233,232,225,.12); overflow: hidden; }
+    body[data-theme="light"] .jiq-person-ico { background: #FFFFFF; border-color: rgba(12,22,24,.14); }
+    .jiq-person-ico img { width: 22px; height: 22px; border-radius: 5px; display: block; }
+    .jiq-person-ico b { display: none; font-size: 14px; font-weight: 800; color: #E9E8E1; }
+    body[data-theme="light"] .jiq-person-ico b { color: #0C1618; }
+    .jiq-person-ico.is-text b { display: block; }
+    .jiq-person-step.is-terminal .jiq-person-ico { border-color: #C7F23E; box-shadow: 0 0 0 1px rgba(199,242,62,.35); }
+    body[data-theme="light"] .jiq-person-step.is-terminal .jiq-person-ico { border-color: #5E7E12; box-shadow: 0 0 0 1px rgba(94,126,18,.35); }
+    .jiq-person-surface { color: #9AA09B; font-weight: 600; }
     .jiq-path { margin: 18px 34px 0; padding: 16px 0 8px; border-top: 1px solid rgba(233,232,225,.08); }
     body[data-theme="light"] .jiq-path { border-top-color: rgba(12,22,24,.1); }
     .jiq-path-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px 18px; flex-wrap: wrap; }
