@@ -432,7 +432,7 @@ def _slide_benchmark(slide, prs, plan_slide, dark, page_num, logos):
         size=9, color=MUTED_DARK if dark else MUTED_LIGHT)
 
 
-def _slide_close(slide, prs, plan_slide, page_num, logos):
+def _slide_close(slide, prs, plan_slide, page_num, logos, view_note=''):
     _bg(slide, prs, GRAPHITE)
     _chrome(slide, True, page_num, plan_slide.get('eyebrow') or 'PROFILE IQ',
             *logos)
@@ -446,6 +446,19 @@ def _slide_close(slide, prs, plan_slide, page_num, logos):
     else:
         _tb(slide, MARGIN, 2.60, BAND_W - 1.5, 2.4, line or 'Thank you.',
             size=48, bold=True, color=TITLE_DARK, line_spacing=1.15)
+    if view_note:
+        # what a view means rides every deck that carries one (2026-10-08)
+        _tb(slide, MARGIN, 6.05, BAND_W, 0.6, view_note, size=9.5,
+            color=BODY_DARK, line_spacing=1.25)
+
+
+def _plan_mentions_views(plan):
+    try:
+        import json as _json
+        from prometheus import methodology as _meth
+        return _meth.mentions_views(_json.dumps(plan, default=str))
+    except Exception:
+        return False
 
 
 def render_deck(plan, out_path, static_dir=None):
@@ -472,6 +485,12 @@ def render_deck(plan, out_path, static_dir=None):
     blank = prs.slide_layouts[6]
 
     slides = plan.get('slides') or []
+    view_note = ''
+    if _plan_mentions_views(plan):
+        from prometheus import methodology as _meth
+        view_note = _meth.VIEW_HEADER + ' ' + _meth.VIEW_DEFINITION
+        if not any(str(ps.get('type') or '').lower() == 'close' for ps in slides):
+            slides = list(slides) + [{'type': 'close', 'line': 'Thank you.'}]
     # Middle slides alternate grounds starting light; cover and close
     # are always dark (open dark, close dark, data prefers off-white).
     mid_idx = 0
@@ -483,7 +502,7 @@ def render_deck(plan, out_path, static_dir=None):
             _slide_cover(slide, prs, ps, logos)
             continue
         if stype == 'close':
-            _slide_close(slide, prs, ps, page_num, logos)
+            _slide_close(slide, prs, ps, page_num, logos, view_note=view_note)
             continue
         dark = (mid_idx % 2 == 1)
         mid_idx += 1

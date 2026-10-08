@@ -6196,7 +6196,18 @@ def build_generated_csv(entry):
                         scrub_user_text(str(m.get('definition') or ''))])
         name_bits = [subject, cohort, entry.get('family') or 'read']
     stem = '_'.join(_csv_slug(b) for b in name_bits if b)[:80].strip('_')
-    return (f"{stem or 'crosswalk_data'}.csv", buf.getvalue())
+    text_out = buf.getvalue()
+    try:   # views carry what a view means (Jenna 2026-10-08)
+        from prometheus import methodology as _meth
+        probe = ' '.join([str(entry.get('question') or ''), str(entry.get('reply') or ''),
+                          str(entry.get('family') or ''), text_out])
+        if _meth.mentions_views(probe):
+            w.writerow([])
+            w.writerow(['Note', _meth.VIEW_HEADER + ' ' + _meth.VIEW_DEFINITION])
+            text_out = buf.getvalue()
+    except Exception:
+        pass
+    return (f"{stem or 'crosswalk_data'}.csv", text_out)
 
 
 _INSIGHTS_SLIDE_TYPES = (

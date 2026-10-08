@@ -34,7 +34,8 @@ THRESHOLD_RX = re.compile(
 
 UNIT = ("Counts are US viewers (persons), any screen, credited at one "
         "second of viewing; they are not comparable to a service's "
-        "reported subscriber count or to TV ratings.")
+        "reported subscriber count, to TV ratings, or to platform view "
+        "counts that tally plays instead of people.")
 THRESHOLD = ("A title start counts at one second of playback; autoplayed "
              "previews and trailers on the home screen do not count as "
              "starts. Where a figure depends on that threshold, the 30 "
@@ -45,6 +46,44 @@ CARRIAGE = ("Carriage paths: direct app and site sessions plus channel "
             "storefronts (Prime Video Channels, Apple TV Channels, Roku) "
             "where the title is attributable.")
 BASE_SAMPLE = "measured across 10M US consumers and projected to the US"
+
+# What we count as a view, for every generated artifact that carries one
+# (Jenna 2026-10-08: "anytime something is generated that includes views
+# we give what we measure as a view from our methodology somewhere
+# attached so they know it's not apples to apples to other metrics").
+VIEW_HEADER = 'What we count as a view:'
+VIEW_DEFINITION = (
+    "A view is one person, on any screen, who played a title for at least one "
+    "second inside the window, counted once however many devices or sessions "
+    "they used. Autoplayed previews and trailers are not views. Counts are US "
+    "viewers (persons), not accounts, so they are not comparable "
+    "to a service's reported subscriber count, to TV ratings, or to platform "
+    "view counts that tally plays instead of people.")
+VIEW_NOTE_SHORT = ("Views here are US viewers (persons) credited at one second of "
+                   "playback, counted once per person; not comparable to subscriber "
+                   "counts, TV ratings, or play counts.")
+
+
+def mentions_views(text):
+    return bool(VIEWERSHIP_RX.search(str(text or '')))
+
+
+def carries_definition(text):
+    t = str(text or '')
+    return VIEW_HEADER in t or 'Counts are US viewers (persons)' in t or VIEW_NOTE_SHORT in t
+
+
+def attach_view_definition(text, short=False):
+    """Append the view definition to a text artifact that mentions views
+    and does not already carry it. Idempotent."""
+    t = str(text or '')
+    if not t.strip() or not mentions_views(t) or carries_definition(t):
+        return text
+    body = t.rstrip()
+    if short:
+        return body + '\n\n' + VIEW_NOTE_SHORT
+    return body + '\n\n' + VIEW_HEADER + ' ' + VIEW_DEFINITION
+
 
 MODEL_RULES = (
     'VIEWERSHIP FIGURES (house rules, always):\n'
@@ -112,7 +151,7 @@ def block(window_start=None, window_end=None, window_label='',
             lines.append(f"- Base: the {base} audience, {BASE_SAMPLE}.")
     else:
         lines.append(f"- Base: {BASE_SAMPLE[0].upper() + BASE_SAMPLE[1:]}.")
-    lines.append(f"- Unit: {UNIT}")
+    lines.append(f"- {VIEW_HEADER} {VIEW_DEFINITION}")
     if THRESHOLD_RX.search(str(text or '')):
         lines.append(f"- Threshold: {THRESHOLD}")
     lines.append(f"- {CARRIAGE}")
@@ -132,7 +171,7 @@ def ensure(reply, res=None, question='', base_label='', base_people=None):
         res = res if isinstance(res, dict) else {}
         if not is_viewership_read(text, res, question):
             return reply
-        if '- Unit: Counts are US viewers (persons)' in text:
+        if carries_definition(text):
             return reply
         lines = block(window_start=res.get('window_start'),
                       window_end=res.get('window_end'),

@@ -101,6 +101,11 @@ def send_user_email(*, to, subject, body, instructed=False, caller='',
         return rec
     subject_c = scrub(subject).replace('\n', ' ').strip()[:200]
     body_c = scrub(body)
+    try:   # views are never left without what a view means (Jenna 2026-10-08)
+        from prometheus import methodology as _meth
+        body_c = _meth.attach_view_definition(body_c)
+    except Exception:
+        pass
     bad = banned_tokens(subject_c) + banned_tokens(body_c)
     if bad:
         rec['reason'] = f"banned vocabulary after scrub: {sorted(set(bad))}"

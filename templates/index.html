@@ -19421,6 +19421,8 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
     // every price and balance in pounds. Numbers are 1:1; only the
     // symbol changes. Every price/balance formatter below reads this.
     window.PM_CURRENCY_SYMBOL = {{ (currency_symbol|default('$'))|tojson }};
+    window.PM_VIEW_DEFINITION = {{ (view_definition|default(''))|tojson }};
+    window.PM_VIEW_NOTE_SHORT = {{ (view_note_short|default(''))|tojson }};
     // Self-serve Prometheus plan (2026-09-24). Set before any module
     // script runs so the Prometheus launcher init can read it.
     window.CW_SELF_SERVE_PLAN = {{ 'true' if self_serve_plan else 'false' }};
@@ -192399,5 +192401,64 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
     })();
 </script>
 
+<script>
+// What we count as a view (2026-10-08, Jenna): any dashboard view that shows
+// view counts carries the definition so readers know it is not apples to
+// apples with subscriber counts, TV ratings, or play counts. One source:
+// prometheus/methodology.py via window.PM_VIEW_DEFINITION.
+(function () {
+    var DEF = window.PM_VIEW_DEFINITION || '';
+    var SHORT = window.PM_VIEW_NOTE_SHORT || DEF;
+    if (!DEF) return;
+    var VIEW_RX = /\b(viewers?|views|viewership|watched|watch time|hours watched|streams?|streamed|sessions?|browse[- ]only|title starts?|plays)\b/i;
+    var IDS = ['journeyIQView', 'subscriberIQView', 'trendsIQView', 'impactIQView'];
+    function ensure(el) {
+        if (!el) return;
+        var txt = el.innerText || '';
+        var has = el.querySelector(':scope > .pm-view-footnote');
+        if (!VIEW_RX.test(txt)) { if (has) has.remove(); return; }
+        if (has) return;
+        var f = document.createElement('div');
+        f.className = 'pm-view-footnote';
+        f.setAttribute('style', 'position:absolute; left:14px; bottom:10px; z-index:40; max-width:min(760px, 72vw); font-size:0.68rem; line-height:1.35; color:#9AA09B; background:rgba(12,22,24,0.9); border:1px solid rgba(154,160,155,0.25); border-radius:10px; padding:6px 10px;');
+        var strong = document.createElement('strong');
+        strong.style.fontWeight = '600';
+        strong.textContent = 'What we count as a view: ';
+        var span = document.createElement('span');
+        span.textContent = SHORT;
+        var a = document.createElement('a');
+        a.href = '#';
+        a.textContent = 'more';
+        a.setAttribute('style', 'color:inherit; text-decoration:underline; margin-left:6px;');
+        var expanded = false;
+        a.addEventListener('click', function (e) {
+            e.preventDefault();
+            expanded = !expanded;
+            span.textContent = expanded ? DEF : SHORT;
+            a.textContent = expanded ? 'less' : 'more';
+        });
+        f.appendChild(strong); f.appendChild(span); f.appendChild(a);
+        if (getComputedStyle(el).position === 'static') el.style.position = 'relative';
+        el.appendChild(f);
+    }
+    var pending = null;
+    function schedule() {
+        if (pending) return;
+        pending = setTimeout(function () {
+            pending = null;
+            IDS.forEach(function (id) { ensure(document.getElementById(id)); });
+        }, 700);
+    }
+    try {
+        var obs = new MutationObserver(schedule);
+        IDS.forEach(function (id) {
+            var el = document.getElementById(id);
+            if (el) obs.observe(el, { childList: true, subtree: true, characterData: true });
+        });
+    } catch (e) { /* older browsers: the first pass below still runs */ }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', schedule);
+    else schedule();
+})();
+</script>
 </body>
 </html>

@@ -190,6 +190,11 @@ def render_answer_pdf(title, body_text, date_label=None,
         if not str(body_text or "").strip():
             return b""
         title, body_text = _scrub_outbound(title, body_text)
+        try:   # views carry what a view means (Jenna 2026-10-08)
+            from prometheus import methodology as _meth
+            body_text = _meth.attach_view_definition(body_text)
+        except Exception:
+            pass
         return _render(title, body_text, date_label,
                        table_highlight_prefix)
     except Exception:

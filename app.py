@@ -10717,6 +10717,8 @@ def index():
                            credits_used=user.get('credits_used', 0) if user else 0,
                            wallet_balance_usd=_wallet_snap.get('wallet_balance_usd', 0.0),
                            currency_symbol=_wallet_snap.get('currency_symbol', '$'),
+                           view_definition=_view_definition_copy(),
+                           view_note_short=_view_definition_copy(short=True),
                            paying_customer=_wallet_snap.get('paying_customer', False),
                            billed_via_company=_wallet_snap.get('billed_via_company', False),
                            wallet_company_name=_wallet_snap.get('company_name', ''),
@@ -44223,6 +44225,16 @@ _CUT_KEYWORDS = {
     'gen_x': ('gen x', 'gen-x'),
     'boomer': ('boomer', 'boomers'),
 }
+
+
+def _view_definition_copy(short=False):
+    """What we count as a view, for the dashboard footnote (one source:
+    prometheus/methodology.py). '' when the module is unavailable."""
+    try:
+        from prometheus import methodology as _meth
+        return _meth.VIEW_NOTE_SHORT if short else _meth.VIEW_DEFINITION
+    except Exception:
+        return ''
 
 
 def _normalize_for_match(s):
