@@ -114550,19 +114550,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 }
             }
             html += '<div class="jiq-song-pad">' + _jiqMusicRead(read) + '</div>';
-            var disc = (a.discovery || []).slice().sort(function(x, y) {
-                return (Number(y.listeners) || 0) - (Number(x.listeners) || 0);
-            });
-            if (disc.length) {
-                var dr = _jiqMusicDetourRows(a, b);
-                html += _jiqMusicSec('02 Detours',
-                    'Where listeners found the songs.',
-                    'Unique people' + (b ? ' · Benchmark: median of ' + b.n + ' ' + b.noun : ''));
-                html += '<div class="jiq-frag-detours">'
-                    + _jiqMusicDetours('First listen channel', dr.listen)
-                    + _jiqMusicDetours('Then watched the title', dr.watched)
-                    + '</div>';
-            }
+            // The detour tables live on their own Detours stage; the
+            // journey page ends on the waterfall and its read line.
             return html;
         }
 
