@@ -167,6 +167,50 @@ def _base_tokens(name):
             if len(w) >= 3}
 
 
+# Journey / next-step reads (2026-10-08, Casey Pearson at Paramount+:
+# "what do subscribers do after they come to Paramount+ but don't
+# stream anything ... what % go to another streaming service ... what
+# services ... what do they watch"). A brand or genre share in such a
+# read is the share of LEAVERS who went there next, never the base
+# profile's penetration row for that brand. The anchor pass used to
+# bind "Netflix 54.9%" to the base row (74.9% of subscribers use
+# Netflix) and hold a correct read.
+_JOURNEY_ASK_RX = re.compile(
+    r"\b(?:what (?:do|did) (?:they|subscribers|viewers|users|people) do "
+    r"(?:after|next|when)|after (?:they|a|the|their)\b.{0,60}\b(?:leave|"
+    r"leaving|exit|bounce|browse|session|visit|don'?t (?:stream|watch|play))|"
+    r"go to another|goes? to (?:another|a different|other)|switch(?:es|ed)? to|"
+    r"what (?:services?|platforms?|apps?) do they (?:go|turn|move|switch) to|"
+    r"where do they go|next (?:stop|service|platform|destination)|"
+    r"immediately after|right after|destination|journey|path(?:way)? "
+    r"(?:to|from|after)|what do they (?:watch|open|start) (?:there|next|instead|"
+    r"on (?:the )?other))\b", re.I)
+_JOURNEY_SENT_RX = re.compile(
+    r"\b(?:go(?:es)? to|went to|head(?:s|ed)? to|move(?:s|d)? to|switch(?:es|ed)? to|"
+    r"turn(?:s|ed)? to|leave for|left for|land(?:s|ed)? on|open(?:s|ed)? next|"
+    r"next (?:stop|service|platform|destination)|destinations?|after leaving|"
+    r"after (?:a|the|their) (?:browse|browse-only|session|visit|bounce)|"
+    r"within (?:the|an?|\d+) (?:hour|minutes?)|immediately after|right after|"
+    r"of (?:those|the ones|the leavers|leavers|the exits|exits) who|"
+    r"share of (?:those|leavers|exits|the leavers)|first title|what they "
+    r"(?:watch|start|open|stream) (?:there|next|on|instead)|genre mix|"
+    r"genres? they|titles? they)\b", re.I)
+
+
+def is_journey_ask(question):
+    """True when the ask is about what people do NEXT (destinations,
+    switches, what they watch elsewhere). Brand and genre shares in
+    the answer are then journey shares, not base-row citations."""
+    return bool(_JOURNEY_ASK_RX.search(str(question or '')))
+
+
+def _journey_share_sentence(text, m_start, m_end):
+    """True when the sentence around a claim frames it as a next-step
+    or destination share."""
+    s, e = _sentence_bounds(text, m_start, m_end)
+    return bool(_JOURNEY_SENT_RX.search(text[s:e]))
+
+
 def is_comparative_ask(question):
     """True when the ask compares the subject against other entities
     (competitors, peers, other artists). Gen Pop / US-average baseline
@@ -534,7 +578,7 @@ def extract_claims(reply, res, base_name=None, comparative=False):
     claims, seen = [], set()
     base_toks = _base_tokens(base_name)
 
-    def _add(kind, label, value, dp, src, off_base=False):
+    def _add(kind, label, value, dp, src, off_base=False, journey=False):
         label = _trim_label(label)
         ln = _norm(label)
         try:
@@ -552,7 +596,8 @@ def extract_claims(reply, res, base_name=None, comparative=False):
             return
         seen.add(dk)
         claims.append({'kind': kind, 'label': label, 'value': v,
-                       'dp': dp, 'src': src, 'off_base': off_base})
+                       'dp': dp, 'src': src, 'off_base': off_base,
+                       'journey': bool(journey)})
 
     def _structured_off(label):
         # In a comparative read, structured rows are per-entity
@@ -607,7 +652,8 @@ def extract_claims(reply, res, base_name=None, comparative=False):
                  off_base=_off_base_text_claim(
                      text, m.start(), m.end(), base_toks,
                      lab_start=m.start('label'),
-                     val_start=m.start('val')))
+                     val_start=m.start('val')),
+                 journey=_journey_share_sentence(text, m.start(), m.end()))
     for rx in _DEMO_TEXT_RX:
         for m in rx.finditer(text):
             lab = _DEMO_ALIASES.get(m.group('label').lower(),
@@ -794,10 +840,17 @@ def anchor_check(reply, res, base_lookup, question=None):
     if not claims:
         return {'status': 'skip', 'detail': 'no recomputable figure cited',
                 'anchored': 0, 'findings': []}
+    journey_ask = is_journey_ask(question)
     anchored, findings, bound = 0, [], 0
     sample_hits = []
     for c in claims:
         if c.get('off_base'):
+            continue
+        # Next-step shares (where leavers went, what they watched
+        # there) are not citations of the base profile's rows. Demo
+        # shares still bind: a journey read's "61% female" is still
+        # this audience's gender row.
+        if c['kind'] != 'demo' and (c.get('journey') or journey_ask):
             continue
         cands = _candidates_for(c, base_lookup)
         if not cands:

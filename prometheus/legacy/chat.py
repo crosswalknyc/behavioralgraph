@@ -11720,47 +11720,6 @@ def _pm_plausible_subject(subj):
         return bool(str(subj or '').strip())
 
 
-def _pm_pending_q_tokens(s):
-    return {w for w in _H._normalize_for_match(s).split()
-            if w and w not in _PM_BASE_GENERIC_TOKENS}
-
-
-def _pm_stash_pending_question(username, subject, question,
-                               thread_id=None):
-    """Remember the question that triggered a build-first offer so the
-    completed run can answer it automatically (2026-09-24 Jenna). Kept
-    per user, newest first, capped at 5, 7-day expiry. The thread the
-    question came from rides along (2026-10-06) so the server-side
-    follow-through (prometheus.pending_answers) answers on that thread
-    even when the tab is closed."""
-    uname = str(username or '').strip().lower()
-    if not uname or not subject or not question:
-        return
-    import time as _t
-    if thread_id is None:
-        thread_id = str(getattr(_PM_REQ_THREAD, 'tid', '') or '')
-
-    def _mut(doc):
-        doc = doc if isinstance(doc, dict) else {}
-        now = _t.time()
-        lst = [e for e in (doc.get(uname) or [])
-               if isinstance(e, dict)
-               and now - float(e.get('ts') or 0) < 7 * 24 * 3600]
-        lst = [e for e in lst
-               if str(e.get('question') or '') != str(question)]
-        lst.insert(0, {'subject': str(subject)[:160],
-                       'question': str(question)[:500], 'ts': now,
-                       'thread_id': str(thread_id or '')[:64]})
-        doc[uname] = lst[:5]
-        return doc
-    try:
-        _H._s3_json_cas_update(_H.S3_BUCKET, _PM_PENDING_Q_S3_KEY, _mut,
-                            default=dict,
-                            log_name='pm_pending_questions')
-    except Exception:
-        traceback.print_exc()
-
-
 def _pm_pop_pending_question(username, completed_subject):
     """The stashed question whose subject matches the completed build
     (distinctive-token overlap), removed from the stash (one-shot).
@@ -12836,6 +12795,13 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
     bind_cohort = str(bind_cohort or '').strip()
     if bind_subject and not subj_hint:
         subj_hint = bind_subject
+    # A consumption count typed in lowercase ("how many people read the
+    # walsh family book series in the us last year?") names its own
+    # subject; the capitalized-run guess misses it and the ladder used
+    # to ask "Do you mean for <memory>?" (Jenna 2026-10-08). Read the
+    # object of the consumption verb instead.
+    if not subj_hint and _pm_is_viewership_ask(text):
+        subj_hint = _pm_consumption_subject(text)
     # WHICH ONES? (2026-10-02 Jenna: "it should have asked him which 3
     # influencers he was talking about then actually given him the
     # answer"). An ask that points at "these three creators" and names
@@ -12933,6 +12899,20 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
                         _opts.append({'label': _lab,
                                       'subject': _r['subject'],
                                       'cohort': _r.get('cohort')})
+                # The ask names one of the remembered subjects: bind it
+                # (never offer it back as a chip). 2026-10-08.
+                _hit = [o for o in _opts if _ns_mod.page_named(
+                    text, o['label'], _H._normalize_for_match,
+                    _PM_CLARIFY_STOP_TOKENS)]
+                if len(_hit) == 1 and not bind_subject:
+                    _pm_ask_hint(route='memory_bind',
+                                 subject=_hit[0]['subject'])
+                    return _pm_generate_metrics_response(
+                        user, text, history, metric_request=metric_request,
+                        prefer_catalog=True,
+                        bind_subject=str(_hit[0]['subject']),
+                        bind_cohort=str(_hit[0].get('cohort') or ''),
+                        switch_page=switch_page)
                 if _opts:
                     if len(_opts) > 1:
                         _q = (f"Do you mean for {_opts[0]['label']}, "
@@ -13146,7 +13126,9 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
             else:
                 reply, followups, offer = pma.build_panel_report_offer(
                     subj_name, _pr_label, question=text,
-                    kind=_pr_kind, years=_pr_qty)
+                    kind=_pr_kind, years=_pr_qty,
+                    verb=_pm_viewership_verb(text),
+                    series=_pm_is_viewership_series_ask(text))
                 _pm_ask_hint(outcome='panel_offer', subject=subj_name)
                 return jsonify({
                     'success': True, 'action': 'answer',
@@ -18684,7 +18666,13 @@ from prometheus.legacy.watch import (  # noqa: E402,F401
     _pm_usd_label,
     _pm_money_symbol,
     _pm_viewership_read_price,
+    _pm_viewership_verb,
+    _pm_is_viewership_series_ask,
+    _pm_is_viewership_ask,
+    _pm_consumption_subject,
     _pm_panel_price_label,
+    _pm_pending_q_tokens,
+    _pm_stash_pending_question,
     _pm_safe_user,
     _pm_s3_json,
     _pm_s3_put_json,

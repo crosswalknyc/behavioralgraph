@@ -17,7 +17,7 @@ from flask import session
 
 from prometheus.legacy import H as _H, C as _C  # noqa: E402
 
-__all__ = ['_PM_WATCH_FLAGGED', '_PM_USER_BLOCK_CACHE', '_PM_USER_BLOCK_LOCK', '_pm_user_block', '_pm_catalog_block', '_pm_ask_log_user', '_pm_probe_caller', '_pm_is_probe_user', '_PM_COMMON_IDENTITY_WORDS', '_pm_thread_confirmed_page', '_pm_watch_flag', '_pm_record_held_reply', '_pm_gate_options', '_pm_open_status_line', '_pm_price_table', '_pm_usd', '_pm_usd_label', '_pm_money_symbol', '_pm_safe_user', '_pm_s3_json', '_pm_s3_put_json', '_PM_REPORT_ASK_RE', '_pm_looks_report_ask', '_pm_is_viewership_series_ask', '_pm_window_years', '_pm_viewership_read_price', '_pm_panel_price_label']
+__all__ = ['_PM_WATCH_FLAGGED', '_PM_USER_BLOCK_CACHE', '_PM_USER_BLOCK_LOCK', '_pm_user_block', '_pm_catalog_block', '_pm_ask_log_user', '_pm_probe_caller', '_pm_is_probe_user', '_PM_COMMON_IDENTITY_WORDS', '_pm_thread_confirmed_page', '_pm_watch_flag', '_pm_record_held_reply', '_pm_gate_options', '_pm_open_status_line', '_pm_price_table', '_pm_usd', '_pm_usd_label', '_pm_money_symbol', '_pm_safe_user', '_pm_s3_json', '_pm_s3_put_json', '_PM_REPORT_ASK_RE', '_pm_looks_report_ask', '_pm_is_viewership_series_ask', '_pm_is_consumption_count_ask', '_pm_is_viewership_ask', '_pm_viewership_verb', '_pm_window_years', '_pm_viewership_read_price', '_pm_panel_price_label', '_pm_consumption_subject', '_pm_pending_q_tokens', '_pm_stash_pending_question']
 
 
 _PM_WATCH_FLAGGED = frozenset({'clarified_repeat', 'empty', 'faulted', 'error',
@@ -428,6 +428,8 @@ def _pm_looks_report_ask(text):
     t = str(text or '')
     if _PM_REPORT_ASK_RE.search(t):
         return True
+    if _pm_is_consumption_count_ask(t):
+        return True
     try:
         from prometheus.understand import _TIME_SERIES_RX
         return bool(_TIME_SERIES_RX.search(t))
@@ -448,6 +450,30 @@ _PM_YEAR_WORDS = {'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5,
                   'six': 6, 'seven': 7, 'eight': 8, 'nine': 9, 'ten': 10}
 
 
+# A consumption COUNT is a viewership ask too (Jenna 2026-10-08: "how
+# many people read the walsh family book series in the us last year?"
+# drew a build offer; it "would just go towards a viewership charge").
+_PM_CONSUME_VERB_RX = (
+    r"(?:read|reads|watch|watched|watches|listen|listened|listens|"
+    r"stream|streamed|streams|play|played|plays|view|viewed|views|"
+    r"tuned in|binged?|bought|buy|buys|purchased|downloaded|"
+    r"subscribed?|subscribes|follow|followed|follows)")
+_PM_CONSUME_COUNT_RX = re.compile(
+    r"\bhow many\b[^.?!]{0,60}\b" + _PM_CONSUME_VERB_RX + r"\b"
+    r"|\b(?:readership|viewership|listenership|audience size|"
+    r"total (?:viewers|readers|listeners|players|audience)|"
+    r"number of (?:viewers|readers|listeners|players|streams|plays|"
+    r"people who " + _PM_CONSUME_VERB_RX + r"))\b"
+    r"|\bhow (?:big|large) (?:is|was) (?:the )?(?:audience|readership|"
+    r"viewership|listenership)\b", re.I)
+_PM_VERB_LABELS = (
+    (r"\bread(?:s)?\b", "read"), (r"\blisten", "listened to"),
+    (r"\bplay", "played"), (r"\bstream", "streamed"),
+    (r"\bbinge", "binged"), (r"\b(?:bought|buy|buys|purchased)\b", "bought"),
+    (r"\bdownload", "downloaded"), (r"\bsubscribe", "subscribed to"),
+    (r"\bfollow", "followed"), (r"\b(?:watch|view|tuned)", "watched"))
+
+
 def _pm_is_viewership_series_ask(text):
     """True for a viewership metric asked over time ("monthly
     consumption for The Office", "viewership month by month")."""
@@ -459,6 +485,28 @@ def _pm_is_viewership_series_ask(text):
     except Exception:
         return False
     return bool(_PM_VIEWERSHIP_METRIC_RX.search(t))
+
+
+def _pm_is_consumption_count_ask(text):
+    """True for "how many people read / watched / listened to X" and
+    readership / viewership / audience-size asks."""
+    return bool(_PM_CONSUME_COUNT_RX.search(str(text or '')))
+
+
+def _pm_is_viewership_ask(text):
+    """A viewership ask: a consumption count or a consumption metric
+    over time. Priced at 500 per year of window."""
+    return _pm_is_viewership_series_ask(text) or _pm_is_consumption_count_ask(text)
+
+
+def _pm_viewership_verb(text):
+    """The consumption verb the ask used, for the offer copy
+    ("how many people read it"). 'watched' when none is named."""
+    t = str(text or '')
+    for rx, label in _PM_VERB_LABELS:
+        if re.search(rx, t, re.I):
+            return label
+    return 'watched'
 
 
 def _pm_window_years(text):
@@ -483,6 +531,7 @@ def _pm_window_years(text):
     m = re.search(r"\bsince\s+(20\d\d)\b", t)
     if m:
         return max(1, min(datetime.now(timezone.utc).year - int(m.group(1)) + 1, 10))
+    # "last year", "this year", "in 2025", "12 months": one year.
     return 1
 
 
@@ -490,7 +539,7 @@ def _pm_viewership_read_price(text, username=None):
     """(label, credits, years) for a viewership-over-time ask in the
     seat's currency, or None when the ask is not one. 500 per year
     (live table key viewership_read), symbol from the seat."""
-    if not _pm_is_viewership_series_ask(text):
+    if not _pm_is_viewership_ask(text):
         return None
     years = _pm_window_years(text)
     each = _pm_usd('viewership_read', 500.0, username=username)
@@ -522,3 +571,94 @@ def _pm_panel_price_label(username):
     usd = _pm_usd('panel_report', float(getattr(_H, 'PANEL_REPORT_USD', 550.0) or 550.0),
                   username=username)
     return _pm_usd_label(usd), credits_price
+
+
+def _pm_pending_q_tokens(s):
+    return {w for w in _H._normalize_for_match(s).split()
+            if w and w not in _C._PM_BASE_GENERIC_TOKENS}
+
+
+_PM_CONSUME_SUBJECT_RX = re.compile(
+    r"\bhow (?:many|much)\b[^.?!]{0,50}?\b" + _PM_CONSUME_VERB_RX +
+    r"\s+(?:to\s+)?(?:the\s+)?(?P<subj>.+?)"
+    r"(?=\s+(?:in|on|across|within|during|over|since|last|this|past|"
+    r"each|every|per|monthly|weekly|yearly|by|between|from|for|"
+    r"so far|to date)\b|\s*[?.!]|$)", re.I)
+_PM_SUBJ_SMALL_WORDS = {'a', 'an', 'the', 'of', 'and', 'or', 'in', 'on',
+                        'for', 'to', 'at', 'by', 'with', 'vs', 'de', 'la'}
+
+
+def _pm_consumption_subject(text):
+    """The object of a consumption-count ask, title-cased when the user
+    typed it in lowercase: "how many people read the walsh family book
+    series in the us last year" -> "Walsh Family Book Series". '' when
+    the ask is not shaped that way or the object is only ordinary
+    words."""
+    m = _PM_CONSUME_SUBJECT_RX.search(str(text or ''))
+    if not m:
+        return ''
+    raw = re.sub(r"\s+", " ", m.group('subj')).strip(" ,;:'\"")
+    # The regex swallowed a lowercase "the"; a capitalized "The" the
+    # user typed is part of the title ("The Pitt") and is restored.
+    head = str(text or '')[:m.start('subj')]
+    if re.search(r"\bThe\s*$", head):
+        raw = 'The ' + raw
+    elif re.search(r"\bthe\s*$", head) and len(raw.split()) == 1:
+        raw = 'The ' + raw           # "the office" -> The Office
+    if not raw or len(raw) > 90:
+        return ''
+    words = raw.split()
+    out = []
+    for i, w in enumerate(words):
+        if w.lower() in _PM_SUBJ_SMALL_WORDS and i not in (0, len(words) - 1):
+            out.append(w.lower())
+        elif w.isupper() and len(w) <= 5:
+            out.append(w)                      # acronyms stay
+        elif any(ch.isupper() for ch in w[1:]):
+            out.append(w)                      # user casing stays (iPhone)
+        else:
+            out.append(w[:1].upper() + w[1:])
+    subj = ' '.join(out)
+    try:
+        from prometheus import referents as _refs
+        if not _refs.plausible_subject(subj):
+            return ''
+    except Exception:
+        pass
+    return subj
+
+
+def _pm_stash_pending_question(username, subject, question,
+                               thread_id=None):
+    """Remember the question that triggered a build-first offer so the
+    completed run can answer it automatically (2026-09-24 Jenna). Kept
+    per user, newest first, capped at 5, 7-day expiry. The thread the
+    question came from rides along (2026-10-06) so the server-side
+    follow-through (prometheus.pending_answers) answers on that thread
+    even when the tab is closed."""
+    uname = str(username or '').strip().lower()
+    if not uname or not subject or not question:
+        return
+    import time as _t
+    if thread_id is None:
+        thread_id = str(getattr(_C._PM_REQ_THREAD, 'tid', '') or '')
+
+    def _mut(doc):
+        doc = doc if isinstance(doc, dict) else {}
+        now = _t.time()
+        lst = [e for e in (doc.get(uname) or [])
+               if isinstance(e, dict)
+               and now - float(e.get('ts') or 0) < 7 * 24 * 3600]
+        lst = [e for e in lst
+               if str(e.get('question') or '') != str(question)]
+        lst.insert(0, {'subject': str(subject)[:160],
+                       'question': str(question)[:500], 'ts': now,
+                       'thread_id': str(thread_id or '')[:64]})
+        doc[uname] = lst[:5]
+        return doc
+    try:
+        _H._s3_json_cas_update(_H.S3_BUCKET, _C._PM_PENDING_Q_S3_KEY, _mut,
+                            default=dict,
+                            log_name='pm_pending_questions')
+    except Exception:
+        traceback.print_exc()

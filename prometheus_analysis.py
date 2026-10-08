@@ -5332,7 +5332,8 @@ def panel_report_eligible(text, subject):
 
 
 def build_panel_report_offer(subject, price_label, question='',
-                             kind='report', years=1):
+                             kind='report', years=1, verb='watched',
+                             series=True):
     """The priced offer for a full read on a no-base subject. Returns
     (reply, followups, offer) where `offer` is the payload the widget
     arms so the confirm chip re-sends the ask with panel_confirm.
@@ -5350,10 +5351,12 @@ def build_panel_report_offer(subject, price_label, question='',
         except (TypeError, ValueError):
             yrs = 1
         span = 'one year' if yrs == 1 else f'{yrs} years'
+        what = (f"month by month viewers and hours watched across {span}"
+                if series else
+                f"how many people in the US {verb or 'watched'} it across {span}")
         reply = (
-            f"That is a viewership read on {subj}: month by month viewers "
-            f"and hours watched across {span}, delivered right here in the "
-            f"chat." + (f" It runs {price}." if price else ""))
+            f"That is a viewership read on {subj}: {what}, delivered right "
+            f"here in the chat." + (f" It runs {price}." if price else ""))
         followups = [run_chip, 'Never mind']
         offer = {'question': str(question or '')[:600],
                  'subject': subj[:120], 'kind': 'viewership', 'years': yrs}
