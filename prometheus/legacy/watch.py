@@ -558,7 +558,7 @@ def _pm_panel_price_label(username):
     """User-facing price for the Prometheus research report, plus the
     credit count the charge will consume. Internal-credit holders see
     the credit count; a paying customer whose credits will not cover
-    it sees the dollar price the wallet will absorb ($550 default,
+    it sees the dollar price the wallet will absorb ($500 default,
     admin-tunable in the billing panel). Never raises."""
     credits_price = _H.CREDITS_PANEL_REPORT
     try:
@@ -568,7 +568,7 @@ def _pm_panel_price_label(username):
         pass
     # Standard pricing, never credits (Jenna 2026-10-07): everyone sees
     # the dollar price; the charge still consumes the internal units.
-    usd = _pm_usd('panel_report', float(getattr(_H, 'PANEL_REPORT_USD', 550.0) or 550.0),
+    usd = _pm_usd('panel_report', float(getattr(_H, 'PANEL_REPORT_USD', 500.0) or 500.0),
                   username=username)
     return _pm_usd_label(usd), credits_price
 

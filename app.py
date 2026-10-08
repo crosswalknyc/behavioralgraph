@@ -2096,8 +2096,8 @@ CREDITS_CHATBOT_DECK = 0      # metered, not per-pull
 # at 6 credits, the nearest whole credit above $550 at the
 # $100/credit build rate. Admin-tunable via pricing settings
 # ('panel_report') and the billing panel's per-tool USD row.
-CREDITS_PANEL_REPORT = 6
-PANEL_REPORT_USD = 550.0
+CREDITS_PANEL_REPORT = 5
+PANEL_REPORT_USD = 500.0   # Jenna 2026-10-08: every custom ask is 500
 
 # Pricing settings S3 key
 PRICING_SETTINGS_KEY = 'system/pricing_settings.json'

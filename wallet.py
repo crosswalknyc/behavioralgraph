@@ -90,7 +90,7 @@ DEFAULT_PRICING = {
         # Prometheus research report (2026-09-14 Jenna): the put-
         # together read on a subject with no base anywhere, and the
         # catch-all price for report asks with no other set price.
-        "panel_report": 550.0,
+        "panel_report": 500.0,
         # Viewership over time (2026-10-08 Jenna, verbatim: "viewership
         # asks is always 500 per year in the company's requested
         # currency"). Priced per year of window; the seat's currency
@@ -450,8 +450,8 @@ MODULE_CATALOG = [
     # panel row is labeled "Un-priced Ask"; the USD field is editable
     # like every other row and the edited value flows through
     # tool_price_usd() into both the Prometheus quote and the charge.
-    ("panel_report",               "Un-priced Ask",
-     "pulls", 6, 550.0, "has_prometheus_access"),
+    ("panel_report",               "Custom Ask",
+     "pulls", 5, 500.0, "has_prometheus_access"),
     # 2026-10-08 (Jenna): a viewership-over-time read (monthly viewers,
     # hours watched, consumption by month) is 500 per year of window,
     # charged in the seat's currency. Quantity = years.

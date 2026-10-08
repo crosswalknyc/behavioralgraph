@@ -5253,36 +5253,18 @@ def the_subject(subject):
     return f"the {s}"
 
 
-def build_profile_required_reply(subject):
-    """Steer-to-build reply for an ask about a subject with no base
-    profile anywhere (2026-08-27, Jenna): generated reads derive from
-    existing bases only, never substitute for a base pull. No numbers,
-    no internal vocabulary; the build chip rides as a followup so the
-    standard build flow takes over. Returns (reply, followups)."""
-    subj = str(subject or '').strip()
-    if not subj or subj.lower() in ('that subject', 'this subject',
-                                    'the subject', 'none', 'null'):
-        # No subject resolved (2026-10-02 replay found "the that
-        # subject profile" shipping): ask for the audience instead of
-        # printing the placeholder.
-        reply = (
-            "That read needs a profile built first, and I did not catch "
-            "which audience it is about. Name the person, brand, title, "
-            "or group and I will build the Total Universe profile, then "
-            "read it any way you need: age bands, parent cohorts, buyer "
-            "overlaps, category mixes. The build is " + seat_price_label(300) + " and lands in "
-            "your Select Profile dropdown when it finishes."
-        )
-        return scrub_user_text(reply), ["Build a profile for ..."]
-    reply = (
-        f"That read needs {the_subject(subj)} profile built first. Once "
-        f"{the_subject(subj)} Total Universe profile is in your library, I can read "
-        f"it any way you need: age bands, parent cohorts, buyer "
-        f"overlaps, category mixes. The build is " + seat_price_label(300) + " and lands in "
-        f"your Select Profile dropdown when it finishes."
-    )
-    followups = [f"Build {the_subject(subj)} profile"[:160]]
-    return scrub_user_text(reply), followups
+def build_profile_required_reply(subject, price_label=None):
+    """Ask which audience a read is about when none was named. Kept
+    under its historic name; the forced-profile steer it used to
+    carry is retired (Jenna 2026-10-08: a custom ask is a priced read,
+    never a build). Returns (reply, followups)."""
+    price = str(price_label or '').strip()
+    tail = (f" A custom read like that runs {price} and lands right here "
+            f"in the chat." if price else "")
+    reply = ("I did not catch which audience this is about. Name the "
+             "person, brand, title, or group and I will read it: who they "
+             "are, what they do, how big the audience is." + tail)
+    return scrub_user_text(reply), []
 
 
 # ---------------------------------------------------------------------------
@@ -5315,20 +5297,11 @@ def panel_report_eligible(text, subject):
         return False
     if detect_deck_intent(t) or detect_csv_download_intent(t):
         return False
-    if _ANALYSIS_QUESTION_RX.search(t) or _ANALYSIS_BEHAVIOR_RX.search(t) \
-            or _STRATEGY_RX.search(t) or t.rstrip().endswith('?') \
-            or re.match(r'\s*(?:do|does|are|is|top|how|what|which|'
-                        r'who|where|when|why|compare|show me|tell me|'
-                        r'give me)\b', t, re.IGNORECASE):
-        return True
-    # A metric over time or a question stated as a wish is a read too
-    # (2026-10-08, East Tree Media: "Show me monthly consumption for
-    # The Office US" fell through to the plain steer-to-build copy).
-    try:
-        from prometheus.understand import _STATEMENT_ASK_RX, _TIME_SERIES_RX
-        return bool(_TIME_SERIES_RX.search(t) or _STATEMENT_ASK_RX.search(t))
-    except Exception:
-        return False
+    # Every remaining ask about a named subject is a custom read
+    # (Jenna 2026-10-08: "all custom asks are just 500 ... take out
+    # force running a profile"). The build / cut / deck / export
+    # exclusions above are the only gate.
+    return True
 
 
 def build_panel_report_offer(subject, price_label, question='',
@@ -5361,24 +5334,14 @@ def build_panel_report_offer(subject, price_label, question='',
         offer = {'question': str(question or '')[:600],
                  'subject': subj[:120], 'kind': 'viewership', 'years': yrs}
         return scrub_user_text(reply), followups, offer
+    # Custom ask (Jenna 2026-10-08): a priced read, delivered in the
+    # chat, with no profile pushed. The user can always ask for one.
     reply = (
-        f"{subj} is not in your library yet, so this one is a full "
-        f"put-together read, not a lookup. I research {the_subject(subj)} "
-        f"audience end to end and deliver the numbers right here in "
-        f"the chat. It runs {price}." if price else
-        f"{subj} is not in your library yet, so this one is a full "
-        f"put-together read, not a lookup. I research {the_subject(subj)} "
-        f"audience end to end and deliver the numbers right here in "
-        f"the chat."
+        f"I can answer that as a custom read on {subj}: I research "
+        f"{the_subject(subj)} audience end to end and deliver the numbers "
+        f"right here in the chat." + (f" It runs {price}." if price else "")
     )
-    reply += (
-        f"\n\nIf you want {subj}'s complete profile in your Select "
-        f"Profile dropdown instead (every category, every cut on "
-        f"tap), the {seat_price_label(300)} build is the better buy."
-    )
-    followups = [run_chip,
-                 f"Build {the_subject(subj)} profile instead"[:160],
-                 'Never mind']
+    followups = [run_chip, 'Never mind']
     offer = {'question': str(question or '')[:600],
              'subject': subj[:120]}
     return scrub_user_text(reply), followups, offer

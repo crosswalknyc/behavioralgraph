@@ -3312,7 +3312,8 @@ _PM_PRICING_COPY_TEMPLATE = (
     "Flywheel - {c}500\n"
     "Brand Partnership - {c}500 + {c}500 Control for a {c}1,000 total\n"
     "Ad Attribution - {c}500 for the initial pull and an optional {c}100 x "
-    "day to track per campaign\n\n"
+    "day to track per campaign\n"
+    "Any other custom ask - {c}500\n\n"
     "All Prometheus (chat bot) usage is billed at a metered rate of "
     "{c}10.50 / {c}52.50 per million in/out, plus {c}0.021 per search.")
 _PM_PRICING_COPY = _PM_PRICING_COPY_TEMPLATE.format(c='$')
@@ -12539,14 +12540,26 @@ def _pm_search_demand_response(user, text, history):
     except Exception:
         traceback.print_exc()
     if not _sd_base:
+        _sd_subj = str(study.get('subject')
+                       or pma.guess_subject_from_text(text) or '').strip()
+        _sd_user = (session.get('username') or user.get('username')
+                    or '').strip()
+        if _sd_subj:
+            _sd_label = _pm_panel_price_label(_sd_user)[0]
+            _b_reply, _b_chips, _b_offer = pma.build_panel_report_offer(
+                _sd_subj, _sd_label, question=text)
+            _pm_ask_hint(outcome='panel_offer', subject=_sd_subj)
+            return jsonify({
+                'success': True, 'action': 'answer', 'reply': _b_reply,
+                'followups': _b_chips, 'offer_deck': False,
+                'deck_angle': None, 'panel_offer': _b_offer})
         _b_reply, _b_chips = pma.build_profile_required_reply(
-            study.get('subject') or pma.guess_subject_from_text(text))
-        _pm_ask_hint(outcome='declined_no_base_profile',
-                     subject=study.get('subject'))
+            '', price_label=_pm_panel_price_label(_sd_user)[0])
+        _pm_ask_hint(outcome='clarify_subject')
         return jsonify({
             'success': True, 'action': 'answer', 'reply': _b_reply,
             'followups': _b_chips, 'offer_deck': False,
-            'deck_angle': None, 'build_required': True})
+            'deck_angle': None})
     if not reply.strip():
         _H._chatbot_error_email('brief-chat/analyze',
                              'search-demand study rendered empty',
@@ -12976,20 +12989,12 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
                 traceback.print_exc()
     panel_charge = None
     if not base:
-        # BUILD-FIRST (2026-09-24 Jenna, the PA-09 ask, verbatim: "in
-        # this case it would just be prometheus metered rate since
-        # it's asking for this but would also tell the user that
-        # prometheus needs an initial data cut to get started will
-        # they approve the run ... then after they say yes you would
-        # build the profile and synth the data").
-        #
-        # A QUESTION about a never-pulled subject meters like any chat
-        # answer, tells the reader an initial data cut is needed, and
-        # offers the run. The original question is stashed; when the
-        # approved build completes, the status poll hands it back and
-        # the chat re-asks it automatically against the fresh base.
-        # Report-shaped asks ("put together a report on X") keep the
-        # priced research-report flow below.
+        # A QUESTION about a never-pulled subject is a custom read
+        # (Jenna 2026-10-08: "all custom asks are just 500 ... take out
+        # force running a profile"). The 2026-09-24 build-first flow
+        # that steered these to a profile approval is retired; the
+        # pending-question stash + follow-through stay for runs the
+        # user chooses to approve themselves.
         _bf_subj = (subj_hint or pma.guess_subject_from_text(text)
                     or '').strip()
         # A subject bound upstream (memory, catalog, the open page)
@@ -13013,28 +13018,11 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
                 prefer_catalog=True, bind_subject=_bf_lib,
                 bind_cohort=bind_cohort, switch_page=switch_page)
         _bf_subj = _bf_core
-        if (_bf_subj and not isinstance(panel_confirm, dict)
-                and not _pm_looks_report_ask(text)):
-            try:
-                _pm_meter_answer('build_first_prompt', _pm_ppu)
-            except Exception:
-                pass
-            try:
-                _pm_stash_pending_question(
-                    (_pm_user or ''), _bf_subj, text)
-            except Exception:
-                traceback.print_exc()
-            _pm_ask_hint(outcome='build_first_offer', subject=_bf_subj)
-            return jsonify({
-                'success': True, 'action': 'answer',
-                'reply': (f"I can answer that, but Prometheus needs an "
-                          f"initial data cut of {_bf_subj} to get "
-                          f"started. Approve the run of {_bf_subj} and "
-                          f"I'll build the profile, then answer your "
-                          f"question the moment it lands."),
-                'followups': [f'Run a profile on {_bf_subj}',
-                              'Not now'],
-                'offer_deck': False, 'deck_angle': None})
+        # The build-first offer that used to sit here ("Prometheus needs
+        # an initial data cut of X ... Approve the run") is retired
+        # (Jenna 2026-10-08: "take out force running a profile and just
+        # charge 500 for the custom ask"). A question about a subject
+        # with no base is a custom read, priced below.
         # PANEL RESEARCH REPORT (2026-09-14, Jenna, verbatim: "before
         # it puts together any report outside of a simple analysis of
         # what already exists it should charge them. if they request
@@ -13080,6 +13068,8 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
                         'profile': subj_name})
             except Exception:
                 traceback.print_exc()
+        if not subj_name and _bf_subj:
+            subj_name = _bf_subj
         if subj_name and pma.panel_report_eligible(text, subj_name):
             _pr_label, _pr_credits = _pm_panel_price_label(_pm_user)
             _pr_pull_type, _pr_qty, _pr_kind = 'Panel Report', 1, 'report'
@@ -13136,15 +13126,28 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
                     'offer_deck': False, 'deck_angle': None,
                     'panel_offer': offer})
     if not base:
+        # No base and no priced read fired above: a named subject still
+        # gets the custom read offer (never a forced profile, Jenna
+        # 2026-10-08); with no subject at all, ask which audience.
         subj_name = (subj_hint or pma.guess_subject_from_text(text)
-                     or 'that subject')
-        reply, followups = pma.build_profile_required_reply(subj_name)
-        _pm_ask_hint(outcome='declined_no_base_profile',
-                     subject=subj_name)
+                     or '').strip()
+        if subj_name and _pm_plausible_subject(subj_name) \
+                and not isinstance(panel_confirm, dict):
+            _pr_label, _pr_credits = _pm_panel_price_label(_pm_user)
+            reply, followups, offer = pma.build_panel_report_offer(
+                subj_name, _pr_label, question=text)
+            _pm_ask_hint(outcome='panel_offer', subject=subj_name)
+            return jsonify({
+                'success': True, 'action': 'answer', 'reply': reply,
+                'followups': followups, 'offer_deck': False,
+                'deck_angle': None, 'panel_offer': offer})
+        reply, followups = pma.build_profile_required_reply(
+            '', price_label=_pm_panel_price_label(_pm_user)[0])
+        _pm_ask_hint(outcome='clarify_subject')
         return jsonify({
             'success': True, 'action': 'answer', 'reply': reply,
             'followups': followups, 'offer_deck': False,
-            'deck_angle': None, 'build_required': True})
+            'deck_angle': None})
     # Base rows ride the prompt (2026-08-27, toy-categories routing):
     # when the caller had no open-page digest but the base resolved to
     # a catalog profile, load that profile's digest so the read
