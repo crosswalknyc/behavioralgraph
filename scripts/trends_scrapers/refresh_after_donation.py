@@ -149,7 +149,11 @@ DOMAIN_REFRESH_MAP: dict[str, dict[str, list[str]]] = {
 _UI_LOOKBACK_DAYS = (1, 3, 7, 14, 30)
 
 # The window the UI selects by default - the one we pre-warm.
-_DEFAULT_UI_LOOKBACK = 7
+# 2026-10-08: corrected from 7 to 1. The #trendsIQLookback select has
+# "Yesterday" (value 1) as its selected option, so every warm since
+# the chain shipped rebuilt the 7-day view while the view the operator
+# actually lands on went cold after each purge.
+_DEFAULT_UI_LOOKBACK = 1
 
 
 def plan_refresh(domains: list[str]) -> tuple[list[str], list[str], list[str]]:
@@ -275,26 +279,29 @@ def run_coverage_gate() -> int:
 
 
 def purge_dashboard_cache() -> int:
-    """Delete today's live Trends IQ dashboard cache entries so the
-    next dashboard load recomputes from the fresh snapshots. Historic
-    (asof < today) entries are untouched - their keys hash a past date
-    and never collide with today's. Returns the number of keys deleted."""
+    """Refresh today's live Trends IQ dashboard cache entries in place
+    so the dashboard moves from the old complete view straight to the
+    new complete view, with no cold gap in between.
+
+    2026-10-08: this used to delete the five UI lookback keys and
+    rely on `warm_default_view` to rebuild one of them afterwards.
+    Between the delete and the warm (several minutes on the laptop)
+    every dashboard load started a 3-minute cold recompute on the web
+    instance; three chains overlapping this morning ran the worker
+    out of memory and the dashboard served 502s. Now this delegates
+    to `trends_iq.invalidate_live_compute_view_caches`, which
+    recomputes each live entry here and overwrites it under the same
+    key. Historic (asof < today) entries are untouched. Returns the
+    number of entries refreshed or deleted."""
     trends_iq = _import_trends_iq()
-    import boto3  # noqa: PLC0415
-    keys = [trends_iq._cache_key({'lookback_days': d}) for d in _UI_LOOKBACK_DAYS]
-    s3 = boto3.client('s3')
-    resp = s3.delete_objects(
-        Bucket=trends_iq.S3_CACHE_BUCKET,
-        Delete={'Objects': [{'Key': k} for k in keys], 'Quiet': True},
-    )
-    errors = resp.get('Errors') or []
-    deleted = len(keys) - len(errors)
-    logger.info("purged %d/%d live dashboard cache entries", deleted, len(keys))
-    return deleted
+    n = trends_iq.invalidate_live_compute_view_caches()
+    logger.info("refreshed %d live dashboard cache entr%s in place",
+                n, 'y' if n == 1 else 'ies')
+    return n
 
 
 def warm_default_view() -> bool:
-    """Recompute + re-cache the dashboard's default view (7-day window)
+    """Recompute + re-cache the dashboard's default view (the Yesterday window)
     so the operator's next page load is instant. Best-effort: a failure
     just means the first load rebuilds on demand."""
     try:
@@ -358,12 +365,16 @@ def main() -> int:
             # anyway was the duplicate coverage gate on 2026-09-26.
             run_coverage_gate()
 
+    refreshed = 0
     try:
-        purge_dashboard_cache()
+        refreshed = purge_dashboard_cache()
     except Exception as e:
-        logger.warning("cache purge failed: %s", e)
+        logger.warning("cache refresh failed: %s", e)
 
-    if args.warm:
+    # The in-place refresh already rebuilt whatever views were live.
+    # Warm the default view only when nothing was live to refresh, so
+    # the operator's first load is still instant.
+    if args.warm and not refreshed:
         warm_default_view()
 
     logger.info("refresh chain complete")

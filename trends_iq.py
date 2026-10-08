@@ -746,9 +746,17 @@ def _cache_put(filters: dict, payload: dict) -> None:
                                   max_concurrency=4)
         except Exception:
             tcfg = None
+        # Object metadata lets the invalidation sweep tell a historic
+        # entry from a live one with a HEAD instead of downloading the
+        # 20 MB body; older entries without it still take the slow path.
+        meta = {
+            'tiq-historic': '1' if _is_historic(filters) else '0',
+            'tiq-lookback': str(int(filters.get('lookback_days') or DEFAULT_LOOKBACK_DAYS)),
+        }
         s3.upload_fileobj(io.BytesIO(body), S3_CACHE_BUCKET,
                           _cache_key(filters),
-                          ExtraArgs={'ContentType': 'application/json'},
+                          ExtraArgs={'ContentType': 'application/json',
+                                     'Metadata': meta},
                           **({'Config': tcfg} if tcfg else {}))
     except Exception as e:
         logger.warning("trends_iq cache put failed (%d bytes): %s",
@@ -778,14 +786,36 @@ def invalidate_live_compute_view_caches() -> int:
     snapshots of a past day and are NEVER deleted. Only live-view
     entries get invalidated.
 
-    Returns the number of live cache entries deleted (0 when nothing
-    to invalidate or when S3 isn't reachable - callers can safely
-    ignore the return value).
+    2026-10-08: invalidation is a REFRESH IN PLACE, not a delete. A
+    deleted entry left the dashboard cold until the next page load,
+    and that load then ran a 3-minute recompute on the web instance.
+    Three refresh chains purged the cache within minutes of each other
+    this morning, every page load started another cold recompute, the
+    worker ran out of memory and restarted, and Trends and Rankers
+    rendered empty for ten minutes. Now each live entry is recomputed
+    here, in the writer's own process, and overwritten under the same
+    key, so a reader always finds a complete view: the old one until
+    the overwrite lands, the new one after. Entries beyond
+    TRENDS_IQ_INVALIDATE_REFRESH_MAX (default 3) and any entry whose
+    recompute fails fall back to the old delete, which is still
+    correct, just slower for the first reader.
+    TRENDS_IQ_INVALIDATE_MODE=delete restores the pure delete.
+
+    Returns the number of live cache entries refreshed or deleted (0
+    when nothing to invalidate or when S3 isn't reachable - callers
+    can safely ignore the return value).
     """
     s3 = _s3_client()
     if s3 is None:
         return 0
-    deleted = 0
+    mode = (os.environ.get('TRENDS_IQ_INVALIDATE_MODE') or 'refresh').strip().lower()
+    try:
+        refresh_max = int(os.environ.get('TRENDS_IQ_INVALIDATE_REFRESH_MAX', '3'))
+    except ValueError:
+        refresh_max = 3
+    if mode == 'delete':
+        refresh_max = 0
+    live: list = []
     try:
         paginator = s3.get_paginator('list_objects_v2')
         for page in paginator.paginate(Bucket=S3_CACHE_BUCKET,
@@ -793,6 +823,16 @@ def invalidate_live_compute_view_caches() -> int:
             for obj in page.get('Contents') or []:
                 key = obj.get('Key') or ''
                 if not key.endswith('.json'):
+                    continue
+                # Fast path: entries written since 2026-10-08 carry
+                # their historic flag as object metadata, so a HEAD
+                # settles them without pulling the body.
+                try:
+                    md = (s3.head_object(Bucket=S3_CACHE_BUCKET, Key=key)
+                          .get('Metadata') or {})
+                except Exception:
+                    md = {}
+                if md.get('tiq-historic') == '1':
                     continue
                 try:
                     resp = s3.get_object(Bucket=S3_CACHE_BUCKET, Key=key)
@@ -802,16 +842,45 @@ def invalidate_live_compute_view_caches() -> int:
                 filters = data.get('filters') or {}
                 if bool(filters.get('historic')):
                     continue
-                try:
-                    s3.delete_object(Bucket=S3_CACHE_BUCKET, Key=key)
-                    deleted += 1
-                except Exception as e:
-                    logger.debug("invalidate: delete %s failed: %s", key, e)
+                live.append((key, filters, obj.get('LastModified')))
     except Exception as e:
         logger.debug("invalidate_live_compute_view_caches failed: %s", e)
-    if deleted:
-        logger.info("invalidated %d live compute_view cache entries", deleted)
-    return deleted
+        return 0
+    # Most recently written first: that is the view someone is looking
+    # at right now, so it is the one that must never go cold.
+    live.sort(key=lambda t: str(t[2] or ''), reverse=True)
+    refreshed = 0
+    deleted = 0
+    for i, (key, filters, _lm) in enumerate(live):
+        if i < refresh_max:
+            try:
+                view_filters = {
+                    'geo_type':      filters.get('geo_type'),
+                    'geo_value':     filters.get('geo_value'),
+                    'lookback_days': filters.get('lookback_days'),
+                    'asof':          filters.get('asof') or None,
+                }
+                compute_view(view_filters, force_refresh=True)
+                refreshed += 1
+                # The recompute wrote under today's key for these
+                # filters. If the stale entry sat under an older key
+                # (a day rolled over), it is now orphaned: drop it.
+                if _cache_key(view_filters) != key:
+                    s3.delete_object(Bucket=S3_CACHE_BUCKET, Key=key)
+                continue
+            except Exception as e:
+                logger.warning("invalidate: refresh of %s failed (%s); "
+                               "deleting instead", key, e)
+        try:
+            s3.delete_object(Bucket=S3_CACHE_BUCKET, Key=key)
+            deleted += 1
+        except Exception as e:
+            logger.debug("invalidate: delete %s failed: %s", key, e)
+    if refreshed or deleted:
+        logger.info("live compute_view cache: %d entr%s refreshed in place, "
+                    "%d deleted", refreshed, 'y' if refreshed == 1 else 'ies',
+                    deleted)
+    return refreshed + deleted
 
 
 # ============================================================================
@@ -12579,7 +12648,39 @@ def _clean_lens_audience_marks(node, depth: int = 0) -> None:
             _clean_lens_audience_marks(v, depth + 1)
 
 
+_INFLIGHT_LOCKS: dict = {}
+_INFLIGHT_MASTER = threading.Lock()
+
+
+def _inflight_lock(key: str) -> threading.Lock:
+    with _INFLIGHT_MASTER:
+        lock = _INFLIGHT_LOCKS.get(key)
+        if lock is None:
+            lock = threading.Lock()
+            _INFLIGHT_LOCKS[key] = lock
+        return lock
+
+
 def compute_view(filters: dict, force_refresh: bool = False) -> dict:
+    """Single-flight front door for `_compute_view_impl`.
+
+    2026-10-08: when the cache is cold, every concurrent request for
+    the same filters used to start its own full recompute on the web
+    instance. Each one holds the 35 MB stream_estimates snapshot plus
+    the 54 MB reasoning snapshot in memory; three or four at once ran
+    the worker out of memory, it restarted, and the dashboard served
+    502s. Now the first caller for a cache key computes while later
+    callers for that key wait on a per-key lock and then take the
+    cache hit it wrote. Writers that pass force_refresh=True (the
+    refresh chains, invalidation) still hold the same lock so a reader
+    never races a half-written entry.
+    """
+    lock = _inflight_lock(_cache_key(filters))
+    with lock:
+        return _compute_view_impl(filters, force_refresh=force_refresh)
+
+
+def _compute_view_impl(filters: dict, force_refresh: bool = False) -> dict:
     """Build the full Trends payload for the requested filters.
 
     Every surface fans out in a background thread so a slow feed on one
