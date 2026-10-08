@@ -1872,6 +1872,49 @@ def money_symbol(subject=None, currency=None) -> str:
     return "£" if cur == "gbp" else "$"
 
 
+def display_currency(user, users_data=None) -> str:
+    """Currency a SEAT sees everywhere on the dashboard (Jenna
+    2026-10-08: East Tree Media and Omaze always see GBP, never USD).
+
+    Order: the seat's own billing_currency, then its company record's
+    (matched by the seat's `company` name whether or not the seat
+    bills through the company), then the billed subject's, else usd.
+    The wallet ledger itself stays numeric 1:1 (a 300 pull is $300 or
+    £300); only the symbol changes."""
+    if not isinstance(user, dict):
+        return "usd"
+    raw = str(user.get("billing_currency") or "").strip()
+    if raw:
+        return billing_currency(user)
+    data = users_data if isinstance(users_data, dict) else {}
+    cname = str(user.get("company") or "").strip()
+    rec = (data.get("companies") or {}).get(cname) if cname else None
+    if isinstance(rec, dict) and str(rec.get("billing_currency") or "").strip():
+        return billing_currency(rec)
+    try:
+        subject, _kind, _key = resolve_billing_subject(user, data)
+        if isinstance(subject, dict) and subject is not user:
+            return billing_currency(subject)
+    except Exception:
+        pass
+    return "usd"
+
+
+def display_symbol(user, users_data=None) -> str:
+    return money_symbol(currency=display_currency(user, users_data))
+
+
+def money_label(amount, currency="usd") -> str:
+    """Short price label in the seat's currency: $300 / £1,000 / £12.50,
+    whole units when they are whole. '' on junk."""
+    try:
+        v = float(amount)
+    except (TypeError, ValueError):
+        return ""
+    sym = money_symbol(currency=currency)
+    return f"{sym}{v:,.0f}" if abs(v - round(v)) < 0.009 else f"{sym}{v:,.2f}"
+
+
 def format_money(amount, subject=None, currency=None) -> str:
     cur = str(currency or billing_currency(subject) or "usd").strip().lower()
     if cur not in ("gbp", "usd"):
@@ -4903,6 +4946,7 @@ __all__ = [
     "wallet_balance", "wallet_stats",
     "is_paying_customer", "is_unlimited", "admits_wallet_ui",
     "billing_mode", "billing_currency", "money_symbol", "format_money",
+    "display_currency", "display_symbol", "money_label",
     "apply_auto_reload_preference",
     "parse_auto_reload_flag",
     "auto_reload_threshold", "auto_reload_amount",

@@ -33,6 +33,7 @@ _APP_BINDINGS = {
     'aiq_intent': '_pm_aiq_intent',
     'pricing_question': '_pm_pricing_question',
     'pricing_copy': '_PM_PRICING_COPY',
+    'pricing_copy_for': '_pm_pricing_copy',     # (username=None) -> rate card in the seat's currency
     'claude_data': '_pm_claude_data',        # (system, user, **kw) -> parsed JSON dict | {}
     'ask_hint': '_pm_ask_hint',
     # thread store

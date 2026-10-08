@@ -707,17 +707,28 @@ _CAP_DEMO_RX = re.compile(
     re.I)
 
 
+def _money_symbol():
+    """The seat's currency symbol; £ for East Tree Media and Omaze
+    (Jenna 2026-10-08). '$' outside a request."""
+    try:
+        import app as _A
+        return _A._session_money_symbol()
+    except Exception:
+        return '$'
+
+
 def _cut_price_label():
-    """Dollar price of a derived cut from the live table ($100
-    standard); never credits (Jenna 2026-10-07)."""
+    """Price of a derived cut from the live table (100 standard) in the
+    seat's currency; never credits (Jenna 2026-10-07)."""
+    sym = _money_symbol()
     try:
         import wallet as _w
         v = float(_w.tool_price_usd('profile_iq_derived_cut') or 0)
         if v > 0:
-            return f"${v:,.0f}" if abs(v - round(v)) < 0.009 else f"${v:,.2f}"
+            return f"{sym}{v:,.0f}" if abs(v - round(v)) < 0.009 else f"{sym}{v:,.2f}"
     except Exception:
         pass
-    return '$100'
+    return f'{sym}100'
 
 
 def capability_answer(text, cut_credits=None):

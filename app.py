@@ -2189,12 +2189,48 @@ _CREDIT_CONST_TOOL_KEYS = {
 }
 
 
-def _usd_label(v):
+def _session_currency(username=None):
+    """Display currency for the seat on this request (Jenna 2026-10-08:
+    East Tree Media and Omaze see GBP everywhere). Cached per request
+    on flask.g; 'usd' outside a request or on any failure."""
+    try:
+        from flask import g as _g, has_request_context as _hrc
+        uname = str(username or '').strip()
+        if not uname and _hrc():
+            uname = str(session.get('username') or '').strip()
+        if not uname:
+            return 'usd'
+        cache = getattr(_g, '_pm_currency_by_user', None) if _hrc() else None
+        if isinstance(cache, dict) and uname in cache:
+            return cache[uname]
+        import wallet as _w
+        data = load_users()
+        user = (data.get('users') or {}).get(uname) or {}
+        cur = _w.display_currency(user, data) if user else 'usd'
+        if _hrc():
+            if not isinstance(cache, dict):
+                cache = {}
+                _g._pm_currency_by_user = cache
+            cache[uname] = cur
+        return cur
+    except Exception:
+        return 'usd'
+
+
+def _session_money_symbol(username=None):
+    return '£' if _session_currency(username) == 'gbp' else '$'
+
+
+def _usd_label(v, username=None):
+    """Short price label in the seat's currency ($300 / £300 / £12.50).
+    Kept under its historic name; every caller is a seat-facing copy
+    path, so the symbol follows the seat (Jenna 2026-10-08)."""
     try:
         v = float(v)
     except Exception:
         return ''
-    return f"${v:,.0f}" if abs(v - round(v)) < 0.009 else f"${v:,.2f}"
+    sym = _session_money_symbol(username)
+    return f"{sym}{v:,.0f}" if abs(v - round(v)) < 0.009 else f"{sym}{v:,.2f}"
 
 
 def _funds_short_error(tool_label, tool_key=None, username=None):
@@ -2664,6 +2700,8 @@ def _caller_wallet_snapshot(username):
         out['company_name'] = key if kind == 'company' else ''
         out['unlimited'] = bool(
             _w.is_unlimited(user) or _w.is_unlimited(subject))
+        out['currency'] = _w.display_currency(user, data)
+        out['currency_symbol'] = _w.money_symbol(currency=out['currency'])
     except Exception:
         traceback.print_exc()
     return out
@@ -10533,6 +10571,7 @@ def index():
                            credits=effective_credits,
                            credits_used=user.get('credits_used', 0) if user else 0,
                            wallet_balance_usd=_wallet_snap.get('wallet_balance_usd', 0.0),
+                           currency_symbol=_wallet_snap.get('currency_symbol', '$'),
                            paying_customer=_wallet_snap.get('paying_customer', False),
                            billed_via_company=_wallet_snap.get('billed_via_company', False),
                            wallet_company_name=_wallet_snap.get('company_name', ''),

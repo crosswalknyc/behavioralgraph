@@ -17,7 +17,7 @@ from flask import session
 
 from prometheus.legacy import H as _H, C as _C  # noqa: E402
 
-__all__ = ['_PM_WATCH_FLAGGED', '_PM_USER_BLOCK_CACHE', '_PM_USER_BLOCK_LOCK', '_pm_user_block', '_pm_catalog_block', '_pm_ask_log_user', '_pm_probe_caller', '_pm_is_probe_user', '_PM_COMMON_IDENTITY_WORDS', '_pm_thread_confirmed_page', '_pm_watch_flag', '_pm_record_held_reply', '_pm_gate_options', '_pm_open_status_line', '_pm_price_table', '_pm_usd', '_pm_usd_label', '_pm_safe_user', '_pm_s3_json', '_pm_s3_put_json', '_PM_REPORT_ASK_RE', '_pm_looks_report_ask']
+__all__ = ['_PM_WATCH_FLAGGED', '_PM_USER_BLOCK_CACHE', '_PM_USER_BLOCK_LOCK', '_pm_user_block', '_pm_catalog_block', '_pm_ask_log_user', '_pm_probe_caller', '_pm_is_probe_user', '_PM_COMMON_IDENTITY_WORDS', '_pm_thread_confirmed_page', '_pm_watch_flag', '_pm_record_held_reply', '_pm_gate_options', '_pm_open_status_line', '_pm_price_table', '_pm_usd', '_pm_usd_label', '_pm_money_symbol', '_pm_safe_user', '_pm_s3_json', '_pm_s3_put_json', '_PM_REPORT_ASK_RE', '_pm_looks_report_ask']
 
 
 _PM_WATCH_FLAGGED = frozenset({'clarified_repeat', 'empty', 'faulted', 'error',
@@ -348,13 +348,24 @@ def _pm_price_table():
         return None
 
 
-def _pm_usd_label(v):
-    """$300 / $1,000 / $12.50 - whole dollars when they are whole."""
+def _pm_money_symbol(username=None):
+    """The seat's currency symbol ($ or £); East Tree Media and Omaze
+    see £ everywhere (Jenna 2026-10-08)."""
+    try:
+        return _H._session_money_symbol(username)
+    except Exception:
+        return '$'
+
+
+def _pm_usd_label(v, username=None):
+    """$300 / £1,000 / £12.50 in the seat's currency - whole units when
+    they are whole."""
     try:
         v = float(v)
     except Exception:
         return ''
-    return f"${v:,.0f}" if abs(v - round(v)) < 0.009 else f"${v:,.2f}"
+    sym = _pm_money_symbol(username)
+    return f"{sym}{v:,.0f}" if abs(v - round(v)) < 0.009 else f"{sym}{v:,.2f}"
 
 
 def _pm_usd(tool_key, fallback_usd, username=None):

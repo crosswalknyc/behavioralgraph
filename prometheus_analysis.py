@@ -5225,6 +5225,25 @@ def detect_csv_download_intent(text):
     return bool(_CSV_DOWNLOAD_RX.search(t))
 
 
+def seat_price_label(amount):
+    """A price in the seat's currency ($300 / £300). Falls back to
+    dollars outside a request (Jenna 2026-10-08, GBP seats)."""
+    try:
+        import sys as _sys
+        _app = _sys.modules.get('app')
+        if _app is not None and hasattr(_app, '_usd_label'):
+            lbl = _app._usd_label(amount)
+            if lbl:
+                return lbl
+    except Exception:
+        pass
+    try:
+        v = float(amount)
+    except (TypeError, ValueError):
+        return ''
+    return f"${v:,.0f}" if abs(v - round(v)) < 0.009 else f"${v:,.2f}"
+
+
 def the_subject(subject):
     """'the X' phrasing that never doubles the article: 'the Nike' stays
     'the Nike', 'the The Office' becomes 'The Office' (2026-10-08)."""
@@ -5251,7 +5270,7 @@ def build_profile_required_reply(subject):
             "which audience it is about. Name the person, brand, title, "
             "or group and I will build the Total Universe profile, then "
             "read it any way you need: age bands, parent cohorts, buyer "
-            "overlaps, category mixes. The build is $300 and lands in "
+            "overlaps, category mixes. The build is " + seat_price_label(300) + " and lands in "
             "your Select Profile dropdown when it finishes."
         )
         return scrub_user_text(reply), ["Build a profile for ..."]
@@ -5259,7 +5278,7 @@ def build_profile_required_reply(subject):
         f"That read needs {the_subject(subj)} profile built first. Once "
         f"{the_subject(subj)} Total Universe profile is in your library, I can read "
         f"it any way you need: age bands, parent cohorts, buyer "
-        f"overlaps, category mixes. The build is $300 and lands in "
+        f"overlaps, category mixes. The build is " + seat_price_label(300) + " and lands in "
         f"your Select Profile dropdown when it finishes."
     )
     followups = [f"Build {the_subject(subj)} profile"[:160]]
@@ -5336,7 +5355,7 @@ def build_panel_report_offer(subject, price_label, question=''):
     reply += (
         f"\n\nIf you want {subj}'s complete profile in your Select "
         f"Profile dropdown instead (every category, every cut on "
-        f"tap), the $300 build is the better buy."
+        f"tap), the {seat_price_label(300)} build is the better buy."
     )
     followups = [run_chip,
                  f"Build {the_subject(subj)} profile instead"[:160],

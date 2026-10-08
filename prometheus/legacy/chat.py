@@ -3301,18 +3301,25 @@ def _synth_chat_cut_strategist(draft):
 # Served deterministically on BOTH chat surfaces before any routing -
 # 'how much is a credit' once fell into the build intake and drafted
 # a build brief (cpearson, 2026-09-23 20:39Z).
-_PM_PRICING_COPY = (
+_PM_PRICING_COPY_TEMPLATE = (
     "Pricing is:\n\n"
-    "Digital Journey - $500\n"
-    "Profile - $300\n"
-    "Subscriber Acquisition - $500\n"
-    "Flywheel - $500\n"
-    "Brand Partnership - $500 + $500 Control for a $1,000 total\n"
-    "Ad Attribution - $500 for the initial pull and an optional $100 x "
+    "Digital Journey - {c}500\n"
+    "Profile - {c}300\n"
+    "Subscriber Acquisition - {c}500\n"
+    "Flywheel - {c}500\n"
+    "Brand Partnership - {c}500 + {c}500 Control for a {c}1,000 total\n"
+    "Ad Attribution - {c}500 for the initial pull and an optional {c}100 x "
     "day to track per campaign\n"
-    "Trends, Rankers, Fin - starts at $5,000/mo\n\n"
+    "Trends, Rankers, Fin - starts at {c}5,000/mo\n\n"
     "All Prometheus (chat bot) usage is billed at a metered rate of "
-    "$10.50 / $52.50 per million in/out, plus $0.021 per search.")
+    "{c}10.50 / {c}52.50 per million in/out, plus {c}0.021 per search.")
+_PM_PRICING_COPY = _PM_PRICING_COPY_TEMPLATE.format(c='$')
+
+
+def _pm_pricing_copy(username=None):
+    """The rate card in the seat's currency (East Tree Media and Omaze
+    read it in pounds, Jenna 2026-10-08). Same numbers, 1:1."""
+    return _PM_PRICING_COPY_TEMPLATE.format(c=_pm_money_symbol(username))
 
 
 _PM_SUBJECT_FIELDS = ('subject', 'name', 'display_name', 'subject_label',
@@ -5704,7 +5711,7 @@ def _pm_interpret_core(user, body, text, history):
     if _pm_pricing_question(text):
         _pm_ask_hint(route='pricing_fact', outcome='answered')
         return jsonify({'success': False, 'guidance': True,
-                        'error': _PM_PRICING_COPY})
+                        'error': _pm_pricing_copy()})
     # Subscriber IQ lookup (2026-10-02 Bria): "do you see the X
     # Subscriber IQ?" reaching the build surface answers from the
     # library instead of drafting a duplicate order.
@@ -8479,8 +8486,8 @@ def api_synth_chat_approve():
         except Exception:
             traceback.print_exc()
         if _snap.get('paying_customer'):
-            _err = (f"This run costs ${_usd:.2f}. Wallet balance is "
-                    f"${_wallet:.2f}. Top up to keep going.")
+            _err = (f"This run costs {_pm_usd_label(_usd)}. Wallet balance is "
+                    f"{_pm_usd_label(_wallet)}. Top up to keep going.")
         else:
             _err = (f"This run costs {_pm_usd_label(_usd)} and your account "
                     f"cannot cover it right now. Top up to keep going.")
@@ -14963,9 +14970,9 @@ def _pm_year_package_reply(subject, years, have, missing):
     """Proposal copy + chips for the year-build package. Live pricing
     from the billing panel."""
     try:
-        each_usd = f"${_H._v1_price_usd_for('new_build', 0):,.0f}"
+        each_usd = _pm_usd_label(_H._v1_price_usd_for('new_build', 0))
     except Exception:
-        each_usd = '$500'
+        each_usd = _pm_usd_label(500)
     n = len(missing)
     year_list = ', '.join(str(y) for y in missing[:-1]) + \
         (f' and {missing[-1]}' if n > 1 else str(missing[0]))
@@ -15267,7 +15274,7 @@ def _pm_analyze_core(user, body, text, history):
     # things cost gets the answer, free, no model call.
     if _pm_pricing_question(text):
         _pm_ask_hint(route='pricing_fact', outcome='answered')
-        return jsonify({'success': True, 'reply': _PM_PRICING_COPY})
+        return jsonify({'success': True, 'reply': _pm_pricing_copy()})
     # Challenged-number heads-up (2026-09-30): fire-and-continue;
     # the answer path is untouched.
     _pm_challenge_headsup(user, text)
@@ -17311,9 +17318,7 @@ def _pm_tool_price_label(tool_key, fallback, username=None):
                 subject = None
         v = float(_w.tool_price_usd(tool_key, subject=subject) or 0)
         if v > 0:
-            if abs(v - round(v)) < 0.009:
-                return f'${v:,.0f}'
-            return f'${v:,.2f}'
+            return _pm_usd_label(v, uname or None)
     except Exception:
         pass
     return fallback
@@ -17565,11 +17570,11 @@ def _pm_aiq_confirm_reply(parsed):
     if parsed.get('daily_refresh'):
         end = parsed.get('end_tracking_date')
         try:
-            _dl = float(str(daily_lbl).replace('$', '')
+            _dl = float(str(daily_lbl).replace('$', '').replace('£', '')
                         .replace(',', ''))
-            _sl = float(str(setup_lbl).replace('$', '')
+            _sl = float(str(setup_lbl).replace('$', '').replace('£', '')
                         .replace(',', ''))
-            total_lbl = f'${_sl + _dl * days:,.0f}'
+            total_lbl = _pm_usd_label(_sl + _dl * days)
         except Exception:
             total_lbl = f'{setup_lbl} + {days} x {daily_lbl}'
         lines.append(
@@ -18669,6 +18674,7 @@ from prometheus.legacy.watch import (  # noqa: E402,F401
     _pm_price_table,
     _pm_usd,
     _pm_usd_label,
+    _pm_money_symbol,
     _pm_safe_user,
     _pm_s3_json,
     _pm_s3_put_json,

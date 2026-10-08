@@ -470,7 +470,12 @@ def ask(user, body, *, via='session'):
             _is_price = False
         if _is_price:
             try:
-                copy = str(host.pricing_copy) if host.has('pricing_copy') else ''
+                # Rate card in the seat's currency (East Tree Media and
+                # Omaze read pounds, Jenna 2026-10-08).
+                if host.has('pricing_copy_for'):
+                    copy = str(host.pricing_copy_for(uname) or '')
+                else:
+                    copy = str(host.pricing_copy) if host.has('pricing_copy') else ''
             except Exception:
                 copy = ''
             if copy:
