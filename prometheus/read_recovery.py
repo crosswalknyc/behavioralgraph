@@ -129,7 +129,7 @@ def is_stale(status, now=None, after=RECOVER_AFTER):
         return False
     if str(status.get('status') or '') != 'working':
         return False
-    if status.get('resumed_as'):
+    if status.get('resumed_as') and status.get('resumed_as') != status.get('job_id'):
         return False
     beat = last_beat(status)
     if beat <= 0:
@@ -447,7 +447,8 @@ def follow(status, trigger=True):
         s3, bucket = _s3()
         job_id = str(status.get('job_id') or '')
         cur, hops = status, 0
-        while str(cur.get('status') or '') == 'working' and cur.get('resumed_as') and hops < 3:
+        while str(cur.get('status') or '') == 'working' and cur.get('resumed_as') \
+                and cur.get('resumed_as') != cur.get('job_id') and hops < 3:
             nxt = json.loads(s3.get_object(
                 Bucket=bucket, Key=f"{_prefix()}{cur['resumed_as']}.json")['Body'].read())
             cur = {**nxt, 'job_id': job_id or nxt.get('job_id'), 'resumed_from': cur.get('job_id')}
