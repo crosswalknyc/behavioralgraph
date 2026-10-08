@@ -192518,10 +192518,13 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         var txt = el.innerText || '';
         var has = el.querySelector(':scope > .pm-view-footnote');
         if (!VIEW_RX.test(txt)) { if (has) has.remove(); return; }
-        if (has) return;
+        // Always the last thing on the page: a static block in the flow, never
+        // floating over content (Jenna 2026-10-08). If a render added content
+        // after it, move it back to the end.
+        if (has) { if (el.lastElementChild !== has) el.appendChild(has); return; }
         var f = document.createElement('div');
         f.className = 'pm-view-footnote';
-        f.setAttribute('style', 'position:absolute; left:14px; bottom:10px; z-index:40; max-width:min(760px, 72vw); font-size:0.68rem; line-height:1.35; color:#9AA09B; background:rgba(12,22,24,0.9); border:1px solid rgba(154,160,155,0.25); border-radius:10px; padding:6px 10px;');
+        f.setAttribute('style', 'display:block; clear:both; margin:36px 14px 18px; font-size:0.68rem; line-height:1.35; color:#9AA09B; background:rgba(12,22,24,0.9); border:1px solid rgba(154,160,155,0.25); border-radius:10px; padding:6px 10px;');
         var strong = document.createElement('strong');
         strong.style.fontWeight = '600';
         strong.textContent = 'What we count as a view: ';
@@ -192539,7 +192542,6 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             a.textContent = expanded ? 'less' : 'more';
         });
         f.appendChild(strong); f.appendChild(span); f.appendChild(a);
-        if (getComputedStyle(el).position === 'static') el.style.position = 'relative';
         el.appendChild(f);
     }
     var pending = null;
