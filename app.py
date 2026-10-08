@@ -50213,7 +50213,19 @@ def _chatbot_error_email(route, err, user_email=None, payload=None,
             tb = traceback.format_exc()
             if not tb or tb.strip() in ('None', 'NoneType: None'):
                 tb = '(no traceback available)'
-        if user_email is None:
+        # A probe (canary, smoke, regression, operator) drives the real
+        # ask path under a seat's session; it is never that user and
+        # nobody saw the calm reply (2026-10-08: a GBP probe run as
+        # jordan mailed Jenna "PROMISE MADE ... deliver to jordan").
+        _probe_label = ''
+        try:
+            from prometheus.legacy.watch import _pm_probe_caller as _ppc
+            _probe_label = str(_ppc() or '').strip()
+        except Exception:
+            _probe_label = ''
+        if _probe_label:
+            user_email = f'canary:{_probe_label}'
+        elif user_email is None:
             try:
                 user_email = (session.get('username')
                               or session.get('email') or '')
@@ -50224,6 +50236,10 @@ def _chatbot_error_email(route, err, user_email=None, payload=None,
                 payload = request.get_json(silent=True) if request                     else None
             except Exception:
                 payload = None
+        if _probe_label:
+            payload = dict(payload) if isinstance(payload, dict) else {}
+            payload['_no_promise'] = True
+            payload['_probe'] = _probe_label
         try:
             payload_str = (json.dumps(payload, default=str)[:2000]
                            if payload else '(none)')
@@ -50278,6 +50294,9 @@ def _chatbot_error_email(route, err, user_email=None, payload=None,
                               'nobody saw this error)')
             else:
                 query_text = '(no question captured on this request)'
+        if _probe_label:
+            query_text = (f"{query_text}  (probe '{_probe_label}' - "
+                          f"no user saw this error)")
         subject_line = f"Chatbot error: {route}"
         if user_email:
             subject_line += f" ({str(user_email)[:80]})"

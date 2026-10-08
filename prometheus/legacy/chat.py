@@ -3301,17 +3301,18 @@ def _synth_chat_cut_strategist(draft):
 # Served deterministically on BOTH chat surfaces before any routing -
 # 'how much is a credit' once fell into the build intake and drafted
 # a build brief (cpearson, 2026-09-23 20:39Z).
+# Jenna's rate card, verbatim order (2026-10-07, Viewership Metrics
+# added 2026-10-08). Rendered in the seat's currency; numbers are 1:1.
 _PM_PRICING_COPY_TEMPLATE = (
     "Pricing is:\n\n"
     "Digital Journey - {c}500\n"
     "Profile - {c}300\n"
     "Subscriber Acquisition - {c}500\n"
+    "Viewership Metrics - {c}500\n"
     "Flywheel - {c}500\n"
     "Brand Partnership - {c}500 + {c}500 Control for a {c}1,000 total\n"
     "Ad Attribution - {c}500 for the initial pull and an optional {c}100 x "
-    "day to track per campaign\n"
-    "Viewership over time - {c}500 per year of window\n"
-    "Trends, Rankers, Fin - starts at {c}5,000/mo\n\n"
+    "day to track per campaign\n\n"
     "All Prometheus (chat bot) usage is billed at a metered rate of "
     "{c}10.50 / {c}52.50 per million in/out, plus {c}0.021 per search.")
 _PM_PRICING_COPY = _PM_PRICING_COPY_TEMPLATE.format(c='$')
