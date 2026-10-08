@@ -114015,12 +114015,42 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 + (rows || []).map(function(r) {
                     var n = Number(r.n) || 0;
                     var w = Math.max(1, Math.round(100 * n / top));
-                    return '<div class="jiq-frag-detrow">'
+                    return '<div class="jiq-frag-detrow' + (r.sub ? ' has-sub' : '') + '">'
                         + '<span class="jiq-frag-detlab">' + _jiqMusicEsc(r.label) + '</span>'
                         + '<span class="jiq-frag-detbar"><i style="width:' + w + '%;"></i></span>'
-                        + '<span class="jiq-frag-detval">' + _jiqMusicCount(n) + '</span></div>';
+                        + '<span class="jiq-frag-detval">' + _jiqMusicCount(n) + '</span>'
+                        + (r.sub ? '<span class="jiq-frag-detsub">' + _jiqMusicEsc(r.sub) + '</span>' : '')
+                        + '</div>';
                 }).join('')
                 + '</div>';
+        }
+
+        // Per-channel benchmark rows for the detour tables: the title's
+        // share of listeners and listener-to-viewer rate on each channel,
+        // each against the same-kind median.
+        function _jiqMusicDetourRows(a, b) {
+            var disc = ((a && a.discovery) || []).slice().sort(function(x, y) {
+                return (Number(y.listeners) || 0) - (Number(x.listeners) || 0);
+            });
+            var tot = disc.reduce(function(s, c) { return s + (Number(c.listeners) || 0); }, 0);
+            var ch = (b && b.channels) || {};
+            return {
+                listen: disc.map(function(c) {
+                    var share = tot ? 100 * (Number(c.listeners) || 0) / tot : 0;
+                    var m = ch[c.channel] || {};
+                    var sub = _jiqMusicPct(share) + ' of listeners';
+                    if (b && Number(m.share) > 0) sub += ' \u00b7 ' + b.label + ' ' + _jiqMusicPct(m.share);
+                    return { label: c.channel, n: c.listeners, sub: sub };
+                }),
+                watched: disc.map(function(c) {
+                    var L = Number(c.listeners) || 0;
+                    var conv = L ? 100 * (Number(c.watched) || 0) / L : 0;
+                    var m = ch[c.channel] || {};
+                    var sub = _jiqMusicPct(conv) + ' of these listeners watched';
+                    if (b && Number(m.conv) > 0) sub += ' \u00b7 ' + b.label + ' ' + _jiqMusicPct(m.conv);
+                    return { label: c.channel, n: c.watched, sub: sub };
+                })
+            };
         }
 
         function _jiqMusicClip(c) {
@@ -114357,8 +114387,18 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (_jiqMusicKindOf(t.meta) !== kind) return;
                 var w = _jiqMusicDoors(t.analysis, t.meta);
                 if (!w.viewers) return;
-                rows.push({ w: w, depth: String(t.meta.depth_label || '') });
+                var disc = t.analysis.discovery || [];
+                var totL = disc.reduce(function(s, c) { return s + (Number(c.listeners) || 0); }, 0);
+                var ch = {};
+                disc.forEach(function(c) {
+                    var L = Number(c.listeners) || 0;
+                    ch[c.channel] = { share: totL ? 100 * L / totL : 0, conv: L ? 100 * (Number(c.watched) || 0) / L : 0 };
+                });
+                rows.push({ w: w, depth: String(t.meta.depth_label || ''), ch: ch });
             });
+            var channels = {};
+            rows.forEach(function(r) { Object.keys(r.ch).forEach(function(k) { channels[k] = channels[k] || { share: [], conv: [] }; channels[k].share.push(r.ch[k].share); channels[k].conv.push(r.ch[k].conv); }); });
+            Object.keys(channels).forEach(function(k) { channels[k] = { share: _jiqMusicMedian(channels[k].share), conv: _jiqMusicMedian(channels[k].conv) }; });
             var same = rows.filter(function(r) { return r.depth === depthLabel; });
             var pick = function(list, f) { return _jiqMusicMedian(list.map(function(r) { return f(r.w); })); };
             var b = {
@@ -114367,6 +114407,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 noun: kind === 'Film' ? 'films' : 'series',
                 n: rows.length,
                 n_depth: same.length,
+                channels: channels,
                 viewers: pick(rows, function(w) { return w.viewers; }),
                 share: {
                     music: pick(rows, function(w) { return w.music.share; }),
@@ -114513,16 +114554,13 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 return (Number(y.listeners) || 0) - (Number(x.listeners) || 0);
             });
             if (disc.length) {
+                var dr = _jiqMusicDetourRows(a, b);
                 html += _jiqMusicSec('02 Detours',
                     'Where listeners found the songs.',
-                    'Unique people');
+                    'Unique people' + (b ? ' · Benchmark: median of ' + b.n + ' ' + b.noun : ''));
                 html += '<div class="jiq-frag-detours">'
-                    + _jiqMusicDetours('First listen channel', disc.map(function(c) {
-                        return { label: c.channel, n: c.listeners };
-                    }))
-                    + _jiqMusicDetours('Then watched the title', disc.map(function(c) {
-                        return { label: c.channel, n: c.watched };
-                    }))
+                    + _jiqMusicDetours('First listen channel', dr.listen)
+                    + _jiqMusicDetours('Then watched the title', dr.watched)
                     + '</div>';
             }
             return html;
@@ -114533,16 +114571,15 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 return (Number(y.listeners) || 0) - (Number(x.listeners) || 0);
             });
             var top = disc[0] || {};
+            var db = _jiqMusicBench(a.meta || {});
+            if (db && db.n < 2) db = null;
+            var ddr = _jiqMusicDetourRows(a, db);
             var html = _jiqMusicSec('01 Detours',
                 top.channel ? (top.channel + ' found the most listeners.') : 'Where they found the songs.',
-                'Unique people. Not a drop-off.');
+                'Unique people. Not a drop-off.' + (db ? ' · Benchmark: median of ' + db.n + ' ' + db.noun : ''));
             html += '<div class="jiq-frag-detours">'
-                + _jiqMusicDetours('Listeners', disc.map(function(c) {
-                    return { label: c.channel, n: c.listeners };
-                }))
-                + _jiqMusicDetours('Then watched', disc.map(function(c) {
-                    return { label: c.channel, n: c.watched };
-                }))
+                + _jiqMusicDetours('Listeners', ddr.listen)
+                + _jiqMusicDetours('Then watched', ddr.watched)
                 + '</div>';
             html += _jiqMusicSec('02 Songs',
                 'Soundtrack and needle-drop songs on this title.',
@@ -190274,6 +190311,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         font-size: 11.5px; font-weight: 700; font-variant-numeric: tabular-nums;
         text-align: right; white-space: nowrap;
     }
+    .jiq-frag-detrow.has-sub { padding-bottom: 9px; }
+    .jiq-frag-detsub { grid-column: 1 / -1; font-size: 10.5px; color: #7C878A; margin-top: -4px; font-variant-numeric: tabular-nums; }
 
 
     /* UFC nest walk sits on the same card system as Young Sheldon. */
