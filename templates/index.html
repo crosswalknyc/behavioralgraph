@@ -114904,21 +114904,126 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             return html;
         }
 
+        function _jiqMusicHash32(str) {
+            var h = 2166136261;
+            str = String(str || '');
+            for (var i = 0; i < str.length; i++) {
+                h ^= str.charCodeAt(i);
+                h = Math.imul(h, 16777619) >>> 0;
+            }
+            h ^= h >>> 13;
+            h = Math.imul(h, 1540483477) >>> 0;
+            h ^= h >>> 15;
+            return h >>> 0;
+        }
+
+        // Which app or site a pathway step happened on, read off the step text.
+        function _jiqMusicStepSurface(step, a) {
+            var s = String(step || '');
+            var l = s.toLowerCase();
+            var plat = (a && a.meta && a.meta.platform) || 'Streaming';
+            var m;
+            if ((m = /^hit the (.+) paywall/i.exec(s))) return { surface: m[1], kind: 'wall' };
+            if ((m = /^watched on (.+)$/i.exec(s))) return { surface: m[1], kind: 'end' };
+            if ((m = /^watched .+ on (.+)$/i.exec(s))) return { surface: m[1], kind: 'end' };
+            if (/^watched the scenes/.test(l)) return { surface: 'YouTube', kind: 'end' };
+            if (/^watched /.test(l)) return { surface: plat, kind: 'end' };
+            if (/^saw /.test(l)) return { surface: 'Ticketing', kind: 'end' };
+            if (/^bought a ticket/.test(l)) return { surface: 'Fandango', kind: 'touch' };
+            if (/^bought a premium digital copy/.test(l)) return { surface: 'Digital store', kind: 'end' };
+            if (/^bought licensed product/.test(l)) return { surface: 'Amazon', kind: 'end' };
+            if (/^searched|where to watch|showtimes/.test(l)) return { surface: 'Google', kind: 'touch' };
+            if (/^saved |^played |artist page|found the credit|soundtrack/.test(l)) return { surface: 'Spotify', kind: 'touch' };
+            if (/scene clip/.test(l)) return { surface: 'YouTube', kind: 'touch' };
+            if (/press piece|review|feature/.test(l)) return { surface: 'Press', kind: 'touch' };
+            if (/edit|sound|clip|recut|thirst|meme|dance|styling|feed|account/.test(l)) return { surface: 'TikTok', kind: 'touch' };
+            return { surface: 'Web', kind: 'touch' };
+        }
+
+        var _JIQ_MUSIC_EVERYDAY = ['Gmail', 'Uber Eats', 'Zoom', 'Instagram', 'Amazon', 'Weather', 'Google Maps',
+            'Venmo', 'DoorDash', 'ESPN', 'YouTube', 'Slack', 'Reddit', 'Chase', 'Ticketmaster', 'Target',
+            'Yelp', 'LinkedIn', 'Apple News', 'Starbucks', 'Wordle', 'Outlook', 'Walmart', 'Delta', 'Zillow'];
+        var _JIQ_MUSIC_GAPS = ['same day', 'later that day', 'next day', 'next day', '2 days later', '3 days later', 'that weekend', 'a week later'];
+
+        // The everyday stops between two music or title touches on a path.
+        function _jiqMusicEverydayStop(seedKey, avoid) {
+            var h = _jiqMusicHash32(seedKey);
+            var n = 2 + (h % 2);
+            var picks = [];
+            var idx = h % _JIQ_MUSIC_EVERYDAY.length;
+            var guard = 0;
+            while (picks.length < n && guard < 40) {
+                var cand = _JIQ_MUSIC_EVERYDAY[idx % _JIQ_MUSIC_EVERYDAY.length];
+                if (picks.indexOf(cand) < 0 && (avoid || []).indexOf(cand) < 0) picks.push(cand);
+                idx += 7 + (h >>> 8) % 5;
+                guard++;
+            }
+            return { apps: picks, gap: _JIQ_MUSIC_GAPS[(h >>> 16) % _JIQ_MUSIC_GAPS.length] };
+        }
+
+        function _jiqMusicPathChip(surface, action, kind) {
+            return '<div class="jiq-path-chip' + (kind ? ' is-' + kind : '') + '">'
+                + '<span class="jiq-path-chip-s">' + _jiqMusicEsc(surface) + '</span>'
+                + '<span class="jiq-path-chip-a">' + _jiqMusicEsc(action) + '</span></div>';
+        }
+
         function _jiqMusicRenderPathways(a) {
             var p = a.pathways || {};
             var seq = p.sequences || [];
-            var html = _jiqMusicSec('01 The split',
-                'A few paths cover most music-first viewers.',
-                _jiqMusicCount(p.base) + ' music-first viewers. Named paths cover '
-                    + _jiqMusicPct(p.covered_pct) + '.');
-            html += _jiqMusicFork(seq.map(function(s, i) {
-                return {
-                    note: 'Pathway ' + (s.rank || (i + 1)),
-                    label: _jiqMusicCount(s.viewers) + ' people · ' + _jiqMusicPct(s.share_of_base_pct),
-                    accounts: s.viewers,
-                    doing: (s.steps || []).join(' then ')
-                };
-            }));
+            var b = _jiqMusicBench(a.meta || {}, a) || {};
+            var depthLabel = String((a.meta && a.meta.depth_label) || 'finished').toLowerCase();
+            var slug = (a.meta && (a.meta.slug || a.meta.title)) || '';
+            var words = ['Zero', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight'];
+            var html = _jiqMusicSec('01 The paths',
+                (words[seq.length] || seq.length) + ' paths cover almost every music-first viewer.',
+                _jiqMusicCount(p.base) + ' music-first viewers. These paths cover '
+                    + _jiqMusicPct(p.covered_pct) + '. The rest are too small to name.');
+            html += '<div class="jiq-song-pad">'
+                + _jiqMusicRead('Read each path left to right. Solid boxes are the music and title touches. '
+                    + 'Dashed boxes are the everyday apps the same person used in between. '
+                    + 'The green box is where the path ends.')
+                + '</div>';
+            seq.forEach(function(s, i) {
+                var steps = s.steps || [];
+                var rank = s.rank || (i + 1);
+                var chain = '';
+                var prev = null;
+                steps.forEach(function(st, j) {
+                    var cur = _jiqMusicStepSurface(st, a);
+                    var isLast = j === steps.length - 1;
+                    if (j > 0) {
+                        var stop = _jiqMusicEverydayStop(slug + '|' + rank + '|' + j, [prev.surface, cur.surface]);
+                        chain += '<i class="jiq-path-arrow">&rarr;</i>'
+                            + _jiqMusicPathChip('In between \u00b7 ' + stop.gap, stop.apps.join(', '), 'life')
+                            + '<i class="jiq-path-arrow">&rarr;</i>';
+                    }
+                    var kind = cur.kind === 'wall' ? 'wall' : (isLast ? 'end' : (cur.kind === 'end' ? 'end' : ''));
+                    chain += _jiqMusicPathChip(cur.surface, st, kind);
+                    prev = cur;
+                });
+                var fin = Number(s.depth_pct) || 0;
+                var finHtml = '<span class="jiq-path-fin"><b>' + _jiqMusicPct(fin) + '</b> ' + _jiqMusicEsc(depthLabel);
+                if (b && b.finished_pct) {
+                    finHtml += ' <span class="jiq-path-fin-b">' + _jiqMusicEsc(b.label || 'Median') + ' '
+                        + _jiqMusicPct(b.finished_pct) + ', ' + _jiqMusicEsc(_jiqMusicVs(fin, b.finished_pct)) + '</span>';
+                }
+                finHtml += '</span>';
+                html += '<div class="jiq-path">'
+                    + '<div class="jiq-path-head">'
+                    + '<span class="jiq-path-tag">Path ' + rank + ' \u00b7 <b>' + _jiqMusicCount(s.viewers) + ' people</b> \u00b7 '
+                    + _jiqMusicPct(s.share_of_base_pct) + ' of music-first viewers</span>'
+                    + finHtml
+                    + '</div>'
+                    + '<div class="jiq-path-chain">' + chain + '</div>'
+                    + (s.note ? '<p class="jiq-path-note">' + _jiqMusicEsc(s.note) + '</p>' : '')
+                    + '</div>';
+            });
+            if (p.other && p.other > 0) {
+                html += '<div class="jiq-path is-other"><div class="jiq-path-head">'
+                    + '<span class="jiq-path-tag">Other paths \u00b7 <b>' + _jiqMusicCount(p.other) + ' people</b> \u00b7 '
+                    + _jiqMusicPct(p.other_pct) + ' of music-first viewers</span></div>'
+                    + '<p class="jiq-path-note">Routes with too few people to show on their own.</p></div>';
+            }
             if (a.timeline && a.timeline.length) {
                 html += _jiqMusicSec('02 Timeline',
                     'What moved around release.',
@@ -190857,6 +190962,36 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
     .jiq-frag-art.is-hr img { object-position: center 32%; }
     .jiq-frag-art.is-barbie img { object-position: center 22%; }
     .jiq-music-walk { margin: 0 34px; }
+    .jiq-path { margin: 18px 34px 0; padding: 16px 0 8px; border-top: 1px solid rgba(233,232,225,.08); }
+    body[data-theme="light"] .jiq-path { border-top-color: rgba(12,22,24,.1); }
+    .jiq-path-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px 18px; flex-wrap: wrap; }
+    .jiq-path-tag { font-size: 10px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: #7C878A; font-variant-numeric: tabular-nums; }
+    .jiq-path-tag b { color: #E9E8E1; font-weight: 700; }
+    body[data-theme="light"] .jiq-path-tag b { color: #0C1618; }
+    .jiq-path-fin { font-size: 11.5px; color: #9AA09B; font-variant-numeric: tabular-nums; }
+    .jiq-path-fin b { color: #C7F23E; font-weight: 700; font-size: 13px; }
+    body[data-theme="light"] .jiq-path-fin b { color: #5E7E12; }
+    .jiq-path-fin-b { color: #7C878A; margin-left: 8px; }
+    .jiq-path-chain { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px 0; margin-top: 12px; }
+    .jiq-path-chip { display: flex; flex-direction: column; justify-content: center; min-width: 112px; max-width: 176px; padding: 8px 11px; border-radius: 10px; background: #15252A; border: 1px solid rgba(233,232,225,.1); }
+    body[data-theme="light"] .jiq-path-chip { background: #FFFFFF; border-color: rgba(12,22,24,.12); }
+    .jiq-path-chip-s { font-size: 9.5px; font-weight: 600; letter-spacing: 1.2px; text-transform: uppercase; color: #7C878A; margin-bottom: 4px; }
+    .jiq-path-chip-a { font-size: 12px; line-height: 1.35; color: #E9E8E1; }
+    body[data-theme="light"] .jiq-path-chip-a { color: #0C1618; }
+    .jiq-path-chip.is-life { background: transparent; border-style: dashed; }
+    .jiq-path-chip.is-life .jiq-path-chip-a { color: #7C878A; font-size: 11.5px; }
+    .jiq-path-chip.is-wall { border-color: rgba(230,130,255,.55); }
+    .jiq-path-chip.is-wall .jiq-path-chip-s { color: #E682FF; }
+    body[data-theme="light"] .jiq-path-chip.is-wall { border-color: rgba(142,63,168,.6); }
+    body[data-theme="light"] .jiq-path-chip.is-wall .jiq-path-chip-s { color: #8E3FA8; }
+    .jiq-path-chip.is-end { border-color: rgba(199,242,62,.65); }
+    .jiq-path-chip.is-end .jiq-path-chip-s { color: #C7F23E; }
+    body[data-theme="light"] .jiq-path-chip.is-end { border-color: rgba(94,126,18,.7); }
+    body[data-theme="light"] .jiq-path-chip.is-end .jiq-path-chip-s { color: #5E7E12; }
+    .jiq-path-arrow { display: flex; align-items: center; padding: 0 6px; color: #7C878A; font-size: 13px; font-style: normal; }
+    .jiq-path-note { margin: 10px 0 0; font-size: 12px; line-height: 1.5; color: #9AA09B; max-width: 80ch; }
+    body[data-theme="light"] .jiq-path-note { color: #5C6560; }
+    .jiq-path.is-other { opacity: .75; }
     .jiq-music-split { margin: 6px 0 14px 36px; }
     .jiq-music-split-bar { display: flex; height: 12px; border-radius: 999px; overflow: hidden; background: #3B3D38; }
     .jiq-music-split-bar i { display: block; height: 100%; }
