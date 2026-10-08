@@ -114946,8 +114946,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         function _jiqMusicStepSurface(step, a) {
             var s = String(step || '');
             var l = s.toLowerCase();
-            var plat = (a && a.meta && a.meta.platform) || 'Streaming';
+            var plat = String((a && a.meta && a.meta.platform) || 'Streaming').split(/\s*(?:\/|, then )\s*/).pop() || 'Streaming';
             var m;
+            if (/ page$/.test(l)) return { surface: 'Spotify', kind: 'touch' };
             if ((m = /^hit the (.+) paywall/i.exec(s))) return { surface: m[1], kind: 'wall' };
             if ((m = /^watched on (.+)$/i.exec(s))) return { surface: m[1], kind: 'end' };
             if ((m = /^watched .+ on (.+)$/i.exec(s))) return { surface: m[1], kind: 'end' };
@@ -115188,7 +115189,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             steps.forEach(function(st, i) {
                 if (watchIdx >= 0) return;
                 var act = String(st.action || '');
-                if (/^(watched (?!a |the scenes)|opened (?!a |the .*sound)|finished|saw |streamed|started)/i.test(act)) watchIdx = i;
+                if (/^(watched (?!a |the scenes|the official trailer|the trailer)|opened (?!a |the \S+ title page|the premium|the .*sound page|tickets)|finished|saw |streamed|started|opening night)/i.test(act)) watchIdx = i;
             });
             if (watchIdx < 0) watchIdx = steps.length - 1;
             var toWatch = steps.length ? _jiqMusicDaysBetween(steps[0].date, steps[watchIdx].date) : null;
@@ -115219,9 +115220,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var kind = last ? 'end' : (i === watchIdx ? 'watch' : '');
                 chain += '<div class="jiq-path-chip is-person' + (kind ? ' is-' + kind : '') + '">'
                     + '<span class="jiq-path-chip-s">' + _jiqMusicSurfaceIconSm(st.surface) + _jiqMusicEsc(st.surface || '') + '</span>'
-                    + '<span class="jiq-path-chip-a">' + _jiqMusicEsc(st.action || '') + '</span>'
+                    + '<span class="jiq-path-chip-a">' + _jiqMusicEsc(_jiqMusicCleanAction(st.action)) + '</span>'
                     + '<span class="jiq-path-chip-d">' + _jiqMusicEsc(st.date || '')
-                    + (st.detail ? ' \u00b7 ' + _jiqMusicEsc(st.detail) : '') + '</span>'
+                    + (st.detail ? ' \u00b7 ' + _jiqMusicEsc(_jiqMusicCleanDetail(st.detail)) : '') + '</span>'
                     + '</div>';
             });
             html += '<div class="jiq-path jiq-person-path">'
@@ -115232,6 +115233,21 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 + 'The orchid box is the first real watch of ' + _jiqMusicEsc(titleName || 'the title') + '; the green box is where the walk ends.</p>'
                 + '</div>';
             return html;
+        }
+
+        // Display cleanup for one-viewer steps: drop the file note on theatrical
+        // plays and collapse a song named twice ("Played X and X", "X / X").
+        function _jiqMusicCleanAction(action) {
+            var a = String(action || '').replace(/\.\s*Theatrical play has no URL\.?$/i, '');
+            var m = /^(Played|Saved|Shared) (.+) and (.+)$/.exec(a);
+            if (m && m[2].trim().toLowerCase() === m[3].trim().toLowerCase()) a = m[1] + ' ' + m[2].trim();
+            return a;
+        }
+        function _jiqMusicCleanDetail(detail) {
+            var parts = String(detail || '').split(/\s*\/\s*/);
+            var seen = {}, out = [];
+            parts.forEach(function(x) { var k = x.trim().toLowerCase(); if (!k || seen[k]) return; seen[k] = 1; out.push(x.trim()); });
+            return out.join(' / ');
         }
 
         function _jiqMusicSurfaceIconSm(surface) {
