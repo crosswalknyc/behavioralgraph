@@ -33249,6 +33249,8 @@ https://www.instagram.com/p/..."></textarea>
             #intentIQView .iiq-weekly-pdf-btn .iiq-weekly-pdf-arrow { font-size: 0.85rem; font-weight: 700; line-height: 1; }
             body[data-theme="light"] #intentIQView .iiq-weekly-pdf-btn { color: #5E7E12; border-color: #C9C6BA; }
             body[data-theme="light"] #intentIQView .iiq-weekly-pdf-btn:hover { background: rgba(94,126,18,0.08); border-color: #5E7E12; }
+            #intentIQView .aiq-controls .aiq-export { margin-left: auto; display: flex; align-items: flex-end; padding-bottom: 0.15rem; }
+            #intentIQView .aiq-controls .aiq-export[hidden] { display: none; }
 
             #intentIQView .iiq-support-card { background: #0C1618; border: 1px solid rgba(59,61,56,0.55); border-radius: 10px; padding: 0.9rem 1.05rem 0.55rem; margin: 0 0 0.85rem; font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
             #intentIQView .iiq-support-eyebrow { font-size: 0.64rem; font-weight: 600; color: #9AA09B; text-transform: uppercase; letter-spacing: 0.1em; }
@@ -41413,6 +41415,64 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 }).catch(function(err) {
                     console.error('[weekly-pdf] download failed', err);
                     alert('Could not download the PDF. Try again in a moment.');
+                }).finally(function() {
+                    if (btnEl && originalLabel != null) {
+                        btnEl.removeAttribute('disabled');
+                        btnEl.innerHTML = originalLabel;
+                    }
+                });
+            };
+
+            // Export to Excel. One click downloads every Attribution IQ
+            // dataset for the open campaign as a workbook, one sheet per
+            // dataset (see /api/intent/<slug>/export.xlsx). The server
+            // reads the campaign itself, so nothing on screen has to be
+            // serialised; the as-of date only steers the dated
+            // multi-touch read.
+            window.aiqExportExcel = function(btnEl) {
+                var slug = (window.__intentIQ && window.__intentIQ.currentSlug) || '';
+                if (!slug) {
+                    alert('Pick a campaign first, then try again.');
+                    return;
+                }
+                var asOf = '';
+                try { asOf = (typeof _iiqAsOfGet === 'function' && _iiqAsOfGet()) || ''; } catch (e) { asOf = ''; }
+                var originalLabel = null;
+                if (btnEl) {
+                    originalLabel = btnEl.innerHTML;
+                    btnEl.setAttribute('disabled', 'disabled');
+                    btnEl.innerHTML = 'Preparing...';
+                }
+                var url = '/api/intent/' + encodeURIComponent(slug) + '/export.xlsx'
+                    + (asOf ? ('?as_of=' + encodeURIComponent(asOf)) : '');
+                var fname = '';
+                fetch(url, { method: 'GET', credentials: 'include' }).then(function(res) {
+                    if (!res.ok) {
+                        return res.text().then(function(t) {
+                            throw new Error('HTTP ' + res.status + ': ' + t);
+                        });
+                    }
+                    try {
+                        var cd = res.headers.get('Content-Disposition') || '';
+                        var m = cd.match(/filename="?([^";]+)"?/);
+                        if (m) fname = m[1];
+                    } catch (e) { fname = ''; }
+                    return res.blob();
+                }).then(function(blob) {
+                    var href = URL.createObjectURL(blob);
+                    var a = document.createElement('a');
+                    a.href = href;
+                    var safeSlug = slug.replace(/[^A-Za-z0-9_-]/g, '');
+                    a.download = fname || (safeSlug + '_Attribution_IQ.xlsx');
+                    document.body.appendChild(a);
+                    a.click();
+                    setTimeout(function() {
+                        try { document.body.removeChild(a); } catch (_) {}
+                        try { URL.revokeObjectURL(href); } catch (_) {}
+                    }, 500);
+                }).catch(function(err) {
+                    console.error('[export-xlsx] download failed', err);
+                    alert('Could not build the Excel file. Try again in a moment.');
                 }).finally(function() {
                     if (btnEl && originalLabel != null) {
                         btnEl.removeAttribute('disabled');
@@ -135673,6 +135733,28 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             });
         }
 
+        // Export to Excel pill at the right end of the controls row.
+        // Every campaign gets it except GOAT, which is frozen.
+        function _aiqExportControl(wrap) {
+            var controls = wrap.querySelector('.aiq-controls');
+            if (!controls) return;
+            var slug = '';
+            try { slug = (window.__intentIQ && window.__intentIQ.currentSlug) || ''; } catch (e) { slug = ''; }
+            var box = controls.querySelector('.aiq-export');
+            if (!box) {
+                box = document.createElement('div');
+                box.className = 'aiq-export';
+                box.innerHTML = '<button type="button" class="iiq-weekly-pdf-btn aiq-export-btn" onclick="aiqExportExcel(this)" '
+                    + 'title="Download every Attribution IQ table for this campaign as one Excel workbook">'
+                    + '<span class="iiq-weekly-pdf-arrow" aria-hidden="true">\u2193</span> Export to Excel</button>';
+                controls.appendChild(box);
+            } else if (box !== controls.lastElementChild) {
+                controls.appendChild(box);
+            }
+            var show = !!slug && slug !== 'goat';
+            if (show) box.removeAttribute('hidden'); else box.setAttribute('hidden', 'hidden');
+        }
+
         function _aiqShell() {
             var root = document.getElementById('intentIQView');
             if (!root) return;
@@ -135732,6 +135814,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 }
             }
             _aiqAudienceControl(wrap);
+            try { _aiqExportControl(wrap); } catch (e) { }
             _AIQ_TABS.forEach(function (t) {
                 var panel = panels.querySelector('[data-aiq-panel="' + t.id + '"]');
                 if (t.legacyOnly && !legacy) return;

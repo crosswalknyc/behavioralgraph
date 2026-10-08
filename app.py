@@ -35,6 +35,12 @@ except Exception as _mta_iq_err:
     print(f"⚠️ Multi-Touch Attribution module unavailable at import time: {_mta_iq_err}")
 
 try:
+    import attribution_excel_export as _attribution_excel_export  # type: ignore
+except Exception as _xlsx_export_err:
+    _attribution_excel_export = None
+    print(f"⚠️ Attribution IQ Excel export unavailable at import time: {_xlsx_export_err}")
+
+try:
     import attribution_weekly_pdf as _attribution_weekly_pdf  # type: ignore
     import campaign_hero_image as _campaign_hero_image  # type: ignore
 except Exception as _weekly_pdf_err:
@@ -19140,6 +19146,47 @@ def api_intent_weekly_pdf(title_slug):
     except Exception as e:
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/intent/<title_slug>/export.xlsx', methods=['GET'])
+@requires_auth
+def api_intent_export_xlsx(title_slug):
+    """Download every Attribution IQ dataset for a campaign as one
+    Excel workbook (one sheet per dataset: campaign facts, phases,
+    assets, content types, paid vs organic, top assets, audiences,
+    districts, cohorts, demographics, touchpoints, journeys, funnel,
+    co-exposure, per-audience views). See
+    ``attribution_excel_export.build_workbook``.
+
+    Same gate as every other ``/api/intent/<slug>/*`` route: the
+    per-user title allow-list applies. ``?as_of=YYYY-MM-DD`` is
+    optional and only steers the dated multi-touch read.
+    """
+    ok, err = _require_intent_iq(title_slug)
+    if not ok:
+        return err
+    if _attribution_excel_export is None:
+        return jsonify({'success': False, 'error': 'Excel export not available'}), 500
+    try:
+        ov = _intent_iq.get_overview(title_slug)
+    except Exception:
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': 'campaign lookup failed'}), 500
+    if not ov or not ov.get('success'):
+        return jsonify({'success': False, 'error': 'campaign not found'}), 404
+    as_of = (request.args.get('as_of') or '').strip()[:10] or None
+    try:
+        xlsx_bytes, fname = _attribution_excel_export.build_workbook(
+            title_slug, _intent_iq, mta_iq=_mta_iq, as_of=as_of)
+        resp = Response(
+            xlsx_bytes,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        resp.headers['Content-Disposition'] = f'attachment; filename="{fname}"'
+        resp.headers['Cache-Control'] = 'no-store'
+        return resp
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': 'could not build the export'}), 500
 
 
 def _user_can_open_subscriber(user, s3_key, label=''):
