@@ -17,7 +17,7 @@ from flask import session
 
 from prometheus.legacy import H as _H, C as _C  # noqa: E402
 
-__all__ = ['_PM_WATCH_FLAGGED', '_PM_USER_BLOCK_CACHE', '_PM_USER_BLOCK_LOCK', '_pm_user_block', '_pm_catalog_block', '_pm_ask_log_user', '_pm_probe_caller', '_pm_is_probe_user', '_PM_COMMON_IDENTITY_WORDS', '_pm_thread_confirmed_page', '_pm_watch_flag', '_pm_record_held_reply', '_pm_gate_options', '_pm_open_status_line', '_pm_price_table', '_pm_usd', '_pm_usd_label', '_pm_money_symbol', '_pm_safe_user', '_pm_s3_json', '_pm_s3_put_json', '_PM_REPORT_ASK_RE', '_pm_looks_report_ask']
+__all__ = ['_PM_WATCH_FLAGGED', '_PM_USER_BLOCK_CACHE', '_PM_USER_BLOCK_LOCK', '_pm_user_block', '_pm_catalog_block', '_pm_ask_log_user', '_pm_probe_caller', '_pm_is_probe_user', '_PM_COMMON_IDENTITY_WORDS', '_pm_thread_confirmed_page', '_pm_watch_flag', '_pm_record_held_reply', '_pm_gate_options', '_pm_open_status_line', '_pm_price_table', '_pm_usd', '_pm_usd_label', '_pm_money_symbol', '_pm_safe_user', '_pm_s3_json', '_pm_s3_put_json', '_PM_REPORT_ASK_RE', '_pm_looks_report_ask', '_pm_is_viewership_series_ask', '_pm_window_years', '_pm_viewership_read_price', '_pm_panel_price_label']
 
 
 _PM_WATCH_FLAGGED = frozenset({'clarified_repeat', 'empty', 'faulted', 'error',
@@ -433,3 +433,92 @@ def _pm_looks_report_ask(text):
         return bool(_TIME_SERIES_RX.search(t))
     except Exception:
         return False
+
+
+# Viewership over time (2026-10-08 Jenna, verbatim: "viewership asks is
+# always 500 per year in the company's requested currency"). A monthly
+# or over-time read of viewers / hours / consumption is priced per year
+# of window (quantity = years), never the un-priced $550.
+_PM_VIEWERSHIP_METRIC_RX = re.compile(
+    r"\b(?:viewership|viewing|viewers?|watch(?:ing)?\s*time|hours watched|"
+    r"minutes watched|watch(?:ed|es)?|viewed|views|consumption|streams?|"
+    r"streamed|streaming|plays|played|listens|listened|listenership|"
+    r"listeners?|audience)\b", re.I)
+_PM_YEAR_WORDS = {'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5,
+                  'six': 6, 'seven': 7, 'eight': 8, 'nine': 9, 'ten': 10}
+
+
+def _pm_is_viewership_series_ask(text):
+    """True for a viewership metric asked over time ("monthly
+    consumption for The Office", "viewership month by month")."""
+    t = str(text or '')
+    try:
+        from prometheus.understand import _TIME_SERIES_RX
+        if not _TIME_SERIES_RX.search(t):
+            return False
+    except Exception:
+        return False
+    return bool(_PM_VIEWERSHIP_METRIC_RX.search(t))
+
+
+def _pm_window_years(text):
+    """Years of window the ask names; 1 for the trailing-12 default.
+    "last three years" -> 3; "2023 to 2025" -> 3 (calendar years,
+    inclusive); "since 2024" -> through this year; "18 months" -> 2."""
+    t = str(text or '').lower()
+    m = re.search(r"\b(\d{1,2}|" + '|'.join(_PM_YEAR_WORDS) + r")\s*(?:-|\s)?\s*(?:years?|yrs?)\b", t)
+    if m:
+        tok = m.group(1)
+        n = int(tok) if tok.isdigit() else _PM_YEAR_WORDS.get(tok, 1)
+        return max(1, min(n, 10))
+    m = re.search(r"\b(\d{1,3})\s*months?\b", t)
+    if m:
+        months = int(m.group(1))
+        return max(1, min(-(-months // 12), 10))
+    m = re.search(r"\b(20\d\d)\s*(?:to|through|thru|-|until|and)\s*(20\d\d)\b", t)
+    if m:
+        lo, hi = int(m.group(1)), int(m.group(2))
+        if hi >= lo:
+            return max(1, min(hi - lo + 1, 10))
+    m = re.search(r"\bsince\s+(20\d\d)\b", t)
+    if m:
+        return max(1, min(datetime.now(timezone.utc).year - int(m.group(1)) + 1, 10))
+    return 1
+
+
+def _pm_viewership_read_price(text, username=None):
+    """(label, credits, years) for a viewership-over-time ask in the
+    seat's currency, or None when the ask is not one. 500 per year
+    (live table key viewership_read), symbol from the seat."""
+    if not _pm_is_viewership_series_ask(text):
+        return None
+    years = _pm_window_years(text)
+    each = _pm_usd('viewership_read', 500.0, username=username)
+    try:
+        each = float(each or 500.0)
+    except (TypeError, ValueError):
+        each = 500.0
+    try:
+        credits_each = int(_H.get_credit_cost('viewership_read') or 5)
+    except Exception:
+        credits_each = 5
+    return _pm_usd_label(each * years, username), max(credits_each, 1) * years, years
+
+
+def _pm_panel_price_label(username):
+    """User-facing price for the Prometheus research report, plus the
+    credit count the charge will consume. Internal-credit holders see
+    the credit count; a paying customer whose credits will not cover
+    it sees the dollar price the wallet will absorb ($550 default,
+    admin-tunable in the billing panel). Never raises."""
+    credits_price = _H.CREDITS_PANEL_REPORT
+    try:
+        credits_price = int(_H.get_credit_cost('panel_report')
+                            or _H.CREDITS_PANEL_REPORT)
+    except Exception:
+        pass
+    # Standard pricing, never credits (Jenna 2026-10-07): everyone sees
+    # the dollar price; the charge still consumes the internal units.
+    usd = _pm_usd('panel_report', float(getattr(_H, 'PANEL_REPORT_USD', 550.0) or 550.0),
+                  username=username)
+    return _pm_usd_label(usd), credits_price

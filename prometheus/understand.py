@@ -76,14 +76,17 @@ _STATEMENT_ASK_RX = re.compile(
 # A metric asked over time ("monthly consumption", "viewership over
 # time", "month by month") is a read, never a build.
 _TIME_WORDS = (r"over time|month by month|month over month|monthly|by month|"
-               r"week by week|week over week|weekly|by week|quarter by quarter|"
-               r"quarterly|by quarter|year over year|trend(?:s|ed|ing|line)?|"
+               r"each month|every month|per month|a month|"
+               r"week by week|week over week|weekly|by week|each week|"
+               r"every week|per week|quarter by quarter|quarterly|by quarter|"
+               r"year over year|each year|every year|trend(?:s|ed|ing|line)?|"
                r"trajectory|time series")
 _METRIC_WORDS = (r"consumption|viewership|viewing|watch(?:ing)? time|"
-                 r"hours watched|minutes watched|streams?|streaming|plays|"
-                 r"listens|listenership|viewers?|listeners?|users?|visitors?|"
-                 r"subscribers?|signups?|churn|engagement|audience|reach|"
-                 r"sales|purchases|searches|traffic|downloads")
+                 r"hours watched|minutes watched|watch(?:ed|es)?|viewed|views|"
+                 r"streams?|streamed|streaming|plays|played|"
+                 r"listens|listened|listenership|viewers?|listeners?|users?|"
+                 r"visitors?|subscribers?|signups?|churn|engagement|audience|"
+                 r"reach|sales|purchases|searches|traffic|downloads")
 _TIME_SERIES_RX = re.compile(
     r"\b(?:" + _METRIC_WORDS + r")\b[^.?!]{0,40}\b(?:" + _TIME_WORDS + r")\b"
     r"|\b(?:" + _TIME_WORDS + r")\b[^.?!]{0,24}\b(?:" + _METRIC_WORDS + r")\b",

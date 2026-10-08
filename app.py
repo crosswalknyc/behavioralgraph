@@ -2647,7 +2647,7 @@ def check_user_credits(username):
     return user_credits > 0, user_credits
 
 
-def has_credits_for(username, amount, pull_type=None, addon_cuts=0):
+def has_credits_for(username, amount, pull_type=None, addon_cuts=0, quantity=1):
     """Return True if the user can pay for this pull.
 
     Internal credits (personal or company pool) still win when they
@@ -2669,7 +2669,7 @@ def has_credits_for(username, amount, pull_type=None, addon_cuts=0):
         if not user:
             return False
         return bool(_w.user_wallet_covers_pull(
-            user, data, pull_type, addon_cuts=addon_cuts))
+            user, data, pull_type, addon_cuts=addon_cuts, quantity=quantity))
     except Exception:
         traceback.print_exc()
         return False
@@ -2747,7 +2747,7 @@ def _sanitize_spend_scope(value):
 
 
 def _try_wallet_fallback(user, pull_type, description, job_id, outcome,
-                         data=None, username=None, addon_cuts=0):
+                         data=None, username=None, addon_cuts=0, quantity=1):
     """Wallet-side fallback for consume_credit (Jenna 2026-09-08).
 
     Called INSIDE the _consume mutator after internal credits (or the
@@ -2784,7 +2784,7 @@ def _try_wallet_fallback(user, pull_type, description, job_id, outcome,
         # the quote on the approve card / partner API is base + cut x n
         # and the wallet takes the same amount.
         usd, mode = _wallet.should_charge_wallet(
-            subject, tool_key, addon_cuts=addon_cuts)
+            subject, tool_key, addon_cuts=addon_cuts, quantity=quantity)
         if mode != 'wallet' or usd <= 0:
             return False
         # Per-member spend scope (Jenna 2026-09-09): when the subject is
@@ -2821,6 +2821,7 @@ def _try_wallet_fallback(user, pull_type, description, job_id, outcome,
         outcome['wallet_charged_usd'] = usd
         outcome['wallet_tool_key'] = tool_key
         outcome['wallet_addon_cuts'] = max(int(addon_cuts or 0), 0)
+        outcome['wallet_quantity'] = max(int(quantity or 1), 1)
         outcome['wallet_subject_kind'] = subject_kind
         outcome['wallet_subject_key'] = subject_key
         return True
@@ -2844,6 +2845,8 @@ def _record_wallet_fallback_usage(user, entry, outcome, credits_used):
         stamped['wallet_tool_key'] = outcome['wallet_tool_key']
     if outcome.get('wallet_addon_cuts'):
         stamped['wallet_addon_cuts'] = outcome['wallet_addon_cuts']
+    if outcome.get('wallet_quantity') and outcome['wallet_quantity'] > 1:
+        stamped['wallet_quantity'] = outcome['wallet_quantity']
     user['credits_used'] = user.get('credits_used', 0) + credits_used
     history = user.setdefault('credit_usage_history', [])
     history.insert(0, stamped)
@@ -2852,7 +2855,7 @@ def _record_wallet_fallback_usage(user, entry, outcome, credits_used):
 
 
 def consume_credit(username, description=None, job_id=None, pull_type=None, credits_used=1,
-                   addon_cuts=0):
+                   addon_cuts=0, quantity=1):
     """Consume credits from user and/or company pool.
     Returns True if successful. `addon_cuts` = embedded add-on cuts
     riding the pull; a dollar wallet debits them with the base tool
@@ -2905,7 +2908,8 @@ def consume_credit(username, description=None, job_id=None, pull_type=None, cred
                 if _try_wallet_fallback(user, pull_type, description,
                                        job_id, outcome, data=data,
                                        username=username,
-                                       addon_cuts=addon_cuts):
+                                       addon_cuts=addon_cuts,
+                                       quantity=quantity):
                     _record_wallet_fallback_usage(
                         user, entry, outcome, credits_used)
                     return data
@@ -2915,7 +2919,8 @@ def consume_credit(username, description=None, job_id=None, pull_type=None, cred
                 if _try_wallet_fallback(user, pull_type, description,
                                        job_id, outcome, data=data,
                                        username=username,
-                                       addon_cuts=addon_cuts):
+                                       addon_cuts=addon_cuts,
+                                       quantity=quantity):
                     _record_wallet_fallback_usage(
                         user, entry, outcome, credits_used)
                     return data
@@ -2937,7 +2942,8 @@ def consume_credit(username, description=None, job_id=None, pull_type=None, cred
             if _try_wallet_fallback(user, pull_type, description,
                                    job_id, outcome, data=data,
                                    username=username,
-                                   addon_cuts=addon_cuts):
+                                   addon_cuts=addon_cuts,
+                                   quantity=quantity):
                 _record_wallet_fallback_usage(
                     user, entry, outcome, credits_used)
                 return data

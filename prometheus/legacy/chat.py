@@ -3310,6 +3310,7 @@ _PM_PRICING_COPY_TEMPLATE = (
     "Brand Partnership - {c}500 + {c}500 Control for a {c}1,000 total\n"
     "Ad Attribution - {c}500 for the initial pull and an optional {c}100 x "
     "day to track per campaign\n"
+    "Viewership over time - {c}500 per year of window\n"
     "Trends, Rankers, Fin - starts at {c}5,000/mo\n\n"
     "All Prometheus (chat bot) usage is billed at a metered rate of "
     "{c}10.50 / {c}52.50 per million in/out, plus {c}0.021 per search.")
@@ -12678,25 +12679,6 @@ def _pm_history_bind_text(history):
     return '\n'.join(parts)
 
 
-def _pm_panel_price_label(username):
-    """User-facing price for the Prometheus research report, plus the
-    credit count the charge will consume. Internal-credit holders see
-    the credit count; a paying customer whose credits will not cover
-    it sees the dollar price the wallet will absorb ($550 default,
-    admin-tunable in the billing panel). Never raises."""
-    credits_price = _H.CREDITS_PANEL_REPORT
-    try:
-        credits_price = int(_H.get_credit_cost('panel_report')
-                            or _H.CREDITS_PANEL_REPORT)
-    except Exception:
-        pass
-    # Standard pricing, never credits (Jenna 2026-10-07): everyone sees
-    # the dollar price; the charge still consumes the internal units.
-    usd = _pm_usd('panel_report', float(getattr(_H, 'PANEL_REPORT_USD', 550.0) or 550.0),
-                  username=username)
-    return _pm_usd_label(usd), credits_price
-
-
 def _pm_panel_refund(panel_charge):
     """Reverse a research-report charge when the read never delivered
     (job error or held-for-review). Mirrors the build flow's
@@ -13119,6 +13101,13 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
                 traceback.print_exc()
         if subj_name and pma.panel_report_eligible(text, subj_name):
             _pr_label, _pr_credits = _pm_panel_price_label(_pm_user)
+            _pr_pull_type, _pr_qty, _pr_kind = 'Panel Report', 1, 'report'
+            # Viewership over time is its own price: 500 per year of
+            # window in the seat's currency (Jenna 2026-10-08).
+            _vw = _pm_viewership_read_price(text, _pm_user)
+            if _vw:
+                _pr_label, _pr_credits, _pr_qty = _vw
+                _pr_pull_type, _pr_kind = 'Viewership Read', 'viewership'
             if isinstance(panel_confirm, dict):
                 # Confirmed: the charge lands NOW, before anything is
                 # generated. Price is always the server's, never the
@@ -13128,10 +13117,13 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
                 # both, plus unlimited users, in one call).
                 if not _pm_user or not _H.consume_credit(
                         _pm_user,
-                        description=('Prometheus Research Report - '
-                                     f'{subj_name}'),
-                        pull_type='Panel Report',
-                        credits_used=_pr_credits):
+                        description=((f'Viewership read ({_pr_qty} yr) - '
+                                      if _pr_kind == 'viewership'
+                                      else 'Prometheus Research Report - ')
+                                     + f'{subj_name}'),
+                        pull_type=_pr_pull_type,
+                        credits_used=_pr_credits,
+                        quantity=_pr_qty):
                     _pm_ask_hint(outcome='panel_out_of_credits',
                                  subject=subj_name)
                     return jsonify({
@@ -13152,7 +13144,8 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
                       f"{_pm_user} for {subj_name}")
             else:
                 reply, followups, offer = pma.build_panel_report_offer(
-                    subj_name, _pr_label, question=text)
+                    subj_name, _pr_label, question=text,
+                    kind=_pr_kind, years=_pr_qty)
                 _pm_ask_hint(outcome='panel_offer', subject=subj_name)
                 return jsonify({
                     'success': True, 'action': 'answer',
@@ -16330,6 +16323,19 @@ def _pm_analyze_core(user, body, text, history):
                         user, text, history, prefer_catalog=True,
                         bind_subject=str(_nc_refs[0].get('subject')
                                          or _nc_lab))
+                # The ask names a different subject of its own ("monthly
+                # viewership for Suits" after an Office thread): read on
+                # it; never ask about the remembered one.
+                try:
+                    import prometheus_analysis as _pma_nc
+                    _own = str(_pma_nc.guess_subject_from_text(text)
+                               or '').strip()
+                except Exception:
+                    _own = ''
+                if _own and _pm_plausible_subject(_own):
+                    _pm_ask_hint(route='named_subject', subject=_own)
+                    return _pm_generate_metrics_response(
+                        user, text, history, prefer_catalog=True)
                 if _nc_lab:
                     _pm_ask_hint(outcome='memory_confirm')
                     return jsonify({
@@ -18675,6 +18681,8 @@ from prometheus.legacy.watch import (  # noqa: E402,F401
     _pm_usd,
     _pm_usd_label,
     _pm_money_symbol,
+    _pm_viewership_read_price,
+    _pm_panel_price_label,
     _pm_safe_user,
     _pm_s3_json,
     _pm_s3_put_json,

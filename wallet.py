@@ -91,6 +91,11 @@ DEFAULT_PRICING = {
         # together read on a subject with no base anywhere, and the
         # catch-all price for report asks with no other set price.
         "panel_report": 550.0,
+        # Viewership over time (2026-10-08 Jenna, verbatim: "viewership
+        # asks is always 500 per year in the company's requested
+        # currency"). Priced per year of window; the seat's currency
+        # supplies the symbol (display_currency), the number is 1:1.
+        "viewership_read": 500.0,
         # 2026-09-09 (Jenna, verbatim: 'please remove chatbot things
         # from modules. those are just access monthly not any per pull
         # things'). The dashboard-side Chatbot Profile IQ pull_type
@@ -447,6 +452,11 @@ MODULE_CATALOG = [
     # tool_price_usd() into both the Prometheus quote and the charge.
     ("panel_report",               "Un-priced Ask",
      "pulls", 6, 550.0, "has_prometheus_access"),
+    # 2026-10-08 (Jenna): a viewership-over-time read (monthly viewers,
+    # hours watched, consumption by month) is 500 per year of window,
+    # charged in the seat's currency. Quantity = years.
+    ("viewership_read",            "Viewership Read (per year)",
+     "pulls", 5, 500.0, "has_prometheus_access"),
     # 2026-09-09 (Jenna, verbatim: 'please remove chatbot things
     # from modules. those are just access monthly not any per pull
     # things'). Three rows retired here:
@@ -1422,6 +1432,7 @@ _PULL_TYPE_TO_TOOL_KEY = {
     "svod":                          "subscriber_iq_build",
     # ---- Prometheus research report / un-priced ask (2026-09-14) ----
     "panel report":                  "panel_report",
+    "viewership read":               "viewership_read",
     "research report":               "panel_report",
     "prometheus report":             "panel_report",
     "un-priced ask":                 "panel_report",
@@ -2307,10 +2318,11 @@ def apply_wallet_refund(user: dict, amount_usd: float, *,
 
 def should_charge_wallet(user: dict, tool_key: str,
                         pricing: Optional[dict] = None,
-                        addon_cuts: int = 0) -> tuple:
+                        addon_cuts: int = 0, quantity: int = 1) -> tuple:
     """Decide whether a pull for `tool_key` should hit the wallet AND
     at what dollar amount. `addon_cuts` embedded cuts price in on
-    top of the tool (see addon_cuts_usd).
+    top of the tool (see addon_cuts_usd); `quantity` multiplies the
+    tool price (years of a viewership read, 2026-10-08).
 
     Returns (usd_to_charge, mode) where:
 
@@ -2348,6 +2360,11 @@ def should_charge_wallet(user: dict, tool_key: str,
     usd = subject_tool_price_usd(user, tool_key, pricing)
     if usd <= 0:
         return 0.0, "no_charge"
+    try:
+        qty = max(int(quantity or 1), 1)
+    except (TypeError, ValueError):
+        qty = 1
+    usd = usd * qty
     usd += addon_cuts_usd(user, tool_key, addon_cuts, pricing)
     return round(usd, 2), "wallet"
 
@@ -4692,7 +4709,7 @@ def _tool_display_name(tool_key: str) -> str:
 
 def user_wallet_covers_pull(user: dict, users_data: dict,
                             pull_type: str = None,
-                            addon_cuts: int = 0) -> bool:
+                            addon_cuts: int = 0, quantity: int = 1) -> bool:
     """True when the resolved billing subject (personal or company
     wallet) can pay for this pull on dollars, not leftover credits.
 
@@ -4713,7 +4730,8 @@ def user_wallet_covers_pull(user: dict, users_data: dict,
         if not tool_key:
             tool_key = "profile_iq_build"
         usd, mode = should_charge_wallet(subject, tool_key,
-                                         addon_cuts=addon_cuts)
+                                         addon_cuts=addon_cuts,
+                                         quantity=quantity)
         if mode != "wallet" or usd <= 0:
             return False
         if kind == "company":

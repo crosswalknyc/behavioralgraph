@@ -5331,17 +5331,33 @@ def panel_report_eligible(text, subject):
         return False
 
 
-def build_panel_report_offer(subject, price_label, question=''):
+def build_panel_report_offer(subject, price_label, question='',
+                             kind='report', years=1):
     """The priced offer for a full read on a no-base subject. Returns
     (reply, followups, offer) where `offer` is the payload the widget
     arms so the confirm chip re-sends the ask with panel_confirm.
     Price is stated up front (2026-08-18 house rule: what you see is
     what you pay); the charge itself only lands on confirm, server
-    side, at the server's price."""
+    side, at the server's price. kind='viewership' is the per-year
+    viewership-over-time read (Jenna 2026-10-08)."""
     subj = str(subject or '').strip() or 'that subject'
     price = str(price_label or '').strip()
     run_chip = (f"{PANEL_RUN_CHIP_PREFIX} - {price}"
                 if price else PANEL_RUN_CHIP_PREFIX)[:160]
+    if kind == 'viewership':
+        try:
+            yrs = max(int(years or 1), 1)
+        except (TypeError, ValueError):
+            yrs = 1
+        span = 'one year' if yrs == 1 else f'{yrs} years'
+        reply = (
+            f"That is a viewership read on {subj}: month by month viewers "
+            f"and hours watched across {span}, delivered right here in the "
+            f"chat." + (f" It runs {price}." if price else ""))
+        followups = [run_chip, 'Never mind']
+        offer = {'question': str(question or '')[:600],
+                 'subject': subj[:120], 'kind': 'viewership', 'years': yrs}
+        return scrub_user_text(reply), followups, offer
     reply = (
         f"{subj} is not in your library yet, so this one is a full "
         f"put-together read, not a lookup. I research {the_subject(subj)} "
