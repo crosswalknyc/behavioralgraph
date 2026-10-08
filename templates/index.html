@@ -20275,7 +20275,7 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
                                         <button type="button" class="user-dropdown-subitem" id="btnVideoTutorials" aria-expanded="false">Video Tutorials<span class="user-dropdown-caret">&#9662;</span></button>
                                         <div class="user-dropdown-submenu user-dropdown-submenu-2" id="videoTutorialsSubmenu">
                                             <div class="user-dropdown-subheader">Product Walk-Throughs</div>
-                                            <button type="button" class="user-dropdown-subitem2" data-howto-video="{{ url_for('static', filename='videos/profile-iq.mp4') }}" data-howto-title="Profile IQ">Profile IQ</button>
+                                            <button type="button" class="user-dropdown-subitem2" data-howto-video="{{ url_for('static', filename='videos/profile-iq-v3.mp4') }}" data-howto-title="Profile IQ">Profile IQ</button>
                                             <button type="button" class="user-dropdown-subitem2" data-howto-video="{{ url_for('static', filename='videos/subscriber-iq.mp4') }}" data-howto-title="Subscriber IQ">Subscriber IQ</button>
                                             <div class="user-dropdown-subheader">Task How-To Guides</div>
                                             <button type="button" class="user-dropdown-subitem2" data-howto-video="{{ url_for('static', filename='videos/view-profile-sub-cuts.mp4') }}" data-howto-title="View Profile Sub Cuts">View Profile Sub Cuts</button>
@@ -142976,7 +142976,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     if (closeId != null && typeof window.closeProfileTab === 'function') window.closeProfileTab(closeId);
                 });
             }
-            var closeAll = hit.closest('#profileTabsBar .profile-tab-close-all');
+            var closeAll = hit.closest('#profileTabsBar .profile-tab-close-all:not(.profile-help-pill)');
             if (closeAll) {
                 return fire(function() {
                     if (typeof window.closeAllProfileTabs === 'function') window.closeAllProfileTabs();
@@ -143153,7 +143153,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     if (hm && typeof window.openHowToVideo === 'function') window.openHowToVideo(hm[1], hm[2] || 'Profile IQ');
                 });
             });
-            document.querySelectorAll('#profileTabsBar .profile-tab-close-all').forEach(function(btn) {
+            document.querySelectorAll('#profileTabsBar .profile-tab-close-all:not(.profile-help-pill)').forEach(function(btn) {
                 once(btn, '_piqCloseAllBound', function(e) {
                     e.preventDefault();
                     e.stopImmediatePropagation();
@@ -150258,7 +150258,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             
             // Add HELP + Close All Tabs buttons at the end
             html += `
-                <div class="profile-tab-close-all profile-help-pill" onclick="openHowToVideo('{{ url_for('static', filename='videos/profile-iq.mp4') }}', 'Profile IQ')" title="Watch the Profile IQ how-to video" style="margin-left:auto;">
+                <div class="profile-tab-close-all profile-help-pill" onclick="openHowToVideo('{{ url_for('static', filename='videos/profile-iq-v3.mp4') }}', 'Profile IQ')" title="Watch the Profile IQ how-to video" style="margin-left:auto;">
                     <span>HELP</span>
                 </div>
                 <div class="profile-tab-close-all" onclick="closeAllProfileTabs()" title="Close all open tabs" style="margin-left:0.5rem;">
