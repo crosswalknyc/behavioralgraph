@@ -463,6 +463,7 @@ def _path_ok_while_view_locked(path):
         or p.startswith('/api/pay/')
         or p.startswith('/api/stripe/')
         or p.startswith('/static/')
+        or p.startswith('/files/')
     )
 
 
@@ -3146,7 +3147,7 @@ def _normalize_role(role):
 # This allows testing changes without affecting regular users
 ALLOWED_DEV_PATHS = [
     '/login', '/logout', '/health', '/healthz', '/ready', '/static',
-    '/api/login', '/caa', '/wbd', '/pricing', '/uta', '/iag',
+    '/api/login', '/caa', '/wbd', '/pricing', '/uta', '/iag', '/files',
 ]
 
 @app.before_request
@@ -4443,6 +4444,107 @@ def pricing_page():
     resp = make_response(render_template('pricing.html'), 200)
     resp.headers.update(headers)
     return resp
+
+
+# ============================================================================
+# SHARED FILES (public, no login, no password)
+# ----------------------------------------------------------------------------
+# Deliverables we hand out by link (PDFs, decks, images) live under the
+# `public_files/` prefix of the dashboard bucket and are served here so
+# the link people receive reads dashboard.crosswalknyc.com/files/<name>
+# instead of an S3 address. Shipping a new file is one upload:
+#   aws s3 cp Report.pdf s3://dashboard-inputs/public_files/Report.pdf \
+#       --content-type application/pdf
+#   -> https://dashboard.crosswalknyc.com/files/Report.pdf
+# The name is one path segment (letters, digits, dot, dash, underscore)
+# with an allowlisted extension, so nothing else in the bucket is
+# reachable from this route. Files are corrected in place under the same
+# name, so the cache window stays short.
+# ============================================================================
+
+PUBLIC_FILES_PREFIX = 'public_files/'
+_PUBLIC_FILE_NAME_RE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]{0,200}$')
+_PUBLIC_FILE_TYPES = {
+    '.pdf':  ('application/pdf', 'inline'),
+    '.png':  ('image/png', 'inline'),
+    '.jpg':  ('image/jpeg', 'inline'),
+    '.jpeg': ('image/jpeg', 'inline'),
+    '.gif':  ('image/gif', 'inline'),
+    '.webp': ('image/webp', 'inline'),
+    '.mp4':  ('video/mp4', 'inline'),
+    '.txt':  ('text/plain; charset=utf-8', 'inline'),
+    '.csv':  ('text/csv; charset=utf-8', 'attachment'),
+    '.json': ('application/json', 'attachment'),
+    '.zip':  ('application/zip', 'attachment'),
+    '.xlsx': ('application/vnd.openxmlformats-officedocument.'
+              'spreadsheetml.sheet', 'attachment'),
+    '.pptx': ('application/vnd.openxmlformats-officedocument.'
+              'presentationml.presentation', 'attachment'),
+    '.docx': ('application/vnd.openxmlformats-officedocument.'
+              'wordprocessingml.document', 'attachment'),
+}
+
+
+def _public_file_type(name):
+    """(content_type, disposition) for an allowlisted name, else None."""
+    name = name or ''
+    if '..' in name or not _PUBLIC_FILE_NAME_RE.match(name):
+        return None
+    return _PUBLIC_FILE_TYPES.get(os.path.splitext(name)[1].lower())
+
+
+def _public_file_error(status, headers):
+    text = ('Not found.' if status == 404
+            else 'This file is not available right now.')
+    resp = make_response(text, status)
+    resp.headers['Content-Type'] = 'text/plain; charset=utf-8'
+    resp.headers.update(headers)
+    return resp
+
+
+@app.route('/files/<name>')
+def public_file(name):
+    """Serve one shared deliverable from public_files/. No login."""
+    headers = {
+        'X-Robots-Tag': 'noindex, nofollow, noarchive',
+        'X-Content-Type-Options': 'nosniff',
+    }
+    kind = _public_file_type(name)
+    if not kind:
+        return _public_file_error(404, headers)
+    if not s3_client:
+        return _public_file_error(503, headers)
+    params = {'Bucket': S3_BUCKET, 'Key': PUBLIC_FILES_PREFIX + name}
+    inm = (request.headers.get('If-None-Match') or '').strip()
+    if inm:
+        params['IfNoneMatch'] = inm
+    try:
+        obj = s3_client.get_object(**params)
+        body = obj['Body'].read()
+    except ClientError as e:
+        code = str(((e.response or {}).get('Error') or {}).get('Code', ''))
+        if code in ('304', 'NotModified'):
+            resp = make_response('', 304)
+            resp.headers['ETag'] = inm
+            resp.headers['Cache-Control'] = 'public, max-age=300'
+            resp.headers.update(headers)
+            return resp
+        if code in ('404', 'NoSuchKey', 'NotFound'):
+            return _public_file_error(404, headers)
+        return _public_file_error(503, headers)
+    except Exception:
+        return _public_file_error(503, headers)
+    content_type, disposition = kind
+    resp = Response(body, status=200, content_type=content_type)
+    resp.headers['Content-Length'] = str(len(body))
+    resp.headers['Content-Disposition'] = f'{disposition}; filename="{name}"'
+    resp.headers['Cache-Control'] = 'public, max-age=300'
+    etag = obj.get('ETag')
+    if etag:
+        resp.headers['ETag'] = etag
+    resp.headers.update(headers)
+    return resp
+
 
 # ============================================================================
 # DESKTOP APP DOWNLOAD
