@@ -41,14 +41,18 @@ RECOVER_AFTER = 240          # seconds without a heartbeat
 HEARTBEAT_EVERY = 60
 SWEEP_EVERY = 300
 LOOKBACK = 6 * 3600          # a dead job's record stops changing at death
-MAX_RESUMES = 2
+MAX_RESUMES = 4              # deploys can come minutes apart
 STALE_STAGE = 'picking the read back up'
 FINAL_NOTE = ('That read did not finish on my side, so nothing is charged '
               'for it. Ask it again and I will run it fresh.')
+FINAL_NOTE_FREE = ('That read did not finish on my side. Ask it again and I '
+                   'will run it fresh.')
 
 _INSTANCE = f"{socket.gethostname()}:{os.getpid()}"
 _started = False
 _lock = threading.Lock()
+_INFLIGHT = {}               # job_id -> head, for the SIGTERM handoff
+_handoff_installed = False
 
 
 def _chat():
@@ -152,26 +156,92 @@ def carry_resume(job_id, head):
 # ----------------------------------------------------------------- beat
 def start_heartbeat(job_id, head):
     """A daemon timer that stamps heartbeat_at on the job once a minute
-    while it is working. Returns the stop event."""
+    while it is working. Returns the stop event. Also registers the job
+    for the SIGTERM handoff."""
     stop = threading.Event()
+    _INFLIGHT[job_id] = head
 
     def _run():
-        while not stop.wait(HEARTBEAT_EVERY):
-            try:
-                s3, bucket = _s3()
-                key = f"{_prefix()}{job_id}.json"
-                cur = json.loads(s3.get_object(Bucket=bucket, Key=key)['Body'].read())
-                if str(cur.get('status') or '') != 'working' or cur.get('resumed_as'):
-                    return
-                cur['heartbeat_at'] = time.time()
-                _chat()._pm_read_status_write(job_id, cur)
-            except Exception:
-                return
+        try:
+            while not stop.wait(HEARTBEAT_EVERY):
+                try:
+                    _beat_once(job_id)
+                except Exception:
+                    break          # finished, resumed elsewhere, or S3 trouble
+        finally:
+            _INFLIGHT.pop(job_id, None)
     try:
         threading.Thread(target=_run, daemon=True).start()
     except Exception:
         pass
     return stop
+
+
+def _beat_once(job_id):
+    """One heartbeat write; raises to end the loop when the job is no
+    longer working here."""
+    s3, bucket = _s3()
+    key = f"{_prefix()}{job_id}.json"
+    cur = json.loads(s3.get_object(Bucket=bucket, Key=key)['Body'].read())
+    if str(cur.get('status') or '') != 'working' or cur.get('resumed_as'):
+        raise RuntimeError('job no longer working here')
+    cur['heartbeat_at'] = time.time()
+    _chat()._pm_read_status_write(job_id, cur)
+
+
+def handoff_inflight(reason='shutdown'):
+    """The process is going away (a deploy): mark every read it is
+    running as stale right now so the next instance's boot sweep picks
+    it up in seconds instead of minutes. Fast, best effort."""
+    jobs = list(_INFLIGHT.items())
+    for job_id, head in jobs:
+        try:
+            s3, bucket = _s3()
+            key = f"{_prefix()}{job_id}.json"
+            cur = json.loads(s3.get_object(Bucket=bucket, Key=key)['Body'].read())
+            if str(cur.get('status') or '') != 'working' or cur.get('resumed_as'):
+                continue
+            # pull every beat back so is_stale() is true immediately
+            for k in ('heartbeat_at', 'stage_at', 'claimed_at'):
+                cur.pop(k, None)
+            cur['started_at'] = time.time() - RECOVER_AFTER - 5
+            cur['handoff_at'] = time.time()
+            cur['handoff_from'] = _INSTANCE
+            cur['stage'] = 'handing the read to a fresh instance'
+            _chat()._pm_read_status_write(job_id, cur)
+            print(f"[pm-recover] handed off read {job_id} ({reason})")
+        except Exception:
+            traceback.print_exc()
+    return len(jobs)
+
+
+def install_handoff():
+    """Chain a SIGTERM handler ahead of gunicorn's so in-flight reads are
+    handed off before the worker exits. Main thread only; never raises."""
+    global _handoff_installed
+    if _handoff_installed:
+        return False
+    try:
+        import signal
+        if threading.current_thread() is not threading.main_thread():
+            return False
+        prev = signal.getsignal(signal.SIGTERM)
+
+        def _on_term(signum, frame):
+            try:
+                handoff_inflight('SIGTERM')
+            except Exception:
+                pass
+            if callable(prev):
+                prev(signum, frame)
+            elif prev == signal.SIG_DFL:
+                signal.signal(signal.SIGTERM, signal.SIG_DFL)
+                os.kill(os.getpid(), signal.SIGTERM)
+        signal.signal(signal.SIGTERM, _on_term)
+        _handoff_installed = True
+        return True
+    except Exception:
+        return False
 
 
 # ---------------------------------------------------------------- claim
@@ -226,23 +296,26 @@ def _finalize(job_id, status, reason):
     uname = str(status.get('user') or '').strip()
     rr = status.get('resume') if isinstance(status.get('resume'), dict) else {}
     charge = rr.get('panel_charge') or status.get('panel_charge')
+    refunded = False
     try:
         if isinstance(charge, dict):
             c._pm_panel_refund(charge)
+            refunded = True
     except Exception:
         traceback.print_exc()
+    note = FINAL_NOTE if refunded else FINAL_NOTE_FREE
     try:
         c._pm_read_status_write(job_id, {
             **{k: v for k, v in status.items() if k != 'resume'},
             'status': 'error', 'final': True, 'final_reason': str(reason)[:200],
-            'payload': {'success': True, 'action': 'answer', 'reply': FINAL_NOTE,
+            'payload': {'success': True, 'action': 'answer', 'reply': note,
                         'followups': [], 'offer_deck': False, 'deck_angle': None}})
     except Exception:
         traceback.print_exc()
     try:
         if uname and not status.get('probe'):
             c._pm_append_read_to_history(uname, job_id, {
-                'success': True, 'action': 'answer', 'reply': FINAL_NOTE,
+                'success': True, 'action': 'answer', 'reply': note,
                 'followups': []})
     except Exception:
         traceback.print_exc()
@@ -254,7 +327,8 @@ def _finalize(job_id, status, reason):
         h._chatbot_error_email(
             'brief-chat/read-recovery',
             f"generated read orphaned and not recoverable ({reason}); "
-            f"charge refunded, calm note left in the thread",
+            + ("charge refunded, " if refunded else "no charge on the job, ")
+            + "calm note left in the thread; the user needs the answer by email",
             user_email=uname or None,
             payload={'job_id': job_id, 'question': str(status.get('question') or '')[:300],
                      'subject': rr.get('bind_subject'), 'attempts': status.get('resume_attempts')})
@@ -282,8 +356,16 @@ def recover(job_id, status=None, reason='no heartbeat'):
     rr = claimed.get('resume') if isinstance(claimed.get('resume'), dict) else None
     uname = str(claimed.get('user') or '').strip()
     attempts = int(claimed.get('resume_attempts') or 1)
+    if (not rr or not rr.get('text')) and str(claimed.get('question') or '').strip():
+        # A launch that predates the resume record still carries the
+        # question and the requester: run it from those (2026-10-08,
+        # Casey Pearson's genre read was stranded by a deploy and only
+        # got a note). The base resolves again from the question.
+        rr = resume_record(text=str(claimed.get('question') or ''), history=[],
+                           base={}, panel_charge=claimed.get('panel_charge'),
+                           probe=bool(claimed.get('probe')))
     if not rr or not rr.get('text') or not uname:
-        _finalize(job_id, claimed, 'no resume record')
+        _finalize(job_id, claimed, 'no question or requester on the job')
         return 'final'
     if attempts > MAX_RESUMES:
         _finalize(job_id, claimed, f'orphaned {attempts} times')
@@ -319,6 +401,14 @@ def recover(job_id, status=None, reason='no heartbeat'):
         body = resp.get_json() if hasattr(resp, 'get_json') else resp
         body = body if isinstance(body, dict) else {}
         new_id = str(body.get('read_job_id') or '').strip()
+        if new_id == job_id:
+            # attached to the dead job itself (the in-flight dedupe):
+            # nothing is running; leave it stale for the next pass
+            print(f"[pm-recover] resume of {job_id} attached to itself; retrying next sweep")
+            c._pm_read_status_write(job_id, {
+                **{k: v for k, v in claimed.items() if k != 'resume'},
+                'resume': rr, 'claimed_by': None, 'claimed_at': None})
+            return None
         if new_id:
             try:
                 # the opt-in email side-file follows the read
@@ -431,6 +521,7 @@ def start_background(initial_delay=20, every=SWEEP_EVERY):
         if _started:
             return False
         _started = True
+    install_handoff()
 
     def _loop():
         time.sleep(initial_delay)

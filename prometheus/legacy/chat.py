@@ -14029,6 +14029,8 @@ def _pm_read_inflight_check(user, text):
         status = json.loads(st['Body'].read().decode('utf-8'))
         if str(status.get('status') or '') != 'working':
             return None
+        if status.get('claimed_by') and not status.get('resumed_as'):
+            return None   # being resumed right now: its own launch must run
         return {'job_id': job_id,
                 'stage': str(status.get('stage') or '').strip()}
     except Exception:
@@ -14416,7 +14418,7 @@ def _pm_run_read_job(job_id, pm_user, pm_ppu, text, history, mr, base,
     head = {'job_id': job_id, 'user': pm_user, 'probe': bool(probe),
             'question': text[:300], 'started_at': time.time()}
     head = _rr.carry_resume(job_id, head)   # keep the launch's resume record
-    _beat = _rr.start_heartbeat(job_id, head)
+    _beat = _rr.start_heartbeat(job_id, head)   # also registers for handoff
 
     def _stage(label):
         try:
