@@ -13661,7 +13661,8 @@ def send_low_universe_user_email(user_email, username, project_name, err,
 
         destination = {'ToAddresses': [user_email]}
         if cc:
-            destination['CcAddresses'] = list(cc)
+            # always BCC, never Cc on anything a user receives (Jenna 2026-10-08)
+            destination['BccAddresses'] = list(cc)
 
         ses.send_email(
             Source='BehavioralGraph <jenna@crosswalknyc.com>',
