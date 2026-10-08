@@ -2263,9 +2263,11 @@ def apply_wallet_refund(user: dict, amount_usd: float, *,
 # ---------------------------------------------------------------------------
 
 def should_charge_wallet(user: dict, tool_key: str,
-                        pricing: Optional[dict] = None) -> tuple:
+                        pricing: Optional[dict] = None,
+                        addon_cuts: int = 0) -> tuple:
     """Decide whether a pull for `tool_key` should hit the wallet AND
-    at what dollar amount.
+    at what dollar amount. `addon_cuts` embedded cuts price in on
+    top of the tool (see addon_cuts_usd).
 
     Returns (usd_to_charge, mode) where:
 
@@ -2303,7 +2305,51 @@ def should_charge_wallet(user: dict, tool_key: str,
     usd = subject_tool_price_usd(user, tool_key, pricing)
     if usd <= 0:
         return 0.0, "no_charge"
+    usd += addon_cuts_usd(user, tool_key, addon_cuts, pricing)
     return round(usd, 2), "wallet"
+
+
+# Cut keys: a pull whose own tool_key IS a cut already prices its
+# first cut; only the extra embedded cuts add on top.
+CUT_TOOL_KEYS = frozenset({"api_profile_iq_cut", "profile_iq_derived_cut"})
+
+
+def addon_cut_tool_key(tool_key: str) -> str:
+    """Pricing key for one embedded add-on cut riding a pull priced at
+    `tool_key`: the api_* family quotes api_profile_iq_cut (the same
+    key _v1_price_usd_for quotes), everything else the dashboard
+    derived-cut key."""
+    tk = str(tool_key or "").strip()
+    if tk in CUT_TOOL_KEYS:
+        return tk
+    return "api_profile_iq_cut" if tk.startswith("api_") \
+        else "profile_iq_derived_cut"
+
+
+def addon_cuts_usd(subject: dict, tool_key: str, addon_cuts: int = 0,
+                   pricing: Optional[dict] = None) -> float:
+    """Dollars the embedded add-on cuts add to a pull (Jenna
+    2026-10-07, GoGo squeeZ SlymeZ for Kartel: 'charge kartel for
+    that'). The approve card and the partner API both quote
+    base + cut x n, but the wallet debit used to take the base tool
+    price only, so every embedded cut rode free on a dollar wallet.
+    The debit now carries the same cuts the quote did. A pull whose
+    tool_key is itself a cut counts its first cut in the base."""
+    try:
+        n = max(int(addon_cuts or 0), 0)
+    except (TypeError, ValueError):
+        n = 0
+    if n <= 0:
+        return 0.0
+    tk = str(tool_key or "").strip()
+    extra = n - 1 if tk in CUT_TOOL_KEYS else n
+    if extra <= 0:
+        return 0.0
+    each = subject_tool_price_usd(subject, addon_cut_tool_key(tk),
+                                  pricing or load_pricing())
+    if each <= 0:
+        return 0.0
+    return round(each * extra, 2)
 
 
 def wallet_can_absorb(user: dict, amount_usd: float) -> tuple:
@@ -4602,7 +4648,8 @@ def _tool_display_name(tool_key: str) -> str:
 
 
 def user_wallet_covers_pull(user: dict, users_data: dict,
-                            pull_type: str = None) -> bool:
+                            pull_type: str = None,
+                            addon_cuts: int = 0) -> bool:
     """True when the resolved billing subject (personal or company
     wallet) can pay for this pull on dollars, not leftover credits.
 
@@ -4622,7 +4669,8 @@ def user_wallet_covers_pull(user: dict, users_data: dict,
         tool_key = pull_type_to_tool_key(pull_type) if pull_type else ""
         if not tool_key:
             tool_key = "profile_iq_build"
-        usd, mode = should_charge_wallet(subject, tool_key)
+        usd, mode = should_charge_wallet(subject, tool_key,
+                                         addon_cuts=addon_cuts)
         if mode != "wallet" or usd <= 0:
             return False
         if kind == "company":

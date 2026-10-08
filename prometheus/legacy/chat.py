@@ -8483,7 +8483,8 @@ def api_synth_chat_approve():
         price += _H.CREDITS_PROFILE_ANALYSIS
     _approve_pull_type = f'Chatbot Profile IQ ({decision})'
     if price > 0 and _charge_user and not _H.has_credits_for(
-            _charge_user, price, pull_type=_approve_pull_type):
+            _charge_user, price, pull_type=_approve_pull_type,
+            addon_cuts=len(_billable_cuts)):
         _, _left = _H.check_user_credits(_charge_user)
         _snap = _H._caller_wallet_snapshot(_charge_user)
         _wallet = float(_snap.get('wallet_balance_usd') or 0.0)
@@ -8495,7 +8496,8 @@ def api_synth_chat_approve():
             _subj, _, _ = _w_live.resolve_billing_subject(_u, _data)
             _usd, _ = _w_live.should_charge_wallet(
                 _subj, _w_live.pull_type_to_tool_key(_approve_pull_type)
-                or 'api_chatbot_profile_iq_build')
+                or 'api_chatbot_profile_iq_build',
+                addon_cuts=len(_billable_cuts))
         except Exception:
             traceback.print_exc()
         if _snap.get('paying_customer'):
@@ -8670,7 +8672,8 @@ def api_synth_chat_approve():
                                  f"{spec.get('name', 'profile')}"),
                     job_id=str(_session_run_id),
                     pull_type=f'Chatbot Profile IQ ({decision})',
-                    credits_used=price):
+                    credits_used=price,
+                    addon_cuts=len(_billable_cuts)):
                 print(f"[synth_chat_run] WARNING: post-queue credit charge "
                       f"failed user={_charge_user} run={_session_run_id} "
                       f"price={price} - run continues, usage NOT recorded")

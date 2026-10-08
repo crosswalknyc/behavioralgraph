@@ -2611,7 +2611,7 @@ def check_user_credits(username):
     return user_credits > 0, user_credits
 
 
-def has_credits_for(username, amount, pull_type=None):
+def has_credits_for(username, amount, pull_type=None, addon_cuts=0):
     """Return True if the user can pay for this pull.
 
     Internal credits (personal or company pool) still win when they
@@ -2632,7 +2632,8 @@ def has_credits_for(username, amount, pull_type=None):
         user = (data.get('users') or {}).get(username)
         if not user:
             return False
-        return bool(_w.user_wallet_covers_pull(user, data, pull_type))
+        return bool(_w.user_wallet_covers_pull(
+            user, data, pull_type, addon_cuts=addon_cuts))
     except Exception:
         traceback.print_exc()
         return False
@@ -2708,7 +2709,7 @@ def _sanitize_spend_scope(value):
 
 
 def _try_wallet_fallback(user, pull_type, description, job_id, outcome,
-                         data=None, username=None):
+                         data=None, username=None, addon_cuts=0):
     """Wallet-side fallback for consume_credit (Jenna 2026-09-08).
 
     Called INSIDE the _consume mutator after internal credits (or the
@@ -2741,7 +2742,11 @@ def _try_wallet_fallback(user, pull_type, description, job_id, outcome,
         if not _wallet.is_paying_customer(subject):
             return False
         tool_key = _wallet.pull_type_to_tool_key(pull_type)
-        usd, mode = _wallet.should_charge_wallet(subject, tool_key)
+        # Embedded add-on cuts debit with the pull (Jenna 2026-10-07):
+        # the quote on the approve card / partner API is base + cut x n
+        # and the wallet takes the same amount.
+        usd, mode = _wallet.should_charge_wallet(
+            subject, tool_key, addon_cuts=addon_cuts)
         if mode != 'wallet' or usd <= 0:
             return False
         # Per-member spend scope (Jenna 2026-09-09): when the subject is
@@ -2777,6 +2782,7 @@ def _try_wallet_fallback(user, pull_type, description, job_id, outcome,
         outcome['ok'] = True
         outcome['wallet_charged_usd'] = usd
         outcome['wallet_tool_key'] = tool_key
+        outcome['wallet_addon_cuts'] = max(int(addon_cuts or 0), 0)
         outcome['wallet_subject_kind'] = subject_kind
         outcome['wallet_subject_key'] = subject_key
         return True
@@ -2798,6 +2804,8 @@ def _record_wallet_fallback_usage(user, entry, outcome, credits_used):
         stamped['wallet_charged_usd'] = usd
     if outcome.get('wallet_tool_key'):
         stamped['wallet_tool_key'] = outcome['wallet_tool_key']
+    if outcome.get('wallet_addon_cuts'):
+        stamped['wallet_addon_cuts'] = outcome['wallet_addon_cuts']
     user['credits_used'] = user.get('credits_used', 0) + credits_used
     history = user.setdefault('credit_usage_history', [])
     history.insert(0, stamped)
@@ -2805,9 +2813,12 @@ def _record_wallet_fallback_usage(user, entry, outcome, credits_used):
     outcome['ok'] = True
 
 
-def consume_credit(username, description=None, job_id=None, pull_type=None, credits_used=1):
+def consume_credit(username, description=None, job_id=None, pull_type=None, credits_used=1,
+                   addon_cuts=0):
     """Consume credits from user and/or company pool.
-    Returns True if successful.
+    Returns True if successful. `addon_cuts` = embedded add-on cuts
+    riding the pull; a dollar wallet debits them with the base tool
+    (Jenna 2026-10-07).
 
     Runs as a compare-and-swap mutator over a freshly-read users.json
     (see _users_cas_mutate): the debit arithmetic is always applied to
@@ -2855,7 +2866,8 @@ def consume_credit(username, description=None, job_id=None, pull_type=None, cred
                 # Pool exhausted -> try wallet fallback for paying customers.
                 if _try_wallet_fallback(user, pull_type, description,
                                        job_id, outcome, data=data,
-                                       username=username):
+                                       username=username,
+                                       addon_cuts=addon_cuts):
                     _record_wallet_fallback_usage(
                         user, entry, outcome, credits_used)
                     return data
@@ -2864,7 +2876,8 @@ def consume_credit(username, description=None, job_id=None, pull_type=None, cred
                 # User's ceiling on this pool reached -> try wallet fallback.
                 if _try_wallet_fallback(user, pull_type, description,
                                        job_id, outcome, data=data,
-                                       username=username):
+                                       username=username,
+                                       addon_cuts=addon_cuts):
                     _record_wallet_fallback_usage(
                         user, entry, outcome, credits_used)
                     return data
@@ -2885,7 +2898,8 @@ def consume_credit(username, description=None, job_id=None, pull_type=None, cred
             # Personal credits exhausted -> try wallet fallback for paying customers.
             if _try_wallet_fallback(user, pull_type, description,
                                    job_id, outcome, data=data,
-                                   username=username):
+                                   username=username,
+                                   addon_cuts=addon_cuts):
                 _record_wallet_fallback_usage(
                     user, entry, outcome, credits_used)
                 return data
@@ -56754,7 +56768,9 @@ def api_v1_profiles_run():
     # preflight - e.g. cut_needs_parent=8). If interpret picked a
     # tier that exceeds the partner's balance, refuse cleanly.
     _v1_pt = f'Chatbot Profile IQ v1 ({decision})'
-    if price > 0 and not has_credits_for(username, price, pull_type=_v1_pt):
+    if price > 0 and not has_credits_for(
+            username, price, pull_type=_v1_pt,
+            addon_cuts=len(_v1_run_cuts or [])):
         _, credits_left = check_user_credits(username)
         _price_usd_tier = _v1_price_usd_for(
             decision, len(_v1_run_cuts or []), username=username)
@@ -56945,6 +56961,7 @@ def api_v1_profiles_run():
                 job_id='',
                 pull_type=f'Chatbot Profile IQ v1 ({decision})',
                 credits_used=price,
+                addon_cuts=len(_v1_run_cuts or []),
             ))
         except Exception:
             traceback.print_exc()
