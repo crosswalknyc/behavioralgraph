@@ -17,7 +17,7 @@ from flask import session
 
 from prometheus.legacy import H as _H, C as _C  # noqa: E402
 
-__all__ = ['_PM_WATCH_FLAGGED', '_PM_USER_BLOCK_CACHE', '_PM_USER_BLOCK_LOCK', '_pm_user_block', '_pm_catalog_block', '_pm_ask_log_user', '_pm_probe_caller', '_pm_is_probe_user', '_PM_COMMON_IDENTITY_WORDS', '_pm_thread_confirmed_page', '_pm_watch_flag', '_pm_record_held_reply', '_pm_gate_options', '_pm_open_status_line', '_pm_price_table', '_pm_usd', '_pm_usd_label', '_pm_money_symbol', '_pm_safe_user', '_pm_s3_json', '_pm_s3_put_json', '_PM_REPORT_ASK_RE', '_pm_looks_report_ask', '_pm_is_viewership_series_ask', '_pm_is_consumption_count_ask', '_pm_is_viewership_ask', '_pm_viewership_verb', '_pm_window_years', '_pm_viewership_read_price', '_pm_panel_price_label', '_pm_consumption_subject',
+__all__ = ['_PM_WATCH_FLAGGED', '_PM_USER_BLOCK_CACHE', '_PM_USER_BLOCK_LOCK', '_pm_user_block', '_pm_catalog_block', '_pm_ask_log_user', '_pm_probe_caller', '_pm_is_probe_user', '_PM_COMMON_IDENTITY_WORDS', '_pm_thread_confirmed_page', '_pm_page_confirm_mark', '_pm_page_confirmed_recently', '_pm_watch_flag', '_pm_record_held_reply', '_pm_gate_options', '_pm_open_status_line', '_pm_price_table', '_pm_usd', '_pm_usd_label', '_pm_money_symbol', '_pm_safe_user', '_pm_s3_json', '_pm_s3_put_json', '_PM_REPORT_ASK_RE', '_pm_looks_report_ask', '_pm_is_viewership_series_ask', '_pm_is_consumption_count_ask', '_pm_is_viewership_ask', '_pm_viewership_verb', '_pm_window_years', '_pm_viewership_read_price', '_pm_panel_price_label', '_pm_consumption_subject',
     '_pm_page_clarify_subject', '_pm_pending_q_tokens', '_pm_stash_pending_question']
 
 
@@ -332,6 +332,43 @@ def _pm_thread_confirmed_page(history, page):
     except Exception:
         pass
     return False
+
+
+_PM_PAGE_CONFIRM_TTL_S = 12 * 3600
+
+
+def _pm_page_confirm_key(user):
+    return f"system/pm_page_confirms/{_pm_safe_user(user)}.json"
+
+
+def _pm_page_confirm_mark(user, page):
+    """The user kept the open page for an ask (clicked "Yes, {page}", or
+    re-sent the question after the confirm): remember it for 12 hours so
+    the same page is not confirmed again on every follow-up (2026-10-08,
+    eriley: twelve confirms in one session on one profile). Never
+    raises."""
+    try:
+        if not user or not page:
+            return
+        key = _pm_page_confirm_key(user)
+        doc = _pm_s3_json(key, {}) or {}
+        now = time.time()
+        doc = {k: v for k, v in doc.items() if now - float(v or 0) < _PM_PAGE_CONFIRM_TTL_S}
+        doc[_H._normalize_for_match(page)] = now
+        _pm_s3_put_json(key, doc)
+    except Exception:
+        traceback.print_exc()
+
+
+def _pm_page_confirmed_recently(user, page):
+    try:
+        if not user or not page:
+            return False
+        doc = _pm_s3_json(_pm_page_confirm_key(user), {}) or {}
+        ts = float(doc.get(_H._normalize_for_match(page)) or 0)
+        return bool(ts) and time.time() - ts < _PM_PAGE_CONFIRM_TTL_S
+    except Exception:
+        return False
 
 
 def _pm_price_table():

@@ -581,6 +581,35 @@ def ask(user, body, *, via='session'):
             _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
             return env, 200
 
+    # Brand coverage lane (2026-10-08). "Is Alexa measured in Crosswalk?",
+    # "what would alexa and echo be listed under in the behavioral tab":
+    # whether we carry a brand, its category, and what the open profile
+    # shows for it, answered from Gen Pop and the profile with no model
+    # call and never the open-page confirm.
+    if referent_decision is None and not _armed(body):
+        try:
+            from . import brand_coverage as _bcov
+            _bc_raw = _bcov.answer(text, ctx, host=host) if _bcov.parse(text) else None
+        except Exception as e:
+            print(f"[prometheus] brand coverage lane skipped: {e}")
+            _bc_raw = None
+        if _bc_raw:
+            raw = _bc_raw
+            decision = {'surface': 'analyze', 'mode': None,
+                        'reason': 'brand_coverage', 'client_hint': None}
+            if _client_surface == 'interpret':
+                raw = _interpret_shape(raw)
+                raw['followups'] = list(_bc_raw.get('followups') or [])
+            try:
+                host.ask_hint(route='brand_coverage', outcome='answered',
+                              subject=_bc_raw.get('subject'))
+            except Exception:
+                pass
+            env = envelope.wrap(raw, surface='analyze', decision=decision,
+                                thread_id=tid, via=via)
+            _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
+            return env, 200
+
     # Drill-down lane (2026-10-06, Alexia's 27,559). A question that
     # names a number from a Digital Journey is a lookup into that
     # journey: answer from the breakdown the file holds, or build it once

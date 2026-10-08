@@ -11432,11 +11432,9 @@ def _pm_open_screen_confirm(text, ctx, history=None):
             return {'route': 'bind', 'subject': _ent_name}
     named = ''
     if not _pg_named:
-        # The ask names a subject of its own (2026-10-08 Jenna: "it
-        # should only default to think it is the open profile if you
-        # say something without specifically mentioning a subject"):
-        # it binds that subject, in the library or not. The page is
-        # only ever offered for an ask that names nothing.
+        # The ask names a subject of its own (2026-10-08 Jenna): it binds
+        # that subject, in the library or not. The page is only ever
+        # offered for an ask that names nothing.
         try:
             named = (_pm_page_clarify_subject(text, page)
                      or _pm_consumption_subject(text)
@@ -11482,7 +11480,9 @@ def _pm_open_screen_confirm(text, ctx, history=None):
     verdict = _pm_screen_bind_verdict(text, page, base, page_key)
     if _alt_named:
         verdict = 'confirm'
-    elif verdict == 'confirm' and _pm_thread_confirmed_page(history, page):
+    elif verdict == 'confirm' and (
+            _pm_thread_confirmed_page(history, page)
+            or _pm_page_confirmed_recently(_pm_ask_log_user(''), page)):
         _pm_ask_hint(route='screen_bind', outcome='bound_thread_confirmed',
                      subject=page)
         return {'route': 'bind', 'subject': page}
@@ -13584,12 +13584,7 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
         traceback.print_exc()
     verdict, verify_revised = None, False
     _last_draft, _last_verdict = (None, None, None, None), None
-    # 2026-09-03 (Jenna, no-rebuild-level-correction.mdc): silent
-    # verify auto-correct. Set True below when a second corrective
-    # pass turns a would-be HELD read into a shippable one; drives
-    # stages['verify_outcome'] = 4 and _pm_ask_hint outcome='corrected'
-    # at the ship point.
-    _pm_auto_corrected = False
+    _pm_auto_corrected = False   # silent auto-correct -> verify_outcome 4
     if pmv is not None:
         try:
             _v_lookup = pmv.load_base_lookup(
@@ -13640,21 +13635,10 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
         except Exception:
             traceback.print_exc()
         if not revised_ok:
-            # Auto-correct pass (2026-09-03, Jenna standing rule from
-            # no-rebuild-level-correction.mdc: "an agent should fix
-            # everything and never need rebuild"). The self-revision
-            # above failed. Give the model ONE more attempt with the
-            # strongest corrective framing available: the verify
-            # findings already name the measured figure the reply got
-            # wrong ("The reply cites Netflix at 71.3% but the base
-            # file measures 99.4578%. Use the measured figure or drop
-            # the claim."). Feed those findings back with explicit
-            # instruction to obey and re-verify. Cap: ONE retry per
-            # read, never a loop. If this attempt raises, log
-            # server-side and fall through to the HELD path with the
-            # original findings only. The retry call routes through
-            # _pm_claude_json so per-user attribution + cost
-            # accounting flow unchanged.
+            # Auto-correct pass (2026-09-03, no-rebuild-level-correction):
+            # ONE more model attempt fed the verify findings (they name
+            # the measured figure); never a loop; a raise falls through
+            # to HELD with the original findings. Routes via _pm_claude_json.
             _retry_findings = []
             try:
                 _findings_now = (verdict or {}).get('findings') or []
@@ -13718,6 +13702,17 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
                 data, res, reply, fam0, verdict, _nfix = _resc
                 verify_revised = revised_ok = _pm_auto_corrected = True
                 stages['facts_fixed'] = int(_nfix)
+        if not revised_ok and pmv is not None:
+            # general in-place rescue (2026-10-08): fixed from its own findings
+            _ld = _last_draft
+            _resc = pmv.rescue_in_place(
+                _ld, _last_verdict or verdict, base_lookup=_v_lookup, question=text,
+                prior_entries=_pm_verify_prior_entries(_ld[1], _ld[3], led) if _ld and _ld[1] else [],
+                bound_facts=_purchase_facts, family=_ld[3] if _ld else fam0)
+            if _resc:
+                data, res, reply, fam0, verdict, _nfix = _resc
+                verify_revised = revised_ok = _pm_auto_corrected = True
+                stages['facts_fixed'] = int(_nfix)
         if not revised_ok:
             stages['verify'] = int(
                 (time.monotonic() - _t_verify) * 1000)
@@ -13742,11 +13737,8 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
                          'subject': res.get('subject'),
                          'base': base.get('s3_key')})
             _pm_ask_hint(outcome='held')
-            # Calm promise instead of a dead end (Jenna 2026-09-30:
-            # when Prometheus can't figure out the answer, the user
-            # sees the working-on-it promise and the answer arrives
-            # by email). The ops email above carries the findings and
-            # the user's question so the answer gets delivered.
+            # Calm promise instead of a dead end (Jenna 2026-09-30); the
+            # held job is retried by read_recovery before anyone is paged.
             return {
                 'success': True, 'action': 'answer',
                 'reply': _H._CHATBOT_CALM_MESSAGE,
@@ -13763,10 +13755,8 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
                 print(f"[pm-verify] bound facts enforced in place: {_nfix} figure(s)")
         except Exception:
             traceback.print_exc()
-    # 0 = clean pass, 1 = passed after one revision, 2 = held (above),
-    # 3 = pass unavailable (verification infrastructure trouble),
-    # 4 = auto-corrected then shipped (2026-09-03, silent in-place
-    #     correction per no-rebuild-level-correction.mdc).
+    # verify_outcome: 0 clean, 1 passed after revision, 2 held, 3 pass
+    # unavailable, 4 auto-corrected then shipped (silent, in place).
     stages['verify_outcome'] = (3 if verdict is None
                                 else (1 if verify_revised else 0))
     if _pm_auto_corrected:
@@ -14444,7 +14434,7 @@ def _pm_run_read_job(job_id, pm_user, pm_ppu, text, history, mr, base,
         if payload.get('success'):
             _done = {**head,
                      'status': 'held' if held else 'done',
-                     'payload': payload}
+                     'finished_at': time.time(), 'payload': payload}
             if isinstance(_stages, dict) and _stages:
                 _done['stages_ms'] = _stages
             if isinstance(_verify, dict) and _verify:
@@ -15804,6 +15794,12 @@ def _pm_analyze_core(user, body, text, history):
     if _bind_subject:
         if ctx_err:
             return ctx_err
+        try:   # "Yes, {page}": the page is kept for this user's follow-ups
+            _pg = str(((ctx or {}).get('primary') or {}).get('name') or '')
+            if _pg and _H._normalize_for_match(_pg) == _H._normalize_for_match(_bind_subject):
+                _pm_page_confirm_mark(_pm_ask_log_user(''), _pg)
+        except Exception:
+            pass
         return _pm_generate_metrics_response(
             user, text, history, ctx=ctx, prefer_catalog=True,
             bind_subject=_bind_subject,
@@ -16264,6 +16260,8 @@ def _pm_analyze_core(user, body, text, history):
             text = _ca_merged
             try:
                 _pm_ask_hint(route='clarify_answer_merge')
+                _pm_page_confirm_mark(_pm_ask_log_user(''), str(
+                    (ctx.get('primary') or {}).get('name') or ''))
             except Exception:
                 pass
         else:
@@ -18668,6 +18666,8 @@ from prometheus.legacy.watch import (  # noqa: E402,F401
     _pm_is_probe_user,
     _PM_COMMON_IDENTITY_WORDS,
     _pm_thread_confirmed_page,
+    _pm_page_confirm_mark,
+    _pm_page_confirmed_recently,
     _pm_watch_flag,
     _pm_record_held_reply,
     _pm_gate_options,

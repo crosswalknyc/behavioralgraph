@@ -87,6 +87,18 @@ ROWS = [
         'examples': [], 'counter': [('who watches love island?', False)],
     },
     {
+        'id': 'brand_coverage', 'surface': 'analyze',
+        'reason': 'brand_coverage', 'client_action': 'analyze',
+        'host_only': True,
+        'note': 'Whether a brand is one we carry, which behavioral category '
+                'it lives under, and what the open profile shows for it '
+                '(2026-10-08: "Is Alexa measured in Crosswalk?", "what would '
+                'alexa and echo be listed under in the behavioral tab"). '
+                'Answered from Gen Pop + the profile, no model call, never '
+                'the open-page confirm.',
+        'examples': [], 'counter': [('what brands over-index with this audience?', False)],
+    },
+    {
         'id': 'document', 'surface': 'analyze',
         'reason': 'document', 'client_action': 'analyze',
         'host_only': True,

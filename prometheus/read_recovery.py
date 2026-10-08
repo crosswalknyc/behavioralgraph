@@ -124,6 +124,27 @@ def last_beat(status):
         return 0.0
 
 
+HELD_RETRY_AFTER = 180       # a held read gets one fresh run
+MAX_HELD_RETRIES = 1
+
+
+def is_retryable_held(status, now=None, after=HELD_RETRY_AFTER):
+    """A read the verifier held, with a resume record, not yet retried:
+    one fresh generation often clears the checks (a different draft,
+    the findings in hand). The user already saw the calm line; the
+    answer lands under it when the retry passes."""
+    if not isinstance(status, dict) or str(status.get('status') or '') != 'held':
+        return False
+    if int(status.get('held_retries') or 0) >= MAX_HELD_RETRIES or status.get('resumed_as'):
+        return False
+    rr = status.get('resume')
+    if not isinstance(rr, dict) or not rr.get('text'):
+        return False
+    done_at = max(float(status.get('finished_at') or 0), float(status.get('stage_at') or 0),
+                  float(status.get('started_at') or 0))
+    return done_at > 0 and (now or time.time()) - done_at > after
+
+
 def is_stale(status, now=None, after=RECOVER_AFTER):
     if not isinstance(status, dict):
         return False
@@ -256,12 +277,16 @@ def _claim(job_id, status):
         cur = json.loads(obj['Body'].read())
     except Exception:
         return None
-    if not is_stale(cur):
+    held_retry = is_retryable_held(cur)
+    if not is_stale(cur) and not held_retry:
         return None
     claimed = dict(cur)
     claimed.update({'status': 'working', 'stage': STALE_STAGE,
                     'claimed_by': _INSTANCE, 'claimed_at': time.time(),
                     'resume_attempts': int(cur.get('resume_attempts') or 0) + 1})
+    if held_retry:
+        claimed['held_retries'] = int(cur.get('held_retries') or 0) + 1
+        claimed['stage'] = 'taking another pass'
     body = json.dumps(claimed).encode('utf-8')
     try:
         kw = dict(Bucket=bucket, Key=key, Body=body, ContentType='application/json')
@@ -348,7 +373,7 @@ def recover(job_id, status=None, reason='no heartbeat'):
                 Bucket=bucket, Key=f"{_prefix()}{job_id}.json")['Body'].read())
         except Exception:
             return None
-    if not is_stale(status):
+    if not is_stale(status) and not is_retryable_held(status):
         return None
     claimed = _claim(job_id, status)
     if not claimed:
@@ -495,15 +520,21 @@ def sweep(now=None, lookback=LOOKBACK):
             if not r.get('IsTruncated'):
                 break
             token = r.get('NextContinuationToken')
+        records = []
         for k in keys:
             try:
-                st = json.loads(s3.get_object(Bucket=bucket, Key=k)['Body'].read())
+                records.append((k, json.loads(s3.get_object(Bucket=bucket, Key=k)['Body'].read())))
             except Exception:
                 continue
+        # a retry's own job is never retried again (one fresh pass per read)
+        retry_children = {str(st.get('resumed_as')) for _k, st in records
+                          if st.get('held_retries') and st.get('resumed_as')}
+        for k, st in records:
+            jid = str(st.get('job_id') or k.rsplit('/', 1)[-1][:-5])
             if is_stale(st, now):
-                jid = str(st.get('job_id') or k.rsplit('/', 1)[-1][:-5])
-                res = recover(jid, status=st, reason='sweep')
-                out.append((jid, res))
+                out.append((jid, recover(jid, status=st, reason='sweep')))
+            elif is_retryable_held(st, now) and jid not in retry_children:
+                out.append((jid, recover(jid, status=st, reason='held-retry')))
     except Exception:
         traceback.print_exc()
     if out:

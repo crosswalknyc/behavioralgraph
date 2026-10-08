@@ -28,8 +28,10 @@ whole pass is testable without S3 or a model key. Only
 load_base_lookup touches the network.
 """
 
+import json
 import re
 import time
+import traceback
 
 # ---------------------------------------------------------------------------
 # Tolerances
@@ -1356,3 +1358,124 @@ def stamp(verdict, revised=False, held=False):
         'anchored': int((checks.get('anchor') or {}).get('anchored') or 0),
         'ts': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
     }
+
+
+# ---------------------------------------------------------------------------
+# General in-place rescue (2026-10-08)
+# ---------------------------------------------------------------------------
+# Seven of 45 reads in the week to 2026-10-08 were HELD after the revise
+# and auto-correct passes and reached the user only when a person
+# stepped in. Every finding the checks produce names the figure the
+# reply got wrong AND the figure it should carry ("cites X at 71.3% but
+# the base file measures 99.4578%"), or the exact word that must not be
+# there. That is enough to fix the draft in place without another model
+# call (no-rebuild-level-correction.mdc): put the measured figure where
+# the cited one was, drop the sentence that carries a banned word, then
+# re-verify. Only a draft the checks accept ships.
+
+_FINDING_CITED_RX = re.compile(
+    r"\bat\s+(?P<v>\d[\d,]*(?:\.\d+)?)\s*(?P<u>%?)", re.I)
+_FINDING_MEASURED_RX = re.compile(
+    r"\b(?:measures|says|projected count is|is)\s+(?P<v>\d[\d,]*(?:\.\d+)?)\s*(?P<u>%?)", re.I)
+_FINDING_TOKEN_RX = re.compile(r'contains\s+"([^"]{1,80})"')
+
+
+def _parse_number(s):
+    try:
+        return float(str(s).replace(',', ''))
+    except (TypeError, ValueError):
+        return None
+
+
+def _fmt_like(value, like_text, unit):
+    """Format `value` the way the cited figure was written (same decimals,
+    thousands separators for counts)."""
+    s = str(like_text)
+    dp = len(s.split('.')[1]) if '.' in s else 0
+    if unit == '%' or '.' in s:
+        return f"{value:.{dp}f}{unit}"
+    return f"{int(round(value)):,}"
+
+
+def _number_pattern(cited_text):
+    """Regex matching the cited figure as written in the reply (commas and
+    trailing zeros optional, not glued to other digits)."""
+    core = str(cited_text).replace(',', '')
+    if '.' in core:
+        ip, fp = core.split('.', 1)
+        fp = fp.rstrip('0')
+        pat = r'(?<![\d.])' + re.escape(ip)
+        pat += (r'\.' + re.escape(fp) + r'0*' if fp else r'(?:\.0+)?')
+    else:
+        ip = core
+        with_commas = f"{int(ip):,}" if ip.isdigit() else ip
+        pat = r'(?<![\d.])(?:' + re.escape(ip) + '|' + re.escape(with_commas) + r')(?:\.0+)?'
+    return re.compile(pat + r'(?![\d])')
+
+
+def rescue_in_place(last_draft, last_verdict, *, base_lookup=None, question=None,
+                    prior_entries=None, bound_facts=None, family=None):
+    """Fix a held draft from its own findings and re-verify. Returns
+    (data, res, reply, family, verdict, n_fixed) or None."""
+    try:
+        data, res, reply, fam = last_draft or (None, None, None, None)
+        if reply is None:
+            return None
+        findings = list((last_verdict or {}).get('findings') or [])
+        if not findings:
+            return None
+        text = str(reply)
+        res2 = json.loads(json.dumps(res)) if isinstance(res, dict) else res
+        n_fixed = 0
+        for f in findings:
+            f = str(f)
+            tok = _FINDING_TOKEN_RX.search(f)
+            if tok:
+                # drop every sentence / bullet carrying the banned word
+                word = tok.group(1)
+                kept = []
+                for line in text.split('\n'):
+                    if word.lower() in line.lower():
+                        parts = re.split(r'(?<=[.!?])\s+', line)
+                        parts = [p for p in parts if word.lower() not in p.lower()]
+                        line = ' '.join(parts).strip()
+                        n_fixed += 1
+                        if not line or line in ('-', '*'):
+                            continue
+                    kept.append(line)
+                text = '\n'.join(kept)
+                continue
+            cm = _FINDING_CITED_RX.search(f)
+            mm = _FINDING_MEASURED_RX.search(f[cm.end():]) if cm else None
+            if not (cm and mm):
+                continue
+            cited, measured = _parse_number(cm.group('v')), _parse_number(mm.group('v'))
+            if cited is None or measured is None or cited == measured:
+                continue
+            unit = cm.group('u') or mm.group('u') or ''
+            new_text_value = _fmt_like(measured, cm.group('v'), unit)
+            rx = _number_pattern(cm.group('v'))
+            text2, n = rx.subn(lambda m: new_text_value.rstrip('%') if not unit else new_text_value.rstrip('%'), text)
+            if n:
+                text = text2
+                n_fixed += n
+            if isinstance(res2, dict):
+                for m in (res2.get('metrics') or []):
+                    if isinstance(m, dict) and _parse_number(m.get('value')) == cited:
+                        m['value'] = measured
+                        n_fixed += 1
+        if not n_fixed:
+            return None
+        text = re.sub(r'\n{3,}', '\n\n', text).strip()
+        if len(text) < 80:
+            return None
+        verdict2 = verify_read(reply=text, res=res2, family=family or fam, base_lookup=base_lookup,
+                               prior_entries=prior_entries or [], question=question, bound_facts=bound_facts)
+        if not verdict2.get('ok'):
+            print(f"[pm-verify] in-place rescue did not clear the checks: {verdict2.get('findings')}")
+            return None
+        print(f"[pm-verify] in-place rescue cleared the checks ({n_fixed} fix(es)); read ships")
+        return data, res2, text, fam, verdict2, n_fixed
+    except Exception:
+        traceback.print_exc()
+        return None
