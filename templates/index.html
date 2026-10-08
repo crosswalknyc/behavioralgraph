@@ -40852,7 +40852,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         var gbm = gf.benchmark || {};
                         var gbPhrase = _iiqGoatBenchPhrase(gbm, gf.use_info ? 'info-seek' : 'ticketing site visit');
                         goatBenchHelp = '<p><b>Benchmark.</b> Paid assets read against the paid median and organic assets against the organic median, so every lift is apples to apples'
-                            + (gbPhrase ? (': ' + gbPhrase) : '') + '. Lift on the Performance page is each asset\u2019s own rate against the median for its own media type.</p>'
+                            + (gbPhrase ? (': ' + gbPhrase) : '') + '. Lift on the Asset View page is each asset\u2019s own rate against the median for its own media type.</p>'
                             + '<p><b>One week, one number.</b> New viewers reached in the last 7 days, against the 7 days before. The WoW chip, the biggest mover, the movers list, the exposure tile and the trajectory all read from it.</p>';
                     } catch (_gse) { }
                 }
@@ -134929,12 +134929,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // is switched off for the title.
             { id: 'q_q2',           label: 'Paid vs Organic', panel: 'drawer', sub: 'questions', q: 'q2',           legacyOnly: true, organicLabel: 'Daily activity' },
             { id: 'l_assets',       label: 'Performance',     panel: 'drawer', sub: 'assets',    legacyOnly: true, supersededBy: 'q_q2' },
-            { id: 'assets',      label: 'Performance', ids: ['iiqAssetTableSection'] },
+            { id: 'assets',      label: 'Performance', goatLabel: 'Asset View', ids: ['iiqAssetTableSection'] },
             // The campaign-level audience read. The slab draws on GOAT
             // (Jenna 2026-09-24) and on any campaign whose audience cards
             // carry congressional districts (Be Good Influence,
             // 2026-09-30), so the tab only appears there.
-            { id: 'audiences',   label: 'Audiences',   ids: ['iiqAudienceTableSection'] },
+            { id: 'audiences',   label: 'Audiences',   goatLabel: 'Audience View', ids: ['iiqAudienceTableSection'] },
             // Surface and Leaks have no tab of their own. Where the
             // cohort landed is what the attribution cuts are dividing up,
             // and where a single-surface tag would go dark is the same
@@ -135005,6 +135005,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             } catch (e) { return false; }
         }
         function _aiqTabLabel(t) {
+            // GOAT names its two table tabs by what they hold.
+            if (t.goatLabel) {
+                try { if (String((window.__intentIQ && window.__intentIQ.currentSlug) || '') === 'goat') return t.goatLabel; } catch (e) { }
+            }
             if (t.organicLabel && _aiqAllOrganic()) return t.organicLabel;
             return t.label;
         }
