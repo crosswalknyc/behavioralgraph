@@ -115176,13 +115176,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             if (d.household || d.income) kpis += '<div class="jiq-frag-kpi"><div class="jiq-frag-kpi-l">Home</div><div class="jiq-frag-kpi-v">' + _jiqMusicEsc(d.household || d.income) + '</div></div>';
             if (toWatch !== null) kpis += '<div class="jiq-frag-kpi is-hot"><div class="jiq-frag-kpi-l">First touch to first watch</div><div class="jiq-frag-kpi-v">' + toWatch + (toWatch === 1 ? ' day' : ' days') + '</div></div>';
             if (whole !== null && whole !== toWatch) kpis += '<div class="jiq-frag-kpi"><div class="jiq-frag-kpi-l">Whole walk</div><div class="jiq-frag-kpi-v">' + whole + (whole === 1 ? ' day' : ' days') + '</div></div>';
-            if (j.spend_usd) kpis += '<div class="jiq-frag-kpi"><div class="jiq-frag-kpi-l">Spend in window</div><div class="jiq-frag-kpi-v">$' + Number(j.spend_usd).toFixed(2) + '</div></div>';
             kpis += '</div>';
 
             html += '<div class="jiq-song-pad"><div class="jiq-person-hero">'
                 + _jiqMusicPersonPhoto(d, titleName || (j.label || ''))
                 + '<div class="jiq-person-hero-b">' + kpis
-                + _jiqMusicRead((j.outcome || '') + (j.spend_note ? ' ' + j.spend_note : ''))
+                + _jiqMusicRead(j.outcome || '')
                 + '</div></div></div>';
 
             // The walk, left to right, in the same shape as the Pathways page.
