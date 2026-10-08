@@ -79,9 +79,12 @@ def _log(record):
 
 def send_user_email(*, to, subject, body, instructed=False, caller='',
                     html=None, pdf=None, pdf_name='', csv=None, csv_name='',
-                    bcc_liz=True, extra_bcc=(), dry_run=False):
+                    bcc_liz=True, extra_bcc=(), cc=(), dry_run=False):
     """Send one user-facing email through the house door. Returns a dict
-    {sent, reason, message_id, destinations}. Never raises."""
+    {sent, reason, message_id, destinations}. Never raises.
+
+    `cc` is a visible Cc line (Jenna 2026-10-08: "cc me/jessie/liz");
+    Jenna and Liz still ride as BCC unless they are already on it."""
     to = str(to or '').strip()
     rec = {'to': to, 'subject': str(subject or '')[:200], 'caller': str(caller or '')[:60],
            'instructed': bool(instructed), 'body_sha': hashlib.sha1(str(body or '').encode()).hexdigest()[:12],
@@ -114,6 +117,9 @@ def send_user_email(*, to, subject, body, instructed=False, caller='',
     msg['Subject'] = subject_c
     msg['From'] = FROM
     msg['To'] = to
+    cc_list = [str(c).strip() for c in (cc or ()) if str(c or '').strip() and '@' in str(c)]
+    if cc_list:
+        msg['Cc'] = ', '.join(cc_list)
     msg['Reply-To'] = REPLY_TO
     alt = MIMEMultipart('alternative')
     alt.attach(MIMEText(body_c, 'plain', 'utf-8'))
@@ -128,7 +134,7 @@ def send_user_email(*, to, subject, body, instructed=False, caller='',
         part = MIMEApplication(csv, _subtype='csv')
         part.add_header('Content-Disposition', 'attachment', filename=csv_name)
         msg.attach(part)
-    dests = [to]
+    dests = [to] + [c for c in cc_list if c.lower() != to.lower()]
     for b in [JENNA] + ([LIZ] if bcc_liz else []) + list(extra_bcc or ()):
         if b and b.lower() not in {d.lower() for d in dests}:
             dests.append(b)
@@ -143,7 +149,8 @@ def send_user_email(*, to, subject, body, instructed=False, caller='',
             Source=FROM, Destinations=dests, RawMessage={'Data': msg.as_string()})
         rec['sent'] = True
         rec['message_id'] = r.get('MessageId')
-        print(f"[outbound-mail] sent to {to} (+{len(dests) - 1} bcc): {subject_c[:60]}")
+        print(f"[outbound-mail] sent to {to} (cc {len(cc_list)}, bcc "
+              f"{len(dests) - 1 - len(cc_list)}): {subject_c[:60]}")
     except Exception as e:
         rec['reason'] = f"send failed: {e}"[:200]
         traceback.print_exc()
