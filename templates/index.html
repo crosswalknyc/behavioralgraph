@@ -114326,6 +114326,81 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             };
         }
 
+        var _jiqMusicBenchCache = {};
+        function _jiqMusicKindOf(meta) {
+            var k = String((meta && meta.kind) || '');
+            if (/film|movie/i.test(k)) return 'Film';
+            if (/series|show/i.test(k)) return 'Series';
+            return '';
+        }
+        function _jiqMusicMedian(vals) {
+            var v = (vals || []).map(Number).filter(function(x) { return isFinite(x) && x > 0; })
+                .sort(function(x, y) { return x - y; });
+            if (!v.length) return 0;
+            var m = Math.floor(v.length / 2);
+            return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2;
+        }
+        // The benchmark for a title is the median across every title of
+        // the same kind in the catalog: films against films, series
+        // against series. Finish rates compare only against titles that
+        // measure the finish the same way (finished the season, finished
+        // the film, took a further paid action).
+        function _jiqMusicBench(meta) {
+            var kind = _jiqMusicKindOf(meta);
+            if (!kind) return null;
+            var depthLabel = String((meta && meta.depth_label) || '');
+            var key = kind + '|' + depthLabel;
+            if (_jiqMusicBenchCache[key]) return _jiqMusicBenchCache[key];
+            var rows = [];
+            (typeof _jiqMusicEntries === 'function' ? _jiqMusicEntries() : []).forEach(function(t) {
+                if (!t || !t.meta || !t.analysis) return;
+                if (_jiqMusicKindOf(t.meta) !== kind) return;
+                var w = _jiqMusicDoors(t.analysis, t.meta);
+                if (!w.viewers) return;
+                rows.push({ w: w, depth: String(t.meta.depth_label || '') });
+            });
+            var same = rows.filter(function(r) { return r.depth === depthLabel; });
+            var pick = function(list, f) { return _jiqMusicMedian(list.map(function(r) { return f(r.w); })); };
+            var b = {
+                kind: kind,
+                label: kind + ' median',
+                noun: kind === 'Film' ? 'films' : 'series',
+                n: rows.length,
+                n_depth: same.length,
+                viewers: pick(rows, function(w) { return w.viewers; }),
+                share: {
+                    music: pick(rows, function(w) { return w.music.share; }),
+                    content: pick(rows, function(w) { return w.content.share; }),
+                    none: pick(rows, function(w) { return w.none.share; })
+                },
+                mf_conv: pick(rows, function(w) { return w.mf_conv; }),
+                finished_pct: pick(same, function(w) { return w.finished_pct; }),
+                depth: {
+                    music: pick(same, function(w) { return w.music.depth_pct; }),
+                    content: pick(same, function(w) { return w.content.depth_pct; }),
+                    none: pick(same, function(w) { return w.none.depth_pct; })
+                }
+            };
+            _jiqMusicBenchCache[key] = b;
+            return b;
+        }
+        function _jiqMusicVs(val, med) {
+            var d = (Number(val) || 0) - (Number(med) || 0);
+            if (Math.abs(d) < 0.05) return 'on the median';
+            return (Math.round(Math.abs(d) * 10) / 10).toFixed(1) + ' pts ' + (d > 0 ? 'above' : 'below');
+        }
+        function _jiqMusicBenchLine(b, val, med) {
+            if (!b || !(Number(med) > 0)) return '';
+            return b.label + ' ' + _jiqMusicPct(med) + ', ' + _jiqMusicVs(val, med) + '.';
+        }
+        function _jiqMusicBenchKpi(b, val, med, isCount) {
+            if (!b || !(Number(med) > 0)) return '';
+            var txt = isCount
+                ? (b.label + ' ' + _jiqMusicCount(Math.round(med)))
+                : (b.label + ' ' + _jiqMusicPct(med) + ' \u00b7 ' + _jiqMusicVs(val, med));
+            return '<div class="jiq-frag-kpi-b">' + _jiqMusicEsc(txt) + '</div>';
+        }
+
         function _jiqMusicOneIn(sharePct) {
             var s = Number(sharePct) || 0;
             if (s <= 0) return '';
@@ -114334,28 +114409,52 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             return n <= 1 ? 'Nearly all' : ('1 in ' + n);
         }
 
-        function _jiqMusicSplitBar(w) {
-            return '<div class="jiq-music-split">'
-                + '<div class="jiq-music-split-bar">'
-                + w.doors.map(function(d) {
-                    return '<i class="is-' + d.key + '" style="width:' + Math.max(0.5, d.share).toFixed(2) + '%;" title="'
-                        + _jiqMusicEsc(d.label + ' ' + _jiqMusicPct(d.share)) + '"></i>';
-                }).join('')
-                + '</div>'
+        function _jiqMusicSplitBar(w, b) {
+            var bar = function(doors, cls) {
+                return '<div class="jiq-music-split-bar' + (cls ? ' ' + cls : '') + '">'
+                    + doors.map(function(d) {
+                        return '<i class="is-' + d.key + '" style="width:' + Math.max(0.5, d.share).toFixed(2) + '%;" title="'
+                            + _jiqMusicEsc(d.label + ' ' + _jiqMusicPct(d.share)) + '"></i>';
+                    }).join('')
+                    + '</div>';
+            };
+            var html = '<div class="jiq-music-split">'
+                + '<div class="jiq-music-split-tag">This title</div>'
+                + bar(w.doors)
                 + '<div class="jiq-music-split-legend">'
                 + w.doors.map(function(d) {
                     return '<span><b class="is-' + d.key + '"></b>' + _jiqMusicEsc(d.label) + ' '
                         + _jiqMusicEsc(_jiqMusicPct(d.share)) + ' \u00b7 ' + _jiqMusicCount(d.viewers) + '</span>';
                 }).join('')
-                + '</div></div>';
+                + '</div>';
+            if (b && b.n > 1) {
+                var bd = w.doors.map(function(d) {
+                    return { key: d.key, label: d.label, share: Number(b.share[d.key]) || 0 };
+                });
+                html += '<div class="jiq-music-split-tag is-bench">' + _jiqMusicEsc(b.label + ', ' + b.n + ' ' + b.noun) + '</div>'
+                    + bar(bd, 'is-bench')
+                    + '<div class="jiq-music-split-legend is-bench">'
+                    + bd.map(function(d) {
+                        return '<span><b class="is-' + d.key + '"></b>' + _jiqMusicEsc(d.label) + ' '
+                            + _jiqMusicEsc(_jiqMusicPct(d.share)) + '</span>';
+                    }).join('')
+                    + '</div>';
+            }
+            return html + '</div>';
         }
 
-        function _jiqMusicDoorBridge(d, depthLabel) {
+        function _jiqMusicDoorBridge(d, depthLabel, b) {
             var keepW = Math.max(0.6, Math.min(100, d.depth_pct));
+            var med = b ? (Number(b.depth[d.key]) || 0) : 0;
+            var tick = med > 0
+                ? '<b class="jiq-frag-tick" style="left:' + Math.max(0, Math.min(100, med)).toFixed(2) + '%;" title="'
+                    + _jiqMusicEsc(b.label + ' ' + _jiqMusicPct(med)) + '"></b>'
+                : '';
             return '<div class="jiq-frag-bridge is-branch"><div class="jiq-frag-rail"></div>'
                 + '<div class="jiq-frag-body"><div class="jiq-frag-track">'
-                + '<div class="jiq-frag-keep is-' + d.key + '" style="width:' + keepW.toFixed(2) + '%;"></div></div>'
+                + '<div class="jiq-frag-keep is-' + d.key + '" style="width:' + keepW.toFixed(2) + '%;"></div>' + tick + '</div>'
                 + '<div class="jiq-frag-foot"><span class="jiq-frag-kept">' + _jiqMusicEsc(_jiqMusicPct(d.depth_pct) + ' ' + String(depthLabel).toLowerCase()) + '</span>'
+                + (med > 0 ? '<span class="jiq-frag-bench">' + _jiqMusicEsc(b.label + ' ' + _jiqMusicPct(med)) + '</span>' : '')
                 + (d.stopped ? '<span class="jiq-frag-lost">\u2212' + _jiqMusicCount(d.stopped) + ' did not</span>' : '')
                 + '</div></div></div>';
         }
@@ -114363,39 +114462,53 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         function _jiqMusicRenderUniverse(a, meta) {
             if (typeof _jiqFragStep !== 'function') return '';
             var w = _jiqMusicDoors(a, meta);
+            var b = _jiqMusicBench(meta);
+            if (b && b.n < 2) b = null;
             var oneIn = _jiqMusicOneIn(w.music.share);
             var head = w.viewers
                 ? (_jiqMusicCount(w.viewers) + ' watched. ' + (oneIn ? (oneIn + ' came in through a song.') : 'Three doors in.'))
                 : 'Three doors into the title.';
-            var html = _jiqMusicSec('01 The journey', head, meta.window_label || 'Every viewer sits in exactly one door');
+            var sub = meta.window_label || 'Every viewer sits in exactly one door';
+            if (b) sub += ' \u00b7 Benchmark: median of ' + b.n + ' ' + b.noun;
+            var html = _jiqMusicSec('01 The journey', head, sub);
             html += '<div class="jiq-music-walk jiq-music-waterfall">';
-            html += _jiqFragStep({ label: w.watch_label, accounts: w.viewers, doing: 'Everyone who watched inside the window' }, { base: true });
-            html += _jiqMusicSplitBar(w);
+            html += _jiqFragStep({ label: w.watch_label, accounts: w.viewers,
+                doing: 'Everyone who watched inside the window.'
+                    + (b && b.viewers ? ' ' + b.label + ' ' + _jiqMusicCount(Math.round(b.viewers)) + ' viewers.' : '') }, { base: true });
+            html += _jiqMusicSplitBar(w, b);
             w.doors.forEach(function(d, i) {
                 var doing = _jiqMusicPct(d.share) + ' of viewers. ' + d.what;
                 if (d.key === 'music') {
                     doing = _jiqMusicCount(d.viewers) + ' of the ' + _jiqMusicCount(w.viewers)
                         + ' viewers (' + _jiqMusicPct(d.share) + ') heard a song before they watched.';
                 }
+                if (b) doing += ' ' + _jiqMusicBenchLine(b, d.share, b.share[d.key]);
                 html += '<div class="jiq-frag-branchnote">Door ' + (i + 1) + ' \u00b7 ' + _jiqMusicEsc(d.tag) + '</div>';
                 html += _jiqFragStep({ label: d.label, accounts: d.viewers, doing: doing }, { branch: true });
-                html += _jiqMusicDoorBridge(d, w.depth_label);
+                html += _jiqMusicDoorBridge(d, w.depth_label, b);
                 html += _jiqFragStep({ label: w.depth_label, accounts: d.deep,
-                    doing: _jiqMusicPct(d.depth_pct) + ' of ' + d.label.toLowerCase() + ' viewers' }, { branch: true, terminal: true });
+                    doing: _jiqMusicPct(d.depth_pct) + ' of ' + d.label.toLowerCase() + ' viewers.'
+                        + (b ? ' ' + _jiqMusicBenchLine(b, d.depth_pct, b.depth[d.key]) : '') }, { branch: true, terminal: true });
             });
             html += '<div class="jiq-frag-step is-terminal jiq-frag-total jiq-music-total"><div class="jiq-frag-rail"><i></i></div>'
                 + '<div class="jiq-frag-body"><div class="jiq-frag-line">'
                 + '<span class="jiq-frag-label">' + _jiqMusicEsc(w.depth_label) + ', all three doors</span>'
                 + '<span class="jiq-frag-count">' + _jiqMusicCount(w.finished) + '</span></div>'
-                + '<div class="jiq-frag-doing">' + _jiqMusicEsc(_jiqMusicPct(w.finished_pct) + ' of ' + _jiqMusicCount(w.viewers) + ' viewers') + '</div>'
+                + '<div class="jiq-frag-doing">' + _jiqMusicEsc(_jiqMusicPct(w.finished_pct) + ' of ' + _jiqMusicCount(w.viewers) + ' viewers.'
+                    + (b ? ' ' + _jiqMusicBenchLine(b, w.finished_pct, b.finished_pct) : '')) + '</div>'
                 + '</div></div>';
             html += '</div>';
-            html += '<div class="jiq-song-pad">'
-                + _jiqMusicRead(w.doors.map(function(d) { return _jiqMusicCount(d.viewers); }).join(' + ')
-                    + ' = ' + _jiqMusicCount(w.viewers) + ' viewers. '
-                    + w.doors.map(function(d) { return _jiqMusicCount(d.deep); }).join(' + ')
-                    + ' = ' + _jiqMusicCount(w.finished) + ' ' + String(w.depth_label).toLowerCase() + '.')
-                + '</div>';
+            var read = w.doors.map(function(d) { return _jiqMusicCount(d.viewers); }).join(' + ')
+                + ' = ' + _jiqMusicCount(w.viewers) + ' viewers. '
+                + w.doors.map(function(d) { return _jiqMusicCount(d.deep); }).join(' + ')
+                + ' = ' + _jiqMusicCount(w.finished) + ' ' + String(w.depth_label).toLowerCase() + '.';
+            if (b) {
+                read += ' Benchmarks are the median across the ' + b.n + ' ' + b.noun + ' on this page.';
+                if (b.n_depth && b.n_depth !== b.n) {
+                    read += ' ' + String(w.depth_label) + ' rates compare against the ' + b.n_depth + ' ' + b.noun + ' measured the same way.';
+                }
+            }
+            html += '<div class="jiq-song-pad">' + _jiqMusicRead(read) + '</div>';
             var disc = (a.discovery || []).slice().sort(function(x, y) {
                 return (Number(y.listeners) || 0) - (Number(x.listeners) || 0);
             });
@@ -114748,20 +114861,27 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }
             if (kpisEl) {
                 if (w.viewers) {
+                    var kb = _jiqMusicBench(meta);
+                    if (kb && kb.n < 2) kb = null;
                     kpisEl.innerHTML =
                         '<div class="jiq-frag-kpi"><div class="jiq-frag-kpi-l">Viewers</div>'
-                        + '<div class="jiq-frag-kpi-v">' + _jiqMusicEsc(_jiqMusicCount(w.viewers)) + '</div></div>'
+                        + '<div class="jiq-frag-kpi-v">' + _jiqMusicEsc(_jiqMusicCount(w.viewers)) + '</div>'
+                        + _jiqMusicBenchKpi(kb, w.viewers, kb && kb.viewers, true) + '</div>'
                         + '<div class="jiq-frag-kpi is-hot"><div class="jiq-frag-kpi-l">Music first</div>'
-                        + '<div class="jiq-frag-kpi-v">' + _jiqMusicEsc(_jiqMusicPct(w.music.share)) + '</div></div>'
+                        + '<div class="jiq-frag-kpi-v">' + _jiqMusicEsc(_jiqMusicPct(w.music.share)) + '</div>'
+                        + _jiqMusicBenchKpi(kb, w.music.share, kb && kb.share.music) + '</div>'
                         + '<div class="jiq-frag-kpi"><div class="jiq-frag-kpi-l">' + _jiqMusicEsc(w.content.label || 'Show first') + '</div>'
-                        + '<div class="jiq-frag-kpi-v">' + _jiqMusicEsc(_jiqMusicPct(w.content.share)) + '</div></div>'
+                        + '<div class="jiq-frag-kpi-v">' + _jiqMusicEsc(_jiqMusicPct(w.content.share)) + '</div>'
+                        + _jiqMusicBenchKpi(kb, w.content.share, kb && kb.share.content) + '</div>'
                         + '<div class="jiq-frag-kpi"><div class="jiq-frag-kpi-l">No music touch</div>'
-                        + '<div class="jiq-frag-kpi-v">' + _jiqMusicEsc(_jiqMusicPct(w.none.share)) + '</div></div>'
+                        + '<div class="jiq-frag-kpi-v">' + _jiqMusicEsc(_jiqMusicPct(w.none.share)) + '</div>'
+                        + _jiqMusicBenchKpi(kb, w.none.share, kb && kb.share.none) + '</div>'
                         + '<div class="jiq-frag-kpi"><div class="jiq-frag-kpi-l">'
                         + _jiqMusicEsc(w.depth_label) + '</div>'
                         + '<div class="jiq-frag-kpi-v">'
                         + _jiqMusicEsc(_jiqMusicPct(w.finished_pct))
-                        + '</div></div>';
+                        + '</div>'
+                        + _jiqMusicBenchKpi(kb, w.finished_pct, kb && kb.finished_pct) + '</div>';
                 } else {
                     kpisEl.innerHTML =
                         '<div class="jiq-frag-kpi"><div class="jiq-frag-kpi-l">Open title</div>'
@@ -190443,6 +190563,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
     body[data-theme="light"] .jiq-music-split-bar i.is-none, body[data-theme="light"] .jiq-music-split-legend b.is-none, body[data-theme="light"] .jiq-frag-keep.is-none { background: #8A86B0; }
     .jiq-music-split-legend { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 8px; font-size: 11px; color: #9AA09B; font-variant-numeric: tabular-nums; }
     .jiq-music-split-legend b { display: inline-block; width: 8px; height: 8px; border-radius: 999px; margin-right: 6px; vertical-align: middle; }
+    .jiq-music-split-tag { font-size: 10px; font-weight: 500; letter-spacing: 1.2px; text-transform: uppercase; color: #7C878A; margin: 0 0 5px; }
+    .jiq-music-split-tag.is-bench { margin-top: 14px; }
+    .jiq-music-split-bar.is-bench { height: 6px; opacity: .55; }
+    .jiq-music-split-legend.is-bench { color: #7C878A; }
+    .jiq-frag-kpi-b { font-size: 11px; color: #7C878A; margin-top: 6px; font-variant-numeric: tabular-nums; }
+    .jiq-frag-tick { position: absolute; top: 0; bottom: 0; width: 2px; background: #E9E8E1; opacity: .8; border-radius: 1px; }
+    body[data-theme="light"] .jiq-frag-tick { background: #0C1618; }
+    .jiq-frag-bench { font-size: 10.5px; color: #7C878A; letter-spacing: .04em; font-variant-numeric: tabular-nums; }
     .jiq-music-waterfall .jiq-frag-step.is-terminal { margin-bottom: 10px; }
     .jiq-music-total { margin-top: 10px; padding-top: 12px; border-top: 1px solid rgba(154,160,155,0.18); }
     body[data-theme="light"] .jiq-music-total { border-top-color: #DDDACE; }
