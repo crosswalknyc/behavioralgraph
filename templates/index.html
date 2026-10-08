@@ -115026,21 +115026,73 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }
             if (a.timeline && a.timeline.length) {
                 html += _jiqMusicSec('02 Timeline',
-                    'What moved around release.',
-                    'Release-relative days');
-                html += '<div class="jiq-song-pad">' + a.timeline.map(function(ev) {
-                    var day = (ev.day > 0 ? '+' : '') + ev.day;
-                    return '<div class="jiq-frag-step">'
-                        + '<div class="jiq-frag-rail"><i></i></div><div class="jiq-frag-body">'
-                        + '<div class="jiq-frag-line"><span class="jiq-frag-label">'
-                        + _jiqMusicEsc(ev.event || '') + '</span>'
-                        + '<span class="jiq-frag-count">' + _jiqMusicEsc(day) + '</span></div>'
-                        + '<div class="jiq-frag-doing">' + _jiqMusicEsc(ev.date || '')
-                        + (ev.detail ? ' · ' + _jiqMusicEsc(ev.detail) : '') + '</div>'
-                        + '</div></div>';
-                }).join('') + '</div>';
+                    'What happened before and after premiere day.',
+                    'Day 0 is the premiere. Left of it is before, right of it is after.');
+                html += _jiqMusicTimeline(a.timeline);
             }
             return html;
+        }
+
+        // Horizontal timeline: one axis in release-relative days, premiere day as its
+        // own tall marker at day 0, every other event a numbered dot on the axis with a
+        // matching numbered card underneath.
+        function _jiqMusicTimeline(timeline) {
+            var evs = (timeline || []).slice().sort(function(x, y) { return (Number(x.day) || 0) - (Number(y.day) || 0); });
+            if (!evs.length) return '';
+            var minD = Number(evs[0].day) || 0;
+            var maxD = Number(evs[evs.length - 1].day) || 0;
+            if (minD > 0) minD = 0;
+            if (maxD < 0) maxD = 0;
+            var span = Math.max(1, maxD - minD);
+            var pad = 4;
+            function pos(day) { return pad + (100 - 2 * pad) * ((Number(day) || 0) - minD) / span; }
+            var kindLabel = { music: 'Music', marketing: 'Marketing', window: 'Window', release: 'Premiere day' };
+            var release = null;
+            evs.forEach(function(ev) { if (ev.kind === 'release' || Number(ev.day) === 0) release = release || ev; });
+            var marks = '';
+            var cards = '';
+            var n = 0;
+            var lastPos = -100;
+            evs.forEach(function(ev) {
+                var p = pos(ev.day);
+                var day = Number(ev.day) || 0;
+                var dayTxt = day === 0 ? 'Day 0' : 'Day ' + (day > 0 ? '+' : '') + day;
+                var kind = ev.kind || 'music';
+                if (ev === release) {
+                    marks += '<div class="jiq-tl-prem" style="left:' + p.toFixed(2) + '%;"></div>'
+                        + '<div class="jiq-tl-prem-l" style="left:' + p.toFixed(2) + '%;">Premiere day'
+                        + '<small>' + _jiqMusicEsc(ev.date || '') + '</small></div>';
+                    cards += '<div class="jiq-tl-card is-release">'
+                        + '<div class="jiq-tl-card-k">Premiere day \u00b7 Day 0</div>'
+                        + '<div class="jiq-tl-card-t">' + _jiqMusicEsc(ev.event || 'Premiere') + '</div>'
+                        + '<div class="jiq-tl-card-d">' + _jiqMusicEsc(ev.date || '')
+                        + (ev.detail ? ' \u00b7 ' + _jiqMusicEsc(ev.detail) : '') + '</div></div>';
+                    lastPos = p;
+                    return;
+                }
+                n++;
+                var lift = (p - lastPos) < 3.4;
+                marks += '<div class="jiq-tl-mark is-' + _jiqMusicEsc(kind) + (lift ? ' is-lift' : '')
+                    + '" style="left:' + p.toFixed(2) + '%;" title="' + _jiqMusicEsc(dayTxt + ' \u00b7 ' + (ev.event || '')) + '">' + n + '</div>';
+                if (!lift) {
+                    marks += '<div class="jiq-tl-day" style="left:' + p.toFixed(2) + '%;">' + _jiqMusicEsc(dayTxt) + '</div>';
+                }
+                cards += '<div class="jiq-tl-card is-' + _jiqMusicEsc(kind) + '">'
+                    + '<div class="jiq-tl-card-k"><b>' + n + '</b> ' + _jiqMusicEsc((kindLabel[kind] || kind) + ' \u00b7 ' + dayTxt) + '</div>'
+                    + '<div class="jiq-tl-card-t">' + _jiqMusicEsc(ev.event || '') + '</div>'
+                    + '<div class="jiq-tl-card-d">' + _jiqMusicEsc(ev.date || '')
+                    + (ev.detail ? ' \u00b7 ' + _jiqMusicEsc(ev.detail) : '') + '</div></div>';
+                lastPos = p;
+            });
+            return '<div class="jiq-tl">'
+                + '<div class="jiq-tl-axis">'
+                + '<span class="jiq-tl-half is-before">Before premiere</span>'
+                + '<span class="jiq-tl-half is-after">After premiere</span>'
+                + '<div class="jiq-tl-line"></div>'
+                + marks
+                + '</div>'
+                + '<div class="jiq-tl-cards">' + cards + '</div>'
+                + '</div>';
         }
 
         function _jiqMusicRenderCommercial(a) {
@@ -190992,6 +191044,45 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
     .jiq-path-note { margin: 10px 0 0; font-size: 12px; line-height: 1.5; color: #9AA09B; max-width: 80ch; }
     body[data-theme="light"] .jiq-path-note { color: #5C6560; }
     .jiq-path.is-other { opacity: .75; }
+    .jiq-tl { margin: 26px 34px 0; }
+    .jiq-tl-axis { position: relative; height: 108px; }
+    .jiq-tl-half { position: absolute; top: 2px; font-size: 10px; font-weight: 500; letter-spacing: 1.4px; text-transform: uppercase; color: #7C878A; }
+    .jiq-tl-half.is-before { left: 0; }
+    .jiq-tl-half.is-after { right: 0; }
+    .jiq-tl-line { position: absolute; left: 0; right: 0; top: 72px; height: 2px; background: #3B3D38; border-radius: 1px; }
+    body[data-theme="light"] .jiq-tl-line { background: #CFCCC0; }
+    .jiq-tl-mark { position: absolute; top: 72px; transform: translate(-50%, -50%); width: 24px; height: 24px; border-radius: 999px; background: #0C1618; border: 2px solid #B7B3D8; color: #E9E8E1; font-size: 10.5px; font-weight: 700; display: flex; align-items: center; justify-content: center; font-variant-numeric: tabular-nums; }
+    body[data-theme="light"] .jiq-tl-mark { background: #E9E8E1; color: #0C1618; }
+    .jiq-tl-mark.is-music { border-color: #E682FF; }
+    .jiq-tl-mark.is-marketing { border-color: #B7B3D8; }
+    .jiq-tl-mark.is-window { border-color: #7C878A; }
+    body[data-theme="light"] .jiq-tl-mark.is-music { border-color: #8E3FA8; }
+    body[data-theme="light"] .jiq-tl-mark.is-marketing { border-color: #8A86B0; }
+    .jiq-tl-mark.is-lift { top: 44px; }
+    .jiq-tl-mark.is-lift::after { content: ''; position: absolute; left: 50%; top: 100%; width: 0; height: 16px; border-left: 2px solid; border-color: inherit; transform: translateX(-50%); opacity: .7; }
+    .jiq-tl-day { position: absolute; top: 90px; transform: translateX(-50%); font-size: 10px; color: #7C878A; white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .jiq-tl-prem { position: absolute; top: 34px; bottom: 0; width: 3px; background: #C7F23E; transform: translateX(-50%); border-radius: 2px; }
+    body[data-theme="light"] .jiq-tl-prem { background: #5E7E12; }
+    .jiq-tl-prem-l { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; text-align: center; font-size: 10px; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase; color: #C7F23E; line-height: 1.3; }
+    body[data-theme="light"] .jiq-tl-prem-l { color: #5E7E12; }
+    .jiq-tl-prem-l small { display: block; font-size: 10px; font-weight: 500; letter-spacing: .04em; text-transform: none; color: #9AA09B; }
+    .jiq-tl-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-top: 16px; }
+    .jiq-tl-card { padding: 10px 12px 12px; border-radius: 10px; background: #15252A; border-top: 2px solid #7C878A; }
+    body[data-theme="light"] .jiq-tl-card { background: #FFFFFF; }
+    .jiq-tl-card.is-music { border-top-color: #E682FF; }
+    .jiq-tl-card.is-marketing { border-top-color: #B7B3D8; }
+    .jiq-tl-card.is-release { border-top-color: #C7F23E; background: rgba(199,242,62,.07); }
+    body[data-theme="light"] .jiq-tl-card.is-music { border-top-color: #8E3FA8; }
+    body[data-theme="light"] .jiq-tl-card.is-marketing { border-top-color: #8A86B0; }
+    body[data-theme="light"] .jiq-tl-card.is-release { border-top-color: #5E7E12; background: rgba(94,126,18,.08); }
+    .jiq-tl-card-k { font-size: 9.5px; font-weight: 600; letter-spacing: 1.2px; text-transform: uppercase; color: #7C878A; margin-bottom: 6px; font-variant-numeric: tabular-nums; }
+    .jiq-tl-card-k b { display: inline-flex; width: 16px; height: 16px; border-radius: 999px; border: 1.5px solid currentColor; align-items: center; justify-content: center; font-size: 9px; margin-right: 4px; vertical-align: -3px; }
+    .jiq-tl-card.is-release .jiq-tl-card-k { color: #C7F23E; }
+    body[data-theme="light"] .jiq-tl-card.is-release .jiq-tl-card-k { color: #5E7E12; }
+    .jiq-tl-card-t { font-size: 13px; font-weight: 700; color: #E9E8E1; line-height: 1.3; }
+    body[data-theme="light"] .jiq-tl-card-t { color: #0C1618; }
+    .jiq-tl-card-d { font-size: 11.5px; line-height: 1.5; color: #9AA09B; margin-top: 4px; }
+    body[data-theme="light"] .jiq-tl-card-d { color: #5C6560; }
     .jiq-music-split { margin: 6px 0 14px 36px; }
     .jiq-music-split-bar { display: flex; height: 12px; border-radius: 999px; overflow: hidden; background: #3B3D38; }
     .jiq-music-split-bar i { display: block; height: 100%; }
