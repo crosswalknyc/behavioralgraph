@@ -214,9 +214,18 @@ ROWS = [
     {
         'id': 'question', 'surface': 'analyze', 'reason': 'question',
         'client_action': 'analyze',
-        'note': 'A question with no data open.',
+        'note': 'A question with no data open. A wish stated as a '
+                'sentence ("we want to understand ...") and a metric '
+                'asked over time ("monthly consumption for ...") are '
+                'questions too (2026-10-08, East Tree Media).',
         'examples': [('who watches love island?', False),
-                     ('what does the love island audience buy', False)],
+                     ('what does the love island audience buy', False),
+                     ('We want to understand the consumption over time '
+                      'for The Office US', False),
+                     ('Show me monthly consumption for The Office US, '
+                      'in the US.', False),
+                     ('viewership month by month for Suits in the US',
+                      False)],
         'counter': [('Run a profile for Starz', False)],
     },
     {

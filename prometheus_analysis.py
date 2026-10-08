@@ -3994,6 +3994,7 @@ _NQ_COMPILED = [(dom, re.compile(rx, re.IGNORECASE), what, alt)
 _SUBJ_STOPWORDS = {
     'how', 'what', 'who', 'when', 'where', 'why', 'which', 'can', 'could',
     'do', 'does', 'did', 'show', 'give', 'tell', 'read', 'pull', 'many',
+    'compare', 'analyze', 'analyse',
     'much', 'the', 'a', 'an', 'is', 'are', 'was', 'were', 'i', 'we',
     'us', 'my', 'our', 'crosswalk', 'tv', 'usa', 'america',
     'american', 'nielsen', 'people', 'viewers'
@@ -4041,8 +4042,18 @@ def guess_subject_from_text(text):
                       r'&\'\+\.]*)*)\b', str(text or ''))
     best = ''
     for run in runs:
-        words = [w for w in run.split()
+        parts = run.split()
+        words = [w for w in parts
                  if w.lower().strip('.') not in _SUBJ_STOPWORDS]
+        # A capitalized "The" that opens a title inside the run stays
+        # with it: "The Office", "The Bear" (2026-10-08). A sentence-
+        # leading "The" with no title after it still drops.
+        if words and len(parts) >= 2:
+            for i, w in enumerate(parts[:-1]):
+                if w == 'The' and parts[i + 1] == words[0] \
+                        and (i > 0 or len(words) <= 3):
+                    words = ['The'] + words
+                    break
         cand = ' '.join(words).strip()
         if len(cand) > len(best):
             best = cand
@@ -5214,6 +5225,15 @@ def detect_csv_download_intent(text):
     return bool(_CSV_DOWNLOAD_RX.search(t))
 
 
+def the_subject(subject):
+    """'the X' phrasing that never doubles the article: 'the Nike' stays
+    'the Nike', 'the The Office' becomes 'The Office' (2026-10-08)."""
+    s = str(subject or '').strip()
+    if re.match(r'^(?:the|a|an)\b', s, re.IGNORECASE):
+        return s
+    return f"the {s}"
+
+
 def build_profile_required_reply(subject):
     """Steer-to-build reply for an ask about a subject with no base
     profile anywhere (2026-08-27, Jenna): generated reads derive from
@@ -5236,13 +5256,13 @@ def build_profile_required_reply(subject):
         )
         return scrub_user_text(reply), ["Build a profile for ..."]
     reply = (
-        f"That read needs the {subj} profile built first. Once the "
-        f"{subj} Total Universe profile is in your library, I can read "
+        f"That read needs {the_subject(subj)} profile built first. Once "
+        f"{the_subject(subj)} Total Universe profile is in your library, I can read "
         f"it any way you need: age bands, parent cohorts, buyer "
         f"overlaps, category mixes. The build is $300 and lands in "
         f"your Select Profile dropdown when it finishes."
     )
-    followups = [f"Build the {subj} profile"[:160]]
+    followups = [f"Build {the_subject(subj)} profile"[:160]]
     return scrub_user_text(reply), followups
 
 
@@ -5276,13 +5296,20 @@ def panel_report_eligible(text, subject):
         return False
     if detect_deck_intent(t) or detect_csv_download_intent(t):
         return False
-    return bool(_ANALYSIS_QUESTION_RX.search(t)
-                or _ANALYSIS_BEHAVIOR_RX.search(t)
-                or _STRATEGY_RX.search(t)
-                or re.match(r'\s*(?:do|does|are|is|top|how|what|which|'
-                            r'who|where|when|why|compare)\b', t,
-                            re.IGNORECASE)
-                or t.rstrip().endswith('?'))
+    if _ANALYSIS_QUESTION_RX.search(t) or _ANALYSIS_BEHAVIOR_RX.search(t) \
+            or _STRATEGY_RX.search(t) or t.rstrip().endswith('?') \
+            or re.match(r'\s*(?:do|does|are|is|top|how|what|which|'
+                        r'who|where|when|why|compare|show me|tell me|'
+                        r'give me)\b', t, re.IGNORECASE):
+        return True
+    # A metric over time or a question stated as a wish is a read too
+    # (2026-10-08, East Tree Media: "Show me monthly consumption for
+    # The Office US" fell through to the plain steer-to-build copy).
+    try:
+        from prometheus.understand import _STATEMENT_ASK_RX, _TIME_SERIES_RX
+        return bool(_TIME_SERIES_RX.search(t) or _STATEMENT_ASK_RX.search(t))
+    except Exception:
+        return False
 
 
 def build_panel_report_offer(subject, price_label, question=''):
@@ -5298,21 +5325,21 @@ def build_panel_report_offer(subject, price_label, question=''):
                 if price else PANEL_RUN_CHIP_PREFIX)[:160]
     reply = (
         f"{subj} is not in your library yet, so this one is a full "
-        f"put-together read, not a lookup. I research the {subj} "
+        f"put-together read, not a lookup. I research {the_subject(subj)} "
         f"audience end to end and deliver the numbers right here in "
         f"the chat. It runs {price}." if price else
         f"{subj} is not in your library yet, so this one is a full "
-        f"put-together read, not a lookup. I research the {subj} "
+        f"put-together read, not a lookup. I research {the_subject(subj)} "
         f"audience end to end and deliver the numbers right here in "
         f"the chat."
     )
     reply += (
-        f"\n\nIf you want the complete {subj} profile in your Select "
+        f"\n\nIf you want {subj}'s complete profile in your Select "
         f"Profile dropdown instead (every category, every cut on "
         f"tap), the $300 build is the better buy."
     )
     followups = [run_chip,
-                 f"Build the {subj} profile instead"[:160],
+                 f"Build {the_subject(subj)} profile instead"[:160],
                  'Never mind']
     offer = {'question': str(question or '')[:600],
              'subject': subj[:120]}

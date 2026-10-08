@@ -60,6 +60,34 @@ _QUESTION_OPEN_RX = re.compile(
     r'^(what|which|who|whose|how|why|where|when|do|does|did|are|is|was|'
     r'were|can|could|would|should|show me|tell me|give me|compare|'
     r'analy[sz]e|top \d|break ?down)\b', re.I)
+# A question stated as a wish (2026-10-08, East Tree Media: "We want
+# to understand the consumption over time for The Office US" drafted
+# a build). "We want to know", "I'd like to see", "help us understand"
+# are questions, not orders.
+_STATEMENT_ASK_RX = re.compile(
+    r"^(?:(?:please\s+)?help (?:us|me) (?:to )?(?:understand|see|figure out|"
+    r"get a sense of|learn)\b|"
+    r"(?:we|i|they|our team|the team|the client|my client|our client|"
+    r"the brand|our brand|the agency)"
+    r"(?:'d|'re|'m| would| are| am| is| was| were| have been| has been)?\s+"
+    r"(?:want|wants|would like|like|need|needs|trying|looking|hoping|"
+    r"curious|interested|would love|love|wondering)\s+"
+    r"(?:to|in|about|if|whether|how|what|who|which|where|when)\b)", re.I)
+# A metric asked over time ("monthly consumption", "viewership over
+# time", "month by month") is a read, never a build.
+_TIME_WORDS = (r"over time|month by month|month over month|monthly|by month|"
+               r"week by week|week over week|weekly|by week|quarter by quarter|"
+               r"quarterly|by quarter|year over year|trend(?:s|ed|ing|line)?|"
+               r"trajectory|time series")
+_METRIC_WORDS = (r"consumption|viewership|viewing|watch(?:ing)? time|"
+                 r"hours watched|minutes watched|streams?|streaming|plays|"
+                 r"listens|listenership|viewers?|listeners?|users?|visitors?|"
+                 r"subscribers?|signups?|churn|engagement|audience|reach|"
+                 r"sales|purchases|searches|traffic|downloads")
+_TIME_SERIES_RX = re.compile(
+    r"\b(?:" + _METRIC_WORDS + r")\b[^.?!]{0,40}\b(?:" + _TIME_WORDS + r")\b"
+    r"|\b(?:" + _TIME_WORDS + r")\b[^.?!]{0,24}\b(?:" + _METRIC_WORDS + r")\b",
+    re.I)
 
 _DECK_BUILD_RX = re.compile(
     r'\b(build|make|create|generate|put together|spin up|prepare|draft|'
@@ -206,6 +234,8 @@ def should_analyze(text, has_ctx):
     if _QUESTION_MARK_RX.search(t):
         return True
     if _QUESTION_OPEN_RX.search(t):
+        return True
+    if _STATEMENT_ASK_RX.search(t) or _TIME_SERIES_RX.search(t):
         return True
     # A question mark or an interrogative on ANY sentence, not only
     # the first or the last (2026-10-02 audit: "58.3% stayed for

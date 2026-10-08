@@ -17,7 +17,7 @@ from flask import session
 
 from prometheus.legacy import H as _H, C as _C  # noqa: E402
 
-__all__ = ['_PM_WATCH_FLAGGED', '_PM_USER_BLOCK_CACHE', '_PM_USER_BLOCK_LOCK', '_pm_user_block', '_pm_catalog_block', '_pm_ask_log_user', '_pm_probe_caller', '_pm_is_probe_user', '_PM_COMMON_IDENTITY_WORDS', '_pm_thread_confirmed_page', '_pm_watch_flag', '_pm_record_held_reply', '_pm_gate_options', '_pm_open_status_line', '_pm_price_table', '_pm_usd', '_pm_usd_label']
+__all__ = ['_PM_WATCH_FLAGGED', '_PM_USER_BLOCK_CACHE', '_PM_USER_BLOCK_LOCK', '_pm_user_block', '_pm_catalog_block', '_pm_ask_log_user', '_pm_probe_caller', '_pm_is_probe_user', '_PM_COMMON_IDENTITY_WORDS', '_pm_thread_confirmed_page', '_pm_watch_flag', '_pm_record_held_reply', '_pm_gate_options', '_pm_open_status_line', '_pm_price_table', '_pm_usd', '_pm_usd_label', '_pm_safe_user', '_pm_s3_json', '_pm_s3_put_json', '_PM_REPORT_ASK_RE', '_pm_looks_report_ask']
 
 
 _PM_WATCH_FLAGGED = frozenset({'clarified_repeat', 'empty', 'faulted', 'error',
@@ -169,14 +169,14 @@ def _pm_watch_flag(user, question, route, outcome, extra=None):
     def _run():
         try:
             key = 'system/ops/pm_watch_recent.json'
-            doc = _C._pm_s3_json(key, {}) or {}
+            doc = _pm_s3_json(key, {}) or {}
             items = [x for x in (doc.get('items') or []) if isinstance(x, dict)]
             items.append({'ts': _C._pm_iso_now(), 'user': str(user or '')[:60],
                           'route': str(route or '')[:40], 'outcome': str(outcome or '')[:30],
                           'signal': sig[:20], 'question': str(question or '')[:200]})
             doc['items'] = items[-80:]
             doc['updated_at'] = _C._pm_iso_now()
-            _C._pm_s3_put_json(key, doc)
+            _pm_s3_put_json(key, doc)
         except Exception:
             traceback.print_exc()
     try:
@@ -376,3 +376,49 @@ def _pm_usd(tool_key, fallback_usd, username=None):
     except Exception:
         pass
     return float(fallback_usd)
+
+
+# Small S3 JSON helpers (moved from chat.py 2026-10-08 to keep the
+# legacy module under its line ratchet). Behavior unchanged.
+def _pm_safe_user(username):
+    return ''.join(c for c in (username or 'anon')
+                   if c.isalnum() or c in '-_.@').lower()
+
+
+def _pm_s3_json(key, default):
+    try:
+        obj = _H.s3_client.get_object(Bucket=_H.S3_BUCKET, Key=key)
+        return json.loads(obj['Body'].read().decode('utf-8'))
+    except Exception as e:
+        if 'NoSuchKey' not in str(e):
+            print(f"[synth-chat] read failed {key}: {e}")
+        return default
+
+
+def _pm_s3_put_json(key, obj):
+    _H.s3_client.put_object(
+        Bucket=_H.S3_BUCKET, Key=key,
+        Body=json.dumps(obj, indent=2).encode('utf-8'),
+        ContentType='application/json')
+
+
+_PM_REPORT_ASK_RE = re.compile(
+    r'\b(report|deck|one.?pager|write.?up|whitepaper|whitesheet'
+    r'|full (analysis|read)|research (report|read))\b', re.I)
+
+
+def _pm_looks_report_ask(text):
+    """True when the ask wants a put-together deliverable (keeps the
+    2026-09-14 priced research-report flow); False for plain questions,
+    which take the 2026-09-24 build-first flow. A metric asked over
+    time ("monthly consumption for The Office", "viewership month by
+    month") is a put-together read too: a profile cannot answer it
+    (2026-10-08, East Tree Media)."""
+    t = str(text or '')
+    if _PM_REPORT_ASK_RE.search(t):
+        return True
+    try:
+        from prometheus.understand import _TIME_SERIES_RX
+        return bool(_TIME_SERIES_RX.search(t))
+    except Exception:
+        return False

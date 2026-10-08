@@ -85042,8 +85042,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // labeled block (one fact per line), then the approve
             // line. No sentence shards.
             s = s || {};
-            var subject = s.subject || 'this profile';
-            var parentName = s.existing_match_display_name || subject;
+            // No subject on the draft reads 'New profile', never
+            // 'New this profile profile' (2026-10-08, East Tree Media).
+            var subject = s.subject || '';
+            var subjectLead = subject ? subject + ' ' : '';
+            var parentName = s.existing_match_display_name || subject || 'this profile';
             var mins = s.estimated_run_minutes;
             var deriveHint = (s.derive_type || '').trim().toLowerCase();
             var refreshHint = (s.refresh_row_hypothesis || '').trim();
@@ -85076,12 +85079,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     lead = parentName + ' refresh, ready to run.';
                     break;
                 case 'cut_needs_parent':
-                    lead = 'New ' + subject + ' profile plus your cut, ' +
+                    lead = 'New ' + subjectLead + 'profile plus your cut, ' +
                         'ready to run.';
                     break;
                 case 'new_build':
                 default:
-                    lead = 'New ' + subject + ' profile, ready to run.';
+                    lead = 'New ' + subjectLead + 'profile, ready to run.';
                     break;
             }
             // Compact labeled block. Skips any line it has no value

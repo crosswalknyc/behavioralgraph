@@ -1940,28 +1940,6 @@ SYNTH_CHAT_THREADS_PREFIX = "system/synth_chat_threads"
 _PM_MAX_THREADS = 40
 
 
-def _pm_safe_user(username):
-    return ''.join(c for c in (username or 'anon')
-                   if c.isalnum() or c in '-_.@').lower()
-
-
-def _pm_s3_json(key, default):
-    try:
-        obj = _H.s3_client.get_object(Bucket=_H.S3_BUCKET, Key=key)
-        return json.loads(obj['Body'].read().decode('utf-8'))
-    except Exception as e:
-        if 'NoSuchKey' not in str(e):
-            print(f"[synth-chat] read failed {key}: {e}")
-        return default
-
-
-def _pm_s3_put_json(key, obj):
-    _H.s3_client.put_object(
-        Bucket=_H.S3_BUCKET, Key=key,
-        Body=json.dumps(obj, indent=2).encode('utf-8'),
-        ContentType='application/json')
-
-
 def _load_synth_chat_history(username):
     try:
         idx = _load_threads_index(username)
@@ -11572,11 +11550,6 @@ def _pm_short_name_identity(toks, raw_text):
 _PM_PENDING_Q_S3_KEY = 'system/pm_pending_questions.json'
 
 
-_PM_REPORT_ASK_RE = re.compile(
-    r'\b(report|deck|one.?pager|write.?up|whitepaper|whitesheet'
-    r'|full (analysis|read)|research (report|read))\b', re.I)
-
-
 _PM_UNRESOLVED_SUBJECT_COPY = (
     "I could not find {subj} as a brand, person, or title, so I have "
     "not set up a build for it. Check the spelling, or tell me who or "
@@ -11736,13 +11709,6 @@ def _pm_plausible_subject(subj):
         return bool(_refs.plausible_subject(subj))
     except Exception:
         return bool(str(subj or '').strip())
-
-
-def _pm_looks_report_ask(text):
-    """True when the ask wants a put-together deliverable (keeps the
-    2026-09-14 priced research-report flow); False for plain questions,
-    which take the 2026-09-24 build-first flow."""
-    return bool(_PM_REPORT_ASK_RE.search(str(text or '')))
 
 
 def _pm_pending_q_tokens(s):
@@ -13056,7 +13022,10 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
         # priced research-report flow below.
         _bf_subj = (subj_hint or pma.guess_subject_from_text(text)
                     or '').strip()
-        if _bf_subj and not _pm_plausible_subject(_bf_subj):
+        # A subject bound upstream (memory, catalog, the open page)
+        # was already resolved; only a free guess is screened.
+        if _bf_subj and _bf_subj != str(bind_subject or '').strip() \
+                and not _pm_plausible_subject(_bf_subj):
             _bf_subj = ''
         # Entity core (2026-10-02 S6): 'Appeal of the Spiderwick
         # Franchise' is a question about Spiderwick, not a subject.
@@ -13108,7 +13077,8 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
         # bills as metered usage (2026-09-14: nothing is ever free).
         subj_name = (subj_hint or pma.guess_subject_from_text(text)
                      or '').strip()
-        if subj_name and not _pm_plausible_subject(subj_name):
+        if subj_name and subj_name != str(bind_subject or '').strip() \
+                and not _pm_plausible_subject(subj_name):
             subj_name = ''
         subj_name = _pm_entity_core_bind(subj_name)[0]
         if isinstance(panel_confirm, dict) and not subj_name:
@@ -16340,6 +16310,19 @@ def _pm_analyze_core(user, body, text, history):
             import prometheus_memory as _pmm_nc
             if _nc_refs:
                 _nc_lab = _pmm_nc.referent_label(_nc_refs[0])
+                # The ask already names the remembered subject
+                # (2026-10-08, East Tree Media: "Show me monthly
+                # consumption for The Office US" drew "Nothing is open
+                # yet. Do you mean for The Office?"). A named subject
+                # binds; the question is never asked back.
+                if _nc_lab and _ns_mod.page_named(
+                        text, _nc_lab, _H._normalize_for_match,
+                        _PM_CLARIFY_STOP_TOKENS):
+                    _pm_ask_hint(route='memory_bind', subject=_nc_lab)
+                    return _pm_generate_metrics_response(
+                        user, text, history, prefer_catalog=True,
+                        bind_subject=str(_nc_refs[0].get('subject')
+                                         or _nc_lab))
                 if _nc_lab:
                     _pm_ask_hint(outcome='memory_confirm')
                     return jsonify({
@@ -18686,6 +18669,11 @@ from prometheus.legacy.watch import (  # noqa: E402,F401
     _pm_price_table,
     _pm_usd,
     _pm_usd_label,
+    _pm_safe_user,
+    _pm_s3_json,
+    _pm_s3_put_json,
+    _PM_REPORT_ASK_RE,
+    _pm_looks_report_ask,
 )
 # Screen warm-up route (2026-10-02 S7): /api/brief-chat/warm primes
 # the digest caches when a profile loads so the first ask skips the

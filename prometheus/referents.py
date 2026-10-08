@@ -427,6 +427,9 @@ _SELF_WORDS = frozenset(('crosswalk', 'crosswalks', 'prometheus', 'sample',
                          'panelists', 'teh'))
 
 
+_TITLE_ARTICLE_RX = re.compile(r"^(?:The|A|An)\s+[A-Z][A-Za-z0-9&'\+\.]*")
+
+
 def plausible_subject(s):
     """False for a subject made of ordinary words, or one that starts
     or ends on a connective. 'Three Actually Influence Product
@@ -443,6 +446,14 @@ def plausible_subject(s):
     # profile when Scott asked how big the sample is).
     if any(w in _SELF_WORDS for w in low):
         return False
+    # A capitalized title that opens on "The" is a subject, however
+    # ordinary the next word is: The Office, The Bear, The Crown, The
+    # Paper, The Voice (2026-10-08, East Tree Media: "The Office" was
+    # rejected and the ask bound to "Office"). Source casing decides;
+    # "the audience" stays ordinary words.
+    if _TITLE_ARTICLE_RX.match(subj) and 2 <= len(low) <= 5 \
+            and low[-1] not in _CONNECTIVE_TAIL:
+        return True
     if low[-1] in _CONNECTIVE_TAIL or low[0] in _CONNECTIVE_HEAD:
         return False
     if all(w in _COMMON_WORDS for w in low):
