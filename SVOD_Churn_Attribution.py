@@ -2396,14 +2396,21 @@ def _reason_reactivation_rate(show_name, platform_name, genre, content_cadence,
     import hashlib
     tier = platform_info.get('tier', 'unknown')
 
+    # Saturation-correct priors (2026-10-08, Jenna: "those should be bigger
+    # than subscribed new accounts"). On a saturated platform the
+    # never-subscribed pool is nearly exhausted, so event-driven gross adds
+    # skew to lapsed accounts returning: the MORE dominant the platform, the
+    # HIGHER the rejoin share of signups. The old table had this inverted
+    # (dominant: 0.15), which printed near-zero reactivations for every
+    # Netflix special.
     _tier_base = {
-        'dominant': 0.15, 'major': 0.25, 'mid': 0.28,
-        'emerging': 0.30, 'niche': 0.22, 'unknown': 0.25,
+        'dominant': 0.62, 'major': 0.52, 'mid': 0.44,
+        'emerging': 0.34, 'niche': 0.26, 'unknown': 0.42,
     }
-    base_rate = _tier_base.get(tier, 0.25)
+    base_rate = _tier_base.get(tier, 0.42)
     _jitter_seed = hashlib.md5(f"{show_name}-{platform_name}-{total_signups}-react".encode()).hexdigest()
     _jitter = (int(_jitter_seed[:8], 16) % 600 - 300) / 10000.0
-    fallback_rate = max(0.05, min(0.45, base_rate + _jitter))
+    fallback_rate = max(0.08, min(0.80, base_rate + _jitter))
 
     # ─────────────────────────────────────────────────────────────────────
     # E2 fix (2026-06-03): New-content guard.
@@ -2436,20 +2443,24 @@ def _reason_reactivation_rate(show_name, platform_name, genre, content_cadence,
         and (is_one_off_telecast or no_prior_episodes)
     )
     if is_genuinely_new_one_off:
-        # Use 1/3 of the normal tier rate as the natural-churn floor and
-        # jitter slightly so it doesn't look hand-set.
-        natural_churn_floor = base_rate / 3.0
-        _floor_jitter_seed = hashlib.md5(
+        # Revised 2026-10-08. The old guard crushed one-offs to 2-10%,
+        # conflating "no prior season to come back FOR" with "the signups
+        # must be brand-new people". Those are different questions. A
+        # one-off gets no content-specific pull-back bonus, but WHO the
+        # signups are is set by platform saturation: on a dominant
+        # platform most people any content pulls in have held an account
+        # before, so the rejoin share holds at the platform baseline with
+        # a light salted dampener. The GPT call is still skipped (its
+        # franchise reasoning misfires on one-offs).
+        _damp_seed = hashlib.md5(
             f"{show_name}-{platform_name}-{total_signups}-react-new".encode()
         ).hexdigest()
-        _floor_jitter = (int(_floor_jitter_seed[:8], 16) % 200 - 100) / 10000.0  # ±1%
-        rate = max(0.02, min(0.10, natural_churn_floor + _floor_jitter))
+        damp = 0.82 + (int(_damp_seed[:8], 16) % 1300) / 10000.0  # 0.82-0.95
+        rate = max(0.05, min(0.80, base_rate * damp))
         print(
-            f"   🆕 New-content reactivation guard: is_new_show={is_new_show}, "
-            f"pre_existing_viewers={pre_existing_viewers}, episode_count={episode_count}, "
-            f"content_cadence={content_cadence!r}. Skipping content-specific "
-            f"reactivation reasoning (no franchise to reactivate against). "
-            f"Using platform natural-churn floor {rate*100:.1f}%."
+            f"   🆕 One-off content: no franchise pull-back bonus; rejoin share "
+            f"holds at the platform-saturation baseline ({tier}): {rate*100:.1f}% "
+            f"(baseline {base_rate*100:.0f}% x {damp:.2f})"
         )
         return rate
     # ─────────────────────────────────────────────────────────────────────
@@ -2505,15 +2516,15 @@ AUDIENCE DEMOGRAPHICS (of people who signed up):
    - Older viewers (35+) are more likely to be independent decision-makers signing up fresh.
    - The higher the % of young viewers, the higher the reactivation rate should be.
 
-2. PLATFORM MATURITY & CHURN CYCLES:
-   - DOMINANT platforms (Netflix, Amazon): 60-70% of US households have had them at some point.
-     Many "new" signups are actually people reactivating after a cancel. Reactivation: 15-30%.
-   - MAJOR platforms (Hulu, Disney+): 40-50% have tried them. Significant reactivation pool.
-     Reactivation: 20-35%.
-   - MID-TIER (Max/HBO Max): 30-40% have tried. Max went through a major rebrand — many
-     "new" signups are former HBO Now/Go/Max users returning. Reactivation: 25-40%.
-   - EMERGING (Paramount+, Peacock): 20-30% tried. Moderate reactivation. 25-35%.
-   - NICHE (Apple TV+, Starz): Many signups ARE truly new. Reactivation: 10-25%.
+2. PLATFORM MATURITY & CHURN CYCLES (saturation sets the rejoin share):
+   - DOMINANT platforms (Netflix, Amazon): most US households have held an account at some
+     point, so the never-subscribed pool is nearly exhausted. Event-driven signups are
+     mostly lapsed accounts returning. Reactivation: 50-70%.
+   - MAJOR platforms (Hulu, Disney+): large tried-it-before pool. Reactivation: 40-55%.
+   - MID-TIER (Max/HBO Max): the rebrand means many "new" signups are former
+     HBO Now/Go/Max users returning. Reactivation: 35-50%.
+   - EMERGING (Paramount+, Peacock): moderate rejoin pool. Reactivation: 25-40%.
+   - NICHE (Apple TV+, Starz): many signups ARE truly new. Reactivation: 15-30%.
 
 3. CONTENT TYPE:
    - Kids/Family content → very high reactivation (parents reactivating for children)
@@ -2530,10 +2541,12 @@ AUDIENCE DEMOGRAPHICS (of people who signed up):
      → higher reactivation rate
 
 === INSTRUCTIONS ===
-1. Weigh all factors above. Audience age is the STRONGEST signal.
+1. Weigh all factors above. Platform saturation is the STRONGEST signal; audience age second.
 2. Be precise — give a specific rate like 31.2%, not a range.
-3. The rate must be between 5% and 50%.
-4. If the audience skews very young on a dominant/major platform, the rate should be 30%+.
+3. The rate must be between 5% and 85%.
+4. On a dominant/major platform, lapsed-returning typically EXCEEDS truly new: below 50% on
+   a dominant platform needs a specific reason (e.g. a large never-subscribed cohort paying
+   for the first time).
 5. If the audience skews older on a niche platform, the rate can be as low as 10-15%.
 
 Respond in JSON ONLY (no markdown fencing):
@@ -2581,14 +2594,14 @@ Respond in JSON ONLY (no markdown fencing):
         if rate > 1:
             rate = rate / 100.0
 
-        if rate <= 0 or rate > 0.50:
+        if rate <= 0 or rate > 0.85:
             print(f"   ⚠️  Reactivation agent returned invalid rate {rate} — using fallback")
             return fallback_rate
 
         # Apply small deterministic noise so the final number never looks fabricated
         noise_pct = (int(_jitter_seed[8:16], 16) % 200 - 100) / 100000.0
         rate = rate * (1 + noise_pct)
-        rate = max(0.05, min(0.50, rate))
+        rate = max(0.05, min(0.85, rate))
 
         print(f"   🧠 Reactivation agent: {rate*100:.2f}% (confidence={confidence})")
         print(f"   🧠 Reasoning: {reasoning}")
@@ -5248,6 +5261,11 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
             f"   🔒 Reactivation overridden by config: {_react_pct_final*100:.1f}% "
             f"(skipping GPT reasoner — analyst-set from per-show research)"
         )
+    elif p.get('reactivation_pct_research') is not None:
+        # Per-title external research (same precedence family as
+        # conversion_pct: override > research > reasoner).
+        _react_pct_final = max(0.0, min(0.85, float(p['reactivation_pct_research']) / 100.0))
+        print(f"   🎯 Reactivation from research: {_react_pct_final*100:.1f}%")
     else:
         _react_pct_final = _reason_reactivation_rate(
             show_name=", ".join(p.get('show_search_terms', [])),
@@ -5453,20 +5471,24 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
         
         total_attributed_signups = int(df_episode_attribution['SIGNUPS_ATTRIBUTED'].sum())
 
-        rows.append(("", "", "", "", "", "", "", "", "", ""))
-        rows.append(("", "", "ATTRIBUTION SUMMARY", "", "", "", "", "", "", ""))
-        rows.append(("", "", "(% of Total Show Watchers)", "", "", "", "", "", "", ""))
-        rows.append(("", "", "", "", "", "", "", "", "", ""))
-        attributed_pct_of_watchers = round((_new_only_signups * 100.0) / total_watchers, 2) if total_watchers > 0 else 0.0
-        attributed_genpop = format_gen_pop(gen_pop_projection(_new_only_signups))
-        rows.append(("Attributed Signups", "", _new_only_signups, "signups", "", "(signed up then watched)", "", "", f"{attributed_pct_of_watchers}%", attributed_genpop))
-        dormant_pct_of_watchers = round((_reactivated_count * 100.0) / total_watchers, 2) if total_watchers > 0 else 0.0
-        dormant_genpop = format_gen_pop(gen_pop_projection(_reactivated_count))
-        rows.append(("Dormant to Reactive", "", _reactivated_count, "signups", "", "(signed up before the exclusion period)", "", "", f"{dormant_pct_of_watchers}%", dormant_genpop))
-        rows.append(("", "", "", "", "", "", "", "", "", ""))
-        total_pct_of_watchers = round((new_signups * 100.0) / total_watchers, 2) if total_watchers > 0 else 0.0
-        total_genpop = format_gen_pop(gen_pop_projection(new_signups))
-        rows.append(("TOTAL SIGNUPS", "", new_signups, "signups", "", "", "", "", f"{total_pct_of_watchers}%", total_genpop))
+    # ATTRIBUTION SUMMARY (new vs reactivated split) always writes - it was
+    # nested under the per-episode block until 2026-10-08, so episode-less
+    # runs (specials, research-driven builds) computed the split but never
+    # printed it, which read as "zero reactivated accounts".
+    rows.append(("", "", "", "", "", "", "", "", "", ""))
+    rows.append(("", "", "ATTRIBUTION SUMMARY", "", "", "", "", "", "", ""))
+    rows.append(("", "", "(% of Total Show Watchers)", "", "", "", "", "", "", ""))
+    rows.append(("", "", "", "", "", "", "", "", "", ""))
+    attributed_pct_of_watchers = round((_new_only_signups * 100.0) / total_watchers, 2) if total_watchers > 0 else 0.0
+    attributed_genpop = format_gen_pop(gen_pop_projection(_new_only_signups))
+    rows.append(("Attributed Signups", "", _new_only_signups, "signups", "", "(signed up then watched)", "", "", f"{attributed_pct_of_watchers}%", attributed_genpop))
+    dormant_pct_of_watchers = round((_reactivated_count * 100.0) / total_watchers, 2) if total_watchers > 0 else 0.0
+    dormant_genpop = format_gen_pop(gen_pop_projection(_reactivated_count))
+    rows.append(("Dormant to Reactive", "", _reactivated_count, "signups", "", "(signed up before the exclusion period)", "", "", f"{dormant_pct_of_watchers}%", dormant_genpop))
+    rows.append(("", "", "", "", "", "", "", "", "", ""))
+    total_pct_of_watchers = round((new_signups * 100.0) / total_watchers, 2) if total_watchers > 0 else 0.0
+    total_genpop = format_gen_pop(gen_pop_projection(new_signups))
+    rows.append(("TOTAL SIGNUPS", "", new_signups, "signups", "", "", "", "", f"{total_pct_of_watchers}%", total_genpop))
     
     # Add signup timing breakdown (overall)
     if not df_timing.empty:
@@ -6448,7 +6470,11 @@ def _research_show_externally_with_claude(
         f'                                   viewers attracted by buzz/awards/critical\n'
         f'                                   acclaim. null if no data.\n'
         f'  "conversion_pct":     <0-15 % of viewers who signed up FOR this show, or null>,\n'
-        f'  "reactivation_pct":   <0-50 % of signups who were lapsed-returning, or null>,\n'
+        f'  "reactivation_pct":   <0-85 % of signups who were lapsed-returning, or null.\n'
+        f'                         Saturation sets this: on dominant platforms (Netflix,\n'
+        f'                         Amazon) the never-subscribed pool is nearly exhausted,\n'
+        f'                         so lapsed-returning typically EXCEEDS truly new (50-70).\n'
+        f'                         Niche platforms (Apple TV+, Starz) skew truly new (15-30)>,\n'
         f'  "avg_days_to_signup": <float days from premiere to signup, or null>,\n'
         f'  "demographics_age": {{\n'
         f'    "18-24": <pct 0-100>, "25-34": <pct>, "35-44": <pct>,\n'
@@ -8168,6 +8194,15 @@ def run_synthetic_attribution(config: dict) -> dict:
         except Exception as _ana_end_err:
             print(f"   ⚠️  Could not apply analysis_end_date_override "
                   f"({_end_override!r}): {_ana_end_err}")
+
+    # Hand the researched lapsed-returning share to the writer's
+    # new/reactivated split (override > research > reasoner).
+    try:
+        if (p.get('reactivation_pct_override') is None
+                and research and research.get('reactivation_pct') is not None):
+            p['reactivation_pct_research'] = float(research['reactivation_pct'])
+    except (TypeError, ValueError):
+        pass
 
     write_output(
         df_summary=df_summary,
