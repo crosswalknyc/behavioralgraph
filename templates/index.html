@@ -114438,19 +114438,26 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     var n = Number(e.viewers) || 0;
                     nmp[e.path] = { share: totNM ? 100 * n / totNM : 0, fin: n ? 100 * (Number(e.deep) || 0) / n : 0 };
                 });
-                rows.push({ w: w, depth: String(t.meta.depth_label || (t.analysis.meta || {}).depth_label || ''), ch: ch, cfch: cfch, nmp: nmp,
+                var FF = _jiqMusicFormats(t.analysis);
+                var fmm = {};
+                FF.rows.forEach(function(r) { fmm[r.fmt] = { share: r.share, fin: r.fin, conv: r.conv }; });
+                rows.push({ w: w, depth: String(t.meta.depth_label || (t.analysis.meta || {}).depth_label || ''), ch: ch, cfch: cfch, nmp: nmp, fmm: fmm,
+                    fmt_listeners: FF.listeners, fmt_watched: FF.watched,
+                    fmt_conv: FF.listeners ? 100 * FF.watched / FF.listeners : 0,
+                    fmt_fin: FF.watched ? 100 * FF.deep / FF.watched : 0,
                     listeners: totL, watched: totW, conv: totL ? 100 * totW / totL : 0 });
             });
             var medMap = function(field) {
                 var acc = {};
                 rows.forEach(function(r) {
                     Object.keys(r[field] || {}).forEach(function(k) {
-                        acc[k] = acc[k] || { share: [], fin: [] };
+                        acc[k] = acc[k] || { share: [], fin: [], conv: [] };
                         acc[k].share.push(r[field][k].share);
                         acc[k].fin.push(r[field][k].fin);
+                        acc[k].conv.push(r[field][k].conv);
                     });
                 });
-                Object.keys(acc).forEach(function(k) { acc[k] = { share: _jiqMusicMedian(acc[k].share), fin: _jiqMusicMedian(acc[k].fin), n: acc[k].share.length }; });
+                Object.keys(acc).forEach(function(k) { acc[k] = { share: _jiqMusicMedian(acc[k].share), fin: _jiqMusicMedian(acc[k].fin), conv: _jiqMusicMedian(acc[k].conv), n: acc[k].share.length }; });
                 return acc;
             };
             var channels = {};
@@ -114466,6 +114473,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 n_depth: same.length,
                 channels: channels,
                 cf_channels: medMap('cfch'),
+                formats: medMap('fmm'),
+                fmt_listeners: _jiqMusicMedian(rows.map(function(r) { return r.fmt_listeners; })),
+                fmt_watched: _jiqMusicMedian(rows.map(function(r) { return r.fmt_watched; })),
+                fmt_conv: _jiqMusicMedian(rows.map(function(r) { return r.fmt_conv; })),
+                fmt_fin: _jiqMusicMedian(rows.map(function(r) { return r.fmt_fin; })),
                 nm_paths: medMap('nmp'),
                 listeners: _jiqMusicMedian(rows.map(function(r) { return r.listeners; })),
                 watched: _jiqMusicMedian(rows.map(function(r) { return r.watched; })),
@@ -114770,23 +114782,90 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             return html;
         }
 
-        function _jiqMusicRenderFormats(a) {
-            var formats = (a.social_formats || []).slice().sort(function(x, y) {
-                return (Number(y.music_first_conversion_pct) || 0)
-                    - (Number(x.music_first_conversion_pct) || 0);
+        function _jiqMusicFormats(a) {
+            // One row per format. The file carries two 'Lyric-overlay edit'
+            // rows on most titles (a feeling cut and a story cut); they are
+            // the same format to the reader, so they are summed here.
+            var by = {};
+            var order = [];
+            ((a && a.social_formats) || []).forEach(function(f) {
+                var key = String(f.fmt || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+                if (!key) return;
+                if (!by[key]) {
+                    by[key] = { fmt: f.fmt, listeners: 0, watched: 0, deep: 0, notes: [] };
+                    order.push(key);
+                }
+                var r = by[key];
+                r.listeners += Number(f.listeners) || 0;
+                r.watched += Number(f.watched != null ? f.watched : f.music_first_watched) || 0;
+                r.deep += Number(f.deep) || 0;
+                if (f.note) r.notes.push(String(f.note));
             });
-            var top = formats[0] || {};
-            var html = _jiqMusicSec('01 Detours',
-                top.fmt ? (top.fmt + ' converts hardest to the title.') : 'Social formats, ranked.',
-                'Ranked by music-first conversion');
+            var rows = order.map(function(k) { return by[k]; });
+            var tot = rows.reduce(function(s, r) { return s + r.listeners; }, 0);
+            rows.forEach(function(r) {
+                r.share = tot ? 100 * r.listeners / tot : 0;
+                r.conv = r.listeners ? 100 * r.watched / r.listeners : 0;
+                r.fin = r.watched ? 100 * r.deep / r.watched : 0;
+            });
+            rows.sort(function(x, y) { return y.listeners - x.listeners; });
+            return { rows: rows, listeners: tot,
+                watched: rows.reduce(function(s, r) { return s + r.watched; }, 0),
+                deep: rows.reduce(function(s, r) { return s + r.deep; }, 0) };
+        }
+
+        function _jiqMusicRenderFormats(a) {
+            var F = _jiqMusicFormats(a);
+            var rows = F.rows;
+            var db = _jiqMusicBench(a.meta || {}, a);
+            if (db && db.n < 2) db = null;
+            var fm = (db && db.formats) || {};
+            var dw = _jiqMusicDoors(a, a.meta || {});
+            var depthLabel = String(dw.depth_label || 'Finished').toLowerCase();
+            var byConv = rows.slice().sort(function(x, y) { return y.conv - x.conv; });
+            var topConv = byConv[0] || {};
+            var topShare = rows[0] || {};
+            var convAll = F.listeners ? 100 * F.watched / F.listeners : 0;
+            var finAll = F.watched ? 100 * F.deep / F.watched : 0;
+            var html = _jiqMusicSec('01 Social formats',
+                topConv.fmt ? (topConv.fmt + ' turns the most listeners into viewers.') : 'Social formats, ranked.',
+                'Listeners are people who heard a song through a social clip. Then watched is the share of those listeners who went on to watch the title.'
+                    + (db ? ' \u00b7 Benchmark: median of ' + db.n + ' ' + db.noun : ''));
+            html += '<div class="jiq-song-pad"><div class="jiq-frag-kpis jiq-music-detkpis">'
+                + '<div class="jiq-frag-kpi"><div class="jiq-frag-kpi-l">Social listeners</div>'
+                + '<div class="jiq-frag-kpi-v">' + _jiqMusicEsc(_jiqMusicCount(F.listeners)) + '</div>'
+                + _jiqMusicBenchKpi(db, F.listeners, db && db.fmt_listeners, true) + '</div>'
+                + '<div class="jiq-frag-kpi"><div class="jiq-frag-kpi-l">Then watched</div>'
+                + '<div class="jiq-frag-kpi-v">' + _jiqMusicEsc(_jiqMusicCount(F.watched)) + '</div>'
+                + _jiqMusicBenchKpi(db, F.watched, db && db.fmt_watched, true) + '</div>'
+                + '<div class="jiq-frag-kpi is-hot"><div class="jiq-frag-kpi-l">Listener to viewer</div>'
+                + '<div class="jiq-frag-kpi-v">' + _jiqMusicEsc(_jiqMusicPct(convAll)) + '</div>'
+                + _jiqMusicBenchKpi(db, convAll, db && db.fmt_conv) + '</div>'
+                + '<div class="jiq-frag-kpi"><div class="jiq-frag-kpi-l">' + _jiqMusicEsc(dw.depth_label || 'Finished') + '</div>'
+                + '<div class="jiq-frag-kpi-v">' + _jiqMusicEsc(_jiqMusicPct(finAll)) + '</div>'
+                + _jiqMusicBenchKpi(db, finAll, db && db.fmt_fin) + '</div>'
+                + (topShare.fmt
+                    ? '<div class="jiq-frag-kpi"><div class="jiq-frag-kpi-l">Biggest format</div>'
+                        + '<div class="jiq-frag-kpi-v">' + _jiqMusicEsc(topShare.fmt) + '</div>'
+                        + '<div class="jiq-frag-kpi-b">' + _jiqMusicEsc(_jiqMusicPct(topShare.share) + ' of social listeners'
+                            + (fm[topShare.fmt] && fm[topShare.fmt].share > 0 ? ' \u00b7 ' + db.label + ' ' + _jiqMusicPct(fm[topShare.fmt].share) : '')) + '</div></div>'
+                    : '')
+                + '</div></div>';
             html += '<div class="jiq-frag-detours">'
-                + _jiqMusicDetours('Listeners', formats.map(function(f) {
-                    return { label: f.fmt, n: f.listeners };
-                }))
-                + _jiqMusicDetours('Then watched the title', formats.map(function(f) {
-                    return { label: f.fmt, n: f.watched || f.music_first_watched };
-                }))
+                + _jiqMusicPctDetours('Share of social listeners by format', rows.map(function(r) {
+                    return { label: r.fmt, n: r.listeners, noun: 'listeners', pct: r.share, med: (fm[r.fmt] || {}).share };
+                }), db)
+                + _jiqMusicPctDetours('Share of each format\'s listeners who then watched', rows.map(function(r) {
+                    return { label: r.fmt, n: r.watched, noun: 'watched', pct: r.conv, med: (fm[r.fmt] || {}).conv };
+                }), db)
+                + _jiqMusicPctDetours('Share of each format\'s viewers who ' + depthLabel, rows.map(function(r) {
+                    return { label: r.fmt, n: r.deep, noun: depthLabel, pct: r.fin, med: (fm[r.fmt] || {}).fin };
+                }), db)
                 + '</div>';
+            var notes = rows.filter(function(r) { return r.notes.length; }).map(function(r) {
+                return r.fmt + ': ' + r.notes[0].replace(/\.$/, '');
+            }).join('. ');
+            if (notes) html += '<div class="jiq-song-pad">' + _jiqMusicRead(notes + '.') + '</div>';
             return html;
         }
 
