@@ -114268,37 +114268,139 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             return html;
         }
 
-        function _jiqMusicRenderUniverse(a, meta) {
-            var u = a.universe || {};
+        // The three doors into a title. Every viewer sits in exactly one:
+        // heard a tracked song first, met the title first and went to the
+        // music after, or never played a tracked song. The source rows
+        // can sit a few accounts off the viewer total from rounding; the
+        // largest door absorbs the difference so the page always sums.
+        function _jiqMusicDoors(a, meta) {
+            var u = (a && a.universe) || {};
+            var dirs = (a && a.directions) || [];
+            var viewers = Number(u.viewers) || 0;
             var mf = _jiqMusicDir(a, 'Music first');
             var nm = _jiqMusicDir(a, 'No music touch');
-            var viewers = Number(u.viewers) || 0;
-            var html = _jiqMusicSec('01 The spine',
-                Number(nm.share_of_viewers_pct) > Number(mf.share_of_viewers_pct)
-                    ? 'Most viewers never touched a tracked song.'
-                    : 'A tracked song reached the title first.',
-                meta.window_label || 'People who kept going');
-            html += _jiqMusicSpine([
-                { label: 'Touched the title', accounts: u.total, doing: 'Everyone in this file' },
-                { label: 'Heard a tracked song', accounts: u.listened, doing: _jiqMusicPct(u.listened_pct) + ' of the file' },
-                { label: meta.watch_label || 'Watched the title', accounts: u.viewers, doing: 'Inside the window' },
-                { label: 'Music-first viewers', accounts: mf.viewers, doing: _jiqMusicPct(mf.conversion_pct) + ' conversion after a song' }
-            ]);
-            html += _jiqMusicSec('02 The split',
-                'Two ways in. Only one starts with music.',
-                'Share of viewers');
-            html += _jiqMusicFork([
-                { note: 'Heard a song first', label: 'Music first', accounts: mf.viewers,
-                    doing: _jiqMusicPct(mf.share_of_viewers_pct) + ' of viewers. '
-                        + _jiqMusicPct(mf.conversion_pct) + ' conversion.' },
-                { note: 'Never played a tracked song', label: 'No music touch', accounts: nm.viewers,
-                    doing: _jiqMusicPct(nm.share_of_viewers_pct) + ' of viewers.' }
-            ]);
+            var cf = dirs.filter(function(d) {
+                return d.direction !== 'Music first' && d.direction !== 'No music touch';
+            })[0] || {};
+            var isFilm = /film/i.test(String(cf.direction || '')) || /film|movie/i.test(String((meta && meta.kind) || ''));
+            var noun = isFilm ? 'film' : 'show';
+            var doors = [
+                { key: 'music', dir: mf, label: 'Music first', tag: 'Heard a song first',
+                  what: 'Played a tracked song before any contact with the title, then watched.' },
+                { key: 'content', dir: cf, label: cf.direction || (isFilm ? 'Film first' : 'Show first'),
+                  tag: 'Met the ' + noun + ' first',
+                  what: 'Watched first, then went to the music.' },
+                { key: 'none', dir: nm, label: 'No music touch', tag: 'Never played a tracked song',
+                  what: 'Watched without ever playing a tracked song in the window.' }
+            ].map(function(d) {
+                d.viewers = Number(d.dir.viewers) || 0;
+                d.deep = Math.min(d.viewers, Number(d.dir.deep) || 0);
+                return d;
+            });
+            var sum = doors.reduce(function(s, d) { return s + d.viewers; }, 0);
+            if (!viewers) viewers = sum;
+            var diff = viewers - sum;
+            if (diff) {
+                var big = doors.slice().sort(function(x, y) { return y.viewers - x.viewers; })[0];
+                big.viewers = Math.max(0, big.viewers + diff);
+                big.deep = Math.min(big.viewers, big.deep);
+            }
+            doors.forEach(function(d) {
+                d.share = viewers ? (100 * d.viewers / viewers) : 0;
+                d.depth_pct = d.viewers ? (100 * d.deep / d.viewers) : 0;
+                d.stopped = Math.max(0, d.viewers - d.deep);
+            });
+            var finished = doors.reduce(function(s, d) { return s + d.deep; }, 0);
+            return {
+                viewers: viewers,
+                doors: doors,
+                music: doors[0],
+                content: doors[1],
+                none: doors[2],
+                finished: finished,
+                finished_pct: viewers ? (100 * finished / viewers) : 0,
+                mf_reached: Number(mf.reached) || 0,
+                mf_conv: Number(mf.conversion_pct) || (Number(mf.reached) ? 100 * doors[0].viewers / Number(mf.reached) : 0),
+                depth_label: (meta && meta.depth_label) || ((a && a.meta) || {}).depth_label || 'Finished',
+                watch_label: (meta && meta.watch_label) || ((a && a.meta) || {}).watch_label || 'Watched the title'
+            };
+        }
+
+        function _jiqMusicOneIn(sharePct) {
+            var s = Number(sharePct) || 0;
+            if (s <= 0) return '';
+            if (s >= 50) return 'Most';
+            var n = Math.round(100 / s);
+            return n <= 1 ? 'Nearly all' : ('1 in ' + n);
+        }
+
+        function _jiqMusicSplitBar(w) {
+            return '<div class="jiq-music-split">'
+                + '<div class="jiq-music-split-bar">'
+                + w.doors.map(function(d) {
+                    return '<i class="is-' + d.key + '" style="width:' + Math.max(0.5, d.share).toFixed(2) + '%;" title="'
+                        + _jiqMusicEsc(d.label + ' ' + _jiqMusicPct(d.share)) + '"></i>';
+                }).join('')
+                + '</div>'
+                + '<div class="jiq-music-split-legend">'
+                + w.doors.map(function(d) {
+                    return '<span><b class="is-' + d.key + '"></b>' + _jiqMusicEsc(d.label) + ' '
+                        + _jiqMusicEsc(_jiqMusicPct(d.share)) + ' \u00b7 ' + _jiqMusicCount(d.viewers) + '</span>';
+                }).join('')
+                + '</div></div>';
+        }
+
+        function _jiqMusicDoorBridge(d, depthLabel) {
+            var keepW = Math.max(0.6, Math.min(100, d.depth_pct));
+            return '<div class="jiq-frag-bridge is-branch"><div class="jiq-frag-rail"></div>'
+                + '<div class="jiq-frag-body"><div class="jiq-frag-track">'
+                + '<div class="jiq-frag-keep is-' + d.key + '" style="width:' + keepW.toFixed(2) + '%;"></div></div>'
+                + '<div class="jiq-frag-foot"><span class="jiq-frag-kept">' + _jiqMusicEsc(_jiqMusicPct(d.depth_pct) + ' ' + String(depthLabel).toLowerCase()) + '</span>'
+                + (d.stopped ? '<span class="jiq-frag-lost">\u2212' + _jiqMusicCount(d.stopped) + ' did not</span>' : '')
+                + '</div></div></div>';
+        }
+
+        function _jiqMusicRenderUniverse(a, meta) {
+            if (typeof _jiqFragStep !== 'function') return '';
+            var w = _jiqMusicDoors(a, meta);
+            var oneIn = _jiqMusicOneIn(w.music.share);
+            var head = w.viewers
+                ? (_jiqMusicCount(w.viewers) + ' watched. ' + (oneIn ? (oneIn + ' came in through a song.') : 'Three doors in.'))
+                : 'Three doors into the title.';
+            var html = _jiqMusicSec('01 The journey', head, meta.window_label || 'Every viewer sits in exactly one door');
+            html += '<div class="jiq-music-walk jiq-music-waterfall">';
+            html += _jiqFragStep({ label: w.watch_label, accounts: w.viewers, doing: 'Everyone who watched inside the window' }, { base: true });
+            html += _jiqMusicSplitBar(w);
+            w.doors.forEach(function(d, i) {
+                var doing = _jiqMusicPct(d.share) + ' of viewers. ' + d.what;
+                if (d.key === 'music' && w.mf_reached) {
+                    doing = _jiqMusicPct(d.share) + ' of viewers. ' + _jiqMusicCount(w.mf_reached)
+                        + ' heard a song before the title; ' + _jiqMusicPct(w.mf_conv) + ' of them went on to watch.';
+                }
+                html += '<div class="jiq-frag-branchnote">Door ' + (i + 1) + ' \u00b7 ' + _jiqMusicEsc(d.tag) + '</div>';
+                html += _jiqFragStep({ label: d.label, accounts: d.viewers, doing: doing }, { branch: true });
+                html += _jiqMusicDoorBridge(d, w.depth_label);
+                html += _jiqFragStep({ label: w.depth_label, accounts: d.deep,
+                    doing: _jiqMusicPct(d.depth_pct) + ' of ' + d.label.toLowerCase() + ' viewers' }, { branch: true, terminal: true });
+            });
+            html += '<div class="jiq-frag-step is-terminal jiq-frag-total jiq-music-total"><div class="jiq-frag-rail"><i></i></div>'
+                + '<div class="jiq-frag-body"><div class="jiq-frag-line">'
+                + '<span class="jiq-frag-label">' + _jiqMusicEsc(w.depth_label) + ', all three doors</span>'
+                + '<span class="jiq-frag-count">' + _jiqMusicCount(w.finished) + '</span></div>'
+                + '<div class="jiq-frag-doing">' + _jiqMusicEsc(_jiqMusicPct(w.finished_pct) + ' of ' + _jiqMusicCount(w.viewers) + ' viewers') + '</div>'
+                + '</div></div>';
+            html += '</div>';
+            html += '<div class="jiq-song-pad">'
+                + _jiqMusicRead(w.doors.map(function(d) { return _jiqMusicCount(d.viewers); }).join(' + ')
+                    + ' = ' + _jiqMusicCount(w.viewers) + ' viewers. '
+                    + w.doors.map(function(d) { return _jiqMusicCount(d.deep); }).join(' + ')
+                    + ' = ' + _jiqMusicCount(w.finished) + ' ' + String(w.depth_label).toLowerCase() + '.')
+                + '</div>';
             var disc = (a.discovery || []).slice().sort(function(x, y) {
                 return (Number(y.listeners) || 0) - (Number(x.listeners) || 0);
             });
             if (disc.length) {
-                html += _jiqMusicSec('03 Detours',
+                html += _jiqMusicSec('02 Detours',
                     'Where listeners found the songs.',
                     'Unique people');
                 html += '<div class="jiq-frag-detours">'
@@ -114308,13 +114410,6 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     + _jiqMusicDetours('Then watched the title', disc.map(function(c) {
                         return { label: c.channel, n: c.watched };
                     }))
-                    + '</div>';
-            }
-            if (viewers) {
-                html += '<div class="jiq-song-pad">'
-                    + _jiqMusicRead(_jiqMusicCount(viewers) + ' viewers. '
-                    + _jiqMusicCount(mf.reached || 0) + ' heard a tracked song first. '
-                    + _jiqMusicPct(nm.share_of_viewers_pct || 0) + ' never touched the music.')
                     + '</div>';
             }
             return html;
@@ -114625,21 +114720,24 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var mf = _jiqMusicDir(a, 'Music first');
             var nm = _jiqMusicDir(a, 'No music touch');
             var u = (a && a.universe) || {};
+            var w = _jiqMusicDoors(a, meta);
             if (titleEl) titleEl.innerHTML = _jiqMusicTitleHtml(meta.title || 'This title');
             if (leadEl) {
-                if (Number(nm.share_of_viewers_pct) > Number(mf.share_of_viewers_pct)) {
+                var oneIn = _jiqMusicOneIn(w.music.share);
+                if (w.none.share > 50) {
                     leadEl.textContent = 'Most viewers never touched a tracked song.';
-                } else if (mf.conversion_pct) {
-                    leadEl.textContent = 'Music-first conversion is ' + _jiqMusicPct(mf.conversion_pct) + '.';
+                } else if (oneIn) {
+                    leadEl.textContent = oneIn + ' viewers came in through a song.';
                 } else {
                     leadEl.textContent = (meta.lead_song || 'The soundtrack') + ' is the first music touch.';
                 }
             }
             if (deckEl) {
-                if (u.viewers) {
-                    deckEl.textContent = _jiqMusicCount(u.viewers) + ' viewers. '
-                        + _jiqMusicCount(mf.reached || 0) + ' heard a tracked song first. '
-                        + _jiqMusicPct(nm.share_of_viewers_pct || 0) + ' never touched the music.';
+                if (w.viewers) {
+                    deckEl.textContent = _jiqMusicCount(w.viewers) + ' watched. '
+                        + _jiqMusicCount(w.music.viewers) + ' heard a song first, '
+                        + _jiqMusicCount(w.content.viewers) + ' found the music after watching, '
+                        + _jiqMusicCount(w.none.viewers) + ' never touched it.';
                 } else {
                     deckEl.textContent = (meta.platform || '') + '. ' + (meta.window_label || meta.window || '');
                 }
@@ -114649,18 +114747,18 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     + (meta.window_label || meta.kind || 'Title');
             }
             if (kpisEl) {
-                if (u.viewers) {
+                if (w.viewers) {
                     kpisEl.innerHTML =
                         '<div class="jiq-frag-kpi"><div class="jiq-frag-kpi-l">Viewers</div>'
-                        + '<div class="jiq-frag-kpi-v">' + _jiqMusicEsc(_jiqMusicCount(u.viewers)) + '</div></div>'
-                        + '<div class="jiq-frag-kpi is-hot"><div class="jiq-frag-kpi-l">Music-first conversion</div>'
-                        + '<div class="jiq-frag-kpi-v">' + _jiqMusicEsc(_jiqMusicPct(mf.conversion_pct)) + '</div></div>'
+                        + '<div class="jiq-frag-kpi-v">' + _jiqMusicEsc(_jiqMusicCount(w.viewers)) + '</div></div>'
+                        + '<div class="jiq-frag-kpi is-hot"><div class="jiq-frag-kpi-l">Music first</div>'
+                        + '<div class="jiq-frag-kpi-v">' + _jiqMusicEsc(_jiqMusicPct(w.music.share)) + '</div></div>'
                         + '<div class="jiq-frag-kpi"><div class="jiq-frag-kpi-l">No music touch</div>'
-                        + '<div class="jiq-frag-kpi-v">' + _jiqMusicEsc(_jiqMusicPct(nm.share_of_viewers_pct)) + '</div></div>'
+                        + '<div class="jiq-frag-kpi-v">' + _jiqMusicEsc(_jiqMusicPct(w.none.share)) + '</div></div>'
                         + '<div class="jiq-frag-kpi"><div class="jiq-frag-kpi-l">'
-                        + _jiqMusicEsc(((a.meta || {}).depth_label) || 'Depth') + '</div>'
+                        + _jiqMusicEsc(w.depth_label) + '</div>'
                         + '<div class="jiq-frag-kpi-v">'
-                        + _jiqMusicEsc(_jiqMusicPct((a.music_total || {}).depth_pct || mf.depth_pct || 0))
+                        + _jiqMusicEsc(_jiqMusicPct(w.finished_pct))
                         + '</div></div>';
                 } else {
                     kpisEl.innerHTML =
@@ -190331,6 +190429,21 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
     .jiq-frag-art.is-hr img { object-position: center 32%; }
     .jiq-frag-art.is-barbie img { object-position: center 22%; }
     .jiq-music-walk { margin: 0 34px; }
+    .jiq-music-split { margin: 6px 0 14px 36px; }
+    .jiq-music-split-bar { display: flex; height: 12px; border-radius: 999px; overflow: hidden; background: #3B3D38; }
+    .jiq-music-split-bar i { display: block; height: 100%; }
+    .jiq-music-split-bar i.is-music, .jiq-music-split-legend b.is-music, .jiq-frag-keep.is-music { background: #C7F23E; }
+    .jiq-music-split-bar i.is-content, .jiq-music-split-legend b.is-content, .jiq-frag-keep.is-content { background: #E682FF; }
+    .jiq-music-split-bar i.is-none, .jiq-music-split-legend b.is-none, .jiq-frag-keep.is-none { background: #B7B3D8; }
+    body[data-theme="light"] .jiq-music-split-bar { background: #DDDACE; }
+    body[data-theme="light"] .jiq-music-split-bar i.is-music, body[data-theme="light"] .jiq-music-split-legend b.is-music, body[data-theme="light"] .jiq-frag-keep.is-music { background: #5E7E12; }
+    body[data-theme="light"] .jiq-music-split-bar i.is-content, body[data-theme="light"] .jiq-music-split-legend b.is-content, body[data-theme="light"] .jiq-frag-keep.is-content { background: #8E3FA8; }
+    body[data-theme="light"] .jiq-music-split-bar i.is-none, body[data-theme="light"] .jiq-music-split-legend b.is-none, body[data-theme="light"] .jiq-frag-keep.is-none { background: #8A86B0; }
+    .jiq-music-split-legend { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 8px; font-size: 11px; color: #9AA09B; font-variant-numeric: tabular-nums; }
+    .jiq-music-split-legend b { display: inline-block; width: 8px; height: 8px; border-radius: 999px; margin-right: 6px; vertical-align: middle; }
+    .jiq-music-waterfall .jiq-frag-step.is-terminal { margin-bottom: 10px; }
+    .jiq-music-total { margin-top: 10px; padding-top: 12px; border-top: 1px solid rgba(154,160,155,0.18); }
+    body[data-theme="light"] .jiq-music-total { border-top-color: #DDDACE; }
     #jiqMusicCatalogCard .jiq-frag-detours { margin: 0 34px; padding-bottom: 34px; }
     #jiqMusicCatalogCard .jiq-clip-strip { margin: 0 34px 28px; }
     #jiqMusicCatalogCard .jiq-frag-read { margin-left: 0; }
