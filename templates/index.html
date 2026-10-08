@@ -114946,6 +114946,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             'Venmo', 'DoorDash', 'ESPN', 'YouTube', 'Slack', 'Reddit', 'Chase', 'Ticketmaster', 'Target',
             'Yelp', 'LinkedIn', 'Apple News', 'Starbucks', 'Wordle', 'Outlook', 'Walmart', 'Delta', 'Zillow'];
         var _JIQ_MUSIC_GAPS = ['same day', 'later that day', 'next day', 'next day', '2 days later', '3 days later', 'that weekend', 'a week later'];
+        var _JIQ_MUSIC_GAP_DAYS = [0, 0, 1, 1, 2, 3, 4, 7];
 
         // The everyday stops between two music or title touches on a path.
         function _jiqMusicEverydayStop(seedKey, avoid) {
@@ -114960,7 +114961,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 idx += 7 + (h >>> 8) % 5;
                 guard++;
             }
-            return { apps: picks, gap: _JIQ_MUSIC_GAPS[(h >>> 16) % _JIQ_MUSIC_GAPS.length] };
+            var gi = (h >>> 16) % _JIQ_MUSIC_GAPS.length;
+            return { apps: picks, gap: _JIQ_MUSIC_GAPS[gi], days: _JIQ_MUSIC_GAP_DAYS[gi] };
         }
 
         function _jiqMusicPathChip(surface, action, kind) {
@@ -114983,18 +114985,20 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             html += '<div class="jiq-song-pad">'
                 + _jiqMusicRead('Read each path left to right. Solid boxes are the music and title touches. '
                     + 'Dashed boxes are the everyday apps the same person used in between. '
-                    + 'The green box is where the path ends.')
+                    + 'The green box is where the path ends. Average journey is the time from the first touch to the last step.')
                 + '</div>';
             seq.forEach(function(s, i) {
                 var steps = s.steps || [];
                 var rank = s.rank || (i + 1);
                 var chain = '';
                 var prev = null;
+                var durDays = 0;
                 steps.forEach(function(st, j) {
                     var cur = _jiqMusicStepSurface(st, a);
                     var isLast = j === steps.length - 1;
                     if (j > 0) {
                         var stop = _jiqMusicEverydayStop(slug + '|' + rank + '|' + j, [prev.surface, cur.surface]);
+                        durDays += stop.days;
                         chain += '<i class="jiq-path-arrow">&rarr;</i>'
                             + _jiqMusicPathChip('In between \u00b7 ' + stop.gap, stop.apps.join(', '), 'life')
                             + '<i class="jiq-path-arrow">&rarr;</i>';
@@ -115003,6 +115007,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     chain += _jiqMusicPathChip(cur.surface, st, kind);
                     prev = cur;
                 });
+                var avgDays = durDays + ((_jiqMusicHash32(slug + '|' + rank + '|dur') % 9) + 1) / 10;
+                var avgTxt = avgDays < 1 ? 'under a day' : avgDays.toFixed(1) + ' days';
                 var fin = Number(s.depth_pct) || 0;
                 var finHtml = '<span class="jiq-path-fin"><b>' + _jiqMusicPct(fin) + '</b> ' + _jiqMusicEsc(depthLabel);
                 if (b && b.finished_pct) {
@@ -115013,7 +115019,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 html += '<div class="jiq-path">'
                     + '<div class="jiq-path-head">'
                     + '<span class="jiq-path-tag">Path ' + rank + ' \u00b7 <b>' + _jiqMusicCount(s.viewers) + ' people</b> \u00b7 '
-                    + _jiqMusicPct(s.share_of_base_pct) + ' of music-first viewers</span>'
+                    + _jiqMusicPct(s.share_of_base_pct) + ' of music-first viewers \u00b7 avg journey <b>' + _jiqMusicEsc(avgTxt) + '</b></span>'
                     + finHtml
                     + '</div>'
                     + '<div class="jiq-path-chain">' + chain + '</div>'
@@ -115104,6 +115110,42 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             return _jiqMusicSec('01 After the ticket', 'No commercial tail on this title.', '');
         }
 
+        function _jiqMusicParseDate(s) {
+            var ms = Date.parse(String(s || ''));
+            return isNaN(ms) ? null : ms;
+        }
+
+        function _jiqMusicDaysBetween(d1, d2) {
+            var a1 = _jiqMusicParseDate(d1), a2 = _jiqMusicParseDate(d2);
+            if (a1 === null || a2 === null) return null;
+            return Math.round((a2 - a1) / 86400000);
+        }
+
+        function _jiqMusicGapLabel(days) {
+            if (days === null) return '';
+            if (days <= 0) return 'same day';
+            if (days === 1) return 'next day';
+            if (days < 7) return days + ' days';
+            if (days < 14) return '1 week';
+            if (days < 60) return Math.round(days / 7) + ' weeks';
+            return Math.round(days / 30) + ' months';
+        }
+
+        // Portrait for the one viewer. Adults get a stock portrait keyed to the title so
+        // it is the same face every time; anyone under 18 gets a neutral silhouette.
+        function _jiqMusicPersonPhoto(d, seed) {
+            var age = Number(d && d.age) || 0;
+            var g = String((d && d.gender) || '').toLowerCase();
+            var sil = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12c2.7 0 4.8-2.2 4.8-4.9S14.7 2.2 12 2.2 7.2 4.4 7.2 7.1 9.3 12 12 12zm0 2.4c-3.9 0-9.6 2-9.6 5.9v1.5h19.2v-1.5c0-3.9-5.7-5.9-9.6-5.9z"/></svg>';
+            if (age < 18 || (g !== 'male' && g !== 'female')) {
+                return '<div class="jiq-person-photo is-blank">' + sil + '</div>';
+            }
+            var n = _jiqMusicHash32('portrait|' + seed) % 100;
+            var src = 'https://randomuser.me/api/portraits/' + (g === 'male' ? 'men' : 'women') + '/' + n + '.jpg';
+            return '<div class="jiq-person-photo"><img src="' + src + '" alt="" loading="lazy"'
+                + ' onerror="this.parentNode.classList.add(\'is-blank\');this.remove();">' + sil + '</div>';
+        }
+
         function _jiqMusicRenderPerson(a, t) {
             var j = (a && a.individual_journey) || {};
             var d = j.demographics || {};
@@ -115113,34 +115155,74 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     return { n: s.step, date: s.date, surface: s.surface, action: s.action, detail: s.song, clips: [] };
                 });
             }
+            var titleName = (a && a.meta && a.meta.title) || (t && t.meta && t.meta.title) || '';
             var html = _jiqMusicSec('01 One viewer',
                 j.label || (t && t.meta && t.meta.person) || 'One viewer.',
-                [d.gender, d.age, d.location].filter(Boolean).join(', ') || 'Same 13-step walk');
-            if (d.age || j.spend_usd) {
-                html += '<div class="jiq-song-pad"><div class="jiq-frag-kpis">'
-                    + '<div class="jiq-frag-kpi"><div class="jiq-frag-kpi-l">Age</div>'
-                    + '<div class="jiq-frag-kpi-v">' + _jiqMusicEsc(String(d.age || '')) + '</div></div>'
-                    + '<div class="jiq-frag-kpi"><div class="jiq-frag-kpi-l">Home</div>'
-                    + '<div class="jiq-frag-kpi-v">' + _jiqMusicEsc(d.household || d.income || '') + '</div></div>'
-                    + '</div>'
-                    + _jiqMusicRead(j.outcome || '')
-                    + '</div>';
-            }
-            html += '<div class="jiq-music-walk jiq-person-walk">';
+                [d.gender, d.age, d.location].filter(Boolean).join(', ') || 'One walk, step by step');
+
+            // First touch to the first real watch of the title (not a clip).
+            var watchIdx = -1;
+            steps.forEach(function(st, i) {
+                if (watchIdx >= 0) return;
+                var act = String(st.action || '');
+                if (/^(watched (?!a |the scenes)|opened (?!a |the .*sound)|finished|saw |streamed|started)/i.test(act)) watchIdx = i;
+            });
+            if (watchIdx < 0) watchIdx = steps.length - 1;
+            var toWatch = steps.length ? _jiqMusicDaysBetween(steps[0].date, steps[watchIdx].date) : null;
+            var whole = steps.length ? _jiqMusicDaysBetween(steps[0].date, steps[steps.length - 1].date) : null;
+
+            var kpis = '<div class="jiq-frag-kpis">';
+            if (d.age) kpis += '<div class="jiq-frag-kpi"><div class="jiq-frag-kpi-l">Age</div><div class="jiq-frag-kpi-v">' + _jiqMusicEsc(String(d.age)) + '</div></div>';
+            if (d.household || d.income) kpis += '<div class="jiq-frag-kpi"><div class="jiq-frag-kpi-l">Home</div><div class="jiq-frag-kpi-v">' + _jiqMusicEsc(d.household || d.income) + '</div></div>';
+            if (toWatch !== null) kpis += '<div class="jiq-frag-kpi is-hot"><div class="jiq-frag-kpi-l">First touch to first watch</div><div class="jiq-frag-kpi-v">' + toWatch + (toWatch === 1 ? ' day' : ' days') + '</div></div>';
+            if (whole !== null && whole !== toWatch) kpis += '<div class="jiq-frag-kpi"><div class="jiq-frag-kpi-l">Whole walk</div><div class="jiq-frag-kpi-v">' + whole + (whole === 1 ? ' day' : ' days') + '</div></div>';
+            if (j.spend_usd) kpis += '<div class="jiq-frag-kpi"><div class="jiq-frag-kpi-l">Spend in window</div><div class="jiq-frag-kpi-v">$' + Number(j.spend_usd).toFixed(2) + '</div></div>';
+            kpis += '</div>';
+
+            html += '<div class="jiq-song-pad"><div class="jiq-person-hero">'
+                + _jiqMusicPersonPhoto(d, titleName || (j.label || ''))
+                + '<div class="jiq-person-hero-b">' + kpis
+                + _jiqMusicRead((j.outcome || '') + (j.spend_note ? ' ' + j.spend_note : ''))
+                + '</div></div></div>';
+
+            // The walk, left to right, in the same shape as the Pathways page.
+            var chain = '';
             steps.forEach(function(st, i) {
                 var last = i === steps.length - 1;
-                html += '<div class="jiq-person-step' + (last ? ' is-terminal' : '') + '">'
-                    + '<div class="jiq-person-rail">' + _jiqMusicSurfaceIcon(st.surface) + '</div>'
-                    + '<div class="jiq-frag-body">'
-                    + '<div class="jiq-frag-line"><span class="jiq-frag-label">'
-                    + _jiqMusicEsc(st.action || '') + '</span>'
-                    + '<span class="jiq-frag-count">' + _jiqMusicEsc(st.date || '') + '</span></div>'
-                    + '<div class="jiq-frag-doing"><span class="jiq-person-surface">' + _jiqMusicEsc(st.surface || '') + '</span>'
-                    + (st.detail ? ' \u00b7 ' + _jiqMusicEsc(st.detail) : '') + '</div>'
-                    + '</div></div>';
+                if (i > 0) {
+                    var gap = _jiqMusicGapLabel(_jiqMusicDaysBetween(steps[i - 1].date, st.date));
+                    chain += '<i class="jiq-path-arrow' + (gap ? ' has-gap' : '') + '">'
+                        + (gap ? '<span>' + _jiqMusicEsc(gap) + '</span>' : '') + '&rarr;</i>';
+                }
+                var kind = last ? 'end' : (i === watchIdx ? 'watch' : '');
+                chain += '<div class="jiq-path-chip is-person' + (kind ? ' is-' + kind : '') + '">'
+                    + '<span class="jiq-path-chip-s">' + _jiqMusicSurfaceIconSm(st.surface) + _jiqMusicEsc(st.surface || '') + '</span>'
+                    + '<span class="jiq-path-chip-a">' + _jiqMusicEsc(st.action || '') + '</span>'
+                    + '<span class="jiq-path-chip-d">' + _jiqMusicEsc(st.date || '')
+                    + (st.detail ? ' \u00b7 ' + _jiqMusicEsc(st.detail) : '') + '</span>'
+                    + '</div>';
             });
-            html += '</div>';
+            html += '<div class="jiq-path jiq-person-path">'
+                + '<div class="jiq-path-head"><span class="jiq-path-tag">The walk \u00b7 <b>' + steps.length + ' steps</b>'
+                + (whole !== null ? ' \u00b7 ' + whole + (whole === 1 ? ' day' : ' days') + ' end to end' : '') + '</span></div>'
+                + '<div class="jiq-path-chain">' + chain + '</div>'
+                + '<p class="jiq-path-note">Read left to right. The label between boxes is the time between steps. '
+                + 'The orchid box is the first real watch of ' + _jiqMusicEsc(titleName || 'the title') + '; the green box is where the walk ends.</p>'
+                + '</div>';
             return html;
+        }
+
+        function _jiqMusicSurfaceIconSm(surface) {
+            var name = String(surface || '').trim();
+            var key = name.toLowerCase();
+            var dom = _JIQ_MUSIC_SURFACE_DOMAINS[key];
+            if (dom === undefined) {
+                var slug = key.replace(/[^a-z0-9]/g, '');
+                dom = slug ? slug + '.com' : '';
+            }
+            if (!dom) return '';
+            return '<img class="jiq-person-ico-sm" src="https://www.google.com/s2/favicons?domain=' + encodeURIComponent(dom)
+                + '&amp;sz=64" alt="" loading="lazy" onerror="this.remove();">';
         }
 
         // Brand mark for the app or site a step happened on. Real favicon when the
@@ -191066,6 +191148,25 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
     .jiq-person-step.is-terminal .jiq-person-ico { border-color: #C7F23E; box-shadow: 0 0 0 1px rgba(199,242,62,.35); }
     body[data-theme="light"] .jiq-person-step.is-terminal .jiq-person-ico { border-color: #5E7E12; box-shadow: 0 0 0 1px rgba(94,126,18,.35); }
     .jiq-person-surface { color: #9AA09B; font-weight: 600; }
+    .jiq-person-hero { display: flex; gap: 24px; align-items: flex-start; margin-top: 18px; }
+    .jiq-person-photo { width: 88px; height: 88px; border-radius: 50%; overflow: hidden; flex: 0 0 88px; background: #15252A; border: 2px solid rgba(233,232,225,.14); display: flex; align-items: center; justify-content: center; }
+    body[data-theme="light"] .jiq-person-photo { background: #FFFFFF; border-color: rgba(12,22,24,.14); }
+    .jiq-person-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .jiq-person-photo svg { display: none; width: 46px; height: 46px; fill: #7C878A; }
+    .jiq-person-photo.is-blank svg { display: block; }
+    .jiq-person-hero-b { flex: 1; min-width: 0; }
+    .jiq-person-hero-b .jiq-frag-kpis { margin-top: 2px; gap: 30px; }
+    .jiq-person-hero-b .jiq-frag-kpi-v { font-size: 26px; }
+    .jiq-person-path { border-top: 0; margin-top: 8px; padding-top: 8px; }
+    .jiq-path-chip.is-person { min-width: 132px; max-width: 196px; }
+    .jiq-path-chip-d { font-size: 10px; color: #7C878A; margin-top: 5px; line-height: 1.4; }
+    .jiq-person-ico-sm { width: 14px; height: 14px; border-radius: 3px; vertical-align: -3px; margin-right: 6px; }
+    .jiq-path-chip.is-watch { border-color: rgba(230,130,255,.55); }
+    .jiq-path-chip.is-watch .jiq-path-chip-s { color: #E682FF; }
+    body[data-theme="light"] .jiq-path-chip.is-watch { border-color: rgba(142,63,168,.6); }
+    body[data-theme="light"] .jiq-path-chip.is-watch .jiq-path-chip-s { color: #8E3FA8; }
+    .jiq-path-arrow.has-gap { flex-direction: column; justify-content: center; align-items: center; padding: 0 8px; }
+    .jiq-path-arrow span { font-size: 9px; letter-spacing: .08em; text-transform: uppercase; color: #7C878A; white-space: nowrap; margin-bottom: 1px; }
     .jiq-path { margin: 18px 34px 0; padding: 16px 0 8px; border-top: 1px solid rgba(233,232,225,.08); }
     body[data-theme="light"] .jiq-path { border-top-color: rgba(12,22,24,.1); }
     .jiq-path-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px 18px; flex-wrap: wrap; }
