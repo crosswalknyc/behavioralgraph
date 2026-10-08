@@ -12991,10 +12991,8 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
     if not base:
         # A QUESTION about a never-pulled subject is a custom read
         # (Jenna 2026-10-08: "all custom asks are just 500 ... take out
-        # force running a profile"). The 2026-09-24 build-first flow
-        # that steered these to a profile approval is retired; the
-        # pending-question stash + follow-through stay for runs the
-        # user chooses to approve themselves.
+        # force running a profile"); the 2026-09-24 build-first flow is
+        # retired, the stash + follow-through stay for approved runs.
         _bf_subj = (subj_hint or pma.guess_subject_from_text(text)
                     or '').strip()
         # A subject bound upstream (memory, catalog, the open page)
@@ -13496,6 +13494,12 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
                                 measured_block, subiq_block,
                                 neighbor_block, examples_block) if b]
     extra_blocks.append(pma.GENERATION_LOOP_GUIDANCE)
+    try:
+        from prometheus import methodology as _meth_rules
+        if _meth_rules.is_viewership_read(text, None, text):
+            extra_blocks.append(_meth_rules.MODEL_RULES)
+    except Exception:
+        pass
     if pma.is_cohort_churn_ask(text):
         extra_blocks.append(pma.COHORT_CHURN_GUIDANCE)
     # Paid research report on a no-base subject (2026-09-14): the
@@ -13804,6 +13808,13 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
         _aud = f"{_aud} - {str(res.get('cohort')).strip()}"
     if _aud and _aud.lower() not in str(reply or '')[:90].lower():
         reply = f"On {_aud}:\n\n{reply}"
+    # Counting block under every viewership figure (Liz 2026-10-08).
+    try:
+        from prometheus import methodology as _meth
+        reply = _meth.ensure(reply, res, question=text,
+                             base_label=str(base.get('subject') or ''))
+    except Exception:
+        traceback.print_exc()
     _t_stage = time.monotonic()
     try:
         anchor_names = []

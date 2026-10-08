@@ -4710,6 +4710,19 @@ _CUT_REQUEST_RX = re.compile(
     r'\b(?:run|do|make|create|build|add)\b[^.?!]{0,40}\bcuts?\b'
     r'|\bcut of\b', re.IGNORECASE)
 
+# Imperative "produce a file" commands with no question in them (the
+# priced custom read is for questions, never for a run or a cut).
+_IMPERATIVE_RUN_RX = re.compile(
+    r'^\s*(?:please\s+|can you\s+|could you\s+)?'
+    r'(?:run|pull|build|create|make|queue|launch|refresh|start|kick off|'
+    r'spin up|generate)\b[^.?!]{0,60}'
+    r'\b(?:profiles?|total universe|tu|avid|cuts?|cohorts?|audiences?|files?)\b'
+    r'|^\s*(?:please\s+)?cut\b[^.?!]{0,80}\bby\b', re.IGNORECASE)
+# "pull Paw Patrol": a bare pull of a name, no metric word, is a build.
+_BARE_PULL_RX = re.compile(
+    r"^\s*(?:please\s+)?pull\s+(?!up\b|the\s+(?:numbers?|data|stats?|figures?)\b|"
+    r"(?:numbers?|data|stats?|figures?)\b)[A-Za-z0-9'&.+:\- ]{2,60}$", re.IGNORECASE)
+
 _ASK_CLASSIFY_SYSTEM = (
     'You classify one dashboard chat message. Decide what the user '
     'wants:\n'
@@ -5293,7 +5306,14 @@ def panel_report_eligible(text, subject):
         return False
     if not t or len(t) > 600:
         return False
-    if _is_build_request(t) or _CUT_REQUEST_RX.search(t):
+    if _is_build_request(t):
+        return False
+    _q = bool(_ANALYSIS_QUESTION_RX.search(t)) or t.rstrip().endswith('?')
+    if _CUT_REQUEST_RX.search(t) and not _q:
+        return False
+    if (_IMPERATIVE_RUN_RX.search(t) or _BARE_PULL_RX.match(t)) and not _q:
+        # "run the Paw Patrol profile", "cut the Godslap audience by
+        # gender": a command to produce a file, never a priced read.
         return False
     if detect_deck_intent(t) or detect_csv_download_intent(t):
         return False

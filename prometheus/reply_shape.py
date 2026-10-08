@@ -112,13 +112,19 @@ def shape(reply):
         body = re.sub(r'[ \t]+([.,;:])', r'\1', body)
         body = re.sub(r'\n{3,}', '\n\n', body).strip()
         if defs:
-            block = ['', 'How these are counted:']
+            bullets = []
             for anchor, inner in defs:
                 inner = inner[:1].upper() + inner[1:]
                 if inner and inner[-1] not in '.!?':
                     inner += '.'
-                block.append(f"- {anchor + ': ' if anchor else ''}{inner}")
-            body = body + '\n' + '\n'.join(block)
+                bullets.append(f"- {anchor + ': ' if anchor else ''}{inner}")
+            if 'How these are counted:' in body:
+                # one block per reply: slot the definitions right under
+                # the header the methodology layer already wrote
+                head, tail = body.split('How these are counted:', 1)
+                body = head + 'How these are counted:\n' + '\n'.join(bullets) + tail
+            else:
+                body = body + '\n' + '\n'.join(['', 'How these are counted:'] + bullets)
         return body if body.strip() else reply
     except Exception:
         return reply
