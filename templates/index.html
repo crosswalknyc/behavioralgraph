@@ -114054,13 +114054,20 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
 
         // Percentage bars: every bar is a share, the tick is the same-kind
         // median on the same scale, the count sits in the sub-line.
-        function _jiqMusicPctDetours(title, rows, b) {
+        function _jiqMusicPctDetours(title, rows, b, hi) {
             var top = 1;
             (rows || []).forEach(function(r) {
                 top = Math.max(top, Number(r.pct) || 0, Number(r.med) || 0);
             });
             top = Math.min(100, top * 1.08);
-            return '<div class="jiq-frag-det jiq-frag-det-pct"><h5>' + _jiqMusicEsc(title)
+            var titleHtml = _jiqMusicEsc(title);
+            (hi || []).forEach(function(word) {
+                var w = String(word || '').trim();
+                if (!w) return;
+                var re = new RegExp('(^|[^A-Za-z])(' + w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')(?![A-Za-z])', 'i');
+                titleHtml = titleHtml.replace(re, '$1<em class="jiq-frag-det-hi">$2</em>');
+            });
+            return '<div class="jiq-frag-det jiq-frag-det-pct"><h5>' + titleHtml
                 + (b ? '<span class="jiq-frag-det-key"><b class="jiq-frag-tick"></b>' + _jiqMusicEsc(b.label) + '</span>' : '')
                 + '</h5>'
                 + (rows || []).map(function(r) {
@@ -114854,13 +114861,13 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             html += '<div class="jiq-frag-detours">'
                 + _jiqMusicPctDetours('Share of social listeners by format', rows.map(function(r) {
                     return { label: r.fmt, n: r.listeners, noun: 'listeners', pct: r.share, med: (fm[r.fmt] || {}).share };
-                }), db)
+                }), db, ['listeners'])
                 + _jiqMusicPctDetours('Share of each format\'s listeners who then watched', rows.map(function(r) {
                     return { label: r.fmt, n: r.watched, noun: 'watched', pct: r.conv, med: (fm[r.fmt] || {}).conv };
-                }), db)
+                }), db, ['watched'])
                 + _jiqMusicPctDetours('Share of each format\'s viewers who ' + depthLabel, rows.map(function(r) {
                     return { label: r.fmt, n: r.deep, noun: depthLabel, pct: r.fin, med: (fm[r.fmt] || {}).fin };
-                }), db)
+                }), db, [depthLabel])
                 + '</div>';
             var notes = rows.filter(function(r) { return r.notes.length; }).map(function(r) {
                 return r.fmt + ': ' + r.notes[0].replace(/\.$/, '');
@@ -190568,6 +190575,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
     .jiq-frag-detbar.is-pct .jiq-frag-tick { top: -3px; bottom: -3px; }
     .jiq-frag-det-pct .jiq-frag-detrow { grid-template-columns: 1fr minmax(120px, 2fr) 52px; }
     .jiq-frag-det-key { float: right; font-weight: 500; letter-spacing: .06em; text-transform: none; font-size: 10px; color: #7C878A; }
+    .jiq-frag-det-hi { font-style: normal; color: #C7F23E; }
+    body[data-theme="light"] .jiq-frag-det-hi { color: #5E7E12; }
     .jiq-frag-det-key .jiq-frag-tick { position: static; display: inline-block; width: 2px; height: 10px; margin-right: 6px; vertical-align: -1px; }
     .jiq-music-detkpis { margin: 4px 0 26px; }
     .jiq-frag-detsub { grid-column: 1 / -1; font-size: 10.5px; color: #7C878A; margin-top: -4px; font-variant-numeric: tabular-nums; }
