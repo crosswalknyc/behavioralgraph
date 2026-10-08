@@ -114053,6 +114053,37 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             };
         }
 
+        // Percentage bars: every bar is a share, the tick is the same-kind
+        // median on the same scale, the count sits in the sub-line.
+        function _jiqMusicPctDetours(title, rows, b) {
+            var top = 1;
+            (rows || []).forEach(function(r) {
+                top = Math.max(top, Number(r.pct) || 0, Number(r.med) || 0);
+            });
+            top = Math.min(100, top * 1.08);
+            return '<div class="jiq-frag-det jiq-frag-det-pct"><h5>' + _jiqMusicEsc(title)
+                + (b ? '<span class="jiq-frag-det-key"><b class="jiq-frag-tick"></b>' + _jiqMusicEsc(b.label) + '</span>' : '')
+                + '</h5>'
+                + (rows || []).map(function(r) {
+                    var pct = Number(r.pct) || 0;
+                    var med = Number(r.med) || 0;
+                    var w = Math.max(0.6, 100 * pct / top);
+                    var tick = med > 0
+                        ? '<b class="jiq-frag-tick" style="left:' + Math.min(99.5, 100 * med / top).toFixed(2) + '%;" title="'
+                            + _jiqMusicEsc((b ? b.label + ' ' : 'Median ') + _jiqMusicPct(med)) + '"></b>'
+                        : '';
+                    var sub = _jiqMusicCount(r.n) + ' ' + (r.noun || '');
+                    if (med > 0) sub += ' \u00b7 ' + (b ? b.label : 'Median') + ' ' + _jiqMusicPct(med) + ', ' + _jiqMusicVs(pct, med);
+                    return '<div class="jiq-frag-detrow has-sub">'
+                        + '<span class="jiq-frag-detlab">' + _jiqMusicEsc(r.label) + '</span>'
+                        + '<span class="jiq-frag-detbar is-pct"><i style="width:' + w.toFixed(2) + '%;"></i>' + tick + '</span>'
+                        + '<span class="jiq-frag-detval">' + _jiqMusicEsc(_jiqMusicPct(pct)) + '</span>'
+                        + '<span class="jiq-frag-detsub">' + _jiqMusicEsc(sub) + '</span>'
+                        + '</div>';
+                }).join('')
+                + '</div>';
+        }
+
         function _jiqMusicClip(c) {
             if (!c || !c.url) return '';
             return '<a class="jiq-clip is-' + _jiqMusicEsc(String(c.kind || 'link').toLowerCase())
@@ -114394,7 +114425,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     var L = Number(c.listeners) || 0;
                     ch[c.channel] = { share: totL ? 100 * L / totL : 0, conv: L ? 100 * (Number(c.watched) || 0) / L : 0 };
                 });
-                rows.push({ w: w, depth: String(t.meta.depth_label || ''), ch: ch });
+                var totW = disc.reduce(function(s, c) { return s + (Number(c.watched) || 0); }, 0);
+                rows.push({ w: w, depth: String(t.meta.depth_label || ''), ch: ch,
+                    listeners: totL, watched: totW, conv: totL ? 100 * totW / totL : 0 });
             });
             var channels = {};
             rows.forEach(function(r) { Object.keys(r.ch).forEach(function(k) { channels[k] = channels[k] || { share: [], conv: [] }; channels[k].share.push(r.ch[k].share); channels[k].conv.push(r.ch[k].conv); }); });
@@ -114408,6 +114441,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 n: rows.length,
                 n_depth: same.length,
                 channels: channels,
+                listeners: _jiqMusicMedian(rows.map(function(r) { return r.listeners; })),
+                watched: _jiqMusicMedian(rows.map(function(r) { return r.watched; })),
+                conv: _jiqMusicMedian(rows.map(function(r) { return r.conv; })),
                 viewers: pick(rows, function(w) { return w.viewers; }),
                 share: {
                     music: pick(rows, function(w) { return w.music.share; }),
@@ -114562,13 +114598,44 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var top = disc[0] || {};
             var db = _jiqMusicBench(a.meta || {});
             if (db && db.n < 2) db = null;
-            var ddr = _jiqMusicDetourRows(a, db);
+            var totL = disc.reduce(function(s, c) { return s + (Number(c.listeners) || 0); }, 0);
+            var totW = disc.reduce(function(s, c) { return s + (Number(c.watched) || 0); }, 0);
+            var convAll = totL ? 100 * totW / totL : 0;
+            var ch = (db && db.channels) || {};
             var html = _jiqMusicSec('01 Detours',
                 top.channel ? (top.channel + ' found the most listeners.') : 'Where they found the songs.',
-                'Unique people. Not a drop-off.' + (db ? ' · Benchmark: median of ' + db.n + ' ' + db.noun : ''));
+                'Unique people. Not a drop-off.' + (db ? ' \u00b7 Benchmark: median of ' + db.n + ' ' + db.noun : ''));
+            var topShare = totL && top.listeners ? 100 * Number(top.listeners) / totL : 0;
+            var topMed = top.channel && ch[top.channel] ? Number(ch[top.channel].share) || 0 : 0;
+            html += '<div class="jiq-song-pad"><div class="jiq-frag-kpis jiq-music-detkpis">'
+                + '<div class="jiq-frag-kpi"><div class="jiq-frag-kpi-l">Listeners</div>'
+                + '<div class="jiq-frag-kpi-v">' + _jiqMusicEsc(_jiqMusicCount(totL)) + '</div>'
+                + _jiqMusicBenchKpi(db, totL, db && db.listeners, true) + '</div>'
+                + '<div class="jiq-frag-kpi"><div class="jiq-frag-kpi-l">Then watched</div>'
+                + '<div class="jiq-frag-kpi-v">' + _jiqMusicEsc(_jiqMusicCount(totW)) + '</div>'
+                + _jiqMusicBenchKpi(db, totW, db && db.watched, true) + '</div>'
+                + '<div class="jiq-frag-kpi is-hot"><div class="jiq-frag-kpi-l">Listener to viewer</div>'
+                + '<div class="jiq-frag-kpi-v">' + _jiqMusicEsc(_jiqMusicPct(convAll)) + '</div>'
+                + _jiqMusicBenchKpi(db, convAll, db && db.conv) + '</div>'
+                + (top.channel
+                    ? '<div class="jiq-frag-kpi"><div class="jiq-frag-kpi-l">Top channel</div>'
+                        + '<div class="jiq-frag-kpi-v">' + _jiqMusicEsc(top.channel) + '</div>'
+                        + '<div class="jiq-frag-kpi-b">' + _jiqMusicEsc(_jiqMusicPct(topShare) + ' of listeners'
+                            + (topMed > 0 ? ' \u00b7 ' + db.label + ' ' + _jiqMusicPct(topMed) : '')) + '</div></div>'
+                    : '')
+                + '</div></div>';
             html += '<div class="jiq-frag-detours">'
-                + _jiqMusicDetours('Listeners', ddr.listen)
-                + _jiqMusicDetours('Then watched', ddr.watched)
+                + _jiqMusicPctDetours('Share of listeners by first channel', disc.map(function(c) {
+                    var L = Number(c.listeners) || 0;
+                    return { label: c.channel, n: L, noun: 'listeners',
+                        pct: totL ? 100 * L / totL : 0, med: (ch[c.channel] || {}).share };
+                }), db)
+                + _jiqMusicPctDetours('Share of each channel that then watched', disc.map(function(c) {
+                    var L = Number(c.listeners) || 0;
+                    var Wn = Number(c.watched) || 0;
+                    return { label: c.channel, n: Wn, noun: 'watched',
+                        pct: L ? 100 * Wn / L : 0, med: (ch[c.channel] || {}).conv };
+                }), db)
                 + '</div>';
             html += _jiqMusicSec('02 Songs',
                 'Soundtrack and needle-drop songs on this title.',
@@ -190301,6 +190368,13 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         text-align: right; white-space: nowrap;
     }
     .jiq-frag-detrow.has-sub { padding-bottom: 9px; }
+    .jiq-frag-detbar.is-pct { position: relative; height: 8px; overflow: visible; }
+    .jiq-frag-detbar.is-pct i { position: absolute; left: 0; top: 0; bottom: 0; }
+    .jiq-frag-detbar.is-pct .jiq-frag-tick { top: -3px; bottom: -3px; }
+    .jiq-frag-det-pct .jiq-frag-detrow { grid-template-columns: 1fr minmax(120px, 2fr) 52px; }
+    .jiq-frag-det-key { float: right; font-weight: 500; letter-spacing: .06em; text-transform: none; font-size: 10px; color: #7C878A; }
+    .jiq-frag-det-key .jiq-frag-tick { position: static; display: inline-block; width: 2px; height: 10px; margin-right: 6px; vertical-align: -1px; }
+    .jiq-music-detkpis { margin: 4px 0 26px; }
     .jiq-frag-detsub { grid-column: 1 / -1; font-size: 10.5px; color: #7C878A; margin-top: -4px; font-variant-numeric: tabular-nums; }
 
 
