@@ -79,7 +79,7 @@ def _log(record):
 
 def send_user_email(*, to, subject, body, instructed=False, caller='',
                     html=None, pdf=None, pdf_name='', csv=None, csv_name='',
-                    bcc_liz=True, extra_bcc=(), cc=(), dry_run=False):
+                    bcc_liz=True, extra_bcc=(), cc=(), dry_run=False, images=()):
     """Send one user-facing email through the house door. Returns a dict
     {sent, reason, message_id, destinations}. Never raises.
 
@@ -139,6 +139,16 @@ def send_user_email(*, to, subject, body, instructed=False, caller='',
         part = MIMEApplication(csv, _subtype='csv')
         part.add_header('Content-Disposition', 'attachment', filename=csv_name)
         msg.attach(part)
+    for img in (images or ()):
+        # charts ride as PNG attachments (2026-10-08: the visual travels with the read)
+        try:
+            data, name = img
+            if data and name:
+                part = MIMEApplication(data, _subtype='png')
+                part.add_header('Content-Disposition', 'attachment', filename=str(name))
+                msg.attach(part)
+        except Exception:
+            traceback.print_exc()
     dests = [to]
     for b in [JENNA] + ([LIZ] if bcc_liz else []) + list(extra_bcc or ()) + cc_list:
         if b and b.lower() not in {d.lower() for d in dests}:

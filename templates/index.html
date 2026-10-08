@@ -79363,10 +79363,25 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                             _synthChatEscapeHtml(String(turn.meta.link.label || 'Download')) + '</a></div>';
                     }
                 }
+                // Chart (2026-10-08): a read that was asked for as a histogram /
+                // chart, or that carries a distribution, ships a PNG via
+                // turn.meta.chart. https-only, escaped, opens full size.
+                var chartHtml = '';
+                if (!isUser && turn.meta && turn.meta.chart && turn.meta.chart.url) {
+                    var _cu = String(turn.meta.chart.url);
+                    if (/^https:\/\//i.test(_cu)) {
+                        var _cuq = _cu.replace(/"/g, '&quot;');
+                        chartHtml = '<div style="margin-top:0.6rem;">' +
+                            '<a href="' + _cuq + '" target="_blank" rel="noopener">' +
+                            '<img src="' + _cuq + '" alt="' + _synthChatEscapeHtml(String(turn.meta.chart.alt || 'Chart')) + '" ' +
+                            'style="display:block; max-width:100%; border-radius:10px; border:1px solid rgba(154,160,155,0.25);"></a></div>';
+                    }
+                }
                 return '<div class="pm-msg ' + (isUser ? 'pm-msg-user' : 'pm-msg-agent') + '">' +
                     (isUser ? '' : '<div class="pm-msg-avatar" aria-hidden="true"></div>') +
                     '<div class="pm-msg-bubble">' +
                     bodyHtml +
+                    chartHtml +
                     linkHtml +
                     chipsHtml +
                     '</div></div>';
@@ -80055,6 +80070,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                             url: String(p.file_link.url),
                             label: String(p.file_link.label || 'Download CSV')
                         };
+                    }
+                    if (p.chart && p.chart.url &&
+                        String(p.chart.url).indexOf('https://') === 0) {
+                        _rjMeta.chart = { url: String(p.chart.url), alt: String(p.chart.alt || 'Chart') };
                     }
                     try { _synthChatMaybeSaveFile(p); } catch (_) {}
                     _synthChatPushTurnWithMeta('agent', p.reply, _rjMeta);
@@ -82623,7 +82642,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         label: String(data.file_link.label || 'Download CSV')
                     };
                 }
-                if (_turnMeta.options || _turnMeta.link) {
+                if (data.chart && data.chart.url &&
+                    String(data.chart.url).indexOf('https://') === 0) {
+                    _turnMeta.chart = { url: String(data.chart.url), alt: String(data.chart.alt || 'Chart') };
+                }
+                if (_turnMeta.options || _turnMeta.link || _turnMeta.chart) {
                     _synthChatPushTurnWithMeta('agent', data.reply, _turnMeta);
                 } else {
                     synthChatPushTurn('agent', data.reply);

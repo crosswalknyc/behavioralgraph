@@ -13832,21 +13832,16 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
     stages['persist'] = int((time.monotonic() - _t_stage) * 1000)
     _pm_remember_ask(pm_user, text, subject=res.get('subject'),
                      cohort=res.get('cohort'), route='generated')
-    # Every answer with data creates its CSV (2026-09-29 Jenna). The
-    # download anchor rides the reply turn on every data answer; an
-    # explicit file ask also auto-saves to the browser; the stash
-    # serves "Email me this file".
+    # Every answer with data creates its CSV (2026-09-29 Jenna); an explicit
+    # file ask also auto-saves; the stash serves "Email me this file".
     _file_payload = {}
     try:
         if res.get('breakdown') or res.get('metrics'):
             _explicit = bool(_PM_FILE_ASK_RE.search(str(text or '')))
-            _fe = {'subject': res.get('subject'),
-                   'cohort': res.get('cohort'), 'question': text,
-                   'metrics': res.get('metrics'),
-                   'breakdown': res.get('breakdown'),
-                   'ws': res.get('window_start'),
-                   'we': res.get('window_end'),
-                   'wl': res.get('window_label')}
+            _fe = {'subject': res.get('subject'), 'cohort': res.get('cohort'),
+                   'question': text, 'metrics': res.get('metrics'),
+                   'breakdown': res.get('breakdown'), 'ws': res.get('window_start'),
+                   'we': res.get('window_end'), 'wl': res.get('window_label')}
             _fn, _fcsv = pma.build_generated_csv(_fe)
             _frng = ''
             if _fe.get('ws') and _fe.get('we'):
@@ -13858,13 +13853,10 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
             _fn = _pm_csv_task_filename(_fe) or _fn
             _fkey = f"{_PM_DATA_FILE_PREFIX}{uuid.uuid4().hex[:12]}/{_fn}"
             _H.s3_client.put_object(Bucket=_H.S3_BUCKET, Key=_fkey,
-                                 Body=_fcsv.encode('utf-8'),
-                                 ContentType='text/csv')
+                                 Body=_fcsv.encode('utf-8'), ContentType='text/csv')
             _furl = _H.s3_client.generate_presigned_url(
-                'get_object',
-                Params={'Bucket': _H.S3_BUCKET, 'Key': _fkey,
-                        'ResponseContentDisposition':
-                            f'attachment; filename="{_fn}"'},
+                'get_object', Params={'Bucket': _H.S3_BUCKET, 'Key': _fkey,
+                                      'ResponseContentDisposition': f'attachment; filename="{_fn}"'},
                 ExpiresIn=7 * 24 * 3600)
             _file_payload = {'file_link': {
                 'url': _furl, 'label': f"Download {_fn}"}}
@@ -13880,6 +13872,12 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
                 followups.append('Email me this file')
     except Exception:
         traceback.print_exc()
+    try:   # the visual rides the read (asked for, or a distribution)
+        from prometheus import charts as _charts
+        _chart_payload = _charts.publish(res, text, pm_user, _H.s3_client, _H.S3_BUCKET)
+    except Exception:
+        traceback.print_exc()
+        _chart_payload = {}
     _pm_ask_hint(
         outcome=('corrected' if _pm_auto_corrected else 'answered'),
         subject=res.get('subject'))
@@ -13897,7 +13895,7 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
             'question': text,
             'options': [{'label': _sw_chip, 'subject': _sw}]}}
     return {
-        'success': True, 'action': 'answer', 'reply': reply,
+        'success': True, 'action': 'answer', 'reply': reply, **_chart_payload,
         'followups': followups, 'offer_deck': False, 'deck_angle': None,
         'model': result.get('model'),
         'profile': res.get('subject'),
@@ -14295,11 +14293,13 @@ def _pm_send_output_email(kind, to_email, data):
             # One door for user-facing mail (2026-10-06): the user asked
             # for this notification, so it is instructed by them.
             from prometheus import outbound_mail as _om
+            from prometheus import charts as _charts
+            _imgs = _charts.attachments_for(data, _H.s3_client, _H.S3_BUCKET)
             _om.send_user_email(
                 to=to_email, subject=subject_line[:200], body=body_text,
                 instructed=True, caller=f'pm-notify:{kind}', html=body_html,
                 pdf=pdf_bytes or None, pdf_name=pdf_name,
-                csv=csv_bytes or None, csv_name=csv_name, bcc_liz=False)
+                csv=csv_bytes or None, csv_name=csv_name, bcc_liz=False, images=_imgs)
         except Exception as e:
             print(f"[pm-notify] send failed: {e}")
 
@@ -14347,11 +14347,11 @@ def _pm_append_read_to_history(username, job_id, payload):
             return
         followups = [f for f in ((payload or {}).get('followups') or [])
                      if isinstance(f, str)][:6]
-        history.append({
-            'role': 'agent', 'text': reply, 'ts': _pm_iso_now(),
-            'meta': {'read_job_id': job_id, 'kind': 'read',
-                     'options': [{'label': f, 'send': f}
-                                 for f in followups]}})
+        _meta = {'read_job_id': job_id, 'kind': 'read',
+                 'options': [{'label': f, 'send': f} for f in followups]}
+        for _k in ('file_link', 'chart'):   # the CSV link and the chart survive a reload
+            if isinstance((payload or {}).get(_k), dict) and (payload or {})[_k].get('url'): _meta['link' if _k == 'file_link' else 'chart'] = dict((payload or {})[_k])
+        history.append({'role': 'agent', 'text': reply, 'ts': _pm_iso_now(), 'meta': _meta})
         _pm_save_thread_or_active(username, _tid, history)
     except Exception:
         traceback.print_exc()

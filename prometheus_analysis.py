@@ -5458,10 +5458,16 @@ Return strict JSON only:
   ],
   "reads": ["2 to 4 interpretive lines"],
   "cohort": "the sub-cohort this read covers, or null (e.g. Parents of Kids 4-7)",
-  "breakdown": {"dimension": "Toy category", "share_basis": "share of the cohort's toy purchase signals", "rows": [{"label": "Preschool Toys", "share_pct": 23.7, "penetration_pct": 61.2, "note": "Fisher-Price and Play-Doh lead"}]} | null,
+  "breakdown": {"dimension": "Toy category", "share_basis": "share of the cohort's toy purchase signals", "bucket_label": "only when rows carry buckets: what one bucket counts, e.g. distinct genres watched", "rows": [{"label": "Preschool Toys", "share_pct": 23.7, "penetration_pct": 61.2, "note": "Fisher-Price and Play-Doh lead", "pool": 47876817, "buckets": [{"label": "1", "count": 2250211, "share_pct": 4.7}, {"label": "2", "count": 4691927, "share_pct": 9.8}]}]} | null,
   "followups": ["up to 4 next questions the user could tap"]
-}"""
+}
 
+DISTRIBUTIONS / HISTOGRAMS: when the ask wants a distribution, a histogram, or
+"how many X per Y" by bucket, every breakdown row carries "pool" (the row's
+own base count) and "buckets": the FULL set of buckets, each with label,
+count and share_pct of that row's pool (shares inside a row sum to 100, the
+last bucket may be open like "7+"). Never pack bucket figures into "note";
+"note" is one short clause. The server draws the histogram from "buckets"."""
 
 def build_reasoned_metrics_user_prompt(text, history, metric_request=None,
                                        anchors_block=None,
@@ -6033,9 +6039,35 @@ def _coherent_breakdown(bd):
                 row['penetration_pct'] = round(pen, 1)
         except (TypeError, ValueError):
             pass
-        note = str(r.get('note') or '').strip()[:160]
+        note = str(r.get('note') or '').strip()[:240]
         if note:
             row['note'] = note
+        # distribution rows (2026-10-08): the full bucket set survives
+        try:
+            pool = float(r.get('pool') or 0)
+            if pool > 0:
+                row['pool'] = int(round(pool))
+        except (TypeError, ValueError):
+            pass
+        bks = r.get('buckets')
+        if isinstance(bks, list) and len(bks) >= 2:
+            clean = []
+            for b in bks[:12]:
+                if not isinstance(b, dict) or not str(b.get('label') or '').strip():
+                    continue
+                try:
+                    cnt = int(round(float(b.get('count') or 0)))
+                    pct = float(b.get('share_pct') or 0)
+                except (TypeError, ValueError):
+                    continue
+                if cnt < 0 or pct < 0 or pct > 100:
+                    continue
+                clean.append({'label': str(b['label']).strip()[:40], 'count': cnt,
+                              'share_pct': round(pct, 1)})
+            if len(clean) >= 2:
+                top = max(range(len(clean)), key=lambda i: clean[i]['count'])
+                clean[top]['mode'] = True
+                row['buckets'] = clean
         rows.append(row)
     if len(rows) < 3:
         return None
@@ -6095,6 +6127,13 @@ def format_generated_metrics_reply(res):
                 ln += f", {r['penetration_pct']:.1f}% penetration"
             if r.get('note'):
                 ln += f". {r['note']}"
+            if isinstance(r.get('buckets'), list) and r['buckets']:
+                if r.get('pool'):
+                    ln += f". Pool {int(r['pool']):,} viewers"
+                ln += '. ' + ' | '.join(
+                    f"{b['label']}: {int(b['count']):,} ({b['share_pct']:.1f}%)"
+                    + (' most common' if b.get('mode') else '')
+                    for b in r['buckets'])
             lines.append(ln)
     else:
         lines.append(f"MEASURED READ ({win})")
