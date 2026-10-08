@@ -651,8 +651,24 @@ def _recouple_monthly_engaged(doc: _Doc):
             rows.append((i, month, v))
     if not rows or sum(v for _, _, v in rows) == n:
         return
-    total = sum(v for _, _, v in rows) or 1
-    quotas = [(i, month, n * (v / total)) for i, month, v in rows]
+    total = sum(v for _, _, v in rows)
+    if total <= 0:
+        # Degenerate legacy shape: every month printed zero engaged while
+        # the base is nonzero. Zero weights starve the largest-remainder
+        # loop (it hands out one unit per month and strands the rest, so
+        # the pass wasn't idempotent). Weight by each month's signup count
+        # instead - organic spread, settles in one pass.
+        weights = []
+        for i, month, _ in rows:
+            sig = doc.geti(i, C_COUNT) or 0
+            weights.append((i, month, max(0, sig)))
+        wtotal = sum(w for _, _, w in weights)
+        if wtotal <= 0:
+            weights = [(i, month, 1) for i, month, _ in rows]
+            wtotal = len(weights)
+        quotas = [(i, month, n * (w / wtotal)) for i, month, w in weights]
+    else:
+        quotas = [(i, month, n * (v / total)) for i, month, v in rows]
     floors = {i: int(q) for i, _, q in quotas}
     rem = n - sum(floors.values())
     for i, _, q in sorted(quotas, key=lambda x: x[2] - int(x[2]), reverse=True):
