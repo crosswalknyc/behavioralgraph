@@ -114373,9 +114373,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             html += _jiqMusicSplitBar(w);
             w.doors.forEach(function(d, i) {
                 var doing = _jiqMusicPct(d.share) + ' of viewers. ' + d.what;
-                if (d.key === 'music' && w.mf_reached) {
-                    doing = _jiqMusicPct(d.share) + ' of viewers. ' + _jiqMusicCount(w.mf_reached)
-                        + ' heard a song before the title; ' + _jiqMusicPct(w.mf_conv) + ' of them went on to watch.';
+                if (d.key === 'music') {
+                    doing = _jiqMusicCount(d.viewers) + ' of the ' + _jiqMusicCount(w.viewers)
+                        + ' viewers (' + _jiqMusicPct(d.share) + ') heard a song before they watched.';
                 }
                 html += '<div class="jiq-frag-branchnote">Door ' + (i + 1) + ' \u00b7 ' + _jiqMusicEsc(d.tag) + '</div>';
                 html += _jiqFragStep({ label: d.label, accounts: d.viewers, doing: doing }, { branch: true });
@@ -114753,6 +114753,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         + '<div class="jiq-frag-kpi-v">' + _jiqMusicEsc(_jiqMusicCount(w.viewers)) + '</div></div>'
                         + '<div class="jiq-frag-kpi is-hot"><div class="jiq-frag-kpi-l">Music first</div>'
                         + '<div class="jiq-frag-kpi-v">' + _jiqMusicEsc(_jiqMusicPct(w.music.share)) + '</div></div>'
+                        + '<div class="jiq-frag-kpi"><div class="jiq-frag-kpi-l">' + _jiqMusicEsc(w.content.label || 'Show first') + '</div>'
+                        + '<div class="jiq-frag-kpi-v">' + _jiqMusicEsc(_jiqMusicPct(w.content.share)) + '</div></div>'
                         + '<div class="jiq-frag-kpi"><div class="jiq-frag-kpi-l">No music touch</div>'
                         + '<div class="jiq-frag-kpi-v">' + _jiqMusicEsc(_jiqMusicPct(w.none.share)) + '</div></div>'
                         + '<div class="jiq-frag-kpi"><div class="jiq-frag-kpi-l">'
