@@ -419,7 +419,14 @@ def _dezero_cluster(doc: _Doc, cells, klass):
     if anchor <= 0 or anchor % 10 != 0:
         return
     h = _hash(doc.salt, cells[0][2], cells[0][1], anchor)
-    d = _pick_delta(h, [lambda d, vv=v: _ok(vv + d) for v in vals])
+    # Smallest workable delta wins. The cluster drags every locked leg by
+    # one shared amount, so taking the first salt-ordered candidate can
+    # land a 30-count base on -8 (a 27% distortion, and 73% on an 11-count
+    # demo bucket riding along) when +2 would have cleared every cell. The
+    # salted candidate order still breaks the tie between +d and -d.
+    checks = [lambda d, vv=v: _ok(vv + d) for v in vals]
+    passing = [d for d in _delta_candidates(h) if all(c(d) for c in checks)]
+    d = min(passing, key=lambda x: (abs(x), passing.index(x))) if passing else None
     if d is None:
         doc.flag(f"could not de-zero {cells[0][2]} cluster (left as shipped)")
         return
@@ -620,6 +627,138 @@ def _recouple_demo_pcts(doc: _Doc):
             })
 
 
+def _recouple_monthly_engaged(doc: _Doc):
+    """The monthly "watched show" column apportions New Platform Signups
+    across the signup months. Divisor rounding at write time and the count
+    passes above can break the sum (19 + 12 printed against a 22 base).
+    Re-apportion the final base across the months (largest remainder on the
+    shares each month already carried) and recompute each row's engaged
+    pct. No-op when the sum already matches, so the pass is idempotent."""
+    ni = doc.headline.get("New Platform Signups")
+    if ni is None:
+        return
+    n = doc.geti(ni, C_COUNT)
+    if not n or n <= 0:
+        return
+    rows = []
+    for i, kind, month in doc.monthly:
+        if kind != "signups":
+            continue
+        if str(doc.cell(i, C_SLABEL)).strip() != "watched show":
+            continue
+        v = doc.geti(i, C_SEC)
+        if v is not None and v >= 0:
+            rows.append((i, month, v))
+    if not rows or sum(v for _, _, v in rows) == n:
+        return
+    total = sum(v for _, _, v in rows) or 1
+    quotas = [(i, month, n * (v / total)) for i, month, v in rows]
+    floors = {i: int(q) for i, _, q in quotas}
+    rem = n - sum(floors.values())
+    for i, _, q in sorted(quotas, key=lambda x: x[2] - int(x[2]), reverse=True):
+        if rem <= 0:
+            break
+        floors[i] += 1
+        rem -= 1
+    # Keep written cells off trailing zeros: shift one unit between the
+    # offender and the first sibling where both sides stay clean. Months
+    # that carried zero engaged stay zero (a real zero is legitimate).
+    idxs = [i for i, _, _ in quotas]
+    for i in idxs:
+        if floors[i] > 0 and floors[i] % 10 == 0:
+            for j in idxs:
+                if j != i and _ok(floors[i] - 1) and _ok(floors[j] + 1):
+                    floors[i] -= 1
+                    floors[j] += 1
+                    break
+    for i, month, _ in quotas:
+        doc.set(i, C_SEC, floors[i], f"{month} watched show", "monthly_engaged")
+        sig = doc.geti(i, C_COUNT)
+        old = str(doc.cell(i, C_PCT)).strip()
+        if sig and sig > 0 and old.endswith("%"):
+            new = f"{floors[i] * 100.0 / sig:.1f}%"
+            if new != old:
+                r = doc.rows[i]
+                r[C_PCT] = new
+                doc.changes.append({
+                    "row": i, "col": C_PCT, "label": f"{month} engaged pct",
+                    "before": old, "after": new, "klass": "pct_recouple",
+                })
+
+
+def _recouple_touch_pcts(doc: _Doc):
+    """A touchpoint percentage is count / New Platform Signups. The count
+    passes can move the components (and the base) after the engine printed
+    its shares; recompute every touchpoint pct from the final counts so a
+    reader doing the division lands on the printed number. The total row
+    stays at its printed 100.00%."""
+    ni = doc.headline.get("New Platform Signups")
+    if ni is None or not doc.touch:
+        return
+    n = doc.geti(ni, C_COUNT)
+    if not n or n <= 0:
+        return
+    # No change-gate: the printed share must always equal the count ratio,
+    # including on a sweep over a file whose counts settled in an earlier
+    # run. Only-writes-on-difference keeps the pass idempotent.
+    for i, rank in doc.touch:
+        c = doc.geti(i, C_COUNT)
+        if c is None:
+            continue
+        old = str(doc.cell(i, C_PCT)).strip()
+        if not old.endswith("%"):
+            continue
+        new = f"{c * 100.0 / n:.2f}%"
+        if new != old:
+            r = doc.rows[i]
+            r[C_PCT] = new
+            doc.changes.append({
+                "row": i, "col": C_PCT,
+                "label": f"{str(doc.cell(i, C_CAT)).strip()} pct",
+                "before": old, "after": new, "klass": "pct_recouple",
+            })
+
+
+def _recouple_conversion(doc: _Doc):
+    """Conversion rates are New Platform Signups over their printed bases
+    (clean sample and total watchers). The count passes can move either
+    side after the engine printed the rate; recompute both rows from the
+    final counts so the pct always equals the visible ratio."""
+    ni = doc.headline.get("New Platform Signups")
+    if ni is None:
+        return
+    n = doc.geti(ni, C_COUNT)
+    if not n or n <= 0:
+        return
+    label_idx = {}
+    for i, r in enumerate(doc.rows):
+        if len(r) > C_CAT:
+            cat = str(r[C_CAT]).strip()
+            if cat in ("Clean Conversion Rate", "Total Show Conversion Rate"):
+                label_idx[cat] = i
+    for label, base_label in (
+            ("Clean Conversion Rate", "Clean Sample (New First Time Viewers)"),
+            ("Total Show Conversion Rate", "Total Show Watchers")):
+        li = label_idx.get(label)
+        bi = doc.headline.get(base_label)
+        if li is None or bi is None:
+            continue
+        b = doc.geti(bi, C_COUNT)
+        if not b or b <= 0:
+            continue
+        old = str(doc.cell(li, C_PCT)).strip()
+        if not old.endswith("%"):
+            continue
+        new = f"{n * 100.0 / b:.2f}%"
+        if new != old:
+            r = doc.rows[li]
+            r[C_PCT] = new
+            doc.changes.append({
+                "row": li, "col": C_PCT, "label": f"{label} pct",
+                "before": old, "after": new, "klass": "pct_recouple",
+            })
+
+
 def _fix_gp_chain(doc: _Doc):
     """Projection chain: New Platform Signups = TOTAL SIGNUPS =
     1st Touchpoint = Attributed + Dormant projections. Returns
@@ -815,6 +954,9 @@ def process_rows(rows, salt=None):
     _dezero_counts(doc, watchers_locked, signups_locked, touch_locked, demo_locked)
     _recouple_gp_to_counts(doc)
     _recouple_demo_pcts(doc)
+    _recouple_touch_pcts(doc)
+    _recouple_monthly_engaged(doc)
+    _recouple_conversion(doc)
     chain_locked, t1_aliased = _fix_gp_chain(doc)
     if not chain_locked:
         # No usable chain: the signups projection is a free cell.
