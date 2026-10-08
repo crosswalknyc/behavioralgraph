@@ -141249,9 +141249,21 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var under35 = pick(demo.age || {}, ['Under 35', '18-34']);
             if (under35 == null && a1824 != null && a2534 != null) under35 = a1824 + a2534;
             var us = Number(parsed.projectedUS || 0);
+            var audLbl = 'US audience';
+            var mkt = window._piqForeignMarket ? window._piqForeignMarket(parsed) : null;
+            if (mkt) {
+                audLbl = mkt.name ? (mkt.name + ' audience') : 'Audience';
+                // A file projected with the US factor (329.9M / 10M) is
+                // re-projected to the country; a country-projected file
+                // keeps its own number.
+                var ss = Number(parsed.sampleSize || 0);
+                if (ss > 0 && us > 0 && Math.abs(us / ss - 32.99) < 0.05) {
+                    us = mkt.adults ? ss * mkt.adults / 10000000 : 0;
+                }
+            }
             var tiles = [];
             var usTxt = fmtCount(us);
-            if (usTxt) tiles.push({ lbl: 'US audience', val: usTxt, accent: true });
+            if (usTxt) tiles.push({ lbl: audLbl, val: usTxt, accent: true });
             // The count the projection is built from, next to the
             // projection itself. It was only visible on the Demographics
             // tab, so the header gave a number with nothing behind it.
@@ -144096,6 +144108,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // $60,000 - $74,999: 100% -> $50,000 - $74,999
             // $250,000+: 100% -> $250,000 or More
             function normalizeIncomeBucketsForDashboard(res) {
+                // Brackets already in another currency are the market's own;
+                // folding them into the US dollar brackets misstates them.
+                if (Object.keys((res.demographics && res.demographics.income) || {}).some(k => /[\u00a3\u20ac]/.test(k))) return;
                 const patternToNew = {
                     '40-59': [['Under $25,000', 0.03], ['$25,000 - $49,999', 0.47], ['$50,000 - $74,999', 0.50]],
                     '60-74': [['$50,000 - $74,999', 1.0]],
@@ -150257,6 +150272,47 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             return !!(d && Array.isArray(d.rawLocations) && isForeignLocationData(d.rawLocations));
         }
 
+        // Country of a non-US profile: the MARKET tag, then the profile
+        // name, then a vote over its cities. adults / 10M panel is the
+        // projection factor, the same shape as the US 329.9M / 10M.
+        const _PIQ_MARKETS = [
+            { name: 'UK', adults: 54255000, symbol: '\u00a3',
+              names: /\b(UK|U\.K\.|UNITED KINGDOM|GREAT BRITAIN|BRITAIN|ENGLAND)\b/i,
+              cities: ['london', 'birmingham', 'manchester', 'glasgow', 'liverpool', 'leeds', 'bristol',
+                       'edinburgh', 'cardiff', 'belfast', 'sheffield', 'newcastle', 'nottingham', 'leicester',
+                       'south east', 'south west', 'north west', 'north east', 'east midlands', 'west midlands',
+                       'east of england', 'yorkshire', 'scotland', 'wales', 'northern ireland'] },
+            { name: 'Germany', adults: 70000000, symbol: '\u20ac',
+              names: /\b(GERMANY|DEUTSCHLAND)\b/i,
+              cities: ['berlin', 'hamburg', 'm\u00fcnchen', 'munich', 'k\u00f6ln', 'koln', 'cologne', 'frankfurt',
+                       'stuttgart', 'd\u00fcsseldorf', 'dusseldorf', 'dortmund', 'essen', 'leipzig', 'bremen',
+                       'dresden', 'hannover', 'n\u00fcrnberg', 'nuremberg'] }
+        ];
+        function _piqForeignMarket(data) {
+            const d = data || (typeof currentDashboardData !== 'undefined' ? currentDashboardData : null);
+            if (!d) return null;
+            if (!d.isNonUsMarket && !isForeignProfile(d)) return null;
+            const byName = (txt) => {
+                const t = String(txt || '').replace(/[_-]+/g, ' ');
+                return _PIQ_MARKETS.find(m => m.names.test(t)) || null;
+            };
+            if (d.isNonUsMarket && d.market) {
+                return byName(d.market) || { name: String(d.market).trim(), adults: 0, symbol: '' };
+            }
+            const hay = [d.name, d.brandName,
+                (typeof currentProfileData !== 'undefined' && currentProfileData && currentProfileData.name),
+                (typeof currentS3Key !== 'undefined' && currentS3Key)];
+            for (const h of hay) { const m = byName(h); if (m) return m; }
+            const locs = (d.rawLocations || []).map(l => String((l && l.name) || '').toLowerCase().trim());
+            let best = null, bestN = 0;
+            _PIQ_MARKETS.forEach(m => {
+                const n = locs.filter(l => m.cities.indexOf(l) !== -1).length;
+                if (n > bestN) { best = m; bestN = n; }
+            });
+            return best || { name: '', adults: 0, symbol: '' };
+        }
+        window._piqForeignMarket = _piqForeignMarket;
+
         function applyForeignProfileMode(data) {
             document.body.classList.toggle('foreign-profile', isForeignProfile(data));
         }
@@ -153179,7 +153235,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             let baseRes = { profile: null, genPop: null };
             try { baseRes = calculateDemographicMedian(incomeDict, gpIncome, 'income') || baseRes; } catch (_) {}
             const profileName = (typeof currentProfileData !== 'undefined' && currentProfileData && currentProfileData.name) || 'Profile';
-            const profileVal = baseRes.profile ? `$${baseRes.profile.value}` : 'N/A';
+            const _sym = (typeof _piqIncomeSymbol === 'function') ? _piqIncomeSymbol() : '$';
+            const profileVal = baseRes.profile ? `${_sym}${baseRes.profile.value}` : 'N/A';
             const genPopVal  = baseRes.genPop ? `$${baseRes.genPop.value}` : 'N/A';
             const isGP = ((typeof isSelectedProfileGenPop === 'function') && isSelectedProfileGenPop())
                 || (typeof isForeignProfile === 'function' && isForeignProfile());
@@ -154258,9 +154315,16 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             '$250,000 or more', '$250,000+', '$250k+', '$250k +'
         ];
         
+        function _piqIncomeSymbol() {
+            const m = (typeof _piqForeignMarket === 'function') ? _piqForeignMarket() : null;
+            return (m && m.symbol) || '$';
+        }
+
         function getIncomeDisplayLabel(originalLabel) {
             const lower = originalLabel.toLowerCase();
-            return INCOME_DISPLAY_LABELS[lower] || INCOME_DISPLAY_LABELS[originalLabel] || originalLabel;
+            const out = INCOME_DISPLAY_LABELS[lower] || INCOME_DISPLAY_LABELS[originalLabel] || originalLabel;
+            const sym = _piqIncomeSymbol();
+            return sym === '$' ? out : String(out).replace(/\$/g, sym);
         }
         
         let currentIncomeSortMode = 'income'; // 'income' or 'value'
