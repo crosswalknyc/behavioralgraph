@@ -8304,6 +8304,7 @@ def run_synthetic_attribution(config: dict) -> dict:
         "output_path":       str(output_path),
         "s3_key":            s3_key,
         "reach_us":          panel['reach_us'],
+        "total_panel":       panel.get('total_panel'),   # the Total Show Watchers the file displays
         "new_signups_us":    panel['new_signups_panel'] * int(US_POPULATION / SAMPLE_REPRESENTS),
         "validation_status": validation_meta.get('status', 'UNKNOWN'),
         "panel_breakdown":   panel['reach_breakdown'],

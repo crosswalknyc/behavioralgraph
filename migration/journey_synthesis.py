@@ -1218,7 +1218,150 @@ def corpus_anchors(inputs: dict, s3=None) -> dict:
         out['prior_journey'] = _cc.prior_journey(cat, win)
     except Exception as exc:
         print(f'[journey] catalog anchors skipped: {exc}')
+    # Title universe anchor (2026-10-08, Bria: Livestream from Hell read
+    # three different viewer counts across Subscriber IQ, Profile IQ and
+    # the journey). Whichever product built first fixed the US viewer
+    # universe for the title; a viewers journey lands its watch /
+    # conversion stage exactly there.
+    try:
+        ta = title_anchor_for(inputs)
+        if ta:
+            out['title_anchor'] = ta
+            line = (f"TITLE UNIVERSE (binding): {int(ta['us_viewers']):,} US viewers of "
+                    f"{ta.get('title') or inputs.get('subject')}, {int(ta.get('sample_size') or 0):,} inside the "
+                    f"10 million sample [{(ta.get('window') or {}).get('start', '')} to "
+                    f"{(ta.get('window') or {}).get('end', '')}], established by "
+                    f"{'Subscriber IQ' if ta.get('source_product') == 'subscriber_iq' else 'Profile IQ'}. "
+                    f"The watch / conversion stage of this journey lands exactly on that count; every "
+                    f"earlier stage sits above it.")
+            out['catalog_block'] = (line + '\n' + str(out.get('catalog_block') or '')).strip()
+    except Exception as exc:
+        print(f'[journey] title anchor skipped: {exc}')
     return out
+
+
+def title_anchor_for(inputs: dict) -> Optional[dict]:
+    """The title anchor registry entry for this journey's subject, or
+    None. Tries the subject as written, then with an ' on <platform>'
+    tail removed, then any explicit title field."""
+    try:
+        from migration.title_anchors import get_title_anchor
+    except Exception:
+        return None
+    cands = []
+    subj = str(inputs.get('subject') or '').strip()
+    if subj:
+        cands.append(subj)
+        cands.append(re.sub(r'\s+on\s+.+$', '', subj, flags=re.I).strip())
+        cands.append(re.sub(r'\s+(?:viewers|watchers|audience|fans)$', '', subj, flags=re.I).strip())
+    for k in ('title', 'anchor_title', 'target_name'):
+        if inputs.get(k):
+            cands.append(str(inputs[k]).strip())
+    seen = set()
+    for c in cands:
+        if not c or c.lower() in seen:
+            continue
+        seen.add(c.lower())
+        try:
+            ta = get_title_anchor(c)
+        except Exception:
+            ta = None
+        if ta and int(ta.get('us_viewers') or 0) > 0:
+            return ta
+    return None
+
+
+def apply_title_anchor(payload: dict, ta: dict, seed: str = '') -> dict:
+    """Deterministic post-build pass: every count in the journey scales
+    by one factor so the watch / conversion stage equals the title
+    anchor's US viewers exactly; stage drops and kept-shares follow;
+    counts stay messy. Returns the payload (changed in place)."""
+    try:
+        want = int(ta.get('us_viewers') or 0)
+        if want <= 0:
+            return payload
+        j = payload.get('fragrance_shop_journey') or {}
+        spine = j.get('spine') or []
+        if len(spine) < 2:
+            return payload
+        tam = int(spine[0].get('accounts') or US_GEN_POP)
+        last = spine[-1]
+        have = int(last.get('accounts') or 0)
+        if have <= 0 or have == want:
+            return payload
+        f = want / have
+        if f > tam / max(want, 1):
+            return payload
+
+        def _m(n, salt):
+            n = int(round(n))
+            if n % 10 == 0:
+                n += 1 + int(hashlib.md5(f"{seed}|{salt}|{n}".encode()).hexdigest()[:2], 16) % 8
+            return n
+
+        def _scale(obj, path=''):
+            if isinstance(obj, dict):
+                for k, v in list(obj.items()):
+                    if k == 'accounts' and isinstance(v, (int, float)) and v and v != tam:
+                        obj[k] = _m(v * f, path + k)
+                    elif k in ('ofUs',) and 'accounts' in obj and obj['accounts'] != tam:
+                        obj[k] = round(obj['accounts'] / tam * 100, 4)
+                    elif k not in ('kept', 'dropped', 'pct'):
+                        _scale(v, path + k + '.')
+            elif isinstance(obj, list):
+                for i, v in enumerate(obj):
+                    _scale(v, f"{path}{i}.")
+
+        old_vals = {}
+        for st in spine:
+            old_vals[st.get('id')] = int(st.get('accounts') or 0)
+        _scale(j.get('spine')); _scale(j.get('fork')); _scale(j.get('detours'))
+        last['accounts'] = want
+        last['ofUs'] = round(want / tam * 100, 4)
+        for i in range(1, len(spine)):
+            prev, cur = spine[i - 1], spine[i]
+            if int(cur.get('accounts') or 0) > int(prev.get('accounts') or 0) and i < len(spine) - 1:
+                cur['accounts'] = _m(int(prev['accounts']) * 0.97, f'mono{i}')
+            cur['dropped'] = int(prev['accounts'] - cur['accounts'])
+            cur['kept'] = round(cur['accounts'] / prev['accounts'] * 100, 4) if prev['accounts'] else 0
+        kp = payload.get('kpis') or {}
+        if isinstance(kp.get('total_users'), (int, float)) and kp['total_users']:
+            kp['total_users'] = want
+        # text that quoted the old counts follows
+        repl = {f"{have:,}": f"{want:,}"}
+        for sid, ov in old_vals.items():
+            nv = next((int(st['accounts']) for st in spine if st.get('id') == sid), None)
+            if ov and nv and ov != nv and ov != tam:
+                repl[f"{ov:,}"] = f"{nv:,}"
+        for fct in payload.get('facts') or []:
+            v = str(fct.get('value') or '')
+            if ta.get('sample_size'):
+                v = re.sub(r"\d{1,3}(?:,\d{3})+ viewers of", f"{int(ta['sample_size']):,} viewers of", v)
+            v = re.sub(r"\d{1,3}(?:,\d{3})+ (people in the US|US viewers|pressed play)", lambda m_: f"{want:,} {m_.group(1)}", v)
+            fct['value'] = v
+
+        def _retext(o):
+            if isinstance(o, str):
+                for a, b in repl.items():
+                    o = o.replace(a, b)
+                return o
+            if isinstance(o, dict):
+                return {k: _retext(v) for k, v in o.items()}
+            if isinstance(o, list):
+                return [_retext(v) for v in o]
+            return o
+        for key in ('facts', 'diagnostics', 'the_read', 'before_after'):
+            if key in payload:
+                payload[key] = _retext(payload[key])
+        j['copy'] = _retext(j.get('copy') or {})
+        payload.setdefault('meta', {})['title_anchor'] = {
+            'us_viewers': want, 'sample_size': int(ta.get('sample_size') or 0),
+            'source_product': ta.get('source_product'), 'scaled_from': have}
+        print(f"[journey] title anchor applied: watch stage {have:,} -> {want:,} "
+              f"({ta.get('source_product')} universe)")
+    except Exception as exc:
+        print(f'[journey] title anchor pass skipped: {exc}')
+    return payload
 
 
 def _fold(s):
@@ -1751,6 +1894,9 @@ def synthesize(inputs: dict, claude_json: Callable, *,
                 seed=f"{inputs['subject']}|{inputs['platform']}")
         except Exception as exc:
             print(f'[journey] corpus anchor pass skipped: {exc}')
+    if anchors.get('title_anchor'):
+        payload = apply_title_anchor(payload, anchors['title_anchor'],
+                                     seed=f"{inputs['subject']}|{inputs['platform']}")
     try:
         from migration.journey_clickstream import attach_clickstream
         attach_clickstream(payload, prim, inputs)
