@@ -18521,6 +18521,7 @@ _EXPORTS = (
     '_pm_pending_q_tokens',
     '_pm_pop_pending_question',
     '_pm_prev_user_question',
+    '_pm_pricing_copy',
     '_pm_pricing_question',
     '_pm_promote_date_snapshot_ask',
     '_pm_rankers_board_block',
