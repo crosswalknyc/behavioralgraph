@@ -1863,6 +1863,17 @@ def billing_mode(user: dict) -> str:
     return "prepay_only"
 
 
+SUPPORTED_BILLING_CURRENCIES = ("usd", "gbp")
+
+
+def normalize_billing_currency(raw) -> str:
+    """usd or gbp. Anything else (including blank) is usd."""
+    cur = str(raw or "usd").strip().lower()
+    if cur in ("gbp", "£", "pound", "pounds", "sterling"):
+        return "gbp"
+    return "usd"
+
+
 def billing_currency(subject) -> str:
     """Stripe charge currency for this billed subject.
 
@@ -1871,11 +1882,45 @@ def billing_currency(subject) -> str:
     5000 top-up is £5,000 on Stripe and credits 5000.00 on the
     wallet. Stripe's GBP-to-USD settlement is the spread we keep.
     """
-    raw = str((subject or {}).get("billing_currency") or "usd")
-    raw = raw.strip().lower()
-    if raw in ("gbp", "£", "pound", "pounds", "sterling"):
-        return "gbp"
-    return "usd"
+    return normalize_billing_currency(
+        (subject or {}).get("billing_currency"))
+
+
+def apply_billing_currency(rec: dict, currency) -> str:
+    """Write a supported currency onto a user or company record."""
+    cur = normalize_billing_currency(currency)
+    if isinstance(rec, dict):
+        rec["billing_currency"] = cur
+    return cur
+
+
+def stamp_wallet_currency(users_data, user, currency, *,
+                          force: bool = False) -> str:
+    """Set the currency on the wallet being onboarded.
+
+    Own-wallet seats write the user record. Company-billed seats
+    write the company only when that company wallet is new, or
+    when force=True (billing admin). Adding a seat to an existing
+    company never flips Kartel / WBD / anyone else off their
+    standing currency.
+    """
+    cur = normalize_billing_currency(currency)
+    if not isinstance(user, dict):
+        return cur
+    src = str(user.get("billing_source") or "").strip().lower()
+    cname = str(user.get("company") or "").strip()
+    if src == "company" and cname and isinstance(users_data, dict):
+        companies = users_data.setdefault("companies", {})
+        existed = isinstance(companies.get(cname), dict)
+        rec = ensure_company_record(users_data, cname, seed_user=user)
+        if rec is not None and (force or not existed):
+            rec["billing_currency"] = cur
+        if rec is not None and (
+                force or not str(user.get("billing_currency") or "").strip()):
+            user["billing_currency"] = billing_currency(rec)
+        return billing_currency(rec if rec is not None else user)
+    user["billing_currency"] = cur
+    return cur
 
 
 def money_symbol(subject=None, currency=None) -> str:
@@ -2783,7 +2828,8 @@ def resolve_billing_subject(user: dict, users_data: dict) -> tuple:
 
 
 def ensure_company_record(users_data: dict, company_name: str,
-                          seed_user: Optional[dict] = None):
+                          seed_user: Optional[dict] = None,
+                          currency=None):
     """Create a real shared company wallet when a seat is billed
     through the company.
 
@@ -2837,6 +2883,8 @@ def ensure_company_record(users_data: dict, company_name: str,
         email = str(seed_user.get("email") or "").strip()
         if email and not str(rec.get("billing_email") or "").strip():
             rec["billing_email"] = email
+    if created and currency is not None:
+        rec["billing_currency"] = normalize_billing_currency(currency)
     return rec
 
 
@@ -4964,6 +5012,8 @@ __all__ = [
     "wallet_balance", "wallet_stats",
     "is_paying_customer", "is_unlimited", "admits_wallet_ui",
     "billing_mode", "billing_currency", "money_symbol", "format_money",
+    "SUPPORTED_BILLING_CURRENCIES", "normalize_billing_currency",
+    "apply_billing_currency", "stamp_wallet_currency",
     "display_currency", "display_symbol", "money_label",
     "apply_auto_reload_preference",
     "parse_auto_reload_flag",

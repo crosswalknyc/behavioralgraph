@@ -619,6 +619,13 @@
             </span>
           </label>
         </div>
+        <div class="kv-row">
+          <label style="margin: 0;">Wallet currency</label>
+          <select id="m-currency">
+            <option value="usd">USD ($)</option>
+            <option value="gbp">GBP (&pound;)</option>
+          </select>
+        </div>
         <div id="profile-pull-fields" style="display: none;">
           <div class="kv-row">
             <label style="margin: 0;">Profile pull price</label>
@@ -654,12 +661,12 @@
         <div id="ar-fields" style="display: none;">
           <div class="kv-row">
             <label style="margin: 0;">Auto-reload threshold</label>
-            <div>$<input id="m-ar-threshold" type="number" step="1"
+            <div><span class="money-prefix">$</span><input id="m-ar-threshold" type="number" step="1"
                     min="0" style="width: 100px;"></div>
           </div>
           <div class="kv-row">
             <label style="margin: 0;">Auto-reload top-up amount</label>
-            <div>$<input id="m-ar-amount" type="number" step="1"
+            <div><span class="money-prefix">$</span><input id="m-ar-amount" type="number" step="1"
                     min="5000" style="width: 100px;"></div>
           </div>
         </div>
@@ -1111,6 +1118,12 @@
       $('modal-subtitle').innerHTML = subtitleParts.join('');
       $('m-unlimited').checked = !!u.unlimited;
       $('m-paying').checked = !!u.paying_customer;
+      const cur = (u.billing_currency === 'gbp') ? 'gbp' : 'usd';
+      if ($('m-currency')) $('m-currency').value = cur;
+      const sym = u.money_symbol || (cur === 'gbp' ? '£' : '$');
+      document.querySelectorAll('.money-prefix').forEach(el => {
+        el.textContent = sym;
+      });
       $('m-mode').value = u.billing_mode || 'prepay_only';
       const floor = Number(u.top_up_min_custom_usd || 5000);
       window._subjectTopUpMin = floor;
@@ -1423,6 +1436,8 @@
       const body = {
         unlimited: wantsUnlimited,
         paying_customer: $('m-paying').checked,
+        billing_currency: ($('m-currency') && $('m-currency').value === 'gbp')
+          ? 'gbp' : 'usd',
         billing_mode: $('m-mode').value,
         auto_reload_threshold_usd:
           Number($('m-ar-threshold').value || 500),

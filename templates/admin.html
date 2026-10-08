@@ -4620,6 +4620,19 @@
                             </small>
                         </div>
                         <div class="form-group">
+                            <label>Wallet currency</label>
+                            <select id="newBillingCurrency">
+                                <option value="usd">USD ($)</option>
+                                <option value="gbp">GBP (&pound;)</option>
+                            </select>
+                            <small style="color: var(--text-secondary); font-size: 0.65rem; display: block; margin-top: 0.25rem;">
+                                Chosen when this wallet is created. The
+                                dashboard, every charge, and Prometheus
+                                quotes stay in this currency. Same number:
+                                300 is $300 or &pound;300.
+                            </small>
+                        </div>
+                        <div class="form-group">
                             <label>Company billing admin</label>
                             <label class="checkbox-group" style="margin-top: 0.35rem;">
                                 <input type="checkbox" id="newCompanyBillingAdmin">
@@ -10038,6 +10051,7 @@
                 
                 if (data.success) {
                     allUsers = data.users;
+                    window.companyCurrencies = data.company_currencies || {};
                     renderUsersTable(getFilteredUsers());
                     updateStats(data.users);
                     loadActivityExportCompany();
@@ -10056,6 +10070,17 @@
             if (modeEl.value === 'list') {
                 ensureSpendScopeCatalog();
             }
+        }
+
+        function syncWalletCurrencyFromCompany() {
+            const src = document.getElementById('newBillingSource');
+            const co = document.getElementById('newCompany');
+            const cur = document.getElementById('newBillingCurrency');
+            if (!src || !co || !cur) return;
+            if (src.value !== 'company') return;
+            const name = String(co.value || '').trim();
+            const mapped = (window.companyCurrencies || {})[name];
+            if (mapped === 'gbp' || mapped === 'usd') cur.value = mapped;
         }
 
         let __spendScopeCatalogLoaded = false;
@@ -10512,7 +10537,21 @@
             document.getElementById('newDepartment').value = '';
             // Company-shared wallet routing (Jenna 2026-09-09).
             const _bsAdd = document.getElementById('newBillingSource');
-            if (_bsAdd) _bsAdd.value = 'user';
+            if (_bsAdd) {
+                _bsAdd.value = 'user';
+                if (!_bsAdd.dataset.currencySync) {
+                    _bsAdd.dataset.currencySync = '1';
+                    _bsAdd.addEventListener('change', syncWalletCurrencyFromCompany);
+                }
+            }
+            const _coAdd = document.getElementById('newCompany');
+            if (_coAdd && !_coAdd.dataset.currencySync) {
+                _coAdd.dataset.currencySync = '1';
+                _coAdd.addEventListener('change', syncWalletCurrencyFromCompany);
+                _coAdd.addEventListener('input', syncWalletCurrencyFromCompany);
+            }
+            const _curAdd = document.getElementById('newBillingCurrency');
+            if (_curAdd) _curAdd.value = 'usd';
             const _cbaAdd = document.getElementById(
                 'newCompanyBillingAdmin');
             if (_cbaAdd) _cbaAdd.checked = false;
@@ -10774,6 +10813,22 @@
             if (typeof _paidOnlyStatus === 'function') _paidOnlyStatus('');
             if (_bs) _bs.value = (user.billing_source === 'company')
                 ? 'company' : 'user';
+            const _cur = document.getElementById('newBillingCurrency');
+            if (_cur) {
+                const have = String(user.wallet_billing_currency
+                    || user.billing_currency || 'usd').toLowerCase();
+                _cur.value = (have === 'gbp') ? 'gbp' : 'usd';
+            }
+            if (_bs && !_bs.dataset.currencySync) {
+                _bs.dataset.currencySync = '1';
+                _bs.addEventListener('change', syncWalletCurrencyFromCompany);
+            }
+            const _coEdit = document.getElementById('newCompany');
+            if (_coEdit && !_coEdit.dataset.currencySync) {
+                _coEdit.dataset.currencySync = '1';
+                _coEdit.addEventListener('change', syncWalletCurrencyFromCompany);
+                _coEdit.addEventListener('input', syncWalletCurrencyFromCompany);
+            }
             const _cba = document.getElementById('newCompanyBillingAdmin');
             if (_cba) _cba.checked = !!user.company_billing_admin;
             // Per-member spend scope (Jenna 2026-09-09). Coerce the stored
@@ -15144,6 +15199,11 @@
                     const el = document.getElementById('newBillingSource');
                     const v = el ? String(el.value || 'user') : 'user';
                     return v === 'company' ? 'company' : 'user';
+                })(),
+                billing_currency: (function() {
+                    const el = document.getElementById('newBillingCurrency');
+                    const v = el ? String(el.value || 'usd') : 'usd';
+                    return v === 'gbp' ? 'gbp' : 'usd';
                 })(),
                 company_billing_admin: (function() {
                     const el = document.getElementById(

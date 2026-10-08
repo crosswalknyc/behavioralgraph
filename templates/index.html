@@ -143529,6 +143529,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         }
 
         function applyCreditsSurface(data) {
+            if (data && data.currency_symbol) {
+                window.PM_CURRENCY_SYMBOL = data.currency_symbol;
+            }
             const availEl = document.getElementById('modalCreditsAvailable');
             const labelEl = document.getElementById('modalCreditsAvailableLabel');
             const headerLabel = document.getElementById('creditsLabel');
@@ -186989,7 +186992,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     creditUsageCache = data.usage || [];
                     const usedEl = document.getElementById('modalCreditsUsed');
                     if (usedEl && typeof data.spend_usd_total === 'number') {
-                        usedEl.textContent = '$' + Number(data.spend_usd_total).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                        if (data.currency_symbol) window.PM_CURRENCY_SYMBOL = data.currency_symbol;
+                        usedEl.textContent = ((window.PM_CURRENCY_SYMBOL) || '$') + Number(data.spend_usd_total).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                     } else if (usedEl && typeof data.credits_used === 'number') {
                         usedEl.textContent = data.credits_used;
                     }
@@ -187066,7 +187070,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // from the server; legacy rows convert at $60/credit.
             var usd = (row && row.usd != null) ? Number(row.usd)
                       : Number(credits || 0) * 60;
-            return '$' + usd.toLocaleString(undefined,
+            var sym = (typeof window !== 'undefined' && window.PM_CURRENCY_SYMBOL) || '$';
+            return sym + usd.toLocaleString(undefined,
                 { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         }
 

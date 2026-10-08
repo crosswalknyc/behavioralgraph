@@ -4562,9 +4562,28 @@ def get_all_users():
     except Exception as e:
         print(f"⚠️ recurring grant tick failed: {e}")
     safe_users = {}
+    company_currencies = {}
+    try:
+        import wallet as _w_cur
+        for cname, crec in (data.get('companies') or {}).items():
+            if isinstance(crec, dict):
+                company_currencies[cname] = _w_cur.billing_currency(crec)
+    except Exception:
+        _w_cur = None
     for username, user in data['users'].items():
-        safe_users[username] = {k: v for k, v in user.items() if k != 'password_hash'}
-    return jsonify({'success': True, 'users': safe_users})
+        safe = {k: v for k, v in user.items() if k != 'password_hash'}
+        if _w_cur is not None:
+            try:
+                safe['wallet_billing_currency'] = _w_cur.display_currency(
+                    user, data)
+            except Exception:
+                safe['wallet_billing_currency'] = 'usd'
+        safe_users[username] = safe
+    return jsonify({
+        'success': True,
+        'users': safe_users,
+        'company_currencies': company_currencies,
+    })
 
 def generate_random_password(length=12):
     """Generate a secure random password."""
@@ -5948,6 +5967,10 @@ def create_user():
                 data, company, seed_user=data['users'][username])
         _wallet_co.inherit_company_explicit_journey_iq(
             data['users'][username], data)
+        _wallet_co.stamp_wallet_currency(
+            data, data['users'][username],
+            req_data.get('billing_currency'),
+            force=False)
         save_users(data)
         
         # Send welcome email if requested and email provided
@@ -6302,6 +6325,11 @@ def update_user(username):
                 }), 400
             _wallet_co.ensure_company_record(
                 data, user.get('company'), seed_user=user)
+
+        if 'billing_currency' in req_data:
+            _wallet_co.stamp_wallet_currency(
+                data, user, req_data.get('billing_currency'),
+                force=False)
         
         save_users(data)
         return jsonify({'success': True, 'message': f'User {username} updated'})
@@ -9979,6 +10007,8 @@ def get_credit_usage():
         'billed_via_company': snap['billed_via_company'],
         'company_name': snap['company_name'],
         'can_export_company': can_export_company,
+        'currency': snap.get('currency') or 'usd',
+        'currency_symbol': snap.get('currency_symbol') or '$',
     })
 
 

@@ -1714,6 +1714,9 @@ def admin_billing_config(target_username):
                 u["credits"] = 0
         if "paying_customer" in body:
             u["paying_customer"] = bool(body.get("paying_customer"))
+        if "billing_currency" in body:
+            wallet.apply_billing_currency(
+                u, body.get("billing_currency"))
         # Company-shared wallet routing (Jenna 2026-09-09). Admin
         # flips a user between 'user' (own wallet) and 'company'
         # (shared wallet at the company they belong to). The
@@ -1931,6 +1934,9 @@ def admin_company_billing_config(company_name):
             c["paying_customer"] = bool(body.get("paying_customer"))
         if "unlimited" in body:
             c["unlimited"] = bool(body.get("unlimited"))
+        if "billing_currency" in body:
+            wallet.apply_billing_currency(
+                c, body.get("billing_currency"))
         c["billing_mode"] = mode
         for k in ("auto_reload_threshold_usd",
                   "auto_reload_amount_usd",
