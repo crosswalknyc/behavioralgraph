@@ -358,3 +358,217 @@ def concert_goer_artist(text):
 
 def concert_goer_label(artist):
     return f"{str(artist or '').strip()} Concert Goers".strip()
+
+
+# ---------------------------------------------------------------------
+# Does the ask name ANY subject of its own? (2026-10-08, Jenna)
+#
+# "how many people read the walsh family book series in the us last
+# year?" was asked "Do you want this on Reba McEntire (open on your
+# screen)?" with Reba open. Jenna, verbatim: "it should only default
+# to think it is the open profile if you say something without
+# specifically mentioning a subject. then it could ask. but this
+# clearly states the ask and that it is firmly NOT reba."
+#
+# The subject-position phrases above catch "profile for X", "look at
+# X", "X fans". This pass catches the rest: "viewers of X", a quoted
+# title, a typed noun phrase ("the X series"), the object of a
+# consumption verb when a generic population is counted ("how many
+# people read X"), a proper-noun run in the user's own casing.
+#
+# Three shapes keep the page as the subject, with any named brand an
+# attribute of the ask: the page named anywhere in the text; deixis
+# to the audience on screen ("what do they buy at Target"); a share /
+# percent / index ask with no population noun ("what share use Prime
+# Video" is a share of the audience on screen).
+
+AUDIENCE_DEIXIS_RX = re.compile(
+    r"\b(?:they|them|their|theirs|themselves|these|those|"
+    r"th(?:is|at|e)\s+(?:audience|group|cohort|profile|crowd|base|"
+    r"fan\s?base|universe|segment|cut|file|people|folks|fans|viewers|"
+    r"subscribers|readers|listeners|shoppers|buyers|users|customers)|"
+    r"its|it|he|she|him|his|hers?|everyone\s+here|people\s+here)\b", re.I)
+PAGE_METRIC_RX = re.compile(
+    r"(?:\bshare\b|\bpercent(?:age)?\b|%|\bindex(?:es|ed|ing)?\b|"
+    r"\bover.?index|\bunder.?index|\brank(?:s|ed|ing)?\b|\bskews?\b|"
+    r"\bpenetration\b|\bhow many of\b|\bwhat portion\b|\bwhat fraction\b)", re.I)
+POPULATION_RX = re.compile(
+    r"\b(?:people|persons|americans|adults|households|folks|consumers|"
+    r"viewers|readers|listeners|users|shoppers|buyers|subscribers|"
+    r"gamers|players|fans|kids|teens|parents|moms|dads|men|women|"
+    r"in the (?:us|u\.s\.|united states|country|states)|nationally|"
+    r"nationwide|us\s+(?:adults|audience|viewers|readers))\b", re.I)
+
+CONSUME_VERB_RX = (
+    r"(?:read|reads|watch|watched|watches|listen(?:ed|s)?\s+to|"
+    r"stream|streamed|streams|play|played|plays|view|viewed|views|"
+    r"tuned?\s+in(?:to)?|binged?|bought|buy|buys|purchased?|"
+    r"download(?:ed|s)?|subscribed?\s+to|subscribes\s+to|follow|"
+    r"followed|follows|visit|visited|visits|attend(?:ed|s)?|"
+    r"shop(?:ped|s)?\s+at|order(?:ed|s)?\s+from|eat|ate|eats\s+at|"
+    r"drink|drank|drinks|wear|wore|wears|drive|drove|drives|use|used|"
+    r"uses|saw|see|seen|heard|hear|searched?\s+for)")
+_OBJECT_END = (
+    r"(?=\s+(?:in|on|across|within|during|over|since|last|this|past|"
+    r"each|every|per|monthly|weekly|yearly|by|between|from|for|"
+    r"so far|to date|and|or|vs|versus|than|compared|months?|weeks?|"
+    r"years?|days?|quarters?|also|too|still|ever|never|then|who|that|"
+    r"which|when|while|but|because|if|as\s+well|is|are|was|were|do|"
+    r"does|did|have|has|had|will|would|can|could|should|"
+    + CONSUME_VERB_RX[3:-1] + r")\b|\s*[?.!,;]|$)")
+_CONSUME_OBJECT_RX = re.compile(
+    r"\b" + CONSUME_VERB_RX +
+    r"\s+(?P<obj>(?:the\s+|a\s+|an\s+)?[A-Za-z0-9][A-Za-z0-9 .&'\-+:!]{1,70}?)"
+    + _OBJECT_END, re.I)
+_OF_SUBJECT_RX = re.compile(
+    r"\b(?:viewers|fans|readers|listeners|buyers|shoppers|subscribers|"
+    r"users|customers|players|audience|followers|owners|drivers|guests|"
+    r"members)\s+of\s+(?P<obj>(?:the\s+)?[A-Za-z0-9][A-Za-z0-9 .&'\-+:!]{1,70}?)"
+    + _OBJECT_END, re.I)
+
+# "how popular is godslap", "who is Gunna", "tell me about Chime": the
+# thing asked about sits right after the opener.
+_ABOUT_SUBJECT_RX = re.compile(
+    r"\b(?:how\s+(?:popular|big|large|famous|successful|well[- ]known|"
+    r"mainstream|niche)\s+(?:is|are|was|were)|who\s+(?:is|are|was|were)|"
+    r"tell\s+me\s+about|what\s+about|how\s+about|know\s+about)\s+"
+    r"(?P<obj>(?:the\s+)?[A-Za-z0-9][A-Za-z0-9 .&'\-+:!]{1,60}?)" + _OBJECT_END, re.I)
+_METRIC_LEAD = frozenset((
+    'biggest', 'largest', 'best', 'top', 'most', 'least', 'median', 'average',
+    'mean', 'total', 'overall', 'typical', 'main', 'primary', 'key',
+    'current', 'latest', 'newest', 'highest', 'lowest', 'fastest'))
+
+TYPE_NOUNS = (
+    r"series|shows?|books?|novels?|films?|movies?|franchise|podcasts?|"
+    r"brands?|apps?|games?|channels?|networks?|albums?|tours?|teams?|"
+    r"leagues?|magazines?|newsletters?|websites?|sites?|stores?|chains?|"
+    r"restaurants?|services?|platforms?|labels?|studios?|trilogy|saga|"
+    r"docuseries|documentary|musical|comics?|manga|anime|cartoons?|"
+    r"sitcoms?|dramas?|reality\s+show|talk\s+show|radio\s+show|band|"
+    r"artist|author|retailer|airline|hotel|resort|casino|cruise\s+line|"
+    r"university|college|charity|nonprofit|company|startup|product|"
+    r"device|sneakers?|toy|video\s+game|board\s+game|sportsbook|bank|"
+    r"credit\s+card|insurer|lender|exchange|fund|etf|cereal|soda|beer|"
+    r"wine|whiskey|vodka|tequila|coffee|energy\s+drink|supplement|"
+    r"skincare\s+line|fragrance|perfume|clothing\s+line|fashion\s+house")
+_TYPED_NP_RX = re.compile(
+    r"\b(?:the|that)\s+(?P<np>(?:[A-Za-z0-9][A-Za-z0-9&'.\-]*\s+){1,5}"
+    r"(?:" + TYPE_NOUNS + r"))\b", re.I)
+_QUOTED_RX = re.compile(
+    r"[\"\u201c\u201d'\u2018\u2019]([^\"\u201c\u201d'\u2018\u2019]{2,60})"
+    r"[\"\u201c\u201d'\u2018\u2019]")
+_CAP_RUN_RX = re.compile(
+    r"\b([A-Z][A-Za-z0-9&'.\-]+(?:\s+(?:of|the|and|&|de|la|von|van|du|"
+    r"for|to)\s+[A-Z][A-Za-z0-9&'.\-]+|\s+[A-Z][A-Za-z0-9&'.\-]+){1,5})\b")
+_CAP_SINGLE_RX = re.compile(r"(?<![.?!]\s)(?<!^)\b([A-Z][a-z0-9&'.\-]{3,})\b")
+_NEVER_SUBJECT = frozenset((
+    'us', 'usa', 'u.s.', 'america', 'american', 'americans', 'united states',
+    'the us', 'the united states', 'people', 'person', 'year', 'month',
+    'week', 'day', 'last year', 'this year', 'q1', 'q2', 'q3', 'q4',
+    'january', 'february', 'march', 'april', 'may', 'june', 'july',
+    'august', 'september', 'october', 'november', 'december', 'monday',
+    'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday',
+    'tv', 'streaming', 'prometheus', 'crosswalk', 'gen pop', 'genpop',
+    'gen z', 'gen x', 'millennials', 'boomers', 'total universe',
+    'avid fan', 'avid fans', 'csv', 'pdf', 'deck', 'profile', 'profile iq',
+    'subscriber iq', 'digital journey iq', 'trends iq', 'what', 'how',
+    'who', 'where', 'when', 'why', 'which', 'something else', 'never mind'))
+_SMALL = {'a', 'an', 'the', 'of', 'and', 'or', 'in', 'on', 'for', 'to',
+          'at', 'by', 'with', 'vs', 'de', 'la'}
+# Sentence openers a capitalized run can start on ("Is Heated Rivalry
+# popular?"): never part of a name.
+_LEAD_STRIP = frozenset((
+    'is', 'are', 'was', 'were', 'do', 'does', 'did', 'has', 'have', 'had',
+    'can', 'could', 'will', 'would', 'should', 'may', 'might', 'how', 'what',
+    'who', 'which', 'when', 'where', 'why', 'compare', 'show', 'give',
+    'tell', 'pull', 'run', 'build', 'does', 'please', 'hey', 'hi', 'ok',
+    'okay', 'so', 'and', 'but', 'or', 'if', 'then', 'also', 'now', 'today'))
+
+
+def _title(words):
+    out = []
+    for i, w in enumerate(words):
+        if w.lower() in _SMALL and i != 0:
+            out.append(w.lower())
+        elif w.isupper() and len(w) <= 5:
+            out.append(w)
+        elif any(ch.isupper() for ch in w[1:]):
+            out.append(w)
+        else:
+            out.append(w[:1].upper() + w[1:])
+    return ' '.join(out)
+
+
+def has_audience_deixis(text):
+    """The ask points at the audience on screen ("what do they buy at
+    Target"): the page is the subject, the named brand an attribute."""
+    return bool(AUDIENCE_DEIXIS_RX.search(str(text or '')))
+
+
+def page_mentioned(text, page, normalize, stop):
+    """Any distinctive page token appears in the ask."""
+    page_d = distinct_tokens(page or '', normalize, stop)
+    if not page_d:
+        return False
+    text_d = set(normalize(str(text or '')).split())
+    return bool(page_d & text_d)
+
+
+def mentioned_subject(text, page, normalize, stop, plausible=None):
+    """A subject the ask names that is NOT the open page, or '' when the
+    ask names nothing of its own (then, and only then, the page may be
+    offered). '' as well when the page is named, when the ask points
+    at the audience on screen, or when it is a share / percent / index
+    ask with no population noun."""
+    t = str(text or '').strip()
+    if not t:
+        return ''
+    if page_mentioned(t, page, normalize, stop):
+        return ''
+    if has_audience_deixis(t):
+        return ''
+    population = bool(POPULATION_RX.search(t))
+    if PAGE_METRIC_RX.search(t) and not population:
+        return ''
+    page_d = distinct_tokens(page or '', normalize, stop)
+    cands = []
+    for m in _OF_SUBJECT_RX.finditer(t):
+        cands.append(m.group('obj'))
+    for m in _ABOUT_SUBJECT_RX.finditer(t):
+        cands.append(m.group('obj'))
+    for m in _QUOTED_RX.finditer(t):
+        cands.append(m.group(1))
+    for m in _TYPED_NP_RX.finditer(t):
+        cands.append(m.group('np'))
+    if population:
+        for m in _CONSUME_OBJECT_RX.finditer(t):
+            cands.append(m.group('obj'))
+    for rx in (_CAP_RUN_RX, _CAP_SINGLE_RX):
+        for m in rx.finditer(t):
+            # "the Bear" in the user's text: the article is the title's
+            lead = 'the ' if re.search(r"\b[Tt]he\s+$", t[:m.start(1)]) else ''
+            cands.append(lead + m.group(1))
+    for raw in cands:
+        raw = re.sub(r"\s+", " ", str(raw or '')).strip(" ,;:.'\"")
+        if not raw or len(raw) > 80:
+            continue
+        words = [w for w in raw.split() if w]
+        while words and words[0].lower() in _LEAD_STRIP:
+            words.pop(0)
+        lead_the = bool(words) and words[0].lower() == 'the'
+        core = words[1:] if words and words[0].lower() in ('the', 'a', 'an') else words
+        if not core or len(core) > 7 or core[0].lower() in _METRIC_LEAD:
+            continue
+        label = _title(core)
+        if lead_the and len(core) == 1:
+            label = 'The ' + label        # "the office" -> The Office
+        if label.lower() in _NEVER_SUBJECT or raw.lower() in _NEVER_SUBJECT:
+            continue
+        named_d = distinct_tokens(label, normalize, stop)
+        if not named_d or (named_d & page_d) or is_gen_pop(label, normalize):
+            continue
+        if plausible is None or plausible(label):
+            return label
+        if lead_the and plausible('The ' + label):
+            return 'The ' + label
+    return ''

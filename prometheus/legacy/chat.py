@@ -11120,45 +11120,6 @@ _PM_CLARIFY_COMPARE_RE = _ns_mod.COMPARE_CUE_RX
 _PM_CLARIFY_METRIC_RE = _ns_mod.METRIC_RX
 
 
-def _pm_page_clarify_subject(text, page_subject):
-    """Return the display name of a subject the ask names that is NOT
-    the open page, or '' when the ask reads as being about the page.
-
-    Subject-position phrases only (prometheus/named_subject.phrases),
-    plausible labels only (2026-10-07: "Promotoe our Product that
-    Caters to" was offered as a subject); library casing when known."""
-    t = str(text or '')
-    page = str(page_subject or '').strip()
-    if not t or not page:
-        return ''
-    norm, stop = _H._normalize_for_match, _PM_CLARIFY_STOP_TOKENS
-    page_d = _ns_mod.distinct_tokens(page, norm, stop)
-    if not page_d:
-        return ''
-    for words in _ns_mod.phrases(t, norm, stop):
-        named_d = _ns_mod.distinct_tokens(' '.join(words), norm, stop)
-        if not named_d or (named_d & page_d):
-            continue
-        try:
-            for entry in _profile_catalog_for_chat():
-                nm = _ns_mod.family_name(entry)
-                if nm and not _ns_mod.is_gen_pop(nm, norm) and \
-                        _ns_mod.distinct_tokens(nm, norm, stop) == named_d:
-                    return nm
-        except Exception:
-            pass
-        label = ' '.join(
-            w if norm(w) in stop else (w[:1].upper() + w[1:]) for w in words)
-        try:
-            from prometheus import referents as _refs
-            if not _refs.plausible_subject(label):
-                continue
-        except Exception:
-            pass
-        return label
-    return ''
-
-
 def _pm_ask_names_its_audiences(text):
     """True when the ask already names who it is about (two cuts, or a
     total universe named alongside another audience)."""
@@ -11471,12 +11432,22 @@ def _pm_open_screen_confirm(text, ctx, history=None):
             return {'route': 'bind', 'subject': _ent_name}
     named = ''
     if not _pg_named:
-        # a subject not in the library yet: torn, confirm with both
-        # chips. Never when the page itself is named.
+        # The ask names a subject of its own (2026-10-08 Jenna: "it
+        # should only default to think it is the open profile if you
+        # say something without specifically mentioning a subject"):
+        # it binds that subject, in the library or not. The page is
+        # only ever offered for an ask that names nothing.
         try:
-            named = _pm_page_clarify_subject(text, page)
+            named = (_pm_page_clarify_subject(text, page)
+                     or _pm_consumption_subject(text)
+                     or _ns_mod.mentioned_subject(
+                         text, page, _norm, _stop, _pm_plausible_subject))
         except Exception:
             traceback.print_exc()
+        if named and _norm(named) != _norm(page):
+            _pm_ask_hint(route='screen_bind', outcome='bound_named_text',
+                         subject=named)
+            return {'route': 'bind', 'subject': named}
     _alt_named = named
     attach = True
     try:
@@ -11494,8 +11465,16 @@ def _pm_open_screen_confirm(text, ctx, history=None):
             and (bsub == psub or bsub in psub or psub in bsub))
         attach = same
     if not attach:
-        # a catalog subject outside the page's family: confirm with both
+        # a catalog subject outside the page's family. Written in the
+        # ask (its distinctive tokens are all there): it binds, the
+        # page is not offered (2026-10-08 Jenna). Only a fuzzy hit
+        # the user did not write still confirms with both chips.
         _bsub = str((base or {}).get('subject') or '').strip()
+        _bsub_d = _ns_mod.distinct_tokens(_bsub.split(' - ')[0], _norm, _stop)
+        if _bsub and _bsub_d and _bsub_d <= set(_norm(text).split()):
+            _pm_ask_hint(route='screen_bind', outcome='bound_named_subject',
+                         subject=_bsub)
+            return {'route': 'bind', 'subject': _bsub}
         if _bsub and not _alt_named:
             _alt_named = _bsub
     # Always confirm (2026-10-06 Jenna): nothing named, nothing assumed;
@@ -16327,12 +16306,19 @@ def _pm_analyze_core(user, body, text, history):
                     import prometheus_analysis as _pma_nc
                     _own = str(_pma_nc.guess_subject_from_text(text)
                                or '').strip()
+                    if not (_own and _pm_plausible_subject(_own)):
+                        _own = (_pm_consumption_subject(text)
+                                or _ns_mod.mentioned_subject(
+                                    text, _nc_lab, _H._normalize_for_match,
+                                    _PM_CLARIFY_STOP_TOKENS,
+                                    _pm_plausible_subject))
                 except Exception:
                     _own = ''
                 if _own and _pm_plausible_subject(_own):
                     _pm_ask_hint(route='named_subject', subject=_own)
                     return _pm_generate_metrics_response(
-                        user, text, history, prefer_catalog=True)
+                        user, text, history, prefer_catalog=True,
+                        bind_subject=_own)
                 if _nc_lab:
                     _pm_ask_hint(outcome='memory_confirm')
                     return jsonify({
@@ -18684,6 +18670,7 @@ from prometheus.legacy.watch import (  # noqa: E402,F401
     _pm_is_viewership_series_ask,
     _pm_is_viewership_ask,
     _pm_consumption_subject,
+    _pm_page_clarify_subject,
     _pm_panel_price_label,
     _pm_pending_q_tokens,
     _pm_stash_pending_question,

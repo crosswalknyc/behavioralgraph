@@ -17,7 +17,8 @@ from flask import session
 
 from prometheus.legacy import H as _H, C as _C  # noqa: E402
 
-__all__ = ['_PM_WATCH_FLAGGED', '_PM_USER_BLOCK_CACHE', '_PM_USER_BLOCK_LOCK', '_pm_user_block', '_pm_catalog_block', '_pm_ask_log_user', '_pm_probe_caller', '_pm_is_probe_user', '_PM_COMMON_IDENTITY_WORDS', '_pm_thread_confirmed_page', '_pm_watch_flag', '_pm_record_held_reply', '_pm_gate_options', '_pm_open_status_line', '_pm_price_table', '_pm_usd', '_pm_usd_label', '_pm_money_symbol', '_pm_safe_user', '_pm_s3_json', '_pm_s3_put_json', '_PM_REPORT_ASK_RE', '_pm_looks_report_ask', '_pm_is_viewership_series_ask', '_pm_is_consumption_count_ask', '_pm_is_viewership_ask', '_pm_viewership_verb', '_pm_window_years', '_pm_viewership_read_price', '_pm_panel_price_label', '_pm_consumption_subject', '_pm_pending_q_tokens', '_pm_stash_pending_question']
+__all__ = ['_PM_WATCH_FLAGGED', '_PM_USER_BLOCK_CACHE', '_PM_USER_BLOCK_LOCK', '_pm_user_block', '_pm_catalog_block', '_pm_ask_log_user', '_pm_probe_caller', '_pm_is_probe_user', '_PM_COMMON_IDENTITY_WORDS', '_pm_thread_confirmed_page', '_pm_watch_flag', '_pm_record_held_reply', '_pm_gate_options', '_pm_open_status_line', '_pm_price_table', '_pm_usd', '_pm_usd_label', '_pm_money_symbol', '_pm_safe_user', '_pm_s3_json', '_pm_s3_put_json', '_PM_REPORT_ASK_RE', '_pm_looks_report_ask', '_pm_is_viewership_series_ask', '_pm_is_consumption_count_ask', '_pm_is_viewership_ask', '_pm_viewership_verb', '_pm_window_years', '_pm_viewership_read_price', '_pm_panel_price_label', '_pm_consumption_subject',
+    '_pm_page_clarify_subject', '_pm_pending_q_tokens', '_pm_stash_pending_question']
 
 
 _PM_WATCH_FLAGGED = frozenset({'clarified_repeat', 'empty', 'faulted', 'error',
@@ -578,12 +579,55 @@ def _pm_pending_q_tokens(s):
             if w and w not in _C._PM_BASE_GENERIC_TOKENS}
 
 
+from prometheus import named_subject as _ns  # noqa: E402
+
+
+def _pm_page_clarify_subject(text, page_subject):
+    """Return the display name of a subject the ask names that is NOT
+    the open page, or '' when the ask reads as being about the page.
+
+    Subject-position phrases only (prometheus/named_subject.phrases),
+    plausible labels only (2026-10-07: "Promotoe our Product that
+    Caters to" was offered as a subject); library casing when known."""
+    t = str(text or '')
+    page = str(page_subject or '').strip()
+    if not t or not page:
+        return ''
+    norm, stop = _H._normalize_for_match, _C._PM_CLARIFY_STOP_TOKENS
+    page_d = _ns.distinct_tokens(page, norm, stop)
+    if not page_d:
+        return ''
+    for words in _ns.phrases(t, norm, stop):
+        named_d = _ns.distinct_tokens(' '.join(words), norm, stop)
+        if not named_d or (named_d & page_d):
+            continue
+        try:
+            for entry in _C._profile_catalog_for_chat():
+                nm = _ns.family_name(entry)
+                if nm and not _ns.is_gen_pop(nm, norm) and \
+                        _ns.distinct_tokens(nm, norm, stop) == named_d:
+                    return nm
+        except Exception:
+            pass
+        label = ' '.join(
+            w if norm(w) in stop else (w[:1].upper() + w[1:]) for w in words)
+        try:
+            from prometheus import referents as _refs
+            if not _refs.plausible_subject(label):
+                continue
+        except Exception:
+            pass
+        return label
+    return ''
+
+
 _PM_CONSUME_SUBJECT_RX = re.compile(
     r"\bhow (?:many|much)\b[^.?!]{0,50}?\b" + _PM_CONSUME_VERB_RX +
     r"\s+(?:to\s+)?(?:the\s+)?(?P<subj>.+?)"
     r"(?=\s+(?:in|on|across|within|during|over|since|last|this|past|"
     r"each|every|per|monthly|weekly|yearly|by|between|from|for|"
-    r"so far|to date)\b|\s*[?.!]|$)", re.I)
+    r"so far|to date|months?|weeks?|years?|days?|quarters?|"
+    r"month\s+by\s+month|week\s+by\s+week)\b|\s*[?.!]|$)", re.I)
 _PM_SUBJ_SMALL_WORDS = {'a', 'an', 'the', 'of', 'and', 'or', 'in', 'on',
                         'for', 'to', 'at', 'by', 'with', 'vs', 'de', 'la'}
 
