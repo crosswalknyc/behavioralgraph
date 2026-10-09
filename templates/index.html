@@ -114195,7 +114195,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     var pct = Number(r.pct) || 0;
                     var med = Number(r.med) || 0;
                     var w = Math.max(0.6, 100 * pct / top);
-                    var tick = _jiqMusicTickHtml(med, top, b ? b.label : 'Median', '');
+                    var tick = _jiqMusicTickHtml(med, top, b ? b.label : 'Median', _jiqMusicBenchTag(b));
                     (r.medX || []).forEach(function(x) { tick += _jiqMusicTickHtml(x.value, top, x.label, x.tag); });
                     var sub = _jiqMusicCount(r.n) + ' ' + (r.noun || '');
                     if (med > 0) sub += ' \u00b7 ' + (b ? b.label : 'Median') + ' ' + _jiqMusicPct(med) + ', ' + _jiqMusicVs(pct, med);
@@ -114664,9 +114664,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             });
             return out.length ? out : null;
         }
+        function _jiqMusicBenchTag(b) { return b && b.kind === 'All' ? 'combined' : ''; }
         function _jiqMusicTickKey(b) {
             if (!b) return '';
-            var html = '<span class="jiq-frag-det-key"><b class="jiq-frag-tick"></b>' + _jiqMusicEsc(b.label) + '</span>';
+            var tagM = _jiqMusicBenchTag(b);
+            var html = '<span class="jiq-frag-det-key' + (tagM ? ' is-' + tagM : '') + '"><b class="jiq-frag-tick' + (tagM ? ' is-' + tagM : '') + '"></b>' + _jiqMusicEsc(b.label) + '</span>';
             if (!b.extra || !b.extra.length) return html;
             // Three keys do not fit beside the header; they take their own line.
             (b.extra || []).forEach(function(x) {
@@ -114727,7 +114729,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var bd = w.doors.map(function(d) {
                     return { key: d.key, label: d.label, share: Number(b.share[d.key]) || 0 };
                 });
-                html += '<div class="jiq-music-split-tag is-bench">' + _jiqMusicEsc(b.label + ', ' + b.n + ' ' + b.noun) + '</div>'
+                html += '<div class="jiq-music-split-tag is-bench' + (_jiqMusicBenchTag(b) ? ' is-' + _jiqMusicBenchTag(b) : '') + '">' + _jiqMusicEsc(b.label + ', ' + b.n + ' ' + b.noun) + '</div>'
                     + bar(bd, 'is-bench')
                     + '<div class="jiq-music-split-legend is-bench">'
                     + bd.map(function(d) {
@@ -114755,14 +114757,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         function _jiqMusicDoorBridge(d, depthLabel, b) {
             var keepW = Math.max(0.6, Math.min(100, d.depth_pct));
             var med = b ? (Number(b.depth[d.key]) || 0) : 0;
-            var tick = med > 0 ? _jiqMusicTickHtml(med, 0, b.label, '') : '';
+            var tick = med > 0 ? _jiqMusicTickHtml(med, 0, b.label, _jiqMusicBenchTag(b)) : '';
             var medX = b ? _jiqMusicMedX(b, function(x) { return x.depth[d.key]; }) : null;
             (medX || []).forEach(function(x) { tick += _jiqMusicTickHtml(x.value, 0, x.label, x.tag); });
             return '<div class="jiq-frag-bridge is-branch"><div class="jiq-frag-rail"></div>'
                 + '<div class="jiq-frag-body"><div class="jiq-frag-track">'
                 + '<div class="jiq-frag-keep is-' + d.key + '" style="width:' + keepW.toFixed(2) + '%;"></div>' + tick + '</div>'
                 + '<div class="jiq-frag-foot"><span class="jiq-frag-kept">' + _jiqMusicEsc(_jiqMusicPct(d.depth_pct) + ' ' + String(depthLabel).toLowerCase()) + '</span>'
-                + (med > 0 ? '<span class="jiq-frag-bench">' + _jiqMusicEsc(b.label + ' ' + _jiqMusicPct(med)) + '</span>' : '')
+                + (med > 0 ? '<span class="jiq-frag-bench' + (_jiqMusicBenchTag(b) ? ' is-' + _jiqMusicBenchTag(b) : '') + '">' + _jiqMusicEsc(b.label + ' ' + _jiqMusicPct(med)) + '</span>' : '')
                 + (medX || []).map(function(x) { return '<span class="jiq-frag-bench is-' + x.tag + '">' + _jiqMusicEsc(x.label + ' ' + _jiqMusicPct(x.value)) + '</span>'; }).join('')
                 + (d.stopped ? '<span class="jiq-frag-lost">\u2212' + _jiqMusicCount(d.stopped) + ' did not</span>' : '')
                 + '</div></div></div>';
@@ -191809,6 +191811,13 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
     body[data-theme="light"] .jiq-music-split-tag.is-series::before { background: #8E3FA8; }
     /* Row labels wrap instead of cutting off (Jenna 2026-10-09). */
     #jiqMusicCatalogCard .jiq-frag-detlab { white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.3; overflow-wrap: anywhere; }
+    /* The combined median reads in Signal Green (Jenna 2026-10-09). */
+    .jiq-frag-tick.is-combined { background: #C7F23E; opacity: .95; }
+    body[data-theme="light"] .jiq-frag-tick.is-combined { background: #5E7E12; }
+    .jiq-frag-bench.is-combined::before { content: ''; display: inline-block; width: 2px; height: 9px; margin-right: 5px; vertical-align: -1px; border-radius: 1px; background: #C7F23E; }
+    body[data-theme="light"] .jiq-frag-bench.is-combined::before { background: #5E7E12; }
+    .jiq-music-split-tag.is-combined::before { content: ''; display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 2px; vertical-align: -1px; background: #C7F23E; }
+    body[data-theme="light"] .jiq-music-split-tag.is-combined::before { background: #5E7E12; }
     body[data-theme="light"] #jiqMusicArt::after {
         background: linear-gradient(90deg, #E9E8E1 0%, rgba(233,232,225,0) 18%);
     }
