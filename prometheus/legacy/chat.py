@@ -6505,13 +6505,13 @@ def _pm_interpret_core(user, body, text, history):
         except Exception as _lk_err:
             print(f"[synth-chat interpret] sample-lock error: {_lk_err}")
 
-        # Run-Avid default enforcement (2026-08-17 Jenna directive).
-        # Default is TRUE for every fresh-build decision (new_build /
-        # time_shifted_refresh / cut_needs_parent). We only honor a
-        # false value if EITHER Claude AND the user opt-out detector
-        # agree, OR the decision is one where run_avid is a no-op
-        # anyway (existing_match / derive_cut). This prevents Claude
-        # misclassifications from silently dropping the Avid cut.
+        # Run-Avid default (2026-08-17 Jenna): TRUE for every fresh-build decision; false only when the
+        # model AND the opt-out detector agree, or where run_avid is a no-op (existing_match / derive_cut).
+        try:   # links are signals (2026-10-09, item 5): brand input + platform scope from the ask's and the thread's URLs
+            from prometheus import links as _links
+            _links.apply_to_draft(spec_draft, _links.merge(_links.extract(text), _links.thread_links(history)))
+        except Exception:
+            traceback.print_exc()
         decision_str = str(spec_draft.get('decision') or '').strip().lower()
         user_optout = _H._user_optout_of_avid(text, chat_history=history)
         claude_says_false = spec_draft.get('run_avid') is False
@@ -13507,7 +13507,9 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
         verifier_block = _pmv0.measured_prompt_block(_v_lookup, text, metric_request=mr or None)
     except Exception:
         traceback.print_exc()
-    extra_blocks = [b for b in (entity_rows_block, purchase_block, verifier_block,
+    from prometheus import links as _links   # links are signals (2026-10-09, item 5)
+    links_block = _links.block(_links.merge(_links.extract(text), _links.thread_links(history)))
+    extra_blocks = [b for b in (entity_rows_block, purchase_block, verifier_block, links_block,
                                 measured_block, subiq_block,
                                 neighbor_block, examples_block) if b]
     extra_blocks.append(pma.GENERATION_LOOP_GUIDANCE)
