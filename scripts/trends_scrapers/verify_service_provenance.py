@@ -106,7 +106,7 @@ def main(argv=None) -> int:
         if not (path.startswith('streaming_trending')
                 or path.startswith('fast_trending')):
             continue
-        if _audience_state(it) != 'cross_service':
+        if _audience_state(it, path) != 'cross_service':
             continue
         title = _item_title(it)
         marked.append((path, title))

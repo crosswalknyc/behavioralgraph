@@ -41,7 +41,7 @@ def report(payload: dict, show: int = 6) -> dict:
             continue
         b = by_rail.setdefault(path, {'total': 0, 'blank': 0, 'rows': []})
         b['total'] += 1
-        if _audience_state(it) == 'missing':
+        if _audience_state(it, path) == 'missing':
             b['blank'] += 1
             b['rows'].append((rank, _item_title(it)))
     return by_rail

@@ -368,6 +368,71 @@ def test_midday_rescrapes_price_what_they_bring() -> None:
           'published')
 
 
+def test_floor_is_the_rails_own() -> None:
+    """2026-10-09: Lionsgate+ caps at 3,473 a day, so most of its
+    100-title list sits under 100 by arithmetic. A flat 100 floor read
+    that honest tail as blank, the render carried stale pre-re-level
+    values over 45% of the rail, and the gate alerted on seven rows
+    that were never missing. The floor is the rail's own, in the
+    gate, the bracket and the render alike."""
+    import trends_iq
+    from scripts.trends_scrapers import coverage_gate as cg
+    from scripts.trends_scrapers import stream_estimates as se
+    from scripts.trends_scrapers import terminal_bracket as tb
+    print('the credibility floor scales to the rail')
+
+    check(se.credibility_floor('') == 100
+          and se.credibility_floor('netflix') == 100
+          and se.credibility_floor('starz') == 100,
+          'cross-platform lists and mass rails keep the 100 floor')
+    lg = se.credibility_floor('lionsgateplus')
+    check(1 <= lg < 100, 'a rail capping in the low thousands floors '
+          'under 100', f'got {lg}')
+    check(se.credibility_floor('lionsgateplus') ==
+          se._platform_daily_cap_for('lionsgateplus') // 1000,
+          'one thousandth of the daily ceiling')
+
+    row = {'rank': 79, 'title': 'Five Feet Apart',
+           'us_streams': {'us_estimate': 28}}
+    lg_path = 'streaming_trending.lionsgateplus.items'
+    nf_path = 'streaming_trending.netflix.items'
+    check(cg._audience_state(row, lg_path) == 'researched',
+          'a measured 28 on Lionsgate+ is a reading to the gate')
+    check(cg._audience_state(row, nf_path) == 'missing'
+          and cg._audience_state(row) == 'missing',
+          'the same 28 on Netflix, or on no rail, is a failed call')
+    check(tb._valued(cg, row, lg_path) == 28
+          and tb._valued(cg, row, nf_path) == 0,
+          'the bracket counts the neighbour the same way')
+    check(trends_iq._coverage_has_audience(row, 'lionsgateplus')
+          and not trends_iq._coverage_has_audience(row, 'netflix')
+          and not trends_iq._coverage_has_audience(row),
+          'the render does not carry a stale value over it')
+    entry = {'by_platform': {'lionsgateplus': {'us_estimate': 28},
+                             'netflix': {'us_estimate': 28}}}
+    check(trends_iq._carry_entry_value(entry, 'lionsgateplus') == 28
+          and trends_iq._carry_entry_value(entry, 'netflix') is None,
+          'a stored prior is usable at the rail floor, not above it')
+
+    # Under the floor the row is still blank on its own rail, and the
+    # bracket reasons it at the rail's scale, not at 101.
+    low = {'rank': 99, 'title': 'Z For Zachariah',
+           'us_streams': {'us_estimate': 2}}
+    check(cg._audience_state(low, lg_path) == 'missing',
+          'a 2 on Lionsgate+ is under even its own floor')
+    got = tb._reason_sequence(se, [28, 0, 21], [1],
+                              salt_base='t', ceiling=3473,
+                              kind_reference=0, floor=lg)
+    check(21 < got.get(1, 0) < 28,
+          'the bracket holds inside sub-100 neighbours on a small rail',
+          f'got {got}')
+    got = tb._reason_sequence(se, [900, 0, 400], [1],
+                              salt_base='t', ceiling=0,
+                              kind_reference=0)
+    check(400 < got.get(1, 0) < 900,
+          'a mass rail brackets unchanged', f'got {got}')
+
+
 def main() -> int:
     test_espnplus()
     print()
@@ -378,6 +443,8 @@ def main() -> int:
     test_chart_only_rows_are_collected()
     print()
     test_midday_rescrapes_price_what_they_bring()
+    print()
+    test_floor_is_the_rails_own()
     print()
     if _FAILURES:
         print(f'{len(_FAILURES)} FAILURE(S):')

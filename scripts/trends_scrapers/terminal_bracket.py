@@ -132,10 +132,10 @@ def _row_value(it: dict) -> int:
     return 0
 
 
-def _valued(cg, it: dict) -> int:
+def _valued(cg, it: dict, path: str = '') -> int:
     """The value a neighbour contributes to a bracket, 0 when it has
-    none the gate would count as rendered."""
-    return _row_value(it) if cg._audience_state(it) != 'missing' else 0
+    none the gate would count as rendered on the rail at `path`."""
+    return _row_value(it) if cg._audience_state(it, path) != 'missing' else 0
 
 
 def _order_key(it: dict) -> tuple[str, int]:
@@ -180,7 +180,7 @@ def _local_slope(values: list[int], at: int, *, direction: int) -> float:
 
 def _reason_sequence(se, values: list[int], missing_idx: list[int],
                      *, salt_base: str, ceiling: int,
-                     kind_reference: int) -> dict[int, int]:
+                     kind_reference: int, floor: int = 100) -> dict[int, int]:
     """Values for the blank positions of one ordered sequence.
 
     `values` is the sequence's current value per position (0 = blank),
@@ -247,13 +247,15 @@ def _reason_sequence(se, values: list[int], missing_idx: list[int],
                 v = int(round(prev * (0.90 + 0.07 * h(i, 'step'))))
         if ceiling > 0 and v >= ceiling:
             v = int(ceiling * (0.90 + 0.08 * h(i, 'cap')))
-        # A list whose own readings sit under 100 (a first-party
-        # derived comics shelf reads in the tens, an Apple Books tail
-        # bottoms out near the floor) brackets under 100 too; the
-        # floor only applies when the neighbour it hangs off allows it.
+        # A list whose own readings sit under the rail's floor (a
+        # first-party derived comics shelf reads in the tens, an Apple
+        # Books tail bottoms out near the floor) brackets under it too;
+        # the floor only applies when the neighbour it hangs off allows
+        # it. `floor` is the rail's own credibility floor: 100 on a
+        # mass rail, scaled down on a small service (2026-10-09).
         anchor = hi or a or b
-        floor = 1 if (anchor and anchor <= 101) else 101
-        v = max(floor, v)
+        low = 1 if (anchor and anchor <= floor + 1) else floor + 1
+        v = max(low, v)
         v = se._natural_last_digits(v, salt_base, f'{i}|bracket')
         # Digits moved by up to +/-100; hold the bracket strictly where
         # the integers allow it.
@@ -283,7 +285,7 @@ def _reason_sequence(se, values: list[int], missing_idx: list[int],
 
 def _reason_list(se, rows: list[tuple[dict, int]], missing_idx: list[int],
                  *, salt_base: str, ceiling: int,
-                 kind_reference: int) -> dict[int, int]:
+                 kind_reference: int, floor: int = 100) -> dict[int, int]:
     """Values for the blank rows of one rendered list, each bracketed
     inside the group the platform placed it in (chart, shelf, or the
     list itself). Returns {rendered position: value}."""
@@ -309,7 +311,8 @@ def _reason_list(se, rows: list[tuple[dict, int]], missing_idx: list[int],
         got = _reason_sequence(se, values,
                                [ordered.index(i) for i in want],
                                salt_base=f'{salt_base}|{g}',
-                               ceiling=ceiling, kind_reference=kind_reference)
+                               ceiling=ceiling, kind_reference=kind_reference,
+                               floor=floor)
         for p, v in got.items():
             out[ordered[p]] = v
         leftover.extend(i for i in want if ordered.index(i) not in got)
@@ -319,7 +322,7 @@ def _reason_list(se, rows: list[tuple[dict, int]], missing_idx: list[int],
         values = [out.get(i, rows[i][1]) for i in range(len(rows))]
         got = _reason_sequence(se, values, sorted(leftover),
                                salt_base=salt_base, ceiling=ceiling,
-                               kind_reference=kind_reference)
+                               kind_reference=kind_reference, floor=floor)
         out.update(got)
     return out
 
@@ -353,7 +356,7 @@ def fill(payload: dict, still_missing: list[tuple[str, str]],
         if not rows:
             continue
         kind = cg._estimator_kind_for(path, rows[0][1]) or ''
-        v = _valued(cg, rows[0][1])
+        v = _valued(cg, rows[0][1], path)
         if v > 0:
             top_by_kind.setdefault(kind, []).append(v)
     kind_ref = {k: int(median(v)) for k, v in top_by_kind.items()}
@@ -365,7 +368,12 @@ def fill(payload: dict, still_missing: list[tuple[str, str]],
 
     for path in sorted(lists, key=lambda p: (_list_rank(p), p)):
         rows = lists[path]
-        seq = [(it, _valued(cg, it)) for _, it in rows]
+        # A row the gate asked for is blank for this pass whatever the
+        # render put on it: a carried value over a sub-floor stored
+        # reading is the gate's reason for asking (2026-10-09). It
+        # contributes nothing to its neighbours' brackets either.
+        seq = [(it, 0 if (path, cg._item_title(it)) in want
+                else _valued(cg, it, path)) for _, it in rows]
         missing_idx = [i for i, (it, v) in enumerate(seq)
                        if v == 0 and (path, cg._item_title(it)) in want]
         if not missing_idx:
@@ -376,6 +384,7 @@ def fill(payload: dict, still_missing: list[tuple[str, str]],
             continue
         service = cg._service_key_for_path(path)
         ceiling = se._platform_daily_cap_for(service) if service else 0
+        rail_floor = se.credibility_floor(service) if service else 100
 
         # Resolve every blank row to its stored key first, so a row
         # already written from a finer list of the same service (the
@@ -411,7 +420,8 @@ def fill(payload: dict, still_missing: list[tuple[str, str]],
         reasoned = _reason_list(
             se, seq, sorted(resolved),
             salt_base=f'{path}|{target_date_iso}',
-            ceiling=ceiling, kind_reference=kind_ref.get(kind, 0))
+            ceiling=ceiling, kind_reference=kind_ref.get(kind, 0),
+            floor=rail_floor)
         for i in sorted(resolved):
             it = seq[i][0]
             title = cg._item_title(it)
@@ -461,7 +471,7 @@ def fill(payload: dict, still_missing: list[tuple[str, str]],
                     had = int((prev or {}).get('us_estimate') or 0)
                 except (TypeError, ValueError):
                     had = 0
-                if (had >= 100 or (had > 0 and prev.get('est_basis')
+                if (had >= rail_floor or (had > 0 and prev.get('est_basis')
                                    == 'first_party')):
                     # A reading the gate would count as rendered exists
                     # in the store, so the row is blank for a render-

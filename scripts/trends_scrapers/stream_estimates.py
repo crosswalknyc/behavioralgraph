@@ -6800,6 +6800,30 @@ def _direction_and_delta(cur_mid: int, prev_mid: int) -> tuple[str, float]:
     return ('up' if delta > 0 else 'down'), round(delta, 4)
 
 
+def credibility_floor(slug: str = '') -> int:
+    """The smallest reading that counts as a reading on this rail.
+
+    The floor exists to catch a failed research call: a charting
+    Audible podcast at 8 is a broken answer, not an audience, and
+    100 does that job on every mass rail. It cannot be a constant,
+    though. A rail whose own #1 caps in the low thousands a day
+    (Lionsgate+ 3,473, MovieSphere+ 6,482) has most of a 100-title
+    list under 100 by arithmetic, so a flat 100 read the honest tail
+    of those rails as blank, the render carried stale pre-re-level
+    values over 45% of the Lionsgate+ list, and the gate alerted on
+    rows that were never missing (2026-10-09). On a rail capping
+    under 100,000 a day the floor is one thousandth of the rail's
+    daily ceiling, never under 1 and never over 100. One number,
+    read here by the gate, the bracket and the render alike.
+    """
+    if not slug:
+        return 100
+    cap = _platform_daily_cap_for(str(slug))
+    if cap <= 0 or cap >= 100_000:
+        return 100
+    return max(1, min(100, cap // 1000))
+
+
 def _platform_daily_cap_for(slug: str) -> int:
     """This service's published cap for its top slot, per DAY.
 

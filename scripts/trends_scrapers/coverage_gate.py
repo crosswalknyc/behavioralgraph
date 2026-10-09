@@ -166,13 +166,29 @@ _BRACKETED_BASES = ('bracketed',)
 _FIRST_PARTY_PREFIXES = ('books_trending.wattpad', 'comics_trending')
 
 
-def _audience_state(it: dict) -> str:
+def _floor_for_path(path: str) -> int:
+    """The credibility floor for the rail at `path`: 100 on every
+    cross-platform list and mass rail, the rail's own scaled floor on
+    a small service (`stream_estimates.credibility_floor`)."""
+    if not path:
+        return 100
+    try:
+        from scripts.trends_scrapers import stream_estimates as se
+        return int(se.credibility_floor(_service_key_for_path(path)))
+    except Exception:
+        return 100
+
+
+def _audience_state(it: dict, path: str = '') -> str:
     """'researched' | 'carried' | 'rank_tier' | 'platform_cap' |
     'cross_service' | 'bracketed' | 'missing' for a rendered row.
-    Sub-100 estimates count as missing (credibility floor, 2026-09-09)
-    so a degenerate research value gets re-priced instead of passing,
-    except when the reading is a first-party derivation or a bracket,
-    which are honest at any positive value."""
+    Estimates under the rail's credibility floor count as missing
+    (2026-09-09; floor scaled per rail 2026-10-09) so a degenerate
+    research value gets re-priced instead of passing, except when the
+    reading is a first-party derivation or a bracket, which are honest
+    at any positive value. `path` names the rendered list so the floor
+    is the rail's own; without it the mass-rail floor of 100 applies."""
+    floor = _floor_for_path(path)
     for f in ('us_streams', 'us_readers'):
         blk = it.get(f)
         if isinstance(blk, dict):
@@ -184,16 +200,16 @@ def _audience_state(it: dict) -> str:
                 if v > 0 and basis in _BRACKETED_BASES:
                     return 'bracketed'
                 # A derived-rail row is the parent's reading times the
-                # rail's carriage share, so the 100 floor does not
-                # apply to it: the parent row is what is judged, and
-                # a parent at 121 makes an honest child in the dozens.
+                # rail's carriage share, so the floor does not apply
+                # to it: the parent row is what is judged, and a
+                # parent at 121 makes an honest child in the dozens.
                 # It still inherits the parent's basis below, so a
                 # carried or capped parent is re-priced through the
                 # parent, once (2026-09-28, The Office on BritBox on
                 # Amazon).
                 if v > 0 and blk.get('derived_from'):
-                    v = max(v, 100.0)
-                if v >= 100:
+                    v = max(v, float(floor))
+                if v >= floor:
                     if basis in _RANK_TIER_BASES:
                         return 'rank_tier'
                     if basis in _CARRIED_BASES:
@@ -440,7 +456,7 @@ def collect_missing(payload: dict,
         if path.startswith('fused_trending') and _fused_row_is_film_only(it):
             continue
         total += 1
-        state = _audience_state(it)
+        state = _audience_state(it, path)
         if state == 'researched':
             researched += 1
             continue
@@ -701,7 +717,7 @@ def _merge_stream_results(results: dict[str, dict],
                 v = int((blk or {}).get('us_estimate') or 0)
             except (TypeError, ValueError):
                 v = 0
-            floor = max(100, floors.get((kind, p), 0))
+            floor = max(se.credibility_floor(p), floors.get((kind, p), 0))
             if v < floor:
                 logger.info("coverage_gate: dropping %s@%s at %d, under "
                             "the service's own floor of %d", k, p, v,
@@ -943,7 +959,7 @@ def _merge_cap_platform_blocks(results: dict[str, dict],
                 v = int(blk.get('us_estimate') or 0)
             except (TypeError, ValueError):
                 v = 0
-            if v < max(100, floors.get(p, 0)):
+            if v < max(se.credibility_floor(p), floors.get(p, 0)):
                 # Same credibility floor the merge above applies, in
                 # the two forms it takes. A sub-100 reading on a
                 # charting row is a failed call, not an audience. So is
@@ -1192,6 +1208,59 @@ def _run_first_party(target_date_iso: str, meter: Any,
     return out
 
 
+def _sub_floor_stored_rows(cards: dict, items: dict) -> list[tuple[str, str]]:
+    """Rendered service-rail rows whose OWN stored reading for the rail
+    sits under the credibility floor with no honest basis, however the
+    render dressed them.
+
+    The render carries a title's older reading forward over such a
+    block, so the row passes the tally as `carried` while the store
+    keeps a number the gate would call missing. Whether the carry
+    lands depends on the history load of that render, so the same
+    row reads carried on one render and missing on the next
+    (2026-10-09: seven Lionsgate+ films, 28 / 21 / 8 / 4 / 2 on file,
+    reached the alert from the re-render only). The bracket writes
+    the row a reading of its own and the flip ends. Rows already
+    missing are the bracket's by the usual route and are not repeated
+    here."""
+    from scripts.trends_scrapers import stream_estimates as se
+    out: list[tuple[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for path, _rank, it in _walk_rendered(cards):
+        if any(path.startswith(p) for p in _EXEMPT_PREFIXES):
+            continue
+        if _audience_state(it, path) != 'carried':
+            continue
+        service = _service_key_for_path(path)
+        if not service:
+            continue
+        kind = _estimator_kind_for(path, it)
+        if kind is None:
+            continue
+        title = _item_title(it)
+        artist = (it.get('artist') or it.get('author') or '').strip()
+        key = next((c for c in _entry_key_candidates(se, kind, title, artist)
+                    if c in items), None)
+        if not key:
+            continue
+        blk = ((items.get(key) or {}).get('by_platform') or {}).get(service)
+        if not isinstance(blk, dict):
+            continue
+        try:
+            v = float(blk.get('us_estimate') or 0)
+        except (TypeError, ValueError):
+            continue
+        basis = blk.get('est_basis')
+        if 0 < v < se.credibility_floor(service) \
+                and basis not in _FIRST_PARTY_BASES \
+                and basis not in _BRACKETED_BASES \
+                and not blk.get('derived_from'):
+            if (path, title) not in seen:
+                seen.add((path, title))
+                out.append((path, title))
+    return out
+
+
 def _tally_rendered(cards: dict) -> dict[str, Any]:
     """Count every rendered non-Film row by how it came by its number.
 
@@ -1220,7 +1289,7 @@ def _tally_rendered(cards: dict) -> dict[str, Any]:
                                              'cross_service': 0,
                                              'bracketed': 0})
         bucket['total'] += 1
-        state = _audience_state(it)
+        state = _audience_state(it, path)
         if state == 'missing':
             still_missing.append((path, _item_title(it)))
             continue
@@ -1234,11 +1303,24 @@ def _tally_rendered(cards: dict) -> dict[str, Any]:
     return out
 
 
-def run_gate(dry_run: bool = False) -> dict[str, Any]:
+class _TerminalOnly(Exception):
+    """Internal: skips a pass inside `run_gate(terminal_only=True)`."""
+
+
+def run_gate(dry_run: bool = False, *,
+             terminal_only: bool = False) -> dict[str, Any]:
     """Run the full coverage gate. Returns a summary dict:
     {total, researched_before, researched_after, rendered_after_pct,
      priced_stream, priced_headline, capped_before, cap_titles,
-     cap_blocks_written, capped_after, spend_usd, still_missing}."""
+     cap_blocks_written, capped_after, spend_usd, still_missing}.
+
+    `terminal_only` skips every research pass and runs the terminal
+    stage alone: recompute, bracket whatever is blank or sits under
+    the rail floor, re-tally, alert, board gate. It is the in-place
+    fix for a coverage alert (2026-10-09): the rows the alert names
+    are re-bracketed today, under the board lock, without paying for
+    the research pass again.
+    """
     import trends_iq
     from scripts.trends_scrapers import stream_estimates as se
     from scripts.trends_scrapers import headline_estimates as he
@@ -1247,12 +1329,18 @@ def run_gate(dry_run: bool = False) -> dict[str, Any]:
     target_date_iso = (datetime.now(timezone.utc).date()
                        - timedelta(days=1)).isoformat()
 
-    payload = trends_iq.compute_view(dict(_DEFAULT_FILTERS),
-                                      force_refresh=True)
     first_party: dict = {}
-    (stream_items, headline_items,
-     total, researched, baseline, cap_targets) = collect_missing(
-        payload, first_party_out=first_party)
+    if terminal_only:
+        # The terminal stage recomputes the board itself below; the
+        # opening audit is only input to the research passes.
+        stream_items, headline_items, cap_targets = [], [], []
+        total, researched, baseline = 0, 0, {}
+    else:
+        payload = trends_iq.compute_view(dict(_DEFAULT_FILTERS),
+                                          force_refresh=True)
+        (stream_items, headline_items,
+         total, researched, baseline, cap_targets) = collect_missing(
+            payload, first_party_out=first_party)
     fp_wattpad = first_party.get('wattpad') or []
     fp_comics = first_party.get('comics') or []
     cap_rows = sum(len(t['rows']) for t in cap_targets)
@@ -1299,6 +1387,12 @@ def run_gate(dry_run: bool = False) -> dict[str, Any]:
     # Meter-only monitor: effectively uncapped (Jenna 2026-09-09:
     # completeness wins over cost). Used purely to REPORT actual spend.
     meter = SpendMonitor(cap_usd=1e9, prefix='coverage_gate')
+
+    if terminal_only:
+        logger.info("coverage_gate: terminal stage only; research passes "
+                    "skipped")
+        summary['terminal_only'] = True
+        stream_items, cap_targets, headline_items = [], [], []
 
     if stream_items:
         results = _price_stream_items(se, stream_items,
@@ -1352,6 +1446,8 @@ def run_gate(dry_run: bool = False) -> dict[str, Any]:
     # so the Wattpad set is always one level and a comics volume
     # never outlives its siblings' readings.
     try:
+        if terminal_only:
+            raise _TerminalOnly()
         fp_stats = _run_first_party(target_date_iso, meter,
                                     fp_wattpad, fp_comics)
         summary['first_party_written'] = fp_stats.get('written') or 0
@@ -1363,6 +1459,8 @@ def run_gate(dry_run: bool = False) -> dict[str, Any]:
             'comics': {k: v for k, v in (fp_stats.get('comics') or {})
                        .items() if k not in ('trail',)},
         }
+    except _TerminalOnly:
+        pass
     except Exception:
         logger.exception("coverage_gate: first-party pass failed "
                          "(non-fatal)")
@@ -1400,8 +1498,22 @@ def run_gate(dry_run: bool = False) -> dict[str, Any]:
     bracket_skipped: dict[tuple[str, str], str] = {}
     rounds = 0
     seen: set[tuple[str, str]] = set()
-    while still_missing and rounds < _BRACKET_MAX_ROUNDS:
-        fresh = [r for r in still_missing if r not in seen]
+    try:
+        from scripts.trends_scrapers import stream_estimates as _se
+        sub_floor = _sub_floor_stored_rows(
+            (payload2 or {}).get('cards') or {},
+            (_se._read_snapshot('stream_estimates') or {}).get('items') or {})
+    except Exception:
+        logger.exception("coverage_gate: sub-floor scan failed (non-fatal)")
+        sub_floor = []
+    if sub_floor:
+        logger.info("coverage_gate: %d carried row(s) hold a sub-floor "
+                    "reading of their own in the store; bracketing them "
+                    "with the blanks", len(sub_floor))
+        summary['sub_floor_stored'] = len(sub_floor)
+    while (still_missing or sub_floor) and rounds < _BRACKET_MAX_ROUNDS:
+        fresh = [r for r in list(still_missing) + sub_floor if r not in seen]
+        sub_floor = []
         if not fresh:
             break
         seen.update(fresh)
@@ -1537,13 +1649,19 @@ def main(argv: Optional[list[str]] = None) -> int:
     ap = argparse.ArgumentParser(description='Trends IQ coverage gate')
     ap.add_argument('--dry-run', action='store_true',
                     help='audit coverage only; price nothing')
+    ap.add_argument('--terminal-only', action='store_true',
+                    help='skip the research passes; recompute, bracket '
+                         'every blank or sub-floor row, re-tally, alert, '
+                         'board gate. The in-place fix for a coverage '
+                         'alert.')
     args = ap.parse_args(argv)
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s %(levelname)s %(name)s %(message)s')
     from scripts.trends_scrapers.run_guard import BoardLock
     with BoardLock('The coverage gate'):
-        summary = run_gate(dry_run=args.dry_run)
+        summary = run_gate(dry_run=args.dry_run,
+                           terminal_only=args.terminal_only)
     print(f"coverage_gate summary: {summary}")
     return 0
 

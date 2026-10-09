@@ -7080,24 +7080,43 @@ def _coverage_item_title(it: dict) -> str:
     return ''
 
 
-def _coverage_has_audience(it: dict) -> bool:
+def _credibility_floor(slug: str = '') -> int:
+    """The smallest reading that counts as a reading on a rail: 100 on
+    every cross-platform list and mass rail, scaled down on a small
+    service whose own #1 caps in the low thousands a day. One number,
+    shared with the coverage gate and the bracket pass
+    (`stream_estimates.credibility_floor`, 2026-10-09)."""
+    if not slug:
+        return 100
+    try:
+        from scripts.trends_scrapers.stream_estimates import \
+            credibility_floor
+        return int(credibility_floor(slug))
+    except Exception:
+        return 100
+
+
+def _coverage_has_audience(it: dict, slug: str = '') -> bool:
     """Mirror of the frontend's chip / CSV-export logic: a row counts
     as covered when us_streams or us_readers carries a positive
     us_estimate, or when a Libby row carries a positive holds count.
 
-    Sub-100 estimates count as NOT covered (credibility floor,
-    2026-09-09): a chip reading "8 weekly US listeners" on a charting
-    row reads as broken, so the baseline pass overwrites it with a
-    chart-tier value instead. A reading derived from the platform's
+    Estimates under the rail's credibility floor count as NOT covered
+    (2026-09-09; floor scaled per rail 2026-10-09): a chip reading "8
+    weekly US listeners" on a charting row reads as broken, so the
+    baseline pass overwrites it with a chart-tier value instead. On
+    Lionsgate+, whose #1 caps at 3,473 a day, a reading of 13 at rank
+    60 is the measured tail and stays. A reading derived from the platform's
     own figure for the row (`est_basis='first_party'`, 2026-09-25) is
     covered at any positive value: a story with 65 lifetime reads has
     a handful of readers a day, and that is the reading."""
+    floor = _credibility_floor(slug)
     for f in ('us_streams', 'us_readers'):
         blk = it.get(f)
         if isinstance(blk, dict):
             try:
                 v = float(blk.get('us_estimate') or 0)
-                if v >= 100:
+                if v >= floor:
                     return True
                 if v > 0 and (blk.get('est_basis') in ('first_party',
                                                        'bracketed')
@@ -7375,6 +7394,9 @@ def _coverage_pick_from_dist(dist: dict, kind: str,
 
 _CARRY_HISTORY_DAYS = 14
 _CARRY_HISTORY_TTL_S = 900
+# Fourteen dated stores of ~36 MB each. Sixty seconds was enough on
+# the box and not on a laptop running two gates at once.
+_CARRY_HISTORY_LOAD_S = 180
 _carry_history_cache: dict = {'ts': 0.0, 'days': []}
 
 # Payload path -> the platform whose number that rail renders. A rail
@@ -7400,11 +7422,12 @@ def _carry_history_days(max_days: int = _CARRY_HISTORY_DAYS) -> list:
     wanted = [(today - timedelta(days=i)).isoformat()
               for i in range(1, max_days + 1)]
     loaded: dict[str, dict] = {}
+    partial = False
     try:
         with ThreadPoolExecutor(max_workers=8) as pool:
             futs = {pool.submit(_read_snapshot, 'stream_estimates', d): d
                     for d in wanted}
-            for fut in as_completed(futs, timeout=60):
+            for fut in as_completed(futs, timeout=_CARRY_HISTORY_LOAD_S):
                 d = futs[fut]
                 try:
                     snap = fut.result()
@@ -7414,6 +7437,7 @@ def _carry_history_days(max_days: int = _CARRY_HISTORY_DAYS) -> list:
                 if isinstance(items, dict) and items:
                     loaded[d] = items
     except Exception as e:
+        partial = True
         logger.info("trends_iq carry-forward history read failed: %s", e)
 
     out = []
@@ -7422,7 +7446,16 @@ def _carry_history_days(max_days: int = _CARRY_HISTORY_DAYS) -> list:
         if items:
             out.append((d, items, _build_day_fold_index(items)))
     _carry_history_cache['days'] = out
-    _carry_history_cache['ts'] = now_ts
+    # A load that timed out holds only the days that finished. Cached
+    # for the full TTL it makes every render in the next 15 minutes
+    # miss the priors on the days it lacks, so a row with a reading
+    # on file renders its stored sub-floor number instead and the
+    # coverage gate reports it (2026-10-09: seven Lionsgate+ films).
+    # Keep what loaded for this render, retry on the next.
+    _carry_history_cache['ts'] = 0.0 if partial else now_ts
+    if partial:
+        logger.warning("trends_iq carry-forward history: partial load, "
+                       "%d of %d day(s); not cached", len(out), len(wanted))
     if out:
         logger.info("trends_iq carry-forward history: %d day(s) loaded "
                     "(%s .. %s)", len(out), out[0][0], out[-1][0])
@@ -7451,7 +7484,7 @@ def _carry_entry_value(entry: dict, slug: str) -> Optional[int]:
                 v = int(blk.get('us_estimate') or 0)
             except (TypeError, ValueError):
                 v = 0
-            return v if v >= 100 else None
+            return v if v >= _credibility_floor(slug) else None
         # The rail names a service the stored entry has no block for.
         # Handing over the cross-platform total here is exactly the
         # defect the per-platform pass fixed, so decline instead.
@@ -7817,8 +7850,9 @@ def _ensure_full_audience_coverage(cards: dict,
             if any(path.startswith(p) for p in _COVERAGE_EXEMPT_PREFIXES):
                 return
             n = len(items)
+            slug = _carry_platform_for_path(path)
             for i, it in enumerate(items):
-                if _coverage_has_audience(it):
+                if _coverage_has_audience(it, slug):
                     continue
                 if (path.startswith('fused_trending')
                         and _fused_row_is_film_only(it)):
@@ -8085,7 +8119,7 @@ def _prior_is_usable(dist: dict, prev_val: int, kind: str,
         v = int(prev_val)
     except (TypeError, ValueError):
         return False
-    if v < 100:
+    if v < _credibility_floor(platform):
         return False
     cap = _platform_daily_cap(kind, platform)
     if cap is not None and v > cap:
