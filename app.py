@@ -2602,6 +2602,21 @@ def _numeric_credits_balance(user):
     return 0 if c is None else c
 
 
+def _credit_num(value, default):
+    """A stored credit field as a number.
+
+    dict.get(key, default) misses the case the records actually hit:
+    the key is present and null. A null ceiling used to reach the
+    arithmetic as None and 500 the request (2026-10-09).
+    """
+    if value is None:
+        return default
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def check_user_credits(username):
     """Check if user has credits remaining.  Returns (has_credits, credits_left).
 
@@ -2626,8 +2641,8 @@ def check_user_credits(username):
     pool = _get_company_pool(data, company)
 
     if pool is not None:
-        pool_total = pool.get('credit_pool', 0)
-        pool_used  = pool.get('credit_pool_used', 0)
+        pool_total = _credit_num(pool.get('credit_pool'), 0)
+        pool_used  = _credit_num(pool.get('credit_pool_used'), 0)
         pool_unlimited  = pool_total == -1
         pool_remaining  = -1 if pool_unlimited else max(pool_total - pool_used, 0)
 
@@ -2637,8 +2652,8 @@ def check_user_credits(username):
                 return True, -1
             return user_credits > 0, user_credits
 
-        ceiling = user.get('credit_ceiling', -1)
-        user_used = user.get('credits_used', 0)
+        ceiling = _credit_num(user.get('credit_ceiling'), -1)
+        user_used = _credit_num(user.get('credits_used'), 0)
         ceiling_remaining = -1 if ceiling == -1 else max(ceiling - user_used, 0)
 
         if pool_unlimited and ceiling == -1:
