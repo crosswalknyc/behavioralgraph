@@ -85,8 +85,50 @@ def enqueue(job_id, head):
     return rec
 
 
+# Decks ride the same queue (item 1 said reads AND decks: a deploy
+# restarts an in-flight deck build just as it did a read). A deck
+# marker is `deck_<job_id>.json`; its record lives under the deck
+# prefix and carries job_type 'deck' plus a resume block with the
+# build's arguments. The worker dispatches on the id's `deck:` tag.
+DECK_TAG = 'deck:'
+
+
+def _split_tag(job_id):
+    """('deck', id) or ('read', id)."""
+    j = str(job_id or '')
+    if j.startswith(DECK_TAG):
+        return 'deck', j[len(DECK_TAG):]
+    return 'read', j
+
+
+def _record_key(kind, jid):
+    pfx = _deck_prefix() if kind == 'deck' else _prefix()
+    return f"{pfx}{jid}.json"
+
+
+def _marker_key(kind, jid):
+    return f"{QUEUE_PREFIX}{'deck_' if kind == 'deck' else ''}{jid}.json"
+
+
+def enqueue_deck(job_id, head):
+    """Write the deck job as queued (status 'queued', the state the
+    widget's poll already knows) and drop its marker. Never raises."""
+    s3, bucket = _s3()
+    rec = dict(head)
+    rec.update({'status': 'queued', 'job_type': 'deck', 'queued': True,
+                'queued_at': time.time(), 'stage': 'lining up the deck'})
+    _chat()._pm_deck_status_write(job_id, rec)
+    s3.put_object(Bucket=bucket, Key=_marker_key('deck', job_id),
+                  Body=json.dumps({'job_id': job_id, 'kind': 'deck',
+                                   'queued_at': rec['queued_at']}).encode('utf-8'),
+                  ContentType='application/json')
+    print(f"[pm-queue] deck {job_id} queued for the read worker")
+    return rec
+
+
 def list_queued():
-    """Marker job ids, oldest first."""
+    """Marker job ids, oldest first. Deck markers come back tagged
+    `deck:<id>` so claim_queued / run_inline dispatch on them."""
     s3, bucket = _s3()
     out = []
     try:
@@ -99,7 +141,10 @@ def list_queued():
             for o in r.get('Contents') or []:
                 k = str(o.get('Key') or '')
                 if k.endswith('.json'):
-                    out.append((o.get('LastModified'), k.rsplit('/', 1)[-1][:-5]))
+                    name = k.rsplit('/', 1)[-1][:-5]
+                    if name.startswith('deck_'):
+                        name = DECK_TAG + name[5:]
+                    out.append((o.get('LastModified'), name))
             if not r.get('IsTruncated'):
                 break
             token = r.get('NextContinuationToken')
@@ -110,30 +155,33 @@ def list_queued():
 
 
 def claim_queued(job_id):
-    """The worker takes a queued read: conditional put flips queued ->
-    claimed; the marker goes. Returns the record or None (someone else
-    took it, or it is no longer queued)."""
+    """The worker takes a queued read or deck: conditional put flips
+    queued -> claimed; the marker goes. Returns the record or None
+    (someone else took it, or it is no longer queued)."""
     s3, bucket = _s3()
-    key = f"{_prefix()}{job_id}.json"
+    kind, job_id = _split_tag(job_id)
+    key = _record_key(kind, job_id)
+    marker = _marker_key(kind, job_id)
     try:
         obj = s3.get_object(Bucket=bucket, Key=key)
         etag = str(obj.get('ETag') or '').strip('"')
         cur = json.loads(obj['Body'].read())
     except Exception:
         try:
-            s3.delete_object(Bucket=bucket, Key=f"{QUEUE_PREFIX}{job_id}.json")
+            s3.delete_object(Bucket=bucket, Key=marker)
         except Exception:
             pass
         return None
-    if not cur.get('queued') or cur.get('claimed_by') or str(cur.get('status') or '') != 'working':
+    open_status = 'queued' if kind == 'deck' else 'working'
+    if not cur.get('queued') or cur.get('claimed_by') or str(cur.get('status') or '') != open_status:
         try:
-            s3.delete_object(Bucket=bucket, Key=f"{QUEUE_PREFIX}{job_id}.json")
+            s3.delete_object(Bucket=bucket, Key=marker)
         except Exception:
             pass
         return None
     claimed = dict(cur)
     claimed.update({'queued': False, 'claimed_by': _INSTANCE, 'claimed_at': time.time(),
-                    'stage': 'reading the data'})
+                    'stage': 'planning the deck' if kind == 'deck' else 'reading the data'})
     body = json.dumps(claimed).encode('utf-8')
     try:
         kw = dict(Bucket=bucket, Key=key, Body=body, ContentType='application/json')
@@ -152,16 +200,43 @@ def claim_queued(job_id):
         except Exception:
             return None
     try:
-        s3.delete_object(Bucket=bucket, Key=f"{QUEUE_PREFIX}{job_id}.json")
+        s3.delete_object(Bucket=bucket, Key=marker)
     except Exception:
         pass
     return claimed
 
 
-def run_inline(job_id, status):
-    """The worker runs one claimed read right here, through the same
-    code path the web process used to run on a thread. Returns True
+def run_deck_inline(job_id, status):
+    """The worker builds one claimed deck right here, through the same
+    job body the web process used to run on a thread. Returns True
     when the job body ran."""
+    c = _chat()
+    kind, job_id = _split_tag(job_id)
+    rr = status.get('resume') if isinstance(status.get('resume'), dict) else None
+    uname = str(status.get('user') or '').strip()
+    if not rr or not isinstance(rr.get('ctx'), dict) or not uname:
+        c._pm_deck_status_write(job_id, {**status, 'status': 'error', 'queued': False,
+                                          'error': 'queued deck without a resume record',
+                                          'finished_at': time.time()})
+        return False
+    try:
+        if isinstance(rr.get('extras'), dict) and rr['extras']:
+            c._PM_DECK_PPU_EXTRAS[job_id] = dict(rr['extras'])
+    except Exception:
+        pass
+    c._pm_run_deck_job(job_id, uname, rr['ctx'], list(rr.get('history') or []),
+                       str(rr.get('angle') or ''), str(rr.get('charge_user') or ''),
+                       str(rr.get('subject') or ''), str(rr.get('partner') or ''))
+    return True
+
+
+def run_inline(job_id, status):
+    """The worker runs one claimed read (or deck) right here, through
+    the same code path the web process used to run on a thread.
+    Returns True when the job body ran."""
+    kind, job_id = _split_tag(job_id)
+    if kind == 'deck' or str(status.get('job_type') or '') == 'deck':
+        return run_deck_inline(job_id, status)
     c, h = _chat(), _host()
     rr = status.get('resume') if isinstance(status.get('resume'), dict) else None
     uname = str(status.get('user') or '').strip()
@@ -207,6 +282,45 @@ def _host():
 def _s3():
     h = _host()
     return h.s3_client, h.S3_BUCKET
+
+
+def _deck_prefix():
+    try:
+        return _chat()._PM_DECK_PREFIX
+    except Exception:
+        return 'system/prometheus_decks/'
+
+
+def _queued_deck_fallback(now=None):
+    """A queued deck nobody claimed inside QUEUE_GRACE runs here, on a
+    thread, so a worker outage costs minutes, never the deck. Returns
+    the ids it took. Never raises."""
+    out = []
+    if os.environ.get('PM_READ_WORKER'):
+        return out
+    try:
+        s3, bucket = _s3()
+        now = now or time.time()
+        for tagged in list_queued():
+            kind, jid = _split_tag(tagged)
+            if kind != 'deck':
+                continue
+            try:
+                mk = json.loads(s3.get_object(Bucket=bucket, Key=_marker_key('deck', jid))['Body'].read())
+                queued_at = float(mk.get('queued_at') or 0)
+            except Exception:
+                continue
+            if not queued_at or now - queued_at <= QUEUE_GRACE:
+                continue
+            rec = claim_queued(tagged)
+            if not rec:
+                continue
+            print(f"[pm-queue] deck {jid} unclaimed for {int(now - queued_at)}s; building it here")
+            threading.Thread(target=run_deck_inline, args=(jid, rec), daemon=True).start()
+            out.append(jid)
+    except Exception:
+        traceback.print_exc()
+    return out
 
 
 def _prefix():
@@ -687,6 +801,8 @@ def sweep(now=None, lookback=LOOKBACK):
                 out.append((jid, recover(jid, status=st, reason='held-retry')))
     except Exception:
         traceback.print_exc()
+    for jid in _queued_deck_fallback(now):
+        out.append((jid, 'deck-local'))
     if out:
         print(f"[pm-recover] sweep: {out}")
     return out

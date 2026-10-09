@@ -224,10 +224,11 @@ def api_synth_chat_deck_status(job_id):
     uname = (user.get('username') or user.get('email') or '').strip()
     if not _pm_job_owner_ok(payload.get('user'), user):
         return jsonify({'success': False, 'error': 'not your job'}), 403
+    payload = dict(payload)
+    payload.pop('resume', None)   # the queued build's arguments stay server-side
     if str(payload.get('status') or '').strip().lower() == 'error':
         # The deck worker already emailed the failure to ops; the
         # poll reply carries no failure detail (calm-failure contract).
-        payload = dict(payload)
         payload['error'] = ''
     return jsonify({'success': True, **payload})
 

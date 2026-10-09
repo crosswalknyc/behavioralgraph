@@ -18116,17 +18116,17 @@ def _pm_deck_core(user, body):
     _deck_extras = _pm_merge_extras(_pm_attrib_extras(), _pm_ppu)
     if _deck_extras:
         _PM_DECK_PPU_EXTRAS[job_id] = _deck_extras
-    _pm_deck_status_write(job_id, {
-        'job_id': job_id, 'user': username, 'status': 'queued',
-        'angle': angle, 'started_at': time.time()})
+    _head = {'job_id': job_id, 'user': username, 'status': 'queued', 'angle': angle, 'started_at': time.time()}
     _pm_job_bind_thread(job_id, username)
-    t = threading.Thread(target=_pm_run_deck_job,
-                         args=(job_id, username, ctx, history[-14:], angle,
-                               _charge_user, deck_subject, deck_partner),
-                         daemon=True)
-    t.start()
-    return jsonify({'success': True, 'job_id': job_id,
-                    'subject': deck_subject})
+    _args = (job_id, username, ctx, history[-14:], angle, _charge_user, deck_subject, deck_partner)
+    if _rr.queue_enabled():   # decks build on the Hetzner read worker like reads (2026-10-09); unclaimed in 150 s, the sweeper builds it here
+        _head['resume'] = {'ctx': ctx, 'history': history[-14:], 'angle': angle, 'charge_user': _charge_user,
+                           'subject': deck_subject, 'partner': deck_partner, 'extras': _deck_extras or {}}
+        _rr.enqueue_deck(job_id, _head)
+    else:
+        _pm_deck_status_write(job_id, _head)
+        threading.Thread(target=_pm_run_deck_job, args=_args, daemon=True).start()
+    return jsonify({'success': True, 'job_id': job_id, 'subject': deck_subject})
 
 
 @_H.app.route('/api/brief-chat/pay-per-use', methods=['POST'])
