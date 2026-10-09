@@ -3299,31 +3299,19 @@ def _synth_chat_cut_strategist(draft):
 
 # Flat rate card for pricing questions (2026-09-23 Jenna, verbatim
 # copy): 'if someone asks a credit question they should get this'.
-# Served deterministically on BOTH chat surfaces before any routing -
-# 'how much is a credit' once fell into the build intake and drafted
-# a build brief (cpearson, 2026-09-23 20:39Z).
-# Jenna's rate card, verbatim order (2026-10-07, Viewership Metrics
-# added 2026-10-08). Rendered in the seat's currency; numbers are 1:1.
-_PM_PRICING_COPY_TEMPLATE = (
-    "Pricing is:\n\n"
-    "Digital Journey - {c}500\n"
-    "Profile - {c}300\n"
-    "Subscriber Acquisition - {c}500\n"
-    "Viewership Metrics - {c}500\n"
-    "Flywheel - {c}500\n"
-    "Brand Partnership - {c}500 + {c}500 Control for a {c}1,000 total\n"
-    "Ad Attribution - {c}500 for the initial pull and an optional {c}100 x "
-    "day to track per campaign\n"
-    "Any other custom ask - {c}500\n\n"
-    "All Prometheus (chat bot) usage is billed at a metered rate of "
-    "{c}10.50 / {c}52.50 per million in/out, plus {c}0.021 per search.")
-_PM_PRICING_COPY = _PM_PRICING_COPY_TEMPLATE.format(c='$')
+# Served deterministically on BOTH chat surfaces before any routing.
+# One source (2026-10-09, item 7): prometheus/rate_card.py renders
+# Jenna's words with the LIVE per-pull prices admins set in the billing
+# panel (the same prices the charge uses), in the seat's currency.
+from prometheus import rate_card as _rate_card  # noqa: E402
+_PM_PRICING_COPY = _rate_card.render('$')
 
 
 def _pm_pricing_copy(username=None):
     """The rate card in the seat's currency (East Tree Media and Omaze
-    read it in pounds, Jenna 2026-10-08). Same numbers, 1:1."""
-    return _PM_PRICING_COPY_TEMPLATE.format(c=_pm_money_symbol(username))
+    read it in pounds, Jenna 2026-10-08) with live prices."""
+    return _rate_card.render(_pm_money_symbol(username),
+                             lambda key, dflt: _pm_usd(key, dflt, username))
 
 
 _PM_SUBJECT_FIELDS = ('subject', 'name', 'display_name', 'subject_label',
@@ -3580,7 +3568,7 @@ def api_synth_chat_clarify():
                    f"({_H._ew_format_label(q.get('start'), q.get('end'))})"
                    f" (+{_pm_usd_label(_pm_usd('profile_iq_derived_cut', 100.0))})" for q in qcuts])
             _cut_usd = _pm_usd('profile_iq_derived_cut', 100.0)
-            _base_usd = _pm_usd('chatbot_profile_iq_build', 300.0)
+            _base_usd = _pm_usd('profile_iq_build', 300.0)
             msg = (f"Locked in {n_all} cut"
                    f"{'s' if n_all != 1 else ''}:\n{cut_lines}\n\n"
                    f"Total: {_pm_usd_label(_base_usd + _cut_usd * n_all)} "
@@ -4254,7 +4242,7 @@ def api_synth_chat_clarify():
                     or subject).strip()
         subiq_credits = int(data.get('subiq_credits') or _H.CREDITS_SVOD)
         _usd_sub = _pm_usd('subscriber_iq_build', 500.0)
-        _usd_prof = _pm_usd('chatbot_profile_iq_build', 300.0)
+        _usd_prof = _pm_usd('profile_iq_build', 300.0)
         prof_credits = int(data.get('profile_credits')
                            or _H.CREDITS_PROFILE_ANALYSIS)
         low = answer.lower().strip()

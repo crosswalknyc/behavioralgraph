@@ -51922,10 +51922,17 @@ def _v1_price_table_for(username: str = None) -> dict:
         out['addon_cut'] = round(_v1_tool_price_usd(
             'api_profile_iq_cut', _V1_USD_ADDON_CUT_FALLBACK, username), 2)
     except Exception:
-        out = {'new_build': 300.0, 'time_shifted_refresh': 300.0,
-               'derive_cut': 100.0, 'cut_needs_parent': 400.0,
-               'subscriber_iq': 1000.0, 'existing_match': 0.0,
-               'addon_cut': 100.0}
+        # published defaults from the one rate card (2026-10-09, item 7);
+        # the old inline copy had drifted (subscriber_iq 1000 vs 500)
+        try:
+            from prometheus import rate_card as _rc
+            _p, _c, _s = _rc.default('profile_iq_build'), _rc.default('profile_iq_derived_cut'), _rc.default('subscriber_iq_build')
+        except Exception:
+            _p, _c, _s = 300.0, 100.0, 500.0
+        out = {'new_build': _p, 'time_shifted_refresh': _p,
+               'derive_cut': _c, 'cut_needs_parent': _p + _c,
+               'subscriber_iq': _s, 'existing_match': 0.0,
+               'addon_cut': _c}
     return out
 
 
