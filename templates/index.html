@@ -115782,9 +115782,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             if (stage === 'universe') {
                 html += _jiqMusicSec('02 Title by title', 'The top eight and bottom four titles on each door.', (r.meta.rollup === 'all' ? 'Ticks are the title, film and series medians' : 'Tick is the median title') + (b ? ' \u00b7 ' + b.n + ' ' + b.noun : ''));
                 html += '<div class="jiq-frag-detours">'
-                    + _jiqMusicPctDetours('Music first share of viewers', pctRows('mf_share', 'viewers'), b)
-                    + _jiqMusicPctDetours('No music touch share of viewers', pctRows('nm_share', 'viewers'), b)
-                    + _jiqMusicPctDetours(String(r.meta.depth_label) + ', all doors', pctRows('finish', 'viewers'), b)
+                    + _jiqMusicPctDetours('Music first share of viewers', pctRows('mf_share', 'viewers'), b, ['Music first'])
+                    + _jiqMusicPctDetours('No music touch share of viewers', pctRows('nm_share', 'viewers'), b, ['No music touch'])
+                    + _jiqMusicPctDetours(String(r.meta.depth_label) + ', all doors', pctRows('finish', 'viewers'), b, [String(r.meta.depth_label)])
                     + '</div>';
                 var d1 = st.mf_share || {}, d2 = st.nm_share || {};
                 html += '<div class="jiq-song-pad">' + _jiqMusicRead(
