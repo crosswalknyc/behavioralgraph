@@ -5563,7 +5563,12 @@ def detect_deck_intent(text):
     return any(rx.search(t) for rx in _DECK_ASK_COMPILED)
 
 
-_DECK_NOUN = r'(?:insights? deck|deck|slides|presentation|one[- ]pagers?|pptx)'
+_DECK_NOUN = r'(?:insights? deck|powerpoint deck|deck|slides|presentation|one[- ]pagers?|pptx|powerpoint)'
+# "a deck built for Euphoria", "slides made for the Starz meeting" (2026-10-09, Liz)
+_DECK_BUILT_FOR_RE = re.compile(
+    r'\b(?:deck|slides|presentation|powerpoint|pptx|one[- ]pager)s?\s+'
+    r'(?:built|made|created|put together|prepared)\s+(?:for|on|about)\s+(.+?)'
+    r'(?=\s+(?:for|on|about|covering|pulling|with|using|that|which)\b|[.!?]|$)', re.IGNORECASE)
 _DECK_SUBJ_TAIL_RE = re.compile(
     r'\b' + _DECK_NOUN + r'\s+(?:on|about|around|covering)\s+(.+)$',
     re.IGNORECASE)
@@ -5585,6 +5590,12 @@ _DECK_SUBJ_STOPWORDS = {
     'this profile', 'the page', 'this page', 'these', 'me', 'us', 'a', 'an',
     'insights', 'insight', 'pitch', 'value', 'audience', 'talent',
     'partnership', 'audience value', 'talent value',
+    # format words are never the subject (2026-10-09, Liz: "Create a
+    # powerpoint deck ..." read 'powerpoint' as the subject)
+    'powerpoint', 'pptx', 'ppt', 'single', 'consolidated', 'full', 'final',
+    'complete', 'proper', 'real', 'actual', 'branded', 'quick', 'simple',
+    'short', 'small', 'tight', 'clean', 'one', 'new', 'another',
+    'single powerpoint', 'one powerpoint', 'consolidated powerpoint',
 }
 
 
@@ -5610,7 +5621,7 @@ def extract_deck_brief(text):
     if m:
         subject = m.group(1)
     else:
-        m = _DECK_SUBJ_MID_RE.search(t)
+        m = _DECK_BUILT_FOR_RE.search(t) or _DECK_SUBJ_MID_RE.search(t)
         if m:
             subject = m.group(1)
     subject = subject.strip(' \'"`,.!?')

@@ -79,7 +79,7 @@ def _log(record):
 
 def send_user_email(*, to, subject, body, instructed=False, caller='',
                     html=None, pdf=None, pdf_name='', csv=None, csv_name='',
-                    bcc_liz=True, extra_bcc=(), cc=(), dry_run=False, images=()):
+                    bcc_liz=True, extra_bcc=(), cc=(), dry_run=False, images=(), files=()):
     """Send one user-facing email through the house door. Returns a dict
     {sent, reason, message_id, destinations}. Never raises.
 
@@ -146,6 +146,18 @@ def send_user_email(*, to, subject, body, instructed=False, caller='',
             data, name = img
             if data and name:
                 part = MIMEApplication(data, _subtype='png')
+                part.add_header('Content-Disposition', 'attachment', filename=str(name))
+                msg.attach(part)
+        except Exception:
+            traceback.print_exc()
+    for f in (files or ()):
+        # any other file the reader asked for rides as an attachment (2026-10-09: the
+        # finished deck itself, not only a link)
+        try:
+            data, name, mime = (list(f) + ['application/octet-stream'])[:3]
+            if data and name:
+                maintype, _, subtype = str(mime or 'application/octet-stream').partition('/')
+                part = MIMEApplication(data, _subtype=subtype or 'octet-stream')
                 part.add_header('Content-Disposition', 'attachment', filename=str(name))
                 msg.attach(part)
         except Exception:

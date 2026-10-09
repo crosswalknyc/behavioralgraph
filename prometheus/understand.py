@@ -95,15 +95,31 @@ _TIME_SERIES_RX = re.compile(
 _DECK_BUILD_RX = re.compile(
     r'\b(build|make|create|generate|put together|spin up|prepare|draft|'
     r'put|turn|drop|export|convert|render|lay out|package|wrap|compile|'
-    r'assemble)\b'
-    r'[^.!?]{0,60}\b(deck|slides|presentation|one[- ]?pagers?|pptx)\b', re.I)
+    r'assemble|consolidate|combine|merge)\b'
+    r'[^.!?]{0,60}\b(deck|slides|presentation|one[- ]?pagers?|pptx|powerpoint|ppt)\b', re.I)
+# 2026-10-09 (Liz): "I want a deck built for Euphoria ...", "powerpoint
+# deck.", "Consolidate all slides into a Single Powerpoint deck." all
+# ran as analysis and came back as slide text. A wish for a deck, a
+# deck named as built, or a bare deck noun is a deck ask: the reader
+# wants the file.
+_DECK_WANT_RX = re.compile(
+    r'\b(?:i |we )?(?:want|need|would like|d like|like|looking for|could use|'
+    r'give me|send me|can (?:you|we|i) (?:get|have|see|build|make|create))\b'
+    r'[^.!?]{0,50}\b(?:deck|slides|presentation|one[- ]?pagers?|pptx|powerpoint|ppt)\b', re.I)
+_DECK_BUILT_RX = re.compile(
+    r'\b(?:deck|slides|presentation|powerpoint|pptx|one[- ]?pager)s?\s+'
+    r'(?:built|made|created|put together|generated|rendered|exported)\b', re.I)
+_DECK_BARE_RX = re.compile(
+    r'^\s*(?:a |the |an |one |single )?(?:powerpoint|pptx|ppt|deck|slides|presentation)'
+    r'(?:\s+(?:deck|file|version|please))*[.! ]*$', re.I)
 # 2026-10-05 (Scott): 'put that data into a simple deck' is a deck
 # ask whatever the verb. So is 'render it' when the reply before it
 # was a deck outline (SLIDE 1 ... ). The outline is a draft; the
 # user asking to render it wants the file.
 _DECK_INTO_RX = re.compile(
-    r'\binto (?:a |an )?(?:simple |quick |short |small |tight |clean |'
-    r'one[- ]page )?(?:deck|slides?|presentation|one[- ]?pager|pptx)\b', re.I)
+    r'\b(?:into|as) (?:a |an |one )?(?:(?:simple|quick|short|small|tight|clean|single|one|full|final|'
+    r'complete|consolidated|proper|real|actual|branded|powerpoint|ppt|pptx|one[- ]page) )*'
+    r'(?:deck|slides?|presentation|one[- ]?pager|pptx|powerpoint)\b', re.I)
 _RENDER_IT_RX = re.compile(
     r'^(?:please\s+)?(?:render|build|make|export|generate|create|produce|'
     r'do|ship|send|give me|finish)\s+(?:it|that|this|them|these|the deck|'
@@ -158,7 +174,8 @@ def looks_like_deck_ask(text, deck_in_flight=False,
     if not t or deck_in_flight:
         return False
     if _DECK_BUILD_RX.search(t) or _DECK_NOUN_RX.search(t) \
-            or _DECK_INTO_RX.search(t):
+            or _DECK_INTO_RX.search(t) or _DECK_WANT_RX.search(t) \
+            or _DECK_BUILT_RX.search(t) or _DECK_BARE_RX.match(t):
         return True
     if prior_deck_outline and _RENDER_IT_RX.match(t):
         return True
