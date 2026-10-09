@@ -510,6 +510,51 @@
         ]
       },
       {
+        "title": "Nielsen",
+        "paragraphs": [
+          {
+            "text": "October 2026.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "October 2026.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "Nielsen Big Data + Panel is a linear measurement product. It fuses set-top box and smart TV ACR data with the panel to make linear ratings more stable, and that is what moved to currency for the 2025-26 season. It does not fold streaming into a network's rating.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Nielsen Big Data + Panel is a linear measurement product. It fuses set-top box and smart TV ACR data with the panel to make linear ratings more stable, and that is what moved to currency for the 2025-26 season. It does not fold streaming into a network's rating.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "Streaming is measured separately. The panel's streaming meters feed The Gauge and Nielsen One at the platform level, and for live sports Nielsen uses first-party data integrations (Amazon for TNF, YouTube, Netflix) plus custom combined reports that a rights holder commissions.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Streaming is measured separately. The panel's streaming meters feed The Gauge and Nielsen One at the platform level, and for live sports Nielsen uses first-party data integrations (Amazon for TNF, YouTube, Netflix) plus custom combined reports that a rights holder commissions.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "ESPN's publicized MNF totals are that kind of custom combination: BD+P linear for ESPN and ABC, plus ESPN app and ESPN+ streaming, plus out-of-home.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "ESPN's publicized MNF totals are that kind of custom combination: BD+P linear for ESPN and ABC, plus ESPN app and ESPN+ streaming, plus out-of-home.",
+                "bold": false
+              }
+            ]
+          }
+        ]
+      },
+      {
         "title": "Subscriptions",
         "paragraphs": [
           {
