@@ -5563,6 +5563,31 @@ def detect_deck_intent(text):
     return any(rx.search(t) for rx in _DECK_ASK_COMPILED)
 
 
+_DECK_FORMAT_WORDS = ('powerpoint', 'presentation', 'slides', 'slide', 'pptx', 'deck', 'onepager')
+
+
+def fix_deck_format_typos(text):
+    """Spell the deck format words the reader meant (2026-10-09, Liz:
+    "Create a powerpoing deck" made 'powerpoing' the subject and drew
+    '"powerpoing" is not in the library'). A token within two edits of
+    a format word becomes that word; nothing else is touched."""
+    import difflib
+    out = []
+    for tok in re.split(r'(\s+)', str(text or '')):
+        core = tok.strip('.,!?;:').lower()
+        if len(core) >= 5 and core.isalpha() and core not in _DECK_FORMAT_WORDS:
+            m = difflib.get_close_matches(core, _DECK_FORMAT_WORDS, n=1, cutoff=0.8)
+            if m and len(m[0]) >= 5:
+                lead = tok[:len(tok) - len(tok.lstrip('.,!?;:'))]
+                trail = tok[len(tok.rstrip('.,!?;:')):]
+                fixed = m[0] if m[0] != 'onepager' else 'one-pager'
+                if tok.strip('.,!?;:')[:1].isupper():
+                    fixed = fixed[:1].upper() + fixed[1:]
+                tok = lead + fixed + trail
+        out.append(tok)
+    return ''.join(out)
+
+
 _DECK_NOUN = r'(?:insights? deck|powerpoint deck|deck|slides|presentation|one[- ]pagers?|pptx|powerpoint)'
 # "a deck built for Euphoria", "slides made for the Starz meeting" (2026-10-09, Liz)
 _DECK_BUILT_FOR_RE = re.compile(
@@ -5606,6 +5631,7 @@ def extract_deck_brief(text):
     t = ' '.join(str(text or '').split())
     if not t:
         return {'subject': '', 'partner': ''}
+    t = fix_deck_format_typos(t)
     t = _DECK_GENERIC_TAIL_RE.sub('', t)
     partner = ''
     pm = _DECK_PARTNER_RE.search(t)

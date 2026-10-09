@@ -173,6 +173,11 @@ def looks_like_deck_ask(text, deck_in_flight=False,
     t = str(text or '').strip()
     if not t or deck_in_flight:
         return False
+    try:   # "powerpoing deck" is a PowerPoint deck (2026-10-09, Liz)
+        import prometheus_analysis as _pma_typo
+        t = _pma_typo.fix_deck_format_typos(t)
+    except Exception:
+        pass
     if _DECK_BUILD_RX.search(t) or _DECK_NOUN_RX.search(t) \
             or _DECK_INTO_RX.search(t) or _DECK_WANT_RX.search(t) \
             or _DECK_BUILT_RX.search(t) or _DECK_BARE_RX.match(t):
