@@ -430,6 +430,40 @@ _SELF_WORDS = frozenset(('crosswalk', 'crosswalks', 'prometheus', 'sample',
 _TITLE_ARTICLE_RX = re.compile(r"^(?:The|A|An)\s+[A-Z][A-Za-z0-9&'\+\.]*")
 
 
+# Topic vocabulary: words that name something ABOUT a subject, never
+# the subject (2026-10-09, eriley's "what about potential brand
+# partnerships" in a Brock Mesarich thread drew a priced custom read on
+# "Potential Brand Partnerships"). A phrase made only of these and the
+# common words is a topic; the thread or the open page carries the
+# subject.
+_TOPIC_WORDS = frozenset((
+    'potential', 'partnership', 'partnerships', 'partner', 'partners',
+    'sponsorship', 'sponsorships', 'sponsor', 'sponsors', 'opportunity',
+    'opportunities', 'angle', 'angles', 'creative', 'creatives',
+    'distribution', 'strategy', 'strategies', 'campaign', 'campaigns',
+    'pricing', 'price', 'prices', 'budget', 'budgets', 'demographics',
+    'demographic', 'demos', 'demo', 'overlap', 'overlaps', 'churn',
+    'retention', 'growth', 'revenue', 'reach', 'engagement', 'awareness',
+    'consideration', 'conversion', 'conversions', 'funnel', 'roi', 'value',
+    'valuation', 'deal', 'deals', 'collab', 'collabs', 'collaboration',
+    'collaborations', 'activation', 'activations', 'insight', 'insights',
+    'deck', 'decks', 'summary', 'recommendation', 'recommendations',
+    'plan', 'plans', 'playbook', 'roadmap', 'brief', 'media', 'mix',
+    'spend', 'channel', 'channels', 'placement', 'placements', 'format',
+    'formats', 'tactic', 'tactics', 'kpi', 'kpis', 'metric', 'metrics',
+    'benchmark', 'benchmarks', 'index', 'indexes', 'penetration', 'share',
+    'shares', 'fit', 'alignment', 'affinity', 'affinities', 'trend',
+    'trends', 'momentum', 'lift', 'incrementality', 'attribution',
+    'journey', 'journeys', 'retail', 'ecommerce', 'social', 'search',
+    'digital', 'marketing', 'advertising', 'ads', 'ad', 'promotion',
+    'promotions', 'launch', 'launches', 'opportunity', 'upside', 'risk',
+    'risks', 'takeaway', 'takeaways', 'implication', 'implications',
+    'ideas', 'idea', 'options', 'option', 'next', 'steps', 'step',
+    'so', 'what', 'matter', 'matters', 'mean', 'means', 'main', 'correct',
+    'own', 'current', 'overall', 'general', 'total', 'universe',
+))
+
+
 def plausible_subject(s):
     """False for a subject made of ordinary words, or one that starts
     or ends on a connective. 'Three Actually Influence Product
@@ -456,8 +490,8 @@ def plausible_subject(s):
         return True
     if low[-1] in _CONNECTIVE_TAIL or low[0] in _CONNECTIVE_HEAD:
         return False
-    if all(w in _COMMON_WORDS for w in low):
-        return False
+    if all(w in _COMMON_WORDS or w in _TOPIC_WORDS for w in low):
+        return False   # a topic about a subject, not a subject (2026-10-09)
     if len(low) >= 5 and sum(w in _COMMON_WORDS for w in low) >= len(low) - 1:
         return False
     return True
