@@ -193,6 +193,7 @@ def render_answer_pdf(title, body_text, date_label=None,
         try:   # views carry what a view means (Jenna 2026-10-08)
             from prometheus import methodology as _meth
             body_text = _meth.attach_view_definition(body_text)
+            body_text = _meth.ensure_period_note(body_text)   # window total next to its quarters (item 6)
         except Exception:
             pass
         return _render(title, body_text, date_label,

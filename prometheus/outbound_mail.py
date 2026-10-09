@@ -104,6 +104,7 @@ def send_user_email(*, to, subject, body, instructed=False, caller='',
     try:   # views are never left without what a view means (Jenna 2026-10-08)
         from prometheus import methodology as _meth
         body_c = _meth.attach_view_definition(body_c)
+        body_c = _meth.ensure_period_note(body_c)   # window total next to its quarters (item 6)
     except Exception:
         pass
     bad = banned_tokens(subject_c) + banned_tokens(body_c)

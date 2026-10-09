@@ -159,6 +159,50 @@ def block(window_start=None, window_end=None, window_label='',
     return lines
 
 
+# Period totals next to their quarters (2026-10-09, item 6; Bria's
+# Starz ticket: Tobias Menzies at 18.42% for the year with every quarter
+# under 5% was a correct number that looked wrong). One plain line
+# wherever a full-window figure sits next to sub-period figures.
+PERIOD_HEADER = 'Why the full-window number sits above each period:'
+PERIOD_NOTE = ("A person is counted once for the whole window but only in the periods they "
+               "were active, so each quarter or month can only equal or fall below the "
+               "full-window share, and the periods do not add up to it. A brand whose "
+               "audience spreads across the year reads higher for the year than for any one "
+               "quarter.")
+PERIOD_RX = re.compile(r"\b(?:q[1-4]\b|quarter(?:s|ly)?|month(?:s|ly)?\b|month by month|by quarter|"
+                       r"per quarter|each quarter|h[12]\s*20\d\d|ytd|year to date|"
+                       r"(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\s+20\d\d)", re.I)
+WHOLE_RX = re.compile(r"\b(?:total universe|full[- ]window|full year|whole year|the year\b|annual|"
+                      r"trailing 12|12 months|twelve months|overall|year total|for 20\d\d\b)", re.I)
+_PERIOD_CUT_NAME_RX = re.compile(r"\s-\s(?:Q[1-4]\s+20\d\d|H[12]\s+20\d\d|20\d\d(?:\s+YTD)?|"
+                                 r"(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\s+20\d\d)\s*$", re.I)
+
+
+def is_period_comparison(*texts):
+    """True when the words put a full-window figure next to sub-period
+    figures (quarters, months, halves, YTD)."""
+    joined = ' '.join(str(t or '') for t in texts)
+    return bool(PERIOD_RX.search(joined) and WHOLE_RX.search(joined))
+
+
+def is_period_cut_name(name):
+    return bool(_PERIOD_CUT_NAME_RX.search(str(name or '')))
+
+
+def ensure_period_note(reply, question=''):
+    """Append the period line once when the reply compares a window
+    total with its periods. Never raises."""
+    try:
+        text = str(reply or '')
+        if not text.strip() or PERIOD_HEADER in text:
+            return reply
+        if not is_period_comparison(text, question):
+            return reply
+        return text.rstrip() + '\n\n' + f"{PERIOD_HEADER} {PERIOD_NOTE}"
+    except Exception:
+        return reply
+
+
 def ensure(reply, res=None, question='', base_label='', base_people=None):
     """Append the counting block to a viewership reply once. A reply
     that already carries the header gets the missing bullets merged in
@@ -169,6 +213,8 @@ def ensure(reply, res=None, question='', base_label='', base_people=None):
         if not text.strip():
             return reply
         res = res if isinstance(res, dict) else {}
+        reply = ensure_period_note(text, question)
+        text = str(reply)
         if not is_viewership_read(text, res, question):
             return reply
         if carries_definition(text):

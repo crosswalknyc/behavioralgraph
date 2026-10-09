@@ -10719,6 +10719,7 @@ def index():
                            currency_symbol=_wallet_snap.get('currency_symbol', '$'),
                            view_definition=_view_definition_copy(),
                            view_note_short=_view_definition_copy(short=True),
+                           period_note=_view_definition_copy(period=True),
                            paying_customer=_wallet_snap.get('paying_customer', False),
                            billed_via_company=_wallet_snap.get('billed_via_company', False),
                            wallet_company_name=_wallet_snap.get('company_name', ''),
@@ -44229,11 +44230,15 @@ _CUT_KEYWORDS = {
 }
 
 
-def _view_definition_copy(short=False):
+def _view_definition_copy(short=False, period=False):
     """What we count as a view, for the dashboard footnote (one source:
-    prometheus/methodology.py). '' when the module is unavailable."""
+    prometheus/methodology.py); with period=True the one line on why a
+    full-window share sits above each quarter's (2026-10-09, item 6).
+    '' when the module is unavailable."""
     try:
         from prometheus import methodology as _meth
+        if period:
+            return f"{_meth.PERIOD_HEADER} {_meth.PERIOD_NOTE}"
         return _meth.VIEW_NOTE_SHORT if short else _meth.VIEW_DEFINITION
     except Exception:
         return ''

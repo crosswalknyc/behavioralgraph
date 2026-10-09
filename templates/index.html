@@ -19423,6 +19423,7 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
     window.PM_CURRENCY_SYMBOL = {{ (currency_symbol|default('$'))|tojson }};
     window.PM_VIEW_DEFINITION = {{ (view_definition|default(''))|tojson }};
     window.PM_VIEW_NOTE_SHORT = {{ (view_note_short|default(''))|tojson }};
+    window.PM_PERIOD_NOTE = {{ (period_note|default(''))|tojson }};
     // Self-serve Prometheus plan (2026-09-24). Set before any module
     // script runs so the Prometheus launcher init can read it.
     window.CW_SELF_SERVE_PLAN = {{ 'true' if self_serve_plan else 'false' }};
@@ -192600,6 +192601,51 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             if (el) obs.observe(el, { childList: true, subtree: true, characterData: true });
         });
     } catch (e) { /* older browsers: the first pass below still runs */ }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', schedule);
+    else schedule();
+})();
+</script>
+
+<script>
+// Why the full-window number sits above each period (2026-10-09, item 6;
+// Bria's Starz quarters ticket). A period cut open in Profile IQ carries one
+// plain line under the dashboard. One source: prometheus/methodology.py via
+// window.PM_PERIOD_NOTE.
+(function () {
+    var NOTE = window.PM_PERIOD_NOTE || '';
+    if (!NOTE) return;
+    var PERIOD_RX = /[_\s]-[_\s](?:Q[1-4][_\s]20\d\d|H[12][_\s]20\d\d|20\d\d(?:[_\s]YTD)?|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*[_\s]20\d\d)(?:[_\s]\d\d[_\s]\d\d[_\s]20\d\d[_\s]\d\d[_\s]\d\d)?(?:\.csv)?$/i;
+    function isPeriodCut() {
+        var name = String(window.currentProfileName || '');
+        return PERIOD_RX.test(name);
+    }
+    function ensure() {
+        var el = document.getElementById('dashboardView');
+        if (!el) return;
+        var has = el.querySelector(':scope > .pm-period-footnote');
+        if (!isPeriodCut()) { if (has) has.remove(); return; }
+        if (has) { if (el.lastElementChild !== has) el.appendChild(has); return; }
+        var f = document.createElement('div');
+        f.className = 'pm-period-footnote';
+        f.setAttribute('style', 'display:block; clear:both; margin:24px 14px 18px; font-size:0.68rem; line-height:1.35; color:#9AA09B; background:rgba(12,22,24,0.9); border:1px solid rgba(154,160,155,0.25); border-radius:10px; padding:6px 10px;');
+        var i = NOTE.indexOf(':');
+        var strong = document.createElement('strong');
+        strong.style.fontWeight = '600';
+        strong.textContent = i > 0 ? NOTE.slice(0, i + 1) + ' ' : '';
+        var span = document.createElement('span');
+        span.textContent = i > 0 ? NOTE.slice(i + 1).trim() : NOTE;
+        f.appendChild(strong); f.appendChild(span);
+        el.appendChild(f);
+    }
+    var pending = null;
+    function schedule() {
+        if (pending) return;
+        pending = setTimeout(function () { pending = null; ensure(); }, 700);
+    }
+    try {
+        var el = document.getElementById('dashboardView');
+        if (el) new MutationObserver(schedule).observe(el, { childList: true, subtree: true, characterData: true });
+    } catch (e) { /* the first pass below still runs */ }
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', schedule);
     else schedule();
 })();
