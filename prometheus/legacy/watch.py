@@ -324,10 +324,21 @@ def _pm_thread_confirmed_page(history, page):
     the same profile)."""
     try:
         want = _H._normalize_for_match(f"yes {page}")
+        norm, stop = _H._normalize_for_match, _C._PM_CLARIFY_STOP_TOKENS
+        seen = 0
         for t in reversed([h for h in (history or []) if isinstance(h, dict)]):
             if str(t.get('role') or '').lower() != 'user':
                 continue
-            if _H._normalize_for_match(str(t.get('text') or '')) == want:
+            txt = str(t.get('text') or '')
+            if norm(txt) == want:
+                return True
+            # The thread already named the page outright in one of its
+            # last user turns (2026-10-09, Scott: "where do i find the
+            # howdy deck" then "no a pdf was created. where is it" drew
+            # "Do you want this on Howdy?"). The user said it; a
+            # follow-up that names nothing stays on it.
+            seen += 1
+            if seen <= 4 and _ns.page_named(txt, page, norm, stop):
                 return True
     except Exception:
         pass

@@ -711,8 +711,11 @@ def _money_symbol():
     """The seat's currency symbol; £ for East Tree Media and Omaze
     (Jenna 2026-10-08). '$' outside a request."""
     try:
-        import app as _A
-        return _A._session_money_symbol()
+        import sys as _sys
+        # the running app only; importing it here would bind the host
+        # from app.py and clobber a hermetic test's fake host (2026-10-09)
+        _A = _sys.modules.get('app')
+        return _A._session_money_symbol() if _A is not None else '$'
     except Exception:
         return '$'
 
@@ -722,8 +725,14 @@ def _cut_price_label():
     seat's currency; never credits (Jenna 2026-10-07)."""
     sym = _money_symbol()
     try:
+        import sys as _sys
         import wallet as _w
-        v = float(_w.tool_price_usd('profile_iq_derived_cut') or 0)
+        if _sys.modules.get('app') is None:
+            # no running app: the shipped default, never an app import
+            # from inside a lane (it rebinds the host; 2026-10-09)
+            v = float((_w.DEFAULT_PRICING.get('per_tool_usd') or {}).get('profile_iq_derived_cut') or 0)
+        else:
+            v = float(_w.tool_price_usd('profile_iq_derived_cut') or 0)
         if v > 0:
             return f"{sym}{v:,.0f}" if abs(v - round(v)) < 0.009 else f"{sym}{v:,.2f}"
     except Exception:

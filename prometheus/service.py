@@ -581,6 +581,37 @@ def ask(user, body, *, via='session'):
             _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
             return env, 200
 
+    # Deliverable lookup lane (2026-10-09, Scott: "where do i find the
+    # howdy deck created last night" ran as a read and failed; "no a pdf
+    # was created. where is it" drew the open-page confirm). Where-is-my
+    # deck / pdf / file is a lookup into what Prometheus produced for
+    # the caller: decks, linked files, sent mail, the catalog. No model
+    # call, never a read, never the page confirm.
+    if referent_decision is None and not _armed(body):
+        try:
+            from . import deliverables as _dlv
+            _dl_raw = (_dlv.answer(text, uname, user=user, ctx=ctx, history=history, host=host)
+                       if _dlv.parse(text) else None)
+        except Exception as e:
+            print(f"[prometheus] deliverable lane skipped: {e}")
+            _dl_raw = None
+        if _dl_raw:
+            raw = _dl_raw
+            decision = {'surface': 'analyze', 'mode': None,
+                        'reason': 'deliverable_lookup', 'client_hint': None}
+            if _client_surface == 'interpret':
+                raw = _interpret_shape(raw)
+                raw['followups'] = list(_dl_raw.get('followups') or [])
+            try:
+                host.ask_hint(route='deliverable_lookup', outcome='answered',
+                              subject=_dl_raw.get('subject'))
+            except Exception:
+                pass
+            env = envelope.wrap(raw, surface='analyze', decision=decision,
+                                thread_id=tid, via=via)
+            _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
+            return env, 200
+
     # Brand coverage lane (2026-10-08). "Is Alexa measured in Crosswalk?",
     # "what would alexa and echo be listed under in the behavioral tab":
     # whether we carry a brand, its category, and what the open profile

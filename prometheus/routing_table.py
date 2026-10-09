@@ -87,6 +87,17 @@ ROWS = [
         'examples': [], 'counter': [('who watches love island?', False)],
     },
     {
+        'id': 'deliverable_lookup', 'surface': 'analyze',
+        'reason': 'deliverable_lookup', 'client_action': 'analyze',
+        'host_only': True,
+        'note': 'Where-is-my deck / PDF / file / email asks answered from '
+                'the caller\'s deck records, linked files, sent mail, and '
+                'the catalog with no model call (2026-10-09, Scott: "where '
+                'do i find the howdy deck created last night"). Served by '
+                'the ask service lane, not decide().',
+        'examples': [], 'counter': [('where is the fall-off from the ticket step?', True)],
+    },
+    {
         'id': 'brand_coverage', 'surface': 'analyze',
         'reason': 'brand_coverage', 'client_action': 'analyze',
         'host_only': True,
