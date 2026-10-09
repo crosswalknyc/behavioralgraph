@@ -32,6 +32,7 @@ import pandas as pd
 import boto3
 
 from prometheus.legacy import H as _H  # noqa: E402
+from prometheus import intake_draft as _intake_draft  # noqa: E402  (drafts briefs from the open profile)
 from prometheus import seams as _seams  # noqa: E402
 
 
@@ -9243,6 +9244,9 @@ def _pm_intake_resolve(flow, text, history, parse_fn, complete_fn,
     if complete_fn(parsed):
         return parsed, False
     prior = _pm_intake_prior_user_turns(history, ask_copy)
+    _pd = _intake_draft.prior_draft(history)   # an edit merges with the drafted brief (2026-10-09)
+    if _pd:
+        prior = [_pd] + prior
     if prior:
         combined = '\n\n'.join(prior + [text])
         try:
@@ -9360,6 +9364,30 @@ def _pm_intake_fault_payload():
     return {'success': True, 'action': 'answer',
             'reply': _PM_INTAKE_FAULT_REPLY,
             'followups': [], 'offer_deck': False, 'deck_angle': None}
+
+
+def _pm_intake_screen_draft(kind, body):
+    """The full brief drafted from the profile open on screen (item 4,
+    2026-10-09): one confirm card instead of a field-by-field ask.
+    None when nothing is open or the profile cannot carry the brief."""
+    try:
+        ctx, _err = _pm_validate_page_context((body or {}).get('page_context'))
+        if not ctx:
+            return None
+        page = str((ctx.get('primary') or {}).get('name') or '').strip()
+        journey = kind == 'journey'
+        parsed = (_intake_draft.journey_draft if journey else _intake_draft.bpiq_draft)(ctx, _H.s3_client, _H.S3_BUCKET)
+        if not parsed or not (_pm_jiq_inputs_complete if journey else _pm_bpiq_inputs_complete)(parsed):
+            return None
+        parsed.pop('_drafted_from', None)
+        reply = _intake_draft.draft_lead(kind, page) + '\n\n' + (_pm_jiq_confirm_reply if journey else _pm_bpiq_confirm_reply)(parsed)
+        payload = ({'jiq_confirm_payload': parsed, 'followups': ['Run the journey', 'Cancel']} if journey
+                   else {'bpiq_confirm_payload': parsed, 'followups': ['Run it', 'Cancel']})
+        _pm_ask_hint(outcome='intake_drafted_from_screen', subject=page)
+        return {'success': True, 'action': 'answer', 'reply': reply, 'offer_deck': False, 'deck_angle': None, **payload}
+    except Exception:
+        traceback.print_exc()
+        return None
 
 
 def _pm_intake_flow_table():
@@ -15470,6 +15498,9 @@ def _pm_analyze_core(user, body, text, history):
             'followups': ['Cancel'],
             'offer_deck': False, 'deck_angle': None})
     if _pm_bpiq_intent(text):
+        _bd = _pm_intake_screen_draft('bpiq', body)   # propose, never interrogate (2026-10-09)
+        if _bd:
+            return jsonify(_bd)
         return jsonify({
             'success': True, 'action': 'answer',
             'reply': _PM_BPIQ_ASK_COPY,
@@ -15760,6 +15791,9 @@ def _pm_analyze_core(user, body, text, history):
             'followups': ['Cancel'],
             'offer_deck': False, 'deck_angle': None})
     if _pm_jiq_intent(text):
+        _jd = _pm_intake_screen_draft('journey', body)   # propose, never interrogate (2026-10-09)
+        if _jd:
+            return jsonify(_jd)
         return jsonify({
             'success': True, 'action': 'answer',
             'reply': _PM_JIQ_ASK_COPY,
@@ -16868,18 +16902,7 @@ _PM_BPIQ_CHIP = 'Pull Brand Partnership Valuation'
 _PM_BPIQ_CREDITS = 15
 
 
-_PM_BPIQ_ASK_COPY = (
-    "Happy to run a Brand Partnership Valuation. Give me, in one "
-    "message:\n"
-    "1. The brand being valued (e.g. RAM Trucks)\n"
-    "2. The partner - talent, show, event, or franchise (e.g. Glen "
-    "Powell)\n"
-    "3. The campaign window (e.g. Apr 2024 - Dec 2024)\n"
-    "Optional: a pre window (default: the year before), a post window "
-    "(default: campaign end through today), and the audience to "
-    "measure against (e.g. show viewers, ticket purchasers).\n\n"
-    "Example: \"Glen Powell x RAM Trucks, campaign Apr 2024 - Dec "
-    "2024, post through Jun 2025\"")
+_PM_BPIQ_ASK_COPY = _intake_draft.BPIQ_ASK_COPY  # text lives in prometheus/intake_draft.py
 
 
 def _pm_bpiq_intent(text):
@@ -17059,32 +17082,7 @@ _PM_JIQ_CHIP = 'Pull a Digital Journey'
 _PM_JIQ_CREDITS = 15
 
 
-_PM_JIQ_ASK_COPY = (
-    "Happy to build a Digital Journey. Give me, in one message:\n"
-    "1. The category or title the journey follows (e.g. luxury "
-    "fragrance, running shoes, Young Sheldon). Or paste the clip URL "
-    "when the file is before and after a specific post.\n"
-    "2. The end step in one sentence. It can be a purchase (e.g. "
-    "paid $95+ for a house bottle on TikTok Shop), a watch (e.g. "
-    "watched a paid episode on Amazon after a clip), a ticketing-site "
-    "visit for a film, a 20-minute before-and-after around a clip, "
-    "new-to-platform vs already on it, or a music-first path into a "
-    "title. 'Engaged with the category' is not an end step.\n"
-    "3. Where that end step happens (e.g. TikTok Shop, Amazon, "
-    "Peacock, Instagram, Pluto)\n"
-    "Optional: a defined starting point (e.g. accounts that watched "
-    "short-form clips of the title; default is US gen pop) and the "
-    "window (default: trailing 12 months).\n"
-    "Every journey includes a Clickstream last tab: the public URLs "
-    "on each step, with people on each URL.\n\n"
-    "Examples:\n"
-    "\"Running shoes on Amazon, end step is paid $120+ for a "
-    "performance shoe, trailing 12 months\"\n"
-    "\"Young Sheldon, start from accounts that watched short-form "
-    "clips of the show, end step is watched a paid episode on "
-    "Amazon\"\n"
-    "\"Build a journey of people who watched this video and what "
-    "happened before and after: https://www.instagram.com/p/xxxxx/\"")
+_PM_JIQ_ASK_COPY = _intake_draft.JIQ_ASK_COPY  # text lives in prometheus/intake_draft.py
 
 
 def _pm_jiq_intent(text):
