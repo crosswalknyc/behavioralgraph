@@ -13472,7 +13472,14 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
         text, history, metric_request=mr or None,
         anchors_block=anchors_block, ledger_block=_rm_led_block,
         profile_rows_block=digest_block)
-    extra_blocks = [b for b in (entity_rows_block, purchase_block,
+    _v_lookup, verifier_block = None, ''
+    try:   # the verifier's rows go in BEFORE generation (2026-10-09, item 2: editor, not gate)
+        import prometheus_verify as _pmv0
+        _v_lookup = _pmv0.load_base_lookup(_H.s3_client, _H.S3_BUCKET, base.get('s3_key'), base.get('subject') or '')
+        verifier_block = _pmv0.measured_prompt_block(_v_lookup, text, metric_request=mr or None)
+    except Exception:
+        traceback.print_exc()
+    extra_blocks = [b for b in (entity_rows_block, purchase_block, verifier_block,
                                 measured_block, subiq_block,
                                 neighbor_block, examples_block) if b]
     extra_blocks.append(pma.GENERATION_LOOP_GUIDANCE)
@@ -13585,9 +13592,10 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
     _pm_auto_corrected = False   # silent auto-correct -> verify_outcome 4
     if pmv is not None:
         try:
-            _v_lookup = pmv.load_base_lookup(
-                _H.s3_client, _H.S3_BUCKET, base.get('s3_key'),
-                base.get('subject') or '')
+            if _v_lookup is None:
+                _v_lookup = pmv.load_base_lookup(
+                    _H.s3_client, _H.S3_BUCKET, base.get('s3_key'),
+                    base.get('subject') or '')
             verdict = pmv.verify_read(bound_facts=_purchase_facts, 
                 reply=reply, res=res, family=fam0,
                 base_lookup=_v_lookup, question=text,
@@ -13639,27 +13647,7 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
             # to HELD with the original findings. Routes via _pm_claude_json.
             _retry_findings = []
             try:
-                _findings_now = (verdict or {}).get('findings') or []
-                corrective_block = (
-                    'AUTO-CORRECT PASS - USE MEASURED FIGURES ONLY\n'
-                    '=============================================\n'
-                    'Your prior reply had these verify findings:\n'
-                    + '\n'.join(f'- {f}'
-                                 for f in _findings_now[:8])
-                    + '\n\nRewrite the reply using the MEASURED '
-                    'figures from the base file above. If a '
-                    "claim's measured value contradicts your prior "
-                    'claim, either use the measured value or drop '
-                    'the claim entirely. Do not introduce any new '
-                    'claims that were not in the prior reply. '
-                    'Keep every claim that was already correct. '
-                    'REWRITE flagged sentences cleanly so every '
-                    'derived figure (shares, indexes, totals, '
-                    'superlatives like smallest or weakest) '
-                    'recomputes from the corrected numbers - NEVER '
-                    'append a parenthetical contradiction next to a '
-                    'wrong claim.'
-                )
+                corrective_block = pmv.render_autocorrect_block((verdict or {}).get('findings') or [])
                 rev_prompt2 = user_prompt + '\n\n' + corrective_block
                 result3 = _pm_claude_json(
                     pma.REASONED_METRICS_SYSTEM_PROMPT, rev_prompt2,
@@ -13711,6 +13699,20 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
                 data, res, reply, fam0, verdict, _nfix = _resc
                 verify_revised = revised_ok = _pm_auto_corrected = True
                 stages['facts_fixed'] = int(_nfix)
+        if not revised_ok and pmv is not None and _last_draft and _last_draft[0] is not None:
+            # Trim, never hold (2026-10-09, item 2): what the findings name comes out, the rest re-verifies and ships
+            _ld = _last_draft
+            _trm = pmv.trim_unverified(
+                _ld, _last_verdict or verdict, base_lookup=_v_lookup, question=text,
+                recompute=lambda d: (lambda r: (r, pma.format_generated_metrics_reply(r)))(
+                    pma.enforce_metrics_coherence(d, so_what=_is_so_what, multi=_multi_qs)),
+                prior_entries=_pm_verify_prior_entries(_ld[1], _ld[3], led) if _ld[1] else [],
+                bound_facts=_purchase_facts, family=_ld[3] or fam0)
+            if _trm:
+                data, res, reply, fam0, verdict, _ntrim, _dropped = _trm
+                verify_revised = revised_ok = _pm_auto_corrected = True
+                stages['trimmed'] = int(_ntrim)
+                reply = (reply.rstrip() + '\n\n' + pmv.left_out_line(text, _dropped)).strip()
         if not revised_ok:
             stages['verify'] = int(
                 (time.monotonic() - _t_verify) * 1000)

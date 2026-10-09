@@ -1479,3 +1479,265 @@ def rescue_in_place(last_draft, last_verdict, *, base_lookup=None, question=None
     except Exception:
         traceback.print_exc()
         return None
+
+
+# ---------------------------------------------------------------------------
+# The verifier as an editor (2026-10-09, item 2 of the improvement list)
+# ---------------------------------------------------------------------------
+# Two moves. Before generation, the measured rows the checks will bind
+# against are handed to the model for the entities and demographics
+# the question names, so the first draft carries the measured figure.
+# After every repair pass has run, a draft that still fails loses the
+# sentences and rows the findings name instead of being held whole:
+# what remains is re-verified and ships. Target: held reads under 2%.
+
+_DEMO_ASK_RX = {
+    'AGE': re.compile(r"\b(?:age|ages|aged|old|older|younger|gen\s*z|millennials?|boomers?|gen\s*x|\d{2}\s*-\s*\d{2}|\d{2}\+)\b", re.I),
+    'GENDER': re.compile(r"\b(?:gender|female|male|women|men|woman|man|skew)\b", re.I),
+    'INCOME': re.compile(r"\b(?:income|hhi|earn|earning|affluent|wealth|\$\d)\b", re.I),
+    'ETHNICITY': re.compile(r"\b(?:ethnicity|ethnic|hispanic|latino|black|white|asian|race|diverse|diversity)\b", re.I),
+    'EDUCATION': re.compile(r"\b(?:education|college|degree|graduate|high school)\b", re.I),
+    'PARENTAL STATUS': re.compile(r"\b(?:parents?|kids|children|moms?|dads?|family|families)\b", re.I),
+    'RELATIONSHIP': re.compile(r"\b(?:married|single|relationship|divorced|couples?)\b", re.I),
+    'OCCUPATION': re.compile(r"\b(?:occupation|job|jobs|profession|employed|workers?)\b", re.I),
+    'SEXUAL ORIENTATION': re.compile(r"\b(?:lgbt|lgbtq|gay|lesbian|orientation|queer)\b", re.I),
+}
+_MEASURED_STOP = frozenset(('the', 'and', 'for', 'with', 'from', 'that', 'this', 'what', 'who',
+                            'how', 'many', 'much', 'does', 'did', 'are', 'was', 'were', 'has',
+                            'have', 'they', 'them', 'their', 'there', 'about', 'into', 'over',
+                            'also', 'than', 'then', 'when', 'where', 'which', 'your', 'you',
+                            'our', 'out', 'not', 'but', 'per', 'via', 'any', 'all', 'one', 'two',
+                            'watch', 'watched', 'viewers', 'audience', 'people', 'users', 'fans',
+                            'share', 'percent', 'index', 'rate', 'month', 'monthly', 'year',
+                            'week', 'hours', 'time', 'data', 'read', 'show', 'shows', 'also'))
+
+
+def _question_ngram_norms(question, max_n=4):
+    words = [w for w in re.split(r"[^A-Za-z0-9+&']+", str(question or '')) if w]
+    out = set()
+    for n in range(1, max_n + 1):
+        for i in range(0, max(0, len(words) - n + 1)):
+            gram = words[i:i + n]
+            if n == 1 and (len(gram[0]) < 4 and not gram[0].isupper()):
+                continue
+            if n == 1 and gram[0].lower() in _MEASURED_STOP:
+                continue
+            out.add(_norm(' '.join(gram)))
+    return {g for g in out if g}
+
+
+def _pretty_key(bn, demos_label=None):
+    if demos_label:
+        return demos_label
+    return str(bn)
+
+
+def measured_prompt_block(base_lookup, question, metric_request=None, max_rows=60):
+    """MEASURED FIGURES block for the generation prompt: every base row
+    for the brands and demographics the question (or the metric
+    request) names, the file's projection, and the sibling cuts' sizes.
+    '' when the lookup has nothing to say."""
+    try:
+        if not isinstance(base_lookup, dict):
+            return ''
+        grams = _question_ngram_norms(question)
+        for lab in (metric_request or {}).get('labels', []) if isinstance(metric_request, dict) else []:
+            g = _norm(lab)
+            if g:
+                grams.add(g)
+        lines = []
+        brands = base_lookup.get('brands') or {}
+        hits = [bn for bn in brands if bn in grams]
+        for bn in sorted(hits)[:20]:
+            for catU, v, idx in (brands.get(bn) or [])[:6]:
+                ln = f"- {bn}: {catU} {v:.4f}%"
+                if idx is not None:
+                    ln += f" (index {idx:g} vs US)"
+                lines.append(ln)
+        demos = base_lookup.get('demos') or {}
+        want_cats = {c for c, rx in _DEMO_ASK_RX.items() if rx.search(str(question or ''))}
+        cut_lines = []
+        demo_lines = []
+        for bn, entries in demos.items():
+            for ent in entries:
+                catU = ent[0]
+                if catU == 'GENERATION CUT':
+                    share = ent[1]
+                    proj = (base_lookup.get('cut_projections') or {}).get(bn)
+                    ln = f"- cut {ent[3] if len(ent) > 3 and ent[3] else bn}:"
+                    if proj:
+                        ln += f" {int(proj):,} US people"
+                    if share is not None:
+                        ln += f" ({share:.2f}% of the parent audience)"
+                    cut_lines.append(ln)
+                elif catU in want_cats or bn in grams:
+                    label = ent[3] if len(ent) > 3 and ent[3] else bn
+                    gp = ent[2] if len(ent) > 2 else None
+                    ln = f"- {catU} {label}: {ent[1]:.4f}%"
+                    if gp:
+                        ln += f" (US {gp:.2f}%)"
+                    demo_lines.append(ln)
+        lines += demo_lines[:max_rows]
+        lines += cut_lines[:12]
+        proj = (base_lookup.get('meta') or {}).get('projection')
+        if not lines and not proj:
+            return ''
+        head = ['MEASURED FIGURES - QUOTE THESE EXACTLY',
+                '======================================',
+                'These are the measured rows for what the question names. Every figure you state for them',
+                'must be the measured value at the precision shown (round only in prose, never in the',
+                'metric value); derive shares, indexes and counts from these, and never state a different',
+                'figure for the same row. Anything not listed here is reasoned, not measured: say so in',
+                'the definition, never present it as a measured row.']
+        if proj:
+            head.append(f"- Projected US audience of this file: {int(proj):,} people")
+        return '\n'.join(head + lines[:max_rows + 40])
+    except Exception:
+        traceback.print_exc()
+        return ''
+
+
+_FINDING_LABEL_RXS = (
+    re.compile(r"\bcites\s+(?P<label>.+?)\s+(?:inside the Avid tier\s+)?at\s+\d", re.I),
+    re.compile(r"\bputs\s+(?P<label>.+?)\s+at\s+\d", re.I),
+    re.compile(r"\bcounts\s+(?P<label>.+?)\s+(?:buyers\s+)?(?:inside the Avid tier\s+)?at\s+\d", re.I),
+    re.compile(r"\bsizes\s+the\s+(?P<label>Avid tier)\b", re.I),
+    re.compile(r"^The\s+(?P<label>Avid tier)\s+is\b", re.I),
+)
+
+
+def finding_labels(findings, include_tokens=True):
+    """The entity labels the findings name, in order, deduped. Banned
+    words from scrub findings ride along when include_tokens (they
+    name the sentence to drop, not an entity)."""
+    out = []
+    for f in findings or []:
+        f = str(f)
+        tok = _FINDING_TOKEN_RX.search(f)
+        if tok:
+            if include_tokens:
+                out.append(tok.group(1))
+            continue
+        for rx in _FINDING_LABEL_RXS:
+            m = rx.search(f)
+            if m:
+                lab = m.group('label').strip(' "\'')
+                if lab and lab.lower() not in {x.lower() for x in out}:
+                    out.append(lab)
+                break
+    return out
+
+
+def _mentions(text, label):
+    ln = _norm(label)
+    if not ln:
+        return False
+    return ln in _norm(text)
+
+
+def _drop_sentences(text, labels):
+    """Remove every sentence / bullet that mentions one of the labels."""
+    kept, dropped = [], 0
+    for line in str(text or '').split('\n'):
+        if any(_mentions(line, lab) for lab in labels):
+            if line.lstrip().startswith(('-', '*')):
+                dropped += 1
+                continue
+            parts = re.split(r'(?<=[.!?;:])\s+', line)
+            keep = [p for p in parts if not any(_mentions(p, lab) for lab in labels)]
+            dropped += len(parts) - len(keep)
+            line = ' '.join(keep).strip()
+            if not line:
+                continue
+        kept.append(line)
+    out = re.sub(r'\n{3,}', '\n\n', '\n'.join(kept)).strip()
+    return out, dropped
+
+
+def trim_unverified(last_draft, last_verdict, *, recompute, base_lookup=None, question=None,
+                    prior_entries=None, bound_facts=None, family=None):
+    """Ship the part of a held draft the checks accept: drop the rows,
+    metrics and sentences the findings name, rebuild the reply, and
+    re-verify. Returns (data, res, reply, family, verdict, n_dropped,
+    dropped_labels) or None when nothing answerable remains."""
+    try:
+        data, res, reply, fam = last_draft or (None, None, None, None)
+        if not isinstance(data, dict) or reply is None:
+            return None
+        labels = finding_labels((last_verdict or {}).get('findings') or [])
+        if not labels:
+            return None
+        d2 = json.loads(json.dumps(data))
+        n = 0
+        mets = [m for m in (d2.get('metrics') or []) if isinstance(m, dict)]
+        keep_m = [m for m in mets if not any(_mentions(str(m.get('label') or ''), lab) for lab in labels)]
+        n += len(mets) - len(keep_m)
+        d2['metrics'] = keep_m
+        bd = d2.get('breakdown') if isinstance(d2.get('breakdown'), dict) else None
+        if bd and isinstance(bd.get('rows'), list):
+            rows = [r for r in bd['rows'] if isinstance(r, dict)]
+            keep_r = [r for r in rows if not any(_mentions(str(r.get('label') or ''), lab) for lab in labels)]
+            n += len(rows) - len(keep_r)
+            if keep_r:
+                bd['rows'] = keep_r
+            else:
+                d2.pop('breakdown', None)
+        for key in ('reads', 'followups'):
+            if isinstance(d2.get(key), list):
+                before = len(d2[key])
+                d2[key] = [x for x in d2[key] if not any(_mentions(str(x), lab) for lab in labels)]
+                n += before - len(d2[key])
+        if isinstance(d2.get('headline'), str) and any(_mentions(d2['headline'], lab) for lab in labels):
+            d2['headline'], k = _drop_sentences(d2['headline'], labels)
+            n += k
+        if not d2.get('metrics') and not d2.get('breakdown'):
+            return None
+        res2, reply2 = recompute(d2)
+        if not reply2:
+            return None
+        reply2, k = _drop_sentences(reply2, labels)
+        n += k
+        if len(reply2) < 80 or not n:
+            return None
+        verdict2 = verify_read(reply=reply2, res=res2, family=family or fam, base_lookup=base_lookup,
+                               prior_entries=prior_entries or [], question=question, bound_facts=bound_facts)
+        if not verdict2.get('ok'):
+            print(f"[pm-verify] trim did not clear the checks: {verdict2.get('findings')}")
+            return None
+        entities = finding_labels((last_verdict or {}).get('findings') or [], include_tokens=False)
+        print(f"[pm-verify] trimmed {n} item(s) naming {labels}; the rest ships")
+        return d2, res2, reply2, fam, verdict2, n, entities
+    except Exception:
+        traceback.print_exc()
+        return None
+
+
+def left_out_line(question, dropped_labels):
+    """One plain line for the reader when a figure the question asked
+    for was left out; '' when the dropped items were the model's own
+    additions (the correction is then silent, in-place-corrections)."""
+    q = _norm(question)
+    asked = [lab for lab in dropped_labels or []
+             if _norm(lab) and len(_norm(lab)) >= 3 and _norm(lab) in q]
+    if not asked:
+        return ''
+    names = ', '.join(dict.fromkeys(asked))
+    return (f"I do not have a figure I can stand behind for {names} in this window, "
+            f"so it is not in this read.")
+
+
+def render_autocorrect_block(findings):
+    """Prompt block for the single auto-correct pass (moved out of the
+    read core 2026-10-09)."""
+    return (
+        'AUTO-CORRECT PASS - USE MEASURED FIGURES ONLY\n'
+        '=============================================\n'
+        'Your prior reply had these verify findings:\n'
+        + '\n'.join(f'- {f}' for f in (findings or [])[:8])
+        + '\n\nRewrite the reply using the MEASURED figures from the base file above. If a '
+        "claim's measured value contradicts your prior claim, either use the measured value or drop "
+        'the claim entirely. Do not introduce any new claims that were not in the prior reply. '
+        'Keep every claim that was already correct. REWRITE flagged sentences cleanly so every '
+        'derived figure (shares, indexes, totals, superlatives like smallest or weakest) '
+        'recomputes from the corrected numbers - NEVER append a parenthetical contradiction next to a '
+        'wrong claim.')
