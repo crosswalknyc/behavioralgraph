@@ -51,6 +51,145 @@ FINAL_NOTE_FREE = ('That read did not finish on my side. Ask it again and I '
 _INSTANCE = f"{socket.gethostname()}:{os.getpid()}"
 _started = False
 _lock = threading.Lock()
+
+# Reads on the queue (2026-10-08, item 1 of the Prometheus plan): the web
+# process no longer runs a read on a thread that every deploy kills. It
+# enqueues the job (status working, stage "lining up the read", a marker
+# under _queue/) and the Hetzner read worker (migration/
+# prometheus_read_worker.py) claims it and runs the same job body inline.
+# If nothing claims a queued read within QUEUE_GRACE seconds the sweeper
+# runs it locally, so a worker outage costs minutes, never the read.
+QUEUE_PREFIX = 'system/prometheus_reads/_queue/'
+QUEUE_GRACE = 150
+
+
+def queue_enabled():
+    """Render enqueues unless PM_READS_ON_QUEUE=0; the worker itself and
+    tests never enqueue."""
+    if os.environ.get('PM_READ_WORKER') or os.environ.get('REGRESSION_TEST_MODE'):
+        return False
+    return os.environ.get('PM_READS_ON_QUEUE', '1') != '0'
+
+
+def enqueue(job_id, head):
+    """Write the job as queued and drop its marker. Never raises."""
+    s3, bucket = _s3()
+    rec = dict(head)
+    rec.update({'status': 'working', 'stage': 'lining up the read',
+                'queued': True, 'queued_at': time.time()})
+    _chat()._pm_read_status_write(job_id, rec)
+    s3.put_object(Bucket=bucket, Key=f"{QUEUE_PREFIX}{job_id}.json",
+                  Body=json.dumps({'job_id': job_id, 'queued_at': rec['queued_at']}).encode('utf-8'),
+                  ContentType='application/json')
+    print(f"[pm-queue] read {job_id} queued for the read worker")
+    return rec
+
+
+def list_queued():
+    """Marker job ids, oldest first."""
+    s3, bucket = _s3()
+    out = []
+    try:
+        token = None
+        while True:
+            kw = dict(Bucket=bucket, Prefix=QUEUE_PREFIX)
+            if token:
+                kw['ContinuationToken'] = token
+            r = s3.list_objects_v2(**kw)
+            for o in r.get('Contents') or []:
+                k = str(o.get('Key') or '')
+                if k.endswith('.json'):
+                    out.append((o.get('LastModified'), k.rsplit('/', 1)[-1][:-5]))
+            if not r.get('IsTruncated'):
+                break
+            token = r.get('NextContinuationToken')
+    except Exception:
+        traceback.print_exc()
+    out.sort(key=lambda x: (x[0] is None, x[0]))
+    return [j for _lm, j in out]
+
+
+def claim_queued(job_id):
+    """The worker takes a queued read: conditional put flips queued ->
+    claimed; the marker goes. Returns the record or None (someone else
+    took it, or it is no longer queued)."""
+    s3, bucket = _s3()
+    key = f"{_prefix()}{job_id}.json"
+    try:
+        obj = s3.get_object(Bucket=bucket, Key=key)
+        etag = str(obj.get('ETag') or '').strip('"')
+        cur = json.loads(obj['Body'].read())
+    except Exception:
+        try:
+            s3.delete_object(Bucket=bucket, Key=f"{QUEUE_PREFIX}{job_id}.json")
+        except Exception:
+            pass
+        return None
+    if not cur.get('queued') or cur.get('claimed_by') or str(cur.get('status') or '') != 'working':
+        try:
+            s3.delete_object(Bucket=bucket, Key=f"{QUEUE_PREFIX}{job_id}.json")
+        except Exception:
+            pass
+        return None
+    claimed = dict(cur)
+    claimed.update({'queued': False, 'claimed_by': _INSTANCE, 'claimed_at': time.time(),
+                    'stage': 'reading the data'})
+    body = json.dumps(claimed).encode('utf-8')
+    try:
+        kw = dict(Bucket=bucket, Key=key, Body=body, ContentType='application/json')
+        if etag:
+            kw['IfMatch'] = etag
+        s3.put_object(**kw)
+    except Exception as e:
+        if 'PreconditionFailed' in str(e) or '412' in str(e):
+            return None
+        try:
+            s3.put_object(Bucket=bucket, Key=key, Body=body, ContentType='application/json')
+            time.sleep(1.0)
+            again = json.loads(s3.get_object(Bucket=bucket, Key=key)['Body'].read())
+            if again.get('claimed_by') != _INSTANCE:
+                return None
+        except Exception:
+            return None
+    try:
+        s3.delete_object(Bucket=bucket, Key=f"{QUEUE_PREFIX}{job_id}.json")
+    except Exception:
+        pass
+    return claimed
+
+
+def run_inline(job_id, status):
+    """The worker runs one claimed read right here, through the same
+    code path the web process used to run on a thread. Returns True
+    when the job body ran."""
+    c, h = _chat(), _host()
+    rr = status.get('resume') if isinstance(status.get('resume'), dict) else None
+    uname = str(status.get('user') or '').strip()
+    if not rr or not rr.get('text') or not uname:
+        _finalize(job_id, status, 'queued read without a resume record')
+        return False
+    try:
+        data = h.load_users()
+        user = (data.get('users') or {}).get(uname)
+    except Exception:
+        user = None
+    if not isinstance(user, dict):
+        _finalize(job_id, status, 'requester not found')
+        return False
+    headers = {'X-Prometheus-Caller': 'resume:read-worker'} if rr.get('probe') else {}
+    panel_confirm = None
+    if isinstance(rr.get('panel_charge'), dict):
+        panel_confirm = {'subject': rr.get('bind_subject') or '', 'resume_charge': rr['panel_charge']}
+    with h.app.test_request_context('/api/brief-chat/analyze', method='POST',
+                                    json={'text': rr['text']}, headers=headers):
+        from flask import session as _session
+        _session['username'] = uname
+        c._pm_generate_metrics_response(
+            user, rr['text'], list(rr.get('history') or []), prefer_catalog=True,
+            bind_subject=rr.get('bind_subject') or None, bind_cohort=rr.get('bind_cohort') or None,
+            panel_confirm=panel_confirm, switch_page=rr.get('switch_page') or None,
+            inline_job_id=job_id, force_local=True)
+    return True
 _INFLIGHT = {}               # job_id -> head, for the SIGTERM handoff
 _handoff_installed = False
 
@@ -152,6 +291,11 @@ def is_stale(status, now=None, after=RECOVER_AFTER):
         return False
     if status.get('resumed_as') and status.get('resumed_as') != status.get('job_id'):
         return False
+    if status.get('queued') and not status.get('claimed_by'):
+        try:
+            return (now or time.time()) - float(status.get('queued_at') or 0) > QUEUE_GRACE
+        except (TypeError, ValueError):
+            return False
     beat = last_beat(status)
     if beat <= 0:
         return False
@@ -281,9 +425,14 @@ def _claim(job_id, status):
     if not is_stale(cur) and not held_retry:
         return None
     claimed = dict(cur)
-    claimed.update({'status': 'working', 'stage': STALE_STAGE,
+    claimed.update({'status': 'working', 'stage': STALE_STAGE, 'queued': False,
                     'claimed_by': _INSTANCE, 'claimed_at': time.time(),
                     'resume_attempts': int(cur.get('resume_attempts') or 0) + 1})
+    if cur.get('queued'):
+        try:
+            s3.delete_object(Bucket=bucket, Key=f"{QUEUE_PREFIX}{job_id}.json")
+        except Exception:
+            pass
     if held_retry:
         claimed['held_retries'] = int(cur.get('held_retries') or 0) + 1
         claimed['stage'] = 'taking another pass'
@@ -422,7 +571,8 @@ def recover(job_id, status=None, reason='no heartbeat'):
                 bind_subject=rr.get('bind_subject') or None,
                 bind_cohort=rr.get('bind_cohort') or None,
                 panel_confirm=panel_confirm,
-                switch_page=rr.get('switch_page') or None)
+                switch_page=rr.get('switch_page') or None,
+                force_local=True)   # recovery never re-queues (a worker outage must not loop)
         body = resp.get_json() if hasattr(resp, 'get_json') else resp
         body = body if isinstance(body, dict) else {}
         new_id = str(body.get('read_job_id') or '').strip()

@@ -12744,7 +12744,8 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
                                   prefer_catalog=False, async_fresh=None,
                                   bind_subject=None, bind_cohort=None,
                                   panel_confirm=None,
-                                  switch_page=None):
+                                  switch_page=None, inline_job_id=None,
+                                  force_local=False):
     """Reasoned measurement read (2026-08-26, Jenna): a concrete
     number for a digitally observable ask the open data does not
     cover, or the read for a sub-cohort the open data does not
@@ -13236,45 +13237,42 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
             _pm_ask_hint(route='read_inflight_dedupe',
                          outcome='answered',
                          subject=base.get('subject'))
-            _stage = (_dup_read.get('stage')
-                      or 'working through the data')
+            _stage = (_dup_read.get('stage') or 'working through the data')
             return jsonify({
-                'success': True, 'action': 'answer',
-                'read_job_id': _dup_read['job_id'],
-                'reply': ('Already on it - that exact read is '
-                          'running now (' + _stage + '). It lands '
-                          'right here the moment it is ready, and I '
+                'success': True, 'action': 'answer', 'read_job_id': _dup_read['job_id'],
+                'reply': ('Already on it - that exact read is running now (' + _stage
+                          + '). It lands right here the moment it is ready, and I '
                           'did not start a second copy.'),
-                'followups': [], 'offer_deck': False,
-                'deck_angle': None})
-        job_id = uuid.uuid4().hex[:12]
+                'followups': [], 'offer_deck': False, 'deck_angle': None})
+        job_id = inline_job_id or uuid.uuid4().hex[:12]
         # A probe's finished read never mails anyone (captured here,
         # on the request thread, and carried on the job).
         _probe = bool(_pm_probe_caller()) or _pm_is_probe_user(_pm_ask_log_user(''))
-        _pm_read_status_write(job_id, {
-            'job_id': job_id, 'user': _pm_user, 'status': 'working',
-            'stage': 'reading the data', 'probe': _probe,
-            'question': text[:300], 'started_at': time.time(),
-            'resume': _rr.resume_record(          # survives a deploy
-                text=text, history=history, base=base,
-                panel_charge=panel_charge, probe=_probe,
-                switch_page=switch_page, bind_cohort=bind_cohort)})
+        _head = {'job_id': job_id, 'user': _pm_user, 'status': 'working',
+                 'stage': 'reading the data', 'probe': _probe,
+                 'question': text[:300], 'started_at': time.time(),
+                 'resume': _rr.resume_record(          # survives a deploy
+                     text=text, history=history, base=base,
+                     panel_charge=panel_charge, probe=_probe,
+                     switch_page=switch_page, bind_cohort=bind_cohort)}
+        _args = (job_id, _pm_user, _pm_read_extras, text, list(history or [])[-10:],
+                 mr, base, digest_block, anchors_block, led)
+        _kw = {'panel_charge': panel_charge, 'probe': _probe}
         _pm_read_inflight_mark(_pm_user, text, job_id)
         _pm_job_bind_thread(job_id, _pm_user)
-        threading.Thread(
-            target=_pm_run_read_job,
-            args=(job_id, _pm_user, _pm_read_extras, text,
-                  list(history or [])[-10:], mr, base, digest_block,
-                  anchors_block, led),
-            kwargs={'panel_charge': panel_charge, 'probe': _probe},
-            daemon=True).start()
+        if inline_job_id:            # the read worker runs the job right here
+            _pm_read_status_write(job_id, _head)
+            _pm_run_read_job(*_args, **_kw)
+        elif _rr.queue_enabled() and not force_local:
+            _rr.enqueue(job_id, _head)   # the Hetzner read worker picks it up
+        else:                        # local thread (fallback / kill switch)
+            _pm_read_status_write(job_id, _head)
+            threading.Thread(target=_pm_run_read_job, args=_args, kwargs=_kw, daemon=True).start()
         _pm_ask_hint(outcome='answered', subject=base.get('subject'))
         return jsonify({
-            'success': True, 'action': 'answer',
-            'read_job_id': job_id,
-            'reply': ('On it. This one takes a real look at the data, '
-                      'so give me a moment - the '
-                      'read will land right here when it is ready.'),
+            'success': True, 'action': 'answer', 'read_job_id': job_id,
+            'reply': ('On it. This one takes a real look at the data, so give me '
+                      'a moment - the read will land right here when it is ready.'),
             'followups': [], 'offer_deck': False, 'deck_angle': None})
     payload = _pm_generate_read_core(
         text=text, history=history, mr=mr, base=base,

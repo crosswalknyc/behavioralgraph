@@ -13908,7 +13908,7 @@ def _llmo_daily_scheduler():
         _llmo_do_background_load()
 
 
-if s3_client:
+if s3_client and os.environ.get('PM_WORKER_MODE') != '1':
     _llmo_scheduler_thread = _llmo_threading.Thread(target=_llmo_daily_scheduler, daemon=True)
     _llmo_scheduler_thread.start()
     print("[LLMO Scheduler] Background thread started (startup load + daily 5:45 AM PST refresh)")
@@ -29733,12 +29733,14 @@ def _stale_sweep_loop():
         time.sleep(BG_STALE_SWEEP_INTERVAL_SECONDS)
 
 
-# Spin up heartbeat + sweep daemons on import.
+# Spin up heartbeat + sweep daemons on import (web process only; the
+# Hetzner read worker imports this module with PM_WORKER_MODE=1).
 try:
-    _hb_thread = threading.Thread(target=_profile_heartbeat_pulser, daemon=True, name='profile-heartbeat')
-    _hb_thread.start()
-    _sweep_thread = threading.Thread(target=_stale_sweep_loop, daemon=True, name='profile-stale-sweep')
-    _sweep_thread.start()
+    if os.environ.get('PM_WORKER_MODE') != '1':
+        _hb_thread = threading.Thread(target=_profile_heartbeat_pulser, daemon=True, name='profile-heartbeat')
+        _hb_thread.start()
+        _sweep_thread = threading.Thread(target=_stale_sweep_loop, daemon=True, name='profile-stale-sweep')
+        _sweep_thread.start()
 except Exception as _e:
     print(f"[Heartbeat] startup error: {_e}")
 
