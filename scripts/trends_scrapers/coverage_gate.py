@@ -1007,16 +1007,27 @@ def _merge_headline_results(results: dict[str, dict]) -> int:
     return len(results)
 
 
-def _send_still_missing_alert(missing_rows: list[tuple[str, str]]) -> None:
+# Bracket rounds the gate runs before it reports. Round one is the
+# board as researched; a later round only ever holds rows that appeared
+# on the re-render (a scraper published mid-gate), so two or three
+# rounds end the loop on any real day.
+_BRACKET_MAX_ROUNDS = 3
+
+
+def _send_still_missing_alert(missing_rows: list[tuple[str, str]],
+                              skipped: Optional[dict] = None) -> None:
     """Best-effort SES alert listing rows that still lack a value after
     the research pass AND the terminal bracket pass. Never raises.
 
     Reaching this means the terminal pass could not hold a bracket for
     the row (no valued row anywhere on its list and no ceiling on file
     for its service, or a gap too tight for two rows). That is a bug
-    in the pass to fix the same day, not a row to wait on."""
+    in the pass to fix the same day, not a row to wait on. `skipped`
+    maps (path, title) to the pass's own reason for the row so the
+    email names the defect rather than the symptom."""
     try:
         import boto3
+        skipped = skipped or {}
         body_lines = [
             'These Trends items still have no US Audience value after '
             'the research pass and the terminal bracket pass. The '
@@ -1028,7 +1039,14 @@ def _send_still_missing_alert(missing_rows: list[tuple[str, str]]) -> None:
             '',
         ]
         for path, title in missing_rows[:200]:
-            body_lines.append(f'  {path}: {title}')
+            why = skipped.get((path, title))
+            if why:
+                why = why.split(': ', 1)[-1]
+                body_lines.append(f'  {path}: {title}  ({why})')
+            else:
+                body_lines.append(
+                    f'  {path}: {title}  (bracket written, row still '
+                    f'renders blank: a render-side key mismatch)')
         if len(missing_rows) > 200:
             body_lines.append(f'  ... and {len(missing_rows) - 200} more')
         body_lines += ['',
@@ -1372,17 +1390,37 @@ def run_gate(dry_run: bool = False) -> dict[str, Any]:
     # recomputed and re-tallied; the alert below fires only for a row
     # that survives even this, which is a bug to fix, not a wait for
     # the next run.
-    if still_missing:
+    # The pass runs until the board it re-renders has nothing new to
+    # bracket. A scraper can publish mid-gate (2026-10-09: a Disney+
+    # cookie donation re-ran the Disney+ and ESPN+ scrapers between the
+    # first bracket and its re-render, and five rows that no pass had
+    # ever seen reached the alert as "could not hold a bracket"). A row
+    # that first appears on the re-render is a row to bracket, not a
+    # defect to report; only a row the pass itself skipped is.
+    bracket_skipped: dict[tuple[str, str], str] = {}
+    rounds = 0
+    seen: set[tuple[str, str]] = set()
+    while still_missing and rounds < _BRACKET_MAX_ROUNDS:
+        fresh = [r for r in still_missing if r not in seen]
+        if not fresh:
+            break
+        seen.update(fresh)
+        rounds += 1
         try:
             from scripts.trends_scrapers import terminal_bracket as tb
-            tb_stats = tb.fill(payload2, still_missing, target_date_iso)
-            summary['bracketed_written'] = tb_stats['written']
-            summary['bracketed_entries_created'] = tb_stats['entries_created']
-            summary['bracketed_skipped'] = tb_stats['skipped']
-            logger.info("coverage_gate: terminal pass bracketed %d of %d "
-                        "blank row(s) from their neighbours (%d new "
-                        "entries, %d skipped)", tb_stats['written'],
-                        len(still_missing), tb_stats['entries_created'],
+            tb_stats = tb.fill(payload2, fresh, target_date_iso)
+            summary['bracketed_written'] = (
+                summary.get('bracketed_written', 0) + tb_stats['written'])
+            summary['bracketed_entries_created'] = (
+                summary.get('bracketed_entries_created', 0)
+                + tb_stats['entries_created'])
+            summary.setdefault('bracketed_skipped', []).extend(
+                tb_stats['skipped'])
+            logger.info("coverage_gate: terminal pass round %d bracketed "
+                        "%d of %d blank row(s) from their neighbours (%d "
+                        "new entries, %d skipped)", rounds,
+                        tb_stats['written'], len(fresh),
+                        tb_stats['entries_created'],
                         len(tb_stats['skipped']))
             for row in tb_stats['trail']:
                 logger.info("coverage_gate bracket: %s on %s -> %s  [%s]",
@@ -1391,19 +1429,24 @@ def run_gate(dry_run: bool = False) -> dict[str, Any]:
             for path, why in tb_stats['skipped']:
                 logger.warning("coverage_gate bracket skipped: %s  [%s]",
                                why, path)
-            if tb_stats['written']:
-                try:
-                    trends_iq.invalidate_live_compute_view_caches()
-                except Exception:
-                    logger.exception("coverage_gate: cache purge after "
-                                     "bracket failed (non-fatal)")
-                payload2 = trends_iq.compute_view(dict(_DEFAULT_FILTERS),
-                                                   force_refresh=True)
-                tally = _tally_rendered((payload2 or {}).get('cards') or {})
-                still_missing = tally['still_missing']
+                title = why.split(': ', 1)[0]
+                bracket_skipped[(path, title)] = why
+            if not tb_stats['written']:
+                break
+            try:
+                trends_iq.invalidate_live_compute_view_caches()
+            except Exception:
+                logger.exception("coverage_gate: cache purge after "
+                                 "bracket failed (non-fatal)")
+            payload2 = trends_iq.compute_view(dict(_DEFAULT_FILTERS),
+                                               force_refresh=True)
+            tally = _tally_rendered((payload2 or {}).get('cards') or {})
+            still_missing = tally['still_missing']
         except Exception:
             logger.exception("coverage_gate: terminal bracket pass failed "
                              "(non-fatal)")
+            break
+    summary['bracket_rounds'] = rounds
 
     total2 = tally['total']
     researched2 = tally['researched']
@@ -1465,7 +1508,7 @@ def run_gate(dry_run: bool = False) -> dict[str, Any]:
                     v['carried'] + v['rank_tier'], v['total'], name)
 
     if still_missing:
-        _send_still_missing_alert(still_missing)
+        _send_still_missing_alert(still_missing, bracket_skipped)
 
     # Board gate (2026-09-29). Research prices a blank title at its own
     # level, not at its chart seat: a blank #4 on a Top 10 lands below

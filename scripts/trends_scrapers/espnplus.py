@@ -75,8 +75,14 @@ _ESPN_STATE_PREFIX_RE = re.compile(
     r'|Upcoming\s+\d{1,2}:\d{2}\s*[AP]M(?:\s+\d{1,2}:\d{2}\s*[AP]M\s*-\s*'
     r'\d{1,2}:\d{2}\s*[AP]M)?'
     r'|Upcoming\b'
-    r'|Replay\s+Aired\s+[A-Z][a-z]+\s+\d{1,2},\s*\d{4}'
-    r'|Replay\b'
+    r'|Starts\s+Soon\b'
+    # Any finished-state word, with or without the "Aired <date>"
+    # clause the tile stacks after it. 2026-10-09: "Ended" arrived as
+    # a new state ("Ended Aired October 9, 2026 SportsCenter") and the
+    # Replay-only form let it through as part of the title.
+    r'|(?:Replay|Ended|Final|Finished|Postponed|Delayed|Cancell?ed)'
+    r'(?:\s+Aired\s+[A-Z][a-z]+\s+\d{1,2},\s*\d{4})?\b'
+    r'|Aired\s+[A-Z][a-z]+\s+\d{1,2},\s*\d{4}'
     r'|\d{1,2}:\d{2}\s*[AP]M\s*-\s*\d{1,2}:\d{2}\s*[AP]M'
     r'|(?:New\s+Series|New\s+Episode|New\s+Season|Coming\s+Soon|New)\s+Badge'
     r')\s*[-:]?\s*',
@@ -145,7 +151,8 @@ _ESPN_LEADING_NOISE_RE = re.compile(
 # word is not a programme. Sport buckets reach here from a rail whose
 # style we do not skip.
 _ESPN_NOT_A_TITLE = frozenset({
-    'live', 'upcoming', 'replay', 'on now', 'next up', 'details',
+    'live', 'upcoming', 'replay', 'ended', 'starts soon', 'on now',
+    'next up', 'details',
     'watchlist', 'search', 'menu', 'home', 'browse', 'espn', 'espn+',
     'more', 'view all', 'see all', 'left arrow', 'right arrow',
     'arrow-left', 'arrow-right',

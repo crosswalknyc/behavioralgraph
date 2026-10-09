@@ -73,6 +73,22 @@ _ESPN_CASES = [
     # Replay rail: no network at all, a date does the cutting.
     ('Replay Aired September 25, 2026 SportsCenter+ Fri, 9/25 - '
      'SportsCenter+ Select for details on this title.', 'SportsCenter+'),
+    # 2026-10-09: a finished live tile reads "Ended" where the replay
+    # rail reads "Replay". The Replay-only form let the whole state
+    # clause through as the programme name and four rows reached the
+    # coverage alert as "Ended Aired October 9, 2026 SportsCenter".
+    ('Ended Aired October 9, 2026 SportsCenter', 'SportsCenter'),
+    ('Ended Aired October 9, 2026 SportsCenter Medianoche',
+     'SportsCenter Medianoche'),
+    ('Ended Aired October 9, 2026 The Golics ESPN+ Released 2026. '
+     'Choose Feed Entry', 'The Golics'),
+    ('Ended Aired October 9, 2026 Good Morning Football NFL Network '
+     'Good Morning Football', 'Good Morning Football'),
+    ('Final Aired October 8, 2026 Pittsburgh vs. Virginia Tech ESPN+ '
+     'NCAA Football Released 2026.', 'Pittsburgh vs. Virginia Tech'),
+    # A programme whose name opens on a state-looking word keeps it.
+    ('Endless Summer ESPN+ Select for details on this title.',
+     'Endless Summer'),
     # Episode metadata, and a title that ends on the bundle it streams
     # on. Disney+ is not a network here or these lose half their name.
     ('Get Up for Disney+ Season 2026 Episode 91 Fri, 9/25 - '
@@ -113,6 +129,10 @@ _ESPN_CASES = [
     ('Select for more information about this title.', ''),
     ('Released 2026.', ''),
     ('left arrow', ''),
+    # 2026-10-09: an upcoming tile's state alone reached the board as a
+    # programme called "Starts Soon" (ESPN+ #2).
+    ('Starts Soon', ''),
+    ('Starts Soon The Golics ESPN+ Released 2026.', 'The Golics'),
 ]
 
 
