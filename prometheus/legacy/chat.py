@@ -17772,7 +17772,7 @@ def _pm_run_deck_job(job_id, username, ctx, history, angle,
             # A finished deck always reaches the requester's inbox with the
             # file attached (2026-10-09, Jenna: "sent to her email and that
             # she could download"), not only when they tapped notify.
-            _pm_send_output_email('deck', _pm_user_email(username), _deck_status)
+            _pm_send_output_email('deck', _pm_user_email(username), _deck_status, sync=True)
     except Exception as e:
         traceback.print_exc()
         _H._chatbot_error_email('brief-chat/deck-job', e,

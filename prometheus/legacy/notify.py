@@ -58,7 +58,7 @@ def _pm_notify_delete(job_id):
         pass
 
 
-def _pm_send_output_email(kind, to_email, data):
+def _pm_send_output_email(kind, to_email, data, sync=False):
     """Email the finished OUTPUT of a long task to the requester.
 
     Owned first-party voice, no internal vocabulary. `kind` is 'read'
@@ -255,6 +255,9 @@ def _pm_send_output_email(kind, to_email, data):
         except Exception as e:
             print(f"[pm-notify] send failed: {e}")
 
+    if sync:   # a background job sends inline so the mail never dies with the thread (2026-10-09)
+        _send()
+        return True
     threading.Thread(target=_send, daemon=True).start()
     return True
 
