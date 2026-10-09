@@ -2870,7 +2870,7 @@ def _record_wallet_fallback_usage(user, entry, outcome, credits_used):
         stamped['wallet_addon_cuts'] = outcome['wallet_addon_cuts']
     if outcome.get('wallet_quantity') and outcome['wallet_quantity'] > 1:
         stamped['wallet_quantity'] = outcome['wallet_quantity']
-    user['credits_used'] = user.get('credits_used', 0) + credits_used
+    user['credits_used'] = _credit_num(user.get('credits_used'), 0) + credits_used
     history = user.setdefault('credit_usage_history', [])
     history.insert(0, stamped)
     user['credit_usage_history'] = history[:500]
@@ -2917,13 +2917,13 @@ def consume_credit(username, description=None, job_id=None, pull_type=None, cred
         has_personal_override = user.get('credit_source') == 'personal'
 
         if pool is not None and not has_personal_override:
-            pool_total = pool.get('credit_pool', 0)
-            pool_used  = pool.get('credit_pool_used', 0)
+            pool_total = _credit_num(pool.get('credit_pool'), 0)
+            pool_used  = _credit_num(pool.get('credit_pool_used'), 0)
             pool_unlimited = pool_total == -1
             pool_remaining = -1 if pool_unlimited else (pool_total - pool_used)
 
-            ceiling = user.get('credit_ceiling', -1)
-            user_used = user.get('credits_used', 0)
+            ceiling = _credit_num(user.get('credit_ceiling'), -1)
+            user_used = _credit_num(user.get('credits_used'), 0)
             ceiling_remaining = -1 if ceiling == -1 else (ceiling - user_used)
 
             if not pool_unlimited and pool_remaining < credits_used:
@@ -2949,13 +2949,13 @@ def consume_credit(username, description=None, job_id=None, pull_type=None, cred
                     return data
                 return None
 
-            user['credits_used'] = user.get('credits_used', 0) + credits_used
+            user['credits_used'] = _credit_num(user.get('credits_used'), 0) + credits_used
             history = user.setdefault('credit_usage_history', [])
             history.insert(0, entry)
             user['credit_usage_history'] = history[:500]
 
             if not pool_unlimited:
-                pool['credit_pool_used'] = pool.get('credit_pool_used', 0) + credits_used
+                pool['credit_pool_used'] = _credit_num(pool.get('credit_pool_used'), 0) + credits_used
 
             outcome['ok'] = True
             return data
@@ -2974,7 +2974,7 @@ def consume_credit(username, description=None, job_id=None, pull_type=None, cred
 
         if not user_unlimited:
             user['credits'] = _numeric_credits_balance(user) - credits_used
-        user['credits_used'] = user.get('credits_used', 0) + credits_used
+        user['credits_used'] = _credit_num(user.get('credits_used'), 0) + credits_used
         history = user.setdefault('credit_usage_history', [])
         history.insert(0, entry)
         user['credit_usage_history'] = history[:500]
@@ -3104,17 +3104,17 @@ def refund_credit(username, credits=1, reason=''):
         has_personal_override = user.get('credit_source') == 'personal'
 
         if pool is not None and not has_personal_override:
-            pool_used = pool.get('credit_pool_used', 0)
-            pool_unlimited = pool.get('credit_pool', 0) == -1
+            pool_used = _credit_num(pool.get('credit_pool_used'), 0)
+            pool_unlimited = _credit_num(pool.get('credit_pool'), 0) == -1
             if not pool_unlimited:
                 pool['credit_pool_used'] = max(0, pool_used - int(credits))
-            user_used = user.get('credits_used', 0)
+            user_used = _credit_num(user.get('credits_used'), 0)
             user['credits_used'] = max(0, user_used - int(credits))
         else:
             user_unlimited = _numeric_credits_balance(user) == -1
             if not user_unlimited:
                 user['credits'] = _numeric_credits_balance(user) + int(credits)
-            user['credits_used'] = max(0, user.get('credits_used', 0) - int(credits))
+            user['credits_used'] = max(0, _credit_num(user.get('credits_used'), 0) - int(credits))
 
         history = user.setdefault('credit_usage_history', [])
         if entry.get('amount_usd') is None:
@@ -5948,7 +5948,8 @@ def create_user():
             # the Billing tab (/admin/billing?user=<username>). If the
             # requesting admin explicitly passes 'credits' the value is
             # honored; otherwise the company default (if any) wins, then 0.
-            'credits': req_data.get('credits', cd.get('credits', 0) if cd else 0),
+            'credits': _credit_num(
+                req_data.get('credits', cd.get('credits') if cd else 0), 0),
             'credits_used': 0,
             # Consulting-hour pool (minutes; -1 = unlimited). Mirrors credits.
             # Company defaults may seed a starting pool for new hires.
@@ -6178,10 +6179,15 @@ def update_user(username):
                     user['role'] = 'super_admin'   # repair: admin account must always be super_admin
             else:
                 user['role'] = _normalize_role(req_data['role'])
+        # Coerce at the boundary. The editor sends null for a field
+        # the admin cleared, and a stored null later reached the credit
+        # arithmetic as None and 500ed the dashboard for 20 seats
+        # (2026-10-09). A cleared ceiling means no limit.
         if 'credits' in req_data:
-            user['credits'] = req_data['credits']
+            user['credits'] = _credit_num(req_data['credits'], 0)
         if 'credit_ceiling' in req_data:
-            user['credit_ceiling'] = req_data['credit_ceiling']
+            user['credit_ceiling'] = _credit_num(
+                req_data['credit_ceiling'], -1)
         # Consulting-hour pool (int minutes; -1 = unlimited). Direct-assign
         # matches the credits pattern above — the value overwrites the pool
         # total (not the used counter). Callers that want to *add* minutes
@@ -6634,7 +6640,7 @@ def add_user_credits(username):
                 resp_balance = user['credits']
 
             # Same as consume_credit: total used + usage log (visible under "Credits used")
-            user['credits_used'] = user.get('credits_used', 0) + credits
+            user['credits_used'] = _credit_num(user.get('credits_used'), 0) + credits
             usage_history = user.setdefault('credit_usage_history', [])
             usage_history.insert(0, {
                 'used_at': added_at,
@@ -6913,7 +6919,7 @@ def undo_user_credit_history_entry(username):
             if amount <= 0:
                 return
             if use_pool and pool is not None:
-                pu = pool.get('credit_pool_used', 0) or 0
+                pu = _credit_num(pool.get('credit_pool_used'), 0) or 0
                 pool['credit_pool_used'] = max(pu - amount, 0)
             else:
                 bal = _numeric_credits_balance(user)
@@ -6927,7 +6933,7 @@ def undo_user_credit_history_entry(username):
             if use_pool and pool is not None:
                 pt = pool.get('credit_pool')
                 if pt is not None and pt != -1:
-                    pu = pool.get('credit_pool_used', 0) or 0
+                    pu = _credit_num(pool.get('credit_pool_used'), 0) or 0
                     pool['credit_pool'] = max(pt - amount, pu)
             else:
                 bal = _numeric_credits_balance(user)
@@ -6945,7 +6951,7 @@ def undo_user_credit_history_entry(username):
 
             # Reverse: refund credits AND decrement credits_used.
             _refund(amount)
-            user['credits_used'] = max(int(user.get('credits_used', 0) or 0) - amount, 0)
+            user['credits_used'] = max(int(_credit_num(user.get('credits_used'), 0) or 0) - amount, 0)
 
             # Paired cleanup: admin charges also created a matching
             # attribution deduction with the same timestamp.
@@ -6969,7 +6975,7 @@ def undo_user_credit_history_entry(username):
             if is_deduction:
                 amount = int(target.get('credits_deducted') or 0)
                 _refund(amount)
-                user['credits_used'] = max(int(user.get('credits_used', 0) or 0) - amount, 0)
+                user['credits_used'] = max(int(_credit_num(user.get('credits_used'), 0) or 0) - amount, 0)
                 # Paired usage row created at the same instant.
                 if remove_paired and ts:
                     for i, u in enumerate(usage_hist):
@@ -6998,11 +7004,11 @@ def undo_user_credit_history_entry(username):
             'removed': removed_entry,
             'removed_paired': removed_paired,
             'credits': effective_remaining,
-            'credits_used': user.get('credits_used', 0),
+            'credits_used': _credit_num(user.get('credits_used'), 0),
             'credit_source': 'pool' if use_pool else 'personal',
             'pool_remaining': (
                 (-1 if pool.get('credit_pool') == -1
-                 else max((pool.get('credit_pool') or 0) - (pool.get('credit_pool_used', 0) or 0), 0))
+                 else max((pool.get('credit_pool') or 0) - (_credit_num(pool.get('credit_pool_used'), 0) or 0), 0))
                 if (use_pool and pool is not None) else None
             ),
         })
@@ -7257,9 +7263,9 @@ def api_update_company_credits(company_name):
             if current != -1:
                 pool['credit_pool'] = current + int(req['add_credits'])
         save_users(data)
-        remaining = -1 if pool['credit_pool'] == -1 else pool['credit_pool'] - pool.get('credit_pool_used', 0)
+        remaining = -1 if pool['credit_pool'] == -1 else pool['credit_pool'] - _credit_num(pool.get('credit_pool_used'), 0)
         return jsonify({'success': True, 'credit_pool': pool['credit_pool'],
-                        'credit_pool_used': pool.get('credit_pool_used', 0),
+                        'credit_pool_used': _credit_num(pool.get('credit_pool_used'), 0),
                         'credit_pool_remaining': remaining})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -7350,11 +7356,11 @@ def api_update_company_user_credits(company_name):
         if not user:
             return jsonify({'success': False, 'error': 'User not found'}), 404
         if 'credit_ceiling' in req:
-            user['credit_ceiling'] = int(req['credit_ceiling'])
+            user['credit_ceiling'] = _credit_num(req['credit_ceiling'], -1)
         if 'credit_source' in req:
             user['credit_source'] = req['credit_source']
         if 'credits' in req:
-            user['credits'] = int(req['credits'])
+            user['credits'] = _credit_num(req['credits'], 0)
         save_users(data)
         return jsonify({'success': True})
     except Exception as e:
@@ -7777,8 +7783,8 @@ def api_company_users(company_name):
         pool = _get_company_pool(data, company_name)
         pool_info = None
         if pool:
-            pt = pool.get('credit_pool', 0)
-            pu = pool.get('credit_pool_used', 0)
+            pt = _credit_num(pool.get('credit_pool'), 0)
+            pu = _credit_num(pool.get('credit_pool_used'), 0)
             pool_info = {'credit_pool': pt, 'credit_pool_used': pu,
                          'credit_pool_remaining': -1 if pt == -1 else pt - pu}
         result = []
@@ -7793,9 +7799,10 @@ def api_company_users(company_name):
                 'last_name': user.get('last_name', ''),
                 'email': user.get('email', ''),
                 'role': user.get('role', 'user'),
-                'credits': user.get('credits', 0),
-                'credits_used': user.get('credits_used', 0),
-                'credit_ceiling': user.get('credit_ceiling', -1),
+                'credits': _credit_num(user.get('credits'), 0),
+                'credits_used': _credit_num(user.get('credits_used'), 0),
+                'credit_ceiling': _credit_num(
+                    user.get('credit_ceiling'), -1),
                 'credit_source': user.get('credit_source', 'pool'),
                 'total_sessions': activity.get('total_sessions') or 0,
                 'last_login': user.get('last_login'),
@@ -8671,15 +8678,15 @@ def get_user_stats(username):
         credits_context = {
             'is_pool_user': is_pool_user,
             'credit_source': 'pool' if is_pool_user else 'personal',
-            'personal_credits': user.get('credits'),
+            'personal_credits': _credit_num(user.get('credits'), 0),
             'pool_total': None,
             'pool_used': None,
             'pool_remaining': None,
-            'ceiling': user.get('credit_ceiling', -1),
+            'ceiling': _credit_num(user.get('credit_ceiling'), -1),
         }
         if is_pool_user and pool is not None:
             pt = pool.get('credit_pool')
-            pu = pool.get('credit_pool_used', 0) or 0
+            pu = _credit_num(pool.get('credit_pool_used'), 0) or 0
             if pt is None:
                 pt = 0
             credits_context['pool_total'] = pt
@@ -10018,7 +10025,7 @@ def get_user_info():
         'company_logo': user.get('company_logo', ''),
         'department': user.get('department', ''),
         'credits': user.get('credits', 0),
-        'credits_used': user.get('credits_used', 0),
+        'credits_used': _credit_num(user.get('credits_used'), 0),
         'allowed_categories': user.get('allowed_categories', ['*']),
         'allowed_runs': user.get('allowed_runs', ['*']),
         'collab_team': user.get('collab_team', [])
@@ -10117,7 +10124,7 @@ def get_credit_usage():
     return jsonify({
         'success': True,
         'usage': usage_out,
-        'credits_used': user.get('credits_used', 0),
+        'credits_used': _credit_num(user.get('credits_used'), 0),
         'spend_usd_total': round(spend_usd, 2),
         'credits_left': credits_left,
         'wallet_balance_usd': snap['wallet_balance_usd'],
@@ -10729,7 +10736,7 @@ def index():
                            insights_quick_snapshot_desc=insights_quick_snapshot_desc,
                            role=role,
                            credits=effective_credits,
-                           credits_used=user.get('credits_used', 0) if user else 0,
+                           credits_used=_credit_num(user.get('credits_used'), 0) if user else 0,
                            wallet_balance_usd=_wallet_snap.get('wallet_balance_usd', 0.0),
                            currency_symbol=_wallet_snap.get('currency_symbol', '$'),
                            view_definition=_view_definition_copy(),
@@ -10819,7 +10826,7 @@ def request_credits():
                 <div style="margin: 10px 0;"><span class="email-label">Username</span><br><span class="email-value">{username}</span></div>
                 <div style="margin: 10px 0;"><span class="email-label">Email</span><br><span class="email-value">{user_email}</span></div>
                 <div style="margin: 10px 0;"><span class="email-label">Current Credits</span><br><span class="email-value">{user.get('credits', 0)}</span></div>
-                <div style="margin: 10px 0;"><span class="email-label">Credits Used</span><br><span class="email-value">{user.get('credits_used', 0)}</span></div>
+                <div style="margin: 10px 0;"><span class="email-label">Credits Used</span><br><span class="email-value">{_credit_num(user.get('credits_used'), 0)}</span></div>
             </div>
             <p style="font-size: 12px; color: #8892b0;">This request was sent from the Crosswalk IQ dashboard.</p>
         """
@@ -10832,7 +10839,7 @@ def request_credits():
 Username: {username}
 Email: {user_email}
 Current Credits: {user.get('credits', 0)}
-Credits Used: {user.get('credits_used', 0)}
+Credits Used: {_credit_num(user.get('credits_used'), 0)}
 
 This request was sent from the Crosswalk IQ dashboard.
 """
