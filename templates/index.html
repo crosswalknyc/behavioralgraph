@@ -38919,11 +38919,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 // without opening the reference panel. Sentence-case
                 // copy, no em dashes.
                 var assetTip = 'The individual campaign asset. Channel glyph + title + posted date. Click any row to open the detail view with the daily curve.';
-                var exposureTip = 'How many viewers have seen the asset so far, filtered by the as-of date. Never exceeds the platform\'s real view count.';
+                var exposureTip = 'How many viewers have seen the asset so far, filtered by the as-of date.';
                 var primaryTip = 'Of the viewers exposed to this asset, what share took the downstream action within the 7-day attribution window. The label switches at T-14, 14 days pre-launch: info-seek before, ticketing site after.';
                 var liftTip = _iiqGoatMode()
-                    ? 'How this asset\'s response rate compares to the median for its own media type: paid assets against the paid median, organic assets against the organic median. Strong is 1.3x or higher, on pace lands near median, soft under-indexes. Nudged off the exact bucket edge so ties don\'t cluster.'
-                    : 'How this asset\'s response rate compares to the campaign median. Strong is 1.3x or higher, on pace lands near median, soft under-indexes. Nudged off the exact bucket edge so ties don\'t cluster.';
+                    ? 'How this asset\'s response rate compares to the median for its own media type: paid assets against the paid median, organic assets against the organic median. Strong is 1.3x or higher, on pace lands near median, soft under-indexes.'
+                    : 'How this asset\'s response rate compares to the campaign median. Strong is 1.3x or higher, on pace lands near median, soft under-indexes.';
                 var sampleTip = 'Raw count of viewers who could have taken the action. Bigger sample = more confidence the response rate is real, not noise.';
                 var confTip = 'Simplified read of sample size. High is 100K or more, Medium is 25K to 100K, Low is under 25K. A Strong lift chip on a Low confidence asset is worth watching but not banking on.';
 
@@ -39116,7 +39116,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     +     '<summary><span>How to read this.</span></summary>'
                     +     '<div class="iiq-help-body">'
                     +       '<p><b>Asset.</b> The individual campaign asset. Channel glyph + title + posted date. Click any row to open the detail view with the daily curve.</p>'
-                    +       '<p><b>Exposure.</b> How many viewers have seen the asset so far, filtered by the as-of date. Never exceeds the platform\'s real view count.</p>'
+                    +       '<p><b>Exposure.</b> How many viewers have seen the asset so far, filtered by the as-of date.</p>'
                     +       (goatBoth
                         ? ('<p><b>Info-seek %.</b> ' + escapeHtml(infoTip) + '</p>'
                           + '<p><b>Ticketing site visit %.</b> ' + escapeHtml(ticketTip) + '</p>'
@@ -78621,6 +78621,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     w.classList.add('pm-on');
                     _applyPos(w, WKEY);
                 }
+                // The rail may have restored while this was hidden, in
+                // which case its width is still owed.
+                if (window._pmRailGrowPending && window._pmRailGrowOpen) {
+                    window._pmRailGrowOpen(w);
+                }
                 try { localStorage.setItem(OKEY, '1'); } catch (_) {}
                 if (typeof synthChatInit === 'function') synthChatInit();
                 if (typeof _synthChatShowWelcomeBack === 'function') _synthChatShowWelcomeBack();
@@ -79044,6 +79049,43 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         var _pmThreadsIdx = null;
         var _pmRailOpen = false;
         var _PM_RAIL_W = 222;
+        // Widen the window to make room for the rail. Split out of
+        // _pmRailApply so the load-time restore can defer it: the
+        // saved rail state is re-applied before the widget is
+        // necessarily on screen, and an element that is still
+        // display:none measures zero. The old inline math turned that
+        // zero into width = 0 + rail width = 222px, which the 360px
+        // min-width floored, leaving the chat in a 136px column
+        // (2026-10-09). Returns false when it had to defer; the
+        // expand path applies it once the widget has a box.
+        function _pmRailGrowOpen(widget) {
+            if (!widget) return false;
+            var r = widget.getBoundingClientRect();
+            if (r.width < 1) {
+                window._pmRailGrowPending = true;
+                return false;
+            }
+            var grow = Math.min(
+                _PM_RAIL_W,
+                Math.max(0, r.left - 8),
+                Math.max(0, Math.floor(window.innerWidth * 0.96)
+                         - r.width));
+            if (grow < 40) grow = Math.min(_PM_RAIL_W,
+                Math.max(40, Math.floor(window.innerWidth * 0.96)
+                         - r.width));
+            window._pmRailGrow = grow;
+            var leftAnchored = !!widget.style.left
+                || getComputedStyle(widget).right === 'auto';
+            widget.style.width = (r.width + grow) + 'px';
+            if (leftAnchored) {
+                widget.style.left = Math.max(8, r.left - grow) + 'px';
+                widget.style.right = 'auto';
+            }
+            window._pmRailGrowPending = false;
+            return true;
+        }
+        window._pmRailGrowOpen = _pmRailGrowOpen;
+
         function _pmRailApply(open) {
             var rail = document.getElementById('pmThreadRail');
             var widget = document.getElementById('prometheusWidget');
@@ -79072,23 +79114,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // never moves and nothing leaves the screen. Close
             // reverses the exact applied growth.
             if (_pmRailOpen && !was) {
-                var r = widget.getBoundingClientRect();
-                var grow = Math.min(
-                    _PM_RAIL_W,
-                    Math.max(0, r.left - 8),
-                    Math.max(0, Math.floor(window.innerWidth * 0.96)
-                             - r.width));
-                if (grow < 40) grow = Math.min(_PM_RAIL_W,
-                    Math.max(40, Math.floor(window.innerWidth * 0.96)
-                             - r.width));
-                window._pmRailGrow = grow;
-                var leftAnchored = !!widget.style.left
-                    || getComputedStyle(widget).right === 'auto';
-                widget.style.width = (r.width + grow) + 'px';
-                if (leftAnchored) {
-                    widget.style.left = Math.max(8, r.left - grow) + 'px';
-                    widget.style.right = 'auto';
-                }
+                _pmRailGrowOpen(widget);
             } else if (!_pmRailOpen && was) {
                 var g = window._pmRailGrow || _PM_RAIL_W;
                 var r2 = widget.getBoundingClientRect();
