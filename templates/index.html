@@ -114616,7 +114616,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var pick = function(list, f) { return _jiqMusicMedian(list.map(function(r) { return f(r.w); })); };
             var b = {
                 kind: kind,
-                label: kind === 'All' ? 'Title median' : (kind + ' median'),
+                label: kind === 'All' ? 'Combined median' : (kind + ' median'),
                 noun: kind === 'Film' ? 'films' : (kind === 'Series' ? 'series' : 'titles'),
                 n: rows.length,
                 n_depth: same.length,
@@ -115780,7 +115780,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 });
             };
             if (stage === 'universe') {
-                html += _jiqMusicSec('02 Title by title', 'The top eight and bottom four titles on each door.', (r.meta.rollup === 'all' ? 'Ticks are the title, film and series medians' : 'Tick is the median title') + (b ? ' \u00b7 ' + b.n + ' ' + b.noun : ''));
+                html += _jiqMusicSec('02 Title by title', 'The top eight and bottom four titles on each door.', (r.meta.rollup === 'all' ? 'Ticks are the combined, film and series medians' : 'Tick is the median title') + (b ? ' \u00b7 ' + b.n + ' ' + b.noun : ''));
                 html += '<div class="jiq-frag-detours">'
                     + _jiqMusicPctDetours('Music first share of viewers', pctRows('mf_share', 'viewers'), b, ['Music first'])
                     + _jiqMusicPctDetours('No music touch share of viewers', pctRows('nm_share', 'viewers'), b, ['No music touch'])
