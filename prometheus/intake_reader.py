@@ -464,7 +464,18 @@ def _kind_from_ask(text, kind):
 _NEW_ASK_OPEN = re.compile(
     r'^\W*(?:is there a way|can (?:you|we|i)|could (?:you|we|i)|'
     r'would (?:you|it be possible)|how (?:do|can|would|could) (?:i|we|you)|'
-    r'what|who|which|why|where|when|do you|does|did|are there|is it possible)\b',
+    r'what|who|which|why|where|when|do you|does|did|are there|is it possible|'
+    r'help me|i need|i want|i am looking|we are looking|tell me|show me|give me|'
+    r'find|identify|recommend|suggest|please help)\b',
+    re.I)
+# A sentence that names someone and asks for direction ("Austin Sprinz is
+# thinking about new sponsorship opportunities. Help me identify where he
+# should be going.") is a new ask even mid-sentence (2026-10-12, Debi: it
+# was read as flywheel fields and answered with raw field names).
+_NEW_ASK_INLINE = re.compile(
+    r'\b(?:help (?:me|us) (?:identify|find|figure out|understand|see|decide)|'
+    r'(?:who|where|what|which) (?:should|could|would) (?:he|she|they|we|i)\b|'
+    r'is (?:thinking about|looking for|trying to find|exploring|considering)\b)',
     re.I)
 _BUILD_ASK = re.compile(
     r'\b(?:build|create|pull|run|make|put together|set up)\b[^.?!]{0,40}'
@@ -486,7 +497,25 @@ def is_new_ask(text):
         return True
     if _NEW_ASK_OPEN.match(t) and (t.endswith('?') or len(words) >= 8):
         return True
+    if _NEW_ASK_INLINE.search(t) and len(words) >= 8:
+        return True
     return False
+
+
+def missing_labels(parsed, fallback):
+    """The plain words for an intake's missing fields ('the starting
+    point', never 'captured_action'). ``fallback`` is the full list the
+    stall copy used when the parser named nothing (2026-10-12, Debi:
+    "I still need captured_action, ecosystem, conversion_event")."""
+    keys = [k for k in ((parsed or {}).get('missing') or []) if k]
+    if not keys:
+        return list(fallback or [])
+    out = []
+    for k in keys:
+        lbl = FIELD_LABELS.get(str(k)) or str(k).replace('_', ' ').strip()
+        if lbl not in out:
+            out.append(lbl)
+    return out
 
 
 def keyword_parse_journey(text):

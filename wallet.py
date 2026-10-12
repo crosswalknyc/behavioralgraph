@@ -96,6 +96,12 @@ DEFAULT_PRICING = {
         # currency"). Priced per year of window; the seat's currency
         # supplies the symbol (display_currency), the number is 1:1.
         "viewership_read": 500.0,
+        # Derived read (2026-10-12 Jenna, Jordan / East Tree: "jordan
+        # should be charged 100gbp for the device breakdown"): a figure
+        # already delivered split by a dimension the panel observes
+        # (device, daypart, geography, demographic). 100 in the seat's
+        # currency, the derived-cut price.
+        "derived_read": 100.0,
         # 2026-09-09 (Jenna, verbatim: 'please remove chatbot things
         # from modules. those are just access monthly not any per pull
         # things'). The dashboard-side Chatbot Profile IQ pull_type
@@ -457,6 +463,11 @@ MODULE_CATALOG = [
     # charged in the seat's currency. Quantity = years.
     ("viewership_read",            "Viewership Read (per year)",
      "pulls", 5, 500.0, "has_prometheus_access"),
+    # 2026-10-12 (Jenna): a delivered figure split by device / daypart /
+    # geography / demographic is a derived read at the derived-cut
+    # price, charged in the seat's currency.
+    ("derived_read",               "Derived Read (breakdown of a delivered figure)",
+     "pulls", 1, 100.0, "has_prometheus_access"),
     # 2026-09-09 (Jenna, verbatim: 'please remove chatbot things
     # from modules. those are just access monthly not any per pull
     # things'). Three rows retired here:
@@ -1433,6 +1444,9 @@ _PULL_TYPE_TO_TOOL_KEY = {
     # ---- Prometheus research report / un-priced ask (2026-09-14) ----
     "panel report":                  "panel_report",
     "viewership read":               "viewership_read",
+    "derived read":                  "derived_read",
+    "device breakdown":              "derived_read",
+    "breakdown read":                "derived_read",
     "research report":               "panel_report",
     "prometheus report":             "panel_report",
     "un-priced ask":                 "panel_report",

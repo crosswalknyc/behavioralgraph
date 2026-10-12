@@ -357,6 +357,18 @@ def _decide(text, *, has_ctx=False, mode=None, extra=None, open_tabs=0,
         d.update(surface='deck', reason='deck_ask')
         return d
 
+    # 2a2. A delivered figure split by a dimension the panel observes
+    #      (device, daypart, geography, demographic) is a derived read on
+    #      the analyze surface with or without a page (2026-10-12, Jenna:
+    #      never page dependent by default; Jordan's device split).
+    try:
+        import prometheus_analysis as _pma
+        if _pma.is_dimension_split_ask(t):
+            d.update(surface='analyze', reason='derived_read')
+            return d
+    except Exception:
+        pass
+
     # 2b. A bare acknowledgement, pick, or refusal with nothing armed
     #     is not an ask. The surface stays whatever the data state
     #     says; the ask service answers it without a reasoning pass

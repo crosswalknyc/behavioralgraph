@@ -647,6 +647,36 @@ def ask(user, body, *, via='session'):
             _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
             return env, 200
 
+    # Email-me-this-file lane (2026-10-12, Debi: with the Austin Sprinz
+    # profile open, "Email me this file" went to the build flow and came
+    # back with an existing-match offer). A reader asking for their own
+    # file is a command: the open profile's CSV (and its cut), or the
+    # latest read in the thread, goes out through the house mail door.
+    if referent_decision is None and not _armed(body):
+        try:
+            from . import send_file as _sf
+            _sf_raw = (_sf.answer(text, uname, user=user, ctx=ctx, history=history, host=host)
+                       if _sf.parse(text) else None)
+        except Exception as e:
+            print(f"[prometheus] send-file lane skipped: {e}")
+            _sf_raw = None
+        if _sf_raw:
+            raw = _sf_raw
+            decision = {'surface': 'analyze', 'mode': None,
+                        'reason': 'email_file', 'client_hint': None}
+            if _client_surface == 'interpret':
+                raw = _interpret_shape(raw)
+                raw['followups'] = list(_sf_raw.get('followups') or [])
+            try:
+                host.ask_hint(route='email_file', outcome='answered' if _sf_raw.get('sent') else 'clarified',
+                              subject=_sf_raw.get('subject'))
+            except Exception:
+                pass
+            env = envelope.wrap(raw, surface='analyze', decision=decision,
+                                thread_id=tid, via=via)
+            _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
+            return env, 200
+
     # Brand coverage lane (2026-10-08). "Is Alexa measured in Crosswalk?",
     # "what would alexa and echo be listed under in the behavioral tab":
     # whether we carry a brand, its category, and what the open profile
@@ -835,6 +865,24 @@ def _armed(body):
     return any(body.get(k) for k in _ARMED_BODY_KEYS)
 
 
+_READ_RUNNING_RX = re.compile(
+    r"^\s*On it\b|\bthe read will land right here\b|\blands right here when it is ready\b|"
+    r"\bwill confirm here when it is (?:ready|live)\b", re.I)
+
+
+def _read_in_flight(prev):
+    """True when the previous agent turn started a read, deck or build
+    that is still running (its text is the 'On it' promise or it
+    carries a job id)."""
+    if not isinstance(prev, dict):
+        return False
+    meta = prev.get('meta') if isinstance(prev.get('meta'), dict) else {}
+    if any(meta.get(k) or prev.get(k) for k in ('read_job_id', 'deck_job_id', 'bpiq_job_id',
+                                                  'jiq_job_id', 'fw_job_id', 'aiq_job_id')):
+        return True
+    return bool(_READ_RUNNING_RX.search(str(prev.get('text') or '')))
+
+
 def _last_agent_turn(history):
     for t in reversed(history or []):
         if isinstance(t, dict) and str(t.get('role') or '') == 'agent':
@@ -1006,6 +1054,12 @@ def _bare_reply(body, text, history, has_ctx):
     if kind == 'affirm':
         if _THANKS_RX.match(low):
             return None, _p('Anytime. Ask me the next one when you are ready.')
+        # A yes right after "On it" is the reader confirming a read that is
+        # already running (2026-10-12, Debi: "yes" after the read started drew
+        # "Nothing is waiting on a yes right now").
+        if _read_in_flight(prev):
+            return None, _p('The read is already running. It lands right here in a few '
+                            'minutes, and you can keep asking in the meantime.')
         if options:
             return None, _p('Which one? ' + ' / '.join(options[:4]) + '. '
                             'Send the one you mean and I will run it.',

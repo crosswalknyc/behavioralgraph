@@ -1,7 +1,7 @@
 {
  "version": 1,
- "content_hash": "c3adcd15a28afe3f2e1ca77ae67422c3256a827988ae2f58dfa234f4a75ff2fc",
- "examples_hash": "e652443891e6035aa996c4df21604bf2f177d6ac505132c56f98b8b652f11216",
+ "content_hash": "42d6d01d07a3ca39136d472587e96277273fd554759edf6b29df5a4f0c9910d3",
+ "examples_hash": "5109d026455118392cc90e510a4a9b52c8f6f6af036371693e3356b62fc983bb",
  "source_hashes": {
   ".cursor/rules/analysis-confidence-calibration.mdc": "3f2d33886bf77e54adde67cbf78f3256fa23fcb86d1ae32dd5ce7294088521f0",
   ".cursor/rules/avid-and-cut-skin-rules.mdc": "d5c01e23c4db2669558c41efdf5c706c722fae827c8d78871989ef259a16eaf0",
@@ -30,7 +30,7 @@
   ".cursor/skills/crosswalk-panel-analyst/references/numbers.md": "2857e3623a4e64134f621fbaf54dc37ad5b8e921bd59510c96d2ee4e05c75773",
   ".cursor/skills/crosswalk-panel-analyst/references/asks.md": "52791675ffd3bb65a21fe2b5ee4f11926bfab0bf00b9a9cbaa9f22e7ee48ab19",
   ".cursor/skills/crosswalk-panel-analyst/references/prior-work.md": "d143ac1c06efbf12a41bbb87bdacf93912580a1a70774c848e4d8606d572dbb5",
-  ".cursor/skills/crosswalk-panel-analyst/references/prometheus-brain.md": "2491161e0ce933fc64a63e5a48b77d60ffd6dca5ca0e3345c6353bdf51845571"
+  ".cursor/skills/crosswalk-panel-analyst/references/prometheus-brain.md": "fba865698b6929871d26a58fa3d0ec4698051816b237760cf02d3622af00ce64"
  },
  "canon": [
   {
@@ -195,11 +195,11 @@
    "text": "On S.W.A.T. Exiles (Starz, Season 1) - Starz viewers of S.W.A.T. Exiles Season 1, new signups separated from pre-existing subscribers:\n\nS.W.A.T. Exiles Season 1 pulled 378,815 Starz watchers in its opening window and converted 13,097 clean new signups, a 3.46% clean conversion rate against Outlander: Blood of My Blood's 2.41%.\n\nTotal US watchers: 378,815, New signups attributed: 14,416, Clean new signups: 13,097.\n\nWatcher pool subscriber status mix, Sep 25 2026 to Oct 2 2026, Season 1 flight to date, signups credited through Oct (share of S.W.A.T. Exiles Season 1 watchers)\n- Pre-existing Starz subscribers: 96.2% ..."
   },
   "white_space": {
-   "subject": "Hotel Transylvania",
-   "title": "Hotel Transylvania | Parents of kids 4-7 | Jul 1 2025 to Jun 30 2026",
-   "q": "what toy categories are underserved for hotel transylvania",
-   "text": "Among Hotel Transylvania parents of kids 4-7, Action Figures and Playsets is the largest underserved category: it carries 28.8% of the cohort's toy purchase signals while no standing figure line has been on shelf since the Jazwares run wound down.\n\nProjected US people, parents of kids 4-7: 1,357,079, Toy purchase signal penetration: 83.7%, Demand share sitting in thin-coverage categories: 50.7%.\n\nToy category (demand vs current Hotel Transylvania coverage) mix, Jul 1 2025 to Jun 30 2026 (share of the cohort's toy purchase signals)\n- Action Figures & Playsets: 28.8% share, 58.9% penetration. Jazwares figures and ..."
+   "subject": "Austin Sprinz",
+   "title": "Austin Sprinz | Oct 12 2025 to Oct 12 2026",
+   "q": "Austin Sprintz is trying to find new sponsorships/partnership opportunities.  Help me identify who he should be reaching out to.",
+   "text": "Athletic footwear and apparel is the largest open sponsorship category for Austin Sprinz: it carries 14.3% of his audience's brand purchase signals at 67.3% category penetration with no endorsement running against it in the window.\n\nProjected US audience (Total Universe): 24,716,483, Avid US audience: 6,382,947, Brand purchase signal penetration: 89.7%.\n\nSponsor category (audience demand vs current Sprinz coverage mix, Oct 12 2025 to Oct 12 2026 (share of the audience's brand purchase and category signals)\n- Athletic Footwear & Apparel: 14.3% share, 67.3% penetration. Nike, adidas, Under Armour, New Balance lead ..."
   }
  },
- "generated_at": "2026-10-12T15:45:54Z"
+ "generated_at": "2026-10-12T17:05:15Z"
 }

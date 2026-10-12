@@ -9187,6 +9187,9 @@ def _pm_intake_last_agent_stalled(history):
     return False
 
 
+from prometheus.intake_reader import missing_labels as _ir_labels  # noqa: E402  (plain words for missing intake fields)
+
+
 def _pm_intake_breakout(text):
     """A new ask typed while a guided intake is collecting leaves the
     intake (2026-10-07 Eliot: "is there a way to build an audience of
@@ -11828,7 +11831,9 @@ def _pm_fuzzy_catalog_subject(text, extra_tokens=None):
     hits = {}
     try:
         for entry in _profile_catalog_for_chat():
-            subj = str(entry.get('subject')
+            # Family name (cut suffix stripped): a TU and its own Avid cut are ONE candidate, not an
+            # ambiguity (2026-10-12, Debi: 'Austin Sprintz' fell through to a $500 read on a held subject)
+            subj = str(_ns_mod.family_name(entry) or entry.get('subject')
                        or entry.get('display_name') or '').strip()
             if _ns_mod.is_gen_pop(subj, _H._normalize_for_match):
                 continue
@@ -11853,10 +11858,9 @@ def _pm_fuzzy_catalog_subject(text, extra_tokens=None):
             # the exact tier upstream never saw those tokens.
             needed_alias = ok and not set(st) <= base_tokens
             if ok and (needed_typo or needed_alias):
-                hits[_H._normalize_for_match(subj)] = {
-                    'subject': subj,
-                    's3_key': str(entry.get('s3_key') or ''),
-                }
+                _hk = _H._normalize_for_match(subj)
+                if _hk not in hits or ' - ' not in str(entry.get('display_name') or ''):   # the TU file wins
+                    hits[_hk] = {'subject': subj, 's3_key': str(entry.get('s3_key') or '')}
     except Exception:
         traceback.print_exc()
     if len(hits) == 1:
@@ -13064,7 +13068,8 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
                 traceback.print_exc()
         if not subj_name and _bf_subj:
             subj_name = _bf_subj
-        if subj_name and pma.panel_report_eligible(text, subj_name):
+        _is_derived = str((metric_request or {}).get('metric_family') or '') == 'dimension split' or (isinstance(panel_confirm, dict) and str(panel_confirm.get('kind') or '') == 'derived')
+        if subj_name and (_is_derived or pma.panel_report_eligible(text, subj_name)):
             _pr_label, _pr_credits = _pm_panel_price_label(_pm_user)
             _pr_pull_type, _pr_qty, _pr_kind = 'Panel Report', 1, 'report'
             # Viewership over time is its own price: 500 per year of
@@ -13073,6 +13078,9 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
             if _vw:
                 _pr_label, _pr_credits, _pr_qty = _vw
                 _pr_pull_type, _pr_kind = 'Viewership Read', 'viewership'
+            if _is_derived:   # a delivered figure split by a dimension: the derived-cut price (Jenna 2026-10-12)
+                _pr_label, _pr_credits = _pm_derived_read_price(_pm_user)
+                _pr_pull_type, _pr_qty, _pr_kind = 'Derived Read', 1, 'derived'
             if isinstance(panel_confirm, dict):
                 # Confirmed: the charge lands NOW, before anything is
                 # generated. Price is always the server's, never the
@@ -13085,7 +13093,8 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
                         _pm_user,
                         description=((f'Viewership read ({_pr_qty} yr) - '
                                       if _pr_kind == 'viewership'
-                                      else 'Prometheus Research Report - ')
+                                      else (f"Derived read ({(metric_request or {}).get('dimension') or 'breakdown'}) - "
+                                            if _pr_kind == 'derived' else 'Prometheus Research Report - '))
                                      + f'{subj_name}'),
                         pull_type=_pr_pull_type,
                         credits_used=_pr_credits,
@@ -13113,7 +13122,8 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
                     subj_name, _pr_label, question=text,
                     kind=_pr_kind, years=_pr_qty,
                     verb=_pm_viewership_verb(text),
-                    series=_pm_is_viewership_series_ask(text))
+                    series=_pm_is_viewership_series_ask(text),
+                    dimension=str((metric_request or {}).get('dimension') or ''))
                 _pm_ask_hint(outcome='panel_offer', subject=subj_name)
                 return jsonify({
                     'success': True, 'action': 'answer',
@@ -15237,8 +15247,7 @@ def _pm_analyze_core(user, body, text, history):
                 'bpiq_confirm_payload': _parsed,
                 'followups': ['Run the valuation', 'Cancel'],
                 'offer_deck': False, 'deck_angle': None})
-        _missing = _parsed.get('missing') or [
-            'the brand', 'the partner', 'the campaign window']
+        _missing = _ir_labels(_parsed, ['the brand', 'the partner', 'the campaign window'])
         return jsonify({
             'success': True, 'action': 'answer',
             'reply': ('Almost there - I still need '
@@ -15329,7 +15338,7 @@ def _pm_analyze_core(user, body, text, history):
                 'aiq_confirm_payload': _aparsed,
                 'followups': ['Start tracking', 'Cancel'],
                 'offer_deck': False, 'deck_angle': None})
-        _amissing = _aparsed.get('missing') or []
+        _amissing = _ir_labels(_aparsed, [])
         if not _amissing:
             _amissing = ['the campaign name', 'tagged URLs',
                          'the conversion']
@@ -15453,9 +15462,7 @@ def _pm_analyze_core(user, body, text, history):
                 'fw_confirm_payload': _fparsed,
                 'followups': ['Run the flywheel', 'Cancel'],
                 'offer_deck': False, 'deck_angle': None})
-        _fmissing = _fparsed.get('missing') or [
-            'the title', 'the captured action', 'the ecosystem',
-            'the conversion']
+        _fmissing = _ir_labels(_fparsed, ['the title', 'the captured action', 'the ecosystem', 'the conversion'])
         return jsonify({
             'success': True, 'action': 'answer',
             'reply': ('Almost there - I still need '
@@ -15530,8 +15537,7 @@ def _pm_analyze_core(user, body, text, history):
                 'jiq_confirm_payload': _jparsed,
                 'followups': ['Run the journey', 'Cancel'],
                 'offer_deck': False, 'deck_angle': None})
-        _jmissing = _jparsed.get('missing') or [
-            'the category', 'the platform', 'the conversion event']
+        _jmissing = _ir_labels(_jparsed, ['the category', 'the platform', 'the conversion event'])
         return jsonify({
             'success': True, 'action': 'answer',
             'reply': ('Almost there - I still need '
@@ -15562,6 +15568,27 @@ def _pm_analyze_core(user, body, text, history):
     # handoff survives only as a safety net (counted in stages as
     # handoff_generate so the shrink is visible in the ask log).
     ctx, ctx_err = _pm_validate_page_context(body.get('page_context'))
+    # Derived read (2026-10-12, Jordan / East Tree; Jenna: never page dependent by default): a held figure split
+    # by device / daypart / geo / demo runs the same with a page, with nothing open, or through the API; subject and
+    # figures come from the ask, then the thread, then the screen; priced at the derived-cut price (prometheus/derived_read).
+    try:
+        from prometheus import derived_read as _derived
+        import prometheus_analysis as _pma_dr
+        _dr = _derived.plan(text, history, ctx if (isinstance(ctx, dict) and not ctx_err) else None, body,
+                            pma=_pma_dr, ns=_ns_mod, normalize=_H._normalize_for_match, stop=_PM_CLARIFY_STOP_TOKENS,
+                            plausible=_pm_plausible_subject, consumption=_pm_consumption_subject)
+    except Exception:
+        traceback.print_exc()
+        _dr = None
+    if _dr:
+        _pm_ask_stage('dimension_split_lane', count=1)
+        if _dr.get('ask'):
+            _pm_ask_hint(route='derived_read', outcome='clarify_subject')
+            return jsonify(_dr['ask'])
+        return _pm_generate_metrics_response(
+            user, text, history, ctx=ctx if (isinstance(ctx, dict) and not ctx_err) else None,
+            prefer_catalog=True, bind_subject=_dr['subject'], metric_request=_dr['metric_request'],
+            panel_confirm=_dr.get('panel_confirm'))
     # Overall ranks (2026-09-25, Jenna): "No" on the open-profile
     # question means the boards, not the profile that happens to
     # be open. Answer from Rankers and do not bind the page.
@@ -16131,14 +16158,10 @@ def _pm_analyze_core(user, body, text, history):
         except Exception:
             traceback.print_exc()
     if not ctx:
-        _pm_ask_hint(outcome='declined_no_context')
-        return jsonify({
-            'success': True, 'action': 'answer',
-            'reply': ('Nothing is open to analyze yet. Open a profile '
-                      'from Select Profile (and check any Data Cuts you '
-                      'want included), or open a view with data on '
-                      'screen, then ask me again.'),
-            'followups': [], 'offer_deck': False, 'deck_angle': None})
+        # Nothing open is not a dead end (Jenna 2026-10-12: never page dependent by default). The reasoned read
+        # binds the subject from the ask or the thread and asks for it when neither names one.
+        _pm_ask_hint(route='no_page_read')
+        return _pm_generate_metrics_response(user, text, history, prefer_catalog=True)
     # 2026-09-09 Jenna: "Analyze this data" is session-metered, not
     # per-pull charged. Pay-per-use accounts bill via the session
     # close; subscribed accounts are covered by their tier. Real
@@ -16368,30 +16391,6 @@ def _pm_analyze_core(user, body, text, history):
     # cohort skips the screen model (which can only quote platform
     # churn) and goes straight to the derived read, which researches
     # the platform's published churn and shapes the cohort curve.
-    if pma.is_dimension_split_ask(text):
-        # Dimension-split lane (2026-10-12, Jordan / East Tree): a held figure split by device / daypart / geo / demo
-        # is a derived read anchored to that figure, never "not a dimension this read carries"; the named subject wins
-        _pm_ask_stage('dimension_split_lane', count=1)
-        _ds_named = ''
-        try:
-            _ds_named = (_pm_consumption_subject(text)
-                         or _ns_mod.mentioned_subject(text, '', _H._normalize_for_match,
-                                                      _PM_CLARIFY_STOP_TOKENS, _pm_plausible_subject) or '')
-        except Exception:
-            traceback.print_exc()
-        if _ds_named:   # keep the article the reader wrote ("The Office US", not "Office US")
-            _m_art = re.search(r'\b(?:The|A|An)\s+' + re.escape(_ds_named) + r'\b', text, re.I)
-            _ds_named = _m_art.group(0) if _m_art else _ds_named
-        _ds_vc = (ctx.get('view_context') or {}).get('data') or {} if isinstance(ctx, dict) else {}
-        _ds_subject = _ds_named or str(_ds_vc.get('show') or _ds_vc.get('title') or '').strip() \
-            or (p_meta.get('name') if isinstance(ctx, dict) and ctx.get('primary') else '') or ''
-        return _pm_generate_metrics_response(
-            user, text, history, ctx=ctx, prefer_catalog=True, bind_subject=_ds_named or None,
-            metric_request={'subject': _ds_subject, 'metric_family': 'dimension split',
-                            'dimension': pma.split_dimension(text),
-                            'bound_series': pma.extract_pasted_series(text),
-                            'needed': f"the figure the reader holds split by {pma.split_dimension(text)}, one row "
-                                      "per period with buckets that sum exactly to it, plus the whole-window total"})
     if _subiq_grounded and pma.is_cohort_churn_ask(text):
         _pm_ask_stage('cohort_churn_lane', count=1)
         _cc_vc = (ctx.get('view_context') or {}).get('data') or {}
@@ -18477,6 +18476,7 @@ from prometheus.legacy.watch import (  # noqa: E402,F401
     _pm_usd_label,
     _pm_money_symbol,
     _pm_viewership_read_price,
+    _pm_derived_read_price,
     _pm_viewership_verb,
     _pm_is_viewership_series_ask,
     _pm_is_viewership_ask,

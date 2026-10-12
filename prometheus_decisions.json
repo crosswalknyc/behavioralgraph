@@ -1,6 +1,6 @@
 {
  "version": 1,
- "content_hash": "9366d7ba3258a3cfe5ce118238bd722bbd4970eba399836717e5e74b0d611c17",
+ "content_hash": "b1d4d33cb4f6a2e2da3b2c9c2ad3fd4e6eb0ac756af18a1065f5d083a68e6097",
  "decisions": [
   {
    "id": "kids_viewers_default",
@@ -425,7 +425,53 @@
    "sources": [
     "prometheus-brain.md"
    ]
+  },
+  {
+   "id": "never_page_dependent",
+   "decided": "2026-10-12",
+   "statement": "The same question gets the same answer with a page open, with nothing open, or through the API. The page is context: it can supply the subject when the ask and the thread name none, and on-screen figures; it never gates a lane. Subject and figures resolve from the ask, then the thread, then the screen; with nothing anywhere, ask for the subject in one line, never a dead end.",
+   "match_terms": [
+    "nothing is open",
+    "open a profile",
+    "api",
+    "no page",
+    "break out by",
+    "split by device"
+   ],
+   "sources": [
+    "prometheus-brain.md"
+   ]
+  },
+  {
+   "id": "derived_read_price",
+   "decided": "2026-10-12",
+   "statement": "A delivered figure split by device, daypart, geography or a demographic is a breakdown read priced like a cut of an existing profile (100 in the seat's currency). The offer states the price, the charge lands on confirm, then every period is reconciled to the figure the reader holds.",
+   "match_terms": [
+    "breakdown",
+    "by device",
+    "by daypart",
+    "breakdown read",
+    "split the hours"
+   ],
+   "sources": [
+    "prometheus-brain.md"
+   ]
+  },
+  {
+   "id": "held_subject_one_typo_one_candidate",
+   "decided": "2026-10-12",
+   "statement": "A subject the library holds binds at one typo's distance, and a profile with its own cuts is one candidate, never an ambiguity. A question about a person we hold never becomes a custom read drawn from scratch. 'Email me this file' is a command that sends the open profile or the latest read; a yes right after 'On it' is the reader confirming the read already running; a new ask typed inside a guided intake leaves the intake, and a missing intake field is named in plain words.",
+   "match_terms": [
+    "email me this",
+    "send me the file",
+    "sponsorship opportunities",
+    "still need",
+    "on it"
+   ],
+   "sources": [
+    "prometheus-brain.md"
+   ]
   }
  ],
- "generated_at": "2026-10-12T15:45:54Z"
+ "generated_at": "2026-10-12T17:05:15Z"
 }

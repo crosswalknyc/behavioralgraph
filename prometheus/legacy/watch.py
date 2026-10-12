@@ -603,6 +603,18 @@ def _pm_viewership_read_price(text, username=None):
     return _pm_usd_label(each * years, username), max(credits_each, 1) * years, years
 
 
+def _pm_derived_read_price(username=None):
+    """(label, credits) for a derived read: a delivered figure split by
+    a dimension the panel observes (Jenna 2026-10-12, Jordan / East
+    Tree: 100 in the seat's currency, the derived-cut price)."""
+    try:
+        credits = int(_H.get_credit_cost('derived_read') or 1)
+    except Exception:
+        credits = 1
+    usd = _pm_usd('derived_read', 100.0, username=username)
+    return _pm_usd_label(usd, username), max(credits, 1)
+
+
 def _pm_panel_price_label(username):
     """User-facing price for the Prometheus research report, plus the
     credit count the charge will consume. Internal-credit holders see

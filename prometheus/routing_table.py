@@ -98,6 +98,17 @@ ROWS = [
         'examples': [], 'counter': [('where is the fall-off from the ticket step?', True)],
     },
     {
+        'id': 'email_file', 'surface': 'analyze',
+        'reason': 'email_file', 'client_action': 'analyze',
+        'host_only': True,
+        'note': '"Email me this file" is a command: the open profile\'s CSV '
+                '(and its cut) or the latest read in the thread goes out '
+                'through the house mail door (2026-10-12, Debi: it went to '
+                'the build flow and drew an existing-match offer). Served '
+                'by the ask service lane, not decide().',
+        'examples': [], 'counter': [('email me when it is ready', True)],
+    },
+    {
         'id': 'brand_coverage', 'surface': 'analyze',
         'reason': 'brand_coverage', 'client_action': 'analyze',
         'host_only': True,
@@ -147,6 +158,21 @@ ROWS = [
         'examples': [('Can I cut the existing Apple TV+ profile by '
                       'quarter?', False)],
         'counter': [('can you build me a Nike profile', False)],
+    },
+    {
+        'id': 'derived_read', 'surface': 'analyze',
+        'reason': 'derived_read', 'client_action': 'analyze',
+        'note': 'A delivered figure split by a dimension the panel observes '
+                '(device, daypart, geography, demographic). A derived read '
+                'at the derived-cut price, with a page open, with nothing '
+                'open, or through the API (2026-10-12, Jenna: never page '
+                'dependent by default).',
+        'examples': [("Could you break the hours out by the method of "
+                      "consumption (tv's, mobile, tablet etc.)?", False),
+                     ('split the signups by time of day', True),
+                     ('Pull a device-level breakdown of The Office US hours', False)],
+        'counter': [('how many hours of The Office US were streamed last month', False),
+                    ('build a profile on The Office US', False)],
     },
     {
         'id': 'product_fact', 'surface': 'analyze',

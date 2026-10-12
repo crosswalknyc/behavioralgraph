@@ -331,6 +331,45 @@ def screen_bind_verdict(text, page, base, page_key, normalize, stop):
     return 'confirm'
 
 
+def thread_subject(history, normalize, stop, plausible=None, consumption=None, limit=16):
+    """The subject the thread is about, newest first: an agent turn that
+    recorded the subject it answered on (``subject`` / ``profile`` on
+    the turn or its meta), else the most recent user turn that names
+    one. '' when the thread names nothing. This is what lets an ask
+    run with no page open (2026-10-12, Jenna: never page dependent by
+    default): the thread, not the screen, is the default anchor."""
+    turns = [t for t in (history or []) if isinstance(t, dict)]
+    for t in reversed(turns[-limit:]):
+        role = str(t.get('role') or '').lower()
+        meta = t.get('meta') if isinstance(t.get('meta'), dict) else {}
+        if role in ('agent', 'assistant'):
+            for k in ('subject', 'profile'):
+                v = str(t.get(k) or meta.get(k) or '').strip()
+                if v and (plausible is None or plausible(v)):
+                    return v
+            continue
+        if role != 'user':
+            continue
+        txt = str(t.get('text') or t.get('content') or '')
+        if not txt:
+            continue
+        named = ''
+        if consumption is not None:
+            try:
+                named = str(consumption(txt) or '').strip()
+            except Exception:
+                named = ''
+        if not named:
+            try:
+                named = str(mentioned_subject(txt, '', normalize, stop, plausible) or '').strip()
+            except Exception:
+                named = ''
+        if named:
+            m = re.search(r"\b(?:The|A|An)\s+" + re.escape(named) + r"\b", txt, re.I)
+            return m.group(0) if m else named
+    return ''
+
+
 def topic_only(text):
     """True when every meaningful word of the ask is ordinary English or
     topic vocabulary (brand partnerships, pricing, demographics): the

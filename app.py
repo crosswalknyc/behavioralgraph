@@ -2138,6 +2138,7 @@ DEFAULT_PRICING = {
     'panel_report': 5,           # custom ask: internal-unit twin of the 500 price
                                  # (Jenna 2026-10-08: every custom ask is 500)
     'viewership_read': 5,        # viewership over time: 5 per year of window (500/yr)
+    'derived_read': 1,           # breakdown of a delivered figure: internal-unit twin of the 100 price
 }
 
 _pricing_cache = {'data': None, 'loaded_at': 0}

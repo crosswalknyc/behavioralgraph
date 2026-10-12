@@ -5292,6 +5292,7 @@ def build_profile_required_reply(subject, price_label=None):
 # ---------------------------------------------------------------------------
 
 PANEL_RUN_CHIP_PREFIX = 'Run the full read'
+DERIVED_RUN_CHIP_PREFIX = 'Run the breakdown'
 
 
 def panel_report_eligible(text, subject):
@@ -5326,7 +5327,7 @@ def panel_report_eligible(text, subject):
 
 def build_panel_report_offer(subject, price_label, question='',
                              kind='report', years=1, verb='watched',
-                             series=True):
+                             series=True, dimension=''):
     """The priced offer for a full read on a no-base subject. Returns
     (reply, followups, offer) where `offer` is the payload the widget
     arms so the confirm chip re-sends the ask with panel_confirm.
@@ -5353,6 +5354,23 @@ def build_panel_report_offer(subject, price_label, question='',
         followups = [run_chip, 'Never mind']
         offer = {'question': str(question or '')[:600],
                  'subject': subj[:120], 'kind': 'viewership', 'years': yrs}
+        return scrub_user_text(reply), followups, offer
+    if kind == 'derived':
+        # A delivered figure split by a dimension the panel observes
+        # (Jenna 2026-10-12, Jordan / East Tree: 100 in the seat's
+        # currency). The figure the reader holds is the anchor; every
+        # period reconciles to it exactly.
+        dim = str(dimension or 'device').strip().lower()
+        buckets = DIMENSION_BUCKETS.get(dim) or ()
+        what = (f"by {dim}" + (f" ({', '.join(b.lower() for b in buckets)})" if buckets else ''))
+        reply = (
+            f"I can split the figures for {subj} {what}, each period reconciled "
+            f"exactly to the number you have, right here in the chat."
+            + (f" It runs {price}." if price else ""))
+        run_chip = (f"{DERIVED_RUN_CHIP_PREFIX} - {price}" if price else DERIVED_RUN_CHIP_PREFIX)[:160]
+        followups = [run_chip, 'Never mind']
+        offer = {'question': str(question or '')[:600],
+                 'subject': subj[:120], 'kind': 'derived', 'dimension': dim}
         return scrub_user_text(reply), followups, offer
     # Custom ask (Jenna 2026-10-08): a priced read, delivered in the
     # chat, with no profile pushed. The user can always ask for one.
@@ -6566,10 +6584,11 @@ def __getattr__(name):
 # the split reconciles to it exactly. Never "not a dimension", never
 # the nearest figure, never a build.
 _DIM_SPLIT_VERB_RE = re.compile(
-    r"\b(?:break(?:s|ing)?\s*(?:out|down)|breakdown|break[- ]out|split(?:s)?|cut|slice|divide|"
-    r"segment\w*|distribut\w+|share of|mix|by\s+(?:device|surface|screen|platform|daypart|"
+    r"\b(?:break(?:s|ing)?\s*(?:out|down)|break(?:s|ing)?\s+(?:\w+\s+){1,4}(?:out|down)\s+by|"
+    r"breakdown|break[- ]out|split(?:s)?|cut|slice|divide|"
+    r"segment\w*|distribut\w+|share of|mix|by\s+(?:the\s+)?(?:device|surface|screen|platform|daypart|"
     r"time of day|hour|region|dma|market|state|age|gender|income|ethnicity|demo\w*|"
-    r"method of consumption))\b", re.I)
+    r"method of consumption|consumption method))\b", re.I)
 _DIM_SPLIT_DIMS = (
     ('device', re.compile(r"\b(?:device(?:[- ]level|s)?|method of consumption|consumption method|"
                           r"surface|screen(?:s| type)?|connected tv|ctv|smart tv|mobile|tablet|desktop|"
@@ -6592,6 +6611,11 @@ DIMENSION_BUCKETS = {
 _PASTED_ROW_RE = re.compile(
     r"^\s*(?P<label>(?:\d{4}-\d{2}(?:-\d{2})?|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\.? ?\d{4}|"
     r"Q[1-4] ?\d{4}|[A-Za-z][A-Za-z0-9 &'/+.-]{0,40}?))\s*[\t:|,]?\s+(?P<value>\d{1,3}(?:,\d{3})+|\d{4,})\s*$", re.M)
+
+
+_INLINE_PERIOD_RE = re.compile(
+    r"(?P<label>\d{4}-\d{2}(?:-\d{2})?|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\.? ?\d{4}|"
+    r"Q[1-4] ?\d{4})\s*(?:[:|]|\s-\s)\s*\**(?P<value>\d{1,3}(?:,\d{3})+|\d{4,})\b")
 
 
 def split_dimension(text):
@@ -6633,6 +6657,25 @@ def extract_pasted_series(text):
         except ValueError:
             continue
         if v > 0 and label.lower() not in ('total', 'sum'):
+            out.append((label, v))
+    if len(out) >= 2:
+        return out
+    # A delivered read in the thread states the periods inline or as a
+    # table ("2025-10: 40,558,495 hours; 2025-11: ..." / "| Oct 2025 |
+    # 40,558,495 |"); dated labels only, so a stray count in prose is
+    # never taken for a period (2026-10-12: the thread anchors a split
+    # when no page is open).
+    out = []
+    seen = set()
+    for m in _INLINE_PERIOD_RE.finditer(str(text or '')):
+        label = m.group('label').strip()
+        try:
+            v = int(m.group('value').replace(',', ''))
+        except ValueError:
+            continue
+        key = label.lower()
+        if v > 0 and key not in seen:
+            seen.add(key)
             out.append((label, v))
     return out if len(out) >= 2 else []
 
@@ -6678,6 +6721,26 @@ def _messy_split(total, shares):
     for i in order[:rem]:
         base[i] += 1
     return base
+
+
+def series_from_history(history, limit=12):
+    """The most recent period series the thread holds, from a pasted
+    or delivered figure block in any turn (agent or user), newest
+    first. [] when no turn carries one. Lets a split run with no page
+    open: the thread is the anchor (Jenna 2026-10-12: never page
+    dependent by default)."""
+    turns = [t for t in (history or []) if isinstance(t, dict)]
+    for t in reversed(turns[-limit:]):
+        txt = str(t.get('text') or t.get('content') or '')
+        if not txt:
+            continue
+        try:
+            series = extract_pasted_series(txt)
+        except Exception:
+            series = []
+        if series:
+            return series
+    return []
 
 
 def reconcile_breakdown_to_series(res, series):

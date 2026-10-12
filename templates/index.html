@@ -83422,12 +83422,18 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var _po = _pmPanelOffer;
                 var _poLow = text.trim().toLowerCase();
                 var _poRun = _poLow.indexOf('run the full read') === 0 ||
+                    _poLow.indexOf('run the breakdown') === 0 ||
                     /^(yes|yeah|yep|ok(ay)?|sure|run it|go ahead|do it|charge (it|me))[.! ]*$/i.test(_poLow);
                 if (_poRun) {
                     _pmPanelOffer = null;
+                    // The offer's kind and dimension ride back so the server
+                    // prices the confirm the way it quoted it (a derived read
+                    // at the derived-cut price, 2026-10-12); the price itself
+                    // is always recomputed server side.
                     await _pmAnalyze(_po.question || text,
                         _pmCollectPageContext(), '',
-                        { panel_confirm: { subject: _po.subject } });
+                        { panel_confirm: { subject: _po.subject, kind: _po.kind || '',
+                                           dimension: _po.dimension || '' } });
                     return;
                 }
                 if (/^(never ?mind|no( thanks?)?|not now|cancel( (that|it))?)[.! ]*$/i.test(_poLow)) {

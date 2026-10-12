@@ -32,6 +32,7 @@ ROWS = (
     ('Brand Partnership', 'brand_partnership_iq', 1000.0, 'split'),
     ('Ad Attribution', 'attribution_iq_setup', 500.0, 'daily'),
     ('Any other custom ask', 'panel_report', 500.0, 'flat'),
+    ('Breakdown of a delivered figure (by device, daypart, geography or demographic)', 'derived_read', 100.0, 'flat'),
 )
 DAILY_KEY, DAILY_DEFAULT = 'attribution_iq_daily', 100.0
 CUT_KEY, CUT_DEFAULT = 'profile_iq_derived_cut', 100.0
