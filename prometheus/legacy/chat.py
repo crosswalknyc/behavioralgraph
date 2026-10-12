@@ -33,7 +33,7 @@ import boto3
 
 from prometheus.legacy import H as _H  # noqa: E402
 from prometheus import intake_draft as _intake_draft  # noqa: E402  (drafts briefs from the open profile)
-from prometheus import seams as _seams  # noqa: E402
+from prometheus import seams as _seams, cohort_scope as _cohort_scope  # noqa: E402
 
 
 def _pm_correct_page(title, body_html):
@@ -7478,6 +7478,10 @@ def _spec_from_draft(draft):
         'follower_platforms': (draft.get('follower_platforms')
                                 if audience_type_out != 'general' else None),
     }
+    try:   # anchor_entity / geo_scope / political_lean ride the spec (2026-10-12); lazy so extracted copies of this function run
+        __import__('prometheus.cohort_scope', fromlist=['apply_to_spec']).apply_to_spec(spec, draft)
+    except Exception:
+        pass
     # ---- Platform scope passthrough (2026-09-04, Jenna perceptionbox
     # rerun). Normalized here so the engine host sees a validated list
     # of canonical platform keys or None. Draft may set the field or
@@ -11645,8 +11649,8 @@ def _pm_chat_subject_verify(spec_draft, candidates, text, preverify=None):
         subj = str(spec_draft.get('subject') or '').split(' - ', 1)[0].strip()
         if not subj:
             return None
-        if spec_draft.get('_persona_universe') or spec_draft.get(
-                'ask_ip_scope') or spec_draft.get('clarify_question'):
+        if spec_draft.get('_persona_universe') or spec_draft.get('ask_ip_scope') or spec_draft.get('clarify_question') \
+                or _cohort_scope.apply_to_draft(spec_draft, text):   # compound cohort anchored on an entity (2026-10-12)
             return None
         verify = getattr(_H, '_v1_subject_verified', None)
         if not callable(verify):
@@ -11831,8 +11835,7 @@ def _pm_fuzzy_catalog_subject(text, extra_tokens=None):
     hits = {}
     try:
         for entry in _profile_catalog_for_chat():
-            # Family name (cut suffix stripped): a TU and its own Avid cut are ONE candidate, not an
-            # ambiguity (2026-10-12, Debi: 'Austin Sprintz' fell through to a $500 read on a held subject)
+            # Family name (cut suffix stripped): a TU and its Avid cut are ONE candidate (2026-10-12, Debi: 'Austin Sprintz')
             subj = str(_ns_mod.family_name(entry) or entry.get('subject')
                        or entry.get('display_name') or '').strip()
             if _ns_mod.is_gen_pop(subj, _H._normalize_for_match):
@@ -13079,8 +13082,7 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
                 _pr_label, _pr_credits, _pr_qty = _vw
                 _pr_pull_type, _pr_kind = 'Viewership Read', 'viewership'
             if _is_derived:   # a delivered figure split by a dimension: the derived-cut price (Jenna 2026-10-12)
-                _pr_label, _pr_credits = _pm_derived_read_price(_pm_user)
-                _pr_pull_type, _pr_qty, _pr_kind = 'Derived Read', 1, 'derived'
+                _pr_label, _pr_credits = _pm_derived_read_price(_pm_user); _pr_pull_type, _pr_qty, _pr_kind = 'Derived Read', 1, 'derived'
             if isinstance(panel_confirm, dict):
                 # Confirmed: the charge lands NOW, before anything is
                 # generated. Price is always the server's, never the
@@ -15568,9 +15570,8 @@ def _pm_analyze_core(user, body, text, history):
     # handoff survives only as a safety net (counted in stages as
     # handoff_generate so the shrink is visible in the ask log).
     ctx, ctx_err = _pm_validate_page_context(body.get('page_context'))
-    # Derived read (2026-10-12, Jordan / East Tree; Jenna: never page dependent by default): a held figure split
-    # by device / daypart / geo / demo runs the same with a page, with nothing open, or through the API; subject and
-    # figures come from the ask, then the thread, then the screen; priced at the derived-cut price (prometheus/derived_read).
+    # Derived read (2026-10-12, Jordan; Jenna: never page dependent by default): a held figure split by a dimension
+    # runs the same with or without a page; subject + figures from the ask, thread, then screen (prometheus/derived_read).
     try:
         from prometheus import derived_read as _derived
         import prometheus_analysis as _pma_dr
@@ -16158,8 +16159,7 @@ def _pm_analyze_core(user, body, text, history):
         except Exception:
             traceback.print_exc()
     if not ctx:
-        # Nothing open is not a dead end (Jenna 2026-10-12: never page dependent by default). The reasoned read
-        # binds the subject from the ask or the thread and asks for it when neither names one.
+        # Nothing open is not a dead end (Jenna 2026-10-12): the read binds the subject from the ask or thread, or asks
         _pm_ask_hint(route='no_page_read')
         return _pm_generate_metrics_response(user, text, history, prefer_catalog=True)
     # 2026-09-09 Jenna: "Analyze this data" is session-metered, not

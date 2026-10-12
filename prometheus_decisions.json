@@ -1,6 +1,6 @@
 {
  "version": 1,
- "content_hash": "b1d4d33cb4f6a2e2da3b2c9c2ad3fd4e6eb0ac756af18a1065f5d083a68e6097",
+ "content_hash": "e270118fe2e40fe97bc3e8a05eabcd867e82ad78e733a9e6c3ef6f168951f5a4",
  "decisions": [
   {
    "id": "kids_viewers_default",
@@ -471,7 +471,24 @@
    "sources": [
     "prometheus-brain.md"
    ]
+  },
+  {
+   "id": "entity_anchored_cohort_builds",
+   "decided": "2026-10-12",
+   "statement": "A cohort anchored on an entity with a geography, a political lean or a demographic qualifier (Republican voters in California who are Rams fans; Chime customers in Texas) is a buildable universe: the anchor pinned at 100 in its home column, LOCATION carrying only that state's markets, the lean read in the brief. Never 'I could not find X as a brand, person, or title'. A state word inside a brand name is not a geography; 'fans of X' with no qualifier is an entity build on X.",
+   "match_terms": [
+    "fans of",
+    "voters in",
+    "who are fans",
+    "customers in",
+    "residents who",
+    "republican",
+    "democrat"
+   ],
+   "sources": [
+    "prometheus-brain.md"
+   ]
   }
  ],
- "generated_at": "2026-10-12T17:05:15Z"
+ "generated_at": "2026-10-12T23:16:37Z"
 }

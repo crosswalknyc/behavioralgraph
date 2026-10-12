@@ -55482,6 +55482,16 @@ def _v1_persona_class_ask(text):
     import re as _re
     t = str(text or '')
     tl = t.lower()
+    # Compound cohort anchored on an entity with a geography, a political
+    # lean or a demographic qualifier ("Republican voters in California
+    # who are fans of the LA Rams") is a persona universe even though it
+    # names an entity (2026-10-12, Jenna / Emmet). prometheus.cohort_scope.
+    try:
+        from prometheus import cohort_scope as _cs
+        if _cs.detect(t):
+            return True
+    except Exception:
+        pass
     interest = bool(_re.search(
         r'interest(?:ed)?\s+in|visitors?\s+to\s|users?\s+of\s|'
         r'\bshoppers?\b|\benthusiasts?\b|(?:have\s+)?downloaded\s|'
@@ -55726,6 +55736,13 @@ def _v1_persona_universe_normalize(draft, user_text):
             return
         draft['_persona_universe'] = True
         draft['subject_verified'] = True
+        # Compound cohort fields (anchor entity, geography, lean) ride the
+        # draft; the label is composed from them when the model's is long.
+        try:
+            from prometheus import cohort_scope as _cs
+            _cs.apply_to_draft(draft, text)
+        except Exception:
+            pass
 
         subject = str(draft.get('subject') or '').strip()
         label = subject
