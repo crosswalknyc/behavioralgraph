@@ -12146,6 +12146,31 @@ RECLASSIFY_SECTIONS = [
     # 'CREATOR/INFLUENCER' at the same slot; dashboard MASTER_CATEGORIES
     # lists both aliases so it renders either way.
     'Creator/Influencer',
+    # Talent content verticals (Jessie 2026-10-12): the third component
+    # of 'Talent, Creator/Influencer, <X> Content' and 'Talent, Host/
+    # Personality, <X> Content'. Each becomes its own Column (TRAVEL
+    # CONTENT) next to the role column; one value per person across
+    # TALENT, the role and the vertical. Source list:
+    # migration/talent_content_verticals.py (tests keep these in step).
+    'Education/How-To Content',
+    'Entertainment Content',
+    'Faith/Spirituality Content',
+    'Fashion Content',
+    'Business/Finance Content',
+    'Fitness/Wellness Content',
+    'Food Content',
+    'Gaming Content',
+    'Home/DIY Content',
+    'Lifestyle Content',
+    'Music/Dance Content',
+    'News/Politics Content',
+    'Family Content',
+    'Pets Content',
+    'Sports Content',
+    'Tech Content',
+    'Travel Content',
+    'Art Content',
+    'Beauty Content',
     'Insurance',
     'Investments',
     'La Liga',
@@ -36778,6 +36803,7 @@ def main():
                 "SOCIAL MEDIA", "BROADCAST/CABLE", "STREAMING/MUSIC", "STREAMING/PLATFORM", "STREAMING/CHANNEL",
                 "VIRTUAL MVPD FAST", "PORN MEDIA", "TECHNOLOGY/DEVICE", "TELECOM", "WORKOUT FACILITY",
                 "EVENTS", "VENUE", "TICKETING", "ACTOR", "ATHLETE", "COMEDIAN", "HOST/PERSONALITY", "BUSINESS/TECH LEADERS", "CREATOR/INFLUENCER",
+                "EDUCATION/HOW-TO CONTENT", "ENTERTAINMENT CONTENT", "FAITH/SPIRITUALITY CONTENT", "FASHION CONTENT", "BUSINESS/FINANCE CONTENT", "FITNESS/WELLNESS CONTENT", "FOOD CONTENT", "GAMING CONTENT", "HOME/DIY CONTENT", "LIFESTYLE CONTENT", "MUSIC/DANCE CONTENT", "NEWS/POLITICS CONTENT", "FAMILY CONTENT", "PETS CONTENT", "SPORTS CONTENT", "TECH CONTENT", "TRAVEL CONTENT", "ART CONTENT", "BEAUTY CONTENT",
                 "MLB ATHLETE", "MUSICIAN/BAND", "NBA ATHLETE", "NFL ATHLETE", "POLITICS/ACTIVIST",
                 "SOCCER ATHLETE", "WNBA ATHLETE", "TALENT", "SPORTS ORGANIZATIONS", "SPORTS TEAM",
                 "WNBA", "NBA", "NFL", "NFC", "NFC EAST", "NFC NORTH", "NFC SOUTH", "NFC WEST",

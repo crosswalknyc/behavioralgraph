@@ -48,6 +48,18 @@ from collections import Counter, defaultdict
 
 import pandas as pd
 
+# Talent content verticals (Jessie 2026-10-12): TRAVEL CONTENT, BEAUTY
+# CONTENT, ... are person columns derived from the creator / host row.
+# Every talent-family set below carries them so mirror alignment and
+# the person-profile category gates treat them as the role column.
+try:
+    from migration.talent_content_verticals import CONTENT_COLUMN_SET as _TCV_COLUMNS
+except ImportError:  # pragma: no cover - bare-path import on the box
+    try:
+        from talent_content_verticals import CONTENT_COLUMN_SET as _TCV_COLUMNS  # type: ignore
+    except ImportError:
+        _TCV_COLUMNS = frozenset()
+
 US_POP = 329_900_000
 
 
@@ -680,6 +692,7 @@ _PERSON_OK_CATS = {
     'BRAND INPUT', 'INPUT_METADATA', 'MEDIA',
     'BRAND CATEGORY', 'EMERGING TALENT', 'GENERAL',
 }
+_PERSON_OK_CATS |= set(_TCV_COLUMNS)
 
 # BRAND CATEGORY values that indicate this profile's SUBJECT is a person
 # (vs a retailer / sports team / app / etc.). Only these archetypes have
@@ -8623,6 +8636,7 @@ _PROPAGATE_DEMO_SKIP = {
     # Content/persona categories carry the subject-100 invariant
     'PERSONA', 'CONTENT', 'SERIES', 'FRANCHISE',
 }
+_PROPAGATE_DEMO_SKIP |= set(_TCV_COLUMNS)
 
 # Min gap (pp) before propagation fires. Tight enough to catch real
 # misalignments (Tyson MPB 22% / CPG 0.03%) but lenient enough that
@@ -8875,6 +8889,7 @@ _MPB_MIRROR_SKIP_CATS = {
     # content/persona
     'PERSONA', 'CONTENT', 'SERIES', 'FRANCHISE',
 }
+_MPB_MIRROR_SKIP_CATS |= set(_TCV_COLUMNS)
 
 
 def enforce_mpb_exact_mirror(df, subject, verbose=True):
@@ -8999,6 +9014,7 @@ _TALENT_FAMILY = {
     'NFL ATHLETE', 'NBA ATHLETE', 'MLB ATHLETE', 'NHL ATHLETE', 'SOCCER',
     'WRITER/DIRECTOR/AUTHOR/ARTIST',
 }
+_TALENT_FAMILY |= set(_TCV_COLUMNS)
 
 _TALENT_PROP_MIN_GAP_PP = 1.5
 _TALENT_PROP_MAX_VALUE = 99.0  # safety: never propagate values ≥ 99 (subject pins)
@@ -9129,7 +9145,7 @@ TALENT_PROFILE_CATEGORIES = frozenset({
     'WRITER/DIRECTOR/AUTHOR/ARTIST', 'POLITICS/ACTIVIST',
     'NBA ATHLETE', 'NFL ATHLETE', 'MLB ATHLETE', 'NHL ATHLETE',
     'WNBA ATHLETE', 'SOCCER ATHLETE',
-})
+}) | frozenset(_TCV_COLUMNS)
 
 
 def _is_brand_profile(df) -> tuple[bool, str | None]:
@@ -9370,7 +9386,7 @@ _TALENT_FAMILY_FOR_TIER = frozenset({
     'HOST/PERSONALITY', 'BUSINESS/TECH LEADERS', 'POLITICS/ACTIVIST', 'POLITICS', 'PODCAST',
     'NFL ATHLETE', 'NBA ATHLETE', 'MLB ATHLETE', 'NHL ATHLETE', 'SOCCER',
     'WRITER/DIRECTOR/AUTHOR/ARTIST', 'CREATOR/INFLUENCER',
-})
+}) | frozenset(_TCV_COLUMNS)
 
 
 def _detect_subject_recognition_tier(df, bp_col):

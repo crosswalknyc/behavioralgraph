@@ -426,6 +426,14 @@ _TALENT_CATEGORIES = {
     'BOXER', 'MMA FIGHTER', 'WRESTLER', 'POLITICS/ACTIVIST',
     'CHEF', 'COMEDIAN', 'AUTHOR', 'JOURNALIST',
 }
+try:
+    from migration.talent_content_verticals import CONTENT_COLUMN_SET as _TCV_COLUMNS
+except ImportError:  # pragma: no cover - bare-path import on the box
+    try:
+        from talent_content_verticals import CONTENT_COLUMN_SET as _TCV_COLUMNS  # type: ignore
+    except ImportError:
+        _TCV_COLUMNS = frozenset()
+_TALENT_CATEGORIES |= set(_TCV_COLUMNS)
 
 # When a row in one of the above categories has GP below this threshold,
 # treat the GP value as a survey floor (not a real benchmark) and skip
@@ -2483,6 +2491,25 @@ _HOSTMAP_SECTION_FALLBACK = {
     'NHL ATHLETE', 'SOCCER ATHLETE', 'MOTORSPORT ATHLETE',
     'CREATOR/INFLUENCER', 'HOST/PERSONALITY',
     'WRITER/DIRECTOR/AUTHOR/ARTIST', 'POLITICS/ACTIVIST',
+    'EDUCATION/HOW-TO CONTENT',
+    'ENTERTAINMENT CONTENT',
+    'FAITH/SPIRITUALITY CONTENT',
+    'FASHION CONTENT',
+    'BUSINESS/FINANCE CONTENT',
+    'FITNESS/WELLNESS CONTENT',
+    'FOOD CONTENT',
+    'GAMING CONTENT',
+    'HOME/DIY CONTENT',
+    'LIFESTYLE CONTENT',
+    'MUSIC/DANCE CONTENT',
+    'NEWS/POLITICS CONTENT',
+    'FAMILY CONTENT',
+    'PETS CONTENT',
+    'SPORTS CONTENT',
+    'TECH CONTENT',
+    'TRAVEL CONTENT',
+    'ART CONTENT',
+    'BEAUTY CONTENT',
     'GAMES', 'MOST PURCHASED BRANDS',
     'APPAREL/FOOTWEAR', 'APPAREL & FOOTWEAR', 'CPG',
     'HOME/OUTDOOR', 'BEAUTY/WELLNESS', 'ACCESSORIES', 'PETS',

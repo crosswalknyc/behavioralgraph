@@ -57210,7 +57210,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
 
         (function() {
             var _sportsSubs = ['AFC','SPORTS TEAM','LA LIGA','METROPOLITAN DIVISION','MLB','MLS','EASTERN CONFERENCE','CENTRAL DIVISION','ATLANTIC DIVISION','AFC EAST','NBA','NFC EAST','NFC NORTH','NFC SOUTH','NFC WEST','NFL','NFC','AFC NORTH','NWSL','PREMIER LEAGUE','RUGBY','SERIE A','SOCCER','PACIFIC DIVISION','AFC SOUTH','AFC WEST','AL','WNBA','AL CENTRAL','AL EAST','AL WEST','SPORTS ORGANIZATIONS','SPORTS ORGANIZATION','HORSE RACING'];
-            var _talentSubs = ['ACTOR','ATHLETE','BUSINESS/TECH LEADERS','HOST/PERSONALITY','INFLUENCER/CREATOR','CREATOR/INFLUENCER','MLB ATHLETE','MUSICIAN/BAND','NBA ATHLETE','NFL ATHLETE','NHL ATHLETE','POLITICS/ACTIVIST','SOCCER ATHLETE','WNBA ATHLETE','WRITER/DIRECTOR/AUTHOR/ARTIST'];
+            // Talent content verticals (Jessie 2026-10-12) fold into TALENT like any sub-column.
+            window._TALENT_CONTENT_LABELS = {'education/how-to content': 'Education/How-To Content', 'entertainment content': 'Entertainment Content', 'faith/spirituality content': 'Faith/Spirituality Content', 'fashion content': 'Fashion Content', 'business/finance content': 'Business/Finance Content', 'fitness/wellness content': 'Fitness/Wellness Content', 'food content': 'Food Content', 'gaming content': 'Gaming Content', 'home/diy content': 'Home/DIY Content', 'lifestyle content': 'Lifestyle Content', 'music/dance content': 'Music/Dance Content', 'news/politics content': 'News/Politics Content', 'family content': 'Family Content', 'pets content': 'Pets Content', 'sports content': 'Sports Content', 'tech content': 'Tech Content', 'travel content': 'Travel Content', 'art content': 'Art Content', 'beauty content': 'Beauty Content'};
+            window.talentContentLabelGlobal = function(col) { return window._TALENT_CONTENT_LABELS[String(col || '').toLowerCase()] || String(col || ''); };
+            var _TALENT_CONTENT_COLS = ['EDUCATION/HOW-TO CONTENT','ENTERTAINMENT CONTENT','FAITH/SPIRITUALITY CONTENT','FASHION CONTENT','BUSINESS/FINANCE CONTENT','FITNESS/WELLNESS CONTENT','FOOD CONTENT','GAMING CONTENT','HOME/DIY CONTENT','LIFESTYLE CONTENT','MUSIC/DANCE CONTENT','NEWS/POLITICS CONTENT','FAMILY CONTENT','PETS CONTENT','SPORTS CONTENT','TECH CONTENT','TRAVEL CONTENT','ART CONTENT','BEAUTY CONTENT'];
+            window._TALENT_CONTENT_COLS = _TALENT_CONTENT_COLS;
+            var _talentSubs = ['ACTOR','ATHLETE','BUSINESS/TECH LEADERS','HOST/PERSONALITY','INFLUENCER/CREATOR','CREATOR/INFLUENCER','MLB ATHLETE','MUSICIAN/BAND','NBA ATHLETE','NFL ATHLETE','NHL ATHLETE','POLITICS/ACTIVIST','SOCCER ATHLETE','WNBA ATHLETE','WRITER/DIRECTOR/AUTHOR/ARTIST'].concat(_TALENT_CONTENT_COLS);
             var _mpbSubs = ['ACCESSORIES','APPAREL/FOOTWEAR','BEAUTY/WELLNESS','CPG','HEALTH & WELLNESS','HOME/OUTDOOR','PETS','TECHNOLOGY BRAND','TOYS'];
 
             function _countBehItems(behData, cat) {
@@ -142010,8 +142015,21 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     return r.pct.toFixed(1) + '% of the audience overlaps this talent&#39;s fan base (' + idxTxt + ' vs Gen Pop). ' + call;
                 };
 
+                const _mkContentVerticalFor = (name) => {
+                    const norm = _mkNorm(name);
+                    if (!norm) return '';
+                    const behav = _mkBehav();
+                    const found = [];
+                    (_TALENT_CONTENT_COLS || []).forEach(col => {
+                        const items = behav[col];
+                        if (!Array.isArray(items)) return;
+                        if (items.some(it => _mkNorm(it && it.name) === norm)) found.push(talentContentLabelGlobal(col));
+                    });
+                    return found.join(', ');
+                };
                 const cardFor = (r, icon) => {
-                    const catLabel = (r.cat || '').replace('/', ' / ');
+                    const vertical = _mkContentVerticalFor(r.name);
+                    const catLabel = (r.cat || '').replace('/', ' / ') + (vertical ? ' \u00b7 ' + vertical : '');
                     const reach = _mkReachPeople(r.pct);
                     const reachTxt = reach > 0 ? '≈' + formatNumber(reach) + ' reachable' : '';
                     return `
@@ -157210,7 +157228,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     'ACTOR', 'ATHLETE', 'HOST/PERSONALITY', 'INFLUENCER/CREATOR', 
                     'CREATOR/INFLUENCER', 'MLB ATHLETE', 'MUSICIAN/BAND', 'NBA ATHLETE', 
                     'NFL ATHLETE', 'NHL ATHLETE', 'POLITICS/ACTIVIST', 'SOCCER ATHLETE', 
-                    'WNBA ATHLETE', 'WRITER/DIRECTOR/AUTHOR/ARTIST'
+                    'WNBA ATHLETE', 'WRITER/DIRECTOR/AUTHOR/ARTIST',
+                    // content verticals (Jessie 2026-10-12): the same people as the
+                    // creator / host rows, grouped by what they make
+                    'EDUCATION/HOW-TO CONTENT', 'ENTERTAINMENT CONTENT', 'FAITH/SPIRITUALITY CONTENT', 'FASHION CONTENT', 'BUSINESS/FINANCE CONTENT', 'FITNESS/WELLNESS CONTENT', 'FOOD CONTENT', 'GAMING CONTENT', 'HOME/DIY CONTENT', 'LIFESTYLE CONTENT', 'MUSIC/DANCE CONTENT', 'NEWS/POLITICS CONTENT', 'FAMILY CONTENT', 'PETS CONTENT', 'SPORTS CONTENT', 'TECH CONTENT', 'TRAVEL CONTENT', 'ART CONTENT', 'BEAUTY CONTENT'
                 ];
                 
                 // Create aggregated behavioral object
@@ -157256,8 +157277,21 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         aggregatedBehavioral[aggCat].forEach(item => {
                             const key = getSportsItemName(item);
                             if (!key) return;
-                            if (!seen.has(key) || item.pct > seen.get(key).pct) {
-                                seen.set(key, item);
+                            // Every sub-column the name came from rides on the kept
+                            // item (2026-10-12): the slice menu filters on the full
+                            // list, so an NFL athlete is found under "nfl athlete"
+                            // and a travel creator under "travel content" even though
+                            // both carry one value across their columns.
+                            const prev = seen.get(key);
+                            const cats = (prev && prev.originalCategories ? prev.originalCategories.slice() : [])
+                                .concat(prev && prev.originalCategory ? [prev.originalCategory] : [])
+                                .concat(item.originalCategories || [])
+                                .concat(item.originalCategory ? [item.originalCategory] : []);
+                            const uniqCats = Array.from(new Set(cats.filter(Boolean)));
+                            if (!prev || item.pct > prev.pct) {
+                                seen.set(key, Object.assign({}, item, { originalCategories: uniqCats }));
+                            } else {
+                                prev.originalCategories = uniqCats;
                             }
                         });
                         let deduped = Array.from(seen.values());
@@ -157454,6 +157488,25 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 'HOST/PERSONALITY': 'Hosts and personalities panelists digitally engaged with.',
                 'CREATOR/INFLUENCER': 'Digital content creators and influencers panelists digitally engaged with.',
                 'INFLUENCER/CREATOR': 'Digital content creators and influencers panelists digitally engaged with.',
+                'EDUCATION/HOW-TO CONTENT': 'Creators and hosts known for education/how-to content that panelists digitally engaged with.',
+                'ENTERTAINMENT CONTENT': 'Creators and hosts known for entertainment content that panelists digitally engaged with.',
+                'FAITH/SPIRITUALITY CONTENT': 'Creators and hosts known for faith/spirituality content that panelists digitally engaged with.',
+                'FASHION CONTENT': 'Creators and hosts known for fashion content that panelists digitally engaged with.',
+                'BUSINESS/FINANCE CONTENT': 'Creators and hosts known for business/finance content that panelists digitally engaged with.',
+                'FITNESS/WELLNESS CONTENT': 'Creators and hosts known for fitness/wellness content that panelists digitally engaged with.',
+                'FOOD CONTENT': 'Creators and hosts known for food content that panelists digitally engaged with.',
+                'GAMING CONTENT': 'Creators and hosts known for gaming content that panelists digitally engaged with.',
+                'HOME/DIY CONTENT': 'Creators and hosts known for home/diy content that panelists digitally engaged with.',
+                'LIFESTYLE CONTENT': 'Creators and hosts known for lifestyle content that panelists digitally engaged with.',
+                'MUSIC/DANCE CONTENT': 'Creators and hosts known for music/dance content that panelists digitally engaged with.',
+                'NEWS/POLITICS CONTENT': 'Creators and hosts known for news/politics content that panelists digitally engaged with.',
+                'FAMILY CONTENT': 'Creators and hosts known for family content that panelists digitally engaged with.',
+                'PETS CONTENT': 'Creators and hosts known for pets content that panelists digitally engaged with.',
+                'SPORTS CONTENT': 'Creators and hosts known for sports content that panelists digitally engaged with.',
+                'TECH CONTENT': 'Creators and hosts known for tech content that panelists digitally engaged with.',
+                'TRAVEL CONTENT': 'Creators and hosts known for travel content that panelists digitally engaged with.',
+                'ART CONTENT': 'Creators and hosts known for art content that panelists digitally engaged with.',
+                'BEAUTY CONTENT': 'Creators and hosts known for beauty content that panelists digitally engaged with.',
                 'INSURANCE': 'Insurance companies panelists digitally engaged with.',
                 'INVESTMENTS': 'Investment companies panelists digitally engaged with.',
                 'TRADING': 'Trading platforms panelists digitally engaged with.',
@@ -157662,6 +157715,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     if (b === 'all') return 1;
                     return a.localeCompare(b);
                 });
+                // Content verticals (Jessie 2026-10-12): a second group in the
+                // Talent slice menu; labels as the data team spells them.
+                const talentContentOptions = ['education/how-to content', 'entertainment content', 'faith/spirituality content', 'fashion content', 'business/finance content', 'fitness/wellness content', 'food content', 'gaming content', 'home/diy content', 'lifestyle content', 'music/dance content', 'news/politics content', 'family content', 'pets content', 'sports content', 'tech content', 'travel content', 'art content', 'beauty content'];
+                const _TALENT_CONTENT_LABELS = {'education/how-to content': 'Education/How-To Content', 'entertainment content': 'Entertainment Content', 'faith/spirituality content': 'Faith/Spirituality Content', 'fashion content': 'Fashion Content', 'business/finance content': 'Business/Finance Content', 'fitness/wellness content': 'Fitness/Wellness Content', 'food content': 'Food Content', 'gaming content': 'Gaming Content', 'home/diy content': 'Home/DIY Content', 'lifestyle content': 'Lifestyle Content', 'music/dance content': 'Music/Dance Content', 'news/politics content': 'News/Politics Content', 'family content': 'Family Content', 'pets content': 'Pets Content', 'sports content': 'Sports Content', 'tech content': 'Tech Content', 'travel content': 'Travel Content', 'art content': 'Art Content', 'beauty content': 'Beauty Content'};
+                const talentContentLabel = (o) => _TALENT_CONTENT_LABELS[String(o || '').toLowerCase()] || capitalizeWords(o);
                 
                 // Check if this is APP/PLATFORM for slice dropdown
                 const isAppPlatform = cat.toUpperCase() === 'APP/PLATFORM' || cat.toUpperCase().includes('APP/PLATFORM');
@@ -157824,10 +157882,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     });
                     whereTheyShopSliceOptions.length = 0; whereTheyShopSliceOptions.push('all', ..._live);
                 }
+                const _origCatsOf = (it) => ((it && it.originalCategories && it.originalCategories.length)
+                    ? it.originalCategories : [it && it.originalCategory || '']).map(c => String(c || '').toUpperCase());
                 const _hasOrigCatItems = (opts, mapFn) => opts.filter(o => {
                     if (o === 'all') return false;
-                    const keys = mapFn(o);
-                    return items.some(it => keys.some(k => (it.originalCategory || '').toUpperCase() === k.toUpperCase()));
+                    const keys = mapFn(o).map(k => String(k).toUpperCase());
+                    return items.some(it => _origCatsOf(it).some(c => keys.includes(c)));
                 });
                 const _hasGenericItems = (opts) => opts.filter(o => {
                     if (o === 'all') return false;
@@ -157843,6 +157903,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     const _tm = {'actor':['ACTOR'],'athlete':['ATHLETE'],'comedian':['COMEDIAN'],'creator/influencer':['CREATOR/INFLUENCER','INFLUENCER/CREATOR'],'emerging talent':['EMERGING TALENT'],'host/personality':['HOST/PERSONALITY'],'mlb athlete':['MLB ATHLETE'],'musician/band':['MUSICIAN/BAND'],'nba athlete':['NBA ATHLETE'],'nfl athlete':['NFL ATHLETE'],'nhl athlete':['NHL ATHLETE'],'politics/activist':['POLITICS/ACTIVIST'],'soccer athlete':['SOCCER ATHLETE'],'wnba athlete':['WNBA ATHLETE'],'writer/director/author/artist':['WRITER/DIRECTOR/AUTHOR/ARTIST']};
                     const _live = _hasOrigCatItems(talentSliceOptions, o => _tm[o.toLowerCase()] || [o.toUpperCase()]);
                     talentSliceOptions.length = 0; talentSliceOptions.push('all', ..._live);
+                    const _liveContent = _hasOrigCatItems(talentContentOptions, o => [o.toUpperCase()]);
+                    talentContentOptions.length = 0; talentContentOptions.push(..._liveContent);
                 }
                 if (isStreamingMusic) {
                     const _live = [];
@@ -157934,7 +157996,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                             ${isTalent ? `
                                 <select class="behavioral-slice-select" id="slice-${catId}" onchange="sliceTalent('${catId}', '${cat}', this.value)" style="flex: 1; min-width: 80px; padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
                                     <option value="all">Show All</option>
+                                    ${talentContentOptions.length ? `<optgroup label="Talent type">` : ''}
                                     ${talentSliceOptions.filter(opt => opt !== 'all').map(opt => `<option value="${opt}">${capitalizeWords(opt)}</option>`).join('')}
+                                    ${talentContentOptions.length ? `</optgroup><optgroup label="Content vertical">${talentContentOptions.map(opt => `<option value="${opt}">${talentContentLabel(opt)}</option>`).join('')}</optgroup>` : ''}
                                 </select>
                             ` : ''}
                             ${isStreamingMusic ? `
@@ -159304,10 +159368,13 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 
                 const sliceKeywords = sliceMap[sliceValue.toLowerCase()] || [sliceValue.toUpperCase()];
                 
-                // Filter items by original category
+                // Filter items by every sub-column the name came from (2026-10-12:
+                // the dedupe keeps the full list, so "nfl athlete" and "travel
+                // content" both find their people)
                 filtered = items.filter(item => {
-                    const originalCat = item.originalCategory || '';
-                    return sliceKeywords.some(keyword => originalCat.toUpperCase() === keyword.toUpperCase());
+                    const cats = (item.originalCategories && item.originalCategories.length)
+                        ? item.originalCategories : [item.originalCategory || ''];
+                    return cats.some(c => sliceKeywords.some(keyword => String(c).toUpperCase() === keyword.toUpperCase()));
                 });
             }
             

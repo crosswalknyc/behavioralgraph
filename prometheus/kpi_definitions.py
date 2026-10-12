@@ -141,6 +141,36 @@ DEFINITIONS = [
             "slice, sized at that share of the full audience."),
     },
     {
+        'id': 'content_vertical',
+        'label': 'Content vertical',
+        'views': '*',
+        'aliases': ('content vertical', 'content verticals', 'travel content',
+                    'entertainment content', 'beauty content', 'food content',
+                    'gaming content', 'fashion content', 'fitness/wellness content',
+                    'news/politics content', 'lifestyle content', 'sports content',
+                    'tech content', 'family content', 'pets content', 'art content',
+                    'music/dance content', 'home/diy content', 'faith/spirituality content',
+                    'business/finance content', 'education/how-to content',
+                    'what is travel content', 'what does travel content mean'),
+        'definition': (
+            "A content vertical groups the creators, influencers, hosts and "
+            "personalities in a profile by the kind of content they are "
+            "known for: Travel Content, Beauty Content, Food Content, "
+            "Gaming Content, Fashion Content, Fitness/Wellness Content, "
+            "News/Politics Content, Entertainment Content, Lifestyle "
+            "Content, Sports Content, Tech Content, Family Content, Pets "
+            "Content, Art Content, Music/Dance Content, Home/DIY Content, "
+            "Faith/Spirituality Content, Business/Finance Content and "
+            "Education/How-To Content. On the Talent card they sit under "
+            "Content vertical in the slice menu."),
+        'computed': (
+            "Each person carries one value across TALENT, their role column "
+            "(creator or host) and their content vertical; the vertical is "
+            "the same people as the role column, grouped by what they make. "
+            "A person's share in a vertical is their share of the audience, "
+            "not a share of the vertical."),
+    },
+    {
         'id': 'engager',
         'label': 'Engager',
         'views': '*',
