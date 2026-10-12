@@ -1,6 +1,6 @@
 {
  "version": 1,
- "content_hash": "953d9965ab8fcbe89301e3d8ddb6c6ed919d47cbac9776d09f63a718b78c5230",
+ "content_hash": "9366d7ba3258a3cfe5ce118238bd722bbd4970eba399836717e5e74b0d611c17",
  "decisions": [
   {
    "id": "kids_viewers_default",
@@ -320,7 +320,112 @@
    "sources": [
     "always-project-to-us-genpop.mdc"
    ]
+  },
+  {
+   "id": "avid_fan_touchpoints",
+   "decided": "2026-10-12",
+   "statement": "An Avid Fan is a person with 4 or more digital touchpoints to the subject over the window studied. A digital touchpoint is a visit to the subject's owned and operated sites or apps, social media engagement with the subject, a search for the subject, time with media about the subject, or a retail action on the subject's products. Everyone with 1 or more touchpoints is the Total Universe; every Avid Fan is inside it. Say this plainly when asked what an Avid Fan is; the two tiers are the same pool at two intensities, never separate audiences.",
+   "match_terms": [
+    "avid fan",
+    "avid",
+    "what is an avid",
+    "definition of an avid",
+    "avid vs total universe",
+    "casual fan",
+    "four or more",
+    "4 or more"
+   ],
+   "sources": [
+    "prometheus-brain.md"
+   ]
+  },
+  {
+   "id": "dimension_split_is_a_read",
+   "decided": "2026-10-12",
+   "statement": "Crosswalk observes the surface every stream plays on (connected TV, mobile phone, tablet, desktop and laptop), the daypart, the geography and the demographics of the person. A figure the reader already holds, split by one of those, is a measured read anchored to that figure: every period's parts sum to the period's figure, the whole-window total and shares sit on top, and the subject the reader names wins over whatever view is open. Never answer that a read does not carry the dimension, never substitute the nearest figure, never offer a profile build in its place.",
+   "match_terms": [
+    "by device",
+    "device-level",
+    "method of consumption",
+    "surface",
+    "connected tv",
+    "mobile",
+    "tablet",
+    "desktop",
+    "break out",
+    "breakdown",
+    "split by",
+    "daypart",
+    "by region",
+    "by dma",
+    "where consumption happens"
+   ],
+   "sources": [
+    "prometheus-brain.md"
+   ]
+  },
+  {
+   "id": "deck_ask_is_a_file",
+   "decided": "2026-10-09",
+   "statement": "A deck asked for is a PowerPoint file, never slide text typed into the chat: built from the open profile when there is one, otherwise from the view on screen plus the reads already delivered in the thread, landed in the thread with its link and sent to the requester's inbox with the file attached.",
+   "match_terms": [
+    "deck",
+    "powerpoint",
+    "pptx",
+    "slides",
+    "presentation",
+    "one-pager"
+   ],
+   "sources": [
+    "prometheus-brain.md"
+   ]
+  },
+  {
+   "id": "lookup_never_researches",
+   "decided": "2026-10-09",
+   "statement": "Where is my deck or file, do we have a profile for X, how big is the X audience, is a brand measured, what does a figure mean, how is a view counted: these are answered from the record (the catalog, the deliverables on file, the published definitions) with no new numbers and no build card. Nothing on file is said plainly with the offer to build it.",
+   "match_terms": [
+    "where is",
+    "where do i find",
+    "do we have",
+    "is there a",
+    "how big is",
+    "is it measured",
+    "what does this mean",
+    "how is a view counted"
+   ],
+   "sources": [
+    "prometheus-brain.md"
+   ]
+  },
+  {
+   "id": "topic_only_follow_up_binds_the_page",
+   "decided": "2026-10-12",
+   "statement": "When every word of the ask is ordinary English or topic vocabulary (what about potential brand partnerships, how old is this audience) and a profile is open, the page is the only thing the ask can mean: answer on it, never ask whether the reader means the open profile. Who watches X names X: the title binds and the page is not offered.",
+   "match_terms": [
+    "what about",
+    "how old is this audience",
+    "who watches",
+    "brand partnerships"
+   ],
+   "sources": [
+    "prometheus-brain.md"
+   ]
+  },
+  {
+   "id": "typed_approval_is_the_button",
+   "decided": "2026-10-12",
+   "statement": "A reader who types the brief card's own words back (Approve to run, approve and run, approve the run) is pressing the Approve button. An approval that names the run (approve the run on Shannen Doherty) is the run on that subject. Neither is a new ask; Approve is never a subject and never draws a build offer.",
+   "match_terms": [
+    "approve to run",
+    "approve and run",
+    "approve the run",
+    "approved"
+   ],
+   "sources": [
+    "prometheus-brain.md"
+   ]
   }
  ],
- "generated_at": "2026-10-07T21:49:41Z"
+ "generated_at": "2026-10-12T15:45:54Z"
 }

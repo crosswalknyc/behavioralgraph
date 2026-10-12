@@ -128,6 +128,96 @@ def _add_to_users_allowed_runs(s3, s3_key: str, category: Optional[str]) -> dict
     return {"users_updated": counts["updated"], "users_skipped": counts["skipped"]}
 
 
+def grant_runs_to_requester(requester: str, s3_keys, s3_client=None) -> dict:
+    """Give the seat that commissioned a build (and its company
+    teammates) the shipped files (2026-10-08, GoGo squeeZ SlymeZ for
+    Kartel). Paid seats carry auto_access_new.profile_iq = False, so
+    fleet registration skips them on purpose: they only see files they
+    paid to pull. The existing-library match path grants on charge
+    (site_signup.grant_runs_to_user); a fresh build never did, so Ben
+    paid $375 and could not see the files in his dropdown. This is the
+    build-completion half of that grant, run by the worker once every
+    deliverable has shipped.
+
+    `requester` is a username or an email (the queue job carries
+    user_email). Mirrors wallet.grant_company_paid_runs: the company
+    record's allowed_runs gets the keys and every teammate whose
+    allowed_runs is an explicit list inherits them; a '*' list is left
+    alone. Idempotent; logged-and-swallowed on failure so a grant
+    problem never fails a finished build.
+    """
+    keys = [str(k).strip() for k in (s3_keys or []) if str(k or "").strip()]
+    who = str(requester or "").strip().lower()
+    if not keys or not who or who in ("local-ops", "admin", "unknown"):
+        return {"granted_users": 0, "company": ""}
+    s3 = s3_client or boto3.client("s3", region_name="us-east-2")
+    counts = {"granted_users": 0, "company": ""}
+
+    def _mutate(doc):
+        counts["granted_users"] = 0
+        users = doc.get("users") or {}
+        uname = None
+        for name, rec in users.items():
+            if not isinstance(rec, dict):
+                continue
+            if str(name).lower() == who or \
+                    str(rec.get("email") or "").strip().lower() == who:
+                uname = name
+                break
+        if uname is None:
+            return None
+        buyer = users[uname]
+        targets = [uname]
+        company = ""
+        if str(buyer.get("billing_source") or "").strip() == "company":
+            company = str(buyer.get("company") or "").strip()
+        companies = doc.get("companies") or {}
+        wrote = False
+        if company and isinstance(companies.get(company), dict):
+            rec = companies[company]
+            cur = rec.get("allowed_runs")
+            cur = list(cur) if isinstance(cur, list) else []
+            add = [k for k in keys if k not in cur]
+            if add:
+                rec["allowed_runs"] = cur + add
+                wrote = True
+            for name, member in users.items():
+                if isinstance(member, dict) and \
+                        str(member.get("company") or "").strip() == company \
+                        and name not in targets:
+                    targets.append(name)
+            counts["company"] = company
+        for name in targets:
+            member = users.get(name)
+            if not isinstance(member, dict):
+                continue
+            cur = member.get("allowed_runs")
+            if not isinstance(cur, list) or "*" in cur:
+                continue
+            add = [k for k in keys if k not in cur]
+            if not add:
+                continue
+            member["allowed_runs"] = list(cur) + add
+            counts["granted_users"] += 1
+            wrote = True
+        if not wrote:
+            return None
+        counts["wrote"] = True
+        return doc
+
+    try:
+        update_json(BUCKET, USERS_KEY, _mutate, s3=s3,
+                    put_extra_args={"CacheControl": "no-cache, max-age=0"})
+    except Exception as e:
+        print(f"[dashboard-register] requester grant failed for {who}: {e}")
+        return {"granted_users": 0, "company": counts["company"], "error": str(e)}
+    if counts.get("wrote"):
+        print(f"[dashboard-register] granted {len(keys)} file(s) to {who}"
+              + (f" + {counts['company']} teammates" if counts["company"] else "")
+              + f" ({counts['granted_users']} seat list(s) updated)")
+    return counts
+
+
 def register_profile_in_dashboard(
     s3_key: str,
     display_name: Optional[str] = None,

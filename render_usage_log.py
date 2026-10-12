@@ -118,12 +118,31 @@ _s3 = None
 _s3_lock = threading.Lock()
 
 
+class _HermeticClient:
+    """Stand-in S3 client for hermetic suites (2026-10-12): the nightly
+    regression on the box, running with real AWS credentials, was
+    writing its scripted asks ('taylor swift fans', 32 times in a
+    week) into the live ask log as user 'unknown', where the weekly
+    reports read them as a reader's misses. Under REGRESSION_TEST_MODE
+    nothing leaves the process; suites that assert on a record swap in
+    their own fake via `_client`."""
+
+    def put_object(self, **kw):
+        return {'hermetic': True}
+
+    def __getattr__(self, name):
+        return lambda *a, **k: {}
+
+
 def _client():
     global _s3
     with _s3_lock:
         if _s3 is None:
-            import boto3
-            _s3 = boto3.client('s3')
+            if os.environ.get('REGRESSION_TEST_MODE') == '1':
+                _s3 = _HermeticClient()
+            else:
+                import boto3
+                _s3 = boto3.client('s3')
         return _s3
 
 

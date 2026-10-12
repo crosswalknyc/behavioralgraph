@@ -402,7 +402,12 @@ def subiq_question_not_build(text, has_ctx=False):
 _AFFIRM_RX = re.compile(
     r'^(?:y|yes|yeah|yep|yup|ya|sure|ok|okay|k|kk|fine|good|great|'
     r'perfect|correct|right|exactly|confirm(?:ed)?|approve[d]?|'
-    r'approve\s+it|go|go\s+ahead|do\s+it|run\s+it|ship\s+it|proceed|'
+    # The brief card says "Approve to run"; the reader types it back
+    # (2026-10-07 Scott: "Approve to run" drafted a build on "Approve")
+    r'approve[d]?\s*(?:,|and|&|to|the)?\s*(?:run|build|go|proceed|start)'
+    r'(?:\s+(?:it|this|that|the\s+(?:run|build|brief|profile)))?|'
+    r'approve\s+(?:it|this|that|the\s+(?:brief|run|build|profile))|'
+    r'go|go\s+ahead|do\s+it|run\s+it|ship\s+it|proceed|'
     r'sounds\s+good|looks\s+good|that\s+works|works\s+for\s+me|'
     r'that\'?s\s+(?:right|it|fine|correct)|please\s+do|yes\s+please|'
     r'thanks?|thank\s+you|ty|cool|got\s+it|understood|noted)[.! ]*$',

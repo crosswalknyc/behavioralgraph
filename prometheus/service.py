@@ -215,6 +215,28 @@ def _last_agent_options(history):
     return []
 
 
+_APPROVED_NAMED_RUN_RX = re.compile(
+    r"^\s*(?:yes[,.!]?\s*)?(?:ok(?:ay)?[,.!]?\s*)?approve[d]?\s+"
+    r"(?:(?:the|this|that|a)\s+)?(?:run|build|profile|brief|pull)"
+    r"(?:\s+(?:on|for|of))\s+(?P<subject>[^?]{2,80}?)\s*[.!]*\s*$", re.I)
+
+
+def approved_named_run(text):
+    """'Approve the run on Shannen Doherty' -> 'Shannen Doherty'; '' when
+    the approval names no subject (that is a short reply) or the text
+    is a question."""
+    t = str(text or '').strip()
+    if not t or '?' in t or len(t) > 120:
+        return ''
+    m = _APPROVED_NAMED_RUN_RX.match(t)
+    if not m:
+        return ''
+    subj = re.sub(r"\s+", " ", m.group('subject')).strip(" '\".,;:")
+    if not subj or subj.lower() in ('it', 'this', 'that', 'them', 'the brief', 'the run'):
+        return ''
+    return subj
+
+
 def accept_offered_run(history, text):
     """When the previous agent turn offered 'Run a profile on X' and this
     turn accepts it in words, return that chip's send value; else ''.
@@ -305,6 +327,19 @@ def ask(user, body, *, via='session'):
         body = dict(body)
         body['text'] = text
         body['surface'] = 'interpret'
+    else:
+        # An approval that names the run IS the run (2026-10-07 Scott:
+        # "Approve the run on Shannen Doherty" re-drew the offer, then
+        # the chip read "Run a profile on Approve"). The subject the
+        # reader approved becomes the build order; a bare "approve"
+        # stays a short reply answered below.
+        _named_run = approved_named_run(text)
+        if _named_run:
+            print(f"[prometheus] approval names the run: {text[:60]!r} -> {_named_run!r}")
+            text = 'Run a profile on ' + _named_run
+            body = dict(body)
+            body['text'] = text
+            body['surface'] = 'interpret'
 
     # Answering an offer (2026-10-07 Jenna, Eliot / Gunna Concert Goers):
     # the previous agent turn asked "Do you still want me to pull it?"
@@ -978,9 +1013,10 @@ def _bare_reply(body, text, history, has_ctx):
         if re.search(r'approv|go|run|ship|do it|proceed', low):
             return None, _p(
                 'Nothing is waiting on an approval right now. If you were '
-                'approving a brief, use the Approve button on its card. '
-                'Otherwise tell me the audience or the question and I '
-                'will take it from there.')
+                'approving a brief, use the Approve & run button on its '
+                'card, or name the run ("approve the run on Shannen '
+                'Doherty") and I will start it. Otherwise tell me the '
+                'audience or the question and I will take it from there.')
         return None, _p(
             'Nothing is waiting on a yes right now. Ask me the question '
             'or name the audience and I will run it.')

@@ -34,6 +34,8 @@ ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
 APP = open(str(_pm_app_path()), encoding='utf-8').read()
+# the finished-output email lives in the notify family since 2026-10-09
+NOTIFY = open(os.path.join(ROOT, 'prometheus', 'legacy', 'notify.py'), encoding='utf-8').read()
 
 FAILURES = []
 
@@ -144,8 +146,8 @@ check("crosswalk account labels by company",
 #    2026-10-01: Carolyn's email had the PDF but not the raw data;
 #    "should also always have a .csv file"). Built from the same
 #    ledger entry as the download chip so file and chat match.
-m_out = re.search(r"def _pm_send_output_email\(kind, to_email, data\):"
-                  r"(.*?)\n    def _send\(\):", APP, re.DOTALL)
+m_out = re.search(r"def _pm_send_output_email\(kind, to_email, data, sync=False\):"
+                  r"(.*?)\n    def _send\(\):", NOTIFY, re.DOTALL)
 check("_pm_send_output_email body found", bool(m_out))
 out_body = m_out.group(1) if m_out else ''
 check("read email builds the CSV from the banked ledger entry",
@@ -158,7 +160,7 @@ check("body copy names the CSV when attached",
       or "attached as \"\n" in out_body
       or "as a CSV" in out_body)
 m_send = re.search(r"def _pm_send_output_email.*?def _send\(\):(.*?)"
-                   r"\n    threading\.Thread", APP, re.DOTALL)
+                   r"\n    if sync:", NOTIFY, re.DOTALL)
 check("send attaches the CSV alongside the PDF",
       m_send is not None and "_subtype='csv'" in m_send.group(1)
       and "filename=csv_name" in m_send.group(1))

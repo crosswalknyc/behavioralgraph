@@ -1,7 +1,7 @@
 {
  "version": 1,
- "content_hash": "e01279cdde1c9a569d5565ffdf2355d9f30bb586ab47b92d3b6dfd8f20124ba6",
- "examples_hash": "b44958dcd4c2d7f37ed610089669a1350375cd1327c5f3da896e845908010716",
+ "content_hash": "c3adcd15a28afe3f2e1ca77ae67422c3256a827988ae2f58dfa234f4a75ff2fc",
+ "examples_hash": "e652443891e6035aa996c4df21604bf2f177d6ac505132c56f98b8b652f11216",
  "source_hashes": {
   ".cursor/rules/analysis-confidence-calibration.mdc": "3f2d33886bf77e54adde67cbf78f3256fa23fcb86d1ae32dd5ce7294088521f0",
   ".cursor/rules/avid-and-cut-skin-rules.mdc": "d5c01e23c4db2669558c41efdf5c706c722fae827c8d78871989ef259a16eaf0",
@@ -23,13 +23,14 @@
   ".cursor/rules/viewer-carriage-constraint.mdc": "cbfd739c4772424aee369da86b3dbfc769b9bed6c15d2c838f36bb3867cea734",
   ".cursor/skills/crosswalk-brand-standards/SKILL.md": "1adecc2dae85a139bf843dbebee76bc5411c56a4ba5c1e66966eb3a19acc61d0",
   ".cursor/skills/crosswalk-brand-standards/references/deck-system.md": "a85ec231ea9b4c8156d789236559be38c5e4dd505b52d53bc6ff3c794a663048",
-  ".cursor/skills/crosswalk-panel-analyst/SKILL.md": "c17c4dd47637bddb11e93b4bd7b2cc3cb9a351f3b62b55b3ead6397138e565cb",
+  ".cursor/skills/crosswalk-panel-analyst/SKILL.md": "198aa201d6618ec6d9f53093d09ed10084c5934fd7a570adfcadf85844d4dd6a",
   ".cursor/skills/crosswalk-panel-analyst/references/boundary.md": "e9a9bcf2b0feb26257e92fa5a610e17dbc03f697dc3eca56a1a734b2c4e4c287",
   ".cursor/skills/crosswalk-panel-analyst/references/sourcing.md": "32b22ff4faa431cf0892ba8eb6ed14cf3f7cebbc55757ba8ef0d08f53d0efce3",
   ".cursor/skills/crosswalk-panel-analyst/references/method.md": "14cc737f7ee8c57b704b0b8e282f341d0939f2704b5c18cea245dc49b5be768f",
-  ".cursor/skills/crosswalk-panel-analyst/references/numbers.md": "51e5c179c509f02d1ec4dad592a0a00659bf9f09ebda06f1d48e4aa95e94f3ab",
-  ".cursor/skills/crosswalk-panel-analyst/references/asks.md": "c198bda74ccb3e51b1dc79d6fdb21b93287cc602d4dfb9496fa87a8244a800ff",
-  ".cursor/skills/crosswalk-panel-analyst/references/prior-work.md": "d143ac1c06efbf12a41bbb87bdacf93912580a1a70774c848e4d8606d572dbb5"
+  ".cursor/skills/crosswalk-panel-analyst/references/numbers.md": "2857e3623a4e64134f621fbaf54dc37ad5b8e921bd59510c96d2ee4e05c75773",
+  ".cursor/skills/crosswalk-panel-analyst/references/asks.md": "52791675ffd3bb65a21fe2b5ee4f11926bfab0bf00b9a9cbaa9f22e7ee48ab19",
+  ".cursor/skills/crosswalk-panel-analyst/references/prior-work.md": "d143ac1c06efbf12a41bbb87bdacf93912580a1a70774c848e4d8606d572dbb5",
+  ".cursor/skills/crosswalk-panel-analyst/references/prometheus-brain.md": "2491161e0ce933fc64a63e5a48b77d60ffd6dca5ca0e3345c6353bdf51845571"
  },
  "canon": [
   {
@@ -146,10 +147,10 @@
    "text": "Target reads as women 25 to 44, mid-market, and mostly without kids at home.\n\nTHE CORE\n- Female 90.3% of the audience, which is +27.7pp over the median ACTOR audience in the corpus. Applied to the 441,835 projected audience, that is 398,977 women.\n- Age carves cleanly (MECE): 25-34 is 28.8%, 35-44 is 25.4%, 45 and over is 32.3%, under 25 is 13.5%. The 25-44 block holds 54.2%, and 25-34 alone runs +10.7pp over peer norms.\n- Mid-market, not affluent: 65.2% hold no bachelors degree, 59.0% earn under $75K. Occupation clusters in Service & Hospitality 17.4% and Healthcare 13.5%.\n\nTHE NON-OBVIOUS PART\n- This is not a ..."
   },
   "audience_sizing": {
-   "subject": "The Roku Channel franchise titles (benchmark set vs The Spiderwick Chronicles)",
-   "title": "The Roku Channel franchise titles (benchmark set vs The Spiderwick Chronicles) | US viewers of franchise titles on The Roku Channel, matched to the Spiderwick window | Sep 29 2023 to Sep 29 2026",
-   "q": "I have a new set of queries. I want to add comparison points for this analysis: The Spiderwick Chronicles brought\n3.1 million new users to The Roku Channel. September 2023 to September 2026. What other Franchises have aired on Roku and what was the audience size., demographics, and impact",
-   "text": "On The Roku Channel franchise titles (benchmark set vs The Spiderwick Chronicles) - US viewers of franchise titles on The Roku Channel, matched to the Spiderwick window:\n\nNaruto is the only franchise on The Roku Channel that acquires at a higher new-to-app rate than The Spiderwick Chronicles: 2,913,742 first-ever Roku Channel users, 22.7% of its 12,846,317 viewers, against Spiderwick's 21.4%.\n\nUnique US viewers across the franchise benchmark set: 38,371,849, First-ever Roku Channel users acquired across the set: 11,978,078, Naruto first-ever Roku Channel users: 2,913,742.\n\nFranchise title on The Roku Channel ..."
+   "subject": "Paramount+ subscribers (UFC-on-Paramount+ audience, US)",
+   "title": "Paramount+ subscribers (UFC-on-Paramount+ audience, US) | Paramount+ subscribers with cross-platform viewing on other streaming services, scoped to genres they do not watch on | Jan 1 2026 to Aug 14 2026",
+   "q": "how many genres do subscribers watch on each service? provide data in histogram format instead of as averages",
+   "text": "On Paramount+ subscribers (UFC-on-Paramount+ audience, US) - Paramount+ subscribers with cross-platform viewing on other streaming services, scoped to genres they do not watch on:\n\nNetflix carries the widest off-Paramount+ genre spread of any service: the modal Paramount+ subscriber watches 4 distinct genres there, 10,820,162 viewers, and 85.5% of the Netflix overlap pool sits at 3 genres or more.\n\nParamount+ subscribers with off-platform genre viewing: 63,948,217, Same pool at the 30 seconds or more threshold: 58,714,369, Modal genre count across all service pools: 3.\n\nStreaming service, genre-count histogram ..."
   },
   "category_demand": {
    "subject": "Paw Patrol Series",
@@ -158,10 +159,10 @@
    "text": "Action Figures and Playsets lead toy purchasing among parents of 4-to-6-year-old Paw Patrol viewers at 22.3% of category signals, with Preschool Toys close behind at 19.8%.\n\nShare of audience, parents of kids 4-6: 34.1%, Projected US people, parents of kids 4-6: 5,476,469, Toy purchase signal penetration: 83.7%.\n\nToy category mix, Jul 1 2025 to Jun 30 2026 (Share of the cohort's toy purchase signals)\n- Action Figures & Playsets: 22.3% share, 64.1% penetration. Spin Master Paw Patrol vehicles and figures dominate, followed by Hasbro Transformers and Mattel Jurassic World\n- Preschool Toys: 19.8% share, 57.3% ..."
   },
   "competitive_overlap": {
-   "subject": "The God Of The Woods Readers",
-   "title": "The God Of The Woods Readers | Each generational band of The God of the Woods Readers benchmarked against US Gen Pop 2026 | Sep 18 2025 to Sep 18 2026",
-   "q": "I'm interested in comparing the generational breaks for The God of the Woods Readers profile versus the generational breaks (Boomers, Gen X, Gen Z, and Millennials) for Gen Pop 2026 to get an index for each generation.  In which Generations does The God of the Woods Readers overindex?",
-   "text": "The file overindexes in two bands only: Millennials index 186 against the US general population and Gen X 142, while Gen Z (47) and Boomers and older (22) sit well below average.\n\nMillennials, index vs US Gen Pop 2026: 186, Gen X, index vs US Gen Pop 2026: 142, Gen Z, index vs US Gen Pop 2026: 47.\n\nGenerational band mix, Sep 18 2025 to Sep 18 2026 (share of the audience's projected US people, indexed against the same band in US Gen Pop 2026)\n- Millennials: 49.8% share, 26.8% penetration. index 186. 687,413 projected US people; the strongest overindex on the file, spine of the readership at 25-34 and 35-44\n- Gen ..."
+   "subject": "Reba McEntire",
+   "title": "Reba McEntire | Social media audiences (social fans and Facebook fans) vs the total audience | Jan 1 2025 to Dec 31 2025",
+   "q": "Compare Reba's Total Audience against her social media audiences in terms of demographics and Most Purchased Brands category.",
+   "text": "On Reba McEntire - Social media audiences (social fans and Facebook fans) vs the total audience:\n\nReba's social audience is 76,454,391 people, 84.7% of her 90,271,230 total audience, and it buys the same brand set in a slightly different order.\n\nTotal audience, projected US people: 90,961,592, Social media audience, projected US people: 76,454,391, Facebook fan audience, projected US people: 59,231,863.\n\nMost purchased brands mix, Jan 1 2025 to Dec 31 2025 (share of the audience's purchase signals across the top 12 most purchased brands)\n- Nike: 13.1% share, 36.3% penetration. 36.3 audience-wide, 37.4 among ..."
   },
   "event_impact": {
    "subject": "The Spiderwick Chronicles (Roku Channel)",
@@ -200,5 +201,5 @@
    "text": "Among Hotel Transylvania parents of kids 4-7, Action Figures and Playsets is the largest underserved category: it carries 28.8% of the cohort's toy purchase signals while no standing figure line has been on shelf since the Jazwares run wound down.\n\nProjected US people, parents of kids 4-7: 1,357,079, Toy purchase signal penetration: 83.7%, Demand share sitting in thin-coverage categories: 50.7%.\n\nToy category (demand vs current Hotel Transylvania coverage) mix, Jul 1 2025 to Jun 30 2026 (share of the cohort's toy purchase signals)\n- Action Figures & Playsets: 28.8% share, 58.9% penetration. Jazwares figures and ..."
   }
  },
- "generated_at": "2026-10-07T21:49:41Z"
+ "generated_at": "2026-10-12T15:45:54Z"
 }

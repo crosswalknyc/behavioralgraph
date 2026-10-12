@@ -319,7 +319,35 @@ def screen_bind_verdict(text, page, base, page_key, normalize, stop):
                 and str(base.get('s3_key') or '') != str(page_key or ''):
             return 'confirm'
         return 'page'
+    # A topic-only follow-up ("what about potential brand partnerships",
+    # "how old is this audience") carries no word that could be another
+    # subject, so the open page is the only thing it can mean (2026-10-12,
+    # eriley re-sent the question after the confirm). Still confirms when
+    # a catalog file outside the page's family resolved for the ask.
+    if topic_only(text) and not (
+            base and str(base.get('source') or '') == 'catalog'
+            and str(base.get('s3_key') or '') != str(page_key or '')):
+        return 'page'
     return 'confirm'
+
+
+def topic_only(text):
+    """True when every meaningful word of the ask is ordinary English or
+    topic vocabulary (brand partnerships, pricing, demographics): the
+    ask names nothing that could be a subject."""
+    try:
+        from prometheus import referents as _refs
+        common, topic = _refs._COMMON_WORDS, _refs._TOPIC_WORDS
+    except Exception:
+        return False
+    toks = [w for w in re.findall(r"[A-Za-z][A-Za-z'+&.-]*", str(text or ''))]
+    low = [w.lower().strip(".'") for w in toks]
+    content = [w for w in low if len(w) >= 3]
+    if not content:
+        return False
+    if any(w[:1].isupper() and i > 0 for i, w in enumerate(toks)):
+        return False   # a capitalized word mid-sentence can be a name
+    return all(w in common or w in topic for w in content)
 
 
 # Concert / live-event universes (2026-10-07 Jenna, Eliot's "people who
@@ -527,7 +555,10 @@ def mentioned_subject(text, page, normalize, stop, plausible=None):
         return ''
     if has_audience_deixis(t):
         return ''
-    population = bool(POPULATION_RX.search(t))
+    # "who watches love island?": the interrogative is the population
+    # (2026-10-12; the page was offered for a question that named its title)
+    population = bool(POPULATION_RX.search(t)) or bool(
+        re.match(r"\s*who(?:'s|\s+is|\s+are|\s+all)?\s+" + CONSUME_VERB_RX + r"\b", t, re.I))
     if PAGE_METRIC_RX.search(t) and not population:
         return ''
     page_d = distinct_tokens(page or '', normalize, stop)

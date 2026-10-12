@@ -83110,9 +83110,34 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // Typed approval (2026-10-02): "approved" / "approve" /
             // "run it" while a brief is on screen is the Approve button.
             // It used to route as a fresh ask and rebuild the brief.
+            // The card's own instruction ("Approve to run"), "approve
+            // and run", "approve the run", and "approve the run on <the
+            // draft's subject>" are the button too (2026-10-07 Scott
+            // typed the instruction back and got a build on "Approve").
+            function _pmTypedApproval(t) {
+                var s = String(t || '').trim();
+                if (!s || s.length > 120 || s.indexOf('?') >= 0) return false;
+                var bare = /^(?:yes[,.!]?\s*)?(?:ok(?:ay)?[,.!]?\s*)?(?:approved?(?:\s*(?:,|and|&|to|the)?\s*(?:run|build|go|proceed|start)(?:\s+(?:it|this|that|the (?:run|build|brief|profile)))?)?|approve (?:it|this|that|the (?:brief|run|build|profile))|run it|go ahead|proceed|ship it|start (?:it|the build)|looks good[,.]? (?:approve|run it|go))[.! ]*$/i;
+                if (bare.test(s)) return true;
+                var named = /^(?:yes[,.!]?\s*)?approved?\s+(?:(?:the|this|that)\s+)?(?:run|build|profile|brief|pull)\s+(?:on|for|of)\s+(.{2,80}?)[.! ]*$/i.exec(s);
+                if (!named) return false;
+                var norm = function (x) { return String(x || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim(); };
+                var want = norm(named[1]);
+                var d = synthChatCurrentDraft || {};
+                var subj = norm(d.subject || d.display_name || d.name || d.subject_name || '');
+                if (!subj && synthChatBatchDrafts && synthChatBatchDrafts.length) {
+                    for (var i = 0; i < synthChatBatchDrafts.length; i++) {
+                        var b = synthChatBatchDrafts[i] || {};
+                        var bs = norm(b.subject || b.display_name || b.name || '');
+                        if (bs && (bs.indexOf(want) >= 0 || want.indexOf(bs) >= 0)) return true;
+                    }
+                    return false;
+                }
+                return !!subj && (subj.indexOf(want) >= 0 || want.indexOf(subj) >= 0);
+            }
             if ((synthChatCurrentDraft || (synthChatBatchDrafts && synthChatBatchDrafts.length)) &&
                 !_pmArmedStepActive() &&
-                /^(?:yes[,.!]?\s*)?(?:approved?|approve (?:it|this|the brief)|run it|go ahead|proceed|ship it|start (?:it|the build)|looks good[,.]? (?:approve|run it|go))[.! ]*$/i.test(text.trim())) {
+                _pmTypedApproval(text)) {
                 try { await synthChatApproveBrief(); } catch (_) {}
                 return;
             }
