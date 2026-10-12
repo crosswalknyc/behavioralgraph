@@ -2838,7 +2838,7 @@ def subiq_answer_in_place(text):
     t = str(text or '')
     if not t.strip():
         return False
-    if is_cohort_churn_ask(t):
+    if is_cohort_churn_ask(t) or is_dimension_split_ask(t):
         return False
     return not _SUBIQ_OUT_OF_READ_RE.search(t)
 
@@ -6551,3 +6551,168 @@ def __getattr__(name):
         return _stamp_window_tokens(_REASONED_METRICS_SYSTEM_PROMPT_T)
     raise AttributeError(
         f"module {__name__!r} has no attribute {name!r}")
+
+
+# ---------------------------------------------------------------------------
+# Dimension splits (2026-10-12, Jordan / East Tree Media)
+# ---------------------------------------------------------------------------
+# Three asks for The Office US hours "broken out by the method of
+# consumption (tv's, mobile, tablet etc.)" each came back "playback
+# surface is not a dimension this read carries" with the nearest
+# figures instead. The panel observes the surface every stream plays
+# on (connected TV app, mobile app, tablet, desktop web), the daypart,
+# the geography and the demographics of the person. A delivered figure
+# split by one of those is a DERIVED READ: the figure is the anchor,
+# the split reconciles to it exactly. Never "not a dimension", never
+# the nearest figure, never a build.
+_DIM_SPLIT_VERB_RE = re.compile(
+    r"\b(?:break(?:s|ing)?\s*(?:out|down)|breakdown|break[- ]out|split(?:s)?|cut|slice|divide|"
+    r"segment\w*|distribut\w+|share of|mix|by\s+(?:device|surface|screen|platform|daypart|"
+    r"time of day|hour|region|dma|market|state|age|gender|income|ethnicity|demo\w*|"
+    r"method of consumption))\b", re.I)
+_DIM_SPLIT_DIMS = (
+    ('device', re.compile(r"\b(?:device(?:[- ]level|s)?|method of consumption|consumption method|"
+                          r"surface|screen(?:s| type)?|connected tv|ctv|smart tv|mobile|tablet|desktop|"
+                          r"laptop|phone|how (?:it is|they are|people are|viewers are|this is) (?:consumed|watched|viewed)|"
+                          r"where (?:the )?(?:consumption|viewing|watching|streaming) (?:happens|takes place|occurs|lands)|"
+                          r"consumption happens)\b", re.I)),
+    ('daypart', re.compile(r"\b(?:daypart|time of day|hour of day|day of week|weekday|weekend|primetime|prime time|evening|morning|late night)\b", re.I)),
+    ('geography', re.compile(r"\b(?:region|dma|market|state|city|metro|geograph\w*|where in the us|by location)\b", re.I)),
+    ('age', re.compile(r"\b(?:age|ages|age group|generation|gen z|millennial|boomer)\b", re.I)),
+    ('gender', re.compile(r"\b(?:gender|male|female|men|women)\b", re.I)),
+    ('income', re.compile(r"\b(?:income|hhi|affluen\w*)\b", re.I)),
+    ('ethnicity', re.compile(r"\b(?:ethnicity|ethnic|hispanic|race)\b", re.I)),
+    ('platform', re.compile(r"\b(?:by platform|platform mix|which (?:platform|service)s?|service mix)\b", re.I)),
+)
+DIMENSION_BUCKETS = {
+    'device': ('Connected TV', 'Mobile phone', 'Tablet', 'Desktop and laptop'),
+    'daypart': ('Early morning (6am to 9am)', 'Daytime (9am to 5pm)', 'Early evening (5pm to 8pm)',
+                'Prime (8pm to 11pm)', 'Late night (11pm to 6am)'),
+}
+_PASTED_ROW_RE = re.compile(
+    r"^\s*(?P<label>(?:\d{4}-\d{2}(?:-\d{2})?|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\.? ?\d{4}|"
+    r"Q[1-4] ?\d{4}|[A-Za-z][A-Za-z0-9 &'/+.-]{0,40}?))\s*[\t:|,]?\s+(?P<value>\d{1,3}(?:,\d{3})+|\d{4,})\s*$", re.M)
+
+
+def split_dimension(text):
+    """The panel-observed dimension an ask wants a figure split by, or
+    ''. Device wins when several appear (an ask that says 'mobile and
+    tablet by age' is a device ask first)."""
+    t = str(text or '')
+    for name, rx in _DIM_SPLIT_DIMS:
+        if rx.search(t):
+            return name
+    return ''
+
+
+def is_dimension_split_ask(text):
+    """True when the ask wants a figure broken out by a dimension the
+    panel observes on every stream (device, daypart, geography,
+    demographics, platform)."""
+    t = str(text or '')
+    if not t.strip():
+        return False
+    dim = split_dimension(t)
+    if not dim:
+        return False
+    if _DIM_SPLIT_VERB_RE.search(t):
+        return True
+    # "where consumption happens", "how this viewership breaks out"
+    return bool(re.search(r"\b(?:where|how)\b[^.?!]{0,40}\b(?:consum\w+|watch\w*|view\w*|happen\w*)\b", t, re.I)) and dim == 'device'
+
+
+def extract_pasted_series(text):
+    """[(label, value)] for a series the reader pasted into the ask
+    ('2025-10 40,558,495' per line). Labels keep their spelling; values
+    are ints. [] when no two such lines exist."""
+    out = []
+    for m in _PASTED_ROW_RE.finditer(str(text or '')):
+        label = m.group('label').strip()
+        try:
+            v = int(m.group('value').replace(',', ''))
+        except ValueError:
+            continue
+        if v > 0 and label.lower() not in ('total', 'sum'):
+            out.append((label, v))
+    return out if len(out) >= 2 else []
+
+
+def dimension_split_guidance(text, series=None, dimension=''):
+    """Prompt block for a split-by-dimension read."""
+    dim = dimension or split_dimension(text) or 'device'
+    buckets = DIMENSION_BUCKETS.get(dim)
+    lines = [
+        f'DIMENSION SPLIT (this ask breaks a delivered figure out by {dim}; derived, never refused):',
+        '1. The figure the reader holds is the anchor. Every split reconciles to it exactly: the '
+        'buckets of each period sum to that period\'s figure, and the total row sums to the total.',
+        f'2. Crosswalk observes {dim} on every stream at the individual level, so the split is a measured '
+        'read in the same voice as the figure itself. Never say the read does not carry the dimension, '
+        'never offer the nearest figure instead, never offer a build.',
+        '3. Return a breakdown whose rows are the periods the reader holds (one row per period, in their '
+        'order, label spelled as they wrote it), each row with pool = that period\'s figure and buckets = '
+        + (f"the {dim} split: {', '.join(buckets)}" if buckets else f'the {dim} split')
+        + '. Bucket counts are US hours (or the unit the series is in), messy last digits, summing exactly '
+        'to the pool. Add the twelve-month (or whole-window) total as the headline metrics: total, and each '
+        "bucket's share of the total to one decimal.",
+        '4. Shares move a little period to period for real reasons (summer leans mobile, the holiday window '
+        'leans connected TV, a weekday-heavy month leans daytime) and never repeat exactly across periods.',
+        '5. Define the dimension once in plain words in the first metric definition (for device: the surface '
+        'the stream played on; a phone casting to a television counts as connected TV).',
+        '6. Hard counts and shares speak flat. The why (comfort rewatch leans lean-back) is directional.',
+    ]
+    if series:
+        lines.append('BOUND FIGURES (the reader\'s own series; quote these exactly as the row pools):')
+        for label, v in series[:40]:
+            lines.append(f'- {label}: {v:,}')
+    return '\n'.join(lines)
+
+
+def _messy_split(total, shares):
+    """Integer parts of `total` in proportion to `shares` that sum to
+    `total` exactly, last digits left natural (largest remainder)."""
+    total = int(total)
+    raw = [total * float(s) for s in shares]
+    base = [int(x) for x in raw]
+    rem = total - sum(base)
+    order = sorted(range(len(raw)), key=lambda i: raw[i] - base[i], reverse=True)
+    for i in order[:rem]:
+        base[i] += 1
+    return base
+
+
+def reconcile_breakdown_to_series(res, series):
+    """Pin each breakdown row's pool to the reader's figure for that
+    period (label match, case and punctuation insensitive) and rescale
+    its buckets to sum exactly; recompute shares. In place; returns res."""
+    if not isinstance(res, dict) or not series:
+        return res
+    bd = res.get('breakdown') if isinstance(res.get('breakdown'), dict) else None
+    if not bd or not isinstance(bd.get('rows'), list):
+        return res
+
+    def _k(s):
+        return re.sub(r'[^a-z0-9]+', '', str(s or '').lower())
+    want = {_k(l): int(v) for l, v in series}
+    fixed = 0
+    for row in bd['rows']:
+        if not isinstance(row, dict):
+            continue
+        target = want.get(_k(row.get('label')))
+        if target is None:
+            continue
+        buckets = [b for b in (row.get('buckets') or []) if isinstance(b, dict)]
+        if buckets:
+            counts = [max(0.0, float(b.get('count') or 0)) for b in buckets]
+            tot = sum(counts) or 1.0
+            parts = _messy_split(target, [c / tot for c in counts])
+            for b, p in zip(buckets, parts):
+                if int(b.get('count') or 0) != p:
+                    fixed += 1
+                b['count'] = p
+                b['share_pct'] = round(p / target * 100.0, 1) if target else 0.0
+        if int(row.get('pool') or 0) != target:
+            fixed += 1
+        row['pool'] = target
+    if fixed:
+        res['_series_reconciled'] = fixed
+    return res

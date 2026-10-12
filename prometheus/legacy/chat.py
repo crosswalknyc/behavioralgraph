@@ -13509,6 +13509,10 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
         pass
     if pma.is_cohort_churn_ask(text):
         extra_blocks.append(pma.COHORT_CHURN_GUIDANCE)
+    _ds_series = []
+    if pma.is_dimension_split_ask(text):   # a held figure split by a panel-observed dimension (2026-10-12)
+        _ds_series = list((mr or {}).get('bound_series') or []) or pma.extract_pasted_series(text)
+        extra_blocks.append(pma.dimension_split_guidance(text, _ds_series, (mr or {}).get('dimension') or ''))
     # Paid research report on a no-base subject (2026-09-14): the
     # subject has no profile rows anywhere, so the read is researched
     # end to end instead of derived from a base file. The guidance
@@ -13584,7 +13588,7 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
     _stage_note('composing the answer')
     _t_stage = time.monotonic()
     try:
-        res = pma.enforce_metrics_coherence(data, so_what=_is_so_what, multi=_multi_qs)
+        res = pma.reconcile_breakdown_to_series(pma.enforce_metrics_coherence(data, so_what=_is_so_what, multi=_multi_qs), _ds_series)
         reply = pma.format_generated_metrics_reply(res)
     except Exception as e:
         traceback.print_exc()
@@ -13640,7 +13644,7 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
                                   if isinstance(d, dict)), {})
                 if str(data2.get('action') or '').strip().lower() \
                         != 'decline':
-                    res2 = pma.enforce_metrics_coherence(data2, so_what=_is_so_what, multi=_multi_qs)
+                    res2 = pma.reconcile_breakdown_to_series(pma.enforce_metrics_coherence(data2, so_what=_is_so_what, multi=_multi_qs), _ds_series)
                     reply2 = pma.format_generated_metrics_reply(res2)
                     fam2 = ('strategy' if is_strategy
                             else res2.get('metric_family'))
@@ -13678,7 +13682,7 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
                                       if isinstance(d, dict)), {})
                     if str(data3.get('action') or '').strip().lower() \
                             != 'decline':
-                        res3 = pma.enforce_metrics_coherence(data3, so_what=_is_so_what, multi=_multi_qs)
+                        res3 = pma.reconcile_breakdown_to_series(pma.enforce_metrics_coherence(data3, so_what=_is_so_what, multi=_multi_qs), _ds_series)
                         reply3 = pma.format_generated_metrics_reply(
                             res3)
                         fam3 = ('strategy' if is_strategy
@@ -13723,7 +13727,7 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
             _trm = pmv.trim_unverified(
                 _ld, _last_verdict or verdict, base_lookup=_v_lookup, question=text,
                 recompute=lambda d: (lambda r: (r, pma.format_generated_metrics_reply(r)))(
-                    pma.enforce_metrics_coherence(d, so_what=_is_so_what, multi=_multi_qs)),
+                    pma.reconcile_breakdown_to_series(pma.enforce_metrics_coherence(d, so_what=_is_so_what, multi=_multi_qs), _ds_series)),
                 prior_entries=_pm_verify_prior_entries(_ld[1], _ld[3], led) if _ld[1] else [],
                 bound_facts=_purchase_facts, family=_ld[3] or fam0)
             if _trm:
@@ -16364,6 +16368,30 @@ def _pm_analyze_core(user, body, text, history):
     # cohort skips the screen model (which can only quote platform
     # churn) and goes straight to the derived read, which researches
     # the platform's published churn and shapes the cohort curve.
+    if pma.is_dimension_split_ask(text):
+        # Dimension-split lane (2026-10-12, Jordan / East Tree): a held figure split by device / daypart / geo / demo
+        # is a derived read anchored to that figure, never "not a dimension this read carries"; the named subject wins
+        _pm_ask_stage('dimension_split_lane', count=1)
+        _ds_named = ''
+        try:
+            _ds_named = (_pm_consumption_subject(text)
+                         or _ns_mod.mentioned_subject(text, '', _H._normalize_for_match,
+                                                      _PM_CLARIFY_STOP_TOKENS, _pm_plausible_subject) or '')
+        except Exception:
+            traceback.print_exc()
+        if _ds_named:   # keep the article the reader wrote ("The Office US", not "Office US")
+            _m_art = re.search(r'\b(?:The|A|An)\s+' + re.escape(_ds_named) + r'\b', text, re.I)
+            _ds_named = _m_art.group(0) if _m_art else _ds_named
+        _ds_vc = (ctx.get('view_context') or {}).get('data') or {} if isinstance(ctx, dict) else {}
+        _ds_subject = _ds_named or str(_ds_vc.get('show') or _ds_vc.get('title') or '').strip() \
+            or (p_meta.get('name') if isinstance(ctx, dict) and ctx.get('primary') else '') or ''
+        return _pm_generate_metrics_response(
+            user, text, history, ctx=ctx, prefer_catalog=True, bind_subject=_ds_named or None,
+            metric_request={'subject': _ds_subject, 'metric_family': 'dimension split',
+                            'dimension': pma.split_dimension(text),
+                            'bound_series': pma.extract_pasted_series(text),
+                            'needed': f"the figure the reader holds split by {pma.split_dimension(text)}, one row "
+                                      "per period with buckets that sum exactly to it, plus the whole-window total"})
     if _subiq_grounded and pma.is_cohort_churn_ask(text):
         _pm_ask_stage('cohort_churn_lane', count=1)
         _cc_vc = (ctx.get('view_context') or {}).get('data') or {}

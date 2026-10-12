@@ -125,14 +125,18 @@ DEFINITIONS = [
                     'avid cut', 'what counts as avid', 'casual fan',
                     'casual fans'),
         'definition': (
-            "Avid Fans are the most engaged slice of the audience: the "
-            "people who come back to the subject again and again across "
-            "their digital life, not a one-touch visitor. Every Avid Fan "
-            "is also in the full audience; the full audience is the "
-            "casual read."),
+            "An Avid Fan is a person with 4 or more digital touchpoints "
+            "to the subject over the window studied. A digital touchpoint "
+            "is any of: a visit to the subject's owned and operated sites "
+            "or apps, social media engagement with the subject, a search "
+            "for the subject, time with media about the subject, or a "
+            "retail action on the subject's products. Every Avid Fan is "
+            "also in the Total Universe, which is everyone with 1 or more "
+            "touchpoints; the Total Universe is the casual read."),
         'computed': (
-            "A subject-specific share of the full audience, read from "
-            "how often and how many ways people engaged in the window. "
+            "Each person's touchpoints with the subject are counted "
+            "across their digital life in the window; those at 4 or more "
+            "are the Avid Fans, stated as a share of the Total Universe. "
             "The Avid Fan file carries the same brands, re-read for that "
             "slice, sized at that share of the full audience."),
     },
@@ -143,12 +147,16 @@ DEFINITIONS = [
         'aliases': ('engager', 'engagers', 'total universe',
                     'who counts as an engager', 'what is an engager',
                     'what counts as engagement', 'qualifying touchpoint',
-                    'touchpoint'),
+                    'touchpoint', 'digital touchpoint', 'digital touchpoints',
+                    'what is a touchpoint', 'what counts as a touchpoint'),
         'definition': (
-            "An Engager is anyone with at least one touch with the "
-            "subject in the window, anywhere in their digital life: a "
-            "search, a visit, a stream, a purchase, a post. The Total "
-            "Universe is every Engager."),
+            "An Engager is anyone with at least one digital touchpoint "
+            "with the subject in the window: a visit to the subject's "
+            "owned and operated sites or apps, social media engagement "
+            "with the subject, a search for the subject, time with media "
+            "about the subject, or a retail action on the subject's "
+            "products. The Total Universe is every Engager; 4 or more "
+            "touchpoints makes an Avid Fan."),
         'computed': (
             "One person, one count. A person qualifies on their first "
             "touch and is not counted again for later ones."),
