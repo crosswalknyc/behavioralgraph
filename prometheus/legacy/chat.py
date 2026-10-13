@@ -16975,6 +16975,15 @@ def _pm_run_jiq_job(job_id, username, inputs, extras):
             'ready_message': _pm_jiq_ready_message(payload, inputs),
             'finished_at': time.time()})
         print(f"[jiq-job {job_id}] done -> {out_key}")
+        # The finished journey is emailed with its detailed breakdown attached
+        # (Jenna 2026-10-13: "it should always send this kind of raw data").
+        try:
+            from prometheus.journey_delivery import deliver_journey
+            _dl = deliver_journey(username=username, payload=payload, s3_key=out_key, host=_H,
+                                  s3_client=_H.s3_client, ready_message=_pm_jiq_ready_message(payload, inputs))
+            print(f"[jiq-job {job_id}] delivery: {'sent' if _dl.get('sent') else _dl.get('reason')}")
+        except Exception as _dl_err:
+            print(f"[jiq-job {job_id}] delivery skipped: {_dl_err}")
     except Exception as e:
         traceback.print_exc()
         try:

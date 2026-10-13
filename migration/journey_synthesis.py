@@ -924,7 +924,14 @@ def build_journey(inputs: dict, prim: dict, *,
             else 'Overlap allowed. Rows do not sum.')
         detours.append({'title': d['title'], 'note': note, 'rows': rows})
 
-    conversion_pct = round(paid / US_GEN_POP * 100, 4)
+    # Conversion is the share of the journey's START step that reached the
+    # end (the Babylon 5 file's definition, the Attribution path's
+    # definition, and what the page's own arithmetic shows). Share of US is
+    # a different number and rides under its own name (2026-10-13: the
+    # picker read "0.0648% conv" for a journey whose page said 7.2%).
+    start_n = int(spine[1]['accounts']) if len(spine) > 1 and spine[1].get('accounts') else 0
+    conversion_pct = round(paid / start_n * 100, 4) if start_n else 0.0
+    share_of_us_pct = round(paid / US_GEN_POP * 100, 4)
     proj_name = f'{subject} on {platform}'.strip()
     blob = {
         'meta': {
@@ -961,6 +968,7 @@ def build_journey(inputs: dict, prim: dict, *,
         'kpis': {
             'total_users': paid,
             'conversion_pct': conversion_pct,
+            'share_of_us_pct': share_of_us_pct,
         },
         'diagnostics': {
             'data_provenance': 'synthetic_estimate',

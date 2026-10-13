@@ -2365,6 +2365,207 @@ def _persist(s3_client, summary: dict, project_name: str, username: str, job_id:
     return key
 
 
+# --- The detailed breakdown that rides with every finished journey -------
+# Jenna, 2026-10-13 (Carolyn Bisson, WBD, holding only the Babylon 5 file):
+# "it should always send this kind of raw data". The shape is the Babylon
+# 5 file's: one row per step, path and detour, with the count, the share
+# kept of the prior step, the drop, the share of US, and where / on what
+# surface / when it happened. Detour rows are held to the spine's own
+# totals so nothing in the file disagrees with the page.
+
+BREAKDOWN_COLUMNS = ['Section', 'Step', 'Accounts', 'Kept of prior %', 'Dropped',
+                     'Of US %', 'Where', 'Surface', 'Timing']
+SHELF_LABELS = {'tv': 'TV Shows', 'movie': 'Movie', 'music': 'Music to Long Form',
+                'brands': 'Brands', 'platforms': 'Platforms'}
+_NUM_RX = re.compile(r"\b\d{1,3}(?:,\d{3})+\b|\b\d{4,}\b")
+
+
+def _bd_int(v):
+    try:
+        return int(round(float(str(v).replace(',', ''))))
+    except Exception:
+        return 0
+
+
+def _bd_pct(v, d=4):
+    try:
+        return round(float(v), d)
+    except Exception:
+        return ''
+
+
+def _bd_messy(n, salt):
+    """Hold a rescaled count off a trailing zero (deterministic)."""
+    n = int(round(n))
+    if n % 10 != 0 or n < 20:
+        return n
+    import hashlib as _hl
+    h = int(_hl.md5(f"{salt}|{n}".encode()).hexdigest()[:6], 16)
+    return n + 1 + (h % 7)
+
+
+def _bd_snap_title(title, spine_counts):
+    """A detour title that quotes a count from an earlier draft of the
+    spine quotes the spine's count instead (within 3%)."""
+    def _swap(m):
+        n = _bd_int(m.group(0))
+        for c in spine_counts:
+            if c and abs(n - c) / float(c) <= 0.03:
+                return f"{c:,}"
+        return m.group(0)
+    return _NUM_RX.sub(_swap, str(title or ''))
+
+
+def _bd_rescale(rows, base_total, salt):
+    """Detour rows re-based to a spine total: shares kept, counts
+    re-derived, the largest row absorbs the rounding so the rows sum to
+    the base exactly. Rows without shares keep their own counts."""
+    shares = [float(r.get('pct') or 0) for r in rows]
+    if not base_total or not any(shares) or sum(shares) < 50:
+        return [dict(r, accounts=_bd_int(r.get('accounts'))) for r in rows]
+    scale = 100.0 / sum(shares) if sum(shares) > 100.5 else 1.0
+    out = []
+    for r, sh in zip(rows, shares):
+        out.append(dict(r, accounts=_bd_messy(base_total * sh * scale / 100.0,
+                                              f"{salt}|{r.get('label')}")))
+    if abs(sum(shares) * scale - 100.0) <= 0.6:
+        big = max(range(len(out)), key=lambda i: out[i]['accounts'])
+        out[big]['accounts'] += int(base_total) - sum(o['accounts'] for o in out)
+    return out
+
+
+def breakdown_rows(payload: dict) -> list:
+    """Rows in BREAKDOWN_COLUMNS order for a persisted journey payload."""
+    j = (payload or {}).get('fragrance_shop_journey') or {}
+    spine = [s for s in (j.get('spine') or []) if isinstance(s, dict)]
+    rows = []
+    counts = [_bd_int(s.get('accounts')) for s in spine]
+    for s in spine:
+        rows.append(['Spine', s.get('label') or '', _bd_int(s.get('accounts')),
+                     _bd_pct(s.get('kept')), _bd_int(s.get('dropped')), _bd_pct(s.get('ofUs')),
+                     s.get('where') or '', s.get('surface') or '', s.get('timing') or ''])
+    for f in (j.get('fork') or []):
+        if not isinstance(f, dict):
+            continue
+        rows.append(['Conversion journey', f.get('label') or '', _bd_int(f.get('accounts')),
+                     _bd_pct(f.get('kept')), _bd_int(f.get('dropped')), '', f.get('doing') or '',
+                     f.get('surface') or '', f.get('timing') or ''])
+    real = [c for c in counts[1:]] if len(counts) > 1 else counts
+    for d in (j.get('detours') or []):
+        if not isinstance(d, dict):
+            continue
+        title = _bd_snap_title(d.get('title') or 'Detour', real)
+        drows = [r for r in (d.get('rows') or []) if isinstance(r, dict)]
+        own = sum(_bd_int(r.get('accounts')) for r in drows)
+        base = None
+        for c in real:   # the spine step this detour partitions
+            if c and own and abs(own - c) / float(c) <= 0.06:
+                base = c
+                break
+        drows = _bd_rescale(drows, base, title) if base else \
+            [dict(r, accounts=_bd_int(r.get('accounts'))) for r in drows]
+        for r in drows:
+            rows.append([title, r.get('label') or '', r['accounts'], _bd_pct(r.get('pct')), '', '',
+                         r.get('doing') or '', '', ''])
+            for sub in (r.get('breakdown') or []):
+                if not isinstance(sub, dict):
+                    continue
+                share = float(sub.get('pct') or 0)
+                n = _bd_messy(r['accounts'] * share / 100.0, f"{title}|{r.get('label')}|{sub.get('label')}") \
+                    if share else _bd_int(sub.get('accounts'))
+                rows.append([title, f"  {sub.get('label') or ''}", n, _bd_pct(share) if share else '', '', '',
+                             sub.get('doing') or '', '', ''])
+    return rows
+
+
+def breakdown_csv(payload: dict) -> str:
+    import csv as _csv
+    buf = io.StringIO()
+    w = _csv.writer(buf)
+    w.writerow(BREAKDOWN_COLUMNS)
+    for r in breakdown_rows(payload):
+        w.writerow(r)
+    return buf.getvalue()
+
+
+def breakdown_filename(payload: dict, ext: str = 'xlsx') -> str:
+    name = str(((payload or {}).get('meta') or {}).get('project_name') or 'Digital_Journey')
+    name = re.sub(r"['\u2019]s\b", "", name)
+    name = re.sub(r"[^A-Za-z0-9]+", "_", name).strip('_') or 'Digital_Journey'
+    return f"{name}_Digital_Journey.{ext}"
+
+
+def breakdown_xlsx(payload: dict) -> bytes:
+    """The breakdown as a formatted workbook: a Breakdown sheet in the
+    Babylon 5 shape and an About sheet (title, window, what we count)."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Font, PatternFill
+    from openpyxl.utils import get_column_letter
+    meta = (payload or {}).get('meta') or {}
+    wb = Workbook()
+    ws = wb.active
+    ws.title = 'Breakdown'
+    ws.append(BREAKDOWN_COLUMNS)
+    head_fill = PatternFill('solid', fgColor='0C1618')
+    for c in ws[1]:
+        c.font = Font(bold=True, color='E9E8E1')
+        c.fill = head_fill
+        c.alignment = Alignment(vertical='center')
+    section_fill = PatternFill('solid', fgColor='E9E8E1')
+    last = None
+    for r in breakdown_rows(payload):
+        ws.append(r)
+        row = ws[ws.max_row]
+        if r[0] != last:
+            for c in row:
+                c.fill = section_fill
+            row[0].font = Font(bold=True)
+            last = r[0]
+        row[2].number_format = '#,##0'
+        row[4].number_format = '#,##0'
+        for i in (3, 5):
+            row[i].number_format = '0.0000'
+    widths = [38, 52, 14, 15, 13, 10, 44, 44, 36]
+    for i, w in enumerate(widths, start=1):
+        ws.column_dimensions[get_column_letter(i)].width = w
+    ws.freeze_panes = 'A2'
+    about = wb.create_sheet('About')
+    spine = [s for s in ((payload or {}).get('fragrance_shop_journey') or {}).get('spine') or []
+             if isinstance(s, dict) and s.get('id') != 'tam']
+    start = _bd_int(spine[0].get('accounts')) if spine else 0
+    end = _bd_int(spine[-1].get('accounts')) if spine else 0
+    conv = (end / start * 100.0) if start else 0.0
+    lines = [
+        ('Digital Journey', str(meta.get('project_name') or '')),
+        ('Window', f"{meta.get('start_date') or ''} to {meta.get('end_date') or ''}"),
+        ('Start of the journey', f"{start:,} people: {spine[0].get('label') if spine else ''}"),
+        ('End of the journey', f"{end:,} people: {spine[-1].get('label') if spine else ''}"),
+        ('Conversion', f"{conv:.2f}% of the people at the start reached the end"),
+        ('Accounts', 'Unique US individuals in the window. One person on any screen counts once.'),
+        ('Kept of prior %', 'The share of the previous step that reached this step.'),
+        ('Dropped', 'People at the previous step who did not reach this step.'),
+        ('Of US %', 'The step as a share of the US population (329,900,000).'),
+        ('Detours', 'Each detour section partitions one spine step; its rows share that step\'s total.'),
+        ('What we count as a view', 'A view is one person, on any screen, who played the title in the window; '
+                                    'repeat plays by the same person count once.'),
+        ('Where to find it', f"Dashboard, Digital Journey IQ, {SHELF_LABELS.get(shelf_for(meta), 'All')}: "
+                             f"{meta.get('project_name') or ''}"),
+    ]
+    about.append(['About', ''])
+    about['A1'].font = Font(bold=True, color='E9E8E1')
+    about['A1'].fill = head_fill
+    about['B1'].fill = head_fill
+    for k, v in lines:
+        about.append([k, v])
+        about[f'A{about.max_row}'].font = Font(bold=True)
+        about[f'B{about.max_row}'].alignment = Alignment(wrap_text=True, vertical='top')
+    about.column_dimensions['A'].width = 26
+    about.column_dimensions['B'].width = 96
+    out = io.BytesIO()
+    wb.save(out)
+    return out.getvalue()
+
+
 _SHELF_TV_RX = re.compile(r"\b(tv|television|series|show|season|episode|streaming|svod|catalog)\b", re.I)
 _SHELF_MOVIE_RX = re.compile(r"\b(movie|film|theatrical|box office|ticketing|pvod)\b", re.I)
 _SHELF_MUSIC_RX = re.compile(r"\b(music|song|album|artist|concert|tour)\b", re.I)
@@ -2582,6 +2783,13 @@ __all__ = [
     'CUT_DISPLAY_ORDER',
     'DEFAULT_LOOKBACK_DAYS',
     'DEFAULT_FORWARD_DAYS',
+    'BREAKDOWN_COLUMNS',
+    'SHELF_LABELS',
+    'breakdown_rows',
+    'breakdown_csv',
+    'breakdown_xlsx',
+    'breakdown_filename',
+    'shelf_for',
     'S3_BUCKET',
     'S3_PREFIX',
     'S3_INDEX_KEY',

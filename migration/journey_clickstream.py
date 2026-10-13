@@ -1029,9 +1029,20 @@ def urls_for_step(subject: str, platform: str, surface: str = '',
         'netflix': ('netflix',),
         'shop': ('shop',),
     }.get(family, (family,))
-    for fam in want_fams:
-        for url, why, _kind in catalog.get(fam, []):
-            add(url, why)
+    if family == 'creator_editorial':
+        # A mixed step (creator feeds AND editorial pages) shows both: the
+        # families take turns, so sixteen creator handles cannot crowd
+        # every review off a ten-row step (2026-10-13).
+        pools = [list(catalog.get(fam, [])) for fam in want_fams]
+        while any(pools):
+            for pool in pools:
+                if pool:
+                    url, why, _kind = pool.pop(0)
+                    add(url, why)
+    else:
+        for fam in want_fams:
+            for url, why, _kind in catalog.get(fam, []):
+                add(url, why)
     if family == 'tracked':
         return _apply_hints(
             [(u, w, 12.0) for u, w in rows[:TOP_TRACKED_URLS]], step_i)
