@@ -470,7 +470,7 @@ def ask(user, body, *, via='session'):
     # rewritten to that option and runs as that option.
     if referent_decision is None:
         try:
-            _rewrite, _bare = _bare_reply(body, text, history, has_ctx)
+            _rewrite, _bare = _bare_reply(body, text, history, has_ctx, uname=uname)
             if _rewrite:
                 text = _rewrite
                 body = dict(body)
@@ -1016,7 +1016,15 @@ def _confirm_answer(text, history):
             'cohort': pick.get('cohort'), 'label': pick['label']}
 
 
-def _bare_reply(body, text, history, has_ctx):
+def _pending_brief_waiting(uname, text):
+    try:
+        from . import pending_intake as _pi
+        return bool(uname) and _pi.waiting(host.s3_client, host.bucket, uname, text)
+    except Exception:
+        return False
+
+
+def _bare_reply(body, text, history, has_ctx, uname=''):
     """(rewrite_text, payload). rewrite_text is set when the bare reply
     resolves to an option the previous turn offered (the ask continues
     as that option). payload is the deterministic answer for a bare
@@ -1026,6 +1034,8 @@ def _bare_reply(body, text, history, has_ctx):
     kind = guards.bare_reply_kind(text)
     if not kind or _armed(body):
         return None, None
+    if kind == 'affirm' and _pending_brief_waiting(uname, text):
+        return None, None   # a proposed brief is stashed for this reader; the flow's confirm step owns the yes (2026-10-13)
     prev = _last_agent_turn(history)
     options = _option_labels(prev)
     low = ' '.join(str(text or '').lower().split()).strip(' .!')

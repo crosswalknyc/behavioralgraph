@@ -9272,11 +9272,13 @@ def _pm_intake_resolve(flow, text, history, parse_fn, complete_fn,
                     > sum(1 for k in required if parsed.get(k))):
                 parsed = again
     combined_text = '\n\n'.join(prior + [text]) if prior else text
-    substantive = len(combined_text.split()) >= 10
     # Deterministic second reader (2026-10-02): plain rules over the
     # same words (quoted or named title, platform names, end-step
     # verbs) fill ONLY what the model left empty. It would have read
     # Carolyn's brief on the first message even with the parser bug.
+    # Runs on a substantive message, or whenever the model read nothing
+    # ("Build a journey for Suits on Peacock" is seven words, 2026-10-13).
+    substantive = len(combined_text.split()) >= 10 or not any(parsed.get(k) for k in required)
     if fallback_fn and substantive:
         try:
             from prometheus.intake_reader import merge_missing
@@ -9365,10 +9367,92 @@ def _pm_intake_finish_confirm(parsed, reply, run_label):
         try:
             from prometheus.intake_reader import proposed_note
             reply = reply + proposed_note(prop['field'], prop['value'],
-                                          run_label=run_label)
+                                          run_label=run_label, source=prop.get('from') or '')
         except Exception:
             traceback.print_exc()
     return reply
+
+
+_PM_INTAKE_UI = {   # flow -> (screen-draft kind, confirm reply fn, run chip, payload key, collect key, plain labels)
+    'digital_journey': ('journey', '_pm_jiq_confirm_reply', 'Run the journey', 'jiq_confirm_payload', 'jiq_collect',
+                        ['the category', 'the platform', 'the conversion event']),
+    'brand_partnership': ('bpiq', '_pm_bpiq_confirm_reply', 'Run the valuation', 'bpiq_confirm_payload', 'bpiq_collect',
+                          ['the brand', 'the partner', 'the campaign window']),
+    'flywheel': ('', '_pm_fw_confirm_reply', 'Run the flywheel', 'fw_confirm_payload', 'fw_collect',
+                 ['the title', 'the captured action', 'the ecosystem', 'the conversion']),
+    'attribution': ('', '_pm_aiq_confirm_reply', 'Start tracking', 'aiq_confirm_payload', 'aiq_collect',
+                    ['the campaign name', 'tagged URLs', 'the conversion']),
+}
+
+
+def _pm_intake_turn(flow, text, body, history, user, ppu, first):
+    """One guided-intake turn for any of the four flows (2026-10-13). The first message is READ before anything
+    is asked: "Build a digital journey for Anthony Bourdain No Reservations on Amazon Prime just like the one you
+    did for Babylon 5" (Carolyn, WBD) names the title, the platform and the shape, and drew the three-field opener.
+    Order: the open screen can draft the whole brief; the ask itself is parsed (model, then rules); a prior
+    deliverable it points at lends its shape; a complete brief confirms; a partial one asks only for what is
+    missing; only an ask that names nothing gets the opener."""
+    kind, confirm_name, run_label, payload_key, collect_key, labels = _PM_INTAKE_UI[flow]
+    parse_fn, complete_fn, required, ask_copy, fallback_fn, propose_fn = _pm_intake_flow_table()[flow]
+    base = {'success': True, 'action': 'answer', 'offer_deck': False, 'deck_angle': None}
+    if first and kind:
+        drafted = _pm_intake_screen_draft(kind, body)
+        if drafted:
+            return drafted
+    from prometheus import intake_reader as _ir
+    template = _ir.find_template_reference(text) if flow == 'digital_journey' else ''
+    ask_text = _ir.strip_template_reference(text) if template else text
+    parsed, fault = _pm_intake_resolve(flow, ask_text, history, parse_fn, complete_fn, required, ask_copy,
+                                       user=user, usage_extras=ppu, fallback_fn=fallback_fn,
+                                       propose_fn=None if template else propose_fn, alert=not first)
+    if template:   # the prior deliverable lends its shape before any default is proposed
+        parsed = _ir.apply_journey_template(parsed, _pm_prior_journey_shape(template, user), template)
+        if not complete_fn(parsed) and propose_fn:
+            prop = propose_fn(parsed)
+            if prop:
+                parsed[prop[0]] = prop[1]
+                parsed.setdefault('_proposed', {'field': prop[0], 'value': prop[1]})
+    have = any(parsed.get(k) for k in required) if isinstance(parsed, dict) else False
+    if first and not have:   # an ask that names nothing gets the opener (a reader fault on a first turn is not the reader's)
+        return {**base, 'reply': ask_copy, collect_key: True, 'followups': ['Cancel']}
+    if fault and not complete_fn(parsed):
+        return _pm_intake_fault_payload()
+    if flow == 'digital_journey' and isinstance(parsed, dict):
+        parsed = _ir.watch_defaults(parsed)   # a title on a video platform starts on social (Jenna 2026-10-13)
+    if complete_fn(parsed):
+        reply = _pm_intake_finish_confirm(parsed, globals()[confirm_name](parsed), run_label)
+        _pm_pending_intake('stash', user, flow, parsed, run_label)   # a later "Run the journey" still finds it
+        return {**base, 'reply': reply, payload_key: parsed, 'followups': [run_label, 'Cancel']}
+    missing = _ir_labels(parsed, labels) or list(labels)
+    if flow == 'attribution' and parsed.get('daily_refresh') and _pm_aiq_days(parsed) < 1:
+        missing = ['a stop date after today for the daily tracking']
+    return {**base, 'reply': ('Almost there - I still need ' + ', '.join(str(m) for m in missing)
+                              + '. Send the missing piece(s) and I will line it up.'),
+            collect_key: True, 'followups': ['Cancel']}
+
+
+def _pm_pending_intake(op, user, flow, *args):
+    """stash / pick the brief a guided intake proposed, per reader, for a day (prometheus.pending_intake)."""
+    try:
+        from prometheus import pending_intake as _pi
+        uname = str((user or {}).get('username') or (user or {}).get('email') or '').strip() if isinstance(user, dict) else str(user or '')
+        if op == 'stash':
+            return _pi.stash(_H.s3_client, _H.S3_BUCKET, uname, flow, args[0], args[1] if len(args) > 1 else '')
+        return _pi.pick(_H.s3_client, _H.S3_BUCKET, uname, flow, args[0] if args else '')
+    except Exception:
+        return None
+
+
+def _pm_prior_journey_shape(title, user=None):
+    """The shape of a prior Digital Journey on `title` (start step, end step, kind) from the corpus, or None."""
+    try:
+        from migration import corpus_catalog as _cc
+        from prometheus import intake_reader as _ir
+        prior = _cc.prior_journey(_cc.anchors_for(title, with_ledger=False))
+        return _ir.journey_shape(prior, title) if prior else None
+    except Exception:
+        traceback.print_exc()
+        return None
 
 
 def _pm_intake_fault_payload():
@@ -15184,7 +15268,7 @@ def _pm_analyze_core(user, body, text, history):
     # Chip -> guided inputs -> confirm -> charge -> background build.
     _bpiq_user = (session.get('username') or user.get('username')
                   or '').strip()
-    _bpiq_confirm = body.get('bpiq_confirm')
+    _bpiq_confirm = body.get('bpiq_confirm') or _pm_pending_intake('pick', user, 'brand_partnership', text)
     if isinstance(_bpiq_confirm, dict) and _bpiq_confirm.get(
             'brand_partner'):
         _subj = (f"{_bpiq_confirm.get('qualifier')} x "
@@ -15223,50 +15307,11 @@ def _pm_analyze_core(user, body, text, history):
             'bpiq_job_id': _bpiq_job,
             'followups': [], 'offer_deck': False, 'deck_angle': None})
     if body.get('bpiq_inputs') and not _pm_intake_breakout(text):
-        from prometheus.intake_reader import (
-            keyword_parse_brand_partnership,
-            propose_brand_partnership_field)
-        _parsed, _bfault = _pm_intake_resolve(
-            'brand_partnership', text, history, _pm_bpiq_parse,
-            _pm_bpiq_inputs_complete,
-            ('brand_partner', 'qualifier', 'event_start', 'event_end'),
-            _PM_BPIQ_ASK_COPY, user=user, usage_extras=_pm_ppu,
-            fallback_fn=keyword_parse_brand_partnership,
-            propose_fn=propose_brand_partnership_field)
-        if _bfault and not _pm_bpiq_inputs_complete(_parsed):
-            return jsonify(_pm_intake_fault_payload())
-        if _pm_bpiq_inputs_complete(_parsed):
-            _breply = _pm_intake_finish_confirm(
-                _parsed, _pm_bpiq_confirm_reply(_parsed),
-                'Run the valuation')
-            return jsonify({
-                'success': True, 'action': 'answer',
-                'reply': _breply,
-                'bpiq_confirm_payload': _parsed,
-                'followups': ['Run the valuation', 'Cancel'],
-                'offer_deck': False, 'deck_angle': None})
-        _missing = _ir_labels(_parsed, ['the brand', 'the partner', 'the campaign window'])
-        return jsonify({
-            'success': True, 'action': 'answer',
-            'reply': ('Almost there - I still need '
-                      + ', '.join(str(m) for m in _missing)
-                      + '. Send the missing piece(s) and I will '
-                        'line it up.'),
-            'bpiq_collect': True,
-            'followups': ['Cancel'],
-            'offer_deck': False, 'deck_angle': None})
+        return jsonify(_pm_intake_turn('brand_partnership', text, body, history, user, _pm_ppu, first=False))
     if _pm_bpiq_intent(text):
-        _bd = _pm_intake_screen_draft('bpiq', body)   # propose, never interrogate (2026-10-09)
-        if _bd:
-            return jsonify(_bd)
-        return jsonify({
-            'success': True, 'action': 'answer',
-            'reply': _PM_BPIQ_ASK_COPY,
-            'bpiq_collect': True,
-            'followups': ['Cancel'],
-            'offer_deck': False, 'deck_angle': None})
+        return jsonify(_pm_intake_turn('brand_partnership', text, body, history, user, _pm_ppu, first=True))
     # ---- Attribution IQ tracking flow (Jenna 2026-09-22) ----
-    _aiq_confirm = body.get('aiq_confirm')
+    _aiq_confirm = body.get('aiq_confirm') or _pm_pending_intake('pick', user, 'attribution', text)
     if isinstance(_aiq_confirm, dict) \
             and _aiq_confirm.get('campaign_name'):
         _aname = str(_aiq_confirm['campaign_name'])
@@ -15315,44 +15360,7 @@ def _pm_analyze_core(user, body, text, history):
             'aiq_job_id': _aiq_job,
             'followups': [], 'offer_deck': False, 'deck_angle': None})
     if body.get('aiq_inputs') and not _pm_intake_breakout(text):
-        from prometheus.intake_reader import (keyword_parse_attribution,
-                                              propose_attribution_field)
-        _aparsed, _afault = _pm_intake_resolve(
-            'attribution', text, history, _pm_aiq_parse,
-            _pm_aiq_inputs_complete,
-            ('campaign_name', 'urls', 'conversion_event'),
-            _PM_AIQ_ASK_COPY, user=user, usage_extras=_pm_ppu,
-            fallback_fn=keyword_parse_attribution,
-            propose_fn=propose_attribution_field)
-        if _afault and not _pm_aiq_inputs_complete(_aparsed):
-            return jsonify(_pm_intake_fault_payload())
-        if _pm_aiq_inputs_complete(_aparsed):
-            _areply = _pm_intake_finish_confirm(
-                _aparsed, _pm_aiq_confirm_reply(_aparsed),
-                'Start tracking')
-            return jsonify({
-                'success': True, 'action': 'answer',
-                'reply': _areply,
-                'aiq_confirm_payload': _aparsed,
-                'followups': ['Start tracking', 'Cancel'],
-                'offer_deck': False, 'deck_angle': None})
-        _amissing = _ir_labels(_aparsed, [])
-        if not _amissing:
-            _amissing = ['the campaign name', 'tagged URLs',
-                         'the conversion']
-            if _aparsed.get('daily_refresh') \
-                    and _pm_aiq_days(_aparsed) < 1:
-                _amissing = ['a stop date after today for the daily '
-                             'tracking']
-        return jsonify({
-            'success': True, 'action': 'answer',
-            'reply': ('Almost there - I still need '
-                      + ', '.join(str(m) for m in _amissing)
-                      + '. Send the missing piece(s) and I will '
-                        'line it up.'),
-            'aiq_collect': True,
-            'followups': ['Cancel'],
-            'offer_deck': False, 'deck_angle': None})
+        return jsonify(_pm_intake_turn('attribution', text, body, history, user, _pm_ppu, first=False))
     if _pm_aiq_stop_intent(text):
         try:
             from migration.attribution_synthesis import (load_trackers,
@@ -15393,14 +15401,9 @@ def _pm_analyze_core(user, body, text, history):
         except Exception:
             traceback.print_exc()
     if _pm_aiq_intent(text):
-        return jsonify({
-            'success': True, 'action': 'answer',
-            'reply': _PM_AIQ_ASK_COPY,
-            'aiq_collect': True,
-            'followups': ['Cancel'],
-            'offer_deck': False, 'deck_angle': None})
+        return jsonify(_pm_intake_turn('attribution', text, body, history, user, _pm_ppu, first=True))
     # ---- Digital Journey flow (Jenna 2026-09-16) ----
-    _fw_confirm = body.get('fw_confirm')
+    _fw_confirm = body.get('fw_confirm') or _pm_pending_intake('pick', user, 'flywheel', text)
     if isinstance(_fw_confirm, dict) and _fw_confirm.get('subject'):
         _fsubj = (f"{_fw_confirm.get('subject')} "
                   f"{_fw_confirm.get('ecosystem')} flywheel")
@@ -15438,46 +15441,10 @@ def _pm_analyze_core(user, body, text, history):
             'fw_job_id': _fw_job,
             'followups': [], 'offer_deck': False, 'deck_angle': None})
     if body.get('fw_inputs') and not _pm_intake_breakout(text):
-        from prometheus.intake_reader import (keyword_parse_flywheel,
-                                              propose_flywheel_field)
-        _fparsed, _ffault = _pm_intake_resolve(
-            'flywheel', text, history, _pm_fw_parse,
-            _pm_fw_inputs_complete,
-            ('subject', 'captured_action', 'ecosystem',
-             'conversion_event'),
-            _PM_FW_ASK_COPY, user=user, usage_extras=_pm_ppu,
-            fallback_fn=keyword_parse_flywheel,
-            propose_fn=propose_flywheel_field)
-        if _ffault and not _pm_fw_inputs_complete(_fparsed):
-            return jsonify(_pm_intake_fault_payload())
-        if _pm_fw_inputs_complete(_fparsed):
-            _freply = _pm_intake_finish_confirm(
-                _fparsed, _pm_fw_confirm_reply(_fparsed),
-                'Run the flywheel')
-            return jsonify({
-                'success': True, 'action': 'answer',
-                'reply': _freply,
-                'fw_confirm_payload': _fparsed,
-                'followups': ['Run the flywheel', 'Cancel'],
-                'offer_deck': False, 'deck_angle': None})
-        _fmissing = _ir_labels(_fparsed, ['the title', 'the captured action', 'the ecosystem', 'the conversion'])
-        return jsonify({
-            'success': True, 'action': 'answer',
-            'reply': ('Almost there - I still need '
-                      + ', '.join(str(m) for m in _fmissing)
-                      + '. Send the missing piece(s) and I will '
-                        'line it up.'),
-            'fw_collect': True,
-            'followups': ['Cancel'],
-            'offer_deck': False, 'deck_angle': None})
+        return jsonify(_pm_intake_turn('flywheel', text, body, history, user, _pm_ppu, first=False))
     if _pm_fw_intent(text):
-        return jsonify({
-            'success': True, 'action': 'answer',
-            'reply': _PM_FW_ASK_COPY,
-            'fw_collect': True,
-            'followups': ['Cancel'],
-            'offer_deck': False, 'deck_angle': None})
-    _jiq_confirm = body.get('jiq_confirm')
+        return jsonify(_pm_intake_turn('flywheel', text, body, history, user, _pm_ppu, first=True))
+    _jiq_confirm = body.get('jiq_confirm') or _pm_pending_intake('pick', user, 'digital_journey', text)
     if isinstance(_jiq_confirm, dict) and _jiq_confirm.get('subject'):
         _jsubj = (f"{_jiq_confirm.get('subject')} on "
                   f"{_jiq_confirm.get('platform')}")
@@ -15514,47 +15481,9 @@ def _pm_analyze_core(user, body, text, history):
             'jiq_job_id': _jiq_job,
             'followups': [], 'offer_deck': False, 'deck_angle': None})
     if body.get('jiq_inputs') and not _pm_intake_breakout(text):
-        from prometheus.intake_reader import (keyword_parse_journey,
-                                              propose_journey_field)
-        _jparsed, _jfault = _pm_intake_resolve(
-            'digital_journey', text, history, _pm_jiq_parse,
-            _pm_jiq_inputs_complete,
-            ('subject', 'platform', 'conversion_event'),
-            _PM_JIQ_ASK_COPY, user=user, usage_extras=_pm_ppu,
-            fallback_fn=keyword_parse_journey,
-            propose_fn=propose_journey_field)
-        if _jfault and not _pm_jiq_inputs_complete(_jparsed):
-            return jsonify(_pm_intake_fault_payload())
-        if _pm_jiq_inputs_complete(_jparsed):
-            _jreply = _pm_intake_finish_confirm(
-                _jparsed, _pm_jiq_confirm_reply(_jparsed),
-                'Run the journey')
-            return jsonify({
-                'success': True, 'action': 'answer',
-                'reply': _jreply,
-                'jiq_confirm_payload': _jparsed,
-                'followups': ['Run the journey', 'Cancel'],
-                'offer_deck': False, 'deck_angle': None})
-        _jmissing = _ir_labels(_jparsed, ['the category', 'the platform', 'the conversion event'])
-        return jsonify({
-            'success': True, 'action': 'answer',
-            'reply': ('Almost there - I still need '
-                      + ', '.join(str(m) for m in _jmissing)
-                      + '. Send the missing piece(s) and I will '
-                        'line it up.'),
-            'jiq_collect': True,
-            'followups': ['Cancel'],
-            'offer_deck': False, 'deck_angle': None})
+        return jsonify(_pm_intake_turn('digital_journey', text, body, history, user, _pm_ppu, first=False))
     if _pm_jiq_intent(text):
-        _jd = _pm_intake_screen_draft('journey', body)   # propose, never interrogate (2026-10-09)
-        if _jd:
-            return jsonify(_jd)
-        return jsonify({
-            'success': True, 'action': 'answer',
-            'reply': _PM_JIQ_ASK_COPY,
-            'jiq_collect': True,
-            'followups': ['Cancel'],
-            'offer_deck': False, 'deck_angle': None})
+        return jsonify(_pm_intake_turn('digital_journey', text, body, history, user, _pm_ppu, first=True))
     # ------------------ SINGLE ROUTER (2026-08-28) ------------------
     # One server-side decision for every ask (prometheus_router):
     # deterministic prefilters in one fixed precedence, the fast
@@ -16862,9 +16791,9 @@ def _pm_jiq_intent(text):
     low = ' '.join(str(text or '').lower().split())
     if low == _PM_JIQ_CHIP.lower():
         return True
-    return ('digital journey' in low
-            and any(k in low for k in ('pull', 'build', 'run', 'create',
-                                       'new', 'make')))
+    # "Build a journey for Suits on Peacock" is the same order without the word digital (2026-10-13)
+    return (('digital journey' in low or re.search(r"\b(?:a|the|me a|another|new)\s+journey\b", low) is not None)
+            and any(k in low for k in ('pull', 'build', 'run', 'create', 'new', 'make', 'map')))
 
 
 def _pm_jiq_parse(text, usage_extras=None):

@@ -1002,8 +1002,126 @@ def propose_flywheel_field(parsed):
     return None
 
 
-def proposed_note(field, value, run_label='Run the journey'):
+def proposed_note(field, value, run_label='Run the journey', source=''):
     label = FIELD_LABELS.get(field, field.replace('_', ' '))
+    if source:   # the shape came from a prior deliverable the ask pointed at (2026-10-13)
+        return (f"\n\nI took {label} from your {source} journey: \"{value}\". "
+                f"Say '{run_label}' if that is right, or send the correction and I will update it.")
     return (f"\n\nYou did not spell out {label}, so I took it as "
             f"\"{value}\". Say '{run_label}' if that is right, or send "
             f"the correction and I will update it.")
+
+
+# ---------------------------------------------------------------------------
+# "Just like the one you did for X" (2026-10-13, Carolyn Bisson / WBD)
+# ---------------------------------------------------------------------------
+# "Build a digital journey for Anthony Bourdain No Reservations on Amazon
+# Prime just like the one you did for Babylon 5" names the title, the
+# platform and the shape in one line. The shape is the prior journey:
+# its start step and its end step, re-pointed at the new title and
+# platform. Nothing is asked that the sentence already answered.
+_TEMPLATE_RXS = (
+    re.compile(r"\b(?:just\s+)?(?:like|same\s+as|similar\s+to|mirroring|modeled\s+on|copy(?:ing)?)\s+"
+               r"(?:the\s+)?(?:one|journey|read|version|build)\s+(?:you|we|I)\s+"
+               r"(?:did|built|made|ran|got|had|created|produced)\s+(?:for|on|with)\s+"
+               r"(?P<title>[^.?!,;]+?)\s*(?:[.?!,;]|$)", re.I),
+    re.compile(r"\b(?:just\s+)?(?:like|same\s+as|similar\s+to)\s+(?:the|your|our|my)\s+"
+               r"(?P<title>[^.?!,;]+?)\s+(?:journey|one|read|version|build)\b", re.I),
+)
+_TEMPLATE_TAIL_RX = re.compile(r"\s+(?:journey|one|read|version|build)$", re.I)
+
+
+def find_template_reference(text):
+    """The prior deliverable an ask points at ("just like the one you
+    did for Babylon 5" -> "Babylon 5"), or ''."""
+    t = ' '.join(str(text or '').split())
+    for rx in _TEMPLATE_RXS:
+        m = rx.search(t)
+        if m:
+            title = _TEMPLATE_TAIL_RX.sub('', m.group('title').strip(' "\'')).strip()
+            if 2 <= len(title) <= 80:
+                return title
+    return ''
+
+
+def strip_template_reference(text):
+    """The ask without its template clause, so the subject reader does
+    not take the referenced title for the subject."""
+    t = ' '.join(str(text or '').split())
+    for rx in _TEMPLATE_RXS:
+        t = rx.sub(' ', t)
+    return ' '.join(t.split()).strip(' ,;')
+
+
+_STAGE_SKIP_RX = re.compile(r"^(?:us\s+gen\s+pop|gen\s+pop|everyone|us\s+population)$", re.I)
+
+
+def journey_shape(prior, title):
+    """{start_behavior, conversion_event, journey_kind} read off a prior
+    journey ({stages: {label: count}, ...} as corpus_catalog.prior_journey
+    returns it, or a spine list), with the prior title swapped out for a
+    placeholder so the caller can re-point it. None when the prior has
+    no readable spine."""
+    labels = []
+    if isinstance(prior, dict):
+        st = prior.get('stages')
+        if isinstance(st, dict):
+            labels = [str(k) for k in st.keys()]
+        elif isinstance(st, list):
+            labels = [str(s.get('label') or s.get('name') or '') for s in st if isinstance(s, dict)]
+    elif isinstance(prior, list):
+        labels = [str(s.get('label') or s.get('name') or '') for s in prior if isinstance(s, dict)]
+    labels = [l.strip() for l in labels if l and not _STAGE_SKIP_RX.match(l.strip())]
+    if len(labels) < 2:
+        return None
+    start, end = labels[0], labels[-1]
+    kind = 'watch' if re.search(r"\bwatch", end, re.I) else ('purchase' if re.search(r"\b(?:paid|bought|purchas)", end, re.I) else None)
+    if title:
+        rx = re.compile(re.escape(str(title)), re.I)
+        start, end = rx.sub('{subject}', start), rx.sub('{subject}', end)
+    start = re.sub(r"^(?:saw|viewed|watched)\b", lambda m: m.group(0).lower(), start)
+    return {'start_behavior': start[:1].lower() + start[1:], 'conversion_event': end[:1].lower() + end[1:],
+            'journey_kind': kind}
+
+
+def apply_journey_template(parsed, shape, template_title=''):
+    """Fill the empty required fields of a journey brief from a prior
+    journey's shape, re-pointed at this brief's subject and platform.
+    Marks the proposal so the confirm says where the shape came from."""
+    p = dict(parsed or {})
+    if not shape:
+        return p
+    subj, plat = str(p.get('subject') or ''), str(p.get('platform') or '')
+    filled = []
+    for field in ('start_behavior', 'conversion_event', 'journey_kind'):
+        if p.get(field) or not shape.get(field):
+            continue
+        v = str(shape[field]).replace('{subject}', subj or 'the title')
+        if field == 'conversion_event' and plat and ' on ' not in f' {v} ' and 'platform' not in v.lower():
+            m = re.search(r"\s+within\b", v)   # "watched an episode on Prime Video within 30 days of the post"
+            v = (v[:m.start()] + f" on {plat}" + v[m.start():]) if m else f"{v} on {plat}"
+        p[field] = v
+        filled.append(field)
+    if 'conversion_event' in filled:
+        p['_proposed'] = {'field': 'conversion_event', 'value': p['conversion_event'],
+                          'from': template_title or 'the prior journey'}
+    p['missing'] = [k for k in ('subject', 'platform', 'conversion_event') if not p.get(k)]
+    return p
+
+
+def watch_defaults(parsed):
+    """A title on a video platform is a watch journey that starts on
+    social (Jenna 2026-10-13: the journey has to show how people came
+    to watch the show from social content, the Young Sheldon / Babylon
+    5 shape). Fills journey_kind and start_behavior only when the brief
+    left them empty."""
+    p = dict(parsed or {})
+    plat = str(p.get('platform') or '')
+    if _PLATFORM_KIND.get(plat) != 'video' and p.get('journey_kind') != 'watch':
+        return p
+    p.setdefault('journey_kind', 'watch')
+    if not p.get('journey_kind'):
+        p['journey_kind'] = 'watch'
+    if not p.get('start_behavior') and p.get('subject'):
+        p['start_behavior'] = f"saw a social post or short-form clip about {p['subject']}"
+    return p

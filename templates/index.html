@@ -80020,6 +80020,13 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                                 'Conversions') + ' in window: ' +
                             Number(st.conversions).toLocaleString('en-US') +
                             ' people in the US.' : '')));
+                    // The tab shows the new run without a reload (2026-10-13,
+                    // Carolyn: "I don't see it on the site - only Babylon 5").
+                    try {
+                        if (typeof loadJourneyIqRunList === 'function') { loadJourneyIqRunList(st.s3_key || undefined); }
+                        if (typeof refreshJourneyIqList === 'function') { refreshJourneyIqList(); }
+                        if (typeof refreshDigitalJourneyList === 'function') { refreshDigitalJourneyList(); }
+                    } catch (_) {}
                     return;
                 }
                 if (st.status === 'error') {
@@ -80061,6 +80068,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                             ' Total brand value: $' +
                             Number(st.total_brand_value).toLocaleString('en-US',
                                 { maximumFractionDigits: 0 }) + '.' : ''));
+                    try { if (typeof refreshBpiqList === 'function') { refreshBpiqList(); } } catch (_) {}
                     return;
                 }
                 if (st.status === 'error') {
