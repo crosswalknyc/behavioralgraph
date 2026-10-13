@@ -191,11 +191,52 @@ def compose(payload: dict, *, who: str = '', intro: str = '', ready_message: str
     return {'subject': subject, 'body': body, 'html': html}
 
 
+def persist_journey_figures(payload: dict, *, s3_key: str = '', sync: bool = False) -> bool:
+    """The finished journey's spine joins the shared ring as the title's
+    figures (provenance delivered_artifact), so a later ask under any
+    spelling replays the page instead of drawing a different number
+    (Carolyn's 22:45 answer quoted 10,023,477 against a page that said
+    2,950,956). Never raises."""
+    try:
+        import insights_ledger as il
+        meta = (payload or {}).get('meta') or {}
+        j = (payload or {}).get('fragrance_shop_journey') or {}
+        spine = [x for x in (j.get('spine') or []) if isinstance(x, dict) and x.get('id') != 'tam']
+        if len(spine) < 2:
+            return False
+        metrics = []
+        for x in spine:
+            try:
+                n = int(round(float(x.get('accounts') or 0)))
+            except Exception:
+                continue
+            if n > 0 and x.get('label'):
+                metrics.append({'name': str(x['label'])[:120], 'value': n, 'unit': 'people',
+                                'definition': str(x.get('where') or x.get('surface') or '')[:160]})
+        start = metrics[0]['value'] if metrics else 0
+        end = metrics[-1]['value'] if metrics else 0
+        if start and end:
+            metrics.append({'name': 'Conversion', 'value': round(end / start * 100.0, 2), 'unit': '%',
+                            'definition': f"{metrics[-1]['name'][:80]} as a share of {metrics[0]['name'][:80]}"})
+        kind = str(meta.get('journey_kind') or '').lower()
+        family = 'viewership' if kind == 'watch' else ('purchase' if kind in ('purchase', 'buy') else 'journey')
+        il.persist(subject=str(meta.get('project_name') or meta.get('target') or ''), metric_family=family,
+                   question=f"Digital Journey: {meta.get('project_name') or ''}", route='delivered_journey',
+                   metrics=metrics, reply=f"Digital Journey {s3_key}".strip(),
+                   window_start=str(meta.get('start_date') or ''), window_end=str(meta.get('end_date') or ''),
+                   provenance=getattr(il, 'PROV_DELIVERED', 'delivered_artifact'), sync=sync)
+        return True
+    except Exception:
+        traceback.print_exc()
+        return False
+
+
 def deliver_journey(*, username: str, payload: dict, s3_key: str = '', s3_client=None, host=None,
                     intro: str = '', ready_message: str = '', extra_bcc=(), caller: str = 'journey_ready',
                     to: str = '', dry_run: bool = False, send=None) -> dict:
     """Email the journey's requester with the breakdown attached. Returns
     the door's record ({sent, reason, ...}). Never raises."""
+    persist_journey_figures(payload, s3_key=s3_key)
     try:
         jiq = _jiq()
         rec = user_record(username, host=host, s3_client=s3_client)

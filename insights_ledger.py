@@ -656,7 +656,6 @@ def fold_subject(subject):
     binds the others instead of being re-drawn as a different subject."""
     n = normalize_subject(subject)
     n = re.sub(r"\b(\w+) s\b", r"\1", n)          # bourdain s -> bourdain
-    n = re.sub(r"\bthe\s+", "", n) if n.startswith("the ") and len(n.split()) > 3 else n
     folded = _PLATFORM_TAIL_RX.sub("", n).strip()
     return folded or n
 
