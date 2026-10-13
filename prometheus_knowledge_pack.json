@@ -1,7 +1,7 @@
 {
  "version": 1,
  "content_hash": "20bc41adbc33635ce6700c3fc517ed39e05e86fb90bc1f2a82584fff5d2238e2",
- "examples_hash": "5109d026455118392cc90e510a4a9b52c8f6f6af036371693e3356b62fc983bb",
+ "examples_hash": "fdb7095f8641c6c143da05de601dd761fdc4d4d5f6c5f911b591b6e5acfcfb32",
  "source_hashes": {
   ".cursor/rules/analysis-confidence-calibration.mdc": "3f2d33886bf77e54adde67cbf78f3256fa23fcb86d1ae32dd5ce7294088521f0",
   ".cursor/rules/avid-and-cut-skin-rules.mdc": "d5c01e23c4db2669558c41efdf5c706c722fae827c8d78871989ef259a16eaf0",
@@ -30,7 +30,7 @@
   ".cursor/skills/crosswalk-panel-analyst/references/numbers.md": "2857e3623a4e64134f621fbaf54dc37ad5b8e921bd59510c96d2ee4e05c75773",
   ".cursor/skills/crosswalk-panel-analyst/references/asks.md": "52791675ffd3bb65a21fe2b5ee4f11926bfab0bf00b9a9cbaa9f22e7ee48ab19",
   ".cursor/skills/crosswalk-panel-analyst/references/prior-work.md": "d143ac1c06efbf12a41bbb87bdacf93912580a1a70774c848e4d8606d572dbb5",
-  ".cursor/skills/crosswalk-panel-analyst/references/prometheus-brain.md": "a31ed0ed66fc5cbbfeb80eab33f0c3fd10646a552154b76ec224b8ba012e7eb9"
+  ".cursor/skills/crosswalk-panel-analyst/references/prometheus-brain.md": "da7a67f235de59be99e4d7cb65a2b17d976a7adbe8863f195d7b53d08806cb4f"
  },
  "canon": [
   {
@@ -171,10 +171,10 @@
    "text": "The Spiderwick Chronicles pulled 14.7M US viewers onto The Roku Channel across the three years, and 3,148,627 of them opened the app for the first time on the series.\n\nMEASURED READ (Sep 29 2023 to Sep 29 2026)\n- Unique US viewers on The Roku Channel: 14,712,483 (distinct US individuals with at least one play of a Spiderwick Chronicles episode on The Roku Channel in the window)\n- First-ever Roku Channel users acquired on the series: 3,148,627 (viewers whose first recorded Roku Channel session in the window was a Spiderwick Chronicles play)\n- Share of series viewers who were new to the app: 21.4% (first-ever Roku ..."
   },
   "journey_path": {
-   "subject": "UFC on Paramount+ (Journey B: UFC-first sign-ups)",
-   "title": "UFC on Paramount+ (Journey B: UFC-first sign-ups) | Journey B UFC-first Paramount+ sign-ups who churned, observed on Hulu after the churn date | Jan 1 2026 to Aug 14 2026",
-   "q": "of people who subscribed to paramount+ from ufc and churned what did they then watch on hulu?",
-   "text": "Family Guy is the top post-churn Hulu landing spot for Journey B churners: 23.4% of the 2.1M churned cohort reached it, index 214 vs Hulu's general viewer base.\n\nJourney B churners: 2,095,847, Churners viewing on Hulu after the churn date: 1,295,247, Adult animation share of post-churn Hulu viewing: 36.2%.\n\nHulu title watched post-churn mix, Jan 1 2026 to Aug 14 2026 (share of the churned cohort's post-churn Hulu viewing signals (penetration = share of the 2,095,847 churners reaching th)\n- Family Guy: 16.2% share, 23.4% penetration. 490,428 churners reached, index 214, adult animation\n- King of the Hill: 10.3% ..."
+   "subject": "Anthony Bourdain: No Reservations",
+   "title": "Anthony Bourdain: No Reservations | Oct 13, 2025 to Oct 13, 2026",
+   "q": "digital journey for Anthony Bourdain: No Reservations: social to a watched episode on Prime Video",
+   "text": "Anthony Bourdain: No Reservations on Prime Video, Digital Journey (Oct 13, 2025 to Oct 13, 2026): 2,950,956 people viewed social posts about the show; 1,162,866 engaged further; 734,931 searched or looked up availability; 423,328 navigated to Prime Video or Amazon; 289,133 reached the title page; 213,678 watched an episode within 30 days of the social view, 7.2%. Nearly every watch happened in the same session as reaching the title page (213,670 of 213,678)."
   },
   "sponsorship_fit": {
    "subject": "Shark Tank",
