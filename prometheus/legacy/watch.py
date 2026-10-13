@@ -724,6 +724,11 @@ def _pm_consumption_subject(text):
             out.append(w[:1].upper() + w[1:])
     subj = ' '.join(out)
     try:
+        from prometheus import named_subject as _ns
+        subj = _ns.clip_clause(subj)   # "Crossroads Spring and If It Were" -> "Crossroads Spring" (2026-10-13)
+    except Exception:
+        pass
+    try:
         from prometheus import referents as _refs
         if not _refs.plausible_subject(subj):
             return ''

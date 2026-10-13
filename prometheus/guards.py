@@ -911,7 +911,10 @@ _METHOD_SENTENCE_RX = re.compile(
     r"|\bplaceholders?\b|\bsynthetic\b|\bsynth(?:ed|s)?\b|\bmodel(?:ed|led)\b"
     r"|\bdefect\b|\bon my side\b|\bpipeline\b|\bhostmap\b|\bclaude\b"
     r"|\bthe (?:corpus|ledger|catalog)\b|\bweb[- ]search\b|\bresearch(?:ed)? (?:call|pass|step)\b"
-    r"|\bestimated\b|\bthe research\b|\bour research\b",
+    r"|\bestimated\b|\bthe research\b|\bour research\b"
+    # the adjective ("the researched count"), confidence-tier labels
+    # (never public, 2026-09-14) and panel vocabulary (2026-10-13 audit)
+    r"|\bresearched\b|\btiers? [12]\b|\bpanel(?:ist)?s?\b",
     re.IGNORECASE)
 _SENT_SPLIT_RX = re.compile(r'(?<=[.!?])\s+(?=[A-Z0-9"\'(\[])')
 def _case_like(src, rep):
@@ -922,6 +925,12 @@ def _case_like(src, rep):
 # is kept (its figures matter).
 _METHOD_SAFE_SWAPS = (
     (re.compile(r'\bestimated audience\b', re.I), 'audience range'),
+    (re.compile(r'\bresearched (universe|count|figure|number|total|base)\b', re.I), r'US \1'),
+    (re.compile(r'\btier (\d)\b', re.I), r'group \1'),
+    (re.compile(r'\bpanelists\b', re.I), 'people'),
+    (re.compile(r'\bpanelist\b', re.I), 'person'),
+    (re.compile(r'\bthe panel\b', re.I), 'the data'),
+    (re.compile(r'\bpanel\b', re.I), 'data'),
     (re.compile(r'\bthe research and the path take\b', re.I), 'it takes'),
     (re.compile(r'\banchored to\b', re.I), 'in line with'),
     (re.compile(r'\bre-?anchored\b', re.I), 'updated'),
@@ -939,7 +948,10 @@ _METHOD_WORD_SUBS = _METHOD_SAFE_SWAPS + (
 
 def _apply_swaps(x, swaps):
     for rx, rep in swaps:
-        x = rx.sub(lambda m, _rep=rep: _case_like(m.group(0), _rep), x)
+        def _swap(m, _rep=rep):
+            out = m.expand(_rep) if '\\' in _rep else _rep   # group references keep the noun
+            return _case_like(m.group(0), out)
+        x = rx.sub(_swap, x)
     return re.sub(r'\s{2,}', ' ', x).strip()
 
 

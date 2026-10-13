@@ -152,6 +152,29 @@ def load_profile_df(s3_client, bucket, s3_key):
     return df, etag
 
 
+
+_NON_BRAND_COLUMNS = frozenset((
+    'BRAND INPUT', 'SAMPLE SIZE', 'BRAND CATEGORY', 'SUBJECT', 'LOCATION',
+    'GENDER', 'AGE', 'ETHNICITY', 'EDUCATION', 'INCOME', 'OCCUPATION',
+    'PARENTAL STATUS', 'PARENTAL_STATUS', 'RELATIONSHIP', 'SEXUAL ORIENTATION',
+    'SEXUAL_ORIENTATION', 'AVID FAN', 'CASUAL FAN', 'INPUT_METADATA'))
+
+
+def profile_brands(df):
+    """The brand values on a profile frame: every row's Value outside the
+    demographic, metadata and LOCATION columns (2026-10-13; the open
+    page's confirm asks whether an ask names a brand on the page)."""
+    try:
+        col_c = _fuzzy_col(df, 'column') or 'Column'
+        col_v = _fuzzy_col(df, 'value') or 'Value'
+        if col_c not in df.columns or col_v not in df.columns:
+            return set()
+        keep = ~df[col_c].astype(str).str.strip().str.upper().isin(_NON_BRAND_COLUMNS)
+        return {str(v).strip() for v in df.loc[keep, col_v].tolist()
+                if str(v).strip()}
+    except Exception:
+        return set()
+
 def _profile_meta(df, fallback_name):
     """Extract subject name, sample size, projection, window from
     metadata rows."""
@@ -4021,6 +4044,15 @@ def classify_quantifiability(text):
     return None
 
 
+def _clip_subject_clause(subject):
+    """Cut a guessed subject at the clause that follows it (prometheus.named_subject.clip_clause)."""
+    try:
+        from prometheus import named_subject as _ns
+        return _ns.clip_clause(subject)
+    except Exception:
+        return subject
+
+
 def guess_subject_from_text(text):
     """Best-effort subject guess from a question: the longest run of
     capitalized words that isn't a sentence-leading stopword. Returns
@@ -4037,7 +4069,7 @@ def guess_subject_from_text(text):
     if m_aud:
         aud = re.sub(r'\s+(?:of|the|and|&)$', '', m_aud.group(1).strip())
         if aud and aud.lower().strip('.') not in _SUBJ_STOPWORDS:
-            return aud[:80]
+            return _clip_subject_clause(aud)[:80]
     runs = re.findall(r'\b([A-Z][A-Za-z0-9&\'\+\.]*(?:\s+[A-Z][A-Za-z0-9'
                       r'&\'\+\.]*)*)\b', str(text or ''))
     best = ''
@@ -4057,7 +4089,7 @@ def guess_subject_from_text(text):
         cand = ' '.join(words).strip()
         if len(cand) > len(best):
             best = cand
-    return best[:80]
+    return _clip_subject_clause(best)[:80]
 
 
 def build_not_quantifiable_reply(text, gate):

@@ -5080,6 +5080,11 @@ def _ask_infer_route_outcome(surface, payload, status_code):
         elif payload.get('success') is False:
             outcome = ('declined' if payload.get('guidance') else 'error')
         return route, outcome, subject
+    if surface == 'deck':   # the deck surface: a queued file, a clarify, or a decline (2026-10-13)
+        if payload.get('job_id'):
+            return 'deck', 'queued', payload.get('subject')
+        return 'deck', ('clarified' if payload.get('clarify') or payload.get('memory_confirm')
+                        else ('declined' if payload.get('success') is False else 'answered')), subject
     # analyze surface
     route = 'page_analysis'
     if payload.get('success') is False:
@@ -5545,11 +5550,13 @@ def _ask_logged(surface):
                 # the legacy surface names and reads the legacy body,
                 # so the weekly reviews and the per-ask notify see
                 # exactly what they saw before.
+                _env_text = ''
                 if isinstance(payload, dict) \
                         and isinstance(payload.get('raw'), dict) \
                         and payload.get('surface') in ('interpret',
                                                        'analyze', 'deck'):
                     log_surface = payload['surface']
+                    _env_text = str(payload.get('text') or '')   # the reader's line for a job / draft (2026-10-13)
                     payload = payload['raw']
                 route, outcome, subject = _ask_infer_route_outcome(
                     log_surface, payload, status_code)
@@ -5611,7 +5618,8 @@ def _ask_logged(surface):
                     route=route, outcome=outcome,
                     ms=int((time.time() - t0) * 1000),
                     mode=mode, subject=subject, extra=extra,
-                    stages=getattr(_g, '_pm_ask_stages', None))
+                    stages=getattr(_g, '_pm_ask_stages', None),
+                    reply=__import__('prometheus.ask_outcome', fromlist=['reply_text']).reply_text(payload) or _env_text)
                 _pm_watch_flag(_pm_ask_log_user(), question, route, outcome, extra)
                 _pm_watch_notify(
                     _pm_ask_log_user(''), question, payload,
@@ -11442,6 +11450,13 @@ def _pm_open_screen_confirm(text, ctx, history=None):
         traceback.print_exc()
         _ent = None
     _pg_named = _ns_mod.page_named(text, page, _norm, _stop)
+    # What is on screen, continued (2026-10-13 audit): the ask points at the screen, the thread's last
+    # answer landed on this page, or the ask names a brand that is a row on it. Each binds the page.
+    _page_signal = (_ns_mod.view_deixis(text) or _ns_mod.thread_on_page(history or [], page, _norm)
+                    or bool(_pm_page_brand_named(text, page_key)))
+    if _ent and str(_ent.get('s3_key') or '') and _ns_mod.platform_reference(
+            text, str(_ent.get('display_name') or _ent.get('subject') or '').split(' - ')[0]):
+        _ent = None   # "his youtube channel link" names a surface, not the YouTube profile
     if _ent and str(_ent.get('s3_key') or ''):
         _ent_name = str(_ent.get('display_name')
                         or _ent.get('subject') or '').strip()
@@ -11459,10 +11474,13 @@ def _pm_open_screen_confirm(text, ctx, history=None):
         # that subject, in the library or not. The page is only ever
         # offered for an ask that names nothing.
         try:
-            named = (_pm_page_clarify_subject(text, page)
-                     or _pm_consumption_subject(text)
-                     or _ns_mod.mentioned_subject(
-                         text, page, _norm, _stop, _pm_plausible_subject))
+            named = _pm_page_clarify_subject(text, page) or _pm_consumption_subject(text)
+            if not named:   # a phrase lifted from prose must read as a name ("Age Or Income" did not, 2026-10-07)
+                named = _ns_mod.mentioned_subject(text, page, _norm, _stop, _pm_plausible_subject)
+                _in_lib = bool(named) and any(_norm(_ns_mod.family_name(e)) == _norm(named)
+                                               for e in _profile_catalog_for_chat())
+                if named and not _ns_mod.alternative_ok(named, text, _in_lib, _pm_plausible_subject):
+                    named = ''
         except Exception:
             traceback.print_exc()
         if named and _norm(named) != _norm(page):
@@ -11491,12 +11509,14 @@ def _pm_open_screen_confirm(text, ctx, history=None):
         # page is not offered (2026-10-08 Jenna). Only a fuzzy hit
         # the user did not write still confirms with both chips.
         _bsub = str((base or {}).get('subject') or '').strip()
+        if _bsub and _ns_mod.platform_reference(text, _bsub.split(' - ')[0]):
+            _bsub = ''
         _bsub_d = _ns_mod.distinct_tokens(_bsub.split(' - ')[0], _norm, _stop)
         if _bsub and _bsub_d and _bsub_d <= set(_norm(text).split()):
             _pm_ask_hint(route='screen_bind', outcome='bound_named_subject',
                          subject=_bsub)
             return {'route': 'bind', 'subject': _bsub}
-        if _bsub and _pg_named:
+        if _bsub and (_pg_named or _page_signal):
             # The ask wrote the page's own name (first name counts); a
             # library hit the reader did not write is a near-miss of
             # that name, not a second subject. The page binds
@@ -11512,7 +11532,8 @@ def _pm_open_screen_confirm(text, ctx, history=None):
     if _alt_named:
         verdict = 'confirm'
     elif verdict == 'confirm' and (
-            _pm_thread_confirmed_page(history, page)
+            _page_signal
+            or _pm_thread_confirmed_page(history, page)
             or _pm_page_confirmed_recently(_pm_ask_log_user(''), page)):
         _pm_ask_hint(route='screen_bind', outcome='bound_thread_confirmed',
                      subject=page)
@@ -11529,6 +11550,8 @@ def _pm_open_screen_confirm(text, ctx, history=None):
     yes = f'Yes, {page}'
     _opts = [{'label': yes, 'subject': page}]
     _alt = _alt_named or str((base or {}).get('subject') or '').strip()
+    if _alt and not _ns_mod.alternative_ok(_alt, text, bool((base or {}).get('s3_key')), _pm_plausible_subject):
+        _alt = ''   # a platform surface or a phrase that is not a name is never a chip (2026-10-13)
     if _alt and _H._normalize_for_match(_alt) != _H._normalize_for_match(page):
         _opts.append({'label': f'On {_alt}', 'subject': _alt})
     _pm_ask_hint(route='open_screen_confirm',
@@ -11541,6 +11564,11 @@ def _pm_open_screen_confirm(text, ctx, history=None):
         'offer_deck': False, 'deck_angle': None,
         'memory_confirm': {'question': text, 'options': _opts},
     })
+
+
+def _pm_page_brand_named(text, page_key):
+    """A brand on the open profile that the ask names, or '' (2026-10-13; named_subject.page_brand_on_file)."""
+    return _ns_mod.page_brand_on_file(text, page_key, _H.s3_client, _H.S3_BUCKET, _H._normalize_for_match)
 
 
 def _pm_short_name_identity(toks, raw_text):
@@ -17574,8 +17602,8 @@ def _pm_resolve_deck_subject(text, ctx):
     # view's title names the deck.
     _vc = (ctx or {}).get('view_context') if isinstance(ctx, dict) else None
     if isinstance(_vc, dict) and (_vc.get('data') or {}) and not (ctx and ctx.get('primary')):
-        _vsubj = (wanted or pma.resolve_subject(ctx, _vc)
-                  or str(_vc.get('view_title') or '').strip() or 'this view')
+        _vsubj = (pma.resolve_subject(ctx, _vc) or str(_vc.get('view_title') or '').strip()
+                  or wanted or 'this view')   # the view names the deck; a typed phrase that matched no profile does not (2026-10-13)
         return ({'ctx': {'primary': None, 'cuts': [], 'extras': [], 'view_context': _vc},
                  'subject': _vsubj[:120], 'partner': resolved_partner, 'clarify': None,
                  'view_deck': True}, None)

@@ -512,9 +512,15 @@ def record_ask(*, user: str, view: str, question: str, surface: str,
                mode: Optional[str] = None,
                subject: Optional[str] = None,
                extra: Optional[dict] = None,
-               stages: Optional[dict] = None) -> None:
+               stages: Optional[dict] = None,
+               reply: Optional[str] = None) -> None:
     """Persist one user question. Never raises; never blocks the caller
     (S3 put runs on a daemon thread, mirroring record_call).
+
+    reply:   the first 400 characters of what the reader saw, after the
+             exit scrub (2026-10-13 audit: without it the grader judges
+             only by the reader's next move and the digest reads "No
+             written answer on this step").
 
     surface: which endpoint took the question ('analyze' | 'interpret').
     route:   which flow answered it ('page_analysis', 'search_demand',
@@ -547,6 +553,8 @@ def record_ask(*, user: str, view: str, question: str, surface: str,
             record['mode'] = str(mode)[:40]
         if subject:
             record['subject'] = str(subject)[:120]
+        if reply and str(reply).strip():
+            record['reply'] = ' '.join(str(reply).split())[:400]
         if isinstance(extra, dict) and extra:
             clean = {}
             for k, v in list(extra.items())[:8]:

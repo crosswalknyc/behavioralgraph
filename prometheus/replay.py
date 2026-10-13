@@ -73,7 +73,8 @@ GOOD_OUTCOMES = frozenset({
     'memory_confirm', 'rerouted', 'forwarded',
     # deterministic lanes (2026-10-02 S3)
     'in_library', 'not_found', 'approve_without_draft',
-    'workorder_status', 'workorder_eta', 'workorder_cancel'}) | BUILD_DECISIONS
+    'workorder_status', 'workorder_eta', 'workorder_cancel',
+    'queued'}) | BUILD_DECISIONS   # queued: a deck or read handed to the worker (2026-10-13)
 
 # Outcomes that depend on state the replay does not have: an empty
 # library, no active build, no recent read to export.
@@ -117,6 +118,7 @@ _CREDIT_PRICES = {'derived_read': 1, 'viewership_read': 5, 'panel_report': 5}
 # ask answered from the shelf, "do you see X", a cut off a held
 # profile) replay against the real shelf instead of an empty one.
 CATALOG_ENV = 'PM_REPLAY_CATALOG'
+GENPOP_KEY = 'Gen_Pop_2026.csv'
 CATALOG_FIELDS = ('display_name', 's3_key', 'category', 'created_at',
                   'last_modified', 'profile_subject', 'job_id')
 
@@ -153,8 +155,21 @@ def write_catalog_snapshot(s3, path, bucket='dashboard-inputs'):
             slim = {k: j.get(k) for k in CATALOG_FIELDS if j.get(k) is not None}
             slim.update({'s3_key': key, 'status': 'cached', 'source': 's3'})
             jobs.append(slim)
+        # Gen Pop, names and levels only, so the brand coverage lane
+        # ("Is Alexa measured?") answers from the real baseline instead
+        # of falling to a priced offer in the child (2026-10-13 audit).
+        genpop_path = ''
+        try:
+            import pandas as pd
+            import io as _io
+            gp = pd.read_csv(_io.BytesIO(s3.get_object(Bucket=bucket, Key=GENPOP_KEY)['Body'].read()))
+            keep = [c for c in gp.columns if c in ('Column', 'Value') or 'penetration' in str(c).lower()]
+            genpop_path = os.path.splitext(path)[0] + '_genpop.csv'
+            gp[keep].to_csv(genpop_path, index=False)
+        except Exception:
+            genpop_path = ''
         with open(path, 'w', encoding='utf-8') as fh:
-            json.dump({'jobs': jobs}, fh)
+            json.dump({'jobs': jobs, 'genpop_csv': genpop_path}, fh)
         os.environ[CATALOG_ENV] = path
         return len(jobs)
     except Exception:
@@ -213,6 +228,13 @@ def _bind_catalog_snapshot(h):
         return 0
     h.host.set('s3_cache', {'jobs': jobs})
     h.host.set('_admin_hidden_profile_keys', lambda *a, **k: set())
+    gp = str(doc.get('genpop_csv') or '')
+    if gp and os.path.exists(gp):
+        try:
+            with open(gp, 'rb') as fh:
+                h.s3.put_object(Bucket='dashboard-inputs', Key=GENPOP_KEY, Body=fh.read())
+        except Exception:
+            pass
     return len(jobs)
 
 
@@ -518,6 +540,7 @@ def _probe_inprocess(question, view_id='', subject='', history=None,
         has_ctx = bool(pc)
         surface, row = surface_for(question, has_ctx, mode)
         out['surface'], out['row'] = surface, row
+        _STATE['question'] = question
         _canned_dual(h, subject, logged_outcome)
         door = _STATE.get('door') or ''
         path = door or ('/api/brief-chat/analyze' if surface == 'analyze'
@@ -525,9 +548,9 @@ def _probe_inprocess(question, view_id='', subject='', history=None,
         body = {'text': question, 'history': list(history or []),
                 'page_context': pc}
         if door:
-            # the widget's shape: no persisted thread, page context as
-            # the dashboard sends it
-            body.update({'client': 'dashboard', 'persist': False})
+            # the widget's shape: its own surface call, no persisted
+            # thread, page context as the dashboard sends it
+            body.update({'client': 'dashboard', 'persist': False, 'surface': surface})
         if mode:
             body['mode'] = mode
         n0 = len(_STATE['captured'])
@@ -567,6 +590,14 @@ def _canned_dual(h, subject, logged_outcome):
     parses: interpret-tagged agent calls get the brief draft, analysis
     calls get the reply. The door picks the surface itself, so the
     model can no longer be shaped for one surface up front."""
+    if not str(subject or '').strip():
+        # the log kept no subject: read one off the question so a
+        # build order or a sizing ask runs instead of declining
+        try:
+            import prometheus_analysis as _pma
+            subject = _pma.guess_subject_from_text(_STATE.get('question') or '') or ''
+        except Exception:
+            subject = ''
     draft = _canned_for('interpret', subject, logged_outcome)
     reply = _canned_for('analyze', subject, logged_outcome)
 

@@ -111,7 +111,20 @@ def reply_text(payload):
     raw = payload.get('raw')
     if isinstance(raw, dict):
         return reply_text(raw)
-    return ''
+    # a brief card has no prose; the log keeps what the card said
+    # (2026-10-13 audit: the digest read "No written answer" for every
+    # drafted build)
+    drafts = payload.get('spec_drafts') or ([payload['spec_draft']] if isinstance(payload.get('spec_draft'), dict) else [])
+    lines = []
+    for d in drafts if isinstance(drafts, list) else []:
+        if not isinstance(d, dict):
+            continue
+        subj = str(d.get('subject') or d.get('universe_label') or '').strip()
+        dec = str(d.get('decision') or 'new_build').replace('_', ' ')
+        cred = d.get('estimated_credits')
+        lines.append(f"Brief drafted: {subj or 'this audience'} ({dec}"
+                     + (f", {cred} credits" if cred not in (None, '') else '') + ')')
+    return '; '.join(lines)
 
 
 def last_agent_text(history):

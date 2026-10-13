@@ -428,6 +428,15 @@ def _decide(text, *, has_ctx=False, mode=None, extra=None, open_tabs=0,
         if guards.is_capability_question(t):
             d.update(surface='analyze', reason='capability_question')
             return d
+    # A churn / retention / signup QUESTION with no page open is a
+    # question (2026-10-13 audit: "What was monthly churn for Peacock
+    # accounts that signed up in July?" ran as a pull order and asked
+    # for a title). The analyze pass answers it from a held Subscriber
+    # IQ read or prices the read; a pull order still builds.
+    if subiq and not has_ctx and not guards.subiq_is_explicit_pull(t) \
+            and guards.is_question_shaped(t):
+        d.update(surface='analyze', reason='question')
+        return d
     # A churn / retention TASK without a build order ("analyze the
     # churn on these two titles and recommend which one gets the
     # dollars") is analysis, not a 10-credit pull (2026-10-02 RCA).

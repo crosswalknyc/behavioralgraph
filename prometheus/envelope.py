@@ -111,8 +111,18 @@ def wrap(raw, *, surface, decision, thread_id=None, via='session'):
         except Exception:
             pass
     job = _job_of(raw, surface)
-    draft = raw.get('draft') or raw.get('drafts') or raw.get('batch')
+    # the legacy brief rides as spec_draft / spec_drafts (2026-10-13
+    # audit: a successful brief wrapped as kind 'error' with "Nothing
+    # came back", which is what an API caller and the ask log saw)
+    draft = (raw.get('draft') or raw.get('drafts') or raw.get('batch')
+             or raw.get('spec_draft') or raw.get('spec_drafts'))
     text = _text_of(raw)
+    if draft and not text:
+        try:
+            from . import ask_outcome as _ao
+            text = _ao.reply_text(raw)
+        except Exception:
+            text = ''
     trace_id = ''
     try:
         from flask import g as _g
@@ -123,7 +133,8 @@ def wrap(raw, *, surface, decision, thread_id=None, via='session'):
     if job:
         kind = 'job'
         if not text:
-            text = 'Working on it. The read will land in this thread when it is ready.'
+            what = 'deck' if surface == 'deck' else 'read'
+            text = f'Working on it. The {what} will land in this thread when it is ready.'
     elif draft:
         kind = 'draft'
         if not text:

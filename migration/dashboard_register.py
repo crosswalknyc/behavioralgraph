@@ -18,19 +18,19 @@ There are THREE files the dashboard reads from, all in the same bucket:
        Curated rail. Only profiles whose key maps to True here appear in
        the dropdown. The webapp's auto_add_to_quick_selects() does this
        automatically for files uploaded via the app, but files written
-       directly to S3 (via boto3 from a script) bypass that path — so
+       directly to S3 (via boto3 from a script) bypass that path - so
        this helper does it explicitly.
 
   3. system/users.json -> users[*].allowed_runs
        Per-user run-access list. Users with allowed_runs=['*'] see
        everything; users with explicit lists need each new key appended
-       (gated by the user's allowed_categories — '*' or matching cat).
+       (gated by the user's allowed_categories - '*' or matching cat).
        The webapp's auto_add_runs_to_all_users() does this automatically
        for files uploaded via the app; direct-to-S3 scripts bypass that
        path. This was the gap that hid the Bridesmaids-Casual /
        Perks-of-Being-a-Wallflower-TU pair from 40 users on 2026-06-18.
 
-  NOT system/quick_selects.json — that's an orphan path some old code
+  NOT system/quick_selects.json - that's an orphan path some old code
   writes to; the dashboard never reads it. Don't write there.
 
 Usage:
@@ -218,6 +218,31 @@ def grant_runs_to_requester(requester: str, s3_keys, s3_client=None) -> dict:
     return counts
 
 
+_DATE_CLAUSE_RX = re.compile(
+    r"[\s.,;(\-]*\b(?:date\s*range|date\s*window|time\s*frame|timeframe)\b"
+    r"\s*[:\-]?\s*[A-Za-z0-9 ,./\-]{4,60}?(?=\s+-\s+|\)|$)",
+    re.IGNORECASE)
+
+
+def clean_display_name(name: Optional[str]) -> Optional[str]:
+    """The dashboard name never carries the pull window (naming rule 6b:
+    the TU is the clean entity name, a cut is '{Subject} - {Cut}').
+    'From the Desk of Lady Miss Audiobook. Date Range: September 10
+    2025 To September 9 2026 - Avid Fan' -> 'From the Desk of Lady Miss
+    Audiobook - Avid Fan' (2026-10-13 audit: two library names carried
+    the clause). Anything that is not a date clause is left alone."""
+    if not name:
+        return name
+    tidy = re.sub(r"\s{2,}", " ", str(name)).strip()
+    head, sep, cut = tidy.partition(" - ")
+    if not _DATE_CLAUSE_RX.search(head):
+        return tidy   # no window clause: the name stands (a trailing "Jr." is part of it)
+    cleaned = _DATE_CLAUSE_RX.sub("", head).strip().rstrip(".,;:-").strip()
+    if not cleaned:
+        return tidy
+    return f"{cleaned}{sep}{cut}" if sep else cleaned
+
+
 def register_profile_in_dashboard(
     s3_key: str,
     display_name: Optional[str] = None,
@@ -262,6 +287,7 @@ def register_profile_in_dashboard(
 
     if not display_name:
         display_name = project_name_fallback
+    display_name = clean_display_name(display_name)
 
     # ETag-guarded read-modify-write: 21 workers can register profiles
     # concurrently, and a lost cache write silently hides a profile from

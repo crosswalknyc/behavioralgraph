@@ -48290,22 +48290,21 @@ def _sg_guard_user_anchor(draft, text, history, allow_ask):
     cur = str(text or '')
     said_mine = bool(re.search(r"\buse mine\b|\bmy (?:number|figure|"
                                r"count)\b", cur, re.IGNORECASE))
-    said_res = bool(re.search(r"\bresearched\b", cur, re.IGNORECASE))
+    said_res = bool(re.search(r"\bresearched\b|\buse (?:the )?(?:us|full|larger|your) (?:count|figure|number)\b", cur, re.IGNORECASE))
     plausible = (researched <= 0
                  or 0.4 <= (user_n / researched) <= 2.5)
     if said_res and not said_mine:
         _append_identity_echo(
-            draft, f"sized to the researched count "
+            draft, f"sized to the US count "
                    f"({researched:,}) as you chose; your "
                    f"{user_n:,} figure stays on record")
         return None
     if not plausible and allow_ask and not said_mine \
             and not _sg_agent_asked(history, 'use mine'):
         return {'question': (
-            f"You said {user_n:,} {noun}, but the researched universe "
-            f"reads closer to {researched:,}. Reply 'use mine' to "
-            f"size to your figure, or 'researched' to size to the "
-            f"researched count.")}
+            f"You said {user_n:,} {noun}; the US count for this reads "
+            f"closer to {researched:,}. Reply 'use mine' to size to your "
+            f"figure, or 'use the US count' to size to {researched:,}.")}
     draft['universe_anchor'] = user_n
     draft['anchor_source'] = f'client-supplied {noun} count'
     try:

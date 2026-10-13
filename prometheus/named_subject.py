@@ -701,3 +701,189 @@ def fuzzy_catalog_subject(text, catalog, *, normalize, typo_eq, expand_alias,
     if len(hits) == 1:
         return next(iter(hits.values()))
     return None
+
+
+# ---------------------------------------------------------------------------
+# The open page, continued (2026-10-13 audit)
+# ---------------------------------------------------------------------------
+# A follow-up that points at what is on screen ("these insights", "this
+# audience", "the numbers above") is about the page; so is a subject-less
+# follow-up in a thread whose last answer landed on the page; so is an
+# ask that names a brand sitting in the open profile's rows. Each of
+# these drew "Do you want this on X (open on your screen)?" in the
+# 2026-10-07 to 10-12 ask log (Eriley 10 times in one session,
+# egoldfarb 3 times) and was re-asked.
+DEIXIS_RX = re.compile(
+    r"\b(?:this|these|that|those)\s+(?:data|screen|page|view|profile|"
+    r"audience|cohort|read|analysis|insights?|findings?|numbers?|figures?|"
+    r"stats?|results?|brands?|chart|table|report|dashboard|rows?|indexes|"
+    r"indices|list|breakdown|file|output|answer)\b"
+    r"|\bon\s+(?:this|the)\s+screen\b"
+    r"|\b(?:the\s+)?(?:numbers|data|results|insights|figures)\s+"
+    r"(?:here|above|below|on\s+screen)\b"
+    r"|\bwhat\s+you\s+(?:just\s+)?(?:said|showed|sent|gave|wrote)\b"
+    r"|\bwhy\s+does\s+(?:this|that|it)\s+matter\b"
+    r"|\bwhat\s+(?:does|do)\s+(?:this|that|these|it)\s+(?:mean|tell|say)\b",
+    re.I)
+
+PLATFORM_WORDS = frozenset((
+    'youtube', 'instagram', 'tiktok', 'facebook', 'twitter', 'x', 'snapchat',
+    'spotify', 'twitch', 'linkedin', 'pinterest', 'reddit', 'threads',
+    'substack', 'patreon', 'discord', 'kick', 'rumble', 'imdb', 'wikipedia',
+    'google', 'bing', 'apple podcasts', 'soundcloud', 'bandcamp'))
+
+_PLATFORM_REF_RX = (
+    r"\b{p}\s*(?:channel|link|page|account|handle|profile|video|url|post|"
+    r"feed|clip|short|reel|stream|bio|followers?|subscribers?|views?|"
+    r"comments?|live)s?\b|\b(?:on|via|from|through|his|her|their|my|the)\s+{p}\b"
+    r"|{p}\.com|@\w+\s+on\s+{p}\b")
+
+
+def view_deixis(text):
+    """The ask points at what is on screen."""
+    return bool(DEIXIS_RX.search(str(text or '')))
+
+
+def platform_reference(text, candidate):
+    """``candidate`` is a platform named as a channel, link, handle or
+    surface in the ask ("his youtube channel link", "on TikTok"), not a
+    subject of its own. A platform the reader asks ABOUT ("who uses
+    YouTube") is still a subject."""
+    c = str(candidate or '').strip().lower()
+    if c not in PLATFORM_WORDS:
+        return False
+    rx = re.compile(_PLATFORM_REF_RX.format(p=re.escape(c)), re.I)
+    return bool(rx.search(str(text or '')))
+
+
+def alternative_ok(name, text, in_library, plausible=None):
+    """May ``name`` be offered or bound as the other subject of an ask?
+    A library subject qualifies unless the ask only names it as a
+    platform surface. Anything else must be written in the ask the way
+    a name is written (a capitalized run the reader typed) and pass the
+    plausibility check: "Age Or Income" title-cased out of lowercase
+    prose and "YouTube" from "his youtube channel link" both drew a
+    chip on 2026-10-07."""
+    n = str(name or '').strip()
+    if not n:
+        return False
+    if platform_reference(text, n):
+        return False
+    if in_library:
+        return True
+    if plausible is not None:
+        try:
+            if not plausible(n):
+                return False
+        except Exception:
+            pass
+    t = str(text or '')
+    if n.lower() in PLATFORM_WORDS:
+        return False
+    # written as a name: every word of it appears capitalized (or as an
+    # acronym) in the reader's own text, in order
+    pat = r"\b" + r"\s+".join(
+        re.escape(w) if (w[:1].isupper() or w.isupper()) else r"(?:" + re.escape(w) + r")"
+        for w in n.split()) + r"\b"
+    return bool(re.search(pat, t))
+
+
+_ON_LINE_RX = re.compile(r"^\s*On\s+(?P<who>[^:\n]{1,160}?)\s*(?::|\n|$)")
+
+
+def thread_on_page(history, page, normalize, limit=12):
+    """True when this thread's latest answer landed on the open page:
+    the agent turn recorded the page as its subject, or its first line
+    reads "On <page>:" (how a page-bound answer opens). A confirm
+    question decides nothing; an "On it" promise decides nothing; an
+    answer on a different subject ends the search as False."""
+    pg = normalize(str(page or '').split(' - ')[0])
+    if not pg:
+        return False
+    turns = [t for t in (history or []) if isinstance(t, dict)]
+    for t in reversed(turns[-limit:]):
+        role = str(t.get('role') or '').lower()
+        if role == 'user':
+            txt = str(t.get('text') or t.get('content') or '').strip()
+            if txt.lower().startswith('yes, ') and normalize(txt[5:].split(' - ')[0]) == pg:
+                return True
+            continue
+        if role not in ('agent', 'assistant'):
+            continue
+        meta = t.get('meta') if isinstance(t.get('meta'), dict) else {}
+        for k in ('subject', 'profile'):
+            v = str(t.get(k) or meta.get(k) or '').strip()
+            if v:
+                return normalize(v.split(' - ')[0]) == pg
+        txt = str(t.get('text') or t.get('content') or '').strip()
+        if not txt:
+            continue
+        low = txt.lower()
+        if low.startswith('do you want this on') or low.startswith('on it'):
+            continue
+        m = _ON_LINE_RX.match(txt)
+        if m:
+            who = normalize(m.group('who').split(' - ')[0].split(' (')[0])
+            return who == pg or (bool(who) and (who in pg or pg in who))
+    return False
+
+
+def page_brand_hit(text, brands, normalize, common=()):
+    """The brand the ask names that is a row on the open profile, or
+    ''. Single-word brands must be 4+ letters; one that is also an
+    ordinary English word counts only when the reader capitalized it
+    ("what is Dewitts why is it 27x?" on Brock Mesarich, 2026-10-07)."""
+    t = str(text or '')
+    tl = ' ' + normalize(t) + ' '
+    if not tl.strip():
+        return ''
+    best = ''
+    for b in brands or ():
+        b = str(b or '').strip()
+        nb = normalize(b)
+        if not nb or len(nb) < 4 or f' {nb} ' not in tl:
+            continue
+        toks = nb.split()
+        if len(toks) == 1 and (toks[0] in common or len(toks[0]) < 5):
+            if not re.search(r"\b" + re.escape(b) + r"\b", t):
+                continue
+        if len(nb) > len(normalize(best)):
+            best = b
+    return best
+
+
+_CLAUSE_CUT_RX = re.compile(
+    r"\s+(?:and|or|but)\s+(?:if|whether|would|could|should|how|what|when|"
+    r"where|why|does|do|did|is|are|will|then|also|can)\b.*$"
+    r"|,\s*(?:and|or|but)\b.*$"
+    r"|\s+if\s+(?:it|they|we|you|there|he|she)\b.*$"
+    r"|\s+(?:would|could|should)\s+(?:it|they|we|you|more|fewer|less)\b.*$",
+    re.I)
+
+
+def clip_clause(subject):
+    """Cut a subject at the clause that follows it: "Crossroads Spring
+    and If It Were" -> "Crossroads Spring" (2026-10-08, a $500 offer
+    carried the conditional in the title)."""
+    s = str(subject or '').strip()
+    if not s:
+        return s
+    cut = _CLAUSE_CUT_RX.sub('', s).strip(" ,;:'\"")
+    return cut or s
+
+
+def page_brand_on_file(text, page_key, s3_client, bucket, normalize):
+    """The brand the ask names that is a row on the open profile, or ''
+    ("what is Dewitts why is it 27x?" on Brock Mesarich drew a confirm,
+    2026-10-07). The frame comes from the ETag-cached loader the digest
+    already uses; any failure reads as no hit."""
+    if not page_key or not str(text or '').strip():
+        return ''
+    try:
+        import prometheus_analysis as _pma
+        from prometheus import referents as _refs
+        df, _etag = _pma.load_profile_df(s3_client, bucket, page_key)
+        return page_brand_hit(text, _pma.profile_brands(df), normalize,
+                              common=getattr(_refs, '_COMMON_WORDS', ()))
+    except Exception:
+        return ''
