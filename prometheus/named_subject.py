@@ -642,3 +642,62 @@ def mentioned_subject(text, page, normalize, stop, plausible=None):
         if lead_the and plausible('The ' + label):
             return 'The ' + label
     return ''
+
+
+def fuzzy_catalog_subject(text, catalog, *, normalize, typo_eq, expand_alias,
+                          generic_tokens, extra_tokens=None):
+    """The single library subject the ask nearly names, or None.
+
+    Every distinctive token of the subject must appear in the ask
+    either exactly or one typo away, at least one match must have
+    needed the typo tolerance (exact matches are upstream), and the
+    fuzzy hit must be unique across the library: two candidates is an
+    ambiguity, not a bind. A TU and its cuts are one candidate (the TU
+    file wins).
+
+    A word the reader wrote that is, exactly, a token of some library
+    subject is spoken for: it never serves as a typo of another
+    subject's token (2026-10-13, Brock Mesarich open on screen; "Brock"
+    is not a typo of "Block", and the reader was asked to choose).
+    """
+    base_tokens = set(normalize(text).split())
+    if extra_tokens:
+        base_tokens |= set(extra_tokens)
+    q_tokens = expand_alias(base_tokens, text)
+    if not q_tokens:
+        return None
+    rows = []
+    for entry in catalog or ():
+        subj = str(family_name(entry) or entry.get('subject')
+                   or entry.get('display_name') or '').strip()
+        if is_gen_pop(subj, normalize):
+            continue
+        st = [w for w in normalize(subj).split() if w not in generic_tokens]
+        if not st or sum(len(w) for w in st) < 5 or not any(len(w) >= 5 for w in st):
+            continue
+        rows.append((entry, subj, st))
+    spoken_for = {w for _e, _s, st in rows for w in st if w in q_tokens and len(w) >= 4}
+    hits = {}
+    for entry, subj, st in rows:
+        needed_typo = False
+        ok = True
+        for w in st:
+            if w in q_tokens:
+                continue
+            tw = next((qt for qt in q_tokens
+                       if qt not in spoken_for and typo_eq(w, qt)), None)
+            if tw is None:
+                ok = False
+                break
+            needed_typo = True
+        # alias expansion counts as a qualifying near-miss too: 'kuwtk'
+        # matches every token exactly AFTER expansion, and the exact
+        # tier upstream never saw those tokens
+        needed_alias = ok and not set(st) <= base_tokens
+        if ok and (needed_typo or needed_alias):
+            hk = normalize(subj)
+            if hk not in hits or ' - ' not in str(entry.get('display_name') or ''):
+                hits[hk] = {'subject': subj, 's3_key': str(entry.get('s3_key') or '')}
+    if len(hits) == 1:
+        return next(iter(hits.values()))
+    return None

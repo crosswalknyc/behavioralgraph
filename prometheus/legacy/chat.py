@@ -11496,6 +11496,14 @@ def _pm_open_screen_confirm(text, ctx, history=None):
             _pm_ask_hint(route='screen_bind', outcome='bound_named_subject',
                          subject=_bsub)
             return {'route': 'bind', 'subject': _bsub}
+        if _bsub and _pg_named:
+            # The ask wrote the page's own name (first name counts); a
+            # library hit the reader did not write is a near-miss of
+            # that name, not a second subject. The page binds
+            # (2026-10-13, Brock Mesarich open, "Brock" offered Block).
+            _pm_ask_hint(route='screen_bind', outcome='bound_screen',
+                         subject=page)
+            return None
         if _bsub and not _alt_named:
             _alt_named = _bsub
     # Always confirm (2026-10-06 Jenna): nothing named, nothing assumed;
@@ -11819,56 +11827,15 @@ def _pm_expand_alias_tokens(toks, raw_text):
 
 
 def _pm_fuzzy_catalog_subject(text, extra_tokens=None):
-    """The single catalog subject the ask nearly names, or None.
-
-    Every distinctive token of the subject must appear in the ask
-    either exactly or one typo away, at least one match must have
-    needed the typo tolerance (exact matches are upstream), and the
-    fuzzy hit must be unique across the catalog - two candidates is
-    an ambiguity, not a bind."""
-    base_tokens = set(_H._normalize_for_match(text).split())
-    if extra_tokens:
-        base_tokens |= set(extra_tokens)
-    q_tokens = _pm_expand_alias_tokens(base_tokens, text)
-    if not q_tokens:
-        return None
-    hits = {}
+    """The single library subject the ask nearly names, or None (prometheus.named_subject.fuzzy_catalog_subject)."""
     try:
-        for entry in _profile_catalog_for_chat():
-            # Family name (cut suffix stripped): a TU and its Avid cut are ONE candidate (2026-10-12, Debi: 'Austin Sprintz')
-            subj = str(_ns_mod.family_name(entry) or entry.get('subject')
-                       or entry.get('display_name') or '').strip()
-            if _ns_mod.is_gen_pop(subj, _H._normalize_for_match):
-                continue
-            st = [w for w in _H._normalize_for_match(subj).split()
-                  if w not in _PM_BASE_GENERIC_TOKENS]
-            if not st or sum(len(w) for w in st) < 5 \
-                    or not any(len(w) >= 5 for w in st):
-                continue
-            needed_typo = False
-            ok = True
-            for w in st:
-                if w in q_tokens:
-                    continue
-                tw = next((qt for qt in q_tokens
-                           if _pm_token_typo_eq(w, qt)), None)
-                if tw is None:
-                    ok = False
-                    break
-                needed_typo = True
-            # Alias expansion counts as a qualifying near-miss too:
-            # 'kuwtk' matches every token exactly AFTER expansion, and
-            # the exact tier upstream never saw those tokens.
-            needed_alias = ok and not set(st) <= base_tokens
-            if ok and (needed_typo or needed_alias):
-                _hk = _H._normalize_for_match(subj)
-                if _hk not in hits or ' - ' not in str(entry.get('display_name') or ''):   # the TU file wins
-                    hits[_hk] = {'subject': subj, 's3_key': str(entry.get('s3_key') or '')}
+        return _ns_mod.fuzzy_catalog_subject(
+            text, _profile_catalog_for_chat(), normalize=_H._normalize_for_match,
+            typo_eq=_pm_token_typo_eq, expand_alias=_pm_expand_alias_tokens,
+            generic_tokens=_PM_BASE_GENERIC_TOKENS, extra_tokens=extra_tokens)
     except Exception:
         traceback.print_exc()
-    if len(hits) == 1:
-        return next(iter(hits.values()))
-    return None
+        return None
 
 
 # TWO-BASE READS (2026-09-28, Phase 3 of the improvement plan):
