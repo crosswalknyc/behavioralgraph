@@ -2820,7 +2820,7 @@ def _synth_chat_incidence_check(text, history=None):
     result = _H._run_nflx_claude_agent(
         system_prompt=system_prompt,
         user_prompt=user_prompt,
-        max_tokens=2000, temperature=0.3,
+        max_tokens=2000, temperature=0.3, usage_tag=('interpret', 'incidence', _pm_attrib_extras() or None),
     )
     if not result.get('success'):
         try:
@@ -5553,7 +5553,7 @@ def _ask_logged(surface):
                     payload = payload['raw']
                 route, outcome, subject = _ask_infer_route_outcome(
                     log_surface, payload, status_code)
-                route = getattr(_g, '_pm_ask_route', None) or route
+                route = __import__('prometheus.ask_outcome', fromlist=['route_pick']).route_pick(getattr(_g, '_pm_ask_route', None), route)  # door placeholder yields to the body's route (2026-10-13)
                 outcome = getattr(_g, '_pm_ask_outcome', None) or outcome
                 subject = getattr(_g, '_pm_ask_subject', None) or subject
                 mode = getattr(_g, '_pm_ask_mode', None) or mode

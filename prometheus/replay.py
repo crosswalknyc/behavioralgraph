@@ -39,6 +39,7 @@ What the replay can and cannot see
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -47,6 +48,7 @@ import sys
 import tempfile
 import threading
 import time
+import traceback
 import types
 
 WEBAPP = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -100,8 +102,118 @@ _COPY_DEFECT_RE = re.compile(
 
 CHILD_TIMEOUT_S = int(os.environ.get('PM_REPLAY_CHILD_TIMEOUT_S', '900'))
 
+# A priced offer is the product declining to give a read away, not a
+# dead end: a shipped free answer that now draws an offer is drift to
+# look at, never a regression (Jordan's breakdown asks, 2026-10-12).
+OFFER_OUTCOMES = frozenset({'panel_offer'})
+
+# Credit prices the replay child answers with (the live table lives in
+# wallet.DEFAULT_PRICING; only the shape matters here).
+_CREDIT_PRICES = {'derived_read': 1, 'viewership_read': 5, 'panel_report': 5}
+
+# Library snapshot (2026-10-13). The nightly runners write the Select
+# Profile library (names + keys, no file bodies) to this path before a
+# child starts, so asks that turn on what the library holds (a named
+# ask answered from the shelf, "do you see X", a cut off a held
+# profile) replay against the real shelf instead of an empty one.
+CATALOG_ENV = 'PM_REPLAY_CATALOG'
+CATALOG_FIELDS = ('display_name', 's3_key', 'category', 'created_at',
+                  'last_modified', 'profile_subject', 'job_id')
+
+# The widget's door. PM_REPLAY_DOOR=legacy posts to the brief-chat
+# cores directly (the pre-2026-10-13 behaviour) for comparison.
+DOOR_PATH = '/api/prometheus/v1/ask'
+
 _LOCK = threading.Lock()
-_STATE: dict = {'harness': None, 'captured': [], 'baseline': None}
+_STATE: dict = {'harness': None, 'captured': [], 'baseline': None,
+                'door': ''}
+
+
+def write_catalog_snapshot(s3, path, bucket='dashboard-inputs'):
+    """Slim copy of the library index for the replay child; sets
+    PM_REPLAY_CATALOG so every child started after this call reads it.
+    Returns the number of profiles written, 0 on any failure."""
+    try:
+        doc = json.loads(s3.get_object(Bucket=bucket, Key='system/s3_cache.json')
+                         ['Body'].read())
+        hidden = set()
+        try:
+            qs = json.loads(s3.get_object(
+                Bucket=bucket, Key='metadata/admin_quick_selects.json')['Body'].read())
+            hidden = {k for k, v in (qs.get('profiles') or {}).items() if v is False}
+        except Exception:
+            pass
+        jobs = []
+        for j in (doc.get('jobs') or []):
+            if not isinstance(j, dict):
+                continue
+            key = j.get('s3_key') or j.get('key')
+            if not key or key in hidden:
+                continue
+            slim = {k: j.get(k) for k in CATALOG_FIELDS if j.get(k) is not None}
+            slim.update({'s3_key': key, 'status': 'cached', 'source': 's3'})
+            jobs.append(slim)
+        with open(path, 'w', encoding='utf-8') as fh:
+            json.dump({'jobs': jobs}, fh)
+        os.environ[CATALOG_ENV] = path
+        return len(jobs)
+    except Exception:
+        traceback.print_exc()
+        return 0
+
+
+class _DoorModule:
+    """The app module the service host binds against, assembled from
+    the chat module (cores, gates, thread store, ask logging) with the
+    recording host behind it for everything else."""
+
+    def __init__(self, chat, rh):
+        self._chat, self._rh = chat, rh
+
+    def __getattr__(self, name):
+        if name.startswith('__'):
+            raise AttributeError(name)
+        chat = object.__getattribute__(self, '_chat')
+        if hasattr(chat, name):
+            return getattr(chat, name)
+        return getattr(object.__getattribute__(self, '_rh'), name)
+
+
+def _bind_service_door(h):
+    """Bind prometheus.service to the harness and mount the v1 ask
+    route on the harness app (2026-10-13). The widget's asks enter
+    through that door, where the command lanes live (email me this
+    file, open / download, build status, offers, drill-downs); a
+    replay posted straight to the legacy cores never saw them and
+    judged their asks by what the build flow did instead. Returns the
+    path to post to, or '' when the door could not be mounted."""
+    try:
+        from prometheus import host as _ph
+        _ph.host.bind_from_app_module(_DoorModule(h.chat, h.host))
+        if 'prometheus' not in h.app.blueprints:
+            from prometheus.blueprint import bp
+            h.app.register_blueprint(bp)
+        return DOOR_PATH
+    except Exception:
+        traceback.print_exc()
+        return ''
+
+
+def _bind_catalog_snapshot(h):
+    """Load PM_REPLAY_CATALOG (if set) into the harness library."""
+    path = os.environ.get(CATALOG_ENV) or ''
+    if not path or not os.path.exists(path):
+        return 0
+    try:
+        with open(path, encoding='utf-8') as fh:
+            doc = json.load(fh)
+        jobs = [j for j in (doc.get('jobs') or [])
+                if isinstance(j, dict) and j.get('s3_key')]
+    except Exception:
+        return 0
+    h.host.set('s3_cache', {'jobs': jobs})
+    h.host.set('_admin_hidden_profile_keys', lambda *a, **k: set())
+    return len(jobs)
 
 
 # ---------------------------------------------------------------------------
@@ -239,6 +351,15 @@ def harness():
         h.as_user(dict(REPLAY_USER))
         h.host.set('_require_profile_run_access', lambda key: (True, None))
         h.host.set('_normalize_for_match', _normalize_for_match)
+        # Seat money + credit prices (2026-10-13): unbound, these render
+        # as "<Stub ...>" inside a priced offer and the copy-defect check
+        # then fails a correct reply (Jordan's breakdown offers).
+        h.host.set('_session_money_symbol', lambda *a, **k: '$')
+        h.host.set('get_credit_cost', lambda key, *a, **k: _CREDIT_PRICES.get(str(key), 1))
+        h.host.set('CREDITS_PANEL_REPORT', 5)
+        _bind_catalog_snapshot(h)
+        _STATE['door'] = ('' if os.environ.get('PM_REPLAY_DOOR') == 'legacy'
+                          else _bind_service_door(h))
         h.host.set('_CHATBOT_CALM_MESSAGE',
                    'Nothing was lost. Give me a moment and ask again.')
         h.host.set('get_current_user', lambda *a, **k: dict(REPLAY_USER))
@@ -323,11 +444,30 @@ def _canned_for(surface, subject, logged_outcome):
     decision = (logged_outcome if logged_outcome in BUILD_DECISIONS
                 and logged_outcome not in ('batch_draft', 'subscriber_iq')
                 else 'new_build')
+    tu, avid = _canned_sizes(subject)
     return {'decision': decision, 'subject': subject or '',
             'brand_category': 'GENERAL',
             'date_window': '2025-10-02 to 2026-10-02',
             'estimated_credits': 10,
-            'universe_label': subject or ''}
+            'universe_label': subject or '',
+            # sizing fields the sample-check lane reads; without them a
+            # sample ask faults in the child and reads as a regression
+            # (Emmet's Hilton sizing, 2026-10-13)
+            'subject_raw_tu': tu, 'subject_raw_avid': avid,
+            'us_audience_estimate': int(round(tu * 32.99)),
+            'window_label': '10-02-2025 to 10-02-2026'}
+
+
+def _canned_sizes(subject):
+    """Deterministic, messy sample sizes for the canned draft."""
+    h = int(hashlib.md5(str(subject or 'audience').encode('utf-8')).hexdigest()[:8], 16)
+    tu = 20_000 + h % 180_000
+    if tu % 10 == 0:
+        tu += 1 + (h >> 8) % 8
+    avid = int(tu * 0.31) + 1 + (h >> 16) % 7
+    if avid % 10 == 0:
+        avid += 3
+    return tu, avid
 
 
 def _reply_text(payload):
@@ -378,11 +518,16 @@ def _probe_inprocess(question, view_id='', subject='', history=None,
         has_ctx = bool(pc)
         surface, row = surface_for(question, has_ctx, mode)
         out['surface'], out['row'] = surface, row
-        h.canned_model(_canned_for(surface, subject, logged_outcome))
-        path = ('/api/brief-chat/analyze' if surface == 'analyze'
-                else '/api/brief-chat/interpret')
+        _canned_dual(h, subject, logged_outcome)
+        door = _STATE.get('door') or ''
+        path = door or ('/api/brief-chat/analyze' if surface == 'analyze'
+                        else '/api/brief-chat/interpret')
         body = {'text': question, 'history': list(history or []),
                 'page_context': pc}
+        if door:
+            # the widget's shape: no persisted thread, page context as
+            # the dashboard sends it
+            body.update({'client': 'dashboard', 'persist': False})
         if mode:
             body['mode'] = mode
         n0 = len(_STATE['captured'])
@@ -400,12 +545,46 @@ def _probe_inprocess(question, view_id='', subject='', history=None,
         out['outcome'] = str(rec.get('outcome') or '')
         extra = rec.get('extra') or {}
         out['result'] = extra.get('result') if isinstance(extra, dict) else None
+        if door and isinstance(payload, dict):
+            # `surface` stays the routing table's call (what the tests
+            # pin); the door's own choice rides alongside
+            out['door_surface'] = str(payload.get('surface') or '')
+            raw = payload.get('raw')
+            if isinstance(raw, dict):
+                merged = dict(raw)
+                merged.setdefault('reply', payload.get('text'))
+                payload = merged
         out['reply'] = _reply_text(payload)[:600]
         if not rec:
             out['route'] = out['route'] or 'unlogged'
             out['outcome'] = out['outcome'] or (
                 'error' if out['status'] >= 400 else 'unlogged')
     return out
+
+
+def _canned_dual(h, subject, logged_outcome):
+    """One canned model that answers each call in the shape its caller
+    parses: interpret-tagged agent calls get the brief draft, analysis
+    calls get the reply. The door picks the surface itself, so the
+    model can no longer be shaped for one surface up front."""
+    draft = _canned_for('interpret', subject, logged_outcome)
+    reply = _canned_for('analyze', subject, logged_outcome)
+
+    def _copy(d):
+        return json.loads(json.dumps(d))
+
+    def _agent(*a, **k):
+        tag = k.get('usage_tag') or ()
+        first = str(tag[0]) if isinstance(tag, (list, tuple)) and tag else ''
+        sp = str(k.get('system_prompt') or '')
+        wants_draft = (first == 'interpret' or 'subject_raw_tu' in sp
+                       or '"decision"' in sp or 'existing_match' in sp)
+        data = draft if wants_draft else reply
+        return {'success': True, 'data': _copy(data), 'model': 'replay'}
+
+    h.host.set('_run_nflx_claude_agent', _agent)
+    h.patch('_pm_claude_json', lambda *a, **k: {
+        'success': True, 'data': _copy(reply), 'model': 'replay'})
 
 
 # ---------------------------------------------------------------------------
@@ -502,14 +681,16 @@ def _needs_subject_decline(live):
 
 
 def compare(logged_route, logged_outcome, live, had_subject=True,
-            has_view_data=False, view_id=''):
+            has_view_data=False, view_id='', rejected=False):
     """Classify a replay. Returns (verdict, reason).
 
     fail       the live reply is broken (error, empty, faulted copy,
                a leaked internal token).
     regressed  a good shipped outcome now declines or dead-ends.
     drift      route or outcome moved, neither side bad; includes a
-               good outcome that now asks a clarifying question.
+               good outcome that now asks a clarifying question, one
+               that now draws a priced offer, and any move away from a
+               shipped reply the reader pushed back on (`rejected`).
     same       same route and outcome.
     unchecked  the difference is one only the model or state the
                replay does not carry could explain.
@@ -532,8 +713,14 @@ def compare(logged_route, logged_outcome, live, had_subject=True,
         return 'unchecked', 'interpret needs a subject the log did not keep'
     if vo in HARNESS_LIMITED_OUTCOMES:
         return 'unchecked', f'{vo}: state the replay does not carry'
+    if rejected:
+        # The shipped reply is not a baseline: the reader re-asked or
+        # pushed back on it, so moving off it is the point of a fix.
+        return 'drift', f'{lr}/{lo} -> {vr}/{vo} (the reader pushed back on the shipped reply)'
     if lo in GOOD_OUTCOMES and vo in CLARIFY_OUTCOMES:
         return 'drift', f'{lr}/{lo} -> {vr}/{vo} (asks first)'
+    if lo in GOOD_OUTCOMES and vo in OFFER_OUTCOMES:
+        return 'drift', f'{lr}/{lo} -> {vr}/{vo} (now a priced offer)'
     if lo in GOOD_OUTCOMES and vo not in GOOD_OUTCOMES:
         return 'regressed', f'{lr}/{lo} -> {vr}/{vo}'
     return 'drift', f'{lr}/{lo} -> {vr}/{vo}'
@@ -550,7 +737,13 @@ def item_from_record(rec):
             '_extra_result': extra.get('result')}
 
 
-def entry_for(rec, live):
+def rejected_key(rec):
+    """(user, question) key for a reply the reader pushed back on."""
+    return (str(rec.get('user') or '').strip().casefold(),
+            str(rec.get('question') or '').strip().casefold())
+
+
+def entry_for(rec, live, rejected=False):
     """Build the replay entry for one ask-log record and its probe."""
     question = str(rec.get('question') or '')
     subject = str(rec.get('subject') or '')
@@ -558,13 +751,14 @@ def entry_for(rec, live):
     verdict, reason = compare(rec.get('route'), rec.get('outcome'), live,
                               had_subject=bool(subject),
                               has_view_data=bool(rec.get('view_data')),
-                              view_id=str(rec.get('view') or ''))
+                              view_id=str(rec.get('view') or ''),
+                              rejected=bool(rejected))
     return {
         'question': question[:200], 'user': str(rec.get('user') or '')[:60],
         'view': str(rec.get('view') or ''), 'subject': subject[:80],
         'ts': rec.get('ts'),
         'logged': {'route': rec.get('route'), 'outcome': rec.get('outcome'),
-                   'result': extra.get('result')},
+                   'result': extra.get('result'), 'rejected': bool(rejected)},
         'live': {k: live.get(k) for k in ('route', 'outcome', 'surface',
                                           'row', 'status', 'ms', 'result')},
         'reply': str(live.get('reply') or '')[:240],
@@ -572,13 +766,17 @@ def entry_for(rec, live):
     }
 
 
-def replay_records(recs):
-    """Replay a list of ask-log records in one child. Returns entries."""
+def replay_records(recs, rejected=None):
+    """Replay a list of ask-log records in one child. Returns entries.
+    `rejected` is the set of rejected_key() pairs whose shipped reply
+    the reader pushed back on (the grader finds them)."""
     recs = list(recs or [])
+    rejected = set(rejected or ())
     items = [{k: v for k, v in item_from_record(r).items()
               if not k.startswith('_')} for r in recs]
     lives = probe_many(items)
-    return [entry_for(r, live) for r, live in zip(recs, lives)]
+    return [entry_for(r, live, rejected=rejected_key(r) in rejected)
+            for r, live in zip(recs, lives)]
 
 
 def replay_record(rec):

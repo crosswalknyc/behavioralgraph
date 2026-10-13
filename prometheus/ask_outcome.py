@@ -99,6 +99,15 @@ def reply_text(payload):
         v = payload.get(k)
         if isinstance(v, str) and v.strip():
             return v
+    # the sample check and guided discovery answer from their own
+    # block (2026-10-13: the digest read "No written answer on this
+    # step" for a sample check the user had read in full)
+    for k in ('incidence_check', 'discovery'):
+        block = payload.get(k)
+        if isinstance(block, dict):
+            v = block.get('message')
+            if isinstance(v, str) and v.strip():
+                return v
     raw = payload.get('raw')
     if isinstance(raw, dict):
         return reply_text(raw)
@@ -198,3 +207,18 @@ def classify(surface, payload, status_code=200, history=None,
         return 'answered', detail
     except Exception:
         return (base_outcome or 'unknown'), {}
+
+
+def route_pick(hint, inferred):
+    """The route the ask log keeps. The door presets
+    'prometheus/ask:<surface>' before a core runs; that is a
+    placeholder, so a route the body itself names (incidence,
+    discovery, clarify, profile_build) wins over it (2026-10-13: a
+    sample check logged as the placeholder, and the digest could not
+    tell what the reader got). A lane's own hint always wins."""
+    hint = str(hint or '')
+    if hint and not hint.startswith('prometheus/ask:'):
+        return hint
+    if inferred and inferred != 'unknown':
+        return inferred
+    return hint or inferred

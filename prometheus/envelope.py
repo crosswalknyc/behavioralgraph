@@ -77,6 +77,15 @@ def _text_of(raw):
         v = raw.get(k)
         if isinstance(v, str) and v.strip():
             return v.strip()
+    # Nested legacy shapes the widget renders from their own block: the
+    # sample check and guided discovery (2026-10-13; an API caller saw
+    # "Nothing came back" for a sample check that had answered).
+    for k in ('incidence_check', 'discovery'):
+        block = raw.get(k)
+        if isinstance(block, dict):
+            v = block.get('message')
+            if isinstance(v, str) and v.strip():
+                return v.strip()
     err = raw.get('error')
     if isinstance(err, str) and err.strip():
         return err.strip()
