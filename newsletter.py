@@ -633,22 +633,43 @@ def normalize_state(state):
         elif camp.get("id") == SEED_CAMPAIGN_ID and not (li_row.get("headline") or "").strip():
             camp["linkedin"] = nli.default_seed_linkedin()
             changed = True
-        if _effective_status(camp) == "sent" and camp.get("status") == "draft":
+        if _effective_status(camp) == "sent" and camp.get("status") in ("draft", "sending"):
             camp["status"] = "sent"
             camp["sent_at"] = camp.get("sent_at") or camp.get("updated_at") or _utcnow()
+            camp["send_lease"] = {}
             changed = True
     return state, changed
 
 
+def _stats_int(camp, key):
+    try:
+        return int(((camp or {}).get("stats") or {}).get(key) or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _send_finished(camp):
+    """True when every claimed recipient has a terminal result and at least one went out."""
+    sent = _stats_int(camp, "sent")
+    failed = _stats_int(camp, "failed")
+    recipients = _stats_int(camp, "recipients")
+    if sent <= 0:
+        return False
+    if recipients > 0 and (sent + failed) >= recipients:
+        return True
+    return False
+
+
 def _effective_status(camp):
-    """A letter that has gone out is sent, even if a crash left status as draft."""
+    """A letter that has gone out is sent, even if a crash left status as draft or sending."""
     status = (camp or {}).get("status") or "draft"
     if status == "sending":
+        if _lease_live(camp):
+            return "sending"
+        if _send_finished(camp):
+            return "sent"
         return "sending"
-    try:
-        sent = int(((camp or {}).get("stats") or {}).get("sent") or 0)
-    except (TypeError, ValueError):
-        sent = 0
+    sent = _stats_int(camp, "sent")
     if sent > 0 and status in ("draft", "", None):
         return "sent"
     return status
@@ -1856,7 +1877,10 @@ def _run_send(campaign_id):
         _cas_update_state(mutate)
         print(f"newsletter campaign {campaign_id} finished sent={sent} failed={failed}")
         if sent:
-            nli.maybe_autopost(campaign_id)
+            try:
+                nli.maybe_autopost(campaign_id)
+            except Exception:
+                traceback.print_exc()
     except Exception as e:
         traceback.print_exc()
         result["errors"].append(str(e)[:400])
@@ -1869,8 +1893,20 @@ def _run_send(campaign_id):
                 c["send_lease"] = {}
             # Keep sending so leftover queued addresses can resume.
             # Never drop back to draft after any copy has gone out.
-            if sent:
+            # If every claimed address already has a result, this send is done.
+            leftover = False
+            try:
+                recips = (get_send_snapshot(campaign_id).get("recipients") or {})
+                leftover = any(
+                    (r or {}).get("status") not in ("sent", "failed")
+                    for r in recips.values()
+                )
+            except Exception:
+                leftover = bool(sent)
+            if sent and leftover:
                 c["status"] = "sending"
+            elif sent:
+                c["status"] = "sent"
             elif c.get("status") == "sending":
                 c["status"] = "draft"
             c["updated_at"] = _utcnow()
@@ -2030,6 +2066,22 @@ def _kick_due_sends():
             ]
             if queued:
                 start_send_async(cid)
+                continue
+
+            def mark_done(st, _cid=cid):
+                c = _campaign(st, _cid)
+                if not c or _lease_live(c) or c.get("status") != "sending":
+                    return None
+                c["status"] = "sent"
+                c["send_lease"] = {}
+                c["sent_at"] = c.get("sent_at") or (snap.get("finished_at") or _utcnow())
+                c["updated_at"] = _utcnow()
+                return st
+
+            try:
+                _cas_update_state(mark_done)
+            except Exception:
+                traceback.print_exc()
             continue
         if status != "scheduled":
             continue
