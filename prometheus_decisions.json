@@ -1,6 +1,6 @@
 {
  "version": 1,
- "content_hash": "e270118fe2e40fe97bc3e8a05eabcd867e82ad78e733a9e6c3ef6f168951f5a4",
+ "content_hash": "344bcba530016f3239537c546cc3dd9c4c4cbe0ca4cc32f685b6e09812fcdbd9",
  "decisions": [
   {
    "id": "kids_viewers_default",
@@ -443,7 +443,7 @@
    ]
   },
   {
-   "id": "derived_read_price",
+   "id": "breakdown_read_price",
    "decided": "2026-10-12",
    "statement": "A delivered figure split by device, daypart, geography or a demographic is a breakdown read priced like a cut of an existing profile (100 in the seat's currency). The offer states the price, the charge lands on confirm, then every period is reconciled to the figure the reader holds.",
    "match_terms": [
@@ -490,5 +490,5 @@
    ]
   }
  ],
- "generated_at": "2026-10-12T23:16:37Z"
+ "generated_at": "2026-10-13T00:43:34Z"
 }
