@@ -70,6 +70,10 @@ SYNTH_CHAT_FRESH_DAYS = 120
 # How many candidate matches from s3_cache we surface to Claude's
 # interpret prompt. Keep this tight (prompt size + Claude focus).
 SYNTH_CHAT_MAX_CANDIDATES = 12
+try:   # the marker claude_client splits a system prompt on: cached rulebook before it, per-ask tail after (2026-10-13)
+    from claude_client import PROMPT_CACHE_SPLIT as _PM_PROMPT_CACHE_SPLIT
+except Exception:
+    _PM_PROMPT_CACHE_SPLIT = "\n"
 
 
 def _profile_catalog_for_chat():
@@ -1529,16 +1533,10 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "the intensity (e.g. 'Heavy TikTok Users'); the platform "
         "pin wins over the intensity read.\n\n"
 
-        "CANDIDATES FROM EXISTING CATALOG (may be empty). These are the "
-        "closest matches to the user's ask that already exist. They are "
-        "ordered best-first with a score in [0,1]. NEVER invent an "
-        "existing_match_s3_key that isn't in this list.\n"
-        f"{candidates_block}\n\n"
-
         "DECISION LOGIC (mandatory - set the `decision` field to exactly "
         "one of these values):\n"
         "  * existing_match: the user's ask is essentially the same subject "
-        "and cut as one of the candidates above, AND that candidate is less "
+        "and cut as one of the CANDIDATES FROM EXISTING CATALOG (listed at the end of these instructions), AND that candidate is less "
         f"than {SYNTH_CHAT_FRESH_DAYS} days old. Fill existing_match_s3_key "
         "and existing_match_display_name. The dashboard will offer to reuse "
         "the file (0 credits) OR refresh it (5 credits). Do not build.\n"
@@ -1882,6 +1880,14 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "defining platform/brands, e.g. [[\"APP/PLATFORM\",\"Google "
         "Play\"]]) plus full `tu_demos` and `subject_raw_tu` - the "
         "queue rejects build specs without them."
+        # Per-ask tail after the cache split (2026-10-13): everything above is the same for every ask and is
+        # cached by the model API; the library candidates change per ask and ride uncached after the marker.
+        f"{_PM_PROMPT_CACHE_SPLIT}"
+        "CANDIDATES FROM EXISTING CATALOG (may be empty). These are the "
+        "closest matches to the user's ask that already exist. They are "
+        "ordered best-first with a score in [0,1]. NEVER invent an "
+        "existing_match_s3_key that isn't in this list.\n"
+        f"{candidates_block}\n"
     )
 
     # The request and prior turns ride inside the data delimiters the
@@ -11450,8 +11456,7 @@ def _pm_open_screen_confirm(text, ctx, history=None):
         traceback.print_exc()
         _ent = None
     _pg_named = _ns_mod.page_named(text, page, _norm, _stop)
-    # What is on screen, continued (2026-10-13 audit): the ask points at the screen, the thread's last
-    # answer landed on this page, or the ask names a brand that is a row on it. Each binds the page.
+    # On screen, continued (2026-10-13): deixis, the thread's last answer on this page, or a brand that is a row on it binds the page
     _page_signal = (_ns_mod.view_deixis(text) or _ns_mod.thread_on_page(history or [], page, _norm)
                     or bool(_pm_page_brand_named(text, page_key)))
     if _ent and str(_ent.get('s3_key') or '') and _ns_mod.platform_reference(

@@ -18,6 +18,7 @@ import difflib
 import hashlib
 import io
 import json
+import os
 import re
 import time
 import threading
@@ -1222,6 +1223,16 @@ def _profile_digest_cached(s3_client, bucket, s3_key, want_name, genpop,
         if pre:
             _digest_cache_put(s3_key, ck, pre[0], pre[1])
             return pre[0], pre[1], etag, None
+        # A digest another process built today (the screen-load warm,
+        # a sibling web worker, the last ask on this page) is shared
+        # through S3 (2026-10-13 audit: the in-process cache never
+        # crossed workers and Gen Pop moves during the day, so the
+        # digest stage ran 4.7s median on asks the warm had already
+        # paid for).
+        shared = _digest_shared_get(s3_client, bucket, s3_key, etag, norms_ver, want_name)
+        if shared:
+            _digest_cache_put(s3_key, ck, shared[0], shared[1])
+            return shared[0], shared[1], etag, None
     df, etag = load_profile_df(s3_client, bucket, s3_key)
     ck = f"{etag}|{norms_ver}"
     with _cache_lock:
@@ -1231,7 +1242,61 @@ def _profile_digest_cached(s3_client, bucket, s3_key, want_name, genpop,
     meta = _profile_meta(df, want_name)
     digest = build_profile_digest(df, meta, genpop, norms=norms)
     _digest_cache_put(s3_key, ck, digest, meta)
+    _digest_shared_put(s3_client, bucket, s3_key, etag, norms_ver, digest, meta, want_name)
     return digest, meta, etag, df
+
+
+DIGEST_SHARED_PREFIX = 'system/prometheus/digest_cache/'
+_DIGEST_SHARED_TTL_S = 36 * 3600
+
+
+def _digest_shared_key(s3_key, etag, norms_ver, want_name=''):
+    gp = _genpop_current_etag() or ''
+    h = hashlib.sha256(f"{s3_key}|{etag}|{norms_ver}|{gp}|{want_name or ''}".encode('utf-8')).hexdigest()[:24]
+    return f"{DIGEST_SHARED_PREFIX}{h}.json"
+
+
+def _digest_shared_get(s3_client, bucket, s3_key, etag, norms_ver, want_name=''):
+    """(digest, meta) built by any process for this exact profile
+    bytes, norms version and Gen Pop bytes; None when absent, stale or
+    unreadable. Never raises."""
+    if os.environ.get('PM_DIGEST_SHARED') == '0':
+        return None
+    try:
+        obj = s3_client.get_object(Bucket=bucket, Key=_digest_shared_key(s3_key, etag, norms_ver, want_name))
+        doc = json.loads(obj['Body'].read().decode('utf-8'))
+        if time.time() - float(doc.get('built_at') or 0) > _DIGEST_SHARED_TTL_S:
+            return None
+        digest, meta = doc.get('digest'), doc.get('meta')
+        if isinstance(digest, str) and digest.strip() and isinstance(meta, dict):
+            return digest, meta
+    except Exception:
+        pass
+    return None
+
+
+def _digest_shared_put(s3_client, bucket, s3_key, etag, norms_ver, digest, meta, want_name):
+    """Publish a live-built digest for the other processes. Best effort,
+    on a daemon thread so the ask never waits on it."""
+    if os.environ.get('PM_DIGEST_SHARED') == '0' or not etag:
+        return
+    try:
+        body = json.dumps({'built_at': time.time(), 's3_key': s3_key, 'etag': etag,
+                           'norms_ver': norms_ver, 'digest': digest, 'meta': meta},
+                          default=str).encode('utf-8')
+        key = _digest_shared_key(s3_key, etag, norms_ver, want_name)
+
+        def _put():
+            try:
+                s3_client.put_object(Bucket=bucket, Key=key, Body=body, ContentType='application/json')
+            except Exception:
+                pass
+        if os.environ.get('REGRESSION_TEST_MODE') == '1':
+            _put()
+        else:
+            threading.Thread(target=_put, daemon=True).start()
+    except Exception:
+        pass
 
 
 def is_missing_key_error(err) -> bool:

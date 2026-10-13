@@ -173,6 +173,31 @@ def _record_tagged_usage(usage_tag, model_id, resp,
         pass
 
 
+# A system prompt may carry one split marker: the text before it is the
+# static rulebook (cached across asks, cache_control on its block), the
+# text after it is the per-ask tail (library candidates, anything that
+# changes between asks) and rides uncached. One dynamic line inside a
+# single cached block defeated the cache on every interpret call
+# (2026-10-13 audit: the candidates list sat mid-prompt, so 20k tokens
+# of rulebook were re-read at full price and full latency each time).
+PROMPT_CACHE_SPLIT = "\n<<<PROMETHEUS_CACHE_SPLIT>>>\n"
+
+
+def system_blocks(system, cache=True):
+    """The `system` parameter for the API: a string becomes one cached
+    block; a string with PROMPT_CACHE_SPLIT becomes a cached head and
+    an uncached tail; anything else passes through."""
+    if not (isinstance(system, str) and system):
+        return system
+    head, sep, tail = system.partition(PROMPT_CACHE_SPLIT)
+    if not cache:
+        return head + ("\n" + tail if sep else "")
+    blocks = [{"type": "text", "text": head, "cache_control": {"type": "ephemeral"}}]
+    if sep and tail.strip():
+        blocks.append({"type": "text", "text": tail})
+    return blocks
+
+
 def claude_reason_json(
     *,
     system: str,
@@ -223,14 +248,7 @@ def claude_reason_json(
     last_err: Optional[Exception] = None
     for attempt in range(max_retries):
         try:
-            if isinstance(system, str) and system and not _cache_disabled:
-                _system_param = [{
-                    "type": "text",
-                    "text": system,
-                    "cache_control": {"type": "ephemeral"},
-                }]
-            else:
-                _system_param = system
+            _system_param = system_blocks(system, cache=not _cache_disabled)
             _kwargs = dict(
                 model=model_id,
                 max_tokens=max_tokens,
@@ -405,14 +423,7 @@ def claude_messages(
     last_err: Optional[Exception] = None
     for attempt in range(max_retries):
         try:
-            if isinstance(system, str) and system and not _cache_disabled:
-                _system_param = [{
-                    "type": "text",
-                    "text": system,
-                    "cache_control": {"type": "ephemeral"},
-                }]
-            else:
-                _system_param = system
+            _system_param = system_blocks(system, cache=not _cache_disabled)
             kwargs = dict(
                 model=model_id,
                 max_tokens=max_tokens,
