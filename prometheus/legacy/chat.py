@@ -2820,7 +2820,7 @@ def _synth_chat_incidence_check(text, history=None):
     result = _H._run_nflx_claude_agent(
         system_prompt=system_prompt,
         user_prompt=user_prompt,
-        max_tokens=2000, temperature=0.3, usage_tag=('interpret', 'incidence', _pm_attrib_extras() or None),
+        max_tokens=2000, temperature=0.3, usage_tag=('interpret', 'incidence', (globals().get('_pm_attrib_extras') or (lambda: None))() or None),
     )
     if not result.get('success'):
         try:
