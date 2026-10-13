@@ -51,6 +51,11 @@ Twin-sync note: this module lives in BOTH the parent repo
 """
 from __future__ import annotations
 
+# Research calls here are fail-open and bound the build's wait: 4 minutes a
+# try, two tries (2026-10-13, No Reservations: two 900 s walls on the
+# scope-URL call held a build 30 minutes before the engine started).
+RESEARCH_WALL_S = 240.0
+
 import hashlib
 import json
 import os
@@ -318,12 +323,12 @@ def research_content_structure(title, run_id=""):
     try:
         raw = claude_messages(system=system, user=user, model=model,
                               max_tokens=1600, temperature=0.1,
-                              tools=[web_tool])
+                              wall_s=RESEARCH_WALL_S, max_retries=2, tools=[web_tool])
         if not raw:
             raw = claude_messages(system=system, user=user,
                                   model="claude-sonnet-4-6",
                                   max_tokens=1600, temperature=0.1,
-                                  tools=[web_tool_legacy])
+                                  wall_s=RESEARCH_WALL_S, max_retries=2, tools=[web_tool_legacy])
     except Exception as e:
         print(f"[{run_id}] content-structure research raised for "
               f"{hint!r}: {e}")
@@ -1019,12 +1024,12 @@ def research_product_audience(subject, run_id=""):
     try:
         raw = claude_messages(system=system, user=user, model=model,
                               max_tokens=700, temperature=0.1,
-                              tools=[web_tool])
+                              wall_s=RESEARCH_WALL_S, max_retries=2, tools=[web_tool])
         if not raw:
             raw = claude_messages(system=system, user=user,
                                   model="claude-sonnet-4-6",
                                   max_tokens=700, temperature=0.1,
-                                  tools=[web_tool_legacy])
+                                  wall_s=RESEARCH_WALL_S, max_retries=2, tools=[web_tool_legacy])
     except Exception as e:
         print(f"[{run_id}] kids-product research raised for "
               f"{hint!r}: {e}")
@@ -1370,12 +1375,12 @@ def research_scope_urls(subject, structure, scope, carriage_doc=None,
     try:
         raw = claude_messages(system=system, user="\n".join(user_lines),
                               model=model, max_tokens=2600,
-                              temperature=0.1, tools=[web_tool])
+                              temperature=0.1, wall_s=RESEARCH_WALL_S, max_retries=2, tools=[web_tool])
         if not raw:
             raw = claude_messages(system=system, user="\n".join(user_lines),
                                   model="claude-sonnet-4-6",
                                   max_tokens=2600, temperature=0.1,
-                                  tools=[web_tool_legacy])
+                                  wall_s=RESEARCH_WALL_S, max_retries=2, tools=[web_tool_legacy])
     except Exception as e:
         print(f"[{run_id}] scope-url research raised for {subject!r}: {e}")
         return failed_scope_urls_doc(label, str(e))

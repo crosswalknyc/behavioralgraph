@@ -55,6 +55,11 @@ Twin-sync note: this module lives in BOTH the parent repo
 """
 from __future__ import annotations
 
+# Research calls here are fail-open and bound the build's wait: 4 minutes a
+# try, two tries (2026-10-13, No Reservations: two 900 s walls on the
+# scope-URL call held a build 30 minutes before the engine started).
+RESEARCH_WALL_S = 240.0
+
 import hashlib
 import json
 import os
@@ -531,14 +536,14 @@ def research_carriage(subject, title_hint, qualifier="viewers",
     try:
         raw = claude_messages(system=system, user=user, model=model,
                               max_tokens=1400, temperature=0.1,
-                              tools=[web_tool])
+                              wall_s=RESEARCH_WALL_S, max_retries=2, tools=[web_tool])
         if not raw:
             print(f"[{run_id}] carriage research: retrying with legacy "
                   f"web-search descriptor")
             raw = claude_messages(system=system, user=user,
                                   model="claude-sonnet-4-6",
                                   max_tokens=1400, temperature=0.1,
-                                  tools=[web_tool_legacy])
+                                  wall_s=RESEARCH_WALL_S, max_retries=2, tools=[web_tool_legacy])
     except Exception as e:
         print(f"[{run_id}] carriage research raised for {subj!r}: {e}")
         return failed_carriage_doc(subj, qualifier, hint, str(e))

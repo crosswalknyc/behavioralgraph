@@ -384,6 +384,7 @@ def claude_messages(
     temperature: float = 0.4,
     max_retries: int = 3,
     tools: Optional[list] = None,
+    wall_s: Optional[float] = None,
 ) -> str:
     """Single-shot Claude call returning text. Mirrors migration/claude_client.
 
@@ -462,7 +463,11 @@ def claude_messages(
                 ThreadPoolExecutor as _WallPool,
                 TimeoutError as _WallTimeout,
             )
-            _wall_s = 900.0 if tools else 420.0
+            # A caller may hand in its own budget (2026-10-13): the fail-open
+            # viewer-scope and carriage research steps run under a few
+            # minutes each so a black-holed connection costs a build minutes,
+            # not 3 x 15.
+            _wall_s = float(wall_s) if wall_s else (900.0 if tools else 420.0)
 
             def _issue_request():
                 # 2026-08-21: SDK raises ValueError("Streaming is
