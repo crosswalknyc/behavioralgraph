@@ -42,9 +42,9 @@ def _pm_user_block(username):
     with _PM_USER_BLOCK_LOCK:
         hit = _PM_USER_BLOCK_CACHE.get(uname)
         if hit and now - hit[0] < 3600:
-            return hit[1]
+            return _pm_with_reader_notes(uname, hit[1])
         if hit and hit[1] == '__building__':
-            return ''
+            return _pm_with_reader_notes(uname, '')
         _PM_USER_BLOCK_CACHE[uname] = (now, '__building__')
 
     def _run():
@@ -61,7 +61,21 @@ def _pm_user_block(username):
         threading.Thread(target=_run, daemon=True).start()
     except Exception:
         pass
-    return ''
+    return _pm_with_reader_notes(uname, '')
+
+
+def _pm_with_reader_notes(uname, block):
+    """The individual ring joins the who-is-asking block (2026-10-13,
+    one brain): the reader's own notes from earlier conversations, a
+    small cached read, never another reader's."""
+    try:
+        from prometheus import shared_memory as _sm
+        notes = _sm.notes_block(uname)
+    except Exception:
+        notes = ''
+    if not notes:
+        return block
+    return (block + '\n\n' + notes) if block else notes
 
 
 def _pm_catalog_block(subject, window=None, extra_subjects=()):

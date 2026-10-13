@@ -33,7 +33,7 @@ import boto3
 
 from prometheus.legacy import H as _H  # noqa: E402
 from prometheus import intake_draft as _intake_draft  # noqa: E402  (drafts briefs from the open profile)
-from prometheus import seams as _seams, cohort_scope as _cohort_scope  # noqa: E402
+from prometheus import seams as _seams, cohort_scope as _cohort_scope, shared_memory as _shared  # noqa: E402
 
 
 def _pm_correct_page(title, body_html):
@@ -72,7 +72,7 @@ SYNTH_CHAT_FRESH_DAYS = 120
 SYNTH_CHAT_MAX_CANDIDATES = 12
 try:   # the marker claude_client splits a system prompt on: cached rulebook before it, per-ask tail after (2026-10-13)
     from claude_client import PROMPT_CACHE_SPLIT as _PM_PROMPT_CACHE_SPLIT
-except Exception:
+except Exception:   # no client on this host: one block, no split
     _PM_PROMPT_CACHE_SPLIT = "\n"
 
 
@@ -1880,8 +1880,7 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "defining platform/brands, e.g. [[\"APP/PLATFORM\",\"Google "
         "Play\"]]) plus full `tu_demos` and `subject_raw_tu` - the "
         "queue rejects build specs without them."
-        # Per-ask tail after the cache split (2026-10-13): everything above is the same for every ask and is
-        # cached by the model API; the library candidates change per ask and ride uncached after the marker.
+        # per-ask tail after the cache split (2026-10-13): the rulebook above is cached by the model API, the candidates ride uncached
         f"{globals().get('_PM_PROMPT_CACHE_SPLIT', chr(10))}"
         "CANDIDATES FROM EXISTING CATALOG (may be empty). These are the "
         "closest matches to the user's ask that already exist. They are "
@@ -2694,7 +2693,8 @@ def _pm_hold_sample_to_catalog(subject, tu, start=None, end=None):
     anchors = _cc.anchors_for(subject, window=w, with_ledger=False)
     pa = _cc.profile_anchor(anchors, w)
     if not pa or not pa.get('sample_size'):
-        return tu
+        _h = _shared.held_sizing(__import__('insights_ledger'), subject, w)   # one brain (2026-10-13): a sizing already given for this subject and window holds for everyone
+        return _h[0] if _h else tu
     ps = int(pa['sample_size'])
     pw = pa.get('window') or {}
     if w and _cc.same_window(w, pw):
@@ -2898,11 +2898,12 @@ def _synth_chat_incidence_check(text, history=None):
                                 f"({_pw.get('start')} to {_pw.get('end')}: {_ps:,} in the sample).")
     except Exception:
         traceback.print_exc()
+    _held_sz = None if _anchor_note else _shared.held_sizing(__import__('insights_ledger'), subject, locals().get('_w'))
+    if _held_sz:   # one brain (2026-10-13): the sizing another reader already got for this subject and window
+        tu, avid = _held_sz[0], (_held_sz[1] or avid)
     if avid <= 0 or avid >= tu:
         avid = max(801, int(tu * 0.22))
-    # Jitter NOW with the same helper the approve path and worker use.
-    # ensure_messy_sample_size is idempotent for already-messy values,
-    # so the numbers quoted here survive the whole pipeline untouched.
+    # jitter now with the helper the approve path and worker use; it is idempotent, so the quoted numbers survive the pipeline
     tu = ensure_messy_sample_size(subject, tu)
     avid = ensure_messy_sample_size(
         f"{subject}|avid", avid, default_if_missing=2937)
@@ -2911,6 +2912,7 @@ def _synth_chat_incidence_check(text, history=None):
 
     # The US figure is the sample projected, always (10M -> 329.9M).
     us_aud = int(round(tu * 32.99))
+    _shared.persist_sizing(__import__('insights_ledger'), subject=subject, window=locals().get('_w'), tu=tu, avid=avid, us_audience=us_aud, question=text)
     incidence_pct = tu / 10_000_000 * 100.0
     if incidence_pct >= 1:
         incidence_str = f"{incidence_pct:.2f}%"
@@ -9001,7 +9003,7 @@ _PM_CLASSIFY_CANDIDATES = (
     + ['claude-haiku-4-5-20251001', 'claude-haiku-4-5'])
 
 
-_PM_CLASSIFY_SURFACES = frozenset(('corpus_select', 'ask_classify'))
+_PM_CLASSIFY_SURFACES = frozenset(('corpus_select', 'ask_classify', 'reader_notes'))
 
 
 _pm_resolved_classify = {'name': None}
@@ -11522,10 +11524,7 @@ def _pm_open_screen_confirm(text, ctx, history=None):
                          subject=_bsub)
             return {'route': 'bind', 'subject': _bsub}
         if _bsub and (_pg_named or _page_signal):
-            # The ask wrote the page's own name (first name counts); a
-            # library hit the reader did not write is a near-miss of
-            # that name, not a second subject. The page binds
-            # (2026-10-13, Brock Mesarich open, "Brock" offered Block).
+            # the page is named or on screen; an unwritten library hit is a near-miss of it, not a second subject (Brock vs Block)
             _pm_ask_hint(route='screen_bind', outcome='bound_screen',
                          subject=page)
             return None
@@ -11571,8 +11570,7 @@ def _pm_open_screen_confirm(text, ctx, history=None):
     })
 
 
-def _pm_page_brand_named(text, page_key):
-    """A brand on the open profile that the ask names, or '' (2026-10-13; named_subject.page_brand_on_file)."""
+def _pm_page_brand_named(text, page_key):   # a brand on the open profile that the ask names, or '' (2026-10-13)
     return _ns_mod.page_brand_on_file(text, page_key, _H.s3_client, _H.S3_BUCKET, _H._normalize_for_match)
 
 
@@ -11859,13 +11857,11 @@ def _pm_expand_alias_tokens(toks, raw_text):
     return out
 
 
-def _pm_fuzzy_catalog_subject(text, extra_tokens=None):
-    """The single library subject the ask nearly names, or None (prometheus.named_subject.fuzzy_catalog_subject)."""
+def _pm_fuzzy_catalog_subject(text, extra_tokens=None):   # the one library subject the ask nearly names, or None
     try:
-        return _ns_mod.fuzzy_catalog_subject(
-            text, _profile_catalog_for_chat(), normalize=_H._normalize_for_match,
-            typo_eq=_pm_token_typo_eq, expand_alias=_pm_expand_alias_tokens,
-            generic_tokens=_PM_BASE_GENERIC_TOKENS, extra_tokens=extra_tokens)
+        return _ns_mod.fuzzy_catalog_subject(text, _profile_catalog_for_chat(), normalize=_H._normalize_for_match,
+                                             typo_eq=_pm_token_typo_eq, expand_alias=_pm_expand_alias_tokens,
+                                             generic_tokens=_PM_BASE_GENERIC_TOKENS, extra_tokens=extra_tokens)
     except Exception:
         traceback.print_exc()
         return None
@@ -16644,6 +16640,9 @@ def _pm_analyze_core(user, body, text, history):
                  outcome=('rerouted' if action == 'build_profile'
                           else 'answered'),
                  subject=_pm_subject, mode=mode or None)
+    if action != 'build_profile':   # one brain (2026-10-13): the figures join the shared ring, a few notes the reader's own
+        _shared.after_answer(__import__('insights_ledger'), _pm_claude_data, user=_pm_user, question=text, reply=reply, subject=_pm_subject,
+                             followups=followups, base_profile_key=str((ctx.get('primary') or {}).get('s3_key') or ''))
     # Fresh generations meter through their own model-call usage rows
     # (usage_extras on _pm_claude_json); no separate debit here.
     return jsonify({
