@@ -2365,6 +2365,39 @@ def _persist(s3_client, summary: dict, project_name: str, username: str, job_id:
     return key
 
 
+_SHELF_TV_RX = re.compile(r"\b(tv|television|series|show|season|episode|streaming|svod|catalog)\b", re.I)
+_SHELF_MOVIE_RX = re.compile(r"\b(movie|film|theatrical|box office|ticketing|pvod)\b", re.I)
+_SHELF_MUSIC_RX = re.compile(r"\b(music|song|album|artist|concert|tour)\b", re.I)
+
+
+def shelf_for(meta: dict) -> str:
+    """Which shelf of the Digital Journey picker a run belongs on:
+    tv | movie | music | brands | platforms | '' (name keywords decide).
+    Read off the run's own kind first (target_type / journey_kind /
+    category), never guessed from the title alone."""
+    meta = meta if isinstance(meta, dict) else {}
+    tt = str(meta.get('target_type') or '').lower()
+    jk = str(meta.get('journey_kind') or '').lower()
+    cat = str(meta.get('category') or '').lower()
+    if cat in ('tv', 'series', 'television'):
+        return 'tv'
+    if cat in ('movie', 'film'):
+        return 'movie'
+    if cat in ('music',):
+        return 'music'
+    if cat in ('platform', 'platforms'):
+        return 'platforms'
+    if jk == 'ticketing' or _SHELF_MOVIE_RX.search(cat):
+        return 'movie'
+    if _SHELF_MUSIC_RX.search(cat):
+        return 'music'
+    if tt == 'watch_journey' or jk == 'watch' or _SHELF_TV_RX.search(cat):
+        return 'tv'
+    if tt == 'purchase_journey' and cat not in ('', 'brands'):
+        return 'brands'
+    return ''
+
+
 def _append_to_index(s3_client, key: str, summary: dict) -> None:
     """Lightweight, best-effort index for fast /list endpoint."""
     try:
@@ -2394,8 +2427,15 @@ def _append_to_index(s3_client, key: str, summary: dict) -> None:
             'created_at':     meta.get('created_at'),
             'total_users':    kpis.get('total_users'),
             'conversion_pct': kpis.get('conversion_pct'),
+            # The run's own kind, so the tab can shelve it (2026-10-13: a
+            # watch journey on a series landed under Other because the
+            # picker only knew names).
+            'target_type':    meta.get('target_type'),
+            'journey_kind':   meta.get('journey_kind'),
+            'category':       meta.get('category'),
+            'shelf':          shelf_for(meta),
         })
-        # Keep the index bounded — drop the oldest if over 500 entries.
+        # Keep the index bounded - drop the oldest if over 500 entries.
         idx['runs'] = idx['runs'][-500:]
         s3_client.put_object(
             Bucket=S3_BUCKET, Key=S3_INDEX_KEY,

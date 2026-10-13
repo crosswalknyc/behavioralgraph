@@ -88673,6 +88673,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         { id: 'neurotropic', label: '🧠 Neurotrophic Drinks', keywords: [] }
                     ];
                     function _runMatchesCategory(r, cat) {
+                        // The run's own kind decides first (index `shelf`, written from
+                        // target_type / journey_kind / category, 2026-10-13); the name
+                        // keywords below only place runs that carry no kind.
+                        if (r && r.shelf) return r.shelf === cat.id;
                         var name = ((r.project_name || r.target || '') + '').toLowerCase().replace(/[_\-]+/g, ' ');
                         for (var i = 0; i < cat.keywords.length; i++) {
                             if (name.indexOf(cat.keywords[i].toLowerCase().replace(/[_\-]+/g, ' ')) !== -1) return true;
