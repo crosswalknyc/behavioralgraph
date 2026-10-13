@@ -1882,7 +1882,7 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "queue rejects build specs without them."
         # Per-ask tail after the cache split (2026-10-13): everything above is the same for every ask and is
         # cached by the model API; the library candidates change per ask and ride uncached after the marker.
-        f"{_PM_PROMPT_CACHE_SPLIT}"
+        f"{globals().get('_PM_PROMPT_CACHE_SPLIT', chr(10))}"
         "CANDIDATES FROM EXISTING CATALOG (may be empty). These are the "
         "closest matches to the user's ask that already exist. They are "
         "ordered best-first with a score in [0,1]. NEVER invent an "
