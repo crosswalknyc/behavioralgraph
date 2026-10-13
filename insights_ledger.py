@@ -136,7 +136,9 @@ def normalize_question(question):
 def entry_key(subject, metric_family, window_start=None, window_end=None):
     ws = str(window_start or '').strip() or 'any'
     we = str(window_end or '').strip() or 'any'
-    return f"{subject_key(subject)}|{canon_family(metric_family)}|{ws}|{we}"
+    # the folded title keys the entry (2026-10-13), so the same ask under
+    # another spelling of the subject supersedes instead of coexisting
+    return f"{(fold_subject(subject).replace(' ', '_')[:80] or subject_key(subject))}|{canon_family(metric_family)}|{ws}|{we}"
 
 
 # ---------------------------------------------------------------------------
@@ -639,6 +641,42 @@ def _derive_list_subentries(entry):
         return []
 
 
+_PLATFORM_TAIL_RX = re.compile(
+    r"\s+(?:on\s+)?(?:amazon\s+prime\s+video|prime\s+video|amazon\s+prime|amazon|netflix|peacock|hulu|max|hbo\s+max|"
+    r"disney\s+plus|disney|paramount\s+plus|paramount|apple\s+tv\s+plus|apple\s+tv|youtube|tiktok|tubi|pluto\s+tv|roku|"
+    r"starz|showtime|discovery\s+plus|spotify)$")
+
+
+def fold_subject(subject):
+    """One title, one bucket (2026-10-13): the possessive and a trailing
+    platform clause are not part of the subject. "Anthony Bourdain's No
+    Reservations on Prime Video", "Anthony Bourdain No Reservations on
+    Amazon Prime Video" and "Anthony Bourdain: No Reservations" fold to
+    the same normalized title, so a figure stated under one spelling
+    binds the others instead of being re-drawn as a different subject."""
+    n = normalize_subject(subject)
+    n = re.sub(r"\b(\w+) s\b", r"\1", n)          # bourdain s -> bourdain
+    n = re.sub(r"\bthe\s+", "", n) if n.startswith("the ") and len(n.split()) > 3 else n
+    folded = _PLATFORM_TAIL_RX.sub("", n).strip()
+    return folded or n
+
+
+def bucket_key_for(index_doc, subject):
+    """The bucket a new entry for `subject` belongs in: an existing
+    bucket whose folded title matches, else the folded title itself."""
+    subjects = (index_doc or {}).get('subjects') or {}
+    skey = subject_key(subject)
+    if skey in subjects:
+        return skey
+    want = fold_subject(subject)
+    if not want:
+        return skey
+    for k, v in subjects.items():
+        if fold_subject(v.get('subject') or k.replace('_', ' ')) == want:
+            return k
+    return want.replace(' ', '_')[:80] or skey
+
+
 def _record_entry_now(entry):
     batch = [entry] + _derive_list_subentries(entry)
     for e in batch:
@@ -649,7 +687,7 @@ def _record_entry_now(entry):
 
     def mutate(doc):
         for e in batch:
-            skey = subject_key(e.get('subject'))
+            skey = bucket_key_for(doc, e.get('subject'))
             subj = doc['subjects'].setdefault(
                 skey, {'subject': e.get('subject') or skey,
                        'entries': []})
@@ -859,6 +897,10 @@ def _resolve_subject(index_doc, subject=None, question=None):
         norm = normalize_subject(subject)
         for k, v in subjects.items():
             if normalize_subject(v.get('subject')) == norm:
+                return k
+        want = fold_subject(subject)   # possessive / platform tail folded (2026-10-13)
+        for k, v in subjects.items():
+            if want and fold_subject(v.get('subject') or k.replace('_', ' ')) == want and (v.get('entries') or []):
                 return k
         # No bucket carries this exact subject name. A derived base
         # name still resolves its parent bucket ("Parents of Paw
