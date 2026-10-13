@@ -22848,6 +22848,46 @@ https://www.instagram.com/p/..."></textarea>
             border-top: 1px solid #3B3D38;
             background: #1B2F35;
         }
+        /* The composer keeps whatever height it is given. All the
+           shrinking happens in the transcript above it, down to the
+           140px floor, which is what the drag ceiling is measured
+           against. */
+        #prometheusWidget .pm-composer { flex: 0 0 auto; }
+        /* 2026-10-13 (Jenna: 'make it so that you can resize the text
+           box to be bigger like you can drag it up so if you have a long
+           query you can see the whole thing'). A grab bar on the TOP edge
+           of the composer. Up is taller, down is shorter, double click
+           restores the default. The native corner handle is off because
+           it only grows downward, which this panel cannot give it. */
+        #prometheusWidget .pm-composer-grip {
+            flex: 0 0 auto;
+            height: 11px;
+            margin: -3px 0 -4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: ns-resize;
+            touch-action: none;
+        }
+        #prometheusWidget .pm-composer-grip span {
+            display: block;
+            width: 38px;
+            height: 3px;
+            border-radius: 999px;
+            background: #3B3D38;
+            transition: background 0.15s ease;
+        }
+        #prometheusWidget .pm-composer-grip:hover span,
+        #prometheusWidget .pm-composer-grip.pm-grip-active span {
+            background: #C7F23E;
+        }
+        body[data-theme="light"] #prometheusWidget .pm-composer-grip span {
+            background: #C9C6BA;
+        }
+        body[data-theme="light"] #prometheusWidget .pm-composer-grip:hover span,
+        body[data-theme="light"] #prometheusWidget .pm-composer-grip.pm-grip-active span {
+            background: #5E7E12;
+        }
         #prometheusWidget #synthChatInput {
             width: 100% !important;
             box-sizing: border-box !important;
@@ -22859,8 +22899,12 @@ https://www.instagram.com/p/..."></textarea>
             font-size: 13px !important;
             padding: 10px 12px !important;
             min-height: 44px !important;
-            resize: vertical;
+            resize: none;
             outline: none !important;
+            max-height: none !important;
+            /* Hold the dragged height. Without this the textarea is a
+               shrinkable flex item and the panel claws the pixels back. */
+            flex: 0 0 auto;
             box-shadow: none !important;
         }
         #prometheusWidget.pm-drop-hover { outline: 2px dashed #C7F23E; outline-offset: -4px; }
@@ -23118,7 +23162,7 @@ https://www.instagram.com/p/..."></textarea>
                         <button type="button" class="pm-funds-btn" onclick="goBuyMoreCredits()">Add funds</button>
                     </div>
                 </div>
-                <div id="synthChatMessages" style="flex: 1; overflow-y: auto; min-height: 260px;">
+                <div id="synthChatMessages" style="flex: 1; overflow-y: auto; min-height: 140px;">
                                 <div class="brief-chat-empty pm-empty">
                                     <div class="pm-empty-title">Ask a question.</div>
                                     <div class="pm-empty-sub">Try one of these, or write your own.</div>
@@ -23324,7 +23368,8 @@ https://www.instagram.com/p/..."></textarea>
                                     <button type="button" data-pm-mode="analyze" onclick="synthChatChipSend('Build a Flywheel')" style="background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer; font-family: inherit; white-space: nowrap;">Build a Flywheel</button>
                                     <button type="button" data-pm-mode="analyze" onclick="synthChatChipSend('Set up Attribution Tracking')" style="background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer; font-family: inherit; white-space: nowrap;">Set up Attribution Tracking</button>
                                 </div>
-                                <textarea id="synthChatInput" placeholder="Ask something else about this audience..." rows="2" style="width: 100%; box-sizing: border-box; resize: vertical;" onkeydown="if(event.key==='Enter' && !event.shiftKey && !event.isComposing && event.keyCode !== 229) { event.preventDefault(); synthChatSubmit(); }"></textarea>
+                                <div class="pm-composer-grip" id="pmComposerGrip" role="separator" aria-orientation="horizontal" title="Drag to resize. Double click to reset."><span></span></div>
+                                <textarea id="synthChatInput" placeholder="Ask something else about this audience..." rows="2" style="width: 100%; box-sizing: border-box; resize: none;" onkeydown="if(event.key==='Enter' && !event.shiftKey && !event.isComposing && event.keyCode !== 229) { event.preventDefault(); synthChatSubmit(); }"></textarea>
                                 <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; min-width: 0;">
                                     <span id="synthChatInputHint" style="font-size: 0.66rem; color: var(--text-secondary); opacity: 0.7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 0 1 auto; min-width: 0;">Enter to send &middot; Shift + Enter for new line</span>
                                     <div style="display: flex; align-items: center; gap: 0.5rem; flex: 0 0 auto;">
@@ -193411,6 +193456,90 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
     } catch (e) { /* the first pass below still runs */ }
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', schedule);
     else schedule();
+})();
+</script>
+<script>
+/* Prometheus composer resize (2026-10-13).
+
+   Drag the grip up to make the message box taller, down to shrink it,
+   double click to go back to the default. The ceiling is worked out
+   live from how much room the transcript can spare, so the send row
+   can never be pushed out of the panel.
+
+   The box also grows on its own as a long query is typed, up to a
+   calmer cap, and stops doing that the moment it is dragged by hand.
+*/
+(function () {
+    var MIN_H = 44;        // matches the composer's min-height
+    var MSG_FLOOR = 140;   // transcript stays at least this tall
+    var AUTO_FRACTION = 0.42;
+
+    function ceiling(ta, msgs, startH) {
+        var slack = 240;
+        if (msgs) {
+            slack = Math.max(0, msgs.getBoundingClientRect().height - MSG_FLOOR);
+        }
+        return Math.max(MIN_H, startH + slack);
+    }
+
+    function init() {
+        var grip = document.getElementById('pmComposerGrip');
+        var ta = document.getElementById('synthChatInput');
+        if (!grip || !ta || grip._pmWired) return;
+        grip._pmWired = true;
+        var msgs = document.getElementById('synthChatMessages');
+
+        var dragging = false, startY = 0, startH = 0, maxH = 0;
+
+        grip.addEventListener('pointerdown', function (e) {
+            dragging = true;
+            startY = e.clientY;
+            startH = ta.getBoundingClientRect().height;
+            maxH = ceiling(ta, msgs, startH);
+            ta._pmManual = true;
+            grip.classList.add('pm-grip-active');
+            try { grip.setPointerCapture(e.pointerId); } catch (_) {}
+            e.preventDefault();
+        });
+
+        grip.addEventListener('pointermove', function (e) {
+            if (!dragging) return;
+            var h = startH + (startY - e.clientY);
+            ta.style.height = Math.max(MIN_H, Math.min(maxH, h)) + 'px';
+        });
+
+        function end(e) {
+            if (!dragging) return;
+            dragging = false;
+            grip.classList.remove('pm-grip-active');
+            try { grip.releasePointerCapture(e.pointerId); } catch (_) {}
+        }
+        grip.addEventListener('pointerup', end);
+        grip.addEventListener('pointercancel', end);
+
+        grip.addEventListener('dblclick', function () {
+            ta.style.height = '';
+            ta._pmManual = false;
+        });
+
+        ta.addEventListener('input', function () {
+            if (ta._pmManual) return;
+            var widget = document.getElementById('prometheusWidget');
+            var cap = widget
+                ? widget.getBoundingClientRect().height * AUTO_FRACTION
+                : 240;
+            ta.style.height = 'auto';
+            var want = Math.max(MIN_H, ta.scrollHeight + 2);
+            ta.style.height = Math.min(cap, want) + 'px';
+        });
+    }
+
+    window._pmWireComposerGrip = init;
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
 })();
 </script>
 </body>
