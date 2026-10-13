@@ -23624,7 +23624,13 @@ DEFAULT_HIDDEN_PRODUCTS = {
     'flywheelIQ': False,        # 2026-09-17 added with <option value="flywheelIQ">
     'shareOfTimeIQ': False,
     'helmIQ': False,
-    'microdramasIQ': False,     # 2026-07-22 added with <option value="microdramasIQ">
+    # 2026-07-22 added with <option value="microdramasIQ">. 2026-10-12
+    # (Jenna): "stop doing the micro series every day and just hide that
+    # tab from the drop down menu". Hidden by default; the daily scrape
+    # (Hetzner microdramas-scrapers.timer + Render
+    # microdramas-scrapers-daily-cron) is stopped. Flip back to False and
+    # re-enable the timer to bring it back.
+    'microdramasIQ': True,
     'chatbotProfileIQ': False,  # 2026-08-17 Chatbot Profile IQ - Analysis IQ sub-tab
     'brandTrackingIQ': False,   # 2026-09-03 added with <option value="brandTrackingIQ">
 }
