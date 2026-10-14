@@ -45,7 +45,7 @@ GROUPS = {
     "video":    ["hulu", "netflix", "appletv", "paramount", "max", "disney",
                  "starz", "hallmark", "amazon", "mgmplus", "britbox", "youtube"],
     "podcasts": ["spotify", "applepodcasts", "iheart", "pandora",
-                 "amazonpodcasts", "siriusxm"],
+                 "amazonpodcasts", "siriusxm", "npr", "youtube"],
     "audio":    ["audible"],
     "books":    ["books"],
     "games":    ["games"],
