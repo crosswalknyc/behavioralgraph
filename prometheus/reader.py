@@ -151,7 +151,6 @@ SEED_EXAMPLES = [
     {"text": "size of Nike runners and Adidas runners", "intent": "size", "subjects": ["Nike runners", "Adidas runners"], "note": "multiple_subjects"},
     {"text": "I would like to see the same analysis you did for Babylon 5 for No Reservations", "intent": "journey", "subjects": ["Anthony Bourdain No Reservations"], "note": "precedent:Babylon 5"},
     {"text": "Pull the same-day, 7-day, and 30-day timing breakdown for No Reservations", "intent": "analyze_page", "subjects": ["Anthony Bourdain No Reservations"], "note": "a breakdown of a delivered read"},
-    {"text": "gen pop who watched a social clip for No Reservations and then watched an episode", "intent": "analyze", "subjects": ["Anthony Bourdain No Reservations"], "note": "a count from the journey on screen"},
 ]
 
 
