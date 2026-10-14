@@ -141,7 +141,7 @@ SIGNUP_HTML = """<!DOCTYPE html>
       <div class="fieldset">
         <h3>Opening balance</h3>
         <div class="total" style="border-top:0;margin-top:0;padding-top:0"><span class="body">Charged on the next screen</span><span class="amt">$500.00</span></div>
-        <p class="fine">Prepaid, not a fee. Every dollar is a report your team pulls or will pull. You enter the card on a secure payment page. It stays on file, and when the balance reaches $100 it tops up with another $5,000. Change or stop top-ups any time from the dashboard. Usage statement downloadable anytime.</p>
+        <p class="fine">Prepaid, not a fee. Every dollar is a report your team pulls or will pull. You enter the card on a secure payment page. It stays on file, and when the balance reaches $100 it tops up with another $500 or amount of your choosing. Change or stop top-ups any time from the dashboard. Usage statement downloadable anytime.</p>
       </div>
       <p id="err" class="fine" style="display:none;color:var(--amethyst);font-size:13px"></p>
       <button class="btn btn-olive" type="submit" id="go" style="width:100%;min-height:48px">Continue to payment</button>
