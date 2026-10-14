@@ -303,10 +303,18 @@ def norms_prompt_block(band: dict) -> dict:
 
 
 # ----------------------------------------------------------------- the hold
-def step_role(label: str, idx: int, n_steps: int) -> str:
+def step_role(label: str, idx: int, n_steps: int, subject: str = '') -> str:
     """The role a spine step plays, from its label; the last step reads as
-    the conversion (play or purchase) when the label is unclear."""
+    the conversion (play or purchase) when the label is unclear. The
+    title's own words never vote: "Opened the The Following page" is a
+    page step, not an engagement step (2026-10-14: 'Following' matched
+    'follow' and the page step was held to 5%, so a 17,221-viewer journey
+    shipped as 6,804)."""
     lab = str(label or '')
+    subj = str(subject or '').strip()
+    if subj:
+        lab = re.sub(re.escape(subj), ' ', lab, flags=re.I)
+        lab = re.sub(r"\b(the|a|an)\s+(the|a|an)\b", r"\1", lab, flags=re.I)
     for role, rx in _ROLE_RX:
         if rx.search(lab):
             if role == 'platform_page' and idx == n_steps - 1:
@@ -436,7 +444,7 @@ def hold_to_norms(payload: dict, band: dict, inputs: Optional[dict] = None, seed
         # middle steps + last: clamp each kept rate to its ceiling, then spread the residual
         steps = spine[2:]
         n = len(steps)
-        roles = [step_role(st.get('label'), i + 2, len(spine)) for i, st in enumerate(steps)]
+        roles = [step_role(st.get('label'), i + 2, len(spine), subject=str(inputs.get('subject') or meta.get('target_name') or '').split(' on ')[0]) for i, st in enumerate(steps)]
         bounds = [STEP_CEILINGS.get(r, STEP_CEILINGS['generic']) for r in roles]
         kept = []
         prev = start
