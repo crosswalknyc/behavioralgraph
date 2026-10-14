@@ -22,6 +22,7 @@
             '<button class="has-mega" type="button" id="prodBtn" aria-expanded="false" aria-controls="mega">Products</button>' +
             '<a href="panel.html" data-nav="panel.html">The Panel</a>' +
             '<a href="' + DASH + '/the-read" data-nav="the-read">The Read</a>' +
+            '<a href="' + DASH + '/the-read/papers">White papers</a>' +
             '<a href="about.html" data-nav="about.html">About</a>' +
             '<a href="contact.html" data-nav="contact.html">Contact</a>' +
             '<a class="btn btn-ghost" href="' + DASH + '">Log in</a>' +
@@ -50,6 +51,7 @@
         '<a href="fin-iq.html">Fin IQ</a>' +
         '<a href="panel.html">The Panel</a>' +
         '<a href="' + DASH + '/the-read">The Read</a>' +
+        '<a href="' + DASH + '/the-read/papers">White papers</a>' +
         '<a href="about.html">About</a>' +
         '<a href="contact.html">Contact</a>' +
         '<a href="' + DASH + '">Log in</a>' +
@@ -66,6 +68,7 @@
               '<strong>Crosswalk</strong>' +
               '<a href="about.html">About</a>' +
               '<a href="' + DASH + '/the-read">The Read</a>' +
+              '<a href="' + DASH + '/the-read/papers">White papers</a>' +
               '<a href="panel.html">The panel</a>' +
               '<a href="contact.html">Contact</a>' +
               '<a href="' + DASH + '">Dashboard</a>' +
