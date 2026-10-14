@@ -336,6 +336,11 @@ def record_call(surface: str, origin: str, model: str,
             ppu = bool(extras.get('pay_per_use'))
             if ppu:
                 record['pay_per_use'] = True
+            try:   # the per-user daily cap counts every attributed call (audit item 8, 2026-10-14)
+                from prometheus import spend_guard as _sg
+                _sg.add(extras.get('user') or extras.get('user_email'), record.get('cost_usd'))
+            except Exception:
+                pass
         if _SYNC_FOR_TESTS:
             _put_record_safe(record, ppu)
             return
@@ -418,6 +423,11 @@ def record_metered_answer(surface: str, extras: Optional[dict] = None,
             ppu = bool(extras.get('pay_per_use'))
             if ppu:
                 record['pay_per_use'] = True
+            try:   # the per-user daily cap counts every attributed call (audit item 8, 2026-10-14)
+                from prometheus import spend_guard as _sg
+                _sg.add(extras.get('user') or extras.get('user_email'), record.get('cost_usd'))
+            except Exception:
+                pass
         if _SYNC_FOR_TESTS:
             _put_record_safe(record, ppu)
             return

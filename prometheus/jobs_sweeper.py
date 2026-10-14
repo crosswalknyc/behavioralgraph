@@ -95,7 +95,7 @@ def stale_jobs(host, now=None, stale_min=STALE_MIN):
             continue
         prefix = getattr(host, pcap)
         for key, doc in _list_docs(host, prefix):
-            if str(doc.get('status') or '') != 'running':
+            if str(doc.get('status') or '') not in ('running', 'queued'):   # a queued job nobody claimed is stale too (audit item 5)
                 continue
             if _age_min(doc, now) >= stale_min:
                 found.append((kind, key, doc))
@@ -110,7 +110,7 @@ def note_for(kind, doc, now=None):
     if st == 'requeued':
         return (f"Your {label} did not finish in its first hour, so I restarted it. "
                 f"It lands in {_LANDS.get(kind, 'the dashboard')} when it is done.")
-    if st == 'running' and _age_min(doc, now) >= STALE_MIN:
+    if st in ('running', 'queued') and _age_min(doc, now) >= STALE_MIN:
         return (f"Your {label} has run past the hour it usually takes. "
                 f"I am restarting it now; it lands in {_LANDS.get(kind, 'the dashboard')} when it is done.")
     return ''

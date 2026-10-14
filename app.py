@@ -134,6 +134,17 @@ except ImportError:
     else:
         print("⚠️ No .env file found, using system environment variables only")
 
+# Managed secrets (audit item 8, 2026-10-14): any key the environment
+# does not carry is read from AWS Secrets Manager / SSM and placed in
+# the environment, so a host needs only AWS credentials.
+try:
+    import managed_keys as _secrets_store
+    _warmed = _secrets_store.warm()
+    _missing = [k for k in ('ANTHROPIC_API_KEY',) if not _warmed.get(k)]
+    print("✅ Secrets resolved" + (f" (missing: {', '.join(_missing)})" if _missing else ""))
+except Exception as _se:
+    print(f"⚠️ Secrets store skipped: {type(_se).__name__}")
+
 # Use the integrated bg.py (same as local script; lives in bg-webapp/bg.py)
 _APP_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _APP_DIR)

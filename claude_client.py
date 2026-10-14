@@ -102,6 +102,12 @@ def get_claude_client():
 
     api_key = (os.environ.get("ANTHROPIC_API_KEY") or "").strip()
     if not api_key:
+        try:   # managed secret when the environment does not carry it (audit item 8)
+            import managed_keys as _ss
+            api_key = str(_ss.get("ANTHROPIC_API_KEY") or "").strip()
+        except Exception:
+            api_key = ""
+    if not api_key:
         _claude_init_failed = True
         return None
 

@@ -30,6 +30,7 @@ from .host import host
 from . import understand
 from . import envelope
 from . import seams
+from . import faults as _faults
 
 _SURFACES = ('interpret', 'analyze', 'deck')
 _ANALYZE_PASSTHROUGH = ('bind_subject', 'bind_cohort', 'overall_ranks',
@@ -102,8 +103,8 @@ def save_thread(uname, tid, history):
             if th.get('title') in (None, '', 'New chat'):
                 try:
                     th['title'] = host.thread_title_from(trimmed)
-                except Exception:
-                    pass
+                except Exception as _fx:
+                    _faults.note('service', _fx)
             break
     host.s3_put_json(host.threads_index_key(uname), idx)
     return True
@@ -291,8 +292,8 @@ def ask(user, body, *, via='session'):
             # the rule is kept; the question beside it routes on its own
             text = _shm0.strip_preferences(_txt0).strip() or text
             body = dict(body, text=text)
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('service', _fx)
     client = str(body.get('client') or '').strip().lower()
     persist = bool(body.get('persist', client != 'dashboard'))
 
@@ -323,8 +324,8 @@ def ask(user, body, *, via='session'):
     open_tabs = 0
     try:
         open_tabs = len((ctx or {}).get('other_tabs') or [])
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('service', _fx)
 
     # Accepting an offered run (2026-10-06, Eliot / Gunna): the build-
     # first offer ends with the chips 'Run a profile on X' / 'Not now'.
@@ -387,8 +388,8 @@ def ask(user, body, *, via='session'):
                 raw['followups'] = []
             try:
                 host.ask_hint(route='offer_answer', outcome=_state)
-            except Exception:
-                pass
+            except Exception as _fx:
+                _faults.note('service', _fx)
             env = envelope.wrap(raw, surface='analyze', decision=decision,
                                 thread_id=tid, via=via)
             # decide() wrote both turns when this caller persists.
@@ -435,8 +436,8 @@ def ask(user, body, *, via='session'):
                     try:
                         host.ask_hint(route='referent_clarify',
                                       outcome='asked_which')
-                    except Exception:
-                        pass
+                    except Exception as _fx:
+                        _faults.note('service', _fx)
                     env = envelope.wrap(raw, surface='analyze',
                                         decision=decision,
                                         thread_id=tid, via=via)
@@ -444,7 +445,7 @@ def ask(user, body, *, via='session'):
                                   env, raw, 'analyze')
                     return env, 200
     except Exception as e:
-        print(f"[prometheus] referent gate skipped: {e}")
+        _faults.note('service.referent_gate', e)
 
     # Answers to a which-one confirm (2026-10-05, Scott). The turn
     # before asked "Do you mean for Will And Grace, or Will & Grace on
@@ -458,7 +459,7 @@ def ask(user, body, *, via='session'):
         try:
             _ca = _confirm_answer(text, history)
         except Exception as e:
-            print(f"[prometheus] confirm-answer gate skipped: {e}")
+            _faults.note('service.confirm_answer_gate', e)
             _ca = None
         if _ca:
             text = _ca['question']
@@ -472,8 +473,8 @@ def ask(user, body, *, via='session'):
                 host.ask_hint(route='confirm_answer',
                               outcome='resolved',
                               subject=_ca.get('subject'))
-            except Exception:
-                pass
+            except Exception as _fx:
+                _faults.note('service', _fx)
 
     # Bare replies (2026-10-02 audit). "approved", "ok", "no", "1",
     # "none" with nothing armed on the server side are not asks. They
@@ -499,8 +500,8 @@ def ask(user, body, *, via='session'):
                     raw = _interpret_shape(raw)
                 try:
                     host.ask_hint(route='short_reply', outcome='answered')
-                except Exception:
-                    pass
+                except Exception as _fx:
+                    _faults.note('service', _fx)
                 env = envelope.wrap(raw, surface=decision['surface'],
                                     decision=decision, thread_id=tid,
                                     via=via)
@@ -508,7 +509,20 @@ def ask(user, body, *, via='session'):
                               decision['surface'])
                 return env, 200
         except Exception as e:
-            print(f"[prometheus] bare-reply gate skipped: {e}")
+            _faults.note('service.bare_reply_gate', e)
+
+    # Per-user daily spend cap (audit item 8, 2026-10-14): over the cap the
+    # model surfaces stop for the day with one honest line; the lookups
+    # below (pricing, catalog, sizing from the catalog, status) still run.
+    _cap_hit = False
+    if referent_decision is None and not _armed(body):
+        try:
+            from . import spend_guard as _sg
+            _ok, _spent, _cap = _sg.check(user)
+            _cap_hit = not _ok
+        except Exception as _fx:
+            _faults.note('service.spend_guard', _fx)
+            _cap_hit = False
 
     # The Reader (2026-10-14, Jenna: "make prometheus closer to your level
     # of intelligence in understanding what is being asked"). One
@@ -517,25 +531,25 @@ def ask(user, body, *, via='session'):
     # Deterministic intents run here; the rest steer the surface below.
     # The lanes stay as the fallback when the Reader is unsure or away.
     reading = None
-    if referent_decision is None and not _armed(body) and len(text.split()) >= 2:
+    if referent_decision is None and not _armed(body) and len(text.split()) >= 2 and not _cap_hit:
         try:
             from . import reader as _rd
             from . import progress as _pg
             reading = _rd.read(text, ctx, history, user, uname, progress=_pg.say)
         except Exception as e:
-            print(f"[prometheus] reader skipped: {e}")
+            _faults.note('service.reader', e)
             reading = None
         if reading:
             body = dict(body, reading=reading)
             try:
                 from flask import g as _g_rd
                 _g_rd._pm_reading = reading
-            except Exception:
-                pass
+            except Exception as _fx:
+                _faults.note('service', _fx)
             try:
                 _rx = _execute_reading(reading, text, ctx, history, user, uname, body, tid, via, persist, _client_surface)
             except Exception as e:
-                print(f"[prometheus] reader executor skipped: {e}")
+                _faults.note('service.reader_executor', e)
                 _rx = None
             if _rx is not None:
                 return _rx
@@ -568,8 +582,8 @@ def ask(user, body, *, via='session'):
                     raw = _interpret_shape(raw)
                 try:
                     host.ask_hint(route='pricing', outcome='answered')
-                except Exception:
-                    pass
+                except Exception as _fx:
+                    _faults.note('service', _fx)
                 env = envelope.wrap(raw, surface='analyze', decision=decision,
                                     thread_id=tid, via=via)
                 _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
@@ -584,7 +598,7 @@ def ask(user, body, *, via='session'):
             from . import documents as _docs
             _doc_raw = _docs.answer(text, uname, tid, history)
         except Exception as e:
-            print(f"[prometheus] document lane skipped: {e}")
+            _faults.note('service.document_lane', e)
             _doc_raw = None
         if _doc_raw:
             raw = _doc_raw
@@ -597,8 +611,8 @@ def ask(user, body, *, via='session'):
                     raw['file_link'] = _doc_raw['file_link']
             try:
                 host.ask_hint(route='document', outcome='answered')
-            except Exception:
-                pass
+            except Exception as _fx:
+                _faults.note('service', _fx)
             env = envelope.wrap(raw, surface='analyze', decision=decision,
                                 thread_id=tid, via=via)
             _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
@@ -612,7 +626,7 @@ def ask(user, body, *, via='session'):
             from . import design_request as _dr
             _dr_raw = _dr.answer(text, user, ctx) if _dr.is_design_request(text) else None
         except Exception as e:
-            print(f"[prometheus] design-request lane skipped: {e}")
+            _faults.note('service.design_request_lane', e)
             _dr_raw = None
         if _dr_raw:
             raw = _dr_raw
@@ -623,12 +637,27 @@ def ask(user, body, *, via='session'):
                 raw['followups'] = []
             try:
                 host.ask_hint(route='design_request', outcome='answered')
-            except Exception:
-                pass
+            except Exception as _fx:
+                _faults.note('service', _fx)
             env = envelope.wrap(raw, surface='analyze', decision=decision,
                                 thread_id=tid, via=via)
             _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
             return env, 200
+
+    if _cap_hit and referent_decision is None and not _armed(body):
+        from . import spend_guard as _sg2
+        _ok2, _spent2, _cap2 = _sg2.check(user)
+        raw = {'success': True, 'action': 'answer', 'reply': _sg2.over_cap_reply(_spent2, _cap2), 'followups': [], 'offer_deck': False, 'deck_angle': None}
+        decision = {'surface': 'analyze', 'mode': None, 'reason': 'spend_cap', 'client_hint': None}
+        if _client_surface == 'interpret':
+            raw = _interpret_shape(raw)
+        try:
+            host.ask_hint(route='spend_cap', outcome='declined_spend_cap')
+        except Exception as _fx:
+            _faults.note('service', _fx)
+        env = envelope.wrap(raw, surface='analyze', decision=decision, thread_id=tid, via=via)
+        _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
+        return env, 200
 
     # 2026-10-13 audit lanes, all deterministic, all before any model:
     #   same question again in this thread -> the same answer, with when;
@@ -666,7 +695,7 @@ def ask(user, body, *, via='session'):
                     if _c0:
                         _sm_raw, _sm_reason = _c0, 'status_lookup'
         except Exception as e:
-            print(f"[prometheus] audit lanes skipped: {e}")
+            _faults.note('service.audit_lanes', e)
         if _sm_raw:
             raw = _sm_raw
             decision = {'surface': 'analyze', 'mode': None, 'reason': _sm_reason, 'client_hint': None}
@@ -675,8 +704,8 @@ def ask(user, body, *, via='session'):
                 raw['followups'] = list(_sm_raw.get('followups') or [])
             try:
                 host.ask_hint(route=_sm_reason, outcome='answered')
-            except Exception:
-                pass
+            except Exception as _fx:
+                _faults.note('service', _fx)
             env = envelope.wrap(raw, surface='analyze', decision=decision, thread_id=tid, via=via)
             _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
             return env, 200
@@ -691,7 +720,7 @@ def ask(user, body, *, via='session'):
             from . import catalog_lane as _cl
             _cat = _cl.answer(text, ctx)
         except Exception as e:
-            print(f"[prometheus] catalog lane skipped: {e}")
+            _faults.note('service.catalog_lane', e)
             _cat = None
         if _cat:
             raw = _cat
@@ -705,8 +734,8 @@ def ask(user, body, *, via='session'):
             try:
                 host.ask_hint(route='catalog_lookup', outcome='answered',
                               subject=_cat.get('subject'))
-            except Exception:
-                pass
+            except Exception as _fx:
+                _faults.note('service', _fx)
             env = envelope.wrap(raw, surface='analyze', decision=decision,
                                 thread_id=tid, via=via)
             _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
@@ -724,7 +753,7 @@ def ask(user, body, *, via='session'):
             from . import sizing_lane as _szl
             _sz = _szl.answer(text, ctx, host=host, history=history)
         except Exception as e:
-            print(f"[prometheus] sizing lane skipped: {e}")
+            _faults.note('service.sizing_lane', e)
             _sz = None
         if _sz:
             raw = _sz
@@ -734,8 +763,8 @@ def ask(user, body, *, via='session'):
                 raw['followups'] = list(_sz.get('followups') or [])
             try:
                 host.ask_hint(route='sizing', outcome='answered', subject=str(_sz.get('subject') or ''))
-            except Exception:
-                pass
+            except Exception as _fx:
+                _faults.note('service', _fx)
             env = envelope.wrap(raw, surface='analyze', decision=decision, thread_id=tid, via=via)
             _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
             return env, 200
@@ -753,7 +782,7 @@ def ask(user, body, *, via='session'):
             _st_raw = (_stl.answer(text, uname, host=host, user=user, history=history)
                        if _stl.wants_status(text) and not _dlv0.parse(text) else None)
         except Exception as e:
-            print(f"[prometheus] status lane skipped: {e}")
+            _faults.note('service.status_lane', e)
             _st_raw = None
         if _st_raw:
             raw = _st_raw
@@ -763,8 +792,8 @@ def ask(user, body, *, via='session'):
                 raw['followups'] = list(_st_raw.get('followups') or [])
             try:
                 host.ask_hint(route='status_lookup', outcome='answered')
-            except Exception:
-                pass
+            except Exception as _fx:
+                _faults.note('service', _fx)
             env = envelope.wrap(raw, surface='analyze', decision=decision, thread_id=tid, via=via)
             _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
             return env, 200
@@ -781,7 +810,7 @@ def ask(user, body, *, via='session'):
             _dl_raw = (_dlv.answer(text, uname, user=user, ctx=ctx, history=history, host=host)
                        if _dlv.parse(text) else None)
         except Exception as e:
-            print(f"[prometheus] deliverable lane skipped: {e}")
+            _faults.note('service.deliverable_lane', e)
             _dl_raw = None
         if _dl_raw:
             raw = _dl_raw
@@ -793,8 +822,8 @@ def ask(user, body, *, via='session'):
             try:
                 host.ask_hint(route='deliverable_lookup', outcome='answered',
                               subject=_dl_raw.get('subject'))
-            except Exception:
-                pass
+            except Exception as _fx:
+                _faults.note('service', _fx)
             env = envelope.wrap(raw, surface='analyze', decision=decision,
                                 thread_id=tid, via=via)
             _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
@@ -811,7 +840,7 @@ def ask(user, body, *, via='session'):
             _sf_raw = (_sf.answer(text, uname, user=user, ctx=ctx, history=history, host=host)
                        if _sf.parse(text) else None)
         except Exception as e:
-            print(f"[prometheus] send-file lane skipped: {e}")
+            _faults.note('service.send_file_lane', e)
             _sf_raw = None
         if _sf_raw:
             raw = _sf_raw
@@ -823,8 +852,8 @@ def ask(user, body, *, via='session'):
             try:
                 host.ask_hint(route='email_file', outcome='answered' if _sf_raw.get('sent') else 'clarified',
                               subject=_sf_raw.get('subject'))
-            except Exception:
-                pass
+            except Exception as _fx:
+                _faults.note('service', _fx)
             env = envelope.wrap(raw, surface='analyze', decision=decision,
                                 thread_id=tid, via=via)
             _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
@@ -840,7 +869,7 @@ def ask(user, body, *, via='session'):
             from . import brand_coverage as _bcov
             _bc_raw = _bcov.answer(text, ctx, host=host) if _bcov.parse(text) else None
         except Exception as e:
-            print(f"[prometheus] brand coverage lane skipped: {e}")
+            _faults.note('service.brand_coverage_lane', e)
             _bc_raw = None
         if _bc_raw:
             raw = _bc_raw
@@ -852,8 +881,8 @@ def ask(user, body, *, via='session'):
             try:
                 host.ask_hint(route='brand_coverage', outcome='answered',
                               subject=_bc_raw.get('subject'))
-            except Exception:
-                pass
+            except Exception as _fx:
+                _faults.note('service', _fx)
             env = envelope.wrap(raw, surface='analyze', decision=decision,
                                 thread_id=tid, via=via)
             _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
@@ -869,7 +898,7 @@ def ask(user, body, *, via='session'):
             from . import drilldown as _dd
             _dd_raw = _dd.answer(text, uname, ctx=ctx, tid=tid) if (_dd.looks_like_drilldown(text) or _dd.looks_like_definition(text)) else None
         except Exception as e:
-            print(f"[prometheus] drill-down lane skipped: {e}")
+            _faults.note('service.drill_down_lane', e)
             _dd_raw = None
         if _dd_raw:
             raw = _dd_raw
@@ -883,8 +912,8 @@ def ask(user, body, *, via='session'):
             try:
                 host.ask_hint(route='journey_drilldown', outcome='answered',
                               subject=_dd_raw.get('subject'))
-            except Exception:
-                pass
+            except Exception as _fx:
+                _faults.note('service', _fx)
             env = envelope.wrap(raw, surface='analyze', decision=decision,
                                 thread_id=tid, via=via)
             _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
@@ -900,7 +929,7 @@ def ask(user, body, *, via='session'):
             from . import guards as _g
             _cap = _g.capability_answer(text)
         except Exception as e:
-            print(f"[prometheus] capability gate skipped: {e}")
+            _faults.note('service.capability_gate', e)
             _cap = None
         if _cap:
             raw = {'success': True, 'action': 'answer',
@@ -914,8 +943,8 @@ def ask(user, body, *, via='session'):
                 raw['followups'] = list(_cap.get('followups') or [])
             try:
                 host.ask_hint(route='capability_question', outcome='answered')
-            except Exception:
-                pass
+            except Exception as _fx:
+                _faults.note('service', _fx)
             env = envelope.wrap(raw, surface='analyze', decision=decision,
                                 thread_id=tid, via=via)
             _persist_turn(persist, uname, tid, history, text, env, raw,
@@ -938,8 +967,8 @@ def ask(user, body, *, via='session'):
                     'question', 'subiq_lookup', 'capability_question', 'compare_open',
                     'data_open'):
                 forced = ''
-        except Exception:
-            pass
+        except Exception as _fx:
+            _faults.note('service', _fx)
     if referent_decision is not None:
         decision = referent_decision
     elif forced in _SURFACES:
@@ -966,7 +995,7 @@ def ask(user, body, *, via='session'):
                 if _bind and not body.get('bind_subject'):
                     body = dict(body, bind_subject=_bind)
         except Exception as e:
-            print(f"[prometheus] reader steer skipped: {e}")
+            _faults.note('service.reader_steer', e)
     # "Don't build a new profile. Answer this from ..." is answer mode,
     # whatever surface the widget sent (2026-10-13 audit, Emma).
     try:
@@ -978,13 +1007,13 @@ def ask(user, body, *, via='session'):
             if _stripped != text:
                 text = _stripped   # the question itself reaches the answer path
                 body = dict(body, text=text)
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('service', _fx)
     surface = decision['surface']
     try:
         host.ask_hint(route='prometheus/ask:' + surface)
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('service', _fx)
 
     gate_resp = _gate_for(surface, user)
     if gate_resp is not None:
@@ -1005,8 +1034,8 @@ def ask(user, body, *, via='session'):
     except Exception as e:
         try:
             host.error_email('prometheus/ask:' + surface, e)
-        except Exception:
-            pass
+        except Exception as _fx:
+            _faults.note('service', _fx)
         raw, status = host.calm_payload(), 200
     else:
         raw, status = _unpack(resp)
@@ -1091,8 +1120,8 @@ def _execute_reading(reading, text, ctx, history, user, uname, body, tid, via, p
             out['memory_confirm'] = raw['memory_confirm']
     try:
         host.ask_hint(route=reason, outcome='answered', subject=(subs[0] if subs else None))
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('service', _fx)
     env = envelope.wrap(out, surface='analyze', decision=decision, thread_id=tid, via=via)
     _persist_turn(persist, uname, tid, history, text, env, out, 'analyze')
     return env, 200
@@ -1128,7 +1157,7 @@ def _after_answer(raw, text, uname, ctx):
                 if chip['label'] not in fu and len(fu) < 4:
                     raw = dict(raw, followups=fu + [chip['label']])
     except Exception as e:
-        print(f"[prometheus] after-answer step skipped: {e}")
+        _faults.note('service.after_answer_step', e)
     return raw
 
 
@@ -1438,7 +1467,7 @@ def _persist_turn(persist, uname, tid, history, text, env, raw, surface):
             from migration import corpus_catalog as _cc
             _cc.record_answer_async(subj, env['text'], user=uname, thread_id=tid or '')
     except Exception as e:
-        print(f"[prometheus] corpus catalog bank skipped: {e}")
+        _faults.note('service.corpus_catalog_bank', e)
 
 
 def _answer_subject(env, raw):
@@ -1454,8 +1483,8 @@ def _answer_subject(env, raw):
         v = getattr(_g, '_pm_ask_subject', None)
         if isinstance(v, str) and v.strip():
             return v.strip()
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('service', _fx)
     return ''
 
 

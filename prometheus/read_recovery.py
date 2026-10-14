@@ -93,21 +93,97 @@ def enqueue(job_id, head):
 DECK_TAG = 'deck:'
 
 
+# Engine jobs ride the same queue (audit item 5, 2026-10-14: every job
+# through the queue, the web tier stateless). Tags: jiq:, bpiq:, fw:,
+# aiq:. Their records are the kind's own status documents (the widget
+# polls them already) with a resume block of inputs + extras; the
+# worker runs the same job body the web process used to run on a thread.
+ENGINE_KINDS = ('jiq', 'bpiq', 'fw', 'aiq')
+_ENGINE_PREFIX_CAP = {'jiq': 'jiq_prefix', 'bpiq': 'bpiq_prefix', 'fw': 'fw_prefix', 'aiq': 'aiq_prefix'}
+_ENGINE_RUNNER = {'jiq': '_pm_run_jiq_job', 'bpiq': '_pm_run_bpiq_job', 'fw': '_pm_run_fw_job', 'aiq': '_pm_run_aiq_job'}
+_ENGINE_WRITER = {'jiq': '_pm_jiq_status_write', 'bpiq': '_pm_bpiq_status_write', 'fw': '_pm_fw_status_write', 'aiq': '_pm_aiq_status_write'}
+_ENGINE_LABEL = {'jiq': 'journey', 'bpiq': 'valuation', 'fw': 'flywheel read', 'aiq': 'campaign tracker'}
+
+
 def _split_tag(job_id):
-    """('deck', id) or ('read', id)."""
+    """('deck', id), ('jiq', id) ... or ('read', id)."""
     j = str(job_id or '')
     if j.startswith(DECK_TAG):
         return 'deck', j[len(DECK_TAG):]
+    for k in ENGINE_KINDS:
+        if j.startswith(k + ':'):
+            return k, j[len(k) + 1:]
     return 'read', j
 
 
+def _engine_prefix(kind):
+    c = _chat()
+    return getattr(c, {'jiq': '_PM_JIQ_JOB_PREFIX', 'bpiq': '_PM_BPIQ_JOB_PREFIX', 'fw': '_PM_FW_JOB_PREFIX', 'aiq': '_PM_AIQ_JOB_PREFIX'}[kind])
+
+
 def _record_key(kind, jid):
-    pfx = _deck_prefix() if kind == 'deck' else _prefix()
+    if kind == 'deck':
+        pfx = _deck_prefix()
+    elif kind in ENGINE_KINDS:
+        pfx = _engine_prefix(kind)
+    else:
+        pfx = _prefix()
     return f"{pfx}{jid}.json"
 
 
 def _marker_key(kind, jid):
-    return f"{QUEUE_PREFIX}{'deck_' if kind == 'deck' else ''}{jid}.json"
+    if kind == 'deck':
+        return f"{QUEUE_PREFIX}deck_{jid}.json"
+    if kind in ENGINE_KINDS:
+        return f"{QUEUE_PREFIX}{kind}_{jid}.json"
+    return f"{QUEUE_PREFIX}{jid}.json"
+
+
+def start_engine_job(kind, job_id, username, inputs, extras, status_write, runner):
+    """Queue an engine job for the worker (or, with the queue off, start
+    it on a thread as before). The status document carries the inputs
+    and extras to resume from; the widget's poll already reads it.
+    Never raises; a queue failure falls back to the thread."""
+    head = {'job_id': job_id, 'user': username, 'status': 'queued', 'job_type': kind,
+            'started_at': time.time(), 'inputs': _jsonable(inputs),
+            'resume': {'inputs': _jsonable(inputs), 'extras': _jsonable(extras) or {}}}
+    if queue_enabled():
+        try:
+            s3, bucket = _s3()
+            rec = dict(head, queued=True, queued_at=time.time(), stage=f"lining up the {_ENGINE_LABEL.get(kind, kind)}")
+            status_write(job_id, rec)
+            s3.put_object(Bucket=bucket, Key=_marker_key(kind, job_id),
+                          Body=json.dumps({'job_id': job_id, 'kind': kind, 'queued_at': rec['queued_at']}).encode('utf-8'),
+                          ContentType='application/json')
+            print(f"[pm-queue] {kind} {job_id} queued for the worker")
+            return rec
+        except Exception:
+            traceback.print_exc()
+    status_write(job_id, head)
+    threading.Thread(target=runner, args=(job_id, username, inputs, extras), daemon=True).start()
+    return head
+
+
+def _jsonable(obj):
+    try:
+        return json.loads(json.dumps(obj, default=str))
+    except Exception:
+        return {}
+
+
+def run_engine_inline(kind, job_id, status):
+    """The worker runs one claimed engine job right here."""
+    c = _chat()
+    rr = status.get('resume') if isinstance(status.get('resume'), dict) else None
+    uname = str(status.get('user') or '').strip()
+    inputs = (rr or {}).get('inputs') or status.get('inputs')
+    writer = getattr(c, _ENGINE_WRITER[kind])
+    if not isinstance(inputs, dict) or not inputs or not uname:
+        writer(job_id, {**status, 'status': 'error', 'queued': False,
+                        'error': f"queued {_ENGINE_LABEL.get(kind, kind)} without a resume record", 'finished_at': time.time()})
+        return False
+    getattr(c, _ENGINE_RUNNER[kind])(job_id, uname, inputs, dict((rr or {}).get('extras') or {}))
+    return True
 
 
 def enqueue_deck(job_id, head):
@@ -144,6 +220,11 @@ def list_queued():
                     name = k.rsplit('/', 1)[-1][:-5]
                     if name.startswith('deck_'):
                         name = DECK_TAG + name[5:]
+                    else:
+                        for ek in ENGINE_KINDS:
+                            if name.startswith(ek + '_'):
+                                name = ek + ':' + name[len(ek) + 1:]
+                                break
                     out.append((o.get('LastModified'), name))
             if not r.get('IsTruncated'):
                 break
@@ -172,7 +253,7 @@ def claim_queued(job_id):
         except Exception:
             pass
         return None
-    open_status = 'queued' if kind == 'deck' else 'working'
+    open_status = 'queued' if kind in ('deck',) + ENGINE_KINDS else 'working'
     if not cur.get('queued') or cur.get('claimed_by') or str(cur.get('status') or '') != open_status:
         try:
             s3.delete_object(Bucket=bucket, Key=marker)
@@ -181,7 +262,7 @@ def claim_queued(job_id):
         return None
     claimed = dict(cur)
     claimed.update({'queued': False, 'claimed_by': _INSTANCE, 'claimed_at': time.time(),
-                    'stage': 'planning the deck' if kind == 'deck' else 'reading the data'})
+                    'stage': 'planning the deck' if kind == 'deck' else (f"starting the {_ENGINE_LABEL[kind]}" if kind in ENGINE_KINDS else 'reading the data')})
     body = json.dumps(claimed).encode('utf-8')
     try:
         kw = dict(Bucket=bucket, Key=key, Body=body, ContentType='application/json')
@@ -237,6 +318,8 @@ def run_inline(job_id, status):
     kind, job_id = _split_tag(job_id)
     if kind == 'deck' or str(status.get('job_type') or '') == 'deck':
         return run_deck_inline(job_id, status)
+    if kind in ENGINE_KINDS or str(status.get('job_type') or '') in ENGINE_KINDS:
+        return run_engine_inline(kind if kind in ENGINE_KINDS else str(status.get('job_type')), job_id, status)
     c, h = _chat(), _host()
     rr = status.get('resume') if isinstance(status.get('resume'), dict) else None
     uname = str(status.get('user') or '').strip()
@@ -303,10 +386,10 @@ def _queued_deck_fallback(now=None):
         now = now or time.time()
         for tagged in list_queued():
             kind, jid = _split_tag(tagged)
-            if kind != 'deck':
+            if kind not in ('deck',) + ENGINE_KINDS:
                 continue
             try:
-                mk = json.loads(s3.get_object(Bucket=bucket, Key=_marker_key('deck', jid))['Body'].read())
+                mk = json.loads(s3.get_object(Bucket=bucket, Key=_marker_key(kind, jid))['Body'].read())
                 queued_at = float(mk.get('queued_at') or 0)
             except Exception:
                 continue
@@ -315,8 +398,11 @@ def _queued_deck_fallback(now=None):
             rec = claim_queued(tagged)
             if not rec:
                 continue
-            print(f"[pm-queue] deck {jid} unclaimed for {int(now - queued_at)}s; building it here")
-            threading.Thread(target=run_deck_inline, args=(jid, rec), daemon=True).start()
+            print(f"[pm-queue] {kind} {jid} unclaimed for {int(now - queued_at)}s; running it here")
+            if kind == 'deck':
+                threading.Thread(target=run_deck_inline, args=(jid, rec), daemon=True).start()
+            else:
+                threading.Thread(target=run_engine_inline, args=(kind, jid, rec), daemon=True).start()
             out.append(jid)
     except Exception:
         traceback.print_exc()

@@ -23,6 +23,8 @@ import threading
 import traceback
 import re
 from prometheus import smarter as _smart   # 2026-10-13 audit helpers
+from prometheus import figures as _fig   # figures by composition (audit items 3 + 4, 2026-10-14)
+from prometheus import faults as _faults   # swallowed faults are counted (audit item 8)
 import io
 import hashlib
 import time
@@ -97,8 +99,8 @@ def _profile_catalog_for_chat():
     # it does at most one S3 HEAD per ~3s per worker.
     try:
         _H.maybe_refresh_persisted_cache_if_changed()
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('chat', _fx)
     from datetime import timezone as _tz
     now = datetime.now(_tz.utc)
     jobs = []
@@ -316,8 +318,8 @@ def _synth_chat_gate(allow_api_key: bool = True):
         try:
             from flask import g as _g_ak
             _g_ak._pm_api_key_owner = uname or u.get('username') or u.get('email')
-        except Exception:
-            pass
+        except Exception as _fx:
+            _faults.note('chat', _fx)
         return u, None
 
     user = _H.get_current_user()
@@ -2309,8 +2311,8 @@ def _synth_chat_interpret_one_subject(subject: str, shared_context: str,
                 spec_draft, candidates, per_prompt)
             if swapped:
                 spec_draft['_parent_guardrail_note'] = swap_note
-        except Exception:
-            pass
+        except Exception as _fx:
+            _faults.note('chat', _fx)
 
         # Normalized existing-profile match (2026-08-24 SHARKNINJA
         # directive). Batch slices are one-shot (no clarify loop), so
@@ -2323,8 +2325,8 @@ def _synth_chat_interpret_one_subject(subject: str, shared_context: str,
                 catalog=catalog, allow_ask=False)
             if _nm_acted:
                 print(f"[synth-chat batch] {_nm_note}")
-        except Exception:
-            pass
+        except Exception as _fx:
+            _faults.note('chat', _fx)
 
         # Universe-qualifier gate (2026-08-25): batch slices are
         # one-shot, so a brand-matches-but-qualifier-differs pick
@@ -2332,8 +2334,8 @@ def _synth_chat_interpret_one_subject(subject: str, shared_context: str,
         try:
             _H._apply_universe_qualifier_gate(spec_draft, per_prompt,
                                            allow_ask=False)
-        except Exception:
-            pass
+        except Exception as _fx:
+            _faults.note('chat', _fx)
 
         # Intersect-cut promoter: if the per-subject prompt looks like
         # "<parent> for <cohort>" / "<parent> -> <cohort>" and a strong
@@ -2342,8 +2344,8 @@ def _synth_chat_interpret_one_subject(subject: str, shared_context: str,
         try:
             _H._maybe_promote_intersect_to_derive_cut(
                 spec_draft, per_prompt, candidates, catalog=catalog)
-        except Exception:
-            pass
+        except Exception as _fx:
+            _faults.note('chat', _fx)
 
         decision_str = str(spec_draft.get('decision') or '').strip().lower()
         user_optout = _H._user_optout_of_avid(per_prompt, chat_history=history)
@@ -2405,15 +2407,15 @@ def _synth_chat_interpret_one_subject(subject: str, shared_context: str,
         try:
             _H._maybe_promote_embedded_cuts_to_parent(spec_draft, catalog)
             _pm_promote_date_snapshot_ask(spec_draft, per_prompt)
-        except Exception:
-            pass
+        except Exception as _fx:
+            _faults.note('chat', _fx)
         est_credits = int(spec_draft.get('estimated_credits')
                           or est_credits)
         try:
             _H._stamp_existing_match_age(spec_draft)
             _H._scrub_draft_prose_dashes(spec_draft)
-        except Exception:
-            pass
+        except Exception as _fx:
+            _faults.note('chat', _fx)
 
         spec_draft['price_table'] = _pm_price_table()
         return {
@@ -2832,8 +2834,8 @@ def _synth_chat_incidence_check(text, history=None):
         try:
             print(f"[incidence-check] failed: "
                   f"{str(result.get('error'))[:300]!r}")
-        except Exception:
-            pass
+        except Exception as _fx:
+            _faults.note('chat', _fx)
         _H._chatbot_error_email(
             'brief-chat/interpret',
             'incidence sizing model call failed: '
@@ -2989,8 +2991,8 @@ def _synth_chat_incidence_check(text, history=None):
     try:
         print(f"[incidence-check] {subject!r} window={window_label!r} "
               f"tu={tu:,} avid={avid:,} verdict={verdict}")
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('chat', _fx)
     return jsonify({
         'success': True,
         'incidence_check': payload,
@@ -3499,8 +3501,8 @@ def _pm_universe_phrase(draft):
             return f'total {verb} universe'
         if str(d.get('seed_source') or '').startswith('content_map'):
             return 'total viewers universe'
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('chat', _fx)
     return 'total universe'
 
 
@@ -3726,8 +3728,8 @@ def api_synth_chat_clarify():
         draft['identity_confident'] = True
         try:
             _H._set_resolved_identity_line(draft)
-        except Exception:
-            pass
+        except Exception as _fx:
+            _faults.note('chat', _fx)
         head = f"Confirmed - {title}, the {medium}{where}."
         # Continue the flow in the same order interpret queued it.
         if draft.get('ask_qualifier_match') and \
@@ -3916,8 +3918,8 @@ def api_synth_chat_clarify():
             try:
                 draft['estimated_run_minutes'] = _estimate_run_minutes(
                     'time_shifted_refresh', True)
-            except Exception:
-                pass
+            except Exception as _fx:
+                _faults.note('chat', _fx)
             if not str(draft.get('refresh_row_hypothesis') or '').strip():
                 draft['refresh_row_hypothesis'] = (
                     f"Fresh read of the {disp} audience over the "
@@ -4925,8 +4927,8 @@ def api_synth_chat_clarify():
         try:
             draft['estimated_run_minutes'] = _estimate_run_minutes(
                 'derive_cut', False)
-        except Exception:
-            pass
+        except Exception as _fx:
+            _faults.note('chat', _fx)
         draft.pop('addon_cuts', None)
         draft.pop('strategist_recs', None)
         draft.pop('ask_parent_link', None)
@@ -5152,8 +5154,8 @@ def _pm_watch_notify(username, question, payload, subject=None,
     try:
         if probe or _pm_is_probe_user(username) or _pm_probe_caller():
             return
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('chat', _fx)
 
     def _run():
         try:
@@ -5164,8 +5166,8 @@ def _pm_watch_notify(username, question, payload, subject=None,
             traceback.print_exc()
     try:
         threading.Thread(target=_run, daemon=True).start()
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('chat', _fx)
 
 
 _PM_TAXONOMY_OVERRIDES = frozenset({
@@ -5181,8 +5183,8 @@ def _pm_swallow(where, exc=None, note=None):
     carries it in `extra.faults`. Never raises."""
     try:
         traceback.print_exc()
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('chat', _fx)
     try:
         from flask import g as _g
         faults = getattr(_g, '_pm_faults', None)
@@ -5196,8 +5198,8 @@ def _pm_swallow(where, exc=None, note=None):
             if note:
                 msg += f' {str(note)[:60]}'
             faults.append(msg)
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('chat', _fx)
 
 
 def _pm_ask_apply_taxonomy(surface, payload, status_code, history,
@@ -5211,8 +5213,8 @@ def _pm_ask_apply_taxonomy(surface, payload, status_code, history,
         faults = getattr(_g, '_pm_faults', None)
         if faults:
             extra['faults'] = '; '.join(faults)[:200]
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('chat', _fx)
     try:
         from prometheus import ask_outcome as _ao
         outcome, detail = _ao.classify(surface, payload, status_code,
@@ -5230,8 +5232,8 @@ def _pm_ask_apply_taxonomy(surface, payload, status_code, history,
                 from flask import g as _g2
                 already = bool(getattr(_g2, '_pm_fault_alerted', False))
                 _g2._pm_fault_alerted = True
-            except Exception:
-                pass
+            except Exception as _fx:
+                _faults.note('chat', _fx)
             if not already:
                 try:
                     _H._chatbot_error_email(
@@ -5359,8 +5361,8 @@ def _pm_answer_gate(fn, args, kwargs, resp, payload, status_code,
                     in ('new_build',) and status_code < 400 \
                     and _pg.reads_as_task(question):
                 mismatched = True
-        except Exception:
-            pass
+        except Exception as _fx:
+            _faults.note('chat', _fx)
         if not held and not mismatched and not repeat:
             return resp, payload, status_code, outcome, (extra or None)
 
@@ -5482,8 +5484,8 @@ def _ask_logged(surface):
             try:
                 _g._pm_trace_id = (str(request.headers.get('X-Prometheus-Trace') or '').strip()[:32]
                                    or uuid.uuid4().hex[:12])
-            except Exception:
-                pass
+            except Exception as _fx:
+                _faults.note('chat', _fx)
             try:
                 body = request.get_json(force=True, silent=True) or {}
                 question = str(body.get('text') or '').strip()
@@ -5496,8 +5498,8 @@ def _ask_logged(surface):
                 view = str(vc.get('view_id') or '').strip()
                 if not view and isinstance(pc, dict) and pc.get('primary'):
                     view = 'profileIQ'
-            except Exception:
-                pass
+            except Exception as _fx:
+                _faults.note('chat', _fx)
             # What the user did next (2026-10-02): a repeat of the
             # prior ask or a push-back phrase grades the PRIOR reply
             # failed. Computed before the handler runs so a route can
@@ -5531,14 +5533,14 @@ def _ask_logged(surface):
                             ms=int((time.time() - t0) * 1000),
                             mode=mode, subject=None,
                             stages=getattr(_g, '_pm_ask_stages', None))
-                    except Exception:
-                        pass
+                    except Exception as _fx:
+                        _faults.note('chat', _fx)
                     try:
                         _pm_watch_notify(
                             _pm_ask_log_user(''), question,
                             {'reply': _H._CHATBOT_CALM_MESSAGE}, None)
-                    except Exception:
-                        pass
+                    except Exception as _fx:
+                        _faults.note('chat', _fx)
                 raise
             try:
                 if not question:
@@ -5618,8 +5620,8 @@ def _ask_logged(surface):
                         extra = dict(extra or {})
                         extra['trace_id'] = _tid_trace
                     _rd = getattr(_g, '_pm_reading', None); _rd and extra.update({'reading': {k: _rd.get(k) for k in ('intent', 'confidence', 'subjects', 'flags', 'restate', 'ms')}})
-                except Exception:
-                    pass
+                except Exception as _fx:
+                    _faults.note('chat', _fx)
                 import render_usage_log as _rul
                 _rul.record_ask(
                     user=_pm_ask_log_user(),
@@ -5647,8 +5649,8 @@ def _ask_logged(surface):
                             (_pm_ask_log_user('')).strip(),
                             question, subject=subject, view=view,
                             route=route)
-                except Exception:
-                    pass
+                except Exception as _fx:
+                    _faults.note('chat', _fx)
             except Exception:
                 traceback.print_exc()
             return resp
@@ -5734,8 +5736,8 @@ def _pm_interpret_core(user, body, text, history):
         try:
             _pm_ask_hint(route='subiq_lookup', outcome='answered',
                          subject=_lk_title if _lk_title != '*' else '')
-        except Exception:
-            pass
+        except Exception as _fx:
+            _faults.note('chat', _fx)
         return jsonify({'success': False, 'guidance': True,
                         'error': _lk_reply, 'followups': _lk_chips})
     # Deterministic lanes run before any library or model path
@@ -5771,8 +5773,8 @@ def _pm_interpret_core(user, body, text, history):
     if _lib_q:
         try:
             _pm_ask_hint(route='subiq_library_answer')
-        except Exception:
-            pass
+        except Exception as _fx:
+            _faults.note('chat', _fx)
         _lib_resp = _pm_generate_metrics_response(user, text, history)
         try:
             _lib_raw = _lib_resp.get_json(silent=True) or {}
@@ -5799,8 +5801,8 @@ def _pm_interpret_core(user, body, text, history):
         if _wo_reply:
             try:
                 _pm_ask_hint(outcome='workorder_' + _wo_intent)
-            except Exception:
-                pass
+            except Exception as _fx:
+                _faults.note('chat', _fx)
             return jsonify({'success': False, 'guidance': True,
                             'error': _wo_reply})
     # Typed approval with no brief on screen (2026-10-02 S3 lanes):
@@ -6127,8 +6129,8 @@ def _pm_interpret_core(user, body, text, history):
                       f"key={c.get('s3_key')!r} age={c.get('days_old')}d"
                       for c in candidates[:5]
                   ]) if candidates else "  (no candidates)"))
-        except Exception:
-            pass
+        except Exception as _fx:
+            _faults.note('chat', _fx)
         system_prompt, user_prompt = _synth_chat_interpret_prompts(
             text, chat_history=history, master_categories=MASTER_CATEGORIES,
             candidate_matches=candidates,
@@ -6651,8 +6653,8 @@ def _pm_interpret_core(user, body, text, history):
             _H._maybe_promote_embedded_cuts_to_parent(spec_draft, catalog)
             _pm_promote_date_snapshot_ask(spec_draft, text)
             _dec_norm, _, _ = _H._normalize_v1_decision(spec_draft)
-        except Exception:
-            pass
+        except Exception as _fx:
+            _faults.note('chat', _fx)
         # ECHO RULE (2026-08-24): every cut/build confirmation states
         # its window. Runs AFTER the promoters so a decision flipped to
         # derive_cut/cut_needs_parent still gets the echo, and re-routes
@@ -6859,12 +6861,12 @@ def _pm_interpret_core(user, body, text, history):
         # the brief card).
         try:
             _H._stamp_existing_match_age(spec_draft)
-        except Exception:
-            pass
+        except Exception as _fx:
+            _faults.note('chat', _fx)
         try:
             _H._scrub_draft_prose_dashes(spec_draft)
-        except Exception:
-            pass
+        except Exception as _fx:
+            _faults.note('chat', _fx)
         # Thread the user's exact natural-language ask onto the draft so
         # it round-trips back on approve and lands on the queued job. If
         # the build later fails, the ops failure email can quote what the
@@ -6872,8 +6874,8 @@ def _pm_interpret_core(user, body, text, history):
         try:
             if isinstance(spec_draft, dict) and text:
                 spec_draft['user_prompt'] = str(text)[:4000]
-        except Exception:
-            pass
+        except Exception as _fx:
+            _faults.note('chat', _fx)
         # Chip pair for existing_match (2026-09-04, Jenna verbatim: "it
         # shouldnt just say is this the one you want yes or no and then
         # you click the chip and if yes it would have retunred that one
@@ -6926,8 +6928,8 @@ def _pm_interpret_core(user, body, text, history):
             # instead of just "0 credits (reusing the existing file)".
             try:
                 spec_draft['estimated_credits_new_build'] = _fresh_new_credits
-            except Exception:
-                pass
+            except Exception as _fx:
+                _faults.note('chat', _fx)
         spec_draft['price_table'] = _ptab = _pm_price_table()  # money, not credits
         return jsonify({
             'success': True,
@@ -6993,8 +6995,8 @@ def _spec_from_draft(draft):
                   f"{subject!r} -> {_subj_no_dr!r} "
                   f"(window={_dr_from_subject or 'unparsed, default kept'})")
             subject = _subj_no_dr
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('chat', _fx)
     # (b) A request / instruction line is not a buildable subject. Both
     #     callers are exception-safe (the chatbot approve route is
     #     wrapped by _chatbot_route_guard, the v1 path has its own
@@ -7025,8 +7027,8 @@ def _spec_from_draft(draft):
     if subject != _subject_in:
         try:
             print(f"[spec-casing] subject {_subject_in!r} -> {subject!r}")
-        except Exception:
-            pass
+        except Exception as _fx:
+            _faults.note('chat', _fx)
         stem = subject.replace(' ', '_').replace('/', '_')
     else:
         stem = draft.get('file_stem') or subject.replace(' ', '_').replace('/', '_')
@@ -7084,8 +7086,8 @@ def _spec_from_draft(draft):
                 f"Hetzner via hostmap. Rows: {_phantom_seen[:8]}"
                 + (f' ...+{len(_phantom_seen) - 8} more' if len(_phantom_seen) > 8 else '')
             )
-        except Exception:
-            pass
+        except Exception as _fx:
+            _faults.note('chat', _fx)
 
     # ── Affinity-pin guard (2026-08-25, generalizing the 2026-08-19
     # car-pin guard after run vQGroDyp7TLjjA: a QSR subject's spec
@@ -7150,8 +7152,8 @@ def _spec_from_draft(draft):
                 + (f' ...+{len(_demoted_pins) - 6} more'
                    if len(_demoted_pins) > 6 else '')
             )
-        except Exception:
-            pass
+        except Exception as _fx:
+            _faults.note('chat', _fx)
         _existing_extra_norms = {
             ''.join(ch for ch in str(e[1]).lower() if ch.isalnum())
             for e in extra_rows if len(e) >= 2}
@@ -7180,8 +7182,8 @@ def _spec_from_draft(draft):
             try:
                 print(f"[spec-backstop] {subject!r}: subject_rows was "
                       f"empty - anchored with [[{_bc!r}, {_entity!r}]]")
-            except Exception:
-                pass
+            except Exception as _fx:
+                _faults.note('chat', _fx)
 
     # Enforce the "no round sample sizes" rule from the workspace rule
     # `.cursor/rules/no-round-sample-sizes.mdc`. Every subject_raw_* that
@@ -7279,15 +7281,15 @@ def _spec_from_draft(draft):
                 if _msg:
                     try:
                         print(_msg)
-                    except Exception:
-                        pass
+                    except Exception as _fx:
+                        _faults.note('chat', _fx)
     except Exception as _fc_err:
         # Never let cap-application break a build; log and continue.
         try:
             print(f"[follower-ceiling] {subject!r}: cap step raised "
                   f"{type(_fc_err).__name__}: {_fc_err}")
-        except Exception:
-            pass
+        except Exception as _fx:
+            _faults.note('chat', _fx)
 
     # ── Mandatory anchor derivation + cross-spec duplicate guard ────
     # (2026-08-24, Florida/Iowa duplicated-sample defect; hardened
@@ -7337,8 +7339,8 @@ def _spec_from_draft(draft):
             print(f"[sizing-guard] {subject!r}: guard step raised "
                   f"{type(_sg_err).__name__}: {_sg_err} - continuing "
                   f"with unguarded values")
-        except Exception:
-            pass
+        except Exception as _fx:
+            _faults.note('chat', _fx)
 
     # ── Brand-category + subject-row canonicalization ───────────────
     # Defense in depth against the P-Valley class of defect (2026-08-19)
@@ -7496,8 +7498,8 @@ def _spec_from_draft(draft):
     }
     try:   # anchor_entity / geo_scope / political_lean ride the spec (2026-10-12); lazy so extracted copies of this function run
         __import__('prometheus.cohort_scope', fromlist=['apply_to_spec']).apply_to_spec(spec, draft)
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('chat', _fx)
     # ---- Platform scope passthrough (2026-09-04, Jenna perceptionbox
     # rerun). Normalized here so the engine host sees a validated list
     # of canonical platform keys or None. Draft may set the field or
@@ -8035,8 +8037,8 @@ def api_synth_chat_rebind_window():
             if _H._bind_shared_explicit_window(
                     d, probe, decision=d.get('decision')):
                 bound += 1
-        except Exception:
-            pass
+        except Exception as _fx:
+            _faults.note('chat', _fx)
     if not bound:
         return jsonify({'success': False, 'unparsed': True}), 200
 
@@ -8044,8 +8046,8 @@ def api_synth_chat_rebind_window():
     # rebound card and a re-read card are indistinguishable.
     try:
         _H._annotate_drafts_date_window(drafts)
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('chat', _fx)
 
     start, end = [p.strip() for p in rng.split(' TO ', 1)]
     try:
@@ -8055,8 +8057,8 @@ def api_synth_chat_rebind_window():
     try:
         print(f"[rebind-window] {user}: {bound} draft(s) -> {rng} "
               f"(no re-read)")
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('chat', _fx)
     return jsonify({
         'success': True,
         'bound': bound,
@@ -8225,8 +8227,8 @@ def _pm_recent_build_guard(username, subject, ws='', we=''):
                     Body=json.dumps(
                         {'entries': entries[-200:]}).encode('utf-8'),
                     ContentType='application/json')
-            except Exception:
-                pass
+            except Exception as _fx:
+                _faults.note('chat', _fx)
         return hit
     except Exception:
         traceback.print_exc()
@@ -8314,8 +8316,8 @@ def api_synth_chat_approve():
             draft['estimated_credits'] = _fresh_credits
             draft['base_credits'] = _fresh_credits
             draft.pop('estimated_credits_new_build', None)
-        except Exception:
-            pass
+        except Exception as _fx:
+            _faults.note('chat', _fx)
 
     # Unverified-subject rescue (2026-09-22, Amandaland): a build draft
     # with empty tu_demos means the interpret step could not verify the
@@ -8583,8 +8585,8 @@ def api_synth_chat_approve():
             _q_est = _H._estimated_audience_range(spec.get('subject_raw_tu'))
             if _q_est:
                 payload['quoted_estimate'] = _q_est
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('chat', _fx)
 
     # A re-approve of the same subject minutes later is a duplicate,
     # not a second order (smclain, Trinity Tatum x2, 2026-09-29).
@@ -8614,8 +8616,8 @@ def api_synth_chat_approve():
             from flask import g as _g_tr
             if getattr(_g_tr, '_pm_trace_id', ''):
                 payload['trace_id'] = _g_tr._pm_trace_id
-        except Exception:
-            pass
+        except Exception as _fx:
+            _faults.note('chat', _fx)
         _t_queue = time.monotonic()
         resp = _requests.post(
             f"{_H.SYNTH_QUEUE_URL}/synth/queue",
@@ -8649,8 +8651,8 @@ def api_synth_chat_approve():
         try:
             print(f"[synth_chat_run] queue returned 200 with no run_id "
                   f"payload={str(queue_resp)[:400]!r} - returning 502")
-        except Exception:
-            pass
+        except Exception as _fx:
+            _faults.note('chat', _fx)
         _H._chatbot_error_email(
             'brief-chat/approve',
             'queue accepted the run but returned no run_id: '
@@ -8698,8 +8700,8 @@ def api_synth_chat_approve():
             f"build: {spec.get('name', 'profile')}",
             subject=spec.get('name'), window=_mem_win,
             region=[r for r in _mem_region if r])
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('chat', _fx)
 
     return jsonify({
         'success': True,
@@ -9071,8 +9073,8 @@ def _pm_claude_json(system_prompt, user_prompt, max_tokens=6000,
         system_prompt = _pmk.with_canon(system_prompt,
                                         s3_client=_H.s3_client,
                                         bucket=_H.S3_BUCKET)
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('chat', _fx)
     # Per-user attribution (2026-09-02): tag every dashboard chat call
     # with the logged-in user so the daily spend email can break
     # Prometheus cost out per user. _pm_attrib_extras() never sets
@@ -9084,8 +9086,8 @@ def _pm_claude_json(system_prompt, user_prompt, max_tokens=6000,
     # usage_extras carries the enqueue-time attribution instead.
     try:
         usage_extras = _pm_merge_extras(_pm_attrib_extras(), usage_extras)
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('chat', _fx)
     last = None
     # Tool plans (2026-08-27, the generation loop): when the caller
     # asks for web research, try the current web_search tool type,
@@ -9295,8 +9297,8 @@ def _pm_intake_resolve(flow, text, history, parse_fn, complete_fn,
                     try:
                         _pm_ask_hint(outcome='intake_rules_completed',
                                      subject=flow)
-                    except Exception:
-                        pass
+                    except Exception as _fx:
+                        _faults.note('chat', _fx)
                     return parsed, False
         except Exception:
             traceback.print_exc()
@@ -9318,8 +9320,8 @@ def _pm_intake_resolve(flow, text, history, parse_fn, complete_fn,
                     try:
                         _pm_ask_hint(outcome='intake_proposed_field',
                                      subject=flow)
-                    except Exception:
-                        pass
+                    except Exception as _fx:
+                        _faults.note('chat', _fx)
                     return parsed, False
                 parsed.pop(field, None)
                 parsed.pop('_proposed', None)
@@ -9333,8 +9335,8 @@ def _pm_intake_resolve(flow, text, history, parse_fn, complete_fn,
             _pm_ask_hint(outcome='intake_fault', subject=flow)
             from flask import g as _gf
             _gf._pm_fault_alerted = True
-        except Exception:
-            pass
+        except Exception as _fx:
+            _faults.note('chat', _fx)
         try:
             _who = ''
             if isinstance(user, dict):
@@ -9856,8 +9858,8 @@ def _pm_ask_hint(route=None, outcome=None, subject=None, mode=None):
             _g._pm_ask_subject = str(subject)[:120]
         if mode:
             _g._pm_ask_mode = mode
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('chat', _fx)
 
 
 def _pm_ask_stage(key, t0=None, ms=None, count=None):
@@ -9879,8 +9881,8 @@ def _pm_ask_stage(key, t0=None, ms=None, count=None):
             stages[str(key)[:40]] = int(ms)
         elif t0 is not None:
             stages[str(key)[:40]] = int((time.monotonic() - t0) * 1000)
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('chat', _fx)
 
 
 def _pm_gate_analyze(user):
@@ -10269,8 +10271,8 @@ def _pm_approval_word(text):
     try:
         from prometheus import user_signal as _us
         t = _us._DATE_RANGE_SUFFIX_RE.sub('', t)
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('chat', _fx)
     return bool(_PM_APPROVAL_WORD_RE.match(t))
 
 
@@ -10645,8 +10647,8 @@ def _pm_prev_user_question(history, complaint):
             if any(rx.search(t) for rx in _PM_WRONG_ANSWER_RES):
                 continue
             return t
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('chat', _fx)
     return ''
 
 
@@ -11059,8 +11061,8 @@ def _pm_has_funding(user, username, data=None):
     try:
         if _w.is_unlimited(user) or bool(user.get('unlimited')):
             return True, 'unlimited'
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('chat', _fx)
     try:
         if data is None:
             data = _H.load_users()
@@ -11109,8 +11111,8 @@ def _pm_funds_gate(user):
             return None
         try:
             _pm_ask_hint(outcome='declined_no_funds')
-        except Exception:
-            pass
+        except Exception as _fx:
+            _faults.note('chat', _fx)
         print(f"[prometheus] funds gate blocked {uname!r} ({reason})")
         reply = (_H.OPENING_FUNDS_MESSAGE if reason == 'opening_topup'
                  else _H.NO_FUNDS_MESSAGE)
@@ -11760,8 +11762,8 @@ def _pm_start_preverify(text, candidates):
             from prometheus import guards as _pg_pv
             core = str(_pg_pv.entity_core(guess) or '').strip()
             guess = core or guess
-        except Exception:
-            pass
+        except Exception as _fx:
+            _faults.note('chat', _fx)
         if not guess or len(guess) < 2:
             return None
     except Exception:
@@ -12101,8 +12103,8 @@ def _pm_generation_base(subject_hint, text, ctx=None,
     guessed = ''
     try:
         guessed = pma.guess_subject_from_text(text)
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('chat', _fx)
     guess_tokens = set(_H._normalize_for_match(guessed).split())
 
     # 2. Profile catalog: a profile whose distinctive subject tokens
@@ -12249,8 +12251,8 @@ def _pm_csv_task_filename(entry):
     try:
         import prometheus_analysis as _pma_fn
         title = _pma_fn.scrub_user_text(title) or title
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('chat', _fx)
     title = re.sub(r'[\\/:*?"<>|]+', ' ', title or '')
     title = re.sub(r'\s+', ' ', title).strip()[:80].strip(' .') \
         or 'Data Export'
@@ -12448,8 +12450,8 @@ def _pm_csv_point(subject, question, family):
             'subject': str(subject or '')[:120],
             'question': str(question or '')[:300],
             'family': str(family or '')[:32]}
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('chat', _fx)
 
 
 def _pm_csv_download_response(user, text, history=None):
@@ -12599,8 +12601,8 @@ def _pm_search_demand_response(user, text, history):
                                    s3_client=_H.s3_client, bucket=_H.S3_BUCKET)
         if _kb:
             user_prompt = f"{user_prompt}\n\n{_kb}"
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('chat', _fx)
     _t_model = time.monotonic()
     result = _pm_claude_json(pma.SEARCH_DEMAND_SYSTEM_PROMPT, user_prompt,
                              max_tokens=7500, temperature=0.4,
@@ -12717,10 +12719,10 @@ def _pm_remember_ask(pm_user, question, subject=None, cohort=None,
         try:
             from flask import g as _g
             _g._pm_mem_recorded = True
-        except Exception:
-            pass
-    except Exception:
-        pass
+        except Exception as _fx:
+            _faults.note('chat', _fx)
+    except Exception as _fx:
+        _faults.note('chat', _fx)
 
 
 def _pm_remember_ask_build(pm_user, question, subject=None, window=None,
@@ -12731,8 +12733,8 @@ def _pm_remember_ask_build(pm_user, question, subject=None, window=None,
         import prometheus_memory as pmm
         pmm.remember(pm_user, question, subject=subject, route='build',
                      window=window, region=region or None)
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('chat', _fx)
 
 
 def _pm_memory_last_window():
@@ -13420,8 +13422,8 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
         if not payload.pop('_held', False):
             _pm_csv_point(payload.get('profile'), text,
                           (payload.get('_family') or ''))
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('chat', _fx)
     payload.pop('_family', None)
     payload.pop('_verify', None)
     _stages = payload.pop('_stages_ms', None)
@@ -13444,8 +13446,8 @@ def _pm_verify_prior_entries(res, family, led):
         if subj and subj.lower() != led_subj.lower():
             led2 = il.consult(subject=subj, metric_family=family)
             ents.extend(led2.get('entries') or [])
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('chat', _fx)
     seen, out = set(), []
     for e in ents:
         if not isinstance(e, dict):
@@ -13506,8 +13508,8 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
             return
         try:
             stage_cb(label)
-        except Exception:
-            pass
+        except Exception as _fx:
+            _faults.note('chat', _fx)
 
     _stage_note('reading the data')
     stages = {}
@@ -13622,8 +13624,8 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
         from prometheus import methodology as _meth_rules
         if _meth_rules.is_viewership_read(text, None, text):
             extra_blocks.append(_meth_rules.MODEL_RULES)
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('chat', _fx)
     if pma.is_cohort_churn_ask(text):
         extra_blocks.append(pma.COHORT_CHURN_GUIDANCE)
     _ds_series = []
@@ -13640,8 +13642,8 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
     is_strategy = False
     try:
         is_strategy = pma.detect_strategy_intent(text)
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('chat', _fx)
     if is_strategy:
         extra_blocks.append(pma.STRATEGY_GUIDANCE)
     _is_so_what = pma.is_so_what_ask(text)  # so-what asks answer as a plan
@@ -13650,15 +13652,16 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
     _multi_qs = pma.split_questions(text)  # several questions: answer all
     if _multi_qs:
         extra_blocks.append(pma.multi_question_guidance(_multi_qs))
-    user_prompt = user_prompt + '\n\n' + '\n\n'.join(extra_blocks)
+    _figs2 = _fig.registry_for(anchors_block, digest_block, verifier_block, measured_block, subiq_block)   # audit items 3 + 4
+    user_prompt = user_prompt + '\n\n' + '\n\n'.join(extra_blocks) + _figs2.prompt_suffix()
     try:
         import prometheus_knowledge as _pmk
         _kb = _pmk.knowledge_block('measured_read', text=text,
                                    s3_client=_H.s3_client, bucket=_H.S3_BUCKET)
         if _kb:
             user_prompt = f"{user_prompt}\n\n{_kb}"
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('chat', _fx)
     print(f"[pm-loop] grounding: base={base.get('s3_key')!r} "
           f"neighbors={neighbor_names} "
           f"examples={'yes' if examples_block else 'no'} "
@@ -13679,8 +13682,8 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
         from claude_client import last_call_stats as _pm_lcs
         stages['model_ws_rounds'] = int(
             (_pm_lcs() or {}).get('web_search_requests') or 0)
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('chat', _fx)
     if not result.get('success'):
         _H._chatbot_error_email(
             'brief-chat/analyze',
@@ -13706,7 +13709,7 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
     _t_stage = time.monotonic()
     try:
         res = pma.reconcile_breakdown_to_series(pma.enforce_metrics_coherence(data, so_what=_is_so_what, multi=_multi_qs), _ds_series)
-        reply = pma.format_generated_metrics_reply(res)
+        reply, _fig_ledger2 = _fig.compose(pma.format_generated_metrics_reply(res), _figs2, anchors_block)
     except Exception as e:
         traceback.print_exc()
         _H._chatbot_error_email('brief-chat/analyze', e)
@@ -13904,8 +13907,8 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
     if pmv is not None and verdict is not None:
         try:
             _verify_stamp = pmv.stamp(verdict, revised=verify_revised)
-        except Exception:
-            pass
+        except Exception as _fx:
+            _faults.note('chat', _fx)
     followups = [pma.scrub_user_text(str(f).strip())[:160]
                  for f in (data.get('followups') or [])
                  if str(f).strip()][:3]
@@ -14034,7 +14037,7 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
             'question': text,
             'options': [{'label': _sw_chip, 'subject': _sw}]}}
     return {
-        'success': True, 'action': 'answer', 'reply': reply, **_chart_payload,
+        'success': True, 'action': 'answer', 'reply': reply, **_chart_payload, 'figures': _fig_ledger2,
         'followups': followups, 'offer_deck': False, 'deck_angle': None,
         'model': result.get('model'),
         'profile': res.get('subject'),
@@ -14091,8 +14094,8 @@ def _pm_thread_for_job(username, job_id):
         idx = _load_threads_index(username)
         if any(t.get('id') == tid for t in idx.get('threads', [])):
             return tid
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('chat', _fx)
     return None
 
 
@@ -14311,8 +14314,8 @@ def _pm_run_read_job(job_id, pm_user, pm_ppu, text, history, mr, base,
             _pm_read_status_write(job_id, {
                 **head, 'status': 'working', 'stage': str(label)[:60],
                 'stage_at': time.time()})
-        except Exception:
-            pass
+        except Exception as _fx:
+            _faults.note('chat', _fx)
 
     try:
         payload = _pm_generate_read_core(
@@ -14370,8 +14373,8 @@ def _pm_run_read_job(job_id, pm_user, pm_ppu, text, history, mr, base,
                                       'text': text[:200]})
         try:
             _pm_read_status_write(job_id, {**head, 'status': 'error'})
-        except Exception:
-            pass
+        except Exception as _fx:
+            _faults.note('chat', _fx)
         _pm_notify_delete(job_id)
         if panel_charge:
             _pm_panel_refund(panel_charge)
@@ -14910,8 +14913,8 @@ def _pm_challenge_headsup(user, text):
             'generated normally; review for consistency): ' + t[:400],
             user_email=(user.get('email') or user.get('username')),
             payload={'question': t[:400], '_no_promise': True})
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('chat', _fx)
 
 
 def _pm_trajectory_files(subject, years):
@@ -15152,8 +15155,8 @@ def _pm_analyze_core(user, body, text, history):
         if _wo_reply:
             try:
                 _pm_ask_hint(outcome='workorder_' + _wo_intent)
-            except Exception:
-                pass
+            except Exception as _fx:
+                _faults.note('chat', _fx)
             return jsonify({
                 'success': True, 'action': 'answer',
                 'reply': _wo_reply, 'followups': [],
@@ -15314,15 +15317,8 @@ def _pm_analyze_core(user, body, text, history):
                           'and I will run it the moment you are set.'),
                 'followups': [], 'offer_deck': False,
                 'deck_angle': None})
-        _bpiq_job = uuid.uuid4().hex[:12]
-        _bpiq_extras = _pm_merge_extras(_pm_attrib_extras(), _pm_ppu)
-        _pm_bpiq_status_write(_bpiq_job, {
-            'job_id': _bpiq_job, 'user': _bpiq_user,
-            'status': 'queued', 'started_at': time.time()})
-        threading.Thread(
-            target=_pm_run_bpiq_job,
-            args=(_bpiq_job, _bpiq_user, _bpiq_confirm, _bpiq_extras),
-            daemon=True).start()
+        _bpiq_job, _bpiq_extras = uuid.uuid4().hex[:12], _pm_merge_extras(_pm_attrib_extras(), _pm_ppu)
+        _rr.start_engine_job('bpiq', _bpiq_job, _bpiq_user, _bpiq_confirm, _bpiq_extras, _pm_bpiq_status_write, _pm_run_bpiq_job)   # the queue, never a web thread (audit item 5)
         return jsonify({
             'success': True, 'action': 'answer',
             'reply': (f'On it. Building the {_subj} valuation now - '
@@ -15364,15 +15360,8 @@ def _pm_analyze_core(user, body, text, history):
                           'set.'),
                 'followups': [], 'offer_deck': False,
                 'deck_angle': None})
-        _aiq_job = uuid.uuid4().hex[:12]
-        _aiq_extras = _pm_merge_extras(_pm_attrib_extras(), _pm_ppu)
-        _pm_aiq_status_write(_aiq_job, {
-            'job_id': _aiq_job, 'user': _bpiq_user,
-            'status': 'queued', 'started_at': time.time()})
-        threading.Thread(
-            target=_pm_run_aiq_job,
-            args=(_aiq_job, _bpiq_user, _aiq_confirm, _aiq_extras),
-            daemon=True).start()
+        _aiq_job, _aiq_extras = uuid.uuid4().hex[:12], _pm_merge_extras(_pm_attrib_extras(), _pm_ppu)
+        _rr.start_engine_job('aiq', _aiq_job, _bpiq_user, _aiq_confirm, _aiq_extras, _pm_aiq_status_write, _pm_run_aiq_job)   # the queue, never a web thread (audit item 5)
         return jsonify({
             'success': True, 'action': 'answer',
             'reply': (f'On it. Setting up {_aname} tracking now - '
@@ -15448,15 +15437,8 @@ def _pm_analyze_core(user, body, text, history):
                           'it the moment you are set.'),
                 'followups': [], 'offer_deck': False,
                 'deck_angle': None})
-        _fw_job = uuid.uuid4().hex[:12]
-        _fw_extras = _pm_merge_extras(_pm_attrib_extras(), _pm_ppu)
-        _pm_fw_status_write(_fw_job, {
-            'job_id': _fw_job, 'user': _bpiq_user,
-            'status': 'queued', 'started_at': time.time()})
-        threading.Thread(
-            target=_pm_run_fw_job,
-            args=(_fw_job, _bpiq_user, _fw_confirm, _fw_extras),
-            daemon=True).start()
+        _fw_job, _fw_extras = uuid.uuid4().hex[:12], _pm_merge_extras(_pm_attrib_extras(), _pm_ppu)
+        _rr.start_engine_job('fw', _fw_job, _bpiq_user, _fw_confirm, _fw_extras, _pm_fw_status_write, _pm_run_fw_job)   # the queue, never a web thread (audit item 5)
         return jsonify({
             'success': True, 'action': 'answer',
             'reply': (f'On it. Building the {_fsubj} now - it starts '
@@ -15489,15 +15471,8 @@ def _pm_analyze_core(user, body, text, history):
                           'it the moment you are set.'),
                 'followups': [], 'offer_deck': False,
                 'deck_angle': None})
-        _jiq_job = uuid.uuid4().hex[:12]
-        _jiq_extras = _pm_merge_extras(_pm_attrib_extras(), _pm_ppu)
-        _pm_jiq_status_write(_jiq_job, {
-            'job_id': _jiq_job, 'user': _bpiq_user,
-            'status': 'queued', 'started_at': time.time()})
-        threading.Thread(
-            target=_pm_run_jiq_job,
-            args=(_jiq_job, _bpiq_user, _jiq_confirm, _jiq_extras),
-            daemon=True).start()
+        _jiq_job, _jiq_extras = uuid.uuid4().hex[:12], _pm_merge_extras(_pm_attrib_extras(), _pm_ppu)
+        _rr.start_engine_job('jiq', _jiq_job, _bpiq_user, _jiq_confirm, _jiq_extras, _pm_jiq_status_write, _pm_run_jiq_job)   # the queue, never a web thread (audit item 5)
         return jsonify({
             'success': True, 'action': 'answer',
             'reply': (f'On it. Building the {_jsubj} journey now - '
@@ -15562,8 +15537,8 @@ def _pm_analyze_core(user, body, text, history):
             _pg = str(((ctx or {}).get('primary') or {}).get('name') or '')
             if _pg and _H._normalize_for_match(_pg) == _H._normalize_for_match(_bind_subject):
                 _pm_page_confirm_mark(_pm_ask_log_user(''), _pg)
-        except Exception:
-            pass
+        except Exception as _fx:
+            _faults.note('chat', _fx)
         return _pm_generate_metrics_response(
             user, text, history, ctx=ctx, prefer_catalog=True,
             bind_subject=_bind_subject,
@@ -16026,8 +16001,8 @@ def _pm_analyze_core(user, body, text, history):
                 _pm_ask_hint(route='clarify_answer_merge')
                 _pm_page_confirm_mark(_pm_ask_log_user(''), str(
                     (ctx.get('primary') or {}).get('name') or ''))
-            except Exception:
-                pass
+            except Exception as _fx:
+                _faults.note('chat', _fx)
         else:
             _osc = _pm_open_screen_confirm(text, ctx, history=history)
             if isinstance(_osc, dict):
@@ -16211,8 +16186,8 @@ def _pm_analyze_core(user, body, text, history):
                 print(f"[analyze] board-view ask ({_bv_view}): selected "
                       f"profile {_bv_name!r} not referenced - answering "
                       f"about the board")
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('chat', _fx)
     try:
         digest, p_meta = None, {}
         if ctx.get('primary'):
@@ -16392,19 +16367,20 @@ def _pm_analyze_core(user, body, text, history):
         _ub = _pm_user_block(_pm_user)
         if _ub:
             _led_block = (_led_block + '\n\n' + _ub) if _led_block else _ub
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('chat', _fx)
     # Thread number bank + view glossary (2026-10-02 S4): on a
     # "why is this different" / "how is this calculated" ask, every
     # figure already stated in this thread and the open view's KPI
     # definitions ride the binding block, so the answer names the
     # earlier figure and the definition instead of re-deriving.
     _led_block = _pm_kpi_prompt_extras(text, history, ctx, _led_block)
+    _figs = _fig.registry_for(xmod_block, digest, _led_block)   # figures by token, with provenance (audit items 3 + 4)
     user_prompt = _smart.with_reading(pma.build_analysis_user_prompt(
         digest, history, text, mode=mode or None,
         view_context=ctx.get('view_context'),
         cross_module_block=xmod_block,
-        ledger_block=_led_block), body.get('reading'))   # the Reader's understanding rides along (2026-10-14)
+        ledger_block=_led_block), body.get('reading')) + _figs.prompt_suffix()   # the Reader's understanding rides along (2026-10-14)
     try:
         import prometheus_knowledge as _pmk
         _kb = _pmk.knowledge_block(
@@ -16413,8 +16389,8 @@ def _pm_analyze_core(user, body, text, history):
             s3_client=_H.s3_client, bucket=_H.S3_BUCKET)
         if _kb:
             user_prompt = f"{user_prompt}\n\n{_kb}"
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('chat', _fx)
     _max_tok = 7500 if mode in ('cross_profile', 'personas',
                                 'whitespace') else 6000
     _t_model = time.monotonic()
@@ -16501,8 +16477,7 @@ def _pm_analyze_core(user, body, text, history):
     # terms replaced and em dashes stripped before the text reaches
     # the user. Mirrors the partner API's _V1_BANNED_TOKENS posture.
     reply = pma.scrub_user_text(reply)
-    if action == 'answer' and xmod_block:   # a count the evidence carried is quoted to the digit (2026-10-14)
-        reply, _ev_swaps = _smart.bind_to_evidence(reply, xmod_block); _ev_swaps and print(f"[pm-evidence-bind] snapped {_ev_swaps[:4]}")
+    reply, _fig_ledger = _fig.compose(reply, _figs, xmod_block) if action == 'answer' else (reply, [])   # tokens rendered, leftovers bound, every figure sourced
     # Refusal guard (2026-09-28): a draft that declines to answer or
     # carries no numbers retries once with a produce-the-read
     # instruction; a second refusal reroutes to the measured-read
@@ -16599,11 +16574,11 @@ def _pm_analyze_core(user, body, text, history):
                  subject=_pm_subject, mode=mode or None)
     if action != 'build_profile':   # one brain (2026-10-13): the figures join the shared ring, a few notes the reader's own
         _shared.after_answer(__import__('insights_ledger'), _pm_claude_data, user=_pm_user, question=text, reply=reply, subject=_pm_subject,
-                             followups=followups, base_profile_key=str((ctx.get('primary') or {}).get('s3_key') or ''))
+                             followups=followups, base_profile_key=str((ctx.get('primary') or {}).get('s3_key') or ''), figures=_fig_ledger)
     # Fresh generations meter through their own model-call usage rows
     # (usage_extras on _pm_claude_json); no separate debit here.
     return jsonify({
-        'success': True, 'action': action, 'reply': reply,
+        'success': True, 'action': action, 'reply': reply, 'figures': _fig_ledger,
         'followups': followups,
         'offer_deck': offer_deck,
         'deck_angle': (str(deck_angle)[:400]
@@ -16697,8 +16672,8 @@ def _pm_run_bpiq_job(job_id, username, inputs, extras):
         try:
             import prometheus_analysis as _pma_b
             tools = [_pma_b.WEB_SEARCH_TOOL]
-        except Exception:
-            pass
+        except Exception as _fx:
+            _faults.note('chat', _fx)
 
         def _cj(system, user_prompt, **kw):
             kw.setdefault('usage_extras', extras)
@@ -16799,8 +16774,8 @@ def _pm_run_bpiq_job(job_id, username, inputs, extras):
             _pm_bpiq_status_write(job_id, {
                 'job_id': job_id, 'user': username, 'status': 'error',
                 'finished_at': time.time()})
-        except Exception:
-            pass
+        except Exception as _fx:
+            _faults.note('chat', _fx)
         _H._chatbot_error_email('brief-chat/bpiq-job', e)
 
 
@@ -16959,8 +16934,8 @@ def _pm_run_jiq_job(job_id, username, inputs, extras):
         try:
             import prometheus_analysis as _pma_j
             tools = [_pma_j.WEB_SEARCH_TOOL]
-        except Exception:
-            pass
+        except Exception as _fx:
+            _faults.note('chat', _fx)
 
         def _cj(system, user_prompt, **kw):
             kw.setdefault('usage_extras', extras)
@@ -17030,8 +17005,8 @@ def _pm_run_jiq_job(job_id, username, inputs, extras):
             _pm_jiq_status_write(job_id, {
                 'job_id': job_id, 'user': username, 'status': 'error',
                 'finished_at': time.time()})
-        except Exception:
-            pass
+        except Exception as _fx:
+            _faults.note('chat', _fx)
         _H._chatbot_error_email('brief-chat/jiq-job', e)
 
 
@@ -17066,8 +17041,8 @@ def _pm_tool_price_label(tool_key, fallback, username=None):
         v = float(_w.tool_price_usd(tool_key, subject=subject) or 0)
         if v > 0:
             return _pm_usd_label(v, uname or None)
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('chat', _fx)
     return fallback
 
 
@@ -17162,8 +17137,8 @@ def _pm_run_fw_job(job_id, username, inputs, extras):
         try:
             import prometheus_analysis as _pma_f
             tools = [_pma_f.WEB_SEARCH_TOOL]
-        except Exception:
-            pass
+        except Exception as _fx:
+            _faults.note('chat', _fx)
 
         def _cf(system, user_prompt, **kw):
             kw.setdefault('usage_extras', extras)
@@ -17207,8 +17182,8 @@ def _pm_run_fw_job(job_id, username, inputs, extras):
             _pm_fw_status_write(job_id, {
                 'job_id': job_id, 'user': username, 'status': 'error',
                 'finished_at': time.time()})
-        except Exception:
-            pass
+        except Exception as _fx:
+            _faults.note('chat', _fx)
         _H._chatbot_error_email('brief-chat/fw-job', e)
 
 
@@ -17412,8 +17387,8 @@ def _pm_run_aiq_job(job_id, username, inputs, extras):
             _pm_aiq_status_write(job_id, {
                 'job_id': job_id, 'user': username, 'status': 'error',
                 'finished_at': time.time()})
-        except Exception:
-            pass
+        except Exception as _fx:
+            _faults.note('chat', _fx)
         _H._chatbot_error_email('brief-chat/aiq-job', e)
 
 
@@ -17714,16 +17689,16 @@ def _pm_run_deck_job(job_id, username, ctx, history, angle,
                 s3_client=_H.s3_client, bucket=_H.S3_BUCKET)
             if _kb:
                 _deck_prompt = f"{_deck_prompt}\n\n{_kb}"
-        except Exception:
-            pass
+        except Exception as _fx:
+            _faults.note('chat', _fx)
         # Corpus catalog (2026-10-06): the dashboard's own figures on
         # the subject bind the deck's headline numbers.
         try:
             _cat_block = _pm_catalog_block(subject)
             if _cat_block:
                 _deck_prompt = f"{_deck_prompt}\n\n{_cat_block}"
-        except Exception:
-            pass
+        except Exception as _fx:
+            _faults.note('chat', _fx)
         plan_result = _pm_claude_json(
             pma.INSIGHTS_DECK_SYSTEM_PROMPT, _deck_prompt,
             max_tokens=20000, temperature=0.4, surface='deck',

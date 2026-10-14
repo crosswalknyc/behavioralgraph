@@ -7,6 +7,13 @@ promise, the repeat-guard options, and the welcome status line. They
 read the host through ``_H`` and the legacy chat module through
 ``_C``; see threads.py for the pattern. Behavior unchanged.
 """
+try:
+    from prometheus import faults as _faults   # swallowed faults are counted (audit item 8)
+except Exception:  # pragma: no cover
+    class _faults:  # type: ignore
+        @staticmethod
+        def note(*a, **k):
+            return 0
 import json
 import re
 import threading
@@ -59,8 +66,8 @@ def _pm_user_block(username):
             _PM_USER_BLOCK_CACHE[uname] = (time.time(), blk)
     try:
         threading.Thread(target=_run, daemon=True).start()
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('watch', _fx)
     return _pm_with_reader_notes(uname, '')
 
 
@@ -122,8 +129,8 @@ def _pm_probe_caller():
             return re.sub(r'[^a-z0-9_-]+', '', caller.lower())[:40] or 'probe'
         if _PM_PROBE_UA_RX.search(str(_rq.headers.get('User-Agent') or '')):
             return 'probe'
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('watch', _fx)
     return ''
 
 
@@ -145,8 +152,8 @@ def _pm_ask_log_user(default='unknown'):
         u = session.get('username')
         if u:
             return str(u)
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('watch', _fx)
     try:
         from flask import g as _g, request as _rq
         u = getattr(_g, '_pm_ask_user', None) or getattr(_g, '_pm_api_key_owner', None)
@@ -160,8 +167,8 @@ def _pm_ask_log_user(default='unknown'):
             return 'canary'
         if getattr(_g, '_pm_api_key_id', None):
             return 'apikey:' + str(getattr(_g, '_pm_api_key_id'))[:24]
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('watch', _fx)
     return default
 
 
@@ -196,8 +203,8 @@ def _pm_watch_flag(user, question, route, outcome, extra=None):
             traceback.print_exc()
     try:
         threading.Thread(target=_run, daemon=True).start()
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('watch', _fx)
 
 
 def _pm_record_held_reply(username, question, told, reason, kind):
@@ -354,8 +361,8 @@ def _pm_thread_confirmed_page(history, page):
             seen += 1
             if seen <= 4 and _ns.page_named(txt, page, norm, stop):
                 return True
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('watch', _fx)
     return False
 
 
@@ -447,8 +454,8 @@ def _pm_usd(tool_key, fallback_usd, username=None):
         v = float(_w.tool_price_usd(tool_key, subject=subject) or 0)
         if v > 0:
             return v
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('watch', _fx)
     return float(fallback_usd)
 
 
@@ -642,8 +649,8 @@ def _pm_panel_price_label(username):
     try:
         credits_price = int(_H.get_credit_cost('panel_report')
                             or _H.CREDITS_PANEL_REPORT)
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('watch', _fx)
     # Standard pricing, never credits (Jenna 2026-10-07): everyone sees
     # the dollar price; the charge still consumes the internal units.
     usd = _pm_usd('panel_report', float(getattr(_H, 'PANEL_REPORT_USD', 500.0) or 500.0),
@@ -684,16 +691,16 @@ def _pm_page_clarify_subject(text, page_subject):
                 if nm and not _ns.is_gen_pop(nm, norm) and \
                         _ns.distinct_tokens(nm, norm, stop) == named_d:
                     return nm
-        except Exception:
-            pass
+        except Exception as _fx:
+            _faults.note('watch', _fx)
         label = ' '.join(
             w if norm(w) in stop else (w[:1].upper() + w[1:]) for w in words)
         try:
             from prometheus import referents as _refs
             if not _refs.plausible_subject(label):
                 continue
-        except Exception:
-            pass
+        except Exception as _fx:
+            _faults.note('watch', _fx)
         return label
     return ''
 
@@ -743,14 +750,14 @@ def _pm_consumption_subject(text):
     try:
         from prometheus import named_subject as _ns
         subj = _ns.clip_clause(subj)   # "Crossroads Spring and If It Were" -> "Crossroads Spring" (2026-10-13)
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('watch', _fx)
     try:
         from prometheus import referents as _refs
         if not _refs.plausible_subject(subj):
             return ''
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('watch', _fx)
     return subj
 
 

@@ -14,6 +14,13 @@ Design constraints (Jenna 2026-08-20):
   no em dashes, state the finding then the number.
 """
 
+try:
+    from prometheus import faults as _faults   # swallowed faults are counted (audit item 8)
+except Exception:  # pragma: no cover
+    class _faults:  # type: ignore
+        @staticmethod
+        def note(*a, **k):
+            return 0
 import difflib
 import hashlib
 import io
@@ -844,8 +851,8 @@ def find_avid_key(s3_client, bucket, subject, exclude_key=None):
                 continue
             if _norm_brand(parts[0]) == subj and sk != exclude_key:
                 return sk
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('analysis', _fx)
     return None
 
 
@@ -898,8 +905,8 @@ def build_purchase_context(df, genpop_map, text, avid_df=None,
                         word = ('ABOVE' if gap > 0.25 else 'BELOW' if gap < -0.25 else 'LEVEL WITH')
                         lines_v[0] += (f" | vs audience-wide {tu_bp:.4f}%: the Avid tier reads "
                                        f"{word} the audience-wide level ({gap:+.1f} points)")
-                    except Exception:
-                        pass
+                    except Exception as _fx:
+                        _faults.note('analysis', _fx)
                     a_lines.extend(lines_v)
             if a_lines:
                 head = ('AVID TIER (the subject\'s avid fans, the library\'s '
@@ -1270,8 +1277,8 @@ def _digest_shared_get(s3_client, bucket, s3_key, etag, norms_ver, want_name='')
         digest, meta = doc.get('digest'), doc.get('meta')
         if isinstance(digest, str) and digest.strip() and isinstance(meta, dict):
             return digest, meta
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('analysis', _fx)
     return None
 
 
@@ -1289,14 +1296,14 @@ def _digest_shared_put(s3_client, bucket, s3_key, etag, norms_ver, digest, meta,
         def _put():
             try:
                 s3_client.put_object(Bucket=bucket, Key=key, Body=body, ContentType='application/json')
-            except Exception:
-                pass
+            except Exception as _fx:
+                _faults.note('analysis', _fx)
         if os.environ.get('REGRESSION_TEST_MODE') == '1':
             _put()
         else:
             threading.Thread(target=_put, daemon=True).start()
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('analysis', _fx)
 
 
 def is_missing_key_error(err) -> bool:
@@ -1311,8 +1318,8 @@ def is_missing_key_error(err) -> bool:
                     .get("Error") or {}).get("Code") or "")
         if code in ("NoSuchKey", "404", "NotFound"):
             return True
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('analysis', _fx)
     return "NoSuchKey" in str(err)
 
 
@@ -1415,8 +1422,8 @@ def get_digest_bundle(s3_client, bucket, page_context, max_cuts=3):
                 for k, _ in sorted(_bundle_ttl_cache.items(),
                                    key=lambda kv: kv[1][0])[:10]:
                     _bundle_ttl_cache.pop(k, None)
-        except Exception:
-            pass
+        except Exception as _fx:
+            _faults.note('analysis', _fx)
     return _bundle_text, p_meta
 
 
@@ -1802,8 +1809,8 @@ def render_view_context_block(view_context):
         from prometheus import projection as _proj
         data, _ = _proj.project_view_data(
             data, salt=str(view_context.get('view_id') or ''))
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('analysis', _fx)
     try:
         body = json.dumps(data, ensure_ascii=False, indent=1)
     except Exception:
@@ -1865,8 +1872,8 @@ def _xmod_title_key(title):
     try:
         from migration.title_anchors import title_key as _tk
         return _tk(title)
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('analysis', _fx)
     s = str(title or '').strip()
     if not s:
         return ''
@@ -2198,14 +2205,14 @@ def _load_deliverable_indexes(s3_client, bucket):
             data['journey_iq'] = list(
                 (_j('journey-iq/_index.json', {}) or {}).get('runs')
                 or [])[-150:]
-        except Exception:
-            pass
+        except Exception as _fx:
+            _faults.note('analysis', _fx)
         try:
             data['attribution_iq'] = list(
                 (_j('intent/registry.json', {}) or {}).get('titles')
                 or [])[-150:]
-        except Exception:
-            pass
+        except Exception as _fx:
+            _faults.note('analysis', _fx)
         try:
             meta = _j('system/brand_partnership_iq_metadata.json', {})
             if isinstance(meta, dict):
@@ -2215,16 +2222,16 @@ def _load_deliverable_indexes(s3_client, bucket):
                                          or k)}
                     for k, v in meta.items() if isinstance(v, dict)
                 ][-150:]
-        except Exception:
-            pass
+        except Exception as _fx:
+            _faults.note('analysis', _fx)
         try:
             resp = s3_client.list_objects_v2(
                 Bucket=bucket, Prefix='flywheel/', MaxKeys=300)
             data['flywheel'] = [
                 o['Key'] for o in resp.get('Contents') or []
                 if str(o.get('Key') or '').lower().endswith('.csv')]
-        except Exception:
-            pass
+        except Exception as _fx:
+            _faults.note('analysis', _fx)
     with _xmod_lock:
         if any(data.values()) or _deliv_index_cache['data'] is None:
             _deliv_index_cache.update(ts=now, data=data)
@@ -2594,8 +2601,8 @@ def build_cross_module_block(s3_client, bucket, ctx, text,
                     lines.append(ln)
                     if mod not in modules:
                         modules.append(mod)
-            except Exception:
-                pass
+            except Exception as _fx:
+                _faults.note('analysis', _fx)
 
             # --- Trends (skip when that view is already open) ---
             if active_view != 'trendsIQ':
@@ -2620,12 +2627,12 @@ def build_cross_module_block(s3_client, bucket, ctx, text,
                                             or local_subject, anchor)
                     lines.insert(0, line)
                     modules.insert(0, 'subscriber_iq')
-                except Exception:
-                    pass
+                except Exception as _fx:
+                    _faults.note('analysis', _fx)
         finally:
             ex.shutdown(wait=False)
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('analysis', _fx)
 
     block = '\n'.join(lines).strip()
     while block and len(block.encode('utf-8')) > XMOD_MAX_BYTES:
@@ -2957,8 +2964,8 @@ def _apply_dashboard_subiq_adjustments(key, parsed):
         fn = getattr(host, 'normalize_demographics_gen_pop_to_nps', None)
         if callable(fn):
             fn(parsed)
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('analysis', _fx)
 
 
 def _subiq_payload_cached(s3_client, subiq_bucket, key, parser):
@@ -3503,8 +3510,8 @@ def _drop_frame_breaking_sentences(s):
         try:
             print('[scrub] dropped frame-breaking sentence(s) '
                   '(citation or off-clickstream claim)')
-        except Exception:
-            pass
+        except Exception as _fx:
+            _faults.note('analysis', _fx)
     return out
 
 
@@ -3531,8 +3538,8 @@ def scrub_user_text(text):
     try:
         from prometheus import guards as _guards
         s = _guards.scrub_method_language(s)
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('analysis', _fx)
     s = re.sub(r'[ \t]{2,}', ' ', s)
     return s
 
@@ -4468,8 +4475,8 @@ def is_so_what_ask(text):
     try:
         if _is_build_request(t) or detect_deck_intent(t):
             return False
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('analysis', _fx)
     return True
 
 
@@ -4898,8 +4905,8 @@ def classify_ask_semantic(text, claude_json_fn):
         m = re.search(r'"kind"\s*:\s*"(analysis|build|cut|other)"', raw)
         if m:
             return m.group(1)
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('analysis', _fx)
     return 'other'
 
 
@@ -5350,8 +5357,8 @@ def seat_price_label(amount):
             lbl = _app._usd_label(amount)
             if lbl:
                 return lbl
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('analysis', _fx)
     try:
         v = float(amount)
     except (TypeError, ValueError):
@@ -6174,8 +6181,8 @@ def enforce_metrics_coherence(data, so_what=False, multi=None):
     try:
         from migration.journey_norms import hold_chat_metrics
         metrics = hold_chat_metrics(metrics, ' '.join([out['headline']] + list(out['reads'])), out['subject'])
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('analysis', _fx)
     out['metrics'] = metrics
     if so_what:
         out['_so_what'] = True
@@ -6417,8 +6424,8 @@ def build_generated_csv(entry):
             w.writerow([])
             w.writerow(['Note', _meth.VIEW_HEADER + ' ' + _meth.VIEW_DEFINITION])
             text_out = buf.getvalue()
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('analysis', _fx)
     return (f"{stem or 'crosswalk_data'}.csv", text_out)
 
 
@@ -6655,8 +6662,8 @@ def _stamp_window_tokens(text):
         from migration.event_window import default_window as _dw
         start, end = _dw()
         start, end = str(start)[:10], str(end)[:10]
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('analysis', _fx)
     if not (start and end):
         t = _dt.date.today()
         try:

@@ -120,15 +120,38 @@ def _numeric(v):
     return num, unit
 
 
+def _with_sources(metrics, figures):
+    """Provenance on the ledger's metrics (audit item 4): a metric whose
+    value matches a composed figure carries that figure's source; the
+    rest are marked model_typed."""
+    try:
+        by_val = {}
+        for f in figures or []:
+            try:
+                by_val.setdefault(round(float(f.get('value')), 4), f)
+            except (TypeError, ValueError):
+                continue
+        for m in metrics or []:
+            try:
+                f = by_val.get(round(float(m.get('value')), 4))
+            except (TypeError, ValueError):
+                f = None
+            m['source'] = (f or {}).get('source') or ('model_typed' if figures else 'unsourced')
+    except Exception:
+        pass
+    return metrics
+
+
 def persist_answer(il, *, subject, question, reply, followups=None,
                    base_profile_key='', window_start='', window_end='',
-                   window_label='', route=ANSWER_ROUTE):
+                   window_label='', route=ANSWER_ROUTE, figures=None):
     """A page answer joins the shared ring: its figures and the reply,
     under the profile's subject and window, so the next ask on that
     page (anyone's) binds to them and an identical ask replays them.
-    Nothing is written for a reply with no figures."""
+    Nothing is written for a reply with no figures. `figures` (the
+    composed ledger) puts a source on every metric."""
     try:
-        metrics = figures_from_reply(reply)
+        metrics = _with_sources(figures_from_reply(reply), figures)
         if not metrics or not str(subject or '').strip():
             return False
         family = ''
@@ -400,12 +423,13 @@ def notes_block(user, k=8):
 
 
 def after_answer(il, claude, *, user, question, reply, subject='', followups=None,
-                 base_profile_key='', window_start='', window_end='', window_label=''):
+                 base_profile_key='', window_start='', window_end='', window_label='', figures=None):
     """Both rings, after a page answer: the figures to the shared
-    ledger, a few notes to the reader's own memory. Non-blocking."""
+    ledger (each with its source), a few notes to the reader's own
+    memory. Non-blocking."""
     def _go():
         persist_answer(il, subject=subject, question=question, reply=reply, followups=followups,
                        base_profile_key=base_profile_key, window_start=window_start,
-                       window_end=window_end, window_label=window_label)
+                       window_end=window_end, window_label=window_label, figures=figures)
         distill_notes(claude, user=user, question=question, reply=reply, subject=subject)
     _run(_go)
