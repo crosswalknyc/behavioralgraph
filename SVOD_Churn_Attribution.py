@@ -5527,7 +5527,11 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
                 rows.append((f"  {day_label}", "", count, "signups", "", "", "", "", f"{pct:.2f}%", genpop))
 
     # Post-signup touchpoint analysis (show visits as 1st-5th platform touchpoint)
-    # 1st Touchpoint Gen Pop must always equal New Platform Signups Gen Pop; Total Gen Pop = sum(1st-5th)
+    # The 1st Touchpoint projection equals the New Platform Signups projection ONLY when that row
+    # IS all signups (the SQL path overwrites rank 1 with the total). A partition row (713 of 986,
+    # the synthetic split) projects by its own count like every other rank, so the touchpoint total
+    # (= sum of the components) lands on the signups projection instead of 28% above it
+    # (2026-10-14, Liz on the Livestream from Hell export).
     new_signups_genpop_str = format_gen_pop(gen_pop_projection(new_signups))
     if not df_post_signup_touchpoints.empty:
         rows.append(("", "", "", "", "", "", "", "", "", ""))
@@ -5541,8 +5545,8 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
                 continue
             touchpoint_rank = int(row["TOUCHPOINT_RANK"])
             user_count = int(row["USER_COUNT"]) if not pd.isna(row["USER_COUNT"]) else 0
-            # 1st Touchpoint: use same Gen Pop as New Platform Signups (align US Gen Pop Projection)
-            if touchpoint_rank == 1:
+            # 1st Touchpoint: the New Platform Signups projection only when the row is all signups
+            if touchpoint_rank == 1 and int(new_signups or 0) > 0 and user_count == int(new_signups):
                 genpop = new_signups_genpop_str
             else:
                 genpop = format_gen_pop(gen_pop_projection(user_count))

@@ -16,7 +16,9 @@ SIGNUPS / CHURN, DEMOGRAPHICS):
      "Total Platform Signups" count (largest component absorbs the
      rounding residual);
    - the touchpoint total projection equals the sum of the component
-     projections;
+     projections; on a partition file (1st-5th counts split the signups)
+     each component projects by its own count at the file's factor, so
+     the block total lands on the signups projection;
    - Pre-Existing + Clean Sample = Total Show Watchers;
    - Attributed Signups + Dormant to Reactive = New Platform Signups =
      TOTAL SIGNUPS (counts, and the projection chain where the file
@@ -556,10 +558,8 @@ def _recouple_gp_to_counts(doc: _Doc):
         return
     ni = doc.headline.get("New Platform Signups")
     t1i = next((i for i, rank in doc.touch if rank == 1), None)
-    # Alias detection must use pre-recouple values (no GP pass has run yet).
-    t1_loaded_aliased = (t1i is not None and ni is not None
-                         and doc.gp(t1i) is not None
-                         and doc.gp(t1i) == doc.gp(ni))
+    # Alias = the 1st row IS all signups (count equality), never a projection coincidence.
+    t1_loaded_aliased = _touch1_is_alias(doc)
     skip = {doc.touch_total}
     if t1_loaded_aliased:
         skip.add(t1i)  # re-aliased below, never ratio-recoupled
@@ -792,7 +792,7 @@ def _fix_gp_chain(doc: _Doc):
     if abs(n_gp - canon) > TOL_GP_ABS:
         doc.flag(f"signups projection chain off by {n_gp - canon} (structural, left as shipped)")
         return False, False
-    t1_aliased = (t1i is not None and doc.gp(t1i) == n_gp)
+    t1_aliased = _touch1_is_alias(doc)
 
     # De-zero the canonical value itself through its larger leg first.
     if canon > 0 and canon % 10 == 0:
@@ -833,19 +833,90 @@ def _fix_gp_chain(doc: _Doc):
     return True, t1_aliased
 
 
+def _touch1_is_alias(doc: _Doc) -> bool:
+    """The 1st Touchpoint row IS all signups (the SQL path overwrites rank 1
+    with the New Platform Signups count), so its projection legitimately
+    equals the signups projection. A partition row (713 of 986) is never an
+    alias, whatever projection it shipped with (2026-10-14, Liz: the
+    Livestream from Hell export pinned 713 sign-ups to the projection of all
+    986 and summed the block to 28% above the stated total)."""
+    ni = doc.headline.get("New Platform Signups")
+    t1i = next((i for i, rank in doc.touch if rank == 1), None)
+    if ni is None or t1i is None:
+        return False
+    n, t1 = doc.geti(ni, C_COUNT), doc.geti(t1i, C_COUNT)
+    return n is not None and t1 is not None and n > 0 and t1 == n
+
+
+def _touch_is_partition(doc: _Doc) -> bool:
+    """The 1st-5th counts split the signups: they sum to the printed
+    touchpoint total and that total is the New Platform Signups count."""
+    if not doc.touch or doc.touch_total is None:
+        return False
+    ni = doc.headline.get("New Platform Signups")
+    n = doc.geti(ni, C_COUNT) if ni is not None else None
+    tot = doc.geti(doc.touch_total, C_COUNT)
+    vals = [doc.geti(i, C_COUNT) for i, _ in doc.touch]
+    if n is None or tot is None or any(v is None for v in vals) or n <= 0:
+        return False
+    return abs(sum(vals) - tot) <= TOL_TOUCH_COUNT and abs(tot - n) <= TOL_TOUCH_COUNT
+
+
+def _rederive_partition_gp(doc: _Doc) -> bool:
+    """Partition files: every component projection is its count at the
+    file's own factor (signups projection / signups count); a component
+    more than 3% off that line is re-derived, and the block total becomes
+    the sum. Returns True when the block was handled here."""
+    if not _touch_is_partition(doc) or _touch1_is_alias(doc):
+        return False
+    ni = doc.headline.get("New Platform Signups")
+    n, n_gp = doc.geti(ni, C_COUNT), doc.gp(ni)
+    if not n or not n_gp or n_gp <= 0:
+        return False
+    factor = n_gp / n
+    counts = [doc.geti(i, C_COUNT) or 0 for i, _ in doc.touch]
+    # the residual a partition legitimately carries when its counts sit a few short of the
+    # signups count (a 53-count split under 54 sign-ups): the absorber keeps it, run after run
+    allowance = abs(n_gp - int(round(sum(counts) * factor)))
+    for i, rank in doc.touch:
+        c, g = doc.geti(i, C_COUNT), doc.gp(i)
+        if c is None:
+            continue
+        if c <= 0:
+            if g:   # nobody in the row: no projection either
+                doc.set(i, C_GP, 0, str(doc.cell(i, C_CAT)).strip() + " projection", "partition_factor")
+            continue
+        want = int(round(c * factor))
+        if g is None or g <= 0 or abs(g - want) > max(TOL_GP_ABS, int(0.03 * want)) + allowance:
+            doc.set(i, C_GP, want, str(doc.cell(i, C_CAT)).strip() + " projection", "partition_factor")
+    # the block sums to the signups projection exactly. The rounding residual goes to the
+    # component that lands closest to its own count x factor after absorbing it (the rank-5
+    # remainder bucket on a tie), and never takes a positive row to zero or below.
+    comps = [(i, rank, doc.gp(i) or 0, doc.geti(i, C_COUNT) or 0) for i, rank in doc.touch]
+    residual = n_gp - sum(g for _, _, g, _ in comps)
+    if residual and abs(residual) <= max(TOL_GP_ABS, int(0.01 * n_gp)):
+        cands = [(abs(g + residual - int(round(c * factor))), rank != 5, i, g) for i, rank, g, c in comps if c > 0 and g + residual > 0]
+        if cands:
+            _, _, li, lv = min(cands)
+            doc.set(li, C_GP, lv + residual, str(doc.cell(li, C_CAT)).strip() + " projection", "partition_factor")
+    return True
+
+
 def _fix_touch_gp(doc: _Doc, t1_aliased: bool):
     """Touchpoint total projection = sum of component projections. The 1st
     touchpoint projection is pinned to the signups chain and is never used
     as an absorber."""
     if not doc.touch or doc.touch_total is None:
         return
+    partition = _rederive_partition_gp(doc)
     comp = [(i, rank) for i, rank in doc.touch]
     gps = {i: doc.gp(i) for i, _ in comp}
     tot = doc.gp(doc.touch_total)
     if tot is None or any(v is None for v in gps.values()):
         return
     sum_gp = sum(gps.values())
-    consistent = abs(tot - sum_gp) <= max(TOL_GP_ABS, int(0.01 * max(tot, 1)))
+    # a partition block's total is the sum of its re-derived components by construction
+    consistent = partition or abs(tot - sum_gp) <= max(TOL_GP_ABS, int(0.01 * max(tot, 1)))
     non_first = [i for i, rank in comp if rank != 1]
     if not consistent:
         doc.flag(f"touchpoint projections off from total by {tot - sum_gp} "
