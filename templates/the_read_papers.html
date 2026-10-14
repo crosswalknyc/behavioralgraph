@@ -7,6 +7,7 @@
     <meta name="description" content="Every live Crosswalk white paper in one place.">
     <link rel="canonical" href="https://dashboard.crosswalknyc.com/the-read/papers">
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg?v=2">
+    <link rel="stylesheet" href="/static/site_nav.css?v=20261013">
     <style>
         @font-face { font-family: 'Inter 18pt'; font-weight: 400; font-style: normal; font-display: swap;
             src: url("{{ url_for('static', filename='fonts/Inter_18pt-Regular.ttf') }}") format('truetype'); }
@@ -29,11 +30,8 @@
             font-size: 14px;
             line-height: 1.45;
         }
-        .page { width: min(920px, calc(100% - 64px)); margin: 0 auto; padding: 48px 0 80px; }
-        header.top { display: flex; align-items: center; justify-content: space-between; }
-        header.top img { height: 20px; width: auto; display: block; }
-        header.top a { color: #9AA09B; text-decoration: none; font-size: 13px; }
-        h1 { font-size: clamp(40px, 8vw, 72px); font-weight: 800; letter-spacing: -0.04em; margin: 36px 0 12px; }
+        .page { width: min(920px, calc(100% - 64px)); margin: 0 auto; padding: 36px 0 80px; }
+        h1 { font-size: clamp(40px, 8vw, 72px); font-weight: 800; letter-spacing: -0.04em; margin: 28px 0 12px; }
         .lead { color: #9AA09B; max-width: 36rem; margin-bottom: 36px; }
         .grid { display: grid; gap: 16px; grid-template-columns: 1fr; }
         @media (min-width: 760px) { .grid { grid-template-columns: 1fr 1fr; } }
@@ -61,11 +59,9 @@
     </style>
 </head>
 <body>
+    {% set nav_on = "papers" %}
+    {% include "site_nav.html" %}
 <div class="page">
-    <header class="top">
-        <img src="{{ url_for('static', filename='crosswalk-logo-white-transparent.png') }}" alt="Crosswalk">
-        <a href="/the-read">The Read</a>
-    </header>
     <h1>White Paper Hub.</h1>
     <p class="lead">Every live Crosswalk white paper, in one place. Pick one, pay if it has a price, and download it.</p>
     {% if papers %}

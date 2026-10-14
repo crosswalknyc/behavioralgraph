@@ -1,0 +1,79 @@
+/* Site header chrome, shared with www.crosswalknyc.com */
+.nav {
+    --off: #E9E8E1;
+    --green: #C7F23E;
+    --t2-d: #9AA09B;
+    --wrap: 1200px;
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    background: rgba(12, 22, 24, 0.92);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(233, 232, 225, 0.06);
+    font-family: "Inter 18pt", -apple-system, BlinkMacSystemFont, sans-serif;
+    -webkit-font-smoothing: antialiased;
+}
+.nav .wrap {
+    width: min(var(--wrap), calc(100% - 80px));
+    margin: 0 auto;
+}
+.nav-in {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 64px;
+}
+.logo-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--green);
+    color: #0C1618;
+    border-radius: 999px;
+    padding: 7px 14px 7px 12px;
+    box-shadow: 0 0 24px rgba(199, 242, 62, 0.28);
+    text-decoration: none;
+}
+.logo-pill img { height: 15px; width: auto; display: block; }
+.nav-links { display: flex; align-items: center; gap: 4px; }
+.nav-links a:not(.btn) {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--t2-d);
+    padding: 8px 12px;
+    border-radius: 999px;
+    text-decoration: none;
+    border: 1px solid transparent;
+}
+.nav-links a:not(.btn):hover { color: var(--off); }
+.nav-links a.is-on {
+    color: var(--off);
+    border-color: rgba(233, 232, 225, 0.45);
+}
+.nav .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 36px;
+    padding: 0 16px;
+    margin-left: 6px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: -0.005em;
+    text-decoration: none;
+    white-space: nowrap;
+}
+.nav .btn-green { background: var(--green); color: #0C1618; border: 0; }
+.nav .btn-green:hover { background: #d3f65e; }
+.nav .btn-ghost {
+    background: transparent;
+    color: var(--off);
+    border: 1px solid rgba(233, 232, 225, 0.24);
+}
+.nav .btn-ghost:hover { border-color: rgba(233, 232, 225, 0.5); }
+@media (max-width: 1023px) { .nav .wrap { width: calc(100% - 48px); } }
+@media (max-width: 767px) {
+    .nav .wrap { width: calc(100% - 40px); }
+    .nav-links a:not(.btn) { display: none; }
+}

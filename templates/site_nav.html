@@ -1,0 +1,19 @@
+{# Same header as www.crosswalknyc.com. Logo always goes home. #}
+{% set site = "https://www.crosswalknyc.com" %}
+{% set on = nav_on|default("the-read") %}
+<header class="nav">
+    <div class="wrap nav-in">
+        <a class="logo-pill" href="{{ site }}/">
+            <img src="{{ site }}/assets/logos/crosswalk-logo-black.png" alt="Crosswalk">
+        </a>
+        <nav class="nav-links">
+            <a href="{{ site }}/products.html">Products</a>
+            <a href="{{ site }}/panel.html">The Panel</a>
+            <a href="/the-read"{% if on == "the-read" %} class="is-on"{% endif %}>The Read</a>
+            <a href="/the-read/papers"{% if on == "papers" %} class="is-on"{% endif %}>White papers</a>
+            <a href="{{ site }}/company.html">Company</a>
+            <a class="btn btn-ghost" href="/login">Log in</a>
+            <a class="btn btn-green" href="{{ site }}/signup.html">Sign up</a>
+        </nav>
+    </div>
+</header>
