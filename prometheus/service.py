@@ -678,6 +678,34 @@ def ask(user, body, *, via='session'):
             _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
             return env, 200
 
+    # Sizing lane (2026-10-14, Jenna, after Ben at Kartel: "this is just
+    # asking for an incidence check or what the projected band would be
+    # for sample size"). How big is X, the size of these two data sets,
+    # the sample size of X customers: held profiles answer from the
+    # catalog (typo tolerant, audience nouns stripped), anything else
+    # runs the free sample check. Never a priced read, never the panel
+    # line when an audience is named.
+    if referent_decision is None and not _armed(body):
+        try:
+            from . import sizing_lane as _szl
+            _sz = _szl.answer(text, ctx, host=host, history=history)
+        except Exception as e:
+            print(f"[prometheus] sizing lane skipped: {e}")
+            _sz = None
+        if _sz:
+            raw = _sz
+            decision = {'surface': 'analyze', 'mode': None, 'reason': 'sizing', 'client_hint': None}
+            if _client_surface == 'interpret':
+                raw = _interpret_shape(raw)
+                raw['followups'] = list(_sz.get('followups') or [])
+            try:
+                host.ask_hint(route='sizing', outcome='answered', subject=str(_sz.get('subject') or ''))
+            except Exception:
+                pass
+            env = envelope.wrap(raw, surface='analyze', decision=decision, thread_id=tid, via=via)
+            _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
+            return env, 200
+
     # Status lane (2026-10-13, Carolyn: "I don't see No Reservations - only
     # Babylon 5" drew "Nothing came back"; "have not received an email yet"
     # drew a page analysis). An ask that says the reader cannot see, find

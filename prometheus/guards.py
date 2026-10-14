@@ -883,6 +883,14 @@ def is_sample_size_ask(text) -> bool:
         if w.lower() in _NOT_A_NAME:
             continue
         return False
+    # a lowercase audience ("how many fanduel customers you have") is
+    # still an audience, not the panel (2026-10-14, Ben at Kartel)
+    try:
+        from . import sizing_lane as _szl
+        if _szl.names_an_audience(t):
+            return False
+    except Exception:
+        pass
     return True
 
 

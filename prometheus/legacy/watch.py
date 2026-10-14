@@ -523,12 +523,15 @@ _PM_CONSUME_VERB_RX = (
     r"subscribed?|subscribes|follow|followed|follows)")
 _PM_CONSUME_COUNT_RX = re.compile(
     r"\bhow many\b[^.?!]{0,60}\b" + _PM_CONSUME_VERB_RX + r"\b"
-    r"|\b(?:readership|viewership|listenership|audience size|"
-    r"total (?:viewers|readers|listeners|players|audience)|"
+    r"|\b(?:readership|viewership|listenership|"
+    r"total (?:viewers|readers|listeners|players)|"
     r"number of (?:viewers|readers|listeners|players|streams|plays|"
     r"people who " + _PM_CONSUME_VERB_RX + r"))\b"
-    r"|\bhow (?:big|large) (?:is|was) (?:the )?(?:audience|readership|"
+    r"|\bhow (?:big|large) (?:is|was) (?:the )?(?:readership|"
     r"viewership|listenership)\b", re.I)
+# "audience size" and "how big is the audience" left this pattern on
+# 2026-10-14 (Jenna, after Ben at Kartel): a size ask is the free sizing
+# lane's, never a priced viewership read.
 _PM_VERB_LABELS = (
     (r"\bread(?:s)?\b", "read"), (r"\blisten", "listened to"),
     (r"\bplay", "played"), (r"\bstream", "streamed"),

@@ -67,6 +67,9 @@ _APP_BINDINGS = {
     'thread_for_job': '_pm_thread_for_job',
     'load_thread': '_pm_load_thread_or_active',
     'save_thread': '_pm_save_thread_or_active',
+    # sizing lane (2026-10-14): the free sample check + the audience band
+    'incidence_check': '_synth_chat_incidence_check',   # (text, history) -> Flask response with incidence_check
+    'audience_range': '_estimated_audience_range',      # (sample) -> {'low','high'} | None
     'route_guard': '_chatbot_route_guard',   # (label) -> decorator
     'ask_logged': '_ask_logged',             # (surface) -> decorator
     'error_email': '_chatbot_error_email',   # (label, err, tb=None)
@@ -76,7 +79,7 @@ _APP_BINDINGS = {
 # Bindings that may legitimately be absent on an older host.
 _OPTIONAL = {'max_threads', 'wallet_snapshot', 'access_gate', 'claude_data', 'user_runs',
              'run_jiq_job', 'run_bpiq_job', 'run_fw_job', 'run_aiq_job',
-             'thread_for_job', 'load_thread', 'save_thread'}
+             'thread_for_job', 'load_thread', 'save_thread', 'incidence_check', 'audience_range'}
 
 
 class HostNotBound(RuntimeError):

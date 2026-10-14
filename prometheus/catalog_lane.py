@@ -27,7 +27,7 @@ _EXISTS_RX = re.compile(
     r"show me what (?:we|you) have (?:on|for|about)|can you (?:find|see|pull up))\s+"
     r"(?P<rest>.+?)[\s?.!]*$", re.I)
 _SIZE_RX = re.compile(
-    r"^\s*(?:how (?:big|large) is (?:the )?(?P<s1>.+?)(?: audience| universe)?|"
+    r"^\s*(?:how (?:big|large) is (?:the )?(?P<s1>.+?)(?: audience| universe)?(?: size)?|"
     r"(?:what(?:'s| is) the )?(?:audience )?size (?:of|for) (?:the )?(?P<s2>.+?)(?: audience| universe)?|"
     r"how many (?:people|viewers|users|individuals) (?:watch|watched|stream|streamed|use|used|engage with|engaged with) (?P<s3>.+?)|"
     # the sample size of a held profile (2026-10-07, Scott: "I was asking
@@ -68,8 +68,12 @@ def _looks_like_entity(subj):
     return bool(content) and (len(content) >= 2 or len(content[0]) >= 4)
 
 
+_PULL_LEAD_RX = re.compile(r"^(?:(?:a |an |any |the )?(?:data )?pulls?|data|anything|something|numbers|figures)\s+(?:on|for|about|of|covering)\s+", re.I)
+
+
 def _clean_subject(rest):
     s = str(rest or '').strip().strip('"\'')
+    s = _PULL_LEAD_RX.sub('', s)   # "a data pull on fanduel customers" -> "fanduel customers" (2026-10-14)
     s = _STRIP_RX.sub('', s)
     s = _YET_RX.sub('', s)
     s = _TAIL_RX.sub('', s)
@@ -178,6 +182,19 @@ def answer(text, ctx=None):
     except Exception:
         return None
     facts = anchors.get('facts') or []
+    if not facts:
+        # a near spelling or an audience noun on the name ("fanduel
+        # cusotmers", "Kalshi bettors") still names a held profile
+        # (2026-10-14, Ben: 'No. There is nothing on data pull on fanduel
+        # cusotmers' while FanDuel sat on the dashboard)
+        try:
+            from . import sizing_lane as _szl
+            hit = _szl.resolve(subj, ctx)
+            if hit and hit.get('name'):
+                anchors = cc.anchors_for(hit['name'], with_ledger=False)
+                facts = anchors.get('facts') or []
+        except Exception:
+            pass
     related = anchors.get('related') or []
     display = anchors.get('subject') or subj
     if kind == 'size':
