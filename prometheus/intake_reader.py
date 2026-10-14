@@ -940,6 +940,7 @@ FIELD_LABELS = {
     'event_start': 'the campaign start', 'event_end': 'the campaign end',
     'campaign_name': 'the campaign name', 'urls': 'the campaign URLs',
     'daily_refresh': 'daily tracking',
+    'end_tracking_date': 'the stop date for daily tracking',
 }
 
 

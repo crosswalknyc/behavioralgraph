@@ -9439,6 +9439,11 @@ def _pm_intake_turn(flow, text, body, history, user, ppu, first):
         return _pm_intake_fault_payload()
     if flow == 'digital_journey' and isinstance(parsed, dict):
         parsed = _ir.watch_defaults(parsed)   # a title on a video platform starts on social (Jenna 2026-10-13)
+    if flow == 'attribution' and isinstance(parsed, dict) and parsed.get('daily_refresh') and _pm_aiq_days(parsed) < 1 \
+            and parsed.get('campaign_name') and parsed.get('urls') and parsed.get('conversion_event'):
+        # daily tracking with no stop date: propose 30 days and confirm rather than ask (the intake contract; golden g058, 2026-10-14)
+        parsed['end_tracking_date'] = (datetime.now() + timedelta(days=30)).strftime('%Y-%m-%d')
+        parsed.setdefault('_proposed', {'field': 'end_tracking_date', 'value': parsed['end_tracking_date']})
     if complete_fn(parsed):
         _pnote = parsed.pop('_precedent_note', '') if isinstance(parsed, dict) else ''
         reply = _pm_intake_finish_confirm(parsed, globals()[confirm_name](parsed), run_label)
