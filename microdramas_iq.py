@@ -453,7 +453,7 @@ def _resolve_window_range(window_days: Optional[int],
     on export. So its a permanent record. Can easily recreate in
     future runs in custom date section."
     """
-    _today = date.today()
+    _today = _data_today()
     if start_date and end_date:
         try:
             _s = datetime.fromisoformat(start_date).date()
@@ -562,7 +562,7 @@ def _subscriber_daily_flow_curve(source: str,
     import math as _m
     from datetime import date as _date, timedelta as _td
     wd = max(1, int(window_days))
-    end_d = _date.today()
+    end_d = _data_today()
     total = 0.0
     daily_base = weekly_rate / 7.0
     # Deterministic per-quarter spike-day selection: one spike per
@@ -1612,7 +1612,7 @@ def _daily_estimate(observations: list[dict],
     # a longer window is requested. Never extend past today - a title
     # observed 10 days ago with a YTD lookback should give us 10 days
     # of curve, not YTD days.
-    today = date.today()
+    today = _data_today()
     days_alive = (today - first).days + 1
     n_days = max(1, min(max(int(days or 28), 28), days_alive))
 
@@ -1671,7 +1671,7 @@ def _trailing_7_iso_dates(latest_iso: str) -> list[str]:
     try:
         end = datetime.fromisoformat(latest_iso).date()
     except Exception:
-        end = date.today()
+        end = _data_today()
     return [(end - timedelta(days=(6 - i))).isoformat() for i in range(7)]
 
 
@@ -1862,6 +1862,51 @@ def _today_iso() -> str:
     return date.today().isoformat()
 
 
+_DATA_TODAY_CACHE: dict = {'ts': 0.0, 'value': None}
+_DATA_TODAY_TTL_SECONDS = 10 * 60
+
+
+def _data_today() -> date:
+    """The latest calendar day that has a scraped snapshot.
+
+    The scrapers run at 05:00 UTC. Between UTC midnight and that run
+    (5 PM to 10 PM Pacific) the server's calendar date has no snapshot
+    yet, and anchoring every window at `date.today()` left "Today"
+    empty on every platform except Peacock, whose catalog carries
+    forward (Jenna 2026-10-13: "there is no data in the micro series
+    report other than peacock"). Windows anchor here instead: the
+    newest `fetched_at` date across the latest/ snapshots, never later
+    than the real date. Falls back to the real date when nothing can
+    be read, so a cold S3 miss degrades to the old behavior rather than
+    an exception. Cached ten minutes; the cron endpoint resets it.
+    """
+    now = time.time()
+    cached = _DATA_TODAY_CACHE.get('value')
+    if cached is not None and (now - _DATA_TODAY_CACHE['ts']) < _DATA_TODAY_TTL_SECONDS:
+        return cached
+    real_today = date.today()
+    best: Optional[date] = None
+    sources = [c['source'] for c in COMPETITOR_SOURCES] + ['peacock']
+    for src in sources:
+        try:
+            snap = _read_json(S3_SNAPSHOT_LATEST.format(source=src)) or {}
+            iso = (snap.get('fetched_at') or '')[:10]
+            d = datetime.fromisoformat(iso).date() if iso else None
+        except Exception:
+            d = None
+        if d and d <= real_today and (best is None or d > best):
+            best = d
+    value = best or real_today
+    _DATA_TODAY_CACHE['ts'] = now
+    _DATA_TODAY_CACHE['value'] = value
+    return value
+
+
+def _reset_data_today() -> None:
+    _DATA_TODAY_CACHE['ts'] = 0.0
+    _DATA_TODAY_CACHE['value'] = None
+
+
 def _cached_read_dated_snapshot(source: str, day_iso: str) -> Optional[dict]:
     """Snapshot read with in-process caching.
 
@@ -1896,12 +1941,14 @@ def invalidate_todays_snapshot_cache() -> None:
     today = _today_iso()
     for k in [k for k in _SNAPSHOT_CACHE.keys() if k[1] == today]:
         _SNAPSHOT_CACHE.pop(k, None)
+    _reset_data_today()
 
 
 def _view_cache_key(prefix: str, filters: dict) -> str:
     # Normalize None -> missing so `{'genre': None}` and `{}` cache
     # under the same key. Sort so key ordering is stable.
     clean = {k: v for k, v in (filters or {}).items() if v not in (None, '')}
+    clean['_data_day'] = _data_today().isoformat()
     return prefix + '|' + json.dumps(clean, sort_keys=True, default=str)
 
 
@@ -2463,7 +2510,7 @@ def _read_history_days(source: str, days: int,
                     out.append(snap)
                 cur += timedelta(days=1)
             return out
-    today = date.today()
+    today = _data_today()
     for offset in range(days - 1, -1, -1):
         d = (today - timedelta(days=offset)).isoformat()
         snap = _read_dated_snapshot(source, d)
@@ -2496,7 +2543,7 @@ def _compute_source_7day_arc(source: str) -> tuple[list[str], dict[str, dict]]:
                 }
             }
     """
-    today = date.today()
+    today = _data_today()
     dates_7d = [(today - timedelta(days=(6 - i))).isoformat()
                 for i in range(7)]
 
@@ -3503,7 +3550,7 @@ def _serialize_title(entry: dict, *, window_days: int) -> dict:
     # whether the user has "Today", "Last 30 days", or "Year to date"
     # selected. Jenna's directive 2026-09-02.
     curve_7d = _peacock_trailing_7day_curve(
-        entry, salt=_title_salt, latest_iso=date.today().isoformat(),
+        entry, salt=_title_salt, latest_iso=_data_today().isoformat(),
     )
 
     # Rank aggregates - across all observations, not just the window.
@@ -3557,7 +3604,7 @@ def _serialize_title(entry: dict, *, window_days: int) -> dict:
     if first_iso:
         try:
             first = datetime.fromisoformat(first_iso).date()
-            days_since = (date.today() - first).days
+            days_since = (_data_today() - first).days
         except Exception:
             pass
 
@@ -3670,7 +3717,7 @@ def _apply_audience_cut(titles: list[dict], cut: str) -> list[dict]:
     if cut == 'top10':
         return titles[:10]
     if cut == 'new_7d':
-        cutoff = date.today() - timedelta(days=7)
+        cutoff = _data_today() - timedelta(days=7)
         out = []
         for t in titles:
             try:
@@ -3774,7 +3821,7 @@ def compute_view(filters: Optional[dict] = None,
     if first_scrape:
         try:
             d = datetime.fromisoformat(first_scrape).date()
-            days_of_history = (date.today() - d).days + 1
+            days_of_history = (_data_today() - d).days + 1
         except Exception:
             pass
 
