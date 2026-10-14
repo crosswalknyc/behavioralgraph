@@ -279,6 +279,25 @@ def refit_degenerate_fork(j: dict, seed: str) -> bool:
     return True
 
 
+def _tidy_extra(d: dict) -> None:
+    """A table the research added on its own rides after the ten: the
+    title starts with a capital, and a count quoted in the title agrees
+    with the rows under it (No Reservations said 212,599 over rows that
+    summed to 213,678)."""
+    try:
+        title = str(d.get('title') or '').strip()
+        if not title:
+            return
+        rows = d.get('rows') or []
+        total = sum(int(r.get('accounts') or 0) for r in rows if isinstance(r, dict))
+        nums = re.findall(r'\d{1,3}(?:,\d{3})+|\d{4,}', title)
+        if len(nums) == 1 and total and int(nums[0].replace(',', '')) != total:
+            title = title.replace(nums[0], f"{total:,}")
+        d['title'] = title[:1].upper() + title[1:]
+    except Exception:
+        pass
+
+
 # -------------------------------------------------------------- sections
 def _bases(j: dict, payload: dict, trail: dict) -> dict:
     # the click-through step is the base of sections 03 and 04, as in the
@@ -454,11 +473,14 @@ def apply(payload: dict, inputs: Optional[dict] = None, claude_json: Optional[Ca
                 else:
                     rows = _rows_from_shares(FALLBACK_ROWS[key], base, (seed, key), kind, doing_f, title, platform)
                     src = 'standard'
+                rows.sort(key=lambda r: -int(r.get('accounts') or 0))      # Babylon 5 tables read biggest first
                 built.append({'title': ttl_f, 'kind': kind, 'of': base_key, 'base': int(bases[base_key]), 'rows': rows, 'source': src,
                               'note': ('Rows sum to the parent count.' if kind == 'partition' else 'Overlap allowed. Rows do not sum.')})
                 continue
             built.append({'title': ttl_f, 'kind': kind, 'of': base_key, 'base': int(bases[base_key]), 'rows': rows, 'source': 'derived',
                           'note': 'Rows sum to the parent count.'})
+        for d in extras:
+            _tidy_extra(d)
         j['detours'] = built + extras
         # facts the Babylon 5 file carries
         facts = payload.get('facts') if isinstance(payload.get('facts'), list) else []

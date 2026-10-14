@@ -175,7 +175,7 @@ def analysis_pdf(payload: dict):
         return None
 
 
-def compose(payload: dict, *, who: str = '', intro: str = '', ready_message: str = '') -> dict:
+def compose(payload: dict, *, who: str = '', intro: str = '', ready_message: str = '', subject: str = '') -> dict:
     """Subject, plain body and HTML for a journey delivery."""
     import welcome_email as _we
     meta = (payload or {}).get('meta') or {}
@@ -228,7 +228,7 @@ def compose(payload: dict, *, who: str = '', intro: str = '', ready_message: str
     html = _we.render_card_html(
         headline, lead, facts=facts, button=('Open Digital Journey IQ', dashboard_url()),
         lines=html_lines, title=f"{name}: Digital Journey")
-    subject = f"{name}: your Digital Journey is ready" if not intro else f"{name}: the detailed breakdown"
+    subject = (subject or '').strip() or (f"{name}: your Digital Journey is ready" if not intro else f"{name}: the detailed breakdown")
     return {'subject': subject, 'body': body, 'html': html}
 
 
@@ -274,7 +274,7 @@ def persist_journey_figures(payload: dict, *, s3_key: str = '', sync: bool = Fal
 
 def deliver_journey(*, username: str, payload: dict, s3_key: str = '', s3_client=None, host=None,
                     intro: str = '', ready_message: str = '', extra_bcc=(), caller: str = 'journey_ready',
-                    to: str = '', dry_run: bool = False, send=None) -> dict:
+                    to: str = '', dry_run: bool = False, send=None, subject: str = '') -> dict:
     """Email the journey's requester with the breakdown attached. Returns
     the door's record ({sent, reason, ...}). Never raises."""
     persist_journey_figures(payload, s3_key=s3_key)
@@ -285,7 +285,7 @@ def deliver_journey(*, username: str, payload: dict, s3_key: str = '', s3_client
         if not email or '@' not in email:
             print(f"[journey-delivery] no email on the seat for {username!r}; nothing sent")
             return {'sent': False, 'reason': 'no email on seat'}
-        parts = compose(payload, who=first_name(rec, username), intro=intro, ready_message=ready_message)
+        parts = compose(payload, who=first_name(rec, username), intro=intro, ready_message=ready_message, subject=subject)
         xlsx = jiq.breakdown_xlsx(payload)
         xname = jiq.breakdown_filename(payload, 'xlsx')
         csv_text = jiq.breakdown_csv(payload)
@@ -312,6 +312,7 @@ def main(argv=None):
     ap.add_argument('--intro', default='', help='the lead sentence the admin asked for')
     ap.add_argument('--bcc', default='', help='extra BCC, comma separated (Jenna and Liz ride always)')
     ap.add_argument('--to', default='', help='override the seat email (operator use)')
+    ap.add_argument('--subject', default='', help='subject line override (operator use)')
     ap.add_argument('--dry-run', action='store_true')
     a = ap.parse_args(argv)
     import boto3
@@ -319,7 +320,7 @@ def main(argv=None):
     payload = load_payload(s3, a.key)
     extra = tuple(x.strip() for x in a.bcc.split(',') if x.strip())
     r = deliver_journey(username=a.user, payload=payload, s3_key=a.key, s3_client=s3, intro=a.intro,
-                        extra_bcc=extra, caller='journey_delivery_cli', to=a.to, dry_run=a.dry_run)
+                        extra_bcc=extra, caller='journey_delivery_cli', to=a.to, dry_run=a.dry_run, subject=a.subject)
     print(json.dumps({k: v for k, v in r.items() if k != 'html'}, default=str))
     return 0 if r.get('sent') or a.dry_run else 1
 
