@@ -64,6 +64,21 @@
                             <button class="btn btn-small btn-secondary" onclick="nlUploadHtml()">Load HTML or ZIP</button>
                             <button class="btn btn-small btn-secondary" onclick="nlSaveCampaign()">Save</button>
                         </div>
+                        <div class="nl-divider">Archive thumbnail</div>
+                        <div class="nl-sub">This photo is the tile on The Read. It has to be a real photo, not a slide or a GIF.</div>
+                        <div class="nl-cover" id="nl-cover-box">
+                            <div class="nl-cover-plate" id="nl-cover-plate">
+                                <img id="nl-cover-preview" alt="" hidden>
+                            </div>
+                            <div>
+                                <div class="nl-sub" id="nl-cover-status">Load the letter, then pick a photo.</div>
+                                <input type="file" id="nl-cover-file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp">
+                                <div class="nl-row" style="margin-top:0.5rem;">
+                                    <button class="btn btn-small btn-secondary" type="button" onclick="nlUploadCover()">Upload photo</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="nl-cover-picks" id="nl-cover-picks"></div>
                         <div class="nl-divider">Gated download</div>
                         <label class="nl-toggle">
                             <input type="checkbox" id="nl-dl-enabled">

@@ -912,70 +912,266 @@ def _cover_asset_name(src, cid):
     return ""
 
 
-def _cover_src_ok(src, cid, width=0):
+PLATE_ASPECT = 108.0 / 136.0
+COVER_MIN_EDGE = 280
+COVER_MAX_ASPECT = 2.15
+COVER_MIN_ASPECT = 0.45
+_COVER_BONUS_RE = re.compile(r"(hero|cover|still|photo|portrait|archive-cover)", re.I)
+_COVER_PENALTY_RE = re.compile(r"(slide|stat|card|cta|footer|masthead|ticker)", re.I)
+ARCHIVE_COVER_PREFIX = "archive-cover"
+
+
+def _cover_url(cid, name):
+    name = (name or "").strip()
+    if not name:
+        return ""
+    if name.startswith("http") or name.startswith("/"):
+        return name
+    return f"/n/asset/{cid}/{name}"
+
+
+def _list_asset_names(cid):
+    names = []
+    if _use_local():
+        folder = _local_root() / f"system/newsletter/assets/{cid}"
+        if folder.exists():
+            names = [p.name for p in folder.iterdir() if p.is_file()]
+        return sorted(names)
+    prefix = f"system/newsletter/assets/{cid}/"
+    try:
+        token = None
+        while True:
+            kw = {"Bucket": S3_BUCKET, "Prefix": prefix}
+            if token:
+                kw["ContinuationToken"] = token
+            resp = _s3_client().list_objects_v2(**kw)
+            for obj in resp.get("Contents") or []:
+                key = obj.get("Key") or ""
+                name = key[len(prefix):]
+                if name and "/" not in name:
+                    names.append(name)
+            if not resp.get("IsTruncated"):
+                break
+            token = resp.get("NextContinuationToken")
+    except Exception:
+        return []
+    return sorted(names)
+
+
+def _html_cover_refs(cid, html):
+    asset_base = f"/n/asset/{cid}"
+    html = (html or "").replace("{{ASSET_BASE}}", asset_base)
+    out = []
+    seen = set()
+
+    def add(src, width=0, kind="img", alt=""):
+        src = _rewrite_cover_src(src, asset_base)
+        if not src or src in seen:
+            return
+        seen.add(src)
+        out.append({"src": src, "width": width, "kind": kind, "alt": alt})
+
+    for match in _BG_URL_RE.finditer(html):
+        add(match.group(1), kind="bg")
+    for tag in _IMG_TAG_RE.findall(html):
+        sm = _IMG_SRC_RE.search(tag)
+        if not sm:
+            continue
+        alt_m = _IMG_ALT_RE.search(tag)
+        alt = alt_m.group(1) if alt_m else ""
+        wm = _IMG_WIDTH_RE.search(tag)
+        width = int(wm.group(1)) if wm else 0
+        add(sm.group(1), width=width, kind="img", alt=alt)
+    return out
+
+
+def _score_cover(src, cid, width=0, kind="img", alt=""):
+    """A plate-fit photo, or None. Higher score is a better archive tile."""
     if not src:
-        return False
+        return None
+    if _LOGO_ALT_RE.search(alt or ""):
+        return None
     low = src.lower()
     if low.endswith(".gif") or ".gif?" in low:
-        return False
+        return None
     if _LOGO_ALT_RE.search(low) or _COVER_CHROME_RE.search(low):
-        return False
+        return None
     if width and width < 160:
-        return False
-    name = _cover_asset_name(src, cid)
-    if not cid or not name:
-        return True
+        return None
+    name = _cover_asset_name(src, cid) or src.rsplit("/", 1)[-1].split("?")[0]
+    w = h = 0
+    asset = _cover_asset_name(src, cid)
+    raw = None
+    if cid and asset:
+        try:
+            raw = _get_bytes(ASSET_KEY.format(cid=cid, name=asset))
+        except Exception:
+            raw = None
+    if raw:
+        w, h = _image_wh(raw[:65536])
+        if w and h:
+            if w < COVER_MIN_EDGE or h < COVER_MIN_EDGE:
+                return None
+            aspect = w / float(h)
+            if aspect > COVER_MAX_ASPECT or aspect < COVER_MIN_ASPECT:
+                return None
+    score = 10.0
+    if kind == "bg":
+        score += 6
+    if w and h:
+        aspect = w / float(h)
+        score += 40 * (1 - min(1.0, abs(aspect - PLATE_ASPECT) / 1.2))
+        score += min(20.0, min(w, h) / 80.0)
+        if 0.62 <= aspect <= 1.15:
+            score += 18
+        elif aspect > 1.6:
+            score -= 12
+    if _COVER_BONUS_RE.search(name) or _COVER_BONUS_RE.search(src):
+        score += 10
+    if _COVER_PENALTY_RE.search(name) or _COVER_PENALTY_RE.search(src):
+        score -= 16
+    if name.lower().startswith(ARCHIVE_COVER_PREFIX):
+        score += 30
+    ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
+    if ext in ("jpg", "jpeg", "png", "webp"):
+        score += 4
+    url = src
+    if not (url.startswith("http") or url.startswith("/")):
+        url = _cover_url(cid, name)
+    return {
+        "name": name,
+        "url": url,
+        "w": w,
+        "h": h,
+        "score": round(score, 3),
+        "kind": kind,
+    }
+
+
+def _cover_src_ok(src, cid, width=0, kind="img", alt=""):
+    return _score_cover(src, cid, width=width, kind=kind, alt=alt) is not None
+
+
+def cover_candidates(cid, camp=None):
+    """Photos that can fill the archive plate, best first."""
+    camp = camp or {}
     try:
-        raw = _get_bytes(ASSET_KEY.format(cid=cid, name=name))
+        html = get_campaign_html(cid) or ""
     except Exception:
-        return True
-    if not raw:
-        return True
-    w, h = _image_wh(raw[:65536])
-    if not w or not h:
-        return True
-    if w < 280 or h < 280:
-        return False
-    if (w / float(h)) > 2.15:
-        return False
-    return True
+        html = ""
+    rows = []
+    seen = set()
+
+    def add(hit):
+        if not hit:
+            return
+        key = (hit.get("name") or hit.get("url") or "").lower()
+        if not key or key in seen:
+            return
+        seen.add(key)
+        rows.append(hit)
+
+    for ref in _html_cover_refs(cid, html):
+        add(_score_cover(
+            ref["src"], cid, width=ref.get("width") or 0,
+            kind=ref.get("kind") or "img", alt=ref.get("alt") or "",
+        ))
+    for name in _list_asset_names(cid):
+        add(_score_cover(_cover_url(cid, name), cid, kind="file"))
+    rows.sort(key=lambda row: (-float(row.get("score") or 0), row.get("name") or ""))
+    return rows
+
+
+def _best_cover_name(cid, camp=None):
+    rows = cover_candidates(cid, camp)
+    if not rows:
+        return ""
+    return (rows[0].get("name") or "").strip()
+
+
+def _kept_staff_cover(cid, camp):
+    camp = camp or {}
+    name = (camp.get("cover_image") or "").strip()
+    if not name:
+        return ""
+    locked = (camp.get("cover_locked_by") or "").strip()
+    if locked != "staff" and not name.lower().startswith(ARCHIVE_COVER_PREFIX):
+        return ""
+    url = _cover_url(cid, name)
+    if _cover_src_ok(url, cid):
+        return name
+    return ""
+
+
+def lock_cover_image(cid, name=None, by="auto"):
+    """Persist the archive tile photo so the next send cannot drift."""
+    camp = _campaign(load_state_raw(), cid) or {}
+    chosen = (name or "").strip()
+    if not chosen:
+        chosen = (
+            _kept_staff_cover(cid, camp)
+            or (COVER_OVERRIDES.get(cid) or "").strip()
+            or _best_cover_name(cid, camp)
+        )
+    if not chosen:
+        return ""
+
+    def mutate(st):
+        c = _campaign(st, cid)
+        if not c:
+            return None
+        if (c.get("cover_image") or "") == chosen and (c.get("cover_locked_by") or "") == by:
+            return None
+        c["cover_image"] = chosen
+        c["cover_locked_by"] = by
+        c["updated_at"] = _utcnow()
+        return st
+
+    _cas_update_state(mutate)
+    return chosen
+
+
+def require_archive_cover(cid):
+    """Lock a plate-fit photo. Empty error means the tile is ready."""
+    name = lock_cover_image(cid)
+    if not name:
+        return "", (
+            "This letter needs a photo for the archive tile. "
+            "Pick one in the editor, or upload a photo."
+        )
+    return _cover_url(cid, name), ""
+
+
+def public_cover_payload(cid, camp=None):
+    camp = camp or _campaign(load_state_raw(), cid) or {}
+    return {
+        "cover_image": (camp.get("cover_image") or "").strip(),
+        "cover_url": _public_cover_image(cid, camp),
+        "cover_locked_by": (camp.get("cover_locked_by") or "").strip(),
+        "covers": cover_candidates(cid, camp)[:16],
+    }
 
 
 def _public_cover_image(cid, camp):
     """A photograph that fills a tall plate. Skip slide GIFs and thin cards."""
     camp = camp or {}
-    asset_base = f"/n/asset/{cid}"
-    override = (camp.get("cover_image") or COVER_OVERRIDES.get(cid) or "").strip()
-    if override:
-        if override.startswith("http") or override.startswith("/"):
-            return override
-        return f"{asset_base}/{override}"
-    try:
-        html = get_campaign_html(cid) or ""
-    except Exception:
-        html = ""
-    html = (html or "").replace("{{ASSET_BASE}}", asset_base)
-    for match in _BG_URL_RE.finditer(html):
-        src = _rewrite_cover_src(match.group(1), asset_base)
-        if _cover_src_ok(src, cid):
-            return src
-    for tag in _IMG_TAG_RE.findall(html):
-        sm = _IMG_SRC_RE.search(tag)
-        if not sm:
-            continue
-        src = _rewrite_cover_src(sm.group(1), asset_base)
-        alt_m = _IMG_ALT_RE.search(tag)
-        alt = alt_m.group(1) if alt_m else ""
-        if _LOGO_ALT_RE.search(alt):
-            continue
-        wm = _IMG_WIDTH_RE.search(tag)
-        width = int(wm.group(1)) if wm else 0
-        if _cover_src_ok(src, cid, width=width):
-            return src
+    for name in (
+        (camp.get("cover_image") or "").strip(),
+        COVER_OVERRIDES.get(cid) or "",
+    ):
+        url = _cover_url(cid, name)
+        if url and _cover_src_ok(url, cid):
+            return url
+        if url and (name.startswith("http") or name.startswith("/")):
+            return url
+    best = _best_cover_name(cid, camp)
+    if best:
+        return _cover_url(cid, best)
     li = camp.get("linkedin") or {}
     url = (li.get("image_url") or "").strip()
     if url and not url.startswith("data:") and "{{ASSET_BASE}}" not in url:
-        return url
+        if _cover_src_ok(url, cid):
+            return url
     return ""
 
 
@@ -2176,6 +2372,10 @@ def _kick_due_sends():
         if due.tzinfo is None:
             due = due.replace(tzinfo=timezone.utc)
         if due <= now:
+            _url, cover_err = require_archive_cover(cid)
+            if cover_err:
+                print(f"newsletter scheduled send skipped {cid}: {cover_err}")
+                continue
             recips, err = _claim_send(
                 cid, camp.get("list_id"), scheduled=True,
                 segment_id=camp.get("segment_id") or None,
@@ -2283,6 +2483,9 @@ def _public_campaign(c, subscriber_counts=None, settings=None, include_downloads
         "share_url": nli.share_url(cid, settings) if cid else "",
         "web_slug": (c.get("web_slug") or "").strip(),
         "web_url": _web_public_url(c, settings),
+        "cover_image": (c.get("cover_image") or "").strip(),
+        "cover_url": _public_cover_image(cid, c),
+        "cover_locked_by": (c.get("cover_locked_by") or "").strip(),
         "linkedin": nli.public_campaign_linkedin(c, settings),
     }
 
@@ -2561,10 +2764,14 @@ def api_create_campaign():
             "segment_id": (body.get("segment_id") or "").strip(),
             "download": _download_from_body(body, _empty_download()),
             "linkedin": nli.merge_campaign_body(nli.empty_campaign_linkedin(), body),
+            "cover_image": "",
+            "cover_locked_by": "",
         })
         return st
 
     _cas_update_state(mutate)
+    if html:
+        lock_cover_image(cid)
     return jsonify({"success": True, "id": cid, **_overview_payload()})
 
 
@@ -2602,6 +2809,10 @@ def api_update_campaign(cid):
             c["download"] = _download_from_body(body, c.get("download") or _empty_download())
         if "linkedin" in body:
             c["linkedin"] = nli.merge_campaign_body(c.get("linkedin") or {}, body)
+        if "cover_image" in body:
+            name = (body.get("cover_image") or "").strip()
+            c["cover_image"] = name
+            c["cover_locked_by"] = "staff" if name else ""
         if "scheduled_at" in body:
             raw = (body.get("scheduled_at") or "").strip()
             c["scheduled_at"] = raw or None
@@ -2675,11 +2886,92 @@ def api_upload_html(cid):
         return st
 
     _cas_update_state(mutate)
+    lock_cover_image(cid)
+    covers = public_cover_payload(cid)
     return jsonify({
         "success": True,
         "bytes": len(html.encode("utf-8")),
         "assets": n_assets,
         "web_slug": slug,
+        "cover_url": covers.get("cover_url") or "",
+        "covers": covers.get("covers") or [],
+    })
+
+
+def _cover_upload_name(raw, filename):
+    ext = (filename or "").rsplit(".", 1)[-1].lower()
+    if raw[:8] == b"\x89PNG\r\n\x1a\n":
+        ext = "png"
+    elif raw[:2] == b"\xff\xd8":
+        ext = "jpg"
+    elif len(raw) >= 12 and raw[:4] == b"RIFF" and raw[8:12] == b"WEBP":
+        ext = "webp"
+    elif ext not in ("jpg", "jpeg", "png", "webp"):
+        ext = "jpg"
+    if ext == "jpeg":
+        ext = "jpg"
+    return f"{ARCHIVE_COVER_PREFIX}.{ext}"
+
+
+@newsletter_bp.route("/api/admin/newsletter/campaigns/<cid>/covers", methods=["GET"])
+@admin_required
+def api_list_covers(cid):
+    state = load_state()
+    camp = _campaign(state, cid)
+    if not camp:
+        return jsonify({"success": False, "error": "campaign not found"}), 404
+    return jsonify({"success": True, **public_cover_payload(cid, camp)})
+
+
+@newsletter_bp.route("/api/admin/newsletter/campaigns/<cid>/cover", methods=["POST"])
+@admin_required
+def api_set_cover(cid):
+    state = load_state()
+    if not _campaign(state, cid):
+        return jsonify({"success": False, "error": "campaign not found"}), 404
+    up = request.files.get("file")
+    if up and up.filename:
+        raw = up.read()
+        if not raw or len(raw) > 8_000_000:
+            return jsonify({"success": False, "error": "Photo must be under 8MB"}), 400
+        low = (up.filename or "").lower()
+        if low.endswith(".gif") or raw[:6] in (b"GIF87a", b"GIF89a"):
+            return jsonify({"success": False, "error": "Use a photo, not a GIF"}), 400
+        w, h = _image_wh(raw[:65536])
+        if w and h:
+            if w < COVER_MIN_EDGE or h < COVER_MIN_EDGE:
+                return jsonify({
+                    "success": False,
+                    "error": "That photo is too small for the archive tile.",
+                }), 400
+            aspect = w / float(h)
+            if aspect > COVER_MAX_ASPECT or aspect < COVER_MIN_ASPECT:
+                return jsonify({
+                    "success": False,
+                    "error": "Pick a photo that is closer to a portrait or a square.",
+                }), 400
+        name = _cover_upload_name(raw, up.filename)
+        _put_bytes(ASSET_KEY.format(cid=cid, name=name), raw, _content_type_for(name))
+        lock_cover_image(cid, name, by="staff")
+    else:
+        body = request.get_json(silent=True) or {}
+        name = (body.get("name") or body.get("cover_image") or "").strip()
+        if name:
+            url = _cover_url(cid, name)
+            if not _cover_src_ok(url, cid):
+                return jsonify({
+                    "success": False,
+                    "error": "That image will crop poorly on the archive tile.",
+                }), 400
+            lock_cover_image(cid, name, by="staff")
+        else:
+            lock_cover_image(cid, by="auto")
+    nxt = load_state_raw()
+    camp = _campaign(nxt, cid)
+    return jsonify({
+        "success": True,
+        "campaign": _public_campaign(camp, settings=nxt.get("settings") or {}),
+        **public_cover_payload(cid, camp),
     })
 
 
@@ -2716,6 +3008,8 @@ def api_duplicate(cid):
             "stats": _empty_stats(),
             "segment_id": src.get("segment_id") or "",
             "download": dict(src.get("download") or _empty_download()),
+            "cover_image": src.get("cover_image") or "",
+            "cover_locked_by": src.get("cover_locked_by") or "",
             "linkedin": nli.merge_campaign_body(
                 src.get("linkedin") or nli.empty_campaign_linkedin(),
                 {"linkedin": {
@@ -2759,6 +3053,9 @@ def api_test_send(cid):
 @newsletter_bp.route("/api/admin/newsletter/campaigns/<cid>/send", methods=["POST"])
 @admin_required
 def api_send(cid):
+    _cover_url_now, cover_err = require_archive_cover(cid)
+    if cover_err:
+        return jsonify({"success": False, "error": cover_err}), 400
     body = request.get_json(silent=True) or {}
     list_id = (body.get("list_id") or "").strip() or None
     segment_id = (body.get("segment_id") or "").strip() or None

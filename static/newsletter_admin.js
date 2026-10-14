@@ -309,6 +309,13 @@
         $('nl-preview').src = '/n/preview/' + encodeURIComponent(id) + '?t=' + Date.now();
         $('nl-html-file').value = '';
         if ($('nl-dl-file')) $('nl-dl-file').value = '';
+        if ($('nl-cover-file')) $('nl-cover-file').value = '';
+        renderCoverPicker({
+            cover_url: (camp && camp.cover_url) || '',
+            cover_image: (camp && camp.cover_image) || '',
+            covers: [],
+        });
+        loadCovers();
         if ($('nl-send-now')) {
             $('nl-send-now').disabled = !!(camp && camp.status === 'sending');
             $('nl-send-now').textContent = (camp && camp.status === 'sending')
@@ -386,6 +393,91 @@
                 + (data.assets ? ` · ${data.assets} images hosted` : '')
                 + (data.web_slug ? ` · web at /the-read/${data.web_slug}/` : '')
             );
+            renderCoverPicker(data);
+            await loadCovers();
+        } catch (e) { toast(e.message, true); }
+    };
+
+    function renderCoverPicker(data) {
+        const img = $('nl-cover-preview');
+        const status = $('nl-cover-status');
+        const picks = $('nl-cover-picks');
+        if (!img || !status) return;
+        const url = (data && data.cover_url) || '';
+        const name = (data && data.cover_image) || '';
+        if (url) {
+            img.hidden = false;
+            img.src = url + (url.indexOf('?') >= 0 ? '&' : '?') + 't=' + Date.now();
+            status.textContent = name
+                ? 'This photo is the archive tile.'
+                : 'This photo fills the archive tile.';
+        } else {
+            img.hidden = true;
+            img.removeAttribute('src');
+            status.textContent = 'Load the letter, then pick a photo.';
+        }
+        if (!picks) return;
+        const rows = (data && data.covers) || [];
+        picks.innerHTML = rows.map((row) => {
+            const on = (url && row.url === url.split('?')[0]) || (name && row.name === name);
+            const safeName = String(row.name || '').replace(/"/g, '');
+            const safeUrl = String(row.url || '').replace(/"/g, '');
+            return `<button type="button" class="nl-cover-pick${on ? ' on' : ''}" data-name="${safeName}" title="${safeName}" onclick="nlPickCover('${safeName.replace(/'/g, "\\'")}')"><img src="${safeUrl}" alt=""></button>`;
+        }).join('');
+    }
+
+    async function loadCovers() {
+        if (!state.editingId) return;
+        try {
+            const data = await api('/api/admin/newsletter/campaigns/' + encodeURIComponent(state.editingId) + '/covers');
+            renderCoverPicker(data);
+            const camp = ((state.data && state.data.campaigns) || []).find((c) => c.id === state.editingId);
+            if (camp) {
+                camp.cover_url = data.cover_url || '';
+                camp.cover_image = data.cover_image || '';
+            }
+        } catch (e) { /* cover picker is additive */ }
+    }
+
+    window.nlPickCover = async function (name) {
+        if (!state.editingId || !name) return;
+        try {
+            const data = await api('/api/admin/newsletter/campaigns/' + encodeURIComponent(state.editingId) + '/cover', {
+                method: 'POST',
+                body: JSON.stringify({ name }),
+            });
+            if (data.campaign) {
+                const camps = (state.data && state.data.campaigns) || [];
+                const idx = camps.findIndex((c) => c.id === state.editingId);
+                if (idx >= 0) camps[idx] = data.campaign;
+            }
+            renderCoverPicker(data);
+            toast('Archive tile updated');
+        } catch (e) { toast(e.message, true); }
+    };
+
+    window.nlUploadCover = async function () {
+        if (!state.editingId) return;
+        const file = $('nl-cover-file') && $('nl-cover-file').files[0];
+        if (!file) { toast('Choose a photo first', true); return; }
+        const fd = new FormData();
+        fd.append('file', file);
+        try {
+            const resp = await fetch('/api/admin/newsletter/campaigns/' + encodeURIComponent(state.editingId) + '/cover', {
+                method: 'POST',
+                credentials: 'same-origin',
+                body: fd,
+            });
+            const data = await resp.json();
+            if (!resp.ok || data.success === false) throw new Error(data.error || 'Upload failed');
+            if (data.campaign) {
+                const camps = (state.data && state.data.campaigns) || [];
+                const idx = camps.findIndex((c) => c.id === state.editingId);
+                if (idx >= 0) camps[idx] = data.campaign;
+            }
+            renderCoverPicker(data);
+            if ($('nl-cover-file')) $('nl-cover-file').value = '';
+            toast('Archive photo uploaded');
         } catch (e) { toast(e.message, true); }
     };
 
@@ -471,6 +563,14 @@
         if (!schedule && camp && camp.status === 'sending') {
             toast('This letter is already going out. One copy per address.');
             await pollSend(state.editingId);
+            return;
+        }
+        if (!(camp && camp.cover_url)) {
+            await loadCovers();
+        }
+        const latestCover = ((state.data && state.data.campaigns) || []).find((c) => c.id === state.editingId);
+        if (!(latestCover && latestCover.cover_url)) {
+            toast('Pick a photo for the archive tile before you send.', true);
             return;
         }
         const liOn = $('nl-li-enabled') && $('nl-li-enabled').checked;
