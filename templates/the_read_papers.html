@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>White Papers | Crosswalk</title>
-    <meta name="description" content="White papers from the Crosswalk clickstream panel of 10M US consumers.">
+    <title>White Paper Hub | Crosswalk</title>
+    <meta name="description" content="Every live Crosswalk white paper in one place.">
     <link rel="canonical" href="https://dashboard.crosswalknyc.com/the-read/papers">
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg?v=2">
     <style>
@@ -35,7 +35,9 @@
         header.top a { color: #9AA09B; text-decoration: none; font-size: 13px; }
         h1 { font-size: clamp(40px, 8vw, 72px); font-weight: 800; letter-spacing: -0.04em; margin: 36px 0 12px; }
         .lead { color: #9AA09B; max-width: 36rem; margin-bottom: 36px; }
-        .grid { display: grid; gap: 16px; }
+        .grid { display: grid; gap: 16px; grid-template-columns: 1fr; }
+        @media (min-width: 760px) { .grid { grid-template-columns: 1fr 1fr; } }
+        .count { color: #7C878A; font-size: 13px; margin: -20px 0 28px; }
         .card {
             background: var(--cw-slate);
             border: 1px solid #27393D;
@@ -64,10 +66,11 @@
         <img src="{{ url_for('static', filename='crosswalk-logo-white-transparent.png') }}" alt="Crosswalk">
         <a href="/the-read">The Read</a>
     </header>
-    <h1>White Papers.</h1>
-    <p class="lead">From the Crosswalk clickstream panel of 10M US consumers. Pick a paper, pay if it has a price, and download it.</p>
+    <h1>White Paper Hub.</h1>
+    <p class="lead">Every live Crosswalk white paper, in one place. Pick one, pay if it has a price, and download it.</p>
+    {% if papers %}
+    <div class="count">{{ papers|length }} {% if papers|length == 1 %}paper{% else %}papers{% endif %}</div>
     <div class="grid">
-        {% if papers %}
             {% for p in papers %}
             <article class="card">
                 <h2>{{ p.title }}</h2>
@@ -76,10 +79,10 @@
                 <a class="buy" href="{{ p.url }}">{% if p.paid %}Buy and download{% else %}Download{% endif %}</a>
             </article>
             {% endfor %}
-        {% else %}
-            <div class="empty">No white papers are up yet.</div>
-        {% endif %}
     </div>
+    {% else %}
+    <div class="empty">No white papers are up yet.</div>
+    {% endif %}
     <footer>{{ address }}</footer>
 </div>
 </body>

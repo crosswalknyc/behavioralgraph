@@ -123,6 +123,22 @@
     font-size: 0.8rem;
     line-height: 1.4;
 }
+#section-newsletter .nl-card-body label {
+    display: block;
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    margin: 0.75rem 0 0.35rem;
+}
+#section-newsletter .nl-card-body input[readonly] {
+    width: 100%;
+    box-sizing: border-box;
+    font-size: 0.78rem;
+    padding: 0.45rem 0.55rem;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--bg-input, #0C1618);
+    color: var(--text-primary);
+}
 #section-newsletter .nl-card-foot {
     display: flex;
     gap: 0.4rem;

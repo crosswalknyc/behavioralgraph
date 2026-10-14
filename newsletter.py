@@ -2211,7 +2211,7 @@ def _public_campaign(c, subscriber_counts=None, settings=None, include_downloads
 def _public_papers_payload(state, settings=None):
     try:
         from newsletter_studio import _papers, _public_paper
-        return [_public_paper(row) for row in _papers(state)]
+        return [_public_paper(row, settings) for row in _papers(state)]
     except Exception:
         return []
 
@@ -2273,6 +2273,7 @@ def _overview_payload():
         ],
         "campaigns": campaigns,
         "papers": _public_papers_payload(state, settings),
+        "paper_hub_url": f"{_public_base(settings)}/the-read/papers",
         "stats": {
             "subscribers": len(active),
             "unsubscribed": sum(1 for s in subs if s.get("status") == "unsubscribed"),

@@ -1379,7 +1379,35 @@
         } catch (e) { toast(e.message, true); }
     };
 
+    function paperHubUrl() {
+        return (state.data && state.data.paper_hub_url) || (location.origin + '/the-read/papers');
+    }
+
+    function paperSaleUrl(p) {
+        if (!p) return '';
+        return p.sale_url || (location.origin + (p.url || ''));
+    }
+
+    function copyText(text, okMsg) {
+        const value = String(text || '');
+        if (!value) { toast('No link yet.', true); return; }
+        const done = () => toast(okMsg || 'Copied.');
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(value).then(done).catch(() => toast(value, true));
+            return;
+        }
+        const ta = document.createElement('textarea');
+        ta.value = value;
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); done(); }
+        catch (e) { toast(value, true); }
+        ta.remove();
+    }
+
     function renderPapers() {
+        const hub = $('nl-wp-hub-url');
+        if (hub) hub.value = paperHubUrl();
         const host = $('nl-papers-grid');
         if (!host) return;
         const papers = (state.data && state.data.papers) || [];
@@ -1391,12 +1419,17 @@
             const stats = p.download_stats || {};
             const price = p.paid ? fmtMoney(p.price_usd) : 'Free with email';
             const file = p.has_file ? (p.original_name || p.filename) : 'No file yet';
+            const sale = paperSaleUrl(p);
             return `<article class="nl-card">
                 <div class="nl-card-body">
                     <span class="nl-badge ${p.enabled ? 'sent' : 'draft'}">${p.enabled ? 'live' : 'hidden'}</span>
                     <h3>${esc(p.title || 'Untitled')}</h3>
                     <div class="meta">${esc(price)} · ${esc(file)} · ${fmtNum(stats.unique_downloads || 0)} downloads</div>
+                    <label>Sale link</label>
+                    <input type="text" readonly value="${esc(sale)}">
+                    ${p.has_file ? '' : '<div class="nl-sub">Add a file before a customer can open this link.</div>'}
                     <div class="nl-card-foot">
+                        <button class="btn btn-small btn-primary" onclick="nlCopyPaperLink('${esc(p.id)}')">Copy sale link</button>
                         <a class="btn btn-small btn-secondary" href="${esc(p.url)}" target="_blank" rel="noopener">Open page</a>
                         <button class="btn btn-small btn-secondary" onclick="nlTogglePaper('${esc(p.id)}', ${p.enabled ? 'false' : 'true'})">${p.enabled ? 'Hide' : 'Show'}</button>
                         <button class="btn btn-small btn-secondary" onclick="nlDeletePaper('${esc(p.id)}')">Delete</button>
@@ -1467,8 +1500,20 @@
             if ($('nl-wp-file')) $('nl-wp-file').value = '';
             renderAll();
             showView('papers');
-            toast('White paper saved.');
+            const created = (state.data && state.data.paper) || {};
+            const sale = paperSaleUrl(created);
+            if (sale) copyText(sale, 'White paper saved. Sale link copied.');
+            else toast('White paper saved.');
         } catch (e) { toast(e.message, true); }
+    };
+
+    window.nlCopyPaperLink = function (id) {
+        const p = ((state.data && state.data.papers) || []).find((row) => row.id === id);
+        copyText(paperSaleUrl(p), 'Sale link copied.');
+    };
+
+    window.nlCopyHubLink = function () {
+        copyText(paperHubUrl(), 'Hub link copied.');
     };
 
     window.nlTogglePaper = async function (id, enabled) {

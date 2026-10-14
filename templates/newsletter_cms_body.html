@@ -247,7 +247,23 @@
             </div>
 
             <div id="nl-view-papers" class="nl-hidden">
-                <div class="nl-sub" style="margin-bottom:0.9rem;">A white paper is a file with a price. It has its own page. It is not attached to a newsletter send. Buyers go to <a href="/the-read/papers" target="_blank" rel="noopener">/the-read/papers</a>.</div>
+                <div class="nl-form" style="margin-bottom:1rem;">
+                    <h3 style="margin:0 0 0.5rem; font-size:1rem;">Customer hub</h3>
+                    <div class="nl-sub">Every live white paper is on this page. Send this link to a customer.</div>
+                    <div class="nl-row" style="margin-top:0.7rem; align-items:end;">
+                        <div style="flex:2;">
+                            <label>Hub link</label>
+                            <input type="text" id="nl-wp-hub-url" readonly value="https://dashboard.crosswalknyc.com/the-read/papers">
+                        </div>
+                        <div>
+                            <button class="btn btn-small btn-primary" onclick="nlCopyHubLink()">Copy hub link</button>
+                        </div>
+                        <div>
+                            <a class="btn btn-small btn-secondary" href="/the-read/papers" target="_blank" rel="noopener">Open hub</a>
+                        </div>
+                    </div>
+                </div>
+                <div class="nl-sub" style="margin-bottom:0.9rem;">A white paper also gets its own sale page. Copy that link when you want to send one paper, not the whole hub.</div>
                 <div class="nl-form" style="margin-bottom:1rem;">
                     <h3 style="margin:0 0 0.5rem; font-size:1rem;">New white paper</h3>
                     <label>Title</label>

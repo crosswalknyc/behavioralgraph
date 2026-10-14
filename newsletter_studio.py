@@ -254,9 +254,16 @@ def _slugify(title, taken):
     return slug
 
 
+def paper_hub_url(settings=None):
+    return f"{_nl()._public_base(settings)}{PAPERS_PATH}"
+
+
 def _public_paper(row, settings=None, include_stats=True):
     nl = _nl()
     pid = row.get("id") or ""
+    slug = row.get("slug") or pid
+    path = f"{PAPERS_PATH}/{slug}"
+    base = nl._public_base(settings)
     price = 0.0
     try:
         price = float(row.get("price_usd") or 0)
@@ -267,7 +274,7 @@ def _public_paper(row, settings=None, include_stats=True):
         stats = nl.download_stats_from_store(nl._get_json(PAPER_LEADS_KEY.format(pid=pid)) or {})
     return {
         "id": pid,
-        "slug": row.get("slug") or "",
+        "slug": slug,
         "title": row.get("title") or "White paper",
         "description": row.get("description") or "",
         "price_usd": round(price, 2),
@@ -279,7 +286,9 @@ def _public_paper(row, settings=None, include_stats=True):
         "created_at": row.get("created_at") or "",
         "updated_at": row.get("updated_at") or "",
         "created_by": row.get("created_by") or "",
-        "url": f"{PAPERS_PATH}/{row.get('slug') or pid}",
+        "url": path,
+        "sale_url": f"{base}{path}",
+        "hub_url": f"{base}{PAPERS_PATH}",
         "download_stats": stats,
     }
 
@@ -782,7 +791,10 @@ color:#5C6560;">Crosswalk / White Papers</div>
 <h1 style="font-size:28px;margin:16px 0 12px;">{heading}</h1>
 <p style="font-size:16px;line-height:1.5;color:#5C6560;">{_esc(message)}</p>
 {box}
-<p style="margin-top:36px;font-size:12px;color:#888C89;">
+<p style="margin-top:28px;font-size:13px;">
+<a href="{PAPERS_PATH}" style="color:#0C1618;">All white papers</a>
+</p>
+<p style="margin-top:20px;font-size:12px;color:#888C89;">
 <span style="color:{tone};">&#9679;</span> {_esc(nl._company_address())}
 </p>
 </div></body></html>"""
