@@ -470,10 +470,30 @@ def hold_to_norms(payload: dict, band: dict, inputs: Optional[dict] = None, seed
             r = ratio ** (1.0 / len(free_idx))
             for i in free_idx:
                 kept[i] = min(max(kept[i] * r, bounds[i][0]), bounds[i][1])
-        # no two consecutive steps keep the same share (salted nudge inside bounds)
+        # a step never sits on a bound edge (The Following, 2026-10-14: three
+        # steps printed 1.5 / 34.9997 / 34.9998, the floors themselves), and
+        # no two consecutive steps keep the same share. When the floors bind,
+        # the end follows the seated steps instead of pinning them.
+        seated = False
+        for i, (k, (lo_b, hi_b)) in enumerate(zip(kept, bounds)):
+            margin = max(0.3, (hi_b - lo_b) * (0.04 + (_h(seed, 'edge', i) % 70) / 1000.0))
+            if k - lo_b < margin:
+                kept[i], seated = lo_b + margin, True
+            elif hi_b - k < margin:
+                kept[i], seated = hi_b - margin, True
         for i in range(1, len(kept)):
             if abs(kept[i] - kept[i - 1]) < 0.6:
-                kept[i] = min(max(kept[i] + 0.7 + (_h(seed, 'gap', i) % 50) / 100.0, bounds[i][0]), bounds[i][1])
+                kept[i] = min(max(kept[i] + 0.7 + (_h(seed, 'gap', i) % 50) / 100.0, bounds[i][0] + 0.3), bounds[i][1] - 0.3)
+                seated = True
+        if seated:
+            implied = float(start)
+            for k in kept:
+                implied *= k / 100.0
+            implied_rate = implied / start * 100.0 if start else 0.0
+            if abs(implied - want_end) > 0.02 * max(want_end, 1) and lo * 0.9 <= implied_rate <= float(band.get('ceiling') or hi):
+                want_end = min(_messy(seed, implied, 'want_end_seated'), start - 1)
+                want_rate = want_end / start * 100.0
+                trail['seated_end'] = want_end
         # recompute accounts; the last step lands exactly on want_end when its bound allows
         prev = start
         for i, st in enumerate(steps):

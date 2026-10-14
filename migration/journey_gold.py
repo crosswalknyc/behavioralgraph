@@ -74,7 +74,7 @@ RESEARCHED = ('first_post', 'post_surface', 'looked_before', 'first_episode', 'l
 
 # how an existing detour title maps onto a standard key (first match wins)
 _MATCH = (
-    ('first_post', re.compile(r"first .*post they saw|post they saw|post type|kind of post|what post", re.I)),
+    ('first_post', re.compile(r"first post about .* they saw|first .*post they saw|post they saw|post type|kind of post|what post", re.I)),
     ('post_surface', re.compile(r"where the first post sat|discovery mix|first social surface|where .* first (?:met|encountered|saw)|first post surface", re.I)),
     ('posts_before', re.compile(r"how many posts|posts before|post frequency|frequency", re.I)),
     ('looked_before', re.compile(r"looked before|where they looked|searched before|before (?:prime video|the platform|netflix|hulu|peacock|max|disney)", re.I)),
