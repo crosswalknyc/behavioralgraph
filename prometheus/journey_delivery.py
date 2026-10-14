@@ -152,6 +152,29 @@ def _short_label(label: str, fallback: str) -> str:
     return ' '.join(out) or fallback
 
 
+def gold_lines(payload: dict) -> list:
+    """The short-version lines and the tie-back paragraph for a watch
+    journey in the standard shape; [] for any other journey."""
+    try:
+        from migration import journey_gold as G
+        if not G.is_gold(payload):
+            return []
+        lines = G.ship_lines(payload)
+        return lines if lines and lines[0] else []
+    except Exception:
+        return []
+
+
+def analysis_pdf(payload: dict):
+    """(bytes, filename) of the analysis PDF, or None when it cannot render."""
+    try:
+        from migration import journey_pdf as P
+        return P.build_pdf(payload), P.pdf_filename(payload)
+    except Exception as e:
+        print(f"[journey-delivery] analysis PDF skipped: {e}")
+        return None
+
+
 def compose(payload: dict, *, who: str = '', intro: str = '', ready_message: str = '') -> dict:
     """Subject, plain body and HTML for a journey delivery."""
     import welcome_email as _we
@@ -178,22 +201,33 @@ def compose(payload: dict, *, who: str = '', intro: str = '', ready_message: str
     if also > 0:
         facts.append(('Already watching, not in the conversion', _fmt(also)))
     attach_line = ("The detailed breakdown is attached: every step, path and detour "
-                   "with its count, the share kept of the step before, and where and when it happened.")
+                   "with its count, the share kept of the step before, and where and when it happened. "
+                   "The PDF is the analysis: what we found, what it means and what to do next.")
     figures = ''
     if summ['start'] and summ['end']:
         s_lab = summ['start_label'][:1].lower() + summ['start_label'][1:]
         e_lab = summ['end_label'][:1].lower() + summ['end_label'][1:]
         figures = (f"{_fmt(summ['start'])} people {s_lab}; {_fmt(summ['end'])} {e_lab} "
                    f"({summ['conversion']:.1f}%).")
-    paragraphs = [greet, lead,
-                  (f"{name}. {window}." if window else f"{name}.") + (f" {figures}" if figures else ''),
-                  where, attach_line, f"Open it: {dashboard_url()}", "Prometheus\nCrosswalk"]
+    gold_block = gold_lines(payload)
+    if gold_block:
+        # the Babylon 5 ship email (2026-10-02) is the shape every watch journey ships in
+        paragraphs = [greet, lead, where, "\n".join(gold_block[:6]).rstrip(), gold_block[-1], attach_line,
+                      f"Open it: {dashboard_url()}",
+                      "Reply here if you want the same path for any other title.", "Prometheus\nCrosswalk"]
+    else:
+        paragraphs = [greet, lead,
+                      (f"{name}. {window}." if window else f"{name}.") + (f" {figures}" if figures else ''),
+                      where, attach_line, f"Open it: {dashboard_url()}", "Prometheus\nCrosswalk"]
     body = "\n\n".join(p for p in paragraphs if p)
     headline = 'Your journey is ready.' if not intro else 'Your detailed breakdown.'
+    html_lines = [f"{name}. {window}." if window else name, where]
+    if gold_block:
+        html_lines += [ln.lstrip('- ') for ln in gold_block[1:6] if ln] + [gold_block[-1]]
+    html_lines.append(attach_line)
     html = _we.render_card_html(
         headline, lead, facts=facts, button=('Open Digital Journey IQ', dashboard_url()),
-        lines=[f"{name}. {window}." if window else name, where, attach_line],
-        title=f"{name}: Digital Journey")
+        lines=html_lines, title=f"{name}: Digital Journey")
     subject = f"{name}: your Digital Journey is ready" if not intro else f"{name}: the detailed breakdown"
     return {'subject': subject, 'body': body, 'html': html}
 
@@ -256,12 +290,15 @@ def deliver_journey(*, username: str, payload: dict, s3_key: str = '', s3_client
         xname = jiq.breakdown_filename(payload, 'xlsx')
         csv_text = jiq.breakdown_csv(payload)
         cname = jiq.breakdown_filename(payload, 'csv')
+        files = [(xlsx, xname, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')]
+        pdf = analysis_pdf(payload)
+        if pdf:
+            files.append((pdf[0], pdf[1], 'application/pdf'))
         if send is None:
             from prometheus.outbound_mail import send_user_email as send
         return send(to=email, subject=parts['subject'], body=parts['body'], html=parts['html'],
                     instructed=True, caller=caller, csv=csv_text.encode('utf-8'), csv_name=cname,
-                    files=[(xlsx, xname, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')],
-                    extra_bcc=tuple(extra_bcc or ()), dry_run=dry_run)
+                    files=files, extra_bcc=tuple(extra_bcc or ()), dry_run=dry_run)
     except Exception as e:
         traceback.print_exc()
         return {'sent': False, 'reason': f"delivery failed: {e}"[:200]}

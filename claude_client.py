@@ -479,7 +479,7 @@ def claude_messages(
                 # 2026-08-21: SDK raises ValueError("Streaming is
                 # required...") client-side for large max_tokens (~24k
                 # on Sonnet). Stream + accumulate for big budgets.
-                if not tools and int(kwargs.get("max_tokens") or 0) >= 12000:
+                if int(kwargs.get("max_tokens") or 0) >= 12000:
                     with _request_client.messages.stream(**kwargs) as _s:
                         return _s.get_final_message()
                 return _request_client.messages.create(**kwargs)

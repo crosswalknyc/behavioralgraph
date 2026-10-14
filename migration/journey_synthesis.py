@@ -89,6 +89,21 @@ A pasted Instagram / YouTube / TikTok URL is clip_url. Never invent
 what the user did not give."""
 
 
+COMPACT_OUTPUT_RULE = """
+
+OUTPUT SIZE. Return the JSON object and nothing else: no words before
+it, none after it, and no commentary between searches. Keep every
+string short: a note or source is one phrase, a doing line is under
+twelve words, a copy line is one sentence. A table carries 5 to 8
+rows. Run at most six searches. The whole answer must fit in 14,000
+tokens."""
+
+COMPACT_RETRY_RULE = """
+
+THIS IS THE SECOND ATTEMPT. The first answer did not come back whole.
+Use at most three searches, skip optional fields, keep every table to
+5 rows, and return the JSON only."""
+
 RESEARCH_SYSTEM_PROMPT = """You are building a discovery-to-purchase
 Digital Journey from a 10M-consumer US clickstream panel. Research the
 category and platform (web search when available), then reason the
@@ -194,9 +209,27 @@ Rules that do not move:
 - partition tables must have pcts that sum to ~100 (the code forces
   exactness); overlap tables may exceed 100 and each row stays under
   its parent.
-- Include a first-touch partition and a last-touch partition and an
-  assists overlap on the conversion count, plus a discovery-mix
-  partition on the discovery stage - those four are the media file.
+- WATCH JOURNEYS (a title on a streaming service) follow one standard
+  shape, the Babylon 5 file (2026-10-14). The nest is exactly four
+  stages after the TAM: "Saw a social post about <title>", "Clicked
+  through from the post to the title", "Opened the <title> page on
+  <platform>", "Watched an episode within 30 days of the post". The
+  detours are these ten, in this order, with these titles: "First
+  <title> post they saw" (partition of the social stage: the real post
+  families), "Where the first post sat" (partition of the social stage
+  by platform), "How many posts before they clicked through" (partition
+  of the click stage: 1 post, 2 to 3, 4 to 6, 7 to 10, 11 or more),
+  "Where they looked before <platform>" (overlap of the click stage),
+  "Time from the social view to the first episode" (partition of the
+  conversion: Same day, Within 7 days (days 1 to 7), Within 30 days
+  (days 8 to 30)), "First episode they played" (partition, real episode
+  names), "Last touch before the watch" (partition), "What assisted the
+  watch" (overlap). The code adds the two overlap-with-the-window
+  sections. Any further table goes after these.
+- Other journeys include a first-touch partition and a last-touch
+  partition and an assists overlap on the conversion count, plus a
+  discovery-mix partition on the discovery stage - those four are the
+  media file.
 - Ground every level in the researched reality of THIS category and
   platform. If the category cannot produce a leave-and-return majority
   of conversions, do not copy the fragrance file's shape - re-reason.
@@ -1897,6 +1930,11 @@ def synthesize(inputs: dict, claude_json: Callable, *,
         meta['replayed_from'] = (anchors.get('prior_journey') or {}).get('source_key')
         print(f"[journey] replayed prior journey for {inputs.get('subject')!r}")
         try:
+            from migration import journey_gold as _jg
+            replay = _jg.apply(replay, inputs, claude_json, seed=f"{inputs['subject']}|{inputs['platform']}")
+        except Exception as exc:
+            print(f'[journey] gold standard pass on replay skipped: {exc}')
+        try:
             from migration.journey_clickstream import attach_clickstream
             attach_clickstream(replay, {}, inputs)
         except Exception as exc:
@@ -1925,9 +1963,16 @@ def synthesize(inputs: dict, claude_json: Callable, *,
         'tam_accounts': int(inputs.get('tam_accounts') or US_GEN_POP),
         'notes': inputs.get('notes') or '',
     })
-    prim = claude_json(RESEARCH_SYSTEM_PROMPT, user_prompt,
-                       max_tokens=12000, temperature=0.6,
+    prim = claude_json(RESEARCH_SYSTEM_PROMPT + COMPACT_OUTPUT_RULE, user_prompt,
+                       max_tokens=16000, temperature=0.6,
                        surface='journey_synthesis', tools=tools)
+    if not isinstance(prim, dict) or not prim.get('nest'):
+        # One more try, tighter: the first read ran long or came back
+        # empty (The Following, 2026-10-14). Same ask, shorter answer.
+        print('[journey] research returned no primitives; one compact re-ask')
+        prim = claude_json(RESEARCH_SYSTEM_PROMPT + COMPACT_OUTPUT_RULE + COMPACT_RETRY_RULE, user_prompt,
+                           max_tokens=16000, temperature=0.4,
+                           surface='journey_synthesis_retry', tools=tools)
     if not isinstance(prim, dict) or not prim.get('nest'):
         raise RuntimeError('journey research returned no primitives')
     if anchors.get('attribution'):
@@ -1955,6 +2000,15 @@ def synthesize(inputs: dict, claude_json: Callable, *,
                                         seed=f"{inputs['subject']}|{inputs['platform']}")
         except Exception as exc:
             print(f'[journey] norms hold skipped: {exc}')
+    # The Babylon 5 shape is the standard for every watch journey (Jenna
+    # 2026-10-14): the four-step spine and the ten sections, whatever the
+    # research chose to return. Missing title-specific sections are filled
+    # with one small research call; the rest derive from the spine.
+    try:
+        from migration import journey_gold as _jg
+        payload = _jg.apply(payload, inputs, claude_json, seed=f"{inputs['subject']}|{inputs['platform']}")
+    except Exception as exc:
+        print(f'[journey] gold standard pass skipped: {exc}')
     try:
         from migration.journey_clickstream import attach_clickstream
         attach_clickstream(payload, prim, inputs)

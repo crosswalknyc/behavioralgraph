@@ -201,6 +201,34 @@ def _email(kind, *, username, name, who, email, shelf, files, facts, intro, read
         return {'sent': False, 'reason': f'email failed: {e}'[:200]}
 
 
+HOLD_PREFIX = 'system/pm_delivery_holds/'
+
+
+def hold_key(job_id: str) -> str:
+    return f"{HOLD_PREFIX}{str(job_id).strip()}.json"
+
+
+def delivery_held(job_id: str, *, s3_client=None, host=None, bucket='dashboard-inputs') -> bool:
+    """True when ops put a hold marker on this job's completion email.
+    Write one with hold_delivery(); the ledger and the dashboard entry
+    still land, only the automatic email steps aside."""
+    s3 = s3_client or (getattr(host, 's3_client', None) if host is not None else None)
+    if s3 is None or not job_id:
+        return False
+    try:
+        s3.head_object(Bucket=bucket, Key=hold_key(job_id))
+        return True
+    except Exception:
+        return False
+
+
+def hold_delivery(job_id: str, *, reason: str, s3_client, bucket='dashboard-inputs') -> str:
+    key = hold_key(job_id)
+    s3_client.put_object(Bucket=bucket, Key=key, ContentType='application/json',
+                         Body=json.dumps({'job_id': job_id, 'reason': reason, 'held_at': _now_iso()}).encode('utf-8'))
+    return key
+
+
 def on_done(kind, *, username, subject='', s3_key='', payload=None, host=None, s3_client=None, bucket='dashboard-inputs',
             files=(), figures=(), facts=(), shelf='', window=None, intro='', ready_message='', extra_bcc=(), to='',
             job_id='', send=None, dry_run=False, email=True):
@@ -214,6 +242,10 @@ def on_done(kind, *, username, subject='', s3_key='', payload=None, host=None, s
     try:
         seat, who = _seat(username, host=host, s3_client=s3_client, bucket=bucket)
         addr = (to or str(seat.get('email') or '')).strip()
+        if email and job_id and delivery_held(job_id, s3_client=s3_client, host=host, bucket=bucket):
+            # an operator is shipping this one by hand (an apology, extra files, a named BCC)
+            email = False
+            rec['email'] = {'sent': False, 'reason': 'held for an operator send'}
         if email and addr and '@' in addr:
             if kind == 'journey':
                 from prometheus.journey_delivery import deliver_journey

@@ -11440,7 +11440,10 @@ def _run_nflx_claude_agent(*, system_prompt, user_prompt, max_tokens=8192,
         # (breakdown reads legitimately run long). One retry at a
         # doubled ceiling; a fragment must never ship (2026-08-28
         # Shark Tank category read).
-        bigger = min(int(max_tokens) * 2, 16000)
+        # 2026-10-14: a journey research read with web search ran past
+        # 16k twice (The Following) and the whole build died. The retry
+        # ceiling follows the budget: doubled, capped at 32k.
+        bigger = min(max(int(max_tokens) * 2, 16000), 32000)
         print(f"[claude-agent] {chosen_model} truncated at "
               f"{max_tokens}; retrying once at {bigger}")
         try:
