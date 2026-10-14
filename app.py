@@ -4347,9 +4347,17 @@ def terms_page():
     return render_template('terms.html')
 
 @app.route('/privacy')
+@app.route('/privacy-policy')
 def privacy_page():
-    """Privacy Policy page - accessible without login"""
-    return render_template('privacy.html')
+    """Privacy Policy page - accessible without login.
+
+    Serves the canonical crosswalknyc.com Privacy Policy (hosted at
+    /privacy-policy-1 as a static site page). Both /privacy and
+    /privacy-policy are permanent-redirect aliases so external
+    references (App Store Connect submission, in-app About links,
+    partner emails) all land on the same canonical page.
+    """
+    return redirect('/privacy-policy-1', code=301)
 
 
 @app.route('/caa', methods=['GET', 'POST'])

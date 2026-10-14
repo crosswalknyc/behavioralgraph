@@ -14,12 +14,12 @@
   <article class="legal">
     <div class="wrap legal-in">
 <h1>Privacy Policy</h1>
-<p class="updated">Last updated: 28 August 2026</p>
+<p class="updated">Last updated: 14 October 2026</p>
 <p>Crosswalk Technologies, Inc. (&quot;Crosswalk,&quot; &quot;we,&quot; &quot;us&quot;) operates an opted-in US digital panel and licenses aggregated audience products. This Privacy Policy explains how we collect, use, share, and protect information, and how you can exercise your rights.</p>
 <p>It covers:</p>
 <ul>
 <li>Our websites, including crosswalknyc.com</li>
-<li>Panel software (browser extension and related apps)</li>
+<li>Panel software (browser extension, Mac and Windows desktop apps, and the Crosswalk Panel mobile app for iOS and Android)</li>
 <li>Client products: Profile IQ, Subscriber IQ, Digital Journey IQ, Trends IQ, Impact IQ, Attribution IQ, and Analysis IQ</li>
 <li>The dashboard at dashboard.crosswalknyc.com, for account-holder information</li>
 </ul>
@@ -44,6 +44,15 @@
 <li>Records of your rights requests</li>
 </ul>
 <p>We redact emails, reset tokens, account IDs, and other sensitive query parameters from URLs on device or at ingest. Identity keys (name, email, payout) are stored apart from the behavioral log.</p>
+<h3>From panel mobile apps (iOS and Android)</h3>
+<p>The Crosswalk Panel mobile app uses the operating system's built-in networking APIs to observe the destination hostnames you visit so your panel contribution reflects your mobile browsing in the same way the browser extension reflects your desktop browsing.</p>
+<ul>
+<li><strong>iOS.</strong> The app installs a local, on-device VPN configuration through Apple's Network Extension framework (NEPacketTunnelProvider). The VPN is on-device only; your traffic is not routed through Crosswalk servers or any other remote endpoint. The extension reads DNS lookups and connection metadata on your device, extracts the destination hostname and timestamp, and uploads only that metadata to the Crosswalk panel. We do not operate or offer a VPN service to you; the VPN API is used solely as the sanctioned iOS mechanism to observe the sites you visit for research purposes.</li>
+<li><strong>Android.</strong> The app uses Android's VpnService API for the same purpose, with the same on-device-only design.</li>
+<li><strong>What is collected.</strong> Destination hostnames (for example example.com), timestamps, per-app byte counts, device model, and OS version. Full URL paths for web browsing where observable are included; app content, form inputs, keystrokes, screenshots, microphone, camera, contacts, and precise GPS location are not collected.</li>
+<li><strong>What is not collected.</strong> We do not read the content of pages or messages. We do not collect your location, contacts, photos, microphone, or camera. We do not inspect encrypted payloads; we do not act as a man-in-the-middle. We do not request those permissions in the app.</li>
+<li><strong>Your controls.</strong> The app shows a plain-English consent screen before any observation begins. You consent in-app and iOS or Android then shows its own system consent dialog for the VPN configuration. You can pause observation in-app at any time, disable the VPN configuration from iOS Settings &gt; General &gt; VPN &amp; Device Management or Android Settings &gt; Network &amp; Internet &gt; VPN, or uninstall the app; uninstalling removes the VPN configuration.</li>
+</ul>
 <h3>From site visitors and dashboard users</h3>
 <ul>
 <li>Information you type into forms (contact, credit requests, support)</li>
