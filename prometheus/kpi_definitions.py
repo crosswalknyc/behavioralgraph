@@ -305,6 +305,41 @@ DEFINITIONS = [
             "at a step the first time they reach it."),
     },
     {
+        'id': 'journey_conversion',
+        'label': 'Conversion rate',
+        'views': ('journeyIQ',),
+        'aliases': ('conversion rate', 'conversion', 'conversion percent', 'conversion %',
+                    'converted', 'end-to-end conversion', 'journey conversion'),
+        'definition': (
+            "Conversion is the share of the people at the start of the journey "
+            "who reached the last step in the window: for a watch journey, the "
+            "people who saw the posts or clips and then played the title for "
+            "the first time afterward. People already watching before the "
+            "posts are listed on their own line and are not in the rate."),
+        'computed': (
+            "People at the last step divided by people at the start step, "
+            "both counted once per person inside the 10 million sample, then "
+            "shown as a percent. Each middle step shows the share of the step "
+            "before it that moved on."),
+    },
+    {
+        'id': 'subiq_conversion',
+        'label': 'Clean Conversion Rate',
+        'views': ('subscriberIQ',),
+        'aliases': ('clean conversion rate', 'total show conversion rate', 'conversion rate',
+                    'conversion', 'show conversion'),
+        'definition': (
+            "The conversion rate is the share of the accounts that watched the "
+            "title whose first platform signup or return came after the title "
+            "was available: new accounts plus reactivated ones, over everyone "
+            "who watched."),
+        'computed': (
+            "New Platform Signups (attributed plus reactivated) divided by the "
+            "clean sample of first-time viewers, shown as a percent. The clean "
+            "sample excludes accounts that were already watching the title "
+            "before the window."),
+    },
+    {
         'id': 'attribution_lift',
         'label': 'Attributed lift',
         'views': ('attributionIQ', 'impactIQ', 'roasIQ', 'sfConversion'),

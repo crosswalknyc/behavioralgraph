@@ -10724,9 +10724,7 @@ _PM_FEEDBACK_RES = (
 )
 
 
-_PM_METHOD_CHALLENGE_RES = (
-    re.compile(r"\bhow\s+is\b[^.?!\n]{0,60}\bcalculated\b",
-               re.IGNORECASE),
+_PM_METHOD_CHALLENGE_RES = (   # "how is X calculated" is a definition question, answered, never a challenge (Jenna 2026-10-14)
     re.compile(r"\b(?:seems?|looks?|is)\s+(?:very|too|way too)\s+"
                r"(?:high|low)\b", re.IGNORECASE),
 )
@@ -10861,8 +10859,10 @@ def _pm_bank_regression_case(username, question, complaint, history,
 
 def _pm_forward_user_feedback(username, text, kind):
     """One SES note to ops per distinct feedback message per hour.
-    Never raises, never blocks the reply."""
+    Never raises, never blocks the reply. A probe never mails."""
     try:
+        if _pm_probe_caller() or _pm_is_probe_user(username):
+            return
         sig = hashlib.md5(
             f"{username}|{str(text)[:200]}".encode()).hexdigest()
         now = time.time()
@@ -14909,6 +14909,8 @@ def _pm_challenge_headsup(user, text):
         if len(t) < 12 or not any(
                 rx.search(t) for rx in _PM_CHALLENGE_RES):
             return
+        if _pm_probe_caller() or _pm_is_probe_user((user or {}).get('username')):
+            return   # a probe (golden set, canary, smoke) never mails ops (2026-10-14)
         _H._chatbot_error_email(
             'pm/number-challenged',
             'reader challenged a delivered figure (the answer still '
