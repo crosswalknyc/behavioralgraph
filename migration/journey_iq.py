@@ -2444,6 +2444,12 @@ def breakdown_rows(payload: dict) -> list:
         rows.append(['Spine', s.get('label') or '', _bd_int(s.get('accounts')),
                      _bd_pct(s.get('kept')), _bd_int(s.get('dropped')), _bd_pct(s.get('ofUs')),
                      s.get('where') or '', s.get('surface') or '', s.get('timing') or ''])
+    also = _bd_int(((payload or {}).get('kpis') or {}).get('also_watching'))
+    if also > 0 and spine:
+        # the people already watching (or already customers) who saw the posts: their own
+        # line, never inside the conversion (Jenna 2026-10-13)
+        rows.append(['Already watching', 'Saw the posts and were already watching before them', also, '', '', '',
+                     'Not counted in the conversion', '', 'Before the first post'])
     for f in (j.get('fork') or []):
         if not isinstance(f, dict):
             continue

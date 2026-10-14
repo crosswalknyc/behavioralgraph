@@ -170,6 +170,13 @@ def compose(payload: dict, *, who: str = '', intro: str = '', ready_message: str
         facts.append((_short_label(summ['end_label'], 'End of the journey'), _fmt(summ['end'])))
     if summ['start'] and summ['end']:
         facts.append(('Conversion', f"{summ['conversion']:.1f}%"))
+    also = ((payload or {}).get('kpis') or {}).get('also_watching')
+    try:
+        also = int(also or 0)
+    except Exception:
+        also = 0
+    if also > 0:
+        facts.append(('Already watching, not in the conversion', _fmt(also)))
     attach_line = ("The detailed breakdown is attached: every step, path and detour "
                    "with its count, the share kept of the step before, and where and when it happened.")
     figures = ''

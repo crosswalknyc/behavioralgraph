@@ -100,6 +100,16 @@ round numbers, no two identical rates. Return STRICT JSON only:
 {
   "customer_brand": str,          // who this file is for
   "category": str,                // short category tag
+  "title_status": "catalog"|"returning"|"new",   // catalog = last new
+                                  // episode or release 2+ years ago;
+                                  // returning = a new season in window;
+                                  // new = a new title with a campaign
+  "audience_age_skew": "younger"|"balanced"|"older",  // under 35 /
+                                  // mixed / 55 and older, from research
+  "title_viewers_in_window": int|null,  // US people who watched (or
+                                  // bought) the title on the platform in
+                                  // the window, researched; null if unknown
+  "post_type": "official_clip"|"news_article"|"meme_reaction"|"mixed",
   "facts": [                      // exactly 4 {label, value} card
     {"label": str, "value": str}, // lines for the tab header - plain
     ...                           // client-safe sentences with the
@@ -198,6 +208,18 @@ Rules that do not move:
   ask "which podcasts?" and the file must already hold the answer.
   Never a placeholder name, never a show that did not cover the title.
 - Do not invent a sample / observed-file n. Never emit a sample field. The path counts are the file.
+- CONVERSION NORMS (2026-10-13). When the input carries `norms`, the
+  whole-journey rate from the FIRST stage to the conversion stage MUST
+  land inside norms.end_to_end_band_pct, aiming near norms.target_pct,
+  and every stage's kept_of_prior_pct sits inside the ceiling for its
+  kind in norms.step_ceilings_kept_of_prior_pct. Conversion counts only
+  people whose FIRST play, purchase, ticketing visit or stream came after
+  the exposure; people who were already watching or buying are not
+  conversions. Of everyone who sees a social post, only a few in a
+  hundred engage with it at all; a catalog show on one paid service
+  converts a fraction of one percent of its social viewers inside 30
+  days. A rate outside the band is corrected after the build; reason it
+  right the first time.
 - clickstream is REQUIRED on every journey. 8 to 13 steps, 6 to 10
   public https URLs on each step. Official accounts, search pages,
   title pages, and documented clips only. Never invent a TikTok
@@ -1024,6 +1046,12 @@ _ANCHOR_LABEL_TOKENS = frozenset((
 def _anchor_tokens(text: str) -> list:
     toks = re.findall(r'[a-z0-9]+', str(text or '').lower())
     return [t for t in toks if t not in _ANCHOR_LABEL_TOKENS and len(t) > 1]
+
+
+def _norms_enabled() -> bool:
+    """Kill switch for hermetic tests: JOURNEY_NORMS=0."""
+    import os
+    return str(os.environ.get('JOURNEY_NORMS', '1')).strip().lower() not in ('0', 'false', 'no', 'off')
 
 
 def _anchors_enabled() -> bool:
@@ -1872,7 +1900,16 @@ def synthesize(inputs: dict, claude_json: Callable, *,
         except Exception as exc:
             print(f'[journey] clickstream attach on replay skipped: {exc}')
         return replay
+    norms_on = _norms_enabled()
+    band0 = None
+    if norms_on:
+        try:
+            from migration import journey_norms as _jn
+            band0 = _jn.band_for(inputs, None, seed=f"{inputs['subject']}|{inputs['platform']}")
+        except Exception as exc:
+            print(f'[journey] norms band skipped: {exc}')
     user_prompt = json.dumps({
+        'norms': (_jn.norms_prompt_block(band0) if band0 else None),
         'corpus_anchors': anchors_prompt_block(anchors),
         'subject': inputs['subject'],
         'platform': inputs['platform'],
@@ -1905,6 +1942,17 @@ def synthesize(inputs: dict, claude_json: Callable, *,
     if anchors.get('title_anchor'):
         payload = apply_title_anchor(payload, anchors['title_anchor'],
                                      seed=f"{inputs['subject']}|{inputs['platform']}")
+    # The sniff test (Jenna 2026-10-13): the end-to-end rate lands inside
+    # the band for this kind of title, service and audience; every step
+    # sits inside its ceiling; the already-watching line is its own.
+    if norms_on:
+        try:
+            from migration import journey_norms as _jn
+            band = _jn.band_for(inputs, prim, seed=f"{inputs['subject']}|{inputs['platform']}")
+            payload = _jn.hold_to_norms(payload, band, inputs,
+                                        seed=f"{inputs['subject']}|{inputs['platform']}")
+        except Exception as exc:
+            print(f'[journey] norms hold skipped: {exc}')
     try:
         from migration.journey_clickstream import attach_clickstream
         attach_clickstream(payload, prim, inputs)
