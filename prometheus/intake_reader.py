@@ -1032,7 +1032,14 @@ _TEMPLATE_RXS = (
     re.compile(r"\b(?:the\s+)?same\s+(?:analysis|read|thing|journey|report|numbers|breakdown|look|view|study)\s+(?:that\s+)?(?:you|we|I)\s+"
                r"(?:did|built|made|ran|gave|produced)\s+(?:for|on)\s+(?P<title>[^.?!,;]+?)(?=\s+(?:for|on|but for|against)\s+|\s*(?:[.?!,;]|$))", re.I),
 )
-_TEMPLATE_TAIL_RX = re.compile(r"\s+(?:journey|one|read|version|build)$", re.I)
+_TEMPLATE_RXS = _TEMPLATE_RXS + (
+    # "Same structure as the Babylon 5 journey" (Carolyn's paste text, 2026-10-14)
+    re.compile(r"\b(?:the\s+)?same\s+(?:structure|format|shape|layout|template|depth|tables|breakdown)\s+as\s+"
+               r"(?:the|your|our|my)?\s*(?P<title>[^.?!,;]+?)\s+(?:journey|one|read|version|build|file|report)\b", re.I),
+    re.compile(r"\b(?:the\s+)?same\s+(?:structure|format|shape|layout|template|depth|tables|breakdown)\s+as\s+"
+               r"(?:the|your|our|my)?\s*(?P<title>[^.?!,;]+?)\s*(?:[.?!,;]|$)", re.I),
+)
+_TEMPLATE_TAIL_RX = re.compile(r"\s+(?:journey|one|read|version|build|file|report)$", re.I)
 
 
 def find_template_reference(text):
@@ -1067,6 +1074,7 @@ def strip_template_reference(text):
     t = ' '.join(str(text or '').split())
     for rx in _TEMPLATE_RXS:
         t = rx.sub(' ', t)
+    t = re.sub(r"\s*\.(?:\s*\.)+", ".", t)
     return ' '.join(t.split()).strip(' ,;')
 
 

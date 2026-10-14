@@ -16930,10 +16930,14 @@ def _pm_jiq_confirm_reply(parsed):
         shape = ("It's a music-first path into the title - the song, "
                  "the sound page, the title page, and the watch")
     elif str(parsed.get('journey_kind') or '') == 'watch':
-        shape = ("It's a full discovery-to-watch path - where the "
-                 "title first reaches them, where they cross to the "
-                 "platform, where they stall or hunt a free play, "
-                 "what pulls them back, and the watch itself")
+        # the Babylon 5 shape, every watch journey (Jenna 2026-10-14)
+        shape = ("It's the same shape as every watch journey: four "
+                 "steps from the social post to the first episode, "
+                 "then the first post they saw and where it sat, how "
+                 "many posts before they clicked through, where they "
+                 "looked before the platform, the time from the view "
+                 "to the first episode, the first episode, the last "
+                 "touch and the assists")
     else:
         shape = ("It's a full discovery-to-purchase path - where "
                  "they learn the name, research, compare, hunt a "
