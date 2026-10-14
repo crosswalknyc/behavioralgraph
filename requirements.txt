@@ -61,3 +61,4 @@ Pillow>=10.4.0
 # next major bump landing without regression coverage.
 stripe>=12.0.0,<13.0
 matplotlib>=3.8  # 2026-10-08: charts on generated reads (prometheus/charts.py)
+psycopg2-binary>=2.9

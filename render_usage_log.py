@@ -508,6 +508,12 @@ def _put_ask_record(record: dict) -> None:
 
 
 def _put_ask_record_safe(record: dict) -> None:
+    try:   # shadow row in the relational store when one is configured (audit item 7, 2026-10-14)
+        from prometheus import store as _store
+        if _store.enabled():
+            _store.record_ask(record)
+    except Exception:
+        pass
     try:
         _put_ask_record(record)
     except Exception as e:

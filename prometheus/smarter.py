@@ -37,22 +37,45 @@ _SUBIQ_RX = re.compile(r"\b(subscriber iq|sub iq|subiq|tracker|signups?|reactiva
 _LIST_RX = re.compile(r"(,|\band\b|\bor\b|\beach\b|\bboth\b|\ball of\b|\bthe following\b)", re.I)
 _PLATFORM_RX = re.compile(r"\b(netflix|prime video|amazon|hulu|disney|max|hbo|peacock|paramount|apple tv|starz|roku|tubi|pluto|youtube|spotify|tiktok|instagram|est|tvod|pvod|svod|avod|fast)\b", re.I)
 _AUTO_RX = re.compile(r"\b(car|auto|automobile|truck|suv|ford|toyota|honda|chevy|chevrolet|tesla|bmw|lincoln|jeep|dealer)\b", re.I)
+_GENDER_RX = re.compile(r"\b(female|male|women|woman|men|man|girls?|boys?|moms?|dads?|mothers?|fathers?|ladies|guys|gender|she|he|her|his)\b", re.I)
+_EVENT_RX = re.compile(r"\b(premiere|launch|opening|tour|release[sd]?|finale|season \d|episode|concert|game day|draft|super bowl|world series|playoffs?|awards?|debut|drop|campaign|event|week of|weekend of|since|after|before|during|around)\b", re.I)
+_KIDS_RX = re.compile(r"\b(kids?|children|child|toddlers?|babies|baby|infants?|toys?|preschool|parents?|family|families|teens?|tweens?|youth)\b", re.I)
 PRUNABLE = {
-    'SUBSCRIBER IQ REQUESTS': lambda t, c: bool(_SUBIQ_RX.search(t)),
-    'ANY-OF / ALL-OF TITLE LISTS': lambda t, c: bool(_LIST_RX.search(t)),
-    'PARENT-SELECTION TIEBREAK': lambda t, c: bool(c),
-    'UNIVERSE-QUALIFIER COMPATIBILITY': lambda t, c: bool(c),
-    'SUBJECT-IDENTITY COMPATIBILITY': lambda t, c: bool(c),
-    'PLATFORM SCOPE': lambda t, c: bool(_PLATFORM_RX.search(t)),
-    'CAR-BRAND SELF-PINS': lambda t, c: bool(_AUTO_RX.search(t)),
-    'PURCHASE-ON-A-PLATFORM': lambda t, c: bool(_PLATFORM_RX.search(t)) or bool(re.search(r"\b(buy|purchas|shop|consumer)", t, re.I)),
+    'SUBSCRIBER IQ REQUESTS': lambda t, c, r=None: bool(_SUBIQ_RX.search(t)),
+    'ANY-OF / ALL-OF TITLE LISTS': lambda t, c, r=None: bool(_LIST_RX.search(t)),
+    'PARENT-SELECTION TIEBREAK': lambda t, c, r=None: bool(c),
+    'UNIVERSE-QUALIFIER COMPATIBILITY': lambda t, c, r=None: bool(c),
+    'SUBJECT-IDENTITY COMPATIBILITY': lambda t, c, r=None: bool(c),
+    'PLATFORM SCOPE': lambda t, c, r=None: bool(_PLATFORM_RX.search(t)) or bool((r or {}).get('platform')),
+    'CAR-BRAND SELF-PINS': lambda t, c, r=None: bool(_AUTO_RX.search(t)),
+    'PURCHASE-ON-A-PLATFORM': lambda t, c, r=None: bool(_PLATFORM_RX.search(t)) or bool(re.search(r"\b(buy|purchas|shop|consumer)", t, re.I)),
+    # Reader-aware (audit item 6, 2026-10-14): sections the reading says cannot apply
+    'GENDER SKEW VOCABULARY': lambda t, c, r=None: bool(_GENDER_RX.search(t)),
+    'EVENT-SCOPED WINDOWS': lambda t, c, r=None: bool(_EVENT_RX.search(t)) or bool((r or {}).get('window')) or 'custom_window' in ((r or {}).get('flags') or []),
+    "KIDS' PRODUCTS": lambda t, c, r=None: bool(_KIDS_RX.search(t)),
+    'SUBJECT IDENTITY RESOLUTION': lambda t, c, r=None: not _subject_resolved(r),
 }
 
 
-def prune_rulebook(system_prompt, text, candidates=None):
+def _subject_resolved(reading):
+    """True when the Reader named one subject with a library match at high
+    confidence and no ambiguity flag: the 3,000-token identity-resolution
+    rulebook has nothing left to resolve."""
+    r = reading if isinstance(reading, dict) else None
+    if not r or float(r.get('confidence') or 0) < 0.9:
+        return False
+    subs = r.get('subjects') or []
+    if len(subs) != 1 or not subs[0].get('catalog'):
+        return False
+    flags = set(r.get('flags') or [])
+    return not (flags & {'typo', 'multiple_subjects', 'ambiguous'})
+
+
+def prune_rulebook(system_prompt, text, candidates=None, reading=None):
     """Drop whole rulebook sections an ask cannot need. A section is the
     text from one ALL-CAPS heading to the next. Anything not in PRUNABLE
-    stays; when in doubt the section stays. Returns (prompt, dropped)."""
+    stays; when in doubt the section stays. The Reader's reading lets more
+    go (gender, event, kids, identity resolution). Returns (prompt, dropped)."""
     try:
         s = str(system_prompt or '')
         t = str(text or '')
@@ -70,7 +93,7 @@ def prune_rulebook(system_prompt, text, candidates=None):
             keep = True
             for key, needed in PRUNABLE.items():
                 if head.startswith(key):
-                    keep = needed(t, candidates)
+                    keep = needed(t, candidates, reading)
                     if not keep:
                         dropped.append(key)
                     break
@@ -80,8 +103,9 @@ def prune_rulebook(system_prompt, text, candidates=None):
         if pos < len(s):
             out.append(s[pos:])
         pruned = ''.join(out)
-        # never prune away more than half; something is off with the split
-        if len(pruned) < len(s) * 0.5:
+        # never prune away more than half (70% with a confident reading); something is off with the split
+        floor = 0.3 if isinstance(reading, dict) and reading.get('intent') else 0.5
+        if len(pruned) < len(s) * floor:
             return s, []
         return pruned, dropped
     except Exception:

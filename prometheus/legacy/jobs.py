@@ -13,7 +13,8 @@ import traceback
 from flask import jsonify, request, session
 
 from prometheus.legacy import H as _H, C as _C  # noqa: E402
-from prometheus import seams as _seams  # noqa: E402
+from prometheus import seams as _seams
+from prometheus import store as _store   # relational shadow store (audit item 7)  # noqa: E402
 
 __all__ = ['api_synth_chat_status', '_pm_job_owner_ok', '_pm_read_status_write', 'api_synth_chat_read_status', '_pm_deck_status_write', '_pm_bpiq_status_write', '_pm_jiq_status_write', '_pm_fw_status_write', '_pm_aiq_status_write', 'api_synth_chat_deck_status', 'api_synth_chat_bpiq_status', 'api_synth_chat_jiq_status', 'api_synth_chat_fw_status', 'api_synth_chat_aiq_status']
 
@@ -128,6 +129,7 @@ def _pm_job_owner_ok(payload_user, user):
 
 def _pm_read_status_write(job_id, payload):
     payload = _seams.tag_job(payload, 'read')
+    _store.enabled() and _store.upsert_job('read', dict(payload, job_id=payload.get('job_id') or job_id))   # shadow row (audit item 7)
     _H.s3_client.put_object(
         Bucket=_H.S3_BUCKET, Key=f"{_C._PM_READ_PREFIX}{job_id}.json",
         Body=json.dumps(payload).encode('utf-8'),
@@ -168,6 +170,7 @@ def api_synth_chat_read_status(job_id):
 
 def _pm_deck_status_write(job_id, payload):
     payload = _seams.tag_job(payload, 'deck')
+    _store.enabled() and _store.upsert_job('deck', dict(payload, job_id=payload.get('job_id') or job_id))   # shadow row (audit item 7)
     _H.s3_client.put_object(
         Bucket=_H.S3_BUCKET, Key=f"{_C._PM_DECK_PREFIX}{job_id}.json",
         Body=json.dumps(payload).encode('utf-8'),
@@ -176,6 +179,7 @@ def _pm_deck_status_write(job_id, payload):
 
 def _pm_bpiq_status_write(job_id, payload):
     payload = _seams.tag_job(payload, 'bpiq')
+    _store.enabled() and _store.upsert_job('bpiq', dict(payload, job_id=payload.get('job_id') or job_id))   # shadow row (audit item 7)
     _H.s3_client.put_object(
         Bucket=_H.S3_BUCKET, Key=f"{_C._PM_BPIQ_JOB_PREFIX}{job_id}.json",
         Body=json.dumps(payload).encode('utf-8'),
@@ -184,6 +188,7 @@ def _pm_bpiq_status_write(job_id, payload):
 
 def _pm_jiq_status_write(job_id, payload):
     payload = _seams.tag_job(payload, 'jiq')
+    _store.enabled() and _store.upsert_job('jiq', dict(payload, job_id=payload.get('job_id') or job_id))   # shadow row (audit item 7)
     _H.s3_client.put_object(
         Bucket=_H.S3_BUCKET, Key=f"{_C._PM_JIQ_JOB_PREFIX}{job_id}.json",
         Body=json.dumps(payload).encode('utf-8'),
@@ -192,6 +197,7 @@ def _pm_jiq_status_write(job_id, payload):
 
 def _pm_fw_status_write(job_id, payload):
     payload = _seams.tag_job(payload, 'fw')
+    _store.enabled() and _store.upsert_job('fw', dict(payload, job_id=payload.get('job_id') or job_id))   # shadow row (audit item 7)
     _H.s3_client.put_object(
         Bucket=_H.S3_BUCKET, Key=f"{_C._PM_FW_JOB_PREFIX}{job_id}.json",
         Body=json.dumps(payload).encode('utf-8'),
@@ -200,6 +206,7 @@ def _pm_fw_status_write(job_id, payload):
 
 def _pm_aiq_status_write(job_id, payload):
     payload = _seams.tag_job(payload, 'aiq')
+    _store.enabled() and _store.upsert_job('aiq', dict(payload, job_id=payload.get('job_id') or job_id))   # shadow row (audit item 7)
     _H.s3_client.put_object(
         Bucket=_H.S3_BUCKET, Key=f"{_C._PM_AIQ_JOB_PREFIX}{job_id}.json",
         Body=json.dumps(payload).encode('utf-8'),

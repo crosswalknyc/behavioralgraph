@@ -25,6 +25,7 @@ import re
 from prometheus import smarter as _smart   # 2026-10-13 audit helpers
 from prometheus import figures as _fig   # figures by composition (audit items 3 + 4, 2026-10-14)
 from prometheus import faults as _faults   # swallowed faults are counted (audit item 8)
+from prometheus import store as _store   # relational shadow store (audit item 7)
 import io
 import hashlib
 import time
@@ -279,7 +280,7 @@ def _synth_chat_gate(allow_api_key: bool = True):
     By default accepts either a logged-in session (browser / dashboard
     use) OR an external partner API key sent as
     `X-Crosswalk-API-Key: <raw_key>`. Pass ``allow_api_key=False`` to
-    force session-only auth — used by the internal dashboard chatbot
+    force session-only auth - used by the internal dashboard chatbot
     routes (`/api/synth-chat/*`, `/api/brief-chat/*`) so partners get
     steered to the documented `/api/v1/*` surface instead of leaking
     internal terminology through the chatbot UI paths.
@@ -525,7 +526,7 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         # ── Phantom-column defense (added 2026-08-19 after Paul Anka,
         # Tony Bennett, and Frankie Valli shipped with a `BRAND` column
         # holding Hallmark Channel, Cracker Barrel, Blue Cross Blue
-        # Shield, Kennedy Center, etc. — the dashboard cannot render
+        # Shield, Kennedy Center, etc. - the dashboard cannot render
         # this column because BRAND is only a top-level grouping in
         # MASTER_CATEGORIES, not a valid Column value).
         "PHANTOM COLUMNS - the following labels are TOP-LEVEL groupings "
@@ -905,20 +906,20 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "  * Set 'general' (default) for any TU / avid / demographic "
         "cut of the SUBJECT'S general audience. 'Taylor Swift "
         "audience', 'Taylor Swift fans', 'Avid Taylor Swift fans' "
-        "are 'general' — everyone who engages with the subject "
+        "are 'general' - everyone who engages with the subject "
         "digitally, not only a physically-bounded subset. If in "
         "doubt whether the cap should apply, default to 'general'.\n"
         "  * `follower_ceiling` (int or null): REQUIRED when "
         "audience_type != 'general'. Your best-researched estimate "
-        "of the underlying public metric — total follower count, "
+        "of the underlying public metric - total follower count, "
         "video view count, subscriber count, listener count, "
-        "attendance figure, MAU / DAU — corresponding to the "
+        "attendance figure, MAU / DAU - corresponding to the "
         "audience_type. Use your training-data knowledge of "
         "well-known accounts / videos / events; the pipeline's "
         "persona-research agent refines this with a live web-search "
         "pass. If you truly have no signal, leave null and the "
         "pipeline will apply a conservative fallback ceiling. "
-        "(Field name is legacy — it holds any capped metric, not "
+        "(Field name is legacy - it holds any capped metric, not "
         "only follower counts.)\n"
         "  * `follower_platforms` (list of strings or null): the "
         "platforms the ceiling covers, e.g. "
@@ -4696,7 +4697,7 @@ def api_synth_chat_clarify():
         else:
             m_num = _re.match(r'^(?:option\s*|#\s*)?([1-9])\b', low)
             m_rng = _re.search(
-                r'(\d{1,2})\s*(?:-|–|—|to)\s*(\d{1,2})|(\d{2})\s*\+', low)
+                r'(\d{1,2})\s*(?:-|–| - |to)\s*(\d{1,2})|(\d{2})\s*\+', low)
             if m_num and int(m_num.group(1)) <= len(opts):
                 chosen = opts[int(m_num.group(1)) - 1]
             elif m_rng:
@@ -4744,9 +4745,9 @@ def api_synth_chat_clarify():
             if matched and matched in s:
                 return s.replace(matched, rep)
             s2 = _re.sub(
-                r'\(\s*\d{1,2}\s*(?:-|–|—)\s*\d{1,2}\s*\)|'
+                r'\(\s*\d{1,2}\s*(?:-|–| - )\s*\d{1,2}\s*\)|'
                 r'(?:ages?|aged)\s*[:\s]?\s*\d{1,2}\s*'
-                r'(?:-|–|—|to|through|thru)\s*\d{1,2}|'
+                r'(?:-|–| - |to|through|thru)\s*\d{1,2}|'
                 r'\(?\s*(?:under|below)\s+\d{1,2}\s*\)?|'
                 r'\(?\s*1[0-7]\s*(?:and|or|&)\s*(?:under|younger)\s*\)?|'
                 r'\b\d{2}\s*\+', rep, s, count=1)
@@ -6135,7 +6136,7 @@ def _pm_interpret_core(user, body, text, history):
             text, chat_history=history, master_categories=MASTER_CATEGORIES,
             candidate_matches=candidates,
         )
-        system_prompt, _dropped = _smart.prune_rulebook(system_prompt, text, candidates)   # rulebook pruned per ask (2026-10-13)
+        system_prompt, _dropped = _smart.prune_rulebook(system_prompt, text, candidates, reading=body.get('reading'))   # rulebook pruned per ask, Reader-aware (2026-10-13/14)
         user_prompt = _smart.with_reading(user_prompt, body.get('reading'))   # the Reader's understanding rides along (2026-10-14)
         _pm_ask_stage('interpret_prep', t0=_t_prep)
         _t_model = time.monotonic()
@@ -7062,8 +7063,8 @@ def _spec_from_draft(draft):
     # ('BRAND', 'CONTENT', 'SPORT', 'HEALTHCARE'), we let them flow
     # through to Hetzner. The worker's canonicalize_phantom_rows()
     # (migration/synth_hostmap_augment.py) will look each Value up in
-    # ClickHouse's reference.host_mapping — the SAME hostmap the
-    # augment pass already reads — and remap the row to the correct
+    # ClickHouse's reference.host_mapping - the SAME hostmap the
+    # augment pass already reads - and remap the row to the correct
     # canonical sub-category, preserving Claude's research instead of
     # dropping it. Non-hostmap brands get dropped on the Hetzner side
     # per Rule #4.
@@ -7482,7 +7483,7 @@ def _spec_from_draft(draft):
         'category_lifts': {},
         'brand_overrides': {},
         # 2026-08-19 (Jenna): public-metric ceiling metadata. Captures
-        # any cohort whose size is publicly measurable — followers,
+        # any cohort whose size is publicly measurable - followers,
         # subscribers, viewers of a video / broadcast, listeners of a
         # podcast, event attendees, MAU/DAU of an app. The worker's
         # persona-research agent will refine follower_ceiling via web
@@ -8807,7 +8808,7 @@ def api_synth_chat_active_runs():
     user with two builds in flight only saw one.
 
     Session-authenticated dashboard users only. Partner API keys must
-    use GET /api/v1/profiles/<run_id> per run — the "list every run"
+    use GET /api/v1/profiles/<run_id> per run - the "list every run"
     surface is intentionally not exposed to partners so one key can't
     enumerate cross-partner traffic.
     """
@@ -8852,7 +8853,7 @@ def api_synth_chat_active_runs():
 
     # Shape each entry into a compact chat-friendly summary. Progress
     # percent is computed on the read side so old status.json files
-    # (without step_index) still return a usable payload — those show
+    # (without step_index) still return a usable payload - those show
     # as "queued" / "running" without a percent.
     #
     # Total steps is authoritative from the worker (PROFILE_STEPS_TOTAL
@@ -14111,6 +14112,7 @@ def _pm_save_thread_or_active(username, tid, history):
     trimmed = list(history or [])[-200:]
     trimmed = _pm_keep_corrected_turns(username, tid, trimmed)
     _pm_s3_put_json(_pm_thread_key(username, tid), trimmed)
+    _store.enabled() and _store.upsert_thread(username, tid, trimmed, _pm_thread_title_from(trimmed))   # shadow row (audit item 7)
     try:
         idx = _load_threads_index(username)
         for th in idx.get('threads', []):

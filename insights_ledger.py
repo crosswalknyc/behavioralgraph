@@ -683,6 +683,15 @@ def _record_entry_now(entry):
             _put_entry_object(e)
         except Exception as err:
             print(f"[insights-ledger] entry put failed: {err}")
+        try:   # shadow rows in the relational store (audit item 7, 2026-10-14)
+            from prometheus import store as _store
+            if _store.enabled():
+                for m in (e.get('metrics') or []):
+                    _store.upsert_fact(e.get('subject'), entry_key(e.get('subject'), e.get('metric_family') or ''), m.get('name'), m.get('value'),
+                                       unit=m.get('unit') or '', source=m.get('source') or '', window={'start': e.get('window_start'), 'end': e.get('window_end')},
+                                       as_of=e.get('ts') or '', product=str(e.get('route') or 'chat'), doc={'question': e.get('question'), 'key': e.get('key')})
+        except Exception:
+            pass
 
     def mutate(doc):
         for e in batch:
