@@ -229,10 +229,24 @@ _R = {
         "success_url_substr": ["xbox.com/en-US/play", "xbox.com/play"],
     },
     "peacocktv.com": {
+        # Measured 2026-10-14: /signin renders a single-step form whose
+        # email box is a plain text input, `input#userIdentifier`
+        # (name="userIdentifier"), not type="email". The old selectors
+        # never matched it, so every nightly attempt ended in
+        # "could not find the username field" and the rail went dark
+        # once the donated session aged out. Password is
+        # `input#password`; submit is
+        # `button[data-testid="sign-in-form__submit"]`. A "Keep me
+        # signed in" box (`input#rememberMe`) sits above it; ticking it
+        # keeps the session alive between nightly runs.
         "login_url": "https://www.peacocktv.com/signin",
-        "user_sel": ['input[type="email"]', 'input[name="email"]'],
-        "pass_sel": ['input[type="password"]', 'input[name="password"]'],
-        "submit_sel": ['button[type="submit"]'],
+        "user_sel": ['input#userIdentifier', 'input[name="userIdentifier"]',
+                     'input[type="email"]', 'input[name="email"]'],
+        "pass_sel": ['input#password', 'input[type="password"]',
+                     'input[name="password"]'],
+        "check_sel": ['input#rememberMe', 'input[name="rememberMe"]'],
+        "submit_sel": ['button[data-testid="sign-in-form__submit"]',
+                       'button[type="submit"]'],
         "success_url_substr": ["/browse", "/watch", "/account"],
     },
     "britbox.com": {
@@ -735,6 +749,24 @@ def _click_first(page, selectors) -> bool:
     return False
 
 
+def _check_first(page, selectors) -> bool:
+    """Tick the first matching checkbox that is present and unticked.
+    Styled boxes often hide the real input, so a plain click can miss;
+    `check(force=True)` sets the state regardless. Never raises."""
+    for sel in selectors or []:
+        try:
+            el = page.query_selector(sel)
+            if not el:
+                continue
+            if el.is_checked():
+                return True
+            el.check(force=True)
+            return True
+        except Exception:
+            continue
+    return False
+
+
 def _qs(page, sel) -> bool:
     try:
         return page.query_selector(sel) is not None
@@ -1000,6 +1032,11 @@ def attempt_login(ctx, domain: str, recipe: dict, *, headed: bool,
                 return _wait_for_human(page, recipe, reason) if headed \
                     else ("needs_human", reason)
             return "needs_human", "could not find the password field"
+
+        # "Keep me signed in" style boxes (Peacock `#rememberMe`). Tick
+        # when present and unticked so the issued session outlives the
+        # browser session; never a failure if the box is missing.
+        _check_first(page, recipe.get("check_sel", []))
 
         _click_first(page, recipe["submit_sel"])
         page.wait_for_timeout(_SETTLE_MS)

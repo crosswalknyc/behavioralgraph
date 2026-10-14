@@ -399,6 +399,80 @@ def _walk_rails(node: Any, out: list[dict], *,
                          page_is_microdrama_only=page_is_microdrama_only)
 
 
+def _canonical_title(alt_text: str) -> tuple[str, str]:
+    """Map a published-grid alt text onto the catalog's canonical
+    spelling when it is the same title, so Peacock's casing drift
+    ("30 Days til I marry my husband's nemesis", "Love Me Bite Me")
+    never forks a second catalog entry. Returns (title, genre).
+
+    Match is on the alnum-only key with difflib; anything new on the
+    grid that matches no known row ships under its own spelling,
+    with Peacock's capitalization tidied to title case."""
+    import difflib
+    key = re.sub(r'[^a-z0-9]+', '', (alt_text or '').lower())
+    best, best_ratio = None, 0.0
+    for row in CURATED_BASELINE_TITLES:
+        k = re.sub(r'[^a-z0-9]+', '', row['title'].lower())
+        ratio = difflib.SequenceMatcher(None, key, k).ratio()
+        if ratio > best_ratio:
+            best, best_ratio = row, ratio
+    if best is not None and best_ratio >= 0.84:
+        return best['title'], best.get('genre', '')
+    small = {'a', 'an', 'the', 'to', 'in', 'on', 'of', 'my', 'is', 'with',
+             'til', 'till', 'and', 'or', 'at', 'by', 'for'}
+    words = (alt_text or '').strip().split()
+    tidy = ' '.join(
+        w if (i == 0 or w.lower() not in small) and w[:1].isupper()
+        else (w.lower() if w.lower() in small and i > 0 else w[:1].upper() + w[1:])
+        for i, w in enumerate(words))
+    return tidy, ''
+
+
+def _walk_published_grid(node: Any, out: list[dict]) -> None:
+    """Peacock's own microdramas page (peacocktv.com/microdramas,
+    measured 2026-10-14) carries the slate as a `gridData[]` block
+    under a section titled "Microdramas on Peacock": one entry per
+    title with `imageThumbnailAltText.value` (the title),
+    `imageThumbnail.url` (key art) and `descriptionSynopsis`. There
+    are no `items[]` rails on that page and the signed-in web app has
+    no microdrama hub at all (the vertical player is in the mobile
+    app), so this grid IS Peacock's published list and its order is
+    the order we keep."""
+    if isinstance(node, dict):
+        grid = node.get('gridData')
+        if isinstance(grid, list) and grid:
+            rail_name = str(node.get('title') or node.get('headline')
+                            or 'Microdramas on Peacock').strip()
+            page_is_micro = _rail_looks_microdrama(rail_name)
+            for entry in grid:
+                if not isinstance(entry, dict):
+                    continue
+                alt = ((entry.get('imageThumbnailAltText') or {}).get('value')
+                       or entry.get('showTitle') or entry.get('title') or '')
+                alt = str(alt).strip()
+                if not alt:
+                    continue
+                if not (page_is_micro or _title_looks_microdrama(alt)):
+                    continue
+                title, genre = _canonical_title(alt)
+                out.append({
+                    'title':      title,
+                    'series':     title,
+                    'poster_url': (entry.get('imageThumbnail') or {}).get('url') or '',
+                    'deep_link':  '',
+                    'episodes':   [],
+                    'synopsis':   str(entry.get('descriptionSynopsis') or '').strip(),
+                    'genre':      genre,
+                    'rail_name':  rail_name,
+                    'is_microdrama': True,
+                })
+        for v in node.values():
+            _walk_published_grid(v, out)
+    elif isinstance(node, list):
+        for v in node:
+            _walk_published_grid(v, out)
+
+
 def _dedupe_and_rank(rows: list[dict]) -> list[dict]:
     seen = {}
     for i, r in enumerate(rows):
@@ -442,6 +516,11 @@ def fetch_live() -> list[dict]:
         pulled: list[dict] = []
         _walk_rails(data, pulled,
                      page_is_microdrama_only=page_is_micro_only)
+        # The published slate grid (see _walk_published_grid). Walked
+        # after the rails so any hero / rail placement keeps its
+        # on-screen priority and the grid fills in the rest in
+        # Peacock's order.
+        _walk_published_grid(data, pulled)
         rows.extend(pulled)
         if pulled:
             logger.info('peacock: %s -> %d microdrama titles',

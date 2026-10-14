@@ -194,7 +194,14 @@ _SITES: dict[str, dict[str, Any]] = {
         # clicking each candidate: only the outer card navigated to
         # /watch/home with rails rendered. The edit pencil beside it
         # is a separate button and must not be the thing clicked.
-        'chooser_tiles': '.profiles__avatar.profiles-main-page',
+        # Re-measured 2026-10-14 after Peacock reshipped the chooser:
+        # the tiles are now `div[role=button]` cards carrying
+        # data-testid="profile-item-<Name>" and aria-label
+        # "<Name>, 1 of 4" (edit pencils are a separate
+        # `profile-edit-button`). The old class is kept as a fallback
+        # in case the previous markup comes back on some accounts.
+        'chooser_tiles': ('[data-testid^="profile-item-"], '
+                          '.profiles__avatar.profiles-main-page'),
         'profile_name': 'jenna',
         'home_url': 'https://www.peacocktv.com/watch/home',
         'signed_in': ['continue watching', 'keep watching',
