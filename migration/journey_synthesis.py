@@ -95,7 +95,7 @@ OUTPUT SIZE. Return the JSON object and nothing else: no words before
 it, none after it, and no commentary between searches. Keep every
 string short: a note or source is one phrase, a doing line is under
 twelve words, a copy line is one sentence. A table carries 5 to 8
-rows. Run at most six searches. The whole answer must fit in 14,000
+rows. Run at most six searches. The whole answer must fit in 20,000
 tokens."""
 
 COMPACT_RETRY_RULE = """
@@ -1964,14 +1964,14 @@ def synthesize(inputs: dict, claude_json: Callable, *,
         'notes': inputs.get('notes') or '',
     })
     prim = claude_json(RESEARCH_SYSTEM_PROMPT + COMPACT_OUTPUT_RULE, user_prompt,
-                       max_tokens=16000, temperature=0.6,
+                       max_tokens=24000, temperature=0.6,
                        surface='journey_synthesis', tools=tools)
     if not isinstance(prim, dict) or not prim.get('nest'):
         # One more try, tighter: the first read ran long or came back
         # empty (The Following, 2026-10-14). Same ask, shorter answer.
         print('[journey] research returned no primitives; one compact re-ask')
         prim = claude_json(RESEARCH_SYSTEM_PROMPT + COMPACT_OUTPUT_RULE + COMPACT_RETRY_RULE, user_prompt,
-                           max_tokens=16000, temperature=0.4,
+                           max_tokens=24000, temperature=0.4,
                            surface='journey_synthesis_retry', tools=tools)
     if not isinstance(prim, dict) or not prim.get('nest'):
         raise RuntimeError('journey research returned no primitives')
