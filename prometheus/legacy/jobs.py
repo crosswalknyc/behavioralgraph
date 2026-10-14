@@ -9,6 +9,7 @@ pattern. Behavior unchanged from chat.py.
 """
 import json
 import re
+import time
 import traceback
 from flask import jsonify, request, session
 
@@ -177,7 +178,32 @@ def _pm_deck_status_write(job_id, payload):
         ContentType='application/json')
 
 
+_ENGINE_BOOKKEEPING = ('restarts', 'restart_reason', 'requeued', 'requeued_at', 'queued_at', 'claimed_by', 'claimed_at', 'resume')
+
+
+def _pm_engine_carry(prefix, job_id, payload):
+    """An engine runner writes its status wholesale ('running', subject,
+    started_at, inputs). The queue's bookkeeping on the existing doc rides
+    along so the sweeper can count restarts and a stranded job keeps the
+    inputs it restarts from (2026-10-14). Never raises."""
+    try:
+        if not isinstance(payload, dict) or all(k in payload for k in _ENGINE_BOOKKEEPING):
+            return payload
+        cur = json.loads(_H.s3_client.get_object(Bucket=_H.S3_BUCKET, Key=f"{prefix}{job_id}.json")['Body'].read())
+        if not isinstance(cur, dict):
+            return payload
+        out = dict(payload)
+        for k in _ENGINE_BOOKKEEPING:
+            if k not in out and k in cur:
+                out[k] = cur[k]
+        out.setdefault('heartbeat_at', time.time())
+        return out
+    except Exception:
+        return payload
+
+
 def _pm_bpiq_status_write(job_id, payload):
+    payload = _pm_engine_carry(_C._PM_BPIQ_JOB_PREFIX, job_id, payload)
     payload = _seams.tag_job(payload, 'bpiq')
     _store.enabled() and _store.upsert_job('bpiq', dict(payload, job_id=payload.get('job_id') or job_id))   # shadow row (audit item 7)
     _H.s3_client.put_object(
@@ -187,6 +213,7 @@ def _pm_bpiq_status_write(job_id, payload):
 
 
 def _pm_jiq_status_write(job_id, payload):
+    payload = _pm_engine_carry(_C._PM_JIQ_JOB_PREFIX, job_id, payload)
     payload = _seams.tag_job(payload, 'jiq')
     _store.enabled() and _store.upsert_job('jiq', dict(payload, job_id=payload.get('job_id') or job_id))   # shadow row (audit item 7)
     _H.s3_client.put_object(
@@ -196,6 +223,7 @@ def _pm_jiq_status_write(job_id, payload):
 
 
 def _pm_fw_status_write(job_id, payload):
+    payload = _pm_engine_carry(_C._PM_FW_JOB_PREFIX, job_id, payload)
     payload = _seams.tag_job(payload, 'fw')
     _store.enabled() and _store.upsert_job('fw', dict(payload, job_id=payload.get('job_id') or job_id))   # shadow row (audit item 7)
     _H.s3_client.put_object(
@@ -205,6 +233,7 @@ def _pm_fw_status_write(job_id, payload):
 
 
 def _pm_aiq_status_write(job_id, payload):
+    payload = _pm_engine_carry(_C._PM_AIQ_JOB_PREFIX, job_id, payload)
     payload = _seams.tag_job(payload, 'aiq')
     _store.enabled() and _store.upsert_job('aiq', dict(payload, job_id=payload.get('job_id') or job_id))   # shadow row (audit item 7)
     _H.s3_client.put_object(

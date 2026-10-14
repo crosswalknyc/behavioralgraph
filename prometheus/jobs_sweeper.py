@@ -38,6 +38,7 @@ KINDS = {
     'flywheel': ('fw_prefix', 'run_fw_job', 'flywheel read'),
     'attribution': ('aiq_prefix', 'run_aiq_job', 'campaign tracker'),
 }
+_ENGINE_KIND = {'journey': 'jiq', 'bpiq': 'bpiq', 'flywheel': 'fw', 'attribution': 'aiq'}   # sweeper kind -> queue kind
 _LANDS = {
     'journey': 'the Digital Journey tab',
     'bpiq': 'the Brand Partnership tab',
@@ -146,6 +147,22 @@ def _write(host, key, doc):
         return False
 
 
+def _queue_on():
+    try:
+        from . import read_recovery as _rr
+        return bool(_rr.queue_enabled())
+    except Exception:
+        return False
+
+
+def _max_restarts():
+    try:
+        from . import read_recovery as _rr
+        return int(_rr.MAX_ENGINE_RESTARTS)
+    except Exception:
+        return 1
+
+
 def sweep(host, now=None, dry_run=False, stale_min=STALE_MIN, start_thread=True):
     """Restart each stale job once; give up honestly the second time.
     Returns {'requeued': [...], 'errored': [...], 'seen': n}."""
@@ -158,26 +175,40 @@ def sweep(host, now=None, dry_run=False, stale_min=STALE_MIN, start_thread=True)
             user = str(doc.get('user') or '')
             label = KINDS[kind][2]
             inputs = doc.get('inputs') if isinstance(doc.get('inputs'), dict) else None
+            if not inputs and isinstance(doc.get('resume'), dict) and isinstance(doc['resume'].get('inputs'), dict):
+                inputs = doc['resume']['inputs']
             rcap = KINDS[kind][1]
-            can_rerun = bool(inputs) and host.has(rcap) and not doc.get('requeued')
+            restarts = int(doc.get('restarts') or 0) + (1 if doc.get('requeued') and not doc.get('restarts') else 0)
+            can_rerun = bool(inputs) and host.has(rcap) and restarts < _max_restarts()
             if can_rerun:
-                new = dict(doc, status='requeued', requeued=True, requeued_at=now,
-                           requeue_note=f"restarted after {int(_age_min(doc, now))} minutes")
+                note = f"restarted after {int(_age_min(doc, now))} minutes"
                 if not dry_run:
-                    if not _write(host, key, new):
-                        continue
-                    _post_thread_line(host, user, job_id, note_for(kind, new, now), 'requeued')
-                    runner = getattr(host, rcap)
-                    if start_thread:
-                        threading.Thread(target=runner, args=(job_id, user, inputs, {}), daemon=True).start()
-                    else:
-                        runner(job_id, user, inputs, {})
+                    rec = None
+                    if _queue_on():
+                        # the queue, never a web thread: a thread dies with the next deploy or autoscale (2026-10-14)
+                        try:
+                            from . import read_recovery as _rr
+                            rec = _rr.requeue_engine(_ENGINE_KIND.get(kind, kind), job_id, dict(doc, inputs=inputs), reason=note)
+                        except Exception:
+                            traceback.print_exc()
+                            rec = None
+                    if rec is None:
+                        new = dict(doc, status='requeued', requeued=True, requeued_at=now, restarts=restarts + 1,
+                                   requeue_note=note, inputs=inputs)
+                        if not _write(host, key, new):
+                            continue
+                        runner = getattr(host, rcap)
+                        if start_thread:
+                            threading.Thread(target=runner, args=(job_id, user, inputs, {}), daemon=True).start()
+                        else:
+                            runner(job_id, user, inputs, {})
+                    _post_thread_line(host, user, job_id, note_for(kind, dict(doc, status='requeued'), now), 'requeued')
                 out['requeued'].append((kind, job_id, user))
             else:
                 msg = (f"Your {label} did not complete. Nothing was lost on your side; "
                        f"ask me to run it again and I will, or ask about the credit for this run.")
                 new = dict(doc, status='error', error=msg, ended_at=now,
-                           sweeper_note='gave up after one restart' if doc.get('requeued') else 'no inputs saved to restart from')
+                           sweeper_note=(f'gave up after {restarts} restart(s)' if restarts else 'no inputs saved to restart from'))
                 if not dry_run:
                     if not _write(host, key, new):
                         continue

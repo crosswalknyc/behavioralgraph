@@ -171,6 +171,10 @@ def _jsonable(obj):
         return {}
 
 
+_INFLIGHT_ENGINE = {}        # job_id -> (kind, status doc) the worker is running, for the shutdown handoff
+MAX_ENGINE_RESTARTS = 1      # restart a stranded job once, then stop honestly (the sweeper contract)
+
+
 def run_engine_inline(kind, job_id, status):
     """The worker runs one claimed engine job right here."""
     c = _chat()
@@ -182,8 +186,46 @@ def run_engine_inline(kind, job_id, status):
         writer(job_id, {**status, 'status': 'error', 'queued': False,
                         'error': f"queued {_ENGINE_LABEL.get(kind, kind)} without a resume record", 'finished_at': time.time()})
         return False
-    getattr(c, _ENGINE_RUNNER[kind])(job_id, uname, inputs, dict((rr or {}).get('extras') or {}))
+    _INFLIGHT_ENGINE[job_id] = (kind, dict(status))
+    try:
+        getattr(c, _ENGINE_RUNNER[kind])(job_id, uname, inputs, dict((rr or {}).get('extras') or {}))
+    finally:
+        _INFLIGHT_ENGINE.pop(job_id, None)
     return True
+
+
+def requeue_engine(kind, job_id, doc, reason='restart'):
+    """Put a stranded engine job back on the queue from its saved inputs
+    (status 'queued' + marker), counting the restart. Returns the new
+    record, or None when the job has no inputs to restart from or has
+    already restarted MAX_ENGINE_RESTARTS times (2026-10-14: a job a
+    worker lost mid-run sat 'running' for hours; the sweeper's web
+    thread restart died with the next deploy or autoscale)."""
+    try:
+        c = _chat()
+        writer = getattr(c, _ENGINE_WRITER[kind])
+        rr = doc.get('resume') if isinstance(doc.get('resume'), dict) else {}
+        inputs = rr.get('inputs') or doc.get('inputs')
+        if not isinstance(inputs, dict) or not inputs or not doc.get('user'):
+            return None
+        restarts = int(doc.get('restarts') or 0)
+        if restarts >= MAX_ENGINE_RESTARTS:
+            return None
+        s3, bucket = _s3()
+        rec = {k: v for k, v in doc.items() if k not in ('claimed_by', 'claimed_at', 'error', 'finished_at', 'ended_at', 'handoff_at')}
+        rec.update({'status': 'queued', 'queued': True, 'queued_at': time.time(), 'job_type': kind,
+                    'restarts': restarts + 1, 'restart_reason': str(reason)[:120],
+                    'stage': f"lining up the {_ENGINE_LABEL.get(kind, kind)} again",
+                    'resume': {'inputs': _jsonable(inputs), 'extras': _jsonable((rr or {}).get('extras') or {})}})
+        writer(job_id, rec)
+        s3.put_object(Bucket=bucket, Key=_marker_key(kind, job_id),
+                      Body=json.dumps({'job_id': job_id, 'kind': kind, 'queued_at': rec['queued_at']}).encode('utf-8'),
+                      ContentType='application/json')
+        print(f"[pm-queue] {kind} {job_id} requeued ({reason}, restart {restarts + 1})")
+        return rec
+    except Exception:
+        traceback.print_exc()
+        return None
 
 
 def enqueue_deck(job_id, head):
@@ -557,7 +599,13 @@ def _beat_once(job_id):
 def handoff_inflight(reason='shutdown'):
     """The process is going away (a deploy): mark every read it is
     running as stale right now so the next instance's boot sweep picks
-    it up in seconds instead of minutes. Fast, best effort."""
+    it up in seconds instead of minutes, and put every engine job it is
+    running back on the queue. Fast, best effort."""
+    for job_id, (kind, doc) in list(_INFLIGHT_ENGINE.items()):
+        try:
+            requeue_engine(kind, job_id, doc, reason=f'worker {reason}')
+        except Exception:
+            traceback.print_exc()
     jobs = list(_INFLIGHT.items())
     for job_id, head in jobs:
         try:
