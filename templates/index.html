@@ -171016,6 +171016,78 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             return [1255.87*rh*Math.sin(th)+482.02, -1181.32*(r0-rh*Math.cos(th))+747.95];
         }
 
+        // Places one label per bubble. Each label is measured, and every
+        // candidate spot (inside the bubble, then rings further out) is
+        // scored on collisions with labels already placed, with other
+        // bubbles, and with the frame; biggest bubbles choose first.
+        function _piqMapLabelLayout(items, bounds) {
+            const FS = 8.5, LH = 10, CW = FS * 0.7;
+            function wrap(name) {
+                const words = String(name || '').split(/\s+/).filter(Boolean);
+                const lines = [];
+                let cur = '';
+                words.forEach(w => {
+                    if (cur && (cur + ' ' + w).length > 14) { lines.push(cur); cur = w; }
+                    else cur = cur ? cur + ' ' + w : w;
+                });
+                if (cur) lines.push(cur);
+                return lines;
+            }
+            function boxOverlap(a, b) {
+                const dx = Math.min(a.x2, b.x2) - Math.max(a.x1, b.x1);
+                const dy = Math.min(a.y2, b.y2) - Math.max(a.y1, b.y1);
+                return (dx > 0 && dy > 0) ? dx * dy : 0;
+            }
+            function circleIntrusion(box, c) {
+                const px = Math.max(box.x1, Math.min(c.x, box.x2));
+                const py = Math.max(box.y1, Math.min(c.y, box.y2));
+                const d = Math.hypot(c.x - px, c.y - py);
+                return d < c.r ? (c.r - d) / Math.max(c.r, 1) : 0;
+            }
+            const out = items.map(it => {
+                const lines = wrap(it.name);
+                const longest = Math.max.apply(null, lines.concat([it.value]).map(s => s.length));
+                return { it: it, lines: lines, w: longest * CW + 6, h: (lines.length + 1) * LH + 2 };
+            });
+            const placed = [];
+            out.map((o, i) => i).sort((a, b) => items[b].r - items[a].r).forEach(i => {
+                const o = out[i], it = o.it;
+                const cands = [{ x: it.x, y: it.y, d: 0 }];
+                [10, 24, 42, 64, 90].forEach(gap => {
+                    for (let k = 0; k < 24; k++) {
+                        const ang = k * Math.PI / 12;
+                        const ext = Math.abs(Math.cos(ang)) * o.w / 2 + Math.abs(Math.sin(ang)) * o.h / 2;
+                        const d = it.r + gap + ext;
+                        cands.push({ x: it.x + Math.cos(ang) * d, y: it.y + Math.sin(ang) * d, d: d });
+                    }
+                });
+                let best = null, bestCost = Infinity;
+                cands.forEach(c => {
+                    const box = { x1: c.x - o.w / 2, x2: c.x + o.w / 2, y1: c.y - o.h / 2, y2: c.y + o.h / 2 };
+                    let cost = 0;
+                    placed.forEach(p => { cost += boxOverlap(box, p) / (o.w * o.h) * 400; });
+                    if (box.x1 < bounds.x1 || box.x2 > bounds.x2 || box.y1 < bounds.y1 || box.y2 > bounds.y2) cost += 1000;
+                    items.forEach((other, j) => { if (j !== i) cost += circleIntrusion(box, other) * 30; });
+                    if (c.d === 0) {
+                        if (o.w > it.r * 2.2 || o.h > it.r * 2.2) cost += 6;
+                    } else {
+                        cost += 2 + c.d * 0.04;
+                    }
+                    if (cost < bestCost) { bestCost = cost; best = { x: c.x, y: c.y, d: c.d, box: box }; }
+                });
+                placed.push(best.box);
+                o.x = best.x; o.box = best.box;
+                o.top = best.y - o.h / 2 + 1;
+                o.lh = LH; o.fs = FS; o.value = it.value;
+                if (best.d > 0) {
+                    const dx = best.x - it.x, dy = best.y - it.y, dist = Math.hypot(dx, dy) || 1;
+                    const t = Math.min((o.w / 2) / Math.max(Math.abs(dx), 1e-6), (o.h / 2) / Math.max(Math.abs(dy), 1e-6), 1);
+                    o.leader = [it.x + dx / dist * it.r, it.y + dy / dist * it.r, best.x - dx * t, best.y - dy * t];
+                }
+            });
+            return out;
+        }
+
         window._piqMapMode = 'tu';
         window._piqSetMapMode = function(mode) {
             window._piqMapMode = mode === 'index' ? 'index' : 'tu';
@@ -171113,160 +171185,65 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             const bubbles = allBubbles.slice(0, 20);
             const _bLbl = (b) => mapMode === 'index' ? ('Index ' + b.index) : (b.pct.toFixed(1) + '%');
 
-            // Radius scaling — sqrt for area-proportional, clamped
+            // Radius scaling — sqrt for area-proportional, clamped. Indexes
+            // cluster (most of a top 20 sits within ~140-200), so index
+            // bubbles scale on the excess over 100 to keep sizes apart.
             const maxPct = bubbles.length ? bubbles[0].size : 1;
-            const minR = 10, maxR = 50;
-            function getRadius(pct) {
-                return minR + (maxR - minR) * Math.sqrt(pct / maxPct);
+            const minR = mapMode === 'index' ? 9 : 10, maxR = mapMode === 'index' ? 36 : 50;
+            function getRadius(v) {
+                if (mapMode === 'index') {
+                    const span = Math.max(1, maxPct - 100);
+                    return minR + (maxR - minR) * Math.sqrt(Math.max(0, v - 100) / span);
+                }
+                return minR + (maxR - minR) * Math.sqrt(v / maxPct);
             }
 
-            // Build SVG — padded viewBox for label overflow, capped height to fit on screen
             const W = 959, H = 593;
-            let svg = '<svg viewBox="-40 -10 ' + (W + 60) + ' ' + (H + 20) + '" xmlns="http://www.w3.org/2000/svg" style="width:95%;height:auto;max-height:75vh;margin:0 auto;display:block;">';
-
-            // Fix SVG paths: after uppercase M x,y, implicit coords must be relative lineto
             function _fixPath(d) {
                 return d.replace(/(M\s*[\d\.\-]+[,\s][\d\.\-]+)\s+([\d\.\-])/g, '$1 l $2');
             }
-
-            // State outlines (continental)
+            let body = '';
             _US_STATE_PATHS.forEach(function(d) {
-                svg += '<path d="' + _fixPath(d) + '" fill="none" stroke="rgba(148,163,184,0.28)" stroke-width="0.7" stroke-linejoin="round"/>';
+                body += '<path d="' + _fixPath(d) + '" fill="none" stroke="rgba(148,163,184,0.28)" stroke-width="0.7" stroke-linejoin="round"/>';
             });
-            svg += '<path d="' + _fixPath(_AK_PATH) + '" fill="none" stroke="rgba(148,163,184,0.28)" stroke-width="0.7" stroke-linejoin="round"/>';
-            svg += '<path d="' + _fixPath(_HI_PATH) + '" fill="none" stroke="rgba(148,163,184,0.28)" stroke-width="0.7" stroke-linejoin="round"/>';
+            body += '<path d="' + _fixPath(_AK_PATH) + '" fill="none" stroke="rgba(148,163,184,0.28)" stroke-width="0.7" stroke-linejoin="round"/>';
+            body += '<path d="' + _fixPath(_HI_PATH) + '" fill="none" stroke="rgba(148,163,184,0.28)" stroke-width="0.7" stroke-linejoin="round"/>';
 
-            // Draw bubbles (smallest first so large ones don't obscure small)
-            const reversed = [...bubbles].reverse();
-            reversed.forEach(b => {
+            const isLight = !!(document.body && document.body.getAttribute('data-theme') === 'light');
+            const hue = mapMode === 'index' ? (isLight ? 285 : 288) : 187;
+            const sat = (mapMode === 'index' && isLight) ? 46 : 80;
+            const lum = (mapMode === 'index' && isLight) ? 45 : 55;
+            [...bubbles].reverse().forEach(b => {
                 const r = getRadius(b.size);
-                const accentH = mapMode === 'index' ? 288 : 187;
-                const opacity = 0.25 + 0.45 * (b.size / maxPct);
-                svg += '<circle cx="' + b.x.toFixed(1) + '" cy="' + b.y.toFixed(1) + '" r="' + r.toFixed(1) + '" '
-                    +  'fill="hsla(' + accentH + ',80%,55%,' + opacity.toFixed(2) + ')" '
-                    +  'stroke="hsl(' + accentH + ',80%,65%)" stroke-width="1.8" '
+                const opacity = 0.25 + 0.45 * Math.min(1, r / maxR);
+                body += '<circle cx="' + b.x.toFixed(1) + '" cy="' + b.y.toFixed(1) + '" r="' + r.toFixed(1) + '" '
+                    +  'fill="hsla(' + hue + ',' + sat + '%,' + lum + '%,' + opacity.toFixed(2) + ')" '
+                    +  'stroke="hsl(' + hue + ',' + sat + '%,' + (lum + 10) + '%)" stroke-width="1.8" '
                     +  'style="cursor:default;">'
                     +  '<title>' + (b.name + (b.state ? ', ' + b.state : '')) + ': ' + b.pct.toFixed(2) + '%' + (canIndex ? ' \u00b7 Index ' + b.index : '') + '</title>'
                     +  '</circle>';
             });
 
-            // Detect overlapping bubbles — displace smaller-pct label with leader line
-            var labelSize = 8.5;
-            var pctLabelSize = 8.5;
-            var lineGap = labelSize * 1.6;
-            var displaced = {};
-            bubbles.forEach((a, i) => {
-                var rA = getRadius(a.size);
-                bubbles.forEach((b, j) => {
-                    if (j <= i) return;
-                    var rB = getRadius(b.size);
-                    var dx = a.x - b.x, dy = a.y - b.y;
-                    var dist = Math.sqrt(dx * dx + dy * dy);
-                    if (dist < (rA + rB) * 0.8) {
-                        var lesser = a.size <= b.size ? i : j;
-                        if (!displaced[lesser]) displaced[lesser] = true;
-                    }
+            const layout = _piqMapLabelLayout(bubbles.map(b => ({
+                x: b.x, y: b.y, r: getRadius(b.size), name: b.name, value: _bLbl(b)
+            })), { x1: -150, y1: -30, x2: W + 150, y2: H + 30 });
+            let vx1 = -40, vy1 = -10, vx2 = W + 20, vy2 = H + 10;
+            layout.forEach(L => {
+                vx1 = Math.min(vx1, L.box.x1 - 4); vx2 = Math.max(vx2, L.box.x2 + 4);
+                vy1 = Math.min(vy1, L.box.y1 - 4); vy2 = Math.max(vy2, L.box.y2 + 4);
+            });
+            const halo = 'paint-order:stroke;stroke:var(--cw-raised,#1B2E34);stroke-width:2.6px;stroke-linejoin:round;stroke-opacity:0.9;pointer-events:none;';
+            layout.forEach(L => {
+                if (!L.leader) return;
+                body += '<line x1="' + L.leader[0].toFixed(1) + '" y1="' + L.leader[1].toFixed(1) + '" x2="' + L.leader[2].toFixed(1) + '" y2="' + L.leader[3].toFixed(1) + '" stroke="rgba(148,163,184,0.6)" stroke-width="0.9" />';
+            });
+            layout.forEach(L => {
+                L.lines.forEach((ln, k) => {
+                    body += '<text x="' + L.x.toFixed(1) + '" y="' + (L.top + k * L.lh).toFixed(1) + '" fill="var(--text-primary)" font-size="' + L.fs + '" text-anchor="middle" dominant-baseline="hanging" font-weight="700" font-family="inherit" style="' + halo + '">' + ln + '</text>';
                 });
+                body += '<text x="' + L.x.toFixed(1) + '" y="' + (L.top + L.lines.length * L.lh).toFixed(1) + '" fill="var(--text-secondary)" font-size="' + L.fs + '" text-anchor="middle" dominant-baseline="hanging" font-weight="600" font-family="inherit" style="' + halo + '">' + L.value + '</text>';
             });
-
-            // Compute offset positions for displaced labels one at a time,
-            // factoring in previously placed labels to avoid stacking
-            var labelPositions = [];
-            bubbles.forEach((b, i) => {
-                var r = getRadius(b.size);
-                if (!displaced[i]) { labelPositions.push({ x: b.x, y: b.y, displaced: false }); return; }
-                var bestAngle = 0, bestScore = -Infinity;
-                var offset = r + 28;
-                for (var a = 0; a < Math.PI * 2; a += Math.PI / 16) {
-                    var testX = b.x + Math.cos(a) * offset;
-                    var testY = b.y + Math.sin(a) * offset;
-                    var score = 0;
-                    // Push away from all bubble centers
-                    bubbles.forEach((other, j) => {
-                        if (j === i) return;
-                        var rO = getRadius(other.size);
-                        var dx = b.x - other.x, dy = b.y - other.y;
-                        var dist = Math.sqrt(dx * dx + dy * dy);
-                        if (dist < (r + rO) * 2.5) {
-                            var awayAngle = Math.atan2(dy, dx);
-                            score += Math.cos(a - awayAngle) * (1 / Math.max(dist, 1));
-                        }
-                    });
-                    // Push away from already-placed displaced labels
-                    labelPositions.forEach((prev, j) => {
-                        if (!prev.displaced) return;
-                        var dx = testX - prev.x, dy = testY - prev.y;
-                        var dist = Math.sqrt(dx * dx + dy * dy);
-                        if (dist < 70) score -= (70 - dist) * 0.1;
-                    });
-                    // Boundary penalties
-                    if (testY > H - 30) score -= 5;
-                    if (testY < 30) score -= 5;
-                    if (testX > W - 70) score -= 5;
-                    if (testX < 70) score -= 5;
-                    if (score > bestScore) { bestScore = score; bestAngle = a; }
-                }
-                labelPositions.push({ x: b.x + Math.cos(bestAngle) * offset, y: b.y + Math.sin(bestAngle) * offset, displaced: true, angle: bestAngle });
-            });
-
-            // Separation pass: push apart any displaced labels still too close
-            var minSep = 65;
-            for (var pass = 0; pass < 8; pass++) {
-                labelPositions.forEach((lp, i) => {
-                    if (!lp.displaced) return;
-                    labelPositions.forEach((lp2, j) => {
-                        if (j <= i) return;
-                        var isOther = lp2.displaced;
-                        var dx = lp.x - lp2.x, dy = lp.y - lp2.y;
-                        var dist = Math.sqrt(dx * dx + dy * dy);
-                        var sep = isOther ? minSep : minSep * 0.7;
-                        if (dist < sep && dist > 0) {
-                            var push = (sep - dist) / 2;
-                            var nx = dx / dist, ny = dy / dist;
-                            lp.x += nx * push; lp.y += ny * push;
-                            if (isOther) { lp2.x -= nx * push; lp2.y -= ny * push; }
-                        }
-                    });
-                    lp.x = Math.max(70, Math.min(W - 70, lp.x));
-                    lp.y = Math.max(25, Math.min(H - 25, lp.y));
-                });
-            }
-
-            // Draw leader lines for displaced labels
-            bubbles.forEach((b, i) => {
-                if (!labelPositions[i].displaced) return;
-                var r = getRadius(b.size);
-                var lp = labelPositions[i];
-                var dx = lp.x - b.x, dy = lp.y - b.y;
-                var dist = Math.sqrt(dx * dx + dy * dy);
-                var edgeX = b.x + (dx / dist) * r;
-                var edgeY = b.y + (dy / dist) * r;
-                svg += '<line x1="' + edgeX.toFixed(1) + '" y1="' + edgeY.toFixed(1) + '" x2="' + lp.x.toFixed(1) + '" y2="' + lp.y.toFixed(1) + '" stroke="rgba(148,163,184,0.55)" stroke-width="1" />';
-                svg += '<circle cx="' + lp.x.toFixed(1) + '" cy="' + lp.y.toFixed(1) + '" r="2" fill="rgba(148,163,184,0.65)" />';
-            });
-
-            // Draw labels at final positions
-            bubbles.forEach((b, i) => {
-                var r = getRadius(b.size);
-                if (r < 10 && !labelPositions[i].displaced) return;
-                var lp = labelPositions[i];
-                var words = b.name.split(/\s+/);
-                if (words.length > 2) {
-                    var mid = 1;
-                    var line1 = words.slice(0, mid).join(' ');
-                    var line2 = words.slice(mid).join(' ');
-                    var topY = lp.y - lineGap;
-                    svg += '<text x="' + lp.x.toFixed(1) + '" y="' + topY.toFixed(1) + '" fill="var(--text-primary)" font-size="' + labelSize + '" text-anchor="middle" dominant-baseline="central" font-weight="700" font-family="inherit" style="pointer-events:none;">' + line1 + '</text>';
-                    svg += '<text x="' + lp.x.toFixed(1) + '" y="' + (topY + lineGap).toFixed(1) + '" fill="var(--text-primary)" font-size="' + labelSize + '" text-anchor="middle" dominant-baseline="central" font-weight="700" font-family="inherit" style="pointer-events:none;">' + line2 + '</text>';
-                    svg += '<text x="' + lp.x.toFixed(1) + '" y="' + (topY + lineGap * 2).toFixed(1) + '" fill="var(--text-secondary)" font-size="' + pctLabelSize + '" text-anchor="middle" font-weight="600" font-family="inherit" style="pointer-events:none;">' + _bLbl(b) + '</text>';
-                } else {
-                    var topY = lp.y - lineGap * 0.5;
-                    svg += '<text x="' + lp.x.toFixed(1) + '" y="' + topY.toFixed(1) + '" fill="var(--text-primary)" font-size="' + labelSize + '" text-anchor="middle" dominant-baseline="central" font-weight="700" font-family="inherit" style="pointer-events:none;">' + b.name + '</text>';
-                    svg += '<text x="' + lp.x.toFixed(1) + '" y="' + (topY + lineGap).toFixed(1) + '" fill="var(--text-secondary)" font-size="' + pctLabelSize + '" text-anchor="middle" font-weight="600" font-family="inherit" style="pointer-events:none;">' + _bLbl(b) + '</text>';
-                }
-            });
-
-            svg += '</svg>';
+            const svg = '<svg viewBox="' + vx1.toFixed(0) + ' ' + vy1.toFixed(0) + ' ' + (vx2 - vx1).toFixed(0) + ' ' + (vy2 - vy1).toFixed(0) + '" xmlns="http://www.w3.org/2000/svg" style="width:95%;height:auto;max-height:75vh;margin:0 auto;display:block;">' + body + '</svg>';
 
             // Legend
             let legendHtml = '<div style="display:flex; align-items:center; gap:1rem; margin-top:0.5rem; font-size:0.72rem; color:var(--text-secondary); flex-wrap:wrap;">';
