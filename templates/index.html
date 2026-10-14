@@ -10623,6 +10623,17 @@
             padding: 0.5rem 1rem;
             border-radius: 6px;
         }
+        #usHeatmap .piq-map-toggle { display: flex; justify-content: flex-end; gap: 6px; margin: 0 0 6px; }
+        #usHeatmap .piq-map-toggle button {
+            background: transparent; border: 1px solid #3B3D38; color: #9AA09B;
+            border-radius: 999px; padding: 5px 12px; font: 600 10.5px/1 inherit;
+            letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer;
+        }
+        #usHeatmap .piq-map-toggle button:hover { color: #E9E8E1; border-color: #5C6466; }
+        #usHeatmap .piq-map-toggle button.on { background: #C7F23E; border-color: #C7F23E; color: #0C1618; }
+        body[data-theme="light"] #usHeatmap .piq-map-toggle button { border-color: #C9C6BA; color: #5C6560; }
+        body[data-theme="light"] #usHeatmap .piq-map-toggle button:hover { color: #0C1618; border-color: #888C89; }
+        body[data-theme="light"] #usHeatmap .piq-map-toggle button.on { background: #0C1618; border-color: #0C1618; color: #E9E8E1; }
         .heatmap-container {
             background: var(--bg-card);
             border: 1px solid var(--border-color);
@@ -171005,6 +171016,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             return [1255.87*rh*Math.sin(th)+482.02, -1181.32*(r0-rh*Math.cos(th))+747.95];
         }
 
+        window._piqMapMode = 'tu';
+        window._piqSetMapMode = function(mode) {
+            window._piqMapMode = mode === 'index' ? 'index' : 'tu';
+            if (window._piqMapLocs) renderHeatmap(window._piqMapLocs);
+        };
         function renderHeatmap(locations) {
             if (!locations || locations.length === 0) {
                 document.getElementById('usHeatmap').innerHTML = '<p style="color: var(--text-secondary);">No location data</p>';
@@ -171066,6 +171082,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 dmaData[name].count++;
             });
 
+            window._piqMapLocs = locations;
+            const canIndex = hasGenPopBaseline && !isGenPopProfile;
+            const mapMode = (canIndex && window._piqMapMode === 'index') ? 'index' : 'tu';
+
             // Resolve coordinates for all DMAs, then keep top 15
             const allBubbles = [];
             Object.entries(dmaData).forEach(([name, d]) => {
@@ -171086,13 +171106,15 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 const rank = dmaInfo.rank || 999;
                 const displayName = canon || name;
                 const state = dmaInfo.state || '';
-                allBubbles.push({ name: displayName, state, pct: d.pct, x: xy[0], y: xy[1], rank });
+                const idx = Math.round(d.index / d.count);
+                allBubbles.push({ name: displayName, state, pct: d.pct, index: idx, size: mapMode === 'index' ? idx : d.pct, x: xy[0], y: xy[1], rank });
             });
-            allBubbles.sort((a, b) => b.pct - a.pct);
+            allBubbles.sort((a, b) => b.size - a.size);
             const bubbles = allBubbles.slice(0, 20);
+            const _bLbl = (b) => mapMode === 'index' ? ('Index ' + b.index) : (b.pct.toFixed(1) + '%');
 
             // Radius scaling — sqrt for area-proportional, clamped
-            const maxPct = bubbles.length ? bubbles[0].pct : 1;
+            const maxPct = bubbles.length ? bubbles[0].size : 1;
             const minR = 10, maxR = 50;
             function getRadius(pct) {
                 return minR + (maxR - minR) * Math.sqrt(pct / maxPct);
@@ -171117,14 +171139,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // Draw bubbles (smallest first so large ones don't obscure small)
             const reversed = [...bubbles].reverse();
             reversed.forEach(b => {
-                const r = getRadius(b.pct);
-                const accentH = 187;
-                const opacity = 0.25 + 0.45 * (b.pct / maxPct);
+                const r = getRadius(b.size);
+                const accentH = mapMode === 'index' ? 288 : 187;
+                const opacity = 0.25 + 0.45 * (b.size / maxPct);
                 svg += '<circle cx="' + b.x.toFixed(1) + '" cy="' + b.y.toFixed(1) + '" r="' + r.toFixed(1) + '" '
                     +  'fill="hsla(' + accentH + ',80%,55%,' + opacity.toFixed(2) + ')" '
                     +  'stroke="hsl(' + accentH + ',80%,65%)" stroke-width="1.8" '
                     +  'style="cursor:default;">'
-                    +  '<title>' + (b.name + (b.state ? ', ' + b.state : '')) + ': ' + b.pct.toFixed(2) + '%</title>'
+                    +  '<title>' + (b.name + (b.state ? ', ' + b.state : '')) + ': ' + b.pct.toFixed(2) + '%' + (canIndex ? ' \u00b7 Index ' + b.index : '') + '</title>'
                     +  '</circle>';
             });
 
@@ -171134,14 +171156,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var lineGap = labelSize * 1.6;
             var displaced = {};
             bubbles.forEach((a, i) => {
-                var rA = getRadius(a.pct);
+                var rA = getRadius(a.size);
                 bubbles.forEach((b, j) => {
                     if (j <= i) return;
-                    var rB = getRadius(b.pct);
+                    var rB = getRadius(b.size);
                     var dx = a.x - b.x, dy = a.y - b.y;
                     var dist = Math.sqrt(dx * dx + dy * dy);
                     if (dist < (rA + rB) * 0.8) {
-                        var lesser = a.pct <= b.pct ? i : j;
+                        var lesser = a.size <= b.size ? i : j;
                         if (!displaced[lesser]) displaced[lesser] = true;
                     }
                 });
@@ -171151,7 +171173,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // factoring in previously placed labels to avoid stacking
             var labelPositions = [];
             bubbles.forEach((b, i) => {
-                var r = getRadius(b.pct);
+                var r = getRadius(b.size);
                 if (!displaced[i]) { labelPositions.push({ x: b.x, y: b.y, displaced: false }); return; }
                 var bestAngle = 0, bestScore = -Infinity;
                 var offset = r + 28;
@@ -171162,7 +171184,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     // Push away from all bubble centers
                     bubbles.forEach((other, j) => {
                         if (j === i) return;
-                        var rO = getRadius(other.pct);
+                        var rO = getRadius(other.size);
                         var dx = b.x - other.x, dy = b.y - other.y;
                         var dist = Math.sqrt(dx * dx + dy * dy);
                         if (dist < (r + rO) * 2.5) {
@@ -171213,7 +171235,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // Draw leader lines for displaced labels
             bubbles.forEach((b, i) => {
                 if (!labelPositions[i].displaced) return;
-                var r = getRadius(b.pct);
+                var r = getRadius(b.size);
                 var lp = labelPositions[i];
                 var dx = lp.x - b.x, dy = lp.y - b.y;
                 var dist = Math.sqrt(dx * dx + dy * dy);
@@ -171225,7 +171247,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
 
             // Draw labels at final positions
             bubbles.forEach((b, i) => {
-                var r = getRadius(b.pct);
+                var r = getRadius(b.size);
                 if (r < 10 && !labelPositions[i].displaced) return;
                 var lp = labelPositions[i];
                 var words = b.name.split(/\s+/);
@@ -171236,11 +171258,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     var topY = lp.y - lineGap;
                     svg += '<text x="' + lp.x.toFixed(1) + '" y="' + topY.toFixed(1) + '" fill="var(--text-primary)" font-size="' + labelSize + '" text-anchor="middle" dominant-baseline="central" font-weight="700" font-family="inherit" style="pointer-events:none;">' + line1 + '</text>';
                     svg += '<text x="' + lp.x.toFixed(1) + '" y="' + (topY + lineGap).toFixed(1) + '" fill="var(--text-primary)" font-size="' + labelSize + '" text-anchor="middle" dominant-baseline="central" font-weight="700" font-family="inherit" style="pointer-events:none;">' + line2 + '</text>';
-                    svg += '<text x="' + lp.x.toFixed(1) + '" y="' + (topY + lineGap * 2).toFixed(1) + '" fill="var(--text-secondary)" font-size="' + pctLabelSize + '" text-anchor="middle" font-weight="600" font-family="inherit" style="pointer-events:none;">' + b.pct.toFixed(1) + '%</text>';
+                    svg += '<text x="' + lp.x.toFixed(1) + '" y="' + (topY + lineGap * 2).toFixed(1) + '" fill="var(--text-secondary)" font-size="' + pctLabelSize + '" text-anchor="middle" font-weight="600" font-family="inherit" style="pointer-events:none;">' + _bLbl(b) + '</text>';
                 } else {
                     var topY = lp.y - lineGap * 0.5;
                     svg += '<text x="' + lp.x.toFixed(1) + '" y="' + topY.toFixed(1) + '" fill="var(--text-primary)" font-size="' + labelSize + '" text-anchor="middle" dominant-baseline="central" font-weight="700" font-family="inherit" style="pointer-events:none;">' + b.name + '</text>';
-                    svg += '<text x="' + lp.x.toFixed(1) + '" y="' + (topY + lineGap).toFixed(1) + '" fill="var(--text-secondary)" font-size="' + pctLabelSize + '" text-anchor="middle" font-weight="600" font-family="inherit" style="pointer-events:none;">' + b.pct.toFixed(1) + '%</text>';
+                    svg += '<text x="' + lp.x.toFixed(1) + '" y="' + (topY + lineGap).toFixed(1) + '" fill="var(--text-secondary)" font-size="' + pctLabelSize + '" text-anchor="middle" font-weight="600" font-family="inherit" style="pointer-events:none;">' + _bLbl(b) + '</text>';
                 }
             });
 
@@ -171248,12 +171270,21 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
 
             // Legend
             let legendHtml = '<div style="display:flex; align-items:center; gap:1rem; margin-top:0.5rem; font-size:0.72rem; color:var(--text-secondary); flex-wrap:wrap;">';
-            legendHtml += '<span>Bubble size = share of audience (Top 20 DMAs shown)</span>';
-            legendHtml += '<span style="display:inline-flex; align-items:center; gap:0.3rem;"><span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:hsla(187,80%,55%,0.5); border:1px solid hsl(187,80%,65%);"></span> DMA market</span>';
+            const _legH = mapMode === 'index' ? 288 : 187;
+            legendHtml += mapMode === 'index'
+                ? '<span>Bubble size = index vs Gen Pop (Top 20 indexing DMAs shown)</span>'
+                : '<span>Bubble size = share of audience (Top 20 DMAs shown)</span>';
+            legendHtml += '<span style="display:inline-flex; align-items:center; gap:0.3rem;"><span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:hsla(' + _legH + ',80%,55%,0.5); border:1px solid hsl(' + _legH + ',80%,65%);"></span> DMA market</span>';
             legendHtml += '<span>' + bubbles.length + ' of ' + Object.keys(dmaData).length + ' DMAs shown</span>';
             legendHtml += '</div>';
 
-            document.getElementById('usHeatmap').innerHTML = svg + legendHtml;
+            const toggleHtml = canIndex
+                ? '<div class="piq-map-toggle" role="group" aria-label="Map view">'
+                    + '<button type="button" class="' + (mapMode === 'tu' ? 'on' : '') + '" onclick="window._piqSetMapMode(\'tu\')">Total Universe</button>'
+                    + '<button type="button" class="' + (mapMode === 'index' ? 'on' : '') + '" onclick="window._piqSetMapMode(\'index\')">GP Index</button>'
+                    + '</div>'
+                : '';
+            document.getElementById('usHeatmap').innerHTML = toggleHtml + svg + legendHtml;
             
             // Location stats
             const totalLocations = locations.length;
