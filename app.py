@@ -339,6 +339,31 @@ APP_BUILD_VERSION = (
 APP_BOOT_TIME = int(time.time())
 print(f"🔖 App build version: {APP_BUILD_VERSION} (boot={APP_BOOT_TIME})")
 
+@app.after_request
+def _cache_static_assets(resp):
+    """Let the browser keep the files that never change.
+
+    Everything under /static went out as no-cache, so six font files
+    and the logos (about 1.15 MB) were re-fetched on every page load.
+    Scripts, stylesheets and JSON are deliberately left alone: those
+    do change on a deploy and must keep revalidating.
+    """
+    try:
+        if resp.status_code != 200:
+            return resp
+        p = request.path or ''
+        if not p.startswith('/static/'):
+            return resp
+        if p.endswith(('.ttf', '.otf', '.woff', '.woff2')):
+            resp.headers['Cache-Control'] = 'public, max-age=2592000'
+        elif p.endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp',
+                         '.svg', '.ico', '.mp4', '.webm')):
+            resp.headers['Cache-Control'] = 'public, max-age=86400'
+    except Exception:
+        pass
+    return resp
+
+
 @app.route('/api/version')
 def api_version():
     """Lightweight version endpoint polled by every open dashboard tab.
@@ -52384,7 +52409,7 @@ def _v1_draft_cache_put(prompt: str, draft, candidates, extra: str = ''):
         traceback.print_exc()
 
 
-def _v1_interpret(prompt, identity_context=None):
+def _v1_interpret_capped(prompt, identity_context=None):
     """Shared interpret helper used by /check and /run. Runs the Claude
     interpret step against the current profile catalog and returns
     (draft_dict, candidates_list) or raises with a jsonify error.
@@ -52537,6 +52562,44 @@ def _v1_interpret(prompt, identity_context=None):
     except Exception:
         pass
     return draft, candidates, interp
+
+
+# --------------------------------------------------------------------
+# Interpret concurrency cap (2026-10-14)
+#
+# One interpret call holds a server slot for one to three minutes.
+# There are 36 slots. On 2026-10-14 a 26-call partner batch took most
+# of them and every other request, the dashboard included, queued
+# behind it: 77 to 112 second responses for twenty minutes.
+#
+# Past the cap a caller is turned away immediately rather than made to
+# wait, because a waiting request still occupies the slot we are trying
+# to protect. Turning it away frees the slot in milliseconds.
+# --------------------------------------------------------------------
+_V1_INTERPRET_SLOTS = max(1, int(os.environ.get('V1_INTERPRET_CONCURRENCY', '6')))
+_V1_INTERPRET_WAIT_S = float(os.environ.get('V1_INTERPRET_WAIT_S', '5'))
+_V1_INTERPRET_SEM = threading.BoundedSemaphore(_V1_INTERPRET_SLOTS)
+
+
+def _v1_interpret(prompt, identity_context=None):
+    """Interpret, but never more than _V1_INTERPRET_SLOTS at a time."""
+    if not _V1_INTERPRET_SEM.acquire(timeout=_V1_INTERPRET_WAIT_S):
+        try:
+            print(f"[v1_interpret] at capacity ({_V1_INTERPRET_SLOTS} in "
+                  f"flight), turned away prompt={prompt[:80]!r}")
+        except Exception:
+            pass
+        return None, [], {
+            'success': False,
+            'status': 429,
+            'retry_after': 10,
+            'error_public': ('too many requests in flight. '
+                             'retry in a few seconds'),
+        }
+    try:
+        return _v1_interpret_capped(prompt, identity_context=identity_context)
+    finally:
+        _V1_INTERPRET_SEM.release()
 
 
 # --------------------------------------------------------------------
@@ -56076,8 +56139,10 @@ def _v1_conclude(prompt, run_avid=True, identity_context=None,
                       f"{str(interp.get('error'))[:400]!r}")
             except Exception:
                 pass
+            _public = (interp or {}).get('error_public')
             return None, (jsonify({'success': False,
-                                   'error': 'could not interpret prompt'}),
+                                   'error': _public
+                                   or 'could not interpret prompt'}),
                           interp.get('status', 502))
     except Exception:
         traceback.print_exc()
