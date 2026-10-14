@@ -23283,6 +23283,13 @@ https://www.instagram.com/p/..."></textarea>
                                     color: var(--text-secondary);
                                     font-size: 0.8rem;
                                 }
+                                .synth-thinking-promise {
+                                    margin-top: 0.4rem;
+                                    font-size: 0.78rem;
+                                    line-height: 1.35;
+                                    color: var(--text-secondary);
+                                    opacity: 0.9;
+                                }
                                 .synth-thinking-elapsed {
                                     margin-left: auto;
                                     font-size: 0.7rem;
@@ -80515,6 +80522,69 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             };
         }
 
+        // Live line under the working mark (2026-10-14, Jenna: "build a
+        // really good indicator that it is working"). The server writes
+        // a plain, query-tied line as each step runs ("Reading your
+        // question", "Sizing FanDuel and Kalshi", "Checking the
+        // figures"); the widget polls it every 1.5 s while the ask is
+        // in flight. Past 45 seconds the bubble also says the answer
+        // will be emailed and will show up here when it finishes, and
+        // the server keeps that promise.
+        var PM_LONG_WAIT_MS = 45000;
+        var PM_LONG_WAIT_LINE = 'Taking longer than usual. I will email this to you and it will show up here when it finishes.';
+        function _pmLiveBubbleLast() {
+            return _pmLiveBubbles.length ? _pmLiveBubbles[_pmLiveBubbles.length - 1] : null;
+        }
+        function _pmLiveStage(text) {
+            var el = _pmLiveBubbleLast();
+            text = String(text || '');
+            if (!el || !text) return;
+            var q = el.querySelector('.synth-thinking-quiet');
+            if (!q) {
+                var dots = el.querySelector('.synth-thinking-dots');
+                if (!dots) return;
+                q = document.createElement('span');
+                q.className = 'synth-thinking-quiet';
+                dots.insertAdjacentElement('afterend', q);
+            }
+            if (q.textContent !== text) q.textContent = text;
+        }
+        function _pmLivePromise() {
+            var el = _pmLiveBubbleLast();
+            if (!el || el.querySelector('.synth-thinking-promise')) return;
+            var d = document.createElement('div');
+            d.className = 'synth-thinking-promise';
+            d.textContent = PM_LONG_WAIT_LINE;
+            el.appendChild(d);
+            try { el.parentNode.scrollTop = el.parentNode.scrollHeight; } catch (_) {}
+        }
+        function _pmNewTrace() {
+            return (Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-6)).slice(0, 16);
+        }
+        function _pmStartProgress(trace) {
+            var startedAt = Date.now();
+            var stopped = false;
+            var promised = false;
+            var busy = false;
+            var timer = setInterval(async function() {
+                if (stopped) return;
+                if (!promised && Date.now() - startedAt >= PM_LONG_WAIT_MS) {
+                    promised = true;
+                    _pmLivePromise();
+                }
+                if (busy) return;
+                busy = true;
+                try {
+                    var r = await fetch('/api/prometheus/v1/progress/' + encodeURIComponent(trace),
+                                        { credentials: 'same-origin', cache: 'no-store' });
+                    var d = await r.json();
+                    if (d && d.label) _pmLiveStage(d.label);
+                } catch (_) {}
+                busy = false;
+            }, 1500);
+            return function() { stopped = true; clearInterval(timer); };
+        }
+
         // Long-build working indicator: the same graphic, kept alive
         // for the life of a queued run (~20 min) with a quiet
         // query-tied label (the subject). Shown by the status poll,
@@ -84636,10 +84706,13 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         async function _synthChatFetchJson(url, body, signal) {
             window._pmLastActivityAt = Date.now();
             var _req = _pmV1Request(url, body);
+            var _trace = _pmNewTrace();
+            var _stopProgress = null;
+            try { _stopProgress = _pmStartProgress(_trace); } catch (_) { _stopProgress = null; }
             async function _once() {
                 var r = await fetch(_req.url, {
                     method: 'POST', credentials: 'same-origin',
-                    headers: {'Content-Type': 'application/json'},
+                    headers: {'Content-Type': 'application/json', 'X-Prometheus-Trace': _trace},
                     body: JSON.stringify(_req.body),
                     signal: signal
                 });
@@ -84650,15 +84723,19 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                          retriable: parseFailed || r.status === 502 ||
                                     r.status === 503 || r.status === 504 };
             }
-            var first = await _once();
-            if (!first.retriable) {
-                _synthChatMaybeSaveFile(first.data);
-                return first;
+            try {
+                var first = await _once();
+                if (!first.retriable) {
+                    _synthChatMaybeSaveFile(first.data);
+                    return first;
+                }
+                await new Promise(function(res) { setTimeout(res, 4000); });
+                var second = await _once();
+                _synthChatMaybeSaveFile(second.data);
+                return second;
+            } finally {
+                try { _stopProgress && _stopProgress(); } catch (_) {}
             }
-            await new Promise(function(res) { setTimeout(res, 4000); });
-            var second = await _once();
-            _synthChatMaybeSaveFile(second.data);
-            return second;
         }
 
         // Calm-failure contract (2026-08-23 Jenna): the chat never

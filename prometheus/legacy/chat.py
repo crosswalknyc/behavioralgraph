@@ -5617,6 +5617,7 @@ def _ask_logged(surface):
                     if _tid_trace:
                         extra = dict(extra or {})
                         extra['trace_id'] = _tid_trace
+                    _rd = getattr(_g, '_pm_reading', None); _rd and extra.update({'reading': {k: _rd.get(k) for k in ('intent', 'confidence', 'subjects', 'flags', 'restate', 'ms')}})
                 except Exception:
                     pass
                 import render_usage_log as _rul
@@ -6133,6 +6134,7 @@ def _pm_interpret_core(user, body, text, history):
             candidate_matches=candidates,
         )
         system_prompt, _dropped = _smart.prune_rulebook(system_prompt, text, candidates)   # rulebook pruned per ask (2026-10-13)
+        user_prompt = _smart.with_reading(user_prompt, body.get('reading'))   # the Reader's understanding rides along (2026-10-14)
         _pm_ask_stage('interpret_prep', t0=_t_prep)
         _t_model = time.monotonic()
         # Subject verification runs alongside the draft model for the
@@ -9864,6 +9866,7 @@ def _pm_ask_stage(key, t0=None, ms=None, count=None):
     time.monotonic() start) for the common case, or an explicit `ms` /
     `count`. Safe outside a request context (tests, background
     threads): failures are swallowed, overhead is one dict write."""
+    __import__('prometheus.progress', fromlist=['stage']).stage(key)   # the live line the widget shows (2026-10-14)
     try:
         from flask import g as _g
         stages = getattr(_g, '_pm_ask_stages', None)
@@ -16397,11 +16400,11 @@ def _pm_analyze_core(user, body, text, history):
     # definitions ride the binding block, so the answer names the
     # earlier figure and the definition instead of re-deriving.
     _led_block = _pm_kpi_prompt_extras(text, history, ctx, _led_block)
-    user_prompt = pma.build_analysis_user_prompt(
+    user_prompt = _smart.with_reading(pma.build_analysis_user_prompt(
         digest, history, text, mode=mode or None,
         view_context=ctx.get('view_context'),
         cross_module_block=xmod_block,
-        ledger_block=_led_block)
+        ledger_block=_led_block), body.get('reading'))   # the Reader's understanding rides along (2026-10-14)
     try:
         import prometheus_knowledge as _pmk
         _kb = _pmk.knowledge_block(
@@ -16499,9 +16502,7 @@ def _pm_analyze_core(user, body, text, history):
     # the user. Mirrors the partner API's _V1_BANNED_TOKENS posture.
     reply = pma.scrub_user_text(reply)
     if action == 'answer' and xmod_block:   # a count the evidence carried is quoted to the digit (2026-10-14)
-        reply, _ev_swaps = _smart.bind_to_evidence(reply, xmod_block)
-        if _ev_swaps:
-            print(f"[pm-evidence-bind] {len(_ev_swaps)} figure(s) snapped: {_ev_swaps[:4]}")
+        reply, _ev_swaps = _smart.bind_to_evidence(reply, xmod_block); _ev_swaps and print(f"[pm-evidence-bind] snapped {_ev_swaps[:4]}")
     # Refusal guard (2026-09-28): a draft that declines to answer or
     # carries no numbers retries once with a produce-the-read
     # instruction; a second refusal reroutes to the measured-read

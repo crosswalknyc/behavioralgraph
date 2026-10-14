@@ -246,6 +246,36 @@ def rearm_brief_from_thread(body, history, user, ppu, intake_ui, intake_turn):
         return ''
 
 
+def reading_line(reading):
+    """One line that tells a drafting model how the Reader understood the
+    request, or '' (2026-10-14)."""
+    try:
+        r = reading if isinstance(reading, dict) else None
+        if not r or not r.get('intent'):
+            return ''
+        subs = ', '.join(((s.get('catalog') or s.get('as_written') or '') + (f" (library: {s['catalog']})" if s.get('catalog') and s.get('as_written') and s['catalog'] != s['as_written'] else ''))
+                         for s in (r.get('subjects') or []) if (s.get('catalog') or s.get('as_written')))
+        bits = [f"intent {r['intent']}"]
+        if subs:
+            bits.append(f"subject(s) {subs}")
+        if r.get('window'):
+            bits.append(f"window {r['window']}")
+        if r.get('platform'):
+            bits.append(f"platform {r['platform']}")
+        if r.get('flags'):
+            bits.append('flags ' + ', '.join(str(f) for f in r['flags']))
+        if r.get('wants'):
+            bits.append(f"they want: {r['wants']}")
+        return "HOW THE REQUEST WAS READ (honor this; it was read with the whole thread and the library in view): " + '; '.join(bits) + '.'
+    except Exception:
+        return ''
+
+
+def with_reading(user_prompt, reading):
+    line = reading_line(reading)
+    return (str(user_prompt or '') + "\n\n" + line) if line else user_prompt
+
+
 def jsonable(obj):
     """A JSON-safe copy of a job's inputs (for the running doc the
     sweeper restarts from). Drops what json cannot carry."""

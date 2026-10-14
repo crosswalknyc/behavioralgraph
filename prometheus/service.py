@@ -161,6 +161,8 @@ def _analyze_body(body, text, history, decision, tid=None):
         ctx = body.get('page_context')
     out = {'text': text, 'history': history, 'page_context': ctx or None,
            'thread_id': tid}
+    if isinstance(body.get('reading'), dict):
+        out['reading'] = body['reading']   # the Reader's understanding (2026-10-14)
     mode = decision.get('mode') or body.get('mode')
     if mode:
         out['mode'] = mode
@@ -186,6 +188,8 @@ def _interpret_body(body, text, history, tid=None):
     for k in ('locked_sample_tu', 'locked_sample_avid'):
         if body.get(k) is not None:
             out[k] = body[k]
+    if isinstance(body.get('reading'), dict):
+        out['reading'] = body['reading']
     return out
 
 
@@ -505,6 +509,36 @@ def ask(user, body, *, via='session'):
                 return env, 200
         except Exception as e:
             print(f"[prometheus] bare-reply gate skipped: {e}")
+
+    # The Reader (2026-10-14, Jenna: "make prometheus closer to your level
+    # of intelligence in understanding what is being asked"). One
+    # understanding step with the whole thread, the page, the library
+    # candidates and the labeled bank in view, before any pattern lane.
+    # Deterministic intents run here; the rest steer the surface below.
+    # The lanes stay as the fallback when the Reader is unsure or away.
+    reading = None
+    if referent_decision is None and not _armed(body) and len(text.split()) >= 2:
+        try:
+            from . import reader as _rd
+            from . import progress as _pg
+            reading = _rd.read(text, ctx, history, user, uname, progress=_pg.say)
+        except Exception as e:
+            print(f"[prometheus] reader skipped: {e}")
+            reading = None
+        if reading:
+            body = dict(body, reading=reading)
+            try:
+                from flask import g as _g_rd
+                _g_rd._pm_reading = reading
+            except Exception:
+                pass
+            try:
+                _rx = _execute_reading(reading, text, ctx, history, user, uname, body, tid, via, persist, _client_surface)
+            except Exception as e:
+                print(f"[prometheus] reader executor skipped: {e}")
+                _rx = None
+            if _rx is not None:
+                return _rx
 
     # Pricing (2026-10-06, audit item 5): one deterministic answer from
     # the rate card on every surface. It used to be an error on one
@@ -923,6 +957,16 @@ def ask(user, body, *, via='session'):
             extra=body.get('extra'), open_tabs=open_tabs,
             deck_in_flight=bool(body.get('deck_in_flight')),
             prior_outline=_outline)
+        # the Reader's confident intent picks the surface (2026-10-14)
+        try:
+            from . import reader as _rd2
+            _steer = _rd2.steer(reading, decision, has_ctx=has_ctx)
+            if _steer:
+                decision, _bind = _steer
+                if _bind and not body.get('bind_subject'):
+                    body = dict(body, bind_subject=_bind)
+        except Exception as e:
+            print(f"[prometheus] reader steer skipped: {e}")
     # "Don't build a new profile. Answer this from ..." is answer mode,
     # whatever surface the widget sent (2026-10-13 audit, Emma).
     try:
@@ -980,6 +1024,78 @@ def ask(user, body, *, via='session'):
                         thread_id=tid, via=via)
     _persist_turn(persist, uname, tid, history, text, env, raw, surface)
     return env, status
+
+
+def _execute_reading(reading, text, ctx, history, user, uname, body, tid, via, persist, _client_surface):
+    """Run the deterministic executor the Reader chose, or return None
+    to let the lanes and surfaces proceed (they also see the reading)."""
+    from . import reader as _rd
+    intent = str(reading.get('intent') or '')
+    conf = float(reading.get('confidence') or 0)
+    if intent not in _rd.EXECUTABLE or conf < 0.6:
+        return None
+    from . import progress as _pg
+    raw, reason = None, ''
+    subs = _rd.subjects_of(reading)
+    page = ''
+    try:
+        page = str(((ctx or {}).get('primary') or {}).get('name') or '').strip()
+    except Exception:
+        page = ''
+    if _rd.refers_to_page(reading) and page:
+        subs = [page] + [x for x in subs if x.lower() not in ('<page>', 'this', 'that', 'it')]
+    if intent == 'size':
+        from . import sizing_lane as _szl
+        _pg.say('Sizing ' + (' and '.join(subs[:3]) if subs else 'the audience'))
+        raw = _szl.answer(text, ctx, host=host, history=history, subjects=subs or None)
+        reason = 'sizing'
+    elif intent == 'exists':
+        from . import catalog_lane as _cl
+        subj = subs[0] if subs else ''
+        if subj:
+            _pg.say(f"Looking for {subj} in the library")
+            raw = _cl.answer(f"do we have {subj}?", ctx)
+            reason = 'catalog_lookup'
+    elif intent == 'status':
+        from . import status_lane as _stl
+        _pg.say('Checking your runs and deliveries')
+        raw = _stl.answer(text, uname, host=host, user=user, history=history)
+        reason = 'status_lookup'
+    elif intent == 'capability':
+        from . import smarter as _sm
+        cap = _sm.capability_ask(text)
+        if not cap:
+            cap = _rd.capability_reply(reading)
+        if cap:
+            raw = {'success': True, 'action': 'answer', 'reply': cap['reply'], 'followups': cap.get('followups') or [],
+                   'offer_deck': False, 'deck_angle': None}
+            reason = 'capability'
+    elif intent == 'decline':
+        from . import smarter as _sm
+        if _last_turn_offered(history):
+            raw = {'success': True, 'action': 'answer', 'reply': _sm.DECLINE_REPLY, 'followups': [], 'offer_deck': False, 'deck_angle': None}
+            reason = 'offer_declined'
+    if not raw:
+        return None
+    # restate when the reading was not sure (the reader corrects a
+    # restatement instantly, and the correction feeds the bank)
+    if conf < 0.75 and reading.get('restate') and raw.get('action') == 'answer' and raw.get('reply'):
+        raw = dict(raw, reply=f"{reading['restate'].rstrip('.')}.\n\n{raw['reply']}")
+    raw = dict(raw, reading={'intent': intent, 'confidence': conf, 'subjects': subs})
+    decision = {'surface': 'analyze', 'mode': None, 'reason': 'reader:' + reason, 'client_hint': None}
+    out = raw
+    if _client_surface == 'interpret':
+        out = _interpret_shape(raw)
+        out['followups'] = list(raw.get('followups') or [])
+        if raw.get('memory_confirm'):
+            out['memory_confirm'] = raw['memory_confirm']
+    try:
+        host.ask_hint(route=reason, outcome='answered', subject=(subs[0] if subs else None))
+    except Exception:
+        pass
+    env = envelope.wrap(out, surface='analyze', decision=decision, thread_id=tid, via=via)
+    _persist_turn(persist, uname, tid, history, text, env, out, 'analyze')
+    return env, 200
 
 
 def _last_turn_offered(history):

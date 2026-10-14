@@ -358,12 +358,16 @@ def _check_line(host, phrase, history, window_txt=''):
         return ''
 
 
-def answer(text, ctx=None, *, host=None, history=None):
-    """A finished reply payload for a sizing ask, else None."""
+def answer(text, ctx=None, *, host=None, history=None, subjects=None):
+    """A finished reply payload for a sizing ask, else None. `subjects`
+    (from the Reader) overrides the phrase extraction."""
     try:
-        if not wants_sizing(text):
-            return None
-        subs = [x for x in subjects(text, ctx) if not _is_panel_self(x)]
+        if subjects:
+            subs = [str(x).strip() for x in subjects if str(x or '').strip() and not _is_panel_self(str(x))]
+        else:
+            if not wants_sizing(text):
+                return None
+            subs = [x for x in globals()['subjects'](text, ctx) if not _is_panel_self(x)]
         if not subs:
             return None   # a question about the ten million panel itself is the product fact's
         lines, chips, sizing = [], [], []

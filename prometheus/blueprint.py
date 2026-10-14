@@ -22,6 +22,7 @@ unhandled error, ops email) and the ask logger, the same two wrappers
 the legacy chat routes use, so observability is unchanged.
 """
 import os
+import time
 from functools import wraps
 
 from flask import Blueprint, g, jsonify, make_response, request
@@ -134,8 +135,69 @@ def ask():
     body = _body()
     if via == 'api_key':
         body.setdefault('client', 'api')
+    _t0 = time.monotonic()
     env, status = service.ask(user, body, via=via)
+    # Over 45 seconds the widget has promised an email as well as the
+    # chat (Jenna 2026-10-14); keep the promise, then close the live line.
+    try:
+        from . import progress as _pg
+        _emailed = False
+        if time.monotonic() - _t0 >= _pg.LONG_WAIT_S and via == 'session':
+            _emailed = _email_long_answer(user, body, env)
+        _pg.done(emailed=_emailed)
+        if isinstance(env, dict):
+            env['waited_s'] = int(time.monotonic() - _t0)
+            env['emailed'] = bool(_emailed)
+    except Exception:
+        pass
     return jsonify(env), status
+
+
+def _email_long_answer(user, body, env):
+    """The finished answer to the reader's inbox when the ask ran past
+    the long-wait mark. Only a real answer with text; never a brief card
+    or a clarifier. Returns True when sent."""
+    try:
+        raw = (env or {}).get('raw') if isinstance(env, dict) else None
+        if not isinstance(raw, dict):
+            return False
+        reply = str(raw.get('reply') or raw.get('answer') or '').strip()
+        if not reply or raw.get('action') not in (None, 'answer') or raw.get('guidance') or raw.get('clarify') or raw.get('spec_draft') or raw.get('spec_drafts'):
+            return False
+        to = str((user or {}).get('email') or '').strip()
+        if '@' not in to:
+            return False
+        q = ' '.join(str((body or {}).get('text') or '').split())
+        from .outbound_mail import send_user_email
+        from .guards import scrub_method_language as _scrub
+        subject = f"Prometheus: {q[:70]}" if q else 'Prometheus: your answer'
+        text = f"You asked: {q}\n\n{reply}\n\nThis answer is also in your chat thread on the dashboard.\n\nPrometheus\nCrosswalk"
+        html = None
+        try:
+            from welcome_email import render_card_html
+            paras = [p_ for p_ in reply.split('\n') if p_.strip()]
+            html = render_card_html('Your answer is ready.', sub=q[:140], lines=paras[:40] + ['This answer is also in your chat thread on the dashboard.'], title=subject)
+        except Exception:
+            html = None
+        rec = send_user_email(to=to, subject=subject, body=_scrub(text), html=html, instructed=True, caller='long_ask')
+        return bool(rec.get('sent'))
+    except Exception:
+        return False
+
+
+@bp.route('/progress/<trace>', methods=['GET'])
+def progress_get(trace):
+    """The live line for an ask in flight (the widget polls while it
+    waits; 2026-10-14). Session or key, no logging, no model."""
+    user, via, err = _auth()
+    if err:
+        return err
+    from . import progress as _pg
+    doc = _pg.get(trace) or {}
+    return jsonify({'success': True, 'trace': str(trace)[:32], 'label': doc.get('label') or '',
+                    'elapsed_s': int(time.time() - float(doc.get('started') or time.time())) if doc else 0,
+                    'long_wait': _pg.long_wait(doc), 'done': bool(doc.get('done')), 'emailed': bool(doc.get('emailed')),
+                    'lines': [l.get('label') for l in (doc.get('lines') or [])][-6:]})
 
 
 @bp.route('/upload', methods=['POST'])
