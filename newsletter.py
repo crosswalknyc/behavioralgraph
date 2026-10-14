@@ -14,6 +14,7 @@ import io
 import json
 import os
 import re
+import struct
 import threading
 import time
 import traceback
@@ -853,6 +854,16 @@ _IMG_ALT_RE = re.compile(r"""alt=["']([^"']*)["']""", re.I)
 _IMG_WIDTH_RE = re.compile(r"""width=["']?(\d+)""", re.I)
 _BG_URL_RE = re.compile(r"""url\(\s*['"]?([^'")]+)['"]?\s*\)""", re.I)
 _LOGO_ALT_RE = re.compile(r"crosswalk|logo|wordmark", re.I)
+_COVER_CHROME_RE = re.compile(
+    r"(masthead|footer|logo|wordmark|_l\.|_r\.|s01_01|cta_1)",
+    re.I,
+)
+# Photos that crop as a tall plate. Slide GIFs and ultra-wide cards do not.
+COVER_OVERRIDES = {
+    "the-read-second-screen": "02_hero_1.jpg",
+    "nl-52075756a6": "s02_03.jpg",
+    "the-read-slow-horses": "b_phone.jpg",
+}
 
 
 def _rewrite_cover_src(src, asset_base):
@@ -864,9 +875,81 @@ def _rewrite_cover_src(src, asset_base):
     return src
 
 
+def _image_wh(data):
+    """Width, height from a JPEG / PNG / GIF header. (0, 0) if unknown."""
+    if not data or len(data) < 10:
+        return 0, 0
+    if data[:6] in (b"GIF87a", b"GIF89a"):
+        return struct.unpack("<HH", data[6:10])
+    if data[:8] == b"\x89PNG\r\n\x1a\n" and len(data) >= 24:
+        return struct.unpack(">II", data[16:24])
+    if data[:2] != b"\xff\xd8":
+        return 0, 0
+    i = 2
+    end = len(data)
+    while i + 9 < end:
+        if data[i] != 0xFF:
+            break
+        marker = data[i + 1]
+        if marker == 0xDA:
+            break
+        if i + 4 > end:
+            break
+        seglen = struct.unpack(">H", data[i + 2:i + 4])[0]
+        if marker in (0xC0, 0xC1, 0xC2) and seglen >= 7 and i + 9 < end:
+            h, w = struct.unpack(">HH", data[i + 5:i + 9])
+            return w, h
+        i += 2 + seglen
+    return 0, 0
+
+
+def _cover_asset_name(src, cid):
+    prefix = f"/n/asset/{cid}/"
+    if prefix in (src or ""):
+        return (src.split(prefix, 1)[1].split("?")[0] or "").strip()
+    if src and "/" not in src and "{{" not in src:
+        return src.strip()
+    return ""
+
+
+def _cover_src_ok(src, cid, width=0):
+    if not src:
+        return False
+    low = src.lower()
+    if low.endswith(".gif") or ".gif?" in low:
+        return False
+    if _LOGO_ALT_RE.search(low) or _COVER_CHROME_RE.search(low):
+        return False
+    if width and width < 160:
+        return False
+    name = _cover_asset_name(src, cid)
+    if not cid or not name:
+        return True
+    try:
+        raw = _get_bytes(ASSET_KEY.format(cid=cid, name=name))
+    except Exception:
+        return True
+    if not raw:
+        return True
+    w, h = _image_wh(raw[:65536])
+    if not w or not h:
+        return True
+    if w < 280 or h < 280:
+        return False
+    if (w / float(h)) > 2.15:
+        return False
+    return True
+
+
 def _public_cover_image(cid, camp):
-    """Letter hero first (background photo), then first large content photo."""
+    """A photograph that fills a tall plate. Skip slide GIFs and thin cards."""
+    camp = camp or {}
     asset_base = f"/n/asset/{cid}"
+    override = (camp.get("cover_image") or COVER_OVERRIDES.get(cid) or "").strip()
+    if override:
+        if override.startswith("http") or override.startswith("/"):
+            return override
+        return f"{asset_base}/{override}"
     try:
         html = get_campaign_html(cid) or ""
     except Exception:
@@ -874,26 +957,22 @@ def _public_cover_image(cid, camp):
     html = (html or "").replace("{{ASSET_BASE}}", asset_base)
     for match in _BG_URL_RE.finditer(html):
         src = _rewrite_cover_src(match.group(1), asset_base)
-        if not src or _LOGO_ALT_RE.search(src):
-            continue
-        return src
+        if _cover_src_ok(src, cid):
+            return src
     for tag in _IMG_TAG_RE.findall(html):
         sm = _IMG_SRC_RE.search(tag)
         if not sm:
             continue
         src = _rewrite_cover_src(sm.group(1), asset_base)
-        if not src:
-            continue
         alt_m = _IMG_ALT_RE.search(tag)
         alt = alt_m.group(1) if alt_m else ""
-        if _LOGO_ALT_RE.search(alt) or _LOGO_ALT_RE.search(src):
+        if _LOGO_ALT_RE.search(alt):
             continue
         wm = _IMG_WIDTH_RE.search(tag)
         width = int(wm.group(1)) if wm else 0
-        if width and width < 160:
-            continue
-        return src
-    li = (camp or {}).get("linkedin") or {}
+        if _cover_src_ok(src, cid, width=width):
+            return src
+    li = camp.get("linkedin") or {}
     url = (li.get("image_url") or "").strip()
     if url and not url.startswith("data:") and "{{ASSET_BASE}}" not in url:
         return url
