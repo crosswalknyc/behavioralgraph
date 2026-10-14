@@ -78,15 +78,15 @@ def _deck():
 REGISTRY = {
     'interpret.rulebook.full': {
         'version': '2026.10.14', 'owner': 'build drafting', 'loader': lambda: _rulebook(candidates=[{'s3_key': 'x', 'display_name': 'X'}], reading=None),
-        'budget_tokens': 20500, 'target_tokens': 5000,
+        'budget_tokens': 13000, 'target_tokens': 9000,
         'invariants': ('OUTPUT SHAPE', 'DECISION LOGIC', 'STRICT VOCABULARY RULE', 'SAMPLE-SIZE', 'AUDIENCE TYPE'),
-        'note': 'the whole rulebook with candidates (worst case)'},
+        'note': 'the whole rulebook with candidates (worst case); 19,838 before the 2026-10-14 diet'},
     'interpret.rulebook.plain': {
         'version': '2026.10.14', 'owner': 'build drafting',
         'loader': lambda: _rulebook(reading={'intent': 'build_profile', 'confidence': 0.95, 'subjects': [{'as_written': 'Taylor Swift', 'catalog': 'Taylor Swift'}], 'flags': []}),
-        'budget_tokens': 12500, 'target_tokens': 5000,
+        'budget_tokens': 4800, 'target_tokens': 4000,
         'invariants': ('OUTPUT SHAPE', 'DECISION LOGIC', 'STRICT VOCABULARY RULE', 'SAMPLE-SIZE', 'AUDIENCE TYPE'),
-        'note': 'a plain profile ask with a confident reading: the Reader-aware prune'},
+        'note': 'a plain profile ask with a confident reading: the Reader-aware prune; 8,901 before the 2026-10-14 diet, 19,838 before the audit'},
     'analysis.system': {'version': '2026.10.14', 'owner': 'page answers', 'loader': _analysis, 'budget_tokens': 6400, 'target_tokens': 3500,
                         'invariants': ('MULTIPLE QUESTIONS',), 'note': 'the page analyst'},
     'metrics.system': {'version': '2026.10.14', 'owner': 'reasoned reads', 'loader': _metrics, 'budget_tokens': 3900, 'target_tokens': 2500,

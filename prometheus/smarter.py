@@ -40,6 +40,13 @@ _AUTO_RX = re.compile(r"\b(car|auto|automobile|truck|suv|ford|toyota|honda|chevy
 _GENDER_RX = re.compile(r"\b(female|male|women|woman|men|man|girls?|boys?|moms?|dads?|mothers?|fathers?|ladies|guys|gender|she|he|her|his)\b", re.I)
 _EVENT_RX = re.compile(r"\b(premiere|launch|opening|tour|release[sd]?|finale|season \d|episode|concert|game day|draft|super bowl|world series|playoffs?|awards?|debut|drop|campaign|event|week of|weekend of|since|after|before|during|around)\b", re.I)
 _KIDS_RX = re.compile(r"\b(kids?|children|child|toddlers?|babies|baby|infants?|toys?|preschool|parents?|family|families|teens?|tweens?|youth)\b", re.I)
+_WINDOW_RX = re.compile(r"\b(trailing|last|past|since|ytd|year|years|month|months|week|weeks|day|days|quarter|q[1-4]|fy\d*|fiscal|recent|current|now|today|window|period|between|through|until|from|to date|h[12]|19\d\d|20\d\d|jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec|january|february|march|april|june|july|august|september|october|november|december)\b", re.I)
+
+
+def _window_phrasing(t, r=None):
+    return bool(_WINDOW_RX.search(t)) or bool(_EVENT_RX.search(t)) or bool((r or {}).get('window')) or 'custom_window' in ((r or {}).get('flags') or [])
+
+
 PRUNABLE = {
     'SUBSCRIBER IQ REQUESTS': lambda t, c, r=None: bool(_SUBIQ_RX.search(t)),
     'ANY-OF / ALL-OF TITLE LISTS': lambda t, c, r=None: bool(_LIST_RX.search(t)),
@@ -54,7 +61,162 @@ PRUNABLE = {
     'EVENT-SCOPED WINDOWS': lambda t, c, r=None: bool(_EVENT_RX.search(t)) or bool((r or {}).get('window')) or 'custom_window' in ((r or {}).get('flags') or []),
     "KIDS' PRODUCTS": lambda t, c, r=None: bool(_KIDS_RX.search(t)),
     'SUBJECT IDENTITY RESOLUTION': lambda t, c, r=None: not _subject_resolved(r),
+    # the diet toward 5,000 tokens (2026-10-14): candidate-only matching rules go
+    # when there is no candidate; verification goes when the library already
+    # holds the subject; the two window rules go when nothing names a window
+    'NAME MATCHING IS CASE': lambda t, c, r=None: bool(c),
+    'CORPORATE / LEGAL FORM ALIASES': lambda t, c, r=None: bool(c),
+    'CURRENT-FILE PHRASING': lambda t, c, r=None: bool(c),
+    'SUBJECT VERIFICATION': lambda t, c, r=None: not _subject_resolved(r),
+    'RELATIVE WINDOWS BIND': lambda t, c, r=None: _window_phrasing(t, r),
+    'DATE RANGE EXPLICIT FLAG': lambda t, c, r=None: _window_phrasing(t, r),
 }
+
+# ---- inside-section diet (2026-10-14). SEMANTIC GUARDS is fifteen numbered
+# guards, each bound to a phrasing family; a guard whose family is absent
+# from the ask (and from the reading's flags) is dead weight. The spec step
+# re-checks every guard server-side, so a missed trigger degrades to the
+# pre-prompt behaviour, never to a silent default.
+_AGE_RX = re.compile(r"\b(gen ?z|gen ?x|millennials?|boomers?|zoomers?|\d{2}\s*(?:-|to)\s*\d{2}|under \d{2}|over \d{2}|\d{2}\+|ages?\b|teens?|seniors?|young|older|adults?)\b", re.I)
+_GEO_RX = re.compile(r"\b(in|from|across|around) [A-Z][a-z]+|\b(dma|market|city|cities|state|county|la|nyc|new york|los angeles|chicago|dallas|houston|miami|atlanta|boston|philly|philadelphia|phoenix|seattle|denver|detroit|tampa|orlando|texas|florida|california|ohio)\b", re.I)
+_COUNTRY_RX = re.compile(r"\b(uk|u\.k\.|britain|british|england|english market|ireland|irish|canada|canadian|mexico|mexican|germany|german|france|french|spain|spanish|italy|italian|australia|australian|japan|japanese|korea|korean|india|indian|brazil|brazilian|europe|european|latam|emea|apac|international|global|worldwide|overseas|outside the us|non-us)\b", re.I)
+GUARD_TRIGGERS = {
+    1: lambda t, r: bool(re.search(r"\b(don'?t|do not|doesn'?t|without|exclud\w*|except|never (?:watched|used|bought|subscribed)|non-?\w+|not (?:a |on |already )?(?:subscriber|member|customer|user)s?|no longer|lack|aren'?t)\b", t, re.I)) or 'negated_build' in _flags(r),
+    2: lambda t, r: bool(re.search(r"\b(former|lapsed|cancel\w*|churn\w*|stopped|quit|left|ex-|used to|no longer|dormant|leavers?|unsubscrib\w*|win-?back|lost)\b", t, re.I)),
+    3: lambda t, r: bool(re.search(r"\b(then|after|before|came to|went on to|followed by|switch\w*|moved|migrat\w*|convert\w*|journey)\b|->", t, re.I)),
+    4: lambda t, r: bool(re.search(r"\b(q[1-4]|fy ?\d*|fiscal|quarter)\b", t, re.I)) or 'custom_window' in _flags(r),
+    5: lambda t, r: _window_phrasing(t, r),
+    6: lambda t, r: bool(_COUNTRY_RX.search(t)),
+    7: lambda t, r: bool(re.search(r"\b(southeast|southwest|midwest|northeast|northwest|pacific northwest|sun ?belt|new england|rust belt|bible belt|the south|the north|east coast|west coast|region\w*|rural|small towns?|suburb\w*|urban|brooklyn|long island|queens|bronx|manhattan|county|tri-?state|coastal)\b", t, re.I)),
+    8: lambda t, r: sum(1 for rx in (_GENDER_RX, _AGE_RX, _GEO_RX) if rx.search(t)) >= 2,
+    9: lambda t, r: bool(re.search(r"\b(compar\w*|vs\.?|versus|against|side by side|difference between|better than|more than|than)\b", t, re.I)) or 'multiple_subjects' in _flags(r),
+    10: lambda t, r: bool(re.search(r"\b(binge\w*|super ?fans?|die-?hard|hardcore|heavy|light|casual|avid|most engaged|top \d+%|at least \d|x a week|times a week|power users?|loyal\w*|devoted|obsess\w*|enthusiast\w*|fanatic\w*)\b", t, re.I)),
+    11: lambda t, r: bool(re.search(r"\d[\d,.]*\s*(?:k|m|mm|million|thousand|billion)?\s*(?:subscribers|members|customers|users|followers|fans|people|accounts|buyers|viewers)\b|\bwe have\b|\bour (?:base|list|file) (?:is|of)\b", t, re.I)),
+    12: lambda t, r: bool(re.search(r"\b(swifties|bey ?hive|little monsters|parrotheads|beliebers|barbz|directioners|blink|stans?|fandom|nation|-?heads|hive|army|navy|mafia|gang)\b", t, re.I)) or _alias_subject(r),
+    13: lambda t, r: bool(_LIST_RX.search(t)) or 'multiple_subjects' in _flags(r),
+    14: lambda t, r: bool(re.search(r"\b(tiers?|with[- ]ads|ad-?(?:free|supported|lite)|mobile|smart ?tv|devices?|app[- ]only|desktop|ios|android|connected tv|ctv|premium|basic plan|plan|bundle)\b", t, re.I)),
+    15: lambda t, r: bool(_PLATFORM_RX.search(t)) or bool(re.search(r"\b(cut by|users?|members?|subscribers?|customers?|buyers?|followers?|viewers?|shoppers?|owners?)\b|\b[A-Z][\w+']+ audience\b", t)) or bool(re.search(r"\b(cut by|users?|members?|subscribers?|customers?|buyers?|followers?|viewers?|shoppers?|owners?)\b", t, re.I)),
+}
+# schema fields that only mean something when their guard or section survives
+_FIELDS_BY_GUARD = {1: ('exclusions',), 2: ('universe_mode', 'universe_note'), 3: ('universe_mode', 'universe_note'),
+                    10: ('intensity_note',), 11: ('user_supplied_anchor',), 14: ('scope_note',)}
+_FIELDS_BY_SECTION = {'SUBSCRIBER IQ REQUESTS': ('subiq',), 'EVENT-SCOPED WINDOWS': ('event_window',),
+                      "KIDS' PRODUCTS": ('kids_product',), 'PLATFORM SCOPE': ('platform_scope',),
+                      'SUBJECT IDENTITY RESOLUTION': ('identity_note', 'identity_qualifier', 'identity_versions'),
+                      'PARENT-SELECTION TIEBREAK': ('existing_match_s3_key', 'existing_match_display_name', 'existing_match_days_old', 'refresh_row_hypothesis')}
+_IP_FIELDS = ('ip_scope', 'consumer_verb', 'seed_source', 'content_show', 'franchise_titles', 'consumers_sample_fraction')
+_GUARD_RX = re.compile(r"(?ms)^  (\d{1,2})\. [A-Z].*?(?=^  \d{1,2}\. [A-Z]|\Z)")
+_GUARD_REF_RX = re.compile(r"\s*//\s*see SEMANTIC GUARDS #[\d-]+")
+
+
+def _flags(r):
+    return set((r or {}).get('flags') or []) if isinstance(r, dict) else set()
+
+
+def _alias_subject(r):
+    """The reading mapped what was written onto a differently named library
+    subject: the alias guard applies."""
+    for s in ((r or {}).get('subjects') or []) if isinstance(r, dict) else []:
+        a, c = str(s.get('as_written') or '').lower(), str(s.get('catalog') or '').lower()
+        if a and c and a not in c and c not in a:
+            return True
+    return False
+
+
+def _only_entities(r):
+    """A confident reading whose every subject is a person or a brand: the
+    title / franchise fields of the schema cannot apply."""
+    if not isinstance(r, dict) or float(r.get('confidence') or 0) < 0.9:
+        return False
+    subs = r.get('subjects') or []
+    return bool(subs) and all(str(s.get('kind') or '') in ('person', 'brand') for s in subs)
+
+
+def prune_semantic_guards(section, text, reading=None):
+    """Keep only the numbered guards whose phrasing family the ask carries.
+    Returns (section_text, dropped_guard_numbers); an empty section_text
+    means every guard went and the heading should go with them."""
+    kept, dropped = [], []
+    body_start = None
+    for m in _GUARD_RX.finditer(section):
+        if body_start is None:
+            body_start = m.start()
+        n = int(m.group(1))
+        test = GUARD_TRIGGERS.get(n)
+        if test is None or test(text, reading):
+            kept.append(m.group(0))
+        else:
+            dropped.append(n)
+    if body_start is None or not dropped:
+        return section, []
+    if not kept:
+        return '', dropped
+    head = section[:body_start]
+    out = head + ''.join(kept)
+    if not out.endswith('\n\n'):
+        out = out.rstrip('\n') + '\n\n'
+    return out, dropped
+
+
+def prune_decision_logic(section):
+    """With no catalog candidate, existing_match / time_shifted_refresh /
+    derive_cut cannot be chosen: keep the two reachable branches and say
+    why the others are absent."""
+    i = section.find('  * existing_match:')
+    j = section.find('  * cut_needs_parent:')
+    if i < 0 or j < 0 or j < i:
+        return section
+    k = section.find('\n\nIMPORTANT: an ask like')
+    tail = section[j:k] if k > j else section[j:]
+    note = ("  * (no catalog candidate matched this ask, so existing_match, "
+            "time_shifted_refresh and derive_cut do not apply here)\n")
+    return section[:i] + tail.rstrip('\n') + '\n' + note + '\n'
+
+
+def prune_output_shape(section, fields, guards_gone=False, gone_sections=(), dropped_guards=()):
+    """Drop the schema lines (or blocks) for the given field names; a block
+    runs from its line to the next field line or the closing brace. Cross
+    references into guards and sections that went are removed with them."""
+    out = section
+    for f in dict.fromkeys(fields):
+        if f == 'addon_cuts':
+            out = re.sub(r'(?ms)^  "addon_cuts": \[\n.*?^  \],\n', '  "addon_cuts": [],\n', out, count=1)
+            continue
+        out = re.sub(r'(?ms)^  "%s":.*?(?=^  "|^\}$)' % re.escape(f), '', out, count=1)
+    gone = set(dropped_guards or ())
+
+    def _ref_gone(m):
+        nums = [int(x) for x in re.findall(r"\d+", m.group(0))]
+        if len(nums) == 2 and '-' in m.group(0):
+            nums = list(range(nums[0], nums[1] + 1))
+        return '' if guards_gone or (nums and all(n in gone for n in nums)) else m.group(0)
+    out = _GUARD_REF_RX.sub(_ref_gone, out)
+    if guards_gone or 15 in gone:
+        out = re.sub(r"\s*See rule 15\.", '', out)
+    for name in gone_sections:
+        if name in ('SUBJECT IDENTITY RESOLUTION', 'SUBJECT VERIFICATION', 'PLATFORM SCOPE', "KIDS' PRODUCTS", 'EVENT-SCOPED WINDOWS', 'SUBSCRIBER IQ REQUESTS'):
+            out = re.sub(r" \(see %s\)|; see %s\b|\s*-\s*see %s\b|\bsee %s: " % ((re.escape(name),) * 4), '', out)
+    return re.sub(r',\n\}', '\n}', out, count=1)
+
+
+def _schema_fields_to_drop(text, candidates, reading, dropped_sections, dropped_guards):
+    fields = []
+    for sec in dropped_sections:
+        fields.extend(_FIELDS_BY_SECTION.get(sec, ()))
+    for g in dropped_guards:
+        fields.extend(_FIELDS_BY_GUARD.get(g, ()))
+    if 2 in dropped_guards and 3 not in dropped_guards or 3 in dropped_guards and 2 not in dropped_guards:
+        fields = [f for f in fields if f not in ('universe_mode', 'universe_note')]
+    if not candidates and 'PARENT-SELECTION TIEBREAK' not in dropped_sections:
+        fields.extend(_FIELDS_BY_SECTION['PARENT-SELECTION TIEBREAK'])
+    if not (_PLATFORM_RX.search(text) or re.search(r"\b(buyers?|renters?|switchers?|cancel\w*|customers?|members?|subscribers?|users?|shoppers?|owners?|purchas\w*)\b", text, re.I)) \
+            and not any(str(s.get('kind') or '') in ('audience', 'platform') for s in ((reading or {}).get('subjects') or []) if isinstance(reading, dict)):
+        fields.append('clickstream_signals')
+    if not (_GENDER_RX.search(text) or _AGE_RX.search(text) or _GEO_RX.search(text) or re.search(r"\b(cut|split|by)\b", text, re.I)):
+        fields.append('addon_cuts')
+    if _only_entities(reading):
+        fields.extend(_IP_FIELDS)
+    return fields
 
 
 def _subject_resolved(reading):
@@ -83,7 +245,8 @@ def prune_rulebook(system_prompt, text, candidates=None, reading=None):
         if len(starts) < 6:
             return s, []
         starts.append(len(s))
-        out, dropped = [], []
+        out, dropped, dropped_guards = [], [], []
+        shape_at = None
         pos = 0
         for a, b in zip(starts, starts[1:]):
             if a > pos:
@@ -97,15 +260,33 @@ def prune_rulebook(system_prompt, text, candidates=None, reading=None):
                     if not keep:
                         dropped.append(key)
                     break
+            if keep and head.startswith('SEMANTIC GUARDS'):
+                sec, dropped_guards = prune_semantic_guards(sec, t, reading)
+                if not sec:
+                    keep = False
+                    dropped.append('SEMANTIC GUARDS')
+            elif keep and head.startswith('DECISION LOGIC') and not candidates:
+                sec = prune_decision_logic(sec)
+                if sec != s[a:b]:
+                    dropped.append('DECISION LOGIC: candidate branches')
             if keep:
+                if head.startswith('OUTPUT SHAPE'):
+                    shape_at = len(out)
                 out.append(sec)
             pos = b
         if pos < len(s):
             out.append(s[pos:])
+        if shape_at is not None:
+            fields = _schema_fields_to_drop(t, candidates, reading, dropped, dropped_guards)
+            if fields:
+                out[shape_at] = prune_output_shape(out[shape_at], fields, guards_gone='SEMANTIC GUARDS' in dropped, gone_sections=dropped, dropped_guards=dropped_guards)
+                dropped.append('OUTPUT SHAPE: ' + ', '.join(dict.fromkeys(fields)))
+        if dropped_guards:
+            dropped.append('SEMANTIC GUARDS #' + ','.join(str(n) for n in dropped_guards))
         pruned = ''.join(out)
-        # never prune away more than half (70% with a confident reading); something is off with the split
-        floor = 0.3 if isinstance(reading, dict) and reading.get('intent') else 0.5
-        if len(pruned) < len(s) * floor:
+        # a broken split shows as a missing landmark or an implausibly small remainder
+        floor = 0.2 if isinstance(reading, dict) and reading.get('intent') else 0.3
+        if len(pruned) < len(s) * floor or not all(k in pruned for k in ('OUTPUT SHAPE', '"decision"', 'DECISION LOGIC', '\n}\n') if k in s):
             return s, []
         return pruned, dropped
     except Exception:
@@ -174,10 +355,27 @@ _PRODUCT_WORDS = (
 )
 
 
+_POLITE_ORDER_RX = re.compile(r"^\W*(?:can|could|would) (?:you|we|crosswalk|prometheus) (?:please )?(?:build|make|create|run|pull|draft|generate|put together|give|send|get|do|show|set up|start|spin up|prepare|kick off)\b(?: (?:me|us))?", re.I)
+
+
+def polite_order(text):
+    """'Can you build me a Nike profile' is an order with manners, not a
+    question about what we can do: 'me' / 'us' after the verb, or a named
+    subject (a capitalised word past the opening) marks it."""
+    t = ' '.join(str(text or '').split())
+    m = _POLITE_ORDER_RX.match(t)
+    if not m:
+        return False
+    if re.search(r"\b(me|us)\b", m.group(0), re.I):
+        return True
+    rest = t[m.end():]
+    return bool(re.search(r"\b[A-Z][\w'&.+-]+", rest))
+
+
 def capability_ask(text):
     """{'reply', 'followups'} for a can-we / is-there-a-way ask, or None."""
     t = ' '.join(str(text or '').split())
-    if not t or not _CAPABILITY_RX.match(t):
+    if not t or not _CAPABILITY_RX.match(t) or polite_order(t):
         return None
     hits = [(name, what, chip) for rx, name, what, chip in _PRODUCT_WORDS if rx.search(t)]
     if not hits:

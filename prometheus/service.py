@@ -672,7 +672,7 @@ def ask(user, body, *, via='session'):
             if _tr:
                 _sm_raw, _sm_reason = {'success': True, 'action': 'answer', 'reply': _tr['reply'],
                                        'followups': _tr.get('followups') or [], 'offer_deck': False, 'deck_angle': None}, 'thread_replay'
-            elif _sm.capability_ask(text):
+            elif _sm.capability_ask(text) and not _reading_overrules(reading, 'capability'):
                 _cap = _sm.capability_ask(text)
                 _sm_raw, _sm_reason = {'success': True, 'action': 'answer', 'reply': _cap['reply'], 'followups': _cap['followups'],
                                        'offer_deck': False, 'deck_angle': None}, 'capability'
@@ -1074,7 +1074,9 @@ def _execute_reading(reading, text, ctx, history, user, uname, body, tid, via, p
     if _rd.refers_to_page(reading) and page:
         subs = [page] + [x for x in subs if x.lower() not in ('<page>', 'this', 'that', 'it')]
     if intent == 'size':
-        from . import sizing_lane as _szl
+        from . import sizing_lane as _szl, guards as _g
+        if _g.is_sample_size_ask(text) or not subs or all(_szl.is_panel_noun(s) for s in subs):
+            return None     # the panel itself ("how many panelists do you have"): the sample-size answer says 10 million
         _pg.say('Sizing ' + (' and '.join(subs[:3]) if subs else 'the audience'))
         raw = _szl.answer(text, ctx, host=host, history=history, subjects=subs or None)
         reason = 'sizing'
@@ -1125,6 +1127,17 @@ def _execute_reading(reading, text, ctx, history, user, uname, body, tid, via, p
     env = envelope.wrap(out, surface='analyze', decision=decision, thread_id=tid, via=via)
     _persist_turn(persist, uname, tid, history, text, env, out, 'analyze')
     return env, 200
+
+
+def _reading_overrules(reading, lane_intent):
+    """A confident reading that names a different intent beats a phrasing
+    lane (2026-10-14: 'can you build me a Nike profile' read build_profile
+    at 0.9 and the capability lane still answered)."""
+    try:
+        return isinstance(reading, dict) and float(reading.get('confidence') or 0) >= 0.7 \
+            and bool(reading.get('intent')) and str(reading.get('intent')) != lane_intent
+    except Exception:
+        return False
 
 
 def _last_turn_offered(history):

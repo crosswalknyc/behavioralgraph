@@ -120,6 +120,16 @@ def _clean(phrase):
     return p.strip(' ?.!,;:"\'')
 
 
+_PANEL_NOUN_RX = re.compile(r"^(?:the |our |your |all |total )*(?:panelists?|respondents?|people|users|individuals|members|consumers|folks|sample|panel|data|data ?set|audience)(?: in (?:the |your |our )?(?:sample|panel|data ?set|data))?$", re.I)
+
+
+def is_panel_noun(phrase):
+    """'panelists', 'people in the panel', 'the sample': the panel itself,
+    not an audience inside it."""
+    low = ' '.join(str(phrase or '').lower().split())
+    return _is_panel_self(low) or bool(_PANEL_NOUN_RX.match(low))
+
+
 def _is_panel_self(phrase):
     low = ' '.join(str(phrase or '').lower().replace('teh ', 'the ').split())
     if low in PANEL_SELF:

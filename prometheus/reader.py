@@ -116,6 +116,8 @@ SEED_EXAMPLES = [
     {"text": "any boxers?", "intent": "exists", "subjects": ["boxers"], "note": "follow-up to a library lookup"},
     {"text": "Do you see the SWAT Exiles Season 1 Subscriber IQ?", "intent": "exists", "subjects": ["S.W.A.T. Exiles Season 1"], "note": "drafted a duplicate tracker"},
     {"text": "what is the size of teh Crosswalk sample audience from January 1, 2026 to date", "intent": "definition", "subjects": [], "note": "the ten million panel itself, not an audience"},
+    {"text": "how many panelists do you have", "intent": "definition", "subjects": [], "note": "the panel itself, ten million; never a sizing of an audience called panelists"},
+    {"text": "how big is your panel", "intent": "definition", "subjects": [], "note": "the panel itself"},
     {"text": "I don't see No Reservations - only Babylon 5 and have not received an email yet", "intent": "status", "subjects": ["Anthony Bourdain No Reservations"], "note": "Carolyn: drew a clarifier"},
     {"text": "is the Gunna profile done?", "intent": "status", "subjects": ["Gunna"], "note": ""},
     {"text": "where is the howdy deck", "intent": "command", "subjects": ["Howdy"], "note": "a named artifact; the deliverable lane"},

@@ -94,6 +94,29 @@ def _minutes_since(ts):
         return None
 
 
+_DOC_CACHE = {}       # key -> (etag, doc); a status ask re-reads only what changed
+_DOC_CACHE_MAX = 3000
+
+
+def _doc(s3, bucket, obj):
+    key = obj.get('Key')
+    etag = str(obj.get('ETag') or '') or (str(obj.get('LastModified')) if obj.get('LastModified') else '')
+    hit = _DOC_CACHE.get(key) if etag else None
+    if hit and hit[0] == etag:
+        return hit[1]
+    try:
+        doc = json.loads(s3.get_object(Bucket=bucket, Key=key)['Body'].read())
+    except Exception:
+        return None
+    if not isinstance(doc, dict):
+        return None
+    if etag:                      # no version marker (a fake store): never cache
+        if len(_DOC_CACHE) >= _DOC_CACHE_MAX:
+            _DOC_CACHE.clear()
+        _DOC_CACHE[key] = (etag, doc)
+    return doc
+
+
 def _job_items(host, uname, days=7):
     """The caller's jobs across every job store, newest first."""
     items = []
@@ -122,14 +145,16 @@ def _job_items(host, uname, days=7):
                         continue
                 except Exception:
                     pass
-                try:
-                    doc = json.loads(s3.get_object(Bucket=bucket, Key=o['Key'])['Body'].read())
-                except Exception:
+                doc = _doc(s3, bucket, o)
+                if doc is None:
                     continue
                 if str(doc.get('user') or '').lower() != str(uname or '').lower():
                     continue
+                if str(doc.get('final_reason') or '') == 'requester not found':
+                    continue        # nobody to report it to (a probe identity with no seat)
                 items.append({'kind': jtype, 'status': str(doc.get('status') or 'running').lower(),
-                              'subject': doc.get('subject') or doc.get('project_name') or doc.get('title') or '',
+                              'subject': doc.get('subject') or doc.get('project_name') or doc.get('title')
+                              or (('"' + str(doc.get('question'))[:80].rstrip() + '"') if doc.get('question') else ''),
                               'started': doc.get('started_at') or doc.get('created_at'),
                               'finished': doc.get('finished_at'), 'key': doc.get('s3_key') or doc.get('slug') or '',
                               'ready_message': doc.get('ready_message') or '', 'job_id': doc.get('job_id')})
@@ -253,7 +278,7 @@ def answer(text, uname, *, host, user=None, history=None):
                      + (f" The email went to {em.get('to')}." if em.get('sent') else ''))
     if not lines:
         return None
-    reply = '\n\n'.join(lines)
+    reply = '\n\n'.join(dict.fromkeys(lines))      # three failed copies of one read say it once
     followups = []
     if any(it.get('status') not in ('done', 'complete', 'completed', 'ready', 'error', 'failed') for it in picked):
         followups.append('Email me when it lands')
