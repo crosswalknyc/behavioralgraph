@@ -293,13 +293,91 @@ def recall_notes(user, k=8):
     return out
 
 
-def notes_block(user, k=8):
-    """Prompt block for the who-is-asking section, '' when none."""
-    notes = recall_notes(user, k=k)
-    if not notes:
+# Standing preferences (2026-10-13 audit). A reader who says "always",
+# "from now on", "going forward", "every time", "I prefer", "never ... me"
+# is setting a rule for every later answer and deliverable, not giving a
+# one-time instruction. Captured without a model call, kept without
+# expiry, shown first in the who-is-asking block as rules to follow.
+_PREF_RX = re.compile(
+    r"(?:^|[.;,]\s*)((?:please\s+)?(?:always|never|from now on|going forward|every time|each time|whenever|"
+    r"in (?:the )?future|by default|i (?:always )?prefer|i'd prefer|i would prefer|don't ever|do not ever|stop (?:adding|sending|including|asking))"
+    r"[^.;\n]{6,160})", re.I)
+_PREF_MAX = 12
+
+
+def extract_preferences(text):
+    """Standing-rule sentences in a message, cleaned, no figures required."""
+    out = []
+    for m in _PREF_RX.finditer(str(text or '')):
+        t = ' '.join(m.group(1).split()).strip(' .;,')
+        if len(t) < 12 or re.search(r'\?$', t):
+            continue
+        if re.match(r'(?i)^(?:always|never)\s+(?:a|an|the)\b', t) and len(t.split()) < 5:
+            continue
+        out.append(t[0].upper() + t[1:] + '.')
+    return out[:3]
+
+
+def capture_preferences(user, text):
+    """Store any standing preferences in the message. Returns the list kept."""
+    prefs = extract_preferences(text)
+    if not (user and prefs):
+        return []
+    try:
+        import prometheus_memory as pmm
+    except Exception:
+        return []
+    now = time.time()
+
+    def _mut(doc):
+        doc = doc if isinstance(doc, dict) else {}
+        cur = [x for x in (doc.get('preferences') or []) if isinstance(x, dict)]
+        have = {str(x.get('text') or '').casefold() for x in cur}
+        new = [{'text': p[:200], 'ts': now} for p in prefs if p.casefold() not in have]
+        doc['preferences'] = (new + cur)[:_PREF_MAX]
+        return doc
+    try:
+        pmm._update(user, _mut)
+        return prefs
+    except Exception:
+        return []
+
+
+def recall_preferences(user, k=_PREF_MAX):
+    try:
+        import prometheus_memory as pmm
+        doc, _etag = pmm._read_with_etag(user)
+    except Exception:
+        return []
+    out = []
+    for x in (doc or {}).get('preferences') or []:
+        if isinstance(x, dict) and str(x.get('text') or '').strip():
+            out.append(str(x['text']))
+        if len(out) >= k:
+            break
+    return out
+
+
+def preferences_block(user):
+    prefs = recall_preferences(user)
+    if not prefs:
         return ''
-    return 'ABOUT THIS READER (private notes from earlier conversations; tone and defaults only, never echoed):\n' + \
-        '\n'.join(f'- {n}' for n in notes)
+    return ('STANDING PREFERENCES FROM THIS READER (rules; follow them on every answer and every file, '
+            'without repeating them back):\n' + '\n'.join(f'- {p}' for p in prefs))
+
+
+def notes_block(user, k=8):
+    """Prompt block for the who-is-asking section, '' when none.
+    Standing preferences lead; private notes follow."""
+    parts = []
+    pb = preferences_block(user)
+    if pb:
+        parts.append(pb)
+    notes = recall_notes(user, k=k)
+    if notes:
+        parts.append('ABOUT THIS READER (private notes from earlier conversations; tone and defaults only, never echoed):\n' +
+                     '\n'.join(f'- {n}' for n in notes))
+    return '\n\n'.join(parts)
 
 
 def after_answer(il, claude, *, user, question, reply, subject='', followups=None,

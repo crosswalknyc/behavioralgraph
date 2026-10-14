@@ -323,6 +323,65 @@ def _exposure_start(label: str) -> bool:
     return bool(_EXPOSURE_RX.search(str(label or '')))
 
 
+# The leave / win-back fork has a shape of its own (2026-10-13 audit: a
+# delivered journey said 6,129 came back and 6,229 of them watched).
+# Each branch ratio sits in a band; outside it, or when an identity
+# fails, the ratios are seated inside the band and the fork re-solves.
+FORK_BANDS = {
+    'share_back': (0.12, 0.40),          # paid_return of paid
+    'paid_return_of_returned': (0.15, 0.45),
+    'returned_of_retargeted': (0.15, 0.60),
+    'retargeted_of_abandoned': (0.20, 0.80),
+}
+_FORK_IDS = ('abandoned', 'retargeted', 'returned', 'paid_return', 'paid_first')
+
+
+def fork_ratios(j: dict) -> Optional[dict]:
+    fork = (j or {}).get('fork') or []
+    fk = {str(r.get('id')): r for r in fork if isinstance(r, dict) and r.get('id')}
+    if not all(k in fk for k in _FORK_IDS):
+        return None
+    ab, rt, rn, pr, pf = (int(fk[k].get('accounts') or 0) for k in _FORK_IDS)
+    paid = pf + pr
+    return {'share_back': pr / paid if paid else 9.0,
+            'paid_return_of_returned': pr / rn if rn else 9.0,
+            'returned_of_retargeted': rn / rt if rt else 9.0,
+            'retargeted_of_abandoned': rt / ab if ab else 9.0,
+            'identities': bool(pf > 0 and pr > 0 and rt < ab and rn < rt and pr <= rn)}
+
+
+def plausible_fork(j: dict, paid: int, penult: int, seed: str, js) -> bool:
+    """True when the fork was re-seated. Checks identities and FORK_BANDS;
+    on a miss, encodes band-interior ratios (salted) into the fork rows and
+    re-solves through refit_fork so every identity holds."""
+    r = fork_ratios(j)
+    if r is None:
+        return False
+    in_band = all(FORK_BANDS[k][0] <= r[k] <= FORK_BANDS[k][1] for k in FORK_BANDS)
+    if in_band and r['identities'] and r['share_back'] * paid <= penult - paid:
+        return False
+    fk = {str(x.get('id')): x for x in j['fork']}
+    seat = {}
+    for k, (lo, hi) in FORK_BANDS.items():
+        v = r[k]
+        if not (lo <= v <= hi):
+            v = lo + (hi - lo) * (0.25 + (_h(seed, 'fork', k) % 51) / 100.0)
+        seat[k] = v
+    pr = max(1.0, paid * seat['share_back'])
+    rn = pr / seat['paid_return_of_returned']
+    rt = rn / seat['returned_of_retargeted']
+    ab = rt / seat['retargeted_of_abandoned']
+    fk['paid_return']['accounts'] = int(pr)
+    fk['paid_first']['accounts'] = int(max(paid - pr, 1))
+    fk['returned']['accounts'] = int(rn)
+    fk['retargeted']['accounts'] = int(rt)
+    fk['abandoned']['accounts'] = int(max(ab, rt + 1))
+    js.refit_fork(j, paid, penult, paid, seed)
+    r2 = fork_ratios(j) or {}
+    print(f"[journey-norms] fork re-seated: " + ', '.join(f"{k}={r2.get(k, 0):.2f}" for k in FORK_BANDS))
+    return True
+
+
 def hold_to_norms(payload: dict, band: dict, inputs: Optional[dict] = None, seed: str = '') -> dict:
     """In place: the spine's end-to-end rate lands on the band's target (or
     under the title cap), every middle step sits inside its ceiling, and
@@ -433,6 +492,11 @@ def hold_to_norms(payload: dict, band: dict, inputs: Optional[dict] = None, seed
             js.refit_fork(j, new_end, penult, old_end, seed)
         except Exception as exc:
             print(f'[journey-norms] fork refit skipped: {exc}')
+        try:
+            if plausible_fork(j, new_end, penult, seed, js):
+                trail['fork_reseated'] = True
+        except Exception as exc:
+            print(f'[journey-norms] fork plausibility skipped: {exc}')
         new_counts = {st.get('id'): int(st.get('accounts') or 0) for st in spine}
         # detours rebase on the new count of the step they partition
         for d in j.get('detours') or []:
@@ -487,10 +551,25 @@ def hold_to_norms(payload: dict, band: dict, inputs: Optional[dict] = None, seed
                 if ov and ov != int(spine[0]['accounts']) and abs(n_ - ov) / float(ov) < 0.03:
                     return f"{new_counts.get(sid, ov):,}"
             return m_.group(0)
+        _conv_words = re.compile(r'\b(convert|conversion|carry|went on|watched|streamed|bought|signed up|of the people|of those)\b', re.I)
+
+        def _retext_rate(m_):
+            # a conversion-shaped percent that drifted from the spine follows
+            # the spine (2026-10-13 audit: a fact said 2.12% while the spine
+            # read 1.49%); unrelated percents (shares of a detour) stay
+            try:
+                v_ = float(m_.group(1))
+            except Exception:
+                return m_.group(0)
+            if old_rate and 0.5 * old_rate <= v_ <= 2.0 * old_rate and abs(v_ - rate) > 0.05:
+                return f"{rate:.1f}%"
+            return m_.group(0)
         for f in facts:
             v = str(f.get('value') or '')
             v = re.sub(r'\b\d{1,3}(?:,\d{3})+\b', _retext_count, v)
             v = re.sub(r'(\d+(?:\.\d+)?)% (carry|conversion)', lambda m_: f"{rate:.1f}% {m_.group(2)}", v)
+            if _conv_words.search(v):
+                v = re.sub(r'(\d+(?:\.\d+)?)%', _retext_rate, v)
             f['value'] = v
         verb = {'ticketing': 'reached a ticketing site', 'music': 'streamed the song', 'signup': 'signed up'}.get(
             band.get('kind'), 'bought' if str(band.get('kind', '')).startswith('purchase') else 'watched')

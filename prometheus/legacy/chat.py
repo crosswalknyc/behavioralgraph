@@ -22,6 +22,7 @@ import csv
 import threading
 import traceback
 import re
+from prometheus import smarter as _smart   # 2026-10-13 audit helpers
 import io
 import hashlib
 import time
@@ -2596,8 +2597,7 @@ def _synth_chat_interpret_batch(user_text: str, subjects: list,
         bool((r.get('spec_draft') or {}).get('date_range_explicit'))
         for r in ok_drafts
     )
-    needs_date_clarification = bool(ok_drafts) and not (
-        user_explicit or claude_explicit)
+    needs_date_clarification = False   # the batch card lists the window too (2026-10-13 audit)
     _dr0 = {}
     if ok_drafts:
         _dr0 = (ok_drafts[0].get('spec_draft') or {}).get('date_range') or {}
@@ -6132,9 +6132,7 @@ def _pm_interpret_core(user, body, text, history):
             text, chat_history=history, master_categories=MASTER_CATEGORIES,
             candidate_matches=candidates,
         )
-        # 32k ceiling + array salvage (2026-08-20): rule 7 lets this
-        # call return a multi-spec ARRAY, which needs far more than
-        # 8192 output tokens and must survive truncation.
+        system_prompt, _dropped = _smart.prune_rulebook(system_prompt, text, candidates)   # rulebook pruned per ask (2026-10-13)
         _pm_ask_stage('interpret_prep', t0=_t_prep)
         _t_model = time.monotonic()
         # Subject verification runs alongside the draft model for the
@@ -6144,7 +6142,7 @@ def _pm_interpret_core(user, body, text, history):
         result = _H._run_nflx_claude_agent(
             system_prompt=system_prompt,
             user_prompt=user_prompt,
-            max_tokens=16000, temperature=0.4,
+            max_tokens=_smart.draft_output_ceiling(text), temperature=0.4,
             model=_SYNTH_CHAT_INTERPRET_MODEL,
             salvage_arrays=True,
         )
@@ -6575,7 +6573,7 @@ def _pm_interpret_core(user, body, text, history):
         # dashboard chatbot only.
         claude_explicit = bool(spec_draft.get('date_range_explicit'))
         user_explicit = _H._user_specified_dates(text, chat_history=history)
-        needs_date_clarification = not (claude_explicit or user_explicit)
+        needs_date_clarification = False   # default window is the rule; the card shows it (2026-10-13 audit)
         # Reuse/derive decisions ship the parent file's window - asking
         # which window to use is noise (2026-08-20 Spider-Man TVOD ask
         # got a window question on a 3-credit derive).
@@ -8136,9 +8134,10 @@ def _pm_rescue_unverified_draft(draft, usage_extras=None):
             chat_history=None,
             master_categories=MASTER_CATEGORIES,
             candidate_matches=[])
+        sys_p, _dropped2 = _smart.prune_rulebook(sys_p, text, None)
         fresh = _H._run_nflx_claude_agent(
             system_prompt=sys_p, user_prompt=usr_p,
-            max_tokens=16000, temperature=0.4,
+            max_tokens=_smart.draft_output_ceiling(text), temperature=0.4,
             model=_SYNTH_CHAT_INTERPRET_MODEL,
             usage_tag=('interpret', 'approve-rescue', None))
         fd = (fresh or {}).get('data') or {}
@@ -9469,6 +9468,7 @@ def _pm_prior_journey_shape(title, user=None):
     except Exception:
         traceback.print_exc()
         return None
+
 
 
 def _pm_intake_fault_payload():
@@ -11646,6 +11646,12 @@ def _pm_open_screen_confirm(text, ctx, history=None):
         # The reader said answer now: the thing on their screen is
         # the answer's base, stated in the reply with the other file
         # as a switch chip. No third question (2026-10-02 S5).
+        verdict = 'page'
+    if verdict == 'confirm' and any(
+            str(t.get('role') or '') != 'user' and str(t.get('text') or t.get('content') or '').startswith(f'Do you want this on {page}')
+            for t in (history or [])):
+        # never twice in a thread (2026-10-13 audit); asked once, the page is the base
+        _pm_ask_hint(route='screen_bind', outcome='bound_after_one_confirm', subject=page)
         verdict = 'page'
     if verdict == 'page':
         _pm_ask_hint(route='screen_bind', outcome='bound_screen',
@@ -15153,7 +15159,8 @@ def _pm_analyze_core(user, body, text, history):
     # bare "approved" / "run it" on a dashboard view is not an
     # analysis ask. Skipped when this chat just asked a question, so
     # a reply to that question still lands where it belongs.
-    if _pm_approval_word(text) and not _pm_last_agent_asked(history):
+    if _pm_approval_word(text) and not _pm_last_agent_asked(history) \
+            and not _smart.rearm_brief_from_thread(body, history, user, _pm_usage_extras(user), _PM_INTAKE_UI, _pm_intake_turn):
         _pm_ask_hint(route='command', outcome='approve_without_draft')
         return jsonify({
             'success': True, 'action': 'answer',
@@ -16680,7 +16687,7 @@ def _pm_run_bpiq_job(job_id, username, inputs, extras):
             'job_id': job_id, 'user': username, 'status': 'running',
             'subject': f"{inputs['qualifier']} x "
                        f"{inputs['brand_partner']}",
-            'started_at': time.time()})
+            'started_at': time.time(), 'inputs': _smart.jsonable(inputs)})
         tools = None
         try:
             import prometheus_analysis as _pma_b
@@ -16942,7 +16949,7 @@ def _pm_run_jiq_job(job_id, username, inputs, extras):
         subj = f"{inputs['subject']} on {inputs['platform']}"
         _pm_jiq_status_write(job_id, {
             'job_id': job_id, 'user': username, 'status': 'running',
-            'subject': subj, 'started_at': time.time()})
+            'subject': subj, 'started_at': time.time(), 'inputs': _smart.jsonable(inputs)})
         tools = None
         try:
             import prometheus_analysis as _pma_j
@@ -17145,7 +17152,7 @@ def _pm_run_fw_job(job_id, username, inputs, extras):
         subj = f"{inputs['subject']} {inputs['ecosystem']} flywheel"
         _pm_fw_status_write(job_id, {
             'job_id': job_id, 'user': username, 'status': 'running',
-            'subject': subj, 'started_at': time.time()})
+            'subject': subj, 'started_at': time.time(), 'inputs': _smart.jsonable(inputs)})
         tools = None
         try:
             import prometheus_analysis as _pma_f
@@ -17349,7 +17356,7 @@ def _pm_run_aiq_job(job_id, username, inputs, extras):
         name = str(inputs.get('campaign_name') or 'Campaign')
         _pm_aiq_status_write(job_id, {
             'job_id': job_id, 'user': username, 'status': 'running',
-            'subject': name, 'started_at': time.time()})
+            'subject': name, 'started_at': time.time(), 'inputs': _smart.jsonable(inputs)})
         out = build_campaign(inputs, requested_by=username,
                              s3_client=_H.s3_client)
         days = _pm_aiq_days(inputs)
@@ -17587,7 +17594,9 @@ def _pm_resolve_deck_subject(text, ctx):
     # thread) is the digest; the named subject, the view's subject, or the
     # view's title names the deck.
     _vc = (ctx or {}).get('view_context') if isinstance(ctx, dict) else None
-    if isinstance(_vc, dict) and (_vc.get('data') or {}) and not (ctx and ctx.get('primary')):
+    # any view with figures (data or its on-screen summary) is deck material (2026-10-13 audit)
+    if isinstance(_vc, dict) and ((_vc.get('data') or {}) or str(_vc.get('summary') or _vc.get('view_summary') or '').strip()) \
+            and not (ctx and ctx.get('primary')):
         _vsubj = (pma.resolve_subject(ctx, _vc) or str(_vc.get('view_title') or '').strip()
                   or wanted or 'this view')   # the view names the deck; a typed phrase that matched no profile does not (2026-10-13)
         return ({'ctx': {'primary': None, 'cuts': [], 'extras': [], 'view_context': _vc},
@@ -17631,6 +17640,11 @@ def _pm_resolve_deck_subject(text, ctx):
             'error': (f'"{wanted}" is not in the library yet. Open the '
                       'profile from Select Profile, or build it first, '
                       'then ask for the deck again.')}), 404)
+    if isinstance(_vc, dict) and str(_vc.get('view_title') or '').strip():   # a view with no figures: one honest line
+        return None, (jsonify({
+            'success': False, 'guidance': True,
+            'error': (f"The {str(_vc.get('view_title')).strip()} page has no figures loaded for me to put on slides yet. "
+                      "Open the read or profile you want the deck on, or name the subject, and ask again.")}), 400)
     return None, (jsonify({
         'success': False, 'guidance': True,
         'error': ('Name the subject ("build the Paige Bueckers insights '

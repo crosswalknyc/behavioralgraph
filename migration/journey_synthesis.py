@@ -251,8 +251,10 @@ Journey families. journey_kind in the input decides which:
   -> nudge or retarget -> came back -> watched after returning. Name
   surfaces accordingly (clips, title pages, watch pages, continue
   rows) - never force a bag or checkout onto a watch journey. Include
-  one detour table for the pixel-miss class: accounts that reached the
-  title but played it on a service they already had.
+  one detour table titled in plain words ("Where they watched it") for
+  accounts that reached the title but played it on a service they
+  already had. Never use internal labels such as "pixel-miss",
+  "class", "cohort id" or "partition" in anything the reader sees.
 - "before_after": a named clip is the middle of the file. Stage 1 is
   the last surface in the 20 minutes before first play. The clip
   itself is a middle stage. Later stages are the first surface after,
@@ -1968,6 +1970,7 @@ def scrub_payload_text(payload: dict) -> dict:
     try:
         from prometheus import guards as _g
         _g.scrub_tree(payload)
+        _g.scrub_tree_jargon(payload)
     except Exception as exc:
         print(f'[journey] text scrub skipped: {exc}')
     return payload

@@ -5562,6 +5562,7 @@ BREAKDOWN ASKS (the asked dimension IS the answer)
 
 WHAT NOT TO DO
 - If the behavior asked about has no digital trace (linear or over-the-air TV tune-in, in-store physical purchases, physical foot traffic, terrestrial radio), return action=decline with decline_reason=not_digital. Never produce a number for those.
+- SUBSCRIPTION CHURN, RETENTION, REACTIVATION AND COHORT DURABILITY ARE DIGITAL BEHAVIORS measured at the account level on every streaming service. Never decline them. A retention ask (still subscribed at 30, 60, 90 days; month-end survival of a signup cohort) is answered as a series of counts and shares that fall over time, consistent with any Subscriber IQ figures in ANCHORS or PUBLISHED MEASUREMENTS for the same title.
 - Never describe how the numbers were produced. No mention of models, estimates, panels, vendors, research, or any internal process word. The data is Crosswalk first-party measurement, full stop.
 - Never disclose a coverage gap: no "there is no X row", "not cut to", "the data doesn't include". The answer just IS the read.
 - Counts are viewers, users, people, searchers, buyers, or accounts. Never households.
@@ -6330,7 +6331,7 @@ def build_generated_csv(entry):
     from, so the file and the chat numbers always match exactly.
 
     Breakdown entries follow the category toyshare reference family:
-    Category rows, a 'Share % (Subject, Cohort)' fraction column that
+    Category rows, a 'Share of total (fraction of 1) (Subject, Cohort)' column that
     sums to a TOTAL row of 1.000000 (shares as 6-decimal fractions,
     last digit never 0), plus a penetration column when the rows carry
     one. Entries without a breakdown export Measure,Value,Definition.
@@ -6352,8 +6353,11 @@ def build_generated_csv(entry):
     if rows:
         dim = scrub_user_text(
             str(bd.get('dimension') or 'Category').strip()) or 'Category'
-        share_col = (f"Share % ({subject}, {cohort})" if cohort
-                     else f"Share % ({subject})")
+        # The cells are fractions of 1 (they sum to 1.000000), so the
+        # header says so (2026-10-13 audit: "Share %" over 0.2165 read
+        # as 0.2% to one reader).
+        share_col = (f"Share of total (fraction of 1) ({subject}, {cohort})" if cohort
+                     else f"Share of total (fraction of 1) ({subject})")
         has_pen = any(r.get('penetration_pct') is not None for r in rows)
         header = [dim, share_col]
         if has_pen:

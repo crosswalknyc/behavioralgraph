@@ -1022,6 +1022,52 @@ _SCRUB_SKIP_KEYS = frozenset((
 ))
 
 
+# Deliverable jargon (2026-10-13 audit): labels the engine coins for
+# itself must never reach a reader. Plain words, same meaning.
+_JARGON_SUBS = (
+    (re.compile(r'\bpixel[- ]miss(?:es|ed)?(?: class| cohort)?\b', re.I), 'watched on a service they already had'),
+    (re.compile(r'\b(?:the )?pixel[- ]miss(?:ed)? (?:class|group|cohort)\b', re.I), 'people who watched on a service they already had'),
+    (re.compile(r'\bcohort[- ]id\b', re.I), 'group'),
+    (re.compile(r'\bthe (\w+) partition\b', re.I), r'the \1 split'),
+    (re.compile(r'\bpartitioned\b', re.I), 'split'),
+    (re.compile(r'\bdeduped?\b', re.I), 'counted once'),
+    (re.compile(r'\bnon-?converters?\b', re.I), 'people who did not watch'),
+    (re.compile(r'\bconverters?\b', re.I), 'people who watched'),
+    (re.compile(r'\bterminal (?:step|stage|event)\b', re.I), 'last step'),
+    (re.compile(r'\bpenultimate (?:step|stage)\b', re.I), 'step before last'),
+)
+
+
+def scrub_jargon(text):
+    x = str(text or '')
+    for rx, rep in _JARGON_SUBS:
+        x = rx.sub(rep, x)
+    return x
+
+
+def scrub_tree_jargon(obj, skip_keys=_SCRUB_SKIP_KEYS, _depth=0):
+    """Plain-word pass over every reader-visible string in a payload."""
+    if _depth > 12:
+        return obj
+    if isinstance(obj, dict):
+        for k, v in list(obj.items()):
+            if str(k) in skip_keys or str(k).startswith('_') or str(k) in ('id', 'url', 'clip_url', 's3_key', 'slug'):
+                continue
+            if isinstance(v, str):
+                if v.strip() and not v.startswith(('http://', 'https://', 's3://')):
+                    obj[k] = scrub_jargon(v)
+            elif isinstance(v, (dict, list)):
+                scrub_tree_jargon(v, skip_keys, _depth + 1)
+    elif isinstance(obj, list):
+        for i, v in enumerate(obj):
+            if isinstance(v, str):
+                if v.strip() and not v.startswith(('http://', 'https://', 's3://')):
+                    obj[i] = scrub_jargon(v)
+            elif isinstance(v, (dict, list)):
+                scrub_tree_jargon(v, skip_keys, _depth + 1)
+    return obj
+
+
 def scrub_tree(obj, skip_keys=_SCRUB_SKIP_KEYS, _depth=0):
     """Apply the full user-text scrub (internal vocabulary + method
     language) to every string in a payload, in place. Keys that carry

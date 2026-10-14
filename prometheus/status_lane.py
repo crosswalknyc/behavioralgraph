@@ -36,6 +36,18 @@ KIND_LABEL = {'jiq': 'Digital Journey', 'bpiq': 'Brand Partnership IQ read', 'ai
               'journey': 'Digital Journey', 'attribution': 'Attribution IQ campaign', 'flywheel': 'Flywheel read',
               'package': 'data package'}
 TYPICAL_MIN = {'jiq': 25, 'bpiq': 12, 'aiq': 20, 'fw': 15, 'deck': 6, 'read': 3, 'profile': 45}
+_STALE_MIN = 60
+_SWEEP_KINDS = ('jiq', 'bpiq', 'aiq', 'fw')
+
+
+def _kick_sweep(host):
+    """Run the stale-job sweeper once on a daemon thread; never blocks the answer."""
+    try:
+        import threading
+        from . import jobs_sweeper as _js
+        threading.Thread(target=_js.sweep, args=(host,), daemon=True).start()
+    except Exception:
+        traceback.print_exc()
 
 
 def wants_status(text):
@@ -217,10 +229,17 @@ def answer(text, uname, *, host, user=None, history=None):
             lines.append(line)
         elif st in ('error', 'failed'):
             lines.append(f"Your {label} for {subj} did not complete. The charge comes back to your balance automatically; tell me to run it again and I will.")
+        elif st == 'requeued':
+            lines.append(f"Your {label} for {subj} did not finish in its first hour, so I restarted it. It lands in the dashboard and in your email when it is done.")
         else:
             mins = _minutes_since(it.get('started'))
             typical = TYPICAL_MIN.get(it['kind'], 20)
-            if mins is not None and mins >= 0:
+            if mins is not None and mins >= _STALE_MIN and it['kind'] in _SWEEP_KINDS:
+                # A job past the hour is the sweeper's (2026-10-13 audit):
+                # restart it now instead of saying "still going" all day.
+                _kick_sweep(host)
+                lines.append(f"Your {label} for {subj} has run past the hour it usually takes. I am restarting it now; it lands in the dashboard and in your email when it is done.")
+            elif mins is not None and mins >= 0:
                 left = max(2, int(typical - mins)) if mins < typical else None
                 eta = (f"usually about {left} more minutes" if left else "it is running longer than usual; it is still going")
                 lines.append(f"Your {label} for {subj} is still running (started {int(mins)} minutes ago, {eta}). I will post here and email you the files the moment it lands.")

@@ -59,6 +59,14 @@ _APP_BINDINGS = {
     'bucket': 'S3_BUCKET',
     # work orders: the caller's engine runs (status lane, 2026-10-13)
     'user_runs': '_pm_user_runs',            # (user, limit=, active=, status=) -> [run docs]
+    # stale-job sweeper (2026-10-13 audit): runners + thread notes
+    'run_jiq_job': '_pm_run_jiq_job',
+    'run_bpiq_job': '_pm_run_bpiq_job',
+    'run_fw_job': '_pm_run_fw_job',
+    'run_aiq_job': '_pm_run_aiq_job',
+    'thread_for_job': '_pm_thread_for_job',
+    'load_thread': '_pm_load_thread_or_active',
+    'save_thread': '_pm_save_thread_or_active',
     'route_guard': '_chatbot_route_guard',   # (label) -> decorator
     'ask_logged': '_ask_logged',             # (surface) -> decorator
     'error_email': '_chatbot_error_email',   # (label, err, tb=None)
@@ -66,7 +74,9 @@ _APP_BINDINGS = {
 }
 
 # Bindings that may legitimately be absent on an older host.
-_OPTIONAL = {'max_threads', 'wallet_snapshot', 'access_gate', 'claude_data', 'user_runs'}
+_OPTIONAL = {'max_threads', 'wallet_snapshot', 'access_gate', 'claude_data', 'user_runs',
+             'run_jiq_job', 'run_bpiq_job', 'run_fw_job', 'run_aiq_job',
+             'thread_for_job', 'load_thread', 'save_thread'}
 
 
 class HostNotBound(RuntimeError):
@@ -111,3 +121,12 @@ host = _Host()
 
 def bind_from_app_module(mod):
     host.bind_from_app_module(mod)
+    # Orphaned engine jobs from the previous process restart once
+    # (2026-10-13 audit). Never blocks binding.
+    try:
+        import os as _os
+        if _os.environ.get('PM_JOBS_SWEEP_ON_BOOT', '1') != '0':
+            from . import jobs_sweeper as _js
+            _js.sweep_on_boot(host)
+    except Exception:
+        pass

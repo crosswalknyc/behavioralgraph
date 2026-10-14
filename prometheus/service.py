@@ -278,6 +278,15 @@ def ask(user, body, *, via='session'):
     body = body if isinstance(body, dict) else {}
     text = str(body.get('text') or '').strip()
     uname = username_of(user)
+    # Standing preferences in the ask ("always", "from now on") are kept
+    # as rules for every later answer (2026-10-13 audit).
+    try:
+        from . import shared_memory as _shm0
+        _txt0 = str((body or {}).get('text') or '')
+        if _txt0 and uname:
+            _shm0.capture_preferences(uname, _txt0)
+    except Exception:
+        pass
     client = str(body.get('client') or '').strip().lower()
     persist = bool(body.get('persist', client != 'dashboard'))
 
@@ -585,6 +594,55 @@ def ask(user, body, *, via='session'):
             _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
             return env, 200
 
+    # 2026-10-13 audit lanes, all deterministic, all before any model:
+    #   same question again in this thread -> the same answer, with when;
+    #   "is there a way to / can we" -> what we can do, never the opener;
+    #   "not now / no thanks" after an offer -> closed, nothing queued;
+    #   a short follow-up -> the previous turn's lane and subject.
+    if referent_decision is None and not _armed(body):
+        _sm_raw, _sm_reason = None, ''
+        try:
+            from . import smarter as _sm
+            _tr = _sm.thread_replay(text, history)
+            if _tr:
+                _sm_raw, _sm_reason = {'success': True, 'action': 'answer', 'reply': _tr['reply'],
+                                       'followups': _tr.get('followups') or [], 'offer_deck': False, 'deck_angle': None}, 'thread_replay'
+            elif _sm.capability_ask(text):
+                _cap = _sm.capability_ask(text)
+                _sm_raw, _sm_reason = {'success': True, 'action': 'answer', 'reply': _cap['reply'], 'followups': _cap['followups'],
+                                       'offer_deck': False, 'deck_angle': None}, 'capability'
+            elif _sm.offer_declined(text) and _last_turn_offered(history):
+                _sm_raw, _sm_reason = {'success': True, 'action': 'answer', 'reply': _sm.DECLINE_REPLY, 'followups': [],
+                                       'offer_deck': False, 'deck_angle': None}, 'offer_declined'
+            else:
+                _lane = _sm.followup_lane(text, history)
+                if _lane == 'catalog_lookup':
+                    from . import catalog_lane as _cl0
+                    _q = text if re.search(r"\b(do we|do you|have|is there|any)\b", text, re.I) else f"do we have any {text.strip(' ?.!')} in Profile IQ?"
+                    _c0 = _cl0.answer(_q, ctx)
+                    if _c0:
+                        _sm_raw, _sm_reason = _c0, 'catalog_lookup'
+                elif _lane == 'status_lookup':
+                    from . import status_lane as _stl0
+                    _c0 = _stl0.answer(text, uname, host=host, user=user, history=history)
+                    if _c0:
+                        _sm_raw, _sm_reason = _c0, 'status_lookup'
+        except Exception as e:
+            print(f"[prometheus] audit lanes skipped: {e}")
+        if _sm_raw:
+            raw = _sm_raw
+            decision = {'surface': 'analyze', 'mode': None, 'reason': _sm_reason, 'client_hint': None}
+            if _client_surface == 'interpret':
+                raw = _interpret_shape(raw)
+                raw['followups'] = list(_sm_raw.get('followups') or [])
+            try:
+                host.ask_hint(route=_sm_reason, outcome='answered')
+            except Exception:
+                pass
+            env = envelope.wrap(raw, surface='analyze', decision=decision, thread_id=tid, via=via)
+            _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
+            return env, 200
+
     # Catalog lane (2026-10-06, Jenna: speed). "do we have a profile for
     # X", "do you see X", "how big is the X audience" are lookups: the
     # corpus catalog answers them with no model call. Runs before any
@@ -833,6 +891,14 @@ def ask(user, body, *, via='session'):
             extra=body.get('extra'), open_tabs=open_tabs,
             deck_in_flight=bool(body.get('deck_in_flight')),
             prior_outline=_outline)
+    # "Don't build a new profile. Answer this from ..." is answer mode,
+    # whatever surface the widget sent (2026-10-13 audit, Emma).
+    try:
+        from . import smarter as _sm2
+        if decision.get('surface') == 'interpret' and _sm2.negated_build(text) and referent_decision is None:
+            decision = dict(decision, surface='analyze', reason='negated_build')
+    except Exception:
+        pass
     surface = decision['surface']
     try:
         host.ask_hint(route='prometheus/ask:' + surface)
@@ -863,6 +929,8 @@ def ask(user, body, *, via='session'):
         raw, status = host.calm_payload(), 200
     else:
         raw, status = _unpack(resp)
+        if surface == 'analyze' and isinstance(raw, dict) and raw.get('action') == 'answer' and raw.get('reply'):
+            raw = _after_answer(raw, text, uname, ctx)
         if (referent_decision is not None and _client_surface == 'interpret'
                 and isinstance(raw, dict)):
             # The widget is sitting in its build flow (that is where it
@@ -875,6 +943,40 @@ def ask(user, body, *, via='session'):
                         thread_id=tid, via=via)
     _persist_turn(persist, uname, tid, history, text, env, raw, surface)
     return env, status
+
+
+def _last_turn_offered(history):
+    """The previous agent turn carried chips or a priced offer."""
+    for turn in reversed(list(history or [])):
+        if str(turn.get('role') or '') == 'user':
+            continue
+        meta = turn.get('meta') or {}
+        txt = str(turn.get('text') or turn.get('content') or '')
+        return bool(meta.get('options') or meta.get('offer') or re.search(r"\b(credits?|on approval|want me to|shall i|would you like)\b", txt, re.I))
+    return False
+
+
+def _after_answer(raw, text, uname, ctx):
+    """Self-grade before send (2026-10-13 audit): a stated count that sits
+    inside a published metric's family is replaced by the published count;
+    the one most useful other read we hold on the subject rides as a chip.
+    Never raises, never blocks."""
+    try:
+        from . import smarter as _sm
+        subject = str((ctx or {}).get('subject') or raw.get('subject') or '') if isinstance(ctx, dict) else str(raw.get('subject') or '')
+        if subject:
+            new_reply, swaps = _sm.bind_to_published(raw.get('reply') or '', subject)
+            if swaps:
+                raw = dict(raw, reply=new_reply, bound_to_published=swaps)
+                print(f"[prometheus] bound {len(swaps)} figure(s) to published measurements for {subject!r}")
+            chip = _sm.adjacent_read(subject, uname, host=host, exclude_kind=str((ctx or {}).get('kind') or ''))
+            if chip:
+                fu = list(raw.get('followups') or [])
+                if chip['label'] not in fu and len(fu) < 4:
+                    raw = dict(raw, followups=fu + [chip['label']])
+    except Exception as e:
+        print(f"[prometheus] after-answer step skipped: {e}")
+    return raw
 
 
 _ARMED_BODY_KEYS = ('locked_sample_tu', 'locked_sample_avid', 'angle',

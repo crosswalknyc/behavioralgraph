@@ -99,6 +99,15 @@ def reply_text(payload):
         v = payload.get(k)
         if isinstance(v, str) and v.strip():
             return v
+    # a clarify or a guidance line on the build surface rides as
+    # guidance + error text (2026-10-13 audit: 75 of 77 clarified asks
+    # logged no reply, so the morning review could not see what was
+    # asked back)
+    if payload.get('guidance') or payload.get('clarify') or payload.get('question'):
+        for k in ('error', 'question', 'clarify', 'prompt'):
+            v = payload.get(k)
+            if isinstance(v, str) and v.strip():
+                return v
     # the sample check and guided discovery answer from their own
     # block (2026-10-13: the digest read "No written answer on this
     # step" for a sample check the user had read in full)

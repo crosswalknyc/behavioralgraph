@@ -110283,7 +110283,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 obsession_touchpoint_m: 8.42,
                 theatrical_hh_m: 8.42,
                 tvod_transactors_pre_svod_k: 892,
-                peacock_playback_initiators_m: 3.24,
+                peacock_playback_initiators_m: 9.5,   // accounts initiating Obsession playback in the 30-day window (August 21 deck)
                 substitution_cohort_k: 618,
                 displacement_usd_m: 27.0,
                 displacement_usd_m_range_low: 22.0,
@@ -110493,12 +110493,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 curve_start_date: 'Jun 30, 2026',
                 curve_read_date: 'Aug 10, 2026 (T+1)',
                 curve_weekly: [
-                    { rel_wk:  1, wk_label: 'W1',   wk_dates: 'Jun 30-Jul 6', obs_k: 615.0, cf_k: 615.0, phase: 'tvod-live',   note: 'Panel-observed peak week. Public transactional-chart rank corroboration deferred to Appendix N2.', peak: true },
-                    { rel_wk:  2, wk_label: 'W2',   wk_dates: 'Jul 7-13',  obs_k: 542.0, cf_k: 542.0, phase: 'tvod-live',   note: 'Panel volume held near W1 levels; ~88.1% of peak weekly velocity remaining at handoff (see Pull 2). Public transactional-chart rank corroboration deferred to Appendix N2 pending Apple + Fandango weekly.' },
-                    { rel_wk:  3, wk_label: 'W3',   wk_dates: 'Jul 14-20', obs_k: 187.0, cf_k: 477.0, phase: 'handoff',     note: 'SVOD hit on Jul 17. Partial week (3 pre-handoff days at ~85K/day + 4 post-handoff days at ~14K/day).', handoff: true },
-                    { rel_wk:  4, wk_label: 'W4',   wk_dates: 'Jul 21-27', obs_k:  24.1, cf_k: 419.0, phase: 'post-svod',    note: 'Free on Peacock for anyone with a $10.99 sub. Panel-observed weekly transaction volume collapsed by ~87%, consistent with substitution to the free destination.' },
-                    { rel_wk:  5, wk_label: 'W5',   wk_dates: 'Jul 28-Aug 3', obs_k:  16.2, cf_k: 369.0, phase: 'post-svod',    note: '' },
-                    { rel_wk:  6, wk_label: 'W6',   wk_dates: 'Aug 4-10',  obs_k:  11.8, cf_k: 325.0, phase: 'post-svod',    note: 'T+1 panel through Aug 10. Counterfactual continues under the 86.5d Universal median to the projected window close; weekly detail refreshes daily as the projection window unfolds.' }
+                    { rel_wk:  1, wk_label: 'W1',   wk_dates: 'Jun 30-Jul 6', obs_k: 634.0, cf_k: 634.0, phase: 'tvod-live',   note: 'Peak week; the series tracks the August 21 client deck (daily 73K to 70K at the handoff, 1.470M through Aug 10). Public transactional-chart rank corroboration deferred to Appendix N2.', peak: true },
+                    { rel_wk:  2, wk_label: 'W2',   wk_dates: 'Jul 7-13',  obs_k: 488.2, cf_k: 488.2, phase: 'tvod-live',   note: 'Volume held near W1 levels through the Jul 14 rental cut to $9.99; ~88.1% of peak weekly velocity remaining at handoff (see Pull 2). Public transactional-chart rank corroboration deferred to Appendix N2 pending Apple + Fandango weekly.' },
+                    { rel_wk:  3, wk_label: 'W3',   wk_dates: 'Jul 14-20', obs_k: 261.1, cf_k: 477.0, phase: 'handoff',     note: 'SVOD hit on Jul 17. Split week: 3 pre-handoff days at 73K / 71K / 70K, then 14K / 12K / 11K / 10K the four days after.', handoff: true },
+                    { rel_wk:  4, wk_label: 'W4',   wk_dates: 'Jul 21-27', obs_k:  46.7, cf_k: 419.0, phase: 'post-svod',    note: 'Free on Peacock for anyone with a $10.99 sub. Weekly transaction volume fell about 85% from the pre-handoff pace, consistent with substitution to the free destination.' },
+                    { rel_wk:  5, wk_label: 'W5',   wk_dates: 'Jul 28-Aug 3', obs_k:  22.3, cf_k: 369.0, phase: 'post-svod',    note: 'Second price cut (Aug 4, rental to $5.99) lands at the end of this week.' },
+                    { rel_wk:  6, wk_label: 'W6',   wk_dates: 'Aug 4-10',  obs_k:  17.8, cf_k: 325.0, phase: 'post-svod',    note: 'Through Aug 10 (1.470M transactions in total since Jun 30, matching the August 21 deck). Counterfactual continues under the 86.5d Universal median to the projected window close; weekly detail refreshes daily as the projection window unfolds.' }
                 ],
                 // C8: four confounds annotated directly on the chart. The
                 // renderer overlays these as vertical guidelines / spans over
