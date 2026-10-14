@@ -9410,7 +9410,7 @@ def _pm_intake_turn(flow, text, body, history, user, ppu, first):
             return drafted
     from prometheus import intake_reader as _ir
     from prometheus import precedent as _prec
-    template = _prec.reference(text)   # every flow: "like the one you did for X" (Jenna 2026-10-13)
+    template = _prec.reference(text) or _ir.reading_precedent(body)   # "like the one you did for X" (Jenna 2026-10-13); the Reader's precedent flag too (2026-10-14)
     ask_text = _ir.strip_template_reference(text) if template else text
     parsed, fault = _pm_intake_resolve(flow, ask_text, history, parse_fn, complete_fn, required, ask_copy,
                                        user=user, usage_extras=ppu, fallback_fn=fallback_fn,

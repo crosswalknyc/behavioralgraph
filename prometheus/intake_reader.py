@@ -1028,6 +1028,9 @@ _TEMPLATE_RXS = (
                r"(?P<title>[^.?!,;]+?)\s*(?:[.?!,;]|$)", re.I),
     re.compile(r"\b(?:just\s+)?(?:like|same\s+as|similar\s+to)\s+(?:the|your|our|my)\s+"
                r"(?P<title>[^.?!,;]+?)\s+(?:journey|one|read|version|build)\b", re.I),
+    # "the same analysis you did for Babylon 5 for No Reservations" (golden g095, 2026-10-14)
+    re.compile(r"\b(?:the\s+)?same\s+(?:analysis|read|thing|journey|report|numbers|breakdown|look|view|study)\s+(?:that\s+)?(?:you|we|I)\s+"
+               r"(?:did|built|made|ran|gave|produced)\s+(?:for|on)\s+(?P<title>[^.?!,;]+?)(?=\s+(?:for|on|but for|against)\s+|\s*(?:[.?!,;]|$))", re.I),
 )
 _TEMPLATE_TAIL_RX = re.compile(r"\s+(?:journey|one|read|version|build)$", re.I)
 
@@ -1042,6 +1045,19 @@ def find_template_reference(text):
             title = _TEMPLATE_TAIL_RX.sub('', m.group('title').strip(' "\'')).strip()
             if 2 <= len(title) <= 80:
                 return title
+    return ''
+
+
+def reading_precedent(body):
+    """The precedent the Reader flagged ('precedent:Babylon 5'), or ''."""
+    try:
+        r = (body or {}).get('reading') if isinstance(body, dict) else None
+        for f in (r or {}).get('flags') or []:
+            f = str(f or '')
+            if f.lower().startswith('precedent:') and 2 <= len(f) - 10 <= 80:
+                return f[10:].strip()
+    except Exception:
+        pass
     return ''
 
 
