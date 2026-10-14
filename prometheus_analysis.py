@@ -6168,6 +6168,13 @@ def enforce_metrics_coherence(data, so_what=False, multi=None):
         metrics = metrics[:3]
     if not metrics and not out['breakdown']:
         raise ValueError('measurement read carried no usable metrics')
+    # Conversion norms (2026-10-13): a social-to-action rate sits inside the
+    # band for its kind of title and service; the matching count follows.
+    try:
+        from migration.journey_norms import hold_chat_metrics
+        metrics = hold_chat_metrics(metrics, ' '.join([out['headline']] + list(out['reads'])), out['subject'])
+    except Exception:
+        pass
     out['metrics'] = metrics
     if so_what:
         out['_so_what'] = True

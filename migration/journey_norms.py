@@ -575,6 +575,84 @@ def audit_index(s3, since: str = ROLLOUT_AT, bucket: str = 'dashboard-inputs') -
     return faults
 
 
+_CHAT_EXPOSURE_RX = re.compile(r"\b(social (?:post|clip|video|media)|clips?|trailer|creator video|saw (?:a|the) post|viewed (?:a|the) post|"
+                               r"posts? about|tiktok|instagram|reel|short-form)\b", re.I)
+_CHAT_ACTION_RX = re.compile(r"\b(watch(?:ed)?|play(?:ed)?|stream(?:ed)?|bought|purchas\w*|subscri\w*|signed up|ticket\w*)\b", re.I)
+_CHAT_RATE_RX = re.compile(r"(conver|carry|went on to|then (?:watched|bought|played|streamed)|share (?:who|that|of .{0,30}who) (?:watched|bought|played|streamed)|"
+                           r"of (?:clip|post|social) viewers|clip.to.play|post.to.play|to.watch rate)", re.I)
+_CHAT_COUNT_RX = re.compile(r"(watched|played|converted|bought|streamed|went on).{0,60}(within|after|following).{0,40}(post|clip|view|exposure|social)", re.I)
+_PCT_UNITS_CHAT = {'%', 'pct', 'percent', 'percentage', 'share', 'rate'}
+
+
+def hold_chat_metrics(metrics: list, context_text: str = '', subject: str = '') -> list:
+    """The numeric gate behind the prompt rule: a Prometheus measurement
+    read about the share of social viewers who then watched, bought,
+    subscribed or reached a ticketing site keeps its rate inside the band
+    for that kind of title and service, and scales the matching converted
+    count with it. Reads without exposure language pass through."""
+    if not isinstance(metrics, list) or not metrics:
+        return metrics
+    ctx = ' '.join([str(context_text or '')] + [f"{m.get('label', '')} {m.get('definition', '')} {m.get('name', '')}"
+                                                 for m in metrics if isinstance(m, dict)])
+    if not (_CHAT_EXPOSURE_RX.search(ctx) and _CHAT_ACTION_RX.search(ctx)):
+        return metrics
+    low = ctx.lower()
+    if re.search(r"\bticket", low):
+        jk, conv = 'ticketing', 'reached a ticketing site'
+    elif re.search(r"\b(subscri|signed up)", low):
+        jk, conv = 'purchase', 'signed up'
+    elif re.search(r"\b(song|track|album|spotify|apple music)\b", low):
+        jk, conv = 'music', 'streamed the song'
+    elif re.search(r"\b(bought|purchas)", low):
+        jk, conv = 'purchase', 'bought'
+    else:
+        jk, conv = 'watch', 'watched'
+    platform = ''
+    for key in sorted(list(SERVICE_REACH) + sorted(FREE_SERVICES), key=len, reverse=True):
+        if re.search(r"\b" + re.escape(key) + r"\b", low):
+            platform = key
+            break
+    status = 'returning' if re.search(r"\b(new season|season \d+ premiere|premiere|returns)\b", low) else (
+        'new' if re.search(r"\b(new original|launch|debut|opening weekend)\b", low) else 'catalog')
+    m_win = re.search(r"within (\d{1,3}) days?", low)
+    band = band_for({'subject': subject, 'platform': platform, 'journey_kind': jk,
+                     'conversion_event': conv + (f" within {m_win.group(1)} days" if m_win else ''), 'notes': low[:300]},
+                    {'title_status': status}, seed=f"chat|{subject}|{platform}|{jk}")
+    factor = None
+    out = []
+    for m in metrics:
+        if not isinstance(m, dict):
+            out.append(m)
+            continue
+        unit = str(m.get('unit') or '').strip().lower()
+        text = f"{m.get('label', '')} {m.get('definition', '')} {m.get('name', '')}"
+        try:
+            v = float(m.get('value'))
+        except (TypeError, ValueError):
+            out.append(m)
+            continue
+        if unit in _PCT_UNITS_CHAT and _CHAT_RATE_RX.search(text) and v > band['hi']:
+            new_v = round(band['target'], 1)
+            if not (band['lo'] < new_v < band['hi']):
+                new_v = round(math.sqrt(band['lo'] * band['hi']), 2)
+            factor = new_v / v if v else None
+            m = dict(m, value=new_v, definition=(str(m.get('definition') or '')[:160] +
+                                                 ' Counts only people whose first watch or purchase came after the post.').strip())
+        out.append(m)
+    if factor:
+        for i, m in enumerate(out):
+            if not isinstance(m, dict):
+                continue
+            unit = str(m.get('unit') or '').strip().lower()
+            text = f"{m.get('label', '')} {m.get('definition', '')} {m.get('name', '')}"
+            if unit not in _PCT_UNITS_CHAT and _CHAT_COUNT_RX.search(text):
+                try:
+                    out[i] = dict(m, value=_messy(f"chat|{subject}", float(m.get('value')) * factor, m.get('name') or text[:40]))
+                except (TypeError, ValueError):
+                    pass
+    return out
+
+
 def chat_rule_text() -> str:
     """The same bands, in the words the Prometheus prompts carry."""
     return (
