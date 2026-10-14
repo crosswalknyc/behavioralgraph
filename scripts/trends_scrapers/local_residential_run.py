@@ -208,6 +208,14 @@ RESIDENTIAL_SCRAPERS = [
     # Chrome session may unblock them (a passed-captcha session is
     # trusted for a while) but that path is opt-in via donate_cookies.py.
     ('film_ticketing', 'Film Ticketing'),
+    # Peacock microdramas (Microdramas IQ, 2026-10-14). peacocktv.com
+    # is GEO-GATED: from Hetzner every page, including the public
+    # /microdramas slate, 302s to /unavailable ("Unavailable In Your
+    # Region"), so the nightly build-box run could only ever ship the
+    # curated fallback. From this Mac the published slate reads ten
+    # deep. Fully-qualified module: it lives beside the other
+    # Microdramas IQ scrapers, not under trends_scrapers.
+    ('scripts.microdramas_scrapers.peacock', 'Peacock Microdramas'),
 ]
 
 
@@ -218,7 +226,9 @@ def _run_scraper(module_name: str, label: str) -> int:
     """Fork a python subprocess to run the named scraper module. Isolated
     per-scraper so a crash in one doesn't take down the batch."""
     logger.info("running scraper: %s (%s)", module_name, label)
-    cmd = [sys.executable, '-m', f'scripts.trends_scrapers.{module_name}']
+    module = (module_name if module_name.startswith('scripts.')
+              else f'scripts.trends_scrapers.{module_name}')
+    cmd = [sys.executable, '-m', module]
     proc = subprocess.run(cmd, capture_output=True, text=True,
                            cwd=str(Path(__file__).resolve().parents[2]))
     if proc.stdout:

@@ -551,6 +551,45 @@ def fetch_baseline() -> list[dict]:
 # rogue mid-sized shell could conceivably clear 1-2) is caught.
 _MIN_LIVE_TITLES_FOR_TRUST = 3
 
+# How long a live observation stays good enough to carry forward when
+# today's pull cannot see Peacock (peacocktv.com geo-gates the build
+# box: every page 302s to /unavailable from a non-US address). The
+# residential lane re-reads the slate from a US address every day, so
+# this normally only bridges the hours between the two runs.
+_LIVE_CARRY_FORWARD_DAYS = 4
+
+
+def _last_live_titles() -> list[dict]:
+    """The most recent LIVE slate on S3, or [] when the latest snapshot
+    is itself the curated fallback, older than the carry window, or
+    unreadable. Never raises."""
+    try:
+        import boto3  # type: ignore
+        bucket = os.environ.get('MICRODRAMAS_IQ_BUCKET', 'dashboard-inputs')
+        s3 = boto3.client('s3', region_name=os.environ.get('AWS_REGION') or 'us-east-2')
+        obj = s3.get_object(Bucket=bucket,
+                            Key='microdramas_iq/snapshots/latest/peacock.json')
+        snap = json.loads(obj['Body'].read().decode('utf-8')) or {}
+    except Exception:
+        return []
+    titles = [t for t in (snap.get('titles') or []) if isinstance(t, dict)]
+    if len(titles) < _MIN_LIVE_TITLES_FOR_TRUST:
+        return []
+    if any((t.get('rail_name') or '') == 'Curated microdrama baseline'
+           for t in titles):
+        return []
+    try:
+        seen = datetime.fromisoformat(
+            (snap.get('live_observed_at') or snap.get('fetched_at') or '')
+            .replace('Z', '+00:00'))
+        if seen.tzinfo is None:
+            seen = seen.replace(tzinfo=timezone.utc)
+    except Exception:
+        return []
+    if (datetime.now(timezone.utc) - seen).days > _LIVE_CARRY_FORWARD_DAYS:
+        return []
+    return titles
+
 
 def fetch() -> dict:
     """Standard entrypoint. Live pull, falling back to curated baseline
@@ -562,19 +601,48 @@ def fetch() -> dict:
     """
     titles = fetch_live()
     n = len(titles)
-    if n < _MIN_LIVE_TITLES_FOR_TRUST:
-        logger.info('peacock: live pull returned only %d usable titles '
-                     '(minimum %d for trust) - falling back to curated '
-                     'baseline. If this is unexpected, check whether '
-                     'donated Peacock cookies are still valid.',
-                     n, _MIN_LIVE_TITLES_FOR_TRUST)
-        titles = fetch_baseline()
-    return {
+    payload = {
         'source': 'peacock',
         'label':  'Peacock',
         'kind':   'microdramas',
-        'titles': titles,
     }
+    if n >= _MIN_LIVE_TITLES_FOR_TRUST:
+        payload['live_observed_at'] = datetime.now(timezone.utc).isoformat()
+    else:
+        carried = _last_live_titles()
+        if carried:
+            logger.info('peacock: live pull returned only %d usable titles '
+                         '(minimum %d for trust) - carrying forward the '
+                         'last live slate (%d titles) instead of the '
+                         'curated baseline.', n, _MIN_LIVE_TITLES_FOR_TRUST,
+                         len(carried))
+            titles = carried
+            payload['carried_forward'] = True
+            # Keep the original observation time so the carry window
+            # measures from the last real read, not from today.
+            try:
+                import boto3  # type: ignore
+                bucket = os.environ.get('MICRODRAMAS_IQ_BUCKET', 'dashboard-inputs')
+                s3 = boto3.client('s3', region_name=os.environ.get('AWS_REGION') or 'us-east-2')
+                prev = json.loads(s3.get_object(
+                    Bucket=bucket,
+                    Key='microdramas_iq/snapshots/latest/peacock.json'
+                )['Body'].read().decode('utf-8')) or {}
+                payload['live_observed_at'] = (prev.get('live_observed_at')
+                                               or prev.get('fetched_at'))
+            except Exception:
+                pass
+        else:
+            logger.info('peacock: live pull returned only %d usable titles '
+                         '(minimum %d for trust) and no recent live slate '
+                         'is on file - falling back to curated baseline. '
+                         'If this is unexpected, check whether the '
+                         'residential lane ran and whether the donated '
+                         'Peacock session is still valid.',
+                         n, _MIN_LIVE_TITLES_FOR_TRUST)
+            titles = fetch_baseline()
+    payload['titles'] = titles
+    return payload
 
 
 def _purge_legacy_baseline_from_catalog(catalog: dict) -> int:
