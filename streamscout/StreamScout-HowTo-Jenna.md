@@ -5,7 +5,7 @@ questions**. You give it a movie, series, podcast, or audiobook; it finds that
 title's exact watch/play/listen identifier(s) on the platform you pick, and
 drops them into a spreadsheet on your Desktop.
 
-It works for **movies and series across all 22 platforms** — streaming video,
+It works for **movies and series across all 23 platforms** — streaming video,
 podcasts, audiobooks *and* books (buy · listen · borrow).
 
 Every run writes one consistent CSV:
@@ -24,7 +24,7 @@ SHOW · URL · PRODUCTION · PLATFORM · SEASON
 
 > 💡 This how-to is all you need to run the tool. There's also an optional
 > flashy one-page grid, `StreamScout-Platforms.xlsx`, to show the wider team all
-> 22 platforms at a glance — nice to have, not needed to run anything.
+> 23 platforms at a glance — nice to have, not needed to run anything.
 
 ---
 
@@ -38,7 +38,7 @@ git checkout main
 git pull
 ```
 
-That's it — `streamscout/` is right there with all 22 platforms (StreamScout
+That's it — `streamscout/` is right there with all 23 platforms (StreamScout
 first shipped in PR #75; Audible, #20, in PR #163; **Books, #21, in PR #185**).
 
 <details>
@@ -91,7 +91,7 @@ python3 -m playwright install firefox chromium
 *(Netflix / HBO Max / Disney+ drive **Firefox**; Amazon Podcasts, SiriusXM and
 Audible drive **Chromium** — so install both.)*
 
-**d) Credentials — only 5 of the 22 platforms need anything.** Put them in a
+**d) Credentials — only 5 of the 23 platforms need anything.** Put them in a
 file named `.env.local` at the **repo root** (the folder *above* `streamscout/`):
 
 ```
@@ -144,11 +144,11 @@ The CSV appears on your **Desktop**. That's the whole job.
 
 ## The platforms (quick version)
 
-**22 platforms.** Only **5** need anything:
+**23 platforms.** Only **5** need anything:
 
-- 🔓 **No login (17):** Peacock, Hulu, Apple TV+, Paramount Plus, Starz,
+- 🔓 **No login (18):** Peacock, Hulu, Apple TV+, Paramount Plus, Starz,
   Hallmark Plus, Amazon, MGM Plus, BritBox, YouTube, Apple Podcasts, iHeart,
-  Pandora, Amazon Podcasts, **Audible**, **Books**, **Games**
+  Pandora, Amazon Podcasts, **NPR**, **Audible**, **Books**, **Games**
 - 🔐 **Browser login — a Firefox window opens and drives itself (2):**
   Netflix, HBO Max
 - 🔑 **Free API key (1):** Spotify (Client ID + Secret in `.env.local`)
@@ -160,7 +160,7 @@ The CSV appears on your **Desktop**. That's the whole job.
 When a browser platform runs, **let the Firefox/Chromium window do its thing** —
 don't click around in it.
 
-*(The flashy at-a-glance grid of all 22 platforms lives in the shared
+*(The flashy at-a-glance grid of all 23 platforms lives in the shared
 `StreamScout-Platforms.xlsx` if you ever want it.)*
 
 ---
@@ -176,15 +176,23 @@ don't click around in it.
   pick-list. (MGM Plus returns one shell per season; Apple TV+ and BritBox use a
   single shell for the whole series, so their SEASON is blank.)
 - **Podcasts (Spotify, Apple Podcasts, iHeart, Pandora, Amazon Podcasts,
-  SiriusXM):** pick **Series** and you get **one row per episode** with that
+  SiriusXM, NPR):** pick **Series** and you get **one row per episode** with that
   platform's full episode URL. (Apple Podcasts' public feed caps at ~200
-  episodes and warns if a show is longer.)
+  episodes and warns if a show is longer. NPR reads the show's public feed and
+  returns every episode's `npr.org` page.) A **podcast** query also sweeps the
+  show's **YouTube** channel automatically, so a podcast audience covers the
+  native audio platforms *and* YouTube in one go.
 - **YouTube** treats a show as its **channel** and returns **one row per
-  episode** with the full `watch?v=…` link — every long-form video on the
-  channel's Videos tab (Shorts are left out). Paste a channel, `@handle`, or
-  `playlist` link if the title search doesn't land it. Heads-up: clip-heavy
-  channels (e.g. *Wild 'N Out*) return **a lot** of rows — that's every clip as
-  it appears in clickstream, by design.
+  episode** with the full `watch?v=…` link. Two client choices:
+  - **Full episodes/videos only (default)** — the long-form **Videos tab**.
+  - **Include clips** — also folds in the channel's **Shorts** (the clips).
+  - **Fair-survey cap (default 600):** when a channel has more than 600 videos,
+    StreamScout even-strides down to 600 **across the whole timespan** (a
+    representative spread, not just the most recent block). Clip-heavy channels
+    (e.g. *Wild 'N Out*) can otherwise return thousands of rows. Promy passes the
+    client's full-vs-clips pick and an optional cap through to the query; set the
+    cap to `0` for no cap. Paste a channel, `@handle`, or `playlist` link if the
+    title search doesn't land it.
 - **Amazon** captures *every* way a title shows up in clickstream (all offer
   ASINs + the GTI in both forms, shells + episodes, **and every film edition** —
   theatrical / ad-supported / Director's Cut). It also covers Amazon
@@ -254,7 +262,7 @@ python3 streamscout/books_identifier.py --franchise "Merciless Saints" \
 
 ## 🎮 Games — buy + play URLs, like any other platform
 
-Games is a normal menu pick (#22). Choose **Games**, type a title or franchise,
+Games is a normal menu pick (#23). Choose **Games**, type a title or franchise,
 and it returns **every buy/play URL** across **19 stores** as content-map terms
 in the same CSV (`SHOW · URL · PRODUCTION · PLATFORM · SEASON`). `SHOW` is the
 franchise on every row; `SEASON` is blank.
@@ -322,7 +330,8 @@ machine, so title search there just works.
 - `*_identifier.py` — one resolver per platform (Peacock, Hulu, Netflix,
   Apple TV+, Paramount Plus, HBO Max, Disney+, Starz, Hallmark Plus, Amazon,
   MGM Plus, BritBox, YouTube, Spotify, Apple Podcasts, iHeart, Pandora,
-  Amazon Podcasts, SiriusXM, **Audible**, **Books** = `books_identifier.py`,
+  Amazon Podcasts, SiriusXM, **NPR** = `npr_episode_identifier.py`,
+  **Audible**, **Books** = `books_identifier.py`,
   **Games** = `games_identifier.py`)
 - `gametool_content/` — the Games engine (buy/play URLs → content-map terms)
 

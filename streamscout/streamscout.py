@@ -399,14 +399,26 @@ def run_slug_query(client, spec, title, seasons, start, end):
 
 
 # ── RESOLVER platforms (import a per-platform resolver module) ─────────────────
-def resolver_lookup(platform, title, kind, seasons, url=None):
-    """Call the platform's resolve() and return unified row dicts."""
+def resolver_lookup(platform, title, kind, seasons, url=None, options=None):
+    """Call the platform's resolve() and return unified row dicts.
+
+    `options` carries optional per-platform knobs that only some resolvers
+    accept; they are forwarded ONLY to the resolver that understands them so
+    the shared signature stays stable. Currently used for YouTube's
+    full-vs-clips choice (``include_clips``) and the fair-survey cap (``limit``).
+    """
     import importlib
     mod = importlib.import_module(RESOLVER_MODULE[platform])
+    extra = {}
+    if platform == "youtube" and options:
+        for k in ("include_clips", "limit"):
+            if options.get(k) is not None:
+                extra[k] = options[k]
     if platform in URL_HINT_RESOLVERS:  # accepts a pasted URL / UUID hint
-        show, rrows = mod.resolve(title=title, url=url, kind=kind, seasons=seasons)
+        show, rrows = mod.resolve(title=title, url=url, kind=kind,
+                                  seasons=seasons, **extra)
     else:
-        show, rrows = mod.resolve(title=title, kind=kind, seasons=seasons)
+        show, rrows = mod.resolve(title=title, kind=kind, seasons=seasons, **extra)
     out = []
     for r in rrows:
         # a resolver may name each row's title independently (Audible lists
