@@ -135,6 +135,7 @@ RESOLVER_PLATFORMS = {
     "amazonpodcasts": {"label": "Amazon Podcasts",
                        "module": "amazon_podcasts_identifier"},
     "siriusxm": {"label": "SiriusXM", "module": "siriusxm_episode_identifier"},
+    "npr": {"label": "NPR", "module": "npr_episode_identifier"},
     "audible": {"label": "Audible", "module": "audible_identifier"},
     "books": {"label": "Books", "module": "books_identifier"},
     "games": {"label": "Games", "module": "games_identifier"},
@@ -162,6 +163,7 @@ RESOLVER_MODULE = {
     "pandora": "pandora_episode_identifier",
     "amazonpodcasts": "amazon_podcasts_identifier",
     "siriusxm": "siriusxm_episode_identifier",
+    "npr": "npr_episode_identifier",
     "audible": "audible_identifier",
     "books": "books_identifier",
     "games": "games_identifier",
@@ -170,13 +172,13 @@ RESOLVER_MODULE = {
 URL_HINT_RESOLVERS = {"hulu", "peacock", "appletv", "paramount", "max", "disney",
                       "starz", "hallmark", "amazon", "mgmplus", "britbox",
                       "youtube", "spotify", "applepodcasts", "iheart", "pandora",
-                      "amazonpodcasts", "siriusxm", "audible", "games"}
+                      "amazonpodcasts", "siriusxm", "npr", "audible", "games"}
 
 PLATFORM_ORDER = ["peacock", "hulu", "netflix", "appletv", "paramount",
                   "max", "disney", "starz", "hallmark", "amazon", "mgmplus",
                   "britbox", "youtube", "spotify", "applepodcasts", "iheart",
-                  "pandora", "amazonpodcasts", "siriusxm", "audible", "books",
-                  "games"]
+                  "pandora", "amazonpodcasts", "siriusxm", "npr", "audible",
+                  "books", "games"]
 
 # ── PRODUCTION (studio) tag ────────────────────────────────────────────────────
 # Sourced centrally for EVERY platform by production_tags.py:
@@ -495,6 +497,8 @@ def choose_platform() -> str:
             tag = "direct · no login · browser · every episode URL"
         elif key == "siriusxm":
             tag = "browser · every episode URL · one-time login for title search"
+        elif key == "npr":
+            tag = "direct · no login · every episode URL"
         elif key == "audible":
             tag = "browser · no login · direct Audible + via-Amazon links"
         elif key == "books":
@@ -640,6 +644,9 @@ def main() -> int:
         elif platform == "siriusxm":
             print(f"Resolving {label} — every episode URL via SiriusXM's "
                   f"anonymous player session (no login; needs Chromium) ...")
+        elif platform == "npr":
+            print(f"Resolving {label} — every episode's npr.org play URL via "
+                  f"the show's public feed (no login) ...")
         elif platform == "audible":
             print(f"Resolving {label} — direct Audible + via-Amazon listen "
                   f"links via a headless browse (no login; needs Chromium) ...")

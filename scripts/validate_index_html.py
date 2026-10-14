@@ -616,3 +616,4 @@ if __name__ == "__main__":
 # (pricing-consistent-everywhere 2026-09-29 - Flywheel $500 + Trends/Rankers/Fin $5000/mo on budget pages, report pages, Prometheus pricing copy)
 # (site-panel-drop-so-what 2026-10-01 - Site: remove What this means note + rule from Panel page)
 # (site-panel-restore-so-what 2026-10-01 - Site: restore What this means note on Panel page per Jenna)
+# (streamscout-npr-podcast 2026-10-14 - StreamScout: add NPR podcast resolver + wire YouTube/NPR into the podcasts group; CI trigger only)
