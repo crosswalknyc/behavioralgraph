@@ -318,6 +318,25 @@ def extract_preferences(text):
     return out[:3]
 
 
+def strip_preferences(text):
+    """The message with its standing-rule sentences removed, when a real
+    ask remains (three or more words); otherwise the original text. Keeps a
+    preference from steering the routing of the question beside it."""
+    t = str(text or '')
+    prefs = extract_preferences(t)
+    if not prefs:
+        return t
+    rest = t
+    for m in list(_PREF_RX.finditer(t))[::-1]:
+        a, b = m.span(1)
+        # take the sentence terminator with it
+        while b < len(rest) and rest[b] in '.;!':
+            b += 1
+        rest = rest[:a] + rest[b:]
+    rest = re.sub(r'\s+', ' ', rest).strip(' ,;.')
+    return rest if len(rest.split()) >= 3 else t
+
+
 def capture_preferences(user, text):
     """Store any standing preferences in the message. Returns the list kept."""
     prefs = extract_preferences(text)

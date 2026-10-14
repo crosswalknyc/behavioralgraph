@@ -283,8 +283,10 @@ def ask(user, body, *, via='session'):
     try:
         from . import shared_memory as _shm0
         _txt0 = str((body or {}).get('text') or '')
-        if _txt0 and uname:
-            _shm0.capture_preferences(uname, _txt0)
+        if _txt0 and uname and _shm0.capture_preferences(uname, _txt0):
+            # the rule is kept; the question beside it routes on its own
+            text = _shm0.strip_preferences(_txt0).strip() or text
+            body = dict(body, text=text)
     except Exception:
         pass
     client = str(body.get('client') or '').strip().lower()
@@ -618,7 +620,9 @@ def ask(user, body, *, via='session'):
                 _lane = _sm.followup_lane(text, history)
                 if _lane == 'catalog_lookup':
                     from . import catalog_lane as _cl0
-                    _q = text if re.search(r"\b(do we|do you|have|is there|any)\b", text, re.I) else f"do we have any {text.strip(' ?.!')} in Profile IQ?"
+                    _subj = re.sub(r"^(?:and|also|what about|how about|any|same for|now|then|ok|okay)\s+", '', text.strip(' ?.!'), flags=re.I).strip(' ?.!')
+                    _subj = re.sub(r"^(?:any|some)\s+", '', _subj, flags=re.I)
+                    _q = text if re.search(r"\b(do we|do you|is there)\b", text, re.I) else f"do we have {_subj} profiles?"
                     _c0 = _cl0.answer(_q, ctx)
                     if _c0:
                         _sm_raw, _sm_reason = _c0, 'catalog_lookup'
@@ -895,8 +899,13 @@ def ask(user, body, *, via='session'):
     # whatever surface the widget sent (2026-10-13 audit, Emma).
     try:
         from . import smarter as _sm2
-        if decision.get('surface') == 'interpret' and _sm2.negated_build(text) and referent_decision is None:
-            decision = dict(decision, surface='analyze', reason='negated_build')
+        if _sm2.negated_build(text) and referent_decision is None:
+            if decision.get('surface') == 'interpret':
+                decision = dict(decision, surface='analyze', reason='negated_build')
+            _stripped = _sm2.strip_build_negation(text)
+            if _stripped != text:
+                text = _stripped   # the question itself reaches the answer path
+                body = dict(body, text=text)
     except Exception:
         pass
     surface = decision['surface']

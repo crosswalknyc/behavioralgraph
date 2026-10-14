@@ -174,6 +174,19 @@ def negated_build(text):
     return bool(_NEGATED_BUILD_RX.search(str(text or '')))
 
 
+_NEGATION_LEAD_RX = re.compile(
+    r"^\W*(?:(?:please\s+)?(?:don'?t|do not|no need to)\s+(?:build|run|pull|create|make|start)[^.:;!?\n]*[.:;!?]?\s*)+"
+    r"(?:(?:just\s+)?answer (?:this|it|that|me)(?: (?:from|with|using) [^:.\n]*)?[:.]?\s*)?", re.I)
+
+
+def strip_build_negation(text):
+    """The question itself, with the "don't build a new profile, answer
+    this from the existing ones:" lead removed, when a question remains."""
+    t = str(text or '')
+    rest = _NEGATION_LEAD_RX.sub('', t, count=1).strip()
+    return rest if len(rest.split()) >= 3 else t
+
+
 _DECLINE_RX = re.compile(r"^\W*(not now|no thanks|no thank you|not yet|maybe later|later|no,? (?:that'?s )?(?:ok|fine|all)|skip|pass|nope|nah)\W*$", re.I)
 
 
