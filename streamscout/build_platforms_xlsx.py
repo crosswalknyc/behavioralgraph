@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Build the flashy StreamScout-Platforms.xlsx (20 platforms).
+"""Build the flashy StreamScout-Platforms.xlsx (all StreamScout platforms).
+
+The platform count is derived from the data tables below (TOTAL), so the title
+banner and notes stay in sync as platforms are added.
 
 Writes StreamScout-Platforms.xlsx next to this script by default; pass a path
 argument to write elsewhere (e.g. python build_platforms_xlsx.py ~/Desktop)."""
@@ -47,7 +50,7 @@ VIDEO = [
     ("Amazon",        1, 1, "no",    "id fragments (ASIN + GTI)",     "Every edition + Amazon Channels (Lionsgate+, Starz…)"),
     ("MGM Plus",      1, 1, "no",    "watch paths",                   "One season shell per season"),
     ("BritBox",       1, 1, "no",    "show / movie shell path",       "One shell per title"),
-    ("YouTube",       1, 1, "no",    "every episode watch?v= URL",    "Channel Videos tab; Shorts excluded"),
+    ("YouTube",       1, 1, "no",    "every episode watch?v= URL",    "Full videos (Videos tab) by default; opt-in clips (Shorts); fair-survey cap 600 across the timespan"),
 ]
 POD = [
     ("Spotify",         1, 1, "api",  "every episode open.spotify URL", "Free developer API key (no browser)"),
@@ -56,6 +59,7 @@ POD = [
     ("Pandora",         1, 1, "no",   "every episode URL",              ""),
     ("Amazon Podcasts", 1, 1, "no",   "every episode URL",              "Self-driving Chromium window"),
     ("SiriusXM",        1, 1, "situ", "every episode URL",              "Paste link = no login; title search = 1-time login"),
+    ("NPR",             1, 1, "no",   "every episode npr.org URL",      "Reads the show's public feed; one row per episode"),
 ]
 AUDIO = [
     ("Audible",         1, 1, "no",   "direct Audible + via-Amazon",    "TWO rows / title: audible.com/pd + amazon.com/dp (different ASINs)"),
@@ -203,8 +207,13 @@ r += 1
 band(r, "  Good to know", NAVY, WHITE, size=12, h=26)
 r += 1
 NOTES = [
-    f"17 of {TOTAL} platforms need NO login. Only 5 need anything: Netflix & HBO Max (browser login), "
+    f"18 of {TOTAL} platforms need NO login. Only 5 need anything: Netflix & HBO Max (browser login), "
     "Spotify (free API key), and Disney+ & SiriusXM (situational).",
+    "A PODCAST query sweeps the native audio platforms (Spotify, Apple Podcasts, iHeart, Pandora, Amazon "
+    "Podcasts, SiriusXM, NPR) AND the show's YouTube channel in one go — listeners + video viewers together.",
+    "YouTube, full-vs-clips (client choice in Promy): FULL episodes/videos only (the long-form Videos tab) is "
+    "the default; INCLUDE CLIPS also folds in Shorts. A fair-survey cap (default 600) even-strides a big "
+    "channel down across its whole timespan — a representative spread, not just the most recent block (0 = no cap).",
     "Access legend:  No login = anonymous  ·  Browser login = a Firefox/Chromium window drives itself  ·  "
     "Free API key = Spotify Client ID+Secret  ·  Situational = usually none, occasional login.",
     "Every run writes one CSV to your Desktop:  SHOW · URL · PRODUCTION · PLATFORM · SEASON.  "
