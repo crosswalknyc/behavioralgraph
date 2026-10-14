@@ -618,3 +618,4 @@ if __name__ == "__main__":
 # (site-panel-restore-so-what 2026-10-01 - Site: restore What this means note on Panel page per Jenna)
 # (streamscout-npr-podcast 2026-10-14 - StreamScout: add NPR podcast resolver + wire YouTube/NPR into the podcasts group; CI trigger only)
 # (streamscout-youtube-clips 2026-10-14 - StreamScout YouTube: full-vs-clips client choice + fair-survey even-stride cap (default 600); CI trigger only)
+# (streamscout-jenna-package 2026-10-14 - StreamScout: explicit Jenna/Promy how-to MD + refreshed 23-platform xlsx (NPR + YouTube clips/cap); CI trigger only)
