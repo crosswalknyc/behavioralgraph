@@ -1,0 +1,144 @@
+@font-face { font-family: 'Inter 18pt'; font-weight: 400; font-style: normal; font-display: swap;
+    src: url("/static/fonts/Inter_18pt-Regular.ttf") format("truetype"); }
+@font-face { font-family: 'Inter 18pt'; font-weight: 500; font-style: normal; font-display: swap;
+    src: url("/static/fonts/Inter_18pt-Medium.ttf") format("truetype"); }
+@font-face { font-family: 'Inter 18pt'; font-weight: 700; font-style: normal; font-display: swap;
+    src: url("/static/fonts/Inter_18pt-Bold.ttf") format("truetype"); }
+@font-face { font-family: 'Inter 18pt'; font-weight: 800; font-style: normal; font-display: swap;
+    src: url("/static/fonts/Inter_18pt-ExtraBold.ttf") format("truetype"); }
+
+body.nl-studio {
+    --cw-graphite: #0C1618;
+    --cw-slate: #15252A;
+    --cw-offwhite: #E9E8E1;
+    --cw-signal-green: #C7F23E;
+    --text-primary: #E9E8E1;
+    --text-secondary: #9AA09B;
+    --bg-card: #15252A;
+    --bg-input: #0C1618;
+    --border-color: #27393D;
+    --accent-cyan: #C7F23E;
+    margin: 0;
+    min-height: 100vh;
+    background: #0C1618;
+    color: #E9E8E1;
+    font-family: 'Inter 18pt', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: 14px;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+}
+
+.nl-studio .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+}
+.nl-studio .btn-small { padding: 7px 11px; font-size: 13px; }
+.nl-studio .btn-primary,
+.nl-studio .btn-success { background: #C7F23E; color: #0C1618; }
+.nl-studio .btn-secondary { background: #15252A; color: #E9E8E1; border: 1px solid #27393D; }
+.nl-studio .btn:disabled { opacity: 0.55; cursor: default; }
+.nl-studio a { color: #C7F23E; }
+
+.nl-studio-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 28px;
+    border-bottom: 1px solid #27393D;
+}
+.nl-studio-brand { display: flex; align-items: center; gap: 14px; }
+.nl-studio-brand img { display: block; height: 18px; width: auto; }
+.nl-studio-brand span {
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #9AA09B;
+}
+.nl-studio-who { display: flex; align-items: center; gap: 16px; color: #9AA09B; font-size: 13px; }
+.nl-studio-who a { color: #E9E8E1; text-decoration: none; }
+.nl-studio-main { padding: 28px; max-width: 1280px; margin: 0 auto; }
+.nl-studio #section-newsletter { display: block; }
+
+.nl-login {
+    display: grid;
+    grid-template-columns: 5fr 6fr;
+    min-height: 100vh;
+}
+@media (max-width: 820px) {
+    .nl-login { grid-template-columns: 1fr; }
+}
+.nl-login-brand {
+    background: #0C1618;
+    color: #E9E8E1;
+    padding: 48px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 16px;
+}
+.nl-login-brand img { height: 20px; width: auto; }
+.nl-login-kicker {
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #9AA09B;
+}
+.nl-login-brand h1 {
+    font-size: 44px;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    margin: 0;
+}
+.nl-login-brand p { color: #9AA09B; max-width: 28rem; margin: 0; }
+.nl-login-form {
+    background: #E9E8E1;
+    color: #0C1618;
+    padding: 72px 48px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 16px;
+}
+.nl-login-form label {
+    display: block;
+    font-size: 12px;
+    color: #5C6560;
+    margin-bottom: 6px;
+}
+.nl-login-form input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 12px 14px;
+    border: 1px solid #C9C6BA;
+    border-radius: 8px;
+    font-size: 16px;
+    background: #fff;
+    color: #0C1618;
+    font-family: inherit;
+    margin-bottom: 14px;
+}
+.nl-login-form .btn { width: 100%; margin-top: 4px; }
+.nl-login-form .btn-secondary { background: transparent; color: #0C1618; border: 1px solid #C9C6BA; }
+.nl-login-msg { min-height: 1.4em; color: #5C6560; font-size: 14px; }
+
+#nl-toast {
+    position: fixed;
+    right: 20px;
+    bottom: 20px;
+    background: #15252A;
+    color: #E9E8E1;
+    border: 1px solid #27393D;
+    border-radius: 8px;
+    padding: 10px 14px;
+    z-index: 13000;
+}
+#nl-toast.err { border-color: #8E3FA8; }

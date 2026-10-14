@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>White Papers | Crosswalk</title>
+    <meta name="description" content="White papers from the Crosswalk clickstream panel of 10M US consumers.">
+    <link rel="canonical" href="https://dashboard.crosswalknyc.com/the-read/papers">
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg?v=2">
+    <style>
+        @font-face { font-family: 'Inter 18pt'; font-weight: 400; font-style: normal; font-display: swap;
+            src: url("{{ url_for('static', filename='fonts/Inter_18pt-Regular.ttf') }}") format('truetype'); }
+        @font-face { font-family: 'Inter 18pt'; font-weight: 700; font-style: normal; font-display: swap;
+            src: url("{{ url_for('static', filename='fonts/Inter_18pt-Bold.ttf') }}") format('truetype'); }
+        @font-face { font-family: 'Inter 18pt'; font-weight: 800; font-style: normal; font-display: swap;
+            src: url("{{ url_for('static', filename='fonts/Inter_18pt-ExtraBold.ttf') }}") format('truetype'); }
+        :root {
+            --cw-graphite: #0C1618;
+            --cw-slate: #15252A;
+            --cw-offwhite: #E9E8E1;
+            --cw-signal-green: #C7F23E;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter 18pt', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--cw-graphite);
+            color: var(--cw-offwhite);
+            min-height: 100vh;
+            font-size: 14px;
+            line-height: 1.45;
+        }
+        .page { width: min(920px, calc(100% - 64px)); margin: 0 auto; padding: 48px 0 80px; }
+        header.top { display: flex; align-items: center; justify-content: space-between; }
+        header.top img { height: 20px; width: auto; display: block; }
+        header.top a { color: #9AA09B; text-decoration: none; font-size: 13px; }
+        h1 { font-size: clamp(40px, 8vw, 72px); font-weight: 800; letter-spacing: -0.04em; margin: 36px 0 12px; }
+        .lead { color: #9AA09B; max-width: 36rem; margin-bottom: 36px; }
+        .grid { display: grid; gap: 16px; }
+        .card {
+            background: var(--cw-slate);
+            border: 1px solid #27393D;
+            border-radius: 14px;
+            padding: 22px 22px 20px;
+        }
+        .card h2 { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 8px; }
+        .card p { color: #9AA09B; margin: 0 0 16px; }
+        .card .meta { font-size: 13px; color: #7C878A; margin-bottom: 16px; }
+        .card a.buy {
+            display: inline-block;
+            background: var(--cw-signal-green);
+            color: var(--cw-graphite);
+            text-decoration: none;
+            font-weight: 700;
+            border-radius: 8px;
+            padding: 10px 14px;
+        }
+        .empty { color: #9AA09B; padding: 32px 0; }
+        footer { margin-top: 56px; font-size: 12px; color: #7C878A; }
+    </style>
+</head>
+<body>
+<div class="page">
+    <header class="top">
+        <img src="{{ url_for('static', filename='crosswalk-logo-white-transparent.png') }}" alt="Crosswalk">
+        <a href="/the-read">The Read</a>
+    </header>
+    <h1>White Papers.</h1>
+    <p class="lead">From the Crosswalk clickstream panel of 10M US consumers. Pick a paper, pay if it has a price, and download it.</p>
+    <div class="grid">
+        {% if papers %}
+            {% for p in papers %}
+            <article class="card">
+                <h2>{{ p.title }}</h2>
+                {% if p.description %}<p>{{ p.description }}</p>{% endif %}
+                <div class="meta">{% if p.paid %}${{ '%.2f'|format(p.price_usd) }}{% else %}Free with email{% endif %}</div>
+                <a class="buy" href="{{ p.url }}">{% if p.paid %}Buy and download{% else %}Download{% endif %}</a>
+            </article>
+            {% endfor %}
+        {% else %}
+            <div class="empty">No white papers are up yet.</div>
+        {% endif %}
+    </div>
+    <footer>{{ address }}</footer>
+</div>
+</body>
+</html>

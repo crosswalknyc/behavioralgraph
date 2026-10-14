@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% if mode == 'login' %}Sign in · The Read{% else %}The Read studio{% endif %}</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg?v=2">
+    <link rel="stylesheet" href="/static/newsletter_admin.css">
+    <link rel="stylesheet" href="/static/newsletter_studio.css?v=20261013">
+</head>
+<body class="nl-studio" data-nl-studio="1" data-nl-mode="{{ mode }}">
+{% if mode == 'login' %}
+<div class="nl-login">
+    <div class="nl-login-brand">
+        <img src="/static/crosswalk-logo-white-transparent.png" alt="Crosswalk" height="20">
+        <div class="nl-login-kicker">The Read</div>
+        <h1>Newsletter studio.</h1>
+        <p>For Crosswalk staff. Sign in with your crosswalknyc.com email. This desk is newsletters and white papers only.</p>
+    </div>
+    <div class="nl-login-form">
+        <div id="nl-login-step-email">
+            <label for="nl-login-email">Work email</label>
+            <input id="nl-login-email" type="email" autocomplete="username" placeholder="you@crosswalknyc.com">
+            <button class="btn btn-primary" type="button" onclick="nlStudioSendCode()">Send code</button>
+        </div>
+        <div id="nl-login-step-code" hidden>
+            <label for="nl-login-code">Six-digit code</label>
+            <input id="nl-login-code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000">
+            <button class="btn btn-primary" type="button" onclick="nlStudioVerify()">Open studio</button>
+            <button class="btn btn-secondary" type="button" onclick="nlStudioSendCode()">Send a new code</button>
+        </div>
+        <div class="nl-login-msg" id="nl-login-msg"></div>
+    </div>
+</div>
+{% else %}
+<header class="nl-studio-top">
+    <div class="nl-studio-brand">
+        <img src="/static/crosswalk-logo-white-transparent.png" alt="Crosswalk" height="18">
+        <span>The Read studio</span>
+    </div>
+    <div class="nl-studio-who">
+        <span>{{ actor }}</span>
+        <a href="/the-read/studio/logout">Sign out</a>
+    </div>
+</header>
+<main class="nl-studio-main">
+    {% include 'newsletter_cms_body.html' %}
+</main>
+<div id="nl-modal">
+    <div class="box">
+        <h3>Send this newsletter?</h3>
+        <p id="nl-modal-msg"></p>
+        <div class="nl-row" style="margin-top:1rem;">
+            <button class="btn btn-small btn-secondary" onclick="nlCloseModal()">Cancel</button>
+            <button class="btn btn-small btn-primary" id="nl-modal-yes">Send</button>
+        </div>
+    </div>
+</div>
+<div id="nl-toast" hidden></div>
+{% endif %}
+<script src="/static/newsletter_admin.js?v=20261013-studio"></script>
+</body>
+</html>

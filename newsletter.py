@@ -461,6 +461,7 @@ def empty_state():
         "subscribers": [],
         "segments": [],
         "campaigns": [],
+        "white_papers": [],
     }
 
 
@@ -601,6 +602,9 @@ def normalize_state(state):
     state.setdefault("lists", [])
     state.setdefault("subscribers", [])
     state.setdefault("campaigns", [])
+    if not isinstance(state.get("white_papers"), list):
+        state["white_papers"] = []
+        changed = True
     for sub in state["subscribers"]:
         if "tags" not in sub:
             sub["tags"] = []
@@ -2126,9 +2130,18 @@ def start_scheduler():
 # ---------------------------------------------------------------------------
 
 def _admin_guard():
+    try:
+        from newsletter_studio import studio_ok
+        if studio_ok():
+            return None
+    except Exception:
+        pass
+    path = request.path or ""
     if "username" not in session:
-        if request.path.startswith("/api/"):
+        if path.startswith("/api/"):
             return jsonify({"success": False, "error": "Session expired. Please log in again."}), 401
+        if path.startswith("/the-read/studio") or path.startswith("/n/preview"):
+            return redirect("/the-read/studio/login")
         return redirect("/login")
     try:
         from app import get_current_user
@@ -2195,6 +2208,14 @@ def _public_campaign(c, subscriber_counts=None, settings=None, include_downloads
     }
 
 
+def _public_papers_payload(state, settings=None):
+    try:
+        from newsletter_studio import _papers, _public_paper
+        return [_public_paper(row) for row in _papers(state)]
+    except Exception:
+        return []
+
+
 def _overview_payload():
     ensure_seeded()
     sync_dashboard_users()
@@ -2251,6 +2272,7 @@ def _overview_payload():
             for s in subs
         ],
         "campaigns": campaigns,
+        "papers": _public_papers_payload(state, settings),
         "stats": {
             "subscribers": len(active),
             "unsubscribed": sum(1 for s in subs if s.get("status") == "unsubscribed"),
@@ -3257,7 +3279,7 @@ def linkedin_callback():
         traceback.print_exc()
         nli.persist_connect_error(str(e)[:300])
         return _linkedin_result_page(str(e)[:300], ok=False), 400
-    return redirect("/admin#newsletter")
+    return redirect("/the-read/studio")
 
 
 def _linkedin_result_page(message, ok=True):
@@ -3279,7 +3301,7 @@ font-family:Arial,Helvetica,sans-serif;">
 color:#5C6560;">Crosswalk / The Read</div>
 <h1 style="font-size:28px;margin:16px 0 12px;">LinkedIn</h1>
 {body}
-<p style="margin-top:22px;"><a href="/admin#newsletter" style="color:#0C1618;font-weight:700;">Back to Newsletter</a></p>
+<p style="margin-top:22px;"><a href="/the-read/studio" style="color:#0C1618;font-weight:700;">Back to Newsletter</a></p>
 <p style="margin-top:36px;font-size:12px;color:#888C89;">
 <span style="color:{tone};">&#9679;</span> {escape(_company_address())}
 </p>
@@ -3938,6 +3960,8 @@ def public_signup():
 
 def register_newsletter_blueprint(app):
     try:
+        from newsletter_studio import attach_studio
+        attach_studio(newsletter_bp)
         app.register_blueprint(newsletter_bp)
         start_scheduler()
         print("Newsletter blueprint registered")

@@ -2828,6 +2828,13 @@ def _handle_checkout_session_completed(event: dict):
         except Exception as e:
             print(f"[billing] newsletter download fulfill failed: {e}")
         return
+    if (md.get("purpose") or "") == "newsletter_white_paper":
+        try:
+            from newsletter_studio import fulfill_paid_paper
+            fulfill_paid_paper(obj)
+        except Exception as e:
+            print(f"[billing] newsletter white paper fulfill failed: {e}")
+        return
     subject_kind, subject_key, subject, _ = _find_subject_by_event(event)
     if not subject:
         print(f"[billing] webhook checkout.session.completed "

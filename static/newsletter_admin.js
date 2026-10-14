@@ -22,7 +22,15 @@
 
     function toast(msg, err) {
         if (typeof showToast === 'function') showToast(msg, !!err);
-        else alert(msg);
+        else {
+            const el = $('nl-toast');
+            if (!el) { alert(msg); return; }
+            el.hidden = false;
+            el.classList.toggle('err', !!err);
+            el.textContent = msg;
+            clearTimeout(toast._t);
+            toast._t = setTimeout(() => { el.hidden = true; }, 3200);
+        }
     }
 
     async function api(path, opts) {
@@ -101,7 +109,7 @@
 
     function showView(name) {
         state.view = name;
-        ['campaigns', 'editor', 'audience', 'report', 'outcomes'].forEach((v) => {
+        ['campaigns', 'editor', 'audience', 'report', 'outcomes', 'papers'].forEach((v) => {
             const el = $('nl-view-' + v);
             if (el) el.classList.toggle('nl-hidden', v !== name);
         });
@@ -1371,11 +1379,39 @@
         } catch (e) { toast(e.message, true); }
     };
 
+    function renderPapers() {
+        const host = $('nl-papers-grid');
+        if (!host) return;
+        const papers = (state.data && state.data.papers) || [];
+        if (!papers.length) {
+            host.innerHTML = '<div class="nl-empty">No white papers yet.</div>';
+            return;
+        }
+        host.innerHTML = papers.map((p) => {
+            const stats = p.download_stats || {};
+            const price = p.paid ? fmtMoney(p.price_usd) : 'Free with email';
+            const file = p.has_file ? (p.original_name || p.filename) : 'No file yet';
+            return `<article class="nl-card">
+                <div class="nl-card-body">
+                    <span class="nl-badge ${p.enabled ? 'sent' : 'draft'}">${p.enabled ? 'live' : 'hidden'}</span>
+                    <h3>${esc(p.title || 'Untitled')}</h3>
+                    <div class="meta">${esc(price)} · ${esc(file)} · ${fmtNum(stats.unique_downloads || 0)} downloads</div>
+                    <div class="nl-card-foot">
+                        <a class="btn btn-small btn-secondary" href="${esc(p.url)}" target="_blank" rel="noopener">Open page</a>
+                        <button class="btn btn-small btn-secondary" onclick="nlTogglePaper('${esc(p.id)}', ${p.enabled ? 'false' : 'true'})">${p.enabled ? 'Hide' : 'Show'}</button>
+                        <button class="btn btn-small btn-secondary" onclick="nlDeletePaper('${esc(p.id)}')">Delete</button>
+                    </div>
+                </div>
+            </article>`;
+        }).join('');
+    }
+
     function renderAll() {
         renderStats();
         renderCampaigns();
         renderAudience();
         renderOutcomes();
+        renderPapers();
     }
 
     async function nlRefresh(keepView) {
@@ -1396,9 +1432,63 @@
     };
 
     window.nlShow = function (view) {
-        if (view === 'campaigns' || view === 'audience' || view === 'outcomes') showView(view);
+        if (view === 'campaigns' || view === 'audience' || view === 'outcomes' || view === 'papers') showView(view);
         if (view === 'audience') renderAudience();
         if (view === 'outcomes') renderOutcomes();
+        if (view === 'papers') renderPapers();
+    };
+
+    window.nlCreatePaper = async function () {
+        const title = ($('nl-wp-title') && $('nl-wp-title').value || '').trim();
+        const description = ($('nl-wp-desc') && $('nl-wp-desc').value || '').trim();
+        const price = parseFloat(($('nl-wp-price') && $('nl-wp-price').value) || '0') || 0;
+        if (!title) { toast('Add a title.', true); return; }
+        try {
+            const data = await api('/api/admin/newsletter/papers', {
+                method: 'POST',
+                body: JSON.stringify({ title, description, price_usd: price, enabled: true }),
+            });
+            state.data = data;
+            const file = $('nl-wp-file') && $('nl-wp-file').files && $('nl-wp-file').files[0];
+            if (file && data.paper && data.paper.id) {
+                const fd = new FormData();
+                fd.append('file', file);
+                const resp = await fetch('/api/admin/newsletter/papers/' + encodeURIComponent(data.paper.id) + '/file', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    body: fd,
+                });
+                const uploaded = await resp.json().catch(() => ({ success: false, error: 'Upload failed' }));
+                if (!resp.ok || uploaded.success === false) throw new Error(uploaded.error || 'Upload failed');
+                state.data = uploaded;
+            }
+            if ($('nl-wp-title')) $('nl-wp-title').value = '';
+            if ($('nl-wp-desc')) $('nl-wp-desc').value = '';
+            if ($('nl-wp-file')) $('nl-wp-file').value = '';
+            renderAll();
+            showView('papers');
+            toast('White paper saved.');
+        } catch (e) { toast(e.message, true); }
+    };
+
+    window.nlTogglePaper = async function (id, enabled) {
+        try {
+            const data = await api('/api/admin/newsletter/papers/' + encodeURIComponent(id), {
+                method: 'PUT',
+                body: JSON.stringify({ enabled: !!enabled }),
+            });
+            state.data = data;
+            renderPapers();
+        } catch (e) { toast(e.message, true); }
+    };
+
+    window.nlDeletePaper = async function (id) {
+        if (!confirm('Delete this white paper?')) return;
+        try {
+            const data = await api('/api/admin/newsletter/papers/' + encodeURIComponent(id), { method: 'DELETE' });
+            state.data = data;
+            renderPapers();
+        } catch (e) { toast(e.message, true); }
     };
 
     window.nlBack = function () {
@@ -1440,8 +1530,56 @@
         $('nl-modal').classList.remove('on');
     };
 
+    async function studioJson(path, body) {
+        const resp = await fetch(path, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body || {}),
+        });
+        const data = await resp.json().catch(() => ({ success: false, error: 'Bad response' }));
+        if (!resp.ok || data.success === false) throw new Error(data.error || ('HTTP ' + resp.status));
+        return data;
+    }
+
+    window.nlStudioSendCode = async function () {
+        const email = ($('nl-login-email') && $('nl-login-email').value || '').trim();
+        const msg = $('nl-login-msg');
+        try {
+            const data = await studioJson('/the-read/studio/login', { email });
+            if ($('nl-login-step-code')) $('nl-login-step-code').hidden = false;
+            if (msg) msg.textContent = data.message || 'Check that inbox.';
+        } catch (e) {
+            if (msg) msg.textContent = e.message;
+        }
+    };
+
+    window.nlStudioVerify = async function () {
+        const email = ($('nl-login-email') && $('nl-login-email').value || '').trim();
+        const code = ($('nl-login-code') && $('nl-login-code').value || '').trim();
+        const msg = $('nl-login-msg');
+        try {
+            const data = await studioJson('/the-read/studio/verify', { email, code });
+            window.location.href = data.redirect || '/the-read/studio';
+        } catch (e) {
+            if (msg) msg.textContent = e.message;
+        }
+    };
+
     document.addEventListener('DOMContentLoaded', () => {
         const search = $('nl-sub-search');
         if (search) search.addEventListener('input', renderAudience);
+        if (document.body.getAttribute('data-nl-studio') === '1' && document.body.getAttribute('data-nl-mode') === 'desk') {
+            if ((location.hash || '').replace('#', '') === 'papers') state.view = 'papers';
+            nlInit();
+        }
+        const code = $('nl-login-code');
+        if (code) code.addEventListener('keydown', (ev) => {
+            if (ev.key === 'Enter') nlStudioVerify();
+        });
+        const email = $('nl-login-email');
+        if (email) email.addEventListener('keydown', (ev) => {
+            if (ev.key === 'Enter') nlStudioSendCode();
+        });
     });
 })();
