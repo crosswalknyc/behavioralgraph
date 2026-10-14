@@ -59,6 +59,11 @@ UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
 BASE = "https://www.youtube.com"
 PLATFORM = "YouTube"
 WATCH = "https://www.youtube.com/watch?v=%s"
+# Fair-survey cap: when a channel returns more than this many videos, we
+# down-sample to this count with an even stride across the (newest-first,
+# chronological) list — a representative spread over the whole timespan rather
+# than just the most recent block. Set limit=0/None to keep every video.
+DEFAULT_LIMIT = 600
 
 # ── tiny helpers ──────────────────────────────────────────────────────────────
 try:
@@ -359,6 +364,19 @@ def discover_channel(title):
 
 
 # ── reusable resolver (imported by streamscout.py) ────────────────────────────
+def _even_stride(items, cap):
+    """Down-sample a chronological list to `cap` items spread evenly across its
+    whole span (keeps the newest & oldest, strides the rest). No-op when `cap`
+    is falsy or the list already fits — so a channel under the cap is untouched.
+    The Videos/Shorts tabs come back newest-first, so an even stride here is a
+    fair survey across the timespan, not just the most recent slice."""
+    n = len(items)
+    if not cap or n <= cap:
+        return items
+    idx = sorted({round(i * (n - 1) / (cap - 1)) for i in range(cap)})
+    return [items[i] for i in idx]
+
+
 def _rows_from_videos(videos):
     rows = []
     for vid, vtitle in videos:
@@ -462,16 +480,26 @@ def _shorts_ids(cid, max_pages=60):
 
 
 def resolve(title=None, url=None, kind="series", seasons=None,
-            include_shorts=False):
+            include_shorts=False, include_clips=None, limit=DEFAULT_LIMIT):
     """Resolve a YouTube show to every episode's watch URL.
 
     Returns (show_name, rows); each row is
         {season:"", episode:"", title:<video title>,
          identifier:"https://www.youtube.com/watch?v=<id>", watch_url:<same>}
     `seasons` is accepted for interface parity but ignored (YouTube channels
-    have no season structure). Set include_shorts=True to also emit Shorts.
+    have no season structure).
+
+    Full-vs-clips (client choice):
+      • default            -> full episodes/videos only (the long-form Videos tab)
+      • include_clips=True -> also fold in the channel's Shorts tab (the clips)
+    `include_clips` is the client-facing name; `include_shorts` is kept as a
+    backward-compatible alias and is used when `include_clips` is left None.
+
+    `limit` applies the fair-survey cap (even stride across the whole timespan);
+    default DEFAULT_LIMIT. Pass limit=0/None to return every video.
     Paste any youtube.com URL via `url` to skip the search.
     """
+    want_clips = include_shorts if include_clips is None else bool(include_clips)
     cid = None
     show = title or ""
 
@@ -481,7 +509,8 @@ def resolve(title=None, url=None, kind="series", seasons=None,
         if ukind == "playlist":
             vids = _enumerate("%s/playlist?list=%s&hl=en&gl=US" % (BASE, uid))
             name = title or ""
-            return (name or "YouTube playlist", _rows_from_videos(vids))
+            return (name or "YouTube playlist",
+                    _rows_from_videos(_even_stride(vids, limit)))
         if ukind == "video" and kind == "movie":
             u = WATCH % uid
             return (title or "", [{"season": "", "episode": "", "title": "",
@@ -519,15 +548,16 @@ def resolve(title=None, url=None, kind="series", seasons=None,
     if not show or show == title:
         show = channel_name(cid) or show or title or ""
 
-    # long-form episodes (Videos tab)
+    # long-form episodes (Videos tab) — the "full episodes/videos only" default
     videos = _enumerate("%s/channel/%s/videos?hl=en&gl=US" % (BASE, cid))
-    if include_shorts:                          # fold in the channel's Shorts tab
+    if want_clips:                              # "include clips": fold in Shorts
         have = {v for v, _ in videos}
         for vid in _shorts_ids(cid):
             if vid not in have:
                 have.add(vid)
                 videos.append((vid, ""))        # a Short (its own watch URL)
 
+    videos = _even_stride(videos, limit)        # fair-survey cap across timespan
     return (show or title or "", _rows_from_videos(videos))
 
 
@@ -539,8 +569,14 @@ def main():
     ap.add_argument("--title")
     ap.add_argument("--url", help="a youtube.com channel / @handle / playlist / "
                                   "watch URL (skips search)")
-    ap.add_argument("--include-shorts", action="store_true",
-                    help="also include Shorts (default: long-form episodes only)")
+    ap.add_argument("--include-clips", "--include-shorts", dest="include_clips",
+                    action="store_true",
+                    help="include clips (fold in the channel's Shorts tab); "
+                         "default is full episodes/videos only")
+    ap.add_argument("--limit", type=int, default=DEFAULT_LIMIT,
+                    help=f"fair-survey cap: even-stride down to this many videos "
+                         f"across the whole timespan when the channel has more "
+                         f"(default {DEFAULT_LIMIT}; 0 = no cap)")
     ap.add_argument("--seasons", help="(accepted but ignored; one flat list)")
     ap.add_argument("--outdir", default=os.path.expanduser("~/Desktop"))
     args = ap.parse_args()
@@ -553,7 +589,7 @@ def main():
 
     try:
         show, rows = resolve(title=title, url=args.url, kind=kind,
-                             include_shorts=args.include_shorts)
+                             include_clips=args.include_clips, limit=args.limit)
     except Exception as e:  # noqa: BLE001
         print(f"  ! Search/fetch failed: {e!r}"); return 2
     if not rows:

@@ -79,7 +79,7 @@ def _platform_keys(platforms):
 
 
 def streamscout_query(title, platforms=None, kind="series", seasons=None,
-                      url=None, show=None):
+                      url=None, show=None, include_clips=None, limit=None):
     """Resolve ``title`` on the given platform(s); return content_map rows.
 
     Parameters
@@ -99,15 +99,26 @@ def streamscout_query(title, platforms=None, kind="series", seasons=None,
     show : str | None
         If given, overrides SHOW on every returned row — pass the franchise name
         to roll a whole series under one SHOW in a single call.
+    include_clips : bool | None
+        YouTube only. False/None (default) = full episodes/videos only (the
+        long-form Videos tab). True = also fold in the channel's Shorts tab
+        (the clips). Ignored by every non-YouTube platform.
+    limit : int | None
+        YouTube only. The fair-survey cap: when a channel has more than `limit`
+        videos, even-stride down to `limit` across the whole timespan (a
+        representative spread, not just the most recent block). None uses the
+        resolver default (600); 0 keeps every video. Ignored elsewhere.
 
     Returns
     -------
     list[dict]  with keys SHOW, URL, PRODUCTION, PLATFORM, SEASON.
     """
+    options = {"include_clips": include_clips, "limit": limit}
     out, seen = [], set()
     for platform in _platform_keys(platforms):
         try:
-            rows = ss.resolver_lookup(platform, title, kind, seasons, url=url)
+            rows = ss.resolver_lookup(platform, title, kind, seasons, url=url,
+                                      options=options)
         except Exception:  # noqa: BLE001 — hands-off: skip a failing platform
             continue
         for r in rows:
@@ -140,12 +151,20 @@ def _main():
     ap.add_argument("--kind", default="series", choices=["series", "movie"])
     ap.add_argument("--show", default=None,
                     help="override SHOW on every row (e.g. the franchise name)")
+    ap.add_argument("--include-clips", action="store_true",
+                    help="YouTube: include clips (fold in Shorts); default is "
+                         "full episodes/videos only")
+    ap.add_argument("--limit", type=int, default=None,
+                    help="YouTube: fair-survey cap (even stride across the "
+                         "timespan; default 600, 0 = no cap)")
     ap.add_argument("--csv", action="store_true",
                     help="print CSV instead of JSON")
     args = ap.parse_args()
     plats = [p.strip() for p in args.platforms.split(",") if p.strip()]
     rows = streamscout_query(args.title, platforms=plats, kind=args.kind,
-                             show=args.show)
+                             show=args.show,
+                             include_clips=(args.include_clips or None),
+                             limit=args.limit)
     if args.csv:
         w = csv.writer(sys.stdout)
         w.writerow(["SHOW", "URL", "PRODUCTION", "PLATFORM", "SEASON"])
