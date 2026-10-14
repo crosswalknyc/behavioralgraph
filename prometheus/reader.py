@@ -183,6 +183,13 @@ def load_bank(s3=None, bucket='dashboard-inputs', force=False):
         doc = None
     if not isinstance(doc, dict) or not doc.get('examples'):
         doc = {'examples': list(SEED_EXAMPLES), 'seeded': True}
+    else:
+        # a seed added to the code after the bank was first written still
+        # rides along (2026-10-14: the panelists seed never reached production)
+        have = {' '.join(str(e.get('text') or '').split()).lower() for e in doc['examples']}
+        missing = [dict(e, seed=True) for e in SEED_EXAMPLES if ' '.join(e['text'].split()).lower() not in have]
+        if missing:
+            doc = dict(doc, examples=list(doc['examples']) + missing)
     with _bank_lock:
         _bank_cache.update({'ts': now, 'doc': doc})
     return doc
