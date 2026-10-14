@@ -355,7 +355,7 @@ _PRODUCT_WORDS = (
 )
 
 
-_POLITE_ORDER_RX = re.compile(r"^\W*(?:can|could|would) (?:you|we|crosswalk|prometheus) (?:please )?(?:build|make|create|run|pull|draft|generate|put together|give|send|get|do|show|set up|start|spin up|prepare|kick off)\b(?: (?:me|us))?", re.I)
+_POLITE_ORDER_RX = re.compile(r"^\W*(?:can|could|would) (?:you|we|crosswalk|prometheus) (?:please )?(?:build|make|create|run|pull|draft|generate|put together|give|send|get|do|show|set up|start|spin up|prepare|kick off|value|price|size|assess|map)\b(?: (?:me|us))?", re.I)
 
 
 def polite_order(text):
@@ -693,3 +693,22 @@ def thread_replay(text, history):
         return None
     except Exception:
         return None
+
+
+def on_it_line(reading, base):
+    """The started-read line names what is being read (2026-10-14: 'On it'
+    alone left 'who skews older, Gunna or Drake?' with no echo of either).
+    The Reader's subjects first, then the bound base."""
+    names = []
+    try:
+        for sdoc in (reading or {}).get('subjects') or []:
+            nm = str((sdoc or {}).get('catalog') or (sdoc or {}).get('as_written') or '').strip()
+            if nm and nm.lower() not in [n.lower() for n in names]:
+                names.append(nm)
+    except Exception:
+        names = []
+    if not names and isinstance(base, dict) and base.get('subject'):
+        names = [str(base['subject'])]
+    what = (' and '.join(names[:3]) if len(names) <= 3 else ', '.join(names[:3]) + ' and more') if names else ''
+    lead = f"On it: reading {what} now." if what else "On it."
+    return lead + " This one takes a real look at the data, so give me a moment - the read will land right here when it is ready."

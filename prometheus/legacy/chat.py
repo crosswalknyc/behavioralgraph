@@ -26,6 +26,7 @@ from prometheus import smarter as _smart   # 2026-10-13 audit helpers
 from prometheus import figures as _fig   # figures by composition (audit items 3 + 4, 2026-10-14)
 from prometheus import faults as _faults   # swallowed faults are counted (audit item 8)
 from prometheus import store as _store   # relational shadow store (audit item 7)
+from prometheus import intents as _intents   # product-intent gates (extracted 2026-10-14)
 import io
 import hashlib
 import time
@@ -5811,6 +5812,8 @@ def _pm_interpret_core(user, body, text, history):
     # (reload, new tab). It used to become a build for a subject
     # named "approved".
     if _pm_approval_word(text):
+        if _smart.rearm_brief_from_thread(body, history, user, _pm_usage_extras(user), _PM_INTAKE_UI, _pm_intake_turn):
+            return _pm_analyze_core(user, body, text, history)   # the re-armed flow's confirm branch lives there (2026-10-14, golden g085)
         _pm_ask_hint(route='command', outcome='approve_without_draft')
         return jsonify({'success': False, 'guidance': True,
                         'error': _PM_APPROVE_NO_DRAFT_COPY})
@@ -12064,6 +12067,13 @@ def _pm_generation_base(subject_hint, text, ctx=None,
     if ctx and ctx.get('primary'):
         pk = str(ctx['primary'].get('s3_key') or '').strip()
         nm = str(ctx['primary'].get('name') or '').strip()
+        if nm and not pk:   # a page named without its file (an API caller, a probe): the library knows the key (2026-10-14)
+            try:
+                _n0 = _H._normalize_for_match(nm)
+                pk = next((str(e.get('s3_key') or '') for e in _profile_catalog_for_chat()
+                           if e.get('s3_key') and _H._normalize_for_match(e.get('display_name')) == _n0), '')
+            except Exception as _fx:
+                _faults.note('chat', _fx)
         if pk:
             page_base = {'subject': nm or pk, 's3_key': pk,
                          'source': 'page'}
@@ -13384,7 +13394,7 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
         if _pm_probe_caller() == 'golden-set':   # grades the reply shape only: no job, no queue, no inflight mark
             _pm_ask_hint(outcome='answered', subject=base.get('subject'))
             return jsonify({'success': True, 'action': 'answer', 'read_job_id': 'golden-' + job_id, 'followups': [], 'offer_deck': False, 'deck_angle': None,
-                            'reply': 'On it. This one takes a real look at the data, so give me a moment - the read will land right here when it is ready.'})
+                            'reply': _pm_on_it_line(base)})
         # A probe's finished read never mails anyone (captured here,
         # on the request thread, and carried on the job).
         _probe = bool(_pm_probe_caller()) or _pm_is_probe_user(_pm_ask_log_user(''))
@@ -13411,8 +13421,7 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
         _pm_ask_hint(outcome='answered', subject=base.get('subject'))
         return jsonify({
             'success': True, 'action': 'answer', 'read_job_id': job_id,
-            'reply': ('On it. This one takes a real look at the data, so give me '
-                      'a moment - the read will land right here when it is ready.'),
+            'reply': _pm_on_it_line(base),
             'followups': [], 'offer_deck': False, 'deck_angle': None})
     payload = _pm_generate_read_core(
         text=text, history=history, mr=mr, base=base,
@@ -14171,6 +14180,12 @@ def _pm_read_inflight_check(user, text):
                 'stage': str(status.get('stage') or '').strip()}
     except Exception:
         return None
+
+
+def _pm_on_it_line(base):
+    """The started-read line names what is being read (2026-10-14)."""
+    from flask import g as _g_r
+    return _smart.on_it_line(getattr(_g_r, '_pm_reading', None), base)
 
 
 def _pm_read_inflight_mark(user, text, job_id):
@@ -15340,7 +15355,7 @@ def _pm_analyze_core(user, body, text, history):
             'followups': [], 'offer_deck': False, 'deck_angle': None})
     if body.get('bpiq_inputs') and not _pm_intake_breakout(text):
         return jsonify(_pm_intake_turn('brand_partnership', text, body, history, user, _pm_ppu, first=False))
-    if _pm_bpiq_intent(text):
+    if _pm_bpiq_intent(text) or _pm_read_intent(body, 'valuation'):
         return jsonify(_pm_intake_turn('brand_partnership', text, body, history, user, _pm_ppu, first=True))
     # ---- Attribution IQ tracking flow (Jenna 2026-09-22) ----
     _aiq_confirm = body.get('aiq_confirm') or _pm_pending_intake('pick', user, 'attribution', text)
@@ -15427,7 +15442,7 @@ def _pm_analyze_core(user, body, text, history):
                     'offer_deck': False, 'deck_angle': None})
         except Exception:
             traceback.print_exc()
-    if _pm_aiq_intent(text):
+    if _pm_aiq_intent(text) or _pm_read_intent(body, 'campaign'):
         return jsonify(_pm_intake_turn('attribution', text, body, history, user, _pm_ppu, first=True))
     # ---- Digital Journey flow (Jenna 2026-09-16) ----
     _fw_confirm = body.get('fw_confirm') or _pm_pending_intake('pick', user, 'flywheel', text)
@@ -15499,7 +15514,7 @@ def _pm_analyze_core(user, body, text, history):
             'followups': [], 'offer_deck': False, 'deck_angle': None})
     if body.get('jiq_inputs') and not _pm_intake_breakout(text):
         return jsonify(_pm_intake_turn('digital_journey', text, body, history, user, _pm_ppu, first=False))
-    if _pm_jiq_intent(text):
+    if _pm_jiq_intent(text) or _pm_read_intent(body, 'journey'):
         return jsonify(_pm_intake_turn('digital_journey', text, body, history, user, _pm_ppu, first=True))
     # ------------------ SINGLE ROUTER (2026-08-28) ------------------
     # One server-side decision for every ask (prometheus_router):
@@ -16626,13 +16641,12 @@ _PM_BPIQ_CREDITS = 15
 _PM_BPIQ_ASK_COPY = _intake_draft.BPIQ_ASK_COPY  # text lives in prometheus/intake_draft.py
 
 
+def _pm_read_intent(body, intent, min_conf=0.7):
+    return _intents.read_intent(body, intent, min_conf)
+
+
 def _pm_bpiq_intent(text):
-    low = ' '.join(str(text or '').lower().split())
-    if low == _PM_BPIQ_CHIP.lower():
-        return True
-    return ('brand partnership' in low
-            and any(k in low for k in ('valuation', 'value', 'pull',
-                                       'run one', 'measure')))
+    return _intents.bpiq_intent(text, _PM_BPIQ_CHIP)
 
 
 def _pm_bpiq_parse(text, usage_extras=None):
@@ -16817,12 +16831,7 @@ _PM_JIQ_ASK_COPY = _intake_draft.JIQ_ASK_COPY  # text lives in prometheus/intake
 
 
 def _pm_jiq_intent(text):
-    low = ' '.join(str(text or '').lower().split())
-    if low == _PM_JIQ_CHIP.lower():
-        return True
-    # "Build a journey for Suits on Peacock" is the same order without the word digital (2026-10-13)
-    return (('digital journey' in low or re.search(r"\b(?:a|the|me a|another|new)\s+journey\b", low) is not None)
-            and any(k in low for k in ('pull', 'build', 'run', 'create', 'new', 'make', 'map')))
+    return _intents.jiq_intent(text, _PM_JIQ_CHIP)
 
 
 def _pm_jiq_parse(text, usage_extras=None):
@@ -17094,12 +17103,7 @@ _PM_FW_ASK_COPY = (
 
 
 def _pm_fw_intent(text):
-    low = ' '.join(str(text or '').lower().split())
-    if low == _PM_FW_CHIP.lower():
-        return True
-    return ('flywheel' in low
-            and any(k in low for k in ('pull', 'build', 'run', 'create',
-                                       'new', 'make')))
+    return _intents.fw_intent(text, _PM_FW_CHIP)
 
 
 def _pm_fw_parse(text, usage_extras=None):
@@ -17238,13 +17242,7 @@ _PM_AIQ_ASK_COPY = (
 
 
 def _pm_aiq_intent(text):
-    low = ' '.join(str(text or '').lower().split())
-    if low == _PM_AIQ_CHIP.lower():
-        return True
-    return ('attribution' in low
-            and any(k in low for k in ('set up', 'setup', 'track',
-                                       'pull', 'build', 'start',
-                                       'create')))
+    return _intents.aiq_intent(text, _PM_AIQ_CHIP)
 
 
 def _pm_aiq_stop_intent(text):

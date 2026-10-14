@@ -78,12 +78,17 @@ def _is_noun(tok):
     return bool(difflib.get_close_matches(t, AUDIENCE_NOUNS, n=1, cutoff=0.8)) if len(t) >= 5 else False
 
 
+_FILE_WORDS = frozenset(('one', 'profile', 'profiles', 'file', 'files', 'data', 'dataset', 'cut', 'read', 'pull', 'audience'))
+
+
 def strip_audience_nouns(phrase):
-    """'FanDuel cuatomers' -> 'FanDuel'; 'Kalshi Cutomers' -> 'Kalshi'."""
+    """'FanDuel cuatomers' -> 'FanDuel'; 'Kalshi Cutomers' -> 'Kalshi';
+    'the noah wyle one' -> 'noah wyle' (a reader pointing at a file by
+    name, 2026-10-14)."""
     toks = str(phrase or '').split()
-    while toks and _is_noun(toks[-1]):
+    while toks and (_is_noun(toks[-1]) or toks[-1].lower().strip(',.') in _FILE_WORDS) and len(toks) > 1:
         toks.pop()
-    while toks and _is_noun(toks[0]) and len(toks) > 1:
+    while toks and (_is_noun(toks[0]) or toks[0].lower() in ('the', 'that', 'this', 'your', 'our', 'my')) and len(toks) > 1:
         toks.pop(0)
     return ' '.join(toks).strip(' ,.-')
 

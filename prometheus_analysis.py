@@ -5445,6 +5445,7 @@ def build_panel_report_offer(subject, price_label, question='',
     side, at the server's price. kind='viewership' is the per-year
     viewership-over-time read (Jenna 2026-10-08)."""
     subj = str(subject or '').strip() or 'that subject'
+    subj = re.sub(r"\s*\([^)]*\)\s*$", '', subj).strip() or 'that subject'   # never 'this audience (open Profile IQ audience)' (2026-10-14)
     price = str(price_label or '').strip()
     run_chip = (f"{PANEL_RUN_CHIP_PREFIX} - {price}"
                 if price else PANEL_RUN_CHIP_PREFIX)[:160]

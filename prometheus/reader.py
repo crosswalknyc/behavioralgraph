@@ -63,7 +63,7 @@ INTENTS = (
     'chat',            # greetings, thanks, anything else
 )
 # intents with a deterministic executor in the service
-EXECUTABLE = frozenset(('exists', 'size', 'status', 'capability', 'decline'))
+EXECUTABLE = frozenset(('exists', 'size', 'status', 'capability', 'decline', 'command'))
 # intents that pick a model surface
 ANALYZE_SET = frozenset(('analyze_page', 'analyze', 'compare', 'definition'))
 BUILD_SET = frozenset(('build_profile', 'cut', 'journey', 'valuation', 'campaign', 'tracker'))
@@ -86,6 +86,7 @@ How to read:
 - "This", "that", "it", "this audience" point at the page on screen when one is open.
 - "Like the one you did for X" / "the same analysis you did for X" names a precedent; put precedent:X in flags and keep the new subject as the subject. When the library shows X as a journey, valuation, campaign or tracker, the intent is that product for the new subject, not analyze.
 - A size question (how big, size of, sample size of X, incidence, projected band) is intent size, never a paid read. "How many people watched X" is analyze (a consumption count).
+- A description of a path (saw a clip and then watched; searched and then subscribed) while a Digital Journey is on screen restates that journey: analyze_page. A new journey needs an order (build, pull, run, map, set up).
 - Where is my X, I don't see X, have not received, still waiting, is it done: status.
 - A short yes / run it / approve / go ahead with nothing else: run_pending.
 - Is there a way to, can we, could you, how do we set up: capability (unless it is a polite build order like "can you build me a Nike profile", which is build_profile).
@@ -118,6 +119,10 @@ SEED_EXAMPLES = [
     {"text": "what is the size of teh Crosswalk sample audience from January 1, 2026 to date", "intent": "definition", "subjects": [], "note": "the ten million panel itself, not an audience"},
     {"text": "how many panelists do you have", "intent": "definition", "subjects": [], "note": "the panel itself, ten million; never a sizing of an audience called panelists"},
     {"text": "how big is your panel", "intent": "definition", "subjects": [], "note": "the panel itself"},
+    {"text": "gen pop who watched a social clip for No Reservations and then watched an episode", "intent": "analyze_page", "subjects": ["Anthony Bourdain No Reservations on Prime Video"], "note": "with that journey on screen: restates its path, a page question, not a new journey"},
+    {"text": "email me the Babylon 5 breakdown", "intent": "command", "subjects": ["Babylon 5"], "note": "a send order for something we hold; never a build"},
+    {"text": "can you build me a Nike profile", "intent": "build_profile", "subjects": ["Nike"], "note": "a polite order, not a capability question"},
+    {"text": "Value the Stanley x Target partnership. Campaign window is 2025-01-15 to 2025-03-31.", "intent": "valuation", "subjects": ["Stanley"], "note": "Brand Partnership intake"},
     {"text": "I don't see No Reservations - only Babylon 5 and have not received an email yet", "intent": "status", "subjects": ["Anthony Bourdain No Reservations"], "note": "Carolyn: drew a clarifier"},
     {"text": "is the Gunna profile done?", "intent": "status", "subjects": ["Gunna"], "note": ""},
     {"text": "where is the howdy deck", "intent": "command", "subjects": ["Howdy"], "note": "a named artifact; the deliverable lane"},
@@ -566,6 +571,8 @@ def steer(reading, decision, *, has_ctx=False, min_conf=0.7):
         want = None
         if intent in ANALYZE_SET or intent in ('compare', 'pricing', 'definition'):
             want = 'analyze'
+        elif intent in ('journey', 'valuation', 'campaign'):
+            want = 'analyze'        # the product intake flows live on the analyze surface (2026-10-14)
         elif intent in BUILD_SET:
             want = 'interpret'
         elif intent == 'deck':

@@ -1101,6 +1101,14 @@ def _execute_reading(reading, text, ctx, history, user, uname, body, tid, via, p
             raw = {'success': True, 'action': 'answer', 'reply': cap['reply'], 'followups': cap.get('followups') or [],
                    'offer_deck': False, 'deck_angle': None}
             reason = 'capability'
+    elif intent == 'command':
+        # a send order ('email me the Babylon 5 breakdown') is a file or a
+        # summary we hold, never a build (2026-10-14, golden g079)
+        from . import send_file as _sf
+        if re.search(r"\b(e-?mail|send|mail|forward)\b", text, re.I) and (_sf.parse(text) or subs):
+            _pg.say('Sending the file')
+            raw = _sf.answer(text, uname, user=user, ctx=ctx, history=history, host=host)
+            reason = 'email_file'
     elif intent == 'decline':
         from . import smarter as _sm
         if _last_turn_offered(history):
