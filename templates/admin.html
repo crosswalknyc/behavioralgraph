@@ -6768,8 +6768,25 @@
                     `Held by ${esc(lock.owner)} since ${when(lock.acquired_at)}${lock.note ? ` · ${esc(lock.note)}` : ''}`,
                     `Expires ${when(lock.expires_at)}`,
                 ] : ['Free'];
+                // Prometheus, the five numbers (audit items 1 and 2, 2026-10-14):
+                // answered on first ask, latency, non-answers, spend per served
+                // ask, golden set pass rate, with the Reader's bank grade.
+                const ns = d.north_star || {};
+                const nsClasses = Object.entries(ns.not_served_by_class || {}).map(([k, v]) => `${esc(k)} ${esc(v)}`).join(', ');
+                const nsHist = (ns.history || []).slice(-7).map(h => `${esc(String(h.day || '').slice(5))} ${esc(h.first_ask_rate)}%`).join(' · ');
+                const nsLines = ns.day ? [
+                    `<b>${esc(ns.first_ask_rate)}%</b> answered on first ask (${esc(ns.served)} of ${esc(ns.asks)} real asks on ${esc(ns.day)})${ns.re_asked ? `, ${esc(ns.re_asked)} re-asked` : ''}`,
+                    nsClasses ? `Not served: ${nsClasses}` : 'Every ask was served',
+                    `Latency p50 ${esc(ns.latency_p50_s)}s, p90 ${esc(ns.latency_p90_s)}s${ns.over_45s ? `, ${esc(ns.over_45s)} over 45s` : ''}`,
+                    ns.spend_usd != null ? `Model spend $${esc(ns.spend_usd)}${ns.spend_per_served_usd != null ? ` ($${esc(ns.spend_per_served_usd)} per served ask)` : ''}` : '',
+                    ns.golden_n ? `Golden set ${esc(ns.golden_pass_rate)}% of ${esc(ns.golden_n)}` : 'Golden set not run yet',
+                    (ns.reader_bank && ns.reader_bank.n) ? `Reader bank ${esc(ns.reader_bank.correct)} of ${esc(ns.reader_bank.n)} exact` : '',
+                    nsHist ? `Trend: ${nsHist}` : '',
+                ].filter(Boolean) : ['No north-star read yet (the nightly writes it)'];
+                const nsLight = ns.first_ask_rate == null ? null : (ns.first_ask_rate >= 85 ? true : (ns.first_ask_rate >= 70 ? 'amber' : false));
                 content.innerHTML = overall + `
                     <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(300px, 1fr));gap:0.75rem;">
+                        ${card('Prometheus: answered on first ask', nsLight === 'amber' ? LIGHT.amber : lightOf(nsLight), nsLines)}
                         ${card('Production', lightOf(prod.reachable && (deployOk || prod.deploy_state == null), prod.deploy_state === 'pending'), prodLines)}
                         ${card('Deploy smoke', lightOf(smoke.present ? smoke.result === 'green' : null), smokeLines)}
                         ${card('Nightly checks', lightOf(regOk), regLines)}

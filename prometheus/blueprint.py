@@ -200,6 +200,47 @@ def progress_get(trace):
                     'lines': [l.get('label') for l in (doc.get('lines') or [])][-6:]})
 
 
+GOLDEN_USER = {'username': 'canary:golden', 'email': '', 'role': 'super_admin',
+               'has_chatbot_profile_iq_access': True, 'unlimited': True, 'company': 'Crosswalk'}
+
+
+@bp.route('/internal/golden-ask', methods=['POST'])
+def golden_ask():
+    """One golden-set ask through the real door on THIS deployment, as a
+    probe user: no thread write, no charge, no mail, no ask-log row
+    (audit item 2, 2026-10-14). Shared-secret auth, the build server's
+    SYNTH_QUEUE_SECRET, so only the nightly grader can call it. Returns
+    the envelope plus the reading and the route hints the ask produced."""
+    import hmac as _hmac
+    secret = str(getattr(host, 'queue_secret', '') if host.has('queue_secret') else '')
+    given = str(request.headers.get('X-Synth-Auth') or '')
+    if not secret or not _hmac.compare_digest(secret, given):
+        return jsonify({'error': 'not found'}), 404
+    body = _body()
+    text = str(body.get('text') or '').strip()
+    if not text:
+        return jsonify({'error': 'text required'}), 400
+    ask_body = {'text': text, 'history': body.get('history') or [], 'client': 'golden', 'persist': False}
+    if isinstance(body.get('context'), dict):
+        ask_body['context'] = body['context']
+    if body.get('surface'):
+        ask_body['surface'] = body['surface']
+    try:
+        g._pm_ask_user = GOLDEN_USER['username']
+    except Exception:
+        pass
+    t0 = time.monotonic()
+    env, status = service.ask(dict(GOLDEN_USER), ask_body, via='canary')
+    out = {'success': True, 'status': status, 'env': env, 'elapsed_s': round(time.monotonic() - t0, 2)}
+    try:
+        out['reading'] = getattr(g, '_pm_reading', None)
+        out['route'] = getattr(g, '_pm_ask_route', None)
+        out['outcome'] = getattr(g, '_pm_ask_outcome', None)
+    except Exception:
+        pass
+    return jsonify(out)
+
+
 @bp.route('/upload', methods=['POST'])
 @_guarded('prometheus/upload')
 def upload():
