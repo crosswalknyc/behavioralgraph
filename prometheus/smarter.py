@@ -346,6 +346,56 @@ def bind_to_published(reply, subject, *, ledger=None, min_overlap=3):
         return reply, swaps
 
 
+# ------------------------------------------------- evidence bind (exact)
+_EV_NUM_RX = re.compile(r"(?<![\w.,])(\d{1,3}(?:,\d{3})+|\d{4,})(?![\w,]|\.\d)")
+
+
+def evidence_numbers(evidence_text):
+    """Every count (1,000 and up) the evidence carries, as ints."""
+    out = set()
+    for m in _EV_NUM_RX.finditer(str(evidence_text or '')):
+        try:
+            out.add(int(m.group(1).replace(',', '')))
+        except ValueError:
+            pass
+    return out
+
+
+def bind_to_evidence(reply, evidence_text, tol=0.02):
+    """A count in the reply that sits within `tol` of a count the evidence
+    carries, but is not that count, becomes it (2026-10-14: a Subscriber
+    IQ answer said 21,115 and 11,569 where the evidence read 21,011 and
+    11,511; the model re-derived what it had been handed). Exact matches
+    and figures with no close evidence neighbour are left alone, so sums
+    and ratios the model computed stay. Returns (reply, swaps)."""
+    swaps = []
+    try:
+        ev = evidence_numbers(evidence_text)
+        if not ev:
+            return reply, swaps
+        ev_sorted = sorted(ev)
+        out = str(reply or '')
+
+        def _fix(m):
+            raw = m.group(1)
+            try:
+                v = int(raw.replace(',', ''))
+            except ValueError:
+                return raw
+            if v in ev or v < 1000:
+                return raw
+            best = min(ev_sorted, key=lambda e: abs(e - v))
+            if best > 0 and abs(best - v) / float(best) <= tol and abs(best - v) >= 1:
+                swaps.append({'from': raw, 'to': f"{best:,}"})
+                return f"{best:,}"
+            return raw
+        out = _EV_NUM_RX.sub(_fix, out)
+        return out, swaps
+    except Exception:
+        traceback.print_exc()
+        return reply, swaps
+
+
 # ---------------------------------------------------------- thread replay
 _REJECT_RX = re.compile(r"\b(wrong|incorrect|not right|doesn'?t (?:look|seem) right|that'?s not|redo|try again|no,? that)\b", re.I)
 

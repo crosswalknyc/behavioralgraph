@@ -16498,6 +16498,10 @@ def _pm_analyze_core(user, body, text, history):
     # terms replaced and em dashes stripped before the text reaches
     # the user. Mirrors the partner API's _V1_BANNED_TOKENS posture.
     reply = pma.scrub_user_text(reply)
+    if action == 'answer' and xmod_block:   # a count the evidence carried is quoted to the digit (2026-10-14)
+        reply, _ev_swaps = _smart.bind_to_evidence(reply, xmod_block)
+        if _ev_swaps:
+            print(f"[pm-evidence-bind] {len(_ev_swaps)} figure(s) snapped: {_ev_swaps[:4]}")
     # Refusal guard (2026-09-28): a draft that declines to answer or
     # carries no numbers retries once with a produce-the-read
     # instruction; a second refusal reroutes to the measured-read
