@@ -1,5 +1,5 @@
 (function () {
-  var DASH = "/";
+  var DASH = "https://dashboard.crosswalknyc.com";
   var MAIL = "hello@crosswalknyc.com";
   var PHONE = "+1 (818) 231-2610";
   var ADDR = "23465 Civic Center Way Bldg 9, Malibu, CA 90265";
@@ -21,7 +21,7 @@
           '<div class="nav-r">' +
             '<button class="has-mega" type="button" id="prodBtn" aria-expanded="false" aria-controls="mega">Products</button>' +
             '<a href="panel.html" data-nav="panel.html">The Panel</a>' +
-            '<a href="/the-read" data-nav="the-read">The Read</a>' +
+            '<a href="' + DASH + '/the-read" data-nav="the-read">The Read</a>' +
             '<a href="about.html" data-nav="about.html">About</a>' +
             '<a href="contact.html" data-nav="contact.html">Contact</a>' +
             '<a class="btn btn-ghost" href="' + DASH + '">Log in</a>' +
@@ -49,7 +49,7 @@
         '<a href="ranker-iq.html">Ranker IQ</a>' +
         '<a href="fin-iq.html">Fin IQ</a>' +
         '<a href="panel.html">The Panel</a>' +
-        '<a href="/the-read">The Read</a>' +
+        '<a href="' + DASH + '/the-read">The Read</a>' +
         '<a href="about.html">About</a>' +
         '<a href="contact.html">Contact</a>' +
         '<a href="' + DASH + '">Log in</a>' +
@@ -65,7 +65,7 @@
             '<div>' +
               '<strong>Crosswalk</strong>' +
               '<a href="about.html">About</a>' +
-              '<a href="/the-read">The Read</a>' +
+              '<a href="' + DASH + '/the-read">The Read</a>' +
               '<a href="panel.html">The panel</a>' +
               '<a href="contact.html">Contact</a>' +
               '<a href="' + DASH + '">Dashboard</a>' +

@@ -1,6 +1,8 @@
 """Public site + self-serve Prometheus signup (Jenna 2026-09-24).
 
-Serves the marketing site at /site (static files under bg-webapp/site/)
+Serves the marketing site at /site (static files under bg-webapp/site/).
+On www.crosswalknyc.com and crosswalknyc.com the same files are the
+site root, so / is the homepage and /login goes to the dashboard.
 and runs the self-serve flow the site's Ask box leads into:
 
     1. POST /site/api/signup
@@ -80,6 +82,88 @@ _FREE_MAIL = {
 }
 
 
+# Hosts that are the public website. The dashboard stays on
+# dashboard.crosswalknyc.com. Render redirects the bare domain to www
+# once both names are on the service.
+MARKETING_HOSTS = frozenset({
+    "www.crosswalknyc.com",
+    "crosswalknyc.com",
+})
+DASHBOARD_ORIGIN = "https://dashboard.crosswalknyc.com"
+# These stay on the dashboard host. A visit on www is sent there.
+_DASHBOARD_PREFIXES = (
+    "/login", "/logout", "/admin", "/the-read", "/wallet",
+    "/set-password", "/api/", "/static/",
+)
+
+
+def _request_host() -> str:
+    return (request.host or "").split(":")[0].lower().rstrip(".")
+
+
+def _marketing_not_found():
+    body = (
+        "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\">"
+        "<title>Not found | Crosswalk</title></head>"
+        "<body style=\"font-family:system-ui;background:#0C1618;color:#E9E8E1;"
+        "padding:48px\"><p>That page is not on this site.</p>"
+        "<p><a href=\"/\" style=\"color:#C7F23E\">Back to the homepage</a></p>"
+        "</body></html>"
+    )
+    return body, 404
+
+
+def _safe_site_file(rel: str):
+    """Serve one file from SITE_DIR. Empty rel is the homepage.
+    Extensionless paths resolve to <name>.html."""
+    rel = (rel or "").strip("/")
+    if not rel:
+        return send_from_directory(SITE_DIR, "index.html")
+    if ".." in rel.split("/"):
+        return _marketing_not_found()
+    candidate = os.path.normpath(os.path.join(SITE_DIR, rel))
+    site_root = os.path.normpath(SITE_DIR)
+    if candidate != site_root and not candidate.startswith(site_root + os.sep):
+        return _marketing_not_found()
+    if os.path.isdir(candidate):
+        index = os.path.join(candidate, "index.html")
+        if os.path.isfile(index):
+            return send_from_directory(SITE_DIR, os.path.join(rel, "index.html"))
+        return _marketing_not_found()
+    if os.path.isfile(candidate):
+        return send_from_directory(SITE_DIR, rel)
+    if os.path.isfile(candidate + ".html"):
+        return send_from_directory(SITE_DIR, rel + ".html")
+    return _marketing_not_found()
+
+
+def serve_marketing_host():
+    """On the public website hosts, / is the marketing site.
+
+    Dashboard routes (login, the read, APIs) redirect to
+    dashboard.crosswalknyc.com. Signup API calls still run here so the
+    forms on this host keep working. Every other host is unchanged.
+    """
+    if _request_host() not in MARKETING_HOSTS:
+        return None
+    path = request.path or "/"
+    if path.startswith("/site/api/") or path.startswith("/.well-known/"):
+        return None
+    if path in ("/health", "/healthz", "/ready"):
+        return None
+    for prefix in _DASHBOARD_PREFIXES:
+        bare = prefix.rstrip("/")
+        if path == bare or path.startswith(prefix):
+            qs = ("?" + request.query_string.decode()) if request.query_string else ""
+            return redirect(DASHBOARD_ORIGIN + path + qs, code=302)
+    rel = path
+    if rel in ("/site", "/site/"):
+        rel = "/"
+    elif rel.startswith("/site/"):
+        rel = "/" + rel[len("/site/"):]
+    return _safe_site_file(rel)
+
+
 # ---------------------------------------------------------------------------
 # Static site
 # ---------------------------------------------------------------------------
@@ -111,19 +195,7 @@ def site_join_panel():
 def site_file(subpath):
     """Static files under bg-webapp/site. Extensionless paths resolve to
     <name>.html so /site/signup and /site/signup.html both work."""
-    clean = subpath.strip("/")
-    if not clean:
-        return send_from_directory(SITE_DIR, "index.html")
-    candidate = os.path.normpath(os.path.join(SITE_DIR, clean))
-    if not candidate.startswith(SITE_DIR + os.sep) and candidate != SITE_DIR:
-        return jsonify({"error": "not_found"}), 404
-    if os.path.isdir(candidate):
-        return send_from_directory(SITE_DIR, os.path.join(clean, "index.html"))
-    if os.path.isfile(candidate):
-        return send_from_directory(SITE_DIR, clean)
-    if os.path.isfile(candidate + ".html"):
-        return send_from_directory(SITE_DIR, clean + ".html")
-    return jsonify({"error": "not_found"}), 404
+    return _safe_site_file(subpath)
 
 
 # ---------------------------------------------------------------------------
@@ -802,7 +874,8 @@ def grant_runs_to_user(username: str, s3_keys) -> bool:
 
 def register_site_blueprint(app) -> None:
     try:
+        app.before_request(serve_marketing_host)
         app.register_blueprint(site_bp)
-        print("✅ Site blueprint registered (/site)")
+        print("✅ Site blueprint registered (/site, www root)")
     except Exception as e:
         print(f"⚠️ Site blueprint registration failed: {e}")

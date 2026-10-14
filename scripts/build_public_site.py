@@ -327,10 +327,9 @@ def main():
     js = (MOCK / "mock.js").read_text(encoding="utf-8")
     js = js.replace("../assets/", "assets/")
     js = js.replace('href="05-ask.html"', 'href="index.html"')
-    js = js.replace("https://dashboard.crosswalknyc.com/the-read", "/the-read")
-    js = js.replace("'<a class=\"btn btn-ghost\" href=\"' + DASH + '\">Log in</a>'",
-                    "'<a class=\"btn btn-ghost\" href=\"/login\">Log in</a>'")
-    js = js.replace("<a href=\"' + DASH + '\">Dashboard</a>", "<a href=\"/\">Dashboard</a>")
+    # Log in, The Read, and Dashboard stay on dashboard.crosswalknyc.com.
+    # www.crosswalknyc.com is the marketing site, so those links must
+    # not point at this host's /.
     js = js.replace('<a href="#">LinkedIn</a>',
                     '<a href="https://www.linkedin.com/company/crosswalk-technologies" target="_blank" rel="noopener">LinkedIn</a>')
     js = js.replace('<a href="#">Privacy Policy</a><a href="#">Your Privacy Choices</a><a href="#">Opt-Out</a><a href="#">Terms of Use</a><a href="#">Tracking consent</a><a href="#">COPPA</a>',
@@ -339,9 +338,9 @@ def main():
 
     # Legacy css/js for the legal pages copied from website/.
     shutil.copy(WEB / "assets" / "css" / "site.css", OUT / "assets" / "css" / "site.css")
+    # Keep Log in, Dashboard, and The Read on the dashboard host.
+    # www is the marketing site.
     legacy_js = (WEB / "assets" / "js" / "site.js").read_text(encoding="utf-8")
-    legacy_js = legacy_js.replace("https://dashboard.crosswalknyc.com/the-read", "/the-read")
-    legacy_js = legacy_js.replace('var DASH = "https://dashboard.crosswalknyc.com";', 'var DASH = "/";')
     (OUT / "assets" / "js" / "site.js").write_text(legacy_js, encoding="utf-8")
 
     for f in FONTS:
