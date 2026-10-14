@@ -57,6 +57,8 @@ _APP_BINDINGS = {
     # storage + ops
     's3_client': 's3_client',
     'bucket': 'S3_BUCKET',
+    # work orders: the caller's engine runs (status lane, 2026-10-13)
+    'user_runs': '_pm_user_runs',            # (user, limit=, active=, status=) -> [run docs]
     'route_guard': '_chatbot_route_guard',   # (label) -> decorator
     'ask_logged': '_ask_logged',             # (surface) -> decorator
     'error_email': '_chatbot_error_email',   # (label, err, tb=None)
@@ -64,7 +66,7 @@ _APP_BINDINGS = {
 }
 
 # Bindings that may legitimately be absent on an older host.
-_OPTIONAL = {'max_threads', 'wallet_snapshot', 'access_gate', 'claude_data'}
+_OPTIONAL = {'max_threads', 'wallet_snapshot', 'access_gate', 'claude_data', 'user_runs'}
 
 
 class HostNotBound(RuntimeError):

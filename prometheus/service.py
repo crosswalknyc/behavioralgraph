@@ -616,6 +616,35 @@ def ask(user, body, *, via='session'):
             _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
             return env, 200
 
+    # Status lane (2026-10-13, Carolyn: "I don't see No Reservations - only
+    # Babylon 5" drew "Nothing came back"; "have not received an email yet"
+    # drew a page analysis). An ask that says the reader cannot see, find
+    # or has not received their work is answered from their jobs across
+    # every product, their engine runs and the delivery records. No model.
+    if referent_decision is None and not _armed(body):
+        try:
+            from . import status_lane as _stl
+            from . import deliverables as _dlv0
+            # a named artifact ("where is the howdy deck") belongs to the deliverable lane below
+            _st_raw = (_stl.answer(text, uname, host=host, user=user, history=history)
+                       if _stl.wants_status(text) and not _dlv0.parse(text) else None)
+        except Exception as e:
+            print(f"[prometheus] status lane skipped: {e}")
+            _st_raw = None
+        if _st_raw:
+            raw = _st_raw
+            decision = {'surface': 'analyze', 'mode': None, 'reason': 'status_lookup', 'client_hint': None}
+            if _client_surface == 'interpret':
+                raw = _interpret_shape(raw)
+                raw['followups'] = list(_st_raw.get('followups') or [])
+            try:
+                host.ask_hint(route='status_lookup', outcome='answered')
+            except Exception:
+                pass
+            env = envelope.wrap(raw, surface='analyze', decision=decision, thread_id=tid, via=via)
+            _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
+            return env, 200
+
     # Deliverable lookup lane (2026-10-09, Scott: "where do i find the
     # howdy deck created last night" ran as a read and failed; "no a pdf
     # was created. where is it" drew the open-page confirm). Where-is-my

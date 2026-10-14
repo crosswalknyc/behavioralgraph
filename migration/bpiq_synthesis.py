@@ -641,10 +641,18 @@ def build_payload(inputs: dict, prim: dict, *,
 
     # ---- conversions -----------------------------------------------------
     cv = prim.get("conversions") or {}
-    conv_pre_u = _messy((subject, "cv_pre"),
-                        n * float(cv.get("pre_users_pct", 0)) / 100.0)
-    conv_post_u = _messy((subject, "cv_post"),
-                         n * float(cv.get("post_users_pct", 0)) / 100.0)
+    # Conversion norms (2026-10-13): the before / after purchase shares sit
+    # inside the Brand Partnership band and the lift inside what a
+    # partnership can plausibly move. Reasoning first, the hold second.
+    try:
+        from migration.journey_norms import hold_bpiq_conversions as _hold_cv
+    except ImportError:   # twin layout
+        from journey_norms import hold_bpiq_conversions as _hold_cv   # type: ignore
+    _pre_pct, _post_pct, _cv_note = _hold_cv(cv.get("pre_users_pct", 0), cv.get("post_users_pct", 0), seed=str(subject))
+    if _cv_note:
+        print(f"[bpiq] conversion lens held: {_cv_note}")
+    conv_pre_u = _messy((subject, "cv_pre"), n * float(_pre_pct or 0) / 100.0)
+    conv_post_u = _messy((subject, "cv_post"), n * float(_post_pct or 0) / 100.0)
     conversions = {
         "pre_hits": _messy((subject, "cvh_pre"), conv_pre_u * 1.3),
         "post_hits": _messy((subject, "cvh_post"), conv_post_u * 1.4),

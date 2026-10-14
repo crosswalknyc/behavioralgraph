@@ -87,6 +87,18 @@ ROWS = [
         'examples': [], 'counter': [('who watches love island?', False)],
     },
     {
+        'id': 'status_lookup', 'surface': 'analyze',
+        'reason': 'status_lookup', 'client_action': 'analyze',
+        'host_only': True,
+        'note': 'An ask that says the reader cannot see, find or has not '
+                'received their work ("I don\'t see No Reservations - only '
+                'Babylon 5", "have not received an email yet", "is it done") '
+                'is answered from their jobs across every product, their '
+                'engine runs and the delivery records; no model call '
+                '(2026-10-13, Carolyn). Served by the ask service lane.',
+        'examples': [], 'counter': [('where is the fall-off from the ticket step?', True)],
+    },
+    {
         'id': 'deliverable_lookup', 'surface': 'analyze',
         'reason': 'deliverable_lookup', 'client_action': 'analyze',
         'host_only': True,

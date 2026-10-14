@@ -9363,6 +9363,8 @@ def _pm_intake_finish_confirm(parsed, reply, run_label):
     if isinstance(parsed, dict):
         parsed.pop('_read_by', None)
         parsed.pop('missing', None)
+        parsed.pop('_precedent_note', None)
+        parsed.pop('_precedent', None)
     if prop and prop.get('field'):
         try:
             from prometheus.intake_reader import proposed_note
@@ -9400,13 +9402,24 @@ def _pm_intake_turn(flow, text, body, history, user, ppu, first):
         if drafted:
             return drafted
     from prometheus import intake_reader as _ir
-    template = _ir.find_template_reference(text) if flow == 'digital_journey' else ''
+    from prometheus import precedent as _prec
+    template = _prec.reference(text)   # every flow: "like the one you did for X" (Jenna 2026-10-13)
     ask_text = _ir.strip_template_reference(text) if template else text
     parsed, fault = _pm_intake_resolve(flow, ask_text, history, parse_fn, complete_fn, required, ask_copy,
                                        user=user, usage_extras=ppu, fallback_fn=fallback_fn,
                                        propose_fn=None if template else propose_fn, alert=not first)
+    found = None
     if template:   # the prior deliverable lends its shape before any default is proposed
-        parsed = _ir.apply_journey_template(parsed, _pm_prior_journey_shape(template, user), template)
+        try:
+            found = _prec.resolve(template, (user or {}).get('username') or '', host=_H)
+        except Exception:
+            found = None
+        if flow == 'digital_journey' and not found:
+            parsed = _ir.apply_journey_template(parsed, _pm_prior_journey_shape(template, user), template)
+        else:
+            parsed = _prec.apply(flow, parsed, found, template)
+        if isinstance(parsed, dict) and found:
+            parsed['_precedent_note'] = _prec.describe(found)
         if not complete_fn(parsed) and propose_fn:
             prop = propose_fn(parsed)
             if prop:
@@ -9420,7 +9433,10 @@ def _pm_intake_turn(flow, text, body, history, user, ppu, first):
     if flow == 'digital_journey' and isinstance(parsed, dict):
         parsed = _ir.watch_defaults(parsed)   # a title on a video platform starts on social (Jenna 2026-10-13)
     if complete_fn(parsed):
+        _pnote = parsed.pop('_precedent_note', '') if isinstance(parsed, dict) else ''
         reply = _pm_intake_finish_confirm(parsed, globals()[confirm_name](parsed), run_label)
+        if _pnote:
+            reply = reply.rstrip() + '\n\n' + _pnote
         _pm_pending_intake('stash', user, flow, parsed, run_label)   # a later "Run the journey" still finds it
         return {**base, 'reply': reply, payload_key: parsed, 'followups': [run_label, 'Cancel']}
     missing = _ir_labels(parsed, labels) or list(labels)
@@ -16755,6 +16771,16 @@ def _pm_run_bpiq_job(job_id, username, inputs, extras):
             .get('total_brand_value'),
             'finished_at': time.time()})
         print(f"[bpiq-job {job_id}] done -> {out_key}")
+        try:   # delivered contract (2026-10-13)
+            from prometheus.delivered import on_done as _on_done
+            _val = payload.get('valuation') or {}
+            _tbv = _val.get('total_brand_value')
+            _on_done('bpiq', username=username, subject=str(payload.get('project_name') or ''), s3_key=bare_key, payload=payload,
+                     host=_H, s3_client=_H.s3_client, job_id=job_id,
+                     figures=([{'name': 'Total brand value', 'value': _tbv, 'unit': 'usd', 'definition': 'Brand Partnership IQ valuation'}] if _tbv else []),
+                     facts=([('Total brand value', f"${float(_tbv):,.2f}")] if _tbv else []))
+        except Exception as _dl_err:
+            print(f"[bpiq-job {job_id}] delivery skipped: {_dl_err}")
     except Exception as e:
         traceback.print_exc()
         try:
@@ -16975,13 +17001,15 @@ def _pm_run_jiq_job(job_id, username, inputs, extras):
             'ready_message': _pm_jiq_ready_message(payload, inputs),
             'finished_at': time.time()})
         print(f"[jiq-job {job_id}] done -> {out_key}")
-        # The finished journey is emailed with its detailed breakdown attached
-        # (Jenna 2026-10-13: "it should always send this kind of raw data").
+        # Done means the user has it (Jenna 2026-10-13): ledger, email with the
+        # breakdown attached, delivery record, shelf. One contract, every product.
         try:
-            from prometheus.journey_delivery import deliver_journey
-            _dl = deliver_journey(username=username, payload=payload, s3_key=out_key, host=_H,
-                                  s3_client=_H.s3_client, ready_message=_pm_jiq_ready_message(payload, inputs))
-            print(f"[jiq-job {job_id}] delivery: {'sent' if _dl.get('sent') else _dl.get('reason')}")
+            from prometheus.delivered import on_done as _on_done
+            from migration.journey_iq import shelf_for as _shelf_for, SHELF_LABELS as _SHELF_LABELS
+            _on_done('journey', username=username, subject=str(payload['meta'].get('project_name') or subj), s3_key=out_key,
+                     payload=payload, host=_H, s3_client=_H.s3_client, job_id=job_id,
+                     shelf=_SHELF_LABELS.get(_shelf_for(payload.get('meta') or {}), ''),
+                     ready_message=_pm_jiq_ready_message(payload, inputs))
         except Exception as _dl_err:
             print(f"[jiq-job {job_id}] delivery skipped: {_dl_err}")
     except Exception as e:
@@ -17152,6 +17180,15 @@ def _pm_run_fw_job(job_id, username, inputs, extras):
             'conversions': summary.get('conversions'),
             'finished_at': time.time()})
         print(f"[fw-job {job_id}] done -> {out_key}")
+        try:   # delivered contract (2026-10-13)
+            from prometheus.delivered import on_done as _on_done
+            _on_done('flywheel', username=username, subject=str(summary.get('title') or ''), s3_key=out_key, payload=summary,
+                     host=_H, s3_client=_H.s3_client, job_id=job_id,
+                     figures=([{'name': 'Captured users who converted', 'value': summary.get('conversions'), 'unit': 'people', 'definition': 'Flywheel read'}]
+                              if isinstance(summary.get('conversions'), (int, float)) else []),
+                     facts=([('Converted', f"{int(summary['conversions']):,}")] if isinstance(summary.get('conversions'), (int, float)) else []))
+        except Exception as _dl_err:
+            print(f"[fw-job {job_id}] delivery skipped: {_dl_err}")
     except Exception as e:
         traceback.print_exc()
         try:
@@ -17350,6 +17387,13 @@ def _pm_run_aiq_job(job_id, username, inputs, extras):
             'end_date': str(inputs.get('end_tracking_date') or ''),
             'finished_at': time.time()})
         print(f"[aiq-job {job_id}] done -> {out['slug']}")
+        try:   # delivered contract (2026-10-13)
+            from prometheus.delivered import on_done as _on_done
+            _on_done('attribution', username=username, subject=str(name or ''), s3_key=str(out.get('slug') or ''), payload=out,
+                     host=_H, s3_client=_H.s3_client, job_id=job_id,
+                     facts=[('Tracked assets', f"{int(out.get('asset_count') or 0):,}")])
+        except Exception as _dl_err:
+            print(f"[aiq-job {job_id}] delivery skipped: {_dl_err}")
     except Exception as e:
         traceback.print_exc()
         try:

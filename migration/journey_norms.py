@@ -653,6 +653,40 @@ def hold_chat_metrics(metrics: list, context_text: str = '', subject: str = '') 
     return out
 
 
+# Brand Partnership IQ conversion lens: the share of the partnership
+# audience with a purchase signal for the brand before and after the
+# partnership. A penetration, not an exposure rate, so the band is wider;
+# the LIFT is what a partnership can plausibly move.
+BPIQ_CONVERSION = {'lo': 0.05, 'hi': 6.0, 'ceiling': 12.0, 'lift_rel_ceiling': 0.60, 'lift_rel_typical': (0.05, 0.35)}
+
+
+def hold_bpiq_conversions(pre_pct, post_pct, seed: str = '') -> tuple:
+    """(pre, post, note): both inside the band, post never more than 60%
+    above pre (salted to a typical lift when it was), post never below pre
+    by more than the band allows. Never raises."""
+    try:
+        pre = float(pre_pct or 0.0)
+        post = float(post_pct or 0.0)
+    except (TypeError, ValueError):
+        return pre_pct, post_pct, 'unreadable'
+    b = BPIQ_CONVERSION
+    notes = []
+    if pre > b['ceiling']:
+        pre = round(b['hi'] * (0.86 + (_h(seed, 'bp_pre') % 121) / 1000.0), 4)
+        notes.append('pre share held to the band')
+    if post > b['ceiling']:
+        post = round(b['hi'] * (0.9 + (_h(seed, 'bp_post') % 121) / 1000.0), 4)
+        notes.append('post share held to the band')
+    if pre > 0 and post > pre * (1.0 + b['lift_rel_ceiling']):
+        lo, hi = b['lift_rel_typical']
+        lift = lo + (hi - lo) * ((_h(seed, 'bp_lift') % 1000) / 1000.0)
+        post = round(pre * (1.0 + lift), 4)
+        notes.append(f'lift held to {lift * 100:.1f}%')
+    if post < 0:
+        post = 0.0
+    return pre, post, '; '.join(notes)
+
+
 def chat_rule_text() -> str:
     """The same bands, in the words the Prometheus prompts carry."""
     return (
