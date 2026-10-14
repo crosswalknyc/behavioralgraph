@@ -15306,11 +15306,13 @@ def _pm_analyze_core(user, body, text, history):
             'brand_partner'):
         _subj = (f"{_bpiq_confirm.get('qualifier')} x "
                  f"{_bpiq_confirm.get('brand_partner')}")
+        _bpiq_job = uuid.uuid4().hex[:12]
         if not _H.consume_credit(
                 _bpiq_user,
                 description=f'Brand Partnership Valuation: {_subj}',
                 pull_type='Brand Partnership IQ',
-                credits_used=_PM_BPIQ_CREDITS):
+                credits_used=_PM_BPIQ_CREDITS,
+                job_id=_bpiq_job):
             return jsonify({
                 'success': True, 'action': 'answer',
                 'reply': ('That valuation needs '
@@ -15321,7 +15323,7 @@ def _pm_analyze_core(user, body, text, history):
                           'and I will run it the moment you are set.'),
                 'followups': [], 'offer_deck': False,
                 'deck_angle': None})
-        _bpiq_job, _bpiq_extras = uuid.uuid4().hex[:12], _pm_merge_extras(_pm_attrib_extras(), _pm_ppu)
+        _bpiq_extras = _pm_merge_extras(_pm_attrib_extras(), _pm_ppu)
         _rr.start_engine_job('bpiq', _bpiq_job, _bpiq_user, _bpiq_confirm, _bpiq_extras, _pm_bpiq_status_write, _pm_run_bpiq_job)   # the queue, never a web thread (audit item 5)
         return jsonify({
             'success': True, 'action': 'answer',
@@ -15348,10 +15350,12 @@ def _pm_analyze_core(user, body, text, history):
                   + (f' + {_adays} prepaid daily refreshes through '
                      f'{_aiq_confirm.get("end_tracking_date")}'
                      if _adays else '') + ')')
+        _aiq_job = uuid.uuid4().hex[:12]
         if not _H.consume_credit(
                 _bpiq_user, description=_adesc,
                 pull_type='Attribution IQ Setup',
-                credits_used=_atotal):
+                credits_used=_atotal,
+                job_id=_aiq_job):
             return jsonify({
                 'success': True, 'action': 'answer',
                 'reply': ('That tracking package comes to '
@@ -15364,7 +15368,7 @@ def _pm_analyze_core(user, body, text, history):
                           'set.'),
                 'followups': [], 'offer_deck': False,
                 'deck_angle': None})
-        _aiq_job, _aiq_extras = uuid.uuid4().hex[:12], _pm_merge_extras(_pm_attrib_extras(), _pm_ppu)
+        _aiq_extras = _pm_merge_extras(_pm_attrib_extras(), _pm_ppu)
         _rr.start_engine_job('aiq', _aiq_job, _bpiq_user, _aiq_confirm, _aiq_extras, _pm_aiq_status_write, _pm_run_aiq_job)   # the queue, never a web thread (audit item 5)
         return jsonify({
             'success': True, 'action': 'answer',
@@ -15426,11 +15430,13 @@ def _pm_analyze_core(user, body, text, history):
     if isinstance(_fw_confirm, dict) and _fw_confirm.get('subject'):
         _fsubj = (f"{_fw_confirm.get('subject')} "
                   f"{_fw_confirm.get('ecosystem')} flywheel")
+        _fw_job = uuid.uuid4().hex[:12]
         if not _H.consume_credit(
                 _bpiq_user,
                 description=f'Flywheel: {_fsubj}',
                 pull_type='Flywheel IQ',
-                credits_used=_PM_FW_CREDITS):
+                credits_used=_PM_FW_CREDITS,
+                job_id=_fw_job):
             return jsonify({
                 'success': True, 'action': 'answer',
                 'reply': ('That flywheel prices at '
@@ -15441,7 +15447,7 @@ def _pm_analyze_core(user, body, text, history):
                           'it the moment you are set.'),
                 'followups': [], 'offer_deck': False,
                 'deck_angle': None})
-        _fw_job, _fw_extras = uuid.uuid4().hex[:12], _pm_merge_extras(_pm_attrib_extras(), _pm_ppu)
+        _fw_extras = _pm_merge_extras(_pm_attrib_extras(), _pm_ppu)
         _rr.start_engine_job('fw', _fw_job, _bpiq_user, _fw_confirm, _fw_extras, _pm_fw_status_write, _pm_run_fw_job)   # the queue, never a web thread (audit item 5)
         return jsonify({
             'success': True, 'action': 'answer',
@@ -15460,11 +15466,13 @@ def _pm_analyze_core(user, body, text, history):
     if isinstance(_jiq_confirm, dict) and _jiq_confirm.get('subject'):
         _jsubj = (f"{_jiq_confirm.get('subject')} on "
                   f"{_jiq_confirm.get('platform')}")
+        _jiq_job = uuid.uuid4().hex[:12]
         if not _H.consume_credit(
                 _bpiq_user,
                 description=f'Digital Journey: {_jsubj}',
                 pull_type='Digital Journey IQ',
-                credits_used=_PM_JIQ_CREDITS):
+                credits_used=_PM_JIQ_CREDITS,
+                job_id=_jiq_job):
             return jsonify({
                 'success': True, 'action': 'answer',
                 'reply': ('That journey prices at '
@@ -15475,7 +15483,7 @@ def _pm_analyze_core(user, body, text, history):
                           'it the moment you are set.'),
                 'followups': [], 'offer_deck': False,
                 'deck_angle': None})
-        _jiq_job, _jiq_extras = uuid.uuid4().hex[:12], _pm_merge_extras(_pm_attrib_extras(), _pm_ppu)
+        _jiq_extras = _pm_merge_extras(_pm_attrib_extras(), _pm_ppu)
         _rr.start_engine_job('jiq', _jiq_job, _bpiq_user, _jiq_confirm, _jiq_extras, _pm_jiq_status_write, _pm_run_jiq_job)   # the queue, never a web thread (audit item 5)
         return jsonify({
             'success': True, 'action': 'answer',

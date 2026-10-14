@@ -4324,12 +4324,20 @@ def credit_usage_for_modal(user, username, users_data=None):
     rows = []
     seen_job = set()
     seen_refund_day = set()
+    seen_charge_fp = set()
 
     def _is_refund(row, usd):
         ptype = str(row.get("pull_type") or "").strip().lower()
         return ptype == "refund" or usd < 0
 
-    def _add(row):
+    def _charge_fp(row, usd):
+        return (
+            str(row.get("used_at") or row.get("ts") or "")[:10],
+            round(abs(usd), 2),
+            norm_usage_desc(row.get("description")),
+        )
+
+    def _add(row, *, from_wallet=False):
         if not isinstance(row, dict):
             return
         usd = usage_row_usd(row)
@@ -4347,6 +4355,15 @@ def credit_usage_for_modal(user, username, users_data=None):
             if rk in seen_refund_day:
                 return
             seen_refund_day.add(rk)
+        if not refund:
+            # Prometheus Digital Journey writes credit_usage_history
+            # and the company wallet deduct with no job_id. Billing
+            # already folds those on description. Modal must too, or
+            # the same $500 shows twice (Carolyn Bisson, 2026-10-13).
+            fp = _charge_fp(row, usd)
+            if from_wallet and fp in seen_charge_fp:
+                return
+            seen_charge_fp.add(fp)
         out = dict(row)
         out["usd"] = usd
         if out.get("amount_usd") is None:
@@ -4390,7 +4407,7 @@ def credit_usage_for_modal(user, username, users_data=None):
             "credits_used": 0,
             "amount_usd": usd,
             "wallet_charged_usd": usd,
-        })
+        }, from_wallet=True)
 
     rows.sort(key=lambda r: str(r.get("used_at") or ""), reverse=True)
     spend = round(sum(float(r.get("usd") or 0) for r in rows), 2)
