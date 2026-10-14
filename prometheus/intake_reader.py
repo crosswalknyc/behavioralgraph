@@ -1093,12 +1093,22 @@ def journey_shape(prior, title):
         return None
     start, end = labels[0], labels[-1]
     kind = 'watch' if re.search(r"\bwatch", end, re.I) else ('purchase' if re.search(r"\b(?:paid|bought|purchas)", end, re.I) else None)
+    platform = str((prior or {}).get('platform') or '') if isinstance(prior, dict) else ''
     if title:
-        rx = re.compile(re.escape(str(title)), re.I)
-        start, end = rx.sub('{subject}', start), rx.sub('{subject}', end)
+        # the run name is often '<Title> on <Platform>' while the stage labels
+        # carry the bare title: swap both forms, and keep the platform as part
+        # of the shape (2026-10-14, golden g095)
+        bare = re.sub(r"\s+on\s+[A-Z][\w+ .&-]{1,30}$", '', str(title)).strip()
+        m_plat = re.search(r"\s+on\s+([A-Z][\w+ .&-]{1,30})$", str(title))
+        if m_plat and not platform:
+            platform = m_plat.group(1).strip()
+        for t in sorted({str(title), bare}, key=len, reverse=True):
+            if t:
+                rx = re.compile(re.escape(t), re.I)
+                start, end = rx.sub('{subject}', start), rx.sub('{subject}', end)
     start = re.sub(r"^(?:saw|viewed|watched)\b", lambda m: m.group(0).lower(), start)
     return {'start_behavior': start[:1].lower() + start[1:], 'conversion_event': end[:1].lower() + end[1:],
-            'journey_kind': kind}
+            'journey_kind': kind, 'platform': platform or None}
 
 
 def apply_journey_template(parsed, shape, template_title=''):
@@ -1108,6 +1118,8 @@ def apply_journey_template(parsed, shape, template_title=''):
     p = dict(parsed or {})
     if not shape:
         return p
+    if not p.get('platform') and shape.get('platform'):
+        p['platform'] = str(shape['platform'])      # the same analysis means the same platform unless the ask says otherwise
     subj, plat = str(p.get('subject') or ''), str(p.get('platform') or '')
     filled = []
     for field in ('start_behavior', 'conversion_event', 'journey_kind'):
