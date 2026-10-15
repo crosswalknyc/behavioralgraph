@@ -141,6 +141,25 @@ def facts_of(raw: dict, *, subject: str = '', window: dict = None, product: str 
         for k in ('size', 'sample', 'projection', 'us_population', 'audience'):
             if ic.get(k) is not None:
                 _add(k.replace('_', ' '), ic.get(k))
+    # the sizing lane: structured per subject, plus the lines of its own
+    # sample-check text (our format, so the parse is exact)
+    for sz in raw.get('sizing') or []:
+        if isinstance(sz, dict) and sz.get('sample'):
+            who = str(sz.get('subject') or subject or '').strip()
+            _add(f"{who} audience".strip() if who else 'audience', sz.get('sample'), 'people')
+            if sz.get('us'):
+                _add(f"{who} US audience".strip() if who else 'US audience', sz.get('us'), 'people')
+    text = str(raw.get('reply') or '')
+    if 'Sample check for' in text:
+        for label, rx, unit in (('Audience', r'-\s*Sample:\s*([\d,]+)', 'people'),
+                                ('Incidence', r'\(([\d.]+)% incidence\)', 'percent'),
+                                ('Avid tier', r'-\s*Avid tier:\s*([\d,]+)', 'people'),
+                                ('US audience in window', r'-\s*US audience in window:\s*~?\$?([\d.,]+\s*[MKmk]?)', 'people'),
+                                ('Audience range low', r'-\s*Audience range:\s*([\d,]+)\s+to', 'people'),
+                                ('Audience range high', r'-\s*Audience range:\s*[\d,]+\s+to\s+([\d,]+)', 'people')):
+            m = re.search(rx, text)
+            if m and not any(f.get('value') == _num(m.group(1).strip()) for f in out):
+                _add(label, m.group(1).strip(), unit)
     return out[:60]
 
 
