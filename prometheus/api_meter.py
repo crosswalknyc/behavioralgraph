@@ -14,11 +14,19 @@ import threading
 import time
 import uuid
 
-__all__ = ['check_rate', 'spent_today', 'record', 'idempotent_replay', 'usage', 'reset_memory']
+__all__ = ['check_rate', 'spent_today', 'spent_since', 'record', 'idempotent_replay', 'repeat_replay', 'repeat_count', 'question_hash', 'usage', 'reset_memory']
 
-_MEM_CALLS: list = []          # (ts_epoch, key_id, endpoint, day, charged_usd, kind, status, ms)
+_MEM_CALLS: list = []          # (ts_epoch, key_id, endpoint, day, charged_usd, kind, status, ms, question_hash)
 _MEM_IDEM: dict = {}           # (key_id, idem_key) -> (ts_epoch, response, status)
+_MEM_REPEAT: dict = {}         # (key_id, question_hash) -> (ts_epoch, response, status)
 _MEM_LOCK = threading.Lock()
+
+
+def question_hash(text: str) -> str:
+    """A stable hash of the question as asked (case and spacing folded)."""
+    import hashlib
+    norm = ' '.join(str(text or '').lower().split())
+    return hashlib.sha256(norm.encode('utf-8')).hexdigest()[:24] if norm else ''
 
 
 def _store():
@@ -41,6 +49,7 @@ def reset_memory():
     with _MEM_LOCK:
         _MEM_CALLS.clear()
         _MEM_IDEM.clear()
+        _MEM_REPEAT.clear()
 
 
 def _mem_count(key_id, endpoint, since):
@@ -50,7 +59,8 @@ def _mem_count(key_id, endpoint, since):
 
 def check_rate(key_id: str, endpoint: str, per_minute: int, per_day: int, now: float = None) -> dict:
     """{'allowed': bool, 'retry_after': int, 'minute': n, 'day': n}.
-    Counts calls already recorded; the caller records this one after."""
+    Counts calls already recorded; the caller records this one after.
+    A limit of 0 means no limit on that window."""
     now = now or time.time()
     st = _store()
     minute = day = None
@@ -60,9 +70,9 @@ def check_rate(key_id: str, endpoint: str, per_minute: int, per_day: int, now: f
     if minute is None or day is None:
         minute = _mem_count(key_id, endpoint, now - 60)
         day = _mem_count(key_id, endpoint, now - 86400)
-    if minute >= per_minute:
+    if per_minute and minute >= per_minute:
         return {'allowed': False, 'retry_after': 20, 'minute': minute, 'day': day}
-    if day >= per_day:
+    if per_day and day >= per_day:
         return {'allowed': False, 'retry_after': 3600, 'minute': minute, 'day': day}
     return {'allowed': True, 'retry_after': 0, 'minute': minute, 'day': day}
 
@@ -80,22 +90,25 @@ def spent_today(key_id: str) -> float:
 
 def record(*, key_id: str, owner: str, endpoint: str, kind: str, status: int, ms: int, trace_id: str = '',
            request_id: str = '', idempotency_key: str = '', conversation_id: str = '', charged_usd: float = 0.0,
-           response: dict = None) -> str:
-    """One call row. The response is kept only when an idempotency key
-    was sent (that is what replay reads back)."""
+           response: dict = None, qhash: str = '') -> str:
+    """One call row. The response is kept on answer rows (idempotency and
+    repeat replay read it back); qhash is the question's hash."""
     now = time.time()
     call_id = uuid.uuid4().hex[:16]
+    keep = response is not None and (idempotency_key or kind in ('answer', 'clarify'))
     row = {'call_id': call_id, 'ts': _iso(now), 'day': _today(), 'key_id': key_id, 'owner': owner, 'endpoint': endpoint,
            'kind': kind, 'status': int(status or 0), 'ms': int(ms or 0), 'trace_id': trace_id or None,
            'request_id': request_id or None, 'idempotency_key': idempotency_key or None,
            'conversation_id': conversation_id or None, 'charged_usd': float(charged_usd or 0.0),
-           'response': (json.dumps(response, default=str) if (response is not None and idempotency_key) else None)}
+           'response': (json.dumps(response, default=str) if keep else None), 'question_hash': qhash or None}
     with _MEM_LOCK:
-        _MEM_CALLS.append((now, key_id, endpoint, row['day'], row['charged_usd'], kind, row['status'], row['ms']))
+        _MEM_CALLS.append((now, key_id, endpoint, row['day'], row['charged_usd'], kind, row['status'], row['ms'], qhash or ''))
         if len(_MEM_CALLS) > 20000:
             del _MEM_CALLS[:5000]
         if idempotency_key and response is not None:
             _MEM_IDEM[(key_id, idempotency_key)] = (now, response, int(status or 200))
+        if qhash and keep:
+            _MEM_REPEAT[(key_id, qhash)] = (now, response, int(status or 200))
     st = _store()
     if st is not None:
         st.record_api_call(row)
@@ -117,6 +130,51 @@ def idempotent_replay(key_id: str, idempotency_key: str, ttl_s: int = 86400):
         if got:
             return got
     return None
+
+
+def repeat_count(key_id: str, qhash: str, window_s: int) -> int:
+    """How many times this key asked this exact question inside the window."""
+    if not qhash:
+        return 0
+    now = time.time()
+    st = _store()
+    if st is not None:
+        n = st.api_repeat_count(key_id, qhash, _iso(now - window_s))
+        if n is not None:
+            return n
+    with _MEM_LOCK:
+        return sum(1 for r in _MEM_CALLS if r[1] == key_id and len(r) > 8 and r[8] == qhash and r[0] >= now - window_s and r[2] == 'ask')
+
+
+def repeat_replay(key_id: str, qhash: str, window_s: int):
+    """(response, status) of the last answer to this exact question inside
+    the window, or None (loop safety: a repeated question costs nothing)."""
+    if not qhash:
+        return None
+    now = time.time()
+    with _MEM_LOCK:
+        hit = _MEM_REPEAT.get((key_id, qhash))
+    if hit and now - hit[0] <= window_s:
+        return hit[1], hit[2]
+    st = _store()
+    if st is not None:
+        got = st.api_repeat_response(key_id, qhash, _iso(now - window_s))
+        if got:
+            return got
+    return None
+
+
+def spent_since(key_id: str, seconds: int) -> float:
+    """Metered charges for the key in the last N seconds (the part of the
+    bill the wallet has not settled yet)."""
+    now = time.time()
+    st = _store()
+    if st is not None:
+        v = st.api_spent_since(key_id, _iso(now - seconds))
+        if v is not None:
+            return float(v)
+    with _MEM_LOCK:
+        return float(sum(r[4] or 0.0 for r in _MEM_CALLS if r[1] == key_id and r[0] >= now - seconds))
 
 
 def usage(key_id: str, day_from: str, day_to: str) -> list:

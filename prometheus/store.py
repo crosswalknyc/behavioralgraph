@@ -54,9 +54,10 @@ DDL = [
     """CREATE TABLE IF NOT EXISTS pm_api_calls (
         call_id TEXT PRIMARY KEY, ts TEXT NOT NULL, day TEXT NOT NULL, key_id TEXT NOT NULL, owner TEXT, endpoint TEXT,
         kind TEXT, status INTEGER, ms INTEGER, trace_id TEXT, request_id TEXT, idempotency_key TEXT, conversation_id TEXT,
-        charged_usd REAL, response TEXT)""",
+        charged_usd REAL, response TEXT, question_hash TEXT)""",
     "CREATE INDEX IF NOT EXISTS pm_api_calls_key_ts ON pm_api_calls (key_id, ts)",
     "CREATE INDEX IF NOT EXISTS pm_api_calls_idem ON pm_api_calls (key_id, idempotency_key)",
+    "CREATE INDEX IF NOT EXISTS pm_api_calls_q ON pm_api_calls (key_id, question_hash, ts)",
     # metered spend per request id, accumulated by the usage log on every
     # model call (dashboard, API and the build server alike)
     """CREATE TABLE IF NOT EXISTS pm_request_charges (
@@ -135,6 +136,13 @@ def _upsert(table, keys, cols, values):
     _exec(sql, tuple(values))
 
 
+# columns added after a table first shipped (CREATE TABLE IF NOT EXISTS leaves an
+# existing table alone, so each is added on its own, errors ignored when present)
+DDL_ADD_COLUMNS = [
+    ('pm_api_calls', 'question_hash', 'TEXT'),
+]
+
+
 def migrate():
     global _migrated
     if not enabled():
@@ -142,6 +150,11 @@ def migrate():
     try:
         for stmt in DDL:
             _exec(stmt)
+        for table, col, typ in DDL_ADD_COLUMNS:
+            try:
+                _exec(f"ALTER TABLE {table} ADD COLUMN {'IF NOT EXISTS ' if _kind == 'pg' else ''}{col} {typ}")
+            except Exception:
+                pass
         _migrated = True
         return True
     except Exception as e:
@@ -373,7 +386,7 @@ def record_api_call(row):
     try:
         _ensure()
         cols = ['call_id', 'ts', 'day', 'key_id', 'owner', 'endpoint', 'kind', 'status', 'ms', 'trace_id', 'request_id',
-                'idempotency_key', 'conversation_id', 'charged_usd', 'response']
+                'idempotency_key', 'conversation_id', 'charged_usd', 'response', 'question_hash']
         vals = [row.get(c) for c in cols]
         if isinstance(vals[-1], (dict, list)):
             vals[-1] = json.dumps(vals[-1], default=str)
@@ -421,6 +434,47 @@ def api_idempotent_response(key_id, idem_key, since_iso):
         return json.loads(row[0]), int(row[1] or 200)
     except Exception as e:
         _note('store.api_idempotent_response', e)
+        return None
+
+
+def api_repeat_count(key_id, qhash, since_iso):
+    if not enabled():
+        return None
+    try:
+        _ensure()
+        cur = _exec("SELECT COUNT(*) FROM pm_api_calls WHERE key_id = %s AND question_hash = %s AND endpoint = 'ask' AND ts >= %s",
+                    (key_id, qhash, since_iso))
+        return int(cur.fetchone()[0])
+    except Exception as e:
+        _note('store.api_repeat_count', e)
+        return None
+
+
+def api_repeat_response(key_id, qhash, since_iso):
+    if not enabled() or not qhash:
+        return None
+    try:
+        _ensure()
+        cur = _exec("SELECT response, status FROM pm_api_calls WHERE key_id = %s AND question_hash = %s AND ts >= %s AND response IS NOT NULL "
+                    "ORDER BY ts DESC LIMIT 1", (key_id, qhash, since_iso))
+        row = cur.fetchone()
+        if not row or not row[0]:
+            return None
+        return json.loads(row[0]), int(row[1] or 200)
+    except Exception as e:
+        _note('store.api_repeat_response', e)
+        return None
+
+
+def api_spent_since(key_id, since_iso):
+    if not enabled():
+        return None
+    try:
+        _ensure()
+        cur = _exec("SELECT COALESCE(SUM(charged_usd), 0) FROM pm_api_calls WHERE key_id = %s AND ts >= %s", (key_id, since_iso))
+        return float(cur.fetchone()[0] or 0.0)
+    except Exception as e:
+        _note('store.api_spent_since', e)
         return None
 
 

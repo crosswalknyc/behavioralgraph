@@ -5,17 +5,26 @@ modal can show and edit it. Missing fields mean the defaults below, so
 every key that exists today keeps working unchanged.
 
     api_key_scopes        ['ask', 'build']           what the key may do
-    api_key_limits        {'ask_per_minute': 30, 'ask_per_day': 400,
-                           'jobs_per_minute': 300, 'jobs_per_day': 5000}
-    api_key_daily_cap_usd 50.0                      metered spend per UTC day
+    api_key_limits        {'ask_per_minute': 60, 'ask_per_day': 0,
+                           'jobs_per_minute': 300, 'jobs_per_day': 0}
+                          (0 = no limit; the per-minute burst limit is
+                          the only default, it protects everyone else's
+                          response times, never a budget)
+    api_key_daily_cap_usd 0 = none (Jenna 2026-10-14: usage is billed
+                          back, so a spend cap only loses revenue; a
+                          partner who wants a budget guardrail gets one
+                          set here by their admin). The wallet never goes
+                          negative: the key shuts off at $0 until a reload.
     api_key_webhook_url   https://...                fired once per terminal job
     api_key_webhook_secret shared secret for X-Crosswalk-Signature (HMAC-SHA256)
     api_key_sandbox       false                      sandbox keys never bill
     api_key_label         a name for the key (admin)
 
-Decisions (Jenna 2026-10-14, plan defaults taken): metered billing on
-the owner's wallet, 30 / 400 asks, $50 a day, webhooks optional,
-conversation memory per key.
+Decisions (Jenna 2026-10-14): metered billing on the owner's wallet;
+no spend cap and no daily ask cap by default ("I don't know why we
+wouldn't encourage them to spend as much as possible"); a 60-a-minute
+burst limit; webhooks optional; conversation memory per key. The
+wallet's funds are the only budget.
 """
 from __future__ import annotations
 
@@ -26,8 +35,16 @@ __all__ = ['SCOPES', 'DEFAULT_LIMITS', 'DEFAULT_DAILY_CAP_USD', 'key_id', 'scope
 
 SCOPES = ('ask', 'build', 'read_only')
 DEFAULT_SCOPES = ('ask', 'build')
-DEFAULT_LIMITS = {'ask_per_minute': 30, 'ask_per_day': 400, 'jobs_per_minute': 300, 'jobs_per_day': 5000}
-DEFAULT_DAILY_CAP_USD = 50.0
+DEFAULT_LIMITS = {'ask_per_minute': 60, 'ask_per_day': 0, 'jobs_per_minute': 300, 'jobs_per_day': 0}   # 0 = no limit
+DEFAULT_DAILY_CAP_USD = 0.0                                                                            # 0 = no cap
+# The wallet never goes negative (Jenna 2026-10-14): one more ask needs at
+# least this much left, net of charges not yet settled to the wallet.
+MIN_RESERVE_USD = 0.50
+# Loop safeties: the same question again inside the window replays the
+# first answer free; past the count it reads as a stuck integration and
+# is held with a retry-after instead of charged.
+REPEAT_WINDOW_S = 600
+REPEAT_HOLD_AFTER = 5
 REQUEST_TEXT_MAX = 4000
 REQUEST_BODY_MAX = 64 * 1024
 IDEMPOTENCY_TTL_S = 86400
@@ -63,23 +80,25 @@ def has_scope(user: dict, scope: str) -> bool:
 
 
 def limits(user: dict) -> dict:
+    """Per-key limits; a value of 0 means no limit on that window."""
     out = dict(DEFAULT_LIMITS)
     raw = (user or {}).get('api_key_limits')
     if isinstance(raw, dict):
         for k in DEFAULT_LIMITS:
+            if raw.get(k) is None:
+                continue
             try:
-                v = int(raw.get(k))
-                if v > 0:
-                    out[k] = v
+                out[k] = max(0, int(raw.get(k)))
             except Exception:
                 pass
     return out
 
 
 def daily_cap_usd(user: dict) -> float:
+    """The key's daily metered cap; 0 means none (the default)."""
     try:
         v = float((user or {}).get('api_key_daily_cap_usd'))
-        return v if v > 0 else DEFAULT_DAILY_CAP_USD
+        return v if v > 0 else 0.0
     except Exception:
         return DEFAULT_DAILY_CAP_USD
 
@@ -121,10 +140,10 @@ def apply_policy(user: dict, patch: dict) -> dict:
     if 'limits' in p and isinstance(p.get('limits'), dict):
         lim = {}
         for k in DEFAULT_LIMITS:
+            if p['limits'].get(k) is None:
+                continue
             try:
-                v = int(p['limits'].get(k))
-                if v > 0:
-                    lim[k] = v
+                lim[k] = max(0, int(p['limits'].get(k)))      # 0 = no limit
             except Exception:
                 pass
         user['api_key_limits'] = lim

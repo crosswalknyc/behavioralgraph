@@ -21,7 +21,7 @@ from . import partner_keys as K
 from . import service
 from .host import host
 
-__all__ = ['handle_ask', 'handle_job', 'handle_usage', 'handle_health', 'conversation_thread_id', 'unsafe_input']
+__all__ = ['handle_ask', 'handle_job', 'handle_usage', 'handle_health', 'conversation_thread_id', 'unsafe_input', 'wallet_room']
 
 _CONV_RX = re.compile(r'^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$')
 _UNSAFE_RX = re.compile(
@@ -89,7 +89,34 @@ def _funds_ok(user: dict) -> bool:
     return True
 
 
-def _billing(user: dict, request_id: str, sandbox: bool) -> dict:
+UNSETTLED_WINDOW_S = 1800      # metered charges settle to the wallet when a session closes (30 min idle)
+
+
+def _wallet_metered(user: dict) -> bool:
+    """True when this owner's asks are metered against a wallet (not an
+    unlimited seat, not a company pool without a wallet)."""
+    try:
+        import pay_per_use as _ppu
+        if not _ppu.billing_active(user):
+            return False
+    except Exception:
+        pass
+    return (user or {}).get('wallet_balance_usd') is not None
+
+
+def wallet_room(user: dict, key_id: str) -> dict:
+    """{'balance', 'unsettled', 'available', 'ok'}: the wallet never goes
+    negative (Jenna 2026-10-14). One more ask needs the balance, net of
+    charges not yet settled, to hold at least the reserve."""
+    bal = _balance(user)
+    if bal is None:
+        return {'balance': None, 'unsettled': 0.0, 'available': None, 'ok': True}
+    unsettled = api_meter.spent_since(key_id, UNSETTLED_WINDOW_S)
+    avail = round(float(bal) - float(unsettled or 0.0), 4)
+    return {'balance': float(bal), 'unsettled': round(float(unsettled or 0.0), 4), 'available': avail, 'ok': avail >= K.MIN_RESERVE_USD}
+
+
+def _billing(user: dict, request_id: str, sandbox: bool, key_id: str = '') -> dict:
     charged = 0.0
     if not sandbox and request_id:
         try:
@@ -97,10 +124,11 @@ def _billing(user: dict, request_id: str, sandbox: bool) -> dict:
             charged = float((_rul.request_charge(request_id) or {}).get('billed_usd') or 0.0)
         except Exception:
             charged = 0.0
-    bal = None if sandbox else _balance(user)
     after = None
-    if bal is not None:
-        after = round(bal - charged, 2)
+    if not sandbox:
+        room = wallet_room(user, key_id) if key_id else {'available': _balance(user)}
+        if room.get('available') is not None:
+            after = max(0.0, round(float(room['available']) - charged, 2))
     return {'charged_usd': round(charged, 4), 'balance_after_usd': after, 'basis': 'metered'}
 
 
@@ -123,7 +151,7 @@ def _scrub(v1: dict) -> dict:
 
 
 def _finish(v1: dict, *, key_id: str, owner: str, endpoint: str, t0: float, request_id: str = '', idem: str = '',
-            conversation_id: str = '', trace_id: str = '') -> tuple:
+            conversation_id: str = '', trace_id: str = '', qhash: str = '') -> tuple:
     """Scrub, pick the HTTP status, record the call. Returns (v1, status, headers)."""
     v1 = _scrub(v1)
     if trace_id and not v1.get('trace_id'):
@@ -138,7 +166,7 @@ def _finish(v1: dict, *, key_id: str, owner: str, endpoint: str, t0: float, requ
         api_meter.record(key_id=key_id, owner=owner, endpoint=endpoint, kind=str(v1.get('kind') or ''), status=status, ms=ms,
                          trace_id=str(v1.get('trace_id') or ''), request_id=request_id, idempotency_key=idem,
                          conversation_id=conversation_id, charged_usd=float((v1.get('billing') or {}).get('charged_usd') or 0.0),
-                         response=v1 if idem else None)
+                         response=v1, qhash=qhash)
     except Exception:
         pass
     return v1, status, headers
@@ -161,13 +189,15 @@ def handle_ask(user: dict, body: dict, headers: dict = None, *, ask=None, raw_le
     except Exception:
         pass
 
+    text = str(body.get('text') or '').strip()
+    qh = api_meter.question_hash(f"{cid}|{text}")      # the same words in another conversation are another question
+
     def _out(v1, request_id=''):
         return _finish(v1, key_id=kid, owner=owner, endpoint='ask', t0=t0, request_id=request_id, idem=idem,
-                       conversation_id=cid, trace_id=trace_id)
+                       conversation_id=cid, trace_id=trace_id, qhash=qh)
 
     if not K.has_scope(user, 'ask'):
         return _out(C.declined('scope', f"This key cannot ask. Its scopes are {', '.join(K.scopes(user))}.", conversation_id=cid))
-    text = str(body.get('text') or '').strip()
     size = raw_len if raw_len is not None else len(json.dumps(body, default=str))
     if size > K.REQUEST_BODY_MAX or len(text) > K.REQUEST_TEXT_MAX:
         return _out(C.declined('too_large', f"Keep the text under {K.REQUEST_TEXT_MAX:,} characters and the body under 64 KB.", conversation_id=cid))
@@ -181,20 +211,53 @@ def handle_ask(user: dict, body: dict, headers: dict = None, *, ask=None, raw_le
             replay = dict(hit[0])
             replay['replayed'] = True
             return replay, int(hit[1] or 200), {}
+    # Loop safeties (Jenna 2026-10-14: "build in safeties to keep those dead
+    # loops from draining a wallet"). The same question again inside ten
+    # minutes replays the first answer free; the same question hammering
+    # past the count is held, nothing charged.
+    repeats = api_meter.repeat_count(kid, qh, K.REPEAT_WINDOW_S)
+    if repeats >= K.REPEAT_HOLD_AFTER:
+        v1 = C.declined('rate_limit', f"The same question has come in {repeats} times in the last {K.REPEAT_WINDOW_S // 60} minutes, "
+                        f"which reads as a stuck loop. Nothing was charged. Try again in a few minutes, or change the question.",
+                        retry_after=300, conversation_id=cid)
+        v1['declined']['loop'] = True
+        return _out(v1)
+    if repeats:
+        hit = api_meter.repeat_replay(kid, qh, K.REPEAT_WINDOW_S)
+        if hit and isinstance(hit[0], dict) and hit[0].get('kind') in ('answer', 'clarify'):
+            replay = dict(hit[0])
+            replay['replayed'] = True
+            replay['billing'] = {'charged_usd': 0.0, 'balance_after_usd': (replay.get('billing') or {}).get('balance_after_usd'), 'basis': 'metered'}
+            # the repeat still counts toward the loop hold
+            try:
+                api_meter.record(key_id=kid, owner=owner, endpoint='ask', kind=str(replay.get('kind')), status=int(hit[1] or 200),
+                                 ms=int((time.monotonic() - t0) * 1000), trace_id=trace_id, conversation_id=cid, charged_usd=0.0, qhash=qh)
+            except Exception:
+                pass
+            return replay, int(hit[1] or 200), {}
     lim = K.limits(user)
     rate = api_meter.check_rate(kid, 'ask', lim['ask_per_minute'], lim['ask_per_day'])
     if not rate['allowed']:
-        return _out(C.declined('rate_limit', f"Over the limit for this key ({lim['ask_per_minute']} a minute, {lim['ask_per_day']} a day). Try again shortly.",
+        what = (f"{lim['ask_per_minute']} a minute" if lim['ask_per_minute'] else '') + \
+               (f"{', ' if lim['ask_per_minute'] else ''}{lim['ask_per_day']} a day" if lim['ask_per_day'] else '')
+        return _out(C.declined('rate_limit', f"Over the limit for this key ({what}). Try again shortly.",
                                retry_after=rate['retry_after'], conversation_id=cid))
     if not sandbox:
-        cap = K.daily_cap_usd(user)
-        spent = api_meter.spent_today(kid)
-        if spent >= cap:
+        cap = K.daily_cap_usd(user)                 # 0 = none; the wallet's funds are the budget
+        if cap > 0 and api_meter.spent_today(kid) >= cap:
             return _out(C.declined('daily_cap', f"This key reached its daily spend cap of ${cap:,.2f}. It resets at 00:00 UTC.",
                                    next_action={'action': 'raise_cap', 'endpoint': 'contact your Crosswalk admin'}, conversation_id=cid))
         if not _funds_ok(user):
             return _out(C.declined('insufficient_funds', 'The wallet behind this key has no funds for a read. Add funds and ask again.',
                                    next_action={'action': 'top_up', 'endpoint': C.TOP_UP_ENDPOINT}, conversation_id=cid))
+        if _wallet_metered(user):
+            room = wallet_room(user, kid)
+            if not room['ok']:
+                avail = room.get('available')
+                return _out(C.declined('insufficient_funds',
+                                       f"The wallet behind this key is at ${max(0.0, avail or 0.0):,.2f} after charges still settling; "
+                                       f"it cannot go below zero. Add funds and ask again.",
+                                       next_action={'action': 'top_up', 'endpoint': C.TOP_UP_ENDPOINT}, conversation_id=cid))
     if unsafe_input(text):
         return _out(C.declined('unsafe_input', 'That text cannot be run as written. Ask the question plainly.', conversation_id=cid))
     win = _window(body)
@@ -240,9 +303,9 @@ def handle_ask(user: dict, body: dict, headers: dict = None, *, ask=None, raw_le
     raw = env.get('_raw') if isinstance(env, dict) else None
     if isinstance(raw, dict) and str(raw.get('action') or '') in _SCREEN_ACTIONS:
         v1 = C.declined('unsupported', 'That action needs the dashboard screen. Ask for the figure itself and it comes back here.',
-                        conversation_id=cid, billing=_billing(user, request_id, sandbox))
+                        conversation_id=cid, billing=_billing(user, request_id, sandbox, kid))
         return _out(v1, request_id)
-    billing = _billing(user, request_id, sandbox)
+    billing = _billing(user, request_id, sandbox, kid)
     v1 = C.to_v1(env, raw, billing=billing, conversation_id=cid, subject=subject, window=win)
     if v1.get('kind') == 'job':
         try:
@@ -278,7 +341,7 @@ def handle_job(user: dict, job_id: str) -> tuple:
     doc = doc if isinstance(doc, dict) else {}
     rid = str(doc.get('request_id') or out.get('request_id') or jd.get('request_id') or '')
     jd = dict(jd, stage=str(doc.get('stage') or doc.get('progress') or jd.get('stage') or ''))
-    billing = _billing(user, rid, sandbox) if rid else {'charged_usd': 0.0, 'balance_after_usd': (None if sandbox else _balance(user)), 'basis': 'metered'}
+    billing = _billing(user, rid, sandbox, kid) if rid else {'charged_usd': 0.0, 'balance_after_usd': (None if sandbox else _balance(user)), 'basis': 'metered'}
     if st in ('done', 'complete', 'completed', 'ready'):
         res = out.get('result') or {}
         v1 = C.to_v1(res, res.get('_raw') if isinstance(res, dict) else None, billing=billing)
