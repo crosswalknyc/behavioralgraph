@@ -110,20 +110,31 @@ def find_journey(text, *, s3, user, uname, bucket='dashboard-inputs', ctx=None):
         page_key = str(((ctx or {}).get('journey') or {}).get('key') or (ctx or {}).get('journey_key') or '')
     except Exception:
         page_key = ''
-    best = None
-    for run in runs:
-        if not isinstance(run, dict) or not run.get('key'):
-            continue
-        if not _visible(run, user, uname):
-            continue
-        if page_key and run.get('key') == page_key:
-            return run
+    visible = [r for r in runs if isinstance(r, dict) and r.get('key') and _visible(r, user, uname)]
+    if page_key:
+        for run in visible:
+            if run.get('key') == page_key:
+                return run
+    # a token that names only one title ("reservations") can stand for it;
+    # "Anthony Bourdain's No Reservations" is asked about as "No Reservations"
+    counts = {}
+    for run in visible:
+        for t in set(_tokens(_title_of(run))):
+            counts[t] = counts.get(t, 0) + 1
+    best, best_score = None, 0.0
+    for run in visible:
         toks = _tokens(_title_of(run))
         if not toks:
             continue
-        if all(f' {t} ' in low for t in toks):
-            if best is None or str(run.get('created_at') or '') > str(best.get('created_at') or ''):
-                best = run
+        present = [t for t in toks if f' {t} ' in low]
+        if len(present) == len(toks):
+            score = 1.0
+        elif any(len(t) >= 8 and counts.get(t, 0) == 1 for t in present) and not any(t.isdigit() and t not in present for t in toks):
+            score = 0.8
+        else:
+            continue
+        if score > best_score or (score == best_score and str(run.get('created_at') or '') > str(best.get('created_at') or '')):
+            best, best_score = run, score
     return best
 
 
