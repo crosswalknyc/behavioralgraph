@@ -585,6 +585,21 @@ def ask(user, body, *, via='session'):
     # first-party answer. No model call, no charge.
     if referent_decision is None and not _armed(body):
         _standing = _standing_answer(text)
+        if _standing is None:
+            # A journey-figure question reads from the delivered journey
+            # first (Jenna 2026-10-14: two different numbers for one
+            # question is its own trust problem). Exact, no model call.
+            try:
+                from . import journey_lane as _jl
+                _standing = _jl.answer(text, ctx, host=host, user=user, history=history)
+                if _standing is not None:
+                    try:
+                        host.ask_hint(route='journey_file', outcome='answered', subject=_standing.get('profile'))
+                    except Exception:
+                        pass
+            except Exception as _fx:
+                _faults.note('service.journey_lane', _fx)
+                _standing = None
         if _standing is not None:
             _decision = {'surface': 'analyze', 'mode': None, 'reason': 'standing', 'client_hint': None}
             _out = _interpret_shape(_standing) if _client_surface == 'interpret' else _standing
