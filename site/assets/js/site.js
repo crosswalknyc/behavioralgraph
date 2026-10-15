@@ -24,6 +24,7 @@
             '<a href="' + DASH + '/the-read" data-nav="the-read">The Read</a>' +
             '<a href="' + DASH + '/the-read/papers">White papers</a>' +
             '<a href="about.html" data-nav="about.html">About</a>' +
+            '<a href="clients.html" data-nav="clients.html">Clients</a>' +
             '<a href="contact.html" data-nav="contact.html">Contact</a>' +
             '<a class="btn btn-ghost" href="' + DASH + '">Log in</a>' +
             '<button class="burger" type="button" id="hamBtn" aria-label="Open menu" aria-expanded="false">' +
@@ -53,6 +54,7 @@
         '<a href="' + DASH + '/the-read">The Read</a>' +
         '<a href="' + DASH + '/the-read/papers">White papers</a>' +
         '<a href="about.html">About</a>' +
+        '<a href="clients.html">Clients</a>' +
         '<a href="contact.html">Contact</a>' +
         '<a href="' + DASH + '">Log in</a>' +
       '</div>'
@@ -67,6 +69,7 @@
             '<div>' +
               '<strong>Crosswalk</strong>' +
               '<a href="about.html">About</a>' +
+              '<a href="clients.html">Clients</a>' +
               '<a href="' + DASH + '/the-read">The Read</a>' +
               '<a href="' + DASH + '/the-read/papers">White papers</a>' +
               '<a href="panel.html">The panel</a>' +
