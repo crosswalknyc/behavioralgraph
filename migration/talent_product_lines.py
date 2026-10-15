@@ -232,9 +232,10 @@ def screen_sellers(universe, batch=80, model=None, workers=8, log=print, passes=
 
 
 # ----------------------------------------------------------------- 3. verify
-def verify_sellers(cands, batch=4, model=None, workers=12, log=print, state_path=None):
+def verify_sellers(cands, batch=4, model=None, workers=None, log=print, state_path=None):
     """Web research per claim. Returns {norm_name: checked_row}. With
     state_path every finished chunk is saved and a rerun resumes."""
+    workers = int(workers or os.environ.get('TPL_VERIFY_WORKERS') or 12)
     items = list(cands.values())
     chunks = [items[i:i + batch] for i in range(0, len(items), batch)]
     out = dict(((_load_json(state_path) if state_path else None) or {}).get('out') or {})
