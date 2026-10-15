@@ -1166,6 +1166,21 @@ def _standing_answer(text):
             return {'success': True, 'action': 'answer', 'reply': _g.PROVENANCE_REPLY, 'followups': [], 'offer_deck': False, 'deck_angle': None}
     except Exception as _fx:
         _faults.note('service', _fx)
+    try:
+        # A roster ask ("all the influencers in your network", "which
+        # brands do you cover") is the offer and the question back, before
+        # the Reader spends a call on it (2026-10-15, Emmet at Kartel).
+        from . import catalog_lane as _cl
+        _ro = _cl.roster_ask(text)
+        if _ro:
+            try:
+                host.ask_hint(route='roster_offer', outcome='answered')
+            except Exception:
+                pass
+            return {'success': True, 'action': 'answer', 'reply': _cl.roster_reply(*_ro), 'followups': [],
+                    'offer_deck': False, 'deck_angle': None, 'roster_ask': True}
+    except Exception as _fx:
+        _faults.note('service', _fx)
     return None
 
 

@@ -8241,6 +8241,9 @@ def _pm_recent_build_guard(username, subject, ws='', we=''):
         return None
 
 
+_PM_NO_DRAFT_REPLY = 'Nothing is queued yet. Tell me who or what you want pulled, a person, a brand or a title, and I will draft the brief for you to approve.'
+
+
 @_H.app.route('/api/brief-chat/approve', methods=['POST'])
 @_H.app.route('/api/synth-chat/approve', methods=['POST'])  # legacy alias
 @_H.requires_auth
@@ -8276,11 +8279,10 @@ def api_synth_chat_approve():
         return jsonify(_H._chatbot_calm_payload())
 
     draft = body.get('spec_draft') or {}
-    if not draft:
-        _H._chatbot_error_email('brief-chat/approve',
-                             'approve called without a spec_draft',
-                             tb='(request validation)')
-        return jsonify(_H._chatbot_calm_payload())
+    if not isinstance(draft, dict) or not any(draft.get(k) for k in ('subject', 'display_name', 'name', 'subject_name', 'decision')):
+        # No draft, nothing to run (2026-10-15, Emmet at Kartel): guidance the reader can act on, never the working-on-it promise, no ops email.
+        _faults.note('chat', RuntimeError('approve without a draft'))
+        return jsonify({'success': False, 'guidance': True, 'error': _PM_NO_DRAFT_REPLY, 'followups': []})
 
     # Chip pair override (2026-09-04, Jenna existing_match UX). The
     # session-only 'No, run what I asked' chip flips an existing_match

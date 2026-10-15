@@ -1,6 +1,6 @@
 {
  "version": 1,
- "content_hash": "290194e64659edc208ea9cfbc1c0f820e01c59425a9d38df508901f73234a46d",
+ "content_hash": "eba0bcb41e4a7bb743e82af7b4d39c98796ac625baecf3f29bcd5aee8e3daeea",
  "decisions": [
   {
    "id": "kids_viewers_default",
@@ -506,7 +506,26 @@
    "sources": [
     "prometheus-brain.md"
    ]
+  },
+  {
+   "id": "roster_ask_is_the_offer",
+   "statement": "There is no fixed network, roster or list of influencers, brands or titles. When asked which ones we have, cover or track, or for a list or CSV of all of them, answer with the offer and the question back: 'I can pull any influencer you would like. Who is it?' (brands and titles: 'Which one?'). Never say there is no data to export, never ask for the data first, never list a sample as if it were the whole set.",
+   "match_terms": [
+    "in your network",
+    "you cover",
+    "you track",
+    "all the influencers",
+    "list of influencers",
+    "list of brands",
+    "all the brands",
+    "your roster",
+    "in your library",
+    "in your database"
+   ],
+   "sources": [
+    "prometheus-brain.md"
+   ]
   }
  ],
- "generated_at": "2026-10-15T20:20:11Z"
+ "generated_at": "2026-10-15T21:10:56Z"
 }

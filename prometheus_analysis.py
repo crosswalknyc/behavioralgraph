@@ -5332,18 +5332,48 @@ _CSV_DOWNLOAD_RX = re.compile(
     re.IGNORECASE)
 
 
+_CSV_CONTENT_RX = re.compile(
+    r"\b(?:csv|spreadsheet|xlsx|excel(?: file| sheet)?|sheet)\s+"
+    r"(?:of|with|listing|containing|for|showing|that (?:lists|shows|has))\s+"
+    r"(?P<content>.+?)[\s?.!]*$", re.IGNORECASE)
+_CSV_DEICTIC_RX = re.compile(
+    r"^(?:(?:all |of )?(?:this|that|it|these|those|everything|the (?:above|data|numbers|figures|"
+    r"results|read|table|answer|output|breakdown|list|same|rows)|what you (?:just )?(?:said|showed|"
+    r"gave me|pulled|found)|your (?:last|previous) (?:answer|reply|read)|the last (?:answer|reply|read))"
+    r"(?: data| numbers| results| table| again)?)$", re.IGNORECASE)
+
+
+def csv_content_ask(text):
+    """The NEW content a message asks to receive as a CSV ("a CSV of all
+    the influencers in your network" -> "all the influencers in your
+    network"), or '' when the CSV wording points at data already on the
+    screen ("a csv of this", "the numbers as a csv"). 2026-10-15 (Emmet at
+    Kartel): a content ask in CSV clothing is a question, not an export
+    command, and must never dead-end on "no recent read to export"."""
+    m = _CSV_CONTENT_RX.search(' '.join(str(text or '').split()))
+    if not m:
+        return ''
+    content = m.group('content').strip().strip('"\'')
+    if not content or _CSV_DEICTIC_RX.match(content):
+        return ''
+    return content
+
+
 def detect_csv_download_intent(text):
     """True when the message asks to EXPORT the data just delivered
     (the CSV offer chip, or a typed "download as csv"). Conservative:
-    a long ask that happens to mention csv while requesting NEW data
-    ("build out a csv of what brands...") flows to the normal
-    generation path, which then offers the download chip itself."""
+    an ask that requests NEW data in CSV form ("a csv of all the
+    influencers you have", "build out a csv of what brands...") flows
+    to the normal path, which answers and then offers the download
+    chip itself."""
     t = str(text or '').strip()
     if not t:
         return False
     if t.lower() == CSV_OFFER_CHIP.lower():
         return True
     if len(t) > 90:
+        return False
+    if csv_content_ask(t):
         return False
     return bool(_CSV_DOWNLOAD_RX.search(t))
 

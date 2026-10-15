@@ -78,15 +78,103 @@ def _clean_subject(rest):
     s = _YET_RX.sub('', s)
     s = _TAIL_RX.sub('', s)
     s = _YET_RX.sub('', s)
+    s = re.sub(r"\s+" + _ROSTER_SCOPE + r"$", '', s, flags=re.I)   # "Nike in your database" -> "Nike" (2026-10-15)
     s = re.sub(r"^(?:a |an |the )", '', s, flags=re.I).strip(' ?.!,')
     return s
 
 
+# Roster asks (2026-10-15, Jenna, after Emmet at Kartel asked for "a CSV
+# of all the influencers or talent in your network" and got "I do not
+# have a recent data read to export yet"): there is no fixed network.
+# Prometheus reads any influencer, brand or title the user names, so
+# the answer is the offer and the question back: "I can pull any
+# influencer you would like. Who is it?" Runs before the existence
+# check, which would otherwise look up "influencers in your network"
+# as a subject.
+_CLASS = (r"(?:influencers?|content creators?|creators?|talents?|celebrities|celebs?|athletes?|"
+          r"musicians?|artists?|podcasters?|actors?|actresses|hosts?|personalities|streamers?|"
+          r"youtubers?|tiktokers?|comedians?|authors?|brands?|companies|advertisers?|retailers?|"
+          r"titles?|shows?|series|movies?|films?|podcasts?|games?|teams?|leagues?|people|names|"
+          r"subjects?|profiles?|audiences?|entities)")
+_ROSTER_SCOPE = (r"(?:in|on|across|within|from|inside) (?:your|the|our) (?:network|roster|library|"
+                 r"system|database|catalog(?:ue)?|platform|panel|data|dashboard|list|universe|"
+                 r"coverage|tool|corpus|book|portfolio)")
+_ROSTER_TAIL = r"(?:\s+(?:right now|currently|today|so far|to date|yet|please))?[\s?.!]*$"
+_ROSTER_RX = re.compile(
+    r"\b(?:all(?: of)?|every|list(?:ing)?|csv|spreadsheet|roster|directory|rundown|how many|which|what|"
+    r"do (?:you|we) (?:have|hold|carry|cover|track)|have you got|is there|are there|any)\b"
+    r".{0,40}?\b(?P<cls>" + _CLASS + r")\b(?:\s*(?:,|/|\bor\b|\band\b|&)\s*(?:the |your )?(?P<cls2>" + _CLASS + r")\b)?"
+    r".{0,24}?\b" + _ROSTER_SCOPE + r"\b" + _ROSTER_TAIL
+    + r"|\b(?P<cls3>" + _CLASS + r")\b(?:\s*(?:,|/|\bor\b|\band\b|&)\s*(?:the |your )?(?P<cls4>" + _CLASS + r")\b)?"
+    r"\s+(?:do |that |who |which )?(?:you|we) (?:have|cover|track|carry|work with|see|know|offer|support|represent|hold)"
+    r"(?: (?:data|profiles|reads|info|information|numbers))?(?: (?:on|for))?" + _ROSTER_TAIL,
+    re.I)
+_ROSTER_PERSON = {
+    'influencer': 'influencer', 'creator': 'creator', 'content creator': 'creator', 'talent': 'talent',
+    'celebrity': 'celebrity', 'celeb': 'celebrity', 'athlete': 'athlete', 'musician': 'musician',
+    'artist': 'artist', 'podcaster': 'podcaster', 'actor': 'actor', 'actress': 'actor', 'host': 'host',
+    'personality': 'personality', 'streamer': 'streamer', 'youtuber': 'YouTuber', 'tiktoker': 'TikToker',
+    'comedian': 'comedian', 'author': 'author',
+}
+_ROSTER_THING = {
+    'brand': 'brand', 'company': 'brand', 'advertiser': 'brand', 'retailer': 'retailer', 'title': 'title',
+    'show': 'show', 'series': 'series', 'movie': 'movie', 'film': 'film', 'podcast': 'podcast',
+    'game': 'game', 'team': 'team', 'league': 'league',
+}
+
+
+def _class_noun(word):
+    w = str(word or '').lower().strip()
+    for form in (w, w[:-1] if w.endswith('s') else w, w[:-3] + 'y' if w.endswith('ies') else w,
+                 w[:-2] if w.endswith('es') else w):
+        if form in _ROSTER_PERSON:
+            return _ROSTER_PERSON[form], True
+        if form in _ROSTER_THING:
+            return _ROSTER_THING[form], False
+    return 'audience', False
+
+
+def roster_ask(text):
+    """('influencer or talent', is_person) when the ask is for the whole
+    class of subjects we hold ("all the influencers in your network",
+    "which brands do you cover", "how many athletes do you have"), else
+    None. A named subject anywhere after the scope phrase disqualifies
+    (that is a real question about a brand or a person)."""
+    t = ' '.join(str(text or '').split())
+    if not t or len(t) > 220:
+        return None
+    m = _ROSTER_RX.search(t)
+    if not m:
+        return None
+    words = [m.group(k) for k in ('cls', 'cls2', 'cls3', 'cls4') if m.group(k)]
+    if not words:
+        return None
+    nouns, person = [], False
+    for w in words:
+        n, is_p = _class_noun(w)
+        person = person or is_p
+        if n not in nouns:
+            nouns.append(n)
+    if 'audience' in nouns and len(nouns) > 1:
+        nouns.remove('audience')
+    return ' or '.join(nouns[:2]), person
+
+
+def roster_reply(noun, person):
+    who = 'Who is it?' if person else 'Which one?'
+    each = 'each audience' if person else 'each one'
+    return (f"I can pull any {noun} you would like. {who} Name one, or paste a list, "
+            f"and I will read {each}.")
+
+
 def parse(text):
-    """('exists'|'size', subject) or None."""
+    """('exists'|'size'|'roster', subject) or None."""
     t = ' '.join(str(text or '').split())
     if not t or len(t) > 200:
         return None
+    _ro = roster_ask(t)
+    if _ro:
+        return 'roster', _ro
     m = _EXISTS_RX.match(t)
     if m:
         subj = _clean_subject(m.group('rest'))
@@ -173,6 +261,11 @@ def answer(text, ctx=None):
     if not parsed:
         return None
     kind, subj = parsed
+    if kind == 'roster':
+        noun, person = subj
+        return {'success': True, 'action': 'answer', 'reply': roster_reply(noun, person),
+                'followups': [], 'offer_deck': False, 'deck_angle': None,
+                'catalog_lookup': True, 'roster_ask': True}
     try:
         from migration import corpus_catalog as cc
     except Exception:

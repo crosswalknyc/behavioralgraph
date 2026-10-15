@@ -83324,7 +83324,19 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 }
                 return !!subj && (subj.indexOf(want) >= 0 || want.indexOf(subj) >= 0);
             }
-            if ((synthChatCurrentDraft || (synthChatBatchDrafts && synthChatBatchDrafts.length)) &&
+            // An empty object is not a draft (2026-10-15, Emmet at
+            // Kartel typed an acknowledgement with {} on screen and the
+            // approve POST went out with no brief). Only a brief that
+            // names a subject or a decision is the button.
+            function _pmRealDraft(d) {
+                return !!(d && typeof d === 'object' &&
+                    (d.subject || d.display_name || d.name || d.subject_name || d.decision));
+            }
+            if (synthChatCurrentDraft && !_pmRealDraft(synthChatCurrentDraft) &&
+                !(synthChatBatchDrafts && synthChatBatchDrafts.length)) {
+                synthChatCurrentDraft = null;
+            }
+            if ((_pmRealDraft(synthChatCurrentDraft) || (synthChatBatchDrafts && synthChatBatchDrafts.length)) &&
                 !_pmArmedStepActive() &&
                 _pmTypedApproval(text)) {
                 try { await synthChatApproveBrief(); } catch (_) {}
@@ -85656,6 +85668,18 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 return;
             }
             if (!synthChatCurrentDraft) return;
+            if (!(synthChatCurrentDraft.subject || synthChatCurrentDraft.display_name ||
+                  synthChatCurrentDraft.name || synthChatCurrentDraft.subject_name ||
+                  synthChatCurrentDraft.decision)) {
+                // Nothing to run (2026-10-15): say so instead of posting {}.
+                synthChatCurrentDraft = null;
+                var _ndPanel = document.getElementById('synthChatBriefPreview');
+                if (_ndPanel) _ndPanel.style.display = 'none';
+                synthChatPushTurn('agent',
+                    'Nothing is queued yet. Tell me who or what you want pulled, a person, ' +
+                    'a brand or a title, and I will draft the brief for you to approve.');
+                return;
+            }
             // The interpret step already decided run_avid based on
             // chat opt-out detection. Trust the draft; the dashboard
             // no longer exposes an override checkbox.
