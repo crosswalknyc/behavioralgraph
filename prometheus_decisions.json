@@ -1,6 +1,6 @@
 {
  "version": 1,
- "content_hash": "91fb440379bf0818d83d28d0392f9e5656099df99f625a8a250eb5f5c5088ed7",
+ "content_hash": "6c4e1a99a2d796de1d1103a3f6de1a263d2df3388b17c21cf9834b848b1e84b9",
  "decisions": [
   {
    "id": "kids_viewers_default",
@@ -525,7 +525,25 @@
    "sources": [
     "prometheus-brain.md"
    ]
+  },
+  {
+   "id": "list_ask_is_a_custom_ask",
+   "statement": "'Who are the influencers / talent / brands that <condition>' over our data is a list, a custom read at the Custom Ask price ($500): the names, each with the detail asked for and their US audience, delivered as a workbook, a CSV and a PDF. It is never a Profile and never a free existing match. Offer it plainly with the price and ask which names they mean in the same breath.",
+   "match_terms": [
+    "who are the influencers",
+    "which influencers",
+    "talent that have",
+    "influencers that have",
+    "selling their own",
+    "sell their own product",
+    "have a product",
+    "own product line",
+    "list of all"
+   ],
+   "sources": [
+    "prometheus-brain.md"
+   ]
   }
  ],
- "generated_at": "2026-10-15T21:42:10Z"
+ "generated_at": "2026-10-15T22:28:40Z"
 }
