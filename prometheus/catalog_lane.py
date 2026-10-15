@@ -120,7 +120,12 @@ _ROSTER_RX = re.compile(
     # "poll your talent database and see which of these influencers also offer a product"
     + r"|\b(?:poll|check|search|scan|query|look (?:through|at|in|into)|go through|comb|screen|see)\b.{0,30}?\b(?P<db>" + _ROSTER_DB + r")\b(?P<rest3>.*)$"
     # "which of these influencers sell a product" with no names anywhere
-    + r"|\b(?:which|how many|what)(?: ones?)? of (?:these|those) (?P<cls6>" + _CLASS + r")\b" + _ROSTER_QUAL.format(name='q4') + _ROSTER_TAIL,
+    + r"|\b(?:which|how many|what)(?: ones?)? of (?:these|those) (?P<cls6>" + _CLASS + r")\b" + _ROSTER_QUAL.format(name='q4') + _ROSTER_TAIL
+    # "who are influencers or talent that have a product they are selling" (Emmet, 2026-10-15: "I want to
+    # see in the dataset who are influencers or talent that have a product or service they are selling")
+    + r"|\b(?:who are|which are|what are|which|what|show me|list|find|identify|see|tell me)\b(?: me)?(?: (?:in|from|across) (?:the|your|our) (?:dataset|data|database|network|library|universe|panel))?"
+    r"\s+(?:the |all (?:the |of the )?|any |every )?(?P<cls7>" + _CLASS + r")\b(?:\s*(?:,|/|\bor\b|\band\b|&)\s*(?:the |your )?(?P<cls8>" + _CLASS + r")\b)?"
+    r"\s+(?P<q5>(?:(?:who|that|which) )?(?:have|has|sell\w*|offer\w*|run\w*|own\w*|launch\w*|promot\w*|monetiz\w*|are (?:selling|offering|running|launching)|(?:who|that|which) (?:are|is|do|make))\b.+?)[\s?.!]*$",
     re.I)
 _ROSTER_PERSON = {
     'influencer': 'influencer', 'creator': 'creator', 'content creator': 'creator', 'talent': 'talent',
@@ -138,7 +143,7 @@ _PLURAL = {'talent': 'talent', 'celebrity': 'celebrities', 'personality': 'perso
            'audience': 'audiences', 'company': 'companies'}
 _QUAL_CUT_RX = re.compile(r"\s*(?:,|\bor\b|\band\b)?\s*(?:or )?(?:something|anything|stuff|whatever|things?) like\b.*$|\s*,?\s*(?:etc|and so on|or whatever|or anything)\b.*$", re.I)
 _DB_REST_RX = re.compile(r"\b(?:which|how many|what)(?: ones?)? of (?:these|those|the|your|our) (?P<cls>" + _CLASS + r")\b(?P<qual>.*?)[\s?.!]*$", re.I)
-_QUAL_LEAD_RX = re.compile(r"^(?:who|that|which|and|also|are|is|have|has|do|does|currently|now|actively|the ones? (?:who|that))\s+", re.I)
+_QUAL_LEAD_RX = re.compile(r"^(?:who|that|which|and|also|are|is|do|does|currently|now|actively|the ones? (?:who|that))\s+", re.I)
 
 
 def _class_noun(word):
@@ -187,8 +192,8 @@ def roster_ask(text):
     m = _ROSTER_RX.search(t)
     if not m:
         return None
-    words = [m.group(k) for k in ('cls', 'cls2', 'cls3', 'cls4', 'cls6') if m.group(k)]
-    qual = next((m.group(k) for k in ('q1', 'q2', 'q4') if m.group(k)), '')
+    words = [m.group(k) for k in ('cls', 'cls2', 'cls3', 'cls4', 'cls6', 'cls7', 'cls8') if m.group(k)]
+    qual = next((m.group(k) for k in ('q1', 'q2', 'q4', 'q5') if m.group(k)), '')
     if m.group('db'):
         # "poll your talent database and see which of these influencers also offer a service"
         m2 = _DB_REST_RX.search(m.group('rest3') or '')
@@ -207,8 +212,8 @@ def roster_ask(text):
     if 'audience' in nouns and len(nouns) > 1:
         nouns.remove('audience')
     qual = _clean_qual(qual)
-    if qual and re.search(r"\b[A-Z][a-z]+ [A-Z][a-z]+\b", qual):
-        return None     # a named person or brand inside the condition: a real question
+    if qual and re.search(r"(?<![.!?] )\b(?!I\b)[A-Z][A-Za-z&'.-]+", qual):
+        return None     # a named person or brand inside the condition ("that Taylor Swift fans follow"): a real question
     return ' or '.join(nouns[:2]), person, qual
 
 
