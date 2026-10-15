@@ -98,11 +98,26 @@ DECK_TAG = 'deck:'
 # aiq:. Their records are the kind's own status documents (the widget
 # polls them already) with a resume block of inputs + extras; the
 # worker runs the same job body the web process used to run on a thread.
-ENGINE_KINDS = ('jiq', 'bpiq', 'fw', 'aiq')
+ENGINE_KINDS = ('jiq', 'bpiq', 'fw', 'aiq', 'tlist')
 _ENGINE_PREFIX_CAP = {'jiq': 'jiq_prefix', 'bpiq': 'bpiq_prefix', 'fw': 'fw_prefix', 'aiq': 'aiq_prefix'}
 _ENGINE_RUNNER = {'jiq': '_pm_run_jiq_job', 'bpiq': '_pm_run_bpiq_job', 'fw': '_pm_run_fw_job', 'aiq': '_pm_run_aiq_job'}
 _ENGINE_WRITER = {'jiq': '_pm_jiq_status_write', 'bpiq': '_pm_bpiq_status_write', 'fw': '_pm_fw_status_write', 'aiq': '_pm_aiq_status_write'}
-_ENGINE_LABEL = {'jiq': 'journey', 'bpiq': 'valuation', 'fw': 'flywheel read', 'aiq': 'campaign tracker'}
+_ENGINE_LABEL = {'jiq': 'journey', 'bpiq': 'valuation', 'fw': 'flywheel read', 'aiq': 'campaign tracker', 'tlist': 'talent list'}
+# the talent list (Custom Ask, 2026-10-15) lives in its own module, not the legacy chat
+_MODULE_KINDS = {'tlist': 'prometheus.talent_list_job'}
+
+
+def _kind_module(kind):
+    import importlib
+    return importlib.import_module(_MODULE_KINDS[kind])
+
+
+def _engine_writer(kind):
+    return _kind_module(kind).status_write if kind in _MODULE_KINDS else getattr(_chat(), _ENGINE_WRITER[kind])
+
+
+def _engine_runner(kind):
+    return _kind_module(kind).run_job if kind in _MODULE_KINDS else getattr(_chat(), _ENGINE_RUNNER[kind])
 
 
 def _split_tag(job_id):
@@ -117,6 +132,8 @@ def _split_tag(job_id):
 
 
 def _engine_prefix(kind):
+    if kind in _MODULE_KINDS:
+        return _kind_module(kind).JOB_PREFIX
     c = _chat()
     return getattr(c, {'jiq': '_PM_JIQ_JOB_PREFIX', 'bpiq': '_PM_BPIQ_JOB_PREFIX', 'fw': '_PM_FW_JOB_PREFIX', 'aiq': '_PM_AIQ_JOB_PREFIX'}[kind])
 
@@ -181,14 +198,14 @@ def run_engine_inline(kind, job_id, status):
     rr = status.get('resume') if isinstance(status.get('resume'), dict) else None
     uname = str(status.get('user') or '').strip()
     inputs = (rr or {}).get('inputs') or status.get('inputs')
-    writer = getattr(c, _ENGINE_WRITER[kind])
+    writer = _engine_writer(kind)
     if not isinstance(inputs, dict) or not inputs or not uname:
         writer(job_id, {**status, 'status': 'error', 'queued': False,
                         'error': f"queued {_ENGINE_LABEL.get(kind, kind)} without a resume record", 'finished_at': time.time()})
         return False
     _INFLIGHT_ENGINE[job_id] = (kind, dict(status))
     try:
-        getattr(c, _ENGINE_RUNNER[kind])(job_id, uname, inputs, dict((rr or {}).get('extras') or {}))
+        _engine_runner(kind)(job_id, uname, inputs, dict((rr or {}).get('extras') or {}))
     finally:
         _INFLIGHT_ENGINE.pop(job_id, None)
     return True
@@ -203,7 +220,7 @@ def requeue_engine(kind, job_id, doc, reason='restart'):
     thread restart died with the next deploy or autoscale)."""
     try:
         c = _chat()
-        writer = getattr(c, _ENGINE_WRITER[kind])
+        writer = _engine_writer(kind)
         rr = doc.get('resume') if isinstance(doc.get('resume'), dict) else {}
         inputs = rr.get('inputs') or doc.get('inputs')
         if not isinstance(inputs, dict) or not inputs or not doc.get('user'):

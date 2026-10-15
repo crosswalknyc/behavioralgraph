@@ -513,12 +513,25 @@ def _deck_files(doc):
     return [(fname, _read)]
 
 
+def _stored_files(doc):
+    """Files a job uploaded itself (the talent list, 2026-10-15): doc['files'] = {kind: {key, name}}."""
+    out = []
+    for _k, f in ((doc.get('files') or {}) if isinstance(doc.get('files'), dict) else {}).items():
+        if isinstance(f, dict) and f.get('key') and f.get('name'):
+            def _read(key=f['key']):
+                return host.s3_client.get_object(Bucket=host.bucket, Key=key)['Body'].read()
+            out.append((str(f['name']), _read))
+    return out
+
+
 def _files_for(doc, kind):
     try:
         if kind in ('jiq', 'journey'):
             return _journey_files(doc)
         if kind == 'deck':
             return _deck_files(doc)
+        if kind == 'tlist' or isinstance(doc.get('files'), dict):
+            return _stored_files(doc)
     except Exception:
         return []
     return []

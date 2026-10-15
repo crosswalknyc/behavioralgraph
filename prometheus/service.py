@@ -588,6 +588,28 @@ def ask(user, body, *, via='session'):
     # no digital trace is declined with the nearest measurable read, and
     # a question about where the data comes from gets the plain
     # first-party answer. No model call, no charge.
+    # The talent list (Custom Ask, 2026-10-15): the chip on a roster offer,
+    # or a yes right after it, charges the seat and queues the list. No
+    # model call; never a profile.
+    if referent_decision is None and not body.get('_meta_replay'):
+        try:
+            from . import talent_list_job as _tl
+            _acc = _tl.accepted(text, history)
+        except Exception as _fx:
+            _faults.note('service.talent_list', _fx)
+            _acc = None
+        if _acc:
+            try:
+                raw = _tl.start(user, uname, text, _acc, tid)
+            except Exception as _fx:
+                _faults.note('service.talent_list', _fx)
+                raw = {'success': False, 'guidance': True, 'followups': [],
+                       'error': 'The list did not start. Nothing was charged. Ask me again in a moment.'}
+            decision = {'surface': 'analyze', 'mode': None, 'reason': 'talent_list', 'client_hint': None}
+            _out = _interpret_shape(raw) if _client_surface == 'interpret' else raw
+            env = envelope.wrap(_out, surface='analyze', decision=decision, thread_id=tid, via=via)
+            _persist_turn(persist, uname, tid, history, text, env, _out, 'analyze')
+            return env, 200
     # A meta check ("are you not working?", "hello?", "you there?") never
     # repeats a pending confirm (Emmet at Kartel got the same "Do you mean
     # for ..." back to it, 2026-10-15). It answers the question the reader
@@ -1218,6 +1240,9 @@ def _standing_answer(text):
             return {'success': True, 'action': 'answer', 'reply': _g.PROVENANCE_REPLY, 'followups': [], 'offer_deck': False, 'deck_angle': None}
     except Exception as _fx:
         _faults.note('service', _fx)
+    if re.match(r"^\s*(?:i will|i'll|ill|let me) name them[.! ]*$", text, re.I):
+        return {'success': True, 'action': 'answer', 'followups': [], 'offer_deck': False, 'deck_angle': None,
+                'reply': 'Go ahead. Name them here, one per line is fine, and I will check each one.'}
     try:
         # A roster ask ("all the influencers in your network", "which
         # brands do you cover") is the offer and the question back, before
@@ -1230,8 +1255,12 @@ def _standing_answer(text):
             except Exception:
                 pass
             _reply, _chips = _cl.roster_reply(*_ro)
-            return {'success': True, 'action': 'answer', 'reply': _reply, 'followups': _chips,
+            _out = {'success': True, 'action': 'answer', 'reply': _reply, 'followups': _chips,
                     'offer_deck': False, 'deck_angle': None, 'roster_ask': True}
+            if _ro[2]:
+                from . import talent_list_job as _tl
+                _out['offer'] = _tl.offer(_cl._plural(_ro[0]), _ro[2], _ro[1])[2]
+            return _out
     except Exception as _fx:
         _faults.note('service', _fx)
     return None
@@ -1552,6 +1581,13 @@ def _bare_reply(body, text, history, has_ctx, uname=''):
         return None, None
     if kind == 'affirm' and _pending_brief_waiting(uname, text):
         return None, None   # a proposed brief is stashed for this reader; the flow's confirm step owns the yes (2026-10-13)
+    if kind == 'affirm':
+        try:
+            from . import talent_list_job as _tl
+            if _tl.last_offer(history):
+                return None, None   # the talent-list offer owns a yes right after it (2026-10-15)
+        except Exception:
+            pass
     prev = _last_agent_turn(history)
     options = _option_labels(prev)
     low = ' '.join(str(text or '').lower().split()).strip(' .!')
@@ -1656,6 +1692,8 @@ def _persist_turn(persist, uname, tid, history, text, env, raw, surface):
         if isinstance(raw, dict) and isinstance(
                 raw.get('referent_clarify'), dict):
             meta['referent_clarify'] = raw['referent_clarify']
+        if isinstance(raw, dict) and isinstance(raw.get('offer'), dict):
+            meta['offer'] = raw['offer']     # the talent-list offer (2026-10-15)
         turns.append({'role': 'agent', 'text': env['text'],
                       'ts': _now(), 'meta': meta})
         save_thread(uname, tid, turns)
@@ -1700,6 +1738,11 @@ def _job_prefixes():
                        ('fw_prefix', 'fw'), ('aiq_prefix', 'aiq')):
         if host.has(cap):
             out.append((getattr(host, cap), jtype))
+    try:
+        from . import talent_list_job as _tl
+        out.append((_tl.JOB_PREFIX, 'tlist'))     # the talent list (2026-10-15)
+    except Exception:
+        pass
     return out
 
 

@@ -223,11 +223,13 @@ def roster_reply(noun, person, qualifier=''):
         each = 'each audience' if person else 'each one'
         return (f"I can pull any {noun} you would like. {who} Name one, or paste a list, "
                 f"and I will read {each}."), []
-    first = qualifier.split(' ', 1)[0].lower()
-    group = f"{plural} {qualifier}" if first.endswith('ing') else f"{plural} {'who' if person else 'that'} {qualifier}"
-    reply = (f"I can pull anything you want, just ask. Which {plural} are you talking about? "
-             f"Name them and I will check each one. Or do you want me to run a profile on {group}?")
-    return reply, [f"Run a profile on {group}"]
+    # Jenna 2026-10-15, on "I want to see who are influencers or talent that
+    # have a product or service they are selling": "that should cost $500
+    # and list influencers who have their own product lines". The offer is
+    # the list, a Custom Ask, not a profile.
+    from . import talent_list_job as _tl
+    reply, chips, _offer = _tl.offer(plural, qualifier, person)
+    return reply, chips
 
 
 def parse(text):

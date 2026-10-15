@@ -75,11 +75,12 @@ _APP_BINDINGS = {
     'route_guard': '_chatbot_route_guard',   # (label) -> decorator
     'ask_logged': '_ask_logged',             # (surface) -> decorator
     'error_email': '_chatbot_error_email',   # (label, err, tb=None)
+    'consume_credit': 'consume_credit',      # (username, description=, job_id=, pull_type=, credits_used=, quantity=) -> bool (2026-10-15, the talent list)
     'calm_payload': '_chatbot_calm_payload', # () -> dict
 }
 
 # Bindings that may legitimately be absent on an older host.
-_OPTIONAL = {'max_threads', 'wallet_snapshot', 'access_gate', 'claude_data', 'user_runs',
+_OPTIONAL = {'max_threads', 'wallet_snapshot', 'access_gate', 'claude_data', 'user_runs', 'consume_credit',
              'run_jiq_job', 'run_bpiq_job', 'run_fw_job', 'run_aiq_job',
              'thread_for_job', 'load_thread', 'save_thread', 'incidence_check', 'audience_range', 'queue_secret'}
 

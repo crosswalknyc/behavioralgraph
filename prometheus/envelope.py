@@ -34,6 +34,7 @@ _JOB_KEYS = (
     ('jiq_job_id', 'jiq'),
     ('fw_job_id', 'fw'),
     ('aiq_job_id', 'aiq'),
+    ('tlist_job_id', 'tlist'),
     ('job_id', 'read'),
 )
 
