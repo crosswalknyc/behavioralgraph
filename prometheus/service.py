@@ -570,6 +570,18 @@ def ask(user, body, *, via='session'):
     # candidates and the labeled bank in view, before any pattern lane.
     # Deterministic intents run here; the rest steer the surface below.
     # The lanes stay as the fallback when the Reader is unsure or away.
+    # Two standing answers before the Reader (2026-10-14): behavior with
+    # no digital trace is declined with the nearest measurable read, and
+    # a question about where the data comes from gets the plain
+    # first-party answer. No model call, no charge.
+    if referent_decision is None and not _armed(body):
+        _standing = _standing_answer(text)
+        if _standing is not None:
+            _decision = {'surface': 'analyze', 'mode': None, 'reason': 'standing', 'client_hint': None}
+            _out = _interpret_shape(_standing) if _client_surface == 'interpret' else _standing
+            env = envelope.wrap(_out, surface='analyze', decision=_decision, thread_id=tid, via=via)
+            _persist_turn(persist, uname, tid, history, text, env, _out, 'analyze')
+            return env, 200
     reading = None
     if referent_decision is None and not _armed(body) and len(text.split()) >= 2 and not _cap_hit:
         try:
@@ -1093,6 +1105,39 @@ def ask(user, body, *, via='session'):
                         thread_id=tid, via=via)
     _persist_turn(persist, uname, tid, history, text, env, raw, surface)
     return env, status
+
+
+def _standing_answer(text):
+    """Two answers that come before any executor or lane (2026-10-14):
+    behavior with no digital trace (linear TV, in-store, foot traffic,
+    radio) is declined with the nearest measurable read instead of being
+    answered with the digital numbers as if they were the same thing;
+    and a question about where the data comes from gets the one plain
+    first-party answer. Returns a raw reply or None."""
+    try:
+        import prometheus_analysis as _pma
+        gate = _pma.classify_quantifiability(text)
+        if gate:
+            reply, chips = _pma.build_not_quantifiable_reply(text, gate)
+            try:
+                host.ask_hint(route='quantifiability_gate', outcome='declined_not_quantifiable')
+            except Exception:
+                pass
+            return {'success': True, 'action': 'answer', 'reply': reply, 'followups': chips or [], 'offer_deck': False,
+                    'deck_angle': None, 'not_quantifiable': gate.get('domain')}
+    except Exception as _fx:
+        _faults.note('service', _fx)
+    try:
+        from . import guards as _g
+        if _g.is_provenance_question(text):
+            try:
+                host.ask_hint(route='provenance', outcome='answered')
+            except Exception:
+                pass
+            return {'success': True, 'action': 'answer', 'reply': _g.PROVENANCE_REPLY, 'followups': [], 'offer_deck': False, 'deck_angle': None}
+    except Exception as _fx:
+        _faults.note('service', _fx)
+    return None
 
 
 def _execute_reading(reading, text, ctx, history, user, uname, body, tid, via, persist, _client_surface):

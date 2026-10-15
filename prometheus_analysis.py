@@ -5485,7 +5485,7 @@ def build_panel_report_offer(subject, price_label, question='',
     # Custom ask (Jenna 2026-10-08): a priced read, delivered in the
     # chat, with no profile pushed. The user can always ask for one.
     reply = (
-        f"I can answer that as a custom read on {subj}: I research "
+        f"I can answer that as a custom read on {subj}: I read "
         f"{the_subject(subj)} audience end to end and deliver the numbers "
         f"right here in the chat." + (f" It runs {price}." if price else "")
     )

@@ -1169,6 +1169,7 @@ _PARTNER_WORD_SWAPS = _METHOD_WORD_SUBS + (
     (re.compile(r'\bthe (?:corpus|ledger|catalog)\b', re.I), 'our library'),
     (re.compile(r'\bpipeline\b', re.I), 'process'),
     (re.compile(r'\bconfidence tiers?\b', re.I), 'readings'),
+    (re.compile(r'\bresearch(?:es|ing)?\b', re.I), 'read'),
     (re.compile(r'\b(?:claude|anthropic|openai|gpt|llm)\b', re.I), 'Prometheus'),
 )
 # Words that may legitimately appear as brands or ordinary English and
@@ -1335,3 +1336,29 @@ def partner_payload_violations(obj, skip_keys=_PARTNER_SKIP_KEYS, _depth=0, _pat
         if bad:
             out.append((_path, bad))
     return out
+
+
+# ----------------------------------------------------------------------
+# Provenance questions (2026-10-14, Jenna: a reader must never be led to
+# believe the data is anything but first-party observation). One plain
+# answer, the same on every surface.
+# ----------------------------------------------------------------------
+_PROVENANCE_RX = re.compile(
+    r"\bwhere (?:does|do|did) (?:this|that|the|your|these|those) (?:data|numbers?|figures?|counts?) come from\b"
+    r"|\bwhat(?:'s| is) the source (?:of|for) (?:this|that|the|your|these)\b"
+    r"|\bhow (?:do you|does crosswalk|does prometheus|is this|is the data|are these) (?:know|measure|measured|collect|collected|gather|gathered|get|source|sourced|count|counted)\b"
+    r"|\bis (?:this|that|the|your) data (?:real|accurate|reliable|first[- ]party|observed|measured|modell?ed|estimated|synthetic|made up)\b"
+    r"|\bhow (?:accurate|reliable) (?:is|are) (?:this|that|the|your|these)\b"
+    r"|\b(?:your|the|this) methodology\b|\bhow (?:is|was) (?:this|that|the|it) (?:calculated|computed|derived|measured|modell?ed|estimated)\b(?![^.?!]{0,40}\b(?:rate|share|index|figure|conversion|number)\b)"
+    r"|\bwhere (?:is|are) (?:this|the|these) (?:data|numbers?) from\b|\bwho (?:collects|measures|provides) (?:this|the|your) data\b", re.I)
+
+PROVENANCE_REPLY = (
+    "Every figure here is a direct count from Crosswalk's own first-party data: the digital activity of a 10 million US consumer "
+    "sample who opted in, measured across the full journey (search, social, media, commerce, owned sites and apps, streaming and "
+    "more), counted once per person and projected to the US population. Each figure names its window. Nothing is reported that "
+    "was not observed in that data; behavior with no digital trace, like linear TV tune-in or in-store purchases, is called out "
+    "as outside it rather than guessed.")
+
+
+def is_provenance_question(text):
+    return bool(_PROVENANCE_RX.search(str(text or '')))
