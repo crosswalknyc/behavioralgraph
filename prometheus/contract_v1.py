@@ -235,7 +235,12 @@ def to_v1(env: dict, raw: dict = None, *, billing: dict = None, conversation_id:
         # a build is its own product: the partner runs it on the build endpoint
         return declined('build_required', text or 'This needs a profile build first.',
                         next_action={'action': 'build', 'endpoint': BUILD_ENDPOINT}, trace_id=trace, conversation_id=conversation_id, billing=billing)
-    if kind == 'clarify' or (kind in ('guidance', 'nudge') and opts):
+    # a product confirm card (journey / brand partnership / flywheel /
+    # attribution brief with Run and Cancel) is a choice, not an answer
+    confirm = any(str(k).endswith('_confirm_payload') for k in raw) or (
+        opts and any(o['label'].lower().startswith(('run the', 'run it', 'approve')) for o in opts)
+        and any(o['label'].lower().startswith(('cancel', 'not now')) for o in opts))
+    if kind == 'clarify' or (kind in ('guidance', 'nudge') and opts) or (kind == 'answer' and confirm):
         return _frame('clarify', trace, conversation_id, billing, clarify={'question': text, 'options': opts})
     if kind in ('guidance', 'nudge') and raw.get('success') is False and not raw.get('reply'):
         return declined('error', 'That one did not finish. Ask again and it will rerun.', trace_id=trace, conversation_id=conversation_id, billing=billing)
