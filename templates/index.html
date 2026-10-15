@@ -7615,6 +7615,17 @@
         .behavioral-table .behavioral-header-row .cmp-col-cell {
             justify-content: flex-end;
         }
+        /* Location header cells are single-line flex rows; the full-width
+           size line must wrap under the cut label, or it overflows leftward
+           across the Total Universe header. */
+        .location-row.header span.cmp-col-cell {
+            flex-wrap: wrap !important;
+            align-content: flex-end;
+            justify-content: flex-end !important;
+        }
+        .location-row.header span.cmp-col-cell .cmp-col-size {
+            text-align: right !important;
+        }
         /* Belt-and-suspenders right-align for the cohort DATA cells inside
            each .behavioral-item row. Most renderers already stamp inline
            text-align:right on these via JS, but if any code path emits a
