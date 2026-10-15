@@ -142922,11 +142922,6 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 }
                 return null;
             }
-            function fmtPct(n) {
-                if (n == null || !isFinite(n)) return '';
-                var v = Math.round(n * 10) / 10;
-                return (v % 1 === 0 ? String(v) : v.toFixed(1)) + '%';
-            }
             function fmtCount(n) {
                 n = Number(n);
                 if (!isFinite(n) || n <= 0) return '';
@@ -142959,10 +142954,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // tab, so the header gave a number with nothing behind it.
             var sampleTxt = fmtCount(parsed.sampleSize);
             if (sampleTxt) tiles.push({ lbl: 'Crosswalk sample', val: sampleTxt, accent: false });
-            var fTxt = fmtPct(female);
-            if (fTxt) tiles.push({ lbl: 'Female', val: fTxt, accent: false });
-            var uTxt = fmtPct(under35);
-            if (uTxt) tiles.push({ lbl: 'Under 35', val: uTxt, accent: false });
+            // 2026-10-15 (Jenna): the banner carries the two headline
+            // numbers and nothing else. Female and Under 35 used to sit
+            // here; the mobile hero had already been hiding them with a
+            // nth-child rule. `female` and `under35` are still read by
+            // the one-liner above.
             var kpiEl = document.getElementById('dashHeroKpis');
             if (kpiEl) {
                 kpiEl.innerHTML = tiles.map(function(t) {
