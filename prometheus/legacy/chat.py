@@ -5146,16 +5146,15 @@ def _ask_mentions_subject(question, subject):
 
 
 def _pm_watch_notify(username, question, payload, subject=None,
-                     probe=False):
-    """Email Jenna the question and the answer for every account.
-    Runs off the request thread. The 'On it' placeholder is skipped;
-    the finished read calls this again with the real answer.
-    A probe (canary, smoke, regression, operator probe: `probe=True`
-    from a background job, a probe caller on the current request, or
-    a canary user label) never mails. Never raises."""
+                     probe=False, via=None):
+    """Email Jenna the question and the answer for every account, API asks included (marked).
+    Off the request thread; the 'On it' placeholder is skipped, the finished read calls again.
+    Probes (probe=True, a probe caller, a canary label) never mail. Never raises."""
     try:
         if probe or _pm_is_probe_user(username) or _pm_probe_caller():
             return
+        if via is None and getattr(__import__('flask').g, '_pm_api_key_owner', None):
+            via = 'api'
     except Exception as _fx:
         _faults.note('chat', _fx)
 
@@ -5163,7 +5162,7 @@ def _pm_watch_notify(username, question, payload, subject=None,
         try:
             import prometheus_watch_notify as _pwn
             rec = _pwn.user_record(_H.load_users() or {}, username)
-            _pwn.notify(username, rec, question, payload, subject)
+            _pwn.notify(username, rec, question, payload, subject, via=via)
         except Exception:
             traceback.print_exc()
     try:
@@ -13418,6 +13417,7 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
         _kw = {'panel_charge': panel_charge, 'probe': _probe}
         _pm_read_inflight_mark(_pm_user, text, job_id)
         _head['thread_id'] = _pm_job_bind_thread(job_id, _pm_user)   # the worker is another process (API conversations, 2026-10-14)
+        _head['via'] = 'api' if getattr(__import__('flask').g, '_pm_api_key_owner', None) else 'dashboard'
         if inline_job_id:            # the read worker runs the job right here
             _pm_read_status_write(job_id, _head)
             _pm_run_read_job(*_args, **_kw)
@@ -14375,8 +14375,8 @@ def _pm_run_read_job(job_id, pm_user, pm_ppu, text, history, mr, base,
             # the thread as its calm one-liner, but carries no output
             # to email, so only a clean read fires the notify.
             _pm_append_read_to_history(pm_user, job_id, payload)
-            _pm_watch_notify(pm_user, text, payload,
-                             payload.get('profile'), probe=probe)
+            _pm_watch_notify(pm_user, text, payload, payload.get('profile'), probe=probe,
+                             via=__import__('prometheus.service', fromlist=['job_doc_field']).job_doc_field(job_id, 'via'))
             if not held and not probe:
                 _pm_flush_notify(job_id, 'read',
                                  {**payload, 'question': text})

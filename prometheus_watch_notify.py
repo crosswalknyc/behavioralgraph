@@ -209,7 +209,7 @@ def _html(who, label, email, when, subject, question, answer,
         f"</div></body></html>")
 
 
-def _send(username, record, question, answer, subject):
+def _send(username, record, question, answer, subject, via=None):
     import boto3
     email = str((record or {}).get('email') or '')
     company = str((record or {}).get('company') or '')
@@ -221,10 +221,14 @@ def _send(username, record, question, answer, subject):
     who = (f"{first} {last}".strip() or str(username or 'A user'))
     when = datetime.now(timezone.utc).strftime('%b %d, %Y %I:%M %p UTC')
     subj_line = str(subject or '').strip()
-    mail_subject = f"{label}: {who} asked Prometheus"
+    api = str(via or '').lower() in ('api', 'api_key')
+    # an API ask mails exactly like a dashboard ask (Jenna 2026-10-14:
+    # "make sure if someone sends a query via api jessie/liz/me still get
+    # the email and the response"), marked so the surface is clear
+    mail_subject = f"{label}: {who} asked Prometheus" + (' (API)' if api else '')
     correct_url = _correct_link(username, question, answer, subj_line)
     text = (
-        f"{who} at {label} asked Prometheus a question.\n"
+        f"{who} at {label} asked Prometheus a question{' over the API' if api else ''}.\n"
         f"{email}\n{when}\n"
         + (f"Open profile: {subj_line}\n" if subj_line else '')
         + f"\nQUESTION\n{question.strip()}\n\nANSWER\n"
@@ -246,22 +250,23 @@ def _send(username, record, question, answer, subject):
         RawMessage={'Data': msg.as_string()})
 
 
-def notify(username, record, question, payload, subject=None):
+def notify(username, record, question, payload, subject=None, via=None):
     """Email Jenna the question and the answer. Never raises. Skips
     the 'On it' placeholder; the finished read calls this again with
-    the real answer."""
+    the real answer. API asks mail too, marked (API)."""
     try:
         if not str(username or '').strip() and not (record or {}).get('email'):
             return
         # A probe (canary, smoke, regression, operator probe) is logged
-        # under a 'canary:' label and never mails (2026-10-06).
-        if str(username or '').strip().lower().startswith('canary'):
+        # under a 'canary:' label and never mails (2026-10-06). The
+        # internal sandbox key (the post-deploy smoke) never mails either.
+        if str(username or '').strip().lower().startswith('canary') or (record or {}).get('api_key_sandbox'):
             return
         if is_placeholder(payload):
             return
         answer = answer_text(payload)
         # Caller already moved this off the request. Send here so the
         # note is not left on a second thread that can die first.
-        _send(username, record, question, answer, subject)
+        _send(username, record, question, answer, subject, via=via)
     except Exception:
         traceback.print_exc()

@@ -169,13 +169,18 @@ def find_job_doc(job_id):
     return None, None
 
 
-def job_thread_id(job_id):
-    """The thread id stamped on a job document at launch, or None."""
+def job_doc_field(job_id, field):
+    """One field stamped on a job document at launch, or None."""
     try:
         doc, _kind = find_job_doc(job_id)
-        return str((doc or {}).get('thread_id') or '').strip() or None
+        return str((doc or {}).get(field) or '').strip() or None
     except Exception:
         return None
+
+
+def job_thread_id(job_id):
+    """The thread id stamped on a job document at launch, or None."""
+    return job_doc_field(job_id, 'thread_id')
 
 
 def list_threads(uname):
