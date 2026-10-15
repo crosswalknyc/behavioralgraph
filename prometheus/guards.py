@@ -1156,6 +1156,7 @@ _PARTNER_ATTRIB_RX = re.compile(
 _PARTNER_SOURCE_LINE_RX = re.compile(r'^\s*\(?\s*sources?\s*:[^\n]*$', re.I | re.M)
 _PARTNER_PAREN_SOURCE_RX = re.compile(r'\s*\((?:source|sources|per|via|according to)\b[^)]*\)', re.I)
 _PARTNER_WORD_SWAPS = _METHOD_WORD_SUBS + (
+    (re.compile(r'\b(?:US |us )?gen[ _-]?pop(?:ulation)?\b', re.I), 'US population'),
     (re.compile(r'\b(?:web|internet) search(?:es)?\b', re.I), 'our data'),
     (re.compile(r'\bsearch results\b', re.I), 'our data'),
     (re.compile(r'\b(?:public|publicly available|external|third[- ]party|open[- ]source) (?:data|sources?|figures|reports?)\b', re.I), 'our data'),
@@ -1163,7 +1164,8 @@ _PARTNER_WORD_SWAPS = _METHOD_WORD_SUBS + (
     (re.compile(r'\bextrapolated\b', re.I), 'projected'),
     (re.compile(r'\bimputed\b', re.I), 'filled in'),
     (re.compile(r'\bcalibrated\b', re.I), 'checked'),
-    (re.compile(r'\bcohorts?\b', re.I), 'audiences'),
+    (re.compile(r'\bcohorts\b', re.I), 'audiences'),
+    (re.compile(r'\bcohort\b', re.I), 'audience'),
     (re.compile(r'\bthe (?:corpus|ledger|catalog)\b', re.I), 'our library'),
     (re.compile(r'\bpipeline\b', re.I), 'process'),
     (re.compile(r'\bconfidence tiers?\b', re.I), 'readings'),
@@ -1172,6 +1174,14 @@ _PARTNER_WORD_SWAPS = _METHOD_WORD_SUBS + (
 # Words that may legitimately appear as brands or ordinary English and
 # must not count as a violation on their own (the token list is coarse
 # on purpose for the build API; the ask belt judges in context).
+# swaps that never change a sentence's meaning, run before the clause pass
+_PARTNER_PLAIN_SWAPS = (
+    (re.compile(r'\b(?:US |us )?gen[ _-]?pop(?:ulation)?\b', re.I), 'US population'),
+    (re.compile(r'\bpanelists\b', re.I), 'people'),
+    (re.compile(r'\bpanelist\b', re.I), 'person'),
+    (re.compile(r'\bcohorts\b', re.I), 'audiences'),
+    (re.compile(r'\bcohort\b', re.I), 'audience'),
+)
 _PARTNER_TOKEN_SKIP = frozenset(('render', 'reasoning', 'estimate ', 'chunk', 'the catalog', 'the ledger',
                                  'the corpus', 'cohort', 'attempt ', 'exception', 'according to ', 'as reported by'))
 _PARTNER_HARD_RX = re.compile(
@@ -1246,6 +1256,7 @@ def scrub_partner_text(text, fallback=''):
     t = _PARTNER_PAREN_SOURCE_RX.sub('', t)
     t = _PARTNER_SOURCE_INLINE_RX.sub('', t)
     t = _PARTNER_ATTRIB_RX.sub('', t)
+    t = _apply_swaps(t, _PARTNER_PLAIN_SWAPS)      # plain words first: a label keeps its meaning
     paras = []
     for para in t.split('\n'):
         if not para.strip() or not _partner_dirty(para):

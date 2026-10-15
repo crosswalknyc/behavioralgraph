@@ -75,7 +75,7 @@ user's message. Return STRICT JSON only:
                                 // plain TAM
   "start_date": "YYYY-MM-DD"|null,  // window (null -> trailing 12 mo)
   "end_date": "YYYY-MM-DD"|null,
-  "tam_label": str|null,        // null -> "US gen pop"
+  "tam_label": str|null,        // null -> "US population"
   "tam_accounts": int|null,     // null -> 329900000
   "notes": str|null,            // anything else the user specified
   "missing": [str, ...]         // which of subject / platform /
@@ -841,7 +841,7 @@ def build_journey(inputs: dict, prim: dict, *,
     subject = str(inputs['subject']).strip()
     platform = str(inputs['platform']).strip()
     tam = int(inputs.get('tam_accounts') or US_GEN_POP)
-    tam_label = str(inputs.get('tam_label') or 'US gen pop')
+    tam_label = str(inputs.get('tam_label') or 'US population')
     start, end = _dates(inputs)
     seedbase = f'{subject}|{platform}'
 
@@ -1959,7 +1959,7 @@ def synthesize(inputs: dict, claude_json: Callable, *,
         'clip_url': inputs.get('clip_url') or None,
         'start_behavior': inputs.get('start_behavior') or None,
         'window': {'start': start, 'end': end},
-        'tam_label': inputs.get('tam_label') or 'US gen pop',
+        'tam_label': inputs.get('tam_label') or 'US population',
         'tam_accounts': int(inputs.get('tam_accounts') or US_GEN_POP),
         'notes': inputs.get('notes') or '',
     })

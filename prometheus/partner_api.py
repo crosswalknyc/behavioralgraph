@@ -147,6 +147,12 @@ def _scrub(v1: dict) -> dict:
             for k in ('question', 'text', 'stage'):
                 if k in b and not str(b.get(k) or '').strip():
                     b[k] = {'question': 'Which one do you mean?', 'text': 'Nothing more to add here.', 'stage': 'working'}[k]
+    cl = v1.get('clarify')
+    if isinstance(cl, dict) and isinstance(cl.get('options'), list):
+        cl['options'] = [o for o in cl['options'] if isinstance(o, dict) and o.get('label') and not _g.partner_violations(str(o.get('send') or ''))]
+    ans = v1.get('answer')
+    if isinstance(ans, dict) and isinstance(ans.get('followups'), list):
+        ans['followups'] = [f for f in ans['followups'] if f and not _g.partner_violations(str(f))]
     return v1
 
 
@@ -402,9 +408,9 @@ def handle_health() -> tuple:
         checks['storage'] = {'status': 'down'}
     try:
         import os as _os
-        checks['reasoning'] = {'status': 'ok' if (_os.environ.get('ANTHROPIC_API_KEY') or _os.environ.get('CLAUDE_API_KEY')) else 'degraded'}
+        checks['analysis'] = {'status': 'ok' if (_os.environ.get('ANTHROPIC_API_KEY') or _os.environ.get('CLAUDE_API_KEY')) else 'degraded'}
     except Exception:
-        checks['reasoning'] = {'status': 'degraded'}
+        checks['analysis'] = {'status': 'degraded'}
     try:
         from . import store as _st
         if _st.enabled():

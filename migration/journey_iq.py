@@ -2438,6 +2438,11 @@ def breakdown_rows(payload: dict) -> list:
     """Rows in BREAKDOWN_COLUMNS order for a persisted journey payload."""
     j = (payload or {}).get('fragrance_shop_journey') or {}
     spine = [s for s in (j.get('spine') or []) if isinstance(s, dict)]
+    for s in spine:                      # the TAM row's label in the client's words (older files said 'US gen pop')
+        if re.search(r'\bgen[ _-]?pop\b', str(s.get('label') or ''), re.I):
+            s = dict(s)
+            s['label'] = re.sub(r'\b(?:US )?gen[ _-]?pop(?:ulation)?\b', 'US population', str(s.get('label')), flags=re.I)
+            spine[spine.index(next(x for x in spine if x is s or x.get('id') == s.get('id')))] = s
     rows = []
     counts = [_bd_int(s.get('accounts')) for s in spine]
     for s in spine:
