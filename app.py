@@ -6847,6 +6847,39 @@ def admin_generate_api_key(username):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/api/admin/users/<username>/api-key/policy', methods=['GET', 'POST'])
+@requires_admin
+def admin_api_key_policy(username):
+    """The key's policy and activity (2026-10-14 partner API): scopes,
+    limits, daily cap, webhook, sandbox flag, label, plus calls / spend /
+    errors over 30 days and p50 / p90 latency over 7 days from the call
+    log. POST with any subset of {scopes, limits, daily_cap_usd,
+    webhook_url, webhook_secret, sandbox, label} to change it."""
+    try:
+        from prometheus import partner_keys as _K
+        from prometheus import store as _store
+        data = load_users()
+        if username not in (data.get('users') or {}):
+            return jsonify({'success': False, 'error': 'User not found'}), 404
+        user = data['users'][username]
+        changed = []
+        if request.method == 'POST':
+            patch = request.get_json(force=True, silent=True) or {}
+            changed = _K.apply_policy(user, patch)
+            if changed:
+                save_users(data)
+        view = _K.policy_view(user)
+        try:
+            view['activity_30d'] = _store.api_key_summary(view['key_id'], days=30)
+            view['latency_7d'] = _store.api_latency(view['key_id'], days=7)
+        except Exception:
+            view['activity_30d'] = None
+            view['latency_7d'] = None
+        return jsonify({'success': True, 'username': username, 'policy': view, 'changed': changed})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/admin/users/<username>/api-key/revoke', methods=['POST'])
 @requires_admin
 def admin_revoke_api_key(username):
@@ -51657,6 +51690,13 @@ _V1_BANNED_TOKENS = (
     # Config knobs
     'api_key', 'anthropic_api',
 )
+# One list for every key-facing surface (2026-10-14): the ask API's
+# partner belt in prometheus/guards.py owns the list; the literal above
+# is the fallback when the package is unavailable.
+try:
+    from prometheus.guards import PARTNER_BANNED_TOKENS as _V1_BANNED_TOKENS
+except Exception:
+    pass
 
 # Partner-facing progress phrases. Kept intentionally coarse: partners
 # know "we're building it, poll again". Fine-grained per-column progress

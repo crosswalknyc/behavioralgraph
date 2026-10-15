@@ -168,11 +168,30 @@ def build_payload(s3, bucket, this_version=None, now=None):
     regression = hb.get('regression') if isinstance(hb.get('regression'), dict) else {}
     canary = hb.get('intake_canary') if isinstance(hb.get('intake_canary'), dict) else {}
 
+    north = read_json(s3, bucket, 'system/ops/pm_north_star.json')
+    north = north if isinstance(north, dict) else {}
+    golden = north.get('golden') if isinstance(north.get('golden'), dict) else {}
+    reader = north.get('reader') if isinstance(north.get('reader'), dict) else {}
+
     return {
         'success': True,
         'generated_at': now.strftime('%Y-%m-%dT%H:%M:%SZ'),
         'light': light,
         'reasons': reasons,
+        # the five numbers the product is run on (audit items 1 and 2, 2026-10-14)
+        'north_star': {
+            'day': north.get('day'),
+            'first_ask_rate': north.get('first_ask_rate'),
+            'asks': north.get('asks'), 'served': north.get('served'), 're_asked': north.get('re_asked'),
+            'not_served_by_class': north.get('not_served_by_class') or {},
+            'latency_p50_s': (north.get('latency_all') or {}).get('p50_s'),
+            'latency_p90_s': (north.get('latency_all') or {}).get('p90_s'),
+            'over_45s': (north.get('latency_all') or {}).get('over_45s'),
+            'spend_usd': north.get('spend_usd'), 'spend_per_served_usd': north.get('spend_per_served_usd'),
+            'golden_pass_rate': golden.get('pass_rate'), 'golden_n': golden.get('n'),
+            'reader_bank': (reader.get('bank') or {}),
+            'history': north.get('history') or [],
+        },
         'heartbeat': {
             'present': bool(hb.get('generated_at')),
             'generated_at': hb.get('generated_at'),

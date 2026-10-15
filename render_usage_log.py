@@ -32,6 +32,7 @@ from __future__ import annotations
 import json
 import os
 import threading
+import time
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Optional
@@ -276,6 +277,48 @@ def _put_ppu_record(record: dict) -> None:
         ContentType='application/json')
 
 
+# ------------------------------------------------------------------
+# Per-request metered totals (2026-10-14): the API reports what one ask
+# cost in its billing block. In-process first (same worker), the store
+# when there is one (the build server's calls land there too).
+_REQ_TOTALS: dict = {}
+_REQ_LOCK = threading.Lock()
+_REQ_TTL_S = 6 * 3600
+
+
+def add_request_charge(request_id: str, billed: float, cost: float = 0.0) -> None:
+    now = time.time()
+    with _REQ_LOCK:
+        b, c, n, _ = _REQ_TOTALS.get(request_id, (0.0, 0.0, 0, now))
+        _REQ_TOTALS[request_id] = (b + float(billed or 0), c + float(cost or 0), n + 1, now)
+        if len(_REQ_TOTALS) > 5000:
+            for k, v in list(_REQ_TOTALS.items()):
+                if now - v[3] > _REQ_TTL_S:
+                    _REQ_TOTALS.pop(k, None)
+    try:
+        from prometheus import store as _store
+        _store.add_request_charge(request_id, billed, cost)
+    except Exception:
+        pass
+
+
+def request_charge(request_id: str) -> dict:
+    """{'billed_usd', 'cost_usd', 'calls'} for one request id."""
+    b = c = 0.0
+    n = 0
+    with _REQ_LOCK:
+        if request_id in _REQ_TOTALS:
+            b, c, n, _ = _REQ_TOTALS[request_id]
+    try:
+        from prometheus import store as _store
+        sb, sc, sn = _store.request_charge(request_id)
+        if sn > n:          # the store saw more (another process ran part of the ask)
+            b, c, n = sb, sc, sn
+    except Exception:
+        pass
+    return {'billed_usd': round(b, 6), 'cost_usd': round(c, 6), 'calls': n}
+
+
 def record_call(surface: str, origin: str, model: str,
                 usage: Any, extras: Optional[dict] = None,
                 duration_s: Optional[float] = None) -> None:
@@ -339,6 +382,13 @@ def record_call(surface: str, origin: str, model: str,
             try:   # the per-user daily cap counts every attributed call (audit item 8, 2026-10-14)
                 from prometheus import spend_guard as _sg
                 _sg.add(extras.get('user') or extras.get('user_email'), record.get('cost_usd'))
+            except Exception:
+                pass
+            # the request's metered total, for the API's billing block (2026-10-14)
+            try:
+                _rid = extras.get('request_id')
+                if _rid:
+                    add_request_charge(str(_rid), record.get('billed_usd') or 0.0, record.get('cost_usd') or 0.0)
             except Exception:
                 pass
         if _SYNC_FOR_TESTS:
@@ -426,6 +476,13 @@ def record_metered_answer(surface: str, extras: Optional[dict] = None,
             try:   # the per-user daily cap counts every attributed call (audit item 8, 2026-10-14)
                 from prometheus import spend_guard as _sg
                 _sg.add(extras.get('user') or extras.get('user_email'), record.get('cost_usd'))
+            except Exception:
+                pass
+            # the request's metered total, for the API's billing block (2026-10-14)
+            try:
+                _rid = extras.get('request_id')
+                if _rid:
+                    add_request_charge(str(_rid), record.get('billed_usd') or 0.0, record.get('cost_usd') or 0.0)
             except Exception:
                 pass
         if _SYNC_FOR_TESTS:

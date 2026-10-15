@@ -1,0 +1,363 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dashboard.crosswalknyc.com/api/prometheus/v1/schemas/ask",
+  "title": "Prometheus ask response (v1)",
+  "type": "object",
+  "properties": {
+    "schema": {
+      "const": "prometheus.ask.v1"
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "answer",
+        "clarify",
+        "job",
+        "pending",
+        "declined"
+      ]
+    },
+    "trace_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "conversation_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "replayed": {
+      "type": "boolean"
+    },
+    "billing": {
+      "type": "object",
+      "properties": {
+        "charged_usd": {
+          "type": "number"
+        },
+        "balance_after_usd": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "basis": {
+          "type": "string",
+          "enum": [
+            "metered"
+          ]
+        }
+      },
+      "required": [
+        "charged_usd",
+        "basis"
+      ]
+    },
+    "answer": {
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string"
+        },
+        "facts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "label": {
+                "type": "string"
+              },
+              "value": {
+                "type": "number"
+              },
+              "unit": {
+                "type": "string",
+                "enum": [
+                  "people",
+                  "percent",
+                  "usd",
+                  "index",
+                  "ratio",
+                  "minutes",
+                  "hours",
+                  "days"
+                ]
+              },
+              "subject": {
+                "type": "string"
+              },
+              "product": {
+                "type": "string"
+              },
+              "window": {
+                "type": "object",
+                "properties": {
+                  "start": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "end": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                }
+              },
+              "as_of": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "base": {
+                "type": [
+                  "number",
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "label",
+              "value",
+              "unit"
+            ]
+          }
+        },
+        "followups": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "text",
+        "facts",
+        "followups"
+      ]
+    },
+    "clarify": {
+      "type": "object",
+      "properties": {
+        "question": {
+          "type": "string"
+        },
+        "options": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "label": {
+                "type": "string"
+              },
+              "send": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "label",
+              "send"
+            ]
+          }
+        }
+      },
+      "required": [
+        "question",
+        "options"
+      ]
+    },
+    "job": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "queued",
+            "working",
+            "starting",
+            "done",
+            "held",
+            "error"
+          ]
+        },
+        "poll": {
+          "type": "string"
+        },
+        "eta_seconds": {
+          "type": "integer"
+        },
+        "stage": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "status",
+        "poll",
+        "eta_seconds"
+      ]
+    },
+    "pending": {
+      "type": "object",
+      "properties": {
+        "retry_after_seconds": {
+          "type": "integer"
+        },
+        "text": {
+          "type": "string"
+        },
+        "job_id": {
+          "type": "string"
+        },
+        "poll": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "retry_after_seconds",
+        "text"
+      ]
+    },
+    "declined": {
+      "type": "object",
+      "properties": {
+        "reason": {
+          "type": "string",
+          "enum": [
+            "not_digital",
+            "no_base",
+            "scope",
+            "rate_limit",
+            "insufficient_funds",
+            "daily_cap",
+            "unsupported",
+            "unsafe_input",
+            "too_large",
+            "build_required",
+            "unknown_subject",
+            "error"
+          ]
+        },
+        "text": {
+          "type": "string"
+        },
+        "retry_after_seconds": {
+          "type": "integer"
+        },
+        "next": {
+          "type": "object",
+          "properties": {
+            "action": {
+              "type": "string"
+            },
+            "endpoint": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "action"
+          ]
+        }
+      },
+      "required": [
+        "reason",
+        "text"
+      ]
+    },
+    "event": {
+      "type": "string"
+    },
+    "job_id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema",
+    "kind",
+    "billing",
+    "replayed"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "answer"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "answer"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "clarify"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "clarify"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "job"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "job"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "pending"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "pending"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "declined"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "declined"
+        ]
+      }
+    }
+  ],
+  "additionalProperties": false
+}

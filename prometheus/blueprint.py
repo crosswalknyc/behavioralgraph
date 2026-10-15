@@ -13,6 +13,9 @@ GET  /threads             list the caller's threads
 POST /threads             start a thread  {title?, activate?}
 GET  /threads/<tid>       one thread's turns
 GET  /jobs/<job_id>       poll a background read / deck / tool job
+GET  /usage               per-day calls and metered charges for the key
+GET  /schemas/ask         the v1 response JSON Schema (public)
+GET  /schemas/ask-request the v1 request JSON Schema (public)
 GET  /understand?text=..  the routing decision only (session callers;
                           used by the eval set and the widget's dev view)
 GET  /health              liveness + version
@@ -122,8 +125,50 @@ def _body():
 
 @bp.route('/health', methods=['GET'])
 def health():
-    return jsonify({'success': True, 'service': 'prometheus',
-                    'version': __version__, 'bound': host.bound})
+    """Liveness for everyone; with ``?deep=1`` the dependency checks a
+    partner can poll (storage, reasoning, records) as ok / degraded /
+    down, plain names only."""
+    out = {'success': True, 'service': 'prometheus', 'version': __version__, 'bound': host.bound}
+    if (request.args.get('deep') or '').strip() in ('1', 'true', 'yes'):
+        from . import partner_api as _papi
+        deep, status = _papi.handle_health()
+        out.update(deep)
+        return jsonify(out), status
+    return jsonify(out)
+
+
+@bp.route('/schemas/ask', methods=['GET'])
+@bp.route('/schemas/ask-request', methods=['GET'])
+def schema_ask():
+    """The JSON Schema a partner codes against (public: a schema has no
+    data in it). /schemas/ask is the response, /schemas/ask-request the
+    request body."""
+    import json as _json
+    name = 'ask-request.v1.json' if request.path.endswith('ask-request') else 'ask.v1.json'
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'schemas', name)
+    try:
+        with open(path, 'r', encoding='utf-8') as fh:
+            doc = _json.load(fh)
+    except Exception:
+        return jsonify({'error': 'schema unavailable'}), 503
+    resp = make_response(jsonify(doc), 200)
+    resp.headers['Cache-Control'] = 'public, max-age=3600'
+    return resp
+
+
+@bp.route('/usage', methods=['GET'])
+@_guarded('prometheus/usage')
+def usage():
+    """Per-day calls and metered charges for the calling key
+    (``?from=YYYY-MM-DD&to=YYYY-MM-DD``, default the last 30 days), the
+    current balance and the key's policy. Session callers get their own
+    seat's view the same way."""
+    user, via, err = _auth()
+    if err:
+        return err
+    from . import partner_api as _papi
+    out, status = _papi.handle_usage(user, dict(request.args))
+    return jsonify(out), status
 
 
 @bp.route('/ask', methods=['POST'])
@@ -134,7 +179,15 @@ def ask():
         return err
     body = _body()
     if via == 'api_key':
-        body.setdefault('client', 'api')
+        # the v1 contract (2026-10-14): scopes, limits, idempotency, the
+        # daily cap, the partner belt over every string. One engine
+        # underneath: partner_api calls the same service.ask.
+        from . import partner_api as _papi
+        v1, status, extra = _papi.handle_ask(user, body, dict(request.headers), raw_len=request.content_length)
+        resp = make_response(jsonify(v1), status)
+        for k, v in (extra or {}).items():
+            resp.headers[k] = v
+        return resp
     _t0 = time.monotonic()
     env, status = service.ask(user, body, via=via)
     # Over 45 seconds the widget has promised an email as well as the
@@ -253,7 +306,8 @@ def upload():
     if err:
         return err
     if via == 'api_key':
-        return jsonify({'success': False, 'error': 'not available on this key'}), 403
+        from . import contract_v1 as _C
+        return jsonify(_C.declined('unsupported', 'Documents are not available on the key surface yet. Ask the question in text.')), 200
     from . import documents as _docs
     uname = service.username_of(user)
     tid = str(request.form.get('thread_id') or '').strip() or None
@@ -367,6 +421,13 @@ def threads_list():
     if err:
         return err
     out = service.list_threads(service.username_of(user))
+    if via == 'api_key':
+        # a key sees its own conversations, never the owner's dashboard threads
+        from . import partner_keys as _K
+        pref = f"api-{_K.key_id(user)[:8]}-"
+        convs = [{'conversation_id': t['id'][len(pref):], 'turns': t.get('turns', 0), 'updated': t.get('updated')}
+                 for t in (out.get('threads') or []) if str(t.get('id') or '').startswith(pref)]
+        return jsonify({'schema': 'prometheus.conversations.v1', 'conversations': convs})
     return jsonify({'success': True, **out})
 
 
@@ -376,6 +437,9 @@ def threads_new():
     user, via, err = _auth()
     if err:
         return err
+    if via == 'api_key':
+        from . import contract_v1 as _C
+        return jsonify(_C.declined('unsupported', 'Conversations start with the first ask: send a conversation_id on POST /ask.')), 200
     body = _body()
     tid, idx = service.new_thread(
         service.username_of(user),
@@ -392,14 +456,18 @@ def thread_get(tid):
     if err:
         return err
     uname = service.username_of(user)
-    safe_t = ''.join(c for c in str(tid) if c.isalnum() or c in '-_')
+    safe_t = ''.join(c for c in str(tid) if c.isalnum() or c in '-_.')
+    if via == 'api_key':
+        # the id is the partner's conversation id; only this key's own
+        from . import partner_api as _papi, guards as _g
+        safe_t = _papi.conversation_thread_id(user, safe_t)
     if not safe_t or not service.thread_exists(uname, safe_t):
         return jsonify({'success': False, 'error': 'unknown thread'}), 404
     turns = service.load_thread(uname, safe_t)
     if via == 'api_key':
-        turns = [{'role': t.get('role'), 'text': t.get('text'),
-                  'ts': t.get('ts')} for t in (turns or [])
-                 if isinstance(t, dict)]
+        turns = [{'role': t.get('role'), 'text': _g.scrub_partner_text(str(t.get('text') or ''), fallback=''),
+                  'ts': t.get('ts')} for t in (turns or []) if isinstance(t, dict)]
+        return jsonify({'schema': 'prometheus.conversation.v1', 'conversation_id': str(tid), 'turns': turns})
     return jsonify({'success': True, 'thread_id': safe_t, 'turns': turns})
 
 
@@ -409,5 +477,12 @@ def job_get(job_id):
     user, via, err = _auth()
     if err:
         return err
+    if via == 'api_key':
+        from . import partner_api as _papi
+        v1, status, extra = _papi.handle_job(user, job_id)
+        resp = make_response(jsonify(v1), status)
+        for k, v in (extra or {}).items():
+            resp.headers[k] = v
+        return resp
     out, status = service.job_status(user, job_id, via=via)
     return jsonify(out), status

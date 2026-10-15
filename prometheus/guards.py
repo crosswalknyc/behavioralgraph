@@ -1108,3 +1108,219 @@ def scrub_tree(obj, skip_keys=_SCRUB_SKIP_KEYS, _depth=0):
             elif isinstance(v, (dict, list)):
                 scrub_tree(v, skip_keys, _depth + 1)
     return obj
+
+
+# ======================================================================
+# Partner belt (2026-10-14, Jenna: "a client using it would NEVER see
+# that anything is synthetic or external sources used"). One list for
+# every key-facing surface: the build API's status scrub reads it, the
+# ask API runs the full belt below over every string in the response.
+# ======================================================================
+
+# Substrings (lower-case) that never reach a key caller. Shared with
+# app._V1_BANNED_TOKENS, which now imports this tuple.
+PARTNER_BANNED_TOKENS = (
+    # model vendors and model names
+    'claude', 'anthropic', 'opus', 'sonnet', 'openai', 'gpt', 'llm', 'ai stage', 'ai step',
+    # how a figure was made
+    'synth', 'synthesis', 'synthesize', 'synthesized', 'synthesised', 'synthetic',
+    'modeled', 'modelled', 'estimated', 'estimate ', 'simulated', 'extrapolated', 'imputed',
+    'calibrated', 'placeholder', 'researched', 'anchored', 'anchor value', 'web search', 'web-search',
+    'search results', 'public data', 'publicly available', 'external data', 'external source',
+    'third-party data', 'third party data', 'open-source data', 'according to ', 'as reported by',
+    'row-by-row', 'row by row', 'row scoring', 'reasoning', 'chunk',
+    # internal machinery
+    'hostmap', 'enforcer', 'depin', 'gen_pop', 'gen pop', 'panelist', 'panel', 'category signal',
+    'persona_doc', 'persona doc', 'persona brief', 'brief-interpret', 'brief interpret',
+    'tu cohort', 'tu_cohort', 'tu build', 'tu_build', 'avid cohort', 'avid_cohort', 'cohort',
+    'cut_done', 'tu_done', 'avid_done', 'pipeline', 'the corpus', 'the ledger', 'the catalog',
+    'confidence tier', 'tier 1', 'tier 2',
+    # infrastructure
+    'hetzner', 'render', 'clickhouse', 'systemd', 's3://', 'dashboard-inputs',
+    # crash mechanics
+    'worker', 'attempt ', 'traceback', 'exception', 'stack trace', 'nameerror', 'typeerror', 'keyerror',
+    # file paths, module names, config knobs
+    '/root/', 'finished_codes', 'migration/', '.py:', 'api_key', 'anthropic_api',
+)
+
+# Attribution clauses: the figure stays, the "according to X" goes.
+_PARTNER_SOURCES = (
+    r'statista|nielsen|pew(?: research)?|comscore|similarweb|sensor tower|data\.ai|emarketer|yougov|'
+    r'box office mojo|the-numbers\.com|deadline|variety|the hollywood reporter|wikipedia|imdb(?:pro)?|google trends|'
+    r'sec filings?|10-k|earnings (?:reports?|calls?)|press reports?|trade press|industry reports?|'
+    r'public(?:ly available)? (?:data|figures|reports?|sources?)|external (?:data|sources?)|third[- ]party (?:data|sources?)'
+)
+_PARTNER_ATTRIB_RX = re.compile(
+    r'(?:,\s*)?\b(?:according to|as reported by|reported by|per|sourced from|based on|citing|via|from)\s+'
+    r'(?:the\s+|a\s+|an\s+)?(?:' + _PARTNER_SOURCES + r')(?:\s+(?:data|figures|reports?|numbers|counts|estimates?))?\b[^.;,\n]*', re.I)
+_PARTNER_SOURCE_LINE_RX = re.compile(r'^\s*\(?\s*sources?\s*:[^\n]*$', re.I | re.M)
+_PARTNER_PAREN_SOURCE_RX = re.compile(r'\s*\((?:source|sources|per|via|according to)\b[^)]*\)', re.I)
+_PARTNER_WORD_SWAPS = _METHOD_WORD_SUBS + (
+    (re.compile(r'\b(?:web|internet) search(?:es)?\b', re.I), 'our data'),
+    (re.compile(r'\bsearch results\b', re.I), 'our data'),
+    (re.compile(r'\b(?:public|publicly available|external|third[- ]party|open[- ]source) (?:data|sources?|figures|reports?)\b', re.I), 'our data'),
+    (re.compile(r'\bsimulated\b', re.I), 'measured'),
+    (re.compile(r'\bextrapolated\b', re.I), 'projected'),
+    (re.compile(r'\bimputed\b', re.I), 'filled in'),
+    (re.compile(r'\bcalibrated\b', re.I), 'checked'),
+    (re.compile(r'\bcohorts?\b', re.I), 'audiences'),
+    (re.compile(r'\bthe (?:corpus|ledger|catalog)\b', re.I), 'our library'),
+    (re.compile(r'\bpipeline\b', re.I), 'process'),
+    (re.compile(r'\bconfidence tiers?\b', re.I), 'readings'),
+    (re.compile(r'\b(?:claude|anthropic|openai|gpt|llm)\b', re.I), 'Prometheus'),
+)
+# Words that may legitimately appear as brands or ordinary English and
+# must not count as a violation on their own (the token list is coarse
+# on purpose for the build API; the ask belt judges in context).
+_PARTNER_TOKEN_SKIP = frozenset(('render', 'reasoning', 'estimate ', 'chunk', 'the catalog', 'the ledger',
+                                 'the corpus', 'cohort', 'attempt ', 'exception', 'according to ', 'as reported by'))
+_PARTNER_HARD_RX = re.compile(
+    r'\b(?:claude|anthropic|opus|sonnet|openai|gpt-?\d?|llm|synth(?:etic|esis|esized|esised|ed|s)?|hostmap|enforcer|depin|'
+    r'gen[_ ]pop|panelists?|hetzner|clickhouse|systemd|traceback|stack trace|nameerror|typeerror|keyerror|'
+    r'web[- ]search(?:es)?|placeholders?|modell?ed|simulated|extrapolated|imputed|tier [12])\b'
+    r'|s3://|/root/|finished_codes|migration/|\.py:|api_key|anthropic_api|dashboard-inputs', re.I)
+_PARTNER_INFRA_RX = re.compile(r'\b(hetzner|clickhouse|systemd|traceback|anthropic|claude|openai)\b|/root/|finished_codes|\.py:|s3://', re.I)
+_PARTNER_SKIP_KEYS = _SCRUB_SKIP_KEYS | frozenset((
+    'trace_id', 'conversation_id', 'request_id', 'idempotency_key', 'schema', 'poll', 'endpoint', 'send',
+    'unit', 'product', 'reason', 'action', 'status', 'basis', 'webhook_url', 'next', 'window'))
+
+
+def partner_violations(text):
+    """The banned words still present in a key-facing string, in context.
+    Vendor and infrastructure names, method words and the attribution
+    clauses count; ordinary English that merely overlaps the coarse
+    build-API list does not."""
+    t = str(text or '')
+    if not t.strip():
+        return []
+    out = []
+    for m in _PARTNER_HARD_RX.finditer(t):
+        out.append(m.group(0))
+    for m in _PARTNER_ATTRIB_RX.finditer(t):
+        out.append(m.group(0).strip(' ,'))
+    for m in _PARTNER_VENDOR_RX.finditer(t):
+        out.append(m.group(0))
+    if _PARTNER_SOURCE_LINE_RX.search(t):
+        out.append('source line')
+    if method_language(t):
+        out.append('method sentence')
+    return out
+
+
+_PARTNER_SOURCE_INLINE_RX = re.compile(r'\(?\bsources?\s*:\s*[^.;\n)]*[.;)]?\s*', re.I)
+_PARTNER_CLAUSE_RX = re.compile(r'(?<=[.!?;])\s+')
+_PARTNER_VERB_SWAPS = (
+    (re.compile(r'\b(?:estimated|modell?ed|simulated|extrapolated|projected out|imputed)\s+(?=(?:about |around |roughly |some )?[\d$])', re.I), 'counted '),
+    (re.compile(r'\b(?:researched|anchored|calibrated|modell?ed|estimated)\b', re.I), 'read'),
+)
+
+
+# Data vendors are never an audience brand in our files; their name in a
+# clause is an attribution however it is phrased.
+_PARTNER_VENDOR_RX = re.compile(
+    r'\b(?:statista|nielsen|comscore|similarweb|sensor tower|data\.ai|emarketer|yougov|mri[- ]simmons|'
+    r'google trends|box office mojo|the-numbers\.com|parrot analytics|samba tv|ispot(?:\.tv)?|kantar|gwi|'
+    r'global ?web ?index|luminate|circana|npd group|magid)\b', re.I)
+
+
+def _partner_dirty(x):
+    return bool(_PARTNER_HARD_RX.search(x) or _METHOD_SENTENCE_RX.search(x) or _PARTNER_ATTRIB_RX.search(x)
+                or _PARTNER_SOURCE_INLINE_RX.search(x) or _PARTNER_VENDOR_RX.search(x))
+
+
+def _cap(x):
+    x = x.strip()
+    return x[:1].upper() + x[1:] if x else x
+
+
+def scrub_partner_text(text, fallback=''):
+    """The partner belt over one string. Attribution clauses go, a
+    clause that describes how a figure was made or names a vendor or a
+    machine goes (its figures travel in the facts list, never in prose
+    that would otherwise read as garbage), internal words get plain
+    swaps. Returns the clean text, or ``fallback`` when nothing safe is
+    left. Idempotent."""
+    t = str(text or '')
+    if not t.strip():
+        return t
+    t = _PARTNER_PAREN_SOURCE_RX.sub('', t)
+    t = _PARTNER_SOURCE_INLINE_RX.sub('', t)
+    t = _PARTNER_ATTRIB_RX.sub('', t)
+    paras = []
+    for para in t.split('\n'):
+        if not para.strip() or not _partner_dirty(para):
+            paras.append(para)
+            continue
+        keep = []
+        for c in _PARTNER_CLAUSE_RX.split(para):
+            if not c.strip():
+                continue
+            if not _partner_dirty(c):
+                keep.append(c.strip())
+                continue
+            fixed = _apply_swaps(_apply_swaps(c, _METHOD_SAFE_SWAPS), _PARTNER_VERB_SWAPS)
+            fixed = _PARTNER_ATTRIB_RX.sub('', fixed)
+            if not _partner_dirty(fixed):
+                keep.append(fixed.strip())
+        out, prev_end = [], '.'
+        for k in keep:
+            if not k:
+                continue
+            out.append(_cap(k) if prev_end in '.!?' else k)
+            prev_end = k[-1]
+        paras.append(' '.join(out))
+    t = '\n'.join(paras)
+    t = scrub_jargon(t)
+    t = _apply_swaps(t, _PARTNER_WORD_SWAPS)
+    t = _PARTNER_INFRA_RX.sub('', t)
+    t = re.sub(r'([.!?;:])\s*,\s*', r'\1 ', t)
+    t = re.sub(r'^\s*,\s*', '', t, flags=re.M)
+    t = re.sub(r'[ \t]{2,}', ' ', t)
+    t = re.sub(r'\s+([.,;:])', r'\1', t)
+    t = re.sub(r'\(\s*\)', '', t)
+    t = re.sub(r'\n{3,}', '\n\n', t).strip()
+    if not t or partner_violations(t):
+        return fallback
+    return t
+
+
+def scrub_partner_payload(obj, skip_keys=_PARTNER_SKIP_KEYS, _depth=0):
+    """The partner belt over every string in a response, in place and
+    returned. Keys that carry identifiers, codes, units or URLs are
+    left alone."""
+    if _depth > 14:
+        return obj
+    if isinstance(obj, dict):
+        for k, v in list(obj.items()):
+            if k in skip_keys:
+                continue
+            if isinstance(v, str):
+                if v.strip():
+                    obj[k] = scrub_partner_text(v, fallback='')
+            else:
+                obj[k] = scrub_partner_payload(v, skip_keys, _depth + 1)
+        return obj
+    if isinstance(obj, list):
+        return [scrub_partner_payload(v, skip_keys, _depth + 1) if not isinstance(v, str) else scrub_partner_text(v, fallback='') for v in obj]
+    return obj
+
+
+def partner_payload_violations(obj, skip_keys=_PARTNER_SKIP_KEYS, _depth=0, _path='') -> list:
+    """(path, words) for every string in a response that still carries a
+    banned word. The contract test greps every fixture with this."""
+    out = []
+    if _depth > 14:
+        return out
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            if k in skip_keys:
+                continue
+            out.extend(partner_payload_violations(v, skip_keys, _depth + 1, f"{_path}.{k}" if _path else str(k)))
+    elif isinstance(obj, list):
+        for i, v in enumerate(obj):
+            out.extend(partner_payload_violations(v, skip_keys, _depth + 1, f"{_path}[{i}]"))
+    elif isinstance(obj, str):
+        bad = partner_violations(obj)
+        if bad:
+            out.append((_path, bad))
+    return out

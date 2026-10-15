@@ -170,6 +170,7 @@ def wrap(raw, *, surface, decision, thread_id=None, via='session'):
     }
     if via == 'api_key':
         env['text'] = _INFRA_RX.sub('', env['text']).strip()
+        env['_raw'] = raw          # the v1 contract reads facts off it, then drops it
     else:
         env['raw'] = raw
     return env

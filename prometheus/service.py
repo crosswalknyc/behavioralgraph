@@ -129,6 +129,46 @@ def new_thread(uname, *, activate=False, title=None):
     return tid, idx
 
 
+def ensure_thread(uname, tid, *, title=None):
+    """A thread with this exact id exists for the user (created when it
+    does not). Never changes the active thread: an API conversation must
+    not move what the dashboard shows."""
+    idx = threads_index(uname)
+    if any(t.get('id') == tid for t in idx.get('threads', [])):
+        return tid
+    now = _now()
+    idx.setdefault('threads', []).append(
+        {'id': tid, 'title': (title or 'API conversation')[:48], 'created': now, 'updated': now, 'turns': 0, 'api': True})
+    cap = host.max_threads if host.has('max_threads') else 40
+    if len(idx['threads']) > cap:
+        # the dashboard's own threads keep their cap; API conversations are pruned oldest first
+        api_threads = sorted([t for t in idx['threads'] if t.get('api')], key=lambda t: str(t.get('updated') or ''))
+        while len(idx['threads']) > cap and api_threads:
+            gone = api_threads.pop(0)
+            if gone.get('id') != tid:
+                idx['threads'] = [t for t in idx['threads'] if t.get('id') != gone.get('id')]
+    host.s3_put_json(host.threads_index_key(uname), idx)
+    host.s3_put_json(host.thread_key(uname, tid), [])
+    return tid
+
+
+def find_job_doc(job_id):
+    """(doc, kind) for a job id across every job store, or (None, None).
+    No owner check: callers that have no user (the webhook sweeper) read
+    the document and judge the owner themselves."""
+    jid = str(job_id or '').strip()
+    if not jid or len(jid) > 64 or not all(c.isalnum() or c in '-_' for c in jid):
+        return None, None
+    s3 = host.s3_client
+    for prefix, jtype in _job_prefixes():
+        try:
+            obj = s3.get_object(Bucket=host.bucket, Key=f'{prefix}{jid}.json')
+            return json.loads(obj['Body'].read().decode('utf-8')), jtype
+        except Exception:
+            continue
+    return None, None
+
+
 def list_threads(uname):
     idx = threads_index(uname)
     return {'active': idx.get('active'),

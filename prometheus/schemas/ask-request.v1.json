@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dashboard.crosswalknyc.com/api/prometheus/v1/schemas/ask-request",
+  "title": "Prometheus ask request (v1)",
+  "type": "object",
+  "properties": {
+    "text": {
+      "type": "string",
+      "maxLength": 4000,
+      "description": "The question, in plain words."
+    },
+    "conversation_id": {
+      "type": "string",
+      "maxLength": 64,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$",
+      "description": "Your handle for a running conversation. Omit for a stateless ask."
+    },
+    "subject": {
+      "type": "string",
+      "maxLength": 160,
+      "description": "A title, brand or person the question is about, when the text does not name it."
+    },
+    "window": {
+      "type": "object",
+      "properties": {
+        "start": {
+          "type": "string",
+          "format": "date"
+        },
+        "end": {
+          "type": "string",
+          "format": "date"
+        }
+      }
+    },
+    "view": {
+      "type": "string",
+      "enum": [
+        "profile",
+        "journey",
+        "attribution",
+        "subscriber"
+      ]
+    },
+    "base_key": {
+      "type": "string",
+      "maxLength": 300
+    },
+    "webhook_url": {
+      "type": "string",
+      "format": "uri",
+      "description": "https URL to receive the job result once, signed. Optional; the key's standing webhook applies when set."
+    }
+  },
+  "required": [
+    "text"
+  ],
+  "additionalProperties": false
+}

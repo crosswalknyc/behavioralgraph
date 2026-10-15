@@ -5570,6 +5570,8 @@ def _ask_logged(surface):
                     log_surface = payload['surface']
                     _env_text = str(payload.get('text') or '')   # the reader's line for a job / draft (2026-10-13)
                     payload = payload['raw']
+                # partner contract (2026-10-14): a v1 response is logged through its legacy view, never rewritten by the gate
+                _v1_api, log_surface, _env_text, payload = __import__('prometheus.contract_v1', fromlist=['log_view']).log_view(payload, log_surface, _env_text)
                 route, outcome, subject = _ask_infer_route_outcome(
                     log_surface, payload, status_code)
                 route = __import__('prometheus.ask_outcome', fromlist=['route_pick']).route_pick(getattr(_g, '_pm_ask_route', None), route)  # door placeholder yields to the body's route (2026-10-13)
@@ -5602,13 +5604,14 @@ def _ask_logged(surface):
                 # reply is retried once, then replaced with the honest
                 # email promise; a build card for a task becomes the
                 # which-audience question.
-                resp, payload, status_code, outcome, extra = \
-                    _pm_answer_gate(
-                        fn, args, kwargs, resp, payload, status_code,
-                        log_surface, outcome, extra, question,
-                        ask_history,
-                        _pm_ask_log_user(''),
-                        t0)
+                if not _v1_api:
+                    resp, payload, status_code, outcome, extra = \
+                        _pm_answer_gate(
+                            fn, args, kwargs, resp, payload, status_code,
+                            log_surface, outcome, extra, question,
+                            ask_history,
+                            _pm_ask_log_user(''),
+                            t0)
                 if user_sig:
                     merged = {'user_signal': user_sig.get('signal'),
                               'rejects': str(user_sig.get('prior_question')
@@ -16931,13 +16934,9 @@ def _pm_jiq_confirm_reply(parsed):
                  "the sound page, the title page, and the watch")
     elif str(parsed.get('journey_kind') or '') == 'watch':
         # the Babylon 5 shape, every watch journey (Jenna 2026-10-14)
-        shape = ("It's the same shape as every watch journey: four "
-                 "steps from the social post to the first episode, "
-                 "then the first post they saw and where it sat, how "
-                 "many posts before they clicked through, where they "
-                 "looked before the platform, the time from the view "
-                 "to the first episode, the first episode, the last "
-                 "touch and the assists")
+        shape = ("It's the same shape as every watch journey: four steps from the social post to the first episode, "
+                 "then the first post they saw and where it sat, how many posts before they clicked through, where they "
+                 "looked before the platform, the time from the view to the first episode, the first episode, the last touch and the assists")
     else:
         shape = ("It's a full discovery-to-purchase path - where "
                  "they learn the name, research, compare, hunt a "
