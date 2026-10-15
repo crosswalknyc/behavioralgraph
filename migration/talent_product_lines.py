@@ -283,6 +283,66 @@ def verify_sellers(cands, batch=4, model=None, workers=None, log=print, state_pa
     return out
 
 
+KNOWLEDGE_SYSTEM = """You check claims that a public figure sells their OWN product line or service (founded, co-founded, owns a stake, carries their name) through their own channels, from what you know. For each claim answer:
+- active: you are confident the brand or program exists now and is theirs
+- discontinued: it was theirs and is gone
+- not_theirs: a sponsorship, a collab owned by someone else, or a mistake
+- unsure: you do not know
+Echo "name" exactly as given. Add "display": the name in its usual capitalization. Correct brand, category, where and since when you know better. Return only JSON:
+{"checked": [{"name": "...", "display": "...", "status": "active|discontinued|not_theirs|unsure", "brand": "...", "category": "...", "type": "...", "where": "...", "since": <year or null>}]}"""
+
+
+def verify_knowledge(cands, batch=25, model=None, workers=8, log=print, state_path=None):
+    """A second model's knowledge, no web: fast. For the long tail of the
+    universe where web research per person is too slow. Agreement with
+    the screen on the same brand is what the caller trusts."""
+    model = model or os.environ.get('TPL_KNOWLEDGE_MODEL', 'claude-sonnet-4-6')
+    items = list(cands.values())
+    chunks = [items[i:i + batch] for i in range(0, len(items), batch)]
+    out = dict(((_load_json(state_path) if state_path else None) or {}).get('out') or {})
+    todo = [(i, c) for i, c in enumerate(chunks) if not all(_norm(r['name']) in out for r in c)]
+    lock = __import__('threading').Lock()
+
+    def one(idx, chunk):
+        claims = [{'name': r['name'], 'brand': r.get('brand'), 'category': r.get('category'), 'type': r.get('type'), 'since': r.get('since')} for r in chunk]
+        doc = _claude_json(KNOWLEDGE_SYSTEM, "Claims:\n" + json.dumps({'claims': claims}, ensure_ascii=False), model=model, max_tokens=6000)
+        rows = (doc or {}).get('checked') or []
+        allowed = {_norm(r['name']): r for r in chunk}
+        keep = {}
+        for r in rows:
+            k = _norm((r or {}).get('name'))
+            if k in allowed:
+                merged = dict(allowed[k])
+                merged.update({kk: vv for kk, vv in r.items() if vv not in (None, '')})
+                merged['name'] = allowed[k]['name']
+                merged['status'] = {'unsure': 'unverified'}.get(str(merged.get('status') or ''), merged.get('status'))
+                merged['check'] = 'knowledge'
+                keep[k] = merged
+        for k, r in allowed.items():
+            keep.setdefault(k, dict(r, status='unverified', check='knowledge'))
+        return idx, keep
+
+    with cf.ThreadPoolExecutor(max_workers=workers) as ex:
+        futs = [ex.submit(one, i, c) for i, c in todo]
+        for f in cf.as_completed(futs):
+            try:
+                idx, keep = f.result()
+            except Exception as e:
+                log(f'[knowledge] chunk failed: {e}')
+                continue
+            with lock:
+                out.update(keep)
+                if state_path:
+                    _save_json(state_path, {'out': out})
+            log(f'[knowledge] chunk {idx + 1}/{len(chunks)}: {sum(1 for r in keep.values() if r.get("status") == "active")}/{len(keep)} active')
+    return out
+
+
+def _same_brand(a, b):
+    na, nb = _norm(a), _norm(b)
+    return bool(na and nb) and (na == nb or na in nb or nb in na)
+
+
 # ----------------------------------------------------------------- rows
 CATEGORY_LABEL = {'beverage': 'Beverage', 'food': 'Food and snacks', 'beauty': 'Beauty and skincare', 'fragrance': 'Fragrance',
                   'apparel': 'Apparel', 'footwear': 'Footwear', 'spirits': 'Spirits and wine', 'supplements': 'Supplements',
@@ -520,11 +580,32 @@ def run(out_dir, *, limit=None, genpop_path=None, model=None, verify_model=None,
     out.mkdir(parents=True, exist_ok=True)
     cands = screen_sellers(universe, model=model, log=log, state_path=str(out / 'candidates.json'))
     log(f'[screen] {len(cands)} candidates')
-    verified = verify_sellers(cands, model=verify_model or VERIFY_MODEL, log=log, state_path=str(out / 'verified.json'))
-    retry = {k: cands[k] for k, v in verified.items() if v.get('status') == 'unverified' and k in cands}
+    # web research for the largest audiences (the names a partner acts on
+    # first), a second model's knowledge for the long tail where a search
+    # per person is too slow; a tail name ships only when both models name
+    # the same brand and the check reads active
+    rank = {_norm(u['name']): i for i, u in enumerate(universe)}
+    ordered = sorted(cands.items(), key=lambda kv: rank.get(kv[0], 10 ** 9))
+    web_top = int(os.environ.get('TPL_WEB_VERIFY_TOP') or 300)
+    head = dict(ordered[:web_top])
+    tail = dict(ordered[web_top:])
+    verified = verify_sellers(head, model=verify_model or VERIFY_MODEL, log=log, state_path=str(out / 'verified.json'))
+    retry = {k: head[k] for k, v in verified.items() if v.get('status') == 'unverified' and k in head}
     if retry:
         log(f'[verify] second pass on {len(retry)} unverified')
         verified.update(verify_sellers(retry, batch=3, model=verify_model or VERIFY_MODEL, log=log))
+    if tail:
+        checked = verify_knowledge(tail, log=log, state_path=str(out / 'knowledge.json'))
+        kept = 0
+        for k, r in checked.items():
+            if k in verified and verified[k].get('status') in ('active', 'discontinued', 'not_theirs'):
+                continue        # the web already settled it
+            if r.get('status') == 'active' and _same_brand(r.get('brand'), tail[k].get('brand')):
+                verified[k] = r
+                kept += 1
+            else:
+                verified[k] = dict(r, status='unverified' if r.get('status') == 'active' else r.get('status'))
+        log(f'[knowledge] {kept} tail names kept where both reads name the same active brand')
     rows = assemble_rows(universe, verified)
     log(f'[rows] {len(rows)} active sellers')
     end = date.today()
