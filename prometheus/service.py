@@ -588,6 +588,32 @@ def ask(user, body, *, via='session'):
     # no digital trace is declined with the nearest measurable read, and
     # a question about where the data comes from gets the plain
     # first-party answer. No model call, no charge.
+    # A meta check ("are you not working?", "hello?", "you there?") never
+    # repeats a pending confirm (Emmet at Kartel got the same "Do you mean
+    # for ..." back to it, 2026-10-15). It answers the question the reader
+    # is waiting on, through the door again, with a one-line lead.
+    if referent_decision is None and not body.get('_meta_replay') and meta_check(text):
+        prev = last_user_question(history)
+        if prev:
+            _rb = {k: v for k, v in body.items() if k not in _ARMED_BODY_KEYS and k not in _ANALYZE_PASSTHROUGH and k != 'extra'}
+            env, st = ask(user, dict(_rb, text=prev, _meta_replay=True, persist=False), via=via)
+            lead = 'I am here. Picking your question back up. '
+            env['text'] = lead + str(env.get('text') or '')
+            _r = env.get('raw') if isinstance(env.get('raw'), dict) else env.get('_raw')
+            if isinstance(_r, dict):
+                for k in ('reply', 'error'):
+                    if _r.get(k):
+                        _r[k] = lead + str(_r[k])
+                        break
+            _persist_turn(persist, uname, tid, history, text, env, _r or {}, str(env.get('surface') or 'analyze'))
+            return env, st
+        raw = {'success': True, 'action': 'answer', 'followups': [], 'offer_deck': False, 'deck_angle': None,
+               'reply': 'I am here. Ask me anything about an audience, a title, a brand or a person and I will take it from there.'}
+        decision = {'surface': 'analyze', 'mode': None, 'reason': 'meta_check', 'client_hint': None}
+        _out = _interpret_shape(raw) if _client_surface == 'interpret' else raw
+        env = envelope.wrap(_out, surface='analyze', decision=decision, thread_id=tid, via=via)
+        _persist_turn(persist, uname, tid, history, text, env, _out, 'analyze')
+        return env, 200
     if referent_decision is None and not _armed(body):
         _standing = _standing_answer(text)
         if _standing is None:
@@ -1136,6 +1162,32 @@ def ask(user, body, *, via='session'):
     return env, status
 
 
+_META_RX = re.compile(
+    r"^\s*(?:hey|hi|hello|yo|um|so)?[,.!\s]*(?:are you (?:not |still |even )?(?:working|there|alive|on|awake|broken|down|ok|okay)|"
+    r"you (?:there|alive|ok|okay|working)|is (?:this|anyone|anybody|it) (?:thing )?(?:working|there|on|broken)|"
+    r"(?:anyone|anybody) (?:there|home)|hello|is this (?:still )?working|does this (?:still )?work|"
+    r"why (?:are you|aren't you|arent you) (?:not )?(?:answering|responding|working)|what is going on|what's going on|wtf|"
+    r"did you (?:get|see) (?:that|my (?:question|message)))[\s?!.]*$", re.I)
+
+
+def meta_check(text):
+    """True for a message about whether Prometheus is working at all."""
+    t = ' '.join(str(text or '').split())
+    return bool(t) and len(t) <= 80 and bool(_META_RX.match(t))
+
+
+def last_user_question(history):
+    """The most recent user turn that is a question or request, not a
+    meta check or a one-word acknowledgement."""
+    for t in reversed(history or []):
+        if not isinstance(t, dict) or t.get('role') != 'user':
+            continue
+        txt = ' '.join(str(t.get('text') or '').split())
+        if txt and not meta_check(txt) and len(txt.split()) >= 3:
+            return txt
+    return ''
+
+
 def _standing_answer(text):
     """Two answers that come before any executor or lane (2026-10-14):
     behavior with no digital trace (linear TV, in-store, foot traffic,
@@ -1177,7 +1229,8 @@ def _standing_answer(text):
                 host.ask_hint(route='roster_offer', outcome='answered')
             except Exception:
                 pass
-            return {'success': True, 'action': 'answer', 'reply': _cl.roster_reply(*_ro), 'followups': [],
+            _reply, _chips = _cl.roster_reply(*_ro)
+            return {'success': True, 'action': 'answer', 'reply': _reply, 'followups': _chips,
                     'offer_deck': False, 'deck_angle': None, 'roster_ask': True}
     except Exception as _fx:
         _faults.note('service', _fx)

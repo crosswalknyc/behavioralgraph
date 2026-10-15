@@ -13057,20 +13057,10 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
                         bind_cohort=str(_hit[0].get('cohort') or ''),
                         switch_page=switch_page)
                 if _opts:
-                    if len(_opts) > 1:
-                        _q = (f"Do you mean for {_opts[0]['label']}, "
-                              f"or {_opts[1]['label']}?")
-                    else:
-                        _q = f"Do you mean for {_opts[0]['label']}?"
-                    _pm_ask_hint(outcome='memory_confirm')
-                    return jsonify({
-                        'success': True, 'action': 'answer',
-                        'reply': _q,
-                        'followups': ([o['label'] for o in _opts]
-                                      + ['Something else']),
-                        'offer_deck': False, 'deck_angle': None,
-                        'memory_confirm': {'question': text,
-                                           'options': _opts}})
+                    from prometheus import referents as _rf2
+                    _mc = _rf2.memory_confirm_payload(text, _opts, history)   # never the same confirm twice in a row (2026-10-15)
+                    _pm_ask_hint(outcome='memory_confirm' if _mc.get('memory_confirm') else 'memory_confirm_released')
+                    return jsonify(_mc)
         except Exception:
             traceback.print_exc()
     # TWO-BASE READS (2026-09-28, Phase 3): a comparison / overlap ask

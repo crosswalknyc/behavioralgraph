@@ -495,3 +495,35 @@ def plausible_subject(s):
     if len(low) >= 5 and sum(w in _COMMON_WORDS for w in low) >= len(low) - 1:
         return False
     return True
+
+
+# ---------------------------------------------------------------------------
+# The cross-session memory confirm, never twice in a row (2026-10-15)
+# ---------------------------------------------------------------------------
+NO_PLACE_REPLY = ("I could not place that against an audience. I can pull anything you want, just ask: "
+                  "name the person, brand, title or group (for example, influencers who sell their own "
+                  "product) and I will take it from there.")
+
+
+def last_agent_text(history):
+    for t in reversed(history or []):
+        if isinstance(t, dict) and t.get('role') in ('agent', 'assistant'):
+            return str(t.get('text') or '')
+    return ''
+
+
+def memory_confirm_payload(text, opts, history=None):
+    """"Do you mean for X, or Y?" with the remembered referents as chips.
+    Never twice in a row: when the previous turn already asked it (Emmet
+    at Kartel saw the same question four times, 2026-10-15), the standing
+    offer comes back instead and the confirm is released."""
+    opts = [o for o in (opts or []) if isinstance(o, dict) and o.get('label')]
+    if last_agent_text(history).startswith('Do you mean for') or not opts:
+        return {'success': True, 'action': 'answer', 'reply': NO_PLACE_REPLY, 'followups': [],
+                'offer_deck': False, 'deck_angle': None, 'memory_confirm_released': True}
+    q = (f"Do you mean for {opts[0]['label']}, or {opts[1]['label']}?" if len(opts) > 1
+         else f"Do you mean for {opts[0]['label']}?")
+    return {'success': True, 'action': 'answer', 'reply': q,
+            'followups': [o['label'] for o in opts] + ['Something else'],
+            'offer_deck': False, 'deck_angle': None,
+            'memory_confirm': {'question': text, 'options': opts}}

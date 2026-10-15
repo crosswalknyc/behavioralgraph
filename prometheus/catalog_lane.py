@@ -99,15 +99,28 @@ _CLASS = (r"(?:influencers?|content creators?|creators?|talents?|celebrities|cel
 _ROSTER_SCOPE = (r"(?:in|on|across|within|from|inside) (?:your|the|our) (?:network|roster|library|"
                  r"system|database|catalog(?:ue)?|platform|panel|data|dashboard|list|universe|"
                  r"coverage|tool|corpus|book|portfolio)")
+_ROSTER_DB = (r"(?:your|the|our) (?:talent|influencer|creator|brand|content|artist) "
+              r"(?:database|library|network|roster|list|pool|catalog(?:ue)?|system|db)")
+# a qualifier after the class or the scope: "who sell their own product",
+# "currently selling a course", "that also offer a service"
+_ROSTER_QUAL = (r"(?P<{name}>\s+(?:who|that|which|and|also|currently|now|actively|are|is|have|has|with|"
+                r"sell\w*|offer\w*|run\w*|own\w*|launch\w*|promot\w*|monetiz\w*|post\w*|do\w*|make\w*|"
+                r"work\w*|partner\w*|have launched|had)\b.+?)?")
 _ROSTER_TAIL = r"(?:\s+(?:right now|currently|today|so far|to date|yet|please))?[\s?.!]*$"
 _ROSTER_RX = re.compile(
+    # "all the influencers in your network (who sell their own product)"
     r"\b(?:all(?: of)?|every|list(?:ing)?|csv|spreadsheet|roster|directory|rundown|how many|which|what|"
     r"do (?:you|we) (?:have|hold|carry|cover|track)|have you got|is there|are there|any)\b"
     r".{0,40}?\b(?P<cls>" + _CLASS + r")\b(?:\s*(?:,|/|\bor\b|\band\b|&)\s*(?:the |your )?(?P<cls2>" + _CLASS + r")\b)?"
-    r".{0,24}?\b" + _ROSTER_SCOPE + r"\b" + _ROSTER_TAIL
+    r".{0,24}?\b" + _ROSTER_SCOPE + r"\b" + _ROSTER_QUAL.format(name='q1') + _ROSTER_TAIL
+    # "influencers you have (that sell a course)"
     + r"|\b(?P<cls3>" + _CLASS + r")\b(?:\s*(?:,|/|\bor\b|\band\b|&)\s*(?:the |your )?(?P<cls4>" + _CLASS + r")\b)?"
     r"\s+(?:do |that |who |which )?(?:you|we) (?:have|cover|track|carry|work with|see|know|offer|support|represent|hold)"
-    r"(?: (?:data|profiles|reads|info|information|numbers))?(?: (?:on|for))?" + _ROSTER_TAIL,
+    r"(?: (?:data|profiles|reads|info|information|numbers))?(?: (?:on|for))?" + _ROSTER_QUAL.format(name='q2') + _ROSTER_TAIL
+    # "poll your talent database and see which of these influencers also offer a product"
+    + r"|\b(?:poll|check|search|scan|query|look (?:through|at|in|into)|go through|comb|screen|see)\b.{0,30}?\b(?P<db>" + _ROSTER_DB + r")\b(?P<rest3>.*)$"
+    # "which of these influencers sell a product" with no names anywhere
+    + r"|\b(?:which|how many|what)(?: ones?)? of (?:these|those) (?P<cls6>" + _CLASS + r")\b" + _ROSTER_QUAL.format(name='q4') + _ROSTER_TAIL,
     re.I)
 _ROSTER_PERSON = {
     'influencer': 'influencer', 'creator': 'creator', 'content creator': 'creator', 'talent': 'talent',
@@ -121,6 +134,11 @@ _ROSTER_THING = {
     'show': 'show', 'series': 'series', 'movie': 'movie', 'film': 'film', 'podcast': 'podcast',
     'game': 'game', 'team': 'team', 'league': 'league',
 }
+_PLURAL = {'talent': 'talent', 'celebrity': 'celebrities', 'personality': 'personalities', 'series': 'series',
+           'audience': 'audiences', 'company': 'companies'}
+_QUAL_CUT_RX = re.compile(r"\s*(?:,|\bor\b|\band\b)?\s*(?:or )?(?:something|anything|stuff|whatever|things?) like\b.*$|\s*,?\s*(?:etc|and so on|or whatever|or anything)\b.*$", re.I)
+_DB_REST_RX = re.compile(r"\b(?:which|how many|what)(?: ones?)? of (?:these|those|the|your|our) (?P<cls>" + _CLASS + r")\b(?P<qual>.*?)[\s?.!]*$", re.I)
+_QUAL_LEAD_RX = re.compile(r"^(?:who|that|which|and|also|are|is|have|has|do|does|currently|now|actively|the ones? (?:who|that))\s+", re.I)
 
 
 def _class_noun(word):
@@ -134,21 +152,52 @@ def _class_noun(word):
     return 'audience', False
 
 
+def _plural(noun):
+    return ' or '.join(_PLURAL.get(n, n + 's') for n in str(noun).split(' or '))
+
+
+def _clean_qual(q):
+    """"are currently selling their own product or course or something like
+    selling something" -> "currently selling their own product or course"."""
+    q = ' '.join(str(q or '').split()).strip(' ?.!,;:')
+    q = _QUAL_CUT_RX.sub('', q).strip(' ?.!,;:')
+    for _ in range(3):
+        q2 = _QUAL_LEAD_RX.sub('', q)
+        if q2 == q:
+            break
+        q = q2
+    q = re.sub(r"\s+(?:right now|today|so far|to date|yet|please)$", '', q, flags=re.I).strip(' ?.!,;:')
+    if len(q) > 90:
+        q = q[:90].rsplit(' ', 1)[0].strip(' ,;:')
+    return q if len(q.split()) >= 2 else ''
+
+
 def roster_ask(text):
-    """('influencer or talent', is_person) when the ask is for the whole
-    class of subjects we hold ("all the influencers in your network",
-    "which brands do you cover", "how many athletes do you have"), else
-    None. A named subject anywhere after the scope phrase disqualifies
-    (that is a real question about a brand or a person)."""
+    """(noun, is_person, qualifier) when the ask is for the whole class
+    of subjects we hold ("all the influencers in your network", "which
+    brands do you cover", "how many athletes in your network sell their
+    own product", "poll your talent database and see which of these
+    influencers offer a service"), else None. The qualifier is the
+    condition on the class, cleaned for a chip, '' when there is none.
+    A named subject after the scope ("in your network that Taylor Swift
+    fans buy") is a real question and does not match."""
     t = ' '.join(str(text or '').split())
-    if not t or len(t) > 220:
+    if not t or len(t) > 260:
         return None
     m = _ROSTER_RX.search(t)
     if not m:
         return None
-    words = [m.group(k) for k in ('cls', 'cls2', 'cls3', 'cls4') if m.group(k)]
+    words = [m.group(k) for k in ('cls', 'cls2', 'cls3', 'cls4', 'cls6') if m.group(k)]
+    qual = next((m.group(k) for k in ('q1', 'q2', 'q4') if m.group(k)), '')
+    if m.group('db'):
+        # "poll your talent database and see which of these influencers also offer a service"
+        m2 = _DB_REST_RX.search(m.group('rest3') or '')
+        if m2:
+            words, qual = [m2.group('cls')], m2.group('qual') or ''
+        else:
+            words = [re.sub(r"\s.*$", '', m.group('db').split(' ', 1)[1]).rstrip('s') + 's']
     if not words:
-        return None
+        words = ['influencers'] if re.search(r"\b(?:talent|influencer|creator)\b", t, re.I) else ['subjects']
     nouns, person = [], False
     for w in words:
         n, is_p = _class_noun(w)
@@ -157,14 +206,28 @@ def roster_ask(text):
             nouns.append(n)
     if 'audience' in nouns and len(nouns) > 1:
         nouns.remove('audience')
-    return ' or '.join(nouns[:2]), person
+    qual = _clean_qual(qual)
+    if qual and re.search(r"\b[A-Z][a-z]+ [A-Z][a-z]+\b", qual):
+        return None     # a named person or brand inside the condition: a real question
+    return ' or '.join(nouns[:2]), person, qual
 
 
-def roster_reply(noun, person):
-    who = 'Who is it?' if person else 'Which one?'
-    each = 'each audience' if person else 'each one'
-    return (f"I can pull any {noun} you would like. {who} Name one, or paste a list, "
-            f"and I will read {each}.")
+def roster_reply(noun, person, qualifier=''):
+    """Jenna 2026-10-15: "the response should always default to we can
+    pull anything you want, just request it" and "it should ask what
+    influencer(s) are you talking about". With a condition on the class,
+    offer the profile on that group as well."""
+    plural = _plural(noun)
+    if not qualifier:
+        who = 'Who is it?' if person else 'Which one?'
+        each = 'each audience' if person else 'each one'
+        return (f"I can pull any {noun} you would like. {who} Name one, or paste a list, "
+                f"and I will read {each}."), []
+    first = qualifier.split(' ', 1)[0].lower()
+    group = f"{plural} {qualifier}" if first.endswith('ing') else f"{plural} {'who' if person else 'that'} {qualifier}"
+    reply = (f"I can pull anything you want, just ask. Which {plural} are you talking about? "
+             f"Name them and I will check each one. Or do you want me to run a profile on {group}?")
+    return reply, [f"Run a profile on {group}"]
 
 
 def parse(text):
@@ -262,10 +325,9 @@ def answer(text, ctx=None):
         return None
     kind, subj = parsed
     if kind == 'roster':
-        noun, person = subj
-        return {'success': True, 'action': 'answer', 'reply': roster_reply(noun, person),
-                'followups': [], 'offer_deck': False, 'deck_angle': None,
-                'catalog_lookup': True, 'roster_ask': True}
+        reply, chips = roster_reply(*subj)
+        return {'success': True, 'action': 'answer', 'reply': reply, 'followups': chips,
+                'offer_deck': False, 'deck_angle': None, 'catalog_lookup': True, 'roster_ask': True}
     try:
         from migration import corpus_catalog as cc
     except Exception:
