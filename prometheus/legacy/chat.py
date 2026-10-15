@@ -13417,7 +13417,7 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
                  mr, base, digest_block, anchors_block, led)
         _kw = {'panel_charge': panel_charge, 'probe': _probe}
         _pm_read_inflight_mark(_pm_user, text, job_id)
-        _pm_job_bind_thread(job_id, _pm_user)
+        _head['thread_id'] = _pm_job_bind_thread(job_id, _pm_user)   # the worker is another process (API conversations, 2026-10-14)
         if inline_job_id:            # the read worker runs the job right here
             _pm_read_status_write(job_id, _head)
             _pm_run_read_job(*_args, **_kw)
@@ -14108,8 +14108,9 @@ def _pm_job_bind_thread(job_id, username=None):
 
 def _pm_thread_for_job(username, job_id):
     """The thread a finished job should land in, or None for the
-    caller's active thread. Verifies the id still belongs to the user."""
-    tid = _PM_JOB_THREAD.pop(job_id, None)
+    caller's active thread. Verifies the id still belongs to the user.
+    The job document's thread_id serves a finishing process that did not launch it (2026-10-14)."""
+    tid = _PM_JOB_THREAD.pop(job_id, None) or __import__('prometheus.service', fromlist=['job_thread_id']).job_thread_id(job_id)
     if not tid or not username:
         return None
     try:

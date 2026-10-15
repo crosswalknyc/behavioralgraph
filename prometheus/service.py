@@ -169,6 +169,15 @@ def find_job_doc(job_id):
     return None, None
 
 
+def job_thread_id(job_id):
+    """The thread id stamped on a job document at launch, or None."""
+    try:
+        doc, _kind = find_job_doc(job_id)
+        return str((doc or {}).get('thread_id') or '').strip() or None
+    except Exception:
+        return None
+
+
 def list_threads(uname):
     idx = threads_index(uname)
     return {'active': idx.get('active'),
