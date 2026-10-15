@@ -64,17 +64,48 @@ def _window(body: dict):
     return {'start': s or None, 'end': e or None} if (s or e) else None
 
 
-def _balance(user: dict):
+def _unlimited(user: dict) -> bool:
+    """An unlimited seat is never charged, so its wallet is never read,
+    never gated and never shown (Jenna 2026-10-14: it can sit below zero
+    and that means nothing)."""
+    u = user or {}
+    if str(u.get('role') or '').lower() == 'super_admin' or u.get('unlimited'):
+        return True
     try:
-        if host.has('wallet_snapshot'):
-            snap = host.wallet_snapshot(_username(user)) or {}
-            for k in ('balance_usd', 'wallet_balance_usd', 'balance'):
-                if snap.get(k) is not None:
-                    return float(snap[k])
+        import wallet as _w
+        if _w.is_unlimited(u):
+            return True
     except Exception:
         pass
     try:
-        return float((user or {}).get('wallet_balance_usd') or 0.0)
+        if host.has('wallet_snapshot'):
+            snap = host.wallet_snapshot(_username(u))
+            if isinstance(snap, dict) and snap.get('unlimited'):
+                return True
+    except Exception:
+        pass
+    return False
+
+
+def _balance(user: dict):
+    """The wallet behind the seat, or None for an unlimited seat (no
+    wallet applies) and when nothing can be read."""
+    if _unlimited(user):
+        return None
+    try:
+        if host.has('wallet_snapshot'):
+            snap = host.wallet_snapshot(_username(user))
+            if isinstance(snap, dict):
+                for k in ('balance_usd', 'wallet_balance_usd', 'balance'):
+                    if snap.get(k) is not None:
+                        return float(snap[k])
+            elif isinstance(snap, (int, float)):
+                return None if float(snap) < 0 else float(snap)
+    except Exception:
+        pass
+    try:
+        v = (user or {}).get('wallet_balance_usd')
+        return float(v) if v is not None else None
     except Exception:
         return None
 
@@ -95,6 +126,8 @@ UNSETTLED_WINDOW_S = 1800      # metered charges settle to the wallet when a ses
 def _wallet_metered(user: dict) -> bool:
     """True when this owner's asks are metered against a wallet (not an
     unlimited seat, not a company pool without a wallet)."""
+    if _unlimited(user):
+        return False
     try:
         import pay_per_use as _ppu
         if not _ppu.billing_active(user):
@@ -248,7 +281,7 @@ def handle_ask(user: dict, body: dict, headers: dict = None, *, ask=None, raw_le
                (f"{', ' if lim['ask_per_minute'] else ''}{lim['ask_per_day']} a day" if lim['ask_per_day'] else '')
         return _out(C.declined('rate_limit', f"Over the limit for this key ({what}). Try again shortly.",
                                retry_after=rate['retry_after'], conversation_id=cid))
-    if not sandbox:
+    if not sandbox and not _unlimited(user):
         cap = K.daily_cap_usd(user)                 # 0 = none; the wallet's funds are the budget
         if cap > 0 and api_meter.spent_today(kid) >= cap:
             return _out(C.declined('daily_cap', f"This key reached its daily spend cap of ${cap:,.2f}. It resets at 00:00 UTC.",
