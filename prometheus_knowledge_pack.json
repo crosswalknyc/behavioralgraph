@@ -1,7 +1,7 @@
 {
  "version": 1,
- "content_hash": "20bc41adbc33635ce6700c3fc517ed39e05e86fb90bc1f2a82584fff5d2238e2",
- "examples_hash": "fdb7095f8641c6c143da05de601dd761fdc4d4d5f6c5f911b591b6e5acfcfb32",
+ "content_hash": "fa04ac11057629dea9efc973694b14e9ccb2c29e0e11fddb8722dd6c725fc80c",
+ "examples_hash": "4367af7cde8355abbae73f8f6a7448abd48ad05ce7186826d76b9187ef9dd3b5",
  "source_hashes": {
   ".cursor/rules/analysis-confidence-calibration.mdc": "3f2d33886bf77e54adde67cbf78f3256fa23fcb86d1ae32dd5ce7294088521f0",
   ".cursor/rules/avid-and-cut-skin-rules.mdc": "d5c01e23c4db2669558c41efdf5c706c722fae827c8d78871989ef259a16eaf0",
@@ -23,14 +23,14 @@
   ".cursor/rules/viewer-carriage-constraint.mdc": "cbfd739c4772424aee369da86b3dbfc769b9bed6c15d2c838f36bb3867cea734",
   ".cursor/skills/crosswalk-brand-standards/SKILL.md": "1adecc2dae85a139bf843dbebee76bc5411c56a4ba5c1e66966eb3a19acc61d0",
   ".cursor/skills/crosswalk-brand-standards/references/deck-system.md": "a85ec231ea9b4c8156d789236559be38c5e4dd505b52d53bc6ff3c794a663048",
-  ".cursor/skills/crosswalk-panel-analyst/SKILL.md": "198aa201d6618ec6d9f53093d09ed10084c5934fd7a570adfcadf85844d4dd6a",
-  ".cursor/skills/crosswalk-panel-analyst/references/boundary.md": "e9a9bcf2b0feb26257e92fa5a610e17dbc03f697dc3eca56a1a734b2c4e4c287",
-  ".cursor/skills/crosswalk-panel-analyst/references/sourcing.md": "32b22ff4faa431cf0892ba8eb6ed14cf3f7cebbc55757ba8ef0d08f53d0efce3",
+  ".cursor/skills/crosswalk-panel-analyst/SKILL.md": "4d81139e798c75a1117d7355015e14e31093de9d46bd6b37c575b077cce2184c",
+  ".cursor/skills/crosswalk-panel-analyst/references/boundary.md": "259377288cb136e0b8723d7707161163c510b14dc483604f501600cca7facc4d",
+  ".cursor/skills/crosswalk-panel-analyst/references/sourcing.md": "ff93f70003b38101967b78f873a809b45f5d6bd27c07b908fb7779c8e49a6af7",
   ".cursor/skills/crosswalk-panel-analyst/references/method.md": "14cc737f7ee8c57b704b0b8e282f341d0939f2704b5c18cea245dc49b5be768f",
   ".cursor/skills/crosswalk-panel-analyst/references/numbers.md": "2857e3623a4e64134f621fbaf54dc37ad5b8e921bd59510c96d2ee4e05c75773",
-  ".cursor/skills/crosswalk-panel-analyst/references/asks.md": "52791675ffd3bb65a21fe2b5ee4f11926bfab0bf00b9a9cbaa9f22e7ee48ab19",
+  ".cursor/skills/crosswalk-panel-analyst/references/asks.md": "4e4eda7aa525be92ec79d93324dadfdadfcc6aad7e95ecfbbd470fb9b95064bc",
   ".cursor/skills/crosswalk-panel-analyst/references/prior-work.md": "d143ac1c06efbf12a41bbb87bdacf93912580a1a70774c848e4d8606d572dbb5",
-  ".cursor/skills/crosswalk-panel-analyst/references/prometheus-brain.md": "3464595a63cdbcc7bbcf5f33914f38242f488ee8ad8d37459ac15d7847af805b"
+  ".cursor/skills/crosswalk-panel-analyst/references/prometheus-brain.md": "fcc5f31f0876f61336fbd845185a3a538b3f60e970cf402a482183311f7c1ada"
  },
  "canon": [
   {
@@ -141,10 +141,10 @@
  },
  "examples": {
   "audience_profile": {
-   "subject": "Abby Lee Miller",
-   "title": "Abby Lee Miller",
-   "q": "what is the target demo for Abby Lee Miller?",
-   "text": "Target reads as women 25 to 44, mid-market, and mostly without kids at home.\n\nTHE CORE\n- Female 90.3% of the audience, which is +27.7pp over the median ACTOR audience in the corpus. Applied to the 441,835 projected audience, that is 398,977 women.\n- Age carves cleanly (MECE): 25-34 is 28.8%, 35-44 is 25.4%, 45 and over is 32.3%, under 25 is 13.5%. The 25-44 block holds 54.2%, and 25-34 alone runs +10.7pp over peer norms.\n- Mid-market, not affluent: 65.2% hold no bachelors degree, 59.0% earn under $75K. Occupation clusters in Service & Hospitality 17.4% and Healthcare 13.5%.\n\nTHE NON-OBVIOUS PART\n- This is not a ..."
+   "subject": "The Pitt",
+   "title": "The Pitt | Jan 1 2025 to Dec 31 2025",
+   "q": "What are the demographics of the audience watching The Pitt?",
+   "text": "The Pitt's US audience is 11,137,127 viewers, 58.1% of them women, with 61.3% (6,827,062 viewers) at 45 or older.\n\nProjected US audience: 11,137,127, Female share: 58.1%, Viewers 45 or older: 6,827,062.\n\nAge band mix, Jan 1 2,026 to Dec 31 2,026 (share of the 11,137,127 US audience)\n- 55-64: 22.7% share. largest single band, strongest female skew\n- 45-54: 20.3% share. peak income and peak Season 2 conversion\n- 65 or Older: 18.3% share. high completion, low second-screen\n- 35-44: 17.2% share. densest healthcare occupation block\n- 25-34: 13.3% share. heaviest social and clip engagement\n- 18-24: 5.4% share. thin, ..."
   },
   "audience_sizing": {
    "subject": "Paramount+ subscribers (UFC-on-Paramount+ audience, US)",
@@ -159,10 +159,10 @@
    "text": "Action Figures and Playsets lead toy purchasing among parents of 4-to-6-year-old Paw Patrol viewers at 22.3% of category signals, with Preschool Toys close behind at 19.8%.\n\nShare of audience, parents of kids 4-6: 34.1%, Projected US people, parents of kids 4-6: 5,476,469, Toy purchase signal penetration: 83.7%.\n\nToy category mix, Jul 1 2025 to Jun 30 2026 (Share of the cohort's toy purchase signals)\n- Action Figures & Playsets: 22.3% share, 64.1% penetration. Spin Master Paw Patrol vehicles and figures dominate, followed by Hasbro Transformers and Mattel Jurassic World\n- Preschool Toys: 19.8% share, 57.3% ..."
   },
   "competitive_overlap": {
-   "subject": "Reba McEntire",
-   "title": "Reba McEntire | Social media audiences (social fans and Facebook fans) vs the total audience | Jan 1 2025 to Dec 31 2025",
-   "q": "Compare Reba's Total Audience against her social media audiences in terms of demographics and Most Purchased Brands category.",
-   "text": "On Reba McEntire - Social media audiences (social fans and Facebook fans) vs the total audience:\n\nReba's social audience is 76,454,391 people, 84.7% of her 90,271,230 total audience, and it buys the same brand set in a slightly different order.\n\nTotal audience, projected US people: 90,961,592, Social media audience, projected US people: 76,454,391, Facebook fan audience, projected US people: 59,231,863.\n\nMost purchased brands mix, Jan 1 2025 to Dec 31 2025 (share of the audience's purchase signals across the top 12 most purchased brands)\n- Nike: 13.1% share, 36.3% penetration. 36.3 audience-wide, 37.4 among ..."
+   "subject": "Digital Journey IQ: Music to Long Form (61 titles, 21 films and 40 series)",
+   "title": "Digital Journey IQ: Music to Long Form (61 titles, 21 films and 40 series) | Per-title release windows, three months before to three months after each releas",
+   "q": "Your two answers in this conversation conflict and I need one authoritative set of figures. Job 0baafe1b6490 reported deduplicated people as 7,648,392 across all 61 titles, 5,214,877 for the 21 films, 6,893,451 for the 40 series, overlap 4,459,936, with pooled film 9,832,617 and pooled series 21,338",
+   "text": "On Digital Journey IQ: Music to Long Form (61 titles, 21 films and 40 series):\n\nFinal figure: 7,648,392 deduplicated people watched at least one of the 61 titles inside its window, against pooled title viewers of 31,171,244.\n\nDeduplicated people, all 61 titles: 7,648,392, Deduplicated people, 21 films: 5,214,877, Deduplicated people, 40 series: 6,893,451.\n\nTitle group mix, Per-title release windows, three months before to three months after each releas (share of the 7,648,392 deduplicated people)\n- Films and series both: 58.3% share, 58.3% penetration. counted once in each set, once in the union\n- Series only: ..."
   },
   "event_impact": {
    "subject": "The Spiderwick Chronicles (Roku Channel)",
@@ -201,5 +201,5 @@
    "text": "Athletic footwear and apparel is the largest open sponsorship category for Austin Sprinz: it carries 14.3% of his audience's brand purchase signals at 67.3% category penetration with no endorsement running against it in the window.\n\nProjected US audience (Total Universe): 24,716,483, Avid US audience: 6,382,947, Brand purchase signal penetration: 89.7%.\n\nSponsor category (audience demand vs current Sprinz coverage mix, Oct 12 2025 to Oct 12 2026 (share of the audience's brand purchase and category signals)\n- Athletic Footwear & Apparel: 14.3% share, 67.3% penetration. Nike, adidas, Under Armour, New Balance lead ..."
   }
  },
- "generated_at": "2026-10-13T00:43:34Z"
+ "generated_at": "2026-10-15T20:20:11Z"
 }

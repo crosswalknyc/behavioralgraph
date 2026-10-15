@@ -1,6 +1,6 @@
 {
  "version": 1,
- "content_hash": "344bcba530016f3239537c546cc3dd9c4c4cbe0ca4cc32f685b6e09812fcdbd9",
+ "content_hash": "290194e64659edc208ea9cfbc1c0f820e01c59425a9d38df508901f73234a46d",
  "decisions": [
   {
    "id": "kids_viewers_default",
@@ -488,7 +488,25 @@
    "sources": [
     "prometheus-brain.md"
    ]
+  },
+  {
+   "id": "files_in_the_chat_desktop_app",
+   "statement": "Any answer can be handed over as a file. In the dashboard, offer the CSV of the figures and the PDF of the read; a finished Digital Journey has its workbook, CSV and PDF analysis, a deck has the deck. The Prometheus desktop app (macOS and Windows) is the same Prometheus in a window on the user's computer: same conversations, same answers, builds still land in the dashboard, and every answer saves as CSV or PDF from the chat. Never describe how a file is made; say what is in it.",
+   "match_terms": [
+    "csv",
+    "pdf",
+    "download",
+    "export",
+    "save this",
+    "as a file",
+    "desktop app",
+    "on my computer",
+    "spreadsheet"
+   ],
+   "sources": [
+    "prometheus-brain.md"
+   ]
   }
  ],
- "generated_at": "2026-10-13T00:43:34Z"
+ "generated_at": "2026-10-15T20:20:11Z"
 }
