@@ -4141,14 +4141,15 @@ def guess_subject_from_text(text):
     m_aud = re.search(
         r'\b(?:fans|fanbase|audience|viewers|followers|listeners|watchers|'
         r'subscribers|customers|buyers|shoppers)\s+of\s+(?:the\s+)?'
-        r'((?:[A-Z][A-Za-z0-9&\'\+\.]*)(?:\s+(?:[A-Z][A-Za-z0-9&\'\+\.]*|of|the|and|&))*)',
+        r'((?:[A-Z][A-Za-z0-9&\'\+\.]*)(?:\s+(?:[A-Z][A-Za-z0-9&\'\+\.]*|[0-9]+|of|the|and|&))*)',
         str(text or ''))
     if m_aud:
         aud = re.sub(r'\s+(?:of|the|and|&)$', '', m_aud.group(1).strip())
         if aud and aud.lower().strip('.') not in _SUBJ_STOPWORDS:
             return _clip_subject_clause(aud)[:80]
-    runs = re.findall(r'\b([A-Z][A-Za-z0-9&\'\+\.]*(?:\s+[A-Z][A-Za-z0-9'
-                      r'&\'\+\.]*)*)\b', str(text or ''))
+    # a number that belongs to the name rides with it: "Babylon 5", "Formula 1", "Area 51" (2026-10-14)
+    runs = re.findall(r'\b([A-Z][A-Za-z0-9&\'\+\.]*(?:\s+(?:[A-Z][A-Za-z0-9'
+                      r'&\'\+\.]*|[0-9]+(?![0-9,.]*\s*(?:%|percent|people|viewers|million|k\b|m\b))))*)\b', str(text or ''))
     best = ''
     for run in runs:
         parts = run.split()
