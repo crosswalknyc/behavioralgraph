@@ -28,7 +28,7 @@ import os
 import time
 from functools import wraps
 
-from flask import Blueprint, g, jsonify, make_response, request
+from flask import Blueprint, g, jsonify, make_response, redirect, request, send_from_directory
 
 from . import __version__
 from .host import host
@@ -135,6 +135,41 @@ def health():
         out.update(deep)
         return jsonify(out), status
     return jsonify(out)
+
+
+@bp.route('/desktop/manifest', methods=['GET'])
+def desktop_manifest():
+    """What the installed desktop app reads at launch (public: a version
+    number and relative paths). See prometheus/desktop.py."""
+    from . import desktop as _dk
+    resp = make_response(jsonify(_dk.manifest_doc()), 200)
+    resp.headers['Cache-Control'] = 'public, max-age=300'
+    return resp
+
+
+@bp.route('/desktop/ui/', methods=['GET'])
+@bp.route('/desktop/ui/<path:asset>', methods=['GET'])
+def desktop_ui(asset='index.html'):
+    """The desktop app's page and its assets, served from the service so
+    the window updates with every deploy. Static files only."""
+    from . import desktop as _dk
+    name = str(asset or 'index.html').strip('/') or 'index.html'
+    if '..' in name:
+        return jsonify({'error': 'not found'}), 404
+    resp = make_response(send_from_directory(_dk.UI_DIR, name))
+    resp.headers['Cache-Control'] = 'no-cache' if name.endswith('.html') else 'public, max-age=86400'
+    return resp
+
+
+@bp.route('/desktop/download/<which>', methods=['GET'])
+def desktop_download(which):
+    """Hands out a platform build through a short presigned link; 404
+    when that build is not published."""
+    from . import desktop as _dk
+    url = _dk.presigned_download(which)
+    if not url:
+        return jsonify({'error': 'that build is not available'}), 404
+    return redirect(url, code=302)
 
 
 @bp.route('/schemas/ask', methods=['GET'])

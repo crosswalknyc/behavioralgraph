@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Prometheus</title>
+<style>
+  @font-face { font-family: 'Inter 18pt'; src: url('assets/fonts/Inter_18pt-Regular.ttf'); font-weight: 400; }
+  @font-face { font-family: 'Inter 18pt'; src: url('assets/fonts/Inter_18pt-Medium.ttf'); font-weight: 500; }
+  @font-face { font-family: 'Inter 18pt'; src: url('assets/fonts/Inter_18pt-Bold.ttf'); font-weight: 700; }
+  @font-face { font-family: 'Inter 18pt'; src: url('assets/fonts/Inter_18pt-Light.ttf'); font-weight: 300; }
+  :root {
+    --graphite: #0C1618; --slate: #15252A; --offwhite: #E9E8E1; --green: #C7F23E; --orchid: #E682FF;
+    --cobalt: #3358FF; --pavement: #3B3D38; --body: #9AA09B; --muted: #7C878A; --rule: #22323A;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; background: var(--graphite); color: var(--offwhite);
+    font-family: 'Inter 18pt', Inter, -apple-system, 'Segoe UI', sans-serif; font-size: 14px; -webkit-font-smoothing: antialiased; }
+  #app { display: grid; grid-template-columns: 260px 1fr; height: 100%; }
+  aside { background: var(--slate); border-right: 1px solid var(--rule); display: flex; flex-direction: column; min-width: 0; }
+  .brand { padding: 18px 18px 10px; display: flex; align-items: center; justify-content: space-between; }
+  .brand img { height: 18px; opacity: .95; }
+  .brand .ver { color: var(--muted); font-size: 11px; }
+  .newbtn { margin: 6px 14px 10px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--rule); background: transparent;
+    color: var(--offwhite); font: inherit; font-weight: 500; cursor: pointer; text-align: left; }
+  .newbtn:hover { border-color: var(--green); }
+  .convs { flex: 1; overflow: auto; padding: 0 8px 8px; }
+  .conv { padding: 9px 10px; border-radius: 8px; color: var(--body); cursor: pointer; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .conv:hover { background: rgba(255,255,255,.04); color: var(--offwhite); }
+  .conv.active { background: rgba(199,242,62,.10); color: var(--offwhite); }
+  .conv small { display: block; color: var(--muted); font-size: 11px; }
+  .side-foot { padding: 12px 14px 16px; border-top: 1px solid var(--rule); display: flex; gap: 8px; flex-wrap: wrap; }
+  .link { background: none; border: 0; color: var(--body); font: inherit; font-size: 12px; cursor: pointer; padding: 4px 6px; border-radius: 6px; }
+  .link:hover { color: var(--green); }
+  main { display: flex; flex-direction: column; min-width: 0; }
+  header { padding: 14px 24px; border-bottom: 1px solid var(--rule); display: flex; justify-content: space-between; align-items: center; }
+  header h1 { margin: 0; font-size: 15px; font-weight: 500; letter-spacing: .01em; }
+  header .status { font-size: 12px; color: var(--muted); }
+  header .status .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--green); margin-right: 6px; vertical-align: middle; }
+  header .status .dot.bad { background: var(--orchid); }
+  .updatebar { display: none; padding: 10px 24px; background: var(--panel); border-bottom: 1px solid var(--rule); font-size: 13px; color: var(--muted); align-items: center; gap: 14px; }
+  .updatebar.show { display: flex; }
+  .updatebar b { color: var(--text); font-weight: 500; }
+  .updatebar .chip { margin-left: auto; }
+  #log { flex: 1; overflow: auto; padding: 22px 24px 8px; }
+  .msg { max-width: 820px; margin: 0 auto 18px; display: flex; gap: 12px; }
+  .msg .who { width: 28px; height: 28px; border-radius: 8px; flex: none; display: grid; place-items: center; font-size: 11px; font-weight: 700; color: var(--graphite); background: var(--green); }
+  .msg.user .who { background: var(--pavement); color: var(--offwhite); }
+  .msg .bubble { flex: 1; min-width: 0; }
+  .msg .text { line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; color: var(--offwhite); }
+  .msg.user .text { color: var(--body); }
+  .meta { color: var(--muted); font-size: 11px; margin-top: 6px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .chip { border: 1px solid var(--rule); background: transparent; color: var(--offwhite); border-radius: 999px; padding: 6px 12px; font: inherit; font-size: 12.5px; cursor: pointer; }
+  .chip:hover { border-color: var(--green); }
+  .chip.primary { background: var(--green); color: var(--graphite); border-color: var(--green); font-weight: 500; }
+  table.facts { border-collapse: collapse; margin-top: 12px; width: 100%; font-size: 12.5px; }
+  table.facts th { text-align: left; color: var(--muted); font-weight: 500; font-size: 11px; letter-spacing: .04em; text-transform: uppercase; padding: 6px 8px 6px 0; border-bottom: 1px solid var(--rule); }
+  table.facts td { padding: 7px 8px 7px 0; border-bottom: 1px solid rgba(255,255,255,.05); color: var(--body); }
+  table.facts td.v { color: var(--green); font-weight: 500; text-align: right; white-space: nowrap; }
+  .files { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; align-items: center; }
+  .fbtn { border: 1px solid var(--rule); background: rgba(255,255,255,.03); color: var(--offwhite); border-radius: 8px; padding: 6px 10px; font: inherit; font-size: 12px; cursor: pointer; }
+  .fbtn:hover { border-color: var(--green); }
+  .saved { color: var(--muted); font-size: 12px; }
+  .saved button { margin-left: 6px; }
+  .job { color: var(--body); font-size: 13px; }
+  .job .stage { color: var(--muted); font-size: 12px; margin-top: 4px; }
+  .declined { color: var(--orchid); }
+  .pulse { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--green); margin-right: 8px; animation: pulse 1.4s infinite; vertical-align: middle; }
+  @keyframes pulse { 0%, 100% { opacity: .25; } 50% { opacity: 1; } }
+  footer { padding: 12px 24px 18px; border-top: 1px solid var(--rule); }
+  .composer { max-width: 820px; margin: 0 auto; display: flex; gap: 10px; align-items: flex-end; }
+  textarea { flex: 1; resize: none; min-height: 46px; max-height: 160px; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--rule);
+    background: var(--slate); color: var(--offwhite); font: inherit; line-height: 1.4; outline: none; }
+  textarea:focus { border-color: var(--green); }
+  .send { height: 46px; padding: 0 16px; border-radius: 12px; border: 0; background: var(--green); color: var(--graphite); font: inherit; font-weight: 700; cursor: pointer; }
+  .send:disabled { opacity: .5; cursor: default; }
+  .hint { max-width: 820px; margin: 8px auto 0; color: var(--muted); font-size: 11.5px; }
+  /* settings / key screen */
+  .overlay { position: fixed; inset: 0; background: rgba(12,22,24,.92); display: none; place-items: center; z-index: 10; }
+  .overlay.show { display: grid; }
+  .card { width: 520px; max-width: 92vw; background: var(--slate); border: 1px solid var(--rule); border-radius: 16px; padding: 26px; }
+  .card h2 { margin: 0 0 6px; font-size: 18px; font-weight: 700; }
+  .card p { color: var(--body); line-height: 1.5; margin: 6px 0 14px; }
+  .card input { width: 100%; padding: 11px 12px; border-radius: 10px; border: 1px solid var(--rule); background: var(--graphite); color: var(--offwhite); font: inherit; outline: none; }
+  .card input:focus { border-color: var(--green); }
+  .card .row { display: flex; gap: 10px; margin-top: 14px; align-items: center; justify-content: flex-end; }
+  .card label { display: block; color: var(--muted); font-size: 11.5px; margin: 10px 0 6px; letter-spacing: .04em; text-transform: uppercase; }
+  .err { color: var(--orchid); font-size: 12.5px; margin-top: 8px; min-height: 16px; }
+  .ok { color: var(--green); }
+  .kv { color: var(--body); font-size: 12.5px; line-height: 1.7; }
+  .kv b { color: var(--offwhite); font-weight: 500; }
+  .empty { max-width: 640px; margin: 60px auto; color: var(--body); line-height: 1.6; }
+  .empty h2 { color: var(--offwhite); font-weight: 700; font-size: 20px; margin: 0 0 8px; }
+  .empty .chips { margin-top: 16px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <aside>
+    <div class="brand"><img src="assets/logo-white.png" alt="Crosswalk"><span class="ver" id="ver"></span></div>
+    <button class="newbtn" onclick="newConversation()">+ New conversation</button>
+    <div class="convs" id="convs"></div>
+    <div class="side-foot">
+      <button class="link" onclick="openDashboard()">Open dashboard</button>
+      <button class="link" onclick="openDownloads()">Downloads folder</button>
+      <button class="link" onclick="showSettings()">Settings</button>
+    </div>
+  </aside>
+  <main>
+    <header>
+      <h1 id="title">Prometheus</h1>
+      <div class="status" id="status"><span class="dot"></span>Checking...</div>
+    </header>
+    <div class="updatebar" id="updatebar"><span id="updatetext"></span><button class="chip primary" onclick="openUpdate()">Download</button><button class="chip" onclick="hideUpdate()" id="updatelater">Later</button></div>
+    <div id="log"></div>
+    <footer>
+      <div class="composer">
+        <textarea id="box" placeholder="Ask Prometheus anything about an audience, a title, a brand or a person..." rows="1" onkeydown="onKey(event)" oninput="autosize(this)"></textarea>
+        <button class="send" id="sendbtn" onclick="send()">Ask</button>
+      </div>
+      <div class="hint">Answers come back here with their numbers; longer reads and every product you start land in your dashboard too. Save any answer as CSV or PDF.</div>
+    </footer>
+  </main>
+</div>
+
+<div class="overlay" id="keyscreen">
+  <div class="card">
+    <h2>Sign in to Prometheus</h2>
+    <p>Paste the API key from your Crosswalk admin. It is kept in your computer's keychain and never leaves this machine except to sign your requests.</p>
+    <label>API key</label>
+    <input id="keyin" type="password" autocomplete="off" placeholder="40-character key">
+    <label>Service</label>
+    <input id="urlin" type="text" autocomplete="off" placeholder="https://dashboard.crosswalknyc.com">
+    <div class="err" id="keyerr"></div>
+    <div class="row"><button class="chip" onclick="hideKey()" id="keycancel" style="display:none">Cancel</button><button class="chip primary" onclick="saveKey()">Sign in</button></div>
+  </div>
+</div>
+
+<div class="overlay" id="settings">
+  <div class="card">
+    <h2>Settings</h2>
+    <div class="kv" id="usage"></div>
+    <div class="row">
+      <button class="chip" onclick="hideSettings()">Close</button>
+      <button class="chip" onclick="changeKey()">Change key</button>
+      <button class="chip" onclick="signOut()">Sign out</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const S = { cid: null, convs: [], busy: false, boot: null, log: [] };
+const $ = (id) => document.getElementById(id);
+function api() { return window.pywebview && window.pywebview.api; }
+function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function fmt(v, unit) {
+  const n = Number(v);
+  if (!isFinite(n)) return esc(v);
+  if (unit === 'percent') return n.toLocaleString(undefined, { maximumFractionDigits: 1 }) + '%';
+  if (unit === 'usd') return '$' + n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  if (unit === 'index' || unit === 'ratio') return n.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  return Number.isInteger(n) ? n.toLocaleString() : n.toLocaleString(undefined, { maximumFractionDigits: 2 });
+}
+function autosize(el) { el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 160) + 'px'; }
+function onKey(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }
+function scrollDown() { const l = $('log'); l.scrollTop = l.scrollHeight; }
+
+window.addEventListener('pywebviewready', boot);
+async function boot() {
+  const b = await api().bootstrap();
+  S.boot = b;
+  $('ver').textContent = 'v' + b.version + (b.ui_source === 'service' ? '' : ' (offline page)');
+  $('urlin').value = b.base_url;
+  showUpdate(b.update);
+  setInterval(async () => { try { const r = await api().check_update(); showUpdate(r && r.update); } catch (_) {} }, 24 * 3600 * 1000);
+  if (!b.has_key || !b.key_ok) { showKey(b.key_error); setStatus(false, b.has_key ? 'Key not accepted' : 'Sign in'); return; }
+  afterSignIn(b.usage);
+}
+function showUpdate(u) {
+  if (!u || !u.version) { $('updatebar').classList.remove('show'); return; }
+  $('updatetext').innerHTML = '<b>Prometheus ' + esc(u.version) + ' is ready.</b> ' + (u.required ? 'This version needs the update to keep working.' : 'Your answers already come from the latest Prometheus; this updates the app window itself.') + (u.notes ? ' ' + esc(u.notes) : '');
+  $('updatelater').style.display = u.required ? 'none' : '';
+  $('updatebar').classList.add('show');
+}
+function hideUpdate() { $('updatebar').classList.remove('show'); }
+function openUpdate() { api().open_update(); }
+function setStatus(ok, text) { $('status').innerHTML = '<span class="dot' + (ok ? '' : ' bad') + '"></span>' + esc(text); }
+async function afterSignIn(usage) {
+  setStatus(true, 'Connected to ' + S.boot.base_url.replace(/^https?:\/\//, ''));
+  await loadConversations();
+  if (!S.cid) newConversation();
+  renderUsage(usage);
+}
+function showKey(err) { $('keyerr').textContent = err || ''; $('keycancel').style.display = S.boot && S.boot.key_ok ? '' : 'none'; $('keyscreen').classList.add('show'); setTimeout(() => $('keyin').focus(), 50); }
+function hideKey() { $('keyscreen').classList.remove('show'); }
+async function saveKey() {
+  const key = $('keyin').value.trim(); const url = $('urlin').value.trim();
+  $('keyerr').textContent = '';
+  if (url) { const r = await api().set_base_url(url); S.boot.base_url = r.base_url; }
+  const r = await api().set_key(key);
+  if (!r.ok) { $('keyerr').textContent = r.error || 'That key was not accepted.'; return; }
+  S.boot.has_key = true; S.boot.key_ok = true; $('keyin').value = '';
+  hideKey(); afterSignIn(r.usage);
+}
+function showSettings() { renderUsage(); $('settings').classList.add('show'); api().usage().then(renderUsage); }
+function hideSettings() { $('settings').classList.remove('show'); }
+function changeKey() { hideSettings(); showKey(''); }
+async function signOut() { await api().clear_key(); hideSettings(); S.boot.has_key = false; S.boot.key_ok = false; showKey(''); setStatus(false, 'Signed out'); }
+function renderUsage(u) {
+  const b = S.boot || {};
+  const pol = (u && u.policy) || {};
+  const lines = [
+    '<b>Service</b> ' + esc(b.base_url || ''),
+    '<b>Files</b> ' + esc(b.downloads || ''),
+    u && u.total_calls != null ? '<b>Calls, last 30 days</b> ' + esc(u.total_calls) : '',
+    u && u.total_charged_usd != null ? '<b>Metered, last 30 days</b> $' + Number(u.total_charged_usd).toFixed(2) : '',
+    u && u.balance_usd != null ? '<b>Balance</b> $' + Number(u.balance_usd).toFixed(2) : '',
+    pol.limits ? '<b>Burst limit</b> ' + esc(pol.limits.ask_per_minute) + ' asks a minute' : '',
+  ].filter(Boolean);
+  $('usage').innerHTML = lines.join('<br>');
+}
+function openDashboard() { api().open_dashboard('/?view=journeyIQ'); }
+function openDownloads() { api().open_downloads(); }
+
+async function loadConversations() {
+  const r = await api().conversations();
+  S.convs = (r && r.conversations) || [];
+  renderConvs();
+}
+function renderConvs() {
+  const el = $('convs');
+  const items = [...S.convs];
+  if (S.cid && !items.some(c => c.conversation_id === S.cid)) items.unshift({ conversation_id: S.cid, turns: S.log.length, updated: '' });
+  el.innerHTML = items.map(c => '<div class="conv' + (c.conversation_id === S.cid ? ' active' : '') + '" onclick="openConversation(' + JSON.stringify(c.conversation_id) + ')">'
+    + esc(c.conversation_id) + '<small>' + esc(c.turns || 0) + ' turns' + (c.updated ? ' · ' + esc(String(c.updated).slice(0, 10)) : '') + '</small></div>').join('');
+}
+async function newConversation() {
+  const r = await api().new_conversation('chat');
+  S.cid = r.conversation_id; S.log = [];
+  $('title').textContent = 'Prometheus';
+  $('log').innerHTML = '<div class="empty"><h2>Ask Prometheus.</h2>Who an audience is, how big a title is, what a journey looked like, which brands over-index, what a partnership is worth. '
+    + 'Products you start here (a Digital Journey, a Profile, a Brand Partnership read) build and land in your dashboard, and come back here with their files.'
+    + '<div class="chips">' + ['How big is the Babylon 5 audience on Prime Video?', 'Which streaming services do Babylon 5 viewers pay for besides Prime Video?', 'Where did the first post sit for The Following?']
+      .map(q => '<button class="chip" onclick="sendText(' + JSON.stringify(q) + ')">' + esc(q) + '</button>').join('') + '</div></div>';
+  renderConvs();
+  $('box').focus();
+}
+async function openConversation(cid) {
+  S.cid = cid; S.log = [];
+  $('title').textContent = cid;
+  $('log').innerHTML = '';
+  renderConvs();
+  const r = await api().conversation(cid);
+  for (const t of (r.turns || [])) {
+    addMessage(t.role === 'user' ? 'user' : 'agent', t.text || '', { bare: true });
+  }
+  scrollDown();
+}
+
+function addMessage(role, html, opts) {
+  opts = opts || {};
+  const id = 'm' + Math.random().toString(36).slice(2, 9);
+  const div = document.createElement('div');
+  div.className = 'msg ' + role; div.id = id;
+  div.innerHTML = '<div class="who">' + (role === 'user' ? 'You' : 'P') + '</div><div class="bubble">' + (opts.bare ? '<div class="text">' + esc(html) + '</div>' : html) + '</div>';
+  const empty = $('log').querySelector('.empty'); if (empty) empty.remove();
+  $('log').appendChild(div);
+  scrollDown();
+  return id;
+}
+function bubble(id) { const m = $(id); return m ? m.querySelector('.bubble') : null; }
+
+function sendText(t) { $('box').value = t; send(); }
+async function send() {
+  const text = $('box').value.trim();
+  if (!text || S.busy) return;
+  $('box').value = ''; autosize($('box'));
+  if (!S.cid) await newConversation();
+  S.log.push({ role: 'user', text });
+  addMessage('user', '<div class="text">' + esc(text) + '</div>');
+  S.busy = true; $('sendbtn').disabled = true;
+  const wait = addMessage('agent', '<div class="job"><span class="pulse"></span>Reading...</div>');
+  const doc = await api().ask(text, S.cid);
+  S.busy = false; $('sendbtn').disabled = false;
+  render(wait, text, doc);
+  renderConvs();
+}
+
+function render(id, question, doc) {
+  const b = bubble(id); if (!b) return;
+  const kind = doc.kind;
+  if (kind === 'answer') {
+    b.innerHTML = answerHtml(question, doc);
+    S.log.push({ role: 'agent', text: doc.answer.text });
+  } else if (kind === 'clarify') {
+    const c = doc.clarify || {};
+    b.innerHTML = '<div class="text">' + esc(c.question) + '</div><div class="chips">'
+      + (c.options || []).map((o, i) => '<button class="chip' + (i === 0 ? ' primary' : '') + '" onclick="sendText(' + JSON.stringify(o.send) + ')">' + esc(o.label) + '</button>').join('') + '</div>';
+  } else if (kind === 'job') {
+    const j = doc.job || {};
+    b.innerHTML = '<div class="job"><span class="pulse"></span>' + esc(j.stage || 'Working on it.') + '<div class="stage">A longer read. It lands in your dashboard thread too; this card updates when it is ready.</div></div>';
+    pollJob(id, question, j.id, j.poll);
+  } else if (kind === 'pending') {
+    const p = doc.pending || {};
+    b.innerHTML = '<div class="job"><span class="pulse"></span>' + esc(p.text || 'Held for a moment.') + '</div>';
+    if (p.job_id) setTimeout(() => pollJob(id, question, p.job_id), Math.min((p.retry_after_seconds || 30) * 1000, 120000));
+  } else if (kind === 'declined') {
+    const d = doc.declined || {};
+    let next = '';
+    if (d.next && d.next.action === 'build') next = '<div class="chips"><button class="chip" onclick="api().open_dashboard(\'/\')">Open the dashboard to build it</button></div>';
+    if (d.next && d.next.action === 'top_up') next = '<div class="chips"><button class="chip" onclick="api().open_dashboard(\'/wallet\')">Add funds</button></div>';
+    if (d.reason === 'auth') next = '<div class="chips"><button class="chip" onclick="showKey(\'\')">Open settings</button></div>';
+    b.innerHTML = '<div class="text declined">' + esc(d.text || 'Not run.') + '</div>' + next;
+    S.log.push({ role: 'agent', text: d.text || '' });
+  } else {
+    b.innerHTML = '<div class="text declined">Nothing came back. Try asking it another way.</div>';
+  }
+  scrollDown();
+}
+
+function answerHtml(question, doc) {
+  const a = doc.answer || {};
+  let html = '<div class="text">' + esc(a.text) + '</div>';
+  const facts = a.facts || [];
+  if (facts.length) {
+    html += '<table class="facts"><tr><th>Figure</th><th style="text-align:right">Value</th><th>Subject</th></tr>'
+      + facts.slice(0, 24).map(f => '<tr><td>' + esc(f.label) + '</td><td class="v">' + fmt(f.value, f.unit) + '</td><td>' + esc(f.subject || '') + '</td></tr>').join('') + '</table>';
+  }
+  const payload = JSON.stringify({ question, answer: a, meta: { conversation_id: doc.conversation_id, trace_id: doc.trace_id, asked_at: doc.asked_at } });
+  html += '<div class="files"><button class="fbtn" onclick=\'saveAnswer(this, "csv", ' + JSON.stringify(payload) + ')\'>Save CSV</button>'
+    + '<button class="fbtn" onclick=\'saveAnswer(this, "pdf", ' + JSON.stringify(payload) + ')\'>Save PDF</button>'
+    + (doc.job_id ? '<button class="fbtn" onclick=\'loadFiles(this, ' + JSON.stringify(doc.job_id) + ')\'>Files from this read</button>' : '')
+    + '<span class="saved"></span></div>';
+  if (a.followups && a.followups.length) {
+    html += '<div class="chips">' + a.followups.slice(0, 5).map(f => '<button class="chip" onclick="sendText(' + JSON.stringify(f) + ')">' + esc(f) + '</button>').join('') + '</div>';
+  }
+  const bill = doc.billing || {};
+  html += '<div class="meta">' + (bill.charged_usd ? 'Metered $' + Number(bill.charged_usd).toFixed(4) : 'No charge') + (doc.replayed ? ' · replayed' : '') + (doc.trace_id ? ' · ' + esc(doc.trace_id) : '') + '</div>';
+  return html;
+}
+
+async function saveAnswer(btn, fmtName, payloadJson) {
+  const p = JSON.parse(payloadJson);
+  const r = await api().save_answer(p.question, JSON.stringify(p.answer), fmtName, p.meta);
+  const span = btn.parentElement.querySelector('.saved');
+  if (r.ok) {
+    const name = r.path.split(/[\\/]/).pop();
+    span.innerHTML = 'Saved ' + esc(name) + '<button class="link" onclick=\'api().open_file(' + JSON.stringify(r.path) + ')\'>Open</button><button class="link" onclick=\'api().reveal(' + JSON.stringify(r.path) + ')\'>Show</button>';
+  } else {
+    span.innerHTML = '<span class="declined">' + esc(r.error || 'Could not save.') + '</span>';
+  }
+}
+
+async function loadFiles(btn, jobId) {
+  const span = btn.parentElement.querySelector('.saved');
+  span.textContent = 'Fetching files...';
+  const r = await api().job_files(jobId);
+  const files = (r && r.files) || [];
+  if (!files.length) { span.textContent = r.error ? 'Files not available.' : 'No files on this read; the CSV and PDF above carry its numbers.'; return; }
+  span.innerHTML = files.map(f => '<button class="fbtn" onclick=\'dl(this, ' + JSON.stringify(f.url) + ', ' + JSON.stringify(f.name) + ')\'>' + esc(f.name) + '</button>').join(' ');
+}
+async function dl(btn, url, name) {
+  btn.disabled = true; btn.textContent = 'Saving ' + name + '...';
+  const r = await api().download(url, name);
+  btn.disabled = false;
+  if (r.ok) { btn.textContent = 'Saved ' + name; btn.onclick = () => api().reveal(r.path); } else { btn.textContent = 'Could not save ' + name; }
+}
+
+async function pollJob(id, question, jobId) {
+  let tries = 0;
+  const tick = async () => {
+    tries += 1;
+    const doc = await api().poll(jobId);
+    const b = bubble(id); if (!b) return;
+    if (doc.kind === 'answer') {
+      doc.job_id = jobId;
+      b.innerHTML = answerHtml(question, doc);
+      S.log.push({ role: 'agent', text: doc.answer.text });
+      scrollDown();
+      return;
+    }
+    if (doc.kind === 'declined') { render(id, question, doc); return; }
+    const stage = (doc.job && doc.job.stage) || (doc.pending && doc.pending.text) || 'Working on it.';
+    b.innerHTML = '<div class="job"><span class="pulse"></span>' + esc(stage) + '<div class="stage">' + (tries < 4 ? 'A longer read. It lands in your dashboard thread too; this card updates when it is ready.' : 'Still working. You can keep asking; this card updates when the read is done.') + '</div></div>';
+    const wait = doc.kind === 'pending' ? Math.min(((doc.pending || {}).retry_after_seconds || 30) * 1000, 120000) : (tries < 6 ? 15000 : 30000);
+    if (tries < 160) setTimeout(tick, wait);
+  };
+  setTimeout(tick, 12000);
+}
+</script>
+</body>
+</html>
