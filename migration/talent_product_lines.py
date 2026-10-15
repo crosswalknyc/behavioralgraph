@@ -70,8 +70,8 @@ VERIFY_SYSTEM = """You verify, with web research, whether each public figure cur
 Correct the brand name, category, where it is sold and the launch year when the research shows otherwise. Echo each person's "name" exactly as given (the name only, never the brand), and add "display": the name in its usual capitalization (MrBeast, KSI, Kim Kardashian). Return only JSON:
 {"checked": [{"name": "<exact input name>", "display": "<usual capitalization>", "status": "active|discontinued|not_theirs|unverified", "brand": "...", "category": "...", "type": "...", "where": "<short: own site, retail, Amazon, app stores, channel link>", "since": <year or null>, "source": "<one domain>"}]}"""
 
-WEB_SEARCH_TOOLS = ({"type": "web_search_20260209", "name": "web_search", "max_uses": 14},
-                    {"type": "web_search_20250305", "name": "web_search", "max_uses": 14})
+WEB_SEARCH_TOOLS = ({"type": "web_search_20260209", "name": "web_search", "max_uses": 8},
+                    {"type": "web_search_20250305", "name": "web_search", "max_uses": 8})
 
 
 def _norm(s):
@@ -146,7 +146,7 @@ def _claude_json(system, user, *, model=None, max_tokens=6000, tools=None, tempe
         for tool in tools:
             try:
                 txt = cc.claude_messages(system=system, user=user, model=model, max_tokens=max_tokens,
-                                         temperature=temperature, tools=[tool], wall_s=240)
+                                         temperature=temperature, tools=[tool], wall_s=200)
             except Exception:
                 txt = ''
             doc = _parse_json(txt)
@@ -161,17 +161,39 @@ SCREEN_MODEL = os.environ.get('TPL_SCREEN_MODEL', 'claude-opus-4-7')
 VERIFY_MODEL = os.environ.get('TPL_VERIFY_MODEL', 'claude-sonnet-4-6')
 
 
-def screen_sellers(universe, batch=80, model=None, workers=8, log=print, passes=2):
+def _load_json(path):
+    try:
+        with open(path) as fh:
+            return json.load(fh)
+    except Exception:
+        return None
+
+
+def _save_json(path, doc):
+    tmp = str(path) + '.tmp'
+    with open(tmp, 'w') as fh:
+        json.dump(doc, fh)
+    os.replace(tmp, path)
+
+
+def screen_sellers(universe, batch=80, model=None, workers=8, log=print, passes=2, state_path=None):
     """Knowledge pass over the whole universe; returns candidate claims
     keyed by normalized name. Two passes with different chunk boundaries,
-    merged: a single pass misses obvious names."""
+    merged: a single pass misses obvious names. With state_path the
+    result of every chunk is saved as it lands and a rerun resumes."""
     model = model or SCREEN_MODEL
     names = [u['name'] for u in universe]
     chunks = [names[i:i + batch] for i in range(0, len(names), batch)]
     if passes > 1:
         off = batch // 2
         chunks += [names[i:i + batch] for i in range(off, len(names), batch)] + ([names[:off]] if len(names) > off else [])
-    found = {}
+    state = (_load_json(state_path) if state_path else None) or {'done': [], 'found': {}}
+    found = dict(state.get('found') or {})
+    done = set(state.get('done') or [])
+    todo = [(i, c) for i, c in enumerate(chunks) if i not in done]
+    if done:
+        log(f'[screen] resuming: {len(done)}/{len(chunks)} chunks done, {len(found)} found')
+    lock = __import__('threading').Lock()
 
     def one(idx, chunk):
         user = "People:\n" + "\n".join(chunk) + "\n\nList only the ones who sell their own product line or service."
@@ -187,30 +209,39 @@ def screen_sellers(universe, batch=80, model=None, workers=8, log=print, passes=
         return idx, keep
 
     with cf.ThreadPoolExecutor(max_workers=workers) as ex:
-        futs = [ex.submit(one, i, c) for i, c in enumerate(chunks)]
+        futs = [ex.submit(one, i, c) for i, c in todo]
         for f in cf.as_completed(futs):
             try:
                 idx, keep = f.result()
             except Exception as e:
                 log(f'[screen] chunk failed: {e}')
                 continue
-            for k, r in keep.items():
-                if k not in found or (not found[k].get('brand') and r.get('brand')):
-                    found[k] = r
-                elif r.get('brand') and _norm(r['brand']) != _norm(found[k].get('brand')):
-                    found[k].setdefault('others', [])
-                    if isinstance(found[k]['others'], list) and r['brand'] not in found[k]['others']:
-                        found[k]['others'].append(r['brand'])
+            with lock:
+                for k, r in keep.items():
+                    if k not in found or (not found[k].get('brand') and r.get('brand')):
+                        found[k] = r
+                    elif r.get('brand') and _norm(r['brand']) != _norm(found[k].get('brand')):
+                        found[k].setdefault('others', [])
+                        if isinstance(found[k]['others'], list) and r['brand'] not in found[k]['others']:
+                            found[k]['others'].append(r['brand'])
+                done.add(idx)
+                if state_path:
+                    _save_json(state_path, {'done': sorted(done), 'found': found})
             log(f'[screen] chunk {idx + 1}/{len(chunks)}: {len(keep)} sellers (total {len(found)})')
     return found
 
 
 # ----------------------------------------------------------------- 3. verify
-def verify_sellers(cands, batch=8, model=None, workers=6, log=print):
-    """Web research per claim. Returns {norm_name: checked_row}."""
+def verify_sellers(cands, batch=4, model=None, workers=12, log=print, state_path=None):
+    """Web research per claim. Returns {norm_name: checked_row}. With
+    state_path every finished chunk is saved and a rerun resumes."""
     items = list(cands.values())
     chunks = [items[i:i + batch] for i in range(0, len(items), batch)]
-    out = {}
+    out = dict(((_load_json(state_path) if state_path else None) or {}).get('out') or {})
+    todo = [(i, c) for i, c in enumerate(chunks) if not all(_norm(r['name']) in out for r in c)]
+    if len(todo) < len(chunks):
+        log(f'[verify] resuming: {len(chunks) - len(todo)}/{len(chunks)} chunks done')
+    lock = __import__('threading').Lock()
 
     def one(idx, chunk):
         claims = [{'name': r['name'], 'brand': r.get('brand'), 'others': [o for o in (r.get('others') or []) if isinstance(o, str)][:3],
@@ -235,14 +266,17 @@ def verify_sellers(cands, batch=8, model=None, workers=6, log=print):
         return idx, keep
 
     with cf.ThreadPoolExecutor(max_workers=workers) as ex:
-        futs = [ex.submit(one, i, c) for i, c in enumerate(chunks)]
+        futs = [ex.submit(one, i, c) for i, c in todo]
         for f in cf.as_completed(futs):
             try:
                 idx, keep = f.result()
             except Exception as e:
                 log(f'[verify] chunk failed: {e}')
                 continue
-            out.update(keep)
+            with lock:
+                out.update(keep)
+                if state_path:
+                    _save_json(state_path, {'out': out})
             act = sum(1 for r in keep.values() if r.get('status') == 'active')
             log(f'[verify] chunk {idx + 1}/{len(chunks)}: {act}/{len(keep)} active')
     return out
@@ -481,13 +515,15 @@ def run(out_dir, *, limit=None, genpop_path=None, model=None, verify_model=None,
     if limit:
         universe = universe[:int(limit)]
     log(f'[universe] {len(universe):,} people in Gen Pop TALENT')
-    cands = screen_sellers(universe, model=model, log=log)
+    out = Path(out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    cands = screen_sellers(universe, model=model, log=log, state_path=str(out / 'candidates.json'))
     log(f'[screen] {len(cands)} candidates')
-    verified = verify_sellers(cands, model=verify_model or VERIFY_MODEL, log=log)
+    verified = verify_sellers(cands, model=verify_model or VERIFY_MODEL, log=log, state_path=str(out / 'verified.json'))
     retry = {k: cands[k] for k, v in verified.items() if v.get('status') == 'unverified' and k in cands}
     if retry:
         log(f'[verify] second pass on {len(retry)} unverified')
-        verified.update(verify_sellers(retry, batch=5, model=verify_model or VERIFY_MODEL, log=log))
+        verified.update(verify_sellers(retry, batch=3, model=verify_model or VERIFY_MODEL, log=log))
     rows = assemble_rows(universe, verified)
     log(f'[rows] {len(rows)} active sellers')
     end = date.today()
