@@ -228,9 +228,10 @@ def run_job(job_id, username, inputs, extras=None):
         with open(path, 'rb') as fh:
             s3.put_object(Bucket=bucket, Key=key, Body=fh.read(), ContentType=ctype)
         links[kind_] = {'key': key, 'name': name, 'url': _presign(s3, bucket, key, name)}
-    total = sum(int(r.get('US audience, trailing 12 months') or 0) for r in rows)
+    auds = sorted((int(r.get('US audience, trailing 12 months') or 0) for r in rows), reverse=True)
+    over_5m = sum(1 for a in auds if a >= 5_000_000)
     top = rows[:5]
-    summary = (f"{len(rows):,} {group} in our data, reaching {total:,} US people together in the trailing 12 months. "
+    summary = (f"{len(rows):,} {group} in our data; {over_5m} of them reach more than 5 million US people each in the trailing 12 months. "
                + (f"The largest audiences: " + '; '.join(f"{r['Name']} ({r['Own product or service']}, {r['US audience, trailing 12 months']:,})" for r in top) + '.' if top else ''))
     text = summary + ' The full list with each person\'s product, category, where it is sold and US audience is attached.'
     link_lines = '\n'.join(f"{k.upper()}: {v['url']}" for k, v in links.items() if v.get('url'))

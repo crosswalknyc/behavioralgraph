@@ -381,6 +381,78 @@ def _title(name):
     return s
 
 
+# ----------------------------------------------------------------- 3b. refine
+REFINE_SYSTEM = """You are editing a client list titled "Influencers and talent who sell their own product or service". Each row names a person and the brand, program, app or venue claimed to be theirs. Decide for each row whether it belongs, and clean it.
+
+Keep ONLY a consumer product line, or a paid program, service, app or venue, that the person owns or co-owns and sells directly to their own audience: beverages, snacks and food, beauty and skincare, fragrance, apparel and footwear lines, jewelry and accessories, spirits and wine, supplements and wellness products, fitness programs, paid courses and coaching, paid memberships and subscriptions they run, apps and games they own, restaurants and venues, home goods, pet products, toys, cannabis, golf and sporting goods.
+Drop: production companies, record labels, media companies, agencies, venture or holding companies, real estate, sports team ownership, corporations they lead as executives, nonprofits and political organizations, tours, films, albums, books, free channels or podcasts, one-off collabs owned by another brand, anything no longer sold.
+
+For kept rows: "brand" is the clean name (no parentheses, no "by <person>" tails unless part of the name, at most 40 characters); "category" is exactly one of: Beverage | Food and snacks | Beauty and skincare | Fragrance | Apparel | Footwear | Jewelry and accessories | Spirits and wine | Supplements and wellness | Fitness programs | Courses and coaching | Memberships and subscriptions | Apps and games | Restaurants and venues | Home | Pets | Toys and kids | Cannabis | Golf and sporting goods | Other consumer products; "where" is exactly one of: own site | own site and retail | retail | Amazon | app stores | in person | online; "since" the launch year or null.
+
+Return only JSON: {"rows": [{"id": <id>, "keep": true|false, "brand": "...", "category": "...", "where": "...", "since": <year or null>, "why": "<up to 8 words when dropped>"}]}"""
+
+CATEGORIES = ('Beverage', 'Food and snacks', 'Beauty and skincare', 'Fragrance', 'Apparel', 'Footwear', 'Jewelry and accessories',
+              'Spirits and wine', 'Supplements and wellness', 'Fitness programs', 'Courses and coaching', 'Memberships and subscriptions',
+              'Apps and games', 'Restaurants and venues', 'Home', 'Pets', 'Toys and kids', 'Cannabis', 'Golf and sporting goods', 'Other consumer products')
+WHERE_LABELS = ('own site', 'own site and retail', 'retail', 'Amazon', 'app stores', 'in person', 'online')
+
+
+def refine_rows(rows, batch=40, model=None, workers=6, log=print, min_audience=1000):
+    """Edit the assembled rows for the client: drop what is not a product
+    line or a paid service (production companies, labels, tours, films,
+    nonprofits, corporations), clean the brand name, one category label,
+    one place-sold label. A tiny audience (under min_audience US people)
+    is left off."""
+    model = model or os.environ.get('TPL_REFINE_MODEL', 'claude-opus-4-7')
+    rows = [r for r in rows if int(r.get('US audience, trailing 12 months') or 0) >= int(min_audience)]
+    chunks = [rows[i:i + batch] for i in range(0, len(rows), batch)]
+    decisions = {}
+
+    def one(idx, chunk):
+        base = idx * batch
+        items = [{'id': base + j, 'name': r['Name'], 'brand': r['Own product or service'], 'category': r.get('Category'),
+                  'type': r.get('Type'), 'where': r.get('Where it is sold'), 'since': r.get('Since')} for j, r in enumerate(chunk)]
+        doc = _claude_json(REFINE_SYSTEM, json.dumps({'rows': items}, ensure_ascii=False), model=model, max_tokens=8000)
+        out = {}
+        for d in (doc or {}).get('rows') or []:
+            try:
+                out[int(d.get('id'))] = d
+            except (TypeError, ValueError):
+                continue
+        return idx, out
+
+    with cf.ThreadPoolExecutor(max_workers=workers) as ex:
+        for f in cf.as_completed([ex.submit(one, i, c) for i, c in enumerate(chunks)]):
+            try:
+                idx, out = f.result()
+            except Exception as e:
+                log(f'[refine] chunk failed: {e}')
+                continue
+            decisions.update(out)
+            log(f'[refine] chunk {idx + 1}/{len(chunks)}: {sum(1 for d in out.values() if d.get("keep"))}/{len(out)} kept')
+    kept, dropped = [], []
+    for i, r in enumerate(rows):
+        d = decisions.get(i)
+        if d is None:
+            kept.append(r)          # no verdict: keep as is
+            continue
+        if not d.get('keep'):
+            dropped.append((r['Name'], r['Own product or service'], d.get('why')))
+            continue
+        r = dict(r)
+        if str(d.get('brand') or '').strip():
+            r['Own product or service'] = str(d['brand']).strip()[:40]
+        cat = str(d.get('category') or '').strip()
+        r['Category'] = cat if cat in CATEGORIES else next((c for c in CATEGORIES if c.lower() == cat.lower()), r.get('Category') or 'Other consumer products')
+        wh = str(d.get('where') or '').strip()
+        r['Where it is sold'] = wh if wh in WHERE_LABELS else next((w for w in WHERE_LABELS if w.lower() == wh.lower()), 'online')
+        if d.get('since'):
+            r['Since'] = d['since']
+        kept.append(r)
+    log(f'[refine] {len(kept)} kept, {len(dropped)} dropped')
+    return kept, dropped
+
+
 # ----------------------------------------------------------------- 4. files
 def _fmt_int(v):
     return f"{int(v):,}"
@@ -425,21 +497,23 @@ def build_files(rows, out_dir, *, title='Influencers and talent who sell their o
             row[8].number_format = '0.0000"%"'
         ws.freeze_panes = 'A2'
         ws2 = wb.create_sheet('By category')
-        ws2.append(['Category', 'People', 'Combined US audience, trailing 12 months'])
+        ws2.append(['Category', 'People', 'Largest audience in the category', 'US audience, trailing 12 months'])
         cats = {}
         for r in rows:
-            c = cats.setdefault(r['Category'], [0, 0])
+            c = cats.setdefault(r['Category'], [0, None])
             c[0] += 1
-            c[1] += r['US audience, trailing 12 months']
-        for cat, (n, aud) in sorted(cats.items(), key=lambda kv: -kv[1][1]):
-            ws2.append([cat, n, aud])
+            if c[1] is None or r['US audience, trailing 12 months'] > c[1]['US audience, trailing 12 months']:
+                c[1] = r
+        for cat, (n, top_r) in sorted(cats.items(), key=lambda kv: -kv[1][0]):
+            ws2.append([cat, n, f"{top_r['Name']} ({top_r['Own product or service']})", top_r['US audience, trailing 12 months']])
         for c in ws2[1]:
             c.font = Font(bold=True, color='E9E8E1')
             c.fill = hdr_fill
-        ws2.column_dimensions['A'].width = 24
-        ws2.column_dimensions['C'].width = 34
+        ws2.column_dimensions['A'].width = 28
+        ws2.column_dimensions['C'].width = 44
+        ws2.column_dimensions['D'].width = 30
         for row in ws2.iter_rows(min_row=2):
-            row[2].number_format = '#,##0'
+            row[3].number_format = '#,##0'
         ws3 = wb.create_sheet('About')
         for line in (title, window_label, '', 'Each person is read across the full digital life of the Crosswalk sample and projected to the US population.',
                      'US audience: people in the US who engaged with the person in the trailing 12 months.',
@@ -489,12 +563,15 @@ def _build_pdf(rows, path, *, title, window_label, client):
     st_cell_m = ParagraphStyle('cm', fontName=fam, fontSize=8.3, leading=10.5, textColor=BODY)
     st_foot = ParagraphStyle('f', fontName=fam, fontSize=7.5, leading=10, textColor=MUTED)
 
-    total_aud = sum(r['US audience, trailing 12 months'] for r in rows)
+    auds = sorted((r['US audience, trailing 12 months'] for r in rows), reverse=True)
+    median_aud = auds[len(auds) // 2] if auds else 0
+    over_5m = sum(1 for a in auds if a >= 5_000_000)
     cats = {}
     for r in rows:
-        c = cats.setdefault(r['Category'], [0, 0])
+        c = cats.setdefault(r['Category'], [0, None])
         c[0] += 1
-        c[1] += r['US audience, trailing 12 months']
+        if c[1] is None or r['US audience, trailing 12 months'] > c[1]['US audience, trailing 12 months']:
+            c[1] = r
     top_cat = sorted(cats.items(), key=lambda kv: -kv[1][0])[:3]
     top = rows[:12]
 
@@ -523,8 +600,8 @@ def _build_pdf(rows, path, *, title, window_label, client):
     story.append(Spacer(1, 12))
     story.append(Paragraph('What we found', st_h))
     bullets = [
-        f"{len(rows):,} people in our talent universe sell a product line or service they own, through their own channel or page. Together they reach {total_aud:,} US people in the trailing 12 months (people who engage with more than one of them are counted once per person).",
-        "The most common lines are " + ', '.join(f"{c.lower()} ({n} people)" for c, (n, _a) in top_cat) + ".",
+        f"{len(rows):,} people in our talent universe sell a product line or service they own, through their own channel or page. {over_5m} of them reach more than 5 million US people each in the trailing 12 months; the median audience on the list is {median_aud:,} US people.",
+        "The most common lines are " + ', '.join(f"{c.lower()} ({n} people)" for c, (n, _r) in top_cat) + ".",
         f"The largest audience on the list is {top[0]['Name']} ({top[0]['Own product or service']}), reaching {top[0]['US audience, trailing 12 months']:,} US people." if top else '',
         "Generic merch, sponsorships and collabs owned by someone else are not on the list; only brands, programs, apps and venues the person founded, co-founded or owns.",
     ]
@@ -544,10 +621,11 @@ def _build_pdf(rows, path, *, title, window_label, client):
     story.append(t)
     story.append(Spacer(1, 10))
     story.append(Paragraph('By category', st_h))
-    data = [[Paragraph(h, ParagraphStyle('th2', parent=st_cell, fontName=bold, textColor=OFFWHITE)) for h in ('Category', 'People', 'Combined US audience')]]
-    for cat, (n, aud) in sorted(cats.items(), key=lambda kv: -kv[1][1]):
-        data.append([Paragraph(cat, st_cell), Paragraph(f'{n}', st_cell), Paragraph(f'{aud:,}', st_cell)])
-    t2 = Table(data, colWidths=[2.6 * inch, 1.0 * inch, 2.2 * inch], hAlign='LEFT')
+    data = [[Paragraph(h, ParagraphStyle('th2', parent=st_cell, fontName=bold, textColor=OFFWHITE)) for h in ('Category', 'People', 'Largest audience in the category', 'US audience')]]
+    for cat, (n, top_r) in sorted(cats.items(), key=lambda kv: -kv[1][0]):
+        data.append([Paragraph(cat, st_cell), Paragraph(f'{n}', st_cell), Paragraph(f"{top_r['Name']} ({top_r['Own product or service']})", st_cell_m),
+                     Paragraph(f"{top_r['US audience, trailing 12 months']:,}", st_cell)])
+    t2 = Table(data, colWidths=[2.0 * inch, 0.7 * inch, 3.1 * inch, 1.2 * inch], hAlign='LEFT')
     t2.setStyle(TableStyle([('BACKGROUND', (0, 0), (-1, 0), GRAPHITE), ('LINEBELOW', (0, 1), (-1, -1), 0.4, RULE),
                             ('TOPPADDING', (0, 0), (-1, -1), 3), ('BOTTOMPADDING', (0, 0), (-1, -1), 3)]))
     story.append(t2)
@@ -608,6 +686,8 @@ def run(out_dir, *, limit=None, genpop_path=None, model=None, verify_model=None,
         log(f'[knowledge] {kept} tail names kept where both reads name the same active brand')
     rows = assemble_rows(universe, verified)
     log(f'[rows] {len(rows)} active sellers')
+    rows, dropped = refine_rows(rows, log=log)
+    _save_json(str(out / 'dropped.json'), dropped)
     end = date.today()
     start = end.replace(year=end.year - 1)
     window = f"Trailing 12 months, {start.strftime('%B %-d, %Y')} to {end.strftime('%B %-d, %Y')}. US population."
