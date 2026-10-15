@@ -122,8 +122,26 @@ def load_universe(path=None):
 
 
 # ----------------------------------------------------------------- 2. screen
-def _claude_json(system, user, *, model=None, max_tokens=6000, tools=None, temperature=0.1):
+def _claude_client():
+    """bg-webapp's claude_client (claude_reason_json + claude_messages with
+    tools). From the parent repo the root-level shim of the same name
+    shadows it, so load the web app's by path when the shim lacks them."""
     import claude_client as cc
+    if hasattr(cc, 'claude_reason_json') and hasattr(cc, 'claude_messages'):
+        return cc
+    import importlib.util
+    for cand in (ROOT / 'bg-webapp' / 'claude_client.py', HERE.parent / 'claude_client.py'):
+        if cand.exists():
+            spec = importlib.util.spec_from_file_location('claude_client_webapp', str(cand))
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            if hasattr(mod, 'claude_reason_json'):
+                return mod
+    raise RuntimeError('claude_client without claude_reason_json')
+
+
+def _claude_json(system, user, *, model=None, max_tokens=6000, tools=None, temperature=0.1):
+    cc = _claude_client()
     if tools:
         for tool in tools:
             try:
