@@ -471,6 +471,37 @@ def thread_get(tid):
     return jsonify({'success': True, 'thread_id': safe_t, 'turns': turns})
 
 
+@bp.route('/jobs/<job_id>/files', methods=['GET'])
+@_guarded('prometheus/job_files')
+def job_files(job_id):
+    """The files a finished job ships with (a journey's workbook, CSV and
+    PDF analysis; a deck), listed as API paths the same key downloads."""
+    user, via, err = _auth()
+    if err:
+        return err
+    from . import partner_api as _papi
+    out, status, extra = _papi.handle_job_files(user, job_id)
+    return jsonify(out), status
+
+
+@bp.route('/jobs/<job_id>/files/<path:name>', methods=['GET'])
+@_guarded('prometheus/job_file')
+def job_file(job_id, name):
+    user, via, err = _auth()
+    if err:
+        return err
+    from . import partner_api as _papi
+    data, ctype, fname = _papi.job_file(user, job_id, name)
+    if data is None:
+        return jsonify({'error': {'scope': 'That job belongs to another key.', 'unknown': 'No such job.', 'not_done': 'Not ready yet.',
+                                  'unknown_file': 'No such file on this job.', 'build': 'The file could not be built.'}.get(fname, 'unavailable')}), ctype
+    resp = make_response(data, 200)
+    resp.headers['Content-Type'] = ctype
+    resp.headers['Content-Disposition'] = f'attachment; filename="{fname}"'
+    resp.headers['Cache-Control'] = 'private, max-age=0'
+    return resp
+
+
 @bp.route('/jobs/<job_id>', methods=['GET'])
 @_guarded('prometheus/jobs')
 def job_get(job_id):

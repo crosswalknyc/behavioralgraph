@@ -21,7 +21,7 @@ from . import partner_keys as K
 from . import service
 from .host import host
 
-__all__ = ['handle_ask', 'handle_job', 'handle_usage', 'handle_health', 'conversation_thread_id', 'unsafe_input', 'wallet_room']
+__all__ = ['handle_ask', 'handle_job', 'handle_job_files', 'job_file', 'handle_usage', 'handle_health', 'conversation_thread_id', 'unsafe_input', 'wallet_room']
 
 _CONV_RX = re.compile(r'^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$')
 _UNSAFE_RX = re.compile(
@@ -460,3 +460,108 @@ def handle_health() -> tuple:
         elif c['status'] == 'degraded' and worst == 'ok':
             worst = 'degraded'
     return {'schema': 'prometheus.health.v1', 'status': worst, 'checks': checks}, (200 if worst != 'down' else 503)
+
+
+# ------------------------------------------------------------------ files
+FILES_PATH = '/api/prometheus/v1/jobs/{job}/files/{name}'
+_FILE_TYPES = {'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'csv': 'text/csv',
+               'pdf': 'application/pdf', 'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation'}
+
+
+def _job_for_files(user, job_id):
+    """(doc, kind) when the job exists, is terminal and belongs to this key; else (None, reason)."""
+    doc, kind = service.find_job_doc(job_id)
+    if not isinstance(doc, dict):
+        return None, 'unknown'
+    try:
+        if not host.job_owner_ok(doc.get('user'), user):
+            return None, 'scope'
+    except Exception:
+        return None, 'scope'
+    if str(doc.get('status') or '').lower() not in ('done', 'complete', 'completed', 'ready'):
+        return None, 'not_done'
+    return doc, kind
+
+
+def _journey_files(doc):
+    """The three files a finished journey ships with, built from the stored payload."""
+    from prometheus.journey_delivery import load_payload
+    from migration import journey_iq as _jiq
+    from migration import journey_pdf as _jp
+    key = str(doc.get('s3_key') or doc.get('result_key') or '')
+    if not key:
+        return []
+    payload = load_payload(host.s3_client, key, host.bucket)
+    out = [(_jiq.breakdown_filename(payload, 'xlsx'), lambda: _jiq.breakdown_xlsx(payload)),
+           (_jiq.breakdown_filename(payload, 'csv'), lambda: _jiq.breakdown_csv(payload).encode('utf-8')),
+           (_jp.pdf_filename(payload), lambda: _jp.build_pdf(payload))]
+    return out
+
+
+def _deck_files(doc):
+    fname = str(doc.get('filename') or '')
+    key = str(doc.get('s3_key') or '')
+    if not fname and key:
+        fname = key.rsplit('/', 1)[-1]
+    if not fname:
+        return []
+    if not key:
+        return []
+
+    def _read():
+        return host.s3_client.get_object(Bucket=host.bucket, Key=key)['Body'].read()
+    return [(fname, _read)]
+
+
+def _files_for(doc, kind):
+    try:
+        if kind in ('jiq', 'journey'):
+            return _journey_files(doc)
+        if kind == 'deck':
+            return _deck_files(doc)
+    except Exception:
+        return []
+    return []
+
+
+def handle_job_files(user, job_id):
+    """(doc, status, headers): the files a finished job ships with, as API
+    paths the same key downloads (no public links)."""
+    t0 = time.monotonic()
+    kid, owner = K.key_id(user), _username(user)
+    doc, kind = _job_for_files(user, job_id)
+    if doc is None:
+        reason = kind
+        v1 = C.declined('scope' if reason == 'scope' else 'unsupported',
+                        {'unknown': 'No job with that id for this key.', 'scope': 'That job belongs to another key.',
+                         'not_done': 'The files are ready when the job is done. Poll the job first.'}[reason])
+        return _finish(v1, key_id=kid, owner=owner, endpoint='files', t0=t0)
+    files = []
+    for name, _make in _files_for(doc, kind):
+        ext = name.rsplit('.', 1)[-1].lower()
+        files.append({'name': name, 'type': _FILE_TYPES.get(ext, 'application/octet-stream'),
+                      'url': FILES_PATH.format(job=job_id, name=name)})
+    out = {'schema': 'prometheus.files.v1', 'job_id': str(job_id), 'files': files}
+    if not files:
+        out['note'] = 'This read ships no separate files; its numbers are in the answer.'
+    try:
+        api_meter.record(key_id=kid, owner=owner, endpoint='files', kind='files', status=200, ms=int((time.monotonic() - t0) * 1000))
+    except Exception:
+        pass
+    return out, 200, {}
+
+
+def job_file(user, job_id, name):
+    """(bytes, content_type, filename) or (None, status, reason)."""
+    doc, kind = _job_for_files(user, job_id)
+    if doc is None:
+        return None, (403 if kind == 'scope' else 404), kind
+    for fname, make in _files_for(doc, kind):
+        if fname == name:
+            try:
+                data = make()
+            except Exception:
+                return None, 500, 'build'
+            ext = fname.rsplit('.', 1)[-1].lower()
+            return data, _FILE_TYPES.get(ext, 'application/octet-stream'), fname
+    return None, 404, 'unknown_file'
