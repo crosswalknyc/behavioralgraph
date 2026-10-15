@@ -389,7 +389,7 @@ def handle_usage(user: dict, args: dict) -> tuple:
     return {'schema': 'prometheus.usage.v1', 'key_id': K.key_id(user), 'from': d_from.isoformat(), 'to': d_to.isoformat(),
             'days': [days[k] for k in sorted(days)], 'total_calls': sum(d['calls'] for d in days.values()),
             'total_charged_usd': total, 'balance_usd': (None if sandbox else _balance(user)), 'basis': 'metered',
-            'policy': {k: v for k, v in K.policy_view(user).items() if k in ('scopes', 'limits', 'daily_cap_usd', 'webhook_url', 'sandbox')}}, 200
+            'policy': {k: v for k, v in K.policy_view(user).items() if k in ('scopes', 'limits', 'daily_cap_usd', 'webhook_url')}}, 200
 
 
 def handle_health() -> tuple:
