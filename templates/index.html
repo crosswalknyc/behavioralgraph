@@ -25110,6 +25110,40 @@ https://www.instagram.com/p/..."></textarea>
             flex: 0 0 auto;
             margin-left: auto;
         }
+        #dashboardView.piq-v4 .piq-beh-filter-btn {
+            flex: 0 0 auto; padding: 3px 9px; border-radius: 6px;
+            background: #1B2F35; border: 1px solid #3B3D38; color: #9AA09B;
+            font-family: inherit; font-size: 10px; font-weight: 600;
+            letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer; line-height: 1.4;
+        }
+        #dashboardView.piq-v4 .piq-beh-filter-btn:hover,
+        #dashboardView.piq-v4 .piq-beh-filter-btn.is-on { border-color: #C7F23E; color: #C7F23E; }
+        body[data-theme="light"] #dashboardView.piq-v4 .piq-beh-filter-btn { background: #FFFFFF; border-color: #C9C6BA; color: #5C6560; }
+        body[data-theme="light"] #dashboardView.piq-v4 .piq-beh-filter-btn:hover,
+        body[data-theme="light"] #dashboardView.piq-v4 .piq-beh-filter-btn.is-on { border-color: #5E7E12; color: #5E7E12; }
+        #dashboardView.piq-v4 .piq-beh-filter {
+            display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+            margin: 0 0 10px; font-size: 10px; font-weight: 600;
+            letter-spacing: 0.08em; text-transform: uppercase; color: #9AA09B;
+        }
+        #dashboardView.piq-v4 .piq-beh-filter[hidden] { display: none !important; }
+        #dashboardView.piq-v4 .piq-beh-filter label { display: inline-flex; align-items: center; gap: 6px; }
+        #dashboardView.piq-v4 .piq-beh-filter input {
+            width: 64px; padding: 4px 6px; border-radius: 6px;
+            background: #0C1618; border: 1px solid #3B3D38; color: #E9E8E1;
+            font: 600 12px inherit; letter-spacing: 0; text-transform: none;
+        }
+        #dashboardView.piq-v4 .piq-beh-filter-clear {
+            background: transparent; border: 0; padding: 0; cursor: pointer;
+            color: #9AA09B; font: inherit; letter-spacing: inherit; text-transform: inherit;
+        }
+        #dashboardView.piq-v4 .piq-beh-filter-clear:hover { color: #E9E8E1; }
+        #dashboardView.piq-v4 .piq-beh-filter-status { margin-left: auto; color: #C7F23E; text-transform: none; letter-spacing: 0; }
+        body[data-theme="light"] #dashboardView.piq-v4 .piq-beh-filter { color: #5C6560; }
+        body[data-theme="light"] #dashboardView.piq-v4 .piq-beh-filter input { background: #FFFFFF; border-color: #C9C6BA; color: #0C1618; }
+        body[data-theme="light"] #dashboardView.piq-v4 .piq-beh-filter-clear:hover { color: #0C1618; }
+        body[data-theme="light"] #dashboardView.piq-v4 .piq-beh-filter-status { color: #5E7E12; }
+        .behavioral-item.beh-min-hidden { display: none !important; }
         #dashboardView.piq-v4 .piq-beh-eye {
             display: flex;
             justify-content: space-between;
@@ -143553,6 +143587,16 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 }
                 eye.innerHTML = '<div class="piq-eyebrow"><span class="num">' + num + '</span>' + window._piqV4Esc(cat) + '</div>' +
                     (window._piqV4HeadActions ? window._piqV4HeadActions(cat, window._piqV4CsvBtn ? window._piqV4CsvBtn('behavioral', cat, wantMenu ? { menu: true } : {}) : '') : (window._piqV4CsvBtn ? window._piqV4CsvBtn('behavioral', cat, wantMenu ? { menu: true } : {}) : ''));
+                var acts = eye.querySelector('.piq-head-actions');
+                if (acts && !acts.querySelector('.piq-beh-filter-btn')) {
+                    var fb = document.createElement('button');
+                    fb.type = 'button';
+                    fb.className = 'piq-beh-filter-btn';
+                    fb.setAttribute('data-cat', cat);
+                    fb.setAttribute('title', 'Hide rows below a minimum % or index');
+                    fb.textContent = 'Filter';
+                    acts.insertBefore(fb, acts.firstChild);
+                }
             });
             var sel = document.getElementById('categoryReorderSelect');
             var jump = document.getElementById('piqBehJump');
@@ -158806,7 +158850,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 // index distinguishes "no index at all" from "index 0".
                 const dataIndexAttr = showIndex ? `data-index="${Number(index)}"` : 'data-index=""';
                 return `
-                    <div class="behavioral-item" ${dataIndexAttr}>
+                    <div class="behavioral-item" ${dataIndexAttr} data-pct="${Number(profilePct) || 0}">
                         <span class="behavioral-rank">${item._rank || (idx + 1)}</span>
                         <div class="behavioral-name-wrapper">
                             <span class="behavioral-name has-tooltip" data-tooltip="${(item.name || '').replace(/"/g, '&quot;')}">${(item.name || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span>
@@ -159344,6 +159388,100 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         // #behavioralGrid re-applies the filter on any subtree
         // change (re-renders, sort, slice, search, cohort injection).
         // ============================================================
+        // Per-card minimum filter (Min % / Min index). Session-only, so a
+        // forgotten value cannot keep hiding rows on a later visit. Rows
+        // with no Gen Pop match are never hidden by the index floor.
+        window._piqBehMins = window._piqBehMins || {};
+        window._piqBehMinsOpen = window._piqBehMinsOpen || {};
+        function _piqBehMinActive(m) {
+            return !!m && (Number.isFinite(m.pct) || Number.isFinite(m.idx));
+        }
+        function _piqApplyBehMins() {
+            const grid = document.getElementById('behavioralGrid');
+            if (!grid) return;
+            grid.querySelectorAll('.behavioral-card[data-category]').forEach(card => {
+                const cat = card.getAttribute('data-category') || '';
+                const m = window._piqBehMins[cat];
+                const active = _piqBehMinActive(m);
+                const open = !!window._piqBehMinsOpen[cat];
+                const btn = card.querySelector('.piq-beh-filter-btn');
+                if (btn) {
+                    btn.classList.toggle('is-on', active);
+                    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+                }
+                let panel = card.querySelector('.piq-beh-filter');
+                if ((open || active) && !panel) {
+                    panel = document.createElement('div');
+                    panel.className = 'piq-beh-filter';
+                    panel.setAttribute('data-cat', cat);
+                    panel.innerHTML =
+                        '<label>Min %<input type="number" min="0" step="0.1" data-k="pct" placeholder="0"></label>' +
+                        '<label>Min index<input type="number" min="0" step="1" data-k="idx" placeholder="0"></label>' +
+                        '<button type="button" class="piq-beh-filter-clear">Clear</button>' +
+                        '<span class="piq-beh-filter-status"></span>';
+                    const eye = card.querySelector('.piq-beh-eye');
+                    if (eye && eye.nextSibling) eye.parentNode.insertBefore(panel, eye.nextSibling);
+                    else card.insertBefore(panel, card.firstChild);
+                    panel.querySelectorAll('input').forEach(inp => {
+                        const v = m ? m[inp.getAttribute('data-k')] : null;
+                        inp.value = Number.isFinite(v) ? String(v) : '';
+                    });
+                }
+                if (panel) panel.hidden = !open;
+                let shown = 0, total = 0;
+                card.querySelectorAll('.behavioral-item').forEach(row => {
+                    if (!row.hasAttribute('data-pct')) return;
+                    total++;
+                    let hide = false;
+                    if (active) {
+                        const pct = Number(row.getAttribute('data-pct'));
+                        const rawIdx = row.getAttribute('data-index');
+                        if (Number.isFinite(m.pct) && !(pct >= m.pct)) hide = true;
+                        if (!hide && Number.isFinite(m.idx) && rawIdx !== null && rawIdx !== '' && Number(rawIdx) < m.idx) hide = true;
+                    }
+                    row.classList.toggle('beh-min-hidden', hide);
+                    if (!hide) shown++;
+                });
+                const status = panel && panel.querySelector('.piq-beh-filter-status');
+                if (status) {
+                    const txt = active ? (shown + ' of ' + total + ' shown') : '';
+                    if (status.textContent !== txt) status.textContent = txt;
+                }
+            });
+        }
+        document.addEventListener('click', function(e) {
+            const btn = e.target.closest && e.target.closest('.piq-beh-filter-btn');
+            if (btn) {
+                e.preventDefault();
+                e.stopPropagation();
+                const cat = btn.getAttribute('data-cat') || '';
+                window._piqBehMinsOpen[cat] = !window._piqBehMinsOpen[cat];
+                _piqApplyBehMins();
+                return;
+            }
+            const clr = e.target.closest && e.target.closest('.piq-beh-filter-clear');
+            if (clr) {
+                e.preventDefault();
+                e.stopPropagation();
+                const panel = clr.closest('.piq-beh-filter');
+                const cat = panel ? panel.getAttribute('data-cat') : '';
+                delete window._piqBehMins[cat];
+                if (panel) panel.querySelectorAll('input').forEach(inp => { inp.value = ''; });
+                _piqApplyBehMins();
+            }
+        }, true);
+        document.addEventListener('input', function(e) {
+            const panel = e.target.closest && e.target.closest('.piq-beh-filter');
+            if (!panel) return;
+            const cat = panel.getAttribute('data-cat') || '';
+            const read = (k) => {
+                const inp = panel.querySelector('input[data-k="' + k + '"]');
+                return (inp && inp.value !== '') ? Number(inp.value) : NaN;
+            };
+            window._piqBehMins[cat] = { pct: read('pct'), idx: read('idx') };
+            _piqApplyBehMins();
+        });
+
         const BEH_INDEX_FILTER_LS_KEY = 'cw.behIndexFilter.v1';
         let _behIndexFilter = { mode: 'off', lo: null, hi: null };
 
@@ -159392,6 +159530,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         }
 
         function applyBehavioralIndexFilter() {
+            try { _piqApplyBehMins(); } catch (_) {}
             const f = _behIndexFilter;
             const active = _isBehIndexFilterActive();
             const grid = document.getElementById('behavioralGrid');
