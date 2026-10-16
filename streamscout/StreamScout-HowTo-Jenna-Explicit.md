@@ -284,6 +284,53 @@ r = current_placements("Gilmore Girls", platforms="video", known=["Netflix"])
 > to skip scanning. Run `current_placements()` every pass; let the live catalog —
 > not a stale seed — decide where it's available now.
 
+### 5d. Viewers profiles ride on watch URLs ONLY  →  `split_profile_terms()` / `viewer_terms()`
+
+Profile IQ seeds a profile **two** ways, and they must not be mixed:
+
+| Profile kind | Seeds on | Example terms |
+|---|---|---|
+| **Person / brand** | host-map + **name variations** (generic "touchpoints") | `gilmore-girls`, `gilmore+girls`, `Gilmore%20Girls` |
+| **Viewers / listeners / players** | **StreamScout watch URLs** from the content_map | `4af2e0cf-…`, `ce5edf4f-…` (the Hulu asset IDs) |
+
+When the client asked for **Gilmore Girls viewers**, the Hulu watch URLs came
+back correctly — but the generic name-variation touchpoints
+(`Gilmore-Girls`, `Gilmore+Girls`, `Gilmore%20Girls`, …) were **also** added.
+Those capture *anyone searching or posting about the show*, not Hulu viewers, so
+they contaminate a viewers profile. **A viewers/listeners/players profile must
+seed on watch URLs only.**
+
+Two helpers enforce it:
+
+```python
+from streamscout_query import streamscout_query, viewer_terms, split_profile_terms
+
+rows = streamscout_query("Gilmore Girls", platforms="hulu", strict=True)
+
+# (a) the authoritative term set — just the watch URLs, ready for Profile IQ:
+terms = viewer_terms(rows)          # ['4af2e0cf-…', 'ce5edf4f-…', …] only
+
+# (b) guard a term list Promy assembled — strip any generic touchpoints:
+kept, dropped = split_profile_terms(candidate_terms, "Gilmore Girls", rows=rows)
+# dropped -> ['Gilmore Girls','Gilmore-Girls','Gilmore+Girls','Gilmore%20Girls', …]
+# kept    -> the watch URLs only
+```
+
+- **`viewer_terms(rows)`** — the clean allowlist straight from a `streamscout_query()`
+  result. This is what a viewers profile should be built on, full stop.
+- **`split_profile_terms(candidate, title, rows=None)`** — returns
+  `(watch_terms, generic_touchpoints)`. It drops every **name variation** of the
+  title (all spacing/delimiter/URL-encoding/case forms). Pass **`rows=`** for the
+  strict version: a term survives only if it's an actual StreamScout identifier
+  (bare-UUID ↔ full-URL aware), so nothing but real watch URLs gets through.
+- **CLI:** `cat terms.txt | python3 streamscout_query.py --title "Gilmore Girls" --scrub-terms`
+  (prints the kept watch URLs; dropped touchpoints go to stderr).
+
+> **Rule of thumb:** building a **viewers/listeners/players** profile → seed on
+> `viewer_terms(rows)` only, and run `split_profile_terms()` on anything else
+> before it reaches Profile IQ. Name variations belong to **person/brand**
+> profiles, never to a viewers profile.
+
 ---
 
 ## 6. Output schema (every row)

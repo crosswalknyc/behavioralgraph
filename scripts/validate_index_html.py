@@ -626,3 +626,5 @@ if __name__ == "__main__":
 # ci-trigger: streamscout-scope-notify
 
 # ci-trigger: streamscout-always-rescan
+
+# ci-trigger: streamscout-viewer-terms
