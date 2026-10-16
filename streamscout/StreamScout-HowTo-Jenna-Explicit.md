@@ -160,6 +160,43 @@ streamscout_query("Gilmore Girls", platforms="disney", strict=True)
 > **Rule of thumb:** any client request that names platforms → pass
 > `strict=True`. Broad "give me everything" sweeps → leave it off.
 
+### 5b. Current-availability advisory (works even on preloaded seeds)
+
+`strict=True` only helps when Promy **freshly resolves**. If a profile is built
+from **preloaded content_map seeds** (no re-resolve), use the advisory
+availability check — a lightweight *"where to watch {title}"* web lookup that
+needs **no resolve** and tells you whether each requested platform **currently**
+carries the title:
+
+```python
+from streamscout_availability import check_availability, warnings_from
+
+report = check_availability("Gilmore Girls", platforms=["hulu", "disney"])
+# [{"platform":"hulu","label":"Hulu","available":True,  ...},
+#  {"platform":"disney","label":"Disney Plus","available":False, "note":"not found … confirm before profiling …"}]
+
+for w in warnings_from(report):
+    surface_to_client(w)   # ⚠️ Disney Plus: not found in a where-to-watch search …
+```
+
+- **`available`** is `True` / `False` / `None` (unknown — no search key, or a
+  non-streaming platform). It is **advisory and never blocks** — the data is a
+  public where-to-watch search, so a `False` means "confirm," not "forbidden."
+- **Why it's separate from `strict`:** it catches the *Gilmore-Girls-from-stale-
+  seeds* case — a profile built on preloaded "GG on Netflix" seeds after the
+  title left Netflix — **without** re-resolving, because it only does a search.
+- **History is kept on purpose.** This answers *currently available?* only; old
+  seeds for a platform the title has since left stay valid for **past-window
+  viewership** behavior. The advisory is about whether StreamScout can *access*
+  a platform now, not about pruning history.
+- **Credentials:** reuses the **same shared web-search key** as SiriusXM
+  (`BRAVE_SEARCH_API_KEY`, or `GOOGLE_SEARCH_API_KEY` + `GOOGLE_SEARCH_CX`). No
+  key → everything returns `None` (unknown), still non-blocking.
+- **CLI:** `python3 streamscout_availability.py --title "Gilmore Girls" --platforms hulu,disney`
+
+> **Rule of thumb:** fresh resolve + named platforms → `strict=True`. Building
+> from preloaded seeds → run `check_availability()` first and surface any ⚠️.
+
 ---
 
 ## 6. Output schema (every row)
