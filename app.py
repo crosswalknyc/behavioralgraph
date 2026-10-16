@@ -50474,6 +50474,13 @@ def _chatbot_error_email(route, err, user_email=None, payload=None,
     different signal from a single blip.
     """
     try:
+        from prometheus.mail_guard import sending_allowed, suppressed_note
+        if not sending_allowed():   # a test or replay process never reaches SES (2026-10-16)
+            print(suppressed_note('error alert', route))
+            return
+    except Exception:
+        pass
+    try:
         if _chatbot_error_is_transient_blip(err, tb):
             print(f"[chatbot-error] transient transport blip on "
                   f"{str(route)[:80]}: "

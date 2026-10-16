@@ -11,7 +11,10 @@
         "_load_threads_index",
         "_pm_thread_key",
         "_pm_threads_index_key",
-        "_pm_thread_title_from"
+        "_pm_thread_title_from",
+        "_turn_epoch",
+        "_is_server_turn",
+        "keep_server_turns"
       ],
       "rules": [
         "^api_synth_chat_threads"

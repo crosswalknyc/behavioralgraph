@@ -171,6 +171,12 @@ def send_user_email(*, to, subject, body, instructed=False, caller='',
         rec['reason'] = 'dry run'
         _log(rec)
         return rec
+    from prometheus.mail_guard import sending_allowed, suppressed_note, test_mode_reason
+    if not sending_allowed():   # a test or replay process never reaches SES (2026-10-16)
+        rec['reason'] = f'test mode ({test_mode_reason()})'
+        print(suppressed_note('outbound door', subject))
+        _log(rec)
+        return rec
     try:
         import boto3
         r = boto3.client('ses', region_name='us-east-2').send_raw_email(

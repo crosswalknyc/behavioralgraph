@@ -210,6 +210,10 @@ def _html(who, label, email, when, subject, question, answer,
 
 
 def _send(username, record, question, answer, subject, via=None):
+    from prometheus.mail_guard import sending_allowed, suppressed_note
+    if not sending_allowed():   # a test or replay process never reaches SES (2026-10-16)
+        print(suppressed_note('watch note', question))
+        return
     import boto3
     email = str((record or {}).get('email') or '')
     company = str((record or {}).get('company') or '')
@@ -261,6 +265,11 @@ def notify(username, record, question, payload, subject=None, via=None):
         # under a 'canary:' label and never mails (2026-10-06). The
         # internal sandbox key (the post-deploy smoke) never mails either.
         if str(username or '').strip().lower().startswith('canary') or (record or {}).get('api_key_sandbox'):
+            return
+        # No account on file means nobody real asked (a test fixture, a
+        # replay, a stale session): nothing to report (2026-10-16, the
+        # 'acme_partner' notes that reached Jenna, Liz and Jessie).
+        if not str((record or {}).get('email') or '').strip():
             return
         if is_placeholder(payload):
             return

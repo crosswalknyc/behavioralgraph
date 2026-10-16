@@ -18199,7 +18199,7 @@ _EXPORTS = (
     '_estimate_run_minutes',
     '_jitter_draft_est_sample',
     '_load_synth_chat_history',
-    '_load_threads_index',
+    '_load_threads_index', '_turn_epoch', '_is_server_turn', 'keep_server_turns',
     '_pm_access_gate',
     '_pm_aiq_confirm_reply',
     '_pm_aiq_days',
@@ -18430,6 +18430,9 @@ from prometheus.legacy.threads import (  # noqa: E402,F401
     _pm_thread_key,
     _pm_thread_title_from,
     _load_threads_index,
+    _turn_epoch,
+    _is_server_turn,
+    keep_server_turns,
 )
 from prometheus.legacy.jobs import (  # noqa: E402,F401
     api_synth_chat_status,

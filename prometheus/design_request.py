@@ -91,6 +91,10 @@ def notify_ux_team(user, text, ctx=None, *, send=None):
             "What they were told: Prometheus cannot make design changes and has passed this to the user experience team.\n")
     try:
         if send is None:
+            from prometheus.mail_guard import sending_allowed, suppressed_note
+            if not sending_allowed():   # a test or replay process never reaches SES (2026-10-16)
+                print(suppressed_note('design request', subject))
+                return {'sent': False, 'reason': 'test mode', 'to': list(UX_TEAM)}
             import boto3
             from email.mime.text import MIMEText
             msg = MIMEText(body, 'plain', 'utf-8')

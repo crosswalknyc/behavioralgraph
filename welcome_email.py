@@ -151,6 +151,10 @@ def send_welcome(email: str, first_name: str, username: str, password: str,
     msg["Reply-To"] = REPLY_TO
     msg.attach(MIMEText(text, "plain", "utf-8"))
     msg.attach(MIMEText(html_body, "html", "utf-8"))
+    from prometheus.mail_guard import sending_allowed, suppressed_note
+    if not sending_allowed():   # a test or replay process never reaches SES (2026-10-16)
+        print(suppressed_note('welcome email', SUBJECT))
+        return ""
     ses = boto3.client("ses", region_name="us-east-2")
     resp = ses.send_raw_email(
         Source=FROM_ADDR,

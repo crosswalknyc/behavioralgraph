@@ -732,6 +732,10 @@ def _send_signup_notice_async(**kw) -> None:
 
     def _run():
         try:
+            from prometheus.mail_guard import sending_allowed, suppressed_note
+            if not sending_allowed():   # a test or replay process never reaches SES (2026-10-16)
+                print(suppressed_note('signup notice', subject))
+                return
             import boto3
             ses = boto3.client("ses", region_name=AWS_REGION)
             ses.send_email(
