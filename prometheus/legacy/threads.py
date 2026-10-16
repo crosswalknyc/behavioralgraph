@@ -179,3 +179,74 @@ def _load_threads_index(username):
     except Exception as e:
         print(f"[synth-chat] thread migration failed for {username}: {e}")
     return idx
+
+
+# Turns the server wrote while the widget held a stale copy of the thread
+# (2026-10-16: a correction note and a "your Digital Journey is ready" line
+# vanished when the next ask posted the widget's history over them).
+SERVER_TURN_MARKS = ('corrected_at', 'read_job_id', 'deck_job_id', 'jiq_job_id', 'bpiq_job_id', 'fw_job_id',
+                     'aiq_job_id', 'tlist_job_id', 'files', 'server_note', 'delivery')
+
+
+def _turn_epoch(t):
+    v = (t or {}).get('ts')
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        pass
+    try:
+        return datetime.fromisoformat(str(v).replace('Z', '+00:00')).timestamp()
+    except Exception:
+        return 0.0
+
+
+def _is_server_turn(t):
+    meta = t.get('meta') if isinstance(t, dict) and isinstance(t.get('meta'), dict) else {}
+    return str(t.get('role') or '') in ('agent', 'assistant') and any(meta.get(k) for k in SERVER_TURN_MARKS)
+
+
+def keep_server_turns(stored, incoming):
+    """The client's history with the server's turns folded back in.
+
+    * A stored turn carrying meta.corrected_at replaces the client's copy
+      of the same turn (by timestamp, then position): corrections stick.
+    * A stored agent turn the server appended (a job's ready line, a
+      delivery note, a correction note) that the client never saw is
+      re-inserted in time order instead of being lost.
+    Never raises; on any doubt the client's list is returned as given."""
+    try:
+        if not isinstance(incoming, list):
+            return incoming
+        stored = [t for t in (stored or []) if isinstance(t, dict)]
+        out = list(incoming)
+        by_ts = {}
+        for j, t in enumerate(out):
+            if isinstance(t, dict) and t.get('ts'):
+                by_ts.setdefault(str(t.get('ts')), j)
+        for i, t in enumerate(stored):
+            meta = t.get('meta') if isinstance(t.get('meta'), dict) else {}
+            if not meta.get('corrected_at'):
+                continue
+            j = by_ts.get(str(t.get('ts') or ''))
+            if j is None and i < len(out) and isinstance(out[i], dict) and out[i].get('role') == t.get('role'):
+                j = i
+            if j is None:
+                continue
+            cur = out[j]
+            if isinstance(cur.get('meta'), dict) and cur['meta'].get('corrected_at') == meta.get('corrected_at'):
+                continue
+            out[j] = dict(t)
+        seen = {(str(t.get('ts') or ''), str(t.get('text') or '')[:80]) for t in out if isinstance(t, dict)}
+        texts = {str(t.get('text') or '')[:80] for t in out if isinstance(t, dict)}
+        missing = [t for t in stored if _is_server_turn(t)
+                   and (str(t.get('ts') or ''), str(t.get('text') or '')[:80]) not in seen
+                   and str(t.get('text') or '')[:80] not in texts]
+        if not missing:
+            return out
+        merged = out + [dict(t) for t in missing]
+        # time order where timestamps allow; a turn with no usable timestamp keeps its place at the end
+        keyed = [(_turn_epoch(t) or float('inf'), n, t) for n, t in enumerate(merged)]
+        keyed.sort(key=lambda x: (x[0], x[1]))
+        return [t for _e, _n, t in keyed]
+    except Exception:
+        return incoming

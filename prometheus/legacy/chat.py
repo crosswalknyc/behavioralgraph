@@ -2058,40 +2058,11 @@ def _pm_rotate_idle_thread(username):
 
 
 def _pm_keep_corrected_turns(username, tid, incoming):
-    """Server-side corrections survive the client's next save.
-
-    The widget posts its whole history on every ask, so an agent turn
-    overwritten in place on S3 (a correction, marked by
-    meta.corrected_at) was being put back to the wrong text the moment
-    the user sent another message (2026-10-05, Alexia's thread). The
-    stored turn wins for any turn carrying a correction mark; matching
-    is by timestamp, then by position. Never raises."""
+    """Server-side turns survive the client's next save: corrections (meta.corrected_at) and turns the server appended
+    while the widget held a stale history (ready lines, delivery notes; 2026-10-16). prometheus.legacy.threads.keep_server_turns."""
     try:
-        stored = _pm_s3_json(_pm_thread_key(username, tid), []) or []
-        marks = [(i, t) for i, t in enumerate(stored)
-                 if isinstance(t, dict)
-                 and isinstance(t.get('meta'), dict)
-                 and t['meta'].get('corrected_at')]
-        if not marks or not isinstance(incoming, list):
-            return incoming
-        out = list(incoming)
-        by_ts = {}
-        for j, t in enumerate(out):
-            if isinstance(t, dict) and t.get('ts'):
-                by_ts.setdefault(str(t.get('ts')), j)
-        for i, t in marks:
-            j = by_ts.get(str(t.get('ts') or ''))
-            if j is None and i < len(out) and isinstance(out[i], dict) \
-                    and out[i].get('role') == t.get('role'):
-                j = i
-            if j is None:
-                continue
-            cur = out[j]
-            if isinstance(cur.get('meta'), dict) and \
-                    cur['meta'].get('corrected_at') == t['meta'].get('corrected_at'):
-                continue
-            out[j] = dict(t)
-        return out
+        from prometheus.legacy import threads as _thr
+        return _thr.keep_server_turns(_pm_s3_json(_pm_thread_key(username, tid), []) or [], incoming)
     except Exception:
         traceback.print_exc()
         return incoming
@@ -9413,9 +9384,9 @@ def _pm_intake_turn(flow, text, body, history, user, ppu, first):
         # The ask's own subject wins over the open screen (Jenna 2026-10-16: a Ghost Energy Drink journey drafted as Reba McEntire on Amazon)
         try: _pre = parse_fn(text, usage_extras=ppu) if len(str(text or '').split()) >= 4 else {}
         except Exception: _pre = {}
-        _page = str(((_pm_validate_page_context((body or {}).get('page_context'))[0] or {}).get('primary') or {}).get('name') or '')
-        _subj = str((_pre or {}).get('subject') or '').strip()
-        if not _subj or _H._normalize_for_match(_subj) in _H._normalize_for_match(_page):
+        _page = _H._normalize_for_match(str(((_pm_validate_page_context((body or {}).get('page_context'))[0] or {}).get('primary') or {}).get('name') or ''))
+        _named = [v for v in (str((_pre or {}).get(k) or '').strip() for k in ('subject', 'talent', 'brand_partner', 'campaign_name')) if v]
+        if not any(_H._normalize_for_match(v) not in _page for v in _named):   # nothing named beyond the open profile
             drafted = _pm_intake_screen_draft(kind, body)
             if drafted:
                 return drafted
