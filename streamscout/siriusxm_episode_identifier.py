@@ -77,6 +77,12 @@ def load_env(path=".env.local"):
                         env.setdefault(k.strip(), v.strip())
         except Exception:  # noqa: BLE001
             pass
+    # Deployed environments carry the login as environment variables
+    # (systemd EnvironmentFile, Render env), not a .env.local on disk
+    # (2026-10-15, Jess + Spike). A file value still wins.
+    for k in ('SIRIUSXM_EMAIL', 'SIRIUSXM_PASSWORD'):
+        if k not in env and os.environ.get(k):
+            env[k] = os.environ[k].strip()
     return env
 
 _UUID = r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"

@@ -119,6 +119,13 @@ def load_env(path=".env.local"):
                 if line and not line.startswith("#") and "=" in line:
                     k, v = line.split("=", 1)
                     env.setdefault(k.strip(), v.strip())
+    # Deployed environments carry the credentials as environment variables
+    # (systemd EnvironmentFile, Render env), not a .env.local on disk
+    # (2026-10-15, Jess + Spike: Spotify came back empty on the New Heights
+    # run because only .env.local was read). A file value still wins.
+    for k in ('SPOTIFY_CLIENT_ID', 'SPOTIFY_CLIENT_SECRET'):
+        if k not in env and os.environ.get(k):
+            env[k] = os.environ[k].strip()
     return env
 
 

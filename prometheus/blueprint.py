@@ -292,6 +292,43 @@ GOLDEN_USER = {'username': 'canary:golden', 'email': '', 'role': 'super_admin',
                'has_chatbot_profile_iq_access': True, 'unlimited': True, 'company': 'Crosswalk'}
 
 
+@bp.route('/internal/streamscout', methods=['POST'])
+def streamscout_relay():
+    """Run one StreamScout platform from THIS deployment and return its
+    rows (2026-10-15, Jess + Spike's New Heights note). Pandora answers
+    only from a US address: the build server sits in Germany and its
+    anonymous login comes back INVALID_REQUEST, while the dashboard runs
+    in Oregon. The build server relays US-only platforms here. Shared
+    secret auth (SYNTH_QUEUE_SECRET); one platform per call so a request
+    stays short."""
+    import hmac as _hmac
+    secret = str(getattr(host, 'queue_secret', '') if host.has('queue_secret') else '')
+    given = str(request.headers.get('X-Synth-Auth') or '')
+    if not secret or not _hmac.compare_digest(secret, given):
+        return jsonify({'error': 'not found'}), 404
+    body = _body()
+    title = str(body.get('title') or '').strip()
+    platform = str(body.get('platform') or '').strip().lower()
+    if not title or not platform or not platform.isalnum():
+        return jsonify({'error': 'title and platform required'}), 400
+    import sys as _sys
+    ss_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'streamscout')
+    if os.path.isdir(ss_dir) and ss_dir not in _sys.path:
+        _sys.path.insert(0, ss_dir)
+    try:
+        from streamscout_query import streamscout_query as _ssq
+    except Exception as e:
+        return jsonify({'error': f'streamscout unavailable: {type(e).__name__}'}), 503
+    t0 = time.monotonic()
+    try:
+        rows = _ssq(title, platforms=[platform], kind=str(body.get('kind') or 'series'),
+                    show=str(body.get('show') or '') or None) or []
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'{type(e).__name__}: {str(e)[:200]}', 'rows': []}), 200
+    return jsonify({'success': True, 'platform': platform, 'rows': [r for r in rows if isinstance(r, dict)],
+                    'elapsed_s': round(time.monotonic() - t0, 2)})
+
+
 @bp.route('/internal/golden-ask', methods=['POST'])
 def golden_ask():
     """One golden-set ask through the real door on THIS deployment, as a
