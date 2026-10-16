@@ -227,6 +227,97 @@ def streamscout_query(title, platforms=None, kind="series", seasons=None,
     return out
 
 
+def _normalize_known(known):
+    """Map stored platform labels/keys ("Netflix", "netflix") to resolver keys,
+    best-effort. Unknown entries are dropped. Returns a de-duped key list."""
+    if not known:
+        return []
+    if isinstance(known, str):
+        known = [known]
+    label_to_key = {}
+    for k in ss.RESOLVER_PLATFORMS:
+        label_to_key[k] = k
+        label_to_key[ss.platform_label(k).lower()] = k
+    out, seen = [], set()
+    for item in known:
+        key = label_to_key.get((str(item) or "").strip().lower())
+        if key and key not in seen:
+            seen.add(key)
+            out.append(key)
+    return out
+
+
+def current_placements(title, platforms="video", kind="series", seasons=None,
+                       url=None, known=None):
+    """Live-scan where ``title`` lives RIGHT NOW — regardless of whether it is
+    already in the content_map.
+
+    This closes the "pre-existing seed suppressed the scan" gap: Gilmore Girls
+    sat in the content_map on **Netflix**, so nobody ever scanned **Hulu**, where
+    it actually lives now. StreamScout's resolvers always hit each platform's
+    LIVE catalog, so a fresh scan is authoritative for *current* placement.
+    Promy should call this on **every** seeding pass — a content_map hit must NOT
+    skip the scan.
+
+    Parameters mirror ``streamscout_query`` (title, platforms/group, kind,
+    seasons, url). ``known`` is the set of platforms the content_map already has
+    stored for this title (keys or display labels, e.g. ``["Netflix"]``); when
+    given, the report reconciles current placement against it.
+
+    Returns a dict (never raises on a single platform failure — hands-off)::
+
+        {
+          "title": ...,
+          "scanned":        [platform keys actually scanned],
+          "present":        {platform: seed_count},     # where it lives NOW
+          "present_labels": [display names of present platforms],
+          "absent":         [scanned platforms with 0 seeds],
+          "counts":         {platform: n},
+          # only when `known` is passed:
+          "added":          [present now, not previously stored],  # the Hulu case
+          "gone":           [stored before, absent now],           # left the platform
+          "unchanged":      [stored before, still present],
+        }
+    """
+    requested = _platform_keys(platforms)
+    known_keys = _normalize_known(known)
+    # Scan the UNION of requested + stored platforms so reconciliation against
+    # what's already in the content_map is complete (we can confirm a stored
+    # platform is "gone" only if we actually scanned it).
+    scan_keys = list(dict.fromkeys(list(requested) + known_keys))
+    options = {"include_clips": None, "limit": None}
+    counts = {k: 0 for k in scan_keys}
+    for platform in scan_keys:
+        try:
+            rows = ss.resolver_lookup(platform, title, kind, seasons, url=url,
+                                      options=options)
+        except Exception:  # noqa: BLE001 — hands-off: skip a failing platform
+            continue
+        seen = set()
+        for r in rows:
+            ident = r.get("identifier", "") or ""
+            if ident and ident not in seen:
+                seen.add(ident)
+                counts[platform] += 1
+    present = {k: counts[k] for k in scan_keys if counts[k] > 0}
+    report = {
+        "title": title,
+        "scanned": list(scan_keys),
+        "present": present,
+        "present_labels": [ss.platform_label(k) for k in present],
+        "absent": [k for k in scan_keys if counts[k] == 0],
+        "counts": counts,
+    }
+    if known is not None:
+        present_set = set(present)
+        known_set = set(known_keys)
+        report["added"] = [k for k in scan_keys
+                           if k in present_set and k not in known_set]
+        report["gone"] = [k for k in known_keys if k not in present_set]
+        report["unchanged"] = [k for k in known_keys if k in present_set]
+    return report
+
+
 def _main():
     import argparse
     import csv
@@ -255,10 +346,25 @@ def _main():
     ap.add_argument("--notify", action="store_true",
                     help="with --strict: on a scope failure, email Crosswalk "
                          "(Jenna + Jess) that the build was refused")
+    ap.add_argument("--placements", action="store_true",
+                    help="don't build rows — just report where the title lives "
+                         "RIGHT NOW (fresh live scan, ignores the content_map). "
+                         "Use --known to reconcile against stored platforms.")
+    ap.add_argument("--known", default=None,
+                    help="with --placements: comma-list of platforms already in "
+                         "the content_map (keys or labels, e.g. 'Netflix') to "
+                         "reconcile against")
     ap.add_argument("--csv", action="store_true",
                     help="print CSV instead of JSON")
     args = ap.parse_args()
     plats = [p.strip() for p in args.platforms.split(",") if p.strip()]
+    if args.placements:
+        known = ([k.strip() for k in args.known.split(",") if k.strip()]
+                 if args.known else None)
+        report = current_placements(args.title, platforms=plats, kind=args.kind,
+                                    known=known)
+        print(json.dumps(report, indent=2))
+        return 0
     try:
         rows = streamscout_query(args.title, platforms=plats, kind=args.kind,
                                  show=args.show,
