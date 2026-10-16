@@ -9408,15 +9408,23 @@ def _pm_intake_turn(flow, text, body, history, user, ppu, first):
     kind, confirm_name, run_label, payload_key, collect_key, labels = _PM_INTAKE_UI[flow]
     parse_fn, complete_fn, required, ask_copy, fallback_fn, propose_fn = _pm_intake_flow_table()[flow]
     base = {'success': True, 'action': 'answer', 'offer_deck': False, 'deck_angle': None}
+    _pre = None
     if first and kind:
-        drafted = _pm_intake_screen_draft(kind, body)
-        if drafted:
-            return drafted
+        # The ask's own subject wins over the open screen (Jenna 2026-10-16: a Ghost Energy Drink journey drafted as Reba McEntire on Amazon)
+        try: _pre = parse_fn(text, usage_extras=ppu) if len(str(text or '').split()) >= 4 else {}
+        except Exception: _pre = {}
+        _page = str(((_pm_validate_page_context((body or {}).get('page_context'))[0] or {}).get('primary') or {}).get('name') or '')
+        _subj = str((_pre or {}).get('subject') or '').strip()
+        if not _subj or _H._normalize_for_match(_subj) in _H._normalize_for_match(_page):
+            drafted = _pm_intake_screen_draft(kind, body)
+            if drafted:
+                return drafted
     from prometheus import intake_reader as _ir
     from prometheus import precedent as _prec
     template = _prec.reference(text) or _ir.reading_precedent(body)   # "like the one you did for X" (Jenna 2026-10-13); the Reader's precedent flag too (2026-10-14)
     ask_text = _ir.strip_template_reference(text) if template else text
-    parsed, fault = _pm_intake_resolve(flow, ask_text, history, parse_fn, complete_fn, required, ask_copy,
+    _reuse = (lambda t, usage_extras=None, _p=_pre: _p if (t == text and isinstance(_p, dict) and _p) else parse_fn(t, usage_extras=usage_extras))
+    parsed, fault = _pm_intake_resolve(flow, ask_text, history, _reuse, complete_fn, required, ask_copy,
                                        user=user, usage_extras=ppu, fallback_fn=fallback_fn,
                                        propose_fn=None if template else propose_fn, alert=not first)
     found = None
@@ -16969,6 +16977,8 @@ def _pm_run_jiq_job(job_id, username, inputs, extras):
 
         payload = synthesize(inputs, _cj, tools=tools,
                              created_by=username or 'prometheus')
+        if str((_pm_s3_json(f"{_PM_JIQ_JOB_PREFIX}{job_id}.json", {}) or {}).get('status') or '') == 'cancelled':
+            print(f"[jiq-job {job_id}] cancelled while building; nothing persisted"); return   # Jenna 2026-10-16: stop it
         # Hero image (2026-10-05): the tab shows the title's poster or
         # the brand's image instead of initials. Best-effort, never
         # blocks the persist.

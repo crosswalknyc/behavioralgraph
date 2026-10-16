@@ -199,6 +199,8 @@ def run_engine_inline(kind, job_id, status):
     uname = str(status.get('user') or '').strip()
     inputs = (rr or {}).get('inputs') or status.get('inputs')
     writer = _engine_writer(kind)
+    if str(status.get('status') or '') == 'cancelled' or _is_cancelled(kind, job_id):
+        return False     # stopped before a worker reached it (2026-10-16)
     if not isinstance(inputs, dict) or not inputs or not uname:
         writer(job_id, {**status, 'status': 'error', 'queued': False,
                         'error': f"queued {_ENGINE_LABEL.get(kind, kind)} without a resume record", 'finished_at': time.time()})
@@ -211,14 +213,51 @@ def run_engine_inline(kind, job_id, status):
     return True
 
 
+def cancel_engine_job(kind, job_id, reason=''):
+    """Stop an engine job (Jenna 2026-10-16: "stop it and redo it"). The
+    status document reads 'cancelled' and its queue marker goes away, so
+    a worker that has not claimed it never will, a restart never requeues
+    it, and a worker mid-run drops the result instead of persisting it.
+    Returns the record, or None when the job is unknown or already done."""
+    s3, bucket = _s3()
+    key = _record_key(kind, job_id)
+    try:
+        doc = json.loads(s3.get_object(Bucket=bucket, Key=key)['Body'].read().decode('utf-8'))
+    except Exception:
+        return None
+    if str(doc.get('status') or '') in ('done', 'complete', 'completed', 'error', 'failed', 'cancelled'):
+        return None
+    doc.update({'status': 'cancelled', 'queued': False, 'cancelled_at': time.time(), 'cancel_reason': str(reason or '')[:160],
+                'stage': 'stopped', 'finished_at': time.time()})
+    _engine_writer(kind)(job_id, doc)
+    try:
+        s3.delete_object(Bucket=bucket, Key=_marker_key(kind, job_id))
+    except Exception:
+        pass
+    print(f"[pm-queue] {kind} {job_id} cancelled ({reason})")
+    return doc
+
+
+def _is_cancelled(kind, job_id):
+    try:
+        s3, bucket = _s3()
+        doc = json.loads(s3.get_object(Bucket=bucket, Key=_record_key(kind, job_id))['Body'].read().decode('utf-8'))
+        return str(doc.get('status') or '') == 'cancelled'
+    except Exception:
+        return False
+
+
 def requeue_engine(kind, job_id, doc, reason='restart'):
     """Put a stranded engine job back on the queue from its saved inputs
     (status 'queued' + marker), counting the restart. Returns the new
-    record, or None when the job has no inputs to restart from or has
+    record, or None when the job has no inputs to restart from, has
     already restarted MAX_ENGINE_RESTARTS times (2026-10-14: a job a
     worker lost mid-run sat 'running' for hours; the sweeper's web
-    thread restart died with the next deploy or autoscale)."""
+    thread restart died with the next deploy or autoscale), or was
+    cancelled (2026-10-16)."""
     try:
+        if _is_cancelled(kind, job_id):
+            return None
         c = _chat()
         writer = _engine_writer(kind)
         rr = doc.get('resume') if isinstance(doc.get('resume'), dict) else {}
