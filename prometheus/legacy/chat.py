@@ -9380,16 +9380,24 @@ def _pm_intake_turn(flow, text, body, history, user, ppu, first):
     parse_fn, complete_fn, required, ask_copy, fallback_fn, propose_fn = _pm_intake_flow_table()[flow]
     base = {'success': True, 'action': 'answer', 'offer_deck': False, 'deck_angle': None}
     _pre = None
-    if first and kind:
-        # The ask's own subject wins over the open screen (Jenna 2026-10-16: a Ghost Energy Drink journey drafted as Reba McEntire on Amazon)
-        try: _pre = parse_fn(text, usage_extras=ppu) if len(str(text or '').split()) >= 4 else {}
-        except Exception: _pre = {}
-        _page = _H._normalize_for_match(str(((_pm_validate_page_context((body or {}).get('page_context'))[0] or {}).get('primary') or {}).get('name') or ''))
-        _named = [v for v in (str((_pre or {}).get(k) or '').strip() for k in ('subject', 'talent', 'brand_partner', 'campaign_name')) if v]
-        if not any(_H._normalize_for_match(v) not in _page for v in _named):   # nothing named beyond the open profile
+    _low = ' '.join(str(text or '').lower().split()).strip(' .!')
+    if not first and _low == 'name another subject':
+        return {**base, 'reply': ask_copy, collect_key: True, 'followups': ['Cancel']}
+    _page = str((((_pm_validate_page_context((body or {}).get('page_context')) or (None,))[0] or {}).get('primary') or {}).get('name') or '').strip()
+    if kind and _page:
+        # Never bound to the open profile unless told (Jenna 2026-10-16: "never ever just start there"). "Use <page>" after the
+        # question, or an ask that points at the screen ("this profile"), drafts from it; an ask that names no subject gets the question.
+        if _low in (f"use {_page.lower()}", 'use the open profile', 'use this profile', 'yes, use it') or (first and _PM_PAGE_DEIXIS_RE.search(_low)):
             drafted = _pm_intake_screen_draft(kind, body)
             if drafted:
                 return drafted
+        if first:
+            try: _pre = parse_fn(text, usage_extras=ppu) if len(str(text or '').split()) >= 4 else {}
+            except Exception: _pre = {}
+            if not [v for v in (str((_pre or {}).get(k) or '').strip() for k in ('subject', 'talent', 'brand_partner', 'campaign_name')) if v]:
+                _pm_ask_hint(outcome='intake_page_question', subject=_page)
+                return {**base, 'reply': _pm_intake_page_question(kind, _page), collect_key: True,
+                        'followups': [f'Use {_page}', 'Name another subject', 'Cancel']}
     from prometheus import intake_reader as _ir
     from prometheus import precedent as _prec
     template = _prec.reference(text) or _ir.reading_precedent(body)   # "like the one you did for X" (Jenna 2026-10-13); the Reader's precedent flag too (2026-10-14)
@@ -9465,6 +9473,16 @@ def _pm_prior_journey_shape(title, user=None):
         traceback.print_exc()
         return None
 
+
+
+_PM_PAGE_DEIXIS_RE = re.compile(r"\b(?:this|the open|the current|my open) (?:profile|audience|page|screen)\b|\bprofile on (?:my|the) screen\b|\bwhat(?:'s| is) (?:open|on (?:my|the) screen)\b")
+
+
+def _pm_intake_page_question(kind, page):
+    """The question, never the draft, when an ask names no subject and a profile is open (Jenna 2026-10-16)."""
+    what = 'journey' if kind == 'journey' else 'valuation'
+    return (f"Do you want this {what} on {page}, the profile open on your screen, or on another subject? "
+            f"Say 'Use {page}' and I will draft it from that profile, or name the subject and I will start from there.")
 
 
 def _pm_intake_fault_payload():

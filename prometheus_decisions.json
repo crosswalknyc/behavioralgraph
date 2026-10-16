@@ -1,6 +1,6 @@
 {
  "version": 1,
- "content_hash": "6c4e1a99a2d796de1d1103a3f6de1a263d2df3388b17c21cf9834b848b1e84b9",
+ "content_hash": "aa11bd2608de09d34fe14cf66df2886507bf43533c3fbe4806ddbe9d7072fb49",
  "decisions": [
   {
    "id": "kids_viewers_default",
@@ -543,7 +543,24 @@
    "sources": [
     "prometheus-brain.md"
    ]
+  },
+  {
+   "id": "intake_never_page_bound",
+   "statement": "A build ask (journey, valuation, flywheel, campaign, profile) is about the subject the user names, never the profile that happens to be open on their screen. When the ask names no subject and a profile is open, ask: do you want this on <the open profile>, or on another subject? Offer both as chips. Never draft or run from the open profile without that answer.",
+   "match_terms": [
+    "build a digital journey",
+    "build a journey",
+    "run a brand partnership",
+    "value a partnership",
+    "this profile",
+    "the open profile",
+    "on my screen",
+    "for this audience"
+   ],
+   "sources": [
+    "prometheus-brain.md"
+   ]
   }
  ],
- "generated_at": "2026-10-15T22:28:40Z"
+ "generated_at": "2026-10-16T19:26:53Z"
 }
