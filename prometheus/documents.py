@@ -287,6 +287,8 @@ def sheet_urls(rec, s3=None, bucket=None):
         for field in ('platform', 'account', 'posted_date', 'tag', 'label'):
             if field in named:
                 item[field] = str(r.get(named[field]) or '').strip()
+        if item.get('account'):
+            item['account'] = '@' + item['account'].lstrip('@')   # a sheet's '@@handle' reads once
         tg = str(item.get('tag') or '').lower()
         item['tag'] = 'paid' if 'paid' in tg else 'organic' if 'organic' in tg else ('earned' if 'earned' in tg else ('official' if 'official' in tg else ''))
         out.append(item)

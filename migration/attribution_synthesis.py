@@ -351,12 +351,30 @@ def fetch_public_count(url: str, timeout: int = 10):
         m = re.search(r'"playCount":(\d+)', html) or re.search(r'"viewCount":"(\d+)"', html) or re.search(r'"viewCount":\{"simpleText":"([\d,]+)', html)
         views = int(m.group(1).replace(",", "")) if m else None
         cap = ""
-        mc = re.search(r'"desc":"((?:[^"\\]|\\.){1,200})"', html) if "tiktok.com" in u else re.search(r'<meta name="title" content="([^"]{1,200})"', html)
+        mc = re.search(r'"desc":"((?:[^"\\]|\\.){1,300})"', html) if "tiktok.com" in u else re.search(r'<meta name="title" content="([^"]{1,200})"', html)
         if mc:
-            cap = mc.group(1).encode("utf-8", "ignore").decode("unicode_escape", "ignore") if "tiktok.com" in u else mc.group(1)
-        return views, cap.strip()
+            if "tiktok.com" in u:
+                try:
+                    cap = json.loads('"' + mc.group(1) + '"')   # the page's JSON string, escapes and all
+                except Exception:
+                    cap = ""
+            else:
+                import html as _html
+                cap = _html.unescape(mc.group(1))
+        return views, " ".join(str(cap).split())[:200]
     except Exception:
         return None, ""
+
+
+_POST_ID_RX = re.compile(r"(/video/\d+|/p/[A-Za-z0-9_-]+|/reel(?:s)?/[A-Za-z0-9_-]+|/status/\d+|[?&]v=[A-Za-z0-9_-]{6,}|/shorts/[A-Za-z0-9_-]{6,}|youtu\.be/[A-Za-z0-9_-]{6,})", re.I)
+
+
+def is_profile_level_url(url: str) -> bool:
+    """A creator's profile link rather than a post ('tiktok.com/@cvnela'):
+    the shape a media plan records a placement under before the post
+    goes live."""
+    u = str(url or "")
+    return bool(handle_from_url(u)) and not _POST_ID_RX.search(u)
 
 
 def _messy_int(seed: str, value: float) -> int:
@@ -412,11 +430,33 @@ def add_assets_to_campaign(slug: str, rows: list, requested_by: str = "", *, s3_
     slug_tokens = [t for t in re.split(r"[^a-z0-9]+", slug.lower()) if len(t) >= 4 and t not in ("hades", "films", "campaign")]
     conv = str(entry.get("conversion_event") or "").strip()
     src = source or f"prometheus_upload_{date.today().isoformat()}"
-    new_rows, skipped = [], 0
+    # a placement the campaign already tracks under the creator's PROFILE
+    # link (a media plan's shape: 'tiktok.com/@cvnela', 4.5M views, Sept
+    # 11) is the same asset as the sheet's post from that creator on that
+    # day: the post link completes the record instead of joining as a
+    # second, earned copy (The Influencer Project, 2026-10-16)
+    by_profile = {}
+    for a in assets:
+        if is_profile_level_url(a.get("url")):
+            k = (str(a.get("channel") or "").strip().lower(), handle_from_url(a.get("url")).lower(), str(a.get("posted_date") or "")[:10])
+            by_profile.setdefault(k, a)
+    new_rows, skipped, merged = [], 0, 0
     for r in rows or []:
         url = str((r or {}).get("url") or "").strip().rstrip(",;")
         if not url.lower().startswith("http") or url.rstrip("/").lower() in have:
             skipped += 1
+            continue
+        rh = ("@" + str(r.get("account") or "").strip().lstrip("@")).lower() if str(r.get("account") or "").strip() else handle_from_url(url).lower()
+        rd = str(r.get("posted_date") or "").strip()[:10]
+        rc = (str(r.get("platform") or "").strip() or channel_for_url(url)).lower()
+        hit = by_profile.get((rc, rh, rd)) if rh else None
+        if hit is not None:
+            hit["url"] = url
+            hit.setdefault("og_metadata", "")
+            hit["note"] = (str(hit.get("note") or "") + " Post link from the creator sheet.").strip()
+            by_profile.pop((rc, rh, rd), None)
+            have.add(url.rstrip("/").lower())
+            merged += 1
             continue
         have.add(url.rstrip("/").lower())
         new_rows.append(dict(r, url=url))
@@ -435,6 +475,8 @@ def add_assets_to_campaign(slug: str, rows: list, requested_by: str = "", *, s3_
     for r in new_rows:
         url = r["url"]
         handle = str(r.get("account") or "").strip() or handle_from_url(url)
+        if handle:
+            handle = "@" + handle.lstrip("@")
         channel = str(r.get("platform") or "").strip() or channel_for_url(url)
         tag = str(r.get("tag") or "").strip().lower()
         if not tag:
@@ -476,7 +518,7 @@ def add_assets_to_campaign(slug: str, rows: list, requested_by: str = "", *, s3_
     reg["updated_at"] = datetime.now(timezone.utc).isoformat()
     s3.put_object(Bucket=S3_BUCKET, Key=REGISTRY_KEY, Body=json.dumps(reg, indent=2).encode(), ContentType="application/json")
     coeff_key = refresh_campaign(slug, s3_client=s3)
-    return {"slug": slug, "display_name": entry.get("display_name") or slug, "added": len(added), "skipped": skipped,
+    return {"slug": slug, "display_name": entry.get("display_name") or slug, "added": len(added), "skipped": skipped, "merged": merged,
             "asset_count": len(assets), "measured": len(counts), "derived": sum(1 for a in added if a["ext_engagement_source"].startswith("batch")),
             "coefficients_key": coeff_key}
 

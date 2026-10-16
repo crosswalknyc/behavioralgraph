@@ -157,11 +157,29 @@ def confirm_reply(entry, rows, file_name, price_label, run_label='Add the assets
     return lines
 
 
+def _slug_words(entry):
+    return [t for t in re.split(r"[^a-z0-9]+", str((entry or {}).get('title_slug') or '').lower()) if len(t) >= 4 and t not in ('hades', 'films', 'campaign')]
+
+
+def tag_for(entry, row):
+    """The sheet's tag when it has one; else the campaign's convention for
+    creator posts: the campaign's own account is official, everyone else
+    is earned."""
+    tg = str((row or {}).get('tag') or '').strip().lower()
+    if tg in ('paid', 'organic', 'earned', 'official'):
+        return tg
+    handle = str(row.get('account') or '').strip().lower().lstrip('@').replace('.', '').replace('_', '')
+    words = _slug_words(entry)
+    if handle and words and all(w in handle for w in words[:2]):
+        return 'official'
+    return 'earned'
+
+
 def inputs_for_add(entry, rows, file_name, requested_by=''):
     """The aiq_confirm payload the approve branch runs: an add, not a new campaign."""
     return {'add_to_slug': entry.get('title_slug'), 'campaign_name': entry.get('display_name') or entry.get('title_slug'),
             'conversion_event': str(entry.get('conversion_event') or '') or 'the campaign\'s conversion',
-            'urls': [{'url': r.get('url'), 'tag': (r.get('tag') or 'earned'), 'label': r.get('label') or '',
+            'urls': [{'url': r.get('url'), 'tag': tag_for(entry, r), 'label': r.get('label') or '',
                       'platform': r.get('platform') or '', 'account': r.get('account') or '', 'posted_date': r.get('posted_date') or ''}
                      for r in rows],
             'daily_refresh': False, 'source_file': file_name, 'requested_by': requested_by}
@@ -309,4 +327,4 @@ def with_sheet_urls(parse_fn, body, user, text, *, host):
 
 
 __all__ = ['ADD_RX', 'ASK_COPY', 'confirm_card', 'intake_turn', 'with_sheet_urls', 'is_add_assets_ask', 'campaign_name_in', 'resolve_campaign', 'campaign_in_text', 'wants_sheet', 'sheet_for',
-           'summarize_rows', 'confirm_reply', 'inputs_for_add']
+           'summarize_rows', 'confirm_reply', 'inputs_for_add', 'tag_for']
