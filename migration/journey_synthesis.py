@@ -785,21 +785,27 @@ def build_copy(subject: str, platform: str, blob: dict, *,
         same_session = 'Bought in the same session'
         total_label = 'Total buyers'
         total_verb = 'who bought'
-    steps = ', '.join(('who ' + str(s['label']).strip().lower())
+    # the step labels lead with a verb, so only the first letter drops
+    # case: 'Saw Ghost Energy content' reads 'who saw Ghost Energy content',
+    # never 'who saw ghost energy content' (Ghost Energy, 2026-10-16)
+    def _lc(t):
+        t = str(t or '').strip()
+        return t[:1].lower() + t[1:] if t and not re.match(r"^[A-Z][A-Z0-9]", t) else t
+    steps = ', '.join(('who ' + _lc(s['label']))
                       for s in spine[1:-1][:4])
     copy = {
         'titleHtml': f'{subj}<br>{where}.',
         'eyebrow': f'{kind_label} \u00b7 {window}',
-        'lead': (f'{carry} of the people who {str(first["label"]).lower()} '
+        'lead': (f'{carry} of the people who {_lc(first["label"])} '
                  f'went on to the last step: they {end_verb}.{no_claim}'),
-        'deck': (f'This starts with everyone who {str(first["label"]).lower()}. '
+        'deck': (f'This starts with everyone who {_lc(first["label"])}. '
                  + (f'Then we count {steps}, and who {end_short}. ' if steps
                     else f'Then we count who {end_short}. ')
                  + f'The bars get smaller each time: {_fmt_n(entered)} people '
                  f'down to {_fmt_n(end)} who {end_short}.'),
         'spineSec': '01 The spine',
         'spineHead': (f'Most people stopped before the last step. {carry} '
-                      f'of those who {str(first["label"]).lower()} '
+                      f'of those who {_lc(first["label"])} '
                       f'{end_short}.'),
         'forkSec': '02 Left and came back',
         'forkHead': 'Journey paths',
@@ -820,7 +826,7 @@ def build_copy(subject: str, platform: str, blob: dict, *,
         'kpis': [
             {'v': _fmt_n(entered), 'l': str(first['label'])},
             {'v': _fmt_n(end), 'l': tile_end},
-            {'v': carry, 'l': f'Of those who {str(first["label"]).lower()}',
+            {'v': carry, 'l': f'Of those who {_lc(first["label"])}',
              'hot': True},
         ],
     }

@@ -146,6 +146,7 @@ def recommendations(payload: dict) -> List[str]:
 def pdf_filename(payload: dict) -> str:
     from migration import journey_gold as G
     T, P = G._title_platform(payload)
+    P = re.sub(r"\s*\(.*$", '', str(P or '')).strip() or P
     stem = re.sub(r'[^A-Za-z0-9]+', '_', f"{T} on {P} Digital Journey").strip('_')
     return f"{stem}.pdf"
 
@@ -334,6 +335,11 @@ def build_pdf(payload: dict) -> bytes:
     from migration import journey_gold as G
     if not G.is_gold(payload):
         payload = G.apply(copy.deepcopy(payload))
+    if not G.is_watch_journey(payload):
+        from migration import journey_gold_purchase as _gp
+        if _gp.is_purchase_journey(payload):
+            from migration import journey_pdf_purchase as _pp
+            return _pp.build_pdf(payload)
     s = G.ship_summary(payload)
     T, P = s['title'], s['platform']
     meta = payload.get('meta') or {}

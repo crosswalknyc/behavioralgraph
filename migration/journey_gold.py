@@ -383,7 +383,15 @@ def apply(payload: dict, inputs: Optional[dict] = None, claude_json: Optional[Ca
     """Bring a watch journey payload to the Babylon 5 shape in place.
     Returns the payload (unchanged when it is not a watch journey)."""
     try:
-        if not isinstance(payload, dict) or not is_watch_journey(payload, inputs):
+        if not isinstance(payload, dict):
+            return payload
+        if not is_watch_journey(payload, inputs):
+            # A purchase journey has its own standard (Ghost Energy,
+            # 2026-10-16): the research spine stays, eleven sections land,
+            # including why the people who left the cart left.
+            from migration import journey_gold_purchase as _gp
+            if _gp.is_purchase_journey(payload, inputs):
+                return _gp.apply(payload, inputs, claude_json, seed=seed)
             return payload
         j = payload.get('fragrance_shop_journey')
         if not isinstance(j, dict) or not j.get('spine'):
@@ -552,6 +560,10 @@ def ship_summary(payload: dict) -> dict:
 
 def ship_lines(payload: dict) -> list:
     """The plain lines of the Babylon 5 ship email for any gold payload."""
+    if not is_watch_journey(payload):
+        from migration import journey_gold_purchase as _gp
+        if _gp.is_purchase_journey(payload) and _gp.is_gold(payload):
+            return _gp.ship_lines(payload)
     s = ship_summary(payload)
     T, P = s['title'], s['platform']
     lines = [f"The short version, {s['window'] or 'the window'}, unique US accounts:" if s['window'] else "The short version, unique US accounts:",
@@ -570,6 +582,9 @@ def ship_lines(payload: dict) -> list:
 def is_gold(payload: dict) -> bool:
     """Every standard section present, in order, under the standard title."""
     try:
+        if not is_watch_journey(payload):
+            from migration import journey_gold_purchase as _gp
+            return bool(_gp.is_purchase_journey(payload) and _gp.is_gold(payload))
         j = payload.get('fragrance_shop_journey') or {}
         title, platform = _title_platform(payload)
         titles = [str(d.get('title') or '') for d in (j.get('detours') or [])]

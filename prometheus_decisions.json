@@ -1,6 +1,6 @@
 {
  "version": 1,
- "content_hash": "aa11bd2608de09d34fe14cf66df2886507bf43533c3fbe4806ddbe9d7072fb49",
+ "content_hash": "daf7ff296cdcfcaf2a2341e7c49c0f01f6bbc1bd86d668f52137751837acc208",
  "decisions": [
   {
    "id": "kids_viewers_default",
@@ -560,7 +560,27 @@
    "sources": [
     "prometheus-brain.md"
    ]
+  },
+  {
+   "id": "purchase_journey_why_they_left",
+   "statement": "A purchase journey carries eleven tables in a fixed order, the same depth as a watch journey: the first content they saw and where it sat, how many posts before they looked it up, where they looked before the cart, time to the order, what they bought first, the last touch, the assists, what the people who left the cart did next and why (coupon hunting, price checks on another retailer, caffeine or safety searches on Reddit, reviews, a competitor, shipping or pack size, went quiet) with who came back and paid, who bought elsewhere and who went quiet under each reason, then the rest of the overlap and every online buyer. When a user asks why people abandoned or left the cart, answer from that table.",
+   "match_terms": [
+    "why did they abandon",
+    "why they left",
+    "abandoned the cart",
+    "left the cart",
+    "cart abandonment",
+    "looked for coupons",
+    "coupon",
+    "price too high",
+    "dangerous",
+    "purchase journey",
+    "after they left"
+   ],
+   "sources": [
+    "prometheus-brain.md"
+   ]
   }
  ],
- "generated_at": "2026-10-16T19:26:53Z"
+ "generated_at": "2026-10-16T20:00:11Z"
 }

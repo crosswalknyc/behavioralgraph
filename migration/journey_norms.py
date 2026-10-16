@@ -441,6 +441,9 @@ def hold_to_norms(payload: dict, band: dict, inputs: Optional[dict] = None, seed
         want_end = min(want_end, start - 1)
 
         old_counts = {st.get('id'): int(st.get('accounts') or 0) for st in spine}
+        # the fork's pre-hold counts ride along so a quoted fork figure in the
+        # read ('1,173 pay later') follows the reseated fork the same way
+        old_counts.update({f"fork:{f.get('id')}": int(f.get('accounts') or 0) for f in (j.get('fork') or []) if isinstance(f, dict) and f.get('id')})
         # middle steps + last: clamp each kept rate to its ceiling, then spread the residual
         steps = spine[2:]
         n = len(steps)
@@ -526,6 +529,7 @@ def hold_to_norms(payload: dict, band: dict, inputs: Optional[dict] = None, seed
         except Exception as exc:
             print(f'[journey-norms] fork plausibility skipped: {exc}')
         new_counts = {st.get('id'): int(st.get('accounts') or 0) for st in spine}
+        new_counts.update({f"fork:{f.get('id')}": int(f.get('accounts') or 0) for f in (j.get('fork') or []) if isinstance(f, dict) and f.get('id')})
         # detours rebase on the new count of the step they partition
         for d in j.get('detours') or []:
             rows = d.get('rows') or []
@@ -592,13 +596,27 @@ def hold_to_norms(payload: dict, band: dict, inputs: Optional[dict] = None, seed
             if old_rate and 0.5 * old_rate <= v_ <= 2.0 * old_rate and abs(v_ - rate) > 0.05:
                 return f"{rate:.1f}%"
             return m_.group(0)
-        for f in facts:
-            v = str(f.get('value') or '')
+        def _retext(v):
+            v = str(v or '')
             v = re.sub(r'\b\d{1,3}(?:,\d{3})+\b', _retext_count, v)
             v = re.sub(r'(\d+(?:\.\d+)?)% (carry|conversion)', lambda m_: f"{rate:.1f}% {m_.group(2)}", v)
             if _conv_words.search(v):
                 v = re.sub(r'(\d+(?:\.\d+)?)%', _retext_rate, v)
-            f['value'] = v
+            return v
+        for f in facts:
+            f['value'] = _retext(f.get('value'))
+        # the read cards and moves quote the same research counts (Ghost
+        # Energy 2026-10-16: a card said 345,239 looked it up and 1,173 paid
+        # later while the spine read 345,225 and 1,108)
+        for holder in (payload.get('the_read'), j.get('the_read')):
+            if not isinstance(holder, dict):
+                continue
+            for c in holder.get('cards') or []:
+                if isinstance(c, dict) and c.get('body'):
+                    c['body'] = _retext(c['body'])
+            for mv in holder.get('moves') or []:
+                if isinstance(mv, dict) and mv.get('why'):
+                    mv['why'] = _retext(mv['why'])
         verb = {'ticketing': 'reached a ticketing site', 'music': 'streamed the song', 'signup': 'signed up'}.get(
             band.get('kind'), 'bought' if str(band.get('kind', '')).startswith('purchase') else 'watched')
         also_fact = {'label': 'Already watching' if verb == 'watched' else 'Already customers',

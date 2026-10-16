@@ -118206,14 +118206,38 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     }
                     var top = rows.reduce(function (m, r) {
                         return Math.max(m, Number(r.accounts) || 0); }, 0) || 1;
-                    return '<div class="jiq-frag-det">'
+                    // A row's own line shows only when the rows differ;
+                    // a section-wide repeat ('First post on the account')
+                    // is noise. A breakdown under a row (the real shows,
+                    // sites or, on the why-they-left table, what each
+                    // group did next) renders as sub-rows.
+                    var doings = {};
+                    rows.forEach(function (r) { if (r.doing) doings[String(r.doing)] = 1; });
+                    var showDoing = Object.keys(doings).length > 1;
+                    var isWhy = /after they left|what they did next|why they left/i.test(t.title || '');
+                    var hasKids = rows.some(function (r) { return Array.isArray(r.breakdown) && r.breakdown.length; });
+                    return '<div class="jiq-frag-det' + (isWhy ? ' is-why' : '') + (hasKids ? ' has-kids' : '') + '">'
                       + '<h5>' + _jiqFragEsc(t.title) + '</h5>'
+                      + (t.note ? '<p class="jiq-frag-detnote">' + _jiqFragEsc(t.note) + '</p>' : '')
                       + rows.map(function (r) {
-                          var w = Math.max(1, Math.round(100 * (Number(r.accounts) || 0) / top));
-                          return '<div class="jiq-frag-detrow">'
+                          var n = Number(r.accounts) || 0;
+                          var w = Math.max(1, Math.round(100 * n / top));
+                          var kids = Array.isArray(r.breakdown) ? r.breakdown.filter(function (k) { return k && k.label; }) : [];
+                          var sub = showDoing && r.doing ? '<span class="jiq-frag-detsub">' + _jiqFragEsc(r.doing) + '</span>' : '';
+                          var kidsHtml = kids.length
+                              ? '<div class="jiq-frag-detkids">' + kids.map(function (k) {
+                                    var kn = Number(k.accounts) || 0;
+                                    var kp = n ? Math.round(1000 * kn / n) / 10 : 0;
+                                    return '<span class="jiq-frag-detkid' + (/came back and paid|watched|paid/i.test(k.label) && kn ? ' is-win' : '') + '">'
+                                        + '<b>' + _jiqFragNum(kn) + '</b> ' + _jiqFragEsc(k.label)
+                                        + (isWhy ? ' <i>' + kp + '%</i>' : '') + '</span>';
+                                }).join('') + '</div>'
+                              : '';
+                          return '<div class="jiq-frag-detrow' + ((sub || kidsHtml) ? ' has-sub' : '') + '">'
                             + '<span class="jiq-frag-detlab">' + _jiqFragEsc(r.label) + '</span>'
                             + '<span class="jiq-frag-detbar"><i style="width:' + w + '%;"></i></span>'
                             + '<span class="jiq-frag-detval">' + _jiqFragNum(r.accounts) + '</span>'
+                            + sub + kidsHtml
                           + '</div>';
                         }).join('')
                       + '</div>';
@@ -191926,6 +191950,25 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
     .jiq-frag-det-key .jiq-frag-tick { position: static; display: inline-block; width: 2px; height: 10px; margin-right: 6px; vertical-align: -1px; }
     .jiq-music-detkpis { margin: 4px 0 26px; }
     .jiq-frag-detsub { grid-column: 1 / -1; font-size: 10.5px; color: #7C878A; margin-top: -4px; font-variant-numeric: tabular-nums; }
+    .jiq-frag-detnote { margin: -4px 0 10px; font-size: 11px; line-height: 1.5; color: #7C878A; }
+    body[data-theme="light"] .jiq-frag-detnote { color: #888C89; }
+    .jiq-frag-det.is-why { grid-column: 1 / -1; padding: 18px 20px 12px; border-radius: 12px; background: var(--cw-panel, #15252A); }
+    body[data-theme="light"] .jiq-frag-det.is-why { background: #F3F2EC; }
+    .jiq-frag-det.is-why h5 { color: #C7F23E; }
+    body[data-theme="light"] .jiq-frag-det.is-why h5 { color: #5E7E12; }
+    .jiq-frag-det.is-why .jiq-frag-detrow { grid-template-columns: minmax(0, 1.6fr) minmax(120px, 1fr) auto; padding: 9px 0; }
+    .jiq-frag-det.is-why .jiq-frag-detlab { white-space: normal; font-size: 12.5px; font-weight: 600; }
+    .jiq-frag-det.has-kids .jiq-frag-detrow.has-sub { padding-bottom: 11px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+    body[data-theme="light"] .jiq-frag-det.has-kids .jiq-frag-detrow.has-sub { border-bottom-color: rgba(12,22,24,0.07); }
+    .jiq-frag-detkids { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 2px; }
+    .jiq-frag-detkid { font-size: 10.5px; color: #9AA09B; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .jiq-frag-detkid b { color: #E9E8E1; font-weight: 600; }
+    .jiq-frag-detkid i { font-style: normal; color: #7C878A; }
+    .jiq-frag-detkid.is-win b { color: #C7F23E; }
+    body[data-theme="light"] .jiq-frag-detkid { color: #5C6560; }
+    body[data-theme="light"] .jiq-frag-detkid b { color: #0C1618; }
+    body[data-theme="light"] .jiq-frag-detkid.is-win b { color: #5E7E12; }
+    .jiq-frag-det.is-why .jiq-frag-detkid { font-size: 11.5px; }
 
 
     /* UFC nest walk sits on the same card system as Young Sheldon. */

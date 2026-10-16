@@ -16928,9 +16928,13 @@ def _pm_jiq_confirm_reply(parsed):
                  "then the first post they saw and where it sat, how many posts before they clicked through, where they "
                  "looked before the platform, the time from the view to the first episode, the first episode, the last touch and the assists")
     else:
-        shape = ("It's a full discovery-to-purchase path - where "
-                 "they learn the name, research, compare, hunt a "
-                 "code, bag and leave, get retargeted, and pay")
+        # the same depth as a watch journey, plus why the cart leavers
+        # left (Jenna 2026-10-16, Ghost Energy)
+        shape = ("It's a full discovery-to-purchase path - where they learn the name, research, compare, hunt a code, "
+                 "cart and leave, get retargeted, and pay - with the first content they saw and where it sat, how many "
+                 "posts before they looked it up, where they looked before the cart, the time to the order, what they "
+                 "bought first, the last touch and the assists, and for everyone who left the cart, what they did next "
+                 "and why: coupon hunting, price checks, safety searches, reviews, competitors")
     clip_line = (f"- Clip: {parsed['clip_url']}\n"
                  if parsed.get('clip_url') else '')
     return (

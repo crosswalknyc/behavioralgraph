@@ -2478,12 +2478,20 @@ def breakdown_rows(payload: dict) -> list:
         for r in drows:
             rows.append([title, r.get('label') or '', r['accounts'], _bd_pct(r.get('pct')), '', '',
                          r.get('doing') or '', '', ''])
-            for sub in (r.get('breakdown') or []):
-                if not isinstance(sub, dict):
-                    continue
+            subs = [s_ for s_ in (r.get('breakdown') or []) if isinstance(s_, dict)]
+            # sub-rows that already add up to the row (the why-they-left
+            # outcomes: came back and paid, bought elsewhere, went quiet)
+            # keep their exact counts so the workbook agrees with the tab
+            # and the fork; a share-only breakdown derives from the share
+            sub_sum = sum(_bd_int(s_.get('accounts')) for s_ in subs)
+            exact = bool(sub_sum) and abs(sub_sum - r['accounts']) <= max(1, int(0.01 * r['accounts']))
+            for sub in subs:
                 share = float(sub.get('pct') or 0)
-                n = _bd_messy(r['accounts'] * share / 100.0, f"{title}|{r.get('label')}|{sub.get('label')}") \
-                    if share else _bd_int(sub.get('accounts'))
+                if exact:
+                    n = _bd_int(sub.get('accounts'))
+                else:
+                    n = _bd_messy(r['accounts'] * share / 100.0, f"{title}|{r.get('label')}|{sub.get('label')}") \
+                        if share else _bd_int(sub.get('accounts'))
                 rows.append([title, f"  {sub.get('label') or ''}", n, _bd_pct(share) if share else '', '', '',
                              sub.get('doing') or '', '', ''])
     return rows
