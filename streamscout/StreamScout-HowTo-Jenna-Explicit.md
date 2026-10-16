@@ -30,6 +30,7 @@ rows = streamscout_query(
     include_clips=None,     # YouTube only — see §4
     limit=None,             # YouTube only — fair-survey cap, see §4
     strict=False,           # explicit-platform scope guard — see §5
+    notify=False,           # with strict: email Crosswalk on a scope miss — §5
 )
 # -> list[dict], each: {"SHOW","URL","PRODUCTION","PLATFORM","SEASON"}
 ```
@@ -153,12 +154,56 @@ streamscout_query("Gilmore Girls", platforms="disney", strict=True)
   `strict=True` won't fail just because one member (say NPR) legitimately has no
   episodes — a group is a "whatever's in this bucket" request.
 - **Handling it in Promy:** catch `PlatformScopeError` and surface it to the
-  client ("requested Hulu, 0 Hulu seeds found — seed Hulu or adjust the
-  platforms") rather than building. The error carries `.title`, `.missing`
-  (platform keys), and `.counts`.
+  client rather than building. The error carries `.title`, `.missing` (platform
+  keys), `.counts`, `.missing_labels` (display names), and **`.client_message`**
+  — an already-worded, client-ready line to relay verbatim.
 
 > **Rule of thumb:** any client request that names platforms → pass
 > `strict=True`. Broad "give me everything" sweeps → leave it off.
+
+### 5a. The anti-fallback contract (the important part) + `notify=True`
+
+This is the whole point of `strict`: when a client scopes to **Hulu only** and
+StreamScout finds the title on **no Hulu**, Promy must **NOT get desperate and
+fall back** to another platform's stored seeds (e.g. handing back the preloaded
+**Netflix** URLs for a Hulu-only ask). That would profile the wrong audience.
+The contract is:
+
+> **On `PlatformScopeError`, do not substitute any other platform's seeds. Full
+> stop.** Relay `.client_message` to the client and let a human pick it up.
+
+`.client_message` reads, verbatim:
+
+> *"We can't see Gilmore Girls on Hulu at this time. Notifying Crosswalk and will
+> get back to you soon."*
+
+To actually **notify Crosswalk**, pass **`notify=True`** alongside `strict=True`.
+On a scope miss StreamScout emails **Jenna + Jess**
+(`jenna@crosswalknyc.com`, `jessie@crosswalknyc.com`) that the build was refused,
+**then** raises `PlatformScopeError`:
+
+```python
+try:
+    rows = streamscout_query(
+        "Gilmore Girls", platforms="hulu",
+        strict=True, notify=True,
+        notify_context={"window": "Jul 1 – Oct 14, 2026", "client": "Alexia"},
+    )
+except PlatformScopeError as e:
+    reply_to_client(e.client_message)   # "We can't see Gilmore Girls on Hulu …"
+    # DO NOT fall back to any other platform's seeds.
+```
+
+- **The email never blocks or crashes the request** — if SES is down the build
+  is *still* refused (we never silently substitute). The alert is best-effort;
+  the refusal is guaranteed.
+- `notify_context` is optional (window / client / requested_by) — it just enriches
+  the alert email so whoever picks it up has context.
+- Uses the same SES path as the rest of Promy's mail
+  (`prometheus@crosswalknyc.com`). Override recipients without a deploy via the
+  `STREAMSCOUT_ALERT_TO` env var (comma-separated).
+- **CLI:** add `--notify` to `--strict`; the client line prints to **stdout**,
+  the detail to stderr, exit **3**.
 
 ### 5b. Current-availability advisory (works even on preloaded seeds)
 
