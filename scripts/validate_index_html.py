@@ -619,3 +619,4 @@ if __name__ == "__main__":
 # (streamscout-npr-podcast 2026-10-14 - StreamScout: add NPR podcast resolver + wire YouTube/NPR into the podcasts group; CI trigger only)
 # (streamscout-youtube-clips 2026-10-14 - StreamScout YouTube: full-vs-clips client choice + fair-survey even-stride cap (default 600); CI trigger only)
 # (streamscout-jenna-package 2026-10-14 - StreamScout: explicit Jenna/Promy how-to MD + refreshed 23-platform xlsx (NPR + YouTube clips/cap); CI trigger only)
+# (streamscout-siriusxm-anon-discovery 2026-10-16 - StreamScout SiriusXM: login-free title->show discovery via a shared web-search API key (Brave / Google Programmable Search) so client queries resolve anonymously; enumeration already anonymous; CI trigger only)

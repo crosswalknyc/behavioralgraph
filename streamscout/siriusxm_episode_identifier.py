@@ -31,14 +31,30 @@ gateway exactly as the player does:
   • URL hint: paste any siriusxm.com/player/{show-podcast,episode-podcast}/entity
     /<id> link to skip discovery. A show link -> every episode; an episode link +
     --type movie -> just that one.
-  • Title search uses the player's own search box (the search API itself is
-    WAF-gated), reading the matching show-podcast card.
+
+Title -> show discovery (LOGIN-FREE, for client queries)
+--------------------------------------------------------
+Enumeration above is anonymous, but turning a *title* into the show's uuid is the
+one gated step: SiriusXM's player search is login-gated and its search API is
+WAF-blocked to anonymous callers. The uuid, however, is embedded in SiriusXM's
+PUBLIC (SEO-indexed) show URLs and is region-portable, so we find that public URL
+with a **shared, app-level web-search API key** (NOT a personal SiriusXM login,
+NOT per-client) and read the uuid out of it. Set ONE of these in the environment
+and every client query resolves SiriusXM anonymously:
+
+    BRAVE_SEARCH_API_KEY=…                         # Brave Search API, or
+    GOOGLE_SEARCH_API_KEY=…  GOOGLE_SEARCH_CX=…    # Google Programmable Search
+
+If no search key is set, discovery falls back to the login-gated player search
+(SIRIUSXM_EMAIL / SIRIUSXM_PASSWORD) — intended for local use only, since client
+queries can't ride on a personal login.
 
 Requirements
 ------------
 Needs Playwright + Chromium (same as the Netflix / Amazon Podcasts resolvers). If
 Playwright isn't installed, this resolver raises a clear message; every other
-StreamScout platform still works. Everything is anonymous — no login.
+StreamScout platform still works. Enumeration is always anonymous; title
+discovery uses the shared web-search key above (or the login fallback).
 
 Usage
 -----
@@ -50,9 +66,12 @@ Usage
 import argparse
 import csv
 import difflib
+import json
 import os
 import re
 import sys
+import urllib.parse
+import urllib.request
 from datetime import datetime
 
 BASE = "https://www.siriusxm.com"
@@ -79,8 +98,12 @@ def load_env(path=".env.local"):
             pass
     # Deployed environments carry the login as environment variables
     # (systemd EnvironmentFile, Render env), not a .env.local on disk
-    # (2026-10-15, Jess + Spike). A file value still wins.
-    for k in ('SIRIUSXM_EMAIL', 'SIRIUSXM_PASSWORD'):
+    # (2026-10-15, Jess + Spike). A file value still wins. The shared web-search
+    # key (login-free title discovery) is read the same way so client queries
+    # resolve SiriusXM anonymously in deployed units (2026-10-16, Jess + Spike).
+    for k in ('SIRIUSXM_EMAIL', 'SIRIUSXM_PASSWORD',
+              'BRAVE_SEARCH_API_KEY', 'GOOGLE_SEARCH_API_KEY', 'GOOGLE_SEARCH_CX',
+              'SIRIUSXM_SEARCH_API_KEY', 'SIRIUSXM_SEARCH_CX'):
         if k not in env and os.environ.get(k):
             env[k] = os.environ[k].strip()
     return env
@@ -419,6 +442,98 @@ def _row(ep_title, ep_id):
             "identifier": url, "watch_url": url}
 
 
+# ── LOGIN-FREE discovery: title -> show-podcast uuid via a web-search API ──────
+# SiriusXM's player search is WAF/login-gated, but episode ENUMERATION only needs
+# the show's uuid, and that uuid is embedded in SiriusXM's PUBLIC (SEO-indexed)
+# show URLs — e.g. siriusxm.com/player/show-podcast/entity/<uuid> or
+# .../show-podcast/<slug>/<uuid> (and the uuid is region-portable: a uuid found
+# on the CA site enumerates fine on the US gateway). So we find that public URL
+# with a shared, app-level web-search API key (NOT a personal SiriusXM login,
+# NOT per-client) and read the uuid out of it. One key in the environment lights
+# this up for every client query. Configure whichever provider you have:
+#   • Brave  Search API : BRAVE_SEARCH_API_KEY
+#   • Google Programmable Search : GOOGLE_SEARCH_API_KEY + GOOGLE_SEARCH_CX
+# (SIRIUSXM_SEARCH_API_KEY / SIRIUSXM_SEARCH_CX are accepted as aliases.)
+_SHOW_URL_UUID = re.compile(
+    r"show-podcast/(?:entity/|[a-z0-9-]+/)?(" + _UUID + r")", re.I)
+
+
+def _extract_show_id(text):
+    """The first show-podcast uuid found in any siriusxm URL inside text/JSON."""
+    m = _SHOW_URL_UUID.search(text or "")
+    return m.group(1) if m else None
+
+
+def _http_json(url, headers=None, timeout=15):
+    req = urllib.request.Request(url, headers=headers or {"User-Agent": UA})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return json.loads(r.read().decode("utf-8", "replace"))
+    except Exception:  # noqa: BLE001 — a flaky search must never sink enumeration
+        return None
+
+
+def _brave_results(query, key):
+    """Brave Search API -> list of url+title+description blobs (or [])."""
+    url = ("https://api.search.brave.com/res/v1/web/search?"
+           + urllib.parse.urlencode({"q": query, "count": 10}))
+    j = _http_json(url, headers={
+        "User-Agent": UA, "Accept": "application/json",
+        "X-Subscription-Token": key})
+    if not j:
+        return []
+    out = []
+    for r in ((j.get("web") or {}).get("results") or []):
+        out.append(" ".join(str(r.get(k, "")) for k in ("url", "title",
+                                                         "description")))
+    return out
+
+
+def _google_cse_results(query, key, cx):
+    """Google Programmable Search (Custom Search JSON) -> list of blobs (or [])."""
+    url = ("https://www.googleapis.com/customsearch/v1?"
+           + urllib.parse.urlencode({"key": key, "cx": cx, "q": query,
+                                     "num": 10}))
+    j = _http_json(url)
+    if not j:
+        return []
+    out = []
+    for it in (j.get("items") or []):
+        out.append(" ".join(str(it.get(k, "")) for k in ("link", "title",
+                                                         "snippet")))
+    return out
+
+
+def _websearch_results(query, env):
+    """Results from whichever web-search provider is configured in env ([] if
+    none/failure). Brave wins if both are present."""
+    brave = env.get("BRAVE_SEARCH_API_KEY") or env.get("SIRIUSXM_SEARCH_API_KEY")
+    if brave and not env.get("GOOGLE_SEARCH_CX") and not env.get("SIRIUSXM_SEARCH_CX"):
+        return _brave_results(query, brave)
+    gkey = env.get("GOOGLE_SEARCH_API_KEY") or env.get("SIRIUSXM_SEARCH_API_KEY")
+    gcx = env.get("GOOGLE_SEARCH_CX") or env.get("SIRIUSXM_SEARCH_CX")
+    if gkey and gcx:
+        return _google_cse_results(query, gkey, gcx)
+    if brave:
+        return _brave_results(query, brave)
+    return []
+
+
+def _discover_show_id_via_websearch(title, env=None):
+    """title -> show-podcast uuid using a shared web-search API key, anonymously.
+    Returns the uuid (str) or None. No SiriusXM login, no browser."""
+    env = env or load_env()
+    if not title:
+        return None
+    for q in ('siriusxm.com show-podcast "%s" podcast' % title,
+              'siriusxm "%s" podcast show' % title):
+        for blob in _websearch_results(q, env):
+            sid = _extract_show_id(blob)
+            if sid:
+                return sid
+    return None
+
+
 # ── public entry point ────────────────────────────────────────────────────────
 def resolve(title=None, url=None, kind="series", seasons=None, headless=True):
     """Resolve a SiriusXM podcast to every episode's siriusxm.com URL.
@@ -428,7 +543,9 @@ def resolve(title=None, url=None, kind="series", seasons=None, headless=True):
          identifier:<https://www.siriusxm.com/player/episode-podcast/entity/<id>>,
          watch_url:<same>}
     `seasons` is accepted for interface parity but ignored (flat episode list).
-    Anonymous — no login, no SiriusXM account.
+    Anonymous — no login, no SiriusXM account. Title discovery uses a shared,
+    app-level web-search API key (see _discover_show_id_via_websearch); if none is
+    configured it falls back to the login-gated player search (local use only).
     """
     if os.environ.get("STREAMSCOUT_HEADED"):
         headless = False
@@ -444,13 +561,22 @@ def resolve(title=None, url=None, kind="series", seasons=None, headless=True):
     if ep_id_hint and not show_id_hint and kind == "movie":
         return (title or "", [_row("", ep_id_hint)])
 
+    # LOGIN-FREE discovery FIRST: a title -> show uuid via a shared web-search key
+    # (no browser, no SiriusXM account). This is the path client queries use.
+    gate_relevance = False
+    if not show_id_hint and title:
+        ws_id = _discover_show_id_via_websearch(title)
+        if ws_id:
+            show_id_hint = ws_id
+            gate_relevance = True      # verify the search hit really is this show
+
     sp = _sync_playwright()
     with sp() as pw:
         ctx, page = _new_context(pw, headless=headless)
         try:
             show_id = show_id_hint
             if not show_id and title:
-                # try search first (works instantly if the profile is logged in)
+                # fallback: login-gated player search (only if creds/profile exist)
                 show_id = _discover_show_id(page, title)
                 if not show_id:
                     # log in only if we're not already authenticated
@@ -460,10 +586,12 @@ def resolve(title=None, url=None, kind="series", seasons=None, headless=True):
                         pw_ = env.get("SIRIUSXM_PASSWORD")
                         if not (email and pw_):
                             raise RuntimeError(
-                                "SiriusXM title-search needs a login. Add "
-                                "SIRIUSXM_EMAIL / SIRIUSXM_PASSWORD to .env.local, "
-                                "or pass --url with the show link (enumeration is "
-                                "anonymous).")
+                                "SiriusXM title discovery found nothing. Set a "
+                                "shared web-search key (BRAVE_SEARCH_API_KEY, or "
+                                "GOOGLE_SEARCH_API_KEY + GOOGLE_SEARCH_CX) so "
+                                "client queries resolve anonymously, or add "
+                                "SIRIUSXM_EMAIL / SIRIUSXM_PASSWORD, or pass --url "
+                                "with the show link (enumeration is anonymous).")
                         _login(page, email, pw_)
                     # retry discovery a few times while the session settles
                     for _ in range(4):
@@ -478,6 +606,12 @@ def resolve(title=None, url=None, kind="series", seasons=None, headless=True):
             eps = data.get("episodes", []) if isinstance(data, dict) else []
             show_name = (data.get("showName") if isinstance(data, dict) else "") \
                 or title or ""
+
+            # relevance floor for a web-search hit: make sure the show the search
+            # surfaced actually matches the requested title (guards over-matches).
+            if gate_relevance and title and show_name \
+                    and similarity(title, show_name) < 0.5:
+                return (title or "", [])
 
             if kind == "movie" and title:      # single best-matching episode
                 if not eps:
