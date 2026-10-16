@@ -242,6 +242,48 @@ for w in warnings_from(report):
 > **Rule of thumb:** fresh resolve + named platforms → `strict=True`. Building
 > from preloaded seeds → run `check_availability()` first and surface any ⚠️.
 
+### 5c. Always rescan current placements  →  `current_placements()`  (a content_map hit must NOT skip the scan)
+
+The Gilmore Girls incident had a deeper root cause than platform scope: GG was
+**already in the content_map on Netflix**, so nobody ever scanned **Hulu**, where
+it actually lives now. A pre-existing seed quietly **suppressed the scan**.
+
+Fix the behavior at the source: **on every seeding pass, rescan — even if the
+title is already in the content_map.** StreamScout's resolvers always hit each
+platform's **live catalog**, so a fresh scan is the authority on *current*
+placement. `current_placements()` is the one call for that:
+
+```python
+from streamscout_query import current_placements
+
+# Where does GG live RIGHT NOW? (ignores whatever's already stored)
+r = current_placements("Gilmore Girls", platforms="video")
+# r["present_labels"] -> ["Hulu"]      ← found, even though it was stored on Netflix
+
+# Reconcile against what the content_map already has:
+r = current_placements("Gilmore Girls", platforms="video", known=["Netflix"])
+# r["added"]     -> ["hulu"]      ← now available here; seed it
+# r["gone"]      -> ["netflix"]   ← no longer live here (keep history, stop treating as current)
+# r["unchanged"] -> []
+```
+
+- **`present` / `present_labels`** — where the title lives **now** (seed counts).
+- **`added` / `gone` / `unchanged`** — only when you pass **`known`** (the
+  platforms already in the content_map, as keys or labels like `"Netflix"`). This
+  is the exact signal to update the map: seed the `added`, stop treating `gone`
+  as a *current* placement.
+- It **scans the union** of the requested platforms **and** `known`, so it can
+  confirm a stored platform is truly `gone`.
+- **History is preserved.** `gone` means "not live there now," not "delete the
+  old seeds" — past-window viewership still needs them. This only corrects what
+  counts as *currently* available.
+- Never raises on a single platform failure (hands-off). **CLI:**
+  `python3 streamscout_query.py --title "Gilmore Girls" --placements --platforms video --known Netflix`
+
+> **Rule of thumb:** a title already being in the content_map is **not** a reason
+> to skip scanning. Run `current_placements()` every pass; let the live catalog —
+> not a stale seed — decide where it's available now.
+
 ---
 
 ## 6. Output schema (every row)

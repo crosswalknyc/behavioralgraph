@@ -624,3 +624,5 @@ if __name__ == "__main__":
 # (streamscout-availability-advisory 2026-10-16 - StreamScout: advisory current-availability check (streamscout_availability.check_availability) via the shared web-search key - 'where to watch {title}' lookup, needs no resolve, flags (never blocks) when a requested platform doesn't currently carry the title so preloaded-seed profiles can't silently use a platform it has left; CI trigger only)
 
 # ci-trigger: streamscout-scope-notify
+
+# ci-trigger: streamscout-always-rescan
