@@ -51820,8 +51820,10 @@ def _scrub_v1_status(raw_status: dict | None) -> dict:
     if mapped == 'failed':
         _raw_err = str(raw_status.get('error') or '').strip()
         _reason = ''
-        if _raw_err.lower().startswith('this build could not be'):
-            _reason = _scrub_v1_freetext(_raw_err, cap=200)
+        # the refund copy, and the platform line the engine writes when
+        # the client named a platform the title is not on (2026-10-16)
+        if _raw_err.lower().startswith(('this build could not be', "we can't see ", 'we cant see ')):
+            _reason = _scrub_v1_freetext(_raw_err, cap=240)
         out['reason'] = _reason or _V1_FAILED_REASON
         _cr = raw_status.get('credits_refunded')
         if isinstance(_cr, (int, float)) and _cr > 0:

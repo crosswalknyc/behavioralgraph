@@ -164,6 +164,22 @@ def _job_items(host, uname, days=7):
     return items
 
 
+# Terminal-failure lines the engine writes FOR the client (the partner
+# API whitelist mirrors this): the refund copy, and StreamScout's
+# "We can't see <title> on <platform> at this time" when the client named
+# a platform the title is not on. Anything else stays generic.
+_CLIENT_FAILURE_PREFIXES = ("this build could not be completed", "we can't see ", "we cant see ")
+
+
+def client_failure_line(error):
+    """The engine's deliberate client-facing failure line, or '' when the
+    recorded error is internal and must not be relayed."""
+    e = ' '.join(str(error or '').split())
+    if e and e.lower().startswith(_CLIENT_FAILURE_PREFIXES) and len(e) <= 400:
+        return e
+    return ''
+
+
 def _engine_runs(host, user):
     """Profile builds on the engine (the listener), via the host when bound."""
     try:
@@ -176,7 +192,8 @@ def _engine_runs(host, user):
                 st = str(d.get('status') or '').lower()
                 out.append({'kind': 'profile', 'status': 'done' if st in ('complete', 'completed', 'done') else ('error' if st in ('error', 'failed') else 'running'),
                             'subject': d.get('subject') or d.get('profile_name') or '', 'started': d.get('queued_at') or d.get('started_at'),
-                            'finished': d.get('completed_at'), 'key': d.get('tu_s3_key') or d.get('s3_key') or '', 'job_id': d.get('run_id')})
+                            'finished': d.get('completed_at'), 'key': d.get('tu_s3_key') or d.get('s3_key') or '', 'job_id': d.get('run_id'),
+                            'client_line': client_failure_line(d.get('error'))})
             return out
     except Exception:
         traceback.print_exc()
@@ -253,7 +270,12 @@ def answer(text, uname, *, host, user=None, history=None):
                 line += f" It is in {where}; if the tab was open before it landed, refresh once and it will be there."
             lines.append(line)
         elif st in ('error', 'failed'):
-            lines.append(f"Your {label} for {subj} did not complete. The charge comes back to your balance automatically; tell me to run it again and I will.")
+            if it.get('client_line'):
+                # the engine wrote this line for the client (a platform the
+                # title is not on, 2026-10-16); relay it as written
+                lines.append(f"Your {label} for {subj}: {it['client_line']}")
+            else:
+                lines.append(f"Your {label} for {subj} did not complete. The charge comes back to your balance automatically; tell me to run it again and I will.")
         elif st == 'requeued':
             lines.append(f"Your {label} for {subj} did not finish in its first hour, so I restarted it. It lands in the dashboard and in your email when it is done.")
         else:

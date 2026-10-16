@@ -125,6 +125,18 @@ def send_scope_alert(title, missing_labels, client_message=None, context=None,
     returns the SES MessageId on success or "" on any problem (so the caller can
     still refuse the build cleanly even if mail is down)."""
     try:
+        # the product's mail guard: a test process never mails (2026-10-16)
+        try:
+            import os as _os, sys as _sys
+            _root = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+            if _root not in _sys.path:
+                _sys.path.insert(0, _root)
+            from prometheus.mail_guard import sending_allowed as _sending_allowed
+            if not _sending_allowed():
+                print("[streamscout] scope alert suppressed: test process")
+                return ""
+        except ImportError:
+            pass
         import boto3  # repo already uses SES us-east-2 for all product mail
         to = recipients or alert_recipients()
         labels = list(missing_labels or [])

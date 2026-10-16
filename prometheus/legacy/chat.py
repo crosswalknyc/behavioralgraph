@@ -1213,6 +1213,8 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "  \"seed_source\": \"content_map\" or null // AUDIENCE-OF-A-PROPERTY pulls (viewers/readers/players/listeners of a title, franchise, podcast, book, or game) seed from the content map: set \"content_map\" once the STREAMSCOUT ROUTING INTERVIEW below is answered. Entity pulls (a person, a brand): null.,\n"
         "  \"content_show\": \"the single title, OR the franchise name (the SHOW every seed row keys on)\" or null,\n"
         "  \"franchise_titles\": [\"Title A\", \"Title B\", ...] or null // franchise only: EVERY title the user listed - never guess titles on the user's behalf,\n"
+        "  \"named_platforms\": [\"Hulu\", ...] or [] // ONLY the platforms the USER named in the ask ('Hulu viewers', 'on Spotify and SiriusXM'); never a platform you researched or inferred,\n"
+        "  \"youtube_include_clips\": <true|false> or null // YouTube audiences only: false = full episodes only (default), true = the channel's clips too; null until asked,\n"
         "  \"consumers_sample_fraction\": <float 0.15-0.90 or null - consumed-share of the broad engager universe>,\n"
         "  \"kids_product\": <true|false - see KIDS' PRODUCTS: true ONLY when the subject is a product/app/game/toy/franchise whose end users are predominantly children under 13>,\n"
         "  \"home_platform_rows\": [[\"STREAMING/PLATFORM\",\"Starz\"], ...] or [],\n"
@@ -1795,7 +1797,18 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "words + the noun ('Rene Vaca YouTube Channel Viewers'), "
         "seed_source = 'content_map', the platform pins at 100 - and "
         "the confirmation still ECHOES the scope so the user sees "
-        "which read they are getting. CONFIRMATION WORDING for any "
+        "which read they are getting. NAMED PLATFORMS (2026-10-16): "
+        "when the user names where the audience watches / listens "
+        "('Hulu viewers of Gilmore Girls', 'New Heights on Spotify "
+        "and SiriusXM'), list exactly those in named_platforms - the "
+        "build is scoped to them and refuses rather than substitute "
+        "another platform's seeds. A platform you found by research "
+        "is NOT named; leave named_platforms [] and the build scans "
+        "where the title lives now. YOUTUBE AUDIENCES: when the "
+        "property is a YouTube channel or show, ASK once 'Full "
+        "episodes only, or include the channel's clips too?' and set "
+        "youtube_include_clips (false = full episodes only, the "
+        "default when the user has no preference). CONFIRMATION WORDING for any "
         "consumption universe (viewers / listeners / readers / "
         "players): say 'the national total <viewers> universe + "
         "avid' with the matching noun - plain 'total universe' is "
@@ -7639,6 +7652,10 @@ def _spec_from_draft(draft):
         except Exception as _ss_err:
             print(f"[spec] content-seed backstop skipped "
                   f"(non-fatal): {_ss_err}")
+    # Jess + Spike 2026-10-16: the platforms the CLIENT named and the
+    # YouTube choices ride the spec (strict on named platforms).
+    from prometheus.streamscout_spec import stamp_client_scope
+    stamp_client_scope(spec, draft, _scrub, subject)
     # Viewer season/film scope (2026-08-27): the bound scope rides the
     # spec so the engine host resolves the scoped content URLs, folds
     # them into BRAND INPUT, and inserts the verified rows into the
@@ -10097,11 +10114,16 @@ def _pm_status_reply_for_runs(runs):
                     line += f" File: {doc['tu_key']}"
                 lines.append(line)
         elif st in ('failed', 'error', 'ops_hold'):
-            lines.append(
-                f"{subj} is still building - it is taking a little "
-                f"longer than usual. It lands in the Select Profile "
-                f"dropdown and this chat confirms the moment it "
-                f"finishes.")
+            from prometheus.status_lane import client_failure_line
+            _cl = client_failure_line(doc.get('error')) if st == 'failed' else ''
+            if _cl:
+                lines.append(f"{subj}: {_cl}")
+            else:
+                lines.append(
+                    f"{subj} is still building - it is taking a little "
+                    f"longer than usual. It lands in the Select Profile "
+                    f"dropdown and this chat confirms the moment it "
+                    f"finishes.")
         else:
             si, tot = doc.get('step_index'), doc.get('step_total') or 11
             lab = str(doc.get('step_label') or '').strip()
