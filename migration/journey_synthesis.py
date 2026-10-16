@@ -831,6 +831,32 @@ def build_copy(subject: str, platform: str, blob: dict, *,
     return copy
 
 
+def close_fork(penult, paid, paid_first, abandoned, retargeted, returned):
+    """Make the fork close as an identity instead of asserting (2026-10-16:
+    a Reba McEntire on Amazon journey died on 'fork identity broken:
+    paid_return 64187 vs returned 22829' after paid_first was capped).
+
+    Everyone who paid either paid first or came back through the
+    retargeting, so the return leg must carry at least paid - paid_first.
+    The model's retarget and return shares are floors; the legs rise to
+    meet the people who paid, inside the chain (returned < retargeted <
+    abandoned). When the chain cannot hold them (nearly everyone at the
+    last step paid), the extra people paid first instead.
+    Returns (paid_first, abandoned, retargeted, returned, paid_return)."""
+    paid_return = paid - paid_first
+    if paid_return > returned:
+        if paid_return + 2 <= abandoned:
+            retargeted = min(max(retargeted, paid_return + 1), abandoned - 1)
+            returned = min(max(returned, paid_return), retargeted - 1)
+        if paid_return > returned:
+            paid_first = paid
+            paid_return = 0
+            abandoned = max(penult - paid_first, 0)
+            retargeted = max(min(retargeted, abandoned - 1), 0)
+            returned = max(min(returned, retargeted - 1), 0)
+    return paid_first, abandoned, retargeted, returned, paid_return
+
+
 def build_journey(inputs: dict, prim: dict, *,
                   created_by: str = 'prometheus') -> dict:
     """Derive the full journey payload from reasoned primitives.
@@ -904,7 +930,8 @@ def build_journey(inputs: dict, prim: dict, *,
                           * float(fk['returned_of_retargeted_pct'])
                           / 100.0)
         returned = min(returned, retargeted - 1)
-        paid_return = paid - paid_first
+        paid_first, abandoned, retargeted, returned, paid_return = close_fork(
+            penult, paid, paid_first, abandoned, retargeted, returned)
         assert 0 <= paid_return <= returned, (
             f'fork identity broken: paid_return {paid_return} vs '
             f'returned {returned}')
