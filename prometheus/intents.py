@@ -61,6 +61,10 @@ def aiq_intent(text, chip=''):
         return True
     if 'attribution' in low and any(k in low for k in ('set up', 'setup', 'track', 'pull', 'build', 'start', 'create')):
         return True
+    # assets joining a campaign: 'add these assets to the attribution iq report for the influencer project' (Alexia 2026-10-16)
+    if re.search(r"\b(add|append|include|attach|put|load)\b", low) and re.search(r"\b(assets?|urls?|links?|videos?|posts?|clips?)\b", low) \
+            and re.search(r"\b(attribution|campaign|mta|multi.?touch)\b", low):
+        return True
     # the filled-in form: 'Campaign: Back to School. Conversion is a checkout on Amazon. ... Assets: https://...' (2026-10-14)
     return bool(re.match(r"^\W*campaign\s*:", low)) or ('assets' in low and 'conversion' in low and 'http' in low)
 

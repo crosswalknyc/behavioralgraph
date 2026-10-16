@@ -458,6 +458,40 @@ def ask(user, body, *, via='session'):
     #  2. This turn points at "these three creators" / "both shows" /
     #     "all 4 titles" and names none of them anywhere we can see:
     #     ask which ones. No model call, no charge, no offer.
+    # Documents on the thread (2026-10-06, Jenna: "upload a document to
+    # it. like a powerpoint to be edited, or pdf or other data"). Runs
+    # BEFORE the referent clarify, the standing answers and the Reader
+    # (2026-10-16: 'can you see the full url now?' drew a which-one
+    # question from memory and a Profile IQ pitch while the file sat on
+    # the thread). An ask about an attached file is answered from the
+    # file, or applied to it and handed back; never a build, never a
+    # design request.
+    _client_surface = str(body.get('surface') or '').strip().lower()
+    if not _armed(body):
+        try:
+            from . import documents as _docs
+            _doc_raw = _docs.answer(text, uname, tid, history)
+        except Exception as e:
+            _faults.note('service.document_lane', e)
+            _doc_raw = None
+        if _doc_raw:
+            raw = _doc_raw
+            decision = {'surface': 'analyze', 'mode': None,
+                        'reason': 'document', 'client_hint': None}
+            if _client_surface == 'interpret':
+                raw = _interpret_shape(raw)
+                raw['followups'] = list(_doc_raw.get('followups') or [])
+                if _doc_raw.get('file_link'):
+                    raw['file_link'] = _doc_raw['file_link']
+            try:
+                host.ask_hint(route='document', outcome='answered')
+            except Exception as _fx:
+                _faults.note('service', _fx)
+            env = envelope.wrap(raw, surface='analyze', decision=decision,
+                                thread_id=tid, via=via)
+            _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
+            return env, 200
+
     referent_decision = None
     _client_surface = str(body.get('surface') or '').strip().lower()
     try:
@@ -717,35 +751,6 @@ def ask(user, body, *, via='session'):
                                     thread_id=tid, via=via)
                 _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
                 return env, 200
-
-    # Documents on the thread (2026-10-06, Jenna: "upload a document to
-    # it. like a powerpoint to be edited, or pdf or other data"). An ask
-    # about an attached file is answered from the file, or applied to
-    # it and handed back; it is never a build and never a design request.
-    if referent_decision is None and not _armed(body):
-        try:
-            from . import documents as _docs
-            _doc_raw = _docs.answer(text, uname, tid, history)
-        except Exception as e:
-            _faults.note('service.document_lane', e)
-            _doc_raw = None
-        if _doc_raw:
-            raw = _doc_raw
-            decision = {'surface': 'analyze', 'mode': None,
-                        'reason': 'document', 'client_hint': None}
-            if _client_surface == 'interpret':
-                raw = _interpret_shape(raw)
-                raw['followups'] = list(_doc_raw.get('followups') or [])
-                if _doc_raw.get('file_link'):
-                    raw['file_link'] = _doc_raw['file_link']
-            try:
-                host.ask_hint(route='document', outcome='answered')
-            except Exception as _fx:
-                _faults.note('service', _fx)
-            env = envelope.wrap(raw, surface='analyze', decision=decision,
-                                thread_id=tid, via=via)
-            _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
-            return env, 200
 
     # Design requests (2026-10-06, Jenna, Alexia's "Section 4 ... please
     # remove"). A change-the-page ask is not a question and never a

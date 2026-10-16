@@ -372,10 +372,17 @@ def polite_order(text):
     return bool(re.search(r"\b[A-Z][\w'&.+-]+", rest))
 
 
+_MATERIAL_RX = re.compile(r"\b(urls?|links?|csv|xlsx|spreadsheet|sheet|file|files|columns?|rows?|cells?|upload(?:ed|s)?|attach(?:ed|ment|ments)?|"
+                          r"the full (?:url|link|list|thing)|what i (?:sent|uploaded|pasted|attached)|(?:this|that|the) (?:deck|pdf|document|doc|image|screenshot))\b", re.I)
+
+
 def capability_ask(text):
-    """{'reply', 'followups'} for a can-we / is-there-a-way ask, or None."""
+    """{'reply', 'followups'} for a can-we / is-there-a-way ask, or None.
+    'Can you see the full url now?' is about the material on the thread,
+    not about what the product does (Alexia 2026-10-16 got a Profile IQ
+    pitch); the document lane answers that."""
     t = ' '.join(str(text or '').split())
-    if not t or not _CAPABILITY_RX.match(t) or polite_order(t):
+    if not t or not _CAPABILITY_RX.match(t) or polite_order(t) or _MATERIAL_RX.search(t):
         return None
     hits = [(name, what, chip) for rx, name, what, chip in _PRODUCT_WORDS if rx.search(t)]
     if not hits:

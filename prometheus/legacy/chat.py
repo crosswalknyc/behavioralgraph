@@ -9378,6 +9378,12 @@ def _pm_intake_turn(flow, text, body, history, user, ppu, first):
     parse_fn, complete_fn, required, ask_copy, fallback_fn, propose_fn = _pm_intake_flow_table()[flow]
     base = {'success': True, 'action': 'answer', 'offer_deck': False, 'deck_angle': None}
     from prometheus import intake_reader as _ir
+    if flow == 'attribution':   # the sheet on the thread carries the URLs; a named live campaign is an add (Alexia 2026-10-16)
+        from prometheus import aiq_assets as _aa
+        _add = _aa.intake_turn(text, body, user, history, host=_H, price_label=_pm_tool_price_label('attribution_iq_daily', '$100'), stash=_pm_pending_intake)
+        if _add:
+            return {**base, **_add}
+        parse_fn = _aa.with_sheet_urls(parse_fn, body, user, text, host=_H)
     _pre = None
     _low = ' '.join(str(text or '').lower().split()).strip(' .!')
     if not first and _low == 'name another subject':
@@ -15357,16 +15363,17 @@ def _pm_analyze_core(user, body, text, history):
             and _aiq_confirm.get('campaign_name'):
         _aname = str(_aiq_confirm['campaign_name'])
         _adays = _pm_aiq_days(_aiq_confirm)
-        _atotal = _PM_AIQ_SETUP_CREDITS + \
-            _PM_AIQ_DAILY_CREDITS * _adays
-        _adesc = (f'Attribution IQ: {_aname} (setup'
+        _is_add = bool(_aiq_confirm.get('add_to_slug'))   # assets joining a live campaign: the day's read, not a setup
+        _atotal = _PM_AIQ_DAILY_CREDITS if _is_add else _PM_AIQ_SETUP_CREDITS + _PM_AIQ_DAILY_CREDITS * _adays
+        _adesc = (f"Attribution IQ: {_aname} (added {len(_aiq_confirm.get('urls') or [])} assets, the day's read)" if _is_add else
+                  f'Attribution IQ: {_aname} (setup'
                   + (f' + {_adays} prepaid daily refreshes through '
                      f'{_aiq_confirm.get("end_tracking_date")}'
                      if _adays else '') + ')')
         _aiq_job = uuid.uuid4().hex[:12]
         if not _H.consume_credit(
                 _bpiq_user, description=_adesc,
-                pull_type='Attribution IQ Setup',
+                pull_type='Attribution IQ Refresh' if _is_add else 'Attribution IQ Setup',
                 credits_used=_atotal,
                 job_id=_aiq_job):
             return jsonify({
@@ -15385,7 +15392,8 @@ def _pm_analyze_core(user, body, text, history):
         _rr.start_engine_job('aiq', _aiq_job, _bpiq_user, _aiq_confirm, _aiq_extras, _pm_aiq_status_write, _pm_run_aiq_job)   # the queue, never a web thread (audit item 5)
         return jsonify({
             'success': True, 'action': 'answer',
-            'reply': (f'On it. Setting up {_aname} tracking now - '
+            'reply': (f"On it. Adding the assets to {_aname} now; today's read is recomputed with them in it, and I will confirm here when it is in." if _is_add else
+                      f'On it. Setting up {_aname} tracking now - '
                       'the campaign lands in the Attribution IQ tab '
                       'with the Multi-Touch read on every URL, and I '
                       'will confirm here when it is live.'
@@ -17233,20 +17241,7 @@ _PM_AIQ_SETUP_CREDITS = 5      # $500 at the standard $100/credit
 _PM_AIQ_DAILY_CREDITS = 1      # $100 per prepaid daily-refresh day
 
 
-_PM_AIQ_ASK_COPY = (
-    "Happy to set up Attribution tracking. Give me, in one message:\n"
-    "1. The campaign name\n"
-    "2. Every campaign URL, each tagged paid or organic - paste them "
-    "line by line (URL, tag, optional asset name) or paste your CSV "
-    "with URL / Tag / Label columns\n"
-    "3. The conversion - one sentence on what counts (a signup, a "
-    "purchase, a ticket, an install)\n"
-    "4. Daily tracking on or off. If on: the date tracking should "
-    "STOP - you are charged up front through that date\n\n"
-    "Example: \"Campaign: Fall Launch. Conversion: signed up on the "
-    "landing page. Daily tracking through 2026-10-15.\n"
-    "https://youtube.com/watch?v=abc paid Hero spot\n"
-    "https://instagram.com/p/xyz organic Launch teaser\"")
+from prometheus.aiq_assets import ASK_COPY as _PM_AIQ_ASK_COPY  # noqa: E402
 
 
 def _pm_aiq_intent(text):
@@ -17307,48 +17302,9 @@ def _pm_aiq_inputs_complete(parsed):
 
 
 def _pm_aiq_confirm_reply(parsed):
-    urls = parsed.get('urls') or []
-    paid = sum(1 for u in urls
-               if str(u.get('tag')).lower() == 'paid')
-    org = len(urls) - paid
-    setup_lbl = _pm_tool_price_label('attribution_iq_setup', '$500')
-    daily_lbl = _pm_tool_price_label('attribution_iq_daily', '$100')
-    days = _pm_aiq_days(parsed)
-    lines = [
-        "Here's the Attribution tracking I'll set up:",
-        f"- Campaign: {parsed['campaign_name']}",
-        f"- {len(urls)} URLs ({paid} paid, {org} organic)",
-        f"- Conversion: {parsed['conversion_event']}",
-    ]
-    if parsed.get('daily_refresh'):
-        end = parsed.get('end_tracking_date')
-        try:
-            _dl = float(str(daily_lbl).replace('$', '').replace('£', '')
-                        .replace(',', ''))
-            _sl = float(str(setup_lbl).replace('$', '').replace('£', '')
-                        .replace(',', ''))
-            total_lbl = _pm_usd_label(_sl + _dl * days)
-        except Exception:
-            total_lbl = f'{setup_lbl} + {days} x {daily_lbl}'
-        lines.append(
-            f"- Daily tracking through {end}: {days} prepaid "
-            f"refresh day(s) at {daily_lbl} each")
-        lines.append('')
-        lines.append(
-            f"Total today: {total_lbl} ({setup_lbl} setup + "
-            f"{days} x {daily_lbl}). The window is prepaid through "
-            f"{end} - tracking stops there on its own, and stopping "
-            f"early does not refund the remaining days.")
-    else:
-        lines.append('')
-        lines.append(f"One-time setup: {setup_lbl}. You can turn on "
-                     f"daily tracking later from this chat.")
-    lines.append('')
-    lines.append("The campaign lands in the Attribution IQ tab with "
-                 "the Multi-Touch read on every URL, and each daily "
-                 "refresh adds that day's numbers alongside. Start "
-                 "tracking?")
-    return '\n'.join(lines)
+    from prometheus import aiq_assets as _aa
+    return _aa.confirm_card(parsed, _pm_aiq_days(parsed), _pm_tool_price_label('attribution_iq_setup', '$500'),
+                            _pm_tool_price_label('attribution_iq_daily', '$100'), _pm_usd_label)
 
 
 def _pm_run_aiq_job(job_id, username, inputs, extras):
@@ -17359,8 +17315,11 @@ def _pm_run_aiq_job(job_id, username, inputs, extras):
         _pm_aiq_status_write(job_id, {
             'job_id': job_id, 'user': username, 'status': 'running',
             'subject': name, 'started_at': time.time(), 'inputs': _smart.jsonable(inputs)})
-        out = build_campaign(inputs, requested_by=username,
-                             s3_client=_H.s3_client)
+        if inputs.get('add_to_slug'):   # assets joining a campaign that exists (Alexia 2026-10-16)
+            from migration.attribution_synthesis import add_assets_to_campaign
+            out = add_assets_to_campaign(str(inputs['add_to_slug']), list(inputs.get('urls') or []), requested_by=username, s3_client=_H.s3_client)
+        else:
+            out = build_campaign(inputs, requested_by=username, s3_client=_H.s3_client)
         days = _pm_aiq_days(inputs)
         if inputs.get('daily_refresh') and days > 0:
             register_tracker(out['slug'], name, username,
@@ -17400,7 +17359,8 @@ def _pm_run_aiq_job(job_id, username, inputs, extras):
             from prometheus.delivered import on_done as _on_done
             _on_done('attribution', username=username, subject=str(name or ''), s3_key=str(out.get('slug') or ''), payload=out,
                      host=_H, s3_client=_H.s3_client, job_id=job_id,
-                     facts=[('Tracked assets', f"{int(out.get('asset_count') or 0):,}")])
+                     facts=[('Tracked assets', f"{int(out.get('asset_count') or 0):,}")] + ([('Added', f"{int(out.get('added') or 0):,}")] if out.get('added') else []),
+                     email=not bool(inputs.get('notify_manual')))
         except Exception as _dl_err:
             print(f"[aiq-job {job_id}] delivery skipped: {_dl_err}")
     except Exception as e:

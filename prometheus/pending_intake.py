@@ -23,7 +23,7 @@ TTL_S = 24 * 3600
 _RUN_RX = re.compile(
     r"^\s*(?:(?:yes|yep|yeah|ok|okay|sure|great|perfect)[,.!]?\s+)?(?:please\s+)?"      # "yes, run it" (Carolyn, 2026-10-14: the card came back twice)
     r"(?:yes|yep|yeah|ok|okay|sure|go|go ahead|do it|run it|run that|run this|ship it|proceed|approve[d]?|confirm(?:ed)?|"
-    r"run the (?:journey|valuation|flywheel|study|read|campaign|tracking)|start tracking|run (?:it|them))\s*(?:please)?\s*[.!]?\s*$",
+    r"run the (?:journey|valuation|flywheel|study|read|campaign|tracking)|start tracking|run (?:it|them)|add (?:the assets|them|the urls|the links))\s*(?:please)?\s*[.!]?\s*$",
     re.I)
 
 

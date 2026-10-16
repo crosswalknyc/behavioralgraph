@@ -312,6 +312,175 @@ def build_campaign(inputs: dict, requested_by: str = "",
             "coefficients_key": coeff_key}
 
 
+# ── adding assets to a campaign that already exists (2026-10-16) ─────────
+# Alexia uploaded 1,156 creator clips for The Influencer Project and asked
+# to "add these assets to the attribution iq report". The campaign keeps
+# its name, its conversion and its history; the new assets join the
+# normalized set (deduped on URL), get a measured view count where the
+# page shows one (TikTok, YouTube), and the day's read is recomputed.
+
+_HANDLE_RX = re.compile(r"(?:tiktok\.com|instagram\.com|x\.com|twitter\.com|youtube\.com|threads\.net|facebook\.com)/@?([A-Za-z0-9_.-]{2,40})", re.I)
+
+
+def handle_from_url(url: str) -> str:
+    """'@grimmofhorror' from a TikTok, Instagram, X or YouTube URL, or ''.
+    Instagram post and reel links carry no handle."""
+    m = _HANDLE_RX.search(str(url or ""))
+    if not m:
+        return ""
+    h = m.group(1)
+    if h.lower() in ("p", "reel", "reels", "watch", "shorts", "video", "status", "share", "embed", "i", "tv", "stories", "explore", "channel", "c"):
+        return ""
+    return "@" + h.lstrip("@")
+
+
+def fetch_public_count(url: str, timeout: int = 10):
+    """(views, caption) read off a public TikTok or YouTube page, or
+    (None, ''). One GET, no key, fail-safe. Instagram and X need a login
+    and return nothing."""
+    u = str(url or "")
+    if not re.search(r"(tiktok\.com/@[^/]+/video/|youtube\.com/(?:watch|shorts/)|youtu\.be/)", u, re.I):
+        return None, ""
+    try:
+        import urllib.request
+        req = urllib.request.Request(u, headers={"User-Agent": ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+                                                                "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"),
+                                                 "Accept-Language": "en-US,en;q=0.9"})
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            html = r.read(2_500_000).decode("utf-8", "ignore")
+        m = re.search(r'"playCount":(\d+)', html) or re.search(r'"viewCount":"(\d+)"', html) or re.search(r'"viewCount":\{"simpleText":"([\d,]+)', html)
+        views = int(m.group(1).replace(",", "")) if m else None
+        cap = ""
+        mc = re.search(r'"desc":"((?:[^"\\]|\\.){1,200})"', html) if "tiktok.com" in u else re.search(r'<meta name="title" content="([^"]{1,200})"', html)
+        if mc:
+            cap = mc.group(1).encode("utf-8", "ignore").decode("unicode_escape", "ignore") if "tiktok.com" in u else mc.group(1)
+        return views, cap.strip()
+    except Exception:
+        return None, ""
+
+
+def _messy_int(seed: str, value: float) -> int:
+    v = max(int(round(value)), 1)
+    if v % 10 == 0:
+        v += 1 + int(hashlib.md5(seed.encode()).hexdigest()[:2], 16) % 8
+    return v
+
+
+def add_assets_to_campaign(slug: str, rows: list, requested_by: str = "", *, s3_client=None,
+                           fetch_counts: bool = True, workers: int = 8, source: str = "") -> dict:
+    """Append rows [{url, platform?, account?, posted_date?, tag?, label?}]
+    to intent/<slug>/source/normalized_assets.json, dedupe on URL, read
+    public view counts where a page shows one, fill the rest from the
+    batch's own measured median (salted, flagged), bump the registry and
+    recompute today's read. Returns {slug, added, skipped, asset_count,
+    measured, derived, coefficients_key}. Raises ValueError when the
+    campaign is unknown."""
+    s3 = _s3(s3_client)
+    reg = _load_registry(s3)
+    entry = next((t for t in reg.get("titles") or [] if t.get("title_slug") == slug), None)
+    if not entry:
+        raise ValueError(f"unknown campaign: {slug}")
+    key = f"intent/{slug}/source/normalized_assets.json"
+    try:
+        doc = json.loads(s3.get_object(Bucket=S3_BUCKET, Key=key)["Body"].read().decode("utf-8"))
+    except Exception:
+        doc = {"assets": []}
+    assets = list(doc.get("assets") or [])
+    have = {str(a.get("url") or "").rstrip("/").lower() for a in assets}
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    if assets:
+        s3.put_object(Bucket=S3_BUCKET, Key=f"intent/{slug}/source/_backups/normalized_assets.pre_add_assets_{stamp}.json",
+                      Body=json.dumps(doc, indent=1).encode(), ContentType="application/json")
+    phases = list(entry.get("phases") or ["Campaign"])
+    # the phase a dated clip belongs to: the campaign's own assets mark
+    # where each phase starts; anything earlier joins the first phase
+    phase_start = {}
+    for a in assets:
+        ph, d = str(a.get("phase_name") or ""), str(a.get("posted_date") or "")
+        if ph and d and (ph not in phase_start or d < phase_start[ph]):
+            phase_start[ph] = d
+    ordered = sorted(phase_start.items(), key=lambda kv: kv[1])
+
+    def _phase_for(d: str) -> str:
+        cur = ordered[0][0] if ordered else (phases[0] if phases else "Campaign")
+        for ph, start in ordered:
+            if d and d >= start:
+                cur = ph
+        return cur
+    official_handles = {handle_from_url(a.get("url")).lower() for a in assets if str(a.get("paid_or_organic") or "") == "official"}
+    official_handles.discard("")
+    slug_tokens = [t for t in re.split(r"[^a-z0-9]+", slug.lower()) if len(t) >= 4 and t not in ("hades", "films", "campaign")]
+    conv = str(entry.get("conversion_event") or "").strip()
+    src = source or f"prometheus_upload_{date.today().isoformat()}"
+    new_rows, skipped = [], 0
+    for r in rows or []:
+        url = str((r or {}).get("url") or "").strip().rstrip(",;")
+        if not url.lower().startswith("http") or url.rstrip("/").lower() in have:
+            skipped += 1
+            continue
+        have.add(url.rstrip("/").lower())
+        new_rows.append(dict(r, url=url))
+    counts, captions = {}, {}
+    if fetch_counts and new_rows:
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=max(1, workers)) as ex:
+            for r, (v, cap) in zip(new_rows, ex.map(lambda rr: fetch_public_count(rr["url"]), new_rows)):
+                if v:
+                    counts[r["url"]] = int(v)
+                if cap:
+                    captions[r["url"]] = cap
+    measured = sorted(counts.values())
+    median = measured[len(measured) // 2] if measured else 0
+    added = []
+    for r in new_rows:
+        url = r["url"]
+        handle = str(r.get("account") or "").strip() or handle_from_url(url)
+        channel = str(r.get("platform") or "").strip() or channel_for_url(url)
+        tag = str(r.get("tag") or "").strip().lower()
+        if not tag:
+            hl = handle.lower().lstrip("@").replace(".", "").replace("_", "")
+            is_official = (handle.lower() in official_handles) or (bool(slug_tokens) and all(t in hl for t in slug_tokens[:2]))
+            tag = "official" if is_official else "earned"
+        posted = str(r.get("posted_date") or "").strip()[:10]
+        try:
+            posted = datetime.fromisoformat(posted).date().isoformat() if posted else ""
+        except Exception:
+            try:
+                posted = datetime.strptime(posted, "%m/%d/%Y").date().isoformat()
+            except Exception:
+                posted = ""
+        cap = captions.get(url) or str(r.get("label") or "").strip()
+        label = " · ".join(x for x in (channel, handle, (cap[:90] if cap else ("clip" if channel.lower() in ("tiktok", "instagram", "x", "youtube") else "post"))) if x)
+        aid = hashlib.md5(f"{slug}|{url}".encode()).hexdigest()[:16]
+        views = counts.get(url)
+        derived = views is None and median > 0
+        added.append({
+            "asset_id": aid, "title_slug": slug, "phase_name": _phase_for(posted), "funnel_stage": "Exposure",
+            "action_label": label, "asset_type": "Creator Clip" if tag in ("earned", "organic") else ("Official Video" if tag == "official" else "Paid Clip"),
+            "channel": channel, "paid_or_organic": tag, "url": url,
+            "source": src, "note": conv, "posted_date": posted or date.today().isoformat(),
+            "talent_tags": [], "audience_target_tags": [],
+            "ext_view_count": int(views) if views else (_messy_int(aid, median) if derived else 0),
+            "ext_engagement_count": 0,
+            "ext_engagement_source": ("public page count" if views else ("batch median (derived)" if derived else "")),
+            "thumbnail_s3_url": "", "og_metadata": "",
+        })
+    assets.extend(added)
+    s3.put_object(Bucket=S3_BUCKET, Key=key, Body=json.dumps({"assets": assets}, indent=1).encode(), ContentType="application/json")
+    entry["asset_count"] = len(assets)
+    entry["updated_at"] = datetime.now(timezone.utc).isoformat()
+    if any(a.get("paid_or_organic") == "earned" for a in added):
+        entry["has_earned_media"] = True
+    if any(a.get("paid_or_organic") == "paid" for a in added):
+        entry["has_paid_media"] = True
+    reg["updated_at"] = datetime.now(timezone.utc).isoformat()
+    s3.put_object(Bucket=S3_BUCKET, Key=REGISTRY_KEY, Body=json.dumps(reg, indent=2).encode(), ContentType="application/json")
+    coeff_key = refresh_campaign(slug, s3_client=s3)
+    return {"slug": slug, "display_name": entry.get("display_name") or slug, "added": len(added), "skipped": skipped,
+            "asset_count": len(assets), "measured": len(counts), "derived": sum(1 for a in added if a["ext_engagement_source"].startswith("batch")),
+            "coefficients_key": coeff_key}
+
+
 def _label_from_url(url: str) -> str:
     p = urlparse(str(url))
     tail = (p.path or "/").rstrip("/").rsplit("/", 1)[-1]

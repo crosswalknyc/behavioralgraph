@@ -65,6 +65,7 @@ import json
 import logging
 import math
 import os
+import re
 from datetime import date, datetime
 from typing import Any, Optional
 
@@ -469,6 +470,7 @@ def _prepare_touchpoints(slug: str, cards: list) -> list[dict]:
     [0.02, 0.42] so the design matrix never carries an all-zero column."""
     if not cards:
         return []
+    cards = _group_crowded_assets(cards)
     scored = []
     for a in cards:
         reach = _asset_reach_score(a)
@@ -499,8 +501,105 @@ def _prepare_touchpoints(slug: str, cards: list) -> list[dict]:
             "paid_or_organic": (a.get("paid_or_organic") or "").strip() or "organic",
             "reach":     float(reach),
             "exposure_rate": float(rate),
+            **({"members": list(a["members"]), "member_count": len(a["members"])} if a.get("members") else {}),
         })
     return touch
+
+
+_HANDLE_IN_URL = re.compile(r"(?:tiktok\.com|instagram\.com|x\.com|twitter\.com|youtube\.com|threads\.net|facebook\.com)/@?([A-Za-z0-9_.-]{2,40})", re.I)
+_HANDLE_IN_LABEL = re.compile(r"(?:^|\s|\u00b7)\s*(@[A-Za-z0-9_.-]{2,40})")
+_NOT_HANDLES = {"p", "reel", "reels", "watch", "shorts", "video", "status", "share", "embed", "i", "tv", "stories", "explore", "channel", "c"}
+
+
+def _asset_handle(a: dict) -> str:
+    """The account behind an asset ('@xehclips'), from the label or the URL, or ''."""
+    m = _HANDLE_IN_LABEL.search(str(a.get("action_label") or ""))
+    if m:
+        return m.group(1).lower()
+    m = _HANDLE_IN_URL.search(str(a.get("url") or ""))
+    if m and m.group(1).lower() not in _NOT_HANDLES:
+        return "@" + m.group(1).lower().lstrip("@")
+    return ""
+
+
+def _group_crowded_assets(cards: list) -> list:
+    """A campaign with more assets than the model carries as touchpoints
+    (The Influencer Project took 1,156 creator clips on 2026-10-16) is read
+    by ACCOUNT: the clips one creator posted on one channel become one
+    touchpoint with their reach summed and the clips listed as members;
+    accounts with a single clip, and assets with no account (press, a
+    trailer page) stay as they are. When that is still more than the cap,
+    the smallest accounts on each channel fold into one 'other creators'
+    touchpoint per channel, so no asset drops out of the read."""
+    if len(cards) <= MAX_TOUCHPOINTS:
+        return cards
+    by_key: dict = {}
+    singles = []
+    for a in cards:
+        h = _asset_handle(a)
+        if not h:
+            singles.append(a)
+            continue
+        # one creator, one channel, one kind of placement: a paid spot and
+        # the same account's own clip stay apart
+        by_key.setdefault((_asset_channel(a), h, (a.get("paid_or_organic") or "").strip().lower()), []).append(a)
+    out = list(singles)
+    for (ch, h, _tag), members in by_key.items():
+        if len(members) == 1:
+            out.append(members[0])
+            continue
+        out.append(_group_card(ch, h, members))
+    if len(out) <= MAX_TOUCHPOINTS:
+        return out
+    out.sort(key=_asset_reach_score, reverse=True)
+    # one fold per channel in the tail; the tail widens until the folds fit
+    n_folds = 1
+    for _ in range(6):
+        tail = out[MAX_TOUCHPOINTS - n_folds:]
+        chans = {_asset_channel(a) for a in tail}
+        if len(chans) <= n_folds:
+            break
+        n_folds = len(chans)
+    keep, tail = out[:MAX_TOUCHPOINTS - n_folds], out[MAX_TOUCHPOINTS - n_folds:]
+    folds: dict = {}
+    for a in tail:
+        folds.setdefault(_asset_channel(a), []).append(a)
+    for ch, members in sorted(folds.items(), key=lambda kv: -len(kv[1])):
+        flat = []
+        for m in members:
+            flat.extend(m.get("members") or [m.get("asset_id")])
+        handles = {_asset_handle(m) for m in members if _asset_handle(m)}
+        g = _group_card(ch, "", members)
+        g["asset_id"] = f"grp:{ch.lower()}:other"
+        creators = bool(handles) and len(handles) >= max(2, len(members) // 2) and ch.lower() not in ("press", "amc theatres", "other")
+        g["action_label"] = (f"{ch} \u00b7 other creators \u00b7 {len(handles):,} accounts, {len(flat):,} clips" if creators
+                             else f"{ch} \u00b7 other items \u00b7 {len(flat):,} assets")
+        g["members"] = flat
+        keep.append(g)
+    return keep
+
+
+def _group_card(ch: str, handle: str, members: list) -> dict:
+    first = sorted(members, key=lambda m: str(m.get("posted_date") or ""))[0]
+    flat = []
+    for m in members:
+        flat.extend(m.get("members") or [m.get("asset_id")])
+    views = sum(float(m.get("ext_view_count") or 0) for m in members)
+    tags = [str(m.get("paid_or_organic") or "").strip() for m in members]
+    tag = max(set(tags), key=tags.count) if tags else "organic"
+    return {
+        "asset_id": f"grp:{ch.lower()}:{handle.lstrip('@')}" if handle else f"grp:{ch.lower()}",
+        "channel": ch,
+        "action_label": (f"{ch} \u00b7 {handle} \u00b7 {len(flat):,} clips" if handle else f"{ch} \u00b7 {len(flat):,} clips"),
+        "asset_type": str(first.get("asset_type") or "Creator Clip"),
+        "phase_name": str(first.get("phase_name") or ""),
+        "funnel_stage": str(first.get("funnel_stage") or "Exposure"),
+        "paid_or_organic": tag,
+        "url": str(first.get("url") or ""),
+        "posted_date": str(first.get("posted_date") or ""),
+        "ext_view_count": int(views),
+        "members": flat,
+    }
 
 
 # ---------------------------------------------------------------------------

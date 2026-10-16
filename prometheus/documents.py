@@ -50,6 +50,26 @@ _DOC_REF_RX = re.compile(
     r"|\bslide\s*\d+\b|\bpage\s*\d+\b|\bin the (deck|pdf|file|document|sheet|upload)\b"
     r"|\b(summari[sz]e|tl;?dr|read|skim|go through|walk me through)\s+(it|this|that)\b"
     r"|\bwhat does (it|this|that) say\b|\bfrom the (deck|pdf|file|document|sheet)\b", re.I)
+_DOC_HINT_RX = re.compile(
+    r"\b(urls?|links?|columns?|rows?|cells?|headers?|tabs?|sheets?|the full (?:url|link|list)|what i (?:sent|uploaded|attached|pasted)|"
+    r"(?:see|read|open|find|load|parse|access) (?:it|that|them|the (?:whole|full|entire) (?:thing|file|list)|everything))\b", re.I)
+RECENT_UPLOAD_S = 3 * 3600
+
+
+def _uploaded_recently(recs, now=None):
+    """Was any attachment uploaded in the last few hours?"""
+    from datetime import datetime, timezone
+    now = now or datetime.now(timezone.utc)
+    for r in recs or []:
+        try:
+            ts = datetime.fromisoformat(str(r.get('uploaded_at') or '').replace('Z', '+00:00'))
+            if (now - ts).total_seconds() <= RECENT_UPLOAD_S:
+                return True
+        except Exception:
+            continue
+    return False
+
+
 _EDIT_RX = re.compile(
     r"\b(change|replace|swap|update|rename|retitle|rewrite|reword|edit|fix|correct|delete|remove|"
     r"drop|add|insert|append|move|reorder|make (it|the \w+) say|should say|should read)\b", re.I)
@@ -164,11 +184,19 @@ def _sheet_summary(name, data):
     sheets, lines = [], []
     for sname, df in list(frames.items())[:12]:
         cols = [str(c) for c in df.columns][:60]
-        sheets.append({'name': str(sname), 'rows': int(len(df)), 'columns': cols})
+        url_cols = url_columns(df)
+        sheets.append({'name': str(sname), 'rows': int(len(df)), 'columns': cols, 'url_columns': url_cols,
+                       'url_count': int(sum(df[c].astype(str).str.startswith('http').sum() for c in url_cols)) if url_cols else 0})
         lines.append(f"Sheet {sname}: {len(df):,} rows, {len(df.columns)} columns")
         lines.append('Columns: ' + ', '.join(cols))
         try:
-            lines.append(df.head(12).to_string(max_cols=20, max_colwidth=40))
+            # a link is never cut off (Alexia 2026-10-16: 'the url values are
+            # cut off in the preview text I can see'); other cells keep the
+            # 40-character preview so a wide sheet still reads
+            lines.append(df.head(12).to_string(max_cols=20, max_colwidth=None if url_cols else 40))
+            if url_cols:
+                lines.append(f"Link column{'s' if len(url_cols) > 1 else ''} {', '.join(url_cols)}: {sheets[-1]['url_count']:,} full links in the file. "
+                             f"Every link is readable in full and can go straight into a campaign (Attribution IQ) or a journey.")
         except Exception:
             pass
         try:
@@ -178,6 +206,91 @@ def _sheet_summary(name, data):
         except Exception:
             pass
     return sheets, '\n'.join(lines)
+
+
+def url_columns(df):
+    """Columns whose values are links (at least half of the non-empty cells start with http)."""
+    out = []
+    try:
+        for c in df.columns:
+            vals = df[c].dropna().astype(str)
+            if len(vals) and (vals.str.strip().str.lower().str.startswith('http').mean() >= 0.5):
+                out.append(str(c))
+    except Exception:
+        pass
+    return out
+
+
+def sheet_rows(rec, s3=None, bucket=None):
+    """Every row of an attached sheet as dicts (first sheet of a workbook), or []."""
+    if not rec or rec.get('kind') != 'sheet':
+        return []
+    try:
+        import pandas as pd  # type: ignore
+        data = document_bytes(rec, s3, bucket)
+        if not data:
+            return []
+        ext = os.path.splitext(str(rec.get('name') or '').lower())[1]
+        if ext in ('.csv', '.tsv'):
+            df = pd.read_csv(io.BytesIO(data), sep='\t' if ext == '.tsv' else ',', low_memory=False, dtype=str, keep_default_na=False)
+        else:
+            frames = pd.read_excel(io.BytesIO(data), sheet_name=None, dtype=str)
+            df = next(iter(frames.values())) if frames else None
+            if df is None:
+                return []
+            df = df.fillna('')
+        return [{str(k): str(v).strip() for k, v in r.items()} for r in df.to_dict('records')]
+    except Exception:
+        traceback.print_exc()
+        return []
+
+
+_SHEET_FIELD_RX = {
+    'url': re.compile(r'^(url|urls|link|links|permalink|post url|video url|asset url)$', re.I),
+    'tag': re.compile(r'^(tag|tags|type|paid[ _/]?or[ _/]?organic|paid|placement|media type)$', re.I),
+    'label': re.compile(r'^(label|name|asset|asset name|title|caption|description)$', re.I),
+    'platform': re.compile(r'^(platform|channel|network|site)$', re.I),
+    'account': re.compile(r'^(account|handle|creator|author|username|user|influencer)$', re.I),
+    'posted_date': re.compile(r'^(posted[ _]?date|date|posted|published|publish[ _]?date|post date)$', re.I),
+}
+
+
+def sheet_urls(rec, s3=None, bucket=None):
+    """The links in an attached sheet with what the sheet says about each:
+    [{'url', 'platform', 'account', 'posted_date', 'tag', 'label'}]. The
+    link column is the one named for it, else the column whose values are
+    links. Rows without a link are skipped; duplicates keep the first."""
+    rows = sheet_rows(rec, s3, bucket)
+    if not rows:
+        return []
+    cols = list(rows[0].keys())
+    named = {}
+    for field, rx in _SHEET_FIELD_RX.items():
+        for c in cols:
+            if rx.match(str(c).strip()):
+                named.setdefault(field, c)
+    if 'url' not in named:
+        for c in cols:
+            vals = [r.get(c, '') for r in rows[:50]]
+            if vals and sum(1 for v in vals if v.lower().startswith('http')) >= max(1, len(vals) // 2):
+                named['url'] = c
+                break
+    if 'url' not in named:
+        return []
+    out, seen = [], set()
+    for r in rows:
+        u = str(r.get(named['url']) or '').strip().rstrip(',;')
+        if not u.lower().startswith('http') or u in seen:
+            continue
+        seen.add(u)
+        item = {'url': u}
+        for field in ('platform', 'account', 'posted_date', 'tag', 'label'):
+            if field in named:
+                item[field] = str(r.get(named[field]) or '').strip()
+        tg = str(item.get('tag') or '').lower()
+        item['tag'] = 'paid' if 'paid' in tg else 'organic' if 'organic' in tg else ('earned' if 'earned' in tg else ('official' if 'official' in tg else ''))
+        out.append(item)
+    return out
 
 
 def extract(name, data):
@@ -345,6 +458,12 @@ def references_document(text, recs, history=None):
         stem = os.path.splitext(str(r.get('name') or ''))[0].lower()
         if stem and len(stem) >= 4 and stem in low:
             return True
+    # Soon after an upload, a question about its contents (the links,
+    # a column, a row, 'can you see the full url now?') is about the file
+    # even without the file's name (Alexia 2026-10-16: that question drew
+    # a Profile IQ pitch).
+    if _DOC_HINT_RX.search(t) and _uploaded_recently(recs):
+        return True
     # The turn right after the upload: "summarize it", "key numbers?"
     turns = [h for h in (history or []) if isinstance(h, dict)]
     for h in reversed(turns[-3:]):
