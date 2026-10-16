@@ -54,19 +54,43 @@ GROUPS["all"] = [p for g in ("video", "podcasts", "audio", "books", "games")
                  for p in GROUPS[g]]
 
 
-def _platform_keys(platforms):
-    """Expand a platform key / list / group name into concrete resolver keys."""
+class PlatformScopeError(Exception):
+    """Raised in strict mode when a client EXPLICITLY asked for a platform but it
+    produced zero seeds — so no profile is ever silently built on the wrong
+    platform (e.g. "Hulu-only" quietly matching preloaded Netflix seeds). Carries
+    the structured detail so callers/Promy can surface or branch on it.
+    """
+
+    def __init__(self, title, missing, counts=None):
+        self.title = title
+        self.missing = list(missing)
+        self.counts = dict(counts or {})
+        human = ", ".join("%s (0 seeds)" % ss.platform_label(p)
+                          for p in self.missing)
+        super().__init__(
+            "explicit platform scope not satisfiable for %r: %s. Refusing to "
+            "build so no profile runs on the wrong platform. Seed these "
+            "platform(s) first (or drop them from the request)." % (title, human))
+
+
+def _platform_keys(platforms, return_explicit=False):
+    """Expand a platform key / list / group name into concrete resolver keys.
+
+    When ``return_explicit`` is True, also return the set of keys the caller named
+    DIRECTLY (not via a group/"all") — those are the ones strict mode enforces.
+    """
     if platforms is None:
         platforms = ["all"]
     if isinstance(platforms, str):
         platforms = [platforms]
-    keys = []
+    keys, explicit = [], set()
     for p in platforms:
         p = (p or "").strip().lower()
         if p in GROUPS:
             keys.extend(GROUPS[p])
         elif p in ss.RESOLVER_PLATFORMS:
             keys.append(p)
+            explicit.add(p)
         else:
             raise ValueError(f"unknown platform/group: {p!r} "
                              f"(groups: {', '.join(sorted(GROUPS))})")
@@ -75,11 +99,12 @@ def _platform_keys(platforms):
         if k not in seen:
             seen.add(k)
             out.append(k)
-    return out
+    return (out, explicit) if return_explicit else out
 
 
 def streamscout_query(title, platforms=None, kind="series", seasons=None,
-                      url=None, show=None, include_clips=None, limit=None):
+                      url=None, show=None, include_clips=None, limit=None,
+                      strict=False):
     """Resolve ``title`` on the given platform(s); return content_map rows.
 
     Parameters
@@ -108,14 +133,30 @@ def streamscout_query(title, platforms=None, kind="series", seasons=None,
         videos, even-stride down to `limit` across the whole timespan (a
         representative spread, not just the most recent block). None uses the
         resolver default (600); 0 keeps every video. Ignored elsewhere.
+    strict : bool
+        Explicit-platform scope guard (default False). When True, every platform
+        the caller named DIRECTLY (not via a group/"all") must return at least one
+        seed; if any comes back empty, raise ``PlatformScopeError`` instead of
+        returning a partial set. Use this for client requests that scope to
+        specific platform(s) ("Hulu viewers only") so a profile is never silently
+        built on the wrong platform (e.g. only Netflix seeds were loaded). Group
+        names are not individually enforced — a group is a "whatever's here"
+        bucket.
 
     Returns
     -------
     list[dict]  with keys SHOW, URL, PRODUCTION, PLATFORM, SEASON.
+
+    Raises
+    ------
+    PlatformScopeError
+        In strict mode, when an explicitly-requested platform yields zero seeds.
     """
     options = {"include_clips": include_clips, "limit": limit}
+    keys, explicit = _platform_keys(platforms, return_explicit=True)
     out, seen = [], set()
-    for platform in _platform_keys(platforms):
+    counts = {k: 0 for k in keys}
+    for platform in keys:
         try:
             rows = ss.resolver_lookup(platform, title, kind, seasons, url=url,
                                       options=options)
@@ -134,6 +175,12 @@ def streamscout_query(title, platforms=None, kind="series", seasons=None,
             if rec["URL"] and key not in seen:
                 seen.add(key)
                 out.append(rec)
+                counts[platform] += 1
+
+    if strict and explicit:
+        missing = [p for p in explicit if counts.get(p, 0) == 0]
+        if missing:
+            raise PlatformScopeError(title, missing, counts)
     return out
 
 
@@ -157,14 +204,23 @@ def _main():
     ap.add_argument("--limit", type=int, default=None,
                     help="YouTube: fair-survey cap (even stride across the "
                          "timespan; default 600, 0 = no cap)")
+    ap.add_argument("--strict", action="store_true",
+                    help="explicit-platform scope guard: hard-fail if any "
+                         "directly-named platform returns 0 seeds (so a scoped "
+                         "'Hulu-only' request can't silently build on the wrong "
+                         "platform)")
     ap.add_argument("--csv", action="store_true",
                     help="print CSV instead of JSON")
     args = ap.parse_args()
     plats = [p.strip() for p in args.platforms.split(",") if p.strip()]
-    rows = streamscout_query(args.title, platforms=plats, kind=args.kind,
-                             show=args.show,
-                             include_clips=(args.include_clips or None),
-                             limit=args.limit)
+    try:
+        rows = streamscout_query(args.title, platforms=plats, kind=args.kind,
+                                 show=args.show,
+                                 include_clips=(args.include_clips or None),
+                                 limit=args.limit, strict=args.strict)
+    except PlatformScopeError as e:
+        print(f"PlatformScopeError: {e}", file=sys.stderr)
+        return 3
     if args.csv:
         w = csv.writer(sys.stdout)
         w.writerow(["SHOW", "URL", "PRODUCTION", "PLATFORM", "SEASON"])
@@ -174,7 +230,8 @@ def _main():
     else:
         print(json.dumps(rows, indent=2))
     print(f"\n{len(rows)} row(s)", file=sys.stderr)
+    return 0
 
 
 if __name__ == "__main__":
-    _main()
+    sys.exit(_main())

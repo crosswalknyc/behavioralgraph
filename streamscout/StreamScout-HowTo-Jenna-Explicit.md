@@ -29,6 +29,7 @@ rows = streamscout_query(
     show=None,              # override SHOW on every row (franchise roll-up)
     include_clips=None,     # YouTube only — see §4
     limit=None,             # YouTube only — fair-survey cap, see §4
+    strict=False,           # explicit-platform scope guard — see §5
 )
 # -> list[dict], each: {"SHOW","URL","PRODUCTION","PLATFORM","SEASON"}
 ```
@@ -124,7 +125,44 @@ And a firehose channel (Law&Crime, ~6,030 videos) with the default cap returns a
 
 ---
 
-## 5. Output schema (every row)
+## 5. Explicit-platform scope  →  `strict=True`  (don't profile the wrong platform)
+
+When a client wants **only specific platform(s)** — e.g. *"Gilmore Girls, Hulu
+viewers only, not Netflix"* — pass **`strict=True`**. It guarantees the profile
+is built on exactly the platforms requested, and **hard-fails** if any
+directly-named platform has **zero seeds**, instead of silently returning a
+partial (or wrong-platform) set.
+
+```python
+# Client wants Hulu viewers only:
+streamscout_query("Gilmore Girls", platforms="hulu", strict=True)    # 153 Hulu rows ✅
+
+# Not actually on Disney+ → refuses to build (rather than quietly matching nothing/Netflix):
+streamscout_query("Gilmore Girls", platforms="disney", strict=True)
+#   raises PlatformScopeError: "... Disney Plus (0 seeds). Refusing to build ..."
+```
+
+- **Why it exists:** a scoped request can go wrong if the content map was
+  preloaded with a *different* platform's seeds (the Gilmore Girls case —
+  Netflix-only seeds were loaded, so a "Hulu-only" profile matched Netflix
+  viewers). `strict=True` makes StreamScout the source of truth: only the
+  requested platform's fresh seeds, or a loud failure.
+- **What it enforces:** every platform you name **directly** (not via a group)
+  must return ≥1 seed. On the CLI, `--strict` exits **3** on a scope failure.
+- **Groups are not individually enforced.** `platforms="podcasts"` with
+  `strict=True` won't fail just because one member (say NPR) legitimately has no
+  episodes — a group is a "whatever's in this bucket" request.
+- **Handling it in Promy:** catch `PlatformScopeError` and surface it to the
+  client ("requested Hulu, 0 Hulu seeds found — seed Hulu or adjust the
+  platforms") rather than building. The error carries `.title`, `.missing`
+  (platform keys), and `.counts`.
+
+> **Rule of thumb:** any client request that names platforms → pass
+> `strict=True`. Broad "give me everything" sweeps → leave it off.
+
+---
+
+## 6. Output schema (every row)
 
 | Column | Meaning |
 |---|---|
@@ -136,7 +174,7 @@ And a firehose channel (Law&Crime, ~6,030 videos) with the default cap returns a
 
 ---
 
-## 6. Quick recipes
+## 7. Quick recipes
 
 ```python
 # Podcast audience (listeners + video viewers), everything in one call
@@ -155,11 +193,14 @@ for t in ["Merciless Saints", "Cruel Saints", "Ruthless Saints"]:
 
 # A game's buy/play links across every store
 streamscout_query("King of Fighters", platforms="games", show="King of Fighters")
+
+# Client scoped to a single platform (profile only those viewers)
+streamscout_query("Gilmore Girls", platforms="hulu", strict=True)
 ```
 
 ---
 
-## 7. Gotchas / good-to-know
+## 8. Gotchas / good-to-know
 
 - **YouTube is throttle-sensitive.** A rapid repeat pull of the *same* big
   channel can come back thin — wait a minute and retry; that's the throttle, not
@@ -169,4 +210,6 @@ streamscout_query("King of Fighters", platforms="games", show="King of Fighters"
 - **The cap is a *survey*, not a filter.** It never changes a show's audience
   size (sizing is show-level); it just keeps the id set processable while
   staying representative across the timespan.
+- **Platform-scoped requests → `strict=True`.** It's the guard against building a
+  profile on the wrong platform's seeds (see §5). Name platforms = pass strict.
 - **Full platform grid:** see `StreamScout-Platforms.xlsx` (23 platforms).

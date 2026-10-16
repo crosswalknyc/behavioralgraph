@@ -620,3 +620,4 @@ if __name__ == "__main__":
 # (streamscout-youtube-clips 2026-10-14 - StreamScout YouTube: full-vs-clips client choice + fair-survey even-stride cap (default 600); CI trigger only)
 # (streamscout-jenna-package 2026-10-14 - StreamScout: explicit Jenna/Promy how-to MD + refreshed 23-platform xlsx (NPR + YouTube clips/cap); CI trigger only)
 # (streamscout-siriusxm-anon-discovery 2026-10-16 - StreamScout SiriusXM: login-free title->show discovery via a shared web-search API key (Brave / Google Programmable Search) so client queries resolve anonymously; enumeration already anonymous; CI trigger only)
+# (streamscout-platform-scope-guard 2026-10-16 - StreamScout: strict explicit-platform scope in streamscout_query - hard-block (PlatformScopeError / CLI exit 3) when a directly-named platform returns 0 seeds, so a client 'Hulu-only' request never silently profiles the wrong platform; CI trigger only)
