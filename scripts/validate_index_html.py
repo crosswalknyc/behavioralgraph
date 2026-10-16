@@ -622,3 +622,5 @@ if __name__ == "__main__":
 # (streamscout-siriusxm-anon-discovery 2026-10-16 - StreamScout SiriusXM: login-free title->show discovery via a shared web-search API key (Brave / Google Programmable Search) so client queries resolve anonymously; enumeration already anonymous; CI trigger only)
 # (streamscout-platform-scope-guard 2026-10-16 - StreamScout: strict explicit-platform scope in streamscout_query - hard-block (PlatformScopeError / CLI exit 3) when a directly-named platform returns 0 seeds, so a client 'Hulu-only' request never silently profiles the wrong platform; CI trigger only)
 # (streamscout-availability-advisory 2026-10-16 - StreamScout: advisory current-availability check (streamscout_availability.check_availability) via the shared web-search key - 'where to watch {title}' lookup, needs no resolve, flags (never blocks) when a requested platform doesn't currently carry the title so preloaded-seed profiles can't silently use a platform it has left; CI trigger only)
+
+# ci-trigger: streamscout-scope-notify

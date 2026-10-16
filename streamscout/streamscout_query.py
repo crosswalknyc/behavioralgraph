@@ -54,19 +54,39 @@ GROUPS["all"] = [p for g in ("video", "podcasts", "audio", "books", "games")
                  for p in GROUPS[g]]
 
 
+def client_message(title, labels):
+    """The honest, client-facing line when a scoped platform has no matches —
+    e.g. "We can't see Gilmore Girls on Hulu at this time. Notifying Crosswalk
+    and will get back to you soon." Promy should relay this verbatim."""
+    labels = [str(x) for x in (labels or []) if str(x).strip()]
+    if not labels:
+        where = "the requested platform"
+    elif len(labels) == 1:
+        where = labels[0]
+    elif len(labels) == 2:
+        where = "%s and %s" % (labels[0], labels[1])
+    else:
+        where = "%s, and %s" % (", ".join(labels[:-1]), labels[-1])
+    return ("We can't see %s on %s at this time. Notifying Crosswalk and will "
+            "get back to you soon." % (title, where))
+
+
 class PlatformScopeError(Exception):
     """Raised in strict mode when a client EXPLICITLY asked for a platform but it
     produced zero seeds — so no profile is ever silently built on the wrong
     platform (e.g. "Hulu-only" quietly matching preloaded Netflix seeds). Carries
-    the structured detail so callers/Promy can surface or branch on it.
+    the structured detail so callers/Promy can surface or branch on it:
+      .title, .missing (platform keys), .missing_labels (display names),
+      .counts (per-platform seed counts), .client_message (relay verbatim).
     """
 
     def __init__(self, title, missing, counts=None):
         self.title = title
         self.missing = list(missing)
         self.counts = dict(counts or {})
-        human = ", ".join("%s (0 seeds)" % ss.platform_label(p)
-                          for p in self.missing)
+        self.missing_labels = [ss.platform_label(p) for p in self.missing]
+        self.client_message = client_message(title, self.missing_labels)
+        human = ", ".join("%s (0 seeds)" % lbl for lbl in self.missing_labels)
         super().__init__(
             "explicit platform scope not satisfiable for %r: %s. Refusing to "
             "build so no profile runs on the wrong platform. Seed these "
@@ -104,7 +124,7 @@ def _platform_keys(platforms, return_explicit=False):
 
 def streamscout_query(title, platforms=None, kind="series", seasons=None,
                       url=None, show=None, include_clips=None, limit=None,
-                      strict=False):
+                      strict=False, notify=False, notify_context=None):
     """Resolve ``title`` on the given platform(s); return content_map rows.
 
     Parameters
@@ -142,6 +162,15 @@ def streamscout_query(title, platforms=None, kind="series", seasons=None,
         built on the wrong platform (e.g. only Netflix seeds were loaded). Group
         names are not individually enforced — a group is a "whatever's here"
         bucket.
+    notify : bool
+        Only meaningful with ``strict=True``. When a scoped platform has no
+        matches, also email Crosswalk (Jenna + Jess) that the build was refused —
+        so a human picks it up instead of anyone quietly substituting another
+        platform's seeds. The alert send never raises; the PlatformScopeError is
+        raised either way.
+    notify_context : dict | None
+        Optional extra fields for the alert email (e.g. {"window": "...",
+        "client": "...", "requested_by": "..."}).
 
     Returns
     -------
@@ -151,6 +180,7 @@ def streamscout_query(title, platforms=None, kind="series", seasons=None,
     ------
     PlatformScopeError
         In strict mode, when an explicitly-requested platform yields zero seeds.
+        Carries ``.client_message`` (relay verbatim) and ``.missing_labels``.
     """
     options = {"include_clips": include_clips, "limit": limit}
     keys, explicit = _platform_keys(platforms, return_explicit=True)
@@ -180,7 +210,20 @@ def streamscout_query(title, platforms=None, kind="series", seasons=None,
     if strict and explicit:
         missing = [p for p in explicit if counts.get(p, 0) == 0]
         if missing:
-            raise PlatformScopeError(title, missing, counts)
+            err = PlatformScopeError(title, missing, counts)
+            if notify:
+                # Loop a human in (email Jenna + Jess). NEVER let a mail problem
+                # turn a clean refusal into a crash — the build is refused either
+                # way, so no other platform's seeds get silently substituted.
+                try:
+                    import streamscout_notify as _notify
+                    _notify.send_scope_alert(
+                        title, err.missing_labels,
+                        client_message=err.client_message,
+                        context=notify_context)
+                except Exception:  # noqa: BLE001
+                    pass
+            raise err
     return out
 
 
@@ -209,6 +252,9 @@ def _main():
                          "directly-named platform returns 0 seeds (so a scoped "
                          "'Hulu-only' request can't silently build on the wrong "
                          "platform)")
+    ap.add_argument("--notify", action="store_true",
+                    help="with --strict: on a scope failure, email Crosswalk "
+                         "(Jenna + Jess) that the build was refused")
     ap.add_argument("--csv", action="store_true",
                     help="print CSV instead of JSON")
     args = ap.parse_args()
@@ -217,8 +263,11 @@ def _main():
         rows = streamscout_query(args.title, platforms=plats, kind=args.kind,
                                  show=args.show,
                                  include_clips=(args.include_clips or None),
-                                 limit=args.limit, strict=args.strict)
+                                 limit=args.limit, strict=args.strict,
+                                 notify=args.notify)
     except PlatformScopeError as e:
+        # The client-facing line goes to stdout for relay; detail to stderr.
+        print(e.client_message)
         print(f"PlatformScopeError: {e}", file=sys.stderr)
         return 3
     if args.csv:
