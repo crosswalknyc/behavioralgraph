@@ -9291,10 +9291,8 @@ def _pm_intake_resolve(flow, text, history, parse_fn, complete_fn,
             # form lets a falsy value ("daily tracking off") ride.
             if prop and len(prop) in (2, 3) and (
                     prop[1] or (len(prop) == 3 and prop[2])):
-                field, value = prop[0], prop[1]
-                display = prop[2] if len(prop) == 3 else value
-                parsed[field] = value
-                parsed['_proposed'] = {'field': field, 'value': display}
+                from prometheus.intake_reader import apply_proposal
+                _keys = apply_proposal(parsed, prop)   # one field, or a window's two (2026-10-16)
                 if complete_fn(parsed):
                     try:
                         _pm_ask_hint(outcome='intake_proposed_field',
@@ -9302,8 +9300,8 @@ def _pm_intake_resolve(flow, text, history, parse_fn, complete_fn,
                     except Exception as _fx:
                         _faults.note('chat', _fx)
                     return parsed, False
-                parsed.pop(field, None)
-                parsed.pop('_proposed', None)
+                for _k in _keys + ['_proposed']:
+                    parsed.pop(_k, None)
         except Exception:
             traceback.print_exc()
     found = sum(1 for k in required if parsed.get(k))
@@ -9379,6 +9377,7 @@ def _pm_intake_turn(flow, text, body, history, user, ppu, first):
     kind, confirm_name, run_label, payload_key, collect_key, labels = _PM_INTAKE_UI[flow]
     parse_fn, complete_fn, required, ask_copy, fallback_fn, propose_fn = _pm_intake_flow_table()[flow]
     base = {'success': True, 'action': 'answer', 'offer_deck': False, 'deck_angle': None}
+    from prometheus import intake_reader as _ir
     _pre = None
     _low = ' '.join(str(text or '').lower().split()).strip(' .!')
     if not first and _low == 'name another subject':
@@ -9392,13 +9391,11 @@ def _pm_intake_turn(flow, text, body, history, user, ppu, first):
             if drafted:
                 return drafted
         if first:
-            try: _pre = parse_fn(text, usage_extras=ppu) if len(str(text or '').split()) >= 4 else {}
-            except Exception: _pre = {}
-            if not [v for v in (str((_pre or {}).get(k) or '').strip() for k in ('subject', 'talent', 'brand_partner', 'campaign_name')) if v]:
+            _pre = _ir.first_read(text, parse_fn, fallback_fn, usage_extras=ppu)   # the model, then the rules when it read nothing
+            if not _ir.names_subject(_pre):
                 _pm_ask_hint(outcome='intake_page_question', subject=_page)
                 return {**base, 'reply': _pm_intake_page_question(kind, _page), collect_key: True,
                         'followups': [f'Use {_page}', 'Name another subject', 'Cancel']}
-    from prometheus import intake_reader as _ir
     from prometheus import precedent as _prec
     template = _prec.reference(text) or _ir.reading_precedent(body)   # "like the one you did for X" (Jenna 2026-10-13); the Reader's precedent flag too (2026-10-14)
     ask_text = _ir.strip_template_reference(text) if template else text
@@ -9421,8 +9418,7 @@ def _pm_intake_turn(flow, text, body, history, user, ppu, first):
         if not complete_fn(parsed) and propose_fn:
             prop = propose_fn(parsed)
             if prop:
-                parsed[prop[0]] = prop[1]
-                parsed.setdefault('_proposed', {'field': prop[0], 'value': prop[1]})
+                _ir.apply_proposal(parsed, prop, keep_existing=True)
     have = any(parsed.get(k) for k in required) if isinstance(parsed, dict) else False
     if first and not have:   # an ask that names nothing gets the opener (a reader fault on a first turn is not the reader's)
         return {**base, 'reply': ask_copy, collect_key: True, 'followups': ['Cancel']}
@@ -9542,7 +9538,7 @@ def _pm_intake_flow_table():
             _pm_bpiq_parse, _pm_bpiq_inputs_complete,
             ('brand_partner', 'qualifier', 'event_start', 'event_end'),
             _PM_BPIQ_ASK_COPY, keyword_parse_brand_partnership,
-            propose_brand_partnership_field),
+            lambda parsed: propose_brand_partnership_field(parsed, researcher=_pm_bpiq_flight_research)),
         'attribution': (
             _pm_aiq_parse, _pm_aiq_inputs_complete,
             ('campaign_name', 'urls', 'conversion_event'),
@@ -16657,6 +16653,12 @@ def _pm_bpiq_parse(text, usage_extras=None):
     return parsed if isinstance(parsed, dict) else {}
 
 
+def _pm_bpiq_flight_research(brand, campaign, qualifier=''):
+    """One web-search call dating a brand's named initiative (prometheus.bpiq_window)."""
+    from prometheus import bpiq_window as _bw
+    return _bw.flight_research(brand, campaign, qualifier, claude_data=_pm_claude_data)
+
+
 def _pm_bpiq_inputs_complete(parsed):
     return bool(parsed.get('brand_partner') and parsed.get('qualifier')
                 and parsed.get('event_start')
@@ -16672,9 +16674,11 @@ def _pm_bpiq_confirm_reply(parsed):
             if parsed.get('post_start') and parsed.get('post_end')
             else 'campaign end through today')
     aud = parsed.get('audience') or 'the partner audience'
+    from prometheus import bpiq_window as _bw
     return (
         f"Here's the valuation I'll run:\n"
         f"- {parsed['qualifier']} x {parsed['brand_partner']}\n"
+        f"{_bw.context_lines(parsed)}"
         f"- Campaign window: {ev}\n"
         f"- Baseline window: {pre}\n"
         f"- Post window: {post}\n"

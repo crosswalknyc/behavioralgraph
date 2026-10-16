@@ -95,14 +95,25 @@ from a user's message. Return STRICT JSON only:
   "post_start": "YYYY-MM-DD"|null,   // optional explicit post window
   "post_end": "YYYY-MM-DD"|null,
   "audience": str|null,        // optional audience descriptor
+  "campaign": str|null,        // the named campaign / initiative /
+                               // program the partnership ran under
+                               // ("Earn Your Sunday"), when given
+  "period_hint": str|null,     // a relative period given instead of
+                               // dates ("last year", "this past fall",
+                               // "Q4 2025", "the 2025 NFL season")
+  "links": [str, ...],         // every URL in the message, verbatim
   "missing": [str, ...]        // which of brand_partner / qualifier /
                                // event window are still missing
 }
 Month-year inputs ("Apr 2024") map to the first of the month for
 starts and the last day of the month for ends. "through today" or an
 open post window maps to null post_end (the builder clips to today).
-Never invent a brand or dates the user did not give; list what is
-missing in "missing"."""
+"X x Y" reads partner x brand (Glen Powell x RAM Trucks; MMG x Lowe's):
+the first name is the talent or property, the second is the brand
+being valued. A parenthetical after a name ("MMG (YouTube, IG,
+TikTok)") lists platforms, not the name. Never invent a brand or dates
+the user did not give; a relative period goes in period_hint, never
+into the dates; list what is missing in "missing"."""
 
 
 RESEARCH_SYSTEM_PROMPT = """You are valuing a brand partnership from a
@@ -866,6 +877,15 @@ def synthesize(inputs: dict, claude_json: Callable, *,
         "pre_period": windows["pre"],
         "event_period": windows["event"],
         "post_period": windows["post"],
+        # the campaign context the ask carried (2026-10-16): the named
+        # initiative and the creator's own links identify the exact
+        # partner (MMG = the YouTube/TikTok creator, not a label) and
+        # the assets the research should start from
+        **({"campaign": inputs["campaign"]} if inputs.get("campaign") else {}),
+        **({"campaign_links": list(inputs["links"])[:12],
+            "campaign_links_rule": ("The partner is the account behind these links. Research them first: "
+                                    "the channel or handle, its size, and the sponsored posts for the brand.")}
+           if inputs.get("links") else {}),
         **({"published_figures": published,
             "published_figures_rule": ("Binding. The audience size and every count "
                                        "must agree with these where they overlap and "

@@ -1,6 +1,6 @@
 {
  "version": 1,
- "content_hash": "daf7ff296cdcfcaf2a2341e7c49c0f01f6bbc1bd86d668f52137751837acc208",
+ "content_hash": "b1f895bf3211a6d71bce8d6773f8f7259f617885c67a50b19b52c675c572c4a2",
  "decisions": [
   {
    "id": "kids_viewers_default",
@@ -580,7 +580,24 @@
    "sources": [
     "prometheus-brain.md"
    ]
+  },
+  {
+   "id": "explicit_ask_read_whole",
+   "statement": "A brand partnership ask that names the partner and the brand ('MMG x Lowe's'), a campaign ('during their Earn Your Sundays initiative'), a time ('last year') or campaign links has given the window: propose it on the confirm card (the partner's first post through the end of the brand's flight, or the period named) and say what was taken. Never ask for the campaign window again, never draft from the profile on screen, and carry the campaign name and the links into the valuation so the research starts from the partner's own posts.",
+   "match_terms": [
+    "brand partnership valuation",
+    "partnered with",
+    "initiative last year",
+    "campaign links",
+    "here are the links",
+    "x lowe",
+    "valuation for",
+    "campaign window"
+   ],
+   "sources": [
+    "prometheus-brain.md"
+   ]
   }
  ],
- "generated_at": "2026-10-16T20:00:11Z"
+ "generated_at": "2026-10-16T20:30:32Z"
 }

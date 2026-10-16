@@ -579,7 +579,7 @@ def merge_missing(primary, secondary, required):
                 'start_date', 'end_date',
                 # brand partnership
                 'pre_start', 'pre_end', 'post_start', 'post_end',
-                'audience',
+                'audience', 'campaign', 'period_hint', 'links',
                 # attribution
                 'end_tracking_date')
     for k in tuple(required) + optional:
@@ -731,10 +731,10 @@ _BP_LABELLED = {
         r'\s*(?P<v>[^,.;\n]{3,60})', re.I),
 }
 _BP_PREP = re.compile(
-    r'\b(?:valu(?:e|ation\s+of|ing)|measure|price|partnership\s+(?:of|for))'
+    r'\b(?:valu(?:e|ation\s+(?:of|for)|ing)|measure|price|partnership\s+(?:of|for))'
     r'\s+(?:the\s+)?(?P<brand>' + _CAPS_RUN + r')'
     r'(?:\s+(?:partnership|deal|sponsorship|campaign|integration))?'
-    r'\s+(?:with|on|and|x|×)\s+(?P<partner>' + _CAPS_RUN + r')')
+    r'\s+(?P<conn>with|on|and|x|×)\s+(?P<partner>' + _CAPS_RUN + r')')
 _BP_NOISE = {'brand', 'partnership', 'valuation', 'campaign', 'window',
              'pull', 'run', 'the', 'a', 'an', 'value', 'please', 'post',
              'pre', 'through', 'optional', 'audience'}
@@ -758,30 +758,244 @@ def _bp_is_name(v):
     return True
 
 
+_URL_ANY = re.compile(r'https?://[^\s,;<>"\')\]]+')
+_BP_CAMPAIGN = re.compile(
+    r"(?:['\"](?P<v>[^'\"\n]{3,60})['\"]\s+(?:initiative|initiate|campaign|program|programme|push|activation|flight|platform)\b)"
+    r"|(?:\bthe\s+(?P<v2>[A-Z][\w'&.-]*(?:\s+[A-Z][\w'&.-]*){0,4})\s+(?:initiative|campaign|program|programme|push|activation|flight)\b)",
+    re.I)
+_SEASONS = {'spring': (3, 1, 5, 31), 'summer': (6, 1, 8, 31), 'fall': (9, 1, 11, 30), 'autumn': (9, 1, 11, 30), 'winter': (12, 1, 2, 28),
+            'holiday': (11, 1, 12, 31), 'holidays': (11, 1, 12, 31)}
+_PERIOD_HINT = re.compile(
+    r"\b(?:last|this\s+past|the\s+past|this|past)\s+(?:year|month|quarter|spring|summer|fall|autumn|winter|holiday\s+season|holidays|nfl\s+season|season)\b"
+    r"|\b(?:in|during|over|across)\s+(?:the\s+)?(?:(?:spring|summer|fall|autumn|winter|holiday\s+season)\s+(?:of\s+)?)?(?:20\d\d)\b"
+    r"|\bq[1-4]\s*(?:of\s*)?20\d\d\b|\b20\d\d\s*q[1-4]\b"
+    r"|\b(?:the\s+)?20\d\d(?:[-/]\d\d)?\s+(?:nfl|nba|mlb|nhl|college\s+football|holiday)\s+season\b",
+    re.I)
+
+
+def _period_from_hint(hint, today=None):
+    """A relative period ("last year", "this past fall", "Q4 2025",
+    "in 2025", "the 2025 NFL season") as (start, end) ISO dates, clipped
+    to today. None when the words do not name a period."""
+    import datetime as _dt
+    import calendar as _cal
+    today = today or _dt.date.today()
+    h = ' '.join(str(hint or '').lower().split())
+    if not h:
+        return None
+
+    def _clip(a, b):
+        if b > today:
+            b = today
+        return (a.isoformat(), b.isoformat()) if a <= b else None
+    m = re.search(r'q([1-4])\s*(?:of\s*)?(20\d\d)|(20\d\d)\s*q([1-4])', h)
+    if m:
+        q = int(m.group(1) or m.group(4)); y = int(m.group(2) or m.group(3))
+        a = _dt.date(y, 3 * (q - 1) + 1, 1); em = 3 * q
+        return _clip(a, _dt.date(y, em, _cal.monthrange(y, em)[1]))
+    m = re.search(r'(20\d\d)(?:[-/](\d\d))?\s+(nfl|college football)\s+season', h)
+    if m:
+        y = int(m.group(1))
+        return _clip(_dt.date(y, 9, 1), _dt.date(y + 1, 2, 15))
+    m = re.search(r'(20\d\d)\s+(nba|nhl)\s+season', h)
+    if m:
+        y = int(m.group(1))
+        return _clip(_dt.date(y, 10, 1), _dt.date(y + 1, 6, 30))
+    m = re.search(r'(20\d\d)\s+mlb\s+season', h)
+    if m:
+        y = int(m.group(1))
+        return _clip(_dt.date(y, 3, 20), _dt.date(y, 11, 5))
+    m = re.search(r'(spring|summer|fall|autumn|winter|holiday season)\s+(?:of\s+)?(20\d\d)', h)
+    if m:
+        season, y = m.group(1).split()[0], int(m.group(2))
+        sm, sd, em, ed = _SEASONS[season]
+        ey = y + 1 if season == 'winter' else y
+        return _clip(_dt.date(y, sm, sd), _dt.date(ey, em, min(ed, _cal.monthrange(ey, em)[1])))
+    m = re.search(r'\b(20\d\d)\b', h)
+    if m and not re.search(r'last|this|past', h):
+        y = int(m.group(1))
+        return _clip(_dt.date(y, 1, 1), _dt.date(y, 12, 31))
+    last = bool(re.search(r'\b(?:last|this past|the past|past)\b', h))
+    if 'year' in h:
+        y = today.year - 1 if last else today.year
+        return _clip(_dt.date(y, 1, 1), _dt.date(y, 12, 31))
+    if 'quarter' in h:
+        q = (today.month - 1) // 3 + 1
+        y = today.year
+        if last:
+            q -= 1
+            if q == 0:
+                q, y = 4, y - 1
+        a = _dt.date(y, 3 * (q - 1) + 1, 1); em = 3 * q
+        return _clip(a, _dt.date(y, em, _cal.monthrange(y, em)[1]))
+    if 'month' in h:
+        y, mo = today.year, today.month
+        if last:
+            mo -= 1
+            if mo == 0:
+                mo, y = 12, y - 1
+        return _clip(_dt.date(y, mo, 1), _dt.date(y, mo, _cal.monthrange(y, mo)[1]))
+    if 'nfl season' in h or ('season' in h and 'holiday' not in h):
+        # the most recent season that has started: Sept to mid-Feb
+        y = today.year if today.month >= 9 else today.year - 1
+        if last and today.month >= 9:
+            y -= 1
+        return _clip(_dt.date(y, 9, 1), _dt.date(y + 1, 2, 15))
+    for season, (sm, sd, em, ed) in _SEASONS.items():
+        if season in h:
+            y = today.year
+            start_this = _dt.date(y, sm, sd)
+            if last or start_this > today:
+                y -= 1
+            ey = y + 1 if season == 'winter' else y
+            return _clip(_dt.date(y, sm, sd), _dt.date(ey, em, min(ed, _cal.monthrange(ey, em)[1])))
+    return None
+
+
+def _youtube_publish_date(url, timeout=8):
+    """The publish date of a public YouTube video or Short, or None.
+    One GET, fail-safe, no API key."""
+    try:
+        if not re.search(r'(?:youtube\.com/(?:watch|shorts/)|youtu\.be/)', str(url or ''), re.I):
+            return None
+        import urllib.request
+        req = urllib.request.Request(str(url), headers={'User-Agent': 'Mozilla/5.0', 'Accept-Language': 'en-US,en;q=0.9'})
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            html = r.read(1_500_000).decode('utf-8', 'ignore')
+        m = re.search(r'"(?:publishDate|uploadDate)":"(\d{4}-\d{2}-\d{2})', html)
+        return m.group(1) if m else None
+    except Exception:
+        return None
+
+
+def link_dates(links, fetch=_youtube_publish_date):
+    """ISO dates of the campaign assets the links point at (public
+    YouTube videos today; other hosts need a login and return nothing)."""
+    out = []
+    for u in list(links or [])[:8]:
+        d = fetch(u)
+        if d:
+            out.append(d)
+    return sorted(set(out))
+
+
+def _pretty(iso):
+    import datetime as _dt
+    try:
+        return _dt.date.fromisoformat(iso).strftime('%b %-d, %Y')
+    except Exception:
+        return str(iso)
+
+
+def resolve_campaign_window(parsed, researcher=None, today=None, fetch=_youtube_publish_date):
+    """The campaign window an explicit ask implies when it gives no
+    dates: the brand's named initiative (researched when a researcher
+    is supplied), the creator's own posts (dated from the links), and
+    a relative period ("last year"). Returns (start, end, display) or
+    None. A creator partnership inside a brand flight runs from the
+    first creator post through the end of the flight.
+
+    researcher(brand, campaign, qualifier) -> {'start','end','basis'} or None.
+    """
+    import datetime as _dt
+    p = parsed or {}
+    today = today or _dt.date.today()
+    links = [str(u) for u in (p.get('links') or []) if u]
+    campaign = str(p.get('campaign') or '').strip()
+    brand = str(p.get('brand_partner') or '').strip()
+    who = str(p.get('qualifier') or 'the partner').strip()
+    if not (links or campaign or p.get('period_hint')):
+        return None
+    posts = link_dates(links, fetch=fetch) if links else []
+    flight = None
+    if campaign and brand and researcher:
+        try:
+            r = researcher(brand, campaign, who) or {}
+            if isinstance(r, dict) and r.get('start'):
+                flight = {'start': str(r['start'])[:10], 'end': str(r.get('end') or '')[:10] or None,
+                          'basis': str(r.get('basis') or '')}
+        except Exception:
+            flight = None
+    period = _period_from_hint(p.get('period_hint'), today=today) if p.get('period_hint') else None
+    start = end = None
+    start_src = end_src = ''
+    flight_label = f"the {campaign} flight" + (f" at {brand}" if brand else '')   # no possessive on a brand name (Lowe's, RAM Trucks)
+    if posts:
+        start, start_src = posts[0], f"{who}'s first post"
+    if flight:
+        if not start:
+            start, start_src = flight['start'], flight_label
+        if flight.get('end'):
+            end, end_src = flight['end'], flight_label
+    if period:
+        if not start:
+            start, start_src = period[0], str(p.get('period_hint'))
+        if not end:
+            end, end_src = period[1], str(p.get('period_hint'))
+    if start and not end:
+        # a dated creator post with no flight end: the post plus the
+        # thirty days a partnership read measures
+        end, end_src = (_dt.date.fromisoformat(start) + _dt.timedelta(days=30)).isoformat(), '30 days after it'
+    if not (start and end):
+        return None
+    if end > today.isoformat():
+        end = today.isoformat()
+    if start > end:
+        start = end
+    if posts and end < posts[-1]:
+        end = posts[-1]
+    if start_src == end_src:
+        basis = start_src
+    elif end_src == flight_label:
+        basis = f"{start_src} through the end of {flight_label}"
+    else:
+        basis = f"{start_src} through {end_src}"
+    display = f"{_pretty(start)} to {_pretty(end)}" + (f" ({basis})" if basis else '')
+    return start, end, display
+
+
 def keyword_parse_brand_partnership(text):
     """Brand Partnership brief -> brand_partner / qualifier / event
     window (+ pre / post / audience when stated), best effort."""
-    t = str(text or '')
+    t = str(text or '').replace('\u2019', "'").replace('\u2018', "'").replace('\u201c', '"').replace('\u201d', '"')
     out = {'brand_partner': None, 'qualifier': None,
            'event_start': None, 'event_end': None,
            'pre_start': None, 'pre_end': None,
            'post_start': None, 'post_end': None, 'audience': None,
-           'notes': None}
+           'notes': None, 'campaign': None, 'period_hint': None, 'links': []}
     out.update({k: v for k, v in find_windows(t).items()})
+    # The campaign context an explicit ask carries (MMG x Lowe's, Jenna
+    # 2026-10-16): every link, the named initiative, and a relative
+    # period given instead of dates. The window resolver turns these
+    # into a proposed campaign window instead of a stall.
+    out['links'] = [m.group(0).rstrip('.,;)') for m in _URL_ANY.finditer(t)]
+    m = _BP_CAMPAIGN.search(t)
+    if m:
+        out['campaign'] = _clean(m.group('v') or m.group('v2'))
+    m = _PERIOD_HINT.search(t)
+    if m:
+        out['period_hint'] = _clean(m.group(0))
     for k, rx in _BP_LABELLED.items():
         m = rx.search(t)
         if m:
             v = _bp_clean(m.group('v'))
             if v and (k == 'audience' or _bp_is_name(v)):
                 out[k] = v
-    # Strip dates so the pair readers do not swallow a window.
+    # Strip dates, links and parentheticals so the pair readers do not
+    # swallow a window or a platform list: "MMG (YouTube, IG, TikTok) x
+    # Lowe's" reads MMG and Lowe's.
     bare = _DATE_RANGE.sub(' ', t)
     bare = _SHORT_RANGE.sub(' ', bare)
     bare = _SINGLE_DATE.sub(' ', bare)
+    bare = _URL_ANY.sub(' ', bare)
+    bare = re.sub(r'\s*\([^)]*\)', ' ', bare)
+    bare = re.sub(r'\s*\n+\s*', ' . ', bare)   # a line break ends a name
     if not (out['brand_partner'] and out['qualifier']):
         m = _BP_PREP.search(bare)
         if m:
             b, p = _bp_clean(m.group('brand')), _bp_clean(m.group('partner'))
+            if m.group('conn') in ('x', '×'):   # "value the Glen Powell x RAM Trucks partnership": partner x brand
+                b, p = p, b
             if _bp_is_name(b) and _bp_is_name(p):
                 out['brand_partner'] = out['brand_partner'] or b
                 out['qualifier'] = out['qualifier'] or p
@@ -801,19 +1015,26 @@ def keyword_parse_brand_partnership(text):
     return out
 
 
-def propose_brand_partnership_field(parsed):
+def propose_brand_partnership_field(parsed, researcher=None):
     """A campaign with a start and no end is running: propose today as
-    the end. Never proposes the brand, the partner, or a start."""
+    the end. A brand and a partner with no dates but a named initiative,
+    campaign links or a relative period ("last year") get the window
+    those imply (resolve_campaign_window), proposed on the confirm card.
+    Never proposes the brand or the partner."""
     p = parsed or {}
     required = ('brand_partner', 'qualifier', 'event_start', 'event_end')
     missing = [k for k in required if not p.get(k)]
-    if missing != ['event_end']:
-        return None
     import datetime as _dt
     today = _dt.date.today().isoformat()
-    if str(p.get('event_start')) > today:
-        return None
-    return 'event_end', today, f'through today ({today})'
+    if missing == ['event_end']:
+        if str(p.get('event_start')) > today:
+            return None
+        return 'event_end', today, f'through today ({today})'
+    if missing == ['event_start', 'event_end']:
+        win = resolve_campaign_window(p, researcher=researcher)
+        if win:
+            return 'event_window', {'event_start': win[0], 'event_end': win[1]}, win[2]
+    return None
 
 
 # ---------------------------------------------------------------------
@@ -938,6 +1159,7 @@ FIELD_LABELS = {
     'the starting point', 'ecosystem': 'the ecosystem',
     'brand_partner': 'the brand', 'qualifier': 'the partner',
     'event_start': 'the campaign start', 'event_end': 'the campaign end',
+    'event_window': 'the campaign window',
     'campaign_name': 'the campaign name', 'urls': 'the campaign URLs',
     'daily_refresh': 'daily tracking',
     'end_tracking_date': 'the stop date for daily tracking',
@@ -1001,6 +1223,49 @@ def propose_flywheel_field(parsed):
         if choice:
             return field, choice
     return None
+
+
+SUBJECT_FIELDS = ('subject', 'talent', 'brand_partner', 'qualifier', 'campaign_name')
+
+
+def names_subject(parsed):
+    """Whether a first read named who or what the ask is about."""
+    return any(str((parsed or {}).get(k) or '').strip() for k in SUBJECT_FIELDS)
+
+
+def first_read(text, parse_fn, fallback_fn=None, usage_extras=None):
+    """The first read of an intake message: the model's parse, and when
+    that names nothing, the rules reader's (MMG x Lowe's, 2026-10-16: a
+    model outage must not turn an explicit ask into the page question).
+    Short messages (under four words) are not parsed. Never raises."""
+    pre = {}
+    try:
+        pre = (parse_fn(text, usage_extras=usage_extras) if len(str(text or '').split()) >= 4 else {}) or {}
+    except Exception:
+        pre = {}
+    if not names_subject(pre) and fallback_fn:
+        try:
+            pre = dict(fallback_fn(text) or {}, **{k: v for k, v in (pre or {}).items() if v})
+        except Exception:
+            pass
+    return pre if isinstance(pre, dict) else {}
+
+
+def apply_proposal(parsed, prop, keep_existing=False):
+    """Set a proposal's field (or fields, when the value is a dict such as
+    a campaign window) on ``parsed``; returns the keys it set so a caller
+    can pop them when the brief still does not complete."""
+    field, value = prop[0], prop[1]
+    display = prop[2] if len(prop) > 2 else value
+    if isinstance(value, dict):
+        parsed.update(value)
+        keys = list(value)
+    else:
+        parsed[field] = value
+        keys = [field]
+    if not (keep_existing and parsed.get('_proposed')):
+        parsed['_proposed'] = {'field': field, 'value': display}
+    return keys
 
 
 def proposed_note(field, value, run_label='Run the journey', source=''):
