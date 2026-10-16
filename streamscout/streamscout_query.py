@@ -32,7 +32,9 @@ CLI (handy for spot checks):
     python3 streamscout_query.py --title "Hades" --platforms games --show Hades
 """
 import os
+import re
 import sys
+import urllib.parse
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import streamscout as ss  # noqa: E402  (needs the path insert above)
@@ -318,6 +320,108 @@ def current_placements(title, platforms="video", kind="series", seasons=None,
     return report
 
 
+# ── viewers-profile term hygiene ──────────────────────────────────────────────
+# Profile IQ has two ways to seed a profile:
+#   • PERSON / BRAND  → host-map + name variations (the generic "touchpoints":
+#     gilmore-girls, gilmore+girls, Gilmore%20Girls, …) — who's *searching/
+#     posting* the title.
+#   • VIEWERS / LISTENERS / PLAYERS → StreamScout watch URLs from the content_map
+#     — who *actually watched/listened/played*.
+# A viewers profile must ride ONLY on the watch URLs. If the generic name
+# variations leak in, the profile stops being "Hulu viewers" and drifts back
+# toward "anyone who mentioned Gilmore Girls." These helpers let Promy strip them.
+
+_UUID_RE = re.compile(
+    r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-"
+    r"[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
+
+
+def name_variations(title):
+    """The generic brand/name **touchpoint** terms for a title — the host-map
+    style name variations (spacing, delimiters, URL-encoding, case) that a
+    PERSON/BRAND profile uses. A VIEWERS/LISTENERS/PLAYERS profile must NOT use
+    these; this set exists so Promy can DETECT and STRIP them.
+
+    Returns a lowercased set for case-insensitive membership tests. For
+    "Gilmore Girls": {"gilmore girls", "gilmoregirls", "gilmore-girls",
+    "gilmore_girls", "gilmore.girls", "gilmore+girls", "gilmore%20girls", …}.
+    """
+    base = (title or "").strip()
+    if not base:
+        return set()
+    words = [w for w in re.split(r"\s+", base) if w]
+    out = set()
+    for d in ("", " ", "-", "_", ".", "+", "%20", "/", "·"):
+        out.add(d.join(words).lower())
+    out.add(base.lower())
+    out.add(urllib.parse.quote(base).lower())      # Gilmore%20Girls
+    out.add(urllib.parse.quote_plus(base).lower())  # Gilmore+Girls
+    return out
+
+
+def _term_keys(term):
+    """Comparable keys for a candidate term: itself (raw + lowercased) plus any
+    UUID(s) it contains — so a bare UUID matches a full watch URL and vice versa.
+    """
+    s = str(term or "").strip()
+    keys = {s, s.lower()}
+    for m in _UUID_RE.findall(s):
+        keys.add(m.lower())
+    return keys
+
+
+def viewer_terms(rows):
+    """The authoritative term set for a viewers/listeners/players profile: the
+    StreamScout watch URLs/identifiers only, de-duped, in order. Pass the rows
+    from ``streamscout_query()``; hand the result straight to Profile IQ.
+    Accepts row dicts (reads "URL") or bare identifier strings.
+    """
+    seen, out = set(), []
+    for r in rows or []:
+        u = (r.get("URL", "") if isinstance(r, dict) else r) or ""
+        u = str(u).strip()
+        if u and u not in seen:
+            seen.add(u)
+            out.append(u)
+    return out
+
+
+def split_profile_terms(candidate_terms, title, rows=None):
+    """Safety guard for viewers profiles. Split a candidate term list into
+    ``(watch_terms, generic_touchpoints)``:
+
+      * **generic_touchpoints** — name variations of ``title`` (brand/host-map
+        style, e.g. 'gilmore-girls', 'gilmore+girls', 'Gilmore%20Girls') →
+        DROPPED. A viewers profile must never seed on these.
+      * **watch_terms** — kept. When ``rows`` is given this is STRICT: a term
+        survives only if it matches an actual StreamScout identifier (bare-UUID
+        ↔ full-URL aware), so nothing but real watch URLs gets through. Without
+        ``rows`` it's lenient: anything that isn't a name variation is kept.
+
+    Returns ``(watch_terms, generic_touchpoints)`` — both de-duped, order kept.
+    """
+    variants = name_variations(title)
+    allow = None
+    if rows is not None:
+        allow = set()
+        for u in viewer_terms(rows):
+            allow |= _term_keys(u)
+    kept, dropped, seen = [], [], set()
+    for t in candidate_terms or []:
+        s = str(t or "").strip()
+        if not s or s in seen:
+            continue
+        seen.add(s)
+        if s.lower() in variants:          # a generic brand touchpoint
+            dropped.append(s)
+            continue
+        if allow is not None and not (_term_keys(s) & allow):
+            dropped.append(s)              # not a real StreamScout watch URL
+            continue
+        kept.append(s)
+    return kept, dropped
+
+
 def _main():
     import argparse
     import csv
@@ -354,10 +458,25 @@ def _main():
                     help="with --placements: comma-list of platforms already in "
                          "the content_map (keys or labels, e.g. 'Netflix') to "
                          "reconcile against")
+    ap.add_argument("--scrub-terms", action="store_true",
+                    help="viewers-profile term hygiene: read candidate terms "
+                         "from stdin (comma/newline separated), drop generic "
+                         "brand touchpoints (name variations of --title), print "
+                         "only the watch URLs. Dropped terms go to stderr.")
     ap.add_argument("--csv", action="store_true",
                     help="print CSV instead of JSON")
     args = ap.parse_args()
     plats = [p.strip() for p in args.platforms.split(",") if p.strip()]
+    if args.scrub_terms:
+        blob = sys.stdin.read()
+        cand = [t.strip() for t in re.split(r"[,\n\r]+", blob) if t.strip()]
+        kept, dropped = split_profile_terms(cand, args.title)
+        if dropped:
+            print("dropped %d generic touchpoint(s): %s"
+                  % (len(dropped), ", ".join(dropped)), file=sys.stderr)
+        print("\n".join(kept) if not args.csv else ",".join(kept))
+        print("\n%d watch term(s) kept" % len(kept), file=sys.stderr)
+        return 0
     if args.placements:
         known = ([k.strip() for k in args.known.split(",") if k.strip()]
                  if args.known else None)
