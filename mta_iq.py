@@ -1664,6 +1664,7 @@ _CREATIVE_DIMENSIONS = (
     ("asset_type", "Creative type", "Which kind of creative converted best"),
     ("channel", "Channel", "Which channel converted best"),
     ("paid_or_organic", "Paid, organic or earned", "Paid, organic or earned: which converted best"),
+    ("phase", "Campaign phase", "Which phase of the campaign converted best"),
 )
 _PAID_LABELS = {"paid": "Paid", "organic": "Organic", "earned": "Earned"}
 
