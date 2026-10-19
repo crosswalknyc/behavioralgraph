@@ -89,17 +89,23 @@ _INVOLVEMENT = ('live', 'one_sitting', 'episode2', 'posted', 'followed_star', 'a
 
 # plausibility bands for a star's measures (share of the people they brought)
 _BANDS = {
-    'live': (28.0, 78.0), 'one_sitting': (70.0, 96.0), 'episode2': (45.0, 92.0), 'posted': (4.0, 45.0),
-    'followed_star': (5.0, 60.0), 'new_fan': (8.0, 60.0), 'ad_buy': (1.5, 12.0),
+    'live': (28.0, 78.0), 'one_sitting': (62.0, 96.0), 'episode2': (40.0, 92.0), 'posted': (3.0, 45.0),
+    'followed_star': (2.0, 60.0), 'new_fan': (8.0, 64.0), 'ad_buy': (0.6, 12.0),
 }
-# the salted gap between consecutive stars in an order, per measure (lo, hi) in points
+# the salted gap between consecutive stars in an order, per measure (lo, hi) in
+# points: a value already inside the band keeps the research number, one
+# outside it moves to the salted gap. The first pair is narrow where the ask
+# said "just slightly below"; the second pair is wide so a distant third can
+# stay distant.
 _GAPS = {
-    'draw': ((1.6, 3.4), (16.0, 26.0)),
-    'live': ((2.5, 6.5), (1.0, 5.0)), 'one_sitting': ((1.5, 4.5), (1.0, 3.5)), 'episode2': ((2.5, 6.5), (2.0, 6.0)),
-    'posted': ((4.0, 9.0), (3.0, 8.0)), 'followed_star': ((4.0, 9.0), (6.0, 14.0)), 'new_fan': ((12.0, 22.0), (2.0, 7.0)),
-    'ad_buy': ((1.2, 2.4), (0.7, 1.8)),
+    'draw': ((1.6, 3.4), (0.0, 0.0)),            # the third star is a RATIO of the second (see _DRAW_THIRD_RATIO)
+    'live': ((2.5, 12.0), (1.0, 20.0)), 'one_sitting': ((1.5, 8.0), (1.0, 15.0)), 'episode2': ((2.5, 12.0), (2.0, 20.0)),
+    'posted': ((4.0, 14.0), (3.0, 20.0)), 'followed_star': ((4.0, 14.0), (6.0, 40.0)), 'new_fan': ((10.0, 24.0), (2.0, 30.0)),
+    'ad_buy': ((0.4, 1.2), (0.2, 0.9)),
 }
+_DRAW_THIRD_RATIO = (0.34, 0.44)   # the third star's draw as a share of the second's
 _STAR_SUM_CAP = 86.0          # the non-star groups keep at least 14 points of the audience
+_STAR_SUM_FLOOR = 75.0        # and the stars carry the audience: the ask is that they were the drivers
 _DEFAULT_GROUPS = (
     {'id': 'franchise', 'name': 'The {franchise} name and the {night} block',
      'came_from': 'Regular viewers of the franchise block who would have watched whatever ran in the slot'},
@@ -137,7 +143,7 @@ OUTPUT (strict JSON, every key present):
  "cover_title": str (one sentence, at most 12 words, the single biggest finding),
  "universe": {"live_same_day_viewers": int, "digital_live_share_pct": float, "catch_up_pct_of_live": float, "streaming_home_us_reach": int, "basis": str (one sentence with the numbers in it)},
  "spine": {"heard_share_of_us_pct": float, "looked_up_pct_of_heard": float, "finished_pct_of_started": float},
- "fork": {"met_nudge_pct_of_stopped": float (of the people who stopped before the end, the share who then met a clip, a cast post, a recap or the continue-watching row), "came_back_pct_of_nudged": float (of those, the share who came back to the episode)},
+ "fork": {"met_nudge_pct_of_stopped": float (of the people who stopped before the end, the share who then met a clip, a cast post, a recap or the continue-watching row), "came_back_pct_of_nudged": float (of those, the share who came back to the episode), "finished_pct_of_returned": float (of those who came back, the share who watched it through)},
  "cast": [{"name": str, "share_pct": float, "live_pct": float, "one_sitting_pct": float, "episode2_pct": float, "posted_pct": float, "followed_star_pct": float, "new_to_franchise_pct": float, "ad_click_buy_pct": float, "fan_base": str (one plain sentence: who these people are and where they came from), "evidence": str (one plain sentence on the public signal behind the read)}],
  "origin_franchise": [{"label": str, "pct": float, "doing": str}] (exactly three rows, in the order: stayed from the lead-in; came for it on purpose; came back for a star from an earlier franchise series),
  "discovery": [{"label": str, "pct": float, "doing": str, "breakdown": [{"label": str, "pct": float, "doing": str}]}] (7 to 9 rows, partition),
@@ -146,7 +152,7 @@ OUTPUT (strict JSON, every key present):
  "where_watched": [{"label": str, "pct": float, "doing": str}] (5 to 7 rows, partition),
  "when_after_live": [{"label": one of ["Later that night, on demand","The next day","Days 2 to 4","Days 5 to 7"], "pct": float, "doing": str}] (all four, partition of the people who did not watch live),
  "second_screen": [{"label": str, "pct": float, "doing": str}] (4 rows, in this order: had a second screen open during the episode; searched the show or the cast during the episode; posted or commented during the episode; clicked an ad during the episode),
- "who": {"female_pct": float, "age_lead": str (e.g. "45 to 64"), "age_lead_pct": float, "ethnicity_lead": str, "income_lead": str, "read": str (two sentences, plain, naming how the stars' followings differ)},
+ "who": {"female_pct": float, "age_lead": str (e.g. "45 to 64"), "age_lead_pct": float, "ethnicity_lead": str, "income_lead": str, "read": str (two sentences, plain; if it names one star's following it names every star's)},
  "facts": [str] (5 one-sentence facts with a number each),
  "anchors_note": str (internal, the public anchors used)
 }
@@ -271,10 +277,24 @@ def shape_cast(inputs: dict, prim_cast: list, seed) -> list:
     # draw shares: the stars in draw order with the salted gaps, capped so the
     # non-star groups keep their room, then the two groups split the rest
     draws = {n: got(n, 'share_pct', 30.0 - 10.0 * i) for i, n in enumerate(names)}
-    draws = _hold_order(draws, names, _GAPS['draw'], (3.0, 60.0), (seed, 'draw'))
+    draws = _hold_order(draws, names[:2], _GAPS['draw'][:1], (3.0, 60.0), (seed, 'draw'))
+    if len(names) >= 3:
+        lo_r, hi_r = _DRAW_THIRD_RATIO
+        second = draws[names[1]]
+        third = draws.get(names[2], second * (lo_r + hi_r) / 2)
+        if not (second * lo_r <= third <= second * hi_r):
+            third = second * (lo_r + (_h(seed, 'third') % 1001) / 1000.0 * (hi_r - lo_r))
+        draws[names[2]] = third
+        prev = third
+        for n in names[3:]:
+            v = draws.get(n, prev * 0.6)
+            draws[n] = min(v, prev * 0.85)
+            prev = draws[n]
     tot = sum(draws.values())
-    if tot > _STAR_SUM_CAP:
-        draws = {n: v * _STAR_SUM_CAP / tot for n, v in draws.items()}
+    if tot > _STAR_SUM_CAP or tot < _STAR_SUM_FLOOR:
+        target = _STAR_SUM_CAP if tot > _STAR_SUM_CAP else _STAR_SUM_FLOOR
+        target = target - 0.5 + (_h(seed, 'starsum') % 1001) / 1000.0   # a salted point inside the band's edge
+        draws = {n: v * target / tot for n, v in draws.items()}
     rest = 100.0 - sum(draws.values())
     g_raw = {g['name']: max(0.5, got(g['name'], 'share_pct', 8.0 if g['id'] == 'franchise' else 4.0)) for g in groups}
     g_tot = sum(g_raw.values()) or 1.0
@@ -436,26 +456,39 @@ def build_payload(inputs: dict, prim: dict, *, created_by: str = 'prometheus') -
         assert 0 < totals[mid] < v4 and totals[mid] % 10, (mid, totals[mid], v4)
 
     # ---- the fork off "started": finished in one sitting, or stopped and came back
-    paid, penult = v4, v3
+    paid = v4
     paid_first = totals['one_sitting']
     paid_return = paid - paid_first
-    abandoned = penult - paid_first
     fk = prim.get('fork') or {}
-    met = min(0.95, max(0.25, _f(fk.get('met_nudge_pct_of_stopped'), 68.0) / 100.0))
-    back = min(0.97, max(0.30, _f(fk.get('came_back_pct_of_nudged'), 74.0) / 100.0))
-    retargeted = min(abandoned - 1, max(paid_return + 2, _messy((seed, 'retargeted'), abandoned * met)))
-    returned = min(retargeted - 1, max(paid_return + 1, _messy((seed, 'returned'), retargeted * back)))
-    if not (0 < paid_return < returned < retargeted < abandoned < penult):
-        # the chain could not hold the people who came back: stretch the
-        # started step a little so it can (the finish rate gives, not the cast)
-        penult = v3 = int(paid_first + max(abandoned, paid_return * 2 + 7))
-        abandoned = penult - paid_first
-        retargeted = min(abandoned - 1, max(paid_return + 2, int(abandoned * met)))
-        returned = min(retargeted - 1, max(paid_return + 1, int(retargeted * back)))
+    met = min(0.95, max(0.50, _f(fk.get('met_nudge_pct_of_stopped'), 68.0) / 100.0))
+    back = min(0.92, max(0.45, _f(fk.get('came_back_pct_of_nudged'), 74.0) / 100.0))
+    fin = min(0.97, max(0.60, _f(fk.get('finished_pct_of_returned'), 86.0) / 100.0))
+    # The stopped branch comes from the finish rate (started minus the
+    # one-sitting finishers). The return chain inside it is walked up from
+    # the people it must carry (finished after coming back <- came back <-
+    # met a nudge <- stopped), each leg a real share of the one above it, so
+    # no branch reads as 100% kept. When the research's leg rates cannot fit
+    # the chain inside the stopped branch, the two middle legs meet in the
+    # middle; the started step grows only when even that cannot hold them.
+    returned = max(paid_return + 1, _messy((seed, 'returned'), paid_return / fin))
+    abandoned = v3 - paid_first
+    if abandoned < returned * 1.25:
+        abandoned = _messy((seed, 'abandoned', 'grow'), returned * 1.25)
+        v3 = paid_first + abandoned
         while v3 % 10 == 0:
-            v3 += 1; penult += 1; abandoned += 1
-    assert paid_first + paid_return == paid and 0 < paid_return < returned < retargeted < abandoned < penult < v2, (
-        paid_first, paid_return, returned, retargeted, abandoned, penult, v2)
+            v3 += 1
+            abandoned += 1
+    ideal = _messy((seed, 'retargeted'), returned / back)
+    if ideal >= abandoned * 0.97:
+        ideal = _messy((seed, 'retargeted', 'mid'), (returned * abandoned) ** 0.5)
+    retargeted = min(abandoned - 1, max(returned + 1, ideal))
+    penult = v3
+    if v2 <= v3 * 1.12:
+        v2 = _messy((seed, 'looked', 'refit'), v3 * 1.18)
+        if v1 <= v2 * 1.3:
+            v1 = _messy((seed, 'heard', 'refit'), v2 * 1.6)
+    assert paid_first + paid_return == paid and 0 < paid_return < returned < retargeted < abandoned < penult < v2 < v1, (
+        paid_first, paid_return, returned, retargeted, abandoned, penult, v2, v1)
 
     spine = [
         {'id': 'tam', 'label': 'US population', 'doing': 'US population. The reach this file is read against', 'where': 'United States',
@@ -656,18 +689,21 @@ def build_payload(inputs: dict, prim: dict, *, created_by: str = 'prometheus') -
     inv_lead = next((c for c in stars if c['name'] == (inputs.get('involvement_order') or [None])[0]), s2 or s1)
     new_lead = max(stars, key=lambda c: c['m']['new_fan']['accounts']) if stars else None
     who = dict(prim.get('who') or {})
+    # the header tiles name every star or none (Jenna 2026-10-19: "take
+    # jennifer beals out of the header if you don't list all 3 marquee cast
+    # members"); the star-by-star numbers live in the cast card below
+    star_sum = sum(c['accounts'] for c in stars)
     kpis = [{'l': 'Watched the first episode through', 'v': f'{v4:,}', 'hot': True}]
-    if s1 and s2:
-        kpis.append({'l': f'Brought by {s1["name"]} or {s2["name"]}', 'v': f'{two_share:.1f}%'})
-    if new_lead:
-        kpis.append({'l': f'Share of the franchise newcomers {new_lead["name"]} brought', 'v': f'{new_lead["m"]["new_fan"]["accounts"] / new_total * 100:.1f}%'})
-    if inv_lead:
-        kpis.append({'l': f'{_pos(inv_lead["name"])} people who came back for episode 2', 'v': f'{inv_lead["m"]["episode2"]["pct"]:.1f}%'})
-        kpis.append({'l': f'{_pos(inv_lead["name"])} people who clicked an ad and bought during the episode', 'v': f'{inv_lead["m"]["ad_buy"]["pct"]:.1f}%'})
+    if stars:
+        kpis.append({'l': 'Brought by ' + _list_names([c['name'] for c in stars], 'or'), 'v': f'{star_sum / v4 * 100:.1f}%'})
+    kpis.append({'l': 'New to the franchise', 'v': f'{new_total / v4 * 100:.1f}%'})
+    kpis.append({'l': 'Came back for episode 2', 'v': f'{e2 / v4 * 100:.1f}%'})
+    kpis.append({'l': 'Clicked an ad and bought during the episode', 'v': f'{ad_buy_total / v4 * 100:.1f}%'})
     kpis.append({'l': 'Finished it in one sitting', 'v': f'{paid_first / penult * 100:.1f}%'})
+    shares_line = ', '.join(f'{c["name"]} {c["share_pct"]:.1f}%' for c in stars)
     copy = {
         'eyebrow': f'Premiere journey. {_window_label(start, end)}',
-        'titleHtml': _clean(prim.get('cover_title') or f'{subject} opened on two stars and a franchise habit.').rstrip('.') + '.',
+        'titleHtml': _clean(inputs.get('cover_title') or prim.get('cover_title') or f'{subject} opened on its leads and a franchise habit.').rstrip('.') + '.',
         'deck': f'The people who watched the first episode of {subject} through to the end on the Crosswalk clickstream panel of 10M US consumers, '
                 f'projected to the United States. Where they came from, how they found out, and who brought them. Every count is a person.',
         'lead': _clean(who.get('read') or ''),
@@ -678,14 +714,15 @@ def build_payload(inputs: dict, prim: dict, *, created_by: str = 'prometheus') -
         'forkSameSessionLabel': 'Finished in one sitting', 'forkTotalLabel': 'First-episode viewers', 'forkTotalVerb': 'who watched it through',
         'forkRead': f'{paid_first / penult * 100:.1f}% of the people who started the episode finished it in one sitting; '
                     f'{paid_return:,} more stopped, met a clip, a cast post or the continue-watching row, and came back to finish inside the week.',
-        'castSec': '03', 'castHead': (f'{s1["name"]} and {s2["name"]} brought {two_share:.1f}% of the audience between them; '
-                                       f'{_pos(inv_lead["name"])} people were the most involved.' if s1 and s2 and inv_lead else 'The stars, the same measures.'),
+        'castSec': '03', 'castHead': (f'The leads brought {star_sum / v4 * 100:.1f}% of the first-episode audience: {shares_line}.'
+                                       if stars else 'The stars, the same measures.'),
         'castSub': 'The same measures for every star. The top value on each line is marked',
         'detourSec': '04', 'detourHead': 'Where they came from, how they found out, and what they did during and after the episode',
         'tldr': [], 'reads': [], 'recommendations': [],
     }
     proj_name = f'{subject} premiere, where the first-episode audience came from'
     blob = {
+        'inputs': _inputs_for_meta(inputs),
         'meta': {'window': window, 'unit': 'unique US people', 'usGenPop': US_GEN_POP, 'kind': KIND, 'network': network, 'streaming_home': platform,
                  'franchise': franchise, 'premiere_date': premiere, 'episode_title': ep1, 'episode2_title': ep2_title, 'episode2_date': ep2_date,
                  'air_slot': _clean(prim.get('air_slot') or ''), 'lead_in': _clean(prim.get('lead_in') or ''), 'panel_sample': sample},
@@ -710,6 +747,22 @@ def build_payload(inputs: dict, prim: dict, *, created_by: str = 'prometheus') -
         'diagnostics': {'data_provenance': 'synthetic_estimate', 'anchors_note': _clean(prim.get('anchors_note') or uni.get('basis') or '')},
     }
     return payload
+
+
+def _list_names(names: list, last_word: str = 'and') -> str:
+    names = [str(n) for n in names if n]
+    if len(names) <= 1:
+        return ''.join(names)
+    return ', '.join(names[:-1]) + f' {last_word} ' + names[-1]
+
+
+def names_all_or_none(text: str, names: list) -> bool:
+    """True when the text names every star in `names` or none of them.
+    (Jenna 2026-10-19: a header or line that names one marquee cast
+    member names all of them.)"""
+    t = str(text or '')
+    hits = [n for n in names if n and n in t]
+    return not hits or len(hits) == len(names)
 
 
 def _pos(name: str) -> str:
@@ -829,7 +882,7 @@ Frames that are right:
 - "Beals brought the most newcomers: 52.6% of the viewers who had watched no earlier NCIS series in the past year, against 27.1% for LL Cool J and 11.9% for Caan."
 - "Her people were the most involved: 84.2% came back for episode 2 (LL Cool J 77.9%, Caan 71.4%)."
 - "8.1% of the people Beals brought clicked an ad and bought something during the episode, against 6.3% for LL Cool J and 4.6% for Caan."
-Frames that are wrong: a star's number without the other stars' numbers beside it; "fans" used for a count of people who did not watch; any share described as a share of streams or of activity; linear TV, cable or ratings words.
+Frames that are wrong: a star's number without the other stars' numbers beside it; a sentence that names one star and not the others (every line names all of the stars or none of them, including the cover title, the who_read, each recommendation and each fact); "fans" used for a count of people who did not watch; any share described as a share of streams or of activity; linear TV, cable or ratings words.
 
 Write:
 {
@@ -931,20 +984,15 @@ def _fallback_copy(payload: dict) -> dict:
     disc = secs.get('How they found out: the first touch') or [{}]
     top_disc = max(disc, key=lambda r: float(r.get('share_pct') or 0)) if disc and disc[0] else {}
     first = stars[0] if stars else {}
-    two_pct = ''
-    if len(stars) >= 2:
-        a, b = stars[0], stars[1]
-        two_pct = f"{float(a['share_of_viewers_pct']) + float(b['share_of_viewers_pct']):.1f}"
-    inv = max(stars, key=lambda s: float((s.get('episode2') or {}).get('pct_of_people_they_brought') or 0)) if stars else {}
-    inv_name = inv.get('name', '') if inv else ''
-    inv_e2 = (inv.get('episode2') or {}).get('pct_of_people_they_brought', '') if inv else ''
+    all_pct = f"{sum(float(s['share_of_viewers_pct']) for s in stars):.1f}" if stars else ''
+    e2_line = ', '.join(f"{s['name']} {(s.get('episode2') or {}).get('pct_of_people_they_brought', '')}%" for s in stars)
     return {
-        'cover_title': (f"{stars[0]['name']} and {stars[1]['name']} drove the {T} premiere." if len(stars) >= 2 else f'The {T} premiere audience.'),
+        'cover_title': f'The leads brought {all_pct}% of the {T} premiere audience.' if all_pct else f'The {T} premiere audience.',
         'who_read': str((dg.get('who') or {}).get('read') or ''),
         'tldr': story[:4] + [f"{dg['steps']['watched_through']} people watched the first episode through; {top_disc.get('label', 'a promo')} was the first touch for {top_disc.get('share_pct', '')}% of them."],
         'reads': story[1:5],
-        'recommendations': [(f"Keep both leads in the promos: together they brought {two_pct}% of the audience." if two_pct else ''),
-                            (f"Put {inv_name}'s people on the episode 2 push: {inv_e2}% of them came back." if inv_name else ''),
+        'recommendations': [(f"Keep the leads in the promos: together they brought {all_pct}% of the audience." if all_pct else ''),
+                            (f"Lead the episode 2 push with the fans who came back most: {e2_line}." if e2_line else ''),
                             f"Sell the second screen: {dg['all_viewers'].get('ad_buy', {}).get('pct', '')}% of all viewers clicked an ad and bought during the episode."],
         'facts': [f"{dg['steps']['watched_through']} people watched the first episode of {T} through.",
                   f"{dg['steps']['watched_through_pct_of_heard']}% of everyone who heard about it watched it through.",
@@ -967,21 +1015,45 @@ def write_copy(payload: dict, claude_json: Optional[Callable]) -> dict:
     fb = _fallback_copy(payload)
     j = payload['fragrance_shop_journey']
     cp = j['copy']
-    title = _clean(c.get('cover_title') or cp.get('titleHtml')).rstrip('.')
-    if len(title.split()) > 14:
+    names = [st['name'] for st in (j.get('cast_drivers') or {}).get('stars') or []]
+    pinned = str(((j.get('inputs') or {}).get('cover_title')) or '').strip()
+    title = _clean(pinned or c.get('cover_title') or cp.get('titleHtml')).rstrip('.')
+    if not pinned and (len(title.split()) > 14 or not names_all_or_none(title, names)):
         title = _clean(fb['cover_title']).rstrip('.')
     cp['titleHtml'] = title + '.'
-    who_read = _clean(c.get('who_read') or cp.get('lead') or '')
+    who_read = _house(_clean(c.get('who_read') or cp.get('lead') or ''))
+    if not names_all_or_none(who_read, names):
+        who_read = _house(_clean(fb.get('who_read') or ''))
+        if not names_all_or_none(who_read, names):
+            who_read = ''
     cp['lead'] = who_read
     payload.setdefault('who_they_are', {})['read'] = who_read
     j.setdefault('who_they_are', {})['read'] = who_read
-    cp['tldr'] = [_clean(x) for x in (c.get('tldr') or []) if x][:5]
-    cp['reads'] = [_clean(x) for x in (c.get('reads') or []) if x][:5]
-    cp['recommendations'] = [_clean(x) for x in (c.get('recommendations') or []) if x][:4]
-    payload['facts'] = [_clean(x) for x in (c.get('facts') or []) if x][:5] or [_clean(x) for x in fb['facts'] if x][:5]
+
+    def lines(key, limit, floor):
+        # every line names all the stars or none of them; a list that
+        # loses lines to that rule fills from the deterministic copy
+        out = [_house(_clean(x)) for x in (c.get(key) or []) if x]
+        out = [x for x in out if names_all_or_none(x, names)]
+        for x in fb.get(key) or []:
+            if len(out) >= floor:
+                break
+            x = _house(_clean(x))
+            if x and x not in out and names_all_or_none(x, names):
+                out.append(x)
+        return out[:limit]
+    cp['tldr'] = lines('tldr', 5, 3)
+    cp['reads'] = lines('reads', 5, 3)
+    cp['recommendations'] = lines('recommendations', 4, 2)
+    payload['facts'] = lines('facts', 5, 3)
     payload['the_read'] = {'tldr': cp['tldr'], 'reads': cp['reads'], 'recommendations': cp['recommendations']}
     j['the_read'] = payload['the_read']
     return payload
+
+
+def _house(text: str) -> str:
+    """House possessive on names ending in s (Beals' people, never Beals's)."""
+    return re.sub(r"(\w+s)'s\b", r"\1'", str(text or ''))
 
 
 def synthesize(inputs: dict, claude_json: Callable, *, tools=None, created_by: str = 'prometheus', s3_client=None,
@@ -1024,7 +1096,8 @@ def _inputs_from_args(a, old_meta: Optional[dict] = None) -> dict:
     if a.known_anchors and Path(a.known_anchors).exists():
         known = json.loads(Path(a.known_anchors).read_text(encoding='utf-8'))
     return {'subject': a.subject or om.get('customer_brand'), 'platform': a.platform or om.get('streaming_home'), 'network': a.network or om.get('network'),
-            'premiere_date': a.premiere_date or om.get('premiere_date'), 'franchise': a.franchise, 'night': a.night, 'journey_kind': KIND,
+            'premiere_date': a.premiere_date or om.get('premiere_date'), 'franchise': a.franchise or om.get('franchise') or '', 'night': a.night or om.get('night') or 'Tuesday',
+            'cover_title': a.cover_title or om.get('cover_title') or '', 'journey_kind': KIND,
             'notes': a.notes, 'cast': cast, 'involvement_order': inv, 'new_fans_order': newo, 'always_above': always, 'known_anchors': known,
             'start_date': a.start_date or om.get('start_date'), 'end_date': a.end_date or om.get('end_date'),
             'ceilings': ({'home_us_reach': a.home_reach} if a.home_reach else {})}
@@ -1045,6 +1118,7 @@ def main(argv=None):
     ap.add_argument('--new-fans-order', default='', help='comma list, most newcomers first')
     ap.add_argument('--always-above', action='append', default=[], help='"Name A > Name B": A beats B on every measure')
     ap.add_argument('--known-anchors', default='', help='json file of public anchors handed to the research pass')
+    ap.add_argument('--cover-title', default='', help='pin the cover title (kept through a republish)')
     ap.add_argument('--user', default='admin')
     ap.add_argument('--notes', default='')
     ap.add_argument('--home-reach', type=int, default=0)
@@ -1075,7 +1149,6 @@ def main(argv=None):
             inputs = _inputs_from_args(a, om)
             prim = json.load(open(a.from_prim))
             payload = synthesize(inputs, _claude_json_cli(), created_by=str(om.get('created_by') or a.user), s3_client=s3, prim=prim)
-            payload['fragrance_shop_journey']['inputs'] = _inputs_for_meta(inputs)
             payload['meta']['created_at'] = om.get('created_at') or payload['meta']['created_at']
             hero = om.get('hero_image') or ((old_payload.get('fragrance_shop_journey') or {}).get('meta') or {}).get('hero_image')
             if hero:
@@ -1097,7 +1170,6 @@ def main(argv=None):
     kept: dict = {}
     prim = json.load(open(a.from_prim)) if a.from_prim else None
     payload = synthesize(inputs, _claude_json_cli(), created_by=a.user, s3_client=s3, prim=prim, keep_prim=kept)
-    payload['fragrance_shop_journey']['inputs'] = _inputs_for_meta(inputs)
     if a.prim_json and kept:
         Path(a.prim_json).write_text(json.dumps(kept, indent=1), encoding='utf-8')
     try:
@@ -1130,7 +1202,7 @@ def main(argv=None):
 
 def _inputs_for_meta(inputs: dict) -> dict:
     """The shaping inputs a later republish needs, stored on the blob."""
-    return {k: inputs.get(k) for k in ('cast', 'involvement_order', 'new_fans_order', 'always_above', 'franchise', 'night', 'premiere_date')}
+    return {k: inputs.get(k) for k in ('cast', 'involvement_order', 'new_fans_order', 'always_above', 'franchise', 'night', 'premiere_date', 'cover_title')}
 
 
 if __name__ == '__main__':

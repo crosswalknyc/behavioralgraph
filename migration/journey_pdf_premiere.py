@@ -102,6 +102,11 @@ def _grid(d: _Doc, title: str, head: List[str], rows: List[List[str]], x: float,
     return y
 
 
+def _all_stars(stars: list, mid: str, suffix: str = '') -> str:
+    """'Jennifer Beals 71.6%, LL Cool J 68.2%, Scott Caan 63.3%' in the payload's star order."""
+    return ', '.join(f"{s['name']} {float(s['m'][mid]['pct']):.1f}%{suffix}" for s in stars)
+
+
 def build_pdf(payload: dict) -> bytes:
     meta = payload.get('meta') or {}
     j = payload.get('fragrance_shop_journey') or {}
@@ -135,9 +140,10 @@ def build_pdf(payload: dict) -> bytes:
                 f"Every star is shown on the same measures, side by side.", d.m, d.y - 10, full_w * 0.72, size=12, color=BODY_DARK)
 
     # 02 TLDR
-    two = f"{(stars[0]['accounts'] + stars[1]['accounts']) / v4 * 100:.1f}%" if len(stars) >= 2 and v4 else ''
+    star_sum = sum(int(s['accounts']) for s in stars)
+    shares = ', '.join(f"{s['name']} {float(s['share_pct']):.1f}%" for s in stars)
     d.new_page(False, 'The short version', f"{_fmt(v4)} people watched the first episode of {T} through.",
-               (f"{stars[0]['name']} and {stars[1]['name']} brought {two} of them between them. Here is what matters and what to do." if two else ''))
+               (f"The leads brought {_pct(star_sum, v4)} of them: {shares}. Here is what matters and what to do." if stars and v4 else ''))
     tl = list(read.get('tldr') or [])[:5] or list(payload.get('facts') or [])[:5]
     d.bullets(tl, d.m, d.y, full_w, size=12.5)
     who = (payload.get('who_they_are') or {}).get('read') or ''
@@ -161,16 +167,19 @@ def build_pdf(payload: dict) -> bytes:
     origin = _section(payload, 'Where they came from')
     new_row = (origin or {}).get('rows', [{}])[-1] if origin else {}
     nb = (new_row.get('breakdown') or [{}])[0] if new_row else {}
+    bd_by = {b.get('label'): b for b in (new_row.get('breakdown') or [])} if new_row else {}
+    new_split = ', '.join(f"{b.get('label')} {_pct(b.get('accounts'), new_row.get('accounts'))}"
+                          for b in (new_row.get('breakdown') or []) if b.get('label') in names)   # biggest first
     d.new_page(False, 'Where they came from',
-               (f"{nb.get('label', 'One star')} brought the most first-time franchise viewers: {_pct(nb.get('accounts'), new_row.get('accounts'))} of them."
-                if nb else 'Where the first-episode audience came from.'),
+               (f"{nb.get('label', 'One star')} brought the most first-time franchise viewers: {new_split}."
+                if nb and new_split else 'Where the first-episode audience came from.'),
                f"{_pct(new_row.get('accounts'), v4)} of first-episode viewers had watched no episode of an earlier series in the past year. "
                f"The left table splits everyone; the right splits the newcomers by who brought them." if new_row else '')
     wide_w = full_w * 0.56
     col_r = d.m + wide_w + 0.28 * 72
     d.table('Where they came from', _rows(origin, v4, limit=6), d.m, d.y, wide_w, head=('', 'People', 'Share'))
     d.table('The newcomers, by who brought them (share of the newcomers)', _split_rows(new_row), col_r, d.y, d.right - col_r, head=('', 'People', 'Share'))
-    d.meaning(f"The franchise habit delivered most of the audience; the newcomers are the growth, and {nb.get('label', 'one star')} is the door they came through." if nb else '')
+    d.meaning(f"The franchise habit delivered most of the audience; the newcomers are the growth, and they came through the leads in this order: {new_split}." if new_split else '')
 
     # 05 how they found out
     disc, lt = _section(payload, 'first touch'), _section(payload, 'Last touch')
@@ -213,13 +222,15 @@ def build_pdf(payload: dict) -> bytes:
         buy = next((r for r in ((ss or {}).get('rows') or []) if str(r.get('label', '')).startswith('Clicked an ad and bought')), None)
         ad_lead = leaders.get('ad_buy') or names[0]
         ad_vals = {s['name']: float(s['m']['ad_buy']['pct']) for s in stars}
-        d.new_page(False, 'The second screen', f"{_pos(ad_lead)} people were the most likely to click an ad and buy during the episode.",
-                   ' | '.join(f"{n} {ad_vals[n]:.1f}%" for n in names) + (f" | all viewers {_pct(buy.get('accounts'), v4)}" if buy else ''))
+        d.new_page(False, 'The second screen', f"Clicked an ad and bought during the episode: {_all_stars(stars, 'ad_buy')}.",
+                   f"The share of the people each star brought who clicked an ad on a second screen and completed a purchase inside the episode's hour"
+                   + (f"; all viewers {_pct(buy.get('accounts'), v4)}." if buy else '.'))
         d.table('What they did on a second screen during the episode', _rows(ss, v4, limit=6), d.m, d.y, half_w, head=('', 'People', 'Share'))
         ad_rows = [[s['name'], f"{float(s['m']['ad_buy']['pct']):.1f}%", _fmt(s['m']['ad_buy']['accounts'])] for s in stars]
         _grid(d, 'Clicked an ad and bought something during the episode, by star', ['Star', 'Rate', 'People'], ad_rows, col2, d.y, half_w,
               [0 if s['name'] == ad_lead else None for s in stars], note='Rate is the share of the people that star brought to the first episode.')
-        d.meaning(f"The ad break works hardest on {_pos(ad_lead)} people: {ad_vals[ad_lead]:.1f}% clicked an ad and completed a purchase inside the episode's own hour.")
+        others = ', '.join(f"{n} {ad_vals[n]:.1f}%" for n in names if n != ad_lead)
+        d.meaning(f"The ad break works hardest on {_pos(ad_lead)} people: {ad_vals[ad_lead]:.1f}% clicked an ad and completed a purchase inside the episode's own hour, against {others}.")
 
     # 08 when, where, and episode 2
     when, where, e2 = _section(payload, 'When they watched'), _section(payload, 'Where it played'), _section(payload, 'episode 2')
@@ -228,8 +239,8 @@ def build_pdf(payload: dict) -> bytes:
     e2_lead = leaders.get('episode2') or ''
     e2_vals = {s['name']: float(s['m']['episode2']['pct']) for s in stars}
     d.new_page(False, 'When and where, and the second episode',
-               f"{_pct(back.get('accounts'), v4)} came back for episode 2; {_pos(e2_lead)} people led at {e2_vals.get(e2_lead, 0):.1f}%." if back and e2_lead else 'When and where they watched.',
-               (' | '.join(f"{n} {e2_vals[n]:.1f}%" for n in names) + ' came back for episode 2.') if names else '')
+               f"{_pct(back.get('accounts'), v4)} came back for episode 2: {_all_stars(stars, 'episode2')}." if back and stars else 'When and where they watched.',
+               'The share of the people each star brought who watched episode 2 within 7 days, then when and where the first episode played.' if stars else '')
     y1 = d.table('When they watched it', _rows(when, v4, limit=5), d.m, d.y, half_w, head=('', 'People', 'Share'))
     y2 = d.table('Where it played', _rows(where, v4, limit=7), col2, d.y, half_w, head=('', 'People', 'Share'))
     d.table('Did they come back for episode 2', _rows(e2, v4, limit=2), d.m, y1 - 14, half_w, head=('', 'People', 'Share'))
@@ -237,8 +248,9 @@ def build_pdf(payload: dict) -> bytes:
 
     # 09 what to do
     recs = list(read.get('recommendations') or [])[:4]
-    d.new_page(True, 'What to do next', f"Keep both leads in front of the audience, and give {_pos(leaders.get('episode2') or names[0])} people the episode 2 push." if names else 'What to do next.',
-               'Each step carries the number that justifies it.')
+    d.new_page(True, 'What to do next', 'Keep the leads in front of the audience, and point the episode 2 push at the fans who came back most.',
+               (f"Came back for episode 2: {_all_stars(stars, 'episode2')}. Each step below carries the number that justifies it." if stars
+                else 'Each step carries the number that justifies it.'))
     y = d.y
     if recs:
         y = d.bullets(recs, d.m, d.y, full_w, size=12.5)
