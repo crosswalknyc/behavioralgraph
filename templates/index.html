@@ -116342,7 +116342,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         function _jiqMwIdx(v) {
             var x = Number(v);
             if (!isFinite(x) || x <= 0) return '';
-            return (x >= 10 ? x.toFixed(0) : x.toFixed(1)).replace(/\.0$/, '') + 'x';
+            // below 1x keep two decimals so 0.85x does not print as 0.8x (the payload carries two)
+            return (x >= 10 ? x.toFixed(0) : (x >= 1 ? x.toFixed(1) : x.toFixed(2))).replace(/\.0$/, '').replace(/(\.\d)0$/, '$1') + 'x';
         }
         function _jiqMediaWeekSection(d, needle) {
             var dets = (d && d.detours) || [];
