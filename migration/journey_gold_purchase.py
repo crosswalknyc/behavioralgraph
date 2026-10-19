@@ -117,7 +117,7 @@ def is_purchase_journey(payload: dict, inputs: Optional[dict] = None) -> bool:
     kind = str((inputs or {}).get('journey_kind') or meta.get('journey_kind') or '').lower()
     if kind == 'purchase':
         return True
-    if kind:
+    if kind or str(meta.get('target_type') or '') == 'media_week_journey':
         return False
     j = payload.get('fragrance_shop_journey') or {}
     end = str((j.get('spine') or [{}])[-1].get('label', ''))

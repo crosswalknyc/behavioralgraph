@@ -168,9 +168,19 @@ def _title_platform(payload: dict, inputs: Optional[dict] = None) -> tuple:
     return subj or 'the title', plat or 'the service'
 
 
+def is_media_week_journey(payload: dict, inputs: Optional[dict] = None) -> bool:
+    """A week in the media life of a title's viewers (2026-10-19): its own
+    shape (migration.journey_media_week), never re-shaped by this module."""
+    meta = (payload or {}).get('meta') or {}
+    kind = str((inputs or {}).get('journey_kind') or meta.get('journey_kind') or '').lower()
+    return kind == 'media_week' or str(meta.get('target_type') or '') == 'media_week_journey'
+
+
 def is_watch_journey(payload: dict, inputs: Optional[dict] = None) -> bool:
     meta = payload.get('meta') or {}
     kind = str((inputs or {}).get('journey_kind') or meta.get('journey_kind') or '').lower()
+    if is_media_week_journey(payload, inputs):
+        return False
     if kind == 'watch' or str(meta.get('target_type') or '') == 'watch_journey':
         return True
     j = payload.get('fragrance_shop_journey') or {}
@@ -385,6 +395,8 @@ def apply(payload: dict, inputs: Optional[dict] = None, claude_json: Optional[Ca
     try:
         if not isinstance(payload, dict):
             return payload
+        if is_media_week_journey(payload, inputs):
+            return payload
         if not is_watch_journey(payload, inputs):
             # A purchase journey has its own standard (Ghost Energy,
             # 2026-10-16): the research spine stays, eleven sections land,
@@ -582,6 +594,8 @@ def ship_lines(payload: dict) -> list:
 def is_gold(payload: dict) -> bool:
     """Every standard section present, in order, under the standard title."""
     try:
+        if is_media_week_journey(payload):
+            return True
         if not is_watch_journey(payload):
             from migration import journey_gold_purchase as _gp
             return bool(_gp.is_purchase_journey(payload) and _gp.is_gold(payload))
