@@ -53539,6 +53539,25 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     <div id="jiqMusicHost"></div>
                 </div>
 
+                <!-- A week in the life (journey_kind media_week): Survivor,
+                     NCIS, Sistas viewers and the rest of their media week.
+                     Same treatment as Music to Long Form; renderer
+                     renderJourneyIqMediaWeek. -->
+                <div id="jiqMediaWeekTabBar" class="jiq-ufc-tabbar" style="display: none;"></div>
+                <div class="jiq-frag" id="jiqMediaWeekCard" style="display: none;">
+                    <div class="jiq-frag-cover">
+                        <div class="jiq-frag-copy">
+                            <div class="jiq-frag-eyebrow" id="jiqMediaWeekMeta">A week in the life</div>
+                            <h2 id="jiqMediaWeekTitle">A week in the life.</h2>
+                            <div class="jiq-frag-read-lead" id="jiqMediaWeekLead"></div>
+                            <p id="jiqMediaWeekDeck"></p>
+                            <div class="jiq-frag-kpis" id="jiqMediaWeekKpis"></div>
+                        </div>
+                        <div class="jiq-frag-art is-ini" id="jiqMediaWeekArt"><span class="jiq-frag-art-ini" id="jiqMediaWeekArtIni">WK</span></div>
+                    </div>
+                    <div id="jiqMediaWeekHost"></div>
+                </div>
+
                 <!-- Universal Basic Guys · Hulu — how viewers actually get to
                      first play on the show. Single-card renderer against
                      _JIQ_UBG_DATA. Story-mode: ubg_hulu_discovery. -->
@@ -90907,6 +90926,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             if (typeof _jiqSongHide === 'function') _jiqSongHide();
             _jiqHideCard('jiqMusicCatalogCard');
             if (typeof _jiqMusicHide === 'function') _jiqMusicHide();
+            _jiqHideCard('jiqMediaWeekCard');
+            if (typeof _jiqMediaWeekHide === 'function') _jiqMediaWeekHide();
 
             var _isObsessionStory        = (_storyMode === 'obsession_caa');
             var _isNetflixStory          = (_storyMode === 'netflix_ad_sales');
@@ -91197,7 +91218,13 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 // copy-driven caterpillar renderer, so a Babylon 5 watch
                 // journey never wears the luxury-fragrance words.
                 var _fragBlock = _pickClickstreamBlock('fragrance_shop_journey');
-                if (_fragBlock && _fragBlock.copy && typeof renderJourneyIqYsPvod === 'function') {
+                var _fragMeta = (fullRun && fullRun.meta) || meta || {};
+                if (typeof _jiqMediaWeekIsRun === 'function' && _jiqMediaWeekIsRun(_fragMeta)
+                        && typeof renderJourneyIqMediaWeek === 'function') {
+                    // A week in the life (2026-10-19): its own view, the
+                    // Music to Long Form treatment.
+                    renderJourneyIqMediaWeek(_fragBlock, _fragMeta);
+                } else if (_fragBlock && _fragBlock.copy && typeof renderJourneyIqYsPvod === 'function') {
                     renderJourneyIqYsPvod(_fragBlock, (fullRun && fullRun.meta) || meta);
                 } else if (typeof renderJourneyIqFragrance === 'function') {
                     renderJourneyIqFragrance(_fragBlock,
@@ -116274,6 +116301,346 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             html += _jiqMusicLeagueTable(r, league, ['title', 'kind', 'viewers', 'mf_share', 'mf_conv', 'nm_share', 'finish', 'best_fam', 'top_channel', 'top_nm', 'song_lead_days', 'lead_song']);
             setTimeout(function() { _jiqMusicWireLeague(document.getElementById('jiqMusicHost')); }, 0);
             return html;
+        }
+
+        // ─── A week in the life (journey_kind media_week) ─────────────────
+        // The Survivor / NCIS / Sistas week-in-the-life journeys (2026-10-19)
+        // wear the Music to Long Form treatment: the jiq-frag cover (eyebrow,
+        // title, lead, deck, KPI tiles, hero art), a Title / Stage nav, and
+        // numbered stages drawn with the walk, the fork, the ranked bar
+        // tables and two strips (the seven days, the five dayparts). Every
+        // number is read off the stored payload; nothing is recomputed.
+        var _jiqMediaWeekActiveStage = 'week';
+        var _jiqMediaWeekStageList = [
+            { id: 'week',     label: 'The week' },
+            { id: 'where',    label: 'Where and how fast' },
+            { id: 'days',     label: 'Day by day' },
+            { id: 'shows',    label: 'Other shows' },
+            { id: 'services', label: 'Streaming services' },
+            { id: 'audio',    label: 'Podcasts and audio' },
+            { id: 'social',   label: 'Social' },
+            { id: 'news',     label: 'News, sports and games' },
+            { id: 'read',     label: 'The read' }
+        ];
+        function _jiqMediaWeekHide() {
+            var bar = document.getElementById('jiqMediaWeekTabBar');
+            var card = document.getElementById('jiqMediaWeekCard');
+            if (bar) { bar.innerHTML = ''; bar.style.display = 'none'; }
+            if (card) card.style.display = 'none';
+        }
+        function _jiqMediaWeekIsRun(meta) {
+            meta = meta || {};
+            return meta.journey_kind === 'media_week' || meta.target_type === 'media_week_journey';
+        }
+        function _jiqMwEsc(s) { return (typeof _jiqFragEsc === 'function') ? _jiqFragEsc(s) : String(s == null ? '' : s); }
+        function _jiqMwNum(n) { return (typeof _jiqFragNum === 'function') ? _jiqFragNum(n) : String(n); }
+        function _jiqMwPct(n) {
+            var v = Number(n);
+            if (!isFinite(v)) return '';
+            return (v >= 10 ? v.toFixed(1) : v.toFixed(2)).replace(/\.?0+$/, '') + '%';
+        }
+        function _jiqMwIdx(v) {
+            var x = Number(v);
+            if (!isFinite(x) || x <= 0) return '';
+            return (x >= 10 ? x.toFixed(0) : x.toFixed(1)).replace(/\.0$/, '') + 'x';
+        }
+        function _jiqMediaWeekSection(d, needle) {
+            var dets = (d && d.detours) || [];
+            needle = String(needle || '').toLowerCase();
+            for (var i = 0; i < dets.length; i++) {
+                if (String(dets[i].title || '').toLowerCase().indexOf(needle) >= 0) return dets[i];
+            }
+            return null;
+        }
+        function _jiqMediaWeekRuns(cb) {
+            if (window.__jiqMediaWeekRuns) { cb(window.__jiqMediaWeekRuns); return; }
+            fetch('/api/journey-iq/list', { credentials: 'same-origin' })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    var runs = ((data && data.runs) || []).filter(function(r) {
+                        return r && (r.journey_kind === 'media_week' || r.target_type === 'media_week_journey');
+                    });
+                    window.__jiqMediaWeekRuns = runs;
+                    cb(runs);
+                })
+                .catch(function() { cb([]); });
+        }
+        function _jiqMediaWeekPaintTabs(block, runMeta) {
+            var bar = document.getElementById('jiqMediaWeekTabBar');
+            if (!bar) return;
+            var picker = document.getElementById('jiqRunPicker');
+            var currentKey = picker ? String(picker.value || '') : '';
+            var currentName = String((runMeta && (runMeta.project_name || runMeta.target_display)) || 'This title');
+            function paint(runs) {
+                var seen = {};
+                var opts = [];
+                (runs || []).forEach(function(r) {
+                    if (!r || !r.key || seen[r.key]) return;
+                    seen[r.key] = 1;
+                    opts.push({ key: r.key, label: String(r.project_name || r.target || r.key) });
+                });
+                if (currentKey && !seen[currentKey]) opts.unshift({ key: currentKey, label: currentName });
+                bar.className = 'jiq-ufc-tabbar jiq-music-navbar';
+                bar.style.display = '';
+                bar.innerHTML =
+                    '<div class="jiq-music-nav">'
+                    + '<label>Title<select id="jiqMediaWeekTitlePick">'
+                    + opts.map(function(o) {
+                        return '<option value="' + _jiqMwEsc(o.key) + '"' + (o.key === currentKey ? ' selected' : '') + '>'
+                            + _jiqMwEsc(o.label.replace(/,?\s*a week in the life$/i, '')) + '</option>';
+                    }).join('')
+                    + '</select></label>'
+                    + '<label>Stage<select id="jiqMediaWeekStage">'
+                    + _jiqMediaWeekStageList.map(function(s) {
+                        return '<option value="' + s.id + '"' + (s.id === _jiqMediaWeekActiveStage ? ' selected' : '') + '>'
+                            + _jiqMwEsc(s.label) + '</option>';
+                    }).join('')
+                    + '</select></label>'
+                    + '</div>';
+                var titleEl = document.getElementById('jiqMediaWeekTitlePick');
+                var stageEl = document.getElementById('jiqMediaWeekStage');
+                if (titleEl) {
+                    titleEl.addEventListener('change', function() {
+                        var next = titleEl.value || '';
+                        if (next && next !== currentKey && typeof onJourneyIqRunPicked === 'function') {
+                            if (picker) picker.value = next;
+                            onJourneyIqRunPicked(next);
+                        }
+                    });
+                }
+                if (stageEl) {
+                    stageEl.addEventListener('change', function() {
+                        _jiqMediaWeekActiveStage = stageEl.value || 'week';
+                        renderJourneyIqMediaWeek(block, runMeta);
+                    });
+                }
+            }
+            paint(window.__jiqMediaWeekRuns || []);
+            if (!window.__jiqMediaWeekRuns) _jiqMediaWeekRuns(function(runs) { if (runs && runs.length) paint(runs); });
+        }
+        function _jiqMediaWeekPaintArt(block, runMeta) {
+            var art = document.getElementById('jiqMediaWeekArt');
+            if (!art) return;
+            var hero = (block && block.meta && block.meta.hero_image) || (runMeta && runMeta.hero_image) || '';
+            var title = String((runMeta && runMeta.customer_brand) || 'Week');
+            var ini = title.split(/\s+/).map(function(w) { return w.charAt(0); }).join('').slice(0, 2).toUpperCase() || 'WK';
+            if (hero) {
+                art.innerHTML = '<img src="' + _jiqMwEsc(hero) + '" alt="">';
+                art.classList.remove('is-ini');
+                var im = art.querySelector('img');
+                if (im) im.onerror = function() {
+                    art.innerHTML = '<span class="jiq-frag-art-ini">' + _jiqMwEsc(ini) + '</span>';
+                    art.classList.add('is-ini');
+                };
+            } else {
+                art.innerHTML = '<span class="jiq-frag-art-ini">' + _jiqMwEsc(ini) + '</span>';
+                art.classList.add('is-ini');
+            }
+        }
+        function _jiqMediaWeekWalk(d) {
+            if (typeof _jiqFragStep !== 'function') return '';
+            var spine = ((d && d.spine) || []).filter(function(s) { return s && s.id !== 'tam' && s.id !== 'us_gen_pop'; });
+            return '<div class="jiq-music-walk jiq-music-waterfall">' + spine.map(function(s, i) {
+                return _jiqFragStep(s, { base: i === 0, terminal: i === spine.length - 1, next: spine[i + 1] });
+            }).join('') + '</div>';
+        }
+        function _jiqMediaWeekFork(d, copy) {
+            if (typeof _jiqFragStep !== 'function') return '';
+            var byId = {};
+            ((d && d.fork) || []).forEach(function(f) { byId[f.id] = f; });
+            var order = ['paid_first', 'abandoned', 'retargeted', 'returned', 'paid_return'];
+            var seq = order.filter(function(id) { return byId[id]; }).map(function(id) { return { id: id, f: byId[id] }; });
+            if (!seq.length) return '';
+            var html = '<div class="jiq-music-walk">';
+            seq.forEach(function(item, i) {
+                var next = seq[i + 1] ? seq[i + 1].f : null;
+                if (item.id === 'paid_first') {
+                    html += '<div class="jiq-frag-branchnote">' + _jiqMwEsc(copy.forkBranchA || 'Watched the night it dropped') + '</div>';
+                    html += _jiqFragStep(item.f, { branch: true });
+                    html += '<div class="jiq-frag-branchnote">' + _jiqMwEsc(copy.forkBranchB || 'Did not watch that night, and what happened next') + '</div>';
+                } else {
+                    html += _jiqFragStep(item.f, { branch: true, terminal: false, next: next });
+                }
+            });
+            if (typeof _jiqFragPaidTotal === 'function') html += _jiqFragPaidTotal(byId, copy || {});
+            html += '</div>';
+            return html;
+        }
+        function _jiqMediaWeekBars(sec, base, opts) {
+            opts = opts || {};
+            if (!sec || !(sec.rows || []).length) return '';
+            var rows = (sec.rows || []).slice();
+            var top = 1;
+            rows.forEach(function(r) { top = Math.max(top, Number(r.accounts) || 0); });
+            var html = '<div class="jiq-frag-det jiq-mw-det' + (opts.index ? ' has-index' : '') + '"><h5>' + _jiqMwEsc(opts.title || sec.title || '')
+                + (opts.index ? '<span class="jiq-frag-det-key">share of viewers <span class="jiq-mw-key-idx">index vs US adults</span></span>' : '')
+                + '</h5>';
+            rows.forEach(function(r) {
+                var n = Number(r.accounts) || 0;
+                var w = Math.max(1, Math.round(100 * n / top));
+                var idx = (r.index != null) ? _jiqMwIdx(r.index) : '';
+                var hot = Number(r.index) >= 2;
+                var sub = String(r.doing || '').replace(/^\d+(?:\.\d+)?x US adults\.?\s*/i, '');
+                html += '<div class="jiq-frag-detrow' + (sub ? ' has-sub' : '') + '">'
+                    + '<span class="jiq-frag-detlab">' + _jiqMwEsc(r.label) + '</span>'
+                    + '<span class="jiq-frag-detbar"><i style="width:' + w + '%;"></i></span>'
+                    + '<span class="jiq-frag-detval">' + _jiqMwEsc(_jiqMwPct(r.pct))
+                    + (opts.index && idx ? ' <b class="jiq-mw-idx' + (hot ? ' is-hot' : '') + '">' + _jiqMwEsc(idx) + '</b>' : '')
+                    + '</span>'
+                    + (sub ? '<span class="jiq-frag-detsub">' + _jiqMwEsc(sub) + '</span>' : '')
+                    + '</div>';
+            });
+            html += '</div>';
+            return html;
+        }
+        function _jiqMediaWeekStrip(sec, opts) {
+            opts = opts || {};
+            if (!sec || !(sec.rows || []).length) return '';
+            var rows = sec.rows || [];
+            var top = 0, topIdx = 0;
+            rows.forEach(function(r, i) { var n = Number(r.accounts) || 0; if (n > top) { top = n; topIdx = i; } });
+            var html = '<div class="jiq-mw-strip cols-' + rows.length + '">';
+            rows.forEach(function(r, i) {
+                var n = Number(r.accounts) || 0;
+                var h = top ? Math.max(4, Math.round(100 * n / top)) : 4;
+                var lab = String(r.label || '');
+                var short = opts.short ? lab.replace(/,.*$/, '') : lab;
+                var hours = opts.short && lab.indexOf(',') > 0 ? lab.slice(lab.indexOf(',') + 1).trim() : '';
+                html += '<div class="jiq-mw-col' + (i === topIdx ? ' is-top' : '') + '">'
+                    + '<div class="jiq-mw-val">' + _jiqMwEsc(_jiqMwPct(r.pct)) + '</div>'
+                    + '<div class="jiq-mw-bar"><i style="height:' + h + '%;"></i></div>'
+                    + '<div class="jiq-mw-lab">' + _jiqMwEsc(short) + '</div>'
+                    + '<div class="jiq-mw-n">' + (hours ? _jiqMwEsc(hours) + ' \u00b7 ' : '') + _jiqMwEsc(_jiqMwNum(n)) + '</div>'
+                    + '</div>';
+            });
+            html += '</div>';
+            var notes = rows.filter(function(r) { return r.doing; });
+            if (notes.length) {
+                html += '<div class="jiq-mw-notes">' + notes.map(function(r) {
+                    return '<div class="jiq-mw-note"><b>' + _jiqMwEsc(String(r.label || '').replace(/,.*$/, '')) + '</b> ' + _jiqMwEsc(r.doing) + '</div>';
+                }).join('') + '</div>';
+            }
+            return html;
+        }
+        function _jiqMediaWeekRead(text) {
+            if (!text) return '';
+            return (typeof _jiqMusicRead === 'function') ? '<div class="jiq-song-pad">' + _jiqMusicRead(text) + '</div>'
+                : '<p class="jiq-frag-read">' + _jiqMwEsc(text) + '</p>';
+        }
+        function _jiqMediaWeekList(k, head, items) {
+            if (!items || !items.length) return '';
+            return '<div class="jiq-music-theme"><div class="jiq-music-theme-k">' + _jiqMwEsc(k) + '</div>'
+                + '<h4>' + _jiqMwEsc(head) + '</h4>'
+                + '<div class="jiq-music-standouts jiq-mw-list">' + items.map(function(x, i) {
+                    return '<div class="jiq-music-standout' + (i === 0 ? ' is-high' : '') + '">' + _jiqMwEsc(x) + '</div>';
+                }).join('') + '</div></div>';
+        }
+        function _jiqMediaWeekStage(block, runMeta, stage) {
+            var d = block || {};
+            var copy = d.copy || {};
+            var sec = (typeof _jiqMusicSec === 'function') ? _jiqMusicSec : function(n, h, e) {
+                return '<div class="jiq-frag-sec"><div class="jiq-frag-num">' + _jiqMwEsc(n) + '</div><h3>' + _jiqMwEsc(h) + '</h3>' + (e ? '<em>' + _jiqMwEsc(e) + '</em>' : '') + '</div>';
+            };
+            var T = String((runMeta && runMeta.customer_brand) || 'the title');
+            var spine = (d.spine || []).filter(function(s) { return s.id !== 'tam'; });
+            var v1 = spine[0] ? Number(spine[0].accounts) : 0;
+            var v2 = spine[1] ? Number(spine[1].accounts) : 0;
+            var v3 = spine[2] ? Number(spine[2].accounts) : 0;
+            var byId = {};
+            (d.fork || []).forEach(function(f) { byId[f.id] = f; });
+            var html = '';
+            var s;
+            if (stage === 'week') {
+                html += sec('01 The week', copy.spineHead || 'Watch, come back off-screen, watch the next one.',
+                    'Each step keeps a share of the one before it. ' + _jiqMwNum(v1) + ' viewers; ' + _jiqMwNum(v3) + ' watched the next episode inside the week.');
+                html += _jiqMediaWeekWalk(d);
+                html += sec('02 ' + (copy.forkHead || 'Episode night or later in the week'), copy.forkSub || 'Who watched the next episode the night it dropped and who caught up', '');
+                html += _jiqMediaWeekFork(d, copy);
+                html += _jiqMediaWeekRead(copy.forkRead || '');
+            } else if (stage === 'where') {
+                s = _jiqMediaWeekSection(d, 'where they stream');
+                var top = s && s.rows && s.rows[0];
+                html += sec('03 Where they stream ' + T, top ? (top.label + ' carries ' + _jiqMwPct(top.pct) + ' of ' + T + ' viewers.') : 'Where the episode plays.', 'Rows sum to every viewer in the window.');
+                html += '<div class="jiq-mw-pad">' + _jiqMediaWeekBars(s, v1, { title: 'Where they stream ' + T }) + '</div>';
+                s = _jiqMediaWeekSection(d, 'how fast');
+                var sp0 = s && s.rows && s.rows[0];
+                html += sec('04 How fast they watch a new episode', sp0 ? (_jiqMwPct(sp0.pct) + ' watch ' + String(sp0.label).toLowerCase() + '.') : 'How long after it drops.', 'Rows sum to every viewer in the window.');
+                html += '<div class="jiq-mw-pad">' + _jiqMediaWeekBars(s, v1, { title: 'How fast they watch a new episode' }) + '</div>';
+            } else if (stage === 'days') {
+                s = _jiqMediaWeekSection(d, 'day by day');
+                var topDay = null;
+                ((s && s.rows) || []).forEach(function(r) { if (!topDay || Number(r.accounts) > Number(topDay.accounts)) topDay = r; });
+                html += sec('05 Their week, day by day', topDay ? (topDay.label + ' is the biggest ' + T + ' day, but every day carries some of it.') : 'The week, day by day.',
+                    'The day each viewer\u2019s ' + T + ' time mostly lands. A share of people, not of streams; the seven days sum to every viewer.');
+                html += '<div class="jiq-mw-pad">' + _jiqMediaWeekStrip(s, {}) + '</div>';
+                s = _jiqMediaWeekSection(d, 'daypart');
+                var topDp = null;
+                ((s && s.rows) || []).forEach(function(r) { if (!topDp || Number(r.accounts) > Number(topDp.accounts)) topDp = r; });
+                html += sec('06 An episode day, by daypart', topDp ? (_jiqMwPct(topDp.pct) + ' of viewers play the episode in ' + String(topDp.label).toLowerCase() + '.') : 'When the episode plays.',
+                    'When the episode play happens, and the other media around it. The five dayparts sum to every viewer.');
+                html += '<div class="jiq-mw-pad">' + _jiqMediaWeekStrip(s, { short: true }) + '</div>';
+            } else if (stage === 'read') {
+                var read = d.the_read || (window._jiqCurrentRun && window._jiqCurrentRun.the_read) || {};
+                var who = d.who_they_are || (window._jiqCurrentRun && window._jiqCurrentRun.who_they_are) || {};
+                html += sec('The read', copy.titleHtml ? String(copy.titleHtml).replace(/<[^>]+>/g, '') : ('What the week says about ' + T + ' viewers.'), who.read || copy.lead || '');
+                html += '<div class="jiq-mw-pad">';
+                var whoBits = [];
+                if (who.female_pct) whoBits.push(_jiqMwPct(who.female_pct) + ' women');
+                if (who.age_lead) whoBits.push((who.age_lead_pct ? _jiqMwPct(who.age_lead_pct) + ' aged ' : 'mostly aged ') + who.age_lead);
+                if (who.ethnicity_lead) whoBits.push(String(who.ethnicity_lead));
+                if (who.income_lead) whoBits.push(String(who.income_lead));
+                if (whoBits.length) html += '<div class="jiq-mw-who">' + whoBits.map(function(b) { return '<span>' + _jiqMwEsc(b) + '</span>'; }).join('') + '</div>';
+                html += _jiqMediaWeekList('The short version', 'What we found, why it matters, what to do.', read.tldr || copy.tldr || []);
+                html += _jiqMediaWeekList('Reads', 'Each line carries its number.', read.reads || copy.reads || []);
+                html += _jiqMediaWeekList('What to do next', 'Reach the ' + T + ' viewer across the week, not only on episode night.', read.recommendations || copy.recommendations || []);
+                html += '</div>';
+            } else {
+                var map = {
+                    shows:    { needle: 'other shows', num: '07', head: function(t) { return t ? (t.label + ' is the show they share most: ' + _jiqMwPct(t.pct) + ' streamed it the same week.') : 'Other shows the same week.'; } },
+                    services: { needle: 'streaming services', num: '08', head: function(t) { return t ? (t.label + ' reaches ' + _jiqMwPct(t.pct) + ' of ' + T + ' viewers in a week.') : 'Streaming services the same week.'; } },
+                    audio:    { needle: 'podcasts and audio', num: '09', head: function(t) { return t ? (t.label + ' is the audio they share most, at ' + _jiqMwPct(t.pct) + ' of viewers.') : 'Podcasts and audio that week.'; } },
+                    social:   { needle: 'social platforms', num: '10', head: function(t) { return t ? (t.label + ' is where ' + _jiqMwPct(t.pct) + ' of ' + T + ' viewers talk about the week.') : 'Social platforms that week.'; } },
+                    news:     { needle: 'news, sports', num: '11', head: function(t) { return t ? (t.label + ' reaches ' + _jiqMwPct(t.pct) + ' of ' + T + ' viewers in a week.') : 'News, sports and games.'; } }
+                };
+                var m = map[stage] || map.shows;
+                s = _jiqMediaWeekSection(d, m.needle);
+                var t0 = s && s.rows && s.rows[0];
+                html += sec(m.num + ' ' + ((s && s.title) || m.needle), m.head(t0), 'Share of viewers who did this in a typical week, and the index against US adults. Rows do not sum.');
+                html += '<div class="jiq-mw-pad">' + _jiqMediaWeekBars(s, v1, { title: (s && s.title) || '', index: true }) + '</div>';
+            }
+            return html;
+        }
+        function renderJourneyIqMediaWeek(block, runMeta) {
+            var d = block || (typeof _pickClickstreamBlock === 'function' ? _pickClickstreamBlock('fragrance_shop_journey') : null);
+            if (!d || !d.spine) { _jiqMediaWeekHide(); return; }
+            runMeta = runMeta || (window._jiqCurrentRun && window._jiqCurrentRun.meta) || {};
+            var card = document.getElementById('jiqMediaWeekCard');
+            if (!card) return;
+            card.style.display = '';
+            var strip = document.getElementById('jiqDashTitle');
+            if (strip) strip.style.display = 'none';
+            if (typeof _jiqHideCard === 'function') { _jiqHideCard('jiqFragCard'); _jiqHideCard('jiqFragTabBar'); }
+            var copy = d.copy || {};
+            var T = String(runMeta.customer_brand || 'This title');
+            _jiqMediaWeekPaintTabs(d, runMeta);
+            _jiqMediaWeekPaintArt(d, runMeta);
+            var metaEl = document.getElementById('jiqMediaWeekMeta');
+            var titleEl = document.getElementById('jiqMediaWeekTitle');
+            var leadEl = document.getElementById('jiqMediaWeekLead');
+            var deckEl = document.getElementById('jiqMediaWeekDeck');
+            var kpisEl = document.getElementById('jiqMediaWeekKpis');
+            var host = document.getElementById('jiqMediaWeekHost');
+            if (metaEl) metaEl.textContent = copy.eyebrow || ('A week in the life \u00b7 ' + (runMeta.window_label || ''));
+            if (titleEl) titleEl.innerHTML = (typeof _jiqMusicTitleHtml === 'function') ? _jiqMusicTitleHtml(T + ' viewers') : _jiqMwEsc(T + ' viewers.');
+            if (leadEl) leadEl.textContent = (copy.titleHtml ? String(copy.titleHtml).replace(/<[^>]+>/g, '') : copy.lead) || '';
+            if (deckEl) deckEl.textContent = copy.deck || '';
+            if (kpisEl) {
+                kpisEl.innerHTML = (copy.kpis || []).slice(0, 5).map(function(t) {
+                    return '<div class="jiq-frag-kpi' + (t.hot ? ' is-hot' : '') + '"><div class="jiq-frag-kpi-l">' + _jiqMwEsc(t.l) + '</div>'
+                        + '<div class="jiq-frag-kpi-v">' + _jiqMwEsc(t.v) + '</div></div>';
+                }).join('');
+            }
+            if (host) host.innerHTML = _jiqMediaWeekStage(d, runMeta, _jiqMediaWeekActiveStage || 'week');
         }
 
         function renderJourneyIqMusicCatalog(block) {
@@ -192280,6 +192647,99 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
     #jiqMusicArt.is-mosaic img {
         position: relative; inset: auto; border-radius: 0;
     }
+    /* A week in the life (media_week): the Music to Long Form treatment. */
+    #jiqMediaWeekCard {
+        margin: 0 0 8px;
+        background: var(--cw-page, #111F22);
+        color: #E9E8E1;
+        border-radius: 14px;
+        flex: 0 0 auto;
+    }
+    body[data-theme="light"] #jiqMediaWeekCard { background: #E9E8E1; color: #0C1618; }
+    #jiqMediaWeekTitle {
+        margin: 14px 0 0 !important; font-size: 52px; font-weight: 800;
+        letter-spacing: -.045em; line-height: .95; text-transform: none !important;
+    }
+    @media (max-width: 1080px) { #jiqMediaWeekTitle { font-size: 38px; } }
+    #jiqMediaWeekDeck {
+        margin: 14px 0 0; font-size: 12.5px; line-height: 1.6;
+        color: #9AA09B; max-width: 62ch; text-transform: none !important;
+    }
+    body[data-theme="light"] #jiqMediaWeekDeck { color: #5C6560; }
+    #jiqMediaWeekDeck, #jiqMediaWeekCard .jiq-frag-label,
+    #jiqMediaWeekCard .jiq-frag-doing, #jiqMediaWeekCard .jiq-frag-read,
+    #jiqMediaWeekCard .jiq-frag-detlab, #jiqMediaWeekCard .jiq-frag-kpi-v,
+    #jiqMediaWeekCard .jiq-frag-count, #jiqMediaWeekCard .jiq-frag-sec h3,
+    #jiqMediaWeekCard .jiq-frag-read-lead { text-transform: none !important; }
+    #jiqMediaWeekArt::after {
+        background: linear-gradient(90deg, var(--cw-page, #111F22) 0%, rgba(17,31,34,0) 18%);
+    }
+    body[data-theme="light"] #jiqMediaWeekArt::after {
+        background: linear-gradient(90deg, #E9E8E1 0%, rgba(233,232,225,0) 18%);
+    }
+    #jiqMediaWeekCard .jiq-frag-cover {
+        align-items: start;
+        grid-template-columns: minmax(0, 1fr) 260px;
+    }
+    #jiqMediaWeekArt.jiq-frag-art {
+        align-self: start; width: 260px; min-height: 0; height: auto; aspect-ratio: 2 / 3;
+    }
+    #jiqMediaWeekArt img { object-fit: cover; object-position: center 20%; }
+    #jiqMediaWeekTabBar.jiq-music-navbar {
+        display: flex; flex-wrap: nowrap; justify-content: flex-start; gap: 12px; padding: 4px 0 12px;
+    }
+    #jiqMediaWeekTitlePick { min-width: 240px; max-width: 420px; width: 32vw; }
+    #jiqMediaWeekStage { min-width: 200px; }
+    .jiq-mw-pad { margin: 0 34px 26px; }
+    #jiqMediaWeekCard .jiq-frag-detsub, .jiq-mw-note, .jiq-mw-who span, .jiq-mw-list .jiq-music-standout,
+    .jiq-mw-idx, .jiq-mw-n, #jiqMediaWeekCard .jiq-frag-sec em { text-transform: none !important; letter-spacing: 0; }
+    .jiq-mw-det .jiq-frag-detval { white-space: nowrap; }
+    .jiq-mw-det .jiq-frag-detrow { grid-template-columns: minmax(0, 1.1fr) minmax(180px, 2fr) 72px; }
+    .jiq-mw-det.has-index .jiq-frag-detrow { grid-template-columns: minmax(0, 1.1fr) minmax(180px, 2fr) 128px; }
+    .jiq-mw-idx {
+        display: inline-block; min-width: 42px; margin-left: 8px; padding: 1px 7px; border-radius: 999px;
+        font-size: 11px; font-weight: 700; letter-spacing: .02em; text-align: center;
+        background: rgba(255,255,255,.07); color: #9AA09B;
+    }
+    .jiq-mw-idx.is-hot { background: rgba(199,242,62,.16); color: #C7F23E; }
+    body[data-theme="light"] .jiq-mw-idx { background: rgba(12,22,24,.07); color: #5C6560; }
+    body[data-theme="light"] .jiq-mw-idx.is-hot { background: rgba(94,126,18,.14); color: #5E7E12; }
+    .jiq-mw-key-idx { margin-left: 14px; }
+    .jiq-mw-strip {
+        display: grid; gap: 14px; align-items: end; margin-top: 10px;
+    }
+    .jiq-mw-strip.cols-7 { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+    .jiq-mw-strip.cols-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+    .jiq-mw-col { text-align: center; min-width: 0; }
+    .jiq-mw-val { font-size: 15px; font-weight: 800; letter-spacing: -.02em; color: #E9E8E1; }
+    body[data-theme="light"] .jiq-mw-val { color: #0C1618; }
+    .jiq-mw-bar {
+        height: 132px; margin: 8px 0 10px; display: flex; align-items: flex-end;
+        border-bottom: 1px solid var(--cw-border, #2C4148);
+    }
+    body[data-theme="light"] .jiq-mw-bar { border-bottom-color: #C9C6BA; }
+    .jiq-mw-bar i { display: block; width: 100%; border-radius: 7px 7px 0 0; background: #3B3D38; min-height: 4px; }
+    .jiq-mw-col.is-top .jiq-mw-bar i { background: #C7F23E; }
+    body[data-theme="light"] .jiq-mw-bar i { background: #B9B6AA; }
+    body[data-theme="light"] .jiq-mw-col.is-top .jiq-mw-bar i { background: #5E7E12; }
+    .jiq-mw-lab { font-size: 11.5px; font-weight: 700; color: #E9E8E1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    body[data-theme="light"] .jiq-mw-lab { color: #0C1618; }
+    .jiq-mw-n { font-size: 10.5px; color: #7C878A; margin-top: 2px; }
+    .jiq-mw-notes { margin-top: 18px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 26px; }
+    @media (max-width: 1080px) { .jiq-mw-notes { grid-template-columns: 1fr; } }
+    .jiq-mw-note { font-size: 12px; line-height: 1.5; color: #9AA09B; }
+    .jiq-mw-note b { color: #E9E8E1; font-weight: 700; margin-right: 6px; }
+    body[data-theme="light"] .jiq-mw-note { color: #5C6560; }
+    body[data-theme="light"] .jiq-mw-note b { color: #0C1618; }
+    .jiq-mw-who { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 4px; }
+    .jiq-mw-who span {
+        padding: 5px 11px; border-radius: 999px; font-size: 12px; font-weight: 600;
+        background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1); color: #E9E8E1;
+    }
+    body[data-theme="light"] .jiq-mw-who span { background: #FFFFFF; border-color: #C9C6BA; color: #0C1618; }
+    .jiq-mw-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .jiq-mw-list .jiq-music-standout { font-size: 13px; line-height: 1.55; color: #E9E8E1; }
+    body[data-theme="light"] .jiq-mw-list .jiq-music-standout { color: #0C1618; }
     /* Combined reads: theme blocks, standouts, league tables. */
     .jiq-music-theme { margin-top: 22px; }
     .jiq-music-theme-k {
