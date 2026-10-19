@@ -497,6 +497,7 @@ def _prepare_touchpoints(slug: str, cards: list) -> list[dict]:
             "asset_id":  aid,
             "channel":   _asset_channel(a),
             "asset_title": _asset_action_title(a),
+            "asset_type": (a.get("asset_type") or "").strip() or "Other",
             "phase":     (a.get("phase_name") or "").strip() or "Unphased",
             "paid_or_organic": (a.get("paid_or_organic") or "").strip() or "organic",
             "reach":     float(reach),
@@ -1151,6 +1152,7 @@ def _compute_slice_impl(*, slug: str,
                 "touchpoint_id":       t["asset_id"],
                 "channel":             t["channel"],
                 "asset_title":         t["asset_title"],
+                "asset_type":          t.get("asset_type") or "Other",
                 "phase":               t["phase"],
                 "paid_or_organic":     t["paid_or_organic"],
                 **({"members": list(t["members"]), "member_count": int(t.get("member_count") or len(t["members"]))} if t.get("members") else {}),
@@ -1187,6 +1189,7 @@ def _compute_slice_impl(*, slug: str,
                 "touchpoint_id":       t["asset_id"],
                 "channel":             t["channel"],
                 "asset_title":         t["asset_title"],
+                "asset_type":          t.get("asset_type") or "Other",
                 "phase":               t["phase"],
                 "paid_or_organic":     t["paid_or_organic"],
                 **({"members": list(t["members"]), "member_count": int(t.get("member_count") or len(t["members"]))} if t.get("members") else {}),
@@ -1285,6 +1288,15 @@ def _compute_slice_impl(*, slug: str,
         paths = _empty_paths_payload(
             conversion_noun or "conversion", int(n_slice))
 
+    # Which creative converted best (Alexia, The Influencer Project,
+    # 2026-10-19): the same exposure matrix, read by creative type,
+    # channel and paid / organic / earned. Fail-safe like the other cards.
+    try:
+        creative = _compute_creative_impl(X_bin=X_bin, y=y, touch=touch, rows=rows, conv_rate=float(conv_rate))
+    except Exception as e:
+        logger.warning("MTA: creative compute failed for %s / %s: %s", slug, slice_salt, e)
+        creative = {"dimensions": []}
+
     # Strip the internal column-index hint before serialization.
     for r in rows:
         r.pop("_col_idx", None)
@@ -1298,6 +1310,7 @@ def _compute_slice_impl(*, slug: str,
         "journeys":        journeys,
         "co_exposure":     co_exposure,
         "paths":           paths,
+        "creative":        creative,
         "source":          "proxy" if proxy_used else "fit",
     }
     if cohort_meta is not None:
@@ -1645,6 +1658,75 @@ def compute_mta_coefficients(campaign_slug: str,
 # The two blocks live on the same cached payload so a single API round
 # trip powers all three cards on the multi-touch dashboard tab.
 # ---------------------------------------------------------------------------
+
+
+_CREATIVE_DIMENSIONS = (
+    ("asset_type", "Creative type", "Which kind of creative converted best"),
+    ("channel", "Channel", "Which channel converted best"),
+    ("paid_or_organic", "Paid, organic or earned", "Paid, organic or earned: which converted best"),
+)
+_PAID_LABELS = {"paid": "Paid", "organic": "Organic", "earned": "Earned"}
+
+
+def _compute_creative_impl(*, X_bin: np.ndarray, y: np.ndarray, touch: list[dict],
+                           rows: list[dict], conv_rate: float) -> dict:
+    """Conversion by creative type, channel, and paid / organic / earned,
+    read at the person level off the fitted exposure matrix: a person who
+    saw any creative of a kind counts once for that kind, so the kinds
+    overlap and do not sum. Each group carries the people reached, the
+    converters among them, their conversion rate, that rate against the
+    cohort's rate (100 = the cohort), the exposure-weighted lift per
+    exposure of its touchpoints, and the assets behind it. Alexia on The
+    Influencer Project (2026-10-19): 'what type of creative was best at
+    conversion?'"""
+    n = int(X_bin.shape[0]) if X_bin is not None and X_bin.ndim == 2 else 0
+    total_conv = int(round(float(np.sum(y)))) if n else 0
+    by_col = {int(r["_col_idx"]): r for r in rows if "_col_idx" in r}
+    dims = []
+    for key, label, question in _CREATIVE_DIMENSIONS:
+        groups: dict[str, list[int]] = {}
+        for k, t in enumerate(touch):
+            v = str(t.get(key) or "Other").strip() or "Other"
+            if key == "paid_or_organic":
+                v = _PAID_LABELS.get(v.lower(), v.title())
+            groups.setdefault(v, []).append(k)
+        out_rows = []
+        for v, cols in groups.items():
+            if not cols or n == 0:
+                continue
+            any_exp = X_bin[:, cols].max(axis=1)
+            exposed = int(round(float(np.sum(any_exp))))
+            converted = int(round(float(np.sum(any_exp * y))))
+            if exposed <= 0:
+                continue
+            rate = converted / exposed
+            w = np.array([float(by_col[k]["exposed_n"]) if k in by_col else 0.0 for k in cols])
+            ors = np.array([float(by_col[k]["odds_ratio"]) if k in by_col else 1.0 for k in cols])
+            lift = float(np.sum(w * ors) / np.sum(w)) if float(np.sum(w)) > 0 else float(np.mean(ors))
+            assets = 0
+            for k in cols:
+                assets += int(touch[k].get("member_count") or len(touch[k].get("members") or []) or 1)
+            out_rows.append({
+                "label":            v,
+                "touchpoints":      len(cols),
+                "assets":           assets,
+                "exposed_n":        exposed,
+                "converted_n":      converted,
+                "conversion_rate":  round(rate, 4),
+                "index_vs_cohort":  round(rate / conv_rate * 100.0, 1) if conv_rate > 0 else None,
+                "lift_per_exposure": round(lift, 4),
+                "share_of_converters": round(converted / total_conv * 100.0, 1) if total_conv else None,
+            })
+        out_rows.sort(key=lambda r: (r["conversion_rate"], r["converted_n"]), reverse=True)
+        dims.append({"key": key, "label": label, "question": question, "rows": out_rows})
+    return {
+        "dimensions": dims,
+        "cohort_conversion_rate": round(float(conv_rate), 4),
+        "cohort_converters": total_conv,
+        "note": ("A person who saw any creative of a kind counts once for that kind, so the kinds overlap and do not sum. "
+                 "Index: the kind's conversion rate against this cohort's, 100 = the cohort. Lift: the typical effect of one more "
+                 "exposure to the kind's creative, from the model."),
+    }
 
 
 def _compute_journeys_impl(*, slug: str, X_bin: np.ndarray, y: np.ndarray,
