@@ -550,8 +550,10 @@ def build_payload(inputs: dict, prim: dict, *, created_by: str = 'prometheus') -
                     key=lambda r: -r['accounts'])
     for b in new_bd:
         b['pct'] = round(b['accounts'] / new_total * 100, 4)
+    star_names = [c['name'] for c in stars]
     origin_rows = [dict(r) for r in fr_rows] + [{'label': f'New to the franchise: no episode of an earlier {franchise} series in the past year',
-                                               'accounts': new_total, 'pct': 0.0, 'doing': f'{new_bd[0]["label"]} brought the most of them', 'breakdown': new_bd}]
+                                               'accounts': new_total, 'pct': 0.0, 'breakdown': new_bd,
+                                               'doing': 'By who brought them: ' + ', '.join(f'{b["label"]} {b["pct"]:.1f}%' for b in new_bd if b['label'] in star_names)}]
     for r in origin_rows:
         r['pct'] = round(r['accounts'] / v4 * 100, 4)
     assert sum(r['accounts'] for r in origin_rows) == v4
@@ -648,8 +650,8 @@ def build_payload(inputs: dict, prim: dict, *, created_by: str = 'prometheus') -
     ad_bd = sorted(({'label': c['name'], 'accounts': c['m']['ad_buy']['accounts'], 'doing': ''} for c in cast), key=lambda r: -r['accounts'])
     for b in ad_bd:
         b['pct'] = round(b['accounts'] / ad_buy_total * 100, 4)
-    ss_rows.append({'label': 'Clicked an ad and bought something during the episode', 'accounts': ad_buy_total,
-                    'doing': f'{_pos(ad_bd[0]["label"])} people were the most likely to', 'breakdown': ad_bd})
+    ss_rows.append({'label': 'Clicked an ad and bought something during the episode', 'accounts': ad_buy_total, 'breakdown': ad_bd,
+                    'doing': 'By who brought the buyer: ' + ', '.join(f'{b["label"]} {b["pct"]:.1f}%' for b in ad_bd if b['label'] in star_names)})
     for r in ss_rows:
         r['pct'] = round(r['accounts'] / v4 * 100, 4)
     detours.append({'title': 'The second screen during the episode', 'kind': 'overlap', 'base': v4,
@@ -703,7 +705,7 @@ def build_payload(inputs: dict, prim: dict, *, created_by: str = 'prometheus') -
     shares_line = ', '.join(f'{c["name"]} {c["share_pct"]:.1f}%' for c in stars)
     copy = {
         'eyebrow': f'Premiere journey. {_window_label(start, end)}',
-        'titleHtml': _clean(inputs.get('cover_title') or prim.get('cover_title') or f'{subject} opened on its leads and a franchise habit.').rstrip('.') + '.',
+        'titleHtml': _clean(inputs.get('cover_title') or subject).rstrip('.') + '.',   # the subject, never a finding that names one star
         'deck': f'The people who watched the first episode of {subject} through to the end on the Crosswalk clickstream panel of 10M US consumers, '
                 f'projected to the United States. Where they came from, how they found out, and who brought them. Every count is a person.',
         'lead': _clean(who.get('read') or ''),
@@ -729,6 +731,7 @@ def build_payload(inputs: dict, prim: dict, *, created_by: str = 'prometheus') -
         'spine': spine, 'fork': fork, 'detours': detours, 'cast_drivers': cast_block, 'copy': copy,
         'who_they_are': {k: (_clean(v) if isinstance(v, str) else v) for k, v in who.items()},
     }
+    hold_all_or_none(blob, [c['name'] for c in stars])
     now = _dt.datetime.now(_dt.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
     payload = {
         'meta': {
@@ -756,13 +759,52 @@ def _list_names(names: list, last_word: str = 'and') -> str:
     return ', '.join(names[:-1]) + f' {last_word} ' + names[-1]
 
 
+def _names_in(text: str, names: list) -> list:
+    """The stars a line names, by full name or by surname (a line that says
+    "tagging Caan" names Scott Caan)."""
+    t = str(text or '')
+    out = []
+    for n in names:
+        n = str(n or '')
+        if not n:
+            continue
+        last = n.split()[-1]
+        if n in t or (len(last) >= 4 and re.search(r'\b' + re.escape(last) + r"(?:'s|')?\b", t)):
+            out.append(n)
+    return out
+
+
 def names_all_or_none(text: str, names: list) -> bool:
     """True when the text names every star in `names` or none of them.
     (Jenna 2026-10-19: a header or line that names one marquee cast
     member names all of them.)"""
-    t = str(text or '')
-    hits = [n for n in names if n and n in t]
+    hits = _names_in(text, names)
     return not hits or len(hits) == len(names)
+
+
+def hold_all_or_none(blob: dict, names: list) -> None:
+    """Every reader-visible note on the tables, the spine and the fork
+    names all of the stars or none of them. A research note that names a
+    subset is dropped (the row keeps its label and its count); the lines
+    the builder writes itself already name every star. Labels that ARE a
+    star's name, the per-star breakdown rows and the cast block are the
+    comparison and are left alone."""
+    if not names:
+        return
+    for d in blob.get('detours') or []:
+        if names_all_or_none(d.get('note'), names) is False:
+            d['note'] = ''
+        for r in d.get('rows') or []:
+            if not names_all_or_none(r.get('doing'), names):
+                r['doing'] = ''
+    for s_ in list(blob.get('spine') or []) + list(blob.get('fork') or []):
+        for k in ('doing', 'where', 'surface', 'label'):
+            if k != 'label' and not names_all_or_none(s_.get(k), names):
+                s_[k] = ''
+    cp = blob.get('copy') or {}
+    for k in ('deck', 'lead', 'spineHead', 'forkHead', 'forkSub', 'forkRead', 'detourHead', 'castSub'):
+        if cp.get(k) and not names_all_or_none(cp[k], names):
+            cp[k] = ''
 
 
 def _pos(name: str) -> str:
@@ -843,6 +885,18 @@ def check_payload(payload: dict, inputs: Optional[dict] = None) -> list:
         for mid in ids:
             if mid not in (s.get('m') or {}):
                 out.append(f'{s["name"]} is missing {mid}')
+    star_names = [s['name'] for s in stars]
+    for d in j.get('detours') or []:
+        for r in d.get('rows') or []:
+            if not names_all_or_none(r.get('doing'), star_names):
+                out.append(f'a note names a subset of the stars: {r.get("doing")!r}')
+    for k in ('titleHtml', 'deck', 'lead', 'spineHead', 'forkRead', 'castHead', 'detourHead'):
+        v = (j.get('copy') or {}).get(k)
+        if v and k != 'titleHtml' and not names_all_or_none(v, star_names):
+            out.append(f'copy.{k} names a subset of the stars')
+    for t in (j.get('copy') or {}).get('kpis') or []:
+        if not names_all_or_none(t.get('l'), star_names):
+            out.append(f'a tile names a subset of the stars: {t.get("l")!r}')
     if inputs:
         names = [c['name'] for c in (inputs.get('cast') or [])]
         bys = {s['name']: s for s in stars}
@@ -1017,10 +1071,8 @@ def write_copy(payload: dict, claude_json: Optional[Callable]) -> dict:
     cp = j['copy']
     names = [st['name'] for st in (j.get('cast_drivers') or {}).get('stars') or []]
     pinned = str(((j.get('inputs') or {}).get('cover_title')) or '').strip()
-    title = _clean(pinned or c.get('cover_title') or cp.get('titleHtml')).rstrip('.')
-    if not pinned and (len(title.split()) > 14 or not names_all_or_none(title, names)):
-        title = _clean(fb['cover_title']).rstrip('.')
-    cp['titleHtml'] = title + '.'
+    # the cover title is the subject (Jenna 2026-10-19: "just say ncis: new york"); a pin wins; the model's line never does
+    cp['titleHtml'] = _clean(pinned or payload['meta'].get('customer_brand') or cp.get('titleHtml')).rstrip('.') + '.'
     who_read = _house(_clean(c.get('who_read') or cp.get('lead') or ''))
     if not names_all_or_none(who_read, names):
         who_read = _house(_clean(fb.get('who_read') or ''))
