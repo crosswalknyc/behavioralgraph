@@ -91226,6 +91226,13 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     renderJourneyIqMediaWeek(_fragBlock, _fragMeta);
                 } else if (_fragBlock && _fragBlock.copy && typeof renderJourneyIqYsPvod === 'function') {
                     renderJourneyIqYsPvod(_fragBlock, (fullRun && fullRun.meta) || meta);
+                    // A premiere run splits into stages behind a select.
+                    // Runs after the renderer, which paints the whole
+                    // scroll, and after the clickstream pass inside it,
+                    // which is what hides the tab bar.
+                    if (typeof _jiqPremPaintTabs === 'function') {
+                        _jiqPremPaintTabs(_fragBlock, _fragMeta);
+                    }
                 } else if (typeof renderJourneyIqFragrance === 'function') {
                     renderJourneyIqFragrance(_fragBlock,
                                              (fullRun && fullRun.meta) || meta);
@@ -118487,6 +118494,150 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             if (typeof _jiqPaintFragClickstream === 'function') _jiqPaintFragClickstream(d);
         }
 
+        // ─── A premiere journey splits into stages (2026-10-19, Jenna:
+        // "split things out like the other ones with the drop downs") ───
+        // The same Stage select the week-in-the-life view carries. The
+        // stages are the deck's own sections, so the page and the PDF
+        // read in the same order. Premiere runs only; every other
+        // journey through this renderer keeps its single scroll.
+        var _jiqPremStage = 'path';
+        var _jiqPremStageList = [
+            { id: 'path',   label: 'The path in' },
+            { id: 'origin', label: 'Where they came from' },
+            { id: 'found',  label: 'How they found out' },
+            { id: 'stars',  label: 'The stars, side by side' },
+            { id: 'second', label: 'The second screen' },
+            { id: 'when',   label: 'When, where and episode 2' },
+            { id: 'read',   label: 'What to do next' }
+        ];
+        function _jiqPremIsRun(meta) {
+            meta = meta || {};
+            return meta.journey_kind === 'premiere'
+                || meta.target_type === 'premiere_journey';
+        }
+        function _jiqPremStageOf(title) {
+            var t = String(title || '').toLowerCase();
+            if (t.indexOf('where they came from') >= 0) return 'origin';
+            if (t.indexOf('first touch') >= 0 || t.indexOf('last touch') >= 0
+                || t.indexOf('in the mix') >= 0) return 'found';
+            if (t.indexOf('who brought them') >= 0) return 'stars';
+            if (t.indexOf('second screen') >= 0) return 'second';
+            return 'when';
+        }
+        function _jiqPremSec(el) {
+            return el ? (el.closest ? el.closest('.jiq-frag-sec') : null) : null;
+        }
+        function _jiqPremShow(el, on) {
+            if (el) el.style.display = on ? '' : 'none';
+        }
+        function _jiqPremReadHost() {
+            var host = document.getElementById('jiqFragPremRead');
+            if (host) return host;
+            var det = document.getElementById('jiqFragDetours');
+            if (!det || !det.parentNode) return null;
+            host = document.createElement('div');
+            host.id = 'jiqFragPremRead';
+            host.className = 'jiq-mw-pad';
+            det.parentNode.insertBefore(host, det.nextSibling);
+            return host;
+        }
+        function _jiqPremReset() {
+            // These nodes are shared with every other journey on this
+            // renderer, so a premiere view must hand them back visible
+            // or the next run opens with its spine and tables missing.
+            [_jiqPremSec(document.getElementById('jiqFragSpineNum')),
+             document.getElementById('jiqFragSpine'),
+             _jiqPremSec(document.getElementById('jiqFragForkNum')),
+             document.getElementById('jiqFragFork'),
+             _jiqPremSec(document.getElementById('jiqFragDetourNum')),
+             document.getElementById('jiqFragDetours')].forEach(function(el) {
+                _jiqPremShow(el, true);
+            });
+            var det = document.getElementById('jiqFragDetours');
+            if (det) {
+                for (var i = 0; i < det.children.length; i++) {
+                    _jiqPremShow(det.children[i], true);
+                }
+            }
+            var read = document.getElementById('jiqFragPremRead');
+            if (read) { read.innerHTML = ''; read.style.display = 'none'; }
+        }
+        function _jiqPremApplyStage(d) {
+            var stage = _jiqPremStage || 'path';
+            var det = document.getElementById('jiqFragDetours');
+            var detNum = document.getElementById('jiqFragDetourNum');
+            var detHead = document.getElementById('jiqFragDetourHead');
+            var onPath = (stage === 'path');
+            _jiqPremShow(_jiqPremSec(document.getElementById('jiqFragSpineNum')), onPath);
+            _jiqPremShow(document.getElementById('jiqFragSpine'), onPath);
+            _jiqPremShow(_jiqPremSec(document.getElementById('jiqFragForkNum')), onPath);
+            _jiqPremShow(document.getElementById('jiqFragFork'), onPath);
+            var onStars = (stage === 'stars');
+            _jiqPremShow(document.getElementById('jiqFragCastSec'), onStars);
+            _jiqPremShow(document.getElementById('jiqFragCast'), onStars);
+
+            var tables = (d && d.detours) || [];
+            var any = false;
+            if (det) {
+                for (var i = 0; i < det.children.length; i++) {
+                    var on = (_jiqPremStageOf((tables[i] || {}).title) === stage);
+                    _jiqPremShow(det.children[i], on);
+                    any = any || on;
+                }
+                _jiqPremShow(det, any);
+            }
+            var label = '';
+            for (var k = 0; k < _jiqPremStageList.length; k++) {
+                if (_jiqPremStageList[k].id === stage) {
+                    label = _jiqPremStageList[k].label;
+                    var n = k + 1;
+                    if (detNum) detNum.textContent = (n < 10 ? '0' + n : String(n)) + ' ' + label;
+                }
+            }
+            _jiqPremShow(_jiqPremSec(detNum), any);
+            if (detHead && any) detHead.textContent = label;
+
+            var readHost = _jiqPremReadHost();
+            if (readHost) {
+                var onRead = (stage === 'read');
+                _jiqPremShow(readHost, onRead);
+                if (onRead) {
+                    var r = (d && d.the_read) || {};
+                    var c = (d && d.copy) || {};
+                    var L = (typeof _jiqMediaWeekList === 'function')
+                        ? _jiqMediaWeekList : function() { return ''; };
+                    readHost.innerHTML =
+                        L('The short version', 'What we found, why it matters, what to do.',
+                          r.tldr || c.tldr || [])
+                        + L('Reads', 'Each line carries its number.',
+                            r.reads || c.reads || [])
+                        + L('What to do next', 'Where to put the next dollar.',
+                            r.recommendations || c.recommendations || []);
+                }
+            }
+        }
+        function _jiqPremPaintTabs(d, runMeta) {
+            var bar = document.getElementById('jiqFragTabBar');
+            if (!bar) return;
+            if (!_jiqPremIsRun(runMeta)) { _jiqPremReset(); return; }
+            bar.className = 'jiq-ufc-tabbar jiq-music-navbar';
+            bar.style.display = '';
+            bar.innerHTML = '<div class="jiq-music-nav"><label>Stage<select id="jiqPremStageSel">'
+                + _jiqPremStageList.map(function(s) {
+                    return '<option value="' + s.id + '"'
+                        + (s.id === _jiqPremStage ? ' selected' : '') + '>'
+                        + _jiqFragEsc(s.label) + '</option>';
+                }).join('')
+                + '</select></label></div>';
+            var sel = document.getElementById('jiqPremStageSel');
+            if (sel) {
+                sel.addEventListener('change', function() {
+                    _jiqPremStage = sel.value || 'path';
+                    _jiqPremApplyStage(d);
+                });
+            }
+            _jiqPremApplyStage(d);
+        }
         // ─── The stars, side by side (journey_kind premiere, 2026-10-19) ───
         // A premiere journey carries cast_drivers: the same measures for
         // every star, in the same order. The card sits between the fork
