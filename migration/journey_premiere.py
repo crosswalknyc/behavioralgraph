@@ -1289,10 +1289,6 @@ def _inputs_for_meta(inputs: dict) -> dict:
     return {k: inputs.get(k) for k in ('cast', 'involvement_order', 'new_fans_order', 'measure_orders', 'always_above', 'franchise', 'night', 'premiere_date', 'cover_title')}
 
 
-if __name__ == '__main__':
-    main()
-
-
 # Time-ordered tables read as a sequence, so they keep their order.
 # Everything else is a ranking and ships biggest first.
 _TIME_ORDERED = ('how fast they watch', 'day by day', 'by daypart',
@@ -1327,3 +1323,5 @@ def _rank_detours(detours):
             if isinstance(bd, list) and len(bd) > 1:
                 r['breakdown'] = _desc(bd)
     return detours
+if __name__ == '__main__':
+    main()
