@@ -24,6 +24,15 @@ import urllib.parse
 import urllib.request
 
 CACHE = os.path.expanduser("~/Desktop/production_tag_cache.json")
+if not os.path.isdir(os.path.dirname(CACHE)):
+    # a server has no Desktop: the disk cache lives in the temp dir there,
+    # so a looked-up title is never asked of Wikidata again on that host
+    import tempfile
+    CACHE = os.path.join(tempfile.gettempdir(), "production_tag_cache.json")
+# In-process memo: every row of a series carries the same show, and the
+# relay's 153-row Gilmore Girls answer took 154 s when each row went back
+# to Wikidata (2026-10-19). One lookup per (show, kind) per process.
+_MEMO = {}
 _TIMEOUT = 15
 # Wikidata asks for a descriptive User-Agent identifying the tool.
 _UA = "behavioralgraph-title-tool/1.0 (https://crosswalknyc.com)"
@@ -196,18 +205,24 @@ def production_for(show, kind="series"):
     """Primary production-house code for a title (blank if truly unknown)."""
     if not show:
         return ""
+    memo_key = _cache_key(show, kind)
+    if memo_key in _MEMO:
+        return _MEMO[memo_key]
     # 1) manual override wins
     o = _override(show)
     if o is not None:
+        _MEMO[memo_key] = o
         return o
     # 2) cache (a prior Wikidata result, including a cached blank miss)
     c = cache_get(show, kind)
     if c is not None:
+        _MEMO[memo_key] = c
         return c
     # 3) Wikidata (open, no key). Cache hits AND misses so we query each once.
     name = _wikidata_first_company(show, kind)
     code = ALIASES.get(name.lower().strip(), name) if name else ""
     cache_put(show, kind, code)
+    _MEMO[memo_key] = code
     return code
 
 
