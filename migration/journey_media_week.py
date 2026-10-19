@@ -238,11 +238,11 @@ RESEARCH_SYSTEM_PROMPT = """You are the analyst behind Crosswalk's Digital Journ
 
 THE PANEL SEES DIGITAL ONLY. The viewers in this read streamed the title on a digital surface: the title's streaming home (Paramount+, BET+), a live TV streaming service (YouTube TV, Hulu + Live TV, DirecTV Stream, Fubo, Sling), the network's own app or site, or YouTube (full episodes or clips). A person who only watches on a cable box or an antenna is outside the panel and outside this universe. Never describe linear tuning, in-store buying, terrestrial radio or print as something the panel saw. Every other behavior in the week must be digital too: streaming, podcasts and music apps, social platforms, news and sports sites and apps, games on a phone or console network, search.
 
-Use web search to anchor: the title's current season, air day and time, where it streams and when it lands there, its recent audience size and shape (age, gender, ethnicity, income lean), the known fan surfaces (official and fan podcasts, subreddits, Facebook groups, creator accounts), the shows that share its audience, and the US adult reach of the platforms you name. Reason from those anchors to the shares below. Anchors and sources stay internal; nothing in the output names a source, a survey, a rating service or a methodology word.
+Use web search to anchor: the title's CURRENT season (the one airing inside the window), its air day and time THIS season (network schedules move between seasons: NCIS ran Mondays in 2024-25 and Tuesdays from fall 2025; never carry last season's slot), where it streams and when it lands there, its recent audience size and shape (age, gender, ethnicity, income lean), the known fan surfaces (official and fan podcasts, subreddits, Facebook groups, creator accounts), the shows that share its audience, and the US adult reach of the platforms you name. Reason from those anchors to the shares below. Anchors and sources stay internal; nothing in the output names a source, a survey, a rating service or a methodology word.
 
 DEFINITIONS
 - universe.us_viewers: unique US people who streamed at least one episode of the title on a digital surface in the window. Walk it from the streaming home's US users times the share who watched, plus live TV streaming households' viewers, plus app and YouTube full-episode viewers, minus overlap. It must sit under the streaming home's US reach and under the network's digital reach. Say the walk in universe.basis (one sentence, numbers in it).
-- A "week" is a typical in-season week with a new episode.
+- A "week" is a typical in-season week with a new episode. air_day is the current season's air day; the days partition's biggest row is that day, and the next-day window is the day after it; weekend behavior stays on the weekend.
 - pct in a partition section is the share of viewers; the rows sum to about 100.
 - pct in an overlap section is the share of viewers who did that thing in a typical week; rows do not sum. us_pct is the share of US adults who did that same thing in a typical week; include it on every overlap row; it is the only base the index (pct / us_pct) is read against, weekly over weekly, so give the real weekly US adult share for every platform, app, show and podcast (Facebook near 60, Reddit low twenties, iHeartRadio single digits, YouTube in the seventies). A row without us_pct shows no index.
 - notes are one plain phrase, concrete to this title's audience (what they do there, which accounts, which shows), never generic.
@@ -286,12 +286,30 @@ Plain words throughout, no em dashes, no internal vocabulary (no modeled, estima
 COMPACT_RULE = "\nKeep every string short. Notes under 90 characters. No prose outside the JSON."
 
 
+def pin_air_day(prim: dict, day: str) -> dict:
+    """Hold the research to a known air day (2026-10-19: the NCIS read carried
+    Monday from the 2024-25 season; the show airs Tuesdays). The pinned day
+    overrides air_day; a days table whose biggest row is another day is a
+    stale season and is refused, so the operator fixes the research instead
+    of shipping a week built around the wrong night."""
+    want = next((d for d in DAYS if _norm(d) == _norm(day)), None)
+    if not want:
+        raise ValueError(f'unknown air day {day!r}')
+    prim['air_day'] = want
+    rows = [r for r in (prim.get('days') or []) if isinstance(r, dict) and r.get('label')]
+    if rows:
+        top = max(rows, key=lambda r: float(r.get('pct') or 0))
+        if _norm(top['label']) != _norm(want):
+            raise ValueError(f"the research built the week around {top['label']}, but the show airs {want}; fix the primitives before publishing")
+    return prim
+
+
 def _research(inputs: dict, claude_json: Callable, tools=None) -> dict:
     start, end = _dates(inputs)
     user = json.dumps({
         'subject': inputs['subject'], 'streaming_home': inputs.get('platform') or '',
         'network': inputs.get('network') or '', 'window': {'start': start, 'end': end},
-        'ceilings': inputs.get('ceilings') or {}, 'notes': inputs.get('notes') or '',
+        'air_day': inputs.get('air_day') or '', 'ceilings': inputs.get('ceilings') or {}, 'notes': inputs.get('notes') or '',
     })
     prim = claude_json(RESEARCH_SYSTEM_PROMPT + COMPACT_RULE, user, max_tokens=20000, temperature=0.5,
                        surface='journey_media_week', tools=tools)
@@ -301,6 +319,8 @@ def _research(inputs: dict, claude_json: Callable, tools=None) -> dict:
                            max_tokens=20000, temperature=0.35, surface='journey_media_week_retry', tools=tools)
     if not isinstance(prim, dict) or not prim.get('universe'):
         raise RuntimeError('media-week research returned no primitives')
+    if inputs.get('air_day'):
+        pin_air_day(prim, inputs['air_day'])
     return prim
 
 
@@ -765,6 +785,8 @@ def write_copy(payload: dict, claude_json: Optional[Callable]) -> dict:
 
 def synthesize(inputs: dict, claude_json: Callable, *, tools=None, created_by: str = 'prometheus', s3_client=None,
                prim: Optional[dict] = None, keep_prim: Optional[dict] = None) -> dict:
+    if prim is not None and inputs.get('air_day'):
+        pin_air_day(prim, inputs['air_day'])
     prim = prim or _research(inputs, claude_json, tools=tools)
     if keep_prim is not None:
         keep_prim.update(prim)
@@ -838,6 +860,7 @@ def main(argv=None):
     ap.add_argument('--user', default='admin')
     ap.add_argument('--notes', default='')
     ap.add_argument('--home-reach', type=int, default=0, help='US people the streaming home reaches (ceiling)')
+    ap.add_argument('--air-day', default='', help='pin the current season\'s air day (refuses research built around another day)')
     ap.add_argument('--pdf-dir', default='')
     ap.add_argument('--out-json', default='')
     ap.add_argument('--no-persist', action='store_true')
@@ -855,7 +878,7 @@ def main(argv=None):
         old_payload = _jiq.load_run_from_s3(s3, a.republish_key) or {}
         om = old_payload.get('meta') or {}
         inputs = {'subject': a.subject or om.get('customer_brand'), 'platform': a.platform or om.get('streaming_home'),
-                  'network': a.network or om.get('network'), 'journey_kind': KIND, 'notes': a.notes,
+                  'network': a.network or om.get('network'), 'journey_kind': KIND, 'notes': a.notes, 'air_day': a.air_day,
                   'start_date': om.get('start_date'), 'end_date': om.get('end_date'),
                   'ceilings': ({'home_us_reach': a.home_reach} if a.home_reach else {})}
         prim = json.load(open(a.from_prim))
@@ -891,7 +914,7 @@ def main(argv=None):
             print(f'[media-week] pdf -> {out}')
         print(json.dumps({'key': a.recopy_key, 'title': payload['fragrance_shop_journey']['copy']['titleHtml']}))
         return
-    inputs = {'subject': a.subject, 'platform': a.platform, 'network': a.network, 'journey_kind': KIND, 'notes': a.notes,
+    inputs = {'subject': a.subject, 'platform': a.platform, 'network': a.network, 'journey_kind': KIND, 'notes': a.notes, 'air_day': a.air_day,
               'ceilings': ({'home_us_reach': a.home_reach} if a.home_reach else {})}
     kept: dict = {}
     prim = json.load(open(a.from_prim)) if a.from_prim else None
