@@ -9161,7 +9161,7 @@ _PM_INTAKE_STALL_PREFIX = 'Almost there - I still need'
 # belongs to the same brief.
 _PM_INTAKE_AGENT_PREFIXES = (
     _PM_INTAKE_STALL_PREFIX.lower(), 'happy to build', 'happy to run',
-    'happy to set up', "here's the", 'here is the')
+    'happy to set up', "here's the", 'here is the', 'one question before i line it up')
 
 _PM_INTAKE_FAULT_REPLY = ('Got it. I have what you sent and I am lining '
                           'it up now. I will email you when it is '
@@ -9448,6 +9448,13 @@ def _pm_intake_turn(flow, text, body, history, user, ppu, first):
     if fault and not complete_fn(parsed):
         return _pm_intake_fault_payload()
     if flow == 'digital_journey' and isinstance(parsed, dict):
+        parsed = _ir.apply_direction(parsed)
+        if _ir.direction_unclear(parsed) and parsed.get('subject'):
+            # which way does it run (Jenna 2026-10-19): how they came TO WATCH, or what watchers do after and in addition
+            _pm_ask_hint(outcome='clarified', subject=parsed.get('subject'))
+            _pm_pending_intake('stash', user, flow, parsed, run_label)
+            return {**base, 'reply': _ir.direction_question(parsed.get('subject')), collect_key: True,
+                    'followups': list(_ir.DIRECTION_CHIPS) + ['Cancel']}
         parsed = _ir.watch_defaults(parsed)   # a title on a video platform starts on social (Jenna 2026-10-13)
     if flow == 'attribution' and isinstance(parsed, dict) and parsed.get('daily_refresh') and _pm_aiq_days(parsed) < 1 \
             and parsed.get('campaign_name') and parsed.get('urls') and parsed.get('conversion_event'):
@@ -16876,8 +16883,8 @@ def _pm_jiq_parse(text, usage_extras=None):
 
 
 def _pm_jiq_inputs_complete(parsed):
-    return bool(parsed.get('subject') and parsed.get('platform')
-                and parsed.get('conversion_event'))
+    from prometheus.intake_reader import journey_inputs_complete
+    return journey_inputs_complete(parsed)   # two directions (Jenna 2026-10-19): after-watch needs the title only; unclear is asked
 
 
 def _pm_jiq_is_ticketing(inputs):
@@ -16909,7 +16916,7 @@ def _pm_jiq_ready_message(payload, inputs):
         msg += (f" Ticketing-site visitors in window: {n_txt} people in "
                 "the US. No claim is made on whether any of them bought "
                 "a ticket; Crosswalk does not predict box office.")
-    elif n_txt and kind == 'watch':
+    elif n_txt and kind in ('watch', 'media_week'):
         msg += f" Viewers in window: {n_txt} people in the US."
     elif n_txt:
         msg += f" Buyers in window: {n_txt} people in the US."
@@ -16920,6 +16927,9 @@ def _pm_jiq_confirm_reply(parsed):
     win = (f"{parsed['start_date']} to {parsed['end_date']}"
            if parsed.get('start_date') and parsed.get('end_date')
            else 'trailing 12 months')
+    if str(parsed.get('journey_kind') or '') == 'media_week':   # what watchers do after and in addition (Jenna 2026-10-19)
+        from prometheus.intake_reader import media_week_confirm_reply
+        return media_week_confirm_reply(parsed, win, _pm_tool_price_label('journey_iq', '$500'))
     tam = parsed.get('tam_label') or 'US gen pop (329.9M)'
     start_line = (f"- Starting point: {parsed['start_behavior']} "
                   f"(out of {tam})"
@@ -16987,7 +16997,8 @@ def _pm_jiq_confirm_reply(parsed):
 def _pm_run_jiq_job(job_id, username, inputs, extras):
     try:
         from migration.journey_synthesis import synthesize, persist
-        subj = f"{inputs['subject']} on {inputs['platform']}"
+        subj = (f"{inputs['subject']} viewers, a week in the life" if str(inputs.get('journey_kind') or '') == 'media_week'
+                else f"{inputs['subject']} on {inputs.get('platform') or 'the platform'}")
         _pm_jiq_status_write(job_id, {
             'job_id': job_id, 'user': username, 'status': 'running',
             'subject': subj, 'started_at': time.time(), 'inputs': _smart.jsonable(inputs)})

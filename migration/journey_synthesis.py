@@ -54,10 +54,20 @@ user's message. Return STRICT JSON only:
                                 // ("watched a paid episode on Amazon
                                 // after a clip", "streamed the title
                                 // on Peacock")
-  "journey_kind": "purchase"|"watch"|"ticketing"|"before_after"|"discovery_existing"|"music",
+  "journey_kind": "purchase"|"watch"|"ticketing"|"before_after"|"discovery_existing"|"music"|"media_week",
                                 // infer from the ask:
                                 // money changes hands -> "purchase"
-                                // watch / stream / play / listen -> "watch"
+                                // how people came TO WATCH a title
+                                //   (social / short-form to the title,
+                                //   discovery, what drove the watch)
+                                //   -> "watch"
+                                // what a title's viewers do AFTER and
+                                //   IN ADDITION to watching (a day or
+                                //   week in the life of its viewers,
+                                //   post-watch behavior, the other
+                                //   shows / podcasts / social / apps
+                                //   around the episode, "what else do
+                                //   X viewers do") -> "media_week"
                                 // film ticket / showtime / theatrical
                                 //   -> "ticketing" (site visit, never a buy)
                                 // before and after a named clip / URL
@@ -66,6 +76,19 @@ user's message. Return STRICT JSON only:
                                 //   -> "discovery_existing"
                                 // song / soundtrack / music-first
                                 //   -> "music"
+  "journey_direction": "to_watch"|"after_watch"|"unclear"|null,
+                                // for a journey about a title's viewers
+                                // / watchers / fans / audience: "to_watch"
+                                // when the ask is about how they came to
+                                // watch (-> "watch"); "after_watch" when
+                                // it is about what they do after or in
+                                // addition (-> "media_week"); "unclear"
+                                // when the ask says neither ("a journey
+                                // for NCIS viewers"). The chip answers
+                                // "How they came to watch" -> to_watch,
+                                // "What watchers do after and in
+                                // addition" -> after_watch. null for a
+                                // purchase, ticketing or clip ask.
   "clip_url": str|null,         // Instagram / YouTube / TikTok URL when
                                 // the user pasted one
   "start_behavior": str|null,   // a DEFINED starting behavior cohort
@@ -87,7 +110,11 @@ event nor a concrete watch/play behavior nor a clip URL with a
 before/after ask, list conversion_event in missing. A start_behavior
 is never required; only capture one the user actually described.
 A pasted Instagram / YouTube / TikTok URL is clip_url. Never invent
-what the user did not give."""
+what the user did not give.
+A "media_week" ask needs only the subject (the title); platform is the
+title's streaming home when the user names it, otherwise null, and
+neither platform nor conversion_event goes in missing. When
+journey_direction is "unclear", list journey_direction in missing."""
 
 
 COMPACT_OUTPUT_RULE = """

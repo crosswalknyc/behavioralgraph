@@ -439,8 +439,114 @@ def _platform_from_clip(url):
     return None
 
 
+# The two directions a journey about a title's viewers can run (Jenna
+# 2026-10-19): how they came TO WATCH (Carolyn's shape: social short-form
+# to the title, journey_kind watch) or what watchers do AFTER and IN
+# ADDITION (the Survivor / NCIS / Sistas week-in-the-life shape,
+# journey_kind media_week). An ask that says neither gets the question.
+_AFTER_WATCH_RE = re.compile(
+    r"after (?:they|people|viewers|fans|watchers|someone|you) (?:watch|stream|finish)|after watching|post[- ]?watch|"
+    r"in addition to (?:watching|the (?:show|episode|title))|(?:day|week) in the (?:media |digital )?life|"
+    r"what (?:else )?(?:do|are|does) [^.?!]{0,50}\b(?:viewers|watchers|fans|audience|people who watch)\b [^.?!]{0,20}"
+    r"\b(?:do|doing|watch|listen|use|engage|read|stream|open)\b|"
+    r"rest of (?:their|the) (?:week|day)|around the episode|between episodes|what watchers do|"
+    r"(?:behavior|behaviour|habits) (?:after|around|beyond) (?:the|a) (?:watch|episode|show)|"
+    r"what (?:else )?(?:they|watchers|viewers) (?:watch|listen to|use|do)",
+    re.I)
+_TO_WATCH_RE = re.compile(
+    r"(?:came|come|get|got) to watch|how (?:they|people|viewers) (?:found|find|discover|discovered|came|come|arrived|got)|"
+    r"from (?:social|a (?:post|clip|reel|short)|short[- ]form|tiktok|instagram|youtube)|"
+    r"to the (?:title|show|first episode|watch)|(?:drove|drives|led|leads) (?:them |people )?to (?:watch|the title)|"
+    r"\bend(?:s|ing)? at\b|\bstart(?:s|ing)? (?:from|at|with)\b|social (?:post|clip|view) to|discovery",
+    re.I)
+_VIEWER_JOURNEY_RE = re.compile(
+    r"\b(?:viewer|viewership|watcher|audience|fan)s?'?\b[^.?!]{0,40}\bjourney\b|\bjourney\b[^.?!]{0,60}\b(?:viewer|viewership|watcher|audience|fan)s?\b",
+    re.I)
+DIRECTION_CHIPS = ('How they came to watch', 'What watchers do after and in addition')
+
+
+def journey_direction_from_text(text):
+    """'after_watch', 'to_watch', 'unclear' or None for an ask about a title's viewers."""
+    low = ' '.join(str(text or '').lower().split())
+    if not low:
+        return None
+    if low.strip(' .!') == DIRECTION_CHIPS[1].lower() or _AFTER_WATCH_RE.search(low):
+        return 'after_watch'
+    if low.strip(' .!') == DIRECTION_CHIPS[0].lower() or _TO_WATCH_RE.search(low):
+        return 'to_watch'
+    if _VIEWER_JOURNEY_RE.search(low) and not find_clip_url(text) \
+            and not re.search(r'\b(?:bought|buy|purchase|ticket|showtime|song|soundtrack)\b', low):
+        return 'unclear'
+    return None
+
+
+def direction_question(subject=None):
+    who = f"{subject} " if subject else ''
+    return (f"One question before I line it up: do you want how {who}viewers came TO WATCH (the path from social "
+            f"and short-form to the title), or what {who}watchers do after and in addition to watching (their week: the other "
+            f"shows, services, podcasts, social, news and games around the episode)?")
+
+
+def direction_unclear(parsed):
+    return str((parsed or {}).get('journey_direction') or '').lower() == 'unclear'
+
+
+def apply_direction(parsed):
+    """Make journey_kind and journey_direction agree: after_watch is the
+    media-week kind, to_watch is a watch journey unless another kind is
+    already set; a media_week kind implies after_watch."""
+    p = dict(parsed or {})
+    d = str(p.get('journey_direction') or '').lower()
+    kind = str(p.get('journey_kind') or '').lower()
+    if kind == 'media_week':
+        p['journey_direction'] = 'after_watch'
+    elif d == 'after_watch':
+        p['journey_kind'] = 'media_week'
+    elif d == 'to_watch' and kind in ('', 'media_week'):
+        p['journey_kind'] = 'watch'
+    if p.get('journey_kind') == 'media_week':
+        p['missing'] = [k for k in (p.get('missing') or []) if k not in ('platform', 'conversion_event', 'journey_direction')]
+        if not p.get('conversion_event'):
+            p['conversion_event'] = f"watched the next new episode of {p.get('subject') or 'the title'} within 7 days"
+    elif p.get('journey_direction') not in (None, '', 'unclear'):
+        p['missing'] = [k for k in (p.get('missing') or []) if k != 'journey_direction']
+    return p
+
+
+def journey_inputs_complete(parsed):
+    """The Digital Journey intake is complete when: the direction is known
+    (an ask that has not said which way it runs is asked, never assumed),
+    and either it is the after-watch read with a title, or it names the
+    title, the platform and the end step."""
+    p = parsed or {}
+    if direction_unclear(p):
+        return False
+    if str(p.get('journey_kind') or '').lower() == 'media_week':
+        return bool(p.get('subject'))
+    return bool(p.get('subject') and p.get('platform') and p.get('conversion_event'))
+
+
+def media_week_confirm_reply(parsed, window_label, price_label):
+    """The confirm card for the after-watch read: the Survivor / NCIS / Sistas shape."""
+    home = parsed.get('platform') or 'its streaming home, confirmed from the title'
+    return (
+        f"Here's the Digital Journey I'll build:\n"
+        f"- {parsed['subject']} viewers, a week in the life\n"
+        f"- The read: what they do after and in addition to watching, not how they came to watch\n"
+        f"- Streaming home: {home}\n"
+        f"- Window: {window_label}\n\n"
+        "It's the same shape as the Survivor, NCIS and Sistas reads: the viewers, who comes back to the title "
+        "off-screen in a week, and who watches the next episode; episode night or later in the week; then where "
+        "they stream it, how fast they watch a new episode, their week day by day, an episode day by daypart, "
+        "and the other shows, streaming services, podcasts and audio, social platforms, news, sports and games "
+        "around the episode, each against US adults. It lands in the Digital Journey tab when finished. It "
+        f"prices at {price_label}. Run it?")
+
+
 def _kind_from_ask(text, kind):
     low = str(text or '').lower()
+    if journey_direction_from_text(text) == 'after_watch':
+        return 'media_week'
     if re.search(r'before and after|before/after|20\s*-?\s*min', low) \
             and find_clip_url(text):
         return 'before_after'
@@ -492,6 +598,8 @@ def is_new_ask(text):
     t = ' '.join(str(text or '').split())
     if not t or _FIELD_SHAPE.search(t):
         return False
+    if t.strip(' .!').lower() in {c.lower() for c in DIRECTION_CHIPS}:
+        return False   # the answer to "which way does the journey run" belongs to the intake
     words = t.split()
     if _BUILD_ASK.search(t):
         return True
@@ -534,15 +642,26 @@ def keyword_parse_journey(text):
         or _platform_from_clip(clip_url)
     subject = find_subject(t, plats)
     sd, ed = find_window(t)
+    direction = journey_direction_from_text(t)
+    if kind == 'media_week':
+        direction = 'after_watch'
+    elif direction == 'unclear' and (conv or start):
+        direction = 'to_watch'
     out = {
         'subject': subject, 'platform': platform,
         'conversion_event': conv, 'journey_kind': kind or None,
+        'journey_direction': direction,
         'clip_url': clip_url,
         'start_behavior': start, 'start_date': sd, 'end_date': ed,
         'tam_label': None, 'tam_accounts': None, 'notes': None,
     }
-    out['missing'] = [k for k in ('subject', 'platform', 'conversion_event')
-                      if not out.get(k)]
+    if kind == 'media_week':
+        out['missing'] = [k for k in ('subject',) if not out.get(k)]
+    else:
+        out['missing'] = [k for k in ('subject', 'platform', 'conversion_event')
+                          if not out.get(k)]
+        if direction == 'unclear':
+            out['missing'].append('journey_direction')
     return out
 
 
@@ -574,7 +693,7 @@ def merge_missing(primary, secondary, required):
     overwritten; ``missing`` is recomputed."""
     out = dict(primary or {})
     sec = secondary or {}
-    optional = ('journey_kind', 'clip_url', 'start_behavior',
+    optional = ('journey_kind', 'journey_direction', 'clip_url', 'start_behavior',
                 'captured_action',
                 'start_date', 'end_date',
                 # brand partnership
@@ -1163,6 +1282,7 @@ FIELD_LABELS = {
     'campaign_name': 'the campaign name', 'urls': 'the campaign URLs',
     'daily_refresh': 'daily tracking',
     'end_tracking_date': 'the stop date for daily tracking',
+    'journey_direction': 'which way the journey runs (how they came to watch, or what watchers do after and in addition)',
 }
 
 
@@ -1171,6 +1291,8 @@ def propose_journey_field(parsed):
     missing and the other two make the answer obvious, return
     (field, value). Otherwise None. Never proposes a subject."""
     p = parsed or {}
+    if str(p.get('journey_kind') or '').lower() == 'media_week' or direction_unclear(p):
+        return None   # a week-in-the-life read has no end step to propose; an unclear direction is asked, not guessed
     required = ('subject', 'platform', 'conversion_event')
     missing = [k for k in required if not p.get(k)]
     if len(missing) != 1:
@@ -1418,6 +1540,8 @@ def watch_defaults(parsed):
     5 shape). Fills journey_kind and start_behavior only when the brief
     left them empty."""
     p = dict(parsed or {})
+    if str(p.get('journey_kind') or '').lower() == 'media_week' or direction_unclear(p):
+        return p   # the after-watch read starts at the viewers, never on social; an unclear ask is asked first
     plat = str(p.get('platform') or '')
     if _PLATFORM_KIND.get(plat) != 'video' and p.get('journey_kind') != 'watch':
         return p

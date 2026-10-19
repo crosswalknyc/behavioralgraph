@@ -52,6 +52,12 @@ def jiq_intent(text, chip=''):
     # 'journey for Young Sheldon on Netflix, start from ..., end at ...' (2026-10-14)
     if re.match(r"^\W*(?:digital )?journey (?:for|on|of)\b", low):
         return True
+    # the after-watch read (Jenna 2026-10-19): 'a viewership journey for NCIS viewers after they watch',
+    # 'a week in the life of a Survivor viewer', 'what do Sistas watchers do in addition to watching'
+    if re.search(r"\b(?:viewer|viewership|watcher|audience|fan)s?\b[^.?!]{0,40}\bjourney\b|\bjourney\b[^.?!]{0,60}\b(?:viewer|viewership|watcher|audience|fan)s?\b", low):
+        return True
+    if re.search(r"\b(?:day|week) in the (?:media |digital )?life of\b", low):
+        return True
     return 'journey' in low and any(k in low for k in ('start from', 'end at', 'ends at', 'conversion'))
 
 
