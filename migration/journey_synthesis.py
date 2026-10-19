@@ -29,6 +29,7 @@ facts all come from the data.
 """
 from __future__ import annotations
 
+import copy
 import datetime as _dt
 import hashlib
 import json
@@ -1457,6 +1458,10 @@ def apply_title_anchor(payload: dict, ta: dict, seed: str = '') -> dict:
         for key in ('facts', 'diagnostics', 'the_read', 'before_after'):
             if key in payload:
                 payload[key] = _retext(payload[key])
+                if key in j:
+                    # the blob carries its own copy of the read; it quotes
+                    # the same counts as the top-level one
+                    j[key] = copy.deepcopy(payload[key])
         j['copy'] = _retext(j.get('copy') or {})
         payload.setdefault('meta', {})['title_anchor'] = {
             'us_viewers': want, 'sample_size': int(ta.get('sample_size') or 0),
@@ -1977,7 +1982,7 @@ def synthesize(inputs: dict, claude_json: Callable, *,
             attach_clickstream(replay, {}, inputs)
         except Exception as exc:
             print(f'[journey] clickstream attach on replay skipped: {exc}')
-        return replay
+        return reconcile_payload(replay)
     norms_on = _norms_enabled()
     band0 = None
     if norms_on:
@@ -2052,7 +2057,113 @@ def synthesize(inputs: dict, claude_json: Callable, *,
         attach_clickstream(payload, prim, inputs)
     except Exception as exc:
         print(f'[journey] clickstream attach skipped: {exc}')
-    return scrub_payload_text(payload)
+    return scrub_payload_text(reconcile_payload(payload))
+
+
+def _acc_int(v) -> int:
+    try:
+        return int(round(float(v)))
+    except (TypeError, ValueError):
+        return 0
+
+
+_FORK_BASE = {'retargeted': 'abandoned', 'returned': 'retargeted', 'paid_return': 'returned'}
+_MIRRORED_BLOCKS = ('who_they_are', 'the_read', 'before_after')
+
+
+def reconcile_payload(payload: dict) -> dict:
+    """Every derived field agrees with the counts, and the blob's copy of
+    the read agrees with the top-level one, before a journey is stored
+    or handed back (2026-10-19, Ghost Energy Drink). The passes that
+    move counts (anchors, title anchor, norms, gold) each refresh what
+    they touch; this is the one place that re-derives everything from
+    the counts they left, so no pass can leave a share behind.
+
+    Counts never move here. Spine: kept of prior, dropped, share of US.
+    Fork: kept of its base, dropped (the two branches off the cart are
+    each other's drop). Detours: a row's share of its table base, a
+    breakdown line's share of its row. Blocks the blob repeats
+    (who_they_are, the_read, before_after) copy the top-level block,
+    which is the one every text pass rewrites. Never raises."""
+    try:
+        if not isinstance(payload, dict):
+            return payload
+        if str((payload.get('meta') or {}).get('journey_kind') or '').lower() == 'media_week':
+            # its own shape and its own kpis (total_users is the viewer
+            # base there, not the last step); the media-week module owns it
+            return payload
+        j = payload.get('fragrance_shop_journey')
+        if not isinstance(j, dict):
+            return payload
+        spine = [s for s in (j.get('spine') or []) if isinstance(s, dict)]
+        prev = None
+        for s in spine:
+            acc = _acc_int(s.get('accounts'))
+            if prev is None:
+                s['kept'] = 100.0
+                s['dropped'] = 0
+            else:
+                s['kept'] = round(acc / prev * 100, 4) if prev else 0.0
+                s['dropped'] = max(prev - acc, 0)
+            s['ofUs'] = round(acc / US_GEN_POP * 100, 4)
+            prev = acc
+        fork = [f for f in (j.get('fork') or []) if isinstance(f, dict) and f.get('id')]
+        by = {f['id']: f for f in fork}
+        if fork and len(spine) >= 2:
+            penult = _acc_int(spine[-2].get('accounts'))
+            pf = _acc_int((by.get('paid_first') or {}).get('accounts'))
+            ab = _acc_int((by.get('abandoned') or {}).get('accounts'))
+            for fid, f in by.items():
+                acc = _acc_int(f.get('accounts'))
+                if fid in ('paid_first', 'abandoned'):
+                    base = penult
+                    dropped = ab if fid == 'paid_first' else pf
+                    if not (pf and ab):
+                        dropped = max(base - acc, 0)
+                elif fid in _FORK_BASE:
+                    base = _acc_int((by.get(_FORK_BASE[fid]) or {}).get('accounts'))
+                    dropped = max(base - acc, 0)
+                else:
+                    continue
+                f['kept'] = round(acc / base * 100, 4) if base else 0.0
+                f['dropped'] = int(dropped)
+        for d in j.get('detours') or []:
+            if not isinstance(d, dict):
+                continue
+            rows = [r for r in (d.get('rows') or []) if isinstance(r, dict)]
+            base = _acc_int(d.get('base'))
+            if base <= 0:
+                partition = (str(d.get('kind') or '') == 'partition'
+                             or 'rows sum to' in str(d.get('note') or '').lower())
+                base = sum(_acc_int(r.get('accounts')) for r in rows) if partition else 0
+            for r in rows:
+                acc = _acc_int(r.get('accounts'))
+                if base > 0:
+                    r['pct'] = round(acc / base * 100, 4)
+                for b in r.get('breakdown') or []:
+                    if isinstance(b, dict) and acc > 0:
+                        b['pct'] = round(_acc_int(b.get('accounts')) / acc * 100, 4)
+        for key in _MIRRORED_BLOCKS:
+            if isinstance(payload.get(key), (dict, list)):
+                j[key] = copy.deepcopy(payload[key])
+            elif isinstance(j.get(key), (dict, list)):
+                payload[key] = copy.deepcopy(j[key])
+        kp = payload.get('kpis')
+        if isinstance(kp, dict) and spine:
+            end = _acc_int(spine[-1].get('accounts'))
+            if 'total_users' in kp:
+                kp['total_users'] = end
+            if 'share_of_us_pct' in kp:
+                # norms-era kpis: the end as a share of the US, and the
+                # end-to-end rate off the first real step
+                kp['share_of_us_pct'] = round(end / US_GEN_POP * 100, 4)
+                first = next((_acc_int(s.get('accounts')) for s in spine
+                              if s.get('id') not in ('tam', 'us_gen_pop')), 0)
+                if 'conversion_pct' in kp and first:
+                    kp['conversion_pct'] = round(end / first * 100, 4)
+    except Exception as exc:
+        print(f'[journey] reconcile skipped: {exc}')
+    return payload
 
 
 def scrub_payload_text(payload: dict) -> dict:
@@ -2075,6 +2186,6 @@ def persist(s3_client, payload: dict, username: str, job_id: str) -> str:
         from migration import journey_iq as _jiq
     except ImportError:
         import journey_iq as _jiq  # type: ignore
-    return _jiq._persist(s3_client, payload,
+    return _jiq._persist(s3_client, reconcile_payload(payload),
                          payload['meta']['project_name'],
                          username, job_id)

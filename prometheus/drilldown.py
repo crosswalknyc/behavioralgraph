@@ -595,6 +595,15 @@ def _persist_payload(hit, payload, s3, bucket, tag='edit'):
         s3, bucket = _s3()
     key = hit['key']
     try:
+        # every share and kept rate agrees with the counts the edit left
+        try:
+            from migration import journey_synthesis as _js
+        except Exception:
+            import journey_synthesis as _js  # type: ignore
+        _js.reconcile_payload(payload)
+    except Exception:
+        pass
+    try:
         from . import guards as _g
         _g.scrub_tree(payload.get('fragrance_shop_journey') or {})
     except Exception:

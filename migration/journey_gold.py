@@ -362,9 +362,20 @@ def _rescale(rows: list, base: int, kind: str, seed) -> list:
     for r in rows:
         r['pct'] = round(r['accounts'] / base * 100, 4) if base else 0.0
         if isinstance(r.get('breakdown'), list) and r['breakdown']:
-            sub_tot = sum(int(b.get('accounts') or 0) for b in r['breakdown']) or 1
-            for b in r['breakdown']:
+            bd = [b for b in r['breakdown'] if isinstance(b, dict)]
+            sub_tot = sum(int(b.get('accounts') or 0) for b in bd) or 1
+            for b in bd:
                 b['accounts'] = max(1, int(round(int(b.get('accounts') or 0) / sub_tot * r['accounts'])))
+            # The lines under a row land exactly on the row, and each
+            # line's share is read off its new count. Before 2026-10-19
+            # the shares stayed at their pre-rescale values, so the Ghost
+            # Energy Drink file carried 34.6007% on a line whose count
+            # was 34.5326% of its row.
+            if bd and r['accounts'] > 0:
+                big = max(bd, key=lambda b: b['accounts'])
+                big['accounts'] = max(1, big['accounts'] + r['accounts'] - sum(b['accounts'] for b in bd))
+            for b in bd:
+                b['pct'] = round(b['accounts'] / r['accounts'] * 100, 4) if r['accounts'] else 0.0
     return rows
 
 

@@ -2452,9 +2452,16 @@ def breakdown_rows(payload: dict) -> list:
     also = _bd_int(((payload or {}).get('kpis') or {}).get('also_watching'))
     if also > 0 and spine:
         # the people already watching (or already customers) who saw the posts: their own
-        # line, never inside the conversion (Jenna 2026-10-13)
-        rows.append(['Already watching', 'Saw the posts and were already watching before them', also, '', '', '',
-                     'Not counted in the conversion', '', 'Before the first post'])
+        # line, never inside the conversion (Jenna 2026-10-13). A purchase journey says
+        # customers, the way the tab's own note does (Ghost Energy Drink, 2026-10-19).
+        _kind = str(((payload or {}).get('meta') or {}).get('journey_kind') or '').lower()
+        _tt = str(((payload or {}).get('meta') or {}).get('target_type') or '').lower()
+        if _kind in ('purchase', 'buy', 'ticketing', 'signup') or _tt == 'purchase_journey':
+            rows.append(['Already customers', 'Saw the posts and were already customers before them', also, '', '', '',
+                         'Not counted in the conversion', '', 'Before the first post'])
+        else:
+            rows.append(['Already watching', 'Saw the posts and were already watching before them', also, '', '', '',
+                         'Not counted in the conversion', '', 'Before the first post'])
     for f in (j.get('fork') or []):
         if not isinstance(f, dict):
             continue

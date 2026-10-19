@@ -87874,6 +87874,29 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var s = String(v);
             return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
         }
+        // Fields that describe how the run was produced rather than
+        // what it found never reach the download (2026-10-19): the
+        // story mode, the build trail, the hero image path, and the
+        // tag a table carries on where its rows came from. A column
+        // whose only values are those tags goes with it. The reader
+        // gets the figures and the words on the page, nothing else.
+        var _JIQ_CSV_INTERNAL_KEY = /^(story_mode|target_type|created_by|hero_image|clip_url|norms|gold|diagnostics|data_provenance|anchors?_note|anchors|corpus_anchors|title_anchor|replayed_from|hot|no_purchase_claim|job_id|run_id|s3_key|trail|debug|_[A-Za-z0-9_]*)$/;
+        var _JIQ_CSV_INTERNAL_VAL = /^(research(ed)?|derived|standard|synthetic(_estimate)?|model(l?ed)?|anchor(ed)?|corpus|replay(ed)?|fallback|gold|estimate[ds]?)$/i;
+        function _jiqCsvInternalKey(k) {
+            k = String(k == null ? '' : k);
+            return _JIQ_CSV_INTERNAL_KEY.test(k)
+                || /synth|provenance|anchor|diagnostic|debug|internal/i.test(k);
+        }
+        function _jiqCsvInternalVal(v) {
+            return typeof v === 'string' && _JIQ_CSV_INTERNAL_VAL.test(v.trim());
+        }
+        // Cells stay raw until the file is joined; quoting happens once
+        // there. Quoting on the way in as well doubled the quotes on any
+        // value with a comma.
+        function _jiqCsvRaw(v) {
+            return (v == null || typeof v === 'object') ? '' : v;
+        }
+        var _jiqCsvSeen = {};
         function _jiqCsvBlocks(node, path, out, depth) {
             if (!node || typeof node !== 'object' || depth > 5) return;
             if (Array.isArray(node)) {
@@ -87882,23 +87905,36 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var cols = [];
                 objs.forEach(function (r) {
                     Object.keys(r).forEach(function (k) {
-                        if (cols.indexOf(k) === -1 && !Array.isArray(r[k]) &&
+                        if (cols.indexOf(k) === -1 && !_jiqCsvInternalKey(k) && !Array.isArray(r[k]) &&
                             (r[k] === null || typeof r[k] !== 'object')) cols.push(k);
                     });
                 });
+                // a column that only ever holds a build tag is a build tag
+                cols = cols.filter(function (c) {
+                    var vals = objs.map(function (r) { return r[c]; })
+                        .filter(function (v) { return v != null && v !== ''; });
+                    return !(vals.length && vals.every(_jiqCsvInternalVal));
+                });
                 if (cols.length) {
-                    out.push([]);
-                    out.push([path]);
-                    out.push(cols);
-                    objs.forEach(function (r) {
-                        out.push(cols.map(function (c) { return _jiqCsvCell(r[c]); }));
+                    var body = objs.map(function (r) {
+                        return cols.map(function (c) { return _jiqCsvRaw(r[c]); });
                     });
+                    var sig = JSON.stringify([cols, body]);
+                    // the blob repeats a few blocks the payload also
+                    // carries at the top; one copy is enough
+                    if (!_jiqCsvSeen[sig]) {
+                        _jiqCsvSeen[sig] = 1;
+                        out.push([]);
+                        out.push([path]);
+                        out.push(cols);
+                        body.forEach(function (r) { out.push(r); });
+                    }
                 }
                 // A row can carry its own table, the way a detour
                 // carries the lines underneath it.
                 objs.forEach(function (r, i) {
                     Object.keys(r).forEach(function (k) {
-                        if (r[k] && typeof r[k] === 'object') {
+                        if (r[k] && typeof r[k] === 'object' && !_jiqCsvInternalKey(k)) {
                             var name = r.title || r.label || r.name || ('row ' + (i + 1));
                             _jiqCsvBlocks(r[k], path + ' · ' + name + ' · ' + k, out, depth + 1);
                         }
@@ -87908,7 +87944,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }
             Object.keys(node).forEach(function (k) {
                 var v = node[k];
-                if (v && typeof v === 'object') {
+                if (v && typeof v === 'object' && !_jiqCsvInternalKey(k)) {
                     _jiqCsvBlocks(v, path ? path + ' · ' + k : k, out, depth + 1);
                 }
             });
@@ -87925,28 +87961,32 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             rows.push(['Prepared', new Date().toISOString().slice(0, 10)]);
 
             var meta = payload.meta || {};
+            _jiqCsvSeen = {};
             var scalars = Object.keys(meta).filter(function (k) {
                 return meta[k] !== null && typeof meta[k] !== 'object'
-                    && String(meta[k]).indexOf('__') !== 0;
+                    && String(meta[k]).indexOf('__') !== 0
+                    && !_jiqCsvInternalKey(k) && !_jiqCsvInternalVal(meta[k]);
             });
             if (scalars.length) {
                 rows.push([]);
                 rows.push(['Run']);
                 rows.push(['Field', 'Value']);
-                scalars.forEach(function (k) { rows.push([k, _jiqCsvCell(meta[k])]); });
+                scalars.forEach(function (k) { rows.push([k, _jiqCsvRaw(meta[k])]); });
             }
             if (Array.isArray(payload.facts) && payload.facts.length) {
                 rows.push([]);
                 rows.push(['Notes']);
                 rows.push(['Label', 'Value']);
                 payload.facts.forEach(function (f) {
-                    rows.push([_jiqCsvCell(f && f.label), _jiqCsvCell(f && f.value)]);
+                    rows.push([_jiqCsvRaw(f && f.label), _jiqCsvRaw(f && f.value)]);
                 });
             }
+            var storyKey = String(meta.story_mode || '');
             Object.keys(payload).forEach(function (k) {
-                if (k === 'meta' || k === 'facts') return;
+                if (k === 'meta' || k === 'facts' || _jiqCsvInternalKey(k)) return;
                 if (payload[k] && typeof payload[k] === 'object') {
-                    _jiqCsvBlocks(payload[k], k, rows, 0);
+                    // the blob is keyed by its story mode; the file says Journey
+                    _jiqCsvBlocks(payload[k], (storyKey && k === storyKey) ? 'Journey' : k, rows, 0);
                 }
             });
             if (rows.length < 6) { alert('No figures found on this journey to export.'); return; }
