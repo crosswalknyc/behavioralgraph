@@ -218,9 +218,11 @@ def build_pdf(payload: dict) -> bytes:
                    str(copy.get('castHead') or f"{names[0]} brought the most people to the first episode."),
                    'The same measures for every star. Each line after the first two is the share of the people that star brought. The top value on each line is marked.')
         _grid(d, '', head, grid_rows, d.m, d.y, full_w, lead_cols, note=str(cb.get('note') or ''))
+        short = {'live': 'live viewing', 'one_sitting': 'one sitting', 'episode2': 'episode 2', 'posted': 'posting',
+                 'followed_star': "the star's own posts", 'new_fan': 'newcomers', 'ad_buy': 'the in-episode purchase'}
         by_leader = {}
         for m in measures:
-            by_leader.setdefault(leaders.get(m['id']) or '', []).append(m['label'].split(':')[0].split(',')[0].lower())
+            by_leader.setdefault(leaders.get(m['id']) or '', []).append(short.get(m['id'], m['label'].lower()))
         parts = [f"{_pos(n)} people lead on {_list(v)}" for n, v in by_leader.items() if n]
         trail = [n for n in names if n not in by_leader]
         d.meaning(f"{names[0]} brought the most people. " + '; '.join(parts) + '.'
