@@ -170,7 +170,7 @@ def build_pdf(payload: dict) -> bytes:
 
     # 04 where they came from
     origin = _section(payload, 'Where they came from')
-    new_row = (origin or {}).get('rows', [{}])[-1] if origin else {}
+    new_row = next((r for r in ((origin or {}).get('rows') or []) if str(r.get('label', '')).startswith('New to the franchise')), {})
     nb = (new_row.get('breakdown') or [{}])[0] if new_row else {}
     bd_by = {b.get('label'): b for b in (new_row.get('breakdown') or [])} if new_row else {}
     new_split = ', '.join(f"{b.get('label')} {_pct(b.get('accounts'), new_row.get('accounts'))}"
@@ -243,8 +243,8 @@ def build_pdf(payload: dict) -> bytes:
 
     # 08 when, where, and episode 2
     when, where, e2 = _section(payload, 'When they watched'), _section(payload, 'Where it played'), _section(payload, 'episode 2')
-    live = (when or {}).get('rows', [{}])[0] if when else {}
-    back = (e2 or {}).get('rows', [{}])[0] if e2 else {}
+    live = next((r for r in ((when or {}).get('rows') or []) if str(r.get('label', '')).startswith('Live on')), {})
+    back = next((r for r in ((e2 or {}).get('rows') or []) if str(r.get('label', '')).startswith('Watched ')), {})
     e2_lead = leaders.get('episode2') or ''
     e2_vals = {s['name']: float(s['m']['episode2']['pct']) for s in stars}
     d.new_page(False, 'When and where, and the second episode',
