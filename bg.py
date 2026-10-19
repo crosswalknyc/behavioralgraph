@@ -28289,9 +28289,11 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             # purchasing share target. Brand-skew table is MPB_DIGITAL_SHARE
             # in post_generation_enforcers.py; gender split comes from the
             # file's own GENDER column.
-            df_final, _n_mpb = _mpb_share_lifts(
-                df_final, _subj_for_enforce, verbose=True,
-            )
+            # RETIRED 2026-10-19: the MPB_DIGITAL_SHARE lift/trim pulled
+            # every table brand to a gender-weighted constant on every
+            # file (the Kartel Tostitos / Windex / Corona lockstep). The
+            # reasoned value ships; see post_generation_enforcers.
+            _n_mpb = 0
         except Exception as _e:
             print(f"   ⚠️ post-generation enforcers skipped: {_e}")
 

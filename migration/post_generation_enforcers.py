@@ -8131,23 +8131,20 @@ def add_missing_sheet4_must_include_mpb(df, subject, verbose=True):
             continue
         if not _is_in_hostmap(brand):
             continue
-        skew = MPB_DIGITAL_SHARE.get(brand.upper())
-        if not skew:
+        if brand.upper() not in MPB_DIGITAL_SHARE:
             continue
-        target = _mpb_audience_weighted_target(df, brand.upper())
-        if target is None or target <= 0:
+        # 2026-10-19: a missing staple enters at its MEASURED Gen Pop
+        # baseline with a subject-salted index in the 'about the same'
+        # band (0.85x to 1.35x), never at the retired table level - the
+        # table level was the cross-file constant (Tostitos 15.4 in
+        # every file). No Gen Pop row, no insert.
+        _gp_pair = _load_gp_raw_map().get(('MOST PURCHASED BRANDS', brand.upper()))
+        if not _gp_pair or not _gp_pair[0] or _gp_pair[0] <= 0:
             continue
-        # Hash-deterministic jitter — same shape as the lift function
-        h = int(_hl.blake2b(
-            f'{subject}|{brand}|must_include_add'.encode(), digest_size=8
-        ).hexdigest(), 16)
-        macro = ((h % 9001) - 4500) / 10000.0       # -0.45..+0.45
-        micro = (((h >> 16) % 1981) - 990) / 100000.0
-        new_bp = max(0.5, target + macro + micro)
-        if abs(new_bp - round(new_bp)) < 0.01:
-            new_bp += 0.17 if (h & 1) else -0.23
-            new_bp = max(0.5, new_bp)
-        new_bp = round(new_bp, 4)
+        target = float(_gp_pair[0])
+        new_bp = _jitter_for(subject, brand.upper(), salt='must_include_add',
+                             lo=target * 0.85, hi=target * 1.35)
+        new_bp = max(0.01, round(new_bp, 4))
         if abs(new_bp * 100 - round(new_bp * 100)) < 1e-4:
             new_bp = round(new_bp + 0.0017, 4)
 
@@ -12362,14 +12359,17 @@ def run_all_enforcers(df, subject, brand_category=None, verbose=True,
         total += n
     except Exception as e:
         print(f"   ⚠️ enforcer enforce_household_streaming_floor failed: {e}")
-    # MPB audience-weighted lifts — release the default-floor lock on
-    # MOST PURCHASED BRANDS (Defect Class #22, Foosball 825-row evidence).
-    # Hostmap-gated per rule #4 — only Sheet4-validated brands lifted.
-    try:
-        df, n = apply_mpb_digital_share_lifts(df, subject, verbose=verbose)
-        total += n
-    except Exception as e:
-        print(f"   ⚠️ enforcer apply_mpb_digital_share_lifts failed: {e}")
+    # RETIRED 2026-10-19 (Kartel, Travelpro x Briggs & Riley x Brock
+    # Mesarich): apply_mpb_digital_share_lifts pulled every one of 857
+    # table brands to a gender-weighted constant +/- 0.45 on every file
+    # (lift below it, trim above it), so Tostitos read 15.4 / 15.1 /
+    # 15.7 at 10x Gen Pop in a luggage buyer, a rival luggage buyer and
+    # a YouTube audience, and Tumi was trimmed from the reasoned 24 to
+    # 7 on the luggage buyer. That is the template rule 2 forbids. The
+    # Defect Class #22 floor lock it answered (MPB rows stuck at 0.01)
+    # cannot recur: the row-by-row engine reasons every MPB row at a
+    # 90% coverage floor. The reasoned value ships. Shipped files are
+    # released in place by migration/mpb_template_release.py.
     # 2026-05-25 (Defect Class #22b): one-shot cleanup of MPB rows that
     # were lifted by a previous non-hostmap-gated MPB run. Reverts any
     # row whose Value isn't in Sheet4 back to a jittered floor [0.01-0.05].
@@ -14560,6 +14560,51 @@ _LUX_SUBCAT_COLUMNS = {
 }
 
 
+# Subject BRAND CATEGORY family -> the purchase mirror column(s) whose
+# brands are native to an audience defined by that vertical.
+_LUX_NATIVE_FAMILY = {
+    'ACCESSORIES': ('ACCESSORIES',), 'JEWELRY': ('JEWELRY', 'ACCESSORIES'),
+    'APPAREL': ('APPAREL/FOOTWEAR', 'APPAREL', 'APPAREL AND FOOTWEAR', 'ACTIVEWEAR'),
+    'APPAREL/FOOTWEAR': ('APPAREL/FOOTWEAR', 'APPAREL', 'APPAREL AND FOOTWEAR', 'FOOTWEAR', 'ACTIVEWEAR'),
+    'FOOTWEAR': ('FOOTWEAR', 'APPAREL/FOOTWEAR', 'APPAREL AND FOOTWEAR'),
+    'ACTIVEWEAR': ('ACTIVEWEAR', 'APPAREL/FOOTWEAR', 'APPAREL AND FOOTWEAR'),
+    'INTIMATES': ('INTIMATES', 'APPAREL/FOOTWEAR'),
+    'BEAUTY': ('BEAUTY', 'BEAUTY/WELLNESS', 'FRAGRANCE'),
+    'RETAILERS': ('WHERE THEY SHOP', 'RETAILERS'), 'WHERE THEY SHOP': ('WHERE THEY SHOP', 'RETAILERS'),
+}
+_LUX_NATIVE_GENERIC_TOKENS = {
+    'THE', 'AND', 'OF', 'FOR', 'NEW', 'YORK', 'BRAND', 'BRANDS', 'COMPANY', 'GROUP', 'INC', 'LLC',
+    'SHOP', 'STORE', 'HOUSE', 'HOME', 'LUXURY', 'BEAUTY', 'FASHION', 'STYLE', 'SPORTS', 'OUTDOOR',
+    'BUYERS', 'SHOPPERS', 'CUSTOMERS', 'FANS', 'VIEWERS', 'MEMBERS', 'USERS', 'AVID', 'FAN',
+}
+
+
+def _lux_native_brand_keys(df, subject, norm_brand):
+    """Normalized brand keys the lux cap must leave alone for THIS file:
+    every brand in the subject's own mirror column(s) per
+    _LUX_NATIVE_FAMILY, plus any brand sharing a distinctive token with
+    the subject name (the subject itself and its sibling lines)."""
+    keys: set = set()
+    cols = df['Column'].astype(str).str.strip().str.upper()
+    bc_rows = df[cols == 'BRAND CATEGORY']
+    bc = str(bc_rows['Value'].iloc[0]).strip().upper() if len(bc_rows) else ''
+    for col in _LUX_NATIVE_FAMILY.get(bc, ()):
+        for v in df.loc[cols == col, 'Value']:
+            k = norm_brand(v)
+            if k:
+                keys.add(k)
+    toks = {t for t in _re.split(r'[^A-Z0-9]+', str(subject or '').upper())
+            if len(t) >= 4 and t not in _LUX_NATIVE_GENERIC_TOKENS}
+    if toks:
+        for v in df.loc[cols.isin(_LUX_SUBCAT_COLUMNS), 'Value']:
+            vt = set(_re.split(r'[^A-Z0-9]+', str(v or '').upper()))
+            if vt & toks:
+                k = norm_brand(v)
+                if k:
+                    keys.add(k)
+    return keys
+
+
 def apply_lux_confirmed_purchase_caps(df, *, subject=None, verbose=True):
     """Cap luxury / aspirational brand BPs into confirmed-purchase panel
     reality (per-tier target bands defined in
@@ -14620,6 +14665,24 @@ def apply_lux_confirmed_purchase_caps(df, *, subject=None, verbose=True):
 
     col_series = df['Column'].astype(str).str.strip().str.upper()
 
+    # Category-native exemption (2026-10-19, Kartel Travelpro / Briggs &
+    # Riley): an audience DEFINED by a vertical over-indexes that
+    # vertical's own brands by construction (luggage buyers on Tumi,
+    # Samsonite, Away; a beauty audience on Charlotte Tilbury). The
+    # panel-reality band is for a lux brand riding into an UNRELATED
+    # audience; capping the native ones trimmed Tumi from the reasoned
+    # 24 to 7 on a luggage buyer and made it read the same as a YouTube
+    # creator's audience. Native = the brand sits in the subject's own
+    # mirror column in this file, or shares a distinctive name token
+    # with the subject.
+    native_keys: set = set()
+    try:
+        native_keys = _lux_native_brand_keys(df, subject, _norm_brand)
+    except Exception as _ne:
+        if verbose:
+            print(f"   ⚠️ lux native exemption skipped: {_ne}")
+    skipped_native: set = set()
+
     for cat in _LUX_SUBCAT_COLUMNS:
         mask = col_series == cat
         if not mask.any():
@@ -14630,6 +14693,9 @@ def apply_lux_confirmed_purchase_caps(df, *, subject=None, verbose=True):
                 continue
             tier = lookup_tier(brand_raw)
             if tier is None:
+                continue
+            if native_keys and _norm_brand(brand_raw) in native_keys:
+                skipped_native.add(str(brand_raw).strip().upper())
                 continue
             cur_bp = _bp(df.at[idx, bp_col]) or 0.0
             lo, hi = target_band(tier)
@@ -14672,6 +14738,10 @@ def apply_lux_confirmed_purchase_caps(df, *, subject=None, verbose=True):
             ops += 1
             log.append((str(brand_raw), tier, cat, cur_bp, new_bp))
 
+    if verbose and skipped_native:
+        print(f"   💎 lux caps: {len(skipped_native)} category-native brand(s) "
+              f"left at their reasoned level ({', '.join(sorted(skipped_native)[:8])}"
+              f"{', ...' if len(skipped_native) > 8 else ''})")
     if verbose and ops:
         subj = f'[{subject}]' if subject else ''
         # Roll up to per-brand summary for readability (a lux brand
