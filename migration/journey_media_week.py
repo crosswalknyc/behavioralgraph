@@ -244,7 +244,7 @@ DEFINITIONS
 - universe.us_viewers: unique US people who streamed at least one episode of the title on a digital surface in the window. Walk it from the streaming home's US users times the share who watched, plus live TV streaming households' viewers, plus app and YouTube full-episode viewers, minus overlap. It must sit under the streaming home's US reach and under the network's digital reach. Say the walk in universe.basis (one sentence, numbers in it).
 - A "week" is a typical in-season week with a new episode.
 - pct in a partition section is the share of viewers; the rows sum to about 100.
-- pct in an overlap section is the share of viewers who did that thing in a typical week; rows do not sum. us_pct is the share of US adults who did that same thing in a typical week; include it on every overlap row so the index (pct / us_pct) can be read. Platforms Gen Pop carries will be indexed off Gen Pop instead; still give us_pct.
+- pct in an overlap section is the share of viewers who did that thing in a typical week; rows do not sum. us_pct is the share of US adults who did that same thing in a typical week; include it on every overlap row; it is the only base the index (pct / us_pct) is read against, weekly over weekly, so give the real weekly US adult share for every platform, app, show and podcast (Facebook near 60, Reddit low twenties, iHeartRadio single digits, YouTube in the seventies). A row without us_pct shows no index.
 - notes are one plain phrase, concrete to this title's audience (what they do there, which accounts, which shows), never generic.
 
 NUMBER RULES
@@ -347,18 +347,16 @@ def _rows_partition(seed, base: int, rows: list, order: Optional[tuple] = None, 
 def _pick_baseline(gp: Optional[float], research: Optional[float]) -> Optional[float]:
     """The base for the index is the share of US adults who did the thing
     IN A TYPICAL WEEK, the same basis as the row (Jenna 2026-10-19, the
-    Facebook question: indexing weekly use against Gen Pop's any-touch-
-    in-a-year row put Survivor viewers at 0.52x on Reddit). Gen Pop's row
-    is an annual any-touch figure, so it serves only as a ceiling: a
-    weekly share can never exceed the annual one. With no weekly figure
-    the annual row is the fallback."""
+    Facebook question). Gen Pop's row is any touch in a year on the
+    measured panel, a different question on a different basis: Reddit
+    reads 37.98 in a year against 22.7 in a week, and iHeartRadio 0.39
+    or YouTube 8.36 are what the panel can see, not US reach. Indexing
+    weekly use against those put Survivor viewers at 0.52x on Reddit and
+    an audio app at 29x. So the annual row never sets the index. A row
+    with no weekly base shows no index at all rather than a mixed one;
+    the annual row still guards the count ceiling in _rows_overlap."""
     r = float(research) if research is not None and research > 0 else None
-    g = float(gp) if gp is not None and gp > 0 else None
-    if r is None:
-        return g
-    if g is None:
-        return r
-    return min(r, g)
+    return r
 
 
 def _rows_overlap(seed, base: int, rows: list, section: str, levels: dict, limit: int = 10) -> list:
@@ -373,9 +371,11 @@ def _rows_overlap(seed, base: int, rows: list, section: str, levels: dict, limit
         us = _pick_baseline(gp, research)
         # the external ceiling: the viewers who did a thing can never
         # outnumber everyone in the US who did it (a fan podcast's
-        # weekly listeners, a niche show's weekly streamers)
-        if us is not None and us > 0:
-            ceiling = int(us / 100.0 * US_ADULTS * 0.92)
+        # weekly listeners, a niche show's weekly streamers). The weekly
+        # base bounds it; with none, the annual row does.
+        cap_base = us if (us is not None and us > 0) else (float(gp) if gp else None)
+        if cap_base is not None and cap_base > 0:
+            ceiling = int(cap_base / 100.0 * US_ADULTS * 0.92)
             if acc > ceiling:
                 acc = _messy((seed, r['label'], 'ceiling'), ceiling * (0.86 + (_h(seed, r['label'], 'cf') % 900) / 10000.0))
                 acc = min(acc, base - 1)
