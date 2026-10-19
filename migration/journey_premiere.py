@@ -722,6 +722,8 @@ def build_payload(inputs: dict, prim: dict, *, created_by: str = 'prometheus') -
         'detourSec': '04', 'detourHead': 'Where they came from, how they found out, and what they did during and after the episode',
         'tldr': [], 'reads': [], 'recommendations': [],
     }
+    _rank_detours(detours)
+
     proj_name = f'{subject} premiere, where the first-episode audience came from'
     blob = {
         'inputs': _inputs_for_meta(inputs),
@@ -1259,3 +1261,39 @@ def _inputs_for_meta(inputs: dict) -> dict:
 
 if __name__ == '__main__':
     main()
+
+
+# Time-ordered tables read as a sequence, so they keep their order.
+# Everything else is a ranking and ships biggest first.
+_TIME_ORDERED = ('how fast they watch', 'day by day', 'by daypart',
+                 'when they watched')
+
+
+def _rank_detours(detours):
+    """Order every ranked table biggest first, in place.
+
+    Left alone: the time-ordered tables above, and a breakdown that
+    carries the same measure labels on every row (the cast comparison),
+    where sorting each row on its own would pull the columns apart.
+    """
+    def _desc(items):
+        return sorted(items, key=lambda x: -x['pct']
+                      if isinstance(x.get('pct'), (int, float)) else 0)
+
+    for det in detours or []:
+        rows = det.get('rows')
+        if not isinstance(rows, list) or len(rows) < 2:
+            continue
+        title = str(det.get('title') or '').lower()
+        if any(p in title for p in _TIME_ORDERED):
+            continue
+        det['rows'] = rows = _desc(rows)
+        bds = [r.get('breakdown') for r in rows]
+        if all(bds) and len({tuple(b.get('label') for b in bd)
+                             for bd in bds}) == 1:
+            continue          # one shared measure set, not a ranking
+        for r in rows:
+            bd = r.get('breakdown')
+            if isinstance(bd, list) and len(bd) > 1:
+                r['breakdown'] = _desc(bd)
+    return detours
