@@ -602,7 +602,15 @@ def check_payload(payload: dict) -> list:
 
 COPY_SYSTEM_PROMPT = """You write the words on a Crosswalk Digital Journey page after the numbers are final. Return JSON only.
 
-You get a digest of a finished read: a title's viewers on the Crosswalk clickstream panel of 10M US consumers, the three steps of their week, the episode-night fork, and nine tables (share of viewers, and the index against US adults). Write:
+You get a digest of a finished read: a title's viewers on the Crosswalk clickstream panel of 10M US consumers, the three steps of their week, the episode-night fork, and nine tables (share of viewers, and the index against US adults). The digest carries a `definitions` block; when you turn a number into a sentence, use that definition's words. Every share in this read is a SHARE OF VIEWERS (people), never a share of streams, of activity, of streaming time or of plays. Frames that are right:
+- "68.7% of viewers come back to {title} off-screen between episodes"
+- "82.0% of those people watch the next new episode within 7 days"
+- "61.9% of them watch it the night it drops; 793,124 catch up later in the week"
+- "31.7% of viewers do most of their {title} time on Wednesday"
+- "47.3% of viewers play the episode in prime time, 7 to 11pm"
+- "38.6% of viewers streamed The Amazing Race the same week, 9.3x US adults"
+Frames that are wrong and must never appear: "of all weekly streaming", "of their activity", "of off-screen activity leads to", "fully caught up at any given time", "of streams".
+Write:
 {
  "cover_title": one sentence, at most 12 words, the single biggest finding, plain words,
  "who_read": two sentences on who these viewers are, from the who block,
@@ -611,7 +619,7 @@ You get a digest of a finished read: a title's viewers on the Crosswalk clickstr
  "recommendations": 3 to 4 plain steps for a network or advertiser, each with the number that justifies it,
  "facts": 5 one-sentence facts, each with one number from the digest
 }
-Rules: every number is copied from the digest exactly as given (same share, same index, same count); never introduce a number that is not in the digest; a share is written as a percent with one decimal; an index as "2.3x US adults"; counts with commas. A high school reader must follow every line. No em dashes, no colons in headers, no puns, no internal words (modeled, estimated, panel data, cohort, benchmark, survey, source), never a platform or company you were not given. Do not mention linear TV, cable, ratings or anything outside what the digest shows."""
+Rules: every number is copied from the digest exactly as given (same share, same index, same count); never introduce a number that is not in the digest; a share is written as a percent with one decimal; an index as "2.3x US adults"; counts with commas. A high school reader must follow every line: one idea per bullet, no sentence over 28 words, a bullet is one or two short sentences. No em dashes, no colons in headers, no puns, no internal words (modeled, estimated, panel data, cohort, benchmark, survey, source), never a platform or company you were not given. Do not mention linear TV, cable, ratings or anything outside what the digest shows."""
 
 
 def _digest(payload: dict) -> dict:
@@ -620,12 +628,25 @@ def _digest(payload: dict) -> dict:
     v1, v2, v3 = (int(spine[i]['accounts']) for i in (1, 2, 3))
     fork = {f['id']: f for f in (j.get('fork') or [])}
     pf, pr, pen = int(fork['paid_first']['accounts']), int(fork['paid_return']['accounts']), v2
+    T = payload['meta'].get('customer_brand')
     out = {
-        'title': payload['meta'].get('customer_brand'), 'streaming_home': payload['meta'].get('streaming_home'),
+        'title': T, 'streaming_home': payload['meta'].get('streaming_home'),
         'window': payload['meta'].get('window_label'), 'air': f"{j['meta'].get('air_day')} {j['meta'].get('air_slot')}".strip(),
         'lands_on_streaming': j['meta'].get('lands_on_streaming'),
         'viewers': f'{v1:,}', 'off_screen_pct': f'{v2 / v1 * 100:.1f}', 'next_episode_pct_of_off_screen': f'{v3 / v2 * 100:.1f}',
         'night_of_pct_of_off_screen': f'{pf / pen * 100:.1f}', 'caught_up_count': f'{pr:,}',
+        'definitions': {
+            'viewers': f'people who streamed at least one episode of {T} in the window',
+            'off_screen_pct': f'the share of viewers who came back to {T} off-screen (a clip, a recap podcast, a post, a search) in a typical week',
+            'next_episode_pct_of_off_screen': 'of the people who came back off-screen, the share who watched the next new episode within 7 days',
+            'night_of_pct_of_off_screen': 'of those same people, the share who watched the next episode the night it dropped',
+            'caught_up_count': 'the people who did not watch it that night, streamed it later in the week, and finished before the following episode',
+            'Where they stream': 'the share of viewers by the surface they stream the title on',
+            'How fast they watch a new episode': 'the share of viewers by how soon after a new episode drops they watch it',
+            'Their week, day by day': f'the share of viewers by the day their {T} time mostly lands (a share of people, not of streams)',
+            'An episode day, by daypart': 'the share of viewers by the time of day their episode play happens',
+            'overlap tables': 'the share of viewers who did this in a typical week; the index is that share divided by the share of US adults who did it',
+        },
         'who': payload.get('who_they_are') or {}, 'sections': [],
     }
     for d in j.get('detours') or []:
@@ -677,7 +698,7 @@ def write_copy(payload: dict, claude_json: Optional[Callable]) -> dict:
     if claude_json is not None:
         try:
             text = claude_json(COPY_SYSTEM_PROMPT, json.dumps(_digest(payload)), max_tokens=4000, temperature=0.4,
-                               surface='journey_media_week_copy', tools=None)
+                               surface='journey_media_week_copy', tools=[])
         except Exception as exc:
             print(f'[media-week] copy pass failed ({exc}); deterministic copy')
     good = isinstance(text, dict) and text.get('tldr') and text.get('reads') and text.get('recommendations')
@@ -738,7 +759,7 @@ def _claude_json_cli():
             return {}
 
     def claude_json(system, user, max_tokens=12000, temperature=0.5, surface='', tools=None):
-        plans = tool_plans if tools is None else [tools, None]
+        plans = tool_plans if tools is None else ([None] if not tools else [tools, None])
         for tp in plans:
             for m in models:
                 try:
@@ -755,10 +776,23 @@ def _claude_json_cli():
     return claude_json
 
 
+def republish(s3_client, key: str, payload: dict) -> str:
+    """Write a corrected payload back under the SAME key (the dated filename is
+    the identifier) and refresh its index row."""
+    import gzip
+    from migration import journey_iq as _jiq
+    body = io.BytesIO()
+    with gzip.GzipFile(fileobj=body, mode='wb') as gz:
+        gz.write(json.dumps(payload, ensure_ascii=False).encode('utf-8'))
+    s3_client.put_object(Bucket=_jiq.S3_BUCKET, Key=key, Body=body.getvalue(), ContentType='application/json', ContentEncoding='gzip')
+    _jiq._append_to_index(s3_client, key, payload)
+    return key
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description='A week in the media life of a title\'s viewers (Digital Journey IQ, media_week).')
-    ap.add_argument('--subject', required=True)
-    ap.add_argument('--platform', required=True, help='the streaming home, e.g. Paramount+')
+    ap.add_argument('--subject', default='')
+    ap.add_argument('--platform', default='', help='the streaming home, e.g. Paramount+')
     ap.add_argument('--network', default='')
     ap.add_argument('--user', default='admin')
     ap.add_argument('--notes', default='')
@@ -768,9 +802,26 @@ def main(argv=None):
     ap.add_argument('--no-persist', action='store_true')
     ap.add_argument('--prim-json', default='', help='write the research primitives here (rebuild later with --from-prim)')
     ap.add_argument('--from-prim', default='', help='skip research; build from saved primitives')
+    ap.add_argument('--recopy-key', default='', help='rewrite the prose of a persisted journey (same key) and its PDF; no research')
     a = ap.parse_args(argv)
     import boto3
     s3 = boto3.client('s3', region_name='us-east-2')
+    if a.recopy_key:
+        from migration import journey_iq as _jiq
+        payload = _jiq.load_run_from_s3(s3, a.recopy_key)
+        if not payload:
+            raise SystemExit(f'no payload at {a.recopy_key}')
+        write_copy(payload, _claude_json_cli())
+        republish(s3, a.recopy_key, payload)
+        if a.out_json:
+            Path(a.out_json).write_text(json.dumps(payload, indent=1), encoding='utf-8')
+        if a.pdf_dir:
+            from migration.journey_pdf import build_pdf, pdf_filename
+            out = Path(a.pdf_dir) / pdf_filename(payload)
+            out.write_bytes(build_pdf(payload))
+            print(f'[media-week] pdf -> {out}')
+        print(json.dumps({'key': a.recopy_key, 'title': payload['fragrance_shop_journey']['copy']['titleHtml']}))
+        return
     inputs = {'subject': a.subject, 'platform': a.platform, 'network': a.network, 'journey_kind': KIND, 'notes': a.notes,
               'ceilings': ({'home_us_reach': a.home_reach} if a.home_reach else {})}
     kept: dict = {}

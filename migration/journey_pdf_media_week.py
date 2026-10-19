@@ -147,10 +147,11 @@ def build_pdf(payload: dict) -> bytes:
     recs = list(read.get('recommendations') or [])[:4]
     d.new_page(True, 'What to do next', f"Reach the {T} viewer across the week, not only on episode night.",
                'Each step carries the number that justifies it.')
+    y = d.y
     if recs:
-        d.bullets(recs, d.m, d.y, full_w, size=12.5)
+        y = d.bullets(recs, d.m, d.y, full_w, size=12.5)
     reads = list(read.get('reads') or [])[:4]
-    if reads:
-        d.paragraph('  '.join(reads), d.m, d.y - 14 - 22 * max(1, len(recs)), full_w, size=10.5, color=BODY_DARK)
+    if reads and y > 1.9 * 72:
+        d.paragraph('  '.join(reads), d.m, y - 22, full_w, size=10.5, color=BODY_DARK)
     d.meaning(f"Basis: the Crosswalk clickstream panel of 10M US consumers, projected to the United States; {window}; unique US people.")
     return d.finish()
