@@ -79,20 +79,79 @@ class PlatformScopeError(Exception):
     platform (e.g. "Hulu-only" quietly matching preloaded Netflix seeds). Carries
     the structured detail so callers/Promy can surface or branch on it:
       .title, .missing (platform keys), .missing_labels (display names),
-      .counts (per-platform seed counts), .client_message (relay verbatim).
+      .counts (per-platform seed counts), .client_message (relay verbatim),
+      .unverified (the missing platforms whose scan could NOT run from here:
+      a resolver raised instead of answering; 'could not look' is never
+      'not there'), .failures ({platform: reason}).
     """
 
-    def __init__(self, title, missing, counts=None):
+    def __init__(self, title, missing, counts=None, unverified=None, failures=None):
         self.title = title
         self.missing = list(missing)
         self.counts = dict(counts or {})
+        self.unverified = [p for p in (unverified or []) if p in self.missing]
+        self.failures = dict(failures or {})
         self.missing_labels = [ss.platform_label(p) for p in self.missing]
+        self.unverified_labels = [ss.platform_label(p) for p in self.unverified]
         self.client_message = client_message(title, self.missing_labels)
-        human = ", ".join("%s (0 seeds)" % lbl for lbl in self.missing_labels)
+        human = ", ".join(
+            "%s (%s)" % (ss.platform_label(p),
+                         "could not be checked from here" if p in self.unverified else "0 seeds")
+            for p in self.missing)
         super().__init__(
             "explicit platform scope not satisfiable for %r: %s. Refusing to "
             "build so no profile runs on the wrong platform. Seed these "
             "platform(s) first (or drop them from the request)." % (title, human))
+
+
+def _hint_for(platform, hints, url):
+    """The URL / identifier hint for one platform: a per-platform entry in
+    ``hints`` (what the content map already holds there) beats the shared
+    ``url``. A hint lets a resolver open the catalog page directly instead
+    of discovering the title first."""
+    if isinstance(hints, dict):
+        h = hints.get(platform)
+        if h:
+            return str(h)
+    return url
+
+
+def query_report(title, platforms=None, kind="series", seasons=None,
+                 url=None, show=None, include_clips=None, limit=None, hints=None):
+    """``streamscout_query`` with the full account: the rows, the per-platform
+    seed counts, and ``failed`` ({platform: reason}) for every platform whose
+    resolver RAISED instead of answering. A raised resolver is not a zero:
+    the geo redirect, a refused lookup, a timeout all land here, so a caller
+    can hold its stored placement instead of reading the title as gone."""
+    options = {"include_clips": include_clips, "limit": limit}
+    keys, explicit = _platform_keys(platforms, return_explicit=True)
+    out, seen = [], set()
+    counts = {k: 0 for k in keys}
+    failed = {}
+    for platform in keys:
+        try:
+            rows = ss.resolver_lookup(platform, title, kind, seasons,
+                                      url=_hint_for(platform, hints, url),
+                                      options=options)
+        except Exception as e:  # noqa: BLE001 (hands-off: the platform is unverified, the batch goes on)
+            failed[platform] = ("%s: %s" % (type(e).__name__, e))[:240]
+            continue
+        for r in rows:
+            row_show = (show or r.get("show") or title or "").strip().upper()
+            rec = {
+                "SHOW": row_show,
+                "URL": r.get("identifier", "") or "",
+                "PRODUCTION": ss.production_for(row_show, kind),
+                "PLATFORM": r.get("platform") or ss.platform_label(platform),
+                "SEASON": ss.season_label(r.get("season", "")),
+            }
+            key = (rec["SHOW"], rec["SEASON"], rec["URL"], rec["PLATFORM"])
+            if rec["URL"] and key not in seen:
+                seen.add(key)
+                out.append(rec)
+                counts[platform] += 1
+    return {"rows": out, "counts": counts, "failed": failed,
+            "keys": list(keys), "explicit": sorted(explicit)}
 
 
 def _platform_keys(platforms, return_explicit=False):
@@ -126,7 +185,7 @@ def _platform_keys(platforms, return_explicit=False):
 
 def streamscout_query(title, platforms=None, kind="series", seasons=None,
                       url=None, show=None, include_clips=None, limit=None,
-                      strict=False, notify=False, notify_context=None):
+                      strict=False, notify=False, notify_context=None, hints=None):
     """Resolve ``title`` on the given platform(s); return content_map rows.
 
     Parameters
@@ -173,6 +232,10 @@ def streamscout_query(title, platforms=None, kind="series", seasons=None,
     notify_context : dict | None
         Optional extra fields for the alert email (e.g. {"window": "...",
         "client": "...", "requested_by": "..."}).
+    hints : dict | None
+        Per-platform URL / identifier hints ({"hulu": "<watch uuid>"}), the
+        placements the content map already holds. A hinted resolver opens
+        the catalog page directly; discovery runs only for the rest.
 
     Returns
     -------
@@ -182,37 +245,22 @@ def streamscout_query(title, platforms=None, kind="series", seasons=None,
     ------
     PlatformScopeError
         In strict mode, when an explicitly-requested platform yields zero seeds.
-        Carries ``.client_message`` (relay verbatim) and ``.missing_labels``.
+        Carries ``.client_message`` (relay verbatim), ``.missing_labels`` and
+        ``.unverified`` (the missing platforms whose resolver raised rather
+        than answered; a caller keeps its stored placement for those).
     """
-    options = {"include_clips": include_clips, "limit": limit}
-    keys, explicit = _platform_keys(platforms, return_explicit=True)
-    out, seen = [], set()
-    counts = {k: 0 for k in keys}
-    for platform in keys:
-        try:
-            rows = ss.resolver_lookup(platform, title, kind, seasons, url=url,
-                                      options=options)
-        except Exception:  # noqa: BLE001 — hands-off: skip a failing platform
-            continue
-        for r in rows:
-            row_show = (show or r.get("show") or title or "").strip().upper()
-            rec = {
-                "SHOW": row_show,
-                "URL": r.get("identifier", "") or "",
-                "PRODUCTION": ss.production_for(row_show, kind),
-                "PLATFORM": r.get("platform") or ss.platform_label(platform),
-                "SEASON": ss.season_label(r.get("season", "")),
-            }
-            key = (rec["SHOW"], rec["SEASON"], rec["URL"], rec["PLATFORM"])
-            if rec["URL"] and key not in seen:
-                seen.add(key)
-                out.append(rec)
-                counts[platform] += 1
+    rep = query_report(title, platforms=platforms, kind=kind, seasons=seasons,
+                       url=url, show=show, include_clips=include_clips,
+                       limit=limit, hints=hints)
+    out, counts, failed = rep["rows"], rep["counts"], rep["failed"]
+    explicit = set(rep["explicit"])
 
     if strict and explicit:
         missing = [p for p in explicit if counts.get(p, 0) == 0]
         if missing:
-            err = PlatformScopeError(title, missing, counts)
+            err = PlatformScopeError(title, missing, counts,
+                                     unverified=[p for p in missing if p in failed],
+                                     failures=failed)
             if notify:
                 # Loop a human in (email Jenna + Jess). NEVER let a mail problem
                 # turn a clean refusal into a crash — the build is refused either
@@ -250,7 +298,7 @@ def _normalize_known(known):
 
 
 def current_placements(title, platforms="video", kind="series", seasons=None,
-                       url=None, known=None):
+                       url=None, known=None, hints=None):
     """Live-scan where ``title`` lives RIGHT NOW — regardless of whether it is
     already in the content_map.
 
@@ -266,6 +314,9 @@ def current_placements(title, platforms="video", kind="series", seasons=None,
     stored for this title (keys or display labels, e.g. ``["Netflix"]``); when
     given, the report reconciles current placement against it.
 
+    ``hints`` ({platform: url or identifier}) are the placements the map
+    already holds; a hinted resolver opens its page directly.
+
     Returns a dict (never raises on a single platform failure — hands-off)::
 
         {
@@ -273,11 +324,14 @@ def current_placements(title, platforms="video", kind="series", seasons=None,
           "scanned":        [platform keys actually scanned],
           "present":        {platform: seed_count},     # where it lives NOW
           "present_labels": [display names of present platforms],
-          "absent":         [scanned platforms with 0 seeds],
+          "absent":         [scanned platforms that answered with 0 seeds],
+          "unverified":     [platforms whose resolver raised: could not be
+                             checked from here; NOT absent, NOT gone],
+          "failures":       {platform: reason},
           "counts":         {platform: n},
           # only when `known` is passed:
           "added":          [present now, not previously stored],  # the Hulu case
-          "gone":           [stored before, absent now],           # left the platform
+          "gone":           [stored before, answered absent now],  # left the platform
           "unchanged":      [stored before, still present],
         }
     """
@@ -289,11 +343,14 @@ def current_placements(title, platforms="video", kind="series", seasons=None,
     scan_keys = list(dict.fromkeys(list(requested) + known_keys))
     options = {"include_clips": None, "limit": None}
     counts = {k: 0 for k in scan_keys}
+    failures = {}
     for platform in scan_keys:
         try:
-            rows = ss.resolver_lookup(platform, title, kind, seasons, url=url,
+            rows = ss.resolver_lookup(platform, title, kind, seasons,
+                                      url=_hint_for(platform, hints, url),
                                       options=options)
-        except Exception:  # noqa: BLE001 — hands-off: skip a failing platform
+        except Exception as e:  # noqa: BLE001 (hands-off: the platform stays unverified)
+            failures[platform] = ("%s: %s" % (type(e).__name__, e))[:240]
             continue
         seen = set()
         for r in rows:
@@ -302,12 +359,15 @@ def current_placements(title, platforms="video", kind="series", seasons=None,
                 seen.add(ident)
                 counts[platform] += 1
     present = {k: counts[k] for k in scan_keys if counts[k] > 0}
+    unverified = [k for k in scan_keys if k in failures and counts[k] == 0]
     report = {
         "title": title,
         "scanned": list(scan_keys),
         "present": present,
         "present_labels": [ss.platform_label(k) for k in present],
-        "absent": [k for k in scan_keys if counts[k] == 0],
+        "absent": [k for k in scan_keys if counts[k] == 0 and k not in failures],
+        "unverified": unverified,
+        "failures": failures,
         "counts": counts,
     }
     if known is not None:
@@ -315,7 +375,9 @@ def current_placements(title, platforms="video", kind="series", seasons=None,
         known_set = set(known_keys)
         report["added"] = [k for k in scan_keys
                            if k in present_set and k not in known_set]
-        report["gone"] = [k for k in known_keys if k not in present_set]
+        # a stored platform is gone only when its scan RAN and found nothing
+        report["gone"] = [k for k in known_keys
+                          if k not in present_set and k not in failures]
         report["unchanged"] = [k for k in known_keys if k in present_set]
     return report
 

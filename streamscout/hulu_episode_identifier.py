@@ -11,8 +11,11 @@ How it works (NO login required — Hulu serves this server-side from the US)
 1. Resolve the title to a Hulu page:
      - a `/watch/<uuid>` URL 302-redirects to the canonical
        `/series/<slug>-<uuid>` (series) or is itself a `/movie/<uuid>`;
-     - a bare title is looked up with a lightweight web search that returns
-       the `hulu.com/series|movie/...` link.
+     - a bare title is matched against Hulu's own sitemap (every series and
+       movie page Hulu lists), with a web search only as the last resort.
+   Hulu serves the US only: from any other address hulu.com redirects to
+   disneyplus.com, and the resolver raises DiscoveryUnavailable instead of
+   reading that as 'not on Hulu'.
 2. Fetch the page and read its embedded `__NEXT_DATA__` JSON, which contains
    the FULL episode tree: each episode dict carries
        {"type":"episode","id":<watch-uuid>,"season":N,"number":E,
@@ -46,6 +49,45 @@ UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
 UUID = r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
 _NEXT = re.compile(r'id="__NEXT_DATA__"[^>]*>(.*?)</script>', re.S)
 _LD = re.compile(r'<script[^>]+application/ld\+json[^>]*>(.*?)</script>', re.S)
+
+# Hulu's own catalog listing (2026-10-19). The search engines stopped being a
+# discovery path: DuckDuckGo answers automated lookups with its anomaly page
+# and Bing no longer indexes hulu.com/series pages. Hulu publishes every
+# series and movie page in its sitemaps, so a title resolves against the
+# catalog itself: no search engine, and a miss there is a real miss.
+SITEMAP_URLS = {
+    "series": "https://www.hulu.com/sitemap_en-us_series.xml",
+    "movie": "https://www.hulu.com/sitemap_en-us_movies.xml",
+}
+_SITEMAP_TTL_S = 6 * 3600
+_SITEMAP_CACHE = {}   # kind -> (fetched_at, [page urls])
+
+
+class DiscoveryUnavailable(Exception):
+    """Hulu could not be checked from this machine: hulu.com answered from
+    another host (outside the US every hulu.com address redirects to
+    disneyplus.com), or no discovery source answered at all (the search
+    engines refused the lookup). This is NOT a verdict on the title. A
+    caller records the platform as unverified and keeps whatever placement
+    it already holds; it never reads this as 'not on Hulu'."""
+    unverified = True
+
+    def __init__(self, reason):
+        self.reason = str(reason or "")
+        super().__init__("Hulu cannot be checked from here: " + self.reason)
+
+
+def on_hulu(url):
+    """True when the address is on hulu.com (the geo redirect lands elsewhere)."""
+    host = (urllib.parse.urlparse(url or "").hostname or "").lower()
+    return host == "hulu.com" or host.endswith(".hulu.com")
+
+
+def _require_hulu(final_url):
+    if final_url and not on_hulu(final_url):
+        host = urllib.parse.urlparse(final_url).hostname or final_url
+        raise DiscoveryUnavailable(
+            f"hulu.com answered from {host} (Hulu serves the US only; check from a US address)")
 
 
 # ── tiny helpers ──────────────────────────────────────────────────────────────
@@ -111,8 +153,29 @@ def _hulu_links(html, kind):
     return uniq
 
 
-def search_hulu_url(title, kind):
-    """Best-effort title -> hulu.com/(series|movie)/<slug>-<uuid> via web search."""
+_BLOCK_MARKERS = ("anomaly", "captcha", "unusual traffic", "verify you are human",
+                  "are you a robot", "bot detection")
+
+
+def _search_answered(code, html):
+    """True when an engine returned a results page (even one without a Hulu
+    link); False for a refusal (DuckDuckGo's 202 anomaly page, 403, 429,
+    an interstitial)."""
+    if code in (202, 403, 429):
+        return False
+    low = (html or "").lower()
+    if "b_algo" in low or "result__a" in low or "result-link" in low:
+        return True
+    return not any(m in low for m in _BLOCK_MARKERS)
+
+
+def search_hulu_url(title, kind, report=None):
+    """Best-effort title -> hulu.com/(series|movie)/<slug>-<uuid> via web search.
+
+    ``report`` (a dict, optional) receives how the engines behaved:
+    ``answered`` = results pages seen, ``blocked`` = refusals. A caller that
+    gets None with answered == 0 knows nothing was looked up; the title was
+    not searched, let alone found missing."""
     ents = "series" if kind == "series" else "movie"
     queries = [f"{title} hulu {ents}", f'"{title}" site:hulu.com/{ents}',
                f"{title} hulu"]
@@ -121,6 +184,10 @@ def search_hulu_url(title, kind):
         ("https://lite.duckduckgo.com/lite/", True),
         ("https://www.bing.com/search?q=", False),     # GET
     ]
+    if report is None:
+        report = {}
+    report.setdefault("answered", 0)
+    report.setdefault("blocked", 0)
     for q in queries:
         for base, is_post in engines:
             for attempt in range(2):
@@ -132,15 +199,76 @@ def search_hulu_url(title, kind):
                         code, _, html = fetch(base + urllib.parse.quote(q))
                     links = _hulu_links(html, kind)
                     if links:
+                        report["answered"] += 1
                         # prefer a slug whose tokens best cover the title
                         want = set(tokens(title))
                         links.sort(key=lambda u: -len(
                             want & set(tokens(u.rsplit("/", 1)[-1]))))
                         return links[0]
-                    if code in (202, 403, 429):
-                        time.sleep(1.5 * (attempt + 1))
+                    if _search_answered(code, html):
+                        report["answered"] += 1
+                        break       # this engine answered; no reason to retry it
+                    report["blocked"] += 1
+                    time.sleep(1.5 * (attempt + 1))
                 except Exception:
+                    report["blocked"] += 1
                     time.sleep(1.0 * (attempt + 1))
+    return None
+
+
+def _slug_tokens(page_url):
+    """Tokens of a catalog page slug, the trailing uuid dropped:
+    .../series/gilmore-girls-e6fd3925-... -> ['gilmore', 'girls']."""
+    slug = page_url.rstrip("/").rsplit("/", 1)[-1]
+    slug = re.sub(UUID + r"$", "", slug).strip("-")
+    return tokens(slug.replace("-", " "))
+
+
+def sitemap_urls(kind, force=False):
+    """Every hulu.com/(series|movie)/ page Hulu lists in its sitemap, cached
+    for a few hours. Raises DiscoveryUnavailable when hulu.com does not
+    answer from here (the geo redirect) or the sitemap cannot be read."""
+    kind = "movie" if kind == "movie" else "series"
+    hit = _SITEMAP_CACHE.get(kind)
+    if hit and not force and time.time() - hit[0] < _SITEMAP_TTL_S:
+        return hit[1]
+    try:
+        code, final, body = fetch(SITEMAP_URLS[kind], timeout=45)
+    except DiscoveryUnavailable:
+        raise
+    except Exception as e:
+        raise DiscoveryUnavailable(f"sitemap fetch failed ({type(e).__name__})")
+    _require_hulu(final)
+    urls = re.findall(r"<loc>\s*(https?://[^<\s]+)\s*</loc>", body or "")
+    ents = "series" if kind == "series" else "movie"
+    urls = [u for u in urls if f"/{ents}/" in u]
+    if code != 200 or not urls:
+        raise DiscoveryUnavailable(f"sitemap answered {code} with no {ents} pages")
+    _SITEMAP_CACHE[kind] = (time.time(), urls)
+    return urls
+
+
+def sitemap_lookup_url(title, kind):
+    """Title -> catalog page from Hulu's sitemap. An exact token match wins
+    ('gilmore girls' -> gilmore-girls, never gilmore-girls-en-espanol); a
+    page whose slug carries every title token in order is the fallback
+    only when exactly one such page exists. None = Hulu lists no such
+    title (a real miss). Raises DiscoveryUnavailable when the catalog
+    cannot be read from here."""
+    want = tokens(title)
+    if not want:
+        return None
+    exact, supersets = [], []
+    for u in sitemap_urls(kind):
+        got = _slug_tokens(u)
+        if got == want:
+            exact.append(u)
+        elif len(got) > len(want) and got[:len(want)] == want:
+            supersets.append(u)
+    if exact:
+        return exact[0]
+    if len(supersets) == 1:
+        return supersets[0]
     return None
 
 
@@ -262,35 +390,61 @@ def resolve(title=None, url=None, kind="series", seasons=None):
     Returns (show_name, rows) where each row is a dict:
         {season, episode, title, identifier, watch_url}
     (season/episode/title are "" for a movie).  `seasons` is a set or None (all).
-    Discovery order: explicit url/uuid  >  local clickstream cache  >  web search.
-    """
-    # Build an ordered list of candidate Hulu URLs and use the first that
-    # actually fetches (a cached /watch/<uuid> can be stale and 404 — don't let
-    # that abort discovery; fall through to web search, then to the caller's
-    # paste-a-URL fallback).
-    candidates = []
-    if url:
-        u = normalize_input_url(url)
-        if u:
-            candidates.append(u)
-    cu = cache_lookup_url(title, kind or "series")
-    if cu:
-        candidates.append(cu)
-    su = search_hulu_url(title, kind or "series")
-    if su:
-        candidates.append(su)
+    Discovery order: explicit url/uuid  >  local clickstream cache  >  Hulu's
+    own sitemap  >  web search (last resort, only when the sitemap could not
+    be read). Each source is tried only when the one before found no page.
 
-    code = final = html = None
-    for page_url in candidates:
+    Returns (title, []) only for a REAL miss: a source that answered showed
+    no such title. Raises DiscoveryUnavailable when Hulu could not be checked
+    from here at all (the geo redirect to disneyplus.com, or every source
+    refused), so a caller never mistakes 'could not look' for 'not there'.
+    """
+    kind = kind or "series"
+
+    def _page(page_url):
+        """Fetch a candidate page; None when it is not a usable Hulu page.
+        The geo redirect raises: nothing on hulu.com is reachable then."""
         try:
             code, final, html = fetch(page_url)
         except Exception:
-            continue
+            return None
+        _require_hulu(final)
         if code == 200 and html:
-            break
-        code = final = html = None
-    if not html:
+            return code, final, html
+        return None
+
+    got = None
+    if url:
+        u = normalize_input_url(url)
+        if u:
+            got = _page(u)
+    if got is None:
+        cu = cache_lookup_url(title, kind)
+        if cu:
+            got = _page(cu)
+    catalog_answered = False
+    if got is None:
+        try:
+            su = sitemap_lookup_url(title, kind)
+            catalog_answered = True
+        except DiscoveryUnavailable as e:
+            if "answered from" in e.reason:
+                raise       # the geo redirect: nothing on hulu.com is reachable from here
+            su = None
+        if su:
+            got = _page(su)
+    if got is None and not catalog_answered:
+        # the catalog could not be read from here; the engines are the last resort
+        report = {}
+        su = search_hulu_url(title, kind, report=report)
+        if su:
+            got = _page(su)
+        if got is None and not report.get("answered"):
+            raise DiscoveryUnavailable(
+                "hulu.com is not reachable from here and the search engines refused the lookup")
+    if got is None:
         return (title or "", [])
+    code, final, html = got
 
     if "/movie/" in final:
         kind = "movie"
@@ -347,6 +501,8 @@ def main():
 
     try:
         show, rows = resolve(title=title, url=args.url, kind=kind, seasons=seasons)
+    except DiscoveryUnavailable as e:
+        print(f"  ! {e}"); return 3
     except Exception as e:
         print(f"  ! Fetch/parse failed: {e!r}"); return 2
     if not rows:

@@ -53569,6 +53569,17 @@ _IP_CONSUMER_VERBS = ('viewers', 'readers', 'listeners', 'players',
                       'watchers')
 
 
+def _name_carries_consumer_noun(name):
+    """True when the deliverable name already says who the universe is:
+    a consumer noun as a whole word anywhere ('Gilmore Girls Viewers ON
+    HULU', 'Parents of Paw Patrol Viewers', 'The Daily Listeners'), so
+    the consumers scope never appends a second one. A noun inside another
+    word ('Playerstown') does not count."""
+    import re as _re
+    low = ' ' + _re.sub(r'[^a-z0-9]+', ' ', str(name or '').lower()) + ' '
+    return any(f' {w} ' in low for w in _IP_CONSUMER_VERBS)
+
+
 def _draft_is_ip_content(draft):
     """IP = series / movie / book / podcast show / game / album.
     Claude sets `is_ip_content`; the category prefix is the fallback
@@ -53634,8 +53645,11 @@ def _apply_ip_scope_to_draft(draft, scope):
             if (c.upper(), v.upper()) not in have:
                 subject_rows.append([c, v])
         draft['subject_rows'] = subject_rows
-        if subj and not any(subj.lower().endswith(' ' + w)
-                            for w in _IP_CONSUMER_VERBS):
+        # The consumer noun is appended only when the name does not already
+        # carry one as a whole word ANYWHERE. 2026-10-19 (Jessie): 'Gilmore
+        # Girls Viewers ON HULU' ends in the platform, not the noun, and
+        # shipped as 'Gilmore Girls Viewers ON HULU Viewers'.
+        if subj and not _name_carries_consumer_noun(subj):
             subj = f'{subj} {verb.title()}'
             draft['subject'] = subj
             draft['name'] = subj

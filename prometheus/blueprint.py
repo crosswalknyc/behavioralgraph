@@ -311,22 +311,41 @@ def streamscout_relay():
     platform = str(body.get('platform') or '').strip().lower()
     if not title or not platform or not platform.isalnum():
         return jsonify({'error': 'title and platform required'}), 400
+    # the placement the content map already holds there (a watch uuid / url):
+    # the resolver opens its page directly instead of discovering the title
+    hint = str(body.get('url') or '').strip()[:400] or None
     import sys as _sys
     ss_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'streamscout')
     if os.path.isdir(ss_dir) and ss_dir not in _sys.path:
         _sys.path.insert(0, ss_dir)
     try:
-        from streamscout_query import streamscout_query as _ssq
+        import streamscout_query as _ssq_mod
+        _ssq = _ssq_mod.streamscout_query
     except Exception as e:
         return jsonify({'error': f'streamscout unavailable: {type(e).__name__}'}), 503
     t0 = time.monotonic()
+    kind = str(body.get('kind') or 'series')
+    show = str(body.get('show') or '') or None
     try:
-        rows = _ssq(title, platforms=[platform], kind=str(body.get('kind') or 'series'),
-                    show=str(body.get('show') or '') or None) or []
+        report = getattr(_ssq_mod, 'query_report', None)
+        if callable(report):
+            # the full account: a resolver that raised is 'unverified', never a zero
+            rep = report(title, platforms=[platform], kind=kind, show=show, url=hint) or {}
+            rows = rep.get('rows') or []
+            failed = dict(rep.get('failed') or {})
+        else:
+            rows = _ssq(title, platforms=[platform], kind=kind, show=show, url=hint) or []
+            failed = {}
     except Exception as e:
-        return jsonify({'success': False, 'error': f'{type(e).__name__}: {str(e)[:200]}', 'rows': []}), 200
-    return jsonify({'success': True, 'platform': platform, 'rows': [r for r in rows if isinstance(r, dict)],
-                    'elapsed_s': round(time.monotonic() - t0, 2)})
+        # the resolver raised: the platform could not be checked from here
+        return jsonify({'success': False, 'error': f'{type(e).__name__}: {str(e)[:200]}', 'rows': [],
+                        'unverified': True}), 200
+    out = {'success': True, 'platform': platform, 'rows': [r for r in rows if isinstance(r, dict)],
+           'unverified': bool(failed.get(platform)) and not rows,
+           'elapsed_s': round(time.monotonic() - t0, 2)}
+    if failed.get(platform):
+        out['error'] = str(failed[platform])[:200]
+    return jsonify(out)
 
 
 @bp.route('/internal/golden-ask', methods=['POST'])
