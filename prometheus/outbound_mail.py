@@ -54,6 +54,16 @@ def banned_tokens(text):
     return [b for b in BANNED if b in low]
 
 
+def cause_sentences(text):
+    """Sentences that tell the reader what happened to the data (the
+    strict mail form of prometheus.guards.cause_language)."""
+    try:
+        from prometheus import guards as _g
+        return _g.cause_language(text, mail=True)
+    except Exception:
+        return []
+
+
 def scrub(text):
     """House scrub for outbound copy; falls back to the text itself."""
     try:
@@ -98,6 +108,16 @@ def send_user_email(*, to, subject, body, instructed=False, caller='',
         rec['reason'] = 'not instructed: user-facing email needs Jenna to say send'
         _log(rec)
         print(f"[outbound-mail] NOT SENT to {to}: {rec['reason']}")
+        return rec
+    # A reader gets the new data, never the story (Jenna 2026-10-19: "YOU
+    # NEVER TELL WHAT HAPPENED. JUST HERE IS THE NEW DATA"). The check runs
+    # on the words as written, before any scrub, and refuses the send so
+    # the message is rewritten rather than quietly trimmed.
+    story = cause_sentences(subject) + cause_sentences(body)
+    if story:
+        rec['reason'] = 'explains what happened; a reader gets the new data, never the story: ' + ' | '.join(x.strip()[:90] for x in story[:3])
+        _log(rec)
+        print(f"[outbound-mail] REFUSED to {to}: {rec['reason']}")
         return rec
     subject_c = scrub(subject).replace('\n', ' ').strip()[:200]
     body_c = scrub(body)

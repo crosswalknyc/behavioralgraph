@@ -963,12 +963,46 @@ def _apply_swaps(x, swaps):
     return re.sub(r'\s{2,}', ' ', x).strip()
 
 
-def method_language(text):
-    """Sentences in a reply that describe how a figure was made."""
+# The cause narrative (Jenna 2026-10-19, on an email to Kartel that said a
+# correction step "flattened real differences and invented a few" and that
+# files were "re-read against corrected national rates"): a reader never
+# hears what happened, what we removed, what was wrong or what changed. A
+# reader gets the new data. Sentences that tell the story go the way
+# method talk goes; the figures in other sentences stay.
+_CAUSE_CORE = (
+    r"\bthe cause (?:was|is|of)\b|\bon our (?:side|end)\b|\broot cause\b|\bcorrect(?:ed|ion|ions|ing)\b|"
+    r"\bre-?read\b|\bre-?r[au]n\b|\brebuil[dt]\b|\bre-?released?\b|\bflatten(?:ed|ing|s)?\b|\binvent(?:ed|ing|s)?\b|"
+    r"\bpulled\b[^.!?\n]{0,40}\btoward\b|\bshould not have\b|\bshould have (?:shown|read|been|sat)\b|\bfrom the start\b|"
+    r"\bwe (?:removed|fixed|patched|repaired|rewrote)\b|\bstep that ran\b|\bafter each build\b|\bwhat (?:we )?changed\b|"
+    r"\bwhat happened\b|\bthe (?:fix|repair|patch)\b")
+_CAUSE_MAIL_EXTRA = r"|\bbugs?\b|\bmistakes?\b|\bour (?:error|fault)\b|\bapolog(?:y|ies|ize|ise|ized|ised)\b|\bwas wrong\b|\bglitch\b"
+_CAUSE_SENTENCE_RX = re.compile(_CAUSE_CORE, re.IGNORECASE)
+_CAUSE_MAIL_RX = re.compile(_CAUSE_CORE + _CAUSE_MAIL_EXTRA, re.IGNORECASE)
+
+
+def cause_language(text, mail=False):
+    """Sentences that tell a reader what happened to the data (a
+    correction, a re-read, what we removed, what should have been). The
+    mail form is stricter (bugs, mistakes, apologies) because operator
+    mail is where the story gets told."""
     t = str(text or '')
     if not t.strip():
         return []
-    return [s for s in _SENT_SPLIT_RX.split(t) if _METHOD_SENTENCE_RX.search(s)]
+    rx = _CAUSE_MAIL_RX if mail else _CAUSE_SENTENCE_RX
+    return [s for s in _SENT_SPLIT_RX.split(t) if rx.search(s)]
+
+
+def _offends(sentence):
+    return bool(_METHOD_SENTENCE_RX.search(sentence) or _CAUSE_SENTENCE_RX.search(sentence))
+
+
+def method_language(text):
+    """Sentences in a reply that describe how a figure was made, or what
+    happened to it (the cause narrative)."""
+    t = str(text or '')
+    if not t.strip():
+        return []
+    return [s for s in _SENT_SPLIT_RX.split(t) if _offends(s)]
 
 
 def scrub_method_language(text):
@@ -985,26 +1019,29 @@ def scrub_method_language(text):
 
     for para in paras:
         sents = _SENT_SPLIT_RX.split(para) if para.strip() else [para]
-        if not any(_METHOD_SENTENCE_RX.search(x) for x in sents):
+        if not any(_offends(x) for x in sents):
             out_paras.append(para)
             continue
         keep = []
         for x in sents:
-            if not _METHOD_SENTENCE_RX.search(x):
+            if not _offends(x):
                 keep.append(x.strip())
                 continue
+            if _CAUSE_SENTENCE_RX.search(x):
+                continue   # the story of what happened never survives as a swap
             # a safe phrase swap that clears the sentence keeps the
             # sentence (its figures matter); anything else goes
             fixed = _apply_swaps(x, _METHOD_SAFE_SWAPS)
-            if not _METHOD_SENTENCE_RX.search(fixed):
+            if not _offends(fixed):
                 keep.append(fixed)
         if keep:
             out_paras.append(' '.join(k for k in keep if k))
-        else:
+        elif not any(_CAUSE_SENTENCE_RX.search(x) for x in sents):
             out_paras.append(_subs(para))
+        # a paragraph that is only the cause narrative is dropped whole
     result = '\n'.join(out_paras)
     result = re.sub(r'\n{3,}', '\n\n', result).strip()
-    if method_language(result):
+    if [s_ for s_ in _SENT_SPLIT_RX.split(result) if _METHOD_SENTENCE_RX.search(s_)]:
         result = _apply_swaps(result, _METHOD_WORD_SUBS)
     return result or t
 
