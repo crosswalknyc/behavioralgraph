@@ -121,16 +121,17 @@ def build_pdf(payload: dict) -> bytes:
     d.meaning('The morning and the workday belong to audio, news and social; the episode owns prime time; late night goes to short video and library streaming.')
 
     # 07 to 11 the overlaps
-    for needle, eyebrow, head_fn, meaning_fn in (
-        ('Other shows', 'Other shows', lambda r: f"{r['label']} is the show they share most: {_pct(r['accounts'], v1)} streamed it the same week.",
+    from migration.journey_media_week import leaders_line
+    for needle, eyebrow, meaning_fn in (
+        ('Other shows', 'Other shows',
          lambda r: f"These are the shows to pair with {T} in promos and lead-ins; the index says how much more this audience watches them than US adults do."),
-        ('Streaming services', 'Streaming services', lambda r: f"{r['label']} reaches {_pct(r['accounts'], v1)} of {T} viewers in a week.",
-         lambda r: "Where the same people spend the rest of their streaming week, with the index against US adults."),
-        ('Podcasts and audio', 'Podcasts and audio', lambda r: f"{r['label']} is the audio they share most, at {_pct(r['accounts'], v1)} of viewers.",
+        ('Streaming services', 'Streaming services',
+         lambda r: "Where the same people spend the rest of their streaming week. The broadest services top the reach list for any audience; the index is the lean."),
+        ('Podcasts and audio', 'Podcasts and audio',
          lambda r: "Audio is the commute and the workday for this audience; the title's own recap shows sit next to music and radio apps."),
-        ('Social platforms', 'Social', lambda r: f"{r['label']} is where {_pct(r['accounts'], v1)} of {T} viewers talk about the week.",
-         lambda r: "The platforms, and what they do there: the groups, the threads, the creator accounts, the clips."),
-        ('News, sports', 'News, sports and games', lambda r: f"{r['label']} reaches {_pct(r['accounts'], v1)} of {T} viewers in a week.",
+        ('Social platforms', 'Social',
+         lambda r: "The platforms, and what they do there: the groups, the threads, the creator accounts, the clips. Facebook tops reach for most adult audiences; the index shows where this one leans."),
+        ('News, sports', 'News, sports and games',
          lambda r: "The rest of the week's screen time: news apps, sports apps and leagues, and the games on the phone."),
     ):
         sec = _section(payload, needle)
@@ -138,7 +139,8 @@ def build_pdf(payload: dict) -> bytes:
         if not rows:
             continue
         top = rows[0]
-        d.new_page(False, eyebrow, head_fn(top), 'Share of viewers who did this in a typical week, and the index against US adults. Rows do not sum.')
+        head = leaders_line(sec, T) or f"{top['label']} reaches {_pct(top['accounts'], v1)} of {T} viewers in a week."
+        d.new_page(False, eyebrow, head, 'Share of viewers who did this in a typical week, ranked by reach. The index against US adults (weekly over weekly) shows where this audience leans. Rows do not sum.')
         d.table(str(sec.get('title') or needle), _rows(sec, v1, limit=10, with_index=True), d.m, d.y, half_w, head=('', 'People', 'Index'))
         d.bullets(_doing_lines(sec, 8), col2, d.y, half_w, size=9.5)
         d.meaning(meaning_fn(top))

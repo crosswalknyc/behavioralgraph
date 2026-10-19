@@ -345,18 +345,20 @@ def _rows_partition(seed, base: int, rows: list, order: Optional[tuple] = None, 
 
 
 def _pick_baseline(gp: Optional[float], research: Optional[float]) -> Optional[float]:
-    """Gen Pop's own row when it reads on the same basis as the research
-    (within a factor of 3); otherwise the research share of US adults. A
-    Gen Pop row at 0.4% against a 20% weekly-reach read is on another
-    basis (iHeartRadio read 29x off such a row) and must not set the index."""
-    if gp is not None and gp > 0 and (research is None or research <= 0):
-        return gp
-    if research is not None and research > 0 and (gp is None or gp <= 0):
-        return research
-    if gp is None or research is None:
-        return None
-    ratio = gp / research if research else 0
-    return gp if 1 / 3.0 <= ratio <= 3.0 else research
+    """The base for the index is the share of US adults who did the thing
+    IN A TYPICAL WEEK, the same basis as the row (Jenna 2026-10-19, the
+    Facebook question: indexing weekly use against Gen Pop's any-touch-
+    in-a-year row put Survivor viewers at 0.52x on Reddit). Gen Pop's row
+    is an annual any-touch figure, so it serves only as a ceiling: a
+    weekly share can never exceed the annual one. With no weekly figure
+    the annual row is the fallback."""
+    r = float(research) if research is not None and research > 0 else None
+    g = float(gp) if gp is not None and gp > 0 else None
+    if r is None:
+        return g
+    if g is None:
+        return r
+    return min(r, g)
 
 
 def _rows_overlap(seed, base: int, rows: list, section: str, levels: dict, limit: int = 10) -> list:
@@ -512,7 +514,8 @@ def build_payload(inputs: dict, prim: dict, *, created_by: str = 'prometheus', l
                                 ('news_sports_games', 'News, sports and games', 'news_sports_games')):
         rows = _rows_overlap((seed, key), v1, prim.get(key) or [], section, levels)
         detours.append({'title': title, 'kind': 'overlap',
-                        'note': 'Share of viewers who did this in a typical week, with the index against US adults. Rows do not sum.',
+                        'note': 'Share of viewers who did this in a typical week, ranked by reach. The index against US adults '
+                                '(weekly use over weekly use) shows where this audience leans. Rows do not sum.',
                         'rows': rows})
 
     window = f'{start} to {end}'
@@ -610,6 +613,7 @@ You get a digest of a finished read: a title's viewers on the Crosswalk clickstr
 - "47.3% of viewers play the episode in prime time, 7 to 11pm"
 - "38.6% of viewers streamed The Amazing Race the same week, 9.3x US adults"
 Frames that are wrong and must never appear: "of all weekly streaming", "of their activity", "of off-screen activity leads to", "fully caught up at any given time", "of streams".
+An overlap table is ranked by REACH, and the broadest platform (Facebook, YouTube, Netflix, Spotify) tops it for almost any audience, so reach alone is never the finding. Each overlap section in the digest names a reach_leader and an index_leader; when you write about a table, say both ("Facebook reaches the most viewers at 52.3%; Discord is where they over-index most at 1.4x"), and never call the reach leader a feeder, a driver or the place the audience comes from.
 Write:
 {
  "cover_title": one sentence, at most 12 words, the single biggest finding, plain words,
@@ -658,8 +662,45 @@ def _digest(payload: dict) -> dict:
             if r.get('doing'):
                 row['note'] = r['doing'][:120]
             rows.append(row)
-        out['sections'].append({'title': d['title'], 'kind': d.get('kind'), 'rows': rows})
+        sec = {'title': d['title'], 'kind': d.get('kind'), 'rows': rows}
+        if d.get('kind') == 'overlap':
+            lead = overlap_leaders(d)
+            if lead:
+                sec['reach_leader'] = f"{lead['reach']['label']} ({lead['reach']['pct']:.1f}% of viewers)"
+                sec['index_leader'] = f"{lead['index']['label']} ({lead['index']['index']:g}x US adults)"
+                sec['note'] = ('The table is ranked by reach; the broadest platform tops it for almost any audience. '
+                               'The index is where this audience differs from US adults.')
+        out['sections'].append(sec)
     return out
+
+
+def overlap_leaders(section: dict) -> Optional[dict]:
+    """{'reach': row, 'index': row} for an overlap table: the row most of the
+    viewers touched, and the row where they most exceed US adults."""
+    rows = [r for r in ((section or {}).get('rows') or []) if r.get('accounts')]
+    if not rows:
+        return None
+    reach = max(rows, key=lambda r: int(r.get('accounts') or 0))
+    with_idx = [r for r in rows if isinstance(r.get('index'), (int, float)) and r['index'] > 0]
+    idx = max(with_idx, key=lambda r: float(r['index'])) if with_idx else reach
+    return {'reach': reach, 'index': idx}
+
+
+def leaders_line(section: dict, title: str = '') -> str:
+    """One plain sentence naming both leaders: 'Facebook reaches the most
+    Survivor viewers (52.3%); Discord is where they over-index most (1.4x).'"""
+    lead = overlap_leaders(section)
+    if not lead:
+        return ''
+    who = f"{title} viewers" if title else 'these viewers'
+    r, i = lead['reach'], lead['index']
+    first = f"{r['label']} reaches the most {who} ({r['pct']:.1f}%)"
+    if i is r or str(i.get('label')) == str(r.get('label')):
+        if i.get('index'):
+            return first + f", and it is also where they over-index most ({i['index']:g}x US adults)."
+        return first + '.'
+    return first + f"; {i['label']} is where they over-index most ({i['index']:g}x US adults)."
+
 
 
 def _fallback_copy(payload: dict) -> dict:
@@ -803,9 +844,37 @@ def main(argv=None):
     ap.add_argument('--prim-json', default='', help='write the research primitives here (rebuild later with --from-prim)')
     ap.add_argument('--from-prim', default='', help='skip research; build from saved primitives')
     ap.add_argument('--recopy-key', default='', help='rewrite the prose of a persisted journey (same key) and its PDF; no research')
+    ap.add_argument('--republish-key', default='', help='with --from-prim: rebuild the numbers from the saved primitives, rewrite the prose, and publish under this existing key')
     a = ap.parse_args(argv)
     import boto3
     s3 = boto3.client('s3', region_name='us-east-2')
+    if a.republish_key:
+        if not a.from_prim:
+            raise SystemExit('--republish-key needs --from-prim')
+        from migration import journey_iq as _jiq
+        old_payload = _jiq.load_run_from_s3(s3, a.republish_key) or {}
+        om = old_payload.get('meta') or {}
+        inputs = {'subject': a.subject or om.get('customer_brand'), 'platform': a.platform or om.get('streaming_home'),
+                  'network': a.network or om.get('network'), 'journey_kind': KIND, 'notes': a.notes,
+                  'start_date': om.get('start_date'), 'end_date': om.get('end_date'),
+                  'ceilings': ({'home_us_reach': a.home_reach} if a.home_reach else {})}
+        prim = json.load(open(a.from_prim))
+        payload = synthesize(inputs, _claude_json_cli(), created_by=str(om.get('created_by') or a.user), s3_client=s3, prim=prim)
+        payload['meta']['created_at'] = om.get('created_at') or payload['meta']['created_at']
+        hero = om.get('hero_image') or ((old_payload.get('fragrance_shop_journey') or {}).get('meta') or {}).get('hero_image')
+        if hero:
+            from prometheus.jiq_image import attach_hero
+            attach_hero(payload, hero)
+        republish(s3, a.republish_key, payload)
+        if a.out_json:
+            Path(a.out_json).write_text(json.dumps(payload, indent=1), encoding='utf-8')
+        if a.pdf_dir:
+            from migration.journey_pdf import build_pdf, pdf_filename
+            out = Path(a.pdf_dir) / pdf_filename(payload)
+            out.write_bytes(build_pdf(payload))
+            print(f'[media-week] pdf -> {out}')
+        print(json.dumps({'key': a.republish_key, 'viewers': payload['kpis']['total_users'], 'title': payload['fragrance_shop_journey']['copy']['titleHtml']}))
+        return
     if a.recopy_key:
         from migration import journey_iq as _jiq
         payload = _jiq.load_run_from_s3(s3, a.recopy_key)

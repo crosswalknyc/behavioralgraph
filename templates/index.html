@@ -116596,16 +116596,36 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 html += '</div>';
             } else {
                 var map = {
-                    shows:    { needle: 'other shows', num: '07', head: function(t) { return t ? (t.label + ' is the show they share most: ' + _jiqMwPct(t.pct) + ' streamed it the same week.') : 'Other shows the same week.'; } },
-                    services: { needle: 'streaming services', num: '08', head: function(t) { return t ? (t.label + ' reaches ' + _jiqMwPct(t.pct) + ' of ' + T + ' viewers in a week.') : 'Streaming services the same week.'; } },
-                    audio:    { needle: 'podcasts and audio', num: '09', head: function(t) { return t ? (t.label + ' is the audio they share most, at ' + _jiqMwPct(t.pct) + ' of viewers.') : 'Podcasts and audio that week.'; } },
-                    social:   { needle: 'social platforms', num: '10', head: function(t) { return t ? (t.label + ' is where ' + _jiqMwPct(t.pct) + ' of ' + T + ' viewers talk about the week.') : 'Social platforms that week.'; } },
-                    news:     { needle: 'news, sports', num: '11', head: function(t) { return t ? (t.label + ' reaches ' + _jiqMwPct(t.pct) + ' of ' + T + ' viewers in a week.') : 'News, sports and games.'; } }
+                    shows:    { needle: 'other shows', num: '07', fallback: 'Other shows the same week.' },
+                    services: { needle: 'streaming services', num: '08', fallback: 'Streaming services the same week.' },
+                    audio:    { needle: 'podcasts and audio', num: '09', fallback: 'Podcasts and audio that week.' },
+                    social:   { needle: 'social platforms', num: '10', fallback: 'Social platforms that week.' },
+                    news:     { needle: 'news, sports', num: '11', fallback: 'News, sports and games.' }
                 };
                 var m = map[stage] || map.shows;
                 s = _jiqMediaWeekSection(d, m.needle);
-                var t0 = s && s.rows && s.rows[0];
-                html += sec(m.num + ' ' + ((s && s.title) || m.needle), m.head(t0), 'Share of viewers who did this in a typical week, and the index against US adults. Rows do not sum.');
+                // Both leaders in the header (Jenna 2026-10-19, "is it odd that
+                // Facebook is the top social feeder"): the table is ranked by
+                // reach, so the broadest platform tops it for almost any
+                // audience; the index is where this audience leans.
+                var _rows0 = (s && s.rows) || [];
+                var _reach = null, _idx = null;
+                _rows0.forEach(function(r) {
+                    if (!_reach || Number(r.accounts) > Number(_reach.accounts)) _reach = r;
+                    if (Number(r.index) > 0 && (!_idx || Number(r.index) > Number(_idx.index))) _idx = r;
+                });
+                var _head = m.fallback;
+                if (_reach) {
+                    _head = _reach.label + ' reaches the most ' + T + ' viewers (' + _jiqMwPct(_reach.pct) + ')';
+                    if (_idx && _idx !== _reach && _idx.label !== _reach.label) {
+                        _head += '; ' + _idx.label + ' is where they over-index most (' + _jiqMwIdx(_idx.index) + ' US adults).';
+                    } else if (_idx && _idx.index) {
+                        _head += ', and it is also where they over-index most (' + _jiqMwIdx(_idx.index) + ' US adults).';
+                    } else {
+                        _head += '.';
+                    }
+                }
+                html += sec(m.num + ' ' + ((s && s.title) || m.needle), _head, 'Share of viewers who did this in a typical week, ranked by reach. The index against US adults (weekly use over weekly use) shows where this audience leans. Rows do not sum.');
                 html += '<div class="jiq-mw-pad">' + _jiqMediaWeekBars(s, v1, { title: (s && s.title) || '', index: true }) + '</div>';
             }
             return html;
