@@ -1961,6 +1961,11 @@ def synthesize(inputs: dict, claude_json: Callable, *,
         # its own shape; the watch / purchase machinery never touches it.
         from migration import journey_media_week as _mw
         return _mw.synthesize(inputs, claude_json, tools=tools, created_by=created_by)
+    if str(inputs.get('journey_kind') or '').lower() == 'premiere':
+        # A series premiere's first-episode audience (2026-10-19): its own
+        # shape too, every table derived from one model of the cast draws.
+        from migration import journey_premiere as _pr
+        return _pr.synthesize(inputs, claude_json, tools=tools, created_by=created_by)
     start, end = _dates(inputs)
     anchors = corpus_anchors(inputs)
     # Same ask, same answer (2026-10-05): a stored journey that IS this

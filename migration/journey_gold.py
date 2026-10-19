@@ -176,10 +176,18 @@ def is_media_week_journey(payload: dict, inputs: Optional[dict] = None) -> bool:
     return kind == 'media_week' or str(meta.get('target_type') or '') == 'media_week_journey'
 
 
+def is_premiere_journey(payload: dict, inputs: Optional[dict] = None) -> bool:
+    """A series premiere's first-episode audience (2026-10-19): its own
+    shape (migration.journey_premiere), never re-shaped by this module."""
+    meta = (payload or {}).get('meta') or {}
+    kind = str((inputs or {}).get('journey_kind') or meta.get('journey_kind') or '').lower()
+    return kind == 'premiere' or str(meta.get('target_type') or '') == 'premiere_journey'
+
+
 def is_watch_journey(payload: dict, inputs: Optional[dict] = None) -> bool:
     meta = payload.get('meta') or {}
     kind = str((inputs or {}).get('journey_kind') or meta.get('journey_kind') or '').lower()
-    if is_media_week_journey(payload, inputs):
+    if is_media_week_journey(payload, inputs) or is_premiere_journey(payload, inputs):
         return False
     if kind == 'watch' or str(meta.get('target_type') or '') == 'watch_journey':
         return True
@@ -406,7 +414,7 @@ def apply(payload: dict, inputs: Optional[dict] = None, claude_json: Optional[Ca
     try:
         if not isinstance(payload, dict):
             return payload
-        if is_media_week_journey(payload, inputs):
+        if is_media_week_journey(payload, inputs) or is_premiere_journey(payload, inputs):
             return payload
         if not is_watch_journey(payload, inputs):
             # A purchase journey has its own standard (Ghost Energy,
@@ -605,7 +613,7 @@ def ship_lines(payload: dict) -> list:
 def is_gold(payload: dict) -> bool:
     """Every standard section present, in order, under the standard title."""
     try:
-        if is_media_week_journey(payload):
+        if is_media_week_journey(payload) or is_premiere_journey(payload):
             return True
         if not is_watch_journey(payload):
             from migration import journey_gold_purchase as _gp

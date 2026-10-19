@@ -149,6 +149,9 @@ def pdf_filename(payload: dict) -> str:
     if G.is_media_week_journey(payload):
         stem = re.sub(r'[^A-Za-z0-9]+', '_', f"{T} viewers a week in the life Digital Journey").strip('_')
         return f"{stem}.pdf"
+    if G.is_premiere_journey(payload):
+        stem = re.sub(r'[^A-Za-z0-9]+', '_', f"{T} premiere first episode audience Digital Journey").strip('_')
+        return f"{stem}.pdf"
     P = re.sub(r"\s*\(.*$", '', str(P or '')).strip() or P
     stem = re.sub(r'[^A-Za-z0-9]+', '_', f"{T} on {P} Digital Journey").strip('_')
     return f"{stem}.pdf"
@@ -339,6 +342,9 @@ def build_pdf(payload: dict) -> bytes:
     if G.is_media_week_journey(payload):
         from migration import journey_pdf_media_week as _pm
         return _pm.build_pdf(payload)
+    if G.is_premiere_journey(payload):
+        from migration import journey_pdf_premiere as _pp
+        return _pp.build_pdf(payload)
     if not G.is_gold(payload):
         payload = G.apply(copy.deepcopy(payload))
     if not G.is_watch_journey(payload):

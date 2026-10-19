@@ -118487,6 +118487,69 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             if (typeof _jiqPaintFragClickstream === 'function') _jiqPaintFragClickstream(d);
         }
 
+        // ─── The stars, side by side (journey_kind premiere, 2026-10-19) ───
+        // A premiere journey carries cast_drivers: the same measures for
+        // every star, in the same order. The card sits between the fork
+        // and the detours; the top value on each line is lit; a last
+        // column holds the same measure over every viewer. It is removed
+        // again for any run that does not carry the block.
+        function _jiqPaintCastDrivers(d, copy) {
+            var detNum = document.getElementById('jiqFragDetourNum');
+            var host = document.getElementById('jiqFragCast');
+            var secEl = document.getElementById('jiqFragCastSec');
+            var cb = d && d.cast_drivers;
+            if (!cb || !(cb.stars || []).length) {
+                if (host && host.parentNode) host.parentNode.removeChild(host);
+                if (secEl && secEl.parentNode) secEl.parentNode.removeChild(secEl);
+                return;
+            }
+            var anchor = detNum ? detNum.parentNode : null;
+            if (!anchor || !anchor.parentNode) return;
+            if (!secEl) {
+                secEl = document.createElement('div');
+                secEl.className = 'jiq-frag-sec';
+                secEl.id = 'jiqFragCastSec';
+                anchor.parentNode.insertBefore(secEl, anchor);
+            }
+            if (!host) {
+                host = document.createElement('div');
+                host.className = 'jiq-frag-cast';
+                host.id = 'jiqFragCast';
+                anchor.parentNode.insertBefore(host, anchor);
+            }
+            copy = copy || {};
+            secEl.innerHTML = '<div class="jiq-frag-num">' + _jiqFragEsc(copy.castSec || '03') + '</div>'
+                + '<h3>' + _jiqFragEsc(copy.castHead || 'The stars, side by side.') + '</h3>'
+                + '<em>' + _jiqFragEsc(copy.castSub || 'The same measures for every star') + '</em>';
+            var stars = cb.stars || [];
+            var all = cb.all || {};
+            var html = '<div class="jiq-cast-grid" style="grid-template-columns: minmax(0, 1.5fr) repeat(' + (stars.length + 1) + ', minmax(92px, 1fr));">';
+            html += '<div class="jiq-cast-h"></div>';
+            stars.forEach(function (s) {
+                html += '<div class="jiq-cast-h"><b>' + _jiqFragEsc(s.name) + '</b>' + (s.role ? '<span>' + _jiqFragEsc(s.role) + '</span>' : '') + '</div>';
+            });
+            html += '<div class="jiq-cast-h is-all"><b>All viewers</b><span>everyone who watched it through</span></div>';
+            (cb.measures || []).forEach(function (m) {
+                var isDraw = m.kind === 'draw';
+                var vals = stars.map(function (s) { var x = (s.m || {})[m.id] || {}; return isDraw ? (Number(x.accounts) || 0) : (Number(x.pct) || 0); });
+                var top = Math.max.apply(null, vals);
+                html += '<div class="jiq-cast-m"><b>' + _jiqFragEsc(m.label) + '</b><span>' + _jiqFragEsc(m.basis || '') + '</span></div>';
+                stars.forEach(function (s, i) {
+                    var x = (s.m || {})[m.id] || {};
+                    var lead = top > 0 && vals[i] === top;
+                    html += '<div class="jiq-cast-v' + (lead ? ' is-top' : '') + '">'
+                        + '<b>' + (isDraw ? _jiqFragNum(x.accounts) : _jiqFragPct(x.pct)) + '</b>'
+                        + '<span>' + (isDraw ? _jiqFragPct(x.pct) + ' of viewers' : _jiqFragNum(x.accounts) + ' people') + '</span></div>';
+                });
+                var a = all[m.id] || {};
+                html += '<div class="jiq-cast-v is-all"><b>' + (isDraw ? _jiqFragNum(a.accounts) : _jiqFragPct(a.pct)) + '</b>'
+                    + '<span>' + (isDraw ? 'everyone' : _jiqFragNum(a.accounts) + ' people') + '</span></div>';
+            });
+            html += '</div>';
+            if (cb.note) html += '<p class="jiq-frag-detnote jiq-cast-note">' + _jiqFragEsc(cb.note) + '</p>';
+            host.innerHTML = html;
+        }
+
         function renderJourneyIqYsPvod(p, runMeta) {
             var d = (p && p.spine) ? p
                   : (typeof _JIQ_YS_PVOD_DATA !== 'undefined' ? _JIQ_YS_PVOD_DATA : null);
@@ -118623,6 +118686,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 }
                 forkEl.innerHTML = html;
             }
+            if (typeof _jiqPaintCastDrivers === 'function') _jiqPaintCastDrivers(d, copy);
             var detEl = document.getElementById('jiqFragDetours');
             if (detEl) {
                 detEl.innerHTML = (d.detours || []).map(function (t) {
@@ -192397,6 +192461,30 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
     body[data-theme="light"] .jiq-frag-detkid b { color: #0C1618; }
     body[data-theme="light"] .jiq-frag-detkid.is-win b { color: #5E7E12; }
     .jiq-frag-det.is-why .jiq-frag-detkid { font-size: 11.5px; }
+
+    /* The stars, side by side (premiere journeys): one column per star, the
+       top value on each line in the accent, the whole audience in the last column. */
+    #jiqFragCast { margin: 0 34px 10px; }
+    .jiq-cast-grid { display: grid; gap: 0 14px; align-items: end; border-top: 1px solid var(--cw-border, #2C4148); }
+    .jiq-cast-h { padding: 12px 0 8px; font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: #9AA09B;
+        border-bottom: 1px solid var(--cw-border, #2C4148); text-align: right; min-width: 0; }
+    .jiq-cast-h b { display: block; color: #E9E8E1; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .jiq-cast-h span { display: block; font-size: 9.5px; letter-spacing: .04em; text-transform: none; color: #7C878A; margin-top: 2px; }
+    .jiq-cast-m { padding: 9px 0; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 12px; min-width: 0; }
+    .jiq-cast-m b { display: block; font-weight: 600; color: #E9E8E1; }
+    .jiq-cast-m span { display: block; font-size: 10px; color: #7C878A; margin-top: 2px; }
+    .jiq-cast-v { padding: 9px 0; border-bottom: 1px solid rgba(255,255,255,0.05); text-align: right; font-variant-numeric: tabular-nums; min-width: 0; }
+    .jiq-cast-v b { display: block; font-size: 15px; font-weight: 700; color: #E9E8E1; }
+    .jiq-cast-v span { display: block; font-size: 10px; color: #7C878A; margin-top: 2px; white-space: nowrap; }
+    .jiq-cast-v.is-top b { color: #C7F23E; }
+    .jiq-cast-v.is-all b, .jiq-cast-h.is-all b { color: #B7B3D8; }
+    .jiq-cast-note { margin-top: 10px; }
+    body[data-theme="light"] .jiq-cast-grid, body[data-theme="light"] .jiq-cast-h { border-color: #C9C6BA; }
+    body[data-theme="light"] .jiq-cast-h b, body[data-theme="light"] .jiq-cast-m b, body[data-theme="light"] .jiq-cast-v b { color: #0C1618; }
+    body[data-theme="light"] .jiq-cast-m, body[data-theme="light"] .jiq-cast-v { border-bottom-color: rgba(12,22,24,0.07); }
+    body[data-theme="light"] .jiq-cast-v.is-top b { color: #5E7E12; }
+    body[data-theme="light"] .jiq-cast-v.is-all b, body[data-theme="light"] .jiq-cast-h.is-all b { color: #8E3FA8; }
+    @media (max-width: 900px) { .jiq-cast-grid { gap: 0 8px; } .jiq-cast-v b { font-size: 13px; } }
 
 
     /* UFC nest walk sits on the same card system as Young Sheldon. */
