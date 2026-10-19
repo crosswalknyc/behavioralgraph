@@ -170,6 +170,7 @@ def _story_block(inputs: dict) -> dict:
                       'most of the first-episode audience; the third is a distant third.' if len(names) >= 3 else ''),
         'involvement_leader': (inputs.get('involvement_order') or names)[0] if names else '',
         'involvement_order': inputs.get('involvement_order') or names,
+        'measure_orders': {mid: measure_order(inputs, mid, names) for mid in _INVOLVEMENT + ('new_fan',)},
         'new_fans_order': inputs.get('new_fans_order') or inputs.get('involvement_order') or names,
         'always_above': inputs.get('always_above') or [],
     }
@@ -234,10 +235,21 @@ def _hold_order(vals: dict, order: list, gaps: tuple, band: tuple, seed) -> dict
         a, b = order[i - 1], order[i]
         g_lo, g_hi = gaps[min(i - 1, len(gaps) - 1)]
         g = _gap((seed, a, b), g_lo, g_hi)
+        near = _gap((seed, a, b, 'near'), g_lo, g_lo + 0.35 * (g_hi - g_lo))   # the smallest honest gap
         cur = out.get(b, out[a] - g)
-        if cur > out[a] - g_lo or cur < out[a] - g_hi:
-            # out of order, or further below than the band allows ("just
-            # slightly below" is a band, not a floor): the salted gap
+        if cur > out[a] - g_lo:
+            # out of order, or too close: the one that must lead rises just
+            # above the challenger (the research is moved as little as it
+            # can be); a trailing position is pushed just under the one above
+            if i == 1:
+                out[a] = min(hi, cur + near)
+                if out[a] - cur < g_lo:          # the ceiling got in the way: the challenger gives
+                    cur = out[a] - near
+            else:
+                cur = out[a] - near
+        elif cur < out[a] - g_hi:
+            # further below than the band allows ("just slightly below" is a
+            # band, not a floor): the salted gap
             cur = out[a] - g
         out[b] = max(lo, cur)
     # a floor hit lower down pushes the ones above it up by the gap
@@ -312,7 +324,7 @@ def shape_cast(inputs: dict, prim_cast: list, seed) -> list:
     for mid in _INVOLVEMENT + ('new_fan',):
         key = {'new_fan': 'new_to_franchise_pct', 'ad_buy': 'ad_click_buy_pct'}.get(mid, f'{mid}_pct')
         vals = {n: got(n, key, sum(_BANDS[mid]) / 2.0) for n in names}
-        order = new_order if mid == 'new_fan' else inv_order
+        order = measure_order(inputs, mid, names)
         vals = _hold_order(vals, order, _GAPS[mid], _BANDS[mid], (seed, mid))
         measures[mid] = {n: _messy_pct((seed, mid, n), v, *_BANDS[mid]) for n, v in vals.items()}
         # the pairs the inputs insist on (name above name), on every measure
@@ -352,6 +364,21 @@ def shape_cast(inputs: dict, prim_cast: list, seed) -> list:
             rec[mid] = _messy_pct((seed, mid, n), v, lo, hi) if hi > 0 else 0.0
         out.append(rec)
     return out
+
+
+def measure_order(inputs: dict, mid: str, names: list) -> list:
+    """The star order a measure holds: a per-measure order from the inputs
+    (Jenna 2026-10-19: LL Cool J leads came back for episode 2, posted
+    about the show and engaged with the star's own posts; Jennifer Beals
+    leads the rest), else the newcomer order for new_fan, else the
+    involvement order."""
+    per = {str(k): [n for n in (v or []) if n in names] for k, v in (inputs.get('measure_orders') or {}).items()}
+    if per.get(mid):
+        return per[mid]
+    inv = [n for n in (inputs.get('involvement_order') or names) if n in names]
+    if mid == 'new_fan':
+        return [n for n in (inputs.get('new_fans_order') or inv) if n in names]
+    return inv
 
 
 def got_text(by_name: dict, name: str, key: str) -> str:
@@ -434,7 +461,7 @@ def build_payload(inputs: dict, prim: dict, *, created_by: str = 'prometheus') -
                 if a['m'][mid]['accounts'] <= b['m'][mid]['accounts']:
                     n = min(a['accounts'] - 1, b['m'][mid]['accounts'] + 1 + (_h(seed, mid, 'cnt') % 2500))
                     a['m'][mid] = {'accounts': int(n), 'pct': round(n / a['accounts'] * 100, 4)}
-    new_leader = (inputs.get('new_fans_order') or [None])[0]
+    new_leader = (measure_order(inputs, 'new_fan', [c['name'] for c in stars]) or [None])[0]
     if new_leader:
         lead = next((c for c in cast if c['name'] == new_leader), None)
         if lead:
@@ -444,8 +471,10 @@ def build_payload(inputs: dict, prim: dict, *, created_by: str = 'prometheus') -
                 lead['m']['new_fan'] = {'accounts': int(n), 'pct': round(n / lead['accounts'] * 100, 4)}
     # a summed row never lands on a round count: a few people move onto the
     # involvement leader's line (which only strengthens the orders held above)
-    bump = next((c for c in stars if c['name'] == (inputs.get('involvement_order') or [None])[0]), stars[0] if stars else cast[0])
+    names_all = [c['name'] for c in stars]
     for mid in _INVOLVEMENT + ('new_fan',):
+        lead_name = (measure_order(inputs, mid, names_all) or names_all or [cast[0]['name']])[0]
+        bump = next((c for c in cast if c['name'] == lead_name), cast[0])
         tries = 0
         while sum(c['m'][mid]['accounts'] for c in cast) % 10 == 0 and tries < 12:
             n = min(bump['accounts'] - 1, bump['m'][mid]['accounts'] + 1 + (_h(seed, mid, 'bump', tries) % 3))
@@ -688,8 +717,6 @@ def build_payload(inputs: dict, prim: dict, *, created_by: str = 'prometheus') -
     window = f'{start} to {end}'
     s1, s2 = (stars + [None, None])[:2]
     two_share = round((s1['accounts'] + s2['accounts']) / v4 * 100, 1) if s1 and s2 else 0.0
-    inv_lead = next((c for c in stars if c['name'] == (inputs.get('involvement_order') or [None])[0]), s2 or s1)
-    new_lead = max(stars, key=lambda c: c['m']['new_fan']['accounts']) if stars else None
     who = dict(prim.get('who') or {})
     # the header tiles name every star or none (Jenna 2026-10-19: "take
     # jennifer beals out of the header if you don't list all 3 marquee cast
@@ -905,15 +932,12 @@ def check_payload(payload: dict, inputs: Optional[dict] = None) -> list:
         for a, b in zip(names, names[1:]):
             if a in bys and b in bys and bys[a]['accounts'] <= bys[b]['accounts']:
                 out.append(f'draw order broken: {a} <= {b}')
-        inv = [n for n in (inputs.get('involvement_order') or names) if n in bys]
-        for mid in _INVOLVEMENT:
-            for a, b in zip(inv, inv[1:]):
+        for mid in _INVOLVEMENT + ('new_fan',):
+            order = [n for n in measure_order(inputs, mid, names) if n in bys]
+            for a, b in zip(order, order[1:]):
                 if bys[a]['m'][mid]['pct'] <= bys[b]['m'][mid]['pct']:
                     out.append(f'{mid} order broken: {a} <= {b}')
-        newo = [n for n in (inputs.get('new_fans_order') or inv) if n in bys]
-        for a, b in zip(newo, newo[1:]):
-            if bys[a]['m']['new_fan']['pct'] <= bys[b]['m']['new_fan']['pct']:
-                out.append(f'new_fan share order broken: {a} <= {b}')
+        newo = [n for n in measure_order(inputs, 'new_fan', names) if n in bys]
         if newo:
             lead = bys[newo[0]]['m']['new_fan']['accounts']
             if any(s['m']['new_fan']['accounts'] >= lead for n, s in bys.items() if n != newo[0]):
@@ -1149,10 +1173,15 @@ def _inputs_from_args(a, old_meta: Optional[dict] = None) -> dict:
     known = {}
     if a.known_anchors and Path(a.known_anchors).exists():
         known = json.loads(Path(a.known_anchors).read_text(encoding='utf-8'))
+    morders = dict(om.get('measure_orders') or {})
+    for spec_ in (a.measure_order or []):
+        if '=' in spec_:
+            mid, lst = spec_.split('=', 1)
+            morders[mid.strip()] = [x.strip() for x in lst.split(',') if x.strip()]
     return {'subject': a.subject or om.get('customer_brand'), 'platform': a.platform or om.get('streaming_home'), 'network': a.network or om.get('network'),
             'premiere_date': a.premiere_date or om.get('premiere_date'), 'franchise': a.franchise or om.get('franchise') or '', 'night': a.night or om.get('night') or 'Tuesday',
             'cover_title': a.cover_title or om.get('cover_title') or '', 'journey_kind': KIND,
-            'notes': a.notes, 'cast': cast, 'involvement_order': inv, 'new_fans_order': newo, 'always_above': always, 'known_anchors': known,
+            'notes': a.notes, 'cast': cast, 'involvement_order': inv, 'new_fans_order': newo, 'measure_orders': morders, 'always_above': always, 'known_anchors': known,
             'start_date': a.start_date or om.get('start_date'), 'end_date': a.end_date or om.get('end_date'),
             'ceilings': ({'home_us_reach': a.home_reach} if a.home_reach else {})}
 
@@ -1171,6 +1200,7 @@ def main(argv=None):
     ap.add_argument('--involvement-order', default='', help='comma list, most involved first')
     ap.add_argument('--new-fans-order', default='', help='comma list, most newcomers first')
     ap.add_argument('--always-above', action='append', default=[], help='"Name A > Name B": A beats B on every measure')
+    ap.add_argument('--measure-order', action='append', default=[], help='"episode2=Name A,Name B,Name C": the order one measure holds (live, one_sitting, episode2, posted, followed_star, new_fan, ad_buy)')
     ap.add_argument('--known-anchors', default='', help='json file of public anchors handed to the research pass')
     ap.add_argument('--cover-title', default='', help='pin the cover title (kept through a republish)')
     ap.add_argument('--user', default='admin')
@@ -1256,7 +1286,7 @@ def main(argv=None):
 
 def _inputs_for_meta(inputs: dict) -> dict:
     """The shaping inputs a later republish needs, stored on the blob."""
-    return {k: inputs.get(k) for k in ('cast', 'involvement_order', 'new_fans_order', 'always_above', 'franchise', 'night', 'premiere_date', 'cover_title')}
+    return {k: inputs.get(k) for k in ('cast', 'involvement_order', 'new_fans_order', 'measure_orders', 'always_above', 'franchise', 'night', 'premiere_date', 'cover_title')}
 
 
 if __name__ == '__main__':

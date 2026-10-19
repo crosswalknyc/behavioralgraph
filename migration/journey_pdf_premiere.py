@@ -102,6 +102,11 @@ def _grid(d: _Doc, title: str, head: List[str], rows: List[List[str]], x: float,
     return y
 
 
+def _list(items: list) -> str:
+    items = [str(x) for x in items if x]
+    return items[0] if len(items) == 1 else (', '.join(items[:-1]) + ' and ' + items[-1] if items else '')
+
+
 def _all_stars(stars: list, mid: str, suffix: str = '') -> str:
     """'Jennifer Beals 71.6%, LL Cool J 68.2%, Scott Caan 63.3%' in the payload's star order."""
     return ', '.join(f"{s['name']} {float(s['m'][mid]['pct']):.1f}%{suffix}" for s in stars)
@@ -209,13 +214,17 @@ def build_pdf(payload: dict) -> bytes:
             allv = (cb.get('all') or {}).get(mid) or {}
             grid_rows.append([m['label']] + [f"{v:.1f}%" for v in vals] + ([f"{float(allv.get('pct')):.1f}%"] if allv else ['']))
             lead_cols.append(max(range(len(vals)), key=lambda i: vals[i]))
-        inv = leaders.get('episode2') or names[0]
         d.new_page(False, 'The stars, side by side',
-                   str(copy.get('castHead') or f"{names[0]} brought the most people; {_pos(inv)} people were the most involved."),
+                   str(copy.get('castHead') or f"{names[0]} brought the most people to the first episode."),
                    'The same measures for every star. Each line after the first two is the share of the people that star brought. The top value on each line is marked.')
         _grid(d, '', head, grid_rows, d.m, d.y, full_w, lead_cols, note=str(cb.get('note') or ''))
-        d.meaning(f"{names[0]} brought the most people; {_pos(inv)} people did the most once they arrived. "
-                  f"{_pos(names[-1])} people trail on every line." if len(names) >= 2 else '')
+        by_leader = {}
+        for m in measures:
+            by_leader.setdefault(leaders.get(m['id']) or '', []).append(m['label'].split(':')[0].split(',')[0].lower())
+        parts = [f"{_pos(n)} people lead on {_list(v)}" for n, v in by_leader.items() if n]
+        trail = [n for n in names if n not in by_leader]
+        d.meaning(f"{names[0]} brought the most people. " + '; '.join(parts) + '.'
+                  + (f" {_list([_pos(n) + ' people' for n in trail])} trail on every line." if trail else '') if len(names) >= 2 else '')
 
         # 07 the second screen: the purchase rate by star, with the room around it
         ss = _section(payload, 'second screen')
