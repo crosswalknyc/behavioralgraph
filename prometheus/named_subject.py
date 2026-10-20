@@ -606,6 +606,43 @@ def names_in_structure(name, text):
     return False
 
 
+# The condition a consumption ask puts on the count ("without paying
+# for it", "outside of theatrical", "at home"). It rides the offer's
+# sentence in plain words, never the subject's name (2026-10-20, Jay
+# Patel: the priced read offered "Title 'mutiny' Without Paying").
+_CONDITION_RX = re.compile(
+    r"\b(?P<cond>without\s+(?:paying|a\s+subscription|subscribing|an?\s+account|ads?)(?:\s+for\s+(?:it|them))?|"
+    r"outside\s+(?:of\s+)?(?:the\s+|a\s+)?theat(?:er|re|rical)s?(?:\s+release)?|"
+    r"(?:not\s+)?in\s+(?:the\s+|a\s+)?theat(?:er|re)s?|at\s+home|for\s+free|free\s+with\s+ads|"
+    r"on\s+(?:streaming|demand|digital)|digitally|online|legally|with\s+ads|ad[- ]free|"
+    r"on\s+(?:a\s+)?(?:subscription|rental|purchase))\b", re.I)
+_CONDITION_PLAIN = {
+    'outside of theatrical': 'outside a theater', 'outside theatrical': 'outside a theater',
+    'outside of the theatrical': 'outside a theater', 'outside of theaters': 'outside a theater',
+    'outside theaters': 'outside a theater', 'outside of theatres': 'outside a theater',
+    'outside of the theater': 'outside a theater', 'not in theaters': 'outside a theater',
+    'on demand': 'on demand', 'digitally': 'on a digital service', 'legally': 'on a licensed service',
+}
+
+
+def ask_condition(text):
+    """The plain-words condition a consumption ask carries, or ''.
+    "how many people watched the title 'mutiny' without paying for it?"
+    -> 'without paying for it'; "...outside of theatrical and where did
+    they watch it" -> 'outside a theater'."""
+    m = _CONDITION_RX.search(str(text or ''))
+    if not m:
+        return ''
+    cond = re.sub(r"\s+", " ", m.group('cond').strip().lower())
+    return _CONDITION_PLAIN.get(cond, cond)
+
+
+def strip_condition(text):
+    """The ask with its condition clause taken out, so a name extractor
+    never swallows it."""
+    return _CONDITION_RX.sub(' ', str(text or ''))
+
+
 def _fold(s):
     return re.sub(r"[^a-z0-9]+", "", str(s or '').lower())
 

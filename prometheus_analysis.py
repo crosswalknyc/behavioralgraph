@@ -5467,7 +5467,7 @@ def panel_report_eligible(text, subject):
 
 def build_panel_report_offer(subject, price_label, question='',
                              kind='report', years=1, verb='watched',
-                             series=True, dimension=''):
+                             series=True, dimension='', condition=''):
     """The priced offer for a full read on a no-base subject. Returns
     (reply, followups, offer) where `offer` is the payload the widget
     arms so the confirm chip re-sends the ask with panel_confirm.
@@ -5477,6 +5477,17 @@ def build_panel_report_offer(subject, price_label, question='',
     viewership-over-time read (Jenna 2026-10-08)."""
     subj = str(subject or '').strip() or 'that subject'
     subj = re.sub(r"\s*\([^)]*\)\s*$", '', subj).strip() or 'that subject'   # never 'this audience (open Profile IQ audience)' (2026-10-14)
+    # The condition the ask puts on the count ("without paying for it",
+    # "outside a theater") is stated in the sentence, never inside the
+    # name (2026-10-20, Jay Patel: "Title 'mutiny' Without Paying").
+    cond = ' '.join(str(condition or '').split()).strip(' ,.;:')
+    if not cond:
+        try:
+            from prometheus.named_subject import ask_condition as _ask_cond
+            cond = _ask_cond(question)
+        except Exception:
+            cond = ''
+    cond_sp = (' ' + cond) if cond else ''
     price = str(price_label or '').strip()
     run_chip = (f"{PANEL_RUN_CHIP_PREFIX} - {price}"
                 if price else PANEL_RUN_CHIP_PREFIX)[:160]
@@ -5486,9 +5497,9 @@ def build_panel_report_offer(subject, price_label, question='',
         except (TypeError, ValueError):
             yrs = 1
         span = 'one year' if yrs == 1 else f'{yrs} years'
-        what = (f"month by month viewers and hours watched across {span}"
+        what = (f"month by month viewers and hours watched{cond_sp} across {span}"
                 if series else
-                f"how many people in the US {verb or 'watched'} it across {span}")
+                f"how many people in the US {verb or 'watched'} it{cond_sp} across {span}")
         reply = (
             f"That is a viewership read on {subj}: {what}, delivered right "
             f"here in the chat." + (f" It runs {price}." if price else ""))
@@ -5516,7 +5527,7 @@ def build_panel_report_offer(subject, price_label, question='',
     # Custom ask (Jenna 2026-10-08): a priced read, delivered in the
     # chat, with no profile pushed. The user can always ask for one.
     reply = (
-        f"I can answer that as a custom read on {subj}: I read "
+        f"I can answer that as a custom read on {subj}" + (f", {verb or 'watched'}{cond_sp}" if cond else '') + ": I read "
         f"{the_subject(subj)} audience end to end and deliver the numbers "
         f"right here in the chat." + (f" It runs {price}." if price else "")
     )

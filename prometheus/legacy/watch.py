@@ -722,13 +722,26 @@ def _pm_consumption_subject(text):
     series in the us last year" -> "Walsh Family Book Series". '' when
     the ask is not shaped that way or the object is only ordinary
     words."""
-    m = _PM_CONSUME_SUBJECT_RX.search(str(text or ''))
+    # A type-led or quoted name is the name (2026-10-20, Jay Patel: "how
+    # many people watched the title 'mutiny' without paying for it?" read
+    # as "Title 'mutiny' Without Paying"). The type noun and the quotes
+    # leave the label; the condition clause rides the sentence instead
+    # (named_subject.ask_condition), never the name.
+    try:
+        _tl, _tk = _ns.type_led_subject(_ns.strip_condition(text))
+        if _tl:
+            return _tl
+    except Exception as _fx:
+        _faults.note('watch', _fx)
+    _src = _ns.strip_condition(text)
+    m = _PM_CONSUME_SUBJECT_RX.search(_src)
     if not m:
         return ''
-    raw = re.sub(r"\s+", " ", m.group('subj')).strip(" ,;:'\"")
+    raw = re.sub(r"\s+", " ", m.group('subj')).strip(" ,;:'\"\u201c\u201d\u2018\u2019")
+    raw = re.sub(r"^(?:title|film|movie|show|series|book|podcast)\s+(?:called\s+|titled\s+|named\s+)?", '', raw, flags=re.I).strip(" ,;:'\"\u201c\u201d\u2018\u2019")
     # The regex swallowed a lowercase "the"; a capitalized "The" the
     # user typed is part of the title ("The Pitt") and is restored.
-    head = str(text or '')[:m.start('subj')]
+    head = _src[:m.start('subj')]
     if re.search(r"\bThe\s*$", head):
         raw = 'The ' + raw
     elif re.search(r"\bthe\s*$", head) and len(raw.split()) == 1:
@@ -748,7 +761,6 @@ def _pm_consumption_subject(text):
             out.append(w[:1].upper() + w[1:])
     subj = ' '.join(out)
     try:
-        from prometheus import named_subject as _ns
         subj = _ns.clip_clause(subj)   # "Crossroads Spring and If It Were" -> "Crossroads Spring" (2026-10-13)
     except Exception as _fx:
         _faults.note('watch', _fx)
