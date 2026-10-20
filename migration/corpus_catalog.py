@@ -224,11 +224,38 @@ def _parse_window_label(label):
     return {'start': m.group(1), 'end': m.group(2)}
 
 
+# The fixed 10 million panel projects to the 2026 US population (Rule
+# #3a): US people = sample / 10,000,000 x 329,900,000.
+PANEL_TO_US = 32.99
+
+# The two size facts a profile yields, named for what they are. The
+# AUDIENCE fact is projected US people (the file's US Gen Pop Projection
+# at BP 100); the SAMPLE fact is the count inside the 10 million panel
+# and is never a US figure. 2026-10-20 (Jenna, the NCIS: New York sweep
+# note): 'US audience = 260,390' next to a journey's 3,266,736 read as a
+# sample next to a projection. Both were projections; the labels now
+# say so, and every reader that compares across products compares
+# PROFILE_AUDIENCE_LABEL figures only.
+PROFILE_AUDIENCE_LABEL = 'US audience (projected US people)'
+PROFILE_SAMPLE_LABEL = 'inside the 10 million sample (not a US count)'
+
+
+def projected_us(sample):
+    """The US-people projection of a count inside the 10 million sample."""
+    try:
+        return int(round(float(sample) * PANEL_TO_US))
+    except (TypeError, ValueError):
+        return 0
+
+
 def facts_from_profile_rows(s3_key, display_name, rows, user=''):
     """rows: iterable of dicts with Column / Value / Brand Penetration
     (Row) / Original Raw Numbers / US Gen Pop Projection (the profile
     CSV columns). Only the metadata rows and the platform rows are
-    read; the first few KB of the CSV already carry the size facts."""
+    read; the first few KB of the CSV already carry the size facts.
+    The audience fact is ALWAYS projected US people: the file's own
+    projection cell, or the canonical chain from the sample when a file
+    carries no projection cell (never the sample itself)."""
     facts = []
     sample = proj = None
     window = None
@@ -256,12 +283,16 @@ def facts_from_profile_rows(s3_key, display_name, rows, user=''):
     _label = _WINDOW_LABEL_RX.sub('', _label.strip().lower())
     is_cut = bool(re.search(r'\s-\s', _label))
     note = f"Profile IQ: {subject}"
+    if sample and not proj:
+        # an older file with no projection cell: the audience fact is
+        # still US people, through the canonical chain, never the sample
+        proj = projected_us(sample)
     if sample:
-        facts.append(make_fact('profile', 'sample_size', 'viewers inside the 10 million sample',
+        facts.append(make_fact('profile', 'sample_size', PROFILE_SAMPLE_LABEL,
                                sample, 'individuals', window=window, source_key=s3_key,
                                source_user=user, note=note))
     if proj:
-        facts.append(make_fact('profile', 'audience_size', 'US audience', proj, 'people',
+        facts.append(make_fact('profile', 'audience_size', PROFILE_AUDIENCE_LABEL, proj, 'people',
                                window=window, source_key=s3_key, source_user=user, note=note))
     for val, p in sorted(platform_rows, key=lambda x: -x[1])[:6]:
         facts.append(make_fact('profile', 'platform_count', f"US viewers on {val}", p, 'people',
@@ -984,6 +1015,68 @@ def profile_anchor(anchors, window=None):
         cands.sort(key=lambda c: (c.get('cut', False),
                                   -(_window_overlap(window, c.get('window') or {}) or 0)))
     return cands[0]
+
+
+def window_days(w):
+    """Length of a {'start','end'} window in days; 0 when open-ended."""
+    try:
+        a, b = _d((w or {}).get('start')), _d((w or {}).get('end'))
+    except Exception:
+        return 0
+    if not (a and b):
+        return 0
+    return (b - a).days + 1
+
+
+def universe_floor(anchors, window, exclude_key=None):
+    """The figure a Profile IQ Total Universe on this subject must sit at
+    or above (2026-10-20, Jenna on the NCIS: New York sweep note: a
+    subject the dashboard already describes never gets a universe
+    smaller than what another product measured on a shorter window).
+
+    A Total Universe is the subject's whole audience over its window.
+    Every other product's US-people figure on an overlapping window
+    that is SHORTER than ``window`` describes a subset of that audience
+    (a journey's end point, a partnership's reach), so the universe
+    must clear the largest of them. Returns that fact as
+    {'value', 'product', 'label', 'note', 'window', 'source_key'} or
+    None. Profile facts (the universe itself, its cuts, its other
+    windows) and chat-stated figures never floor a build; a figure on a
+    window as long as or longer than the build's is not a subset and is
+    skipped."""
+    if not isinstance(window, dict) or not (window.get('start') and window.get('end')):
+        return None
+    mine = window_days(window)
+    if mine <= 0:
+        return None
+    best = None
+    for f in (anchors or {}).get('facts') or []:
+        if not isinstance(f, dict):
+            continue
+        if f.get('product') in ('profile', 'chat') or f.get('kind') != 'audience_size' \
+                or f.get('unit') != 'people':
+            continue
+        src = (f.get('source') or {}).get('key') or ''
+        if exclude_key and src == exclude_key:
+            continue
+        fw = f.get('window') or {}
+        if not (fw.get('start') and fw.get('end')):
+            continue
+        theirs = window_days(fw)
+        if theirs <= 0 or theirs >= mine:
+            continue
+        if not (_window_overlap(window, fw) or 0) > 0:
+            continue
+        try:
+            v = float(f.get('value'))
+        except (TypeError, ValueError):
+            continue
+        if v <= 0:
+            continue
+        if best is None or v > best['value']:
+            best = {'value': int(round(v)), 'product': f.get('product'), 'label': f.get('label'),
+                    'note': f.get('note') or f.get('product'), 'window': fw, 'source_key': src}
+    return best
 
 
 def prior_journey(anchors, window=None):

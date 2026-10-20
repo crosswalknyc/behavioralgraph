@@ -23,6 +23,17 @@ Stores:
 Deployed on Hetzner by migration/systemd/corpus-catalog-sync.{service,timer}
 (every 30 minutes). Log: /var/log/corpus-catalog-sync.log. The audit
 email goes to jenna@ and jessie@ only (system alert recipients).
+
+Every size the audit compares is projected US people (a profile's US
+Gen Pop Projection, a journey's end point, a partnership's reach); a
+profile's count inside the 10 million sample is kept as its own fact
+and never compared across products. A Profile IQ Total Universe that
+sits below another product's figure on a shorter overlapping window is
+corrected IN PLACE by the reconcile step (migration/corpus_coherence:
+the universe lifts above the figure under its own dated filename, its
+cuts follow, the catalog re-indexes) and the mail carries only what the
+sweep could not settle itself (2026-10-20, Jenna: "have the system
+realize that so no need for the email").
 """
 from __future__ import annotations
 
@@ -341,19 +352,43 @@ def forget_gone(sources, present, dry_run=False):
 
 
 # ---------------------------------------------------------------- audit
+def _attach_samples(facts):
+    """A profile's audience fact carries its sibling sample (same source
+    file) as ``_sample`` so a line can show both figures: '260,390 US
+    people (7,893 inside the 10 million sample)'. The 2026-10-20 sweep
+    note read 'US audience = 260,390' as a sample next to a journey's
+    projection; it was a projection, and the line now says so."""
+    samples = {}
+    for f in facts:
+        if f.get('product') == 'profile' and f.get('kind') == 'sample_size':
+            samples[(f.get('source') or {}).get('key') or ''] = f.get('value')
+    for f in facts:
+        if f.get('product') == 'profile' and f.get('kind') == 'audience_size':
+            s = samples.get((f.get('source') or {}).get('key') or '')
+            if s:
+                f['_sample'] = s
+    return facts
+
+
 def audit(limit_subjects=5000):
-    """Same-subject disagreements across products. A sub-window may sit
-    below an annual figure; it may never sit above it. Two reads of the
-    same thing on overlapping windows should agree within 35%."""
+    """Same-subject disagreements across products, every one compared
+    as projected US people against projected US people. A sub-window
+    may sit below an annual figure; it may never sit above it. Two reads
+    of the same thing on overlapping windows should agree within 35%.
+    A profile CUT is a sub-population of its universe, never the
+    universe, so it never enters the audience comparison. Each finding
+    carries the two facts (``short`` / ``long`` or ``a`` / ``b`` as
+    dicts) so the reconcile step can act on it."""
     idx = cc.load_index(force=True)
     findings = []
     subs = idx.get('subjects') or {}
     multi = [(k, v) for k, v in subs.items() if len(v.get('products') or []) >= 2]
     for skey, ent in multi[:limit_subjects]:
         page = cc.load_subject_page(skey, force=True) or {}
-        facts = [f for f in (page.get('facts') or []) if isinstance(f, dict)]
+        facts = _attach_samples([f for f in (page.get('facts') or []) if isinstance(f, dict)])
         sizes = [f for f in facts if f.get('kind') in ('audience_size', 'stage_count')
-                 and f.get('unit') == 'people' and f.get('product') != 'chat']
+                 and f.get('unit') == 'people' and f.get('product') != 'chat'
+                 and not (f.get('product') == 'profile' and f.get('cut'))]
         # pairwise across products
         for i, a in enumerate(sizes):
             for b in sizes[i + 1:]:
@@ -373,12 +408,62 @@ def audit(limit_subjects=5000):
                 vs, vl = float(short['value']), float(long_['value'])
                 if la != lb and vs > vl * 1.05 and _comparable(short, long_):
                     findings.append({'subject': ent.get('subject'), 'kind': 'sub_window_exceeds',
-                                     'a': _fact_line(short), 'b': _fact_line(long_)})
+                                     'a': _fact_line(short), 'b': _fact_line(long_),
+                                     'short': short, 'long': long_})
                 elif la == lb and max(va, vb) / min(va, vb) > 1.35 and _comparable(a, b):
+                    small, big = (a, b) if va < vb else (b, a)
+                    if big.get('product') == 'profile' and big.get('kind') == 'audience_size':
+                        # a universe above another product's figure on the same
+                        # window is a universe above one of its subsets: fine
+                        continue
                     findings.append({'subject': ent.get('subject'), 'kind': 'same_window_disagree',
-                                     'a': _fact_line(a), 'b': _fact_line(b)})
+                                     'a': _fact_line(small), 'b': _fact_line(big),
+                                     'short': small, 'long': big})
     print(f"[audit] subjects with 2+ products: {len(multi)}, findings: {len(findings)}")
     return findings, len(multi)
+
+
+def reconcile(findings, dry_run=False, s3=None):
+    """Correct every finding of the fixable shape in place and return
+    (fixed, unresolved). Fixable: a Profile IQ Total Universe (the long
+    side, a parent file) sits below another product's US-people figure
+    on a shorter or equal overlapping window. The universe lifts above
+    that figure under its own dated filename, its cuts follow, the
+    catalog re-indexes, and the finding is closed without mail
+    (no-rebuild-level-correction.mdc). Anything else (two journeys, a
+    journey against a campaign) stays for a human."""
+    from migration import corpus_coherence as coh
+    fixed, unresolved = [], []
+    s3 = s3 or _s3()
+    stamp = time.strftime('%Y%m%d_%H%M%S', time.gmtime())
+    done_keys = set()
+    for f in findings:
+        short, long_ = f.get('short'), f.get('long')
+        profile = long_ if (isinstance(long_, dict) and long_.get('product') == 'profile') else None
+        other = short if profile is not None else None
+        if f.get('kind') == 'same_window_disagree' and profile is None \
+                and isinstance(short, dict) and short.get('product') == 'profile':
+            # same window, the profile is the smaller side: a subset outgrew its universe
+            profile, other = short, long_
+        if not (profile and isinstance(other, dict) and other.get('product') not in ('profile', 'chat')
+                and profile.get('kind') == 'audience_size' and not profile.get('cut')):
+            unresolved.append(f)
+            continue
+        key = (profile.get('source') or {}).get('key') or ''
+        if key in done_keys:
+            fixed.append(dict(f, trail={'key': key, 'note': 'lifted earlier in this pass'}))
+            continue
+        trail = coh.reconcile_universe(s3, profile, other, dry_run=dry_run, stamp=stamp)
+        if not trail or trail.get('error'):
+            unresolved.append(dict(f, trail=trail))
+            continue
+        done_keys.add(key)
+        fixed.append(dict(f, trail=trail))
+        print(f"[audit] fixed in place: {f['subject']} | {f['kind']} | {key}: "
+              f"{trail.get('old_people', 0):,} -> {trail.get('new_people', 0):,} US people"
+              + (f" ({len(trail.get('cuts') or [])} cut(s) followed)" if trail.get('cuts') else '')
+              + (' [dry run]' if dry_run else ''))
+    return fixed, unresolved
 
 
 # Order matters: a label is classed by the first family that names it.
@@ -422,11 +507,23 @@ def _comparable(a, b):
 
 
 def _fact_line(f):
-    return (f"{f.get('note') or f.get('product')}: {f.get('label')} = {cc._fmt_value(f)}"
+    """One figure, as the reader should read it: a people count says
+    'US people'; a profile's audience shows its sample alongside so the
+    two can never be mistaken for each other."""
+    unit = ' US people' if f.get('unit') == 'people' else ''
+    tail = ''
+    if f.get('product') == 'profile' and f.get('kind') == 'audience_size' and f.get('_sample'):
+        try:
+            tail = f" ({int(round(float(f['_sample']))):,} inside the 10 million sample)"
+        except (TypeError, ValueError):
+            tail = ''
+    return (f"{f.get('note') or f.get('product')}: {f.get('label')} = {cc._fmt_value(f)}{unit}{tail}"
             f"{cc._fmt_window(f.get('window'))}")
 
 
-def send_audit_email(findings, n_multi, stats):
+def send_audit_email(findings, n_multi, stats, fixed=()):
+    """The sweep mails ONLY what it could not settle itself. Both sides
+    of every line are projected US people."""
     import boto3
     lines = [f"Corpus catalog sweep {time.strftime('%Y-%m-%d %H:%M UTC', time.gmtime())}",
              '',
@@ -435,10 +532,13 @@ def send_audit_email(findings, n_multi, stats):
              f"sources removed: {stats.get('gone', 0)}.",
              f"Subjects described by two or more products: {n_multi}.",
              '']
+    if fixed:
+        lines.append(f"{len(fixed)} universe(s) brought into line in place this run (no action needed).")
+        lines.append('')
     if not findings:
-        lines.append('No cross-product disagreements.')
+        lines.append('No cross-product disagreements left to look at.')
     else:
-        lines.append(f"{len(findings)} cross-product disagreement(s) to look at:")
+        lines.append(f"{len(findings)} cross-product disagreement(s) to look at (every figure is projected US people):")
         lines.append('')
         for f in findings[:60]:
             lines.append(f"- {f['subject']} ({f['kind'].replace('_', ' ')})")
@@ -468,6 +568,11 @@ def main(argv=None):
     ap.add_argument('--rebuild', action='store_true',
                     help='forget every indexed source first so the whole corpus is re-read '
                          '(after a change to the subject fold)')
+    ap.add_argument('--force-profiles', action='store_true',
+                    help='re-read every profile CSV regardless of its stored ETag (after a change '
+                         'to the profile reader); journeys, campaigns and reads keep their ETag skip')
+    ap.add_argument('--no-reconcile', action='store_true',
+                    help='report disagreements without correcting the fixable ones in place')
     args = ap.parse_args(argv)
     if args.rebuild and not args.dry_run:
         s3 = _s3()
@@ -491,6 +596,9 @@ def main(argv=None):
     stats = {}
     if not args.audit_only:
         sources = dict(cc.load_sources())
+        if args.force_profiles:
+            sources = {k: v for k, v in sources.items() if (v or {}).get('product') != 'profile'}
+            print('[sync] --force-profiles: every profile CSV will be re-read')
         present = set()
         n, seen = sweep_profiles(sources, dry_run=args.dry_run, workers=args.workers)
         stats['profiles'] = n
@@ -515,12 +623,21 @@ def main(argv=None):
             print(f"[sync] thread backfill skipped: {e}")
     findings = []
     n_multi = 0
+    fixed = []
     if not args.no_audit:
         findings, n_multi = audit()
         for f in findings[:40]:
             print(f"[audit] {f['subject']} | {f['kind']} | {f['a']} || {f['b']}")
+        if findings and not args.no_reconcile:
+            # the fixable shape is corrected in place and silently; the
+            # catalog re-indexes as each universe lifts, so a second audit
+            # shows only what is still live, and only that can mail
+            fixed, findings = reconcile(findings, dry_run=args.dry_run)
+            if fixed and not args.dry_run:
+                findings, n_multi = audit()
+            stats['universes_lifted'] = len(fixed)
         if not args.no_email and not args.dry_run and findings:
-            send_audit_email(findings, n_multi, stats)
+            send_audit_email(findings, n_multi, stats, fixed=fixed)
     print(f"[sync] done in {time.time() - t0:.1f}s: {stats}")
     return 0
 
