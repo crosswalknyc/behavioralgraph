@@ -153108,30 +153108,63 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // Update sort dropdown labels to reflect current mode
             updateSortDropdownLabels();
 
-            // Re-render all dashboard data with new display mode
+            // Re-render dashboard data for the new display mode.
+            //
+            // Desktop runs every renderer synchronously (unchanged - it has
+            // the memory headroom). On mobile Safari that single synchronous
+            // burst of ~10 heavy renderers (the behavioral grid alone is
+            // enormous) spikes memory enough to CRASH the tab and force a
+            // full page reload. The reload silently reset the mode back to
+            // 'percent', so the user saw the label flip but 'nothing change'
+            // on Demographics, and an obvious reload on Behavioral. Fix:
+            // on mobile, spread the renderers one-per-animation-frame so the
+            // browser can paint + GC between them (peak memory ~= one
+            // renderer instead of the sum), and render the visible tab first.
+            var _dispTasks = [];
             if (currentDashboardData) {
-                renderCharts(currentDashboardData.demographics, currentDashboardData.demographicsIndex, currentDashboardData.demographicsProjection, currentDashboardData.demographicsGenPop);
-                renderBehavioralCards(currentDashboardData.behavioral);
-                renderDemoInsights(currentDashboardData.demographics, currentDashboardData.demographicsIndex, currentDashboardData.demographicsGenPop);
-                renderLocationTable(currentDashboardData.locations);
-                
-                // Re-render interests
+                _dispTasks.push(['demographics', function() { renderCharts(currentDashboardData.demographics, currentDashboardData.demographicsIndex, currentDashboardData.demographicsProjection, currentDashboardData.demographicsGenPop); }]);
+                _dispTasks.push(['behavioral', function() { renderBehavioralCards(currentDashboardData.behavioral); }]);
+                _dispTasks.push(['demographics', function() { renderDemoInsights(currentDashboardData.demographics, currentDashboardData.demographicsIndex, currentDashboardData.demographicsGenPop); }]);
+                _dispTasks.push(['locations', function() { renderLocationTable(currentDashboardData.locations); }]);
                 if (currentDashboardData.interests) {
-                    renderInterests(currentDashboardData.interests);
+                    _dispTasks.push(['interests', function() { renderInterests(currentDashboardData.interests); }]);
                 }
-                
-                // Re-render insights and other tabs
-                renderTopInsights(currentDashboardData);
-                renderAffinityMap(currentDashboardData);
-                renderEcosystemInsights(currentDashboardData);
-                renderSponsorshipFinder(currentDashboardData);
-                renderMediaOptimizer(currentDashboardData);
+                _dispTasks.push(['insights', function() { renderTopInsights(currentDashboardData); }]);
+                _dispTasks.push(['affinity', function() { renderAffinityMap(currentDashboardData); }]);
+                _dispTasks.push(['ecosystem', function() { renderEcosystemInsights(currentDashboardData); }]);
+                _dispTasks.push(['sponsorship', function() { renderSponsorshipFinder(currentDashboardData); }]);
+                _dispTasks.push(['marketing', function() { renderMediaOptimizer(currentDashboardData); }]);
             }
             if (typeof refreshLLMOBrandConversionTable === 'function' && _llmoBrandConvRows && _llmoBrandConvRows.length) {
-                refreshLLMOBrandConversionTable();
+                _dispTasks.push(['', refreshLLMOBrandConversionTable]);
             }
             if (typeof refreshLLMORetailerConversionTable === 'function' && _llmoRetailerConvRows && _llmoRetailerConvRows.length) {
-                refreshLLMORetailerConversionTable();
+                _dispTasks.push(['', refreshLLMORetailerConversionTable]);
+            }
+            var _dispMobile = window.matchMedia && window.matchMedia('(max-width: 768px)').matches;
+            if (_dispMobile && _dispTasks.length > 1) {
+                // Visible tab first so what the user is looking at updates now.
+                var _vw = document.getElementById('dashboardView');
+                var _activeTab = _vw ? (_vw.getAttribute('data-piq-tab') || '') : '';
+                if (_activeTab) {
+                    _dispTasks.sort(function(a, b) {
+                        return (a[0] === _activeTab ? 0 : 1) - (b[0] === _activeTab ? 0 : 1);
+                    });
+                }
+                var _raf = window.requestAnimationFrame
+                    ? function(fn) { window.requestAnimationFrame(fn); }
+                    : function(fn) { window.setTimeout(fn, 16); };
+                var _di = 0;
+                (function _dispStep() {
+                    if (_di >= _dispTasks.length) return;
+                    try { _dispTasks[_di][1](); } catch (_e) {}
+                    _di++;
+                    if (_di < _dispTasks.length) _raf(_dispStep);
+                })();
+            } else {
+                for (var _di2 = 0; _di2 < _dispTasks.length; _di2++) {
+                    _dispTasks[_di2][1]();
+                }
             }
         }
         
