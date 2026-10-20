@@ -56,7 +56,13 @@ _PLATFORM_Q_RX = re.compile(
     r"\b(?:what|which)\s+(?:streaming\s+)?(?:platforms?|services?|streamers?|apps?|networks?|channels?|outlets?)\b"
     r"(?:(?!\.).){0,60}?\b(?:carr(?:y|ies|ied)|ha(?:s|ve)|had|stream|streams|offer|offers|show|shows|run|runs|play|plays|air|airs|host|hosts|is|are|was|were)\b", re.I)
 _IS_ON_RX = re.compile(
-    r"\b(?:is|are|was|were|does|do|did)\s+(?P<title>(?:the\s+)?[^?]{2,70}?)\s+(?:streaming\s+|available\s+|airing\s+|playing\s+|out\s+)?on\s+(?P<plat>[A-Za-z][A-Za-z0-9+ ]{1,30})\s*\??$", re.I)
+    r"^\s*(?:is|are|was|were|does|do|did)\s+(?P<title>(?:the\s+)?[^?]{2,70}?)\s+(?:streaming\s+|available\s+|airing\s+|playing\s+|out\s+)?on\s+(?P<plat>[A-Za-z][A-Za-z0-9+ ]{1,30})\s*\??$", re.I)
+# a size, count, share or demographic question is another lane's, whatever platform it names
+_NOT_THIS_LANE_RX = re.compile(
+    r"^\s*(?:how\s+(?:big|many|much|large|old|often)|what(?:'s|\s+is|\s+was|\s+are)\s+the\s+(?:size|audience|reach|share|index|count|number|demographic)|"
+    r"(?:the\s+)?size\s+of|what\s+(?:share|percent|percentage|fraction)|who\s+(?:is|are)\s+the\s+audience)\b", re.I)
+_AUDIENCE_TAIL_RX = re.compile(
+    r"\b(?:audience|audiences|viewers|watchers|fans|fanbase|fan\s+base|users|subscribers|readers|listeners|buyers|shoppers|customers|members|followers|people|cohort|profile)\s*$", re.I)
 _WHERE_TO_WATCH_RX = re.compile(
     r"\bwhere\s+(?:to|can\s+(?:i|you|we|people|they)|do\s+(?:i|you|we)|should\s+(?:i|we))\s+(?:" + _WATCH_VERBS + r")\s+"
     r"(?P<title>(?:the\s+)?[\"\u201c\u201d'\u2018\u2019]?[A-Za-z0-9][^?]{1,70}?)\s*\??$", re.I)
@@ -88,10 +94,14 @@ _PLATFORM_WORDS = frozenset(w.lower() for w in (
 
 
 def is_where_watched_ask(text):
-    """True when the words ask where something is watched or carried."""
+    """True when the words ask where something is watched or carried. A
+    size, count, share or demographic question is never this lane's
+    ("How big is the Babylon 5 audience on Prime Video?" is a size ask)."""
     t = ' '.join(str(text or '').split())
     if not t:
         return False
+    if _NOT_THIS_LANE_RX.match(t) and not re.search(r"\bwhere\b", t, re.I):
+        return False      # a size question with no where-clause; "how many ... and where did they watch it" keeps its where
     return bool(_WHERE_RX.search(t) or _PLATFORM_Q_RX.search(t) or _IS_ON_RX.search(t) or _WHERE_TO_WATCH_RX.search(t))
 
 
@@ -104,8 +114,8 @@ def _clean_title(raw):
         return ''
     if s.lower() in _PLATFORM_WORDS or s.lower() in _ns._NEVER_SUBJECT:
         return ''
-    if len(s.split()) > 8:
-        return ''
+    if len(s.split()) > 8 or _AUDIENCE_TAIL_RX.search(s):
+        return ''      # "the Babylon 5 audience" is an audience, not a title
     return _ns._title(s.split()) if s == s.lower() else s
 
 
@@ -135,6 +145,8 @@ def parse(text, history=None, *, page='', plausible=None):
     if _ns.has_audience_deixis(t) and not _PRONOUN_OBJECT_RX.search(t):
         return None     # "where do the people on this profile watch tv": the page's audience, not a title
     title, kind = _ns.type_led_subject(t)
+    if title and _AUDIENCE_TAIL_RX.search(title):
+        return None
     if title and kind in _AUDIO_KINDS:
         kind = 'podcast'
     elif title:
@@ -489,7 +501,14 @@ def resolve(title, kind='title', *, host=None, connect=None, live=True, research
 
     def _research():
         try:
-            boxes['research'] = _research_platforms(title, kind, host, ask=ask)
+            r1 = _research_platforms(title, kind, host, ask=ask)
+            # the search plan is not always granted on the first call; an
+            # unsure first read gets one more try while time remains
+            if (not r1 or float(r1.get('confidence') or 0) < 0.6) and (time.monotonic() - t0) < _RESOLVE_BUDGET_S - 45:
+                r2 = _research_platforms(title, kind, host, ask=ask)
+                if r2 and float(r2.get('confidence') or 0) >= float((r1 or {}).get('confidence') or 0):
+                    r1 = r2
+            boxes['research'] = r1
         except Exception as e:
             boxes['research_err'] = str(e)[:120]
 
@@ -641,7 +660,9 @@ def compose(res, shares, *, page='', ask=''):
     if res.get('home_release'):
         lines.append(f"It reached home screens on {res['home_release']}.")
     if shares:
-        who = "the people who listened" if res.get('kind') == 'podcast' else "the people who watched it outside a theater" if rent and not incl else "its viewers"
+        who = ("the people who listened" if res.get('kind') == 'podcast'
+               else "the people who watched it outside a theater" if (rent and not incl and res.get('kind') == 'movie')
+               else "its viewers")
         if len(shares) == 1:
             lines.append(f"All of {who} did so on {shares[0]['name']}.")
         else:
