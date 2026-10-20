@@ -742,7 +742,7 @@ def _final_insight_lines(ctx: DeckCtx) -> tuple[str, str]:
             line2 = "compounding reach year over year."
         else:
             line1 = f"A {lift_rel:.1f}% adjusted lift,"
-            line2 = "significant against control drift."
+            line2 = "above a matched group that started where they did."
     return (line1, line2)
 
 
@@ -1502,19 +1502,39 @@ def _slide_brand_engagement_value(prs, ctx: DeckCtx, idx: int, total: int):
     return s
 
 
+def _matched_group_lines(cg: dict) -> tuple:
+    """The reader-facing account of the comparison group (Jenna
+    2026-10-20: same size, roughly the same brand engagement before the
+    partnership). Returns (one_line, side_by_side) where side_by_side
+    is '' when the payload carries no match figures."""
+    try:
+        from migration.bpiq_matched_control import READER_NOTE as _note
+    except ImportError:  # pragma: no cover - twin layout
+        _note = ("Compared against a matched group of the same size with the "
+                 "same brand engagement before the partnership.")
+    m = (cg or {}).get("match") or {}
+    if not m:
+        return _note, ""
+    side = (f"Exposed group {fmt_num(int(m.get('exposed_size') or 0))} people, "
+            f"{float(m.get('exposed_pre_rate_pct') or 0):.2f}% engaged with the brand before; "
+            f"matched group {fmt_num(int(m.get('control_size') or 0))} people, "
+            f"{float(m.get('control_pre_rate_pct') or 0):.2f}% before.")
+    return _note, side
+
+
 def _slide_brand_lift_value(prs, ctx: DeckCtx, idx: int, total: int):
     """BLV slide - the net-new engagement attributable to the
-    partnership. We use raw pre/post delta minus size-matched gen-pop
-    control drift ('adjusted lift'); we do NOT call it
-    difference-in-differences because both cohorts are drawn from the
-    same panel, so a true DiD design would require a genuine holdout
-    (see D4 in the QC memo)."""
+    partnership: the exposed group's change minus the matched group's
+    change over the same windows (Jenna 2026-10-20: the matched group
+    carries the exposed group's size and its brand engagement before
+    the partnership, so the lift is the partnership and not a baseline
+    difference)."""
     s = _blank(prs)
     _add_bg(s, BG_DARK)
     _eyebrow(s, Inches(0.6), Inches(0.6),
              _section_label(idx, "Brand Lift Value"), on_dark=True)
     _add_text(s, Inches(0.6), Inches(1.0), Inches(11), Inches(1.3),
-              f"{fmt_money(ctx.blv)} of net-new\nengagement, above control drift.",
+              f"{fmt_money(ctx.blv)} of net-new engagement\nabove a matched group.",
               size=40, bold=True, color=FG_LIGHT,
               spacing=0.95, font=FONT_DISPLAY)
     rate = float((ctx.data.get("valuation") or {})
@@ -1539,12 +1559,12 @@ def _slide_brand_lift_value(prs, ctx: DeckCtx, idx: int, total: int):
     # the treated delta, the subtraction label would contradict the
     # printed +0.00pp, so state the reason instead.
     if incr_pp == 0.0 and (treat_dp - control_dp) < -0.005:
-        lift_label = (f"Adjusted incremental lift  "
-                      f"(control {control_dp:+.2f}pp exceeded "
-                      f"treated {treat_dp:+.2f}pp)")
+        lift_label = (f"Incremental lift  "
+                      f"(matched group {control_dp:+.2f}pp exceeded "
+                      f"exposed {treat_dp:+.2f}pp)")
     else:
-        lift_label = (f"Adjusted incremental lift  "
-                      f"(treated {treat_dp:+.2f}pp minus control "
+        lift_label = (f"Incremental lift  "
+                      f"(exposed {treat_dp:+.2f}pp minus matched group "
                       f"{control_dp:+.2f}pp)")
     # Calculator raised to y=2.85 AND row height tightened to 0.60"
     # so the 3-row math block + total bar clears the source line
@@ -1570,15 +1590,14 @@ def _slide_brand_lift_value(prs, ctx: DeckCtx, idx: int, total: int):
     _add_text(s, Inches(9.2), Inches(3.00), Inches(3.5), Inches(0.3),
               "WHY IT MATTERS", size=9, bold=True, color=ACCENT,
               letter_spacing=0.18)
+    _note_line, _side = _matched_group_lines(cg)
     detail = (
-        "Brand Lift Value isolates net-new engagement attributable to "
-        "the partnership. We subtract a size-matched gen-pop control "
-        "cohort's natural drift from the treated cohort's raw pre/post "
-        "delta so we don't double-count baseline brand interest the "
-        "campaign didn't move.\n\n"
-        "Because both cohorts are drawn from the same 30M+ panel, this "
-        "is an adjusted-lift design, not a true difference-in-"
-        "differences. A holdout-based DiD is on the roadmap."
+        "Brand Lift Value is the engagement the partnership added. "
+        + _note_line
+        + " The matched group's own movement over the same windows is "
+          "taken out of the exposed group's gain, so brand interest "
+          "that would have grown anyway is not counted."
+        + (("\n\n" + _side) if _side else "")
     )
     _add_text(s, Inches(9.2), Inches(3.35), Inches(3.5), Inches(2.4),
               detail, size=9, color=FG_LIGHT, spacing=1.35)
@@ -1994,7 +2013,7 @@ def _slide_final_insight(prs, ctx: DeckCtx, idx: int, total: int):
                 else ctx.delta_rel)
     lift_label = (
         f"+{lift_rel:.1f}% adjusted engagement lift"
-        if lift_rel > 0 else "adjusted lift at or below control drift"
+        if lift_rel > 0 else "lift at or below the matched group's own movement"
     )
     closing = (
         f"{fmt_money(ctx.total_value)} in total brand value observed, "
@@ -2080,13 +2099,13 @@ def _slide_source(prs, ctx: DeckCtx, idx: int, total: int):
          "of campaign end: long enough to capture delayed brand "
          "behavior, tight enough to keep the causal read clean."),
         ("BRAND LIFT",
-         "Brand Lift Value uses an adjusted-lift design: the size-"
-         "matched gen-pop control cohort's natural drift is subtracted "
-         "from the treated cohort's raw pre/post delta. Both cohorts "
-         "are drawn from the same panel, so this is a within-panel "
-         "adjusted-lift read, not a true difference-in-differences "
-         "(which would require a genuine holdout); a holdout-based "
-         "DiD is on the roadmap."),
+         _matched_group_lines(ctx.data.get("control_group") or {})[0]
+         + " The lift is the exposed group's change in brand engagement "
+           "minus the matched group's change over the same windows, so a "
+           "difference that was already there before the partnership "
+           "never reads as lift."
+         + ((" " + _matched_group_lines(ctx.data.get("control_group") or {})[1])
+            if _matched_group_lines(ctx.data.get("control_group") or {})[1] else "")),
         ("SIGNIFICANCE",
          "Same-panel pre/post design. Primary test: pooled two-sample "
          "z on the paired marginals (conservative for a within-panel "

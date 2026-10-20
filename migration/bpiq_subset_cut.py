@@ -1082,6 +1082,24 @@ def build_subset_payload(
             out = _autofix_rule9_apply_boomer_demo_shift(out)
     out = _autofix_rule12_apply_canonical_conversion_rate(out)
 
+    # Matched comparison group (Jenna 2026-10-20): the deep copy above
+    # carries the PARENT's control_group, so the subset's comparison
+    # group would be the parent's size with the parent's pre-period
+    # rate. Re-draw it at the subset's own size and pre-period
+    # engagement (salted by the shared subject_id so peer brand reads
+    # of one cohort draw the same group) and recompute the lift lenses
+    # off it. Only fires when the inherited block breaks a rule.
+    try:
+        from migration.bpiq_matched_control import enforce_matched_control as _emc
+    except ImportError:   # pragma: no cover - twin layout
+        from bpiq_matched_control import enforce_matched_control as _emc  # type: ignore
+    if isinstance(out.get("control_group"), dict) and out["control_group"].get("enabled", True):
+        out, _mc_notes = _emc(out, subject=f"{subject_id}|{subset_label}", salt="subset")
+        if _mc_notes:
+            diag = out.get("diagnostics") or {}
+            diag["matched_control_redraw"] = _mc_notes
+            out["diagnostics"] = diag
+
     return out
 
 

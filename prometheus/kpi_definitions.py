@@ -376,6 +376,31 @@ DEFINITIONS = [
             "the lenses, printed exact."),
     },
     {
+        # Jenna 2026-10-20: the comparison group is matched on size and
+        # on brand engagement before the partnership, so the lift is the
+        # partnership and not a baseline difference.
+        'id': 'bpiq_lift',
+        'label': 'Brand engagement lift',
+        'views': ('brandPartnershipIQ',),
+        'aliases': ('brand engagement lift', 'incremental lift', 'brand lift',
+                    'matched group', 'comparison group', 'control',
+                    'control group', 'target vs control', 'gen pop cohort',
+                    'incremental consumers', 'net lift'),
+        'definition': (
+            "Brand engagement lift is the extra share of the audience "
+            "that engaged with the brand because of the partnership. It "
+            "is read against a matched group of the same size with the "
+            "same brand engagement before the partnership, so a "
+            "difference that was already there never counts as lift."),
+        'computed': (
+            "The exposed group's change in brand engagement from before "
+            "the partnership to after, minus the matched group's change "
+            "over the same windows. The matched group carries the "
+            "exposed group's exact size and a pre-period rate within "
+            "five percent of it; Brand Lift Value and each platform's "
+            "incremental people are priced off that difference."),
+    },
+    {
         'id': 'share_of_time',
         'label': 'Share of time',
         'views': ('shareOfTimeIQ',),

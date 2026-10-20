@@ -1,6 +1,6 @@
 {
  "version": 1,
- "content_hash": "b1f895bf3211a6d71bce8d6773f8f7259f617885c67a50b19b52c675c572c4a2",
+ "content_hash": "db71ca390252979f3ba6609cb89bf0c69c75b95cfbea3522be840f861eb1d671",
  "decisions": [
   {
    "id": "kids_viewers_default",
@@ -491,6 +491,7 @@
   },
   {
    "id": "files_in_the_chat_desktop_app",
+   "decided": "2026-10-15",
    "statement": "Any answer can be handed over as a file. In the dashboard, offer the CSV of the figures and the PDF of the read; a finished Digital Journey has its workbook, CSV and PDF analysis, a deck has the deck. The Prometheus desktop app (macOS and Windows) is the same Prometheus in a window on the user's computer: same conversations, same answers, builds still land in the dashboard, and every answer saves as CSV or PDF from the chat. It is always current: the answers come from the service, the window updates itself, and when a newer app is published it shows a Download bar. It is downloaded from the dashboard (ask your admin for the link) as a Windows installer or a Mac app. Never describe how a file is made; say what is in it.",
    "match_terms": [
     "csv",
@@ -509,6 +510,7 @@
   },
   {
    "id": "roster_ask_is_the_offer",
+   "decided": "2026-10-15",
    "statement": "There is no fixed network, roster or list of influencers, brands or titles. When asked which ones we have, cover or track, or for a list or CSV of all of them, answer with the offer and the question back: 'I can pull any influencer you would like. Who is it?' (brands and titles: 'Which one?'). Never say there is no data to export, never ask for the data first, never list a sample as if it were the whole set.",
    "match_terms": [
     "in your network",
@@ -528,6 +530,7 @@
   },
   {
    "id": "list_ask_is_a_custom_ask",
+   "decided": "2026-10-15",
    "statement": "'Who are the influencers / talent / brands that <condition>' over our data is a list, a custom read at the Custom Ask price ($500): the names, each with the detail asked for and their US audience, delivered as a workbook, a CSV and a PDF. It is never a Profile and never a free existing match. Offer it plainly with the price and ask which names they mean in the same breath.",
    "match_terms": [
     "who are the influencers",
@@ -546,6 +549,7 @@
   },
   {
    "id": "intake_never_page_bound",
+   "decided": "2026-10-16",
    "statement": "A build ask (journey, valuation, flywheel, campaign, profile) is about the subject the user names, never the profile that happens to be open on their screen. When the ask names no subject and a profile is open, ask: do you want this on <the open profile>, or on another subject? Offer both as chips. Never draft or run from the open profile without that answer.",
    "match_terms": [
     "build a digital journey",
@@ -563,6 +567,7 @@
   },
   {
    "id": "purchase_journey_why_they_left",
+   "decided": "2026-10-16",
    "statement": "A purchase journey carries eleven tables in a fixed order, the same depth as a watch journey: the first content they saw and where it sat, how many posts before they looked it up, where they looked before the cart, time to the order, what they bought first, the last touch, the assists, what the people who left the cart did next and why (coupon hunting, price checks on another retailer, caffeine or safety searches on Reddit, reviews, a competitor, shipping or pack size, went quiet) with who came back and paid, who bought elsewhere and who went quiet under each reason, then the rest of the overlap and every online buyer. When a user asks why people abandoned or left the cart, answer from that table.",
    "match_terms": [
     "why did they abandon",
@@ -583,6 +588,7 @@
   },
   {
    "id": "explicit_ask_read_whole",
+   "decided": "2026-10-16",
    "statement": "A brand partnership ask that names the partner and the brand ('MMG x Lowe's'), a campaign ('during their Earn Your Sundays initiative'), a time ('last year') or campaign links has given the window: propose it on the confirm card (the partner's first post through the end of the brand's flight, or the period named) and say what was taken. Never ask for the campaign window again, never draft from the profile on screen, and carry the campaign name and the links into the valuation so the research starts from the partner's own posts.",
    "match_terms": [
     "brand partnership valuation",
@@ -597,7 +603,26 @@
    "sources": [
     "prometheus-brain.md"
    ]
+  },
+  {
+   "id": "partnership_lift_against_a_matched_group",
+   "decided": "2026-10-20",
+   "statement": "A Brand Partnership valuation's lift is read against a matched group of the same size with the same brand engagement before the partnership (the exposed group's exact size; a pre-period rate within five percent of the exposed group's, never identical). The lift is the exposed group's change minus the matched group's change over the same windows, and Brand Lift Value and each platform's incremental people are priced off that difference. When a reader asks about the control, the comparison or the lift, say it in those words and give the two sizes and the two pre-period rates side by side; a valuation whose group breaks a rule is re-drawn in place, never held.",
+   "match_terms": [
+    "control group",
+    "matched group",
+    "comparison group",
+    "brand lift",
+    "incremental lift",
+    "target vs control",
+    "gen pop cohort",
+    "how is the lift calculated",
+    "why is the lift"
+   ],
+   "sources": [
+    "prometheus-brain.md"
+   ]
   }
  ],
- "generated_at": "2026-10-16T20:30:32Z"
+ "generated_at": "2026-10-20T17:10:51Z"
 }

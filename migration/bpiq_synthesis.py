@@ -51,6 +51,11 @@ except ImportError:  # pragma: no cover - twin-path import
     except ImportError:
         validate_bpiq_payload = None  # type: ignore
 
+try:
+    from migration import bpiq_matched_control as _mc
+except ImportError:  # pragma: no cover - twin-path import
+    import bpiq_matched_control as _mc  # type: ignore
+
 S3_PREFIX = "brand-partnership-iq/"
 PANEL_WEIGHT_DEFAULT = 32.99  # 329.9M US / 10M panel
 
@@ -170,9 +175,18 @@ two identical values. Return STRICT JSON only:
   "top_brand_properties": [        // 8-12 brand touchpoint slugs with
     {"common_name": str, "pre_hits": int, "post_hits": int}, ...
   ],
-  "gen_pop_drift_pp": float,       // background brand drift in the
-                                   // same window for gen pop (small,
-                                   // well under the treatment delta)
+  "gen_pop_drift_pp": float,       // background brand drift over the
+                                   // event window for a MATCHED
+                                   // comparison group: same size as
+                                   // the audience, the same pre-period
+                                   // brand engagement rate (within 5
+                                   // percent relative), no exposure to
+                                   // the partnership. Percentage points
+                                   // of that group; small, well under
+                                   // the treatment delta. The code forms
+                                   // the group at exactly that size and
+                                   // rate and reads the lift as the
+                                   // audience's change minus this.
   "synthesis_note": str,           // internal: the real-world anchors
                                    // used (campaigns, spots, launches)
   "methodology": str               // client-safe one-paragraph read of
@@ -677,46 +691,22 @@ def build_payload(inputs: dict, prim: dict, *,
         "enabled": conv_post_u > 0,
     }
 
-    # ---- control group (gen pop drift) -----------------------------------
+    # ---- the matched comparison group --------------------------------------
+    # Jenna 2026-10-20: "the pre brand engagement [must] be roughly the
+    # same for the control group and sample group along with the same
+    # sample size". The group is drawn (salted, deterministic) at the
+    # exposed group's exact size with a pre-period brand engagement rate
+    # inside the match band, never identical; its post period is the pre
+    # count carried forward by the background drift the research
+    # supplied. The lift is the difference in differences. Size matching
+    # dates from 2026-10-05 (Willow Smith x Free People: "why is the
+    # willow control bigger than the target? shouldnt they be the same
+    # number"); the pre-period match replaces the old gen-pop baseline
+    # (about a fifth of the exposed rate), which made the lift read as a
+    # baseline difference. See migration/bpiq_matched_control.py.
     drift_pp = float(prim.get("gen_pop_drift_pp", 0.4))
-    # The Gen Pop cohort is SIZE-MATCHED to the partner audience: same
-    # panel count, same projection, so the two deltas read on the same
-    # base (dashboard contract; every hand-built read carries
-    # control_size == audience_size). 2026-10-05, Jenna on Willow Smith
-    # x Free People: "why is the willow control bigger than the
-    # target? shouldnt they be the same number".
-    ctrl_n = n
-    c_pre_pct = max(pre_pct * 0.22 + (_h(subject, "cp") % 70) / 100.0, 0.3)
-    c_post_pct = c_pre_pct + drift_pp
-    c_pre = _messy((subject, "c_pre"), ctrl_n * c_pre_pct / 100.0)
-    c_post = _messy((subject, "c_post"), ctrl_n * c_post_pct / 100.0)
-    control_group = {
-        "enabled": True,
-        "control_size": ctrl_n,
-        "projected_control_size": projected,
-        "control_pre_users": c_pre, "control_post_users": c_post,
-        "control_pre_hits": _messy((subject, "ch_pre"), c_pre * 2.1),
-        "control_post_hits": _messy((subject, "ch_post"), c_post * 2.2),
-        "treat_pre_pen_pct": totals["audience_pen_pre_pct"],
-        "treat_post_pen_pct": totals["audience_pen_post_pct"],
-        "control_pre_pen_pct": round(c_pre / ctrl_n * 100, 2),
-        "control_post_pen_pct": round(c_post / ctrl_n * 100, 2),
-        "treat_delta_pp": round(
-            totals["audience_pen_post_pct"]
-            - totals["audience_pen_pre_pct"], 2),
-    }
-    control_group["control_delta_pp"] = round(
-        control_group["control_post_pen_pct"]
-        - control_group["control_pre_pen_pct"], 2)
-    control_group["incremental_lift_pp"] = round(
-        control_group["treat_delta_pp"]
-        - control_group["control_delta_pp"], 2)
-    control_group["incremental_lift_rel_pct"] = (
-        round(control_group["incremental_lift_pp"]
-              / control_group["control_delta_pp"] * 100, 2)
-        if control_group["control_delta_pp"] else None)
-    control_group["control_lift_pct_users"] = round(
-        (c_post - c_pre) / c_pre * 100, 2) if c_pre else 0.0
+    control_group = _mc.control_block(subject, n, projected, pre_users,
+                                      post_users, drift_pp)
 
     # ---- sentiment --------------------------------------------------------
     s = prim.get("sentiment") or {}
@@ -765,43 +755,35 @@ def build_payload(inputs: dict, prim: dict, *,
     rates.update({k: float(v) for k, v in
                   (inputs.get("rates") or {}).items() if v})
     emv_rates = dict(EMV_RATES)
-    emv_breakdown, emv_total = [], 0.0
+    # Earned Media rows: one per platform with a rate and a raw gain.
+    # The incremental count and the dollar value are filled by
+    # _mc.apply_lenses below, net of the matched comparison group.
+    emv_breakdown = []
     for row in per_platform:
         rate = emv_rates.get(row["platform"])
         if not rate:
             continue
-        incr = row["post_users_projected"] - row["pre_users_projected"]
-        if incr <= 0:
+        if row["post_users_projected"] - row["pre_users_projected"] <= 0:
             continue
-        incr = _messy((subject, row["platform"], "emv_incr"), incr)
-        val = round(incr * rate, 2)
-        emv_total += val
         emv_breakdown.append({
             "platform": row["platform"],
             "post_users_projected": row["post_users_projected"],
             "pre_users_projected": row["pre_users_projected"],
-            "incremental_users_projected": incr,
+            "incremental_users_projected": 0,
             "emv_per_user_rate": rate,
-            "emv_value": val,
+            "emv_value": 0.0,
         })
-    emv_breakdown.sort(key=lambda r: -r["emv_value"])
-    incr_users = max(totals["post_users_projected"]
-                     - totals["pre_users_projected"], 0)
-    # A difference of two messy counts can still land on a trailing
-    # zero (Willow Smith x Free People: 410,880); keep it messy.
-    incr_users = _messy((subject, "incr_users"), incr_users)
     bev = round(totals["post_users_projected"]
                 * rates["bev_per_user"], 2)
-    blv = round(incr_users * rates["blv_per_incr_user"], 2)
     conv_val = round(conversions["post_users_projected"]
                      * rates["conv_value_per_user"], 2)
     valuation = {
-        "total_brand_value": round(bev + emv_total + blv + conv_val, 2),
+        "total_brand_value": 0.0,
         "brand_engagement_value": bev,
-        "earned_media_value": round(emv_total, 2),
-        "brand_lift_value": blv,
+        "earned_media_value": 0.0,
+        "brand_lift_value": 0.0,
         "conversion_value": conv_val,
-        "incremental_users": incr_users,
+        "incremental_users": 0,
         "rates": {**rates, "emv_per_user": emv_rates},
         "emv_breakdown": emv_breakdown,
         "methodology": str(prim.get("methodology") or ""),
@@ -844,6 +826,10 @@ def build_payload(inputs: dict, prim: dict, *,
         "created_by": created_by,
         "valuation": valuation,
     }
+    # Every lift lens (Earned Media incrementals, Brand Lift, the total,
+    # attributable-to-partnership) off the matched comparison group, in
+    # place; the reader line rides the valuation.
+    _mc.apply_lenses(payload, subject)
     return payload
 
 
@@ -906,6 +892,13 @@ def synthesize(inputs: dict, claude_json: Callable, *,
     except Exception as e:
         print(f"[bpiq-synth] catalog hold skipped: {e}")
     payload = build_payload(inputs, prim, created_by=created_by)
+    # The matching rules hold on every published valuation regardless
+    # of what the model returned: a comparison group off in size or
+    # pre-period engagement is re-drawn in place, never held.
+    payload, _mc_notes = _mc.enforce_matched_control(
+        payload, subject=f"{inputs['qualifier']} x {inputs['brand_partner']}")
+    if _mc_notes:
+        print(f"[bpiq-synth] comparison group corrected: {_mc_notes[:3]}")
     if validate_bpiq_payload is not None:
         try:
             issues = validate_bpiq_payload(payload)

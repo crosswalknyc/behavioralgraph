@@ -29884,7 +29884,10 @@ https://www.instagram.com/p/..."></textarea>
                                     </div>
                                 </div>
                                 <div id="bpiqGenPopKpiRow" style="display: none; margin-bottom: 0.75rem;">
-                                    <div style="font-size: 0.95rem; font-weight: 800; color: #c8e600; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 1rem;">CONTROL</div>
+                                    <div style="font-size: 0.95rem; font-weight: 800; color: #c8e600; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.35rem;">CONTROL</div>
+                                    <!-- The matched comparison group in plain words (Jenna 2026-10-20): same size as the exposed
+                                         group, the same brand engagement before the partnership. Filled from control_group.match. -->
+                                    <div id="bpiqMatchedNote" style="display: none; font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 1rem; line-height: 1.5;"></div>
                                     <div class="bpiq-kpi-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem;">
                                         <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center; display: flex; flex-direction: column;">
                                             <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Consumers</div>
@@ -30030,7 +30033,7 @@ https://www.instagram.com/p/..."></textarea>
                                 <details class="bpiq-methodology">
                                     <summary class="bpiq-method-summary">How this is calculated</summary>
                                     <div class="bpiq-method-body">
-                                        Values only the <strong>incremental consumers</strong> (DiD lift over Gen Pop) at a higher rate than BEV - these are the partnership-attributable brand engagers who would not have engaged without the campaign.
+                                        Values only the <strong>incremental consumers</strong> at a higher rate than BEV: the exposed group's gain in brand engagers minus the gain of a matched group of the same size with the same brand engagement before the partnership. These are the brand engagers who would not have engaged without the campaign.
                                     </div>
                                 </details>
                                 <div id="bpiqBlvBody" style="margin-top:auto; padding-top:0.75rem;"></div>
@@ -75181,6 +75184,26 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var cg = data.control_group || {};
             var gpRow = document.getElementById('bpiqGenPopKpiRow');
             if (gpRow) gpRow.style.display = cg.enabled ? 'block' : 'none';
+            // Matched comparison group (Jenna 2026-10-20): the two sizes and the two
+            // pre-period rates side by side, in plain words. Older payloads without
+            // the match block keep the note hidden.
+            var matchedNote = document.getElementById('bpiqMatchedNote');
+            if (matchedNote) {
+                var mm = cg.match || null;
+                if (cg.enabled && mm && mm.exposed_size) {
+                    var _mFmt = function(x) { return (Number(x) || 0).toFixed(2) + '%'; };
+                    matchedNote.innerHTML = '<div>' + (mm.note || 'Compared against a matched group of the same size with the same brand engagement before the partnership.') + '</div>'
+                        + '<div style="margin-top:0.25rem;">'
+                        +   '<span style="color:var(--text-primary);font-weight:600;">Exposed group</span> ' + _bpiqFmtNum(mm.exposed_size) + ' people, ' + _mFmt(mm.exposed_pre_rate_pct) + ' engaged with the brand before'
+                        +   '<span style="opacity:0.6;"> | </span>'
+                        +   '<span style="color:var(--text-primary);font-weight:600;">Matched group</span> ' + _bpiqFmtNum(mm.control_size) + ' people, ' + _mFmt(mm.control_pre_rate_pct) + ' before'
+                        + '</div>';
+                    matchedNote.style.display = 'block';
+                } else {
+                    matchedNote.style.display = 'none';
+                    matchedNote.innerHTML = '';
+                }
+            }
             var deltaRow = document.getElementById('bpiqDeltaRow');
             var netLiftCard = document.getElementById('bpiqNetLiftCard');
             if (cg.enabled) {

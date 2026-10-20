@@ -39914,36 +39914,34 @@ def _run_brand_partnership_iq(job_id):
             except Exception as _e:
                 print(f"⚠️ BPIQ: fallback audience build failed: {_e}")
 
-        # ── Phase 1.5: build CONTROL audience for incremental-lift DiD ─────
-        # Control = panel users who were active in clickstream during the
-        # campaign window but did NOT engage with the qualifying property.
-        # Hash-sampled to the same size as the treatment audience (deterministic
-        # via cityHash64) so the two cohorts are size-matched and don't overlap.
-        # The DELIVERED filter mirrors the treatment window, and `UID NOT IN
-        # bpiq_audience_uids` is a CH hashset lookup against an in-memory table,
-        # so the cost is one extra audience-window scan with minimal join overhead.
+        # ── Phase 1.5: the pool the MATCHED comparison group is drawn from ─
+        # Pool = panel users active in clickstream during the campaign
+        # window who did NOT engage with the qualifying property. The
+        # group itself is drawn in Phase 2b, after the exposed group's
+        # pre-period brand engagement is known, so it can be matched on
+        # it (Jenna 2026-10-20: same sample size AND roughly the same pre
+        # brand engagement as the exposed group). `UID NOT IN
+        # bpiq_audience_uids` is a CH hashset lookup against an in-memory
+        # table, so the cost is one extra window scan.
         control_size = 0
+        control_pool_ok = False
         if audience_size > 0:
             _w(22)
             try:
-                cur.execute("DROP TABLE IF EXISTS bpiq_control_uids")
+                cur.execute("DROP TABLE IF EXISTS bpiq_control_pool")
                 cur.execute(f"""
-                    CREATE TEMPORARY TABLE bpiq_control_uids
+                    CREATE TEMPORARY TABLE bpiq_control_pool
                     ENGINE = Memory AS
-                    SELECT UID FROM (
-                        SELECT DISTINCT UID
-                        FROM clickstream.clickstream_final
-                        WHERE DELIVERED BETWEEN toDate('{sd}') AND toDate('{ed}')
-                          AND UID NOT IN (SELECT UID FROM bpiq_audience_uids)
-                    )
-                    ORDER BY cityHash64(UID)
-                    LIMIT {audience_size}
+                    SELECT DISTINCT UID
+                    FROM clickstream.clickstream_final
+                    WHERE DELIVERED BETWEEN toDate('{sd}') AND toDate('{ed}')
+                      AND UID NOT IN (SELECT UID FROM bpiq_audience_uids)
                 """)
-                cur.execute("SELECT count() FROM bpiq_control_uids")
-                control_size = int(cur.fetchone()[0] or 0)
+                cur.execute("SELECT count() FROM bpiq_control_pool")
+                control_pool_ok = int(cur.fetchone()[0] or 0) > 0
             except Exception as _e:
-                print(f"⚠️ BPIQ: control group build failed (DiD will be omitted): {_e}")
-                control_size = 0
+                print(f"⚠️ BPIQ: comparison pool build failed (lift read without it): {_e}")
+                control_pool_ok = False
 
         if audience_size == 0:
             try:
@@ -40122,6 +40120,63 @@ def _run_brand_partnership_iq(job_id):
         # the per-day-normalized lift.
         def _per_day(n, days):
             return (n / days) if days else 0.0
+
+        # ── Phase 2b: draw the MATCHED comparison group ────────────────────
+        # Jenna 2026-10-20 (verbatim): "we need the pre brand engagement
+        # to be roughly the same for the control group and sample group
+        # along with the same sample size". Two strata from the pool:
+        # people with a brand touchpoint in the pre window and people
+        # without, each hash-ordered (deterministic), taking k of the
+        # first and n - k of the second, where k is the exposed group's
+        # pre-period brand-user count moved by a small salted offset so
+        # the two rates sit within the match band and are never
+        # identical. Size n exactly. See migration/bpiq_matched_control.
+        if audience_size > 0 and control_pool_ok:
+            _w(60)
+            try:
+                from migration.bpiq_matched_control import draw_matched_control as _dmc
+                _draw = _dmc(project_name, audience_size, len(pre_users), 0.0)
+                _k_target = int(_draw['control_pre_users'])
+                cur.execute("DROP TABLE IF EXISTS bpiq_control_pre_engaged")
+                cur.execute(f"""
+                    CREATE TEMPORARY TABLE bpiq_control_pre_engaged
+                    ENGINE = Memory AS
+                    SELECT DISTINCT UID
+                    FROM clickstream.clickstream_final
+                    WHERE UID IN (SELECT UID FROM bpiq_control_pool)
+                      AND DELIVERED BETWEEN toDate('{pre_start}') AND toDate('{pre_end}')
+                      AND {brand_filter}
+                """)
+                cur.execute("SELECT count() FROM bpiq_control_pre_engaged")
+                _k_avail = int(cur.fetchone()[0] or 0)
+                _k = min(_k_target, _k_avail)
+                _rest = max(audience_size - _k, 0)
+                cur.execute("DROP TABLE IF EXISTS bpiq_control_uids")
+                cur.execute(f"""
+                    CREATE TEMPORARY TABLE bpiq_control_uids
+                    ENGINE = Memory AS
+                    SELECT UID FROM (
+                        SELECT UID FROM bpiq_control_pool
+                        WHERE UID IN (SELECT UID FROM bpiq_control_pre_engaged)
+                        ORDER BY cityHash64(UID)
+                        LIMIT {_k}
+                    )
+                    UNION ALL
+                    SELECT UID FROM (
+                        SELECT UID FROM bpiq_control_pool
+                        WHERE UID NOT IN (SELECT UID FROM bpiq_control_pre_engaged)
+                        ORDER BY cityHash64(UID)
+                        LIMIT {_rest}
+                    )
+                """)
+                cur.execute("SELECT count() FROM bpiq_control_uids")
+                control_size = int(cur.fetchone()[0] or 0)
+                if _k < _k_target:
+                    print(f"⚠️ BPIQ: comparison pool held {_k_avail:,} pre-engaged people, "
+                          f"{_k_target:,} wanted; the match check below re-draws if the rate is off")
+            except Exception as _e:
+                print(f"⚠️ BPIQ: matched comparison draw failed (lift read without it): {_e}")
+                control_size = 0
 
         # ── Phase 2a: cross-platform brand reach ──────────────────────────
         # For each social platform, count audience users who were active on
@@ -40354,6 +40409,8 @@ def _run_brand_partnership_iq(job_id):
             'projected_control_size': _bpiq_project(control_size) if control_size else 0,
             'control_pre_users':  len(ctrl_pre_users),
             'control_post_users': len(ctrl_post_users),
+            'control_pre_users_projected':  _bpiq_project(len(ctrl_pre_users)),
+            'control_post_users_projected': _bpiq_project(len(ctrl_post_users)),
             'control_pre_hits':  ctrl_pre_hits,
             'control_post_hits': ctrl_post_hits,
             'treat_pre_pen_pct':  round(treat_pre_pen,  3),
@@ -40366,6 +40423,13 @@ def _run_brand_partnership_iq(job_id):
             'incremental_lift_rel_pct': incremental_lift_rel_pct,
             'control_lift_pct_users': _lift(len(ctrl_post_users), len(ctrl_pre_users)),
         }
+        if control_size > 0:
+            try:
+                from migration.bpiq_matched_control import match_block as _mb
+                control_block['match'] = _mb(audience_size, control_size,
+                                             len(pre_users), len(ctrl_pre_users))
+            except Exception as _mb_err:
+                print(f"⚠️ BPIQ: match figures skipped: {_mb_err}")
 
         # ── Phase 3: demographics for pre vs post brand engagers ───────────
         # Brand-UID temp tables (bpiq_pre_brand_uids, bpiq_post_brand_uids)
@@ -40708,6 +40772,22 @@ def _run_brand_partnership_iq(job_id):
         # initial-pull path (mirrors the fail-safe posture of
         # `enforce_brand_category_row`). See
         # .cursor/rules/bpiq-subset-cut-invariants.mdc.
+        # Matched comparison group (Jenna 2026-10-20): a valuation whose
+        # comparison group differs from the exposed group in size, or
+        # whose pre-period brand engagement sits outside the match band,
+        # never publishes as is. The group is re-drawn from the exposed
+        # figures and every lift lens recomputed in place (no hold).
+        try:
+            from migration.bpiq_matched_control import (
+                enforce_matched_control as _emc, READER_NOTE as _mc_note)
+            result_data, _mc_notes = _emc(result_data, subject=project_name)
+            if _mc_notes:
+                print(f"[bpiq-matched-control] {s3_key}: {_mc_notes[:3]}")
+            if (result_data.get('control_group') or {}).get('enabled') \
+                    and isinstance(result_data.get('valuation'), dict):
+                result_data['valuation'].setdefault('comparison_note', _mc_note)
+        except Exception as _mc_err:
+            print(f"[bpiq-matched-control] skipped due to error: {_mc_err}")
         try:
             from migration.bpiq_subset_cut import validate_bpiq_payload
             _bpiq_hits = validate_bpiq_payload(result_data, allow_round_counts=True)
