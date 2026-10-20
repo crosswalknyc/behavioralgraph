@@ -2235,8 +2235,23 @@ def _append_txn(user: dict, txn: dict, cap: int = 500):
     user["wallet_transactions"] = out[:cap]
 
 
+LEDGER_TS_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
+
+
+def ledger_now_iso() -> str:
+    """The one timestamp form for every credit / wallet ledger row: UTC,
+    second precision, trailing Z ('2026-10-20T22:01:37Z'). Wallet
+    transactions always wrote this; credit_usage_history rows written by
+    app.py and the worker's refund path used a zoneless local-time
+    isoformat, so a 22:01 UTC charge read 00:01 the next day on the
+    build box's clock next to a wallet line that read 22:01 (Marie Flores
+    charge, 2026-10-20). Every writer calls this; historical rows are
+    left as written (readers already accept both forms)."""
+    return datetime.now(timezone.utc).strftime(LEDGER_TS_FORMAT)
+
+
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return ledger_now_iso()
 
 
 def existing_wallet_deduct(subject: dict, *, tool_key: str = "",

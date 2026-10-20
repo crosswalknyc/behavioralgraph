@@ -2890,6 +2890,21 @@ def _try_wallet_fallback(user, pull_type, description, job_id, outcome,
         return False
 
 
+def _credit_history_ts() -> str:
+    """UTC 'used_at' for a credit_usage_history row, in the wallet
+    transactions' form (second precision, trailing Z) through the shared
+    ledger helper in wallet.py. 2026-10-20 (Marie Flores charge): these
+    rows carried datetime.now().isoformat(), the build box's local clock
+    with no zone, so a 22:01 UTC charge read 2026-10-21T00:01:37 next to
+    a wallet line at 22:01Z. Import failure never blocks a charge: the
+    fallback writes the identical form."""
+    try:
+        from wallet import ledger_now_iso as _ledger_now_iso
+        return _ledger_now_iso()
+    except Exception:
+        return datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+
+
 def _record_wallet_fallback_usage(user, entry, outcome, credits_used):
     """Wallet paid; still write the user's pull log.
 
@@ -2931,7 +2946,7 @@ def consume_credit(username, description=None, job_id=None, pull_type=None, cred
     customer, the wallet may absorb the pull instead. See
     _try_wallet_fallback and bg-webapp/wallet.py.
     """
-    used_at = datetime.now().isoformat()
+    used_at = _credit_history_ts()
     entry = {
         'used_at': used_at,
         'description': description or 'Analysis run',
@@ -3122,7 +3137,7 @@ def refund_credit(username, credits=1, reason=''):
         return True
 
     entry = {
-        'used_at': datetime.now().isoformat(),
+        'used_at': _credit_history_ts(),
         'description': f'REFUND: {reason or "downstream failure"}',
         'job_id': '',
         'pull_type': 'refund',
@@ -6599,7 +6614,7 @@ def api_admin_usage_ledger_log():
             return None
         hist = u.setdefault('credit_usage_history', [])
         hist.insert(0, {
-            'used_at': datetime.now().isoformat(),
+            'used_at': _credit_history_ts(),
             'description': desc, 'job_id': '',
             'pull_type': 'Logged entry',
             'credits_used': credits,
@@ -6647,7 +6662,9 @@ def add_user_credits(username):
         bal = _numeric_credits_balance(user)
 
         added_by = (get_current_user() or {}).get('username') or 'admin'
-        added_at = datetime.now().isoformat()
+        # one UTC stamp shared by the usage row and its paired credit row
+        # (the pair is removed together by matching this value)
+        added_at = _credit_history_ts()
 
         company = (user.get('company') or '').strip()
         pool = _get_company_pool(data, company)
