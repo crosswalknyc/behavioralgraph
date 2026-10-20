@@ -272,11 +272,27 @@ def _content_map_platforms(title, connect=None):
     return plats, shows
 
 
+def _on_topic(show, title):
+    """A resolver row names THIS title: the resolved show folds equal to
+    the title, or (a title of two or more words) contains it. A one-word
+    title never matches by containment ('Mutiny' is not 'Mutiny on the
+    Bounty')."""
+    s, t = _ns._fold(show), _ns._fold(title)
+    if not s or not t:
+        return False
+    if s == t or _ns._fold_the(show) == _ns._fold_the(title):
+        return True
+    return len(str(title).split()) >= 2 and t in s
+
+
 def _live_platforms(title, kind, timeout_s=45.0):
     """StreamScout's live look across the video (or podcast) services,
-    time-boxed. Returns (present, unverified). A service whose scan
-    could not run is unverified, never absent; a scan that ran out of
-    time leaves every service unverified."""
+    time-boxed. Returns (present, unverified). Only rows whose resolved
+    show names THIS title count (a service's catalog carries many near
+    names). A service whose resolver raised is unverified, never absent;
+    a scan that ran out of time leaves every service unverified. YouTube
+    is left out for a film (its rows are channels and clips, and a film
+    sold there comes back from the research step as a storefront)."""
     result = {}
 
     def _run():
@@ -288,9 +304,16 @@ def _live_platforms(title, kind, timeout_s=45.0):
             if os.path.isdir(ss_dir) and ss_dir not in sys.path:
                 sys.path.insert(0, ss_dir)
             import streamscout_query as _ssq
-            group = 'podcasts' if kind == 'podcast' else 'video'
+            if kind == 'podcast':
+                plats = list(_ssq.GROUPS['podcasts'])
+            else:
+                plats = [p for p in _ssq.GROUPS['video'] if not (kind == 'movie' and p == 'youtube')]
             k = 'movie' if kind == 'movie' else 'series'
-            result['rep'] = _ssq.current_placements(title, platforms=group, kind=k)
+            if callable(getattr(_ssq, 'query_report', None)):
+                result['rep'] = _ssq.query_report(title, platforms=plats, kind=k)
+            else:
+                rows = _ssq.streamscout_query(title, platforms=plats, kind=k) or []
+                result['rep'] = {'rows': rows, 'failed': {}, 'keys': plats}
         except Exception as e:
             result['err'] = f"{type(e).__name__}: {str(e)[:120]}"
 
@@ -300,8 +323,14 @@ def _live_platforms(title, kind, timeout_s=45.0):
     rep = result.get('rep')
     if th.is_alive() or not isinstance(rep, dict):
         return [], ['every service'] if th.is_alive() else []
-    present = [{'name': display_name(k), 'how': '', 'source': 'live scan'} for k in (rep.get('present') or {})]
-    unverified = [display_name(k) for k in (rep.get('unverified') or [])]
+    present = []
+    for r in rep.get('rows') or []:
+        if not isinstance(r, dict) or not _on_topic(r.get('SHOW'), title):
+            continue
+        name = display_name(r.get('PLATFORM') or '')
+        if name and not any(_ns._fold(name) == _ns._fold(p['name']) for p in present):
+            present.append({'name': name, 'how': '', 'source': 'live scan'})
+    unverified = [display_name(k) for k in (rep.get('failed') or {})]
     return present, unverified
 
 
@@ -354,7 +383,7 @@ def resolve(title, kind='title', *, host=None, connect=None, live=True, research
     'platforms': [{'name','how','source'}], 'unverified': [...],
     'candidates': [...], 'home_release', 'found': bool}."""
     out = {'title': title, 'year': '', 'kind': kind or 'title', 'platforms': [], 'unverified': [],
-           'candidates': [], 'home_release': '', 'found': False}
+           'candidates': [], 'home_release': '', 'found': False, 'researched': False}
 
     def _add(items):
         for p in items or []:
@@ -370,21 +399,27 @@ def resolve(title, kind='title', *, host=None, connect=None, live=True, research
     if len(shows) > 1:
         out['candidates'] = shows
     _add(cm_plats)
-    if live:
+    in_house = bool(out['platforms'])
+    if live and not in_house:
+        # the map and the library know nothing: a live look across the services
         present, unverified = _live_platforms(title, kind)
         _add(present)
         out['unverified'] = unverified
-    if not out['platforms'] and research:
+    carriage_known = any(_carriage_of(p.get('how')) for p in out['platforms'])
+    if research and (not out['platforms'] or (not in_house and not carriage_known)):
+        # nothing in house, or a live hit with no word on how it is carried
+        # (a rental storefront and a subscription service are different
+        # markets): one research call names the services and the carriage
         r = _research_platforms(title, kind, host, ask=ask)
-        if r:
-            if r.get('platforms'):
-                _add(r['platforms'])
-                out['title'] = r.get('title') or title
-                out['year'] = r.get('year') or ''
-                out['kind'] = r.get('kind') or out['kind']
-                out['home_release'] = r.get('home_release') or ''
-            elif r.get('candidates'):
-                out['candidates'] = r['candidates']
+        if r and float(r.get('confidence') or 0) >= 0.6 and r.get('platforms'):
+            _add(r['platforms'])
+            out['researched'] = True
+            out['title'] = r.get('title') or title
+            out['year'] = r.get('year') or ''
+            out['kind'] = r.get('kind') or out['kind']
+            out['home_release'] = r.get('home_release') or ''
+        elif r and r.get('candidates') and not out['platforms']:
+            out['candidates'] = r['candidates']
     out['found'] = bool(out['platforms'])
     return out
 
@@ -508,7 +543,7 @@ def compose(res, shares, *, page='', ask=''):
             rank = shares.index(hit) + 1
             lines.append(f"{pg} is the profile open on your screen: " + ("the largest share of" if rank == 1 else f"the number {rank} share of")
                          + f" {title}'s home viewers sits there.")
-    if res.get('unverified') and res['unverified'] != ['every service']:
+    if res.get('unverified') and res['unverified'] != ['every service'] and not res.get('researched'):
         lines.append(f"{_join(res['unverified'])} could not be checked just now; this read stands on the services that answered.")
     reply = ' '.join(lines)
     followups = [f"How many people watched {title}", f"Who watches {title}", f"{title} viewers by service, in a deck"]
