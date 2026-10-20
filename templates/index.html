@@ -19026,6 +19026,15 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
             color: #5C6560 !important;
         }
 
+        /* Hover descriptors never fire on touch, so the HOVER ON/OFF toggle is
+           dead weight on phones - hide it. The remaining three controls
+           (DATA CUTS, EXPORT, US%) keep flex:1 1 0 and rebalance to thirds.
+           3 ids beat the .piq-has-profile rule (~24744), and this sits after
+           the show rules (~18998) so it wins the display tie. Mobile only. */
+        :is(#dashboardView, #piqStickyChrome).piq-v4 #toolbarContent > #hoverToggle {
+            display: none !important;
+        }
+
         /* ---- 11c. Drop the Export button's envelope + chevron glyphs ----------
            The parked Export control reads "📥 EXPORT ▾". On phones we want a
            clean "EXPORT" label, so zero the button text and redraw it via
@@ -145015,6 +145024,19 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             return wrap;
         };
 
+        // Single funnel for the US%/US POP toggle. On mobile the chrome is a
+        // body-pinned fixed layer where pointerdown/click can misfire (or
+        // double-fire with the touchend tap added below), so de-dupe within
+        // 500ms on mobile. Desktop runs immediately - unchanged behaviour.
+        window._piqGuardedToggleUS = function() {
+            var mobile = window.matchMedia && window.matchMedia('(max-width: 768px)').matches;
+            if (mobile) {
+                var now = Date.now();
+                if (now - (window._piqUSGuard || 0) < 500) return;
+                window._piqUSGuard = now;
+            }
+            if (typeof window.toggleDashboardDisplayMode === 'function') window.toggleDashboardDisplayMode();
+        };
         window._piqV4NavAct = function(hit, e) {
             if (!hit || !hit.closest) return false;
             function fire(fn) {
@@ -145090,9 +145112,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 });
             }
             if (hit.closest('#dashDisplayToggle')) {
-                return fire(function() {
-                    if (typeof window.toggleDashboardDisplayMode === 'function') window.toggleDashboardDisplayMode();
-                });
+                return fire(window._piqGuardedToggleUS);
             }
             return false;
         };
@@ -145208,8 +145228,22 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             once(document.getElementById('dashDisplayToggle'), '_piqUsBound', function(e) {
                 e.preventDefault();
                 e.stopImmediatePropagation();
-                if (typeof window.toggleDashboardDisplayMode === 'function') window.toggleDashboardDisplayMode();
+                if (window._piqGuardedToggleUS) window._piqGuardedToggleUS();
             });
+            // Mobile: the chrome is body-pinned+fixed, where pointerdown/click
+            // can fail to reach #dashDisplayToggle. touchend is the reliable
+            // tap signal on iOS; the guard above collapses any double-fire.
+            (function() {
+                var usEl = document.getElementById('dashDisplayToggle');
+                if (usEl && !usEl._piqUsTouchBound) {
+                    usEl._piqUsTouchBound = true;
+                    usEl.addEventListener('touchend', function(e) {
+                        if (!window.matchMedia || !window.matchMedia('(max-width: 768px)').matches) return;
+                        e.preventDefault();
+                        if (window._piqGuardedToggleUS) window._piqGuardedToggleUS();
+                    }, { passive: false });
+                }
+            })();
             document.querySelectorAll('#profileTabsBar .profile-help-pill').forEach(function(help) {
                 once(help, '_piqHelpBound', function(e) {
                     e.preventDefault();
