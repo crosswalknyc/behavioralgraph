@@ -2654,6 +2654,20 @@ def _synth_chat_is_incidence_request(text):
     if _re.search(r'\bsample( |-)?size\b[^.?!]{0,20}'
                   r'\b(of|should be|=|:)?\s*[\d,]{4,}', t):
         return False
+    # A consumption count is a viewership read, never a sample check
+    # (2026-10-20, Marie Flores at WBD: "how many people watched
+    # Everybody Loves Raymond on Prime Video in September 2026 ... by
+    # platform as a table" drew the sample-check card and an empty
+    # answer). Same guard the sizing lane carries: "how many people
+    # watched X" prices as a viewership read unless the ask names the
+    # sample, the incidence or the data set itself.
+    if _re.search(r'\bhow many\b[^.?!]{0,60}\b(?:watch(?:ed|es|ing)?'
+                  r'|view(?:ed|s|ing)?|stream(?:ed|s|ing)?|read|reads'
+                  r'|listen(?:ed|s|ing)?|play(?:ed|s|ing)?|bought|buy'
+                  r'|buys|purchased|downloaded|binged?|tuned in'
+                  r'|subscribed?)\b', t) \
+            and not _re.search(r'\b(?:sample|incidence|data ?set)\b', t):
+        return False
     strong = _re.search(
         r'\bincidence\b'
         r'|\bsample( |-)?size\b'
@@ -13175,7 +13189,17 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
             if _vw:
                 _pr_label, _pr_credits, _pr_qty = _vw
                 _pr_pull_type, _pr_kind = 'Viewership Read', 'viewership'
-            if _is_derived:   # a delivered figure split by a dimension: the derived-cut price (Jenna 2026-10-12)
+            # A delivered figure split by a dimension: the derived-cut
+            # price (Jenna 2026-10-12). Only when a figure was delivered
+            # (the confirm says derived, or the split binds figures from
+            # the thread or the ask). An ask for the count itself "by
+            # platform" is the viewership read it asks for, with the
+            # split riding along (2026-10-20, Marie Flores at WBD: the
+            # $100 breakdown price was overriding the $500 count price
+            # on a question that had no figure to break down).
+            _has_delivered = bool((metric_request or {}).get('bound_series')) \
+                or (isinstance(panel_confirm, dict) and str(panel_confirm.get('kind') or '') == 'derived')
+            if _is_derived and (_has_delivered or not _vw):
                 _pr_label, _pr_credits = _pm_derived_read_price(_pm_user); _pr_pull_type, _pr_qty, _pr_kind = 'Derived Read', 1, 'derived'
             if isinstance(panel_confirm, dict):
                 # Confirmed: the charge lands NOW, before anything is
