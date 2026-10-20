@@ -144566,6 +144566,34 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             };
             var keepOrder = { age: 1, income: 1, age_of_children: 1, number_of_children: 1 };
             var visibleN = 0;
+            // Mobile US POP # support. The v4 demographics bar list normally
+            // shows percentages only (_piqV4Pct). When the US%/US POP # toggle
+            // is in projection mode AND we're on mobile, show projected
+            // head-counts instead so Demographics matches the Behavioral tab.
+            // Desktop (and percent mode) are untouched - still percentages.
+            var projMap = parsed.demographicsProjection || {};
+            var _demoMobile = window.matchMedia && window.matchMedia('(max-width: 768px)').matches;
+            var _demoProj = _demoMobile && (typeof dashDisplayMode !== 'undefined') && dashDisplayMode === 'projection';
+            var _DEMO_US_POP = 329900000;
+            function _demoFmtCount(v) {
+                v = Number(v);
+                if (!isFinite(v)) return '-';
+                return (typeof formatNumber === 'function') ? formatNumber(Math.round(v)) : String(Math.round(v));
+            }
+            function _demoProfileDisp(key, seg, pctVal) {
+                if (_demoProj) {
+                    var pv = projMap[key] && projMap[key][seg];
+                    if (isFinite(Number(pv))) return _demoFmtCount(pv);
+                }
+                return window._piqV4Pct(pctVal);
+            }
+            function _demoGpDisp(gpPct) {
+                if (_demoProj) {
+                    var g = Number(gpPct);
+                    if (isFinite(g)) return _demoFmtCount(g / 100 * _DEMO_US_POP);
+                }
+                return window._piqV4Pct(gpPct);
+            }
             tab.querySelectorAll('.chart-card[data-module]').forEach(function(card) {
                 var mod = card.getAttribute('data-module') || '';
                 var key = moduleToKey[mod];
@@ -144601,8 +144629,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     var tip = lbl + ': ' + window._piqV4Pct(n) + ' of this audience. Gen Pop ' + window._piqV4Pct(gp) + (isFinite(ix) && ix > 0 ? ('. Index ' + Math.round(ix) + '.') : '.');
                     rowsHtml += '<div class="piq-demo-row has-tooltip" data-tooltip="' + window._piqV4Esc(tip).replace(/"/g, '') + '">' +
                         '<span class="name">' + window._piqV4Esc(lbl) + '</span>' +
-                        '<span class="pct">' + window._piqV4Pct(n) + '</span>' +
-                        '<span class="gp">' + window._piqV4Pct(gp) + '</span>' +
+                        '<span class="pct">' + _demoProfileDisp(key, k, n) + '</span>' +
+                        '<span class="gp">' + _demoGpDisp(gp) + '</span>' +
                         '<span class="idx ' + window._piqV4IdxCls(ix) + '">' + idxHtml + '</span></div>';
                 });
                 if (list.innerHTML !== rowsHtml) list.innerHTML = rowsHtml;
@@ -153122,7 +153150,16 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // renderer instead of the sum), and render the visible tab first.
             var _dispTasks = [];
             if (currentDashboardData) {
-                _dispTasks.push(['demographics', function() { renderCharts(currentDashboardData.demographics, currentDashboardData.demographicsIndex, currentDashboardData.demographicsProjection, currentDashboardData.demographicsGenPop); }]);
+                _dispTasks.push(['demographics', function() {
+                    // v4 hides the Chart.js canvases (.chart-container) and shows a
+                    // bar list instead. On mobile, re-running renderCharts rebuilds
+                    // ~11 hidden Chart.js instances - the memory spike that was
+                    // crashing/reloading the tab. Skip it and refresh the visible
+                    // bar list, which _piqV4DressDemos makes projection-aware.
+                    var _mdemo = window.matchMedia && window.matchMedia('(max-width: 768px)').matches;
+                    if (_mdemo && window._piqV4DressDemos) { window._piqV4DressDemos(); return; }
+                    renderCharts(currentDashboardData.demographics, currentDashboardData.demographicsIndex, currentDashboardData.demographicsProjection, currentDashboardData.demographicsGenPop);
+                }]);
                 _dispTasks.push(['behavioral', function() { renderBehavioralCards(currentDashboardData.behavioral); }]);
                 _dispTasks.push(['demographics', function() { renderDemoInsights(currentDashboardData.demographics, currentDashboardData.demographicsIndex, currentDashboardData.demographicsGenPop); }]);
                 _dispTasks.push(['locations', function() { renderLocationTable(currentDashboardData.locations); }]);
