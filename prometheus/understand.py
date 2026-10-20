@@ -43,7 +43,10 @@ _ANALYZE_EXTRA_KEYS = ('bind_subject', 'bind_cohort', 'overall_ranks',
 
 _BUILD_VERB_RX = re.compile(
     r'\b(run|build|pull|create|queue|start|launch|generate)\b[^.]{0,60}'
-    r'\bprofiles?\b'
+    # "aprofile" (the missing space), "porfile", "profle": the order
+    # stands however the noun is typed (2026-10-20 Jenna, "run aprofile
+    # on ncis: new york" ran as a read and quoted a $300 custom read)
+    r'\b(?:a?profiles?|porfiles?|profles?|proifles?|profiels?)\b'
     # A people-universe order is a build order whatever it is called
     # (2026-10-07 Eliot: "is there a way to build an audience of
     # people who have attended a Gunna concert?" routed as a question).

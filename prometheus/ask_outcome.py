@@ -244,3 +244,84 @@ def route_pick(hint, inferred):
     if inferred and inferred != 'unknown':
         return inferred
     return hint or inferred
+
+
+# ---------------------------------------------------------------------
+# Ask-log inference (moved out of prometheus/legacy/chat.py 2026-10-20):
+# best-effort route / outcome / subject from a response body, and the
+# views where the subject describes what the ask is ABOUT. Pure text.
+# ---------------------------------------------------------------------
+def _ask_infer_route_outcome(surface, payload, status_code):
+    """Best-effort (route, outcome, subject) from a response body."""
+    route, outcome, subject = 'unknown', 'unknown', None
+    if not isinstance(payload, dict):
+        return route, outcome, subject
+    if surface == 'interpret':
+        route = 'profile_build'
+        if 'incidence_check' in payload:
+            route, outcome = 'incidence', 'answered'
+            subject = (payload.get('incidence_check') or {}).get('subject')
+        elif 'discovery' in payload:
+            route, outcome = 'discovery', 'answered'
+        elif 'spec_drafts' in payload:
+            outcome = 'batch_draft'
+        elif 'spec_draft' in payload:
+            draft = payload.get('spec_draft') or {}
+            outcome = str(draft.get('decision') or 'draft')[:40]
+            subject = draft.get('subject') or draft.get('subject_label')
+        elif 'draft' in payload and payload.get('next_step'):
+            route, outcome = 'clarify', 'clarify'
+        elif payload.get('success') is False:
+            outcome = ('declined' if payload.get('guidance') else 'error')
+        return route, outcome, subject
+    if surface == 'deck':   # the deck surface: a queued file, a clarify, or a decline (2026-10-13)
+        if payload.get('job_id'):
+            return 'deck', 'queued', payload.get('subject')
+        return 'deck', ('clarified' if payload.get('clarify') or payload.get('memory_confirm')
+                        else ('declined' if payload.get('success') is False else 'answered')), subject
+    # analyze surface
+    route = 'page_analysis'
+    if payload.get('success') is False:
+        err = str(payload.get('error') or '').lower()
+        if status_code == 402 or 'credit' in err:
+            outcome = 'declined_credits'
+        else:
+            outcome = 'error'
+        return route, outcome, subject
+    action = str(payload.get('action') or '').strip().lower()
+    reply = str(payload.get('reply') or '')
+    subject = payload.get('profile')
+    if action == 'build_profile':
+        route, outcome = 'profile_build', 'answered'
+    elif payload.get('not_quantifiable'):
+        route, outcome = 'quantifiability_gate', 'declined_not_quantifiable'
+    elif reply.startswith('Nothing is open to analyze yet'):
+        outcome = 'declined_no_context'
+    else:
+        outcome = 'answered'
+    return route, outcome, subject
+
+
+# Views where the subject describes what the ask is ABOUT. Elsewhere
+# the handlers still resolve a subject in order to answer (page
+# context, cross-session memory), but it is whatever the reader had
+# open last rather than the topic of this question.
+_ASK_SUBJECT_VIEWS = {'profileIQ', 'subscriberIQ', 'journeyIQ'}
+
+
+_ASK_SUBJ_STOP = {'the', 'a', 'an', 'and', 'of', 'show', 'series',
+                  'movie', 'audience', 'fans', 'viewers', 'profile'}
+
+
+def _ask_mentions_subject(question, subject):
+    """The ask names the subject, so recording it is meaningful even
+    on a view that does not own one ("how is Shark Tank trending" in
+    Trends IQ). Any distinctive subject token is enough."""
+    try:
+        q = re.sub(r'[^a-z0-9 ]+', ' ', str(question or '').lower())
+        toks = [t for t in re.sub(r'[^a-z0-9 ]+', ' ',
+                                  str(subject or '').lower()).split()
+                if len(t) >= 4 and t not in _ASK_SUBJ_STOP]
+        return any(t in q for t in toks)
+    except Exception:
+        return True

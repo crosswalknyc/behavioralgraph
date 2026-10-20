@@ -318,8 +318,23 @@ ROWS = [
                      ('is there a way to build an audience of people who '
                       'have attended a Gunna concert?', False),
                      ('is there a way to build an audience of people who '
-                      'have attended a Gunna concert?', True)],
-        'counter': [('who watches love island?', False)],
+                      'have attended a Gunna concert?', True),
+                     # an explicit profile order with a profile open is
+                     # the build lane, whatever is on the screen or
+                     # armed (2026-10-20 Jenna: 'run a profile on
+                     # mountain dew' with Ghost Energy Drink open drew
+                     # a $500 custom-read offer)
+                     ('run a profile on mountain dew', True),
+                     ('build a profile on mountain dew', True),
+                     ('run aprofile on ncis: new york', True),
+                     ('pull a profile for Nike runners', True)],
+        'counter': [('who watches love island?', False),
+                    # a correction inside the conversation never lands
+                    # on the build row (Mark at Bent Pixels, 2026-10-20)
+                    ('No I am interested in showing a lot of aligned '
+                     'creators...I am unclear why you keep bringing up '
+                     'Salish matter', True),
+                    ("No, that's not what I meant", True)],
     },
 ]
 

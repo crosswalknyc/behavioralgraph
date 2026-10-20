@@ -27,6 +27,7 @@ from prometheus import figures as _fig   # figures by composition (audit items 3
 from prometheus import faults as _faults   # swallowed faults are counted (audit item 8)
 from prometheus import store as _store   # relational shadow store (audit item 7)
 from prometheus import intents as _intents   # product-intent gates (extracted 2026-10-14)
+from prometheus import subject_rules as _subject_rules   # the open profile is context, never a default subject (2026-10-20)
 import io
 import hashlib
 import time
@@ -5053,80 +5054,11 @@ def api_synth_chat_clarify():
     return _finalize_cuts_response(notes)
 
 
-def _ask_infer_route_outcome(surface, payload, status_code):
-    """Best-effort (route, outcome, subject) from a response body."""
-    route, outcome, subject = 'unknown', 'unknown', None
-    if not isinstance(payload, dict):
-        return route, outcome, subject
-    if surface == 'interpret':
-        route = 'profile_build'
-        if 'incidence_check' in payload:
-            route, outcome = 'incidence', 'answered'
-            subject = (payload.get('incidence_check') or {}).get('subject')
-        elif 'discovery' in payload:
-            route, outcome = 'discovery', 'answered'
-        elif 'spec_drafts' in payload:
-            outcome = 'batch_draft'
-        elif 'spec_draft' in payload:
-            draft = payload.get('spec_draft') or {}
-            outcome = str(draft.get('decision') or 'draft')[:40]
-            subject = draft.get('subject') or draft.get('subject_label')
-        elif 'draft' in payload and payload.get('next_step'):
-            route, outcome = 'clarify', 'clarify'
-        elif payload.get('success') is False:
-            outcome = ('declined' if payload.get('guidance') else 'error')
-        return route, outcome, subject
-    if surface == 'deck':   # the deck surface: a queued file, a clarify, or a decline (2026-10-13)
-        if payload.get('job_id'):
-            return 'deck', 'queued', payload.get('subject')
-        return 'deck', ('clarified' if payload.get('clarify') or payload.get('memory_confirm')
-                        else ('declined' if payload.get('success') is False else 'answered')), subject
-    # analyze surface
-    route = 'page_analysis'
-    if payload.get('success') is False:
-        err = str(payload.get('error') or '').lower()
-        if status_code == 402 or 'credit' in err:
-            outcome = 'declined_credits'
-        else:
-            outcome = 'error'
-        return route, outcome, subject
-    action = str(payload.get('action') or '').strip().lower()
-    reply = str(payload.get('reply') or '')
-    subject = payload.get('profile')
-    if action == 'build_profile':
-        route, outcome = 'profile_build', 'answered'
-    elif payload.get('not_quantifiable'):
-        route, outcome = 'quantifiability_gate', 'declined_not_quantifiable'
-    elif reply.startswith('Nothing is open to analyze yet'):
-        outcome = 'declined_no_context'
-    else:
-        outcome = 'answered'
-    return route, outcome, subject
-
-
-# Views where the subject describes what the ask is ABOUT. Elsewhere
-# the handlers still resolve a subject in order to answer (page
-# context, cross-session memory), but it is whatever the reader had
-# open last rather than the topic of this question.
-_ASK_SUBJECT_VIEWS = {'profileIQ', 'subscriberIQ', 'journeyIQ'}
-
-
-_ASK_SUBJ_STOP = {'the', 'a', 'an', 'and', 'of', 'show', 'series',
-                  'movie', 'audience', 'fans', 'viewers', 'profile'}
-
-
-def _ask_mentions_subject(question, subject):
-    """The ask names the subject, so recording it is meaningful even
-    on a view that does not own one ("how is Shark Tank trending" in
-    Trends IQ). Any distinctive subject token is enough."""
-    try:
-        q = re.sub(r'[^a-z0-9 ]+', ' ', str(question or '').lower())
-        toks = [t for t in re.sub(r'[^a-z0-9 ]+', ' ',
-                                  str(subject or '').lower()).split()
-                if len(t) >= 4 and t not in _ASK_SUBJ_STOP]
-        return any(t in q for t in toks)
-    except Exception:
-        return True
+# The ask-log route / outcome / subject inference lives in
+# prometheus.ask_outcome (moved 2026-10-20 to keep this module under
+# its line ratchet); the names stay importable from here.
+from prometheus.ask_outcome import (  # noqa: E402,F401
+    _ask_infer_route_outcome, _ASK_SUBJECT_VIEWS, _ASK_SUBJ_STOP, _ask_mentions_subject)
 
 
 def _pm_watch_notify(username, question, payload, subject=None,
@@ -11679,6 +11611,17 @@ def _pm_open_screen_confirm(text, ctx, history=None):
     # Always confirm (2026-10-06 Jenna): nothing named, nothing assumed;
     # one "Yes, {page}" per thread binds later asks on the same page.
     verdict = _pm_screen_bind_verdict(text, page, base, page_key)
+    # The open profile is context, never a default subject (2026-10-20
+    # Jenna, Mark at Bent Pixels: three turns into DraftKings users, with
+    # "I am not interested in salish matter" already said, the deck lane
+    # still asked "Do you want this on Salish Matter?"). A page the
+    # reader has said no to in this thread is never the lead chip, never
+    # bound by an earlier confirm, never the answer-now base; the
+    # thread's own subjects come first.
+    _osq = _subject_rules.open_screen_question(text, page, history)
+    if _osq and (_osq['outcome'].endswith('page_rejected') or not _alt_named):
+        _pm_ask_hint(route='open_screen_confirm', outcome=_osq.pop('outcome'), subject=page)
+        return jsonify(_osq)
     if _alt_named:
         verdict = 'confirm'
     elif verdict == 'confirm' and (
@@ -13281,6 +13224,13 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
         # No base and no priced read fired above: a named subject still
         # gets the custom read offer (never a forced profile, Jenna
         # 2026-10-08); with no subject at all, ask which audience.
+        # An explicit profile ORDER is the one exception (2026-10-20
+        # Jenna, "run a profile on mountain dew" drew this offer): the
+        # reader asked for the profile, so the build flow drafts it.
+        _eb = _subject_rules.explicit_build_subject(text)
+        if _eb and not isinstance(panel_confirm, dict):
+            _pm_ask_hint(route='build_reroute', outcome='explicit_build_order', subject=_eb)
+            return jsonify(_subject_rules.build_reroute_payload())
         subj_name = (subj_hint or pma.guess_subject_from_text(text)
                      or '').strip()
         if subj_name and _pm_plausible_subject(subj_name) \
@@ -15545,6 +15495,16 @@ def _pm_analyze_core(user, body, text, history):
             'followups': [], 'offer_deck': False, 'deck_angle': None})
     if body.get('jiq_inputs') and not _pm_intake_breakout(text):
         return jsonify(_pm_intake_turn('digital_journey', text, body, history, user, _pm_ppu, first=False))
+    # An explicit Profile IQ order never stays on the analyze surface
+    # (2026-10-20 Jenna: "run a profile on mountain dew", typed while a
+    # journey intake sat armed, was read as journey inputs, broke out,
+    # ran as a read on the open profile and drew a $500 custom-read
+    # offer). The words order a profile on a named subject: the
+    # interpret flow drafts the brief, whatever is open or armed.
+    _eb_subject = _subject_rules.explicit_build_subject(text)
+    if _eb_subject:
+        _pm_ask_hint(route='build_reroute', outcome='explicit_build_order', subject=_eb_subject)
+        return jsonify(_subject_rules.build_reroute_payload())
     if _pm_jiq_intent(text) or _pm_read_intent(body, 'journey'):
         return jsonify(_pm_intake_turn('digital_journey', text, body, history, user, _pm_ppu, first=True))
     # ------------------ SINGLE ROUTER (2026-08-28) ------------------
@@ -16510,6 +16470,30 @@ def _pm_analyze_core(user, body, text, history):
             metric_request=data.get('metric_request'),
             anchors_block=xmod_block, charge_done=True,
             ctx=ctx, digest_block=digest or '')
+    # A build verdict on a turn that orders no build is the model's
+    # guess, never a handoff (2026-10-20 Jenna, Mark at Bent Pixels:
+    # "No I am interested in showing a lot of aligned creators...I am
+    # unclear why you keep bringing up Salish matter" drafted a $300
+    # DraftKings Users profile). The turn is read again as the
+    # correction it is; if that still yields nothing, the one-tap
+    # which-subject question (the thread's subjects first, the page
+    # last as the open profile). Nothing with a price is drafted.
+    if action == 'build_profile' and not _subject_rules.priced_handoff_allowed(text):
+        _pm_ask_stage('refusal_retry', count=1)
+
+        def _reask_conv(note, _up=user_prompt, _mt=_max_tok):
+            _r = _pm_claude_json(pma.ANALYSIS_SYSTEM_PROMPT, f"{_up}\n\n{note}",
+                                 max_tokens=_mt, temperature=0.3, usage_extras=_pm_ppu)
+            return (_r.get('data') or {}) if _r.get('success') else {}
+        _how, _out = _subject_rules.conversation_hold(
+            text, history, p_meta.get('name') or '', _reask_conv, pma.scrub_user_text)
+        if _how == 'answer':
+            data, action = _out, 'answer'
+            _pm_ask_hint(outcome='conversation_kept', subject=p_meta.get('name') or None)
+        else:
+            _pm_ask_hint(route='open_screen_confirm', outcome='asked_which_subject',
+                         subject=p_meta.get('name') or None)
+            return jsonify(_out)
     reply = str(data.get('reply') or '').strip()
     if action != 'build_profile' and not reply:
         _H._chatbot_error_email('brief-chat/analyze',
@@ -17870,6 +17854,12 @@ def _pm_deck_core(user, body):
     if resolution.get('used_open_page') \
             and not body.get('confirm_open_screen'):
         page = str(resolution.get('subject') or 'this profile').strip()
+        # the thread's own subject leads; a page the reader said no to is
+        # never the lead chip (2026-10-20 Jenna, Mark at Bent Pixels)
+        _osq = _subject_rules.open_screen_question(text, page, history, deck=True, what='the deck')
+        if _osq:
+            _pm_ask_hint(route='deck', outcome=_osq.pop('outcome'), subject=page)
+            return jsonify(_osq)
         yes = f'Yes, {page}'
         return jsonify({
             'success': True,

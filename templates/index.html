@@ -80625,6 +80625,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var el = document.createElement('div');
             el.className = 'synth-thinking-bubble';
             el.id = bubbleId;
+            el.setAttribute('data-pm-kind', String(kind || 'ask'));
             el.innerHTML =
                 '<div class="synth-thinking-label pm-speaker">Prometheus</div>' +
                 '<div class="synth-thinking-status">' +
@@ -80676,10 +80677,24 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         function _pmLiveBubbleLast() {
             return _pmLiveBubbles.length ? _pmLiveBubbles[_pmLiveBubbles.length - 1] : null;
         }
-        function _pmLiveStage(text) {
-            var el = _pmLiveBubbleLast();
+        // The bubble an ask's live line belongs to: the newest live
+        // bubble that is NOT a long-build indicator. The build bubble
+        // keeps its own label (the subject) for the life of the run and
+        // never takes another ask's line (2026-10-20: a read-back for a
+        // journey ask sat on the NCIS build bubble for 40 minutes).
+        function _pmLiveAskBubble() {
+            for (var i = _pmLiveBubbles.length - 1; i >= 0; i--) {
+                var b = _pmLiveBubbles[i];
+                if (b && b.getAttribute && b.getAttribute('data-pm-kind') !== 'build') return b;
+            }
+            return null;
+        }
+        function _pmLiveStage(text, target) {
+            var el = target || _pmLiveAskBubble();
             text = String(text || '');
             if (!el || !text) return;
+            if (el.getAttribute && el.getAttribute('data-pm-kind') === 'build') return;
+            if (_pmLiveBubbles.indexOf(el) === -1) return;   // the ask already ended
             var q = el.querySelector('.synth-thinking-quiet');
             if (!q) {
                 var dots = el.querySelector('.synth-thinking-dots');
@@ -80690,9 +80705,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }
             if (q.textContent !== text) q.textContent = text;
         }
-        function _pmLivePromise() {
-            var el = _pmLiveBubbleLast();
+        function _pmLivePromise(target) {
+            var el = target || _pmLiveAskBubble();
             if (!el || el.querySelector('.synth-thinking-promise')) return;
+            if (_pmLiveBubbles.indexOf(el) === -1) return;
             var d = document.createElement('div');
             d.className = 'synth-thinking-promise';
             d.textContent = PM_LONG_WAIT_LINE;
@@ -80707,11 +80723,17 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var stopped = false;
             var promised = false;
             var busy = false;
+            // bound at start: the ask's own bubble, never one that
+            // appears later or the long-build indicator
+            var target = _pmLiveAskBubble();
             var timer = setInterval(async function() {
                 if (stopped) return;
+                if (target && _pmLiveBubbles.indexOf(target) === -1) {
+                    stopped = true; clearInterval(timer); return;
+                }
                 if (!promised && Date.now() - startedAt >= PM_LONG_WAIT_MS) {
                     promised = true;
-                    _pmLivePromise();
+                    _pmLivePromise(target);
                 }
                 if (busy) return;
                 busy = true;
@@ -80719,7 +80741,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     var r = await fetch('/api/prometheus/v1/progress/' + encodeURIComponent(trace),
                                         { credentials: 'same-origin', cache: 'no-store' });
                     var d = await r.json();
-                    if (d && d.label) _pmLiveStage(d.label);
+                    if (d && d.label && !stopped) _pmLiveStage(d.label, target);
                 } catch (_) {}
                 busy = false;
             }, 1500);
@@ -82397,6 +82419,13 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         // True when any step is armed - i.e. the previous agent turn
         // asked a question the next message would normally bind to.
         function _pmArmedStepActive() {
+            // The guided intakes (journey, valuation, flywheel,
+            // attribution) and the priced custom-read offer are armed
+            // steps too (2026-10-20 Jenna: "run a profile on mountain
+            // dew", typed thirty minutes after "Create a digital
+            // journey", was sent as the journey's inputs and came back
+            // as a $500 offer). A topic switch releases them like any
+            // other pending question.
             return !!(synthChatBatchClarify ||
                 (synthChatClarify && synthChatClarify.steps &&
                  synthChatClarify.idx < synthChatClarify.steps.length) ||
@@ -82407,7 +82436,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 _pmAwaitingAudienceName ||
                 _pmAwaitingCombineChoice ||
                 _pmAwaitingCombineName ||
-                _pmCompareArmed);
+                _pmCompareArmed ||
+                _pmPanelOffer ||
+                _pmJiqCollect || _pmJiqConfirm ||
+                _pmBpiqCollect || _pmBpiqConfirm ||
+                _pmFwCollect || _pmFwConfirm ||
+                _pmAiqCollect || _pmAiqConfirm);
         }
 
         // Quiet release of every armed step: the pending question is
