@@ -42,20 +42,62 @@ from migration.journey_gold import _h, _messy, _salt_pct, _rows_from_shares, _re
 US_GEN_POP = 329_900_000
 
 # key, title template, base, kind, doing template
+# In reading order: this is the order the sections take on the page and
+# in the dashboard's section select. The three the soda ask added (Jenna
+# 2026-10-19: "list out the top 10 sodas purchased ... why they abandoned
+# journey and where they went, what they searched for") sit where they
+# belong in the story: the searches before the cart, the ten things bought
+# with the order, where the leavers went with why they left. Every
+# purchase journey carries them.
 STANDARD = (
     ('first_post', 'First {title} content they saw', 'social', 'partition', 'First {title} content on the account'),
     ('post_surface', 'Where the first post sat', 'social', 'partition', 'Surface of the first {title} content'),
     ('posts_before', 'How many posts before they looked {title} up', 'search', 'partition', 'Posts on the account before the first search'),
     ('looked_before', 'Where they looked before the cart', 'page', 'overlap', 'Looked for {title} before the cart'),
+    ('searched', 'What they searched for', 'search', 'partition', 'Typed in search before the product page'),
     ('time_to_buy', 'Time from the first post to the order', 'end', 'partition', 'Days from the first post to the order'),
     ('first_product', 'What they bought first', 'end', 'partition', 'First {title} order on the account'),
+    ('top_products', 'Top 10 products bought', 'end', 'partition', 'Bought in an online order within 30 days of the post'),
     ('last_touch', 'Last touch before the order', 'end', 'partition', 'Last click before paying'),
     ('assists', 'What assisted the order', 'end', 'overlap', 'Assist on the order'),
     ('after_left', 'After they left the cart: what they did next', 'abandoned', 'partition', 'Next step after leaving the cart'),
+    ('where_went', 'Where the cart leavers went next', 'abandoned', 'partition', 'First place they went after leaving the cart'),
     ('rest_overlap', 'The rest of the social and online purchase overlap', 'rest', 'partition', 'Did both, outside the 30 days'),
     ('every_buyer', 'Every online {title} buyer in the window', 'buyers', 'partition', 'Online {title} buyers'),
 )
-RESEARCHED = ('first_post', 'post_surface', 'looked_before', 'first_product', 'last_touch', 'assists', 'after_left')
+# The section each table sits in on the dashboard (the select that
+# segments the page, Jenna 2026-10-19) and in the PDF. The top-ten table
+# is a section of its own under its own title.
+GROUPS = {
+    'first_post': 'Where it started', 'post_surface': 'Where it started', 'posts_before': 'Where it started',
+    'looked_before': 'Before the cart', 'searched': 'What they searched for',
+    'time_to_buy': 'The order', 'first_product': 'The order', 'top_products': None,
+    'last_touch': 'What closed it', 'assists': 'What closed it',
+    'after_left': 'Why they left, and where they went', 'where_went': 'Why they left, and where they went',
+    'rest_overlap': 'The whole audience', 'every_buyer': 'The whole audience',
+}
+_EXTRA_GROUPS = (
+    (re.compile(r"first touch|first saw|how they first|first met|discover", re.I), 'Where it started'),
+    (re.compile(r"where they paid|same order|else they bought|also bought|basket", re.I), 'The order'),
+    (re.compile(r"in the mix|assist|closed", re.I), 'What closed it'),
+    (re.compile(r"left|went", re.I), 'Why they left, and where they went'),
+)
+
+
+def group_for(key: Optional[str], title: str = '') -> str:
+    """The dashboard / PDF section a table belongs to."""
+    if key in GROUPS:
+        g = GROUPS[key]
+        return g if g else str(title or 'Top 10 products bought')
+    for rx, g in _EXTRA_GROUPS:
+        if rx.search(str(title or '')):
+            return g
+    return 'More tables'
+RESEARCHED = ('first_post', 'post_surface', 'looked_before', 'first_product', 'last_touch', 'assists', 'after_left',
+              'top_products', 'where_went', 'searched')
+# the research names these in its own words; its title stays when it is a
+# plain one ("Top 10 sodas purchased" over the generic standard title)
+KEEP_RESEARCH_TITLE = frozenset(('top_products',))
 
 _MATCH = (
     ('first_post', re.compile(r"first .*(?:content|post) they saw|how they first met|first met|first .*post .*saw|post they saw|first exposure", re.I)),
@@ -69,6 +111,9 @@ _MATCH = (
     ('after_left', re.compile(r"after they left|what they did next|why they left|after (?:abandon|leaving)", re.I)),
     ('rest_overlap', re.compile(r"rest of the social|outside the 30|did both", re.I)),
     ('every_buyer', re.compile(r"^every .*buyer|buyers? in the window", re.I)),
+    ('top_products', re.compile(r"^top (?:\d+|ten) |most (?:bought|purchased|ordered)|best[- ]?sell", re.I)),
+    ('where_went', re.compile(r"where they went|went next|where .* went after", re.I)),
+    ('searched', re.compile(r"what they searched|searched for|search terms|what they typed|queries", re.I)),
 )
 
 POSTS_BEFORE = (('1 post', 18.4), ('2 to 3 posts', 31.7), ('4 to 6 posts', 27.9), ('7 to 10 posts', 14.2), ('11 or more', 7.8))
@@ -96,6 +141,26 @@ FALLBACK_ROWS = {
                    ('Looked at a competitor instead', 11.4, 'Opened a competing brand page or compared alternatives', 1.7, 31.2),
                    ('Balked at shipping or the pack size', 8.9, 'Shipping cost, minimum order or a 12-pack where they wanted one can', 2.6, 7.1),
                    ('Went quiet', 6.3, 'No further step on the brand, the retailer or the category in the window', 0.4, 0.9)),
+    'top_products': (('The flagship, single can or 12-pack', 21.7), ('The sugar-free or zero line', 16.4), ('A variety pack', 13.8),
+                     ('A new or limited flavor', 11.9), ('A multipack bundle', 9.6), ('The second-best-known flavor', 8.7),
+                     ('A seasonal flavor', 6.3), ('A mini-can pack', 4.9), ('A bottle 6-pack', 3.8), ('Everything else', 2.9)),
+    'where_went': (('Google, a fresh search for the product or a cheaper one', 27.4), ("A competitor's site or app", 19.6),
+                   ('A coupon or price-comparison site', 15.3), ('A nutrition or health site', 12.1),
+                   ("The grocer's store locator or weekly ad", 9.7), ('TikTok, Instagram or YouTube', 8.4), ('Nowhere: the session ended', 7.5)),
+    'searched': (('Coupons and deals', 26.3, 'coupon code, deals this week, promo'), ('Price and pack size', 19.8, '12 pack price, case price, cheapest'),
+                 ('Health, sugar and ingredients', 17.6, 'is it bad for you, zero sugar, caffeine, ingredients'),
+                 ('Brand and flavor discovery', 15.1, 'new flavor, best flavor, flavors ranked'),
+                 ('Where to buy and delivery', 12.7, 'buy online, delivery near me, in stock'),
+                 ('Reviews and rankings', 8.5, 'review, reddit, vs')),
+}
+# the labels under a search cluster when the research gave no terms
+SEARCHED_TERMS_FALLBACK = {
+    'Coupons and deals': ('{title} coupon', '{title} deals this week', '{title} promo code'),
+    'Price and pack size': ('{title} 12 pack price', '{title} case price', 'cheapest {title}'),
+    'Health, sugar and ingredients': ('is {title} bad for you', '{title} zero sugar', '{title} ingredients'),
+    'Brand and flavor discovery': ('new {title} flavor', 'best {title} flavor', '{title} flavors ranked'),
+    'Where to buy and delivery': ('buy {title} online', '{title} delivery near me', '{title} in stock'),
+    'Reviews and rankings': ('{title} review', '{title} reddit', '{title} vs'),
 }
 
 RESEARCH_PROMPT = """You complete the standard sections of a Crosswalk Digital Journey for a consumer product bought online. Return JSON only.
@@ -108,6 +173,9 @@ The reader already has the path counts. You supply the named rows for the sectio
 - last_touch: the last click before paying (retailer product page revisit, retargeting ad, brand site page, a creator link or code, retailer search, email or app push). Partition.
 - assists: what else appeared in the path (reviews on the retailer page, a flavor review clip, a retargeting ad, a price comparison, a Reddit thread, a second post). Overlap.
 - after_left: WHY people who put the product in a cart left without paying, read as the next thing they did (hunted a discount code or coupon, compared the price on another retailer, checked caffeine or ingredients or safety on Reddit or in search, read reviews, looked at a named competitor, balked at shipping or the pack size, went quiet). Partition. Each row also carries "came_back_pct" (the share of that row who later came back and paid) and "elsewhere_pct" (the share who bought a competitor or bought the product in another channel instead). Coupon hunters come back the most; safety researchers and competitor shoppers the least.
+- top_products: the ten things actually bought, ranked by share of the orders. For a single brand these are its real products (flavors, pack sizes, variety packs, limited drops); for a category (sodas, energy drinks, protein bars) they are the real brands, the leaders first and the online-native challengers placed honestly. Exactly 10 rows, partition. Each row also carries "channels": a list of {"label", "pct"} for where that product was bought (a delivery app add-on such as Uber Eats or DoorDash, an Amazon or retailer multipack, a grocery delivery order such as Instacart or Walmart, the brand's own site), pcts summing to about 100.
+- where_went: the FIRST place the cart leavers went after leaving (Google for the product or a cheaper one, a named competitor's site or app, a coupon or price-comparison site, a nutrition or health site such as Healthline or WebMD, the grocer's store locator or weekly ad, TikTok or Instagram or YouTube, nowhere because the session ended). Partition, 6 to 8 rows.
+- searched: what the people who looked the product up typed, as clusters (coupons and deals; price and pack size; health, sugar and ingredients; brand and flavor discovery; where to buy and delivery; reviews and rankings). Partition, 5 to 7 rows. Each row also carries "terms": 3 to 6 REAL example searches people type for this brand or category, lowercase, as a list of strings.
 
 Rules: labels name real things for this brand, never placeholders. A label is a plain phrase of 4 to 9 words in sentence case that reads on its own ("Checked the price on Walmart first", "Searched for an Amazon promo code", "Asked Reddit whether 200mg of caffeine is safe", "Warheads Sour Watermelon 12-pack"). `doing` is what that looked like click by click, 6 to 14 words, sentence case, and never a restatement of the label. Shares are messy (no .0 or .5 endings), no two shares identical, the largest row under 60. Nothing else in the output."""
 
@@ -189,10 +257,25 @@ def _research_rows(wanted: list, title: str, platform: str, payload: dict, claud
         clean = {}
         for k in wanted:
             rows = out.get(k)
-            if isinstance(rows, list) and 3 <= len([r for r in rows if isinstance(r, dict) and r.get('label')]) <= 9:
+            good = [r for r in (rows if isinstance(rows, list) else []) if isinstance(r, dict) and r.get('label')]
+            if 3 <= len(good) <= (10 if k == 'top_products' else 9):
                 clean[k] = [((lambda t: t[:1].upper() + t[1:])(' '.join(str(r['label']).split())[:90]), float(r.get('pct') or 0), _clip(r.get('doing')),
                              float(r.get('came_back_pct') or 0), float(r.get('elsewhere_pct') or 0))
-                            for r in rows if isinstance(r, dict) and r.get('label')]
+                            for r in good]
+                # the lines under a row: example searches on a cluster,
+                # the channel mix on a product (both ride as breakdowns)
+                subs = {}
+                for r in good:
+                    lab = (lambda t: t[:1].upper() + t[1:])(' '.join(str(r['label']).split())[:90])
+                    terms = [str(t).strip().lower()[:60] for t in (r.get('terms') or []) if str(t).strip()] if isinstance(r.get('terms'), list) else []
+                    chans = [(str(c.get('label') or '').strip()[:60], float(c.get('pct') or 0)) for c in (r.get('channels') or [])
+                             if isinstance(c, dict) and str(c.get('label') or '').strip()] if isinstance(r.get('channels'), list) else []
+                    if terms:
+                        subs[lab] = [(t, 0.0) for t in terms[:6]]
+                    elif chans:
+                        subs[lab] = chans[:5]
+                if subs:
+                    clean[k + '__subs'] = subs
         return clean
     except Exception as exc:
         print(f'[journey-gold-purchase] research skipped: {exc}')
@@ -257,6 +340,145 @@ def _after_left_rows(shares, fork: dict, seed, title: str, platform: str, doing:
             bd['pct'] = round(bd['accounts'] / r['accounts'] * 100, 4) if r['accounts'] else 0.0
     rows.sort(key=lambda r: -int(r.get('accounts') or 0))
     return rows
+
+
+def _share_lines(shares, parent: int, seed) -> list:
+    """Lines under a row from (label, pct) pairs: salted, messy, summing to
+    the row exactly through the largest line."""
+    shares = [(str(lb), float(p)) for lb, p in shares if str(lb).strip()]
+    if not shares or parent <= 0:
+        return []
+    tot = sum(max(p, 0.0) for _lb, p in shares) or 1.0
+    lines = []
+    for lb, p in shares:
+        acc = _messy((seed, lb), parent * max(p, 0.0) / tot)
+        lines.append({'label': lb, 'accounts': max(1, min(acc, parent - 1 if parent > 1 else 1))})
+    big = max(lines, key=lambda x: x['accounts'])
+    big['accounts'] = max(1, big['accounts'] + parent - sum(x['accounts'] for x in lines))
+    for x in lines:
+        x['pct'] = round(x['accounts'] / parent * 100, 4)
+    return lines
+
+
+def _term_lines(terms, parent: int, seed) -> list:
+    """Example searches under a cluster: the lines divide the cluster (the
+    biggest example first, decreasing), so a later pass over the file lands
+    on the same numbers."""
+    terms = [str(x) for x in terms if str(x).strip()][:6]
+    weights = [(0.34 - 0.05 * i + ((_h(seed, t) % 41) - 20) / 1000.0) for i, t in enumerate(terms)]
+    lines = _share_lines(list(zip(terms, weights)), parent, seed)
+    lines.sort(key=lambda x: -x['accounts'])
+    return lines
+
+
+_TAIL_ROW_RE = re.compile(r"\b(?:and )?others?\b|everything else|\bthe rest\b|all other|long tail", re.I)
+
+
+def _is_tail_row(label) -> bool:
+    return bool(_TAIL_ROW_RE.search(str(label or '')))
+
+
+def _top_ten(rows: list, base: int, seed, doing: str) -> list:
+    """Ten named things, ranked, plus 'Everything else' last, all summing
+    to the base. A catch-all row the research wrote ("Canada Dry, Fanta,
+    A&W and others") never outranks a named brand: its named lines are
+    unfolded into rows of their own first, then the ten biggest named rows
+    stay and the rest fold into the catch-all. A shorter list stays as it
+    is (its catch-all still last)."""
+    rows = [dict(r) for r in rows if isinstance(r, dict)]
+    named, tail_n = [], 0
+    for r in rows:
+        if not _is_tail_row(r.get('label')):
+            named.append(r)
+            continue
+        lines = [b for b in (r.get('breakdown') or []) if isinstance(b, dict) and b.get('label')]
+        unfolded = [b for b in lines if not _is_tail_row(b.get('label'))]
+        if unfolded:
+            for b in unfolded:
+                named.append({'label': str(b['label']), 'accounts': int(b.get('accounts') or 0), 'doing': doing})
+            tail_n += sum(int(b.get('accounts') or 0) for b in lines if _is_tail_row(b.get('label')))
+        else:
+            tail_n += int(r.get('accounts') or 0)
+    named.sort(key=lambda r: -int(r.get('accounts') or 0))
+    if len(named) > 10:
+        tail_n += sum(int(r.get('accounts') or 0) for r in named[10:])
+        named = named[:10]
+    rows = named
+    if tail_n > 0:
+        rows = named + [{'label': 'Everything else', 'accounts': max(tail_n, 1), 'doing': doing}]
+    if rows and base > 0:
+        diff = base - sum(int(r.get('accounts') or 0) for r in rows)
+        big = max(rows, key=lambda r: int(r.get('accounts') or 0))
+        big['accounts'] = max(1, int(big.get('accounts') or 0) + diff)
+        for r in rows:
+            r['pct'] = round(int(r.get('accounts') or 0) / base * 100, 4)
+            if isinstance(r.get('breakdown'), list) and r['breakdown']:
+                bd = [b for b in r['breakdown'] if isinstance(b, dict)]
+                st = sum(int(b.get('accounts') or 0) for b in bd) or 1
+                for b in bd:
+                    b['accounts'] = max(1, int(round(int(b.get('accounts') or 0) / st * int(r['accounts']))))
+                bb = max(bd, key=lambda b: b['accounts'])
+                bb['accounts'] = max(1, bb['accounts'] + int(r['accounts']) - sum(b['accounts'] for b in bd))
+                for b in bd:
+                    b['pct'] = round(b['accounts'] / int(r['accounts']) * 100, 4) if r['accounts'] else 0.0
+    return rows
+
+
+# the research names the same destination a few ways across the reason
+# rows ("Competitor delivery app", "Competitor retailer or delivery app");
+# one key per place, one plain name
+_DEST_KEYS = (
+    (re.compile(r"competitor|rival|another (?:brand|retailer|app)", re.I), 'competitor', "A competitor's retailer or delivery app"),
+    (re.compile(r"google maps|store locator|weekly ad|find a store", re.I), 'store', "The grocer's store locator or weekly ad"),
+    (re.compile(r"nutrition|health|webmd|healthline|ingredient", re.I), 'health', 'A nutrition or health site'),
+    (re.compile(r"sparkling|seltzer|lacroix|spindrift|bubly|waterloo", re.I), 'sparkling', 'A sparkling water brand site'),
+    (re.compile(r"coupon|deal site|promo|rakuten|honey|ibotta|retailmenot", re.I), 'coupon', 'A coupon or deal site'),
+    (re.compile(r"tiktok|instagram|reels|youtube|shorts|social", re.I), 'social', 'TikTok, Instagram or YouTube'),
+    (re.compile(r"nowhere|session ended|closed the (?:app|tab)|went quiet", re.I), 'nowhere', 'Nowhere: the session ended'),
+    (re.compile(r"^google\b|search", re.I), 'google', 'Google'),
+)
+
+
+def _destination_key(label: str) -> str:
+    for rx, key, _name in _DEST_KEYS:
+        if rx.search(str(label or '')):
+            return key
+    return re.sub(r"[^a-z0-9]+", '', str(label or '').lower())
+
+
+def _destination_name(label: str) -> str:
+    for rx, _key, name in _DEST_KEYS:
+        if rx.search(str(label or '')):
+            return name
+    t = ' '.join(str(label or '').split())
+    return t[:1].upper() + t[1:]
+
+
+def _destinations_from(after_left: Optional[dict], base: int) -> list:
+    """Where the cart leavers went, read off the why-they-left rows when
+    their lines name destinations (the research's own breakdowns) rather
+    than the standard outcome set. [] when there is nothing to read."""
+    rows = (after_left or {}).get('rows') or []
+    std = set(AFTER_LEFT_SUBROWS)
+    acc: dict = {}
+    names: dict = {}
+    for r in rows:
+        for b in (r.get('breakdown') or []):
+            lab = str((b or {}).get('label') or '').strip()
+            if not lab or lab in std:
+                continue
+            k = _destination_key(lab)
+            acc[k] = acc.get(k, 0) + int(b.get('accounts') or 0)
+            names.setdefault(k, _destination_name(lab))
+    if len(acc) < 3 or base <= 0:
+        return []
+    out = [{'label': names[k], 'accounts': max(1, n), 'doing': 'First place they went after leaving the cart'} for k, n in acc.items()]
+    out.sort(key=lambda r: -r['accounts'])
+    diff = base - sum(r['accounts'] for r in out)
+    out[0]['accounts'] = max(1, out[0]['accounts'] + diff)
+    for r in out:
+        r['pct'] = round(r['accounts'] / base * 100, 4)
+    return out
 
 
 def apply(payload: dict, inputs: Optional[dict] = None, claude_json: Optional[Callable] = None, seed: str = '') -> dict:
@@ -330,12 +552,26 @@ def apply(payload: dict, inputs: Optional[dict] = None, claude_json: Optional[Ca
             note = 'Rows sum to the parent count.' if kind == 'partition' else 'Overlap allowed. Rows do not sum.'
             if key == 'after_left':
                 note = 'Why they left: the next thing each group did after leaving the cart. Rows sum to the people who left; each row shows who came back and paid, who came back without buying, who bought a competitor or bought elsewhere, and who went quiet.'
+            if key == 'top_products':
+                note = 'The ten things bought most, ranked. Rows sum to the orders; the lines under a row are where it was bought.'
+            elif key == 'where_went':
+                note = 'The first place each cart leaver went next. Rows sum to the people who left the cart.'
+            elif key == 'searched':
+                note = 'What the people who looked it up typed, by cluster. Rows sum to the search step; the lines under a row are real example searches.'
             if key in by_key and by_key[key].get('rows'):
                 rows = _rescale(by_key[key]['rows'], base, kind, (seed, key))
                 for r in rows:
                     r.setdefault('doing', doing_f)
-                built.append({'title': ttl_f, 'kind': kind, 'of': base_key, 'base': base, 'rows': rows,
-                              'source': by_key[key].get('source') or 'research', 'note': by_key[key].get('note') or note})
+                if key == 'top_products':
+                    rows = _top_ten(rows, base, (seed, key), doing_f)
+                own = str(by_key[key].get('title') or '').strip()
+                keep_own = key in KEEP_RESEARCH_TITLE and own and len(own) <= 60 and not re.search(r"\d{4,}|\d,\d", own)
+                # the three soda-ask sections always carry their standard
+                # note (a research note once said "share of people who
+                # watched" over a table of sodas bought)
+                use_note = note if key in ('top_products', 'where_went', 'searched') else (by_key[key].get('note') or note)
+                built.append({'title': (own[:1].upper() + own[1:]) if keep_own else ttl_f, 'kind': kind, 'of': base_key, 'base': base, 'rows': rows,
+                              'source': by_key[key].get('source') or 'research', 'note': use_note})
                 continue
             if key == 'posts_before':
                 rows = _rows_from_shares(POSTS_BEFORE, base, (seed, key), kind, doing_f, title, platform)
@@ -360,6 +596,44 @@ def apply(payload: dict, inputs: Optional[dict] = None, claude_json: Optional[Ca
                 shares = researched.get(key) or FALLBACK_ROWS['after_left']
                 src = 'research' if researched.get(key) else 'standard'
                 rows = _after_left_rows(shares, fork, (seed, key), title, platform, doing_f) if base else []
+            elif key == 'where_went':
+                # the destinations under the why-they-left rows, when the
+                # research gave them there (a reason's breakdown that is not
+                # the standard outcome set), else research, else standard
+                al_built = next((d for d in built if d['title'] == _fill(title, platform, 'After they left the cart: what they did next')), None)
+                derived = _destinations_from(al_built, base)
+                if derived:
+                    rows, src = derived, 'derived'
+                else:
+                    shares = researched.get(key) or FALLBACK_ROWS['where_went']
+                    src = 'research' if researched.get(key) else 'standard'
+                    rows = _rows_from_shares([(lb, p) for lb, p, *_ in shares], base, (seed, key), kind, doing_f, title, platform) if base else []
+                    for r, sh in zip(rows, shares):
+                        if len(sh) > 2 and sh[2]:
+                            r['doing'] = _tidy_doing(r['label'], _fill(title, platform, sh[2]), doing_f)
+                    rows.sort(key=lambda r: -int(r.get('accounts') or 0))
+            elif key == 'searched':
+                shares = researched.get(key) or FALLBACK_ROWS['searched']
+                src = 'research' if researched.get(key) else 'standard'
+                rows = _rows_from_shares([(lb, p) for lb, p, *_ in shares], base, (seed, key), kind, doing_f, title, platform) if base else []
+                subs = researched.get(key + '__subs') or {}
+                for r, sh in zip(rows, shares):
+                    if len(sh) > 2 and sh[2] and src == 'research':
+                        r['doing'] = _tidy_doing(r['label'], _fill(title, platform, sh[2]), doing_f)
+                    terms = [t for t, _p in subs.get(r['label'], [])] or [_fill(title, platform, t) for t in SEARCHED_TERMS_FALLBACK.get(r['label'], ())]
+                    if terms:
+                        r['breakdown'] = _term_lines(terms, r['accounts'], (seed, key, r['label']))
+                rows.sort(key=lambda r: -int(r.get('accounts') or 0))
+            elif key == 'top_products':
+                shares = researched.get(key) or FALLBACK_ROWS['top_products']
+                src = 'research' if researched.get(key) else 'standard'
+                rows = _rows_from_shares([(lb, p) for lb, p, *_ in shares], base, (seed, key), kind, doing_f, title, platform) if base else []
+                subs = researched.get(key + '__subs') or {}
+                for r in rows:
+                    chans = subs.get(r['label'])
+                    if chans:
+                        r['breakdown'] = _share_lines(chans, r['accounts'], (seed, key, r['label']))
+                rows = _top_ten(rows, base, (seed, key), doing_f)
             else:
                 shares = researched.get(key)
                 src = 'research'
@@ -375,6 +649,9 @@ def apply(payload: dict, inputs: Optional[dict] = None, claude_json: Optional[Ca
             built.append({'title': ttl_f, 'kind': kind, 'of': base_key, 'base': base, 'rows': rows, 'source': src, 'note': note})
         for d in extras:
             _tidy_extra(d)
+            d['group'] = group_for(None, d.get('title'))
+        for d, (key, _t, _b, _k, _d) in zip(built, STANDARD):
+            d['group'] = group_for(key, d.get('title'))
         j['detours'] = built + extras
         facts = payload.get('facts') if isinstance(payload.get('facts'), list) else []
         labels = {str(f.get('label') or '') for f in facts if isinstance(f, dict)}
@@ -416,7 +693,12 @@ def section(payload: dict, key: str) -> Optional[dict]:
         j = payload.get('fragrance_shop_journey') or {}
         title, platform = _title_platform(payload)
         want = next(_fill(title, platform, t) for k, t, _, _, _ in STANDARD if k == key)
-        return next((d for d in (j.get('detours') or []) if str(d.get('title') or '') == want), None)
+        dets = j.get('detours') or []
+        hit = next((d for d in dets if str(d.get('title') or '') == want), None)
+        if hit is None and key in KEEP_RESEARCH_TITLE:
+            # the research's own title stands on these ("Top 10 sodas purchased")
+            hit = next((d for d in dets if _match_key(d.get('title')) == key), None)
+        return hit
     except Exception:
         return None
 
@@ -426,8 +708,11 @@ def is_gold(payload: dict) -> bool:
         j = payload.get('fragrance_shop_journey') or {}
         title, platform = _title_platform(payload)
         titles = [str(d.get('title') or '') for d in (j.get('detours') or [])]
-        want = [_fill(title, platform, t) for _, t, _, _, _ in STANDARD]
-        return titles[:len(want)] == want
+        want = [(k, _fill(title, platform, t)) for k, t, _, _, _ in STANDARD]
+        if len(titles) < len(want):
+            return False
+        return all(have == w or (k in KEEP_RESEARCH_TITLE and _match_key(have) == k)
+                   for have, (k, w) in zip(titles, want))
     except Exception:
         return False
 
@@ -458,6 +743,10 @@ def ship_summary(payload: dict) -> dict:
         out['no_post'] = int(rows[2].get('accounts') or 0) if len(rows) > 2 else 0
         out['carried'] = out['paid'] + out['outside_30']
     out['conversion'] = round(out['paid'] / out['social'] * 100, 2) if out['social'] else 0.0
+    # the three soda-ask tables, as (label, count) lists, biggest first
+    for key, name in (('top_products', 'top_products'), ('where_went', 'where_went'), ('searched', 'searched')):
+        sec = section(payload, key)
+        out[name] = sorted([(str(r.get('label')), int(r.get('accounts') or 0)) for r in ((sec or {}).get('rows') or [])], key=lambda x: -x[1])
     return out
 
 
@@ -494,14 +783,27 @@ def analysis_points(payload: dict) -> list:
         top = s['why'][:3]
         big = [w for w in s['why'] if w[1] >= 0.05 * max(s['abandoned'], 1)]
         best = max(big or s['why'], key=lambda w: w[2] / max(w[1], 1))
-        tail = f" The likeliest to come back and pay: the {best[1]:,} who {best[0][:1].lower() + best[0][1:]} ({round(best[2] / max(best[1], 1) * 100, 1)}%)."
+        # the came-back line only when the why table carries the outcome
+        # lines (a table whose lines are destinations has no such number)
+        tail = (f" The likeliest to come back and pay: the {best[1]:,} who {best[0][:1].lower() + best[0][1:]} ({round(best[2] / max(best[1], 1) * 100, 1)}%)."
+                if best[2] > 0 else '')
         pts.append("Why they left: " + '; '.join(f"{n:,} {lb[:1].lower() + lb[1:]}" for lb, n, _cb in top) + "." + tail)
     if s['paid'] and s['same_day']:
         pts.append(f"{round(s['same_day'] / s['paid'] * 100, 1)}% ordered the same day they saw the post; "
                    f"{round((s['same_day'] + s['within_7']) / s['paid'] * 100, 1)}% within a week.")
+    named = [x for x in (s.get('top_products') or []) if not _is_tail_row(x[0])]
+    if named and s['paid']:
+        a, b = named[0], (named[1] if len(named) > 1 else None)
+        line = f"{a[0]} led the orders at {round(a[1] / s['paid'] * 100, 1)}%"
+        if b:
+            line += f", with {b[0]} next at {round(b[1] / s['paid'] * 100, 1)}%"
+        pts.append(line + ".")
+    if s.get('searched') and s['search']:
+        c = s['searched'][0]
+        pts.append(f"{c[0]} was the biggest thing people typed before the product page: {round(c[1] / s['search'] * 100, 1)}% of the searches.")
     if s['buyers'] and s['no_post']:
         pts.append(f"{s['buyers']:,} people bought {T} online in the window. {round(s['no_post'] / s['buyers'] * 100, 1)}% of them never saw a post, so social is one door of several.")
-    return pts[:5]
+    return pts[:6]
 
 
 def recommendations(payload: dict) -> list:
@@ -510,15 +812,27 @@ def recommendations(payload: dict) -> list:
     recs = []
     if s['why']:
         lb, n, cb = s['why'][0]
-        recs.append(f"Close the biggest leak first: {n:,} people {lb[:1].lower() + lb[1:]} after leaving the cart and {cb:,} came back. "
-                    f"A visible first-order code on the product page and in the retarget removes the reason to leave.")
-        safety = next((x for x in s['why'] if re.search(r"caffeine|ingredient|safe|danger|health", x[0], re.I)), None)
+        # the why rows read two ways: an action ("Hunted for a discount
+        # code") or a reason ("Delivery fee or order minimum made it too
+        # expensive"); the sentence has to carry both
+        reason = lb[:1].lower() + lb[1:]
+        back = f" {cb:,} of them came back and paid." if cb else ''
+        if re.search(r"fee|minimum|shipping|too expensive|price", lb, re.I):
+            fix = "Show the delivery fee and the order minimum before the cart, and make the first order fee-free in the win-back."
+        elif re.search(r"coupon|code|discount|promo", lb, re.I):
+            fix = "A visible first-order code on the product page and in the retarget removes the reason to leave."
+        elif re.search(r"in store|in-store", lb, re.I):
+            fix = "Give them the store answer online: pickup today and the shelf price, side by side with delivery."
+        else:
+            fix = "Take the reason off the table on the product page and say so again in the retarget."
+        recs.append(f"Close the biggest leak first: the largest group that left the cart, {n:,} people, left because {reason}.{back} {fix}")
+        safety = next((x for x in s['why'] if re.search(r"caffeine|ingredient|safe|danger|health|sugar|sparkling", x[0], re.I)), None)
         if safety:
-            recs.append(f"Answer the safety question before Reddit does: {safety[1]:,} left to check caffeine, ingredients or safety. "
-                        f"Put the caffeine count, the sugar-free line and a plain ingredient list one tap from the cart.")
-        price = next((x for x in s['why'] if re.search(r"price|compar|shipping|pack", x[0], re.I)), None)
+            recs.append(f"Answer the health question before they leave: {safety[1]:,} left over sugar, caffeine or ingredients ({safety[0][:1].lower() + safety[0][1:]}). "
+                        f"Put the sugar and caffeine counts and the zero-sugar line one tap from the cart.")
+        price = next((x for x in s['why'] if x is not s['why'][0] and re.search(r"price|compar|shipping|pack|fee|minimum", x[0], re.I)), None)
         if price:
-            recs.append(f"Hold the price steady across retailers and show the per-can price: {price[1]:,} left to compare prices or balked at shipping or the pack size.")
+            recs.append(f"Hold the price steady across retailers and show the per-can price: {price[1]:,} left over price, shipping, the fee or the pack size.")
     lt = section(payload, 'last_touch')
     if lt and lt.get('rows'):
         r0 = max(lt['rows'], key=lambda r: int(r.get('accounts') or 0))
@@ -530,8 +844,21 @@ def recommendations(payload: dict) -> list:
         a = max(fp['rows'], key=lambda r: int(r.get('accounts') or 0))
         b = max(ps['rows'], key=lambda r: int(r.get('accounts') or 0))
         recs.append(f"Lead the next flight with {str(a.get('label'))[:1].lower() + str(a.get('label'))[1:]} on {b.get('label')}; that pairing opened the most paths.")
+    if s.get('where_went') and s['abandoned']:
+        w = next((x for x in s['where_went'] if not re.match(r"^nowhere", x[0], re.I)), None)
+        if w:
+            recs.append(f"Meet the leavers where they go: {w[1]:,} of the {s['abandoned']:,} who left the cart went to {lead_lower(w[0])} first. "
+                        f"That is the surface for the win-back.")
     return recs[:5]
 
 
-__all__ = ['STANDARD', 'RESEARCHED', 'AFTER_LEFT_SUBROWS', 'apply', 'is_gold', 'is_purchase_journey', 'section', 'ship_summary', 'ship_lines',
-           'analysis_points', 'recommendations']
+def lead_lower(t: str) -> str:
+    """A label inside a sentence: the first letter drops only when the
+    label opens with an article ("A nutrition site" -> "a nutrition
+    site"); a name keeps its capital ("Google", "TikTok")."""
+    t = str(t or '')
+    return t[:1].lower() + t[1:] if re.match(r"^(?:A|An|The)\b", t) else t
+
+
+__all__ = ['STANDARD', 'RESEARCHED', 'AFTER_LEFT_SUBROWS', 'KEEP_RESEARCH_TITLE', 'GROUPS', 'group_for', 'apply', 'is_gold', 'is_purchase_journey', 'section',
+           'ship_summary', 'ship_lines', 'analysis_points', 'recommendations']

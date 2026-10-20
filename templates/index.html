@@ -91291,12 +91291,19 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     // Runs after the renderer, which paints the whole
                     // scroll, and after the clickstream pass inside it,
                     // which is what hides the tab bar.
-                    if (typeof _jiqPremPaintTabs === 'function') {
+                    if (typeof _jiqSecPaintTabs === 'function') {
+                        _jiqSecPaintTabs(_fragBlock, _fragMeta);
+                    } else if (typeof _jiqPremPaintTabs === 'function') {
                         _jiqPremPaintTabs(_fragBlock, _fragMeta);
                     }
                 } else if (typeof renderJourneyIqFragrance === 'function') {
                     renderJourneyIqFragrance(_fragBlock,
                                              (fullRun && fullRun.meta) || meta);
+                    // the hand-built journeys share the renderer and
+                    // take the same section select (2026-10-19)
+                    if (typeof _jiqSecPaintTabs === 'function') {
+                        _jiqSecPaintTabs(_fragBlock, _fragMeta);
+                    }
                 }
             }
 
@@ -118699,6 +118706,185 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }
             _jiqPremApplyStage(d);
         }
+        // ─── Sections behind a select, every journey (2026-10-19) ───
+        // Jenna: "format it to be like the ncis ones where each thing is
+        // on a drop down and it's segmented out. moving forward let's
+        // have it do that since tht's easier to read". The cover stays;
+        // the select picks what shows under it. A premiere run keeps its
+        // grouped stages (_jiqPremPaintTabs); every other run through
+        // this renderer derives its sections from the blocks the payload
+        // carries: the path (spine and fork), one section per table
+        // group the builder stamped (d.detours[i].group) or per table
+        // when there is none, the stars card, the read, the URLs. One
+        // long scroll is the explicit fallback only (window.JIQ_LONG_SCROLL).
+        var _jiqSecCurrent = 'path';
+        var _jiqSecList = [];
+        var _jiqSecData = null;
+        function _jiqSecShow(el, on) {
+            if (el) el.style.display = on ? '' : 'none';
+        }
+        function _jiqSecOf(el) {
+            return el ? (el.closest ? el.closest('.jiq-frag-sec') : null) : null;
+        }
+        function _jiqSecBuild(d) {
+            var copy = (d && d.copy) || {};
+            var list = [{ id: 'path', label: 'The path', head: copy.spineHead || '', tables: [] }];
+            var tables = (d && d.detours) || [];
+            var byGroup = {};
+            for (var i = 0; i < tables.length; i++) {
+                var t = tables[i] || {};
+                var g = String(t.group || '').trim();
+                if (g) {
+                    if (!byGroup[g]) {
+                        byGroup[g] = { id: 'g' + i, label: g, head: '', tables: [] };
+                        list.push(byGroup[g]);
+                    }
+                    byGroup[g].tables.push(i);
+                } else {
+                    var ttl = String(t.title || ('Table ' + (i + 1)));
+                    list.push({ id: 't' + i, label: ttl.length > 48 ? ttl.slice(0, 46).replace(/\s+\S*$/, '') + '...' : ttl, head: ttl, tables: [i] });
+                }
+            }
+            if (d && d.cast_drivers) list.push({ id: 'stars', label: 'The stars, side by side', head: '', tables: [] });
+            var r = (d && d.the_read) || {};
+            if ((r.tldr && r.tldr.length) || (r.reads && r.reads.length) || (r.recommendations && r.recommendations.length)
+                    || (copy.tldr && copy.tldr.length) || (copy.recommendations && copy.recommendations.length)) {
+                list.push({ id: 'read', label: 'What to do next', head: '', tables: [] });
+            }
+            if (typeof _jiqFragKeepsClickstream === 'function' && _jiqFragKeepsClickstream(d)) {
+                list.push({ id: 'clickstream', label: 'The URLs on each step', head: '', tables: [] });
+            }
+            return list;
+        }
+        function _jiqSecReset() {
+            // every node this select hides is shared with the other
+            // journeys on the renderer: hand them back visible
+            var journey = document.getElementById('jiqFragJourneyPane');
+            var click = document.getElementById('jiqFragClickPane');
+            if (journey) journey.style.display = '';
+            if (click) click.style.display = 'none';
+            [_jiqSecOf(document.getElementById('jiqFragSpineNum')),
+             document.getElementById('jiqFragSpine'),
+             _jiqSecOf(document.getElementById('jiqFragForkNum')),
+             document.getElementById('jiqFragFork'),
+             _jiqSecOf(document.getElementById('jiqFragDetourNum')),
+             document.getElementById('jiqFragDetours'),
+             document.getElementById('jiqFragCastSec'),
+             document.getElementById('jiqFragCast')].forEach(function(el) {
+                _jiqSecShow(el, true);
+            });
+            var det = document.getElementById('jiqFragDetours');
+            if (det) {
+                for (var i = 0; i < det.children.length; i++) _jiqSecShow(det.children[i], true);
+                det.classList.remove('is-seg-1');
+                det.classList.remove('is-seg-2');
+            }
+            var read = document.getElementById('jiqFragSecRead');
+            if (read) { read.innerHTML = ''; read.style.display = 'none'; }
+        }
+        function _jiqSecReadHost() {
+            var host = document.getElementById('jiqFragSecRead');
+            if (host) return host;
+            var det = document.getElementById('jiqFragDetours');
+            if (!det || !det.parentNode) return null;
+            host = document.createElement('div');
+            host.id = 'jiqFragSecRead';
+            host.className = 'jiq-mw-pad';
+            det.parentNode.insertBefore(host, det.nextSibling);
+            return host;
+        }
+        function _jiqSecApply(d) {
+            var list = _jiqSecList || [];
+            var cur = null;
+            for (var k = 0; k < list.length; k++) if (list[k].id === _jiqSecCurrent) cur = list[k];
+            if (!cur && list.length) { cur = list[0]; _jiqSecCurrent = cur.id; }
+            if (!cur) return;
+            var journey = document.getElementById('jiqFragJourneyPane');
+            var click = document.getElementById('jiqFragClickPane');
+            var onClick = (cur.id === 'clickstream');
+            if (journey) journey.style.display = onClick ? 'none' : '';
+            if (click) click.style.display = onClick ? '' : 'none';
+            if (onClick && typeof _jiqFillFragClickstream === 'function') {
+                _jiqFillFragClickstream((typeof _jiqFragClickData !== 'undefined' && _jiqFragClickData) || d);
+            }
+            var onPath = (cur.id === 'path');
+            _jiqSecShow(_jiqSecOf(document.getElementById('jiqFragSpineNum')), onPath);
+            _jiqSecShow(document.getElementById('jiqFragSpine'), onPath);
+            _jiqSecShow(_jiqSecOf(document.getElementById('jiqFragForkNum')), onPath);
+            _jiqSecShow(document.getElementById('jiqFragFork'), onPath);
+            var onStars = (cur.id === 'stars');
+            _jiqSecShow(document.getElementById('jiqFragCastSec'), onStars);
+            _jiqSecShow(document.getElementById('jiqFragCast'), onStars);
+            var det = document.getElementById('jiqFragDetours');
+            var detNum = document.getElementById('jiqFragDetourNum');
+            var detHead = document.getElementById('jiqFragDetourHead');
+            var any = false;
+            var shown = 0;
+            if (det) {
+                for (var i = 0; i < det.children.length; i++) {
+                    var on = cur.tables.indexOf(i) >= 0;
+                    _jiqSecShow(det.children[i], on);
+                    any = any || on;
+                    if (on) shown++;
+                }
+                _jiqSecShow(det, any);
+                // one or two tables take the width; three or more keep the grid
+                det.classList.remove('is-seg-1');
+                det.classList.remove('is-seg-2');
+                if (shown === 1) det.classList.add('is-seg-1');
+                if (shown === 2) det.classList.add('is-seg-2');
+            }
+            _jiqSecShow(_jiqSecOf(detNum), any);
+            if (any) {
+                var n = list.indexOf(cur) + 1;
+                if (detNum) detNum.textContent = (n < 10 ? '0' + n : String(n)) + ' ' + cur.label;
+                if (detHead) detHead.textContent = cur.head || cur.label;
+            }
+            var readHost = _jiqSecReadHost();
+            if (readHost) {
+                var onRead = (cur.id === 'read');
+                _jiqSecShow(readHost, onRead);
+                if (onRead) {
+                    var r = (d && d.the_read) || {};
+                    var c = (d && d.copy) || {};
+                    var L = (typeof _jiqMediaWeekList === 'function') ? _jiqMediaWeekList : function() { return ''; };
+                    readHost.innerHTML =
+                        L('The short version', 'What we found, why it matters, what to do.', r.tldr || c.tldr || [])
+                        + L('Reads', 'Each line carries its number.', r.reads || c.reads || [])
+                        + L('What to do next', 'Where to put the next dollar.', r.recommendations || c.recommendations || []);
+                }
+            }
+        }
+        function _jiqSecPaintTabs(d, runMeta) {
+            var bar = document.getElementById('jiqFragTabBar');
+            if (!bar) return;
+            _jiqSecReset();
+            if (typeof _jiqPremIsRun === 'function' && _jiqPremIsRun(runMeta)) {
+                if (typeof _jiqPremPaintTabs === 'function') _jiqPremPaintTabs(d, runMeta);
+                return;
+            }
+            if (typeof _jiqPremReset === 'function') _jiqPremReset();
+            if (window.JIQ_LONG_SCROLL) return;        // the explicit fallback: one scroll
+            _jiqSecData = d;
+            _jiqSecList = _jiqSecBuild(d);
+            if (!_jiqSecList.some(function(s) { return s.id === _jiqSecCurrent; })) _jiqSecCurrent = 'path';
+            bar.className = 'jiq-ufc-tabbar jiq-music-navbar';
+            bar.style.display = '';
+            bar.innerHTML = '<div class="jiq-music-nav"><label>Section<select id="jiqSecSel">'
+                + _jiqSecList.map(function(s) {
+                    return '<option value="' + s.id + '"' + (s.id === _jiqSecCurrent ? ' selected' : '') + '>'
+                        + _jiqFragEsc(s.label) + '</option>';
+                }).join('')
+                + '</select></label><span class="jiq-sec-count">' + _jiqSecList.length + ' sections</span></div>';
+            var sel = document.getElementById('jiqSecSel');
+            if (sel) {
+                sel.addEventListener('change', function() {
+                    _jiqSecCurrent = sel.value || 'path';
+                    _jiqSecApply(_jiqSecData);
+                });
+            }
+            _jiqSecApply(d);
+        }
         // ─── The stars, side by side (journey_kind premiere, 2026-10-19) ───
         // A premiere journey carries cast_drivers: the same measures for
         // every star, in the same order. The card sits between the fork
@@ -118821,7 +119007,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var subject = (fullMeta && (fullMeta.customer_brand || fullMeta.target_name))
                     || 'Young Sheldon';
                 if (hero) {
-                    art.innerHTML = '<img src="' + _jiqFragEsc(hero) + '" alt="" onerror="this.remove()">';
+                    var heroCredit = (p && p.hero_credit) || (d.meta && d.meta.hero_credit) || (fullMeta && fullMeta.hero_credit) || '';
+                    art.innerHTML = '<img src="' + _jiqFragEsc(hero) + '" alt="" onerror="this.remove()">'
+                        + (heroCredit ? '<span class="jiq-frag-art-credit">' + _jiqFragEsc(heroCredit) + '</span>' : '');
                     art.classList.remove('is-ini');
                     art.classList.add('is-ys');
                     art.classList.remove('is-dexter');
@@ -192431,6 +192619,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         object-fit: cover; object-position: center;
         border-radius: 12px 0 0 12px;
     }
+    .jiq-frag-art-credit {
+        position: absolute; right: 10px; bottom: 8px; font-size: 9.5px; letter-spacing: .02em;
+        color: rgba(233, 232, 225, .78); background: rgba(12, 22, 24, .55); padding: 2px 7px; border-radius: 4px;
+    }
+    .jiq-sec-count { align-self: flex-end; font-size: 11px; color: #7C878A; padding-bottom: 10px; }
+    body[data-theme="light"] .jiq-sec-count { color: #888C89; }
     .jiq-frag-art.is-ys img { object-position: center 18%; }
     .jiq-frag-art.is-ufc img { object-position: 68% 18%; }
     .jiq-frag-art.is-arrow img { object-position: 38% 18%; }
@@ -192607,6 +192801,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
     }
     @media (max-width: 1100px) { .jiq-frag-detours { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
     @media (max-width: 720px)  { .jiq-frag-detours { grid-template-columns: 1fr; } }
+    /* a section picked from the select with one or two tables uses the width */
+    .jiq-frag-detours.is-seg-1 { grid-template-columns: minmax(0, 1fr); max-width: 860px; }
+    .jiq-frag-detours.is-seg-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .jiq-frag-detours.is-seg-1 .jiq-frag-detkids, .jiq-frag-detours.is-seg-2 .jiq-frag-detkids { max-width: none; }
     .jiq-frag-det h5 {
         margin: 0 0 10px; font-size: 10.5px; font-weight: 700; letter-spacing: .12em;
         text-transform: uppercase; color: #9AA09B;

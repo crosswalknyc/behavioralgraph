@@ -32,11 +32,19 @@ def build_pdf(payload: dict) -> bytes:
     half_w = (full_w - 0.28 * 72) / 2
     col2 = d.m + half_w + 0.28 * 72
 
-    # 01 cover
-    d.new_page(True, 'Digital Journey IQ', f"{T} bought online: the path from the first post to the order.",
-               f"Unique US people, {window}. Every count is a person, not a household.")
+    # 01 cover: the name, then the claim (the NCIS: New York cover is the
+    # precedent, Jenna 2026-10-19); the journey's own still on the right
+    hero = str(meta.get('hero_image') or '')
+    name = str(meta.get('project_name') or meta.get('target_name') or f"{T} on {P}")
+    cover_title = name.rsplit(' on ', 1)[0].strip() if (meta.get('title_noun') and ' on ' in name) else name
+    tw = full_w * (0.52 if hero else 1.0)
+    d.new_page(True, 'Digital Journey IQ', cover_title + ('' if cover_title.endswith('.') else '.'),
+               f"Unique US people, {window}. Every count is a person, not a household.", text_width=tw)
+    if hero:
+        d.cover_photo(hero, credit=str(meta.get('hero_credit') or ''))
+    n_tables = len((payload.get('fragrance_shop_journey') or {}).get('detours') or [])
     d.paragraph(f"How content about {T} turned into an online order, step by step, who left the cart and why, "
-                f"and the eleven tables behind it.", d.m, d.y - 10, full_w * 0.7, size=12, color=BODY_DARK)
+                f"and the {n_tables} tables behind it.", d.m, d.y - 10, tw * 0.9, size=12, color=BODY_DARK)
 
     # 02 TLDR
     d.new_page(False, 'The short version', f"{_fmt(s['paid'])} people bought {T} online within 30 days of seeing a post.",
@@ -130,6 +138,60 @@ def build_pdf(payload: dict) -> bytes:
     if comp:
         bits.append(f"{_fmt(comp.get('accounts'))} went to a competitor and {_pct(_sub(comp, G.AFTER_LEFT_SUBROWS[2]), comp.get('accounts'))} of them bought the other brand.")
     d.meaning(' '.join(bits) or f"{_fmt(s['paid_return'])} of the {_fmt(s['abandoned'])} who left came back and paid.")
+
+    # 07b where the leavers went
+    ww = G.section(payload, 'where_went')
+    ww_rows = (ww or {}).get('rows') or []
+    if ww_rows:
+        top_ww = next((r for r in ww_rows if not re.match(r"^nowhere", str(r.get('label')), re.I)), ww_rows[0])
+        nowhere = next((r for r in ww_rows if re.match(r"^nowhere", str(r.get('label')), re.I)), None)
+        d.new_page(False, 'Where the leavers went', f"{_fmt(top_ww.get('accounts'))} of the {_fmt(s['abandoned'])} who left went to {G.lead_lower(str(top_ww.get('label')))} first.",
+                   "The first place each person went after leaving the cart. One row per person.")
+        d.table('Where the cart leavers went next', _rows_for(ww, s['abandoned'], limit=10), d.m, d.y, full_w, head=('Destination', 'People', 'Share'),
+                note=f"Share of the {_fmt(s['abandoned'])} who left the cart.")
+        nutri = next((r for r in ww_rows if re.search(r"nutrition|health|webmd|healthline", str(r.get('label')), re.I)), None)
+        comp2 = next((r for r in ww_rows if re.search(r"competitor|rival|another brand", str(r.get('label')), re.I)), None)
+        bits2 = [f"{_pct(top_ww.get('accounts'), s['abandoned'])} went to {G.lead_lower(str(top_ww.get('label')))}."]
+        if nowhere:
+            bits2.append(f"For {_fmt(nowhere.get('accounts'))} the session simply ended; the retarget is the only way back to them.")
+        if nutri:
+            bits2.append(f"{_fmt(nutri.get('accounts'))} went to read about sugar, caffeine or ingredients; that group is the hardest to win back.")
+        if comp2:
+            bits2.append(f"{_fmt(comp2.get('accounts'))} went straight to a competitor.")
+        d.meaning(' '.join(bits2))
+
+    # 07c what they bought and what they searched for
+    tp, sr = G.section(payload, 'top_products'), G.section(payload, 'searched')
+    tp_rows, sr_rows = (tp or {}).get('rows') or [], (sr or {}).get('rows') or []
+    if tp_rows or sr_rows:
+        lead = tp_rows[0] if tp_rows else None
+        hdr2 = (f"{lead.get('label')} led the orders at {_pct(lead.get('accounts'), s['paid'])}." if lead else "What they bought, and what they typed to get there.")
+        d.new_page(False, 'What they bought and searched for', hdr2,
+                   f"The ten things bought most across the {_fmt(s['paid'])} orders, and what the {_fmt(s['search'])} who looked it up typed.")
+        y1 = d.y
+        if tp_rows:
+            y1 = d.table(str((tp or {}).get('title') or 'Top 10 products bought'), _rows_for(tp, s['paid'], limit=11), d.m, d.y, half_w,
+                         head=('Product', 'People', 'Share'), note=f"Share of the {_fmt(s['paid'])} orders. Everything else is the long tail.")
+        if sr_rows:
+            y2 = d.table('What they searched for', _rows_for(sr, s['search'], limit=7), col2, d.y, half_w, head=('Cluster', 'People', 'Share'),
+                         note=f"Share of the {_fmt(s['search'])} who searched.")
+            yy = y2 - 12
+            for r in sr_rows[:4]:
+                kids = [str(b.get('label')) for b in (r.get('breakdown') or []) if b.get('label')][:3]
+                if kids:
+                    yy = d.paragraph(f"{r.get('label')}: {', '.join(kids)}", col2, yy, half_w, size=8.5, color=BODY_DARK) - 3
+        bits3 = []
+        named = [r for r in tp_rows if not G._is_tail_row(r.get('label'))]
+        if len(named) > 1:
+            bits3.append(f"{named[0].get('label')} and {named[1].get('label')} together took {_pct(int(named[0].get('accounts') or 0) + int(named[1].get('accounts') or 0), s['paid'])} of the orders.")
+        chans = [b for b in ((lead or {}).get('breakdown') or []) if b.get('label')]
+        if chans:
+            cb = max(chans, key=lambda b: int(b.get('accounts') or 0))
+            bits3.append(f"Most {lead.get('label')} orders came through {G.lead_lower(str(cb.get('label')))} ({_pct(cb.get('accounts'), lead.get('accounts'))} of them).")
+        if sr_rows:
+            c0 = sr_rows[0]
+            bits3.append(f"{c0.get('label')} was the biggest search cluster at {_pct(c0.get('accounts'), s['search'])}.")
+        d.meaning(' '.join(bits3) or "What was bought and what was searched, side by side.")
 
     # 08 the whole audience
     ro, ev = G.section(payload, 'rest_overlap'), G.section(payload, 'every_buyer')

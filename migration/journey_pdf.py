@@ -152,6 +152,14 @@ def pdf_filename(payload: dict) -> str:
     if G.is_premiere_journey(payload):
         stem = re.sub(r'[^A-Za-z0-9]+', '_', f"{T} premiere first episode audience Digital Journey").strip('_')
         return f"{stem}.pdf"
+    meta = payload.get('meta') or {}
+    if meta.get('title_noun'):
+        # the file is named for the audience alone ("Online Soda Shoppers");
+        # the noun ("soda") is for the sentences inside
+        name = str(meta.get('project_name') or meta.get('target_name') or '')
+        T = name.rsplit(' on ', 1)[0].strip() if ' on ' in name else (name.strip() or T)
+        stem = re.sub(r'[^A-Za-z0-9]+', '_', f"{T} Digital Journey").strip('_')
+        return f"{stem}.pdf"
     P = re.sub(r"\s*\(.*$", '', str(P or '')).strip() or P
     stem = re.sub(r'[^A-Za-z0-9]+', '_', f"{T} on {P} Digital Journey").strip('_')
     return f"{stem}.pdf"
@@ -192,6 +200,7 @@ class _Doc:
                             preserveAspectRatio=True, anchor='sw', mask='auto')
         except Exception:
             pass
+        self._eyebrow = eyebrow
         c.setFont(self.f['medium'], 8.5)
         c.setFillColor(colors.HexColor(GREEN if dark else OLIVE))
         c.drawRightString(self.right, self.H - 0.62 * 72, eyebrow.upper())
@@ -200,7 +209,7 @@ class _Doc:
         c.drawString(self.m, 0.42 * 72, 'CROSSWALK  /  BEHAVIORAL INTELLIGENCE ENGINE')
         c.drawRightString(self.right, 0.42 * 72, f"{self.page:02d}")
 
-    def new_page(self, dark: bool, eyebrow: str, header: str, sub: str = ''):
+    def new_page(self, dark: bool, eyebrow: str, header: str, sub: str = '', text_width: float = 0):
         from reportlab.lib import colors
         if self.page:
             self.c.showPage()
@@ -210,18 +219,79 @@ class _Doc:
         c.setFillColor(colors.HexColor(OFFWHITE if dark else GRAPHITE))
         c.setFont(self.f['bold'], 20)
         y = self.H - 1.35 * 72
-        for line in self._wrap(header, self.f['bold'], 20, self.right - self.m):
+        tw = text_width or (self.right - self.m)
+        for line in self._wrap(header, self.f['bold'], 20, tw):
             c.drawString(self.m, y, line)
             y -= 26
         if sub:
             c.setFont(self.f['regular'], 11)
             c.setFillColor(colors.HexColor(BODY_DARK if dark else BODY_LIGHT))
-            for line in self._wrap(sub, self.f['regular'], 11, self.right - self.m):
+            for line in self._wrap(sub, self.f['regular'], 11, tw):
                 c.drawString(self.m, y - 4, line)
                 y -= 15
         self.y = y - 18
         self.dark = dark
         return self.y
+
+    def cover_photo(self, image, credit: str = '') -> bool:
+        """The journey's still on the right half of the cover, bleeding to
+        the page edge, with its credit in small muted type under it. A
+        licensed photo keeps its author on the page (never in a header).
+        ``image`` is a local path, bytes, or an http URL (fetched once into
+        the temp dir). Returns False, drawing nothing, when it cannot load."""
+        from reportlab.lib import colors
+        try:
+            from reportlab.lib.utils import ImageReader
+            from PIL import Image as _Im
+            import io as _io
+            if isinstance(image, (bytes, bytearray)):
+                raw = bytes(image)
+            elif str(image).startswith(('http://', 'https://')):
+                import hashlib as _hl
+                import tempfile as _tf
+                import urllib.request as _ur
+                cache = Path(_tf.gettempdir()) / ('jiq_cover_' + _hl.sha1(str(image).encode()).hexdigest()[:12])
+                if not cache.exists():
+                    req = _ur.Request(str(image), headers={'User-Agent': 'Mozilla/5.0 (Crosswalk journey pdf)'})
+                    with _ur.urlopen(req, timeout=30) as r:
+                        cache.write_bytes(r.read())
+                raw = cache.read_bytes()
+            else:
+                raw = Path(str(image)).read_bytes()
+            im = _Im.open(_io.BytesIO(raw)).convert('RGB')
+            x0 = self.W * 0.56
+            w, h = self.W - x0, self.H
+            scale = max(w / im.width, h / im.height)
+            im = im.resize((max(1, int(im.width * scale)), max(1, int(im.height * scale))))
+            left, top = (im.width - w) // 2, (im.height - h) // 2
+            im = im.crop((int(left), int(top), int(left + w), int(top + h)))
+            self.c.drawImage(ImageReader(im), x0, 0, width=w, height=h)
+            # a soft wash where the photo meets the type so the ground reads as one
+            for i in range(28):
+                a = 0.85 * (1 - i / 28.0)
+                self.c.setFillColor(colors.Color(12 / 255.0, 22 / 255.0, 24 / 255.0, alpha=a))
+                self.c.rect(x0 + i * 2.2, 0, 2.2, h, stroke=0, fill=1)
+            # the chrome the photo covered goes back on top of it, each line
+            # on a small graphite pill so it reads on a light photograph
+            from reportlab.pdfbase.pdfmetrics import stringWidth as _sw
+
+            def _pill(text, font, size, y, color):
+                w = _sw(text, font, size)
+                self.c.setFillColor(colors.Color(12 / 255.0, 22 / 255.0, 24 / 255.0, alpha=0.62))
+                self.c.roundRect(self.right - w - 8, y - 4, w + 16, size + 8, 4, stroke=0, fill=1)
+                self.c.setFont(font, size)
+                self.c.setFillColor(color)
+                self.c.drawRightString(self.right, y, text)
+
+            eyebrow = str(getattr(self, '_eyebrow', '') or '').upper()
+            if eyebrow:
+                _pill(eyebrow, self.f['medium'], 8.5, self.H - 0.62 * 72, colors.HexColor(GREEN))
+            _pill(f"{self.page:02d}", self.f['regular'], 7.5, 0.42 * 72, colors.Color(233 / 255.0, 232 / 255.0, 225 / 255.0, alpha=0.95))
+            if credit:
+                _pill(str(credit), self.f['regular'], 7.5, 0.42 * 72 + 16, colors.Color(233 / 255.0, 232 / 255.0, 225 / 255.0, alpha=0.9))
+            return True
+        except Exception:
+            return False
 
     def _wrap(self, text: str, font: str, size: float, width: float) -> List[str]:
         from reportlab.pdfbase.pdfmetrics import stringWidth

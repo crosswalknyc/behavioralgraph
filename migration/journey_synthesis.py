@@ -970,9 +970,19 @@ def build_journey(inputs: dict, prim: dict, *,
             f'fork identity broken: paid_return {paid_return} vs '
             f'returned {returned}')
         assert paid_first + paid_return == paid
+        # a purchase journey says "bought" where the generic shape says
+        # "converted" (2026-10-19, the soda file: the fork read "Left
+        # without converting" next to a branch note that said BOUGHT)
+        _buy = (journey_family(inputs, prim) == 'purchase'
+                and not is_ticketing_journey(inputs, prim))
+        _w = {'left': 'Left without buying' if _buy else 'Left without converting',
+              'left_doing': 'Left with the order one step away' if _buy else 'Left with the conversion one step away',
+              'back_paid': 'Bought after coming back' if _buy else 'Converted after coming back',
+              'back_paid_doing': 'Bought after leaving and coming back' if _buy else 'Converted after leave and return',
+              'same': 'Bought in the same session' if _buy else 'Converted in the same session'}
         fork_rows = [
-            {'id': 'abandoned', 'label': 'Left without converting',
-             'doing': 'Left with the conversion one step away',
+            {'id': 'abandoned', 'label': _w['left'],
+             'doing': _w['left_doing'],
              'accounts': abandoned,
              'kept': round(abandoned / penult * 100, 4),
              'dropped': penult - abandoned,
@@ -991,16 +1001,16 @@ def build_journey(inputs: dict, prim: dict, *,
              'dropped': retargeted - returned,
              'surface': surfaces.get('returned') or '',
              'timing': timings.get('returned') or ''},
-            {'id': 'paid_return', 'label': 'Converted after coming back',
-             'doing': 'Converted after leave and return',
+            {'id': 'paid_return', 'label': _w['back_paid'],
+             'doing': _w['back_paid_doing'],
              'accounts': paid_return,
              'kept': round(paid_return / returned * 100, 4)
              if returned else 0.0,
              'dropped': returned - paid_return,
              'surface': surfaces.get('paid_return') or '',
              'timing': timings.get('paid_return') or ''},
-            {'id': 'paid_first', 'label': 'Converted in the same session',
-             'doing': 'Converted in the same session',
+            {'id': 'paid_first', 'label': _w['same'],
+             'doing': _w['same'],
              'accounts': paid_first,
              'kept': round(paid_first / penult * 100, 4),
              'dropped': abandoned,
@@ -1079,6 +1089,10 @@ def build_journey(inputs: dict, prim: dict, *,
                 else str(inputs.get('journey_kind') or 'purchase')),
             'clip_url': str(inputs.get('clip_url') or '') or None,
             'category': str(prim.get('category') or 'brands'),
+            # a category journey's noun for the standard sentences and
+            # table titles ("soda" under the name "Online Soda Shoppers")
+            'title_noun': str(inputs.get('title_noun') or '').strip() or None,
+            'platform_label': platform,
             'created_by': created_by, 'created_at': now,
         },
         'fragrance_shop_journey': blob,

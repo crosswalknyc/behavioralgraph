@@ -159,8 +159,19 @@ def _title_platform(payload: dict, inputs: Optional[dict] = None) -> tuple:
     subj = str((inputs or {}).get('subject') or '').strip()
     plat = str((inputs or {}).get('platform') or '').strip()
     name = str(meta.get('target_name') or meta.get('project_name') or meta.get('target') or '')
+    # A category journey names its audience ("Online Soda Shoppers") and
+    # carries the noun the sentences and table titles use ("soda"), so a
+    # standard title reads "First soda content they saw", never "First
+    # Online Soda Shoppers content they saw" (2026-10-19).
+    noun = str((inputs or {}).get('title_noun') or meta.get('title_noun') or '').strip()
+    if noun:
+        subj = noun
     if not subj:
         subj = name.rsplit(' on ', 1)[0].strip() if ' on ' in name else name.strip()
+    if not plat:
+        # a journey named for its audience alone ("Online Soda Shoppers")
+        # carries the places the order happened on the meta
+        plat = str(meta.get('platform_label') or '').strip()
     if not plat and ' on ' in name:
         plat = name.rsplit(' on ', 1)[1].strip()
     if not plat:
