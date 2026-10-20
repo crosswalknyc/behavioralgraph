@@ -18924,6 +18924,50 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
             color: var(--text-primary) !important;
         }
 
+        /* ---- 11n. Profile IQ empty state: clean landing, not the menu -------
+           Desktop renders a 360px "Select a profile" menu beside the empty-
+           state landing (rules at ~26619-26658, no media query). On phones that
+           360px menu filled the screen, so Profile IQ "opened to the menu".
+           Mobile: hide the menu until the user taps Browse profiles, give the
+           landing the full width, and reveal the menu full-width (with a close
+           button) on demand. Each selector carries a `body` prefix purely to
+           outrank those non-media no-profile rules. Open/close is the existing
+           _piqV4ToggleSidebar (Browse CTA = open, close X = close). */
+        body #dashboardView.piq-v4:not(.piq-has-profile) .dashboard-layout {
+            flex-direction: column !important;
+            min-height: 0 !important;
+            height: auto !important;
+        }
+        body #dashboardView.piq-v4:not(.piq-has-profile):not(.piq-sidebar-open) #piqProfileSidebar {
+            display: none !important;
+        }
+        body #dashboardView.piq-v4:not(.piq-has-profile) #dashboardEmptyState {
+            min-height: 46vh !important;
+            padding: 36px 22px 56px !important;
+        }
+        body #dashboardView.piq-v4:not(.piq-has-profile) .piq-empty h2 {
+            font-size: 32px !important;
+        }
+        body #dashboardView.piq-v4:not(.piq-has-profile) .piq-empty p {
+            font-size: 14px !important;
+        }
+        body #dashboardView.piq-v4:not(.piq-has-profile) #piqEmptyBrowseBtn {
+            display: inline-flex !important;
+        }
+        body #dashboardView.piq-v4:not(.piq-has-profile).piq-sidebar-open #piqProfileSidebar {
+            display: flex !important;
+            width: 100% !important;
+            min-width: 0 !important;
+            max-width: 100% !important;
+            border-right: 0 !important;
+        }
+        body #dashboardView.piq-v4:not(.piq-has-profile).piq-sidebar-open #dashboardEmptyState {
+            display: none !important;
+        }
+        body #dashboardView.piq-v4:not(.piq-has-profile).piq-sidebar-open #piqPickerCloseBtn {
+            display: inline-flex !important;
+        }
+
         /* ---- 11b. Profile IQ v4 toolbar: tidy the parked controls -------------
            v4's _piqV4ParkChrome() moves Data Cuts, Select Profile, Export,
            Hover, US% into #toolbarContent as one flex-wrap row (orders 8/9/10).
