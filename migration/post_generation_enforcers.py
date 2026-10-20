@@ -9010,6 +9010,16 @@ _TALENT_FAMILY = {
     'HOST/PERSONALITY', 'BUSINESS/TECH LEADERS', 'POLITICS/ACTIVIST', 'POLITICS', 'PODCAST',
     'NFL ATHLETE', 'NBA ATHLETE', 'MLB ATHLETE', 'NHL ATHLETE', 'SOCCER',
     'WRITER/DIRECTOR/AUTHOR/ARTIST',
+    # The creator role columns (both spellings the canonical list carries).
+    # 2026-10-20, the DraftKings Users build for Mark Valdez: a creator's
+    # TALENT row and content-vertical row agreed (Dude Perfect 27.9 /
+    # 28.8, Jomboy 18.9 / 18.1, Jason Kelce 42.4 / 43.6) while the
+    # CREATOR/INFLUENCER row reasoned apart sat at half (14.3 / 8.1 /
+    # 25.4), because this set never named the role column, so the person
+    # mirror (one value per person across TALENT, the role and the
+    # vertical) skipped it. 555 of 1,642 creators on that file carried a
+    # spread above 0.5pp.
+    'CREATOR/INFLUENCER', 'INFLUENCER/CREATOR', 'EMERGING TALENT',
 }
 _TALENT_FAMILY |= set(_TCV_COLUMNS)
 
