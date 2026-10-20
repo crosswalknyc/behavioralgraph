@@ -374,9 +374,14 @@ def _research_platforms(title, kind, host, ask=''):
     """One research call when nothing in house knows the title."""
     if host is None or not host.has('claude_data'):
         return {}
+    cached = _cache_get(title, kind, host)
+    if cached:
+        return cached
     try:
         import prometheus_analysis as _pma
-        tools = [_pma.WEB_SEARCH_TOOL]
+        # two searches at most: a where-to-watch lookup is one page read,
+        # and six searches on the analysis model ran past two minutes
+        tools = [dict(_pma.WEB_SEARCH_TOOL, max_uses=2)]
     except Exception:
         tools = None
     user = (f"Title as the person wrote it: {title!r}. Kind: {kind or 'unknown'}. Their question: {ask!r}. "
@@ -397,11 +402,51 @@ def _research_platforms(title, kind, host, ask=''):
             plats.append({'name': display_name(p['name']), 'how': _carriage_of(p.get('how')), 'source': 'web'})
         elif isinstance(p, str) and p.strip():
             plats.append({'name': display_name(p), 'how': '', 'source': 'web'})
-    return {'title': str(data.get('title') or '').strip(), 'year': str(data.get('year') or '').strip(),
-            'kind': str(data.get('kind') or '').strip(), 'platforms': plats,
-            'home_release': str(data.get('home_release') or '').strip(),
-            'candidates': [str(c) for c in (data.get('candidates') or []) if str(c).strip()][:5],
-            'confidence': float(data.get('confidence') or 0)}
+    out = {'title': str(data.get('title') or '').strip(), 'year': str(data.get('year') or '').strip(),
+           'kind': str(data.get('kind') or '').strip(), 'platforms': plats,
+           'home_release': str(data.get('home_release') or '').strip(),
+           'candidates': [str(c) for c in (data.get('candidates') or []) if str(c).strip()][:5],
+           'confidence': float(data.get('confidence') or 0)}
+    if out['confidence'] >= 0.6 and plats:
+        _cache_put(title, kind, host, out)
+    return out
+
+
+# A confident research read is kept three days per title (a title's
+# carriage changes when it moves to a subscription service; a repeat
+# ask inside the window answers at once).
+_CACHE_PREFIX = 'system/where_watched/'
+_CACHE_TTL_S = 3 * 24 * 3600
+
+
+def _cache_key(title, kind):
+    return f"{_CACHE_PREFIX}{_ns._fold(title) or 'untitled'}_{kind or 'title'}.json"
+
+
+def _cache_get(title, kind, host):
+    try:
+        import json
+        if host is None or not host.has('s3_client'):
+            return {}
+        s3 = host.s3_client
+        doc = json.loads(s3.get_object(Bucket='dashboard-inputs', Key=_cache_key(title, kind))['Body'].read().decode('utf-8'))
+        if time.time() - float(doc.get('at') or 0) > _CACHE_TTL_S:
+            return {}
+        return doc.get('research') or {}
+    except Exception:
+        return {}
+
+
+def _cache_put(title, kind, host, research):
+    try:
+        import json
+        if host is None or not host.has('s3_client'):
+            return
+        host.s3_client.put_object(Bucket='dashboard-inputs', Key=_cache_key(title, kind),
+                                  Body=json.dumps({'at': time.time(), 'title': title, 'kind': kind, 'research': research}).encode('utf-8'),
+                                  ContentType='application/json')
+    except Exception:
+        pass
 
 
 def resolve(title, kind='title', *, host=None, connect=None, live=True, research=True, ask=''):
