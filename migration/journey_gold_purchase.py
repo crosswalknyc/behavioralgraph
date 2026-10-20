@@ -50,20 +50,20 @@ US_GEN_POP = 329_900_000
 # with the order, where the leavers went with why they left. Every
 # purchase journey carries them.
 STANDARD = (
-    ('first_post', 'First {title} content they saw', 'social', 'partition', 'First {title} content on the account'),
-    ('post_surface', 'Where the first post sat', 'social', 'partition', 'Surface of the first {title} content'),
-    ('posts_before', 'How many posts before they looked {title} up', 'search', 'partition', 'Posts on the account before the first search'),
-    ('looked_before', 'Where they looked before the cart', 'page', 'overlap', 'Looked for {title} before the cart'),
+    ('first_post', 'First {product} content they saw', 'social', 'partition', 'First {product} content on the account'),
+    ('post_surface', 'Where the first post sat', 'social', 'partition', 'Surface of the first {product} content'),
+    ('posts_before', 'How many posts before they looked {product} up', 'search', 'partition', 'Posts on the account before the first search'),
+    ('looked_before', 'Where they looked before the cart', 'page', 'overlap', 'Looked for {product} before the cart'),
     ('searched', 'What they searched for', 'search', 'partition', 'Typed in search before the product page'),
     ('time_to_buy', 'Time from the first post to the order', 'end', 'partition', 'Days from the first post to the order'),
-    ('first_product', 'What they bought first', 'end', 'partition', 'First {title} order on the account'),
+    ('first_product', 'What they bought first', 'end', 'partition', 'First {product} order on the account'),
     ('top_products', 'Top 10 products bought', 'end', 'partition', 'Bought in an online order within 30 days of the post'),
     ('last_touch', 'Last touch before the order', 'end', 'partition', 'Last click before paying'),
     ('assists', 'What assisted the order', 'end', 'overlap', 'Assist on the order'),
     ('after_left', 'After they left the cart: what they did next', 'abandoned', 'partition', 'Next step after leaving the cart'),
     ('where_went', 'Where the cart leavers went next', 'abandoned', 'partition', 'First place they went after leaving the cart'),
     ('rest_overlap', 'The rest of the social and online purchase overlap', 'rest', 'partition', 'Did both, outside the 30 days'),
-    ('every_buyer', 'Every online {title} buyer in the window', 'buyers', 'partition', 'Online {title} buyers'),
+    ('every_buyer', 'Every online {product} buyer in the window', 'buyers', 'partition', 'Online {product} buyers'),
 )
 # The section each table sits in on the dashboard (the select that
 # segments the page, Jenna 2026-10-19) and in the PDF. The top-ten table
@@ -123,20 +123,20 @@ AFTER_LEFT_SUBROWS = ('Came back and paid', 'Came back but did not buy', 'Bought
                       'No further step in the window')
 
 FALLBACK_ROWS = {
-    'first_post': (('A creator clip featuring {title}', 26.4), ("{title}'s own posts", 22.7), ('A flavor review or ranking', 17.9),
+    'first_post': (('A creator clip featuring {product}', 26.4), ("{product}'s own posts", 22.7), ('A flavor review or ranking', 17.9),
                    ('A partner brand or collab post', 13.6), ('A meme or reaction post', 11.3), ('A news or deal post', 8.1)),
     'post_surface': (('TikTok', 31.6), ('Instagram', 26.3), ('YouTube', 14.7), ('Facebook', 11.9), ('Reddit', 8.4), ('X', 7.1)),
-    'looked_before': (('Google, where to buy {title}', 38.7), ('Amazon search', 34.2), ('Walmart search', 19.8), ('The {title} site', 17.6),
+    'looked_before': (('Google, where to buy {product}', 38.7), ('Amazon search', 34.2), ('Walmart search', 19.8), ('The {product} site', 17.6),
                       ('Instacart or a grocery app search', 12.9), ('Reddit, is it worth it', 9.3)),
     'first_product': (('The best-known flavor, single can or 12-pack', 29.4), ('A new or limited flavor', 23.8), ('A variety pack', 18.6),
                       ('A sugar-free or zero option', 15.7), ('A multipack bundle', 12.5)),
-    'last_touch': (('Retailer product page revisit', 27.8), ('Retargeting ad', 21.4), ('{title} site flavor page', 15.6),
-                   ('A creator link or code', 14.2), ('Retailer search for {title}', 12.1), ('An email or app push', 8.9)),
+    'last_touch': (('Retailer product page revisit', 27.8), ('Retargeting ad', 21.4), ('{product} site flavor page', 15.6),
+                   ('A creator link or code', 14.2), ('Retailer search for {product}', 12.1), ('An email or app push', 8.9)),
     'assists': (('Read reviews on the retailer page', 51.2), ('Watched a flavor review clip', 46.3), ('Saw a retargeting ad', 42.1),
                 ('Compared the price on another retailer', 33.6), ('A Reddit or forum thread', 24.7), ('A second social post', 19.8)),
-    'after_left': (('Hunted for a discount code or coupon', 24.3, 'Searched for a {title} discount code or opened a coupon extension', 11.8, 6.2),
+    'after_left': (('Hunted for a discount code or coupon', 24.3, 'Searched for a {product} discount code or opened a coupon extension', 11.8, 6.2),
                    ('Compared the price elsewhere', 19.7, 'Checked the same product on another retailer, unit price and pack size', 7.4, 14.6),
-                   ('Checked caffeine, ingredients and safety', 16.8, 'Searched whether {title} is safe, how much caffeine, read a Reddit or forum thread', 3.1, 9.7),
+                   ('Checked caffeine, ingredients and safety', 16.8, 'Searched whether {product} is safe, how much caffeine, read a Reddit or forum thread', 3.1, 9.7),
                    ('Read reviews and flavor threads', 12.6, 'Retailer reviews, flavor rankings, creator reviews', 5.9, 8.3),
                    ('Looked at a competitor instead', 11.4, 'Opened a competing brand page or compared alternatives', 1.7, 31.2),
                    ('Balked at shipping or the pack size', 8.9, 'Shipping cost, minimum order or a 12-pack where they wanted one can', 2.6, 7.1),
@@ -155,12 +155,12 @@ FALLBACK_ROWS = {
 }
 # the labels under a search cluster when the research gave no terms
 SEARCHED_TERMS_FALLBACK = {
-    'Coupons and deals': ('{title} coupon', '{title} deals this week', '{title} promo code'),
-    'Price and pack size': ('{title} 12 pack price', '{title} case price', 'cheapest {title}'),
-    'Health, sugar and ingredients': ('is {title} bad for you', '{title} zero sugar', '{title} ingredients'),
-    'Brand and flavor discovery': ('new {title} flavor', 'best {title} flavor', '{title} flavors ranked'),
-    'Where to buy and delivery': ('buy {title} online', '{title} delivery near me', '{title} in stock'),
-    'Reviews and rankings': ('{title} review', '{title} reddit', '{title} vs'),
+    'Coupons and deals': ('{product} coupon', '{product} deals this week', '{product} promo code'),
+    'Price and pack size': ('{product} 12 pack price', '{product} case price', 'cheapest {product}'),
+    'Health, sugar and ingredients': ('is {product} bad for you', '{product} zero sugar', '{product} ingredients'),
+    'Brand and flavor discovery': ('new {product} flavor', 'best {product} flavor', '{product} flavors ranked'),
+    'Where to buy and delivery': ('buy {product} online', '{product} delivery near me', '{product} in stock'),
+    'Reviews and rankings': ('{product} review', '{product} reddit', '{product} vs'),
 }
 
 RESEARCH_PROMPT = """You complete the standard sections of a Crosswalk Digital Journey for a consumer product bought online. Return JSON only.
@@ -193,7 +193,31 @@ def is_purchase_journey(payload: dict, inputs: Optional[dict] = None) -> bool:
 
 
 def _fill(title: str, platform: str, text: str) -> str:
-    return str(text or '').replace('{title}', title).replace('{platform}', platform)
+    """{product} (and its older spelling {title}) is the thing bought;
+    {platform} is where the order happened. Never the audience name."""
+    return (str(text or '').replace('{product}', title).replace('{title}', title)
+            .replace('{platform}', platform))
+
+
+_PRODUCT_SLOT = re.compile(r"content|buyer|post|order|bought|looked|cart|search|product|purchas|flavor|pack|brand", re.I)
+
+
+def refill_audience(text, audience: str, product: str):
+    """A label or line built on an earlier pass with the AUDIENCE name
+    standing where the product belongs ("Online Online Soda Shoppers
+    buyers", "Bought Online Soda Shoppers on Amazon") reads with the
+    product. Only a string that also carries a product-slot word moves;
+    the audience name on its own (the cover) stays."""
+    t = str(text or '')
+    a = str(audience or '').strip()
+    pr = str(product or '').strip()
+    if not t or not a or not pr or a.lower() == pr.lower() or a.lower() not in t.lower():
+        return text
+    if not _PRODUCT_SLOT.search(t):
+        return text
+    out = re.sub(re.escape(a), pr, t, flags=re.I)
+    out = re.sub(r"\b(\w+) \1\b", r"\1", out, flags=re.I)      # "Online online soda" -> "Online soda"
+    return out
 
 
 def _tp(payload: dict, inputs: Optional[dict] = None) -> tuple:
@@ -588,7 +612,7 @@ def apply(payload: dict, inputs: Optional[dict] = None, claude_json: Optional[Ca
             elif key == 'every_buyer':
                 rows = [{'label': 'Bought within 30 days of a social post', 'accounts': end, 'doing': doing_f},
                         {'label': 'Bought outside the 30 days after a post', 'accounts': rest_total, 'doing': doing_f},
-                        {'label': _fill(title, platform, 'No {title} social post seen'), 'accounts': no_post, 'doing': doing_f}]
+                        {'label': _fill(title, platform, 'No {product} social post seen'), 'accounts': no_post, 'doing': doing_f}]
                 for r in rows:
                     r['pct'] = round(r['accounts'] / buyers * 100, 4) if buyers else 0.0
                 src = 'derived'
@@ -652,6 +676,29 @@ def apply(payload: dict, inputs: Optional[dict] = None, claude_json: Optional[Ca
             d['group'] = group_for(None, d.get('title'))
         for d, (key, _t, _b, _k, _d) in zip(built, STANDARD):
             d['group'] = group_for(key, d.get('title'))
+        # rows carried from an earlier pass may still name the audience
+        # where the product belongs (2026-10-19, Online Soda Shoppers)
+        audience = str((payload.get('meta') or {}).get('project_name') or '').rsplit(' on ', 1)[0].strip()
+        if audience and audience.lower() != title.lower():
+            for d in built + extras:
+                d['title'] = refill_audience(d.get('title'), audience, title)
+                for r in d.get('rows') or []:
+                    for fld in ('label', 'doing'):
+                        if isinstance(r.get(fld), str):
+                            r[fld] = refill_audience(r[fld], audience, title)
+                    for b in (r.get('breakdown') or []):
+                        if isinstance(b, dict) and isinstance(b.get('label'), str):
+                            b['label'] = refill_audience(b['label'], audience, title)
+            cp0 = j.get('copy') or {}
+            for k in (cp0.get('kpis') or []):
+                if isinstance(k, dict) and isinstance(k.get('l'), str):
+                    k['l'] = refill_audience(k['l'], audience, title)
+            for fld in ('deck', 'lead', 'spineHead', 'forkRead', 'detourHead'):
+                if isinstance(cp0.get(fld), str):
+                    cp0[fld] = refill_audience(cp0[fld], audience, title)
+            for f in (payload.get('facts') if isinstance(payload.get('facts'), list) else []):
+                if isinstance(f, dict) and isinstance(f.get('value'), str):
+                    f['value'] = refill_audience(f['value'], audience, title)
         j['detours'] = built + extras
         facts = payload.get('facts') if isinstance(payload.get('facts'), list) else []
         labels = {str(f.get('label') or '') for f in facts if isinstance(f, dict)}
@@ -860,5 +907,5 @@ def lead_lower(t: str) -> str:
     return t[:1].lower() + t[1:] if re.match(r"^(?:A|An|The)\b", t) else t
 
 
-__all__ = ['STANDARD', 'RESEARCHED', 'AFTER_LEFT_SUBROWS', 'KEEP_RESEARCH_TITLE', 'GROUPS', 'group_for', 'apply', 'is_gold', 'is_purchase_journey', 'section',
+__all__ = ['STANDARD', 'RESEARCHED', 'AFTER_LEFT_SUBROWS', 'KEEP_RESEARCH_TITLE', 'GROUPS', 'group_for', 'refill_audience', 'apply', 'is_gold', 'is_purchase_journey', 'section',
            'ship_summary', 'ship_lines', 'analysis_points', 'recommendations']

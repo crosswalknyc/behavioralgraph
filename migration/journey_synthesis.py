@@ -142,6 +142,11 @@ round numbers, no two identical rates. Return STRICT JSON only:
 
 {
   "customer_brand": str,          // who this file is for
+  "product": str,                 // the thing bought, as the sentences
+                                  // name it: the brand for a brand
+                                  // journey ("Ghost Energy Drink"), the
+                                  // category noun for a category journey
+                                  // ("soda"). Never the audience name.
   "category": str,                // short category tag
   "title_status": "catalog"|"returning"|"new",   // catalog = last new
                                   // episode or release 2+ years ago;
@@ -761,8 +766,66 @@ def rescale_breakdown(row: dict, seed) -> None:
         b['pct'] = round(b['accounts'] / float(base) * 100, 4)
 
 
+# The words that name an audience rather than a thing bought. A subject
+# built from them ("Online Soda Shoppers", "Running Shoe Buyers") names
+# the people; the product is what is left once they come off.
+_AUDIENCE_NOUNS = re.compile(
+    r"\b(?:shoppers?|buyers?|purchasers?|consumers?|customers?|fans?|viewers?|listeners?|"
+    r"players?|readers?|subscribers?|users?|owners?|drinkers?|eaters?|audiences?|households?)\b", re.I)
+_AUDIENCE_QUALIFIERS = re.compile(
+    r"^(?:online|digital|us|u\.s\.|american|frequent|heavy|new|first[- ]time|repeat|regular|casual|avid|potential)\s+", re.I)
+
+
+def derive_product(subject: str, prim: Optional[dict] = None, inputs: Optional[dict] = None) -> str:
+    """The thing bought, for the sentences and table titles (2026-10-19,
+    Online Soda Shoppers: the labels read "First Online Soda Shoppers
+    content they saw" and "Bought Online Soda Shoppers on Amazon" because
+    the subject name stood where the product belongs).
+
+    Order: a product the brief named (inputs.product / what_they_buy /
+    title_noun), then the research's own `product`, then the subject with
+    its audience words taken off ("Online Soda Shoppers" -> "soda"). A
+    subject with no audience word is a brand or title and IS the
+    product ("Ghost Energy Drink")."""
+    inputs = inputs or {}
+    for k in ('product', 'what_they_buy', 'title_noun'):
+        v = str(inputs.get(k) or '').strip()
+        if v:
+            return v
+    v = str((prim or {}).get('product') or '').strip()
+    subj = str(subject or '').strip()
+    if v and not _AUDIENCE_NOUNS.search(v) and v.lower() != subj.lower():
+        return v
+    if v and v.lower() == subj.lower() and not _AUDIENCE_NOUNS.search(subj):
+        return v
+    if not _AUDIENCE_NOUNS.search(subj):
+        return subj
+    core = _AUDIENCE_NOUNS.sub(' ', subj)
+    core = re.sub(r"\bwho\b.*$", ' ', core, flags=re.I)
+    core = ' '.join(core.replace(',', ' ').split())
+    while core and _AUDIENCE_QUALIFIERS.search(core):
+        core = _AUDIENCE_QUALIFIERS.sub('', core, count=1).strip()
+    core = core.strip(' -:')
+    if not core:
+        return subj
+    # a category noun reads lowercase ("soda", "running shoes"); a proper
+    # name keeps its capitals ("Nike", "Dr Pepper")
+    if core.lower() in _COMMON_CATEGORY_NOUNS:
+        core = core.lower()
+    return core
+
+
+_COMMON_CATEGORY_NOUNS = frozenset((
+    'soda', 'energy drinks', 'energy drink', 'running shoes', 'sneakers', 'fragrance', 'luxury fragrance', 'perfume', 'coffee',
+    'protein bars', 'protein powder', 'candy', 'chips', 'snacks', 'beer', 'wine', 'water', 'sparkling water', 'skincare', 'makeup',
+    'vitamins', 'supplements', 'dog food', 'cat food', 'pet food', 'diapers', 'laundry detergent', 'toothpaste', 'shampoo',
+    'headphones', 'phone cases', 'books', 'audiobooks', 'games', 'video games', 'board games', 'toys', 'tea', 'cereal', 'ice cream',
+    'frozen pizza', 'pizza', 'burgers', 'tickets', 'concert tickets', 'luggage', 'jewelry', 'watches', 'sunglasses', 'apparel', 'activewear',
+))
+
+
 def build_copy(subject: str, platform: str, blob: dict, *,
-               family: str) -> dict:
+               family: str, product: Optional[str] = None) -> dict:
     """The copy block the Digital Journey tab paints from (title, lead,
     deck, section heads, fork branch labels, KPI tiles). Without it the
     renderer falls back to the luxury-fragrance words, which is how a
@@ -779,11 +842,16 @@ def build_copy(subject: str, platform: str, blob: dict, *,
     window = str((blob.get('meta') or {}).get('window') or '')
     subj = subject.split(' (film)')[0].split(', opening weekend')[0].strip()
     plat = platform.split(' (')[0].strip()
+    # the thing bought / watched, where a sentence names it; the subject
+    # when the journey is named for a brand or a title, the product when
+    # it is named for its audience ("Online Soda Shoppers" buy soda)
+    thing = str(product or '').strip() or subj
+    audience_named = thing.lower() != subj.lower()
     carry = _pct1(end, entered)
     if family == 'ticketing':
         end_verb = 'went to a ticketing site for a ticket'
         end_short = 'reached the ticketing site'
-        tile_end = f'Went to a ticketing site for a ticket to {subj}'
+        tile_end = f'Went to a ticketing site for a ticket to {thing}'
         kind_label = 'Ticketing journey'
         branch_a = 'REACHED THE TICKETING SITE IN THE SAME SESSION'
         no_claim = ' ' + TICKETING_NO_CLAIM
@@ -794,7 +862,7 @@ def build_copy(subject: str, platform: str, blob: dict, *,
     elif family == 'watch':
         end_verb = 'watched'
         end_short = 'watched'
-        tile_end = f'Watched {subj} on {plat}'
+        tile_end = f'Watched {thing} on {plat}'
         kind_label = 'Watch journey'
         branch_a = 'WATCHED IN THE SAME SESSION'
         no_claim = ''
@@ -805,7 +873,7 @@ def build_copy(subject: str, platform: str, blob: dict, *,
     else:
         end_verb = 'bought'
         end_short = 'bought'
-        tile_end = f'Bought {subj} on {plat}'
+        tile_end = f'Bought {thing} on {plat}'
         kind_label = 'Purchase journey'
         branch_a = 'BOUGHT IN THE SAME SESSION'
         no_claim = ''
@@ -822,7 +890,9 @@ def build_copy(subject: str, platform: str, blob: dict, *,
     steps = ', '.join(('who ' + _lc(s['label']))
                       for s in spine[1:-1][:4])
     copy = {
-        'titleHtml': f'{subj}<br>{where}.',
+        # a journey named for its audience reads by its name alone (Jenna
+        # 2026-10-19); a brand or title pairs with where it happened
+        'titleHtml': (f'{subj}.' if audience_named else f'{subj}<br>{where}.'),
         'eyebrow': f'{kind_label} \u00b7 {window}',
         'lead': (f'{carry} of the people who {_lc(first["label"])} '
                  f'went on to the last step: they {end_verb}.{no_claim}'),
@@ -900,6 +970,7 @@ def build_journey(inputs: dict, prim: dict, *,
     primitive fails loudly instead of shipping a broken nest."""
     subject = str(inputs['subject']).strip()
     platform = str(inputs['platform']).strip()
+    product = derive_product(subject, prim, inputs)
     tam = int(inputs.get('tam_accounts') or US_GEN_POP)
     tam_label = str(inputs.get('tam_label') or 'US population')
     start, end = _dates(inputs)
@@ -1089,9 +1160,11 @@ def build_journey(inputs: dict, prim: dict, *,
                 else str(inputs.get('journey_kind') or 'purchase')),
             'clip_url': str(inputs.get('clip_url') or '') or None,
             'category': str(prim.get('category') or 'brands'),
-            # a category journey's noun for the standard sentences and
-            # table titles ("soda" under the name "Online Soda Shoppers")
-            'title_noun': str(inputs.get('title_noun') or '').strip() or None,
+            # the thing bought, for the standard sentences and table
+            # titles ("soda" under the name "Online Soda Shoppers"; the
+            # brand itself on a brand journey). title_noun is its alias.
+            'product': product,
+            'title_noun': product if product.lower() != subject.lower() else None,
             'platform_label': platform,
             'created_by': created_by, 'created_at': now,
         },
@@ -1112,7 +1185,7 @@ def build_journey(inputs: dict, prim: dict, *,
         payload = apply_ticketing_language(payload)
     family = journey_family(inputs, prim)
     payload['fragrance_shop_journey']['copy'] = build_copy(
-        subject, platform, payload['fragrance_shop_journey'], family=family)
+        subject, platform, payload['fragrance_shop_journey'], family=family, product=product)
     if prim.get('cover_title'):
         payload['fragrance_shop_journey']['copy']['titleHtml'] = (
             str(prim['cover_title']).strip().rstrip('.') + '.')
@@ -1983,7 +2056,7 @@ def apply_attribution_anchors(payload: dict, camp: dict, inputs: dict,
     family = journey_family(inputs)
     try:
         j['copy'] = build_copy(str(inputs.get('subject') or ''), str(inputs.get('platform') or ''),
-                               j, family=family)
+                               j, family=family, product=str((payload.get('meta') or {}).get('product') or '') or None)
     except Exception:
         pass
     payload.setdefault('meta', {})['anchored_to'] = {

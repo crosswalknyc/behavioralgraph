@@ -163,7 +163,8 @@ def _title_platform(payload: dict, inputs: Optional[dict] = None) -> tuple:
     # carries the noun the sentences and table titles use ("soda"), so a
     # standard title reads "First soda content they saw", never "First
     # Online Soda Shoppers content they saw" (2026-10-19).
-    noun = str((inputs or {}).get('title_noun') or meta.get('title_noun') or '').strip()
+    noun = str((inputs or {}).get('product') or (inputs or {}).get('title_noun')
+               or meta.get('product') or meta.get('title_noun') or '').strip()
     if noun:
         subj = noun
     if not subj:
