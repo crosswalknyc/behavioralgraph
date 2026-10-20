@@ -40,6 +40,7 @@ from __future__ import annotations
 import hashlib
 import re
 import threading
+import time
 import traceback
 
 from . import named_subject as _ns
@@ -190,12 +191,37 @@ _DISPLAY = {
 }
 
 
+_FAMILY = (
+    (('primevideo', 'amazonvideo', 'amazonprime', 'amazonmgm'), 'Prime Video'),
+    (('appletvplus',), 'Apple TV+'), (('appletv', 'itunes'), 'Apple TV'),
+    (('fandango', 'vudu'), 'Fandango at Home'), (('googletv', 'googleplay'), 'Google TV'),
+    (('youtubemovies', 'youtubetv', 'youtube'), 'YouTube'), (('mgmplus', 'mgm'), 'MGM+'),
+    (('hbomax', 'max'), 'Max'), (('paramountplus', 'paramount'), 'Paramount+'),
+    (('disneyplus', 'disney'), 'Disney+'), (('hulu',), 'Hulu'), (('netflix',), 'Netflix'),
+    (('peacock',), 'Peacock'), (('starz',), 'Starz'), (('plex',), 'Plex'), (('tubi',), 'Tubi'),
+    (('plutotv', 'pluto'), 'Pluto TV'), (('rokuchannel', 'roku'), 'The Roku Channel'),
+    (('microsoft', 'xbox'), 'Microsoft Store'), (('britbox',), 'BritBox'), (('hallmark',), 'Hallmark+'),
+    (('kanopy',), 'Kanopy'), (('crunchyroll',), 'Crunchyroll'), (('spotify',), 'Spotify'),
+    (('applepodcasts',), 'Apple Podcasts'), (('iheart',), 'iHeartRadio'), (('pandora',), 'Pandora'),
+    (('siriusxm',), 'SiriusXM'), (('amazonmusic', 'amazonpodcasts'), 'Amazon Music'), (('audible',), 'Audible'),
+)
+
+
 def display_name(label):
-    k = _ns._fold(label)
+    """One name per service: 'Prime Video (Amazon Video)', 'Amazon' and
+    'amazon' are Prime Video; 'Apple TV (iTunes)' is Apple TV; 'MGM Plus'
+    is MGM+. A name no family claims is kept as written, parenthetical off."""
+    s = re.sub(r"\s*\([^)]*\)\s*", " ", str(label or '')).strip()
+    k = _ns._fold(s) or _ns._fold(label)
     if k in _DISPLAY:
         return _DISPLAY[k]
-    s = str(label or '').strip()
-    return s
+    for toks, name in _FAMILY:
+        if any(k == t or k.startswith(t) or (len(t) >= 5 and t in k) for t in toks):
+            return name
+    return s or str(label or '').strip()
+
+
+_RESOLVE_BUDGET_S = 150.0     # the live look and the research call together, at most
 
 
 def _carriage_of(how):
@@ -285,7 +311,7 @@ def _on_topic(show, title):
     return len(str(title).split()) >= 2 and t in s
 
 
-def _live_platforms(title, kind, timeout_s=45.0):
+def _live_platforms(title, kind, timeout_s=40.0):
     """StreamScout's live look across the video (or podcast) services,
     time-boxed. Returns (present, unverified). Only rows whose resolved
     show names THIS title count (a service's catalog carries many near
@@ -400,26 +426,66 @@ def resolve(title, kind='title', *, host=None, connect=None, live=True, research
         out['candidates'] = shows
     _add(cm_plats)
     in_house = bool(out['platforms'])
-    if live and not in_house:
-        # the map and the library know nothing: a live look across the services
-        present, unverified = _live_platforms(title, kind)
+    if in_house:
+        out['found'] = True
+        return out
+    # The map and the library know nothing. The live look across the
+    # services and the one research call run side by side (each is tens
+    # of seconds; the reader waits for the slower, not the sum). Research
+    # names the services and how each carries the title (a rental
+    # storefront and a subscription service are different markets).
+    boxes = {}
+
+    def _live():
+        try:
+            boxes['live'] = _live_platforms(title, kind)
+        except Exception as e:
+            boxes['live_err'] = str(e)[:120]
+
+    def _research():
+        try:
+            boxes['research'] = _research_platforms(title, kind, host, ask=ask)
+        except Exception as e:
+            boxes['research_err'] = str(e)[:120]
+
+    t0 = time.monotonic()
+    threads = []
+    if live:
+        threads.append(threading.Thread(target=_live, daemon=True))
+    if research:
+        threads.append(threading.Thread(target=_research, daemon=True))
+    for th in threads:
+        th.start()
+    for th in threads:
+        th.join(max(1.0, _RESOLVE_BUDGET_S - (time.monotonic() - t0)))
+    present, unverified = boxes.get('live') or ([], [])
+    r = boxes.get('research') or {}
+    confident = bool(r) and float(r.get('confidence') or 0) >= 0.6 and bool(r.get('platforms'))
+    if confident:
+        _add(r['platforms'])
+        out['researched'] = True
+        out['title'] = r.get('title') or title
+        out['year'] = r.get('year') or ''
+        out['kind'] = r.get('kind') or out['kind']
+        out['home_release'] = r.get('home_release') or ''
+        named = {_ns._fold(p['name']) for p in out['platforms']}
+        for p in present:
+            if _ns._fold(p['name']) in named:
+                continue
+            # a service the live look lists under this name that the
+            # researched release does not sit on: a same-name listing
+            # (the 1952 Mutiny on MGM+ next to the 2026 film), kept apart
+            out.setdefault('same_name', []).append(p['name'])
+    else:
         _add(present)
-        out['unverified'] = unverified
-    carriage_known = any(_carriage_of(p.get('how')) for p in out['platforms'])
-    if research and (not out['platforms'] or (not in_house and not carriage_known)):
-        # nothing in house, or a live hit with no word on how it is carried
-        # (a rental storefront and a subscription service are different
-        # markets): one research call names the services and the carriage
-        r = _research_platforms(title, kind, host, ask=ask)
-        if r and float(r.get('confidence') or 0) >= 0.6 and r.get('platforms'):
-            _add(r['platforms'])
-            out['researched'] = True
-            out['title'] = r.get('title') or title
-            out['year'] = r.get('year') or ''
-            out['kind'] = r.get('kind') or out['kind']
-            out['home_release'] = r.get('home_release') or ''
-        elif r and r.get('candidates') and not out['platforms']:
+        if r and r.get('candidates') and not out['platforms']:
             out['candidates'] = r['candidates']
+    out['unverified'] = unverified
+    try:
+        print(f"[where-watched] {title!r}: live {len(present)} service(s), research "
+              f"{'confident' if confident else ('none' if not r else 'unsure')}, {time.monotonic() - t0:.0f}s")
+    except Exception:
+        pass
     out['found'] = bool(out['platforms'])
     return out
 
@@ -431,7 +497,7 @@ def resolve(title, kind='title', *, host=None, connect=None, live=True, research
 # US digital rentals and purchases; a title included in a subscription
 # splits across the services by their US reach.
 _STOREFRONT_W = {'Prime Video': 46.0, 'Apple TV': 24.0, 'Fandango at Home': 12.0, 'YouTube': 8.5, 'Google TV': 4.5,
-                 'Microsoft Store': 1.6, 'Xfinity': 2.2, 'DIRECTV': 1.2}
+                 'Microsoft Store': 1.6, 'Xfinity': 2.2, 'DIRECTV': 1.2, 'Plex': 1.4, 'The Roku Channel': 1.5}
 _SUBSCRIPTION_W = {'Netflix': 68.0, 'Prime Video': 45.0, 'Disney+/Hulu': 51.0, 'Hulu': 36.0, 'Disney+': 32.0, 'Max': 20.0,
                    'Paramount+': 15.0, 'Peacock': 14.5, 'Apple TV+': 15.8, 'Starz': 6.2, 'MGM+': 3.1, 'BritBox': 1.6,
                    'Hallmark+': 1.9, 'Tubi': 24.0, 'Pluto TV': 18.0, 'The Roku Channel': 16.0, 'Freevee': 12.0, 'YouTube': 30.0,
@@ -543,6 +609,8 @@ def compose(res, shares, *, page='', ask=''):
             rank = shares.index(hit) + 1
             lines.append(f"{pg} is the profile open on your screen: " + ("the largest share of" if rank == 1 else f"the number {rank} share of")
                          + f" {title}'s home viewers sits there.")
+    if res.get('same_name'):
+        lines.append(f"A title named {title} also sits on {_join(res['same_name'])}; this read is the {res.get('year') or 'named'} release.")
     if res.get('unverified') and res['unverified'] != ['every service'] and not res.get('researched'):
         lines.append(f"{_join(res['unverified'])} could not be checked just now; this read stands on the services that answered.")
     reply = ' '.join(lines)
