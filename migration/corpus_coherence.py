@@ -195,15 +195,29 @@ def _display_of(key, catalog_note=''):
 
 def lift_profile_in_place(s3, key, new_sample, *, subject, display_name='', reason='',
                           stamp=None, dry_run=False, follow_cuts=True, reindex=True):
+    """Lift a shipped Total Universe to ``new_sample`` (the corpus floor):
+    the upward case of resize_profile_in_place; a target at or below the
+    current sample is 'nothing to lift'."""
+    return resize_profile_in_place(s3, key, new_sample, subject=subject, display_name=display_name,
+                                   reason=reason, stamp=stamp, dry_run=dry_run, follow_cuts=follow_cuts,
+                                   reindex=reindex, direction='up')
+
+
+def resize_profile_in_place(s3, key, new_sample, *, subject, display_name='', reason='',
+                            stamp=None, dry_run=False, follow_cuts=True, reindex=True, direction='any'):
     """Resize a shipped Total Universe to ``new_sample`` under its own
     dated filename, scale its cuts by the same factor, re-index the
-    catalog. Returns the trail: {key, old_sample, new_sample,
+    catalog. ``direction`` 'up' refuses a smaller target, 'down' a
+    larger one, 'any' takes both (2026-10-20: a universe above its
+    published count comes down the same way one below the corpus floor
+    goes up). Returns the trail: {key, old_sample, new_sample,
     old_people, new_people, factor, backup, cuts: [...]}. Never a
     quarantine, never a hold; a frame that cannot be read is left as it
     is and the trail says so."""
     import pandas as pd
     stamp = stamp or _dt.datetime.now(_dt.timezone.utc).strftime('%Y%m%d_%H%M%S')
-    trail = {'key': key, 'new_sample': int(new_sample), 'cuts': [], 'reason': reason, 'dry_run': dry_run}
+    trail = {'key': key, 'new_sample': int(new_sample), 'cuts': [], 'reason': reason, 'dry_run': dry_run,
+             'direction': direction}
     try:
         body = s3.get_object(Bucket=BUCKET, Key=key)['Body'].read()
         df = pd.read_csv(io.BytesIO(body), low_memory=False)
@@ -214,8 +228,12 @@ def lift_profile_in_place(s3, key, new_sample, *, subject, display_name='', reas
     trail['old_sample'] = old
     trail['old_people'] = cc.projected_us(old)
     trail['new_people'] = cc.projected_us(new_sample)
-    if old <= 0 or int(new_sample) <= old:
-        trail['error'] = 'nothing to lift' if old > 0 else 'no sample on the frame'
+    if old <= 0:
+        trail['error'] = 'no sample on the frame'
+        return trail
+    if int(new_sample) == old or (direction == 'up' and int(new_sample) < old) \
+            or (direction == 'down' and int(new_sample) > old):
+        trail['error'] = 'nothing to lift' if direction == 'up' else 'nothing to resize'
         return trail
     factor = float(new_sample) / float(old)
     trail['factor'] = round(factor, 6)

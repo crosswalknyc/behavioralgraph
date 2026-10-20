@@ -85655,7 +85655,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     ? String(s.estimated_audience_sentence)
                         .trim().replace(/\.$/, '')
                     : 'Estimated audience: ' +
-                        _tuEst.toLocaleString('en-US') + ' individuals';
+                        _tuEst.toLocaleString('en-US') + ' inside the 10 million sample, about ' +
+                        Math.round(_tuEst * 32.99).toLocaleString('en-US') + ' US people';
                 facts.push(_audLine + ' (' + _incStr + '% incidence)');
                 var _avEst = s.subject_raw_avid;
                 if (s.run_avid !== false && typeof _avEst === 'number' && _avEst > 0) {

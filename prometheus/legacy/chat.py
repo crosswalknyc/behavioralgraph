@@ -28,6 +28,7 @@ from prometheus import faults as _faults   # swallowed faults are counted (audit
 from prometheus import store as _store   # relational shadow store (audit item 7)
 from prometheus import intents as _intents   # product-intent gates (extracted 2026-10-14)
 from prometheus import subject_rules as _subject_rules   # the open profile is context, never a default subject (2026-10-20)
+from prometheus import creator_fit as _creator_fit   # a creator-fit read is held to the subject's universe (2026-10-20)
 import io
 import hashlib
 import time
@@ -13701,6 +13702,16 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
     _t_stage = time.monotonic()
     try:
         res = pma.reconcile_breakdown_to_series(pma.enforce_metrics_coherence(data, so_what=_is_so_what, multi=_multi_qs), _ds_series)
+        # a creator-fit read is held to the subject's universe (the catalog's
+        # projected US people, the thread's banked figure, Gen Pop) so it can
+        # never disagree with the subject's profile (2026-10-20, Mark's
+        # DraftKings read: twelve creators 'together reach 8,947,163' against
+        # a build the thread quoted at under a million)
+        res = _creator_fit.apply(
+            res, text,
+            anchors_fn=lambda s: __import__('migration.corpus_catalog', fromlist=['anchors_for']).anchors_for(s, with_ledger=True),
+            genpop_fn=lambda: pma.load_genpop_map(_H.s3_client, _H.S3_BUCKET),
+            profile_loader=lambda k: pma.load_profile_df(_H.s3_client, _H.S3_BUCKET, k)[0])
         reply, _fig_ledger2 = _fig.compose(pma.format_generated_metrics_reply(res), _figs2, anchors_block)
     except Exception as e:
         traceback.print_exc()

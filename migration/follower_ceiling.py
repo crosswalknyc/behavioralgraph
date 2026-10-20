@@ -64,7 +64,9 @@ of or viewers of a certain video, etc that has easy to see public
 metrics will never exceed that value when projected."
 """
 from __future__ import annotations
+import hashlib
 import math
+import re
 
 US_POP = 329_900_000
 PANEL = 10_000_000
@@ -105,6 +107,57 @@ CAPPED_AUDIENCE_TYPES = frozenset({
 # broader set. Nothing outside this module should reference this
 # directly going forward — use CAPPED_AUDIENCE_TYPES.
 FOLLOWER_ONLY_TYPES = CAPPED_AUDIENCE_TYPES
+
+# A universe defined as a brand's own customers (2026-10-20, Jenna, the
+# DraftKings Users build: the interpret draft anchored on 28.8M 'ever
+# registered' at 99.8% engaged while the research held the published
+# count, and the profile projected 28.8M US people against DraftKings'
+# own 10.9M unique customers in the prior twelve months). The trailing
+# noun says the universe IS the published population, so the published
+# count caps it whatever audience_type the draft carried.
+_USER_UNIVERSE_RX = re.compile(
+    r"\b(?:users?|customers?|subscribers?|members?|payers?|players?|bettors?|account ?holders?|cardholders?|"
+    r"depositors?|policyholders?|riders?|guests?|diners?|shoppers?|buyers?|patients?|clients?)\b\s*$", re.I)
+# A monthly figure (MAU, MUP, monthly actives) understates a trailing
+# twelve months; the unique-over-a-year count runs this much above it.
+# DraftKings: 10.9M unique customers in the prior twelve months against
+# 4.05M average monthly unique payers (2.7x); the band keeps the
+# conversion salted, never a constant.
+ANNUAL_OVER_MONTHLY = (2.4, 3.0)
+
+
+def subject_is_user_universe(subject) -> bool:
+    """'DraftKings Users', 'Chime customers', 'Peacock subscribers' name
+    a brand's own population; 'Nike' or 'Reba McEntire fans' do not."""
+    s = ' '.join(str(subject or '').split())
+    if not s or len(s.split()) < 2:
+        return False
+    return bool(_USER_UNIVERSE_RX.search(s))
+
+
+def published_user_ceiling(metric, *, period='', subject='') -> int:
+    """The most US people a brand-user universe may project to, from a
+    published count. An annual or total count is the ceiling as is; a
+    monthly count (MAU / MUP) is lifted into the trailing-year band
+    with a subject-salted factor; 0 when nothing published."""
+    try:
+        m = int(float(metric or 0))
+    except (TypeError, ValueError):
+        return 0
+    if m <= 0:
+        return 0
+    p = str(period or '').strip().lower()
+    lo, hi = ANNUAL_OVER_MONTHLY
+    if p.startswith('month') or p in ('mau', 'mup', 'dau', 'monthly_unique', 'monthly uniques'):
+        h = int(hashlib.sha256(f"annual-over-monthly|{subject}|{m}".encode('utf-8')).hexdigest()[:8], 16)
+        factor = lo + (hi - lo) * (h % 10_000) / 10_000.0
+        return int(round(m * factor))
+    if p in ('annual', 'yearly', 'year', 'trailing_12', 'ttm', 'total', 'cumulative', 'lifetime', 'installed_base'):
+        return m
+    # period unknown (research built before the field existed): the
+    # count may be a monthly figure, so the ceiling is the top of the
+    # annual band; a universe above even that is off against the metric
+    return int(round(m * hi))
 
 
 def is_capped_audience(audience_type) -> bool:
