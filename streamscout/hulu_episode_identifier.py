@@ -258,13 +258,19 @@ def sitemap_lookup_url(title, kind):
     want = tokens(title)
     if not want:
         return None
+    # Hulu runs some titles together in the slug ('Nip/Tuck' is
+    # /series/niptuck-...), so the joined letters count as the same name
+    want_joined = ''.join(want)
     exact, supersets = [], []
     for u in sitemap_urls(kind):
         got = _slug_tokens(u)
-        if got == want:
+        got_joined = ''.join(got)
+        if got == want or got_joined == want_joined:
             exact.append(u)
         elif len(got) > len(want) and got[:len(want)] == want:
             supersets.append(u)
+        elif len(got) > 1 and got[0] == want_joined:
+            supersets.append(u)      # the run-together title with a suffix ('niptuck-en-espanol')
     if exact:
         return exact[0]
     if len(supersets) == 1:
