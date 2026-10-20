@@ -40,6 +40,15 @@ The rules, pure text, shared by every surface:
      been about (the reads Prometheus ran, the runs it started), so a
      which-subject question offers what the thread is about before the
      page.
+  6. reading_subject(reading, page): a subject the Reader found in the
+     words (a title, a brand, a person, a show), not the page and not a
+     pointer at the page, wins over the open tab. 2026-10-20, Jay Patel
+     at Prime Video: "where people watched the film mutiny" with Amazon
+     Prime Video open. The Reader had 'the film mutiny' as a title; the
+     open-screen confirm never looked and asked "Do you want this on
+     Amazon Prime Video?". Jenna: "it's trying to do the open tab agqain
+     instead of just telling him where people watch this piece of
+     content".
 
 No Flask, no S3, no model.
 """
@@ -49,7 +58,80 @@ import re
 
 __all__ = ['explicit_build_subject', 'conversational_turn', 'priced_handoff_allowed',
            'page_rejected_in_thread', 'thread_subjects', 'which_subject_payload',
-           'CONVERSATIONAL_NOTE', 'strip_lead_negation']
+           'CONVERSATIONAL_NOTE', 'strip_lead_negation', 'reading_subject', 'current_reading_subject']
+
+# A pointer at what is on the screen, never a subject of its own.
+_DEIXIS = frozenset(('<page>', 'this', 'that', 'it', 'this audience', 'this profile',
+                     'the audience', 'the profile', 'this one', 'these', 'those',
+                     'the page', 'this page', 'the open profile', 'the file', 'this file'))
+# The Reader's kinds that name a thing of their own. 'audience' and
+# 'cohort' describe the page's people; 'metric' and 'unknown' name nothing.
+_NAMED_KINDS = frozenset(('title', 'show', 'series', 'film', 'movie', 'book', 'podcast', 'game',
+                          'brand', 'company', 'person', 'talent', 'creator', 'artist', 'team',
+                          'league', 'franchise', 'platform', 'channel', 'app', 'event', 'place',
+                          'product', 'retailer', 'network', 'studio', 'album', 'song'))
+
+
+def reading_subject(reading, page, normalize=None):
+    """The subject the Reader found in the words that is not the open
+    page: its library spelling when it resolved, else as written with
+    the type words taken off ('the film mutiny' -> 'Mutiny'). '' when
+    the reading names nothing of its own, points at the page, or names
+    the page itself."""
+    if not isinstance(reading, dict):
+        return ''
+    norm = normalize or (lambda s: re.sub(r"[^a-z0-9]+", "", str(s or '').lower()))
+    page_n = norm(str(page or '').split(' - ')[0])
+    for s in (reading.get('subjects') or []):
+        if not isinstance(s, dict):
+            continue
+        as_written = str(s.get('as_written') or '').strip()
+        catalog = str(s.get('catalog') or '').strip()
+        kind = str(s.get('kind') or '').strip().lower()
+        if not as_written and not catalog:
+            continue
+        if as_written.lower().strip(" .?!") in _DEIXIS:
+            continue
+        if kind and kind not in _NAMED_KINDS:
+            continue
+        name = catalog or _bare_name(as_written)
+        if not name:
+            continue
+        n = norm(name.split(' - ')[0])
+        if not n or (page_n and (n == page_n or n in page_n or page_n in n)):
+            continue
+        return name
+    return ''
+
+
+def current_reading_subject(page, normalize=None):
+    """reading_subject over the Reader's reading for the request in
+    flight (flask.g._pm_reading); '' outside a request or without one."""
+    try:
+        from flask import g as _g
+        return reading_subject(getattr(_g, '_pm_reading', None), page, normalize)
+    except Exception:
+        return ''
+
+
+_TYPE_LEAD_RX = re.compile(
+    r"^(?:the|that|this|a|an)\s+(?:film|movie|show|series|title|book|novel|podcast|game|"
+    r"brand|app|channel|network|album|song|franchise|docuseries|documentary|sitcom|drama|"
+    r"musical|comic|manga|anime|cartoon|band|artist|author|company|team|league)\s+"
+    r"(?:called\s+|titled\s+|named\s+)?", re.I)
+
+
+def _bare_name(as_written):
+    """'the film mutiny' -> 'Mutiny'; "'mutiny'" -> 'Mutiny'; 'The Bear' stays."""
+    s = str(as_written or '').strip().strip("\"\u201c\u201d'\u2018\u2019 ")
+    s = _TYPE_LEAD_RX.sub('', s).strip().strip("\"\u201c\u201d'\u2018\u2019 ")
+    if not s:
+        return ''
+    if s == s.lower():
+        words = s.split()
+        s = ' '.join(w if (i and w in ('of', 'the', 'and', 'a', 'an', 'in', 'on', 'at', 'to', 'for', 'de', 'la'))
+                     else (w[:1].upper() + w[1:]) for i, w in enumerate(words))
+    return s
 
 # "run a profile on X", "build a profile for X", "pull a profile of X",
 # "run aprofile on X" (the missing space is the common typo), "profile X

@@ -687,6 +687,19 @@ def ask(user, body, *, via='session'):
             except Exception as _fx:
                 _faults.note('service.journey_lane', _fx)
                 _standing = None
+        if _standing is None:
+            # Where a named title is watched (Jay Patel 2026-10-20, "where
+            # people watched the film mutiny" with Prime Video open drew
+            # "Do you want this on Amazon Prime Video?"). The title in the
+            # words is the subject; the open profile is context at most.
+            # Deterministic routing, no charge, no draft; a title found
+            # nowhere is said plainly and the open tab is never offered.
+            try:
+                from . import where_watched as _ww
+                _standing = _ww.answer(text, ctx, host=host, user=user, history=history)
+            except Exception as _fx:
+                _faults.note('service.where_watched', _fx)
+                _standing = None
         if _standing is not None:
             _decision = {'surface': 'analyze', 'mode': None, 'reason': 'standing', 'client_hint': None}
             _out = _interpret_shape(_standing) if _client_surface == 'interpret' else _standing

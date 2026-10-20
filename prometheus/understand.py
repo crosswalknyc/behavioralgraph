@@ -467,6 +467,19 @@ def _decide(text, *, has_ctx=False, mode=None, extra=None, open_tabs=0,
                  client_hint='compare_picker')
         return d
 
+    # 4b. Where a named title is watched (Jay Patel 2026-10-20, "where
+    #     people watched the film mutiny" with Prime Video open drew the
+    #     open-tab confirm). The title in the words is the subject; the
+    #     service's where_watched lane answers it with no charge. With
+    #     or without data open, the page is context at most.
+    try:
+        from . import where_watched as _ww
+        if not subiq and _ww.parse(t) is not None:
+            d.update(surface='analyze', reason='where_watched')
+            return d
+    except Exception:
+        pass
+
     # 5. Search-journey demand carries its own subject.
     if not subiq and looks_search_demand(t):
         d.update(surface='analyze', mode='search_demand',

@@ -11569,6 +11569,11 @@ def _pm_open_screen_confirm(text, ctx, history=None):
                     named = ''
         except Exception:
             traceback.print_exc()
+        if not named:
+            # the Reader's own subject for the words wins over the open tab, lowercase or not (2026-10-20 Jay Patel, "the film mutiny")
+            named = _subject_rules.current_reading_subject(page, _norm)
+            if named:
+                _pm_ask_hint(route='screen_bind', outcome='bound_reader_subject', subject=named)
         if named and _norm(named) != _norm(page):
             _pm_ask_hint(route='screen_bind', outcome='bound_named_text',
                          subject=named)

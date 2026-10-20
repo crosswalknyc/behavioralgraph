@@ -506,7 +506,7 @@ _METRIC_LEAD = frozenset((
     'current', 'latest', 'newest', 'highest', 'lowest', 'fastest'))
 
 TYPE_NOUNS = (
-    r"series|shows?|books?|novels?|films?|movies?|franchise|podcasts?|"
+    r"series|shows?|books?|novels?|films?|movies?|titles?|franchise|podcasts?|"
     r"brands?|apps?|games?|channels?|networks?|albums?|tours?|teams?|"
     r"leagues?|magazines?|newsletters?|websites?|sites?|stores?|chains?|"
     r"restaurants?|services?|platforms?|labels?|studios?|trilogy|saga|"
@@ -521,6 +521,97 @@ TYPE_NOUNS = (
 _TYPED_NP_RX = re.compile(
     r"\b(?:the|that)\s+(?P<np>(?:[A-Za-z0-9][A-Za-z0-9&'.\-]*\s+){1,5}"
     r"(?:" + TYPE_NOUNS + r"))\b", re.I)
+# "the film mutiny", "the show gilmore girls", "the book 'the kiss
+# quotient'": the type noun LEADS and the name follows (2026-10-20,
+# Jay Patel: "where people watched the film mutiny" with Prime Video
+# open drew "Do you want this on Amazon Prime Video?"). The reader said
+# what kind of thing it is, so the name needs no capital letter.
+_CARRIAGE_END = (
+    r"(?=\s+(?:streaming|available|airing|playing|showing|carried|"
+    r"offered|released|premier(?:ed|es|ing)|dropp(?:ed|ing)|landed|"
+    r"out|now|without|with|while|after|before|instead|outside|"
+    r"beyond|through|via|at|among)\b|"
+)
+_TYPE_LED_Q_RX = re.compile(
+    r"\b(?:the|that|this)\s+(?P<kind>" + TYPE_NOUNS + r")\s+"
+    r"(?:called\s+|titled\s+|named\s+)?"
+    r"[\"\u201c\u201d'\u2018\u2019](?P<name>[^\"\u201c\u201d'\u2018\u2019]{2,60})"
+    r"[\"\u201c\u201d'\u2018\u2019]", re.I)
+_TYPE_LED_RX = re.compile(
+    r"\b(?:the|that|this)\s+(?P<kind>" + TYPE_NOUNS + r")\s+"
+    r"(?:called\s+|titled\s+|named\s+)?"
+    r"[\"\u201c\u201d'\u2018\u2019]?"
+    r"(?!(?:and|or|but|nor|vs|versus|than|that|which|who|whose|is|are|was|were|"
+    r"in|on|of|for|to|with|without|by|at|from|as|if|so|then|there|here|"
+    r"it|its|they|them|we|you|he|she|his|her|their|our|your|my)\b)"
+    r"(?P<name>(?:the\s+|a\s+|an\s+)?[A-Za-z0-9][A-Za-z0-9 .&'\-+:!]{1,70}?)"
+    r"[\"\u201c\u201d'\u2018\u2019]?"
+    + _CARRIAGE_END + _OBJECT_END[3:], re.I)
+_TYPE_WORD_RX = re.compile(r"^(?:" + TYPE_NOUNS + r")$", re.I)
+
+
+def type_led_subject(text):
+    """The (name, kind) a type-led phrase names: "the film mutiny" ->
+    ('Mutiny', 'film'), "that show gilmore girls" -> ('Gilmore Girls',
+    'show'). ('', '') when the text carries none. Quotes around the name
+    are dropped; a leading "the" inside the name stays ("the book the
+    kiss quotient" -> 'The Kiss Quotient')."""
+    t = str(text or '')
+    hits = list(_TYPE_LED_Q_RX.finditer(t)) or list(_TYPE_LED_RX.finditer(t))
+    for m in hits:
+        raw = m.group('name').strip(" ,;:.\"\u201c\u201d'\u2018\u2019")
+        words = [w for w in raw.split() if w]
+        if not words:
+            continue
+        lead_the = words[0].lower() == 'the' and len(words) > 1
+        core = words[1:] if (words[0].lower() in ('a', 'an') or lead_the) else words
+        if not core or len(core) > 7 or core[0].lower() in _METRIC_LEAD:
+            continue
+        if _TYPE_WORD_RX.match(core[0]) and len(core) == 1:
+            continue    # "the film series" names no title
+        label = _title(core)
+        if lead_the:
+            label = 'The ' + label
+        if label.lower() in _NEVER_SUBJECT or raw.lower() in _NEVER_SUBJECT:
+            continue
+        kind = re.sub(r"\s+", " ", m.group('kind').lower())
+        return label, kind
+    return '', ''
+
+
+def names_in_structure(name, text):
+    """True when ``text`` names ``name`` by structure, so the name needs
+    no capital letter: a type-led phrase ("the film mutiny"), the thing
+    a population consumes ("where people watched mutiny", "who reads
+    lore olympus"), or a quoted title. The open page may then never be
+    offered in its place."""
+    n = str(name or '').strip()
+    t = str(text or '')
+    if not n or not t:
+        return False
+    tl, _k = type_led_subject(t)
+    if tl and _fold(tl) == _fold(n):
+        return True
+    for m in _QUOTED_RX.finditer(t):
+        if _fold(m.group(1)) == _fold(n) or _fold_the(m.group(1)) == _fold_the(n):
+            return True
+    population = bool(POPULATION_RX.search(t)) or bool(
+        re.match(r"\s*(?:where|who|when|how\s+often)(?:'s|\s+is|\s+are|\s+all|\s+do|\s+did|\s+does)?\s+", t, re.I))
+    if population:
+        for m in _CONSUME_OBJECT_RX.finditer(t):
+            obj = re.sub(r"^(?:the|a|an)\s+", "", m.group('obj').strip(), flags=re.I)
+            obj = re.sub(r"^(?:" + TYPE_NOUNS + r")\s+", "", obj, flags=re.I)
+            if obj and (_fold(obj) == _fold(n) or _fold_the(obj) == _fold_the(n)):
+                return True
+    return False
+
+
+def _fold(s):
+    return re.sub(r"[^a-z0-9]+", "", str(s or '').lower())
+
+
+def _fold_the(s):
+    return _fold(re.sub(r"^\s*the\s+", "", str(s or ''), flags=re.I))
 _QUOTED_RX = re.compile(
     r"[\"\u201c\u201d'\u2018\u2019]([^\"\u201c\u201d'\u2018\u2019]{2,60})"
     r"[\"\u201c\u201d'\u2018\u2019]")
@@ -602,12 +693,17 @@ def mentioned_subject(text, page, normalize, stop, plausible=None):
         return ''
     page_d = distinct_tokens(page or '', normalize, stop)
     cands = []
+    _tl, _tk = type_led_subject(t)
+    if _tl:
+        cands.append(_tl)      # "the film mutiny": named by its kind, any case
     for m in _OF_SUBJECT_RX.finditer(t):
         cands.append(m.group('obj'))
     for m in _ABOUT_SUBJECT_RX.finditer(t):
         cands.append(m.group('obj'))
+    quoted = set()
     for m in _QUOTED_RX.finditer(t):
         cands.append(m.group(1))
+        quoted.add(re.sub(r"\s+", " ", m.group(1)).strip(" ,;:.'\"").lower())
     for m in _TYPED_NP_RX.finditer(t):
         cands.append(m.group('np'))
     if population:
@@ -620,6 +716,7 @@ def mentioned_subject(text, page, normalize, stop, plausible=None):
             cands.append(lead + m.group(1))
     for raw in cands:
         raw = re.sub(r"\s+", " ", str(raw or '')).strip(" ,;:.'\"")
+        was_quoted = raw.lower() in quoted
         if not raw or len(raw) > 80:
             continue
         words = [w for w in raw.split() if w]
@@ -629,9 +726,16 @@ def mentioned_subject(text, page, normalize, stop, plausible=None):
         core = words[1:] if words and words[0].lower() in ('the', 'a', 'an') else words
         if not core or len(core) > 7 or core[0].lower() in _METRIC_LEAD:
             continue
+        # a type noun that leads the object is the kind, not the name:
+        # "the film mutiny" -> Mutiny (2026-10-20, Jay Patel)
+        if len(core) > 1 and _TYPE_WORD_RX.match(core[0]):
+            core = core[1:]
+            lead_the = core[0].lower() == 'the' and len(core) > 1
+            if lead_the:
+                core = core[1:]
         label = _title(core)
-        if lead_the and len(core) == 1:
-            label = 'The ' + label        # "the office" -> The Office
+        if lead_the and (len(core) == 1 or was_quoted):
+            label = 'The ' + label        # "the office" -> The Office; a quoted title is verbatim
         if label.lower() in _NEVER_SUBJECT or raw.lower() in _NEVER_SUBJECT:
             continue
         named_d = distinct_tokens(label, normalize, stop)
@@ -780,6 +884,10 @@ def alternative_ok(name, text, in_library, plausible=None):
     t = str(text or '')
     if n.lower() in PLATFORM_WORDS:
         return False
+    # named by structure (a type-led phrase, the thing a population
+    # consumes, a quoted title): no capital letter needed (2026-10-20)
+    if names_in_structure(n, t):
+        return True
     # written as a name: every word of it appears capitalized (or as an
     # acronym) in the reader's own text, in order
     pat = r"\b" + r"\s+".join(

@@ -163,6 +163,25 @@ ROWS = [
         'examples': [], 'counter': [],
     },
     {
+        'id': 'where_watched', 'surface': 'analyze',
+        'reason': 'where_watched', 'client_action': 'analyze',
+        'note': 'Where a named title is watched ("where people watched '
+                'the film mutiny", "where do people watch gilmore girls", '
+                '"is the show the bear on hulu"): the title in the words is '
+                'the subject, answered from the library, the content map, '
+                'a live look across the services or one research call, '
+                'with the split of its viewers by service. No charge, no '
+                'draft, and never a confirm about the profile open on the '
+                'screen (Jay Patel 2026-10-20).',
+        'examples': [('where people watched the film mutiny', True),
+                     ('where do people watch gilmore girls', False),
+                     ('is the show the bear on hulu', True),
+                     ('what platform carries mutiny', False)],
+        'counter': [('how old is this audience', True),
+                    ('where do the people on this profile watch tv', True),
+                    ('run a profile on mountain dew', True)],
+    },
+    {
         'id': 'capability_question', 'surface': 'analyze',
         'reason': 'capability_question', 'client_action': 'analyze',
         'note': 'A question about what the product can do, answered '
