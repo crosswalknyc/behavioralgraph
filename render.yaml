@@ -103,6 +103,18 @@ services:
       # while still 'running' gets auto-marked failed. 1800 = 30 min.
       - key: BG_JOB_STALE_AFTER_SECONDS
         value: "1800"
+      # StreamScout US relay (2026-10-21, SiriusXM): build.sh installs
+      # Chromium here and the relay launches it from here; the two must
+      # agree. SiriusXM's gateway refuses sessions minted outside the US,
+      # so the dashboard (Oregon) mints the session and lists the episodes
+      # for the build server (Germany).
+      - key: PLAYWRIGHT_BROWSERS_PATH
+        value: "/opt/render/project/.cache/ms-playwright"
+      # Shared, app-level web-search key SiriusXM title discovery uses
+      # (a show's public page carries its id). Set in the Render dashboard,
+      # never in this file. The build server carries the same key.
+      - key: BRAVE_SEARCH_API_KEY
+        sync: false
       # Cron secret for /api/cron/* endpoints (shared between web + cron services)
       - key: CRON_SECRET
         value: "FLrVHDerM_oMlPikk-Gr6544GyGMCoY19ScpMySuwWA"

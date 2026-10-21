@@ -464,24 +464,40 @@ def _extract_show_id(text):
     return m.group(1) if m else None
 
 
+class DiscoveryUnavailable(RuntimeError):
+    """SiriusXM could not be CHECKED from here: no search key and no login,
+    the search API failed, the browser is not installed, or the gateway
+    refused the anonymous session (it refuses any session minted outside
+    the US; the token carries the country it was minted in). This is not a
+    verdict on the title. A caller records the platform as unverified and
+    keeps whatever placement it already holds; it never reads this as 'not
+    on SiriusXM'. (2026-10-21, New Heights from the build server in
+    Germany: every step answered but the gateway said 401.)"""
+    unverified = True
+
+
 def _http_json(url, headers=None, timeout=15):
+    """The decoded JSON, or None when the request failed (a flaky search
+    must never sink enumeration; the caller tells a failure from an empty
+    answer)."""
     req = urllib.request.Request(url, headers=headers or {"User-Agent": UA})
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
             return json.loads(r.read().decode("utf-8", "replace"))
-    except Exception:  # noqa: BLE001 — a flaky search must never sink enumeration
+    except Exception:  # noqa: BLE001
         return None
 
 
 def _brave_results(query, key):
-    """Brave Search API -> list of url+title+description blobs (or [])."""
+    """Brave Search API -> list of url+title+description blobs; [] when the
+    search answered with nothing; None when the search FAILED."""
     url = ("https://api.search.brave.com/res/v1/web/search?"
            + urllib.parse.urlencode({"q": query, "count": 10}))
     j = _http_json(url, headers={
         "User-Agent": UA, "Accept": "application/json",
         "X-Subscription-Token": key})
-    if not j:
-        return []
+    if j is None:
+        return None
     out = []
     for r in ((j.get("web") or {}).get("results") or []):
         out.append(" ".join(str(r.get(k, "")) for k in ("url", "title",
@@ -490,13 +506,14 @@ def _brave_results(query, key):
 
 
 def _google_cse_results(query, key, cx):
-    """Google Programmable Search (Custom Search JSON) -> list of blobs (or [])."""
+    """Google Programmable Search (Custom Search JSON) -> list of blobs; []
+    when it answered with nothing; None when it failed."""
     url = ("https://www.googleapis.com/customsearch/v1?"
            + urllib.parse.urlencode({"key": key, "cx": cx, "q": query,
                                      "num": 10}))
     j = _http_json(url)
-    if not j:
-        return []
+    if j is None:
+        return None
     out = []
     for it in (j.get("items") or []):
         out.append(" ".join(str(it.get(k, "")) for k in ("link", "title",
@@ -505,8 +522,9 @@ def _google_cse_results(query, key, cx):
 
 
 def _websearch_results(query, env):
-    """Results from whichever web-search provider is configured in env ([] if
-    none/failure). Brave wins if both are present."""
+    """Results from whichever web-search provider is configured in env.
+    [] = the provider answered with nothing; None = no provider configured
+    or the provider failed. Brave wins if both are present."""
     brave = env.get("BRAVE_SEARCH_API_KEY") or env.get("SIRIUSXM_SEARCH_API_KEY")
     if brave and not env.get("GOOGLE_SEARCH_CX") and not env.get("SIRIUSXM_SEARCH_CX"):
         return _brave_results(query, brave)
@@ -516,18 +534,33 @@ def _websearch_results(query, env):
         return _google_cse_results(query, gkey, gcx)
     if brave:
         return _brave_results(query, brave)
-    return []
+    return None
 
 
-def _discover_show_id_via_websearch(title, env=None):
+def _discover_show_id_via_websearch(title, env=None, report=None):
     """title -> show-podcast uuid using a shared web-search API key, anonymously.
-    Returns the uuid (str) or None. No SiriusXM login, no browser."""
+    Returns the uuid (str) or None. No SiriusXM login, no browser.
+
+    ``report`` (a dict, optional) receives ``answered`` (queries the
+    provider answered, with or without a SiriusXM page among the results)
+    and ``failed`` (queries with no provider or a failed provider). None
+    with answered > 0 is a real miss: the search ran and SiriusXM lists no
+    such show; None with answered == 0 means nothing was looked up."""
     env = env or load_env()
+    if report is None:
+        report = {}
+    report.setdefault("answered", 0)
+    report.setdefault("failed", 0)
     if not title:
         return None
     for q in ('siriusxm.com show-podcast "%s" podcast' % title,
               'siriusxm "%s" podcast show' % title):
-        for blob in _websearch_results(q, env):
+        blobs = _websearch_results(q, env)
+        if blobs is None:
+            report["failed"] += 1
+            continue
+        report["answered"] += 1
+        for blob in blobs:
             sid = _extract_show_id(blob)
             if sid:
                 return sid
@@ -564,35 +597,44 @@ def resolve(title=None, url=None, kind="series", seasons=None, headless=True):
     # LOGIN-FREE discovery FIRST: a title -> show uuid via a shared web-search key
     # (no browser, no SiriusXM account). This is the path client queries use.
     gate_relevance = False
+    search_answered = False
     if not show_id_hint and title:
-        ws_id = _discover_show_id_via_websearch(title)
+        report = {}
+        ws_id = _discover_show_id_via_websearch(title, report=report)
+        search_answered = bool(report.get("answered"))
         if ws_id:
             show_id_hint = ws_id
             gate_relevance = True      # verify the search hit really is this show
 
-    sp = _sync_playwright()
+    try:
+        sp = _sync_playwright()
+    except RuntimeError as exc:
+        # no browser on this machine: SiriusXM cannot be checked here
+        raise DiscoveryUnavailable(str(exc)) from exc
     with sp() as pw:
         ctx, page = _new_context(pw, headless=headless)
         try:
             show_id = show_id_hint
             if not show_id and title:
+                env = load_env()
+                has_login = bool(env.get("SIRIUSXM_EMAIL") and env.get("SIRIUSXM_PASSWORD"))
+                if search_answered and not has_login:
+                    # the search ran and SiriusXM lists no page for this
+                    # title: a real miss, not a failure to look
+                    return (title or "", [])
                 # fallback: login-gated player search (only if creds/profile exist)
                 show_id = _discover_show_id(page, title)
                 if not show_id:
                     # log in only if we're not already authenticated
                     if not _logged_in(page):
-                        env = load_env()
-                        email = env.get("SIRIUSXM_EMAIL")
-                        pw_ = env.get("SIRIUSXM_PASSWORD")
-                        if not (email and pw_):
-                            raise RuntimeError(
-                                "SiriusXM title discovery found nothing. Set a "
-                                "shared web-search key (BRAVE_SEARCH_API_KEY, or "
-                                "GOOGLE_SEARCH_API_KEY + GOOGLE_SEARCH_CX) so "
-                                "client queries resolve anonymously, or add "
-                                "SIRIUSXM_EMAIL / SIRIUSXM_PASSWORD, or pass --url "
-                                "with the show link (enumeration is anonymous).")
-                        _login(page, email, pw_)
+                        if not has_login:
+                            raise DiscoveryUnavailable(
+                                "SiriusXM title discovery could not run: no "
+                                "shared web-search key answered (BRAVE_SEARCH_API_KEY, "
+                                "or GOOGLE_SEARCH_API_KEY + GOOGLE_SEARCH_CX) and no "
+                                "SIRIUSXM_EMAIL / SIRIUSXM_PASSWORD; pass --url with "
+                                "the show link (enumeration is anonymous).")
+                        _login(page, env.get("SIRIUSXM_EMAIL"), env.get("SIRIUSXM_PASSWORD"))
                     # retry discovery a few times while the session settles
                     for _ in range(4):
                         show_id = _discover_show_id(page, title)
@@ -603,9 +645,18 @@ def resolve(title=None, url=None, kind="series", seasons=None, headless=True):
                 return (title or "", [])
 
             data = _mint_and_enumerate(page, show_id)
-            eps = data.get("episodes", []) if isinstance(data, dict) else []
-            show_name = (data.get("showName") if isinstance(data, dict) else "") \
-                or title or ""
+            if not isinstance(data, dict):
+                raise DiscoveryUnavailable("the web player returned no episode data")
+            err = str(data.get("error") or "")
+            if err:
+                # 'no-token': the anonymous session never minted; 'page-401':
+                # the gateway refused the session (minted outside the US).
+                # Either way SiriusXM was not checked; the title is not absent.
+                raise DiscoveryUnavailable(
+                    "SiriusXM's gateway refused the session (%s); it only serves "
+                    "sessions minted from a US address" % err)
+            eps = data.get("episodes", [])
+            show_name = data.get("showName") or title or ""
 
             # relevance floor for a web-search hit: make sure the show the search
             # surfaced actually matches the requested title (guards over-matches).
@@ -657,6 +708,9 @@ def main():
     try:
         show, rows = resolve(title=title, url=args.url, kind=kind,
                              headless=not args.headed)
+    except DiscoveryUnavailable as exc:
+        print(f"  ! SiriusXM could not be checked from here: {exc}")
+        return 3
     except Exception as exc:  # noqa: BLE001
         print(f"  ! Search/fetch failed: {exc!r}")
         return 2

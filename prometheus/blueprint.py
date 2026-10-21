@@ -292,6 +292,18 @@ GOLDEN_USER = {'username': 'canary:golden', 'email': '', 'role': 'super_admin',
                'has_chatbot_profile_iq_access': True, 'unlimited': True, 'company': 'Crosswalk'}
 
 
+RENDER_PLAYWRIGHT_BROWSERS = '/opt/render/project/.cache/ms-playwright'
+
+
+def _playwright_browsers_default():
+    """Point Playwright at the browser build.sh installed when the service
+    env did not (2026-10-21, SiriusXM): the path has to be set before the
+    playwright module is first imported, and only when the directory is
+    really there, so a machine without it keeps Playwright's own default."""
+    if not os.environ.get('PLAYWRIGHT_BROWSERS_PATH') and os.path.isdir(RENDER_PLAYWRIGHT_BROWSERS):
+        os.environ['PLAYWRIGHT_BROWSERS_PATH'] = RENDER_PLAYWRIGHT_BROWSERS
+
+
 @bp.route('/internal/streamscout', methods=['POST'])
 def streamscout_relay():
     """Run one StreamScout platform from THIS deployment and return its
@@ -318,6 +330,7 @@ def streamscout_relay():
     ss_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'streamscout')
     if os.path.isdir(ss_dir) and ss_dir not in _sys.path:
         _sys.path.insert(0, ss_dir)
+    _playwright_browsers_default()
     try:
         import streamscout_query as _ssq_mod
         _ssq = _ssq_mod.streamscout_query

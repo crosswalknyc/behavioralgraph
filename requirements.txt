@@ -62,3 +62,7 @@ Pillow>=10.4.0
 stripe>=12.0.0,<13.0
 matplotlib>=3.8  # 2026-10-08: charts on generated reads (prometheus/charts.py)
 psycopg2-binary>=2.9
+# 2026-10-21: the StreamScout US relay mints SiriusXM's anonymous web-player
+# session with a headless browser (build.sh installs Chromium into
+# PLAYWRIGHT_BROWSERS_PATH). Same major line as the build server (1.61).
+playwright>=1.47,<2
