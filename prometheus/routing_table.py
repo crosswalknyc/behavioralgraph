@@ -62,7 +62,9 @@ ROWS = [
         'id': 'deck_ask', 'surface': 'deck', 'reason': 'deck_ask',
         'client_action': 'deck',
         'note': 'Build a deck / one-pager / venn diagram.',
-        'examples': [('build a pitch deck on this audience', True),
+        'examples': [
+                     # ask log 2026-10-20 (I9)
+                     ("are you able to make a slide presentation depicting demographic, interests, behaviors and platform users as well.  I am wanting to present something to a client", True),('build a pitch deck on this audience', True),
                      ('make a one-pager on the Nike runner profile', True)],
         'counter': [('who watches love island?', False)],
     },
@@ -305,7 +307,9 @@ ROWS = [
                 'sentence ("we want to understand ...") and a metric '
                 'asked over time ("monthly consumption for ...") are '
                 'questions too (2026-10-08, East Tree Media).',
-        'examples': [('who watches love island?', False),
+        'examples': [
+                     # ask log 2026-10-20 (I9)
+                     ("Give me unique US viewers per surface, not just hours, so we can see hours per viewer on television versus phone", False),('who watches love island?', False),
                      ('what does the love island audience buy', False),
                      ('We want to understand the consumption over time '
                       'for The Office US', False),
@@ -319,7 +323,15 @@ ROWS = [
         'id': 'data_open', 'surface': 'analyze', 'reason': 'data_open',
         'client_action': 'analyze',
         'note': 'Data open and the ask is not a build order.',
-        'examples': [('what do these fans buy', True),
+        'examples': [
+                     # ask log 2026-10-20 (I9)
+                     ("What are other titles watched (across platforms) by people who watched the Among Us series on Paramount+?", True),
+                     # ask log 2026-10-20 (I9)
+                     ("How many UFC fans are there in the US? And how many of those are on Paramount+?", True),
+                     # ask log 2026-10-20 (I9)
+                     ("how many people have read 'Lore Olympus' webtoon in the last 12 months? how incremental is this audience to prime video users?", True),
+                     # ask log 2026-10-20 (I9)
+                     ("I am interested in building a report for a betting client like draftkings....can you make me a report to provide them advertising directional insight?", True),('what do these fans buy', True),
                      ('top brands here', True)],
         'counter': [('build a profile of Nike runners', True)],
     },
@@ -337,7 +349,13 @@ ROWS = [
         'reason': 'build_or_other', 'client_action': 'interpret',
         'note': 'A build order or a bare subject; the interpret step '
                 'drafts a brief for approval.',
-        'examples': [('Run a profile for Starz', False),
+        'examples': [
+                     # ask log 2026-10-20 (I9)
+                     ("run a profile on mountain dew", True),
+                     # ask log 2026-10-20 (I9)
+                     ("can you build a profile for the toys category that is for the brand Lego?", True),
+                     # ask log 2026-10-20 (I9)
+                     ("Everybody Loves Raymond viewers on Amazon Prime Video, September 2026", False),('Run a profile for Starz', False),
                      ('Reba McEntire avid fans', False),
                      ('Nike', False),
                      ('can you build me a Nike profile', False),

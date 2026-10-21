@@ -328,16 +328,22 @@ def _band(host, sample):
 def profile_line(hit, host=None):
     """One plain line for a held profile: sample, incidence, US people,
     band, window."""
+    # I5 (2026-10-20): US people in plain words; the sample count, the
+    # incidence and the ten million stay inside (Tania Nasr asked what
+    # the 10 million was). The sizing block on the payload keeps the
+    # sample for the operator surfaces.
     sample = int(hit['sample'])
-    inc = sample / 10_000_000 * 100.0
-    inc_s = f"{inc:.2f}%" if inc >= 1 else (f"{inc:.3f}%" if inc >= 0.01 else f"{inc:.4f}%")
-    line = (f"{hit['name']}: {_fmt(sample)} inside the 10 million sample ({inc_s} incidence), "
-            f"projecting to {_fmt(hit['us'])} US people")
+    line = f"{hit['name']}: {_fmt(hit['us'])} people in the US"
     band = _band(host, sample)
     if band:
         line += f"; audience range {_fmt(band[0])} to {_fmt(band[1])}"
     w = _window_text(hit.get('window'))
     if w:
+        try:
+            from . import guards as _g
+            w = _g.plain_window(w) or w
+        except Exception:
+            pass
         line += f" ({w})"
     return line + ". That is the profile on the dashboard."
 
@@ -436,9 +442,8 @@ def answer(text, ctx=None, *, host=None, history=None, subjects=None, staff=True
             return None
         reply = '\n\n'.join(lines)
         if len(subs) > 1:
-            reply += ("\n\nBoth figures count people with at least one digital touchpoint with the brand in the window, "
-                      "inside the 10 million sample and projected to the US.") if len(subs) == 2 else \
-                     "\n\nEach figure counts people with at least one digital touchpoint with the brand in the window, inside the 10 million sample and projected to the US."
+            reply += ("\n\nBoth figures count people with at least one digital touchpoint with the brand in the window, projected to the US.") if len(subs) == 2 else \
+                     "\n\nEach figure counts people with at least one digital touchpoint with the brand in the window, projected to the US."
         return {'success': True, 'action': 'answer', 'reply': reply, 'followups': chips[:4],
                 'offer_deck': False, 'deck_angle': None, 'sizing': sizing,
                 'subject': sizing[0].get('subject') if sizing else ''}

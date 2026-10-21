@@ -50,6 +50,10 @@ __all__ = ['parse', 'resolve', 'split', 'compose', 'answer', 'is_where_watched_a
 # ------------------------------------------------------------ parse
 _WATCH_VERBS = (r"(?:watch|watched|watching|watches|stream|streamed|streaming|streams|see|saw|seen|"
                 r"view|viewed|viewing|views|catch|caught|find|found|get|got|access|accessed|listen(?:ed|ing)?\s+to)")
+_DELIVERABLE_RX = re.compile(
+    r"\b(?:deck|decks|pdf|pdfs|csv|csvs|xlsx|workbook|spreadsheet|file|files|report|one[- ]pager|slides?|presentation|email|download|"
+    r"profile|journey|read)\b(?:(?!\bwatch).){0,40}?\b(?:created|built|made|sent|emailed|generated|ran|run|delivered|finished|you\s+(?:made|built|sent|created))\b"
+    r"|\b(?:i|we)\s+find\s+(?:the|my|our)\s+[^?]{0,40}?\b(?:deck|pdf|csv|file|report|one[- ]pager|slides?|presentation|download|export)\b", re.I)
 _WHERE_RX = re.compile(
     r"\bwhere\b(?:(?!\bwhere\b).){0,80}?\b(?:" + _WATCH_VERBS + r"|available|airing|playing|showing|carried|offered|out)\b", re.I)
 _PLATFORM_Q_RX = re.compile(
@@ -142,6 +146,8 @@ def parse(text, history=None, *, page='', plausible=None):
     t = ' '.join(str(text or '').split())
     if not t or not is_where_watched_ask(t):
         return None
+    if _DELIVERABLE_RX.search(t):
+        return None     # "where do i find the howdy deck created last night": a file of ours, the deliverable lane's (2026-10-20)
     if _ns.has_audience_deixis(t) and not _PRONOUN_OBJECT_RX.search(t):
         return None     # "where do the people on this profile watch tv": the page's audience, not a title
     title, kind = _ns.type_led_subject(t)

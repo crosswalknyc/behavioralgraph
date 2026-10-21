@@ -325,3 +325,18 @@ def _ask_mentions_subject(question, subject):
         return any(t in q for t in toks)
     except Exception:
         return True
+
+
+_JOB_KEYS = ('read_job_id', 'deck_job_id', 'bpiq_job_id', 'jiq_job_id', 'fw_job_id', 'aiq_job_id', 'tlist_job_id', 'job_id', 'run_id')
+
+
+def promised_job(payload):
+    """The job id a reply promised (I4, 2026-10-20), or ''. A golden
+    probe's pseudo id is not a promise."""
+    if not isinstance(payload, dict):
+        return ''
+    for k in _JOB_KEYS:
+        v = payload.get(k)
+        if v and isinstance(v, (str, int)) and not str(v).startswith('golden-'):
+            return str(v)[:40]
+    return ''

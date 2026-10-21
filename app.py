@@ -50729,11 +50729,24 @@ def _chatbot_error_email(route, err, user_email=None, payload=None,
                     "Crosswalk)\n\n")
         except Exception:
             promise_block = ''
+        # I4b (2026-10-20): the turn was already retried once through the
+        # binder; the mail names the subject it bound and the path that
+        # should answer it, so the fix is one look away.
+        _bound = str(getattr(err, 'pm_bound_subject', '') or '').strip()
+        _first = str(getattr(err, 'pm_first_error', '') or '').strip()
+        _bound_block = ''
+        if _bound or _first:
+            _bound_block = (
+                (f"Bound subject: {_bound}\n" if _bound else "Bound subject: (none in the words)\n")
+                + (f"First error (before the retry): {_first}\n" if _first else '')
+                + "Suggested path: the read on the bound subject (reasoned read with bind_subject), "
+                  "or the one-question clarify when no subject bound.\n\n")
         body_text = (
             f"User: {user_email or '(unknown)'}\n"
             f"Question: {query_text}\n"
             f"\n"
             f"{promise_block}"
+            f"{_bound_block}"
             f"----- detail -----\n"
             f"Timestamp: {ts}\n"
             f"Route: {route}\n"

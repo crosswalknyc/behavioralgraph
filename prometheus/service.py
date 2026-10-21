@@ -351,6 +351,11 @@ def ask(user, body, *, via='session'):
     client = str(body.get('client') or '').strip().lower()
     persist = bool(body.get('persist', client != 'dashboard'))
 
+    try:
+        from flask import g as _g_ask
+        _g_ask._pm_ask_text = text
+    except Exception:
+        pass
     if not text:
         env = envelope.wrap({'success': False,
                              'error': 'Ask me something and I will take it from there.'},
@@ -611,6 +616,30 @@ def ask(user, body, *, via='session'):
         except Exception as _fx:
             _faults.note('service.spend_guard', _fx)
             _cap_hit = False
+
+    # Continuation before routing (I2, 2026-10-20). Every turn is read
+    # against the previous agent turn first: a re-run in a window, a
+    # reply to the question just asked, a parameter change on the last
+    # read, a question about the answer, a correction. Each binds its
+    # subject and deliverable from the thread and never falls onto the
+    # open tab, a fresh priced offer or a calm line. The same question
+    # coming back after a reply the reader did not accept takes the
+    # other path (I7); the prior ask is graded failed in real time.
+    if referent_decision is None and not _armed(body) and not body.get('_meta_replay'):
+        try:
+            from . import turn_gate as _tg
+            _tg_out = _tg.gate(text, body, history, ctx, user, uname, tid, via, persist,
+                               client_surface=_client_surface, host=host, envelope=envelope,
+                               interpret_shape=_interpret_shape, persist_turn=_persist_turn)
+        except Exception as e:
+            _faults.note('service.turn_gate', e)
+            _tg_out = None
+        if _tg_out is not None:
+            if isinstance(_tg_out, tuple):
+                return _tg_out
+            # a rewrite: the gate re-bound the text / body and lets the lanes run
+            text = str(_tg_out.get('text') or text)
+            body = dict(_tg_out.get('body') or body)
 
     # The Reader (2026-10-14, Jenna: "make prometheus closer to your level
     # of intelligence in understanding what is being asked"). One
@@ -1713,6 +1742,10 @@ def _persist_turn(persist, uname, tid, history, text, env, raw, surface):
             meta['referent_clarify'] = raw['referent_clarify']
         if isinstance(raw, dict) and isinstance(raw.get('offer'), dict):
             meta['offer'] = raw['offer']     # the talent-list offer (2026-10-15)
+        if isinstance(raw, dict) and isinstance(raw.get('rerun_confirm'), dict):
+            meta['rerun_confirm'] = raw['rerun_confirm']   # the re-run card (I2, 2026-10-20)
+        if isinstance(raw, dict) and raw.get('subject'):
+            meta.setdefault('subject', str(raw.get('subject'))[:120])
         turns.append({'role': 'agent', 'text': env['text'],
                       'ts': _now(), 'meta': meta})
         save_thread(uname, tid, turns)

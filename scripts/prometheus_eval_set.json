@@ -1,6 +1,6 @@
 {
  "description": "Fixed route-level eval set for the dashboard chat assistant. Real questions sampled from the S3 ask log (system/usage/ask_log/, 2026-08-26 through 2026-08-28, the log's full history at build time) plus constructed representatives for families the young log does not carry yet. Graded hermetically by scripts/prometheus_eval_run.py against prometheus_router.route_ask, the same server-side router both chat endpoints consult in production (classify_fn stays None so the run makes no model calls). expected_route vocabulary: analysis, generate, search_demand, csv_download, not_quantifiable, memory_confirm, build_interpret, subiq, clarify. surface: analyze (api_synth_chat_analyze) or interpret (api_synth_chat_interpret). page_context null means nothing open. has_base / memory_referent stand in for data-dependent conditions. known_fail documents a real routing defect owned by a separate fix.",
- "built": "2026-08-28 +2026-10-01 wave (relative windows, multi-title, cut sizing, proactive openers)",
+ "built": "2026-08-28 +2026-10-01 wave (relative windows, multi-title, cut sizing, proactive openers) +2026-10-20 real asks (ten invariants)",
  "cases": [
   {
    "id": "toy-001",
@@ -97,7 +97,7 @@
    "id": "ws-002",
    "family": "whitespace_strategy",
    "surface": "analyze",
-   "input": "What\u2019s the potential white space to create paw patrol toys for this audience",
+   "input": "What’s the potential white space to create paw patrol toys for this audience",
    "page_context": null,
    "expected_route": "generate",
    "flags": {
@@ -109,7 +109,7 @@
    "id": "ws-003",
    "family": "whitespace_strategy",
    "surface": "analyze",
-   "input": "What\u2019s the potential white space to create paw patrol toys for this audience?",
+   "input": "What’s the potential white space to create paw patrol toys for this audience?",
    "page_context": {
     "primary": {
      "s3_key": "Parents_of_Paw_Patrol_Series_Viewers_08_27_2026_20_00.csv",
@@ -891,6 +891,319 @@
    "expected_route": "analysis",
    "source": "welcome chip (standing)",
    "note": "The compare-cuts welcome chip stays on the on-screen analysis pass."
+  },
+  {
+   "id": "real-1020-01",
+   "family": "named_title_over_open_tab",
+   "surface": "analyze",
+   "input": "where people watched the film mutiny",
+   "page_context": {
+    "primary": {
+     "s3_key": "Amazon_Prime_Video_09_01_2026_10_00.csv",
+     "name": "Amazon Prime Video"
+    },
+    "cuts": []
+   },
+   "expected_route": "analysis",
+   "expected_subject": "Mutiny",
+   "expected_reply_type": "where_watched",
+   "never": [
+    "open-tab confirm",
+    "Amazon Prime Video as the subject"
+   ],
+   "source": "ask_log 2026-10-20 (Jay Patel, Casey Pearson, Bria, Tania Nasr, Marie Flores, Mark Valdez, Jenna)",
+   "note": "Real ask from the day of the ten invariants; the lane-level behavior is pinned by scripts/test_pm_invariants.py (door section D)."
+  },
+  {
+   "id": "real-1020-02",
+   "family": "viewership_read_clean_name",
+   "surface": "analyze",
+   "input": "how many people watched the title 'mutiny' without paying for it?",
+   "page_context": {
+    "primary": {
+     "s3_key": "Amazon_Prime_Video_09_01_2026_10_00.csv",
+     "name": "Amazon Prime Video"
+    },
+    "cuts": []
+   },
+   "expected_route": "generate",
+   "expected_subject": "Mutiny",
+   "expected_reply_type": "priced viewership read",
+   "never": [
+    "Title 'mutiny' Without Paying as the subject"
+   ],
+   "source": "ask_log 2026-10-20 (Jay Patel, Casey Pearson, Bria, Tania Nasr, Marie Flores, Mark Valdez, Jenna)",
+   "note": "Real ask from the day of the ten invariants; the lane-level behavior is pinned by scripts/test_pm_invariants.py (door section D)."
+  },
+  {
+   "id": "real-1020-03",
+   "family": "ip_read_named_subject",
+   "surface": "analyze",
+   "input": "how many people have read 'Lore Olympus' webtoon in the last 12 months? how incremental is this audience to prime video users?",
+   "page_context": {
+    "primary": {
+     "s3_key": "Amazon_Prime_Video_09_01_2026_10_00.csv",
+     "name": "Amazon Prime Video"
+    },
+    "cuts": []
+   },
+   "expected_route": "generate",
+   "expected_subject": "Lore Olympus",
+   "expected_reply_type": "reasoned read on Lore Olympus x Prime Video",
+   "never": [
+    "page analysis answering for the page",
+    "'Lore Olympus' webtoon as the display"
+   ],
+   "source": "ask_log 2026-10-20 (Jay Patel, Casey Pearson, Bria, Tania Nasr, Marie Flores, Mark Valdez, Jenna)",
+   "note": "Real ask from the day of the ten invariants; the lane-level behavior is pinned by scripts/test_pm_invariants.py (door section D)."
+  },
+  {
+   "id": "real-1020-04",
+   "family": "nested_audience_binds_title",
+   "surface": "analyze",
+   "input": "What are other titles watched (across platforms) by people who watched the Among Us series on Paramount+?",
+   "page_context": {
+    "primary": {
+     "s3_key": "Paramount_09_01_2026_10_00.csv",
+     "name": "Paramount+"
+    },
+    "cuts": []
+   },
+   "expected_route": "analysis",
+   "expected_subject": "Among Us",
+   "expected_reply_type": "reasoned read on Among Us viewers on Paramount+",
+   "never": [
+    "which-subject question",
+    "On it: reading Paramount+"
+   ],
+   "source": "ask_log 2026-10-20 (Jay Patel, Casey Pearson, Bria, Tania Nasr, Marie Flores, Mark Valdez, Jenna)",
+   "note": "Real ask from the day of the ten invariants; the lane-level behavior is pinned by scripts/test_pm_invariants.py (door section D)."
+  },
+  {
+   "id": "real-1020-05",
+   "family": "rerun_window_continuation",
+   "surface": "analyze",
+   "input": "re-reun in the time frame 9/16 - 9/30",
+   "page_context": {
+    "primary": {
+     "s3_key": "Paramount_09_01_2026_10_00.csv",
+     "name": "Paramount+"
+    },
+    "cuts": []
+   },
+   "expected_route": "analysis",
+   "expected_subject": "Golden Axe (previous read)",
+   "expected_reply_type": "confirm card: deliverable, September 16 to 30, 2026, price",
+   "never": [
+    "a run before the confirm",
+    "the page as the subject"
+   ],
+   "source": "ask_log 2026-10-20 (Jay Patel, Casey Pearson, Bria, Tania Nasr, Marie Flores, Mark Valdez, Jenna)",
+   "note": "Real ask from the day of the ten invariants; the lane-level behavior is pinned by scripts/test_pm_invariants.py (door section D)."
+  },
+  {
+   "id": "real-1020-06",
+   "family": "parameter_change_continuation",
+   "surface": "analyze",
+   "input": "Give me unique US viewers per surface, not just hours, so we can see hours per viewer on television versus phone",
+   "page_context": null,
+   "expected_route": "clarify",
+   "expected_subject": "The Office US (previous read)",
+   "expected_reply_type": "derived read on The Office US",
+   "never": [
+    "Unique as the subject",
+    "a fresh $500 custom read"
+   ],
+   "source": "ask_log 2026-10-20 (Jay Patel, Casey Pearson, Bria, Tania Nasr, Marie Flores, Mark Valdez, Jenna)",
+   "note": "Real ask from the day of the ten invariants; the lane-level behavior is pinned by scripts/test_pm_invariants.py (door section D)."
+  },
+  {
+   "id": "real-1020-07",
+   "family": "product_fact_definition_turn",
+   "surface": "analyze",
+   "input": "what's the 10 million sample you're mentioning",
+   "page_context": {
+    "primary": {
+     "s3_key": "BET_09_01_2026_10_00.csv",
+     "name": "BET"
+    },
+    "cuts": []
+   },
+   "expected_route": "analysis",
+   "expected_subject": "",
+   "expected_reply_type": "product fact about the ten million",
+   "never": [
+    "Do you want this on BET"
+   ],
+   "source": "ask_log 2026-10-20 (Jay Patel, Casey Pearson, Bria, Tania Nasr, Marie Flores, Mark Valdez, Jenna)",
+   "note": "Real ask from the day of the ten invariants; the lane-level behavior is pinned by scripts/test_pm_invariants.py (door section D)."
+  },
+  {
+   "id": "real-1020-08",
+   "family": "sizing_plain_words",
+   "surface": "analyze",
+   "input": "How many UFC fans are there in the US? And how many of those are on Paramount+?",
+   "page_context": {
+    "primary": {
+     "s3_key": "BET_09_01_2026_10_00.csv",
+     "name": "BET"
+    },
+    "cuts": []
+   },
+   "expected_route": "analysis",
+   "expected_subject": "UFC fans",
+   "expected_reply_type": "US people in plain words",
+   "never": [
+    "Sample check",
+    "incidence",
+    "inside the 10 million sample"
+   ],
+   "source": "ask_log 2026-10-20 (Jay Patel, Casey Pearson, Bria, Tania Nasr, Marie Flores, Mark Valdez, Jenna)",
+   "note": "Real ask from the day of the ten invariants; the lane-level behavior is pinned by scripts/test_pm_invariants.py (door section D)."
+  },
+  {
+   "id": "real-1020-09",
+   "family": "breakdown_never_incidence",
+   "surface": "analyze",
+   "input": "Among U.S. panelists who watched Everybody Loves Raymond on Amazon Prime Video in September 2026, how many people watched the series and what other streaming platforms did those viewers also watch? Please show the results by platform as a table",
+   "page_context": null,
+   "expected_route": "generate",
+   "expected_subject": "Everybody Loves Raymond",
+   "expected_reply_type": "reasoned read with the by-platform table",
+   "never": [
+    "Sample check",
+    "the bare incidence card"
+   ],
+   "source": "ask_log 2026-10-20 (Jay Patel, Casey Pearson, Bria, Tania Nasr, Marie Flores, Mark Valdez, Jenna)",
+   "note": "Real ask from the day of the ten invariants; the lane-level behavior is pinned by scripts/test_pm_invariants.py (door section D).",
+   "known_fail": "router-level clarify; the door answers through the Reader and the by-platform read (test_pm_invariants)"
+  },
+  {
+   "id": "real-1020-10",
+   "family": "chip_answer_binds_question",
+   "surface": "interpret",
+   "input": "Everybody Loves Raymond viewers on Amazon Prime Video, September 2026",
+   "page_context": null,
+   "expected_route": "build_interpret",
+   "expected_subject": "Everybody Loves Raymond",
+   "expected_reply_type": "the original question proceeds on the named audience",
+   "never": [
+    "I read that as a task, not a profile to build",
+    "Which audience should this be on (again)"
+   ],
+   "source": "ask_log 2026-10-20 (Jay Patel, Casey Pearson, Bria, Tania Nasr, Marie Flores, Mark Valdez, Jenna)",
+   "note": "Real ask from the day of the ten invariants; the lane-level behavior is pinned by scripts/test_pm_invariants.py (door section D)."
+  },
+  {
+   "id": "real-1020-11",
+   "family": "like_x_binds_x",
+   "surface": "analyze",
+   "input": "I am interested in building a report for a betting client like draftkings....can you make me a report to provide them advertising directional insight?",
+   "page_context": {
+    "primary": {
+     "s3_key": "Salish_Matter_09_01_2026_10_00.csv",
+     "name": "Salish Matter"
+    },
+    "cuts": []
+   },
+   "expected_route": "analysis",
+   "expected_subject": "DraftKings",
+   "expected_reply_type": "reasoned read on DraftKings",
+   "never": [
+    "a betting client like draftkings as the subject",
+    "Salish Matter as the subject"
+   ],
+   "source": "ask_log 2026-10-20 (Jay Patel, Casey Pearson, Bria, Tania Nasr, Marie Flores, Mark Valdez, Jenna)",
+   "note": "Real ask from the day of the ten invariants; the lane-level behavior is pinned by scripts/test_pm_invariants.py (door section D)."
+  },
+  {
+   "id": "real-1020-12",
+   "family": "correction_never_prices",
+   "surface": "analyze",
+   "input": "No I am interested in showing a lot of aligned creators...I am unclear why you keep bringing up Salish matter",
+   "page_context": {
+    "primary": {
+     "s3_key": "Salish_Matter_09_01_2026_10_00.csv",
+     "name": "Salish Matter"
+    },
+    "cuts": []
+   },
+   "expected_route": "analysis",
+   "expected_subject": "DraftKings users (thread)",
+   "expected_reply_type": "the correction re-asked, no price",
+   "never": [
+    "Nothing came back for that one",
+    "Brief drafted",
+    "Salish Matter (open on your screen)"
+   ],
+   "source": "ask_log 2026-10-20 (Jay Patel, Casey Pearson, Bria, Tania Nasr, Marie Flores, Mark Valdez, Jenna)",
+   "note": "Real ask from the day of the ten invariants; the lane-level behavior is pinned by scripts/test_pm_invariants.py (door section D)."
+  },
+  {
+   "id": "real-1020-13",
+   "family": "build_named_brand_over_page",
+   "surface": "interpret",
+   "input": "run a profile on mountain dew",
+   "page_context": {
+    "primary": {
+     "s3_key": "Ghost_Energy_Drink_09_01_2026_10_00.csv",
+     "name": "Ghost Energy Drink"
+    },
+    "cuts": []
+   },
+   "expected_route": "build_interpret",
+   "expected_subject": "Mountain Dew",
+   "expected_reply_type": "build brief on Mountain Dew",
+   "never": [
+    "Ghost Energy Drink in the brief",
+    "a journey"
+   ],
+   "source": "ask_log 2026-10-20 (Jay Patel, Casey Pearson, Bria, Tania Nasr, Marie Flores, Mark Valdez, Jenna)",
+   "note": "Real ask from the day of the ten invariants; the lane-level behavior is pinned by scripts/test_pm_invariants.py (door section D)."
+  },
+  {
+   "id": "real-1020-14",
+   "family": "build_brand_named_last",
+   "surface": "interpret",
+   "input": "can you build a profile for the toys category that is for the brand Lego?",
+   "page_context": {
+    "primary": {
+     "s3_key": "Salish_Matter_09_01_2026_10_00.csv",
+     "name": "Salish Matter"
+    },
+    "cuts": []
+   },
+   "expected_route": "build_interpret",
+   "expected_subject": "Lego",
+   "expected_reply_type": "build brief on Lego",
+   "never": [
+    "toys category that is for the brand Lego as the subject"
+   ],
+   "source": "ask_log 2026-10-20 (Jay Patel, Casey Pearson, Bria, Tania Nasr, Marie Flores, Mark Valdez, Jenna)",
+   "note": "Real ask from the day of the ten invariants; the lane-level behavior is pinned by scripts/test_pm_invariants.py (door section D)."
+  },
+  {
+   "id": "real-1020-15",
+   "family": "deck_confirm_fast",
+   "surface": "deck",
+   "input": "are you able to make a slide presentation depicting demographic, interests, behaviors and platform users as well.  I am wanting to present something to a client",
+   "page_context": {
+    "primary": {
+     "s3_key": "Salish_Matter_09_01_2026_10_00.csv",
+     "name": "Salish Matter"
+    },
+    "cuts": []
+   },
+   "expected_route": "analysis",
+   "expected_subject": "DraftKings users (thread)",
+   "expected_reply_type": "the deck question, under 10 s",
+   "never": [
+    "467 s before a question",
+    "the page assumed"
+   ],
+   "source": "ask_log 2026-10-20 (Jay Patel, Casey Pearson, Bria, Tania Nasr, Marie Flores, Mark Valdez, Jenna)",
+   "note": "Real ask from the day of the ten invariants; the lane-level behavior is pinned by scripts/test_pm_invariants.py (door section D).",
+   "known_fail": "route_ask has no deck vocabulary; understand.decide lands deck_ask (routing table)"
   }
  ]
 }

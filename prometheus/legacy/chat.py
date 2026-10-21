@@ -2802,8 +2802,8 @@ def _synth_chat_incidence_check(text, history=None):
 
     d = result.get('data') or {}
     subject = str(d.get('subject') or '').strip() or 'this audience'
-    window_label = str(d.get('window_label') or '').strip() \
-        or '07-01-2025 to 06-30-2026'
+    window_label = __import__('prometheus.guards', fromlist=['plain_window']).plain_window(
+        str(d.get('window_label') or '').strip() or 'the last 12 months')   # I5: 'the last 12 months', never 'trailing year (10-20-2025 ...)'
 
     def _to_int(v, default=0):
         try:
@@ -5345,6 +5345,7 @@ def _ask_logged(surface):
             try:
                 body = request.get_json(force=True, silent=True) or {}
                 question = str(body.get('text') or '').strip()
+                _g._pm_ask_text = question   # the exit scrub reads the ask (I5)
                 ask_history = body.get('history') or []
                 mode = (str(body.get('mode') or '').strip().lower()
                         or None)
@@ -5369,7 +5370,13 @@ def _ask_logged(surface):
             except Exception:
                 user_sig = None
             try:
-                resp = fn(*args, **kwargs)
+                try:
+                    resp = fn(*args, **kwargs)
+                except Exception as _first:
+                    # I4b (2026-10-20): most of a day's faults were binding
+                    # failures; one retry with the binder's subject before
+                    # the calm line, then the ops mail carries the subject.
+                    resp = __import__('prometheus.faults', fromlist=['retry_once']).retry_once(fn, args, kwargs, question, ask_history, _first)
             except Exception:
                 # 2026-09-30 (Jenna: "make sure they are all being
                 # emailed to me with the replies so I can troubleshoot
@@ -5385,9 +5392,10 @@ def _ask_logged(surface):
                             user=_pm_ask_log_user(),
                             view=view, question=question,
                             surface=log_surface, route='unknown',
-                            outcome='error',
+                            outcome='faulted',   # I4b: the calm line is a fault, never 'answered'
                             ms=int((time.time() - t0) * 1000),
-                            mode=mode, subject=None,
+                            mode=mode, subject=getattr(_g, '_pm_retry_bound', None) or None,
+                            extra={'retried': bool(getattr(_g, '_pm_retried', False))},
                             stages=getattr(_g, '_pm_ask_stages', None))
                     except Exception as _fx:
                         _faults.note('chat', _fx)
@@ -5489,7 +5497,8 @@ def _ask_logged(surface):
                     ms=int((time.time() - t0) * 1000),
                     mode=mode, subject=subject, extra=extra,
                     stages=getattr(_g, '_pm_ask_stages', None),
-                    reply=__import__('prometheus.ask_outcome', fromlist=['reply_text']).reply_text(payload) or _env_text)
+                    reply=__import__('prometheus.ask_outcome', fromlist=['reply_text']).reply_text(payload) or _env_text,
+                    job_id=__import__('prometheus.ask_outcome', fromlist=['promised_job']).promised_job(payload))
                 _pm_watch_flag(_pm_ask_log_user(), question, route, outcome, extra)
                 _pm_watch_notify(
                     _pm_ask_log_user(''), question, payload,
@@ -5694,7 +5703,7 @@ def _pm_interpret_core(user, body, text, history):
     # Cartesian detection because those detectors can misread a
     # question containing commas as a multi-subject build request.
     # ------------------------------------------------------------------
-    if _synth_chat_is_incidence_request(text):
+    if _synth_chat_is_incidence_request(text) and not _subject_rules.wants_breakdown(text):   # I3: a split or a table is never the sample card
         try:
             return _synth_chat_incidence_check(text, history)
         except Exception as _inc_err:
@@ -6127,7 +6136,8 @@ def _pm_interpret_core(user, body, text, history):
         except Exception:
             _frag_subj, _frag_dec = '', ''
         if _frag_subj and _frag_dec in ('new_build', 'subscriber_iq', '') \
-                and _pg.subject_reads_as_fragment(_frag_subj):
+                and _pg.subject_reads_as_fragment(_frag_subj) \
+                and not _subject_rules.qualified_audience(_frag_subj)[0]:   # 'X viewers on Y, September 2026' is an audience, not a task (I2)
             _fr_rescued = False
             try:
                 _uv = _pm_rescue_unverified_draft(
@@ -11471,6 +11481,13 @@ def _pm_open_screen_confirm(text, ctx, history=None):
             return None
     except Exception:
         traceback.print_exc()
+    # One subject, bound once (I1, 2026-10-20): a continuation never
+    # confirms the page, and a subject the words name (any case, inside
+    # "people who watched the Among Us series on Paramount+", even when
+    # the page is named as its platform) binds before any page test.
+    _b_route = _subject_rules.bind_or_continue(text, ctx, history, _pm_ask_hint)
+    if _b_route is not None:
+        return _b_route or None
     page_key = str((ctx.get('primary') or {}).get('s3_key') or '')
     # What the user names is not an assumption (2026-10-07 Jenna: Gunna
     # asked on the Warriors page drew "Golden State or Gen_Pop?"; "a
@@ -12859,10 +12876,22 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
     # between sessions and threads"): the widget's confirm chip sends
     # the remembered subject explicitly; it resolves the base directly
     # and rides the consult below so a banked read replays instantly.
-    bind_subject = str(bind_subject or '').strip()
+    bind_subject = str(bind_subject or '').strip() or str(getattr(__import__('flask').g, '_pm_retry_bound', '') or '').strip()   # I4b: the retry's bound subject
     bind_cohort = str(bind_cohort or '').strip()
     if bind_subject and not subj_hint:
         subj_hint = bind_subject
+    # I2 (2026-10-20): a re-run accepted on its card is charged at the quoted price before anything is generated
+    _rrc = getattr(__import__('flask').g, '_pm_rerun_charge', None)
+    if isinstance(_rrc, dict) and not getattr(__import__('flask').g, '_pm_rerun_charged', False):
+        __import__('flask').g._pm_rerun_charged = True
+        _rr_subj = str(_rrc.get('subject') or subj_hint or 'the read')
+        _rr_desc = f"Re-run - {_rr_subj} ({__import__('prometheus.continuation', fromlist=['window_phrase']).window_phrase(_rrc.get('window'))})"
+        _rr_pt = 'Viewership Read' if str(_rrc.get('price_key') or '') == 'viewership_read' else 'Panel Report'
+        if _pm_user and not _H.consume_credit(_pm_user, description=_rr_desc, pull_type=_rr_pt, credits_used=5, quantity=1):
+            _pm_ask_hint(outcome='panel_out_of_credits', subject=_rr_subj)
+            return jsonify({'success': False, 'guidance': True, 'analysis_read': True, 'followups': [],
+                            'error': f"The {_rr_subj} re-run runs {_rrc.get('price_label') or 'the quoted price'} and your account cannot cover it right now. Top up or ask your admin, and I will pick it right back up."})
+        charge_done = True
     # A consumption count typed in lowercase ("how many people read the
     # walsh family book series in the us last year?") names its own
     # subject; the capitalized-run guess misses it and the ladder used
@@ -13113,7 +13142,22 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
                 traceback.print_exc()
         if not subj_name and _bf_subj:
             subj_name = _bf_subj
+        subj_name = _subject_rules.display_for(subj_name, text, page=str(((ctx or {}).get('primary') or {}).get('name') or ''))   # I1: never 'Unique', never a wrapper
         _is_derived = str((metric_request or {}).get('metric_family') or '') == 'dimension split' or (isinstance(panel_confirm, dict) and str(panel_confirm.get('kind') or '') == 'derived')
+        # I2 (2026-10-20, Bria on The Office US): a different metric or
+        # breakdown asked back at a landed read is the derived read on
+        # that subject at the derived-read row, never a fresh custom read
+        _cont_pc = getattr(__import__('flask').g, '_pm_continuation', None) or {}
+        _param_change = (str(_cont_pc.get('kind') or '') == 'parameter_change'
+                         and str((_cont_pc.get('deliverable') or {}).get('kind') or '') == 'read')
+        if _param_change:
+            _is_derived = True
+            _pc_params = dict(_cont_pc.get('params') or {})
+            _pc_params['breakdown'] = {'surface': 'device', 'screen': 'device', 'devices': 'device'}.get(str(_pc_params.get('breakdown') or '').lower(), _pc_params.get('breakdown'))
+            if isinstance(metric_request, dict):
+                metric_request = dict(metric_request, dimension=metric_request.get('dimension') or _pc_params.get('breakdown') or '', bound_series=metric_request.get('bound_series') or [{'from': 'thread'}])
+            else:
+                metric_request = {'dimension': _pc_params.get('breakdown') or '', 'bound_series': [{'from': 'thread'}], 'metric_family': 'dimension split'}
         if subj_name and (_is_derived or pma.panel_report_eligible(text, subj_name)):
             _pr_label, _pr_credits = _pm_panel_price_label(_pm_user)
             _pr_pull_type, _pr_qty, _pr_kind = 'Panel Report', 1, 'report'
@@ -13195,8 +13239,7 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
         if _eb and not isinstance(panel_confirm, dict):
             _pm_ask_hint(route='build_reroute', outcome='explicit_build_order', subject=_eb)
             return jsonify(_subject_rules.build_reroute_payload())
-        subj_name = (subj_hint or pma.guess_subject_from_text(text)
-                     or '').strip()
+        subj_name = _subject_rules.display_for((subj_hint or pma.guess_subject_from_text(text) or '').strip(), text)
         if subj_name and _pm_plausible_subject(subj_name) \
                 and not isinstance(panel_confirm, dict):
             _pr_label, _pr_credits = _pm_panel_price_label(_pm_user)
@@ -13331,16 +13374,24 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
                           + '). It lands right here the moment it is ready, and I '
                           'did not start a second copy.'),
                 'followups': [], 'offer_deck': False, 'deck_angle': None})
+        # I1/I4: the subject the person named leads the promise and the ask
+        # log; the base profile is context (Marie Flores: Everybody Loves
+        # Raymond on the Prime Video base; Casey Pearson: Among Us on the
+        # Paramount+ base)
+        _promised = _subject_rules.clean_display(str(bind_subject or ''), text) or _subject_rules.clean_display(str(base.get('subject') or ''), text)
+        if not _promised:   # I4: a promise names its subject or is not made
+            _pm_ask_hint(outcome='clarify_subject')
+            return jsonify({'success': True, 'action': 'answer', 'reply': _subject_rules.clarify_for(text), 'followups': [], 'offer_deck': False, 'deck_angle': None})
         job_id = inline_job_id or uuid.uuid4().hex[:12]
         if _pm_probe_caller() == 'golden-set':   # grades the reply shape only: no job, no queue, no inflight mark
-            _pm_ask_hint(outcome='answered', subject=base.get('subject'))
+            _pm_ask_hint(outcome='answered', subject=_promised)
             return jsonify({'success': True, 'action': 'answer', 'read_job_id': 'golden-' + job_id, 'followups': [], 'offer_deck': False, 'deck_angle': None,
-                            'reply': _pm_on_it_line(base)})
+                            'reply': _pm_on_it_line(base, bound=bind_subject)})
         # A probe's finished read never mails anyone (captured here,
         # on the request thread, and carried on the job).
         _probe = bool(_pm_probe_caller()) or _pm_is_probe_user(_pm_ask_log_user(''))
         _head = {'job_id': job_id, 'user': _pm_user, 'status': 'working',
-                 'stage': 'reading the data', 'probe': _probe,
+                 'stage': 'reading the data', 'probe': _probe, 'subject': _promised,
                  'question': text[:300], 'started_at': time.time(),
                  'resume': _rr.resume_record(          # survives a deploy
                      text=text, history=history, base=base,
@@ -13360,10 +13411,10 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
         else:                        # local thread (fallback / kill switch)
             _pm_read_status_write(job_id, _head)
             threading.Thread(target=_pm_run_read_job, args=_args, kwargs=_kw, daemon=True).start()
-        _pm_ask_hint(outcome='answered', subject=base.get('subject'))
+        _pm_ask_hint(outcome='answered', subject=_promised)
         return jsonify({
-            'success': True, 'action': 'answer', 'read_job_id': job_id,
-            'reply': _pm_on_it_line(base),
+            'success': True, 'action': 'answer', 'read_job_id': job_id, 'subject': _promised,
+            'reply': _pm_on_it_line(base, bound=bind_subject),
             'followups': [], 'offer_deck': False, 'deck_angle': None})
     payload = _pm_generate_read_core(
         text=text, history=history, mr=mr, base=base,
@@ -14135,10 +14186,10 @@ def _pm_read_inflight_check(user, text):
         return None
 
 
-def _pm_on_it_line(base):
+def _pm_on_it_line(base, bound=''):
     """The started-read line names what is being read (2026-10-14)."""
     from flask import g as _g_r
-    return _smart.on_it_line(getattr(_g_r, '_pm_reading', None), base)
+    return _smart.on_it_line(getattr(_g_r, '_pm_reading', None), base, bound=bound)
 
 
 def _pm_read_inflight_mark(user, text, job_id):
@@ -14203,65 +14254,6 @@ def _pm_history_has_job_turn(history, meta_key, job_id):
     return False
 
 
-def _pm_append_read_to_history(username, job_id, payload):
-    """Append a finished read to the requester's chat thread so it is
-    waiting when they return, even if the tab that started it is gone.
-    Uses the existing per-user history store; idempotent by
-    read_job_id so it never doubles a turn the widget also delivered."""
-    if not username:
-        return
-    try:
-        reply = str((payload or {}).get('reply') or '').strip()
-        if not reply:
-            return
-        _tid = _pm_thread_for_job(username, job_id)
-        history = _pm_load_thread_or_active(username, _tid)
-        if _pm_history_has_job_turn(history, 'read_job_id', job_id):
-            return
-        followups = [f for f in ((payload or {}).get('followups') or [])
-                     if isinstance(f, str)][:6]
-        _meta = {'read_job_id': job_id, 'kind': 'read',
-                 'options': [{'label': f, 'send': f} for f in followups]}
-        for _k in ('file_link', 'chart'):   # the CSV link and the chart survive a reload
-            if isinstance((payload or {}).get(_k), dict) and (payload or {})[_k].get('url'): _meta['link' if _k == 'file_link' else 'chart'] = dict((payload or {})[_k])
-        history.append({'role': 'agent', 'text': reply, 'ts': _pm_iso_now(), 'meta': _meta})
-        _pm_save_thread_or_active(username, _tid, history)
-    except Exception:
-        traceback.print_exc()
-
-
-def _pm_append_deck_to_history(username, job_id, status):
-    """Append a finished deck (title + download link) to the
-    requester's chat thread. Idempotent by deck_job_id."""
-    if not username:
-        return
-    try:
-        url = str((status or {}).get('url') or '')
-        if not url.lower().startswith('https://'):
-            return
-        _tid = _pm_thread_for_job(username, job_id)
-        history = _pm_load_thread_or_active(username, _tid)
-        if _pm_history_has_job_turn(history, 'deck_job_id', job_id):
-            return
-        title = str((status or {}).get('title')
-                    or (status or {}).get('filename')
-                    or 'Profile IQ deck')
-        slides = (status or {}).get('slides')
-        slide_note = (f" ({slides} slides)"
-                      if isinstance(slides, int) and slides else '')
-        history.append({
-            'role': 'agent',
-            'text': (f"Deck ready: {title}{slide_note}. "
-                     "The link is good for 7 days."),
-            'ts': _pm_iso_now(),
-            'meta': {'deck_job_id': job_id, 'kind': 'deck',
-                     'link': {'url': url,
-                              'label': 'Download the deck'}}})
-        _pm_save_thread_or_active(username, _tid, history)
-    except Exception:
-        traceback.print_exc()
-
-
 def _pm_run_read_job(job_id, pm_user, pm_ppu, text, history, mr, base,
                      digest_block, anchors_block, led,
                      panel_charge=None, probe=False):
@@ -14318,7 +14310,7 @@ def _pm_run_read_job(job_id, pm_user, pm_ppu, text, history, mr, base,
             # email them the read itself. A held read still lands in
             # the thread as its calm one-liner, but carries no output
             # to email, so only a clean read fires the notify.
-            _pm_append_read_to_history(pm_user, job_id, payload)
+            _pm_append_read_to_history(pm_user, job_id, payload, held=held, started_at=head.get('started_at'))
             _pm_watch_notify(pm_user, text, payload, payload.get('profile'), probe=probe,
                              via=__import__('prometheus.service', fromlist=['job_doc_field']).job_doc_field(job_id, 'via'))
             if not held and not probe:
@@ -14334,6 +14326,7 @@ def _pm_run_read_job(job_id, pm_user, pm_ppu, text, history, mr, base,
         else:
             _pm_read_status_write(job_id, {**head, 'status': 'error'})
             _pm_notify_delete(job_id)
+            _pm_settle_ask(job_id, 'faulted', '', head.get('started_at'))
             if panel_charge:
                 _pm_panel_refund(panel_charge)
         print(f"[pm-loop] read {job_id} "
@@ -15173,7 +15166,7 @@ def _pm_analyze_core(user, body, text, history):
         if _pma_ss.is_sample_size_ask(text):
             _pm_ask_hint(route='sample_size', outcome='answered')
             return jsonify({
-                'success': True, 'action': 'answer',
+                'success': True, 'action': 'answer', 'product_fact': True,   # the one reply that keeps 'ten million' (I5)
                 'reply': _pma_ss.sample_size_reply(text), 'followups': [],
                 'offer_deck': False, 'deck_angle': None})
     except Exception:
@@ -15965,7 +15958,7 @@ def _pm_analyze_core(user, body, text, history):
     # never run on it.
     _vc_owns = False
     try:
-        _vc_owns = _pm_view_owns_ask(text, ctx)
+        _vc_owns = _pm_view_owns_ask(text, ctx) and not _subject_rules.names_other_subject(text, ctx)   # I6: a named subject is never answered from the page
     except Exception:
         traceback.print_exc()
     if _vc_owns:
@@ -17796,13 +17789,11 @@ def _pm_deck_core(user, body):
     _pm_req_thread_set(body)
     # Prometheus tier gate (2026-08-26): decks are an analysis-tier
     # feature. pulls_only users without pay-as-you-go get the offer.
+    _t_deck0 = time.monotonic()
     _gate_resp = _pm_access_gate(user)
     if _gate_resp is not None:
         return _gate_resp
-    # Funds gate (2026-09-16, Jenna): decks are metered work too.
-    _funds_resp = _pm_funds_gate(user)
-    if _funds_resp is not None:
-        return _funds_resp
+    _pm_ask_stage('deck_access_gate', _t_deck0)
     _pm_ppu = _pm_usage_extras(user)
     text = str(body.get('text') or '').strip()[:600]
     angle = ((body.get('angle') or '').strip()
@@ -17823,6 +17814,7 @@ def _pm_deck_core(user, body):
         return jsonify(_H._chatbot_calm_payload())
     if res_err:
         return res_err
+    _pm_ask_stage('deck_resolve', _t_deck0)
     if resolution.get('clarify'):
         return jsonify({'success': True, 'clarify': resolution['clarify']})
     if resolution.get('used_open_page') \
@@ -17834,6 +17826,15 @@ def _pm_deck_core(user, body):
         if _osq:
             _pm_ask_hint(route='deck', outcome=_osq.pop('outcome'), subject=page)
             return jsonify(_osq)
+        if body.get('_pm_correction') or body.get('bind_subject'):
+            # the reader just corrected the page away (I2): never the page
+            # yes/no again; the bound subject leads the which-subject question
+            _subs = [x for x in [str(body.get('bind_subject') or '').strip()] + list(_subject_rules.thread_subjects(history, page)) if x]
+            _wsp = _subject_rules.which_subject_payload(page, _subs[:3], what='the deck')
+            _pm_ask_hint(route='deck', outcome='asked_which_subject_correction', subject=_subs[0] if _subs else page)
+            return jsonify({'success': True, 'action': 'answer', 'reply': _wsp['reply'], 'followups': _wsp['followups'],
+                            'offer_deck': False, 'deck_angle': None,
+                            'memory_confirm': {'question': text, 'deck': True, 'options': [dict(o, deck=True) for o in _wsp['options']]}})
         yes = f'Yes, {page}'
         return jsonify({
             'success': True,
@@ -17847,6 +17848,13 @@ def _pm_deck_core(user, body):
                              'deck': True}],
             },
         })
+    # Funds gate (2026-09-16, Jenna): decks are metered work too. It runs
+    # AFTER the question (I8, 2026-10-20: a yes/no about the open tab
+    # costs nothing and must not wait on the wallet).
+    _funds_resp = _pm_funds_gate(user)
+    if _funds_resp is not None:
+        return _funds_resp
+    _pm_ask_stage('deck_funds_gate', _t_deck0)
     ctx = resolution['ctx']
     deck_subject = resolution.get('subject') or ''
     deck_partner = resolution.get('partner') or ''
@@ -18407,6 +18415,8 @@ from prometheus.legacy.jobs import (  # noqa: E402,F401
     api_synth_chat_fw_status,
     api_synth_chat_aiq_status,
 )
+from prometheus.legacy.land import (  # noqa: E402,F401  (I4: landing settles the promise)
+    _pm_append_read_to_history, _pm_append_deck_to_history, _pm_settle_ask)
 from prometheus.legacy.notify import (  # noqa: E402,F401
     _PM_NOTIFY_PREFIX, _pm_clean_notify_email, _pm_notify_write, _pm_notify_read, _pm_notify_delete,
     _pm_send_output_email, _pm_flush_notify, _pm_user_email, _pm_view_deck_digest,

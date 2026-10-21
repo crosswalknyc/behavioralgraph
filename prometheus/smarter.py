@@ -725,20 +725,40 @@ def thread_replay(text, history):
         return None
 
 
-def on_it_line(reading, base):
+def on_it_line(reading, base, bound=''):
     """The started-read line names what is being read (2026-10-14: 'On it'
     alone left 'who skews older, Gunna or Drake?' with no echo of either).
     The Reader's subjects first, then the bound base."""
+    # I1 (2026-10-20): every name passes the binder's clean_display, so a
+    # metric ('Unique'), a behavior ('watch scary movies'), a wrapper
+    # ("the Golden Axe series on Paramount+") or a pointer never shows;
+    # the bound base is the fallback, and with nothing to name the line
+    # is written without a subject (the caller refuses to launch then).
+    from . import subject_rules as _sr
     names = []
+    # the subject bound upstream (the binder, a chip answer, a re-run)
+    # is what the person named; it leads the line (I4, Marie Flores
+    # 2026-10-20 drew "On it: reading Amazon now" on an Everybody Loves
+    # Raymond ask whose base was the Prime Video profile)
+    try:
+        bn = _sr.clean_display(str(bound or ''))
+        if bn:
+            names.append(bn)
+    except Exception:
+        names = []
     try:
         for sdoc in (reading or {}).get('subjects') or []:
-            nm = str((sdoc or {}).get('catalog') or (sdoc or {}).get('as_written') or '').strip()
+            kind = str((sdoc or {}).get('kind') or '').lower()
+            if kind in ('metric', 'unknown', 'cohort') and not (sdoc or {}).get('catalog'):
+                continue
+            nm = _sr.clean_display(str((sdoc or {}).get('catalog') or (sdoc or {}).get('as_written') or ''))
             if nm and nm.lower() not in [n.lower() for n in names]:
                 names.append(nm)
     except Exception:
         names = []
     if not names and isinstance(base, dict) and base.get('subject'):
-        names = [str(base['subject'])]
+        bn = _sr.clean_display(str(base['subject']))
+        names = [bn] if bn else []
     what = (' and '.join(names[:3]) if len(names) <= 3 else ', '.join(names[:3]) + ' and more') if names else ''
     lead = f"On it: reading {what} now." if what else "On it."
     return lead + " This one takes a real look at the data, so give me a moment - the read will land right here when it is ready."

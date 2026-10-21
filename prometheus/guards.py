@@ -1092,6 +1092,22 @@ def scrub_method_language(text):
     return result or t
 
 
+def _keeps_sample_words(raw):
+    """The product fact about the ten million keeps its number: the
+    payload says product_fact, or the ask in flight was that question."""
+    if isinstance(raw, dict) and raw.get('product_fact'):
+        return True
+    try:
+        from flask import g as _g
+        ask = str(getattr(_g, '_pm_ask_text', '') or '')
+    except Exception:
+        ask = ''
+    try:
+        return bool(ask) and is_sample_definition_ask(ask)
+    except Exception:
+        return False
+
+
 def scrub_method_language_payload(raw):
     """Apply the scrub to every user-visible text field of a reply
     payload, in place. Returns the payload."""
@@ -1102,6 +1118,16 @@ def scrub_method_language_payload(raw):
         if isinstance(v, str) and v.strip() and method_language(v):
             raw[k] = scrub_method_language(v)
             raw.setdefault('_scrubbed', []).append(k)
+        v = raw.get(k)
+        # I5: sample vocabulary never reaches a reader; the ten-million
+        # product fact is the one reply that keeps its number (the payload
+        # says so, or the ask itself was the question about the sample)
+        if isinstance(v, str) and v.strip() and not _keeps_sample_words(raw) and SAMPLE_VOCAB_RX.search(v):
+            raw[k] = scrub_sample_vocabulary(v)
+            raw.setdefault('_scrubbed', []).append(k + ':sample')
+    ic = raw.get('incidence_check')
+    if isinstance(ic, dict) and isinstance(ic.get('message'), str) and not _keeps_sample_words(raw):
+        ic['message'] = scrub_sample_vocabulary(ic['message'])
     return raw
 
 
@@ -1445,3 +1471,138 @@ PROVENANCE_REPLY = (
 
 def is_provenance_question(text):
     return bool(_PROVENANCE_RX.search(str(text or '')))
+
+
+# ---------------------------------------------------------------------------
+# Sample vocabulary at the exit (I5, 2026-10-20). Tania Nasr at Paramount+
+# read "Sample check for UFC fans (trailing year (10-20-2025 to
+# 10-20-2026)): Sample: 70,083 individuals (0.701% incidence), Avid tier,
+# inside the 10 million sample" and asked what the 10 million was. The
+# reader hears US people in plain words; the product fact about the ten
+# million is the one reply that keeps the number (payload product_fact).
+# ---------------------------------------------------------------------------
+_US_PER_SAMPLE = 32.99
+_MONTH_NAMES = ('January', 'February', 'March', 'April', 'May', 'June', 'July', 'August',
+                'September', 'October', 'November', 'December')
+
+
+def _people(n):
+    try:
+        n = int(round(float(str(n).replace(',', ''))))
+    except Exception:
+        return str(n)
+    if n >= 1_000_000:
+        v = n / 1_000_000
+        return f"about {v:.1f}M people" if v < 10 else f"about {v:.0f}M people"
+    if n >= 10_000:
+        return f"about {round(n / 1000):,}K people"
+    return f"about {n:,} people"
+
+
+def _plain_date(s):
+    m = re.match(r"^\s*(\d{1,2})-(\d{1,2})-(\d{4})\s*$", str(s or ''))
+    if m:
+        mo, d, y = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        if 1 <= mo <= 12:
+            return f"{_MONTH_NAMES[mo - 1]} {d}, {y}"
+    m = re.match(r"^\s*(\d{4})-(\d{1,2})-(\d{1,2})\s*$", str(s or ''))
+    if m:
+        y, mo, d = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        if 1 <= mo <= 12:
+            return f"{_MONTH_NAMES[mo - 1]} {d}, {y}"
+    return str(s or '').strip()
+
+
+def plain_window(label):
+    """'trailing year (10-20-2025 to 10-20-2026)' -> 'the last 12 months';
+    '07-01-2026 to 10-14-2026' -> 'July 1, 2026 to October 14, 2026'."""
+    t = ' '.join(str(label or '').split()).strip(' ()')
+    if not t:
+        return ''
+    if re.search(r"\btrailing\s+(?:year|12\s+months|twelve\s+months)\b", t, re.I):
+        return 'the last 12 months'
+    m = re.search(r"(\d{1,2}-\d{1,2}-\d{4}|\d{4}-\d{1,2}-\d{1,2})\s*(?:to|-|\u2013|through)\s*(\d{1,2}-\d{1,2}-\d{4}|\d{4}-\d{1,2}-\d{1,2})", t)
+    if m:
+        try:
+            import datetime as _d
+            def _p(x):
+                for fmt in ('%m-%d-%Y', '%Y-%m-%d'):
+                    try:
+                        return _d.datetime.strptime(x, fmt).date()
+                    except ValueError:
+                        pass
+                return None
+            a, b = _p(m.group(1)), _p(m.group(2))
+            if a and b and 360 <= (b - a).days <= 370 and (_d.date.today() - b).days <= 7:
+                return 'the last 12 months'
+        except Exception:
+            pass
+        return f"{_plain_date(m.group(1))} to {_plain_date(m.group(2))}"
+    return t
+
+
+_SAMPLE_LINE_RX = re.compile(r"^\s*-?\s*Sample:\s*([\d,]+)\s+(?:individuals|people|panelists)?\s*(?:\([^)]*incidence[^)]*\))?\s*$", re.I | re.M)
+_AVID_LINE_RX = re.compile(r"^\s*-?\s*Avid tier:\s*([\d,]+)\s+(?:individuals|people)?\s*$", re.I | re.M)
+_US_LINE_RX = re.compile(r"^\s*-?\s*US audience in window:\s*(.+?)\s*$", re.I | re.M)
+_RANGE_LINE_RX = re.compile(r"^\s*-?\s*Audience range:\s*([\d,]+)\s+to\s+([\d,]+)\s+individuals\s*$", re.I | re.M)
+_CHECK_HEAD_RX = re.compile(r"^\s*Sample check for (?P<who>.+?)\s*\((?P<win>.*)\)\s*:\s*$", re.I | re.M)
+_INSIDE_RX = re.compile(r"\s*,?\s*(?:\(?\s*)?inside the (?:10|ten) million(?: sample| panel)?(?: and projected to the US)?\s*\)?", re.I)
+_INCIDENCE_PAREN_RX = re.compile(r"\s*\(\s*[\d.]+%\s*incidence\s*\)", re.I)
+_PROFILE_LINE_RX = re.compile(r"^(?P<name>[^:\n]{1,120}):\s*([\d,]+)\s*,?\s*projecting to\s+([\d,]+)\s+US people", re.I | re.M)
+_RUN_IT_RX = re.compile(r"Reply 'run it' to build the profile locked to this exact\s+sample, or refine the audience / window and ask again\.", re.I)
+_VERDICT_RX = re.compile(r"^\s*Verdict:[^\n]*$", re.I | re.M)
+SAMPLE_VOCAB_RX = re.compile(
+    r"\bsample check\b|\bsample size\b|\bsample\b|\bincidence\b|\b(?:10|ten) million\b|\bpanelists?\b|\bavid tier\b|\btrailing year\b|\bindividuals\b", re.I)
+
+
+def scrub_sample_vocabulary(text):
+    """A sizing or sample-check reply in US people, plain words. Keeps
+    every figure that matters (US people, the range), drops the sample
+    count, the incidence, the ten million and the operator verdict."""
+    t = str(text or '')
+    if not t.strip() or not SAMPLE_VOCAB_RX.search(t):
+        return t
+    m = _CHECK_HEAD_RX.search(t)
+    if m:
+        who, win = m.group('who').strip(), plain_window(m.group('win'))
+        t = _CHECK_HEAD_RX.sub(f"{who}, {win}:" if win else f"{who}:", t, count=1)
+    us_m = _US_LINE_RX.search(t)
+    sm = _SAMPLE_LINE_RX.search(t)
+    if sm:
+        n = int(sm.group(1).replace(',', ''))
+        us_txt = ''
+        if us_m and re.search(r"\d", us_m.group(1)):
+            raw = us_m.group(1).strip()
+            mm = re.match(r"~?\s*([\d.]+)\s*M\b", raw, re.I)
+            us_txt = f"about {float(mm.group(1)):.1f}M people in the US" if mm else f"about {raw.lstrip('~')} people in the US"
+        if not us_txt:
+            us_txt = _people(n * _US_PER_SAMPLE) + " in the US"
+        t = _SAMPLE_LINE_RX.sub(f"- {us_txt[:1].upper() + us_txt[1:]}", t, count=1)
+        t = _US_LINE_RX.sub('', t, count=1)
+    am = _AVID_LINE_RX.search(t)
+    if am:
+        n = int(am.group(1).replace(',', ''))
+        t = _AVID_LINE_RX.sub(f"- The most engaged of them: {_people(n * _US_PER_SAMPLE)}", t, count=1)
+    rm = _RANGE_LINE_RX.search(t)
+    if rm:
+        t = _RANGE_LINE_RX.sub(f"- Audience range: {rm.group(1)} to {rm.group(2)} people", t, count=1)
+    t = _VERDICT_RX.sub('', t)
+    t = _RUN_IT_RX.sub("Say 'build a profile on this audience' and I will draft it for your approval.", t)
+    t = _INCIDENCE_PAREN_RX.sub('', t)
+    t = _INSIDE_RX.sub('', t)
+    t = _PROFILE_LINE_RX.sub(lambda mm: f"{mm.group('name')}: {_people(mm.group(3))} in the US", t)
+    t = re.sub(r"\btrailing year\s*\(([^)]*)\)", lambda mm: plain_window(mm.group(1)) or 'the last 12 months', t, flags=re.I)
+    t = re.sub(r"\btrailing year\b", 'the last 12 months', t, flags=re.I)
+    t = re.sub(r"\bsample check\b", 'audience size', t, flags=re.I)
+    t = re.sub(r"\bsample size\b", 'audience size', t, flags=re.I)
+    t = re.sub(r"\bavid tier\b", 'most engaged tier', t, flags=re.I)
+    t = re.sub(r"\bpanelists\b", 'people', t, flags=re.I)
+    t = re.sub(r"\bpanelist\b", 'person', t, flags=re.I)
+    t = re.sub(r"\bindividuals\b", 'people', t, flags=re.I)
+    t = re.sub(r"\b(?:the )?(?:10|ten) million(?: sample| panel| person US sample)?\b", 'our US data', t, flags=re.I)
+    t = re.sub(r"\bthe sample\b", 'the data', t, flags=re.I)
+    t = re.sub(r"\bsample\b", 'data', t, flags=re.I)
+    t = re.sub(r"\bincidence\b", 'share', t, flags=re.I)
+    t = re.sub(r"[ \t]{2,}", ' ', t)
+    t = re.sub(r"\n{3,}", '\n\n', t).strip()
+    return t

@@ -84005,8 +84005,27 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     _pmDateFold = true;
                 }
                 var _pmDateOk = !_pmDateFold && (_pmDateSplit.confirm || _synthChatIsDateConfirmation(text));
+                // A new question is not a window answer (I4d, 2026-10-20:
+                // Jay's and Marie's reads carried "in the last 12 months" /
+                // "during September 2026" and released a stale stash as
+                // "New profile, ready to run" beside the read). A full
+                // question, or a stash with no real draft behind it, ends
+                // the pending window step and routes the ask fresh.
+                if (!_pmDateOk && !_pmDateFold &&
+                    (/\?\s*$/.test(text) || text.length > 140 ||
+                     (!_pmRealDraft(synthChatStashedDraft) && !(synthChatStashedBatchData && synthChatStashedBatchData.spec_drafts)))) {
+                    _synthChatClearDateState();
+                    synthChatStashedDraft = null;
+                    synthChatStashedBatchData = null;
+                    _pmDateFold = true;
+                }
                 if (!_pmDateOk && !_pmDateFold) {
                     _pmDateOk = await _pmRebindStashedWindow(text);
+                }
+                if (_pmDateOk && !synthChatStashedBatchData && !_pmRealDraft(synthChatStashedDraft)) {
+                    _synthChatClearDateState();
+                    synthChatStashedDraft = null;
+                    _pmDateOk = false;
                 }
                 if (_pmDateOk) {
                     // Batch release (2026-08-20): the whole batch

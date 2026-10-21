@@ -153,8 +153,19 @@ def wrap(raw, *, surface, decision, thread_id=None, via='session'):
         # Legacy interpret answers ride as success=False + error text.
         kind = 'answer' if raw.get('success') is not False or raw.get('reply') else 'guidance'
     else:
-        kind = 'error'
-        text = text or 'Nothing came back for that one. Try asking it another way.'
+        # I4c (2026-10-20): "Nothing came back for that one" never ships as
+        # the reply. With nothing to show, the one question that moves the
+        # conversation (name the subject) goes out as a clarify.
+        kind = 'clarify'
+        if not text:
+            try:
+                from . import subject_rules as _sr
+                text = _sr.clarify_for('')
+            except Exception:
+                text = 'Which subject should this be on? Name the show, brand or person and I will take it from there.'
+            raw['reply'] = text
+            raw['action'] = raw.get('action') or 'answer'
+            raw.setdefault('followups', [])
 
     env = {
         'schema': _seams.ENVELOPE,

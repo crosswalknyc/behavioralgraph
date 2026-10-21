@@ -51,15 +51,28 @@ The rules, pure text, shared by every surface:
      content".
 
 No Flask, no S3, no model.
+
+One subject, bound once (I1, 2026-10-20, a day of misroutes): ``bind``
+is the single binder every lane that shows a subject goes through. It
+reads the words first, then the thread, then the page, and returns a
+``Subject`` whose ``display`` is the only spelling a reader ever sees:
+"the film mutiny" is Mutiny, "the Among Us series on Paramount+" is
+Among Us with platform Paramount+, "Title 'mutiny' Without Paying" is
+Mutiny, "a betting client like draftkings" is DraftKings, "Everybody
+Loves Raymond viewers on Amazon Prime Video, September 2026" is the
+title with viewers / platform / window as qualifiers, "Unique" and
+"watch scary movies" are a metric and a modifier and name nothing.
 """
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass, field
 
 __all__ = ['explicit_build_subject', 'conversational_turn', 'priced_handoff_allowed',
            'page_rejected_in_thread', 'thread_subjects', 'which_subject_payload',
            'CONVERSATIONAL_NOTE', 'strip_lead_negation', 'reading_subject', 'current_reading_subject',
-           'definition_turn']
+           'definition_turn', 'Subject', 'bind', 'clean_display', 'is_metric_phrase',
+           'nested_audience', 'qualified_audience', 'clarify_for', 'wants_breakdown', 'display_for']
 
 # A pointer at what is on the screen, never a subject of its own.
 _DEIXIS = frozenset(('<page>', 'this', 'that', 'it', 'this audience', 'this profile',
@@ -392,8 +405,9 @@ CONVERSATIONAL_NOTE = (
 def build_reroute_payload():
     """The analyze surface handing an explicit profile order to the
     interpret flow (the widget's reroute contract)."""
+    # the reply names the handoff, so the thread never reads "Nothing came back" (I4c)
     return {'success': True, 'action': 'build_profile', 'route_hint': 'interpret',
-            'reply': '', 'followups': [], 'offer_deck': False, 'deck_angle': None}
+            'reply': 'Setting up the profile brief for you to approve.', 'followups': [], 'offer_deck': False, 'deck_angle': None}
 
 
 def open_screen_question(text, page, history, *, deck=False, what='this'):
@@ -461,3 +475,506 @@ def which_subject_payload(page, subjects, *, what='this'):
         reply = f'Which subject should {what} be on?'
     return {'reply': reply, 'options': opts,
             'followups': [o['label'] for o in opts] + ['Something else']}
+
+
+# ===========================================================================
+# One subject, bound once (I1)
+# ===========================================================================
+@dataclass
+class Subject:
+    """What an ask is about, bound once for every lane.
+
+    kind: title | brand | person | audience | metric | none
+    name: the bound name (library spelling when known)
+    display: the only spelling a reader sees (clean, cased)
+    qualifiers: window, platform, verb (viewers / readers / ...), cut,
+                condition ("without paying for it")
+    source: words | thread | page | none
+    pointed: the words point at the page ("this audience", "it")
+    """
+    kind: str = 'none'
+    name: str = ''
+    display: str = ''
+    qualifiers: dict = field(default_factory=dict)
+    source: str = 'none'
+    confidence: float = 0.0
+    pointed: bool = False
+
+    def __bool__(self):
+        return bool(self.display) and self.kind != 'none'
+
+    @property
+    def named(self):
+        """True when the words themselves name the subject."""
+        return bool(self) and self.source == 'words'
+
+    def label(self, with_platform=True):
+        """'Among Us on Paramount+' for a platform-qualified title."""
+        if not self.display:
+            return ''
+        p = str(self.qualifiers.get('platform') or '')
+        return f"{self.display} on {p}" if (with_platform and p) else self.display
+
+
+# metric and breakdown vocabulary: never a subject on its own
+_METRIC_WORDS = frozenset((
+    'unique', 'uniques', 'viewers', 'viewer', 'users', 'user', 'people', 'individuals', 'accounts',
+    'hours', 'hour', 'minutes', 'views', 'streams', 'sessions', 'visits', 'reach', 'share',
+    'shares', 'percent', 'percentage', 'index', 'indexes', 'penetration', 'rate', 'rates',
+    'conversion', 'conversions', 'engagement', 'retention', 'churn', 'lift', 'count', 'counts',
+    'number', 'numbers', 'total', 'totals', 'average', 'mean', 'median', 'per', 'by', 'surface',
+    'surfaces', 'device', 'devices', 'platform', 'platforms', 'daypart', 'dayparts', 'month',
+    'months', 'monthly', 'week', 'weeks', 'weekly', 'daily', 'quarter', 'quarters', 'year',
+    'years', 'yearly', 'window', 'period', 'breakdown', 'split', 'table', 'chart', 'us', 'u.s.',
+    'the', 'a', 'an', 'of', 'and', 'or', 'not', 'just', 'only', 'vs', 'versus', 'television',
+    'tv', 'phone', 'mobile', 'desktop', 'tablet', 'ctv', 'demographic', 'demographics', 'demo',
+    'demos', 'age', 'gender', 'income', 'geography', 'state', 'dma', 'size', 'sample',
+    'incidence', 'audience', 'cohort', 'segment', 'cut', 'profile', 'data', 'metric', 'metrics',
+    'kpi', 'kpis', 'figure', 'figures', 'results', 'result', 'frequency', 'volume', 'spend',
+    'cost', 'price', 'revenue', 'all', 'every', 'each', 'other', 'rest', 'more', 'less'))
+# a leading verb makes the phrase a behavior, not a thing
+_BEHAVIOR_LEAD_RX = re.compile(
+    r"^(?:who\s+)?(?:also\s+)?(?:watch(?:es|ed|ing)?|drink(?:s|ing)?|drank|buy(?:s|ing)?|bought|read(?:s|ing)?|"
+    r"listen(?:s|ed|ing)?|play(?:s|ed|ing)?|stream(?:s|ed|ing)?|shop(?:s|ped|ping)?|eat(?:s|ing)?|ate|"
+    r"use(?:s|d)?|using|visit(?:s|ed|ing)?|follow(?:s|ed|ing)?|subscribe(?:s|d)?|own(?:s|ed)?|"
+    r"like(?:s|d)?|love(?:s|d)?|prefer(?:s|red)?|search(?:es|ed|ing)?|click(?:s|ed)?|attend(?:s|ed)?)\b", re.I)
+# wrappers an extractor leaves on a name
+_WRAPPER_LEAD_RX = re.compile(
+    r"^(?:the\s+)?(?:title|film|movie|show|series|book|podcast|game|brand|app|channel|network|album|song)\s+", re.I)
+_LIKE_RX = re.compile(r"^(?:a|an|the|some)\s+.*?\blike\s+(?P<name>.+)$", re.I)
+_AUDIENCE_IN_PROFILE_RX = re.compile(
+    r"^(?:the\s+)?(?P<name>.+?)\s+(?:audience|viewers|readers|listeners|users|buyers|fans|customers|cohort|profile)\s+in\s+(?:this|the)\s+(?:profile|file|view|page|audience)$", re.I)
+_CONDITION_TAIL_RX = re.compile(
+    r"\s+(?:without\s+paying(?:\s+for\s+it)?|outside\s+(?:of\s+)?theatrical|at\s+home|for\s+free|on\s+demand|"
+    r"with\s+ads|ad[- ]free|digitally|online|legally|in\s+(?:the\s+)?(?:last|past|trailing)\s+\d+\s+(?:days|weeks|months|years))\s*$", re.I)
+_SERIES_ON_RX = re.compile(
+    r"^(?:the\s+)?(?P<name>.+?)\s+(?P<kind>series|show|film|movie|title|podcast|book|game|franchise)\s+on\s+(?P<platform>[A-Za-z0-9+&' .-]{2,40})$", re.I)
+_NESTED_RX = re.compile(
+    r"\b(?:people|viewers|users|those|folks|subscribers|accounts|anyone|everyone|audiences?)\s+(?:who|that)\s+"
+    r"(?:also\s+)?(?:watch(?:ed|es)?|stream(?:ed|s)?|view(?:ed|s)?|read|reads|listen(?:ed|s)?\s+to|play(?:ed|s)?|bought|buy|purchased?|"
+    r"subscribed?\s+to|follow(?:ed|s)?|binge(?:d|s)?|saw|started|drink|drinks|drank|eat|eats|ate|use|uses|used|own|owns|wear|wears|drive|drives|shop\s+at)\s+"
+    r"(?P<obj>(?:the\s+)?[A-Za-z0-9][A-Za-z0-9 .&'\-+:!]{1,70}?)"
+    r"(?:\s+on\s+(?P<platform>[A-Z][A-Za-z0-9+&' .-]{1,30}?|paramount\+|hulu|netflix|peacock|max|prime video|amazon prime video|disney\+|apple tv\+|tubi|roku))?"
+    r"(?=\s*[?.,;!]|\s+(?:in|during|over|within|since|last|this|between|from|and|or|but|who|that|which|when|while|after|before)\b|$)", re.I)
+_QUALIFIED_AUDIENCE_RX = re.compile(
+    r"^(?P<name>[A-Za-z0-9][A-Za-z0-9 .&'\-+:!]{1,70}?)\s+(?P<verb>viewers|readers|listeners|players|watchers|buyers|shoppers|users|fans|subscribers|customers)"
+    r"(?:\s+on\s+(?P<platform>[A-Za-z0-9+&' .-]{2,40}?))?"
+    r"(?:\s*,\s*|\s+(?:in|for|during)\s+)?(?P<window>(?:january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{4}|q[1-4]\s+\d{4}|\d{4}|(?:last|trailing|past)\s+\d+\s+(?:days|weeks|months))?\s*$", re.I)
+_QUOTED_WITH_TYPE_RX = re.compile(
+    r"(?<![A-Za-z0-9])[\"\u201c\u201d'\u2018\u2019](?P<name>[^\"\u201c\u201d'\u2018\u2019]{2,60})[\"\u201c\u201d'\u2018\u2019](?![A-Za-z0-9])\s*(?P<kind>webtoon|comic|manga|book|novel|series|show|film|movie|podcast|game|title)?", re.I)
+_LIKE_IN_TEXT_RX = re.compile(
+    r"\b(?:a|an|the|some|any)\s+[a-z][a-z ]{1,40}?\s+like\s+(?P<name>[A-Za-z0-9][A-Za-z0-9&'+ .-]{1,40}?)(?=[.,;:!?]|\s+(?:and|or|but|who|that|which|so|to)\b|$)", re.I)
+_PLATFORM_TAIL_RX = re.compile(
+    r"\s+(?:on\s+)?(?:amazon\s+prime\s+video|prime\s+video|netflix|hulu|paramount\+|paramount\s+plus|peacock|hbo\s+max|max|disney\+|apple\s+tv\+|tubi|roku|youtube)\s*$", re.I)
+_READ_TAIL_RX = re.compile(r"\s+(?:crossover\s+|cross-?watch\s+)?(?:read|analysis|report|question|ask|breakdown|numbers?)\s*$", re.I)
+_BREAKDOWN_RX = re.compile(
+    r"\b(?:by|per|across|broken\s+(?:out|down)\s+by|split\s+by|segmented\s+by)\s+(?:platform|service|surface|device|daypart|month|week|day|geography|state|dma|demographic|age|gender|genre|title|creator|channel)s?\b"
+    r"|\bas\s+a\s+table\b|\bin\s+a\s+table\b|\btable\s+(?:format|form)\b|\bshow\s+(?:me\s+)?(?:the\s+)?(?:results|it|them)\s+by\b|\bwhat\s+other\s+(?:streaming\s+)?(?:platforms|services)\b", re.I)
+
+_BRAND_NAMED_RX = re.compile(
+    r"\b(?:the|a)\s+brand\s+(?:named\s+|called\s+)?(?P<name>[A-Za-z0-9][A-Za-z0-9&'+.-]*(?:\s+[A-Za-z0-9&'+.-]+){0,4})\s*$", re.I)
+_AUDIENCE_IN_PROFILE_TEXT_RX = re.compile(
+    r"\b(?:for|of|on|about|in)\s+the\s+(?P<name>[A-Z][A-Za-z0-9&'+.:-]*(?:\s+[A-Za-z0-9&'+.:-]+){0,7}?)\s+"
+    r"(?P<verb>audience|viewers|readers|listeners|users|buyers|fans|customers|cohort|profile)\s+in\s+(?:this|the)\s+(?:profile|file|view|page|audience)\b", re.I)
+_PLATFORM_VENDORS = frozenset(('amazon', 'apple', 'google', 'youtube', 'paramount', 'disney', 'hbo', 'warner', 'nbc', 'peacock', 'roku', 'pluto', 'tubi', 'fox', 'cbs', 'abc'))
+_SIZE_AUDIENCE_RX = re.compile(
+    r"\b(?:how\s+many|how\s+big\s+is|size\s+of|the\s+size\s+of|number\s+of)\s+(?:the\s+)?(?P<name>[A-Z][A-Za-z0-9&+'. -]{1,40}?|[a-z0-9][a-z0-9&+'. -]{1,40}?)\s+"
+    r"(?P<verb>fans|viewers|readers|listeners|players|users|customers|buyers|shoppers|subscribers|owners|drinkers|watchers)\b", re.I)
+
+_KNOWN_CASING = {
+    'draftkings': 'DraftKings', 'fanduel': 'FanDuel', 'mountain dew': 'Mountain Dew', 'netflix': 'Netflix',
+    'hulu': 'Hulu', 'prime video': 'Prime Video', 'amazon prime video': 'Amazon Prime Video', 'paramount+': 'Paramount+',
+    'paramount plus': 'Paramount+', 'youtube': 'YouTube', 'tiktok': 'TikTok', 'hbo max': 'HBO Max', 'max': 'Max',
+    'peacock': 'Peacock', 'disney+': 'Disney+', 'apple tv+': 'Apple TV+', 'tubi': 'Tubi', 'espn': 'ESPN', 'nfl': 'NFL',
+    'nba': 'NBA', 'mlb': 'MLB', 'ufc': 'UFC', 'wwe': 'WWE', 'ncis': 'NCIS', 'mrbeast': 'MrBeast', 'ishowspeed': 'IShowSpeed',
+    'bet': 'BET', 'cnn': 'CNN', 'webtoon': 'WEBTOON', 'lore olympus': 'Lore Olympus', 'mutiny': 'Mutiny',
+    'among us': 'Among Us', 'golden axe': 'Golden Axe', 'the office': 'The Office', 'the office us': 'The Office US',
+}
+_SMALL_WORDS = frozenset(('a', 'an', 'the', 'of', 'and', 'or', 'in', 'on', 'for', 'to', 'at', 'by', 'with', 'vs', 'de', 'la', 'us'))
+
+
+def _cased(name, casing=None):
+    """Library / known casing for a name, else title case that keeps
+    acronyms and inner capitals ("NCIS: New York", "iJustine")."""
+    s = ' '.join(str(name or '').split()).strip(" ,;:.'\"")
+    if not s:
+        return ''
+    low = s.lower()
+    if casing and low in casing:
+        return casing[low]
+    if low in _KNOWN_CASING:
+        return _KNOWN_CASING[low]
+    if s != low and any(ch.isupper() for ch in s):
+        return s        # the reader typed capitals: keep them
+    out = []
+    for i, w in enumerate(low.split()):
+        if i and w in _SMALL_WORDS and w != 'us':
+            out.append(w)
+        elif w == 'us':
+            out.append('US')
+        elif w.rstrip(':,') in _KNOWN_CASING:
+            out.append(_KNOWN_CASING[w.rstrip(':,')] + w[len(w.rstrip(':,')):])
+        else:
+            out.append(w[:1].upper() + w[1:])
+    return ' '.join(out)
+
+
+def is_metric_phrase(s):
+    """'Unique', 'unique US viewers per surface', 'watch scary movies':
+    a metric, a breakdown or a behavior, never a subject."""
+    t = ' '.join(str(s or '').lower().split()).strip(" ,;:.'\"")
+    if not t:
+        return True
+    if _BEHAVIOR_LEAD_RX.match(t):
+        return True
+    words = [w for w in re.split(r"[^a-z0-9+.']+", t) if w]
+    if not words:
+        return True
+    return all(w in _METRIC_WORDS for w in words)
+
+
+def wants_breakdown(text):
+    """The ask wants a split or a table, not one count."""
+    return bool(_BREAKDOWN_RX.search(str(text or '')))
+
+
+def clean_display(raw, text='', casing=None):
+    """The one spelling a reader sees for a subject an extractor or a
+    model produced. '' when the raw is a metric, a modifier, a pointer
+    at the page, or ordinary words with no name in them."""
+    s = ' '.join(str(raw or '').split()).strip(" ,;:.'\"")
+    if not s:
+        return ''
+    if s.lower() in _DEIXIS or s.lower() in ('<page>', 'page'):
+        return ''
+    m = re.match(r"^(?:re-?r(?:u|eu)n|re-?pull|redo)\s*\((?P<inner>[^)]+)\)\s*$", s, re.I)
+    if m:
+        inner = m.group('inner').strip()
+        # "(the Golden Axe crossover read)": a lowercase article before a capitalized name is an article
+        if re.match(r"^the\s+[A-Z]", inner):
+            inner = inner[4:]
+        s = inner
+    if re.match(r"^(?:re-?r(?:u|eu)n|re-?pull|redo)\b", s, re.I):
+        return ''
+    s = _READ_TAIL_RX.sub('', s).strip(" ,;:.'\"")
+    m = _AUDIENCE_IN_PROFILE_RX.match(s)
+    if m:
+        s = m.group('name')
+    m = _LIKE_RX.match(s)
+    if m:
+        s = m.group('name')
+    s = _CONDITION_TAIL_RX.sub('', s).strip(" ,;:.'\"")
+    s = re.sub(r"^(?:title|film|movie|show|series|book|podcast|game)\s+[\"\u201c\u201d'\u2018\u2019]?([^\"\u201c\u201d'\u2018\u2019]+?)[\"\u201c\u201d'\u2018\u2019]?$", r"\1", s, flags=re.I)
+    # "'Lore Olympus' webtoon": a quoted name followed by its type noun
+    s = re.sub(r"^[\"\u201c\u201d'\u2018\u2019]?([^\"\u201c\u201d'\u2018\u2019]{2,60})[\"\u201c\u201d'\u2018\u2019]\s+(?:webtoon|comic|manga|book|novel|series|show|film|movie|podcast|game|title)$", r"\1", s, flags=re.I)
+    # "the toys category that is for the brand Lego": the brand named last is the subject
+    m = _BRAND_NAMED_RX.search(s)
+    if m:
+        s = m.group('name').strip()
+    m = _SERIES_ON_RX.match(s)
+    if m:
+        s = m.group('name')
+    s = _WRAPPER_LEAD_RX.sub('', s).strip(" ,;:.'\"")
+    s = s.strip("\"\u201c\u201d'\u2018\u2019 ")
+    s = re.sub(r"^(?:the\s+)?(?:question|ask|read|analysis|report)\s+(?:on|about|of)\s+", '', s, flags=re.I)
+    if len(s.split()) > 2:
+        pm = _PLATFORM_TAIL_RX.search(s)
+        # "Everybody Loves Raymond Amazon Prime Video" drops the platform;
+        # "Amazon Prime Video" IS the platform and keeps its whole name
+        if pm and pm.start() > 0 and s[:pm.start()].strip().lower() not in _PLATFORM_VENDORS:
+            s = (s[:pm.start()] + s[pm.end():]).strip(" ,;:.'\"")
+    if not s or is_metric_phrase(s):
+        return ''
+    low = s.lower()
+    if low in _NEVER_LABEL:
+        return ''
+    # a bare 'the' title keeps its article ("The Office"); other leading articles drop
+    if low.startswith('the ') and len(low.split()) <= 3:
+        return _cased(s, casing)
+    s = re.sub(r"^(?:a|an)\s+", '', s, flags=re.I)
+    return _cased(s, casing)
+
+
+_NEVER_LABEL = frozenset((
+    'us', 'usa', 'u.s.', 'america', 'people', 'person', 'year', 'month', 'week', 'day', 'tv',
+    'streaming', 'prometheus', 'crosswalk', 'gen pop', 'genpop', 'total universe', 'avid fan',
+    'something else', 'never mind', 'yes', 'no', 'ok', 'okay', 'approve', 're-run', 'rerun',
+    'the time frame', 'time frame', 'window', 'the window', 'september', 'october', 'november',
+    'q1', 'q2', 'q3', 'q4', 'last year', 'this year', 'approve the run'))
+
+
+def nested_audience(text):
+    """'people who watched the Among Us series on Paramount+' ->
+    (name, platform, kind). ('', '', '') when the words carry none."""
+    m = _NESTED_RX.search(str(text or ''))
+    if not m:
+        return '', '', ''
+    obj = m.group('obj').strip()
+    platform = (m.group('platform') or '').strip()
+    kind = ''
+    sm = _SERIES_ON_RX.match(obj)
+    if sm:
+        obj, kind, platform = sm.group('name'), sm.group('kind'), platform or sm.group('platform')
+    else:
+        km = re.match(r"^(?:the\s+)?(?P<name>.+?)\s+(?P<kind>series|show|film|movie|title|podcast|book|game)$", obj, re.I)
+        if km:
+            obj, kind = km.group('name'), km.group('kind')
+    name = clean_display(obj)
+    if not name:
+        return '', '', ''
+    return name, _cased(platform) if platform else '', kind or 'title'
+
+
+def qualified_audience(text):
+    """'Everybody Loves Raymond viewers on Amazon Prime Video, September
+    2026' -> (name, {'verb','platform','window'}); ('', {}) otherwise.
+    The whole text must be the audience name (a chip answer, a build
+    subject), not a sentence."""
+    t = ' '.join(str(text or '').split()).strip(" .!?")
+    if not t or len(t) > 140 or ' who ' in t.lower() or '?' in t:
+        return '', {}
+    m = _QUALIFIED_AUDIENCE_RX.match(t)
+    if not m:
+        return '', {}
+    name = clean_display(m.group('name'))
+    if not name or _BEHAVIOR_LEAD_RX.match(m.group('name')):
+        return '', {}
+    q = {'verb': m.group('verb').lower()}
+    if m.group('platform'):
+        q['platform'] = _cased(m.group('platform'))
+    if m.group('window'):
+        q['window'] = ' '.join(m.group('window').split())
+    return name, q
+
+
+def _reading_candidates(reading, page, norm):
+    out = []
+    if not isinstance(reading, dict):
+        return out
+    page_n = norm(str(page or '').split(' - ')[0])
+    for s in (reading.get('subjects') or []):
+        if not isinstance(s, dict):
+            continue
+        aw = str(s.get('as_written') or '').strip()
+        cat = str(s.get('catalog') or '').strip()
+        kind = str(s.get('kind') or '').strip().lower()
+        if aw.lower().strip(" .?!") in _DEIXIS or aw.lower() == '<page>':
+            continue
+        if kind in ('metric', 'unknown', 'audience', 'cohort') and not cat:
+            # 'audience' as the reader's kind for a named audience ("DraftKings users") still names a brand
+            if kind != 'audience':
+                continue
+        name = cat or clean_display(aw)
+        if not name:
+            continue
+        n = norm(name.split(' - ')[0])
+        if page_n and (n == page_n or n in page_n or page_n in n):
+            continue
+        k = kind if kind in ('title', 'brand', 'person', 'audience') else 'title'
+        out.append((name, k, 0.8 if cat else 0.7))
+    return out
+
+
+def bind(text, history=None, page='', reading=None, catalog_names=None, normalize=None):
+    """The one binder. Words beat thread beat page."""
+    norm = normalize or (lambda s: re.sub(r"[^a-z0-9]+", "", str(s or '').lower()))
+    casing = {str(n).lower(): str(n) for n in (catalog_names or []) if n}
+    t = ' '.join(str(text or '').split())
+    page = str(page or '').strip()
+    quals = {}
+    if not t:
+        return Subject()
+    if definition_turn(t, reading, page):
+        return Subject('none', '', '', {}, 'none', 0.0, True)
+    # a pointer at the page
+    pointed = bool(re.search(r"\b(?:this|that|it|these|those)\b", t, re.I)) and bool(re.search(
+        r"\b(?:this|that)\s+(?:audience|profile|data|file|view|page|one|cohort|group)\b|\b(?:the|this)\s+(?:open\s+)?profile\b|\bit\b", t, re.I))
+    # 1. an explicit build order names its subject
+    eb = explicit_build_subject(t)
+    if eb:
+        name, q = qualified_audience(eb)
+        if name:
+            quals.update(q)
+        else:
+            name = clean_display(eb, t, casing)
+        if name:
+            return Subject('brand', name, name, quals, 'words', 0.95)
+    # 2. a nested audience: people who watched X on Y
+    name, platform, kind = nested_audience(t)
+    if name:
+        if platform:
+            quals['platform'] = platform
+        quals['verb'] = 'viewers'
+        return Subject('title' if kind != 'brand' else 'brand', name, name, quals, 'words', 0.9)
+    # 2b. the audience named in words with a pointer at the page: "For the
+    # Everybody Loves Raymond Amazon Prime Video audience in this profile"
+    m = _AUDIENCE_IN_PROFILE_TEXT_RX.search(t)
+    if m:
+        raw_name = m.group('name').strip()
+        pm = _PLATFORM_TAIL_RX.search(raw_name)
+        if pm and len(raw_name.split()) > 2:
+            quals['platform'] = _cased(pm.group(0).strip(' ,'))
+        name = clean_display(raw_name, t, casing)
+        if name:
+            quals['verb'] = m.group('verb').lower()
+            return Subject('audience', name, name, quals, 'words', 0.85, True)
+    # 3. a type-led phrase: the film mutiny / the Among Us series on Paramount+
+    try:
+        from .named_subject import type_led_subject as _tls, ask_condition as _cond
+        tl, tk = _tls(t)
+    except Exception:
+        tl, tk, _cond = '', '', None
+    if tl:
+        name = clean_display(tl, t, casing)
+        if name:
+            sm = _SERIES_ON_RX.search(t)
+            if sm and norm(clean_display(sm.group('name'))) == norm(name):
+                quals['platform'] = _cased(sm.group('platform'))
+            c = _cond(t) if callable(_cond) else ''
+            if c:
+                quals['condition'] = c
+            return Subject('title', name, name, quals, 'words', 0.9)
+    # 4. a quoted title ("'Lore Olympus' webtoon", "the title 'mutiny'")
+    m = _QUOTED_WITH_TYPE_RX.search(t)
+    if m:
+        name = clean_display(m.group('name'), t, casing)
+        if name:
+            c = _cond(t) if callable(_cond) else ''
+            if c:
+                quals['condition'] = c
+            return Subject('title', name, name, quals, 'words', 0.88)
+    # 5. the whole text is a qualified audience name (a chip answer)
+    name, q = qualified_audience(t)
+    if name:
+        quals.update(q)
+        return Subject('title', name, name, quals, 'words', 0.85)
+    # 5b. a size ask on a named audience: "how many UFC fans are there"
+    m = _SIZE_AUDIENCE_RX.search(t)
+    if m:
+        name = clean_display(m.group('name'), t, casing)
+        if name:
+            quals['verb'] = m.group('verb').lower()
+            return Subject('audience', name, f"{name} {quals['verb']}", quals, 'words', 0.8)
+    # 6. the Reader's subjects for these words
+    for name, kind, conf in _reading_candidates(reading, page, norm):
+        disp = clean_display(name, t, casing) or name
+        if disp:
+            return Subject(kind, disp, disp, quals, 'words', conf)
+    # 7. "a betting client like draftkings" names DraftKings
+    m = _LIKE_IN_TEXT_RX.search(t)
+    if m:
+        name = clean_display(m.group('name'), t, casing)
+        if name:
+            return Subject('brand', name, name, quals, 'words', 0.6)
+    # 8. the words name nothing: the thread, then the page
+    subs = thread_subjects(history, page) if history else []
+    if subs:
+        disp = clean_display(subs[0], '', casing) or subs[0]
+        if disp:
+            return Subject('audience', disp, disp, quals, 'thread', 0.5, pointed)
+    if page and pointed:
+        return Subject('audience', page, page, quals, 'page', 0.5, True)
+    return Subject('none', '', '', quals, 'none', 0.0, pointed)
+
+
+def display_for(raw, text='', page='', reading=None, catalog_names=None):
+    """What a lane shows for the subject it has in hand: the binder's
+    display when the words bind one, else the raw cleaned. '' means
+    nothing to show (the line is written without a subject)."""
+    s = bind(text, None, page, reading, catalog_names)
+    if s and s.source == 'words':
+        return s.label()
+    return clean_display(raw, text)
+
+
+def clarify_for(text, page=''):
+    """The one question when an ask binds no subject: name the thing."""
+    return ("Which subject should this be on? Name the show, brand or person "
+            "(one line is enough) and I will take it from there.")
+
+
+def _page_name(ctx):
+    try:
+        prim = (ctx or {}).get('primary') or {}
+        name = str(prim.get('name') or '').strip()
+        if name:
+            return name
+        vc = (ctx or {}).get('view_context') or {}
+        return str(vc.get('view_title') or vc.get('subject') or '').strip()
+    except Exception:
+        return ''
+
+
+def _same_family(a, b, norm):
+    na, nb = norm(str(a or '').split(' - ')[0]), norm(str(b or '').split(' - ')[0])
+    return bool(na) and bool(nb) and (na == nb or na in nb or nb in na)
+
+
+def _current_continuation(text, history, page):
+    """The continuation the service classified for this request, or a
+    fresh classification outside one."""
+    try:
+        from flask import g as _g
+        c = getattr(_g, '_pm_continuation', None)
+        if isinstance(c, dict) and c.get('kind'):
+            return c
+    except Exception:
+        pass
+    try:
+        from . import continuation as _cont
+        return _cont.classify(text, history, None, page)
+    except Exception:
+        return {'kind': 'new_ask'}
+
+
+def bind_or_continue(text, ctx, history, ask_hint=None):
+    """The open-screen confirm's first question (I1 + I2):
+      {}                          a continuation: never the page confirm
+      {'route': 'bind', ...}      the words bind a subject that is not the page
+      None                        the binder has no say; the caller's page tests run
+    """
+    page = _page_name(ctx)
+    norm = lambda s: re.sub(r"[^a-z0-9]+", "", str(s or '').lower())
+    try:
+        cont = _current_continuation(text, history, page)
+        if str(cont.get('kind') or 'new_ask') != 'new_ask':
+            if callable(ask_hint):
+                ask_hint(route='screen_bind', outcome='continuation_' + str(cont['kind']), subject=page)
+            return {}
+        reading = None
+        try:
+            from flask import g as _g
+            reading = getattr(_g, '_pm_reading', None)
+        except Exception:
+            reading = None
+        s = bind(text, history, page, reading)
+        if s and s.source == 'words' and s.kind in ('title', 'brand', 'person', 'audience') and not _same_family(s.display, page, norm):
+            # "people who watched the Among Us series on Paramount+" with
+            # Paramount+ open binds Among Us; the page rides as the
+            # platform qualifier (Casey Pearson 2026-10-20 drew "Which
+            # subject: the Golden Axe series on Paramount+ or Paramount+?"
+            # and then "On it: reading Paramount+")
+            if callable(ask_hint):
+                ask_hint(route='screen_bind', outcome='bound_binder_subject', subject=s.display)
+            return {'route': 'bind', 'subject': s.display, 'qualifiers': dict(s.qualifiers)}
+    except Exception:
+        return None
+    return None
+
+
+def names_other_subject(text, ctx):
+    """True when the words name a subject that is not the page's (I6):
+    the page never answers for it."""
+    page = _page_name(ctx)
+    norm = lambda s: re.sub(r"[^a-z0-9]+", "", str(s or '').lower())
+    try:
+        reading = None
+        try:
+            from flask import g as _g
+            reading = getattr(_g, '_pm_reading', None)
+        except Exception:
+            reading = None
+        s = bind(text, None, page, reading)
+        return bool(s) and s.source == 'words' and s.kind in ('title', 'brand', 'person') and not _same_family(s.display, page, norm)
+    except Exception:
+        return False

@@ -553,15 +553,79 @@ ASK_PREFIX = 'system/usage/ask_log/'
 _SYNC_FOR_TESTS = False
 
 
-def _put_ask_record(record: dict) -> None:
+def _ask_key(record: dict) -> str:
     day = record['ts'][:10]
-    key = (f"{ASK_PREFIX}{day}/"
-           f"{record['ts'][11:19].replace(':', '')}_"
-           f"{uuid.uuid4().hex[:10]}.json")
+    return (f"{ASK_PREFIX}{day}/"
+            f"{record['ts'][11:19].replace(':', '')}_"
+            f"{uuid.uuid4().hex[:10]}.json")
+
+
+# A promise is a tracked job or it is not made (I4, 2026-10-20). A
+# record that promised a job ("On it: reading X now", read_job_id on
+# the payload) is findable by that job id so the landing settles it.
+ASK_BY_JOB_PREFIX = 'system/usage/ask_log/_by_job/'
+
+
+def _put_ask_record(record: dict) -> None:
+    key = _ask_key(record)
+    job_id = str(record.get('job_id') or '')
     _client().put_object(
         Bucket=S3_BUCKET, Key=key,
         Body=json.dumps(record).encode('utf-8'),
         ContentType='application/json')
+    if job_id:
+        try:
+            _client().put_object(
+                Bucket=S3_BUCKET, Key=f"{ASK_BY_JOB_PREFIX}{job_id}.json",
+                Body=json.dumps({'key': key, 'ts': record['ts'], 'user': record.get('user')}).encode('utf-8'),
+                ContentType='application/json')
+        except Exception as e:
+            print(f"[ask-log] job pointer put failed: {e}")
+
+
+def settle_ask(job_id: str, *, outcome: str, reply: Optional[str] = None,
+               ms: Optional[int] = None) -> bool:
+    """Update the ask-log record that promised ``job_id``: outcome
+    'landed' | 'held' | 'faulted', the read's opening as the reply, the
+    total time. Never raises; False when no record promised the job."""
+    try:
+        jid = str(job_id or '').strip()
+        if not jid:
+            return False
+        c = _client()
+        ptr = json.loads(c.get_object(Bucket=S3_BUCKET, Key=f"{ASK_BY_JOB_PREFIX}{jid}.json")['Body'].read().decode('utf-8') or '{}')
+        key = str(ptr.get('key') or '')
+        if not key:
+            return False
+        rec = json.loads(c.get_object(Bucket=S3_BUCKET, Key=key)['Body'].read().decode('utf-8') or '{}')
+        if not isinstance(rec, dict):
+            return False
+        rec['outcome'] = str(outcome or '')[:40]
+        rec['promised_outcome'] = rec.get('promised_outcome') or 'answered'
+        if reply and str(reply).strip():
+            rec['promise_line'] = rec.get('promise_line') or rec.get('reply')
+            rec['reply'] = ' '.join(str(reply).split())[:400]
+        if ms is not None:
+            try:
+                rec['ms_total'] = max(int(ms), 0)
+            except (TypeError, ValueError):
+                pass
+        rec['settled_at'] = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+        c.put_object(Bucket=S3_BUCKET, Key=key, Body=json.dumps(rec).encode('utf-8'),
+                     ContentType='application/json')
+        try:
+            from prometheus import store as _store
+            if _store.enabled():
+                _store.record_ask(rec)
+        except Exception:
+            pass
+        return True
+    except Exception as e:
+        try:
+            print(f"[ask-log] settle failed for {job_id}: {e}")
+        except Exception:
+            pass
+        return False
 
 
 def _put_ask_record_safe(record: dict) -> None:
@@ -586,9 +650,14 @@ def record_ask(*, user: str, view: str, question: str, surface: str,
                subject: Optional[str] = None,
                extra: Optional[dict] = None,
                stages: Optional[dict] = None,
-               reply: Optional[str] = None) -> None:
+               reply: Optional[str] = None,
+               job_id: Optional[str] = None) -> None:
     """Persist one user question. Never raises; never blocks the caller
     (S3 put runs on a daemon thread, mirroring record_call).
+
+    job_id:  the read / deck / build job the reply promised (I4,
+             2026-10-20); settle_ask(job_id, ...) finds the record by
+             it when the job lands, is held, or faults.
 
     reply:   the first 400 characters of what the reader saw, after the
              exit scrub (2026-10-13 audit: without it the grader judges
@@ -628,6 +697,8 @@ def record_ask(*, user: str, view: str, question: str, surface: str,
             record['subject'] = str(subject)[:120]
         if reply and str(reply).strip():
             record['reply'] = ' '.join(str(reply).split())[:400]
+        if job_id and str(job_id).strip():
+            record['job_id'] = str(job_id).strip()[:40]
         if isinstance(extra, dict) and extra:
             clean = {}
             for k, v in list(extra.items())[:8]:
@@ -656,6 +727,6 @@ def record_ask(*, user: str, view: str, question: str, surface: str,
         pass
 
 
-__all__ = ['record_call', 'record_ask', 'record_ppu_marker', 'cost_usd',
+__all__ = ['record_call', 'record_ask', 'settle_ask', 'record_ppu_marker', 'cost_usd',
            'PRICING_USD_PER_MTOK', 'ASK_PREFIX', 'PPU_MARKUP',
            'PPU_CALLS_PREFIX']

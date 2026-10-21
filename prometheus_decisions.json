@@ -1,6 +1,6 @@
 {
  "version": 1,
- "content_hash": "db71ca390252979f3ba6609cb89bf0c69c75b95cfbea3522be840f861eb1d671",
+ "content_hash": "00264721e299499043cb45592be74a05c931ad6af8b0b7aca6b2239b4b4351f4",
  "decisions": [
   {
    "id": "kids_viewers_default",
@@ -622,7 +622,97 @@
    "sources": [
     "prometheus-brain.md"
    ]
+  },
+  {
+   "id": "one_subject_bound_once",
+   "decided": "2026-10-20",
+   "statement": "A question has one subject and it is named once, in the words first, then the thread, then the open profile. The words bind in either order (the film Mutiny, the Among Us series, 'Lore Olympus' webtoon); people who watched X on Y binds X with Y as its service, even when Y is open on the screen; a client like DraftKings is DraftKings; the brand named last is the brand. A metric, a breakdown word or a condition (unique viewers, without paying, outside of theatrical) is never the subject, and a service keeps its whole name. Every line that shows the subject, the started-read line, the priced offer, the confirm, the which-subject question, the sizing answer, uses that one clean name. With no subject at all, ask which show, brand or person; never say nothing came back.",
+   "match_terms": [
+    "which subject",
+    "the film",
+    "the series",
+    "webtoon",
+    "people who watched",
+    "like draftkings",
+    "the brand",
+    "on it: reading",
+    "what is this on"
+   ],
+   "sources": [
+    "prometheus-brain.md"
+   ]
+  },
+  {
+   "id": "continuation_answered_in_the_conversation",
+   "decided": "2026-10-20",
+   "statement": "A turn that continues the last answer stays on that answer's subject and deliverable: a re-run in a window (9/16 - 9/30 is September 16 to September 30 of this year) draws a confirm naming the read, the window and the standing price before anything runs; a different metric or breakdown on a landed read is the breakdown read on the same subject at its own price, never a fresh custom read; a question about the answer is answered from the figures held; the typed answer to which audience binds the original question; a correction continues on the thread's subject, never on the name the reader pushed away, and prices nothing. The open-tab confirm never fires on a continuation.",
+   "match_terms": [
+    "re-run",
+    "rerun",
+    "in the time frame",
+    "not just hours",
+    "per surface",
+    "instead of",
+    "that is not what i asked",
+    "why do you keep",
+    "no i am interested in",
+    "same read but"
+   ],
+   "sources": [
+    "prometheus-brain.md"
+   ]
+  },
+  {
+   "id": "promise_is_a_tracked_job",
+   "decided": "2026-10-20",
+   "statement": "The started-read line ('On it: reading X now, the read will land right here') goes out only with a job behind it and the subject the reader named; when the read lands, the record of the ask is updated with the read's opening, and a read that does not land in time is said to be held, plainly. Before any calm line about nothing being lost, one retry runs on the bound subject. A new question never releases an old draft; nothing is queued or ready to run unless the reader asked for it.",
+   "match_terms": [
+    "on it",
+    "will land right here",
+    "nothing was lost",
+    "ready to run",
+    "nothing is queued",
+    "still waiting",
+    "where is my read"
+   ],
+   "sources": [
+    "prometheus-brain.md"
+   ]
+  },
+  {
+   "id": "sizing_is_us_people_in_plain_words",
+   "decided": "2026-10-20",
+   "statement": "A size or reach answer reads as people in the US over the last 12 months (about 2.3M people in the US, the most engaged of them about 602K, a range), with a custom window written as dates in words. The measurement base behind it, its share, its tiers and its internal labels never appear in the answer; the one reply that names the ten million is the answer to what the ten million is.",
+   "match_terms": [
+    "how many people",
+    "how big is",
+    "audience size",
+    "the last 12 months",
+    "people in the us",
+    "what is the 10 million",
+    "ten million"
+   ],
+   "sources": [
+    "prometheus-brain.md"
+   ]
+  },
+  {
+   "id": "hand_off_and_escalate",
+   "decided": "2026-10-20",
+   "statement": "When the words name a subject that is not the open profile, the on-screen read declines and the named-subject path answers (the title read, the size, where it is watched); 'not carried on this page' is said only when the subject is the page's, and then with the path that can answer. The same question asked again after a reply that did not land takes the other path the second time and a different, pointed question the third; the same reply never goes out a third time. A confirm or a clarify is answered at once, before any work.",
+   "match_terms": [
+    "how incremental",
+    "how many people have read",
+    "not carried on this page",
+    "asked again",
+    "you already said that",
+    "same answer",
+    "which part is off"
+   ],
+   "sources": [
+    "prometheus-brain.md"
+   ]
   }
  ],
- "generated_at": "2026-10-20T17:10:51Z"
+ "generated_at": "2026-10-21T02:52:59Z"
 }

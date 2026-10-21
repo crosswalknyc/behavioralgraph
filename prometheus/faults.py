@@ -141,3 +141,50 @@ def render_lines(report):
     for k, n, b in rep.get('over_budget') or []:
         lines.append(f"  OVER BUDGET: {k} {n} > {b}")
     return lines
+
+
+# ---------------------------------------------------------------------------
+# One retry before the calm line (I4b, 2026-10-20)
+# ---------------------------------------------------------------------------
+def retry_once(fn, args, kwargs, question, history, first_exc):
+    """A chat route raised. Most of a day's faults were binding
+    failures, so the turn runs once more with the binder's subject
+    on flask.g (``_pm_retry_bound``) for the lanes that take a bound
+    subject. A second failure re-raises the SECOND exception carrying
+    the bound subject and the suggested path, so the ops mail names
+    them and the ask log reads 'faulted'. Never retries a retry."""
+    try:
+        from flask import g as _g
+        if getattr(_g, '_pm_retried', False):
+            raise first_exc
+        _g._pm_retried = True
+        bound = ''
+        try:
+            from . import subject_rules as _sr
+            page = ''
+            try:
+                from flask import request as _rq
+                body = _rq.get_json(force=True, silent=True) or {}
+                page = _sr._page_name(body.get('page_context') or body.get('context') or {})
+            except Exception:
+                page = ''
+            s = _sr.bind(question, history, page)
+            bound = s.display if (s and s.source == 'words') else ''
+        except Exception:
+            bound = ''
+        _g._pm_retry_bound = bound
+        note('chat.retry_once', first_exc, detail=f"bound={bound!r}")
+    except Exception as e:
+        if e is first_exc:
+            raise
+    try:
+        return fn(*args, **kwargs)
+    except Exception as second:
+        try:
+            from flask import g as _g2
+            setattr(second, 'pm_bound_subject', getattr(_g2, '_pm_retry_bound', ''))
+            setattr(second, 'pm_first_error', f"{type(first_exc).__name__}: {str(first_exc)[:200]}")
+            _g2._pm_ask_outcome = 'faulted'
+        except Exception:
+            pass
+        raise
