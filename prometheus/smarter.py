@@ -741,6 +741,12 @@ def on_it_line(reading, base, bound=''):
     # 2026-10-20 drew "On it: reading Amazon now" on an Everybody Loves
     # Raymond ask whose base was the Prime Video profile)
     try:
+        if not bound:
+            from flask import g as _g_an
+            bound = getattr(_g_an, '_pm_anaphor_subject', '') or ''   # the thread's subject the words pointed back at
+    except Exception:
+        pass
+    try:
         bn = _sr.clean_display(str(bound or ''))
         if bn:
             names.append(bn)

@@ -18,9 +18,58 @@ from __future__ import annotations
 import time
 import traceback
 
-from prometheus.legacy import C as _C  # noqa: E402
+from prometheus.legacy import H as _H, C as _C  # noqa: E402
 
-__all__ = ['_pm_append_read_to_history', '_pm_append_deck_to_history', '_pm_settle_ask']
+__all__ = ['_pm_append_read_to_history', '_pm_append_deck_to_history', '_pm_settle_ask',
+           '_pm_gate_host', '_pm_calm_hold_response']
+
+
+class _PmGateHost:
+    """The capabilities prometheus.turn_gate.calm_hold needs from inside
+    the legacy answer gate: the ops email and the held record (2026-10-21)."""
+
+    def has(self, name):
+        return name in ('error_email', 'record_held', 'ask_hint')
+
+    def error_email(self, *a, **k):
+        return _H._chatbot_error_email(*a, **k)
+
+    def record_held(self, *a, **k):
+        return _C._pm_record_held_reply(*a, **k)
+
+    def ask_hint(self, **k):
+        return _C._pm_ask_hint(**k)
+
+
+def _pm_gate_host():
+    return _PmGateHost()
+
+
+def _pm_calm_hold_response(question, history, username, envelope, extra, *, reason, n_rep=0):
+    """A question asked again whose path returned no answer: the calm
+    promise, the held record and one ops alert (turn_gate.calm_hold), in
+    the answer gate's return shape (resp, payload, status, outcome, extra).
+    Returns None when the hold itself failed so the caller keeps its
+    original reply."""
+    try:
+        from flask import g as _g, jsonify
+        from prometheus import turn_gate as _tg
+        page = str(((getattr(_g, '_pm_page_ctx', None) or {}).get('primary') or {}).get('name') or '')
+        payload = _tg.calm_hold(question, history, page, username, _pm_gate_host(), reason=reason,
+                                n_rep=n_rep, cont=getattr(_g, '_pm_continuation', None))
+        extra = dict(extra or {})
+        extra['gate'] = 'repeat_calm'
+        extra['result'] = 'held'
+        body = payload
+        if envelope is not None:
+            body = dict(envelope)
+            body['raw'] = payload
+            body['kind'] = 'guidance'
+            body['text'] = payload.get('error')
+        return (jsonify(body), 200), payload, 200, 'held', extra
+    except Exception:
+        traceback.print_exc()
+        return None
 
 
 def _pm_settle_ask(job_id, outcome, reply='', started_at=None):

@@ -1217,12 +1217,19 @@ def ask(user, body, *, via='session'):
         raw, status = _unpack(resp)
         if surface == 'analyze' and isinstance(raw, dict) and raw.get('action') == 'answer' and raw.get('reply'):
             raw = _after_answer(raw, text, uname, ctx)
-        if (referent_decision is not None and _client_surface == 'interpret'
+        if (surface == 'analyze' and _client_surface == 'interpret'
                 and isinstance(raw, dict)):
-            # The widget is sitting in its build flow (that is where it
-            # sent the names). That flow renders analyze results only
-            # in the guidance shape, the same way the legacy interpret
-            # deflection hands them back.
+            # The widget is sitting in its build flow (an armed step, or a
+            # stale one). That flow renders analyze results only in the
+            # guidance shape, the same way the legacy interpret deflection
+            # hands them back. Until 2026-10-21 this applied only to a
+            # referent decision: Jay Patel's "What did the BookTok exposed
+            # viewers watch on Prime Video in the 30 days after the film?"
+            # started its read ("On it ...") but the widget, in its build
+            # flow, rendered the success payload as an empty draft card
+            # ("New profile, ready to run" / "Nothing is queued yet"), so
+            # the promise was never seen and the question came back three
+            # times.
             raw = _interpret_shape(raw)
 
     env = envelope.wrap(raw, surface=surface, decision=decision,

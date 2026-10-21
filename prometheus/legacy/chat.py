@@ -5120,12 +5120,13 @@ _PM_GATE_TASK_MESSAGE = (
     "I read that as a task, not a profile to build. Which audience "
     "should this be on? Name the show, brand, or person (one line is "
     "enough) and I will take it from there.")
+# A repeat never reads as a scold (Jenna 2026-10-21): the pick line names
+# the choices and runs the one tapped; with nothing to pick from the calm
+# promise ships and ops finish by email (prometheus.turn_gate.calm_hold).
 _PM_GATE_REPEAT_MESSAGE = (
-    "I could not place that answer, so I will not ask again. Tell me "
-    "the one you mean in a few words and I will run it right away.")
+    "Name the one you mean in a few words and I will run it right away.")
 _PM_GATE_REPEAT_PICK_MESSAGE = (
-    "I could not place that answer, so I will not ask again. Pick one "
-    "and I will run it right away: {options}.")
+    "Pick one and I will run it right away: {options}.")
 _PM_GATE_HELD_NEXT_MESSAGE = (
     "I did not land a clean answer on that one. Ask it again in a few "
     "words, or open the profile and ask from there. I am also looking "
@@ -5210,6 +5211,21 @@ def _pm_answer_gate(fn, args, kwargs, resp, payload, status_code,
         # _pm_intake_resolve; this covers profile builds, Subscriber
         # IQ and cuts).
         repeat = result == 'clarified_repeat'
+        # A question asked again (turn_gate counted it) whose other path
+        # came back with no answer: the calm promise and ops get the
+        # problem, never a retry loop and never a scold (Jenna 2026-10-21).
+        try:
+            _n_rep = int(getattr(_g, '_pm_repeat_n', 0) or 0)
+        except Exception:
+            _n_rep = 0
+        if _n_rep >= 1 and status_code < 400 and not payload.get('held'):
+            _prev_txt = _ao.last_agent_text(history)
+            _same = bool(_prev_txt) and _ao._norm(_prev_txt)[:160] == _ao._norm(_ao.reply_text(payload))[:160]
+            if held or repeat or result in ('error',) or _same:
+                _calm = _pm_calm_hold_response(question, history, username, envelope, extra,
+                                               reason='asked again; the other path returned ' + (result or 'no answer'), n_rep=_n_rep)
+                if _calm is not None:
+                    return _calm
         mismatched = False
         try:
             from prometheus import guards as _pg
@@ -5274,6 +5290,12 @@ def _pm_answer_gate(fn, args, kwargs, resp, payload, status_code,
                     options=' or '.join(_opts))
                 new_payload['followups'] = list(_opts)
             else:
+                # nothing to pick from: the same question is not asked a
+                # second time; the calm promise ships and ops finish it
+                _calm = _pm_calm_hold_response(question, history, username, envelope, extra,
+                                               reason='the same clarifying question was about to go out twice; nothing to pick from')
+                if _calm is not None:
+                    return _calm
                 told = _PM_GATE_REPEAT_MESSAGE
             new_payload['reply'] = told
             new_payload['success'] = True
@@ -5350,6 +5372,7 @@ def _ask_logged(surface):
                 mode = (str(body.get('mode') or '').strip().lower()
                         or None)
                 pc = body.get('page_context') or {}
+                _g._pm_page_ctx = pc if isinstance(pc, dict) else {}   # the answer gate's calm hold names the page (2026-10-21)
                 vc = (pc.get('view_context') or {}) \
                     if isinstance(pc, dict) else {}
                 view = str(vc.get('view_id') or '').strip()
@@ -18056,6 +18079,8 @@ def _pm_promote_date_snapshot_ask(draft, text):
         return False
 
 _EXPORTS = (
+    '_pm_record_held_reply',   # host 'record_held' (turn_gate.calm_hold, 2026-10-21)
+    '_pm_watch_flag',          # host 'watch_flag' (I10, 2026-10-20)
     'SYNTH_CHAT_BATCH_MAX',
     'SYNTH_CHAT_FRESH_DAYS',
     'SYNTH_CHAT_HISTORY_KEY_PREFIX',
@@ -18415,8 +18440,8 @@ from prometheus.legacy.jobs import (  # noqa: E402,F401
     api_synth_chat_fw_status,
     api_synth_chat_aiq_status,
 )
-from prometheus.legacy.land import (  # noqa: E402,F401  (I4: landing settles the promise)
-    _pm_append_read_to_history, _pm_append_deck_to_history, _pm_settle_ask)
+from prometheus.legacy.land import (  # noqa: E402,F401  (I4: landing settles the promise; the calm hold on a repeat)
+    _pm_append_read_to_history, _pm_append_deck_to_history, _pm_settle_ask, _pm_gate_host, _pm_calm_hold_response)
 from prometheus.legacy.notify import (  # noqa: E402,F401
     _PM_NOTIFY_PREFIX, _pm_clean_notify_email, _pm_notify_write, _pm_notify_read, _pm_notify_delete,
     _pm_send_output_email, _pm_flush_notify, _pm_user_email, _pm_view_deck_digest,

@@ -1,4 +1,4 @@
-"""The turn gate: continuation before routing, repeats escalated.
+"""The turn gate: continuation before routing, repeats handed to ops.
 
 Runs inside service.ask before the Reader and every pattern lane
 (I2 and I7, 2026-10-20). It reads the turn against the previous agent
@@ -9,9 +9,16 @@ deliverable, or lets it through as a new ask.
 Returns:
   None                      a new ask; nothing changes
   (envelope, status)        the gate answered (a confirm card, a clarify,
-                            a definition, the pointed question on a third
-                            repeat)
+                            a definition, the calm promise on a repeat)
   {'text': ..., 'body': ...} a rewrite: the lanes run on it
+
+A repeat never gets a scold or a debugging question (Jenna 2026-10-21,
+Jay Patel: "It should never answer like this ... they should just say
+we are working on it and email you when done, and then email me and
+jessie that there is a problem"). The second ask may take the other
+path once; the third ask, or a second ask the other path could not
+answer, gets the standing calm line and ops gets the problem through
+the chatbot error email, keyed on user + question (`calm_hold`).
 
 The open-tab confirm, the priced-offer fallback and the calm line are
 never reached from a continuation: the classification rides on
@@ -28,12 +35,37 @@ from . import continuation as _cont
 from . import subject_rules as _sr
 from . import faults as _faults
 
-__all__ = ['gate', 'repeat_count', 'mark_failed_by_user', 'POINTED_QUESTION']
+__all__ = ['gate', 'repeat_count', 'mark_failed_by_user', 'calm_hold', 'calm_payload', 'CALM_LINE',
+           'RepeatUnanswered', 'ALERT_ROUTE']
 
-POINTED_QUESTION = ("I have answered this twice and it has not landed, so I will stop repeating myself. "
-                    "Tell me which part is off: the subject, the window, or the number you expected, "
-                    "and I will take it from there.")
+# The standing calm line (app.py _CHATBOT_CALM_MESSAGE, Jenna 2026-09-30),
+# verbatim. The one thing a reader is told when the answer will come by
+# email instead of in the chat.
+CALM_LINE = ("Working on it. Confirmed your task is in progress and I will email you when it "
+             "completes.")
+# The route label on the ops email: the chatbot error path's subject reads
+# "Chatbot error: prometheus/asked-again (<user>)".
+ALERT_ROUTE = 'prometheus/asked-again'
 REPEAT_WINDOW_S = 30 * 60
+HOLD_HOURS = 2
+
+
+class RepeatUnanswered(Exception):
+    """A question asked again after replies that did not land. Its text is
+    the user and the question, so the error email's dedupe key (route +
+    exception text) is keyed on user + question and a different user or
+    question is never swallowed by the 15 minute cooldown. The attributes
+    ride into the email body (app.py _chatbot_error_email)."""
+
+    def __init__(self, user, question, prior_answers=(), bound_subject='', window='', suggested_path=''):
+        q = ' '.join(str(question or '').split())
+        super().__init__(f"{user or 'unknown'} asked again, unanswered: {q[:140]}")
+        self.pm_user = str(user or '')
+        self.pm_question = q
+        self.pm_prior_answers = [' '.join(str(a or '').split())[:400] for a in (prior_answers or []) if str(a or '').strip()][:4]
+        self.pm_bound_subject = str(bound_subject or '')
+        self.pm_window = str(window or '')
+        self.pm_suggested_path = str(suggested_path or '')
 _SIGNAL_PREFIX = 'system/usage/ask_log/_signals/'
 
 
@@ -158,6 +190,106 @@ def _last_agent(history):
     return None
 
 
+def _prior_replies(text, history, limit=3):
+    """The agent replies that followed this same question in the thread,
+    oldest first: what the reader was shown and did not accept."""
+    q = _norm_q(text)
+    turns = [t for t in (history or []) if isinstance(t, dict)]
+    out = []
+    for i, t in enumerate(turns):
+        if str(t.get('role') or '') != 'user' or _norm_q(t.get('text') or t.get('content')) != q:
+            continue
+        for nxt in turns[i + 1:i + 3]:
+            if str(nxt.get('role') or '') == 'user':
+                break
+            txt = ' '.join(str(nxt.get('text') or nxt.get('content') or '').split())
+            if txt:
+                out.append(txt)
+                break
+    return out[-limit:]
+
+
+def calm_payload():
+    """The reply a reader sees on a repeat: the calm promise, in the shape
+    the widget renders for the calm line (guidance, no card, no chips)."""
+    return {'success': False, 'guidance': True, 'analysis_read': True, 'held': True,
+            'error': CALM_LINE, 'reply': CALM_LINE, 'followups': [],
+            'offer_deck': False, 'deck_angle': None}
+
+
+def calm_hold(text, history, page, uname, host, *, reason, n_rep=0, cont=None, prior=None, bound=None):
+    """A question that keeps coming back without landing is finished by a
+    human: the reader is told the calm line, the ask is logged as held with
+    a promise and a due time, and ops (jenna@ + jessie@) get one email
+    through the chatbot error path carrying the user, the question, the
+    earlier replies, the bound subject and window, and the suggested
+    answer path. Keyed on user + question. Never raises; returns the raw
+    calm payload."""
+    text = ' '.join(str(text or '').split())
+    prior = list(prior) if prior is not None else _prior_replies(text, history)
+    try:
+        s = bound if bound is not None else _sr.bind(text, history, page)
+    except Exception:
+        s = None
+    subj = (s.display if s else '') or ''
+    window = ''
+    try:
+        window = str((s.qualifiers or {}).get('window') or '') if s else ''
+        if not window and isinstance(cont, dict) and cont.get('window'):
+            window = _cont.window_phrase(cont['window'])
+    except Exception:
+        window = ''
+    deliv = (cont or {}).get('deliverable') if isinstance(cont, dict) else None
+    if not subj and isinstance(deliv, dict) and deliv.get('subject'):
+        subj = str(deliv.get('subject') or '')
+    path = _suggested_path(text, subj, page, cont)
+    # the record for the watch card and the day's digest
+    try:
+        from flask import g as _g
+        _g._pm_ask_outcome = 'held'
+        _g._pm_held_promise = {'question': text, 'subject': subj, 'window': window, 'hours': HOLD_HOURS}
+    except Exception:
+        pass
+    try:
+        if host is not None and host.has('record_held'):
+            host.record_held(uname, text, CALM_LINE, f"{reason}; bound subject: {subj or '(none)'}; path: {path}", 'repeat')
+    except Exception as e:
+        _faults.note('turn_gate.record_held', e)
+    # ops: one email per user + question
+    try:
+        exc = RepeatUnanswered(uname, text, prior, subj, window, path)
+        payload = {'text': text, 'user': uname, 'asked_times': int(n_rep or 0) + 1, 'page': page or '',
+                   'bound_subject': subj, 'window': window, 'suggested_path': path,
+                   'prior_replies': exc.pm_prior_answers, 'reason': reason}
+        if host is not None and host.has('error_email'):
+            host.error_email(ALERT_ROUTE, exc, user_email=uname or None, payload=payload, tb='(no traceback: the question came back without an answer)')
+    except Exception as e:
+        _faults.note('turn_gate.alert', e)
+    return calm_payload()
+
+
+def _suggested_path(text, subj, page, cont):
+    """One line for ops: the lane that should answer this question."""
+    kind = str((cont or {}).get('kind') or '') if isinstance(cont, dict) else ''
+    deliv = (cont or {}).get('deliverable') if isinstance(cont, dict) else None
+    if kind == 'rerun_window' and isinstance(deliv, dict) and deliv.get('subject'):
+        return f"re-run the {deliv.get('subject')} read on the window the user named, at the standing price"
+    if kind == 'parameter_change' and subj:
+        return f"the derived read on {subj} with the new metric or breakdown"
+    if kind == 'correction':
+        return f"re-ask the previous question on {subj or 'the subject the user names'}; never the page they pushed away"
+    low = text.lower()
+    if re.search(r"where.*(?:watch|watched|stream|see)", low):
+        return f"where-watched on {subj or 'the title in the words'}"
+    if re.search(r"how (?:many|big)|size|audience", low) and not re.search(r"what did|watch(?:ed)? on", low):
+        return f"sizing on {subj or 'the audience in the words'}"
+    if subj:
+        return f"the reasoned read on {subj} (bind_subject={subj}), answered in the thread and by email"
+    if page:
+        return f"the one-question clarify (no subject in the words; {page} is open and may be the context)"
+    return "the one-question clarify, then the reasoned read on the subject the user names"
+
+
 def gate(text, body, history, ctx, user, uname, tid, via, persist, *, client_surface, host, envelope,
          interpret_shape, persist_turn):
     page = _sr._page_name(ctx)
@@ -184,27 +316,17 @@ def gate(text, body, history, ctx, user, uname, tid, via, persist, *, client_sur
             _g2._pm_repeat_n = n_rep
         except Exception:
             pass
-        if n_rep >= 2 or (n_rep == 1 and kind == 'correction'):
-            # never the same reply a third time: the second escalation is a
-            # different question, one that picks the subject from the thread
-            prev_pointed = POINTED_QUESTION[:40] in prev_text
-            if n_rep >= 2 and prev_pointed:
-                subs = [x for x in _sr.thread_subjects(history, page) if x][:3]
-                if page:
-                    subs.append(page)
-                opts = ', '.join(subs) if subs else 'the show, brand or person'
-                raw = {'success': True, 'action': 'answer',
-                       'reply': f"Pick what this should be on and I will start over on it: {opts}, or name another.",
-                       'followups': [f'On {x}' for x in subs][:4] + ['Something else'],
-                       'offer_deck': False, 'deck_angle': None}
-                return _answer(raw, 'repeat_pick_subject', route='repeat_guard', outcome='asked_subject', **common)
-            raw = {'success': True, 'action': 'answer', 'reply': POINTED_QUESTION,
-                   'followups': ['The subject is wrong', 'The window is wrong', 'The number looks off'],
-                   'offer_deck': False, 'deck_angle': None}
-            return _answer(raw, 'repeat_pointed', route='repeat_guard', outcome='asked_pointed', **common)
-        # the second time: the other path. The binder's subject rides as a
-        # bound subject so the page never answers for it again; the lanes
-        # see _pm_repeat_n and avoid the route that drew the rejected reply.
+        if n_rep >= 2 or kind != 'new_ask':
+            # The third ask, or a repeated continuation whose own path
+            # already ran once: the calm promise, and ops gets the problem.
+            # Never a scold, never a debugging question (Jenna 2026-10-21).
+            raw = calm_hold(text, history, page, uname, host, reason='asked again, unanswered',
+                            n_rep=n_rep, cont=cont)
+            return _answer(raw, 'repeat_calm', route='repeat_guard', outcome='held', **common)
+        # the second time: the other path, once. The binder's subject rides
+        # as a bound subject so the page never answers for it again; the
+        # answer gate sees _pm_repeat_n and hands a reply that is not an
+        # answer (empty, faulted, the same clarify again) to calm_hold.
         s = _sr.bind(text, history, page)
         body = dict(body)
         if s and s.source == 'words' and not body.get('bind_subject'):
@@ -214,8 +336,7 @@ def gate(text, body, history, ctx, user, uname, tid, via, persist, *, client_sur
             host.ask_hint(route='repeat_guard', outcome='alternative_path', subject=(s.display if s else None))
         except Exception as _fx:
             _faults.note('turn_gate', _fx)
-        if kind == 'new_ask':
-            return {'text': text, 'body': body}
+        return {'text': text, 'body': body}
 
     if kind == 'new_ask':
         return None

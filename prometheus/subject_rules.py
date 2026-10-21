@@ -927,6 +927,33 @@ def _current_continuation(text, history, page):
         return {'kind': 'new_ask'}
 
 
+# "this audience / this profile / this data" is the page (view deixis);
+# "the film", "the BookTok exposed viewers", "those people" is the thread
+_THREAD_ANAPHOR_RX = re.compile(
+    r"\b(?:the|that|those)\s+(?:same\s+)?(?:film|movie|series|show|title|book|episode|season|read|cohort|"
+    r"(?:[A-Za-z][A-Za-z-]*\s+){0,3}?(?:exposed\s+)?(?:viewers|readers|listeners|buyers|fans|users|people))\b", re.I)
+
+
+def thread_anaphor(text, history, page=''):
+    """The thread's subject when the words point back at it with a
+    definite phrase ("the film", "the BookTok exposed viewers", "those
+    people") and name nothing of their own; '' otherwise. The page is
+    never the answer here: a phrase like this continues the thread."""
+    t = ' '.join(str(text or '').split())
+    if not t or not history or not _THREAD_ANAPHOR_RX.search(t):
+        return ''
+    try:
+        s = bind(t, None, '')
+        if s and s.named and s.source == 'words':
+            return ''
+    except Exception:
+        pass
+    for cand in thread_subjects(history, page):
+        if cand and not _same_family(cand, page, _norm):
+            return cand
+    return ''
+
+
 def bind_or_continue(text, ctx, history, ask_hint=None):
     """The open-screen confirm's first question (I1 + I2):
       {}                          a continuation: never the page confirm
@@ -948,6 +975,22 @@ def bind_or_continue(text, ctx, history, ask_hint=None):
         except Exception:
             reading = None
         s = bind(text, history, page, reading)
+        if not (s and s.source == 'words' and s.named):
+            # "What did the BookTok exposed viewers watch on Prime Video in
+            # the 30 days after the film?" after the Love Hypothesis read:
+            # the words point back at the thread, so the ask continues on
+            # it (the page rides as context), never the which-subject
+            # question (Jay Patel 2026-10-21)
+            anaphor = thread_anaphor(text, history, page)
+            if anaphor:
+                try:
+                    from flask import g as _g
+                    _g._pm_anaphor_subject = anaphor
+                except Exception:
+                    pass
+                if callable(ask_hint):
+                    ask_hint(route='screen_bind', outcome='continued_thread_subject', subject=anaphor)
+                return {}
         if s and s.source == 'words' and s.kind in ('title', 'brand', 'person', 'audience') and not _same_family(s.display, page, norm):
             # "people who watched the Among Us series on Paramount+" with
             # Paramount+ open binds Among Us; the page rides as the

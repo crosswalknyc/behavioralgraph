@@ -1,7 +1,7 @@
 {
  "version": 1,
- "content_hash": "da6b59eecffce6cb402a35037c943233740b4efe7a4173a821e4748f9b894149",
- "examples_hash": "7dc4f035c61fbfdde0a70341177a01241a8bcabbb54a1f53bb3b43b5996445d9",
+ "content_hash": "9e9194babb96bac4fce0fd00dfa5e2435c3322b9c08fd34ad89e7434f868b3c0",
+ "examples_hash": "0f351685f541e0a6e9d1abfb32c132cd07afe21158e87bc04374cc771b6f2168",
  "source_hashes": {
   ".cursor/rules/analysis-confidence-calibration.mdc": "3f2d33886bf77e54adde67cbf78f3256fa23fcb86d1ae32dd5ce7294088521f0",
   ".cursor/rules/avid-and-cut-skin-rules.mdc": "d5c01e23c4db2669558c41efdf5c706c722fae827c8d78871989ef259a16eaf0",
@@ -30,7 +30,7 @@
   ".cursor/skills/crosswalk-panel-analyst/references/numbers.md": "2857e3623a4e64134f621fbaf54dc37ad5b8e921bd59510c96d2ee4e05c75773",
   ".cursor/skills/crosswalk-panel-analyst/references/asks.md": "5a36b47f843163fefe4500de88488e1ad1ec971f5df54308e4a29bddd599f005",
   ".cursor/skills/crosswalk-panel-analyst/references/prior-work.md": "d143ac1c06efbf12a41bbb87bdacf93912580a1a70774c848e4d8606d572dbb5",
-  ".cursor/skills/crosswalk-panel-analyst/references/prometheus-brain.md": "5bf8744b6d45ed566f7cf8b9e27cc21827a4479e752ad42c9c1791cfc15aecae"
+  ".cursor/skills/crosswalk-panel-analyst/references/prometheus-brain.md": "a53be392a203a0f65cbbe99e296af707996438eeacc9d0b67ade23ac255bd47a"
  },
  "canon": [
   {
@@ -159,10 +159,10 @@
    "text": "Action Figures and Playsets lead toy purchasing among parents of 4-to-6-year-old Paw Patrol viewers at 22.3% of category signals, with Preschool Toys close behind at 19.8%.\n\nShare of audience, parents of kids 4-6: 34.1%, Projected US people, parents of kids 4-6: 5,476,469, Toy purchase signal penetration: 83.7%.\n\nToy category mix, Jul 1 2025 to Jun 30 2026 (Share of the cohort's toy purchase signals)\n- Action Figures & Playsets: 22.3% share, 64.1% penetration. Spin Master Paw Patrol vehicles and figures dominate, followed by Hasbro Transformers and Mattel Jurassic World\n- Preschool Toys: 19.8% share, 57.3% ..."
   },
   "competitive_overlap": {
-   "subject": "Digital Journey IQ: Music to Long Form (61 titles, 21 films and 40 series)",
-   "title": "Digital Journey IQ: Music to Long Form (61 titles, 21 films and 40 series) | Per-title release windows, three months before to three months after each releas",
-   "q": "Your two answers in this conversation conflict and I need one authoritative set of figures. Job 0baafe1b6490 reported deduplicated people as 7,648,392 across all 61 titles, 5,214,877 for the 21 films, 6,893,451 for the 40 series, overlap 4,459,936, with pooled film 9,832,617 and pooled series 21,338",
-   "text": "On Digital Journey IQ: Music to Long Form (61 titles, 21 films and 40 series):\n\nFinal figure: 7,648,392 deduplicated people watched at least one of the 61 titles inside its window, against pooled title viewers of 31,171,244.\n\nDeduplicated people, all 61 titles: 7,648,392, Deduplicated people, 21 films: 5,214,877, Deduplicated people, 40 series: 6,893,451.\n\nTitle group mix, Per-title release windows, three months before to three months after each releas (share of the 7,648,392 deduplicated people)\n- Films and series both: 58.3% share, 58.3% penetration. counted once in each set, once in the union\n- Series only: ..."
+   "subject": "Golden Axe (Paramount+)",
+   "title": "Golden Axe (Paramount+) | Golden Axe viewers on Paramount+ | Sep 16 2026 to Sep 30 2026",
+   "q": "re-reun in the time frame 9/16 - 9/30",
+   "text": "On Golden Axe (Paramount+) - Golden Axe viewers on Paramount+:\n\nIn the September 16 to September 30 window, 106,147 of the 118,463 US viewers who started Golden Axe on Paramount+ also started a title on another service, and Invincible on Prime Video leads that crossover at 40.3% of them.\n\nUnique US Golden Axe viewers (Sep 16 to Sep 30): 118,463, Golden Axe viewers with off-platform title starts: 106,147, Crossover rate: 89.6%.\n\nCrossover title mix, Sep 16 2026 to Sep 30 2026 (share of the cohort's off-platform title starts in the window)\n- Invincible (Prime Video): 35.2% share, 40.3% penetration. strongest ..."
   },
   "event_impact": {
    "subject": "The Spiderwick Chronicles (Roku Channel)",
@@ -207,5 +207,5 @@
    "text": "Athletic footwear and apparel is the largest open sponsorship category for Austin Sprinz: it carries 14.3% of his audience's brand purchase signals at 67.3% category penetration with no endorsement running against it in the window.\n\nProjected US audience (Total Universe): 24,716,483, Avid US audience: 6,382,947, Brand purchase signal penetration: 89.7%.\n\nSponsor category (audience demand vs current Sprinz coverage mix, Oct 12 2025 to Oct 12 2026 (share of the audience's brand purchase and category signals)\n- Athletic Footwear & Apparel: 14.3% share, 67.3% penetration. Nike, adidas, Under Armour, New Balance lead ..."
   }
  },
- "generated_at": "2026-10-21T02:52:59Z"
+ "generated_at": "2026-10-21T15:17:49Z"
 }

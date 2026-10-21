@@ -50,6 +50,28 @@ ROWS = [
         'needs': {'extra': {'bind_subject': 'x'}},
     },
     {
+        'id': 'asked_again', 'surface': 'analyze',
+        'reason': 'repeat_calm', 'client_action': 'analyze',
+        'note': 'The same question again after a reply the reader did not '
+                'accept (prometheus.turn_gate, before decide()). The second '
+                'ask may take the other path once; the third ask, or a '
+                'second ask the other path could not answer, is the standing '
+                'calm line ("Working on it. Confirmed your task is in '
+                'progress and I will email you when it completes.") plus '
+                'ONE ops email to jenna@ and jessie@ through the chatbot '
+                'error path, keyed on user + question, carrying the user, '
+                'the question, the earlier replies, the bound subject and '
+                'window and the suggested answer path; the ask is logged '
+                'held with a two hour promise. Never a scold, never a '
+                'debugging question (Jenna 2026-10-21, Jay Patel: "What did '
+                'the BookTok exposed viewers watch on Prime Video in the 30 '
+                'days after the film?" asked three times drew "I have '
+                'answered this twice ... tell me which part is off"). Pinned '
+                'by scripts/test_pm_invariants.py (I7 + door D).',
+        'examples': [], 'counter': [],
+        'host_only': True,
+    },
+    {
         'id': 'tool_intake', 'surface': 'analyze',
         'reason': 'tool_intake:', 'client_action': 'analyze',
         'note': 'Attribution / Flywheel / Journey / Brand Partnership '

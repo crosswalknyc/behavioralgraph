@@ -1,6 +1,6 @@
 {
  "version": 1,
- "content_hash": "00264721e299499043cb45592be74a05c931ad6af8b0b7aca6b2239b4b4351f4",
+ "content_hash": "548000ce7444333cee6ee2df1e8bee2fd51bf04e44d90e6105850c1789d0613c",
  "decisions": [
   {
    "id": "kids_viewers_default",
@@ -699,20 +699,38 @@
   {
    "id": "hand_off_and_escalate",
    "decided": "2026-10-20",
-   "statement": "When the words name a subject that is not the open profile, the on-screen read declines and the named-subject path answers (the title read, the size, where it is watched); 'not carried on this page' is said only when the subject is the page's, and then with the path that can answer. The same question asked again after a reply that did not land takes the other path the second time and a different, pointed question the third; the same reply never goes out a third time. A confirm or a clarify is answered at once, before any work.",
+   "statement": "When the words name a subject that is not the open profile, the on-screen read declines and the named-subject path answers (the title read, the size, where it is watched); 'not carried on this page' is said only when the subject is the page's, and then with the path that can answer. The same question asked again after a reply that did not land takes the other path the second time; the third time, or a second time that path could not answer, is the calm promise and ops finish by email. A confirm or a clarify is answered at once, before any work.",
    "match_terms": [
     "how incremental",
     "how many people have read",
     "not carried on this page",
     "asked again",
     "you already said that",
-    "same answer",
-    "which part is off"
+    "same answer"
+   ],
+   "sources": [
+    "prometheus-brain.md"
+   ]
+  },
+  {
+   "id": "repeat_gets_the_calm_promise",
+   "decided": "2026-10-21",
+   "statement": "When the same question comes back after an answer that did not land, the reader is never scolded, never told how many times they asked, and never asked to say which part is off. The second ask may take the other path once; the third ask, or a second ask that path could not answer, is told exactly 'Working on it. Confirmed your task is in progress and I will email you when it completes.' and nothing else, and the team finishes the answer by email. A choice already on the table may be offered again as a pick; a question that asks the reader to debug may not.",
+   "match_terms": [
+    "asked again",
+    "asked twice",
+    "third time",
+    "stop repeating",
+    "which part is off",
+    "working on it",
+    "email you when it completes",
+    "you keep asking",
+    "same question"
    ],
    "sources": [
     "prometheus-brain.md"
    ]
   }
  ],
- "generated_at": "2026-10-21T02:52:59Z"
+ "generated_at": "2026-10-21T15:17:49Z"
 }

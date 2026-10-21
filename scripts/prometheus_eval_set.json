@@ -1,6 +1,6 @@
 {
  "description": "Fixed route-level eval set for the dashboard chat assistant. Real questions sampled from the S3 ask log (system/usage/ask_log/, 2026-08-26 through 2026-08-28, the log's full history at build time) plus constructed representatives for families the young log does not carry yet. Graded hermetically by scripts/prometheus_eval_run.py against prometheus_router.route_ask, the same server-side router both chat endpoints consult in production (classify_fn stays None so the run makes no model calls). expected_route vocabulary: analysis, generate, search_demand, csv_download, not_quantifiable, memory_confirm, build_interpret, subiq, clarify. surface: analyze (api_synth_chat_analyze) or interpret (api_synth_chat_interpret). page_context null means nothing open. has_base / memory_referent stand in for data-dependent conditions. known_fail documents a real routing defect owned by a separate fix.",
- "built": "2026-08-28 +2026-10-01 wave (relative windows, multi-title, cut sizing, proactive openers) +2026-10-20 real asks (ten invariants)",
+ "built": "2026-08-28 +2026-10-01 wave (relative windows, multi-title, cut sizing, proactive openers) +2026-10-20 real asks (ten invariants) +2026-10-21 Jay repeat",
  "cases": [
   {
    "id": "toy-001",
@@ -1204,6 +1204,31 @@
    "source": "ask_log 2026-10-20 (Jay Patel, Casey Pearson, Bria, Tania Nasr, Marie Flores, Mark Valdez, Jenna)",
    "note": "Real ask from the day of the ten invariants; the lane-level behavior is pinned by scripts/test_pm_invariants.py (door section D).",
    "known_fail": "route_ask has no deck vocabulary; understand.decide lands deck_ask (routing table)"
+  },
+  {
+   "id": "real-1021-01",
+   "family": "thread_follow_up_repeat",
+   "surface": "analyze",
+   "input": "What did the BookTok exposed viewers watch on Prime Video in the 30 days after the film?",
+   "page_context": {
+    "primary": {
+     "s3_key": "Amazon_Prime_Video_09_01_2026_10_00.csv",
+     "name": "Amazon Prime Video"
+    },
+    "cuts": []
+   },
+   "expected_route": "analysis",
+   "expected_subject": "The Love Hypothesis (thread)",
+   "expected_reply_type": "the read promise in the shape the build flow renders; asked a third time: the calm line plus one ops alert",
+   "never": [
+    "New profile, ready to run",
+    "Nothing is queued yet",
+    "I have answered this twice",
+    "which part is off",
+    "Pick what this should be on"
+   ],
+   "source": "ask_log 2026-10-21 (Jay Patel, 09:14 to 09:19 UTC)",
+   "note": "The thread holds the Love Hypothesis BookTok read; the words point back at it. Pinned by scripts/test_pm_invariants.py door D (jay_repeat)."
   }
  ]
 }

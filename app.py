@@ -50940,13 +50940,23 @@ def _chatbot_error_email(route, err, user_email=None, payload=None,
         # should answer it, so the fix is one look away.
         _bound = str(getattr(err, 'pm_bound_subject', '') or '').strip()
         _first = str(getattr(err, 'pm_first_error', '') or '').strip()
+        # A question asked again without an answer (prometheus.turn_gate
+        # RepeatUnanswered, Jenna 2026-10-21): the user saw the calm line;
+        # the mail carries the earlier replies, the window and the path
+        # so a human finishes by email.
+        _window = str(getattr(err, 'pm_window', '') or '').strip()
+        _prior = [str(x) for x in (getattr(err, 'pm_prior_answers', None) or []) if str(x).strip()]
+        _path = str(getattr(err, 'pm_suggested_path', '') or '').strip()
         _bound_block = ''
-        if _bound or _first:
+        if _bound or _first or _prior or _path:
+            _prior_txt = ''.join(f"  {i + 1}. {a[:400]}\n" for i, a in enumerate(_prior[:4]))
             _bound_block = (
                 (f"Bound subject: {_bound}\n" if _bound else "Bound subject: (none in the words)\n")
+                + (f"Window: {_window}\n" if _window else '')
                 + (f"First error (before the retry): {_first}\n" if _first else '')
-                + "Suggested path: the read on the bound subject (reasoned read with bind_subject), "
-                  "or the one-question clarify when no subject bound.\n\n")
+                + (f"Earlier replies the user did not accept:\n{_prior_txt}" if _prior_txt else '')
+                + "Suggested path: " + (_path or ("the read on the bound subject (reasoned read with bind_subject), "
+                                                  "or the one-question clarify when no subject bound.")) + "\n\n")
         body_text = (
             f"User: {user_email or '(unknown)'}\n"
             f"Question: {query_text}\n"

@@ -72,6 +72,16 @@ _SCAFFOLD_RE = re.compile(
     r'\[inst\]|<\/?(?:system|user_request|prior_chat_context)>)'
     r'\s*[:\-]?\s*(?:\*\*)?\s*$',
     re.IGNORECASE)
+# A scold or a debugging question is never an answer (Jenna 2026-10-21,
+# Jay Patel was told "I have answered this twice and it has not landed, so
+# I will stop repeating myself. Tell me which part is off"). Wording of
+# that family is a scaffold: the gate holds it and the calm promise ships.
+_SCOLD_RE = re.compile(
+    r"\b(?:i have answered (?:this|that) (?:twice|already|before|once)|i (?:already )?answered (?:this|that) (?:twice|already|before)|"
+    r"stop repeating myself|repeating myself|i will not ask again|i won'?t ask again|which part is off|"
+    r"tell me which part|i could not place that answer|i have told you|as i (?:said|told you) (?:before|already|twice)|"
+    r"(?:you|you've|you have) (?:already )?asked (?:this|that|me)(?: twice| already| before| again)|"
+    r"i will stop (?:asking|repeating))\b", re.IGNORECASE)
 # The intake / clarify shapes the guided pulls and the base-clarify
 # path send back.
 _CLARIFY_RE = re.compile(
@@ -161,6 +171,8 @@ def is_faulted_text(text):
         return True
     if _SCAFFOLD_RE.search(t[:600]):
         return True
+    if _SCOLD_RE.search(t[:800]):
+        return True
     return False
 
 
@@ -181,6 +193,10 @@ def classify(surface, payload, status_code=200, history=None,
         if not isinstance(payload, dict):
             return ('error' if (status_code or 200) >= 500 else
                     (base_outcome or 'unknown')), detail
+        if payload.get('held') and payload.get('guidance'):
+            return 'held', {'promise': True}   # the calm promise on a repeat (turn_gate.calm_hold)
+        if payload.get('guidance') and (payload.get('read_job_id') or payload.get('job_id')):
+            return 'answered', {'async': True}   # a read promise shaped for the build flow (service._interpret_shape)
         if payload.get('success') is False:
             err = str(payload.get('error') or '')
             if base_outcome and base_outcome.startswith('declined'):
