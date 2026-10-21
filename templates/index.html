@@ -27975,7 +27975,7 @@ https://www.instagram.com/p/..."></textarea>
                     <div class="display-mode-toggle has-tooltip" id="hoverToggle" onclick="toggleHoverDescriptors()" data-tooltip="Hover: Toggle detailed tooltip descriptions on/off when hovering over data elements.">
                         <span id="hoverToggleLabel">HOVER ON</span>
                     </div>
-                    <div class="display-mode-toggle has-tooltip" id="dashDisplayToggle" onclick="toggleDashboardDisplayMode()" data-tooltip="US %: Toggle between showing percentages of audience vs. US population numbers.">
+                    <div class="display-mode-toggle has-tooltip" id="dashDisplayToggle" onclick="(window._piqGuardedToggleUS||toggleDashboardDisplayMode)()" data-tooltip="US %: Toggle between showing percentages of audience vs. US population numbers.">
                         <span id="dashDisplayLabel">US %</span>
                     </div>
                     <div class="display-mode-toggle has-tooltip" id="toolbarCollapseWrapper" onclick="toggleToolbar()" data-tooltip="Collapse/Expand Toolbar" style="display: flex; align-items: center; gap: 0.2rem; cursor: pointer;">
@@ -145351,6 +145351,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     usEl.addEventListener('touchend', function(e) {
                         if (!window.matchMedia || !window.matchMedia('(max-width: 768px)').matches) return;
                         e.preventDefault();
+                        // Mark the follow-up synthetic click as handled so the
+                        // capture-phase swallow listener kills it before it can
+                        // reach the inline onclick and toggle a SECOND time
+                        // (that double-fire was flipping US# straight back to US%).
+                        document._piqV4NavSwallow = Date.now();
                         if (window._piqGuardedToggleUS) window._piqGuardedToggleUS();
                     }, { passive: false });
                 }
