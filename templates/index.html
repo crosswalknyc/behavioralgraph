@@ -153241,7 +153241,34 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     if (_mdemo && window._piqV4DressDemos) { window._piqV4DressDemos(); return; }
                     renderCharts(currentDashboardData.demographics, currentDashboardData.demographicsIndex, currentDashboardData.demographicsProjection, currentDashboardData.demographicsGenPop);
                 }]);
-                _dispTasks.push(['behavioral', function() { renderBehavioralCards(currentDashboardData.behavioral); }]);
+                _dispTasks.push(['behavioral', function() {
+                    // MOBILE ONLY: rebuilding the (huge) VISIBLE behavioral grid
+                    // in place makes Safari hold the old + new render trees and
+                    // compositing layers at once - the memory spike that crashed
+                    // the tab and forced a reload. (On the Demographics tab the
+                    // same renderBehavioralCards call targets a HIDDEN tab, so it
+                    // never crashed there.) Detach the grid from layout
+                    // (display:none) while the new DOM is built, then restore on
+                    // the next frame so it lays out + paints exactly once. DOM
+                    // queries / class toggles / the #behavioralGrid MutationObserver
+                    // still run while hidden, and renderBehavioralCards does no
+                    // layout reads, so this is safe. Desktop is untouched.
+                    var _mbeh = window.matchMedia && window.matchMedia('(max-width: 768px)').matches;
+                    var _bgrid = _mbeh ? document.getElementById('behavioralGrid') : null;
+                    if (_bgrid) {
+                        var _bgPrev = _bgrid.style.display;
+                        _bgrid.style.display = 'none';
+                        try { renderBehavioralCards(currentDashboardData.behavioral); }
+                        finally {
+                            var _bgRaf = window.requestAnimationFrame
+                                ? function(fn) { window.requestAnimationFrame(fn); }
+                                : function(fn) { window.setTimeout(fn, 16); };
+                            _bgRaf(function() { _bgrid.style.display = _bgPrev || ''; });
+                        }
+                    } else {
+                        renderBehavioralCards(currentDashboardData.behavioral);
+                    }
+                }]);
                 _dispTasks.push(['demographics', function() { renderDemoInsights(currentDashboardData.demographics, currentDashboardData.demographicsIndex, currentDashboardData.demographicsGenPop); }]);
                 _dispTasks.push(['locations', function() { renderLocationTable(currentDashboardData.locations); }]);
                 if (currentDashboardData.interests) {
