@@ -58453,6 +58453,23 @@ try:
 except Exception as _pm_pkg_err:
     print(f"⚠️ Prometheus surface not registered: {_pm_pkg_err}")
 
+# Cold-start pre-warm (2026-10-21). templates/index.html is ~12MB; Jinja
+# compiles it lazily on the FIRST render after a deploy. On the single web
+# worker that first compile serialized every other request behind it, and a
+# burst of dashboard loads right after a deploy piled up past Render's proxy
+# timeout -> a wave of 502s (post-deploy outage seen 2026-10-21 ~16:00 UTC).
+# Compiling here at import time means that with gunicorn preload_app=True the
+# MASTER compiles the template once and forked workers inherit the compiled
+# bytecode via copy-on-write, so the first real request renders immediately.
+# Best-effort only: never block boot or raise.
+try:
+    import time as _prewarm_time
+    _pw_t0 = _prewarm_time.time()
+    app.jinja_env.get_template('index.html')
+    print(f"✅ Pre-compiled index.html template in {_prewarm_time.time() - _pw_t0:.2f}s")
+except Exception as _prewarm_err:
+    print(f"⚠️ index.html pre-warm skipped: {_prewarm_err}")
+
 # Print startup completion message
 print("=" * 60)
 print("✅ Flask app fully initialized and ready to serve requests")
