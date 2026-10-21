@@ -628,3 +628,5 @@ if __name__ == "__main__":
 # ci-trigger: streamscout-always-rescan
 
 # ci-trigger: streamscout-viewer-terms
+
+# ci-trigger: harden-cold-start-prewarm (pre-compile index.html at import; app.py-only PR #325)
