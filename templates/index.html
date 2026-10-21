@@ -39267,6 +39267,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         };
                         var _po = _poMap[_poRaw] || _poMap.organic;
                         var _poChip = '<span title="Media type" style="display:inline-block; background:' + _po.bg + '; border:1px solid ' + _po.bd + '; color:' + _po.fg + '; font-size:0.6rem; font-weight:700; letter-spacing:0.05em; text-transform:uppercase; padding:0.08rem 0.4rem; border-radius:999px; white-space:nowrap; vertical-align:middle; margin-left:0.35rem;">' + _po.label + '</span>';
+                        if (/influencer_project/.test(String(slug || ''))) _poChip = '';
                         var assetCell = '<div style="display:flex; align-items:center; gap:0.6rem;">'
                             + '<div style="flex: 0 0 24px; width:24px; height:24px; border-radius:4px; background:' + iconBg + '; color:' + iconFg + '; display:flex; align-items:center; justify-content:center; font-size:0.78rem; font-weight:700;">' + escapeHtml(icon) + '</div>'
                             + '<div style="min-width:0;">'
