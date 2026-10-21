@@ -153267,32 +153267,19 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     renderCharts(currentDashboardData.demographics, currentDashboardData.demographicsIndex, currentDashboardData.demographicsProjection, currentDashboardData.demographicsGenPop);
                 }]);
                 _dispTasks.push(['behavioral', function() {
-                    // MOBILE ONLY: rebuilding the (huge) VISIBLE behavioral grid
-                    // in place makes Safari hold the old + new render trees and
-                    // compositing layers at once - the memory spike that crashed
-                    // the tab and forced a reload. (On the Demographics tab the
-                    // same renderBehavioralCards call targets a HIDDEN tab, so it
-                    // never crashed there.) Detach the grid from layout
-                    // (display:none) while the new DOM is built, then restore on
-                    // the next frame so it lays out + paints exactly once. DOM
-                    // queries / class toggles / the #behavioralGrid MutationObserver
-                    // still run while hidden, and renderBehavioralCards does no
-                    // layout reads, so this is safe. Desktop is untouched.
+                    // MOBILE ONLY: update the behavioral values IN PLACE rather
+                    // than rebuilding the whole grid. The full renderBehavioralCards
+                    // rebuild spiked memory + reflowed for ~2s on phones, which
+                    // unpinned the sticky header and could crash/reset the tab
+                    // back to %. _piqBehUpdateDisplay just swaps the profile-column
+                    // text and toggles .hide-gp - instant, no rebuild. Desktop
+                    // keeps the full rebuild.
                     var _mbeh = window.matchMedia && window.matchMedia('(max-width: 768px)').matches;
-                    var _bgrid = _mbeh ? document.getElementById('behavioralGrid') : null;
-                    if (_bgrid) {
-                        var _bgPrev = _bgrid.style.display;
-                        _bgrid.style.display = 'none';
-                        try { renderBehavioralCards(currentDashboardData.behavioral); }
-                        finally {
-                            var _bgRaf = window.requestAnimationFrame
-                                ? function(fn) { window.requestAnimationFrame(fn); }
-                                : function(fn) { window.setTimeout(fn, 16); };
-                            _bgRaf(function() { _bgrid.style.display = _bgPrev || ''; });
-                        }
-                    } else {
-                        renderBehavioralCards(currentDashboardData.behavioral);
+                    if (_mbeh && typeof window._piqBehUpdateDisplay === 'function') {
+                        window._piqBehUpdateDisplay();
+                        return;
                     }
+                    renderBehavioralCards(currentDashboardData.behavioral);
                 }]);
                 _dispTasks.push(['demographics', function() { renderDemoInsights(currentDashboardData.demographics, currentDashboardData.demographicsIndex, currentDashboardData.demographicsGenPop); }]);
                 _dispTasks.push(['locations', function() { renderLocationTable(currentDashboardData.locations); }]);
@@ -160121,9 +160108,13 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 const profilePct = item.pct || 0;
 
                 // Show profile % and gen pop % alongside index
-                const profileDisplay = isProjection
-                    ? (item.projection === 0 || item.projection === null ? 'N/A' : formatNumber(Math.round(item.projection || 0)))
-                    : formatValueOrNA(profilePct, true);
+                // Precompute BOTH display strings so the mobile US%/# toggle can
+                // swap the text in place (data-disp-*) instead of rebuilding the
+                // whole grid - see window._piqBehUpdateDisplay.
+                const _profPctStr = formatValueOrNA(profilePct, true);
+                const _profProjStr = (item.projection === 0 || item.projection === null || item.projection === undefined)
+                    ? 'N/A' : formatNumber(Math.round(item.projection || 0));
+                const profileDisplay = isProjection ? _profProjStr : _profPctStr;
                 const genPopProjection = item.genPopProjection ?? 0;
                 const genPopDisplay = isProjection
                     ? (genPopProjection === 0 || genPopProjection === null ? 'N/A' : formatNumber(Math.round(genPopProjection)))
@@ -160146,13 +160137,40 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         <div class="behavioral-name-wrapper">
                             <span class="behavioral-name has-tooltip" data-tooltip="${(item.name || '').replace(/"/g, '&quot;')}">${(item.name || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span>
                         </div>
-                        <span class="behavioral-pct profile-col" style="color: var(--text-primary);">${profileDisplay}</span>
+                        <span class="behavioral-pct profile-col" data-disp-pct="${_profPctStr}" data-disp-proj="${_profProjStr}" style="color: var(--text-primary);">${profileDisplay}</span>
                         <span class="behavioral-pct genpop-col" style="color: var(--text-secondary);">${hasGenPopMatch ? genPopDisplay : 'N/A'}</span>
                         <span class="behavioral-index index-col ${indexTier}" style="${showIndex ? '' : 'color: var(--text-secondary);'} font-weight: 700;">${showIndex ? formatIndex(index) : 'N/A'}</span>
                     </div>
                 `;
             }).join('');
         }
+
+        // MOBILE ONLY: in-place US%/# updater for the behavioral grid.
+        // Rebuilding the entire grid on toggle (renderBehavioralCards) spikes
+        // memory and reflows for ~2s on phones - that unpinned the sticky
+        // header and sometimes crashed/reset the tab back to %. But toggling
+        // only changes two things: (a) the PROFILE column text (% <-> US #)
+        // and (b) whether the Gen Pop column is hidden (.hide-gp). The Gen Pop
+        // column's own text is only ever shown in % mode, and the index column
+        // is mode-independent, so neither needs rewriting. So swap the profile
+        // text from the precomputed data-disp-* attributes and toggle .hide-gp
+        // - no DOM rebuild, no reflow storm, no scroll jump. Desktop keeps
+        // calling renderBehavioralCards (it has the headroom).
+        window._piqBehUpdateDisplay = function() {
+            var grid = document.getElementById('behavioralGrid');
+            if (!grid) return;
+            var proj = (typeof dashDisplayMode !== 'undefined') && dashDisplayMode === 'projection';
+            var cards = grid.querySelectorAll('.behavioral-card');
+            for (var c = 0; c < cards.length; c++) {
+                cards[c].classList.toggle('hide-gp', proj);
+            }
+            var cols = grid.querySelectorAll('.behavioral-item .profile-col');
+            for (var i = 0; i < cols.length; i++) {
+                var el = cols[i];
+                var v = proj ? el.getAttribute('data-disp-proj') : el.getAttribute('data-disp-pct');
+                if (v != null && el.textContent !== v) el.textContent = v;
+            }
+        };
 
         // Store current slice selections for each category
         const currentSlices = {};
