@@ -1,6 +1,6 @@
 {
  "version": 1,
- "content_hash": "34d8fe0d42a6310a1544a3d06df3777dc49f6528e555ccbb39e2a22c519521aa",
+ "content_hash": "2e898bc31430c517ba5966c983923e5853ad47c3576d037b503471d360de07cb",
  "decisions": [
   {
    "id": "kids_viewers_default",
@@ -531,7 +531,7 @@
   {
    "id": "list_ask_is_a_custom_ask",
    "decided": "2026-10-15",
-   "statement": "'Who are the influencers / talent / brands that <condition>' over our data is a list, a custom read at the Custom Ask price ($500): the names, each with the detail asked for and their US audience, delivered as a workbook, a CSV and a PDF. It is never a Profile and never a free existing match. Offer it plainly with the price and ask which names they mean in the same breath.",
+   "statement": "'Who are the influencers / talent / brands that <condition>' over our data is a list, a custom read at the Custom Ask price ($100 for the first ask on a subject since 2026-10-21): the names, each with the detail asked for and their US audience, delivered as a workbook, a CSV and a PDF. It is never a Profile and never a free existing match. Offer it plainly with the price and ask which names they mean in the same breath.",
    "match_terms": [
     "who are the influencers",
     "which influencers",
@@ -542,6 +542,40 @@
     "have a product",
     "own product line",
     "list of all"
+   ],
+   "sources": [
+    "prometheus-brain.md"
+   ]
+  },
+  {
+   "id": "custom_ask_is_work_100_then_50",
+   "decided": "2026-10-21",
+   "statement": "A put-together read is a custom ask whether or not a profile is open: a ranked list, a table, a cross of two or more things, a top N, an over-index against the population, what they watched next, other titles watched, a cohort within the audience, an overlap or an incrementality. A lookup of what is on the screen or in the thread (one figure, a definition, which row, how it is calculated, a question about the previous answer) and where a named title is watched (a lookup of carriage, never priced) stay at the metered rate. The first custom ask on a subject in a thread is $100 and each follow-up on the same subject is $50; a new subject is $100 again; viewership stays $500 a year. The offer is one sentence on what the reader gets, naming the subject the words bind (never the open page), then exactly 'Pulling this data will cost $N.' and two chips, Approve and Cancel. The charge lands once on Approve, on the company's shared wallet for every seat of a paying company, with the subject in the ledger line; Crosswalk staff see the offer and are never billed. Nothing already answered is re-charged.",
+   "match_terms": [
+    "custom ask",
+    "pulling this data will cost",
+    "where people watched",
+    "where do people watch",
+    "top five",
+    "top 5",
+    "top ten",
+    "ranked",
+    "as a table",
+    "over-index",
+    "overindex",
+    "compared with the general population",
+    "watched next",
+    "other titles watched",
+    "also watch",
+    "cohort",
+    "follow-up price",
+    "$50",
+    "$100",
+    "approve",
+    "cancel",
+    "shared wallet",
+    "company wallet",
+    "paramount+ wallet"
    ],
    "sources": [
     "prometheus-brain.md"
@@ -828,5 +862,5 @@
    ]
   }
  ],
- "generated_at": "2026-10-22T00:45:55Z"
+ "generated_at": "2026-10-22T01:56:14Z"
 }

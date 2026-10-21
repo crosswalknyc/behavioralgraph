@@ -416,7 +416,7 @@ def strip_build_negation(text):
     return rest if len(rest.split()) >= 3 else t
 
 
-_DECLINE_RX = re.compile(r"^\W*(not now|no thanks|no thank you|not yet|maybe later|later|no,? (?:that'?s )?(?:ok|fine|all)|skip|pass|nope|nah)\W*$", re.I)
+_DECLINE_RX = re.compile(r"^\W*(decline|not now|no thanks|no thank you|not yet|maybe later|later|no,? (?:that'?s )?(?:ok|fine|all)|skip|pass|nope|nah)\W*$", re.I)
 
 
 def offer_declined(text):

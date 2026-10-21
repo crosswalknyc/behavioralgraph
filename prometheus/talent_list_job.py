@@ -64,9 +64,13 @@ def offer(noun_plural, qualifier, person=True):
     """(reply, chips, offer_doc) for a roster ask with a condition."""
     group = group_phrase(noun_plural, qualifier)
     price = price_label()
+    # the one offer shape (prometheus/priced_read.py, Jenna 2026-10-21):
+    # what they get, then the price line; the list chip accepts
+    from .priced_read import OFFER_LINE
+    # "we can pull anything you want, just request it" stays the opener (Jenna 2026-10-15, Emmet at Kartel)
     reply = (f"I can pull anything you want, just ask. Which {noun_plural} are you talking about? Name them and I will "
-             f"check each one. Or do you want me to pull the list of {group} in our data, each with their US audience? "
-             f"That is a custom read, {price} on approval, delivered here and to your inbox as a workbook and a PDF.")
+             f"check each one. Or I can pull the list of {group} in our data, each with their US audience, delivered here "
+             f"and to your inbox as a workbook and a PDF. " + OFFER_LINE.format(price=price))
     chip = f"Pull the list of {group} ({price})"
     return reply, [chip, 'I will name them'], {'kind': KIND, 'group': group, 'noun': noun_plural, 'qualifier': qualifier,
                                               'price_usd': price_usd(), 'chip': chip}
@@ -101,7 +105,7 @@ def accepted(text, history):
         return {'kind': KIND, 'group': (m.group('group') or prior.get('group') or LABEL).strip(),
                 'qualifier': prior.get('qualifier', ''), 'price_usd': price_usd(), 'chip': t}
     off = last_offer(history)
-    if off and _ACCEPT_RX.match(t) and len(t.split()) <= 8:
+    if off and (_ACCEPT_RX.match(t) or t.lower().startswith('accept')) and len(t.split()) <= 8:
         return off
     return None
 

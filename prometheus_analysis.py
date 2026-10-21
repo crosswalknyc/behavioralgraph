@@ -5472,32 +5472,29 @@ def panel_report_eligible(text, subject):
 
 def build_panel_report_offer(subject, price_label, question='',
                              kind='report', years=1, verb='watched',
-                             series=True, dimension='', condition=''):
-    """The priced offer for a full read on a no-base subject. Returns
+                             series=True, dimension='', condition='',
+                             staff=False):
+    """The priced offer in the one shape (prometheus/priced_read.py):
+    one sentence on what the reader gets, then "Pulling this data will
+    cost $N.", then Approve and Cancel (Jenna 2026-10-21). Returns
     (reply, followups, offer) where `offer` is the payload the widget
-    arms so the confirm chip re-sends the ask with panel_confirm.
-    Price is stated up front (2026-08-18 house rule: what you see is
-    what you pay); the charge itself only lands on confirm, server
-    side, at the server's price. kind='viewership' is the per-year
-    viewership-over-time read (Jenna 2026-10-08).
+    arms so Approve re-sends the ask with panel_confirm. The charge
+    lands on confirm, server side, at the server's price.
 
-    The shape (Jenna 2026-10-21): one sentence on what the reader
-    gets, then 'Pulling this data will cost $N.', then Approve /
-    Cancel. Never a refusal. The subject shown is the words' own; the
-    open tab's label never leads an offer the words did not bind to
-    it (Liz Huszarik: 'The path for Netflix'), and when no subject
-    reads clean the line is written without one."""
+    The shape (Jenna 2026-10-21, twice): one sentence on what the reader
+    gets, then 'Pulling this data will cost $N.', then Approve / Cancel.
+    Never a refusal. The subject shown is the words' own; the open tab's
+    label never leads an offer the words did not bind to it (Liz
+    Huszarik: 'The path for Netflix'; Casey Pearson: 'market size for
+    prank content'), and when no subject reads clean the line is written
+    without one."""
+    from prometheus import priced_read as _pr
     raw = str(subject or '').strip()
     raw = re.sub(r"\s*\([^)]*\)\s*$", '', raw).strip()   # never 'this audience (open Profile IQ audience)' (2026-10-14)
-    subj = ''
     try:
-        from prometheus import priced_read as _pr_shape
-        subj = _pr_shape.display_subject(raw, question, _pr_shape.page_name())
+        subj = _pr.display_subject(raw, question, _pr.page_name())
     except Exception:
         subj = raw if raw.lower() not in ('that subject', 'that audience') else ''
-    # The condition the ask puts on the count ("without paying for it",
-    # "outside a theater") is stated in the sentence, never inside the
-    # name (2026-10-20, Jay Patel: "Title 'mutiny' Without Paying").
     cond = ' '.join(str(condition or '').split()).strip(' ,.;:')
     if not cond:
         try:
@@ -5505,51 +5502,18 @@ def build_panel_report_offer(subject, price_label, question='',
             cond = _ask_cond(question)
         except Exception:
             cond = ''
-    cond_sp = (' ' + cond) if cond else ''
-    price = str(price_label or '').strip()
-    cost = (' ' + PANEL_COST_LINE.format(price=price)) if price else ''
-    followups = [PANEL_RUN_CHIP_PREFIX, PANEL_CANCEL_CHIP]
-    on_subj = f" on {subj}" if subj else ''
-    body_subject = (raw or subj or 'that subject')[:120]
-    if kind == 'viewership':
-        try:
-            yrs = max(int(years or 1), 1)
-        except (TypeError, ValueError):
-            yrs = 1
-        span = 'one year' if yrs == 1 else f'{yrs} years'
-        what = (f"month by month viewers and hours watched{cond_sp} across {span}"
-                if series else
-                f"how many people in the US {verb or 'watched'} it{cond_sp} across {span}")
-        reply = (f"I can pull a viewership read{on_subj}: {what}, delivered right "
-                 f"here in the chat." + cost)
-        offer = {'question': str(question or '')[:600],
-                 'subject': body_subject, 'kind': 'viewership', 'years': yrs}
-        return scrub_user_text(reply), followups, offer
-    if kind == 'derived':
-        # A delivered figure split by a dimension the panel observes
-        # (Jenna 2026-10-12, Jordan / East Tree: 100 in the seat's
-        # currency). The figure the reader holds is the anchor; every
-        # period reconciles to it exactly.
-        dim = str(dimension or 'device').strip().lower()
-        buckets = DIMENSION_BUCKETS.get(dim) or ()
-        what = (f"by {dim}" + (f" ({', '.join(b.lower() for b in buckets)})" if buckets else ''))
-        reply = (f"I can split the figures{(' for ' + subj) if subj else ''} {what}, each period "
-                 f"reconciled exactly to the number you have, right here in the chat." + cost)
-        offer = {'question': str(question or '')[:600],
-                 'subject': body_subject, 'kind': 'derived', 'dimension': dim}
-        return scrub_user_text(reply), followups, offer
-    # Custom ask (Jenna 2026-10-08): a priced read, delivered in the
-    # chat, with no profile pushed. The user can always ask for one.
-    if subj:
-        reply = (f"I can pull that as a custom read on {subj}"
-                 + (f", {verb or 'watched'}{cond_sp}" if cond else '')
-                 + f": {the_subject(subj)} audience end to end, with the numbers "
-                 f"right here in the chat." + cost)
-    else:
-        reply = ("I can pull that as a custom read"
-                 + (f", {verb or 'watched'}{cond_sp}" if cond else '')
-                 + ": the audience end to end, with the numbers right here in the chat." + cost)
-    offer = {'question': str(question or '')[:600], 'subject': body_subject}
+    try:
+        yrs = max(int(years or 1), 1)
+    except (TypeError, ValueError):
+        yrs = 1
+    span = 'one year' if yrs == 1 else f'{yrs} years'
+    dim = str(dimension or '').strip().lower()
+    reply, followups, offer = _pr.offer(
+        subj, price_label, question, kind=kind, years=yrs, staff=staff,
+        dimension=dim, verb=(verb or 'watched'), series=bool(series),
+        condition=cond, span=span, page=_pr.page_name())
+    if raw and not offer.get('subject'):
+        offer['subject'] = raw[:120]
     return scrub_user_text(reply), followups, offer
 
 

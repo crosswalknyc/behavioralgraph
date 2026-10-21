@@ -23,6 +23,7 @@ from __future__ import annotations
 #   shape 'flat'    -> "{label} - {c}{price}"
 #   shape 'split'   -> "{label} - {c}{half} + {c}{half} Control for a {c}{price} total"
 #   shape 'daily'   -> "{label} - {c}{price} for the initial pull and an optional {c}{daily} x day to track per campaign"
+#   shape 'followup'-> "{label} - {c}{price} for the first ask on a subject, then {c}{followup} for each follow-up on the same subject"
 ROWS = (
     ('Digital Journey', 'journey_iq', 500.0, 'flat'),
     ('Profile', 'profile_iq_build', 300.0, 'flat'),
@@ -31,18 +32,22 @@ ROWS = (
     ('Flywheel', 'flywheel_iq', 500.0, 'flat'),
     ('Brand Partnership', 'brand_partnership_iq', 1000.0, 'split'),
     ('Ad Attribution', 'attribution_iq_setup', 500.0, 'daily'),
-    ('Any other custom ask', 'panel_report', 500.0, 'flat'),
+    ('Any other custom ask (a ranked list, a table, a cross, a top N, what they did next)', 'panel_report', 100.0, 'followup'),
     ('Audience size / sample check', 'derived_read', 100.0, 'flat'),
     ('Breakdown of a delivered figure (by device, daypart, geography or demographic)', 'derived_read', 100.0, 'flat'),
 )
 DAILY_KEY, DAILY_DEFAULT = 'attribution_iq_daily', 100.0
 CUT_KEY, CUT_DEFAULT = 'profile_iq_derived_cut', 100.0
+# Jenna 2026-10-21: the initial custom ask is $100, then $50 for each
+# follow-up on the same subject in the thread.
+FOLLOWUP_KEY, FOLLOWUP_DEFAULT = 'panel_report_followup', 50.0
 # Metered Prometheus usage, per million tokens in / out, per search.
 METERED_IN, METERED_OUT, METERED_SEARCH = 10.50, 52.50, 0.021
 
 DEFAULTS = {key: usd for _l, key, usd, _s in ROWS}
 DEFAULTS[DAILY_KEY] = DAILY_DEFAULT
 DEFAULTS[CUT_KEY] = CUT_DEFAULT
+DEFAULTS[FOLLOWUP_KEY] = FOLLOWUP_DEFAULT
 
 
 def default(key):
@@ -73,6 +78,10 @@ def render(symbol='$', price_fn=None):
         if shape == 'split':
             half = p / 2.0
             lines.append(f"{label} - {money(half, c)} + {money(half, c)} Control for a {money(p, c)} total")
+        elif shape == 'followup':
+            fu = _price(price_fn, FOLLOWUP_KEY, FOLLOWUP_DEFAULT)
+            lines.append(f"{label} - {money(p, c)} for the first ask on a subject, then {money(fu, c)} for each "
+                         f"follow-up on the same subject")
         elif shape == 'daily':
             daily = _price(price_fn, DAILY_KEY, DAILY_DEFAULT)
             lines.append(f"{label} - {money(p, c)} for the initial pull and an optional {money(daily, c)} x "

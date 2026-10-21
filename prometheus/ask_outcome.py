@@ -90,6 +90,13 @@ _RETIRED_OFFER_RE = re.compile(
     r"\bThat is an? [\$\u00a3\u20ac]\s?[\d,.]+k? read\b|"
     r"\bIt runs [\$\u00a3\u20ac]\s?\d|"
     r"^\s*Run the (?:full read|breakdown)\b", re.IGNORECASE | re.MULTILINE)
+# The retired offer wording as it reached Liz Huszarik ("The path for
+# Netflix. That is a $500 read. I will not answer until you accept."):
+# the second net, same gate.
+_OLD_OFFER_RE = re.compile(
+    r"\bi will not answer until you accept\b|\bthat is a \$[\d,]+(?:\.\d+)? read\b|^\s*the path for\b|"
+    r"\bit runs \$[\d,]+(?:\.\d+)?\.?\s*$|\brun the full read\b|\brun the breakdown\b",
+    re.IGNORECASE | re.MULTILINE)
 # The intake / clarify shapes the guided pulls and the base-clarify
 # path send back.
 _CLARIFY_RE = re.compile(
@@ -181,7 +188,7 @@ def is_faulted_text(text):
         return True
     if _SCOLD_RE.search(t[:800]):
         return True
-    if _RETIRED_OFFER_RE.search(t[:800]):
+    if _RETIRED_OFFER_RE.search(t[:800]) or _OLD_OFFER_RE.search(t[:800]):
         return True
     return False
 

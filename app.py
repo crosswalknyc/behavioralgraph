@@ -2133,8 +2133,9 @@ CREDITS_CHATBOT_DECK = 0      # metered, not per-pull
 # at 6 credits, the nearest whole credit above $550 at the
 # $100/credit build rate. Admin-tunable via pricing settings
 # ('panel_report') and the billing panel's per-tool USD row.
-CREDITS_PANEL_REPORT = 5
-PANEL_REPORT_USD = 500.0   # Jenna 2026-10-08: every custom ask is 500
+CREDITS_PANEL_REPORT = 1
+PANEL_REPORT_USD = 100.0   # Jenna 2026-10-21: the first custom ask on a subject is 100, then 50 per follow-up
+PANEL_REPORT_FOLLOWUP_USD = 50.0
 
 # Pricing settings S3 key
 PRICING_SETTINGS_KEY = 'system/pricing_settings.json'
@@ -2171,8 +2172,9 @@ DEFAULT_PRICING = {
     'journey_iq': 30,            # Digital Journey - 2026-08-14 Jenna: 10 -> 30
     'cross_show': 5,             # 2026-08-14 new tile
     'intent_ingest': 10,         # 2026-08-14 new tile (module added 2026-08-12)
-    'panel_report': 5,           # custom ask: internal-unit twin of the 500 price
-                                 # (Jenna 2026-10-08: every custom ask is 500)
+    'panel_report': 1,           # custom ask: internal-unit twin of the 100 price
+                                 # (Jenna 2026-10-21: first custom ask on a subject 100, then 50)
+    'panel_report_followup': 1,  # the follow-up on the same subject (50)
     'viewership_read': 5,        # viewership over time: 5 per year of window (500/yr)
     'derived_read': 1,           # breakdown of a delivered figure: internal-unit twin of the 100 price
 }

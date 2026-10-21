@@ -87,10 +87,14 @@ DEFAULT_PRICING = {
         "profile_iq_build": 300.0,
         "profile_iq_derived_cut": 100.0,
         "subscriber_iq_build": 500.0,
-        # Prometheus research report (2026-09-14 Jenna): the put-
-        # together read on a subject with no base anywhere, and the
-        # catch-all price for report asks with no other set price.
-        "panel_report": 500.0,
+        # Custom ask (2026-09-14 Jenna; re-priced 2026-10-21, verbatim:
+        # "let's make the initial ask like this only $100 instead of $500
+        # for the initial custom ask then $50 x subsequent"): any put-
+        # together read, on an open profile or not; the first on a
+        # subject in a thread is panel_report, each later one on the
+        # same subject is panel_report_followup.
+        "panel_report": 100.0,
+        "panel_report_followup": 50.0,
         # Viewership over time (2026-10-08 Jenna, verbatim: "viewership
         # asks is always 500 per year in the company's requested
         # currency"). Priced per year of window; the seat's currency
@@ -456,8 +460,12 @@ MODULE_CATALOG = [
     # panel row is labeled "Un-priced Ask"; the USD field is editable
     # like every other row and the edited value flows through
     # tool_price_usd() into both the Prometheus quote and the charge.
-    ("panel_report",               "Custom Ask",
-     "pulls", 5, 500.0, "has_prometheus_access"),
+    ("panel_report",               "Custom Ask (first on a subject)",
+     "pulls", 1, 100.0, "has_prometheus_access"),
+    # 2026-10-21 (Jenna): each later custom ask on the same subject in
+    # the same thread is the follow-up price.
+    ("panel_report_followup",      "Custom Ask (follow-up, same subject)",
+     "pulls", 1, 50.0, "has_prometheus_access"),
     # 2026-10-08 (Jenna): a viewership-over-time read (monthly viewers,
     # hours watched, consumption by month) is 500 per year of window,
     # charged in the seat's currency. Quantity = years.
@@ -1443,6 +1451,10 @@ _PULL_TYPE_TO_TOOL_KEY = {
     "svod":                          "subscriber_iq_build",
     # ---- Prometheus research report / un-priced ask (2026-09-14) ----
     "panel report":                  "panel_report",
+    "panel report follow-up":        "panel_report_followup",
+    "panel report followup":         "panel_report_followup",
+    "custom ask":                    "panel_report",
+    "custom ask follow-up":          "panel_report_followup",
     "viewership read":               "viewership_read",
     "derived read":                  "derived_read",
     "device breakdown":              "derived_read",

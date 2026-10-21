@@ -574,8 +574,8 @@ _CONDITION_TAIL_RX = re.compile(
 _SERIES_ON_RX = re.compile(
     r"^(?:the\s+)?(?P<name>.+?)\s+(?P<kind>series|show|film|movie|title|podcast|book|game|franchise)\s+on\s+(?P<platform>[A-Za-z0-9+&' .-]{2,40})$", re.I)
 _NESTED_RX = re.compile(
-    r"\b(?:people|viewers|users|those|folks|subscribers|accounts|anyone|everyone|audiences?)\s+(?:who|that)\s+"
-    r"(?:also\s+)?(?:watch(?:ed|es)?|stream(?:ed|s)?|view(?:ed|s)?|read|reads|listen(?:ed|s)?\s+to|play(?:ed|s)?|bought|buy|purchased?|"
+    r"\b(?:people|viewers|users|those|folks|subscribers|accounts|anyone|everyone|audiences?|panelists|respondents|members|adults|americans|households|consumers|customers|fans|readers|listeners|players|shoppers|buyers)\s+(?:who|that)\s+"
+    r"(?:also\s+)?(?P<act>watch(?:ed|es)?|stream(?:ed|s)?|view(?:ed|s)?|read|reads|listen(?:ed|s)?\s+to|play(?:ed|s)?|bought|buy|purchased?|"
     r"subscribed?\s+to|follow(?:ed|s)?|binge(?:d|s)?|saw|started|drink|drinks|drank|eat|eats|ate|use|uses|used|own|owns|wear|wears|drive|drives|shop\s+at)\s+"
     r"(?P<obj>(?:the\s+)?[A-Za-z0-9][A-Za-z0-9 .&'\-+:!]{1,70}?)"
     r"(?:\s+on\s+(?P<platform>[A-Z][A-Za-z0-9+&' .-]{1,30}?|paramount\+|hulu|netflix|peacock|max|prime video|amazon prime video|disney\+|apple tv\+|tubi|roku))?"
@@ -749,6 +749,24 @@ def nested_audience(text):
     return name, _cased(platform) if platform else '', kind or 'title'
 
 
+_ACT_NOUN = (('listen', 'listeners'), ('read', 'readers'), ('play', 'players'), ('bought', 'buyers'), ('buy', 'buyers'),
+             ('purchas', 'buyers'), ('subscrib', 'subscribers'), ('follow', 'followers'), ('drink', 'drinkers'), ('drank', 'drinkers'),
+             ('eat', 'eaters'), ('ate', 'eaters'), ('use', 'users'), ('own', 'owners'), ('wear', 'wearers'), ('drive', 'drivers'),
+             ('shop', 'shoppers'))
+
+
+def nested_audience_verb(text):
+    """The audience noun for a nested audience's act: 'people who drink
+    Mountain Dew' -> drinkers; watch / stream / view / binge -> viewers."""
+    m = _NESTED_RX.search(str(text or ''))
+    act = (m.group('act') if m else '') or ''
+    act = act.lower()
+    for stem, noun in _ACT_NOUN:
+        if act.startswith(stem):
+            return noun
+    return 'viewers'
+
+
 def qualified_audience(text):
     """'Everybody Loves Raymond viewers on Amazon Prime Video, September
     2026' -> (name, {'verb','platform','window'}); ('', {}) otherwise.
@@ -799,6 +817,60 @@ def _reading_candidates(reading, page, norm):
     return out
 
 
+_SENTENCE_AUDIENCE_RX = re.compile(
+    r"(?<![\w'])(?P<name>[A-Z][\w&'.:!+-]*(?:\s+(?:[A-Z][\w&'.:!+-]*|\d[\w.:-]*|of|the|and|&|de|la))*?)\s+"
+    r"(?P<verb>viewers|fans|readers|listeners|players|watchers|buyers|shoppers|users|customers|subscribers|drinkers|owners)\b")
+_SENTENCE_STOP = frozenset(('what', 'which', 'who', 'whom', 'how', 'when', 'where', 'why', 'give', 'show', 'tell',
+                            'list', 'the', 'a', 'an', 'do', 'does', 'did', 'are', 'is', 'was', 'were', 'among',
+                            'us', 'u.s.', 'our', 'their', 'these', 'those', 'all', 'every', 'any', 'some', 'most',
+                            'many', 'top', 'other', 'same', 'new', 'total', 'unique', 'monthly', 'weekly', 'daily'))
+
+
+def sentence_audience(text, casing=None):
+    """An audience named inside a sentence: 'What did Landman viewers
+    watch next', 'the share of Landman viewers'. The name that recurs
+    wins; ties go to the first. ('', '') when none. (2026-10-21, Liz
+    Huszarik: the offer said 'The path for Netflix', the open tab,
+    for an ask about Landman viewers.)"""
+    t = ' '.join(str(text or '').split())
+    if not t:
+        return '', ''
+    seen, order = {}, []
+    for m in _SENTENCE_AUDIENCE_RX.finditer(t):
+        raw = m.group('name').strip()
+        words = raw.split()
+        while words and words[0].lower() in _SENTENCE_STOP:
+            words = words[1:]
+        if not words:
+            continue
+        raw = ' '.join(words)
+        low = raw.lower()
+        if low in _SENTENCE_STOP or low in _NEVER_LABEL or is_metric_phrase(raw):
+            continue
+        name = clean_display(raw, t, casing) or raw
+        if not name or len(name) < 2:
+            continue
+        key = re.sub(r"[^a-z0-9]+", "", name.lower())
+        if key not in seen:
+            seen[key] = [name, m.group('verb').lower(), 0]
+            order.append(key)
+        seen[key][2] += 1
+    if not order:
+        return '', ''
+    best = max(order, key=lambda k: (seen[k][2], -order.index(k)))
+    return seen[best][0], seen[best][1]
+
+
+def _request_reading():
+    """The Reader's reading for the request in flight, when there is one."""
+    try:
+        from flask import g as _g
+        r = getattr(_g, '_pm_reading', None)
+        return r if isinstance(r, dict) else None
+    except Exception:
+        return None
+
+
 def bind(text, history=None, page='', reading=None, catalog_names=None, normalize=None):
     """The one binder. Words beat thread beat page."""
     norm = normalize or (lambda s: re.sub(r"[^a-z0-9]+", "", str(s or '').lower()))
@@ -806,6 +878,8 @@ def bind(text, history=None, page='', reading=None, catalog_names=None, normaliz
     t = ' '.join(str(text or '').split())
     page = str(page or '').strip()
     quals = {}
+    if reading is None:
+        reading = _request_reading()
     if not t:
         return Subject()
     if definition_turn(t, reading, page):
@@ -828,7 +902,7 @@ def bind(text, history=None, page='', reading=None, catalog_names=None, normaliz
     if name:
         if platform:
             quals['platform'] = platform
-        quals['verb'] = 'viewers'
+        quals['verb'] = nested_audience_verb(t)
         return Subject('title' if kind != 'brand' else 'brand', name, name, quals, 'words', 0.9)
     # 2b. the audience named in words with a pointer at the page: "For the
     # Everybody Loves Raymond Amazon Prime Video audience in this profile"
@@ -879,6 +953,12 @@ def bind(text, history=None, page='', reading=None, catalog_names=None, normaliz
         if name:
             quals['verb'] = m.group('verb').lower()
             return Subject('audience', name, f"{name} {quals['verb']}", quals, 'words', 0.8)
+    # 5c. an audience named inside the sentence: "What did Landman viewers
+    # watch next ... the share of Landman viewers" (Liz, 2026-10-21)
+    name, verb = sentence_audience(t, casing)
+    if name:
+        quals['verb'] = verb
+        return Subject('audience', name, f"{name} {verb}", quals, 'words', 0.8)
     # 6. the Reader's subjects for these words
     for name, kind, conf in _reading_candidates(reading, page, norm):
         disp = clean_display(name, t, casing) or name

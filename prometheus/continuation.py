@@ -57,7 +57,7 @@ _WINDOW_RELATIVE_RX = re.compile(r"\b(?:last|past|trailing)\s+(?P<n>\d+)\s+(?P<u
 _WINDOW_Q_RX = re.compile(r"\b(?P<q>q[1-4])\s*(?:of\s+)?(?P<y>\d{4}|last\s+year|this\s+year)?\b", re.I)
 
 _ACCEPT_RX = re.compile(
-    r"^\W*(?:yes|yep|yeah|ok(?:ay)?|sure|approve[d]?|go ahead|do it|run it|proceed|confirm(?:ed)?|sounds good|please do|let'?s do it|go for it|"
+    r"^\W*(?:accept\b.*|yes|yep|yeah|ok(?:ay)?|sure|approve[d]?|go ahead|do it|run it|proceed|confirm(?:ed)?|sounds good|please do|let'?s do it|go for it|"
     r"yes,?\s+(?:run it again|re-?run it|do it|please|go ahead)|run it again|re-?run it)\W*$", re.I)
 
 _PARAM_WORDS_RX = re.compile(
@@ -365,10 +365,12 @@ def rerun_confirm(deliv, window, price_label, *, what=''):
     noun = {'read': 'read', 'build': 'profile', 'journey': 'journey', 'deck': 'deck', 'cut': 'cut'}.get(kind, 'read')
     wp = window_phrase(window)
     if wp:
-        reply = f"I can run the {subj} {noun} again on {wp}. Pulling this data will cost {price_label}."
+        # the one offer shape (prometheus/priced_read.py, Jenna 2026-10-21: Approve / Cancel)
+        from .priced_read import compose_offer, lead_for
+        reply, chips, _body = compose_offer(lead_for('rerun', subj, noun=noun, window=wp), price_label, '', {})
     else:
         reply = f"I can run the {subj} {noun} again. Tell me the window (two dates, a month, or a quarter) and I will quote it; pulling this data will cost {price_label}."
-    chips = ['Approve', 'Cancel'] if wp else ['Something else']
+        chips = ['Something else']
     q = str((deliv or {}).get('question') or '').strip()
     merged = (f"{q} Window: {wp}." if (q and wp) else q)
     return {'success': True, 'action': 'answer', 'reply': reply, 'followups': chips,

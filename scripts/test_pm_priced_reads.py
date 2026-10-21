@@ -4,9 +4,11 @@
 Jay Patel, Emmet Riley and Debi Pomerantz were getting incrementality,
 path tables, ranked lists, where-watched and sample sizes at the
 metered chat rate. Jenna: quote, they accept, then answer. Sizing is
-$100, not free. First new frame $500; extra titles in the same thread
-frame $100. Talk on a paid file stays metered. Kartel stickers stay
-$275 / $925.
+$100, not free. A custom ask is $100 for the first on a subject in a
+thread and $50 for each follow-up on the same subject (Jenna, later the
+same day: "only $100 instead of $500 for the initial custom ask then
+$50 x subsequent"). Talk on a paid file stays metered. Kartel stickers
+stay $275 / $925.
 
 Hermetic: imports priced_read / overlap_read and reads chat.py /
 service.py / rate_card.py as source. No network.
@@ -58,11 +60,11 @@ check("Marie watched-count is not sizing",
       (classify(marie) or {}).get('kind') != 'sizing')
 check("Marie is not talk", is_talk(marie) is False)
 
-# --- overlap / incrementality $500 ----------------------------------
+# --- overlap / incrementality: a $100 custom ask ---------------------
 jay = "how incremental is Lore Olympus to Prime Video?"
 hit = classify(jay)
-check("Lore Olympus incrementality is generate $500",
-      bool(hit) and hit.get('via') == 'generate' and hit.get('usd') == 500)
+check("Lore Olympus incrementality is generate $100",
+      bool(hit) and hit.get('via') == 'generate' and hit.get('usd') == 100)
 check("needs_generate_quote on incrementality",
       needs_generate_quote(jay) is True)
 
@@ -97,15 +99,17 @@ check("where do I see it is talk",
       is_talk("where do I see the Love Hypothesis file") is True)
 check("talk classify is None",
       classify("craziest insights from the Brock profile") is None)
-check("Tania on-service split is not priced",
-      classify("how many UFC fans are there out there, of those, "
-               "how many are on Paramount+, on HBO Max and how many "
-               "have neither service") is None)
+tania = classify("how many UFC fans are there out there, of those, "
+                 "how many are on Paramount+, on HBO Max and how many "
+                 "have neither service")
+check("Tania on-service split is a cross: a $100 custom ask in the sizing lane",
+      bool(tania) and tania.get('kind') == 'cross' and tania.get('via') == 'service'
+      and tania.get('usd') == 100)
 
 # --- ranked list ----------------------------------------------------
 lst = classify("who are the top 25 YouTube creators")
-check("top 25 YouTube creators is a $500 list",
-      bool(lst) and lst.get('kind') == 'list' and lst.get('usd') == 500)
+check("top 25 YouTube creators is a $100 list",
+      bool(lst) and lst.get('kind') == 'list' and lst.get('usd') == 100)
 
 # --- offer copy is the one shape (Jenna 2026-10-21, twice) ----------
 # One sentence on what they get, 'Pulling this data will cost $N.', then
@@ -124,7 +128,7 @@ RETIRED = ('I will not answer', 'That is a $', 'It runs $', 'Run the full read',
            'Run the breakdown', 'Never mind')
 check("no retired phrasing in the sizing offer",
       not any(x in reply or any(x in c for c in chips) for x in RETIRED))
-for kind, subj in (('where_watched', 'Mutiny'), ('list', 'DraftKings users'),
+for kind, subj in (('list', 'DraftKings users'),
                    ('path', 'Landman viewers'), ('overlap', 'Lore Olympus'),
                    ('derived', 'The Office US'), ('report', 'Eastside Golf')):
     r, c, o = offer(subj, '$500', 'q', kind=kind)
@@ -168,7 +172,7 @@ check("the open tab never leads a path offer (Liz, Netflix open)",
             'on Paramount+, and which other streaming services do they pay '
             'for? plus the share who subscribe to Netflix, Peacock, Max and '
             'Prime Video.', kind='path', page='Netflix')[0]
-      == 'I can pull the path you asked for. ' + COST_LINE.format(price='$100'))
+      == 'I can pull what Landman viewers did next. ' + COST_LINE.format(price='$100'))
 check("a metric phrase never leads an offer (Bria, 'Unique')",
       display_subject('Unique', 'Give me unique US viewers per surface') == '')
 
@@ -200,17 +204,22 @@ check("interpret incidence quotes before the sample check",
 inc_block = chat[chat.find('INCIDENCE / SAMPLE-SIZE'):
                  chat.find('INCIDENCE / SAMPLE-SIZE') + 2800]
 check("interpret incidence offer uses priced_read",
-      'priced_read' in inc_block and 'kind=\'sizing\'' in inc_block)
-check("generate_metrics hands sizing confirm to the lane",
-      "kind') or '') in (\n            'sizing', 'where_watched')" in chat
-      or "'sizing', 'where_watched'" in chat)
+      'priced_read' in inc_block and 'sizing_offer_payload' in inc_block)
+check("generate_metrics hands the sizing / cross confirm to the lane (never where-watched)",
+      "in ('sizing', 'cross')" in chat and "'sizing', 'where_watched'" not in chat)
+# NEVER THIS (2026-10-21): where a named title is watched is a lookup of carriage, the free lane, never a quote
+check("Jay's Mutiny turn is never a priced hit",
+      classify('where people watched the film mutiny', [], {'primary': {'name': 'Amazon Prime Video'}}) is None
+      and needs_generate_quote('where people watched the film mutiny') is False)
+check("where-watched is out of the custom family", 'where_watched' not in __import__('prometheus.priced_read', fromlist=['CUSTOM_FAMILY']).CUSTOM_FAMILY)
 gate_at = chat.find("NEW-NUMBERS ON AN OPEN FILE (2026-10-21)")
 digest_at = chat.find("Base rows ride the prompt (2026-08-27, toy-categories routing)")
 check("with-base new-numbers gate sits before the digest load",
       0 < gate_at < digest_at)
-check("same-frame uses the $100 derived price",
+check("same-frame rides the derived kind through the one gate",
       '_same_frame' in chat[gate_at:digest_at]
-      and '_pm_derived_read_price' in chat[gate_at:digest_at])
+      and "_pr_kind = 'derived'" in chat[gate_at:digest_at]
+      and 'offer_or_charge' in chat[gate_at:digest_at])
 check("unconfirmed generate quote returns panel_offer",
       'panel_offer' in chat[gate_at:digest_at])
 
@@ -218,7 +227,8 @@ check("unconfirmed generate quote returns panel_offer",
 card = (WEB / 'prometheus' / 'rate_card.py').read_text()
 check("rate card names audience size at derived_read $100",
       'Audience size / sample check' in card and "'derived_read', 100.0" in card)
-check("custom ask stays $500", "'panel_report', 500.0" in card)
+check("custom ask is $100 first on a subject", "'panel_report', 100.0" in card)
+check("custom ask follow-up is $50", "'panel_report_followup', 50.0" in card)
 wp = (WEB / 'wallet.py').read_text()
 check("Kartel profile sticker stays 275", '275' in wp)
 check("Kartel partnership sticker stays 925", '925' in wp)

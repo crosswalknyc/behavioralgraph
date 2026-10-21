@@ -5729,24 +5729,10 @@ def _pm_interpret_core(user, body, text, history):
     if _synth_chat_is_incidence_request(text) and not _subject_rules.wants_breakdown(text):   # I3: a split or a table is never the sample card
         try:
             from prometheus import priced_read as _pr_inc
-            from prometheus import sizing_lane as _sz_inc
-            _inc_hit = _pr_inc.classify(text, history)
-            if (_inc_hit and _inc_hit.get('kind') == 'sizing') or (
-                    _sz_inc.wants_sizing(text) and _sz_inc.names_an_audience(text)):
-                _inc_subj = ((_inc_hit or {}).get('subject')
-                             or _pr_inc._sizing_subject(text) or 'that audience')
-                _inc_label, _inc_cr, _inc_pt, _inc_ok = _pr_inc.price_plan(
-                    _inc_hit or {'kind': 'sizing', 'usd': 100},
-                    _pm_ask_log_user(''))
-                _inc_reply, _inc_chips, _inc_off = _pr_inc.offer(
-                    _inc_subj, _inc_label, text, kind='sizing',
-                    frame=(_inc_hit or {}).get('frame') or 'sizing')
-                _pm_ask_hint(route='incidence', outcome='panel_offer',
-                             subject=_inc_subj)
-                return jsonify({
-                    'success': False, 'guidance': True,
-                    'analysis_read': True, 'error': _inc_reply,
-                    'followups': _inc_chips, 'panel_offer': _inc_off})
+            _inc_pl = _pr_inc.sizing_offer_payload(text, history, _pm_ask_log_user(''))
+            if _inc_pl:
+                _pm_ask_hint(route='incidence', outcome='panel_offer', subject=_inc_pl.get('subject'))
+                return jsonify(_inc_pl)
             return _synth_chat_incidence_check(text, history)
         except Exception as _inc_err:
             traceback.print_exc()
@@ -12792,27 +12778,19 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
     _pm_ask_hint(route='reasoned_metrics')
     _pm_user = (session.get('username') or user.get('username') or '').strip()
     _pm_ppu = _pm_usage_extras(user)
-    # Sizing / where-watched confirm landed on generate (2026-10-21).
-    # Charge the quoted $100 / $500 and run the deterministic lane;
-    # do not compile a custom read.
-    if isinstance(panel_confirm, dict) and str(panel_confirm.get('kind') or '') in (
-            'sizing', 'where_watched'):
+    # A sizing / cross confirm landed on generate (2026-10-21): charge
+    # the quoted price and run the deterministic lane, never a compiled
+    # read. Where-watched is never priced (service.py, the free lane).
+    if isinstance(panel_confirm, dict) and str(panel_confirm.get('kind') or '') in ('sizing', 'cross'):
         try:
-            from prometheus import priced_read as _pr_lane
-            _lane = _pr_lane.service_turn(
-                text, user=user, ctx=ctx, history=history,
-                panel_confirm=panel_confirm)
+            _lane = __import__('prometheus.priced_read', fromlist=['service_turn']).service_turn(
+                text, user=user, ctx=ctx, history=history, panel_confirm=panel_confirm)
         except Exception:
-            traceback.print_exc()
-            _lane = None
+            traceback.print_exc(); _lane = None
         if _lane:
             return jsonify(_lane)
-    # Prometheus reasoned-metrics reads are session-metered
-    # (2026-09-09 Jenna). No per-pull credit gate here - the metered
-    # spend rolls up through the Prometheus session bill or is
-    # included in the subscribed tier. `charge_done` is kept in the
-    # function signature for callsite compatibility but no longer
-    # matters for gating.
+    # Talk on an open file is session-metered (2026-09-09 Jenna); a put-together
+    # read is a priced custom ask, gated below (2026-10-21). `charge_done` is kept for callsite compatibility.
     mr = metric_request if isinstance(metric_request, dict) else {}
     subj_hint = str(mr.get('subject') or '').strip()
     # Confirmed memory referent (2026-08-27, Jenna: "know context
@@ -12824,16 +12802,11 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
     if bind_subject and not subj_hint:
         subj_hint = bind_subject
     # I2 (2026-10-20): a re-run accepted on its card is charged at the quoted price before anything is generated
-    _rrc = getattr(__import__('flask').g, '_pm_rerun_charge', None)
-    if isinstance(_rrc, dict) and not getattr(__import__('flask').g, '_pm_rerun_charged', False):
-        __import__('flask').g._pm_rerun_charged = True
-        _rr_subj = str(_rrc.get('subject') or subj_hint or 'the read')
-        _rr_desc = f"Re-run - {_rr_subj} ({__import__('prometheus.continuation', fromlist=['window_phrase']).window_phrase(_rrc.get('window'))})"
-        _rr_pt = 'Viewership Read' if str(_rrc.get('price_key') or '') == 'viewership_read' else 'Panel Report'
-        if _pm_user and not _H.consume_credit(_pm_user, description=_rr_desc, pull_type=_rr_pt, credits_used=5, quantity=1):
-            _pm_ask_hint(outcome='panel_out_of_credits', subject=_rr_subj)
-            return jsonify({'success': False, 'guidance': True, 'analysis_read': True, 'followups': [],
-                            'error': f"The {_rr_subj} re-run runs {_rrc.get('price_label') or 'the quoted price'} and your account cannot cover it right now. Top up or ask your admin, and I will pick it right back up."})
+    _rr_err = __import__('prometheus.priced_read', fromlist=['charge_rerun']).charge_rerun(_pm_user, subj_hint, _H.consume_credit)
+    if _rr_err is not None:
+        if _rr_err:
+            _pm_ask_hint(outcome='panel_out_of_credits', subject=_rr_err.get('subject'))
+            return jsonify(_rr_err)
         charge_done = True
     # A consumption count typed in lowercase ("how many people read the
     # walsh family book series in the us last year?") names its own
@@ -13102,75 +13075,27 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
             else:
                 metric_request = {'dimension': _pc_params.get('breakdown') or '', 'bound_series': [{'from': 'thread'}], 'metric_family': 'dimension split'}
         if subj_name and (_is_derived or pma.panel_report_eligible(text, subj_name)):
-            _pr_label, _pr_credits = _pm_panel_price_label(_pm_user)
-            _pr_pull_type, _pr_qty, _pr_kind = 'Panel Report', 1, 'report'
-            # Viewership over time is its own price: 500 per year of
-            # window in the seat's currency (Jenna 2026-10-08).
+            # One gate for every priced read (prometheus/priced_read.py,
+            # Jenna 2026-10-21): viewership is $500 a year, a breakdown of
+            # a delivered figure $100, everything else the custom ask
+            # ($100 first on a subject in the thread, $50 after). The offer
+            # is one shape; the charge lands on Accept, server side.
+            from prometheus import priced_read as _prg
             _vw = _pm_viewership_read_price(text, _pm_user)
-            if _vw:
-                _pr_label, _pr_credits, _pr_qty = _vw
-                _pr_pull_type, _pr_kind = 'Viewership Read', 'viewership'
-            # A delivered figure split by a dimension: the derived-cut
-            # price (Jenna 2026-10-12). Only when a figure was delivered
-            # (the confirm says derived, or the split binds figures from
-            # the thread or the ask). An ask for the count itself "by
-            # platform" is the viewership read it asks for, with the
-            # split riding along (2026-10-20, Marie Flores at WBD: the
-            # $100 breakdown price was overriding the $500 count price
-            # on a question that had no figure to break down).
             _has_delivered = bool((metric_request or {}).get('bound_series')) \
                 or (isinstance(panel_confirm, dict) and str(panel_confirm.get('kind') or '') == 'derived')
-            if _is_derived and (_has_delivered or not _vw):
-                _pr_label, _pr_credits = _pm_derived_read_price(_pm_user); _pr_pull_type, _pr_qty, _pr_kind = 'Derived Read', 1, 'derived'
-            if isinstance(panel_confirm, dict):
-                # Confirmed: the charge lands NOW, before anything is
-                # generated. Price is always the server's, never the
-                # client's. Internal credits drain first; a paying
-                # customer's wallet absorbs the pull at the dollar
-                # price when credits are out (consume_credit handles
-                # both, plus unlimited users, in one call).
-                _rc = panel_confirm.get('resume_charge')   # read_recovery
-                if not isinstance(_rc, dict) and (not _pm_user or not _H.consume_credit(
-                        _pm_user,
-                        description=((f'Viewership read ({_pr_qty} yr) - '
-                                      if _pr_kind == 'viewership'
-                                      else (f"Derived read ({(metric_request or {}).get('dimension') or 'breakdown'}) - "
-                                            if _pr_kind == 'derived' else 'Prometheus Research Report - '))
-                                     + f'{subj_name}'),
-                        pull_type=_pr_pull_type,
-                        credits_used=_pr_credits,
-                        quantity=_pr_qty)):
-                    _pm_ask_hint(outcome='panel_out_of_credits',
-                                 subject=subj_name)
-                    return jsonify({
-                        'success': False, 'guidance': True,
-                        'analysis_read': True,
-                        'error': (f"The {subj_name} read runs "
-                                  f"{_pr_label} and your account cannot "
-                                  f"cover it right now. Top up or ask "
-                                  f"your admin, and I'll pick it right "
-                                  f"back up."),
-                        'followups': []})
-                base = {'subject': subj_name, 's3_key': '',
-                        'source': 'panel'}
-                panel_charge = _rc if isinstance(_rc, dict) else {
-                    'user': _pm_user, 'credits': _pr_credits,
-                    'subject': subj_name}
-                print(f"[pm-panel] charged {_pr_credits} credits to "
-                      f"{_pm_user} for {subj_name}")
-            else:
-                reply, followups, offer = pma.build_panel_report_offer(
-                    subj_name, _pr_label, question=text,
-                    kind=_pr_kind, years=_pr_qty,
-                    verb=_pm_viewership_verb(text),
-                    series=_pm_is_viewership_series_ask(text),
-                    dimension=str((metric_request or {}).get('dimension') or ''))
-                _pm_ask_hint(outcome='panel_offer', subject=subj_name)
-                return jsonify({
-                    'success': True, 'action': 'answer',
-                    'reply': reply, 'followups': followups,
-                    'offer_deck': False, 'deck_angle': None,
-                    'panel_offer': offer})
+            _pr_kind = 'derived' if (_is_derived and (_has_delivered or not _vw)) else ('viewership' if _vw else 'report')
+            _state, _pl = _prg.offer_or_charge(
+                text=text, subject=subj_name, kind=_pr_kind, panel_confirm=panel_confirm,
+                username=_pm_user, user=user, history=history, consume=_H.consume_credit,
+                years=(_vw[2] if _vw else 1), dimension=str((metric_request or {}).get('dimension') or ''),
+                verb=_pm_viewership_verb(text), series=_pm_is_viewership_series_ask(text))
+            if _state != 'charged':
+                _pm_ask_hint(outcome=('panel_offer' if _state == 'offer' else 'panel_out_of_credits'), subject=subj_name)
+                return jsonify(_pl)
+            base = {'subject': subj_name, 's3_key': '', 'source': 'panel'}
+            panel_charge = _pl
+            print(f"[pm-panel] charged {_pl.get('credits')} credits to {_pm_user} for {subj_name}")
     if not base:
         # No base and no priced read fired above: a named subject still
         # gets the custom read offer (never a forced profile, Jenna
@@ -13185,14 +13110,11 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
         subj_name = _subject_rules.display_for((subj_hint or pma.guess_subject_from_text(text) or '').strip(), text)
         if subj_name and _pm_plausible_subject(subj_name) \
                 and not isinstance(panel_confirm, dict):
-            _pr_label, _pr_credits = _pm_panel_price_label(_pm_user)
-            reply, followups, offer = pma.build_panel_report_offer(
-                subj_name, _pr_label, question=text)
+            from prometheus import priced_read as _prg
+            _state, _pl = _prg.offer_or_charge(text=text, subject=subj_name, kind='report', panel_confirm=None,
+                                               username=_pm_user, user=user, history=history)
             _pm_ask_hint(outcome='panel_offer', subject=subj_name)
-            return jsonify({
-                'success': True, 'action': 'answer', 'reply': reply,
-                'followups': followups, 'offer_deck': False,
-                'deck_angle': None, 'panel_offer': offer})
+            return jsonify(_pl)
         reply, followups = pma.build_profile_required_reply(
             '', price_label=_pm_panel_price_label(_pm_user)[0])
         _pm_ask_hint(outcome='clarify_subject')
@@ -13207,31 +13129,25 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
     # priced_read.service_turn. Keep the catalog base so the read
     # still uses the file's rows.
     if base and panel_charge is None:
-        _ov_hit = False
-        _same_frame = False
+        # The line is drawn on WORK, not on whether a profile exists
+        # (Jenna 2026-10-21, Liz's QSR ask on the open Paramount+ profile:
+        # "this should have charged her $100"). A put-together read on
+        # the open file (a ranked list, a table, a cross, a top N, what
+        # they watched next, a cohort within the audience) is a custom
+        # ask: the offer first, the charge on Accept, the read after.
+        # A lookup of a figure on the screen stays metered.
+        from prometheus import priced_read as _prg
         _pr_hit = None
         try:
-            from prometheus import priced_read as _pr
-            _pr_hit = _pr.classify(text, history, ctx)
-            _ov_hit = bool(_pr_hit and _pr_hit.get('via') == 'generate')
-            _same_frame = bool(_pr_hit and _pr_hit.get('same_frame'))
+            _pr_hit = _prg.classify(text, history, ctx)
         except Exception:
-            try:
-                from prometheus import overlap_read as _ov
-                _ov_hit = _ov.is_overlap_read(text)
-            except Exception:
-                _ov_hit = False
+            _pr_hit = None
+        _ov_hit = bool(_pr_hit and _pr_hit.get('via') == 'generate')
+        _same_frame = bool(_pr_hit and _pr_hit.get('same_frame'))
         if _ov_hit:
-            _ov_subj = str(base.get('subject') or subj_hint or '').strip()
-            _ov_subj = _subject_rules.display_for(
-                _ov_subj, text,
-                page=str(((ctx or {}).get('primary') or {}).get('name') or '')
-            ) or _ov_subj
-            if isinstance(panel_confirm, dict) and not _ov_subj:
-                _ov_subj = str(panel_confirm.get('subject') or '').strip()
+            _ov_subj = _prg.bound_subject(text, history, ctx, fallback=str(base.get('subject') or subj_hint or '').strip())
+            _ov_subj = _ov_subj or str((panel_confirm or {}).get('subject') or '').strip() if isinstance(panel_confirm, dict) else _ov_subj
             if _ov_subj:
-                _pr_label, _pr_credits = _pm_panel_price_label(_pm_user)
-                _pr_pull_type, _pr_qty, _pr_kind = 'Panel Report', 1, 'report'
                 _is_derived = (
                     str((metric_request or {}).get('metric_family') or '') == 'dimension split'
                     or (isinstance(panel_confirm, dict)
@@ -13241,57 +13157,17 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
                     or (isinstance(panel_confirm, dict)
                         and str(panel_confirm.get('kind') or '') == 'derived') \
                     or _same_frame
-                if _is_derived and _has_delivered:
-                    _pr_label, _pr_credits = _pm_derived_read_price(_pm_user)
-                    _pr_pull_type, _pr_qty, _pr_kind = 'Derived Read', 1, 'derived'
-                if isinstance(panel_confirm, dict):
-                    _rc = panel_confirm.get('resume_charge')
-                    if not isinstance(_rc, dict) and (not _pm_user or not _H.consume_credit(
-                            _pm_user,
-                            description=((f"Derived read ({(metric_request or {}).get('dimension') or 'breakdown'}) - "
-                                          if _pr_kind == 'derived'
-                                          else 'Prometheus Research Report - ')
-                                         + f'{_ov_subj}'),
-                            pull_type=_pr_pull_type,
-                            credits_used=_pr_credits,
-                            quantity=_pr_qty)):
-                        _pm_ask_hint(outcome='panel_out_of_credits',
-                                     subject=_ov_subj)
-                        return jsonify({
-                            'success': False, 'guidance': True,
-                            'analysis_read': True,
-                            'error': (f"The {_ov_subj} read runs "
-                                      f"{_pr_label} and your account cannot "
-                                      f"cover it right now. Top up or ask "
-                                      f"your admin, and I'll pick it right "
-                                      f"back up."),
-                            'followups': []})
-                    panel_charge = _rc if isinstance(_rc, dict) else {
-                        'user': _pm_user, 'credits': _pr_credits,
-                        'subject': _ov_subj}
-                    print(f"[pm-panel] charged {_pr_credits} credits to "
-                          f"{_pm_user} for overlap {_ov_subj}")
-                else:
-                    try:
-                        from prometheus import priced_read as _pr_off
-                        _off_kind = 'derived' if _pr_kind == 'derived' else (
-                            (_pr_hit or {}).get('kind') or 'report')
-                        reply, followups, offer = _pr_off.offer(
-                            _ov_subj, _pr_label, text, kind=_off_kind,
-                            frame=(_pr_hit or {}).get('frame') or '')
-                    except Exception:
-                        reply, followups, offer = pma.build_panel_report_offer(
-                            _ov_subj, _pr_label, question=text,
-                            kind=_pr_kind, years=_pr_qty,
-                            verb=_pm_viewership_verb(text),
-                            series=False,
-                            dimension=str((metric_request or {}).get('dimension') or ''))
-                    _pm_ask_hint(outcome='panel_offer', subject=_ov_subj)
-                    return jsonify({
-                        'success': True, 'action': 'answer',
-                        'reply': reply, 'followups': followups,
-                        'offer_deck': False, 'deck_angle': None,
-                        'panel_offer': offer})
+                _pr_kind = 'derived' if (_is_derived and _has_delivered) else str((_pr_hit or {}).get('kind') or 'report')
+                _state, _pl = _prg.offer_or_charge(
+                    text=text, subject=_ov_subj, kind=_pr_kind, panel_confirm=panel_confirm,
+                    username=_pm_user, user=user, history=history, consume=_H.consume_credit,
+                    dimension=str((metric_request or {}).get('dimension') or ''),
+                    frame=str((_pr_hit or {}).get('frame') or ''))
+                if _state != 'charged':
+                    _pm_ask_hint(outcome=('panel_offer' if _state == 'offer' else 'panel_out_of_credits'), subject=_ov_subj)
+                    return jsonify(_pl)
+                panel_charge = _pl
+                print(f"[pm-panel] charged {_pl.get('credits')} credits to {_pm_user} for {_pr_kind} {_ov_subj}")
     # Base rows ride the prompt (2026-08-27, toy-categories routing):
     # when the caller had no open-page digest but the base resolved to
     # a catalog profile, load that profile's digest so the read

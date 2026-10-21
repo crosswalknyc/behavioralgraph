@@ -394,6 +394,40 @@ def accept_offered_run(history, text):
     return ''
 
 
+# The dispatcher's lane order (2026-10-21). ask() reads top to bottom:
+# commands and guards, then the continuation read against the previous
+# agent turn (I2), then every deterministic lane (a lookup is free and
+# metered), and only when all of those have declined the priced custom
+# ask offer (the work line) and the model surfaces. Where-watched is a
+# deterministic lane and is never priced. Each block below carries a
+# "# lane: <name>" marker; scripts/test_pm_custom_ask_pricing.py holds
+# the source order to this tuple.
+LANE_ORDER = (
+    'offer_acceptance', 'offer_answer', 'referents', 'document', 'confirm_answer', 'short_reply',
+    'spend_cap_precheck',
+    'continuation',
+    'talent_list_acceptance', 'meta_check', 'standing', 'where_watched', 'sizing_quote',
+    'reader', 'pricing', 'design_request', 'spend_cap', 'thread_followups', 'catalog',
+    'sizing_fallback', 'status', 'deliverable_lookup', 'email_file', 'brand_coverage',
+    'definitions', 'capability',
+    'surface_decision',
+    'work_gate',
+)
+DETERMINISTIC_LANES = frozenset((
+    'meta_check', 'standing', 'where_watched', 'sizing_quote', 'reader', 'pricing', 'design_request',
+    'thread_followups', 'catalog', 'sizing_fallback', 'status', 'deliverable_lookup', 'email_file',
+    'brand_coverage', 'definitions', 'capability'))
+NEVER_PRICED_LANES = frozenset(('where_watched', 'status', 'pricing', 'catalog', 'definitions',
+                                'deliverable_lookup', 'email_file', 'brand_coverage', 'capability'))
+
+
+def lane_markers(source=None):
+    """The '# lane: <name>' markers of ask() in source order."""
+    import inspect as _inspect
+    src = source if source is not None else _inspect.getsource(ask)
+    return [m.group(1) for m in re.finditer(r"^\s*# lane: ([a-z_]+)\s*$", src, re.M)]
+
+
 def ask(user, body, *, via='session'):
     """Run one ask end to end. Returns (envelope_dict, http_status)."""
     body = body if isinstance(body, dict) else {}
@@ -453,6 +487,7 @@ def ask(user, body, *, via='session'):
     except Exception as _fx:
         _faults.note('service', _fx)
 
+    # lane: offer_acceptance
     # Accepting an offered run (2026-10-06, Eliot / Gunna): the build-
     # first offer ends with the chips 'Run a profile on X' / 'Not now'.
     # A typed acceptance ("ok run Gunna", "yes", "go ahead", "build
@@ -483,6 +518,7 @@ def ask(user, body, *, via='session'):
             body['text'] = text
             body['surface'] = 'interpret'
 
+    # lane: offer_answer
     # Answering an offer (2026-10-07 Jenna, Eliot / Gunna Concert Goers):
     # the previous agent turn asked "Do you still want me to pull it?"
     # with the offer id on its meta. A yes launches that build through
@@ -521,6 +557,7 @@ def ask(user, body, *, via='session'):
             # decide() wrote both turns when this caller persists.
             return env, 200
 
+    # lane: referents
     # Unresolved referents (2026-10-02 Jenna: "it should have asked him
     # which 3 influencers he was talking about then actually given him
     # the answer"). Two halves, both before any surface runs:
@@ -530,6 +567,7 @@ def ask(user, body, *, via='session'):
     #  2. This turn points at "these three creators" / "both shows" /
     #     "all 4 titles" and names none of them anywhere we can see:
     #     ask which ones. No model call, no charge, no offer.
+    # lane: document
     # Documents on the thread (2026-10-06, Jenna: "upload a document to
     # it. like a powerpoint to be edited, or pdf or other data"). Runs
     # BEFORE the referent clarify, the standing answers and the Reader
@@ -607,6 +645,7 @@ def ask(user, body, *, via='session'):
     except Exception as e:
         _faults.note('service.referent_gate', e)
 
+    # lane: confirm_answer
     # Answers to a which-one confirm (2026-10-05, Scott). The turn
     # before asked "Do you mean for Will And Grace, or Will & Grace on
     # Hulu?" and the user typed "both". The widget only resolves exact
@@ -636,6 +675,7 @@ def ask(user, body, *, via='session'):
             except Exception as _fx:
                 _faults.note('service', _fx)
 
+    # lane: short_reply
     # Bare replies (2026-10-02 audit). "approved", "ok", "no", "1",
     # "none" with nothing armed on the server side are not asks. They
     # used to reach a reasoning pass that guessed a subject out of them
@@ -671,6 +711,7 @@ def ask(user, body, *, via='session'):
         except Exception as e:
             _faults.note('service.bare_reply_gate', e)
 
+    # lane: spend_cap_precheck
     # Per-user daily spend cap (audit item 8, 2026-10-14): over the cap the
     # model surfaces stop for the day with one honest line; the lookups
     # below (pricing, catalog, sizing from the catalog, status) still run.
@@ -684,6 +725,7 @@ def ask(user, body, *, via='session'):
             _faults.note('service.spend_guard', _fx)
             _cap_hit = False
 
+    # lane: continuation
     # Continuation before routing (I2, 2026-10-20). Every turn is read
     # against the previous agent turn first: a re-run in a window, a
     # reply to the question just asked, a parameter change on the last
@@ -718,6 +760,7 @@ def ask(user, body, *, via='session'):
     # no digital trace is declined with the nearest measurable read, and
     # a question about where the data comes from gets the plain
     # first-party answer. No model call, no charge.
+    # lane: talent_list_acceptance
     # The talent list (Custom Ask, 2026-10-15): the chip on a roster offer,
     # or a yes right after it, charges the seat and queues the list. No
     # model call; never a profile.
@@ -740,6 +783,7 @@ def ask(user, body, *, via='session'):
             env = envelope.wrap(_out, surface='analyze', decision=decision, thread_id=tid, via=via)
             _persist_turn(persist, uname, tid, history, text, env, _out, 'analyze')
             return env, 200
+    # lane: meta_check
     # A meta check ("are you not working?", "hello?", "you there?") never
     # repeats a pending confirm (Emmet at Kartel got the same "Do you mean
     # for ..." back to it, 2026-10-15). It answers the question the reader
@@ -766,9 +810,57 @@ def ask(user, body, *, via='session'):
         env = envelope.wrap(_out, surface='analyze', decision=decision, thread_id=tid, via=via)
         _persist_turn(persist, uname, tid, history, text, env, _out, 'analyze')
         return env, 200
-    # Sizing ($100) and where-watched ($500, or $100 in the same frame)
-    # quote first and wait for accept (2026-10-21, Jenna). Runs armed
-    # or not so a confirm cannot fall through to a compiled $500 read.
+    # lane: standing
+    if referent_decision is None and not _armed(body):
+        _standing = _standing_answer(text)
+        if _standing is None:
+            # A journey-figure question reads from the delivered journey
+            # first (Jenna 2026-10-14: two different numbers for one
+            # question is its own trust problem). Exact, no model call.
+            try:
+                from . import journey_lane as _jl
+                _standing = _jl.answer(text, ctx, host=host, user=user, history=history)
+                if _standing is not None:
+                    try:
+                        host.ask_hint(route='journey_file', outcome='answered', subject=_standing.get('profile'))
+                    except Exception:
+                        pass
+            except Exception as _fx:
+                _faults.note('service.journey_lane', _fx)
+                _standing = None
+        if _standing is not None:
+            _decision = {'surface': 'analyze', 'mode': None, 'reason': 'standing', 'client_hint': None}
+            _out = _interpret_shape(_standing) if _client_surface == 'interpret' else _standing
+            env = envelope.wrap(_out, surface='analyze', decision=_decision, thread_id=tid, via=via)
+            _persist_turn(persist, uname, tid, history, text, env, _out, 'analyze')
+            return env, 200
+    # lane: where_watched
+    # Where a named title is watched (Jay Patel 2026-10-20: "where people
+    # watched the film mutiny" with Prime Video open). A lookup of
+    # carriage from the library, the content map and one research call,
+    # never a put-together read: free at the metered rate, and it runs
+    # before any priced quote so no offer can stand in for it (regressed
+    # on 2026-10-21 to "Pulling this data will cost $500."; the rule is the
+    # work line: a lookup is free, a put-together read is the custom ask).
+    if referent_decision is None and not _armed(body):
+        try:
+            from . import where_watched as _ww
+            _ww_raw = _ww.answer(text, ctx, host=host, user=user, history=history)
+        except Exception as _fx:
+            _faults.note('service.where_watched', _fx)
+            _ww_raw = None
+        if _ww_raw is not None:
+            _decision = {'surface': 'analyze', 'mode': None, 'reason': 'where_watched', 'client_hint': None}
+            _out = _interpret_shape(_ww_raw) if _client_surface == 'interpret' else _ww_raw
+            env = envelope.wrap(_out, surface='analyze', decision=_decision, thread_id=tid, via=via)
+            _persist_turn(persist, uname, tid, history, text, env, _out, 'analyze')
+            return env, 200
+    # lane: sizing_quote
+    # Sizing ($100, rule 26) and the cross of a held audience across
+    # services (a custom ask in the sizing lane) quote first and wait for
+    # approve (2026-10-21, Jenna). Runs armed or not so a confirm cannot
+    # fall through to a compiled read. Where-watched is never here: it is
+    # the free lane above.
     if referent_decision is None:
         try:
             from . import priced_read as _pr
@@ -792,7 +884,8 @@ def ask(user, body, *, via='session'):
                     raw['panel_offer'] = _pr_raw['panel_offer']
             try:
                 host.ask_hint(
-                    route='priced_read',
+                    route=(str(_pr_raw.get('priced_lane') or '') if _pr_raw.get('priced_lane') and not _pr_raw.get('panel_offer')
+                           else 'priced_read'),
                     outcome=('panel_offer' if _pr_raw.get('panel_offer')
                              else 'answered'),
                     subject=str(_pr_raw.get('subject') or ''))
@@ -802,40 +895,8 @@ def ask(user, body, *, via='session'):
                                 thread_id=tid, via=via)
             _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
             return env, 200
-    if referent_decision is None and not _armed(body):
-        _standing = _standing_answer(text)
-        if _standing is None:
-            # A journey-figure question reads from the delivered journey
-            # first (Jenna 2026-10-14: two different numbers for one
-            # question is its own trust problem). Exact, no model call.
-            try:
-                from . import journey_lane as _jl
-                _standing = _jl.answer(text, ctx, host=host, user=user, history=history)
-                if _standing is not None:
-                    try:
-                        host.ask_hint(route='journey_file', outcome='answered', subject=_standing.get('profile'))
-                    except Exception:
-                        pass
-            except Exception as _fx:
-                _faults.note('service.journey_lane', _fx)
-                _standing = None
-        if _standing is None:
-            # Where a named title is watched (Jay Patel 2026-10-20).
-            # Priced in priced_read.service_turn above ($500, or $100
-            # for another title in the same frame). This standing call
-            # is the fail-safe when classify missed.
-            try:
-                from . import where_watched as _ww
-                _standing = _ww.answer(text, ctx, host=host, user=user, history=history)
-            except Exception as _fx:
-                _faults.note('service.where_watched', _fx)
-                _standing = None
-        if _standing is not None:
-            _decision = {'surface': 'analyze', 'mode': None, 'reason': 'standing', 'client_hint': None}
-            _out = _interpret_shape(_standing) if _client_surface == 'interpret' else _standing
-            env = envelope.wrap(_out, surface='analyze', decision=_decision, thread_id=tid, via=via)
-            _persist_turn(persist, uname, tid, history, text, env, _out, 'analyze')
-            return env, 200
+
+    # lane: reader
     reading = None
     if referent_decision is None and not _armed(body) and len(text.split()) >= 2 and not _cap_hit:
         try:
@@ -860,6 +921,7 @@ def ask(user, body, *, via='session'):
             if _rx is not None:
                 return _rx
 
+    # lane: pricing
     # Pricing (2026-10-06, audit item 5): one deterministic answer from
     # the rate card on every surface. It used to be an error on one
     # surface, a decline on another and an answer on the third.
@@ -895,6 +957,7 @@ def ask(user, body, *, via='session'):
                 _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
                 return env, 200
 
+    # lane: design_request
     # Design requests (2026-10-06, Jenna, Alexia's "Section 4 ... please
     # remove"). A change-the-page ask is not a question and never a
     # build: one fixed reply, one email to the user experience team.
@@ -921,6 +984,7 @@ def ask(user, body, *, via='session'):
             _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
             return env, 200
 
+    # lane: spend_cap
     if _cap_hit and referent_decision is None and not _armed(body):
         from . import spend_guard as _sg2
         _ok2, _spent2, _cap2 = _sg2.check(user)
@@ -936,6 +1000,7 @@ def ask(user, body, *, via='session'):
         _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
         return env, 200
 
+    # lane: thread_followups
     # 2026-10-13 audit lanes, all deterministic, all before any model:
     #   same question again in this thread -> the same answer, with when;
     #   "is there a way to / can we" -> what we can do, never the opener;
@@ -987,6 +1052,7 @@ def ask(user, body, *, via='session'):
             _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
             return env, 200
 
+    # lane: catalog
     # Catalog lane (2026-10-06, Jenna: speed). "do we have a profile for
     # X", "do you see X", "how big is the X audience" are lookups: the
     # corpus catalog answers them with no model call. Runs before any
@@ -1018,6 +1084,7 @@ def ask(user, body, *, via='session'):
             _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
             return env, 200
 
+    # lane: sizing_fallback
     # Sizing lane (2026-10-14, Ben at Kartel; priced $100 on 2026-10-21).
     # How big is X, the size of these two data sets, the sample size of
     # X customers: quoted in priced_read.service_turn above. This
@@ -1044,6 +1111,7 @@ def ask(user, body, *, via='session'):
             _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
             return env, 200
 
+    # lane: status
     # Status lane (2026-10-13, Carolyn: "I don't see No Reservations - only
     # Babylon 5" drew "Nothing came back"; "have not received an email yet"
     # drew a page analysis). An ask that says the reader cannot see, find
@@ -1073,6 +1141,7 @@ def ask(user, body, *, via='session'):
             _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
             return env, 200
 
+    # lane: deliverable_lookup
     # Deliverable lookup lane (2026-10-09, Scott: "where do i find the
     # howdy deck created last night" ran as a read and failed; "no a pdf
     # was created. where is it" drew the open-page confirm). Where-is-my
@@ -1104,6 +1173,7 @@ def ask(user, body, *, via='session'):
             _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
             return env, 200
 
+    # lane: email_file
     # Email-me-this-file lane (2026-10-12, Debi: with the Austin Sprinz
     # profile open, "Email me this file" went to the build flow and came
     # back with an existing-match offer). A reader asking for their own
@@ -1134,6 +1204,7 @@ def ask(user, body, *, via='session'):
             _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
             return env, 200
 
+    # lane: brand_coverage
     # Brand coverage lane (2026-10-08). "Is Alexa measured in Crosswalk?",
     # "what would alexa and echo be listed under in the behavioral tab":
     # whether we carry a brand, its category, and what the open profile
@@ -1163,6 +1234,7 @@ def ask(user, body, *, via='session'):
             _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
             return env, 200
 
+    # lane: definitions
     # Drill-down lane (2026-10-06, Alexia's 27,559). A question that
     # names a number from a Digital Journey is a lookup into that
     # journey: answer from the breakdown the file holds, or build it once
@@ -1194,6 +1266,7 @@ def ask(user, body, *, via='session'):
             _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
             return env, 200
 
+    # lane: capability
     # Capability questions (2026-10-02 audit). "Can I cut the existing
     # Apple TV+ profile by quarter (i.e., 2Q 2026)?" was split into two
     # builds named "I.e Can I Cut ..." and "2Q 2026 Can I Cut ...". A
@@ -1226,6 +1299,7 @@ def ask(user, body, *, via='session'):
                           'analyze')
             return env, 200
 
+    # lane: surface_decision
     # A client in the middle of its own armed step (a confirm chip, a
     # deck angle picker, a clarify answer) already knows the surface.
     # It names it; the server still gates and runs it.
@@ -1295,6 +1369,38 @@ def ask(user, body, *, via='session'):
         raw, status = _unpack(gate_resp)
         return envelope.wrap(raw, surface=surface, decision=decision,
                              thread_id=tid, via=via), status
+
+    # lane: work_gate
+    # The work line (Jenna 2026-10-21, Liz's QSR ask on the open
+    # Paramount+ profile answered free): a put-together read on an open
+    # file is a custom ask on every analyze lane. The offer first; on
+    # Accept the charge lands here once and rides the confirm so no
+    # lane charges again.
+    if surface == 'analyze' and referent_decision is None:
+        try:
+            from . import priced_read as _prw
+            _wg = _prw.work_gate(text, history, ctx, user, body, username=uname,
+                                 consume=(host.consume_credit if host.has('consume_credit') else None))
+        except Exception as _fx:
+            _faults.note('service.work_gate', _fx)
+            _wg = None
+        if _wg:
+            raw = _wg
+            decision = dict(decision, reason=('custom_ask_offer' if _wg.get('panel_offer') else 'custom_ask_funds'))
+            if _client_surface == 'interpret':
+                raw = _interpret_shape(raw)
+                raw['followups'] = list(_wg.get('followups') or [])
+                if _wg.get('panel_offer'):
+                    raw['panel_offer'] = _wg['panel_offer']
+            try:
+                host.ask_hint(route='reasoned_metrics',
+                              outcome=('panel_offer' if _wg.get('panel_offer') else 'panel_out_of_credits'),
+                              subject=str(_wg.get('subject') or ''))
+            except Exception as _fx:
+                _faults.note('service', _fx)
+            env = envelope.wrap(raw, surface='analyze', decision=decision, thread_id=tid, via=via)
+            _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
+            return env, 200
 
     try:
         if surface == 'analyze':
