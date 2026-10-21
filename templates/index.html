@@ -78889,11 +78889,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var url = (data && data.top_up_url) || '/wallet';
                 var lbl = (data && data.top_up_label) || 'Add funds';
                 var reply = (data && data.reply) ||
-                    'Your balance is ' + (window.PM_CURRENCY_SYMBOL || '$') + '0. Add funds to use Prometheus.';
+                    "You're out of credits. Add funds to use Prometheus.";
                 if (typeof _synthChatPushTurnWithMeta === 'function') {
                     _synthChatPushTurnWithMeta('agent', reply, {
                         options: [{ label: lbl, chipAction: 'buy_credits', url: url }]
                     });
+                }
+                try { window.location.href = String(url); } catch (_) {
+                    try { window.open(String(url), '_blank'); } catch (_) {}
                 }
             };
             window._pmCheckFundsOnOpen = function() {
@@ -78908,6 +78911,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     .then(function(d) {
                         if (d && d.allowed) {
                             window._pmSetFundsLock(false);
+                            return;
+                        }
+                        if (typeof window._pmShowNoFundsReply === 'function') {
+                            window._pmShowNoFundsReply(d);
                             return;
                         }
                         window._pmSetFundsLock(true);

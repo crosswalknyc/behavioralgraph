@@ -51565,9 +51565,8 @@ def _prometheus_mode_of(user):
 
 
 NO_FUNDS_MESSAGE = (
-    "Your balance is $0, so Prometheus is paused. Buy credits to keep "
-    "going. The moment funding lands, your next ask goes straight "
-    "through.")
+    "You're out of credits. Buy credits to keep going. The moment "
+    "funding lands, your next ask goes straight through.")
 
 OPENING_FUNDS_MESSAGE = (
     "Prometheus opens after the $500 card payment. Use the payment "
