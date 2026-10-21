@@ -450,6 +450,58 @@ _TP_HEADERS = ["Touchpoint", "Channel", "Phase", "Paid or organic", "Lift in res
                "Exposed accounts", "Responded accounts", "Response rate %", "Signal strength"]
 
 
+def _exposure_pairs(mta: dict) -> List[Tuple[str, Any]]:
+    """The exposed audience as US people with the sample beside it, when the
+    read sizes exposure from the assets (2026-10-20)."""
+    ex = (mta.get("exposure") or ((mta.get("overall") or {}).get("exposure")) or {})
+    if ex.get("basis") != "views":
+        return []
+    return [("Exposed US people", ex.get("us_people")),
+            ("Assets behind the exposure", ex.get("assets")),
+            ("Views behind the exposure", ex.get("views"))]
+
+
+_CREATIVE_HEADERS = ["Kind", "Assets", "Views", "People reached", "Share of exposed %", "Responded",
+                     "Response rate %", "Index (campaign = 100)", "Lift per exposure (1.0 = no change)",
+                     "Share of responders %"]
+
+
+def _sheet_creative(wb, ws, ctx: dict) -> None:
+    """Which creative converted best: by format (a skit, a reaction, a
+    trailer cut...), by placement type, by channel, by paid or organic
+    or earned, by phase. The format table leads (2026-10-20)."""
+    mta = ctx.get("mta") or {}
+    overall = mta.get("overall") or {}
+    cr = overall.get("creative") or {}
+    dims = [d for d in (cr.get("dimensions") or []) if d.get("rows")]
+    row = 1
+    noun = mta.get("conversion_noun") or "action page"
+    pairs = [("Response measured as", f"Reached the {noun} within the response window"),
+             ("Overall response rate %", _pct_from_fraction(overall.get("conversion_rate")))]
+    if cr.get("best_formats"):
+        pairs.append(("Formats that responded best", ", ".join(cr["best_formats"])))
+    pairs += _exposure_pairs(mta)
+    pairs.append(("How to read", "People reached is everyone who saw at least one creative of that kind; a person who saw several kinds "
+                                 "counts in each, so the kinds overlap and do not sum. Index 100 = the campaign."))
+    row = _kv_block(ws, row, pairs)
+    row += 1
+    for d in dims:
+        row = _section(ws, row, str(d.get("question") or d.get("label") or "Creative"))
+        rows = []
+        for r in d.get("rows") or []:
+            rows.append([r.get("label"), r.get("assets"), r.get("views"), r.get("exposed_n"), r.get("share_of_exposed"),
+                         r.get("converted_n"), _pct_from_fraction(r.get("conversion_rate")), r.get("index_vs_cohort"),
+                         r.get("lift_per_exposure"), r.get("share_of_converters")])
+        _write_table(ws, _CREATIVE_HEADERS, rows, start_row=row,
+                     number_formats={2: "#,##0", 3: "#,##0", 4: "#,##0", 5: "0.0", 6: "#,##0", 7: "0.00", 8: "0.0", 9: "0.000", 10: "0.0"},
+                     freeze=False)
+        row += len(rows) + 3
+        if d.get("note"):
+            ws.cell(row=row - 1, column=1, value=str(d["note"]))
+    _autosize(ws)
+    ws.column_dimensions["A"].width = 34
+
+
 def _sheet_touchpoints(wb, ws, ctx: dict) -> None:
     mta = ctx.get("mta") or {}
     overall = mta.get("overall") or {}
@@ -458,6 +510,7 @@ def _sheet_touchpoints(wb, ws, ctx: dict) -> None:
     row = _kv_block(ws, row, [
         ("Response measured as", f"Reached the {noun} within the response window"),
         ("Accounts in the read", overall.get("sample_size")),
+        *_exposure_pairs(mta),
         ("Overall response rate %", _pct_from_fraction(overall.get("conversion_rate"))),
         ("As of", _fmt_date(mta.get("as_of"))),
     ])
@@ -655,6 +708,7 @@ _SHEETS: List[Tuple[str, Callable, str]] = [
     ("Districts", _sheet_districts, "Congressional district reach, research and action rates."),
     ("Cohorts", _sheet_cohorts, "Behavioral cohorts and their size."),
     ("Demographics", _sheet_demographics, "Who was reached, all campaigns and by phase."),
+    ("Creative", _sheet_creative, "Which creative responded best: by format, placement, channel, paid or earned, phase."),
     ("Touchpoints", _sheet_touchpoints, "Every touchpoint's lift in response odds, exposure and response."),
     ("Journeys", _sheet_journeys, "The most common paths to response and how each performed."),
     ("Funnel", _sheet_funnel, "Funnel stages, splits, first and last touch, time to response, drop-outs."),

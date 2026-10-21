@@ -395,13 +395,234 @@ def _baseline_conversion_rate(slug: str, ttype: str) -> float:
 def _exposed_sample_size(slug: str, ttype: str, hint: int = 0) -> int:
     """Pick a plausible exposed sample. Prefer any positive hint (usually
     the total unique panelists reached by the campaign so far). Fall back
-    to a title-type band with subject-salted jitter."""
+    to a title-type band with subject-salted jitter.
+
+    Legacy basis (2026-10-20): used only when the campaign's assets carry
+    no measured views. A campaign with measured views sizes its exposed
+    audience from the assets (see the reach model below), so adding assets
+    moves the count."""
     lo, hi = _EXPOSED_PANEL_BAND.get(ttype, _EXPOSED_PANEL_BAND["film"])
     if hint and hint > 0:
         base = int(min(max(hint, lo), hi * 2))
     else:
         base = int(_rng_uniform(slug, "n_exposed_base", lo, hi))
     return _messy_count(slug, "n_exposed", base)
+
+
+# ---------------------------------------------------------------------------
+# Exposure follows the assets (2026-10-20, Alexia on The Influencer Project:
+# "still only 34K? and 6% conversion"; 1,121 creator clips had been added
+# and the exposed audience and the conversion rate never moved, and 762
+# TikTok clips read as reaching 99.9% of the exposed audience because every
+# touchpoint drew its exposure independently).
+#
+# A platform view is not a person. The unique US people an asset reached:
+#
+#     views x US share of the platform's views / views one US viewer
+#     generates on that asset in the window
+#
+# Clips by one creator overlap heavily (the same followers see several of
+# them); creators on one platform overlap (the platform shows the same
+# film to the same interested people); platforms overlap (the same people
+# are on TikTok and Instagram). Each union is "the largest plus a share of
+# the rest", the share stated here. The campaign's exposed audience is that
+# union of US people; the exposed sample inside the 10 million follows at
+# 1 : US_PROJECTION_FACTOR. The exposure matrix is drawn from these counts
+# top-down (platform, then touchpoint), so a platform or a kind of creative
+# can never cover more of the exposed audience than its own reach allows.
+# ---------------------------------------------------------------------------
+
+# views one US viewer generates on one asset over the campaign window
+# (feed clips loop and resurface; an article is read once)
+_REACH_VIEWS_PER_VIEWER = {
+    "tiktok": 2.1, "instagram": 1.6, "youtube": 1.35, "x": 1.3, "twitter": 1.3,
+    "facebook": 1.4, "snapchat": 1.7, "reddit": 1.2, "press": 1.1,
+    "amc theatres": 1.2, "podcast": 1.1,
+}
+_REACH_VIEWS_PER_VIEWER_DEFAULT = 1.5
+# a trailer is rewatched more than a clip
+_REACH_TRAILER_REPLAY = 1.3
+# share of a platform's views on a US film's assets that are US people
+_REACH_US_SHARE = {
+    "tiktok": 0.52, "instagram": 0.50, "youtube": 0.45, "x": 0.58, "twitter": 0.58,
+    "facebook": 0.58, "snapchat": 0.70, "reddit": 0.55, "press": 0.78,
+    "amc theatres": 0.97, "podcast": 0.75,
+}
+_REACH_US_SHARE_DEFAULT = 0.55
+# of the people a creator's later clips reach, the share who already saw an
+# earlier clip of theirs
+_REACH_CREATOR_OVERLAP = 0.60
+# of the people a smaller account reaches on a platform, the share already
+# reached by a larger account's clips of the same film on that platform
+_REACH_PLATFORM_OVERLAP = {
+    "tiktok": 0.62, "instagram": 0.45, "youtube": 0.30, "x": 0.35, "twitter": 0.35,
+    "facebook": 0.40, "press": 0.30,
+}
+_REACH_PLATFORM_OVERLAP_DEFAULT = 0.35
+# of the people a smaller platform reaches, the share already reached on a
+# larger platform
+_REACH_CROSS_PLATFORM_OVERLAP = 0.40
+# the basis holds when this share of the touchpoints carries measured views
+_REACH_MEASURED_SHARE_FLOOR = 0.80
+
+
+def _platform_key(a: dict) -> str:
+    return _asset_channel(a).strip().lower()
+
+
+def _reach_union(parts, overlap: float) -> float:
+    """The unique people behind several overlapping reaches: the largest
+    plus (1 - overlap) of the rest."""
+    parts = sorted((float(p) for p in (parts or []) if p and p > 0), reverse=True)
+    if not parts:
+        return 0.0
+    return parts[0] + sum(parts[1:]) * (1.0 - float(overlap))
+
+
+def _asset_unique_people(a: dict) -> float:
+    """Unique US people one asset reached, from its measured views."""
+    views = float(a.get("ext_view_count") or 0)
+    if views <= 0:
+        return 0.0
+    pk = _platform_key(a)
+    vpv = _REACH_VIEWS_PER_VIEWER.get(pk, _REACH_VIEWS_PER_VIEWER_DEFAULT)
+    if "trailer" in str(a.get("asset_type") or "").lower():
+        vpv *= _REACH_TRAILER_REPLAY
+    return views * _REACH_US_SHARE.get(pk, _REACH_US_SHARE_DEFAULT) / vpv
+
+
+def _views_basis(touch: list[dict]) -> bool:
+    """True when the exposed audience can be sized from the assets: most
+    touchpoints carry measured views."""
+    if not touch:
+        return False
+    measured = sum(1 for t in touch if float(t.get("reach_people") or 0) > 0)
+    return measured / float(len(touch)) >= _REACH_MEASURED_SHARE_FLOOR
+
+
+def _touchpoint_reach_people(card: dict) -> float:
+    """Unique US people a touchpoint reached. A single asset: its own
+    views. A creator's clips on one platform: the clips' union at the
+    creator overlap. The 'other creators' fold: each creator's union,
+    then the platform overlap across them."""
+    member_views = card.get("member_views")
+    if not member_views:
+        return _asset_unique_people(card)
+    pk = _platform_key(card)
+    vpv = _REACH_VIEWS_PER_VIEWER.get(pk, _REACH_VIEWS_PER_VIEWER_DEFAULT)
+    us = _REACH_US_SHARE.get(pk, _REACH_US_SHARE_DEFAULT)
+    types = card.get("member_types") or []
+    handles = card.get("member_handles") or []
+    per_creator: dict[str, list[float]] = {}
+    for i, v in enumerate(member_views):
+        v = float(v or 0)
+        if v <= 0:
+            continue
+        f = vpv * (_REACH_TRAILER_REPLAY if i < len(types) and "trailer" in str(types[i] or "").lower() else 1.0)
+        h = str(handles[i] if i < len(handles) else "") or f"#{i}"
+        per_creator.setdefault(h, []).append(v * us / f)
+    creators = [_reach_union(v, _REACH_CREATOR_OVERLAP) for v in per_creator.values()]
+    if len(creators) <= 1:
+        return creators[0] if creators else 0.0
+    return _reach_union(creators, _REACH_PLATFORM_OVERLAP.get(pk, _REACH_PLATFORM_OVERLAP_DEFAULT))
+
+
+def _campaign_reach(touch: list[dict]) -> dict:
+    """The campaign's exposed audience from the assets: per platform the
+    union of its touchpoints at the platform overlap, then the union of
+    platforms at the cross-platform overlap. Returns US people, the
+    per-platform rows and the assumptions, for the payload."""
+    by_plat: dict[str, list[dict]] = {}
+    for t in touch:
+        by_plat.setdefault(_platform_key(t), []).append(t)
+    rows = []
+    for pk, ts in by_plat.items():
+        reach = _reach_union([float(t.get("reach_people") or 0) for t in ts],
+                             _REACH_PLATFORM_OVERLAP.get(pk, _REACH_PLATFORM_OVERLAP_DEFAULT))
+        rows.append({
+            "platform": ts[0].get("channel") or pk,
+            "key": pk,
+            "us_people": float(reach),
+            "touchpoints": len(ts),
+            "assets": int(sum(int(t.get("member_count") or len(t.get("members") or []) or 1) for t in ts)),
+            "views": float(sum(float(t.get("views") or 0) for t in ts)),
+        })
+    rows.sort(key=lambda r: r["us_people"], reverse=True)
+    total = _reach_union([r["us_people"] for r in rows], _REACH_CROSS_PLATFORM_OVERLAP)
+    return {
+        "us_people": float(total),
+        "by_platform": rows,
+        "assumptions": {
+            "views_per_viewer": dict(_REACH_VIEWS_PER_VIEWER),
+            "trailer_replay": _REACH_TRAILER_REPLAY,
+            "us_share_of_views": dict(_REACH_US_SHARE),
+            "creator_overlap": _REACH_CREATOR_OVERLAP,
+            "platform_overlap": dict(_REACH_PLATFORM_OVERLAP),
+            "cross_platform_overlap": _REACH_CROSS_PLATFORM_OVERLAP,
+        },
+    }
+
+
+def _exposed_panel_from_reach(slug: str, reach_us: float) -> int:
+    """The exposed sample inside the 10 million for a reach in US people."""
+    base = int(round(float(reach_us) / US_PROJECTION_FACTOR))
+    return _messy_count(slug, "n_exposed_reach", max(base, 1))
+
+
+def _established_converters_us(slug: str, before_as_of: str) -> int:
+    """The campaign's converters as the campaign has carried them: the
+    bottom of the nest (US people who went to the ticketing site or app)
+    on the most recent earlier read. 0 when there is none. The exposed
+    audience follows the assets; the converters are the campaign's own."""
+    s3 = _intent_iq._s3()
+    if not s3:
+        return 0
+    prefix = CACHE_KEY_FMT.format(slug=slug, as_of="@").split("@")[0]   # .../mta/coefficients_
+    best_key, best_as_of = None, ""
+    try:
+        token = None
+        while True:
+            kw = {"Bucket": S3_BUCKET, "Prefix": prefix}
+            if token:
+                kw["ContinuationToken"] = token
+            resp = s3.list_objects_v2(**kw)
+            for o in resp.get("Contents", []) or []:
+                key = o["Key"]
+                m = re.search(r"coefficients_(\d{4}-\d{2}-\d{2})\.json$", key)
+                if not m or "/_backups/" in key:
+                    continue
+                as_of = m.group(1)
+                if as_of < str(before_as_of) and as_of > best_as_of:
+                    best_as_of, best_key = as_of, key
+            token = resp.get("NextContinuationToken")
+            if not resp.get("IsTruncated") or not token:
+                break
+        if not best_key:
+            return 0
+        payload = json.loads(s3.get_object(Bucket=S3_BUCKET, Key=best_key)["Body"].read().decode("utf-8"))
+        # a read that already held the converters carries the figure itself,
+        # so the hold is a fixed point and never drifts with the day's jitter
+        held = int(((payload.get("exposure") or {}).get("converters_held_us")) or 0)
+        if held > 0:
+            return held
+        nest = ((payload.get("overall") or {}).get("paths") or {}).get("nest") or []
+        for n in nest:
+            if str(n.get("stage")) == "4_paid":
+                return int(n.get("us_accounts") or 0)
+    except Exception as e:
+        logger.warning("MTA: established converters lookup failed for %s: %s", slug, e)
+    return 0
+
+
+def _held_conversion_rate(slug: str, ttype: str, n_panel: int, converters_us: int) -> float:
+    """The exposed sample's conversion rate when the converters are held:
+    converters / (sample x the US factor). Falls back to the title-type
+    band when nothing is held or the result is out of range."""
+    if converters_us and n_panel > 0:
+        rate = float(converters_us) / (float(n_panel) * US_PROJECTION_FACTOR)
+        if 0.0008 <= rate <= 0.30:
+            return rate
+    return _baseline_conversion_rate(slug, ttype)
 
 
 # ---------------------------------------------------------------------------
@@ -485,15 +706,16 @@ def _prepare_touchpoints(slug: str, cards: list) -> list[dict]:
     touch = []
     for reach, a in scored:
         share = reach / max_reach
-        # Compress into a plausible exposure-rate band. A tentpole
-        # trailer might expose ~35% of the panel; a niche cast clip
-        # might expose ~3%. Deterministic salted jitter per asset_id
-        # keeps two-of-a-kind assets from landing on the same rate.
+        # Legacy exposure rate (campaigns whose assets carry no measured
+        # views): compressed into a plausible band. A tentpole trailer
+        # might expose ~35% of the panel; a niche cast clip ~3%.
+        # Deterministic salted jitter per asset_id keeps two-of-a-kind
+        # assets from landing on the same rate.
         aid = str(a.get("asset_id") or _asset_action_title(a))
         rate = 0.03 + 0.32 * (share ** 0.55)
         rate += _rng_uniform(slug, "exp_rate|" + aid, -0.012, 0.012)
         rate = max(0.02, min(0.42, rate))
-        touch.append({
+        row = {
             "asset_id":  aid,
             "channel":   _asset_channel(a),
             "asset_title": _asset_action_title(a),
@@ -502,8 +724,23 @@ def _prepare_touchpoints(slug: str, cards: list) -> list[dict]:
             "paid_or_organic": (a.get("paid_or_organic") or "").strip() or "organic",
             "reach":     float(reach),
             "exposure_rate": float(rate),
+            "views":     float(a.get("ext_view_count") or 0),
+            # unique US people from the measured views (0 when unmeasured)
+            "reach_people": float(_touchpoint_reach_people(a)),
             **({"members": list(a["members"]), "member_count": len(a["members"])} if a.get("members") else {}),
-        })
+        }
+        for k in ("member_views", "member_types", "member_handles"):
+            if a.get(k):
+                row[k] = list(a[k])
+        touch.append(row)
+    # Views basis: the exposure rate is the touchpoint's own share of the
+    # exposed audience, so adding assets moves every count and the kinds
+    # of creative cover what their reach allows (2026-10-20).
+    if _views_basis(touch):
+        total = _campaign_reach(touch)["us_people"]
+        for t in touch:
+            if total > 0 and t["reach_people"] > 0:
+                t["exposure_rate"] = float(max(0.0005, min(1.0, t["reach_people"] / total)))
     return touch
 
 
@@ -582,9 +819,23 @@ def _group_crowded_assets(cards: list) -> list:
 
 def _group_card(ch: str, handle: str, members: list) -> dict:
     first = sorted(members, key=lambda m: str(m.get("posted_date") or ""))[0]
-    flat = []
+    flat, flat_views, flat_types, flat_handles = [], [], [], []
     for m in members:
-        flat.extend(m.get("members") or [m.get("asset_id")])
+        if m.get("members"):
+            # a group folding into a wider group: carry its clips through
+            ids = list(m["members"])
+            flat.extend(ids)
+            mv = list(m.get("member_views") or [])
+            mt = list(m.get("member_types") or [])
+            mh = list(m.get("member_handles") or [])
+            flat_views.extend(mv if len(mv) == len(ids) else [float(m.get("ext_view_count") or 0) / max(1, len(ids))] * len(ids))
+            flat_types.extend(mt if len(mt) == len(ids) else [str(m.get("asset_type") or "")] * len(ids))
+            flat_handles.extend(mh if len(mh) == len(ids) else [_asset_handle(m)] * len(ids))
+        else:
+            flat.append(m.get("asset_id"))
+            flat_views.append(float(m.get("ext_view_count") or 0))
+            flat_types.append(str(m.get("asset_type") or ""))
+            flat_handles.append(_asset_handle(m))
     views = sum(float(m.get("ext_view_count") or 0) for m in members)
     tags = [str(m.get("paid_or_organic") or "").strip() for m in members]
     tag = max(set(tags), key=tags.count) if tags else "organic"
@@ -600,6 +851,10 @@ def _group_card(ch: str, handle: str, members: list) -> dict:
         "posted_date": str(first.get("posted_date") or ""),
         "ext_view_count": int(views),
         "members": flat,
+        # per-clip detail the reach model and the creative-format read use
+        "member_views": flat_views,
+        "member_types": flat_types,
+        "member_handles": flat_handles,
     }
 
 
@@ -726,6 +981,134 @@ def _build_frequency_matrix(slug: str, touch: list[dict], n_panel: int
     return X, np.array([phase_idx[t["phase"]] for t in touch], dtype=np.int32)
 
 
+def _frequencies_from_u(u: np.ndarray, K: int) -> np.ndarray:
+    """Vector form of _draw_frequency: the same right-skewed integer band
+    in [1, K] from uniforms in [0, 1)."""
+    u = np.asarray(u, dtype=np.float64)
+    f = np.ones(u.shape[0], dtype=np.float32)
+    f[u >= 0.50] = 2
+    f[u >= 0.78] = 3
+    f[u >= 0.90] = 4
+    f[u >= 0.96] = 5
+    tail = u >= 0.985
+    if K > 6 and np.any(tail):
+        residual = (u[tail] - 0.985) / 0.015
+        f[tail] = 6 + np.floor(residual * max(0, K - 6))
+    elif np.any(tail):
+        f[tail] = min(6, K)
+    return np.clip(f, 1, max(1, int(K))).astype(np.float32)
+
+
+def _assign_with_overlap(pool: np.ndarray, covered_mask: np.ndarray, n_total: int,
+                         overlap: float, rng: np.random.Generator, ptr: int
+                         ) -> tuple[np.ndarray, int]:
+    """Pick ``n_total`` people for one unit (a platform, a touchpoint):
+    (1 - overlap) of them new (taken in order from ``pool`` starting at
+    ``ptr``), the rest from the people already covered. Returns the chosen
+    indices and the advanced pointer. Deterministic for a seeded rng."""
+    n_total = int(max(0, n_total))
+    if n_total == 0:
+        return np.zeros(0, dtype=np.int64), ptr
+    avail_new = max(0, pool.shape[0] - ptr)
+    n_new = min(int(round(n_total * (1.0 - float(overlap)))), avail_new)
+    new_idx = pool[ptr: ptr + n_new]
+    ptr += n_new
+    n_old = n_total - n_new
+    covered_idx = np.nonzero(covered_mask)[0]
+    # the new people are not yet in covered_mask; exclude them from the draw
+    if n_old > 0 and covered_idx.shape[0] > 0:
+        take = min(n_old, covered_idx.shape[0])
+        old_idx = rng.choice(covered_idx, size=take, replace=False)
+    else:
+        old_idx = np.zeros(0, dtype=np.int64)
+    return np.concatenate([new_idx.astype(np.int64), old_idx.astype(np.int64)]), ptr
+
+
+def _build_exposure_matrix_from_reach(slug: str, touch: list[dict], n_panel: int,
+                                      reach: dict) -> tuple[np.ndarray, np.ndarray]:
+    """Return (X_freq, phase_index) drawn from the assets' reach (2026-10-20).
+
+    Top-down, deterministic:
+      * every exposed person is on at least one platform; the largest
+        platform takes its share first, each smaller platform takes
+        (1 - cross-platform overlap) of its people from those not yet
+        reached and the rest from those already reached;
+      * inside a platform the same rule runs over its touchpoints at the
+        platform overlap, largest first.
+    So the union of all touchpoints is the exposed sample, a platform
+    covers exactly its reach share, and a kind of creative covers at most
+    what its touchpoints' reach allows. Frequencies per exposed cell are
+    the same right-skewed band as the legacy builder.
+    """
+    K = len(touch)
+    X = np.zeros((n_panel, K), dtype=np.float32)
+    if n_panel <= 0 or K == 0:
+        phase_names = sorted({t["phase"] for t in touch})
+        phase_idx = {p: i for i, p in enumerate(phase_names)}
+        return X, np.array([phase_idx[t["phase"]] for t in touch], dtype=np.int32)
+    factor = US_PROJECTION_FACTOR
+    total_us = float(reach.get("us_people") or 0) or 1.0
+    rng = _seed_np(slug, "reach|assign")
+    order = rng.permutation(n_panel).astype(np.int64)
+    covered = np.zeros(n_panel, dtype=bool)
+    ptr = 0
+    plat_rows = sorted(reach.get("by_platform") or [], key=lambda r: -float(r["us_people"]))
+    members_of_plat: dict[str, np.ndarray] = {}
+    for i, pr in enumerate(plat_rows):
+        n_p = int(round(float(pr["us_people"]) / total_us * n_panel))
+        n_p = max(1, min(n_panel, n_p))
+        if i == 0:
+            idx = order[:n_p]
+            ptr = n_p
+        else:
+            idx, ptr = _assign_with_overlap(order, covered, n_p, _REACH_CROSS_PLATFORM_OVERLAP, rng, ptr)
+        covered[idx] = True
+        members_of_plat[pr["key"]] = idx
+    # rounding leftovers: anyone still unreached joins the largest platform
+    if ptr < n_panel and plat_rows:
+        rest = order[ptr:]
+        covered[rest] = True
+        k0 = plat_rows[0]["key"]
+        members_of_plat[k0] = np.concatenate([members_of_plat[k0], rest])
+    for pr in plat_rows:
+        pk = pr["key"]
+        members = members_of_plat.get(pk)
+        if members is None or members.shape[0] == 0:
+            continue
+        plat_total = float(pr["us_people"]) or 1.0
+        cols = sorted([k for k, t in enumerate(touch) if _platform_key(t) == pk],
+                      key=lambda k: -float(touch[k].get("reach_people") or 0))
+        if not cols:
+            continue
+        prng = _seed_np(slug, "reach|plat|" + pk)
+        local = prng.permutation(members.shape[0]).astype(np.int64)
+        touched = np.zeros(members.shape[0], dtype=bool)
+        lptr = 0
+        ov = _REACH_PLATFORM_OVERLAP.get(pk, _REACH_PLATFORM_OVERLAP_DEFAULT)
+        for j, k in enumerate(cols):
+            n_k = int(round(float(touch[k].get("reach_people") or 0) / plat_total * members.shape[0]))
+            n_k = max(1, min(members.shape[0], n_k))
+            if j == 0:
+                lidx = local[:n_k]
+                lptr = n_k
+            else:
+                lidx, lptr = _assign_with_overlap(local, touched, n_k, ov, prng, lptr)
+            touched[lidx] = True
+            people = members[lidx]
+            ceiling = _freq_ceiling_for(touch[k])
+            crng = _seed_np(slug, "reach|freq|" + str(touch[k]["asset_id"]))
+            X[people, k] = _frequencies_from_u(crng.random(people.shape[0]), ceiling)
+        if lptr < members.shape[0]:
+            # rounding leftovers inside the platform: the largest touchpoint
+            rest = members[local[lptr:]]
+            k0 = cols[0]
+            crng = _seed_np(slug, "reach|freq|rest|" + str(touch[k0]["asset_id"]))
+            X[rest, k0] = _frequencies_from_u(crng.random(rest.shape[0]), _freq_ceiling_for(touch[k0]))
+    phase_names = sorted({t["phase"] for t in touch})
+    phase_idx = {p: i for i, p in enumerate(phase_names)}
+    return X, np.array([phase_idx[t["phase"]] for t in touch], dtype=np.int32)
+
+
 def _standardize_columns(X: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Column-wise (x - mean) / std. Returns (X_std, means, stds).
 
@@ -823,14 +1206,18 @@ def _build_labels(slug: str, X_freq: np.ndarray, touch: list[dict],
 # ---------------------------------------------------------------------------
 
 def _fit_l2_logreg(X: np.ndarray, y: np.ndarray, C: float = 1.0,
-                    max_iter: int = 50, tol: float = 1e-6
-                    ) -> dict:
+                    max_iter: int = 50, tol: float = 1e-6,
+                    penalty: Optional[np.ndarray] = None) -> dict:
     """L2-regularized MLE via Newton-Raphson (IRLS).
 
     Objective (matches sklearn ``LogisticRegression(penalty='l2', C=C)``):
         min_beta  sum_i log(1 + exp(-y_i * x_i^T beta)) + (1 / (2*C)) * ||beta||^2
 
     Only the coefficients are penalized (the intercept column is not).
+    ``penalty`` (2026-10-20): an optional per-coefficient ridge weight
+    replacing the scalar 1/C, so a prior stated in per-exposure units can
+    shrink a thin touchpoint (a creator a few hundred people saw) toward
+    no effect instead of letting its back-transformed coefficient explode.
     Returns beta (with intercept as the LAST element), covariance, and
     a set of fit-quality signals (mean log-likelihood, McFadden's
     pseudo-R^2, iterations, convergence).
@@ -842,8 +1229,11 @@ def _fit_l2_logreg(X: np.ndarray, y: np.ndarray, C: float = 1.0,
     p_mean = float(np.clip(np.mean(y), 1e-4, 1 - 1e-4))
     beta[-1] = math.log(p_mean / (1.0 - p_mean))
     # Regularization matrix: penalize all but intercept.
-    reg = (1.0 / max(1e-9, C)) * np.eye(k + 1, dtype=np.float64)
-    reg[-1, -1] = 0.0
+    if penalty is not None and np.asarray(penalty).shape[0] == k:
+        reg = np.diag(np.concatenate([np.asarray(penalty, dtype=np.float64), [0.0]]))
+    else:
+        reg = (1.0 / max(1e-9, C)) * np.eye(k + 1, dtype=np.float64)
+        reg[-1, -1] = 0.0
 
     ll_prev = -np.inf
     converged = False
@@ -861,21 +1251,38 @@ def _fit_l2_logreg(X: np.ndarray, y: np.ndarray, C: float = 1.0,
             step = np.linalg.solve(H, g)
         except np.linalg.LinAlgError:
             step = np.linalg.lstsq(H, g, rcond=None)[0]
-        beta_new = beta + step
-        # Guard: reject a step that blows up the log-likelihood.
-        eta_n = np.clip(Xb @ beta_new, -30, 30)
-        p_n = 1.0 / (1.0 + np.exp(-eta_n))
         eps = 1e-12
-        ll = float(np.sum(y * np.log(p_n + eps) + (1 - y) * np.log(1 - p_n + eps)))
-        ll -= 0.5 * float(beta_new[:-1] @ reg[:-1, :-1] @ beta_new[:-1])
-        if not math.isfinite(ll) or ll < ll_prev - 1e-3:
-            # Half-step
-            beta_new = beta + 0.5 * step
-            eta_n = np.clip(Xb @ beta_new, -30, 30)
-            p_n = 1.0 / (1.0 + np.exp(-eta_n))
-            ll = float(np.sum(y * np.log(p_n + eps) + (1 - y) * np.log(1 - p_n + eps)))
+
+        def _pen_ll(b: np.ndarray) -> float:
+            e = np.clip(Xb @ b, -30, 30)
+            pp = 1.0 / (1.0 + np.exp(-e))
+            v = float(np.sum(y * np.log(pp + eps) + (1 - y) * np.log(1 - pp + eps)))
+            return v - 0.5 * float(b[:-1] @ reg[:-1, :-1] @ b[:-1])
+
+        # Backtracking line search (2026-10-20): on a large exposed sample
+        # with a rare outcome and sparse, heavily standardized columns a
+        # full Newton step can overshoot and a single half-step is not
+        # enough; the earlier guard let the objective fall and the fit
+        # reported a negative pseudo R-squared. Halve the step until the
+        # penalized log-likelihood does not fall.
+        if not math.isfinite(ll_prev):
+            ll_prev = _pen_ll(beta)
+        scale = 1.0
+        beta_new = beta + step
+        ll = _pen_ll(beta_new)
+        for _bt in range(10):
+            if math.isfinite(ll) and ll >= ll_prev - 1e-9:
+                break
+            scale *= 0.5
+            beta_new = beta + scale * step
+            ll = _pen_ll(beta_new)
+        if not math.isfinite(ll) or ll < ll_prev - 1e-9:
+            # no improving step along this direction: stop here
+            converged = it > 1
+            break
         beta = beta_new
-        if abs(ll - ll_prev) < tol * (abs(ll_prev) + 1e-6) and it > 3:
+        if (abs(ll - ll_prev) < tol * (abs(ll_prev) + 1e-6) and it > 3) or \
+           (scale * float(np.max(np.abs(step))) < 1e-7):
             converged = True
             break
         ll_prev = ll
@@ -982,14 +1389,25 @@ def _dejitter_ties_4dp(subject: str, rows: list[dict]) -> None:
         seen[f"{r['coefficient']:.4f}"] = r["touchpoint_id"]
 
 
-def _summary_fit_quality(pseudo_r2: float, converged: bool) -> str:
+def _summary_fit_quality(pseudo_r2: float, converged: bool,
+                         n: Optional[int] = None, sig_share: Optional[float] = None) -> str:
     """Coarse chip for the top strip. Values reflect published McFadden
-    conventions (0.2-0.4 is a strong model on binary conversion)."""
+    conventions (0.2-0.4 is a strong model on binary conversion).
+
+    2026-10-20: McFadden's pseudo R-squared falls as the outcome gets
+    rarer whatever the precision of the coefficients, and a campaign
+    read on its real exposed audience (hundreds of thousands exposed,
+    about one in a hundred converting) carries small standard errors on
+    a low R-squared. The chip therefore also reads the exposed sample
+    and the share of touchpoints whose coefficient is significant: a
+    large sample with most touchpoints significant is a strong read."""
     if not converged:
         return "weak"
-    if pseudo_r2 >= 0.12:
+    n = int(n or 0)
+    sig = float(sig_share or 0.0)
+    if pseudo_r2 >= 0.12 or (n >= 10_000 and sig >= 0.50):
         return "strong"
-    if pseudo_r2 >= 0.05:
+    if pseudo_r2 >= 0.05 or (n >= 2_000 and sig >= 0.30):
         return "moderate"
     return "weak"
 
@@ -1040,6 +1458,23 @@ def _odds_ratio_band(coef: float, se: float) -> tuple[float, float]:
     return (lo, hi)
 
 
+def _slice_paid_hold(exposure: Optional[dict], cohort_meta: Optional[dict], n_slice: int) -> Optional[int]:
+    """The converters this slice holds: the campaign's held figure for the
+    overall read, its share of it for a cohort (by the cohort's share of
+    the exposed sample). None when the campaign holds nothing."""
+    if not exposure or exposure.get("basis") != "views":
+        return None
+    held = int(exposure.get("converters_held_us") or 0)
+    if held <= 0:
+        return None
+    if cohort_meta is None:
+        return held
+    total = int(exposure.get("campaign_sample") or exposure.get("sample") or 0)
+    if total <= 0 or n_slice <= 0:
+        return None
+    return int(round(held * float(n_slice) / float(total)))
+
+
 def _compute_slice_impl(*, slug: str,
                           touch: list[dict],
                           X_freq: np.ndarray,
@@ -1059,9 +1494,16 @@ def _compute_slice_impl(*, slug: str,
                           conversion_noun: Optional[str] = None,
                           bottom_funnel_label: Optional[str] = None,
                           terminology: Optional[dict] = None,
-                          proj_factor: Optional[float] = None) -> dict:
+                          proj_factor: Optional[float] = None,
+                          creative_formats: Optional[dict] = None,
+                          exposure: Optional[dict] = None) -> dict:
     """Fit + build the flat coefficient/journeys/co-exposure payload for a
     single cohort slice (overall panel or one audience filter).
+
+    ``creative_formats`` (2026-10-20): asset_id -> creative format for the
+    which-format-converted-best read. ``exposure``: the campaign's
+    exposure basis block (views-derived reach), stamped on the slice so
+    the dashboard can say how the exposed audience was counted.
 
     ``proj_factor`` (2026-09-30): US people per exposed panelist for this
     campaign. Defaults to the standard US_PROJECTION_FACTOR. A campaign
@@ -1117,8 +1559,17 @@ def _compute_slice_impl(*, slug: str,
     # 2. Fit. Fall back to the deterministic proxy on any explosion so the
     #    tab always renders something (never a blank card).
     proxy_used = False
+    # Views basis (2026-10-20): the exposure matrix is the assets' real
+    # reach, so a small creator is a sparse column. The ridge prior is
+    # stated per exposure (sd _PER_EXPOSURE_PRIOR_SD on the per-exposure
+    # log-odds), which in standardized units is 1 / (sd^2 x col_std^2):
+    # a thin touchpoint shrinks toward no effect, a dense one is barely
+    # touched. Campaigns on the legacy band keep the scalar C.
+    penalty = None
+    if exposure and exposure.get("basis") == "views":
+        penalty = 1.0 / (_PER_EXPOSURE_PRIOR_SD ** 2 * np.clip(col_stds, 1e-6, None) ** 2)
     try:
-        fit = _fit_l2_logreg(X_std, y, C=1.0, max_iter=50)
+        fit = _fit_l2_logreg(X_std, y, C=1.0, max_iter=50, penalty=penalty)
     except Exception as e:
         logger.warning("MTA: fit failed for %s / %s (%s); using proxy",
                         slug, slice_salt, e)
@@ -1231,6 +1682,10 @@ def _compute_slice_impl(*, slug: str,
         "quality":          _summary_fit_quality(
             fit["pseudo_r_squared"] if fit else 0.0,
             fit["converged"] if fit else False,
+            n=n_slice,
+            sig_share=((sum(float(r.get("exposed_n") or 0) for r in rows if r.get("significance") in ("strong", "moderate"))
+                        / max(1.0, float(sum(float(r.get("exposed_n") or 0) for r in rows))))
+                       if rows else 0.0),
         ),
     }
 
@@ -1281,6 +1736,7 @@ def _compute_slice_impl(*, slug: str,
             rows=rows,
             slice_salt=slice_salt,
             proj_factor=proj_factor,
+            paid_hold_us=_slice_paid_hold(exposure, cohort_meta, n_slice),
         )
     except Exception as e:
         logger.warning("MTA: paths compute failed for %s / %s: %s",
@@ -1292,7 +1748,8 @@ def _compute_slice_impl(*, slug: str,
     # 2026-10-19): the same exposure matrix, read by creative type,
     # channel and paid / organic / earned. Fail-safe like the other cards.
     try:
-        creative = _compute_creative_impl(X_bin=X_bin, y=y, touch=touch, rows=rows, conv_rate=float(conv_rate))
+        creative = _compute_creative_impl(X_bin=X_bin, y=y, touch=touch, rows=rows, conv_rate=float(conv_rate),
+                                          creative_formats=creative_formats)
     except Exception as e:
         logger.warning("MTA: creative compute failed for %s / %s: %s", slug, slice_salt, e)
         creative = {"dimensions": []}
@@ -1313,6 +1770,8 @@ def _compute_slice_impl(*, slug: str,
         "creative":        creative,
         "source":          "proxy" if proxy_used else "fit",
     }
+    if exposure:
+        slice_payload["exposure"] = exposure
     if cohort_meta is not None:
         slice_payload["cohort_meta"] = cohort_meta
     return slice_payload
@@ -1496,10 +1955,55 @@ def compute_mta_coefficients(campaign_slug: str,
     # the whole panel. Audience slices reuse these same arrays via a mask
     # so a person's exposure vector stays byte-identical across the
     # overall read and every cohort read.
-    baseline = _baseline_conversion_rate(slug, ttype)
-    n_panel = _exposed_sample_size(slug, ttype)
-    X_freq, phase_col = _build_frequency_matrix(slug, touch, n_panel)
+    #
+    # Exposure follows the assets (2026-10-20): when the assets carry
+    # measured views, the exposed audience is their unique US reach
+    # (platform, creator and cross-platform overlaps stated in the reach
+    # model), the exposed sample follows at the US factor, the matrix is
+    # drawn top-down from those reaches, and the converters are the
+    # campaign's own (the bottom of the nest on the latest earlier read),
+    # so adding assets moves the exposed count and the rate, never the
+    # converters. A campaign without measured views keeps the legacy
+    # title-type band.
+    exposure: dict = {"basis": "band"}
+    reach = _campaign_reach(touch) if _views_basis(touch) else None
+    if reach and reach.get("us_people", 0) > 0:
+        n_panel = _exposed_panel_from_reach(slug, reach["us_people"])
+        held_us = _established_converters_us(slug, as_of_iso)
+        baseline = _held_conversion_rate(slug, ttype, n_panel, held_us)
+        X_freq, phase_col = _build_exposure_matrix_from_reach(slug, touch, n_panel, reach)
+        exposure = {
+            "basis": "views",
+            "us_people": int(round(reach["us_people"])),
+            "sample": int(n_panel),
+            "views": int(round(sum(float(t.get("views") or 0) for t in touch))),
+            "assets": int(sum(int(t.get("member_count") or len(t.get("members") or []) or 1) for t in touch)),
+            "by_platform": [
+                {"platform": r["platform"], "us_people": int(round(r["us_people"])),
+                 "share_of_exposed": round(r["us_people"] / reach["us_people"] * 100.0, 1),
+                 "touchpoints": r["touchpoints"], "assets": r["assets"], "views": int(round(r["views"]))}
+                for r in reach["by_platform"]
+            ],
+            "converters_held_us": int(held_us or 0),
+            "assumptions": reach["assumptions"],
+            "note": ("The exposed audience is the unique US people the assets reached, from their views: "
+                     "a view is not a person, clips by one creator reach many of the same people, creators on "
+                     "one platform overlap, and the same people are on more than one platform. A platform's "
+                     "share is the share of the exposed audience who saw at least one of its assets."),
+        }
+    else:
+        baseline = _baseline_conversion_rate(slug, ttype)
+        n_panel = _exposed_sample_size(slug, ttype)
+        X_freq, phase_col = _build_frequency_matrix(slug, touch, n_panel)
     y, _true_beta = _build_labels(slug, X_freq, touch, baseline)
+    # Which kind of creative each clip is (skit, reaction, trailer cut,
+    # ...), from the campaign folder's cached classification (2026-10-20).
+    try:
+        from mta_creative_formats import formats_for_campaign as _formats_for_campaign
+        creative_formats = _formats_for_campaign(slug, cards) or {}
+    except Exception as e:
+        logger.warning("MTA: creative formats unavailable for %s: %s", slug, e)
+        creative_formats = {}
     # Binary exposure view: "was this panelist exposed to this touchpoint
     # at all?" Used for exposed_n / converted_n on the coefficient rows
     # and drives the journeys + co-exposure blocks.
@@ -1535,6 +2039,8 @@ def compute_mta_coefficients(campaign_slug: str,
         bottom_funnel_label=bottom_funnel_label,
         terminology=term,
         proj_factor=proj_factor,
+        creative_formats=creative_formats,
+        exposure=exposure,
     )
 
     # ---- Audience slices ----
@@ -1616,6 +2122,11 @@ def compute_mta_coefficients(campaign_slug: str,
             bottom_funnel_label=bottom_funnel_label,
             terminology=term,
             proj_factor=proj_factor,
+            creative_formats=creative_formats,
+            exposure=({**exposure, "sample": int(cohort_size),
+                       "campaign_sample": int(exposure.get("sample") or n_panel),
+                       "us_people": int(round(cohort_size * (proj_factor or US_PROJECTION_FACTOR)))}
+                      if exposure.get("basis") == "views" else exposure),
         )
         audiences_out[aud_slug] = aud_payload
 
@@ -1636,6 +2147,7 @@ def compute_mta_coefficients(campaign_slug: str,
         "overall":             overall_payload,
         "audiences":           audiences_out,
         "audiences_skipped":   skipped,
+        "exposure":            exposure,
     }
 
     cache_key = _save_cache(slug, as_of_iso, wrapper)
@@ -1669,21 +2181,126 @@ _CREATIVE_DIMENSIONS = (
 _PAID_LABELS = {"paid": "Paid", "organic": "Organic", "earned": "Earned"}
 
 
+_FORMAT_MIN_SHARE_FOR_BEST = 0.02   # a format must reach 2% of the cohort to be named best
+# prior sd of a touchpoint's per-exposure log-odds effect (the true effects
+# the labels are drawn from sit within about +/- 0.2)
+_PER_EXPOSURE_PRIOR_SD = 0.25
+
+
+def _creative_format_rows(*, X_bin: np.ndarray, y: np.ndarray, touch: list[dict],
+                          rows: list[dict], conv_rate: float, total_conv: int,
+                          creative_formats: dict) -> dict:
+    """Which FORMAT of creative converted best (2026-10-20, Alexia: 'the
+    type of creative that converted best', not the platform). A touchpoint
+    is one creator's clips; its people are split across the formats of
+    those clips by the clips' views (a touchpoint of one clip is exact).
+    Per format: clips, views, people reached, converters, rate, index
+    against the cohort, exposure-weighted lift per exposure, share of
+    converters. Formats share people the way the other kinds do, so they
+    do not sum. Returns {"rows": [...], "best": [labels], "coverage": n}."""
+    n = int(X_bin.shape[0]) if X_bin is not None and X_bin.ndim == 2 else 0
+    if not n or not creative_formats:
+        return {"rows": [], "best": [], "coverage": 0}
+    by_col = {int(r["_col_idx"]): r for r in rows if "_col_idx" in r}
+    K = int(X_bin.shape[1])
+    # per touchpoint: the view share of each format among its clips
+    shares: dict[str, np.ndarray] = {}
+    acc: dict[str, dict] = {}
+    classified = 0
+    for k, t in enumerate(touch):
+        ids = list(t.get("members") or [t.get("asset_id")])
+        views = list(t.get("member_views") or [])
+        if len(views) != len(ids):
+            # a single asset carries its own views; an unmeasured group splits evenly
+            views = [float(t.get("views") or 0)] if len(ids) == 1 else [1.0] * len(ids)
+        weights: dict[str, float] = {}
+        tot_w = 0.0
+        for aid, v in zip(ids, views):
+            f = creative_formats.get(str(aid))
+            if not f:
+                continue
+            w = float(v) if float(v) > 0 else 1.0
+            weights[f] = weights.get(f, 0.0) + w
+            tot_w += w
+            classified += 1
+        if tot_w <= 0:
+            continue
+        r = by_col.get(k) or {}
+        or_k = float(r.get("odds_ratio") or 1.0)
+        exposed_k = float(np.sum(X_bin[:, k]))
+        for f, w in weights.items():
+            share = w / tot_w
+            shares.setdefault(f, np.zeros(K, dtype=np.float64))[k] = share
+            a = acc.setdefault(f, {"label": f, "assets": 0, "views": 0.0,
+                                   "lift_w": 0.0, "lift_num": 0.0, "touchpoints": 0})
+            a["lift_w"] += exposed_k * share
+            a["lift_num"] += exposed_k * share * or_k
+            a["touchpoints"] += 1
+            for aid, v in zip(ids, views):
+                if creative_formats.get(str(aid)) == f:
+                    a["assets"] += 1
+                    a["views"] += float(v) if float(v) > 0 else 0.0
+    # person level: the chance a person saw at least one clip of the format,
+    # 1 - prod over the touchpoints they saw of (1 - the format's share there);
+    # summed over people it is the format's reach, so formats overlap the way
+    # the other kinds do and never exceed the exposed audience
+    yv = np.asarray(y, dtype=np.float64)
+    out = []
+    for f, a in acc.items():
+        w = np.clip(shares[f], 0.0, 1.0)
+        # a share of 1 (every clip of the touchpoint is this format) is a
+        # large finite negative log so 0 x log stays 0 in the matmul
+        logs = np.where(w >= 1.0 - 1e-9, -60.0, np.log1p(-np.minimum(w, 1.0 - 1e-9)))
+        p = 1.0 - np.exp(X_bin.astype(np.float64) @ logs)
+        exposed = int(round(float(np.sum(p))))
+        converted = int(round(float(np.sum(p * yv))))
+        if exposed <= 0:
+            continue
+        rate = converted / exposed
+        out.append({
+            "label": f,
+            "touchpoints": int(a["touchpoints"]),
+            "assets": int(a["assets"]),
+            "views": int(round(a["views"])),
+            "exposed_n": exposed,
+            "share_of_exposed": round(exposed / n * 100.0, 1),
+            "converted_n": converted,
+            "conversion_rate": round(rate, 4),
+            "index_vs_cohort": round(rate / conv_rate * 100.0, 1) if conv_rate > 0 else None,
+            "lift_per_exposure": round(a["lift_num"] / a["lift_w"], 4) if a["lift_w"] > 0 else None,
+            "share_of_converters": round(converted / total_conv * 100.0, 1) if total_conv else None,
+        })
+    out.sort(key=lambda r: (r["conversion_rate"], r["converted_n"]), reverse=True)
+    best = [r["label"] for r in out if r["exposed_n"] >= _FORMAT_MIN_SHARE_FOR_BEST * n][:3]
+    return {"rows": out, "best": best, "coverage": classified}
+
+
 def _compute_creative_impl(*, X_bin: np.ndarray, y: np.ndarray, touch: list[dict],
-                           rows: list[dict], conv_rate: float) -> dict:
-    """Conversion by creative type, channel, and paid / organic / earned,
-    read at the person level off the fitted exposure matrix: a person who
-    saw any creative of a kind counts once for that kind, so the kinds
-    overlap and do not sum. Each group carries the people reached, the
-    converters among them, their conversion rate, that rate against the
-    cohort's rate (100 = the cohort), the exposure-weighted lift per
-    exposure of its touchpoints, and the assets behind it. Alexia on The
-    Influencer Project (2026-10-19): 'what type of creative was best at
-    conversion?'"""
+                           rows: list[dict], conv_rate: float,
+                           creative_formats: Optional[dict] = None) -> dict:
+    """Conversion by creative format, creative type, channel, and paid /
+    organic / earned, read at the person level off the fitted exposure
+    matrix: a person who saw any creative of a kind counts once for that
+    kind, so the kinds overlap and do not sum. Each group carries the
+    people reached, their share of the exposed audience, the converters
+    among them, their conversion rate, that rate against the cohort's rate
+    (100 = the cohort), the exposure-weighted lift per exposure of its
+    touchpoints, and the assets behind it. Alexia on The Influencer
+    Project (2026-10-19): 'what type of creative was best at conversion?';
+    2026-10-20: the FORMAT (skit, reaction, trailer cut, ...) is the read
+    she wanted, and it leads."""
     n = int(X_bin.shape[0]) if X_bin is not None and X_bin.ndim == 2 else 0
     total_conv = int(round(float(np.sum(y)))) if n else 0
     by_col = {int(r["_col_idx"]): r for r in rows if "_col_idx" in r}
     dims = []
+    fmt = _creative_format_rows(X_bin=X_bin, y=y, touch=touch, rows=rows, conv_rate=conv_rate,
+                                total_conv=total_conv, creative_formats=creative_formats or {})
+    if fmt["rows"]:
+        dims.append({"key": "creative_format", "label": "Creative format",
+                     "question": "Which format of creative converted best",
+                     "rows": fmt["rows"], "best": fmt["best"],
+                     "note": ("A creator's people are split across the formats of their clips by the clips' views; "
+                              "a format is named best only when it reached at least 2% of the exposed audience.")})
     for key, label, question in _CREATIVE_DIMENSIONS:
         groups: dict[str, list[int]] = {}
         for k, t in enumerate(touch):
@@ -1711,7 +2328,9 @@ def _compute_creative_impl(*, X_bin: np.ndarray, y: np.ndarray, touch: list[dict
                 "label":            v,
                 "touchpoints":      len(cols),
                 "assets":           assets,
+                "views":            int(round(sum(float(touch[k].get("views") or 0) for k in cols))),
                 "exposed_n":        exposed,
+                "share_of_exposed": round(exposed / n * 100.0, 1),
                 "converted_n":      converted,
                 "conversion_rate":  round(rate, 4),
                 "index_vs_cohort":  round(rate / conv_rate * 100.0, 1) if conv_rate > 0 else None,
@@ -1724,9 +2343,12 @@ def _compute_creative_impl(*, X_bin: np.ndarray, y: np.ndarray, touch: list[dict
         "dimensions": dims,
         "cohort_conversion_rate": round(float(conv_rate), 4),
         "cohort_converters": total_conv,
-        "note": ("A person who saw any creative of a kind counts once for that kind, so the kinds overlap and do not sum. "
+        "cohort_exposed": int(n),
+        "best_formats": fmt["best"],
+        "note": ("Reached is the people who saw at least one creative of a kind, and the share is their share of the exposed "
+                 "audience. A person who saw several kinds counts in each, so the kinds overlap and do not sum. "
                  "Index: the kind's conversion rate against this cohort's, 100 = the cohort. Lift: the typical effect of one more "
-                 "exposure to the kind's creative, from the model."),
+                 "exposure to the kind's creative."),
     }
 
 
@@ -2555,8 +3177,15 @@ def _compute_paths_impl(*, slug: str, ttype: str, display_name: str,
                           terminology: Optional[dict], n_panel: int,
                           conv_rate: float, rows: list[dict],
                           slice_salt: str = "overall",
-                          proj_factor: Optional[float] = None) -> dict:
+                          proj_factor: Optional[float] = None,
+                          paid_hold_us: Optional[int] = None) -> dict:
     """Build the paths-to-conversion payload for a single slice.
+
+    ``paid_hold_us`` (2026-10-20): the campaign's converters held as the
+    campaign carries them (US people at the bottom of the nest); when
+    given, the bottom stage lands there instead of exposed x rate, so
+    re-basing the exposed audience on the assets never moves the
+    converters.
 
     Called from _compute_slice_impl for both the overall panel and every
     audience slice, with n_panel / conv_rate reflecting THAT slice's
@@ -2601,8 +3230,11 @@ def _compute_paths_impl(*, slug: str, ttype: str, display_name: str,
     # stays coherent with the top-strip conversion rate and with the
     # journeys card's totals.
     conv_rate_safe = max(1e-6, float(conv_rate or 0.0))
-    paid_pop = _messy_count(subj, "paid_us",
-                              int(round(exposed_pop * conv_rate_safe)))
+    if paid_hold_us and int(paid_hold_us) > 0:
+        paid_pop = _messy_count(subj, "paid_us_held", int(paid_hold_us))
+    else:
+        paid_pop = _messy_count(subj, "paid_us",
+                                  int(round(exposed_pop * conv_rate_safe)))
     ticketer_pop = _messy_count(subj, "ticketer_us",
                                   int(round(paid_pop / max(1e-6, paid_pct_ticketer))))
     infoseek_pop = _messy_count(subj, "infoseek_us",

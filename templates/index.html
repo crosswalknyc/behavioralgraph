@@ -37117,11 +37117,16 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var chipBorder = passes ? 'rgba(199,242,62,0.35)' : 'rgba(234,179,8,0.45)';
                 var chipLabel = passes ? 'Clears sufficiency' : 'Below sufficiency threshold';
                 var derivedTag = derived ? ' <span style="color: var(--text-secondary); font-size:0.66rem;">(cohort-derived)</span>' : '';
-                var exposedLabel = isCohort ? 'Exposed panellists in this cohort' : 'Exposed panellists in this read';
+                var exposedLabel = isCohort ? 'Exposed people in this cohort' : 'Exposed people in this read';
+                var exposure = (activePayload && activePayload.exposure) || (d && d.exposure) || null;
+                var usPeople = exposure && exposure.basis === 'views' ? Number(exposure.us_people || 0) : 0;
+                var countText = usPeople > 0
+                    ? '<strong style="font-variant-numeric: tabular-nums;">' + Number(usPeople).toLocaleString() + '</strong> US people, ' + Number(exposedN).toLocaleString() + ' in the sample'
+                    : '<strong style="font-variant-numeric: tabular-nums;">' + Number(exposedN).toLocaleString() + '</strong>';
                 return (
                     '<div style="display:flex; align-items:center; gap: 0.9rem; margin: 0.15rem 0 0.65rem 0; padding: 0.55rem 0.85rem; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; flex-wrap: wrap;">'
                   + '  <div style="font-size:0.72rem; color: var(--text-primary);">'
-                  +      escapeHtml(exposedLabel) + ': <strong style="font-variant-numeric: tabular-nums;">' + Number(exposedN).toLocaleString() + '</strong>' + derivedTag
+                  +      escapeHtml(exposedLabel) + ': ' + countText + derivedTag
                   + '  </div>'
                   + '  <div style="font-size:0.68rem; color: var(--text-secondary); flex: 1 1 auto;">'
                   + '    95% confidence, 5-point margin threshold: n = ' + threshold
@@ -37153,6 +37158,20 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     ? (escapeHtml(top.label) + ' converted best: ' + _iiqMTAFmtPct(top.conversion_rate, 2) + ' of the ' + fmtInt(top.exposed_n)
                        + ' people it reached, ' + escapeHtml(String(top.index_vs_cohort)) + ' against ' + (audLabel ? 'this cohort' : 'the campaign') + ' at 100.')
                     : '';
+                // The format of the creative (a skit, a reaction, a trailer
+                // cut...) is the read Alexia asked for (2026-10-20); when it
+                // is on the payload it leads, naming the best formats.
+                var fmtDim = dims.filter(function (x) { return x.key === 'creative_format'; })[0];
+                if (fmtDim && fmtDim.best && fmtDim.best.length) {
+                    var byLabel = {};
+                    (fmtDim.rows || []).forEach(function (r) { byLabel[r.label] = r; });
+                    var parts = fmtDim.best.map(function (lbl) {
+                        var r = byLabel[lbl];
+                        return escapeHtml(lbl) + (r ? ' (' + _iiqMTAFmtPct(r.conversion_rate, 2) + ', ' + escapeHtml(String(r.index_vs_cohort)) + ')' : '');
+                    });
+                    lead = 'Formats that converted best, with their rate and index: ' + parts.join('; ') + '.';
+                }
+                var totalExposed = Number((cr && cr.cohort_exposed) || (d && d.sample_size) || 0);
                 function table(dim) {
                     var rows = dim.rows || [];
                     var best = rows.length ? rows[0] : null;
@@ -37162,6 +37181,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         + '<thead><tr style="color: var(--text-secondary); font-size:0.66rem; text-transform:uppercase; letter-spacing:0.04em;">'
                         + '<th style="text-align:left; font-weight:600; padding:0.2rem 0;">' + escapeHtml(dim.label || '') + '</th>'
                         + '<th style="text-align:right; font-weight:600; padding:0.2rem 0.3rem;">Reached</th>'
+                        + '<th style="text-align:right; font-weight:600; padding:0.2rem 0.3rem;">Share</th>'
                         + '<th style="text-align:right; font-weight:600; padding:0.2rem 0.3rem;">' + escapeHtml(bfl) + '</th>'
                         + '<th style="text-align:right; font-weight:600; padding:0.2rem 0.3rem;">Rate</th>'
                         + '<th style="text-align:right; font-weight:600; padding:0.2rem 0.3rem;">Index</th>'
@@ -37174,19 +37194,24 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                             + '<td style="padding:0.3rem 0; color:' + color + '; font-weight:' + (isBest ? '700' : '500') + ';">' + escapeHtml(r.label)
                             + '<div style="font-size:0.64rem; color: var(--text-secondary); font-weight:400;">' + fmtInt(r.assets) + (r.assets === 1 ? ' asset' : ' assets') + '</div></td>'
                             + '<td style="text-align:right; padding:0.3rem 0.3rem; font-variant-numeric:tabular-nums;">' + fmtInt(r.exposed_n) + '</td>'
+                            + '<td style="text-align:right; padding:0.3rem 0.3rem; font-variant-numeric:tabular-nums; color: var(--text-secondary);">'
+                            +     escapeHtml(r.share_of_exposed != null ? (Number(r.share_of_exposed).toFixed(1) + '%')
+                                    : (totalExposed > 0 ? (Number(r.exposed_n) / totalExposed * 100).toFixed(1) + '%' : '')) + '</td>'
                             + '<td style="text-align:right; padding:0.3rem 0.3rem; font-variant-numeric:tabular-nums;">' + fmtInt(r.converted_n) + '</td>'
                             + '<td style="text-align:right; padding:0.3rem 0.3rem; font-variant-numeric:tabular-nums; color:' + color + '; font-weight:700;">' + _iiqMTAFmtPct(r.conversion_rate, 2) + '</td>'
                             + '<td style="text-align:right; padding:0.3rem 0.3rem; font-variant-numeric:tabular-nums;">' + escapeHtml(r.index_vs_cohort == null ? '' : String(r.index_vs_cohort)) + '</td>'
                             + '<td style="text-align:right; padding:0.3rem 0 0.3rem 0.3rem; font-variant-numeric:tabular-nums;">' + escapeHtml(Number(r.lift_per_exposure || 0).toFixed(2)) + 'x</td>'
                             + '</tr>';
                     });
-                    html += '</tbody></table></div>';
+                    html += '</tbody></table>';
+                    if (dim.note) html += '<div style="font-size:0.64rem; color: var(--text-secondary); margin-top:0.4rem;">' + escapeHtml(dim.note) + '</div>';
+                    html += '</div>';
                     return html;
                 }
                 return '<div style="margin-bottom: 0.6rem;">'
                     + '  <h4 style="margin: 0;">Which creative converted best.</h4>'
                     + '  <div style="font-size:0.72rem; color: var(--text-secondary); margin-top:0.2rem;">' + lead + '</div>'
-                    + '  <div style="font-size:0.72rem; color: var(--text-secondary); margin-top:0.2rem;">Reached is the people who saw any creative of that kind; the rate is the share of them who reached ' + escapeHtml(bfl.toLowerCase()) + ' in the attribution window. A person who saw several kinds counts in each, so the kinds overlap and do not sum. Lift is the typical effect of one more exposure to that kind of creative on ' + escapeHtml(convNoun) + ', holding everything else constant.</div>'
+                    + '  <div style="font-size:0.72rem; color: var(--text-secondary); margin-top:0.2rem;">Reached is the people who saw at least one creative of that kind, and Share is what part of everyone exposed that is; the rate is the share of those people who reached ' + escapeHtml(bfl.toLowerCase()) + ' in the attribution window. A person who saw several kinds counts in each, so the kinds overlap and do not sum. Lift is the typical effect of one more exposure to that kind of creative on ' + escapeHtml(convNoun) + ', holding everything else constant.</div>'
                     + '</div>'
                     + '<div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap:0.6rem;">' + dims.map(table).join('') + '</div>';
             }
@@ -37272,9 +37297,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         // GOAT: one scale. The tile reads projected US
                         // accounts, the same figure as the nest, with the
                         // panel count beside it.
-                        var n1 = _iiqGoatMode() && activePayload.paths && Array.isArray(activePayload.paths.nest) && activePayload.paths.nest[1]
+                        var viewsBasis = !!(activePayload.exposure && activePayload.exposure.basis === 'views');
+                        var n1 = (_iiqGoatMode() || viewsBasis) && activePayload.paths && Array.isArray(activePayload.paths.nest) && activePayload.paths.nest[1]
                             ? Number(activePayload.paths.nest[1].us_accounts) : 0;
-                        if (n1 > 0) return iiqSummaryTile(exposedLabel, fmtCompact(n1), 'projected US accounts reached by campaign creative, from ' + fmtInt(activePayload.sample_size) + ' panellists');
+                        if (n1 > 0) return iiqSummaryTile(exposedLabel, fmtCompact(n1), 'US people reached by campaign creative; ' + fmtInt(activePayload.sample_size) + ' in the sample');
                         return iiqSummaryTile(exposedLabel, fmtCompact(activePayload.sample_size), 'individual viewers used in the read');
                     })(),
                     '<div class="iiq-card" style="padding:0.6rem 0.75rem; display:flex; flex-direction:column; justify-content:space-between;">'
