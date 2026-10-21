@@ -13290,6 +13290,78 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
             'success': True, 'action': 'answer', 'reply': reply,
             'followups': followups, 'offer_deck': False,
             'deck_angle': None})
+    # OVERLAP READ (2026-10-21, Bria): of an open audience, how many
+    # subscribe to / pay for another service is a Custom Ask, not
+    # metered chat. Opening the profile does not make a new
+    # cross-service count free. Quote first; charge on confirm; keep
+    # the catalog base so the read still uses the file's rows.
+    if base and panel_charge is None:
+        try:
+            from prometheus import overlap_read as _ov
+            _ov_hit = _ov.is_overlap_read(text)
+        except Exception:
+            _ov_hit = False
+        if _ov_hit:
+            _ov_subj = str(base.get('subject') or subj_hint or '').strip()
+            _ov_subj = _subject_rules.display_for(
+                _ov_subj, text,
+                page=str(((ctx or {}).get('primary') or {}).get('name') or '')
+            ) or _ov_subj
+            if isinstance(panel_confirm, dict) and not _ov_subj:
+                _ov_subj = str(panel_confirm.get('subject') or '').strip()
+            if _ov_subj:
+                _pr_label, _pr_credits = _pm_panel_price_label(_pm_user)
+                _pr_pull_type, _pr_qty, _pr_kind = 'Panel Report', 1, 'report'
+                _is_derived = (
+                    str((metric_request or {}).get('metric_family') or '') == 'dimension split'
+                    or (isinstance(panel_confirm, dict)
+                        and str(panel_confirm.get('kind') or '') == 'derived'))
+                _has_delivered = bool((metric_request or {}).get('bound_series')) \
+                    or (isinstance(panel_confirm, dict)
+                        and str(panel_confirm.get('kind') or '') == 'derived')
+                if _is_derived and _has_delivered:
+                    _pr_label, _pr_credits = _pm_derived_read_price(_pm_user)
+                    _pr_pull_type, _pr_qty, _pr_kind = 'Derived Read', 1, 'derived'
+                if isinstance(panel_confirm, dict):
+                    _rc = panel_confirm.get('resume_charge')
+                    if not isinstance(_rc, dict) and (not _pm_user or not _H.consume_credit(
+                            _pm_user,
+                            description=((f"Derived read ({(metric_request or {}).get('dimension') or 'breakdown'}) - "
+                                          if _pr_kind == 'derived'
+                                          else 'Prometheus Research Report - ')
+                                         + f'{_ov_subj}'),
+                            pull_type=_pr_pull_type,
+                            credits_used=_pr_credits,
+                            quantity=_pr_qty)):
+                        _pm_ask_hint(outcome='panel_out_of_credits',
+                                     subject=_ov_subj)
+                        return jsonify({
+                            'success': False, 'guidance': True,
+                            'analysis_read': True,
+                            'error': (f"The {_ov_subj} read runs "
+                                      f"{_pr_label} and your account cannot "
+                                      f"cover it right now. Top up or ask "
+                                      f"your admin, and I'll pick it right "
+                                      f"back up."),
+                            'followups': []})
+                    panel_charge = _rc if isinstance(_rc, dict) else {
+                        'user': _pm_user, 'credits': _pr_credits,
+                        'subject': _ov_subj}
+                    print(f"[pm-panel] charged {_pr_credits} credits to "
+                          f"{_pm_user} for overlap {_ov_subj}")
+                else:
+                    reply, followups, offer = pma.build_panel_report_offer(
+                        _ov_subj, _pr_label, question=text,
+                        kind=_pr_kind, years=_pr_qty,
+                        verb=_pm_viewership_verb(text),
+                        series=False,
+                        dimension=str((metric_request or {}).get('dimension') or ''))
+                    _pm_ask_hint(outcome='panel_offer', subject=_ov_subj)
+                    return jsonify({
+                        'success': True, 'action': 'answer',
+                        'reply': reply, 'followups': followups,
+                        'offer_deck': False, 'deck_angle': None,
+                        'panel_offer': offer})
     # Base rows ride the prompt (2026-08-27, toy-categories routing):
     # when the caller had no open-page digest but the base resolved to
     # a catalog profile, load that profile's digest so the read

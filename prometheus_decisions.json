@@ -1,6 +1,6 @@
 {
  "version": 1,
- "content_hash": "1cbe9f1633a480e8939604dc30cf7ed5392de30ff08d85d791f1ad7759fbbe02",
+ "content_hash": "424173f22e31ab0a96e96da06b19403abbdd94411cbbf0586411005f6ced1619",
  "decisions": [
   {
    "id": "kids_viewers_default",
@@ -749,7 +749,24 @@
    "sources": [
     "prometheus-brain.md"
    ]
+  },
+  {
+   "id": "subscribe_overlap_is_a_custom_read",
+   "decided": "2026-10-21",
+   "statement": "When the reader asks how many people in an audience subscribe to or pay for another service, or how incremental one title is to a service, or what that audience watched next in a named window, that is a custom read at the standing custom price, even when the audience's file is already open. Quote the price first and wait for confirm. A size question stays a size. Who is on a service, with no subscribe wording, stays the split from what we hold. Insights on an open file, what a number means, and where to find a file stay ordinary conversation.",
+   "match_terms": [
+    "subscribe to",
+    "how many subscribe",
+    "netflix subscribers",
+    "how incremental",
+    "watched next",
+    "30 days after",
+    "of those viewers"
+   ],
+   "sources": [
+    "prometheus-brain.md"
+   ]
   }
  ],
- "generated_at": "2026-10-21T19:44:32Z"
+ "generated_at": "2026-10-21T19:57:11Z"
 }

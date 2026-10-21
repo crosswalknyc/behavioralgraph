@@ -1,6 +1,6 @@
 {
  "version": 1,
- "content_hash": "a09cd3eb75605322c3daad4dd807510fa785769d2602c5601ba02e95c90a2e25",
+ "content_hash": "085dfb1547d83a27647080cc6ae8f22cfdcdfeda6e207204f73800300d464c51",
  "examples_hash": "ea4bdc4d88889695d3469ff23e0296e3c6614d1beac63ff3a5f43a9c5a515ffa",
  "source_hashes": {
   ".cursor/rules/analysis-confidence-calibration.mdc": "3f2d33886bf77e54adde67cbf78f3256fa23fcb86d1ae32dd5ce7294088521f0",
@@ -30,7 +30,7 @@
   ".cursor/skills/crosswalk-panel-analyst/references/numbers.md": "2857e3623a4e64134f621fbaf54dc37ad5b8e921bd59510c96d2ee4e05c75773",
   ".cursor/skills/crosswalk-panel-analyst/references/asks.md": "5a36b47f843163fefe4500de88488e1ad1ec971f5df54308e4a29bddd599f005",
   ".cursor/skills/crosswalk-panel-analyst/references/prior-work.md": "d143ac1c06efbf12a41bbb87bdacf93912580a1a70774c848e4d8606d572dbb5",
-  ".cursor/skills/crosswalk-panel-analyst/references/prometheus-brain.md": "950ac0bee27fed0f3acc87050031cfefa63bf11b329ed911fcbff4a6da894494"
+  ".cursor/skills/crosswalk-panel-analyst/references/prometheus-brain.md": "a8447c82bc9b6d7b61db18f9d2aa4e4f14ed28cf4ca45a0a0f4f5bcbd62d1868"
  },
  "canon": [
   {
@@ -207,5 +207,5 @@
    "text": "Athletic footwear and apparel is the largest open sponsorship category for Austin Sprinz: it carries 14.3% of his audience's brand purchase signals at 67.3% category penetration with no endorsement running against it in the window.\n\nProjected US audience (Total Universe): 24,716,483, Avid US audience: 6,382,947, Brand purchase signal penetration: 89.7%.\n\nSponsor category (audience demand vs current Sprinz coverage mix, Oct 12 2025 to Oct 12 2026 (share of the audience's brand purchase and category signals)\n- Athletic Footwear & Apparel: 14.3% share, 67.3% penetration. Nike, adidas, Under Armour, New Balance lead ..."
   }
  },
- "generated_at": "2026-10-21T19:44:32Z"
+ "generated_at": "2026-10-21T19:57:11Z"
 }

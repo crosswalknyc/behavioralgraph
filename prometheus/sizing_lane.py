@@ -398,8 +398,16 @@ def answer(text, ctx=None, *, host=None, history=None, subjects=None, staff=True
     for a reader outside Crosswalk (the operator's verdict line leaves).
     A cross ask (a base audience split across services: 'of those, how
     many are on Paramount+, on HBO Max, neither') is answered as the
-    cross, never as independent sizes (2026-10-20, Tania Nasr)."""
+    cross, never as independent sizes (2026-10-20, Tania Nasr). A
+    subscribe / pay / incremental overlap of a held audience is not
+    this lane: that is a Custom Ask (2026-10-21, Bria)."""
     try:
+        try:
+            from . import overlap_read as _ov
+            if _ov.is_overlap_read(text):
+                return None
+        except Exception:
+            traceback.print_exc()
         try:
             from . import cross_sizing as _cx
             _cross = _cx.answer(text, ctx, host=host, reader_subjects=reader_subjects or subjects)
