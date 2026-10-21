@@ -190385,7 +190385,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             if (msg) msg.textContent = name + ' costs $' + usd.toFixed(0) + ' to open. Top up your account to access this profile.';
             if (btn) {
                 btn.textContent = 'Top up';
-                btn.onclick = function() { goBuyMoreCredits(); };
+                btn.onclick = function() { confirmPricedProfileUnlock(); };
             }
             modal.classList.add('active');
             modal.style.display = 'flex';
