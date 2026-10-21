@@ -19455,6 +19455,26 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
             white-space: normal;
         }
 
+        /* ---- 15b. Behavioral tab: tame the giant grid on phones -----------
+           The behavioral grid builds EVERY category x item row up front. On a
+           phone, laying out + compositing that entire DOM the moment the tab
+           becomes visible spiked memory enough to crash Safari ("A problem
+           repeatedly occurred") and force a full page reload - which is why
+           just *visiting* Behavioral reloaded even after the toggle fix.
+           content-visibility:auto makes Safari skip layout + paint for the
+           off-screen cards (only the 1-2 on screen are rendered), keeping peak
+           render-tree / compositing-layer memory small. contain-intrinsic-size
+           gives off-screen cards an estimated height so the scrollbar stays
+           sane; `auto` lets Safari remember each card's real size once it has
+           rendered. The DOM is untouched, so search / sort / slice / the
+           per-card filters / the #behavioralGrid MutationObserver all keep
+           working. No other rule sets content-visibility, so no !important is
+           needed. Desktop never enters this media query. */
+        body #behavioralGrid .behavioral-card {
+            content-visibility: auto;
+            contain-intrinsic-size: auto 520px;
+        }
+
         /* ---- 16. Location tab ------------------------------------------------
            The location "tables" are CSS-grid rows (.location-row), not <table>s,
            so the generic table rule doesn't apply; on a phone the 5-7 fixed
