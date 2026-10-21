@@ -740,7 +740,9 @@ def _prepare_touchpoints(slug: str, cards: list) -> list[dict]:
         total = _campaign_reach(touch)["us_people"]
         for t in touch:
             if total > 0 and t["reach_people"] > 0:
-                t["exposure_rate"] = float(max(0.0005, min(1.0, t["reach_people"] / total)))
+                # exactly the touchpoint's share of the exposed audience: no
+                # floor, a touchpoint never claims more people than its reach
+                t["exposure_rate"] = float(min(1.0, t["reach_people"] / total))
     return touch
 
 
