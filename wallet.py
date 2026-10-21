@@ -2820,6 +2820,19 @@ def try_auto_reload(subject_key: str, subject_snapshot: dict, *,
 # individual isn't billed, which is the correct fallback.
 
 
+# Seats that were typed as BZZR still bill the BUZZR wallet.
+_COMPANY_NAME_ALIASES = {
+    "BZZR": "BUZZR",
+}
+
+
+def canonical_company_name(name) -> str:
+    raw = str(name or "").strip()
+    if not raw:
+        return ""
+    return _COMPANY_NAME_ALIASES.get(raw.upper(), raw)
+
+
 def resolve_billing_subject(user: dict, users_data: dict) -> tuple:
     """Resolve which record holds the wallet + card for a given user.
 
@@ -2843,12 +2856,16 @@ def resolve_billing_subject(user: dict, users_data: dict) -> tuple:
         source = str(user.get("billing_source") or "user").strip().lower()
         if source != "company":
             return user, "user", _user_key(user, users_data)
-        company_name = str(user.get("company") or "").strip()
+        company_name = canonical_company_name(user.get("company"))
         if not company_name:
             return user, "user", _user_key(user, users_data)
         companies = users_data.get("companies") or {}
         company = companies.get(company_name)
         if not isinstance(company, dict):
+            raw = str(user.get("company") or "").strip()
+            company = companies.get(raw) if raw and raw != company_name else None
+            if isinstance(company, dict):
+                return company, "company", raw
             return user, "user", _user_key(user, users_data)
         return company, "company", company_name
     except Exception:
@@ -3792,6 +3809,101 @@ def already_owns_paid_run(user, users_data, s3_key,
     return catalog_item_allowed(rec, "allowed_runs", wanted, default_open=False)
 
 
+_PRICED_PROFILE_ACCESS = "priced_profile_access"
+
+
+def priced_profile_access_rows(user, users_data=None) -> list:
+    """Priced catalog files on this seat or its billing company."""
+    rows = []
+    seen = set()
+
+    def _add(holder):
+        if not isinstance(holder, dict):
+            return
+        for raw in holder.get(_PRICED_PROFILE_ACCESS) or []:
+            if not isinstance(raw, dict):
+                continue
+            match = str(raw.get("match") or raw.get("label") or "").strip()
+            try:
+                usd = float(raw.get("usd") or 0)
+            except (TypeError, ValueError):
+                usd = 0.0
+            fold = fold_profile_label(match)
+            if not fold or usd <= 0 or fold in seen:
+                continue
+            seen.add(fold)
+            keys = [str(k).strip() for k in (raw.get("s3_keys") or [])
+                    if str(k).strip()]
+            rows.append({"match": match, "usd": usd, "s3_keys": keys})
+
+    if isinstance(user, dict):
+        _add(user)
+    if isinstance(users_data, dict) and isinstance(user, dict):
+        try:
+            subject, kind, _key = resolve_billing_subject(user, users_data)
+        except Exception:
+            subject, kind = None, ""
+        if kind == "company" and subject is not user:
+            _add(subject)
+    return rows
+
+
+def priced_unlock_usd(user, users_data=None, s3_key="",
+                      display_name="") -> float:
+    """Dollars to unlock this catalog file. 0 means no special price."""
+    wanted = [w for w in (
+        fold_profile_label(s3_key),
+        fold_profile_label(display_name),
+    ) if w]
+    key_base = str(s3_key or "").strip().rsplit("/", 1)[-1]
+    if not wanted and not key_base:
+        return 0.0
+    for row in priced_profile_access_rows(user, users_data):
+        needle = fold_profile_label(row.get("match"))
+        keys = [str(k).rsplit("/", 1)[-1] for k in (row.get("s3_keys") or [])]
+        hit = False
+        if key_base and key_base in keys:
+            hit = True
+        if not hit and needle:
+            for w in wanted:
+                if profile_labels_match(w, needle):
+                    hit = True
+                    break
+        if hit:
+            try:
+                return float(row.get("usd") or 0)
+            except (TypeError, ValueError):
+                return 0.0
+    return 0.0
+
+
+def priced_unlock_due(user, users_data=None, s3_key="",
+                      display_name="", username: str = "") -> float:
+    """Dollars still owed to open this priced file. 0 if free or paid."""
+    if not isinstance(user, dict):
+        return 0.0
+    if is_internal_staff_seat(user, username):
+        return 0.0
+    if str(user.get("role") or "").strip().lower() == "super_admin":
+        return 0.0
+    usd = priced_unlock_usd(
+        user, users_data, s3_key=s3_key, display_name=display_name)
+    if usd <= 0:
+        return 0.0
+    wanted = [w for w in (
+        fold_profile_label(s3_key),
+        fold_profile_label(display_name),
+        subject_from_usage_description(display_name),
+    ) if w]
+    if not wanted:
+        return usd
+    for tok in paid_profile_tokens(user, users_data):
+        for w in wanted:
+            if profile_labels_match(w, tok):
+                return 0.0
+    return usd
+
+
 def company_wants_paid_only(users_data: dict, company_name: str) -> bool:
     """True when new company seats should inherit paid-reports-only."""
     name = str(company_name or "").strip()
@@ -4599,7 +4711,8 @@ def company_billing_admins(company_name: str, users_data: dict) -> list:
     for username, u in (users_data.get("users") or {}).items():
         if not isinstance(u, dict):
             continue
-        if str(u.get("company") or "").strip() != company_name:
+        if canonical_company_name(u.get("company")) != canonical_company_name(
+                company_name):
             continue
         if bool(u.get("company_billing_admin")):
             admins.append(username)
@@ -4614,7 +4727,8 @@ def company_members(company_name: str, users_data: dict) -> list:
     for username, u in (users_data.get("users") or {}).items():
         if not isinstance(u, dict):
             continue
-        if str(u.get("company") or "").strip() != company_name:
+        if canonical_company_name(u.get("company")) != canonical_company_name(
+                company_name):
             continue
         if str(u.get("billing_source") or "").strip().lower() != "company":
             continue
@@ -5073,7 +5187,10 @@ __all__ = [
     "try_auto_reload",
     "add_custom_tool", "remove_custom_tool", "CustomToolError",
     "hide_builtin_tool", "unhide_builtin_tool", "hidden_builtin_tools",
-    "resolve_billing_subject", "ensure_company_record",
+    "resolve_billing_subject", "canonical_company_name",
+    "ensure_company_record",
+    "priced_profile_access_rows", "priced_unlock_usd",
+    "priced_unlock_due",
     "WBD_COMPANY_NAME", "is_wbd_company", "ensure_wbd_shared_wallet",
     "apply_prometheus_only_seat", "attach_wbd_seat",
     "is_internal_staff_seat", "has_full_profile_catalog",

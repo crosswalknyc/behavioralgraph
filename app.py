@@ -18080,6 +18080,9 @@ def _require_profile_run_access(s3_key: str):
             'success': False,
             'error': 'Profile IQ access not enabled for this user',
         }), 403)
+    priced = _priced_profile_unlock_response(user, s3_key)
+    if priced is not None:
+        return False, priced
     if not _user_can_access_profile_run(user, s3_key):
         return False, (jsonify({
             'success': False,
@@ -18088,6 +18091,203 @@ def _require_profile_run_access(s3_key: str):
             's3_key': s3_key,
         }), 403)
     return True, None
+
+
+def _priced_profile_display_name(s3_key: str) -> str:
+    key = str(s3_key or "").strip()
+    for job in (s3_cache.get("jobs") or []):
+        if (job.get("s3_key") or job.get("job_id") or "") == key:
+            return str(job.get("display_name") or job.get("project_name")
+                       or job.get("name") or key)
+    name = key.rsplit("/", 1)[-1]
+    if name.lower().endswith(".csv"):
+        name = name[:-4]
+    return name.replace("_", " ")
+
+
+def _priced_profile_unlock_response(user, s3_key: str):
+    """402 when this seat still owes a priced catalog unlock."""
+    try:
+        import wallet as _w
+    except Exception:
+        return None
+    uname = ""
+    try:
+        uname = str(session.get("username") or "").strip()
+    except Exception:
+        uname = ""
+    try:
+        data = load_users()
+        live = ((data.get("users") or {}).get(uname) or user or {})
+        label = _priced_profile_display_name(s3_key)
+        due = _w.priced_unlock_due(
+            live, data, s3_key=s3_key, display_name=label, username=uname)
+        if due <= 0:
+            return None
+        subject, _kind, _key = _w.resolve_billing_subject(live, data)
+        bal = float(_w.wallet_balance(subject) or 0.0)
+        can_pay, _why = _w.wallet_can_absorb(subject, due)
+        if can_pay:
+            err = (f"{label} costs ${due:.0f} to open. "
+                   "Confirm to charge your account.")
+        else:
+            err = (f"You're out of credits. {label} costs ${due:.0f} "
+                   "to open. Top up your account to access this profile.")
+        return jsonify({
+            "success": False,
+            "needs_unlock": True,
+            "no_funds": not can_pay,
+            "unlock_usd": due,
+            "profile_name": label,
+            "s3_key": s3_key,
+            "wallet_balance_usd": bal,
+            "error": err,
+            "top_up_url": "/wallet",
+            "top_up_label": "Top up",
+        }), 402
+    except Exception:
+        traceback.print_exc()
+        return None
+
+
+def _mark_priced_profile_unlocks(job_list, user, users_data, username=""):
+    """Lock priced catalog files until the wallet pays to open them."""
+    try:
+        import wallet as _w
+    except Exception:
+        return
+    if not isinstance(user, dict) or not job_list:
+        return
+    for e in job_list:
+        if not isinstance(e, dict):
+            continue
+        sk = e.get("s3_key") or e.get("job_id") or ""
+        label = (e.get("display_name") or e.get("project_name")
+                 or e.get("name") or "")
+        try:
+            due = _w.priced_unlock_due(
+                user, users_data, s3_key=sk, display_name=label,
+                username=username)
+        except Exception:
+            due = 0.0
+        if due > 0:
+            e["accessible"] = False
+            e["needs_unlock"] = True
+            e["unlock_usd"] = due
+
+
+@app.route('/api/profiles/unlock', methods=['POST'])
+@requires_auth
+def api_unlock_priced_profile():
+    """Charge the seat's wallet to open one priced catalog file."""
+    user = get_current_user()
+    if not user:
+        return jsonify({'success': False, 'error': 'Not authenticated'}), 401
+    body = request.get_json(silent=True) or {}
+    s3_key = str(body.get('s3_key') or '').strip()
+    if not s3_key:
+        return jsonify({'success': False, 'error': 'Missing profile'}), 400
+    uname = str(session.get('username') or '').strip()
+    if not uname:
+        return jsonify({'success': False, 'error': 'Not authenticated'}), 401
+    try:
+        import wallet as _w
+    except Exception:
+        return jsonify({'success': False, 'error': 'Could not open wallet'}), 500
+
+    label = _priced_profile_display_name(s3_key)
+    data = load_users()
+    live = ((data.get('users') or {}).get(uname) or user or {})
+    due = _w.priced_unlock_due(
+        live, data, s3_key=s3_key, display_name=label, username=uname)
+    if due <= 0:
+        return jsonify({
+            'success': True,
+            'already_unlocked': True,
+            's3_key': s3_key,
+        })
+    subject, kind, skey = _w.resolve_billing_subject(live, data)
+    can_pay, _why = _w.wallet_can_absorb(subject, due)
+    if not can_pay:
+        bal = float(_w.wallet_balance(subject) or 0.0)
+        return jsonify({
+            'success': False,
+            'needs_unlock': True,
+            'no_funds': True,
+            'unlock_usd': due,
+            'profile_name': label,
+            's3_key': s3_key,
+            'wallet_balance_usd': bal,
+            'error': (f"You're out of credits. {label} costs ${due:.0f} "
+                      "to open. Top up your account to access this profile."),
+            'top_up_url': '/wallet',
+            'top_up_label': 'Top up',
+        }), 402
+
+    outcome = {'ok': False, 'usd': due}
+
+    def _charge(doc):
+        users = (doc or {}).get('users') or {}
+        u = users.get(uname)
+        if not isinstance(u, dict):
+            return None
+        subj, sub_kind, sub_key = _w.resolve_billing_subject(u, doc)
+        still = _w.priced_unlock_due(
+            u, doc, s3_key=s3_key, display_name=label, username=uname)
+        if still <= 0:
+            outcome['ok'] = True
+            outcome['usd'] = 0.0
+            return doc
+        can, _r = _w.wallet_can_absorb(subj, still)
+        if not can:
+            return None
+        _w.apply_wallet_deduct(
+            subj, still,
+            description=f'Profile IQ - {label}',
+            tool_key='profile_iq_catalog_unlock',
+            job_id=s3_key,
+            billed_via_username=uname)
+        _w.record_paid_profile(subj, s3_key=s3_key, subject_name=label)
+        if sub_kind == 'company' and sub_key:
+            rec = ((doc.get('companies') or {}).get(sub_key) or subj)
+            _w.record_paid_profile(rec, s3_key=s3_key, subject_name=label)
+        hist = u.setdefault('credit_usage_history', [])
+        hist.insert(0, {
+            'used_at': datetime.now().isoformat(),
+            'description': f'Profile IQ - {label}',
+            'job_id': s3_key,
+            'pull_type': 'Profile IQ',
+            'credits_used': 0,
+            'wallet_charged_usd': still,
+        })
+        u['credit_usage_history'] = hist[:500]
+        outcome['ok'] = True
+        outcome['usd'] = still
+        return doc
+
+    try:
+        _users_cas_mutate(_charge)
+    except Exception:
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': 'Could not charge wallet'}), 500
+    if not outcome.get('ok'):
+        return jsonify({
+            'success': False,
+            'needs_unlock': True,
+            'no_funds': True,
+            'unlock_usd': due,
+            'profile_name': label,
+            's3_key': s3_key,
+            'error': (f"You're out of credits. {label} costs ${due:.0f} "
+                      "to open. Top up your account to access this profile."),
+            'top_up_url': '/wallet',
+            'top_up_label': 'Top up',
+        }), 402
+    return jsonify({
+        'success': True,
+        's3_key': s3_key,
+        'unlock_usd': outcome.get('usd') or 0.0,
+    })
 
 
 # ============================================================================
@@ -28811,6 +29011,12 @@ def list_jobs():
                     except Exception:
                         gift = False
                 e['accessible'] = bool(gift)
+        try:
+            _mark_priced_profile_unlocks(
+                job_list, locals().get('u'), locals().get('_users_data'),
+                session.get('username') or '')
+        except Exception:
+            traceback.print_exc()
         
         categories = {e.get('category') for e in job_list if e.get('category')}
         

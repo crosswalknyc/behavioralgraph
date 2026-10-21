@@ -20168,6 +20168,17 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
             <button class="credits-close-btn" onclick="closeCreditsModal()">Close</button>
         </div>
     </div>
+
+    <div class="credits-modal" id="pricedProfileUnlockModal" onclick="if(event.target === this) closePricedProfileUnlock()">
+        <div class="credits-modal-content" style="max-width: 460px;" onclick="event.stopPropagation()">
+            <h2 id="pricedProfileUnlockTitle">You're out of credits.</h2>
+            <p id="pricedProfileUnlockMessage" style="margin: 0 0 1.25rem 0; color: var(--text-secondary); line-height: 1.5;">This profile costs $300 to open. Top up your account to access it.</p>
+            <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+                <button type="button" class="request-credits-btn" id="pricedProfileUnlockPayBtn" onclick="confirmPricedProfileUnlock()">Top up</button>
+                <button type="button" class="credits-close-btn" onclick="closePricedProfileUnlock()">Close</button>
+            </div>
+        </div>
+    </div>
     
     <!-- Profile/Subscriber Released Modal - Shown when an analysis finishes and lands in the dashboard -->
     <div class="credits-modal" id="profileReleasedModal" style="display: none;" onclick="if(event.target === this) closeProfileReleasedModal()">
@@ -147771,11 +147782,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             const idEsc = escapeIdForOnclick(id);
             const isActive = selectedDashProfile === id;
             const isLocked = profile.accessible === false;
+            const needsUnlock = !!profile.needs_unlock;
             let cls = 'profile-select-item';
             if (opts && opts.extraClasses) cls += ' ' + opts.extraClasses;
             if (isActive && !isLocked) cls += ' active';
             if (isLocked) cls += ' locked';
-            const onclick = isLocked ? '' : ` onclick="event.stopPropagation(); selectDashboardProfile('${idEsc}')"`;
+            const onclick = (isLocked && !needsUnlock) ? '' : ` onclick="event.stopPropagation(); selectDashboardProfile('${idEsc}')"`;
             const skipLockIcon = opts && opts.skipLockIcon;
             const lockIcon = (isLocked && !skipLockIcon) ? '🔒 ' : '';
             const plainTitle = typeof labelHtml === 'string' ? labelHtml.replace(/<[^>]*>/g, '') : '';
@@ -152309,6 +152321,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 : null;
             const _isGenPop = !profileId || profileId.toLowerCase().includes('gen_pop');
             if (_profEntry) {
+                if (_profEntry.needs_unlock && !_isGenPop) {
+                    if (typeof openPricedProfileUnlock === 'function') {
+                        openPricedProfileUnlock(_profEntry);
+                    }
+                    return;
+                }
                 if (_profEntry.accessible === false && !_isGenPop) {
                     console.warn('Access denied: profile not accessible');
                     return;
@@ -152340,6 +152358,17 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 let response = await fetch(csvUrl, { credentials: 'same-origin', cache: 'no-store' });
                 if (response.status === 401) { window.location.href = '/login'; return; }
                 let data = await response.json();
+                if (response.status === 402 || (data && data.needs_unlock)) {
+                    if (typeof openPricedProfileUnlock === 'function') {
+                        openPricedProfileUnlock({
+                            s3_key: profileId,
+                            display_name: data.profile_name,
+                            unlock_usd: data.unlock_usd,
+                            needs_unlock: true
+                        });
+                    }
+                    return;
+                }
                 let effectiveId = profileId;
 
                 // 2026-09-09: purgatory retry fallback removed (workflow
@@ -190337,6 +190366,61 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             try { window.location.href = '/wallet'; } catch (_) {
                 window.open('/wallet', '_blank');
             }
+        }
+        window._pricedUnlockKey = '';
+        function openPricedProfileUnlock(profile) {
+            var modal = document.getElementById('pricedProfileUnlockModal');
+            if (!modal) {
+                try { window.location.href = '/wallet'; } catch (_) {}
+                return;
+            }
+            var name = (profile && (profile.display_name || profile.project_name || profile.name)) || 'This profile';
+            var usd = Number((profile && profile.unlock_usd) || 300);
+            if (!isFinite(usd) || usd <= 0) usd = 300;
+            window._pricedUnlockKey = (profile && (profile.s3_key || profile.job_id)) || '';
+            var title = document.getElementById('pricedProfileUnlockTitle');
+            var msg = document.getElementById('pricedProfileUnlockMessage');
+            var btn = document.getElementById('pricedProfileUnlockPayBtn');
+            if (title) title.textContent = "You're out of credits.";
+            if (msg) msg.textContent = name + ' costs $' + usd.toFixed(0) + ' to open. Top up your account to access this profile.';
+            if (btn) {
+                btn.textContent = 'Top up';
+                btn.onclick = function() { goBuyMoreCredits(); };
+            }
+            modal.classList.add('active');
+            modal.style.display = 'flex';
+        }
+        function closePricedProfileUnlock() {
+            var modal = document.getElementById('pricedProfileUnlockModal');
+            if (modal) {
+                modal.classList.remove('active');
+                modal.style.display = 'none';
+            }
+        }
+        async function confirmPricedProfileUnlock() {
+            var key = window._pricedUnlockKey;
+            if (!key) { goBuyMoreCredits(); return; }
+            try {
+                var res = await fetch('/api/profiles/unlock', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ s3_key: key })
+                });
+                var data = await res.json();
+                if (data && data.success) {
+                    closePricedProfileUnlock();
+                    if (typeof selectDashboardProfile === 'function') {
+                        selectDashboardProfile(key, true);
+                    }
+                    return;
+                }
+                if (data && data.no_funds) {
+                    goBuyMoreCredits();
+                    return;
+                }
+            } catch (_) {}
+            goBuyMoreCredits();
         }
         // Compat shim: any legacy caller that still points at
         // requestMoreCredits() lands on the same top-up page.
