@@ -124,13 +124,29 @@ def _now_iso():
 
 
 # ------------------------------------------------------------------ keys
-_PLATFORM_RX = re.compile(
-    r'\s+(?:on|via|at)\s+(?:netflix|hulu|max|hbo max|hbo|disney\+?|'
-    r'disney plus|peacock|paramount\+?|paramount plus|apple tv\+?|'
-    r'apple tv plus|prime video|amazon prime video|amazon|prime|starz|'
-    r'showtime|amc\+?|discovery\+?|espn\+?|tubi|pluto tv|roku|freevee|'
-    r'crunchyroll|britbox|youtube|youtube tv|fubo|sling|philo|cbs|nbc|'
-    r'abc|fox|the cw|spotify|tiktok|instagram)\b.*$', re.I)
+# Where something is watched, bought or heard is a QUALIFIER on the
+# subject, never the subject (2026-10-21, Jenna: 'Nip/Tuck on Hulu' is
+# Nip/Tuck; the sweep had filed eight such journeys under their
+# platform and paired them with the platform's own profile). '+' may
+# arrive as '+' or, after the fold's normalization, as ' plus'.
+_PLUS = r'(?:\s*\+|\s+plus)?'
+_PLATFORM_WORDS = (
+    r'amazon prime video|amazon prime|prime video|amazon|prime|'
+    r'netflix|hulu|hbo max|hbo|max|disney' + _PLUS + r'|peacock|paramount' + _PLUS + r'|'
+    r'apple tv' + _PLUS + r'|starz|showtime|amc' + _PLUS + r'|discovery' + _PLUS + r'|espn' + _PLUS + r'|'
+    r'bet' + _PLUS + r'|mgm' + _PLUS + r'|hallmark' + _PLUS + r'|tubi|pluto tv|pluto|'
+    r'the roku channel|roku channel|roku|freevee|crunchyroll|britbox|youtube tv|youtube|'
+    r'fubo|sling|philo|cbs|nbc|abc|fox|the cw|cw|spotify|apple podcasts|siriusxm|'
+    r'audible|kindle|tiktok shop|tiktok|instagram|online grocery|instacart|doordash|'
+    r'uber eats|walmart|target|any digital movie ticketing platform'
+)
+_CONSUMER_NOUNS = r'viewers|watchers|listeners|readers|players|subscribers|users|fans|audience|shoppers|buyers'
+# '<Title> on <Platform>', '<Title> viewers on <Platform>', '<Title> Viewers ON HULU'
+_PLATFORM_TAIL_RX = re.compile(
+    r'^(?P<title>.+?)\s+(?:on|via|at)\s+(?P<plat>(?:' + _PLATFORM_WORDS + r'))(?![a-z0-9])(?P<rest>.*)$', re.I)
+# '<Title> - <Platform> Viewers' (a cut named for where the audience watches)
+_PLATFORM_CUT_RX = re.compile(
+    r'^(?P<title>.+?)\s+-\s+(?P<plat>(?:' + _PLATFORM_WORDS + r'))\s+(?:' + _CONSUMER_NOUNS + r')\s*$', re.I)
 _TRAILING_LABEL_RX = re.compile(
     r'\s+(series|tu|total universe|viewers|fans|audience|film|movie|'
     r'\(film\)|\(series\))$')
@@ -152,19 +168,50 @@ _QUALIFIER_RX = re.compile(
     r'launch (?:week|weekend)|finale (?:week|weekend)|season \d+ (?:premiere|finale))\b.*$')
 
 
+def split_platform(name, extra=()):
+    """(title, platform) for a name that carries a where-it-is-watched
+    qualifier: 'Nip/Tuck on Hulu' -> ('Nip/Tuck', 'Hulu'); 'Gilmore
+    Girls Viewers ON HULU' -> ('Gilmore Girls Viewers', 'HULU'); 'BET -
+    Paramount+ Viewers' -> ('BET', 'Paramount+'). ``extra`` names (the
+    journey's client, its platform label) count as platforms too, so
+    'Gunna x Under Armour Athlete Picks on Under Armour' splits for a
+    client named Under Armour. (name, '') when there is no qualifier.
+    The platform is returned as written."""
+    raw = ' '.join(str(name or '').split())
+    if not raw:
+        return '', ''
+    m = _PLATFORM_CUT_RX.match(raw)
+    if m:
+        return m.group('title').strip(), m.group('plat').strip()
+    m = _PLATFORM_TAIL_RX.match(raw)
+    if m:
+        return m.group('title').strip(' ,'), m.group('plat').strip()
+    for ex in extra or ():
+        ex = ' '.join(str(ex or '').split())
+        if not ex:
+            continue
+        m = re.match(r'^(?P<title>.+?)\s+(?:on|via|at)\s+' + re.escape(ex) + r'\s*(?:\(.*\))?\s*$', raw, re.I)
+        if m:
+            return m.group('title').strip(' ,'), ex
+    return raw, ''
+
+
 def entity_fold(name):
     """One key per real-world entity across the spellings the dashboard
     produces: case, '&' vs 'and', punctuation, a trailing platform
-    ('on Hulu'), a trailing Series / TU / (film) label, a cut suffix
-    (' - Avid Fan', ' - Female')."""
+    ('on Hulu', 'Viewers ON HULU', ' - Paramount+ Viewers'), a trailing
+    Series / TU / (film) label, a cut suffix (' - Avid Fan',
+    ' - Female')."""
     t = str(name or '').strip().lower()
-    t = t.replace('&', ' and ').replace('+', ' plus ').replace('\u00d7', ' x ')
+    t = t.replace('&', ' and ').replace('\u00d7', ' x ')
     t = re.sub(r'\([^)]*\)', ' ', t)
     t = ' '.join(t.split())
     t = _QUALIFIER_RX.sub('', t)
     t = _WINDOW_LABEL_RX.sub('', t)
     t = _CUT_SUFFIX_RX.sub('', t)
-    t = _PLATFORM_RX.sub('', t)
+    t, _plat = split_platform(t)
+    t = t.replace('+', ' plus ')
+    t = ' '.join(t.split())
     t = _TRAILING_LABEL_RX.sub('', t)
     t = re.sub(r'[^a-z0-9]+', ' ', t)
     t = re.sub(r'\bthe\b', ' ', t)
@@ -298,8 +345,14 @@ def facts_from_profile_rows(s3_key, display_name, rows, user=''):
         facts.append(make_fact('profile', 'platform_count', f"US viewers on {val}", p, 'people',
                                window=window, source_key=s3_key, source_user=user, note=note))
     facts = [f for f in facts if f]
+    # 'Gilmore Girls Viewers ON HULU', 'BET - Paramount+ Viewers': the
+    # platform is where the audience watches, kept on the facts; the
+    # subject key already folds it away.
+    _, platform = split_platform(_WINDOW_LABEL_RX.sub('', str(display_name or subject or '').strip()))
     for f in facts:
         f['cut'] = is_cut
+        if platform:
+            f['platform'] = str(platform)[:60]
     return subject, facts
 
 
@@ -310,12 +363,54 @@ def facts_from_profile_csv_text(s3_key, display_name, text, user=''):
     return facts_from_profile_rows(s3_key, display_name, rows, user=user)
 
 
+# A journey target that describes the READ rather than the thing read
+# ('Mark Rober Audience - YouTube Creator Journey', 'Banking Research -
+# Chime Steal-Share Brief'): the client is the subject there.
+_DESCRIPTOR_RX = re.compile(
+    r'\b(journey|brief|research|migration|discovery|cross[- ]window|steal[- ]share|case study)\b', re.I)
+
+
+def journey_identity(meta, inputs=None):
+    """(subject, platform) for a journey payload (2026-10-21, Jenna: a
+    journey named '<Title> on <Platform>' describes the TITLE; the
+    platform is where it is watched). The payload's own title fields
+    come first (subject / content_show / title / anchor_title, the
+    inputs' subject); then the target with its 'on <Platform>'
+    qualifier split off; a descriptor-shaped target hands the identity
+    to the client; the client (customer_brand) is the last resort. The
+    cbisson watch journeys carried the platform as customer_brand and
+    the title only inside target_name, which is how 'Nip/Tuck on Hulu'
+    was filed under Hulu."""
+    meta = meta if isinstance(meta, dict) else {}
+    inputs = inputs if isinstance(inputs, dict) else {}
+    client = str(meta.get('customer_brand') or '').strip()
+    plat_hint = str(meta.get('platform_label') or meta.get('platform') or inputs.get('platform') or '').strip()
+    target = str(meta.get('target_name') or meta.get('target') or meta.get('project_name')
+                 or meta.get('target_display') or '').strip()
+    for f in (meta.get('subject'), meta.get('content_show'), meta.get('title'), meta.get('anchor_title'),
+              inputs.get('subject'), inputs.get('title')):
+        f = str(f or '').strip()
+        if f:
+            title, plat = split_platform(f, extra=(client, plat_hint))
+            if not plat and target:
+                _, plat = split_platform(target, extra=(client, plat_hint))
+            return title or f, (plat or plat_hint)
+    if target:
+        title, plat = split_platform(target, extra=(client, plat_hint))
+        if plat:
+            return title or target, plat
+        if client and _DESCRIPTOR_RX.search(target):
+            return client, plat_hint
+        return target, plat_hint
+    return client, plat_hint
+
+
 def facts_from_journey(key, payload, user=''):
     meta = (payload or {}).get('meta') or {}
     body = (payload or {}).get('fragrance_shop_journey') or {}
     kpis = (payload or {}).get('kpis') or {}
-    subject = str(meta.get('customer_brand') or meta.get('subject')
-                  or meta.get('target') or meta.get('project_name') or '').strip()
+    subject, platform = journey_identity(meta, (payload or {}).get('inputs'))
+    subject = str(subject or '').strip()
     window = {'start': meta.get('start_date') or meta.get('window_start'),
               'end': meta.get('end_date') or meta.get('window_end')}
     as_of = str(meta.get('created_at') or meta.get('generated_at') or '')[:19] or None
@@ -374,7 +469,11 @@ def facts_from_journey(key, payload, user=''):
                     facts.append(make_fact('journey', 'ticketing_partition', str(row['label']),
                                            row['pct'], 'pct', window=window, as_of=as_of,
                                            source_key=key, source_user=user, note=note))
-    return subject, [f for f in facts if f]
+    facts = [f for f in facts if f]
+    if platform:
+        for f in facts:
+            f['platform'] = str(platform)[:60]
+    return subject, facts
 
 
 def facts_from_attribution(slug, assets, fit, user=''):
@@ -684,6 +783,8 @@ def upsert_source(product, s3_key, subject, facts, etag=None, aliases=()):
     facts = [f for f in facts if isinstance(f, dict)]
     now = _now_iso()
     alias_set = {str(subject).strip()} | {str(a).strip() for a in aliases if a}
+    if not str(s3_key).startswith('thread/'):
+        _leave_old_subjects([{'s3_key': s3_key, 'subject': subject}])
 
     def _mut_page(doc):
         doc.setdefault('subject_key', skey)
@@ -745,13 +846,15 @@ def bulk_upsert(records):
     if not enabled():
         return 0
     by_subject = {}
+    records = [r for r in records if r and r.get('facts')]
     for r in records:
-        if not r or not r.get('facts'):
-            continue
         skey = subject_key(r.get('subject'))
         if not skey:
             continue
         by_subject.setdefault(skey, []).append(r)
+    if not by_subject:
+        return 0
+    _leave_old_subjects(records)
     now = _now_iso()
     page_counts = {}
 
@@ -841,21 +944,45 @@ def load_sources():
     return doc if isinstance(doc, dict) else {}
 
 
-def forget_source(s3_key):
-    """A deleted object leaves the catalog (sweep only)."""
-    src = load_sources().get(s3_key)
+def forget_source(s3_key, sources=None):
+    """A deleted object leaves the catalog, and so does a source whose
+    identity moved to another subject (2026-10-21: 'Nip/Tuck on Hulu'
+    from the Hulu page to the Nip/Tuck page). The old page drops the
+    source's facts and the index entry follows (products and fact count
+    recomputed; an emptied subject leaves the index)."""
+    src = (sources if isinstance(sources, dict) else load_sources()).get(s3_key)
     if not src:
         return False
     skey = src.get('subject_key')
+    left = {'facts': None}
 
     def _mut_page(doc):
         doc['facts'] = [f for f in (doc.get('facts') or [])
                         if (f.get('source') or {}).get('key') != s3_key]
         doc['updated'] = _now_iso()
+        left['facts'] = list(doc['facts'])
         return doc
 
     if skey:
         _update_json(_subject_page_key(skey), _mut_page)
+
+        def _mut_index(doc):
+            subs = doc.setdefault('subjects', {})
+            ent = subs.get(skey)
+            if not isinstance(ent, dict):
+                return doc
+            facts = left['facts'] if left['facts'] is not None else []
+            if not facts:
+                subs.pop(skey, None)
+            else:
+                ent['products'] = sorted({str(f.get('product')) for f in facts if f.get('product')})
+                ent['n_facts'] = len(facts)
+                ent['updated'] = _now_iso()
+                subs[skey] = ent
+            doc['updated'] = _now_iso()
+            return doc
+
+        _update_json(INDEX_KEY, _mut_index)
 
     def _mut_sources(doc):
         doc.pop(s3_key, None)
@@ -866,6 +993,27 @@ def forget_source(s3_key):
         _state['index_ts'] = 0.0
         _state['pages'].pop(skey, None)
     return True
+
+
+def _leave_old_subjects(records, sources=None):
+    """Before an upsert: every record whose source was last filed under
+    a DIFFERENT subject leaves that subject first, so a moved identity
+    never leaves stale facts behind on the old page."""
+    try:
+        prev = sources if isinstance(sources, dict) else load_sources()
+    except Exception:
+        return 0
+    moved = 0
+    for r in records:
+        if not isinstance(r, dict) or not r.get('s3_key'):
+            continue
+        old = (prev.get(r['s3_key']) or {}).get('subject_key')
+        new = subject_key(r.get('subject'))
+        if old and new and old != new:
+            if forget_source(r['s3_key'], sources=prev):
+                moved += 1
+                print(f"[corpus-catalog] {r['s3_key']}: identity moved {old} -> {new}; left the old page")
+    return moved
 
 
 # ------------------------------------------------------------- consult
@@ -894,6 +1042,23 @@ def same_window(a, b):
     return (str(a.get('start') or '')[:10] == str(b.get('start') or '')[:10]
             and str(a.get('end') or '')[:10] == str(b.get('end') or '')[:10]
             and bool(a.get('start')))
+
+
+def window_within(inner, outer):
+    """True when ``inner`` sits inside ``outer`` (inclusive; identical
+    windows count). Two windows that merely overlap (2025-01-01 to
+    2025-12-31 against 2025-10-20 to 2026-10-20) are NOT a sub-window
+    case: neither contains the other (2026-10-21, Jenna)."""
+    if not (isinstance(inner, dict) and isinstance(outer, dict)):
+        return False
+    try:
+        i0, i1 = _d(inner.get('start')), _d(inner.get('end'))
+        o0, o1 = _d(outer.get('start')), _d(outer.get('end'))
+    except Exception:
+        return False
+    if not (i0 and i1 and o0 and o1):
+        return False
+    return i0 >= o0 and i1 <= o1
 
 
 def resolve_subject(name):
@@ -1035,15 +1200,15 @@ def universe_floor(anchors, window, exclude_key=None):
     smaller than what another product measured on a shorter window).
 
     A Total Universe is the subject's whole audience over its window.
-    Every other product's US-people figure on an overlapping window
-    that is SHORTER than ``window`` describes a subset of that audience
-    (a journey's end point, a partnership's reach), so the universe
-    must clear the largest of them. Returns that fact as
-    {'value', 'product', 'label', 'note', 'window', 'source_key'} or
-    None. Profile facts (the universe itself, its cuts, its other
-    windows) and chat-stated figures never floor a build; a figure on a
-    window as long as or longer than the build's is not a subset and is
-    skipped."""
+    Every other product's US-people figure on a window CONTAINED in
+    ``window`` describes a subset of that audience (a journey's end
+    point, a partnership's reach), so the universe must clear the
+    largest of them. Returns that fact as {'value', 'product', 'label',
+    'note', 'window', 'source_key'} or None. Profile facts (the universe
+    itself, its cuts, its other windows) and chat-stated figures never
+    floor a build; a figure on a window that is not inside the build's
+    (longer, or merely overlapping) is not a subset and is skipped
+    (2026-10-21, Jenna: containment, never overlap)."""
     if not isinstance(window, dict) or not (window.get('start') and window.get('end')):
         return None
     mine = window_days(window)
@@ -1062,10 +1227,7 @@ def universe_floor(anchors, window, exclude_key=None):
         fw = f.get('window') or {}
         if not (fw.get('start') and fw.get('end')):
             continue
-        theirs = window_days(fw)
-        if theirs <= 0 or theirs >= mine:
-            continue
-        if not (_window_overlap(window, fw) or 0) > 0:
+        if not window_within(fw, window):
             continue
         try:
             v = float(f.get('value'))

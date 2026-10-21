@@ -370,55 +370,93 @@ def _attach_samples(facts):
     return facts
 
 
+def _val(f):
+    try:
+        return float(f.get('value'))
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def audit_facts(facts, subject=''):
+    """The disagreements among one subject's facts. Every rule asks the
+    same three things (2026-10-21, Jenna, after eight '<Title> on
+    <Platform>' journeys were paired with the platform's own profile):
+    the two sources share an identity (they sit on one subject page),
+    one window is CONTAINED in the other (identical counts; a mere
+    overlap never does), and the figure that must sit below sits
+    above. Every figure is projected US people. A subset by
+    construction is never a finding: a cut inside its universe, a
+    journey's steps inside its own base, a title's watchers inside a
+    universe that is larger.
+
+      universe_below_subset   Profile IQ universe (a parent file) below
+                              another product's total on a window
+                              inside the profile's. Fixable: the
+                              universe lifts in place.
+      sub_window_exceeds      two other products, like steps, the one
+                              on the contained window above the one on
+                              the containing window.
+      same_window_disagree    two other products, like steps, identical
+                              windows, apart by more than 35%.
+
+    Returns findings; each carries the two facts (``profile`` / ``other``
+    for the universe rule, ``inner`` / ``outer`` for the rest)."""
+    facts = _attach_samples([f for f in (facts or []) if isinstance(f, dict)])
+    sizes = [f for f in facts if f.get('kind') in ('audience_size', 'stage_count')
+             and f.get('unit') == 'people' and f.get('product') != 'chat'
+             and not (f.get('product') == 'profile' and f.get('cut')) and _val(f) > 0]
+    universes = [f for f in sizes if f.get('product') == 'profile' and f.get('kind') == 'audience_size']
+    others = [f for f in sizes if f.get('product') != 'profile']
+    findings = []
+    # Rule 1: a Profile IQ universe holds everything another product
+    # measured on a window inside the profile's own. Above it: fine,
+    # whatever the windows (a universe is the superset). Below it: a
+    # finding, fixed in place by the reconcile step.
+    for p in universes:
+        for o in others:
+            if o.get('kind') != 'audience_size':
+                continue        # a path step is not a total
+            if not cc.window_within(o.get('window') or {}, p.get('window') or {}):
+                continue
+            if _val(o) > _val(p) * 1.05:
+                findings.append({'subject': subject, 'kind': 'universe_below_subset',
+                                 'a': _fact_line(o), 'b': _fact_line(p), 'profile': p, 'other': o})
+    # Rules 2 and 3: between two other products, like with like only.
+    for i, a in enumerate(others):
+        for b in others[i + 1:]:
+            if a.get('product') == b.get('product') or not _comparable(a, b):
+                continue
+            wa, wb = a.get('window') or {}, b.get('window') or {}
+            va, vb = _val(a), _val(b)
+            if cc.same_window(wa, wb):
+                if max(va, vb) / min(va, vb) > 1.35:
+                    small, big = (a, b) if va < vb else (b, a)
+                    findings.append({'subject': subject, 'kind': 'same_window_disagree',
+                                     'a': _fact_line(small), 'b': _fact_line(big), 'inner': small, 'outer': big})
+                continue
+            if cc.window_within(wa, wb):
+                inner, outer = a, b
+            elif cc.window_within(wb, wa):
+                inner, outer = b, a
+            else:
+                continue        # overlap without containment is never a sub-window case
+            if _val(inner) > _val(outer) * 1.05:
+                findings.append({'subject': subject, 'kind': 'sub_window_exceeds',
+                                 'a': _fact_line(inner), 'b': _fact_line(outer), 'inner': inner, 'outer': outer})
+    return findings
+
+
 def audit(limit_subjects=5000):
-    """Same-subject disagreements across products, every one compared
-    as projected US people against projected US people. A sub-window
-    may sit below an annual figure; it may never sit above it. Two reads
-    of the same thing on overlapping windows should agree within 35%.
-    A profile CUT is a sub-population of its universe, never the
-    universe, so it never enters the audience comparison. Each finding
-    carries the two facts (``short`` / ``long`` or ``a`` / ``b`` as
-    dicts) so the reconcile step can act on it."""
+    """Same-subject disagreements across products over the whole
+    catalog (see audit_facts for the rules). Returns (findings,
+    subjects described by two or more products)."""
     idx = cc.load_index(force=True)
     findings = []
     subs = idx.get('subjects') or {}
     multi = [(k, v) for k, v in subs.items() if len(v.get('products') or []) >= 2]
     for skey, ent in multi[:limit_subjects]:
         page = cc.load_subject_page(skey, force=True) or {}
-        facts = _attach_samples([f for f in (page.get('facts') or []) if isinstance(f, dict)])
-        sizes = [f for f in facts if f.get('kind') in ('audience_size', 'stage_count')
-                 and f.get('unit') == 'people' and f.get('product') != 'chat'
-                 and not (f.get('product') == 'profile' and f.get('cut'))]
-        # pairwise across products
-        for i, a in enumerate(sizes):
-            for b in sizes[i + 1:]:
-                if a.get('product') == b.get('product'):
-                    continue
-                wa, wb = a.get('window') or {}, b.get('window') or {}
-                ov = cc._window_overlap(wa, wb)
-                if ov is None or ov <= 0:
-                    continue
-                va, vb = float(a['value']), float(b['value'])
-                if va <= 0 or vb <= 0:
-                    continue
-                # the one with the shorter window must not exceed the longer
-                la = (cc._d(wa.get('end')) - cc._d(wa.get('start'))).days + 1
-                lb = (cc._d(wb.get('end')) - cc._d(wb.get('start'))).days + 1
-                short, long_ = (a, b) if la < lb else (b, a)
-                vs, vl = float(short['value']), float(long_['value'])
-                if la != lb and vs > vl * 1.05 and _comparable(short, long_):
-                    findings.append({'subject': ent.get('subject'), 'kind': 'sub_window_exceeds',
-                                     'a': _fact_line(short), 'b': _fact_line(long_),
-                                     'short': short, 'long': long_})
-                elif la == lb and max(va, vb) / min(va, vb) > 1.35 and _comparable(a, b):
-                    small, big = (a, b) if va < vb else (b, a)
-                    if big.get('product') == 'profile' and big.get('kind') == 'audience_size':
-                        # a universe above another product's figure on the same
-                        # window is a universe above one of its subsets: fine
-                        continue
-                    findings.append({'subject': ent.get('subject'), 'kind': 'same_window_disagree',
-                                     'a': _fact_line(small), 'b': _fact_line(big),
-                                     'short': small, 'long': big})
+        findings.extend(audit_facts(page.get('facts') or [], subject=ent.get('subject')))
     print(f"[audit] subjects with 2+ products: {len(multi)}, findings: {len(findings)}")
     return findings, len(multi)
 
@@ -438,14 +476,10 @@ def reconcile(findings, dry_run=False, s3=None):
     stamp = time.strftime('%Y%m%d_%H%M%S', time.gmtime())
     done_keys = set()
     for f in findings:
-        short, long_ = f.get('short'), f.get('long')
-        profile = long_ if (isinstance(long_, dict) and long_.get('product') == 'profile') else None
-        other = short if profile is not None else None
-        if f.get('kind') == 'same_window_disagree' and profile is None \
-                and isinstance(short, dict) and short.get('product') == 'profile':
-            # same window, the profile is the smaller side: a subset outgrew its universe
-            profile, other = short, long_
-        if not (profile and isinstance(other, dict) and other.get('product') not in ('profile', 'chat')
+        profile, other = f.get('profile'), f.get('other')
+        if not (f.get('kind') == 'universe_below_subset' and isinstance(profile, dict)
+                and isinstance(other, dict) and profile.get('product') == 'profile'
+                and other.get('product') not in ('profile', 'chat')
                 and profile.get('kind') == 'audience_size' and not profile.get('cut')):
             unresolved.append(f)
             continue
@@ -523,7 +557,12 @@ def _fact_line(f):
 
 def send_audit_email(findings, n_multi, stats, fixed=()):
     """The sweep mails ONLY what it could not settle itself. Both sides
-    of every line are projected US people."""
+    of every line are projected US people. Nothing left to look at means
+    no mail at all, never an empty one (2026-10-21, Jenna: 'getting so
+    many of these')."""
+    if not findings:
+        print('[audit] nothing to mail')
+        return ''
     import boto3
     lines = [f"Corpus catalog sweep {time.strftime('%Y-%m-%d %H:%M UTC', time.gmtime())}",
              '',
@@ -535,18 +574,15 @@ def send_audit_email(findings, n_multi, stats, fixed=()):
     if fixed:
         lines.append(f"{len(fixed)} universe(s) brought into line in place this run (no action needed).")
         lines.append('')
-    if not findings:
-        lines.append('No cross-product disagreements left to look at.')
-    else:
-        lines.append(f"{len(findings)} cross-product disagreement(s) to look at (every figure is projected US people):")
-        lines.append('')
-        for f in findings[:60]:
-            lines.append(f"- {f['subject']} ({f['kind'].replace('_', ' ')})")
-            lines.append(f"    {f['a']}")
-            lines.append(f"    {f['b']}")
+    lines.append(f"{len(findings)} cross-product disagreement(s) to look at (every figure is projected US people; "
+                 f"the first line is the figure that sits above, the second the one it had to sit under):")
+    lines.append('')
+    for f in findings[:60]:
+        lines.append(f"- {f['subject']} ({f['kind'].replace('_', ' ')})")
+        lines.append(f"    {f['a']}")
+        lines.append(f"    {f['b']}")
     body = '\n'.join(lines)
-    subj = ('Corpus catalog: ' + (f"{len(findings)} cross-product disagreement(s)" if findings
-                                  else 'clean sweep'))
+    subj = f"Corpus catalog: {len(findings)} cross-product disagreement(s)"
     try:
         ses = boto3.client('ses', region_name='us-east-2')
         ses.send_email(Source=SENDER, Destination={'ToAddresses': ALERT_TO},
@@ -571,6 +607,9 @@ def main(argv=None):
     ap.add_argument('--force-profiles', action='store_true',
                     help='re-read every profile CSV regardless of its stored ETag (after a change '
                          'to the profile reader); journeys, campaigns and reads keep their ETag skip')
+    ap.add_argument('--force-journeys', action='store_true',
+                    help='re-read every journey payload regardless of its stored ETag (after a change '
+                         'to the journey identity reader)')
     ap.add_argument('--no-reconcile', action='store_true',
                     help='report disagreements without correcting the fixable ones in place')
     args = ap.parse_args(argv)
@@ -599,6 +638,11 @@ def main(argv=None):
         if args.force_profiles:
             sources = {k: v for k, v in sources.items() if (v or {}).get('product') != 'profile'}
             print('[sync] --force-profiles: every profile CSV will be re-read')
+        if args.force_journeys:
+            # a journey whose identity moved (2026-10-21, 'Nip/Tuck on Hulu'
+            # from Hulu to Nip/Tuck) leaves its old page inside bulk_upsert
+            sources = {k: v for k, v in sources.items() if (v or {}).get('product') != 'journey'}
+            print('[sync] --force-journeys: every journey payload will be re-read')
         present = set()
         n, seen = sweep_profiles(sources, dry_run=args.dry_run, workers=args.workers)
         stats['profiles'] = n
