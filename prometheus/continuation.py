@@ -365,10 +365,10 @@ def rerun_confirm(deliv, window, price_label, *, what=''):
     noun = {'read': 'read', 'build': 'profile', 'journey': 'journey', 'deck': 'deck', 'cut': 'cut'}.get(kind, 'read')
     wp = window_phrase(window)
     if wp:
-        reply = f"Run the {subj} {noun} again on {wp}? It runs {price_label}."
+        reply = f"I can run the {subj} {noun} again on {wp}. Pulling this data will cost {price_label}."
     else:
-        reply = f"Run the {subj} {noun} again? Tell me the window (two dates, a month, or a quarter) and I will quote it; the read itself runs {price_label}."
-    chips = ['Yes, run it again', 'Something else'] if wp else ['Something else']
+        reply = f"I can run the {subj} {noun} again. Tell me the window (two dates, a month, or a quarter) and I will quote it; pulling this data will cost {price_label}."
+    chips = ['Approve', 'Cancel'] if wp else ['Something else']
     q = str((deliv or {}).get('question') or '').strip()
     merged = (f"{q} Window: {wp}." if (q and wp) else q)
     return {'success': True, 'action': 'answer', 'reply': reply, 'followups': chips,

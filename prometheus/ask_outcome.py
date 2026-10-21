@@ -82,6 +82,14 @@ _SCOLD_RE = re.compile(
     r"tell me which part|i could not place that answer|i have told you|as i (?:said|told you) (?:before|already|twice)|"
     r"(?:you|you've|you have) (?:already )?asked (?:this|that|me)(?: twice| already| before| again)|"
     r"i will stop (?:asking|repeating))\b", re.IGNORECASE)
+# The retired offer closers (Jenna 2026-10-21, twice: the offer says
+# 'Pulling this data will cost $N.' with Approve / Cancel, never a
+# refusal). Any lane still composing the old sentences is held here.
+_RETIRED_OFFER_RE = re.compile(
+    r"\bI will not answer until you accept\b|"
+    r"\bThat is an? [\$\u00a3\u20ac]\s?[\d,.]+k? read\b|"
+    r"\bIt runs [\$\u00a3\u20ac]\s?\d|"
+    r"^\s*Run the (?:full read|breakdown)\b", re.IGNORECASE | re.MULTILINE)
 # The intake / clarify shapes the guided pulls and the base-clarify
 # path send back.
 _CLARIFY_RE = re.compile(
@@ -172,6 +180,8 @@ def is_faulted_text(text):
     if _SCAFFOLD_RE.search(t[:600]):
         return True
     if _SCOLD_RE.search(t[:800]):
+        return True
+    if _RETIRED_OFFER_RE.search(t[:800]):
         return True
     return False
 

@@ -20,8 +20,10 @@ WEB = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(WEB))
 
 from prometheus.priced_read import (  # noqa: E402
-    CONFIRM, classify, is_talk, needs_generate_quote, offer, same_frame,
+    APPROVE_CHIP, CANCEL_CHIP, COST_LINE, classify, display_subject, is_talk,
+    needs_generate_quote, offer, same_frame, service_turn, sizing_lead,
 )
+from prometheus import ask_outcome  # noqa: E402
 from prometheus.overlap_read import is_overlap_read  # noqa: E402
 
 FAIL = 0
@@ -80,8 +82,8 @@ check("same_frame helper agrees",
 declined = [
     {'role': 'user', 'text': 'how incremental is The Kiss Quotient to Prime Video?'},
     {'role': 'agent', 'text': (
-        'I can answer that as a custom read on The Kiss Quotient. '
-        'That is a $500 read. I will not answer until you accept.')},
+        'I can pull that as a custom read on The Kiss Quotient and deliver '
+        'the numbers in this chat. Pulling this data will cost $500.')},
 ]
 check("a declined incrementality offer is not a paid frame",
       same_frame(declined, 'incrementality|prime video') is False)
@@ -105,15 +107,84 @@ lst = classify("who are the top 25 YouTube creators")
 check("top 25 YouTube creators is a $500 list",
       bool(lst) and lst.get('kind') == 'list' and lst.get('usd') == 500)
 
-# --- offer copy is upfront ------------------------------------------
+# --- offer copy is the one shape (Jenna 2026-10-21, twice) ----------
+# One sentence on what they get, 'Pulling this data will cost $N.', then
+# Approve / Cancel. Never 'I will not answer until you accept', never
+# 'That is a $N read', never 'It runs $N', never the page's own label.
 reply, chips, off = offer('Chipotle', '$100', 'how big is Chipotle',
                           kind='sizing', frame='sizing')
 check("sizing offer names $100", '$100' in reply)
-check("sizing offer waits for accept", CONFIRM in reply)
-check("sizing offer chip is Run the full read",
-      any('Run the full read' in c and '$100' in c for c in chips))
+check("sizing offer ends on the cost line",
+      reply.endswith(COST_LINE.format(price='$100')))
+check("sizing offer names the subject in the lead",
+      reply.startswith('I can size Chipotle'))
+check("chips are Approve and Cancel", chips == [APPROVE_CHIP, CANCEL_CHIP])
 check("sizing offer kind is sizing", off.get('kind') == 'sizing')
-check("Never mind is a chip", 'Never mind' in chips)
+RETIRED = ('I will not answer', 'That is a $', 'It runs $', 'Run the full read',
+           'Run the breakdown', 'Never mind')
+check("no retired phrasing in the sizing offer",
+      not any(x in reply or any(x in c for c in chips) for x in RETIRED))
+for kind, subj in (('where_watched', 'Mutiny'), ('list', 'DraftKings users'),
+                   ('path', 'Landman viewers'), ('overlap', 'Lore Olympus'),
+                   ('derived', 'The Office US'), ('report', 'Eastside Golf')):
+    r, c, o = offer(subj, '$500', 'q', kind=kind)
+    check(f"{kind} offer: one shape, names {subj}",
+          subj in r and r.endswith(COST_LINE.format(price='$500'))
+          and c == [APPROVE_CHIP, CANCEL_CHIP]
+          and not any(x in r for x in RETIRED))
+
+# Casey Pearson, 2026-10-21 22:33 UTC, open profile 'market size for prank
+# content': the offer read "market size for prank content: data, share, and
+# US people in the window. That is a $100 read. I will not answer until you
+# accept." The subject was the open profile's title; the ask names three
+# content categories and Paramount+.
+casey = ("what is the market size for prank content, horror, and comedy "
+         "and how penetrated is Paramount+ in each of them?")
+casey_ctx = {'primary': {'name': 'market size for prank content',
+                         'subject': 'market size for prank content'}}
+lead = sizing_lead(casey, casey_ctx)
+check("Casey: the lead names the categories and Paramount+",
+      lead == "I can size the market for prank content, horror and comedy "
+              "and Paramount+'s share of each.")
+casey_out = service_turn(casey, user={'username': 'cpearson'}, ctx=casey_ctx,
+                         history=[], host=None)
+check("Casey: the offer is the lead plus the $100 cost line",
+      bool(casey_out) and casey_out.get('reply') == lead + ' ' + COST_LINE.format(price='$100'))
+check("Casey: Approve / Cancel chips",
+      bool(casey_out) and casey_out.get('followups') == [APPROVE_CHIP, CANCEL_CHIP])
+check("Casey: the page label never leads the offer",
+      bool(casey_out) and 'market size for prank content:' not in casey_out.get('reply', '')
+      and not casey_out.get('reply', '').lower().startswith('market size'))
+check("Casey: no retired phrasing",
+      bool(casey_out) and not any(x in casey_out.get('reply', '') for x in RETIRED))
+check("Casey: the offer still arms the sizing confirm",
+      bool(casey_out) and (casey_out.get('panel_offer') or {}).get('kind') == 'sizing')
+check("the page label alone shows no subject",
+      display_subject('market size for prank content', casey,
+                      'market size for prank content') == '')
+check("the open tab never leads a path offer (Liz, Netflix open)",
+      offer('Netflix', '$100',
+            'What did Landman viewers watch next after the Season 2 finale '
+            'on Paramount+, and which other streaming services do they pay '
+            'for? plus the share who subscribe to Netflix, Peacock, Max and '
+            'Prime Video.', kind='path', page='Netflix')[0]
+      == 'I can pull the path you asked for. ' + COST_LINE.format(price='$100'))
+check("a metric phrase never leads an offer (Bria, 'Unique')",
+      display_subject('Unique', 'Give me unique US viewers per surface') == '')
+
+# --- the retired sentences can never ship again ---------------------
+for old_line in ("market size for prank content: data, share, and US people in the "
+                 "window. That is a $100 read. I will not answer until you accept.",
+                 "The path for Netflix. That is a $500 read. I will not answer until you accept.",
+                 "I can split the figures by device. It runs $100.",
+                 "Run the full read - $500"):
+    check(f"gate holds the retired offer line: {old_line[:38]}",
+          ask_outcome.is_faulted_text(old_line) is True)
+check("the new offer line passes the gate",
+      ask_outcome.is_faulted_text(casey_out.get('reply', '')) is False)
+check("an out-of-funds line is not an offer closer",
+      ask_outcome.is_faulted_text("The Chipotle read runs $100 and your account "
+                                  "cannot cover it right now.") is False)
 
 # --- service / chat wiring ------------------------------------------
 service = (WEB / 'prometheus' / 'service.py').read_text()

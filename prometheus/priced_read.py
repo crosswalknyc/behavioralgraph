@@ -15,7 +15,16 @@ from __future__ import annotations
 
 import re
 
-CONFIRM = "I will not answer until you accept."
+# The one offer shape (Jenna 2026-10-21, twice: "it should not say 'I will
+# not answer until you accept', just do the chips approve | cancel"). One
+# sentence on what the reader gets, then the cost line, then two chips.
+# Never a refusal, never 'That is a $N read', never 'It runs $N'.
+COST_LINE = "Pulling this data will cost {price}."
+APPROVE_CHIP = "Approve"
+CANCEL_CHIP = "Cancel"
+# Kept under its historic name for callers that import it; the offer text
+# no longer carries a refusal sentence.
+CONFIRM = ""
 
 _TALK_RX = re.compile(
     r"\b(?:what does (?:this|that|it|the (?:number|figure|percent)).{0,24}mean|"
@@ -36,8 +45,11 @@ _INC_RX = re.compile(
     r"\b(?:how\s+incremental(?:ly)?|incrementality|"
     r"incremental\s+(?:to|for|reach|lift|viewers?))\b",
     re.I)
+# An offer turn in a thread (the current shape and the retired ones) is
+# never mistaken for a delivered read when a frame is checked.
 _OFFER_COPY_RX = re.compile(
-    r"I will not answer until you accept|It runs \$|Run the full read|Run the breakdown",
+    r"Pulling this data will cost|I will not answer until you accept|It runs \$|"
+    r"Run the full read|Run the breakdown",
     re.I)
 
 
@@ -252,37 +264,160 @@ def _panel_price(username=None):
         return '$500', 5
 
 
-def offer(subject, price_label, question, kind='report', frame='', years=1):
-    """(reply, followups, offer dict). Copy names the price and says
-    we will not answer until they accept."""
-    subj = str(subject or '').strip() or 'that subject'
-    price = str(price_label or '').strip() or '$500'
-    run = (f"Run the full read - {price}" if kind != 'derived'
-           else f"Run the breakdown - {price}")[:160]
+_PLACEHOLDER_SUBJECTS = frozenset({
+    'that subject', 'that audience', 'that title', 'this audience',
+    'this subject', 'this title', 'the page', '__page__'})
+_WH_LEAD_RX = re.compile(r"^(?:how|what|which|where|who|when|why)\b", re.I)
+_SIZE_PREFIX_RX = re.compile(
+    r"^(?:the\s+)?(?:market\s+size\s+(?:for|of)|size\s+of|audience\s+size\s+(?:for|of)|"
+    r"sample\s+size\s+(?:for|of)|how\s+big\s+is|how\s+many)\s+(?:the\s+)?", re.I)
+_SHARE_OF_RX = re.compile(
+    r"(?:how\s+penetrated\s+is|penetration\s+of|share\s+of|how\s+(?:much|far)\s+(?:does\s+)?)\s*"
+    r"(?P<plat>[A-Z][\w+&'. -]{1,40}?)(?:\s+(?:in|into|across|on)\b|'s\b|\?|$)")
+
+
+def _fold(s):
+    return re.sub(r"[^a-z0-9]+", "", str(s or '').lower())
+
+
+def display_subject(subject, question='', page=''):
+    """The subject a reader sees in an offer: the binder's clean display
+    for the words in hand, '' when the raw is a placeholder, a metric
+    phrase, a question fragment, a descriptor ('market size for ...'),
+    or the open page's own label that the words did not name
+    (2026-10-21, Casey Pearson's offer read 'market size for prank
+    content', the open profile's title; Liz Huszarik's read 'The path
+    for Netflix', the open tab). An empty display writes the line
+    without a subject rather than with the wrong one."""
+    s = ' '.join(str(subject or '').split()).strip(" ,;:.'\"")
+    if not s or s.lower() in _PLACEHOLDER_SUBJECTS or _WH_LEAD_RX.match(s):
+        return ''
+    if _SIZE_PREFIX_RX.match(s):
+        return ''
+    try:
+        from . import subject_rules as _sr
+        if _sr.is_metric_phrase(s):
+            return ''
+        if page and _fold(s) == _fold(page):
+            # the page's label stands only when the words bind it; a
+            # subject the words bind instead replaces it; otherwise the
+            # line is written without one
+            q = ' '.join(str(question or '').split())
+            try:
+                b = _sr.bind(q, None, '')
+            except Exception:
+                b = None
+            if b and b.source == 'words' and b.display:
+                return _sr.clean_display(b.display, q) or ''
+            return ''
+        return _sr.clean_display(s, question) or ''
+    except Exception:
+        return s
+
+
+def _join(parts):
+    parts = [p for p in parts if p]
+    if not parts:
+        return ''
+    if len(parts) == 1:
+        return parts[0]
+    return ', '.join(parts[:-1]) + ' and ' + parts[-1]
+
+
+def sizing_lead(text, ctx=None):
+    """The one sentence a sizing offer opens with, built from the things
+    the ask names: 'I can size the market for prank content, horror and
+    comedy and Paramount+'s share of each.' '' when nothing in the ask
+    names a thing (the caller writes the neutral lead)."""
+    t = ' '.join(str(text or '').split())
+    things = []
+    try:
+        from . import sizing_lane as _sz
+        from . import subject_rules as _sr
+        for s in _sz.subjects(t, ctx):
+            s = ' '.join(str(s or '').split()).strip(" ,;:.'\"")
+            if not s or s == '__page__' or _sz.is_panel_noun(s) or _WH_LEAD_RX.match(s):
+                continue
+            s = _SIZE_PREFIX_RX.sub('', s).strip(" ,;:.'\"")
+            if not s or _sr.is_metric_phrase(s):
+                continue
+            s = _sz.strip_audience_nouns(s) or s
+            if s and s.lower() not in [x.lower() for x in things]:
+                things.append(s)
+    except Exception:
+        things = []
+    if not things:
+        return ''
+    market = bool(re.search(r"\bmarket\s+size\b", t, re.I))
+    lead = ("I can size the market for " if market else "I can size ") + _join(things)
+    m = _SHARE_OF_RX.search(t)
+    if m:
+        plat = m.group('plat').strip(" ,;:.'\"")
+        if plat and plat.lower() not in [x.lower() for x in things]:
+            lead += f" and {plat}'s share of each" if len(things) > 1 else f" and {plat}'s share of it"
+    return lead + '.'
+
+
+def _lead(kind, subj):
+    """The default first sentence per offer kind; written without a
+    subject when none reads clean."""
     if kind == 'sizing':
-        reply = (f"{subj}: sample, share, and US people in the window. "
-                 f"That is a {price} read. {CONFIRM}")
-    elif kind == 'where_watched':
-        reply = (f"Where people watched {subj}. That is a {price} read. "
-                 f"{CONFIRM}")
-    elif kind == 'list':
-        reply = (f"The ranked list you asked for on {subj}. That is a "
-                 f"{price} read. {CONFIRM}")
-    elif kind == 'path':
-        reply = (f"The path for {subj}. That is a {price} read. {CONFIRM}")
-    elif kind == 'derived':
-        reply = (f"I can add that title to the same read on {subj}. "
-                 f"That is a {price} read. {CONFIRM}")
-        run = (f"Run the breakdown - {price}")[:160]
-    else:
-        reply = (f"I can answer that as a custom read on {subj} and "
-                 f"deliver the numbers in this chat. That is a {price} "
-                 f"read. {CONFIRM}")
+        return (f"I can size {subj}: share and US people in the window."
+                if subj else "I can size this audience: share and US people in the window.")
+    if kind == 'where_watched':
+        return (f"I can pull where people watched {subj}." if subj
+                else "I can pull where people watched it.")
+    if kind == 'list':
+        return (f"I can pull the ranked list you asked for on {subj}." if subj
+                else "I can pull the ranked list you asked for.")
+    if kind == 'path':
+        return (f"I can pull the path for {subj}." if subj
+                else "I can pull the path you asked for.")
+    if kind == 'overlap':
+        return (f"I can pull the overlap you asked for on {subj}." if subj
+                else "I can pull the overlap you asked for.")
+    if kind == 'derived':
+        return (f"I can add that title to the same read on {subj}." if subj
+                else "I can add that title to the same read.")
+    return (f"I can pull that as a custom read on {subj} and deliver the numbers in this chat."
+            if subj else "I can pull that as a custom read and deliver the numbers in this chat.")
+
+
+def page_name(ctx=None):
+    """The open profile's label from the page context, else from the
+    request's page context (flask.g._pm_page_ctx, set at the door), ''
+    when none."""
+    try:
+        name = str(((ctx or {}).get('primary') or {}).get('name') or '').strip()
+        if name:
+            return name
+    except Exception:
+        pass
+    try:
+        from flask import g as _g
+        pc = getattr(_g, '_pm_page_ctx', None) or {}
+        return str(((pc or {}).get('primary') or {}).get('name') or '').strip()
+    except Exception:
+        return ''
+
+
+def offer(subject, price_label, question, kind='report', frame='', years=1, what='', page=''):
+    """(reply, followups, offer dict). One sentence on what the reader
+    gets, then 'Pulling this data will cost $N.', then Approve / Cancel.
+    ``what`` is a caller-written first sentence (the sizing lead); the
+    subject shown is the binder's clean display, never the page label
+    (pass ``page`` so the open profile's name is recognized)."""
+    raw_subj = str(subject or '').strip()
+    price = str(price_label or '').strip() or '$500'
+    subj = display_subject(raw_subj, question, page or page_name())
+    lead = ' '.join(str(what or '').split()) or _lead(kind, subj)
+    reply = (lead + ' ' if lead else '') + COST_LINE.format(price=price)
     offer_body = {'question': str(question or '')[:600],
-                  'subject': subj[:120], 'kind': kind, 'frame': frame}
+                  'subject': (raw_subj or subj or 'that subject')[:120],
+                  'kind': kind, 'frame': frame}
     if years and years != 1:
         offer_body['years'] = years
-    return reply, [run, 'Never mind'], offer_body
+    return reply, [APPROVE_CHIP, CANCEL_CHIP], offer_body
 
 
 def out_of_credits(subject, price_label):
@@ -354,8 +489,10 @@ def service_turn(text, *, user=None, ctx=None, history=None, host=None,
                    else _where_subject(text, history, ctx) or 'that title')
     label, credits, pull_type, offer_kind = price_plan(hit, uname or None)
     if pc is None:
+        what = sizing_lead(text, ctx) if hit['kind'] == 'sizing' else ''
         reply, chips, off = offer(subject, label, text, kind=offer_kind,
-                                  frame=hit.get('frame') or '')
+                                  frame=hit.get('frame') or '', what=what,
+                                  page=page_name(ctx))
         return {
             'success': True, 'action': 'answer', 'reply': reply,
             'followups': chips, 'offer_deck': False, 'deck_angle': None,

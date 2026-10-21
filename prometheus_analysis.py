@@ -5412,7 +5412,7 @@ def build_profile_required_reply(subject, price_label=None):
     carry is retired (Jenna 2026-10-08: a custom ask is a priced read,
     never a build). Returns (reply, followups)."""
     price = str(price_label or '').strip()
-    tail = (f" A custom read like that runs {price} and lands right here "
+    tail = (f" A custom read like that costs {price} and lands right here "
             f"in the chat." if price else "")
     reply = ("I did not catch which audience this is about. Name the "
              "person, brand, title, or group and I will read it: who they "
@@ -5431,8 +5431,13 @@ def build_profile_required_reply(subject, price_label=None):
 # confirm, before generation starts.
 # ---------------------------------------------------------------------------
 
-PANEL_RUN_CHIP_PREFIX = 'Run the full read'
-DERIVED_RUN_CHIP_PREFIX = 'Run the breakdown'
+# The one offer shape (Jenna 2026-10-21): a sentence on what the reader
+# gets, 'Pulling this data will cost $N.', then Approve / Cancel. The
+# historic names stay for callers; both run chips read Approve.
+PANEL_RUN_CHIP_PREFIX = 'Approve'
+DERIVED_RUN_CHIP_PREFIX = 'Approve'
+PANEL_CANCEL_CHIP = 'Cancel'
+PANEL_COST_LINE = 'Pulling this data will cost {price}.'
 
 
 def panel_report_eligible(text, subject):
@@ -5474,9 +5479,22 @@ def build_panel_report_offer(subject, price_label, question='',
     Price is stated up front (2026-08-18 house rule: what you see is
     what you pay); the charge itself only lands on confirm, server
     side, at the server's price. kind='viewership' is the per-year
-    viewership-over-time read (Jenna 2026-10-08)."""
-    subj = str(subject or '').strip() or 'that subject'
-    subj = re.sub(r"\s*\([^)]*\)\s*$", '', subj).strip() or 'that subject'   # never 'this audience (open Profile IQ audience)' (2026-10-14)
+    viewership-over-time read (Jenna 2026-10-08).
+
+    The shape (Jenna 2026-10-21): one sentence on what the reader
+    gets, then 'Pulling this data will cost $N.', then Approve /
+    Cancel. Never a refusal. The subject shown is the words' own; the
+    open tab's label never leads an offer the words did not bind to
+    it (Liz Huszarik: 'The path for Netflix'), and when no subject
+    reads clean the line is written without one."""
+    raw = str(subject or '').strip()
+    raw = re.sub(r"\s*\([^)]*\)\s*$", '', raw).strip()   # never 'this audience (open Profile IQ audience)' (2026-10-14)
+    subj = ''
+    try:
+        from prometheus import priced_read as _pr_shape
+        subj = _pr_shape.display_subject(raw, question, _pr_shape.page_name())
+    except Exception:
+        subj = raw if raw.lower() not in ('that subject', 'that audience') else ''
     # The condition the ask puts on the count ("without paying for it",
     # "outside a theater") is stated in the sentence, never inside the
     # name (2026-10-20, Jay Patel: "Title 'mutiny' Without Paying").
@@ -5489,8 +5507,10 @@ def build_panel_report_offer(subject, price_label, question='',
             cond = ''
     cond_sp = (' ' + cond) if cond else ''
     price = str(price_label or '').strip()
-    run_chip = (f"{PANEL_RUN_CHIP_PREFIX} - {price}"
-                if price else PANEL_RUN_CHIP_PREFIX)[:160]
+    cost = (' ' + PANEL_COST_LINE.format(price=price)) if price else ''
+    followups = [PANEL_RUN_CHIP_PREFIX, PANEL_CANCEL_CHIP]
+    on_subj = f" on {subj}" if subj else ''
+    body_subject = (raw or subj or 'that subject')[:120]
     if kind == 'viewership':
         try:
             yrs = max(int(years or 1), 1)
@@ -5500,12 +5520,10 @@ def build_panel_report_offer(subject, price_label, question='',
         what = (f"month by month viewers and hours watched{cond_sp} across {span}"
                 if series else
                 f"how many people in the US {verb or 'watched'} it{cond_sp} across {span}")
-        reply = (
-            f"That is a viewership read on {subj}: {what}, delivered right "
-            f"here in the chat." + (f" It runs {price}." if price else ""))
-        followups = [run_chip, 'Never mind']
+        reply = (f"I can pull a viewership read{on_subj}: {what}, delivered right "
+                 f"here in the chat." + cost)
         offer = {'question': str(question or '')[:600],
-                 'subject': subj[:120], 'kind': 'viewership', 'years': yrs}
+                 'subject': body_subject, 'kind': 'viewership', 'years': yrs}
         return scrub_user_text(reply), followups, offer
     if kind == 'derived':
         # A delivered figure split by a dimension the panel observes
@@ -5515,25 +5533,23 @@ def build_panel_report_offer(subject, price_label, question='',
         dim = str(dimension or 'device').strip().lower()
         buckets = DIMENSION_BUCKETS.get(dim) or ()
         what = (f"by {dim}" + (f" ({', '.join(b.lower() for b in buckets)})" if buckets else ''))
-        reply = (
-            f"I can split the figures for {subj} {what}, each period reconciled "
-            f"exactly to the number you have, right here in the chat."
-            + (f" It runs {price}." if price else ""))
-        run_chip = (f"{DERIVED_RUN_CHIP_PREFIX} - {price}" if price else DERIVED_RUN_CHIP_PREFIX)[:160]
-        followups = [run_chip, 'Never mind']
+        reply = (f"I can split the figures{(' for ' + subj) if subj else ''} {what}, each period "
+                 f"reconciled exactly to the number you have, right here in the chat." + cost)
         offer = {'question': str(question or '')[:600],
-                 'subject': subj[:120], 'kind': 'derived', 'dimension': dim}
+                 'subject': body_subject, 'kind': 'derived', 'dimension': dim}
         return scrub_user_text(reply), followups, offer
     # Custom ask (Jenna 2026-10-08): a priced read, delivered in the
     # chat, with no profile pushed. The user can always ask for one.
-    reply = (
-        f"I can answer that as a custom read on {subj}" + (f", {verb or 'watched'}{cond_sp}" if cond else '') + ": I read "
-        f"{the_subject(subj)} audience end to end and deliver the numbers "
-        f"right here in the chat." + (f" It runs {price}." if price else "")
-    )
-    followups = [run_chip, 'Never mind']
-    offer = {'question': str(question or '')[:600],
-             'subject': subj[:120]}
+    if subj:
+        reply = (f"I can pull that as a custom read on {subj}"
+                 + (f", {verb or 'watched'}{cond_sp}" if cond else '')
+                 + f": {the_subject(subj)} audience end to end, with the numbers "
+                 f"right here in the chat." + cost)
+    else:
+        reply = ("I can pull that as a custom read"
+                 + (f", {verb or 'watched'}{cond_sp}" if cond else '')
+                 + ": the audience end to end, with the numbers right here in the chat." + cost)
+    offer = {'question': str(question or '')[:600], 'subject': body_subject}
     return scrub_user_text(reply), followups, offer
 
 

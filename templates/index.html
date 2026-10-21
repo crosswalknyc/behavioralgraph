@@ -83935,7 +83935,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             if (_pmPanelOffer && !_pmKpiPivot) {
                 var _po = _pmPanelOffer;
                 var _poLow = text.trim().toLowerCase();
-                var _poRun = _poLow.indexOf('run the full read') === 0 ||
+                // The offer's chips read Approve / Cancel (Jenna 2026-10-21);
+                // the older run chips and a typed yes still count as approval.
+                var _poRun = _poLow.indexOf('approve') === 0 ||
+                    _poLow.indexOf('run the full read') === 0 ||
                     _poLow.indexOf('run the breakdown') === 0 ||
                     /^(yes|yeah|yep|ok(ay)?|sure|run it|go ahead|do it|charge (it|me))[.! ]*$/i.test(_poLow);
                 if (_poRun) {
