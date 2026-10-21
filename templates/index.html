@@ -64141,6 +64141,13 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         // tab (all-platforms > competitors > peacock). Prefers the
         // freshest fetch on the active tab so the stamp bar tracks
         // whichever data set the user is looking at.
+        function _miqPayloadForPanel(panel) {
+            var mq = window.__microdramasIQ || {};
+            if (panel === 'all')     return mq.allData || mq.compData || mq.lastData || null;
+            if (panel === 'peacock') return mq.lastData || mq.allData || mq.compData || null;
+            return mq.compData || mq.allData || mq.lastData || null;
+        }
+
         function _miqActivePayload() {
             var mq = window.__microdramasIQ || {};
             var panel = mq.activePanel;
@@ -64215,18 +64222,73 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         // Jenna 2026-08-17: "The date range needs to print on DB and
         // on export. So its a permanent record. Can easily recreate
         // in future runs in custom date section."
-        function microdramasIQExportCsv() {
-            var mq = window.__microdramasIQ || {};
-            var panel = mq.activePanel || 'all';
+        // Every tab, not only the one on screen (Jenna 2026-10-21).
+        // Tabs load the first time they are opened, so anything not
+        // yet fetched is fetched here first; otherwise clicking Export
+        // on a fresh page would save one file and silently skip the
+        // rest. A tab that genuinely has no rows is skipped rather
+        // than saved as a header with nothing under it.
+        async function microdramasIQExportCsv() {
+            var btn = document.querySelector('#microdramasIQView .miq-export-btn');
+            var label = btn ? btn.textContent : '';
+            function say(t) { if (btn) { btn.textContent = t; btn.disabled = true; } }
+            function done() { if (btn) { btn.textContent = label || 'Export'; btn.disabled = false; } }
+
+            var panels = [];
             try {
-                var activeEl = document.querySelector('.miq-panel.active[data-panel]');
-                if (activeEl) panel = activeEl.getAttribute('data-panel');
+                document.querySelectorAll('#microdramasIQView .miq-tab[data-panel]')
+                    .forEach(function(b) { panels.push(b.getAttribute('data-panel')); });
             } catch (e) { /* ignore */ }
-            var payload = _miqActivePayload();
-            if (!payload) {
-                alert('No data loaded yet. Apply a filter first.');
-                return;
+            if (!panels.length) panels = ['all', 'peacock'].concat(_MIQ_COMPETITOR_PANELS);
+
+            var mq = window.__microdramasIQ || {};
+            var needsAll  = panels.indexOf('all') >= 0 && !mq.allData;
+            var needsPeac = panels.indexOf('peacock') >= 0 && !mq.lastData;
+            var needsComp = !mq.compData && panels.some(function(p) {
+                return _MIQ_COMPETITOR_PANELS.indexOf(p) >= 0;
+            });
+            if (needsAll || needsPeac || needsComp) {
+                say('Loading the other tabs...');
+                try {
+                    if (needsAll) {
+                        window.__microdramasIQ.allLoaded = true;
+                        await applyMicrodramasIQAll();
+                    }
+                    if (needsPeac) await applyMicrodramasIQFilters();
+                    if (needsComp) {
+                        window.__microdramasIQ.compLoaded = true;
+                        await applyMicrodramasIQCompetitors();
+                    }
+                } catch (e) { /* export whatever did load */ }
             }
+
+            var written = 0, skipped = [];
+            for (var i = 0; i < panels.length; i++) {
+                var panel = panels[i];
+                var payload = _miqPayloadForPanel(panel);
+                if (!payload) { skipped.push(panel); continue; }
+                var body = _miqExportRowsForPanel(panel, payload);
+                // Row 0 is the column header; nothing under it is an
+                // empty tab, and an empty file helps no one.
+                if (body.length < 2) { skipped.push(panel); continue; }
+                say('Saving ' + (written + 1) + ' of ' + panels.length + '...');
+                _miqExportOnePanel(panel, payload, body);
+                written++;
+                // Browsers rate-limit a burst of saves from one click.
+                if (i < panels.length - 1) {
+                    await new Promise(function(r) { setTimeout(r, 350); });
+                }
+            }
+            done();
+            if (!written) {
+                alert('No data loaded yet. Apply a filter first.');
+            } else if (skipped.length) {
+                console.log('[microdramas export] saved ' + written
+                    + ', no rows for: ' + skipped.join(', '));
+            }
+        }
+
+        function _miqExportOnePanel(panel, payload, body) {
             var s = payload.window_start_date || '';
             var e = payload.window_end_date || '';
             var lbl = payload.window_label || '';
@@ -64249,7 +64311,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 []  // blank separator row
             ];
 
-            var rows = header.concat(_miqExportRowsForPanel(panel, payload));
+            var rows = header.concat(body);
 
             var filenameParts = [
                 'microdramas-iq',
@@ -64268,6 +64330,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             if (panel === 'dramabox')  return 'DramaBox';
             if (panel === 'goodshort') return 'GoodShort';
             if (panel === 'netshort')  return 'NetShort';
+            if (panel === 'dramashorts') return 'DramaShorts';
+            if (panel === 'atwist')      return 'aTwist';
             return panel || 'View';
         }
 
