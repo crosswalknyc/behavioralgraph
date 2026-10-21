@@ -158,6 +158,14 @@ round numbers, no two identical rates. Return STRICT JSON only:
                                   // bought) the title on the platform in
                                   // the window, researched; null if unknown
   "post_type": "official_clip"|"news_article"|"meme_reaction"|"mixed",
+  "following": "cult"|"mainstream",  // cult = a small, dedicated fan base
+                                  // that still makes and shares its own
+                                  // content (fan edits, scene clips,
+                                  // remaster comparisons), often with a
+                                  // revival or reboot in the news, while
+                                  // the title's own US reach is low;
+                                  // mainstream = clips reach a huge
+                                  // casual audience. Unsure = mainstream.
   "facts": [                      // exactly 4 {label, value} card
     {"label": str, "value": str}, // lines for the tab header - plain
     ...                           // client-safe sentences with the
@@ -832,7 +840,9 @@ def build_copy(subject: str, platform: str, blob: dict, *,
     film ticketing read came to say "Paid for a $95 and up bottle".
     Family is 'ticketing', 'watch', or 'purchase'; every string is
     derived from the data, nothing is hand-written per run."""
-    spine = [s for s in (blob.get('spine') or []) if s.get('id') != 'tam']
+    # the first row is the US base whatever its id ('tam', or 'us_gen_pop' on
+    # the first Babylon 5 file); it never counts as the start step
+    spine = [s for s in (blob.get('spine') or []) if s.get('id') not in ('tam', 'us_gen_pop')]
     fork = {f.get('id'): f for f in (blob.get('fork') or [])}
     if not spine:
         return {}

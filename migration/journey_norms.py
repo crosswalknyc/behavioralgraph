@@ -26,6 +26,14 @@ and trail for one journey), `norms_prompt_block` (what the research
 prompt is told before it reasons), and `hold_to_norms` (the in-place
 hold after the build: rescale the spine, recompute everything downstream,
 add the already-watching line). `audit_index` is the nightly sniff test.
+
+The band applies to EVERY journey in the catalog (Jenna 2026-10-21,
+Carolyn Bisson: her eight new titles read under 1% while Babylon 5 and
+No Reservations, built before the band landed, still said 16.1% and
+7.2% off the same casual social feed; "the eight are right"). A payload
+built before the rollout is re-leveled in place by `relevel_payload`,
+either on its next publish or by `scripts/journey_norms_sweep.py`; the
+rollout date is kept only as the record of when the band landed.
 """
 from __future__ import annotations
 
@@ -36,7 +44,7 @@ import re
 from typing import Optional
 
 US_GEN_POP = 329_900_000
-ROLLOUT_AT = '2026-10-14T00:00:00Z'      # journeys created after this are held
+ROLLOUT_AT = '2026-10-14T00:00:00Z'      # when the band landed; a record, never a gate (2026-10-21)
 TITLE_CAP_SHARE = 0.45                    # end step <= 45% of the title's viewers on the service in window
 
 # kind -> (band_lo_pct, band_hi_pct, hard_ceiling_pct)
@@ -80,10 +88,23 @@ GENRE_FACTORS = [
 ]
 POST_TYPE_FACTORS = {'official_clip': 1.2, 'news_article': 0.7, 'meme_reaction': 0.8, 'mixed': 1.0}
 WINDOW_FACTORS = [(7, 0.6), (14, 0.8), (30, 1.0), (60, 1.15), (90, 1.3)]
+# The following a title has (Jenna 2026-10-21: "babylon5 can be higher since
+# it is a cult like show"). A cult title's posts reach a self-selected
+# fandom, not a casual scroll: a small but dedicated fan base, a long tail of
+# fan-made content, a revival or reboot in the news, low US reach of the
+# title itself. Its band and ceiling scale up, and its click step may run
+# where a fandom feed runs. Researched per title (classify_following), never
+# a hard-coded exception for one show. Mainstream is the default.
+FOLLOWING_FACTORS = {'cult': 2.4, 'mainstream': 1.0}
+FOLLOWING_CEILING_MULT = {'cult': 2.0, 'mainstream': 1.0}
+FOLLOWING_LABEL = {'cult': 'cult following: a dedicated fan base reached by its own posts (x2.4)',
+                   'mainstream': 'mainstream title, casual social reach'}
+FOLLOWING_CACHE_PREFIX = 'journey-iq/_cache/following/'
 
 # kept-of-prior ceilings (percent) by the role a step plays
 STEP_CEILINGS = {
     'engagement': (1.5, 5.0),
+    'engagement_cult': (4.0, 12.0),     # a fandom clicks its own posts far more than a casual scroll does
     'search': (15.0, 40.0),
     'platform_page': (35.0, 70.0),
     'play': (35.0, 65.0),
@@ -127,7 +148,7 @@ def service_reach_factor(platform: str) -> tuple[float, str]:
             break
     if reach is None:
         return 0.8, 'service reach unknown, read as a mid-size service'
-    return max(0.3, min(1.0, reach / 0.70)), f'{int(reach * 100)}% US household reach'
+    return max(0.3, min(1.0, reach / 0.70)), f'reaches {int(reach * 100)}% of US homes'
 
 
 def is_free_service(platform: str) -> bool:
@@ -225,6 +246,79 @@ def window_factor(inputs: dict) -> tuple[float, str]:
     return 1.0, f'{days}-day window'
 
 
+def following_of(inputs: dict, prim: Optional[dict] = None) -> str:
+    """'cult' or 'mainstream' from the research primitives (or the inputs
+    when the caller already classified); mainstream when unsaid."""
+    for src in (prim or {}, inputs or {}):
+        v = _norm((src or {}).get('following'))
+        if v in FOLLOWING_FACTORS:
+            return v
+        if v in ('cult following', 'cult classic', 'fandom'):
+            return 'cult'
+    return 'mainstream'
+
+
+def following_factor(inputs: dict, prim: Optional[dict] = None) -> tuple[float, str]:
+    f = following_of(inputs, prim)
+    return FOLLOWING_FACTORS[f], FOLLOWING_LABEL[f]
+
+
+FOLLOWING_PROMPT = (
+    "You classify a TV series or film by the kind of following it has today, for an audience read. "
+    "Answer STRICT JSON only: {\"following\": \"cult\"|\"mainstream\", \"why\": str (one plain sentence, no citations)}. "
+    "cult = a small but dedicated fan base that still produces and shares its own content (fan edits, scene clips, "
+    "rankings, remaster comparisons, tribute posts), often with a revival, reboot or remaster in the news, while the "
+    "title's own US reach is low (a legacy sci-fi or genre series kept alive by its fandom). "
+    "mainstream = a title whose clips reach a huge casual audience (a hit sitcom, a mass-market food or travel brand, "
+    "a current network show), whatever its age. When unsure, answer mainstream.")
+
+
+def classify_following(subject: str, platform: str = '', claude_json=None, s3_client=None, use_cache: bool = True) -> dict:
+    """{'following': 'cult'|'mainstream', 'why': str, 'source': 'cache'|'research'|'default'}.
+    One search-enabled model call per title, cached in S3 (and /tmp), fail-safe to mainstream."""
+    key = re.sub(r'[^a-z0-9]+', '_', _norm(subject)).strip('_')
+    if not key:
+        return {'following': 'mainstream', 'why': 'no title', 'source': 'default'}
+    local = f'/tmp/journey_following_{key}.json'
+    if use_cache:
+        try:
+            with open(local) as fh:
+                doc = json.load(fh)
+            if doc.get('following') in FOLLOWING_FACTORS:
+                return dict(doc, source='cache')
+        except Exception:
+            pass
+        if s3_client is not None:
+            try:
+                doc = json.loads(s3_client.get_object(Bucket='dashboard-inputs', Key=f'{FOLLOWING_CACHE_PREFIX}{key}.json')['Body'].read())
+                if doc.get('following') in FOLLOWING_FACTORS:
+                    return dict(doc, source='cache')
+            except Exception:
+                pass
+    out = {'following': 'mainstream', 'why': 'default when unclassified', 'source': 'default'}
+    if claude_json is not None:
+        try:
+            got = claude_json(FOLLOWING_PROMPT, json.dumps({'title': subject, 'platform': platform or ''}),
+                              max_tokens=400, temperature=0.2, surface='journey_following', tools=None)
+            if isinstance(got, dict) and _norm(got.get('following')) in FOLLOWING_FACTORS:
+                out = {'following': _norm(got.get('following')), 'why': str(got.get('why') or '')[:300], 'source': 'research'}
+        except Exception as exc:
+            print(f'[journey-norms] following classification skipped: {exc}')
+    if out['source'] == 'research':
+        try:
+            with open(local, 'w') as fh:
+                json.dump(out, fh)
+        except Exception:
+            pass
+        if s3_client is not None:
+            try:
+                s3_client.put_object(Bucket='dashboard-inputs', Key=f'{FOLLOWING_CACHE_PREFIX}{key}.json',
+                                     Body=json.dumps(out).encode(), ContentType='application/json')
+            except Exception:
+                pass
+    return out
+
+
 # ------------------------------------------------------------------ the band
 def band_for(inputs: dict, prim: Optional[dict] = None, title_profile: Optional[dict] = None,
              seed: str = '') -> dict:
@@ -255,6 +349,11 @@ def band_for(inputs: dict, prim: Optional[dict] = None, title_profile: Optional[
     f, why = window_factor(inputs)
     factors['window'] = f
     trail.append(why)
+    f, why = following_factor(inputs, prim)
+    factors['following'] = f
+    trail.append(why)
+    following = following_of(inputs, prim)
+    ceil = ceil * FOLLOWING_CEILING_MULT.get(following, 1.0)
     mult = 1.0
     for v in factors.values():
         mult *= v
@@ -275,7 +374,8 @@ def band_for(inputs: dict, prim: Optional[dict] = None, title_profile: Optional[
     except Exception:
         title_viewers = None
     return {'kind': cls['kind'], 'free': cls['free'], 'lo': lo_f, 'hi': hi_f, 'ceiling': ceil,
-            'target': round(target, 4), 'factors': factors, 'trail': trail, 'title_viewers': title_viewers}
+            'target': round(target, 4), 'factors': factors, 'trail': trail, 'title_viewers': title_viewers,
+            'following': following}
 
 
 def norms_prompt_block(band: dict) -> dict:
@@ -299,6 +399,10 @@ def norms_prompt_block(band: dict) -> dict:
         'caps': ('the conversion stage never exceeds 45% of the title\'s viewers on the service in the window; '
                  'the exposure stage never exceeds 5x the combined follower count of the title\'s official accounts '
                  '(12x with a live campaign)'),
+        'following': ('the band above already carries the title\'s following: a cult title (a small, dedicated fan base '
+                      'that makes and shares its own content, a revival or reboot in the news, low US reach of the title '
+                      'itself) runs 2.4x a mainstream title because its posts reach a fandom, not a casual scroll; say '
+                      'which this title is in "following"'),
     }
 
 
@@ -404,7 +508,8 @@ def hold_to_norms(payload: dict, band: dict, inputs: Optional[dict] = None, seed
     seed = seed or f"{inputs.get('subject')}|{inputs.get('platform')}"
     meta = payload.setdefault('meta', {})
     trail = {'kind': band.get('kind'), 'band': [band.get('lo'), band.get('hi')], 'ceiling': band.get('ceiling'),
-             'target': band.get('target'), 'factors': band.get('factors'), 'why': band.get('trail'), 'applied': False}
+             'target': band.get('target'), 'factors': band.get('factors'), 'why': band.get('trail'), 'applied': False,
+             'following': band.get('following') or 'mainstream'}
     try:
         j = payload.get('fragrance_shop_journey') or {}
         spine = j.get('spine') or []
@@ -448,6 +553,8 @@ def hold_to_norms(payload: dict, band: dict, inputs: Optional[dict] = None, seed
         steps = spine[2:]
         n = len(steps)
         roles = [step_role(st.get('label'), i + 2, len(spine), subject=str(inputs.get('subject') or meta.get('target_name') or '').split(' on ')[0]) for i, st in enumerate(steps)]
+        if band.get('following') == 'cult':
+            roles = ['engagement_cult' if r == 'engagement' else r for r in roles]
         bounds = [STEP_CEILINGS.get(r, STEP_CEILINGS['generic']) for r in roles]
         kept = []
         prev = start
@@ -571,7 +678,8 @@ def hold_to_norms(payload: dict, band: dict, inputs: Optional[dict] = None, seed
         kp = payload.get('kpis') or {}
         kp.update({'total_users': new_end, 'conversion_pct': round(rate, 4),
                    'share_of_us_pct': round(new_end / US_GEN_POP * 100.0, 4),
-                   'norm_band': [lo, hi], 'norm_kind': band.get('kind'), 'also_watching': also})
+                   'norm_band': [lo, hi], 'norm_kind': band.get('kind'), 'also_watching': also,
+                   'following': band.get('following') or 'mainstream'})
         payload['kpis'] = kp
         facts = payload.get('facts') or []
 
@@ -651,7 +759,7 @@ def audit_payload(payload: dict) -> dict:
     """Does a journey's end-to-end rate sit inside its band? Reads the
     band the build recorded, or resolves one from the payload's meta."""
     j = (payload or {}).get('fragrance_shop_journey') or {}
-    spine = [s for s in (j.get('spine') or []) if isinstance(s, dict) and s.get('id') != 'tam']
+    spine = [s for s in (j.get('spine') or []) if isinstance(s, dict) and s.get('id') not in ('tam', 'us_gen_pop')]
     meta = (payload or {}).get('meta') or {}
     kp = (payload or {}).get('kpis') or {}
     if len(spine) < 2:
@@ -661,19 +769,52 @@ def audit_payload(payload: dict) -> dict:
     band = kp.get('norm_band')
     kind = kp.get('norm_kind')
     if not band:
-        b = band_for({'subject': meta.get('target') or meta.get('project_name'), 'platform': str(meta.get('project_name') or '').split(' on ')[-1],
-                      'journey_kind': meta.get('journey_kind'), 'conversion_event': ''}, None)
+        # a bare payload resolves its band the way the re-level does: the
+        # kind from target_type when journey_kind is absent (the first
+        # Babylon 5 file), the title's audience from its own tables
+        inp = payload_inputs(payload)
+        tv = title_viewers_from_payload(payload)
+        pr = {'title_status': 'catalog'} if str(inp.get('journey_kind') or 'watch') == 'watch' else {}
+        if tv:
+            pr['title_viewers_in_window'] = tv
+        fol = _norm(kp.get('following')) or _norm((meta.get('norms') or {}).get('following'))
+        if fol in FOLLOWING_FACTORS:
+            pr['following'] = fol
+        b = band_for(inp, pr or None)
         band, kind = [b['lo'], b['hi']], b['kind']
     ok = band[0] - 1e-9 <= rate <= band[1] + 1e-9
-    if not _exposure_start(spine[0].get('label')):
+    if not _exposure_start(spine[0].get('label')) or not band_applies(payload):
         ok = True
     return {'ok': ok, 'rate_pct': round(rate, 4), 'band': band, 'kind': kind,
-            'project_name': meta.get('project_name'), 'created_at': meta.get('created_at')}
+            'project_name': meta.get('project_name'), 'created_at': meta.get('created_at'),
+            'anchored': not band_applies(payload)}
 
 
-def audit_index(s3, since: str = ROLLOUT_AT, bucket: str = 'dashboard-inputs') -> list:
-    """The nightly sniff test: every journey created since the rollout whose
-    conversion sits outside its band. Returns a list of fault dicts."""
+# Kinds whose counts come from somewhere the band must not override: a
+# journey anchored to an Attribution IQ campaign or a title read (its end
+# point IS the other product's count), and the before/after read whose
+# whole point is the title anchor (Bria 2026-10-08: the title anchor is
+# final). The media-week and premiere kinds have no exposure start and
+# never reach the band.
+_ANCHORED_KINDS = {'before_after', 'media_week', 'premiere'}
+
+
+def band_applies(payload: dict) -> bool:
+    """False when another product's count sets this journey's end point."""
+    meta = (payload or {}).get('meta') or {}
+    if str(meta.get('journey_kind') or '') in _ANCHORED_KINDS:
+        return False
+    if meta.get('anchored_to') or meta.get('title_anchor') or meta.get('attribution_anchor'):
+        return False
+    return True
+
+
+def audit_index(s3, since: str = '', bucket: str = 'dashboard-inputs') -> list:
+    """The nightly sniff test: every journey in the catalog whose conversion
+    sits outside its band. Returns a list of fault dicts. ``since`` is an
+    optional created_at floor; by default every run is audited (2026-10-21:
+    the band is the standard for the whole catalog, not only for journeys
+    built after it landed)."""
     import gzip
     faults = []
     try:
@@ -681,7 +822,7 @@ def audit_index(s3, since: str = ROLLOUT_AT, bucket: str = 'dashboard-inputs') -
     except Exception:
         return faults
     for r in idx.get('runs', []) or []:
-        if str(r.get('created_at') or '') < since or not r.get('key'):
+        if (since and str(r.get('created_at') or '') < since) or not r.get('key'):
             continue
         try:
             raw = s3.get_object(Bucket=bucket, Key=r['key'])['Body'].read()
@@ -698,6 +839,344 @@ def audit_index(s3, since: str = ROLLOUT_AT, bucket: str = 'dashboard-inputs') -
                            'band': a.get('band'), 'kind': a.get('kind'),
                            'why': f"conversion {a.get('rate_pct')}% outside {a.get('band')} ({a.get('kind')})"})
     return faults
+
+
+# ------------------------------------------------- re-level a stored payload
+# Jenna 2026-10-21 (Carolyn Bisson): the band is the standard for the whole
+# catalog. A payload built before the band landed carries no inputs or
+# research primitives, so the band is resolved from what the payload itself
+# says (subject, platform, kind, category, the title's audience on the
+# service from its own "every viewer" table), the hold runs, and the parts
+# the hold cannot see from a bare payload are brought into line: the two
+# audience tables (the title's viewers on the service keep their total; the
+# within-30-days row follows the new end), every count in a note, card or
+# title that equaled a retired stage / fork / table total, and the read
+# cards, which are rewritten from the corrected numbers rather than left
+# claiming the old rate.
+_NUM_RX = re.compile(r'\b\d{1,3}(?:,\d{3})+\b|\b\d{4,}\b')
+_PCT_RX = re.compile(r'(\d+(?:\.\d+)?)\s?%')
+_BAND_STRIP = re.compile(r"\s*(?:That|This|The)?\s*\d+(?:\.\d+)?% (?:carry rate|conversion|carry)\s+sits above[^.]*\.", re.I)
+
+
+def payload_inputs(payload: dict) -> dict:
+    """The build inputs for a stored payload: the stored block when the
+    build kept one, else derived from meta and the spine labels."""
+    stored = (payload or {}).get('inputs') or ((payload or {}).get('meta') or {}).get('inputs')
+    if isinstance(stored, dict) and stored.get('subject'):
+        return dict(stored)
+    meta = (payload or {}).get('meta') or {}
+    j = (payload or {}).get('fragrance_shop_journey') or {}
+    spine = j.get('spine') or []
+    target = str(meta.get('target_name') or meta.get('target') or meta.get('project_name') or '')
+    subject, platform = target, ''
+    m = re.match(r'^(.*?)\s+on\s+([^()]+?)\s*$', target)
+    if m:
+        subject, platform = m.group(1).strip(), m.group(2).strip()
+    elif meta.get('customer_brand') and _norm(meta.get('customer_brand')) != _norm(target):
+        platform = str(meta.get('customer_brand') or '')
+    return {'subject': subject, 'platform': platform,
+            'journey_kind': str(meta.get('journey_kind') or ('watch' if str(meta.get('target_type') or '') == 'watch_journey' else '')),
+            'conversion_event': str((spine[-1] if spine else {}).get('label') or ''),
+            'start_behavior': str((spine[1] if len(spine) > 1 else {}).get('label') or ''),
+            'notes': str(meta.get('category') or '')}
+
+
+def title_viewers_from_payload(payload: dict) -> int:
+    """The title's audience on the service in the window, as the payload
+    records it: the title anchor, the norms trail, else the sum of the
+    'every viewer' table (within 30 days + outside + no post seen)."""
+    meta = (payload or {}).get('meta') or {}
+    for v in ((meta.get('title_anchor') or {}).get('us_viewers'), (meta.get('norms') or {}).get('title_viewers')):
+        try:
+            if v and int(v) > 0:
+                return int(v)
+        except (TypeError, ValueError):
+            pass
+    # a research anchor for the title's viewers on the service, when the
+    # build recorded one ('312,647 people watched at least one episode of
+    # No Reservations on Prime Video in the same 12-month window'), beats
+    # a table total that an inflated end step inflated with it
+    for f in ((payload or {}).get('facts') or []):
+        if not isinstance(f, dict):
+            continue
+        lab, val = str(f.get('label') or ''), str(f.get('value') or '')
+        if re.search(r'\bviewers?\b', lab, re.I) and re.search(r'watched at least one episode', val, re.I):
+            m = re.search(r'\b(\d{1,3}(?:,\d{3})+|\d{4,})\b', val)
+            if m:
+                try:
+                    return int(m.group(1).replace(',', ''))
+                except ValueError:
+                    pass
+    j = (payload or {}).get('fragrance_shop_journey') or {}
+    for d in j.get('detours') or []:
+        if re.search(r'\bevery\b.*\bviewer', str(d.get('title') or ''), re.I):
+            rows = [r for r in (d.get('rows') or []) if isinstance(r, dict)]
+            if len(rows) >= 3:
+                return sum(int(r.get('accounts') or 0) for r in rows)
+    return 0
+
+
+def _relevel_audience_tables(j: dict, old_end: int, new_end: int, also: int, viewers: int, seed: str) -> dict:
+    """The two tables that partition the title's audience on the service
+    (not a spine stage): the total holds, the within-30-days row follows
+    the new end, the outside-30-days row keeps its share of the carried
+    audience, already-watching is the norms count, and no-post absorbs the
+    rest. Returns the figures the facts quote."""
+    out = {'outside': 0, 'also': also, 'no_post': 0, 'viewers': viewers, 'rest': 0}
+    rest_t = next((d for d in (j.get('detours') or []) if re.search(r'rest of the social|outside the 30|did both', str(d.get('title') or ''), re.I)), None)
+    ev_t = next((d for d in (j.get('detours') or []) if re.search(r'\bevery\b.*\bviewer', str(d.get('title') or ''), re.I)), None)
+    old_outside = 0
+    if rest_t and (rest_t.get('rows') or []):
+        old_outside = int((rest_t['rows'][0] or {}).get('accounts') or 0)
+    if ev_t and len(ev_t.get('rows') or []) >= 2 and not old_outside:
+        old_outside = int((ev_t['rows'][1] or {}).get('accounts') or 0) - (int((rest_t['rows'][1] or {}).get('accounts') or 0) if rest_t and len(rest_t.get('rows') or []) > 1 else 0)
+    share_outside = (old_outside / float(old_end)) if old_end and old_outside else 0.28
+    share_outside = min(max(share_outside, 0.12), 0.9)
+    outside = _messy(seed, new_end * share_outside, 'outside30')
+    rest = outside + also
+    if viewers <= 0 or viewers < new_end + rest + 1:
+        viewers = new_end + rest + _messy(seed, (new_end + rest) * 0.35, 'nopost_fill')
+    no_post = viewers - new_end - rest
+    if rest_t is not None:
+        rows = rest_t.get('rows') or []
+        if len(rows) >= 2:
+            rows[0]['accounts'], rows[1]['accounts'] = outside, also
+            for r in rows[:2]:
+                r['pct'] = round(r['accounts'] / rest * 100, 4) if rest else 0.0
+            rest_t['rows'] = rows[:2]
+    if ev_t is not None:
+        rows = ev_t.get('rows') or []
+        if len(rows) >= 3:
+            rows[0]['accounts'], rows[1]['accounts'], rows[2]['accounts'] = new_end, rest, no_post
+            for r in rows[:3]:
+                r['pct'] = round(r['accounts'] / viewers * 100, 4) if viewers else 0.0
+            ev_t['rows'] = rows[:3]
+    out.update({'outside': outside, 'no_post': no_post, 'viewers': viewers, 'rest': rest})
+    return out
+
+
+def _rewrite_read(payload: dict, j: dict, inputs: dict, fig: dict) -> None:
+    """The read cards and moves, written from the corrected numbers. The
+    research's cards quoted the retired rate as a finding ('sits above
+    typical'), so they are replaced, not patched."""
+    spine = [s for s in (j.get('spine') or []) if s.get('id') not in ('tam', 'us_gen_pop')]
+    if len(spine) < 3:
+        return
+    title = str(inputs.get('subject') or 'the title')
+    plat = str(inputs.get('platform') or 'the service')
+    start, click, page, end = spine[0]['accounts'], spine[1]['accounts'], spine[-2]['accounts'], spine[-1]['accounts']
+    rate = end / start * 100.0 if start else 0.0
+    page_rate = end / page * 100.0 if page else 0.0
+    click_rate = click / start * 100.0 if start else 0.0
+    fk = {f.get('id'): int(f.get('accounts') or 0) for f in (j.get('fork') or []) if isinstance(f, dict)}
+    back = fk.get('paid_return', 0)
+    first_tab = next((d for d in (j.get('detours') or []) if re.search(r'where the first post sat', str(d.get('title') or ''), re.I)), None)
+    surfaces = ''
+    if first_tab and (first_tab.get('rows') or []):
+        rows = sorted((r for r in first_tab['rows'] if isinstance(r, dict)), key=lambda r: -int(r.get('accounts') or 0))[:2]
+        tot = sum(int(r.get('accounts') or 0) for r in first_tab['rows']) or 1
+        surfaces = ' and '.join(str(r.get('label') or '') for r in rows)
+        surf_share = sum(int(r.get('accounts') or 0) for r in rows) / tot * 100.0
+    cards = [
+        {'title': f"{start:,} people saw a post about {title} in the window",
+         'body': (f"Anyone who scrolled past a clip, thread or news post naming {title} counts, so the start is wide. "
+                  + (f"{surfaces} carried {surf_share:.0f}% of the first posts. " if surfaces else '')
+                  + f"{click:,} clicked through to the title ({click_rate:.1f}%), which is where most of the audience thins out.")},
+        {'title': f"{rate:.1f}% of post viewers watched {title} on {plat} within 30 days",
+         'body': (f"{end:,} people pressed play within 30 days of the post. The rate is small because the start is wide; "
+                  f"measured from the title page it is {page_rate:.0f}%, which is the normal range for a catalog series on a paid service.")},
+        {'title': f"{page_rate:.0f}% of the people who reached the {plat} page pressed play",
+         'body': (f"{page:,} opened the {title} page on {plat} and {end:,} watched. "
+                  + (f"{back:,} of the viewers left the page first and came back before they played." if back else
+                     "Almost all of the watching happened in the same session as the page visit."))},
+        {'title': f"{fig.get('viewers', 0):,} people watched {title} on {plat} in the window",
+         'body': (f"The journey keeps the {end:,} whose first play came inside 30 days of a post. "
+                  f"{fig.get('outside', 0):,} watched 31 to 90 days after a post, {fig.get('also', 0):,} were already watching before the posts, "
+                  f"and {fig.get('no_post', 0):,} {plat} viewers of {title} saw no post at all.")},
+    ]
+    moves = [
+        {'move': f"Put the clips where the first posts sit", 'why': (f"{surfaces} carried the most first posts about {title}; more clips there widen the start at the lowest cost." if surfaces else f"The surfaces that carried the first posts about {title} are where more clips widen the start.")},
+        {'move': f"Make the click the job", 'why': f"Only {click_rate:.1f}% of post viewers clicked through; naming the show and {plat} on the post is the one change that moves the whole funnel."},
+        {'move': f"Nudge the people who left the page", 'why': (f"{fk.get('abandoned', 0):,} opened the {plat} page and left without playing; {back:,} came back after a nudge and watched." if fk.get('abandoned') else f"The people who open the {plat} page and leave are the cheapest viewers to win back.")},
+    ]
+    for holder in (payload, j):
+        if isinstance(holder.get('the_read'), dict) or holder is payload:
+            holder['the_read'] = {'cards': cards, 'moves': moves}
+
+
+def relevel_payload(payload: dict, title_viewers: int = 0, seed: str = '', inputs: Optional[dict] = None,
+                    prim: Optional[dict] = None, claude_json=None, s3_client=None) -> dict:
+    """Bring a stored journey onto the band in place and return it with
+    meta.norms.releveled set. Only the exposure-start kinds the band
+    covers are touched; a payload already inside its band is left where
+    it is (the trail still records the check). Never raises."""
+    try:
+        if not isinstance(payload, dict):
+            return payload
+        j = payload.get('fragrance_shop_journey') or {}
+        spine = j.get('spine') or []
+        if len(spine) < 3 or not _exposure_start((spine[1] or {}).get('label')):
+            return payload
+        if not band_applies(payload):
+            payload.setdefault('meta', {}).setdefault('norms', {})['note'] = 'anchored to another product; band not applied'
+            return payload
+        inputs = dict(inputs or payload_inputs(payload))
+        meta = payload.setdefault('meta', {})
+        seed = seed or f"{inputs.get('subject')}|{inputs.get('platform')}"
+        prim = dict(prim or {})
+        if str(spine[0].get('id') or '') == 'us_gen_pop':
+            spine[0]['id'] = 'tam'          # the standard id for the US base row
+        tv = int(title_viewers or 0) or title_viewers_from_payload(payload)
+        if tv and not prim.get('title_viewers_in_window'):
+            prim['title_viewers_in_window'] = tv
+        if not prim.get('title_status') and str(inputs.get('journey_kind') or 'watch') == 'watch':
+            prim['title_status'] = 'catalog'
+        if not prim.get('category'):
+            prim['category'] = str(meta.get('category') or '')
+        following_why = str((meta.get('norms') or {}).get('following_why') or '')
+        if _norm(prim.get('following')) not in FOLLOWING_FACTORS:
+            known = _norm((payload.get('kpis') or {}).get('following')) or _norm((meta.get('norms') or {}).get('following'))
+            if known in FOLLOWING_FACTORS and (meta.get('norms') or {}).get('following_why'):
+                prim['following'] = known
+            else:
+                cls = classify_following(str(inputs.get('subject') or ''), str(inputs.get('platform') or ''),
+                                         claude_json=claude_json, s3_client=s3_client)
+                prim['following'] = cls['following']
+                following_why = f"{cls['following']} ({cls['source']}): {cls.get('why') or ''}".strip()
+        band = band_for(inputs, prim, seed=seed)
+        start, old_end = int(spine[1]['accounts']), int(spine[-1]['accounts'])
+        old_rate = old_end / start * 100.0 if start else 0.0
+        if band['lo'] - 1e-9 <= old_rate <= band['hi'] + 1e-9:
+            trail = dict(meta.get('norms') or {})
+            trail.update({'checked_at': _now_iso(), 'in_band': True, 'band': [band['lo'], band['hi']], 'kind': band['kind'],
+                          'following': band.get('following'), 'following_why': following_why})
+            meta['norms'] = trail
+            return payload
+        old_fork = {f.get('id'): int(f.get('accounts') or 0) for f in (j.get('fork') or []) if isinstance(f, dict)}
+        old_tables = {str(d.get('title') or ''): sum(int(r.get('accounts') or 0) for r in (d.get('rows') or []) if isinstance(r, dict)) for d in (j.get('detours') or [])}
+        old_stage = {st.get('id'): int(st.get('accounts') or 0) for st in spine}
+        hold_to_norms(payload, band, inputs, seed=seed)
+        j = payload.get('fragrance_shop_journey') or {}
+        spine = j.get('spine') or []
+        new_end = int(spine[-1]['accounts'])
+        also = int((payload.get('kpis') or {}).get('also_watching') or 0)
+        fig = _relevel_audience_tables(j, old_end, new_end, also, tv, seed)
+        # every retired figure that still sits in a note, title or fact
+        new_fork = {f.get('id'): int(f.get('accounts') or 0) for f in (j.get('fork') or []) if isinstance(f, dict)}
+        new_stage = {st.get('id'): int(st.get('accounts') or 0) for st in spine}
+        new_tables = {str(d.get('title') or ''): sum(int(r.get('accounts') or 0) for r in (d.get('rows') or []) if isinstance(r, dict)) for d in (j.get('detours') or [])}
+        follow = {}
+        for k, ov in old_stage.items():
+            if ov and k in new_stage and new_stage[k] != ov and k != 'tam':
+                follow[ov] = new_stage[k]
+        for k, ov in old_fork.items():
+            if ov and k in new_fork and new_fork[k] != ov:
+                follow.setdefault(ov, new_fork[k])
+        for t, ov in old_tables.items():
+            if ov and t in new_tables and new_tables[t] != ov:
+                follow.setdefault(ov, new_tables[t])
+
+        def _follow_counts(text: str) -> str:
+            def _one(m_):
+                n_ = int(m_.group(0).replace(',', ''))
+                if n_ in follow:
+                    return f"{follow[n_]:,}"
+                near = [(abs(n_ - ov), ov) for ov in follow if abs(n_ - ov) <= max(3, int(ov * 0.03))]
+                if near:
+                    return f"{follow[min(near)[1]]:,}"
+                return m_.group(0)
+            return _NUM_RX.sub(_one, str(text or ''))
+        for d in j.get('detours') or []:
+            for fld in ('title', 'note'):
+                if d.get(fld):
+                    d[fld] = _follow_counts(d[fld])
+            for r in d.get('rows') or []:
+                if isinstance(r, dict) and r.get('doing'):
+                    r['doing'] = _follow_counts(r['doing'])
+        gold = meta.get('gold') or {}
+        if isinstance(gold.get('extras'), list):
+            gold['extras'] = [_follow_counts(x) for x in gold['extras']]
+        facts = payload.get('facts') if isinstance(payload.get('facts'), list) else []
+        plat = str(inputs.get('platform') or '')
+        rate = new_end / start * 100.0 if start else 0.0
+        for f in facts:
+            if not isinstance(f, dict):
+                continue
+            lab = str(f.get('label') or '')
+            if lab in ('Already watching', 'Already customers'):
+                f['value'] = (f"{also:,} of the people who saw the posts were already watching {inputs.get('subject')} before the posts; "
+                              f"they are not counted in the {rate:.1f}% conversion.")
+            elif lab == 'The rest':
+                f['value'] = f"{fig['rest']:,} did both but outside the 30 days. {fig['no_post']:,} {plat} viewers saw no post at all."
+            elif lab == 'The path':
+                f['value'] = f"{start:,} saw a post about {inputs.get('subject')}. {new_end:,} watched an episode on {plat} within 30 days of it."
+            elif lab == 'The timing':
+                t_tab = next((d for d in (j.get('detours') or []) if re.search(r'time from the social view', str(d.get('title') or ''), re.I)), None)
+                if t_tab and len(t_tab.get('rows') or []) >= 3:
+                    rr = t_tab['rows']
+                    f['value'] = f"{int(rr[0].get('accounts') or 0):,} watched the same day, {int(rr[1].get('accounts') or 0):,} within 7 days, {int(rr[2].get('accounts') or 0):,} within 30 days."
+            else:
+                v = _follow_counts(f.get('value'))
+                v = _BAND_STRIP.sub('.', v)
+                v = re.sub(r'(\d+(?:\.\d+)?)% (carry rate|carry|conversion)', lambda m_: f"{rate:.1f}% {m_.group(2)}", v)
+                f['value'] = v
+        # the facts the standard carries: Window, The path, The timing,
+        # Already watching, The rest. Research-anchor lines from before the
+        # standard ('16.9% of the broader title set', 'title-level signals')
+        # are method talk and leave; a missing standard line is written.
+        std = {str(f.get('label') or ''): f for f in facts if isinstance(f, dict)}
+        window_fact = std.get('Window') or {'label': 'Window', 'value': f"{_window_words(meta)}. Unique US accounts."}
+        path_fact = std.get('The path') or {'label': 'The path', 'value': f"{start:,} saw a post about {inputs.get('subject')}. {new_end:,} watched an episode on {plat} within 30 days of it."}
+        timing_fact = std.get('The timing')
+        if timing_fact is None:
+            t_tab = next((d for d in (j.get('detours') or []) if re.search(r'time from the social view', str(d.get('title') or ''), re.I)), None)
+            if t_tab and len(t_tab.get('rows') or []) >= 3:
+                rr = t_tab['rows']
+                timing_fact = {'label': 'The timing', 'value': f"{int(rr[0].get('accounts') or 0):,} watched the same day, {int(rr[1].get('accounts') or 0):,} within 7 days, {int(rr[2].get('accounts') or 0):,} within 30 days."}
+        also_fact = std.get('Already watching') or std.get('Already customers') or {
+            'label': 'Already watching', 'value': (f"{also:,} of the people who saw the posts were already watching {inputs.get('subject')} before the posts; "
+                                                   f"they are not counted in the {rate:.1f}% conversion.")}
+        rest_fact = std.get('The rest') or {'label': 'The rest', 'value': f"{fig['rest']:,} did both but outside the 30 days. {fig['no_post']:,} {plat} viewers saw no post at all."}
+        facts = [f for f in (window_fact, path_fact, timing_fact, also_fact, rest_fact) if f]
+        payload['facts'] = facts
+        if isinstance(payload.get('diagnostics'), dict) and payload['diagnostics'].get('anchors_note'):
+            payload['diagnostics']['anchors_note'] = _follow_counts(payload['diagnostics']['anchors_note'])
+            payload['diagnostics']['norms_relevel'] = f"re-leveled {old_rate:.2f}% -> {rate:.2f}% ({band['kind']} band {band['lo']} to {band['hi']})"
+        _rewrite_read(payload, j, inputs, fig)
+        kp = payload.setdefault('kpis', {})
+        kp['also_watching'] = also
+        trail = dict(meta.get('norms') or {})
+        trail.update({'releveled': True, 'releveled_at': _now_iso(), 'from_rate_pct': round(old_rate, 4), 'to_rate_pct': round(rate, 4),
+                      'old_end': old_end, 'new_end': new_end, 'title_viewers': tv or fig.get('viewers'), 'audience': fig,
+                      'following': band.get('following'), 'following_why': following_why})
+        meta['norms'] = trail
+        print(f"[journey-norms] re-leveled {inputs.get('subject')!r} on {plat!r}: {old_rate:.2f}% -> {rate:.2f}% "
+              f"(end {old_end:,} -> {new_end:,}; viewers on service {fig.get('viewers', 0):,})")
+        return payload
+    except Exception as exc:
+        import traceback
+        traceback.print_exc()
+        try:
+            payload.setdefault('meta', {}).setdefault('norms', {})['relevel_error'] = str(exc)
+        except Exception:
+            pass
+        return payload
+
+
+def _now_iso() -> str:
+    import datetime as _dt
+    return _dt.datetime.utcnow().replace(microsecond=0).isoformat() + 'Z'
+
+
+def _window_words(meta: dict) -> str:
+    """'Jul 1, 2025 to Jun 30, 2026' from the meta's dates; the raw pair when they do not parse."""
+    import datetime as _dt
+    a, b = str((meta or {}).get('start_date') or ''), str((meta or {}).get('end_date') or '')
+    try:
+        da, db = _dt.date.fromisoformat(a[:10]), _dt.date.fromisoformat(b[:10])
+        return f"{da.strftime('%b')} {da.day}, {da.year} to {db.strftime('%b')} {db.day}, {db.year}"
+    except Exception:
+        return f"{a} to {b}".strip()
 
 
 _CHAT_EXPOSURE_RX = re.compile(r"\b(social (?:post|clip|video|media)|clips?|trailer|creator video|saw (?:a|the) post|viewed (?:a|the) post|"
