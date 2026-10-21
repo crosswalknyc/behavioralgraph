@@ -58,6 +58,16 @@ _TOKEN_RX = re.compile(r"\[\s*f(\d+)\s*\]|\{\{\s*f(\d+)\s*\}\}")
 _CALC_RX = re.compile(r"\[\s*calc\s*:\s*([^\]|]+?)\s*(?:\|\s*(pct1|pct2|pct|count|money|x|raw))?\s*\]", re.I)
 _YEAR_RX = re.compile(r"^(19|20)\d\d$")
 
+
+def _is_date(text, m):
+    """A year inside a date, a month/day pair or an episode marker is not
+    a figure (prometheus.stated_numbers, 2026-10-21)."""
+    try:
+        from . import stated_numbers as _sn
+        return _sn.is_date_token(text, m.start(1), m.end(1))
+    except Exception:
+        return False
+
 PROMPT_RULE = (
     "FIGURES BY TOKEN (hard rule): every count, percent and dollar figure you state must come from the FIGURES table below, "
     "written as its token, e.g. [f12], or as arithmetic on tokens, e.g. [calc: f3/f1*100 | pct] for a share, [calc: f2-f5 | count] for a "
@@ -158,6 +168,8 @@ class Registry:
                 cur_src = source_for_header(hm.group(1), cur_src)   # an unknown header inherits the block's source
                 cur_hdr = ' '.join(w for w in hm.group(1).title().split() if w.isalpha())[:40]
             for m in _NUM_RX.finditer(line):
+                if _is_date(line, m):
+                    continue
                 if len(self.figures) >= limit:
                     return
                 tok = m.group(1)
@@ -264,6 +276,8 @@ class Registry:
         for f in self.figures:
             by_val.setdefault((round(f['value'], 4), f['kind']), f)
         for m in _NUM_RX.finditer(str(final_text or '')):
+            if _is_date(str(final_text or ''), m):
+                continue
             tok = m.group(1)
             if _YEAR_RX.match(tok.replace(',', '')) or tok in rendered_text:
                 continue

@@ -183,8 +183,23 @@ ROWS = [
                 'podcasts are behind the 27,559?") is a lookup into that '
                 'journey: answered from the breakdown the file holds, or '
                 'built once and written onto the page under the row '
-                '(2026-10-06).',
-        'examples': [], 'counter': [],
+                '(2026-10-06). The number comes from the one shared '
+                'extractor (prometheus.stated_numbers, 2026-10-21): a year '
+                'inside a date, a month/day pair or a season / episode '
+                'marker is never a figure and a bare four digit year never '
+                'triggers the explainer; the lane fires only on a figure '
+                'question (why / what is behind / how is this calculated / '
+                'what makes up) and never on a question that asks how many '
+                'of an audience did something or names a subject, a '
+                'platform pair and a window (Bria Dotson: "How many viewers '
+                'who watched Law & Order: SVU on Peacock from September 2025 '
+                'to March 2026 also watched the series on Hulu?" drew the '
+                '2,025-person row of a Peacock journey). Pinned by '
+                'scripts/test_pm_stated_numbers.py.',
+        'examples': [],
+        # host_only rows carry counters for the record; the extractor test pins them
+        'counter': [("How many viewers who watched Law & Order: SVU on Peacock from September 2025 to March 2026 also watched the series on Hulu?", True),
+                    ('re-run in the time frame 9/16 - 9/30', True)],
     },
     {
         'id': 'where_watched', 'surface': 'analyze',

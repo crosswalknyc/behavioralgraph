@@ -1,6 +1,6 @@
 {
  "description": "Fixed route-level eval set for the dashboard chat assistant. Real questions sampled from the S3 ask log (system/usage/ask_log/, 2026-08-26 through 2026-08-28, the log's full history at build time) plus constructed representatives for families the young log does not carry yet. Graded hermetically by scripts/prometheus_eval_run.py against prometheus_router.route_ask, the same server-side router both chat endpoints consult in production (classify_fn stays None so the run makes no model calls). expected_route vocabulary: analysis, generate, search_demand, csv_download, not_quantifiable, memory_confirm, build_interpret, subiq, clarify. surface: analyze (api_synth_chat_analyze) or interpret (api_synth_chat_interpret). page_context null means nothing open. has_base / memory_referent stand in for data-dependent conditions. known_fail documents a real routing defect owned by a separate fix.",
- "built": "2026-08-28 +2026-10-01 wave (relative windows, multi-title, cut sizing, proactive openers) +2026-10-20 real asks (ten invariants) +2026-10-21 Jay repeat",
+ "built": "2026-08-28 +2026-10-01 wave (relative windows, multi-title, cut sizing, proactive openers) +2026-10-20 real asks (ten invariants) +2026-10-21 Jay repeat +2026-10-21 Bria SVU",
  "cases": [
   {
    "id": "toy-001",
@@ -1229,6 +1229,30 @@
    ],
    "source": "ask_log 2026-10-21 (Jay Patel, 09:14 to 09:19 UTC)",
    "note": "The thread holds the Love Hypothesis BookTok read; the words point back at it. Pinned by scripts/test_pm_invariants.py door D (jay_repeat)."
+  },
+  {
+   "id": "real-1021-02",
+   "family": "co_viewing_cross_never_explainer",
+   "surface": "analyze",
+   "input": "How many viewers who watched Law & Order: SVU on Peacock from September 2025 to March 2026 also watched the series on Hulu?",
+   "page_context": {
+    "primary": {
+     "s3_key": "Peacock_06_16_2026_14_34.csv",
+     "name": "Peacock"
+    },
+    "cuts": []
+   },
+   "expected_route": "generate",
+   "expected_subject": "Law & Order: SVU",
+   "expected_reply_type": "the co-viewing read: SVU viewers on Peacock in the window, how many also watched on Hulu, Peacock-only and Hulu-only alongside",
+   "never": [
+    "journey_drilldown",
+    "Frankenstein and the Horny Villagers",
+    "2,025 is",
+    "Do you want this on Peacock"
+   ],
+   "source": "ask_log 2026-10-21 (Bria Dotson at Crosswalk, 19:21 UTC, API thread)",
+   "note": "The 2025 inside September 2025 is a year, never a figure (prometheus.stated_numbers). Pinned by scripts/test_pm_stated_numbers.py."
   }
  ]
 }

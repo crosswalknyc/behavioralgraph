@@ -74,6 +74,12 @@ def figures_from_reply(reply, limit=14):
             v = m.group(0).strip()
             if not v or v in seen or _YEAR_RX.match(v):
                 continue
+            try:
+                from . import stated_numbers as _sn
+                if _sn.is_date_token(s, m.start(), m.end()):
+                    continue   # a year inside a date is never a figure (2026-10-21)
+            except Exception:
+                pass
             if _SKIP_SENT_RX.search(s) and ('$' in v or 'credit' in s.lower()):
                 continue
             seen.add(v)

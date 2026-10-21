@@ -21,7 +21,14 @@ import traceback
 from prometheus.legacy import H as _H, C as _C  # noqa: E402
 
 __all__ = ['_pm_append_read_to_history', '_pm_append_deck_to_history', '_pm_settle_ask',
-           '_pm_gate_host', '_pm_calm_hold_response']
+           '_pm_gate_host', '_pm_calm_hold_response', '_pm_on_it_line']
+
+
+def _pm_on_it_line(base, bound=''):
+    """The started-read line names what is being read (2026-10-14)."""
+    from flask import g as _g_r
+    from prometheus import smarter as _smart
+    return _smart.on_it_line(getattr(_g_r, '_pm_reading', None), base, bound=bound)
 
 
 class _PmGateHost:

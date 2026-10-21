@@ -659,6 +659,12 @@ def stated_numbers(history, max_turns=12, max_items=40):
                 continue
             seen = set()
             for m in _NUM_RE.finditer(s):
+                try:
+                    from . import stated_numbers as _sn
+                    if _sn.is_date_token(s, m.start(), m.end()):
+                        continue   # a year inside a date is never a stated figure (2026-10-21)
+                except Exception:
+                    pass
                 v = m.group(0).strip()
                 if _YEAR_ONLY_RE.match(v) or v in seen:
                     continue

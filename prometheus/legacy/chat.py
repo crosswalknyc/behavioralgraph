@@ -12293,45 +12293,6 @@ def _pm_csv_task_filename(entry):
     return f"{title}.csv"
 
 
-_PM_LAST_FILE_PREFIX = 'system/usage/pm_last_file/'
-
-
-def _pm_file_stash_write(username, url, filename, s3_key,
-                         subject='', question=''):
-    """Remember the most recent file handed to this account so
-    "Email me this file" can serve it (2026-09-29 Jenna: every data
-    answer creates a CSV the user can download or have emailed)."""
-    try:
-        uname = str(username or '').strip().lower()
-        if not uname:
-            return
-        _H.s3_client.put_object(
-            Bucket=_H.S3_BUCKET,
-            Key=f"{_PM_LAST_FILE_PREFIX}{uname}.json",
-            Body=json.dumps({
-                'url': url, 'filename': filename, 's3_key': s3_key,
-                'subject': str(subject or '')[:120],
-                'question': str(question or '')[:300],
-                'ts': time.time()}).encode('utf-8'),
-            ContentType='application/json')
-    except Exception:
-        traceback.print_exc()
-
-
-def _pm_file_stash_read(username):
-    try:
-        uname = str(username or '').strip().lower()
-        if not uname:
-            return {}
-        raw = _H.s3_client.get_object(
-            Bucket=_H.S3_BUCKET,
-            Key=f"{_PM_LAST_FILE_PREFIX}{uname}.json")['Body'].read()
-        doc = json.loads(raw)
-        return doc if isinstance(doc, dict) else {}
-    except Exception:
-        return {}
-
-
 def _pm_answer_file_payload(entry, auto_save=False, username='',
                             question=''):
     """Build, upload, and stash the CSV for a data answer (the replay
@@ -14256,12 +14217,6 @@ def _pm_read_inflight_check(user, text):
                 'stage': str(status.get('stage') or '').strip()}
     except Exception:
         return None
-
-
-def _pm_on_it_line(base, bound=''):
-    """The started-read line names what is being read (2026-10-14)."""
-    from flask import g as _g_r
-    return _smart.on_it_line(getattr(_g_r, '_pm_reading', None), base, bound=bound)
 
 
 def _pm_read_inflight_mark(user, text, job_id):
@@ -18490,7 +18445,9 @@ from prometheus.legacy.jobs import (  # noqa: E402,F401
     api_synth_chat_aiq_status,
 )
 from prometheus.legacy.land import (  # noqa: E402,F401  (I4: landing settles the promise; the calm hold on a repeat)
-    _pm_append_read_to_history, _pm_append_deck_to_history, _pm_settle_ask, _pm_gate_host, _pm_calm_hold_response)
+    _pm_append_read_to_history, _pm_append_deck_to_history, _pm_settle_ask, _pm_gate_host, _pm_calm_hold_response, _pm_on_it_line)
+from prometheus.legacy.jobs import (  # noqa: E402,F401  (the last-file stash, 2026-10-21)
+    _PM_LAST_FILE_PREFIX, _pm_file_stash_write, _pm_file_stash_read)
 from prometheus.legacy.notify import (  # noqa: E402,F401
     _PM_NOTIFY_PREFIX, _pm_clean_notify_email, _pm_notify_write, _pm_notify_read, _pm_notify_delete,
     _pm_send_output_email, _pm_flush_notify, _pm_user_email, _pm_view_deck_digest,

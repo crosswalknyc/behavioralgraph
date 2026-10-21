@@ -1,6 +1,6 @@
 {
  "version": 1,
- "content_hash": "548000ce7444333cee6ee2df1e8bee2fd51bf04e44d90e6105850c1789d0613c",
+ "content_hash": "1cbe9f1633a480e8939604dc30cf7ed5392de30ff08d85d791f1ad7759fbbe02",
  "decisions": [
   {
    "id": "kids_viewers_default",
@@ -730,7 +730,26 @@
    "sources": [
     "prometheus-brain.md"
    ]
+  },
+  {
+   "id": "date_numbers_are_never_figures",
+   "decided": "2026-10-21",
+   "statement": "A year inside a date (September 2025, 9/23/2026, 2025 to 2026, in 2025, Q3 2026), a month and day pair, and a season or episode marker (S2 E1) are dates, never figures to look up or explain. A number written with a comma (2,025) is a count. A question that asks how many of an audience did something, or names a title with a service or two and a window, is a read of that audience; the number explainer answers only a question about a figure on screen: why it is what it is, what is behind it, how it is calculated, what makes it up.",
+   "match_terms": [
+    "what is behind",
+    "what makes up",
+    "why is this",
+    "how is this calculated",
+    "september 2025",
+    "from september",
+    "between",
+    "also watched",
+    "how many viewers who"
+   ],
+   "sources": [
+    "prometheus-brain.md"
+   ]
   }
  ],
- "generated_at": "2026-10-21T15:17:49Z"
+ "generated_at": "2026-10-21T19:44:32Z"
 }

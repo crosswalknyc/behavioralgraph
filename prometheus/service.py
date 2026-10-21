@@ -1641,8 +1641,8 @@ def _bare_reply(body, text, history, has_ctx, uname=''):
             from . import talent_list_job as _tl
             if _tl.last_offer(history):
                 return None, None   # the talent-list offer owns a yes right after it (2026-10-15)
-        except Exception:
-            pass
+        except Exception as _fx:
+            _faults.note('service.affirm_offer', _fx)
     prev = _last_agent_turn(history)
     options = _option_labels(prev)
     low = ' '.join(str(text or '').lower().split()).strip(' .!')

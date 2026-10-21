@@ -616,14 +616,15 @@ _DATE_YEAR_RX = re.compile(r"^(?:19|20)\d{2}$")
 
 
 def _is_date_token(text, m):
+    # the one shared rule (prometheus.stated_numbers, 2026-10-21): a year
+    # inside a date, a month/day pair or an episode marker is never a count
+    from . import stated_numbers as _sn
     tok = m.group(1)
-    if ',' in tok or not _DATE_YEAR_RX.match(tok):
+    if ',' in tok:
         return False
-    after = text[m.end():m.end() + 3]
-    before = text[max(0, m.start() - 1):m.start()]
-    if re.match(r"-\d\d", after) or re.match(r"/\d", after) or before == '/':
+    if _sn.is_date_token(text, m.start(1), m.end(1)):
         return True
-    return True   # a bare 1900-2099 number is a year on these surfaces
+    return bool(_DATE_YEAR_RX.match(tok))   # a bare 1900-2099 number is a year on these surfaces
 
 
 def evidence_numbers(evidence_text):

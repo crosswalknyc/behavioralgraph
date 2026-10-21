@@ -44,32 +44,40 @@ JOURNEY_INDEX_KEY = 'journey-iq/_index.json'
 _MAX_PAYLOAD_LOADS = 25
 _payload_cache = {}
 
-_NUM_RE = re.compile(r'(?<![\d.])(\d{1,3}(?:,\d{3})+|\d{3,})(?![\d,]*%)')
+# The numbers in the ask come from the one shared extractor
+# (prometheus.stated_numbers, 2026-10-21): a year inside a date, a
+# month/day pair or a season / episode marker is never a figure, and a
+# bare four digit year never triggers the explainer. Bria Dotson's "How
+# many viewers who watched Law & Order: SVU on Peacock from September 2025
+# to March 2026 also watched the series on Hulu?" had its 2025 matched to
+# a 2,025-person row on a Peacock journey and explained.
+from . import stated_numbers as _sn
+
 _CUE_RE = re.compile(
-    r'\b(journey|detour|detours|row|section|stage|exposed|accounts|individuals|people|'
-    r'included|include|behind|make up|makes up|made up|break ?down|breakdown|which|what|'
-    r'who|where|split|composition|consist)\b', re.I)
+    r'\b(journey|detour|detours|row|section|stage|exposed|'
+    r'included|include|behind|make up|makes up|made up|break ?down|breakdown|'
+    r'split|composition|consist)\b', re.I)
 
 
 def numbers_in(text):
-    """Integers of three or more digits in the ask, commas allowed, in
-    order of appearance, deduped. Percentages are skipped."""
-    out = []
-    for m in _NUM_RE.finditer(str(text or '')):
-        try:
-            n = int(m.group(1).replace(',', ''))
-        except Exception:
-            continue
-        if n >= 100 and n not in out:
-            out.append(n)
-    return out
+    """The count figures the ask states (100 and up, written as counts),
+    in order of appearance, deduped. Dates, years and percentages are
+    never figures."""
+    return _sn.counts(text, min_value=100, lane='drilldown')
 
 
 def looks_like_drilldown(text):
+    """The ask is about a figure on screen: it states a count and asks
+    what is behind it, why it is what it is, how it is calculated or what
+    it is made of. A question that asks how many of an audience did
+    something, or names a subject with a platform pair and a window, is a
+    read and never this lane, whatever digits it carries."""
     t = str(text or '')
     if not numbers_in(t):
         return False
-    return bool(_CUE_RE.search(t)) or looks_like_check(t)
+    if _sn.is_measurement_ask(t):
+        return False
+    return _sn.is_figure_question(t) or bool(_CUE_RE.search(t)) or looks_like_check(t)
 
 
 # ------------------------------------------------------- definitions

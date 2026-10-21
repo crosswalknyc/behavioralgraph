@@ -351,3 +351,44 @@ def api_synth_chat_aiq_status(job_id):
     if not _pm_job_owner_ok(payload.get('user'), user):
         return jsonify({'success': False, 'error': 'not your job'}), 403
     return jsonify({'success': True, **payload})
+
+
+# ---------------------------------------------------------------- the last-file stash
+# (moved from chat.py 2026-10-21; reached through the same names)
+_PM_LAST_FILE_PREFIX = 'system/usage/pm_last_file/'
+
+
+def _pm_file_stash_write(username, url, filename, s3_key,
+                         subject='', question=''):
+    """Remember the most recent file handed to this account so
+    "Email me this file" can serve it (2026-09-29 Jenna: every data
+    answer creates a CSV the user can download or have emailed)."""
+    try:
+        uname = str(username or '').strip().lower()
+        if not uname:
+            return
+        _H.s3_client.put_object(
+            Bucket=_H.S3_BUCKET,
+            Key=f"{_PM_LAST_FILE_PREFIX}{uname}.json",
+            Body=json.dumps({
+                'url': url, 'filename': filename, 's3_key': s3_key,
+                'subject': str(subject or '')[:120],
+                'question': str(question or '')[:300],
+                'ts': time.time()}).encode('utf-8'),
+            ContentType='application/json')
+    except Exception:
+        traceback.print_exc()
+
+
+def _pm_file_stash_read(username):
+    try:
+        uname = str(username or '').strip().lower()
+        if not uname:
+            return {}
+        raw = _H.s3_client.get_object(
+            Bucket=_H.S3_BUCKET,
+            Key=f"{_PM_LAST_FILE_PREFIX}{uname}.json")['Body'].read()
+        doc = json.loads(raw)
+        return doc if isinstance(doc, dict) else {}
+    except Exception:
+        return {}
