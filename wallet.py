@@ -1797,6 +1797,33 @@ def opening_checkout_allowed(amt, *, amount_locked: bool = False,
     return False
 
 
+def opening_funds_copy(user: dict = None, users_data: dict = None) -> str:
+    """Prometheus hold copy when the opening top-up is still unpaid.
+
+    Uses the seat's own opening amount so a $2,500 opener is not
+    told $500. USA Today-class $500 openers still read $500.
+    """
+    need = OPENING_TOPUP_MIN_USD
+    try:
+        if isinstance(user, dict):
+            n = opening_topup_usd(user)
+            if isinstance(users_data, dict):
+                subject, _, _ = resolve_billing_subject(user, users_data)
+                n = max(n, opening_topup_usd(subject or {}))
+            if n > 0:
+                need = n
+    except Exception:
+        pass
+    if abs(need - round(need)) < 1e-9:
+        amt = f"${need:,.0f}"
+    else:
+        amt = f"${need:,.2f}"
+    return (
+        f"Prometheus opens after the {amt} card payment. Use the payment "
+        f"link in your email, or add {amt} on the wallet page."
+    )
+
+
 # ---------------------------------------------------------------------------
 # Wallet reads
 # ---------------------------------------------------------------------------
@@ -5168,7 +5195,7 @@ __all__ = [
     "requires_card_to_view", "dashboard_view_locked",
     "opening_funding_unmet", "access_window_expired",
     "has_complimentary_grant", "complimentary_view_unlocked",
-    "opening_checkout_allowed",
+    "opening_checkout_allowed", "opening_funds_copy",
     "wallet_balance", "wallet_stats",
     "is_paying_customer", "is_unlimited", "admits_wallet_ui",
     "billing_mode", "billing_currency", "money_symbol", "format_money",

@@ -51716,7 +51716,8 @@ def api_brief_chat_funds():
         'allowed': False,
         'reason': reason,
         'no_funds': True,
-        'reply': NO_FUNDS_MESSAGE,
+        'reply': (opening_funds_message(user)
+                  if reason == 'opening_topup' else NO_FUNDS_MESSAGE),
         'top_up_url': '/wallet',
         'top_up_label': 'Buy credits',
     })
@@ -51786,7 +51787,16 @@ NO_FUNDS_MESSAGE = (
 
 OPENING_FUNDS_MESSAGE = (
     "Prometheus opens after the $500 card payment. Use the payment "
-    "link in your welcome email, or add $500 on the wallet page.")
+    "link in your email, or add $500 on the wallet page.")
+
+
+def opening_funds_message(user=None, users_data=None):
+    """Opening-hold copy using the seat's own first top-up amount."""
+    try:
+        import wallet as _w
+        return _w.opening_funds_copy(user, users_data)
+    except Exception:
+        return OPENING_FUNDS_MESSAGE
 
 
 # ============================================================================

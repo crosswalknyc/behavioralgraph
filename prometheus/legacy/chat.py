@@ -11059,7 +11059,7 @@ def _pm_funds_gate(user):
         except Exception as _fx:
             _faults.note('chat', _fx)
         print(f"[prometheus] funds gate blocked {uname!r} ({reason})")
-        reply = (_H.OPENING_FUNDS_MESSAGE if reason == 'opening_topup'
+        reply = (_H.opening_funds_message(user) if reason == 'opening_topup'
                  else _H.NO_FUNDS_MESSAGE)
         return jsonify({
             'success': True, 'action': 'answer',
