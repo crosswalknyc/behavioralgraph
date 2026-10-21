@@ -51010,6 +51010,32 @@ def _hostmap_canonical_casing(collapsed_key):
     return result
 
 
+def _corpus_casing_pick(catalog, coll):
+    """The spelling of an entity already in the catalog, or None.
+
+    Every catalog entry whose display head or subject head collapses to
+    `coll` is a candidate. Preference order: a base profile (no
+    ' - <cut>' in its display name) before a cut; a spaced display
+    spelling before a file-stem subject ('Simu_Liu'); mixed case before
+    all caps. Ties keep catalog order."""
+    found = []
+    for pos, c in enumerate(catalog or []):
+        display = str(c.get('display_name') or '').strip()
+        subj = str(c.get('subject') or '').strip()
+        is_cut = (' - ' in display) or (' - ' in subj)
+        for rank, raw in ((0, display), (1, subj)):
+            cand = raw.split(' - ', 1)[0].strip()
+            if not cand or _collapse_for_match(cand) != coll:
+                continue
+            found.append((1 if is_cut else 0, rank, 1 if '_' in cand else 0,
+                          1 if cand.isupper() else 0, pos, cand))
+            break
+    if not found:
+        return None
+    found.sort()
+    return found[0][-1]
+
+
 def _canonical_subject_casing(subject):
     """Best casing for a subject entity (2026-08-24 SHARKNINJA
     directive: 'SHARKNINJA', 'SharkNinja', 'shark ninja' must all mint
@@ -51026,13 +51052,13 @@ def _canonical_subject_casing(subject):
         return raw
     fixed = None
     # 1. Existing corpus casing: the catalog already has this entity.
+    #    The base profile's display spelling outranks a cut's, a spaced
+    #    spelling outranks a file-stem one ('Simu_Liu'), and mixed case
+    #    outranks all caps. Whichever entry the catalog listed first
+    #    used to win, so a refresh of 'Simu Liu' minted 'SIMU LIU' off
+    #    its 2025 avid cut (2026-10-20, five talent refreshes).
     try:
-        for c in _profile_catalog_for_chat():
-            cand = str(c.get('subject') or c.get('display_name')
-                       or '').split(' - ', 1)[0].strip()
-            if cand and _collapse_for_match(cand) == coll:
-                fixed = cand
-                break
+        fixed = _corpus_casing_pick(_profile_catalog_for_chat(), coll)
     except Exception:
         fixed = None
     # 2. Hostmap canonical casing.
