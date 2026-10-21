@@ -58,7 +58,8 @@ import re
 
 __all__ = ['explicit_build_subject', 'conversational_turn', 'priced_handoff_allowed',
            'page_rejected_in_thread', 'thread_subjects', 'which_subject_payload',
-           'CONVERSATIONAL_NOTE', 'strip_lead_negation', 'reading_subject', 'current_reading_subject']
+           'CONVERSATIONAL_NOTE', 'strip_lead_negation', 'reading_subject', 'current_reading_subject',
+           'definition_turn']
 
 # A pointer at what is on the screen, never a subject of its own.
 _DEIXIS = frozenset(('<page>', 'this', 'that', 'it', 'this audience', 'this profile',
@@ -112,6 +113,35 @@ def current_reading_subject(page, normalize=None):
         return reading_subject(getattr(_g, '_pm_reading', None), page, normalize)
     except Exception:
         return ''
+
+
+_DEFINITION_TURN_RX = re.compile(
+    r"^\W*(?:ok[,.]?\s+|so[,.]?\s+|wait[,.]?\s+|sorry[,.]?\s+)?"
+    r"(?:what(?:'s|s| is| are| was| does| do)\b.{0,60}\b(?:you(?:'re| are| were)? ?(?:mention(?:ed|ing)?|referenc(?:ed|ing)|referr(?:ed|ing) to|quot(?:ed|ing)|talking about|said|cited)|that (?:number|figure|term|mean)|this (?:number|figure|term|mean)|the (?:figure|term|number) (?:above|there|you))"
+    r"|what do(?:es)? (?:you|that|this|it) mean\b|what (?:does|do) .{1,60}\bmean\b|explain (?:that|this|the (?:number|figure|term|last))|can you (?:explain|clarify|define)\b|define\b|clarify\b)", re.I)
+
+
+def definition_turn(text, reading=None, page=''):
+    """A question about the previous answer or a term in it, naming no
+    subject of its own: 'what's the 10 million sample you're mentioning',
+    'what does that number mean'. The Reader's reading (intent
+    'definition' with no subject) decides when it is in hand; the words
+    decide otherwise. Such a turn continues the conversation and is
+    never a reason to offer the open profile (2026-10-20, Tania Nasr at
+    Paramount+ drew 'Do you want this on BET (open on your screen)?')."""
+    r = reading
+    if r is None:
+        try:
+            from flask import g as _g
+            r = getattr(_g, '_pm_reading', None)
+        except Exception:
+            r = None
+    if isinstance(r, dict) and r.get('intent'):
+        if str(r.get('intent')).lower() == 'definition' and not reading_subject(r, page):
+            return True
+        if str(r.get('intent')).lower() not in ('definition', 'chat', 'decline', 'unknown', ''):
+            return False
+    return bool(_DEFINITION_TURN_RX.search(str(text or '')))
 
 
 _TYPE_LEAD_RX = re.compile(

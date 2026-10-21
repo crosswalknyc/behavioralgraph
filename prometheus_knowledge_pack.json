@@ -1,7 +1,7 @@
 {
  "version": 1,
  "content_hash": "0666db57f686c47537691e0883ffb7cf787dc1f4248ac35b3657e6a4aadce5a0",
- "examples_hash": "46d3169bbd280d1a56ba7cab2d5ecf358637d5ffede1ca5800645449c6ca669b",
+ "examples_hash": "7dc4f035c61fbfdde0a70341177a01241a8bcabbb54a1f53bb3b43b5996445d9",
  "source_hashes": {
   ".cursor/rules/analysis-confidence-calibration.mdc": "3f2d33886bf77e54adde67cbf78f3256fa23fcb86d1ae32dd5ce7294088521f0",
   ".cursor/rules/avid-and-cut-skin-rules.mdc": "d5c01e23c4db2669558c41efdf5c706c722fae827c8d78871989ef259a16eaf0",
@@ -30,7 +30,7 @@
   ".cursor/skills/crosswalk-panel-analyst/references/numbers.md": "2857e3623a4e64134f621fbaf54dc37ad5b8e921bd59510c96d2ee4e05c75773",
   ".cursor/skills/crosswalk-panel-analyst/references/asks.md": "5a36b47f843163fefe4500de88488e1ad1ec971f5df54308e4a29bddd599f005",
   ".cursor/skills/crosswalk-panel-analyst/references/prior-work.md": "d143ac1c06efbf12a41bbb87bdacf93912580a1a70774c848e4d8606d572dbb5",
-  ".cursor/skills/crosswalk-panel-analyst/references/prometheus-brain.md": "70f10d945cc4de120a7f0e140553a3e25736df2ae315c9126b91c7bd6ab64a7d"
+  ".cursor/skills/crosswalk-panel-analyst/references/prometheus-brain.md": "79f4f7f589bd07cdae941cd1a8aa00cbe64d1f019bca0c0a2c12d9045de62c10"
  },
  "canon": [
   {
@@ -147,10 +147,10 @@
    "text": "On Amazon Prime Video:\n\nAcross the 25 English-language, non-preschool YouTube creators that move the most new audience, MrBeast delivers the largest single block at 157,580,428 US people who do not stream Prime Video in the window, and the 25 together reach 174,926,183 unduplicated non-streamers.\n\nYouTube penetration of the Prime Video audience: 79.5%, Prime Video viewers active on YouTube: 101,874,242, Unduplicated incremental people across the 25 creators: 174,926,183.\n\nYouTube creator mix, Oct 19 2025 to Oct 19 2026 (share of the 25-creator set's incremental US people (people with no Prime Video streaming in ..."
   },
   "audience_sizing": {
-   "subject": "The Gamer, Lumine and unOrdinary (WEBTOON)",
-   "title": "The Gamer, Lumine and unOrdinary (WEBTOON) | Oct 19 2025 to Oct 19 2026",
-   "q": "how many people have read 'the gamer', 'lumine', 'unordinary' webtoon in the last 12 months? how incremental is this audience to prime video users? can you also rank this to hazbin hotel before its S1 launch?",
-   "text": "On The Gamer, Lumine and unOrdinary (WEBTOON):\n\nThe Gamer, Lumine and unOrdinary together reach 2,114,739 US readers in the trailing 12 months, 1,636,412 of them with no Prime Video streaming in the window, and that combined pool sits at 64.4% of the 3,284,617 US audience Hazbin Hotel carried in the 12 months before its Season 1 launch.\n\nCombined US readers (unduplicated): 2,114,739, Incremental to Prime Video: 1,636,412, Hazbin Hotel US audience, pre Season 1: 3,284,617.\n\nWEBTOON title mix, Oct 19 2025 to Oct 19 2026 (share of the combined pool's episode-read signals across the three titles)\n- unOrdinary: 49.7% ..."
+   "subject": "Everybody Loves Raymond (Amazon Prime Video) Viewers",
+   "title": "Everybody Loves Raymond (Amazon Prime Video) Viewers | Sep 1 2026 to Sep 30 2026",
+   "q": "For the Everybody Loves Raymond Amazon Prime Video audience in this profile, what are the top 10 other scripted TV series they watched during September 2026? Show audience penetration, index versus U.S. Gen Pop, and projected audience for each title in a table",
+   "text": "On Everybody Loves Raymond (Amazon Prime Video) Viewers:\n\nThe King of Queens is the strongest co-watch in the Everybody Loves Raymond audience, reaching 34.2% of them (790,717 US viewers) in September 2026 at an index of 612 vs the US average.\n\nEverybody Loves Raymond viewers, projected US audience: 2,312,038, Watched at least one other scripted series: 2,194,127, Median other scripted series watched per viewer: 4.\n\nScripted series mix, Sep 1 2026 to Sep 30 2026 (share of this audience's other-scripted-series viewing signals across the top 10 titles, Sep 1 2026 to Sep 30 2026)\n- The King of Queens: 14.1% share, ..."
   },
   "category_demand": {
    "subject": "Paw Patrol Series",

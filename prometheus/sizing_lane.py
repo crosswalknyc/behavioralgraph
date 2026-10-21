@@ -373,10 +373,35 @@ def _check_line(host, phrase, history, window_txt=''):
         return ''
 
 
-def answer(text, ctx=None, *, host=None, history=None, subjects=None):
+_VERDICT_LINE_RX = re.compile(r"\n*Verdict:[^\n]*", re.I)
+
+
+def reader_safe(msg, staff=True):
+    """The sample check as a reader sees it. The verdict line is an
+    operator's build-decision note and a confidence tier (never public,
+    2026-09-14); it leaves for anyone outside Crosswalk (2026-10-20,
+    Tania Nasr at Paramount+ read 'Verdict: Strong - deep sample')."""
+    if staff:
+        return msg
+    return _VERDICT_LINE_RX.sub('', str(msg or '')).strip()
+
+
+def answer(text, ctx=None, *, host=None, history=None, subjects=None, staff=True, reader_subjects=None):
     """A finished reply payload for a sizing ask, else None. `subjects`
-    (from the Reader) overrides the phrase extraction."""
+    (from the Reader) overrides the phrase extraction. `staff` is False
+    for a reader outside Crosswalk (the operator's verdict line leaves).
+    A cross ask (a base audience split across services: 'of those, how
+    many are on Paramount+, on HBO Max, neither') is answered as the
+    cross, never as independent sizes (2026-10-20, Tania Nasr)."""
     try:
+        try:
+            from . import cross_sizing as _cx
+            _cross = _cx.answer(text, ctx, host=host, reader_subjects=reader_subjects or subjects)
+        except Exception:
+            traceback.print_exc()
+            _cross = None
+        if _cross:
+            return _cross
         if subjects:
             subs = [str(x).strip() for x in subjects if str(x or '').strip() and not _is_panel_self(str(x))]
         else:
@@ -398,7 +423,7 @@ def answer(text, ctx=None, *, host=None, history=None, subjects=None):
                 sizing.append({'subject': hit['name'], 'sample': hit['sample'], 'us': hit['us'],
                                'window': hit.get('window'), 'source': 'profile', 'asked_as': phrase})
                 continue
-            msg = _check_line(host, phrase, history, window_txt)
+            msg = reader_safe(_check_line(host, phrase, history, window_txt), staff)
             if msg:
                 lines.append(msg)
                 chips.append(f"Build a profile on {strip_audience_nouns(phrase) or phrase}")

@@ -849,6 +849,21 @@ def humanize_name(s):
     return ' '.join(out)
 
 
+def is_staff(user) -> bool:
+    """A Crosswalk operator (a super admin or a Crosswalk account). The
+    operator forms of a reply (the sample check's verdict line) are
+    theirs; every other reader gets the reader-safe form."""
+    try:
+        u = user if isinstance(user, dict) else {}
+        if str(u.get('role') or '').strip().lower() == 'super_admin':
+            return True
+        if str(u.get('company') or '').strip().lower() == 'crosswalk':
+            return True
+        return str(u.get('email') or '').strip().lower().endswith('@crosswalknyc.com')
+    except Exception:
+        return False
+
+
 # ── Product facts (2026-10-05) ──────────────────────────────────────
 # "How big is the Crosswalk sample?" is a fact about the product, the
 # same answer for everyone, never a subject to build (Scott's ask was
@@ -863,13 +878,44 @@ _SIZE_WORD_RE = re.compile(
 _SAMPLE_SELF_RE = re.compile(
     r"\b(crosswalk|your|the|our)\b.{0,30}\b(sample|panel|panelists?)\b|"
     r"\b(sample|panel|panelists?)\b.{0,20}\b(size|audience|population|do you have)\b", re.I)
+# A question about what the sample IS, asked back at an answer that
+# mentioned it (2026-10-20, Tania Nasr: "what's the 10 million sample
+# you're mentioning" carried no size word and drew the open-tab
+# confirm). The same product fact answers it.
+_DEFINE_RE = re.compile(
+    r"\b(what(?:'s|s| is| are| was| does| do)\b|what do(?:es)? (?:you|that|this|it) mean|mean(?:ing|s)?\s+(?:by|of|when)\b|"
+    r"explain|define|clarify|you(?:'re| are| were) (?:mentioning|referencing|referring to|talking about|quoting)|"
+    r"you (?:mention(?:ed)?|referenced|quoted|cited)|(?:refer|referr)(?:ed|ing|s)? to)\b", re.I)
+_TEN_MILLION_RE = re.compile(r"\b(?:10|ten)[ -]?(?:million|m|mm)\b", re.I)
+
+
+def is_sample_definition_ask(text) -> bool:
+    """A question about what the sample (the ten million) is, as opposed
+    to how big it is: 'what's the 10 million sample you're mentioning',
+    'what does inside the 10 million mean'."""
+    t = str(text or '')
+    if not _DEFINE_RE.search(t):
+        return False
+    if _TEN_MILLION_RE.search(t):
+        return True      # "what is the 10 million", "the 10m you keep referencing": the sample
+    return bool(_SAMPLE_WORD_RE.search(t) and _SAMPLE_SELF_RE.search(t))
 
 
 def is_sample_size_ask(text) -> bool:
-    """A question about how big the Crosswalk sample itself is."""
+    """A question about how big the Crosswalk sample itself is, or what
+    it is."""
     t = str(text or '')
     if not _SAMPLE_WORD_RE.search(t) or not _SIZE_WORD_RE.search(t):
-        return False
+        if not is_sample_definition_ask(t):
+            return False
+        # a definition ask about the ten million: the same fact, when no
+        # audience is named inside it
+        if _TEN_MILLION_RE.search(t) and not _SAMPLE_WORD_RE.search(t):
+            try:
+                from . import sizing_lane as _szl
+                return not _szl.names_an_audience(t)
+            except Exception:
+                return True
     # "sample" as a verb or a brand ("sample sale", "Sample the album")
     # does not count; the ask has to be about the sample as a thing.
     if not _SAMPLE_SELF_RE.search(t):

@@ -607,12 +607,33 @@ def bind_to_published(reply, subject, *, ledger=None, min_overlap=3):
 
 # ------------------------------------------------- evidence bind (exact)
 _EV_NUM_RX = re.compile(r"(?<![\w.,])(\d{1,3}(?:,\d{3})+|\d{4,})(?![\w,]|\.\d)")
+# A year is a date, never a count: the four digits of an ISO date
+# (2026-09-23), a slash date (9/23/2026), or a bare year (2026-10-20,
+# Tania Nasr's BET read: "the window 2025-09-23 to 2026-09-23" came
+# back as "2,026-09-23 to 2026-09-23" because the start year was bound
+# to the nearest evidence count).
+_DATE_YEAR_RX = re.compile(r"^(?:19|20)\d{2}$")
+
+
+def _is_date_token(text, m):
+    tok = m.group(1)
+    if ',' in tok or not _DATE_YEAR_RX.match(tok):
+        return False
+    after = text[m.end():m.end() + 3]
+    before = text[max(0, m.start() - 1):m.start()]
+    if re.match(r"-\d\d", after) or re.match(r"/\d", after) or before == '/':
+        return True
+    return True   # a bare 1900-2099 number is a year on these surfaces
 
 
 def evidence_numbers(evidence_text):
-    """Every count (1,000 and up) the evidence carries, as ints."""
+    """Every count (1,000 and up) the evidence carries, as ints; years
+    inside dates are not counts."""
     out = set()
-    for m in _EV_NUM_RX.finditer(str(evidence_text or '')):
+    text = str(evidence_text or '')
+    for m in _EV_NUM_RX.finditer(text):
+        if _is_date_token(text, m):
+            continue
         try:
             out.add(int(m.group(1).replace(',', '')))
         except ValueError:
@@ -637,6 +658,8 @@ def bind_to_evidence(reply, evidence_text, tol=0.02):
 
         def _fix(m):
             raw = m.group(1)
+            if _is_date_token(out, m):
+                return raw          # a year in a date is never a count to bind
             try:
                 v = int(raw.replace(',', ''))
             except ValueError:

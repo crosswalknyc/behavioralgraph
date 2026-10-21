@@ -29,6 +29,7 @@ from prometheus import store as _store   # relational shadow store (audit item 7
 from prometheus import intents as _intents   # product-intent gates (extracted 2026-10-14)
 from prometheus import subject_rules as _subject_rules   # the open profile is context, never a default subject (2026-10-20)
 from prometheus import creator_fit as _creator_fit   # a creator-fit read is held to the subject's universe (2026-10-20)
+from prometheus import intake_predicates as _intake_predicates   # pure text predicates (extracted 2026-10-20)
 import io
 import hashlib
 import time
@@ -2636,53 +2637,7 @@ def _synth_chat_interpret_batch(user_text: str, subjects: list,
     })
 
 
-def _synth_chat_is_incidence_request(text):
-    """True when the message is a sample-size / incidence QUESTION,
-    not a build instruction. Tuned for roundabout phrasings.
-    """
-    import re as _re
-    t = (text or '').strip().lower()
-    if not t or len(t) > 600:
-        return False
-    # Negative gates: explicit sample-size INSTRUCTIONS are build
-    # parameters, not questions.
-    #   "use a sample size of 50,000" / "set the sample to 40k" /
-    #   "the sample size should be 25000"
-    if _re.search(r'\b(use|set|with|lock|make)\b[^.?!]{0,40}'
-                  r'\bsample( |-)?size\b', t):
-        return False
-    if _re.search(r'\bsample( |-)?size\b[^.?!]{0,20}'
-                  r'\b(of|should be|=|:)?\s*[\d,]{4,}', t):
-        return False
-    # A consumption count is a viewership read, never a sample check
-    # (2026-10-20, Marie Flores at WBD: "how many people watched
-    # Everybody Loves Raymond on Prime Video in September 2026 ... by
-    # platform as a table" drew the sample-check card and an empty
-    # answer). Same guard the sizing lane carries: "how many people
-    # watched X" prices as a viewership read unless the ask names the
-    # sample, the incidence or the data set itself.
-    if _re.search(r'\bhow many\b[^.?!]{0,60}\b(?:watch(?:ed|es|ing)?'
-                  r'|view(?:ed|s|ing)?|stream(?:ed|s|ing)?|read|reads'
-                  r'|listen(?:ed|s|ing)?|play(?:ed|s|ing)?|bought|buy'
-                  r'|buys|purchased|downloaded|binged?|tuned in'
-                  r'|subscribed?)\b', t) \
-            and not _re.search(r'\b(?:sample|incidence|data ?set)\b', t):
-        return False
-    strong = _re.search(
-        r'\bincidence\b'
-        r'|\bsample( |-)?size\b'
-        r'|\bsample check\b|\bcheck (the |a |our )?sample\b'
-        r'|\bhow (many|big|large|much)\b[^.?!]{0,80}'
-        r'\b(panel(ist)?s?|sample|audience|people|respondents|n)\b'
-        r'|\b(do|would|will|did) we have enough\b'
-        r'|\benough (panel(ist)?s?|sample|data|people|respondents)\b'
-        r'|\bis the (sample|panel|n|audience|base) '
-        r'(big |large )?enough\b'
-        r'|\bpanel(ist)? count\b|\bhow many panel(ist)?s\b'
-        r'|\bfeasib(le|ility)\b'
-        r'|\bn( |-)?size\b|\bwhat(\'| i)?s the n\b',
-        t)
-    return bool(strong)
+_synth_chat_is_incidence_request = _intake_predicates.is_incidence_request   # moved to prometheus/intake_predicates.py (2026-10-20)
 
 
 def _pm_hold_sample_to_catalog(subject, tu, start=None, end=None):
@@ -3002,38 +2957,7 @@ def _synth_chat_incidence_check(text, history=None):
     })
 
 
-def _synth_chat_is_discovery_request(text):
-    """True when the message states a business goal (pitch, meeting,
-    deck, client) WITHOUT defining an audience - the case where the
-    user needs help figuring out what kind of profile to build.
-    Direct build asks return False so they behave exactly as today.
-    """
-    import re as _re
-    t = (text or '').strip().lower()
-    if not t or len(t) > 500:
-        return False
-    # Direct build ask with an audience attached -> NOT discovery.
-    if _re.search(r'\b(build|run|make|create|pull|queue|launch|refresh)'
-                  r'\b[^.?!]{0,40}\b(profile|cut|audience|cohort)s?\b'
-                  r'\s+(of|on|for)\s+\S', t):
-        return False
-    # Explicit audience descriptors -> they already know the cut.
-    if _re.search(r'\b(viewers|buyers|purchasers|shoppers|subscribers|'
-                  r'listeners|owners|fans|users|moms|dads|parents)\b'
-                  r'[^.?!]{0,30}\b(of|who|for)\b', t):
-        return False
-    pitch = _re.search(
-        r"\b(i'?m|im|we'?re|were|i am|we are)\s+pitching\b"
-        r"|\bpitching\s+[a-z0-9]"
-        r"|\bprepping\s+(a\s+|the\s+)?(deck|pitch|meeting|presentation)\b"
-        r"|\b(meeting|presenting)\s+(with|to)\s+[a-z0-9]"
-        r"|\brfp\s+(for|from)\b"
-        r"|\b(new\s+)?(client|prospect)\s+is\s+[a-z0-9]"
-        r"|\bwhat\s+(kind|type)\s+of\s+profile\b"
-        r"|\bhelp\s+me\s+figure\s+out\s+(what|which|who)\b"
-        r"|\bwho\s+should\s+(we|i)\s+(profile|pull|target)\b",
-        t)
-    return bool(pitch)
+_synth_chat_is_discovery_request = _intake_predicates.is_discovery_request   # moved to prometheus/intake_predicates.py (2026-10-20)
 
 
 def _synth_chat_discovery_options(text):
@@ -11534,6 +11458,16 @@ def _pm_open_screen_confirm(text, ctx, history=None):
         return None
     try:
         if _pm_titles_ask_needs_scope(text, page):
+            return None
+    except Exception:
+        traceback.print_exc()
+    # A question about the previous answer or a term in it ("what's the
+    # 10 million sample you're mentioning") is a turn in the
+    # conversation, never a reason to offer the page (2026-10-20 Jenna,
+    # Tania Nasr at Paramount+ drew "Do you want this on BET?").
+    try:
+        if _subject_rules.definition_turn(text, page=page):
+            _pm_ask_hint(route='screen_bind', outcome='definition_turn', subject=page)
             return None
     except Exception:
         traceback.print_exc()

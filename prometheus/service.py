@@ -897,8 +897,8 @@ def ask(user, body, *, via='session'):
     # line when an audience is named.
     if referent_decision is None and not _armed(body):
         try:
-            from . import sizing_lane as _szl
-            _sz = _szl.answer(text, ctx, host=host, history=history)
+            from . import sizing_lane as _szl, guards as _gs
+            _sz = _szl.answer(text, ctx, host=host, history=history, staff=_gs.is_staff(user))
         except Exception as e:
             _faults.note('service.sizing_lane', e)
             _sz = None
@@ -1307,7 +1307,8 @@ def _execute_reading(reading, text, ctx, history, user, uname, body, tid, via, p
         if _g.is_sample_size_ask(text) or not subs or all(_szl.is_panel_noun(s) for s in subs):
             return None     # the panel itself ("how many panelists do you have"): the sample-size answer says 10 million
         _pg.say('Sizing ' + (' and '.join(subs[:3]) if subs else 'the audience'))
-        raw = _szl.answer(text, ctx, host=host, history=history, subjects=subs or None)
+        raw = _szl.answer(text, ctx, host=host, history=history, subjects=subs or None,
+                          staff=_g.is_staff(user), reader_subjects=list((reading or {}).get('subjects') or []))
         reason = 'sizing'
     elif intent == 'exists':
         from . import catalog_lane as _cl
