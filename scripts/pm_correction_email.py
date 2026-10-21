@@ -164,7 +164,7 @@ def main():
     # assert, From Prometheus, Jenna + Liz on BCC, logged.
     from prometheus import outbound_mail as _om
     resp = _om.send_user_email(
-        to=args.to, subject=str(msg['Subject']), body=body, instructed=True,
+        to=args.to, subject=str(msg['Subject']), body=body_text, instructed=True,
         caller='pm_correction_email', html=html, pdf=pdf or None,
         pdf_name=f'{safe or "Crosswalk_Read"}.pdf',
         csv=(open(args.csv, 'rb').read() if args.csv else None),

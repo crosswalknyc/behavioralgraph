@@ -58,6 +58,11 @@ AUDIENCE_NOUNS = (
     r'listeners?|watchers?|followers?|customers?|consumers?|users?')
 
 NAME_RES = (
+    # 'Colin and Samir have a Lexus deal' (Debi Pomerantz,
+    # 2026-10-21). The people named before the verb are the subject.
+    re.compile(
+        r'(?:^|[.!?]\s+)([A-Z][A-Za-z0-9&\'.-]+(?:\s+(?:and|&)\s+'
+        r'[A-Z][A-Za-z0-9&\'.-]+)+)\s+(?:have|has|had)\b'),
     # 'profile iq for emily in paris', 'a journey on nike',
     # 'demographics of yellowstone'
     re.compile(

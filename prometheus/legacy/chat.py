@@ -11437,13 +11437,60 @@ def _pm_view_vocab_hit(text, vc):
     return False
 
 
+def _pm_foreign_names(text, vc):
+    """Capitalized names in the ask that this view does not carry.
+
+    Shared words are not a subject. Debi Pomerantz, 2026-10-21: she
+    asked about Colin and Samir's Lexus campaign with the NCIS: New
+    York premiere journey open. The journey text contains audience,
+    episode, conversion, and youtube, so the vocabulary overlap bound
+    the view and the reply came back as that journey's conversion.
+    """
+    try:
+        import json as _json
+        blob = _json.dumps(vc, ensure_ascii=False, default=str).lower()
+    except Exception:
+        blob = ''
+    title = str((vc or {}).get('view_title') or '').lower()
+    blob = blob + ' ' + title
+    skip = _PM_VIEW_VOCAB_STOP | frozenset((
+        'have', 'has', 'had', 'this', 'that', 'they', 'them', 'with',
+        'from', 'your', 'what', 'when', 'where', 'which', 'would',
+        'could', 'should', 'there', 'their', 'about', 'after', 'before',
+        'into', 'over', 'under', 'also', 'just', 'only', 'been', 'were',
+        'will', 'each', 'other', 'than', 'then', 'here'))
+    raw = str(text or '')
+    absent = []
+    for m in re.finditer(r'\b([A-Z][A-Za-z0-9&]{3,})\b', raw):
+        w = m.group(1).lower()
+        if w in skip or w in blob:
+            continue
+        # A capital that only exists because it starts a sentence
+        # ("Analyze the data") is not a name. A sentence start still
+        # counts when a second name follows ("Colin and Samir").
+        prev = raw[:m.start()]
+        at_start = (not prev.strip()) or bool(
+            re.search(r'[.!?]\s*$', prev))
+        if at_start:
+            rest = raw[m.end():]
+            if not re.match(
+                    r'\s+(?:and|&)\s+[A-Z]|\s+[A-Z][A-Za-z0-9&]{3,}',
+                    rest):
+                continue
+        absent.append(w)
+    return absent
+
+
 def _pm_view_owns_ask(text, ctx):
     """True when the on-screen view owns this ask (2026-09-30 Jenna:
     "What drove conversion in this campaign window?" on the
     Attribution view must ground in the campaign on screen, never
     disambiguate between profiles). The view context only exists when
     the user is on a data-bearing non-profile view, so Profile IQ
-    asks never land here."""
+    asks never land here.
+
+    A name the ask brings that the view does not carry wins. The view
+    is not the subject of a different campaign."""
     if not isinstance(ctx, dict):
         return False
     vc = ctx.get('view_context') or {}
@@ -11451,6 +11498,8 @@ def _pm_view_owns_ask(text, ctx):
     if not view_id:
         return False
     t = str(text or '')
+    if _pm_foreign_names(t, vc):
+        return False
     if _PM_VIEW_DEIXIS_RE.search(t):
         return True
     if view_id == 'intentIQ' and (

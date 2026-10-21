@@ -66,6 +66,30 @@ check("named-subject data ask stays off the view",
 check("conversion vocab does not own non-attribution views",
       not owns("what drove conversions for the brand?", SUB))
 
+# Debi Pomerantz, 2026-10-21: a Lexus campaign asked on the NCIS
+# premiere journey came back as that journey's conversion, because
+# audience / episode / conversion / youtube overlapped the view.
+JNY = {"view_context": {
+    "view_id": "journeyIQ",
+    "view_title": ("NCIS: New York premiere, where the first-episode "
+                   "audience came from"),
+    "data": {"audience": 37582027, "conversion": 0.087,
+             "episode": "first", "youtube": True,
+             "first_episode": True}}}
+DEBI = (
+    "Colin and Samir have a Lexus deal around the Lexus GX 550. "
+    "The first promo launched on YouTube. I want to understand who "
+    "the campaign is driving to Lexus and what the lift is. Are they "
+    "bringing in a younger Lexus audience. What does the conversion "
+    "look like.")
+check("shared journey words would have bound the open view",
+      ns["_pm_view_vocab_hit"](DEBI, JNY["view_context"]))
+check("a named other campaign does not bind the open journey",
+      not owns(DEBI, JNY))
+check("the same conversion ask with no other name still binds",
+      owns("What does the conversion look like for this campaign?",
+           JNY))
+
 camp = ns["_PM_CAMPAIGN_ASK_RE"]
 check("campaign regex hits campaign/attribution/roas",
       all(camp.search(s) for s in
