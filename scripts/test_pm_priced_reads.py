@@ -1,0 +1,156 @@
+#!/usr/bin/env python3
+"""New-numbers quote first; sizing is $100 (Jenna 2026-10-21).
+
+Jay Patel, Emmet Riley and Debi Pomerantz were getting incrementality,
+path tables, ranked lists, where-watched and sample sizes at the
+metered chat rate. Jenna: quote, they accept, then answer. Sizing is
+$100, not free. First new frame $500; extra titles in the same thread
+frame $100. Talk on a paid file stays metered. Kartel stickers stay
+$275 / $925.
+
+Hermetic: imports priced_read / overlap_read and reads chat.py /
+service.py / rate_card.py as source. No network.
+"""
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+WEB = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(WEB))
+
+from prometheus.priced_read import (  # noqa: E402
+    CONFIRM, classify, is_talk, needs_generate_quote, offer, same_frame,
+)
+from prometheus.overlap_read import is_overlap_read  # noqa: E402
+
+FAIL = 0
+
+
+def check(name, ok):
+    global FAIL
+    print(('PASS ' if ok else 'FAIL ') + name)
+    if not ok:
+        FAIL += 1
+
+
+# --- sizing is $100 -------------------------------------------------
+chip = classify("how big is Chipotle in the dataset")
+check("Chipotle sizing is a $100 sizing",
+      bool(chip) and chip.get('kind') == 'sizing' and chip.get('usd') == 100)
+check("Chipotle sizing is the service lane, not generate",
+      bool(chip) and chip.get('via') == 'service')
+check("FanDuel audience size is sizing $100, not overlap",
+      classify("how big is the fanduel audience size")['kind'] == 'sizing'
+      and not is_overlap_read("how big is the fanduel audience size"))
+check("sample size of Chipotle buyers is sizing",
+      classify("sample size of Chipotle buyers")['kind'] == 'sizing')
+check("two data sets FanDuel and Kalshi is sizing",
+      classify("i need the size of two data sets, first FanDuel customers, "
+               "the second Kalshi customers")['kind'] == 'sizing')
+
+# --- consumption is not sizing --------------------------------------
+marie = ("how many people watched Everybody Loves Raymond on Prime Video "
+         "in September 2026 by platform as a table")
+check("Marie watched-count is not sizing",
+      (classify(marie) or {}).get('kind') != 'sizing')
+check("Marie is not talk", is_talk(marie) is False)
+
+# --- overlap / incrementality $500 ----------------------------------
+jay = "how incremental is Lore Olympus to Prime Video?"
+hit = classify(jay)
+check("Lore Olympus incrementality is generate $500",
+      bool(hit) and hit.get('via') == 'generate' and hit.get('usd') == 500)
+check("needs_generate_quote on incrementality",
+      needs_generate_quote(jay) is True)
+
+# --- same-frame extra title $100 ------------------------------------
+prior = [
+    {'role': 'user', 'text': 'how incremental is The Kiss Quotient to Prime Video?'},
+    {'role': 'agent', 'text': (
+        'The Kiss Quotient is incremental to Prime Video. 1,284,317 people '
+        'who engaged with it had not streamed Prime Video in the prior 30 days. '
+        'That is 18.4 percent of the title audience.')},
+]
+addon = classify("how incremental is Lore Olympus to Prime Video?", prior)
+check("Lore Olympus after Kiss Quotient incrementality is $100",
+      bool(addon) and addon.get('same_frame') is True and addon.get('usd') == 100)
+check("same_frame helper agrees",
+      same_frame(prior, 'incrementality|prime video') is True)
+declined = [
+    {'role': 'user', 'text': 'how incremental is The Kiss Quotient to Prime Video?'},
+    {'role': 'agent', 'text': (
+        'I can answer that as a custom read on The Kiss Quotient. '
+        'That is a $500 read. I will not answer until you accept.')},
+]
+check("a declined incrementality offer is not a paid frame",
+      same_frame(declined, 'incrementality|prime video') is False)
+
+# --- talk stays metered ---------------------------------------------
+check("Brock insights is talk",
+      is_talk("craziest insights from the Brock profile") is True)
+check("what does this 36.2% mean is talk",
+      is_talk("what does this 36.2% mean") is True)
+check("where do I see it is talk",
+      is_talk("where do I see the Love Hypothesis file") is True)
+check("talk classify is None",
+      classify("craziest insights from the Brock profile") is None)
+check("Tania on-service split is not priced",
+      classify("how many UFC fans are there out there, of those, "
+               "how many are on Paramount+, on HBO Max and how many "
+               "have neither service") is None)
+
+# --- ranked list ----------------------------------------------------
+lst = classify("who are the top 25 YouTube creators")
+check("top 25 YouTube creators is a $500 list",
+      bool(lst) and lst.get('kind') == 'list' and lst.get('usd') == 500)
+
+# --- offer copy is upfront ------------------------------------------
+reply, chips, off = offer('Chipotle', '$100', 'how big is Chipotle',
+                          kind='sizing', frame='sizing')
+check("sizing offer names $100", '$100' in reply)
+check("sizing offer waits for accept", CONFIRM in reply)
+check("sizing offer chip is Run the full read",
+      any('Run the full read' in c and '$100' in c for c in chips))
+check("sizing offer kind is sizing", off.get('kind') == 'sizing')
+check("Never mind is a chip", 'Never mind' in chips)
+
+# --- service / chat wiring ------------------------------------------
+service = (WEB / 'prometheus' / 'service.py').read_text()
+check("service calls priced_read.service_turn",
+      'priced_read' in service and 'service_turn' in service)
+check("service persist keeps priced_paid",
+      "meta['priced_paid']" in service)
+chat = (WEB / 'prometheus' / 'legacy' / 'chat.py').read_text()
+check("interpret incidence quotes before the sample check",
+      'outcome=\'panel_offer\'' in chat[chat.find('INCIDENCE / SAMPLE-SIZE'):
+                                       chat.find('INCIDENCE / SAMPLE-SIZE') + 2500]
+      or 'outcome="panel_offer"' in chat)
+inc_block = chat[chat.find('INCIDENCE / SAMPLE-SIZE'):
+                 chat.find('INCIDENCE / SAMPLE-SIZE') + 2800]
+check("interpret incidence offer uses priced_read",
+      'priced_read' in inc_block and 'kind=\'sizing\'' in inc_block)
+check("generate_metrics hands sizing confirm to the lane",
+      "kind') or '') in (\n            'sizing', 'where_watched')" in chat
+      or "'sizing', 'where_watched'" in chat)
+gate_at = chat.find("NEW-NUMBERS ON AN OPEN FILE (2026-10-21)")
+digest_at = chat.find("Base rows ride the prompt (2026-08-27, toy-categories routing)")
+check("with-base new-numbers gate sits before the digest load",
+      0 < gate_at < digest_at)
+check("same-frame uses the $100 derived price",
+      '_same_frame' in chat[gate_at:digest_at]
+      and '_pm_derived_read_price' in chat[gate_at:digest_at])
+check("unconfirmed generate quote returns panel_offer",
+      'panel_offer' in chat[gate_at:digest_at])
+
+# --- rate card and Kartel stickers ----------------------------------
+card = (WEB / 'prometheus' / 'rate_card.py').read_text()
+check("rate card names audience size at derived_read $100",
+      'Audience size / sample check' in card and "'derived_read', 100.0" in card)
+check("custom ask stays $500", "'panel_report', 500.0" in card)
+wp = (WEB / 'wallet.py').read_text()
+check("Kartel profile sticker stays 275", '275' in wp)
+check("Kartel partnership sticker stays 925", '925' in wp)
+
+print("\n" + ("OK" if not FAIL else f"{FAIL} FAILED"))
+sys.exit(1 if FAIL else 0)

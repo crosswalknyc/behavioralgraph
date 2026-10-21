@@ -699,6 +699,42 @@ def ask(user, body, *, via='session'):
         env = envelope.wrap(_out, surface='analyze', decision=decision, thread_id=tid, via=via)
         _persist_turn(persist, uname, tid, history, text, env, _out, 'analyze')
         return env, 200
+    # Sizing ($100) and where-watched ($500, or $100 in the same frame)
+    # quote first and wait for accept (2026-10-21, Jenna). Runs armed
+    # or not so a confirm cannot fall through to a compiled $500 read.
+    if referent_decision is None:
+        try:
+            from . import priced_read as _pr
+            _ex = body.get('extra') if isinstance(body.get('extra'), dict) else {}
+            _pc = _ex.get('panel_confirm') or body.get('panel_confirm')
+            _pr_raw = _pr.service_turn(
+                text, user=user, ctx=ctx, history=history,
+                host=host, panel_confirm=_pc)
+        except Exception as e:
+            _faults.note('service.priced_read', e)
+            _pr_raw = None
+        if _pr_raw:
+            raw = _pr_raw
+            decision = {'surface': 'analyze', 'mode': None,
+                        'reason': 'priced_read', 'client_hint': None}
+            if (_client_surface == 'interpret' and _pr_raw.get('success')
+                    and _pr_raw.get('reply')):
+                raw = _interpret_shape(_pr_raw)
+                raw['followups'] = list(_pr_raw.get('followups') or [])
+                if _pr_raw.get('panel_offer'):
+                    raw['panel_offer'] = _pr_raw['panel_offer']
+            try:
+                host.ask_hint(
+                    route='priced_read',
+                    outcome=('panel_offer' if _pr_raw.get('panel_offer')
+                             else 'answered'),
+                    subject=str(_pr_raw.get('subject') or ''))
+            except Exception as _fx:
+                _faults.note('service', _fx)
+            env = envelope.wrap(raw, surface='analyze', decision=decision,
+                                thread_id=tid, via=via)
+            _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
+            return env, 200
     if referent_decision is None and not _armed(body):
         _standing = _standing_answer(text)
         if _standing is None:
@@ -717,12 +753,10 @@ def ask(user, body, *, via='session'):
                 _faults.note('service.journey_lane', _fx)
                 _standing = None
         if _standing is None:
-            # Where a named title is watched (Jay Patel 2026-10-20, "where
-            # people watched the film mutiny" with Prime Video open drew
-            # "Do you want this on Amazon Prime Video?"). The title in the
-            # words is the subject; the open profile is context at most.
-            # Deterministic routing, no charge, no draft; a title found
-            # nowhere is said plainly and the open tab is never offered.
+            # Where a named title is watched (Jay Patel 2026-10-20).
+            # Priced in priced_read.service_turn above ($500, or $100
+            # for another title in the same frame). This standing call
+            # is the fail-safe when classify missed.
             try:
                 from . import where_watched as _ww
                 _standing = _ww.answer(text, ctx, host=host, user=user, history=history)
@@ -917,13 +951,11 @@ def ask(user, body, *, via='session'):
             _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
             return env, 200
 
-    # Sizing lane (2026-10-14, Jenna, after Ben at Kartel: "this is just
-    # asking for an incidence check or what the projected band would be
-    # for sample size"). How big is X, the size of these two data sets,
-    # the sample size of X customers: held profiles answer from the
-    # catalog (typo tolerant, audience nouns stripped), anything else
-    # runs the free sample check. Never a priced read, never the panel
-    # line when an audience is named.
+    # Sizing lane (2026-10-14, Ben at Kartel; priced $100 on 2026-10-21).
+    # How big is X, the size of these two data sets, the sample size of
+    # X customers: quoted in priced_read.service_turn above. This
+    # standing call is the fail-safe when classify missed (panel-self
+    # still answers free). Never the panel line when an audience is named.
     if referent_decision is None and not _armed(body):
         try:
             from . import sizing_lane as _szl, guards as _gs
@@ -1343,8 +1375,17 @@ def _execute_reading(reading, text, ctx, history, user, uname, body, tid, via, p
         if _g.is_sample_size_ask(text) or not subs or all(_szl.is_panel_noun(s) for s in subs):
             return None     # the panel itself ("how many panelists do you have"): the sample-size answer says 10 million
         _pg.say('Sizing ' + (' and '.join(subs[:3]) if subs else 'the audience'))
-        raw = _szl.answer(text, ctx, host=host, history=history, subjects=subs or None,
-                          staff=_g.is_staff(user), reader_subjects=list((reading or {}).get('subjects') or []))
+        try:
+            from . import priced_read as _pr
+            _ex = body.get('extra') if isinstance(body.get('extra'), dict) else {}
+            _pc = _ex.get('panel_confirm') or body.get('panel_confirm')
+            raw = _pr.service_turn(text, user=user, ctx=ctx, history=history,
+                                   host=host, panel_confirm=_pc)
+        except Exception:
+            raw = None
+        if raw is None:
+            raw = _szl.answer(text, ctx, host=host, history=history, subjects=subs or None,
+                              staff=_g.is_staff(user), reader_subjects=list((reading or {}).get('subjects') or []))
         reason = 'sizing'
     elif intent == 'exists':
         from . import catalog_lane as _cl
@@ -1753,6 +1794,10 @@ def _persist_turn(persist, uname, tid, history, text, env, raw, surface):
             meta['rerun_confirm'] = raw['rerun_confirm']   # the re-run card (I2, 2026-10-20)
         if isinstance(raw, dict) and raw.get('subject'):
             meta.setdefault('subject', str(raw.get('subject'))[:120])
+        if isinstance(raw, dict) and isinstance(raw.get('panel_offer'), dict):
+            meta['panel_offer'] = raw['panel_offer']
+        if isinstance(raw, dict) and isinstance(raw.get('priced_paid'), dict):
+            meta['priced_paid'] = raw['priced_paid']
         turns.append({'role': 'agent', 'text': env['text'],
                       'ts': _now(), 'meta': meta})
         save_thread(uname, tid, turns)

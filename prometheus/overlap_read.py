@@ -7,10 +7,11 @@ rate because the title's profile was open. Opening a file does not
 make a new cross-service count chat. Quote Custom Ask ($500) first,
 charge on confirm, then generate.
 
-A size question stays free (brain 26). A Tania-style split that only
-asks who is 'on' a service, with no subscribe / pay / incremental
-wording, stays the free cross (brain 48). A breakdown of a figure
-they already paid for stays the $100 derived read.
+A size question is its own $100 read (brain 26, Jenna 2026-10-21).
+A Tania-style split that only asks who is 'on' a service, with no
+subscribe / pay / incremental wording, stays the free cross (brain
+48). A breakdown of a figure they already paid for stays the $100
+derived read.
 """
 from __future__ import annotations
 
@@ -48,8 +49,8 @@ _NEXT_WATCH_RX = re.compile(
     re.I)
 _NOT_THIS_RX = re.compile(
     r"\b(?:what does (?:this|that|it|the (?:number|figure|percent))\s+mean|"
-    r"craziest insights|sample[- ]size|incidence|"
-    r"how big is|audience size|"
+    r"craziest insights|"
+    r"how big is|audience size|sample[- ]size|incidence|"
     r"where (?:do|can) i (?:find|see|get))\b",
     re.I)
 

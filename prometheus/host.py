@@ -69,7 +69,7 @@ _APP_BINDINGS = {
     'thread_for_job': '_pm_thread_for_job',
     'load_thread': '_pm_load_thread_or_active',
     'save_thread': '_pm_save_thread_or_active',
-    # sizing lane (2026-10-14): the free sample check + the audience band
+    # sizing lane (2026-10-14; $100 as of 2026-10-21): sample check + audience band
     'incidence_check': '_synth_chat_incidence_check',   # (text, history) -> Flask response with incidence_check
     'audience_range': '_estimated_audience_range',      # (sample) -> {'low','high'} | None
     # golden set (audit item 2, 2026-10-14): the build server's shared secret

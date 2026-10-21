@@ -25,6 +25,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 WEB = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(WEB))
 CHAT = (WEB / 'prometheus' / 'legacy' / 'chat.py').read_text()
 WATCH = (WEB / 'prometheus' / 'legacy' / 'watch.py').read_text()
 
@@ -49,9 +50,7 @@ def _grab(src, name):
 
 
 # --- the incidence pre-check (interpret surface) --------------------------
-ns = {'re': re}
-exec(_grab(CHAT, '_synth_chat_is_incidence_request'), ns)
-is_incidence = ns['_synth_chat_is_incidence_request']
+from prometheus.intake_predicates import is_incidence_request as is_incidence  # noqa: E402
 
 check('Marie\'s viewership count is not a sample check', is_incidence(MARIE) is False)
 check('"how many people read the Walsh family book series last year" is not a sample check',
@@ -64,6 +63,9 @@ check('a count that names the sample still is one',
       is_incidence('how many people watched Landman are in the sample?') is True)
 check('a sample-size instruction is still not one',
       is_incidence('use a sample size of 50,000 for the Landman build') is False)
+from prometheus.priced_read import classify as _pr_classify  # noqa: E402
+check("Marie is not a $100 sizing",
+      (_pr_classify(MARIE) or {}).get('kind') != 'sizing')
 
 # --- the viewership price (watch.py) -------------------------------------
 wns = {'re': re, 'datetime': datetime, 'timezone': timezone}

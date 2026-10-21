@@ -9,14 +9,16 @@ people are in an audience, inside the sample and projected to the US.
 Jenna: "this is just asking for an incidence check or what the
 projected band would be for sample size."
 
-The lane answers sizing asks deterministically and free:
+The lane answers sizing asks deterministically. As of 2026-10-21
+the answer is a $100 read, quoted first (prometheus/priced_read.py).
+This module still produces the numbers after they accept:
 
 - one or more subjects are read out of the ask (lists, ordinals, typos,
   audience nouns like customers / users / fans stripped for matching);
 - a subject the dashboard already holds answers from the catalog: the
   sample inside the ten million, the projected US audience, the band
   and the window, in one line;
-- a subject we do not hold runs the free sample check (the same check
+- a subject we do not hold runs the sample check (the same check
   the build surface offers), through the host binding;
 - the ten-million panel line is reserved for asks that name no
   audience at all.

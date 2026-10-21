@@ -8,9 +8,9 @@ many subscribe to Netflix?" shipped a compiled overlap (29.6M viewers,
 at the metered chat rate because the title's profile was open.
 
 Opening a file does not make a new cross-service count chat. Size
-stays free. A Tania-style 'of those, how many are on X' with no
-subscribe wording stays the free cross. Insights and 'what does this
-mean' stay metered.
+is its own $100 read (2026-10-21). A Tania-style 'of those, how
+many are on X' with no subscribe wording stays the free cross.
+Insights and 'what does this mean' stay metered.
 
 Hermetic: imports overlap_read and reads chat.py / sizing_lane.py as
 source. No network.
@@ -69,7 +69,7 @@ check("empty is not one", is_overlap_read("") is False)
 
 # --- with-base gate in chat.py --------------------------------------
 chat = (WEB / "prometheus" / "legacy" / "chat.py").read_text()
-gate_at = chat.find("OVERLAP READ (2026-10-21, Bria)")
+gate_at = chat.find("NEW-NUMBERS ON AN OPEN FILE (2026-10-21)")
 no_base_at = chat.find("if not base:\n        # A QUESTION about a never-pulled subject")
 digest_at = chat.find("Base rows ride the prompt (2026-08-27, toy-categories routing)")
 check("the with-base overlap gate is in generate_metrics", gate_at > 0)
@@ -80,9 +80,9 @@ check("the overlap gate sits before the digest load",
 check("confirm still charges via consume_credit",
       "consume_credit(" in chat[gate_at:digest_at])
 check("unconfirmed overlap returns panel_offer, not a generated reply",
-      "panel_offer" in chat[gate_at:digest_at] and "build_panel_report_offer" in chat[gate_at:digest_at])
+      "panel_offer" in chat[gate_at:digest_at])
 check("overlap offer uses the custom-read kind, not viewership copy",
-      "kind=_pr_kind" in chat[gate_at:digest_at])
+      "kind=_off_kind" in chat[gate_at:digest_at] or "kind=_pr_kind" in chat[gate_at:digest_at])
 check("confirmed overlap keeps the catalog base (does not blank s3_key)",
       "s3_key': ''" not in chat[gate_at:digest_at])
 
