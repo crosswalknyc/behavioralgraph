@@ -2270,8 +2270,14 @@ def _creative_format_rows(*, X_bin: np.ndarray, y: np.ndarray, touch: list[dict]
             "lift_per_exposure": round(a["lift_num"] / a["lift_w"], 4) if a["lift_w"] > 0 else None,
             "share_of_converters": round(converted / total_conv * 100.0, 1) if total_conv else None,
         })
-    out.sort(key=lambda r: (r["conversion_rate"], r["converted_n"]), reverse=True)
-    best = [r["label"] for r in out if r["exposed_n"] >= _FORMAT_MIN_SHARE_FOR_BEST * n][:3]
+    # formats with enough people to call (>= 2% of the exposed audience)
+    # lead, by rate; the thin ones follow in their own rate order, so the
+    # highlighted first row is the best format a reader can act on
+    floor = _FORMAT_MIN_SHARE_FOR_BEST * n
+    out.sort(key=lambda r: (r["exposed_n"] >= floor, r["conversion_rate"], r["converted_n"]), reverse=True)
+    best = [r["label"] for r in out if r["exposed_n"] >= floor][:3]
+    for r in out:
+        r["enough_to_call"] = bool(r["exposed_n"] >= floor)
     return {"rows": out, "best": best, "coverage": classified}
 
 
@@ -2299,8 +2305,9 @@ def _compute_creative_impl(*, X_bin: np.ndarray, y: np.ndarray, touch: list[dict
         dims.append({"key": "creative_format", "label": "Creative format",
                      "question": "Which format of creative converted best",
                      "rows": fmt["rows"], "best": fmt["best"],
-                     "note": ("A creator's people are split across the formats of their clips by the clips' views; "
-                              "a format is named best only when it reached at least 2% of the exposed audience.")})
+                     "note": ("A creator's people are split across the formats of their clips by the clips' views. "
+                              "Formats that reached at least 2% of the exposed audience lead, by rate; the ones below "
+                              "that line reached too few people to call and follow.")})
     for key, label, question in _CREATIVE_DIMENSIONS:
         groups: dict[str, list[int]] = {}
         for k, t in enumerate(touch):
