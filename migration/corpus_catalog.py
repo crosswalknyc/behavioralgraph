@@ -365,9 +365,10 @@ def facts_from_profile_csv_text(s3_key, display_name, text, user=''):
 
 # A journey target that describes the READ rather than the thing read
 # ('Mark Rober Audience - YouTube Creator Journey', 'Banking Research -
-# Chime Steal-Share Brief'): the client is the subject there.
+# Chime Steal-Share Brief', 'Paramount+ Subscriber Lifecycle'): the
+# client is the subject there.
 _DESCRIPTOR_RX = re.compile(
-    r'\b(journey|brief|research|migration|discovery|cross[- ]window|steal[- ]share|case study)\b', re.I)
+    r'\b(journey|brief|research|migration|discovery|cross[- ]window|steal[- ]share|case study|lifecycle)\b', re.I)
 
 
 def journey_identity(meta, inputs=None):
