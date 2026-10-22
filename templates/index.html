@@ -35832,6 +35832,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var midL = _iiqROIMidLabel();
                 var botL = _iiqROIBotLabel();
                 var limit = window.__iiqROIShowAll ? rows.length : Math.min(rows.length, 20);
+                var slim = /influencer_project/.test(String((window.__intentIQ && window.__intentIQ.currentSlug) || ''));
                 var body = rows.slice(0, limit).map(function(r) {
                     var a = r.asset;
                     var on = r.id === scopeId;
@@ -35843,13 +35844,13 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                       +     '<div style="font-size:0.66rem; color:var(--text-secondary); font-weight:400;">' + escapeHtml([a.asset_type, a.posted_date].filter(Boolean).join(' \u00b7 ')) + '</div></td>'
                       +   '<td style="padding:0.45rem 0.55rem; color:var(--text-secondary);">' + escapeHtml(a.channel || '') + '</td>'
                       +   '<td style="padding:0.45rem 0.55rem; color:#22d3ee; text-align:right; font-variant-numeric:tabular-nums;">' + fmtInt(Math.round(r.views)) + '</td>'
-                      +   '<td style="padding:0.45rem 0.55rem; color:#22d3ee; text-align:right;">' + _iiqROIFmtUSD(r.views_value) + '</td>'
+                      +   (slim ? '' : '<td style="padding:0.45rem 0.55rem; color:#22d3ee; text-align:right;">' + _iiqROIFmtUSD(r.views_value) + '</td>')
                       +   '<td style="padding:0.45rem 0.55rem; color:#a78bfa; text-align:right;">' + _iiqROIFmtUSD(r.eng_value)  + '</td>'
                       +   '<td style="padding:0.45rem 0.55rem; color:#818cf8; text-align:right;">' + _iiqROIFmtUSD(r.info_value) + '</td>'
                       +   '<td style="padding:0.45rem 0.55rem; color:#fbbf24; text-align:right;">' + _iiqROIFmtUSD(r.web_value)  + '</td>'
-                      +   '<td style="padding:0.45rem 0.55rem; color:#f0fdf4; text-align:right; font-weight:700;">' + _iiqROIFmtUSD(r.total_value) + '</td>'
+                      +   (slim ? '' : '<td style="padding:0.45rem 0.55rem; color:#f0fdf4; text-align:right; font-weight:700;">' + _iiqROIFmtUSD(r.total_value) + '</td>')
                       +   '<td style="padding:0.45rem 0.55rem; color:var(--text-secondary); text-align:right;">' + r.share.toFixed(1) + '%</td>'
-                      +   '<td style="padding:0.45rem 0.55rem; color:var(--text-secondary); text-align:right;">' + _iiqROIFmtUSD(r.per_k) + '</td>'
+                      +   (slim ? '' : '<td style="padding:0.45rem 0.55rem; color:var(--text-secondary); text-align:right;">' + _iiqROIFmtUSD(r.per_k) + '</td>')
                       + '</tr>';
                 }).join('');
                 var more = rows.length > 20
@@ -35857,7 +35858,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     : '';
                 return ''
                   + '<div style="margin-top:0.5rem; margin-bottom:0.4rem; font-size:0.85rem; font-weight:600; color:#e5e7eb;">Value of every piece of content</div>'
-                  + '<div style="font-size:0.7rem; color:var(--text-secondary); margin-bottom:0.4rem;">Ranked by total value. Click any row to value that post on its own. Per 1K is total value per thousand views, the cleanest read of which content is doing more with each view.</div>'
+                  + '<div style="font-size:0.7rem; color:var(--text-secondary); margin-bottom:0.4rem;">Ranked by total value. Click any row to value that post on its own.' + (slim ? '' : ' Per 1K is total value per thousand views, the cleanest read of which content is doing more with each view.') + '</div>'
                   + '<div style="overflow-x:auto; border:1px solid rgba(255,255,255,0.06); border-radius:8px;">'
                   +   '<table style="width:100%; border-collapse:collapse; font-size:0.76rem;">'
                   +     '<thead><tr style="background: rgba(0,0,0,0.35); color:#94a3b8; font-size:0.66rem; text-transform:uppercase; letter-spacing:0.05em;">'
@@ -35865,13 +35866,13 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                   +       '<th style="padding:0.45rem 0.55rem; text-align:left;">Content</th>'
                   +       '<th style="padding:0.45rem 0.55rem; text-align:left;">Channel</th>'
                   +       '<th style="padding:0.45rem 0.55rem; text-align:right;">Views</th>'
-                  +       '<th style="padding:0.45rem 0.55rem; text-align:right;">Views $</th>'
+                  +       (slim ? '' : '<th style="padding:0.45rem 0.55rem; text-align:right;">Views $</th>')
                   +       '<th style="padding:0.45rem 0.55rem; text-align:right;">Eng $</th>'
                   +       '<th style="padding:0.45rem 0.55rem; text-align:right;">' + escapeHtml(midL) + ' $</th>'
                   +       '<th style="padding:0.45rem 0.55rem; text-align:right;">' + escapeHtml(botL) + ' $</th>'
-                  +       '<th style="padding:0.45rem 0.55rem; text-align:right;">Total $</th>'
+                  +       (slim ? '' : '<th style="padding:0.45rem 0.55rem; text-align:right;">Total $</th>')
                   +       '<th style="padding:0.45rem 0.55rem; text-align:right;">Share</th>'
-                  +       '<th style="padding:0.45rem 0.55rem; text-align:right;">Per 1K</th>'
+                  +       (slim ? '' : '<th style="padding:0.45rem 0.55rem; text-align:right;">Per 1K</th>')
                   +     '</tr></thead>'
                   +     '<tbody>' + body + '</tbody>'
                   +   '</table>'
