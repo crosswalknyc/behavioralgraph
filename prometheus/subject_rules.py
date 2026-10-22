@@ -387,8 +387,10 @@ def thread_subjects(history, page='', limit=4):
 
     if bound:
         _add(bound)
-    for turn in reversed(list(history or [])):
-        if not isinstance(turn, dict) or str(turn.get('role') or '') == 'user':
+    turns = [t for t in (history or []) if isinstance(t, dict)]
+    for pos in range(len(turns) - 1, -1, -1):
+        turn = turns[pos]
+        if str(turn.get('role') or '') == 'user':
             continue
         meta = turn.get('meta') if isinstance(turn.get('meta'), dict) else {}
         if meta.get('subject'):
@@ -398,9 +400,31 @@ def thread_subjects(history, page='', limit=4):
         if m:
             what = m.group('what')
             # "reading X and Y now" names two things; the page rides along
-            # in the first clause when it was the open profile
-            for part in re.split(r"\s+and\s+", what):
-                part = part.strip()
+            # in the first clause when it was the open profile. A title
+            # that carries 'and' inside it ("Rick and Morty") is one thing
+            # (2026-10-22): the user turn the promise answered binds it
+            # whole, so the split is skipped when the binder reads the
+            # whole phrase as the subject. A part that is a bare prefix
+            # of another part is the old binder's truncation ("Jackass:
+            # Best &" beside "Jackass: Best & Last") and is dropped.
+            prev_user = ''
+            for back in range(pos - 1, -1, -1):
+                if str(turns[back].get('role') or '') == 'user':
+                    prev_user = ' '.join(str(turns[back].get('text') or turns[back].get('content') or '').split())
+                    break
+            parts = [what.strip()]
+            if re.search(r"\s+and\s+", what):
+                parts = [x.strip() for x in re.split(r"\s+and\s+", what) if x.strip()]
+                try:
+                    whole = bind(prev_user, None, '') if prev_user else None
+                    if whole is not None and whole.name and _norm(whole.name) == _norm(what):
+                        parts = [what.strip()]
+                except Exception:
+                    pass
+                keys = [_norm(x) for x in parts]
+                parts = [x for x, k in zip(parts, keys)
+                         if not any(o != k and o.startswith(k + ' ') for o in keys)]
+            for part in parts:
                 if not part or re.search(r"\b(?:all the|the best|which|what|how)\b", part, re.I):
                     continue
                 # "a betting client like draftkings" names draftkings
@@ -579,7 +603,17 @@ _NESTED_RX = re.compile(
     r"subscribed?\s+to|follow(?:ed|s)?|binge(?:d|s)?|saw|started|drink|drinks|drank|eat|eats|ate|use|uses|used|own|owns|wear|wears|drive|drives|shop\s+at)\s+"
     r"(?P<obj>(?:the\s+)?[A-Za-z0-9][A-Za-z0-9 .&'\-+:!]{1,70}?)"
     r"(?:\s+on\s+(?P<platform>[A-Z][A-Za-z0-9+&' .-]{1,30}?|paramount\+|hulu|netflix|peacock|max|prime video|amazon prime video|disney\+|apple tv\+|tubi|roku))?"
-    r"(?=\s*[?.,;!]|\s+(?:in|during|over|within|since|last|this|between|from|and|or|but|who|that|which|when|while|after|before)\b|$)", re.I)
+    # a stop word ends the title only when what follows is not more title
+    # (2026-10-22: 'Jackass: Best & Last on Paramount+' bound 'Jackass:
+    # Best &', 'Emily in Paris' bound 'Emily', 'Only Murders in the
+    # Building' bound 'Only Murders'); a capitalized continuation that is
+    # not a month, a quarter or a year keeps the title going, and so does a
+    # capitalized stop word ('Jackass: Best & Last', 'Doctor Who'); once a
+    # platform is named, the next stop word ends it ('on Paramount+ and ...')
+    r"(?=\s*[?.,;!]|\s+(?-i:in|during|over|within|since|last|this|between|from|and|or|but|who|that|which|when|while|after|before|also|too)\b"
+    r"(?(platform)|(?!\s+(?:the\s+)?(?-i:(?!(?:January|February|March|April|May|June|July|August|September|October|November|December|Q[1-4]|US|UK)\b)[A-Z][A-Za-z0-9'&:!.-]*)))"
+    # a named platform ends at the next lowercase word too ('on Netflix watch next' is Netflix)
+    r"|(?(platform)\s+(?-i:[a-z])|(?!))|$)", re.I)
 _QUALIFIED_AUDIENCE_RX = re.compile(
     r"^(?P<name>[A-Za-z0-9][A-Za-z0-9 .&'\-+:!]{1,70}?)\s+(?P<verb>viewers|readers|listeners|players|watchers|buyers|shoppers|users|fans|subscribers|customers)"
     r"(?:\s+on\s+(?P<platform>[A-Za-z0-9+&' .-]{2,40}?))?"

@@ -133,6 +133,59 @@ def is_approval(text):
     return bool(_APPROVE_RX.match(low))
 
 
+_NAMED_APPROVE_RX = re.compile(
+    r"^\s*(?:yes[,.!]?\s*)?(?:ok(?:ay)?[,.!]?\s*)?(?:approve[d]?|accept(?:ed)?|run|go ahead with|proceed with)\s+"
+    r"(?:(?:the|this|that|a)\s+)?(?:run|build|profile|brief|pull|read|report|request|ask)"
+    r"(?:\s+(?:on|for|of))\s+(?P<subject>[^?]{2,80}?)\s*[.!]*\s*$", re.I)
+_AUDIENCE_NOUN_RX = re.compile(
+    r"\b(?:viewers?|audiences?|fans?|readers?|listeners?|players?|watchers?|buyers?|shoppers?|users?|subscribers?|customers?|people)\b", re.I)
+_ON_PLATFORM_RX = re.compile(r"\bon\s+[A-Za-z0-9+&' .-]{2,40}$", re.I)
+
+
+def named_subject(text):
+    """'approve the run on Jackass: Best & Last viewers' -> 'Jackass: Best &
+    Last viewers'; '' when the words name nothing (a bare approval) or
+    are a question. The no-pending line itself tells the reader to
+    'name the run', so the name must bind to the offer it names."""
+    t = ' '.join(str(text or '').split())
+    if not t or '?' in t or len(t) > 120:
+        return ''
+    m = _NAMED_APPROVE_RX.match(t)
+    if not m:
+        return ''
+    subj = m.group('subject').strip(" '\".,;:")
+    if not subj or subj.lower() in ('it', 'this', 'that', 'them', 'the brief', 'the run', 'the read'):
+        return ''
+    return subj
+
+
+def _fold(s):
+    s = _AUDIENCE_NOUN_RX.sub(' ', str(s or ''))
+    s = _ON_PLATFORM_RX.sub(' ', s.strip())
+    s = re.sub(r"[^a-z0-9]+", " ", s.lower())
+    return ' '.join(s.split())
+
+
+def names_offer(named, offer):
+    """True when the name a reader typed is the offer's subject: the same
+    words once audience nouns and the platform tail are set aside, one
+    inside the other, or most of the distinctive tokens shared."""
+    a = _fold(named)
+    if not a:
+        return False
+    cands = [_fold(offer.get('subject') or ''), _fold(offer.get('question') or '')]
+    for b in cands:
+        if not b:
+            continue
+        if a == b or (len(a) >= 4 and (a in b or b in a)):
+            return True
+        ta = {w for w in a.split() if len(w) >= 3}
+        tb = {w for w in b.split() if len(w) >= 3}
+        if ta and tb and len(ta & tb) / max(1, min(len(ta), len(tb))) >= 0.6 and len(ta & tb) >= 2:
+            return True
+    return False
+
+
 _CANCEL_RX = re.compile(
     r"^(?:cancel(?: (?:that|it))?|decline[d]?|no(?: thanks?| thank you)?|nope|not now|never ?mind|skip(?: it)?|pass|stop|forget it)$", re.I)
 
@@ -174,7 +227,7 @@ def _is_real_ask(text):
     t = ' '.join(str(text or '').split())
     if not t:
         return False
-    if is_approval(t) or is_cancel(t):
+    if is_approval(t) or is_cancel(t) or named_subject(t):
         return False
     return len(t.split()) >= 3 or '?' in t
 
@@ -248,8 +301,9 @@ def open_in_history(history, ctx=None, now=None):
         if not _offer_turn(t):
             # an agent turn after the offer that is neither the no-pending
             # line nor the decline line answered something: the offer is done
+            # (a blank agent turn answered nothing and is skipped)
             txt = str(t.get('text') or '')
-            if _NO_PENDING_RX.match(txt):
+            if not txt.strip() or _NO_PENDING_RX.match(txt):
                 continue
             if _DECLINED_RX.match(txt):
                 return None
@@ -371,16 +425,22 @@ def resolve_reply(uname, tid, text, history, ctx=None):
     {'action': 'approve' | 'cancel', 'offer': {...}} when an offer is
     open; None when the words are not a bare approval / cancel or
     nothing is open (the caller's own no-pending reply then stands)."""
+    named = ''
     if is_approval(text):
         action = 'approve'
     elif is_cancel(text):
         action = 'cancel'
     else:
-        return None
+        named = named_subject(text)
+        if not named:
+            return None
+        action = 'approve'
     offer = find(uname, history, tid, ctx)
     if not offer:
         return None
-    return {'action': action, 'offer': offer}
+    if named and not names_offer(named, offer):
+        return None           # a name that is not this offer is the build-brief path
+    return {'action': action, 'offer': offer, 'named': named}
 
 
 def anything_open(uname, history=None, tid=None):

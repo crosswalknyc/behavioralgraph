@@ -80328,7 +80328,18 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             } catch (_) {}
         }
 
+        // An agent turn is never blank (2026-10-22, Casey Pearson: a build
+        // draft answered into the analyze handler stored {role: 'agent'}
+        // with no text at all). Whatever path forgot its words, the reader
+        // sees the calm line and ops hear about it.
+        function _synthChatAgentText(role, text) {
+            if (role !== 'agent') return text;
+            if (typeof text === 'string' && text.trim()) return text;
+            try { _synthChatReportClientError('brief-chat/blank-turn', 'agent turn pushed without text'); } catch (_) {}
+            return SYNTH_CHAT_CALM_MSG;
+        }
         function synthChatPushTurn(role, text) {
+            text = _synthChatAgentText(role, text);
             synthChatHistory.push({ role: role, text: text, ts: new Date().toISOString() });
             _synthChatBumpActivity();
             synthChatRerender();
@@ -80345,6 +80356,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         // subject) so we can resume polling after a tab refresh or
         // a Render redeploy that severs the poll connection.
         function _synthChatPushTurnWithMeta(role, text, meta) {
+            text = _synthChatAgentText(role, text);
             var turn = { role: role, text: text, ts: new Date().toISOString(), meta: meta || {} };
             synthChatHistory.push(turn);
             _synthChatBumpActivity();

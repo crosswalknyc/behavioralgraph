@@ -66,28 +66,56 @@ _FIGURE_RX = re.compile(r"\d{1,3}(?:,\d{3})+|\d{4,}")
 _PROVENANCE_RX = re.compile(r"\b(?:come|comes|coming|came)\s+from\b|\bnumber\b|\bfigure\b|\bwhere\s+(?:did|does|do)\s+you\s+get\b", re.I)
 
 
-def _split_keep_figures(raw):
-    """Split a brand list on , / and / & / or, never inside 12,004,203."""
+_SPLIT_KEEP_RX = re.compile(r"(\s*(?:,|\band\b|&|\bor\b|/)\s*)", re.I)
+
+
+def _split_keep_figures(raw, resolves=None):
+    """Split a brand list on , / and / & / or, never inside 12,004,203,
+    and never inside a name that carries '&' or 'and' (2026-10-22, the
+    same class as the figure split: 'Ben & Jerry's' is one brand, 'Law &
+    Order: SVU' one title, 'Netflix and Hulu' two services). With a
+    resolver (does this string name something we carry?) two pieces
+    joined by & / and stay one when the joined name resolves, or when
+    neither piece resolves on its own; they split when both do, or when
+    exactly one does (the known brand keeps its own answer)."""
     hold = {}
 
     def _stash(m):
         key = f"\x00{len(hold)}\x00"
         hold[key] = m.group(0)
         return key
-    safe = _FIGURE_RX.sub(_stash, raw)
-    parts = []
-    for p in _SPLIT_RX.split(safe):
-        if not p or not p.strip():
-            continue
+
+    def _restore(p):
         for key, val in hold.items():
             p = p.replace(key, val)
-        parts.append(p.strip(' ?.!,"\''))
-    return parts
+        return p.strip(' ?.!,"\'')
+    safe = _FIGURE_RX.sub(_stash, raw)
+    pieces = _SPLIT_KEEP_RX.split(safe)
+    parts = [_restore(x) for x in pieces[0::2]]
+    seps = [str(x or '') for x in pieces[1::2]]
+    if resolves is None or len(parts) < 2:
+        return [p for p in parts if p]
+    out = [parts[0]]
+    for sep, nxt in zip(seps, parts[1:]):
+        cur = out[-1]
+        if sep.strip().lower() in ('&', 'and') and cur and nxt:
+            joined = f"{cur}{sep}{nxt}"          # the reader's own spacing (AT&T stays AT&T)
+            try:
+                joined_ok = resolves(joined) or resolves(f"{cur} & {nxt}") or resolves(f"{cur} and {nxt}")
+                a_ok, b_ok = resolves(cur), resolves(nxt)
+            except Exception:
+                joined_ok, a_ok, b_ok = False, True, True
+            if joined_ok or not (a_ok or b_ok):
+                out[-1] = joined
+                continue
+        out.append(nxt)
+    return [p for p in out if p]
 
 
-def parse(text):
+def parse(text, resolves=None):
     """List of brand strings the ask is about, or [] when it is not a
-    coverage question."""
+    coverage question. `resolves(name) -> bool` keeps a compound name
+    whole (see _split_keep_figures)."""
     t = ' '.join(str(text or '').split())
     if not t or len(t) > 220:
         return []
@@ -99,7 +127,7 @@ def parse(text):
             continue
         raw = _TAIL_RX.sub('', m.group('b')).strip(' ?.!,"\'')
         raw = re.sub(r"^(?:the|a|an)\s+", '', raw, flags=re.I)
-        parts = _split_keep_figures(raw)
+        parts = _split_keep_figures(raw, resolves)
         out = []
         for p in parts:
             p = _BEHAVIOR_TAIL_RX.sub('', p).strip()
@@ -214,6 +242,17 @@ def answer(text, ctx=None, host=None):
             prof = _frame(host, page_key)
         except Exception:
             prof = None
+
+    def _resolves(name):
+        try:
+            if _matches(gp, name)[0]:
+                return True
+            return prof is not None and bool(_matches(prof, name)[0])
+        except Exception:
+            return False
+    # the list again, with the brand universe in hand: a name that
+    # carries & / and stays one brand (2026-10-22)
+    brands = parse(text, resolves=_resolves) or brands
     lines, chips = [], []
     for b in brands:
         g_exact, g_near = _matches(gp, b)

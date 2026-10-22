@@ -502,6 +502,7 @@ def ask(user, body, *, via='session'):
         print(f"[prometheus] offer accepted: {text[:60]!r} -> {_accepted!r}")
         text = _accepted
         body = dict(body)
+        body['_client_surface_sent'] = body.get('_client_surface_sent') or str(body.get('surface') or '').strip().lower()
         body['text'] = text
         body['surface'] = 'interpret'
     else:
@@ -509,12 +510,29 @@ def ask(user, body, *, via='session'):
         # "Approve the run on Shannen Doherty" re-drew the offer, then
         # the chip read "Run a profile on Approve"). The subject the
         # reader approved becomes the build order; a bare "approve"
-        # stays a short reply answered below.
+        # stays a short reply answered below. A name that is a PENDING
+        # PRICED OFFER's subject approves that offer, never a build
+        # (2026-10-22, Casey Pearson: "approve the run on Jackass: Best &
+        # Last viewers", typed because the no-pending line told her to
+        # name the run, drafted a 104 second profile build instead of
+        # running the $100 read she had been offered).
         _named_run = approved_named_run(text)
-        if _named_run:
+        _pend_named = None
+        if _named_run and not _armed(body):
+            try:
+                from . import pending_offers as _pend0
+                _pend_named = _pend0.resolve_reply(uname, tid, text, history, ctx=ctx)
+            except Exception as _fx:
+                _faults.note('service.pending_offer_named', _fx)
+                _pend_named = None
+        if _pend_named:
+            body = dict(body)
+            body['_pending_offer_hit'] = _pend_named
+        elif _named_run:
             print(f"[prometheus] approval names the run: {text[:60]!r} -> {_named_run!r}")
             text = 'Run a profile on ' + _named_run
             body = dict(body)
+            body['_client_surface_sent'] = body.get('_client_surface_sent') or str(body.get('surface') or '').strip().lower()
             body['text'] = text
             body['surface'] = 'interpret'
 
@@ -534,7 +552,7 @@ def ask(user, body, *, via='session'):
             and not str(body.get('text') or '').lower().startswith('run a profile on '):
         try:
             from . import pending_offers as _pend
-            _pend_hit = _pend.resolve_reply(uname, tid, text, history, ctx=body.get('context') or body.get('page_context'))
+            _pend_hit = body.get('_pending_offer_hit') or _pend.resolve_reply(uname, tid, text, history, ctx=ctx)
         except Exception as e:
             _faults.note('service.pending_offer', e)
             _pend_hit = None
@@ -1473,6 +1491,25 @@ def ask(user, body, *, via='session'):
             env = envelope.wrap(raw, surface='analyze', decision=decision, thread_id=tid, via=via)
             _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
             return env, 200
+
+    # A draft never goes to a client that cannot render it (2026-10-22,
+    # Casey Pearson): the widget's analyze handler renders `reply` and
+    # knows nothing of an approval card, so a lane that re-surfaced an
+    # analyze request to interpret (an accepted or named run) must hand
+    # the widget off to its build flow instead of running the interpret
+    # core here. Her named approval drafted a build for 104 seconds and
+    # the analyze handler stored the answer as a blank turn. The handoff
+    # carries a blank reply by contract; the widget re-sends the words on
+    # the interpret surface and the card renders there (one core run).
+    if surface == 'interpret' and _client_surface == 'analyze' \
+            and str(body.get('_client_surface_sent') or '') == 'analyze':
+        raw = {'success': True, 'action': 'build_profile', 'route_hint': 'interpret', 'reply': ''}
+        decision = dict(decision, reason='handoff_to_build_flow')
+        try:
+            host.ask_hint(route='handoff', outcome='build_flow')
+        except Exception as _fx:
+            _faults.note('service', _fx)
+        return envelope.wrap(raw, surface='analyze', decision=decision, thread_id=tid, via=via), 200
 
     try:
         if surface == 'analyze':

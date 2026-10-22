@@ -14,7 +14,7 @@ from flask import jsonify, request, session
 from prometheus.legacy import H as _H, C as _C  # noqa: E402
 from prometheus import seams as _seams  # noqa: E402
 
-__all__ = ['api_synth_chat_threads', 'api_synth_chat_threads_new', 'api_synth_chat_threads_activate', 'api_synth_chat_threads_bind', 'api_synth_chat_threads_rename', 'api_synth_chat_threads_delete', '_pm_threads_index_key', '_pm_thread_key', '_pm_thread_title_from', '_load_threads_index', '_turn_epoch', '_is_server_turn', 'keep_server_turns']
+__all__ = ['api_synth_chat_threads', 'api_synth_chat_threads_new', 'api_synth_chat_threads_activate', 'api_synth_chat_threads_bind', 'api_synth_chat_threads_rename', 'api_synth_chat_threads_delete', '_pm_threads_index_key', '_pm_thread_key', '_pm_thread_title_from', '_load_threads_index', '_turn_epoch', '_is_server_turn', 'keep_server_turns', 'fill_blank_agent_turns']
 
 
 @_H.app.route('/api/brief-chat/threads/bind', methods=['POST'])
@@ -241,6 +241,26 @@ def _is_server_turn(t):
     return str(t.get('role') or '') in ('agent', 'assistant') and any(meta.get(k) for k in SERVER_TURN_MARKS)
 
 
+def fill_blank_agent_turns(turns, line="Working on it. This one needs a closer look and will come back to you shortly."):
+    """No agent turn is stored blank (2026-10-22, Casey Pearson: the
+    widget saved {role: 'agent', ts} after a draft reached its analyze
+    handler). A blank agent turn with nothing attached becomes the calm
+    line (the widget's own), marked so the next pass can tell it apart
+    from an answer."""
+    try:
+        out = []
+        for t in (turns or []):
+            if isinstance(t, dict) and str(t.get('role') or '') in ('agent', 'assistant') \
+                    and not str(t.get('text') or '').strip():
+                meta = t.get('meta') if isinstance(t.get('meta'), dict) else {}
+                if not any(meta.get(k) for k in ('link', 'chart', 'files', 'options')):
+                    t = dict(t, text=line, meta=dict(meta, blank_filled=True))
+            out.append(t)
+        return out
+    except Exception:
+        return turns
+
+
 def keep_server_turns(stored, incoming):
     """The client's history with the server's turns folded back in.
 
@@ -249,10 +269,13 @@ def keep_server_turns(stored, incoming):
     * A stored agent turn the server appended (a job's ready line, a
       delivery note, a correction note) that the client never saw is
       re-inserted in time order instead of being lost.
+    * No agent turn is stored blank: a client turn with no text and
+      nothing attached becomes the calm line (fill_blank_agent_turns).
     Never raises; on any doubt the client's list is returned as given."""
     try:
         if not isinstance(incoming, list):
             return incoming
+        incoming = fill_blank_agent_turns(incoming)
         stored = [t for t in (stored or []) if isinstance(t, dict)]
         out = list(incoming)
         by_ts = {}
