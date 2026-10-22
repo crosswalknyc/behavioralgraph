@@ -37021,6 +37021,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             function _iiqMTARenderCoefficientCard(d) {
                 var tps = (d.touchpoints || []).slice();
                 if (!tps.length) return '';
+                if (/influencer_project/.test(String((window.__intentIQ && window.__intentIQ.currentSlug) || ''))) return '';
                 var bfl = d.bottom_funnel_label || 'Ticketing site visit';
                 var convNoun = d.conversion_noun || 'conversion';
                 var audLabelCoef = (d.cohort_meta && d.cohort_meta.audience_label) ? String(d.cohort_meta.audience_label) : '';
@@ -37366,8 +37367,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
 
                 var pathsCard =
                     '<section id="' + pathsHost + '" style="margin-top:0.75rem;">' + _iiqMTARenderPathsCard(activePayload) + '</section>';
-                var coefCard =
-                    '<section id="' + coefHost + '" style="margin-top:1.1rem;">' + _iiqMTARenderCoefficientCard(activePayload) + '</section>';
+                var coefHtml = _iiqMTARenderCoefficientCard(activePayload);
+                var coefCard = coefHtml
+                    ? '<section id="' + coefHost + '" style="margin-top:1.1rem;">' + coefHtml + '</section>' : '';
                 var creativeHtml = _iiqMTARenderCreativeCard(activePayload);
                 var creativeCard = creativeHtml
                     ? '<section id="iiqMTACreativeCard" style="margin-top:1.1rem;">' + creativeHtml + '</section>' : '';
