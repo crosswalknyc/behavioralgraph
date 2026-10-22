@@ -35869,7 +35869,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                       + (isStatic ? '<tr>' : '<tr onclick="iiqROISetAsset(\'' + esc + '\')" title="Value this post on its own" style="cursor:pointer; ' + (on ? 'background: rgba(34,197,94,0.14);' : '') + '">')
                       +   '<td style="padding:0.45rem 0.55rem; color:var(--text-secondary); text-align:right; font-variant-numeric:tabular-nums;">' + r.rank + '</td>'
                       +   '<td style="padding:0.45rem 0.55rem; color:#e5e7eb; font-weight:600; max-width:26rem;"><div style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + escapeHtml(_iiqROIAssetLabel(a, 96)) + '</div>'
-                      +     '<div style="font-size:0.66rem; color:var(--text-secondary); font-weight:400;">' + escapeHtml([a.asset_type, a.posted_date].filter(Boolean).join(' \u00b7 ')) + '</div></td>'
+                      +     '<div style="font-size:0.66rem; color:var(--text-secondary); font-weight:400;">' + escapeHtml([a.asset_type, a.posted_date].filter(Boolean).join(' \u00b7 ')) + '</div>'
+                      +     (isStatic && _iiqCreativeFormat(a) ? '<div style="font-size:0.66rem; color:var(--text-secondary); font-weight:400;">' + escapeHtml(_iiqCreativeFormat(a)) + '</div>' : '')
+                      +   '</td>'
                       +   '<td style="padding:0.45rem 0.55rem; color:var(--text-secondary);">' + escapeHtml(a.channel || '') + '</td>'
                       +   '<td style="padding:0.45rem 0.55rem; color:#22d3ee; text-align:right; font-variant-numeric:tabular-nums;">' + fmtInt(Math.round(r.views)) + '</td>'
                       +   (slim ? '' : '<td style="padding:0.45rem 0.55rem; color:#22d3ee; text-align:right;">' + _iiqROIFmtUSD(r.views_value) + '</td>')
@@ -36136,10 +36138,35 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             function _iiqROIMovesToMTA(slug) {
                 return /influencer_project/.test(String(slug || ''));
             }
+            // Creative format per asset, from the client's format sheet,
+            // keyed by the asset's URL (lowercased, no trailing slash).
+            window.__iiqCreativeFmt = window.__iiqCreativeFmt || { slug: null, map: null, loading: null };
+            function _iiqCreativeFmtKey(u) { return String(u || '').trim().replace(/\/+$/, '').toLowerCase(); }
+            function _iiqCreativeFormat(a) {
+                var cf = window.__iiqCreativeFmt;
+                var slug = (window.__intentIQ && window.__intentIQ.currentSlug) || '';
+                if (!cf || cf.slug !== slug || !cf.map || !a) return '';
+                return cf.map[_iiqCreativeFmtKey(a.url)] || '';
+            }
             window._iiqROIPaintMTABlock = function() {
                 var boxes = document.querySelectorAll('.iiq-mta-roi-block');
                 if (!boxes.length) return;
                 var slug = (window.__intentIQ && window.__intentIQ.currentSlug) || '';
+                var cf = window.__iiqCreativeFmt;
+                if (cf.slug !== slug) {
+                    if (cf.loading !== slug) {
+                        cf.loading = slug;
+                        fetch('/static/iiq_creative_format/' + encodeURIComponent(slug) + '.json', { credentials: 'same-origin' })
+                            .then(function(r) { return r.ok ? r.json() : {}; })
+                            .catch(function() { return {}; })
+                            .then(function(m) {
+                                if (cf.loading !== slug) return;
+                                cf.slug = slug; cf.map = m || {}; cf.loading = null;
+                                window._iiqROIPaintMTABlock();
+                            });
+                    }
+                    return;
+                }
                 var c = window.__iiqROICache || {};
                 var fill = function(html) { Array.prototype.forEach.call(boxes, function(b) { b.innerHTML = html; }); };
                 var paint = function() {
