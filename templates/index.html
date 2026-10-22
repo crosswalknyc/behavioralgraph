@@ -79753,32 +79753,37 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         }
         var _pmFollow = { key: null, inflight: false, pending: false, timer: null };
         var _PM_FOLLOW_SUB_DEFAULT = 'Ask any read across your workspace.';
+        // The identity is the KEY only (2026-10-22): the key and the
+        // display name live in different variables that a tab switch
+        // updates on different ticks, and reading both here once bound
+        // LeBron's key to the label 'Shane Smith'. The server names the
+        // thread from the key; the label comes back in the binding.
         function _pmProjectIdentity() {
             try {
                 var view = _pmActiveViewId();
                 if (view === 'profileIQ' || view === 'workspace' || view === 'dashboard' || !view) {
                     var k = (typeof currentS3Key !== 'undefined' && currentS3Key) || null;
-                    var pd = (typeof currentProfileData !== 'undefined' && currentProfileData) || null;
-                    if (!k && pd) k = pd.s3Key || null;
+                    if (!k) {
+                        var pd = (typeof currentProfileData !== 'undefined' && currentProfileData) || null;
+                        k = (pd && (pd.s3Key || pd.s3_key)) || null;
+                    }
                     if (!k) return null;
-                    var nm = (pd && pd.name) || String(k).replace(/\.csv$/i, '').replace(/_\d{2}_\d{2}_\d{4}_\d{2}_\d{2}$/, '').replace(/_/g, ' ');
-                    return { subject_key: 'profile:' + String(k), subject_label: String(nm), product: 'profileIQ' };
+                    return { subject_key: 'profile:' + String(k), product: 'profileIQ' };
                 }
                 if (view === 'journeyIQ') {
-                    var run = window._jiqCurrentRun || null;
                     var jk = window._jiqCurrentKey || null;
-                    if (!run && !jk) return null;
-                    var meta = (run && run.meta) || {};
-                    var label = meta.title || meta.target_label || meta.subject || meta.label ||
-                        String(jk || '').replace(/\.json(\.gz)?$/i, '').replace(/_\d{8}_\d{6}_[0-9a-f]+$/i, '').replace(/^__demo_/, '').replace(/_/g, ' ');
-                    return { subject_key: 'journey:' + String(jk || label), subject_label: String(label), product: 'journeyIQ' };
+                    if (!jk) {
+                        var run = window._jiqCurrentRun || null;
+                        jk = (run && run.meta && (run.meta.key || run.meta.s3_key)) || null;
+                    }
+                    if (!jk) return null;
+                    return { subject_key: 'journey:' + String(jk), product: 'journeyIQ' };
                 }
                 if (view === 'intentIQ' || view === 'attributionIQ') {
                     var st = window.__intentIQ || {};
                     var slug = st.currentSlug || null;
                     if (!slug) return null;
-                    var ov = st.overview || {};
-                    return { subject_key: 'campaign:' + String(slug), subject_label: String(ov.title || ov.name || String(slug).replace(/[_-]+/g, ' ')), product: view };
+                    return { subject_key: 'campaign:' + String(slug), product: view };
                 }
             } catch (_) {}
             return null;
@@ -79820,7 +79825,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             if (key === _pmFollow.key) return;
             if (_pmFollow.inflight) { _pmFollow.pending = true; return; }
             _pmFollow.inflight = true;
-            var body = ident ? ident : { subject_key: '', subject_label: '', product: '' };
+            var body = ident ? ident : { subject_key: '', product: '' };
             // the thread we are leaving keeps what was typed in it
             try {
                 if (_pmFollow.key !== null && Array.isArray(synthChatHistory) && synthChatHistory.length) {

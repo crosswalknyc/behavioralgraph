@@ -90,14 +90,135 @@ def subject_key_for(page_context):
     return f"{kind}:{ident}", label, view
 
 
-def binding_from(subject_key, subject_label, product):
-    """The binding dict a thread carries, or None for the general chat."""
+# ------------------------------------------------------- the label is the key's
+#
+# 2026-10-22 (Scott): a thread bound to profile:LeBron_James_... carried the
+# label 'Shane Smith'. The widget read the open profile's key and its name
+# from two variables that the tab switch updates on different ticks (the
+# key first, the name about a hundred lines later), and the server stored
+# whatever label it was handed. A label is never trusted from the client
+# again: it is derived from the key, through the dashboard's own display
+# name for that key when the catalog has one, else from what the key
+# itself spells. A client label only ever supplies casing the key cannot,
+# and only when it agrees with the key's name under the fold.
+
+_PROFILE_STAMP_RE = re.compile(r'_\d{2}_\d{2}_\d{4}_\d{2}_\d{2}$')
+_JOURNEY_STAMP_RE = re.compile(r'(?:_full)?_\d{8}_\d{6}(?:_[0-9a-f]+)?$', re.I)
+
+
+def split_key(subject_key):
+    """('profile', 'Netflix_09_01_2026_10_00.csv') for
+    'profile:Netflix_09_01_2026_10_00.csv'; ('', '') for an empty key. A
+    key with no kind prefix reads as ('', key)."""
+    sk = _clean(subject_key)
+    if not sk:
+        return '', ''
+    if ':' in sk:
+        kind, ident = sk.split(':', 1)
+        return _clean(kind).lower(), _clean(ident)
+    return '', sk
+
+
+def prettify(raw):
+    """The dashboard's own cleanup of a stored name (the journey picker's
+    _prettifyRunName): underscores and hyphens to spaces; an all-caps
+    name title-cased; mixed case left alone so brand casing survives."""
+    s = ' '.join(re.sub(r'[_\-]+', ' ', str(raw or '')).split())
+    letters = re.sub(r'[^A-Za-z]', '', s)
+    if letters and letters == letters.upper():
+        s = re.sub(r'\b([a-z])', lambda m: m.group(1).upper(), s.lower())
+    return s
+
+
+def label_from_key(subject_key):
+    """The name the key itself spells, with no catalog: the profile's
+    file stem without its build stamp, a journey run's stem without its
+    stamp, a campaign slug as words. '' for an empty key."""
+    kind, ident = split_key(subject_key)
+    if not ident:
+        return ''
+    if kind == 'profile':
+        stem = re.sub(r'\.csv$', '', ident, flags=re.I)
+        stem = _PROFILE_STAMP_RE.sub('', stem)
+        return _clean(stem.replace('_', ' '))
+    if kind == 'journey':
+        stem = ident.rsplit('/', 1)[-1]
+        stem = re.sub(r'\.json(?:\.gz)?$', '', stem, flags=re.I)
+        stem = _JOURNEY_STAMP_RE.sub('', stem)
+        stem = re.sub(r'^__demo_', '', stem).strip('_')
+        return prettify(stem)
+    return prettify(ident)
+
+
+def _fold(s):
+    return re.sub(r'[^a-z0-9]+', '', str(s or '').lower())
+
+
+def labels_agree(a, b):
+    """True when two labels are the same name under the fold (case and
+    punctuation set aside); never true for an empty label."""
+    fa, fb = _fold(a), _fold(b)
+    return bool(fa) and fa == fb
+
+
+def resolve_label(subject_key, offered=None, lookup=None):
+    """The one label a key carries. ``lookup(kind, ident)`` is the
+    dashboard's display name for the key (the catalog entry for a
+    profile, the journey index row, the campaign title); when it names
+    the key, that is the label. Otherwise the name the key spells. An
+    offered label is used only when it agrees with that name under the
+    fold (it then keeps the punctuation the key lost, 'Paramount+' for
+    'Paramount'); one that disagrees is ignored. Never raises."""
+    kind, ident = split_key(subject_key)
+    if not ident:
+        return ''
+    named = ''
+    if lookup is not None:
+        try:
+            named = _clean(lookup(kind, ident))
+        except Exception:
+            named = ''
+    if named:
+        return named
+    base = label_from_key(subject_key)
+    off = _clean(offered)
+    if off and base and labels_agree(off, base):
+        return off
+    return base or ident
+
+
+def binding_from(subject_key, subject_label, product, lookup=None):
+    """The binding dict a thread carries, or None for the general chat.
+    The label is resolved from the key (``resolve_label``); the offered
+    label only ever supplies casing."""
     sk = _clean(subject_key)
     if not sk:
         return None
     return {'subject_key': sk,
-            'subject_label': _clean(subject_label) or sk.split(':', 1)[-1],
+            'subject_label': resolve_label(sk, subject_label, lookup) or sk.split(':', 1)[-1],
             'product': _clean(product) or 'profileIQ'}
+
+
+def repair_labels(idx, lookup=None):
+    """Every bound thread's label re-derived from its key; a thread whose
+    stored label disagrees with the key's name is relabeled in place,
+    and its title follows when the title was that label (or empty).
+    Returns [(tid, old_label, new_label), ...] for what changed; the
+    caller persists when the list is non-empty."""
+    changed = []
+    for t in (idx or {}).get('threads', []) or []:
+        b = t.get('binding') if isinstance(t, dict) else None
+        if not (isinstance(b, dict) and b.get('subject_key')):
+            continue
+        old = _clean(b.get('subject_label'))
+        new = resolve_label(b['subject_key'], old, lookup)
+        if not new or new == old:
+            continue
+        b['subject_label'] = new
+        if t.get('title') in (None, '', 'New chat', old) or (old and _clean(t.get('title')) == old[:48]):
+            t['title'] = new[:48]
+        changed.append((t.get('id'), old, new))
+    return changed
 
 
 def binding_of_thread(idx, tid):
@@ -159,16 +280,18 @@ def apply_cap(idx, cap, keep_id=None):
     return retired
 
 
-def bind(idx, subject_key, subject_label, product, *, cap=40, create=True):
+def bind(idx, subject_key, subject_label, product, *, cap=40, create=True, lookup=None):
     """Activate the thread for a project (or the general chat when the
-    key is empty), creating it when needed. Mutates ``idx``.
+    key is empty), creating it when needed. Mutates ``idx``. The label
+    comes from the key (``resolve_label`` with ``lookup``), never from
+    ``subject_label`` alone.
 
     Returns {'tid', 'created', 'switched', 'binding', 'retired'}; tid is
     None only when create is False and nothing is bound."""
     idx.setdefault('threads', [])
     prev = idx.get('active')
     now = _now()
-    b = binding_from(subject_key, subject_label, product)
+    b = binding_from(subject_key, subject_label, product, lookup)
     if b is None:
         th = general_thread(idx)
         created = False
@@ -190,10 +313,12 @@ def bind(idx, subject_key, subject_label, product, *, cap=40, create=True):
             idx['threads'].append(th)
             created = True
         else:
-            # the label can improve (a file renamed, a title resolved)
-            if b.get('subject_label') and b['subject_label'] != th['binding'].get('subject_label'):
+            # the label can improve (a file renamed, a title resolved, a
+            # stale label repaired); the title follows when it was the label
+            old = _clean(th['binding'].get('subject_label'))
+            if b.get('subject_label') and b['subject_label'] != old:
                 th['binding']['subject_label'] = b['subject_label']
-                if th.get('auto') and th.get('title') in (None, '', 'New chat', th['binding'].get('subject_label')):
+                if th.get('title') in (None, '', 'New chat', old) or (old and _clean(th.get('title')) == old[:48]):
                     th['title'] = b['subject_label'][:48]
     th['opened'] = now
     idx['active'] = th['id']

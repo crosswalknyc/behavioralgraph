@@ -183,8 +183,34 @@ def job_thread_id(job_id):
     return job_doc_field(job_id, 'thread_id')
 
 
+def project_lookup():
+    """``(kind, ident) -> display name`` for a project key, from the
+    host's catalog (profiles, journey runs, campaigns), or None when the
+    host has no such capability (the key then names itself)."""
+    if host.has('project_label'):
+        return host.project_label
+    return None
+
+
+def repair_thread_labels(uname, idx=None, persist=True):
+    """A bound thread whose label disagrees with its key is relabeled
+    from the key (2026-10-22, Scott: 'Shane Smith' on LeBron's key).
+    Runs on every load of the rail and every bind, so a stale label
+    never survives the next look. Returns the index and what changed."""
+    from . import thread_binding as _tb
+    idx = idx if idx is not None else threads_index(uname)
+    changed = []
+    try:
+        changed = _tb.repair_labels(idx, project_lookup())
+        if changed and persist:
+            host.s3_put_json(host.threads_index_key(uname), idx)
+    except Exception as _fx:
+        _faults.note('service', _fx)
+    return idx, changed
+
+
 def list_threads(uname, subject_key=None):
-    idx = threads_index(uname)
+    idx, _changed = repair_thread_labels(uname)
     threads = sorted(idx.get('threads', []),
                      key=lambda t: str(t.get('updated') or ''),
                      reverse=True)
@@ -235,10 +261,15 @@ def thread_for_subject(uname, subject_key, subject_label=None, product=None, *, 
 
     Returns {'tid', 'created', 'switched', 'binding', 'history'}."""
     from . import thread_binding as _tb
-    idx = threads_index(uname)
+    # the label is the key's: the catalog's display name for it, else
+    # the name the key spells; a client label only supplies casing
+    idx, _repaired = repair_thread_labels(uname, persist=False)
     cap = host.max_threads if host.has('max_threads') else 40
-    out = _tb.bind(idx, subject_key, subject_label, product, cap=cap, create=create)
+    out = _tb.bind(idx, subject_key, subject_label, product, cap=cap, create=create,
+                   lookup=project_lookup())
     if not out.get('tid'):
+        if _repaired:
+            host.s3_put_json(host.threads_index_key(uname), idx)
         out['history'] = []
         return out
     host.s3_put_json(host.threads_index_key(uname), idx)

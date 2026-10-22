@@ -14,7 +14,65 @@ from flask import jsonify, request, session
 from prometheus.legacy import H as _H, C as _C  # noqa: E402
 from prometheus import seams as _seams  # noqa: E402
 
-__all__ = ['api_synth_chat_threads', 'api_synth_chat_threads_new', 'api_synth_chat_threads_activate', 'api_synth_chat_threads_bind', 'api_synth_chat_threads_rename', 'api_synth_chat_threads_delete', '_pm_threads_index_key', '_pm_thread_key', '_pm_thread_title_from', '_load_threads_index', '_turn_epoch', '_is_server_turn', 'keep_server_turns', 'fill_blank_agent_turns']
+__all__ = ['api_synth_chat_threads', 'api_synth_chat_threads_new', 'api_synth_chat_threads_activate', 'api_synth_chat_threads_bind', 'api_synth_chat_threads_rename', 'api_synth_chat_threads_delete', '_pm_threads_index_key', '_pm_thread_key', '_pm_thread_title_from', '_pm_project_label', '_load_threads_index', '_turn_epoch', '_is_server_turn', 'keep_server_turns', 'fill_blank_agent_turns']
+
+
+# The dashboard's display name for a project key (2026-10-22, Scott's
+# 'Shane Smith' thread on LeBron's key): the label of a bound thread is
+# derived from its key on the server, never taken from the client. One
+# small per-process cache for the two listings that cost a call.
+_PM_PROJECT_NAMES = {'journey': (0.0, {}), 'campaign': (0.0, {})}
+_PM_PROJECT_NAMES_TTL = 120.0
+
+
+def _pm_project_names(kind):
+    import time as _t
+    at, names = _PM_PROJECT_NAMES.get(kind) or (0.0, {})
+    if names and _t.time() - at < _PM_PROJECT_NAMES_TTL:
+        return names
+    fresh = {}
+    try:
+        if kind == 'journey':
+            from prometheus import thread_binding as _tb
+            idx = _H._pm_s3_json('journey-iq/_index.json', {}) or {}
+            for r in (idx.get('runs') or []) if isinstance(idx, dict) else []:
+                if isinstance(r, dict) and r.get('key'):
+                    fresh[str(r['key'])] = _tb.prettify(r.get('project_name') or r.get('target') or '')
+        elif kind == 'campaign':
+            iq = _H.get('_intent_iq', None)
+            if iq is not None:
+                for t in (iq.list_titles() or {}).get('titles') or []:
+                    if isinstance(t, dict) and t.get('title_slug'):
+                        fresh[str(t['title_slug'])] = str(t.get('display_name') or '').strip()
+    except Exception:
+        fresh = {}
+    if fresh or not names:
+        _PM_PROJECT_NAMES[kind] = (_t.time(), fresh)
+    return fresh or names
+
+
+def _pm_project_label(kind, ident):
+    """The display name the dashboard shows for a project key, or '' when
+    the catalog does not name it (the caller then reads the key itself).
+    Profiles from the in-memory profile catalog (hidden files included:
+    an open file has a name whatever the rail shows), journeys from the
+    journey index, campaigns from the Attribution IQ title list. Never
+    raises."""
+    try:
+        if kind == 'profile':
+            try:
+                _H.maybe_refresh_persisted_cache_if_changed()
+            except Exception:
+                pass
+            for j in (_H.get('s3_cache', None) or {}).get('jobs') or []:
+                if isinstance(j, dict) and (j.get('s3_key') or j.get('key')) == ident:
+                    return str(j.get('display_name') or '').strip()
+            return ''
+        if kind in ('journey', 'campaign'):
+            return str(_pm_project_names(kind).get(ident) or '').strip()
+    except Exception:
+        return ''
+    return ''
 
 
 @_H.app.route('/api/brief-chat/threads/bind', methods=['POST'])
@@ -62,7 +120,8 @@ def api_synth_chat_threads():
     if err:
         return err
     uname = session.get('username') or ''
-    idx = _load_threads_index(uname)
+    from prometheus import service as _svc
+    idx, _changed = _svc.repair_thread_labels(uname)   # a stale label never survives the next look (2026-10-22)
     threads = sorted(idx.get('threads', []),
                      key=lambda t: str(t.get('updated') or ''),
                      reverse=True)

@@ -48,6 +48,7 @@ _APP_BINDINGS = {
     's3_json': '_pm_s3_json',
     's3_put_json': '_pm_s3_put_json',
     'max_threads': '_PM_MAX_THREADS',
+    'project_label': '_pm_project_label',    # (kind, ident) -> the dashboard's display name for a project key, or '' (2026-10-22)
     # jobs
     'job_owner_ok': '_pm_job_owner_ok',
     'read_prefix': '_PM_READ_PREFIX',
@@ -83,7 +84,7 @@ _APP_BINDINGS = {
 }
 
 # Bindings that may legitimately be absent on an older host.
-_OPTIONAL = {'max_threads', 'wallet_snapshot', 'access_gate', 'claude_data', 'watch_flag', 'record_held', 'user_runs', 'consume_credit', 'intent_view_hydrate',
+_OPTIONAL = {'max_threads', 'project_label', 'wallet_snapshot', 'access_gate', 'claude_data', 'watch_flag', 'record_held', 'user_runs', 'consume_credit', 'intent_view_hydrate',
              'run_jiq_job', 'run_bpiq_job', 'run_fw_job', 'run_aiq_job',
              'thread_for_job', 'load_thread', 'save_thread', 'incidence_check', 'audience_range', 'queue_secret'}
 
