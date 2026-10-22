@@ -5510,6 +5510,7 @@ def _ask_logged(surface):
                         extra['trace_id'] = _tid_trace
                     _rd = getattr(_g, '_pm_reading', None); _rd and extra.update({'reading': {k: _rd.get(k) for k in ('intent', 'confidence', 'subjects', 'flags', 'restate', 'ms')}})
                     _tb = getattr(_g, '_pm_thread_binding', None); (_tb or getattr(_g, '_pm_thread_id', None)) and extra.update({'thread': dict((_tb or {}), id=getattr(_g, '_pm_thread_id', None))})   # the project the thread follows (2026-10-21)
+                    _ao = getattr(_g, '_pm_approved_offer', None); _ao and extra.update({'approved_offer': _ao})   # a typed approval bound to a pending priced offer (2026-10-22)
                 except Exception as _fx:
                     _faults.note('chat', _fx)
                 import render_usage_log as _rul

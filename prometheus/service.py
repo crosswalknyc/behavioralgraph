@@ -403,7 +403,7 @@ def accept_offered_run(history, text):
 # "# lane: <name>" marker; scripts/test_pm_custom_ask_pricing.py holds
 # the source order to this tuple.
 LANE_ORDER = (
-    'offer_acceptance', 'offer_answer', 'referents', 'document', 'confirm_answer', 'short_reply',
+    'offer_acceptance', 'priced_offer_acceptance', 'offer_answer', 'referents', 'document', 'confirm_answer', 'short_reply',
     'spend_cap_precheck',
     'continuation',
     'talent_list_acceptance', 'meta_check', 'standing', 'where_watched', 'sizing_quote',
@@ -518,6 +518,78 @@ def ask(user, body, *, via='session'):
             body['text'] = text
             body['surface'] = 'interpret'
 
+    # lane: priced_offer_acceptance
+    # A typed approval is the chip (Jenna 2026-10-22, Casey Pearson at
+    # Paramount+: the $100 offer on her Jackass: Best & Last read, then
+    # "Approve", drew "Nothing is waiting on an approval right now",
+    # twice). The offer lived only in the widget's armed state, which a
+    # thread switch or a history refresh drops, so the server had nothing
+    # to bind the word to. Every priced offer is now a pending item on the
+    # server (prometheus.pending_offers); a bare approval binds to the
+    # most recent open one across the user's recent threads and runs the
+    # offered question with the chip's own panel_confirm, charging once at
+    # the quoted price; a bare cancel closes it with nothing charged. The
+    # no-pending line below is right only when nothing is open anywhere.
+    if not _armed(body) and not body.get('_meta_replay') \
+            and not str(body.get('text') or '').lower().startswith('run a profile on '):
+        try:
+            from . import pending_offers as _pend
+            _pend_hit = _pend.resolve_reply(uname, tid, text, history, ctx=body.get('context') or body.get('page_context'))
+        except Exception as e:
+            _faults.note('service.pending_offer', e)
+            _pend_hit = None
+        if _pend_hit and _pend_hit['action'] == 'approve':
+            _po = _pend_hit['offer']
+            print(f"[prometheus] typed approval binds the pending offer: {text[:40]!r} -> "
+                  f"{str(_po.get('question') or '')[:80]!r} ({_po.get('kind') or 'report'}, {_po.get('price_label') or 'quoted'})")
+            try:
+                if _po.get('id'):
+                    _pend.close(uname, _po['id'], 'approved')
+            except Exception as _fx:
+                _faults.note('service.pending_offer_close', _fx)
+            body = dict(body)
+            body['_client_surface_sent'] = str(body.get('surface') or '').strip().lower()
+            body['_approved_offer'] = {'id': _po.get('id') or '', 'thread_id': _po.get('thread_id') or '',
+                                       'typed': str(text)[:40]}
+            text = str(_po.get('question') or '').strip()
+            body['text'] = text
+            body['surface'] = 'analyze'
+            body['panel_confirm'] = _pend.confirm_body(_po)
+            try:
+                # the read's own lane names the route; the approval rides
+                # along as a field the digest and the replay can see
+                from flask import g as _g
+                _g._pm_approved_offer = {'typed': str(body['_approved_offer']['typed']), 'offer_id': _po.get('id') or '',
+                                         'price': str(_po.get('price_label') or ''), 'kind': str(_po.get('kind') or ''),
+                                         'offer_thread': str(_po.get('thread_id') or '')}
+            except Exception as _fx:
+                _faults.note('service', _fx)
+        elif _pend_hit and _pend_hit['action'] == 'cancel':
+            _po = _pend_hit['offer']
+            try:
+                if _po.get('id'):
+                    _pend.close(uname, _po['id'], 'cancelled')
+            except Exception as _fx:
+                _faults.note('service.pending_offer_close', _fx)
+            raw = {'success': True, 'action': 'answer', 'reply': _pend.DECLINE_REPLY,
+                   'followups': [], 'offer_deck': False, 'deck_angle': None,
+                   'offer_cancelled': {'subject': str(_po.get('subject') or ''),
+                                       'question': str(_po.get('question') or '')[:200]}}
+            decision = {'surface': 'analyze', 'mode': None,
+                        'reason': 'priced_offer_cancelled', 'client_hint': None}
+            if str(body.get('surface') or '').strip().lower() == 'interpret':
+                raw = _interpret_shape(raw)
+                raw['followups'] = []
+            try:
+                host.ask_hint(route='priced_offer_acceptance', outcome='cancelled',
+                              subject=str(_po.get('subject') or ''))
+            except Exception as _fx:
+                _faults.note('service', _fx)
+            env = envelope.wrap(raw, surface='analyze', decision=decision,
+                                thread_id=tid, via=via)
+            _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
+            return env, 200
+
     # lane: offer_answer
     # Answering an offer (2026-10-07 Jenna, Eliot / Gunna Concert Goers):
     # the previous agent turn asked "Do you still want me to pull it?"
@@ -576,7 +648,7 @@ def ask(user, body, *, via='session'):
     # the thread). An ask about an attached file is answered from the
     # file, or applied to it and handed back; never a build, never a
     # design request.
-    _client_surface = str(body.get('surface') or '').strip().lower()
+    _client_surface = str(body.get('_client_surface_sent') or body.get('surface') or '').strip().lower()
     if not _armed(body):
         try:
             from . import documents as _docs
@@ -603,7 +675,7 @@ def ask(user, body, *, via='session'):
             return env, 200
 
     referent_decision = None
-    _client_surface = str(body.get('surface') or '').strip().lower()
+    _client_surface = str(body.get('_client_surface_sent') or body.get('surface') or '').strip().lower()
     try:
         from . import referents as _refs
         _merged, _label = _refs.answer_merge(history, text)
@@ -1948,6 +2020,16 @@ def _persist_turn(persist, uname, tid, history, text, env, raw, surface):
     """Append the user turn and the agent turn to the thread. The
     which-ones question keeps its referent on the agent turn's meta so
     the names that come back merge into the question that asked."""
+    # Every priced offer a lane produced is a pending item on the server,
+    # whoever persists the thread (the dashboard client writes its own
+    # turns, so this is the only record of the offer the server holds).
+    # A typed approval binds to it (2026-10-22, Casey Pearson).
+    try:
+        if isinstance(raw, dict) and isinstance(raw.get('panel_offer'), dict) and uname:
+            from . import pending_offers as _pend
+            _pend.record(uname, tid, raw, text)
+    except Exception as e:
+        _faults.note('service.pending_offer_record', e)
     if not (persist and tid and env.get('text')):
         return
     try:
