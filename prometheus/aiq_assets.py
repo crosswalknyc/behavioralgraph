@@ -180,7 +180,8 @@ def inputs_for_add(entry, rows, file_name, requested_by=''):
     return {'add_to_slug': entry.get('title_slug'), 'campaign_name': entry.get('display_name') or entry.get('title_slug'),
             'conversion_event': str(entry.get('conversion_event') or '') or 'the campaign\'s conversion',
             'urls': [{'url': r.get('url'), 'tag': tag_for(entry, r), 'label': r.get('label') or '',
-                      'platform': r.get('platform') or '', 'account': r.get('account') or '', 'posted_date': r.get('posted_date') or ''}
+                      'platform': r.get('platform') or '', 'account': r.get('account') or '', 'posted_date': r.get('posted_date') or '',
+                      **({'phase': r.get('phase'), 'phase_explicit': bool(r.get('phase_explicit'))} if r.get('phase') else {})}
                      for r in rows],
             'daily_refresh': False, 'source_file': file_name, 'requested_by': requested_by}
 

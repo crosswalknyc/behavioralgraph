@@ -338,9 +338,48 @@ def fetch_public_count(url: str, timeout: int = 10):
     """(views, caption) read off a public TikTok or YouTube page, or
     (None, ''). One GET, no key, fail-safe. Instagram and X need a login
     and return nothing."""
+    m = fetch_public_meta(url, timeout=timeout)
+    return m.get("views"), m.get("caption") or ""
+
+
+_PAGE_DATE_RXS = (
+    re.compile(r'"uploadDate":\s*"(\d{4}-\d{2}-\d{2})'),          # YouTube microformat
+    re.compile(r'"publishDate":\s*"(\d{4}-\d{2}-\d{2})'),
+    re.compile(r'<meta itemprop="uploadDate" content="(\d{4}-\d{2}-\d{2})'),
+    re.compile(r'"datePublished":\s*"(\d{4}-\d{2}-\d{2})'),
+)
+_TIKTOK_CREATE_RX = re.compile(r'"createTime":\s*"?(\d{9,11})"?')
+
+
+def _page_posted_date(html: str) -> str:
+    """The day a public page says its video was posted (YouTube
+    uploadDate / publishDate, TikTok createTime), as YYYY-MM-DD, or ''.
+    The date a clip posted decides its campaign phase, so a sheet row
+    that arrives without one takes the page's date before it ever falls
+    back to the day of the upload (2026-10-22, The Influencer Project:
+    31 YouTube shorts arrived dateless, were dated the upload day and
+    tagged to the first phase)."""
+    for rx in _PAGE_DATE_RXS:
+        m = rx.search(html or "")
+        if m:
+            return m.group(1)
+    m = _TIKTOK_CREATE_RX.search(html or "")
+    if m:
+        try:
+            return datetime.fromtimestamp(int(m.group(1)), tz=timezone.utc).date().isoformat()
+        except Exception:
+            return ""
+    return ""
+
+
+def fetch_public_meta(url: str, timeout: int = 10) -> dict:
+    """{'views', 'caption', 'posted_date'} read off a public TikTok or
+    YouTube page; every field empty when the page carries nothing or the
+    URL is another platform. One GET, no key, fail-safe."""
     u = str(url or "")
+    empty = {"views": None, "caption": "", "posted_date": ""}
     if not re.search(r"(tiktok\.com/@[^/]+/video/|youtube\.com/(?:watch|shorts/)|youtu\.be/)", u, re.I):
-        return None, ""
+        return empty
     try:
         import urllib.request
         req = urllib.request.Request(u, headers={"User-Agent": ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
@@ -361,9 +400,9 @@ def fetch_public_count(url: str, timeout: int = 10):
             else:
                 import html as _html
                 cap = _html.unescape(mc.group(1))
-        return views, " ".join(str(cap).split())[:200]
+        return {"views": views, "caption": " ".join(str(cap).split())[:200], "posted_date": _page_posted_date(html)}
     except Exception:
-        return None, ""
+        return empty
 
 
 _POST_ID_RX = re.compile(r"(/video/\d+|/p/[A-Za-z0-9_-]+|/reel(?:s)?/[A-Za-z0-9_-]+|/status/\d+|[?&]v=[A-Za-z0-9_-]{6,}|/shorts/[A-Za-z0-9_-]{6,}|youtu\.be/[A-Za-z0-9_-]{6,})", re.I)
@@ -375,6 +414,88 @@ def is_profile_level_url(url: str) -> bool:
     goes live."""
     u = str(url or "")
     return bool(handle_from_url(u)) and not _POST_ID_RX.search(u)
+
+
+def _phase_starts(doc: dict, assets: list) -> list:
+    """[(phase_name, start_date)] in start order: the campaign's declared
+    phase starts (the snapshot's phases block) first; a phase with no
+    declared start takes the earliest posted date among its own assets.
+    A phase nothing dates is left out."""
+    declared = {}
+    for p in ((doc or {}).get("phases") or []):
+        if isinstance(p, dict) and str(p.get("phase_name") or "").strip() and str(p.get("start_date") or "").strip():
+            declared[str(p["phase_name"]).strip()] = str(p["start_date"]).strip()[:10]
+    earliest = {}
+    for a in assets or []:
+        if not isinstance(a, dict):
+            continue
+        ph, d = str(a.get("phase_name") or "").strip(), str(a.get("posted_date") or "").strip()[:10]
+        if ph and d and ph not in declared and (ph not in earliest or d < earliest[ph]):
+            earliest[ph] = d
+    return sorted({**earliest, **declared}.items(), key=lambda kv: kv[1])
+
+
+def phase_by_date(posted: str, ordered: list, default: str = "Campaign") -> str:
+    """The phase a posted date falls in: the latest phase whose start is on
+    or before the date; a date before every start joins the first phase."""
+    cur = ordered[0][0] if ordered else default
+    d = str(posted or "")[:10]
+    for ph, start in ordered:
+        if d and d >= start:
+            cur = ph
+    return cur
+
+
+def refresh_phase_counts(doc: dict) -> dict:
+    """{phase: {asset_count, view_count}} from the assets' own tags, written
+    into the snapshot's demographics.phases rows (the Phases table reads
+    them). Demographic shapes are left as they are."""
+    assets = (doc or {}).get("assets") or []
+    by: dict = {}
+    for a in assets:
+        if not isinstance(a, dict):
+            continue
+        ph = str(a.get("phase_name") or "").strip() or "Unphased"
+        b = by.setdefault(ph, {"asset_count": 0, "view_count": 0})
+        b["asset_count"] += 1
+        b["view_count"] += int(a.get("ext_view_count") or 0)
+    demo = (doc or {}).get("demographics")
+    if isinstance(demo, dict):
+        rows = [p for p in (demo.get("phases") or []) if isinstance(p, dict)]
+        seen = set()
+        for p in rows:
+            ph = str(p.get("phase_name") or "")
+            if ph in by:
+                p["asset_count"], p["view_count"] = by[ph]["asset_count"], by[ph]["view_count"]
+            seen.add(ph)
+        for ph, c in by.items():
+            if ph not in seen:
+                rows.append({"phase_name": ph, **c})
+        demo["phases"] = rows
+    return by
+
+
+def _parse_sheet_date(raw) -> str:
+    """A sheet's date as YYYY-MM-DD ('2026-10-05', '10/5/2026',
+    '2026-10-05T12:00:00'), or '' when it carries none."""
+    posted = str(raw or "").strip()
+    if not posted:
+        return ""
+    for cand in (posted[:10], posted):
+        try:
+            return datetime.fromisoformat(cand).date().isoformat()
+        except Exception:
+            pass
+    for fmt in ("%m/%d/%Y", "%m/%d/%y", "%d-%b-%Y", "%b %d, %Y", "%B %d, %Y", "%Y/%m/%d"):
+        try:
+            return datetime.strptime(posted, fmt).date().isoformat()
+        except Exception:
+            pass
+    return ""
+
+
+def _truthy(v) -> bool:
+    return str(v or "").strip().lower() in ("1", "true", "yes", "y", "x", "explicit", "keep", "override")
 
 
 def _messy_int(seed: str, value: float) -> int:
@@ -410,21 +531,10 @@ def add_assets_to_campaign(slug: str, rows: list, requested_by: str = "", *, s3_
         s3.put_object(Bucket=S3_BUCKET, Key=f"intent/{slug}/source/_backups/normalized_assets.pre_add_assets_{stamp}.json",
                       Body=json.dumps(doc, indent=1).encode(), ContentType="application/json")
     phases = list(entry.get("phases") or ["Campaign"])
-    # the phase a dated clip belongs to: the campaign's own assets mark
-    # where each phase starts; anything earlier joins the first phase
-    phase_start = {}
-    for a in assets:
-        ph, d = str(a.get("phase_name") or ""), str(a.get("posted_date") or "")
-        if ph and d and (ph not in phase_start or d < phase_start[ph]):
-            phase_start[ph] = d
-    ordered = sorted(phase_start.items(), key=lambda kv: kv[1])
+    ordered = _phase_starts(doc, assets)
 
     def _phase_for(d: str) -> str:
-        cur = ordered[0][0] if ordered else (phases[0] if phases else "Campaign")
-        for ph, start in ordered:
-            if d and d >= start:
-                cur = ph
-        return cur
+        return phase_by_date(d, ordered, default=(phases[0] if phases else "Campaign"))
     official_handles = {handle_from_url(a.get("url")).lower() for a in assets if str(a.get("paid_or_organic") or "") == "official"}
     official_handles.discard("")
     slug_tokens = [t for t in re.split(r"[^a-z0-9]+", slug.lower()) if len(t) >= 4 and t not in ("hades", "films", "campaign")]
@@ -460,15 +570,17 @@ def add_assets_to_campaign(slug: str, rows: list, requested_by: str = "", *, s3_
             continue
         have.add(url.rstrip("/").lower())
         new_rows.append(dict(r, url=url))
-    counts, captions = {}, {}
+    counts, captions, page_dates = {}, {}, {}
     if fetch_counts and new_rows:
         from concurrent.futures import ThreadPoolExecutor
         with ThreadPoolExecutor(max_workers=max(1, workers)) as ex:
-            for r, (v, cap) in zip(new_rows, ex.map(lambda rr: fetch_public_count(rr["url"]), new_rows)):
-                if v:
-                    counts[r["url"]] = int(v)
-                if cap:
-                    captions[r["url"]] = cap
+            for r, meta in zip(new_rows, ex.map(lambda rr: fetch_public_meta(rr["url"]), new_rows)):
+                if meta.get("views"):
+                    counts[r["url"]] = int(meta["views"])
+                if meta.get("caption"):
+                    captions[r["url"]] = meta["caption"]
+                if meta.get("posted_date"):
+                    page_dates[r["url"]] = meta["posted_date"]
     measured = sorted(counts.values())
     median = measured[len(measured) // 2] if measured else 0
     added = []
@@ -483,24 +595,39 @@ def add_assets_to_campaign(slug: str, rows: list, requested_by: str = "", *, s3_
             hl = handle.lower().lstrip("@").replace(".", "").replace("_", "")
             is_official = (handle.lower() in official_handles) or (bool(slug_tokens) and all(t in hl for t in slug_tokens[:2]))
             tag = "official" if is_official else "earned"
-        posted = str(r.get("posted_date") or "").strip()[:10]
-        try:
-            posted = datetime.fromisoformat(posted).date().isoformat() if posted else ""
-        except Exception:
-            try:
-                posted = datetime.strptime(posted, "%m/%d/%Y").date().isoformat()
-            except Exception:
-                posted = ""
+        posted = _parse_sheet_date(r.get("posted_date"))
+        # The date a clip posted decides its phase, so the date is settled
+        # first (the sheet, else the public page, else the day of the
+        # upload) and the phase is read off the date that is stored. The
+        # two were derived apart before (the rule saw an empty date and
+        # gave the first phase while the record was dated the upload day;
+        # The Influencer Project, 2026-10-22).
+        posted_source = "sheet" if posted else ""
+        if not posted and page_dates.get(url):
+            posted, posted_source = page_dates[url], "public page"
+        if not posted:
+            posted, posted_source = date.today().isoformat(), "upload day"
+        dated_phase = _phase_for(posted)
+        sheet_phase = str(r.get("phase") or r.get("phase_name") or "").strip()
+        explicit = _truthy(r.get("phase_explicit"))
+        if sheet_phase and explicit:
+            phase_name = sheet_phase if sheet_phase in phases or not phases else dated_phase
+        else:
+            phase_name = dated_phase   # the date rule over any hand tag unless the sheet marks it explicit
         cap = captions.get(url) or str(r.get("label") or "").strip()
         label = " · ".join(x for x in (channel, handle, (cap[:90] if cap else ("clip" if channel.lower() in ("tiktok", "instagram", "x", "youtube") else "post"))) if x)
         aid = hashlib.md5(f"{slug}|{url}".encode()).hexdigest()[:16]
         views = counts.get(url)
         derived = views is None and median > 0
+        note = conv
+        if sheet_phase and not explicit and sheet_phase != phase_name:
+            note = (f"{conv} Sheet phase: {sheet_phase}; tagged {phase_name} by posted date.").strip()
         added.append({
-            "asset_id": aid, "title_slug": slug, "phase_name": _phase_for(posted), "funnel_stage": "Exposure",
+            "asset_id": aid, "title_slug": slug, "phase_name": phase_name, "funnel_stage": "Exposure",
             "action_label": label, "asset_type": "Creator Clip" if tag in ("earned", "organic") else ("Official Video" if tag == "official" else "Paid Clip"),
             "channel": channel, "paid_or_organic": tag, "url": url,
-            "source": src, "note": conv, "posted_date": posted or date.today().isoformat(),
+            "source": src, "note": note, "posted_date": posted, "posted_date_source": posted_source,
+            **({"phase_source": "sheet (explicit)"} if (sheet_phase and explicit) else {}),
             "talent_tags": [], "audience_target_tags": [],
             "ext_view_count": int(views) if views else (_messy_int(aid, median) if derived else 0),
             "ext_engagement_count": 0,
@@ -508,7 +635,15 @@ def add_assets_to_campaign(slug: str, rows: list, requested_by: str = "", *, s3_
             "thumbnail_s3_url": "", "og_metadata": "",
         })
     assets.extend(added)
-    s3.put_object(Bucket=S3_BUCKET, Key=key, Body=json.dumps({"assets": assets}, indent=1).encode(), ContentType="application/json")
+    # The snapshot keeps everything it carried (title, phases, audiences,
+    # demographics, funnel summary): the 2026-10-16 add wrote back only
+    # the asset list and the Phases table read empty for the campaign
+    # (2026-10-22). The per-phase counts the table reads follow the assets.
+    doc = dict(doc) if isinstance(doc, dict) else {}
+    doc["assets"] = assets
+    refresh_phase_counts(doc)
+    doc["_assets_added_at_utc"] = datetime.now(timezone.utc).isoformat()
+    s3.put_object(Bucket=S3_BUCKET, Key=key, Body=json.dumps(doc, indent=1).encode(), ContentType="application/json")
     entry["asset_count"] = len(assets)
     entry["updated_at"] = datetime.now(timezone.utc).isoformat()
     if any(a.get("paid_or_organic") == "earned" for a in added):

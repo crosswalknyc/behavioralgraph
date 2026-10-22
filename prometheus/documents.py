@@ -252,7 +252,13 @@ _SHEET_FIELD_RX = {
     'platform': re.compile(r'^(platform|channel|network|site)$', re.I),
     'account': re.compile(r'^(account|handle|creator|author|username|user|influencer)$', re.I),
     'posted_date': re.compile(r'^(posted[ _]?date|date|posted|published|publish[ _]?date|post date)$', re.I),
+    # a hand phase tag; the date rule overrides it unless the sheet marks it
+    # explicit (a header carrying 'explicit' / 'override' / 'final', or a
+    # yes in a 'phase explicit' column) (2026-10-22)
+    'phase': re.compile(r'^(phase|campaign[ _]?phase|phase[ _]?name)(\s*\((?:explicit|override|final|keep)\))?$', re.I),
+    'phase_explicit': re.compile(r'^(phase[ _]?explicit|explicit[ _]?phase|keep[ _]?phase|phase[ _]?override|phase[ _]?final)$', re.I),
 }
+_PHASE_EXPLICIT_HEADER_RX = re.compile(r'\b(explicit|override|final|keep)\b', re.I)
 
 
 def sheet_urls(rec, s3=None, bucket=None):
@@ -284,9 +290,13 @@ def sheet_urls(rec, s3=None, bucket=None):
             continue
         seen.add(u)
         item = {'url': u}
-        for field in ('platform', 'account', 'posted_date', 'tag', 'label'):
+        for field in ('platform', 'account', 'posted_date', 'tag', 'label', 'phase'):
             if field in named:
                 item[field] = str(r.get(named[field]) or '').strip()
+        if item.get('phase'):
+            flag = str(r.get(named['phase_explicit']) or '').strip().lower() if 'phase_explicit' in named else ''
+            item['phase_explicit'] = bool(_PHASE_EXPLICIT_HEADER_RX.search(str(named['phase']))
+                                          or flag in ('1', 'true', 'yes', 'y', 'x', 'explicit', 'keep', 'override'))
         if item.get('account'):
             item['account'] = '@' + item['account'].lstrip('@')   # a sheet's '@@handle' reads once
         tg = str(item.get('tag') or '').lower()

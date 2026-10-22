@@ -729,7 +729,7 @@ def _prepare_touchpoints(slug: str, cards: list) -> list[dict]:
             "reach_people": float(_touchpoint_reach_people(a)),
             **({"members": list(a["members"]), "member_count": len(a["members"])} if a.get("members") else {}),
         }
-        for k in ("member_views", "member_types", "member_handles"):
+        for k in ("member_views", "member_types", "member_handles", "member_phases"):
             if a.get(k):
                 row[k] = list(a[k])
         touch.append(row)
@@ -819,9 +819,29 @@ def _group_crowded_assets(cards: list) -> list:
     return keep
 
 
+def _group_phase_label(phases: list) -> str:
+    """A group's phase, labeled for what it is (2026-10-22): one phase when
+    every clip carries it, else each phase with its clip count in posted
+    order ('Trailer Launch (12 clips), Reviews and Opening Week (19
+    clips)'). The per-phase read never uses this label; it counts clips by
+    their own tag (see _compute_creative_impl)."""
+    names = [str(p or "").strip() or "Unphased" for p in (phases or [])]
+    if not names:
+        return ""
+    order, counts = [], {}
+    for p in names:
+        if p not in counts:
+            order.append(p)
+        counts[p] = counts.get(p, 0) + 1
+    if len(order) == 1:
+        return order[0]
+    return ", ".join(f"{p} ({counts[p]:,} clip{'s' if counts[p] != 1 else ''})" for p in order)
+
+
 def _group_card(ch: str, handle: str, members: list) -> dict:
-    first = sorted(members, key=lambda m: str(m.get("posted_date") or ""))[0]
-    flat, flat_views, flat_types, flat_handles = [], [], [], []
+    members = sorted(members, key=lambda m: str(m.get("posted_date") or ""))
+    first = members[0]
+    flat, flat_views, flat_types, flat_handles, flat_phases = [], [], [], [], []
     for m in members:
         if m.get("members"):
             # a group folding into a wider group: carry its clips through
@@ -830,14 +850,17 @@ def _group_card(ch: str, handle: str, members: list) -> dict:
             mv = list(m.get("member_views") or [])
             mt = list(m.get("member_types") or [])
             mh = list(m.get("member_handles") or [])
+            mp = list(m.get("member_phases") or [])
             flat_views.extend(mv if len(mv) == len(ids) else [float(m.get("ext_view_count") or 0) / max(1, len(ids))] * len(ids))
             flat_types.extend(mt if len(mt) == len(ids) else [str(m.get("asset_type") or "")] * len(ids))
             flat_handles.extend(mh if len(mh) == len(ids) else [_asset_handle(m)] * len(ids))
+            flat_phases.extend(mp if len(mp) == len(ids) else [str(m.get("phase_name") or "")] * len(ids))
         else:
             flat.append(m.get("asset_id"))
             flat_views.append(float(m.get("ext_view_count") or 0))
             flat_types.append(str(m.get("asset_type") or ""))
             flat_handles.append(_asset_handle(m))
+            flat_phases.append(str(m.get("phase_name") or ""))
     views = sum(float(m.get("ext_view_count") or 0) for m in members)
     tags = [str(m.get("paid_or_organic") or "").strip() for m in members]
     tag = max(set(tags), key=tags.count) if tags else "organic"
@@ -846,7 +869,7 @@ def _group_card(ch: str, handle: str, members: list) -> dict:
         "channel": ch,
         "action_label": (f"{ch} \u00b7 {handle} \u00b7 {len(flat):,} clips" if handle else f"{ch} \u00b7 {len(flat):,} clips"),
         "asset_type": str(first.get("asset_type") or "Creator Clip"),
-        "phase_name": str(first.get("phase_name") or ""),
+        "phase_name": _group_phase_label(flat_phases),
         "funnel_stage": str(first.get("funnel_stage") or "Exposure"),
         "paid_or_organic": tag,
         "url": str(first.get("url") or ""),
@@ -857,6 +880,7 @@ def _group_card(ch: str, handle: str, members: list) -> dict:
         "member_views": flat_views,
         "member_types": flat_types,
         "member_handles": flat_handles,
+        "member_phases": flat_phases,
     }
 
 
@@ -2200,12 +2224,40 @@ def _creative_format_rows(*, X_bin: np.ndarray, y: np.ndarray, touch: list[dict]
     against the cohort, exposure-weighted lift per exposure, share of
     converters. Formats share people the way the other kinds do, so they
     do not sum. Returns {"rows": [...], "best": [labels], "coverage": n}."""
+    if not creative_formats:
+        return {"rows": [], "best": [], "coverage": 0}
+    return _per_clip_rows(X_bin=X_bin, y=y, touch=touch, rows=rows, conv_rate=conv_rate, total_conv=total_conv,
+                          label_of=lambda t, i, aid: creative_formats.get(str(aid)),
+                          floor_share=_FORMAT_MIN_SHARE_FOR_BEST)
+
+
+def _clip_phase(t: dict, i: int, aid) -> str:
+    """The phase a clip carries by its own tag (its posted date against the
+    phase start dates); a touchpoint of one asset is that asset's phase."""
+    mp = t.get("member_phases") or []
+    if i < len(mp) and str(mp[i] or "").strip():
+        return str(mp[i]).strip()
+    return str(t.get("phase") or "").strip() or "Unphased"
+
+
+def _per_clip_rows(*, X_bin: np.ndarray, y: np.ndarray, touch: list[dict],
+                   rows: list[dict], conv_rate: float, total_conv: int,
+                   label_of, floor_share: float = 0.0) -> dict:
+    """One row per clip-level label (a creative format, a campaign phase),
+    read at the person level. A touchpoint is one creator's clips; its
+    people are split across the labels of those clips by the clips' views
+    (a touchpoint of one clip is exact), so a label's `assets` is the
+    count of clips that carry it and the labels' asset counts sum to the
+    asset count. `label_of(touchpoint, index, asset_id)` names a clip's
+    label or returns None to leave it out. Labels that reached at least
+    `floor_share` of the exposed audience lead, by rate.
+    Returns {"rows": [...], "best": [labels], "coverage": clips labeled}."""
     n = int(X_bin.shape[0]) if X_bin is not None and X_bin.ndim == 2 else 0
-    if not n or not creative_formats:
+    if not n:
         return {"rows": [], "best": [], "coverage": 0}
     by_col = {int(r["_col_idx"]): r for r in rows if "_col_idx" in r}
     K = int(X_bin.shape[1])
-    # per touchpoint: the view share of each format among its clips
+    # per touchpoint: the view share of each label among its clips
     shares: dict[str, np.ndarray] = {}
     acc: dict[str, dict] = {}
     classified = 0
@@ -2215,10 +2267,10 @@ def _creative_format_rows(*, X_bin: np.ndarray, y: np.ndarray, touch: list[dict]
         if len(views) != len(ids):
             # a single asset carries its own views; an unmeasured group splits evenly
             views = [float(t.get("views") or 0)] if len(ids) == 1 else [1.0] * len(ids)
+        labels = [label_of(t, i, aid) for i, aid in enumerate(ids)]
         weights: dict[str, float] = {}
         tot_w = 0.0
-        for aid, v in zip(ids, views):
-            f = creative_formats.get(str(aid))
+        for f, v in zip(labels, views):
             if not f:
                 continue
             w = float(v) if float(v) > 0 else 1.0
@@ -2238,8 +2290,8 @@ def _creative_format_rows(*, X_bin: np.ndarray, y: np.ndarray, touch: list[dict]
             a["lift_w"] += exposed_k * share
             a["lift_num"] += exposed_k * share * or_k
             a["touchpoints"] += 1
-            for aid, v in zip(ids, views):
-                if creative_formats.get(str(aid)) == f:
+            for lf, v in zip(labels, views):
+                if lf == f:
                     a["assets"] += 1
                     a["views"] += float(v) if float(v) > 0 else 0.0
     # person level: the chance a person saw at least one clip of the format,
@@ -2272,10 +2324,10 @@ def _creative_format_rows(*, X_bin: np.ndarray, y: np.ndarray, touch: list[dict]
             "lift_per_exposure": round(a["lift_num"] / a["lift_w"], 4) if a["lift_w"] > 0 else None,
             "share_of_converters": round(converted / total_conv * 100.0, 1) if total_conv else None,
         })
-    # formats with enough people to call (>= 2% of the exposed audience)
-    # lead, by rate; the thin ones follow in their own rate order, so the
-    # highlighted first row is the best format a reader can act on
-    floor = _FORMAT_MIN_SHARE_FOR_BEST * n
+    # labels with enough people to call (formats: >= 2% of the exposed
+    # audience) lead, by rate; the thin ones follow in their own rate
+    # order, so the highlighted first row is the best one a reader can act on
+    floor = float(floor_share) * n
     out.sort(key=lambda r: (r["exposed_n"] >= floor, r["conversion_rate"], r["converted_n"]), reverse=True)
     best = [r["label"] for r in out if r["exposed_n"] >= floor][:3]
     for r in out:
@@ -2311,6 +2363,20 @@ def _compute_creative_impl(*, X_bin: np.ndarray, y: np.ndarray, touch: list[dict
                               "Formats that reached at least 2% of the exposed audience lead, by rate; the ones below "
                               "that line reached too few people to call and follow.")})
     for key, label, question in _CREATIVE_DIMENSIONS:
+        if key == "phase":
+            # Each clip is counted under its own phase tag (2026-10-22,
+            # Alexia / The Influencer Project): the row's assets are the
+            # clips posted in that phase, and the phases' asset counts sum
+            # to the asset count. The touchpoint-level read grouped a
+            # creator's clips under the first clip's phase (867 / 318
+            # against 165 / 1,020 by asset).
+            ph = _per_clip_rows(X_bin=X_bin, y=y, touch=touch, rows=rows, conv_rate=conv_rate,
+                                total_conv=total_conv, label_of=_clip_phase)
+            dims.append({"key": key, "label": label, "question": question, "rows": ph["rows"],
+                         "note": ("Assets are counted by their own phase tag, the date each posted against the phase start "
+                                  "dates, so the phases' asset counts add up to the campaign's assets. A creator's people are "
+                                  "split across the phases of their clips by the clips' views.")})
+            continue
         groups: dict[str, list[int]] = {}
         for k, t in enumerate(touch):
             v = str(t.get(key) or "Other").strip() or "Other"
