@@ -16,8 +16,11 @@ This module reads that shape:
     lean      a political lean word (Republican / Democrat /
               Conservative / Liberal / Independent)
 
-An ask is a compound cohort when it has an anchor AND at least one of
-state / lean / demographic qualifier. The interpret marks the draft as
+An ask is a compound cohort when it has an anchor AND a geography or a
+lean, or two anchors (an intersection) with a demographic qualifier. A
+single entity with only a demographic qualifier ("Nike shoppers aged
+25+") is rule 6b's embedded-cut shape (full universe on the entity plus
+add-on cuts), never a compound cohort (2026-10-21). The interpret marks the draft as
 a persona universe (the entity check passes by construction), carries
 `anchor_entity`, `geo_scope` and `political_lean` on the draft and the
 spec, and the engine pins the anchor, scopes LOCATION to those states
@@ -113,9 +116,10 @@ def lean_in(text):
     return _LEAN_CANON.get(m.group('lean').lower().replace('-', ' '), m.group('lean').title())
 
 
-def anchor_in(text):
-    """The entity the cohort is anchored on, as written ('LA Rams',
-    'Hilton'), or ''. Qualifier words never count as the entity."""
+def anchors_in(text):
+    """Every distinct entity the cohort is anchored on, as written, in
+    order ('Hilton', 'Lady Gaga' for 'Hilton guests who are Lady Gaga
+    fans'). Qualifier words never count as the entity."""
     t = str(text or '')
     cands = []
     for m in _ANCHOR_OF_RX.finditer(t):
@@ -126,6 +130,7 @@ def anchor_in(text):
         cands.append(m.group('e'))
     geo_states = set(states_in(t))
     geo_words = {n for n, c in US_STATES.items() if c in geo_states}
+    out = []
     for raw in cands:
         words = [w for w in raw.split() if w]
         def _drop(w):
@@ -140,24 +145,44 @@ def anchor_in(text):
         if not words:
             continue
         e = ' '.join(words).strip(" ,.;:'\"")
-        if len(e) >= 2:
-            return e
-    return ''
+        if len(e) >= 2 and e.lower() not in {x.lower() for x in out} \
+                and not any(e.lower() in x.lower() or x.lower() in e.lower() for x in out):
+            out.append(e)
+    return out
+
+
+def anchor_in(text):
+    """The entity the cohort is anchored on, as written ('LA Rams',
+    'Hilton'), or ''. Qualifier words never count as the entity."""
+    found = anchors_in(text)
+    return found[0] if found else ''
 
 
 def detect(text):
     """{'anchor', 'states', 'lean', 'demo'} when the ask is a compound
-    cohort anchored on an entity with at least one qualifier; None
-    otherwise ("fans of Taylor Swift" alone is an entity build)."""
+    cohort anchored on an entity with a qualifier the entity's own
+    universe cannot carry: a geography, a political lean, or a second
+    entity (an intersection, 'Hilton guests who are Lady Gaga fans,
+    women 30-35'). None otherwise.
+
+    A single entity with only a demographic qualifier ('Nike shoppers
+    aged 25+', 'female Nike shoppers') is NOT a compound cohort: that
+    is the embedded-cut shape of rule 6b (avid-and-cut-skin, Jenna
+    2026-08-20): the full universe is built on the entity and each
+    demographic rides as an add-on cut. 'fans of Taylor Swift' alone is
+    an entity build."""
     t = str(text or '')
-    anchor = anchor_in(t)
-    if not anchor:
+    anchors = anchors_in(t)
+    if not anchors:
         return None
+    anchor = anchors[0]
     states = states_in(t)
     lean = lean_in(t)
     demo = bool(_DEMO_RX.search(t))
     if not (states or lean or demo):
         return None
+    if demo and not (states or lean) and len(anchors) < 2:
+        return None     # one entity + demographics: rule 6b, full universe plus add-on cuts
     return {'anchor': anchor, 'states': states, 'lean': lean, 'demo': demo}
 
 

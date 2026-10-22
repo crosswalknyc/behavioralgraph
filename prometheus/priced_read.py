@@ -273,6 +273,31 @@ def _panel_self(text, ctx=None):
         return False
 
 
+def sizes_open_page(text, ctx=None):
+    """True when a sizing ask points at the audience already on the
+    screen ('how big is this audience', 'how many people is that', a
+    size ask that names nothing while a profile is open). That figure
+    is on the page; reading it back is a lookup, free and metered, under
+    the work line Jenna set on 2026-10-21 (a lookup of what is on screen
+    is free; a put-together read is the custom ask). A cross, or a
+    subject that is not the open page, stays priced in the sizing lane."""
+    try:
+        from . import sizing_lane as _sz
+        if not _sz.wants_sizing(text):
+            return False
+        page = ''
+        try:
+            page = str(((ctx or {}).get('primary') or {}).get('name') or '').strip()
+        except Exception:
+            page = ''
+        if not page:
+            return False
+        subs = [s for s in _sz.subjects(text, ctx) if s and not _sz.is_panel_noun(s)]
+        return bool(subs) and all(s == '__page__' or s.strip().lower() == page.lower() for s in subs)
+    except Exception:
+        return False
+
+
 def _sizing_subject(text, ctx=None):
     try:
         from . import sizing_lane as _sz
@@ -441,7 +466,9 @@ def classify(text, history=None, ctx=None):
                 'frame': frame, 'subject': ''}
     try:
         from . import sizing_lane as _sz
-        if _sz.wants_sizing(t) and not _panel_self(t, ctx):
+        if _sz.wants_sizing(t) and not _panel_self(t, ctx) and not sizes_open_page(t, ctx):
+            # the size of the audience on the open page is a lookup of a
+            # figure already on screen: free and metered, never a quote
             return {'kind': 'sizing', 'via': 'service', 'usd': 100,
                     'same_frame': False, 'frame': 'sizing',
                     'subject': _sizing_subject(t, ctx)}

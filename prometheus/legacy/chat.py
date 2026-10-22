@@ -16812,8 +16812,8 @@ def _pm_jiq_confirm_reply(parsed):
         parsed['no_purchase_claim'] = True
         end_step = ("Went to the ticketing site for a ticket. This is "
                     "the furthest point we see; it makes no claim on "
-                    "whether a ticket was then bought, and Crosswalk "
-                    "does not predict box office")
+                    "what happened after the ticketing site, and "
+                    "Crosswalk does not predict box office")
         parsed['conversion_event'] = (
             "Went to a ticketing site or app for a ticket to "
             f"{parsed['subject']} (no purchase claim)")

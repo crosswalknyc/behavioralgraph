@@ -23276,7 +23276,7 @@ https://www.instagram.com/p/..."></textarea>
                 <div id="prometheusFundsLock" role="alertdialog" aria-label="Add funds to use Prometheus">
                     <div class="pm-funds-card">
                         <div class="pm-funds-title">Add funds to use Prometheus.</div>
-                        <div class="pm-funds-sub">Your balance is $0, so this chat stays paused until funding lands.</div>
+                        <div class="pm-funds-sub" id="pmFundsSub">Your balance is {{ (currency_symbol|default('$')) }}0. This chat stays paused until funding lands.</div>
                         <button type="button" class="pm-funds-btn" onclick="goBuyMoreCredits()">Add funds</button>
                     </div>
                 </div>
@@ -78983,6 +78983,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (lock) {
                     if (blocked) lock.classList.add('pm-on');
                     else lock.classList.remove('pm-on');
+                    // the balance line follows the seat's currency (GBP seats see their own symbol, 2026-10-21)
+                    var sub = document.getElementById('pmFundsSub');
+                    if (sub) sub.textContent = 'Your balance is ' + (window.PM_CURRENCY_SYMBOL || '$') + '0. This chat stays paused until funding lands.';
                 }
                 if (input) {
                     input.disabled = !!blocked;

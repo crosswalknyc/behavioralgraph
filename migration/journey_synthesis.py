@@ -159,13 +159,11 @@ round numbers, no two identical rates. Return STRICT JSON only:
                                   // the window, researched; null if unknown
   "post_type": "official_clip"|"news_article"|"meme_reaction"|"mixed",
   "following": "cult"|"mainstream",  // cult = a small, dedicated fan base
-                                  // that still makes and shares its own
-                                  // content (fan edits, scene clips,
-                                  // remaster comparisons), often with a
-                                  // revival or reboot in the news, while
-                                  // the title's own US reach is low;
-                                  // mainstream = clips reach a huge
-                                  // casual audience. Unsure = mainstream.
+                                  // still making its own content (fan
+                                  // edits, remaster clips), a revival in
+                                  // the news, low US reach; mainstream =
+                                  // clips reach a huge casual audience.
+                                  // Unsure = mainstream.
   "facts": [                      // exactly 4 {label, value} card
     {"label": str, "value": str}, // lines for the tab header - plain
     ...                           // client-safe sentences with the
@@ -207,15 +205,10 @@ round numbers, no two identical rates. Return STRICT JSON only:
     ...                           // (overlap allowed). Omit on a row
   ],                              // that is already one named thing.
   "anchors_note": str,            // internal: the public anchors used
-  "clickstream": {                // REQUIRED. Last tab on every journey.
-    "steps": [                    // 8 to 13 steps, each a subset of the
-      {"date": "YYYY-MM-DD",      // one above. 6 to 10 public URLs each.
-       "surface": str,            // search, official accounts, title
-       "action": str,             // pages, documented clips. No invented
-       "people": int,             // TikTok video IDs. URL people overlap
-       "urls": [{"url": "https://...",  // and do not sum to the step.
-                 "why": str,
-                 "share_of_step_pct": float}]}
+  "clickstream": {                // REQUIRED; rules below
+    "steps": [
+      {"date": "YYYY-MM-DD", "surface": str, "action": str, "people": int,
+       "urls": [{"url": "https://...", "why": str, "share_of_step_pct": float}]}
     ]
   },
   "before_after": {               // when journey_kind is before_after
@@ -236,37 +229,38 @@ round numbers, no two identical rates. Return STRICT JSON only:
 }
 
 Rules that do not move:
-- If the input carries corpus_anchors, Crosswalk already holds a read
-  on this subject. Reason the sub-window FROM those counts: every
-  matching stage lands at or below its anchor, the partitions and
-  the creators / publishers are the anchor's own, never placeholders
-  like "Creator 01". Two Crosswalk products never disagree on one title.
-  tracked_channels lists where the campaign's own assets sit; the
-  discovery mix still covers the whole exposed audience, so rows
-  outside that list (creator podcasts, reposts, search) stay when
-  the audience really met the title there.
+- LOOK AT WHAT WE ALREADY HOLD. If the input carries corpus_anchors,
+  Crosswalk already holds a read on this subject. Reason the sub-window
+  FROM those counts: every matching stage lands at or below its anchor;
+  the creators and publishers are the anchor's own, never placeholders
+  like "Creator 01"; the exposure / creator / editorial clickstream
+  steps use the tracked asset URLs it lists (never an invented
+  Instagram, TikTok, YouTube or Google search for a stage we already
+  track). Two Crosswalk products never disagree on one title.
+  tracked_channels is where the campaign's assets sit; rows outside it
+  (creator podcasts, reposts, search) stay when the audience really met
+  the title there.
 - The nest DECREASES: every share and kept rate must produce a strict
   subset of the stage above.
 - partition tables must have pcts that sum to ~100 (the code forces
   exactness); overlap tables may exceed 100 and each row stays under
   its parent.
-- WATCH JOURNEYS (a title on a streaming service) follow one standard
-  shape, the Babylon 5 file (2026-10-14). The nest is exactly four
-  stages after the TAM: "Saw a social post about <title>", "Clicked
-  through from the post to the title", "Opened the <title> page on
-  <platform>", "Watched an episode within 30 days of the post". The
-  detours are these ten, in this order, with these titles: "First
-  <title> post they saw" (partition of the social stage: the real post
-  families), "Where the first post sat" (partition of the social stage
-  by platform), "How many posts before they clicked through" (partition
-  of the click stage: 1 post, 2 to 3, 4 to 6, 7 to 10, 11 or more),
+- WATCH JOURNEYS (a title on a streaming service) follow the Babylon 5
+  standard (2026-10-14). Nest after the TAM, exactly:
+  "Saw a social post about <title>",
+  "Clicked through from the post to the title",
+  "Opened the <title> page on <platform>",
+  "Watched an episode within 30 days of the post".
+  Detours, in this order and with these titles:
+  "First <title> post they saw" (partition of the social stage, real post families),
+  "Where the first post sat" (partition by platform),
+  "How many posts before they clicked through" (partition of the click stage: 1 post, 2 to 3, 4 to 6, 7 to 10, 11 or more),
   "Where they looked before <platform>" (overlap of the click stage),
-  "Time from the social view to the first episode" (partition of the
-  conversion: Same day, Within 7 days (days 1 to 7), Within 30 days
-  (days 8 to 30)), "First episode they played" (partition, real episode
-  names), "Last touch before the watch" (partition), "What assisted the
-  watch" (overlap). The code adds the two overlap-with-the-window
-  sections. Any further table goes after these.
+  "Time from the social view to the first episode" (partition of the conversion: Same day, Within 7 days (days 1 to 7), Within 30 days (days 8 to 30)),
+  "First episode they played" (real names),
+  "Last touch before the watch",
+  "What assisted the watch" (overlap).
+  The code adds the two window-overlap sections; any further table follows these.
 - Other journeys include a first-touch partition and a last-touch
   partition and an assists overlap on the conversion count, plus a
   discovery-mix partition on the discovery stage - those four are the
@@ -276,11 +270,10 @@ Rules that do not move:
   of conversions, do not copy the fragrance file's shape - re-reason.
 - Rates are messy (never .0 / .5 endings), no two rates identical.
 - An aggregate detour row ("Creator podcast episodes and clips",
-  "Tracked media and editorial articles", "Reposts") carries a
-  breakdown of the REAL shows, episodes, outlets or sites behind it,
-  found by research, with each one's share of the row. A reader will
-  ask "which podcasts?" and the file must already hold the answer.
-  Never a placeholder name, never a show that did not cover the title.
+  "Reposts") carries a breakdown of the REAL shows, episodes, outlets
+  or sites behind it, each with its share of the row: a reader will ask
+  "which podcasts?" and the file already holds the answer. Never a
+  placeholder, never a show that did not cover the title.
 - Do not invent a sample / observed-file n. Never emit a sample field. The path counts are the file.
 - CONVERSION NORMS (2026-10-13). When the input carries `norms`, the
   whole-journey rate from the FIRST stage to the conversion stage MUST
@@ -294,41 +287,31 @@ Rules that do not move:
   converts a fraction of one percent of its social viewers inside 30
   days. A rate outside the band is corrected after the build; reason it
   right the first time.
-- clickstream is REQUIRED on every journey. 8 to 13 steps, 6 to 10
-  public https URLs on each step. Official accounts, search pages,
-  title pages, and documented clips only. Never invent a TikTok
-  video ID. A taken-down post is the creator account plus the public
-  pages that still name it. URL people overlap and do not add to the
-  step. cover_title is the subject name, not a finding.
-- Each clickstream step carries URLs for THAT step only. A creator
-  feed step carries Instagram / TikTok / YouTube creator pages. An
-  editorial step carries review and article pages. A ticketing step
-  carries real Fandango / AMC / Regal / Cinemark / Atom title pages
-  for this film, never a /search path. A search step carries typed
-  search. Never paste the same URL list onto every step.
-  Share-of-step percents must differ across steps.
-- LOOK AT WHAT WE ALREADY HOLD BEFORE BUILDING. If corpus_anchors
-  lists tracked asset URLs (creator posts, YouTube videos, editorial
-  articles from Attribution IQ), the exposure / "saw tracked campaign
-  content" / creator / editorial steps MUST use those URLs. Do not
-  invent Instagram search, TikTok search, YouTube search, or Google
-  search for a stage we already track. Search pages are only for a
-  typed-search step.
+- clickstream is REQUIRED on every journey: 8 to 13 steps, each a
+  subset of the one above, 6 to 10 public https URLs on each, for
+  THAT step only (a creator step carries creator pages, an editorial
+  step review and article pages, a ticketing step real Fandango / AMC
+  / Regal / Cinemark / Atom title pages for this film, a search step
+  typed search, never a /search path). Official accounts, title pages
+  and documented clips only; never an invented TikTok video ID; a
+  taken-down post is the creator account plus the public pages that
+  still name it. URL people overlap and do not add to the step; never
+  the same URL list on two steps; share-of-step percents differ across
+  steps. cover_title is the subject name, not a finding.
 
 Journey families. journey_kind in the input decides which:
 - "purchase": the shop family. The last stage is the paid event; the
   penultimate stage is the cart-like step (bag, buy page); the fork is
   left-without-paying -> retarget -> return -> paid return.
-- "watch": the clip-to-episode family. The last stage is the WATCH /
-  PLAY event itself (a behavior, not a payment); the penultimate stage
-  is the title / platform page; the fork is opened-but-did-not-watch
-  -> nudge or retarget -> came back -> watched after returning. Name
-  surfaces accordingly (clips, title pages, watch pages, continue
-  rows) - never force a bag or checkout onto a watch journey. Include
-  one detour table titled in plain words ("Where they watched it") for
-  accounts that reached the title but played it on a service they
-  already had. Never use internal labels such as "pixel-miss",
-  "class", "cohort id" or "partition" in anything the reader sees.
+- "watch": the clip-to-episode family. The last stage is the WATCH
+  event itself (a behavior, not a payment); the penultimate stage is
+  the title page; the fork is opened-but-did-not-watch -> nudge or
+  retarget -> came back -> watched after returning. Surfaces are clips,
+  title pages, watch pages, continue rows; never a bag or checkout.
+  Include one plain-words detour ("Where they watched it") for people
+  who played it on a service they already had. No internal labels
+  ("pixel-miss", "class", "cohort id", "partition") in anything the
+  reader sees.
 - "before_after": a named clip is the middle of the file. Stage 1 is
   the last surface in the 20 minutes before first play. The clip
   itself is a middle stage. Later stages are the first surface after,
@@ -351,22 +334,19 @@ plain TAM. The TAM row itself never changes.
 
 Movie tickets (journey_kind "ticketing"; Jenna 2026-10-05): the
 clickstream sees the visit to a ticketing site or app, never the
-purchase, and Crosswalk never predicts box office. For a film,
-theatrical release, or movie-ticket journey the LAST stage is "Went to
-the ticketing site for a ticket" (reached a ticketing site or circuit
-app for THIS title with a showtime in window). No stage, fact, fork surface, or detour may say bought,
-buyers, purchased, purchasers, paid, checkout completed, conversion,
-or box office, and nothing may imply a ticket was bought. The fork is
+purchase, and Crosswalk never predicts box office. The LAST stage is
+"Went to the ticketing site for a ticket" (reached a ticketing site or
+circuit app for THIS title with a showtime in window); every earlier
+stage is OFF the site (saw the campaign, looked the film up, looked up
+showtimes), and no order-page, seat-map, checkout or payment stage
+exists (those sit inside the site). No stage, fact, fork surface or
+detour may say bought, buyers, purchased, paid, checkout completed,
+conversion or box office, or imply a ticket was bought. The fork is
 left-before-the-ticketing-site -> retarget -> came back -> reached the
-ticketing site later. Detours divide the ticketing-site visitors (where they
-reached it, first touch, last touch, assists).
-Every stage before the last one is OFF the ticketing site (saw the
-campaign, acted on it, looked the film up, looked up showtimes in
-search or listings). Never emit an order page, seat map, checkout,
-or payment stage: those sit inside the ticketing site and would read
-as coming before the visit. The ticketing-site visit is the one
-terminal stage and the fork's "left" branch is people who looked up
-showtimes and did not reach a ticketing site in that session.
+site later; its "left" branch is people who looked up showtimes and did
+not reach a ticketing site that session. Detours divide the
+ticketing-site visitors (where they reached it, first touch, last
+touch, assists).
 """
 
 
@@ -400,8 +380,17 @@ _TICKETING_RE = re.compile(
     re.I)
 
 TICKETING_LAST_LABEL = 'Went to the ticketing site for a ticket'
-TICKETING_NO_CLAIM = ('No claim is made on whether a ticket was then '
-                      'bought; Crosswalk does not predict box office.')
+# The one sentence that says what the read does not see. It carries no
+# purchase word of its own (2026-10-21: 'then bought' was the only
+# purchase vocabulary left in a ticketing payload, and it was ours).
+TICKETING_NO_CLAIM = ('No claim is made on what happened after the '
+                      'ticketing site; Crosswalk does not predict box office.')
+# Keys whose strings are quoted third-party data, never our copy: a
+# tracked asset's own title or handle. The ticketing scrub leaves them
+# as written (a creator's Short titled '... Bought a Hat ...' is their
+# words, not a purchase claim of ours), which also keeps the scrub
+# idempotent once the clickstream tab is attached.
+_VERBATIM_KEYS = frozenset(('tracked_assets', 'url', 'urls', 'handle', 'channel_handle'))
 
 
 def is_ticketing_journey(inputs: dict, prim: Optional[dict] = None) -> bool:
@@ -544,8 +533,10 @@ def ticketing_text(text: str) -> str:
 
 
 def _walk_strings(obj, fn):
+    """Apply fn to every string in the payload except quoted third-party
+    data (_VERBATIM_KEYS: tracked asset titles, urls, handles)."""
     if isinstance(obj, dict):
-        return {k: _walk_strings(v, fn) for k, v in obj.items()}
+        return {k: (v if k in _VERBATIM_KEYS else _walk_strings(v, fn)) for k, v in obj.items()}
     if isinstance(obj, list):
         return [_walk_strings(v, fn) for v in obj]
     if isinstance(obj, str):

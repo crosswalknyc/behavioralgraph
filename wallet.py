@@ -1483,6 +1483,10 @@ _PULL_TYPE_TO_TOOL_KEY = {
     "attribution tracking setup":    "attribution_iq_setup",
     "attribution iq daily":          "attribution_iq_daily",
     "attribution daily refresh":     "attribution_iq_daily",
+    # assets added to a live campaign bill as one day's read (the
+    # chat's aiq_confirm add_to_slug path, 2026-10-16 Alexia; mapped
+    # 2026-10-21 so the refresh charges at the daily price)
+    "attribution iq refresh":        "attribution_iq_daily",
     "attribution iq ingest":         "intent_iq",
     "intent iq":                     "intent_iq",
     "intent ingest":                 "intent_iq",
