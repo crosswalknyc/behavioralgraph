@@ -30,6 +30,7 @@ from prometheus import intents as _intents   # product-intent gates (extracted 2
 from prometheus import subject_rules as _subject_rules   # the open profile is context, never a default subject (2026-10-20)
 from prometheus import creator_fit as _creator_fit   # a creator-fit read is held to the subject's universe (2026-10-20)
 from prometheus import intake_predicates as _intake_predicates   # pure text predicates (extracted 2026-10-20)
+from prometheus import subject_display as _subject_display   # a reader sees a name, never a key (2026-10-22)
 import io
 import hashlib
 import time
@@ -131,7 +132,13 @@ def _profile_catalog_for_chat():
             continue
         display = (j.get('display_name') or j.get('project_name')
                     or j.get('profile_subject') or s3_key).strip()
-        subject = (j.get('profile_subject') or j.get('subject') or display).strip()
+        # The subject is the name a reader sees. On 137 catalog files
+        # `profile_subject` is the upper-snake file stem
+        # (BEST_OF_THE_BEST, 2_CHAINZ); it is matching material, never a
+        # label (2026-10-22, the counting block in Casey Pearson's
+        # Jackass: Best & Last thread printed it). Display name wins.
+        subject = _subject_display.display(
+            (j.get('profile_subject') or j.get('subject') or '').strip(), display) or display
         cat = (j.get('category') or '').strip()
         lm_iso = j.get('last_modified') or j.get('created_at')
         # Age from the filename timestamp first (immutable build stamp);
@@ -12046,8 +12053,10 @@ def _pm_generation_base(subject_hint, text, ctx=None,
                          'source': 'page'}
 
     def _tokens(s):
-        return [w for w in _H._normalize_for_match(s).split()
-                if w not in _PM_BASE_GENERIC_TOKENS]
+        # Distinct: 'BEST OF THE BEST' is one ordinary word (2026-10-22)
+        return list(dict.fromkeys(
+            w for w in _H._normalize_for_match(s).split()
+            if w not in _PM_BASE_GENERIC_TOKENS))
 
     # Subject-conflict guard (2026-09-24, the PA-09 hold): an ask that
     # NAMES ITS OWN SUBJECT must never silently ride the open page as
@@ -13916,14 +13925,16 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
     # The answer opens by naming the audience it used (2026-09-29
     # Jenna: the screen no longer binds by default, so the binding is
     # stated up front and a wrong one is visible in the first line).
-    _aud = str(res.get('subject') or '').strip()
-    if str(res.get('cohort') or '').strip():
-        _aud = f"{_aud} - {str(res.get('cohort')).strip()}"
+    # The opener and the counting block name the same audience, as a
+    # reader would say it: subject plus cohort once ('On Mountain Dew
+    # drinkers who watch scary movies - Mountain Dew drinkers who watch
+    # scary movies:' shipped on 2026-10-21), never a key.
+    from prometheus import methodology as _meth
+    _aud = _meth.audience_label(res, '')
     if _aud and _aud.lower() not in str(reply or '')[:90].lower():
         reply = f"On {_aud}:\n\n{reply}"
     # Counting block under every viewership figure (Liz 2026-10-08).
     try:
-        from prometheus import methodology as _meth
         reply = _meth.ensure(reply, res, question=text,
                              base_label=str(base.get('subject') or ''),
                              domain=str(base.get('domain') or ''),

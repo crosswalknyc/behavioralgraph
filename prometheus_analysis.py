@@ -3540,6 +3540,15 @@ def scrub_user_text(text):
         s = _guards.scrub_method_language(s)
     except Exception as _fx:
         _faults.note('analysis', _fx)
+    # Internal key shapes (2026-10-22: "Base: the BEST_OF_THE_BEST
+    # audience" reached a client thread from a file stem): an upper
+    # snake key or a dated profile stem outside a URL is rendered as
+    # the name it stands for. A reader sees a name, never a key.
+    try:
+        from prometheus import subject_display as _sd
+        s = _sd.scrub_keys(s)
+    except Exception as _fx:
+        _faults.note('analysis', _fx)
     s = re.sub(r'[ \t]{2,}', ' ', s)
     return s
 

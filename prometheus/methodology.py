@@ -17,6 +17,8 @@ from __future__ import annotations
 import re
 from datetime import date, datetime
 
+from prometheus import subject_display as _display
+
 HEADER = 'How these are counted:'
 
 # What a viewership figure looks like in a reply or an ask.
@@ -137,18 +139,22 @@ def block(window_start=None, window_end=None, window_label='',
     lines = [HEADER]
     if win:
         lines.append(f"- Window: {win}.")
-    base = str(base_label or '').strip()
+    # A reader sees a name, never a key (2026-10-22: "Base: the
+    # BEST_OF_THE_BEST audience" reached Casey Pearson's thread from a
+    # file stem).
+    base = _display.display(str(base_label or '').strip())
     people = None
     try:
         people = int(float(base_people)) if base_people not in (None, '') else None
     except (TypeError, ValueError):
         people = None
     if base:
+        who = base if _NAMES_PEOPLE_RX.search(base) else f"the {base} audience"
         if people:
-            lines.append(f"- Base: the {base} audience ({people:,} US viewers), "
+            lines.append(f"- Base: {who} ({people:,} US viewers), "
                          f"{BASE_SAMPLE}.")
         else:
-            lines.append(f"- Base: the {base} audience, {BASE_SAMPLE}.")
+            lines.append(f"- Base: {who}, {BASE_SAMPLE}.")
     else:
         lines.append(f"- Base: {BASE_SAMPLE[0].upper() + BASE_SAMPLE[1:]}.")
     lines.append(f"- {VIEW_HEADER} {VIEW_DEFINITION}")
@@ -203,6 +209,34 @@ def ensure_period_note(reply, question=''):
         return reply
 
 
+def audience_label(res=None, base_label=''):
+    """The audience the Base line names: the subject the read is about
+    (with its cohort), as the reader would say it. The profile the read
+    was derived from is a fallback, never a label when it is a key, and
+    never shown over the audience itself (2026-10-22: a Jackass: Best &
+    Last read derived off another file named that file's stem)."""
+    res = res if isinstance(res, dict) else {}
+    subj = _display.display(str(res.get('subject') or '').strip())
+    cohort = _display.display(str(res.get('cohort') or '').strip())
+    if subj:
+        if not cohort or cohort.lower() in subj.lower():
+            return subj
+        if subj.lower() in cohort.lower():
+            return cohort          # 'Paramount+ - Avid Fan' already names the subject
+        if cohort[:1].islower():
+            return f"{subj} {cohort}"   # 'Jackass: Best & Last viewers on Paramount+'
+        return f"{subj} - {cohort}"
+    return _display.display(str(base_label or res.get('_base_label') or '').strip())
+
+
+# A label that already names people reads as itself on the Base line
+# ('Base: Jackass: Best & Last viewers on Paramount+'), a bare subject
+# takes the 'the X audience' frame.
+_NAMES_PEOPLE_RX = re.compile(
+    r"\b(?:viewers?|fans?|audience|subscribers?|buyers?|shoppers?|listeners?|"
+    r"players?|users?|members?|customers?|readers?|voters?|households?|people)\b", re.I)
+
+
 def ensure(reply, res=None, question='', base_label='', base_people=None,
            domain='', view_context=None):
     """Append the counting block to a viewership reply once. A reply
@@ -238,7 +272,7 @@ def ensure(reply, res=None, question='', base_label='', base_people=None,
         lines = block(window_start=res.get('window_start'),
                       window_end=res.get('window_end'),
                       window_label=res.get('window_label') or '',
-                      base_label=base_label or res.get('_base_label') or '',
+                      base_label=audience_label(res, base_label),
                       base_people=base_people if base_people is not None
                       else res.get('_base_people'),
                       text=text)
