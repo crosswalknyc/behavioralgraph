@@ -529,6 +529,15 @@ def _claude_copy(subject, preheader, excerpt):
 
 
 def _font_path(weight="Bold"):
+    """Crosswalk Inter from the crosswalk-design pack (2026-10-21); the
+    Inter 18pt bundle only when the pack is absent on this machine."""
+    try:
+        from migration import design_skill as _ds
+        p = _ds.font_path(weight)
+        if p and Path(p).name.startswith("CrosswalkInter"):
+            return str(p)
+    except Exception:
+        pass
     name = f"Inter_18pt-{weight}.ttf"
     for folder in _FONT_DIRS:
         path = Path(folder) / name

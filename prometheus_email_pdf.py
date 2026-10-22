@@ -84,16 +84,23 @@ def _register_inter():
     from reportlab.pdfbase.ttfonts import TTFont
     if _INTER_REGISTERED:
         return _INTER_FAMILY
+    # 2026-10-21: Crosswalk Inter from the crosswalk-design pack first;
+    # the Inter 18pt bundle only when the pack is absent on this machine.
+    _pack = None
+    try:
+        from migration import design_skill as _ds
+        _pack = _ds if _ds.using_house_font() else None
+    except Exception:
+        _pack = None
     font_dir = _find_font_dir()
-    if font_dir is None:
+    if font_dir is None and _pack is None:
         return _HELV_FAMILY
     try:
-        for suffix, fname in (("", "Inter_18pt-Regular.ttf"),
-                              ("-Bold", "Inter_18pt-Bold.ttf"),
-                              ("-Medium", "Inter_18pt-Medium.ttf"),
-                              ("-Light", "Inter_18pt-Light.ttf")):
-            fp = font_dir / fname
-            if fp.is_file():
+        for suffix, weight in (("", "Regular"), ("-Bold", "Bold"),
+                               ("-Medium", "Medium"), ("-Light", "Light")):
+            fp = _pack.font_path(weight) if _pack is not None else (font_dir / f"Inter_18pt-{weight}.ttf")
+            fp = Path(str(fp)) if fp else None
+            if fp is not None and fp.is_file():
                 pdfmetrics.registerFont(TTFont(_INTER_FAMILY + suffix,
                                                str(fp)))
     except Exception:
@@ -262,7 +269,8 @@ def _render(title, body_text, date_label, table_highlight_prefix):
     doc = BaseDocTemplate(
         buf, pagesize=letter, leftMargin=margin, rightMargin=margin,
         topMargin=margin, bottomMargin=margin + 12,
-        title=_clean(title), author="Crosswalk")
+        title=_clean(title), author="Crosswalk",
+        initialFontName=_font(fam) if fam != _HELV_FAMILY else "Helvetica")
     frame = Frame(margin, margin + 12, content_w,
                   page_h - 2 * margin - 12, leftPadding=0, rightPadding=0,
                   topPadding=0, bottomPadding=0)

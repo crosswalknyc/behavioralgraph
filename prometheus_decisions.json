@@ -1,6 +1,6 @@
 {
  "version": 1,
- "content_hash": "09ce01dcbadbdb56183177c4c4dd8713dadbb665baac83fd2cf35cdf227bce01",
+ "content_hash": "34d8fe0d42a6310a1544a3d06df3777dc49f6528e555ccbb39e2a22c519521aa",
  "decisions": [
   {
    "id": "kids_viewers_default",
@@ -786,7 +786,47 @@
    "sources": [
     "prometheus-brain.md"
    ]
+  },
+  {
+   "id": "every_file_in_crosswalk_inter_embedded_and_checked",
+   "decided": "2026-10-21",
+   "statement": "Every file handed to a reader (a deck, a Word document, a PDF, an HTML page, a chart, a newsletter) is set in Crosswalk Inter with the font embedded, and it passes the house brand check before it goes out: the Graphite Teal and Off-White grounds, Signal Green or Orchid as the one accent on dark and their Olive and Amethyst twins on light, a gradient page in every deck, backgrounds set as backgrounds, the logo at its native proportions, no more than three dark pages in a row, headers of one sentence and twelve words or fewer. A deck starts from the approved 27-layout template; a statement of work, a 30-day proof of concept, a platform access proposal, a newsletter issue and an email signature start from their approved templates, every blank filled in. Product descriptions use the approved wording for Profile IQ, Subscriber IQ, Digital Journey IQ, Attribution IQ, Brand Partnership IQ and Trends IQ. When the file is handed over, one line says Crosswalk Inter is embedded and the check passed; nothing about the tooling or what was adjusted reaches the reader.",
+   "match_terms": [
+    "deck",
+    "powerpoint",
+    "pptx",
+    "slides",
+    "slide",
+    "one-pager",
+    "one pager",
+    "proposal",
+    "statement of work",
+    "sow",
+    "proof of concept",
+    "poc",
+    "newsletter",
+    "the read",
+    "signature",
+    "word doc",
+    "docx",
+    "pdf",
+    "font",
+    "typeface",
+    "brand",
+    "on brand",
+    "design",
+    "template",
+    "logo",
+    "color",
+    "colour",
+    "palette",
+    "layout"
+   ],
+   "sources": [
+    "prometheus-brain.md",
+    "crosswalk-design/SKILL.md"
+   ]
   }
  ],
- "generated_at": "2026-10-22T00:26:30Z"
+ "generated_at": "2026-10-22T00:45:55Z"
 }

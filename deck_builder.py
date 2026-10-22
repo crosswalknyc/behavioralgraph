@@ -87,21 +87,44 @@ def _spc(run, hundredths):
 _FONT_REG = {"done": False, "ok": False}
 
 
-def _font_dir():
-    here = os.path.dirname(os.path.abspath(__file__))
-    cands = []
+def _design():
+    """The crosswalk-design pack resolver (2026-10-21: fonts, tokens,
+    templates and the finishing checks come from the locked skill)."""
+    try:
+        from migration import design_skill as _ds
+        return _ds
+    except Exception:
+        return None
+
+
+def _font_file(weight):
+    """The TTF for a weight: Crosswalk Inter from the design pack, the
+    legacy Inter 18pt file only when the pack is absent on this machine.
+    PROMETHEUS_PDF_FONT_DIR still wins when set (ops override)."""
     env = os.environ.get("PROMETHEUS_PDF_FONT_DIR")
     if env:
-        cands.append(env)
-    cands.append(os.path.join(here, "static", "fonts"))
-    cands.append(os.path.join(
-        os.path.dirname(here), ".cursor", "skills",
-        "crosswalk-brand-standards", "assets", "fonts"))
-    for c in cands:
-        if c and os.path.isdir(c) and os.path.exists(
-                os.path.join(c, "Inter_18pt-Regular.ttf")):
-            return c
+        for stem in ("CrosswalkInter", "Inter_18pt"):
+            cand = os.path.join(env, f"{stem}-{weight}.ttf")
+            if os.path.exists(cand):
+                return cand
+    ds = _design()
+    if ds is not None:
+        p = ds.font_path(weight)
+        if p:
+            return str(p)
+    here = os.path.dirname(os.path.abspath(__file__))
+    for d in (os.path.join(here, "static", "fonts"),
+              os.path.join(os.path.dirname(here), ".cursor", "skills",
+                           "crosswalk-brand-standards", "assets", "fonts")):
+        cand = os.path.join(d, f"Inter_18pt-{weight}.ttf")
+        if os.path.exists(cand):
+            return cand
     return None
+
+
+def _font_dir():
+    f = _font_file("Regular")
+    return os.path.dirname(f) if f else None
 
 
 def _ensure_fonts():
@@ -111,13 +134,11 @@ def _ensure_fonts():
     try:
         from reportlab.pdfbase import pdfmetrics
         from reportlab.pdfbase.ttfonts import TTFont
-        d = _font_dir()
-        if not d:
+        reg, bold = _font_file("Regular"), _font_file("Bold")
+        if not reg or not bold:
             return False
-        pdfmetrics.registerFont(TTFont(
-            "CWDeckR", os.path.join(d, "Inter_18pt-Regular.ttf")))
-        pdfmetrics.registerFont(TTFont(
-            "CWDeckB", os.path.join(d, "Inter_18pt-Bold.ttf")))
+        pdfmetrics.registerFont(TTFont("CWDeckR", reg))
+        pdfmetrics.registerFont(TTFont("CWDeckB", bold))
         _FONT_REG["ok"] = True
     except Exception:
         _FONT_REG["ok"] = False
@@ -205,6 +226,31 @@ def txt(s, x, y, w, h, text, *, size=12, bold=False, color=GRAPHITE,
         _face(r, face)
         if spc is not None:
             _spc(r, spc)
+    return box
+
+
+def slide_number(s, x, y, w, h, page, *, size=8, color=GRAPHITE, font="Crosswalk Inter"):
+    """The page number as a slide-number field (the design pack fails a
+    typed one): PowerPoint keeps it right when pages move."""
+    box = s.shapes.add_textbox(x, y, w, h)
+    tf = box.text_frame
+    tf.word_wrap = True
+    tf.margin_left = tf.margin_right = tf.margin_top = tf.margin_bottom = 0
+    para = tf.paragraphs[0]
+    para.alignment = PP_ALIGN.RIGHT
+    hex6 = "%02X%02X%02X" % (color[0], color[1], color[2])
+    fld = etree.SubElement(para._p, A_NS + "fld")
+    fld.set("id", "{B6F15528-21DE-4FAA-801E-634DDDAF4B2B}")
+    fld.set("type", "slidenum")
+    rPr = etree.SubElement(fld, A_NS + "rPr")
+    rPr.set("lang", "en-US")
+    rPr.set("sz", str(int(size * 100)))
+    rPr.set("b", "0")
+    sf = etree.SubElement(rPr, A_NS + "solidFill")
+    etree.SubElement(sf, A_NS + "srgbClr").set("val", hex6)
+    for tag in ("latin", "ea", "cs"):
+        etree.SubElement(rPr, A_NS + tag).set("typeface", font)
+    etree.SubElement(fld, A_NS + "t").text = str(page)
     return box
 
 
@@ -460,7 +506,10 @@ class _Deck:
 
     def new_slide(self, dark=False, fill=None):
         s = self.prs.slides.add_slide(self.prs.slide_layouts[6])
-        rect(s, 0, 0, SW, SH, fill or (GRAPHITE if dark else OFFWHITE))
+        # the page color is the slide background, never a full-page shape
+        # (the design pack, 2026-10-21)
+        s.background.fill.solid()
+        s.background.fill.fore_color.rgb = fill or (GRAPHITE if dark else OFFWHITE)
         self.page += 1
         self.content_top = 2.330
         return s
@@ -505,8 +554,8 @@ class _Deck:
         foot_c = FOOTER if not orchid else ORCHID_FOOT
         txt(s, M, Inches(7.080), Inches(8.2), Inches(0.22),
             foot, size=8, color=foot_c, spc=160 if page == 1 else 200)
-        txt(s, Inches(10.183), Inches(7.080), Inches(2.230), Inches(0.22),
-            str(page), size=8, color=foot_c, align=PP_ALIGN.RIGHT)
+        slide_number(s, Inches(10.183), Inches(7.080), Inches(2.230), Inches(0.22),
+                     page, size=8, color=foot_c)
 
 
 def _bar(s, x, y, track_w, frac, *, accent=False, h=0.17, dark=False):
@@ -576,8 +625,8 @@ def _sl_cover(d, sl):
         x += w + GUT
     txt(s, M, Inches(7.080), Inches(8.2), Inches(0.22),
         "CONFIDENTIAL", size=8, color=FOOTER, spc=160)
-    txt(s, Inches(10.183), Inches(7.080), Inches(2.230), Inches(0.22),
-        str(d.page), size=8, color=FOOTER, align=PP_ALIGN.RIGHT)
+    slide_number(s, Inches(10.183), Inches(7.080), Inches(2.230), Inches(0.22),
+                 d.page, size=8, color=FOOTER)
 
 
 def _cards_2x2(d, s, cards, dark):
@@ -1017,9 +1066,20 @@ SLIDE_TYPES = tuple(_RENDERERS.keys())
 
 
 def _resolve_logos(static_dir):
-    """Prefer the brand lockups shipped in static/; fall back to the
+    """The real lockups from the crosswalk-design pack first (transparent,
+    4736 x 600; 2026-10-21), then the copies in static/, then the older
     skill assets when running from the repo root (local tests)."""
     cands_w, cands_k = [], []
+    ds = _design()
+    if ds is not None:
+        try:
+            pw, pk = ds.logo_path("white"), ds.logo_path("black")
+            if pw:
+                cands_w.append(str(pw))
+            if pk:
+                cands_k.append(str(pk))
+        except Exception:
+            pass
     if static_dir:
         cands_w.append(os.path.join(static_dir,
                                     "crosswalk-logo-brand-white.png"))
@@ -1125,4 +1185,13 @@ def render_insights_deck(plan, out_path, static_dir=None,
         rendered += 1
     prs.save(out_path)
     _apply_theme_faces(out_path)
+    # 2026-10-21 (Jenna: the design skill is always used): every delivered
+    # deck carries Crosswalk Inter embedded and passes the pack's checks.
+    # The finish fixes in place and never holds the file.
+    ds = _design()
+    if ds is not None:
+        try:
+            ds.finish(out_path)
+        except Exception:
+            pass
     return rendered

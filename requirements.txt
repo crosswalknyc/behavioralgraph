@@ -66,3 +66,7 @@ psycopg2-binary>=2.9
 # session with a headless browser (build.sh installs Chromium into
 # PLAYWRIGHT_BROWSERS_PATH). Same major line as the build server (1.61).
 playwright>=1.47,<2
+
+# The crosswalk-design pack embeds Crosswalk Inter into every delivered
+# deck and document (cw_embed_fonts.py, 2026-10-21); the embed needs fontTools.
+fonttools>=4.50.0

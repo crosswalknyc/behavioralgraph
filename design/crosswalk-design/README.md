@@ -1,0 +1,1 @@
+Packaged copy of the crosswalk-design skill for the deployed app (fonts, logo, tokens, metrics, the deck / SOW / POC templates and the finishing scripts). The full skill, with SKILL.md and every reference and template, is .cursor/skills/crosswalk-design in the parent repo. Do not edit here: run scripts/sync_design_pack.py after the skill changes.

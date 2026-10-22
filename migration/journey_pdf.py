@@ -50,23 +50,39 @@ def _pct(part, whole, nd=1) -> str:
         return ''
 
 
+def _font_file(weight: str):
+    """Crosswalk Inter from the crosswalk-design pack (2026-10-21, the
+    locked skill); the legacy Inter 18pt file under static/fonts only when
+    the pack is absent on this machine."""
+    try:
+        from migration import design_skill as _ds
+        p = _ds.font_path(weight)
+        if p:
+            return Path(p)
+    except Exception:
+        pass
+    p = _FONT_DIR / f'Inter_18pt-{weight}.ttf'
+    return p if p.exists() else None
+
+
 def _fonts():
-    """Register Inter 18pt when the files ship with the app; Helvetica otherwise."""
+    """Register the house family (Crosswalk Inter; Inter 18pt as the
+    fallback) under the Inter18-* face names every renderer uses;
+    Helvetica when neither is on the machine."""
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.ttfonts import TTFont
-    names = {'regular': 'Inter_18pt-Regular.ttf', 'medium': 'Inter_18pt-Medium.ttf',
-             'bold': 'Inter_18pt-Bold.ttf', 'light': 'Inter_18pt-Light.ttf'}
+    weights = {'regular': 'Regular', 'medium': 'Medium', 'bold': 'Bold', 'light': 'Light'}
     out = {}
-    for key, fn in names.items():
-        path = _FONT_DIR / fn
+    for key, w in weights.items():
+        path = _font_file(w)
         face = f"Inter18-{key}"
         try:
-            if path.exists():
+            if path is not None and path.exists():
                 if face not in pdfmetrics.getRegisteredFontNames():
                     pdfmetrics.registerFont(TTFont(face, str(path)))
                 out[key] = face
             else:
-                raise FileNotFoundError(fn)
+                raise FileNotFoundError(w)
         except Exception:
             out[key] = {'regular': 'Helvetica', 'medium': 'Helvetica', 'bold': 'Helvetica-Bold', 'light': 'Helvetica'}[key]
     return out
@@ -173,8 +189,10 @@ class _Doc:
         from reportlab.pdfgen import canvas
         self.buf = io.BytesIO()
         self.W, self.H = landscape(letter)
-        self.c = canvas.Canvas(self.buf, pagesize=(self.W, self.H))
         self.f = _fonts()
+        # the canvas opens on the house face: reportlab's default preamble
+        # would otherwise write Helvetica (never embedded) into every page
+        self.c = canvas.Canvas(self.buf, pagesize=(self.W, self.H), initialFontName=self.f['regular'])
         self.page = 0
         self.m = 0.92 * 72                       # grid starts at 0.920 in
         self.right = self.W - 0.587 * 72          # ends at 12.413 in on an 11 x 8.5 sheet, scaled
@@ -406,7 +424,18 @@ def _rows_for(section: Optional[dict], base: Optional[int] = None, limit: int = 
 
 
 def build_pdf(payload: dict) -> bytes:
-    """The analysis PDF for a journey payload (gold shape preferred; any journey renders)."""
+    """The analysis PDF for a journey payload (gold shape preferred; any
+    journey renders). Every PDF leaves through the design pack's check
+    (2026-10-21: embedded fonts verified; the file is never held)."""
+    data = _build_pdf(payload)
+    try:
+        from migration import design_skill as _ds
+        return _ds.finish_bytes(data, '.pdf')
+    except Exception:
+        return data
+
+
+def _build_pdf(payload: dict) -> bytes:
     import copy
     from migration import journey_gold as G
     if G.is_media_week_journey(payload):

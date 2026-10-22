@@ -66,11 +66,30 @@ MUTED_DK  = RGBColor(0x8F, 0x94, 0x8C)   # muted text on dark
 SLIDE_W = Inches(13.333)
 SLIDE_H = Inches(7.5)
 
-# Font stack - python-pptx writes font names directly into the XML; if
-# the viewer doesn't have these, PowerPoint substitutes automatically.
-FONT_DISPLAY = "Helvetica Neue"
-FONT_BODY    = "Helvetica Neue"
-FONT_NUMERIC = "Helvetica Neue"
+# Font: the house face, Crosswalk Inter, from the crosswalk-design pack
+# (2026-10-21, Jenna: the design skill is always used). Helvetica Neue
+# and Arial are retired faces in an Office file. The finish step at the
+# end of build_deck embeds the family so a reader without the font still
+# sees the deck as built.
+def _design():
+    try:
+        from migration import design_skill as _ds
+        return _ds
+    except Exception:
+        return None
+
+
+def _house_face(weight: str = "Regular") -> str:
+    ds = _design()
+    try:
+        return ds.family_name(weight) if ds is not None else "Crosswalk Inter"
+    except Exception:
+        return "Crosswalk Inter"
+
+
+FONT_DISPLAY = _house_face("Regular")
+FONT_BODY    = _house_face("Regular")
+FONT_NUMERIC = _house_face("Regular")
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -139,13 +158,60 @@ def safe_filename(s: str) -> str:
 #  builders read closer to a layout-DSL than raw XML wrangling.
 # ─────────────────────────────────────────────────────────────────────
 def _add_bg(slide, color: RGBColor):
-    """Solid full-bleed background rectangle."""
-    bg = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, 0, 0, SLIDE_W, SLIDE_H)
-    bg.line.fill.background()
-    bg.fill.solid()
-    bg.fill.fore_color.rgb = color
-    bg.shadow.inherit = False
-    return bg
+    """The page color, set as the slide background (2026-10-21, the
+    crosswalk-design pack: never a full-page shape acting as one)."""
+    slide.background.fill.solid()
+    slide.background.fill.fore_color.rgb = color
+    return None
+
+
+def _line_count(text: str, size_pt: float, width_in: float, *, bold: bool = False) -> int:
+    """How many lines a run wraps to at this width, by the design pack's
+    own wrap model (falls back to a width estimate when the pack is absent)."""
+    pack = _design()
+    mod = pack.lint_module() if pack is not None else None
+    words = str(text or "").split()
+    if not words:
+        return 1
+    if mod is not None:
+        try:
+            wt = mod._weight_key(FONT_DISPLAY, bold)
+            chars = [(ch, wt, float(size_pt), 0.0) for ch in str(text)]
+            return max(1, max(len(mod._wrap(chars, width_in * 72 * k)) for k in mod.WRAP_SCALES))
+        except Exception:
+            pass
+    est = len(str(text)) * size_pt * (0.56 if bold else 0.52) / 72
+    return max(1, int(est // width_in) + 1)
+
+
+def _fit_lines(text: str, sizes, width_in: float, *, bold: bool = False, max_lines: int = 1) -> float:
+    """The largest size in `sizes` at which `text` fits in `max_lines`."""
+    for sz in sizes:
+        if _line_count(text, sz, width_in, bold=bold) <= max_lines:
+            return sz
+    return sizes[-1]
+
+
+def _crop_to_fill(pic):
+    """Crop a placed picture to its slot's proportions instead of
+    stretching it (the design pack fails a stretched image)."""
+    try:
+        from PIL import Image
+        with Image.open(io.BytesIO(pic.image.blob)) as im:
+            nw, nh = im.size
+    except Exception:
+        return
+    if not (nw and nh and pic.width and pic.height):
+        return
+    native, placed = nw / nh, pic.width / pic.height
+    if abs(native - placed) / placed < 0.02:
+        return
+    if native > placed:          # too wide: trim the sides
+        keep = placed / native
+        pic.crop_left = pic.crop_right = (1 - keep) / 2
+    else:                        # too tall: trim top and bottom
+        keep = native / placed
+        pic.crop_top = pic.crop_bottom = (1 - keep) / 2
 
 
 def _add_text(
@@ -181,7 +247,27 @@ def _add_text(
         "center": PP_ALIGN.CENTER,
         "right":  PP_ALIGN.RIGHT,
     }.get(align, PP_ALIGN.LEFT)
-    paragraphs = str(text).split("\n")
+    text = str(text)
+    if 0 < size < 9:
+        size = 9          # the design pack's floor: notes run at 9pt, body at 10pt
+    if size >= 26:
+        # a headline is one paragraph that wraps on its own (the design
+        # pack fails a sentence split across paragraphs by hand)
+        text = " ".join(part.strip() for part in text.split("\n") if part.strip())
+    paragraphs = text.split("\n")
+    if size >= 10 and len(paragraphs) == 1 and len(text.split()) >= 4:
+        # a sentence never ends on a lone word: the box is narrowed (never
+        # widened) until the pack's own wrap model puts two words on the
+        # last line. Dates and figures change per deck, so this is settled
+        # here, not in the copy.
+        try:
+            _pack = _design()
+            safe = _pack.widow_safe_width(text, size, Emu(width).inches, bold=bold, face=font,
+                                          tracking_pt=letter_spacing) if _pack is not None else None
+            if safe and safe < Emu(width).inches:
+                box.width = Inches(safe)
+        except Exception:
+            pass
     for i, para_text in enumerate(paragraphs):
         if i == 0:
             p = tf.paragraphs[0]
@@ -194,7 +280,9 @@ def _add_text(
         r.font.name = font
         r.font.size = Pt(size)
         r.font.bold = bold
-        r.font.italic = italic
+        # the house family ships upright faces only; italics never render
+        # as Crosswalk Inter, so an italic request sets a quiet weight instead
+        r.font.italic = False
         r.font.color.rgb = color
     return box
 
@@ -380,7 +468,16 @@ def _generate_typographic_hero(text: str, palette: str = "dark") -> str:
     d = ImageDraw.Draw(im)
     # Try a few candidate fonts; fall back to Pillow's default if none
     # are present (the test environment ships a couple of system fonts).
-    font_path_candidates = [
+    font_path_candidates = []
+    _ds = _design()
+    if _ds is not None:
+        try:
+            _fp = _ds.font_path("Bold")
+            if _fp:
+                font_path_candidates.append(str(_fp))
+        except Exception:
+            pass
+    font_path_candidates += [
         "/System/Library/Fonts/HelveticaNeue.ttc",
         "/System/Library/Fonts/Supplemental/Arial Black.ttf",
         "/System/Library/Fonts/Helvetica.ttc",
@@ -617,10 +714,11 @@ def _period_label(period: dict, fallback: str = "") -> str:
     end   = _fmt_date(str(period.get("end")   or ""))
     days  = period.get("days")
     if start and end:
-        base = f"from {start} to {end}"
+        # the window length leads and the dates close the sentence, so the
+        # last line never ends on a lone "window)."
         if isinstance(days, (int, float)) and days > 0:
-            base += f" ({int(days)}-day window)"
-        return base
+            return f"across the {int(days)} days from {start} to {end}"
+        return f"from {start} to {end}"
     return fallback
 
 
@@ -717,8 +815,8 @@ def _final_insight_lines(ctx: DeckCtx) -> tuple[str, str]:
         return (
             f"A directional {lift_rel:.1f}% adjusted lift,",
             "not statistically distinguishable from zero at this sample "
-            "size. Signal is consistent with a genuine but small "
-            "sponsorship effect.",
+            "size. The signal is consistent with a small but genuine "
+            "effect from this sponsorship.",
         )
     # Extract the talent / qualifier name from the project title
     # (split on the LISA-style '×' character; fall back to 'the
@@ -766,11 +864,12 @@ def _slide_cover(prs, ctx: DeckCtx, idx: int, total: int):
     # aspect during download so the photo isn't deformed here).
     if ctx.cover_image:
         try:
-            s.shapes.add_picture(
+            pic = s.shapes.add_picture(
                 ctx.cover_image,
                 Inches(5.8), Inches(0),
                 width=Inches(7.6), height=Inches(7.5),
             )
+            _crop_to_fill(pic)
         except Exception:
             pass
     # Left-hand title stack. Title font size is scaled to length so
@@ -1996,12 +2095,20 @@ def _slide_final_insight(prs, ctx: DeckCtx, idx: int, total: int):
     _eyebrow(s, Inches(0.6), Inches(0.6),
              _section_label(idx, "The Final Insight"), on_dark=False)
     l1, l2 = _final_insight_lines(ctx)
-    _add_text(s, Inches(0.6), Inches(2.2), Inches(12.1), Inches(1.6),
-              l1, size=64, bold=True, color=FG_DARK,
+    # the two lines are a claim and its reading: a short reading keeps the
+    # display size, a sentence-length one steps down so it fits the page
+    # (a 64pt sentence ran off the slide on non-significant reads)
+    size1 = _fit_lines(l1, (64, 56, 48, 44, 40, 36), 12.1, bold=True, max_lines=1)
+    lines1 = _line_count(l1, size1, 12.1, bold=True)
+    h1 = max(1.0, lines1 * size1 * 1.05 / 72 + 0.15)
+    size2 = 64 if len(l2.split()) <= 6 else 28
+    y2 = 2.2 + h1 + 0.15
+    _add_text(s, Inches(0.6), Inches(2.2), Inches(12.1), Inches(h1),
+              l1, size=size1, bold=True, color=FG_DARK,
               font=FONT_DISPLAY, spacing=0.95)
-    _add_text(s, Inches(0.6), Inches(3.6), Inches(12.1), Inches(1.6),
-              l2, size=64, bold=True, color=FG_DARK,
-              font=FONT_DISPLAY, spacing=0.95)
+    _add_text(s, Inches(0.6), Inches(y2), Inches(12.1), Inches(1.6 if size2 == 64 else 2.0),
+              l2, size=size2, bold=(size2 == 64), color=FG_DARK,
+              font=FONT_DISPLAY, spacing=0.95 if size2 == 64 else 1.15)
     # C10: previously the strip showed both a relative-adjusted-lift
     # figure (from _final_insight_lines) and a raw-relative-lift
     # figure (delta_rel) on the same slide with no labels, so a
@@ -2101,7 +2208,7 @@ def _slide_source(prs, ctx: DeckCtx, idx: int, total: int):
         ("BRAND LIFT",
          _matched_group_lines(ctx.data.get("control_group") or {})[0]
          + " The lift is the exposed group's change in brand engagement "
-           "minus the matched group's change over the same windows, so a "
+           "minus the matched group's change over the same windows. A "
            "difference that was already there before the partnership "
            "never reads as lift."
          + ((" " + _matched_group_lines(ctx.data.get("control_group") or {})[1])
@@ -2201,6 +2308,14 @@ def build_deck(data: dict,
 
     out = io.BytesIO()
     prs.save(out)
+    # 2026-10-21: the delivered deck carries Crosswalk Inter embedded and
+    # passes the pack's checks (fixed in place; never held).
+    _ds = _design()
+    if _ds is not None:
+        try:
+            out = io.BytesIO(_ds.finish_bytes(out.getvalue(), ".pptx"))
+        except Exception:
+            pass
 
     # Best-effort cleanup of any tmp files we materialized. Only
     # delete paths that live under the system temp dir - the shipped

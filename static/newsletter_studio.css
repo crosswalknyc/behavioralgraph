@@ -1,11 +1,19 @@
 @font-face { font-family: 'Inter 18pt'; font-weight: 400; font-style: normal; font-display: swap;
-    src: url("/static/fonts/Inter_18pt-Regular.ttf") format("truetype"); }
+    src: url("/static/fonts/CrosswalkInter-Regular.ttf") format("truetype"); }
 @font-face { font-family: 'Inter 18pt'; font-weight: 500; font-style: normal; font-display: swap;
-    src: url("/static/fonts/Inter_18pt-Medium.ttf") format("truetype"); }
+    src: url("/static/fonts/CrosswalkInter-Medium.ttf") format("truetype"); }
 @font-face { font-family: 'Inter 18pt'; font-weight: 700; font-style: normal; font-display: swap;
-    src: url("/static/fonts/Inter_18pt-Bold.ttf") format("truetype"); }
+    src: url("/static/fonts/CrosswalkInter-Bold.ttf") format("truetype"); }
 @font-face { font-family: 'Inter 18pt'; font-weight: 800; font-style: normal; font-display: swap;
-    src: url("/static/fonts/Inter_18pt-ExtraBold.ttf") format("truetype"); }
+    src: url("/static/fonts/CrosswalkInter-ExtraBold.ttf") format("truetype"); }
+@font-face { font-family: 'Crosswalk Inter'; font-weight: 400; font-style: normal; font-display: swap;
+    src: url("/static/fonts/CrosswalkInter-Regular.ttf") format("truetype"); }
+@font-face { font-family: 'Crosswalk Inter'; font-weight: 500; font-style: normal; font-display: swap;
+    src: url("/static/fonts/CrosswalkInter-Medium.ttf") format("truetype"); }
+@font-face { font-family: 'Crosswalk Inter'; font-weight: 700; font-style: normal; font-display: swap;
+    src: url("/static/fonts/CrosswalkInter-Bold.ttf") format("truetype"); }
+@font-face { font-family: 'Crosswalk Inter'; font-weight: 800; font-style: normal; font-display: swap;
+    src: url("/static/fonts/CrosswalkInter-ExtraBold.ttf") format("truetype"); }
 
 body.nl-studio {
     --cw-graphite: #0C1618;

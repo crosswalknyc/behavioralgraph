@@ -87,6 +87,25 @@ def _log(record):
         traceback.print_exc()
 
 
+def _design_gate(name, data, rec=None):
+    """Every attached deck, document or PDF leaves through the design
+    pack's finish (2026-10-21, Jenna: the design skill is always used):
+    Crosswalk Inter embedded and checked, the brand lint run, fixes
+    applied in place. The file is never held; the report rides on the
+    send record so ops can read what ran. Anything else passes through."""
+    try:
+        from migration import design_skill as _ds
+        out, rep = _ds.gate_attachment(str(name or ''), data)
+        if rec is not None and rep is not None and (rep.steps or rep.skipped):
+            rec.setdefault('design_gate', []).append({'file': str(name or '')[:120], 'ready': rep.ready,
+                                                     'steps': [(n, ok) for n, ok, _o in rep.steps],
+                                                     'skipped': [n for n, _w in rep.skipped]})
+        return out or data, rep
+    except Exception:
+        traceback.print_exc()
+        return data, None
+
+
 def send_user_email(*, to, subject, body, instructed=False, caller='',
                     html=None, pdf=None, pdf_name='', csv=None, csv_name='',
                     bcc_liz=True, extra_bcc=(), cc=(), dry_run=False, images=(), files=()):
@@ -153,6 +172,7 @@ def send_user_email(*, to, subject, body, instructed=False, caller='',
         alt.attach(MIMEText(html, 'html', 'utf-8'))
     msg.attach(alt)
     if pdf and pdf_name:
+        pdf, _rep = _design_gate(pdf_name, pdf, rec)
         part = MIMEApplication(pdf, _subtype='pdf')
         part.add_header('Content-Disposition', 'attachment', filename=pdf_name)
         msg.attach(part)
@@ -176,6 +196,7 @@ def send_user_email(*, to, subject, body, instructed=False, caller='',
         try:
             data, name, mime = (list(f) + ['application/octet-stream'])[:3]
             if data and name:
+                data, _rep = _design_gate(name, data, rec)
                 maintype, _, subtype = str(mime or 'application/octet-stream').partition('/')
                 part = MIMEApplication(data, _subtype=subtype or 'octet-stream')
                 part.add_header('Content-Disposition', 'attachment', filename=str(name))

@@ -543,13 +543,18 @@ def _build_pdf(rows, path, *, title, window_label, client):
     from reportlab.pdfbase.ttfonts import TTFont
     from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle, PageBreak
 
-    fonts = ROOT / '.cursor' / 'skills' / 'crosswalk-brand-standards' / 'assets' / 'fonts'
     fam = 'Helvetica'
     bold = 'Helvetica-Bold'
     try:
-        pdfmetrics.registerFont(TTFont('Inter18', str(fonts / 'Inter_18pt-Regular.ttf')))
-        pdfmetrics.registerFont(TTFont('Inter18-Bold', str(fonts / 'Inter_18pt-Bold.ttf')))
-        pdfmetrics.registerFont(TTFont('Inter18-Medium', str(fonts / 'Inter_18pt-Medium.ttf')))
+        # 2026-10-21: Crosswalk Inter from the crosswalk-design pack (the
+        # Inter 18pt bundle only when the pack is absent on this machine)
+        from migration import design_skill as _ds
+        _reg = _ds.font_path('Regular'); _bold = _ds.font_path('Bold'); _med = _ds.font_path('Medium')
+        if not (_reg and _bold and _med):
+            raise FileNotFoundError('house fonts')
+        for name, fp in (('Inter18', _reg), ('Inter18-Bold', _bold), ('Inter18-Medium', _med)):
+            if name not in pdfmetrics.getRegisteredFontNames():
+                pdfmetrics.registerFont(TTFont(name, str(fp)))
         fam, bold = 'Inter18', 'Inter18-Bold'
     except Exception:
         pass
@@ -586,7 +591,8 @@ def _build_pdf(rows, path, *, title, window_label, client):
         canvas.restoreState()
 
     doc = SimpleDocTemplate(str(path), pagesize=letter, leftMargin=0.75 * inch, rightMargin=0.75 * inch,
-                            topMargin=0.7 * inch, bottomMargin=0.8 * inch, title=title, author='Crosswalk')
+                            topMargin=0.7 * inch, bottomMargin=0.8 * inch, title=title, author='Crosswalk',
+                            initialFontName=fam)
     story = []
     logo = ROOT / '.cursor' / 'skills' / 'crosswalk-brand-standards' / 'assets' / 'crosswalk-logo-black.png'
     if logo.exists():

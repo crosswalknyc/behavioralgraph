@@ -1,0 +1,122 @@
+/* Crosswalk brand tokens for HTML (pages, proposals, dashboards, newsletters, artifacts).
+   Load Inter with the optical-size axis before this file:
+   <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,100..900&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+   Crosswalk Inter is Inter at the 18pt optical size, so --cw-opsz pins Inter to match.
+   Before delivery run scripts/cw_embed_fonts.py on the page: it inlines the real Crosswalk Inter faces
+   as base64 @font-face rules, so the page looks right with no network and on any machine. */
+
+:root {
+  /* Core */
+  --cw-graphite: #0C1618;     /* primary dark surface */
+  --cw-offwhite: #E9E8E1;     /* primary light surface */
+  --cw-signal: #C7F23E;       /* accent on dark, use sparingly */
+  --cw-olive: #5E7E12;        /* Signal Green's twin on light */
+  --cw-orchid: #E682FF;       /* negative / low values on dark; gradient pages */
+  --cw-amethyst: #8E3FA8;     /* Orchid's twin on light */
+
+  /* Supporting and structure */
+  --cw-slate: #15252A;        /* raised panels and cards on dark */
+  --cw-deep: #081113;         /* one step below graphite */
+  --cw-newsletter-ink: #070F11;   /* older issues; The Read now sits on #0C1618 */
+  --cw-panel-light: #E1E0D7;  /* cards on off-white */
+  --cw-rule-dark: #27393D;
+  --cw-rule-light: #C9C6BA;
+  --cw-pavement: #3B3D38;     /* empty bar tracks on dark */
+  --cw-cobalt: #3358FF;       /* rare extra series */
+  --cw-dusk: #B7B3D8;         /* rare diverging neutral */
+
+  /* Text on dark */
+  --cw-dark-title: #E9E8E1;
+  --cw-dark-body: #9AA09B;
+  --cw-dark-muted: #7C878A;
+  /* Text on light */
+  --cw-light-title: #0C1618;
+  --cw-light-body: #5C6560;
+  --cw-light-muted: #5C6466;
+  /* Text on the pale Signal and Orchid gradients: Graphite for everything, weight carries hierarchy */
+  --cw-on-gradient: #0C1618;
+  /* Text on a Graphite, Slate or glow card */
+  --cw-card-title: #E9E8E1;
+  --cw-card-body: #A8AFA9;
+  --cw-card-label: #9BAAAC;
+  /* Off-White page: source lines and axis labels use #888C89, footer #5C6466 */
+  --cw-light-source: #888C89;
+
+  /* Gradients, matched to the Sept/Oct 2026 decks (see tokens.json "gradient") */
+  --cw-grad-signal: linear-gradient(137deg, #C7F23E 0%, #E8F3CC 100%);        /* default alternative page or band */
+  --cw-grad-orchid: linear-gradient(137deg, #E682FF 0%, #F4E4F5 100%);        /* orchid statement page or band */
+  --cw-grad-signal-deep: linear-gradient(65deg, #C7F23E 0%, #9FD628 100%);    /* saturated variant, sparingly */
+  --cw-grad-offwhite-edge: linear-gradient(120deg, #EAE8E2 0%, #EAE8E2 65%, #D6EE84 91%, #C7F33D 100%);
+  --cw-grad-glow-card: linear-gradient(210deg, #2B3F2D 0%, #15252A 42%, #0B1617 73%, #020505 99%);
+  --cw-photo-shadow: linear-gradient(90deg, rgba(12,22,24,1) 0%, rgba(12,22,24,0) 100%); /* never to white or gray */
+  --cw-scrim: linear-gradient(205deg, rgba(12,22,24,.90) 0%, rgba(11,22,23,.78) 55%, rgba(10,21,25,.60) 100%);
+
+  /* Type */
+  --cw-font: "Crosswalk Inter", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --cw-font-mono: "Geist Mono", ui-monospace, "SFMono-Regular", Menlo, monospace; /* clickstream rows only */
+  --cw-opsz: "opsz" 18;
+  --cw-weight-light: 300;
+  --cw-weight-regular: 400;
+  --cw-weight-semibold: 600;
+  --cw-weight-bold: 700;
+  --cw-tracking-eyebrow: 0.25em;  /* +2.6pt at 10.5pt */
+  --cw-tracking-label: 0.1em;
+  --cw-tracking-footer: 0.25em;
+
+  /* Shape */
+  /* Web radius ladder (Brand System v6): 2 chips, 6 buttons and inputs, 10 cards and panels, full for pills.
+     The 0.14 in deck card radius is for slides; do not carry it into web pages. */
+  --cw-radius-chip: 2px;
+  --cw-radius-control: 6px;
+  --cw-radius-card: 10px;
+  --cw-radius-scrim: 28px;   /* the deck scrim card (0.28 in); use only for that component */
+  --cw-radius-pill: 999px;
+  --cw-radius-vbar: 6px;
+}
+
+/* Base: dark surface by default */
+.cw, .cw-dark {
+  background: var(--cw-graphite);
+  color: var(--cw-dark-body);
+  font-family: var(--cw-font);
+  font-variation-settings: var(--cw-opsz);
+  font-style: normal;               /* no italics anywhere */
+}
+.cw-light {
+  background: var(--cw-offwhite);
+  color: var(--cw-light-body);
+}
+.cw em, .cw i, .cw-light em, .cw-light i { font-style: normal; font-weight: var(--cw-weight-semibold); }
+
+/* Weight-pair headline: <h2 class="cw-title"><b>Bold claim</b> <span>light context.</span></h2> */
+.cw-title { font-weight: var(--cw-weight-light); color: var(--cw-dark-title); letter-spacing: 0; line-height: 1.12; }
+.cw-title b, .cw-title strong { font-weight: var(--cw-weight-bold); }
+.cw-light .cw-title { color: var(--cw-light-title); }
+
+/* Eyebrow: dot + tracked caps, regular weight, centered on the dot */
+.cw-eyebrow { display: flex; align-items: center; gap: .6em; font-size: 10.5pt; font-weight: var(--cw-weight-regular);
+  letter-spacing: var(--cw-tracking-eyebrow); text-transform: uppercase; color: var(--cw-dark-body); }
+.cw-eyebrow::before { content: ""; width: .62em; height: .62em; border-radius: 50%; background: var(--cw-signal); box-shadow: none; flex: none; }
+.cw-light .cw-eyebrow { color: var(--cw-light-body); }
+.cw-light .cw-eyebrow::before { background: var(--cw-olive); }
+
+.cw-footer { font-size: 8pt; letter-spacing: var(--cw-tracking-footer); text-transform: uppercase; color: var(--cw-dark-muted); }
+.cw-light .cw-footer { color: var(--cw-light-muted); }
+
+.cw-card { background: var(--cw-slate); border-radius: var(--cw-radius-card); padding: 24px 26px; }
+.cw-light .cw-card { background: var(--cw-panel-light); }
+.cw-card--on-photo { background: rgba(12,22,24,.62); border: 1px solid rgba(233,232,225,.18); }
+
+/* Cylindrical horizontal bar */
+.cw-track { background: var(--cw-pavement); border-radius: var(--cw-radius-pill); height: 12px; overflow: hidden; }
+.cw-light .cw-track { background: var(--cw-rule-light); }
+.cw-fill { background: var(--cw-signal); border-radius: var(--cw-radius-pill); height: 100%; }
+.cw-light .cw-fill { background: var(--cw-olive); }
+.cw-fill--negative { background: var(--cw-orchid); }
+.cw-light .cw-fill--negative { background: var(--cw-amethyst); }
+
+/* Figures: unit set apart from the numeral */
+.cw-figure { font-weight: var(--cw-weight-bold); color: var(--cw-dark-title); font-variant-numeric: tabular-nums; }
+.cw-figure .unit { margin-left: .06em; font-size: .62em; }
+
+.cw-clickstream { font-family: var(--cw-font-mono); font-size: 12px; }

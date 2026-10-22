@@ -75,7 +75,25 @@ C_BLUE     = RGBColor(0x33, 0x58, 0xFF)   # data accent
 # Chart-friendly cycle used in demographic comparison bars
 CYCLE_ACCENT = [C_LAVENDER, C_MAGENTA, C_LIME, C_BLUE, C_CREAM]
 
-FONT_MAIN = "Arial"
+def _design():
+    try:
+        from migration import design_skill as _ds
+        return _ds
+    except Exception:
+        return None
+
+
+def _house_face(weight: str = "Regular") -> str:
+    """Crosswalk Inter from the crosswalk-design pack (2026-10-21; Arial
+    is a retired face in an Office file)."""
+    ds = _design()
+    try:
+        return ds.family_name(weight) if ds is not None else "Crosswalk Inter"
+    except Exception:
+        return "Crosswalk Inter"
+
+
+FONT_MAIN = _house_face("Regular")
 
 US_POPULATION = 329_900_000
 
@@ -275,7 +293,7 @@ def build_deck(
 
     buf = io.BytesIO()
     prs.save(buf)
-    return buf.getvalue()
+    return _finished(buf.getvalue())
 
 
 def build_combined_deck(profiles: Iterable[dict]) -> bytes:
@@ -319,7 +337,19 @@ def build_combined_deck(profiles: Iterable[dict]) -> bytes:
 
     buf = io.BytesIO()
     prs.save(buf)
-    return buf.getvalue()
+    return _finished(buf.getvalue())
+
+
+def _finished(data: bytes) -> bytes:
+    """Crosswalk Inter embedded and the pack's checks run on the deck
+    bytes (2026-10-21); the input comes back untouched on any failure."""
+    ds = _design()
+    if ds is None:
+        return data
+    try:
+        return ds.finish_bytes(data, ".pptx")
+    except Exception:
+        return data
 
 
 def suggested_filename(data: dict, ext: str = "pptx") -> str:

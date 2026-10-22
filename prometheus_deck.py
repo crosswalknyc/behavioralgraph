@@ -33,6 +33,14 @@ MUTED_LIGHT = RGBColor(0x88, 0x8C, 0x89)
 FOOTER_GREY = RGBColor(0x5C, 0x64, 0x66)
 
 FONT = 'Crosswalk Inter'
+
+
+def _design():
+    try:
+        from migration import design_skill as _ds
+        return _ds
+    except Exception:
+        return None
 MARGIN = 0.920
 BAND_RIGHT = 12.413
 BAND_W = BAND_RIGHT - MARGIN
@@ -136,8 +144,10 @@ def _chrome(slide, dark, page_num, eyebrow, logo_white, logo_black,
 
 
 def _bg(slide, prs, color):
-    _rect(slide, 0, 0, prs.slide_width / 914400, prs.slide_height / 914400,
-          color)
+    # the page color is the slide background (the design pack fails a
+    # full-page shape acting as one, 2026-10-21)
+    slide.background.fill.solid()
+    slide.background.fill.fore_color.rgb = color
 
 
 def _title_block(slide, dark, title, subhead=None):
@@ -522,4 +532,11 @@ def render_deck(plan, out_path, static_dir=None):
             _slide_stats(slide, prs, ps, dark, page_num, logos)
 
     prs.save(out_path)
+    # 2026-10-21: Crosswalk Inter embedded + the pack's checks, in place.
+    _ds = _design()
+    if _ds is not None:
+        try:
+            _ds.finish(out_path)
+        except Exception:
+            pass
     return out_path

@@ -88,6 +88,18 @@ def has_distribution(res):
 def _font():
     try:
         from matplotlib import font_manager
+        # 2026-10-21: the crosswalk-design pack's Crosswalk Inter first
+        try:
+            from migration import design_skill as _ds
+            _fd = _ds.font_dir()
+            if _fd is not None and _ds.using_house_font():
+                for fn in os.listdir(str(_fd)):
+                    if fn.lower().endswith('.ttf'):
+                        font_manager.fontManager.addfont(os.path.join(str(_fd), fn))
+                if 'Crosswalk Inter' in {f.name for f in font_manager.fontManager.ttflist}:
+                    return 'Crosswalk Inter'
+        except Exception:
+            pass
         for d in _FONT_DIRS:
             if not os.path.isdir(d):
                 continue

@@ -19640,19 +19640,31 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
          external CSS/JS file) so it paints on the very first tick.
          ============================================================ -->
     <style>
-        /* Inter 18pt for boot overlay and Profile IQ v4. */
+        /* Crosswalk Inter (the crosswalk-design pack, 2026-10-21) for boot overlay and Profile IQ v4; the 'Inter 18pt' name maps to the same files. */
         @font-face { font-family: 'Inter 18pt'; font-weight: 300; font-style: normal; font-display: swap;
-            src: url("{{ url_for('static', filename='fonts/Inter_18pt-Light.ttf') }}") format('truetype'); }
+            src: url("{{ url_for('static', filename='fonts/CrosswalkInter-Light.ttf') }}") format('truetype'); }
         @font-face { font-family: 'Inter 18pt'; font-weight: 400; font-style: normal; font-display: swap;
-            src: url("{{ url_for('static', filename='fonts/Inter_18pt-Regular.ttf') }}") format('truetype'); }
+            src: url("{{ url_for('static', filename='fonts/CrosswalkInter-Regular.ttf') }}") format('truetype'); }
         @font-face { font-family: 'Inter 18pt'; font-weight: 500; font-style: normal; font-display: swap;
-            src: url("{{ url_for('static', filename='fonts/Inter_18pt-Medium.ttf') }}") format('truetype'); }
+            src: url("{{ url_for('static', filename='fonts/CrosswalkInter-Medium.ttf') }}") format('truetype'); }
         @font-face { font-family: 'Inter 18pt'; font-weight: 700; font-style: normal; font-display: swap;
-            src: url("{{ url_for('static', filename='fonts/Inter_18pt-Bold.ttf') }}") format('truetype'); }
+            src: url("{{ url_for('static', filename='fonts/CrosswalkInter-Bold.ttf') }}") format('truetype'); }
         @font-face { font-family: 'Inter 18pt'; font-weight: 800; font-style: normal; font-display: swap;
-            src: url("{{ url_for('static', filename='fonts/Inter_18pt-ExtraBold.ttf') }}") format('truetype'); }
+            src: url("{{ url_for('static', filename='fonts/CrosswalkInter-ExtraBold.ttf') }}") format('truetype'); }
         @font-face { font-family: 'Inter 18pt'; font-weight: 900; font-style: normal; font-display: swap;
-            src: url("{{ url_for('static', filename='fonts/Inter_18pt-Black.ttf') }}") format('truetype'); }
+            src: url("{{ url_for('static', filename='fonts/CrosswalkInter-Black.ttf') }}") format('truetype'); }
+        @font-face { font-family: 'Crosswalk Inter'; font-weight: 300; font-style: normal; font-display: swap;
+            src: url("{{ url_for('static', filename='fonts/CrosswalkInter-Light.ttf') }}") format('truetype'); }
+        @font-face { font-family: 'Crosswalk Inter'; font-weight: 400; font-style: normal; font-display: swap;
+            src: url("{{ url_for('static', filename='fonts/CrosswalkInter-Regular.ttf') }}") format('truetype'); }
+        @font-face { font-family: 'Crosswalk Inter'; font-weight: 500; font-style: normal; font-display: swap;
+            src: url("{{ url_for('static', filename='fonts/CrosswalkInter-Medium.ttf') }}") format('truetype'); }
+        @font-face { font-family: 'Crosswalk Inter'; font-weight: 700; font-style: normal; font-display: swap;
+            src: url("{{ url_for('static', filename='fonts/CrosswalkInter-Bold.ttf') }}") format('truetype'); }
+        @font-face { font-family: 'Crosswalk Inter'; font-weight: 800; font-style: normal; font-display: swap;
+            src: url("{{ url_for('static', filename='fonts/CrosswalkInter-ExtraBold.ttf') }}") format('truetype'); }
+        @font-face { font-family: 'Crosswalk Inter'; font-weight: 900; font-style: normal; font-display: swap;
+            src: url("{{ url_for('static', filename='fonts/CrosswalkInter-Black.ttf') }}") format('truetype'); }
 
         .app-boot-overlay {
             position: fixed;

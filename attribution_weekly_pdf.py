@@ -156,23 +156,33 @@ def _register_inter() -> str:
     global _INTER_REGISTERED
     if _INTER_REGISTERED:
         return _INTER_FAMILY
+    # 2026-10-21: Crosswalk Inter from the crosswalk-design pack first
+    # (the locked skill); the Inter 18pt bundle only when the pack is
+    # absent on this machine.
+    _pack = None
+    try:
+        from migration import design_skill as _ds
+        _pack = _ds if _ds.using_house_font() else None
+    except Exception:
+        _pack = None
     font_dir = _find_font_dir()
-    if font_dir is None:
-        print("[attribution_weekly_pdf] Inter 18pt fonts not found; "
+    if font_dir is None and _pack is None:
+        print("[attribution_weekly_pdf] house fonts not found; "
               "falling back to Helvetica.")
         return _HELV_FAMILY
     weights = {
-        "":           "Inter_18pt-Regular.ttf",
-        "-Bold":      "Inter_18pt-Bold.ttf",
-        "-Light":     "Inter_18pt-Light.ttf",
-        "-Medium":    "Inter_18pt-Medium.ttf",
-        "-Black":     "Inter_18pt-Black.ttf",
-        "-ExtraBold": "Inter_18pt-ExtraBold.ttf",
+        "":           "Regular",
+        "-Bold":      "Bold",
+        "-Light":     "Light",
+        "-Medium":    "Medium",
+        "-Black":     "Black",
+        "-ExtraBold": "ExtraBold",
     }
     try:
-        for suffix, fname in weights.items():
-            fp = font_dir / fname
-            if fp.is_file():
+        for suffix, weight in weights.items():
+            fp = _pack.font_path(weight) if _pack is not None else (font_dir / f"Inter_18pt-{weight}.ttf")
+            fp = Path(str(fp)) if fp else None
+            if fp is not None and fp.is_file():
                 pdfmetrics.registerFont(TTFont(_INTER_FAMILY + suffix, str(fp)))
     except Exception as e:
         print(f"[attribution_weekly_pdf] Inter registration failed ({e}); "
@@ -636,7 +646,8 @@ def _build_dark_pdf(payload: dict) -> bytes:
     ff = _register_inter()
     d  = _extract(payload)
     buf = io.BytesIO()
-    c = canvas.Canvas(buf, pagesize=LETTER, pageCompression=1)
+    c = canvas.Canvas(buf, pagesize=LETTER, pageCompression=1,
+                      initialFontName=_font(ff) if ff != _HELV_FAMILY else "Helvetica")
     c.setTitle(f"Attribution IQ Weekly - {d['display_name']} - {d['week_end']}")
     c.setAuthor("Crosswalk")
     c.setSubject("Attribution IQ Weekly Summary")
@@ -1048,7 +1059,8 @@ def _build_light_pdf(payload: dict) -> bytes:
     ff = _register_inter()
     d  = _extract(payload)
     buf = io.BytesIO()
-    c = canvas.Canvas(buf, pagesize=LETTER, pageCompression=1)
+    c = canvas.Canvas(buf, pagesize=LETTER, pageCompression=1,
+                      initialFontName=_font(ff) if ff != _HELV_FAMILY else "Helvetica")
     c.setTitle(f"Attribution IQ Weekly - {d['display_name']} - {d['week_end']}")
     c.setAuthor("Crosswalk")
     c.setSubject("Attribution IQ Weekly Summary")
