@@ -3920,6 +3920,30 @@ def priced_unlock_usd(user, users_data=None, s3_key="",
     return 0.0
 
 
+def complimentary_covers_profile(user, users_data=None, s3_key="",
+                                 display_name="") -> bool:
+    """True when this seat or its company gifted this catalog file."""
+    holders = []
+    if isinstance(user, dict):
+        holders.append(user)
+    if isinstance(users_data, dict) and isinstance(user, dict):
+        try:
+            subject, kind, _key = resolve_billing_subject(user, users_data)
+        except Exception:
+            subject, kind = None, ""
+        if (kind == "company" and isinstance(subject, dict)
+                and subject is not user):
+            holders.append(subject)
+    key = str(s3_key or "").strip()
+    label = str(display_name or "").strip()
+    for holder in holders:
+        if key and _key_in_list(key, complimentary_keys(holder, "profile_iq")):
+            return True
+        if owns_complimentary_title(holder, "profile_iq", key, label):
+            return True
+    return False
+
+
 def priced_unlock_due(user, users_data=None, s3_key="",
                       display_name="", username: str = "") -> float:
     """Dollars still owed to open this priced file. 0 if free or paid."""
@@ -3932,6 +3956,9 @@ def priced_unlock_due(user, users_data=None, s3_key="",
     usd = priced_unlock_usd(
         user, users_data, s3_key=s3_key, display_name=display_name)
     if usd <= 0:
+        return 0.0
+    if complimentary_covers_profile(
+            user, users_data, s3_key=s3_key, display_name=display_name):
         return 0.0
     wanted = [w for w in (
         fold_profile_label(s3_key),
@@ -5233,7 +5260,7 @@ __all__ = [
     "resolve_billing_subject", "canonical_company_name",
     "ensure_company_record",
     "priced_profile_access_rows", "priced_unlock_usd",
-    "priced_unlock_due",
+    "priced_unlock_due", "complimentary_covers_profile",
     "WBD_COMPANY_NAME", "is_wbd_company", "ensure_wbd_shared_wallet",
     "apply_prometheus_only_seat", "attach_wbd_seat",
     "is_internal_staff_seat", "has_full_profile_catalog",
