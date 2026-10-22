@@ -1,6 +1,6 @@
 {
  "version": 1,
- "content_hash": "2e898bc31430c517ba5966c983923e5853ad47c3576d037b503471d360de07cb",
+ "content_hash": "902186f77b4a9b708cd077291ca2810056f3b0fc883767d7f1ab87ae3724b904",
  "decisions": [
   {
    "id": "kids_viewers_default",
@@ -766,6 +766,28 @@
    ]
   },
   {
+   "id": "repeated_correction_is_held_and_probes_never_count",
+   "decided": "2026-10-22",
+   "statement": "When the reader corrects the same answer a second time inside a day (the same words again, or a rejection right after the same reply), the answer is not tried a third time on the same ground: the reader is told exactly 'Working on it. Confirmed your task is in progress and I will email you when it completes.' and the team finishes it by email. Internal checks that ask questions on purpose (the deploy check, the canaries, the graders, a suite replaying an old question) are never readers: they are never counted as a repeat, never graded, never listed in the day's summary or on the watch card, and never owed a promise. A summary of the day names only real people and lists as still owed only what has not landed; an ask the reader moved past is not owed. Where-is-the-file on a named subject looks back a season across every store and, when nothing exists, names what the person did ask for on that subject.",
+   "match_terms": [
+    "corrected again",
+    "still wrong",
+    "that is not it either",
+    "same answer again",
+    "where is the pdf",
+    "where is the deck",
+    "where is the file",
+    "nothing on file",
+    "daily summary",
+    "digest",
+    "still owed",
+    "promise held"
+   ],
+   "sources": [
+    "prometheus-brain.md"
+   ]
+  },
+  {
    "id": "date_numbers_are_never_figures",
    "decided": "2026-10-21",
    "statement": "A year inside a date (September 2025, 9/23/2026, 2025 to 2026, in 2025, Q3 2026), a month and day pair, and a season or episode marker (S2 E1) are dates, never figures to look up or explain. A number written with a comma (2,025) is a count. A question that asks how many of an audience did something, or names a title with a service or two and a window, is a read of that audience; the number explainer answers only a question about a figure on screen: why it is what it is, what is behind it, how it is calculated, what makes it up.",
@@ -862,5 +884,5 @@
    ]
   }
  ],
- "generated_at": "2026-10-22T01:56:14Z"
+ "generated_at": "2026-10-22T20:31:47Z"
 }
