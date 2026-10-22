@@ -61,10 +61,53 @@ def page_name(body):
         return ''
 
 
+_TITLES_CACHE = {'at': 0.0, 'names': []}
+_TITLES_TTL_S = 3600
+
+
+def content_map_titles(connect=None, now=None):
+    """The content map's distinct SHOW spellings (the podcasts, series
+    and films StreamScout has seeded), loaded once an hour per process
+    so a build order can resolve a title the catalog does not yet hold
+    (2026-10-21: "Ball in the Bonzo Family with Lonzo Ball" is the map's
+    "Ball in the Family Podcast with Lonzo & Gelo Ball" long before any
+    profile exists). A test process never opens the warehouse; the
+    pool is simply empty there, and a read failure keeps the last list."""
+    import os
+    import time as _time
+    t = float(now if now is not None else _time.time())
+    if _TITLES_CACHE['names'] and t - _TITLES_CACHE['at'] < _TITLES_TTL_S:
+        return list(_TITLES_CACHE['names'])
+    if connect is None and (os.environ.get('REGRESSION_TEST_MODE') or os.environ.get('PM_REPLAY_CHILD')):
+        return list(_TITLES_CACHE['names'])
+    try:
+        if connect is None:
+            try:
+                from migration.clickhouse_connector import connect_clickhouse as connect
+            except ImportError:
+                from clickhouse_connector import connect_clickhouse as connect  # type: ignore
+        conn = connect()
+        cur = conn.cursor()
+        cur.execute("SELECT DISTINCT SHOW FROM reference.content_mapping WHERE SHOW != '' ORDER BY SHOW")
+        rows = cur.fetchall() or []
+        try:
+            cur.close(); conn.close()
+        except Exception:
+            pass
+        names = [str(r[0]).strip() for r in rows if r and str(r[0] or '').strip()]
+        if names:
+            _TITLES_CACHE['names'] = names
+            _TITLES_CACHE['at'] = t
+    except Exception as e:
+        print(f"[build-entity] content map titles unavailable: {type(e).__name__}: {str(e)[:120]}")
+    return list(_TITLES_CACHE['names'])
+
+
 def entity_pools(catalog, body):
     """Candidate names for the resolver: the page, the catalog's display
-    names, and the hostmap's brands when a loaded index is at hand (no
-    network is ever opened for this step)."""
+    names, the content map's titles (cached hourly) and the hostmap's
+    brands when a loaded index is at hand (no network is opened for the
+    brands; the titles open the warehouse at most once an hour)."""
     names = []
     for c in (catalog or []):
         if not isinstance(c, dict):
@@ -80,7 +123,11 @@ def entity_pools(catalog, body):
             brands = [v[0] for v in cache.values() if isinstance(v, (list, tuple)) and v and v[0]]
     except Exception:
         brands = []
-    return {'page': page_name(body), 'catalog': names, 'brands': brands}
+    try:
+        titles = content_map_titles()
+    except Exception:
+        titles = []
+    return {'page': page_name(body), 'catalog': names, 'titles': titles, 'brands': brands}
 
 
 def resolve_build_entity(spec_draft, text, catalog, body, deps):
@@ -112,6 +159,18 @@ def resolve_build_entity(spec_draft, text, catalog, body, deps):
         name = res['display']
         if res['source'] == 'titles':
             spec_draft['content_show'] = name
+            name = _be.strip_credit(name) or name
+        else:
+            # the page or the catalog named it; when the content map knows
+            # the same show under its own spelling, that spelling seeds the
+            # consumers universe (the open "Ball in the Family with Lonzo
+            # Ball" is the content map's "Ball in the Family Podcast with
+            # Lonzo & Gelo Ball"; the episodes hang off the latter)
+            titles_pool = [str(t) for t in (pools.get('titles') or [])]
+            for sp in (res.get('spellings') or []):
+                if sp in titles_pool and not str(spec_draft.get('content_show') or '').strip():
+                    spec_draft['content_show'] = sp
+                    break
             name = _be.strip_credit(name) or name
     elif drafted:
         # nothing in the library: the model's reading of the name stands

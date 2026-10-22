@@ -201,12 +201,42 @@ def resolve(phrase, *, page='', catalog=(), titles=(), brands=(), min_score=0.72
     if not cands:
         return out
     top = cands[0]
-    rivals = [c for c in cands[1:] if top[1] - c[1] < gap and _norm(c[0]) != _norm(top[0])]
+    # Two spellings of one entity are not two entities (2026-10-21, the
+    # same Jessie ask with the show open: the page "Ball in the Family
+    # with Lonzo Ball" and the content map's "Ball in the Family Podcast
+    # with Lonzo & Gelo Ball" scored 0.976 and 0.906, read as rivals, and
+    # the which-one question came back naming the same podcast twice).
+    # A candidate whose name agrees with the top one, by the same two-way
+    # coverage, is the same entity; the higher-trust source names it and
+    # the others ride along as spellings.
+    rivals = [c for c in cands[1:]
+              if top[1] - c[1] < gap and _norm(c[0]) != _norm(top[0]) and not same_entity(top[0], c[0])]
     if rivals and top[1] < 1.0:
         out['ambiguous'] = True
         return out
     out['display'], out['source'] = top[0], top[2]
+    out['spellings'] = [c[0] for c in cands[1:] if same_entity(top[0], c[0])][:3]
     return out
+
+
+def same_entity(a, b, floor=0.85):
+    """True when two names are the same entity in two spellings: equal
+    once normalized, equal once the credit and the scope noun are off,
+    or fuzzy-equal by the same two-way token coverage the resolver uses
+    ("Ball in the Family with Lonzo Ball" ~ "Ball in the Family Podcast
+    with Lonzo & Gelo Ball"; "New Heights Podcast Listeners" ~ "New
+    Heights with Jason & Travis Kelce"). Two different shows that share
+    a few words ("The Office" and "The Office Ladies") stay apart."""
+    na, nb = _norm(a), _norm(b)
+    if not na or not nb:
+        return False
+    if na == nb:
+        return True
+    ca = _norm(strip_credit(split_scope(str(a))[0] or str(a)))
+    cb = _norm(strip_credit(split_scope(str(b))[0] or str(b)))
+    if ca and cb and ca == cb:
+        return True
+    return score(a, b) >= floor
 
 
 def which_question(candidates):
