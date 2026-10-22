@@ -304,6 +304,23 @@ def gate(text, body, history, ctx, user, uname, tid, via, persist, *, client_sur
     common = dict(tid=tid, via=via, client_surface=client_surface, envelope=envelope, interpret_shape=interpret_shape,
                   persist=persist, persist_turn=persist_turn, uname=uname, history=history, text=text, host=host)
 
+    # ---- a quoted figure: where it came from, from the record of the
+    # answer that stated it, with the open product's own numbers set
+    # against it (2026-10-22, Alexia / The Influencer Project). Before the
+    # repeat guard: asked twice because the lanes answered something else,
+    # the second ask still gets the answer, never the hold.
+    if kind == 'question_about_answer' and (cont.get('params') or {}).get('figure'):
+        try:
+            from . import figure_provenance as _fp
+            _pa = _fp.answer(text, history, ctx, host=host)
+        except Exception as e:
+            _faults.note('turn_gate.figure_provenance', e)
+            _pa = None
+        if _pa and _pa.get('reply'):
+            raw = {'success': True, 'action': 'answer', 'reply': _pa['reply'], 'followups': [],
+                   'offer_deck': False, 'deck_angle': None, 'figure_provenance': _pa.get('figure')}
+            return _answer(raw, 'figure_provenance', route='figure_provenance', outcome='answered', **common)
+
     # ---- I7: the same question again after a reply that did not land
     n_rep = repeat_count(text, history)
     if n_rep:
@@ -424,6 +441,7 @@ def gate(text, body, history, ctx, user, uname, tid, via, persist, *, client_sur
                 return None   # the product fact about the ten million answers this one (Tania Nasr 2026-10-20)
         except Exception as e:
             _faults.note('turn_gate.sample_fact', e)
+
         try:
             from . import kpi_definitions as _kd
             vc = (ctx or {}).get('view_context') if isinstance(ctx, dict) else {}

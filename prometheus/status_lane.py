@@ -50,12 +50,17 @@ def _kick_sweep(host):
         traceback.print_exc()
 
 
+_FIGURE_PROVENANCE_RX = re.compile(r"(?:\d{1,3}(?:,\d{3})+|\d{4,}).*\b(?:come|comes|coming|came)\s+from\b|\b(?:come|comes|coming|came)\s+from\b.*(?:\d{1,3}(?:,\d{3})+|\d{4,})", re.I | re.S)
+
+
 def wants_status(text):
     t = ' '.join(str(text or '').split())
     if not t or len(t) > 320:
         return False
     if not _STATUS_RX.search(t):
         return False
+    if _FIGURE_PROVENANCE_RX.search(t):
+        return False   # "where does 12,004,203 come from? I only see 6.6M" asks about a figure, not a delivery (2026-10-22)
     if _NOT_STATUS_RX.search(t) and not re.search(r"\b(email|received|see|find|tab|site|dashboard)\b", t, re.I):
         return False
     return True

@@ -9558,6 +9558,25 @@ def _pm_intent_view_hydrate(view_ctx):
         except Exception:
             doc = None
         hit = _pm_intent_compact_numbers(doc) if doc else {}
+        if doc:
+            # The campaign's own words and tables (phases, asset types,
+            # channels, creative formats) ride with the numbers, so an
+            # ask typed from the screen is the screen's ask and the read
+            # answers from the campaign table, never a same-title profile
+            # (2026-10-22, Alexia / The Influencer Project).
+            try:
+                from prometheus import view_base as _vb
+                _assets = _formats = None
+                try:
+                    _assets = (json.loads(_H.s3_client.get_object(
+                        Bucket=_H.S3_BUCKET, Key=f'intent/{slug}/source/normalized_assets.json')['Body'].read()) or {}).get('assets')
+                    _formats = json.loads(_H.s3_client.get_object(
+                        Bucket=_H.S3_BUCKET, Key=f'intent/{slug}/mta/creative_formats.json')['Body'].read())
+                except Exception:
+                    pass
+                hit = dict(hit or {}, **_vb.intent_vocabulary(doc, _assets, _formats))
+            except Exception:
+                traceback.print_exc()
         if len(_PM_INTENT_HYDRATE_CACHE) > 16:
             _PM_INTENT_HYDRATE_CACHE.clear()
         _PM_INTENT_HYDRATE_CACHE[ck] = hit
@@ -9569,9 +9588,10 @@ def _pm_intent_view_hydrate(view_ctx):
     return view_ctx
 
 
-_PM_SELF_CONTAINED_VIEWS = frozenset((
-    'journeyIQ', 'journey_iq', 'brandPartnershipIQ', 'brand_partnership_iq',
-    'attributionIQ', 'attribution_iq'))
+# One list (prometheus/view_base.py). intentIQ is the Attribution IQ view id
+# the widget sends; it was missing here, so a profile left in the picker rode
+# along as `primary` and became the base of a campaign ask (2026-10-22).
+_PM_SELF_CONTAINED_VIEWS = __import__('prometheus.view_base', fromlist=['SELF_CONTAINED']).SELF_CONTAINED
 
 
 def _pm_validate_page_context(page_context):
@@ -11390,6 +11410,17 @@ def _pm_view_owns_ask(text, ctx):
     if not view_id:
         return False
     t = str(text or '')
+    # An ask that names the open product's own title or the product itself
+    # is the product's ask; the other capitalized words are its labels
+    # typed from the screen (Trailer Launch, Reviews and Opening Week), not
+    # foreign names (2026-10-22, Alexia). A different subject still wins
+    # through names_other_subject at the call site.
+    try:
+        from prometheus import view_base as _vb
+        if _vb.names_view(t, vc, product_nouns=False):
+            return True
+    except Exception:
+        traceback.print_exc()
     if _pm_foreign_names(t, vc):
         return False
     if _PM_VIEW_DEIXIS_RE.search(t):
@@ -11975,6 +12006,26 @@ def _pm_generation_base(subject_hint, text, ctx=None,
     ask wins over the open page; the page stays the fallback.
     """
     import prometheus_analysis as pma
+    # 0. The open product is the base (2026-10-22, Alexia / The Influencer
+    # Project): with an Attribution IQ campaign, a Digital Journey or a Brand
+    # Partnership read on screen, an ask that refers to it or names its own
+    # title answers from that payload. The library is never consulted for
+    # it, so a same-title Profile IQ file (the Potential Ticket Buyer
+    # profile) can never become the base of a campaign question.
+    try:
+        from prometheus import view_base as _vb
+        _vc0 = (ctx or {}).get('view_context') if isinstance(ctx, dict) else None
+        if _vb.is_self_contained((_vc0 or {}).get('view_id')):
+            _own = _vb.names_view(text, _vc0) or _vb.names_view(subject_hint, _vc0)
+            if not _own:
+                try:
+                    _own = bool(_PM_VIEW_DEIXIS_RE.search(str(text or ''))) or not str(subject_hint or '').strip()
+                except Exception:
+                    _own = False
+            if _own and not _subject_rules.names_other_subject(text, ctx):
+                return _vb.view_base(_vc0)
+    except Exception:
+        traceback.print_exc()
     # 1. The profile open on the page IS the base (unless the caller
     # asked for ask-named catalog subjects to win; the page is still
     # the fallback below when the catalog names nothing).
@@ -12989,6 +13040,7 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
             except Exception:
                 traceback.print_exc()
     panel_charge = None
+    _view_base = __import__('prometheus.view_base', fromlist=['is_view_base']).is_view_base(base)   # the open product's own numbers: a lookup, never priced (2026-10-22)
     if not base:
         # A QUESTION about a never-pulled subject is a custom read
         # (Jenna 2026-10-08: "all custom asks are just 500 ... take out
@@ -13085,7 +13137,7 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
                 metric_request = dict(metric_request, dimension=metric_request.get('dimension') or _pc_params.get('breakdown') or '', bound_series=metric_request.get('bound_series') or [{'from': 'thread'}])
             else:
                 metric_request = {'dimension': _pc_params.get('breakdown') or '', 'bound_series': [{'from': 'thread'}], 'metric_family': 'dimension split'}
-        if subj_name and (_is_derived or pma.panel_report_eligible(text, subj_name)):
+        if subj_name and not _view_base and (_is_derived or pma.panel_report_eligible(text, subj_name)):
             # One gate for every priced read (prometheus/priced_read.py,
             # Jenna 2026-10-21): viewership is $500 a year, a breakdown of
             # a delivered figure $100, everything else the custom ask
@@ -13150,7 +13202,7 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
         from prometheus import priced_read as _prg
         _pr_hit = None
         try:
-            _pr_hit = _prg.classify(text, history, ctx)
+            _pr_hit = None if _view_base else _prg.classify(text, history, ctx)
         except Exception:
             _pr_hit = None
         _ov_hit = bool(_pr_hit and _pr_hit.get('via') == 'generate')
@@ -13184,6 +13236,11 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
     # a catalog profile, load that profile's digest so the read
     # derives from the base's actual rows (a category mix weighs the
     # base's own brand rows, not free-floating knowledge).
+    if _view_base:
+        # The open product is the base (2026-10-22, Alexia): the read
+        # derives from the payload on screen and nothing else. Any digest
+        # a caller attached (a profile left in the picker) is dropped.
+        digest_block = __import__('prometheus.view_base', fromlist=['data_block']).data_block((ctx or {}).get('view_context'))
     if not str(digest_block or '').strip() \
             and str(base.get('s3_key') or '').lower().endswith('.csv'):
         _t_digest = time.monotonic()
@@ -13867,7 +13924,9 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
     try:
         from prometheus import methodology as _meth
         reply = _meth.ensure(reply, res, question=text,
-                             base_label=str(base.get('subject') or ''))
+                             base_label=str(base.get('subject') or ''),
+                             domain=str(base.get('domain') or ''),
+                             view_context=((ctx or {}).get('view_context') if _view_base else None))
     except Exception:
         traceback.print_exc()
     _t_stage = time.monotonic()
@@ -16032,6 +16091,17 @@ def _pm_analyze_core(user, body, text, history):
         traceback.print_exc()
     _pm_ask_stage('ledger', t0=_t_ledger)
     _led_exact = _led.get('exact')
+    # A self-contained product on screen never replays a stored read whose
+    # base was a profile file: that read was a different dataset
+    # (2026-10-22, Alexia: the Potential Ticket Buyer read replayed under
+    # the Attribution IQ campaign of the same title).
+    try:
+        from prometheus import view_base as _vb_rp
+        if _led_exact and _vb_rp.is_self_contained(((ctx.get('view_context') or {}).get('view_id'))) \
+                and str(_led_exact.get('base') or '').lower().endswith('.csv'):
+            _led_exact = None
+    except Exception:
+        traceback.print_exc()
     if _led_exact and _led_exact.get('reply') and _led_same_subject \
             and _led_subj and not mode and not _pm_skip_replay \
             and not _pm_replay_repeat_block(_pm_user, text):

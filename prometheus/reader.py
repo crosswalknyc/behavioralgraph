@@ -254,6 +254,16 @@ def _page(ctx):
         vc = (ctx or {}).get('view_context') or {}
         name = str(prim.get('name') or '').strip()
         view = str(vc.get('view_id') or vc.get('view_title') or '').strip()
+        try:
+            from . import view_base as _vb
+            if _vb.is_self_contained(vc.get('view_id')):
+                # a profile left in the picker is not open under a
+                # self-contained product; the product's title is the
+                # subject on screen (2026-10-22, Alexia)
+                name = str(vc.get('view_title') or '').strip()
+                view = f"{_vb.product_label(vc.get('view_id')) or view}: {name}" if name else view
+        except Exception:
+            pass
         summ = str(vc.get('summary') or vc.get('view_summary') or '').strip()
         data = vc.get('data') if isinstance(vc.get('data'), dict) else {}
         keys = []

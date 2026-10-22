@@ -305,6 +305,19 @@ def classify(text, history, reading=None, page=''):
         out.update(kind='rerun_window', window=rerun_window(t), confidence=0.9 if rerun_window(t) else 0.7,
                    subject=(deliv or {}).get('subject', ''))
         return out
+    # a question that quotes a figure Prometheus stated earlier is a
+    # question about that answer, whatever else the words say (2026-10-22,
+    # Alexia: "where does the 12,004,203 ... number come from? I only see
+    # 6.6M ..." read as a status check, a brand ask and a box office ask)
+    try:
+        from . import figure_provenance as _fp
+        _q = _fp.quoted_from_thread(t, history)
+    except Exception:
+        _q = None
+    if _q:
+        out.update(kind='question_about_answer', confidence=0.9, subject=(deliv or {}).get('subject', ''),
+                   params={'figure': _q['figure'], 'figure_turn': _q['turn']})
+        return out
     # a question about the previous answer
     if _sr.definition_turn(t, reading, page) or _ABOUT_ANSWER_RX.search(t):
         if deliv and deliv.get('kind') in ('read', 'offer', 'build', 'journey', 'deck'):

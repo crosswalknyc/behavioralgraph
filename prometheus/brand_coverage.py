@@ -57,25 +57,57 @@ def _tokens(s):
     return [t for t in re.split(r"[^a-z0-9+]+", str(s or '').lower()) if t]
 
 
+# A thousands-grouped figure is one token (2026-10-22, Alexia: "where does
+# the 12,004,203 potential ticket buyers number come from" was split on its
+# commas into the brands "12" and "004"). The comma inside \d,\d{3} is never
+# a list separator, and a question about where a figure comes from is a
+# question about the previous answer, never a coverage ask.
+_FIGURE_RX = re.compile(r"\d{1,3}(?:,\d{3})+|\d{4,}")
+_PROVENANCE_RX = re.compile(r"\b(?:come|comes|coming|came)\s+from\b|\bnumber\b|\bfigure\b|\bwhere\s+(?:did|does|do)\s+you\s+get\b", re.I)
+
+
+def _split_keep_figures(raw):
+    """Split a brand list on , / and / & / or, never inside 12,004,203."""
+    hold = {}
+
+    def _stash(m):
+        key = f"\x00{len(hold)}\x00"
+        hold[key] = m.group(0)
+        return key
+    safe = _FIGURE_RX.sub(_stash, raw)
+    parts = []
+    for p in _SPLIT_RX.split(safe):
+        if not p or not p.strip():
+            continue
+        for key, val in hold.items():
+            p = p.replace(key, val)
+        parts.append(p.strip(' ?.!,"\''))
+    return parts
+
+
 def parse(text):
     """List of brand strings the ask is about, or [] when it is not a
     coverage question."""
     t = ' '.join(str(text or '').split())
     if not t or len(t) > 220:
         return []
+    if _FIGURE_RX.search(t) and _PROVENANCE_RX.search(t):
+        return []   # a question about a stated figure, not about a brand
     for rx in _ASK_RXS:
         m = rx.match(t)
         if not m:
             continue
         raw = _TAIL_RX.sub('', m.group('b')).strip(' ?.!,"\'')
         raw = re.sub(r"^(?:the|a|an)\s+", '', raw, flags=re.I)
-        parts = [p.strip(' ?.!,"\'') for p in _SPLIT_RX.split(raw) if p and p.strip()]
+        parts = _split_keep_figures(raw)
         out = []
         for p in parts:
             p = _BEHAVIOR_TAIL_RX.sub('', p).strip()
             toks = _tokens(p)
             if not toks or len(toks) > 5 or all(x in _GENERIC for x in toks):
                 continue
+            if all(re.fullmatch(r"[\d,.%$]+", x) for x in p.split()):
+                continue   # a number is never a brand
             out.append(p)
         return out[:4]
     return []

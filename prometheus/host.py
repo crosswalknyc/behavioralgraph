@@ -79,10 +79,11 @@ _APP_BINDINGS = {
     'error_email': '_chatbot_error_email',   # (label, err, tb=None)
     'consume_credit': 'consume_credit',      # (username, description=, job_id=, pull_type=, credits_used=, quantity=) -> bool (2026-10-15, the talent list)
     'calm_payload': '_chatbot_calm_payload', # () -> dict
+    'intent_view_hydrate': '_pm_intent_view_hydrate',   # (view_ctx) -> view_ctx with the campaign's own numbers and words (2026-10-22)
 }
 
 # Bindings that may legitimately be absent on an older host.
-_OPTIONAL = {'max_threads', 'wallet_snapshot', 'access_gate', 'claude_data', 'watch_flag', 'record_held', 'user_runs', 'consume_credit',
+_OPTIONAL = {'max_threads', 'wallet_snapshot', 'access_gate', 'claude_data', 'watch_flag', 'record_held', 'user_runs', 'consume_credit', 'intent_view_hydrate',
              'run_jiq_job', 'run_bpiq_job', 'run_fw_job', 'run_aiq_job',
              'thread_for_job', 'load_thread', 'save_thread', 'incidence_check', 'audience_range', 'queue_secret'}
 

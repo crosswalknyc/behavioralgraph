@@ -203,11 +203,18 @@ def ensure_period_note(reply, question=''):
         return reply
 
 
-def ensure(reply, res=None, question='', base_label='', base_people=None):
+def ensure(reply, res=None, question='', base_label='', base_people=None,
+           domain='', view_context=None):
     """Append the counting block to a viewership reply once. A reply
     that already carries the header gets the missing bullets merged in
     (reply_shape may have opened the block for definitions). Never
-    raises; returns the input on any failure."""
+    raises; returns the input on any failure.
+
+    `domain` names the open product when the base is a self-contained
+    view (2026-10-22, Alexia / The Influencer Project): an attribution
+    read gets the campaign's own block (window, exposed base, the
+    conversion definition, assets tracked) and never the viewing block,
+    whose "viewers" and "carriage" lines describe a different product."""
     try:
         text = str(reply or '')
         if not text.strip():
@@ -215,6 +222,15 @@ def ensure(reply, res=None, question='', base_label='', base_people=None):
         res = res if isinstance(res, dict) else {}
         reply = ensure_period_note(text, question)
         text = str(reply)
+        if str(domain or '') in ('attribution', 'journey', 'partnership'):
+            if HEADER in text or carries_definition(text):
+                return reply
+            try:
+                from . import view_base as _vb
+                lines = _vb.counting_lines(view_context)
+            except Exception:
+                lines = []
+            return (text.rstrip() + '\n\n' + '\n'.join(lines)) if lines else reply
         if not is_viewership_read(text, res, question):
             return reply
         if carries_definition(text):
