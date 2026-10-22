@@ -36202,9 +36202,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                       + _iiqROIScopePicker(bd, scopeId)
                       + phasePick
                       + (picked ? _iiqROIPostHero(picked, bd, rates) : _iiqROIHero(bd, rates, term, selected))
-                      + (_iiqROIMovesToMTA(slug) ? '' : _iiqROIContentTable(bd, rates, scopeId)
+                      + (_iiqROIMovesToMTA(slug) ? '<div class="iiq-roi-coef-keep" style="margin-top:2.4rem;"></div>' : _iiqROIContentTable(bd, rates, scopeId)
                       + (picked ? '' : _iiqROIChannelTable(bd, rates))
                       + _iiqROIRateEditor(rates));
+                    if (_iiqROIMovesToMTA(slug) && typeof window._iiqROIPaintCoefKeep === 'function') window._iiqROIPaintCoefKeep();
                 } catch (err) {
                     console.error('[ROI] render failed:', err);
                     host.innerHTML = '<div class="iiq-empty" style="padding:1.5rem; color:#fca5a5;">This view could not be drawn: ' + escapeHtml(err && err.message || String(err)) + '</div>';
@@ -37089,10 +37090,25 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (extra) extra.innerHTML = t.view.slice(t.limit).map(t.render).join('');
             };
 
-            function _iiqMTARenderCoefficientCard(d) {
+            // On Influencer Project the card lives at the foot of the ROI
+            // tab (keep = true) instead of the Attribution tab. Its host
+            // there must not be a <section>: the tab shell claims sections
+            // by heading and would pull it back onto Attribution.
+            window._iiqROIPaintCoefKeep = function() {
+                var boxes = document.querySelectorAll('.iiq-roi-coef-keep');
+                if (!boxes.length) return;
+                var slug = (window.__intentIQ && window.__intentIQ.currentSlug) || '';
+                var kp = window.__iiqMTAKeepPayload;
+                var html = '';
+                if (kp && kp.slug === slug && kp.d) {
+                    try { html = _iiqMTARenderCoefficientCard(kp.d, true); } catch (e) { console.warn('[MTA] ROI copy failed', e); }
+                }
+                Array.prototype.forEach.call(boxes, function(b) { b.innerHTML = html; });
+            };
+            function _iiqMTARenderCoefficientCard(d, keep) {
                 var tps = (d.touchpoints || []).slice();
                 if (!tps.length) return '';
-                if (/influencer_project/.test(String((window.__intentIQ && window.__intentIQ.currentSlug) || ''))) return '';
+                if (!keep && /influencer_project/.test(String((window.__intentIQ && window.__intentIQ.currentSlug) || ''))) return '';
                 var bfl = d.bottom_funnel_label || 'Ticketing site visit';
                 var convNoun = d.conversion_noun || 'conversion';
                 var audLabelCoef = (d.cohort_meta && d.cohort_meta.audience_label) ? String(d.cohort_meta.audience_label) : '';
@@ -37354,6 +37370,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     try { activePayload = _iiqGoatAsOfPayload(activePayload, d); }
                     catch (_ge) { console.warn('[MTA] as-of read failed', _ge); }
                 }
+                window.__iiqMTAKeepPayload = { slug: (window.__intentIQ && window.__intentIQ.currentSlug) || '', d: activePayload };
+                try { window._iiqROIPaintCoefKeep(); } catch (_) {}
                 var tps = (activePayload.touchpoints || []).slice();
                 var bfl = activePayload.bottom_funnel_label || d.bottom_funnel_label || 'Ticketing site visit';
                 var convNoun = activePayload.conversion_noun || d.conversion_noun || 'conversion';
