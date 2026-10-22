@@ -556,6 +556,11 @@ _WH_LEAD_RX = re.compile(r"^(?:how|what|which|where|who|when|why)\b", re.I)
 _SIZE_PREFIX_RX = re.compile(
     r"^(?:the\s+)?(?:market\s+size\s+(?:for|of)|size\s+of|audience\s+size\s+(?:for|of)|"
     r"sample\s+size\s+(?:for|of)|how\s+big\s+is|how\s+many)\s+(?:the\s+)?", re.I)
+# the tail of a how-many question that is not part of the thing counted:
+# 'how many UFC fans are there' -> 'UFC fans'
+_SIZE_TAIL_RX = re.compile(
+    r"\s+(?:(?:are|is)\s+(?:out\s+)?there|exist(?:s)?|out\s+there|in\s+(?:the\s+)?(?:us|u\.s\.|united\s+states|country)|"
+    r"in\s+total|total|overall|right\s+now|today|do\s+(?:you|we)\s+(?:have|see|carry|cover))\s*$", re.I)
 _SHARE_OF_RX = re.compile(
     r"(?:how\s+penetrated\s+is|penetration\s+of|share\s+of|how\s+(?:much|far)\s+(?:does\s+)?)\s*"
     r"(?P<plat>[A-Z][\w+&'. -]{1,40}?)(?:\s+(?:in|into|across|on)\b|'s\b|\?|$)")
@@ -609,6 +614,22 @@ def _join(parts):
     return ', '.join(parts[:-1]) + ' and ' + parts[-1]
 
 
+_AUDIENCE_NOUN_RX = re.compile(
+    r"\b(?:audience|viewers|listeners|readers|players|fans|subscribers|buyers|shoppers|users|customers|"
+    r"members|visitors|households|people|market)\b", re.I)
+_ARTICLE_RX = re.compile(r"^(?:the|a|an|its|their|our|your|this|these|those|all|every)\b", re.I)
+
+
+def _with_article(s):
+    """'Babylon 5 audience on Prime Video' -> 'the Babylon 5 audience on
+    Prime Video'. A bare brand or title ('Mountain Dew', 'Gilmore Girls')
+    and a phrase that already opens with a determiner are left alone."""
+    s = ' '.join(str(s or '').split())
+    if not s or _ARTICLE_RX.match(s) or not _AUDIENCE_NOUN_RX.search(s):
+        return s
+    return 'the ' + s
+
+
 def sizing_lead(text, ctx=None):
     """The one sentence a sizing offer opens with, built from the things
     the ask names: 'I can size the market for prank content, horror and
@@ -624,9 +645,17 @@ def sizing_lead(text, ctx=None):
             if not s or s == '__page__' or _sz.is_panel_noun(s) or _WH_LEAD_RX.match(s):
                 continue
             s = _SIZE_PREFIX_RX.sub('', s).strip(" ,;:.'\"")
+            for _ in range(3):   # 'are there in the US' peels one tail at a time
+                s2 = _SIZE_TAIL_RX.sub('', s).strip(" ,;:.'\"")
+                if s2 == s:
+                    break
+                s = s2
             if not s or _sr.is_metric_phrase(s):
                 continue
-            s = _sz.strip_audience_nouns(s) or s
+            core = _sz.strip_audience_nouns(s) or s
+            # 'UFC fans' sizes as the UFC audience and says so; a bare
+            # brand or title stays as written
+            s = f"the {core} audience" if core != s and not _AUDIENCE_NOUN_RX.search(core) else core
             if s and s.lower() not in [x.lower() for x in things]:
                 things.append(s)
     except Exception:
@@ -634,6 +663,9 @@ def sizing_lead(text, ctx=None):
     if not things:
         return ''
     market = bool(re.search(r"\bmarket\s+size\b", t, re.I))
+    # an audience phrase takes its article: 'the Babylon 5 audience on Prime
+    # Video', never the fragment 'Babylon 5 audience on Prime Video'
+    things = [_with_article(s) for s in things]
     lead = ("I can size the market for " if market else "I can size ") + _join(things)
     m = _SHARE_OF_RX.search(t)
     if m:

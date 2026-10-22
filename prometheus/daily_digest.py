@@ -33,6 +33,11 @@ RECIPIENTS = ['jenna@crosswalknyc.com', 'jessie@crosswalknyc.com']
 SENDER = 'BehavioralGraph <jenna@crosswalknyc.com>'
 _SKIP_USERS = ('', 'unknown', 'canary', 'replay')
 _HELD_OUTCOMES = ('held', 'faulted', 'promised')
+# an ask with a job behind it is a promise still open only while the job
+# is in flight; a settled outcome (landed, superseded by a correction,
+# answered by one, declined, cancelled) is never listed (2026-10-22:
+# Alexia's superseded 14:47 ask read as a held promise)
+_IN_FLIGHT = ('', 'promised', 'held', 'working', 'pending', 'running', 'queued', 'started')
 _INTERNAL_RX = re.compile(r"\b(?:synth\w*|modeled|modelled|hostmap|clickstream|panelists?|tier\s*[12]|gen\s*pop|claude|anthropic)\b", re.I)
 
 
@@ -67,8 +72,17 @@ def _get(s3, key):
 
 
 def _live_user(u):
+    """A real person: the one predicate every surface shares
+    (prometheus.probe_identity). canary:*, the sandbox key's owner, the
+    smoke and the graders never make the digest."""
     u = str(u or '')
-    return u not in _SKIP_USERS and not u.startswith('canary')
+    if u in _SKIP_USERS or u.startswith('canary'):
+        return False
+    try:
+        from . import probe_identity as _pid
+        return _pid.live(u)
+    except Exception:
+        return True
 
 
 def _ask_records(s3, day):
@@ -98,7 +112,7 @@ def collect(day=None, s3=None):
             if oc in ('faulted', 'error'):
                 doc['faults'].append({'ts': r.get('ts'), 'user': r.get('user'), 'question': r.get('question'),
                                       'route': r.get('route'), 'subject': r.get('subject')})
-            elif oc in _HELD_OUTCOMES or (r.get('job_id') and oc not in ('landed', 'answered')):
+            elif oc in _HELD_OUTCOMES or (r.get('job_id') and oc in _IN_FLIGHT):
                 doc['held'].append({'ts': r.get('ts'), 'user': r.get('user'), 'question': r.get('question'),
                                     'job_id': r.get('job_id'), 'outcome': oc, 'subject': r.get('subject')})
         for k in _list(s3, f'{SIGNAL_PREFIX}{day}/'):

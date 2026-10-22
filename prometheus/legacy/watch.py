@@ -183,7 +183,10 @@ def _pm_watch_flag(user, question, route, outcome, extra=None):
         sig = str((extra or {}).get('user_signal') or '')
         if outcome not in _PM_WATCH_FLAGGED and sig not in ('rejected', 'wrong', 'no'):
             return
-        if str(user or '').startswith('canary') or str(user or '') in ('', 'unknown', 'replay'):
+        # one predicate for every surface (prometheus.probe_identity):
+        # a probe identity or a test process never lands on the card
+        from prometheus import probe_identity as _pid
+        if not _pid.may_record(user):
             return
     except Exception:
         return
@@ -210,8 +213,12 @@ def _pm_watch_flag(user, question, route, outcome, extra=None):
 def _pm_record_held_reply(username, question, told, reason, kind):
     """A held or repeated reply opens a task with a due time (2026-10-06,
     dead ends): system/ops/held_replies/<day>/<ts>_<id>.json, read by the
-    ops watch so an unanswered promise is flagged, never forgotten."""
+    ops watch so an unanswered promise is flagged, never forgotten. A
+    probe identity or a test process opens none (probe_identity)."""
     try:
+        from prometheus import probe_identity as _pid
+        if not _pid.may_record(username):
+            return
         import hashlib as _hl
         now = datetime.now(timezone.utc)
         rid = _hl.sha1(f"{username}|{question}|{now.isoformat()}".encode()).hexdigest()[:10]

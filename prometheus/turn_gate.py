@@ -34,9 +34,10 @@ import time
 from . import continuation as _cont
 from . import subject_rules as _sr
 from . import faults as _faults
+from . import probe_identity as _pid
 
-__all__ = ['gate', 'repeat_count', 'mark_failed_by_user', 'calm_hold', 'calm_payload', 'CALM_LINE',
-           'RepeatUnanswered', 'ALERT_ROUTE']
+__all__ = ['gate', 'repeat_count', 'correction_count', 'mark_failed_by_user', 'calm_hold', 'calm_payload',
+           'CALM_LINE', 'RepeatUnanswered', 'ALERT_ROUTE']
 
 # The standing calm line (app.py _CHATBOT_CALM_MESSAGE, Jenna 2026-09-30),
 # verbatim. The one thing a reader is told when the answer will come by
@@ -113,10 +114,67 @@ def repeat_count(text, history, window_s=REPEAT_WINDOW_S, now=None):
     return n
 
 
-def mark_failed_by_user(uname, question, prior_reply='', reason='repeat', s3=None, bucket='dashboard-inputs'):
+def correction_count(text, history, window_s=24 * 3600, now=None):
+    """How many times the person has already pushed back on the same
+    answer in this thread: a prior user turn with this same correction
+    text, or a correction-shaped turn that followed the same agent reply
+    the latest one did (Prometheus said the same wrong thing again). Each
+    counted turn was answered. A correction is not a repeat of a question,
+    so the repeat guard never saw these (2026-10-22, the digest's seven
+    "no a pdf was created. where is it")."""
+    q = _norm_q(text)
+    if not q:
+        return 0
+    try:
+        from . import user_signal as _us
+        _rej = _us.is_rejection
+    except Exception:
+        _rej = lambda s: False  # noqa: E731
+
+    def rejection(s):
+        # the rejection regex, or a push-back that opens with a no and
+        # goes on to say what was true ("no a pdf was created. where is it")
+        return bool(_rej(s)) or bool(re.match(r"^\s*(?:no+|nope|wrong|incorrect|not\s+(?:right|true|that))\b", str(s or ''), re.I))
+    turns = [t for t in (history or []) if isinstance(t, dict)]
+    if turns and str(turns[-1].get('role') or '') == 'user' and _norm_q(turns[-1].get('text') or turns[-1].get('content')) == q:
+        turns = turns[:-1]
+    latest_reply = ''
+    for t in reversed(turns):
+        if str(t.get('role') or '') != 'user':
+            latest_reply = _norm_q(t.get('text') or t.get('content'))
+            break
+    now = now or _dt.datetime.now(_dt.timezone.utc)
+    n = 0
+    for i, t in enumerate(turns):
+        if str(t.get('role') or '') != 'user':
+            continue
+        txt = str(t.get('text') or t.get('content') or '')
+        same_text = _norm_q(txt) == q
+        prev_reply = ''
+        for p in reversed(turns[:i]):
+            if str(p.get('role') or '') != 'user':
+                prev_reply = _norm_q(p.get('text') or p.get('content'))
+                break
+        same_reply = bool(latest_reply) and prev_reply == latest_reply and rejection(txt)
+        if not (same_text or same_reply):
+            continue
+        ts = _parse_ts(t.get('ts'))
+        if ts is not None and (now - ts).total_seconds() > window_s:
+            continue
+        if any(str(x.get('role') or '') != 'user' for x in turns[i + 1:i + 3]):
+            n += 1
+    return n
+
+
+def mark_failed_by_user(uname, question, prior_reply='', reason='repeat', s3=None, bucket='dashboard-inputs', record=None):
     """The prior reply did not land: record it now, in real time, under
     the ask log's signals prefix (the watch card and the day's digest
-    read it). Never raises."""
+    read it). Never raises. A probe identity or a test / replay process
+    never writes one (probe_identity.may_record): the day's digest read
+    seven "corrections" from Scott that were seven suite runs of his
+    fixture (2026-10-22)."""
+    if not _pid.may_record(uname, record, s3):
+        return False
     try:
         import boto3
         c = s3 or boto3.client('s3', region_name='us-east-2')
@@ -251,7 +309,8 @@ def calm_hold(text, history, page, uname, host, *, reason, n_rep=0, cont=None, p
     except Exception:
         pass
     try:
-        if host is not None and host.has('record_held'):
+        # the promise ledger holds real people's promises only
+        if host is not None and host.has('record_held') and _pid.may_record(uname):
             host.record_held(uname, text, CALM_LINE, f"{reason}; bound subject: {subj or '(none)'}; path: {path}", 'repeat')
     except Exception as e:
         _faults.note('turn_gate.record_held', e)
@@ -321,12 +380,18 @@ def gate(text, body, history, ctx, user, uname, tid, via, persist, *, client_sur
                    'offer_deck': False, 'deck_angle': None, 'figure_provenance': _pa.get('figure')}
             return _answer(raw, 'figure_provenance', route='figure_provenance', outcome='answered', **common)
 
-    # ---- I7: the same question again after a reply that did not land
-    n_rep = repeat_count(text, history)
+    # ---- I7: the same question again after a reply that did not land.
+    # A probe identity (the post-deploy smoke on its sandbox key, a canary,
+    # a grader) asks the same question on purpose, every deploy; it is
+    # never a reader who did not get an answer, so the guard, the grading
+    # and the calm line never apply to it (2026-10-22: three deploys in
+    # thirty minutes walked the smoke into the calm line).
+    probe = _pid.asks_on_purpose(uname, user if isinstance(user, dict) else None)
+    n_rep = 0 if probe else repeat_count(text, history)
     if n_rep:
         prev = _last_agent(history)
         prev_text = str((prev or {}).get('text') or (prev or {}).get('content') or '')
-        mark_failed_by_user(uname, text, prev_text, reason='repeat')
+        mark_failed_by_user(uname, text, prev_text, reason='repeat', record=user if isinstance(user, dict) else None)
         _watch(host, uname, text, 'repeat_guard', 'failed_by_user')
         try:
             from flask import g as _g2
@@ -462,8 +527,20 @@ def gate(text, body, history, ctx, user, uname, tid, via, persist, *, client_sur
     if kind == 'correction':
         prev = _last_agent(history)
         prev_text = str((prev or {}).get('text') or (prev or {}).get('content') or '')
-        mark_failed_by_user(uname, text, prev_text, reason='correction')
-        _watch(host, uname, text, 'correction', 'failed_by_user')
+        if not probe:
+            mark_failed_by_user(uname, text, prev_text, reason='correction',
+                                record=user if isinstance(user, dict) else None)
+            _watch(host, uname, text, 'correction', 'failed_by_user')
+        # The same correction a second time, or a second push-back on the
+        # same reply, means Prometheus said the same wrong thing again. That
+        # escalates exactly like a repeated question: the calm promise and
+        # ops get the problem; never the same wrong reply a third time
+        # (2026-10-22, the digest's seven identical corrections from one
+        # person). A probe never escalates.
+        if not probe and correction_count(text, history) >= 1:
+            raw = calm_hold(text, history, page, uname, host, reason='corrected again, same answer',
+                            n_rep=correction_count(text, history), cont=cont)
+            return _answer(raw, 'correction_calm', route='correction', outcome='held', **common)
         body = dict(body)
         body['_pm_correction'] = True
         subj = str(cont.get('subject') or (deliv or {}).get('subject') or '').strip()
@@ -501,8 +578,11 @@ def gate(text, body, history, ctx, user, uname, tid, via, persist, *, client_sur
 
 def _watch(host, uname, question, route, outcome):
     """The System Status watch card sees a failed_by_user grade the
-    moment it happens (I10). Never raises."""
+    moment it happens (I10). Never raises; never for a probe identity or
+    from a test process (probe_identity.may_record)."""
     try:
+        if not _pid.may_record(uname):
+            return
         if host is not None and host.has('watch_flag'):
             host.watch_flag(uname, question, route, outcome, {'user_signal': 'rejected'})
     except Exception as e:

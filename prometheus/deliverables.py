@@ -29,6 +29,9 @@ from datetime import datetime, timedelta, timezone
 from urllib.parse import unquote, urlparse
 
 LOOKBACK_DAYS = 14
+# an ask that names its subject looks back a season: "where is the Howdy
+# deck" two weeks after the build must still find the build (2026-10-22)
+SUBJECT_LOOKBACK_DAYS = 120
 MAX_ITEMS = 5
 
 _ART = (r"decks?|pdfs?|powerpoints?|pptx|slides?|slide decks?|one[- ]pagers?|"
@@ -326,6 +329,158 @@ def _mail_items(email, subject, s3, bucket, since):
     return out
 
 
+def _dashboard_deck_items(uname, subject, s3, bucket, since):
+    """Decks the person built in the dashboard's own deck builder
+    (system/decks/, the /api/decks store): owned by them or shared with
+    them. A dashboard deck opens from the Decks panel; a PDF exported
+    from it saved to their computer, so the item names the deck and
+    where it opens rather than a link (2026-10-22, Scott: "a pdf was
+    created" with no deck anywhere Prometheus wrote)."""
+    out = []
+    u = str(uname or '').lower()
+    if not u:
+        return out
+    try:
+        pag = s3.get_paginator('list_objects_v2')
+        for page in pag.paginate(Bucket=bucket, Prefix='system/decks/'):
+            for o in page.get('Contents') or []:
+                k = str(o.get('Key') or '')
+                if not k.endswith('.json'):
+                    continue
+                lm = o.get('LastModified')
+                ts = lm.timestamp() if hasattr(lm, 'timestamp') else time.time()
+                if ts < since:
+                    continue
+                d = _s3_json(s3, bucket, k) or {}
+                people = {str(d.get('owner') or '').lower(), str(d.get('last_editor') or '').lower()}
+                for c in (d.get('collaborators') or []) + (d.get('shared_with') or []):
+                    people.add(str((c.get('username') if isinstance(c, dict) else c) or '').lower())
+                if u not in people:
+                    continue
+                name = str(d.get('name') or d.get('title') or '')
+                if not _matches(subject, name, str(d.get('description') or '')):
+                    continue
+                label, ts2 = _when(d.get('updated_at') or d.get('created_at'))
+                n = len(d.get('slides') or [])
+                out.append({'kind': 'deck', 'label': f"{name or 'deck'} ({n} slide{'s' if n != 1 else ''}, in the dashboard's Decks panel)",
+                            'subject': name, 'when': label, 'ts': ts2 or ts, 'url': ''})
+    except Exception:
+        traceback.print_exc()
+    return out
+
+
+def _read_items(uname, subject, s3, bucket, read_prefix, since):
+    """Generated reads the person asked for (the read job records):
+    the ones that finished with a file, a chart or a CSV link."""
+    out = []
+    try:
+        pag = s3.get_paginator('list_objects_v2')
+        keys = []
+        for page in pag.paginate(Bucket=bucket, Prefix=read_prefix):
+            for o in page.get('Contents') or []:
+                lm = o.get('LastModified')
+                ts = lm.timestamp() if hasattr(lm, 'timestamp') else time.time()
+                if ts >= since and str(o.get('Key') or '').endswith('.json'):
+                    keys.append((ts, o['Key']))
+        keys.sort(reverse=True)
+        for _, k in keys[:80]:
+            d = _s3_json(s3, bucket, k) or {}
+            if str(d.get('user') or '').lower() != str(uname or '').lower() or str(d.get('status') or '') != 'done':
+                continue
+            payload = d.get('payload') if isinstance(d.get('payload'), dict) else {}
+            links = []
+            for src in (d, payload):
+                for mk, kind in (('link', 'file'), ('chart', 'chart'), ('csv', 'file'), ('pdf', 'file')):
+                    v = src.get(mk)
+                    if isinstance(v, dict) and v.get('url'):
+                        links.append((kind, str(v.get('label') or v.get('filename') or kind), v['url']))
+                    elif isinstance(v, str) and v.startswith('http'):
+                        links.append((kind, mk, v))
+            if not links:
+                continue
+            q = str(d.get('question') or payload.get('question') or '')
+            subj = str(d.get('subject') or payload.get('subject') or '')
+            if not _matches(subject, subj, q, ' '.join(l[1] for l in links)):
+                continue
+            label, ts2 = _when(d.get('finished_at') or d.get('started_at'))
+            for kind, name, url in links:
+                out.append({'kind': kind, 'label': re.sub(r'^Download\s+', '', name), 'subject': subj,
+                            'when': label, 'ts': ts2, 'url': _fresh_link(url, s3, bucket)})
+    except Exception:
+        traceback.print_exc()
+    return out
+
+
+def _delivery_items(uname, subject, s3, bucket, since):
+    """What was delivered to the person through the deliverables record
+    (system/pm_deliveries/<user>/): a profile with its files, a journey
+    with its workbook, the email that carried them."""
+    out = []
+    u = str(uname or '')
+    if not u:
+        return out
+    try:
+        r = s3.list_objects_v2(Bucket=bucket, Prefix=f'system/pm_deliveries/{u}/')
+        for o in r.get('Contents') or []:
+            lm = o.get('LastModified')
+            ts = lm.timestamp() if hasattr(lm, 'timestamp') else time.time()
+            if ts < since:
+                continue
+            d = _s3_json(s3, bucket, o['Key']) or {}
+            subj = str(d.get('subject') or '')
+            files = [str(f) for f in (d.get('files') or []) if str(f or '').strip()]
+            if not _matches(subject, subj, ' '.join(files), str(d.get('key') or '')):
+                continue
+            label, ts2 = _when(d.get('ts') or d.get('delivered_at') or (lm.isoformat() if hasattr(lm, 'isoformat') else ''))
+            kind = str(d.get('kind') or 'file')
+            where = str(d.get('where') or '')
+            head = (f"{subj} profile: {', '.join(files[:3])}" if kind == 'profile' and files
+                    else (f"{subj} {kind}: {', '.join(files[:3])}" if files else f"{subj} {kind}"))
+            if where:
+                head += f". {where}"
+            out.append({'kind': 'file', 'label': head, 'subject': subj, 'when': label, 'ts': ts2 or ts, 'url': ''})
+    except Exception:
+        traceback.print_exc()
+    return out
+
+
+def _ask_trail(uname, subject, s3, bucket, since, limit=3):
+    """The person's own asks about the subject that would have produced a
+    file (a deck, a journey, a build) and what each came to, from the ask
+    log; what the plain 'nothing on file' reply points at so the person
+    knows what Prometheus did and did not do."""
+    out = []
+    u = str(uname or '')
+    if not u or not subject:
+        return out
+    try:
+        day = datetime.now(timezone.utc)
+        ndays = min(int((time.time() - since) / 86400) + 1, SUBJECT_LOOKBACK_DAYS)
+        want = re.compile(r"\b(?:deck|pdf|slides?|journey|build|profile|report|pull)\b", re.I)
+        for i in range(ndays):
+            d = (day - timedelta(days=i)).strftime('%Y-%m-%d')
+            r = s3.list_objects_v2(Bucket=bucket, Prefix=f'system/usage/ask_log/{d}/')
+            for o in r.get('Contents') or []:
+                k = str(o.get('Key') or '')
+                if '/_signals/' in k or not k.endswith('.json'):
+                    continue
+                rec = _s3_json(s3, bucket, k) or {}
+                if str(rec.get('user') or '') != u:
+                    continue
+                q = str(rec.get('question') or '')
+                if not want.search(q) or not _matches(subject, q, str(rec.get('subject') or '')):
+                    continue
+                label, ts = _when(rec.get('ts'))
+                out.append({'when': label, 'ts': ts, 'question': q[:140], 'outcome': str(rec.get('outcome') or ''),
+                            'route': str(rec.get('route') or '')})
+            if len(out) >= limit * 3:
+                break
+    except Exception:
+        traceback.print_exc()
+    out.sort(key=lambda it: -float(it.get('ts') or 0))
+    return out[:limit]
+
+
 def _catalog_line(subject):
     """What the dashboard holds on the subject, or ''."""
     if not subject:
@@ -381,14 +536,26 @@ def answer(text, uname, user=None, ctx=None, history=None, host=None):
         s3, bucket = host.s3_client, host.bucket
     except Exception:
         return None
-    since = time.time() - LOOKBACK_DAYS * 86400
+    # a named subject looks back a season; a bare "where is the pdf" lists
+    # the recent fortnight
+    since = time.time() - (SUBJECT_LOOKBACK_DAYS if subject else LOOKBACK_DAYS) * 86400
     email = str((user or {}).get('email') or '') if isinstance(user, dict) else ''
     try:
         deck_prefix = host.deck_prefix
     except Exception:
         deck_prefix = 'system/prometheus_decks/'
+    try:
+        read_prefix = host.read_prefix
+    except Exception:
+        read_prefix = 'system/prometheus_reads/'
+    # every store a file can land in: Prometheus deck jobs, the
+    # dashboard's own deck builder, generated reads with a file, the
+    # deliverables record, links in the person's threads, mail sent to them
     items = []
     items += _deck_items(uname, subject, s3, bucket, deck_prefix, since)
+    items += _dashboard_deck_items(uname, subject, s3, bucket, since)
+    items += _read_items(uname, subject, s3, bucket, read_prefix, since)
+    items += _delivery_items(uname, subject, s3, bucket, since)
     items += _thread_items(uname, subject, s3, bucket, host, since)
     items += _mail_items(email, subject, s3, bucket, since)
     # an ask for a specific format lists that format first, the rest after
@@ -439,10 +606,22 @@ def answer(text, uname, user=None, ctx=None, history=None, host=None):
                 'subject': display, 'items': picked}
     # nothing produced for the caller
     if display:
+        span = 'the last two weeks' if (time.time() - since) < 20 * 86400 else 'the last few months'
         reply = (f"I do not have a {display} {noun} on file for you, and nothing about {display} has gone "
-                 f"to your inbox from Prometheus in the last two weeks.")
+                 f"to your inbox from Prometheus in {span}.")
         if cat_line:
             reply += ' ' + cat_line
+        # what the person did ask for on the subject, so the no is specific
+        trail = _ask_trail(uname, subject, s3, bucket, since)
+        if trail:
+            bits = []
+            for t in trail:
+                oc = t.get('outcome') or ''
+                came = {'new_build': 'the profile was built', 'workorder_cancel': 'nothing was running to stop',
+                        'answered': 'answered in the chat', 'landed': 'answered in the chat',
+                        'clarified': 'I asked a question back', 'declined': 'it did not run'}.get(oc, oc or 'logged')
+                bits.append(f"\"{t['question']}\" ({t['when']}: {came})")
+            reply += " What you asked me about " + display + ": " + '; '.join(bits) + "."
         reply += (" If you exported a PDF from the dashboard, it saved to your computer's downloads folder."
                   f" Say 'build a {display} deck' and I will put one together.")
     else:

@@ -197,11 +197,16 @@ def grade_sequence(records, window_s=300, skip_users=('unknown', ''),
     graded once, by the first qualifying follow-up."""
     out = []
     by_user = {}
+    try:
+        from . import probe_identity as _pid
+        _is_probe = _pid.is_probe_user
+    except Exception:
+        _is_probe = lambda u, record=None: False  # noqa: E731
     for r in records:
         if not isinstance(r, dict):
             continue
         u = str(r.get('user') or '')
-        if u in skip_users:
+        if u in skip_users or _is_probe(u):
             continue
         if not str(r.get('question') or '').strip():
             continue

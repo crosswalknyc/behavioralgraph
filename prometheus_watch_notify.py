@@ -274,6 +274,12 @@ def notify(username, record, question, payload, subject=None, via=None, surface=
         # internal sandbox key (the post-deploy smoke) never mails either.
         if str(username or '').strip().lower().startswith('canary') or (record or {}).get('api_key_sandbox'):
             return
+        try:
+            from prometheus import probe_identity as _pid
+            if _pid.is_probe_user(username, record):
+                return
+        except Exception:
+            pass
         # No account on file means nobody real asked (a test fixture, a
         # replay, a stale session): nothing to report (2026-10-16, the
         # 'acme_partner' notes that reached Jenna, Liz and Jessie).

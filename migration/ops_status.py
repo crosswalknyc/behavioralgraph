@@ -101,9 +101,17 @@ def watch_view(s3, bucket, now):
     last hour; amber when anything is open; green when quiet."""
     out = {'present': False, 'flags_24h': 0, 'flags_1h': 0, 'recent': [],
            'open_promises': 0, 'overdue_promises': 0, 'promises': [], 'light': None}
+    # read-side twin of the writers' predicate: a probe identity (the
+    # smoke's sandbox key, a canary, a grader) never lights the card
+    # (prometheus.probe_identity, 2026-10-22)
+    try:
+        from prometheus import probe_identity as _pid
+        _live = _pid.live
+    except Exception:
+        _live = lambda u, record=None: not str(u or '').startswith('canary')  # noqa: E731
     try:
         doc = read_json(s3, bucket, WATCH_KEY)
-        items = [x for x in ((doc or {}).get('items') or []) if isinstance(x, dict)]
+        items = [x for x in ((doc or {}).get('items') or []) if isinstance(x, dict) and _live(x.get('user'))]
         day = now - dt.timedelta(hours=24)
         hour = now - dt.timedelta(hours=1)
         recent = []
@@ -127,7 +135,7 @@ def watch_view(s3, bucket, now):
             resp = s3.list_objects_v2(Bucket=bucket, Prefix=prefix)
             for o in resp.get('Contents') or []:
                 doc = read_json(s3, bucket, o['Key'])
-                if isinstance(doc, dict) and doc.get('status', 'open') == 'open':
+                if isinstance(doc, dict) and doc.get('status', 'open') == 'open' and _live(doc.get('user')):
                     due = _parse(doc.get('due_by'))
                     promises.append({'user': doc.get('user'), 'question': str(doc.get('question') or '')[:120],
                                      'kind': doc.get('kind'), 'opened_at': doc.get('opened_at'),
