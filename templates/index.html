@@ -35845,9 +35845,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                       +   '<td style="padding:0.45rem 0.55rem; color:var(--text-secondary);">' + escapeHtml(a.channel || '') + '</td>'
                       +   '<td style="padding:0.45rem 0.55rem; color:#22d3ee; text-align:right; font-variant-numeric:tabular-nums;">' + fmtInt(Math.round(r.views)) + '</td>'
                       +   (slim ? '' : '<td style="padding:0.45rem 0.55rem; color:#22d3ee; text-align:right;">' + _iiqROIFmtUSD(r.views_value) + '</td>')
-                      +   '<td style="padding:0.45rem 0.55rem; color:#a78bfa; text-align:right;">' + _iiqROIFmtUSD(r.eng_value)  + '</td>'
-                      +   '<td style="padding:0.45rem 0.55rem; color:#818cf8; text-align:right;">' + _iiqROIFmtUSD(r.info_value) + '</td>'
-                      +   '<td style="padding:0.45rem 0.55rem; color:#fbbf24; text-align:right;">' + _iiqROIFmtUSD(r.web_value)  + '</td>'
+                      +   '<td style="padding:0.45rem 0.55rem; color:#a78bfa; text-align:right; font-variant-numeric:tabular-nums;">' + (slim ? fmtInt(Math.round(r.eng))  : _iiqROIFmtUSD(r.eng_value))  + '</td>'
+                      +   '<td style="padding:0.45rem 0.55rem; color:#818cf8; text-align:right; font-variant-numeric:tabular-nums;">' + (slim ? fmtInt(Math.round(r.info)) : _iiqROIFmtUSD(r.info_value)) + '</td>'
+                      +   '<td style="padding:0.45rem 0.55rem; color:#fbbf24; text-align:right; font-variant-numeric:tabular-nums;">' + (slim ? fmtInt(Math.round(r.web))  : _iiqROIFmtUSD(r.web_value))  + '</td>'
                       +   (slim ? '' : '<td style="padding:0.45rem 0.55rem; color:#f0fdf4; text-align:right; font-weight:700;">' + _iiqROIFmtUSD(r.total_value) + '</td>')
                       +   '<td style="padding:0.45rem 0.55rem; color:var(--text-secondary); text-align:right;">' + r.share.toFixed(1) + '%</td>'
                       +   (slim ? '' : '<td style="padding:0.45rem 0.55rem; color:var(--text-secondary); text-align:right;">' + _iiqROIFmtUSD(r.per_k) + '</td>')
@@ -35867,9 +35867,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                   +       '<th style="padding:0.45rem 0.55rem; text-align:left;">Channel</th>'
                   +       '<th style="padding:0.45rem 0.55rem; text-align:right;">Views</th>'
                   +       (slim ? '' : '<th style="padding:0.45rem 0.55rem; text-align:right;">Views $</th>')
-                  +       '<th style="padding:0.45rem 0.55rem; text-align:right;">Eng $</th>'
-                  +       '<th style="padding:0.45rem 0.55rem; text-align:right;">' + escapeHtml(midL) + ' $</th>'
-                  +       '<th style="padding:0.45rem 0.55rem; text-align:right;">' + escapeHtml(botL) + ' $</th>'
+                  +       '<th style="padding:0.45rem 0.55rem; text-align:right;">' + (slim ? 'Engagements' : 'Eng $') + '</th>'
+                  +       '<th style="padding:0.45rem 0.55rem; text-align:right;">' + escapeHtml(slim ? midL + ' events' : midL + ' $') + '</th>'
+                  +       '<th style="padding:0.45rem 0.55rem; text-align:right;">' + escapeHtml(slim ? botL + (/visit$/i.test(botL) ? 's' : ' visits') : botL + ' $') + '</th>'
                   +       (slim ? '' : '<th style="padding:0.45rem 0.55rem; text-align:right;">Total $</th>')
                   +       '<th style="padding:0.45rem 0.55rem; text-align:right;">Share</th>'
                   +       (slim ? '' : '<th style="padding:0.45rem 0.55rem; text-align:right;">Per 1K</th>')
