@@ -1,6 +1,6 @@
 {
  "version": 1,
- "content_hash": "424173f22e31ab0a96e96da06b19403abbdd94411cbbf0586411005f6ced1619",
+ "content_hash": "09ce01dcbadbdb56183177c4c4dd8713dadbb665baac83fd2cf35cdf227bce01",
  "decisions": [
   {
    "id": "kids_viewers_default",
@@ -766,7 +766,27 @@
    "sources": [
     "prometheus-brain.md"
    ]
+  },
+  {
+   "id": "conversation_follows_the_project",
+   "decided": "2026-10-21",
+   "statement": "Each project the reader opens (a profile, a journey, a campaign) has its own conversation thread. Opening a project moves the chat to that project's thread and returns to it with its earlier turns; a screen with no project open returns to the general chat. The thread's project is the subject of every follow-up on it: a bare 'and in September?' on the Peacock thread is about Peacock, never about a page the reader happened to open since. A subject named in the words still wins. A project's thread never rotates away for being idle; a thread opened by hand from the rail stays until the next project change.",
+   "match_terms": [
+    "this thread",
+    "this chat",
+    "switch project",
+    "other project",
+    "which project",
+    "new chat",
+    "the thread",
+    "back to",
+    "earlier you said",
+    "as I asked before"
+   ],
+   "sources": [
+    "prometheus-brain.md"
+   ]
   }
  ],
- "generated_at": "2026-10-21T19:57:11Z"
+ "generated_at": "2026-10-22T00:26:30Z"
 }

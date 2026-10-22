@@ -344,14 +344,36 @@ _READING_RX = re.compile(r"^On it:\s*reading\s+(?P<what>.+?)\s+now\.?", re.I)
 _STARTED_RX = re.compile(r"^Started\s+(?P<what>.+?)\s*(?:\(number|\.|$)", re.I)
 
 
+def bound_thread_subject():
+    """The project the current thread is bound to (the conversation
+    follows the project, Debi Pomerantz 2026-10-21), as the label a
+    reader sees; '' outside a bound thread or outside a request."""
+    try:
+        from flask import g as _g
+        b = getattr(_g, '_pm_thread_binding', None)
+        if isinstance(b, dict) and b.get('subject_key'):
+            return ' '.join(str(b.get('subject_label') or '').split()).strip(' .,;:')
+    except Exception:
+        pass
+    return ''
+
+
 def thread_subjects(history, page='', limit=4):
     """The subjects this thread has been about, most recent first: the
-    reads Prometheus started ("On it: reading X now"), the runs it
-    started (meta.subject), the subjects on agent turn meta. The page
-    is left out; duplicates fold case-insensitively."""
+    project the thread is bound to (a bound thread's subject IS the
+    thread subject, so a question in the Golden Axe thread is about
+    Golden Axe whatever tab is open), then the reads Prometheus started
+    ("On it: reading X now"), the runs it started (meta.subject), the
+    subjects on agent turn meta. The page is left out when the thread
+    is unbound; a binding that names the page keeps it, since on a
+    bound thread the page is the project. Duplicates fold
+    case-insensitively."""
     out, seen = [], set()
     _, ptoks = _page_tokens(page)
     pkey = ' '.join(ptoks)
+    bound = bound_thread_subject()
+    if bound and pkey == _norm(bound):
+        pkey = ''        # the page is the project: not an exclusion
 
     def _add(name):
         name = ' '.join(str(name or '').split()).strip(' .,;:')
@@ -363,6 +385,8 @@ def thread_subjects(history, page='', limit=4):
         seen.add(k)
         out.append(name)
 
+    if bound:
+        _add(bound)
     for turn in reversed(list(history or [])):
         if not isinstance(turn, dict) or str(turn.get('role') or '') == 'user':
             continue
@@ -866,8 +890,9 @@ def bind(text, history=None, page='', reading=None, catalog_names=None, normaliz
         name = clean_display(m.group('name'), t, casing)
         if name:
             return Subject('brand', name, name, quals, 'words', 0.6)
-    # 8. the words name nothing: the thread, then the page
-    subs = thread_subjects(history, page) if history else []
+    # 8. the words name nothing: the thread (its bound project first,
+    #    even on a fresh thread), then the page
+    subs = thread_subjects(history, page) if (history or bound_thread_subject()) else []
     if subs:
         disp = clean_display(subs[0], '', casing) or subs[0]
         if disp:

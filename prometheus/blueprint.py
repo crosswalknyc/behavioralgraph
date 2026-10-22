@@ -524,7 +524,8 @@ def threads_list():
     user, via, err = _auth()
     if err:
         return err
-    out = service.list_threads(service.username_of(user))
+    out = service.list_threads(service.username_of(user),
+                               subject_key=str(request.args.get('subject_key') or '').strip() or None)
     if via == 'api_key':
         # a key sees its own conversations, never the owner's dashboard threads
         from . import partner_keys as _K
@@ -545,6 +546,22 @@ def threads_new():
         from . import contract_v1 as _C
         return jsonify(_C.declined('unsupported', 'Conversations start with the first ask: send a conversation_id on POST /ask.')), 200
     body = _body()
+    bind = body.get('bind')
+    if isinstance(bind, dict) or body.get('page_context'):
+        # The conversation follows the project (2026-10-21): the thread
+        # bound to what the dashboard has open becomes active, created
+        # when none exists; an empty key is the general chat.
+        from . import thread_binding as _tb
+        bind = bind if isinstance(bind, dict) else {}
+        sk = str(bind.get('subject_key') or '').strip()
+        label = str(bind.get('subject_label') or '').strip()
+        product = str(bind.get('product') or '').strip()
+        if not sk and body.get('page_context'):
+            sk, label, product = _tb.subject_key_for(body.get('page_context'))
+        out = service.thread_for_subject(service.username_of(user), sk or '', label or '', product or '', create=True)
+        return jsonify({'success': True, 'thread_id': out.get('tid'), 'active': out.get('tid'),
+                        'switched': bool(out.get('switched')), 'created': bool(out.get('created')),
+                        'binding': out.get('binding'), 'turns': out.get('history') or []})
     tid, idx = service.new_thread(
         service.username_of(user),
         activate=bool(body.get('activate')),

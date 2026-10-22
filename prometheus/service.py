@@ -183,12 +183,74 @@ def job_thread_id(job_id):
     return job_doc_field(job_id, 'thread_id')
 
 
-def list_threads(uname):
+def list_threads(uname, subject_key=None):
     idx = threads_index(uname)
-    return {'active': idx.get('active'),
-            'threads': sorted(idx.get('threads', []),
-                              key=lambda t: str(t.get('updated') or ''),
-                              reverse=True)}
+    threads = sorted(idx.get('threads', []),
+                     key=lambda t: str(t.get('updated') or ''),
+                     reverse=True)
+    if subject_key:
+        sk = str(subject_key).strip()
+        threads = [t for t in threads
+                   if isinstance(t.get('binding'), dict) and t['binding'].get('subject_key') == sk]
+    return {'active': idx.get('active'), 'threads': threads}
+
+
+def thread_binding(uname, tid):
+    """The project a thread is bound to ({'subject_key', 'subject_label',
+    'product'}), or None for the general chat."""
+    from . import thread_binding as _tb
+    try:
+        return _tb.binding_of_thread(threads_index(uname), tid)
+    except Exception as _fx:
+        _faults.note('service', _fx)
+        return None
+
+
+def stash_binding(uname, tid=None):
+    """Put the thread's project on the request (``g._pm_thread_id`` /
+    ``g._pm_thread_binding``) so the binder reads it as the thread
+    subject and the ask log records it. The explicit id wins when the
+    caller sent one that is theirs; else the active thread. Never
+    raises."""
+    try:
+        from flask import g as _g
+        t = str(tid or '').strip() or None
+        if t and not thread_exists(uname, t):
+            t = None
+        if not t:
+            t = active_thread_id(uname)
+        _g._pm_thread_id = t
+        _g._pm_thread_binding = thread_binding(uname, t) if t else None
+        return _g._pm_thread_binding
+    except Exception as _fx:
+        _faults.note('service', _fx)
+        return None
+
+
+def thread_for_subject(uname, subject_key, subject_label=None, product=None, *, create=True):
+    """The conversation follows the project (Debi Pomerantz 2026-10-21):
+    activate the thread bound to this project, creating it when none
+    exists; an empty subject_key activates the general chat. Persists
+    the index and the bodies of any thread the cap retired.
+
+    Returns {'tid', 'created', 'switched', 'binding', 'history'}."""
+    from . import thread_binding as _tb
+    idx = threads_index(uname)
+    cap = host.max_threads if host.has('max_threads') else 40
+    out = _tb.bind(idx, subject_key, subject_label, product, cap=cap, create=create)
+    if not out.get('tid'):
+        out['history'] = []
+        return out
+    host.s3_put_json(host.threads_index_key(uname), idx)
+    if out.get('created'):
+        host.s3_put_json(host.thread_key(uname, out['tid']), [])
+    for gone in out.get('retired') or []:
+        try:
+            host.s3_client.delete_object(Bucket=host.bucket, Key=host.thread_key(uname, gone))
+        except Exception as _fx:
+            _faults.note('service', _fx)
+    out['history'] = [] if out.get('created') else load_thread(uname, out['tid'])
+    return out
 
 
 # -------------------------------------------------------------------- ask
@@ -371,6 +433,11 @@ def ask(user, body, *, via='session'):
                              decision={'reason': 'bad_thread'}, via=via), 404
     if not tid:
         tid = active_thread_id(uname)
+    # The project this thread is bound to rides the request (2026-10-21,
+    # Debi: the conversation follows the project). The binder reads it as
+    # the thread's subject ahead of the history and the page; the ask log
+    # records it; nothing else in the ask changes.
+    stash_binding(uname, tid)
 
     history = body.get('history')
     if not isinstance(history, list):

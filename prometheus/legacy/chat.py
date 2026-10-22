@@ -2053,8 +2053,8 @@ def _pm_rotate_idle_thread(username):
         tid = idx.get('active')
         th = next((t for t in idx.get('threads', [])
                    if t.get('id') == tid), None)
-        if not th or not th.get('turns'):
-            return None
+        if not th or not th.get('turns') or (isinstance(th.get('binding'), dict) and th['binding'].get('subject_key')):
+            return None   # a project's thread stays the project's thread; the idle rule is for the general chat (2026-10-21)
         stamps = [d for d in (_pm_parse_iso(th.get('updated')),
                               _pm_parse_iso(th.get('opened')))
                   if d is not None]
@@ -2084,13 +2084,14 @@ def _pm_keep_corrected_turns(username, tid, incoming):
         return incoming
 
 
-def _save_synth_chat_history(username, history):
+def _save_synth_chat_history(username, history, thread_id=None):
     try:
         # Trim to last 200 turns to bound growth
         trimmed = list(history or [])[-200:]
         idx = _load_threads_index(username)
-        tid = idx.get('active') or (idx['threads'][0]['id']
-                                    if idx.get('threads') else None)
+        known = {th.get('id') for th in idx.get('threads', [])}
+        # the save names its thread (2026-10-21): a save that races a switch lands on the thread it came from, never the one just opened
+        tid = (str(thread_id).strip() if thread_id and str(thread_id).strip() in known else None) or idx.get('active') or (idx['threads'][0]['id'] if idx.get('threads') else None)
         if not tid:
             return False
         trimmed = _pm_keep_corrected_turns(username, tid, trimmed)
@@ -5375,6 +5376,7 @@ def _ask_logged(surface):
                 view = str(vc.get('view_id') or '').strip()
                 if not view and isinstance(pc, dict) and pc.get('primary'):
                     view = 'profileIQ'
+                __import__('prometheus.service', fromlist=['stash_binding']).stash_binding(_pm_ask_log_user(''), body.get('thread_id'))   # the thread's project rides the request (2026-10-21)
             except Exception as _fx:
                 _faults.note('chat', _fx)
             # What the user did next (2026-10-02): a repeat of the
@@ -5507,6 +5509,7 @@ def _ask_logged(surface):
                         extra = dict(extra or {})
                         extra['trace_id'] = _tid_trace
                     _rd = getattr(_g, '_pm_reading', None); _rd and extra.update({'reading': {k: _rd.get(k) for k in ('intent', 'confidence', 'subjects', 'flags', 'restate', 'ms')}})
+                    _tb = getattr(_g, '_pm_thread_binding', None); (_tb or getattr(_g, '_pm_thread_id', None)) and extra.update({'thread': dict((_tb or {}), id=getattr(_g, '_pm_thread_id', None))})   # the project the thread follows (2026-10-21)
                 except Exception as _fx:
                     _faults.note('chat', _fx)
                 import render_usage_log as _rul
@@ -8544,7 +8547,7 @@ def api_synth_chat_history():
                              'history payload is not a list',
                              tb='(request validation)')
         return jsonify(_H._chatbot_calm_payload())
-    ok = _save_synth_chat_history(uname, history)
+    ok = _save_synth_chat_history(uname, history, body.get('thread_id'))
     return jsonify({'success': ok})
 
 

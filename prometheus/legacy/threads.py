@@ -14,7 +14,43 @@ from flask import jsonify, request, session
 from prometheus.legacy import H as _H, C as _C  # noqa: E402
 from prometheus import seams as _seams  # noqa: E402
 
-__all__ = ['api_synth_chat_threads', 'api_synth_chat_threads_new', 'api_synth_chat_threads_activate', 'api_synth_chat_threads_rename', 'api_synth_chat_threads_delete', '_pm_threads_index_key', '_pm_thread_key', '_pm_thread_title_from', '_load_threads_index', '_turn_epoch', '_is_server_turn', 'keep_server_turns']
+__all__ = ['api_synth_chat_threads', 'api_synth_chat_threads_new', 'api_synth_chat_threads_activate', 'api_synth_chat_threads_bind', 'api_synth_chat_threads_rename', 'api_synth_chat_threads_delete', '_pm_threads_index_key', '_pm_thread_key', '_pm_thread_title_from', '_load_threads_index', '_turn_epoch', '_is_server_turn', 'keep_server_turns']
+
+
+@_H.app.route('/api/brief-chat/threads/bind', methods=['POST'])
+@_H.requires_auth
+def api_synth_chat_threads_bind():
+    """The conversation follows the project (2026-10-21, Debi Pomerantz:
+    "if I am switching between projects, it would be great if the
+    conversation thread could switch with me"). The widget posts what
+    the dashboard has open (``page_context`` or an explicit
+    ``subject_key`` / ``subject_label`` / ``product``); the thread bound
+    to that project becomes active, created when none exists; an empty
+    key activates the general chat. Returns the active id, whether it
+    switched or was created, the binding and the thread's history so the
+    widget can swap in one round trip. Session-only."""
+    user, err = _C._synth_chat_gate(allow_api_key=False)
+    if err:
+        return err
+    uname = session.get('username') or ''
+    body = request.get_json(silent=True) or {}
+    from prometheus import service as _svc, thread_binding as _tb
+    sk = str(body.get('subject_key') or '').strip()
+    label = str(body.get('subject_label') or '').strip()
+    product = str(body.get('product') or '').strip()
+    if not sk and body.get('page_context'):
+        sk, label, product = _tb.subject_key_for(body.get('page_context'))
+        sk, label, product = sk or '', label or '', product or ''
+    out = _svc.thread_for_subject(uname, sk, label, product, create=True)
+    idx = _load_threads_index(uname)
+    return jsonify({'success': True, 'active': out.get('tid'),
+                    'switched': bool(out.get('switched')),
+                    'created': bool(out.get('created')),
+                    'binding': out.get('binding'),
+                    'history': out.get('history') or [],
+                    'threads': sorted(idx.get('threads', []),
+                                      key=lambda t: str(t.get('updated') or ''),
+                                      reverse=True)})
 
 
 @_H.app.route('/api/brief-chat/threads', methods=['GET'])
