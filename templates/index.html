@@ -34125,6 +34125,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         body[data-theme="light"] #intentIQView .aiq-rail span { color: #0C1618; }
         body[data-theme="light"] #intentIQView .aiq-tab.on { color: var(--cw-page, #111F22); border-bottom-color: #5E7E12; }
         body[data-theme="light"] #intentIQView .aiq-panel h5 { color: var(--cw-page, #111F22) !important; }
+        #intentIQView .aiq-panel h5.iiq-res-title,
+        #intentIQView .aiq-panel div.iiq-res-title { font-size: 1.35rem !important; font-weight: 500 !important;
+            letter-spacing: -.012em; line-height: 1.2; color: #E9E8E1 !important; text-transform: none !important;
+            margin: 0 0 0.35rem !important; }
+        #intentIQView .aiq-panel div.iiq-res-title { margin-top: 2.4rem !important; }
+        body[data-theme="light"] #intentIQView .aiq-panel .iiq-res-title { color: var(--cw-page, #111F22) !important; }
         </style>
         <div id="intentIQView">
             <div class="iiq-header">
@@ -35880,7 +35886,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     : '';
                 return ''
                   + (isStatic ? '' : '<div style="margin-top:0.5rem; margin-bottom:0.4rem; font-size:0.85rem; font-weight:600; color:#e5e7eb;">Value of every piece of content</div>')
-                  + '<div style="font-size:0.7rem; color:var(--text-secondary); margin-bottom:0.4rem;">Ranked by total value.' + (isStatic ? ' Click a column header to sort.' : ' Click any row to value that post on its own.') + (slim ? '' : ' Per 1K is total value per thousand views, the cleanest read of which content is doing more with each view.') + '</div>'
+                  + '<div style="font-size:0.7rem; color:var(--text-secondary); margin-bottom:0.4rem;">' + (isStatic ? 'Ranked by counts. Click a column header to sort.' : 'Ranked by total value. Click any row to value that post on its own.') + (slim ? '' : ' Per 1K is total value per thousand views, the cleanest read of which content is doing more with each view.') + '</div>'
                   + '<div style="overflow-x:auto; border:1px solid rgba(255,255,255,0.06); border-radius:8px;">'
                   +   '<table style="width:100%; border-collapse:collapse; font-size:0.76rem;">'
                   +     '<thead><tr style="background: rgba(0,0,0,0.35); color:#94a3b8; font-size:0.66rem; text-transform:uppercase; letter-spacing:0.05em;">'
@@ -35935,8 +35941,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                       + '</tr>';
                 }).join('');
                 return ''
-                  + '<div style="margin-top:1rem; margin-bottom:0.4rem; font-size:0.85rem; font-weight:600; color:#e5e7eb;">Value by channel</div>'
-                  + '<div style="font-size:0.7rem; color:var(--text-secondary); margin-bottom:0.4rem;">' + (slim ? 'Views, engagements, ' + escapeHtml(_iiqROIMidLabel().toLowerCase()) + ' events and ' + escapeHtml(botL.toLowerCase()) + 's summed across every piece of content on each channel.' : 'Views are priced at each channel\'s CPM. Engagement, ' + escapeHtml(_iiqROIMidLabel().toLowerCase()) + ' and ' + escapeHtml(_iiqROIBotLabel().toLowerCase()) + ' values use the flat rates below and do not vary by channel.') + '</div>'
+                  + (isStatic
+                      ? '<div class="iiq-res-title" style="margin-top:2.4rem;">Resonance by channel</div>'
+                      : '<div style="margin-top:1rem; margin-bottom:0.4rem; font-size:0.85rem; font-weight:600; color:#e5e7eb;">Value by channel</div>')
+                  + '<div style="font-size:0.7rem; color:var(--text-secondary); margin-bottom:0.4rem;">' + (isStatic ? 'Views, engagements, ' + escapeHtml(_iiqROIMidLabel().toLowerCase()) + ' events and ' + escapeHtml(botL.toLowerCase()) + 's across every piece of content on each channel. Click a column header to sort.' : slim ? 'Views, engagements, ' + escapeHtml(_iiqROIMidLabel().toLowerCase()) + ' events and ' + escapeHtml(botL.toLowerCase()) + 's summed across every piece of content on each channel.' : 'Views are priced at each channel\'s CPM. Engagement, ' + escapeHtml(_iiqROIMidLabel().toLowerCase()) + ' and ' + escapeHtml(_iiqROIBotLabel().toLowerCase()) + ' values use the flat rates below and do not vary by channel.') + '</div>'
                   + '<div style="overflow-x:auto; border:1px solid rgba(255,255,255,0.06); border-radius:8px;">'
                   +   '<table style="width:100%; border-collapse:collapse; font-size:0.78rem;">'
                   +     '<thead><tr style="background: rgba(0,0,0,0.35); color:#94a3b8; font-size:0.68rem; text-transform:uppercase; letter-spacing:0.05em;">'
@@ -36139,7 +36147,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     try {
                         var rates = _iiqROIActiveRates();
                         var bd = _iiqROICompute((window.__iiqROICache && window.__iiqROICache.assets) || [], rates);
-                        fill(_iiqROIContentTable(bd, rates, '', true) + _iiqROIChannelTable(bd, rates, true) + _iiqROIRateEditor(rates));
+                        fill(_iiqROIContentTable(bd, rates, '', true) + _iiqROIChannelTable(bd, rates, true));
                     } catch (err) {
                         console.error('[ROI] attribution block failed:', err);
                         fill('');
@@ -37438,7 +37446,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     ? '<section id="iiqMTACreativeCard" style="margin-top:1.1rem;">' + creativeHtml + '</section>' : '';
 
                 var roiMoved = (/influencer_project/.test(String((window.__intentIQ && window.__intentIQ.currentSlug) || '')))
-                    ? '<section style="margin-top:1.1rem;"><h5 style="margin:0.5rem 0 0.4rem; font-size:0.85rem; font-weight:600; color:#e5e7eb; text-transform:none; letter-spacing:0;">Value of every piece of content</h5><div class="iiq-mta-roi-block"></div></section>' : '';
+                    ? '<section style="margin-top:1.1rem;"><h5 class="iiq-res-title">Content Resonance</h5><div class="iiq-mta-roi-block"></div></section>' : '';
                 host.innerHTML = dropdownRow + cohortStrip + howToRead + topStrip + sufficiencyCard + pathsCard + creativeCard + coefCard + roiMoved;
                 if (roiMoved) { try { window._iiqROIPaintMTABlock(); } catch (_) {} }
             }
@@ -138069,7 +138077,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                                                                'attribution on bottom funnel destination reach only',
                                                                'touchpoint contribution to ',
                                                                'leaks the pixel cannot see',
-                                                               'value of every piece of content'] },
+                                                               'content resonance'] },
             // Path archetypes is deliberately not claimed by head here:
             // where it belongs depends on whether the landing carries a
             // Digital Journey view, so _aiqPlaceArchetypes seats it and
