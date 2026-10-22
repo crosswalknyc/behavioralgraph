@@ -647,10 +647,16 @@ def keyword_parse_journey(text):
         direction = 'after_watch'
     elif direction == 'unclear' and (conv or start):
         direction = 'to_watch'
+    try:
+        from migration import journey_gold_watch as _gw
+        watch_definition = _gw.definition_from_text(t) or None   # "saw a clip and then went on to view", "no click needed"
+    except Exception:
+        watch_definition = None
     out = {
         'subject': subject, 'platform': platform,
         'conversion_event': conv, 'journey_kind': kind or None,
         'journey_direction': direction,
+        'watch_definition': watch_definition,
         'clip_url': clip_url,
         'start_behavior': start, 'start_date': sd, 'end_date': ed,
         'tam_label': None, 'tam_accounts': None, 'notes': None,
@@ -694,7 +700,7 @@ def merge_missing(primary, secondary, required):
     out = dict(primary or {})
     sec = secondary or {}
     optional = ('journey_kind', 'journey_direction', 'clip_url', 'start_behavior',
-                'captured_action',
+                'watch_definition', 'captured_action',
                 'start_date', 'end_date',
                 # brand partnership
                 'pre_start', 'pre_end', 'post_start', 'post_end',
@@ -1551,3 +1557,42 @@ def watch_defaults(parsed):
     if not p.get('start_behavior') and p.get('subject'):
         p['start_behavior'] = f"saw a social post or short-form clip about {p['subject']}"
     return p
+
+
+def watch_definition_default(parsed, username=''):
+    """Which read a watch journey carries (Carolyn Bisson, 2026-10-22):
+    the click chain (saw a post, clicked through, opened the page,
+    watched) or saw-then-watched (saw a post, then watched within 30 days
+    whether or not they clicked). The ask's own words win; an empty field
+    takes the reader's default, else the house default. Set on the brief
+    before the confirm so the reader sees it and the build carries it."""
+    p = dict(parsed or {})
+    if str(p.get('journey_kind') or '').lower() != 'watch':
+        return p
+    try:
+        from migration import journey_gold_watch as _gw
+        d = _gw.normalize_definition(p.get('watch_definition'))
+        if not d:
+            d = _gw.definition_of(p, None, username=str(username or ''))
+        if d:
+            p['watch_definition'] = d
+    except Exception:
+        pass
+    return p
+
+
+def watch_definition_line(parsed):
+    """The shape line of the confirm card for a watch journey, by definition."""
+    try:
+        from migration import journey_gold_watch as _gw
+        d = _gw.normalize_definition((parsed or {}).get('watch_definition'))
+    except Exception:
+        d = ''
+    if d == 'saw_then_watched':
+        return ("It counts everyone who saw a social post about the title and then watched an episode on the platform within 30 days, "
+                "whether or not they clicked the post: the same day, within 7 days and within 30 days. The ones who clicked through are "
+                "their own path inside the count, then the first post they saw and where it sat, where they looked before the platform, "
+                "the first episode, the last touch and the assists")
+    return ("It's the same shape as every watch journey: four steps from the social post to the first episode, "
+            "then the first post they saw and where it sat, how many posts before they clicked through, where they "
+            "looked before the platform, the time from the view to the first episode, the first episode, the last touch and the assists")

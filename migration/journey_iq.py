@@ -2476,10 +2476,13 @@ def breakdown_rows(payload: dict) -> list:
         drows = [r for r in (d.get('rows') or []) if isinstance(r, dict)]
         own = sum(_bd_int(r.get('accounts')) for r in drows)
         base = None
-        for c in real:   # the spine step this detour partitions
-            if c and own and abs(own - c) / float(c) <= 0.06:
-                base = c
-                break
+        # a path table (the click path of a saw-then-watched journey, 2026-10-22) nests its
+        # rows inside each other; its rows never sum to a step and are never re-based
+        if str(d.get('kind') or '') != 'path':
+            for c in real:   # the spine step this detour partitions
+                if c and own and abs(own - c) / float(c) <= 0.06:
+                    base = c
+                    break
         drows = _bd_rescale(drows, base, title) if base else \
             [dict(r, accounts=_bd_int(r.get('accounts'))) for r in drows]
         for r in drows:

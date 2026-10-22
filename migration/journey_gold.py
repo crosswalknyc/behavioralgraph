@@ -441,6 +441,16 @@ def apply(payload: dict, inputs: Optional[dict] = None, claude_json: Optional[Ca
             return payload
         title, platform = _title_platform(payload, inputs)
         seed = seed or f"{title}|{platform}"
+        # The second definition (Carolyn Bisson, 2026-10-22): a payload already
+        # on the saw-then-watched read keeps that shape; its module re-derives
+        # the text. A payload whose ask or own record says saw-then-watched is
+        # shaped here first and converted below. The reader's default is
+        # applied at intake and on a fresh build, never to a file already
+        # built (a sweep must not flip a definition by who built the file).
+        from migration import journey_gold_watch as _gw
+        if _gw.is_social_then_view(payload):
+            return _gw.to_social_then_view(payload, inputs, seed=seed, claude_json=claude_json, resize=False)
+        definition = _gw.definition_of(inputs, payload, reader_default=False)
         trail = standardize_spine(j, title, platform, seed)
         trail['fork_refit'] = refit_degenerate_fork(j, seed)
         bases = _bases(j, payload, trail)
@@ -547,7 +557,10 @@ def apply(payload: dict, inputs: Optional[dict] = None, claude_json: Optional[Ca
         meta['gold'] = {'standard': 'babylon5', 'applied_at': _dt.datetime.utcnow().isoformat() + 'Z',
                         'folded_steps': trail.get('folded') or [], 'fork_refit': bool(trail.get('fork_refit')), 'sections': [d['title'] for d in built],
                         'researched': sorted(researched.keys()), 'extras': [d.get('title') for d in extras]}
+        meta.setdefault('journey_definition', 'clicked_through')
         payload['fragrance_shop_journey'] = j
+        if definition == 'saw_then_watched':
+            payload = _gw.to_social_then_view(payload, inputs, seed=seed, claude_json=claude_json)
         return payload
     except Exception:
         traceback.print_exc()
@@ -569,6 +582,12 @@ def ship_summary(payload: dict) -> dict:
     """The numbers the Babylon 5 ship email carried, read off a gold
     payload: the path, the timing split, the return-first count and the
     tie back to every viewer of the title on the service in the window."""
+    try:
+        from migration import journey_gold_watch as _gw
+        if _gw.is_social_then_view(payload):
+            return _gw.ship_summary(payload)
+    except Exception:
+        pass
     j = payload.get('fragrance_shop_journey') or {}
     spine = j.get('spine') or []
     title, platform = _title_platform(payload)
@@ -607,6 +626,12 @@ def ship_lines(payload: dict) -> list:
         from migration import journey_gold_purchase as _gp
         if _gp.is_purchase_journey(payload) and _gp.is_gold(payload):
             return _gp.ship_lines(payload)
+    try:
+        from migration import journey_gold_watch as _gw
+        if _gw.is_social_then_view(payload):
+            return _gw.ship_lines(payload)
+    except Exception:
+        pass
     s = ship_summary(payload)
     T, P = s['title'], s['platform']
     lines = [f"The short version, {s['window'] or 'the window'}, unique US accounts:" if s['window'] else "The short version, unique US accounts:",
@@ -630,6 +655,9 @@ def is_gold(payload: dict) -> bool:
         if not is_watch_journey(payload):
             from migration import journey_gold_purchase as _gp
             return bool(_gp.is_purchase_journey(payload) and _gp.is_gold(payload))
+        from migration import journey_gold_watch as _gw
+        if _gw.is_social_then_view(payload):
+            return _gw.is_gold(payload)
         j = payload.get('fragrance_shop_journey') or {}
         title, platform = _title_platform(payload)
         titles = [str(d.get('title') or '') for d in (j.get('detours') or [])]

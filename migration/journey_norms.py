@@ -57,12 +57,23 @@ BANDS = {
     'purchase_page':   (0.5, 2.5, 4.0),
     'music':           (0.8, 6.0, 8.0),
     'signup':          (0.05, 0.6, 1.0),
+    # Saw a social post, then watched on the service within 30 days, whether
+    # or not they clicked (Carolyn Bisson, 2026-10-22; migration.journey_gold_watch).
+    # Anchored on the two originals she already had: No Reservations 7.2%
+    # (mainstream, Prime Video) and Babylon 5 16.1% (cult). The click chain
+    # above stays the band for journeys built on that spine.
+    'watch_social_then_view':           (3.5, 14.0, 22.0),
+    'watch_social_then_view_returning': (5.5, 20.0, 30.0),
+    'watch_social_then_view_new':       (7.0, 26.0, 36.0),
 }
 FREE_MULT, FREE_CEILING = 1.4, 5.0
 KIND_LABEL = {
     'watch_catalog': 'catalog title on a paid streaming service',
     'watch_returning': 'returning series with a new season in the window',
     'watch_new': 'new original with a campaign behind it',
+    'watch_social_then_view': 'catalog title: saw a social post, then watched on the service within 30 days, clicked or not',
+    'watch_social_then_view_returning': 'returning series: saw a social post, then watched within 30 days, clicked or not',
+    'watch_social_then_view_new': 'new original: saw a social post, then watched within 30 days, clicked or not',
     'ticketing': 'theatrical ticketing (reached a ticketing site)',
     'purchase': 'purchase journey (bought)',
     'purchase_page': 'purchase journey (reached the product page)',
@@ -99,7 +110,14 @@ FOLLOWING_FACTORS = {'cult': 2.4, 'mainstream': 1.0}
 FOLLOWING_CEILING_MULT = {'cult': 2.0, 'mainstream': 1.0}
 FOLLOWING_LABEL = {'cult': 'cult following: a dedicated fan base reached by its own posts (x2.4)',
                    'mainstream': 'mainstream title, casual social reach'}
+# On the saw-then-watched read the fandom's lift is in the watching, not the
+# clicking: Babylon 5 (cult) at 16.1% against No Reservations (mainstream)
+# at 7.2% on the same service is 1.8x once the genre factor is taken off.
+SOCIAL_VIEW_FOLLOWING_FACTORS = {'cult': 1.9, 'mainstream': 1.0}
+SOCIAL_VIEW_FOLLOWING_LABEL = {'cult': 'cult following: a dedicated fan base that watches when its own posts land (x1.9)',
+                               'mainstream': 'mainstream title, casual social reach'}
 FOLLOWING_CACHE_PREFIX = 'journey-iq/_cache/following/'
+SOCIAL_VIEW_KIND = 'watch_social_then_view'
 
 # kept-of-prior ceilings (percent) by the role a step plays
 STEP_CEILINGS = {
@@ -165,6 +183,16 @@ def classify(inputs: dict, prim: Optional[dict] = None) -> dict:
     conv = _norm(inputs.get('conversion_event'))
     notes = _norm(inputs.get('notes'))
     text = ' '.join([conv, notes, _norm(inputs.get('subject')), _norm(prim.get('category'))])
+    definition = ''
+    try:
+        from migration import journey_gold_watch as _gw
+        definition = _gw.definition_of(inputs) if (jk == 'watch' or re.search(r'\b(watch|play|stream|episode)\b', conv)) else ''
+        # the reader's default never decides the kind here; only the ask's own words or an explicit field
+        if definition == 'saw_then_watched' and not (any(_gw.normalize_definition(inputs.get(k)) for k in ('watch_definition', 'journey_definition', 'definition'))
+                                                       or _gw.definition_from_text(' '.join([conv, notes, _norm(inputs.get('start_behavior'))]))):
+            definition = ''
+    except Exception:
+        definition = ''
     if jk == 'ticketing' or re.search(r'\b(ticket|showtime|theatrical|box office|fandango)\b', conv):
         kind = 'ticketing'
     elif jk == 'music' or re.search(r'\b(song|album|track|spotify|apple music)\b', conv):
@@ -180,7 +208,10 @@ def classify(inputs: dict, prim: Optional[dict] = None) -> dict:
                 status = 'new'
             else:
                 status = 'catalog'
-        kind = {'catalog': 'watch_catalog', 'returning': 'watch_returning', 'new': 'watch_new'}[status]
+        if definition == 'saw_then_watched':
+            kind = {'catalog': SOCIAL_VIEW_KIND, 'returning': SOCIAL_VIEW_KIND + '_returning', 'new': SOCIAL_VIEW_KIND + '_new'}[status]
+        else:
+            kind = {'catalog': 'watch_catalog', 'returning': 'watch_returning', 'new': 'watch_new'}[status]
     elif re.search(r'\b(product page|listing|visited|browsed|viewed the product)\b', conv) and not re.search(r'\b(bought|purchas|paid|order)', conv):
         kind = 'purchase_page'
     else:
@@ -258,8 +289,10 @@ def following_of(inputs: dict, prim: Optional[dict] = None) -> str:
     return 'mainstream'
 
 
-def following_factor(inputs: dict, prim: Optional[dict] = None) -> tuple[float, str]:
+def following_factor(inputs: dict, prim: Optional[dict] = None, kind: str = '') -> tuple[float, str]:
     f = following_of(inputs, prim)
+    if str(kind or '').startswith(SOCIAL_VIEW_KIND):
+        return SOCIAL_VIEW_FOLLOWING_FACTORS[f], SOCIAL_VIEW_FOLLOWING_LABEL[f]
     return FOLLOWING_FACTORS[f], FOLLOWING_LABEL[f]
 
 
@@ -328,8 +361,11 @@ def band_for(inputs: dict, prim: Optional[dict] = None, title_profile: Optional[
     cls = classify(inputs, prim)
     lo, hi, ceil = BANDS[cls['kind']]
     trail = [KIND_LABEL[cls['kind']]]
+    social_view = cls['kind'].startswith(SOCIAL_VIEW_KIND)
     if cls['free'] and cls['kind'].startswith('watch'):
-        lo, hi, ceil = lo * FREE_MULT, hi * FREE_MULT, FREE_CEILING
+        # a free service has no subscription gate; the saw-then-watched
+        # ceiling scales with its band instead of the click chain's 5%
+        lo, hi, ceil = lo * FREE_MULT, hi * FREE_MULT, (ceil * FREE_MULT if social_view else FREE_CEILING)
         trail.append('free service band (x1.4)')
     factors = {}
     if cls['kind'].startswith('watch') or cls['kind'] == 'signup':
@@ -349,11 +385,13 @@ def band_for(inputs: dict, prim: Optional[dict] = None, title_profile: Optional[
     f, why = window_factor(inputs)
     factors['window'] = f
     trail.append(why)
-    f, why = following_factor(inputs, prim)
+    f, why = following_factor(inputs, prim, kind=cls['kind'])
     factors['following'] = f
     trail.append(why)
     following = following_of(inputs, prim)
     ceil = ceil * FOLLOWING_CEILING_MULT.get(following, 1.0)
+    if social_view:
+        trail.append('saw-then-watched read: no click needed; the title\'s own audience on the service is the ceiling')
     mult = 1.0
     for v in factors.values():
         mult *= v
@@ -506,6 +544,16 @@ def hold_to_norms(payload: dict, band: dict, inputs: Optional[dict] = None, seed
         import journey_synthesis as js   # type: ignore
     inputs = inputs or {}
     seed = seed or f"{inputs.get('subject')}|{inputs.get('platform')}"
+    if str(band.get('kind') or '').startswith(SOCIAL_VIEW_KIND):
+        # the saw-then-watched kind has its own shape and its own hold
+        # (migration.journey_gold_watch): the click chain is held on the
+        # click-chain band first, then the end is sized on this band
+        try:
+            from migration import journey_gold_watch as _gw
+            return _gw.hold(payload, band, inputs, seed=seed)
+        except Exception as exc:
+            print(f'[journey-norms] saw-then-watched hold skipped: {exc}')
+            return payload
     meta = payload.setdefault('meta', {})
     trail = {'kind': band.get('kind'), 'band': [band.get('lo'), band.get('hi')], 'ceiling': band.get('ceiling'),
              'target': band.get('target'), 'factors': band.get('factors'), 'why': band.get('trail'), 'applied': False,
@@ -783,9 +831,15 @@ def audit_payload(payload: dict) -> dict:
         b = band_for(inp, pr or None)
         band, kind = [b['lo'], b['hi']], b['kind']
     ok = band[0] - 1e-9 <= rate <= band[1] + 1e-9
+    cap_bound = bool(kp.get('cap_bound') or (meta.get('norms') or {}).get('cap_applied'))
+    if cap_bound and rate <= band[1] + 1e-9:
+        # the end sits at its ceiling (45% of the title's own audience on
+        # the service); a title whose social reach dwarfs its audience lands
+        # under the band floor by construction and cannot go higher
+        ok = True
     if not _exposure_start(spine[0].get('label')) or not band_applies(payload):
         ok = True
-    return {'ok': ok, 'rate_pct': round(rate, 4), 'band': band, 'kind': kind,
+    return {'ok': ok, 'rate_pct': round(rate, 4), 'band': band, 'kind': kind, 'cap_bound': cap_bound,
             'project_name': meta.get('project_name'), 'created_at': meta.get('created_at'),
             'anchored': not band_applies(payload)}
 
@@ -874,11 +928,21 @@ def payload_inputs(payload: dict) -> dict:
         subject, platform = m.group(1).strip(), m.group(2).strip()
     elif meta.get('customer_brand') and _norm(meta.get('customer_brand')) != _norm(target):
         platform = str(meta.get('customer_brand') or '')
-    return {'subject': subject, 'platform': platform,
-            'journey_kind': str(meta.get('journey_kind') or ('watch' if str(meta.get('target_type') or '') == 'watch_journey' else '')),
-            'conversion_event': str((spine[-1] if spine else {}).get('label') or ''),
-            'start_behavior': str((spine[1] if len(spine) > 1 else {}).get('label') or ''),
-            'notes': str(meta.get('category') or '')}
+    out = {'subject': subject, 'platform': platform,
+           'journey_kind': str(meta.get('journey_kind') or ('watch' if str(meta.get('target_type') or '') == 'watch_journey' else '')),
+           'conversion_event': str((spine[-1] if spine else {}).get('label') or ''),
+           'start_behavior': str((spine[1] if len(spine) > 1 else {}).get('label') or ''),
+           'notes': str(meta.get('category') or '')}
+    # the definition a watch journey carries rides with its inputs so the
+    # band resolves to the right kind (the saw-then-watched read is never
+    # pulled to the click-chain band)
+    try:
+        from migration import journey_gold_watch as _gw
+        if _gw.is_social_then_view(payload):
+            out['watch_definition'] = 'saw_then_watched'
+    except Exception:
+        pass
+    return out
 
 
 def title_viewers_from_payload(payload: dict) -> int:
@@ -1023,6 +1087,21 @@ def relevel_payload(payload: dict, title_viewers: int = 0, seed: str = '', input
         inputs = dict(inputs or payload_inputs(payload))
         meta = payload.setdefault('meta', {})
         seed = seed or f"{inputs.get('subject')}|{inputs.get('platform')}"
+        try:
+            from migration import journey_gold_watch as _gw
+        except ImportError:
+            _gw = None
+        if _gw is not None and _gw.is_social_then_view(payload):
+            # the saw-then-watched read keeps its own shape and band; a payload
+            # inside its band (or at its title cap) only records the check
+            a = audit_payload(payload)
+            trail = dict(meta.get('norms') or {})
+            if a.get('ok'):
+                trail.update({'checked_at': _now_iso(), 'in_band': True, 'band': a.get('band'), 'kind': a.get('kind')})
+                meta['norms'] = trail
+                return payload
+            return _gw.to_social_then_view(payload, inputs, prim, seed=seed, claude_json=claude_json, s3_client=s3_client,
+                                           title_viewers=int(title_viewers or 0), resize=True)
         prim = dict(prim or {})
         if str(spine[0].get('id') or '') == 'us_gen_pop':
             spine[0]['id'] = 'tam'          # the standard id for the US base row

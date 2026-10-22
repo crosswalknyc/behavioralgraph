@@ -9260,6 +9260,7 @@ def _pm_intake_turn(flow, text, body, history, user, ppu, first):
             return {**base, 'reply': _ir.direction_question(parsed.get('subject')), collect_key: True,
                     'followups': list(_ir.DIRECTION_CHIPS) + ['Cancel']}
         parsed = _ir.watch_defaults(parsed)   # a title on a video platform starts on social (Jenna 2026-10-13)
+        parsed = _ir.watch_definition_default(parsed, (user or {}).get('username') if isinstance(user, dict) else user)   # click chain or saw-then-watched (2026-10-22)
     if flow == 'attribution' and isinstance(parsed, dict) and parsed.get('daily_refresh') and _pm_aiq_days(parsed) < 1 \
             and parsed.get('campaign_name') and parsed.get('urls') and parsed.get('conversion_event'):
         # daily tracking with no stop date: propose 30 days and confirm rather than ask (the intake contract; golden g058, 2026-10-14)
@@ -16916,10 +16917,9 @@ def _pm_jiq_confirm_reply(parsed):
         shape = ("It's a music-first path into the title - the song, "
                  "the sound page, the title page, and the watch")
     elif str(parsed.get('journey_kind') or '') == 'watch':
-        # the Babylon 5 shape, every watch journey (Jenna 2026-10-14)
-        shape = ("It's the same shape as every watch journey: four steps from the social post to the first episode, "
-                 "then the first post they saw and where it sat, how many posts before they clicked through, where they "
-                 "looked before the platform, the time from the view to the first episode, the first episode, the last touch and the assists")
+        # the Babylon 5 shape, every watch journey (Jenna 2026-10-14); the saw-then-watched read when the brief carries it (Carolyn Bisson 2026-10-22)
+        from prometheus.intake_reader import watch_definition_line
+        shape = watch_definition_line(parsed)
     else:
         # the same depth as a watch journey, plus why the cart leavers
         # left (Jenna 2026-10-16, Ghost Energy)

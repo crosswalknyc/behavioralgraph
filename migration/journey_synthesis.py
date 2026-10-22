@@ -89,6 +89,20 @@ user's message. Return STRICT JSON only:
                                 // "What watchers do after and in
                                 // addition" -> after_watch. null for a
                                 // purchase, ticketing or clip ask.
+  "watch_definition": "clicked_through"|"saw_then_watched"|null,
+                                // for a "watch" journey only: what the
+                                // headline rate counts.
+                                // "clicked_through" when the ask says the
+                                //   viewers clicked the post / clicked
+                                //   through (each step inside the last).
+                                // "saw_then_watched" when the ask says
+                                //   they saw a clip or post and then went
+                                //   on to watch, no click needed, whether
+                                //   or not they clicked, a wider net, same
+                                //   day / within 7 / within 30 days.
+                                // null when the words say neither (the
+                                //   reader is asked, or their default
+                                //   applies). null for any other kind.
   "clip_url": str|null,         // Instagram / YouTube / TikTok URL when
                                 // the user pasted one
   "start_behavior": str|null,   // a DEFINED starting behavior cohort
@@ -1167,6 +1181,10 @@ def build_journey(inputs: dict, prim: dict, *,
             'product': product,
             'title_noun': product if product.lower() != subject.lower() else None,
             'platform_label': platform,
+            # which read a watch journey carries (2026-10-22): the click chain
+            # unless the ask or the reader's default says saw-then-watched; the
+            # gold pass converts the shape when it does
+            'journey_definition': (str(inputs.get('watch_definition') or '') or None),
             'created_by': created_by, 'created_at': now,
         },
         'fragrance_shop_journey': blob,
@@ -2105,14 +2123,36 @@ def synthesize(inputs: dict, claude_json: Callable, *,
         return reconcile_payload(replay)
     norms_on = _norms_enabled()
     band0 = None
+    # The definition a watch journey carries (Carolyn Bisson, 2026-10-22):
+    # the research always reasons the Babylon 5 click chain on its own band;
+    # on the saw-then-watched read the headline end is sized afterwards,
+    # inside the gold pass, from the title's audience on the service.
+    definition = ''
+    try:
+        from migration import journey_gold_watch as _gw
+        definition = _gw.definition_of(inputs, None, username=created_by) if str(inputs.get('journey_kind') or '').lower() in ('watch', '') else ''
+    except Exception:
+        definition = ''
+    chain_inputs = dict(inputs)
+    if definition == 'saw_then_watched':
+        inputs = dict(inputs, watch_definition='saw_then_watched')
+        for k in ('watch_definition', 'journey_definition', 'definition'):
+            chain_inputs.pop(k, None)
+        chain_inputs['watch_definition'] = 'clicked_through'
     if norms_on:
         try:
             from migration import journey_norms as _jn
-            band0 = _jn.band_for(inputs, None, seed=f"{inputs['subject']}|{inputs['platform']}")
+            band0 = _jn.band_for(chain_inputs, None, seed=f"{inputs['subject']}|{inputs['platform']}")
         except Exception as exc:
             print(f'[journey] norms band skipped: {exc}')
+    norms_block = (_jn.norms_prompt_block(band0) if band0 else None)
+    if norms_block and definition == 'saw_then_watched':
+        norms_block = dict(norms_block, headline_definition=(
+            'the headline read for this journey is saw-then-watched: everyone who saw a post and then watched on the service '
+            'within 30 days, clicked or not; it is sized after your answer from title_viewers_in_window, so reason the click '
+            'chain above exactly as described and give title_viewers_in_window your best public-anchor figure'))
     user_prompt = json.dumps({
-        'norms': (_jn.norms_prompt_block(band0) if band0 else None),
+        'norms': norms_block,
         'corpus_anchors': anchors_prompt_block(anchors),
         'subject': inputs['subject'],
         'platform': inputs['platform'],
@@ -2158,8 +2198,10 @@ def synthesize(inputs: dict, claude_json: Callable, *,
     if norms_on:
         try:
             from migration import journey_norms as _jn
-            band = _jn.band_for(inputs, prim, seed=f"{inputs['subject']}|{inputs['platform']}")
-            payload = _jn.hold_to_norms(payload, band, inputs,
+            # the click chain is held on the click-chain band whatever the
+            # headline definition; the saw-then-watched end lands in the gold pass
+            band = _jn.band_for(chain_inputs, prim, seed=f"{inputs['subject']}|{inputs['platform']}")
+            payload = _jn.hold_to_norms(payload, band, chain_inputs,
                                         seed=f"{inputs['subject']}|{inputs['platform']}")
         except Exception as exc:
             print(f'[journey] norms hold skipped: {exc}')
@@ -2231,6 +2273,11 @@ def reconcile_payload(payload: dict) -> dict:
         by = {f['id']: f for f in fork}
         if fork and len(spine) >= 2:
             penult = _acc_int(spine[-2].get('accounts'))
+            # the saw-then-watched shape (2026-10-22) hangs the fork off the
+            # click path's title page, not the step before the end
+            fb = j.get('fork_base')
+            if isinstance(fb, dict) and _acc_int(fb.get('accounts')) > 0:
+                penult = _acc_int(fb.get('accounts'))
             pf = _acc_int((by.get('paid_first') or {}).get('accounts'))
             ab = _acc_int((by.get('abandoned') or {}).get('accounts'))
             for fid, f in by.items():
