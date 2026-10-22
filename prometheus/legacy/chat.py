@@ -5001,7 +5001,7 @@ from prometheus.ask_outcome import (  # noqa: E402,F401
 
 
 def _pm_watch_notify(username, question, payload, subject=None,
-                     probe=False, via=None):
+                     probe=False, via=None, surface=None):
     """Email Jenna the question and the answer for every account, API asks included (marked).
     Off the request thread; the 'On it' placeholder is skipped, the finished read calls again.
     Probes (probe=True, a probe caller, a canary label) never mail. Never raises."""
@@ -5017,7 +5017,7 @@ def _pm_watch_notify(username, question, payload, subject=None,
         try:
             import prometheus_watch_notify as _pwn
             rec = _pwn.user_record(_H.load_users() or {}, username)
-            _pwn.notify(username, rec, question, payload, subject, via=via)
+            _pwn.notify(username, rec, question, payload, subject, via=via, surface=surface)
         except Exception:
             traceback.print_exc()
     try:
@@ -5116,10 +5116,7 @@ def _pm_ask_apply_taxonomy(surface, payload, status_code, history,
 _PM_GATE_HELD_MESSAGE = (
     "I did not land a clean answer on that one. I am looking at it now "
     "and will email you the read.")
-_PM_GATE_TASK_MESSAGE = (
-    "I read that as a task, not a profile to build. Which audience "
-    "should this be on? Name the show, brand, or person (one line is "
-    "enough) and I will take it from there.")
+_PM_GATE_TASK_MESSAGE = __import__('prometheus.build_guards', fromlist=['TASK_MESSAGE']).TASK_MESSAGE
 # A repeat never reads as a scold (Jenna 2026-10-21): the pick line names
 # the choices and runs the one tapped; with nothing to pick from the calm
 # promise ships and ops finish by email (prometheus.turn_gate.calm_hold).
@@ -5525,7 +5522,7 @@ def _ask_logged(surface):
                 _pm_watch_flag(_pm_ask_log_user(), question, route, outcome, extra)
                 _pm_watch_notify(
                     _pm_ask_log_user(''), question, payload,
-                    subject)
+                    subject, surface=log_surface)
                 # Cross-session memory (2026-08-27, Jenna): every ask
                 # that resolved a subject feeds the per-user memory,
                 # unless the handler already recorded it with richer
@@ -6102,140 +6099,16 @@ def _pm_interpret_core(user, body, text, history):
                     tb='(array salvage produced no valid spec drafts)')
                 return jsonify(_H._chatbot_calm_payload())
 
-        # Placeholder-subject guard (2026-08-20 Jenna: a Cartesian ask
-        # that slipped past the batch detectors came back with subject
-        # 'this profile' and the card read 'Building a new **this
-        # profile** profile'). A draft whose subject is a generic
-        # pronoun/noun is an interpret failure - ask for a rephrase
-        # instead of shipping a garbage card.
-        if _H._is_placeholder_subject(spec_draft.get('subject')):
-            # Research rescue (2026-09-22, Amandaland round 2): the
-            # model holds the subject when it cannot verify the entity
-            # - but 'run a profile on Amandaland' NAMES one. Identify
-            # it (search-enabled) and re-interpret with the verified
-            # context; the canned segments question below is only for
-            # Cartesian asks that truly name no subject.
-            _ph_subj = ''
-            for _f in ('resolved_title', 'resolved_identity', 'name'):
-                _c = str(spec_draft.get(_f) or '').strip()
-                if _c and not _H._is_placeholder_subject(_c):
-                    _ph_subj = _c
-                    break
-            if not _ph_subj:
-                _m_ph = re.search(
-                    r'\b(?:profile|audience|universe)\s+(?:on|for|of)'
-                    r'\s+([A-Za-z0-9][^,.;\n]{1,60})', text, re.I)
-                if _m_ph:
-                    _ph_subj = _m_ph.group(1).strip()
-            _ph_rescued = False
-            if _ph_subj:
-                _uv = _pm_rescue_unverified_draft(
-                    {'name': _ph_subj, 'decision': 'new_build',
-                     'tu_demos': {}})
-                if isinstance(_uv, dict) and isinstance(
-                        _uv.get('draft'), dict):
-                    spec_draft = _uv['draft']
-                    _ph_rescued = True
-                    print(f"[synth-chat interpret] placeholder "
-                          f"subject rescued by research: {_ph_subj!r}")
-                elif isinstance(_uv, dict) and _uv.get('ask'):
-                    return jsonify({
-                        'success': False, 'guidance': True,
-                        'error': _uv['ask'],
-                    }), 400
-            if not _ph_rescued:
-                guidance_msg = (
-                    "Quick check on the audience: tell me who each "
-                    "profile is for - e.g. 'Amazon EST buyers' or "
-                    "'Vizio TV owners' - or list the segments and I'll "
-                    "queue one profile per segment.")
-                try:
-                    _H._prometheus_manual_look_email(
-                        text, guidance_msg,
-                        'The audience in this ask did not resolve to a '
-                        'named subject, so the user was asked to '
-                        'rephrase.')
-                except Exception:
-                    traceback.print_exc()
-                return jsonify({
-                    'success': False,
-                    'guidance': True,
-                    'error': guidance_msg,
-                }), 400
-
-        # Fragment-subject guard (2026-10-02 RCA, Scott: "review these
-        # three creators and prepare a report on which of the three
-        # actually influence product purchases" drafted a new build
-        # named "Three Actually Influence Product Purchases"). A
-        # subject that reads as a slice of the sentence is not an
-        # entity. Research can still rescue a real title the guard
-        # misjudges; otherwise the user names the audience and no
-        # build is drafted.
-        try:
-            from prometheus import guards as _pg
-            _frag_subj = str(spec_draft.get('subject') or '').strip()
-            _frag_dec = str(spec_draft.get('decision') or '')
-        except Exception:
-            _frag_subj, _frag_dec = '', ''
-        if _frag_subj and _frag_dec in ('new_build', 'subscriber_iq', '') \
-                and _pg.subject_reads_as_fragment(_frag_subj) \
-                and not _subject_rules.qualified_audience(_frag_subj)[0]:   # 'X viewers on Y, September 2026' is an audience, not a task (I2)
-            _fr_rescued = False
-            try:
-                _uv = _pm_rescue_unverified_draft(
-                    {'name': _frag_subj, 'decision': 'new_build',
-                     'tu_demos': {}})
-                if isinstance(_uv, dict) and isinstance(
-                        _uv.get('draft'), dict) \
-                        and not _pg.subject_reads_as_fragment(
-                            _uv['draft'].get('subject')):
-                    spec_draft = _uv['draft']
-                    _fr_rescued = True
-                    print(f"[synth-chat interpret] fragment subject "
-                          f"rescued by research: {_frag_subj!r}")
-            except Exception:
-                _pm_swallow('fragment-rescue')
-            if not _fr_rescued:
-                _pm_ask_hint(outcome='asked_subject', subject=_frag_subj)
-                guidance_msg = (
-                    "I read that as a task, not a profile to build. "
-                    "Which audience should this be on? Name the show, "
-                    "brand, or person (one line is enough) and I will "
-                    "take it from there.")
-                try:
-                    _H._prometheus_manual_look_email(
-                        text, guidance_msg,
-                        'The audience in this ask did not resolve to a '
-                        'named subject, so the user was asked to '
-                        'rephrase.')
-                except Exception:
-                    traceback.print_exc()
-                return jsonify({
-                    'success': False,
-                    'guidance': True,
-                    'error': guidance_msg,
-                }), 400
-
-        # Entity core (2026-10-02 S6): a fresh build named for a
-        # measure around an entity ('Appeal of the Spiderwick
-        # Franchise') is renamed to the entity before the catalog
-        # matchers run, so the existing profile is found and no
-        # wrapper ever becomes a Total Universe name.
-        try:
-            from prometheus import guards as _pg_core
-            _ec_dec = str(spec_draft.get('decision') or '')
-            _ec_subj = str(spec_draft.get('subject') or '').strip()
-            if _ec_subj and _ec_dec in ('new_build', 'cut_needs_parent', ''):
-                _ec_core = _pg_core.entity_core(_ec_subj)
-                if _ec_core and _ec_core != _ec_subj:
-                    print(f"[synth-chat interpret] entity core "
-                          f"{_ec_subj!r} -> {_ec_core!r}")
-                    spec_draft['subject'] = _ec_core
-                    for _ec_k in ('name', 'deliverable_name'):
-                        if str(spec_draft.get(_ec_k) or '').strip() == _ec_subj:
-                            spec_draft[_ec_k] = _ec_core
-        except Exception:
-            traceback.print_exc()
+        # Subject guards on the draft (prometheus/build_guards, 2026-10-21): placeholder, the entity
+        # behind an explicit build order (typo-tolerant, scope-aware), fragment, entity core.
+        from prometheus import build_guards as _bgd, guards as _pg_mod
+        spec_draft, _bgd_resp = _bgd.settle_subject(spec_draft, text, catalog, body, {
+            'is_placeholder_subject': _H._is_placeholder_subject, 'rescue': _pm_rescue_unverified_draft,
+            'manual_look_email': _H._prometheus_manual_look_email, 'ask_hint': _pm_ask_hint,
+            'swallow': _pm_swallow, 'qualified_audience': _subject_rules.qualified_audience,
+            'explicit_build_subject': _subject_rules.explicit_build_subject, 'guards': _pg_mod})
+        if _bgd_resp is not None:
+            return jsonify(_bgd_resp[0]), _bgd_resp[1]
 
         # Subscriber IQ intent net (2026-08-26): typo-tolerant
         # deterministic routing for Subscriber IQ asks the interpret

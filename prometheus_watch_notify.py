@@ -169,7 +169,7 @@ def _correct_link(username, question, answer, subject):
 
 
 def _html(who, label, email, when, subject, question, answer,
-          correct_url=''):
+          correct_url='', subject_label='Open profile'):
     ink, body, muted, olive, off = (
         '#0C1618', '#5C6560', '#888C89', '#5E7E12', '#E9E8E1')
     def block(title, text):
@@ -183,7 +183,7 @@ def _html(who, label, email, when, subject, question, answer,
                 f"padding:14px 16px;color:{ink};font-size:15px;"
                 f"line-height:1.5'>{safe}</div>")
     subj = (f"<div style='color:{muted};font-size:13px;margin-top:4px'>"
-            f"Open profile: {subject}</div>" if subject else '')
+            f"{subject_label}: {subject}</div>" if subject else '')
     return (
         f"<html><body style='margin:0;padding:0;background:{off};"
         f"font-family:Helvetica,Arial,sans-serif;color:{body}'>"
@@ -209,7 +209,15 @@ def _html(who, label, email, when, subject, question, answer,
         f"</div></body></html>")
 
 
-def _send(username, record, question, answer, subject, via=None):
+def _subject_label(surface):
+    """What the subject line on the copy is. On the build surface the
+    subject is the brief the words drafted, not a page; labeling it
+    'Open profile' sent a reader looking for a file that did not exist
+    (2026-10-21, 'Ball in the Family with Lonzo Ball')."""
+    return 'Subject' if str(surface or '').lower() == 'interpret' else 'Open profile'
+
+
+def _send(username, record, question, answer, subject, via=None, surface=None):
     from prometheus.mail_guard import sending_allowed, suppressed_note
     if not sending_allowed():   # a test or replay process never reaches SES (2026-10-16)
         print(suppressed_note('watch note', question))
@@ -234,14 +242,14 @@ def _send(username, record, question, answer, subject, via=None):
     text = (
         f"{who} at {label} asked Prometheus a question{' over the API' if api else ''}.\n"
         f"{email}\n{when}\n"
-        + (f"Open profile: {subj_line}\n" if subj_line else '')
+        + (f"{_subject_label(surface)}: {subj_line}\n" if subj_line else '')
         + f"\nQUESTION\n{question.strip()}\n\nANSWER\n"
         f"{(answer or 'No written answer on this step.').strip()}\n"
         + (f"\nCorrect this answer: {correct_url}\n"
            if correct_url else '')
         + f"\nPrometheus\nCrosswalk")
     html = _html(who, label, email, when, subj_line, question, answer,
-                 correct_url=correct_url)
+                 correct_url=correct_url, subject_label=_subject_label(surface))
     msg = MIMEMultipart('alternative')
     msg['Subject'] = mail_subject[:180]
     msg['From'] = _FROM
@@ -254,7 +262,7 @@ def _send(username, record, question, answer, subject, via=None):
         RawMessage={'Data': msg.as_string()})
 
 
-def notify(username, record, question, payload, subject=None, via=None):
+def notify(username, record, question, payload, subject=None, via=None, surface=None):
     """Email Jenna the question and the answer. Never raises. Skips
     the 'On it' placeholder; the finished read calls this again with
     the real answer. API asks mail too, marked (API)."""
@@ -276,6 +284,6 @@ def notify(username, record, question, payload, subject=None, via=None):
         answer = answer_text(payload)
         # Caller already moved this off the request. Send here so the
         # note is not left on a second thread that can die first.
-        _send(username, record, question, answer, subject, via=via)
+        _send(username, record, question, answer, subject, via=via, surface=surface)
     except Exception:
         traceback.print_exc()

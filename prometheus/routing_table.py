@@ -408,7 +408,15 @@ ROWS = [
                      ('run a profile on mountain dew', True),
                      ('build a profile on mountain dew', True),
                      ('run aprofile on ncis: new york', True),
-                     ('pull a profile for Nike runners', True)],
+                     ('pull a profile for Nike runners', True),
+                     # ask log 2026-10-21 (Jessie): a build verb, a
+                     # consumer noun and a title with two slips is a
+                     # build order; the entity resolves, the gate never
+                     # asks whether it is a build (rule 60)
+                     ('run a profile for Listerners of Ball in the Bonzo Family with Lonzo Ball', True),
+                     ('run a profile for listeners of New Heights', False),
+                     ('run a profile on mountan dew', True),
+                     ('build a profile for The Spiderwick Chronicles', False)],
         'counter': [('who watches love island?', False),
                     # a correction inside the conversation never lands
                     # on the build row (Mark at Bent Pixels, 2026-10-20)

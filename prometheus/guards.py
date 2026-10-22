@@ -164,9 +164,17 @@ _FRAGMENT_TOKENS = {
     'were', 'has', 'have', 'had', 'will', 'can', 'please', 'tell',
     'show', 'give', 'make', 'build', 'run', 'pull', 'create',
 }
+# A counted or pointed opener ("Three actually influence...", "these
+# three creators"). Never 'the' / 'all' / 'each' / 'every': those open
+# more real titles than fragments ("The Spiderwick Chronicles", "All in
+# the Family"), and until 2026-10-21 that one word made every three-word
+# "The ..." title a fragment and drew "I read that as a task" on a build.
 _NUMBER_WORDS = {'one', 'two', 'three', 'four', 'five', 'six', 'seven',
-                 'eight', 'nine', 'ten', 'several', 'few', 'some', 'all',
-                 'both', 'each', 'every', 'these', 'those', 'the'}
+                 'eight', 'nine', 'ten', 'several', 'few', 'some',
+                 'both', 'these', 'those'}
+# a host / credit / billing suffix is not part of the name it follows
+_CREDIT_SUFFIX_RX = re.compile(
+    r"\s+(?:with|featuring|feat\.?|ft\.?|hosted by|presented by|starring|w/)\s+[A-Z&][^,;]*$")
 
 
 def is_build_order(text):
@@ -184,6 +192,15 @@ def reads_as_task(text):
     t = str(text or '').strip()
     if not t or is_build_order(t):
         return False
+    # An explicit build order with a subject is never a task, whatever
+    # the subject looks like (2026-10-21, Jessie: "run a profile for
+    # Listerners of Ball in the Bonzo Family with Lonzo Ball").
+    try:
+        from prometheus import subject_rules as _sr
+        if _sr.explicit_build_subject(t):
+            return False
+    except Exception:
+        pass
     # A named tool product is a guided intake, not a free task.
     if _TOOL_NOUN_RX.search(t):
         return False
@@ -205,14 +222,24 @@ def subject_reads_as_fragment(subject):
     s = str(subject or '').strip()
     if not s:
         return False
+    # the host credit is not the name ("Ball in the Family Podcast with
+    # Lonzo & Gelo Ball" is a four-word title with a credit on it)
+    s = _CREDIT_SUFFIX_RX.sub('', s).strip() or s
     toks = re.sub(r'[^a-z0-9 ]+', ' ', s.lower()).split()
     if not toks:
         return False
-    if len(toks) > 6:
+    hits = [w for w in toks if w in _FRAGMENT_TOKENS]
+    # Length alone never decides (2026-10-21, Jessie: a seven-word
+    # podcast title drew "I read that as a task"): "Harry Potter and the
+    # Order of the Phoenix" is eight words and a title. A long phrase is
+    # a fragment when it also carries a function word; a sentence-long
+    # one is a fragment on its own.
+    if len(toks) > 12:
+        return True
+    if len(toks) > 6 and hits:
         return True
     if toks[0] in _NUMBER_WORDS and len(toks) >= 3:
         return True
-    hits = [w for w in toks if w in _FRAGMENT_TOKENS]
     # One function word inside a real title is common ("Days of Our
     # Lives" has none, "Who Wants to Be a Millionaire" has 'who'); two
     # or more, or a bare verb of commerce / influence, is a fragment.
