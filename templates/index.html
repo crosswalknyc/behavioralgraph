@@ -35895,35 +35895,37 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (rows.length === 0) {
                     return '<div class="iiq-empty" style="padding:1rem;">No assets with measured views.</div>';
                 }
+                var slim = /influencer_project/.test(String((window.__intentIQ && window.__intentIQ.currentSlug) || ''));
+                var botL = _iiqROIBotLabel();
                 var body = rows.map(function(r) {
                     return ''
                       + '<tr>'
                       +   '<td style="padding:0.5rem 0.6rem; color:#e5e7eb; font-weight:600;">' + escapeHtml(r.label) + '</td>'
                       +   '<td style="padding:0.5rem 0.6rem; color:var(--text-secondary); text-align:right;">' + fmtInt(r.assets) + '</td>'
                       +   '<td style="padding:0.5rem 0.6rem; color:#22d3ee; text-align:right; font-variant-numeric:tabular-nums;">' + fmtInt(Math.round(r.views)) + '</td>'
-                      +   '<td style="padding:0.5rem 0.6rem; color:var(--text-secondary); text-align:right;">$' + r.cpm.toFixed(2) + '</td>'
-                      +   '<td style="padding:0.5rem 0.6rem; color:#22d3ee; text-align:right; font-weight:600;">' + _iiqROIFmtUSD(r.views_value) + '</td>'
-                      +   '<td style="padding:0.5rem 0.6rem; color:#a78bfa; text-align:right;">' + _iiqROIFmtUSD(r.eng_value)  + '</td>'
-                      +   '<td style="padding:0.5rem 0.6rem; color:#818cf8; text-align:right;">' + _iiqROIFmtUSD(r.info_value) + '</td>'
-                      +   '<td style="padding:0.5rem 0.6rem; color:#fbbf24; text-align:right;">' + _iiqROIFmtUSD(r.web_value)  + '</td>'
-                      +   '<td style="padding:0.5rem 0.6rem; color:#f0fdf4; text-align:right; font-weight:700;">' + _iiqROIFmtUSD(r.total_value) + '</td>'
+                      +   (slim ? '' : '<td style="padding:0.5rem 0.6rem; color:var(--text-secondary); text-align:right;">$' + r.cpm.toFixed(2) + '</td>')
+                      +   (slim ? '' : '<td style="padding:0.5rem 0.6rem; color:#22d3ee; text-align:right; font-weight:600;">' + _iiqROIFmtUSD(r.views_value) + '</td>')
+                      +   '<td style="padding:0.5rem 0.6rem; color:#a78bfa; text-align:right; font-variant-numeric:tabular-nums;">' + (slim ? fmtInt(Math.round(r.eng))  : _iiqROIFmtUSD(r.eng_value))  + '</td>'
+                      +   '<td style="padding:0.5rem 0.6rem; color:#818cf8; text-align:right; font-variant-numeric:tabular-nums;">' + (slim ? fmtInt(Math.round(r.info)) : _iiqROIFmtUSD(r.info_value)) + '</td>'
+                      +   '<td style="padding:0.5rem 0.6rem; color:#fbbf24; text-align:right; font-variant-numeric:tabular-nums;">' + (slim ? fmtInt(Math.round(r.web))  : _iiqROIFmtUSD(r.web_value))  + '</td>'
+                      +   (slim ? '' : '<td style="padding:0.5rem 0.6rem; color:#f0fdf4; text-align:right; font-weight:700;">' + _iiqROIFmtUSD(r.total_value) + '</td>')
                       + '</tr>';
                 }).join('');
                 return ''
                   + '<div style="margin-top:1rem; margin-bottom:0.4rem; font-size:0.85rem; font-weight:600; color:#e5e7eb;">Value by channel</div>'
-                  + '<div style="font-size:0.7rem; color:var(--text-secondary); margin-bottom:0.4rem;">Views are priced at each channel\'s CPM. Engagement, ' + escapeHtml(_iiqROIMidLabel().toLowerCase()) + ' and ' + escapeHtml(_iiqROIBotLabel().toLowerCase()) + ' values use the flat rates below and do not vary by channel.</div>'
+                  + '<div style="font-size:0.7rem; color:var(--text-secondary); margin-bottom:0.4rem;">' + (slim ? 'Views, engagements, ' + escapeHtml(_iiqROIMidLabel().toLowerCase()) + ' events and ' + escapeHtml(botL.toLowerCase()) + 's summed across every piece of content on each channel.' : 'Views are priced at each channel\'s CPM. Engagement, ' + escapeHtml(_iiqROIMidLabel().toLowerCase()) + ' and ' + escapeHtml(_iiqROIBotLabel().toLowerCase()) + ' values use the flat rates below and do not vary by channel.') + '</div>'
                   + '<div style="overflow-x:auto; border:1px solid rgba(255,255,255,0.06); border-radius:8px;">'
                   +   '<table style="width:100%; border-collapse:collapse; font-size:0.78rem;">'
                   +     '<thead><tr style="background: rgba(0,0,0,0.35); color:#94a3b8; font-size:0.68rem; text-transform:uppercase; letter-spacing:0.05em;">'
                   +       '<th style="padding:0.5rem 0.6rem; text-align:left;">Channel</th>'
                   +       '<th style="padding:0.5rem 0.6rem; text-align:right;">Assets</th>'
                   +       '<th style="padding:0.5rem 0.6rem; text-align:right;">Views</th>'
-                  +       '<th style="padding:0.5rem 0.6rem; text-align:right;">CPM</th>'
-                  +       '<th style="padding:0.5rem 0.6rem; text-align:right;">Views $</th>'
-                  +       '<th style="padding:0.5rem 0.6rem; text-align:right;">Eng $</th>'
-                  +       '<th style="padding:0.5rem 0.6rem; text-align:right;">' + escapeHtml(_iiqROIMidLabel()) + ' $</th>'
-                  +       '<th style="padding:0.5rem 0.6rem; text-align:right;">' + escapeHtml(_iiqROIBotLabel()) + ' $</th>'
-                  +       '<th style="padding:0.5rem 0.6rem; text-align:right;">Total $</th>'
+                  +       (slim ? '' : '<th style="padding:0.5rem 0.6rem; text-align:right;">CPM</th>')
+                  +       (slim ? '' : '<th style="padding:0.5rem 0.6rem; text-align:right;">Views $</th>')
+                  +       '<th style="padding:0.5rem 0.6rem; text-align:right;">' + (slim ? 'Engagements' : 'Eng $') + '</th>'
+                  +       '<th style="padding:0.5rem 0.6rem; text-align:right;">' + escapeHtml(slim ? _iiqROIMidLabel() + ' events' : _iiqROIMidLabel() + ' $') + '</th>'
+                  +       '<th style="padding:0.5rem 0.6rem; text-align:right;">' + escapeHtml(slim ? botL + (/visit$/i.test(botL) ? 's' : ' visits') : botL + ' $') + '</th>'
+                  +       (slim ? '' : '<th style="padding:0.5rem 0.6rem; text-align:right;">Total $</th>')
                   +     '</tr></thead>'
                   +     '<tbody>' + body + '</tbody>'
                   +   '</table>'
