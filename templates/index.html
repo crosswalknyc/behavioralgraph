@@ -35826,8 +35826,30 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }
             // Every piece of content, ranked by what it is worth.
             window.__iiqROIShowAll = window.__iiqROIShowAll || false;
+            window.__iiqROIMTASort = window.__iiqROIMTASort || { content: { key: '', dir: -1 }, channel: { key: '', dir: -1 } };
+            window.iiqROIMTASort = function(tbl, key) {
+                var st = window.__iiqROIMTASort[tbl];
+                if (!st) return;
+                if (st.key === key) st.dir = -st.dir;
+                else { st.key = key; st.dir = -1; }
+                if (typeof window._iiqROIPaintMTABlock === 'function') window._iiqROIPaintMTABlock();
+            };
+            function _iiqROISortRows(rows, tbl) {
+                var st = window.__iiqROIMTASort[tbl];
+                if (!st || !st.key) return rows;
+                var k = st.key, d = st.dir;
+                return rows.slice().sort(function(a, b) { return ((Number(a[k]) || 0) - (Number(b[k]) || 0)) * d; });
+            }
+            function _iiqROITh(tbl, key, label, pad, sortable) {
+                var base = 'padding:' + pad + '; text-align:right;';
+                if (!sortable) return '<th style="' + base + '">' + label + '</th>';
+                var st = window.__iiqROIMTASort[tbl] || {};
+                var on = st.key === key;
+                return '<th onclick="iiqROIMTASort(\'' + tbl + '\', \'' + key + '\')" title="Sort by this column" style="' + base + ' cursor:pointer; user-select:none;' + (on ? ' color:#e5e7eb;' : '') + '">'
+                    + label + (on ? (st.dir > 0 ? ' \u2191' : ' \u2193') : '') + '</th>';
+            }
             function _iiqROIContentTable(bd, rates, scopeId, isStatic) {
-                var rows = bd.perAsset;
+                var rows = isStatic ? _iiqROISortRows(bd.perAsset, 'content') : bd.perAsset;
                 if (!rows.length) return '<div class="iiq-empty" style="padding:1rem;">No content with measured views.</div>';
                 var midL = _iiqROIMidLabel();
                 var botL = _iiqROIBotLabel();
@@ -35858,20 +35880,20 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     : '';
                 return ''
                   + (isStatic ? '' : '<div style="margin-top:0.5rem; margin-bottom:0.4rem; font-size:0.85rem; font-weight:600; color:#e5e7eb;">Value of every piece of content</div>')
-                  + '<div style="font-size:0.7rem; color:var(--text-secondary); margin-bottom:0.4rem;">Ranked by total value.' + (isStatic ? '' : ' Click any row to value that post on its own.') + (slim ? '' : ' Per 1K is total value per thousand views, the cleanest read of which content is doing more with each view.') + '</div>'
+                  + '<div style="font-size:0.7rem; color:var(--text-secondary); margin-bottom:0.4rem;">Ranked by total value.' + (isStatic ? ' Click a column header to sort.' : ' Click any row to value that post on its own.') + (slim ? '' : ' Per 1K is total value per thousand views, the cleanest read of which content is doing more with each view.') + '</div>'
                   + '<div style="overflow-x:auto; border:1px solid rgba(255,255,255,0.06); border-radius:8px;">'
                   +   '<table style="width:100%; border-collapse:collapse; font-size:0.76rem;">'
                   +     '<thead><tr style="background: rgba(0,0,0,0.35); color:#94a3b8; font-size:0.66rem; text-transform:uppercase; letter-spacing:0.05em;">'
                   +       '<th style="padding:0.45rem 0.55rem; text-align:right;">#</th>'
                   +       '<th style="padding:0.45rem 0.55rem; text-align:left;">Content</th>'
                   +       '<th style="padding:0.45rem 0.55rem; text-align:left;">Channel</th>'
-                  +       '<th style="padding:0.45rem 0.55rem; text-align:right;">Views</th>'
+                  +       _iiqROITh('content', 'views', 'Views', '0.45rem 0.55rem', isStatic)
                   +       (slim ? '' : '<th style="padding:0.45rem 0.55rem; text-align:right;">Views $</th>')
-                  +       '<th style="padding:0.45rem 0.55rem; text-align:right;">' + (slim ? 'Engagements' : 'Eng $') + '</th>'
-                  +       '<th style="padding:0.45rem 0.55rem; text-align:right;">' + escapeHtml(slim ? midL + ' events' : midL + ' $') + '</th>'
-                  +       '<th style="padding:0.45rem 0.55rem; text-align:right;">' + escapeHtml(slim ? botL + (/visit$/i.test(botL) ? 's' : ' visits') : botL + ' $') + '</th>'
+                  +       _iiqROITh('content', 'eng', (slim ? 'Engagements' : 'Eng $'), '0.45rem 0.55rem', isStatic)
+                  +       _iiqROITh('content', 'info', escapeHtml(slim ? midL + ' events' : midL + ' $'), '0.45rem 0.55rem', isStatic)
+                  +       _iiqROITh('content', 'web', escapeHtml(slim ? botL + (/visit$/i.test(botL) ? 's' : ' visits') : botL + ' $'), '0.45rem 0.55rem', isStatic)
                   +       (slim ? '' : '<th style="padding:0.45rem 0.55rem; text-align:right;">Total $</th>')
-                  +       '<th style="padding:0.45rem 0.55rem; text-align:right;">Share</th>'
+                  +       _iiqROITh('content', 'share', 'Share', '0.45rem 0.55rem', isStatic)
                   +       (slim ? '' : '<th style="padding:0.45rem 0.55rem; text-align:right;">Per 1K</th>')
                   +     '</tr></thead>'
                   +     '<tbody>' + body + '</tbody>'
@@ -35889,9 +35911,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                   + '</div>';
             }
 
-            function _iiqROIChannelTable(bd, rates) {
+            function _iiqROIChannelTable(bd, rates, isStatic) {
                 var rows = Object.keys(bd.byChannel).map(function(k) { return bd.byChannel[k]; })
                               .sort(function(a,b) { return b.total_value - a.total_value; });
+                if (isStatic) rows = _iiqROISortRows(rows, 'channel');
                 if (rows.length === 0) {
                     return '<div class="iiq-empty" style="padding:1rem;">No assets with measured views.</div>';
                 }
@@ -35918,13 +35941,13 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                   +   '<table style="width:100%; border-collapse:collapse; font-size:0.78rem;">'
                   +     '<thead><tr style="background: rgba(0,0,0,0.35); color:#94a3b8; font-size:0.68rem; text-transform:uppercase; letter-spacing:0.05em;">'
                   +       '<th style="padding:0.5rem 0.6rem; text-align:left;">Channel</th>'
-                  +       '<th style="padding:0.5rem 0.6rem; text-align:right;">Assets</th>'
-                  +       '<th style="padding:0.5rem 0.6rem; text-align:right;">Views</th>'
+                  +       _iiqROITh('channel', 'assets', 'Assets', '0.5rem 0.6rem', isStatic)
+                  +       _iiqROITh('channel', 'views', 'Views', '0.5rem 0.6rem', isStatic)
                   +       (slim ? '' : '<th style="padding:0.5rem 0.6rem; text-align:right;">CPM</th>')
                   +       (slim ? '' : '<th style="padding:0.5rem 0.6rem; text-align:right;">Views $</th>')
-                  +       '<th style="padding:0.5rem 0.6rem; text-align:right;">' + (slim ? 'Engagements' : 'Eng $') + '</th>'
-                  +       '<th style="padding:0.5rem 0.6rem; text-align:right;">' + escapeHtml(slim ? _iiqROIMidLabel() + ' events' : _iiqROIMidLabel() + ' $') + '</th>'
-                  +       '<th style="padding:0.5rem 0.6rem; text-align:right;">' + escapeHtml(slim ? botL + (/visit$/i.test(botL) ? 's' : ' visits') : botL + ' $') + '</th>'
+                  +       _iiqROITh('channel', 'eng', (slim ? 'Engagements' : 'Eng $'), '0.5rem 0.6rem', isStatic)
+                  +       _iiqROITh('channel', 'info', escapeHtml(slim ? _iiqROIMidLabel() + ' events' : _iiqROIMidLabel() + ' $'), '0.5rem 0.6rem', isStatic)
+                  +       _iiqROITh('channel', 'web', escapeHtml(slim ? botL + (/visit$/i.test(botL) ? 's' : ' visits') : botL + ' $'), '0.5rem 0.6rem', isStatic)
                   +       (slim ? '' : '<th style="padding:0.5rem 0.6rem; text-align:right;">Total $</th>')
                   +     '</tr></thead>'
                   +     '<tbody>' + body + '</tbody>'
@@ -36116,7 +36139,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     try {
                         var rates = _iiqROIActiveRates();
                         var bd = _iiqROICompute((window.__iiqROICache && window.__iiqROICache.assets) || [], rates);
-                        fill(_iiqROIContentTable(bd, rates, '', true) + _iiqROIChannelTable(bd, rates) + _iiqROIRateEditor(rates));
+                        fill(_iiqROIContentTable(bd, rates, '', true) + _iiqROIChannelTable(bd, rates, true) + _iiqROIRateEditor(rates));
                     } catch (err) {
                         console.error('[ROI] attribution block failed:', err);
                         fill('');
