@@ -35826,7 +35826,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }
             // Every piece of content, ranked by what it is worth.
             window.__iiqROIShowAll = window.__iiqROIShowAll || false;
-            function _iiqROIContentTable(bd, rates, scopeId) {
+            function _iiqROIContentTable(bd, rates, scopeId, isStatic) {
                 var rows = bd.perAsset;
                 if (!rows.length) return '<div class="iiq-empty" style="padding:1rem;">No content with measured views.</div>';
                 var midL = _iiqROIMidLabel();
@@ -35838,7 +35838,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     var on = r.id === scopeId;
                     var esc = escapeHtml(String(r.id)).replace(/'/g, '&#39;');
                     return ''
-                      + '<tr onclick="iiqROISetAsset(\'' + esc + '\')" title="Value this post on its own" style="cursor:pointer; ' + (on ? 'background: rgba(34,197,94,0.14);' : '') + '">'
+                      + (isStatic ? '<tr>' : '<tr onclick="iiqROISetAsset(\'' + esc + '\')" title="Value this post on its own" style="cursor:pointer; ' + (on ? 'background: rgba(34,197,94,0.14);' : '') + '">')
                       +   '<td style="padding:0.45rem 0.55rem; color:var(--text-secondary); text-align:right; font-variant-numeric:tabular-nums;">' + r.rank + '</td>'
                       +   '<td style="padding:0.45rem 0.55rem; color:#e5e7eb; font-weight:600; max-width:26rem;"><div style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + escapeHtml(_iiqROIAssetLabel(a, 96)) + '</div>'
                       +     '<div style="font-size:0.66rem; color:var(--text-secondary); font-weight:400;">' + escapeHtml([a.asset_type, a.posted_date].filter(Boolean).join(' \u00b7 ')) + '</div></td>'
@@ -35858,7 +35858,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     : '';
                 return ''
                   + '<div style="margin-top:0.5rem; margin-bottom:0.4rem; font-size:0.85rem; font-weight:600; color:#e5e7eb;">Value of every piece of content</div>'
-                  + '<div style="font-size:0.7rem; color:var(--text-secondary); margin-bottom:0.4rem;">Ranked by total value. Click any row to value that post on its own.' + (slim ? '' : ' Per 1K is total value per thousand views, the cleanest read of which content is doing more with each view.') + '</div>'
+                  + '<div style="font-size:0.7rem; color:var(--text-secondary); margin-bottom:0.4rem;">Ranked by total value.' + (isStatic ? '' : ' Click any row to value that post on its own.') + (slim ? '' : ' Per 1K is total value per thousand views, the cleanest read of which content is doing more with each view.') + '</div>'
                   + '<div style="overflow-x:auto; border:1px solid rgba(255,255,255,0.06); border-radius:8px;">'
                   +   '<table style="width:100%; border-collapse:collapse; font-size:0.76rem;">'
                   +     '<thead><tr style="background: rgba(0,0,0,0.35); color:#94a3b8; font-size:0.66rem; text-transform:uppercase; letter-spacing:0.05em;">'
@@ -36102,7 +36102,45 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 else window.__iiqROICosts[_iiqROICostKey(scopeId)] = n;
                 _iiqROIKeepScroll(_iiqROIRenderFromCache);
             };
+            function _iiqROIMovesToMTA(slug) {
+                return /influencer_project/.test(String(slug || ''));
+            }
+            window._iiqROIPaintMTABlock = function() {
+                var box = document.getElementById('iiqMTAROIBlock');
+                if (!box) return;
+                var slug = (window.__intentIQ && window.__intentIQ.currentSlug) || '';
+                var c = window.__iiqROICache || {};
+                var paint = function() {
+                    try {
+                        var bd = _iiqROICompute((window.__iiqROICache && window.__iiqROICache.assets) || [], _iiqROIActiveRates());
+                        var rates = _iiqROIActiveRates();
+                        box.innerHTML = _iiqROIContentTable(bd, rates, '', true) + _iiqROIChannelTable(bd, rates) + _iiqROIRateEditor(rates);
+                    } catch (err) {
+                        console.error('[ROI] attribution block failed:', err);
+                        box.innerHTML = '';
+                    }
+                };
+                if (c.slug === slug && c.assets) { paint(); return; }
+                if (box.getAttribute('data-loading') === slug) return;
+                box.setAttribute('data-loading', slug);
+                box.innerHTML = '<div class="iiq-empty" style="padding:1rem;">Loading content...</div>';
+                fetch('/api/intent/' + slug + '/assets?window=all', { credentials: 'same-origin' })
+                    .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+                    .then(function(d) {
+                        box.removeAttribute('data-loading');
+                        if (!d || !d.success) { box.innerHTML = ''; return; }
+                        var assets = d.cards || d.assets || [];
+                        window.__iiqROICache = { slug: slug, assets: _aiqScopeAssets(assets), assetsAll: assets, ts: Date.now() };
+                        paint();
+                    })
+                    .catch(function(e) {
+                        box.removeAttribute('data-loading');
+                        console.error('[ROI] attribution block fetch failed:', e);
+                        box.innerHTML = '';
+                    });
+            };
             function _iiqROIRenderFromCache() {
+                try { window._iiqROIPaintMTABlock(); } catch (_) {}
                 var host = document.getElementById('iiqROIContent');
                 if (!host) return;
                 try {
@@ -36131,9 +36169,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                       + _iiqROIScopePicker(bd, scopeId)
                       + phasePick
                       + (picked ? _iiqROIPostHero(picked, bd, rates) : _iiqROIHero(bd, rates, term, selected))
-                      + _iiqROIContentTable(bd, rates, scopeId)
+                      + (_iiqROIMovesToMTA(slug) ? '' : _iiqROIContentTable(bd, rates, scopeId)
                       + (picked ? '' : _iiqROIChannelTable(bd, rates))
-                      + _iiqROIRateEditor(rates);
+                      + _iiqROIRateEditor(rates));
                 } catch (err) {
                     console.error('[ROI] render failed:', err);
                     host.innerHTML = '<div class="iiq-empty" style="padding:1.5rem; color:#fca5a5;">This view could not be drawn: ' + escapeHtml(err && err.message || String(err)) + '</div>';
@@ -37374,7 +37412,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var creativeCard = creativeHtml
                     ? '<section id="iiqMTACreativeCard" style="margin-top:1.1rem;">' + creativeHtml + '</section>' : '';
 
-                host.innerHTML = dropdownRow + cohortStrip + howToRead + topStrip + sufficiencyCard + pathsCard + creativeCard + coefCard;
+                var roiMoved = (/influencer_project/.test(String((window.__intentIQ && window.__intentIQ.currentSlug) || '')))
+                    ? '<section id="iiqMTAROIBlock" style="margin-top:1.1rem;"></section>' : '';
+                host.innerHTML = dropdownRow + cohortStrip + howToRead + topStrip + sufficiencyCard + pathsCard + creativeCard + coefCard + roiMoved;
+                if (roiMoved) { try { window._iiqROIPaintMTABlock(); } catch (_) {} }
             }
             // ============================================================
             // // end __IIQ_MTA_MODULE_v1__
