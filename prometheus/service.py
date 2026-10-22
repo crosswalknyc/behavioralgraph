@@ -2052,7 +2052,7 @@ def job_status(user, job_id, *, via='session'):
         elif status in ('error', 'failed'):
             out['result'] = {'kind': 'error', 'text': (
                 payload.get('reply') or payload.get('error')
-                or 'That one did not finish. Ask again and I will rerun it.')}
+                or 'That one did not land. Send the question again and I will take it from there.')}
             if via == 'api_key':
                 out['result']['text'] = envelope._INFRA_RX.sub(
                     '', out['result']['text']).strip()

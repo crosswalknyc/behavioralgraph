@@ -118,7 +118,7 @@ def _payload_for(doc: dict, job_doc: dict, kind: str, event: str) -> dict:
         v1 = C.pending('Held for a moment on our side. Poll again shortly.', retry_after=300, job_id=doc.get('job_id'),
                        conversation_id=doc.get('conversation_id') or None)
     else:
-        v1 = C.declined('error', 'That one did not finish. Ask again and it will rerun.', conversation_id=doc.get('conversation_id') or None)
+        v1 = C.declined('error', 'That one did not land. Send the question again.', conversation_id=doc.get('conversation_id') or None)
     v1['event'] = event
     v1['job_id'] = doc.get('job_id')
     _g.scrub_partner_payload(v1)

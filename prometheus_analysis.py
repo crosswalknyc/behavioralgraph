@@ -5327,7 +5327,7 @@ _CSV_DOWNLOAD_RX = re.compile(
     r'\b(?:download|export|save|send|get|grab|give me|share)\b'
     r'[^.?!\n]{0,50}\bcsv\b'
     r'|\bcsv\b[^.?!\n]{0,30}\b(?:download|export|please|version|file|'
-    r'of (?:this|that|it))\b'
+    r'of (?:this|that|it|the (?:data|numbers|figures|results|read|table|answer)))\b'
     r'|\bas an? csv\b|\bto csv\b',
     re.IGNORECASE)
 
@@ -5343,19 +5343,39 @@ _CSV_DEICTIC_RX = re.compile(
     r"(?: data| numbers| results| table| again)?)$", re.IGNORECASE)
 
 
+_CSV_CONTENT_WORDS_RX = re.compile(
+    r"\b(?:all|every|each|any|list|lists|listing|top|best|biggest|who|what|which|where|that|"
+    r"brands?|influencers?|creators?|titles?|shows?|people|users?|viewers?|buyers?|customers?|"
+    r"fans?|audiences?|rows?|names?|accounts?|companies|platforms?|services?|you have|we have|"
+    r"in your|in our|your network|our network|they|their|them)\b", re.IGNORECASE)
+
+
 def csv_content_ask(text):
     """The NEW content a message asks to receive as a CSV ("a CSV of all
     the influencers in your network" -> "all the influencers in your
     network"), or '' when the CSV wording points at data already on the
     screen ("a csv of this", "the numbers as a csv"). 2026-10-15 (Emmet at
     Kartel): a content ask in CSV clothing is a question, not an export
-    command, and must never dead-end on "no recent read to export"."""
+    command, and must never dead-end on "no recent read to export".
+
+    2026-10-21: a bare SUBJECT NAME after 'for' / 'of' is not new
+    content. "download the csv for eastside golf" names the read to
+    export (the subject Eastside Golf) and is the export command, served
+    without a model call; "a csv of all the influencers you have" or "a
+    csv of what brands they buy" describes content to produce and is a
+    question. A phrase counts as content when it carries a quantifier,
+    a question word, a plural category noun, a pronoun clause or a
+    possessive ('you have', 'in your network'); a short proper name
+    with none of those is a subject."""
     m = _CSV_CONTENT_RX.search(' '.join(str(text or '').split()))
     if not m:
         return ''
     content = m.group('content').strip().strip('"\'')
     if not content or _CSV_DEICTIC_RX.match(content):
         return ''
+    words = content.split()
+    if len(words) <= 5 and not _CSV_CONTENT_WORDS_RX.search(content):
+        return ''          # a named subject, not content to produce
     return content
 
 

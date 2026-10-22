@@ -5523,9 +5523,15 @@ def _ask_logged(surface):
                     reply=__import__('prometheus.ask_outcome', fromlist=['reply_text']).reply_text(payload) or _env_text,
                     job_id=__import__('prometheus.ask_outcome', fromlist=['promised_job']).promised_job(payload))
                 _pm_watch_flag(_pm_ask_log_user(), question, route, outcome, extra)
-                _pm_watch_notify(
-                    _pm_ask_log_user(''), question, payload,
-                    subject, surface=log_surface)
+                # A key ask is notified once, at the API door, with the
+                # text the caller actually received (the v1 doc can turn an
+                # empty reply into a decline after this point; 2026-10-21
+                # the copy read 'No written answer' while the partner read
+                # 'That one did not land'). Dashboard asks notify here.
+                if not getattr(_g, '_pm_api_key_owner', None):
+                    _pm_watch_notify(
+                        _pm_ask_log_user(''), question, payload,
+                        subject, surface=log_surface)
                 # Cross-session memory (2026-08-27, Jenna): every ask
                 # that resolved a subject feeds the per-user memory,
                 # unless the handler already recorded it with richer
@@ -7910,17 +7916,22 @@ def _pm_rescue_unverified_draft(draft, usage_extras=None):
             from iq_rankers import MASTER_CATEGORIES
         except Exception:
             MASTER_CATEGORIES = {}
+        # the composed ask is the text the rulebook prune and the draft
+        # ceiling read (no caller text reaches this rescue; the name was
+        # unbound here and the rescue raised NameError on every approve
+        # it should have saved)
+        rescue_text = (f"run a profile on {subject}\n\n"
+                       f"VERIFIED CONTEXT (already researched, treat as fact): "
+                       f"{subject} is {summary}")
         sys_p, usr_p = _synth_chat_interpret_prompts(
-            (f"run a profile on {subject}\n\n"
-             f"VERIFIED CONTEXT (already researched, treat as fact): "
-             f"{subject} is {summary}"),
+            rescue_text,
             chat_history=None,
             master_categories=MASTER_CATEGORIES,
             candidate_matches=[])
-        sys_p, _dropped2 = _smart.prune_rulebook(sys_p, text, None)
+        sys_p, _dropped2 = _smart.prune_rulebook(sys_p, rescue_text, None)
         fresh = _H._run_nflx_claude_agent(
             system_prompt=sys_p, user_prompt=usr_p,
-            max_tokens=_smart.draft_output_ceiling(text), temperature=0.4,
+            max_tokens=_smart.draft_output_ceiling(rescue_text), temperature=0.4,
             model=_SYNTH_CHAT_INTERPRET_MODEL,
             usage_tag=('interpret', 'approve-rescue', None))
         fd = (fresh or {}).get('data') or {}
@@ -18277,6 +18288,7 @@ _EXPORTS = (
     'api_synth_chat_threads',
     'api_internal_intake_canary',
     'api_synth_chat_threads_activate',
+    'api_synth_chat_threads_bind',
     'api_synth_chat_threads_delete',
     'api_synth_chat_threads_new',
     'api_synth_chat_threads_rename',
@@ -18296,6 +18308,7 @@ from prometheus.legacy.threads import (  # noqa: E402,F401
     api_synth_chat_threads,
     api_synth_chat_threads_new,
     api_synth_chat_threads_activate,
+    api_synth_chat_threads_bind,
     api_synth_chat_threads_rename,
     api_synth_chat_threads_delete,
     _pm_threads_index_key,

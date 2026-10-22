@@ -79,11 +79,11 @@ check('one month of window prices as one year', wns['_pm_window_years'](MARIE) =
 
 # --- pricing precedence in the custom-read lane ---------------------------
 lane = CHAT[CHAT.index('_vw = _pm_viewership_read_price(text, _pm_user)'):]
-lane = lane[:lane.index('if isinstance(panel_confirm, dict):')]
+lane = lane[:lane.index('_state, _pl = _prg.offer_or_charge(')]   # the lane hands the confirm to the one priced gate (2026-10-21)
 check('the breakdown price needs a delivered figure (bound_series or a derived confirm)',
       "(metric_request or {}).get('bound_series')" in lane and "== 'derived'" in lane)
 check('the viewership price stands when the ask asks for the count itself',
-      re.search(r"if _is_derived and \(_has_delivered or not _vw\):", lane) is not None)
+      re.search(r"'derived' if \(_is_derived and \(_has_delivered or not _vw\)\) else \('viewership' if _vw else 'report'\)", lane) is not None)   # the kind handed to the one priced gate (2026-10-21)
 check('the old unconditional override is gone',
       re.search(r"^\s*if _is_derived:\s*#", lane, re.M) is None)
 

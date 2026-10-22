@@ -111,6 +111,13 @@ def _auth():
         # The ask log and the per-ask notify read the session user;
         # an API-key caller has none, so hand them the gated identity.
         g._pm_ask_user = service.username_of(user)
+        if via == 'api_key':
+            # The legacy /api/brief-chat gate stamps the key owner on g;
+            # this door never did, so the in-service code could not tell
+            # a key ask from a dashboard ask (its notify fired unmarked
+            # and twice, 2026-10-21). The owner flag is what the notify,
+            # the ask log and the 'via' marker read.
+            g._pm_api_key_owner = service.username_of(user)
     except Exception:
         pass
     return user, via, None

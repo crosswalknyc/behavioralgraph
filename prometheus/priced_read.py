@@ -470,12 +470,19 @@ def _usd(tool_key, default, username=None):
 
 
 def _label(usd, username=None):
+    """The price in the seat's currency. Only a real string reaches a
+    reader: a host that answers with anything else (a hermetic test's
+    stub, a broken seat lookup) falls back to the dollar form rather
+    than printing the object into the offer line."""
     try:
         from prometheus.legacy.watch import _pm_usd_label
-        return _pm_usd_label(usd, username)
+        lbl = _pm_usd_label(usd, username)
+        if isinstance(lbl, str) and lbl.strip() and re.match(r"^[^\w\s]?\s?[\d,]+(?:\.\d+)?$", lbl.strip()):
+            return lbl
     except Exception:
-        v = float(usd)
-        return f"${v:,.0f}" if abs(v - round(v)) < 0.009 else f"${v:,.2f}"
+        pass
+    v = float(usd)
+    return f"${v:,.0f}" if abs(v - round(v)) < 0.009 else f"${v:,.2f}"
 
 
 def custom_price(username=None, history=None, subject=''):

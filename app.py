@@ -18255,7 +18255,7 @@ def api_unlock_priced_profile():
             _w.record_paid_profile(rec, s3_key=s3_key, subject_name=label)
         hist = u.setdefault('credit_usage_history', [])
         hist.insert(0, {
-            'used_at': datetime.now().isoformat(),
+            'used_at': _credit_history_ts(),
             'description': f'Profile IQ - {label}',
             'job_id': s3_key,
             'pull_type': 'Profile IQ',

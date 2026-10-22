@@ -57,8 +57,11 @@ class _S3Stub:
 stub = _S3Stub()
 ns = {"re": re, "json": json, "time": time, "s3_client": stub,
       "S3_BUCKET": "b", "traceback": __import__("traceback")}
-m = re.search(r"(_PM_LAST_FILE_PREFIX = .*?)\n\n\ndef "
-              r"_pm_answer_file_payload", SRC, re.S)
+# The last-file stash moved to the jobs family (prometheus/legacy/jobs.py,
+# 2026-10-21); it reaches S3 through the host (_H.s3_client).
+JOBS = (_WEB / "prometheus" / "legacy" / "jobs.py").read_text()
+m = re.search(r"(_PM_LAST_FILE_PREFIX = .*?def _pm_file_stash_read\(username\):"
+              r".*?\n        return \{\}\n)", JOBS, re.S)
 check("stash helpers present", m is not None)
 _pm_host_for(ns)
 exec(m.group(1), ns)

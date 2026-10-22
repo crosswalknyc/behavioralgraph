@@ -78,7 +78,8 @@ check("the overlap gate sits after the no-base offer block",
 check("the overlap gate sits before the digest load",
       0 < gate_at < digest_at)
 check("confirm still charges via consume_credit",
-      "consume_credit(" in chat[gate_at:digest_at])
+      "consume=_H.consume_credit" in chat[gate_at:digest_at]
+      and "offer_or_charge(" in chat[gate_at:digest_at])   # the one priced gate charges through consume_credit (2026-10-21)
 check("unconfirmed overlap returns panel_offer, not a generated reply",
       "panel_offer" in chat[gate_at:digest_at])
 check("overlap offer uses the custom-read kind, not viewership copy",

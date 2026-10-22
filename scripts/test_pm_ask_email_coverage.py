@@ -60,7 +60,7 @@ m = re.search(r"def _ask_logged\(surface\):(.*?)\n    return deco", APP,
 check("_ask_logged body found", bool(m))
 body = m.group(1) if m else ''
 check("route exception still records the ask",
-      "except Exception:" in body and "outcome='error'" in body)
+      "except Exception:" in body and "outcome='faulted'" in body)   # I4b (2026-10-20): the calm line is a fault, never 'answered'
 check("route exception still emails the question",
       "_pm_watch_notify(" in body
       and "_CHATBOT_CALM_MESSAGE" in body)
@@ -72,9 +72,9 @@ check("happy path still emails question + reply",
 
 # 3. Finished queued reads email the real answer.
 check("finished-read path calls _pm_watch_notify",
-      re.search(r"_pm_append_read_to_history\(pm_user, job_id, payload\)"
+      re.search(r"_pm_append_read_to_history\(pm_user, job_id, payload[^\n]*\)"
                 r"\s*\n\s*_pm_watch_notify\(pm_user, text, payload",
-                APP) is not None)
+                APP) is not None)   # the append carries held= / started_at= since 2026-10-20; the notify still follows it
 
 # 4. Placeholder gating: only 'On it.' is skipped. The calm
 #    working-on-it promise must still email.

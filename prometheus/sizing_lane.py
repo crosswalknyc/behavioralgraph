@@ -36,6 +36,17 @@ _SIZE_WORDS_RX = re.compile(
     r"data ?set[- ]size|universe[- ]size|projected band|headcount|head count|reach)\b", re.I)
 _CONSUME_RX = re.compile(r"\b(?:watch(?:ed|es|ing)?|view(?:ed|s|ing)?|read(?:s|ing)?|listen(?:ed|s|ing)?|stream(?:ed|s|ing)?|"
                          r"play(?:ed|s|ing)?|bought|buy(?:s|ing)?|purchas(?:e|ed|es|ing)|download(?:ed|s)?|binge[ds]?|tuned)\b", re.I)
+# "how many people <did a thing>" is an event count (an action in a window),
+# never an audience size (2026-10-21: 'how many people saw a Babylon 5 post
+# in June' was sized as an audience named 'saw a Babylon 5 post in June').
+# The action verbs beyond consumption: saw, clicked, searched, visited,
+# posted, engaged, attended, signed up, subscribed, converted, ...
+_EVENT_RX = re.compile(
+    r"\bhow many (?:people|users|customers|individuals|folks|consumers|viewers|fans|accounts)\s+"
+    r"(?:saw|see|seen|clicked|click(?:s|ed)?|searched|search(?:es|ed)?|visit(?:ed|s)?|post(?:ed|s)?|"
+    r"engag(?:ed|es)|attend(?:ed|s)?|sign(?:ed)? up|subscrib(?:ed|es)?|convert(?:ed|s)?|open(?:ed|s)?|"
+    r"shar(?:ed|es)?|lik(?:ed|es)?|follow(?:ed|s)?|comment(?:ed|s)?|went|came|left|return(?:ed|s)?|"
+    r"ordered|rented|tried|used|installed|redeemed|voted|donated|registered|enrolled|churned|cancel(?:l)?ed)\b", re.I)
 _INSTRUCTION_RX = re.compile(r"\b(?:use|set|with|lock|make)\b[^.?!]{0,40}\bsample[- ]?size\b|\bsample[- ]?size\b[^.?!]{0,20}(?:of|should be|=|:)?\s*[\d,]{4,}", re.I)
 _NOT_SIZING_RX = re.compile(r"\b(?:deck|slides?|email me|send me the file|download|csv|journey|valuation|partnership|attribution)\b", re.I)
 
@@ -104,6 +115,8 @@ def wants_sizing(text):
         return False
     if _CONSUME_RX.search(t) and not re.search(r"\b(?:sample|incidence|data ?set)\b", t, re.I):
         return False   # "how many people watched X" is a viewership read
+    if _EVENT_RX.search(t):
+        return False   # "how many people saw / clicked / searched X" is an event count, not an audience size
     return True
 
 

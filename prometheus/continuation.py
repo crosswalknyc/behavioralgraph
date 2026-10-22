@@ -75,6 +75,12 @@ _ABOUT_ANSWER_RX = re.compile(
 _READ_HEAD_RX = re.compile(r"^On\s+(?P<who>[^:\n(]{1,120}?)(?:\s*\([^)]*\))?\s*(?:-\s*[^:\n]{1,80})?:", re.I)
 _PROMISE_RX = re.compile(r"^\s*On it\b|\bthe read will land right here\b|\bWorking on it\b", re.I)
 _QUESTION_RX = re.compile(r"\?\s*$|\bwhich (?:subject|audience|profile|one|title)\b|\bdo you (?:want|mean)\b|\bname the\b", re.I)
+# A sentence that opens like a question and runs five words or more is a
+# new question even without its mark ("how much impact did Spiderwick
+# have on Roku"), never a short reply to the question the agent asked.
+_INTERROGATIVE_OPEN_RX = re.compile(
+    r"^\W*(?:how|what|which|who|whom|whose|when|where|why|do|does|did|is|are|was|were|"
+    r"can|could|should|would|will|has|have|had)\b", re.I)
 
 
 _NEGATED_RX = re.compile(
@@ -273,6 +279,8 @@ def _is_chip_answer(text, prev):
         return False
     if _sr.explicit_build_subject(t) or _RERUN_RX.match(t):
         return False
+    if _INTERROGATIVE_OPEN_RX.match(t) and len(t.split()) >= 5:
+        return False    # a question typed without its mark is a new ask
     return True
 
 

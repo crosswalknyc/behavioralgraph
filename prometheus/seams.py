@@ -131,7 +131,7 @@ def job_result(doc):
         body.setdefault('success', False)
         body.setdefault('reply', str(
             doc.get('reply') or doc.get('error')
-            or 'That one did not finish. Ask again and I will rerun it.'))
+            or 'That one did not land. Send the question again and I will take it from there.'))
         return body
     if not body.get('reply'):
         if jtype == 'deck' or doc.get('url'):

@@ -1068,7 +1068,16 @@ def bind_or_continue(text, ctx, history, ask_hint=None):
     page = _page_name(ctx)
     norm = lambda s: re.sub(r"[^a-z0-9]+", "", str(s or '').lower())
     try:
-        cont = _current_continuation(text, history, page)
+        # "answer this now: <question>" is a command to answer THIS
+        # question (S5): the words are the ask, never a reply to the
+        # question the agent asked a turn ago
+        answer_now = False
+        try:
+            from flask import g as _g_an
+            answer_now = bool(getattr(_g_an, '_pm_answer_now', False))
+        except Exception:
+            answer_now = False
+        cont = {'kind': 'new_ask'} if answer_now else _current_continuation(text, history, page)
         if str(cont.get('kind') or 'new_ask') != 'new_ask':
             if callable(ask_hint):
                 ask_hint(route='screen_bind', outcome='continuation_' + str(cont['kind']), subject=page)

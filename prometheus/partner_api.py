@@ -173,7 +173,7 @@ def _scrub(v1: dict) -> dict:
         ans['text'] = _FALLBACK_ANSWER if ans.get('facts') else ''
         if not ans['text']:
             v1.clear()
-            v1.update(C.declined('error', 'That one did not come through cleanly. Ask again and it will rerun.'))
+            v1.update(C.declined('error', 'That one did not land. Send the question again.'))
     for blk in ('clarify', 'declined', 'pending', 'job'):
         b = v1.get(blk)
         if isinstance(b, dict):
@@ -354,7 +354,50 @@ def handle_ask(user: dict, body: dict, headers: dict = None, *, ask=None, raw_le
             pass
     if isinstance(env, dict):
         env.pop('_raw', None)
-    return _out(v1, request_id)
+    out = _out(v1, request_id)
+    _notify_key_ask(user, text, out[0] if isinstance(out, tuple) else v1, subject, raw)
+    return out
+
+
+def shown_text(v1: dict) -> str:
+    """The words a key caller reads from a v1 doc: the answer, the clarify
+    question, the decline, or the job's stage line."""
+    if not isinstance(v1, dict):
+        return ''
+    for blk, field in (('answer', 'text'), ('clarify', 'question'), ('declined', 'text'), ('pending', 'text')):
+        b = v1.get(blk)
+        if isinstance(b, dict) and str(b.get(field) or '').strip():
+            return str(b[field]).strip()
+    job = v1.get('job')
+    if isinstance(job, dict) and job.get('id'):
+        return ''          # the finished job notifies with the real answer
+    return ''
+
+
+def _notify_key_ask(user: dict, question: str, v1: dict, subject, raw) -> None:
+    """One copy of the question and the answer to Jenna (Liz and Jessie
+    blind-copied) for a key ask, carrying EXACTLY the text the caller
+    received (Jenna 2026-10-14: an API ask mails like a dashboard ask).
+    Fires here, after the v1 doc is final, because the door can turn an
+    empty reply into a decline the raw payload never carried (2026-10-21:
+    the copy read 'No written answer on this step' while the partner read
+    'That one did not land'). The in-service notify defers to this for
+    key asks. A job (a read still running) is notified by the job on
+    completion. Never raises."""
+    try:
+        txt = shown_text(v1)
+        if not txt:
+            return
+        from prometheus.legacy import chat as _chat
+        payload = {'reply': txt}
+        if isinstance(raw, dict):
+            for k in ('subject_label', 'profile'):
+                if raw.get(k):
+                    payload[k] = raw[k]
+        subj = str(subject or (raw or {}).get('profile') or (raw or {}).get('subject_label') or '') or None
+        _chat._pm_watch_notify(_username(user), question, payload, subj, via='api', surface='api')
+    except Exception:
+        pass
 
 
 def handle_job(user: dict, job_id: str) -> tuple:
@@ -389,9 +432,9 @@ def handle_job(user: dict, job_id: str) -> tuple:
     elif st == 'held':
         v1 = C.pending('Held for a moment on our side. Poll again shortly.', retry_after=120, job_id=job_id, billing=billing)
     elif st in ('error', 'failed'):
-        v1 = C.declined('error', 'That one did not finish. Ask again and it will rerun.', billing=billing)
+        v1 = C.declined('error', 'That one did not land. Send the question again.', billing=billing)
     elif st == 'timed_out':
-        v1 = C.declined('error', 'That one ran out of time. Ask again and it will rerun.', billing=billing)
+        v1 = C.declined('error', 'That one ran out of time. Send the question again.', billing=billing)
     else:
         v1 = C.job(job_id, status='working' if st != 'queued' else 'queued', stage=str(jd.get('stage') or ''), eta_seconds=120, billing=billing)
     return _finish(v1, key_id=kid, owner=owner, endpoint='jobs', t0=t0)

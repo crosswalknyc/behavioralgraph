@@ -243,7 +243,7 @@ def to_v1(env: dict, raw: dict = None, *, billing: dict = None, conversation_id:
     if kind == 'clarify' or (kind in ('guidance', 'nudge') and opts) or (kind == 'answer' and confirm):
         return _frame('clarify', trace, conversation_id, billing, clarify={'question': text, 'options': opts})
     if kind in ('guidance', 'nudge') and raw.get('success') is False and not raw.get('reply'):
-        return declined('error', 'That one did not finish. Ask again and it will rerun.', trace_id=trace, conversation_id=conversation_id, billing=billing)
+        return declined('error', 'That one did not land. Send the question again.', trace_id=trace, conversation_id=conversation_id, billing=billing)
     if kind in ('guidance', 'nudge'):
         if raw.get('no_funds'):
             return declined('insufficient_funds', text, next_action={'action': 'top_up', 'endpoint': TOP_UP_ENDPOINT},
@@ -251,7 +251,7 @@ def to_v1(env: dict, raw: dict = None, *, billing: dict = None, conversation_id:
         return declined('unsupported', text, trace_id=trace, conversation_id=conversation_id, billing=billing)
     if kind == 'error' or (raw.get('success') is False and not raw.get('reply')) or (env.get('success') is False and not text):
         # an engine error never echoes its own text to a partner
-        return declined('error', 'That one did not finish. Ask again and it will rerun.', trace_id=trace, conversation_id=conversation_id, billing=billing)
+        return declined('error', 'That one did not land. Send the question again.', trace_id=trace, conversation_id=conversation_id, billing=billing)
     if raw.get('held') or raw.get('pending'):
         return pending(text or 'Still working on it.', retry_after=int(raw.get('retry_after') or 30), trace_id=trace,
                        conversation_id=conversation_id, job_id=(jobd or {}).get('id'), billing=billing)
