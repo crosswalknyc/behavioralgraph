@@ -281,6 +281,42 @@ def is_title_match(client_title: str, canonical_title: str,
     return title_similarity(client_title, canonical_title) >= thresh
 
 
+def verify_title_rows(title, rows, thresh: float = 0.7):
+    """Look-alike guard: drop resolver rows whose SHOW doesn't actually match
+    ``title``.
+
+    A loose resolver can answer the wrong show entirely — e.g. a "Paw Patrol"
+    query coming back as **Doom Patrol** (Max), or **Rosemary & Thyme**
+    (Hallmark). Those rows carry a SHOW that fails the same ``is_title_match``
+    floor the rest of the pipeline uses, so we filter them out before they can
+    seed a client profile on the wrong title.
+
+    Returns ``(kept_rows, dropped_shows)`` where ``dropped_shows`` is the set of
+    distinct mismatched SHOW names that were removed (for logging/visibility).
+    No-op when ``title`` is empty (e.g. URL-only lookups, where the caller
+    pinned an exact asset and there's nothing to verify against).
+    """
+    if not title:
+        return list(rows), set()
+    kept, dropped = [], set()
+    for r in rows:
+        show = (r.get("show") or "").strip()
+        # Keep rows we can't verify (no show name) and rows that clear the floor.
+        if not show or is_title_match(title, show, thresh):
+            kept.append(r)
+        else:
+            dropped.add(show)
+    return kept, dropped
+
+
+# Resolvers that require an interactive, HEADED browser login (a real window)
+# and therefore cannot run unattended. The non-interactive query paths
+# (streamscout_query / current_placements) skip these instead of popping a
+# browser window on the user's desktop — use the platform's own CLI for them.
+# (Max's SPA won't render headless, so there is no unattended path for it.)
+NONINTERACTIVE_SKIP = frozenset({"max"})
+
+
 def token_regex(title: str) -> str:
     """'Wicked For Good' -> 'wicked[^a-z0-9]+for[^a-z0-9]+good'."""
     toks = tokens(title)
