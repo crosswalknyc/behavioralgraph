@@ -150711,10 +150711,20 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     changed = true;
                 }
             });
+            // Only this profile's own cuts are eligible to be removed.
+            // Switching the primary resets selectedKeys, so without this
+            // the first brand's avid column was pulled the moment the
+            // second brand opened (client report, 2026-10-23).
+            var mine = {};
+            ((_comparisonRunsState.availableRuns || [])).forEach(function(rn) {
+                var k = (rn && rn.key) || rn;
+                if (k) mine[k] = 1;
+            });
             // A Set is not array-like, so slice.call would hand back
             // an empty list and nothing would ever be un-mirrored.
             Array.from(_cmpCutMirrored).forEach(function(k) {
                 if (want.indexOf(k) !== -1) return;
+                if (!mine[k]) return;          // another profile's cut, leave it
                 _cmpCutMirrored.delete(k);
                 if (selectedForComparison.has(k)) {
                     selectedForComparison.delete(k);
@@ -175750,12 +175760,28 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     segmentSelections.push(seg.name);
                 }
             });
-            
+
+            // Same for data-cut columns (Avid and friends). The rebuild
+            // below only knows about open tabs, and a cut is not a tab,
+            // so opening a second brand used to wipe the first brand's
+            // avid column (client report, 2026-10-23). Only cuts still
+            // in the set are kept, so removing a chip by hand sticks.
+            const cutSelections = [];
+            try {
+                if (typeof _cmpCutMirrored !== 'undefined' && _cmpCutMirrored) {
+                    Array.from(_cmpCutMirrored).forEach(function(k) {
+                        if (selectedForComparison.has(k)) cutSelections.push(k);
+                        else _cmpCutMirrored.delete(k);
+                    });
+                }
+            } catch (e) { console.warn('[compare] cut preserve skipped', e); }
+
             // Clear and re-select to include all open tabs
             selectedForComparison.clear();
             
             // Re-add segment selections
             segmentSelections.forEach(name => selectedForComparison.add(name));
+            cutSelections.forEach(k => selectedForComparison.add(k));
             
             // Add all profiles that are currently open in tabs
             if (openProfileTabs && openProfileTabs.length > 0) {
