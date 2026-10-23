@@ -85439,6 +85439,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var data = null, parseFailed = false;
                 try { data = _pmV1Unwrap(await r.json()); }
                 catch (_) { parseFailed = true; }
+                if (r.status === 401) {
+                    // a signed-out tab (2026-10-22 audit): the honest line, never the
+                    // calm promise that something will come back
+                    data = { success: false, guidance: true, error: SYNTH_CHAT_SIGNED_OUT_MSG };
+                    parseFailed = false;
+                }
                 return { r: r, data: data,
                          retriable: parseFailed || r.status === 502 ||
                                     r.status === 503 || r.status === 504 };
@@ -85463,6 +85469,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         // reaches ops by email (server-side, or via the beacon below
         // when the backend never saw the failure).
         var SYNTH_CHAT_CALM_MSG = "Working on it. This one needs a closer look and will come back to you shortly.";
+        var SYNTH_CHAT_SIGNED_OUT_MSG = "Your session has ended. Sign in again and ask me once more.";
         function _synthChatReportClientError(route, err, jobId) {
             // Backend-unreachable / unparseable-reply beacon: fires
             // the same ops email as a server-side failure. Dropped
