@@ -29759,6 +29759,14 @@ https://www.instagram.com/p/..."></textarea>
             color: #ff6b6b; font-size: 9.5px; font-weight: 600; letter-spacing: .12em;
             text-transform: uppercase; font-family: inherit; }
         #ecommerceIQView .bp-tab-close-all:hover { background: rgba(255,107,107,0.18); border-color: rgba(255,107,107,0.55); }
+        #ecommerceIQView .bp-tab-csv { margin-left: auto; flex-shrink: 0; padding: 6px 11px; cursor: pointer;
+            border: 1px solid #3B3D38; border-radius: 6px; background: transparent;
+            color: #9AA09B; font-size: 9.5px; font-weight: 600; letter-spacing: .12em;
+            text-transform: uppercase; font-family: inherit; }
+        #ecommerceIQView .bp-tab-csv:hover { color: #E9E8E1; border-color: #5C6560; }
+        #ecommerceIQView .bp-tab-csv + .bp-tab-close-all { margin-left: 0; }
+        body[data-theme="light"] #ecommerceIQView .bp-tab-csv { border-color: #C9C6BA; color: #5C6560; }
+        body[data-theme="light"] #ecommerceIQView .bp-tab-csv:hover { color: #0C1618; border-color: #9AA09B; }
         body[data-theme="light"] #ecommerceIQView .bp-tab { background: #FFFFFF; border-color: #C9C6BA; color: #5C6560; }
         body[data-theme="light"] #ecommerceIQView .bp-tab.is-active { background: rgba(94, 126, 18, 0.08);
             border-color: rgba(94, 126, 18, 0.4); color: #5E7E12; }
@@ -74782,12 +74790,19 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                      + '<span class="bp-tab-name">' + name.replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</span>'
                      + '<button type="button" class="bp-tab-x" data-bp-close="' + safe + '" aria-label="Close">\u00d7</button></span>';
             });
+            html += '<button type="button" class="bp-tab-csv" data-bp-csv="1" title="Download this partnership as CSV">CSV</button>';
             html += '<button type="button" class="bp-tab-close-all" data-bp-close-all="1" title="Close all open tabs">Close all tabs</button>';
             bar.innerHTML = html;
         }
         document.addEventListener('click', function (ev) {
             if (!ev.target.closest) return;
             if (ev.target.closest('[data-bp-close-all]')) { ev.stopPropagation(); _bpCloseAllTabs(); return; }
+            if (ev.target.closest('[data-bp-csv]')) {
+                ev.stopPropagation();
+                if (!(_bpiqState && _bpiqState.data)) { alert('Open a partnership first, then download its CSV.'); return; }
+                _bpiqExportCsv();
+                return;
+            }
             var x = ev.target.closest('[data-bp-close]');
             if (x) { ev.stopPropagation(); _bpCloseTab(x.getAttribute('data-bp-close')); return; }
             var tab = ev.target.closest('[data-bp-tab]');
