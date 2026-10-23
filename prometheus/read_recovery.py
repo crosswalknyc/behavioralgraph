@@ -564,6 +564,67 @@ def last_beat(status):
 HELD_RETRY_AFTER = 180       # a held read gets one fresh run
 MAX_HELD_RETRIES = 1
 
+# The chain a resumed read belongs to (2026-10-22 audit, Casey Pearson's
+# "re-run 9/16 to 9/30"). A read the verifier held was retried once; the
+# retry was held too; the rule "a retry's own job is never retried again"
+# then left it, and a third pass only ran six hours later when the
+# grandparent aged out of the sweep's lookback and the rule stopped
+# seeing the child as a retry. The answer landed in her thread six
+# hours after the ask, and the calm line's "I will email you when it
+# completes" was never kept because the email opt-in lives on the first
+# job id and a held read drops it. Every resumed job now carries a small
+# chain marker (root, depth, whether the reader was promised an email):
+# the sweep gives a held read MAX_HELD_PASSES fresh passes in all and
+# then finalizes honestly instead of waiting on an accident, and a read
+# that lands after the calm line was shown is emailed to the seat.
+CHAIN_PREFIX = 'system/prometheus_reads/_chain/'
+MAX_HELD_PASSES = 2
+
+
+def chain_marker(job_id):
+    """{'root', 'depth', 'promised_email'} for a resumed job, {} for a
+    job that was never resumed. Never raises."""
+    try:
+        s3, bucket = _s3()
+        doc = json.loads(s3.get_object(Bucket=bucket, Key=f"{CHAIN_PREFIX}{job_id}.json")['Body'].read())
+        return doc if isinstance(doc, dict) else {}
+    except Exception:
+        return {}
+
+
+def _write_chain(new_id, parent_id, parent_status, held_retry):
+    """The child's marker: depth counts fresh passes after the first run;
+    the email promise is inherited and set by a held retry (the held
+    read's thread turn is the calm line that promises the email)."""
+    try:
+        parent = chain_marker(parent_id)
+        doc = {'root': parent.get('root') or parent_id, 'parent': parent_id,
+               'depth': int(parent.get('depth') or 0) + 1,
+               'promised_email': bool(parent.get('promised_email')) or bool(held_retry),
+               'user': str((parent_status or {}).get('user') or ''),
+               'question': str((parent_status or {}).get('question') or '')[:300],
+               'written_at': time.time()}
+        s3, bucket = _s3()
+        s3.put_object(Bucket=bucket, Key=f"{CHAIN_PREFIX}{new_id}.json",
+                      Body=json.dumps(doc).encode('utf-8'), ContentType='application/json')
+        return doc
+    except Exception:
+        traceback.print_exc()
+        return {}
+
+
+def promised_email(job_id):
+    """True when the reader was told the answer would come by email (a
+    held read's calm line) somewhere up this job's chain."""
+    return bool(chain_marker(job_id).get('promised_email'))
+
+
+def held_passes_left(job_id, status=None):
+    """How many more fresh passes a held read may get. A read that was
+    never resumed has had one run; each resume adds one."""
+    depth = int(chain_marker(job_id).get('depth') or 0)
+    return max(0, MAX_HELD_PASSES - depth)
+
 
 def is_retryable_held(status, now=None, after=HELD_RETRY_AFTER):
     """A read the verifier held, with a resume record, not yet retried:
@@ -897,6 +958,8 @@ def recover(job_id, status=None, reason='no heartbeat'):
                               Body=side, ContentType='application/json')
             except Exception:
                 pass
+            # the chain marker follows too: pass count and the email promise
+            _write_chain(new_id, job_id, claimed, held_retry=bool(claimed.get('held_retries')))
             c._pm_read_status_write(job_id, {
                 **{k: v for k, v in claimed.items() if k != 'resume'},
                 'status': 'working', 'stage': STALE_STAGE,
@@ -980,15 +1043,23 @@ def sweep(now=None, lookback=LOOKBACK):
                 records.append((k, json.loads(s3.get_object(Bucket=bucket, Key=k)['Body'].read())))
             except Exception:
                 continue
-        # a retry's own job is never retried again (one fresh pass per read)
+        # a retry's own job is retried only while its chain has passes left
+        # (MAX_HELD_PASSES in all); a held read with none left finalizes
+        # honestly instead of sitting until the lookback accident retries it
         retry_children = {str(st.get('resumed_as')) for _k, st in records
                           if st.get('held_retries') and st.get('resumed_as')}
         for k, st in records:
             jid = str(st.get('job_id') or k.rsplit('/', 1)[-1][:-5])
             if is_stale(st, now):
                 out.append((jid, recover(jid, status=st, reason='sweep')))
-            elif is_retryable_held(st, now) and jid not in retry_children:
-                out.append((jid, recover(jid, status=st, reason='held-retry')))
+            elif is_retryable_held(st, now):
+                depth = int(chain_marker(jid).get('depth') or 0)
+                if depth >= MAX_HELD_PASSES or (depth == 0 and jid in retry_children):
+                    # no passes left (or a retry child from before the marker): the honest terminal now
+                    _finalize(jid, st, f'held after {depth + 1} passes')
+                    out.append((jid, 'final'))
+                else:
+                    out.append((jid, recover(jid, status=st, reason='held-retry')))
     except Exception:
         traceback.print_exc()
     for jid in _queued_deck_fallback(now):

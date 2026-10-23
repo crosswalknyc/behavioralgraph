@@ -29,7 +29,20 @@ _STATUS_RX = re.compile(
     r"|\bstill\s+(?:waiting|running|building|processing|not\s+(?:there|here|done|ready))\b"
     r"|\bwhat\s+happened\s+to\b|\bdid\s+(?:it|that|this|the\s+\w+)\s+(?:finish|run|land|go\s+through|work)\b"
     r"|\bhow\s+do\s+i\s+(?:find|see|get\s+to|open)\b|\bwhere\s+(?:do|can|would)\s+i\s+(?:find|see|get)\b"
-    r"|\bis\s+it\s+(?:there|in\s+the\s+tab|on\s+the\s+site)\b)", re.I)
+    r"|\bis\s+it\s+(?:there|in\s+the\s+tab|on\s+the\s+site)\b"
+    r"|\bwhy\s+did\s+(?:it|that|this|my|the\s+\w+)(?:\s+\w+)?\s+(?:fail|error|break|stop|die|not\s+(?:work|run|finish|land|complete))\b"
+    r"|^\s*(?:status|any\s+update|update)\s*\??\s*$|\bwhat(?:'s|\s+is)\s+the\s+status\b)", re.I)
+# the fast pass before the reader (2026-10-22 audit): a short status ask the
+# regex recognizes is answered from the records before the reader's model call,
+# which cost "where do I find the oprah podcast data?" and "why did this query
+# fail?" 15 to 18 seconds for a lookup. An ask that names campaign material
+# ("did the campaign work") stays with the reader.
+_FAST_SKIP_RX = re.compile(r"\b(campaign|creative|ads?|posts?|clips?|trailers?|promos?|audience|viewers|subscribers)\b", re.I)
+
+
+def wants_status_fast(text):
+    t = ' '.join(str(text or '').split())
+    return bool(t) and len(t.split()) <= 14 and wants_status(t) and not _FAST_SKIP_RX.search(t)
 _NOT_STATUS_RX = re.compile(r"\b(fall[- ]?off|drop[- ]?off|index(?:es)?|penetration|overlap|share\s+of|what\s+share|how\s+many|percent|%)\b", re.I)
 KIND_LABEL = {'jiq': 'Digital Journey', 'bpiq': 'Brand Partnership IQ read', 'aiq': 'Attribution IQ campaign',
               'fw': 'Flywheel read', 'deck': 'deck', 'read': 'read', 'profile': 'profile', 'subiq': 'Subscriber IQ tracker',

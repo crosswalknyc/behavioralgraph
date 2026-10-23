@@ -437,7 +437,7 @@ LANE_ORDER = (
     'offer_acceptance', 'priced_offer_acceptance', 'offer_answer', 'referents', 'document', 'confirm_answer', 'short_reply',
     'spend_cap_precheck',
     'continuation',
-    'talent_list_acceptance', 'meta_check', 'standing', 'where_watched', 'sizing_quote',
+    'talent_list_acceptance', 'meta_check', 'standing', 'where_watched', 'sizing_quote', 'status_fast',
     'reader', 'pricing', 'design_request', 'spend_cap', 'thread_followups', 'catalog',
     'sizing_fallback', 'status', 'deliverable_lookup', 'email_file', 'brand_coverage',
     'definitions', 'capability',
@@ -445,10 +445,10 @@ LANE_ORDER = (
     'work_gate',
 )
 DETERMINISTIC_LANES = frozenset((
-    'meta_check', 'standing', 'where_watched', 'sizing_quote', 'reader', 'pricing', 'design_request',
+    'meta_check', 'standing', 'where_watched', 'sizing_quote', 'status_fast', 'reader', 'pricing', 'design_request',
     'thread_followups', 'catalog', 'sizing_fallback', 'status', 'deliverable_lookup', 'email_file',
     'brand_coverage', 'definitions', 'capability'))
-NEVER_PRICED_LANES = frozenset(('where_watched', 'status', 'pricing', 'catalog', 'definitions',
+NEVER_PRICED_LANES = frozenset(('where_watched', 'status_fast', 'status', 'pricing', 'catalog', 'definitions',
                                 'deliverable_lookup', 'email_file', 'brand_coverage', 'capability'))
 
 
@@ -1014,6 +1014,35 @@ def ask(user, body, *, via='session'):
                 _faults.note('service', _fx)
             env = envelope.wrap(raw, surface='analyze', decision=decision,
                                 thread_id=tid, via=via)
+            _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
+            return env, 200
+
+    # lane: status_fast
+    # A short status ask the status regex recognizes is answered from the
+    # reader's own records before the reader runs (2026-10-22 audit: "where
+    # do I find the oprah podcast data?" and "why did this query fail?" paid
+    # the reader's 15 to 18 s for a lookup). Same lane, same guards, earlier;
+    # a miss falls through to the reader and the later status lane.
+    if referent_decision is None and not _armed(body):
+        try:
+            from . import status_lane as _stl_f
+            from . import deliverables as _dlv_f
+            _sf_raw = (_stl_f.answer(text, uname, host=host, user=user, history=history)
+                       if _stl_f.wants_status_fast(text) and not _dlv_f.parse(text) else None)
+        except Exception as e:
+            _faults.note('service.status_fast', e)
+            _sf_raw = None
+        if _sf_raw:
+            raw = _sf_raw
+            decision = {'surface': 'analyze', 'mode': None, 'reason': 'status_lookup', 'client_hint': None}
+            if _client_surface == 'interpret':
+                raw = _interpret_shape(raw)
+                raw['followups'] = list(_sf_raw.get('followups') or [])
+            try:
+                host.ask_hint(route='status_lookup', outcome='answered')
+            except Exception as _fx:
+                _faults.note('service', _fx)
+            env = envelope.wrap(raw, surface='analyze', decision=decision, thread_id=tid, via=via)
             _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
             return env, 200
 

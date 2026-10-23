@@ -30297,8 +30297,8 @@ def _run_profile_via_dispatcher(job_id, project_name, brands, brand_category,
     update_job_status(
         job_id,
         message=(
-            f'Queued on Hetzner (position {queue_pos})' if queue_pos and queue_pos > 1
-            else 'Running on Hetzner...'
+            f'In line (position {queue_pos})' if queue_pos and queue_pos > 1
+            else 'Running...'
         ),
     )
     try:
@@ -30334,9 +30334,9 @@ def _run_profile_via_dispatcher(job_id, project_name, brands, brand_category,
             # Mirror remote queue position into the local job state
             # so the UI shows something useful.
             if st == 'queued':
-                update_job_status(job_id, message='Queued on Hetzner...')
+                update_job_status(job_id, message='In line...')
             elif st == 'running':
-                update_job_status(job_id, message='Running on Hetzner...')
+                update_job_status(job_id, message='Running...')
         if st in ('done', 'skipped', 'failed', 'cancelled'):
             final = jd
             break
@@ -30356,7 +30356,7 @@ def _run_profile_via_dispatcher(job_id, project_name, brands, brand_category,
                 raw_universe=0,
                 inflated_estimate=0,
                 threshold=getattr(_bg, 'MIN_VIABLE_UNIVERSE', 5000),
-                message=f"Skipped on Hetzner: {final.get('skip_reason') or 'low universe'}"
+                message=f"Skipped: {final.get('skip_reason') or 'low universe'}"
             )
         except (ImportError, AttributeError):
             raise RuntimeError(f"dispatcher skipped (low universe): {final.get('skip_reason')}")
@@ -30483,7 +30483,7 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
             update_job_status(
                 job_id,
                 progress=_profile_step_progress(_completed_steps),
-                message='Submitting to Hetzner dispatcher...',
+                message='Submitting the build...',
             )
             try:
                 result_file = _run_profile_via_dispatcher(
@@ -30506,7 +30506,7 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
                 update_job_status(
                     job_id,
                     progress=_profile_step_progress(_completed_steps),
-                    message='Processing results from Hetzner...',
+                    message='Processing results...',
                 )
             except Exception as _de:
                 # Low-universe gate fired on Hetzner — same handling as inline path
@@ -48523,11 +48523,18 @@ def _sg_guard_intersection(draft, text, history, allow_ask):
         return None
     combo = ' '.join(parts).lower() if parts else 'the qualifiers'
     sep = '; '.join(parts) if parts else 'one per qualifier'
+    # money, never credits (Jenna 2026-10-07); the 2026-10-22 audit found this
+    # line still quoting "3 credits" next to a $100 receipt
+    try:
+        _cut_usd = float(_v1_price_table_for(session.get('username')).get('addon_cut') or 100.0)
+    except Exception:
+        _cut_usd = 100.0
+    _cut_label = f"${_cut_usd:,.0f}" if abs(_cut_usd - round(_cut_usd)) < 0.009 else f"${_cut_usd:,.2f}"
     return {'question': (
         f"Your request stacks several qualifiers on one audience. "
         f"Should I build one combined audience ({combo} together as "
         f"a single cut), or separate cuts ({sep})? Reply 'combined' "
-        f"or 'separate'. Each cut is 3 credits.")}
+        f"or 'separate'. Each cut is {_cut_label}.")}
 
 
 # Guards 9 + 13: comparisons and heterogeneous multi-asks. The

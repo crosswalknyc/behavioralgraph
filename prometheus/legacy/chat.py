@@ -14302,8 +14302,12 @@ def _pm_run_read_job(job_id, pm_user, pm_ppu, text, history, mr, base,
             _pm_watch_notify(pm_user, text, payload, payload.get('profile'), probe=probe,
                              via=__import__('prometheus.service', fromlist=['job_doc_field']).job_doc_field(job_id, 'via'))
             if not held and not probe:
-                _pm_flush_notify(job_id, 'read',
-                                 {**payload, 'question': text})
+                _sent = _pm_flush_notify(job_id, 'read',
+                                         {**payload, 'question': text})
+                # The calm line on a held read promises the answer by email; a retry that lands keeps it
+                # (2026-10-22 audit: Casey's re-run landed six hours later, in the thread only).
+                if not _sent and _rr.promised_email(job_id) and _pm_user_email(pm_user):
+                    _pm_send_output_email('read', _pm_user_email(pm_user), {**payload, 'question': text}, sync=True)
             else:
                 _pm_notify_delete(job_id)
                 # A held research report never delivered: the charge

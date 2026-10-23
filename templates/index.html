@@ -84847,7 +84847,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         // and any failure lines. Copy honors the workspace rule on
         // no-modeled-or-source-language.mdc.
         function _synthChatBuildBatchSummary(drafts, totalCredits, failures, sharedCtx) {
-            var lines = ['I will queue ' + drafts.length + ' profiles in parallel:'];
+            // no infrastructure words and money, never credits (2026-10-22 audit: Ben Kusin's card read
+            // 'I will queue 2 profiles in parallel ... 5 credits' next to a $275 receipt)
+            var lines = ['I will start ' + drafts.length + ' profiles together:'];
+            var _usdTotal = 0, _usdKnown = true;
             // Time frame per draft (2026-08-20 Jenna: the summary
             // must list the window; 2026-08-24 ECHO RULE). Each item
             // prefers the plain-language window it carries (the
@@ -84880,9 +84883,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var d = drafts[i] || {};
                 var subj = d.subject || d.name || ('Profile ' + (i + 1));
                 var decision = String(d.decision || 'new_build').toLowerCase();
-                var cred = (typeof d.estimated_credits === 'number')
-                    ? d.estimated_credits + ' credit' + (d.estimated_credits === 1 ? '' : 's')
-                    : '';
+                var _bPt = d.price_table || (synthChatCurrentDraft && synthChatCurrentDraft.price_table) || null;
+                var _bCuts = (d.addon_cuts && d.addon_cuts.length) || 0;
+                var _bUsd = _bPt ? _synthChatPriceUsd(_bPt, decision, _bCuts) : null;
+                if (_bUsd === null) { _usdKnown = false; } else { _usdTotal += _bUsd; }
+                var cred = (_bUsd !== null) ? _synthChatUsd(_bUsd) : '';
                 var mins = d.estimated_run_minutes;
                 var eta = mins ? ' (~' + mins + ' min)' : '';
                 var action = 'new build';
@@ -84904,9 +84909,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 lines.push('');
                 lines.push('Window: ' + _winFirst + '.');
             }
-            if (typeof totalCredits === 'number' && totalCredits >= 0) {
+            if (_usdKnown && drafts.length) {
                 lines.push('');
-                lines.push('Total cost: ' + totalCredits + ' credit' + (totalCredits === 1 ? '' : 's') + ' on approval.');
+                lines.push('Total cost: ' + _synthChatUsd(_usdTotal) + ' on approval.');
             }
             if (Array.isArray(failures) && failures.length) {
                 lines.push('');
