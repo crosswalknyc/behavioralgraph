@@ -814,6 +814,15 @@ def offer(subject, price_label, question, kind='report', frame='', years=1,
             and (not pg or _fold(raw_subj) != _fold(pg)):
         # the binder's fuller label ('Scream 7 viewers on Paramount+') is the one the reader saw bound
         subj = raw_subj
+    if not what and kind in ('overlap', 'custom', 'report'):
+        # a two-service co-viewing ask reads its own question back, with the
+        # window as asked (Bria 2026-10-22: never 'across one year' for a
+        # September to March ask)
+        try:
+            from . import overlap_read as _ov
+            what = _ov.also_watched_lead(question)
+        except Exception:
+            what = ''
     kw = dict(kw, what=what)
     # the confirm and the ledger line carry the subject the reader saw
     offer_body = {'question': str(question or '')[:600],

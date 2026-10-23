@@ -37,7 +37,7 @@ from __future__ import annotations
 import re
 
 __all__ = ['is_date_token', 'is_year_token', 'stated', 'counts', 'plausible_figure',
-           'is_figure_question', 'is_measurement_ask', 'MONTHS_RX']
+           'is_figure_question', 'is_measurement_ask', 'window_in_words', 'MONTHS_RX']
 
 _MONTHS = (r"jan(?:uary|\.)?|feb(?:ruary|\.)?|mar(?:ch|\.)?|apr(?:il|\.)?|may|jun(?:e|\.)?|jul(?:y|\.)?|"
            r"aug(?:ust|\.)?|sep(?:t(?:ember)?|\.)?|oct(?:ober|\.)?|nov(?:ember|\.)?|dec(?:ember|\.)?")
@@ -141,6 +141,63 @@ def stated(text, *, min_value=0):
                     'unit': unit, 'start': m.start(1), 'end': m.end(1),
                     'counted': bool(_COUNT_UNIT_AFTER_RX.match(text[m.end():m.end() + 24]))})
     return out
+
+
+_MONTH_FULL = {'jan': 'January', 'feb': 'February', 'mar': 'March', 'apr': 'April', 'may': 'May', 'jun': 'June',
+               'jul': 'July', 'aug': 'August', 'sep': 'September', 'oct': 'October', 'nov': 'November', 'dec': 'December'}
+_RANGE_JOIN = r"(?:to|through|thru|until|till|and|-|\u2013|\u2014)"
+_WIN_MONTH_RANGE_RX = re.compile(
+    r"\b(?P<am>" + _MONTHS + r")\s*,?\s*(?P<ay>(?:19|20)\d{2})?\s*" + _RANGE_JOIN + r"\s*(?P<bm>" + _MONTHS + r")\s*,?\s*(?P<by>(?:19|20)\d{2})\b", re.I)
+_WIN_MONTH_ONE_RX = re.compile(r"\b(?P<m>" + _MONTHS + r")\s*,?\s*(?P<y>(?:19|20)\d{2})\b", re.I)
+_WIN_NUMERIC_RANGE_RX = re.compile(
+    r"(?<![\d/])(?P<am>\d{1,2})/(?P<ay>(?:19|20)\d{2})\s*" + _RANGE_JOIN + r"\s*(?P<bm>\d{1,2})/(?P<by>(?:19|20)\d{2})(?![\d/])", re.I)
+_WIN_QUARTER_RX = re.compile(r"\b(?P<q>q[1-4])\s*(?:of\s+)?(?P<y>(?:19|20)\d{2})\b", re.I)
+_WIN_FISCAL_RX = re.compile(r"\b(?:fy|fiscal(?:\s+year)?)\s*(?P<y>(?:19|20)\d{2})\b", re.I)
+_WIN_YEAR_RANGE_RX = re.compile(r"\b(?P<a>(?:19|20)\d{2})\s*(?:to|through|thru|until|till|-|\u2013|\u2014)\s*(?P<b>(?:19|20)\d{2})\b", re.I)
+
+
+def _month_name(tok):
+    return _MONTH_FULL.get(str(tok or '')[:3].lower(), str(tok or '').title())
+
+
+def window_in_words(text):
+    """The window a person named, in words, or '' when none: 'September
+    2025 to March 2026', 'November and December 2025', 'September 2025',
+    'Q3 2025', 'fiscal 2026', '2025 to 2026'. Month names come back in
+    full; a numeric month/year pair (9/2025 to 3/2026) reads as its
+    months. The offer line and the read restate the window with this so
+    a dated ask is never quoted as 'across one year' (2026-10-22, Bria's
+    SVU on Peacock and Hulu ask)."""
+    t = ' '.join(str(text or '').split())
+    if not t:
+        return ''
+    m = _WIN_MONTH_RANGE_RX.search(t)
+    if m:
+        join = 'and' if re.search(r"\band\b", m.group(0), re.I) else 'to'
+        a = _month_name(m.group('am')) + (f" {m.group('ay')}" if m.group('ay') else '')
+        return f"{a} {join} {_month_name(m.group('bm'))} {m.group('by')}"
+    m = _WIN_NUMERIC_RANGE_RX.search(t)
+    if m:
+        try:
+            am, bm = int(m.group('am')), int(m.group('bm'))
+            if 1 <= am <= 12 and 1 <= bm <= 12:
+                names = list(_MONTH_FULL.values())
+                return f"{names[am - 1]} {m.group('ay')} to {names[bm - 1]} {m.group('by')}"
+        except ValueError:
+            pass
+    m = _WIN_MONTH_ONE_RX.search(t)
+    if m:
+        return f"{_month_name(m.group('m'))} {m.group('y')}"
+    m = _WIN_QUARTER_RX.search(t)
+    if m:
+        return f"{m.group('q').upper()} {m.group('y')}"
+    m = _WIN_FISCAL_RX.search(t)
+    if m:
+        return f"fiscal {m.group('y')}"
+    m = _WIN_YEAR_RANGE_RX.search(t)
+    if m:
+        return f"{m.group('a')} to {m.group('b')}"
+    return ''
 
 
 def plausible_figure(item, lane='generic'):

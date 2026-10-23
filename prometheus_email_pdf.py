@@ -363,9 +363,13 @@ def _render(title, body_text, date_label, table_highlight_prefix):
                 text = _esc(ln)
             items.append(ListItem(Paragraph(text, s_body),
                                   leftIndent=14))
+        # The bullet glyph takes the house face too. Without bulletFontName
+        # ReportLab draws the dot in Helvetica, which puts a non-embedded
+        # font in every bulleted email PDF and fails the embed check
+        # (2026-10-22, the SVU read to Bria: "NOT READY (embed: FAIL)").
         return ListFlowable(items, bulletType="bullet", start="\u2022",
                             bulletColor=body_c, bulletFontSize=9,
-                            leftIndent=14)
+                            bulletFontName=_font(fam), leftIndent=14)
 
     blocks = _expand_blocks(
         [b.strip() for b in

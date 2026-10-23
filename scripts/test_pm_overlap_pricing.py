@@ -31,12 +31,48 @@ BRIA = ("Of those viewers who watch Law & Order: SVU on Peacock, "
 FAIL = 0
 
 
-def check(name, ok):
+def check(name, ok, detail=''):
     global FAIL
-    print(('PASS ' if ok else 'FAIL ') + name)
+    print(('PASS ' if ok else 'FAIL ') + name + ('' if ok or not detail else f'  <- {str(detail)[:200]}'))
     if not ok:
         FAIL += 1
 
+
+# --- a two-service co-viewing ask with a window (Bria 2026-10-22) ---------
+# "How many viewers who watched Law & Order: SVU on Peacock from September
+# 2025 to March 2026 also watched the series on Hulu?" came back as an
+# explanation of a 2,025-person row on a Peacock journey: the year in the
+# date read as a figure (fixed 2026-10-21, stated_numbers), and the ask
+# itself was never routed as the two-service overlap it is.
+from prometheus import overlap_read as _ov, drilldown as _dd, stated_numbers as _sn, smarter as _sm  # noqa: E402
+from prometheus import priced_read as _pr  # noqa: E402
+SVU = ("How many viewers who watched Law & Order: SVU on Peacock from September 2025 "
+       "to March 2026 also watched the series on Hulu?")
+ST = ("Of those viewers who watched Stranger Things in November and December 2025, "
+      "how many also watched Peacock in September and October 2025?")
+check("the SVU Peacock x Hulu co-viewing ask is an overlap read", is_overlap_read(SVU) is True)
+check("the Stranger Things two-window ask is an overlap read", is_overlap_read(ST) is True)
+check("a year inside a date is never a figure the drill-down lane reads", _dd.numbers_in(SVU) == [] and _dd.looks_like_drilldown(SVU) is False)
+check("the ask is a measurement, never a figure question", _sn.is_measurement_ask(SVU) is True and _sn.is_figure_question(SVU) is False)
+parts = _ov.also_watched(SVU)
+check("the words are read back: title, both services, the window",
+      parts == {'title': 'Law & Order: SVU', 'a': 'Peacock', 'b': 'Hulu', 'window': 'September 2025 to March 2026', 'window_b': ''})
+parts2 = _ov.also_watched(ST)
+check("two windows are read when the ask carries two",
+      bool(parts2) and parts2['title'] == 'Stranger Things' and parts2['b'] == 'Peacock'
+      and parts2['window'] == 'November and December 2025' and parts2['window_b'] == 'September and October 2025')
+check("the window comes back in words for every spelling",
+      _sn.window_in_words('from 9/2025 to 3/2026') == 'September 2025 to March 2026' and _sn.window_in_words('in Q3 2025') == 'Q3 2025'
+      and _sn.window_in_words('for fiscal 2026') == 'fiscal 2026' and _sn.window_in_words('2025 to 2026') == '2025 to 2026' and _sn.window_in_words('how big is it') == '')
+reply, chips, off = _pr.offer('Law & Order: SVU', '$100', SVU, kind='overlap')
+check("the offer reads the question back with the window, never 'across one year'",
+      'September 2025 to March 2026' in reply and 'Hulu' in reply and 'Peacock only and Hulu only' in reply and 'one year' not in reply, reply)
+check("the offer carries the one price line and the Approve and Cancel chips", 'Pulling this data will cost $100.' in reply and len(chips) == 2)
+check("the lead carries no dash and no internal word", '\u2014' not in reply and '\u2013' not in reply and not any(w in reply.lower() for w in ('synth', 'panel', 'sample', 'incidence')))
+check("'can you look at X and tell me Y' is work, never the capability pitch",
+      _sm.advisory_order('Can you look at the Colin and Samir campaign and tell me conversion and value?') is True
+      and _sm.capability_ask('are you able to help me determine what the best cut would be?') is None
+      and _sm.advisory_order('can you see the full url now?') is False)
 
 # --- detector --------------------------------------------------------
 check("Bria's SVU x Netflix subscribe ask is an overlap read",
