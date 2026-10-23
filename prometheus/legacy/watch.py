@@ -607,7 +607,16 @@ def _pm_window_years(text):
     if m:
         lo, hi = int(m.group(1)), int(m.group(2))
         if hi >= lo:
+            # every calendar year the ask lists counts ("2023, 2024 and 2025" is three, not the two
+            # either side of the "and"; Bria 2026-10-23)
+            years = sorted({int(y) for y in re.findall(r"\b(20\d\d)\b", t)})
+            if years and years[-1] >= years[0]:
+                lo, hi = years[0], years[-1]
             return max(1, min(hi - lo + 1, 10))
+    years = sorted({int(y) for y in re.findall(r"\b(?:calendar(?:\s+years?)?|years?|cy|fy)\s*(20\d\d)\b", t)} |
+                   {int(y) for y in re.findall(r"\b(20\d\d)\s*,\s*(?=20\d\d)", t)})
+    if len(years) >= 2:
+        return max(1, min(years[-1] - years[0] + 1, 10))
     m = re.search(r"\bsince\s+(20\d\d)\b", t)
     if m:
         return max(1, min(datetime.now(timezone.utc).year - int(m.group(1)) + 1, 10))

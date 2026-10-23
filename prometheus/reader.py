@@ -466,6 +466,16 @@ def read(text, ctx=None, history=None, user=None, uname='', *, claude=None, prog
     t = ' '.join(str(text or '').split())
     if not t:
         return None
+    # the reading is of the person's own words; pasted material (a prior reply, a
+    # table) is named, never mined for subjects (Bria 2026-10-23: "On it: reading
+    # Back Into Rotation and The Office now" came off a pasted sentence)
+    try:
+        from .pasted import split as _split_paste
+        _own, _paste = _split_paste(text)
+        if _paste and _own:
+            t = ' '.join(_own.split()) + ' (The message also carries pasted material: a prior report with its figures. It is context, not part of the question.)'
+    except Exception:
+        pass
     try:
         if progress:
             progress('Reading your question')

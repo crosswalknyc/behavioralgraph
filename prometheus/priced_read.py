@@ -353,13 +353,14 @@ def _page_name(ctx):
         return ''
 
 
-def bound_subject(text, history=None, ctx=None, fallback=''):
+def bound_subject(text, history=None, ctx=None, fallback='', reading=None):
     """The one subject every offer shows (I1): the binder's label when
-    the words name one, else the fallback cleaned, else the page."""
+    the words name one, else the fallback cleaned, else the page. The
+    Reader's reading, when the caller has one, feeds the binder."""
     page = _page_name(ctx)
     try:
         from . import subject_rules as _sr
-        s = _sr.bind(text, history, page)
+        s = _sr.bind(text, history, page, reading=reading) if reading else _sr.bind(text, history, page)
         if s and s.source == 'words':
             verb = str(s.qualifiers.get('verb') or '')
             plat = str(s.qualifiers.get('platform') or '')
@@ -410,7 +411,9 @@ def reading_cohort(text, page=''):
     return ''
 
 
-_VIDEO_VERB_RX = re.compile(r"\b(?:watch(?:ed|es|ing)?|stream(?:ed|s|ing)?|view(?:ed|s|ing|ers|ership)?|binge[ds]?)\b", re.I)
+# "consumption" is the viewing verb of a consumption report (Jordan 2026-10-08 "Show me monthly consumption for
+# The Office US"; Bria 2026-10-23 "run the same type of consumption report by month"): both ran unpriced without it
+_VIDEO_VERB_RX = re.compile(r"\b(?:watch(?:ed|es|ing)?|stream(?:ed|s|ing)?|view(?:ed|s|ing|ers|ership)?|binge[ds]?|consum(?:ption|ed|e|ing))\b", re.I)
 
 
 def _viewership_ask(text):
@@ -431,7 +434,14 @@ def classify(text, history=None, ctx=None):
     """A priced read, or None when the ask stays metered / free / another
     product path. ``via`` is 'service' for deterministic lanes (sizing,
     where-watched, cross) and 'generate' for compiled new-numbers."""
-    t = ' '.join(str(text or '').split())
+    # the person's own words, apart from anything they pasted (Bria 2026-10-23: a
+    # pasted report under a three-sentence ask ran the message past the guard and
+    # the read went out with no price and no Approve)
+    try:
+        from .pasted import own_words as _own
+        t = ' '.join(_own(text).split())
+    except Exception:
+        t = ' '.join(str(text or '').split())
     if not t or len(t) > 800:
         return None
     if is_talk(t) or is_single_figure(t):
@@ -1088,7 +1098,13 @@ def work_gate(text, history=None, ctx=None, user=None, body=None, username=None,
     if not hit or hit.get('via') != 'generate':
         return None
     uname = str(username or (user or {}).get('username') or (user or {}).get('email') or '').strip()
-    subject = bound_subject(text, history, ctx, fallback=_page_name(ctx))
+    try:
+        from .pasted import own_words as _own
+        words = ' '.join(_own(text).split()) or text
+    except Exception:
+        words = text
+    reading = body.get('reading') if isinstance(body.get('reading'), dict) else None
+    subject = bound_subject(words, history, ctx, fallback=_page_name(ctx), reading=reading)
     if not subject:
         return None
     kind = hit['kind'] if hit['kind'] in CUSTOM_FAMILY or hit['kind'] == 'viewership' else 'report'
@@ -1096,18 +1112,18 @@ def work_gate(text, history=None, ctx=None, user=None, body=None, username=None,
     try:
         from prometheus.legacy import watch as _w
         if kind == 'viewership':
-            extra = {'years': int(_w._pm_window_years(text) or 1), 'verb': _w._pm_viewership_verb(text),
-                     'series': bool(_w._pm_is_viewership_series_ask(text))}
+            extra = {'years': int(_w._pm_window_years(words) or 1), 'verb': _w._pm_viewership_verb(words),
+                     'series': bool(_w._pm_is_viewership_series_ask(words))}
         else:
-            extra = {'verb': _w._pm_viewership_verb(text) if _w._pm_is_consumption_count_ask(text) else 'watched'}
+            extra = {'verb': _w._pm_viewership_verb(words) if _w._pm_is_consumption_count_ask(words) else 'watched'}
     except Exception:
         extra = {}
     try:
         from .named_subject import ask_condition as _ask_cond
-        extra['condition'] = str(_ask_cond(text) or '')
+        extra['condition'] = str(_ask_cond(words) or '')
     except Exception:
         pass
-    state, payload = offer_or_charge(text=text, subject=subject, kind=kind, panel_confirm=pc,
+    state, payload = offer_or_charge(text=words, subject=subject, kind=kind, panel_confirm=pc,
                                      username=uname, user=user, history=history, consume=consume,
                                      frame=str(hit.get('frame') or ''), **extra)
     if state == 'offer':
