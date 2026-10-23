@@ -313,8 +313,13 @@ def verify_title_rows(title, rows, thresh: float = 0.7):
 # and therefore cannot run unattended. The non-interactive query paths
 # (streamscout_query / current_placements) skip these instead of popping a
 # browser window on the user's desktop — use the platform's own CLI for them.
-# (Max's SPA won't render headless, so there is no unattended path for it.)
-NONINTERACTIVE_SKIP = frozenset({"max"})
+#
+# Max is NOT skipped: it now resolves unattended via saved-auth token replay
+# (pure HTTP, no window — see max_episode_identifier.resolve with headed=None).
+# When that auth is missing/stale it raises, so the query path records Max as
+# "unverified" rather than opening a window — refresh it with
+# `max_episode_identifier.py --refresh-auth`.
+NONINTERACTIVE_SKIP = frozenset()
 
 
 def token_regex(title: str) -> str:

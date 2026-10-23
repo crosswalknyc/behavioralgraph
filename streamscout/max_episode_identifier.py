@@ -51,11 +51,13 @@ Usage
 
 import argparse
 import csv
+import json
 import os
 import re
 import sys
 import time
 import urllib.parse
+import urllib.request
 from datetime import datetime
 
 from playwright.sync_api import sync_playwright
@@ -383,9 +385,177 @@ def _fetch_season(page, extra, col_id, sn, show_id):
     return eps
 
 
+# ── headless auth: capture once (headed), replay forever (pure HTTP) ───────────
+# Max's catalog calls are plain HTTPS GETs; the browser is only there to log in
+# and attach cookies + the x-disco/x-wbd headers. We capture those once and
+# replay the same GETs via urllib — no browser — so Max resolves UNATTENDED
+# (Promy/servers) with no window. Auth comes from (in priority order):
+#   MAX_AUTH_JSON env (inline JSON blob, for deploys) -> MAX_AUTH_PATH file ->
+#   ~/.max_auth.json. Refresh it with `max_episode_identifier.py --refresh-auth`.
+_DEFAULT_AUTH_PATH = os.path.expanduser("~/.max_auth.json")
+
+
+class _AuthError(RuntimeError):
+    """Saved Max auth is missing or stale (401/403) — needs a refresh."""
+
+
+def _auth_path():
+    return os.environ.get("MAX_AUTH_PATH") or _DEFAULT_AUTH_PATH
+
+
+def load_saved_auth():
+    """Return the stored {"headers":..., "cookies":...} or None."""
+    blob = os.environ.get("MAX_AUTH_JSON")
+    if blob:
+        try:
+            return json.loads(blob)
+        except Exception:
+            pass
+    path = _auth_path()
+    if os.path.exists(path):
+        try:
+            return json.load(open(path))
+        except Exception:
+            pass
+    return None
+
+
+def save_auth(auth):
+    """Persist captured auth to the MAX_AUTH_PATH file (not MAX_AUTH_JSON env)."""
+    try:
+        path = _auth_path()
+        json.dump(auth, open(path, "w"))
+        try:
+            os.chmod(path, 0o600)
+        except OSError:
+            pass
+        return path
+    except Exception:
+        return None
+
+
+def _cookie_header(cookies, host):
+    """Build a Cookie: header from the cookies that apply to ``host``."""
+    out = []
+    for c in cookies or []:
+        dom = (c.get("domain") or "").lstrip(".")
+        if not dom or host == dom or host.endswith("." + dom) or dom in host:
+            out.append("%s=%s" % (c.get("name"), c.get("value")))
+    return "; ".join(out)
+
+
+def _http_api(auth, url):
+    """Pure-HTTP GET of a Max CMS endpoint using captured cookies + headers.
+    Raises _AuthError on 401/403 (stale auth), RuntimeError on other failures."""
+    host = urllib.parse.urlparse(API_BASE).netloc
+    hdrs = {"User-Agent": UA, "Accept": "application/json",
+            "Cookie": _cookie_header(auth.get("cookies"), host)}
+    hdrs.update({k: v for k, v in (auth.get("headers") or {}).items()
+                 if k in _REPLAY_HEADERS})
+    req = urllib.request.Request(url, headers=hdrs)
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            return json.loads(r.read().decode("utf-8", "replace"))
+    except urllib.error.HTTPError as e:
+        if e.code in (401, 403):
+            raise _AuthError("Max auth stale (HTTP %s)" % e.code)
+        raise RuntimeError("Max API HTTP %s: %s" % (e.code, e.reason))
+
+
+def _discover_show_http(auth, title):
+    data = _http_api(auth, f"{API_BASE}/cms/routes/search?include=default"
+                     f"&decorators={DEC}&page[items.size]=25&contentFilter[query]="
+                     f"{urllib.parse.quote(title)}")
+    want = tokens(title)
+    cands = [(it.get("id"), it.get("attributes", {}).get("name") or "",
+              tokens(it.get("attributes", {}).get("name") or ""))
+             for it in data.get("included", []) if it.get("type") == "show"]
+    if not cands:
+        return None, None
+    exact = [c for c in cands if c[2] == want]
+    if exact:
+        return exact[0][0], exact[0][1]
+    cands.sort(key=lambda c: (-len(set(c[2]) & set(want)), len(c[2])))
+    top = cands[0]
+    return (top[0], top[1]) if set(top[2]) & set(want) else (None, None)
+
+
+def resolve_headless(title, url, kind, seasons, auth):
+    """Resolve a Max title to watch UUIDs via pure HTTP — NO browser.
+    Returns (show_name, rows). Raises _AuthError if the saved auth is stale."""
+    def mkrow(season, ep, eptitle, wid):
+        return {"season": season, "episode": ep, "title": eptitle,
+                "identifier": wid,
+                "watch_url": f"https://play.hbomax.com/video/watch/{wid}"}
+
+    show_id = None
+    if url:
+        m = re.search(r"/show/(" + UUID_RE + ")", url)
+        if m:
+            show_id = m.group(1)
+    show = title or ""
+    if not show_id:
+        show_id, found = _discover_show_http(auth, title)
+        if found:
+            show = found
+    if not show_id:
+        return (show, [])
+
+    show_data = _http_api(auth, f"{API_BASE}/cms/routes/show/{show_id}"
+                          f"?include=default&decorators={DEC}&page[items.size]=100")
+    show = show_name_from_route(show_data, show_id) or show
+    rows = []
+    if kind == "movie":
+        nm, wid = parse_movie(show_data, want_name=show)
+        if wid:
+            show = nm or show
+            rows.append(mkrow("", "", "", wid))
+        return (show, rows)
+
+    col_id = _episodes_collection_id(show_data)
+    if not col_id:
+        for s, e, n, wid in parse_episodes(show_data):
+            rows.append(mkrow(str(s or "1"), str(e or ""), n, wid))
+        return (show, rows)
+    for sn in (_season_numbers(show_data) or [1]):
+        if seasons is not None and sn not in seasons:
+            continue
+        page_no, got = 1, []
+        while True:
+            try:
+                data = _http_api(auth, f"{API_BASE}/cms/collections/{col_id}"
+                                 f"?include=default&decorators={DEC}"
+                                 f"&page[items.size]=100&page[items.number]={page_no}"
+                                 f"&pf[show.id]={show_id}&pf[seasonNumber]={sn}")
+            except _AuthError:
+                raise
+            except Exception:
+                break
+            batch = parse_episodes(data)
+            got.extend(batch)
+            meta = (data.get("data", {}) or {}).get("meta", {}) or {}
+            if page_no >= (meta.get("itemsTotalPages") or 1) or not batch:
+                break
+            page_no += 1
+        for s, e, n, wid in got:
+            rows.append(mkrow(str(s if s is not None else sn), str(e or ""), n, wid))
+    return (show, rows)
+
+
+def _capture_auth_from_context(ctx, page, seed_title):
+    """After a headed login, grab the replay headers + cookies and save them so
+    future runs can go headless. Returns the auth dict (or None)."""
+    extra = warm_up(page, seed_title=seed_title)
+    if not extra.get("x-disco-client"):
+        return None
+    auth = {"headers": extra, "cookies": ctx.cookies()}
+    save_auth(auth)
+    return auth
+
+
 # ── reusable resolver (imported by title_lookup.py) ───────────────────────────
 def resolve(title=None, url=None, kind="series", seasons=None,
-            browser="firefox", headed=True):
+            browser="firefox", headed=None):
     """Resolve a Max title to episode watch UUIDs.
 
     Returns (show_name, rows) where each row is a dict:
@@ -393,85 +563,68 @@ def resolve(title=None, url=None, kind="series", seasons=None,
     (season/episode/title are "" for a movie).  `seasons` is a set or None (all).
     `url` may be a play.hbomax.com/show/<id> link to skip search.
     Raises RuntimeError if credentials are missing.
-    """
-    env = load_env()
-    # Global "no window" switch: when STREAMSCOUT_HEADLESS is set, never open a
-    # visible browser (automated/library use). Max's SPA can't render headless,
-    # so this effectively makes Max a no-op off the desktop — which is correct:
-    # unattended runs should use the content_map seeds, not pop a login window.
-    if headed and str(os.environ.get("STREAMSCOUT_HEADLESS", "")).strip().lower() \
-            in ("1", "true", "yes", "on"):
-        headed = False
 
+    Window policy:
+      headed=None  (default / library / Promy): UNATTENDED — replay saved auth
+          via pure HTTP; if auth is missing/stale, raise (NEVER opens a window).
+      headed=True  (interactive CLI): headless replay first; only if auth is
+          missing/stale do we open a window to log in and capture fresh auth.
+      headed=False (explicit --headless): same as unattended.
+    STREAMSCOUT_HEADLESS forces window-less even when headed=True.
+    """
+    force_headless = str(os.environ.get("STREAMSCOUT_HEADLESS", "")).strip().lower() \
+        in ("1", "true", "yes", "on")
+    allow_window = (headed is True) and not force_headless
+
+    # 1) Fast path: replay saved auth via pure HTTP — no browser, works anywhere.
+    auth = load_saved_auth()
+    if auth:
+        try:
+            return resolve_headless(title, url, kind, seasons, auth)
+        except _AuthError:
+            auth = None  # stale -> refresh below if we're allowed a window
+        except Exception:
+            if not allow_window:
+                raise  # transient API error; surfaced as unverified upstream
+            # else fall through to re-login as a backstop
+
+    # 2) No usable auth. Unattended runs must NOT open a window.
+    if not allow_window:
+        raise _AuthError(
+            "Max auth missing or stale and no interactive window is allowed. "
+            "Refresh it on a desktop with: "
+            "python3 max_episode_identifier.py --refresh-auth")
+
+    # 3) Interactive refresh: open a window, log in, capture fresh auth, then
+    #    resolve through the exact same pure-HTTP path.
+    fresh = refresh_auth(seed_title=title or "house of the dragon")
+    return resolve_headless(title, url, kind, seasons, fresh)
+
+
+def refresh_auth(seed_title="house of the dragon"):
+    """Open a visible Firefox, log in, and capture fresh Max auth
+    (cookies + replay headers) to the MAX_AUTH_PATH file. Returns the auth dict.
+    This is the ONLY code path that opens a browser window."""
+    env = load_env()
     email, pw = env.get("MAX_EMAIL"), env.get("MAX_PASSWORD")
     if not email or not pw:
         raise RuntimeError("Missing MAX_EMAIL / MAX_PASSWORD in .env.local.")
-
     os.makedirs(PROFILE_DIR, exist_ok=True)
-
-    show_id = None
-    if url:
-        m = re.search(r"/show/(" + UUID_RE + ")", url)
-        if m:
-            show_id = m.group(1)
-
-    def mkrow(season, ep, eptitle, wid):
-        return {"season": season, "episode": ep, "title": eptitle,
-                "identifier": wid,
-                "watch_url": f"https://play.hbomax.com/video/watch/{wid}"}
-
-    show = title or ""
-    rows = []
     with sync_playwright() as pw_ctx:
         ctx = pw_ctx.firefox.launch_persistent_context(
-            PROFILE_DIR, headless=not headed,
+            PROFILE_DIR, headless=False,
             viewport={"width": 1360, "height": 1000}, user_agent=UA)
         page = ctx.pages[0] if ctx.pages else ctx.new_page()
         try:
-            if not ensure_login(page, email, pw, headed=headed):
-                return (show, [])
-            extra = warm_up(page, seed_title=title or "house of the dragon")
-            if not extra.get("x-disco-client"):
+            if not ensure_login(page, email, pw, headed=True):
+                raise RuntimeError("Max login did not complete.")
+            fresh = _capture_auth_from_context(ctx, page, seed_title=seed_title)
+            if not fresh:
                 raise RuntimeError("could not capture Max API headers "
                                    "(is a profile/verification screen blocking?)")
-
-            if not show_id:
-                show_id, found = discover_show(page, extra, title, kind)
-                if found:
-                    show = found
-            if not show_id:
-                return (show, [])
-
-            show_url = (f"{API_BASE}/cms/routes/show/{show_id}?include=default"
-                        f"&decorators={DEC}&page[items.size]=100")
-            show_data = _api(page, extra, show_url)
-            show = show_name_from_route(show_data, show_id) or show
-
-            if kind == "movie":
-                nm, wid = parse_movie(show_data, want_name=show)
-                if wid:
-                    show = nm or show
-                    rows.append(mkrow("", "", "", wid))
-            else:
-                col_id = _episodes_collection_id(show_data)
-                if not col_id:
-                    # single-season or movie-shaped: read whatever episodes exist
-                    for s, e, n, wid in parse_episodes(show_data):
-                        rows.append(mkrow(str(s or "1"), str(e or ""), n, wid))
-                else:
-                    avail = _season_numbers(show_data) or [1]
-                    for sn in avail:
-                        if seasons is not None and sn not in seasons:
-                            continue
-                        eps = _fetch_season(page, extra, col_id, sn, show_id)
-                        if eps:
-                            print(f"  Season {sn}: {len(eps)} episodes.")
-                        for s, e, n, wid in eps:
-                            rows.append(mkrow(str(s if s is not None else sn),
-                                              str(e or ""), n, wid))
         finally:
             ctx.close()
-    return (show, rows)
+    return fresh
 
 
 # ── main ──────────────────────────────────────────────────────────────────────
@@ -482,10 +635,24 @@ def main() -> int:
     ap.add_argument("--seasons", help="e.g. 1 | 1,3 | 1-4 | all")
     ap.add_argument("--url", help="play.hbomax.com/show/<id> URL (skip search)")
     ap.add_argument("--headless", action="store_true",
-                    help="run without a visible window (only works if the SPA "
-                         "still fires its API — usually it does NOT; not advised)")
+                    help="never open a window; replay saved auth only "
+                         "(fails if auth is missing/stale — run --refresh-auth)")
+    ap.add_argument("--refresh-auth", action="store_true",
+                    help="open a window, log in, and save fresh Max auth "
+                         "(cookies + headers) for unattended headless runs, "
+                         "then exit")
     ap.add_argument("--outdir", default=os.path.expanduser("~/Desktop"))
     args = ap.parse_args()
+
+    if args.refresh_auth:
+        try:
+            auth = refresh_auth()
+        except RuntimeError as e:
+            print(f"  ! {e}"); return 1
+        print(f"\n✓ Saved Max auth: {len(auth.get('headers', {}))} headers, "
+              f"{len(auth.get('cookies', []))} cookies -> {_auth_path()}")
+        print("  Unattended runs can now resolve Max headless (no window).\n")
+        return 0
 
     kind = args.type
     title = args.title

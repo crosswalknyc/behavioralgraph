@@ -356,15 +356,25 @@ that platform (nothing to second-guess).
 > **Why it matters:** this is the automatic backstop behind §5/§5d — even if a
 > resolver fuzzy-matches the wrong show, it can never reach a client profile.
 
-### 5f. Interactive-login platforms are skipped unattended (HBO Max)
+### 5f. HBO Max resolves unattended via saved-auth token replay
 
-**HBO Max** needs a real logged-in browser window to read its catalog (its app
-won't render headless). So the non-interactive paths (`streamscout_query`,
-`current_placements`) **skip Max** instead of popping a browser window on
-someone's desktop — it's reported as **unverified**, not as "0 / not available,"
-so a stored Max placement is never read as gone. To pull Max, run its own tool
-(`max_episode_identifier.py`) interactively. (A `STREAMSCOUT_HEADLESS=1` env var
-also forces any direct Max call to stay window-less.)
+**HBO Max** used to need a logged-in browser window to read its catalog, so the
+non-interactive paths skipped it. That's fixed. Max now resolves **unattended,
+headless, with no window** — the same as every other platform — using captured
+**auth replay**:
+
+- **Capture once (headed):** run `python3 max_episode_identifier.py --refresh-auth`
+  on a desktop. It opens one browser, you log in, and it saves the login
+  (cookies + API headers) to `~/.max_auth.json`.
+- **Replay forever (headless):** every later Max lookup — `streamscout_query`,
+  `current_placements`, or Promy calling the resolver — replays that saved auth
+  over plain HTTPS. No browser, ~1–2 s, works on any server.
+- **Deploy to Promy's env:** set the saved blob as `MAX_AUTH_JSON` (inline JSON
+  secret) **or** point `MAX_AUTH_PATH` at the file. Refresh it periodically
+  (when cookies expire) by re-running `--refresh-auth` and updating the secret.
+- **When auth is missing/stale,** a Max lookup raises → the platform is reported
+  as **unverified** (not "0 / gone") and **no window ever opens** unattended.
+  That's the signal to re-run `--refresh-auth`.
 
 ---
 
