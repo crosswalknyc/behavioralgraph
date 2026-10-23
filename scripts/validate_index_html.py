@@ -634,3 +634,5 @@ if __name__ == "__main__":
 # ci-trigger: streamscout-lookalike-guard-max-skip
 
 # ci-trigger: streamscout-max-headless-replay
+
+# ci-trigger: streamscout-netflix-profile-click-graphql-episodes

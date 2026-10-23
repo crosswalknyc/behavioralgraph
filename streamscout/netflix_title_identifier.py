@@ -45,6 +45,7 @@ only works once the profile is already logged in), --id <netflixTitleId>.
 
 import argparse
 import csv
+import json
 import os
 import re
 import sys
@@ -197,17 +198,38 @@ def ensure_login(page, email, pw, profile, headed=False):
 
 def _pick_profile(page, profile):
     print(f"  Selecting profile: {profile}")
-    try:
-        loc = page.get_by_role("link", name=profile, exact=True)
-        if loc.count() > 0:
-            loc.first.click(); time.sleep(3); return
-    except Exception:
-        pass
-    for sel in (f'a[aria-label="{profile}"]', f'a:has-text("{profile}")'):
-        el = page.query_selector(sel)
-        if el:
-            el.click(); time.sleep(3); return
-    print(f"  ! Could not find profile '{profile}'; continuing with current.")
+    # Netflix's "Who's watching?" gate now renders each profile as a <button>
+    # (data-uia="profile-selector+tile-<id>") with the name as inner text and no
+    # aria-label — so role/text selectors are required; the old <a aria-label>
+    # selectors silently missed, leaving the resolver stuck on the gate (every
+    # search then returns 0). Try the current markup first, then legacy links.
+    def _try(loc):
+        try:
+            if loc.count() > 0:
+                loc.first.click(); return True
+        except Exception:
+            pass
+        return False
+
+    clicked = (
+        _try(page.get_by_role("button", name=profile, exact=True))
+        or _try(page.get_by_role("button", name=profile))
+        or _try(page.locator(
+            'button[data-uia^="profile-selector"]:has-text("%s")' % profile))
+        or _try(page.get_by_role("link", name=profile, exact=True))
+        or _try(page.locator('a[aria-label="%s"], a:has-text("%s")'
+                             % (profile, profile)))
+    )
+    if not clicked:
+        print(f"  ! Could not find profile '{profile}'; continuing with current.")
+        return
+    # Confirm we actually left the profile gate before searching.
+    for _ in range(10):
+        time.sleep(1)
+        if not page.query_selector('button[data-uia^="profile-selector"]'):
+            return
+    print("  ! Profile gate did not clear after selecting "
+          f"'{profile}'.")
 
 
 def search_title(page, title):
@@ -357,6 +379,153 @@ def select_season(page, snum):
 _CARD_SEL = '.episode-item[data-uia="titleCard--container"]'
 
 
+# ── GraphQL episode capture ───────────────────────────────────────────────────
+# Netflix's redesigned title page only renders ~10 episode cards in the DOM
+# (virtualized, no scroll-to-load), so DOM scraping truncates long seasons. But
+# the page fetches the FULL season list from its GraphQL
+# `PreviewModalEpisodeSelectorSeasonEpisodes` op. We attach a response listener
+# and read that JSON (complete, authoritative) instead of the capped DOM.
+def _parse_gql_episodes(j):
+    """Pull [{index,title,video_id}] (deduped, ordered) from a SeasonEpisodes
+    GraphQL response body (parsed JSON). Only real, numbered episodes are kept —
+    the op also returns a per-season promo/recap node (no positive number)."""
+    acc = []
+
+    def walk(o):
+        if isinstance(o, dict):
+            if o.get("__typename") == "Episode" and o.get("videoId"):
+                num = o.get("number")
+                try:
+                    keep = int(num) >= 1
+                except (TypeError, ValueError):
+                    keep = False
+                if keep:
+                    acc.append({"index": str(num),
+                                "title": o.get("title") or "",
+                                "video_id": str(o.get("videoId"))})
+            for v in o.values():
+                walk(v)
+        elif isinstance(o, list):
+            for v in o:
+                walk(v)
+
+    walk(j)
+    seen, out = set(), []
+    for e in acc:
+        if e["video_id"] not in seen:
+            seen.add(e["video_id"])
+            out.append(e)
+    return out
+
+
+def _parse_gql_seasons(j):
+    """Pull [{number, season_id}] from a PreviewModalEpisodeSelector (season
+    list) response. Netflix stores a season's id in the Season node's videoId."""
+    out, seen = [], set()
+
+    def walk(o):
+        if isinstance(o, dict):
+            if o.get("__typename") == "Season" and o.get("videoId") is not None:
+                m = re.match(r"season\s+(\d+)", str(o.get("title") or ""), re.I)
+                sid = int(o["videoId"])
+                if m and sid not in seen:
+                    seen.add(sid)
+                    out.append({"number": int(m.group(1)), "season_id": sid})
+            for v in o.values():
+                walk(v)
+        elif isinstance(o, list):
+            for v in o:
+                walk(v)
+
+    walk(j)
+    return out
+
+
+# Persisted-query id/version for the per-season episode list op (Netflix 'akira'
+# web client). Replaying it with a season id returns the COMPLETE season, which
+# the DOM (≈10 virtualized cards) does not expose.
+_SEASON_EPISODES_PQ = ("04d92a07-1aff-4046-adbf-90ba1f9e009a", 102)
+_SEASON_EPISODES_OP = "PreviewModalEpisodeSelectorSeasonEpisodes"
+
+
+def install_episode_capture(page):
+    """Attach a /graphql listener. Returns a dict with ['latest'] (most recent
+    SeasonEpisodes episodes) and ['seasons'] (the season list {number,id})."""
+    cap = {"latest": None, "seasons": None}
+
+    def on_resp(resp):
+        try:
+            if "/graphql" not in resp.url:
+                return
+            pd = resp.request.post_data or ""
+            if "SeasonEpisodes" in pd:
+                cap["latest"] = _parse_gql_episodes(json.loads(resp.text()))
+            elif "PreviewModalEpisodeSelector" in pd:
+                seasons = _parse_gql_seasons(json.loads(resp.text()))
+                if seasons:
+                    cap["seasons"] = seasons
+        except Exception:
+            pass
+
+    page.on("response", on_resp)
+    return cap
+
+
+def gql_season_episodes(page, season_id, count=60):
+    """Replay the SeasonEpisodes op for one season id via an in-page fetch
+    (credentials:'include'); returns [{index,title,video_id}] or []. Deterministic
+    — unlike DOM selection, this always hits the network (no client-cache miss)."""
+    pq_id, pq_ver = _SEASON_EPISODES_PQ
+    js = """async ([seasonId, count, opName, pqId, pqVer]) => {
+      try {
+        const build = netflix.reactContext.models.serverDefs.data.BUILD_IDENTIFIER;
+        const body = {operationName: opName,
+          variables: {playbackRedirectEnabled:false, seasonId:seasonId,
+                      count:count, opaqueImageFormat:"WEBP", artworkContext:{}},
+          extensions: {persistedQuery:{id:pqId, version:pqVer}}};
+        const r = await fetch("https://www.netflix.com/graphql", {
+          method:"POST", credentials:"include",
+          headers:{"content-type":"application/json",
+            "x-netflix.context.ui-flavor":"akira",
+            "x-netflix.context.app-version":build,
+            "x-netflix.context.locales":"en-US",
+            "x-netflix.context.operation-name":opName},
+          body: JSON.stringify(body)});
+        if (!r.ok) return {error:"HTTP "+r.status};
+        return {text: await r.text()};
+      } catch (e) { return {error:String(e)}; }
+    }"""
+    res = page.evaluate(js, [season_id, count, _SEASON_EPISODES_OP, pq_id, pq_ver])
+    if not res or res.get("error"):
+        return []
+    try:
+        return _parse_gql_episodes(json.loads(res["text"]))
+    except Exception:
+        return []
+
+
+def _wait_capture(cap, timeout=12.0):
+    """Wait up to ``timeout`` s for a fresh SeasonEpisodes capture; return it."""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if cap["latest"] is not None:
+            return cap["latest"]
+        time.sleep(0.4)
+    return cap["latest"]
+
+
+def _current_toggle_season(page):
+    """Season number currently shown on the episode-selector toggle, or None."""
+    try:
+        t = (page.locator(_TOGGLE).first.inner_text() or "").strip()
+        m = re.match(r"season\s+(\d+)", t, re.I)
+        if m:
+            return int(m.group(1))
+    except Exception:
+        pass
+    return None
+
+
 def scrape_episodes(page):
     """Wait for episode cards, scroll to load the full (lazy) list, then read."""
     eps = []
@@ -431,11 +600,15 @@ def resolve(title=None, title_id=None, kind="series", seasons=None,
         page = ctx.pages[0] if ctx.pages else ctx.new_page()
         try:
             ensure_login(page, email, pw, profile, headed=headed)
+            # Read the full season list from Netflix's own GraphQL response
+            # rather than the DOM (which only renders ~10 episode cards).
+            cap = install_episode_capture(page)
             tid, matched = (title_id, title)
             if not tid:
                 tid, matched = search_title(page, title)
             if not tid:
                 return (show, [])
+            cap["latest"] = None
             show = open_title(page, tid) or (matched or title or tid)
 
             if kind == "movie":
@@ -447,17 +620,47 @@ def resolve(title=None, title_id=None, kind="series", seasons=None,
                 if vid:
                     rows.append(mkrow("", "", "", vid))
             else:
+                # The default season's episodes were fetched during open_title;
+                # keep that capture for the season that's already selected (its
+                # dropdown click won't re-fire the request).
+                default_eps = _wait_capture(cap, timeout=12)
+                default_sn = _current_toggle_season(page)
+
+                # Opening the season dropdown fires the season-list op, which
+                # carries each season's id (needed for the deterministic replay).
                 avail = list_seasons(page)
-                if not avail:  # single-season show: scrape what's shown
-                    for e in scrape_episodes(page):
-                        rows.append(mkrow("1", e["index"], e["title"], e["video_id"]))
+                sid_by_num = {s["number"]: s["season_id"]
+                              for s in (cap.get("seasons") or [])}
+
+                def _episodes_for(snum):
+                    # Preferred: replay the season-list op by id — always hits the
+                    # network and returns the COMPLETE season (DOM shows only ~10).
+                    sid = sid_by_num.get(snum)
+                    if sid:
+                        eps = gql_season_episodes(page, sid)
+                        if eps:
+                            return eps
+                    # Fallbacks: DOM selection capture, then the (capped) scrape.
+                    cap["latest"] = None
+                    select_season(page, snum)
+                    eps = _wait_capture(cap, timeout=12)
+                    if not eps and snum == default_sn and default_eps:
+                        eps = default_eps
+                    if not eps:
+                        eps = scrape_episodes(page)
+                    return eps or []
+
+                if not avail:  # single-season show
+                    eps = default_eps or scrape_episodes(page)
+                    for e in eps:
+                        rows.append(mkrow("1", e["index"], e["title"],
+                                          e["video_id"]))
                 else:
                     for snum, _ in avail:
                         if seasons is not None and snum not in seasons:
                             continue
                         print(f"  Season {snum}: reading episodes ...")
-                        select_season(page, snum)
-                        eps = scrape_episodes(page)
+                        eps = _episodes_for(snum)
                         for e in eps:
                             rows.append(mkrow(str(snum), e["index"],
                                               e["title"], e["video_id"]))
