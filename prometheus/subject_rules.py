@@ -581,6 +581,9 @@ _METRIC_WORDS = frozenset((
     'kpi', 'kpis', 'figure', 'figures', 'results', 'result', 'frequency', 'volume', 'spend',
     'cost', 'price', 'revenue', 'all', 'every', 'each', 'other', 'rest', 'more', 'less'))
 # a leading verb makes the phrase a behavior, not a thing
+_DISCOURSE_LEAD_RX = re.compile(
+    r"^(?:what|how|which|why|when|where|who|whom|whose|is|are|was|were|can|could|would|should|do|does|did|and|also|but|so|or|"
+    r"what about|how about|same for|now|then|ok|okay|yes|no)\b", re.I)
 _BEHAVIOR_LEAD_RX = re.compile(
     r"^(?:who\s+)?(?:also\s+)?(?:watch(?:es|ed|ing)?|drink(?:s|ing)?|drank|buy(?:s|ing)?|bought|read(?:s|ing)?|"
     r"listen(?:s|ed|ing)?|play(?:s|ed|ing)?|stream(?:s|ed|ing)?|shop(?:s|ped|ping)?|eat(?:s|ing)?|ate|"
@@ -814,6 +817,12 @@ def qualified_audience(text):
         return '', {}
     name = clean_display(m.group('name'))
     if not name or _BEHAVIOR_LEAD_RX.match(m.group('name')):
+        return '', {}
+    # a follow-up that opens with a discourse or question word is not an
+    # audience name ("what about gender age and international viewers" was
+    # priced as a $500 read on "What About Gender Age and International",
+    # Jay Patel 2026-10-21); it stays with the thread's subject
+    if _DISCOURSE_LEAD_RX.match(m.group('name')):
         return '', {}
     q = {'verb': m.group('verb').lower()}
     if m.group('platform'):

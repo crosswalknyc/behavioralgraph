@@ -376,13 +376,32 @@ _MATERIAL_RX = re.compile(r"\b(urls?|links?|csv|xlsx|spreadsheet|sheet|file|file
                           r"the full (?:url|link|list|thing)|what i (?:sent|uploaded|pasted|attached)|(?:this|that|the) (?:deck|pdf|document|doc|image|screenshot))\b", re.I)
 
 
+# "Can you look at the Colin and Samir campaign and tell me conversion and
+# value?" (Debi 2026-10-21), "are you able to help me determine what the best
+# cut would be?" (Emmet 2026-10-18, three times), "are you able to poll your
+# talent database and see which one of these influencers also offer a product"
+# (Emmet 2026-10-15): work asked for with manners, never a question about what
+# the product does. Each drew the Profile IQ pitch and "tell me the subject".
+_ADVISORY_ORDER_RX = re.compile(
+    r"^\W*(?:(?:can|could|would) (?:you|we|crosswalk|prometheus)|are you able to|would it be possible for you to)\b[^?]{0,40}?"
+    r"\b(?:help (?:me|us)|tell (?:me|us)|show (?:me|us)|give (?:me|us)|look at|look into|poll|identify|"
+    r"determine|figure out|work out|recommend|suggest|analy[sz]e|review|compare|rank|size up|see (?:which|if|whether)|find out|walk (?:me|us) through)\b", re.I)
+
+
+def advisory_order(text):
+    """An ask for work behind a can-you frame ('can you look at X and tell
+    me Y', 'are you able to help me determine Z'): the work is the ask."""
+    return bool(_ADVISORY_ORDER_RX.match(' '.join(str(text or '').split())))
+
+
 def capability_ask(text):
     """{'reply', 'followups'} for a can-we / is-there-a-way ask, or None.
     'Can you see the full url now?' is about the material on the thread,
     not about what the product does (Alexia 2026-10-16 got a Profile IQ
-    pitch); the document lane answers that."""
+    pitch); the document lane answers that. An ask for work behind the
+    frame (advisory_order) is not this lane either (2026-10-22 audit)."""
     t = ' '.join(str(text or '').split())
-    if not t or not _CAPABILITY_RX.match(t) or polite_order(t) or _MATERIAL_RX.search(t):
+    if not t or not _CAPABILITY_RX.match(t) or polite_order(t) or _MATERIAL_RX.search(t) or advisory_order(t):
         return None
     hits = [(name, what, chip) for rx, name, what, chip in _PRODUCT_WORDS if rx.search(t)]
     if not hits:
