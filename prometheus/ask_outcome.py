@@ -154,11 +154,39 @@ def reply_text(payload):
         if not isinstance(d, dict):
             continue
         subj = str(d.get('subject') or d.get('universe_label') or '').strip()
-        dec = str(d.get('decision') or 'new_build').replace('_', ' ')
-        cred = d.get('estimated_credits')
+        dk = str(d.get('decision') or 'new_build')
+        dec = dk.replace('_', ' ')
+        # money, never credits (Jenna 2026-10-07); this line reached a reader on
+        # 2026-10-22 as "Brief drafted: Banana Republic (new build, 5 credits)"
+        usd = draft_price_usd(d)
         lines.append(f"Brief drafted: {subj or 'this audience'} ({dec}"
-                     + (f", {cred} credits" if cred not in (None, '') else '') + ')')
+                     + (f", ${usd:,.0f}" if usd is not None else '') + ')')
     return '; '.join(lines)
+
+
+def draft_price_usd(d):
+    """The dollar price of a drafted build from the price table the server
+    stamps on the draft (the widget's _synthChatPriceUsd, mirrored): the
+    tier price plus add-on cuts, the first cut inside cut_needs_parent, a
+    cuts-only derive priced per cut. None when the draft carries no table,
+    so a caller prints nothing rather than credits."""
+    try:
+        pt = d.get('price_table') if isinstance(d, dict) and isinstance(d.get('price_table'), dict) else None
+        if not pt:
+            return None
+        dk = str(d.get('decision') or 'new_build')
+        cut = float(pt.get('addon_cut') or 0)
+        n = len(d.get('addon_cuts') or []) if isinstance(d.get('addon_cuts'), list) else 0
+        if dk == 'existing_match':
+            return 0.0
+        if dk == 'derive_cut':
+            return cut * max(n, 1)
+        if dk == 'cut_needs_parent':
+            return float(pt.get('cut_needs_parent') or 0) + cut * max(n - 1, 0)
+        base = pt.get(dk, pt.get('new_build'))
+        return float(base or 0) + cut * n
+    except Exception:
+        return None
 
 
 def last_agent_text(history):

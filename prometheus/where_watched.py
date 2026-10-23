@@ -65,6 +65,13 @@ _IS_ON_RX = re.compile(
 _NOT_THIS_LANE_RX = re.compile(
     r"^\s*(?:how\s+(?:big|many|much|large|old|often)|what(?:'s|\s+is|\s+was|\s+are)\s+the\s+(?:size|audience|reach|share|index|count|number|demographic)|"
     r"(?:the\s+)?size\s+of|what\s+(?:share|percent|percentage|fraction)|who\s+(?:is|are)\s+the\s+audience)\b", re.I)
+# "where do i see the answer" / "where do i find the results" name our own output, never a title
+# (Jay Patel 2026-10-21 drew "Which The Answer do you mean: The Answer (2015), The Answer (2015) or The
+# Answer (2015)?" after 116 s); the status lane owns those words
+_GENERIC_OBJECT_RX = re.compile(
+    r"^(?:the\s+|my\s+|your\s+|our\s+|that\s+|this\s+)?(?:answer|answers|result|results|data|number|numbers|output|outputs|reply|"
+    r"response|read|reads|previous\s+question|last\s+question|question|info|information|table|list|chart|charts|summary|"
+    r"file|files|export|download|report|deck|pdf|csv)(?:\s+(?:of|for|to|from)\b.*)?\s*$", re.I)
 _AUDIENCE_TAIL_RX = re.compile(
     r"\b(?:audience|audiences|viewers|watchers|fans|fanbase|fan\s+base|users|subscribers|readers|listeners|buyers|shoppers|customers|members|followers|people|cohort|profile)\s*$", re.I)
 _WHERE_TO_WATCH_RX = re.compile(
@@ -176,7 +183,7 @@ def parse(text, history=None, *, page='', plausible=None):
     if not title and _PRONOUN_OBJECT_RX.search(t):
         title, kind = _thread_title(history)
         kind = _VIDEO_KINDS.get(kind, kind or 'title') if kind not in _AUDIO_KINDS else 'podcast'
-    if not title:
+    if not title or _GENERIC_OBJECT_RX.match(title):
         return None
     if plausible is not None:
         try:
