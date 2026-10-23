@@ -331,6 +331,41 @@ kept, dropped = split_profile_terms(candidate_terms, "Gilmore Girls", rows=rows)
 > before it reaches Profile IQ. Name variations belong to **person/brand**
 > profiles, never to a viewers profile.
 
+### 5e. Look-alike guard — a wrong-title match can't seed a profile (automatic)
+
+Some platforms' resolvers will answer a query with the *closest* show they can
+find, even when it isn't the right one. A **"Paw Patrol"** scan came back with
+**Doom Patrol** (HBO Max) and **Rosemary & Thyme** (Hallmark) — two completely
+different shows that would have seeded the wrong audience.
+
+`streamscout_query()` / `query_report()` / `current_placements()` now **verify
+every returned row's SHOW against the requested title** and **drop the
+look-alikes automatically** — no action needed on your side. It uses the same
+similarity floor as the rest of the pipeline, so:
+
+- *Paw Patrol* vs *Doom Patrol* (0.57) → **dropped**; *Paw Patrol* vs *Rosemary
+  & Thyme* (0.25) → **dropped**.
+- Legit messy titles still pass: *Wicked For Good* ↔ *Wicked: For Good*, *The
+  Office* ↔ *The Office (U.S.)*, *Paw Patrol* ↔ *Paw Patrol: The Movie* → kept.
+
+Dropped look-alikes are logged to stderr (`⚠ hallmark: dropped look-alike
+ROSEMARY & THYME — resolved a different show, not 'Paw Patrol'`). If a caller
+pins an exact asset via a `hints=`/`url=` identifier, verification is skipped for
+that platform (nothing to second-guess).
+
+> **Why it matters:** this is the automatic backstop behind §5/§5d — even if a
+> resolver fuzzy-matches the wrong show, it can never reach a client profile.
+
+### 5f. Interactive-login platforms are skipped unattended (HBO Max)
+
+**HBO Max** needs a real logged-in browser window to read its catalog (its app
+won't render headless). So the non-interactive paths (`streamscout_query`,
+`current_placements`) **skip Max** instead of popping a browser window on
+someone's desktop — it's reported as **unverified**, not as "0 / not available,"
+so a stored Max placement is never read as gone. To pull Max, run its own tool
+(`max_episode_identifier.py`) interactively. (A `STREAMSCOUT_HEADLESS=1` env var
+also forces any direct Max call to stay window-less.)
+
 ---
 
 ## 6. Output schema (every row)

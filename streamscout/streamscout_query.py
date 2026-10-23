@@ -129,6 +129,14 @@ def query_report(title, platforms=None, kind="series", seasons=None,
     counts = {k: 0 for k in keys}
     failed = {}
     for platform in keys:
+        if platform in getattr(ss, "NONINTERACTIVE_SKIP", frozenset()):
+            # Needs an interactive login window; can't run unattended. Mark it
+            # UNVERIFIED (not a hard zero) so strict mode keeps a stored
+            # placement instead of reading the title as "gone" from this path.
+            failed[platform] = "skipped: needs an interactive login window (run its own CLI)"
+            print("  \u2139 skipped %s \u2014 needs an interactive login window; run its "
+                  "own CLI" % platform, file=sys.stderr)
+            continue
         try:
             rows = ss.resolver_lookup(platform, title, kind, seasons,
                                       url=_hint_for(platform, hints, url),
@@ -136,6 +144,16 @@ def query_report(title, platforms=None, kind="series", seasons=None,
         except Exception as e:  # noqa: BLE001 (hands-off: the platform is unverified, the batch goes on)
             failed[platform] = ("%s: %s" % (type(e).__name__, e))[:240]
             continue
+        # Look-alike guard: drop rows whose SHOW isn't the requested title (e.g.
+        # 'Doom Patrol' for 'Paw Patrol'). Skipped when the caller pinned an
+        # exact asset via a hint/url (nothing to verify against).
+        if title and not _hint_for(platform, hints, url):
+            rows, dropped = ss.verify_title_rows(title, rows)
+            if dropped:
+                print("  \u26a0 %s: dropped look-alike match %s \u2014 resolved a "
+                      "different show, not %r"
+                      % (platform, ", ".join(sorted(dropped)), title),
+                      file=sys.stderr)
         for r in rows:
             row_show = (show or r.get("show") or title or "").strip().upper()
             rec = {
@@ -345,6 +363,13 @@ def current_placements(title, platforms="video", kind="series", seasons=None,
     counts = {k: 0 for k in scan_keys}
     failures = {}
     for platform in scan_keys:
+        if platform in getattr(ss, "NONINTERACTIVE_SKIP", frozenset()):
+            # Interactive-login resolver: can't check it unattended. Unverified,
+            # not "absent" — so a stored placement here is never read as gone.
+            failures[platform] = "skipped: needs an interactive login window (run its own CLI)"
+            print("  \u2139 skipped %s \u2014 needs an interactive login window; run its "
+                  "own CLI" % platform, file=sys.stderr)
+            continue
         try:
             rows = ss.resolver_lookup(platform, title, kind, seasons,
                                       url=_hint_for(platform, hints, url),
@@ -352,6 +377,14 @@ def current_placements(title, platforms="video", kind="series", seasons=None,
         except Exception as e:  # noqa: BLE001 (hands-off: the platform stays unverified)
             failures[platform] = ("%s: %s" % (type(e).__name__, e))[:240]
             continue
+        # Look-alike guard (same as query_report): drop wrong-show matches.
+        if title and not _hint_for(platform, hints, url):
+            rows, dropped = ss.verify_title_rows(title, rows)
+            if dropped:
+                print("  \u26a0 %s: dropped look-alike match %s \u2014 resolved a "
+                      "different show, not %r"
+                      % (platform, ", ".join(sorted(dropped)), title),
+                      file=sys.stderr)
         seen = set()
         for r in rows:
             ident = r.get("identifier", "") or ""

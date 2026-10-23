@@ -395,6 +395,14 @@ def resolve(title=None, url=None, kind="series", seasons=None,
     Raises RuntimeError if credentials are missing.
     """
     env = load_env()
+    # Global "no window" switch: when STREAMSCOUT_HEADLESS is set, never open a
+    # visible browser (automated/library use). Max's SPA can't render headless,
+    # so this effectively makes Max a no-op off the desktop — which is correct:
+    # unattended runs should use the content_map seeds, not pop a login window.
+    if headed and str(os.environ.get("STREAMSCOUT_HEADLESS", "")).strip().lower() \
+            in ("1", "true", "yes", "on"):
+        headed = False
+
     email, pw = env.get("MAX_EMAIL"), env.get("MAX_PASSWORD")
     if not email or not pw:
         raise RuntimeError("Missing MAX_EMAIL / MAX_PASSWORD in .env.local.")
