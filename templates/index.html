@@ -81505,6 +81505,15 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             return /(^|\b)(update|status|progress)(\b|$)/.test(t);
         }
 
+        // The reader sees a name, never a file name (2026-10-22 audit: 222 completion
+        // turns read 'File: Mountain_Dew_10_20_2026_00_58.csv'). A stored key becomes
+        // its display name: path and extension off, the build stamp off, underscores
+        // to spaces.
+        function _synthChatFileLabel(key) {
+            var s = String(key || '').split('/').pop().replace(/\.(csv|json|json\.gz|xlsx)$/i, '');
+            s = s.replace(/_\d{2}_\d{2}_\d{4}_\d{2}_\d{2}$/, '');
+            return s.replace(/_/g, ' ').trim();
+        }
         function _synthChatFindActiveRunFromHistory() {
             var terminal = { complete: 1, error: 1, failed: 1, cancelled: 1 };
             for (var i = synthChatHistory.length - 1; i >= 0; i--) {
@@ -81547,10 +81556,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     lines.push('Number ' + st.pending_position + ' in line.');
                 }
                 if (cur === 'tu_done' && st.tu_key) {
-                    lines.push('File: ' + st.tu_key);
+                    lines.push('In Select Profile as: ' + _synthChatFileLabel(st.tu_key));
                 }
                 if (cur === 'avid_done' && st.avid_key) {
-                    lines.push('Avid file: ' + st.avid_key);
+                    lines.push('Avid Fan cut: ' + _synthChatFileLabel(st.avid_key));
                 }
                 if (cur === 'complete') {
                     if (st.subiq_s3_key) {
@@ -81558,10 +81567,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         // lives in the Subscriber IQ tab, not the
                         // profile dropdown, and carries a download.
                         lines = [name + ' is finished. Your Subscriber IQ read is live in the Subscriber IQ tab now.'];
-                        lines.push('File: ' + st.subiq_s3_key);
                     } else {
-                        if (st.tu_key)   lines.push('File: ' + st.tu_key);
-                        if (st.avid_key) lines.push('Avid file: ' + st.avid_key);
+                        if (st.tu_key)   lines.push('In Select Profile as: ' + _synthChatFileLabel(st.tu_key));
+                        if (st.avid_key) lines.push('Avid Fan cut: ' + _synthChatFileLabel(st.avid_key));
                     }
                 }
                 if (cur === 'error' || cur === 'failed') {
@@ -86636,15 +86644,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                             case 'complete':  msg = subject + ' is finished and ready in the Select Profile dropdown.'; break;
                             default:          msg = subject + ': ' + _synthChatStatusLabel(cur) + '.';
                         }
-                        if (cur === 'tu_done' && st.tu_key) msg += '\nFile: ' + st.tu_key;
-                        if (cur === 'avid_done' && st.avid_key) msg += '\nAvid file: ' + st.avid_key;
+                        if (cur === 'tu_done' && st.tu_key) msg += '\nIn Select Profile as: ' + _synthChatFileLabel(st.tu_key);
+                        if (cur === 'avid_done' && st.avid_key) msg += '\nAvid Fan cut: ' + _synthChatFileLabel(st.avid_key);
                         if (cur === 'complete') {
                             if (st.subiq_s3_key) {
-                                msg = subject + ' is finished. Your Subscriber IQ read is live in the Subscriber IQ tab now.'
-                                    + '\nFile: ' + st.subiq_s3_key;
+                                msg = subject + ' is finished. Your Subscriber IQ read is live in the Subscriber IQ tab now.';
                             } else {
-                                if (st.tu_key) msg += '\nFile: ' + st.tu_key;
-                                if (st.avid_key) msg += '\nAvid file: ' + st.avid_key;
+                                if (st.tu_key) msg += '\nIn Select Profile as: ' + _synthChatFileLabel(st.tu_key);
+                                if (st.avid_key) msg += '\nAvid Fan cut: ' + _synthChatFileLabel(st.avid_key);
                             }
                         }
                         if (cur === 'error' || cur === 'failed') {
