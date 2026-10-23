@@ -614,6 +614,71 @@ def _established_converters_us(slug: str, before_as_of: str) -> int:
     return 0
 
 
+# A campaign whose assets carry their own funnel rates (an advocacy
+# campaign: every placement reads a research rate and an action-page
+# rate, there is no ticketing partition or checkout to count) has no
+# converter count of its own apart from the assets. Holding the COUNT
+# there would freeze the bottom of the nest while the library keeps
+# posting, the same defect Alexia flagged at the top (2026-10-20), one
+# stage lower. Such a campaign holds its established conversion RATE
+# (converters / exposed on the latest earlier read) and the converters
+# follow the exposed audience as the assets reach more people.
+_ASSET_FUNNEL_SHARE_FLOOR = 0.80
+
+
+def _asset_funnel_basis(cards: list) -> bool:
+    """True when the campaign's conversions are read from the assets:
+    most asset cards carry a positive action-page (website visit) rate."""
+    if not cards:
+        return False
+    rated = sum(1 for a in cards if float(a.get("ext_website_visit_pct") or 0) > 0)
+    return rated / float(len(cards)) >= _ASSET_FUNNEL_SHARE_FLOOR
+
+
+def _established_conversion_rate(slug: str, before_as_of: str) -> float:
+    """The campaign's conversion rate as it has carried it: the held rate
+    on the latest earlier read when that read already held one (a fixed
+    point), else the bottom of its nest over its exposed audience.
+    0.0 when there is no earlier read."""
+    s3 = _intent_iq._s3()
+    if not s3:
+        return 0.0
+    prefix = CACHE_KEY_FMT.format(slug=slug, as_of="@").split("@")[0]
+    best_key, best_as_of = None, ""
+    try:
+        token = None
+        while True:
+            kw = {"Bucket": S3_BUCKET, "Prefix": prefix}
+            if token:
+                kw["ContinuationToken"] = token
+            resp = s3.list_objects_v2(**kw)
+            for o in resp.get("Contents", []) or []:
+                key = o["Key"]
+                m = re.search(r"coefficients_(\d{4}-\d{2}-\d{2})\.json$", key)
+                if not m or "/_backups/" in key:
+                    continue
+                as_of = m.group(1)
+                if as_of < str(before_as_of) and as_of > best_as_of:
+                    best_as_of, best_key = as_of, key
+            token = resp.get("NextContinuationToken")
+            if not resp.get("IsTruncated") or not token:
+                break
+        if not best_key:
+            return 0.0
+        payload = json.loads(s3.get_object(Bucket=S3_BUCKET, Key=best_key)["Body"].read().decode("utf-8"))
+        held = float(((payload.get("exposure") or {}).get("converters_held_rate")) or 0.0)
+        if held > 0:
+            return held
+        nest = {str(n.get("stage")): float(n.get("us_accounts") or 0)
+                for n in (((payload.get("overall") or {}).get("paths") or {}).get("nest") or [])}
+        exposed, paid = nest.get("1_exposed", 0.0), nest.get("4_paid", 0.0)
+        if exposed > 0 and paid > 0:
+            return paid / exposed
+    except Exception as e:
+        logger.warning("MTA: established conversion rate lookup failed for %s: %s", slug, e)
+    return 0.0
+
+
 def _held_conversion_rate(slug: str, ttype: str, n_panel: int, converters_us: int) -> float:
     """The exposed sample's conversion rate when the converters are held:
     converters / (sample x the US factor). Falls back to the title-type
@@ -1994,8 +2059,36 @@ def compute_mta_coefficients(campaign_slug: str,
     exposure: dict = {"basis": "band"}
     reach = _campaign_reach(touch) if _views_basis(touch) else None
     if reach and reach.get("us_people", 0) > 0:
+        # A campaign that carries its own reach anchor (brand_config.
+        # exposed_reach_us, derived at ingest from its placements with its
+        # own stated overlaps) sizes the exposed audience from it; the
+        # assets' reach model keeps allocating the platform and touchpoint
+        # shares. Otherwise the top strip reads the generic model's people
+        # while the nest ladders to the anchor, two scales in one read
+        # (Be Good Influence 2026-10-19 to 10-22: 17.7M vs 3.9M, 0.84% vs
+        # 3.59%).
+        try:
+            _anchor_us = float(((overview.get("brand_config") or {}).get("exposed_reach_us")) or 0)
+        except (TypeError, ValueError):
+            _anchor_us = 0.0
+        if _anchor_us > 0:
+            _scale = _anchor_us / float(reach["us_people"])
+            reach["us_people"] = _anchor_us
+            for _r in reach["by_platform"]:
+                _r["us_people"] = float(_r["us_people"]) * _scale
+            for _t in touch:
+                _t["reach_people"] = float(_t.get("reach_people") or 0) * _scale
+            reach["assumptions"]["campaign_reach_anchor_us"] = int(round(_anchor_us))
         n_panel = _exposed_panel_from_reach(slug, reach["us_people"])
-        held_us = _established_converters_us(slug, as_of_iso)
+        held_rate = 0.0
+        if _asset_funnel_basis(cards):
+            # conversions are read from the assets: hold the rate, the
+            # converters follow the exposed audience
+            held_rate = _established_conversion_rate(slug, as_of_iso)
+        if held_rate > 0:
+            held_us = int(round(reach["us_people"] * held_rate))
+        else:
+            held_us = _established_converters_us(slug, as_of_iso)
         baseline = _held_conversion_rate(slug, ttype, n_panel, held_us)
         X_freq, phase_col = _build_exposure_matrix_from_reach(slug, touch, n_panel, reach)
         exposure = {
@@ -2011,6 +2104,9 @@ def compute_mta_coefficients(campaign_slug: str,
                 for r in reach["by_platform"]
             ],
             "converters_held_us": int(held_us or 0),
+            # set when the campaign's conversions are read from the assets'
+            # own funnel rates: the rate is the fixed point, not the count
+            "converters_held_rate": float(held_rate) if held_rate > 0 else None,
             "assumptions": reach["assumptions"],
             "note": ("The exposed audience is the unique US people the assets reached, from their views: "
                      "a view is not a person, clips by one creator reach many of the same people, creators on "
