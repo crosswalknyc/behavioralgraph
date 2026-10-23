@@ -686,7 +686,17 @@ def to_social_then_view(payload: dict, inputs: Optional[dict] = None, prim: Opti
                 rows.sort(key=lambda r: -int(r.get('accounts') or 0))
             built.append({'title': ttl_f, 'kind': kind, 'of': base_key, 'base': base, 'rows': rows, 'source': 'standard',
                           'note': ('Rows sum to the parent count.' if kind == 'partition' else 'Overlap allowed. Rows do not sum.')})
+        # an extra table that partitions an old step moves with the step (Young Sheldon's
+        # "Where they watched it" and "How the free hunt resolved" kept the old page and click totals)
+        moved = [(chain['click'], click, 'click'), (chain['page'], page, 'page'), (chain['end'], end, 'end')]
         for d in extras:
+            rows_x = [r for r in (d.get('rows') or []) if isinstance(r, dict)]
+            own = sum(int(r.get('accounts') or 0) for r in rows_x)
+            for old_n, new_n, step in moved:
+                if own and old_n and new_n != old_n and abs(own - old_n) <= max(1, int(0.01 * old_n)):
+                    d['rows'] = G._rescale(rows_x, int(new_n), 'partition', (seed, d.get('title')))
+                    d.update({'kind': 'partition', 'of': step, 'base': int(new_n)})
+                    break
             G._tidy_extra(d)
         j['detours'] = built + extras
         # figures the text quotes

@@ -2476,9 +2476,15 @@ def breakdown_rows(payload: dict) -> list:
         drows = [r for r in (d.get('rows') or []) if isinstance(r, dict)]
         own = sum(_bd_int(r.get('accounts')) for r in drows)
         base = None
+        own_base = _bd_int(d.get('base'))
         # a path table (the click path of a saw-then-watched journey, 2026-10-22) nests its
-        # rows inside each other; its rows never sum to a step and are never re-based
-        if str(d.get('kind') or '') != 'path':
+        # rows inside each other; its rows never sum to a step and are never re-based.
+        # A table that records its own total and adds to it keeps its counts: the Knots
+        # Landing viewer table (97,236) sat within 6% of the click step (98,096) and was
+        # stretched onto it, so its first row stopped matching the end of the path.
+        if own_base and abs(own - own_base) <= max(1, int(0.001 * own_base)):
+            pass
+        elif str(d.get('kind') or '') != 'path':
             for c in real:   # the spine step this detour partitions
                 if c and own and abs(own - c) / float(c) <= 0.06:
                     base = c

@@ -377,8 +377,17 @@ def _rescale(rows: list, base: int, kind: str, seed) -> list:
             big = max(rows, key=lambda r: r['accounts'])
             big['accounts'] = max(1, big['accounts'] + diff)
     else:
+        # an overlap row is a share of its base: when the base moves, the share holds and
+        # the count follows (a held count on a 30x base read as 2.8% of watchers seeing a post)
         for r in rows:
-            r['accounts'] = max(1, min(int(r.get('accounts') or 0), base - 1 if base > 1 else 1))
+            n = int(r.get('accounts') or 0)
+            try:
+                sh = float(r.get('pct') or 0)
+            except (TypeError, ValueError):
+                sh = 0.0
+            if base and 0 < sh <= 100 and abs(n - base * sh / 100.0) > max(2.0, 0.01 * n):
+                n = _messy((seed, r.get('label')), base * sh / 100.0)
+            r['accounts'] = max(1, min(n, base - 1 if base > 1 else 1))
     for r in rows:
         r['pct'] = round(r['accounts'] / base * 100, 4) if base else 0.0
         if isinstance(r.get('breakdown'), list) and r['breakdown']:
