@@ -1589,10 +1589,10 @@ def watch_definition_line(parsed):
     except Exception:
         d = ''
     if d == 'saw_then_watched':
-        return ("It counts everyone who saw a social post about the title and then watched an episode on the platform within 30 days, "
-                "whether or not they clicked the post: the same day, within 7 days and within 30 days. The ones who clicked through are "
-                "their own path inside the count, then the first post they saw and where it sat, where they looked before the platform, "
-                "the first episode, the last touch and the assists")
+        return ("Four steps from the social post to the first episode: saw a post, clicked through, opened the title page, watched within "
+                "30 days of the post, with the watch step sized on everyone who saw a post and then watched (the same day, within 7 days, "
+                "within 30 days), then the first post they saw and where it sat, how many posts before they clicked through, where they "
+                "looked before the platform, the first episode, the last touch and the assists")
     return ("It's the same shape as every watch journey: four steps from the social post to the first episode, "
             "then the first post they saw and where it sat, how many posts before they clicked through, where they "
             "looked before the platform, the time from the view to the first episode, the first episode, the last touch and the assists")

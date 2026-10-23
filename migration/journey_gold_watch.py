@@ -20,27 +20,38 @@ it carries (meta.journey_definition):
                     before. Band kind watch_catalog (journey_norms).
   saw_then_watched  this module: saw a social post about the title ->
                     watched an episode on the service within 30 days of
-                    the first post, whether or not they clicked. The click
-                    chain stays as its own path inside the count ("The
-                    ones who clicked the post") and the leave-and-return
-                    fork hangs off that path's title page. Band kind
-                    watch_social_then_view, anchored on the two originals
-                    (No Reservations 7.2% mainstream, Babylon 5 16.1% cult).
+                    the first post. The spine keeps the Babylon 5 shape
+                    Carolyn reads (Jenna 2026-10-22: "they have to be
+                    added back to the spine and have to be the version
+                    output she likes"): saw a post -> clicked through ->
+                    opened the title page -> watched within 30 days, each
+                    step keeping a share of the one before it. The watch
+                    step is sized on this kind's band (watch_social_then_view,
+                    anchored on the two originals: No Reservations 7.2%
+                    mainstream, Babylon 5 16.1% cult) under the title's own
+                    audience on the service; the click and page steps are
+                    the build's own counts, lifted only as far as the funnel
+                    needs so the page step always holds the watch step
+                    (the two originals keep every count). The leave-and-
+                    return fork hangs off the title page.
 
-The saw-then-watched spine is two steps after the US base. Its sections
-are the ten Babylon 5 sections plus the click path, in this order:
+The saw-then-watched spine is four steps after the US base. Its sections
+are the ten Babylon 5 sections, in this order:
 
   01 First {title} post they saw                 partition of the social step
   02 Where the first post sat                    partition of the social step
-  03 The ones who clicked the post               the click path: clicked, page, watched (each inside the one above)
-  04 How many posts before they clicked through  partition of the click step
-  05 Where they looked before {platform}         overlap of the click step
-  06 Time from the social view to the first episode   partition of the watch step (same day / 7 / 30)
-  07 First episode they played                   partition of the watch step
-  08 Last touch before the watch                 partition of the watch step
-  09 What assisted the watch                     overlap of the watch step
-  10 The rest of the social and {platform} overlap    outside 30 days / already watching
-  11 Every {platform} {title} viewer in the window     within 30 days / outside / no post seen
+  03 How many posts before they clicked through  partition of the click step
+  04 Where they looked before {platform}         overlap of the click step
+  05 Time from the social view to the first episode   partition of the watch step (same day / 7 / 30)
+  06 First episode they played                   partition of the watch step
+  07 Last touch before the watch                 partition of the watch step
+  08 What assisted the watch                     overlap of the watch step
+  09 The rest of the social and {platform} overlap    outside 30 days / already watching
+  10 Every {platform} {title} viewer in the window     within 30 days / outside / no post seen
+
+A payload shaped before 2026-10-22 23:30Z carried a two-step spine with
+the click chain as the table "The ones who clicked the post"; this module
+reads that shape and brings it onto the four-step spine.
 
 Sizing the watch step (the way the two originals were sized): the title's
 own viewers on the service in the window are the ceiling
@@ -77,8 +88,23 @@ DEFINITION_LABEL = {
 
 SPINE_LABELS = (
     ('social_view', 'Saw a social post about {title}'),
+    ('click_through', 'Clicked through from the post to the title'),
+    ('title_page', 'Opened the {title} page on {platform}'),
     ('watched_30d', 'Watched an episode on {platform} within 30 days of the first post'),
 )
+SPINE_DOING = {
+    'social_view': 'Saw a post about {title} on any social surface',
+    'click_through': 'Left the post for the title',
+    'title_page': 'Opened the {title} page on {platform}',
+    'watched_30d': 'Pressed play on {platform} within 30 days of the first post',
+}
+# the click and page steps hold the watch step inside the shape of the two originals:
+# page / click sat at 24.9% (No Reservations) and 73.2% (Babylon 5); watch / page at 57.1% and 73.9%;
+# the click step itself never passes the originals' top click rate (39.4% of everyone who saw a post)
+PAGE_OF_CLICK = (0.25, 0.73)
+WATCH_OF_PAGE = (0.57, 0.74)
+CLICK_RATE_MAX = 0.40
+CLICK_RATE_CAP_DRAW = (0.30, 0.39)
 CLICKED_PATH_KEY = 'clicked_path'
 CLICKED_PATH_TITLE = 'The ones who clicked the post'
 CLICKED_ROWS = (
@@ -317,19 +343,50 @@ def title_viewers_of(payload: dict, band: Optional[dict] = None) -> int:
 
 
 # ------------------------------------------------------------- the shape
-def _read_chain(j: dict) -> Optional[dict]:
-    """social / click / page / watched_click / end from either shape."""
+def _read_chain(j: dict, social_then_view: bool = False) -> Optional[dict]:
+    """social / click / page / watched_click / end from any of the shapes:
+    the Babylon 5 click chain (five steps), a saw-then-watched payload on
+    the four-step spine (``social_then_view`` says the payload carries the
+    kind), or the two-step shape of 2026-10-22 with the click chain as a
+    table."""
     spine = [s for s in (j.get('spine') or []) if isinstance(s, dict)]
     if spine and str(spine[0].get('id') or '') == 'us_gen_pop':
         spine[0]['id'] = 'tam'
     if len(spine) >= 5:
         social, click, page, end = (int(spine[i].get('accounts') or 0) for i in (1, 2, 3, 4))
-        return {'shape': 'click_chain', 'social': social, 'click': click, 'page': page, 'watched_click': end, 'end': end, 'spine': spine}
+        shape = 'social_then_view' if social_then_view else 'click_chain'
+        return {'shape': shape, 'social': social, 'click': click, 'page': page, 'watched_click': end, 'end': end, 'spine': spine}
     if len(spine) == 3 and _clicked_table(j) is not None:
         c = _clicked_counts(j)
         return {'shape': 'social_then_view', 'social': int(spine[1].get('accounts') or 0), 'click': c['click'], 'page': c['page'],
                 'watched_click': c['watched'], 'end': int(spine[2].get('accounts') or 0), 'spine': spine}
     return None
+
+
+def _bracket_chain(social: int, click: int, page: int, end: int, seed: str) -> tuple:
+    """(click, page) holding the watch step inside the Babylon 5 shape:
+    social > click > page > end. The build's own counts stand when they
+    already hold it (the two originals keep every count); a page step the
+    wider watch count has outgrown lifts to a salted watch-of-page share
+    in the band of the originals, and the click step above it to a salted
+    page-of-click share, never to or past the social step."""
+    social, click, page, end = int(social), int(click or 0), int(page or 0), int(end)
+    if social <= 1 or end <= 0:
+        return click, page
+    end = min(end, social - 1)
+    if page <= end:
+        page = _messy(seed, end / _u(seed, 'watch_of_page', *WATCH_OF_PAGE), 'page_lift')
+    page = max(min(page, social - 2), end + 1)
+    # the click step: lifted when the page has outgrown it, or when the page would read as nearly
+    # every click (above the originals' top page-of-click share); never past the originals' top click rate
+    if click <= page or page / float(click) > PAGE_OF_CLICK[1] + 0.01:
+        click = _messy(seed, page / _u(seed, 'page_of_click', *PAGE_OF_CLICK), 'click_lift')
+    if click / float(social) > CLICK_RATE_MAX:
+        click = _messy(seed, social * _u(seed, 'click_rate_cap', *CLICK_RATE_CAP_DRAW), 'click_cap')
+        if click <= page:
+            click = _messy(seed, page / 0.80, 'click_over_page')
+    click = max(min(click, social - 1), page + 1)
+    return int(click), int(page)
 
 
 def _fork_total(j: dict) -> int:
@@ -396,13 +453,9 @@ def _audience(j: dict, end: int, tv: int, seed: str, keep: bool) -> dict:
 
 
 def _standard_sections(G, title: str, platform: str) -> list:
-    """(key, title, base_key, kind, doing) in saw-then-watched order."""
-    out = []
-    for key, ttl, base_key, kind, doing in G.STANDARD:
-        out.append((key, ttl, base_key, kind, doing))
-        if key == 'post_surface':
-            out.append((CLICKED_PATH_KEY, CLICKED_PATH_TITLE, 'social', 'path', 'Clicked the post'))
-    return out
+    """(key, title, base_key, kind, doing): the ten Babylon 5 sections. The
+    click chain sits on the spine, so it is no longer a table of its own."""
+    return [(key, ttl, base_key, kind, doing) for key, ttl, base_key, kind, doing in G.STANDARD]
 
 
 def standard_titles(title: str, platform: str) -> list:
@@ -494,7 +547,7 @@ def to_social_then_view(payload: dict, inputs: Optional[dict] = None, prim: Opti
         meta = payload.setdefault('meta', {})
         title, platform = G._title_platform(payload, inputs)
         seed = seed or f"{title}|{platform}"
-        chain = _read_chain(j)
+        chain = _read_chain(j, social_then_view=is_social_then_view(payload))
         if chain is None:
             return payload
         inputs = dict(inputs or N.payload_inputs(payload))
@@ -544,25 +597,22 @@ def to_social_then_view(payload: dict, inputs: Optional[dict] = None, prim: Opti
         else:
             sized = _size_end(social, watched_click, band, tv, seed)
             end, cap_bound = sized['end'], sized['cap_bound']
-        # the click path's watched count: the chain's own; when the fork closed on the
-        # old end (the originals), the page's play share decides it and the fork refits
-        if chain['shape'] == 'click_chain' and keep_end:
-            total = _fork_total(j)
-            if total and abs(total - old_end) <= max(1, int(0.01 * old_end)):
-                watched_click = _messy(seed, page * _u(seed, 'click_play', 0.36, 0.50), 'click_play')
-                watched_click = max(1, min(watched_click, page - 2, end - 1))
-        if watched_click >= end:
-            watched_click = max(1, int(end * _u(seed, 'click_share_fit', 0.55, 0.80)))
+        # the click and page steps hold the watch step (the originals keep every count);
+        # the chain closes on the watch step, so the fork closes there too
+        click, page = _bracket_chain(social, click, page, end, seed)
+        watched_click = end
         watched_click = _fit_fork(j, watched_click, page, seed)
         _relabel_fork(j, title, platform)
         j['fork_base'] = {'label': G._fill(title, platform, 'Opened the {title} page on {platform}'), 'accounts': int(page)}
-        # the spine
+        # the spine: the Babylon 5 shape, four steps after the US base
         tam = spine[0]
         new_spine = [tam]
         prev = int(tam.get('accounts') or US_GEN_POP)
-        old_social_row = spine[1]
-        for (sid, label), n, src in zip(SPINE_LABELS, (social, end), (old_social_row, spine[-1])):
-            row = dict(src)
+        old_rows = {str(s.get('id') or ''): s for s in spine[1:]}
+        src_rows = [spine[1], spine[2] if len(spine) >= 5 else old_rows.get('click_through', {}),
+                    spine[3] if len(spine) >= 5 else old_rows.get('title_page', {}), spine[-1]]
+        for (sid, label), n, src in zip(SPINE_LABELS, (social, click, page, end), src_rows):
+            row = dict(src or {})
             row['id'] = sid
             row['label'] = G._fill(title, platform, label)
             row['accounts'] = int(n)
@@ -571,23 +621,30 @@ def to_social_then_view(payload: dict, inputs: Optional[dict] = None, prim: Opti
             row['ofUs'] = round(n / US_GEN_POP * 100, 4)
             if sid == 'social_view':
                 row.setdefault('where', G._fill(title, platform, 'First {title} post on the account'))
-                row['doing'] = row.get('doing') or G._fill(title, platform, 'Saw a post about {title} on any social surface')
-            else:
-                row['doing'] = G._fill(title, platform, 'Pressed play on {platform} within 30 days of the first post, clicked or not')
+                row['doing'] = row.get('doing') or G._fill(title, platform, SPINE_DOING[sid])
+            elif sid == 'watched_30d':
+                row['doing'] = G._fill(title, platform, SPINE_DOING[sid])
                 row['where'] = G._fill(title, platform, '{platform}')
+            else:
+                row['doing'] = row.get('doing') or G._fill(title, platform, SPINE_DOING[sid])
+                row.setdefault('where', G._fill(title, platform, 'Title search, guide, or platform page' if sid == 'click_through' else '{platform}'))
+            for k in ('surface', 'job', 'timing'):
+                row.setdefault(k, '')
             new_spine.append(row)
             prev = int(n)
         for a, b in zip(new_spine, new_spine[1:]):
             a['next'] = b['label']
         new_spine[-1]['next'] = ''
         j['spine'] = new_spine
-        # the tables
+        # the tables (a click-path table from the two-step shape is retired: the spine carries it)
         existing = list(j.get('detours') or [])
         by_key, extras = {}, []
         for d in existing:
             if not isinstance(d, dict):
                 continue
-            k = CLICKED_PATH_KEY if (d.get('key') == CLICKED_PATH_KEY or _norm(d.get('title')) == _norm(CLICKED_PATH_TITLE)) else G._match_key(d.get('title'))
+            if d.get('key') == CLICKED_PATH_KEY or _norm(d.get('title')) == _norm(CLICKED_PATH_TITLE):
+                continue
+            k = G._match_key(d.get('title'))
             if k and k not in by_key:
                 by_key[k] = d
             else:
@@ -598,11 +655,6 @@ def to_social_then_view(payload: dict, inputs: Optional[dict] = None, prim: Opti
         for key, ttl, base_key, kind, doing in _standard_sections(G, title, platform):
             ttl_f, doing_f = G._fill(title, platform, ttl), G._fill(title, platform, doing)
             base = int(bases.get(base_key) or 0)
-            if key == CLICKED_PATH_KEY:
-                built.append({'key': CLICKED_PATH_KEY, 'title': ttl_f, 'kind': 'path', 'of': 'social', 'base': social,
-                              'rows': _clicked_rows(title, platform, social, click, page, watched_click), 'source': 'derived',
-                              'note': f"Each row sits inside the one above it. All {_fmt(watched_click)} who clicked and watched are inside the {_fmt(end)} who watched within 30 days of a post."})
-                continue
             if key == 'rest_overlap':
                 rows = [{'label': 'Watched 31 to 90 days after the post', 'accounts': aud['outside'], 'doing': doing_f},
                         {'label': 'Already watching before the post', 'accounts': aud['also'], 'doing': doing_f}]
@@ -643,10 +695,11 @@ def to_social_then_view(payload: dict, inputs: Optional[dict] = None, prim: Opti
         payload['facts'] = _facts(payload, fig)
         rate = _pct(end, social, 4)
         kp = payload.get('kpis') if isinstance(payload.get('kpis'), dict) else {}
+        kp.pop('clicked_and_watched', None)
         kp.update({'total_users': end, 'conversion_pct': rate, 'share_of_us_pct': round(end / US_GEN_POP * 100, 4),
                    'norm_band': [band['lo'], band['hi']], 'norm_kind': band['kind'], 'also_watching': aud['also'],
                    'following': band.get('following') or 'mainstream', 'definition': 'saw_then_watched',
-                   'cap_bound': bool(cap_bound), 'clicked_and_watched': int(watched_click)})
+                   'cap_bound': bool(cap_bound), 'click_rate_pct': _pct(click, social, 4)})
         payload['kpis'] = kp
         j['copy'] = build_copy(title, platform, j, fig)
         payload['the_read'] = the_read(fig)
@@ -695,7 +748,7 @@ def hold(payload: dict, band: dict, inputs: Optional[dict] = None, seed: str = '
     try:
         N = _norms()
         j = payload.get('fragrance_shop_journey') or {}
-        chain = _read_chain(j)
+        chain = _read_chain(j, social_then_view=is_social_then_view(payload))
         if chain is None:
             return payload
         inputs = dict(inputs or N.payload_inputs(payload))
@@ -760,9 +813,9 @@ def _facts(payload: dict, f: dict) -> list:
     window = N._window_words(payload.get('meta') or {})
     return [
         {'label': 'Window', 'value': f"{window}. Unique US accounts."},
-        {'label': 'The path', 'value': f"{_fmt(f['social'])} saw a post about {T}. {_fmt(f['end'])} watched an episode on {P} within 30 days of it, whether or not they clicked the post."},
+        {'label': 'The path', 'value': f"{_fmt(f['social'])} saw a post about {T}. {_fmt(f['click'])} clicked through to the title, {_fmt(f['page'])} opened the {P} page, "
+                                       f"and {_fmt(f['end'])} watched an episode on {P} within 30 days of the post."},
         {'label': 'The timing', 'value': f"{_fmt(f['same_day'])} watched the same day, {_fmt(f['within_7'])} within 7 days, {_fmt(f['within_30'])} within 30 days."},
-        {'label': 'The ones who clicked', 'value': f"{_fmt(f['click'])} clicked through to the title, {_fmt(f['page'])} opened the {P} page and {_fmt(f['watched_click'])} of them watched. They are inside the {_fmt(f['end'])}."},
         {'label': 'Already watching', 'value': f"{_fmt(f['also'])} of the people who saw the posts were already watching {T} before the posts; they are not counted in the {f['rate']:.1f}%."},
         {'label': 'The rest', 'value': f"{_fmt(f['outside'])} did both but outside the 30 days. {_fmt(f['no_post'])} {P} viewers saw no post at all."},
     ]
@@ -773,34 +826,34 @@ def build_copy(title: str, platform: str, j: dict, f: dict) -> dict:
     window = str((j.get('meta') or {}).get('window') or f.get('window') or '')
     T, P = title, platform
     rate = f['rate']
-    back_pct = _pct(f['back'], f['watched_click'])
+    back_pct = _pct(f['back'], f['end'])
     kpis = [
         {'v': _fmt(f['social']), 'l': f'Saw a social post about {T}'},
+        {'v': f"{f['click_rate']:.1f}%", 'l': 'Of those who saw a post clicked through to the title'},
         {'v': _fmt(f['end']), 'l': f'Watched {T} on {P} within 30 days'},
         {'v': f"{rate:.1f}%", 'l': 'Of those who saw a post watched within 30 days', 'hot': True},
         {'v': f"{f['same_pct']:.0f}%", 'l': 'Of the viewers watched the same day'},
-        {'v': f"{f['clicked_share']:.0f}%", 'l': 'Of the viewers clicked the post first'},
     ]
     return {
         'titleHtml': f'{T}<br>on {P}.',
         'eyebrow': f'Watch journey \u00b7 {window}',
-        'lead': f"{rate:.1f}% of the people who saw a social post about {T} watched an episode on {P} within 30 days, whether or not they clicked the post.",
-        'deck': (f"This starts with everyone who saw a social post about {T}. Then we count who watched an episode on {P} within 30 days of their first post, "
-                 f"no click needed: {_fmt(f['social'])} people down to {_fmt(f['end'])} who watched. The ones who clicked the post are their own path inside that count."),
-        'spineSec': '01 The spine',
-        'spineHead': f"{rate:.1f}% of the people who saw a post watched within 30 days. {f['same_pct']:.0f}% of those viewers watched the same day.",
-        'forkSec': '02 The ones who clicked',
-        'forkHead': f"{_fmt(f['click'])} clicked the post, {_fmt(f['page'])} opened the {P} page, {_fmt(f['watched_click'])} of them watched.",
+        'lead': f"{rate:.1f}% of the people who saw a social post about {T} watched an episode on {P} within 30 days of it.",
+        'deck': (f"This starts with everyone who saw a social post about {T}. Then we count who clicked through to the title, who opened the {P} page, "
+                 f"and who watched an episode within 30 days of the post. The bars get smaller each time: {_fmt(f['social'])} people down to {_fmt(f['end'])} who watched."),
+        'spineSec': '01 From the post to the first episode',
+        'spineHead': f"{f['click_rate']:.1f}% of the people who saw a post clicked through. {rate:.1f}% watched within 30 days, and {f['same_pct']:.0f}% of those viewers watched the same day.",
+        'forkSec': f'02 The {P} page',
+        'forkHead': f"{_fmt(f['page'])} opened the {P} page. {_fmt(f['end'])} of them watched within 30 days.",
         'forkSub': 'Who watched in the same session as the page, and who left and came back',
         'forkBranchA': 'WATCHED IN THE SAME SESSION AS THE PAGE',
         'forkBranchB': 'Left the page, and what happened next',
         'forkSameSessionLabel': 'Watched in the same session',
-        'forkTotalLabel': 'Watched after clicking the post',
-        'forkTotalVerb': 'watched after clicking',
-        'forkRead': (f"Of the {_fmt(f['watched_click'])} who clicked the post and watched, {_fmt(f['back'])} came back after they left the page. That is {back_pct:.1f}%. "
-                     f"All {_fmt(f['watched_click'])} sit inside the {_fmt(f['end'])} who watched within 30 days of a post.") if f['back'] else '',
+        'forkTotalLabel': 'Watched within 30 days of the post',
+        'forkTotalVerb': 'watched within 30 days',
+        'forkRead': (f"Of the {_fmt(f['end'])} who watched, {_fmt(f['back'])} came back after they left the {P} page. That is {back_pct:.1f}%. "
+                     f"The rest pressed play in the session they opened the page.") if f['back'] else '',
         'detourSec': '03 Detours',
-        'detourHead': 'Where the posts sat, who clicked, and what closed the watch.',
+        'detourHead': 'Where the posts sat, how many it took, and what closed the watch.',
         'clickSec': '04 Clickstream',
         'clickHead': 'The URLs on each step.',
         'kpis': kpis,
@@ -816,14 +869,12 @@ def the_read(f: dict) -> dict:
     fp, ps, lb, fe, lt = f.get('fp'), f.get('ps'), f.get('lb'), f.get('fe'), f.get('lt')
     ratio = (f['social'] / float(f['viewers'])) if f.get('viewers') else 0.0
     fast = (f['same_pct'] + f['w7_pct']) >= 60     # the title's own timing decides the words, never a stock line
+    page_rate, play_rate = _pct(f['page'], f['click']), _pct(f['end'], f['page'])
     tldr = [
-        f"{_fmt(f['end'])} people watched {T} on {P} within 30 days of seeing a social post about it. That is {rate:.1f}% of the {_fmt(f['social'])} who saw one, and nobody had to click the post to count.",
+        f"{_fmt(f['end'])} people watched {T} on {P} within 30 days of seeing a social post about it. That is {rate:.1f}% of the {_fmt(f['social'])} who saw one.",
+        f"{_fmt(f['click'])} of the people who saw a post clicked through to the title ({f['click_rate']:.1f}%). {page_rate:.0f}% of them opened the {P} page, and {play_rate:.0f}% of those pressed play within 30 days.",
         (f"The watching came fast: {f['same_pct']:.0f}% pressed play the same day, {f['w7_pct']:.0f}% in the next week, {f['w30_pct']:.0f}% in days 8 to 30." if fast else
          f"The watching spread across the month: {f['same_pct']:.0f}% pressed play the same day, {f['w7_pct']:.0f}% in the next week and {f['w30_pct']:.0f}% in days 8 to 30, so a post kept working for weeks."),
-        (f"Clicking was the exception. {_fmt(f['click'])} people clicked through and {_fmt(f['watched_click'])} of them watched, {f['clicked_share']:.0f}% of the viewers; "
-         f"the rest saw the post, kept scrolling and found the show on {P} on their own." if f['clicked_share'] < 50 else
-         f"Most of the viewers clicked first. {_fmt(f['click'])} people clicked through and {_fmt(f['watched_click'])} of them watched, {f['clicked_share']:.0f}% of the viewers; "
-         f"the other {100 - f['clicked_share']:.0f}% saw the post, kept scrolling and found the show on {P} on their own."),
     ]
     if f.get('cap_bound') and f.get('viewers'):
         tldr.append(f"{T} has {_fmt(f['viewers'])} viewers on {P} in the window and the posts reached {ratio:.0f} times that many people. "
@@ -836,35 +887,35 @@ def the_read(f: dict) -> dict:
     if fp and ps:
         reads.append(f"The first post people saw was most often {_lower_first(fp[0])}, {_pct(fp[1], f['social']):.0f}% of first posts; {ps[0]} carried {_pct(ps[1], f['social']):.0f}% of them.")
     if f['click']:
-        reads.append(f"Of the {_fmt(f['click'])} who clicked, {_pct(f['two_plus'], f['click']):.0f}% had seen two or more posts first. One post rarely did it alone.")
+        reads.append(f"Of the {_fmt(f['click'])} who clicked through, {_pct(f['two_plus'], f['click']):.0f}% had seen two or more posts first. One post rarely did it alone.")
     if lb and f['click']:
-        reads.append(f"{lb[0]} was the most common stop between the post and {P} for the people who clicked, {_pct(lb[1], f['click']):.0f}% of them.")
+        reads.append(f"{lb[0]} was the most common stop between the post and {P}, {_pct(lb[1], f['click']):.0f}% of the people who clicked through.")
     if fe:
         reads.append(f"{fe[0]} was the first episode for {_pct(fe[1], f['end']):.0f}% of the viewers.")
     if lt:
         reads.append(f"{lt[0]} was the last touch before {_pct(lt[1], f['end']):.0f}% of the plays.")
-    if f['back'] and f['watched_click']:
-        reads.append(f"{_fmt(f['back'])} of the {_fmt(f['watched_click'])} who clicked and watched left the {P} page first and came back, {_pct(f['back'], f['watched_click']):.0f}% of them.")
+    if f['back'] and f['end']:
+        reads.append(f"{_fmt(f['back'])} of the {_fmt(f['end'])} viewers left the {P} page first and came back before they played, {_pct(f['back'], f['end']):.0f}% of them.")
     reads.append(f"{_fmt(f['also'])} people who saw the posts were already watching {T} before them. They are their own line and sit outside the {rate:.1f}%.")
     recs = []
     if fp and ps:
         recs.append(f"Lead the next flight with {_lower_first(fp[0])} on {ps[0]}. That pairing opened the path for the most viewers, {_fmt(fp[1])} first views.")
-    recs.append(f"Do not make the click the goal. {100 - f['clicked_share']:.0f}% of the viewers never clicked the post, so name the show and {P} on the post itself; the person who scrolls past still has to find it.")
+    recs.append(f"Name the show and {P} on the post itself. {100 - f['click_rate']:.0f}% of the people who saw a post never clicked it, and the person who scrolls past still has to find the show.")
     if fast:
         recs.append(f"Front-load the week. {f['same_pct'] + f['w7_pct']:.0f}% of first plays came within seven days of the post; run posts in a cluster rather than one a month.")
     else:
         recs.append(f"Keep posting through the month. {f['same_pct'] + f['w7_pct']:.0f}% of first plays came within seven days of the post and {f['w30_pct']:.0f}% landed in days 8 to 30, so a steady cadence beats one burst.")
     if f.get('cap_bound') and f.get('viewers'):
         recs.append(f"Grow the show's own audience on {P} before widening the feed. The posts already reach {ratio:.0f} times the show's {P} audience; the next viewers come from the title page and the continue row, not from more impressions.")
-    elif f['back'] and f['watched_click']:
-        recs.append(f"Keep the title page one tap from the post. {_fmt(f['back'])} of the {_fmt(f['watched_click'])} who clicked and watched left the page first; a fast follow-up is cheaper than a new impression.")
+    elif f['back'] and f['end']:
+        recs.append(f"Keep the title page one tap from the post. {_fmt(f['back'])} of the {_fmt(f['end'])} viewers left the page first; a fast follow-up is cheaper than a new impression.")
     cards = [
         {'title': f"{_fmt(f['social'])} people saw a post about {T} in the window",
-         'body': f"Anyone who scrolled past a clip, thread or news post naming {T} counts, so the start is wide. {_fmt(f['click'])} of them clicked through ({f['click_rate']:.1f}%); clicking was never required to count as a viewer."},
+         'body': f"Anyone who scrolled past a clip, thread or news post naming {T} counts, so the start is wide. {_fmt(f['click'])} of them clicked through to the title, {f['click_rate']:.1f}%."},
+        {'title': f"{_fmt(f['page'])} opened the {P} page",
+         'body': f"{page_rate:.0f}% of the people who clicked through opened the {P} page, and {play_rate:.0f}% of those pressed play within 30 days. " + (f"{_fmt(f['back'])} left the page first and came back before they played." if f['back'] else "Almost all of them watched in the session they opened the page.")},
         {'title': f"{rate:.1f}% of post viewers watched {T} on {P} within 30 days",
          'body': f"{_fmt(f['end'])} people pressed play within 30 days of their first post. {f['same_pct']:.0f}% of them watched the same day, {f['w7_pct']:.0f}% within the week, {f['w30_pct']:.0f}% in days 8 to 30."},
-        {'title': f"{_fmt(f['watched_click'])} of the viewers clicked the post first",
-         'body': f"{_fmt(f['page'])} opened the {P} page after a click and {_fmt(f['watched_click'])} of those watched. " + (f"{_fmt(f['back'])} left the page first and came back before they played." if f['back'] else "Almost all of them watched in the session they opened the page.")},
         {'title': f"{_fmt(f['viewers'])} people watched {T} on {P} in the window",
          'body': f"The journey keeps the {_fmt(f['end'])} whose first play came inside 30 days of a post. {_fmt(f['outside'])} watched 31 to 90 days after a post, {_fmt(f['also'])} were already watching before the posts, and {_fmt(f['no_post'])} saw no post at all."},
     ]
@@ -893,10 +944,15 @@ def ship_summary(payload: dict) -> dict:
     spine = [s for s in (j.get('spine') or []) if isinstance(s, dict)]
     title, platform = G._title_platform(payload)
     meta = payload.get('meta') or {}
-    c = _clicked_counts(j)
+    social = int(spine[1]['accounts']) if len(spine) > 1 else 0
+    watched = int(spine[-1]['accounts']) if spine else 0
+    if len(spine) >= 5:
+        click, page = int(spine[2]['accounts']), int(spine[3]['accounts'])
+    else:
+        c = _clicked_counts(j)          # the two-step shape of 2026-10-22, the click chain as a table
+        click, page = c['click'], c['page']
     out = {'title': title, 'platform': platform, 'window': '', 'definition': 'saw_then_watched',
-           'social': int(spine[1]['accounts']) if len(spine) > 1 else 0, 'watched': int(spine[-1]['accounts']) if spine else 0,
-           'click': c['click'], 'page': c['page'], 'watched_click': c['watched'],
+           'social': social, 'watched': watched, 'click': click, 'page': page, 'watched_click': watched,
            'same_day': 0, 'within_7': 0, 'within_30': 0, 'watched_return': 0, 'viewers': 0, 'carried': 0, 'outside_30': 0, 'no_post': 0, 'also': 0}
     if meta.get('start_date') and meta.get('end_date'):
         out['window'] = f"{meta['start_date']} to {meta['end_date']}"
@@ -917,7 +973,8 @@ def ship_summary(payload: dict) -> dict:
         out['no_post'] = int(rows[2].get('accounts') or 0) if len(rows) > 2 else 0
     out['carried'] = out['watched'] + out['outside_30'] + out['also']
     out['conversion'] = round(out['watched'] / out['social'] * 100, 1) if out['social'] else 0.0
-    out['clicked_share'] = round(out['watched_click'] / out['watched'] * 100, 1) if out['watched'] else 0.0
+    out['click_rate'] = round(out['click'] / out['social'] * 100, 1) if out['social'] else 0.0
+    out['clicked_share'] = 100.0
     return out
 
 
@@ -927,11 +984,11 @@ def ship_lines(payload: dict) -> list:
     T, P = s['title'], s['platform']
     lines = [f"The short version, {s['window'] or 'the window'}, unique US accounts:" if s['window'] else "The short version, unique US accounts:",
              f"- {_fmt(s['social'])} people saw a social post about {T}.",
-             f"- {_fmt(s['watched'])} watched at least one episode on {P} within 30 days of the first post, whether or not they clicked it. That is {s['conversion']:.1f}% of everyone who saw a post.",
-             f"- Timing: {_fmt(s['same_day'])} watched the same day, {_fmt(s['within_7'])} within 7 days, {_fmt(s['within_30'])} within 30 days.",
-             f"- The ones who clicked: {_fmt(s['click'])} clicked through to the title, {_fmt(s['page'])} opened the {P} page and {_fmt(s['watched_click'])} of them watched. They are inside the {_fmt(s['watched'])}."]
+             f"- {_fmt(s['click'])} clicked through to the title, {s['click_rate']:.1f}% of everyone who saw a post. {_fmt(s['page'])} opened the {P} page.",
+             f"- {_fmt(s['watched'])} watched at least one episode on {P} within 30 days of the first post. That is {s['conversion']:.1f}% of everyone who saw a post.",
+             f"- Timing: {_fmt(s['same_day'])} watched the same day, {_fmt(s['within_7'])} within 7 days, {_fmt(s['within_30'])} within 30 days."]
     if s['watched_return']:
-        lines.append(f"- {_fmt(s['watched_return'])} of the {_fmt(s['watched_click'])} who clicked and watched left the page first and came back before they played.")
+        lines.append(f"- {_fmt(s['watched_return'])} of the {_fmt(s['watched'])} left the page first and came back before they played.")
     tie = (f"How this ties to the read you already have: {_fmt(s['viewers'])} people watched {T} on {P} in the window and {_fmt(s['carried'])} of them also saw a post. "
            f"The journey keeps the {_fmt(s['watched'])} whose first play came inside 30 days of a post. {_fmt(s['outside_30'])} watched 31 to 90 days after a post, "
            f"{_fmt(s['also'])} were already watching before the posts, and {_fmt(s['no_post'])} {P} viewers saw no post at all.")
@@ -939,14 +996,16 @@ def ship_lines(payload: dict) -> list:
 
 
 def is_gold(payload: dict) -> bool:
-    """Two-step spine, the eleven sections in order under the standard titles, the click path present."""
+    """The four-step spine (US base, saw, clicked, page, watched) and the ten sections in order under the standard titles."""
     try:
         G = _gold()
         j = payload.get('fragrance_shop_journey') or {}
         title, platform = G._title_platform(payload)
         titles = [str(d.get('title') or '') for d in (j.get('detours') or [])]
         want = standard_titles(title, platform)
-        return titles[:len(want)] == want and len(j.get('spine') or []) == 3 and _clicked_table(j) is not None
+        spine = [s for s in (j.get('spine') or []) if isinstance(s, dict)]
+        counts = [int(s.get('accounts') or 0) for s in spine]
+        return titles[:len(want)] == want and len(spine) == 5 and all(a > b for a, b in zip(counts, counts[1:]))
     except Exception:
         return False
 

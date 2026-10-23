@@ -548,8 +548,10 @@ def _build_pdf(payload: dict) -> bytes:
 
 def _build_pdf_social_then_view(payload: dict) -> bytes:
     """The analysis PDF for the saw-then-watched definition (Carolyn
-    Bisson, 2026-10-22): two steps from a social post to the first
-    episode, the click path as its own page, the same eleven tables."""
+    Bisson, 2026-10-22; Jenna: the click step stays on the spine, the
+    version she reads): four steps from a social post to the first
+    episode, the title page fork beside it, the same ten tables, with the
+    short version and the moves read off the payload's own read."""
     from migration import journey_gold as G
     from migration import journey_gold_watch as GW
     s = GW.ship_summary(payload)
@@ -557,91 +559,73 @@ def _build_pdf_social_then_view(payload: dict) -> bytes:
     meta = payload.get('meta') or {}
     window = s['window'] if s['window'] else str(meta.get('window_label') or '')
     read = payload.get('the_read') if isinstance(payload.get('the_read'), dict) else {}
-    tldr = [str(x) for x in (read.get('tldr') or []) if str(x).strip()]
-    recs = [str(x) for x in (read.get('recommendations') or []) if str(x).strip()]
+    tldr = [str(x) for x in (read.get('tldr') or []) if str(x).strip()] or analysis_points(payload)
+    recs = [str(x) for x in (read.get('recommendations') or []) if str(x).strip()] or recommendations(payload)
     d = _Doc()
     full_w = d.right - d.m
     half_w = (full_w - 0.28 * 72) / 2
     col2 = d.m + half_w + 0.28 * 72
 
     # 01 cover
-    d.new_page(True, 'Digital Journey IQ', f"{T} on {P}: from a social post to the first episode.",
+    d.new_page(True, 'Digital Journey IQ', f"{T} on {P}: the social path to the first episode.",
                f"Unique US accounts, {window}. Every count is one person.")
-    d.paragraph("Everyone who saw a social post about the title, and how many of them watched an episode on the service "
-                "within 30 days of it, whether or not they clicked the post. The people who clicked are their own path inside the count.",
-                d.m, d.y - 10, full_w * 0.7, size=12, color=BODY_DARK)
+    d.paragraph("How a social post about the title turned into a first play on the service, in four steps, "
+                "and the ten tables behind them.", d.m, d.y - 10, full_w * 0.7, size=12, color=BODY_DARK)
 
     # 02 TLDR
-    d.new_page(False, 'The short version', f"{_fmt(s['watched'])} people watched {T} within 30 days of seeing a social post.",
-               f"{s['conversion']:.1f}% of everyone who saw a post, no click needed. Here is what matters and what to do.")
+    d.new_page(False, 'The short version', f"{_fmt(s['watched'])} people watched {T} within 30 days of a social post.",
+               f"{s['conversion']:.1f}% of everyone who saw a post. Here is what matters and what to do.")
     y = d.bullets(tldr[:5], d.m, d.y, full_w, size=12.5)
     d.meaning(f"Social did real work for {T}: it reached {_fmt(s['social'])} people and {_fmt(s['watched'])} of them watched. "
-              f"The rest of this file shows which posts, which platforms, who clicked and how fast the watching came.")
+              f"The rest of this file shows which posts, which platforms and how fast the watching came.")
 
     # 03 the path
-    tp = GW.section(payload, 'time_to_play')
-    d.new_page(False, 'The path', f"Two steps from a social post to the first episode.",
-               f"{_fmt(s['social'])} saw a post about {T}; {_fmt(s['watched'])} watched an episode on {P} within 30 days of their first post.")
+    d.new_page(False, 'The path', f"Four steps from a social post to the first episode.",
+               f"Each step keeps a share of the one before it. {_fmt(s['social'])} saw a post; {_fmt(s['watched'])} watched.")
     spine = (payload.get('fragrance_shop_journey') or {}).get('spine') or []
     rows, prev = [], None
     for st in spine[1:]:
         n = int(st.get('accounts') or 0)
         rows.append((str(st.get('label') or ''), _fmt(n), _pct(n, prev) if prev else 'start'))
         prev = n
-    y1 = d.table('The spine', rows, d.m, d.y, half_w, head=('Step', 'Accounts', 'Kept'),
-                 note='No click is required: anyone who saw a post and then pressed play within 30 days counts.')
-    y2 = d.table('Time from the social view to the first episode', _rows_for(tp, s['watched']), col2, d.y, half_w,
-                 note=f"Share of the {_fmt(s['watched'])} who watched within 30 days.")
-    fast = (s['same_day'] + s['within_7']) >= 0.6 * max(s['watched'], 1)
-    d.meaning(f"{_pct(s['same_day'], s['watched'])} of the viewers pressed play the same day they saw the post, "
-              f"{_pct(s['within_7'], s['watched'])} within a week and {_pct(s['within_30'], s['watched'])} in days 8 to 30. "
-              + ("The decision is fast." if fast else "Most of the watching came after the first week, so a post kept working for weeks."))
-
-    # 04 the ones who clicked
-    cp = GW.section(payload, GW.CLICKED_PATH_KEY)
+    y = d.table('The spine', rows, d.m, d.y, half_w, head=('Step', 'Accounts', 'Kept'))
     fork = (payload.get('fragrance_shop_journey') or {}).get('fork') or []
-    crow, prev = [], None
-    for r in (cp or {}).get('rows') or []:
-        n = int(r.get('accounts') or 0)
-        crow.append((str(r.get('label') or ''), _fmt(n), _pct(n, prev) if prev else _pct(n, s['social'])))
-        prev = n
-    d.new_page(False, 'The ones who clicked', f"{_fmt(s['watched_click'])} of the {_fmt(s['watched'])} viewers clicked the post first.",
-               f"{_fmt(s['click'])} clicked through to the title, {_fmt(s['page'])} opened the {P} page, and {_fmt(s['watched_click'])} of those watched. "
-               f"The other {_fmt(max(s['watched'] - s['watched_click'], 0))} viewers saw the post, kept scrolling and found the show on their own.")
-    d.table('The click path', crow, d.m, d.y, half_w, head=('Step', 'Accounts', 'Kept'),
-            note='Each row sits inside the one above it, and all of them sit inside the watch step on the page before.')
     frows = [(str(f.get('label') or f.get('id')), _fmt(f.get('accounts')), f"{float(f.get('kept') or 0):.1f}%") for f in fork]
     d.table(f"The {P} page: who left and who came back", frows, col2, d.y, half_w, head=('Branch', 'Accounts', 'Kept'),
-            note='Kept is the share of the branch above it. Same-session plays and plays after a return add up to the clickers who watched.')
-    d.meaning(f"{_pct(s['watched_click'], s['watched'])} of the viewers clicked the post before they watched. For the rest the post did its job "
-              f"without a click: they went to {P} on their own, which is why a click rate understates what social does for {T}.")
+            note='Kept is the share of the branch above it. Same-session plays and plays after a return add up to the watch step.')
+    d.meaning(f"{_pct(s['click'], s['social'])} of the people who saw a post clicked through to the title. {_pct(s['page'], s['click'])} of those opened the {P} page, "
+              f"and {_pct(s['watched'], s['page'])} of the people on the page watched within 30 days. The page is where the path is won or lost.")
 
-    # 05 where it started
+    # 04 where it started
     fp, ps, pb = GW.section(payload, 'first_post'), GW.section(payload, 'post_surface'), GW.section(payload, 'posts_before')
     top_fp, top_ps = _top(fp), _top(ps)
     hdr = (f"{top_fp[0][0]} on {top_ps[0][0]} opened the most paths." if top_fp and top_ps else "Where the path started.")
     d.new_page(False, 'Where it started', hdr[:1].upper() + hdr[1:],
-               f"The first post each of the {_fmt(s['social'])} viewers saw, where it sat, and how many posts it took the clickers to click.")
+               f"The first post each of the {_fmt(s['social'])} viewers saw, where it sat, and how many posts it took to click.")
     y1 = d.table('First post they saw', _rows_for(fp, s['social']), d.m, d.y, half_w)
     y2 = d.table('Where the first post sat', _rows_for(ps, s['social']), col2, d.y, half_w)
     d.table('How many posts before they clicked through', _rows_for(pb, s['click']), d.m, min(y1, y2) - 16, half_w,
             note=f"Share of the {_fmt(s['click'])} who clicked through.")
     one = next((int(r.get('accounts') or 0) for r in (pb or {}).get('rows') or [] if str(r.get('label', '')).startswith('1 post')), 0)
-    d.meaning(f"One post was enough for {_pct(one, s['click'])} of the people who clicked. The rest had seen a run of posts first, "
+    d.meaning(f"One post was enough for {_pct(one, s['click'])} of the click-throughs. The rest needed a run of posts, "
               f"so frequency is part of the plan, not a nice-to-have.")
 
-    # 06 from the post to the play
-    lb, fe = GW.section(payload, 'looked_before'), GW.section(payload, 'first_episode')
-    top_lb, top_fe = _top(lb), _top(fe)
-    d.new_page(False, 'From the post to the play', (f"{top_fe[0][0]} was the first episode for most viewers." if top_fe else "Where the first play landed."),
-               f"Where the clickers looked before {P}, and which episode the {_fmt(s['watched'])} viewers played first.")
-    d.table(f"Where they looked before {P}", _rows_for(lb, s['click']), d.m, d.y, half_w,
-            note=f"Share of the {_fmt(s['click'])} click-throughs. A person can appear in more than one row.")
-    d.table('First episode they played', _rows_for(fe, s['watched'], limit=7), col2, d.y, half_w)
-    d.meaning((f"{top_lb[0][0]} was the most common stop between the post and {P} for the people who clicked. " if top_lb else '') +
-              (f"{_pct(top_fe[0][1], s['watched'])} of the viewers started with {top_fe[0][0]}; point the creative at the real entry point." if top_fe else ''))
+    # 05 from the post to the play
+    lb, tp, fe = GW.section(payload, 'looked_before'), GW.section(payload, 'time_to_play'), GW.section(payload, 'first_episode')
+    fast = (s['same_day'] + s['within_7']) >= 0.6 * max(s['watched'], 1)
+    d.new_page(False, 'From the post to the play', ("Most first plays came within a week of the post." if fast else "The watching spread across the month."),
+               f"{_pct(s['same_day'], s['watched'])} the same day, {_pct(s['within_7'], s['watched'])} within a week, "
+               f"{_pct(s['within_30'], s['watched'])} in days 8 to 30.")
+    y1 = d.table(f"Where they looked before {P}", _rows_for(lb, s['click']), d.m, d.y, half_w,
+                 note=f"Share of the {_fmt(s['click'])} click-throughs. A person can appear in more than one row.")
+    y2 = d.table('Time from the social view to the first episode', _rows_for(tp, s['watched']), col2, d.y, half_w)
+    d.table('First episode they played', _rows_for(fe, s['watched'], limit=6), col2, y2 - 16, half_w)
+    top_lb = _top(lb)
+    d.meaning((f"{top_lb[0][0]} was the most common stop between the post and {P}. " if top_lb else '') +
+              (f"The window to convert is short: after the first week only {_pct(s['within_30'], s['watched'])} of the plays were still to come." if fast else
+               f"A post kept working for weeks: {_pct(s['within_30'], s['watched'])} of the plays landed in days 8 to 30."))
 
-    # 07 what closed it
+    # 06 what closed it
     lt, asst = GW.section(payload, 'last_touch'), GW.section(payload, 'assists')
     top_lt = _top(lt)
     d.new_page(False, 'What closed it', (f"{top_lt[0][0]} was the last touch before most plays." if top_lt else "The last touch before the play."),
@@ -651,7 +635,7 @@ def _build_pdf_social_then_view(payload: dict) -> bytes:
             note='Assists overlap: one viewer can have several.')
     d.meaning("Credit the last touch for the close and the assists for the warm-up. Both are needed to read the next campaign fairly.")
 
-    # 08 every viewer
+    # 07 every viewer
     ro, ev = GW.section(payload, 'rest_overlap'), GW.section(payload, 'every_viewer')
     d.new_page(False, 'The whole audience', f"{_fmt(s['viewers'])} people watched {T} on {P} in the window.",
                f"The journey keeps the {_fmt(s['watched'])} whose first play came within 30 days of a post. This page shows everyone else.")
@@ -660,7 +644,7 @@ def _build_pdf_social_then_view(payload: dict) -> bytes:
     d.table(f"Every {T} viewer on {P} in the window", _rows_for(ev, s['viewers']), col2, d.y, half_w)
     d.meaning(f"{_pct(s['no_post'], s['viewers'])} of the viewers never saw a post. Social is the biggest door we can measure here, not the only one.")
 
-    # 09 what to do
+    # 08 what to do
     d.new_page(True, 'What to do next', f"Moves for the next {T} flight.", "Each one comes with the number that backs it.")
     d.bullets(recs[:4], d.m, d.y, full_w, size=12.5)
     d.meaning(f"Reply to the email this came with to run the same path for another title, or to cut this one by platform, post family or episode.")
