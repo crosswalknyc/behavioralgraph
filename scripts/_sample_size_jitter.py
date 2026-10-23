@@ -98,6 +98,7 @@ def ensure_messy_sample_size(
 
     Returns an int that:
       * never equals value if value was round
+      * carries a subject salt of about +/-1%, so two subjects never share it
       * never equals a FORBIDDEN_LITERALS entry
       * never has a trailing 000 or 500
       * never has a trailing 00 when >= 10000
@@ -110,6 +111,18 @@ def ensure_messy_sample_size(
         v = 0
     if v <= 0:
         v = default_if_missing
+    # Always subject-salted (2026-10-22 audit). A value that already looks
+    # messy used to pass through untouched, so the number the interpret step
+    # proposes for several unrelated subjects landed as the same sample and
+    # the same estimated band on every one of their cards (Ashton Hall, Tame
+    # Impala, Golden State Valkyries and New Heights all read 156,306 to
+    # 219,237). The salt is about +/-1% of the value, deterministic per
+    # (subject, value), so two subjects never share a sample and a repeat
+    # run still reproduces its own.
+    span = max(9, int(v * 0.02) | 1)
+    v = v + _deterministic_offset(subject, v, span)
+    if v < minimum:
+        v = minimum + ((_deterministic_offset(subject, v) % 47) + 3)
     if not _looks_round(v):
         return v
 
