@@ -632,3 +632,5 @@ if __name__ == "__main__":
 # ci-trigger: harden-cold-start-prewarm (pre-compile index.html at import; app.py-only PR #325)
 
 # ci-trigger: streamscout-lookalike-guard-max-skip
+
+# ci-trigger: streamscout-max-headless-replay
