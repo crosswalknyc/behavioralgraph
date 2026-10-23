@@ -150689,6 +150689,58 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             return p;
         }
 
+        // ─── Data cuts reach the Compare tab (2026-10-23) ───
+        // The popover and the Compare tab kept separate lists, so a cut
+        // ticked on never became a column and never reached the export.
+        // Only the keys mirrored here are ever removed again, so a
+        // profile added by hand through Select Profile is left alone.
+        var _cmpCutMirrored = new Set();
+        function _mirrorDataCutsIntoCompare() {
+            if (typeof selectedForComparison === 'undefined'
+                || !selectedForComparison) return false;
+            var want = (_comparisonRunsState.selectedKeys || []).filter(function(k) {
+                // The category norm is precomputed, not a file, so there
+                // is nothing for the Compare tab to load.
+                return k && k !== CATEGORY_NORM_KEY;
+            });
+            var changed = false;
+            want.forEach(function(k) {
+                if (!selectedForComparison.has(k)) {
+                    selectedForComparison.add(k);
+                    _cmpCutMirrored.add(k);
+                    changed = true;
+                }
+            });
+            // A Set is not array-like, so slice.call would hand back
+            // an empty list and nothing would ever be un-mirrored.
+            Array.from(_cmpCutMirrored).forEach(function(k) {
+                if (want.indexOf(k) !== -1) return;
+                _cmpCutMirrored.delete(k);
+                if (selectedForComparison.has(k)) {
+                    selectedForComparison.delete(k);
+                    changed = true;
+                }
+            });
+            return changed;
+        }
+        function _refreshCompareForDataCuts() {
+            var changed = false;
+            try { changed = _mirrorDataCutsIntoCompare(); }
+            catch (e) { console.warn('[compare] data-cut mirror failed', e); return; }
+            if (!changed) return;
+            try {
+                if (typeof updateSelectedCount === 'function') updateSelectedCount();
+            } catch (_) {}
+            // Re-running refetches every column, so only while the tab is
+            // on screen. Opening it later picks up the new set anyway.
+            var pane = document.getElementById('comparisonResults');
+            var onScreen = !!pane && pane.offsetParent !== null;
+            if (onScreen && typeof runComparison === 'function') {
+                try { runComparison(); }
+                catch (e) { console.warn('[compare] data-cut refresh failed', e); }
+            }
+        }
+
         async function _toggleComparisonRun(key, profile, checked) {
             let result = { ok: true };
             if (checked) {
@@ -150720,6 +150772,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             try { applyComparisonRunsToCategoryTables(); } catch (e) { console.warn('[compare] category tables re-apply failed', e); }
             // 2026-06-20: visible-cohorts list changed; refresh Insights tab.
             try { _renderInsightsForVisibleCohorts(); } catch (e) { console.warn('[insights] data-cut toggle render failed', e); }
+            // The Compare tab keeps its own list; carry the change over
+            // so the cut becomes a column there and reaches the export.
+            _refreshCompareForDataCuts();
             return result;
         }
 
