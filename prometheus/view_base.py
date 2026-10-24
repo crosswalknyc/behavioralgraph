@@ -70,6 +70,25 @@ def _norm(s):
     return re.sub(r"[^a-z0-9]+", " ", str(s or '').lower()).strip()
 
 
+# Words a view title shares with ordinary asks about any campaign, title
+# or audience. They never count toward naming the open view by tokens;
+# the whole title still does.
+GENERIC_TITLE_WORDS = frozenset((
+    'first', 'second', 'third', 'last', 'next', 'new', 'where', 'when', 'what', 'who', 'how', 'why', 'came',
+    'come', 'from', 'with', 'into', 'their', 'they', 'this', 'that', 'these', 'those', 'there', 'here',
+    'audience', 'audiences', 'viewer', 'viewers', 'people', 'fans', 'users', 'customers', 'subscribers',
+    'episode', 'episodes', 'premiere', 'finale', 'season', 'seasons', 'week', 'weeks', 'weekend', 'opening',
+    'launch', 'launched', 'campaign', 'campaigns', 'conversion', 'conversions', 'convert', 'converted',
+    'trailer', 'trailers', 'review', 'reviews', 'clip', 'clips', 'post', 'posts', 'social', 'search',
+    'journey', 'journeys', 'path', 'read', 'report', 'reports', 'data', 'profile', 'profiles', 'title',
+    'titles', 'watch', 'watched', 'watching', 'stream', 'streaming', 'signup', 'signups', 'subscribe',
+    'subscribers', 'ticket', 'tickets', 'ticketing', 'sales', 'live', 'night', 'day', 'days', 'year',
+    'years', 'month', 'months', 'part', 'window', 'lift', 'value', 'brand', 'brands', 'partnership',
+    'attribution', 'flywheel', 'subscriber', 'digital', 'youtube', 'tiktok', 'instagram', 'amazon',
+    'netflix', 'hulu', 'peacock', 'paramount', 'prime', 'video', 'premium', 'free', 'paid',
+))
+
+
 def title_family(view_title):
     """'The Influencer Project - Hades' -> 'The Influencer Project'."""
     t = str(view_title or '').strip()
@@ -105,8 +124,14 @@ def names_view(text, view_ctx, product_nouns=True):
             continue
         if cand and f" {cand} " in f" {t} ":
             return True
-        hits = [w for w in toks if re.search(rf"\b{re.escape(w)}\b", t)]
-        if (len(toks) == 1 and hits) or len(hits) >= 2:
+        # Only distinctive title words count as naming the view. A
+        # journey titled "NCIS: New York premiere, where the first-episode
+        # audience came from" shares 'first' and 'audience' with an ask
+        # about Colin and Samir's Lexus campaign; those are the product's
+        # own words, not the title (Debi Pomerantz, 2026-10-21).
+        distinct = [w for w in toks if w not in GENERIC_TITLE_WORDS and len(w) > 3]
+        hits = [w for w in distinct if re.search(rf"\b{re.escape(w)}\b", t)]
+        if hits and (len(hits) >= 2 or len(hits) == len(distinct)):
             return True
     if not product_nouns:
         return False

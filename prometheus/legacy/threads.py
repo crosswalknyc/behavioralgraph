@@ -300,7 +300,7 @@ def _is_server_turn(t):
     return str(t.get('role') or '') in ('agent', 'assistant') and any(meta.get(k) for k in SERVER_TURN_MARKS)
 
 
-def fill_blank_agent_turns(turns, line="Working on it. This one needs a closer look and will come back to you shortly."):
+def fill_blank_agent_turns(turns, line="Working on it. Confirmed your task is in progress and I will email you when it completes."):
     """No agent turn is stored blank (2026-10-22, Casey Pearson: the
     widget saved {role: 'agent', ts} after a draft reached its analyze
     handler). A blank agent turn with nothing attached becomes the calm

@@ -51,7 +51,7 @@ _INSTRUCTION_RX = re.compile(r"\b(?:use|set|with|lock|make)\b[^.?!]{0,40}\bsampl
 _NOT_SIZING_RX = re.compile(r"\b(?:deck|slides?|email me|send me the file|download|csv|journey|valuation|partnership|attribution)\b", re.I)
 
 _LEAD_RX = re.compile(
-    r"^\W*(?:no[,.]?\s+|ok[,.]?\s+|so[,.]?\s+)?"
+    r"^\W*(?:(?:no|ok|okay|so|and|also|alright|right|well|hey|hi|um)[,.]?\s+)*"
     r"(?:(?:i|we) (?:just )?(?:need|want|would like|'d like|am looking|are looking)(?: to (?:know|see|get|understand))?\s+|"
     r"(?:can|could) (?:you|i|we) (?:get|tell me|see|show me|give me)\s+|what(?:'s| is| are| was)\s+|tell me\s+|give me\s+|show me\s+|"
     r"how (?:big|large) (?:is|are|was|were)\s+|how many (?:people|users|customers|individuals|folks|panelists|consumers) (?:are |is )?(?:in|inside|within)\s+|"

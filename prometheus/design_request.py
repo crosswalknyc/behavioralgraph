@@ -11,7 +11,8 @@ rename, resize, recolor, add a column or tab, "it is showing X, please
 remove") about a part of the dashboard gets one fixed reply and one
 email to the user experience team (Jenna + Jessie) carrying the user,
 the ask verbatim, and the open view. No model call, no build offer, no
-charge.
+charge. A probe's ask (canary:golden on the nightly grade, a smoke run,
+a sandbox key) gets the reply and no email; see prometheus.mail_guard.
 """
 import os
 import re
@@ -80,6 +81,16 @@ def notify_ux_team(user, text, ctx=None, *, send=None):
         return {'sent': False, 'reason': 'disabled'}
     uname = str((user or {}).get('username') or user or '').strip() if not isinstance(user, str) else user
     email = str((user or {}).get('email') or '').strip() if isinstance(user, dict) else ''
+    try:
+        # A probe's ask (the nightly golden grader, a canary, a smoke run)
+        # is never a real person's design request: no email, whoever is
+        # calling and whatever sender is injected (Jenna 2026-10-24).
+        from prometheus.probe_identity import is_probe_user
+        if is_probe_user(uname, user if isinstance(user, dict) else None):
+            print(f"[mail] design request: not sent, probe ask ({uname})")
+            return {'sent': False, 'reason': 'probe ask', 'to': list(UX_TEAM)}
+    except Exception:
+        traceback.print_exc()
     when = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')
     where = _view_summary(ctx) or 'not captured'
     subject = f"Design request from {uname or 'a dashboard user'}: {str(text or '').strip()[:70]}"
