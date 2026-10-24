@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Digital Twins and Synthetic Data from Real Behavior | Crosswalk</title>
+<meta name="description" content="Twin IQ builds a digital twin of each of 10 million US people from observed behavior, not surveys. Test a plan, a title, or a price on synthetic audiences before you spend.">
+<meta name="robots" content="index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1">
+<link rel="canonical" href="https://www.crosswalknyc.com/digital-twins.html">
+<link rel="icon" type="image/svg+xml" href="assets/logos/favicon.svg">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Crosswalk">
+<meta property="og:locale" content="en_US">
+<meta property="og:url" content="https://www.crosswalknyc.com/digital-twins.html">
+<meta property="og:title" content="Digital Twins and Synthetic Data from Real Behavior | Crosswalk">
+<meta property="og:description" content="Twin IQ builds a digital twin of each of 10 million US people from observed behavior, not surveys. Test a plan, a title, or a price on synthetic audiences before you spend.">
+<meta property="og:image" content="https://www.crosswalknyc.com/assets/images/og-digital-twins.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Digital Twins and Synthetic Data from Real Behavior | Crosswalk">
+<meta name="twitter:description" content="Twin IQ builds a digital twin of each of 10 million US people from observed behavior, not surveys. Test a plan, a title, or a price on synthetic audiences before you spend.">
+<meta name="twitter:image" content="https://www.crosswalknyc.com/assets/images/og-digital-twins.png">
+<link rel="stylesheet" href="assets/css/crosswalk.css">
+<style>
+  .caps.four { grid-template-columns: repeat(4, 1fr); }
+  @media (max-width: 1023px) { .caps.four { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 767px) { .caps.four { grid-template-columns: 1fr; } }
+  .twin { padding: 22px 24px 20px; }
+  .twin .top { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 16px; }
+  .twin .id { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--t3-d); }
+  .twin .tag { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; border: 1px solid var(--green); border-radius: 999px; padding: 5px 10px; color: var(--green); white-space: nowrap; }
+  .twin .lab { font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--t3-d); margin: 18px 0 8px; }
+  .twin .lab:first-of-type { margin-top: 0; }
+  .twin .stream .r { grid-template-columns: 82px 1fr; }
+  .twin .kv div { display: grid; grid-template-columns: 112px 1fr; gap: 12px; padding: 7px 0; border-bottom: 1px solid rgba(233,232,225,0.07); font-size: 13px; color: var(--t2-d); }
+  .twin .kv b { color: var(--off); font-weight: 600; }
+  .twin .note { font-size: 11px; color: var(--t3-d); margin-top: 14px; }
+  .cards3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--gutter); }
+  .cards3 .c { padding: 26px 26px 24px; border-radius: 12px; background: var(--white); border: 1px solid var(--rule-l); }
+  .cards3 .k { font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--olive); margin-bottom: 12px; }
+  .cards3 p { font-size: 16px; line-height: 1.5; color: var(--t1-l); margin: 0; }
+  @media (max-width: 1023px) { .cards3 { grid-template-columns: 1fr; } }
+  .prodsec .wrap { display: grid; grid-template-columns: 0.9fr 1.3fr; gap: 56px; align-items: center; }
+  .prodsec.flip .wrap { grid-template-columns: 1.3fr 0.9fr; }
+  .prodsec.flip .wrap > .copy { order: 2; }
+  @media (max-width: 1023px) { .prodsec .wrap { grid-template-columns: 1fr; gap: 32px; } .prodsec.flip .wrap > .copy { order: 0; } }
+  .prodsec .kicker { font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--t3-d); margin: 26px 0 10px; }
+  .light .prodsec .kicker, .prodsec.light .kicker { color: var(--t3-l); }
+  .gets { list-style: none; margin: 0; padding: 0; }
+  .gets li { position: relative; padding: 9px 0 9px 26px; font-size: 16px; line-height: 1.45; color: var(--off); border-top: 1px solid var(--rule-d); }
+  .gets li::before { content: "+"; position: absolute; left: 0; top: 7px; color: var(--green); font-weight: 600; }
+  .light .gets li { color: var(--t1-l); border-color: var(--rule-l); }
+  .light .gets li::before { color: var(--olive); }
+  .gets li:last-child { border-bottom: 1px solid var(--rule-d); }
+  .light .gets li:last-child { border-color: var(--rule-l); }
+  .shot { margin: 0; }
+  .shot img { width: 100%; height: auto; display: block; border-radius: 12px; border: 1px solid var(--rule-d); box-shadow: 0 30px 80px rgba(0,0,0,0.35); }
+  .light .shot img { border-color: var(--rule-l); box-shadow: 0 24px 60px rgba(12,22,24,0.14); }
+  .shot figcaption { font-size: 12px; color: var(--t3-d); margin-top: 12px; }
+  .light .shot figcaption { color: var(--t3-l); }
+  .cmp { border-top: 1px solid var(--rule-d); }
+  .cmp .r { display: grid; grid-template-columns: 1.1fr 1fr 1.2fr; gap: 24px; padding: 16px 0; border-bottom: 1px solid var(--rule-d); font-size: 15px; }
+  .cmp .r.head { font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--t3-d); padding: 10px 0; }
+  .cmp .r.head .us { color: var(--green); }
+  .cmp .q { color: var(--off); font-weight: 600; }
+  .cmp .them { color: var(--t2-d); }
+  .cmp .us { color: var(--off); }
+  @media (max-width: 767px) { .cmp .r { grid-template-columns: 1fr; gap: 6px; } .cmp .r.head { display: none; } }
+  .faq { display: grid; grid-template-columns: 1fr 1fr; gap: 0 48px; }
+  .faq .item { padding: 22px 0; border-top: 1px solid var(--rule-l); }
+  .faq h3 { font-size: 18px; font-weight: 700; letter-spacing: -0.015em; line-height: 1.3; margin: 0 0 8px; color: var(--t1-l); }
+  .faq p { font-size: 15px; line-height: 1.55; color: var(--t2-l); margin: 0; max-width: 52ch; }
+  @media (max-width: 1023px) { .faq { grid-template-columns: 1fr; } }
+  .record { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--gutter); margin-top: 40px; }
+  .record .s { padding-top: 18px; border-top: 1px solid var(--rule-d); }
+  .record .s .k { font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--t3-d); margin-bottom: 10px; }
+  .record .s p { font-size: 15px; line-height: 1.55; color: var(--t2-d); margin: 0; }
+  @media (max-width: 1023px) { .record { grid-template-columns: 1fr; } }
+</style>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": "https://www.crosswalknyc.com/#organization",
+      "name": "Crosswalk Technologies, Inc.",
+      "alternateName": "Crosswalk",
+      "url": "https://www.crosswalknyc.com/",
+      "logo": "https://www.crosswalknyc.com/assets/logos/crosswalk-logo-black.png",
+      "sameAs": ["https://www.linkedin.com/company/crosswalk-technologies"],
+      "email": "hello@crosswalknyc.com",
+      "telephone": "+1-818-231-2610",
+      "address": {
+        "@type": "PostalAddress",
+        "streetAddress": "23465 Civic Center Way Bldg 9",
+        "addressLocality": "Malibu",
+        "addressRegion": "CA",
+        "postalCode": "90265",
+        "addressCountry": "US"
+      }
+    },
+    {
+      "@type": "WebSite",
+      "@id": "https://www.crosswalknyc.com/#website",
+      "url": "https://www.crosswalknyc.com/",
+      "name": "Crosswalk",
+      "publisher": {"@id": "https://www.crosswalknyc.com/#organization"}
+    },
+    {
+      "@type": "WebPage",
+      "@id": "https://www.crosswalknyc.com/digital-twins.html#webpage",
+      "url": "https://www.crosswalknyc.com/digital-twins.html",
+      "name": "Digital Twins and Synthetic Data from Real Behavior | Crosswalk",
+      "description": "Twin IQ builds a digital twin of each of 10 million US people from observed behavior, not surveys. Test a plan, a title, or a price on synthetic audiences before you spend.",
+      "isPartOf": {"@id": "https://www.crosswalknyc.com/#website"},
+      "about": {"@id": "https://www.crosswalknyc.com/digital-twins.html#service"},
+      "breadcrumb": {"@id": "https://www.crosswalknyc.com/digital-twins.html#breadcrumb"},
+      "primaryImageOfPage": "https://www.crosswalknyc.com/assets/images/og-digital-twins.png",
+      "inLanguage": "en-US"
+    },
+    {
+      "@type": "BreadcrumbList",
+      "@id": "https://www.crosswalknyc.com/digital-twins.html#breadcrumb",
+      "itemListElement": [
+        {"@type": "ListItem", "position": 1, "name": "Home", "item": "https://www.crosswalknyc.com/"},
+        {"@type": "ListItem", "position": 2, "name": "Products", "item": "https://www.crosswalknyc.com/products.html"},
+        {"@type": "ListItem", "position": 3, "name": "Digital twins", "item": "https://www.crosswalknyc.com/digital-twins.html"}
+      ]
+    },
+    {
+      "@type": "Service",
+      "@id": "https://www.crosswalknyc.com/digital-twins.html#service",
+      "name": "Twin IQ",
+      "alternateName": ["Crosswalk Digital Twins", "Crosswalk synthetic audiences"],
+      "serviceType": "Digital twin audience simulation and synthetic data built from observed consumer behavior",
+      "description": "A digital twin of each of 10 million US people in the Crosswalk opted-in panel, built from observed behavior rather than surveys. Clients test media plans, titles, ideas, prices, and audiences on the twins, receive the range of outcomes and a recommended plan, and set the plan live inside the ad platforms.",
+      "provider": {"@id": "https://www.crosswalknyc.com/#organization"},
+      "areaServed": {"@type": "Country", "name": "United States"},
+      "audience": {"@type": "BusinessAudience", "audienceType": "Studios, streamers, brands, agencies, and research teams"},
+      "hasOfferCatalog": {
+        "@type": "OfferCatalog",
+        "name": "Twin IQ products",
+        "itemListElement": [
+          {"@type": "Offer", "itemOffered": {"@type": "Service", "name": "Launch Lab", "description": "A launch or media plan run on the twins before the money goes out: three plans, odds on the goal week by week, levers ranked by what they earn, and a holdout sized to prove lift."}},
+          {"@type": "Offer", "itemOffered": {"@type": "Service", "name": "Greenlight Lab", "description": "The odds on a title or an idea before money is committed: the range of outcomes on each platform, the audience that shows up, and the comparable titles."}},
+          {"@type": "Offer", "itemOffered": {"@type": "Service", "name": "Spend Engine", "description": "Always-on paid media run against the twins, connected to Meta, Google, Amazon, and TikTok, with lift read against a matched twin holdout and a savings ledger."}}
+        ]
+      },
+      "termsOfService": "https://www.crosswalknyc.com/terms-of-use.html",
+      "url": "https://www.crosswalknyc.com/digital-twins.html"
+    },
+    {
+      "@type": "FAQPage",
+      "@id": "https://www.crosswalknyc.com/digital-twins.html#faq",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "What is a digital twin in market research?",
+          "acceptedAnswer": {"@type": "Answer", "text": "A digital twin is a copy of a real person's behavior that can respond to something new. In research it stands in for a survey respondent. Crosswalk builds one from observed behavior over time for each of 10 million US people. A question about a plan or a title is answered by how people like that behave."}
+        },
+        {
+          "@type": "Question",
+          "name": "What does synthetic data based on real data mean?",
+          "acceptedAnswer": {"@type": "Answer", "text": "Synthetic data is data that was produced rather than observed. Crosswalk produces it by running a plan on twins built from real behavior. The inputs are real: what people watched, searched, bought, and paid. The output is new: what those same people would do with a plan they have not seen yet."}
+        },
+        {
+          "@type": "Question",
+          "name": "How is this different from a synthetic panel or AI respondents?",
+          "acceptedAnswer": {"@type": "Answer", "text": "Most synthetic panels start from surveys, interviews, or a language model answering as a type of person. They can tell you what people say. Crosswalk's twins start from what people do, and they are checked against live campaigns rather than against another survey."}
+        },
+        {
+          "@type": "Question",
+          "name": "How accurate are the digital twins?",
+          "acceptedAnswer": {"@type": "Answer", "text": "Every forecast is scored against what happened, and that score sits next to each new read inside the product. Before any client sees a forecast, the twins are run on past launches and campaigns using only what was knowable at the time."}
+        },
+        {
+          "@type": "Question",
+          "name": "What can I test on the twins?",
+          "acceptedAnswer": {"@type": "Answer", "text": "A media plan and its budget split, a title, a script, a trailer, a bare idea, a creator roster, a price or a promotion, a release week, an audience. Anything you would otherwise spend money to find out."}
+        },
+        {
+          "@type": "Question",
+          "name": "Does it connect to our ad platforms?",
+          "acceptedAnswer": {"@type": "Answer", "text": "Yes. The recommended plan exports in the shape each platform's buyer uploads from day one. Connected accounts on Meta, Google, Amazon, and TikTok add daily reads and, with your approval, the moves themselves."}
+        },
+        {
+          "@type": "Question",
+          "name": "Is any personal data used or sold?",
+          "acceptedAnswer": {"@type": "Answer", "text": "No customer files are sold and no individual is identified. The panel is opted in, identity is kept apart from behavior, and clients receive group statistics projected to the US population."}
+        },
+        {
+          "@type": "Question",
+          "name": "How do I start?",
+          "acceptedAnswer": {"@type": "Answer", "text": "Talk to us. Twin IQ opens to Crosswalk clients first, and Prometheus already answers audience questions on the same 10 million people today."}
+        }
+      ]
+    }
+  ]
+}
+</script>
+</head>
+<body>
+<div id="nav"></div>
+
+<section class="band dark glow page-hero">
+  <div class="wrap">
+    <div>
+      <div class="eyebrow"><span class="n">01</span> Digital twins</div>
+      <h1 class="h-l">Digital twins built from what ten million people actually do.</h1>
+      <p class="lead" style="margin-top:20px">A digital twin is a working copy of a real person's behavior. Twin IQ builds one for each of the 10 million US people in the Crosswalk panel. It comes from what they watch, search, buy, and pay for, not from what they tell a survey. Put a plan, a title, a price, or an idea in front of the twins and see what happens before you spend.</p>
+      <div style="display:flex;gap:10px;margin-top:28px;flex-wrap:wrap"><a class="btn btn-green" href="company.html#contact">Talk to us about digital twins</a><a class="btn btn-ghost" href="#how">How it works</a></div>
+      <p class="fine" style="color:var(--t3-d);margin-top:18px">Synthetic data, grounded in real behavior. Clients see group statistics only. No individual is ever identified.</p>
+    </div>
+    <div class="panel twin">
+      <div class="top"><span class="id">Twin t_7f2a91 · one of 10,000,000 · shown as built</span><span class="tag">Real behavior</span></div>
+      <div class="lab">What the panel observed</div>
+      <div class="stream">
+        <div class="r"><span class="t">Mon 21:14</span><span>paramountplus.com · Landman S2 E3 · 54m watched</span></div>
+        <div class="r"><span class="t">Tue 07:02</span><span>google.com · landman season 2 finale date</span></div>
+        <div class="r"><span class="t">Tue 12:40</span><span>tiktok.com · #landman clip · 38s watched</span></div>
+        <div class="r hit"><span class="t">Thu 20:11</span><span>amazon.com · Yellowstone Dutton Ranch cap · order placed</span></div>
+      </div>
+      <div class="lab">What the twin carries</div>
+      <div class="kv">
+        <div><b>Cohort</b><span>Western drama regulars, 2,184,112 US people like this one</span></div>
+        <div><b>Response</b><span>Clip to play in 2.6 days, three clips before the click</span></div>
+        <div><b>Price</b><span>Pays the $11.99 tier, passed on the annual plan twice</span></div>
+        <div><b>Lifecycle</b><span>In the habit, month seven on the service</span></div>
+      </div>
+      <div class="lab">Run forward: the Season 3 trailer plan</div>
+      <div class="rank">
+        <div class="r on"><span class="n">01</span><span>Watches premiere week</span><span class="v">64.1%</span></div>
+        <div class="r"><span class="n">02</span><span>Searches first, then watches</span><span class="v">20.9%</span></div>
+        <div class="r"><span class="n">03</span><span>Buys merchandise within 30 days</span><span class="v">7.3%</span></div>
+        <div class="r"><span class="n">04</span><span>Does nothing</span><span class="v">7.7%</span></div>
+      </div>
+      <div class="note">One twin, shown as an example. Clients never see a single twin. They see the ten million, projected to the country.</div>
+    </div>
+  </div>
+</section>
+
+<section class="dark" style="padding:44px 0 52px;border-top:1px solid var(--rule-d)">
+  <div class="wrap stats">
+    <div class="stat"><div class="lab">Digital twins</div><div class="fig acc">10M</div><div class="sub">One for each US panelist, projected to the US population.</div></div>
+    <div class="stat"><div class="lab">Built from</div><div class="fig">Behavior</div><div class="sub">Watching, searching, buying, paying, with timing. Not survey answers.</div></div>
+    <div class="stat"><div class="lab">Already read</div><div class="fig">4,600+</div><div class="sub">Audiences, journeys, and campaigns the twins learn from.</div></div>
+    <div class="stat"><div class="lab">Freshness</div><div class="fig">T+1</div><div class="sub">Yesterday's behavior is on the twins today.</div></div>
+  </div>
+</section>
+
+<section class="band light">
+  <div class="wrap">
+    <div class="band-head">
+      <div>
+        <div class="eyebrow"><span class="n">02</span> The short version</div>
+        <h2 class="h-l">Twin IQ lets you test your spend on ten million real lives.</h2>
+      </div>
+      <div>
+        <p class="lead">Every person in the Crosswalk panel gets a twin built from what they do. You put in a plan, a title, or an idea. Prometheus runs it forward on the twins and returns the odds, the audience, and the package that earns the most. Then it sets the plan live inside the ad platforms and keeps score.</p>
+      </div>
+    </div>
+    <div class="cards3">
+      <div class="c"><div class="k">What it is</div><p>One twin per person: observed behavior, 4,600+ audiences already read, outside anchors, and what each person pays.</p></div>
+      <div class="c"><div class="k">Why now</div><p>Twin and AI research tools raised more than $250 million in the past year. Every one of them is built on what people say, none on what they do.</p></div>
+      <div class="c"><div class="k">Why Crosswalk</div><p>The only panel that sees each person's whole digital life, joined to products that already read live campaigns.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="band dark">
+  <div class="wrap">
+    <div class="band-head">
+      <div>
+        <div class="eyebrow"><span class="n">03</span> What a digital twin is</div>
+        <h2 class="h-l">Synthetic data that starts with real data.</h2>
+      </div>
+      <div>
+        <p class="lead">Most synthetic data starts with a survey, or with a language model guessing how a type of person would answer. Crosswalk's digital twins start with the record: a real person's digital life over time, kept in order with timing. The twin learns how that person responds, what they pay, and when they leave. The synthetic part is what you do with it. Run a plan the person never saw and read how people like them respond.</p>
+      </div>
+    </div>
+    <dl class="asks">
+      <div class="row"><dt>Digital twin</dt><dd>One real person's observed behavior, turned into a copy that can respond to something new.</dd></div>
+      <div class="row"><dt>Synthetic data</dt><dd>The outcomes the twins produce when you run a plan they have never seen. New data, built on real behavior.</dd></div>
+      <div class="row"><dt>Synthetic audience</dt><dd>The twins a plan would reach, sized, described, and projected to the US population.</dd></div>
+      <div class="row"><dt>Not a survey</dt><dd>No twin here was built from a questionnaire, an interview, or a model guessing at a type of person.</dd></div>
+    </dl>
+  </div>
+</section>
+
+<section class="band light">
+  <div class="wrap">
+    <div class="eyebrow"><span class="n">04</span> The twin</div>
+    <h2 class="h-l" style="max-width:20ch;margin-bottom:12px">What one twin carries.</h2>
+    <p class="lead" style="margin-bottom:44px">Four layers of fact and two of judgment, for each of ten million people.</p>
+    <div class="caps">
+      <div><div class="n">01</div><h3>Observed behavior.</h3><p>This person's watching, searching, buying, paying, and clicking, kept as a sequence with timing, across every surface.</p></div>
+      <div><div class="n">02</div><h3>The corpus.</h3><p>Everything already read about people like them: 4,600+ audiences, every journey, every attribution, churn, and trend read.</p></div>
+      <div><div class="n">03</div><h3>Outside anchors.</h3><p>Public facts the panel cannot see, fixed on as anchors: box office and streaming history, platform reach, ad benchmarks, prices paid.</p></div>
+      <div><div class="n">04</div><h3>Response and price.</h3><p>Past responses to content and ads, how long each took, the prices this person paid, and the ones they walked away from.</p></div>
+      <div><div class="n">05</div><h3>Lifecycle.</h3><p>Their standing with each title, platform, or brand: discovering, trying, in the habit, lapsing, or coming back.</p></div>
+      <div><div class="n">06</div><h3>A track record.</h3><p>How well twins like this one forecast the campaigns in the corpus, published next to every new read.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="band dark" id="how">
+  <div class="wrap">
+    <div class="eyebrow"><span class="n">05</span> How it works</div>
+    <h2 class="h-l" style="max-width:22ch;margin-bottom:12px">Four steps from the plan to the result.</h2>
+    <p class="lead" style="margin-bottom:44px">Put it in, run it forward, make it better, set it live and prove it.</p>
+    <div class="caps four">
+      <div><div class="n">01</div><h3>Put it in.</h3><p>A plan, a budget, assets, a trailer, a script, a logline, a creator roster, or a price, typed to Prometheus or attached as a file.</p></div>
+      <div><div class="n">02</div><h3>Run it forward.</h3><p>The twins the plan can reach respond the way people like them did before. Thousands of runs become odds and ranges.</p></div>
+      <div><div class="n">03</div><h3>Make it better.</h3><p>Prometheus works every lever and ranks them by what they earn, then returns the package that reaches the goal for less money.</p></div>
+      <div><div class="n">04</div><h3>Set it live.</h3><p>Approve it, and it runs inside the ad platforms, moves money toward rising signal, tests, and keeps the ledger of what it saved.</p></div>
+    </div>
+    <figure class="shot" style="margin-top:52px">
+      <img src="assets/images/twins/input.webp" width="1600" height="1090" alt="Twin IQ plan intake screen: a plan described in plain words on the left, read back as editable fields on the right, with the goal, budget, window, platforms, assets, audience, rule for moving money, and lift test" loading="lazy">
+      <figcaption>Step one, as a screen. You describe the plan the way you would say it. Prometheus reads it back as fields you can edit, then runs it on the twins. Product mockup; figures are illustrative.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section class="band light prodsec">
+  <div class="wrap">
+    <div class="copy">
+      <div class="eyebrow"><span class="n">06</span> Product one</div>
+      <h2 class="h-l">Launch Lab.</h2>
+      <p class="lead" style="margin-top:14px">A plan run on the twins before the money goes out. For studios, streamers, labels, and game publishers with a release to open.</p>
+      <div class="kicker">What the client gets</div>
+      <ul class="gets">
+        <li>Three plans side by side: as allocated, signal-led, and the minimum that still hits the goal</li>
+        <li>Odds and ranges on the goal, week by week</li>
+        <li>The levers ranked by what they earn</li>
+        <li>A holdout sized to prove lift at the lowest spend</li>
+      </ul>
+      <p class="so-what" style="margin-top:26px"><b>Example.</b> The signal-led plan sells 23% more opening-weekend tickets on the same budget, and the review clips lead instead of the trailer.</p>
+    </div>
+    <figure class="shot">
+      <img src="assets/images/twins/launch-lab.webp" width="1600" height="1018" alt="Twin IQ Launch Lab screen: two plans compared on opening-weekend tickets with odds and ranges, a week-by-week chart of tickets per $100K, and the levers ranked by what they earn" loading="lazy">
+      <figcaption>Launch Lab. Product mockup; figures are illustrative.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section class="band dark prodsec flip">
+  <div class="wrap">
+    <div class="copy">
+      <div class="eyebrow"><span class="n">07</span> Product two</div>
+      <h2 class="h-l">Greenlight Lab.</h2>
+      <p class="lead" style="margin-top:14px">The odds on a title or a bare idea before money is committed. For development, acquisitions, financing, and slate decisions.</p>
+      <div class="kicker">What the client gets</div>
+      <ul class="gets">
+        <li>A logline, script, trailer, roster, or pilot goes in</li>
+        <li>The range of outcomes on each platform</li>
+        <li>The audience that shows up, sized by cohort</li>
+        <li>Levers ranked by value, with one package to run</li>
+      </ul>
+      <p class="so-what" style="margin-top:26px"><b>Example.</b> A seven in ten chance the limited series clears 4M viewers in its first month on Peacock, and the lead carries 71% of the reach.</p>
+    </div>
+    <figure class="shot">
+      <img src="assets/images/twins/greenlight-lab.webp" width="1600" height="1351" alt="Twin IQ Greenlight Lab screen: first-month viewer ranges by platform, the comparable titles the twins recognize, the audience that shows up by cohort, and levers ranked by value with a recommended package" loading="lazy">
+      <figcaption>Greenlight Lab. Product mockup; figures are illustrative.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section class="band light prodsec">
+  <div class="wrap">
+    <div class="copy">
+      <div class="eyebrow"><span class="n">08</span> Product three</div>
+      <h2 class="h-l">Spend Engine.</h2>
+      <p class="lead" style="margin-top:14px">The connected loop that moves money toward what is working. For brands, agencies, and partners with always-on paid media.</p>
+      <div class="kicker">What the client gets</div>
+      <ul class="gets">
+        <li>Meta, Google, Amazon, and TikTok connected, read and write</li>
+        <li>Daily moves by chip, or on the rule you set</li>
+        <li>A/B tests spun from the trends</li>
+        <li>Lift read against a matched twin holdout</li>
+      </ul>
+      <p class="so-what" style="margin-top:26px"><b>Example.</b> A $50,000 test on matched twins reads with the confidence of a seven-figure one, and the account moves budget the next morning.</p>
+    </div>
+    <figure class="shot">
+      <img src="assets/images/twins/spend-engine.webp" width="1600" height="1077" alt="Twin IQ Spend Engine screen: four connected ad platforms with daily spend and conversions, the moves Prometheus recommends, a running test, and the savings ledger" loading="lazy">
+      <figcaption>Spend Engine. Product mockup; figures are illustrative.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section class="band dark">
+  <div class="wrap">
+    <div class="eyebrow"><span class="n">09</span> Who it is for</div>
+    <h2 class="h-l" style="max-width:22ch;margin-bottom:12px">Four kinds of buyer, one engine.</h2>
+    <p class="lead" style="margin-bottom:44px">Each one brings a decision that today gets made on a hunch, a survey, or last year's numbers.</p>
+    <div class="caps four">
+      <div><div class="n">01</div><h3>Studios and streamers.</h3><p>P&amp;A and launch teams opening a film, a season, an album, or a game. Launch Lab, per release.</p></div>
+      <div><div class="n">02</div><h3>Development and slate.</h3><p>Greenlight, acquisitions, and financing decisions. Greenlight Lab, per read or per slate.</p></div>
+      <div><div class="n">03</div><h3>Brands and agencies.</h3><p>Always-on paid social and search. Spend Engine, connected to the platforms they already buy.</p></div>
+      <div><div class="n">04</div><h3>Partners through the API.</h3><p>Platforms and agencies that build on Crosswalk: reads at rate-card prices, with the savings ledger returned in the API.</p></div>
+    </div>
+    <p class="so-what" style="margin-top:44px"><b>Next to the others.</b> <a href="profile-iq.html" style="text-decoration:underline">Profile IQ</a> tells you who the audience is. <a href="digital-journey-iq.html" style="text-decoration:underline">Digital Journey IQ</a> shows the path they took. <a href="attribution-iq.html" style="text-decoration:underline">Attribution IQ</a> gives each touchpoint its credit. Twin IQ takes the same people and runs the plan you have not spent on yet.</p>
+  </div>
+</section>
+
+<section class="band light">
+  <div class="wrap">
+    <div class="band-head">
+      <div>
+        <div class="eyebrow"><span class="n">10</span> Why real behavior</div>
+        <h2 class="h-l">A survey-built twin cannot tell you what a dollar will do.</h2>
+      </div>
+      <div>
+        <p class="lead">Survey-built twins and synthetic respondents are good at what people say. Spend decisions depend on what people do: whether they click, watch, pay, come back, or leave, and how long each takes. Crosswalk's twins were built from that record, and they are checked against live campaigns.</p>
+      </div>
+    </div>
+    <div class="cmp" style="border-color:var(--rule-l)">
+      <div class="r head" style="color:var(--t3-l);border-color:var(--rule-l)"><span>The question</span><span>Survey-built twins and forecast tools</span><span class="us" style="color:var(--olive)">Twin IQ</span></div>
+      <div class="r" style="border-color:var(--rule-l)"><span class="q" style="color:var(--t1-l)">What the twin is built from</span><span class="them" style="color:var(--t2-l)">Interviews, questionnaires, title attributes, and a model answering as a type of person</span><span class="us" style="color:var(--t1-l)">A real person's observed digital life over time, with timing</span></div>
+      <div class="r" style="border-color:var(--rule-l)"><span class="q" style="color:var(--t1-l)">What it predicts</span><span class="them" style="color:var(--t2-l)">Stated intent, or a title's revenue from budget, genre, and cast</span><span class="us" style="color:var(--t1-l)">What people like them do next, with odds and ranges</span></div>
+      <div class="r" style="border-color:var(--rule-l)"><span class="q" style="color:var(--t1-l)">How it is checked</span><span class="them" style="color:var(--t2-l)">Against another survey</span><span class="us" style="color:var(--t1-l)">Against live campaigns and launches, with the score shown in the product</span></div>
+      <div class="r" style="border-color:var(--rule-l)"><span class="q" style="color:var(--t1-l)">Prices and timing</span><span class="them" style="color:var(--t2-l)">Asked</span><span class="us" style="color:var(--t1-l)">Observed: what they paid, what they passed on, and how long each step took</span></div>
+      <div class="r" style="border-color:var(--rule-l)"><span class="q" style="color:var(--t1-l)">What happens with the answer</span><span class="them" style="color:var(--t2-l)">A report</span><span class="us" style="color:var(--t1-l)">A recommended plan, exported to the ad platforms or set live with approval</span></div>
+      <div class="r" style="border-color:var(--rule-l)"><span class="q" style="color:var(--t1-l)">Learning from a live campaign</span><span class="them" style="color:var(--t2-l)">No</span><span class="us" style="color:var(--t1-l)">Daily: the real signal comes in, the plan moves, the ledger is kept</span></div>
+    </div>
+  </div>
+</section>
+
+<section class="band dark">
+  <div class="wrap">
+    <div class="band-head">
+      <div>
+        <div class="eyebrow"><span class="n">11</span> The track record</div>
+        <h2 class="h-l">Every forecast sits next to what happened.</h2>
+      </div>
+      <div>
+        <p class="lead">Before any client sees a forecast, the engine runs on the past. Every campaign and launch in the corpus is replayed from the day before it started, with only what was knowable then, and scored against the result. The score is published inside the product and updated as live campaigns land.</p>
+      </div>
+    </div>
+    <div class="record">
+      <div class="s"><div class="k">Before you trust it</div><p>The engine's score on the past campaigns that look most like yours is on the page with the forecast.</p></div>
+      <div class="s"><div class="k">While it runs</div><p>The live signal comes in daily. The forecast is re-scored and the plan moves with it.</p></div>
+      <div class="s"><div class="k">After it lands</div><p>What was forecast, what happened, and what the twins saved go into a ledger you can open any time.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="band light tight">
+  <div class="wrap cols-2" style="align-items:start">
+    <div>
+      <div class="eyebrow"><span class="n">12</span> Privacy</div>
+      <h2 class="h-l">Twins, not people.</h2>
+    </div>
+    <div>
+      <p class="lead">Each twin stands in for one of the 10 million US panelists who chose to be counted. Identity is kept apart from behavior, and sensitive details are removed before anything is stored. Prometheus never answers about one person. It answers about the group a person is counted with, and every projected figure carries its base.</p>
+      <div style="display:flex;gap:10px;margin-top:22px;flex-wrap:wrap"><a class="btn btn-olive" href="panel.html">How the panel works</a><a class="btn btn-ghost-l" href="privacy-policy-1.html">Privacy Policy</a></div>
+    </div>
+  </div>
+</section>
+
+<section class="band light" style="padding-top:72px;border-top:1px solid var(--rule-l)">
+  <div class="wrap">
+    <div class="eyebrow"><span class="n">13</span> Questions people ask</div>
+    <h2 class="h-l" style="max-width:20ch;margin-bottom:28px">Digital twins and synthetic data, in plain words.</h2>
+    <div class="faq">
+      <div class="item">
+        <h3>What is a digital twin in market research?</h3>
+        <p>A digital twin is a copy of a real person's behavior that can respond to something new. In research it stands in for a survey respondent. Crosswalk builds one from observed behavior over time for each of 10 million US people. A question about a plan or a title is answered by how people like that behave.</p>
+      </div>
+      <div class="item">
+        <h3>What does synthetic data based on real data mean?</h3>
+        <p>Synthetic data is data that was produced rather than observed. Crosswalk produces it by running a plan on twins built from real behavior. The inputs are real: what people watched, searched, bought, and paid. The output is new: what those same people would do with a plan they have not seen yet.</p>
+      </div>
+      <div class="item">
+        <h3>How is this different from a synthetic panel or AI respondents?</h3>
+        <p>Most synthetic panels start from surveys, interviews, or a language model answering as a type of person. They can tell you what people say. Crosswalk's twins start from what people do, and they are checked against live campaigns rather than against another survey.</p>
+      </div>
+      <div class="item">
+        <h3>How accurate are the digital twins?</h3>
+        <p>Every forecast is scored against what happened, and that score sits next to each new read inside the product. Before any client sees a forecast, the twins are run on past launches and campaigns using only what was knowable at the time.</p>
+      </div>
+      <div class="item">
+        <h3>What can I test on the twins?</h3>
+        <p>A media plan and its budget split, a title, a script, a trailer, a bare idea, a creator roster, a price or a promotion, a release week, an audience. Anything you would otherwise spend money to find out.</p>
+      </div>
+      <div class="item">
+        <h3>Does it connect to our ad platforms?</h3>
+        <p>Yes. The recommended plan exports in the shape each platform's buyer uploads from day one. Connected accounts on Meta, Google, Amazon, and TikTok add daily reads and, with your approval, the moves themselves.</p>
+      </div>
+      <div class="item">
+        <h3>Is any personal data used or sold?</h3>
+        <p>No customer files are sold and no individual is identified. The panel is opted in, identity is kept apart from behavior, and clients receive group statistics projected to the US population.</p>
+      </div>
+      <div class="item">
+        <h3>How do I start?</h3>
+        <p>Talk to us. Twin IQ opens to Crosswalk clients first, and Prometheus already answers audience questions on the same 10 million people today.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="band dark glow" style="text-align:center">
+  <div class="wrap">
+    <div class="eyebrow" style="justify-content:center"><span class="n">14</span> Talk to us</div>
+    <h2 class="h-l" style="max-width:18ch;margin:0 auto">See what the twins say before you spend.</h2>
+    <p class="lead" style="margin:16px auto 0;text-align:center">Bring a plan, a script, or a title. We will run it on the twins and walk you through the read. Prometheus answers audience questions on the same ten million people today.</p>
+    <div style="display:flex;gap:10px;margin-top:30px;flex-wrap:wrap;justify-content:center"><a class="btn btn-green" href="company.html#contact">Talk to us about digital twins</a><a class="btn btn-ghost" href="signup.html">Sign up for the dashboard</a></div>
+  </div>
+</section>
+
+<div id="foot"></div>
+<script src="assets/js/crosswalk.js"></script>
+</body>
+</html>

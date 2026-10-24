@@ -1,9 +1,11 @@
 """Public site + self-serve Prometheus signup (Jenna 2026-09-24).
 
 Serves the marketing site at /site (static files under bg-webapp/site/).
-On www.crosswalknyc.com and crosswalknyc.com the same files are the
-site root, so / is the homepage and /login goes to the dashboard.
-and runs the self-serve flow the site's Ask box leads into:
+On www.crosswalknyc.com the same files are the site root, so / is the
+homepage and /login goes to the dashboard. The bare domain and the
+/site/ copies of a page redirect permanently to the www address so a
+search engine sees one URL per page. It also runs the self-serve flow
+the site's Ask box leads into:
 
     1. POST /site/api/signup
          Creates the dashboard account on the Prometheus self-serve plan
@@ -89,6 +91,10 @@ MARKETING_HOSTS = frozenset({
     "www.crosswalknyc.com",
     "crosswalknyc.com",
 })
+# The one address search engines index. Every page's canonical link
+# points here (scripts/site_seo.py), the bare domain redirects here.
+CANONICAL_HOST = "www.crosswalknyc.com"
+CANONICAL_ORIGIN = "https://" + CANONICAL_HOST
 DASHBOARD_ORIGIN = "https://dashboard.crosswalknyc.com"
 # These stay on the dashboard host. A visit on www is sent there.
 _DASHBOARD_PREFIXES = (
@@ -144,24 +150,30 @@ def serve_marketing_host():
     dashboard.crosswalknyc.com. Signup API calls still run here so the
     forms on this host keep working. Every other host is unchanged.
     """
-    if _request_host() not in MARKETING_HOSTS:
+    host = _request_host()
+    if host not in MARKETING_HOSTS:
         return None
     path = request.path or "/"
     if path.startswith("/site/api/") or path.startswith("/.well-known/"):
         return None
     if path in ("/health", "/healthz", "/ready"):
         return None
+    qs = ("?" + request.query_string.decode()) if request.query_string else ""
+    # One address per page for search engines (2026-10-23). The bare
+    # domain and the /site/ copies of a page send a permanent redirect
+    # to the www address, which is the canonical on every page.
+    if host != CANONICAL_HOST:
+        return redirect(CANONICAL_ORIGIN + path + qs, code=301)
+    if path == "/site" or path.startswith("/site/"):
+        rest = path[len("/site"):]
+        if rest in ("", "/"):
+            rest = "/"
+        return redirect(CANONICAL_ORIGIN + rest + qs, code=301)
     for prefix in _DASHBOARD_PREFIXES:
         bare = prefix.rstrip("/")
         if path == bare or path.startswith(prefix):
-            qs = ("?" + request.query_string.decode()) if request.query_string else ""
             return redirect(DASHBOARD_ORIGIN + path + qs, code=302)
-    rel = path
-    if rel in ("/site", "/site/"):
-        rel = "/"
-    elif rel.startswith("/site/"):
-        rel = "/" + rel[len("/site/"):]
-    return _safe_site_file(rel)
+    return _safe_site_file(path)
 
 
 # ---------------------------------------------------------------------------

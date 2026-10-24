@@ -1,4 +1,8 @@
 User-agent: *
-Allow: /site/
+Allow: /
+Disallow: /signup.html
 Disallow: /site/signup.html
+Disallow: /welcome.html
 Disallow: /site/welcome.html
+
+Sitemap: https://www.crosswalknyc.com/sitemap.xml

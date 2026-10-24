@@ -1,11 +1,20 @@
 #!/usr/bin/env python3
-"""Build the public site served at dashboard.crosswalknyc.com/site.
+"""Build the public site served at www.crosswalknyc.com (bg-webapp/site).
 
-Source of truth for the page designs is website/mockups (direction 5,
-Ask-led). This script copies the approved pages into bg-webapp/site,
-rewrites asset paths, and writes the two live pages that differ from
-the mockups: signup.html (posts to /site/api/signup and hands off to
-Stripe Checkout) and welcome.html (polls /site/api/signup/status).
+RETIRED AS A WRITER (2026-10-23). bg-webapp/site is edited directly:
+since late September its pages carry pricing, copy and whole pages
+(clients.html, join.html) that never went back into website/mockups,
+so a rebuild from the mockups would overwrite live content. main()
+refuses to run without --force. After any page edit run
+scripts/site_seo.py (canonical, description, cards, JSON-LD,
+sitemap.xml, robots.txt) and, once deployed, scripts/site_submit.py.
+
+The original job, kept for reference and for --force: the page
+designs live in website/mockups (direction 5, Ask-led). This script
+copies the approved pages into bg-webapp/site, rewrites asset paths,
+and writes the two live pages that differ from the mockups:
+signup.html (posts to /site/api/signup and hands off to Stripe
+Checkout) and welcome.html (polls /site/api/signup/status).
 
 Legal and panel-consent pages come across from website/ unchanged so
 the footer links resolve.
@@ -313,6 +322,13 @@ def redirect_stub(target: str) -> str:
 
 
 def main():
+    import sys
+    if "--force" not in sys.argv[1:]:
+        print("build_public_site.py is retired as a writer: bg-webapp/site is edited directly and "
+              "a rebuild from website/mockups would overwrite live pages. Edit the page under "
+              "bg-webapp/site, run scripts/site_seo.py, then scripts/site_submit.py after deploy. "
+              "Pass --force to rebuild anyway.")
+        return 2
     if OUT.exists():
         shutil.rmtree(OUT)
     (OUT / "assets" / "css").mkdir(parents=True)
@@ -372,4 +388,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main() or 0)
