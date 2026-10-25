@@ -135,6 +135,20 @@ def is_gen_pop(name, normalize):
     return bool(GEN_POP_RX.match(normalize(str(name or '').split(' - ')[0])))
 
 
+EVERYONE_RX = re.compile(
+    r'^(?:everyone(?:\s+in\s+the\s+(?:us|u\s?s|united\s+states|country))?|all\s+(?:us\s+)?(?:adults|consumers|people)|'
+    r'us\s+(?:adults|consumers|population|people)|the\s+(?:us|whole\s+(?:panel|country|us)|general\s+population|'
+    r'us\s+population)|general\s+population|the\s+entire\s+(?:panel|us)|(?:us\s+)?gen\s?pop(?:ulation)?(?:\s+\d{4})?)$')
+
+
+def is_everyone(name):
+    """The whole panel named as an audience ("Everyone in the US", "all US
+    adults", "gen pop"): a read on it runs on the panel, never on the
+    profile open on the page (2026-10-24)."""
+    n = re.sub(r"[^a-z0-9]+", " ", str(name or '').lower()).strip()
+    return bool(n) and bool(EVERYONE_RX.match(n))
+
+
 def subject_segment(text):
     """The part of the ask where its subject sits: before the first
     comparison cue, or between a leading comparison verb and its

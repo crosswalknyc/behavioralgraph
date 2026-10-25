@@ -331,11 +331,11 @@ def page_rejected_in_thread(history, page):
         if key not in low:
             continue
         win = low
-        if re.search(r"\b(?:not|no|never|instead of|rather than|other than|besides|without|stop|unclear why|why (?:do|does|did|would) (?:you|it) keep|don t want|do not want|didn t (?:ask|say|mean|want)|did not (?:ask|say|mean|want))\b", win):
+        if re.search(r"\b(?:not|no|never|nothing to do with|has nothing|instead of|rather than|other than|besides|without|stop|unclear why|why (?:do|does|did|would) (?:you|it) keep|don t want|do not want|didn t (?:ask|say|mean|want)|did not (?:ask|say|mean|want))\b", win):
             # the negation sits in the same sentence as the page name
             for sent in re.split(r"[.?!]+", str(turn.get('text') or turn.get('content') or '')):
                 s = _norm(sent)
-                if key in s and re.search(r"\b(?:not|no|never|instead of|rather than|other than|besides|without|stop|unclear why|why (?:do|does|did|would) (?:you|it) keep|don t want|do not want|didn t|did not)\b", s):
+                if key in s and re.search(r"\b(?:not|no|never|nothing to do with|has nothing|instead of|rather than|other than|besides|without|stop|unclear why|why (?:do|does|did|would) (?:you|it) keep|don t want|do not want|didn t|did not)\b", s):
                     return True
     return False
 
@@ -832,11 +832,45 @@ def qualified_audience(text):
     return name, q
 
 
-def _reading_candidates(reading, page, norm):
+_PLACE_LIST_RX = re.compile(
+    r"\b(?:at|on|across|between|among|from|via|through|in|to|with)\s+"
+    r"(?:(?:the\s+)?[\w&'.+-]+,?\s+(?:and\s+|or\s+|&\s+)?){0,5}$", re.I)
+
+
+def _place_in_list(name, text):
+    """True when every mention of `name` in the text sits in a list of
+    places after a locative preposition ("shopping at Amazon, Walmart and
+    Target", "on Netflix or Hulu"): the places people shop or watch, not
+    the audience the ask is about."""
+    t = str(text or '')
+    found = False
+    for m in re.finditer(r"(?<![\w'])" + re.escape(str(name or '')) + r"(?![\w'])", t, re.I):
+        found = True
+        head = t[max(0, m.start() - 160):m.start()]
+        if not _PLACE_LIST_RX.search(head):
+            return False
+    return found
+
+
+def _reading_candidates(reading, page, norm, text=''):
     out = []
     if not isinstance(reading, dict):
         return out
     page_n = norm(str(page or '').split(' - ')[0])
+    # Two or more brands or platforms that only appear as places after
+    # "at", "on", "across" are where the behavior happens, not who it is
+    # about (Scott Carlin 2026-10-24: "shopping at Amazon, Walmart and
+    # Target" bound Amazon as the subject). They never become candidates;
+    # a single place keeps today's reading.
+    places = set()
+    if text:
+        brands = [str(sd.get('as_written') or sd.get('catalog') or '').strip() for sd in (reading.get('subjects') or [])
+                  if isinstance(sd, dict) and str(sd.get('kind') or '').lower() in ('brand', 'platform')]
+        brands = [b for b in brands if b]
+        if len(brands) >= 2:
+            listed = [b for b in brands if _place_in_list(b, text)]
+            if len(listed) >= 2:
+                places = {norm(b) for b in listed}
     for s in (reading.get('subjects') or []):
         if not isinstance(s, dict):
             continue
@@ -854,6 +888,8 @@ def _reading_candidates(reading, page, norm):
             continue
         n = norm(name.split(' - ')[0])
         if page_n and (n == page_n or n in page_n or page_n in n):
+            continue
+        if places and (norm(aw) in places or n in places):
             continue
         k = kind if kind in ('title', 'brand', 'person', 'audience') else 'title'
         out.append((name, k, 0.8 if cat else 0.7))
@@ -1003,7 +1039,7 @@ def bind(text, history=None, page='', reading=None, catalog_names=None, normaliz
         quals['verb'] = verb
         return Subject('audience', name, f"{name} {verb}", quals, 'words', 0.8)
     # 6. the Reader's subjects for these words
-    for name, kind, conf in _reading_candidates(reading, page, norm):
+    for name, kind, conf in _reading_candidates(reading, page, norm, text=t):
         disp = clean_display(name, t, casing) or name
         if disp:
             return Subject(kind, disp, disp, quals, 'words', conf)

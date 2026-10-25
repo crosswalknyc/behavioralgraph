@@ -28,6 +28,7 @@ from prometheus import faults as _faults   # swallowed faults are counted (audit
 from prometheus import store as _store   # relational shadow store (audit item 7)
 from prometheus import intents as _intents   # product-intent gates (extracted 2026-10-14)
 from prometheus import subject_rules as _subject_rules   # the open profile is context, never a default subject (2026-10-20)
+from prometheus import page_default as _page_default   # the page is the base only on a positive signal; the quoted subject is the one that runs (2026-10-24)
 from prometheus import creator_fit as _creator_fit   # a creator-fit read is held to the subject's universe (2026-10-20)
 from prometheus import intake_predicates as _intake_predicates   # pure text predicates (extracted 2026-10-20)
 from prometheus import subject_display as _subject_display   # a reader sees a name, never a key (2026-10-22)
@@ -11994,7 +11995,7 @@ def _pm_two_base_detect(text, ctx=None):
 
 
 def _pm_generation_base(subject_hint, text, ctx=None,
-                        prefer_catalog=False):
+                        prefer_catalog=False, bound=False):
     """Resolve the base that authorizes a generated read.
 
     Jenna 2026-08-27 (verbatim): "it can't pull full data on something
@@ -12038,6 +12039,8 @@ def _pm_generation_base(subject_hint, text, ctx=None,
     # 1. The profile open on the page IS the base (unless the caller
     # asked for ask-named catalog subjects to win; the page is still
     # the fallback below when the catalog names nothing).
+    if _page_default.is_everyone(subject_hint):
+        return None   # the whole panel: never a file, never the page; priced and run as a panel read (2026-10-24)
     page_base = None
     if ctx and ctx.get('primary'):
         pk = str(ctx['primary'].get('s3_key') or '').strip()
@@ -12083,6 +12086,9 @@ def _pm_generation_base(subject_hint, text, ctx=None,
                   f"to the open page ({page_base.get('subject')!r}); "
                   f"page base skipped")
             page_base = None
+    if page_base is not None and bound and not _page_default.page_base_stands(
+            '', None, page_base.get('subject'), '', subject_hint, normalize=_H._normalize_for_match, stop_tokens=_PM_CLARIFY_STOP_TOKENS)[0]:
+        page_base = None   # a bound subject (chip, approved quote) is the base or nothing; the quote and the read agree (2026-10-24)
     if page_base is not None and not prefer_catalog:
         return page_base
 
@@ -12871,6 +12877,7 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
     # the remembered subject explicitly; it resolves the base directly
     # and rides the consult below so a banked read replays instantly.
     bind_subject = str(bind_subject or '').strip() or str(getattr(__import__('flask').g, '_pm_retry_bound', '') or '').strip()   # I4b: the retry's bound subject
+    bind_subject = _page_default.quoted_subject(panel_confirm, bind_subject) or bind_subject   # the subject a quote named is the one the Approve runs on (2026-10-24)
     bind_cohort = str(bind_cohort or '').strip()
     if bind_subject and not subj_hint:
         subj_hint = bind_subject
@@ -12918,7 +12925,7 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
         try:
             base = _pm_generation_base(
                 bind_subject, f"{bind_subject} {bind_cohort}".strip(),
-                ctx=ctx, prefer_catalog=True)
+                ctx=ctx, prefer_catalog=True, bound=True)
         except Exception:
             traceback.print_exc()
     if not base:
@@ -12940,6 +12947,12 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
                                                prefer_catalog=True)
         except Exception:
             traceback.print_exc()
+    if base and str(base.get('source') or '') in ('page', 'catalog') and not str(base.get('s3_key') or '').startswith('subiq:'):
+        _stands, _why = _page_default.base_stands(text, history, base, bind_subject, normalize=_H._normalize_for_match,
+                                                  stop_tokens=_PM_CLARIFY_STOP_TOKENS, brand_named=_pm_page_brand_named, ask_user=_pm_ask_log_user(''))
+        if not _stands:   # the open profile is context, never a default subject; a name the reader said no to is no base (2026-10-06, 2026-10-24)
+            print(f"[pm-base] {base.get('source')} base {base.get('subject')!r} dropped ({_why})")
+            switch_page, base = (switch_page or str(base.get('subject') or '')), None
     if not base:
         # RESOLUTION LADDER, last rung (2026-08-27, Jenna: "if I go
         # back and ask for toy white space it can say do you mean for
@@ -13062,8 +13075,8 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
         # A subject bound upstream (memory, catalog, the open page)
         # was already resolved; only a free guess is screened.
         if _bf_subj and _bf_subj != str(bind_subject or '').strip() \
-                and not _pm_plausible_subject(_bf_subj):
-            _bf_subj = ''
+                and _page_default.not_a_subject(_bf_subj, text, _pm_plausible_subject, history):
+            _bf_subj = ''   # ordinary words, a prose fragment ("Target. Among"), or a place in a list of places (2026-10-24)
         # Entity core (2026-10-02 S6): 'Appeal of the Spiderwick
         # Franchise' is a question about Spiderwick, not a subject.
         # Collapse to the entity; when the library already carries
@@ -13095,14 +13108,11 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
         # report that already delivered does not re-quote the $550 -
         # the identical-ask replay below fires before any quote and
         # bills as metered usage (2026-09-14: nothing is ever free).
-        subj_name = (subj_hint or pma.guess_subject_from_text(text)
-                     or '').strip()
-        if subj_name and subj_name != str(bind_subject or '').strip() \
-                and not _pm_plausible_subject(subj_name):
-            subj_name = ''
-        subj_name = _pm_entity_core_bind(subj_name)[0]
-        if isinstance(panel_confirm, dict) and not subj_name:
-            subj_name = str(panel_confirm.get('subject') or '').strip()
+        _qs = _page_default.quoted_subject(panel_confirm, bind_subject)
+        subj_name = _qs or (subj_hint or pma.guess_subject_from_text(text) or '').strip()
+        if subj_name and not _qs and _page_default.not_a_subject(subj_name, text, _pm_plausible_subject, history):
+            subj_name = ''   # ordinary words, a prose fragment, or a place in a list of places ("at Amazon, Walmart and Target"), 2026-10-24
+        subj_name = subj_name if _page_default.is_everyone(subj_name) else _pm_entity_core_bind(subj_name)[0]
         if subj_name:
             try:
                 _led_nb = il.consult(subject=subj_name, question=text)
@@ -13181,14 +13191,18 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
         if _eb and not isinstance(panel_confirm, dict):
             _pm_ask_hint(route='build_reroute', outcome='explicit_build_order', subject=_eb)
             return jsonify(_subject_rules.build_reroute_payload())
-        subj_name = _subject_rules.display_for((subj_hint or pma.guess_subject_from_text(text) or '').strip(), text)
-        if subj_name and _pm_plausible_subject(subj_name) \
-                and not isinstance(panel_confirm, dict):
-            from prometheus import priced_read as _prg
+        from prometheus import priced_read as _prg
+        _pg_name = str(((ctx or {}).get('primary') or {}).get('name') or switch_page or '').strip()
+        subj_name = _page_default.no_base_subject(text, _pg_name, bind_subject, subj_hint or pma.guess_subject_from_text(text), panel_confirm,
+                                                  display_for=_subject_rules.display_for, reading_cohort=_prg.reading_cohort, plausible=_pm_plausible_subject)
+        if subj_name and not isinstance(panel_confirm, dict):
             _state, _pl = _prg.offer_or_charge(text=text, subject=subj_name, kind='report', panel_confirm=None,
                                                username=_pm_user, user=user, history=history)
             _pm_ask_hint(outcome='panel_offer', subject=subj_name)
             return jsonify(_pl)
+        if not isinstance(panel_confirm, dict):   # nothing named: which audience? the page is a chip, never the answer (2026-10-24)
+            _pm_ask_hint(route='audience_confirm', outcome='asked_audience', subject=_pg_name)
+            return jsonify(_prg.which_audience(text, ctx if (_pg_name and not _page_default.page_rejected(text, history, _pg_name)) else None))
         reply, followups = pma.build_profile_required_reply(
             '', price_label=_pm_panel_price_label(_pm_user)[0])
         _pm_ask_hint(outcome='clarify_subject')
@@ -15520,10 +15534,12 @@ def _pm_analyze_core(user, body, text, history):
                 _pm_page_confirm_mark(_pm_ask_log_user(''), _pg)
         except Exception as _fx:
             _faults.note('chat', _fx)
+        _pc_with_bind = body.get('panel_confirm') if isinstance(body.get('panel_confirm'), dict) else None
         return _pm_generate_metrics_response(
             user, text, history, ctx=ctx, prefer_catalog=True,
             bind_subject=_bind_subject,
-            bind_cohort=str(body.get('bind_cohort') or '').strip())
+            bind_cohort=str(body.get('bind_cohort') or '').strip(),
+            panel_confirm=_pc_with_bind)
     # Open profile is not the question (2026-09-25, Jenna): a titles
     # ask that does not name the profile on screen asks before it
     # answers. Yes binds that profile. No is overall_ranks above.

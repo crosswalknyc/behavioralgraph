@@ -114,7 +114,13 @@ _CUSTOM_WORK_RX = re.compile(
     r"(?:cohort|segment|slice)\s+(?:of|within)|within\s+(?:the|this)\s+(?:audience|profile)|"
     r"\bx\b|cross(?:ed|ing)?\s+(?:with|against)|share\s+who\s+(?:subscribe|pay|watch|buy|use)|"
     r"which\s+(?:other\s+)?(?:streaming\s+)?(?:services|platforms|brands)\s+do\s+they|"
-    r"incremental|incrementality|(?:what|which)\s+(?:brands|titles|shows|services|platforms)\s+do\s+.{1,40}\s+(?:over-?index|index|watch|use|buy))\b",
+    r"incremental|incrementality|(?:what|which)\s+(?:brands|titles|shows|services|platforms)\s+do\s+.{1,40}\s+(?:over-?index|index|watch|use|buy)|"
+    # a market read put together across retailers, platforms or weeks: which one is winning, the latest
+    # period against the one before, a share that shifted, an outlook (Scott Carlin 2026-10-24, run unpriced on an open file)
+    r"which\s+(?:retailer|brand|platform|service|title|show|network|app|store|chain)\s+is\s+(?:increasingly\s+)?(?:winning|gaining|losing|taking|leading)|"
+    r"(?:latest|last|past|most\s+recent)\s+(?:\d+|two|three|four|six|eight|twelve)\s+weeks?\s+(?:with|against|vs\.?|versus|to)\s+the\s+(?:preceding|prior|previous|earlier)|"
+    r"(?:purchase|consideration|repeat|market|wallet|visit|category)\s+share\s+(?:is\s+)?shift(?:s|ed|ing)?|share\s+(?:is\s+)?shift(?:s|ed|ing)|"
+    r"directional\s+outlook|outlook\s+for\s+the\s+next|(?:examine|assess|evaluate)\s+(?:observed\s+)?\w[\w-]*\s+(?:shopping|purchases?|purchasing|viewing|behavior|spend))\b",
     re.I)
 # A single figure already on the screen: free.
 _SINGLE_FIGURE_RX = re.compile(
@@ -383,7 +389,11 @@ def bound_subject(text, history=None, ctx=None, fallback='', reading=None):
             return s.label()
     except Exception:
         pass
-    return str(fallback or page or '').strip()
+    # The open page is never an implicit default (Jenna 2026-10-24, Scott
+    # Carlin's small-kitchen-appliance ask with LeBron James open ran on
+    # LeBron James). A caller that wants the page passes it as fallback;
+    # the binder already returns the page when the words point at it.
+    return str(fallback or '').strip()
 
 
 def reading_cohort(text, page=''):
@@ -1080,6 +1090,43 @@ def charge_rerun(username, subj_hint, consume):
     return out
 
 
+# The whole panel as a subject: a market question that names no audience
+# runs on everyone in the US once the reader picks it (never on the
+# profile that happens to be open).
+GEN_POP_LABEL = "Everyone in the US"
+
+
+def is_everyone(label):
+    try:
+        from .named_subject import is_everyone as _ie
+        return _ie(label)
+    except Exception:
+        return _fold(label) in ('everyoneintheus', 'everyone', 'genpop', 'usgenpop', 'generalpopulation', 'allusadults', 'usadults')
+
+
+def which_audience(text, ctx=None):
+    """The one question when a put-together read names no audience and
+    does not point at the page (Jenna 2026-10-06: nothing named, nothing
+    assumed; 2026-10-24: never the open profile by default). The page is
+    a chip, never the answer; everyone in the US is the other chip; the
+    widget's "Something else" asks the reader to name one. No quote and
+    no charge until the audience is settled."""
+    page = _page_name(ctx)
+    opts = []
+    if page:
+        opts.append({'label': f'{page} (open on your screen)', 'subject': page})
+    opts.append({'label': GEN_POP_LABEL, 'subject': GEN_POP_LABEL})
+    if page:
+        reply = (f"Which audience should this run on? The question does not name one, and {page} is only "
+                 f"the profile open on your screen. Pick it, pick everyone in the US, or name another audience.")
+    else:
+        reply = "Which audience should this run on? The question does not name one. Pick everyone in the US, or name an audience."
+    return {'success': True, 'action': 'answer', 'reply': reply,
+            'followups': [o['label'] for o in opts] + ['Something else'],
+            'offer_deck': False, 'deck_angle': None, 'audience_confirm': True,
+            'memory_confirm': {'question': str(text or ''), 'options': opts}}
+
+
 def work_gate(text, history=None, ctx=None, user=None, body=None, username=None, consume=None):
     """The analyze surface's gate (service.py), ahead of every lane that
     could answer on an open file: a put-together read is a custom ask.
@@ -1104,9 +1151,33 @@ def work_gate(text, history=None, ctx=None, user=None, body=None, username=None,
     except Exception:
         words = text
     reading = body.get('reading') if isinstance(body.get('reading'), dict) else None
-    subject = bound_subject(words, history, ctx, fallback=_page_name(ctx), reading=reading)
+    # The subject, in order: the chip the reader tapped (bind_subject), the
+    # subject the quote named (the Approve carries it back), the words. The
+    # open page is never the default: a read that names no audience asks
+    # which one before any quote (Jenna 2026-10-24, Scott Carlin).
+    bind = str(extra.get('bind_subject') or body.get('bind_subject') or '').strip()
+    quoted = str((pc or {}).get('subject') or '').strip() if isinstance(pc, dict) else ''
+    if bind:
+        subject = GEN_POP_LABEL if is_everyone(bind) else bind
+    elif quoted and quoted.lower() != 'that subject':
+        subject = GEN_POP_LABEL if is_everyone(quoted) else quoted
+    else:
+        subject = bound_subject(words, history, ctx, fallback='', reading=reading)
+        if subject and is_everyone(subject):
+            subject = GEN_POP_LABEL
     if not subject:
-        return None
+        try:
+            # The open product's own view ("this campaign", its title) is the
+            # base and its lanes answer, metered, as before (2026-10-22,
+            # Alexia). Only an ask that names nothing and points at nothing
+            # on screen gets the which-audience question.
+            from . import view_base as _vb
+            _vc = (ctx or {}).get('view_context') if isinstance(ctx, dict) else None
+            if _vb.view_base(_vc) and _vb.names_view(words, _vc):
+                return None
+        except Exception:
+            pass
+        return which_audience(words, ctx)
     kind = hit['kind'] if hit['kind'] in CUSTOM_FAMILY or hit['kind'] == 'viewership' else 'report'
     extra = {}
     try:
@@ -1132,4 +1203,9 @@ def work_gate(text, history=None, ctx=None, user=None, body=None, username=None,
         return payload
     if isinstance(pc, dict) and not isinstance(pc.get('resume_charge'), dict):
         pc['resume_charge'] = payload
+    # The read runs on exactly what was quoted and approved: the subject
+    # rides the body as the bound subject so the generation pass never
+    # resolves a base of its own (the open page) behind the quote.
+    if subject and not bind and not str(body.get('bind_subject') or '').strip():
+        body['bind_subject'] = subject
     return None
