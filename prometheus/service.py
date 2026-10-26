@@ -1455,13 +1455,15 @@ def ask(user, body, *, via='session'):
             raw = _dd_raw
             decision = {'surface': 'analyze', 'mode': None,
                         'reason': 'journey_drilldown', 'client_hint': None}
+            if _dd_raw.get('campaign'):   # a figure an Attribution IQ campaign holds, answered from its assets (2026-10-26)
+                decision['reason'] = 'campaign_drilldown'
             if _client_surface == 'interpret':
                 raw = _interpret_shape(raw)
                 raw['followups'] = list(_dd_raw.get('followups') or [])
                 if _dd_raw.get('read_job_id'):
                     raw['read_job_id'] = _dd_raw['read_job_id']
             try:
-                host.ask_hint(route='journey_drilldown', outcome='answered',
+                host.ask_hint(route=decision['reason'], outcome='answered',
                               subject=_dd_raw.get('subject'))
             except Exception as _fx:
                 _faults.note('service', _fx)
@@ -2282,6 +2284,8 @@ def _persist_turn(persist, uname, tid, history, text, env, raw, surface):
             meta['panel_offer'] = raw['panel_offer']
         if isinstance(raw, dict) and isinstance(raw.get('priced_paid'), dict):
             meta['priced_paid'] = raw['priced_paid']
+        if isinstance(raw, dict) and isinstance(raw.get('file_link'), dict) and raw['file_link'].get('url'):
+            meta['link'] = {'url': str(raw['file_link']['url']), 'label': str(raw['file_link'].get('label') or 'Download CSV')}   # the CSV link survives a reload (2026-10-26)
         turns.append({'role': 'agent', 'text': env['text'],
                       'ts': _now(), 'meta': meta})
         save_thread(uname, tid, turns)

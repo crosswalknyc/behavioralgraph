@@ -9593,15 +9593,16 @@ def _pm_intent_view_hydrate(view_ctx):
             # (2026-10-22, Alexia / The Influencer Project).
             try:
                 from prometheus import view_base as _vb
-                _assets = _formats = None
+                _assets = _formats = _phases = None
                 try:
-                    _assets = (json.loads(_H.s3_client.get_object(
-                        Bucket=_H.S3_BUCKET, Key=f'intent/{slug}/source/normalized_assets.json')['Body'].read()) or {}).get('assets')
+                    _adoc = json.loads(_H.s3_client.get_object(
+                        Bucket=_H.S3_BUCKET, Key=f'intent/{slug}/source/normalized_assets.json')['Body'].read()) or {}
+                    _assets, _phases = _adoc.get('assets'), _adoc.get('phases')   # the phases date the campaign window (2026-10-26)
                     _formats = json.loads(_H.s3_client.get_object(
                         Bucket=_H.S3_BUCKET, Key=f'intent/{slug}/mta/creative_formats.json')['Body'].read())
                 except Exception:
                     pass
-                hit = dict(hit or {}, **_vb.intent_vocabulary(doc, _assets, _formats))
+                hit = dict(hit or {}, **_vb.intent_vocabulary(doc, _assets, _formats, phases_in=_phases))
             except Exception:
                 traceback.print_exc()
         if len(_PM_INTENT_HYDRATE_CACHE) > 16:
@@ -13081,6 +13082,20 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
                 traceback.print_exc()
     panel_charge = None
     _view_base = __import__('prometheus.view_base', fromlist=['is_view_base']).is_view_base(base)   # the open product's own numbers: a lookup, never priced (2026-10-22)
+    if _view_base:
+        base['view_context'] = (ctx or {}).get('view_context')   # the read core reads the screen and its window from the base (2026-10-26)
+    # A figure an Attribution IQ campaign holds is broken down from the campaign's own assets, never generated
+    # (2026-10-26, Alexia's 67,729 read the same-title Profile IQ file and printed invented asset groups under its
+    # Jan to Dec 2025 window). Runs here too so a read reached without the service door, or resumed on the read
+    # worker with no screen, still answers from the campaign.
+    try:
+        _cd_raw = __import__('prometheus.campaign_drilldown', fromlist=['answer']).answer(
+            text, _pm_user, ctx, hint=f"{bind_subject} {subj_hint} {(base or {}).get('subject') or ''}")
+    except Exception:
+        traceback.print_exc(); _cd_raw = None
+    if _cd_raw:
+        _pm_ask_hint(route='campaign_drilldown', outcome='answered', subject=_cd_raw.get('subject'))
+        return jsonify(_cd_raw)
     if not base:
         # A QUESTION about a never-pulled subject is a custom read
         # (Jenna 2026-10-08: "all custom asks are just 500 ... take out
@@ -13746,6 +13761,10 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
             anchors_fn=lambda s: __import__('migration.corpus_catalog', fromlist=['anchors_for']).anchors_for(s, with_ledger=True),
             genpop_fn=lambda: pma.load_genpop_map(_H.s3_client, _H.S3_BUCKET),
             profile_loader=lambda k: pma.load_profile_df(_H.s3_client, _H.S3_BUCKET, k)[0])
+        if str(base.get('source') or '') == 'view' and str(base.get('domain') or '') == 'attribution':
+            _cw = __import__('prometheus.campaign_drilldown', fromlist=['window_for_base']).window_for_base(base)
+            if _cw:   # the campaign's own window, never a profile's and never a default (2026-10-26)
+                res.update(window_label=_cw['label'], window_start=_cw['start'], window_end=_cw['end'])
         reply, _fig_ledger2 = _fig.compose(pma.format_generated_metrics_reply(res), _figs2, anchors_block)
     except Exception as e:
         traceback.print_exc()
@@ -13969,7 +13988,7 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
         reply = _meth.ensure(reply, res, question=text,
                              base_label=str(base.get('subject') or ''),
                              domain=str(base.get('domain') or ''),
-                             view_context=((ctx or {}).get('view_context') if _view_base else None))
+                             view_context=(base.get('view_context') if str(base.get('source') or '') == 'view' else None))
     except Exception:
         traceback.print_exc()
     _t_stage = time.monotonic()

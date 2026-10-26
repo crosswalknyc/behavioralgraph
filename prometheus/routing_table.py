@@ -207,6 +207,28 @@ ROWS = [
         'examples': [], 'counter': [],
     },
     {
+        'id': 'campaign_drilldown', 'surface': 'analyze',
+        'reason': 'campaign_drilldown', 'client_action': 'analyze',
+        'host_only': True,
+        'note': 'A figure an Attribution IQ campaign holds (a journey step '
+                'such as the 67,729 ticketing visitors, the exposed base, a '
+                'ticketing surface, a first or last touch row) is a lookup '
+                'into that campaign (2026-10-26, Alexia on The Influencer '
+                'Project; Jenna: "think Prom is getting confused. it\'s using '
+                'a Jan-Dec 2025 time period"). "Isolate the data to just the '
+                'assets that drove the 67,729 ..." answers from the '
+                'campaign\'s own tracked assets, one person on one asset, rows '
+                'adding to the figure, under the campaign\'s own window, with '
+                'the full table as a CSV; never a generated read, never a '
+                'same-title Profile IQ file. The campaign on screen binds '
+                'first, then the thread\'s campaign, then a campaign the words '
+                'name, then any campaign in the library that holds the figure. '
+                'A figure no campaign holds falls through to the journey '
+                'lane and the rest of the path. Pinned by '
+                'scripts/test_pm_campaign_figure_breakdown.py.',
+        'examples': [], 'counter': [],
+    },
+    {
         'id': 'journey_drilldown', 'surface': 'analyze',
         'reason': 'journey_drilldown', 'client_action': 'analyze',
         'host_only': True,

@@ -71,13 +71,21 @@ def looks_like_drilldown(text):
     what is behind it, why it is what it is, how it is calculated or what
     it is made of. A question that asks how many of an audience did
     something, or names a subject with a platform pair and a window, is a
-    read and never this lane, whatever digits it carries."""
+    read and never this lane, whatever digits it carries. A count with
+    the assets / channels / surfaces that drove it is the campaign form
+    of the same question (prometheus.campaign_drilldown, 2026-10-26)."""
     t = str(text or '')
     if not numbers_in(t):
         return False
     if _sn.is_measurement_ask(t):
         return False
-    return _sn.is_figure_question(t) or bool(_CUE_RE.search(t)) or looks_like_check(t)
+    if _sn.is_figure_question(t) or bool(_CUE_RE.search(t)) or looks_like_check(t):
+        return True
+    try:
+        from . import campaign_drilldown as _cd
+        return _cd.looks_like(t)
+    except Exception:
+        return False
 
 
 # ------------------------------------------------------- definitions
@@ -968,8 +976,28 @@ def answer(text, uname, ctx=None, tid=None, *, s3=None, bucket=None,
                 return _raw(rep, _subject_of(dh['payload']), _followups(dh), drilldown='definition')
         if not looks_like_drilldown(text):
             return None
+    # A figure an Attribution IQ campaign holds is a lookup into that
+    # campaign (2026-10-26, Alexia's 67,729): the campaign on screen or
+    # the thread's campaign answers first; otherwise the journeys are
+    # read first and the campaign library after them.
+    try:
+        from . import campaign_drilldown as _cd
+    except Exception:
+        _cd = None
+    camp_first = False
+    if _cd is not None:
+        try:
+            camp_first = bool(_cd.slug_from_ctx(ctx) or _cd.slug_from_binding(_cd._thread_binding()))
+        except Exception:
+            camp_first = False
+        if camp_first:
+            craw = _cd.answer(text, uname, ctx, tid, s3=s3, bucket=bucket)
+            if craw:
+                return craw
     hit = locate(text, uname, ctx, s3=s3, bucket=bucket)
     if not hit:
+        if _cd is not None and not camp_first:
+            return _cd.answer(text, uname, ctx, tid, s3=s3, bucket=bucket)
         return None
     subj = _subject_of(hit['payload'])
     kind = hit['kind']

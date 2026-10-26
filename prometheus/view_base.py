@@ -258,7 +258,7 @@ def _phase_table(assets, formats):
     return out
 
 
-def intent_vocabulary(doc, assets=None, formats=None):
+def intent_vocabulary(doc, assets=None, formats=None, phases_in=None):
     """Compact creative table + the campaign's own words, from the
     coefficients doc (and the asset list when given). Rides under
     data.campaign_numbers so an ask that uses the screen's labels
@@ -285,6 +285,19 @@ def intent_vocabulary(doc, assets=None, formats=None):
             if isinstance(n, dict) and n.get('stage') == '4_paid' and isinstance(n.get('us_accounts'), (int, float)):
                 out['ticketing_us_accounts'] = int(n['us_accounts'])
                 out['conversion_definition'] = str(n.get('label') or '').strip() or 'went to a ticketing site or app for a ticket within 7 days'
+        # The campaign's own window rides with its numbers (2026-10-26): its
+        # first phase start (else first posted asset) through the latest
+        # read, so the counting block and a read on this base never show a
+        # profile's window or a default.
+        try:
+            from . import campaign_drilldown as _cd
+            _win = _cd.window_of({'assets_doc': {'phases': phases_in or [], 'assets': assets or []},
+                                  'as_of': str((doc or {}).get('as_of') or '')[:10], 'key': ''})
+            if _win.get('label'):
+                out['window'] = _win['label']
+                out['window_start'], out['window_end'] = _win['start'], _win['end']
+        except Exception:
+            pass
         cr = ov.get('creative') or {}
         dims = []
         for d in (cr.get('dimensions') or []):
