@@ -429,6 +429,32 @@ I'll add it. Everything **not** on the list resolves normally with no change.
 > fine; for genuinely remade titles (*Dune*, *IT*, *The Italian Job*) add the
 > **year** — `"Dune (2021)"` — to pin the one you mean.
 
+### 5h. Netflix runs headless too — on a saved login (refresh when it goes stale)
+
+Like Max, **Netflix** resolves **headless / unattended** (no window) through
+`streamscout_query`. The difference is what it rides on: Netflix uses a **saved
+login** in the resolver's own browser profile (not a token blob). That login
+lasts a long time but can eventually expire or trip a device-verification check.
+
+- **Normal operation:** headless, no window, nothing to do.
+- **When the login expires:** the resolver can't clear Netflix's login/"verify"
+  gate headless, so affected Netflix lookups come back **empty**. The tell is a
+  **sudden drop to 0 across many Netflix titles at once** — one title being 0 is
+  just "not on Netflix"; *everything* Netflix going 0 is the login.
+- **Refresh it once (the Netflix analog of Max's `--refresh-auth`):** run the
+  resolver with a visible window to re-authenticate, then headless resumes:
+  ```bash
+  python3 netflix_title_identifier.py --headed --type series \
+    --title "Wednesday" --seasons 1
+  ```
+  Complete the login / "Email a code" step in the window and pick the profile;
+  the session is saved for every later headless run.
+
+> **Operational note:** a stale Netflix login currently reads as **0 seeds**, not
+> "unverified" — so if Netflix titles vanish en masse, refresh the login *before*
+> treating them as gone. (Ask Jess/Spike if you'd like this hardened to raise a
+> hard "unverified" signal, like Max, so it can never be misread as absent.)
+
 ---
 
 ## 6. Output schema (every row)
