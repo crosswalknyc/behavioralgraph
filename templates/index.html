@@ -177032,6 +177032,32 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             });
         }
 
+        // The index for one row of a comparison file (2026-10-26).
+        //
+        // A profile file states its own benchmark in two columns, and
+        // those are the truth: Index vs Gen Pop, and Gen Pop
+        // Penetration to derive it from. Neither was being read.
+        //
+        // The old expression took US Gen Pop Projection for a gen pop
+        // share. It is not one, it is the row's own projected count,
+        // and since Projection is Raw/10M x 329.9M while Raw is
+        // BP/100 x sample, the penetration cancels and what is left is
+        // 1e9 / sample. Constant down the whole file. It survived
+        // because Gen Pop's sample is exactly 10M, the one case where
+        // that constant is the right answer, and Gen Pop used to be
+        // the only profile loaded this way.
+        //
+        // The fallback is that same expression, so a file carrying no
+        // benchmark at all behaves exactly as it did.
+        function _cmpRowIndex(row, pct, usGenPop, US_POPULATION) {
+            var stated = parseFloat(row['Index vs Gen Pop']);
+            if (isFinite(stated) && stated > 0) return Math.round(stated);
+            var gpPen = parseFloat(row['Gen Pop Penetration']);
+            if (isFinite(gpPen) && gpPen > 0) return Math.round((pct / gpPen) * 100);
+            var genPopPct = usGenPop > 0 ? (usGenPop / US_POPULATION) * 100 : 0;
+            return genPopPct > 0 ? Math.round((pct / genPopPct) * 100) : 0;
+        }
+
         function parseComparisonData(csvData) {
             const US_POPULATION = 329900000;
             const demoKeys = ['age', 'gender', 'ethnicity', 'income', 'education', 'relationship', 'sexual_orientation', 'parental_status', 'occupation', 'age_of_children', 'number_of_children'];
@@ -177064,7 +177090,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 const pct = brandPen || 0;
                 
                 const genPopPct = usGenPop > 0 ? (usGenPop / US_POPULATION) * 100 : 0;
-                const index = genPopPct > 0 ? Math.round((pct / genPopPct) * 100) : 0;
+                const index = _cmpRowIndex(row, pct, usGenPop, US_POPULATION);
 
                 if (category === 'SAMPLE SIZE') {
                     let chosen = rawNum || catShare || brandPen || 0;
@@ -177126,8 +177152,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     // values represent real Gen Pop reach. Falling back to catShare here would silently
                     // substitute a "share of category" number for "% of US population" - wrong units.
                     let genPopPct = usGenPop > 0 ? (usGenPop / 329900000) * 100 : 0;
-                    // Calculate Index = (brand pct / gen pop pct) * 100
-                    const index = genPopPct > 0 ? Math.round((pct / genPopPct) * 100) : 0;
+                    // The file states its own benchmark; see _cmpRowIndex.
+                    const _statedGp = parseFloat(row['Gen Pop Penetration']);
+                    if (isFinite(_statedGp) && _statedGp > 0) genPopPct = _statedGp;
+                    const index = _cmpRowIndex(row, pct, usGenPop, 329900000);
                     result.behavioral[category].push({ 
                         name: value, 
                         pct: pct, 
