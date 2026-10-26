@@ -581,7 +581,24 @@ def gate(text, body, history, ctx, user, uname, tid, via, persist, *, client_sur
         body = dict(body)
         body['_pm_correction'] = True
         subj = str(cont.get('subject') or (deliv or {}).get('subject') or '').strip()
-        if subj and not body.get('bind_subject') and not _sr.is_metric_phrase(subj):
+        if subj and _sr.is_metric_phrase(subj):
+            subj = ''
+        # Thread memory (Emmet Riley, Debi Pomerantz 2026-10-26): the names
+        # the correction pushes away are dropped from the thread for good
+        # and the thread's own subject stays pinned, so no later clarify,
+        # read or draft can bring the page back.
+        negated = [str(x) for x in ((cont.get('params') or {}).get('negated') or []) if str(x or '').strip()]
+        try:
+            from . import thread_subject as _ts
+            if negated:
+                _ts.drop(host, uname, tid, negated)
+            if subj and not _ts.is_dropped(subj):
+                _ts.pin(host, uname, tid, subj, source='correction')
+            elif subj:
+                subj = ''
+        except Exception as e:
+            _faults.note('turn_gate.thread_memory', e)
+        if subj and not body.get('bind_subject'):
             body['bind_subject'] = subj
         # the question the person is correcting was drawn by an ask of its
         # own (Mark Valdez 2026-10-20: the deck ask drew "Do you want this
@@ -601,6 +618,34 @@ def gate(text, body, history, ctx, user, uname, tid, via, persist, *, client_sur
                 except Exception as _fx:
                     _faults.note('turn_gate', _fx)
                 return {'text': new_text, 'body': body}
+        # A complaint about the conversation is never a go-ahead (Emmet
+        # Riley 2026-10-26: "okay but why do you keep brining up summers
+        # eve this is an indepdent pull" drafted a $275 build). "Why do you
+        # keep ...", "stop bringing up ...", "this has nothing to do with
+        # ...", "this is independent of ...": acknowledge in one line, and
+        # continue with what the reader asked for last, on the thread's
+        # subject, with no charge and no draft.
+        ct = str((cont.get('params') or {}).get('turn') or '')
+        if ct == 'why_keep' or negated:
+            ack = _ack_line(negated, page, subj, history, text)
+            last = ''
+            try:
+                from . import thread_subject as _ts2
+                last = _ts2.last_user_ask(history, skip_text=text)
+            except Exception as e:
+                _faults.note('turn_gate.last_ask', e)
+            if last:
+                body.pop('bind_subject', None)   # the pinned thread subject binds the lanes; an armed bind would skip them
+                try:
+                    host.ask_hint(route='correction', outcome='continued_last_ask', subject=subj or None)
+                except Exception as _fx:
+                    _faults.note('turn_gate', _fx)
+                return {'text': last, 'body': body, 'lead': ack, 'continued_from': text}
+            tail = (f"What would you like on {subj}? Ask the question or say what to pull and I will take it from there."
+                    if subj else "Tell me the subject or the question and I will take it from there.")
+            raw = {'success': True, 'action': 'answer', 'reply': f"{ack} {tail}".strip(), 'followups': [],
+                   'offer_deck': False, 'deck_angle': None, 'correction_ack': True, 'subject': subj or ''}
+            return _answer(raw, 'correction_ack', route='correction', outcome='acknowledged', **common)
         # no subject to continue on: the deterministic lanes still get the
         # turn (a deliverable lookup, a product fact, a status ask answer
         # corrections too); an empty reply becomes the one-question
@@ -611,6 +656,46 @@ def gate(text, body, history, ctx, user, uname, tid, via, persist, *, client_sur
             _faults.note('turn_gate', _fx)
         return {'text': text, 'body': body}
     return None
+
+
+def _display_name(key, page, history, text=''):
+    """The spelling a reader saw for a folded name: the page's when it is
+    the page, else the way the thread wrote it, else title case."""
+    k = ' '.join(str(key or '').split()).lower()
+    if not k:
+        return ''
+    if page and _sr._norm(page.split(' - ')[0]) == _sr._norm(k):
+        return str(page).split(' - ')[0]
+    rx = re.compile(r"\b" + r"\W+".join(re.escape(w) for w in k.split()) + r"\b", re.I)
+    for src in [str(text or '')] + [str(t.get('text') or t.get('content') or '') for t in reversed([x for x in (history or []) if isinstance(x, dict)])]:
+        m = rx.search(src)
+        if m and any(ch.isupper() for ch in m.group(0)):
+            return m.group(0)
+    return ' '.join(w[:1].upper() + w[1:] for w in k.split())
+
+
+def _ack_line(negated, page, subj, history, text=''):
+    """One line that drops the named page or subject and names the thread's
+    own subject. No apology, no story about what went wrong."""
+    names = []
+    for k in negated or []:
+        d = _display_name(k, page, history, text)
+        if d and not any(_sr._norm(d) == _sr._norm(x) for x in names) \
+                and not any(_sr._norm(d) in _sr._norm(x) and _sr._norm(d) != _sr._norm(x) for x in (negated or [])):
+            names.append(d)
+    if names:
+        shown = names[0] if len(names) == 1 else ', '.join(names[:-1]) + ' and ' + names[-1]
+        is_page = bool(page) and len(names) == 1 and _sr._norm(names[0]) == _sr._norm(str(page).split(' - ')[0])
+        verb = 'is' if len(names) == 1 else 'are'
+        if is_page:
+            ack = f"Understood. {shown} is only the profile open on your screen; it is out of this thread for good."
+        else:
+            ack = f"Understood. {shown} {verb} out of this thread for good."
+    else:
+        ack = "Understood."
+    if subj:
+        ack += f" This is {subj} on its own."
+    return ack
 
 
 def _prior_was_read(deliv):

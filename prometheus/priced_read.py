@@ -540,10 +540,15 @@ def custom_price(username=None, history=None, subject=''):
     followup = bool(subject) and prior_custom_on_subject(history, subject)
     if not followup and history:
         # the ask stayed on the thread's subject (a cohort within it, a
-        # second cut of the same read): the follow-up price applies
+        # second cut of the same read): the follow-up price applies. A
+        # different named subject is a new first ask at $100 (2026-10-21);
+        # the thread's remembered subject never prices it as a follow-up
         try:
             from . import subject_rules as _sr
-            for ts in (_sr.thread_subjects(history) or [])[:2]:
+            # the reads the thread's turns record, never the remembered
+            # conversation subject (prometheus.thread_subject): a pin says
+            # what the thread is about, not what was paid for
+            for ts in (_sr.thread_subjects(history, include_pin=False) or [])[:2]:
                 if prior_custom_on_subject(history, ts):
                     followup = True
                     break

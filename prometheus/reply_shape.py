@@ -28,6 +28,23 @@ _SCAFFOLD_RX = re.compile(
     r'headline|interpretive reads?|what this means|the numbers?|metrics)'
     r'\s*(?:\(([^)]{0,160})\))?\s*[:\-]?\s*(?:\*\*)?\s*$', re.I)
 _CAPS_HEADER_RX = re.compile(r'^\s*(?:\*\*)?([A-Z0-9][A-Z0-9 ,.\'’&/+%:$\-]{11,})(?:\*\*)?\s*$')
+# A section label glued to the end of a sentence line (2026-10-26, Emmet
+# Riley: "...high affinity audience. WHAT I HAVE IN FRONT OF ME RIGHT NOW"
+# then a bullet; "...single touch. ONE THING TO SETTLE"). Two or more
+# words in capitals after sentence punctuation, nothing after them.
+_INLINE_CAPS_TAIL_RX = re.compile(
+    r'^(?P<head>.*?[.!?:;])\s+(?P<label>[A-Z][A-Z0-9\'’&/+\-]*(?:[ ,]+[A-Z0-9][A-Z0-9\'’&/+\-]*){1,9})\s*:?\s*$')
+# A label naming the move rather than carrying a finding ("WHAT I HAVE IN
+# FRONT OF ME RIGHT NOW", "WHAT THE UVA PULL WILL CARRY", "ONE THING TO
+# SETTLE", "THE READ", "BOTTOM LINE"). These go; a capitals line that
+# states a finding ("SODA IS A CONQUEST CATEGORY HERE") is sentence-cased.
+_MOVE_LABEL_RX = re.compile(
+    r"^(?:WHAT\b|ONE (?:THING|QUESTION|MORE|NOTE|LAST|CALL)\b|TWO THINGS|THREE THINGS|"
+    r"THE (?:ONE|SHORT|LONG|QUICK|READ|ASK|CASE|PLAN|ANSWER|NUMBERS?|TAKEAWAY|BOTTOM|OPEN|NEXT|CALL|RECOMMENDATION|UPSHOT|GIST|POINT|DETAIL|SETUP|SET-UP|WINDOW|COST|PRICE)\b|"
+    r"HOW (?:TO|THIS|IT|I|WE|THAT)\b|WHY (?:THIS|IT|THAT)\b|WHERE (?:THIS|IT|TO|WE|THAT)\b|WHEN\b|WHO (?:THIS|IT|THEY|COUNTS)\b|"
+    r"NEXT (?:STEPS?|UP)\b|BOTTOM LINE|IN SHORT|IN SUM|SO WHAT|TO SETTLE|OPEN QUESTIONS?|STILL OPEN|"
+    r"KEY (?:POINTS?|TAKEAWAYS?|NUMBERS?|FACTS?)\b|BEFORE (?:WE|YOU|I)\b|ON (?:QUALIFICATION|THE WINDOW|THE COST|COST|PRICE|THE PULL|SIZE|SIZING)\b|"
+    r"MY (?:READ|TAKE|CALL)\b|YOUR CALL|UP TO YOU|RIGHT NOW\b|IN FRONT OF ME)", re.I)
 _LONG_PAREN_RX = re.compile(r'\s*\(([^()]{90,}?)\)')
 _SMALL_WORDS = {'a', 'an', 'the', 'of', 'on', 'in', 'and', 'or', 'to', 'for', 'by', 'with',
                 'at', 'from', 'vs', 'per', 'this', 'that', 'these', 'those', 'us', 'tvod',
@@ -66,6 +83,36 @@ def _is_caps_header(line):
     return len(words) >= 2 and body.upper() == body
 
 
+def _is_move_label(label):
+    """A capitals label that names the move, not a finding."""
+    s = ' '.join(str(label or '').strip().strip('*').split()).strip(' :-')
+    return bool(s) and bool(_MOVE_LABEL_RX.match(s))
+
+
+def _caps_words(label):
+    s = str(label or '')
+    letters = re.sub(r'[^A-Za-z]', '', s)
+    words = [w for w in re.split(r'[\s,]+', s.strip()) if re.search(r'[A-Za-z]', w)]
+    return words if (len(letters) >= 8 and len(words) >= 2 and s.upper() == s) else []
+
+
+def split_inline_label(line):
+    """('sentence text', 'LABEL') when a section label in capitals rides
+    the end of a sentence line; (line, '') otherwise. Figures, acronyms
+    and a short all-caps name in running text are never a label (two or
+    more words, eight or more letters, after the sentence's own stop)."""
+    m = _INLINE_CAPS_TAIL_RX.match(str(line or ''))
+    if not m:
+        return line, ''
+    label = m.group('label').strip()
+    if not _caps_words(label):
+        return line, ''
+    # a trailing acronym pair in a sentence ("... on CBS and NBC.") ends
+    # with the sentence's stop and never matches; here the stop is BEFORE
+    # the label, so the capitals are a heading glued to the line
+    return m.group('head').rstrip(), label
+
+
 def shape(reply):
     """The plain-English shaped reply. Figures untouched."""
     text = str(reply or '')
@@ -73,6 +120,17 @@ def shape(reply):
         return reply
     try:
         lines = text.split('\n')
+        # a label glued to the end of a sentence line becomes its own line
+        # first, so the header rules below see it (2026-10-26)
+        split_lines = []
+        for ln in lines:
+            head, label = split_inline_label(ln)
+            if label:
+                split_lines.append(head)
+                split_lines.append(label)
+            else:
+                split_lines.append(ln)
+        lines = split_lines
         out_lines = []
         for ln in lines:
             if _SCAFFOLD_RX.match(ln):
@@ -92,6 +150,13 @@ def shape(reply):
                     out_lines.append(q)
                 continue
             if _is_caps_header(ln):
+                if _is_move_label(ln):
+                    # a label naming the move ("WHAT I HAVE IN FRONT OF ME
+                    # RIGHT NOW", "ONE THING TO SETTLE") carries nothing a
+                    # reader needs: it goes, and the paragraph break stays
+                    if out_lines and out_lines[-1].strip():
+                        out_lines.append('')
+                    continue
                 out_lines.append(_sentence_case(ln))
                 continue
             out_lines.append(ln)

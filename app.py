@@ -56525,16 +56525,17 @@ def _estimated_people(sample):
 
 def _estimated_audience_sentence(est):
     """Human sentence for the estimated band. The word 'estimated' is
-    mandatory (Jenna 2026-08-24). The band is the planned sample inside
-    the 10 million and says so; the US people it projects to ride beside
-    it (2026-10-20 Jenna: a brief quoted '729,592 to 991,827 individuals'
-    for a universe that projected 28.8M US people, and the reader could
-    not tell which figure to trust against a 9M creator read)."""
+    mandatory (Jenna 2026-08-24). The reader hears US people and nothing
+    else: the count behind it never reaches a reader (Jenna 2026-10-26,
+    Emmet Riley's brief read "158,305 to 220,662 inside the 10 million
+    sample, about 5,222,482 to 7,279,639 US people"; the first figure and
+    the words around it are internal). The US people figures still derive
+    from the same band, so the brief, the partner surfaces and the
+    delivered file agree (2026-10-20)."""
     if not est:
         return ''
     lo_us, hi_us = _estimated_people(est['low']), _estimated_people(est['high'])
-    return (f"Estimated audience: {est['low']:,} to {est['high']:,} "
-            f"inside the 10 million sample, about {lo_us:,} to {hi_us:,} US people.")
+    return f"Estimated audience: about {lo_us:,} to {hi_us:,} US people."
 
 
 # Pin the first estimate quoted for a prompt for the draft-cache TTL so

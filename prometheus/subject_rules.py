@@ -72,7 +72,8 @@ __all__ = ['explicit_build_subject', 'conversational_turn', 'priced_handoff_allo
            'page_rejected_in_thread', 'thread_subjects', 'which_subject_payload',
            'CONVERSATIONAL_NOTE', 'strip_lead_negation', 'reading_subject', 'current_reading_subject',
            'definition_turn', 'Subject', 'bind', 'clean_display', 'is_metric_phrase',
-           'nested_audience', 'qualified_audience', 'clarify_for', 'wants_breakdown', 'display_for']
+           'nested_audience', 'qualified_audience', 'clarify_for', 'wants_breakdown', 'display_for',
+           'pinned_thread_subject', 'pin_beats_page', 'pinned_bind_for']
 
 # A pointer at what is on the screen, never a subject of its own.
 _DEIXIS = frozenset(('<page>', 'this', 'that', 'it', 'this audience', 'this profile',
@@ -207,8 +208,14 @@ _WHY_KEEP_RX = re.compile(
     r"\b(?:why (?:do|does|did|would|are) (?:you|it|this|prometheus) (?:keep|still|always|again)|"
     r"why (?:do you|does it) keep|why (?:are|is) (?:you|it) (?:bringing|pulling|using|defaulting)|"
     r"(?:i'?m|i am) (?:unclear|confused|not sure|unsure) (?:why|what|how)|"
-    r"stop (?:bringing|pulling|using|defaulting|suggesting|offering)|"
-    r"(?:keep|keeps) (?:bringing|pulling|coming) (?:up|back)|"
+    r"stop (?:bringing|pulling|using|defaulting|suggesting|offering|mentioning)|"
+    r"(?:keep|keeps) (?:bringing|brining|pulling|coming) (?:up|back)|"
+    # "this has nothing to do with Colin and Samir or Mark Rober" (Debi 2026-10-26),
+    # "this is an independent pull" (Emmet 2026-10-26): the page or a name is
+    # pushed out of the conversation, never an order
+    r"(?:has|have|had|is|was) nothing to do with|nothing to do with|"
+    r"(?:is|was|'s) (?:an? )?(?:independent|separate|unrelated|different) (?:pull|ask|question|request|read|build|profile|thing|subject|topic)|"
+    r"independent of|unrelated to|"
     r"i (?:did ?n[o']?t|never) (?:say|mention|ask (?:about|for)) )", re.I)
 _CLARIFY_PREV_RX = re.compile(
     r"^\W*(?:what do you mean|i mean|i meant|to clarify|clarif(?:y|ication)|let me (?:clarify|rephrase|be clear)|"
@@ -319,10 +326,19 @@ def _page_tokens(page):
 def page_rejected_in_thread(history, page):
     """True when a USER turn in the thread said no to the page: "not
     interested in salish matter", "no, not Salish Matter", "instead of
-    Salish Matter", "why do you keep bringing up Salish matter"."""
+    Salish Matter", "why do you keep bringing up Salish matter"; or when
+    the thread's memory already holds the name as dropped (a correction
+    in an earlier turn, kept server-side whoever wrote the thread;
+    Emmet Riley 2026-10-26)."""
     base, toks = _page_tokens(page)
     if not toks:
         return False
+    try:
+        from . import thread_subject as _ts
+        if _ts.is_dropped(base):
+            return True
+    except Exception:
+        pass
     key = ' '.join(toks)
     for turn in (history or []):
         if not isinstance(turn, dict) or str(turn.get('role') or '') != 'user':
@@ -331,13 +347,48 @@ def page_rejected_in_thread(history, page):
         if key not in low:
             continue
         win = low
-        if re.search(r"\b(?:not|no|never|nothing to do with|has nothing|instead of|rather than|other than|besides|without|stop|unclear why|why (?:do|does|did|would) (?:you|it) keep|don t want|do not want|didn t (?:ask|say|mean|want)|did not (?:ask|say|mean|want))\b", win):
+        if re.search(r"\b(?:not|no|never|nothing to do with|has nothing|instead of|rather than|other than|besides|without|stop|unclear why|why (?:do|does|did|would) (?:you|it) keep|don t want|do not want|didn t (?:ask|say|mean|want)|did not (?:ask|say|mean|want)|independent|unrelated|separate|forget|drop)\b", win):
             # the negation sits in the same sentence as the page name
             for sent in re.split(r"[.?!]+", str(turn.get('text') or turn.get('content') or '')):
                 s = _norm(sent)
-                if key in s and re.search(r"\b(?:not|no|never|nothing to do with|has nothing|instead of|rather than|other than|besides|without|stop|unclear why|why (?:do|does|did|would) (?:you|it) keep|don t want|do not want|didn t|did not)\b", s):
+                if key in s and re.search(r"\b(?:not|no|never|nothing to do with|has nothing|instead of|rather than|other than|besides|without|stop|unclear why|why (?:do|does|did|would) (?:you|it) keep|don t want|do not want|didn t|did not|independent|unrelated|separate|forget|drop)\b", s):
                     return True
     return False
+
+
+def pinned_thread_subject(strong_only=False):
+    """The subject the reader set on the current thread ("the subject is
+    the university of virginia"), or the one Prometheus itself quoted or
+    drafted there, as a reader sees it; '' outside a request or when
+    nothing is pinned (prometheus.thread_subject)."""
+    try:
+        from . import thread_subject as _ts
+        return _ts.pinned_subject(strong_only=strong_only)
+    except Exception:
+        return ''
+
+
+def pin_beats_page(page):
+    """True when the reader set a subject in this thread and it is not
+    the open page: the page is context only from then on, never offered
+    and never a default (Emmet Riley 2026-10-26)."""
+    pin = pinned_thread_subject(strong_only=True)
+    return bool(pin) and not same_entity(pin, str(page or '').split(' - ')[0])
+
+
+def pinned_bind_for(text, history=None, page=''):
+    """The pinned thread subject when the words themselves name no
+    subject, '' otherwise. Words always win over the thread."""
+    pin = pinned_thread_subject()
+    if not pin:
+        return ''
+    try:
+        s = bind(text, history, page)
+        if s and s.source == 'words':
+            return ''
+    except Exception:
+        pass
+    return pin
 
 
 _READING_RX = re.compile(r"^On it:\s*reading\s+(?P<what>.+?)\s+now\.?", re.I)
@@ -345,9 +396,19 @@ _STARTED_RX = re.compile(r"^Started\s+(?P<what>.+?)\s*(?:\(number|\.|$)", re.I)
 
 
 def bound_thread_subject():
-    """The project the current thread is bound to (the conversation
-    follows the project, Debi Pomerantz 2026-10-21), as the label a
-    reader sees; '' outside a bound thread or outside a request."""
+    """The subject the current thread is about, as the label a reader
+    sees: the subject the reader set or Prometheus quoted in the thread
+    (prometheus.thread_subject, Emmet Riley 2026-10-26) first, else the
+    project the thread is bound to (the conversation follows the
+    project, Debi Pomerantz 2026-10-21); '' outside a request or when
+    the thread has neither."""
+    try:
+        from . import thread_subject as _ts
+        pin = _ts.pinned_subject()
+        if pin:
+            return pin
+    except Exception:
+        pass
     try:
         from flask import g as _g
         b = getattr(_g, '_pm_thread_binding', None)
@@ -358,8 +419,11 @@ def bound_thread_subject():
     return ''
 
 
-def thread_subjects(history, page='', limit=4):
+def thread_subjects(history, page='', limit=4, include_pin=True):
     """The subjects this thread has been about, most recent first: the
+    subject the reader set or Prometheus quoted in the thread (the pin,
+    prometheus.thread_subject; ``include_pin=False`` leaves it out for a
+    caller that wants the turns' own record, the follow-up price), the
     project the thread is bound to (a bound thread's subject IS the
     thread subject, so a question in the Golden Axe thread is about
     Golden Axe whatever tab is open), then the reads Prometheus started
@@ -372,8 +436,22 @@ def thread_subjects(history, page='', limit=4):
     _, ptoks = _page_tokens(page)
     pkey = ' '.join(ptoks)
     bound = bound_thread_subject()
+    if not include_pin:
+        bound = ''
+        try:
+            from flask import g as _g0
+            _b0 = getattr(_g0, '_pm_thread_binding', None)
+            if isinstance(_b0, dict) and _b0.get('subject_key'):
+                bound = ' '.join(str(_b0.get('subject_label') or '').split()).strip(' .,;:')
+        except Exception:
+            bound = ''
     if bound and pkey == _norm(bound):
         pkey = ''        # the page is the project: not an exclusion
+    try:
+        from . import thread_subject as _ts
+        _dropped = _ts.is_dropped       # a name the reader pushed out of the thread never comes back as its subject
+    except Exception:
+        _dropped = lambda _n: False  # noqa: E731
 
     def _add(name):
         name = ' '.join(str(name or '').split()).strip(' .,;:')
@@ -381,6 +459,8 @@ def thread_subjects(history, page='', limit=4):
             return
         k = _norm(name)
         if not k or k in seen or (pkey and k == pkey):
+            return
+        if _dropped(name):
             return
         seen.add(k)
         out.append(name)
@@ -465,7 +545,9 @@ def open_screen_question(text, page, history, *, deck=False, what='this'):
     plain one-tap confirm on the page). The options carry the deck flag
     so the deck lane's memory confirm re-runs as a deck."""
     page = str(page or '').strip()
-    rejected = page_rejected_in_thread(history, page)
+    # a subject the reader set in this thread that is not the page puts
+    # the page out of the question for good (Emmet Riley 2026-10-26)
+    rejected = page_rejected_in_thread(history, page) or pin_beats_page(page)
     # a thread subject that IS the page ("farmlink" with The Farmlink
     # Project open) is not a second option; with nothing else in the
     # thread there is no question to ask (eriley 2026-10-25 drew "The
@@ -473,7 +555,9 @@ def open_screen_question(text, page, history, *, deck=False, what='this'):
     subs = [x for x in thread_subjects(history, page) if not same_entity(x, page)]
     if not rejected and not subs:
         return None
-    ws = which_subject_payload(page, subs, what=what)
+    # a rejected page is never a chip (page_rejected=True); the thread's
+    # own subjects are the question
+    ws = which_subject_payload(page, subs, what=what, page_rejected=rejected)
     opts = ws['options']
     if deck:
         opts = [dict(o, deck=True) for o in opts]
@@ -518,24 +602,28 @@ def same_entity(a, b):
     return na == nb or (min(len(na), len(nb)) >= 5 and (na in nb or nb in na))
 
 
-def which_subject_payload(page, subjects, *, what='this'):
+def which_subject_payload(page, subjects, *, what='this', page_rejected=False):
     """The one-tap which-subject question when the words name no subject:
     the thread's subjects first, the page last and labeled as the open
     profile, then 'Something else'. Never a yes/no on the page alone, and
-    never the same name twice (2026-10-26)."""
+    never the same name twice (2026-10-26). A page the reader has said no
+    to in the thread (``page_rejected``) is not a chip at all: it is
+    never offered again (Emmet Riley 2026-10-26)."""
     opts = []
     for s in (subjects or []):
         if any(same_entity(s, o['subject']) for o in opts) or (page and same_entity(s, page)):
             continue
         opts.append({'label': f'On {s}', 'subject': s})
-    if page:
+    if page and not page_rejected:
         opts.append({'label': f'{page} (open on your screen)', 'subject': page})
     names = [o['subject'] for o in opts]
     if len(names) >= 2:
         lead = ', '.join(names[:-1]) + f' or {names[-1]}'
         reply = f'Which subject should {what} be on: {lead}?'
-    elif names:
+    elif names and page and not page_rejected:
         reply = f'Which subject should {what} be on? {names[0]} is what is open; name another if you mean something else.'
+    elif names:
+        reply = f'Which subject should {what} be on? {names[0]} is what this thread is about; name another if you mean something else.'
     else:
         reply = f'Which subject should {what} be on?'
     return {'reply': reply, 'options': opts,
@@ -1201,6 +1289,15 @@ def bind_or_continue(text, ctx, history, ask_hint=None):
                 if callable(ask_hint):
                     ask_hint(route='screen_bind', outcome='continued_thread_subject', subject=anaphor)
                 return {}
+            # the subject the reader set in this thread ("the subject is
+            # the university of virginia") binds an ask that names nothing,
+            # whatever profile is open: the page is context only from the
+            # moment they said so (Emmet Riley 2026-10-26)
+            pin = pinned_thread_subject(strong_only=True)
+            if pin and not _same_family(pin, page, norm):
+                if callable(ask_hint):
+                    ask_hint(route='screen_bind', outcome='bound_thread_pin', subject=pin)
+                return {'route': 'bind', 'subject': pin, 'qualifiers': {}}
         if s and s.source == 'words' and s.kind in ('title', 'brand', 'person', 'audience') and not _same_family(s.display, page, norm):
             # "people who watched the Among Us series on Paramount+" with
             # Paramount+ open binds Among Us; the page rides as the

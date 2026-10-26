@@ -280,3 +280,40 @@ def settle_subject(spec_draft, text, catalog, body, deps):
     except Exception:
         traceback.print_exc()
     return spec_draft, None
+
+
+def correction_hold(text, history=None):
+    """A complaint about the conversation that reached the build intake
+    is never a draft (Emmet Riley 2026-10-26: "okay but why do you keep
+    brining up summers eve this is an indepdent pull" drafted a $275
+    build). A correction, a why-do-you-keep or a nothing-to-do-with that
+    carries no fresh order gets one plain line on the thread's subject
+    and no card. Returns the guidance payload, or None when the words are
+    an order or a plain ask."""
+    try:
+        from prometheus import subject_rules as _sr
+        from prometheus import thread_subject as _ts
+        t = ' '.join(str(text or '').split())
+        if not t or not _sr.conversational_turn(t) or _sr.priced_handoff_allowed(t):
+            return None
+        subj = _sr.pinned_thread_subject() or ''
+        if not subj:
+            for cand in _sr.thread_subjects(history or [], ''):
+                if cand and not _ts.is_dropped(cand) and not _sr.is_metric_phrase(cand):
+                    subj = cand
+                    break
+        dropped = _ts.dropped_names(t)
+        shown, keep = '', []
+        if dropped:
+            from prometheus.turn_gate import _display_name as _dn
+            keep = [d for d in dropped if not any(d != o and d in o for o in dropped)]
+            names = [_dn(d, '', history, t) for d in keep[:3]]
+            shown = names[0] if len(names) == 1 else ', '.join(names[:-1]) + ' and ' + names[-1]
+        lead = (f"Understood. {shown} {'is' if len(keep) == 1 else 'are'} out of this thread for good."
+                if shown else "Understood. Nothing is drafted from that.")
+        tail = (f" This is {subj} on its own. Ask the question or say what to pull on it and I will take it from there."
+                if subj else " Tell me the subject or the question and I will take it from there.")
+        return {'success': False, 'guidance': True, 'error': lead + tail, 'followups': [], 'correction_ack': True}
+    except Exception:
+        traceback.print_exc()
+        return None

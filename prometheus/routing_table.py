@@ -122,6 +122,62 @@ ROWS = [
         'counter': [('who watches love island?', False)],
     },
     {
+        'id': 'dataset_build', 'surface': 'interpret',
+        'reason': 'dataset_build', 'client_action': 'interpret',
+        'note': 'A dataset on an audience is a Profile IQ build (Emmet Riley '
+                '2026-10-26: "Can you help me query a dataset on UVA consumers '
+                'for the unversity of virgina https://www.virginia.edu/" drew '
+                'the $100 custom-read quote). Query / pull / find / get a '
+                'dataset (or data) on an audience goes to the build intake; a '
+                'URL in the words is the brand input (prometheus.links). A '
+                'question about data we hold stays a lookup.',
+        'examples': [('Can you help me query a dataset on UVA consumers for the unversity of virgina https://www.virginia.edu/', False),
+                     ('Can you help me query a dataset on UVA consumers for the unversity of virgina https://www.virginia.edu/', True),
+                     ('find a dataset for Chipotle buyers', False),
+                     ("okay I'm trying to find a dataset for travel pros who book cruises", False),
+                     ('can you pull data on nike buyers please', True)],
+        'counter': [('how much data do you have on chipotle buyers?', False),
+                    ('what is the fox news dataset pulled from', False),
+                    ('do you have data on nike?', True),
+                    ('pull data on the office viewers by month', False)],
+    },
+    {
+        'id': 'subject_set', 'surface': 'analyze',
+        'reason': 'subject_set', 'client_action': 'analyze',
+        'host_only': True,
+        'note': 'A subject the reader states ("the subject is the university '
+                'of virginia") is pinned on the thread for good and the pull '
+                'on it is laid out in plain words; the open page is context '
+                'only from then on and is never offered again (Emmet Riley '
+                '2026-10-26). Served by the ask service lane, not decide().',
+        'examples': [], 'counter': [],
+    },
+    {
+        'id': 'pull_discussion', 'surface': 'analyze',
+        'reason': 'pull_discussion', 'client_action': 'analyze',
+        'host_only': True,
+        'note': '"Can we discuss the exact pull first?", "walk me through the '
+                'pull", "what would this include", "let\'s talk through it '
+                'first": a discussion of the pull on the thread\'s subject (who '
+                'counts, the window, what the file carries, the cuts, the '
+                'cost, nothing charged until approval, what to adjust). Never '
+                'a quote, a draft or a clarify about the page (Emmet Riley '
+                '2026-10-26). Served by the ask service lane.',
+        'examples': [], 'counter': [],
+    },
+    {
+        'id': 'correction_no_build', 'surface': 'analyze',
+        'reason': 'correction_no_build', 'client_action': 'analyze',
+        'host_only': True,
+        'note': 'A correction is never a go-ahead: a turn the gate read as a '
+                'correction ("why do you keep bringing up X", "this has '
+                'nothing to do with X") that would have reached the build '
+                'intake is answered on the analyze surface instead (Emmet '
+                'Riley 2026-10-26 drafted a $275 build from his complaint). '
+                'Set by the ask service, not decide().',
+        'examples': [], 'counter': [],
+    },
+    {
         'id': 'short_reply', 'surface': 'interpret',
         'reason': 'short_reply:', 'client_action': 'short_reply',
         'note': 'A bare yes / no / number / "approved" with nothing '

@@ -240,13 +240,24 @@ def stash_binding(uname, tid=None):
     raises."""
     try:
         from flask import g as _g
+        from . import thread_binding as _tb
+        from . import thread_subject as _ts
+        idx = threads_index(uname)
         t = str(tid or '').strip() or None
-        if t and not thread_exists(uname, t):
+        if t and not any(x.get('id') == t for x in idx.get('threads', [])):
             t = None
         if not t:
-            t = active_thread_id(uname)
+            t = idx.get('active') or (idx['threads'][0]['id'] if idx.get('threads') else None)
         _g._pm_thread_id = t
-        _g._pm_thread_binding = thread_binding(uname, t) if t else None
+        try:
+            _g._pm_thread_binding = _tb.binding_of_thread(idx, t) if t else None
+        except Exception as _fx:
+            _faults.note('service', _fx)
+            _g._pm_thread_binding = None
+        # the subject the reader set in this thread, and the names they
+        # dropped, ride the request too (prometheus.thread_subject,
+        # Emmet Riley 2026-10-26); every clarify consults it before the page
+        _ts.stash(host, uname, t, idx=idx)
         return _g._pm_thread_binding
     except Exception as _fx:
         _faults.note('service', _fx)
@@ -437,6 +448,7 @@ LANE_ORDER = (
     'offer_acceptance', 'priced_offer_acceptance', 'offer_answer', 'referents', 'document', 'confirm_answer', 'short_reply',
     'spend_cap_precheck',
     'continuation',
+    'subject_set', 'pull_discussion', 'dataset_build',
     'talent_list_acceptance', 'meta_check', 'standing', 'where_watched', 'sizing_quote', 'status_fast',
     'reader', 'pricing', 'design_request', 'spend_cap', 'thread_followups', 'subiq_library', 'catalog',
     'sizing_fallback', 'status', 'deliverable_lookup', 'email_file', 'brand_coverage',
@@ -445,11 +457,13 @@ LANE_ORDER = (
     'work_gate',
 )
 DETERMINISTIC_LANES = frozenset((
+    'subject_set', 'pull_discussion', 'dataset_build',
     'meta_check', 'standing', 'where_watched', 'sizing_quote', 'status_fast', 'reader', 'pricing', 'design_request',
     'thread_followups', 'subiq_library', 'catalog', 'sizing_fallback', 'status', 'deliverable_lookup', 'email_file',
     'brand_coverage', 'definitions', 'capability'))
-NEVER_PRICED_LANES = frozenset(('where_watched', 'status_fast', 'status', 'pricing', 'catalog', 'definitions',
-                                'deliverable_lookup', 'email_file', 'brand_coverage', 'capability'))
+NEVER_PRICED_LANES = frozenset(('subject_set', 'pull_discussion', 'where_watched', 'status_fast', 'status', 'pricing',
+                                'catalog', 'definitions', 'deliverable_lookup', 'email_file', 'brand_coverage',
+                                'capability'))
 
 
 def lane_markers(source=None):
@@ -507,6 +521,15 @@ def ask(user, body, *, via='session'):
     history = body.get('history')
     if not isinstance(history, list):
         history = load_thread(uname, tid) if tid else []
+    # the thread's pinned subject applies to the conversation in hand: a
+    # history with no trace of it (a cleared chat, another conversation
+    # under the same id) gets none (prometheus.thread_subject)
+    try:
+        from . import thread_subject as _tsc
+        _tsc.scope_to_history(history if isinstance(body.get('history'), list) else None,
+                              extra=(text, body.get('_pm_continued_from')))
+    except Exception as _fx:
+        _faults.note('service', _fx)
 
     ctx = body.get('context')
     if ctx is None:
@@ -863,6 +886,21 @@ def ask(user, body, *, via='session'):
     # open tab, a fresh priced offer or a calm line. The same question
     # coming back after a reply the reader did not accept takes the
     # other path (I7); the prior ask is graded failed in real time.
+    # A subject the reader states ("the subject is the university of
+    # virginia") is pinned on the thread before anything routes, so the
+    # gate, every clarify and every lane read it ahead of the open page
+    # from this turn on (Emmet Riley 2026-10-26). The statement itself is
+    # answered in the subject_set lane below.
+    _stated_subject = ''
+    if referent_decision is None and not _armed(body) and not body.get('_meta_replay'):
+        try:
+            from . import thread_subject as _ts0
+            _stated_subject = _ts0.statement_subject(text)
+            if _stated_subject and uname and tid:
+                _ts0.pin(host, uname, tid, _stated_subject, source='statement')
+        except Exception as e:
+            _faults.note('service.thread_subject', e)
+            _stated_subject = ''
     if referent_decision is None and not _armed(body) and not body.get('_meta_replay'):
         try:
             from . import turn_gate as _tg
@@ -875,9 +913,165 @@ def ask(user, body, *, via='session'):
         if _tg_out is not None:
             if isinstance(_tg_out, tuple):
                 return _tg_out
+            if _tg_out.get('lead'):
+                # A correction continues with what the reader asked for last
+                # (Emmet Riley 2026-10-26): the gate acknowledged the name it
+                # dropped; the last real ask runs again through the door on
+                # the thread's pinned subject, the acknowledgement in front.
+                # Never a draft, never a quote from the complaint itself.
+                _rb = {k: v for k, v in dict(_tg_out.get('body') or body).items()
+                       if k not in _ARMED_BODY_KEYS and k not in _ANALYZE_PASSTHROUGH and k != 'extra'}
+                env, st = ask(user, dict(_rb, text=str(_tg_out['text']), _meta_replay=True, persist=False,
+                                         _pm_correction=True, _pm_continued_from=text), via=via)
+                lead = str(_tg_out['lead']).strip() + ' '
+                env['text'] = lead + str(env.get('text') or '')
+                _r = env.get('raw') if isinstance(env.get('raw'), dict) else env.get('_raw')
+                if isinstance(_r, dict):
+                    for k in ('reply', 'error'):
+                        if _r.get(k):
+                            _r[k] = lead + str(_r[k])
+                            break
+                    _r['correction_continued'] = str(_tg_out.get('continued_from') or '')[:200]
+                env['decision'] = dict(env.get('decision') or {}, continued_after_correction=True)
+                _persist_turn(persist, uname, tid, history, text, env, _r or {}, str(env.get('surface') or 'analyze'))
+                return env, st
             # a rewrite: the gate re-bound the text / body and lets the lanes run
             text = str(_tg_out.get('text') or text)
             body = dict(_tg_out.get('body') or body)
+
+    # lane: subject_set
+    # "the subject is the university of virginia" (Emmet Riley 2026-10-26,
+    # Summers Eve open on his screen). The statement sets the thread's
+    # subject for good; the reply lays out the pull on it in plain words
+    # (who counts, the window, what the file carries, the cuts, the cost,
+    # nothing charged until approval) and asks what to adjust. No model
+    # call, no quote, no draft, never the page.
+    if referent_decision is None and not _armed(body) and not body.get('_meta_replay') and _stated_subject:
+        _ss_raw = None
+        try:
+            from . import thread_subject as _ts2
+            from . import pull_discussion as _pdx
+            # the gate may have rewritten a chip answer into the question it
+            # answered; the lane only speaks when the statement is the turn
+            if _ts2.statement_subject(text) == _stated_subject:
+                _ss_raw = _pdx.answer('walk me through the pull', uname, tid, history, ctx, host=host, user=user)
+        except Exception as e:
+            _faults.note('service.subject_set', e)
+            _ss_raw = None
+        if _ss_raw and _ss_raw.get('reply'):
+            _ss_raw = dict(_ss_raw, reply=f"Logged: the subject is {_stated_subject}.\n\n{_ss_raw['reply']}",
+                           subject=_stated_subject, subject_set=True)
+            decision = {'surface': 'analyze', 'mode': None, 'reason': 'subject_set', 'client_hint': None}
+            _out = _interpret_shape(_ss_raw) if _client_surface == 'interpret' else _ss_raw
+            if _client_surface == 'interpret':
+                _out['followups'] = list(_ss_raw.get('followups') or [])
+            try:
+                host.ask_hint(route='subject_set', outcome='answered', subject=_stated_subject)
+            except Exception as _fx:
+                _faults.note('service', _fx)
+            env = envelope.wrap(_out, surface='analyze', decision=decision, thread_id=tid, via=via)
+            _persist_turn(persist, uname, tid, history, text, env, _out, 'analyze')
+            return env, 200
+
+    # lane: pull_discussion
+    # "cna we discuss the exact pull first?" (Emmet Riley 2026-10-26, asked
+    # twice: a which-one question that offered the page, then the same
+    # $100 quote). A request to talk through the pull before it runs is a
+    # discussion: the pull described in plain words on the thread's
+    # subject, the brief already drafted reused, what to adjust asked.
+    # Nothing is charged by this lane; never a quote, never a draft.
+    if referent_decision is None and not _armed(body):
+        try:
+            from . import pull_discussion as _pd
+            _pd_raw = _pd.answer(text, uname, tid, history, ctx, host=host, user=user)
+        except Exception as e:
+            _faults.note('service.pull_discussion', e)
+            _pd_raw = None
+        if _pd_raw:
+            decision = {'surface': 'analyze', 'mode': None, 'reason': 'pull_discussion', 'client_hint': None}
+            _out = _interpret_shape(_pd_raw) if _client_surface == 'interpret' else _pd_raw
+            if _client_surface == 'interpret':
+                _out['followups'] = list(_pd_raw.get('followups') or [])
+                if _pd_raw.get('memory_confirm'):
+                    _out['memory_confirm'] = _pd_raw['memory_confirm']
+            try:
+                host.ask_hint(route='pull_discussion',
+                              outcome='answered' if _pd_raw.get('subject') else 'asked_audience',
+                              subject=str(_pd_raw.get('subject') or '') or None)
+            except Exception as _fx:
+                _faults.note('service', _fx)
+            env = envelope.wrap(_out, surface='analyze', decision=decision, thread_id=tid, via=via)
+            _persist_turn(persist, uname, tid, history, text, env, _out, 'analyze')
+            return env, 200
+
+    # lane: dataset_build
+    # "Can you help me query a dataset on UVA consumers for the unversity
+    # of virgina https://www.virginia.edu/" (Emmet Riley 2026-10-26, drew
+    # the $100 custom-read quote). A dataset on an audience IS a Profile
+    # IQ profile: the order goes to the build intake with the URL as the
+    # brand input (prometheus.links carries it onto the draft). The
+    # audience named becomes the thread's subject. A widget sitting on
+    # its analyze surface is handed to its build flow (it cannot render
+    # a brief from here); every other client runs the intake now.
+    if referent_decision is None and not _armed(body) and not body.get('_meta_replay'):
+        try:
+            from . import dataset_ask as _dsa
+            _ds = _dsa.parse(text)
+        except Exception as e:
+            _faults.note('service.dataset_ask', e)
+            _ds = None
+        if _ds:
+            try:
+                from . import thread_subject as _ts1
+                if uname and tid:
+                    # the audience the order names is the thread's subject
+                    # (an order outranks a quote or a draft, never a statement)
+                    _ts1.pin(host, uname, tid, _ds['subject'], source='order')
+            except Exception as e:
+                _faults.note('service.thread_subject', e)
+            decision = {'surface': 'interpret', 'mode': None, 'reason': 'dataset_build', 'client_hint': None}
+            if _client_surface == 'analyze':
+                raw = {'success': True, 'action': 'build_profile', 'route_hint': 'interpret', 'reply': '',
+                       'dataset_build': {'subject': _ds['subject'], 'brand_input_hint': _ds.get('brand_input_hint') or ''}}
+                try:
+                    host.ask_hint(route='handoff', outcome='build_flow', subject=_ds['subject'])
+                except Exception as _fx:
+                    _faults.note('service', _fx)
+                return envelope.wrap(raw, surface='analyze', decision=dict(decision, reason='handoff_to_build_flow'),
+                                     thread_id=tid, via=via), 200
+            try:
+                host.ask_hint(route='prometheus/ask:interpret', subject=_ds['subject'])
+            except Exception as _fx:
+                _faults.note('service', _fx)
+            gate_resp = _gate_for('interpret', user)
+            if gate_resp is not None:
+                raw, status = _unpack(gate_resp)
+                return envelope.wrap(raw, surface='interpret', decision=decision, thread_id=tid, via=via), status
+            try:
+                resp = host.interpret_core(user, _interpret_body(dict(body, surface='interpret'), text, history, tid), text, history)
+            except Exception as e:
+                try:
+                    host.error_email('prometheus/ask:interpret', e)
+                except Exception as _fx:
+                    _faults.note('service', _fx)
+                raw, status = host.calm_payload(), 200
+            else:
+                raw, status = _unpack(resp)
+            if isinstance(raw, dict):
+                raw['dataset_build'] = {'subject': _ds['subject'], 'brand_input_hint': _ds.get('brand_input_hint') or ''}
+                try:
+                    # the brief resolves the audience to its name ("University
+                    # of Virginia" for "UVA consumers for the unversity of
+                    # virgina"); that spelling is the thread's subject
+                    _dsub = str(((raw.get('spec_draft') or {}) if isinstance(raw.get('spec_draft'), dict) else {}).get('subject') or '').strip()
+                    if _dsub and uname and tid:
+                        from . import thread_subject as _ts3
+                        _ts3.pin(host, uname, tid, _dsub, source='order')
+                except Exception as e:
+                    _faults.note('service.thread_subject', e)
+            env = envelope.wrap(raw, surface='interpret', decision=decision, thread_id=tid, via=via)
+            _persist_turn(persist, uname, tid, history, text, env, raw, 'interpret')
+            return env, status
 
     # The Reader (2026-10-14, Jenna: "make prometheus closer to your level
     # of intelligence in understanding what is being asked"). One
@@ -1562,6 +1756,19 @@ def ask(user, body, *, via='session'):
             if _stripped != text:
                 text = _stripped   # the question itself reaches the answer path
                 body = dict(body, text=text)
+    except Exception as _fx:
+        _faults.note('service', _fx)
+    # A correction is never a go-ahead (Emmet Riley 2026-10-26: "okay but
+    # why do you keep brining up summers eve this is an indepdent pull"
+    # reached the interpret core with no page open and drafted a $275
+    # build). A turn the gate read as a correction, or that reads as one
+    # here, never runs the build intake unless it carries a fresh order.
+    try:
+        from . import subject_rules as _sr_c
+        if decision.get('surface') == 'interpret' and referent_decision is None and (
+                body.get('_pm_correction') or _sr_c.conversational_turn(text)) \
+                and not _sr_c.priced_handoff_allowed(text):
+            decision = dict(decision, surface='analyze', reason='correction_no_build')
     except Exception as _fx:
         _faults.note('service', _fx)
     surface = decision['surface']
@@ -2261,6 +2468,35 @@ def _persist_turn(persist, uname, tid, history, text, env, raw, surface):
             _pend.record(uname, tid, raw, text)
     except Exception as e:
         _faults.note('service.pending_offer_record', e)
+    # The subject Prometheus itself quoted or drafted is noted as the
+    # thread's subject, server side, whoever writes the turns (the
+    # dashboard writes its own, without this meta). A statement or a
+    # correction by the reader always outranks it (Emmet Riley 2026-10-26).
+    try:
+        _bound_proj = None
+        try:
+            from flask import g as _gn
+            _bound_proj = getattr(_gn, '_pm_thread_binding', None)
+        except Exception:
+            _bound_proj = None
+        # a thread bound to a project is about that project (Debi 2026-10-21);
+        # only an unbound thread takes its subject from what was quoted or drafted
+        if isinstance(raw, dict) and uname and tid and not (isinstance(_bound_proj, dict) and _bound_proj.get('subject_key')):
+            from . import thread_subject as _tsn
+            _noted = ''
+            _src = 'offer'
+            _po = raw.get('panel_offer') if isinstance(raw.get('panel_offer'), dict) else None
+            _dr = raw.get('spec_draft') if isinstance(raw.get('spec_draft'), dict) else None
+            if _po and _po.get('subject'):
+                _noted = str(_po.get('subject') or '')
+            elif _dr and _dr.get('subject'):
+                _noted, _src = str(_dr.get('subject') or ''), 'draft'
+            elif raw.get('subject') and env.get('kind') in ('answer', 'job'):
+                _noted = str(raw.get('subject') or '')
+            if _noted:
+                _tsn.note(host, uname, tid, _noted, source=_src)
+    except Exception as e:
+        _faults.note('service.thread_subject_note', e)
     if not (persist and tid and env.get('text')):
         return
     try:

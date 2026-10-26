@@ -119,6 +119,14 @@ def answer_text(payload):
             lines.append("Asked which time window to use before running.")
         sentence = str(draft.get('estimated_audience_sentence') or '').strip()
         if sentence:
+            # US people only, never the count behind it or the words around
+            # it (Jenna 2026-10-26, Emmet Riley's brief copy carried
+            # "inside the 10 million sample" into this note)
+            try:
+                from prometheus import guards as _gd
+                sentence = _gd.scrub_sample_vocabulary(sentence)
+            except Exception:
+                pass
             lines.append(sentence)
         # Money, never credits (Jenna 2026-10-07): price the draft from
         # the table the interpret step stamps on it.

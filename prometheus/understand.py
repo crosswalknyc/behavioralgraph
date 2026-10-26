@@ -361,6 +361,21 @@ def _decide(text, *, has_ctx=False, mode=None, extra=None, open_tabs=0,
         d.update(surface='deck', reason='deck_ask')
         return d
 
+    # 2a. A dataset on an audience is a Profile IQ build (Emmet Riley
+    #     2026-10-26: "Can you help me query a dataset on UVA consumers
+    #     for the unversity of virgina https://www.virginia.edu/" ran as
+    #     a question and drew the $100 custom-read quote). The order
+    #     goes to the build intake; the URL rides as the brand input. A
+    #     question about data we hold ("how much data do you have on X")
+    #     is not an order and never lands here.
+    try:
+        from . import dataset_ask as _dsa
+        if _dsa.is_build_ask(t):
+            d.update(surface='interpret', reason='dataset_build')
+            return d
+    except Exception:
+        pass
+
     # 2a2. A delivered figure split by a dimension the panel observes
     #      (device, daypart, geography, demographic) is a derived read on
     #      the analyze surface with or without a page (2026-10-12, Jenna:

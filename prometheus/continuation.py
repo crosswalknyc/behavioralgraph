@@ -101,6 +101,16 @@ def _negated_names(text):
             k = _sr._norm(' '.join(words[:n]).strip('.,;:!?'))
             if k:
                 out.add(k)
+    # "this has nothing to do with Colin and Samir or Mark Rober", "why do
+    # you keep brining up summers eve this is an indepdent pull": the
+    # thread-memory parser reads the names the way they were typed
+    # (Debi Pomerantz, Emmet Riley 2026-10-26)
+    try:
+        from . import thread_subject as _ts
+        for k in _ts.dropped_names(text):
+            out.add(_sr._norm(k))
+    except Exception:
+        pass
     return out
 
 
@@ -354,11 +364,20 @@ def classify(text, history, reading=None, page=''):
                     break
         out.update(kind='correction', confidence=0.85, subject=subj, params={'turn': ct, 'negated': sorted(negated)})
         return out
-    # a chip answer: short reply to a question just asked
+    # a chip answer: short reply to a question just asked. "the subject is
+    # the university of virginia" answers with the name it states, never
+    # with the whole sentence (Emmet Riley 2026-10-26)
     if _is_chip_answer(t, prev):
+        stated = ''
+        try:
+            from . import thread_subject as _ts
+            stated = _ts.statement_subject(t)
+        except Exception:
+            stated = ''
         s = _sr.bind(t, None, page, reading)
-        out.update(kind='chip_answer', confidence=0.8, subject=(s.display if s else t),
-                   params={'qualifiers': dict(s.qualifiers) if s else {}, 'question': (deliv or {}).get('question', '')})
+        out.update(kind='chip_answer', confidence=0.8, subject=(stated or (s.display if s else t)),
+                   params={'qualifiers': dict(s.qualifiers) if s else {}, 'question': (deliv or {}).get('question', ''),
+                           **({'stated': True} if stated else {})})
         return out
     # a parameter change on the previous subject: no new subject in the words
     if deliv and deliv.get('kind') in ('read', 'offer') and _PARAM_WORDS_RX.search(t):

@@ -35,6 +35,7 @@ _APP_BINDINGS = {
     'pricing_question': '_pm_pricing_question',
     'pricing_copy': '_PM_PRICING_COPY',
     'pricing_copy_for': '_pm_pricing_copy',     # (username=None) -> rate card in the seat's currency
+    'price_table_for': '_v1_price_table_for',   # (username=None) -> {'new_build', 'derive_cut', ...} in the seat's currency (the pull discussion, 2026-10-26)
     'claude_data': '_pm_claude_data',        # (system, user, **kw) -> parsed JSON dict | {}
     'watch_flag': '_pm_watch_flag',          # (user, question, route, outcome, extra) -> None; the System Status watch card
     'record_held': '_pm_record_held_reply',  # (user, question, told, reason, kind) -> None; a promise with a due time (held_replies)
@@ -88,7 +89,7 @@ _APP_BINDINGS = {
 }
 
 # Bindings that may legitimately be absent on an older host.
-_OPTIONAL = {'twin_intent', 'recent_read', 'subiq_bucket', 'can_open_subiq', 'max_threads', 'project_label', 'wallet_snapshot', 'access_gate', 'claude_data', 'watch_flag', 'record_held', 'user_runs', 'consume_credit', 'intent_view_hydrate',
+_OPTIONAL = {'twin_intent', 'recent_read', 'subiq_bucket', 'can_open_subiq', 'max_threads', 'project_label', 'wallet_snapshot', 'access_gate', 'claude_data', 'watch_flag', 'record_held', 'user_runs', 'consume_credit', 'intent_view_hydrate', 'price_table_for',
              'run_jiq_job', 'run_bpiq_job', 'run_fw_job', 'run_aiq_job',
              'thread_for_job', 'load_thread', 'save_thread', 'incidence_check', 'audience_range', 'queue_secret'}
 

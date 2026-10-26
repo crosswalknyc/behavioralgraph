@@ -5625,18 +5625,18 @@ def _pm_interpret_core(user, body, text, history):
     surface itself and returns a Flask response exactly as before.
     """
 
-    # ------------------------------------------------------------------
-    # PRICING QUESTIONS (2026-09-23 Jenna): the flat rate card, never
-    # the build intake. Runs before every detector - 'how much is a
-    # credit' once reached interpret and drafted a build brief.
-    # ------------------------------------------------------------------
+    # PRICING QUESTIONS (2026-09-23 Jenna): the flat rate card, never the build intake.
+    # Runs before every detector ('how much is a credit' once reached interpret and drafted a build brief).
     if _pm_pricing_question(text):
         _pm_ask_hint(route='pricing_fact', outcome='answered')
         return jsonify({'success': False, 'guidance': True,
                         'error': _pm_pricing_copy()})
-    # Subscriber IQ lookup (2026-10-02 Bria): "do you see the X
-    # Subscriber IQ?" reaching the build surface answers from the
-    # library instead of drafting a duplicate order.
+    _ch = __import__('prometheus.build_guards', fromlist=['correction_hold']).correction_hold(text, history)   # a complaint is never a go-ahead (Emmet Riley 2026-10-26)
+    if _ch:
+        _pm_ask_hint(route='correction', outcome='no_draft')
+        return jsonify(_ch)
+    # Subscriber IQ lookup (2026-10-02 Bria): "do you see the X Subscriber IQ?" reaching the
+    # build surface answers from the library instead of drafting a duplicate order.
     try:
         from prometheus import guards as _pg_lk
         _lk_title = _pg_lk.subiq_lookup_title(text)
@@ -5651,15 +5651,10 @@ def _pm_interpret_core(user, body, text, history):
             _faults.note('chat', _fx)
         return jsonify({'success': False, 'guidance': True,
                         'error': _lk_reply, 'followups': _lk_chips})
-    # Deterministic lanes run before any library or model path
-    # (2026-10-02 S7): "is eastside golf running?" is a status
-    # question even when it is question-shaped and names a library
-    # title; it used to fall into the library-answer read below and
-    # spend a model call on a lookup.
-    # Subject-named status question (2026-10-02 S3 lanes): "is
-    # eastside golf running?" answers from the caller's runs and the
-    # library on this surface too. It drafted a fresh 5-credit build
-    # here while the analysis surface answered the same words.
+    # Deterministic lanes run before any library or model path (2026-10-02 S7 + S3 lanes):
+    # "is eastside golf running?" is a status question even when it is question-shaped and
+    # names a library title; it answers from the caller's runs and the library on this surface
+    # too (it used to spend a model call on a lookup, or draft a fresh 5-credit build here).
     _st_lane = _pm_status_lane(user, text)
     if _st_lane:
         _st_reply, _st_chips, _st_outcome, _st_subject = _st_lane
@@ -5667,10 +5662,8 @@ def _pm_interpret_core(user, body, text, history):
                      subject=_st_subject)
         return jsonify({'success': False, 'guidance': True,
                         'error': _st_reply, 'followups': _st_chips})
-    # A question about reads the library already holds (compare two
-    # titles' first three days, which had more new accounts) answers
-    # from those reads instead of drafting a new order (2026-10-02
-    # Bria). Pull verbs still draft.
+    # A question about reads the library already holds (compare two titles' first three days,
+    # which had more new accounts) answers from those reads instead of drafting a new order (2026-10-02 Bria). Pull verbs still draft.
     try:
         from prometheus import guards as _pg_q
         import prometheus_analysis as _pma_q
@@ -12891,12 +12884,11 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
     # read is a priced custom ask, gated below (2026-10-21). `charge_done` is kept for callsite compatibility.
     mr = metric_request if isinstance(metric_request, dict) else {}
     subj_hint = str(mr.get('subject') or '').strip()
-    # Confirmed memory referent (2026-08-27, Jenna: "know context
-    # between sessions and threads"): the widget's confirm chip sends
-    # the remembered subject explicitly; it resolves the base directly
-    # and rides the consult below so a banked read replays instantly.
+    # Confirmed memory referent (2026-08-27, Jenna: "know context between sessions and threads"):
+    # the widget's confirm chip sends the remembered subject explicitly; it resolves the base directly and rides the consult below so a banked read replays instantly.
     bind_subject = str(bind_subject or '').strip() or str(getattr(__import__('flask').g, '_pm_retry_bound', '') or '').strip()   # I4b: the retry's bound subject
     bind_subject = _page_default.quoted_subject(panel_confirm, bind_subject) or bind_subject   # the subject a quote named is the one the Approve runs on (2026-10-24)
+    bind_subject = bind_subject or _subject_rules.pinned_bind_for(text, history, str(((ctx or {}).get('primary') or {}).get('name') or ''))   # the thread's own subject, never a which-one question from cross-session memory (Emmet Riley 2026-10-26)
     bind_cohort = str(bind_cohort or '').strip()
     if bind_subject and not subj_hint:
         subj_hint = bind_subject
@@ -12907,20 +12899,15 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
             _pm_ask_hint(outcome='panel_out_of_credits', subject=_rr_err.get('subject'))
             return jsonify(_rr_err)
         charge_done = True
-    # A consumption count typed in lowercase ("how many people read the
-    # walsh family book series in the us last year?") names its own
-    # subject; the capitalized-run guess misses it and the ladder used
-    # to ask "Do you mean for <memory>?" (Jenna 2026-10-08). Read the
-    # object of the consumption verb instead.
+    # A consumption count typed in lowercase ("how many people read the walsh family book series
+    # in the us last year?") names its own subject; the capitalized-run guess misses it and the ladder
+    # used to ask "Do you mean for <memory>?" (Jenna 2026-10-08). Read the object of the consumption verb instead.
     if not subj_hint and _pm_is_viewership_ask(text):
         subj_hint = _pm_consumption_subject(text)
-    # WHICH ONES? (2026-10-02 Jenna: "it should have asked him which 3
-    # influencers he was talking about then actually given him the
-    # answer"). An ask that points at "these three creators" and names
-    # none of them stops here with the question, before any base
-    # lookup, any model call, any offer. A subject handed in by a
-    # model or an extractor that is only ordinary words ("Three
-    # Actually Influence Product Purchases and") is not a subject.
+    # WHICH ONES? (2026-10-02 Jenna: "it should have asked him which 3 influencers he was talking
+    # about then actually given him the answer"). An ask that points at "these three creators" and
+    # names none of them stops here with the question, before any base lookup, model call or offer.
+    # A subject from a model or extractor that is only ordinary words ("Three Actually Influence Product Purchases and") is not a subject.
     try:
         from prometheus import referents as _refs
         if subj_hint and not _refs.plausible_subject(subj_hint):

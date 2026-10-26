@@ -1211,6 +1211,20 @@ def scrub_method_language_payload(raw):
     ic = raw.get('incidence_check')
     if isinstance(ic, dict) and isinstance(ic.get('message'), str) and not _keeps_sample_words(raw):
         ic['message'] = scrub_sample_vocabulary(ic['message'])
+    # the brief card prints the draft's own audience sentence (the widget
+    # reads spec_draft.estimated_audience_sentence verbatim); it says US
+    # people and nothing else (Jenna 2026-10-26, Emmet Riley's card read
+    # "158,305 to 220,662 inside the 10 million sample, about ... US people")
+    drafts = list(raw.get('spec_drafts') or []) if isinstance(raw.get('spec_drafts'), list) else []
+    if isinstance(raw.get('spec_draft'), dict):
+        drafts.append(raw['spec_draft'])
+    for d in drafts:
+        if not isinstance(d, dict):
+            continue
+        s = d.get('estimated_audience_sentence')
+        if isinstance(s, str) and s.strip() and SAMPLE_VOCAB_RX.search(s):
+            d['estimated_audience_sentence'] = scrub_sample_vocabulary(s)
+            raw.setdefault('_scrubbed', []).append('estimated_audience_sentence:sample')
     return raw
 
 
@@ -1642,6 +1656,13 @@ _US_LINE_RX = re.compile(r"^\s*-?\s*US audience in window:\s*(.+?)\s*$", re.I | 
 _RANGE_LINE_RX = re.compile(r"^\s*-?\s*Audience range:\s*([\d,]+)\s+to\s+([\d,]+)\s+individuals\s*$", re.I | re.M)
 _CHECK_HEAD_RX = re.compile(r"^\s*Sample check for (?P<who>.+?)\s*\((?P<win>.*)\)\s*:\s*$", re.I | re.M)
 _INSIDE_RX = re.compile(r"\s*,?\s*(?:\(?\s*)?inside the (?:10|ten) million(?: sample| panel)?(?: and projected to the US)?\s*\)?", re.I)
+# "Estimated audience: 158,305 to 220,662 inside the 10 million sample,
+# about 5,222,482 to 7,279,639 US people": only the US people survive
+# (Jenna 2026-10-26, Emmet Riley's brief)
+_EST_BAND_RX = re.compile(
+    r"(?P<lead>\b(?:estimated\s+)?audience(?:\s+in\s+(?:the\s+)?window)?:\s*)(?P<count>~?\s*[\d,]+(?:\s+to\s+[\d,]+)?)\s*,?\s*"
+    r"(?:\(?\s*)?inside the (?:10|ten) million(?: sample| panel)?\s*\)?\s*,?\s*"
+    r"(?P<us>(?:about|roughly|around)\s+~?\s*[\d,]+(?:\s+to\s+[\d,]+)?\s+US\s+people)", re.I)
 _INCIDENCE_PAREN_RX = re.compile(r"\s*\(\s*[\d.]+%\s*incidence\s*\)", re.I)
 _PROFILE_LINE_RX = re.compile(r"^(?P<name>[^:\n]{1,120}):\s*([\d,]+)\s*,?\s*projecting to\s+([\d,]+)\s+US people", re.I | re.M)
 _RUN_IT_RX = re.compile(r"Reply 'run it' to build the profile locked to this exact\s+sample, or refine the audience / window and ask again\.", re.I)
@@ -1693,6 +1714,7 @@ def scrub_sample_vocabulary(text):
     t = _VERDICT_RX.sub('', t)
     t = _RUN_IT_RX.sub("Say 'build a profile on this audience' and I will draft it for your approval.", t)
     t = _INCIDENCE_PAREN_RX.sub('', t)
+    t = _EST_BAND_RX.sub(lambda mm: mm.group('lead') + mm.group('us'), t)
     t = _INSIDE_RX.sub('', t)
     t = _PROFILE_LINE_RX.sub(lambda mm: f"{mm.group('name')}: {_people(mm.group(3))} in the US", t)
     t = re.sub(r"\btrailing year\s*\(([^)]*)\)", lambda mm: plain_window(mm.group(1)) or 'the last 12 months', t, flags=re.I)
