@@ -68,6 +68,9 @@ _APP_BINDINGS = {
     'run_fw_job': '_pm_run_fw_job',
     'run_aiq_job': '_pm_run_aiq_job',
     'thread_for_job': '_pm_thread_for_job',
+    'recent_read': '_pm_read_recent_check',   # (user, text) -> the caller's landed or running read on this question (2026-10-26)
+    'subiq_bucket': 'SUBSCRIBER_S3_BUCKET',   # the Subscriber IQ library bucket (2026-10-26)
+    'can_open_subiq': '_user_can_open_subscriber',   # (user, s3_key, show_name) -> bool (2026-10-26)
     'load_thread': '_pm_load_thread_or_active',
     'save_thread': '_pm_save_thread_or_active',
     # sizing lane (2026-10-14; $100 as of 2026-10-21): sample check + audience band
@@ -84,7 +87,7 @@ _APP_BINDINGS = {
 }
 
 # Bindings that may legitimately be absent on an older host.
-_OPTIONAL = {'max_threads', 'project_label', 'wallet_snapshot', 'access_gate', 'claude_data', 'watch_flag', 'record_held', 'user_runs', 'consume_credit', 'intent_view_hydrate',
+_OPTIONAL = {'recent_read', 'subiq_bucket', 'can_open_subiq', 'max_threads', 'project_label', 'wallet_snapshot', 'access_gate', 'claude_data', 'watch_flag', 'record_held', 'user_runs', 'consume_credit', 'intent_view_hydrate',
              'run_jiq_job', 'run_bpiq_job', 'run_fw_job', 'run_aiq_job',
              'thread_for_job', 'load_thread', 'save_thread', 'incidence_check', 'audience_range', 'queue_secret'}
 

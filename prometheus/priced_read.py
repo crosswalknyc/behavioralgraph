@@ -757,6 +757,15 @@ def _as_audience(subj):
     return s if _AUDIENCE_TAIL_RX.search(s) else f"the {s} audience"
 
 
+_AUD_NOUN_IN_TITLE_RX = re.compile(
+    r"\s+(?:viewers|watchers|audience|fans|streamers|subscribers|readers|listeners|players|users)\b(?=\s+on\s+|\s*$)", re.I)
+
+
+def _title_of_audience(subj):
+    """'Law & Order: SVU viewers on Peacock' -> 'Law & Order: SVU on Peacock'."""
+    return _AUD_NOUN_IN_TITLE_RX.sub('', str(subj or '')).strip()
+
+
 def lead_for(kind, subject, **kw):
     """One plain sentence on what the reader gets, ahead of the price.
     A caller-written sentence (``what``) wins; with no subject that
@@ -786,8 +795,12 @@ def lead_for(kind, subject, **kw):
         verb = str(kw.get('verb') or 'watched').strip()
         span = str(kw.get('span') or 'one year').strip()
         cond = str(kw.get('condition') or '').strip(' ,.;:')
+        # "watched <title>", never "watched <title> viewers on Peacock" (Bria
+        # 2026-10-21): the audience noun comes off the title, the service
+        # rides as "on <service>"
+        title = _title_of_audience(subj)
         what = (f"month by month viewers and hours watched for {subj} across {span}" if kw.get('series')
-                else f"how many people in the US {verb} {subj}" + (f" {cond}" if cond else '') + f" across {span}")
+                else f"how many people in the US {verb} {title}" + (f" {cond}" if cond else '') + f" across {span}")
         return f"I can pull {what}."
     if kind == 'rerun':
         noun = str(kw.get('noun') or 'read')

@@ -75,7 +75,11 @@ def _now():
 
 
 def _norm_q(s):
-    return re.sub(r"[^a-z0-9]+", " ", str(s or '').lower()).strip()
+    try:
+        from . import question_key as _qk
+        return _qk.fold(s)
+    except Exception:
+        return re.sub(r"[^a-z0-9]+", " ", str(s or '').lower()).strip()
 
 
 def _parse_ts(v):
@@ -388,6 +392,28 @@ def gate(text, body, history, ctx, user, uname, tid, via, persist, *, client_sur
     # thirty minutes walked the smoke into the calm line).
     probe = _pid.asks_on_purpose(uname, user if isinstance(user, dict) else None)
     n_rep = 0 if probe else repeat_count(text, history)
+    # ---- the same question again while its read runs or after it landed:
+    # the same read, never a second copy. Before the guard and whatever the
+    # count: a re-send a minute after "On it" is impatience, not a failed
+    # reply, and the second copy is where the numbers diverged (2026-10-26,
+    # Jay Patel: three reads of one BookTok question, three answers).
+    if not probe and (n_rep or _prior_was_read(deliv)) and not body.get('bind_subject'):
+        kept = same_read_again(text, history, uname, host)
+        if kept:
+            raw, route = kept
+            return _answer(raw, route, route=route, outcome='answered', **common)
+    # ---- the same question again after a price quote: the quote stands.
+    # The lanes draw it again, identically; a repeat is not a yes and never
+    # a free run of the read (Scott, Casey Pearson, 2026-10-21 to 25: the
+    # "other path" ran the priced read for nothing on the second send).
+    if n_rep == 1 and str((deliv or {}).get('kind') or '') == 'offer':
+        # the second send gets the same quote; a third is the escalation
+        # below (asked again, unanswered: ops hears about it)
+        try:
+            host.ask_hint(route='repeat_guard', outcome='offer_stands', subject=(deliv or {}).get('subject') or None)
+        except Exception as _fx:
+            _faults.note('turn_gate', _fx)
+        n_rep = 0
     if n_rep:
         prev = _last_agent(history)
         prev_text = str((prev or {}).get('text') or (prev or {}).get('content') or '')
@@ -506,6 +532,17 @@ def gate(text, body, history, ctx, user, uname, tid, via, persist, *, client_sur
                 return None   # the product fact about the ten million answers this one (Tania Nasr 2026-10-20)
         except Exception as e:
             _faults.note('turn_gate.sample_fact', e)
+        if (cont.get('params') or {}).get('about_read'):
+            try:
+                from . import read_answers as _ra
+                _ra_hit = _ra.answer(text, history)
+            except Exception as e:
+                _faults.note('turn_gate.read_answers', e)
+                _ra_hit = None
+            if _ra_hit and _ra_hit.get('reply'):
+                raw = {'success': True, 'action': 'answer', 'reply': _ra_hit['reply'], 'followups': [],
+                       'offer_deck': False, 'deck_angle': None, 'read_answer': True}
+                return _answer(raw, 'read_answer', route='read_answer', outcome='answered', **common)
 
         try:
             from . import kpi_definitions as _kd
@@ -573,6 +610,46 @@ def gate(text, body, history, ctx, user, uname, tid, via, persist, *, client_sur
         except Exception as _fx:
             _faults.note('turn_gate', _fx)
         return {'text': text, 'body': body}
+    return None
+
+
+def _prior_was_read(deliv):
+    """The previous deliverable in this thread is a read promise or a landed
+    read (a tracked job, or a reply that opens 'On <subject>:'); a long
+    reply that is neither is not one."""
+    d = deliv or {}
+    kind = str(d.get('kind') or '')
+    if kind == 'promise':
+        return True
+    return kind == 'read' and bool(d.get('job_id') or re.match(r"^On\s+[^:\n]{1,120}:", str(d.get('text') or '')))
+
+
+def same_read_again(text, history, uname, host):
+    """(payload, route) when this question already has a read for this
+    caller: the landed reply verbatim (the caller's read record inside a
+    day, else the thread's own landed turn), or the running job's line.
+    None when there is no record. Never a new read."""
+    try:
+        hit = host.recent_read(uname, text) if host.has('recent_read') else None
+    except Exception as e:
+        _faults.note('turn_gate.recent_read', e)
+        hit = None
+    try:
+        from . import read_registry as _reg
+        if hit and hit.get('status') == 'done':
+            return _reg.replay_payload(hit), 'read_replay'
+        if hit and hit.get('status') == 'working':
+            return _reg.inflight_payload(hit), 'read_inflight_dedupe'
+    except Exception as e:
+        _faults.note('turn_gate.read_registry', e)
+    try:
+        from . import smarter as _sm
+        tr = _sm.thread_replay(text, history)
+        if tr and tr.get('reply') and tr.get('landed'):   # a landed read only, never an offer or a decline
+            return ({'success': True, 'action': 'answer', 'reply': tr['reply'], 'followups': list(tr.get('followups') or [])[:3],
+                     'offer_deck': False, 'deck_angle': None, 'replayed_read': True}, 'read_replay')
+    except Exception as e:
+        _faults.note('turn_gate.thread_replay', e)
     return None
 
 

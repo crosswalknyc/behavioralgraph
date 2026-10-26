@@ -148,6 +148,11 @@ def parse(text):
         arts = _artifacts(rest)
         if not arts:
             return None
+        if arts == {'read'}:
+            # "where do i see the answer", "where do i find the results for
+            # my previous question": the reader's own read, which the status
+            # lane holds and hands back; this lane is for files (2026-10-26)
+            return None
         # "where is the fall-off from the ticket step" is a journey
         # question; a deliverable ask carries no metric vocabulary
         if re.search(r"\b(?:fall[- ]?off|drop[- ]?off|lift|share|percent|%|index|viewers|"

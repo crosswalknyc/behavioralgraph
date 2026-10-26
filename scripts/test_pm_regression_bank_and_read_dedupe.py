@@ -92,16 +92,17 @@ check('inflight index under the reads prefix',
 gate = SRC.find('_dup_read = _pm_read_inflight_check(_pm_user, text)')
 spawn = SRC.find("job_id = uuid.uuid4().hex[:12]")
 check('dedupe gate runs before the job spawns', 0 < gate < spawn)
+REG = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'prometheus', 'read_registry.py'), encoding='utf-8').read()   # the index lives in prometheus.read_registry (2026-10-26)
 check('new jobs are marked in the index',
-      '_pm_read_inflight_mark(_pm_user, text, job_id)' in SRC)
+      '_pm_read_inflight_mark(_pm_user, text, job_id, _promised)' in SRC)
 check('duplicate reply hands back the running job id',
       "'read_job_id': _dup_read['job_id']" in SRC)
 check('paid re-send refunds before attaching',
       SRC.count('_pm_panel_refund(panel_charge)') >= 2)
 check('entries self-expire at 15 minutes',
-      SRC.count("> 900") >= 1 and SRC.count("<= 900") >= 1)
+      'RUNNING_S = 900' in REG and REG.count("> RUNNING_S") >= 1 and REG.count("<= RUNNING_S") >= 1)
 check('only working jobs dedupe',
-      "!= 'working':\n            return None" in SRC.replace(
+      "!= 'working':\n            return None" in REG.replace(
           'str(status.get(\'status\') or \'\') ', ''))
 
 reply_block = SRC[SRC.find("'Already on it - that exact read is'"

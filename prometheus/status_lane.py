@@ -29,6 +29,9 @@ _STATUS_RX = re.compile(
     r"|\bstill\s+(?:waiting|running|building|processing|not\s+(?:there|here|done|ready))\b"
     r"|\bwhat\s+happened\s+to\b|\bdid\s+(?:it|that|this|the\s+\w+)\s+(?:finish|run|land|go\s+through|work)\b"
     r"|\bhow\s+do\s+i\s+(?:find|see|get\s+to|open)\b|\bwhere\s+(?:do|can|would)\s+i\s+(?:find|see|get)\b"
+    r"|\bdo\s+you\s+have\s+(?:the\s+|my\s+|any\s+)?(?:results?|answers?|numbers|output|the\s+read)\b"
+    r"|\b(?:results?|answers?)\s+(?:yet|ready|back|in|available)\b|\bany\s+(?:results?|answers?|update)\b"
+    r"|\bwhere\s+(?:is|are)\s+(?:the|my)\s+(?:results?|answers?|numbers|output|read)\b"
     r"|\bis\s+it\s+(?:there|in\s+the\s+tab|on\s+the\s+site)\b"
     r"|\bwhy\s+did\s+(?:it|that|this|my|the\s+\w+)(?:\s+\w+)?\s+(?:fail|error|break|stop|die|not\s+(?:work|run|finish|land|complete))\b"
     r"|^\s*(?:status|any\s+update|update)\s*\??\s*$|\bwhat(?:'s|\s+is)\s+the\s+status\b)", re.I)
@@ -168,14 +171,23 @@ def _job_items(host, uname, days=7):
                     continue
                 if str(doc.get('user') or '').lower() != str(uname or '').lower():
                     continue
+                if jtype == 'read' and doc.get('resumed_as') and str(doc.get('status') or '') == 'working':
+                    try:   # a resumed read answers under the first job id
+                        from . import read_recovery as _rr
+                        doc = _rr.follow(doc, trigger=False) or doc
+                    except Exception:
+                        pass
                 if str(doc.get('final_reason') or '') == 'requester not found':
                     continue        # nobody to report it to (a probe identity with no seat)
+                _pl = doc.get('payload') if isinstance(doc.get('payload'), dict) else {}
                 items.append({'kind': jtype, 'status': str(doc.get('status') or 'running').lower(),
                               'subject': doc.get('subject') or doc.get('project_name') or doc.get('title')
                               or (('"' + str(doc.get('question'))[:80].rstrip() + '"') if doc.get('question') else ''),
                               'started': doc.get('started_at') or doc.get('created_at'),
                               'finished': doc.get('finished_at'), 'key': doc.get('s3_key') or doc.get('slug') or '',
-                              'ready_message': doc.get('ready_message') or '', 'job_id': doc.get('job_id')})
+                              'ready_message': doc.get('ready_message') or '', 'job_id': doc.get('job_id'),
+                              'reply': (str(_pl.get('reply') or '').strip() if jtype == 'read' else ''),
+                              'followups': [f for f in (_pl.get('followups') or []) if isinstance(f, str)][:3] if jtype == 'read' else []})
         except Exception:
             traceback.print_exc()
     items.sort(key=lambda i: str(i.get('finished') or i.get('started') or ''), reverse=True)
@@ -267,6 +279,7 @@ def answer(text, uname, *, host, user=None, history=None):
             by_key.setdefault(k, d)
     picked = _mentioned(text, items)[:3] if items else []
     lines = []
+    reposted, followups = False, []
     for it in picked:
         label = KIND_LABEL.get(it['kind'], it['kind'])
         subj = str(it.get('subject') or 'your request')
@@ -282,10 +295,17 @@ def answer(text, uname, *, host, user=None, history=None):
                     line += f" The email with the files went to {em.get('to') or 'you'}{(' ' + _ago(d.get('recorded_at'))) if d.get('recorded_at') else ''}."
                 elif em.get('reason') == 'no email on seat':
                     line += " I could not email it because your seat has no email address on file; ask your admin to add one."
+            elif it['kind'] == 'read' and it.get('reply') and not reposted:
+                # the answer itself, right here: the thread it landed in may
+                # not be the one the reader is looking at (2026-10-26, Jay
+                # Patel: "where do i see the answer", "do you have the results")
+                line += " Here it is:\n\n" + it['reply']
+                reposted = True
+                followups = list(it.get('followups') or [])
             else:
                 where = {'jiq': 'the Digital Journey IQ tab', 'bpiq': 'the Brand Partnership IQ tab', 'aiq': 'the Attribution IQ tab',
                          'fw': 'the Flywheel tab', 'profile': 'Profile IQ, Select Profile', 'deck': 'your email', 'read': 'this chat'}.get(it['kind'], 'the dashboard')
-                line += f" It is in {where}; if the tab was open before it landed, refresh once and it will be there."
+                line += f" It is in {where}; open the tab again if you had it open before it landed."
             lines.append(line)
         elif st in ('error', 'failed'):
             if it.get('client_line'):
@@ -319,7 +339,7 @@ def answer(text, uname, *, host, user=None, history=None):
     if not lines:
         return None
     reply = '\n\n'.join(dict.fromkeys(lines))      # three failed copies of one read say it once
-    followups = []
+    followups = list(followups)                       # the re-posted read's own chips, when one was handed back
     if any(it.get('status') not in ('done', 'complete', 'completed', 'ready', 'error', 'failed') for it in picked):
         followups.append('Email me when it lands')
     return {'success': True, 'action': 'answer', 'reply': reply, 'followups': followups, 'offer_deck': False, 'deck_angle': None,

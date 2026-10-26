@@ -465,11 +465,21 @@ _VIEWER_JOURNEY_RE = re.compile(
 DIRECTION_CHIPS = ('How they came to watch', 'What watchers do after and in addition')
 
 
+_BOTH_DIRECTIONS_RE = re.compile(
+    r"^\W*(?:i\s+want\s+|i'?d\s+like\s+|give\s+me\s+|do\s+|run\s+|show\s+me\s+)?(?:both|all\s+of\s+(?:that|it|them|the\s+above)|all\s+(?:of\s+)?(?:that|it)|everything|"
+    r"either(?:\s+one)?|whichever|you\s+(?:pick|choose|decide)|(?:the\s+)?default|no\s+preference|whatever\s+you\s+(?:recommend|suggest|think)|"
+    r"the\s+(?:full|whole|complete)\s+(?:picture|path|journey|thing))\W*(?:please)?\W*$", re.I)
+BOTH_DIRECTIONS_NOTE = ("You asked for both directions. This journey runs as how they came to watch; say "
+                        "'the week after' and I will set up what watchers do after and in addition as its own journey.")
+
+
 def journey_direction_from_text(text):
     """'after_watch', 'to_watch', 'unclear' or None for an ask about a title's viewers."""
     low = ' '.join(str(text or '').lower().split())
     if not low:
         return None
+    if _BOTH_DIRECTIONS_RE.match(low):
+        return 'to_watch'   # "I want all of that", "both", "you pick": the discovery shape, with the other offered (Debi 2026-10-21)
     if low.strip(' .!') == DIRECTION_CHIPS[1].lower() or _AFTER_WATCH_RE.search(low):
         return 'after_watch'
     if low.strip(' .!') == DIRECTION_CHIPS[0].lower() or _TO_WATCH_RE.search(low):
@@ -489,6 +499,29 @@ def direction_question(subject=None):
 
 def direction_unclear(parsed):
     return str((parsed or {}).get('journey_direction') or '').lower() == 'unclear'
+
+
+def direction_asked_already(history):
+    """True when the last thing Prometheus said in this thread was the
+    direction question: it is never asked twice in a row. The reader's
+    reply, whatever it was, takes the default (Debi 2026-10-21 was asked
+    the same question three times: "is US gen pop", "I want all of that")."""
+    for t in reversed([x for x in (history or []) if isinstance(x, dict)]):
+        if str(t.get('role') or '') == 'user':
+            continue
+        txt = ' '.join(str(t.get('text') or t.get('content') or '').split())
+        return txt.startswith('One question before I line it up: do you want how')
+    return False
+
+
+def default_direction(parsed, both=False):
+    """The discovery shape when the reader did not pick one, with the note
+    that names the other."""
+    p = apply_direction({**(parsed or {}), 'journey_direction': 'to_watch'})
+    p['_precedent_note'] = ((str(p.get('_precedent_note') or '') + '\n\n') if p.get('_precedent_note') else '') + (
+        BOTH_DIRECTIONS_NOTE if both else
+        "I ran this as how they came to watch. Say 'the week after' and I will set up what watchers do after and in addition as its own journey.")
+    return p
 
 
 def apply_direction(parsed):

@@ -95,6 +95,37 @@ def _visible(run, user, uname):
     return False
 
 
+_CAP_PHRASE_RX = re.compile(r"\b[A-Z][A-Za-z0-9&'+.-]*(?:\s+(?:and\s+|&\s+|of\s+|the\s+)?[A-Z][A-Za-z0-9&'+.-]*)*")
+_NOT_A_NAME = frozenset((
+    'i', 'we', 'you', 'the', 'a', 'an', 'this', 'that', 'these', 'those', 'what', 'which', 'how', 'when', 'where', 'why', 'who',
+    'is', 'are', 'was', 'were', 'can', 'could', 'would', 'should', 'do', 'does', 'did', 'please', 'prometheus', 'crosswalk', 'us',
+    'usa', 'u.s.', 'ok', 'okay', 'yes', 'no', 'and', 'or', 'but', 'so', 'if', 'then', 'also', 'from', 'for', 'to', 'on', 'in', 'at',
+    'by', 'with', 'of', 'as', 'my', 'our', 'your', 'its', 'it', 'they', 'them', 'there', 'here', 'now', 'today', 'conversion',
+    'january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december',
+    'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday', 'q1', 'q2', 'q3', 'q4',
+    'youtube', 'tiktok', 'instagram', 'facebook', 'snapchat', 'twitter', 'x', 'reddit', 'netflix', 'hulu', 'peacock', 'max', 'hbo',
+    'paramount', 'disney', 'prime', 'video', 'amazon', 'apple', 'tv', 'roku', 'tubi', 'spotify', 'google', 'pre', 'roll', 'mid',
+    'new', 'york', 'los', 'angeles', 'journey', 'digital', 'brand', 'partnership', 'iq', 'attribution', 'profile'))
+
+
+def names_other_subject(text, title):
+    """True when the words name a person, brand or title that is not the
+    journey's own (a capitalized phrase outside the title's tokens, after
+    platforms, months and sentence openers are set aside)."""
+    t = ' '.join(str(text or '').split())
+    own = set(_tokens(title)) | {w.lower() for w in re.findall(r"[A-Za-z0-9]+", str(title or ''))}
+    for m in _CAP_PHRASE_RX.finditer(t):
+        words = re.findall(r"[A-Za-z0-9&'+.-]+", m.group(0))
+        opener = m.start() == 0 or t[max(0, m.start() - 2):m.start()].strip() in ('.', '?', '!', ':', ';', '-', '"')
+        rest = [w.lower().strip(".'") for w in words if w.lower().strip(".'") not in _NOT_A_NAME]
+        if opener and len(words) == 1:
+            continue          # a sentence-initial word is not a name on its own
+        if not rest or all(w in own or len(w) < 3 or w.isdigit() for w in rest):
+            continue
+        return True
+    return False
+
+
 def find_journey(text, *, s3, user, uname, bucket='dashboard-inputs', ctx=None):
     """The newest delivered journey the caller can see whose title the
     question names (every distinctive title token present, a number in
@@ -114,6 +145,12 @@ def find_journey(text, *, s3, user, uname, bucket='dashboard-inputs', ctx=None):
     if page_key:
         for run in visible:
             if run.get('key') == page_key:
+                # the open journey answers a question about itself, never one
+                # that names another subject (Debi 2026-10-21: the Colin and
+                # Samir x Lexus campaign drew the NCIS: New York journey line,
+                # three times, because that journey was open)
+                if names_other_subject(text, _title_of(run)):
+                    break
                 return run
     # a token that names only one title ("reservations") can stand for it;
     # "Anthony Bourdain's No Reservations" is asked about as "No Reservations"

@@ -1535,7 +1535,7 @@ def find_semantic(entries, question):
     q_years = _years_in(qn)
     best, best_dist, best_rank = None, None, None
     for e in reversed(entries):   # newest first; ties keep the newest
-        if not isinstance(e, dict) or not e.get('reply'):
+        if not isinstance(e, dict) or not e.get('reply') or is_retired_surface_reply(e.get('reply')):
             continue
         if e.get('route') == ANCHOR_ROUTE:
             continue
@@ -1599,19 +1599,34 @@ def find_semantic(entries, question):
     return best
 
 
+# A reply from a surface that no longer exists is never an answer to
+# anything: the suggested-cuts list ("Here's how I'd cut this ...") was
+# retired on 2026-10-21 and the distilled history still carried five of
+# them; a key-only match handed one to "what about jacknjellify?" and to
+# a Will & Grace viewership ask (2026-10-19 and 2026-10-25, both under
+# the subject 'youtube').
+_RETIRED_SURFACE_RX = re.compile(r"^\s*Here'?s how I'?d cut this\b|\(each cut is \d+ credits", re.I)
+
+
+def is_retired_surface_reply(reply):
+    return bool(_RETIRED_SURFACE_RX.search(str(reply or '')[:400]))
+
+
 def find_exact(entries, question=None, key=None):
     """Best stored entry matching this exact ask: normalized question
     match first (strongest), else normalized key match with a
-    non-empty stored reply. On conflicting matches, provenance wins
-    (delivered_artifact > operator > distilled), then recency; with
-    the historical single-provenance corpus this is exactly the old
-    newest-first behavior."""
+    non-empty stored reply whose own words are about the ask (a key is
+    subject, family and window; two different questions share one).
+    On conflicting matches, provenance wins (delivered_artifact >
+    operator > distilled), then recency; with the historical
+    single-provenance corpus this is exactly the old newest-first
+    behavior."""
     qn = normalize_question(question) if question else None
 
     def _best(match_fn):
         best, best_rank = None, None
         for e in reversed(entries):     # newest first; ties keep newest
-            if not (match_fn(e) and e.get('reply')):
+            if not (match_fn(e) and e.get('reply')) or is_retired_surface_reply(e.get('reply')):
                 continue
             r = provenance_rank(e)
             if best is None or r > best_rank:
@@ -1623,7 +1638,7 @@ def find_exact(entries, question=None, key=None):
         if hit is not None:
             return hit
     if key:
-        return _best(lambda e: e.get('k') == key)
+        return _best(lambda e: e.get('k') == key and (not qn or _topical_overlap_ok(e, qn)))
     return None
 
 

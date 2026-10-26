@@ -318,6 +318,17 @@ def classify(text, history, reading=None, page=''):
         out.update(kind='question_about_answer', confidence=0.9, subject=(deliv or {}).get('subject', ''),
                    params={'figure': _q['figure'], 'figure_turn': _q['turn']})
         return out
+    # a yes/no about what the last read holds ("is the film you started with
+    # The Love Hypotheis, if so I should expect Off Campus to be on the list?")
+    # is a question about that answer, answered from its words (2026-10-26)
+    if deliv and deliv.get('kind') == 'read':
+        try:
+            from . import read_answers as _ra
+            if _ra.answer(t, history):
+                out.update(kind='question_about_answer', confidence=0.9, subject=deliv.get('subject', ''), params={'about_read': True})
+                return out
+        except Exception:
+            pass
     # a question about the previous answer
     if _sr.definition_turn(t, reading, page) or _ABOUT_ANSWER_RX.search(t):
         if deliv and deliv.get('kind') in ('read', 'offer', 'build', 'journey', 'deck'):

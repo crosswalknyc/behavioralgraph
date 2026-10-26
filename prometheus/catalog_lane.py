@@ -24,6 +24,7 @@ _EXISTS_RX = re.compile(
     r"^\s*(?:hey |hi |prometheus,? )?(?:do (?:we|you) (?:already )?(?:have|see|hold|carry|know)|"
     r"is there|are there|have we (?:got|built|run|pulled|done)|did we (?:build|run|pull)|"
     r"what do (?:we|you) have (?:on|for|about)|do you have anything (?:on|for|about)|"
+    r"how much (?:data|information|coverage|history) (?:do (?:we|you) have|is there|have we got) (?:on|for|about)|"
     r"show me what (?:we|you) have (?:on|for|about)|can you (?:find|see|pull up))\s+"
     r"(?P<rest>.+?)[\s?.!]*$", re.I)
 _SIZE_RX = re.compile(

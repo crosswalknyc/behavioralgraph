@@ -1489,15 +1489,27 @@ _PROVENANCE_RX = re.compile(
     r"|\bwhere (?:is|are) (?:this|the|these) (?:data|numbers?) from\b|\bwho (?:collects|measures|provides) (?:this|the|your) data\b", re.I)
 
 PROVENANCE_REPLY = (
-    "Every figure here is a direct count from Crosswalk's own first-party data: the digital activity of a 10 million US consumer "
-    "sample who opted in, measured across the full journey (search, social, media, commerce, owned sites and apps, streaming and "
+    "Every figure here is a direct count from Crosswalk's own first-party data: the digital activity of 10 million US consumers "
+    "who opted in, measured across the full journey (search, social, media, commerce, owned sites and apps, streaming and "
     "more), counted once per person and projected to the US population. Each figure names its window. Nothing is reported that "
     "was not observed in that data; behavior with no digital trace, like linear TV tune-in or in-store purchases, is called out "
     "as outside it rather than guessed.")
 
 
+_FIGURE_MENTION_RX = re.compile(r"\d[\d,.]*\s*(?:%|percent|k|m|mm|million|thousand|billion)\b|\d{1,3}(?:,\d{3})+", re.I)
+
+
 def is_provenance_question(text):
-    return bool(_PROVENANCE_RX.search(str(text or '')))
+    """The general "how do you know / is this real / your methodology"
+    question. A methodology ask that quotes two or more figures and sets
+    them against each other ("the summary shows 6.6M exposed and 1.04%
+    ... Content Resonance shows 723K") is a question about those numbers
+    on the page, and the page lanes answer it (Alexia 2026-10-23 drew the
+    boilerplate twice)."""
+    t = str(text or '')
+    if not _PROVENANCE_RX.search(t):
+        return False
+    return len(_FIGURE_MENTION_RX.findall(t)) < 2
 
 
 # ---------------------------------------------------------------------------
@@ -1612,7 +1624,16 @@ def scrub_sample_vocabulary(text):
         t = _AVID_LINE_RX.sub(f"- The most engaged of them: {_people(n * _US_PER_SAMPLE)}", t, count=1)
     rm = _RANGE_LINE_RX.search(t)
     if rm:
-        t = _RANGE_LINE_RX.sub(f"- Audience range: {rm.group(1)} to {rm.group(2)} people", t, count=1)
+        # the range is a count inside the ten million; the reader hears it
+        # in US people, on the same scale as the figure above it (eriley
+        # 2026-10-21 read "77,895,196 people ... range 2,043,833 to 2,732,352")
+        try:
+            lo = int(round(float(rm.group(1).replace(',', '')) * _US_PER_SAMPLE))
+            hi = int(round(float(rm.group(2).replace(',', '')) * _US_PER_SAMPLE))
+            _lo = _people(lo).replace('about ', '').replace(' people', '')
+            t = _RANGE_LINE_RX.sub(f"- Audience range: {_lo} to {_people(hi).replace('about ', '')}", t, count=1)
+        except Exception:
+            t = _RANGE_LINE_RX.sub(f"- Audience range: {rm.group(1)} to {rm.group(2)} people", t, count=1)
     t = _VERDICT_RX.sub('', t)
     t = _RUN_IT_RX.sub("Say 'build a profile on this audience' and I will draft it for your approval.", t)
     t = _INCIDENCE_PAREN_RX.sub('', t)
@@ -1626,7 +1647,11 @@ def scrub_sample_vocabulary(text):
     t = re.sub(r"\bpanelists\b", 'people', t, flags=re.I)
     t = re.sub(r"\bpanelist\b", 'person', t, flags=re.I)
     t = re.sub(r"\bindividuals\b", 'people', t, flags=re.I)
-    t = re.sub(r"\b(?:the )?(?:10|ten) million(?: sample| panel| person US sample)?\b", 'our US data', t, flags=re.I)
+    # "the 10 million sample" is our US data; "10 million US consumers" is a
+    # number the reader may hear and stays (2026-10-26: the broad rule left
+    # Alexia "the digital activity of a our US data US consumer data")
+    t = re.sub(r"\b(?:the )?(?:10|ten) million(?: person)?(?: US)? (?:sample|panel)\b", 'our US data', t, flags=re.I)
+    t = re.sub(r"\bthe (?:10|ten) million\b(?!\s+(?:us\b|u\.s\.|people|consumers|americans|persons|users|viewers|adults|individuals|base))", 'our US data', t, flags=re.I)
     t = re.sub(r"\bthe sample\b", 'the data', t, flags=re.I)
     t = re.sub(r"\bsample\b", 'data', t, flags=re.I)
     t = re.sub(r"\bincidence\b", 'share', t, flags=re.I)

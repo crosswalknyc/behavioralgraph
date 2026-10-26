@@ -403,15 +403,24 @@ def capability_ask(text):
     t = ' '.join(str(text or '').split())
     if not t or not _CAPABILITY_RX.match(t) or polite_order(t) or _MATERIAL_RX.search(t) or advisory_order(t):
         return None
+    if _DECK_ASK_RX.search(t):
+        return None     # "are you able to make a slide presentation ...": a deck order, the deck lane's (Mark Valdez 2026-10-20)
     hits = [(name, what, chip) for rx, name, what, chip in _PRODUCT_WORDS if rx.search(t)]
     if not hits:
         hits = [_PRODUCT_WORDS[-1][1:]]
     name, what, chip = hits[0]
+    # the remainder of the question is the subject only when it reads as a
+    # name; a clause ("look at the colin and samir campaign and tell me
+    # conversion and value") is never echoed back in parentheses
     subj = re.sub(_CAPABILITY_RX, '', t).strip(' ?.!')
+    subj = subj if (subj and len(subj.split()) <= 5 and not re.search(r"\b(?:and|tell|me|look|make|build|show|that|this|which|what|how)\b", subj, re.I)) else ''
     reply = (f"Yes. {name[0].upper() + name[1:]} {what}. "
-             f"Tell me the subject{(' (' + subj[:80] + ')') if subj else ''} and the window and I will line it up; "
+             f"Tell me the subject{(' (' + subj + ')') if subj else ''} and the window and I will line it up; "
              f"it comes back as a brief to approve before anything is charged.")
     return {'reply': reply, 'followups': [chip]}
+
+
+_DECK_ASK_RX = re.compile(r"\b(?:slide\s+deck|slide\s+presentation|slides?|deck|powerpoint|pptx|presentation|one[- ]pager)\b", re.I)
 
 
 _NEGATED_BUILD_RX = re.compile(r"\b(don'?t|do not|no need to|without|not)\s+(?:build|run|pull|create|make|start)\b|\b(no|not) (?:a )?(?:new )?(?:profile|build|pull|run)\b|\banswer (?:this|it|that) (?:from|with|using)\b|\bjust (?:answer|tell me)\b|\bfrom (?:the )?existing\b", re.I)
@@ -703,7 +712,11 @@ _REJECT_RX = re.compile(r"\b(wrong|incorrect|not right|doesn'?t (?:look|seem) ri
 
 
 def _fold_q(s):
-    return re.sub(r"[^a-z0-9 ]", ' ', str(s or '').lower()).split()
+    try:
+        from . import question_key as _qk
+        return _qk.fold(s).split()
+    except Exception:
+        return re.sub(r"[^a-z0-9 ]", ' ', str(s or '').lower()).split()
 
 
 def thread_replay(text, history):
@@ -724,7 +737,10 @@ def thread_replay(text, history):
                 continue
             ans = str(nxt.get('text') or nxt.get('content') or '').strip()
             meta = nxt.get('meta') or {}
-            if not ans or meta.get('job') or meta.get('options') or len(ans) < 40:
+            # a landed read carries its follow-up chips as options; it is the
+            # answer, not a question with chips (2026-10-26)
+            landed = bool(meta.get('read_job_id')) or str(meta.get('kind') or '') == 'read'
+            if not ans or meta.get('job') or (meta.get('options') and not landed) or len(ans) < 40:
                 continue
             if re.search(r"(give me, in one message|which time window|here'?s the|brief drafted|ready to run)", ans, re.I):
                 continue
@@ -739,7 +755,8 @@ def thread_replay(text, history):
             except Exception:
                 when_txt = ''
             lead = f"Same read as earlier in this thread{(' (' + when_txt + ')') if when_txt else ''}:"
-            return {'reply': lead + '\n\n' + ans, 'followups': list(meta.get('followups') or [])[:3]}
+            return {'reply': lead + '\n\n' + ans, 'followups': list(meta.get('followups') or [])[:3],
+                    'landed': bool(landed or re.match(r"^On\s+[^:\n]{1,120}:", ans))}
         return None
     except Exception:
         return None

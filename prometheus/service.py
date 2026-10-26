@@ -438,7 +438,7 @@ LANE_ORDER = (
     'spend_cap_precheck',
     'continuation',
     'talent_list_acceptance', 'meta_check', 'standing', 'where_watched', 'sizing_quote', 'status_fast',
-    'reader', 'pricing', 'design_request', 'spend_cap', 'thread_followups', 'catalog',
+    'reader', 'pricing', 'design_request', 'spend_cap', 'thread_followups', 'subiq_library', 'catalog',
     'sizing_fallback', 'status', 'deliverable_lookup', 'email_file', 'brand_coverage',
     'definitions', 'capability',
     'surface_decision',
@@ -446,7 +446,7 @@ LANE_ORDER = (
 )
 DETERMINISTIC_LANES = frozenset((
     'meta_check', 'standing', 'where_watched', 'sizing_quote', 'status_fast', 'reader', 'pricing', 'design_request',
-    'thread_followups', 'catalog', 'sizing_fallback', 'status', 'deliverable_lookup', 'email_file',
+    'thread_followups', 'subiq_library', 'catalog', 'sizing_fallback', 'status', 'deliverable_lookup', 'email_file',
     'brand_coverage', 'definitions', 'capability'))
 NEVER_PRICED_LANES = frozenset(('where_watched', 'status_fast', 'status', 'pricing', 'catalog', 'definitions',
                                 'deliverable_lookup', 'email_file', 'brand_coverage', 'capability'))
@@ -1160,8 +1160,23 @@ def ask(user, body, *, via='session'):
         _sm_raw, _sm_reason = None, ''
         try:
             from . import smarter as _sm
-            _tr = _sm.thread_replay(text, history)
-            if _tr:
+            # the caller's own read on this question inside the day, in any
+            # thread: the words that landed, never a fresh draw (2026-10-26)
+            _rr_hit = None
+            try:
+                from . import read_registry as _reg0
+                _rr_hit = _reg0.for_subject(host.recent_read(uname, text) if host.has('recent_read') else None,
+                                            body.get('bind_subject'))
+            except Exception as _fx:
+                _faults.note('service.recent_read', _fx)
+            _tr = None if (_rr_hit or body.get('bind_subject')) else _sm.thread_replay(text, history)
+            if _rr_hit and _rr_hit.get('status') == 'done':
+                from . import read_registry as _reg
+                _sm_raw, _sm_reason = _reg.replay_payload(_rr_hit), 'read_replay'
+            elif _rr_hit and _rr_hit.get('status') == 'working':
+                from . import read_registry as _reg
+                _sm_raw, _sm_reason = _reg.inflight_payload(_rr_hit), 'read_inflight_dedupe'
+            elif _tr:
                 _sm_raw, _sm_reason = {'success': True, 'action': 'answer', 'reply': _tr['reply'],
                                        'followups': _tr.get('followups') or [], 'offer_deck': False, 'deck_angle': None}, 'thread_replay'
             elif _sm.capability_ask(text) and not _reading_overrules(reading, 'capability'):
@@ -1196,6 +1211,35 @@ def ask(user, body, *, via='session'):
                 raw['followups'] = list(_sm_raw.get('followups') or [])
             try:
                 host.ask_hint(route=_sm_reason, outcome='answered')
+            except Exception as _fx:
+                _faults.note('service', _fx)
+            env = envelope.wrap(raw, surface='analyze', decision=decision, thread_id=tid, via=via)
+            _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
+            return env, 200
+
+    # lane: subiq_library
+    # A question across the Subscriber IQ library ("of the existing
+    # Subscriber IQs on the dashboard, which series have the highest percent
+    # acquired") is read off the library's own headline figures, no model,
+    # no charge, never the which-audience question (Bria 2026-10-21).
+    if referent_decision is None and not _armed(body):
+        _lib_raw = None
+        try:
+            from . import subiq_library as _sl
+            if _sl.is_library_wide_ask(text) and host.has('subiq_bucket') and host.has('s3_client'):
+                _can = (lambda k, n: host.can_open_subiq(user, k, n)) if host.has('can_open_subiq') else None
+                _lib_raw = _sl.answer(text, host.s3_client, host.subiq_bucket, user, can_open=_can)
+        except Exception as e:
+            _faults.note('service.subiq_library', e)
+            _lib_raw = None
+        if _lib_raw:
+            raw = _lib_raw
+            decision = {'surface': 'analyze', 'mode': None, 'reason': 'subiq_library', 'client_hint': None}
+            if _client_surface == 'interpret':
+                raw = _interpret_shape(raw)
+                raw['followups'] = list(_lib_raw.get('followups') or [])
+            try:
+                host.ask_hint(route='subiq_library', outcome='answered')
             except Exception as _fx:
                 _faults.note('service', _fx)
             env = envelope.wrap(raw, surface='analyze', decision=decision, thread_id=tid, via=via)
@@ -1769,7 +1813,8 @@ def _execute_reading(reading, text, ctx, history, user, uname, body, tid, via, p
         return None
     # restate when the reading was not sure (the reader corrects a
     # restatement instantly, and the correction feeds the bank)
-    if conf < 0.75 and reading.get('restate') and raw.get('action') == 'answer' and raw.get('reply'):
+    if conf < 0.75 and reading.get('restate') and raw.get('action') == 'answer' and raw.get('reply') \
+            and _restate_reads_clean(reading['restate']):
         raw = dict(raw, reply=f"{reading['restate'].rstrip('.')}.\n\n{raw['reply']}")
     raw = dict(raw, reading={'intent': intent, 'confidence': conf, 'subjects': subs})
     decision = {'surface': 'analyze', 'mode': None, 'reason': 'reader:' + reason, 'client_hint': None}
@@ -1786,6 +1831,22 @@ def _execute_reading(reading, text, ctx, history, user, uname, body, tid, via, p
     env = envelope.wrap(out, surface='analyze', decision=decision, thread_id=tid, via=via)
     _persist_turn(persist, uname, tid, history, text, env, out, 'analyze')
     return env, 200
+
+
+def _restate_reads_clean(restate):
+    """A restatement is shown only when the exit scrub would leave it as
+    written: one that carries internal words ("the panel count in the
+    panel") came back to eriley as "the data count in the data"
+    (2026-10-21). Such a restate is dropped; the answer stands alone."""
+    try:
+        import prometheus_analysis as _pa
+        from . import guards as _gd
+        r = str(restate or '')
+        if _gd.SAMPLE_VOCAB_RX.search(r):
+            return False
+        return ' '.join(_pa.scrub_user_text(r).split()) == ' '.join(r.split())
+    except Exception:
+        return True
 
 
 def _reading_overrules(reading, lane_intent):

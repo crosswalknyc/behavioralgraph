@@ -119,6 +119,8 @@ def is_where_watched_ask(text):
 def _clean_title(raw):
     s = ' '.join(str(raw or '').split()).strip(" ,;:.!?\"\u201c\u201d'\u2018\u2019")
     s = _TRAILING_RX.sub('', s).strip(" ,;:.!?\"\u201c\u201d'\u2018\u2019")
+    if re.fullmatch(r"(?:the\s+|that\s+|this\s+)?(?:film|movie|show|series|title|podcast|documentary|episode|season|it|that|this|them)s?", s, re.I):
+        return ''      # "the movie", "the film": a pointer at the thread's title, never a title named The Movie (Jay Patel 2026-10-21)
     s = re.sub(r"^(?:the\s+)?(?:film|movie|show|series|title|podcast|documentary)\s+(?:called\s+|titled\s+|named\s+)?", '', s, flags=re.I)
     s = s.strip(" ,;:.!?\"\u201c\u201d'\u2018\u2019")
     if not s:
@@ -700,7 +702,7 @@ def compose(res, shares, *, page='', ask=''):
 
 
 def compose_not_found(title, res, *, ask=''):
-    cands = [c for c in (res or {}).get('candidates') or [] if str(c).strip()]
+    cands = list(dict.fromkeys(c for c in ((res or {}).get('candidates') or []) if str(c).strip()))   # distinct, never "X (2015), X (2015) or X (2015)"
     if len(cands) > 1:
         reply = f"Which {title} do you mean: " + (', '.join(cands[:-1]) + f" or {cands[-1]}") + "?"
         return reply, [f"{c}" for c in cands[:4]] + ['Something else'], 'which_title'

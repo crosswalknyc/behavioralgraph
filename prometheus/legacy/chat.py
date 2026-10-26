@@ -32,6 +32,9 @@ from prometheus import page_default as _page_default   # the page is the base on
 from prometheus import creator_fit as _creator_fit   # a creator-fit read is held to the subject's universe (2026-10-20)
 from prometheus import intake_predicates as _intake_predicates   # pure text predicates (extracted 2026-10-20)
 from prometheus import subject_display as _subject_display   # a reader sees a name, never a key (2026-10-22)
+from prometheus import question_key as _question_key   # one fold for one question (2026-10-26)
+from prometheus import read_registry as _read_registry   # the caller's recent reads by question (2026-10-26)
+from prometheus import subiq_library as _subiq_library   # a question across the Subscriber IQ library (2026-10-26)
 import io
 import hashlib
 import time
@@ -9254,6 +9257,8 @@ def _pm_intake_turn(flow, text, body, history, user, ppu, first):
         return _pm_intake_fault_payload()
     if flow == 'digital_journey' and isinstance(parsed, dict):
         parsed = _ir.apply_direction(parsed)
+        if _ir.direction_unclear(parsed) and parsed.get('subject') and _ir.direction_asked_already(history):
+            parsed = _ir.default_direction(parsed)   # asked once already: the default, never the same question twice (2026-10-26)
         if _ir.direction_unclear(parsed) and parsed.get('subject'):
             # which way does it run (Jenna 2026-10-19): how they came TO WATCH, or what watchers do after and in addition
             _pm_ask_hint(outcome='clarified', subject=parsed.get('subject'))
@@ -10603,10 +10608,9 @@ _PM_REGRESSION_CASES_KEY = 'system/pm_regression_cases.json'
 
 
 def _pm_regression_q_key(text):
-    """Stable key for one question: casefold, alnum-only, md5[:16]."""
-    norm = re.sub(r'[^a-z0-9]+', ' ',
-                  str(text or '').casefold()).strip()
-    return hashlib.md5(norm.encode('utf-8')).hexdigest()[:16]
+    """Stable key for one question: the shared fold (prometheus.question_key), md5[:16]."""
+    from prometheus import question_key as _qk   # local: this function is extracted by source in a test
+    return _qk.key(text)
 
 
 def _pm_compact_for_bank(value, depth=0):
@@ -13404,7 +13408,7 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
         _args = (job_id, _pm_user, _pm_read_extras, text, list(history or [])[-10:],
                  mr, base, digest_block, anchors_block, led)
         _kw = {'panel_charge': panel_charge, 'probe': _probe}
-        _pm_read_inflight_mark(_pm_user, text, job_id)
+        _pm_read_inflight_mark(_pm_user, text, job_id, _promised)
         _head['thread_id'] = _pm_job_bind_thread(job_id, _pm_user)   # the worker is another process (API conversations, 2026-10-14)
         _head['via'] = 'api' if getattr(__import__('flask').g, '_pm_api_key_owner', None) else 'dashboard'
         if inline_job_id:            # the read worker runs the job right here
@@ -14157,68 +14161,22 @@ _PM_READ_INFLIGHT_PREFIX = 'system/prometheus_reads/_inflight/'
 
 
 def _pm_read_inflight_doc_key(user):
-    safe = re.sub(r'[^a-z0-9_.-]+', '_',
-                  str(user or 'anon').strip().lower()) or 'anon'
-    return f"{_PM_READ_INFLIGHT_PREFIX}{safe}.json"
+    return _read_registry.doc_key(user)
 
 
 def _pm_read_inflight_check(user, text):
-    """The caller's own running job for this exact question, or None.
-    A same-question re-send attaches to the running job instead of
-    starting a second copy (Jenna 2026-09-30; builds already had
-    this). Self-expiring: the entry only counts while the job status
-    still says working and it started under 15 minutes ago."""
-    try:
-        qk = _pm_regression_q_key(text)
-        resp = _H.s3_client.get_object(
-            Bucket=_H.S3_BUCKET, Key=_pm_read_inflight_doc_key(user))
-        doc = json.loads(resp['Body'].read().decode('utf-8'))
-        ent = doc.get(qk) if isinstance(doc, dict) else None
-        if not isinstance(ent, dict):
-            return None
-        if time.time() - float(ent.get('started_at') or 0) > 900:
-            return None
-        job_id = str(ent.get('job_id') or '')
-        if not job_id:
-            return None
-        st = _H.s3_client.get_object(
-            Bucket=_H.S3_BUCKET, Key=f"{_PM_READ_PREFIX}{job_id}.json")
-        status = json.loads(st['Body'].read().decode('utf-8'))
-        if str(status.get('status') or '') != 'working':
-            return None
-        if status.get('claimed_by') and not status.get('resumed_as'):
-            return None   # being resumed right now: its own launch must run
-        return {'job_id': job_id,
-                'stage': str(status.get('stage') or '').strip()}
-    except Exception:
-        return None
+    """The caller's own running job for this question (shared fold), or None
+    (prometheus.read_registry; Jenna 2026-09-30, 2026-10-26)."""
+    return _read_registry.inflight(_H.s3_client, _H.S3_BUCKET, _PM_READ_PREFIX, user, text)
 
 
-def _pm_read_inflight_mark(user, text, job_id):
-    """Record the running job under the caller's question key. Prunes
-    entries past the 15 minute window on every write. Never raises."""
-    try:
-        qk = _pm_regression_q_key(text)
-        key = _pm_read_inflight_doc_key(user)
-        try:
-            resp = _H.s3_client.get_object(Bucket=_H.S3_BUCKET, Key=key)
-            doc = json.loads(resp['Body'].read().decode('utf-8'))
-        except Exception:
-            doc = {}
-        if not isinstance(doc, dict):
-            doc = {}
-        now = time.time()
-        doc = {k: v for k, v in doc.items()
-               if isinstance(v, dict)
-               and now - float(v.get('started_at') or 0) <= 900}
-        doc[qk] = {'job_id': job_id, 'started_at': now,
-                   'question': str(text or '')[:200]}
-        _H.s3_client.put_object(
-            Bucket=_H.S3_BUCKET, Key=key,
-            Body=json.dumps(doc).encode('utf-8'),
-            ContentType='application/json')
-    except Exception:
-        traceback.print_exc()
+def _pm_read_recent_check(user, text):
+    """The caller's landed read on this question inside a day, or the running one."""
+    return _read_registry.recent(_H.s3_client, _H.S3_BUCKET, _PM_READ_PREFIX, user, text)
+
+
+def _pm_read_inflight_mark(user, text, job_id, subject=''):
+    _read_registry.mark(_H.s3_client, _H.S3_BUCKET, user, text, job_id, subject=subject)
 
 
 # ------------------------------------------------------------------
@@ -15866,6 +15824,9 @@ def _pm_analyze_core(user, body, text, history):
     _subiq_answerable = False
     _subiq_fork = (_route == 'clarify'
                    and _route_d.get('why') == 'subiq_fork')
+    if (_route == 'subiq' or _subiq_fork) and _subiq_library.is_library_wide_ask(text):   # "of the existing Subscriber IQs, which series ..." is read off the library (Bria 2026-10-21)
+        _pm_ask_hint(route='subiq_library', outcome='answered')
+        return jsonify(_subiq_library.answer(text, _H.s3_client, _H.SUBSCRIBER_S3_BUCKET, user, can_open=(lambda k, n: _H._user_can_open_subscriber(user, k, n))))
     if _route == 'subiq' or _subiq_fork:
         try:
             from prometheus import guards as _pg_sq
@@ -18296,6 +18257,7 @@ _EXPORTS = (
     '_pm_read_inflight_check',
     '_pm_read_inflight_doc_key',
     '_pm_read_inflight_mark',
+    '_pm_read_recent_check',
     '_pm_read_status_write',
     '_pm_reads_as_refusal',
     '_pm_recent_build_guard',

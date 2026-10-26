@@ -466,7 +466,11 @@ def open_screen_question(text, page, history, *, deck=False, what='this'):
     so the deck lane's memory confirm re-runs as a deck."""
     page = str(page or '').strip()
     rejected = page_rejected_in_thread(history, page)
-    subs = thread_subjects(history, page)
+    # a thread subject that IS the page ("farmlink" with The Farmlink
+    # Project open) is not a second option; with nothing else in the
+    # thread there is no question to ask (eriley 2026-10-25 drew "The
+    # Farmlink Project or The Farmlink Project?")
+    subs = [x for x in thread_subjects(history, page) if not same_entity(x, page)]
     if not rejected and not subs:
         return None
     ws = which_subject_payload(page, subs, what=what)
@@ -504,12 +508,25 @@ def conversation_hold(text, history, page, reask, scrub, note=None):
                    'memory_confirm': {'question': text, 'options': ws['options']}}
 
 
+def same_entity(a, b):
+    """Two spellings of one thing: equal once folded, or one folded name
+    inside the other with five or more characters in common ("farmlink"
+    and "The Farmlink Project"; "Will & Grace" and "Will And Grace")."""
+    na, nb = _norm(a), _norm(b)
+    if not na or not nb:
+        return False
+    return na == nb or (min(len(na), len(nb)) >= 5 and (na in nb or nb in na))
+
+
 def which_subject_payload(page, subjects, *, what='this'):
     """The one-tap which-subject question when the words name no subject:
     the thread's subjects first, the page last and labeled as the open
-    profile, then 'Something else'. Never a yes/no on the page alone."""
+    profile, then 'Something else'. Never a yes/no on the page alone, and
+    never the same name twice (2026-10-26)."""
     opts = []
     for s in (subjects or []):
+        if any(same_entity(s, o['subject']) for o in opts) or (page and same_entity(s, page)):
+            continue
         opts.append({'label': f'On {s}', 'subject': s})
     if page:
         opts.append({'label': f'{page} (open on your screen)', 'subject': page})

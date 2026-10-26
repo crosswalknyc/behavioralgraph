@@ -2870,19 +2870,22 @@ def sample_size_reply(text) -> str:
     if m:
         end = m.group(2) or ''
         end = 'today' if end.lower() in ('today', 'date', 'now', '') else end
-        window = f" From {m.group(1)} to {end} it was {SAMPLE_SIZE // 1_000_000} million."
+        window = f" From {m.group(1)} to {end} it was the same {SAMPLE_SIZE // 1_000_000} million."
+    n = SAMPLE_SIZE // 1_000_000
+    # No "sample" or "panel" in the words (the exit scrub rewrites them and
+    # left Tania Nasr "The Crosswalk data is our US data", 2026-10-26)
     return (
-        f"The Crosswalk sample is {SAMPLE_SIZE // 1_000_000} million US "
-        f"consumers, and it is the same size on every date.{window}\n\n"
-        "The sample does not grow or shrink by window. What changes by "
-        "window is how many of those 10 million did a given thing: "
+        f"Crosswalk measures the digital behavior of {n} million US consumers "
+        f"who opted in, the same {n} million on every date.{window}\n\n"
+        "That base does not grow or shrink by window. What changes by "
+        f"window is how many of those {n} million did a given thing: "
         "watched a title, visited a site, signed up, searched a brand. "
         "Every count on the dashboard is that activity projected from the "
-        f"10 million to the US general population of "
+        f"{n} million to the US population of "
         f"{US_GEN_POP_SIZE / 1_000_000:.1f} million, so the figures read "
-        "as US people, not as sample members.\n\n"
-        "If you want the size of a specific audience inside the sample for "
-        "that window, name the brand, title, or behavior and I will pull it."
+        "as US people.\n\n"
+        "If you want the size of a specific audience for a window, name the "
+        "brand, title, or behavior and I will pull it."
     )
 
 
