@@ -6149,6 +6149,14 @@ def _pm_interpret_core(user, body, text, history):
             _H._resolve_subject_identity(spec_draft, text, allow_ask=True)
         except Exception as _id_err:
             print(f"[synth-chat interpret] identity error: {_id_err}")
+        # Same-title variants (Jessie's HowTo 5g, 2026-10-26): a bare title
+        # on StreamScout's own list (The Office US / UK) asks which version
+        # here, with one chip per version, before anything is built.
+        try:
+            from prometheus.title_variants import apply_variant_guard as _tv_guard
+            _tv_guard(spec_draft)
+        except Exception as _tv_err:
+            print(f"[synth-chat interpret] variant guard error: {_tv_err}")
         _pm_ask_stage('identity', t0=_t_identity)
 
         # Normalized existing-profile match (2026-08-24 SHARKNINJA
