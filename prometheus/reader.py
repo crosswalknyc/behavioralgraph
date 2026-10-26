@@ -570,15 +570,7 @@ _PRODUCT_FOR = {
 
 
 def capability_reply(reading):
-    """A can-we answer shaped by what the Reader saw the person wanting.
-
-    The reading's `wants` is the Reader's own third-person note ("They
-    want to know whether Crosswalk can measure ..."). It picks the
-    product here and is never quoted: until 2026-10-26 it rode into the
-    reply as "From what you describe (They want to know ...), that is the
-    one." (Mark Valdez, YouTube's share of US connected TV time). A
-    yes-answerable question about the data itself is answered "Yes." by
-    prometheus.data_capability before this is reached."""
+    """A can-we answer shaped by what the Reader saw the person wanting."""
     wants = str((reading or {}).get('wants') or '').strip()
     low = wants.lower()
     key = 'analyze'
@@ -591,7 +583,8 @@ def capability_reply(reading):
             break
     name, what, chip = _PRODUCT_FOR[key]
     reply = (f"Yes. {name[0].upper() + name[1:]} {what}. "
-             "Tell me the subject and the window and I will line it up; it comes back as a brief to approve before anything is charged.")
+             + (f"From what you describe ({wants.rstrip('.')}), that is the one. " if wants else '')
+             + "Tell me the subject and the window and I will line it up; it comes back as a brief to approve before anything is charged.")
     return {'reply': reply, 'followups': [chip]}
 
 

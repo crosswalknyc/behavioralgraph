@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import re
 
-BANNED = ("\u2014", "\u2013")                      # never in any text, prompts included (no-em-dashes)
+BANNED = (r"—", r"–")                      # never in any text, prompts included (no-em-dashes)
 INTERNAL = (r"\bsynth\b", r"\bhostmap\b", r"\bHetzner\b", r"\bClaude\b")   # noted, not failed: prompts may name internal terms to forbid them
 _TOK = 4.0   # chars per token, the house estimate
 

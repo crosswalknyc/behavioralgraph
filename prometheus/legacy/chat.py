@@ -35,7 +35,6 @@ from prometheus import subject_display as _subject_display   # a reader sees a n
 from prometheus import question_key as _question_key   # one fold for one question (2026-10-26)
 from prometheus import read_registry as _read_registry   # the caller's recent reads by question (2026-10-26)
 from prometheus import subiq_library as _subiq_library   # a question across the Subscriber IQ library (2026-10-26)
-from prometheus import deck_sources as _deck_sources   # a deck of something already delivered or attached (2026-10-26)
 import io
 import hashlib
 import time
@@ -6149,14 +6148,6 @@ def _pm_interpret_core(user, body, text, history):
             _H._resolve_subject_identity(spec_draft, text, allow_ask=True)
         except Exception as _id_err:
             print(f"[synth-chat interpret] identity error: {_id_err}")
-        # Same-title variants (Jessie's HowTo 5g, 2026-10-26): a bare title
-        # on StreamScout's own list (The Office US / UK) asks which version
-        # here, with one chip per version, before anything is built.
-        try:
-            from prometheus.title_variants import apply_variant_guard as _tv_guard
-            _tv_guard(spec_draft)
-        except Exception as _tv_err:
-            print(f"[synth-chat interpret] variant guard error: {_tv_err}")
         _pm_ask_stage('identity', t0=_t_identity)
 
         # Normalized existing-profile match (2026-08-24 SHARKNINJA
@@ -9071,10 +9062,6 @@ def _pm_intake_resolve(flow, text, history, parse_fn, complete_fn,
     if complete_fn(parsed):
         return parsed, False
     prior = _pm_intake_prior_user_turns(history, ask_copy)
-    if not prior:
-        from prometheus import intake_predicates as _ip   # local: the resolver is also exec'd standalone in tests
-        if _ip.points_back_at_thread(text):   # "look at the colin and samir campaign": the brief sits one message up (Debi 2026-10-21)
-            prior = _ip.recent_substantive_user_turns(history)
     _pd = _intake_draft.prior_draft(history)   # an edit merges with the drafted brief (2026-10-09)
     if _pd:
         prior = [_pd] + prior
@@ -9124,9 +9111,7 @@ def _pm_intake_resolve(flow, text, history, parse_fn, complete_fn,
     # instead of asking the user to type it again.
     if propose_fn:
         try:
-            parsed['_ask'] = combined_text   # the proposer reads the ask itself (a prospective partnership gets its window); popped there
             prop = propose_fn(parsed)
-            parsed.pop('_ask', None)
             # (field, value) or (field, value, display); the display
             # form lets a falsy value ("daily tracking off") ride.
             if prop and len(prop) in (2, 3) and (
@@ -15280,7 +15265,7 @@ def _pm_analyze_core(user, body, text, history):
             'followups': [], 'offer_deck': False, 'deck_angle': None})
     if body.get('bpiq_inputs') and not _pm_intake_breakout(text):
         return jsonify(_pm_intake_turn('brand_partnership', text, body, history, user, _pm_ppu, first=False))
-    if _pm_bpiq_intent(text) or _pm_read_intent(body, 'valuation') or _intents.bpiq_reading(body):
+    if _pm_bpiq_intent(text) or _pm_read_intent(body, 'valuation'):
         return jsonify(_pm_intake_turn('brand_partnership', text, body, history, user, _pm_ppu, first=True))
     # ---- Attribution IQ tracking flow (Jenna 2026-09-22) ----
     _aiq_confirm = body.get('aiq_confirm') or _pm_pending_intake('pick', user, 'attribution', text)
@@ -15813,7 +15798,6 @@ def _pm_analyze_core(user, body, text, history):
             mode=str(body.get('mode') or ''),
             has_base=_router_has_base,
             memory_referent=_router_memory_referent,
-            other_subject=lambda: _subject_rules.names_other_subject(text, ctx),   # a named subject that is not the page is never a page analysis (Debi 2026-10-26)
             classify_fn=lambda _t: _pma_rt.classify_ask_semantic(
                 _t, lambda s, u: _pm_claude_json(
                     s, u, max_tokens=200, temperature=0.0,
@@ -17418,9 +17402,6 @@ def _pm_resolve_deck_subject(text, ctx):
         {'subject': '', 'partner': ''}
     partner = brief.get('partner') or ''
     wanted = (brief.get('subject') or '').strip()
-    _from_delivered = bool(isinstance(ctx, dict) and ctx.get('deck_source'))   # the material is the delivered journey or the attached file, never a library profile of the same name
-    if _from_delivered:
-        wanted, partner = '', ''
 
     def _norm(s):
         return _H._normalize_for_match(str(s or ''))
@@ -17492,7 +17473,7 @@ def _pm_resolve_deck_subject(text, ctx):
     # no subject and may have nothing open, but the session remembers
     # which subject the last read covered. Resolve that subject so the
     # deck consumes the data just delivered instead of erroring.
-    if chosen is None and not wanted and not (ctx and ctx.get('primary')) and not _from_delivered:
+    if chosen is None and not wanted and not (ctx and ctx.get('primary')):
         try:
             _last_read = session.get('pm_csv_last') or {}
         except Exception:
@@ -17803,10 +17784,6 @@ def _pm_deck_core(user, body):
     ctx, ctx_err = _pm_validate_page_context(body.get('page_context'))
     if ctx_err:
         return ctx_err
-    _ds = _deck_sources.resolve(text, ctx, history, user, _H, tid=str(body.get('thread_id') or ''))   # a PPT of the deck already delivered or attached (Debi 2026-10-21)
-    if _ds:
-        ctx, history = _ds
-        angle = 'The same deck, slide for slide: every number, table and read exactly as delivered, in the same order, nothing added.'
     try:
         resolution, res_err = _pm_resolve_deck_subject(text, ctx)
     except Exception as e:

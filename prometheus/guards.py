@@ -1119,57 +1119,6 @@ def scrub_method_language(text):
     return result or t
 
 
-# The reader's own note never reaches a reader (Jenna 2026-10-26). The
-# Reader (prometheus.reader) writes a third-person line on what the person
-# wants ("They want to know whether Crosswalk can measure YouTube's share
-# of US connected TV watch time"); it is internal. Mark Valdez got it back
-# inside "From what you describe (...), that is the one." A sentence that
-# frames the note goes whole, a sentence that opens as the note goes
-# whole, and a parenthetical note inside a kept sentence goes on its own.
-# The note shape is "they want to know / are asking / are trying to
-# decide ..."; an audience sentence ("They want short clips.") is prose
-# and stays.
-_ECHO_FRAME_RX = re.compile(r"\bfrom what you (?:describe|say|said|wrote|write|ask|asked)\b\s*\(", re.I)
-_NOTE_CORE = (r"(?:they|the (?:user|reader|person|caller|client|asker)) "
-              r"(?:(?:want|wants|would like|need|needs) to (?:know|see|understand|find out|figure out|learn|measure|"
-              r"determine|decide|confirm|check|get a (?:read|sense|view|count))\b|"
-              r"(?:is|are) (?:asking (?:whether|if|how|what|which|who|where|when|why|about)|"
-              r"trying to (?:decide|determine|figure out|find out|understand|measure|know|see|confirm|get))\b)")
-_ECHO_NOTE_RX = re.compile(r"^\W*" + _NOTE_CORE, re.I)
-_ECHO_PAREN_RX = re.compile(r"\s*\(" + _NOTE_CORE + r"[^()]*\)", re.I)
-
-
-def reader_echo(text):
-    """Sentences in a reply that quote the Reader's own note."""
-    t = str(text or '')
-    if not t.strip():
-        return []
-    return [s for s in _SENT_SPLIT_RX.split(t) if _ECHO_FRAME_RX.search(s) or _ECHO_NOTE_RX.match(s)]
-
-
-def strip_reader_echo(text):
-    """The reply without the Reader's note. Idempotent; returns the input
-    when nothing else would remain (the answer gate holds that reply)."""
-    t = str(text or '')
-    if not t.strip():
-        return t
-    if not (_ECHO_FRAME_RX.search(t) or _ECHO_PAREN_RX.search(t) or any(_ECHO_NOTE_RX.match(s) for s in _SENT_SPLIT_RX.split(t))):
-        return t
-    out_paras = []
-    for para in t.split('\n'):
-        if not para.strip():
-            out_paras.append(para)
-            continue
-        keep = [s.strip() for s in _SENT_SPLIT_RX.split(para)
-                if s.strip() and not (_ECHO_FRAME_RX.search(s) or _ECHO_NOTE_RX.match(s))]
-        if keep:
-            out_paras.append(' '.join(keep))
-    result = _ECHO_PAREN_RX.sub('', '\n'.join(out_paras))
-    result = re.sub(r'\s+([.,;:])', r'\1', result)
-    result = re.sub(r'\n{3,}', '\n\n', result).strip()
-    return result or t
-
-
 def _keeps_sample_words(raw):
     """The product fact about the ten million keeps its number: the
     payload says product_fact, or the ask in flight was that question."""
@@ -1196,11 +1145,6 @@ def scrub_method_language_payload(raw):
         if isinstance(v, str) and v.strip() and method_language(v):
             raw[k] = scrub_method_language(v)
             raw.setdefault('_scrubbed', []).append(k)
-        v = raw.get(k)
-        # the Reader's own note never reaches a reader (2026-10-26)
-        if isinstance(v, str) and v.strip() and reader_echo(v):
-            raw[k] = strip_reader_echo(v)
-            raw.setdefault('_scrubbed', []).append(k + ':echo')
         v = raw.get(k)
         # I5: sample vocabulary never reaches a reader; the ten-million
         # product fact is the one reply that keeps its number (the payload

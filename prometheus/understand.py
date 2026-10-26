@@ -98,7 +98,7 @@ _TIME_SERIES_RX = re.compile(
 _DECK_BUILD_RX = re.compile(
     r'\b(build|make|create|generate|put together|spin up|prepare|draft|'
     r'put|turn|drop|export|convert|render|lay out|package|wrap|compile|'
-    r'assemble|consolidate|combine|merge|recreate|re-create|rebuild|remake|redo|reproduce)\b'
+    r'assemble|consolidate|combine|merge)\b'
     r'[^.!?]{0,60}\b(deck|slides|presentation|one[- ]?pagers?|pptx|powerpoint|ppt)\b', re.I)
 # 2026-10-09 (Liz): "I want a deck built for Euphoria ...", "powerpoint
 # deck.", "Consolidate all slides into a Single Powerpoint deck." all
@@ -122,7 +122,7 @@ _DECK_BARE_RX = re.compile(
 _DECK_INTO_RX = re.compile(
     r'\b(?:into|as) (?:a |an |one )?(?:(?:simple|quick|short|small|tight|clean|single|one|full|final|'
     r'complete|consolidated|proper|real|actual|branded|powerpoint|ppt|pptx|one[- ]page) )*'
-    r'(?:deck|slides?|presentation|one[- ]?pager|pptx|ppt|powerpoint)\b', re.I)
+    r'(?:deck|slides?|presentation|one[- ]?pager|pptx|powerpoint)\b', re.I)
 _RENDER_IT_RX = re.compile(
     r'^(?:please\s+)?(?:render|build|make|export|generate|create|produce|'
     r'do|ship|send|give me|finish)\s+(?:it|that|this|them|these|the deck|'

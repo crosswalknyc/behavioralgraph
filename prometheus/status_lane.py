@@ -195,14 +195,10 @@ def _job_items(host, uname, days=7):
 
 
 # Terminal-failure lines the engine writes FOR the client (the partner
-# API whitelist mirrors this): the refund copy, StreamScout's
+# API whitelist mirrors this): the refund copy, and StreamScout's
 # "We can't see <title> on <platform> at this time" when the client named
-# a platform the title is not on, and the title hold "We need to confirm
-# which <title> you mean before we build this" (2026-10-26, a bare
-# title that names more than one work, or a near title held). Anything
-# else stays generic.
-_CLIENT_FAILURE_PREFIXES = ("this build could not be completed", "we can't see ", "we cant see ",
-                            "we need to confirm which ")
+# a platform the title is not on. Anything else stays generic.
+_CLIENT_FAILURE_PREFIXES = ("this build could not be completed", "we can't see ", "we cant see ")
 
 
 def client_failure_line(error):

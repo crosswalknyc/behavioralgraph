@@ -801,39 +801,9 @@ def _to_iso(iso, mon, day, year, end=False):
     return f'{y:04d}-{m:02d}-{d:02d}'
 
 
-_NUMERIC_DATE = re.compile(r'(?<![\d/])(?P<m>\d{1,2})/(?P<d>\d{1,2})/(?P<y>\d{4}|\d{2})(?![\d/])')
-
-
-def normalize_numeric_dates(text):
-    """"7/14/26" and "07/14/2026" (US order) read as 2026-07-14 so every
-    date rule below sees one spelling (Debi 2026-10-21: "launched the
-    first promo on 7/14/26")."""
-    def _sub(m):
-        mm, dd, yy = int(m.group('m')), int(m.group('d')), int(m.group('y'))
-        if yy < 100:
-            yy += 2000
-        if not (1 <= mm <= 12 and 1 <= dd <= 31):
-            return m.group(0)
-        try:
-            import datetime as _dt
-            return _dt.date(yy, mm, dd).isoformat()
-        except Exception:
-            return m.group(0)
-    return _NUMERIC_DATE.sub(_sub, str(text or ''))
-
-
-_OPEN_END_RX = re.compile(
-    r'\b(?:to|through|thru|until|till)\s+(?:date|today|now|present|the\s+present)\b|\b(?:still|currently)\s+(?:running|live|on\s+air|going)\b|'
-    r'\b(?:is|are)\s+(?:still\s+)?(?:running|live|ongoing)\b|\bongoing\b|\bruns?\s+for\s+(?:a|one|the\s+next)\s+(?:year|month|quarter|season)|'
-    r'\bruns?\s+(?:through|until|till)\s+(?:next\s+)?(?:year|spring|summer|fall|winter|20\d\d)\b', re.I)
-_START_ONLY_RX = re.compile(
-    r'\b(?:launch(?:ed|es|ing)?|start(?:ed|s|ing)?|kick(?:ed|s)?\s+off|went\s+live|go(?:es)?\s+live|began|begins|beginning|premiered|debuted|dropped|'
-    r'first\s+(?:promo|post|video|ad|spot|episode|drop)(?:\s+\w+){0,3}?|since|starting|as\s+of|from)\s+(?:on\s+|in\s+|back\s+in\s+)?' + _DATE_RX, re.I)
-
-
 def find_date_ranges(text):
     """Every (start_iso, end_iso, span) range in the text, in order."""
-    t = normalize_numeric_dates(text)
+    t = str(text or '')
     out = []
     for m in _DATE_RANGE.finditer(t):
         s = _to_iso(m.group('iso'), m.group('mon'), m.group('day'),
@@ -871,10 +841,8 @@ def _label_before(text, pos):
 
 def find_windows(text):
     """{'event_start','event_end','pre_*','post_*'} from the labelled
-    ranges; the first unlabelled range is the campaign. A start with no
-    end ("launched on 7/14/26 and runs for a year", "from 7/14/26 to
-    date") is the campaign start; an open end reads through today."""
-    t = normalize_numeric_dates(text)
+    ranges; the first unlabelled range is the campaign."""
+    t = str(text or '')
     out = {}
     unlabelled = []
     for s, e, (a, b) in find_date_ranges(t):
@@ -897,17 +865,6 @@ def find_windows(text):
             out['post_end'] = e
             if out.get('event_end'):
                 out['post_start'] = out['event_end']
-    if 'event_start' not in out:
-        m = _START_ONLY_RX.search(t)
-        if m:
-            s0 = _to_iso(m.group('iso'), m.group('mon'), m.group('day'), m.group('year'))
-            if s0:
-                out['event_start'] = s0
-                if _OPEN_END_RX.search(t):
-                    import datetime as _dt
-                    today = _dt.date.today().isoformat()
-                    if s0 <= today:
-                        out['event_end'] = today
     return out
 
 
@@ -920,10 +877,6 @@ _BP_X = re.compile(
     r'(?P<a>' + _CAPS_RUN + r')'
     r'(?:\s*(?:×|\+|&)\s*|\s+(?:x|X|and|with)\s+)'
     r'(?P<b>' + _CAPS_RUN + r')')
-_BP_X_STRICT = re.compile(
-    r'(?P<a>' + _CAPS_RUN + r')'
-    r'(?:\s*(?:×|\+)\s*|\s+(?:x|X)\s+)'
-    r'(?P<b>' + _CAPS_RUN + r')')
 _BP_LABELLED = {
     'brand_partner': re.compile(
         r'\b(?:brand(?:\s+being\s+valued)?|advertiser|sponsor)\s*(?:is|:|=)'
@@ -935,40 +888,11 @@ _BP_LABELLED = {
         r'\b(?:audience|measure(?:d)?\s+against|against)\s*(?:is|:|=|of)?'
         r'\s*(?P<v>[^,.;\n]{3,60})', re.I),
 }
-# a name that may carry a lowercase joiner inside it ("Colin and Samir",
-# "Rhett & Link", "Dude Perfect"); used only where a verb phrase, not the
-# joiner, separates the two parties
-_DUO_RUN = r"[A-Z0-9][\w.&'+-]*(?:\s+(?:(?:and|&|of|the)\s+)?[A-Z0-9][\w.&'+-]*){0,5}"
-_BP_PARTNERING = re.compile(
-    r'(?P<a>' + _DUO_RUN + r')'
-    r"(?i:(?:\s+(?:is|are|was|were|will\s+be|has|have|had|to|should|could|would|might|may|wants?\s+to|plans?\s+to|decided\s+to|agreed\s+to|officially|now|just|recently))*"
-    r"\s+(?:partner(?:ing|ed|s)?|team(?:ing|ed|s)?\s+up|collab(?:orat(?:e|ing|ed|es))?|sign(?:ing|ed|s)?(?:\s+a\s+deal)?|tie\s+up)\s+with\s+)"
-    r'(?P<b>' + _DUO_RUN + r')')
-_BP_DEAL = re.compile(
-    r'(?P<p>' + _DUO_RUN + r')'
-    r"(?i:\s+(?:have|has|had|signed|landed|got|announced|struck|inked|closed|ran|run|did|launched|fronted|shot|filmed|started)\s+(?:a|an|the|their)\s+(?:new\s+)?)"
-    r'(?P<b>' + _DUO_RUN + r')'
-    r"(?i:\s+(?:deal|sponsorship|partnership|campaign|integration|collab(?:oration)?)\b)")
-# "Lexus signed Colin and Samir", "Wendy's tapped Rhett and Link": the one
-# doing the signing is the brand, the people signed are the talent
-_BP_SIGNED = re.compile(
-    r'(?P<b>' + _DUO_RUN + r')'
-    r"(?i:\s+(?:has|have|had|just|recently|officially|reportedly)?\s*(?:signed|hired|tapped|booked|enlisted|recruited|brought\s+on|brought\s+in|named)\s+)"
-    r'(?P<p>' + _DUO_RUN + r')'
-    r"(?i:\s+(?:for|as|to\s+front|to\s+lead|to\s+star|to\s+promote|in)\b)")
-# "Wendy's is a good fit with Rhett and Link", "is Mastercard the right partner for MrBeast"
-_BP_FIT = re.compile(
-    r'(?P<a>' + _DUO_RUN + r')'
-    r"(?i:\s+(?:is|are|would\s+be|be|as|makes?|seems?(?:\s+like)?|looks?\s+like)?\s*(?:a|an|the)?\s*(?:good|great|strong|right|natural|smart|perfect|bad|poor|wrong|odd)?\s*(?:fit|match|partner|pairing)\s+(?:with|for)\s+)"
-    r'(?P<b>' + _DUO_RUN + r')')
-_BP_DUO_BRAND = re.compile(
-    r"\b(?:the|this|their)\s+(?P<p>[A-Z][\w.'+-]*\s+(?:and|&)\s+[A-Z][\w.'+-]*)\s+(?P<b>[A-Z][\w.&'+-]*(?:\s+[A-Z][\w.&'+-]*){0,2})"
-    r"\s+(?:campaign|deal|partnership|sponsorship|collab(?:oration)?|integration|run|flight)\b")
 _BP_PREP = re.compile(
     r'\b(?:valu(?:e|ation\s+(?:of|for)|ing)|measure|price|partnership\s+(?:of|for))'
     r'\s+(?:the\s+)?(?P<brand>' + _CAPS_RUN + r')'
     r'(?:\s+(?:partnership|deal|sponsorship|campaign|integration))?'
-    r'\s+(?P<conn>with|on|and|x|×)\s+(?P<partner>' + _DUO_RUN + r')')   # the partner may be a duo ("with Colin and Samir")
+    r'\s+(?P<conn>with|on|and|x|×)\s+(?P<partner>' + _CAPS_RUN + r')')
 _BP_NOISE = {'brand', 'partnership', 'valuation', 'campaign', 'window',
              'pull', 'run', 'the', 'a', 'an', 'value', 'please', 'post',
              'pre', 'through', 'optional', 'audience'}
@@ -979,25 +903,6 @@ def _bp_clean(v):
     v = re.sub(r'^(?:the|a|an)\s+', '', v, flags=re.I)
     v = re.sub(r'\s*(?:,|;|\(|-)\s*$', '', v).strip()
     return v or None
-
-
-def _looks_like_people(v):
-    """A duo ("Colin and Samir", "Rhett & Link") or an honorific name
-    ("Mr. Beast", "Dr. Mike") reads as talent, never as the brand."""
-    t = ' '.join(str(v or '').split())
-    return bool(re.match(r"^[A-Z][\w'.-]+\s+(?:and|&)\s+[A-Z][\w'.-]+$", t) or re.match(r"^(?:Mr|Mrs|Ms|Dr|Sir)\.?\s+[A-Z]", t))
-
-
-_BRAND_SUFFIX_RX = re.compile(
-    r"\b(?:inc|llc|co|corp|corporation|company|group|brands?|motors?|trucks?|bank|financial|airlines?|airways|foods?|beverages?|stores?|markets?|"
-    r"pharmacy|insurance|wireless|mobile|energy|hotels?|resorts?|casinos?|cosmetics|beauty|apparel|outfitters|supply|hardware|depot|mart|express)\.?$", re.I)
-
-
-def _looks_like_brand(v):
-    """A possessive trade name ("Lowe's", "Wendy's", "Dick's") or a company
-    suffix ("RAM Trucks", "Capital One Bank") reads as the brand side."""
-    t = ' '.join(str(v or '').split())
-    return bool(re.search(r"[\w]['\u2019]s$", t) or _BRAND_SUFFIX_RX.search(t))
 
 
 def _bp_is_name(v):
@@ -1237,7 +1142,7 @@ def keyword_parse_brand_partnership(text):
     # Strip dates, links and parentheticals so the pair readers do not
     # swallow a window or a platform list: "MMG (YouTube, IG, TikTok) x
     # Lowe's" reads MMG and Lowe's.
-    bare = _DATE_RANGE.sub(' ', normalize_numeric_dates(t))
+    bare = _DATE_RANGE.sub(' ', t)
     bare = _SHORT_RANGE.sub(' ', bare)
     bare = _SINGLE_DATE.sub(' ', bare)
     bare = _URL_ANY.sub(' ', bare)
@@ -1253,59 +1158,6 @@ def keyword_parse_brand_partnership(text):
                 out['brand_partner'] = out['brand_partner'] or b
                 out['qualifier'] = out['qualifier'] or p
     if not (out['brand_partner'] and out['qualifier']):
-        # the explicit "Glen Powell x RAM Trucks" form first (partner x brand);
-        # a plain "and" / "with" between two names is read last, after the
-        # partnering verbs, so "Colin and Samir have a Lexus deal" is a duo
-        # and a brand, not two halves (Debi 2026-10-26)
-        for m in _BP_X_STRICT.finditer(bare):
-            a, b = _bp_clean(m.group('a')), _bp_clean(m.group('b'))
-            if not (_bp_is_name(a) and _bp_is_name(b)):
-                continue
-            out['qualifier'] = out['qualifier'] or a
-            out['brand_partner'] = out['brand_partner'] or b
-            break
-    if not (out['brand_partner'] and out['qualifier']):
-        # "Mastercard is partnering with Mr. Beast" / "Mastercard to partner
-        # with Mr. Beast": the one partnering is the brand, the one partnered
-        # with is the talent; "Colin and Samir have a Lexus deal": the duo
-        # is the talent and the named deal is the brand (Debi 2026-10-26)
-        m = _BP_PARTNERING.search(bare)
-        if m:
-            b, p = _bp_clean(m.group('a')), _bp_clean(m.group('b'))
-            if (_looks_like_people(b) and not _looks_like_people(p)) or (_looks_like_brand(p) and not _looks_like_brand(b)):
-                b, p = p, b      # "Rhett and Link are teaming up with Wendy's", "MMG partnered with Lowe's": the trade name is the brand
-            if _bp_is_name(b) and _bp_is_name(p):
-                out['brand_partner'], out['qualifier'] = b, p
-        if not (out['brand_partner'] and out['qualifier']):
-            # "the Colin and Samir Lexus campaign": a duo, then the brand, then the noun
-            m = _BP_DUO_BRAND.search(bare)
-            if m:
-                p, b = _bp_clean(m.group('p')), _bp_clean(m.group('b'))
-                if _bp_is_name(b) and _bp_is_name(p):
-                    out['brand_partner'], out['qualifier'] = b, p
-        if not (out['brand_partner'] and out['qualifier']):
-            m = _BP_DEAL.search(bare)
-            if m:
-                p, b = _bp_clean(m.group('p')), _bp_clean(m.group('b'))
-                if _bp_is_name(b) and _bp_is_name(p):
-                    out['brand_partner'], out['qualifier'] = b, p
-        if not (out['brand_partner'] and out['qualifier']):
-            m = _BP_SIGNED.search(bare)
-            if m:
-                b, p = _bp_clean(m.group('b')), _bp_clean(m.group('p'))
-                if _looks_like_people(b) and not _looks_like_people(p):
-                    b, p = p, b
-                if _bp_is_name(b) and _bp_is_name(p):
-                    out['brand_partner'], out['qualifier'] = b, p
-        if not (out['brand_partner'] and out['qualifier']):
-            m = _BP_FIT.search(bare)
-            if m:
-                b, p = _bp_clean(m.group('a')), _bp_clean(m.group('b'))
-                if _looks_like_people(b) and not _looks_like_people(p):
-                    b, p = p, b
-                if _bp_is_name(b) and _bp_is_name(p):
-                    out['brand_partner'], out['qualifier'] = b, p
-    if not (out['brand_partner'] and out['qualifier']):
         for m in _BP_X.finditer(bare):
             a, b = _bp_clean(m.group('a')), _bp_clean(m.group('b'))
             if not (_bp_is_name(a) and _bp_is_name(b)):
@@ -1315,29 +1167,10 @@ def keyword_parse_brand_partnership(text):
             out['qualifier'] = out['qualifier'] or a
             out['brand_partner'] = out['brand_partner'] or b
             break
-    # "the colin and samir campaign" names the partner, not an initiative
-    if out.get('campaign') and out.get('qualifier') and out.get('brand_partner'):
-        _cn = re.sub(r'[^a-z0-9]+', ' ', str(out['campaign']).lower()).strip()
-        _names = {re.sub(r'[^a-z0-9]+', ' ', str(v).lower()).strip() for v in (out['qualifier'], out['brand_partner'])}
-        _names.add(' '.join(sorted(_names)))
-        if _cn in _names or _cn in {f"{a} {b}" for a in _names for b in _names if a != b}:
-            out['campaign'] = None
     out['missing'] = [k for k in ('brand_partner', 'qualifier',
                                   'event_start', 'event_end')
                       if not out.get(k)]
     return out
-
-
-_PROSPECTIVE_RX = re.compile(
-    r"\b(?:why\s+(?:it\s+)?(?:makes?|would\s+make|does)\s+sense|makes?\s+sense\s+(?:for|to)|good\s+(?:idea|fit|match)|right\s+(?:fit|partner|creator)|"
-    r"should\s+\w+\s+partner|is\s+(?:partnering|teaming\s+up|about\s+to)|(?:potential|prospective|possible|proposed|upcoming)\s+(?:partner|deal|partnership|campaign|creators?)|"
-    r"over\s+(?:other|potential|the\s+other)\s+(?:creators?|talent|partners?|options)|case\s+for|rationale|whether\s+to\s+partner)\b", re.I)
-
-
-def is_prospective_partnership(text):
-    """The ask is about a partnership being weighed, not a campaign that
-    ran: no dates to measure yet (Debi 2026-10-26, Mastercard x MrBeast)."""
-    return bool(_PROSPECTIVE_RX.search(' '.join(str(text or '').split())))
 
 
 def propose_brand_partnership_field(parsed, researcher=None):
@@ -1345,11 +1178,8 @@ def propose_brand_partnership_field(parsed, researcher=None):
     the end. A brand and a partner with no dates but a named initiative,
     campaign links or a relative period ("last year") get the window
     those imply (resolve_campaign_window), proposed on the confirm card.
-    A prospective partnership (why it makes sense, is partnering with)
-    gets the last 12 months as the fit window. Never proposes the brand
-    or the partner."""
+    Never proposes the brand or the partner."""
     p = parsed or {}
-    ask = str(p.pop('_ask', '') or '')
     required = ('brand_partner', 'qualifier', 'event_start', 'event_end')
     missing = [k for k in required if not p.get(k)]
     import datetime as _dt
@@ -1362,11 +1192,6 @@ def propose_brand_partnership_field(parsed, researcher=None):
         win = resolve_campaign_window(p, researcher=researcher)
         if win:
             return 'event_window', {'event_start': win[0], 'event_end': win[1]}, win[2]
-        if ask and is_prospective_partnership(ask):
-            t = _dt.date.today()
-            start = t.replace(year=t.year - 1)
-            return ('event_window', {'event_start': start.isoformat(), 'event_end': t.isoformat()},
-                    f"{_pretty(start.isoformat())} to {_pretty(t.isoformat())} (no campaign dates yet, so the fit reads on the last 12 months)")
     return None
 
 

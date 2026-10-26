@@ -52190,13 +52190,9 @@ def _scrub_v1_status(raw_status: dict | None) -> dict:
     if mapped == 'failed':
         _raw_err = str(raw_status.get('error') or '').strip()
         _reason = ''
-        # the refund copy, the platform line the engine writes when the
-        # client named a platform the title is not on (2026-10-16), and
-        # the title hold line when the title itself needs confirming
-        # (2026-10-26: a bare title naming more than one work, a near
-        # title held)
-        if _raw_err.lower().startswith(('this build could not be', "we can't see ", 'we cant see ',
-                                        'we need to confirm which ')):
+        # the refund copy, and the platform line the engine writes when
+        # the client named a platform the title is not on (2026-10-16)
+        if _raw_err.lower().startswith(('this build could not be', "we can't see ", 'we cant see ')):
             _reason = _scrub_v1_freetext(_raw_err, cap=240)
         out['reason'] = _reason or _V1_FAILED_REASON
         _cr = raw_status.get('credits_refunded')
@@ -54702,20 +54698,6 @@ def _apply_identity_version(draft, version):
     draft['resolved_title'] = subject
     if qualifier:
         draft['identity_qualifier'] = qualifier
-    # 2026-10-26 (Jessie's StreamScout HowTo 5g): a consumption universe's
-    # title carries the version too, so the seed step never sees the bare
-    # title and the content map's SHOW reads 'THE OFFICE (US)'. The old
-    # title in content_show / franchise_titles is repointed to the pick.
-    _old_show = str(draft.get('content_show') or '').strip()
-    _old_show_c = _collapse_for_match(_old_show) if _old_show else ''
-    if _old_show_c and (_old_show_c == _collapse_for_match(old_subject)
-                        or _collapse_for_match(subject).startswith(_old_show_c)):
-        draft['content_show'] = subject
-        _fts = draft.get('franchise_titles')
-        if isinstance(_fts, list):
-            draft['franchise_titles'] = [
-                subject if _collapse_for_match(str(t)) == _old_show_c else t
-                for t in _fts]
     if medium:
         draft['medium'] = medium
     if platform:

@@ -346,19 +346,13 @@ def streamscout_relay():
     t0 = time.monotonic()
     kind = str(body.get('kind') or 'series')
     show = str(body.get('show') or '') or None
-    flagged, ambiguous = [], False
     try:
         report = getattr(_ssq_mod, 'query_report', None)
         if callable(report):
-            # the full account: a resolver that raised is 'unverified', never a zero;
-            # a near title HELD for a human (2026-10-26, HowTo 5e) and a bare title
-            # that names more than one work (5g) ride back too, so the build server
-            # never reads a hold as an absence
+            # the full account: a resolver that raised is 'unverified', never a zero
             rep = report(title, platforms=[platform], kind=kind, show=show, url=hint) or {}
             rows = rep.get('rows') or []
             failed = dict(rep.get('failed') or {})
-            flagged = [str(x) for x in ((rep.get('flagged') or {}).get(platform) or [])]
-            ambiguous = bool(rep.get('ambiguous'))
         else:
             rows = _ssq(title, platforms=[platform], kind=kind, show=show, url=hint) or []
             failed = {}
@@ -368,7 +362,6 @@ def streamscout_relay():
                         'unverified': True}), 200
     out = {'success': True, 'platform': platform, 'rows': [r for r in rows if isinstance(r, dict)],
            'unverified': bool(failed.get(platform)) and not rows,
-           'flagged': flagged, 'ambiguous': ambiguous,
            'elapsed_s': round(time.monotonic() - t0, 2)}
     if failed.get(platform):
         out['error'] = str(failed[platform])[:200]

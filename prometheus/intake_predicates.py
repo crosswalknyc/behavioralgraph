@@ -88,37 +88,3 @@ def is_discovery_request(text):
         r"|\bwho\s+should\s+(we|i)\s+(profile|pull|target)\b",
         t)
     return bool(pitch)
-
-
-_POINTS_BACK_RX = re.compile(
-    r"\b(?:the|this|that|our|their|his|her)\s+(?:[a-z0-9&'.+-]+\s+){0,4}?(?:campaign|deal|partnership|collab(?:oration)?|sponsorship|program|promo|run|launch|initiative)\b"
-    r"|\b(?:look at|measure|value|size|read|analy[sz]e|assess|evaluate|tell me about)\s+(?:it|that|this|them)\b", re.I)
-_NAMES_PAIR_RX = re.compile(r"\b[A-Z][\w&'.-]+(?:\s+[A-Z][\w&'.-]+)*\s+(?:x|×|and|with|for)\s+[A-Z][\w&'.-]+", re.I)
-
-
-def points_back_at_thread(text):
-    """The ask refers to a campaign, deal or partnership described
-    earlier in the thread ('Can you look at the colin and samir campaign
-    and tell me conversion and value?') instead of spelling it out
-    again; the intake reads those earlier turns too (Debi 2026-10-21,
-    who had pasted the whole Lexus brief one message before and was
-    asked for the brand, the partner and the window)."""
-    t = ' '.join(str(text or '').split())
-    return bool(t) and bool(_POINTS_BACK_RX.search(t))
-
-
-def recent_substantive_user_turns(history, n=2, min_words=12, lookback=8):
-    """The reader's last `n` substantive messages in this thread (newest
-    last), whatever Prometheus said in between."""
-    out = []
-    turns = [x for x in (history or []) if isinstance(x, dict)][-lookback:]
-    for x in reversed(turns):
-        if str(x.get('role') or '') != 'user':
-            continue
-        txt = ' '.join(str(x.get('text') or x.get('content') or '').split())
-        if len(txt.split()) >= min_words:
-            out.append(txt)
-        if len(out) >= n:
-            break
-    return list(reversed(out))
-

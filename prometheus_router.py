@@ -94,7 +94,7 @@ def _resolve(flag):
 
 
 def route_ask(text, *, surface, has_ctx=False, mode='', has_base=False,
-              memory_referent=False, classify_fn=None, other_subject=False):
+              memory_referent=False, classify_fn=None):
     """Decide the route for one ask. See the module docstring for the
     precedence and the decision-dict shape. Never raises."""
     import prometheus_analysis as pma
@@ -196,17 +196,6 @@ def route_ask(text, *, surface, has_ctx=False, mode='', has_base=False,
                     return d
             except Exception:
                 pass
-            # ... unless the words name their own subject and it is not
-            # what is open: the open data is context, never the answer
-            # (Debi 2026-10-26: Mastercard x MrBeast asked on the Colin
-            # and Samir Lexus read drew two analyses of the Lexus run)
-            try:
-                _other = other_subject() if callable(other_subject) else bool(other_subject)
-            except Exception:
-                _other = False
-            if _other:
-                d.update(route='generate', why='named_other_subject')
-                return d
             d.update(route='analysis', why='open_data_default')
             return d
         # Nothing open: direct data asks generate; the base gate

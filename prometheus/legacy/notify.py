@@ -295,10 +295,6 @@ def _pm_view_deck_digest(view_context, history, subject=''):
     (digest_text, meta)."""
     import prometheus_analysis as pma
     parts = [pma.render_view_context_block(view_context)]
-    material = [str(m) for m in ((view_context or {}).get('material') or []) if str(m or '').strip()]
-    if material:   # a delivered journey or an attached file, restated slide for slide (Debi 2026-10-21)
-        parts.append('THE MATERIAL THIS DECK RESTATES (slide for slide, every number exactly as written here, nothing added)\n'
-                     '===================================================\n' + '\n\n'.join(m[:6000] for m in material[:24]))
     turns = [str(h.get('text') or '') for h in (history or []) if isinstance(h, dict)
              and str(h.get('role') or '').lower() in ('agent', 'assistant') and str(h.get('text') or '').strip()]
     if turns:
