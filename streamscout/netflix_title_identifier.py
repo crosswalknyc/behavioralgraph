@@ -609,7 +609,14 @@ def resolve(title=None, title_id=None, kind="series", seasons=None,
             if not tid:
                 return (show, [])
             cap["latest"] = None
-            show = open_title(page, tid) or (matched or title or tid)
+            # open_title navigates to the title (needed so the episode list
+            # loads) and returns the scraped tab title — but that reads the
+            # browse-page nav ("Home - Netflix") when a title opens as an overlay
+            # instead of a full page, which then fails the look-alike guard and
+            # drops every row. Trust the discovery-matched name first; fall back
+            # to the scraped name only when we have nothing authoritative.
+            scraped = open_title(page, tid)
+            show = matched or title or scraped or tid
 
             if kind == "movie":
                 href = page.eval_on_selector(
