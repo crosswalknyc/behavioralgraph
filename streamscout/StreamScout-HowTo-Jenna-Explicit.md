@@ -1,5 +1,21 @@
 # StreamScout → Promy: Explicit How-To (for Jenna)
 
+> ## ⚡ Operator TL;DR — the only things you must do
+> 1. **HBO Max:** deploy the saved login as `MAX_AUTH_JSON` (or `MAX_AUTH_PATH`).
+>    When Max reports *unverified*, re-run `max_episode_identifier.py --refresh-auth`
+>    and update the secret. (§5f)
+> 2. **Netflix:** it runs headless on a saved login. If Netflix titles drop to
+>    **0 en masse**, the login expired — refresh it once with
+>    `netflix_title_identifier.py --headed …`, then headless resumes. (§5h)
+> 3. **Amazon:** ~5 ids per episode is **by design** (not a bug) — collapse to one
+>    id per (season, episode) at your counting layer, preferring the streaming
+>    `amzn1.dv.gti`. (§8)
+> 4. **Held-title alerts** (ambiguous look-alike / "which version?") email **you +
+>    Jess** — those are confirmations to action, not errors. (§5e, §5g)
+>
+> Everything below is reference. If a title won't resolve, it's almost always #1
+> or #2 above.
+
 This is the **step-by-step, copy-paste** guide for wiring StreamScout into Promy.
 It covers the one function Promy calls, every parameter, the platform groups,
 and the two **new YouTube client choices** (full-vs-clips + the fair-survey cap).
