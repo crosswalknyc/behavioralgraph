@@ -259,54 +259,120 @@ def tokens(s: str) -> list[str]:
 # years, etc. A strict token-set equality test flags all of those as
 # "near match / LOW CONFIDENCE" even when discovery found the right title.
 # These helpers accept a correct-but-messy client title as an EXACT match.
-def title_similarity(a: str, b: str) -> float:
-    """0..1 similarity between two titles, robust to word order and typos.
-    Combines token-set Jaccard, subset containment, and a character ratio."""
-    ta, tb = set(tokens(a)), set(tokens(b))
+def _fuzzy_similarity(ta: set, tb: set) -> float:
+    """0..1 similarity between two token sets on their own merits (Jaccard +
+    character ratio). Deliberately WITHOUT a containment shortcut — see
+    ``classify_title_match`` for why pure subset containment is unsafe."""
     if not ta or not tb:
         return 0.0
-    if ta == tb or ta <= tb or tb <= ta:      # one is contained in the other
-        return 1.0
     jacc = len(ta & tb) / len(ta | tb)
     ratio = difflib.SequenceMatcher(
         None, " ".join(sorted(ta)), " ".join(sorted(tb))).ratio()
     return max(jacc, ratio)
 
 
+def title_similarity(a: str, b: str) -> float:
+    """0..1 similarity between two titles, robust to word order and typos.
+    Combines token-set Jaccard, subset containment, and a character ratio.
+    (Raw score; the directional match POLICY lives in ``classify_title_match``.)"""
+    ta, tb = set(tokens(a)), set(tokens(b))
+    if not ta or not tb:
+        return 0.0
+    if ta == tb or ta <= tb or tb <= ta:      # one is contained in the other
+        return 1.0
+    return _fuzzy_similarity(ta, tb)
+
+
+def classify_title_match(client_title: str, canonical_title: str,
+                         thresh: float = 0.7) -> str:
+    """How a resolver's canonical title relates to the (messy) client title:
+
+      * ``"match"``  — a clean match, safe to seed.
+      * ``"review"`` — AMBIGUOUS: hold it and loop a human in (never seed or
+                        drop it silently).
+      * ``"drop"``   — a different show entirely; remove it.
+
+    The dangerous shortcut we retired (2026-10-26): treating a SHORT client
+    query that is a strict subset of a LONGER canonical title as a perfect
+    match. ``House`` is a subset of both ``House M.D.`` (right) and
+    ``House of Cards`` (wrong), and tokens alone can't tell them apart, so a
+    blind ``1.0`` silently seeded whichever the resolver happened to return.
+
+    Policy now:
+      * identical tokens → ``match``.
+      * canonical ⊆ client (client just typed EXTRA words — a franchise prefix
+        or subtitle) → ``match``. This is the safe direction: same, or a more
+        specific, title.
+      * otherwise clears the fuzzy floor on its own (typos, word-order) →
+        ``match``. The character ratio still carries short disambiguations like
+        ``House`` → ``House M.D.``, so legit short titles are not withheld.
+      * client ⊂ canonical strictly AND nothing but that containment carries it
+        (``House`` → ``House of Cards``) → ``review``.
+      * anything else → ``drop``.
+    """
+    ta, tb = set(tokens(client_title)), set(tokens(canonical_title))
+    if not ta or not tb:
+        return "drop"
+    if ta == tb:
+        return "match"
+    if tb <= ta:                       # canonical inside client: extra words
+        return "match"
+    if _fuzzy_similarity(ta, tb) >= thresh:
+        return "match"
+    if ta <= tb:                       # short query inside a longer title
+        return "review"
+    return "drop"
+
+
 def is_title_match(client_title: str, canonical_title: str,
                    thresh: float = 0.7) -> bool:
-    """True if a (possibly messy) client title should count as an EXACT match
-    for a resolver's canonical title. Subset containment (wordy-but-correct)
-    and high fuzzy similarity (typos, reordering) both qualify."""
-    return title_similarity(client_title, canonical_title) >= thresh
+    """True only for a CLEAN (seed-worthy) match. An ambiguous subset match
+    (``House`` vs ``House of Cards``) is NOT clean — it classifies as
+    ``"review"`` and returns False here (so it reads as a near, not exact,
+    match everywhere this floor is used)."""
+    return classify_title_match(client_title, canonical_title, thresh) == "match"
 
 
 def verify_title_rows(title, rows, thresh: float = 0.7):
-    """Look-alike guard: drop resolver rows whose SHOW doesn't actually match
+    """Look-alike guard: sort resolver rows by how their SHOW relates to
     ``title``.
 
     A loose resolver can answer the wrong show entirely — e.g. a "Paw Patrol"
     query coming back as **Doom Patrol** (Max), or **Rosemary & Thyme**
-    (Hallmark). Those rows carry a SHOW that fails the same ``is_title_match``
-    floor the rest of the pipeline uses, so we filter them out before they can
-    seed a client profile on the wrong title.
+    (Hallmark) — or an AMBIGUOUS one: a short query ("House") landing inside a
+    longer, different title ("House of Cards"). Neither must silently seed a
+    client profile on the wrong title.
 
-    Returns ``(kept_rows, dropped_shows)`` where ``dropped_shows`` is the set of
-    distinct mismatched SHOW names that were removed (for logging/visibility).
+    Returns ``(kept, dropped, flagged)``:
+      * ``kept``    — rows whose SHOW is a clean match (safe to seed), plus any
+                      row with no SHOW to verify against.
+      * ``dropped`` — set of distinct SHOW names that are a DIFFERENT show;
+                      removed outright (the Doom Patrol case).
+      * ``flagged`` — set of distinct SHOW names that are an AMBIGUOUS subset
+                      match (the House of Cards case). These are HELD OUT of
+                      ``kept`` (never silently seeded) AND surfaced for a human
+                      to confirm (never silently dropped) — the query path emails
+                      a review alert (see streamscout_notify.send_review_alert).
+
     No-op when ``title`` is empty (e.g. URL-only lookups, where the caller
     pinned an exact asset and there's nothing to verify against).
     """
     if not title:
-        return list(rows), set()
-    kept, dropped = [], set()
+        return list(rows), set(), set()
+    kept, dropped, flagged = [], set(), set()
     for r in rows:
         show = (r.get("show") or "").strip()
-        # Keep rows we can't verify (no show name) and rows that clear the floor.
-        if not show or is_title_match(title, show, thresh):
+        if not show:
+            kept.append(r)                      # nothing to verify against
+            continue
+        verdict = classify_title_match(title, show, thresh)
+        if verdict == "match":
             kept.append(r)
+        elif verdict == "review":
+            flagged.add(show)                   # held, not seeded; human confirms
         else:
-            dropped.add(show)
-    return kept, dropped
+            dropped.add(show)                   # different show; removed
+    return kept, dropped, flagged
 
 
 # Resolvers that require an interactive, HEADED browser login (a real window)

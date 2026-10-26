@@ -636,3 +636,5 @@ if __name__ == "__main__":
 # ci-trigger: streamscout-max-headless-replay
 
 # ci-trigger: streamscout-netflix-profile-click-graphql-episodes
+
+# ci-trigger: streamscout-lookalike-ambiguous-hold-for-review
