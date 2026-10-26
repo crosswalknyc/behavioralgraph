@@ -11,7 +11,6 @@
         '<a href="digital-twins.html">Digital twins</a>' +
         '<a href="micro-series.html">Micro-series</a>' +
         '<a href="' + DASH + '/the-read">The Read</a>' +
-        '<a href="' + DASH + '/the-read/papers">White papers</a>' +
         '<a href="company.html">Company</a>' +
         '<a href="clients.html">Clients</a>' +
         '<button class="nav-menu-btn" type="button" aria-expanded="false" aria-controls="navMenu"><i></i>Menu</button>' +
@@ -20,14 +19,13 @@
       '</nav>' +
     '</div>' +
     // Same links again for the narrow layout. Below 1050px the row
-    // cannot hold eight of them without breaking the words.
+    // cannot hold seven of them without breaking the words.
     '<div class="nav-menu" id="navMenu"><div class="wrap nav-menu-in">' +
       '<a href="products.html">Products</a>' +
       '<a href="panel.html">The Panel</a>' +
       '<a href="digital-twins.html">Digital twins</a>' +
       '<a href="micro-series.html">Micro-series</a>' +
       '<a href="' + DASH + '/the-read">The Read</a>' +
-      '<a href="' + DASH + '/the-read/papers">White papers</a>' +
       '<a href="company.html">Company</a>' +
       '<a href="clients.html">Clients</a>' +
       '<a href="' + DASH + '/login">Log in</a>' +
