@@ -144579,8 +144579,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     var catMap = {
                         'dominant gender': 'Gender',
                         'largest age group': 'Age',
-                        'top indexing ethnicity': 'Ethnicity',
-                        'top ethnicity': 'Ethnicity',
+                        // Jenna 2026-10-26: say what the row actually is.
+                        // "Ethnicity" read as the dominant one; the pick is
+                        // the one that over-indexes hardest against Gen Pop,
+                        // which is rarely the biggest share.
+                        'top indexing ethnicity': 'Top over indexing ethnicity',
+                        'top ethnicity': 'Top over indexing ethnicity',
                         'top income': 'Income'
                     };
                     var rows = ['<div class="piq-data-row head"><span>Category</span><span>Segment</span><span>Profile</span><span>Gen Pop</span><span>Index</span></div>'];
