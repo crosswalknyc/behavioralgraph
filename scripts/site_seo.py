@@ -20,7 +20,7 @@ For every indexable page it sets, in <head>:
     that carries its own JSON-LD (digital-twins.html) keeps it.
 
 Then it writes sitemap.xml (one URL per indexable page, lastmod from
-git) and robots.txt. Pages marked noindex and the redirect stubs are
+git), robots.txt, and llms.txt (a plain summary for AI assistants). Pages marked noindex and the redirect stubs are
 left alone and kept out of the sitemap.
 
 Idempotent: a second run changes nothing. No em dashes anywhere.
@@ -58,7 +58,7 @@ PRODUCTS_CRUMB = ("Products", "products.html")
 PAGES = {
     "index.html": dict(
         title="Crosswalk | Audience data from what 30 million people actually do",
-        description="Ask Prometheus any audience question. It answers from 30 million opted-in people and their entire digital life: who they are, what they watch, what they buy.",
+        description="Ask Prometheus any audience question. It answers from 30 million opted-in people worldwide, 10 million in the US, and their entire digital life: who they are, what they watch, what they buy.",
         kind="home"),
     "products.html": dict(
         title="Products and report pricing | Crosswalk",
@@ -102,7 +102,7 @@ PAGES = {
         kind="product", name="Fin IQ"),
     "digital-twins.html": dict(
         title="Digital Twins and Synthetic Data from Real Behavior | Crosswalk",
-        description="Twin IQ builds a digital twin of each of 10 million US people from observed behavior, not surveys. Test a plan, a title, or a price on synthetic audiences before you spend.",
+        description="Twin IQ builds a digital twin of each of the 10 million US people in Crosswalk's 30 million-person panel, from observed behavior, not surveys. Test a plan, a title, or a price on synthetic audiences before you spend.",
         kind="product", name="Twin IQ", crumb_label="Digital twins",
         og_image="assets/images/og-digital-twins.png"),
     "micro-series.html": dict(
@@ -110,8 +110,8 @@ PAGES = {
         description="Who watches vertical dramas on ReelShort, DramaBox, GoodShort, NetShort and Peacock, who pays, and where the paywall sits. Counted from 10 million US people, updated daily.",
         kind="product", name="Micro-series", og_image="assets/images/og-micro-series.png"),
     "panel.html": dict(
-        title="The Crosswalk panel: 30 million opted-in people | Crosswalk",
-        description="30 million people chose to be counted. How the opted-in panel works, what gets counted, your rights, and what clients receive.",
+        title="The Crosswalk panel: 30 million opted-in people worldwide | Crosswalk",
+        description="30 million people worldwide chose to be counted, 10 million of them in the US. How the panel works, what gets counted, your rights, and what clients receive.",
         crumb=[("The panel", "panel.html")]),
     "company.html": dict(
         title="Company | Crosswalk Technologies, Inc.",
@@ -163,11 +163,17 @@ PAGES = {
         crumb=[("The panel", "panel.html"), ("Join the panel", "app.html")]),
 }
 
+# One sentence about the company, used everywhere a machine reads who we are
+# (Organization JSON-LD, llms.txt). Keep the panel sizes in step with the pages.
+ORG_DESCRIPTION = (
+    "Crosswalk is an opted-in consumer panel of 30 million people worldwide, 10 million of them in the US. It reads what audiences actually do across their entire digital life, and Twin IQ builds a digital twin of each US panelist from observed behavior."
+)
 ORG = {
     "@type": "Organization",
     "@id": ORIGIN + "/#organization",
     "name": "Crosswalk Technologies, Inc.",
     "alternateName": "Crosswalk",
+    "description": ORG_DESCRIPTION,
     "url": ORIGIN + "/",
     "logo": ORIGIN + "/assets/logos/crosswalk-logo-black.png",
     "sameAs": ["https://www.linkedin.com/company/crosswalk-technologies"],
@@ -389,6 +395,45 @@ def build_robots() -> str:
     return "\n".join(lines)
 
 
+def build_llms_txt(pages: list[str]) -> str:
+    """llms.txt (llmstxt.org): a plain summary for AI assistants, from PAGES."""
+    def row(name: str) -> str:
+        spec = PAGES.get(name, {})
+        crumb = spec.get("crumb") or []
+        label = spec.get("name") or (crumb[-1][0] if crumb else _page_label(name, spec.get("title", name)))
+        url = ORIGIN + "/" + ("" if name == "index.html" else name)
+        return f"- [{label}]({url}): {spec.get('description', '').strip()}"
+    products = sorted((n for n in pages if PAGES.get(n, {}).get("kind") == "product"),
+                      key=lambda n: n != "digital-twins.html")
+    company = [n for n in ("panel.html", "company.html", "clients.html", "products.html", "join.html")
+               if n in pages]
+    policies = [n for n in ("privacy-policy-1.html", "terms-of-use.html", "why-we-track.html",
+                            "deidentified-data.html") if n in pages]
+    out = [
+        "# Crosswalk",
+        "",
+        f"> {ORG_DESCRIPTION}",
+        "",
+        "Crosswalk Technologies, Inc. serves studios, streamers, brands, agencies, and finance teams. "
+        "Prometheus answers audience questions in plain English from the same panel. "
+        "Clients receive group statistics projected to the US population; no individual is identified.",
+        "",
+        "## Products",
+        *[row(n) for n in products],
+        "",
+        "## The panel and the company",
+        *[row(n) for n in company],
+        "",
+        "## Policies",
+        *[row(n) for n in policies],
+        "",
+        "## Contact",
+        f"- [Talk to us]({ORIGIN}/company.html#contact): hello@crosswalknyc.com",
+        "",
+    ]
+    return "\n".join(out)
+
+
 def run(check: bool = False) -> int:
     pages = indexable_pages()
     changes: list[str] = []
@@ -415,6 +460,12 @@ def run(check: bool = False) -> int:
         changes.append("robots.txt")
         if not check:
             rb.write_text(robots, encoding="utf-8")
+    llms = build_llms_txt(pages)
+    lt = SITE / "llms.txt"
+    if not lt.exists() or lt.read_text(encoding="utf-8") != llms:
+        changes.append("llms.txt")
+        if not check:
+            lt.write_text(llms, encoding="utf-8")
     verb = "would change" if check else "updated"
     print(f"[site_seo] {len(pages)} indexable pages; {len(changes)} file(s) {verb}" + (": " + ", ".join(changes) if changes else ""))
     return 1 if (check and changes) else 0

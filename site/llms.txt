@@ -1,0 +1,34 @@
+# Crosswalk
+
+> Crosswalk is an opted-in consumer panel of 30 million people worldwide, 10 million of them in the US. It reads what audiences actually do across their entire digital life, and Twin IQ builds a digital twin of each US panelist from observed behavior.
+
+Crosswalk Technologies, Inc. serves studios, streamers, brands, agencies, and finance teams. Prometheus answers audience questions in plain English from the same panel. Clients receive group statistics projected to the US population; no individual is identified.
+
+## Products
+- [Twin IQ](https://www.crosswalknyc.com/digital-twins.html): Twin IQ builds a digital twin of each of the 10 million US people in Crosswalk's 30 million-person panel, from observed behavior, not surveys. Test a plan, a title, or a price on synthetic audiences before you spend.
+- [Attribution IQ](https://www.crosswalknyc.com/attribution-iq.html): Attribution IQ reads the same people across every touch, paid and organic, and splits the credit along the path they actually took. Refreshed daily while the campaign runs.
+- [Brand Partnership IQ](https://www.crosswalknyc.com/brand-partnership-iq.html): Brand Partnership IQ puts a dollar figure on a partnership after it runs: earned media, brand engagement, brand lift, and conversion on the same people, each priced.
+- [Digital Journey IQ](https://www.crosswalknyc.com/digital-journey-iq.html): Digital Journey IQ lays out the steps people took around a campaign, a title, or a launch, in order, across their entire digital life, not just the last click.
+- [Fin IQ](https://www.crosswalknyc.com/fin-iq.html): Fin IQ is the desk's read of the same opted-in panel: platforms, tickers, and consumer movement counted in window. Not a price feed and not a delayed filing.
+- [Flywheel IQ](https://www.crosswalknyc.com/flywheel-iq.html): Flywheel IQ follows the same accounts from one title to the next owned surface, the checkout, and the return of accounts that had lapsed.
+- [Micro-series](https://www.crosswalknyc.com/micro-series.html): Who watches vertical dramas on ReelShort, DramaBox, GoodShort, NetShort and Peacock, who pays, and where the paywall sits. Counted from 10 million US people, updated daily.
+- [Profile IQ](https://www.crosswalknyc.com/profile-iq.html): Profile IQ is a behavioral read on any audience: who engages with a title, talent, brand, or team, their demographic shape, and the brands and platforms they over-index on.
+- [Rankers IQ](https://www.crosswalknyc.com/ranker-iq.html): Rankers IQ ranks free ad-supported TV, streaming, music, podcasts, and gaming on observed behavior, updated every morning. Not a follower count.
+- [Subscriber IQ](https://www.crosswalknyc.com/subscriber-iq.html): Subscriber IQ ties account opens, returns, and cancels to the titles and windows that moved them, on the same opted-in people. A play is not a signup.
+- [Trends IQ](https://www.crosswalknyc.com/trends-iq.html): Trends IQ ranks what moved yesterday: searches, headlines, people, books, comics, Broadway, and the box office, day over day on the same 30 million people.
+
+## The panel and the company
+- [The panel](https://www.crosswalknyc.com/panel.html): 30 million people worldwide chose to be counted, 10 million of them in the US. How the panel works, what gets counted, your rights, and what clients receive.
+- [Company](https://www.crosswalknyc.com/company.html): Crosswalk Technologies, Inc. Who we work with, how we write the numbers, The Read, and how to reach us.
+- [Clients](https://www.crosswalknyc.com/clients.html): The media companies, brands, agencies, finance firms, and public offices that work with Crosswalk.
+- [Products](https://www.crosswalknyc.com/products.html): Report pricing for Profile IQ, Subscriber IQ, Digital Journey IQ, Attribution IQ, Brand Partnership IQ, Flywheel IQ, Trends IQ, Rankers IQ, Fin IQ, and digital twins.
+- [Join the panel](https://www.crosswalknyc.com/join.html): Download the Crosswalk panel app for Mac or Windows. It is free, and it explains what it collects before you install it.
+
+## Policies
+- [Privacy Policy](https://www.crosswalknyc.com/privacy-policy-1.html): How Crosswalk Technologies, Inc. collects, uses, shares, and protects information on its opted-in US digital panel, and how you can exercise your rights.
+- [Terms of Use](https://www.crosswalknyc.com/terms-of-use.html): The Terms of Use for the Crosswalk panel software, the dashboard, and the website: the contract between you and Crosswalk Technologies, Inc.
+- [What we track](https://www.crosswalknyc.com/why-we-track.html): What the Crosswalk panel software captures, why we capture it, and what clients actually receive from the opted-in US digital panel.
+- [De-identified data](https://www.crosswalknyc.com/deidentified-data.html): Crosswalk Technologies, Inc.'s public commitment about aggregated dashboard products: group statistics that cannot reasonably be linked back to a person.
+
+## Contact
+- [Talk to us](https://www.crosswalknyc.com/company.html#contact): hello@crosswalknyc.com
