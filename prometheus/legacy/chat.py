@@ -6223,6 +6223,8 @@ def _pm_interpret_core(user, body, text, history):
             _H._maybe_ask_parent_link(spec_draft, text, catalog)
         except Exception as _pl_err:
             print(f"[synth-chat interpret] parent-link error: {_pl_err}")
+        try: from prometheus.title_variants import apply_variant_guard as _tv_guard; _tv_guard(spec_draft)  # same-title variants (HowTo 5g, 2026-10-26): fresh builds only, after the existing-profile steps above; the guard gates itself
+        except Exception as _tv_err: print(f"[synth-chat interpret] variant guard error: {_tv_err}")
 
         # Age-break alignment (2026-08-20 Jenna directive): a request
         # like "15-26" can't be honored by the panel's age breaks
