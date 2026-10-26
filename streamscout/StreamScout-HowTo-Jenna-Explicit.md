@@ -476,6 +476,16 @@ streamscout_query("Gilmore Girls", platforms="hulu", strict=True)
   a bad channel.
 - **NPR stays native.** The NPR resolver only accepts shows whose feed is a real
   `feeds.npr.org` feed, so it won't drag in a non-NPR look-alike.
+- **Amazon returns several ids per episode — by design.** Amazon lists each
+  episode/movie under multiple offer SKUs (SD/HD/UHD `detail/B0…` store ASINs)
+  plus a `GTI-26` and the streaming `amzn1.dv.gti.…` playback id — so one episode
+  yields ~5 rows. This is intentional: a viewer's clickstream URL could carry
+  **any** of those ids, so keeping them all maximizes match coverage. StreamScout
+  only collapses *exact-identical* ids, not the distinct per-episode SKUs.
+  **Promy should collapse to one id per (season, episode) at the counting layer**
+  (prefer the streaming `amzn1.dv.gti` over the `detail/B0…` store ASINs) so a
+  viewer isn't counted multiple times. It is **not** a bug to see 5× Amazon rows
+  for an episode.
 - **The cap is a *survey*, not a filter.** It never changes a show's audience
   size (sizing is show-level); it just keeps the id set processable while
   staying representative across the timespan.
