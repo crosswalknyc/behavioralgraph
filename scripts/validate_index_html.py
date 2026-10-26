@@ -646,3 +646,5 @@ if __name__ == "__main__":
 # ci-trigger: streamscout-howto-amazon-multiid-note
 
 # ci-trigger: streamscout-howto-netflix-headless-login-refresh
+
+# ci-trigger: streamscout-howto-operator-tldr-box
