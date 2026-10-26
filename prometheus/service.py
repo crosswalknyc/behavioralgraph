@@ -960,6 +960,8 @@ def ask(user, body, *, via='session'):
         if _standing is not None:
             _decision = {'surface': 'analyze', 'mode': None, 'reason': 'standing', 'client_hint': None}
             _out = _interpret_shape(_standing) if _client_surface == 'interpret' else _standing
+            if _client_surface == 'interpret' and _standing.get('capability_yes') and _standing.get('followups'):
+                _out['followups'] = list(_standing.get('followups') or [])   # the person's own question rides as the chip
             env = envelope.wrap(_out, surface='analyze', decision=_decision, thread_id=tid, via=via)
             _persist_turn(persist, uname, tid, history, text, env, _out, 'analyze')
             return env, 200
@@ -1693,12 +1695,15 @@ def last_user_question(history):
 
 
 def _standing_answer(text):
-    """Two answers that come before any executor or lane (2026-10-14):
+    """Three answers that come before any executor or lane (2026-10-14):
     behavior with no digital trace (linear TV, in-store, foot traffic,
     radio) is declined with the nearest measurable read instead of being
     answered with the digital numbers as if they were the same thing;
-    and a question about where the data comes from gets the one plain
-    first-party answer. Returns a raw reply or None."""
+    a question about where the data comes from gets the one plain
+    first-party answer; and a yes-answerable question about what the data
+    can show ("is it possible from your data to know ...") gets "Yes." and
+    nothing else in prose (Jenna 2026-10-26, Mark Valdez). Returns a raw
+    reply or None."""
     try:
         import prometheus_analysis as _pma
         gate = _pma.classify_quantifiability(text)
@@ -1722,6 +1727,22 @@ def _standing_answer(text):
             return {'success': True, 'action': 'answer', 'reply': _g.PROVENANCE_REPLY, 'followups': [], 'offer_deck': False, 'deck_angle': None}
     except Exception as _fx:
         _faults.note('service', _fx)
+    try:
+        # "is it possible from your data to know how much of connected TV
+        # watchtime is spent on youtube?" is answered "Yes." with the
+        # person's own question as the chip (Jenna 2026-10-26). The no
+        # side (no digital trace) was decided above; the product and the
+        # lanes that own an ask keep theirs (prometheus.data_capability).
+        from . import data_capability as _dc
+        _dc_raw = _dc.answer(text)
+        if _dc_raw:
+            try:
+                host.ask_hint(route='capability', outcome='answered')
+            except Exception:
+                pass
+            return _dc_raw
+    except Exception as _fx:
+        _faults.note('service.data_capability', _fx)
     if re.match(r"^\s*(?:i will|i'll|ill|let me) name them[.! ]*$", text, re.I):
         return {'success': True, 'action': 'answer', 'followups': [], 'offer_deck': False, 'deck_angle': None,
                 'reply': 'Go ahead. Name them here, one per line is fine, and I will check each one.'}
@@ -1796,13 +1817,27 @@ def _execute_reading(reading, text, ctx, history, user, uname, body, tid, via, p
         raw = _stl.answer(text, uname, host=host, user=user, history=history)
         reason = 'status_lookup'
     elif intent == 'capability':
+        # a yes-answerable question about what the data can show is "Yes."
+        # (Jenna 2026-10-26); a product question keeps the product answer
+        # (the can-we pitch, then the cut / quarter / compare answers the
+        # capability lane gives, then the generic one); the reader's own
+        # note never rides into any of them (reader.capability_reply)
         from . import smarter as _sm
-        cap = _sm.capability_ask(text)
+        from . import data_capability as _dc
+        from . import guards as _gc
+        cap = _dc.answer(text) or _sm.capability_ask(text)
+        if not cap:
+            try:
+                cap = _gc.capability_answer(text)
+            except Exception:
+                cap = None
         if not cap:
             cap = _rd.capability_reply(reading)
         if cap:
             raw = {'success': True, 'action': 'answer', 'reply': cap['reply'], 'followups': cap.get('followups') or [],
                    'offer_deck': False, 'deck_angle': None}
+            if cap.get('capability_yes'):
+                raw['capability_yes'] = True
             reason = 'capability'
     elif intent == 'command':
         # a send order ('email me the Babylon 5 breakdown') is a file or a
@@ -1820,9 +1855,10 @@ def _execute_reading(reading, text, ctx, history, user, uname, body, tid, via, p
     if not raw:
         return None
     # restate when the reading was not sure (the reader corrects a
-    # restatement instantly, and the correction feeds the bank)
+    # restatement instantly, and the correction feeds the bank); never on
+    # the one-word yes, which is the whole answer
     if conf < 0.75 and reading.get('restate') and raw.get('action') == 'answer' and raw.get('reply') \
-            and _restate_reads_clean(reading['restate']):
+            and not raw.get('capability_yes') and _restate_reads_clean(reading['restate']):
         raw = dict(raw, reply=f"{reading['restate'].rstrip('.')}.\n\n{raw['reply']}")
     raw = dict(raw, reading={'intent': intent, 'confidence': conf, 'subjects': subs})
     decision = {'surface': 'analyze', 'mode': None, 'reason': 'reader:' + reason, 'client_hint': None}
