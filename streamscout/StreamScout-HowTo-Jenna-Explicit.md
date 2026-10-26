@@ -7,9 +7,10 @@
 > 2. **Netflix:** it runs headless on a saved login. If Netflix titles drop to
 >    **0 en masse**, the login expired — refresh it once with
 >    `netflix_title_identifier.py --headed …`, then headless resumes. (§5h)
-> 3. **Amazon:** ~5 ids per episode is **by design** (not a bug) — collapse to one
->    id per (season, episode) at your counting layer, preferring the streaming
->    `amzn1.dv.gti`. (§8)
+> 3. **Amazon:** it **never** resolves from a bare title — always pass a pinned
+>    **series-level** Amazon watch URL (`url=`), then eyeball the returned `SHOW`.
+>    And ~5 ids per episode is **by design** — collapse to one id per
+>    (season, episode) at your counting layer, preferring `amzn1.dv.gti`. (§5i, §8)
 > 4. **Held-title alerts** (ambiguous look-alike / "which version?") email **you +
 >    Jess** — those are confirmations to action, not errors. (§5e, §5g)
 >
@@ -471,6 +472,49 @@ lasts a long time but can eventually expire or trip a device-verification check.
 > treating them as gone. (Ask Jess/Spike if you'd like this hardened to raise a
 > hard "unverified" signal, like Max, so it can never be misread as absent.)
 
+### 5i. Amazon ALWAYS needs a pinned series-level URL (this is how Amazon works)
+
+Amazon is the one platform that does **not** resolve from a bare title. Amazon's
+title-search discovery returns **0** — for brand-new *and* long-catalog titles
+alike (verified on *The Rainmaker*, *Riverdale*, *The Big Bang Theory*,
+*The Hitman's Bodyguard* — all 0 by title). **This is expected, not an outage.**
+To get Amazon coverage you must hand it the exact page via `url=` (or the
+per-platform `hints={"amazon": "<url>"}`):
+
+```python
+# Series: pin the SERIES-level Amazon page (spans every season)
+streamscout_query("Riverdale", platforms="amazon", kind="series",
+                  url="https://www.amazon.com/gp/video/detail/B01MU3G91Q")
+
+# Movie: pin the movie's /dp/ page
+streamscout_query("The Hitman's Bodyguard", platforms="amazon", kind="movie",
+                  url="https://www.amazon.com/Hitmans-Bodyguard-Ryan-Reynolds/dp/B074VZK5TS")
+```
+
+**Use the right URL shape — this matters:**
+
+- ✅ A **series-level** `amazon.com/.../dp/<ASIN>` or
+  `amazon.com/gp/video/detail/<ASIN>` **streaming** page — it shows the full
+  Season 1…N selector and all seasons resolve from it.
+- ❌ A `primevideo.com/detail/amzn1.dv.gti.…` / `primevideo.com/detail/0…` link
+  → resolves to **0** (wrong URL family for the resolver).
+- ❌ A **single-season** ASIN → you only get that one season.
+- ❌ A **DVD/Blu-ray** product ASIN → that's physical media, not the stream.
+
+**Sanity-check the returned `SHOW` — pinned URLs skip the look-alike guard.**
+When you pin a URL, StreamScout trusts it and **does not** run the §5e wrong-title
+check (there's nothing to compare a pinned asset against). So if Amazon serves a
+bot/cookie wall instead of the real page, the rows come back labelled with the
+page's junk title — the tell is a `SHOW` like **`AMAZON.COM. SPEND LESS. SMILE
+MORE.`** instead of the real show. If you see that, the pin was blocked: re-pull
+(it's often transient) or grab a fresh series-level URL. A correct pull shows the
+real title (e.g. `THE BIG BANG THEORY`) across every expected season.
+
+> **Rule of thumb:** seeding Amazon = *find the series-level Amazon watch page →
+> pass it as `url=` → confirm the `SHOW` name looks right.* Expect the keep-all
+> SKU fan-out from §8 (hundreds/thousands of rows for a long series is normal;
+> Promy collapses to one id per episode at counting).
+
 ---
 
 ## 6. Output schema (every row)
@@ -528,6 +572,9 @@ streamscout_query("Gilmore Girls", platforms="hulu", strict=True)
   (prefer the streaming `amzn1.dv.gti` over the `detail/B0…` store ASINs) so a
   viewer isn't counted multiple times. It is **not** a bug to see 5× Amazon rows
   for an episode.
+- **Amazon won't resolve from a bare title — pin a series-level URL.** This is
+  how Amazon always works; see **§5i** for the required URL shape and the
+  blocked-page (`AMAZON.COM. SPEND LESS…`) tell.
 - **The cap is a *survey*, not a filter.** It never changes a show's audience
   size (sizing is show-level); it just keeps the id set processable while
   staying representative across the timespan.
