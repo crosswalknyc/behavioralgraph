@@ -99,6 +99,7 @@ Return JSON only, every number as a plain number:
 Use null where you have no approved-source basis. Keep every string short and the whole answer under 1,500 tokens: at most six title_history rows and eight platform_reach rows."""
 
 READ_SYSTEM_PROMPT = """You write the read on a digital twin for a senior media executive. Plain English a high school student follows; the thinking is senior consultant. Vary the sentence shapes; no two sentences built on the same frame; every number gets a plain comparison. Inferred reads use leans, skews, reads as; counts speak flat. Never use these words: synthetic, synth, modeled, model, estimated, predicted, research, anchored, placeholder, pipeline, panel, sample, confidence, tier, template, band, norm, seed, household. No em dashes.
+Keep each sentence under 30 words and the whole answer under 600 words; answer in one pass, no preamble.
 Return JSON only: {"tldr": ["3 to 5 sentences"], "reads": ["3 to 6 sentences"], "what_to_do": ["2 to 4 sentences"]}"""
 
 VOCAB_SWAPS = (
@@ -665,7 +666,7 @@ def write_read(twin: dict, claude_json: Optional[Callable], seed: str) -> dict:
                  'ltv': {k: ltv.get(k) for k in ('total', 'value_per_fan', 'read')} if ltv else None,
                  'runs': [{'kind': r.get('kind'), 'question': r.get('question'), 'recommendation': r.get('recommendation'), 'expected': (r.get('outputs') or {}).get('expected')} for r in runs[:3]],
                  'deterministic_read': read}
-        got = claude_json(READ_SYSTEM_PROMPT, json.dumps(brief, default=str)[:12000], max_tokens=2400, temperature=0.5, surface='twin_read')
+        got = claude_json(READ_SYSTEM_PROMPT, json.dumps(brief, default=str)[:12000], max_tokens=3200, temperature=0.5, surface='twin_read')
         if isinstance(got, dict) and got.get('tldr'):
             return {'tldr': [scrub_text(str(x)) for x in got.get('tldr') or []][:5], 'reads': [scrub_text(str(x)) for x in (got.get('reads') or read['reads'])][:6],
                     'what_to_do': [scrub_text(str(x)) for x in (got.get('what_to_do') or read['what_to_do'])][:4]}
@@ -937,7 +938,7 @@ def run_scenario(twin: dict, scenario: dict, *, claude_json: Optional[Callable] 
         def read_fn(run, tw):
             brief = {'twin': tw.get('meta'), 'run': {k: run.get(k) for k in ('kind', 'question', 'outputs', 'drivers', 'comparison', 'recommendation')},
                      'deterministic_read': run.get('read')}
-            got = claude_json(READ_SYSTEM_PROMPT, json.dumps(brief, default=str)[:12000], max_tokens=2000, temperature=0.5, surface='twin_run_read')
+            got = claude_json(READ_SYSTEM_PROMPT, json.dumps(brief, default=str)[:12000], max_tokens=3200, temperature=0.5, surface='twin_run_read')
             return got if isinstance(got, dict) else None
     kind = str(scenario.get('kind') or '').lower()
     if kind == 'compare' and other_twin is not None:

@@ -656,6 +656,10 @@ def run_greenlight(twin: dict, inputs: dict, seed: str) -> dict:
     is_idea = not inputs.get('title') and bool(inputs.get('idea') or inputs.get('logline'))
     platforms = [str(p) for p in (inputs.get('platforms') or []) if str(p).strip()] or [str(_meta(twin).get('platform_home') or 'Netflix')]
     goal = _norm_goal(inputs.get('goal'), _noun_for(twin))
+    if not goal['value']:
+        # no bar named: the odds are read against the usual bar, three in ten of the twin in the first month
+        goal['value'] = messy_count(f"{subj}|{title}", 'goal', size * 0.3)
+        goal['usual_bar'] = True
     trial = 0.14 + 0.36 * trait(twin, 'trial_speed') / 100.0
     fit = float(inputs.get('fit') or 1.0)
     if is_idea:
@@ -708,7 +712,8 @@ def run_greenlight(twin: dict, inputs: dict, seed: str) -> dict:
                   'share_pct': pct1(best['expected'] / size * 100.0), 'read': f"The expected first month is {pct1(best['expected'] / size * 100.0)}% of the {human_people(size)} people in this twin."}
     rec = package['read']
     if odds is not None:
-        rec = f"{odds_words(odds).capitalize()} chance it clears {fmt_people(goal['value'])} {noun} in its first {goal['window_days']} days on {best['platform']}. " + rec
+        bar = f"the usual bar of {fmt_people(goal['value'])} {noun} (three in ten of the twin)" if goal.get('usual_bar') else f"{fmt_people(goal['value'])} {noun}"
+        rec = f"{odds_words(odds).capitalize()} chance it clears {bar} in its first {goal['window_days']} days on {best['platform']}. " + rec
     return {'outputs': outputs, 'drivers': drivers, 'comparison': comparison, 'recommendation': rec}
 
 
