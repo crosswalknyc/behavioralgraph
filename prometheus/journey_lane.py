@@ -50,6 +50,13 @@ _SECTION_RX = (
     ('every_viewer', re.compile(r"\b(?:every viewer|all viewers|viewers in the window|total viewers|how many (?:people )?watched .* in the window|saw no post|never saw a post)\b", re.I)),
 )
 _FORK_RX = re.compile(r"\b(?:came back|left the page|abandon(?:ed)?|return(?:ed)?|same session|retarget|nudge|win[- ]back)\b", re.I)
+# "what is this conversion?", "what counts as a conversion", "how is conversion defined":
+# the reader wants the definition, not the figure again (Debi 2026-10-21)
+_DEFINE_RX = re.compile(
+    r"\b(?:what\s+(?:is|does|do\s+you\s+mean\s+by|counts?\s+as|makes)\s+(?:a|an|this|that)\s+(?:conversion|convert(?:ed|s)?)\b|"
+    r"what\s+is\s+(?:the\s+)?conversion\s+(?:here|measuring|based\s+on|defined\s+as|in\s+this\s+case)\b|what\s+does\s+(?:the\s+)?conversion\s+(?:mean|measure|count)\b|"
+    r"(?:conversion|converted)\s+(?:mean|means|defined|definition)\b|(?:define|definition\s+of|meaning\s+of|explain)\s+(?:the\s+|this\s+)?conversion\b|"
+    r"how\s+(?:is|do\s+you)\s+(?:define|measure|count)\s+(?:a\s+|the\s+)?conversion\b|what\s+is\s+this\s+(?:\d+(?:\.\d+)?%|number|rate|percent(?:age)?))", re.I)
 _SUMMARY_RX = re.compile(r"\b(?:summar(?:y|ize)|overview|walk me through|tell me about|what does the journey|the whole journey|headline|short version)\b", re.I)
 
 
@@ -235,6 +242,27 @@ def _step_answer(payload, wants, title, platform):
     return lines, figs
 
 
+def _define_conversion(payload, title, platform):
+    """What the journey's conversion is: who counts, out of whom, and the
+    arithmetic behind the percentage. Plain words, no new figures."""
+    sp = _spine(payload)
+    if len(sp) < 2:
+        return None, []
+    start, end = int(sp[0].get('accounts') or 0), int(sp[-1].get('accounts') or 0)
+    if not (start and end):
+        return None, []
+    s_lab = str(sp[0].get('label') or 'started').strip()
+    e_lab = str(sp[-1].get('label') or 'reached the last step').strip()
+    e_doing = str(sp[-1].get('doing') or '').strip().rstrip('.')
+    lo = lambda x: x[:1].lower() + x[1:]
+    lines = [f"Conversion here is the share of people who {lo(s_lab)} who went on to the last step of the journey: {lo(e_lab)}."
+             + (f" That step counts anyone who {lo(e_doing)}." if e_doing and e_doing.lower() != e_lab.lower() else ''),
+             f"The arithmetic: {_fmt(end)} who {lo(e_lab)}, divided by {_fmt(start)} who {lo(s_lab)}, is {_pct(end, start)}.",
+             f"So {_pct(end, start)} is not a share of all of the United States or of {title}'s existing audience; it is how much of the people the journey starts with made it to the end."]
+    figs = [_figure('Conversion', round(end / start * 100, 2), 'pct'), _figure(s_lab, start), _figure(e_lab, end)]
+    return lines, figs
+
+
 def _section_answer(payload, key, title, platform):
     from migration import journey_gold as G
     sec = G.section(payload, key)
@@ -292,6 +320,13 @@ def answer(text, ctx=None, *, host=None, user=None, history=None, s3=None, bucke
     wants = [k for k, rx in _STEP_RX if rx.search(t)]
     if 'conversion' in wants and 'watched' in wants and not re.search(r"\bhow many (?:people )?watched\b", t, re.I):
         wants.remove('watched')
+    if _DEFINE_RX.search(t[-240:]) and ('conversion' in wants or re.search(r"\bconver(?:sion|ted|t)\b", t, re.I)):
+        lines, figs = _define_conversion(payload, title, platform)
+        if lines:
+            head = (f"From the journey for {name} ({window}):" if name.lower().startswith(('the ', 'a ', 'an ')) else f"From the {name} journey ({window}):")
+            return {'success': True, 'action': 'answer', 'reply': head + '\n' + '\n'.join(lines), 'followups': [f"Where the first post sat for {title}", f"Time from the social view to the first episode for {title}"],
+                    'offer_deck': False, 'deck_angle': None, 'figures': figs, 'profile': name, 'journey_key': run.get('key'),
+                    'window': {'start': (payload.get('meta') or {}).get('start_date'), 'end': (payload.get('meta') or {}).get('end_date')}}
     keys = [k for k, rx in _SECTION_RX if rx.search(t)]
     # "where did the first post sit" is the surface table, not the post table
     if 'post_surface' in keys and 'first_post' in keys and not re.search(r"\b(?:which|what) post\b|post (?:type|family|families)", t, re.I):
