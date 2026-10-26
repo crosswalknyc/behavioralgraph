@@ -159,3 +159,137 @@ def send_scope_alert(title, missing_labels, client_message=None, context=None,
     except Exception:  # noqa: BLE001 — a mail failure must never crash the query
         traceback.print_exc()
         return ""
+
+
+# ── ambiguous look-alike held for review ──────────────────────────────────────
+# The companion to send_scope_alert. The look-alike guard (streamscout.
+# verify_title_rows) HOLDS — never seeds, never silently drops — a resolver row
+# whose SHOW is an ambiguous subset of the query: a short title sitting inside a
+# longer, possibly different one ("House" -> "House of Cards", "Alien" ->
+# "Alien: Covenant"). Pure tokens can't tell a right short match ("House" ->
+# "House M.D.") from a wrong one, so a human confirms. This mails that queue.
+def _fmt_flagged(flagged):
+    """flagged: {platform_key: [SHOW, ...]} -> ['Max: House of Cards', ...]."""
+    out = []
+    for plat in sorted(flagged or {}):
+        for show in flagged[plat]:
+            out.append("%s: %s" % (plat, show))
+    return out
+
+
+def _review_text(title, flagged, context):
+    ctx = context or {}
+    when = datetime.now(timezone.utc).strftime("%b %d, %Y %I:%M %p UTC")
+    lines = [
+        "StreamScout held an ambiguous look-alike for review (not seeded).",
+        "",
+        "QUERY:     %s" % title,
+    ]
+    for k in ("window", "client", "requested_by", "kind"):
+        v = str(ctx.get(k) or "").strip()
+        if v:
+            lines.append("%-10s %s" % (k.upper() + ":", v))
+    lines += ["WHEN:      %s" % when, "", "Held for review:"]
+    lines += ["  - %s" % item for item in _fmt_flagged(flagged)]
+    lines += [
+        "",
+        "Each of these is a SHORT query sitting inside a LONGER title, so "
+        "StreamScout could not confirm it is the same show. It was NOT seeded "
+        "(so no profile runs on the wrong title) and NOT dropped. Please "
+        "confirm whether any is the title you meant, and seed it by hand if so.",
+        "",
+        "StreamScout / Crosswalk",
+    ]
+    return "\n".join(lines)
+
+
+def _review_html(title, flagged, context):
+    import html as _h
+    ctx = context or {}
+    when = datetime.now(timezone.utc).strftime("%b %d, %Y %I:%M %p UTC")
+    ink, body, muted, olive, off = (
+        "#0C1618", "#5C6560", "#888C89", "#5E7E12", "#E9E8E1")
+
+    def row(label, value):
+        return (f"<div style='font-size:11px;letter-spacing:.08em;"
+                f"text-transform:uppercase;color:{olive};font-weight:600;"
+                f"margin:16px 0 4px'>{_h.escape(label)}</div>"
+                f"<div style='background:#fff;border-radius:10px;padding:12px 14px;"
+                f"color:{ink};font-size:15px;line-height:1.5'>"
+                f"{_h.escape(str(value))}</div>")
+
+    extra = ""
+    for k in ("window", "client", "requested_by", "kind"):
+        v = str(ctx.get(k) or "").strip()
+        if v:
+            extra += row(k.replace("_", " ").title(), v)
+
+    items = "".join(
+        f"<li style='margin:4px 0'>{_h.escape(item)}</li>"
+        for item in _fmt_flagged(flagged))
+    held = (f"<div style='font-size:11px;letter-spacing:.08em;"
+            f"text-transform:uppercase;color:{olive};font-weight:600;"
+            f"margin:16px 0 4px'>Held for review</div>"
+            f"<div style='background:#fff;border-radius:10px;padding:12px 14px;"
+            f"color:{ink};font-size:15px;line-height:1.5'>"
+            f"<ul style='margin:0;padding-left:18px'>{items}</ul></div>")
+
+    return (
+        f"<html><body style='margin:0;padding:0;background:{off};"
+        f"font-family:Helvetica,Arial,sans-serif;color:{body}'>"
+        f"<div style='max-width:640px;margin:0 auto;padding:32px 24px'>"
+        f"<div style='font-size:11px;letter-spacing:.12em;text-transform:uppercase;"
+        f"color:{olive};font-weight:600'>StreamScout · Crosswalk</div>"
+        f"<h1 style='font-size:21px;color:{ink};font-weight:700;margin:10px 0 4px'>"
+        f"Ambiguous match — held for review</h1>"
+        f"<div style='color:{muted};font-size:13px'>{_h.escape(when)}</div>"
+        + row("Query", title)
+        + extra
+        + held
+        + (f"<div style='margin:22px 0 0;color:{ink};font-size:14px;"
+           f"line-height:1.55'>Each is a <b>short</b> query sitting inside a "
+           f"<b>longer</b> title, so StreamScout could not confirm it is the "
+           f"same show. It was <b>not</b> seeded and <b>not</b> dropped. Please "
+           f"confirm whether any is the title you meant.</div>")
+        + f"<div style='margin-top:26px;color:{ink}'>StreamScout<br>"
+        f"<span style='color:{muted}'>Crosswalk</span></div>"
+        f"</div></body></html>")
+
+
+def send_review_alert(title, flagged, context=None, recipients=None):
+    """Email Jenna + Jess that an ambiguous look-alike was HELD for review (not
+    seeded, not dropped). ``flagged`` is ``{platform_key: [SHOW, ...]}``. Never
+    raises; returns the SES MessageId on success or "" on any problem."""
+    try:
+        if not flagged:
+            return ""
+        try:
+            import os as _os, sys as _sys
+            _root = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+            if _root not in _sys.path:
+                _sys.path.insert(0, _root)
+            from prometheus.mail_guard import sending_allowed as _sending_allowed
+            if not _sending_allowed():
+                print("[streamscout] review alert suppressed: test process")
+                return ""
+        except ImportError:
+            pass
+        import boto3
+        to = recipients or alert_recipients()
+        subject = "StreamScout: %s — ambiguous match held for review" % title
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = subject[:180]
+        msg["From"] = _FROM
+        msg["To"] = ", ".join(to)
+        msg["Reply-To"] = _REPLY_TO
+        msg.attach(MIMEText(_review_text(title, flagged, context),
+                            "plain", "utf-8"))
+        msg.attach(MIMEText(_review_html(title, flagged, context),
+                            "html", "utf-8"))
+        resp = boto3.client("ses", region_name="us-east-2").send_raw_email(
+            Source=_FROM, Destinations=list(to),
+            RawMessage={"Data": msg.as_string()})
+        return resp.get("MessageId") or ""
+    except Exception:  # noqa: BLE001 — a mail failure must never crash the query
+        traceback.print_exc()
+        return ""

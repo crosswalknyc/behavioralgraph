@@ -128,6 +128,7 @@ def query_report(title, platforms=None, kind="series", seasons=None,
     out, seen = [], set()
     counts = {k: 0 for k in keys}
     failed = {}
+    flagged = {}  # platform -> [ambiguous SHOW names held for review, not seeded]
     for platform in keys:
         if platform in getattr(ss, "NONINTERACTIVE_SKIP", frozenset()):
             # Needs an interactive login window; can't run unattended. Mark it
@@ -148,11 +149,18 @@ def query_report(title, platforms=None, kind="series", seasons=None,
         # 'Doom Patrol' for 'Paw Patrol'). Skipped when the caller pinned an
         # exact asset via a hint/url (nothing to verify against).
         if title and not _hint_for(platform, hints, url):
-            rows, dropped = ss.verify_title_rows(title, rows)
+            rows, dropped, flag = ss.verify_title_rows(title, rows)
             if dropped:
                 print("  \u26a0 %s: dropped look-alike match %s \u2014 resolved a "
                       "different show, not %r"
                       % (platform, ", ".join(sorted(dropped)), title),
+                      file=sys.stderr)
+            if flag:
+                flagged[platform] = sorted(flag)
+                print("  \u26a0 %s: HELD ambiguous look-alike %s for review \u2014 a "
+                      "short query inside a longer title; not seeded, flagged "
+                      "for a human, not confirmed as %r"
+                      % (platform, ", ".join(sorted(flag)), title),
                       file=sys.stderr)
         for r in rows:
             row_show = (show or r.get("show") or title or "").strip().upper()
@@ -169,6 +177,7 @@ def query_report(title, platforms=None, kind="series", seasons=None,
                 out.append(rec)
                 counts[platform] += 1
     return {"rows": out, "counts": counts, "failed": failed,
+            "flagged": flagged,
             "keys": list(keys), "explicit": sorted(explicit)}
 
 
@@ -273,6 +282,18 @@ def streamscout_query(title, platforms=None, kind="series", seasons=None,
     out, counts, failed = rep["rows"], rep["counts"], rep["failed"]
     explicit = set(rep["explicit"])
 
+    # Ambiguous look-alikes were HELD (not seeded) by the guard. Loop a human in
+    # so a short query that sits inside a longer title ('House' -> 'House of
+    # Cards') never silently seeds the wrong show NOR silently vanishes. Mail
+    # failure must never crash the build (same contract as the scope alert).
+    if notify and rep.get("flagged"):
+        try:
+            import streamscout_notify as _notify
+            _notify.send_review_alert(title, rep["flagged"],
+                                      context=notify_context)
+        except Exception:  # noqa: BLE001
+            pass
+
     if strict and explicit:
         missing = [p for p in explicit if counts.get(p, 0) == 0]
         if missing:
@@ -362,6 +383,7 @@ def current_placements(title, platforms="video", kind="series", seasons=None,
     options = {"include_clips": None, "limit": None}
     counts = {k: 0 for k in scan_keys}
     failures = {}
+    flagged = {}  # platform -> [ambiguous SHOW names held for review]
     for platform in scan_keys:
         if platform in getattr(ss, "NONINTERACTIVE_SKIP", frozenset()):
             # Interactive-login resolver: can't check it unattended. Unverified,
@@ -377,13 +399,21 @@ def current_placements(title, platforms="video", kind="series", seasons=None,
         except Exception as e:  # noqa: BLE001 (hands-off: the platform stays unverified)
             failures[platform] = ("%s: %s" % (type(e).__name__, e))[:240]
             continue
-        # Look-alike guard (same as query_report): drop wrong-show matches.
+        # Look-alike guard (same as query_report): drop wrong-show matches,
+        # hold ambiguous subset matches for review.
         if title and not _hint_for(platform, hints, url):
-            rows, dropped = ss.verify_title_rows(title, rows)
+            rows, dropped, flag = ss.verify_title_rows(title, rows)
             if dropped:
                 print("  \u26a0 %s: dropped look-alike match %s \u2014 resolved a "
                       "different show, not %r"
                       % (platform, ", ".join(sorted(dropped)), title),
+                      file=sys.stderr)
+            if flag:
+                flagged[platform] = sorted(flag)
+                print("  \u26a0 %s: HELD ambiguous look-alike %s for review \u2014 a "
+                      "short query inside a longer title; not counted, flagged "
+                      "for a human, not confirmed as %r"
+                      % (platform, ", ".join(sorted(flag)), title),
                       file=sys.stderr)
         seen = set()
         for r in rows:
@@ -401,6 +431,7 @@ def current_placements(title, platforms="video", kind="series", seasons=None,
         "absent": [k for k in scan_keys if counts[k] == 0 and k not in failures],
         "unverified": unverified,
         "failures": failures,
+        "flagged": flagged,
         "counts": counts,
     }
     if known is not None:

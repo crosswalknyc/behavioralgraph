@@ -335,26 +335,45 @@ kept, dropped = split_profile_terms(candidate_terms, "Gilmore Girls", rows=rows)
 
 Some platforms' resolvers will answer a query with the *closest* show they can
 find, even when it isn't the right one. A **"Paw Patrol"** scan came back with
-**Doom Patrol** (HBO Max) and **Rosemary & Thyme** (Hallmark) — two completely
-different shows that would have seeded the wrong audience.
+**Doom Patrol** (HBO Max) and **Rosemary & Thyme** (Hallmark) — different shows
+that would have seeded the wrong audience. And a short query can sit *inside* a
+longer, different title: **"House"** lives inside **"House of Cards"**,
+**"Alien"** inside **"Alien: Covenant"**.
 
-`streamscout_query()` / `query_report()` / `current_placements()` now **verify
-every returned row's SHOW against the requested title** and **drop the
-look-alikes automatically** — no action needed on your side. It uses the same
-similarity floor as the rest of the pipeline, so:
+`streamscout_query()` / `query_report()` / `current_placements()` **verify every
+returned row's SHOW against the requested title** and sort each row into one of
+**three outcomes** — no action needed on your side unless a row lands in *review*:
 
-- *Paw Patrol* vs *Doom Patrol* (0.57) → **dropped**; *Paw Patrol* vs *Rosemary
-  & Thyme* (0.25) → **dropped**.
-- Legit messy titles still pass: *Wicked For Good* ↔ *Wicked: For Good*, *The
-  Office* ↔ *The Office (U.S.)*, *Paw Patrol* ↔ *Paw Patrol: The Movie* → kept.
+- **Match → seeded.** Identical titles, a messy client title that just adds
+  words (*Wicked For Good* ↔ *Wicked: For Good*, *The Office* ↔
+  *The Office (U.S.)*), and typo / word-order variants all pass.
+- **Different show → dropped silently.** *Paw Patrol* vs *Doom Patrol* /
+  *Rosemary & Thyme* → removed; logged to stderr (`⚠ hallmark: dropped
+  look-alike ROSEMARY & THYME — resolved a different show, not 'Paw Patrol'`).
+- **Ambiguous subset → HELD for review (new, 2026-10-26).** A short query
+  sitting inside a longer title that we *can't* confirm is the same show —
+  *House* → *House of Cards*, *Alien* → *Alien: Covenant*, *Paw Patrol* →
+  *Paw Patrol: The Movie*, *Gilmore Girls* → *Gilmore Girls: A Year in the Life*.
+  These are **never silently seeded** (so no profile runs on the wrong title)
+  **and never silently dropped** (so a legit short title isn't lost). Instead
+  StreamScout **emails you + Jess a review alert** ("ambiguous match held for
+  review") so a human confirms it and seeds it by hand if it's the one you meant.
 
-Dropped look-alikes are logged to stderr (`⚠ hallmark: dropped look-alike
-ROSEMARY & THYME — resolved a different show, not 'Paw Patrol'`). If a caller
-pins an exact asset via a `hints=`/`url=` identifier, verification is skipped for
-that platform (nothing to second-guess).
+Why the third bucket exists: tokens alone can't tell *House* → *House M.D.*
+(right) from *House* → *House of Cards* (wrong) — both are a one-word query
+inside a longer title. Rather than guess (the old code blindly seeded whichever
+the resolver returned), StreamScout holds the genuinely ambiguous ones for a
+human. Short disambiguations the character match can still vouch for (*House* →
+*House M.D.*, *The Office* → *The Office (U.S.)*) stay auto-seeded.
+
+Review alerts go to the same inbox as the §5a scope alerts (Jenna + Jess), never
+raise into the build, and honor the test-mail guard. If a caller pins an exact
+asset via a `hints=`/`url=` identifier, verification is skipped for that platform
+(nothing to second-guess).
 
 > **Why it matters:** this is the automatic backstop behind §5/§5d — even if a
-> resolver fuzzy-matches the wrong show, it can never reach a client profile.
+> resolver fuzzy-matches the wrong show, or a short query collides with a bigger
+> title, it can never *silently* reach a client profile.
 
 ### 5f. HBO Max resolves unattended via saved-auth token replay
 
