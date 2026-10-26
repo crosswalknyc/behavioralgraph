@@ -375,6 +375,115 @@ def verify_title_rows(title, rows, thresh: float = 0.7):
     return kept, dropped, flagged
 
 
+# ── same-title variant disambiguation ─────────────────────────────────────────
+# Some titles name MORE THAN ONE distinct work: a US and a UK series (The Office,
+# Shameless), an original and a reboot (Charmed, Gossip Girl), or a film remade
+# years apart (Dune 1984/2021, IT 1990/2017). The look-alike guard can't separate
+# these — "The Office (UK)" and "The Office (US)" read as the SAME show (match) —
+# so a BARE query for one would silently seed whichever the resolver ranked
+# first. This layer:
+#   * parses a disambiguator the caller supplied (a parenthetical/bracketed
+#     region, year, or era — "Shameless (US)", "Dune (2021)", "Charmed (reboot)")
+#     and labels the seed distinctly, so US and UK become SEPARATE audiences; and
+#   * for a known-ambiguous base title with NO disambiguator, HOLDS the query for
+#     review (same queue as §5e) so a human picks the version.
+# Region words INSIDE a title ("American Sniper", "American Horror Story") are
+# deliberately NOT treated as tags — only an explicit trailing (..)/[..] marker.
+def _base_key(title: str) -> str:
+    """Normalized key for the variant registry: lowercase alnum tokens with a
+    leading 'the' dropped. 'The Office' -> 'office'; 'House of Cards' ->
+    'house of cards'."""
+    toks = tokens(title)
+    if toks and toks[0] == "the":
+        toks = toks[1:]
+    return " ".join(toks)
+
+
+# base_key -> the distinct versions that share the name (for the review message).
+# This registry is the tuning knob: conservative + streaming-relevant. Add a
+# title here when a client surfaces a bare query that maps to >1 real work.
+_AMBIGUOUS_RAW = {
+    "The Office": ("US", "UK"),
+    "Shameless": ("US", "UK"),
+    "Skins": ("UK", "US"),
+    "Being Human": ("UK", "US"),
+    "Queer as Folk": ("UK", "US"),
+    "House of Cards": ("US", "UK"),
+    "Wilfred": ("AU", "US"),
+    "The Inbetweeners": ("UK", "US"),
+    "Ghosts": ("UK", "US"),
+    "Gladiators": ("UK", "US"),
+    "Gossip Girl": ("original", "reboot"),
+    "Charmed": ("original", "reboot"),
+    "Dynasty": ("original", "reboot"),
+    "One Day at a Time": ("original", "reboot"),
+    "Dune": ("1984", "2021"),
+    "It": ("1990", "2017"),
+    "The Italian Job": ("1969", "2003"),
+}
+AMBIGUOUS_TITLES = {_base_key(k): v for k, v in _AMBIGUOUS_RAW.items()}
+
+_REGION_MARKERS = {
+    "us": "US", "usa": "US", "unitedstates": "US",
+    "uk": "UK", "gb": "UK", "gbr": "UK", "britain": "UK", "greatbritain": "UK",
+    "au": "AU", "aus": "AU", "australia": "AU",
+    "ca": "CA", "canada": "CA", "nz": "NZ", "newzealand": "NZ",
+    "usversion": "US", "ukversion": "UK",
+}
+_ERA_MARKERS = {
+    "original": "original", "classic": "original",
+    "reboot": "reboot", "remake": "reboot", "revival": "reboot",
+}
+
+
+def _tag_from_marker(inner: str) -> str:
+    """A region / year / era tag from a parenthetical's inner text, or ''."""
+    raw = (inner or "").strip()
+    if re.fullmatch(r"(?:19|20)\d{2}", raw):          # a release year
+        return raw
+    x = re.sub(r"[^a-z0-9]", "", raw.lower())
+    return _REGION_MARKERS.get(x) or _ERA_MARKERS.get(x) or ""
+
+
+def parse_variant(title: str):
+    """Split an explicit disambiguator off a title: ``(base, tag)``.
+
+    Reads ONLY a trailing ``(..)`` / ``[..]`` marker that is a region ("US",
+    "U.K."), a release year ("2021"), or an era ("reboot") — so
+    "Shameless (US)" -> ("Shameless", "US") and "Dune (2021)" -> ("Dune",
+    "2021"), while "American Sniper" -> ("American Sniper", "") (the region word
+    is part of the title, not a tag). ``tag`` is "" when none is present."""
+    s = (title or "").strip()
+    if not s:
+        return s, ""
+    m = re.search(r"[\(\[]\s*([^\)\]]+?)\s*[\)\]]\s*$", s)
+    if m:
+        tag = _tag_from_marker(m.group(1))
+        if tag:
+            return s[:m.start()].strip(), tag
+    return s, ""
+
+
+def ambiguous_variants(title: str):
+    """The known distinct versions for ``title``'s base, or () if not known."""
+    base, _ = parse_variant(title)
+    return AMBIGUOUS_TITLES.get(_base_key(base), ())
+
+
+def is_ambiguous_title(title: str) -> bool:
+    """True when ``title`` is a BARE query (no region/year/era supplied) whose
+    base names more than one distinct work — so it must not auto-resolve."""
+    base, tag = parse_variant(title)
+    return (not tag) and _base_key(base) in AMBIGUOUS_TITLES
+
+
+def variant_show_label(base: str, variant: str) -> str:
+    """The distinct SHOW label for a variant seed: 'The Office' + 'UK' ->
+    'THE OFFICE (UK)'. Keeps US and UK as separate audiences downstream."""
+    b = (base or "").strip().upper()
+    return f"{b} ({variant})" if variant else b
+
+
 # Resolvers that require an interactive, HEADED browser login (a real window)
 # and therefore cannot run unattended. The non-interactive query paths
 # (streamscout_query / current_placements) skip these instead of popping a

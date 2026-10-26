@@ -256,6 +256,108 @@ def _review_html(title, flagged, context):
         f"</div></body></html>")
 
 
+# ── same-title variant held (US/UK, reboot, remake) ───────────────────────────
+# A BARE query for a title that names more than one distinct work (The Office
+# US/UK, Dune 1984/2021) is held — StreamScout won't guess which one. This mails
+# Jenna + Jess to pick the version; the fix is to re-query the specific form.
+def _variant_line(variants):
+    vs = [str(v) for v in (variants or []) if str(v).strip()]
+    return _fmt_platforms(vs) if vs else "more than one version"
+
+
+def send_variant_alert(title, variants, context=None, recipients=None):
+    """Email Jenna + Jess that a title naming >1 distinct work was held (not
+    seeded) because the query didn't say which version. Never raises; returns
+    the SES MessageId on success or "" on any problem."""
+    try:
+        try:
+            import os as _os, sys as _sys
+            _root = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+            if _root not in _sys.path:
+                _sys.path.insert(0, _root)
+            from prometheus.mail_guard import sending_allowed as _sending_allowed
+            if not _sending_allowed():
+                print("[streamscout] variant alert suppressed: test process")
+                return ""
+        except ImportError:
+            pass
+        import boto3
+        to = recipients or alert_recipients()
+        vtext = _variant_line(variants)
+        when = datetime.now(timezone.utc).strftime("%b %d, %Y %I:%M %p UTC")
+        ctx = context or {}
+        ctx_lines = ""
+        for k in ("window", "client", "requested_by", "kind"):
+            v = str(ctx.get(k) or "").strip()
+            if v:
+                ctx_lines += "%-10s %s\n" % (k.upper() + ":", v)
+        text = (
+            "StreamScout held a title that names more than one work (not "
+            "seeded).\n\n"
+            "QUERY:     %s\n"
+            "VERSIONS:  %s\n"
+            "%sWHEN:      %s\n\n"
+            "'%s' maps to more than one distinct work, so StreamScout could not "
+            "tell which you meant and did NOT seed any of them. Re-query the "
+            "specific version (e.g. '%s (%s)') and it will resolve and seed "
+            "normally.\n\nStreamScout / Crosswalk"
+            % (title, vtext, ctx_lines, when, title, title,
+               (list(variants or ["US"]) or ["US"])[0]))
+        import html as _h
+        ink, body, muted, olive, off = (
+            "#0C1618", "#5C6560", "#888C89", "#5E7E12", "#E9E8E1")
+
+        def row(label, value):
+            return (f"<div style='font-size:11px;letter-spacing:.08em;"
+                    f"text-transform:uppercase;color:{olive};font-weight:600;"
+                    f"margin:16px 0 4px'>{_h.escape(label)}</div>"
+                    f"<div style='background:#fff;border-radius:10px;"
+                    f"padding:12px 14px;color:{ink};font-size:15px;"
+                    f"line-height:1.5'>{_h.escape(str(value))}</div>")
+
+        extra = ""
+        for k in ("window", "client", "requested_by", "kind"):
+            v = str(ctx.get(k) or "").strip()
+            if v:
+                extra += row(k.replace("_", " ").title(), v)
+        example = "%s (%s)" % (title, (list(variants or ["US"]) or ["US"])[0])
+        html_body = (
+            f"<html><body style='margin:0;padding:0;background:{off};"
+            f"font-family:Helvetica,Arial,sans-serif;color:{body}'>"
+            f"<div style='max-width:640px;margin:0 auto;padding:32px 24px'>"
+            f"<div style='font-size:11px;letter-spacing:.12em;"
+            f"text-transform:uppercase;color:{olive};font-weight:600'>"
+            f"StreamScout · Crosswalk</div>"
+            f"<h1 style='font-size:21px;color:{ink};font-weight:700;"
+            f"margin:10px 0 4px'>Which version? — held for review</h1>"
+            f"<div style='color:{muted};font-size:13px'>{_h.escape(when)}</div>"
+            + row("Query", title) + row("Versions that share this name", vtext)
+            + extra
+            + (f"<div style='margin:22px 0 0;color:{ink};font-size:14px;"
+               f"line-height:1.55'><b>{_h.escape(title)}</b> names more than one "
+               f"distinct work, so StreamScout did <b>not</b> seed any of them. "
+               f"Re-query the specific version (e.g. "
+               f"<b>{_h.escape(example)}</b>) and it resolves normally.</div>")
+            + f"<div style='margin-top:26px;color:{ink}'>StreamScout<br>"
+            f"<span style='color:{muted}'>Crosswalk</span></div>"
+            f"</div></body></html>")
+        subject = "StreamScout: %s — which version? (held)" % title
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = subject[:180]
+        msg["From"] = _FROM
+        msg["To"] = ", ".join(to)
+        msg["Reply-To"] = _REPLY_TO
+        msg.attach(MIMEText(text, "plain", "utf-8"))
+        msg.attach(MIMEText(html_body, "html", "utf-8"))
+        resp = boto3.client("ses", region_name="us-east-2").send_raw_email(
+            Source=_FROM, Destinations=list(to),
+            RawMessage={"Data": msg.as_string()})
+        return resp.get("MessageId") or ""
+    except Exception:  # noqa: BLE001 — a mail failure must never crash the query
+        traceback.print_exc()
+        return ""
+
+
 def send_review_alert(title, flagged, context=None, recipients=None):
     """Email Jenna + Jess that an ambiguous look-alike was HELD for review (not
     seeded, not dropped). ``flagged`` is ``{platform_key: [SHOW, ...]}``. Never

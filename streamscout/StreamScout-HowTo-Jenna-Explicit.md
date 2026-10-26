@@ -395,6 +395,40 @@ headless, with no window** — the same as every other platform — using captur
   as **unverified** (not "0 / gone") and **no window ever opens** unattended.
   That's the signal to re-run `--refresh-auth`.
 
+### 5g. Same-title variants — US/UK, reboot, remake (ask, don't guess)
+
+Some titles name **more than one distinct work**: a US *and* a UK series
+(*The Office*, *Shameless*), an original *and* a reboot (*Charmed*,
+*Gossip Girl*), or a film remade years apart (*Dune* 1984/2021, *IT* 1990/2017).
+The look-alike guard (§5e) **can't** separate these — *The Office (UK)* and
+*The Office (US)* read as the *same* show — so a bare query would silently seed
+whichever version discovery happened to rank first.
+
+StreamScout now handles the variant itself:
+
+- **Specify the version and it seeds, labeled distinctly.** Pass the region,
+  year, or era in a trailing marker — `"The Office (UK)"`, `"Shameless (US)"`,
+  `"Dune (2021)"`, `"Charmed (reboot)"`. The seed's `SHOW` carries the tag
+  (`THE OFFICE (UK)`), so **US and UK stay separate audiences** in the content
+  map. Markers understood: `US`/`USA`, `UK`/`GB`, `AU`, `CA`, `NZ`, a 4-digit
+  year, and `original`/`reboot`/`remake`/`revival`.
+- **A BARE ambiguous title is HELD for review.** Query just `"The Office"` and
+  StreamScout seeds **nothing** and emails you + Jess *"which version? — held"*
+  listing the known versions. Re-query the specific form and it resolves.
+- **Region words inside a title are safe.** *American Sniper*, *American Horror
+  Story*, *The Americans* are **not** misread as "US" — only an explicit
+  trailing `(..)`/`[..]` marker counts.
+- **Pinned assets skip the hold.** If a caller passes a `hints=`/`url=`
+  identifier, StreamScout trusts that exact asset (nothing to disambiguate).
+
+The known-ambiguous list is a conservative, streaming-relevant set
+(`streamscout.AMBIGUOUS_TITLES`) — tell me when a client surfaces a new one and
+I'll add it. Everything **not** on the list resolves normally with no change.
+
+> For **remakes** like *American Sniper* (one well-known film) a bare query is
+> fine; for genuinely remade titles (*Dune*, *IT*, *The Italian Job*) add the
+> **year** — `"Dune (2021)"` — to pin the one you mean.
+
 ---
 
 ## 6. Output schema (every row)
