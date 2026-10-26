@@ -129,6 +129,19 @@ def query_report(title, platforms=None, kind="series", seasons=None,
     counts = {k: 0 for k in keys}
     failed = {}
     flagged = {}  # platform -> [ambiguous SHOW names held for review, not seeded]
+    # Same-title variant guard (title-level): a BARE query for a title that names
+    # more than one distinct work (The Office US/UK, Dune 84/21) can't be safely
+    # auto-resolved — discovery would silently pick one. Unless the caller pinned
+    # an exact asset (url/hints) or specified the variant, HOLD it for review. A
+    # specified variant ("The Office (UK)") seeds and is labeled distinctly.
+    base, variant = ss.parse_variant(title or "")
+    pinned = bool(url) or bool(hints)
+    if title and not pinned and not variant and ss.is_ambiguous_title(title):
+        return {"rows": [], "counts": {k: 0 for k in keys}, "failed": failed,
+                "flagged": flagged,
+                "ambiguous": {"title": title, "base": base,
+                              "variants": list(ss.ambiguous_variants(title))},
+                "keys": list(keys), "explicit": sorted(explicit)}
     for platform in keys:
         if platform in getattr(ss, "NONINTERACTIVE_SKIP", frozenset()):
             # Needs an interactive login window; can't run unattended. Mark it
@@ -163,11 +176,19 @@ def query_report(title, platforms=None, kind="series", seasons=None,
                       % (platform, ", ".join(sorted(flag)), title),
                       file=sys.stderr)
         for r in rows:
-            row_show = (show or r.get("show") or title or "").strip().upper()
+            if variant and not show:
+                # caller specified a version ("The Office (UK)") — label the seed
+                # distinctly so US/UK stay separate audiences; tag production off
+                # the base title.
+                row_show = ss.variant_show_label(base, variant)
+                prod_show = base
+            else:
+                row_show = (show or r.get("show") or title or "").strip().upper()
+                prod_show = row_show
             rec = {
                 "SHOW": row_show,
                 "URL": r.get("identifier", "") or "",
-                "PRODUCTION": ss.production_for(row_show, kind),
+                "PRODUCTION": ss.production_for(prod_show, kind),
                 "PLATFORM": r.get("platform") or ss.platform_label(platform),
                 "SEASON": ss.season_label(r.get("season", "")),
             }
@@ -177,7 +198,7 @@ def query_report(title, platforms=None, kind="series", seasons=None,
                 out.append(rec)
                 counts[platform] += 1
     return {"rows": out, "counts": counts, "failed": failed,
-            "flagged": flagged,
+            "flagged": flagged, "ambiguous": None,
             "keys": list(keys), "explicit": sorted(explicit)}
 
 
@@ -282,6 +303,20 @@ def streamscout_query(title, platforms=None, kind="series", seasons=None,
     out, counts, failed = rep["rows"], rep["counts"], rep["failed"]
     explicit = set(rep["explicit"])
 
+    # Same-title variant held (title names >1 distinct work, e.g. The Office
+    # US/UK) — nothing was seeded. Loop a human in to pick the version, then
+    # stop here (no strict raise: this is ambiguity, not an absence).
+    if rep.get("ambiguous"):
+        amb = rep["ambiguous"]
+        if notify:
+            try:
+                import streamscout_notify as _notify
+                _notify.send_variant_alert(amb["title"], amb["variants"],
+                                           context=notify_context)
+            except Exception:  # noqa: BLE001
+                pass
+        return out  # [] — a specified variant ("The Office (UK)") seeds normally
+
     # Ambiguous look-alikes were HELD (not seeded) by the guard. Loop a human in
     # so a short query that sits inside a longer title ('House' -> 'House of
     # Cards') never silently seeds the wrong show NOR silently vanishes. Mail
@@ -380,6 +415,19 @@ def current_placements(title, platforms="video", kind="series", seasons=None,
     # what's already in the content_map is complete (we can confirm a stored
     # platform is "gone" only if we actually scanned it).
     scan_keys = list(dict.fromkeys(list(requested) + known_keys))
+    # Same-title variant guard (see query_report): a BARE ambiguous title can't
+    # be reconciled — we don't know which version to scan for. Hold it (so no
+    # stored placement is read as "gone") unless the caller pinned/specified.
+    _base, _variant = ss.parse_variant(title or "")
+    if title and not (url or hints) and not _variant and ss.is_ambiguous_title(title):
+        report = {"title": title, "scanned": [], "present": {},
+                  "present_labels": [], "absent": [], "unverified": [],
+                  "failures": {}, "flagged": {}, "counts": {},
+                  "ambiguous": {"title": title, "base": _base,
+                                "variants": list(ss.ambiguous_variants(title))}}
+        if known is not None:
+            report["added"], report["gone"], report["unchanged"] = [], [], []
+        return report
     options = {"include_clips": None, "limit": None}
     counts = {k: 0 for k in scan_keys}
     failures = {}
@@ -432,6 +480,7 @@ def current_placements(title, platforms="video", kind="series", seasons=None,
         "unverified": unverified,
         "failures": failures,
         "flagged": flagged,
+        "ambiguous": None,
         "counts": counts,
     }
     if known is not None:
