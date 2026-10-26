@@ -360,7 +360,10 @@ def _live_platforms(title, kind, timeout_s=40.0):
             if kind == 'podcast':
                 plats = list(_ssq.GROUPS['podcasts'])
             else:
-                plats = [p for p in _ssq.GROUPS['video'] if not (kind == 'movie' and p == 'youtube')]
+                # Amazon never resolves from a bare title (its zero is not an
+                # answer); the content map and the research call cover it
+                plats = [p for p in _ssq.GROUPS['video']
+                         if p != 'amazon' and not (kind == 'movie' and p == 'youtube')]
             k = 'movie' if kind == 'movie' else 'series'
             if callable(getattr(_ssq, 'query_report', None)):
                 result['rep'] = _ssq.query_report(title, platforms=plats, kind=k)
