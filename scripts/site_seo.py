@@ -105,6 +105,10 @@ PAGES = {
         description="Twin IQ builds a digital twin of each of 10 million US people from observed behavior, not surveys. Test a plan, a title, or a price on synthetic audiences before you spend.",
         kind="product", name="Twin IQ", crumb_label="Digital twins",
         og_image="assets/images/og-digital-twins.png"),
+    "micro-series.html": dict(
+        title="Micro-series: who watches vertical dramas, and where | Crosswalk",
+        description="Who watches vertical dramas on ReelShort, DramaBox, GoodShort, NetShort and Peacock, who pays, and where the paywall sits. Counted from 10 million US people, updated daily.",
+        kind="product", name="Micro-series", og_image="assets/images/og-micro-series.png"),
     "panel.html": dict(
         title="The Crosswalk panel: 30 million opted-in people | Crosswalk",
         description="30 million people chose to be counted. How the opted-in panel works, what gets counted, your rights, and what clients receive.",
