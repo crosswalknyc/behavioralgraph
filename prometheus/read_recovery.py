@@ -98,13 +98,14 @@ DECK_TAG = 'deck:'
 # aiq:. Their records are the kind's own status documents (the widget
 # polls them already) with a resume block of inputs + extras; the
 # worker runs the same job body the web process used to run on a thread.
-ENGINE_KINDS = ('jiq', 'bpiq', 'fw', 'aiq', 'tlist')
+ENGINE_KINDS = ('jiq', 'bpiq', 'fw', 'aiq', 'tlist', 'twin_build', 'twin_run')
 _ENGINE_PREFIX_CAP = {'jiq': 'jiq_prefix', 'bpiq': 'bpiq_prefix', 'fw': 'fw_prefix', 'aiq': 'aiq_prefix'}
 _ENGINE_RUNNER = {'jiq': '_pm_run_jiq_job', 'bpiq': '_pm_run_bpiq_job', 'fw': '_pm_run_fw_job', 'aiq': '_pm_run_aiq_job'}
 _ENGINE_WRITER = {'jiq': '_pm_jiq_status_write', 'bpiq': '_pm_bpiq_status_write', 'fw': '_pm_fw_status_write', 'aiq': '_pm_aiq_status_write'}
-_ENGINE_LABEL = {'jiq': 'journey', 'bpiq': 'valuation', 'fw': 'flywheel read', 'aiq': 'campaign tracker', 'tlist': 'talent list'}
-# the talent list (Custom Ask, 2026-10-15) lives in its own module, not the legacy chat
-_MODULE_KINDS = {'tlist': 'prometheus.talent_list_job'}
+_ENGINE_LABEL = {'jiq': 'journey', 'bpiq': 'valuation', 'fw': 'flywheel read', 'aiq': 'campaign tracker', 'tlist': 'talent list',
+                 'twin_build': 'twin', 'twin_run': 'twin run'}
+# the talent list (Custom Ask, 2026-10-15) and the Digital Twins IQ jobs (2026-10-26) live in their own modules, not the legacy chat
+_MODULE_KINDS = {'tlist': 'prometheus.talent_list_job', 'twin_build': 'prometheus.digital_twin_job', 'twin_run': 'prometheus.digital_twin_job'}
 
 
 def _kind_module(kind):

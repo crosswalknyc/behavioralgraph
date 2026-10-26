@@ -149,6 +149,16 @@ DEFAULT_PRICING = {
         # front through the user's chosen end date; no refunds).
         "attribution_iq_setup": 500.0,
         "attribution_iq_daily": 100.0,
+        # 2026-10-26 (Jenna): Digital Twins IQ. The twin (with its IP
+        # lifetime value and three runs) $750; each further run $100;
+        # a Spend Engine plan $250 for its window; a Focus Group IQ session
+        # $150 with 12 questions, then $100 per further 12. One line
+        # each; the admin billing panel overrides them.
+        "digital_twins_iq": 750.0,
+        "digital_twin_run": 100.0,
+        "digital_twin_spend": 250.0,
+        "digital_twin_panel": 150.0,
+        "digital_twin_panel_more": 100.0,
         "flywheel_conversion": 0.0,
         "intent_iq": 0.0,
         "share_of_time": 0.0,
@@ -527,6 +537,17 @@ MODULE_CATALOG = [
      "modules", 5, 500.0, "has_intent_iq_access"),
     ("attribution_iq_daily",       "Attribution IQ - Daily Refresh",
      "modules", 1, 100.0, "has_intent_iq_access"),
+    # ---------- Digital Twins IQ (2026-10-26, Jenna) ----------
+    ("digital_twins_iq",           "Digital Twins IQ - Twin",
+     "modules", 15, 750.0, "has_digital_twins_iq_access"),
+    ("digital_twin_run",           "Digital Twins IQ - Run",
+     "modules", 3, 100.0, "has_digital_twins_iq_access"),
+    ("digital_twin_spend",         "Digital Twins IQ - Spend Engine Plan",
+     "modules", 5, 250.0, "has_digital_twins_iq_access"),
+    ("digital_twin_panel",         "Digital Twins IQ - Focus Group IQ Session",
+     "modules", 4, 150.0, "has_digital_twins_iq_access"),
+    ("digital_twin_panel_more",    "Digital Twins IQ - Focus Group IQ, 12 More Questions",
+     "modules", 3, 100.0, "has_digital_twins_iq_access"),
     ("share_of_time",              "Share of Time - View",
      "modules", 0, 0.0, "has_share_of_time_access"),
     ("share_of_time_run",          "Share of Time - Run",
@@ -1474,6 +1495,15 @@ _PULL_TYPE_TO_TOOL_KEY = {
     "campaign roi":                  "campaign_roi",
     "watch time":                    "watch_time",
     "roas iq":                       "roas_iq",
+    # ---- Digital Twins IQ (2026-10-26) ----
+    "digital twins iq":              "digital_twins_iq",
+    "digital twin":                  "digital_twins_iq",
+    "digital twins iq run":          "digital_twin_run",
+    "digital twins iq spend":        "digital_twin_spend",
+    "digital twins iq panel":        "digital_twin_panel",
+    "digital twins iq panel more":   "digital_twin_panel_more",
+    "digital twins iq focus group":  "digital_twin_panel",
+    "digital twins iq focus group more": "digital_twin_panel_more",
     # ---- Digital Journey / Intent / Sentiment ----
     "digital journey iq":            "journey_iq",
     "journey iq":                    "journey_iq",
@@ -2999,6 +3029,7 @@ _PROMETHEUS_ONLY_FALSE_FLAGS = (
     "has_brand_partnership_iq_access",
     "has_sentiment_iq_access",
     "has_journey_iq_access",
+    "has_digital_twins_iq_access",
     "has_intent_iq_access",
     "has_share_of_time_access",
     "has_share_of_time_run_access",
@@ -3012,6 +3043,7 @@ _PROMETHEUS_ONLY_EMPTY_LISTS = (
     "allowed_categories",
     "allowed_behavioral_categories",
     "allowed_journey_iq_runs",
+    "allowed_digital_twin_runs",
     "allowed_flywheel_iq_runs",
     "allowed_subscriber_iq_runs",
     "allowed_intent_iq_runs",
@@ -3028,18 +3060,21 @@ _CATALOG_LIST_FIELDS = (
     "allowed_flywheel_iq_runs",
     "allowed_subscriber_iq_runs",
     "allowed_journey_iq_runs",
+    "allowed_digital_twin_runs",
 )
 _FLAG_FOR_CATALOG = {
     "allowed_runs": "has_profile_iq_access",
     "allowed_flywheel_iq_runs": "has_flywheel_iq_access",
     "allowed_subscriber_iq_runs": "has_subscriber_iq_access",
     "allowed_journey_iq_runs": "has_journey_iq_access",
+    "allowed_digital_twin_runs": "has_digital_twins_iq_access",
 }
 _PRODUCT_FOR_CATALOG = {
     "allowed_runs": "profile_iq",
     "allowed_flywheel_iq_runs": "flywheel_iq",
     "allowed_subscriber_iq_runs": "subscriber_iq",
     "allowed_journey_iq_runs": "journey_iq",
+    "allowed_digital_twin_runs": "digital_twins_iq",
 }
 # Jenna 2026-09-28: WBD sees Gilmore Girls for free in Profile IQ,
 # Flywheel, and Subscriber IQ, plus Dexter's Lab and Young Sheldon

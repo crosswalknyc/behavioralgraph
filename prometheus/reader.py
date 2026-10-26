@@ -51,6 +51,7 @@ INTENTS = (
     'valuation',       # a Brand Partnership read
     'campaign',        # an Attribution IQ campaign tracker
     'tracker',         # a Subscriber IQ tracker
+    'twin',            # a Digital Twin: build one, or run a lab / room on one (2026-10-26)
     'analyze_page',    # a question about what is on screen
     'analyze',         # an analytical question answered from the library and what we know
     'compare',         # two or more audiences side by side
@@ -66,7 +67,7 @@ INTENTS = (
 EXECUTABLE = frozenset(('exists', 'size', 'status', 'capability', 'decline', 'command'))
 # intents that pick a model surface
 ANALYZE_SET = frozenset(('analyze_page', 'analyze', 'compare', 'definition'))
-BUILD_SET = frozenset(('build_profile', 'cut', 'journey', 'valuation', 'campaign', 'tracker'))
+BUILD_SET = frozenset(('build_profile', 'cut', 'journey', 'valuation', 'campaign', 'tracker', 'twin'))
 
 BANK_KEY = 'system/pm_reader_bank.json'
 READ_TIMEOUT_S = 40.0
@@ -76,7 +77,7 @@ _bank_lock = threading.Lock()
 
 CHARTER = """You are the reader for Prometheus, the analyst inside the Crosswalk dashboard. Your only job is to say what the person is asking for, the way a careful senior analyst would after reading the whole thread. You do not answer the question.
 
-Crosswalk holds a library: Profile IQ audiences (a person, brand, title or behavior: demographics plus the brands, platforms and talent they over-index on), Subscriber IQ trackers (a title on a service: accounts, new and reactivated subscribers, how long they stayed), Digital Journeys (a post or clip to a watch, purchase or ticketing visit), Brand Partnership reads (a talent or title against a brand, one dollar figure), Attribution IQ campaigns (assets tracked to a ticketing site, product page or signup), decks and files. Counts are measured inside a 10 million person US sample and projected to the US (x 32.99).
+Crosswalk holds a library: Profile IQ audiences (a person, brand, title or behavior: demographics plus the brands, platforms and talent they over-index on), Subscriber IQ trackers (a title on a service: accounts, new and reactivated subscribers, how long they stayed), Digital Journeys (a post or clip to a watch, purchase or ticketing visit), Brand Partnership reads (a talent or title against a brand, one dollar figure), Attribution IQ campaigns (assets tracked to a ticketing site, product page or signup), Digital Twins (a twin of an audience that runs titles, plans, prices and ideas forward: Greenlight Lab, Launch Lab, Spend Engine, Focus Group IQ), decks and files. Counts are measured inside a 10 million person US sample and projected to the US (x 32.99).
 
 How to read:
 - A question is a question. "Do we have", "how big", "how many", "what is", "who skews", "which" are never build orders, even on the build screen. Only an order to build, pull, run, create or make is a build ("can you build me a Nike profile" and "run aprofile on X" included): build_profile on the named subject, however it is spelled, whatever is open. "Don't build, answer from what exists" is answer mode.
@@ -87,6 +88,7 @@ How to read:
 - "Like the one you did for X" names a precedent: precedent:X in flags, the new subject stays. When the library shows X as a journey, valuation, campaign or tracker, the intent is that product for the new subject.
 - A size question (how big, size of, incidence, projected band) is intent size. The audience on the open page is read off the page; any other audience, or a cross of audiences, is a $100 read quoted before any number. "How many people watched X" is analyze (a consumption count).
 - A path described while a Digital Journey is on screen (saw a clip and then watched) restates that journey: analyze_page. A new journey needs an order (build, pull, run, map, set up).
+- An order to build a twin, run Greenlight Lab, Launch Lab or the Spend Engine on a twin, open Focus Group IQ, a focus group or a room with a twin, or ask the room a question: twin, with the twin's subject.
 - Where is my X, have not received, still waiting, is it done: status. A short yes / run it / approve alone: run_pending. Is there a way to, can we, how do we set up: capability.
 - What does this number mean / how is this calculated: definition. What does X cost: pricing. Email me, send the file, download the csv, open X: command. Build a deck / one-pager / slides: deck.
 - Churn, retention, reactivation, overlap, demographics, over-indexing, trends on a title or audience: analyze (analyze_page when it is about the page).
@@ -136,6 +138,10 @@ SEED_EXAMPLES = [
     {"text": "can you build me a Nike profile", "intent": "build_profile", "subjects": ["Nike"], "note": "a polite build order"},
     {"text": "pull an audience of yoga clothing buyers", "intent": "build_profile", "subjects": ["yoga clothing buyers"], "note": ""},
     {"text": "Pull Subscriber IQ for Livestream from Hell (movie) on Prime Video", "intent": "tracker", "subjects": ["Livestream from Hell"], "note": ""},
+    {"text": "Build a twin of Gilmore Girls Hulu viewers", "intent": "twin", "subjects": ["Gilmore Girls"], "note": "Digital Twins IQ build (2026-10-26)"},
+    {"text": "Run Greenlight Lab on the Gilmore Girls twin: a new season on Hulu and Netflix, goal 4M viewers", "intent": "twin", "subjects": ["Gilmore Girls"], "note": "a lab run on a twin"},
+    {"text": "Open a focus group with the Mark Rober twin and ask whether they would pay $29 for the Build Box", "intent": "twin", "subjects": ["Mark Rober"], "note": "the room; the question is answered in the chat"},
+    {"text": "Put the signal-led plan in the Spend Engine on the rule: max 15% a day", "intent": "twin", "subjects": [], "note": "the Spend Engine on the thread's twin"},
     {"text": "can you value Gunna x Nike?", "intent": "valuation", "subjects": ["Gunna", "Nike"], "note": ""},
     {"text": "set up attribution for the Influencer Project campaign", "intent": "campaign", "subjects": ["The Influencer Project"], "note": ""},
     {"text": "female only cut of the Reba profile", "intent": "cut", "subjects": ["Reba McEntire"], "note": ""},
@@ -562,6 +568,7 @@ _PRODUCT_FOR = {
     'valuation': ('Brand Partnership IQ', 'values a talent or title against a brand: audience fit, earned media, brand lift and conversion lenses, one dollar figure', 'Value a brand partnership'),
     'campaign': ('Attribution IQ', "tracks a campaign's creators, posts and assets to the people who reached a ticketing site, a product page or a signup", 'Set up Attribution IQ'),
     'tracker': ('Subscriber IQ', 'tracks a title on a streaming service: accounts that watched, new and reactivated subscribers, how long they stayed', 'Pull a Subscriber IQ'),
+    'twin': ('Digital Twins IQ', 'builds a twin of an audience and runs titles, plans, prices and ideas forward on it: Greenlight Lab, Launch Lab, the Spend Engine and Focus Group IQ, with the IP lifetime value when it applies', 'Build a twin'),
     'build_profile': ('a Profile IQ profile', 'builds the audience of any person, title, brand or behavior with demographics and the brands, platforms and talent they over-index on', 'Run a profile'),
     'cut': ('a cut', 'splits a profile we hold by gender, age, geography or behavior', 'Cut the profile'),
     'deck': ('a deck', 'turns any read or profile on screen into slides', 'Build a deck'),
@@ -582,7 +589,8 @@ def capability_reply(reading):
     wants = str((reading or {}).get('wants') or '').strip()
     low = wants.lower()
     key = 'analyze'
-    for k, words in (('campaign', ('creator', 'campaign', 'asset', 'attribut')), ('journey', ('journey', 'path', 'clip', 'post')),
+    for k, words in (('twin', ('twin', 'greenlight', 'launch lab', 'spend engine', 'panel lab', 'focus group', 'odds')),
+                     ('campaign', ('creator', 'campaign', 'asset', 'attribut')), ('journey', ('journey', 'path', 'clip', 'post')),
                      ('valuation', ('partnership', 'sponsor', 'worth', 'value')), ('tracker', ('subscri', 'churn', 'retention', 'signup')),
                      ('cut', ('cut', 'split', 'female', 'male', 'age')), ('deck', ('deck', 'slides')),
                      ('build_profile', ('audience', 'profile', 'fans', 'buyers', 'who'))):
@@ -649,6 +657,7 @@ ROUTE_FAMILY = {
     'valuation': ('bpiq', 'brand_partnership', 'intake'),
     'campaign': ('aiq', 'attribution', 'intake'),
     'tracker': ('subscriber_iq', 'subiq', 'profile_build'),
+    'twin': ('digital_twin', 'twin', 'panel_lab', 'spend_engine', 'intake'),
     'analyze_page': ('page_analysis', 'reasoned_metrics', 'analyze', 'screen_bind', 'open_screen_confirm'),
     'analyze': ('page_analysis', 'reasoned_metrics', 'analyze', 'ledger_replay', 'catalog_lookup', 'cohort_churn'),
     'compare': ('page_analysis', 'reasoned_metrics', 'analyze', 'compare'),

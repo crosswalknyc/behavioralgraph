@@ -242,16 +242,33 @@ def from_delivered(text, user, uname, s3, bucket):
         return None
 
 
+def from_twin(text, ctx, user, uname, s3, bucket):
+    """(ctx, material) from a Digital Twin: the one open on the page or
+    the one the words name ('a deck of the Gilmore Girls twin'), or None
+    (2026-10-26)."""
+    try:
+        from . import digital_twin_lane as _tl
+        return _tl.deck_from_twin(text, ctx, user, uname, s3, bucket)
+    except Exception:
+        traceback.print_exc()
+        return None
+
+
 def resolve(text, ctx, history, user, host, tid=''):
     """(ctx, history) for the deck core when the ask converts something
     delivered; None otherwise (the deck core proceeds as before)."""
-    if not is_conversion_ask(text):
-        return None
     try:
         s3, bucket = host.s3_client, host.S3_BUCKET
     except Exception:
         return None
     uname = str((user or {}).get('username') or (user or {}).get('email') or '').strip()
+    _vc = (ctx or {}).get('view_context') if isinstance(ctx, dict) else None
+    if (isinstance(_vc, dict) and str(_vc.get('view_id') or '') == 'digitalTwinsIQ') or re.search(r"\btwins?\b", str(text or ''), re.I):
+        found = from_twin(text, ctx, user, uname, s3, bucket)   # the twin is the material, slide for slide
+        if found:
+            return dict(found[0]), list(history or [])
+    if not is_conversion_ask(text):
+        return None
     found = from_document(text, uname, tid, s3, bucket) if tid else None
     if not found:
         found = from_delivered(text, user, uname, s3, bucket)
@@ -261,4 +278,4 @@ def resolve(text, ctx, history, user, host, tid=''):
     return dict(new_ctx), list(history or [])
 
 
-__all__ = ['is_conversion_ask', 'from_document', 'from_delivered', 'resolve']
+__all__ = ['is_conversion_ask', 'from_document', 'from_delivered', 'from_twin', 'resolve']

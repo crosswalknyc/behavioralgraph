@@ -31,7 +31,8 @@ import re
 SELF_CONTAINED = frozenset((
     'intentIQ', 'attributionIQ', 'attribution_iq',
     'journeyIQ', 'journey_iq',
-    'brandPartnershipIQ', 'brand_partnership_iq'))
+    'brandPartnershipIQ', 'brand_partnership_iq',
+    'digitalTwinsIQ', 'digital_twins_iq'))
 
 _PRODUCT_NOUN = {
     'intentIQ': ('Attribution IQ', 'campaign'),
@@ -41,6 +42,8 @@ _PRODUCT_NOUN = {
     'journey_iq': ('Digital Journey IQ', 'journey'),
     'brandPartnershipIQ': ('Brand Partnership IQ', 'partnership'),
     'brand_partnership_iq': ('Brand Partnership IQ', 'partnership'),
+    'digitalTwinsIQ': ('Digital Twins IQ', 'twin'),
+    'digital_twins_iq': ('Digital Twins IQ', 'twin'),
 }
 
 # words that name the product itself ("the Attribution report", "this
@@ -49,6 +52,7 @@ _PRODUCT_RX = {
     'campaign': re.compile(r"\b(?:attribution(?:\s+iq|\s+report|\s+dashboard|\s+data)?|campaign|touch[\s-]?points?|assets?|creatives?|phases?)\b", re.I),
     'journey': re.compile(r"\b(?:journey(?:\s+iq)?|digital\s+journey|funnel|steps?|stages?)\b", re.I),
     'partnership': re.compile(r"\b(?:brand\s+partnership(?:\s+iq)?|partnership|valuation|sponsorship)\b", re.I),
+    'twin': re.compile(r"\b(?:digital\s+twins?(?:\s+iq)?|twin|greenlight\s+lab|launch\s+lab|spend\s+engine|panel\s+lab|the\s+room|lifetime\s+value|odds|levers?|runs?)\b", re.I),
 }
 
 

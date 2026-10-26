@@ -7,6 +7,7 @@ confident, answers the same question without the words (`read_intent`).
   jiq_intent    Digital Journey
   aiq_intent    Attribution IQ campaign tracking
   fw_intent     Flywheel
+  twin_intent   Digital Twins IQ (build, lab, panel, catalog, status, directions)
 """
 from __future__ import annotations
 
@@ -133,3 +134,17 @@ def fw_intent(text, chip=''):
     if chip and low == chip.lower():
         return True
     return 'flywheel' in low and any(k in low for k in _BUILD_VERBS)
+
+
+def twin_intent(text, chip=''):
+    """A Digital Twins IQ ask: build a twin, run a lab or a room on one,
+    the twin catalog or status, or the directions (2026-10-26)."""
+    try:
+        from . import digital_twin_lane as _tl
+        return bool(_tl.twin_intent(text, chip))
+    except Exception:
+        return False
+
+
+def twin_reading(body, min_conf=0.7):
+    return read_intent(body, 'twin', min_conf)

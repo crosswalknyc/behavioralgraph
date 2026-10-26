@@ -33,10 +33,10 @@ DASHBOARD = 'https://dashboard.crosswalknyc.com'
 KIND_LABEL = {
     'journey': 'Digital Journey', 'bpiq': 'Brand Partnership IQ read', 'attribution': 'Attribution IQ campaign',
     'flywheel': 'Flywheel read', 'profile': 'Profile IQ profile', 'subiq': 'Subscriber IQ tracker',
-    'package': 'data package', 'deck': 'deck',
+    'package': 'data package', 'deck': 'deck', 'twin': 'Digital Twin',
 }
 KIND_VIEW = {'journey': 'journeyIQ', 'bpiq': 'brandPartnershipIQ', 'attribution': 'attributionIQ',
-             'flywheel': 'flywheelIQ', 'profile': 'profileIQ', 'subiq': 'subscriberIQ'}
+             'flywheel': 'flywheelIQ', 'profile': 'profileIQ', 'subiq': 'subscriberIQ', 'twin': 'digitalTwinsIQ'}
 WHERE = {
     'journey': 'Digital Journey IQ tab{shelf}: {name}',
     'bpiq': 'Brand Partnership IQ tab: {name}',
@@ -46,6 +46,7 @@ WHERE = {
     'subiq': 'Subscriber IQ tab: {name}',
     'package': 'your email (files attached)',
     'deck': 'your email (file attached)',
+    'twin': 'Digital Twins IQ, Twins tab: {name}',
 }
 
 
@@ -165,7 +166,7 @@ def _persist(kind, payload, subject, s3_key, figures=None, window=None):
         if not metrics:
             return False
         fam = {'bpiq': 'brand_partnership', 'attribution': 'attribution', 'flywheel': 'journey', 'profile': 'audience',
-               'subiq': 'viewership', 'package': 'viewership', 'deck': 'audience'}.get(kind, 'audience')
+               'subiq': 'viewership', 'package': 'viewership', 'deck': 'audience', 'twin': 'audience'}.get(kind, 'audience')
         win = window or {}
         il.persist(subject=str(subject or ''), metric_family=fam, question=f"{KIND_LABEL.get(kind, kind)}: {subject}",
                    route=f'delivered_{kind}', metrics=metrics, reply=f"{KIND_LABEL.get(kind, kind)} {s3_key}".strip(),

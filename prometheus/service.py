@@ -2331,6 +2331,11 @@ def _job_prefixes():
         out.append((_tl.JOB_PREFIX, 'tlist'))     # the talent list (2026-10-15)
     except Exception:
         pass
+    try:
+        from . import digital_twin_job as _tj
+        out.append((_tj.JOB_PREFIX, 'twin'))      # Digital Twins IQ builds and runs (2026-10-26)
+    except Exception:
+        pass
     return out
 
 

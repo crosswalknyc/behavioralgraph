@@ -31,6 +31,7 @@ _APP_BINDINGS = {
     'jiq_intent': '_pm_jiq_intent',
     'fw_intent': '_pm_fw_intent',
     'aiq_intent': '_pm_aiq_intent',
+    'twin_intent': '_pm_twin_intent',        # Digital Twins IQ: build, lab, panel, catalog, status and how-to asks (2026-10-26)
     'pricing_question': '_pm_pricing_question',
     'pricing_copy': '_PM_PRICING_COPY',
     'pricing_copy_for': '_pm_pricing_copy',     # (username=None) -> rate card in the seat's currency
@@ -87,7 +88,7 @@ _APP_BINDINGS = {
 }
 
 # Bindings that may legitimately be absent on an older host.
-_OPTIONAL = {'recent_read', 'subiq_bucket', 'can_open_subiq', 'max_threads', 'project_label', 'wallet_snapshot', 'access_gate', 'claude_data', 'watch_flag', 'record_held', 'user_runs', 'consume_credit', 'intent_view_hydrate',
+_OPTIONAL = {'twin_intent', 'recent_read', 'subiq_bucket', 'can_open_subiq', 'max_threads', 'project_label', 'wallet_snapshot', 'access_gate', 'claude_data', 'watch_flag', 'record_held', 'user_runs', 'consume_credit', 'intent_view_hydrate',
              'run_jiq_job', 'run_bpiq_job', 'run_fw_job', 'run_aiq_job',
              'thread_for_job', 'load_thread', 'save_thread', 'incidence_check', 'audience_range', 'queue_secret'}
 

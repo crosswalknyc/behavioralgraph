@@ -20469,6 +20469,7 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
                             <option value="profileIQ" {% if not has_profile_iq_access %}disabled{% endif %} {% if not default_view_hedge_fund_iq %}selected{% endif %}>🎯 Profile IQ</option>
                             <option value="subscriberIQ" {% if not has_subscriber_iq_access %}disabled{% endif %}>👥 Subscriber IQ</option>
                             <option value="journeyIQ" {% if not has_journey_iq_access and 'journey_iq' not in analysis_iq_modules and role != 'super_admin' and role != 'admin' %}disabled{% endif %}>🗺️ Digital Journey IQ</option>
+                            <option value="digitalTwinsIQ" {% if not has_digital_twins_iq_access and role != 'super_admin' and role != 'admin' %}disabled{% endif %}>🧬 Digital Twins IQ</option>
                             <option value="intentIQ" {% if not has_intent_iq_access %}disabled{% endif %}>📈 Attribution IQ</option>
                             <option value="trendsIQ" {% if not has_trends_iq_access %}disabled{% endif %}>📈 Trends</option>
                             <option value="cultureRankerIQ" {% if not has_rankers_iq_access %}disabled{% endif %}>📊 Rankers</option>
@@ -50780,6 +50781,636 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             </div>
         </div><!-- End hedgeFundIQView -->
 
+
+        <!-- DIGITAL TWINS IQ VIEW (2026-10-26, Jenna: twins, Greenlight Lab, Launch Lab, Spend Engine, Focus Group IQ, How to) -->
+        <style>
+        #digitalTwinsIQView { background: #0C1618; color: #E9E8E1; font-family: inherit; }
+        body[data-theme="light"] #digitalTwinsIQView { background: #E9E8E1; color: #0C1618; }
+        #digitalTwinsIQView .dtw-topbar { display: flex; align-items: center; gap: 1rem; padding: 0.55rem 1.25rem; border-bottom: 1px solid var(--border-color); flex-wrap: wrap; }
+        #digitalTwinsIQView .dtw-title { font-weight: 700; font-size: 0.95rem; letter-spacing: -0.02em; }
+        #digitalTwinsIQView .dtw-tabs { display: flex; gap: 0.25rem; flex-wrap: wrap; }
+        #digitalTwinsIQView .dtw-tab { appearance: none; background: transparent; border: 1px solid transparent; color: var(--text-secondary); border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.78rem; cursor: pointer; font-family: inherit; }
+        #digitalTwinsIQView .dtw-tab.active { background: rgba(199,242,62,0.12); border-color: rgba(199,242,62,0.45); color: var(--text-primary); }
+        body[data-theme="light"] #digitalTwinsIQView .dtw-tab.active { background: rgba(94,126,18,0.12); border-color: rgba(94,126,18,0.5); }
+        #digitalTwinsIQView .dtw-actions { margin-left: auto; display: flex; gap: 0.4rem; }
+        #digitalTwinsIQView .dtw-btn { appearance: none; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 8px; padding: 0.38rem 0.75rem; font-size: 0.78rem; cursor: pointer; font-family: inherit; text-decoration: none; display: inline-block; }
+        #digitalTwinsIQView .dtw-btn-primary { background: #C7F23E; color: #0C1618; border-color: #C7F23E; font-weight: 600; }
+        body[data-theme="light"] #digitalTwinsIQView .dtw-btn-primary { background: #5E7E12; color: #E9E8E1; border-color: #5E7E12; }
+        #digitalTwinsIQView .dtw-btn:disabled { opacity: 0.5; cursor: default; }
+        #digitalTwinsIQView .dtw-body { flex: 1 1 0%; min-height: 0; overflow: auto; padding: 1rem 1.25rem 2rem; }
+        #digitalTwinsIQView .dtw-pane { display: none; }
+        #digitalTwinsIQView .dtw-pane.active { display: block; }
+        #digitalTwinsIQView .dtw-grid2 { display: grid; grid-template-columns: minmax(280px, 360px) 1fr; gap: 1rem; align-items: start; }
+        #digitalTwinsIQView .dtw-grid2.even { grid-template-columns: 1fr 1fr; }
+        @media (max-width: 1000px) { #digitalTwinsIQView .dtw-grid2, #digitalTwinsIQView .dtw-grid2.even { grid-template-columns: 1fr; } }
+        #digitalTwinsIQView .dtw-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 0.9rem 1rem; margin-bottom: 0.8rem; }
+        #digitalTwinsIQView .dtw-card h3 { margin: 0 0 0.5rem; font-size: 0.86rem; font-weight: 700; letter-spacing: -0.01em; }
+        #digitalTwinsIQView .dtw-card h4 { margin: 0.7rem 0 0.35rem; font-size: 0.74rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em; }
+        #digitalTwinsIQView .dtw-eyebrow { font-size: 0.68rem; letter-spacing: 0.08em; text-transform: uppercase; color: #C7F23E; font-weight: 600; margin-bottom: 0.25rem; }
+        body[data-theme="light"] #digitalTwinsIQView .dtw-eyebrow { color: #5E7E12; }
+        #digitalTwinsIQView .dtw-muted { color: var(--text-secondary); font-size: 0.78rem; line-height: 1.45; }
+        #digitalTwinsIQView .dtw-p { font-size: 0.84rem; line-height: 1.5; margin: 0.25rem 0 0.5rem; }
+        #digitalTwinsIQView label.dtw-field { display: block; font-size: 0.74rem; color: var(--text-secondary); margin: 0.55rem 0 0.2rem; }
+        #digitalTwinsIQView input.dtw-in, #digitalTwinsIQView select.dtw-in, #digitalTwinsIQView textarea.dtw-in { width: 100%; box-sizing: border-box; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 8px; padding: 0.42rem 0.55rem; font-size: 0.8rem; font-family: inherit; }
+        #digitalTwinsIQView textarea.dtw-in { min-height: 72px; resize: vertical; }
+        #digitalTwinsIQView .dtw-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.6rem; margin: 0.4rem 0 0.6rem; }
+        #digitalTwinsIQView .dtw-tile { background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 10px; padding: 0.6rem 0.7rem; }
+        body[data-theme="light"] #digitalTwinsIQView .dtw-tile { background: rgba(0,0,0,0.03); }
+        #digitalTwinsIQView .dtw-tile .v { font-size: 1.25rem; font-weight: 700; color: #C7F23E; letter-spacing: -0.02em; }
+        body[data-theme="light"] #digitalTwinsIQView .dtw-tile .v { color: #5E7E12; }
+        #digitalTwinsIQView .dtw-tile .l { font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.15rem; }
+        #digitalTwinsIQView .dtw-bar { display: grid; grid-template-columns: minmax(90px, 36%) 1fr 64px; align-items: center; gap: 0.5rem; font-size: 0.76rem; margin: 0.22rem 0; }
+        #digitalTwinsIQView .dtw-bar .t { height: 8px; background: rgba(255,255,255,0.08); border-radius: 999px; overflow: hidden; }
+        body[data-theme="light"] #digitalTwinsIQView .dtw-bar .t { background: rgba(0,0,0,0.08); }
+        #digitalTwinsIQView .dtw-bar .f { height: 100%; background: #C7F23E; border-radius: 999px; }
+        body[data-theme="light"] #digitalTwinsIQView .dtw-bar .f { background: #5E7E12; }
+        #digitalTwinsIQView .dtw-bar .f.alt { background: #E682FF; }
+        body[data-theme="light"] #digitalTwinsIQView .dtw-bar .f.alt { background: #8E3FA8; }
+        #digitalTwinsIQView .dtw-bar .n { text-align: right; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+        #digitalTwinsIQView .dtw-lib { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 0.7rem; }
+        #digitalTwinsIQView .dtw-lib-item { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 0.75rem 0.85rem; cursor: pointer; }
+        #digitalTwinsIQView .dtw-lib-item:hover, #digitalTwinsIQView .dtw-lib-item.on { border-color: rgba(199,242,62,0.5); }
+        #digitalTwinsIQView .dtw-lib-item .nm { font-weight: 700; font-size: 0.88rem; }
+        #digitalTwinsIQView .dtw-lib-item .sm { font-size: 0.72rem; color: var(--text-secondary); margin-top: 0.2rem; }
+        #digitalTwinsIQView .dtw-hero { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; }
+        #digitalTwinsIQView .dtw-hero img { width: 84px; height: 84px; object-fit: cover; border-radius: 12px; border: 1px solid var(--border-color); }
+        #digitalTwinsIQView .dtw-hero h2 { margin: 0; font-size: 1.35rem; letter-spacing: -0.03em; }
+        #digitalTwinsIQView table.dtw-table { width: 100%; border-collapse: collapse; font-size: 0.76rem; }
+        #digitalTwinsIQView table.dtw-table th { text-align: left; color: var(--text-secondary); font-weight: 600; font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.05em; padding: 0.3rem 0.4rem; border-bottom: 1px solid var(--border-color); }
+        #digitalTwinsIQView table.dtw-table td { padding: 0.32rem 0.4rem; border-bottom: 1px solid rgba(255,255,255,0.05); vertical-align: top; }
+        body[data-theme="light"] #digitalTwinsIQView table.dtw-table td { border-bottom-color: rgba(0,0,0,0.06); }
+        #digitalTwinsIQView td.num, #digitalTwinsIQView th.num { text-align: right; font-variant-numeric: tabular-nums; }
+        #digitalTwinsIQView .dtw-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.35rem 0; }
+        #digitalTwinsIQView .dtw-chip { appearance: none; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 999px; padding: 0.25rem 0.65rem; font-size: 0.72rem; cursor: pointer; font-family: inherit; }
+        #digitalTwinsIQView .dtw-chip.on { border-color: rgba(199,242,62,0.6); color: var(--text-primary); background: rgba(199,242,62,0.1); }
+        #digitalTwinsIQView .dtw-run { border: 1px solid var(--border-color); border-radius: 10px; padding: 0.6rem 0.75rem; margin: 0.45rem 0; cursor: pointer; }
+        #digitalTwinsIQView .dtw-run.on { border-color: rgba(199,242,62,0.6); }
+        #digitalTwinsIQView .dtw-run .q { font-weight: 600; font-size: 0.82rem; }
+        #digitalTwinsIQView .dtw-run .m { font-size: 0.74rem; color: var(--text-secondary); margin-top: 0.15rem; }
+        #digitalTwinsIQView .dtw-gauge { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+        #digitalTwinsIQView .dtw-gauge .big { font-size: 2.2rem; font-weight: 800; color: #C7F23E; letter-spacing: -0.04em; line-height: 1; }
+        body[data-theme="light"] #digitalTwinsIQView .dtw-gauge .big { color: #5E7E12; }
+        #digitalTwinsIQView .dtw-days { display: flex; gap: 0.3rem; flex-wrap: wrap; margin: 0.4rem 0; }
+        #digitalTwinsIQView .dtw-day { min-width: 46px; text-align: center; border: 1px solid var(--border-color); border-radius: 8px; padding: 0.3rem 0.35rem; font-size: 0.68rem; cursor: pointer; }
+        #digitalTwinsIQView .dtw-day.on { border-color: rgba(199,242,62,0.7); background: rgba(199,242,62,0.1); }
+        #digitalTwinsIQView .dtw-day .d { font-weight: 700; font-size: 0.78rem; }
+        #digitalTwinsIQView .dtw-day.pend .d::after { content: ' \2022'; color: #E682FF; }
+        #digitalTwinsIQView .dtw-move { border-left: 3px solid #E682FF; padding: 0.4rem 0.6rem; margin: 0.4rem 0; background: rgba(255,255,255,0.02); border-radius: 0 8px 8px 0; font-size: 0.78rem; }
+        #digitalTwinsIQView .dtw-move.ok { border-left-color: #C7F23E; }
+        #digitalTwinsIQView .dtw-voice { font-size: 0.8rem; padding: 0.35rem 0; border-bottom: 1px dashed var(--border-color); }
+        #digitalTwinsIQView .dtw-voice b { color: #E682FF; }
+        body[data-theme="light"] #digitalTwinsIQView .dtw-voice b { color: #8E3FA8; }
+        #digitalTwinsIQView .dtw-room { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 0.4rem; }
+        #digitalTwinsIQView .dtw-seat { border: 1px solid var(--border-color); border-radius: 10px; padding: 0.45rem 0.5rem; font-size: 0.72rem; }
+        #digitalTwinsIQView .dtw-seat .nm { font-weight: 700; font-size: 0.8rem; }
+        #digitalTwinsIQView .dtw-transcript { max-height: 460px; overflow: auto; }
+        #digitalTwinsIQView .dtw-q { padding: 0.5rem 0; border-bottom: 1px solid var(--border-color); }
+        #digitalTwinsIQView .dtw-howto h3 { font-size: 1rem; margin: 0.9rem 0 0.3rem; }
+        #digitalTwinsIQView .dtw-howto .ex { display: inline-block; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.3rem 0.55rem; font-size: 0.76rem; margin: 0.2rem 0.3rem 0.2rem 0; cursor: pointer; }
+        #digitalTwinsIQView svg.dtw-band { width: 100%; height: 170px; display: block; }
+        #digitalTwinsIQView .dtw-status { font-size: 0.76rem; color: var(--text-secondary); padding: 0.3rem 0; min-height: 1.1em; }
+        #digitalTwinsIQView .dtw-toggle { display: inline-flex; border: 1px solid var(--border-color); border-radius: 999px; overflow: hidden; }
+        #digitalTwinsIQView .dtw-toggle button { appearance: none; background: transparent; border: 0; color: var(--text-secondary); padding: 0.2rem 0.6rem; font-size: 0.72rem; cursor: pointer; font-family: inherit; }
+        #digitalTwinsIQView .dtw-toggle button.on { background: rgba(199,242,62,0.15); color: var(--text-primary); }
+        </style>
+        <div id="digitalTwinsIQView" style="display: none; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden;">
+            <div class="dtw-topbar">
+                <div class="dtw-title">🧬 Digital Twins IQ</div>
+                <div class="dtw-tabs" role="tablist">
+                    <button type="button" class="dtw-tab active" data-tab="twins" onclick="dtwTab('twins')">Twins</button>
+                    <button type="button" class="dtw-tab" data-tab="greenlight" onclick="dtwTab('greenlight')">Greenlight Lab</button>
+                    <button type="button" class="dtw-tab" data-tab="launch" onclick="dtwTab('launch')">Launch Lab</button>
+                    <button type="button" class="dtw-tab" data-tab="spend" onclick="dtwTab('spend')">Spend Engine</button>
+                    <button type="button" class="dtw-tab" data-tab="panel" onclick="dtwTab('panel')">Focus Group IQ</button>
+                    <button type="button" class="dtw-tab" data-tab="howto" onclick="dtwTab('howto')">How to</button>
+                </div>
+                <div class="dtw-actions">
+                    <button type="button" class="dtw-btn" onclick="dtwLoadList(true)">Refresh</button>
+                    <button type="button" class="dtw-btn dtw-btn-primary" onclick="dtwBuildTwin()">Build a twin</button>
+                </div>
+            </div>
+            <div class="dtw-body">
+                <section id="dtwTabTwins" class="dtw-pane active">
+                    <div id="dtwLibrary" class="dtw-lib"></div>
+                    <div id="dtwTwinPage" style="margin-top: 1rem;"></div>
+                </section>
+                <section id="dtwTabGreenlight" class="dtw-pane">
+                    <div class="dtw-grid2">
+                        <div>
+                            <div class="dtw-card">
+                                <div class="dtw-eyebrow">Greenlight Lab</div>
+                                <h3>Odds on a title or a bare idea</h3>
+                                <label class="dtw-field">Twin</label><select id="dtwGlTwin" class="dtw-in"></select>
+                                <label class="dtw-field">Title, logline, script or treatment (paste the text; or attach the file in Prometheus)</label>
+                                <textarea id="dtwGlText" class="dtw-in" placeholder="A new season of the show, or: a chef returns to her hometown diner after a scandal"></textarea>
+                                <label class="dtw-field">Platforms (comma separated)</label><input id="dtwGlPlatforms" class="dtw-in" placeholder="Hulu, Netflix">
+                                <label class="dtw-field">Goal (first 30 days)</label>
+                                <div style="display:flex; gap:0.4rem;"><input id="dtwGlGoal" class="dtw-in" placeholder="4000000"><select id="dtwGlNoun" class="dtw-in" style="max-width:130px;"><option>viewers</option><option>buyers</option><option>listeners</option><option>players</option><option>readers</option></select></div>
+                                <label class="dtw-field">Compare with (optional)</label><select id="dtwGlOther" class="dtw-in"><option value="">No compare</option></select>
+                                <div style="margin-top:0.7rem; display:flex; gap:0.4rem; align-items:center; flex-wrap:wrap;"><button type="button" class="dtw-btn dtw-btn-primary" onclick="dtwRunLab('greenlight')">Run Greenlight Lab</button><span class="dtw-muted" id="dtwGlPrice"></span></div>
+                                <div class="dtw-status" id="dtwGlStatus"></div>
+                            </div>
+                        </div>
+                        <div id="dtwGlResults"></div>
+                    </div>
+                </section>
+                <section id="dtwTabLaunch" class="dtw-pane">
+                    <div class="dtw-grid2">
+                        <div>
+                            <div class="dtw-card">
+                                <div class="dtw-eyebrow">Launch Lab</div>
+                                <h3>A plan and budget before money goes out</h3>
+                                <label class="dtw-field">Twin</label><select id="dtwLaTwin" class="dtw-in"></select>
+                                <label class="dtw-field">Channels with spend (one per line, or paste the budget sheet rows)</label>
+                                <textarea id="dtwLaChannels" class="dtw-in" placeholder="Meta $120,000&#10;Google $80,000&#10;TikTok $40,000"></textarea>
+                                <label class="dtw-field">Assets (comma separated)</label><input id="dtwLaAssets" class="dtw-in" placeholder="Cast trailer, Premise trailer, Episode 1 clip">
+                                <div style="display:flex; gap:0.4rem;"><div style="flex:1"><label class="dtw-field">Window (weeks)</label><input id="dtwLaWeeks" class="dtw-in" value="6"></div><div style="flex:1"><label class="dtw-field">Platform</label><input id="dtwLaPlatform" class="dtw-in" placeholder="Hulu"></div></div>
+                                <label class="dtw-field">Goal</label><div style="display:flex; gap:0.4rem;"><input id="dtwLaGoal" class="dtw-in" placeholder="3000000"><select id="dtwLaNoun" class="dtw-in" style="max-width:130px;"><option>viewers</option><option>buyers</option><option>listeners</option><option>subscribers</option></select></div>
+                                <div style="margin-top:0.7rem; display:flex; gap:0.4rem; align-items:center; flex-wrap:wrap;"><button type="button" class="dtw-btn dtw-btn-primary" onclick="dtwRunLab('launch')">Run Launch Lab</button><span class="dtw-muted" id="dtwLaPrice"></span></div>
+                                <div class="dtw-status" id="dtwLaStatus"></div>
+                            </div>
+                        </div>
+                        <div id="dtwLaResults"></div>
+                    </div>
+                </section>
+                <section id="dtwTabSpend" class="dtw-pane">
+                    <div class="dtw-grid2">
+                        <div>
+                            <div class="dtw-card">
+                                <div class="dtw-eyebrow">Spend Engine</div>
+                                <h3>The plan, run forward day by day</h3>
+                                <label class="dtw-field">Twin</label><select id="dtwSpTwin" class="dtw-in" onchange="dtwSpendPickTwin()"></select>
+                                <label class="dtw-field">Plan source</label><select id="dtwSpSource" class="dtw-in" onchange="dtwSpendSourceChanged()"><option value="manual">Paste channels</option></select>
+                                <div id="dtwSpManual">
+                                    <label class="dtw-field">Channels with spend (one per line)</label>
+                                    <textarea id="dtwSpChannels" class="dtw-in" placeholder="Meta $60,000&#10;YouTube $40,000"></textarea>
+                                    <label class="dtw-field">Assets (comma separated)</label><input id="dtwSpAssets" class="dtw-in" placeholder="Cast trailer, Premise trailer">
+                                    <div style="display:flex; gap:0.4rem;"><div style="flex:1"><label class="dtw-field">Window (days)</label><input id="dtwSpDays" class="dtw-in" value="14"></div><div style="flex:1"><label class="dtw-field">Goal (first actions)</label><input id="dtwSpGoal" class="dtw-in" placeholder="20000"></div></div>
+                                </div>
+                                <label class="dtw-field">Mode</label>
+                                <div class="dtw-chips"><button type="button" class="dtw-chip on" id="dtwSpModeChip" onclick="dtwSpendMode('chip')">Approve each move by chip</button><button type="button" class="dtw-chip" id="dtwSpModeRule" onclick="dtwSpendMode('rule')">On a rule</button></div>
+                                <div id="dtwSpRule" style="display:none;">
+                                    <div style="display:flex; gap:0.4rem;"><div style="flex:1"><label class="dtw-field">Max daily shift (%)</label><input id="dtwSpMax" class="dtw-in" value="15"></div><div style="flex:1"><label class="dtw-field">Floor per channel per day ($)</label><input id="dtwSpFloor" class="dtw-in" value="0"></div></div>
+                                </div>
+                                <div style="margin-top:0.7rem; display:flex; gap:0.4rem; align-items:center; flex-wrap:wrap;"><button type="button" class="dtw-btn dtw-btn-primary" onclick="dtwSpendActivate()">Activate the plan</button><span class="dtw-muted" id="dtwSpPrice"></span></div>
+                                <div class="dtw-status" id="dtwSpStatus"></div>
+                            </div>
+                            <div class="dtw-card">
+                                <h3>Connect accounts</h3>
+                                <p class="dtw-muted">Connected-account execution (Meta, Google, Amazon, TikTok, YouTube, CTV) is switched on per account by Crosswalk. Until it is, the approved moves list is the handoff for your buyers and the Attribution IQ tracking intake measures the plan. Filing a request tells Crosswalk which accounts you want connected; nothing is connected until Crosswalk switches it on.</p>
+                                <input id="dtwConnectPlatforms" class="dtw-in" placeholder="Meta, Google, TikTok">
+                                <div style="margin-top:0.5rem; display:flex; gap:0.4rem; align-items:center; flex-wrap:wrap;"><button type="button" class="dtw-btn" onclick="dtwConnectRequest()">File the request</button><span class="dtw-muted" id="dtwConnectStatus"></span></div>
+                            </div>
+                        </div>
+                        <div id="dtwSpResults"></div>
+                    </div>
+                </section>
+                <section id="dtwTabPanel" class="dtw-pane">
+                    <div class="dtw-grid2">
+                        <div>
+                            <div class="dtw-card">
+                                <div class="dtw-eyebrow">Focus Group IQ</div>
+                                <h3>Your focus group, with the twins in the room. You moderate.</h3>
+                                <label class="dtw-field">Twins in the room</label>
+                                <select id="dtwPnTwin" class="dtw-in" onchange="dtwPanelPickTwin()"></select>
+                                <select id="dtwPnTwin2" class="dtw-in" style="margin-top:0.3rem;"><option value="">Add a second twin (optional)</option></select>
+                                <label class="dtw-field">Cohorts in the room (one per line; blank = the whole twin)</label>
+                                <textarea id="dtwPnSegments" class="dtw-in" placeholder="women 25 to 44&#10;lapsed subscribers in Dallas"></textarea>
+                                <div style="display:flex; gap:0.4rem;"><div style="flex:1"><label class="dtw-field">Twins seated</label><input id="dtwPnRoom" class="dtw-in" value="12"></div><div style="flex:2"><label class="dtw-field">Room title (optional)</label><input id="dtwPnTitle" class="dtw-in" placeholder="Season 2 pricing"></div></div>
+                                <div style="margin-top:0.7rem; display:flex; gap:0.4rem; align-items:center; flex-wrap:wrap;"><button type="button" class="dtw-btn dtw-btn-primary" onclick="dtwPanelOpen()">Open the room</button><span class="dtw-muted" id="dtwPnPrice"></span></div>
+                                <div class="dtw-status" id="dtwPnStatus"></div>
+                                <h4>Saved rooms</h4>
+                                <div id="dtwPnSessions" class="dtw-muted">Pick a twin to see its rooms.</div>
+                            </div>
+                        </div>
+                        <div id="dtwPnConsole"></div>
+                    </div>
+                </section>
+                <section id="dtwTabHowto" class="dtw-pane">
+                    <div id="dtwHowto" class="dtw-howto dtw-card"></div>
+                </section>
+            </div>
+        </div>
+
+        <script>
+        (function() {
+            var S = window._dtw = window._dtw || { runs: [], twin: null, key: '', tab: 'twins', openRun: null, session: null, plan: null, howto: null, loaded: false, horizon: '10', spendDay: 1, spendMode: 'chip', pricing: [] };
+            function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+            function fmtN(n) { n = Number(n || 0); return isFinite(n) ? n.toLocaleString('en-US') : String(n); }
+            function fmtMoney(v) { v = Number(v || 0); return '$' + v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+            function human(n) { n = Number(n || 0); if (n >= 1e6) return (n / 1e6).toFixed(2) + 'M'; if (n >= 1e4) return (n / 1e3).toFixed(1) + 'K'; return fmtN(n); }
+            function humanMoney(v) { v = Number(v || 0); if (v >= 1e9) return '$' + (v / 1e9).toFixed(2) + 'B'; if (v >= 1e6) return '$' + (v / 1e6).toFixed(2) + 'M'; if (v >= 1e4) return '$' + (v / 1e3).toFixed(1) + 'K'; return fmtMoney(v); }
+            function pct(v, d) { v = Number(v || 0); return v.toFixed(d == null ? 1 : d) + '%'; }
+            function el(id) { return document.getElementById(id); }
+            function jsq(s) { return String(s || '').replace(/\\/g, '').replace(/'/g, '').replace(/"/g, ''); }
+            async function api(path, opts) {
+                var r = await fetch('/api/digital-twins' + path, Object.assign({ credentials: 'same-origin', headers: { 'Content-Type': 'application/json' } }, opts || {}));
+                var d = null; try { d = await r.json(); } catch (_) { d = null; }
+                if (!r.ok || !d || d.success === false) { throw new Error((d && d.error) || ('Request failed (' + r.status + ')')); }
+                return d;
+            }
+            function bar(label, v, max, alt, suffix) { var w = max > 0 ? Math.max(1, Math.min(100, v / max * 100)) : 0; return '<div class="dtw-bar"><span>' + esc(label) + '</span><div class="t"><div class="f' + (alt ? ' alt' : '') + '" style="width:' + w.toFixed(1) + '%"></div></div><span class="n">' + esc(suffix != null ? suffix : pct(v)) + '</span></div>'; }
+            function tiles(items) { return '<div class="dtw-tiles">' + items.map(function(t) { return '<div class="dtw-tile"><div class="v">' + esc(t[0]) + '</div><div class="l">' + esc(t[1]) + '</div></div>'; }).join('') + '</div>'; }
+            function chatSend(text) { try { if (typeof window.prometheusExpand === 'function') window.prometheusExpand(); } catch (_) {} try { if (typeof synthChatChipSend === 'function') synthChatChipSend(text); } catch (_) {} }
+            function chatFill(text) { try { if (typeof window.prometheusExpand === 'function') window.prometheusExpand(); } catch (_) {} try { if (typeof synthChatChipFill === 'function') synthChatChipFill(text); } catch (_) {} }
+            window.dtwChatSend = chatSend; window.dtwChatFill = chatFill;
+            window._dtwHelpers = { esc: esc, fmtN: fmtN, fmtMoney: fmtMoney, human: human, humanMoney: humanMoney, pct: pct, el: el, api: api, bar: bar, tiles: tiles, jsq: jsq };
+
+            window.showDigitalTwinsIQ = function(hint) {
+                try {
+                    var dd = document.getElementById('viewNavDropdown');
+                    if (dd && dd.value !== 'digitalTwinsIQ') { dd.value = 'digitalTwinsIQ'; try { dd.dispatchEvent(new Event('change', { bubbles: true })); } catch (_) {} }
+                    var v = el('digitalTwinsIQView'); if (v) { v.style.display = 'flex'; v.style.visibility = 'visible'; }
+                } catch (_) {}
+                hint = hint || window._dtwLastHint || null;
+                window._dtwLastHint = null;
+                dtwLoadList(false).then(function() {
+                    if (hint && hint.twin_key) { dtwOpen(hint.twin_key, hint.run_id || null, hint.session_id || null, hint.plan_id || null, hint.tab || null); }
+                    else if (hint && hint.tab) { dtwTab(hint.tab); }
+                });
+                if (!S.howto) { api('/how-to').then(function(d) { S.howto = d; renderHowto(); }).catch(function() {}); }
+            };
+            window.dtwTab = function(tab) {
+                S.tab = tab;
+                document.querySelectorAll('#digitalTwinsIQView .dtw-tab').forEach(function(b) { b.classList.toggle('active', b.getAttribute('data-tab') === tab); });
+                document.querySelectorAll('#digitalTwinsIQView .dtw-pane').forEach(function(p) { p.classList.remove('active'); });
+                var pane = el('dtwTab' + tab.charAt(0).toUpperCase() + tab.slice(1)); if (pane) pane.classList.add('active');
+                if (tab === 'howto') renderHowto();
+                if (tab === 'panel') { renderPanelSessions(); if (!S.session && el('dtwPnConsole') && !el('dtwPnConsole').innerHTML) renderEmpty('dtwPnConsole', 'panel'); }
+                if (tab === 'spend') { dtwSpendPickTwin(); if (!S.plan && el('dtwSpResults') && !el('dtwSpResults').innerHTML) renderEmpty('dtwSpResults', 'spend'); }
+                if (tab === 'greenlight' && el('dtwGlResults') && !el('dtwGlResults').innerHTML) renderEmpty('dtwGlResults', 'greenlight');
+                if (tab === 'launch' && el('dtwLaResults') && !el('dtwLaResults').innerHTML) renderEmpty('dtwLaResults', 'launch');
+                try { if (typeof _pmRefreshStarterChips === 'function') _pmRefreshStarterChips(); } catch (_) {}
+            };
+            function renderEmpty(hostId, id) {
+                var h = el(hostId); if (!h) return;
+                var it = ((S.howto || {}).items || []).filter(function(x) { return x.id === id; })[0];
+                if (!it) { h.innerHTML = '<div class="dtw-card dtw-muted">Pick a twin on the left and run it, or type the ask to Prometheus.</div>'; return; }
+                h.innerHTML = '<div class="dtw-card"><div class="dtw-eyebrow">Before the first run</div><h3>' + esc(it.title) + '</h3><p class="dtw-p">' + esc(it.answers) + '</p><h4>Put in</h4><p class="dtw-muted">' + esc(it.put_in) + '</p><h4>Or type this to Prometheus</h4><div class="dtw-chips">' + (it.type_this || []).map(function(t) { return '<button type="button" class="dtw-chip" onclick="dtwChatFill(\'' + esc(jsq(t)) + '\')">' + esc(t) + '</button>'; }).join('') + '</div><p class="dtw-muted">' + esc(it.comes_back) + ' Cost: ' + esc(it.cost) + '.</p></div>';
+            }
+            window.dtwBuildTwin = function() { chatFill('Build a twin of [subject] for [what you want to use it for]'); };
+            window.dtwLoadList = async function(force) {
+                if (S.loaded && !force) return S.runs;
+                try { var d = await api('/list'); S.runs = d.runs || []; S.pricing = d.pricing || []; S.loaded = true; }
+                catch (e) { if (el('dtwLibrary')) el('dtwLibrary').innerHTML = '<div class="dtw-card dtw-muted" style="grid-column:1/-1">' + esc(e.message) + '</div>'; return []; }
+                renderLibrary(); fillTwinSelects(); renderPrices(); return S.runs;
+            };
+            function renderPrices() {
+                var p = S.pricing || [];
+                var find = function(k) { var m = p.filter(function(x) { return x.toLowerCase().indexOf(k) === 0; })[0]; return m ? m.split(' - ').slice(1).join(' - ') : ''; };
+                if (el('dtwGlPrice')) el('dtwGlPrice').textContent = find('each further');
+                if (el('dtwLaPrice')) el('dtwLaPrice').textContent = find('each further');
+                if (el('dtwSpPrice')) el('dtwSpPrice').textContent = find('spend engine');
+                if (el('dtwPnPrice')) el('dtwPnPrice').textContent = find('focus group iq');
+            }
+            function fillTwinSelects() {
+                ['dtwGlTwin', 'dtwLaTwin', 'dtwSpTwin', 'dtwPnTwin'].forEach(function(id) {
+                    var s = el(id); if (!s) return; var cur = s.value;
+                    s.innerHTML = S.runs.map(function(r) { return '<option value="' + esc(r.key) + '">' + esc(r.name || r.subject) + '</option>'; }).join('') || '<option value="">No twins yet</option>';
+                    if (cur) s.value = cur; if (S.key && !cur) s.value = S.key;
+                });
+                ['dtwGlOther', 'dtwPnTwin2'].forEach(function(id) {
+                    var s = el(id); if (!s) return; var first = s.options[0] ? s.options[0].outerHTML : '';
+                    s.innerHTML = first + S.runs.map(function(r) { return '<option value="' + esc(r.key) + '">' + esc(r.name || r.subject) + '</option>'; }).join('');
+                });
+            }
+            function renderLibrary() {
+                var h = el('dtwLibrary'); if (!h) return;
+                if (!S.runs.length) {
+                    h.innerHTML = '<div class="dtw-card" style="grid-column:1/-1"><h3>No twins yet.</h3><p class="dtw-p">A twin is an audience you can run plans, titles, prices and ideas forward on. Build the first one from Prometheus: say <b>Build a twin of Gilmore Girls Hulu viewers</b> (or any title, creator, brand, audience or idea).</p><div class="dtw-chips"><button type="button" class="dtw-chip" onclick="dtwChatSend(\'Build a twin of Gilmore Girls Hulu viewers\')">Build a twin of Gilmore Girls Hulu viewers</button><button type="button" class="dtw-chip" onclick="dtwTab(\'howto\')">How to</button></div></div>';
+                    return;
+                }
+                h.innerHTML = S.runs.map(function(r) {
+                    return '<div class="dtw-lib-item' + (r.key === S.key ? ' on' : '') + '" onclick="dtwOpen(\'' + esc(r.key) + '\')"><div class="nm">' + esc(r.name || r.subject) + '</div><div class="sm">' + human(r.size_us) + ' people in the US' + (r.platform_home ? ' on ' + esc(r.platform_home) : '') + '</div><div class="sm">' + (r.ltv_5y ? 'IP value ' + humanMoney(r.ltv_5y) + ' over 5 years. ' : '') + (r.runs || 0) + ' runs' + (r.panel_sessions ? ', ' + r.panel_sessions + ' rooms' : '') + (r.spend_plans ? ', ' + r.spend_plans + ' plans' : '') + '</div><div class="sm">' + esc(String(r.created_at || '').slice(0, 10)) + ' by ' + esc(r.created_by || '') + '</div></div>';
+                }).join('');
+            }
+            window.dtwOpen = async function(key, runId, sessionId, planId, tab) {
+                var page = el('dtwTwinPage');
+                if (page) page.innerHTML = '<div class="dtw-card dtw-muted">Opening the twin...</div>';
+                try { var d = await api('/' + key); } catch (e) { if (page) page.innerHTML = '<div class="dtw-card dtw-muted">' + esc(e.message) + '</div>'; return; }
+                S.twin = d.twin; S.key = key; S.summary = d.summary; S.openRun = runId || null; S.session = null; S.plan = null;
+                ['dtwGlTwin', 'dtwLaTwin', 'dtwSpTwin', 'dtwPnTwin'].forEach(function(id) { if (el(id)) el(id).value = key; });
+                renderLibrary(); renderTwin();
+                var run = runId ? (S.twin.runs || []).filter(function(x) { return x.id === runId; })[0] : null;
+                if (sessionId) { S.session = (S.twin.panel_sessions || []).filter(function(s) { return s.id === sessionId; })[0] || null; }
+                if (planId) { S.plan = ((S.twin.labs || {}).spend || []).filter(function(p) { return p.plan_id === planId; })[0] || null; }
+                if (run) { if (run.kind === 'launch') renderLaunch(run); else if (run.kind === 'spend') { S.plan = ((S.twin.labs || {}).spend || []).filter(function(p) { return p.plan_id === (run.inputs || {}).plan_id; })[0] || S.plan; } else renderGreenlight(run); }
+                if (S.session) renderPanelConsole();
+                if (S.plan) renderSpend();
+                dtwTab(tab || (S.session ? 'panel' : S.plan ? 'spend' : run ? ({'launch': 'launch', 'greenlight': 'greenlight', 'compare': 'greenlight'}[run.kind] || 'twins') : 'twins'));
+                try { if (typeof _pmWarmScreen === 'function') _pmWarmScreen(); } catch (_) {}
+            };
+            window.dtwAsk = function() {
+                var inp = el('dtwAskInput'); var q = inp && inp.value.trim();
+                if (!q) { chatFill('Ask the ' + ((S.twin || {}).meta || {}).name + ' twin: '); return; }
+                if (inp) inp.value = '';
+                chatSend(q);
+            };
+            function demoRows(cat) { return (((S.twin || {}).identity || {}).demographics || {})[cat] || []; }
+            function renderTwin() {
+                var t = S.twin, m = t.meta || {}, h = el('dtwTwinPage'); if (!h) return;
+                var ident = t.identity || {}, ltv = t.ip_lifetime_value || null, rd = t.the_read || {}, key = m.key || S.key;
+                var out = '<div class="dtw-card"><div class="dtw-hero">' + (m.hero_image ? '<img src="' + esc(m.hero_image) + '" alt="">' : '') + '<div><div class="dtw-eyebrow">Digital twin</div><h2>' + esc(m.name || m.subject) + '</h2><div class="dtw-muted">' + fmtN(m.size_us) + ' people in the US, ' + esc(m.window_start) + ' to ' + esc(m.window_end) + (m.platform_home ? ', home: ' + esc(m.platform_home) : '') + (m.ip_related ? ', IP-related' : '') + '</div></div><div style="margin-left:auto; display:flex; gap:0.4rem; flex-wrap:wrap;"><a class="dtw-btn" href="/api/digital-twins/' + esc(key) + '/export.csv">CSV</a><a class="dtw-btn" href="/api/digital-twins/' + esc(key) + '/export.pdf">PDF</a><a class="dtw-btn" href="/api/digital-twins/' + esc(key) + '/export.pptx">Deck</a><button type="button" class="dtw-btn" onclick="dtwChatSend(\'Build a deck of the ' + esc(jsq(m.name || m.subject)) + ' twin\')">Deck via Prometheus</button></div></div>';
+                out += '<p class="dtw-p" style="margin-top:0.7rem;">' + esc(ident.read || '') + '</p>';
+                out += '<div class="dtw-chips"><button type="button" class="dtw-chip" onclick="dtwTab(\'greenlight\')">Greenlight Lab</button><button type="button" class="dtw-chip" onclick="dtwTab(\'launch\')">Launch Lab</button><button type="button" class="dtw-chip" onclick="dtwTab(\'spend\')">Spend Engine</button><button type="button" class="dtw-chip" onclick="dtwTab(\'panel\')">Focus Group IQ</button></div>';
+                out += '<div style="display:flex; gap:0.4rem; margin-top:0.4rem;"><input id="dtwAskInput" class="dtw-in" placeholder="Ask the twin anything: what are the odds a new season clears 4M on Hulu? would they pay $12.99?" onkeydown="if(event.key===\'Enter\'){dtwAsk();}"><button type="button" class="dtw-btn dtw-btn-primary" onclick="dtwAsk()">Ask the twin</button></div></div>';
+                if (rd.tldr && rd.tldr.length) { out += '<div class="dtw-card"><div class="dtw-eyebrow">The read</div>' + rd.tldr.map(function(s) { return '<p class="dtw-p">' + esc(s) + '</p>'; }).join('') + (rd.what_to_do && rd.what_to_do.length ? '<h4>What to do</h4>' + rd.what_to_do.map(function(s) { return '<p class="dtw-p">' + esc(s) + '</p>'; }).join('') : '') + '</div>'; }
+                out += '<div class="dtw-grid2 even">';
+                out += '<div class="dtw-card"><h3>Identity</h3>';
+                [['gender', 'Gender'], ['age', 'Age'], ['income', 'Income'], ['ethnicity', 'Ethnicity']].forEach(function(c) { var rows = demoRows(c[0]); if (rows.length) { out += '<h4>' + c[1] + '</h4>' + rows.slice(0, 8).map(function(r) { return bar(r.label, r.pct, 100, false, pct(r.pct, 1)); }).join(''); } });
+                if ((ident.geography || []).length) { out += '<h4>Top markets</h4>' + ident.geography.slice(0, 8).map(function(r) { return bar(r.label, r.pct, Math.max.apply(null, ident.geography.map(function(x) { return x.pct; })), true, pct(r.pct, 1)); }).join(''); }
+                out += '</div><div class="dtw-card"><h3>Platforms and buying</h3>';
+                if ((ident.platforms || []).length) { out += '<h4>Platform footprint (share of the twin in a year)</h4>' + ident.platforms.slice(0, 10).map(function(r) { return bar(r.label, r.reach_pct, 100, false, pct(r.reach_pct, 1)); }).join(''); }
+                if ((ident.purchase || []).length) { out += '<h4>What they buy</h4>' + ident.purchase.slice(0, 10).map(function(r) { return bar(r.label, r.pct, 100, true, pct(r.pct, 1)); }).join(''); }
+                if ((ident.talent || []).length) { out += '<h4>People they follow</h4><div class="dtw-muted">' + ident.talent.slice(0, 8).map(function(r) { return esc(r.label) + ' ' + pct(r.pct, 1); }).join(', ') + '</div>'; }
+                out += '</div></div>';
+                out += '<div class="dtw-grid2 even"><div class="dtw-card"><h3>How they respond</h3><div class="dtw-muted">Twelve dials, 0 to 100. 50 is an ordinary US audience.</div>';
+                Object.keys(t.traits || {}).forEach(function(k) { var v = t.traits[k]; out += '<div style="margin:0.45rem 0;">' + bar(v.label || k, v.value, 100, false, String(v.value)) + '<div class="dtw-muted" style="padding-left:0.1rem;">They ' + esc(v.read || '') + '.</div></div>'; });
+                out += '</div><div class="dtw-card"><h3>Lifecycle</h3>';
+                var lc = t.lifecycle || {};
+                [['discovering_pct', 'Discovering'], ['trying_pct', 'Trying'], ['habit_pct', 'In the habit'], ['lapsing_pct', 'Lapsing'], ['returning_pct', 'Returning']].forEach(function(c) { if (lc[c[0]] != null) out += bar(c[1], lc[c[0]], 100, false, pct(lc[c[0]], 1)); });
+                out += '<p class="dtw-muted" style="margin-top:0.5rem;">' + esc(lc.read || '') + '</p>';
+                var sq = t.standing_questions;
+                if (sq) { out += '<h4>The standing questions</h4><p class="dtw-muted">' + esc(sq.relative_popularity || '') + ' ' + esc(sq.demographics_line || '') + ' Prime Video in the last 30 days: ' + pct(sq.prime_video_t30d_pct) + '. SVOD churn: ' + pct(sq.svod_churn_pct) + '. On Prime Video: ' + pct(sq.on_prime_pct) + '; the rest sit on ' + (sq.off_prime_platforms || []).slice(0, 5).map(function(p) { return esc(p.label) + ' ' + pct(p.pct, 1); }).join(', ') + '.</p>'; }
+                if (t.track_record) { out += '<h4>Track record</h4><p class="dtw-muted">' + esc(t.track_record.line) + '</p>'; }
+                out += '</div></div>';
+                if (ltv) out += renderLtv(ltv, m);
+                out += '<div class="dtw-card"><h3>Runs</h3><div class="dtw-muted">Every lab result lands here. Click one to open it on its lab tab.</div>';
+                (t.runs || []).forEach(function(r) { var o = r.outputs || {}; var usd = o.unit === 'usd'; out += '<div class="dtw-run' + (r.id === S.openRun ? ' on' : '') + '" onclick="dtwOpenRun(\'' + esc(r.id) + '\')"><div class="q">' + esc(r.label || r.kind) + ': ' + esc(r.question || '') + '</div><div class="m">Expected ' + (usd ? fmtMoney(o.expected) : human(o.expected) + ' ' + esc(o.noun || 'people')) + (o.low != null ? ', range ' + (usd ? humanMoney(o.low) : human(o.low)) + ' to ' + (usd ? humanMoney(o.high) : human(o.high)) : '') + (o.odds_pct != null ? '. Odds ' + pct(o.odds_pct) + ' (' + esc(o.odds_words || '') + ')' : '') + '. ' + esc(String(r.created_at || '').slice(0, 10)) + ' by ' + esc(r.created_by || '') + '</div></div>'; });
+                if (!(t.runs || []).length) out += '<p class="dtw-muted">No runs yet.</p>';
+                out += '</div>';
+                h.innerHTML = out;
+            }
+            window.dtwOpenRun = function(id) { var r = (S.twin.runs || []).filter(function(x) { return x.id === id; })[0]; if (!r) return; S.openRun = id; if (r.kind === 'launch') { renderLaunch(r); dtwTab('launch'); } else if (r.kind === 'spend') { S.plan = ((S.twin.labs || {}).spend || []).filter(function(p) { return p.plan_id === (r.inputs || {}).plan_id; })[0] || null; renderSpend(); dtwTab('spend'); } else { renderGreenlight(r); dtwTab('greenlight'); } };
+            window.dtwHorizon = function(h) { S.horizon = String(h); renderTwin(); };
+            function renderLtv(ltv, m) {
+                var H = S.horizon, tot = (ltv.total || {})[H] || {}, vpf = (ltv.value_per_fan || {})[H] || {}, streams = (ltv.by_stream || {})[H] || [];
+                var out = '<div class="dtw-card"><div style="display:flex; align-items:center; gap:0.8rem; flex-wrap:wrap;"><div><div class="dtw-eyebrow">IP lifetime value</div><h3 style="margin:0;">What ' + esc(m.name || m.subject) + ' is worth as IP, in today\'s dollars</h3></div><div class="dtw-toggle" style="margin-left:auto;"><button type="button" class="' + (H === '5' ? 'on' : '') + '" onclick="dtwHorizon(5)">5 years</button><button type="button" class="' + (H === '10' ? 'on' : '') + '" onclick="dtwHorizon(10)">10 years</button></div></div>';
+                out += tiles([[fmtMoney(tot.expected), 'Expected, ' + H + ' years'], [humanMoney(tot.low) + ' to ' + humanMoney(tot.high), 'Range'], [fmtMoney(vpf.all), 'Per fan'], [fmtMoney(vpf.avid), 'Per avid fan'], [fmtMoney(vpf.casual), 'Per casual fan']]);
+                var fb = ltv.fan_base || {};
+                out += '<div class="dtw-muted">' + fmtN(fb.total_us) + ' US fans: ' + fmtN(fb.avid_us) + ' avid (' + pct(fb.avid_share_pct) + '), ' + fmtN(fb.casual_us) + ' casual. Discount rate ' + pct(ltv.discount_rate_pct, 2) + '.</div>';
+                out += '<div class="dtw-grid2 even" style="margin-top:0.6rem;"><div><h4>By stream</h4>' + streams.map(function(s) { return bar(s.label, s.expected, Math.max.apply(null, streams.map(function(x) { return x.expected; })), false, humanMoney(s.expected) + ' (' + pct(s.share_pct) + ')'); }).join('') + '</div>';
+                out += '<div><h4>By year</h4>' + yearCurve(ltv.by_year || []) + '</div></div>';
+                var pv = ltv.platform_value || {};
+                out += '<div class="dtw-grid2 even"><div><h4>Value to ' + esc(pv.platform || 'the platform') + '</h4>' + tiles([[humanMoney(pv.value), 'Over five years'], [human(pv.new_subscribers), 'New subscribers'], [human(pv.retained_subscriber_months), 'Subscriber months kept']]) + '<p class="dtw-muted">' + esc(pv.read || '') + '</p></div>';
+                out += '<div><h4>What moves it</h4><table class="dtw-table"><tr><th>Lever</th><th class="num">On ' + H + ' years</th></tr>' + (ltv.sensitivity || []).map(function(s) { return '<tr><td>' + esc(s.lever) + '<div class="dtw-muted">' + esc(s.read || '') + '</div></td><td class="num">' + (s.delta_pct >= 0 ? '+' : '') + pct(s.delta_pct) + '</td></tr>'; }).join('') + '</table></div></div>';
+                out += '<p class="dtw-p" style="margin-top:0.6rem;">' + esc(ltv.read || '') + '</p></div>';
+                return out;
+            }
+            function yearCurve(rows) {
+                if (!rows.length) return '';
+                var W = 520, Hh = 150, pad = 28, max = Math.max.apply(null, rows.map(function(r) { return r.expected; })) || 1;
+                var pts = rows.map(function(r, i) { var x = pad + (W - 2 * pad) * (i / Math.max(1, rows.length - 1)); var y = Hh - pad - (Hh - 2 * pad) * (r.expected / max); return [x, y, r]; });
+                var path = pts.map(function(p, i) { return (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1); }).join(' ');
+                var area = path + ' L' + pts[pts.length - 1][0].toFixed(1) + ' ' + (Hh - pad) + ' L' + pts[0][0].toFixed(1) + ' ' + (Hh - pad) + ' Z';
+                return '<svg class="dtw-band" viewBox="0 0 ' + W + ' ' + Hh + '"><path d="' + area + '" fill="rgba(199,242,62,0.14)"></path><path d="' + path + '" fill="none" stroke="#C7F23E" stroke-width="2"></path>' + pts.map(function(p) { return '<circle cx="' + p[0].toFixed(1) + '" cy="' + p[1].toFixed(1) + '" r="3" fill="#C7F23E"><title>Year ' + p[2].year + ': ' + fmtMoney(p[2].expected) + '</title></circle><text x="' + p[0].toFixed(1) + '" y="' + (Hh - 8) + '" font-size="10" text-anchor="middle" fill="#7C878A">Y' + p[2].year + '</text>'; }).join('') + '</svg>';
+            }
+            function renderHowto() {
+                var h = el('dtwHowto'); if (!h) return;
+                var d = S.howto; if (!d) { h.innerHTML = '<div class="dtw-muted">Loading the directions...</div>'; return; }
+                var out = '<div class="dtw-eyebrow">How to</div><h2 style="margin:0 0 0.4rem; letter-spacing:-0.03em;">' + esc(d.title) + '</h2><p class="dtw-p">' + esc(d.intro) + '</p>';
+                (d.items || []).forEach(function(it) {
+                    out += '<h3>' + esc(it.title) + '</h3><p class="dtw-p"><b>What it answers.</b> ' + esc(it.answers) + '</p><p class="dtw-p"><b>What to put in.</b> ' + esc(it.put_in) + '</p><p class="dtw-p"><b>Type this to Prometheus</b> (click to fill it in):</p><div>' + (it.type_this || []).map(function(t) { return '<span class="ex" onclick="dtwChatFill(\'' + esc(jsq(t)) + '\')">' + esc(t) + '</span>'; }).join('') + '</div><p class="dtw-p"><b>Attaching a file.</b> ' + esc(it.attach) + '</p><p class="dtw-p"><b>What comes back and where.</b> ' + esc(it.comes_back) + '</p><p class="dtw-p"><b>Cost.</b> ' + esc(it.cost) + ' <b>Export.</b> ' + esc(it.export) + '</p>';
+                });
+                out += '<h3>Pricing</h3>' + (d.pricing || []).map(function(p) { return '<p class="dtw-p">' + esc(p) + '</p>'; }).join('') + '<p class="dtw-muted">' + esc(d.where || '') + '</p>';
+                h.innerHTML = out;
+            }
+            window._dtwRender = { renderTwin: renderTwin, renderHowto: renderHowto, renderEmpty: renderEmpty };
+
+            // ---------------------------------------------------------------- jobs
+            window.dtwPollJob = function(jobId, onDone, statusEl) {
+                var waited = 0;
+                (async function loop() {
+                    while (waited < 1500000) {
+                        await new Promise(function(res) { setTimeout(res, 6000); }); waited += 6000;
+                        var d = null; try { d = await api('/jobs/' + jobId); } catch (_) { d = null; }
+                        if (!d || !d.job) continue;
+                        var j = d.job;
+                        if (statusEl && el(statusEl)) el(statusEl).textContent = j.status === 'done' ? 'Done.' : (j.stage || j.status || 'working') + '...';
+                        if (j.status === 'done') { try { onDone(j); } catch (_) {} return; }
+                        if (j.status === 'error' || j.status === 'cancelled') { if (statusEl && el(statusEl)) el(statusEl).textContent = j.error || 'That run did not finish; nothing more is charged.'; return; }
+                    }
+                })();
+            };
+            function parseChannels(text) {
+                var out = [];
+                String(text || '').split(/\n|;/).forEach(function(line) {
+                    var m = line.match(/([A-Za-z][A-Za-z +\/&-]{1,24}?)\s*[:=,-]?\s*\$?\s*(\d[\d,]*(?:\.\d+)?)\s*([kKmM])?\b/);
+                    if (!m) return;
+                    var amt = parseFloat(m[2].replace(/,/g, '')); var k = (m[3] || '').toLowerCase(); amt *= k === 'k' ? 1000 : k === 'm' ? 1000000 : 1;
+                    if (amt > 0) out.push({ channel: m[1].trim(), spend: amt });
+                });
+                return out;
+            }
+            function goalOf(valId, nounId) { var v = parseFloat(String((el(valId) || {}).value || '').replace(/[,$]/g, '')); if (!v) return null; return { metric: (el(nounId) || {}).value || 'viewers', value: Math.round(v), window_days: 30 }; }
+            window.dtwRunLab = async function(kind) {
+                var statusId = kind === 'greenlight' ? 'dtwGlStatus' : 'dtwLaStatus';
+                var key = (el(kind === 'greenlight' ? 'dtwGlTwin' : 'dtwLaTwin') || {}).value;
+                if (!key) { el(statusId).textContent = 'Pick a twin first (or build one).'; return; }
+                var body = { kind: kind, inputs: {} };
+                if (kind === 'greenlight') {
+                    var txt = (el('dtwGlText').value || '').trim();
+                    var plats = (el('dtwGlPlatforms').value || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+                    body.inputs = { platforms: plats };
+                    if (txt.length < 90 && txt) body.inputs.title = txt; else if (txt) body.inputs.logline = txt;
+                    var g = goalOf('dtwGlGoal', 'dtwGlNoun'); if (g) { g.platform = plats[0] || ''; body.inputs.goal = g; }
+                    var other = (el('dtwGlOther') || {}).value;
+                    if (other && other !== key) { body.kind = 'compare'; body.other_key = other; body.inputs.scenario_kind = 'greenlight'; }
+                    body.question = txt ? ('Greenlight Lab: ' + txt.slice(0, 120)) : '';
+                } else {
+                    var chans = parseChannels(el('dtwLaChannels').value);
+                    if (!chans.length) { el(statusId).textContent = 'Add at least one channel with spend (Meta $120,000).'; return; }
+                    var plan = { channels: chans, window_weeks: parseInt(el('dtwLaWeeks').value || '6', 10) || 6, assets: (el('dtwLaAssets').value || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean), platform: (el('dtwLaPlatform').value || '').trim() };
+                    var g2 = goalOf('dtwLaGoal', 'dtwLaNoun'); if (g2) plan.goal = g2;
+                    body.inputs = { plan: plan };
+                }
+                el(statusId).textContent = 'Queued. Running it forward on the twin...';
+                try { var d = await api('/' + key + '/run', { method: 'POST', body: JSON.stringify(body) }); }
+                catch (e) { el(statusId).textContent = e.message; return; }
+                el(statusId).textContent = d.message || 'Running...';
+                dtwPollJob(d.job_id, function(j) { dtwOpen(key, j.run_id || null, null, null, kind === 'greenlight' ? 'greenlight' : 'launch'); }, statusId);
+            };
+            function cohortTable(rows) { return '<table class="dtw-table"><tr><th>Cohort</th><th class="num">Share</th><th class="num">People</th></tr>' + (rows || []).map(function(c) { return '<tr><td>' + esc(c.cohort) + '</td><td class="num">' + pct(c.share_pct, 1) + '</td><td class="num">' + fmtN(c.people) + '</td></tr>'; }).join('') + '</table>'; }
+            function leverTable(rows, usd) { return '<table class="dtw-table"><tr><th>#</th><th>Lever</th><th class="num">Earns</th></tr>' + (rows || []).map(function(l) { return '<tr><td>' + (l.rank || '') + '</td><td>' + esc(l.lever) + '<div class="dtw-muted">' + esc(l.read || '') + '</div></td><td class="num">+' + pct(l.delta_pct) + '<div class="dtw-muted">' + (usd ? humanMoney(l.delta_people) : human(l.delta_people) + ' people') + '</div></td></tr>'; }).join('') + '</table>'; }
+            function renderGreenlight(r) {
+                var h = el('dtwGlResults'); if (!h) return;
+                var o = r.outputs || {}, rd = r.read || {};
+                if (r.kind === 'compare') {
+                    var a = o.a || {}, b = o.b || {};
+                    h.innerHTML = '<div class="dtw-card"><div class="dtw-eyebrow">Compare</div><h3>' + esc(r.question) + '</h3>' + tiles([[a.twin, 'Twin A'], [human(a.expected) + ' ' + esc(a.noun || ''), 'A expected'], [b.twin, 'Twin B'], [human(b.expected) + ' ' + esc(b.noun || ''), 'B expected'], [(o.delta_pct >= 0 ? '+' : '') + pct(o.delta_pct), 'A against B']]) + (rd.tldr || []).map(function(s) { return '<p class="dtw-p">' + esc(s) + '</p>'; }).join('') + '<p class="dtw-p"><b>' + esc(r.recommendation || '') + '</b></p></div>';
+                    return;
+                }
+                var out = '<div class="dtw-card"><div class="dtw-eyebrow">Greenlight Lab</div><h3>' + esc(r.question) + '</h3>';
+                if (o.odds_pct != null) { out += '<div class="dtw-gauge"><div class="big">' + pct(o.odds_pct) + '</div><div><div style="font-weight:600;">' + esc((o.odds_words || '').charAt(0).toUpperCase() + (o.odds_words || '').slice(1)) + ' chance it clears ' + fmtN((o.goal || {}).value) + ' ' + esc(o.noun || '') + ' in its first ' + ((o.goal || {}).window_days || 30) + ' days on ' + esc(o.platform || '') + '.</div><div class="dtw-muted">Expected ' + human(o.expected) + ', range ' + human(o.low) + ' to ' + human(o.high) + '.</div></div></div>'; }
+                out += tiles([[human(o.expected) + ' ' + esc(o.noun || ''), 'Expected first ' + ((o.goal || {}).window_days || 30) + ' days on ' + (o.platform || '')], [human(o.low) + ' to ' + human(o.high), 'Range'], [pct(o.completion_pct), 'Completion'], [pct(o.return_pct), 'Come back for the next one']]);
+                out += (rd.tldr || []).map(function(s) { return '<p class="dtw-p">' + esc(s) + '</p>'; }).join('');
+                out += '</div><div class="dtw-grid2 even"><div class="dtw-card"><h3>Range per platform</h3>' + (o.per_platform || []).map(function(p) { return bar(p.platform, p.expected, Math.max.apply(null, (o.per_platform || []).map(function(x) { return x.high; })), false, human(p.low) + ' to ' + human(p.high) + (p.odds_pct != null ? ', odds ' + pct(p.odds_pct) : '')); }).join('') + '</div>';
+                out += '<div class="dtw-card"><h3>Who shows up</h3>' + cohortTable(o.cohorts) + '</div></div>';
+                out += '<div class="dtw-grid2 even"><div class="dtw-card"><h3>Levers, ranked by what they earn</h3>' + leverTable(o.levers, false) + '</div>';
+                var pk = o.package || {};
+                out += '<div class="dtw-card"><h3>The package to run</h3><p class="dtw-p">' + esc(pk.read || '') + '</p>' + tiles([[pk.platform || '', 'Home'], [pk.window || '', 'Window'], [pk.lead_asset || '', 'Lead asset'], [pk.clip_cadence || '', 'Clips'], [pk.spend_mix || '', 'Paid'], [pk.holdout || '', 'Holdout']]) + '<div class="dtw-chips"><button type="button" class="dtw-chip" onclick="dtwTab(\'launch\')">Plan the launch</button><button type="button" class="dtw-chip" onclick="dtwChatSend(\'Open a focus group with the ' + esc(jsq(((S.twin || {}).meta || {}).name)) + ' twin and ask whether they would watch ' + esc(jsq(o.title || 'it')) + ' on ' + esc(jsq(o.platform || '')) + '\')">Ask the room about it</button></div></div></div>';
+                out += '<div class="dtw-card"><h3>Why</h3>' + (r.drivers || []).map(function(s) { return '<p class="dtw-p">' + esc(s) + '</p>'; }).join('') + '<p class="dtw-p"><b>' + esc(r.recommendation || '') + '</b></p></div>';
+                h.innerHTML = out;
+            }
+            function bandChart(weeks, goal) {
+                if (!weeks || !weeks.length) return '';
+                var W = 560, Hh = 170, pad = 30, max = Math.max.apply(null, weeks.map(function(w) { return w.high; }).concat([goal || 0])) || 1;
+                var x = function(i) { return pad + (W - 2 * pad) * (i / Math.max(1, weeks.length - 1)); }, y = function(v) { return Hh - pad - (Hh - 2 * pad) * (v / max); };
+                var top = weeks.map(function(w, i) { return (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(w.high).toFixed(1); }).join(' ');
+                var bot = weeks.slice().reverse().map(function(w, j) { var i = weeks.length - 1 - j; return 'L' + x(i).toFixed(1) + ' ' + y(w.low).toFixed(1); }).join(' ');
+                var mid = weeks.map(function(w, i) { return (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(w.expected).toFixed(1); }).join(' ');
+                var g = goal ? '<line x1="' + pad + '" x2="' + (W - pad) + '" y1="' + y(goal).toFixed(1) + '" y2="' + y(goal).toFixed(1) + '" stroke="#E682FF" stroke-dasharray="4 4"></line><text x="' + (W - pad) + '" y="' + (y(goal) - 4).toFixed(1) + '" font-size="10" text-anchor="end" fill="#E682FF">goal ' + human(goal) + '</text>' : '';
+                return '<svg class="dtw-band" viewBox="0 0 ' + W + ' ' + Hh + '"><path d="' + top + ' ' + bot + ' Z" fill="rgba(199,242,62,0.16)"></path><path d="' + mid + '" fill="none" stroke="#C7F23E" stroke-width="2"></path>' + g + weeks.map(function(w, i) { return '<text x="' + x(i).toFixed(1) + '" y="' + (Hh - 8) + '" font-size="10" text-anchor="middle" fill="#7C878A">W' + w.week + (w.odds_pct != null ? ' ' + pct(w.odds_pct, 0) : '') + '</text>'; }).join('') + '</svg>';
+            }
+            function renderLaunch(r) {
+                var h = el('dtwLaResults'); if (!h) return;
+                var o = r.outputs || {}, rd = r.read || {}, goal = (o.goal || {}).value;
+                var out = '<div class="dtw-card"><div class="dtw-eyebrow">Launch Lab</div><h3>' + esc(r.question) + '</h3>' + (rd.tldr || []).map(function(s) { return '<p class="dtw-p">' + esc(s) + '</p>'; }).join('') + '</div>';
+                out += '<div class="dtw-tiles" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));">' + (o.plans || []).map(function(p, i) {
+                    return '<div class="dtw-card" style="margin:0;"><div class="dtw-eyebrow">' + esc(p.label) + '</div><div style="font-size:1.3rem; font-weight:700;">' + human(p.expected) + ' <span class="dtw-muted">' + esc(o.noun || '') + '</span></div><div class="dtw-muted">' + humanMoney(p.spend) + ' spend, ' + human(p.first_actions) + ' first actions at ' + fmtMoney(p.cpa) + '</div>' + (p.odds_pct != null ? '<div class="dtw-muted">Odds of clearing the goal: <b>' + pct(p.odds_pct) + '</b> (' + esc(p.odds_words || '') + ')</div>' : '') + '<div class="dtw-muted" style="margin-top:0.3rem;">' + esc(p.note || '') + '</div><div style="margin-top:0.4rem;">' + (p.channels || []).map(function(c) { return bar(c.channel, c.spend, Math.max.apply(null, (p.channels || []).map(function(x) { return x.spend; })), i === 1, humanMoney(c.spend)); }).join('') + '</div><div style="margin-top:0.5rem;"><button type="button" class="dtw-btn dtw-btn-primary" onclick="dtwSetLive(\'' + esc(r.id) + '\', \'' + esc(jsq(p.label)) + '\')">Set it live</button></div></div>';
+                }).join('') + '</div>';
+                out += '<div class="dtw-card"><h3>Week by week on the signal-led plan</h3>' + bandChart(o.weeks, goal) + '<table class="dtw-table"><tr><th>Week</th><th class="num">Expected</th><th class="num">Low</th><th class="num">High</th><th class="num">Odds</th></tr>' + (o.weeks || []).map(function(w) { return '<tr><td>' + w.week + '</td><td class="num">' + fmtN(w.expected) + '</td><td class="num">' + fmtN(w.low) + '</td><td class="num">' + fmtN(w.high) + '</td><td class="num">' + (w.odds_pct != null ? pct(w.odds_pct) : '') + '</td></tr>'; }).join('') + '</table></div>';
+                var ho = o.holdout || {};
+                out += '<div class="dtw-grid2 even"><div class="dtw-card"><h3>Levers, ranked by what they earn</h3>' + leverTable(o.levers, false) + '</div><div class="dtw-card"><h3>The holdout</h3>' + tiles([[fmtN(ho.size), 'Matched people held out'], [fmtMoney(ho.spend), 'Lowest spend that proves lift'], [pct(ho.expected_lift_pct), 'Lift it can read']]) + '<p class="dtw-p">' + esc(ho.lift_read || '') + '</p></div></div>';
+                out += '<div class="dtw-card"><h3>Why</h3>' + (r.drivers || []).map(function(s) { return '<p class="dtw-p">' + esc(s) + '</p>'; }).join('') + '<p class="dtw-p"><b>' + esc(r.recommendation || '') + '</b></p></div>';
+                h.innerHTML = out;
+            }
+            window.dtwSetLive = function(runId, label) { S.liveFrom = { run_id: runId, plan_label: label }; dtwTab('spend'); if (el('dtwSpSource')) { dtwSpendPickTwin(); el('dtwSpSource').value = 'run:' + runId + '|' + label; dtwSpendSourceChanged(); } if (el('dtwSpStatus')) el('dtwSpStatus').textContent = 'The ' + label + ' plan from Launch Lab is loaded. Pick a mode and activate it.'; };
+
+            // ------------------------------------------------------------ spend engine
+            window.dtwSpendPickTwin = function() {
+                var key = (el('dtwSpTwin') || {}).value; var src = el('dtwSpSource'); if (!src) return;
+                var cur = src.value; var opts = '<option value="manual">Paste channels</option>';
+                if (S.twin && S.key === key) {
+                    (S.twin.runs || []).filter(function(r) { return r.kind === 'launch'; }).forEach(function(r) { (((r.outputs || {}).plans) || []).forEach(function(p) { opts += '<option value="run:' + esc(r.id) + '|' + esc(p.label) + '">Launch Lab ' + esc(String(r.created_at || '').slice(0, 10)) + ': ' + esc(p.label) + ' (' + humanMoney(p.spend) + ')</option>'; }); });
+                    renderSpendPlans();
+                } else if (key && key !== S.key) { dtwOpen(key, null, null, null, 'spend'); return; }
+                src.innerHTML = opts; if (cur) src.value = cur; dtwSpendSourceChanged();
+            };
+            window.dtwSpendSourceChanged = function() { var v = (el('dtwSpSource') || {}).value || 'manual'; if (el('dtwSpManual')) el('dtwSpManual').style.display = v === 'manual' ? 'block' : 'none'; };
+            window.dtwSpendMode = function(mode) { S.spendMode = mode; el('dtwSpModeChip').classList.toggle('on', mode === 'chip'); el('dtwSpModeRule').classList.toggle('on', mode === 'rule'); el('dtwSpRule').style.display = mode === 'rule' ? 'block' : 'none'; };
+            function renderSpendPlans() {
+                var plans = ((S.twin || {}).labs || {}).spend || [];
+                if (!plans.length) return;
+                var h = el('dtwSpResults'); if (!h) return;
+                if (!S.plan) { S.plan = plans[0]; renderSpend(); }
+            }
+            window.dtwSpendActivate = async function() {
+                var key = (el('dtwSpTwin') || {}).value; if (!key) { el('dtwSpStatus').textContent = 'Pick a twin first.'; return; }
+                var body = { mode: S.spendMode, rule: { max_daily_shift_pct: parseFloat(el('dtwSpMax').value || '15'), floor_per_channel: parseFloat(el('dtwSpFloor').value || '0') } };
+                var src = (el('dtwSpSource') || {}).value || 'manual';
+                if (src.indexOf('run:') === 0) { var parts = src.slice(4).split('|'); body.from_run = parts[0]; body.plan_label = parts[1] || 'Signal-led'; body.plan = { assets: (el('dtwSpAssets').value || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean) }; }
+                else {
+                    var chans = parseChannels(el('dtwSpChannels').value);
+                    if (!chans.length) { el('dtwSpStatus').textContent = 'Add at least one channel with spend (Meta $60,000).'; return; }
+                    body.plan = { channels: chans, window: { days: parseInt(el('dtwSpDays').value || '14', 10) || 14 }, assets: (el('dtwSpAssets').value || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean) };
+                    var g = parseFloat(String(el('dtwSpGoal').value || '').replace(/[,$]/g, '')); if (g) body.plan.goal = { metric: 'first actions', value: Math.round(g) };
+                }
+                el('dtwSpStatus').textContent = 'Running the plan forward day by day...';
+                try { var d = await api('/' + key + '/spend/activate', { method: 'POST', body: JSON.stringify(body) }); } catch (e) { el('dtwSpStatus').textContent = e.message; return; }
+                el('dtwSpStatus').textContent = 'Activated.';
+                await dtwOpen(key, null, null, d.plan.plan_id, 'spend');
+            };
+            window.dtwSpendDay = function(d) { S.spendDay = d; renderSpend(); };
+            window.dtwSpendApprove = async function(day, moveId) {
+                if (!S.plan) return;
+                try { var d = await api('/' + S.key + '/spend/' + S.plan.plan_id + '/approve', { method: 'POST', body: JSON.stringify({ day: day, move_id: moveId }) }); S.plan = d.plan; replacePlan(); renderSpend(); } catch (e) { el('dtwSpStatus').textContent = e.message; }
+            };
+            window.dtwSpendSetMode = async function(mode) {
+                if (!S.plan) return;
+                var rule = { max_daily_shift_pct: parseFloat((el('dtwSpMax') || {}).value || '15'), floor_per_channel: parseFloat((el('dtwSpFloor') || {}).value || '0') };
+                try { var d = await api('/' + S.key + '/spend/' + S.plan.plan_id + '/mode', { method: 'POST', body: JSON.stringify({ mode: mode, rule: rule }) }); S.plan = d.plan; replacePlan(); renderSpend(); } catch (e) { el('dtwSpStatus').textContent = e.message; }
+            };
+            function replacePlan() { var plans = ((S.twin || {}).labs || {}).spend || []; for (var i = 0; i < plans.length; i++) { if (plans[i].plan_id === S.plan.plan_id) plans[i] = S.plan; } }
+            window.dtwSpendHandoff = async function() {
+                if (!S.plan) return;
+                try { var d = await api('/' + S.key + '/spend/' + S.plan.plan_id + '/handoff'); chatFill('Set up Attribution IQ tracking. ' + (d.package || {}).text); } catch (e) { el('dtwSpStatus').textContent = e.message; }
+            };
+            window.dtwSpendPick = function(pid) { S.plan = (((S.twin || {}).labs || {}).spend || []).filter(function(p) { return p.plan_id === pid; })[0] || null; S.spendDay = 1; renderSpend(); };
+            function renderSpend() {
+                var h = el('dtwSpResults'); if (!h) return;
+                var p = S.plan; if (!p) { renderEmpty('dtwSpResults', 'spend'); return; }
+                var plans = ((S.twin || {}).labs || {}).spend || [];
+                var led = p.ledger || {}, days = p.days || [], dayN = Math.min(Math.max(1, S.spendDay), days.length), day = days[dayN - 1] || {};
+                var out = '<div class="dtw-card"><div class="dtw-eyebrow">Spend Engine</div><div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;"><h3 style="margin:0;">' + esc(p.label) + '</h3>' + (plans.length > 1 ? '<select class="dtw-in" style="max-width:260px;" onchange="dtwSpendPick(this.value)">' + plans.map(function(x) { return '<option value="' + esc(x.plan_id) + '"' + (x.plan_id === p.plan_id ? ' selected' : '') + '>' + esc(x.label) + '</option>'; }).join('') + '</select>' : '') + '</div>';
+                out += '<div class="dtw-muted">' + days.length + ' days, ' + (p.source === 'launch' ? 'from Launch Lab' : 'pasted plan') + ', ' + (p.mode === 'rule' ? 'on a rule: max ' + Number((p.rule || {}).max_daily_shift_pct || 0).toFixed(0) + '% a day, floor ' + fmtMoney((p.rule || {}).floor_per_channel || 0) + ' per channel' : 'approve each move by chip') + '. <button type="button" class="dtw-chip" onclick="dtwSpendSetMode(\'' + (p.mode === 'rule' ? 'chip' : 'rule') + '\')">' + (p.mode === 'rule' ? 'Switch to chips' : 'Switch to the rule') + '</button></div>';
+                out += tiles([[fmtMoney(led.saved_total), 'Saved against the plan as allocated'], [String(led.moves_approved || 0) + ' of ' + String(led.moves_proposed || 0), 'Moves approved'], [human(led.signal_led_outcome), 'First actions, with the moves'], [human(led.as_allocated_outcome), 'First actions, as allocated'], [fmtMoney(led.signal_led_cpa), 'Cost per first action now']]);
+                out += '<p class="dtw-p">' + esc(led.read || '') + '</p>';
+                out += '<div class="dtw-chips"><a class="dtw-btn" href="/api/digital-twins/' + esc(S.key) + '/spend/' + esc(p.plan_id) + '/moves.csv">Export moves (CSV)</a><button type="button" class="dtw-btn" onclick="dtwSpendHandoff()">Track it with Attribution IQ</button></div></div>';
+                out += '<div class="dtw-card"><h3>Day by day</h3><div class="dtw-days">' + days.map(function(d) { var pend = (d.moves || []).some(function(m) { return !m.approved; }); return '<div class="dtw-day' + (d.day === dayN ? ' on' : '') + (pend ? ' pend' : '') + '" onclick="dtwSpendDay(' + d.day + ')"><div class="d">' + d.day + '</div><div>' + human(d.first_actions) + '</div></div>'; }).join('') + '</div>';
+                out += '<h4>Day ' + dayN + ' by channel</h4><table class="dtw-table"><tr><th>Channel</th><th class="num">Spend</th><th class="num">Reach</th><th class="num">First actions</th><th class="num">Cost per first action</th></tr>' + (day.by_channel || []).map(function(b) { return '<tr><td>' + esc(b.channel) + (b.momentum && Math.abs(b.momentum - 1) > 0.01 ? ' <span class="dtw-muted">momentum x' + Number(b.momentum).toFixed(2) + '</span>' : '') + '</td><td class="num">' + fmtMoney(b.spend) + '</td><td class="num">' + fmtN(b.reach) + '</td><td class="num">' + fmtN(b.first_actions) + '</td><td class="num">' + fmtMoney(b.cpa) + '</td></tr>'; }).join('') + '</table>';
+                out += '<h4>Moves on day ' + dayN + '</h4>' + ((day.moves || []).length ? (day.moves || []).map(function(m) { return '<div class="dtw-move' + (m.approved ? ' ok' : '') + '"><b>' + esc(m.kind === 'asset' ? 'Swap the lead asset' : m.kind === 'raise' ? 'Raise ' + m.to : 'Move ' + fmtMoney(m.amount) + ' a day from ' + m.from + ' to ' + m.to) + '</b> <span class="dtw-muted">earns about ' + fmtN(m.delta) + ' first actions</span><div>' + esc(m.why) + '</div>' + (m.approved ? '<div class="dtw-muted">Approved by ' + esc(m.approved_by || 'you') + ' ' + esc(String(m.approved_at || '').slice(0, 16).replace('T', ' ')) + '</div>' : '<div style="margin-top:0.3rem;"><button type="button" class="dtw-chip on" onclick="dtwSpendApprove(' + day.day + ', \'' + esc(m.id) + '\')">Approve</button></div>') + '</div>'; }).join('') : '<p class="dtw-muted">No moves this day.</p>') + '</div>';
+                var ho = p.holdout || {};
+                out += '<div class="dtw-grid2 even"><div class="dtw-card"><h3>Tests to run inside the flight</h3>' + (p.tests || []).map(function(t) { return '<div class="dtw-run"><div class="q">' + esc(t.name) + '</div><div class="m">' + esc(t.what) + ' Split: ' + esc(t.split) + '. ' + t.days + ' days. ' + esc(t.why) + '</div></div>'; }).join('') + '</div>';
+                out += '<div class="dtw-card"><h3>Lift read against the holdout</h3>' + tiles([[fmtN(ho.size), 'Matched people held out'], [fmtMoney(ho.spend), 'Lowest spend that proves lift'], [pct(ho.expected_lift_pct), 'Lift it can read']]) + '<p class="dtw-p">' + esc(ho.lift_read || '') + '</p></div></div>';
+                h.innerHTML = out;
+            }
+            window.dtwConnectRequest = async function() {
+                var plats = (el('dtwConnectPlatforms').value || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+                try { var d = await api('/connect-request', { method: 'POST', body: JSON.stringify({ platforms: plats, twin_key: S.key }) }); el('dtwConnectStatus').textContent = d.message || 'Request filed.'; } catch (e) { el('dtwConnectStatus').textContent = e.message; }
+            };
+
+            // ------------------------------------------------------- focus group iq (panel)
+            window.dtwPanelPickTwin = function() { var key = (el('dtwPnTwin') || {}).value; if (key && key !== S.key) { dtwOpen(key, null, null, null, 'panel'); } else { renderPanelSessions(); } };
+            function renderPanelSessions() {
+                var h = el('dtwPnSessions'); if (!h) return;
+                var ss = (S.twin || {}).panel_sessions || [];
+                if (!S.twin) { h.innerHTML = 'Pick a twin to see its rooms.'; return; }
+                if (!ss.length) { h.innerHTML = 'No rooms on this twin yet.'; return; }
+                h.innerHTML = ss.map(function(s) { return '<div class="dtw-run' + (S.session && S.session.id === s.id ? ' on' : '') + '" onclick="dtwPanelResume(\'' + esc(s.id) + '\')"><div class="q">' + esc(s.title) + '</div><div class="m">' + (s.questions || []).length + ' questions, ' + ((s.group || {}).in_room || 0) + ' twins in the room, ' + esc(String(s.created_at || '').slice(0, 10)) + '</div></div>'; }).join('');
+            }
+            window.dtwPanelResume = function(sid) { S.session = ((S.twin || {}).panel_sessions || []).filter(function(s) { return s.id === sid; })[0] || null; renderPanelSessions(); renderPanelConsole(); };
+            window.dtwPanelOpen = async function() {
+                var key = (el('dtwPnTwin') || {}).value; if (!key) { el('dtwPnStatus').textContent = 'Pick a twin first.'; return; }
+                var segs = (el('dtwPnSegments').value || '').split('\n').map(function(s) { return s.trim(); }).filter(Boolean).map(function(s) { return { label: s }; });
+                var other = (el('dtwPnTwin2') || {}).value;
+                var body = { segments: segs.length ? segs : null, in_room: parseInt(el('dtwPnRoom').value || '12', 10) || 12, title: (el('dtwPnTitle').value || '').trim(), twins: other && other !== key ? [other] : [] };
+                el('dtwPnStatus').textContent = 'Seating the room...';
+                try { var d = await api('/' + key + '/panel/open', { method: 'POST', body: JSON.stringify(body) }); } catch (e) { el('dtwPnStatus').textContent = e.message; return; }
+                el('dtwPnStatus').textContent = 'The room is open.';
+                await dtwOpen(key, null, d.session.id, null, 'panel');
+            };
+            window.dtwPanelKind = function(k) { S.panelKind = (S.panelKind === k) ? '' : k; document.querySelectorAll('#dtwPnKinds .dtw-chip').forEach(function(b) { b.classList.toggle('on', b.getAttribute('data-k') === S.panelKind); }); var o = el('dtwPnOptions'); if (o) o.style.display = (S.panelKind === 'multiple_choice' || S.panelKind === 'ab') ? 'block' : 'none'; };
+            window.dtwPanelAsk = async function(presetQ) {
+                if (!S.session) return;
+                var inp = el('dtwPnQ'); var q = presetQ || (inp && inp.value.trim());
+                if (!q) return;
+                var body = { q: q };
+                if (S.panelKind) body.kind = S.panelKind;
+                var optsRaw = (el('dtwPnOptions') || {}).value || '';
+                if (optsRaw.trim()) body.options = optsRaw.split(/\n|,/).map(function(s) { return s.trim(); }).filter(Boolean);
+                var live = el('dtwPnLive'); if (live) live.innerHTML = '<div class="dtw-muted">Asking the room...</div>';
+                if (inp && !presetQ) inp.value = '';
+                try { var d = await api('/' + S.key + '/panel/' + S.session.id + '/ask', { method: 'POST', body: JSON.stringify(body) }); }
+                catch (e) { if (live) live.innerHTML = '<div class="dtw-muted">' + esc(e.message) + '</div>'; return; }
+                S.session.questions = S.session.questions || []; S.session.questions.push(d.question); S.session.questions_paid = d.questions_paid;
+                renderPanelConsole(d.question);
+            };
+            function distBars(rows, people) { var max = Math.max.apply(null, (rows || []).map(function(r) { return r.pct; })) || 1; return (rows || []).map(function(r) { return bar(r.label, r.pct, 100, false, pct(r.pct, 1) + ' (' + human(r.people) + ')'); }).join(''); }
+            function renderPanelConsole(latest) {
+                var h = el('dtwPnConsole'); if (!h) return;
+                var s = S.session; if (!s) { renderEmpty('dtwPnConsole', 'panel'); return; }
+                var g = s.group || {}, qs = s.questions || [], last = latest || qs[qs.length - 1];
+                var out = '<div class="dtw-card"><div class="dtw-eyebrow">Focus Group IQ</div><div style="display:flex; align-items:center; gap:0.6rem; flex-wrap:wrap;"><h3 style="margin:0;">' + esc(s.title) + '</h3><span class="dtw-muted">' + g.in_room + ' twins standing for ' + fmtN(g.size_people) + ' people. ' + qs.length + ' of ' + (s.questions_paid || 12) + ' questions used.</span><span style="margin-left:auto; display:flex; gap:0.3rem;"><a class="dtw-btn" href="/api/digital-twins/' + esc(S.key) + '/panel/' + esc(s.id) + '/export.csv">Export CSV</a><a class="dtw-btn" href="/api/digital-twins/' + esc(S.key) + '/panel/' + esc(s.id) + '/export.pdf">Export PDF</a></span></div>';
+                out += '<div class="dtw-muted" style="margin:0.3rem 0;">' + (g.segments || []).map(function(sg) { return esc(sg.label) + ' ' + pct(sg.share_pct, 1) + ' (' + fmtN(sg.people) + ' people, ' + sg.seats + ' seats)'; }).join('; ') + '</div>';
+                out += '<div class="dtw-room">' + (g.roster || []).map(function(r) { return '<div class="dtw-seat"><div class="nm">' + esc(r.name) + '</div><div>' + r.age + ', ' + esc(r.city) + '</div><div class="dtw-muted">' + esc(r.segment) + '</div></div>'; }).join('') + '</div></div>';
+                out += '<div class="dtw-card"><h3>Ask the room</h3><div id="dtwPnKinds" class="dtw-chips">' + [['yes_no', 'Yes / no'], ['multiple_choice', 'Multiple choice'], ['rating', 'Rate 1 to 5'], ['price', 'Would you pay $X'], ['ab', 'A vs B'], ['show_of_hands', 'Show of hands'], ['open', 'Open question'], ['probe', 'Probe the last answer']].map(function(k) { return '<button type="button" class="dtw-chip' + (S.panelKind === k[0] ? ' on' : '') + '" data-k="' + k[0] + '" onclick="dtwPanelKind(\'' + k[0] + '\')">' + k[1] + '</button>'; }).join('') + '</div>';
+                out += '<textarea id="dtwPnOptions" class="dtw-in" style="display:' + ((S.panelKind === 'multiple_choice' || S.panelKind === 'ab') ? 'block' : 'none') + '; min-height:48px;" placeholder="Options, one per line (or comma separated)"></textarea>';
+                out += '<div style="display:flex; gap:0.4rem; margin-top:0.4rem;"><input id="dtwPnQ" class="dtw-in" placeholder="Would you watch a new season on Netflix? Would you pay $29 for the box? Show of hands, who watched season 1?" onkeydown="if(event.key===\'Enter\'){dtwPanelAsk();}"><button type="button" class="dtw-btn dtw-btn-primary" onclick="dtwPanelAsk()">Ask</button></div>';
+                out += '<div class="dtw-chips"><button type="button" class="dtw-chip" onclick="dtwPanelAsk(\'Why?\')">Why?</button><button type="button" class="dtw-chip" onclick="dtwPanelAsk(\'What would change your mind?\')">What would change your mind?</button><button type="button" class="dtw-chip" onclick="dtwPanelAsk(\'Show of hands, who watched the last one?\')">Show of hands</button></div><div id="dtwPnLive"></div></div>';
+                if (last) {
+                    out += '<div class="dtw-card"><div class="dtw-eyebrow">' + esc(last.kind.replace('_', ' ')) + '</div><h3>' + esc(last.q) + '</h3>' + distBars(last.distribution) + '<p class="dtw-p" style="margin-top:0.5rem;"><b>' + esc(last.read || '') + '</b></p>';
+                    if ((last.by_segment || []).length > 1) { out += '<h4>By segment</h4><table class="dtw-table"><tr><th>Segment</th>' + (last.distribution || []).slice(0, 5).map(function(r) { return '<th class="num">' + esc(r.label) + '</th>'; }).join('') + '</tr>' + last.by_segment.map(function(sg) { return '<tr><td>' + esc(sg.segment) + '</td>' + (last.distribution || []).slice(0, 5).map(function(r) { var x = (sg.distribution || []).filter(function(y) { return y.label === r.label; })[0]; return '<td class="num">' + (x ? pct(x.pct, 1) : '') + '</td>'; }).join('') + '</tr>'; }).join('') + '</table>'; }
+                    out += '<h4>Voices from the room</h4>' + (last.voices || []).map(function(v) { return '<div class="dtw-voice"><b>' + esc(v.name) + ', ' + v.age + ', ' + esc(v.city) + ':</b> ' + esc(v.line) + '</div>'; }).join('') + '</div>';
+                }
+                if (qs.length > 1) { out += '<div class="dtw-card"><h3>Transcript</h3><div class="dtw-transcript">' + qs.slice().reverse().map(function(q) { return '<div class="dtw-q"><div style="font-weight:600;">' + esc(q.q) + ' <span class="dtw-muted">(' + esc(q.kind.replace('_', ' ')) + ')</span></div><div class="dtw-muted">' + (q.distribution || []).slice(0, 6).map(function(r) { return esc(r.label) + ' ' + pct(r.pct, 1); }).join(', ') + '</div><div class="dtw-muted">' + esc(q.read || '') + '</div></div>'; }).join('') + '</div></div>'; }
+                h.innerHTML = out;
+                var live = el('dtwPnLive'); if (live) live.innerHTML = '';
+            }
+            window._dtwRender.renderGreenlight = renderGreenlight; window._dtwRender.renderLaunch = renderLaunch; window._dtwRender.renderSpend = renderSpend; window._dtwRender.renderPanelConsole = renderPanelConsole;
+        })();
+        </script>
+
         <!-- DIGITAL JOURNEY IQ VIEW -->
         <div id="journeyIQView" style="display: none; flex-direction: column; flex: 1; overflow: hidden;">
             <div class="jiq-topbar" style="padding: 0.6rem 1.25rem; display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
@@ -57188,6 +57819,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     }, 200);
                 },
                 journeyIQ: function(slug) { if (typeof showJourneyIQ === 'function') showJourneyIQ(slug); },
+                digitalTwinsIQ: function() { if (typeof showDigitalTwinsIQ === 'function') showDigitalTwinsIQ(); },
                 shareOfTimeIQ: showShareOfTimeIQ,
                 flywheelConversion: showFlywheelConversionDashboard,
                 dashboard: showDashboardView,
@@ -57249,7 +57881,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         }
                     } catch (_) { /* localStorage disabled - no persist */ }
                     // Ensure selected view is visible (guard against handler not running or layout issues)
-                    var viewIds = { profileIQ: 'dashboardView', subscriberIQ: 'subscriberIQView', ticketSalesIQ: 'ticketSalesIQView', ticketSalesTracker: 'ticketSalesTrackerView', hedgeFundIQ: 'hedgeFundIQView', sentimentIQ: 'sentimentIQView', ecommerceIQ: 'ecommerceIQView', brandPartnershipIQ: 'ecommerceIQView', journeyIQ: 'journeyIQView', shareOfTimeIQ: 'shareOfTimeIQView', sfConversion: 'sfConversionView', flywheelConversion: 'flywheelConversionView', flywheelIQ: 'flywheelIQView', talentSearchIQ: 'talentSearchIQView', talentTheaterIQ: 'talentTheaterIQView', talentFitIQ: 'talentFitIQView', blueIQ: 'blueIQView', intentIQ: 'intentIQView', helmIQ: 'helmIQView', microdramasIQ: 'microdramasIQView', trendsIQ: 'trendsIQView', impactIQ: 'impactIQView', cultureRankerIQ: 'trendsIQView', brandTrackingIQ: 'brandTrackingIQView' };
+                    var viewIds = { profileIQ: 'dashboardView', subscriberIQ: 'subscriberIQView', ticketSalesIQ: 'ticketSalesIQView', ticketSalesTracker: 'ticketSalesTrackerView', hedgeFundIQ: 'hedgeFundIQView', sentimentIQ: 'sentimentIQView', ecommerceIQ: 'ecommerceIQView', brandPartnershipIQ: 'ecommerceIQView', journeyIQ: 'journeyIQView', digitalTwinsIQ: 'digitalTwinsIQView', shareOfTimeIQ: 'shareOfTimeIQView', sfConversion: 'sfConversionView', flywheelConversion: 'flywheelConversionView', flywheelIQ: 'flywheelIQView', talentSearchIQ: 'talentSearchIQView', talentTheaterIQ: 'talentTheaterIQView', talentFitIQ: 'talentFitIQView', blueIQ: 'blueIQView', intentIQ: 'intentIQView', helmIQ: 'helmIQView', microdramasIQ: 'microdramasIQView', trendsIQ: 'trendsIQView', impactIQ: 'impactIQView', cultureRankerIQ: 'trendsIQView', brandTrackingIQ: 'brandTrackingIQView' };
                     if (val === 'flywheelIQ' && typeof loadFlywheelIqRuns === 'function') {
                         try { loadFlywheelIqRuns(); } catch (_e) {}
                     }
@@ -57257,7 +57889,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     if (activeId) {
                         var activeEl = document.getElementById(activeId);
                         if (activeEl) { activeEl.style.display = 'flex'; activeEl.style.visibility = 'visible'; }
-                        ['formView', 'dashboardView', 'subscriberIQView', 'llmoIQView', 'rankerIQView', 'ticketSalesIQView', 'ticketSalesTrackerView', 'hedgeFundIQView', 'sentimentIQView', 'roasIQView', 'ecommerceIQView', 'shareOfTimeIQView', 'sfConversionView', 'flywheelConversionView', 'flywheelIQView', 'customAnalysisView', 'talentSearchIQView', 'talentTheaterIQView', 'talentFitIQView', 'journeyIQView', 'blueIQView', 'intentIQView', 'helmIQView', 'microdramasIQView', 'trendsIQView', 'impactIQView', 'brandTrackingIQView'].forEach(function(id) {
+                        ['formView', 'dashboardView', 'subscriberIQView', 'llmoIQView', 'rankerIQView', 'ticketSalesIQView', 'ticketSalesTrackerView', 'hedgeFundIQView', 'sentimentIQView', 'roasIQView', 'ecommerceIQView', 'shareOfTimeIQView', 'sfConversionView', 'flywheelConversionView', 'flywheelIQView', 'customAnalysisView', 'talentSearchIQView', 'talentTheaterIQView', 'talentFitIQView', 'journeyIQView', 'digitalTwinsIQView', 'blueIQView', 'intentIQView', 'helmIQView', 'microdramasIQView', 'trendsIQView', 'impactIQView', 'brandTrackingIQView'].forEach(function(id) {
                             if (id === activeId) return;
                             var el = document.getElementById(id);
                             if (el) el.style.display = 'none';
@@ -57323,6 +57955,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         ['flywheelConversion', !!d.has_flywheel_conversion_access || hasAnalysisModule('flywheel_conversion')],
                         ['brandPartnershipIQ', !!d.has_brand_partnership_iq_access || hasAnalysisModule('brand_partnership_iq')],
                         ['journeyIQ', !!d.has_journey_iq_access || hasAnalysisModule('journey_iq')],
+                        ['digitalTwinsIQ', !!d.has_digital_twins_iq_access || isAdmin],
                         ['flywheelIQ', !!d.has_flywheel_iq_access || hasAnalysisModule('flywheel_iq')],
                         ['impactIQ', d.has_impact_iq_access !== false],
                         ['talentFitIQ', !!d.has_talent_fit_access],
@@ -80706,6 +81339,38 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 /pull|build|run|create|new|make/.test(low);
         }
 
+        async function _pmPollTwinJob(jobId) {
+            // Digital Twins IQ (2026-10-26): a build or a run on the queue.
+            // The ready message is written by the API; the chip opens the page.
+            var waited = 0;
+            while (waited < 1800000) {
+                await new Promise(function(res) { setTimeout(res, 9000); });
+                waited += 9000;
+                var st = null;
+                try {
+                    var r = await fetch('/api/digital-twins/jobs/' + jobId, { credentials: 'same-origin' });
+                    var d = r.ok ? await r.json() : null;
+                    st = d && d.job ? d.job : null;
+                } catch (_) { st = null; }
+                if (!st) continue;
+                if (st.status === 'done') {
+                    window._dtwLastHint = { view: 'digitalTwinsIQ', twin_key: st.s3_key || '', run_id: st.run_id || null, tab: st.run_id ? ({'launch': 'launch', 'greenlight': 'greenlight', 'compare': 'greenlight'}[st.kind] || 'twins') : 'twins' };
+                    _synthChatPushTurnWithMeta('agent', st.ready_message || ('Your twin is ready: ' + (st.subject || 'the twin') + ' is live on the Twins tab of Digital Twins IQ.'),
+                        { options: [{ label: 'Open in Digital Twins IQ', send: 'Open in Digital Twins IQ' }], twin_key: st.s3_key || '' });
+                    try {
+                        if (window._dtw && window._dtw.loaded && typeof dtwLoadList === 'function') { dtwLoadList(true); }
+                        var _dd2 = document.getElementById('viewNavDropdown');
+                        if (_dd2 && _dd2.value === 'digitalTwinsIQ' && st.s3_key && typeof dtwOpen === 'function') { dtwOpen(st.s3_key, st.run_id || null, null, null, window._dtwLastHint.tab); window._dtwLastHint = null; }
+                    } catch (_) {}
+                    return;
+                }
+                if (st.status === 'error' || st.status === 'cancelled') {
+                    synthChatPushTurn('agent', st.error || 'That twin did not finish. Nothing more is charged; ask again and it runs fresh.');
+                    return;
+                }
+            }
+        }
+
         async function _pmPollJiqJob(jobId) {
             var waited = 0;
             while (waited < 1200000) {
@@ -82005,6 +82670,25 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         }
 
         var _pmViewSerializers = {
+            // Digital Twins IQ (2026-10-26): the open twin's summary, the open
+            // run or room when there is one. The key lets the twin lanes bind.
+            digitalTwinsIQ: function() {
+                var S = window._dtw;
+                if (!S || !S.twin) return null;
+                var sum = S.summary ? JSON.parse(JSON.stringify(S.summary)) : {};
+                sum.key = S.key;
+                sum.tab = S.tab;
+                if (S.openRun) {
+                    var r = (S.twin.runs || []).filter(function(x) { return x.id === S.openRun; })[0];
+                    if (r) sum.open_run = { id: r.id, kind: r.kind, question: r.question, outputs: r.outputs, drivers: r.drivers, recommendation: r.recommendation };
+                }
+                if (S.session) {
+                    sum.open_panel_session = { id: S.session.id, title: S.session.title, in_room: (S.session.group || {}).in_room,
+                        questions: (S.session.questions || []).slice(-6).map(function(q) { return { q: q.q, kind: q.kind, read: q.read, distribution: q.distribution }; }) };
+                }
+                if (S.plan) sum.spend_engine = { plan_id: S.plan.plan_id, label: S.plan.label, ledger: S.plan.ledger, mode: S.plan.mode };
+                return sum;
+            },
             subscriberIQ: function() {
                 var d = (typeof currentSubscriberData !== 'undefined')
                     ? currentSubscriberData : null;
@@ -82570,6 +83254,17 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 } catch (_) {}
                 return m;
             }
+            if (viewId === 'digitalTwinsIQ') {
+                var tw = _pmSanitizeChipText(data.twin || '');
+                var dt = [
+                    { t: 'What are the odds the next release clears its goal on ' + (_pmSanitizeChipText(data.platform_home || '') || 'its home') + '?', hot: true },
+                    { t: 'Open a focus group with the ' + (tw || 'open') + ' twin and ask whether they would watch a new season' },
+                    { t: 'How do I run Greenlight Lab on a twin?' },
+                    { t: 'Analyze the data on this screen' }
+                ];
+                if (data.ip_lifetime_value) dt.splice(1, 0, { t: 'What drives the lifetime value of ' + (tw || 'this IP') + '?' });
+                return dt;
+            }
             if (viewId === 'journeyIQ') {
                 var jq = [
                     { t: 'Walk me through this journey', hot: true },
@@ -82968,6 +83663,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 _pmCompareArmed ||
                 _pmPanelOffer ||
                 _pmJiqCollect || _pmJiqConfirm ||
+                _pmTwinCollect || _pmTwinConfirm ||
                 _pmBpiqCollect || _pmBpiqConfirm ||
                 _pmFwCollect || _pmFwConfirm ||
                 _pmAiqCollect || _pmAiqConfirm);
@@ -82992,6 +83688,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             _pmBpiqConfirm = null;
             _pmJiqCollect = false;
             _pmJiqConfirm = null;
+            _pmTwinCollect = false;
+            _pmTwinConfirm = null;
             _pmFwCollect = false;
             _pmFwConfirm = null;
             _pmAiqCollect = false;
@@ -83030,6 +83728,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         // Digital Journey pull flow (2026-09-16): same shape.
         var _pmJiqCollect = false;
         var _pmJiqConfirm = null;
+        // Digital Twins IQ build flow (2026-10-26): same machine.
+        var _pmTwinCollect = false;
+        var _pmTwinConfirm = null;
         // Build a Flywheel flow (2026-09-17): same machine. Starts
         // at the captured users, never US gen pop.
         var _pmFwCollect = false;
@@ -83506,6 +84207,31 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     _pmAiqCollect = false;
                     _pmAiqConfirm = null;
                     try { _pmPollAiqJob(data.aiq_job_id); } catch (_) {}
+                }
+                // Digital Twins IQ (2026-10-26): the twin intake, the build /
+                // run job poll, and the page the reply points at.
+                if (data.twin_collect) {
+                    _pmTwinCollect = true;
+                    _pmTwinConfirm = null;
+                }
+                if (data.twin_confirm_payload) {
+                    _pmTwinConfirm = data.twin_confirm_payload;
+                    _pmTwinCollect = false;
+                }
+                if (data.twin_job_id) {
+                    _pmTwinCollect = false;
+                    _pmTwinConfirm = null;
+                    try { _pmPollTwinJob(data.twin_job_id); } catch (_) {}
+                }
+                if (data.action_hint && data.action_hint.view === 'digitalTwinsIQ') {
+                    window._dtwLastHint = data.action_hint;
+                    try {
+                        var _dtwDd = document.getElementById('viewNavDropdown');
+                        if (_dtwDd && _dtwDd.value === 'digitalTwinsIQ' && typeof dtwOpen === 'function' && data.action_hint.twin_key) {
+                            dtwOpen(data.action_hint.twin_key, data.action_hint.run_id || null, data.action_hint.session_id || null, data.action_hint.plan_id || null, data.action_hint.tab || null);
+                            window._dtwLastHint = null;
+                        }
+                    } catch (_) {}
                 }
                 var opts = (data.followups || []).map(function(f) {
                     return { label: f, send: f };
@@ -84164,6 +84890,48 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }
             if (_pmFwIntent(text)) {
                 await _pmAnalyze(text, _pmCollectPageContext(), '', {});
+                return;
+            }
+
+            // Digital Twins IQ (2026-10-26): the Open chip switches the page;
+            // the twin brief confirms or collects like the journey flow.
+            if (/^open (?:in digital twins iq|focus group iq)[.! ]*$/i.test(text.trim())) {
+                if (/focus group/i.test(text) && window._dtwLastHint) window._dtwLastHint.tab = 'panel';
+                if (typeof showDigitalTwinsIQ === 'function') showDigitalTwinsIQ(window._dtwLastHint || null);
+                synthChatPushTurn('agent', 'Opening Digital Twins IQ.');
+                return;
+            }
+            if (_pmTwinConfirm) {
+                var _twLow = text.trim().toLowerCase();
+                if (_twLow.indexOf('build the twin') === 0 || _twLow.indexOf('run the twin') === 0 ||
+                    /^(yes|yeah|yep|ok(ay)?|sure|run it|go ahead|do it|build it)[.! ]*$/i.test(_twLow)) {
+                    var _tq = _pmTwinConfirm;
+                    _pmTwinConfirm = null;
+                    await _pmAnalyze(text, _pmCollectPageContext(), '',
+                        { twin_confirm: _tq });
+                    return;
+                }
+                if (/^(never ?mind|no( thanks?)?|not now|cancel( (that|it))?)[.! ]*$/i.test(_twLow)) {
+                    _pmTwinConfirm = null;
+                    synthChatPushTurn('agent',
+                        'No problem - nothing was charged. Ask me ' +
+                        'anything else when ready.');
+                    return;
+                }
+                _pmTwinConfirm = null;
+                await _pmAnalyze(text, _pmCollectPageContext(), '',
+                    { twin_inputs: true });
+                return;
+            }
+            if (_pmTwinCollect) {
+                _pmTwinCollect = false;
+                if (/^(never ?mind|no( thanks?)?|not now|cancel( (that|it))?)[.! ]*$/i.test(text.trim())) {
+                    synthChatPushTurn('agent',
+                        'No problem. Ask me anything else when ready.');
+                    return;
+                }
+                await _pmAnalyze(text, _pmCollectPageContext(), '',
+                    { twin_inputs: true });
                 return;
             }
 

@@ -36,6 +36,7 @@ from prometheus import question_key as _question_key   # one fold for one questi
 from prometheus import read_registry as _read_registry   # the caller's recent reads by question (2026-10-26)
 from prometheus import subiq_library as _subiq_library   # a question across the Subscriber IQ library (2026-10-26)
 from prometheus import deck_sources as _deck_sources   # a deck of something already delivered or attached (2026-10-26)
+from prometheus import digital_twin_lane as _twin_lane   # Digital Twins IQ: intake, labs, Focus Group IQ, catalog, status, directions (2026-10-26)
 import io
 import hashlib
 import time
@@ -9196,7 +9197,10 @@ _PM_INTAKE_UI = {   # flow -> (screen-draft kind, confirm reply fn, run chip, pa
                  ['the title', 'the captured action', 'the ecosystem', 'the conversion']),
     'attribution': ('', '_pm_aiq_confirm_reply', 'Start tracking', 'aiq_confirm_payload', 'aiq_collect',
                     ['the campaign name', 'tagged URLs', 'the conversion']),
+    'digital_twin': _twin_lane.ui_entry(),   # Digital Twins IQ (2026-10-26): the row lives in prometheus/digital_twin_lane.py
 }
+_pm_twin_confirm_reply = lambda parsed: _twin_lane.confirm_reply(parsed)   # noqa: E731  (the intake looks confirm functions up by name)
+_pm_twin_intent = _intents.twin_intent   # host binding for understand.tool_intent (2026-10-26)
 
 
 def _pm_intake_turn(flow, text, body, history, user, ppu, first):
@@ -9392,6 +9396,7 @@ def _pm_intake_flow_table():
             ('campaign_name', 'urls', 'conversion_event'),
             _PM_AIQ_ASK_COPY, keyword_parse_attribution,
             propose_attribution_field),
+        'digital_twin': _twin_lane.flow_table_entry(),
     }
 
 
@@ -15195,7 +15200,7 @@ def _pm_analyze_core(user, body, text, history):
     if not any(body.get(k) for k in (
             'bpiq_confirm', 'bpiq_inputs', 'jiq_confirm', 'jiq_inputs',
             'fw_confirm', 'fw_inputs', 'aiq_confirm', 'aiq_inputs',
-            'panel_confirm')):
+            'twin_confirm', 'twin_inputs', 'panel_confirm')):
         try:
             import prometheus_analysis as pma
             _my_years = _pm_detect_multi_year_ask(text)
@@ -15237,6 +15242,9 @@ def _pm_analyze_core(user, body, text, history):
     # Chip -> guided inputs -> confirm -> charge -> background build.
     _bpiq_user = (session.get('username') or user.get('username')
                   or '').strip()
+    _twin_resp = _twin_lane.analyze_hook(text, body, history, user, _pm_ppu, _bpiq_user, globals())   # Digital Twins IQ (2026-10-26): intake, labs, Focus Group IQ, catalog, status, directions
+    if _twin_resp is not None:
+        return jsonify(_twin_resp)
     _bpiq_confirm = body.get('bpiq_confirm') or _pm_pending_intake('pick', user, 'brand_partnership', text)
     if isinstance(_bpiq_confirm, dict) and _bpiq_confirm.get(
             'brand_partner'):
@@ -18183,6 +18191,7 @@ _EXPORTS = (
     '_pm_bpiq_intent',
     '_pm_bpiq_parse',
     '_pm_bpiq_status_write',
+    '_pm_twin_confirm_reply', '_pm_twin_intent',
     '_pm_cancel_target',
     '_pm_cant_do_lane',
     '_pm_challenge_headsup',

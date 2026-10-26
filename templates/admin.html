@@ -2554,6 +2554,10 @@
                                 <input type="checkbox" class="hidden-product-checkbox" data-product="brandTrackingIQ" onchange="updateHiddenProduct('brandTrackingIQ', this.checked)">
                                 <span>📡 Brand Tracking</span>
                             </label>
+                            <label class="checkbox-group" style="padding: 0.6rem 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox" class="hidden-product-checkbox" data-product="digitalTwinsIQ" onchange="updateHiddenProduct('digitalTwinsIQ', this.checked)">
+                                <span>🧬 Digital Twins IQ</span>
+                            </label>
                         </div>
                         <div style="margin-top: 0.75rem; padding: 0.6rem 0.75rem; background: rgba(124, 58, 237, 0.08); border-radius: 6px; border: 1px solid rgba(124, 58, 237, 0.25);">
                             <p style="margin: 0; font-size: 0.8rem; color: var(--text-secondary);">
@@ -3090,6 +3094,9 @@
                                     </label>
                                     <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
                                         <input type="checkbox" id="cdJourneyIQ"> Digital Journey IQ
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
+                                        <input type="checkbox" id="cdDigitalTwinsIQ"> Digital Twins IQ
                                     </label>
                                     <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
                                         <input type="checkbox" id="cdIntentIQ" checked> Attribution IQ
@@ -3918,6 +3925,17 @@
                                 <div id="brandPartnershipJourneysCount" style="font-size:0.7rem;color:var(--text-secondary);margin-top:0.4rem;"></div>
                             </div>
                         </div>
+                    </div>
+
+                    <!-- Digital Twins IQ Access (2026-10-26, Jenna) -->
+                    <div class="dashboard-access-item" data-access-group="core">
+                        <div class="dashboard-access-header">
+                            <label class="checkbox-group" onclick="event.stopPropagation()">
+                                <input type="checkbox" id="hasDigitalTwinsIQAccess">
+                                <span style="font-weight: 600;">🧬 DIGITAL TWINS IQ</span>
+                            </label>
+                        </div>
+                        <div style="padding:0.4rem 1rem 0.2rem;font-size:0.78rem;color:var(--text-secondary);">Twins, Greenlight Lab, Launch Lab, Spend Engine and Panel Lab. Every twin joins the shared library; the user sees all twins unless an explicit list is set through the API.</div>
                     </div>
 
                     <!-- Digital Journey IQ Access -->
@@ -6200,6 +6218,8 @@
                     if (cdBp) cdBp.checked = !!d.has_brand_partnership_iq_access;
                     var cdJiq = document.getElementById('cdJourneyIQ');
                     if (cdJiq) cdJiq.checked = !!d.has_journey_iq_access;
+                    var cdDtw = document.getElementById('cdDigitalTwinsIQ');
+                    if (cdDtw) cdDtw.checked = !!d.has_digital_twins_iq_access;
                     var cdIntent = document.getElementById('cdIntentIQ');
                     if (cdIntent) cdIntent.checked = d.has_intent_iq_access !== false;
                     var cdBiq = document.getElementById('cdBlueIQ');
@@ -6270,6 +6290,7 @@
                 has_ticket_sales_tracker_access: document.getElementById('cdTicketTracker').checked,
                 has_brand_partnership_iq_access: !!(document.getElementById('cdBrandPartnership') && document.getElementById('cdBrandPartnership').checked),
                 has_journey_iq_access: !!(document.getElementById('cdJourneyIQ') && document.getElementById('cdJourneyIQ').checked),
+                has_digital_twins_iq_access: !!(document.getElementById('cdDigitalTwinsIQ') && document.getElementById('cdDigitalTwinsIQ').checked),
                 has_intent_iq_access: !!(document.getElementById('cdIntentIQ') && document.getElementById('cdIntentIQ').checked),
                 has_blue_iq_access: !!(document.getElementById('cdBlueIQ') && document.getElementById('cdBlueIQ').checked),
                 has_brand_tracking_iq_access: !!(document.getElementById('cdBrandTrackingIQ') && document.getElementById('cdBrandTrackingIQ').checked),
@@ -8061,7 +8082,8 @@
             brandPartnershipIQ: false, flywheelConversion: false, flywheelIQ: false,
             shareOfTimeIQ: false,
             helmIQ: false, microdramasIQ: false, chatbotProfileIQ: false,
-            brandTrackingIQ: false
+            brandTrackingIQ: false,
+            digitalTwinsIQ: false   // 2026-10-26 Digital Twins IQ (Jenna)
         };
 
         // 2026-09-02 (Jenna): global default-hide state for Trends IQ
@@ -10370,6 +10392,8 @@
             syncBrandPartnershipJourneyAccessVisibility();
             var jiqAccessReset = document.getElementById('hasJourneyIQAccess');
             if (jiqAccessReset) jiqAccessReset.checked = false;
+            var dtwAccessReset = document.getElementById('hasDigitalTwinsIQAccess');
+            if (dtwAccessReset) dtwAccessReset.checked = false;
             // Reset per-user Journey IQ run gating to default-open (['*'])
             populateJourneyIqRunsCheckboxes(['*']);
             syncJourneyIqRunAccessVisibility();
@@ -10643,6 +10667,8 @@
             syncBrandPartnershipJourneyAccessVisibility();
             var jiqAccess = document.getElementById('hasJourneyIQAccess');
             if (jiqAccess) jiqAccess.checked = user.has_journey_iq_access === true; // Default false
+            var dtwAccess = document.getElementById('hasDigitalTwinsIQAccess');
+            if (dtwAccess) dtwAccess.checked = user.has_digital_twins_iq_access === true; // Default false (2026-10-26)
             // Per-user Journey IQ run gating: list of S3 keys, ['*']/missing = all
             populateJourneyIqRunsCheckboxes(user.allowed_journey_iq_runs);
             syncJourneyIqRunAccessVisibility();
@@ -12404,6 +12430,7 @@
                 setBox('hasRankersIQAccess', !!d.has_rankers_iq_access);
                 setBox('hasBrandPartnershipIQAccess', !!d.has_brand_partnership_iq_access);
                 setBox('hasJourneyIQAccess', !!d.has_journey_iq_access);
+                setBox('hasDigitalTwinsIQAccess', !!d.has_digital_twins_iq_access);
                 setBox('hasIntentIQAccess', d.has_intent_iq_access !== false);
                 setBox('hasBlueIQAccess', !!d.has_blue_iq_access);
                 setBox('hasBrandTrackingIQAccess', !!d.has_brand_tracking_iq_access);
@@ -12603,6 +12630,7 @@
                 hasSFConversionAccess: false,
                 hasBrandPartnershipIQAccess: false,
                 hasJourneyIQAccess: false,
+                hasDigitalTwinsIQAccess: false,
                 hasIntentIQAccess: true,
                 hasImpactIQAccess: true,
                 hasTrendsIQAccess: false,
@@ -15008,6 +15036,7 @@
                 brand_partnership_iq_journeys: getBrandPartnershipJourneysAllowedPayload(),
                 has_journey_iq_access: !!(document.getElementById('hasJourneyIQAccess') && document.getElementById('hasJourneyIQAccess').checked),
                 allowed_journey_iq_runs: getJourneyIqRunsAllowedPayload(),
+                has_digital_twins_iq_access: !!(document.getElementById('hasDigitalTwinsIQAccess') && document.getElementById('hasDigitalTwinsIQAccess').checked),
                 has_intent_iq_access: !!(document.getElementById('hasIntentIQAccess') && document.getElementById('hasIntentIQAccess').checked),
                 allowed_intent_iq_runs: getIntentIqRunsAllowedPayload(),
                 has_ticket_sales_iq_access: document.getElementById('hasTicketSalesIQAccess').checked,

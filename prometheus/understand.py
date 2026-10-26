@@ -39,7 +39,8 @@ ANALYZE_MODES = ('exec_summary', 'whitespace', 'new_consumers', 'personas',
 _ANALYZE_EXTRA_KEYS = ('bind_subject', 'bind_cohort', 'overall_ranks',
                        'panel_confirm', 'bpiq_inputs', 'bpiq_confirm',
                        'jiq_inputs', 'jiq_confirm', 'fw_inputs',
-                       'fw_confirm', 'aiq_inputs', 'aiq_confirm')
+                       'fw_confirm', 'aiq_inputs', 'aiq_confirm',
+                       'twin_inputs', 'twin_confirm')
 
 _BUILD_VERB_RX = re.compile(
     r'\b(run|build|pull|create|queue|start|launch|generate)\b[^.]{0,60}'
@@ -237,7 +238,7 @@ def looks_metric_kpi(text):
 
 def tool_intent(text):
     """Which guided tool intake the ask opens, if any."""
-    for name in ('aiq', 'fw', 'jiq', 'bpiq'):
+    for name in ('aiq', 'fw', 'jiq', 'bpiq', 'twin'):
         cap = name + '_intent'
         if host.has(cap) and _safe(getattr(host, cap), text):
             return name

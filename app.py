@@ -3315,6 +3315,7 @@ _PRODUCT_ACCESS_FIELDS = frozenset([
     'has_brand_partnership_iq_access', 'brand_partnership_iq_journeys',
     'has_sentiment_iq_access',
     'has_journey_iq_access', 'allowed_journey_iq_runs',
+    'has_digital_twins_iq_access', 'allowed_digital_twin_runs',   # Digital Twins IQ (Jenna 2026-10-26)
     'allowed_flywheel_iq_runs', 'allowed_subscriber_iq_runs',
     'has_intent_iq_access', 'allowed_intent_iq_runs',
     'has_share_of_time_access', 'has_share_of_time_run_access',
@@ -6049,6 +6050,8 @@ def create_user():
             'has_sentiment_iq_access': req_data.get('has_sentiment_iq_access', cd.get('has_sentiment_iq_access', False) if cd else False),
             'has_journey_iq_access': req_data.get('has_journey_iq_access', cd.get('has_journey_iq_access', False) if cd else False),
             'allowed_journey_iq_runs': req_data.get('allowed_journey_iq_runs', cd.get('allowed_journey_iq_runs', ['*']) if cd else ['*']),
+            'has_digital_twins_iq_access': req_data.get('has_digital_twins_iq_access', cd.get('has_digital_twins_iq_access', False) if cd else False),
+            'allowed_digital_twin_runs': req_data.get('allowed_digital_twin_runs', cd.get('allowed_digital_twin_runs', ['*']) if cd else ['*']),
             'has_intent_iq_access': req_data.get('has_intent_iq_access', cd.get('has_intent_iq_access', True) if cd else True),
             'allowed_intent_iq_runs': req_data.get('allowed_intent_iq_runs', cd.get('allowed_intent_iq_runs', ['*']) if cd else ['*']),
             'has_share_of_time_access': req_data.get('has_share_of_time_access', cd.get('has_share_of_time_access', True) if cd else True),
@@ -6335,6 +6338,11 @@ def update_user(username):
             user['has_sentiment_iq_access'] = bool(req_data['has_sentiment_iq_access'])
         if 'has_journey_iq_access' in req_data:
             user['has_journey_iq_access'] = bool(req_data['has_journey_iq_access'])
+        if 'has_digital_twins_iq_access' in req_data:   # Digital Twins IQ (2026-10-26)
+            user['has_digital_twins_iq_access'] = bool(req_data['has_digital_twins_iq_access'])
+        if 'allowed_digital_twin_runs' in req_data:
+            _adtr = req_data.get('allowed_digital_twin_runs')
+            user['allowed_digital_twin_runs'] = [str(x) for x in _adtr if str(x).strip()] if isinstance(_adtr, list) else ['*']
         if 'allowed_journey_iq_runs' in req_data:
             # Per-user gate for Digital Journey IQ runs. ['*'] = all visible,
             # explicit list = only those keys. Unset / missing also = all
@@ -8094,6 +8102,7 @@ def api_set_company_defaults(company_name):
             )[0],
             'has_sentiment_iq_access': req.get('has_sentiment_iq_access', False),
             'has_journey_iq_access': req.get('has_journey_iq_access', False),
+            'has_digital_twins_iq_access': req.get('has_digital_twins_iq_access', False),
             'has_share_of_time_access': req.get('has_share_of_time_access', True),
             'has_share_of_time_run_access': req.get('has_share_of_time_run_access', True),
             'has_blue_iq_access': req.get('has_blue_iq_access', False),
@@ -8163,6 +8172,7 @@ def api_reset_company_users(company_name):
                 user['has_brand_partnership_iq_access'] = cd.get('has_brand_partnership_iq_access', False)
                 user['has_sentiment_iq_access'] = cd.get('has_sentiment_iq_access', False)
                 user['has_journey_iq_access'] = cd.get('has_journey_iq_access', False)
+                user['has_digital_twins_iq_access'] = cd.get('has_digital_twins_iq_access', False)
                 user['has_share_of_time_access'] = cd.get('has_share_of_time_access', True)
                 user['has_share_of_time_run_access'] = cd.get('has_share_of_time_run_access', True)
                 user['has_blue_iq_access'] = cd.get('has_blue_iq_access', False)
@@ -8191,6 +8201,7 @@ def api_reset_company_users(company_name):
                 user['has_brand_partnership_iq_access'] = False
                 user['has_sentiment_iq_access'] = False
                 user['has_journey_iq_access'] = False
+                user['has_digital_twins_iq_access'] = False
                 user['has_share_of_time_access'] = True
                 user['has_share_of_time_run_access'] = True
                 user['has_blue_iq_access'] = False
@@ -10571,6 +10582,8 @@ def compute_product_access_flags(user, role):
             'brand_partnership_iq_journeys': '*',
             'has_sentiment_iq_access': True,
             'has_journey_iq_access': True,
+            'has_digital_twins_iq_access': True,
+            'allowed_digital_twin_runs': ['*'],
             'has_workspace_access': True,
             'has_share_of_time_access': True,
             'has_share_of_time_run_access': True,
@@ -10636,6 +10649,9 @@ def compute_product_access_flags(user, role):
         'brand_partnership_iq_journeys': _bp_journeys,
         'has_sentiment_iq_access': bool(u.get('has_sentiment_iq_access', False)),
         'has_journey_iq_access': bool(u.get('has_journey_iq_access', False)),
+        # Digital Twins IQ (Jenna 2026-10-26): admins always; others by the flag; runs default to every twin
+        'has_digital_twins_iq_access': role == 'admin' or bool(u.get('has_digital_twins_iq_access', False)),
+        'allowed_digital_twin_runs': (list(u['allowed_digital_twin_runs']) if isinstance(u.get('allowed_digital_twin_runs'), list) else ['*']),
         'has_flywheel_iq_access': bool(u.get('has_flywheel_iq_access', False)),
         # has_workspace_access retained ONLY as legacy plumbing for
         # /api/collab/* deck-collab routes (2026-09-03 Workspace product
@@ -10794,6 +10810,7 @@ def index():
     has_brand_partnership_iq = _acc.get('has_brand_partnership_iq_access', False)
     has_sentiment_iq = _acc.get('has_sentiment_iq_access', False)
     has_journey_iq = _acc.get('has_journey_iq_access', False)
+    has_digital_twins_iq = _acc.get('has_digital_twins_iq_access', False)
     has_share_of_time = _acc.get('has_share_of_time_access', True)
     has_share_of_time_run = _acc.get('has_share_of_time_run_access', True)
     has_blue_iq = _acc.get('has_blue_iq_access', False)
@@ -10867,6 +10884,7 @@ def index():
                            has_brand_partnership_iq_access=has_brand_partnership_iq,
                            has_sentiment_iq_access=has_sentiment_iq,
                            has_journey_iq_access=has_journey_iq,
+                           has_digital_twins_iq_access=has_digital_twins_iq,
                            has_share_of_time_access=has_share_of_time,
                            has_share_of_time_run_access=has_share_of_time_run,
                            has_blue_iq_access=has_blue_iq,
@@ -23930,6 +23948,7 @@ DEFAULT_HIDDEN_PRODUCTS = {
     'microdramasIQ': False,
     'chatbotProfileIQ': False,  # 2026-08-17 Chatbot Profile IQ - Analysis IQ sub-tab
     'brandTrackingIQ': False,   # 2026-09-03 added with <option value="brandTrackingIQ">
+    'digitalTwinsIQ': False,    # 2026-10-26 added with <option value="digitalTwinsIQ"> (Digital Twins IQ, Jenna)
 }
 
 
@@ -58471,6 +58490,14 @@ try:
     _prometheus_pkg.init_app(app, _pm_pkg_sys.modules[__name__])
 except Exception as _pm_pkg_err:
     print(f"⚠️ Prometheus surface not registered: {_pm_pkg_err}")
+
+# Digital Twins IQ API (2026-10-26, Jenna): its own blueprint so app.py
+# stays small. /api/digital-twins/*; see digital_twins_api.py.
+try:
+    import digital_twins_api as _dt_api
+    _dt_api.register(app)
+except Exception as _dt_api_err:
+    print(f"⚠️ Digital Twins IQ API not registered: {_dt_api_err}")
 
 # Cold-start pre-warm (2026-10-21). templates/index.html is ~12MB; Jinja
 # compiles it lazily on the FIRST render after a deploy. On the single web

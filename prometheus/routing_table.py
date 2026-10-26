@@ -81,6 +81,37 @@ ROWS = [
         'host_only': True,
     },
     {
+        'id': 'twin_lab', 'surface': 'analyze', 'reason': 'twin_lab',
+        'client_action': 'analyze', 'host_only': True,
+        'note': 'Digital Twins IQ (Jenna 2026-10-26): a build order ("Build a twin of '
+                'Gilmore Girls Hulu viewers") opens the twin intake through the '
+                'tool_intake:twin row; a lab run on a twin ("Run Greenlight Lab on the '
+                'Gilmore Girls twin ...", "Run Launch Lab on this plan", "Put the '
+                'signal-led plan in the Spend Engine on the rule: max 15% a day", '
+                '"Compare the X and Y twins"), the twin catalog ("do you have a twin '
+                'for X"), the status ("is my twin ready") and the directions ("how do '
+                'I run Greenlight Lab") are served by prometheus.digital_twin_lane on '
+                'the analyze surface. Host intent; exercised in '
+                'scripts/test_pm_digital_twins.py.',
+        'examples': [],
+        'counter': [('how big is your panel', True), ('what does a panel report cost', False),
+                    ('twin peaks viewers', False)],
+    },
+    {
+        'id': 'focus_group', 'surface': 'analyze', 'reason': 'focus_group',
+        'client_action': 'analyze', 'host_only': True,
+        'note': 'Focus Group IQ, the focus group the reader moderates (Jenna 2026-10-26): '
+                '"Open a focus group with the Mark Rober twin and ask whether they would '
+                'pay $29 for the Build Box" opens the room and answers in seconds with '
+                'the % table and the voices; "why?", "show of hands who watched season '
+                '1", "ask them ...", "re-ask at $19" stay in the same room for the '
+                'thread. Served by prometheus.digital_twin_lane.run_panel; never fires '
+                'on the word panel alone (the sample fact and the panel report keep '
+                'their lanes).',
+        'examples': [],
+        'counter': [("what's the 10 million sample you're mentioning", True), ('how big is your panel', True)],
+    },
+    {
         'id': 'deck_ask', 'surface': 'deck', 'reason': 'deck_ask',
         'client_action': 'deck',
         'note': 'Build a deck / one-pager / venn diagram.',
@@ -347,6 +378,9 @@ ROWS = [
         'examples': [
                      # ask log 2026-10-20 (I9)
                      ("Give me unique US viewers per surface, not just hours, so we can see hours per viewer on television versus phone", False),('who watches love island?', False),
+                     # Digital Twins IQ directions (2026-10-26): question-shaped, answered by the twin lane on the analyze surface
+                     ('how do I run Greenlight Lab on a twin?', False),
+                     ('do you have a twin for Mark Rober?', False),
                      ('what does the love island audience buy', False),
                      ('We want to understand the consumption over time '
                       'for The Office US', False),
