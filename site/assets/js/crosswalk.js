@@ -14,10 +14,25 @@
         '<a href="' + DASH + '/the-read/papers">White papers</a>' +
         '<a href="company.html">Company</a>' +
         '<a href="clients.html">Clients</a>' +
+        '<button class="nav-menu-btn" type="button" aria-expanded="false" aria-controls="navMenu"><i></i>Menu</button>' +
         '<a class="btn btn-ghost" href="' + DASH + '/login">Log in</a>' +
         '<a class="btn btn-green" href="signup.html">Sign up</a>' +
       '</nav>' +
-    '</div></header>';
+    '</div>' +
+    // Same links again for the narrow layout. Below 1050px the row
+    // cannot hold eight of them without breaking the words.
+    '<div class="nav-menu" id="navMenu"><div class="wrap nav-menu-in">' +
+      '<a href="products.html">Products</a>' +
+      '<a href="panel.html">The Panel</a>' +
+      '<a href="digital-twins.html">Digital twins</a>' +
+      '<a href="micro-series.html">Micro-series</a>' +
+      '<a href="' + DASH + '/the-read">The Read</a>' +
+      '<a href="' + DASH + '/the-read/papers">White papers</a>' +
+      '<a href="company.html">Company</a>' +
+      '<a href="clients.html">Clients</a>' +
+      '<a href="' + DASH + '/login">Log in</a>' +
+    '</div></div>' +
+  '</header>';
 
   var foot =
     '<footer class="foot"><div class="wrap">' +
@@ -32,4 +47,32 @@
 
   var n = document.getElementById("nav"); if (n) n.replaceWith(el(nav));
   var f = document.getElementById("foot"); if (f) f.replaceWith(el(foot));
+
+  // The narrow-window menu. Opens on the button, closes on a link, on
+  // Escape, on a click outside, and whenever the window grows back to
+  // a width that shows the full row again.
+  var header = document.querySelector("header.nav");
+  var btn = header && header.querySelector(".nav-menu-btn");
+  if (header && btn) {
+    var setOpen = function (open) {
+      header.classList.toggle("is-menu-open", open);
+      btn.setAttribute("aria-expanded", open ? "true" : "false");
+    };
+    btn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      setOpen(!header.classList.contains("is-menu-open"));
+    });
+    header.querySelectorAll(".nav-menu a").forEach(function (a) {
+      a.addEventListener("click", function () { setOpen(false); });
+    });
+    document.addEventListener("click", function (e) {
+      if (!header.contains(e.target)) setOpen(false);
+    });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") setOpen(false);
+    });
+    window.addEventListener("resize", function () {
+      if (window.innerWidth > 1049) setOpen(false);
+    });
+  }
 })();

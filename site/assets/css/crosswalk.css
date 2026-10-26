@@ -131,10 +131,59 @@ h1, h2, h3, p { margin: 0; }
 .nav-links { display: flex; align-items: center; gap: 4px; }
 .nav-links a:not(.btn) {
   font-size: 13px; font-weight: 500; color: var(--t2-d); padding: 8px 12px; border-radius: 999px;
+  /* A label is one word or it is nothing. Without this "White papers"
+     breaks across two lines inside a 64px bar. */
+  white-space: nowrap;
 }
 .nav-links a:not(.btn):hover { color: var(--off); }
-.nav-links .btn { min-height: 36px; padding: 0 16px; font-size: 13px; margin-left: 6px; }
-@media (max-width: 767px) { .nav-links a:not(.btn) { display: none; } }
+.nav-links .btn { min-height: 36px; padding: 0 16px; font-size: 13px; margin-left: 6px; white-space: nowrap; }
+
+/* ---------- Nav at narrower windows (2026-10-26) ----------
+   Eight links plus two buttons need about 1050px beside the logo.
+   Tighten the spacing first; below that the links move into a menu
+   rather than being squeezed until the words break. */
+@media (max-width: 1199px) {
+  .nav-links { gap: 0; }
+  .nav-links a:not(.btn) { padding: 8px 8px; }
+  .nav-links .btn { padding: 0 13px; margin-left: 4px; }
+}
+
+.nav-menu-btn {
+  display: none; align-items: center; gap: 7px;
+  background: transparent; color: var(--t2-d);
+  border: 1px solid rgba(233, 232, 225, 0.22); border-radius: 999px;
+  min-height: 36px; padding: 0 14px; margin-left: 4px;
+  font-family: inherit; font-size: 13px; font-weight: 500;
+  cursor: pointer; white-space: nowrap;
+}
+.nav-menu-btn:hover { color: var(--off); border-color: rgba(233, 232, 225, 0.4); }
+.nav-menu-btn i { display: block; width: 14px; height: 1.5px; background: currentColor; position: relative; }
+.nav-menu-btn i::before, .nav-menu-btn i::after {
+  content: ''; position: absolute; left: 0; width: 14px; height: 1.5px; background: currentColor;
+}
+.nav-menu-btn i::before { top: -4.5px; }
+.nav-menu-btn i::after { top: 4.5px; }
+
+.nav-menu { display: none; border-top: 1px solid rgba(233, 232, 225, 0.08); }
+.nav-menu-in { display: flex; flex-direction: column; padding: 8px 0 14px; }
+.nav-menu a {
+  color: var(--t2-d); font-size: 15px; font-weight: 500;
+  padding: 11px 2px; border-bottom: 1px solid rgba(233, 232, 225, 0.06);
+}
+.nav-menu a:last-child { border-bottom: 0; }
+.nav-menu a:hover { color: var(--off); }
+
+@media (max-width: 1049px) {
+  .nav-links a:not(.btn) { display: none; }
+  .nav-menu-btn { display: inline-flex; }
+  .nav.is-menu-open .nav-menu { display: block; }
+}
+/* On a phone the green Sign up carries the bar; Log in lives in the
+   menu with everything else. */
+@media (max-width: 460px) {
+  .nav-links .btn-ghost { display: none; }
+  .logo-pill { padding: 7px 11px 7px 10px; }
+}
 
 /* ---------- Bands ---------- */
 .band { padding: 96px 0; position: relative; }
