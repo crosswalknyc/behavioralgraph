@@ -72,6 +72,15 @@ _SCAFFOLD_RE = re.compile(
     r'\[inst\]|<\/?(?:system|user_request|prior_chat_context)>)'
     r'\s*[:\-]?\s*(?:\*\*)?\s*$',
     re.IGNORECASE)
+# The Reader's own note (Jenna 2026-10-26, Mark Valdez): "From what you
+# describe (They want to know whether Crosswalk can measure ...), that is
+# the one." is the Reader's third-person read of the ask quoted back as
+# the answer. The exit scrub (guards.strip_reader_echo) removes it; a
+# reply that still frames it, or still opens as the note, is a scaffold
+# and is held here.
+_READER_NOTE_RE = re.compile(
+    r"\bfrom what you (?:describe|say|said|wrote|write|ask|asked)\s*\(|^\s*they want to know\b",
+    re.IGNORECASE | re.MULTILINE)
 # A scold or a debugging question is never an answer (Jenna 2026-10-21,
 # Jay Patel was told "I have answered this twice and it has not landed, so
 # I will stop repeating myself. Tell me which part is off"). Wording of
@@ -213,6 +222,8 @@ def is_faulted_text(text):
     if _PY_LEAK_RE.search(t[:2000]):
         return True
     if _SCAFFOLD_RE.search(t[:600]):
+        return True
+    if _READER_NOTE_RE.search(t[:800]):
         return True
     if _SCOLD_RE.search(t[:800]):
         return True
