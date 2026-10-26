@@ -701,7 +701,10 @@ def ask(user, body, *, via='session'):
     if not _armed(body):
         try:
             from . import documents as _docs
-            _doc_raw = _docs.answer(text, uname, tid, history)
+            from . import deck_sources as _dsrc
+            # "recreate the uploaded deck into a PPT": the deck surface builds it
+            # from the file; this lane answers questions about the file (Debi 2026-10-21)
+            _doc_raw = None if _dsrc.is_conversion_ask(text) else _docs.answer(text, uname, tid, history)
         except Exception as e:
             _faults.note('service.document_lane', e)
             _doc_raw = None
@@ -812,6 +815,11 @@ def ask(user, body, *, via='session'):
                 text = _rewrite
                 body = dict(body)
                 body['text'] = text
+                # the client chose a surface for "yes"; an action the reply
+                # offered picks its own (a build chip runs as a build, Debi
+                # 2026-10-26). A numbered answer to a question stays put.
+                if _ACTION_CHIP_RX.match(text):
+                    body.pop('surface', None)
             elif _bare is not None:
                 decision = {'surface': 'analyze' if has_ctx else 'interpret',
                             'mode': None, 'reason': 'short_reply',
@@ -1966,6 +1974,26 @@ def _option_labels(turn):
     return out
 
 
+_ACTION_CHIP_RX = re.compile(
+    r"^(?:build|run|pull|rank|value|size|measure|compare|set up|setup|open|map|track|draft|start|refresh|show|list|price|quote|cut|split|email|send)\b", re.I)
+
+
+def _action_chips(turn):
+    """The action chips a reply carried whether or not it asked a
+    question ("Build a MrBeast audience profile" under a statement). A
+    yes after such a reply is a yes to those (Debi 2026-10-26: "Yes!!"
+    drew "Nothing is waiting on a yes right now")."""
+    out = []
+    if not isinstance(turn, dict):
+        return out
+    meta = turn.get('meta') if isinstance(turn.get('meta'), dict) else {}
+    for o in (meta.get('options') or []):
+        lbl = str((o.get('send') or o.get('label')) if isinstance(o, dict) else o or '').strip()
+        if lbl and not _UTILITY_CHIP_RX.match(lbl) and _ACTION_CHIP_RX.match(lbl):
+            out.append(lbl)
+    return out
+
+
 _CONFIRM_Q_RX = re.compile(
     r'^\s*Do you mean (?:for )?(.+?)(?:,? or (.+?))?\s*\?\s*$', re.I | re.S)
 _CONFIRM_ANY_RX = re.compile(
@@ -2127,6 +2155,11 @@ def _bare_reply(body, text, history, has_ctx, uname=''):
             return None, _p('Which one? ' + ' / '.join(options[:4]) + '. '
                             'Send the one you mean and I will run it.',
                             options[:4])
+        acts = _action_chips(prev)
+        if len(acts) == 1:
+            return acts[0], None        # the one thing the reply offered: the yes is that
+        if acts:
+            return None, _p('Which one? ' + ' / '.join(acts[:4]) + '. Send the one you mean and I will run it.', acts[:4])
         if re.search(r'approv|go|run|ship|do it|proceed', low):
             return None, _p(
                 'Nothing is waiting on an approval right now. If you were '
