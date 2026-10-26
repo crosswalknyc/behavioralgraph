@@ -272,14 +272,16 @@ def streamscout_query(title, platforms=None, kind="series", seasons=None,
         names are not individually enforced — a group is a "whatever's here"
         bucket.
     notify : bool
-        Only meaningful with ``strict=True``. When a scoped platform has no
-        matches, also email Crosswalk (Jenna + Jess) that the build was refused —
-        so a human picks it up instead of anyone quietly substituting another
-        platform's seeds. The alert send never raises; the PlatformScopeError is
-        raised either way.
+        Accepted for backward compatibility (and the CLI ``--notify`` flag), but
+        **no longer sends a scope-miss email** as of 2026-10-26. The scope alert
+        was retired because Promy's own door-level clarity handler already catches
+        the "not sure which platform/version" case, and the wrapper's mail path
+        was firing false "build refused" alerts (transient resolver 0s, and the
+        structural Amazon-never-resolves-from-a-bare-title case, §5i). The
+        anti-fallback guarantee is unchanged: a scoped miss still raises
+        ``PlatformScopeError`` so no other platform's seeds get substituted.
     notify_context : dict | None
-        Optional extra fields for the alert email (e.g. {"window": "...",
-        "client": "...", "requested_by": "..."}).
+        Accepted but unused (was extra context for the retired alert email).
     hints : dict | None
         Per-platform URL / identifier hints ({"hulu": "<watch uuid>"}), the
         placements the content map already holds. A hinted resolver opens
@@ -335,18 +337,19 @@ def streamscout_query(title, platforms=None, kind="series", seasons=None,
             err = PlatformScopeError(title, missing, counts,
                                      unverified=[p for p in missing if p in failed],
                                      failures=failed)
-            if notify:
-                # Loop a human in (email Jenna + Jess). NEVER let a mail problem
-                # turn a clean refusal into a crash — the build is refused either
-                # way, so no other platform's seeds get silently substituted.
-                try:
-                    import streamscout_notify as _notify
-                    _notify.send_scope_alert(
-                        title, err.missing_labels,
-                        client_message=err.client_message,
-                        context=notify_context)
-                except Exception:  # noqa: BLE001
-                    pass
+            # NOTE (2026-10-26, Jess): the scope-miss EMAIL was retired. Promy's
+            # own door-level clarity handler already catches "not sure which
+            # platform/version" BEFORE a build, so this wrapper's mail path was
+            # pure noise — and it fired false "build refused" alerts for cases
+            # that are either transient (a resolver's momentary 0, e.g. Gilmore
+            # Girls on Hulu, which is actually live — 153 rows) or STRUCTURAL
+            # (Amazon/Prime Video never resolves from a bare title, §5i, so every
+            # scoped Prime Video ask would email forever). The anti-fallback
+            # CONTRACT is unchanged: we still raise PlatformScopeError so no other
+            # platform's seeds are ever substituted. `notify` / `notify_context`
+            # stay in the signature (CLI --notify still parses) but no longer send
+            # a scope-miss email.
+            _ = (notify, notify_context)  # accepted, intentionally no-op now
             raise err
     return out
 

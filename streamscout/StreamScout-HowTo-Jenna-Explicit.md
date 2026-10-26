@@ -47,7 +47,7 @@ rows = streamscout_query(
     include_clips=None,     # YouTube only — see §4
     limit=None,             # YouTube only — fair-survey cap, see §4
     strict=False,           # explicit-platform scope guard — see §5
-    notify=False,           # with strict: email Crosswalk on a scope miss — §5
+    notify=False,           # accepted but a NO-OP (scope-miss email retired) — §5a
 )
 # -> list[dict], each: {"SHOW","URL","PRODUCTION","PLATFORM","SEASON"}
 ```
@@ -178,7 +178,7 @@ streamscout_query("Gilmore Girls", platforms="disney", strict=True)
 > **Rule of thumb:** any client request that names platforms → pass
 > `strict=True`. Broad "give me everything" sweeps → leave it off.
 
-### 5a. The anti-fallback contract (the important part) + `notify=True`
+### 5a. The anti-fallback contract (the important part)
 
 This is the whole point of `strict`: when a client scopes to **Hulu only** and
 StreamScout finds the title on **no Hulu**, Promy must **NOT get desperate and
@@ -194,33 +194,27 @@ The contract is:
 > *"We can't see Gilmore Girls on Hulu at this time. Notifying Crosswalk and will
 > get back to you soon."*
 
-To actually **notify Crosswalk**, pass **`notify=True`** alongside `strict=True`.
-On a scope miss StreamScout emails **Jenna + Jess**
-(`jenna@crosswalknyc.com`, `jessie@crosswalknyc.com`) that the build was refused,
-**then** raises `PlatformScopeError`:
+On a scope miss, relay `.client_message` to the client and stop:
 
 ```python
 try:
-    rows = streamscout_query(
-        "Gilmore Girls", platforms="hulu",
-        strict=True, notify=True,
-        notify_context={"window": "Jul 1 – Oct 14, 2026", "client": "Alexia"},
-    )
+    rows = streamscout_query("Gilmore Girls", platforms="hulu", strict=True)
 except PlatformScopeError as e:
     reply_to_client(e.client_message)   # "We can't see Gilmore Girls on Hulu …"
     # DO NOT fall back to any other platform's seeds.
 ```
 
-- **The email never blocks or crashes the request** — if SES is down the build
-  is *still* refused (we never silently substitute). The alert is best-effort;
-  the refusal is guaranteed.
-- `notify_context` is optional (window / client / requested_by) — it just enriches
-  the alert email so whoever picks it up has context.
-- Uses the same SES path as the rest of Promy's mail
-  (`prometheus@crosswalknyc.com`). Override recipients without a deploy via the
-  `STREAMSCOUT_ALERT_TO` env var (comma-separated).
-- **CLI:** add `--notify` to `--strict`; the client line prints to **stdout**,
-  the detail to stderr, exit **3**.
+> **No scope-miss email (changed 2026-10-26).** StreamScout used to email Jenna +
+> Jess on every scoped miss (`notify=True`). That alert was **retired**: Promy's
+> own door-level clarity handler already catches the "not sure which
+> platform/version" case *before* a build, and the mail path was firing false
+> **"build refused"** alerts — both transient (a resolver's momentary 0; e.g.
+> *Gilmore Girls on Hulu*, which is actually live, 153 rows) and **structural**
+> (Amazon/Prime Video never resolves from a bare title — §5i — so every scoped
+> Prime Video ask would email forever). **The guarantee that matters is
+> unchanged:** a scoped miss still raises `PlatformScopeError`, so no other
+> platform's seeds are ever substituted. `notify=True` / `notify_context` and the
+> CLI `--notify` flag are still accepted but are now **no-ops**.
 
 ### 5b. Current-availability advisory (works even on preloaded seeds)
 
