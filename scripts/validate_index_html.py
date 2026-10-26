@@ -642,3 +642,5 @@ if __name__ == "__main__":
 # ci-trigger: streamscout-same-title-variant-disambiguation
 
 # ci-trigger: streamscout-netflix-matched-show-name
+
+# ci-trigger: streamscout-howto-amazon-multiid-note
