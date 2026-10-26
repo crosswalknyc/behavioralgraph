@@ -34,8 +34,8 @@ PRICING = {
     'digital_twins_iq': 750.0,          # a twin build: the twin, the IP lifetime value and three runs
     'digital_twin_run': 100.0,          # each further Greenlight, Launch, content or compare run
     'digital_twin_spend': 250.0,        # Spend Engine plan activation for the plan window, daily runs included
-    'digital_twin_panel': 150.0,        # a Focus Group IQ session, 12 questions included
-    'digital_twin_panel_more': 100.0,   # each further 12 questions in a session
+    'digital_twin_panel': 5500.0,       # a Focus Group IQ session, 12 questions included (Jenna 2026-10-26: 'A session is $5,500 (twelve questions, any room)')
+    'digital_twin_panel_more': 5500.0,  # each further 12 questions is another session at the session price
 }
 PANEL_QUESTIONS_INCLUDED = 12
 PULL_TYPES = {

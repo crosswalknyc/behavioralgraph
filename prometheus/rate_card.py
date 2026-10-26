@@ -38,10 +38,10 @@ ROWS = (
     # Digital Twins IQ (Jenna 2026-10-26): the twin with its IP lifetime value and three runs, then each further run
     ('Digital Twin (with its IP lifetime value and three runs)', 'digital_twins_iq', 750.0, 'twin'),
     ('Digital Twin Spend Engine (a plan for its window, daily runs included)', 'digital_twin_spend', 250.0, 'flat'),
-    ('Digital Twin Focus Group IQ (a session with 12 questions)', 'digital_twin_panel', 150.0, 'panel'),
+    ('Digital Twin Focus Group IQ (a session with 12 questions)', 'digital_twin_panel', 5500.0, 'panel'),
 )
 TWIN_RUN_KEY, TWIN_RUN_DEFAULT = 'digital_twin_run', 100.0
-PANEL_MORE_KEY, PANEL_MORE_DEFAULT = 'digital_twin_panel_more', 100.0
+PANEL_MORE_KEY, PANEL_MORE_DEFAULT = 'digital_twin_panel_more', 5500.0   # a further twelve questions is another session (Jenna 2026-10-26)
 DAILY_KEY, DAILY_DEFAULT = 'attribution_iq_daily', 100.0
 CUT_KEY, CUT_DEFAULT = 'profile_iq_derived_cut', 100.0
 # Jenna 2026-10-21: the initial custom ask is $100, then $50 for each
