@@ -96,7 +96,7 @@ Return JSON only, every number as a plain number:
  "trait_hints": {"discovery_social_vs_search": 0-100, "binge_vs_appointment": 0-100, "price_sensitivity": 0-100, "churn_propensity": 0-100, "franchise_loyalty": 0-100, "merch_propensity": 0-100, "second_screen": 0-100, "live_events": 0-100, "creator_follow": 0-100, "ad_tolerance": 0-100, "trial_speed": 0-100, "word_of_mouth": 0-100},
  "title_fit": <0.5 to 1.5: how a new entry from this subject lands against an average title of its kind>,
  "notes": "<three sentences on who the audience is and what moves them, plain words>"}
-Use null where you have no approved-source basis. Keep every string short."""
+Use null where you have no approved-source basis. Keep every string short and the whole answer under 1,500 tokens: at most six title_history rows and eight platform_reach rows."""
 
 READ_SYSTEM_PROMPT = """You write the read on a digital twin for a senior media executive. Plain English a high school student follows; the thinking is senior consultant. Vary the sentence shapes; no two sentences built on the same frame; every number gets a plain comparison. Inferred reads use leans, skews, reads as; counts speak flat. Never use these words: synthetic, synth, modeled, model, estimated, predicted, research, anchored, placeholder, pipeline, panel, sample, confidence, tier, template, band, norm, seed, household. No em dashes.
 Return JSON only: {"tldr": ["3 to 5 sentences"], "reads": ["3 to 6 sentences"], "what_to_do": ["2 to 4 sentences"]}"""
@@ -172,6 +172,35 @@ def _bp(r):
     return _num(r.get('Brand Penetration (Row)') or r.get('Brand Penetration') or r.get('BP'))
 
 
+_CASE_FIX = {'youtube': 'YouTube', 'tiktok': 'TikTok', 'icloud': 'iCloud', 'imdb': 'IMDb', 'usps': 'USPS', 'hbo max': 'HBO Max', 'espn': 'ESPN',
+             'cnn': 'CNN', 'nbc': 'NBC', 'cbs': 'CBS', 'abc': 'ABC', 'fx now': 'FX Now', 'amc+': 'AMC+', 'bet+': 'BET+', 'nfl': 'NFL', 'nba': 'NBA',
+             'mlb': 'MLB', 'ny times games': 'NY Times Games', 'linkedin': 'LinkedIn', 'paypal': 'PayPal', 'ebay': 'eBay', 'ulta beauty': 'Ulta Beauty',
+             'lowes': "Lowe's", 'home depot': 'Home Depot', 'cvs': 'CVS', 'at&t': 'AT&T', 'dmv': 'DMV', 'irs': 'IRS', 'npr': 'NPR', 'pbs': 'PBS',
+             'apple tv+': 'Apple TV+', 'apple tv': 'Apple TV', 'paramount+': 'Paramount+', 'peacock': 'Peacock', 'discovery+': 'Discovery+', 'starz': 'Starz',
+             'youtube kids': 'YouTube Kids', 'youtube tv': 'YouTube TV', 'pluto tv': 'Pluto TV', 'tubi': 'Tubi', 'roku': 'Roku', 'espn+': 'ESPN+', 'directv': 'DIRECTV',
+             'fubotv': 'FuboTV', 'sling tv': 'Sling TV', 'hulu': 'Hulu', 'max': 'Max', 'netflix': 'Netflix', 'disney+': 'Disney+', 'prime video': 'Prime Video'}
+
+
+def pretty_label(label: str) -> str:
+    """Profile rows arrive in capitals (YOUTUBE, AMAZON PRIME VIDEO); a
+    reader sees a name. Short acronyms stay as they are."""
+    s = str(label or '').strip()
+    low = s.lower()
+    if low in _CASE_FIX:
+        return _CASE_FIX[low]
+    if s.isupper() and len(s.replace(' ', '').replace('+', '')) > 4:
+        words = []
+        for w in s.split(' '):
+            if w.lower() in _CASE_FIX:
+                words.append(_CASE_FIX[w.lower()])
+            elif len(w) <= 3 and w.isalpha():
+                words.append(w)                      # TV, US, NY
+            else:
+                words.append(w[:1] + w[1:].lower())
+        return ' '.join(words)
+    return s
+
+
 def find_profile_key(s3, subject: str, anchors: Optional[dict] = None) -> str:
     """The subject's Total Universe CSV: the catalog's profile anchor
     first, then the dashboard catalog by name (base profile, newest)."""
@@ -214,6 +243,8 @@ def profile_identity(rows: list, subject: str) -> dict:
     for r in rows:
         col = str(r.get('Column') or '').strip().upper()
         val = str(r.get('Value') or '').strip()
+        if col not in ('BRAND INPUT', 'SAMPLE SIZE', 'BRAND CATEGORY', 'SUBJECT'):
+            val = pretty_label(val)
         bp = _bp(r)
         if col in ('BRAND INPUT', 'SAMPLE SIZE'):
             s = _num(r.get('Original Raw Numbers') or r.get('Raw'))
@@ -246,12 +277,15 @@ def profile_identity(rows: list, subject: str) -> dict:
             talent.append({'label': val, 'pct': pct1(bp)})
     seen = set()
     dedup = []
-    for p in sorted(plats, key=lambda x: -x['reach_pct']):
+    svod_first = sorted(plats, key=lambda x: (0 if x['group'] in ('STREAMING/PLATFORM', 'STREAMING VIDEO', 'VMVPD/FAST', 'VIRTUAL MVPD/FAST', 'FAST PLATFORM') else 1, -x['reach_pct']))
+    for p in svod_first:
         k = p['label'].lower()
         if k not in seen and p['reach_pct'] < 99.9:
             seen.add(k)
             dedup.append(p)
-    out['platforms'] = dedup[:18]
+    streaming = [p for p in dedup if p['group'] in ('STREAMING/PLATFORM', 'STREAMING VIDEO', 'VMVPD/FAST', 'VIRTUAL MVPD/FAST', 'FAST PLATFORM')][:12]
+    others = [p for p in dedup if p not in streaming][:12]
+    out['platforms'] = sorted(streaming + others, key=lambda x: -x['reach_pct'])
     out['purchase'] = sorted(purch, key=lambda x: -x['pct'])[:14]
     out['media_diet'] = sorted(media, key=lambda x: -x['pct'])[:10]
     out['talent'] = sorted(talent, key=lambda x: -x['pct'])[:10]
@@ -337,7 +371,7 @@ def research_anchors(subject: str, kind: str, purpose: str, window: Optional[dic
         return {}
     user = json.dumps({'subject': subject, 'subject_kind': kind, 'purpose': purpose[:400], 'window': window or {}, 'today': _dt.date.today().isoformat()})
     try:
-        got = claude_json(RESEARCH_SYSTEM_PROMPT, user, max_tokens=3200, temperature=0.2, surface='twin_research', tools=tools)
+        got = claude_json(RESEARCH_SYSTEM_PROMPT, user, max_tokens=6000, temperature=0.2, surface='twin_research', tools=tools)
     except TypeError:
         got = claude_json(RESEARCH_SYSTEM_PROMPT, user)
     except Exception as e:
@@ -631,7 +665,7 @@ def write_read(twin: dict, claude_json: Optional[Callable], seed: str) -> dict:
                  'ltv': {k: ltv.get(k) for k in ('total', 'value_per_fan', 'read')} if ltv else None,
                  'runs': [{'kind': r.get('kind'), 'question': r.get('question'), 'recommendation': r.get('recommendation'), 'expected': (r.get('outputs') or {}).get('expected')} for r in runs[:3]],
                  'deterministic_read': read}
-        got = claude_json(READ_SYSTEM_PROMPT, json.dumps(brief, default=str)[:12000], max_tokens=1400, temperature=0.5, surface='twin_read')
+        got = claude_json(READ_SYSTEM_PROMPT, json.dumps(brief, default=str)[:12000], max_tokens=2400, temperature=0.5, surface='twin_read')
         if isinstance(got, dict) and got.get('tldr'):
             return {'tldr': [scrub_text(str(x)) for x in got.get('tldr') or []][:5], 'reads': [scrub_text(str(x)) for x in (got.get('reads') or read['reads'])][:6],
                     'what_to_do': [scrub_text(str(x)) for x in (got.get('what_to_do') or read['what_to_do'])][:4]}
@@ -903,7 +937,7 @@ def run_scenario(twin: dict, scenario: dict, *, claude_json: Optional[Callable] 
         def read_fn(run, tw):
             brief = {'twin': tw.get('meta'), 'run': {k: run.get(k) for k in ('kind', 'question', 'outputs', 'drivers', 'comparison', 'recommendation')},
                      'deterministic_read': run.get('read')}
-            got = claude_json(READ_SYSTEM_PROMPT, json.dumps(brief, default=str)[:12000], max_tokens=1200, temperature=0.5, surface='twin_run_read')
+            got = claude_json(READ_SYSTEM_PROMPT, json.dumps(brief, default=str)[:12000], max_tokens=2000, temperature=0.5, surface='twin_run_read')
             return got if isinstance(got, dict) else None
     kind = str(scenario.get('kind') or '').lower()
     if kind == 'compare' and other_twin is not None:
