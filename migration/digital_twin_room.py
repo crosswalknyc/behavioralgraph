@@ -306,6 +306,8 @@ class Models:
             rec = self._log(role, stats.get('model') or 'fake', stats, t0, data is not None)
             return (data if isinstance(data, dict) else None), rec
         surface = f'twin_room_{role}'
+        if regression_mode():   # REGRESSION_TEST_MODE never calls a model: a test without a fake lands on the fallbacks
+            return None, self._log(role, 'off', {}, t0, False)
         if role == 'persona':
             data, model = self._chain(system, user, max_tokens, temperature, surface, MODELS['persona'])
             if data is not None:
@@ -551,7 +553,7 @@ def persona_card(twin: dict, seat: dict, session_seed: str) -> dict:
            'high': 'texts the group chat about what they are watching and gets friends onto things'}[_level(g('word_of_mouth'), 40, 65)]
     live = {'low': 'does not go to fan events or live shows for this', 'mid': 'has been to one fan event or screening',
             'high': 'goes to fan events, screenings and live shows when they come near'}[_level(g('live_events'), 30, 55)]
-    ads = {'low': 'pays extra to skip ads', 'mid': 'takes the cheaper ad tier on some services', 'high': 'fine with ads if it saves money'}[_level(g('ad_tolerance'), 40, 62)]
+    ads = {'low': 'pays extra to skip ads', 'mid': 'takes the cheaper plan with ads on some services', 'high': 'fine with ads if it saves money'}[_level(g('ad_tolerance'), 40, 62)]
     binge = 'binges a season in a weekend' if g('binge_vs_appointment') >= 55 else 'watches an episode or two a night'
     second = 'scrolls the phone while watching' if g('second_screen') >= 55 else 'puts the phone down to watch'
     name = str(m.get('name') or m.get('subject') or 'the title')
@@ -580,20 +582,208 @@ def persona_card(twin: dict, seat: dict, session_seed: str) -> dict:
     services = [p for i, p in enumerate(plats) if unit('pl', sid, p) < (0.95 - 0.12 * i)][:4] or plats[:2]
     shops = [str(p.get('label')) for p in (ident.get('purchase') or [])[:6] if isinstance(p, dict)]
     shops = [s for s in shops if unit('shop', sid, s) < 0.7][:3]
-    return {'seat': seat.get('seat'), 'name': seat.get('name'), 'age': age, 'gender': gender, 'city': seat.get('city'), 'segment': str(seat.get('segment') or ''),
+    card = {'seat': seat.get('seat'), 'name': seat.get('name'), 'age': age, 'gender': gender, 'city': seat.get('city'), 'segment': str(seat.get('segment') or ''),
             'income': income, 'education': education, 'parental': parental, 'relationship_status': relationship,
             'lifecycle_stage': stage, 'relationship_to_subject': rel, 'how_often': freq, 'owns': owns,
             'habits': [price, loyal, merch, physical, churn, social, wom, live, ads, binge, second],
             'streams_on': services, 'shops_at': shops}
+    card['bio'] = str(seat.get('persona') or '') or persona_bio(card, twin, sid)   # the bio on the seat, once written, is the one the agent acts on
+    return card
+
+
+_JOBS_EARLY = ('a barista finishing a degree', 'a server at a neighborhood restaurant', 'an assistant manager at a grocery store', 'a receptionist at a dental practice', 'a line cook',
+               'a retail associate at a big-box store', 'a preschool aide', 'a warehouse picker', 'a hair stylist building a client list', 'a bank teller')
+_JOBS_MID = ('a dental hygienist', 'a middle school teacher', 'a nurse on night shifts', 'a paralegal', 'a project manager at a logistics firm', 'a graphic designer who freelances',
+             'an HR coordinator', 'a software tester', 'a real estate agent', 'a bookkeeper for small businesses', 'an event planner', 'a social worker', 'an electrician',
+             'an insurance claims adjuster', 'an office manager', 'a high school counselor', 'a flight attendant', 'a veterinary tech', 'a librarian', 'a sales rep for a medical device company')
+_JOBS_HIGH = ('a pharmacist', 'an accountant at a regional firm', 'a physical therapist', 'a bank branch manager', 'a senior project manager', 'an attorney at a small practice',
+              'a marketing director', 'a nurse practitioner', 'an engineer at a utility', 'a sales director who travels most weeks', 'a dentist', 'a product manager at a software company')
+_HUMAN_DETAILS = ('keeps a running list of comfort shows for sick days', 'has a group chat that has been going since college', 'cooks for the week on Sundays with something on in the background',
+                  'plans one big trip a year and saves for it in a separate account', 'volunteers at the library on Saturday mornings', 'collects vinyl and still buys CDs at shows',
+                  'redoes one room of the house every winter', 'plays bar trivia on Tuesdays and takes it seriously', 'has two rescue dogs that sleep through everything {pron} watches',
+                  'keeps the TV on for company while working from home', 'sends the family a watch list every Thanksgiving', 'buys the birthday gifts for the whole friend group',
+                  'runs before work most mornings with a podcast on', 'reads two books a month and talks about them more than TV', 'drives to a sister\'s place for Sunday dinner most weeks',
+                  'coaches a kids\' soccer team in the fall', 'grows tomatoes on the balcony every summer', 'has not missed a high school friend\'s birthday in twenty years',
+                  'rewatches the same three movies every December', 'keeps a spreadsheet of every concert {pron} has been to')
+_STREAMING_NAMES = ('netflix', 'hulu', 'prime video', 'amazon prime video', 'max', 'hbo max', 'disney+', 'disney plus', 'peacock', 'paramount+', 'paramount plus', 'apple tv+', 'apple tv',
+                    'youtube', 'youtube tv', 'tiktok', 'instagram', 'facebook', 'spotify', 'pandora', 'tubi', 'roku channel', 'pluto tv', 'twitch', 'snapchat', 'reddit', 'pinterest',
+                    'x', 'twitter', 'sling tv', 'fubo', 'audible', 'kindle', 'siriusxm', 'crunchyroll', 'starz', 'amc+', 'britbox', 'philo', 'plex', 'freevee', 'discovery+', 'espn')
+
+
+def _income_words(label: str) -> str:
+    s = str(label or '').strip()
+    if not s or 'prefer' in s.lower():
+        return ''
+    low = s.lower()
+    if low.startswith('less than') or low.startswith('under'):
+        amount = re.sub(r"(?i)^(less than|under)\s*", '', s).strip()
+        return f"under {amount} a year"
+    if 'or more' in low or s.endswith('+'):
+        amount = re.sub(r"(?i)\s*(or more|\+)$", '', s).strip()
+        return f"{amount} or more a year"
+    m = re.match(r"^\s*(\$[\d,]+)\s*(?:-|to|\u2013)\s*(\$[\d,]+)\s*$", s)
+    if m:
+        return f"{m.group(1)} to {m.group(2)} a year"
+    return f"{s.lower()} a year"
+
+
+def _education_words(label: str, pron: str) -> str:
+    low = str(label or '').lower()
+    if not low or 'prefer' in low:
+        return ''
+    if 'graduate' in low and ('degree' in low or 'professional' in low) and 'college graduate' not in low:
+        return f"{pron} holds a graduate degree"
+    if 'bachelor' in low or 'college graduate' in low:
+        return f"{pron} has a bachelor's degree"
+    if 'some college' in low or 'associate' in low:
+        return f"{pron} has some college behind {'her' if pron.lower() == 'she' else 'him'}"
+    if 'high school' in low:
+        return f"{pron} finished high school"
+    return ''
+
+
+def _parental_words(label: str) -> str:
+    low = str(label or '').lower()
+    if not low or 'prefer' in low:
+        return ''
+    if low.startswith('no') or low.startswith('not'):
+        return 'no children at home'
+    return 'children at home'
+
+
+def _relationship_words(label: str) -> str:
+    low = str(label or '').lower()
+    if not low or 'prefer' in low:
+        return ''
+    for key, words in (('married', 'married'), ('partner', 'married or partnered'), ('relationship', 'in a relationship'), ('divorc', 'divorced'), ('separat', 'separated'),
+                       ('widow', 'widowed'), ('single', 'single')):
+        if key in low:
+            return words
+    return low
+
+
+def _media_names(labels: list, keep: int = 4) -> list:
+    out = [l for l in labels if str(l).strip().lower() in _STREAMING_NAMES or any(str(l).lower().startswith(p) for p in ('netflix', 'hulu', 'prime', 'amazon prime', 'disney', 'paramount', 'apple tv', 'youtube', 'peacock', 'max', 'hbo'))]
+    return out[:keep] or [l for l in labels if str(l).lower() not in ('gmail', 'google maps', 'weather', 'google', 'outlook', 'yahoo mail', 'calendar', 'maps')][:2]
+
+
+def persona_bio(card: dict, twin: dict, sid: str) -> str:
+    """The bio the persona agent acts on, written for a reader (120 to
+    200 words, third person): who they are, household and income as the
+    twin's demographics put it, how they relate to the subject, their
+    habits as plain traits, their media diet, one or two human details.
+    Deterministic for the seat; scrubbed."""
+    m = _meta(twin)
+    name = str(card.get('name') or 'This person')
+    age = int(card.get('age') or 35)
+    she = str(card.get('gender') or 'woman') == 'woman'
+    pron, obj, poss = ('she', 'her', 'her') if she else ('he', 'him', 'his')
+    income = _income_words(card.get('income') or '')
+    low_income = bool(re.search(r"under|\$25,000 to|\$35,000 to|\$25,000 -", income))
+    high_income = bool(re.search(r"\$1\d\d,\d{3}|\$2\d\d,\d{3}|or more", income))
+    bank = _JOBS_HIGH if high_income else _JOBS_EARLY if (low_income or age < 25) else _JOBS_MID
+    if age < 22:
+        work = 'a college student working part time'
+    elif age >= 66:
+        work = f"retired after years as {bank[int(unit('job', sid) * len(bank))]}"
+    else:
+        work = bank[int(unit('job', sid) * len(bank))]
+    stage = {'discovering': 'just finding it', 'trying': 'still trying it on', 'in the habit': 'firmly in the habit', 'lapsing': 'drifting away from it lately', 'returning': 'back to it after a break'}.get(str(card.get('lifecycle_stage') or ''), 'in the habit')
+    sent = [f"{name}, {age}, lives in {card.get('city') or 'the US'} and works as {work}."]
+    rel_w = _relationship_words(card.get('relationship_status') or '')
+    par_w = _parental_words(card.get('parental') or '')
+    bits = ([rel_w] if rel_w else []) + ([('with ' if rel_w else '') + par_w] if par_w else [])
+    hh = f"{pron.capitalize()} is {' '.join(bits)}" if bits else ''
+    if income:
+        hh = (hh + f", earning {income}") if hh else f"{pron.capitalize()} earns {income}"
+    if hh:
+        sent.append(hh + '.')
+    edu = _education_words(card.get('education') or '', pron.capitalize())
+    if edu:
+        sent.append(edu + '.')
+    rel = str(card.get('relationship_to_subject') or '')
+    rel = re.sub(r"^(found|started|has watched|has been|used to|came back)", lambda mm: {'found': f"{pron.capitalize()} found", 'started': f"{pron.capitalize()} started", 'has watched': f"{pron.capitalize()} has watched",
+                                                                                            'has been': f"{pron.capitalize()} has been", 'used to': f"{pron.capitalize()} used to", 'came back': f"{pron.capitalize()} came back"}[mm.group(1)], rel, count=1)
+    sent.append(f"{rel} and {card.get('how_often')}; {pron} is {stage}." if rel else f"{pron.capitalize()} is {stage} with {m.get('name') or 'the subject'}.")
+    if card.get('owns'):
+        sent.append(f"{pron.capitalize()} owns {' and '.join(card['owns'])}.")
+    h = list(card.get('habits') or [])
+    if len(h) >= 11:
+        price, loyal, merch, physical, churn, social, wom, live, ads, binge, second = h[:11]
+        stage_key = str(card.get('lifecycle_stage') or '')
+        if stage_key in ('discovering', 'trying') and loyal.startswith('deeply loyal'):
+            loyal = 'getting attached to it fast'
+        elif stage_key == 'lapsing' and loyal.startswith('deeply loyal'):
+            loyal = 'still loyal to it and knows it by heart, even with the TV off lately'
+        sent.append(f"On money {pron} {price}, and {pron} is {loyal}.")
+        sent.append(f"{pron.capitalize()} {merch}, and {pron} {physical}.")
+        sent.append(f"{pron.capitalize()} {churn}, {binge}, and {second}.")
+        diet = []
+        if card.get('streams_on'):
+            diet.append(f"streams on {', '.join(_media_names(card['streams_on']))}")
+        if card.get('shops_at'):
+            diet.append(f"shops at {', '.join(card['shops_at'][:3])}")
+        diet.append(social)
+        diet.append(wom)
+        sent.append(f"{pron.capitalize()} " + ', '.join(diet[:-1]) + f", and {diet[-1]}.")
+        if live and 'does not' not in live:
+            sent.append(f"{pron.capitalize()} {live} and {ads}.")
+        else:
+            sent.append(f"{pron.capitalize()} {ads}.")
+    talent = [str(t.get('label') if isinstance(t, dict) else t) for t in (((twin or {}).get('identity') or {}).get('talent') or [])][:6]
+    picks_t = [t for t in talent if unit('talent', sid, t) < 0.45][:2]
+    if picks_t:
+        sent.append(f"Online {pron} keeps up with {' and '.join(picks_t)}.")
+    d1 = _HUMAN_DETAILS[int(unit('detail1', sid) * len(_HUMAN_DETAILS))]
+    d2 = _HUMAN_DETAILS[int(unit('detail2', sid) * len(_HUMAN_DETAILS))]
+    if d2 == d1:
+        d2 = _HUMAN_DETAILS[(int(unit('detail2', sid) * len(_HUMAN_DETAILS)) + 7) % len(_HUMAN_DETAILS)]
+    sent.append(f"{pron.capitalize()} {d1.replace('{pron}', pron)}, and {d2.replace('{pron}', pron)}.")
+    text = ' '.join(s for s in sent if s and s.strip() not in ('.', ''))
+    text = re.sub(r"\s+,", ',', re.sub(r"\s{2,}", ' ', text)).replace(' .', '.').replace(',.', '.')
+    text = scrub(text)
+    words = text.split()
+    if len(words) > 200:   # trim from the end at a sentence boundary
+        cut = ' '.join(words[:200])
+        text = cut[:cut.rfind('.') + 1] if '.' in cut else cut
+    return text
 
 
 def _card_text(card: dict) -> str:
+    """What the persona agent is given about itself: the bio the reader
+    sees on the seat (``roster[].persona``), verbatim; the structured
+    lines when a bio is missing."""
+    if card.get('bio'):
+        return str(card['bio'])
     lines = [f"{card['name']}, {card['age']}, {card['gender']}, {card['city']}." + (f" Income {card['income']}." if card.get('income') else '') + (f" {card['education']}." if card.get('education') else ''),
              (f"{card['parental']}. " if card.get('parental') else '') + (f"{card['relationship_status']}." if card.get('relationship_status') else ''),
              f"Relationship to the subject: {card['relationship_to_subject']}; {card['how_often']}." + (f" Owns {', '.join(card['owns'])}." if card.get('owns') else ''),
-             'Habits: ' + '; '.join(card['habits']) + '.',
+             'Habits: ' + '; '.join(card.get('habits') or []) + '.',
              (f"Streams on {', '.join(card['streams_on'])}." if card.get('streams_on') else '') + (f" Shops at {', '.join(card['shops_at'])}." if card.get('shops_at') else '')]
     return '\n'.join(l for l in lines if l.strip())
+
+
+def ensure_personas(session: dict, twins_by_key: dict, session_seed: str = '') -> int:
+    """Every seat in the room carries its bio (``roster[].persona``) and
+    its memory list; written once, stable for the life of the room.
+    Returns the number of seats filled."""
+    from migration.digital_twin_engine import VERSION
+    seed = session_seed or f"room|{session.get('id')}|{VERSION}"
+    n = 0
+    for seat in (session.get('group') or {}).get('roster') or []:
+        if not seat.get('persona'):
+            twin = twins_by_key.get(str(seat.get('twin') or '')) or next(iter(twins_by_key.values()), {})
+            seat['persona'] = persona_card(twin, seat, seed)['bio']
+            n += 1
+        seat.setdefault('memory', [])
+    return n
+
+
+def refresh_memory(session: dict) -> None:
+    """``roster[].memory``: what each seat said in this room so far
+    (question, the option it picked, its words), for the seat panel."""
+    for seat in (session.get('group') or {}).get('roster') or []:
+        seat['memory'] = memory_for(session, int(seat.get('seat') or 0), limit=24)
 
 
 # ------------------------------------------------------------- prompts
@@ -1225,7 +1415,7 @@ def _cached_brief(s3, key: str) -> dict:
     return {}
 
 
-def _update_payload(s3, twin_key: str, session_id: str, rec: dict):
+def _update_payload(s3, twin_key: str, session_id: str, rec: dict, roster: Optional[list] = None):
     """The record in the twin payload, replaced in place (load, modify,
     save) so the page's session read sees the stage."""
     if s3 is None or not twin_key:
@@ -1245,6 +1435,14 @@ def _update_payload(s3, twin_key: str, session_id: str, rec: dict):
                 break
         else:
             qs.append(rec)
+        if roster:   # the seats' bios and memory ride along (roster[].persona, roster[].memory)
+            by_seat = {int(r.get('seat') or 0): r for r in roster}
+            for seat in (sess.get('group') or {}).get('roster') or []:
+                src = by_seat.get(int(seat.get('seat') or 0))
+                if src:
+                    for k in ('persona', 'memory'):
+                        if src.get(k) is not None:
+                            seat[k] = src[k]
         sess['updated_at'] = _now()
         SYN.save_twin(s3, twin_key, payload)
         return True
@@ -1280,12 +1478,13 @@ def _publish(ctx: dict, stage: str, status: str = 'running', extra: Optional[dic
         doc = {'job_id': ctx['job_id'], 'product': 'digital_twins_iq', 'op': 'panel_ask', 'user': ctx.get('asked_by') or '', 'status': status, 'stage': stage, 'stage_label': STAGE_LABEL.get(stage, stage),
                'twin_key': ctx.get('twin_key') or '', 's3_key': ctx.get('twin_key') or '', 'session_id': ctx['session'].get('id'), 'question_id': rec.get('id'), 'subject': ctx.get('subject') or '',
                'question': {k: v for k, v in rec.items() if k != 'trail'}, 'seats_answered': len(rec.get('answers') or []), 'seats': len(ctx['roster']),
-               'started_at': rec.get('started_at'), 'updated_at': time.time(), 'created_at': ctx.get('created_at')}
+               'started_at': rec.get('started_at'), 'updated_at': time.time(), 'created_at': ctx.get('created_at'),
+               'resumes': int(ctx.get('resumes') or 0), 'notify': ctx.get('notify') or {}}
         if extra:
             doc.update(extra)
         _put_json(s3, job_key(ctx['job_id']), doc)
         if payload_too:
-            _update_payload(s3, ctx.get('twin_key') or '', ctx['session'].get('id'), rec)
+            _update_payload(s3, ctx.get('twin_key') or '', ctx['session'].get('id'), rec, (ctx['session'].get('group') or {}).get('roster'))
 
 
 def run_question(ctx: dict) -> dict:
@@ -1430,6 +1629,10 @@ def run_question(ctx: dict) -> dict:
     trail.update({'models': tot['models'], 'tokens': tot['tokens'], 'searches': tot['searches'], 'cost_usd': tot['cost_usd'], 'calls': tot['calls'], 'version': ROOM_VERSION})
     timings['total_s'] = round(time.time() - ctx['t0'], 2)
     rec['finished_at'] = _now()
+    try:
+        refresh_memory(session)
+    except Exception:
+        pass
     ready = '\n'.join(chat_lines(session, rec))
     _publish(ctx, 'done', status='done', extra={'success': True, 'finished_at': time.time(), 'ready_message': ready, 'cost_usd': tot['cost_usd']}, payload_too=True)
     notify = ctx.get('notify') or {}
@@ -1497,6 +1700,10 @@ def ask_room(session: dict, twins_by_key: dict, q: str, *, kind: Optional[str] =
            'trail': {'stages': [], 'fallbacks': []}}
     session.setdefault('questions', []).append(rec)
     session['updated_at'] = _now()
+    try:
+        ensure_personas(session, twins_by_key, f"room|{session['id']}|{VERSION}")   # roster[].persona and roster[].memory for the seat panel
+    except Exception as e:
+        print(f"[twin-room] personas skipped: {e}")
     ctx = {'rec': rec, 'session': session, 'twins_by_key': twins_by_key, 'twin': twin, 'roster': list(group.get('roster') or []), 'models': Models(model_fn=model_fn, usage_extras=usage_extras),
            's3': s3, 'twin_key': twin_key, 'job_id': job_id, 'seed': f"{session['id']}|{qi}|{q}|{VERSION}|{ROOM_VERSION}", 'session_seed': f"room|{session['id']}|{VERSION}",
            'last': last, 'asked_by': asked_by or session.get('created_by') or '', 'subject': _twin_name(twin), 't0': time.time(), 'created_at': time.time(),
@@ -1516,7 +1723,7 @@ def ask_room(session: dict, twins_by_key: dict, q: str, *, kind: Optional[str] =
     return rec
 
 
-__all__ = ['ask_room', 'run_question', 'research', 'moderator_options', 'seat_answer', 'moderator_read', 'weigh', 'prior_over_options', 'plain_share', 'persona_card',
+__all__ = ['ask_room', 'run_question', 'research', 'moderator_options', 'seat_answer', 'moderator_read', 'weigh', 'prior_over_options', 'plain_share', 'persona_card', 'persona_bio', 'ensure_personas', 'refresh_memory',
            'memory_for', 'prior_note', 'drop_ruled_out', 'scrub', 'has_banned', 'chat_lines', 'room_enabled', 'model_available', 'set_model_fn', 'topic_hash', 'topic_tokens',
            'topics_overlap', 'research_key', 'facts_key', 'job_key', 'job_read', 'Models', 'MODELS', 'BUDGET_S', 'ALPHA_SEATS', 'STAGES', 'STAGE_LABEL', 'ROOM_VERSION',
            'JOB_PREFIX', 'RESEARCH_PREFIX', 'FACTS_PREFIX']

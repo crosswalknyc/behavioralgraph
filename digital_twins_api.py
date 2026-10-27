@@ -243,6 +243,12 @@ def dt_job(job_id):
         return jsonify({'success': False, 'error': 'job not found'}), 404
     if str(rec.get('user') or '') != _uname(user) and not DT.is_admin(user):
         return jsonify({'success': False, 'error': 'job not found'}), 404
+    if str(rec.get('op') or '') == 'panel_ask':
+        try:   # a room job with no update for five minutes is picked back up once; a second stall or an old job reads 'failed'
+            from migration import digital_twin_room_jobs as RJ
+            rec = RJ.check_stale(_s3(), rec) or rec
+        except Exception:
+            traceback.print_exc()
     rec = {k: v for k, v in rec.items() if k not in ('resume', 'inputs')}
     return _nocache(jsonify({'success': True, 'job': rec}))
 
@@ -633,6 +639,12 @@ def dt_panel_get(key, sid):
     if not sess:
         return jsonify({'success': False, 'error': 'session not found'}), 404
     _attach_portraits(payload, key, sess)
+    try:   # an in-flight question whose job stalled is picked back up once, or marked failed with a plain line (never 'researching' forever)
+        from migration import digital_twin_room_jobs as RJ
+        if RJ.sweep_session(_s3(), key, sess):
+            DT.save_twin(_s3(), key, payload)
+    except Exception:
+        traceback.print_exc()
     return _nocache(jsonify({'success': True, 'session': sess}))
 
 
@@ -651,6 +663,18 @@ def dt_panel_ask(key, sid):
     q = ' '.join(str(body.get('q') or body.get('question') or '').split())
     if not q:
         return jsonify({'success': False, 'error': 'Ask the room something.'}), 400
+    stimulus = body.get('stimulus') if isinstance(body.get('stimulus'), dict) else None
+    ask_again = bool(body.get('ask_again'))
+    if not ask_again:
+        # the same question again in this room: the in-flight record while it runs, the finished one with a note after;
+        # nothing is charged and no second job starts (2026-10-26). The Ask again chip sends ask_again: true.
+        from migration import digital_twin_room_jobs as RJ
+        dup = RJ.find_duplicate(sess, q, stimulus)
+        if dup is not None:
+            RJ.mark_asked_again(dup)
+            DT.save_twin(_s3(), key, payload)
+            return jsonify({'success': True, 'question': dup, 'duplicate': True, 'note': dup.get('note'), 'session_id': sid, 'questions_asked': len(sess['questions']),
+                            'questions_paid': sess.get('questions_paid'), 'job_id': dup.get('job_id'), 'stage': dup.get('stage')})
     funds = _charge_question(user, payload, sess)      # the session on its first question, a further block after twelve
     if funds is not None:
         return funds
@@ -671,8 +695,8 @@ def dt_panel_ask(key, sid):
     # The room engine (migration/digital_twin_room.py) answers as a job: the record returns at once at stage
     # 'researching' with a job_id; poll GET /api/digital-twins/jobs/<job_id> for the stage and the seat answers as
     # they arrive, then the finished record (read, options, voices) lands here on the session (2026-10-26).
-    rec = P.ask(sess, twins_by_key, q, kind=body.get('kind'), options=body.get('options'), stimulus=body.get('stimulus') if isinstance(body.get('stimulus'), dict) else None,
-                voices_fn=_voices_fn(), asked_by=_uname(user), s3=_s3(), twin_key=key)
+    rec = P.ask(sess, twins_by_key, q, kind=body.get('kind'), options=body.get('options'), stimulus=stimulus,
+                voices_fn=_voices_fn(), asked_by=_uname(user), s3=_s3(), twin_key=key, ask_again=ask_again)
     DT.save_twin(_s3(), key, payload)
     return jsonify({'success': True, 'question': rec, 'session_id': sid, 'questions_asked': len(sess['questions']), 'questions_paid': sess.get('questions_paid'),
                     'job_id': rec.get('job_id'), 'stage': rec.get('stage')})

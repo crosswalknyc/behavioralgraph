@@ -916,7 +916,7 @@ def delete_room(s3, twin_key: str, payload: dict, sid: str, deleted_by: str = ''
 def ask(session: dict, twins_by_key: dict, q: str, *, kind: Optional[str] = None, options: Optional[list] = None,
         stimulus: Optional[dict] = None, voices_fn: Optional[Callable] = None, time_budget_s: float = TIME_BUDGET_S,
         asked_by: str = '', s3=None, twin_key: str = '', room: Optional[bool] = None, model_fn: Optional[Callable] = None,
-        usage_extras: Optional[dict] = None, run_async: bool = True, notify: Optional[dict] = None) -> dict:
+        usage_extras: Optional[dict] = None, run_async: bool = True, notify: Optional[dict] = None, ask_again: bool = False) -> dict:
     """Ask the room one question. Appends the record to the session and
     returns it.
 
@@ -926,7 +926,21 @@ def ask(session: dict, twins_by_key: dict, q: str, *, kind: Optional[str] = None
     (REGRESSION_TEST_MODE never calls one); the record then comes back
     at stage 'researching' with a job_id and fills in on a background
     thread (run_async) or here (run_async=False). ``room=False`` or
-    DTIQ_ROOM=0 restores this deterministic engine."""
+    DTIQ_ROOM=0 restores this deterministic engine.
+
+    The same question asked again in the same room (same words, same
+    stimulus) returns the earlier record: the in-flight one while it
+    runs, the finished one with an 'asked again' note after, unless
+    ``ask_again`` (the moderator's Ask again chip) puts it to the room
+    fresh (migration/digital_twin_room_jobs.py, 2026-10-26)."""
+    if not ask_again:
+        try:
+            from migration import digital_twin_room_jobs as _J
+            dup = _J.find_duplicate(session, q, stimulus)
+        except Exception:
+            dup = None
+        if dup is not None:
+            return _J.mark_asked_again(dup)
     use_room = room
     if use_room is None:
         try:

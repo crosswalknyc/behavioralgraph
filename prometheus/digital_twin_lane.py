@@ -695,7 +695,13 @@ def panel_reply(payload, session, rec, key, user):
     asked = len(session.get('questions') or [])
     paid = int(session.get('questions_paid') or 12)
     tail = f" ({asked} of {paid} questions in this session used.)" if asked >= paid - 2 else ''
-    if rec and rec.get('job_id') and rec.get('stage') not in (None, 'done', 'stopped'):
+    if rec and rec.get('note'):
+        tail = f" {rec['note']}" + tail      # asked again: the earlier record comes back with the note
+    if rec and rec.get('stage') == 'failed':
+        return _payload(f"{rec.get('q')}\n{rec.get('read') or 'The room did not finish this question. Ask it again and it runs fresh.'}" + tail, ['Ask them again', 'Open Focus Group IQ'],
+                        panel_session={'key': key, 'sid': session.get('id'), 'question_id': rec.get('id')}, open_view='digitalTwinsIQ', twin_key=key,
+                        action_hint={'view': 'digitalTwinsIQ', 'tab': 'panel', 'twin_key': key, 'session_id': session.get('id')})
+    if rec and rec.get('job_id') and rec.get('stage') not in (None, 'done', 'stopped', 'failed'):
         # the room engine answers as a job: the read, the table and the voices land in this thread when it finishes
         n = int((session.get('group') or {}).get('in_room') or 12)
         reply = (f"The room is on it. First the record on {payload['meta'].get('name')} and this question, then the {n} people in the room answer in their own words, "
@@ -753,9 +759,21 @@ def run_panel(text, body, history, user, ppu=None):
         if not payload or not sess:
             return None
         last = sess['questions'][-1] if sess.get('questions') else None
+        from migration import digital_twin_room_jobs as RJ
+        fresh = RJ.wants_fresh(text)
         q = _reask_text(text, last, sess) if re.search(r"^\s*re-?ask\b", str(text or ''), re.I) else panel_question(text)
+        if fresh and (not q or re.match(r"^(ask (?:them |it |the room )?)?again[?. ]*$", q, re.I)):
+            q = str((last or {}).get('q') or '')      # 'Ask them again': the last question, put to the room fresh
         if not q:
             return _payload('What should I ask the room?', ['Would you watch a new season?', 'Would you pay $29 for the box?', 'Show of hands, who watched season 1?'])
+        if not fresh:
+            # the same question again in this room returns the earlier record (in flight or finished) with a note; nothing is charged (2026-10-26)
+            dup = RJ.find_duplicate(sess, q, _stimulus(text, last))
+            if dup is not None:
+                RJ.mark_asked_again(dup)
+                DT.save_twin(s3, active['key'], payload)
+                set_active_session(user, active['key'], sess['id'])
+                return panel_reply(payload, sess, dup, active['key'], user)
         funds = _charge_panel_question(user, payload, sess)      # the session on its first question, a further block after twelve
         if funds is not None:
             return funds
@@ -766,7 +784,7 @@ def run_panel(text, body, history, user, ppu=None):
                 if t:
                     twins_by_key[tk] = t
         rec = P.ask(sess, twins_by_key, q, stimulus=_stimulus(text, last), voices_fn=_voices_fn(), asked_by=uname, s3=s3, twin_key=active['key'],
-                    usage_extras=ppu or None, notify=_room_notify(body, uname))
+                    usage_extras=ppu or None, notify=_room_notify(body, uname), ask_again=fresh)
         DT.save_twin(s3, active['key'], payload)
         set_active_session(user, active['key'], sess['id'])
         try:
