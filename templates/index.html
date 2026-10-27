@@ -50985,8 +50985,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-body.is-fg-room .dtw-pane-fg.active { display: block; height: auto; }
         #digitalTwinsIQView .dtw-body.is-fg-room .dtw-fg { height: auto; min-height: 0; overflow: visible; }
         #digitalTwinsIQView .dtw-fg-dock { display: none; }
-        #digitalTwinsIQView.is-fg-room .dtw-fg-dock { display: block; position: sticky; top: 0; z-index: 8; flex: 0 0 auto; background: var(--dtw-page); padding: 10px 0 12px; margin: 0; border-bottom: 1px solid var(--dtw-rule); box-shadow: 0 -18px 0 0 var(--dtw-page); }
-        #digitalTwinsIQView.is-fg-room .dtw-fg-dock .dtw-fg-acts { display: flex; justify-content: flex-end; padding: 0 0 8px; }
+        #digitalTwinsIQView.is-fg-room .dtw-fg-dock { display: block; position: sticky; top: 0; z-index: 8; flex: 0 0 auto; background: var(--dtw-page); padding: 8px 0 10px; margin: 0; border-bottom: 1px solid var(--dtw-rule); box-shadow: 0 -18px 0 0 var(--dtw-page); }
+        #digitalTwinsIQView.is-fg-room .dtw-fg-dock .dtw-fg-acts { display: flex; justify-content: flex-end; padding: 0 0 6px; }
         #digitalTwinsIQView.is-fg-room .dtw-fg-hero { border-bottom: 0; padding-bottom: 0; overflow: visible; z-index: 1; }
         #digitalTwinsIQView.is-fg-room .dtw-fg-htext { margin-top: 0; }
         #digitalTwinsIQView .dtw-body.is-fg-room .dtw-fg-main { height: var(--dtw-main-h, 58vh); min-height: 240px; overflow: hidden; align-items: stretch; }
@@ -52212,8 +52212,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 } else {
                     meta = '<span>' + fmtN(g.in_room || roster.length) + ' twins standing for <b>' + fmtN(g.size_people) + '</b> people' + SEP + 'Ask the first question below; the shares, the read and the voices come back in a minute or two.</span>';
                 }
-                var big = fq ? weightPair(fq.q) : 'The room is seated.';
-                return '<div class="dtw-fg-acts" id="dtwFgDockActs"></div><div class="dtw-fg-htext"><div class="dtw-fg-rt">' + esc(roomTitle(s)) + '</div><div class="dtw-fg-fq">' + big + '</div><div class="dtw-fg-fm">' + meta + '</div></div>';
+                return '<div class="dtw-fg-acts" id="dtwFgDockActs"></div><div class="dtw-fg-htext"><div class="dtw-fg-rt">' + esc(roomTitle(s)) + '</div><div class="dtw-fg-fm">' + meta + '</div></div>';
             }
             function paintFgDock(s, g, roster, fq, fly) {
                 var hero = el('dtwFgHero'), dock = el('dtwFgDock');
