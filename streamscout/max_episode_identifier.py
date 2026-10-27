@@ -403,21 +403,77 @@ def _auth_path():
     return os.environ.get("MAX_AUTH_PATH") or _DEFAULT_AUTH_PATH
 
 
+def _load_donated_cookies():
+    """Best-effort: fresh hbomax.com cookies from the shared S3 session donation
+    (``trends_iq_storage_state/hbomax.com.json``) — the same signed-in session
+    the Trends IQ scrapers ride, auto-re-donated headless. The SESSION cookies
+    (incl. the ``st`` auth cookie) stay fresh with no manual --refresh-auth.
+    Returns a Playwright cookie list or None (any failure — AWS not wired,
+    nothing donated — is silent, so the stored auth still applies)."""
+    try:
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        if root not in sys.path:
+            sys.path.insert(0, root)
+        from scripts.trends_scrapers._base import load_donated_storage_state
+        st = load_donated_storage_state("hbomax.com")
+        if st and st.get("cookies"):
+            return st["cookies"]
+    except Exception:
+        pass
+    return None
+
+
 def load_saved_auth():
-    """Return the stored {"headers":..., "cookies":...} or None."""
+    """Return the replay auth {"headers":..., "cookies":...} or None.
+
+    The x-disco/x-wbd replay HEADERS are stable web-client identifiers (stored
+    via MAX_AUTH_JSON env / MAX_AUTH_PATH file / ~/.max_auth.json). The COOKIES
+    are the session that expires. When the shared S3 donation has a fresh
+    hbomax.com session, prefer ITS cookies (auto-refreshed) over the stored ones
+    so Max keeps searching without a manual --refresh-auth; the stored headers
+    ride along unchanged."""
+    base = None
     blob = os.environ.get("MAX_AUTH_JSON")
     if blob:
         try:
-            return json.loads(blob)
+            base = json.loads(blob)
         except Exception:
-            pass
-    path = _auth_path()
-    if os.path.exists(path):
+            base = None
+    if base is None:
+        path = _auth_path()
+        if os.path.exists(path):
+            try:
+                base = json.load(open(path))
+            except Exception:
+                base = None
+    if base is None:
+        return None
+    donated = _load_donated_cookies()
+    if donated and base.get("headers"):
+        return {"headers": base.get("headers"), "cookies": donated}
+    return base
+
+
+def _flag_stale_session(domain="hbomax.com"):
+    """Best-effort nudge for operators to re-donate this platform's session,
+    reusing the Trends IQ cookie-gap alert (daily-deduped, one-click re-donate
+    button). Never raises; silent in test processes."""
+    try:
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        if root not in sys.path:
+            sys.path.insert(0, root)
         try:
-            return json.load(open(path))
+            from prometheus.mail_guard import sending_allowed
+            if not sending_allowed():
+                return
         except Exception:
             pass
-    return None
+        from scripts.trends_scrapers.cookie_gap_notify import notify_cookie_gap
+        notify_cookie_gap("max", domain,
+                          reason="StreamScout could not resolve Max unattended "
+                                 "\u2014 the hbomax.com session looks stale.")
+    except Exception:
+        pass
 
 
 def save_auth(auth):
@@ -590,9 +646,11 @@ def resolve(title=None, url=None, kind="series", seasons=None,
 
     # 2) No usable auth. Unattended runs must NOT open a window.
     if not allow_window:
+        _flag_stale_session("hbomax.com")  # nudge a re-donation (best-effort)
         raise _AuthError(
             "Max auth missing or stale and no interactive window is allowed. "
-            "Refresh it on a desktop with: "
+            "Refresh the hbomax.com donation (donate_cookies.py hbomax.com) or, "
+            "if the client headers changed, re-capture on a desktop with: "
             "python3 max_episode_identifier.py --refresh-auth")
 
     # 3) Interactive refresh: open a window, log in, capture fresh auth, then

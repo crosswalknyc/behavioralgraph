@@ -76,9 +76,39 @@ def _auth_path():
     return os.environ.get("NETFLIX_AUTH_PATH") or _DEFAULT_AUTH_PATH
 
 
+def _load_donated_state():
+    """Best-effort read of the shared S3 session donation for Netflix
+    (``trends_iq_storage_state/netflix.com.json``) — the same signed-in session
+    the Trends IQ scrapers ride. It is captured on an operator Mac (US
+    residential) and auto-re-donated headless, so production reads a FRESH
+    session live from S3 with no redeploy and no bespoke token to push. Returns
+    a storage_state dict or None (any failure — AWS not wired, nothing donated —
+    is silent, so the env/file fallbacks still apply)."""
+    try:
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        if root not in sys.path:
+            sys.path.insert(0, root)
+        from scripts.trends_scrapers._base import load_donated_storage_state
+        st = load_donated_storage_state("netflix.com")
+        if st and (st.get("cookies") or st.get("origins")):
+            return {"cookies": st.get("cookies", []),
+                    "origins": st.get("origins", [])}
+    except Exception:
+        pass
+    return None
+
+
 def load_saved_auth():
-    """Return a Playwright storage_state dict from NETFLIX_AUTH_JSON (inline),
-    NETFLIX_AUTH_PATH, or the default path — else None."""
+    """Return a Playwright storage_state dict for unattended Netflix, in
+    priority order:
+      1. the shared S3 session donation (canonical, auto-refreshed by the
+         cookie-donation system — the Hetzner/Render shared store),
+      2. NETFLIX_AUTH_JSON inline blob (deploy-time override),
+      3. NETFLIX_AUTH_PATH / ~/.netflix_auth.json file (desktop capture).
+    Else None."""
+    donated = _load_donated_state()
+    if donated:
+        return donated
     blob = os.environ.get("NETFLIX_AUTH_JSON")
     if blob:
         try:
@@ -100,6 +130,28 @@ def save_auth(state, path=None):
     with open(path, "w") as f:
         json.dump(state, f)
     return path
+
+
+def _flag_stale_session(domain="netflix.com"):
+    """Best-effort nudge for operators to re-donate this platform's session,
+    reusing the Trends IQ cookie-gap alert (daily-deduped, one-click re-donate
+    button). Never raises; silent in test processes."""
+    try:
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        if root not in sys.path:
+            sys.path.insert(0, root)
+        try:
+            from prometheus.mail_guard import sending_allowed
+            if not sending_allowed():
+                return
+        except Exception:
+            pass
+        from scripts.trends_scrapers.cookie_gap_notify import notify_cookie_gap
+        notify_cookie_gap("netflix", domain,
+                          reason="StreamScout could not resolve Netflix "
+                                 "unattended \u2014 the session looks stale.")
+    except Exception:
+        pass
 
 
 def capture_auth(profile="Jenna", browser="firefox", headed=True, path=None):
@@ -686,13 +738,15 @@ def resolve(title=None, title_id=None, kind="series", seasons=None,
         page = ctx.pages[0] if ctx.pages else ctx.new_page()
         try:
             ensure_login(page, email or "", pw or "", profile, headed=headed)
-            # A present-but-stale token can't log in headless — fail LOUD
-            # (surfaces as 'unverified' upstream) instead of a silent 0 rows.
+            # A present-but-stale session can't log in headless — fail LOUD
+            # (surfaces as 'unverified' upstream) instead of a silent 0 rows,
+            # and nudge a re-donation.
             if auth and _auth_state(page) in ("login", "verify"):
+                _flag_stale_session("netflix.com")
                 raise _AuthError(
-                    "Netflix session token (NETFLIX_AUTH_JSON) is stale — "
-                    "re-capture on a desktop with: "
-                    "python3 netflix_title_identifier.py --save-auth")
+                    "Netflix session is stale — re-donate it "
+                    "(donate_cookies.py netflix.com) or re-capture on a "
+                    "desktop with: python3 netflix_title_identifier.py --save-auth")
             # Read the full season list from Netflix's own GraphQL response
             # rather than the DOM (which only renders ~10 episode cards).
             cap = install_episode_capture(page)

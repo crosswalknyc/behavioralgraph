@@ -45,26 +45,34 @@ This repo (`crosswalknyc/behavioralgraph`) deploys on Render (team `tea-d5gns1uu
 
 ## Streaming resolver auth (Max + Netflix "always searching")
 
-StreamScout's two auth-gated resolvers run headless/server-side by replaying a
-saved **session token** stored as a Render env var (NOT a live login). Without
-the token they go blind in the wild (Ghost Hunters incident, 2026-10-26).
+StreamScout's two auth-gated resolvers run headless/server-side off the **shared
+session donation** — the same signed-in sessions the Trends IQ scrapers ride —
+NOT a live login. Without a session they go blind in the wild (Ghost Hunters
+incident, 2026-10-26).
 
-| Platform | Env var | Token shape | Capture / refresh command |
-|---|---|---|---|
-| HBO Max | `MAX_AUTH_JSON` | `{headers, cookies}` (~20 KB) | `python3 streamscout/max_episode_identifier.py --refresh-auth` → `~/.max_auth.json` |
-| Netflix | `NETFLIX_AUTH_JSON` | Playwright `storage_state` cookies (~3.6 KB) | `python3 streamscout/netflix_title_identifier.py --save-auth` → `~/.netflix_auth.json` |
-
-- Both env vars are set on **prod** (`srv-d5gpci5actks73cr4lig`) and **dev**
-  (`srv-d6ktpffgi27c73fk2v30`). Max resolves via pure-HTTP token replay; Netflix
-  replays the cookie token into a fresh headless browser (no on-disk profile).
-- Setting the env var does NOT auto-deploy — trigger a prod redeploy after.
-- **One-command refresh (run on a desktop with the logged-in profiles):**
-  `bash streamscout/refresh_streaming_auth.sh` — re-captures both tokens, pushes
-  them to prod + dev env vars, and redeploys prod. (Never prints token contents.)
-- **Stale-token signal:** both resolvers now **raise `unverified`** (not a silent
-  0) when their token is stale, so a run of `unverified` across many Netflix/Max
-  titles = time to refresh. Env vars `MAX_AUTH_PATH` / `NETFLIX_AUTH_PATH`
-  override the default file locations; never commit the token files.
+- **Canonical source = S3 donation** (read live by prod + Hetzner, no redeploy):
+  `s3://dashboard-inputs/trends_iq_storage_state/{netflix.com,hbomax.com}.json`,
+  captured on the operator Mac (US residential) and **auto-re-donated headless**
+  by the daily cookie-donation job. The resolvers read it via
+  `scripts/trends_scrapers/_base.load_donated_storage_state(domain)`.
+  - **Netflix** uses the whole donated session (replayed into a headless browser).
+  - **Max** uses the donated **cookies** (the part that expires, incl. the `st`
+    auth cookie) + its stable `x-disco`/`x-wbd` **client headers** from
+    `MAX_AUTH_JSON` (pure-HTTP replay).
+- **Fallback = env/file token:** `MAX_AUTH_JSON` / `NETFLIX_AUTH_JSON` (or
+  `MAX_AUTH_PATH` / `NETFLIX_AUTH_PATH` files) are used only when the donation
+  can't be read. `MAX_AUTH_JSON` is still **required on prod/dev** for Max's
+  client headers. Setting an env var does NOT auto-deploy — redeploy after.
+  Never commit the token files.
+- **Re-donate (the normal refresh, what the daily job does automatically):**
+  `python3 scripts/trends_scrapers/donate_cookies.py netflix.com hbomax.com`
+  (or the one-click button in the cookie-gap email). Max's client headers only
+  change rarely → `python3 streamscout/max_episode_identifier.py --refresh-auth`
+  + redeploy `MAX_AUTH_JSON`; `streamscout/refresh_streaming_auth.sh` bundles that.
+- **Stale signal:** both resolvers **raise `unverified`** (never a silent 0) AND
+  emit the Trends IQ cookie-gap alert (`notify_cookie_gap`, daily-deduped) so a
+  run of `unverified` across many Netflix/Max titles = re-donate. The donation's
+  own `donate_cookies.py --verify` is the proactive check.
 
 ## Notes
 

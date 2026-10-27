@@ -440,39 +440,46 @@ I'll add it. Everything **not** on the list resolves normally with no change.
 > fine; for genuinely remade titles (*Dune*, *IT*, *The Italian Job*) add the
 > **year** — `"Dune (2021)"` — to pin the one you mean.
 
-### 5h. Netflix + Max are "always searching" in production (deployed session tokens)
+### 5h. Netflix + Max are "always searching" in production (shared session donation)
 
 Both **Netflix** and **Max** resolve **headless / unattended** (no window) through
 `streamscout_query`, and both are now **always searching in production** because
-each rides a **saved session token** deployed to the server (Render), not a live
-login:
+each rides the **shared session donation** — the *same* signed-in sessions the
+Trends IQ scrapers use, stored in S3 and read **live** by production (no redeploy,
+no bespoke token to hand-push):
 
-- **Max** replays a token blob — `MAX_AUTH_JSON` (pure HTTP, no browser).
-- **Netflix** now does the same — `NETFLIX_AUTH_JSON`, a small (~3.6 KB) cookie
-  token captured from the logged-in profile and replayed into a fresh headless
-  browser. The on-disk browser profile is now just the *desktop capture source*;
-  production no longer depends on it.
+- The donation lives at `s3://dashboard-inputs/trends_iq_storage_state/{netflix.com,hbomax.com}.json`.
+  It's captured on the operator Mac (a US residential address) and **auto-re-donated
+  headless** by the daily cookie-donation job, so the session stays fresh on its own.
+- **Netflix** takes its whole session from the donation (`load_donated_storage_state`),
+  replayed into a fresh headless browser.
+- **Max** takes the part that actually expires — the **session cookies** (incl. the
+  `st` auth cookie) — from the donation, and keeps its stable `x-disco`/`x-wbd`
+  **client headers** in `MAX_AUTH_JSON` (those identify the web client and rarely
+  change). Pure-HTTP replay, no browser.
+- Each resolver still falls back to a locally-captured token (`NETFLIX_AUTH_JSON` /
+  `MAX_AUTH_JSON` env or file) if the donation can't be read.
 
-**Normal operation:** headless, nothing to do — both platforms search every build.
+**Normal operation:** headless, nothing to do — both platforms search every build,
+on whatever the donation last refreshed.
 
-**When a token goes stale** (expires / trips device-verification): the resolver
-**fails LOUD — it now raises `unverified`**, exactly like Max, so a stale session
-can never be silently misread as "not on the platform." The tell is a **sudden
-run of `unverified` across many Netflix (or Max) titles at once** — one title
-being 0 is just "not there"; *everything* going `unverified` is the token.
+**When a session goes stale** (sign-out / password change): the resolver **fails
+LOUD — it raises `unverified`** (never a silent 0, so a stale session can't be
+misread as "not on the platform") **and emails operators a one-click "re-donate"
+nudge** (the existing Trends IQ cookie-gap alert, de-duped to one per day). The
+tell is a **sudden run of `unverified` across many Netflix/Max titles at once** —
+one title being 0 is just "not there"; *everything* going `unverified` is the session.
 
-**Refresh both in one command (on a desktop with the logged-in profiles):**
+**The fix is the normal re-donation** (the same flow the team already uses, and
+what the daily job does automatically) — click the button in the email, or on the
+operator Mac:
 ```bash
-bash streamscout/refresh_streaming_auth.sh
+python3 scripts/trends_scrapers/donate_cookies.py netflix.com hbomax.com
 ```
-This re-captures both tokens, pushes them to Render (prod + dev), and redeploys
-prod. (First run of the day may pop a window for a one-time Netflix device code.)
-To refresh only Netflix: `python3 netflix_title_identifier.py --save-auth` (then
-deploy the file as `NETFLIX_AUTH_JSON`). First-ever login needs a visible window:
-```bash
-python3 netflix_title_identifier.py --headed --type series \
-  --title "Wednesday" --seasons 1
-```
+Only if Max's **client headers** themselves change (rare) does Max need a desktop
+header re-capture: `python3 streamscout/max_episode_identifier.py --refresh-auth`
+(then redeploy `MAX_AUTH_JSON`). `streamscout/refresh_streaming_auth.sh` bundles
+that header refresh + Render push for the emergency/fallback case.
 
 ### 5i. Amazon ALWAYS needs a pinned series-level URL (this is how Amazon works)
 
