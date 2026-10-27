@@ -200,10 +200,12 @@ class Moderator(unittest.TestCase):
         self.assertNotIn('Moderator note', page)
         self.assertIn('Prometheus is reading the room', page)
         self.assertIn('id="dtwBuildDrawer"', page)
-        # Cover tiles name the group, not SERIES / NETFLIX. A twin can
-        # be any audience, not just viewers of a title.
+        # Cover tiles and the twin page name the group, not SERIES /
+        # NETFLIX or IP-related. A twin can be any audience.
         self.assertNotIn("esc(kind + home)", page)
         self.assertNotIn('<div class="kind">', page)
+        self.assertNotIn('IP-related', page)
+        self.assertNotIn("cap(m.format)", page)
 
 
 if __name__ == '__main__':
