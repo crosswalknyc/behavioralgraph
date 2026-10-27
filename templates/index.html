@@ -50972,14 +50972,24 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
            the saved rooms as cards, no placeholder faces). */
         #digitalTwinsIQView { --dtw-s1: #C7F23E; --dtw-s2: #E682FF; --dtw-s3: #3358FF; --dtw-s4: #B7B3D8; --dtw-s5: #3B3D38; --dtw-cbody: #A8AFA9; --dtw-clabel: #9BAAAC; --dtw-ink2: #081113; }
         body[data-theme="light"] #digitalTwinsIQView { --dtw-s1: #5E7E12; --dtw-s2: #8E3FA8; --dtw-cbody: #5C6560; --dtw-clabel: #5C6466; }
-        /* Landing still pages in .dtw-body. An open room freezes the spine, the pills and the seat band; the thread and the split
-           each scroll on their own (Jenna 2026-10-27: 'these should scroll independently like the right card should scroll itstelf
-           and the left chatbox should scroll by itself'). The composer sits under the thread, inside the left column. */
+        /* Landing still pages in .dtw-body. An open room scrolls as a page: the twin name, the tabs and the seats go away.
+           It freezes at the question (and the room pills), then the thread and the split each scroll on their own
+           (Jenna 2026-10-27: 'allow this page to scroll to where it stops and freezes here'; later: 'It's not freezing
+           at the right place anymore now it's freezing the whole top'). */
         #digitalTwinsIQView .dtw-body.is-fg { padding: 0.85rem 1.5rem 1rem; }
-        #digitalTwinsIQView .dtw-body.is-fg-room { overflow: hidden; display: flex; flex-direction: column; padding: 0.75rem 1.5rem 0.55rem; }
-        #digitalTwinsIQView .dtw-body.is-fg-room .dtw-pane-fg.active { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; height: 100%; }
-        #digitalTwinsIQView .dtw-body.is-fg-room .dtw-fg { flex: 1 1 auto; min-height: 0; height: 100%; }
-        #digitalTwinsIQView .dtw-body.is-fg-room .dtw-fg-main { flex: 1 1 auto; min-height: 0; align-items: stretch; }
+        #digitalTwinsIQView.is-fg-room { overflow: auto !important; }
+        #digitalTwinsIQView.is-fg-room > .dtw-spine { flex: 0 0 auto; }
+        #digitalTwinsIQView.is-fg-room > .dtw-body { flex: 0 0 auto; height: auto; min-height: 0; overflow: visible; }
+        #digitalTwinsIQView.is-fg-room .dtw-spine-foot .dtw-fg-acts { display: none !important; }
+        #digitalTwinsIQView .dtw-body.is-fg-room { overflow: visible; display: block; height: auto; padding: 0.75rem 1.5rem 0.55rem; }
+        #digitalTwinsIQView .dtw-body.is-fg-room .dtw-pane-fg.active { display: block; height: auto; }
+        #digitalTwinsIQView .dtw-body.is-fg-room .dtw-fg { height: auto; min-height: 0; }
+        #digitalTwinsIQView .dtw-fg-dock { display: none; }
+        #digitalTwinsIQView.is-fg-room .dtw-fg-dock { display: block; position: sticky; top: 0; z-index: 6; background: var(--dtw-page); padding: 8px 0 10px; margin: 0 0 2px; border-bottom: 1px solid var(--dtw-rule); }
+        #digitalTwinsIQView.is-fg-room .dtw-fg-dock .dtw-fg-acts { display: flex; justify-content: flex-end; padding: 0 0 8px; }
+        #digitalTwinsIQView.is-fg-room .dtw-fg-hero { border-bottom: 0; padding-bottom: 0; }
+        #digitalTwinsIQView.is-fg-room .dtw-fg-htext { margin-top: 0; }
+        #digitalTwinsIQView .dtw-body.is-fg-room .dtw-fg-main { height: var(--dtw-main-h, 58vh); min-height: 240px; overflow: hidden; align-items: stretch; }
         #digitalTwinsIQView .dtw-body.is-fg-room .dtw-fg-main > * { min-height: 0; }
         #digitalTwinsIQView .dtw-body.is-fg-room .dtw-fg-chat { height: 100%; overflow: hidden; }
         #digitalTwinsIQView .dtw-body.is-fg-room .dtw-fg-stream { flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 8px; scrollbar-width: thin; overscroll-behavior: contain; }
@@ -51970,12 +51980,19 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             function modav() { return '<span class="dtw-fg-modav">' + MARK_SVG + '</span>'; }
             function fgReset(sid) { if (S.fg.sid !== sid) { S.fg.sid = sid; S.fg.open = {}; S.fg.earlier = {}; S.fg.seat = null; S.fg.tallyQ = null; } }
             function syncFgBody() {
+                var room = S.tab === 'panel' && !!S.session;
+                var view = el('digitalTwinsIQView');
+                if (view) {
+                    view.classList.toggle('is-fg-room', room);
+                    if (!room) view.style.removeProperty('--dtw-main-h');
+                }
                 var b = document.querySelector('#digitalTwinsIQView .dtw-body');
                 if (b) {
                     b.classList.toggle('is-fg', S.tab === 'panel');
-                    b.classList.toggle('is-fg-room', S.tab === 'panel' && !!S.session);
+                    b.classList.toggle('is-fg-room', room);
                 }
                 syncFgActs();
+                if (room) fgDockSize();
             }
             function ordWord(n) { n = Number(n || 0); return ORD[n - 1] || (n + 'th'); }
             function kindWord(k) { return KIND_WORDS[String(k || '')] || cap(String(k || '').replace(/_/g, ' ')); }
@@ -52193,7 +52210,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     meta = '<span>' + fmtN(g.in_room || roster.length) + ' twins standing for <b>' + fmtN(g.size_people) + '</b> people' + SEP + 'Ask the first question below; the shares, the read and the voices come back in a minute or two.</span>';
                 }
                 var big = fq ? weightPair(fq.q) : 'The room is seated.';
-                return '<div class="dtw-fg-seatrow" role="list">' + seats + '</div><div class="dtw-fg-htext"><div class="dtw-fg-rt">' + esc(roomTitle(s)) + '</div><div class="dtw-fg-fq">' + big + '</div><div class="dtw-fg-fm">' + meta + '</div></div>';
+                return '<div class="dtw-fg-seatrow" role="list">' + seats + '</div><div class="dtw-fg-dock" id="dtwFgDock"><div class="dtw-fg-acts" id="dtwFgDockActs"></div><div class="dtw-fg-htext"><div class="dtw-fg-rt">' + esc(roomTitle(s)) + '</div><div class="dtw-fg-fq">' + big + '</div><div class="dtw-fg-fm">' + meta + '</div></div></div>';
             }
             // The row fits the width it has: one row when the seats fit at their pitch, else as few rows as needed, filled evenly (never one seat alone on a second row).
             function fgLayoutSeats() {
@@ -52203,6 +52220,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     var rows = Math.max(1, Math.ceil(n * pitch / (w + gap))), per = Math.ceil(n / rows);
                     row.style.gridTemplateColumns = 'repeat(' + per + ', minmax(0, ' + (row.classList.contains('mini') ? 72 : 124) + 'px))';
                 });
+                fgDockSize();
+            }
+            function fgDockSize() {
+                var view = el('digitalTwinsIQView'), dock = el('dtwFgDock');
+                if (!view || !dock || !S.session) { if (view) view.style.removeProperty('--dtw-main-h'); return; }
+                view.style.setProperty('--dtw-main-h', Math.max(240, view.clientHeight - dock.offsetHeight) + 'px');
             }
             window.addEventListener('resize', function() { if (S.tab !== 'panel') return; clearTimeout(S.fgResizeT); S.fgResizeT = setTimeout(fgLayoutSeats, 120); });
             // ---- the thread: the question as the moderator's message, the answers as messages, the read as the closing message.
@@ -52340,7 +52363,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 S.fg.tallyQ = id || null;
                 var s = S.session, h = el('dtwFgTally'); if (!s || !h) { fgRefresh(); return; }
                 var g = s.group || {}, roster = g.roster || [], fq = tallyFocusQ(), fly = flyQ();
-                var hero = el('dtwFgHero'); if (hero) { hero.innerHTML = heroHtml(s, g, roster, fq, fly); fgLayoutSeats(); }
+                var hero = el('dtwFgHero'); if (hero) { hero.innerHTML = heroHtml(s, g, roster, fq, fly); syncFgActs(); fgLayoutSeats(); }
                 h.innerHTML = tallyHtml(s, g, roster, fq);
                 var inn = el('dtwFgTallyIn'); if (inn) inn.scrollTop = 0;
             };
@@ -52359,10 +52382,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 return acts;
             }
             function syncFgActs() {
-                var slot = el('dtwFgActs'); if (!slot) return;
-                var on = S.tab === 'panel';
-                slot.hidden = !on;
-                if (on) slot.innerHTML = actsHtml(S.session);
+                var on = S.tab === 'panel', room = on && !!S.session;
+                var spine = el('dtwFgActs');
+                if (spine) { spine.hidden = !on || room; if (on && !room) spine.innerHTML = actsHtml(null); }
+                var dock = el('dtwFgDockActs');
+                if (dock) dock.innerHTML = room ? actsHtml(S.session) : '';
             }
             function popHtml() { return '<div id="dtwSeatPop" class="dtw-fg-pop" role="dialog" aria-label="Who they are"><span class="arrow"></span><button type="button" class="close" aria-label="Close" onclick="dtwSeatOpen(null)">&#215;</button><div class="dtw-fg-pop-in" id="dtwSeatBody"></div></div>'; }
             // ---- the landing, no room open (Jenna 2026-10-27: 'CAN you redesign this page to look better I dont like the circles'): no placeholder
@@ -52408,8 +52432,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 out += '<div class="dtw-fg-land-pm"><div class="k">Or say it to Prometheus</div>' + examples.map(function(x) { return '<button type="button" class="dtw-fg-chip" onclick="dtwChatFill(\'' + esc(jsq(x)) + '\')">' + esc(x) + '</button>'; }).join('') + '</div>';
                 return out + '</div>';
             }
-            // The console: the band, the thread with the composer under it, the tally on the right, the seat popover.
-            // Room pills (Rooms, New room, Save, Export, Close) live in the frozen spine via syncFgActs.
+            // The console: the seats, then the question dock (pills + title), the thread and the tally.
+            // An open room: pills sit on the question dock, the freeze point.
             function renderPanelConsole() {
                 var h = el('dtwPnConsole'); if (!h) return;
                 syncFgBody();
@@ -52424,6 +52448,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 out += '<aside class="dtw-fg-tally" id="dtwFgTally" aria-label="The split">' + tallyHtml(s, g, roster, fq) + '</aside></div>';
                 out += popHtml();
                 h.innerHTML = out;
+                syncFgActs();
                 fgLayoutSeats();
                 if (fresh) fgScrollTop();
                 setAskEnabled(true);
@@ -52444,11 +52469,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 setAskEnabled(true);
                 if (S.fg.seat != null) placePop();
             }
-            // An open room: the thread is the scroller. The landing still uses the view body.
+            // The thread is the left scroller. Opening a room scrolls the page (the view) to its top.
+            function fgPage() { return el('digitalTwinsIQView'); }
             function fgScroller() { return el('dtwPnTranscript') || document.querySelector('#digitalTwinsIQView .dtw-body'); }
             function fgAtEnd() { var sc = fgScroller(); return !sc || (sc.scrollHeight - sc.scrollTop - sc.clientHeight < 80); }
             function fgScrollEnd() { var sc = fgScroller(); if (sc) sc.scrollTop = sc.scrollHeight; }
-            function fgScrollTop() { var sc = fgScroller(); if (sc) sc.scrollTop = 0; }
+            function fgScrollTop() { var page = S.session ? fgPage() : fgScroller(); if (page) page.scrollTop = 0; var sc = fgScroller(); if (sc && sc !== page) sc.scrollTop = 0; }
             // bring a block into the scrollport: its top a little under the edge when it sits below, or above, the visible band
             function fgScrollTo(node, pad) {
                 var sc = fgScroller(); if (!sc || !node) return;
@@ -52457,7 +52483,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }
             // the note under the composer; when it appears the composer grows, so a thread that sat at its end stays there
             function liveNote(text) { var live = el('dtwPnLive'); if (!live) return; live.textContent = text || ''; }
-            function fgShown() { fgLayoutSeats(); if (S.fg.seat != null) placePop(); }
+            function fgShown() { fgLayoutSeats(); fgDockSize(); if (S.fg.seat != null) placePop(); }
             window.dtwFgToggle = function(qid) { S.fg.open[qid] = !S.fg.open[qid]; fgRefresh(); var blk = document.querySelector('#dtwPnTranscript [data-q="' + esc(qid) + '"]'); if (blk && S.fg.open[qid]) fgScrollTo(blk); };
             window.dtwFgEarlier = function(qid, on) { S.fg.earlier[qid] = !!on; fgRefresh(); if (!on) { var blk = document.querySelector('#dtwPnTranscript [data-q="' + esc(qid) + '"]'); if (blk) fgScrollTo(blk); } };
             // ---- the drawers: the saved rooms behind Rooms, the room builder behind New room (the drawer component How to uses).

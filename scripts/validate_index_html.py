@@ -232,9 +232,11 @@ REQUIRED_ANCHORS: list[tuple[str, str]] = [
     ('function renderLibrary',
      "Digital Twins IQ library renderer (covers are logos)"),
     ('id="dtwFgActs"',
-     "Digital Twins IQ Focus Group room pills in the frozen spine"),
+     "Digital Twins IQ Focus Group room pills (landing)"),
+    ('id="dtwFgDock"',
+     "Digital Twins IQ Focus Group freezes at the question, not the whole top"),
     ('is-fg-room',
-     "Digital Twins IQ Focus Group: thread and split each scroll on their own"),
+     "Digital Twins IQ Focus Group: page scrolls, question docks, panes scroll"),
     ('id="dtwFgTallyQ"',
      "Digital Twins IQ Focus Group question picker on the split card"),
 ]
