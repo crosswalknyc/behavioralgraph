@@ -235,6 +235,8 @@ REQUIRED_ANCHORS: list[tuple[str, str]] = [
      "Digital Twins IQ Focus Group room pills in the frozen spine"),
     ('is-fg-room',
      "Digital Twins IQ Focus Group: thread and split each scroll on their own"),
+    ('id="dtwFgTallyQ"',
+     "Digital Twins IQ Focus Group question picker on the split card"),
 ]
 
 # Anchors we DO NOT want in the file (false negatives).

@@ -50984,7 +50984,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-body.is-fg-room .dtw-fg-chat { height: 100%; overflow: hidden; }
         #digitalTwinsIQView .dtw-body.is-fg-room .dtw-fg-stream { flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 8px; scrollbar-width: thin; overscroll-behavior: contain; }
         #digitalTwinsIQView .dtw-body.is-fg-room .dtw-fg-composer { position: relative; bottom: auto; z-index: 2; flex: 0 0 auto; padding: 10px 0 2px; }
-        #digitalTwinsIQView .dtw-body.is-fg-room .dtw-fg-tally { position: static; align-self: stretch; height: 100%; max-height: 100%; overflow: auto; scrollbar-width: thin; overscroll-behavior: contain; }
+        #digitalTwinsIQView .dtw-body.is-fg-room .dtw-fg-tally { position: static; align-self: stretch; height: 100%; max-height: 100%; overflow: hidden; }
         #digitalTwinsIQView .dtw-fg { position: relative; display: flex; flex-direction: column; min-width: 0; width: 100%; gap: 10px; }
         #digitalTwinsIQView .dtw-fg-top { display: flex; justify-content: space-between; align-items: center; gap: 10px 14px; flex-wrap: wrap; min-height: 24px; flex: 0 0 auto; }
         #digitalTwinsIQView .dtw-fg-top .dtw-eyebrow { color: var(--dtw-body); font-weight: 400; letter-spacing: 0.25em; font-size: 10px; min-width: 0; overflow-wrap: anywhere; }
@@ -51108,6 +51108,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         /* the tally, pinned while the thread scrolls */
         #digitalTwinsIQView .dtw-fg-tally { background: var(--dtw-raised); border-radius: 10px; padding: 12px 16px 14px; display: flex; flex-direction: column; position: sticky; top: 0; align-self: start; min-width: 0; }
         #digitalTwinsIQView .dtw-fg-tally > * { flex: none; }
+        /* Question picker (Jenna 2026-10-27): every question asked, the split and the voices follow the one you pick. */
+        #digitalTwinsIQView .dtw-fg-qpick { display: flex; flex-direction: column; gap: 5px; padding: 0 0 10px; margin: 0 0 4px; }
+        #digitalTwinsIQView .dtw-fg-qpick label { font-size: 10px; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dtw-clabel); }
+        #digitalTwinsIQView .dtw-fg-qpick select.dtw-in { width: 100%; min-height: 34px; padding: 0.35rem 1.8rem 0.35rem 0.7rem; font-size: 12px; line-height: 1.3; }
+        #digitalTwinsIQView .dtw-fg-tally > .dtw-fg-tally-in { flex: 1 1 auto; min-height: 0; overflow: auto; scrollbar-width: thin; overscroll-behavior: contain; }
         #digitalTwinsIQView .dtw-fg-th { display: flex; justify-content: space-between; align-items: baseline; gap: 6px 10px; font-size: 13px; font-weight: 600; color: var(--dtw-ink); line-height: 18px; flex-wrap: wrap; }
         #digitalTwinsIQView .dtw-fg-th span { font-size: 11px; color: var(--dtw-clabel); font-weight: 400; }
         #digitalTwinsIQView .dtw-fg-stack { margin-top: 5px; height: 11px; border-radius: 999px; overflow: hidden; display: flex; background: var(--dtw-s5); }
@@ -51962,9 +51967,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var ORD = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth', 'ninth', 'tenth', 'eleventh', 'twelfth', 'thirteenth', 'fourteenth', 'fifteenth', 'sixteenth', 'seventeenth', 'eighteenth', 'nineteenth', 'twentieth', 'twenty-first', 'twenty-second', 'twenty-third', 'twenty-fourth'];
             var MARK_SVG = '<svg viewBox="0 0 828 822" aria-hidden="true"><path d="M178.5,821.5 19.5,821.4 15.5,820.8 12.5,819.7 8.8,817.5 5.4,814.5 3.1,811.5 1.2,807.5 0.2,802.5 0.3,798.5 198.2,24.5 201.2,14.5 202.2,12.5 204.3,9.5 208.5,5.2 213.5,2.2 216.5,1.2 219.5,0.7 331.5,0.7 334.5,1.0 338.5,2.2 342.5,4.3 345.5,6.9 347.8,9.5 349.5,12.5 350.9,16.5 351.5,21.5 350.9,26.5 214.2,780.5 209.9,805.5 208.6,809.5 206.9,812.5 203.2,816.5 199.5,819.0 195.5,820.7 193.5,821.0 186.5,821.5ZM498.5,821.5 328.5,821.5 324.5,820.9 321.5,819.8 316.5,816.6 314.4,814.5 312.1,811.5 310.2,807.5 309.3,803.5 309.2,799.5 310.2,791.5 428.7,51.5 431.2,33.5 433.2,23.5 435.2,16.5 437.3,11.5 439.3,8.5 441.5,6.2 445.5,3.3 447.5,2.3 452.5,1.0 455.5,0.7 570.5,0.7 573.5,1.4 576.5,2.9 578.5,4.2 581.7,7.5 582.9,9.5 584.5,13.5 584.9,15.5 585.0,19.5 523.3,759.5 520.2,796.5 520.0,803.5 519.7,805.5 517.7,810.5 515.7,813.5 512.5,816.7 509.5,818.7 506.5,820.0 503.5,821.0ZM803.5,821.5 636.5,821.5 632.5,820.9 629.5,819.9 625.5,817.8 623.9,816.5 621.0,813.5 619.0,810.5 618.1,808.5 617.0,804.5 616.7,799.5 617.7,789.5 667.3,28.5 668.1,22.5 669.1,18.5 671.2,13.5 674.5,8.6 676.5,6.4 680.5,3.5 685.5,1.4 690.5,0.3 697.5,0.3 701.5,0.8 801.5,0.6 805.5,1.0 809.5,2.2 811.5,3.3 814.5,5.4 816.7,7.5 818.9,10.5 819.9,12.5 820.8,14.5 821.7,18.5 822.1,24.5 822.6,81.5 827.2,771.5 827.4,797.5 827.7,801.5 826.8,806.5 825.7,809.5 823.9,812.5 820.1,816.5 818.5,817.7 814.5,819.8 810.5,820.9Z"/></svg>';
             var SEP = '<span class="dtw-fg-sep">&middot;</span>';
-            S.fg = S.fg || { sid: null, open: {}, earlier: {}, seat: null };
+            S.fg = S.fg || { sid: null, open: {}, earlier: {}, seat: null, tallyQ: null };
             function modav() { return '<span class="dtw-fg-modav">' + MARK_SVG + '</span>'; }
-            function fgReset(sid) { if (S.fg.sid !== sid) { S.fg.sid = sid; S.fg.open = {}; S.fg.earlier = {}; S.fg.seat = null; } }
+            function fgReset(sid) { if (S.fg.sid !== sid) { S.fg.sid = sid; S.fg.open = {}; S.fg.earlier = {}; S.fg.seat = null; S.fg.tallyQ = null; } }
             function syncFgBody() {
                 var b = document.querySelector('#digitalTwinsIQView .dtw-body');
                 if (b) {
@@ -52030,6 +52035,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 for (var i = qs.length - 1; i >= 0; i--) { if (!qInFlight(qs[i]) && !qFailed(qs[i])) return qs[i]; }
                 for (var j = qs.length - 1; j >= 0; j--) { if (!qInFlight(qs[j])) return qs[j]; }
                 return qs.length ? qs[qs.length - 1] : null;
+            }
+            function qId(q, i) { return (q && q.id) ? String(q.id) : ('i' + i); }
+            function tallyFocusQ() {
+                var qs = (S.session || {}).questions || [];
+                if (S.fg.tallyQ) {
+                    for (var i = 0; i < qs.length; i++) { if (qId(qs[i], i) === String(S.fg.tallyQ)) return qs[i]; }
+                }
+                return focusQ();
             }
             function setAskEnabled(on) { var b = el('dtwPnAskBtn'); if (!b) return; var busy = !on || anyInFlight(); b.disabled = busy; b.classList.toggle('working', busy); b.innerHTML = busy ? 'Working...' : 'Ask the room<span class="arr"></span>'; }
             function clearRoomPoll() { if (S.roomPollTimer) { clearTimeout(S.roomPollTimer); S.roomPollTimer = null; } if (S.roomTick) { clearInterval(S.roomTick); S.roomTick = null; } }
@@ -52167,15 +52180,16 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     var a = bySeat[String(r.seat)], landed = !!flyBySeat[String(r.seat)];
                     return seatCircle(r, i, { edge: a ? edgeOf(rk, answerOptId(fq, a)) : '', mark: fly ? (landed ? '<span class="mark"></span>' : '<span class="mark wait"></span>') : '', pending: !!fly && !landed });
                 }).join('');
-                var meta;
-                if (fly) {
-                    meta = '<span class="dtw-fg-pulse"></span><span>' + stageLead(fly) + SEP + '<span id="dtwFgStageEl">' + qElapsedS(fly) + '</span>s</span>' + (fly !== fq ? SEP + '<span>' + (fly.kind && normQ(fly.q).indexOf(normQ(kindWord(fly.kind))) !== 0 ? esc(kindWord(fly.kind)) + ': ' : '') + esc(fly.q) + '</span>' : '');
+                var meta, qsAll = s.questions || [];
+                if (fly && (!fq || fly === fq)) {
+                    meta = '<span class="dtw-fg-pulse"></span><span>' + stageLead(fly) + SEP + '<span id="dtwFgStageEl">' + qElapsedS(fly) + '</span>s</span>';
                 } else if (fq) {
-                    var qs = s.questions || [], n = qs.indexOf(fq) + 1, took = qTookS(fq), nA = (fq.answers || []).length, total = seatsTotal(fq);
+                    var n = qsAll.indexOf(fq) + 1, took = qTookS(fq), nA = (fq.answers || []).length, total = seatsTotal(fq);
                     meta = '<span>Question ' + n + (fq.kind ? SEP + esc(kindWord(fq.kind)) : '');
                     if (qFailed(fq)) meta += SEP + 'did not finish';
                     else meta += SEP + '<b>' + nA + (total ? ' of ' + total : '') + '</b> answered' + (took != null ? ' in ' + took + 's' : '');
                     meta += SEP + fmtN(g.in_room || roster.length) + ' twins standing for <b>' + fmtN(g.size_people) + '</b> people' + (s.updated_at ? SEP + 'Saved ' + esc(fmtDay(s.updated_at)) : '') + '</span>';
+                    if (fly) meta += SEP + '<span class="dtw-fg-pulse"></span><span>Question ' + (qsAll.indexOf(fly) + 1) + ' is working</span>';
                 } else {
                     meta = '<span>' + fmtN(g.in_room || roster.length) + ' twins standing for <b>' + fmtN(g.size_people) + '</b> people' + SEP + 'Ask the first question below; the shares, the read and the voices come back in a minute or two.</span>';
                 }
@@ -52285,29 +52299,52 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (segs.length < 2) return '<div class="dtw-fg-quiet">' + fmtN((g || {}).in_room) + ' twins standing for ' + fmtN((g || {}).size_people) + ' people.</div>';
                 return '<div class="dtw-fg-sec"><div class="dtw-fg-th">Who is in the room.</div>' + segs.map(function(sg) { return '<div class="dtw-fg-seg"><div class="l1"><span>' + esc(sg.label) + '</span><b>' + pct(sg.share_pct, 1) + '</b></div><div class="dtw-fg-quiet" style="margin-top:1px;">' + fmtN(sg.people) + ' people, ' + sg.seats + (Number(sg.seats) === 1 ? ' seat' : ' seats') + '</div></div>'; }).join('') + '</div>';
             }
-            function tallyHtml(s, g, roster, fq) {
-                if (!fq) return '<div class="dtw-fg-th">The split.<span>Share of the room, by answer</span></div><div class="dtw-fg-quiet">Ask the first question and the split lands here: one bar, the people behind each answer, what the room knew and the voices.</div>' + roomFacts(g);
-                if (qFailed(fq)) return '<div class="dtw-fg-th">The split.<span>Share of the room, by answer</span></div><div class="dtw-fg-quiet">' + esc(fq.read || 'The room did not finish this question. Ask it again and it runs fresh.') + '</div>' + factsSec(fq);
-                var live = qInFlight(fq), opts = optsOf(fq), rk = rankMap(fq), seats = seatsTotal(fq), counts = live ? liveCounts(fq) : null, nA = (fq.answers || []).length;
-                var out = '<div class="dtw-fg-th">' + (live ? 'The split so far.' : 'The split.') + '<span>' + (live ? nA + (seats ? ' of ' + seats : '') + ' answered' : 'Share of the room, by answer') + '</span></div>';
-                if (!opts.length) { out += '<div class="dtw-fg-quiet">' + (live ? 'The options land with the first answers.' : 'An open question: the read and the voices carry it.') + '</div>'; }
-                else {
-                    out += questionStack(fq);
-                    out += opts.map(function(o) {
-                        var v = live ? (seats ? (counts[String(o.id)] || 0) / seats * 100 : 0) : Number(o.pct || 0);
-                        var tally = live ? ((counts[String(o.id)] || 0) + (seats ? ' of ' + seats : '')) : (o.tally || (o.seats_n != null && seats ? o.seats_n + ' of ' + seats : ''));
-                        var det = [];
-                        if (!live && o.people != null) det.push(fmtN(o.people) + ' people');
-                        if (tally) det.push(tally);
-                        return '<div class="dtw-fg-lrow' + (rk[String(o.id)] === 0 ? ' lead' : '') + '"><span class="dtw-fg-dot" style="background:' + seriesOf(rk, o.id) + '"></span><div class="body"><div class="l1"><span class="lab">' + esc(o.label) + '</span>' + (det.length ? '<span class="det">' + det.join(SEP) + '</span>' : '') + '<b>' + pct(v, 1) + '</b></div>' + (o.context && !live ? '<div class="ctx">' + esc(o.context) + '</div>' : '') + '</div></div>';
-                    }).join('');
-                }
-                out += factsSec(fq);
-                var voices = (fq.voices || []).slice(0, 2);
-                if (voices.length) out += '<div class="dtw-fg-sec"><div class="dtw-fg-th">The voices.</div><div class="dtw-fg-vtwo">' + voices.map(function(v) { return voiceMini(v, roster, fq); }).join('') + '</div></div>';
-                out += segmentsSec(fq, rk);
-                return out;
+            function qPickHtml(s, selected) {
+                var qs = (s || {}).questions || [];
+                if (qs.length < 2) return '';
+                var opts = qs.map(function(q, i) {
+                    var label = (i + 1) + '. ' + String(q.q || ('Question ' + (i + 1)));
+                    if (qInFlight(q)) label += ' (working)';
+                    else if (qFailed(q)) label += ' (did not finish)';
+                    if (label.length > 92) label = label.slice(0, 89) + '...';
+                    return '<option value="' + esc(qId(q, i)) + '"' + (selected && qId(q, i) === qId(selected, qs.indexOf(selected)) ? ' selected' : '') + '>' + esc(label) + '</option>';
+                }).join('');
+                return '<div class="dtw-fg-qpick"><label for="dtwFgTallyQ">Questions asked</label><select id="dtwFgTallyQ" class="dtw-in" aria-label="Question to show" onchange="dtwFgTallyQ(this.value)">' + opts + '</select></div>';
             }
+            function tallyHtml(s, g, roster, fq) {
+                var body;
+                if (!fq) body = '<div class="dtw-fg-th">The split.<span>Share of the room, by answer</span></div><div class="dtw-fg-quiet">Ask the first question and the split lands here: one bar, the people behind each answer, what the room knew and the voices.</div>' + roomFacts(g);
+                else if (qFailed(fq)) body = '<div class="dtw-fg-th">The split.<span>Share of the room, by answer</span></div><div class="dtw-fg-quiet">' + esc(fq.read || 'The room did not finish this question. Ask it again and it runs fresh.') + '</div>' + factsSec(fq);
+                else {
+                    var live = qInFlight(fq), opts = optsOf(fq), rk = rankMap(fq), seats = seatsTotal(fq), counts = live ? liveCounts(fq) : null, nA = (fq.answers || []).length;
+                    body = '<div class="dtw-fg-th">' + (live ? 'The split so far.' : 'The split.') + '<span>' + (live ? nA + (seats ? ' of ' + seats : '') + ' answered' : 'Share of the room, by answer') + '</span></div>';
+                    if (!opts.length) { body += '<div class="dtw-fg-quiet">' + (live ? 'The options land with the first answers.' : 'An open question: the read and the voices carry it.') + '</div>'; }
+                    else {
+                        body += questionStack(fq);
+                        body += opts.map(function(o) {
+                            var v = live ? (seats ? (counts[String(o.id)] || 0) / seats * 100 : 0) : Number(o.pct || 0);
+                            var tally = live ? ((counts[String(o.id)] || 0) + (seats ? ' of ' + seats : '')) : (o.tally || (o.seats_n != null && seats ? o.seats_n + ' of ' + seats : ''));
+                            var det = [];
+                            if (!live && o.people != null) det.push(fmtN(o.people) + ' people');
+                            if (tally) det.push(tally);
+                            return '<div class="dtw-fg-lrow' + (rk[String(o.id)] === 0 ? ' lead' : '') + '"><span class="dtw-fg-dot" style="background:' + seriesOf(rk, o.id) + '"></span><div class="body"><div class="l1"><span class="lab">' + esc(o.label) + '</span>' + (det.length ? '<span class="det">' + det.join(SEP) + '</span>' : '') + '<b>' + pct(v, 1) + '</b></div>' + (o.context && !live ? '<div class="ctx">' + esc(o.context) + '</div>' : '') + '</div></div>';
+                        }).join('');
+                    }
+                    body += factsSec(fq);
+                    var voices = (fq.voices || []).slice(0, 2);
+                    if (voices.length) body += '<div class="dtw-fg-sec"><div class="dtw-fg-th">The voices.</div><div class="dtw-fg-vtwo">' + voices.map(function(v) { return voiceMini(v, roster, fq); }).join('') + '</div></div>';
+                    body += segmentsSec(fq, rk);
+                }
+                return qPickHtml(s, fq) + '<div class="dtw-fg-tally-in" id="dtwFgTallyIn">' + body + '</div>';
+            }
+            window.dtwFgTallyQ = function(id) {
+                S.fg.tallyQ = id || null;
+                var s = S.session, h = el('dtwFgTally'); if (!s || !h) { fgRefresh(); return; }
+                var g = s.group || {}, roster = g.roster || [], fq = tallyFocusQ(), fly = flyQ();
+                var hero = el('dtwFgHero'); if (hero) { hero.innerHTML = heroHtml(s, g, roster, fq, fly); fgLayoutSeats(); }
+                h.innerHTML = tallyHtml(s, g, roster, fq);
+                var inn = el('dtwFgTallyIn'); if (inn) inn.scrollTop = 0;
+            };
             // ---- the composer, under the thread, as the Prometheus chat: the kind chips, the field, Ask the room as the one Signal Green button.
             function composerHtml(typed, typedOpts) {
                 var out = '<div class="dtw-fg-composer"><div id="dtwPnKinds" class="dtw-fg-kinds">' + KINDS.map(function(k) { return '<button type="button" class="dtw-fg-chip' + (S.panelKind === k[0] ? ' on' : '') + '" data-k="' + k[0] + '" onclick="dtwPanelKind(\'' + k[0] + '\')">' + k[1] + '</button>'; }).join('') + '</div>';
@@ -52381,10 +52418,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (!s) { var had = S.fg.sid != null; clearRoomPoll(); clearPortraitTimers(); fgReset(null); h.innerHTML = noRoomHtml(); fgLayoutSeats(); if (had) fgScrollTop(); return; }
                 var fresh = S.fg.sid !== s.id;
                 fgReset(s.id);
-                var g = s.group || {}, roster = g.roster || [], fq = focusQ(), fly = flyQ();
+                var g = s.group || {}, roster = g.roster || [], fq = tallyFocusQ(), latest = focusQ(), fly = flyQ();
                 var typed = (el('dtwPnQ') || {}).value || '', typedOpts = (el('dtwPnOptions') || {}).value || '';
                 var out = '<div class="dtw-fg-hero" id="dtwFgHero">' + heroHtml(s, g, roster, fq, fly) + '</div>';
-                out += '<div class="dtw-fg-main"><div class="dtw-fg-chat"><div class="dtw-fg-stream" id="dtwPnTranscript">' + threadHtml(s, roster, fq, fly) + '</div>' + composerHtml(typed, typedOpts) + '</div>';
+                out += '<div class="dtw-fg-main"><div class="dtw-fg-chat"><div class="dtw-fg-stream" id="dtwPnTranscript">' + threadHtml(s, roster, latest, fly) + '</div>' + composerHtml(typed, typedOpts) + '</div>';
                 out += '<aside class="dtw-fg-tally" id="dtwFgTally" aria-label="The split">' + tallyHtml(s, g, roster, fq) + '</aside></div>';
                 out += popHtml();
                 h.innerHTML = out;
@@ -52398,11 +52435,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // A refresh while the room works or a portrait lands: the band, the thread and the tally redraw; the composer keeps what was typed.
             function fgRefresh() {
                 var s = S.session, h = el('dtwPnConsole'); if (!s || !h || !el('dtwFgHero')) { renderPanelConsole(); return; }
-                var g = s.group || {}, roster = g.roster || [], fq = focusQ(), fly = flyQ();
+                var g = s.group || {}, roster = g.roster || [], fq = tallyFocusQ(), latest = focusQ(), fly = flyQ();
                 el('dtwFgHero').innerHTML = heroHtml(s, g, roster, fq, fly);
                 fgLayoutSeats();
                 var tr = el('dtwPnTranscript');
-                if (tr) { var atEnd = fgAtEnd(); tr.innerHTML = threadHtml(s, roster, fq, fly); if (atEnd) fgScrollEnd(); }
+                if (tr) { var atEnd = fgAtEnd(); tr.innerHTML = threadHtml(s, roster, latest, fly); if (atEnd) fgScrollEnd(); }
                 var ta = el('dtwFgTally'); if (ta) ta.innerHTML = tallyHtml(s, g, roster, fq);
                 syncFgActs();
                 setAskEnabled(true);
@@ -52575,12 +52612,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     // the same question again in this room: the record it already has comes back with a note; nothing was charged, no second job
                     adoptQuestion(d.question, true);
                     S.fg.open[d.question.id] = true;
+                    if (d.question.id) S.fg.tallyQ = d.question.id;
                     renderPanelConsole();
                     liveNote(d.note || d.question.note || 'You asked this earlier in this session; here is that answer.');
                     var blk = document.querySelector('#dtwPnTranscript [data-q="' + esc(d.question.id) + '"]'); if (blk) fgScrollTo(blk);
                     return;
                 }
                 S.session.questions.push(d.question); if (d.questions_paid != null) S.session.questions_paid = d.questions_paid;
+                if (d.question && d.question.id) S.fg.tallyQ = d.question.id;
                 renderPanelConsole();
                 var nb = document.querySelector('#dtwPnTranscript [data-q="' + esc(d.question.id) + '"]'); if (nb) fgScrollTo(nb); else fgScrollEnd();
             };
