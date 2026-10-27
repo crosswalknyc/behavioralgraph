@@ -141217,6 +141217,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             if (!legacy && drawer && drawer.parentElement !== attic) attic.appendChild(drawer);
 
             // rail of tabs, built from the slabs that actually arrived
+            if (/influencer_project/.test(slugNow)) { delete claimed.roi; delete claimed.assets; }
             var live = _AIQ_TABS.filter(function (t) { return claimed[t.id]; });
             _aiqBanner(wrap);
             if (!live.length) {
