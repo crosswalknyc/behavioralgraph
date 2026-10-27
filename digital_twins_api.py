@@ -18,11 +18,15 @@ app.py so app.py stays small.
   POST /api/digital-twins/<key>/spend/<plan>/mode     chip or rule, with the guardrail
   GET  /api/digital-twins/<key>/spend/<plan>/moves.csv
   GET  /api/digital-twins/<key>/spend/<plan>/handoff  the Attribution IQ tracking package, prefilled
-  POST /api/digital-twins/<key>/panel/open           open a Focus Group IQ room
-  GET  /api/digital-twins/<key>/panel/<sid>
-  POST /api/digital-twins/<key>/panel/<sid>/ask      ask the room (synchronous, seconds)
+  POST /api/digital-twins/<key>/panel/open           open a Focus Group IQ room (free; an empty room with the same twins, segments
+                                                     and seats is reused; portraits start on a thread)
+  GET  /api/digital-twins/<key>/panel/<sid>          the session; the roster carries portrait_url once the faces exist (re-poll)
+  POST /api/digital-twins/<key>/panel/<sid>/ask      ask the room (synchronous, seconds; the session price on the first question)
+  DELETE /api/digital-twins/<key>/panel/<sid>        delete a room (creator or admin; 30-day undo copy under system/digital_twins/deleted_rooms/)
+  POST /api/digital-twins/<key>/panel/<sid>/delete   the same for clients that cannot send DELETE
   GET  /api/digital-twins/<key>/panel/<sid>/export.csv
   GET  /api/digital-twins/<key>/panel/<sid>/export.pdf
+  GET  /api/digital-twins/portrait/<hash>?size=128   a twin's generated portrait (JPEG, long cache); 404 when absent
 
 Access: ``has_digital_twins_iq_access`` or admin / super_admin; the
 creator always sees their own; ``allowed_digital_twin_runs`` defaults
@@ -32,6 +36,7 @@ super admins are free. No email is sent from here.
 from __future__ import annotations
 
 import json
+import re
 import sys
 import time
 import traceback
@@ -169,6 +174,34 @@ def _nocache(resp):
     except Exception:
         pass
     return resp
+
+
+def _portraits():
+    """The portraits module, or None when it cannot load (the room
+    never depends on it)."""
+    try:
+        from migration import digital_twin_portraits as PT
+        return PT
+    except Exception:
+        traceback.print_exc()
+        return None
+
+
+def _attach_portraits(payload, key, sess):
+    """The self-heal on read: seats whose portrait exists get their url;
+    a change is written back in place. Never raises."""
+    PT = _portraits()
+    if PT is None or not sess:
+        return
+    try:
+        if PT.attach_portraits(sess, _s3()):
+            DT.save_twin(_s3(), key, payload)
+    except Exception as e:
+        try:
+            from prometheus import faults as _faults
+            _faults.note('digital_twins_api.attach_portraits', e)
+        except Exception:
+            pass
 
 
 # -------------------------------------------------------------- routes
@@ -521,24 +554,71 @@ def dt_panel_open(key):
         if other:
             twins.append(other)
     from migration import digital_twin_panel as P
-    sid = uuid.uuid4().hex[:10]
-    funds = _charge(user, 'digital_twin_panel', f"Focus Group IQ session: {(payload.get('meta') or {}).get('name')}", sid)
-    if funds is not None:
-        return funds
-    sess = P.open_session(twins, segments=body.get('segments') or None, in_room=int(body.get('in_room') or P.DEFAULT_IN_ROOM), title=str(body.get('title') or '')[:120],
-                          created_by=_uname(user), session_id=sid)
-    sess['twin_keys'] = [str((t.get('meta') or {}).get('key') or '') for t in twins]
-    sess['questions_paid'] = DT.PANEL_QUESTIONS_INCLUDED
-    payload.setdefault('panel_sessions', []).insert(0, sess)
+    segments = body.get('segments') or None
+    in_room = int(body.get('in_room') or P.DEFAULT_IN_ROOM)
+    title = str(body.get('title') or '')[:120]
+    twins_by_key = {str((t.get('meta') or {}).get('key') or ''): t for t in twins}
+    # Opening a room is free; the session price is taken on the first
+    # question (2026-10-26). An empty room with the same twins, segments
+    # and seats is reused instead of opening another (Jenna: repeated
+    # clicks on Open the room left four empty 'Room: Gilmore Girls').
+    reused = P.find_reusable_session(payload, twins, segments, in_room, created_by=_uname(user))
+    if reused is not None:
+        sess = reused
+        if title and title != sess.get('title'):
+            sess['title'] = title
+    else:
+        sess = P.open_session(twins, segments=segments, in_room=in_room, title=title, created_by=_uname(user), session_id=uuid.uuid4().hex[:10])
+        sess['twin_keys'] = [str((t.get('meta') or {}).get('key') or '') for t in twins]
+        payload.setdefault('panel_sessions', []).insert(0, sess)
+    PT = _portraits()
+    if PT is not None:
+        try:
+            PT.attach_portraits(sess, _s3())      # seats already pictured (a second room with the same twins) carry their url at once
+        except Exception:
+            pass
     DT.save_twin(_s3(), key, payload)
     first_q = str(body.get('q') or body.get('question') or '').strip()
     rec = None
     if first_q:
-        twins_by_key = {str((t.get('meta') or {}).get('key') or ''): t for t in twins}
+        funds = _charge_question(user, payload, sess)
+        if funds is not None:
+            doc = funds[0].get_json() or {}
+            doc['session'] = sess        # the room stays open and free; the question waits on funds
+            return jsonify(doc), funds[1]
         rec = P.ask(sess, twins_by_key, first_q, options=body.get('options'), stimulus=body.get('stimulus') if isinstance(body.get('stimulus'), dict) else None,
                     voices_fn=_voices_fn(), asked_by=_uname(user))
         DT.save_twin(_s3(), key, payload)
-    return jsonify({'success': True, 'session': sess, 'question': rec})
+    if PT is not None:
+        try:
+            # the faces land in the session document when they finish; the room answers now
+            PT.schedule_room_portraits(_s3(), key, sess, twins_by_key, payload)
+        except Exception as e:
+            try:
+                from prometheus import faults as _faults
+                _faults.note('digital_twins_api.schedule_portraits', e)
+            except Exception:
+                pass
+    return jsonify({'success': True, 'session': sess, 'question': rec, 'reused': reused is not None})
+
+
+def _charge_question(user, payload, sess):
+    """The price the next question carries, if any: the session on its
+    first question, a further block when the paid questions are used
+    up. None when nothing is due or it was charged (or free)."""
+    from migration import digital_twin_panel as P
+    due = P.charge_due(sess, DT.PANEL_QUESTIONS_INCLUDED)
+    if not due:
+        return None
+    name = (payload.get('meta') or {}).get('name')
+    sid = str(sess.get('id') or '')
+    asked = len(sess.get('questions') or [])
+    desc = f"Focus Group IQ session: {name}" if due == 'digital_twin_panel' else f"Focus Group IQ, {DT.PANEL_QUESTIONS_INCLUDED} more questions: {name}"
+    funds = _charge(user, due, desc, sid if due == 'digital_twin_panel' else f"{sid}-{asked}")
+    if funds is not None:
+        return funds
+    P.mark_paid(sess, DT.PANEL_QUESTIONS_INCLUDED)
+    return None
 
 
 @bp.route(f'{PREFIX}/<path:key>/panel/<sid>', methods=['GET'])
@@ -552,6 +632,7 @@ def dt_panel_get(key, sid):
     sess = _session(payload, sid)
     if not sess:
         return jsonify({'success': False, 'error': 'session not found'}), 404
+    _attach_portraits(payload, key, sess)
     return _nocache(jsonify({'success': True, 'session': sess}))
 
 
@@ -570,13 +651,9 @@ def dt_panel_ask(key, sid):
     q = ' '.join(str(body.get('q') or body.get('question') or '').split())
     if not q:
         return jsonify({'success': False, 'error': 'Ask the room something.'}), 400
-    asked = len(sess.get('questions') or [])
-    paid = int(sess.get('questions_paid') or DT.PANEL_QUESTIONS_INCLUDED)
-    if asked >= paid:
-        funds = _charge(user, 'digital_twin_panel_more', f"Focus Group IQ, {DT.PANEL_QUESTIONS_INCLUDED} more questions: {(payload.get('meta') or {}).get('name')}", f"{sid}-{asked}")
-        if funds is not None:
-            return funds
-        sess['questions_paid'] = paid + DT.PANEL_QUESTIONS_INCLUDED
+    funds = _charge_question(user, payload, sess)      # the session on its first question, a further block after twelve
+    if funds is not None:
+        return funds
     twins_by_key = {}
     for tk in sess.get('twin_keys') or [key]:
         t = payload if tk == key else DT.load_twin(_s3(), tk)
@@ -585,10 +662,44 @@ def dt_panel_ask(key, sid):
     if key not in twins_by_key:
         twins_by_key[key] = payload
     from migration import digital_twin_panel as P
+    PT = _portraits()
+    if PT is not None:
+        try:
+            PT.attach_portraits(sess, _s3())      # so the voices of this answer carry the portraits that exist
+        except Exception:
+            pass
     rec = P.ask(sess, twins_by_key, q, kind=body.get('kind'), options=body.get('options'), stimulus=body.get('stimulus') if isinstance(body.get('stimulus'), dict) else None,
                 voices_fn=_voices_fn(), asked_by=_uname(user))
     DT.save_twin(_s3(), key, payload)
     return jsonify({'success': True, 'question': rec, 'session_id': sid, 'questions_asked': len(sess['questions']), 'questions_paid': sess.get('questions_paid')})
+
+
+@bp.route(f'{PREFIX}/<path:key>/panel/<sid>', methods=['DELETE'])
+@bp.route(f'{PREFIX}/<path:key>/panel/<sid>/delete', methods=['POST'])
+def dt_panel_delete(key, sid):
+    """Delete a room (2026-10-26, Jenna: "need a way to delete a room").
+    The room's creator or an admin; the session leaves the twin payload
+    in place and a copy is kept under system/digital_twins/deleted_rooms/
+    for a 30-day undo. Never emailed."""
+    user, err = _gate()
+    if err:
+        return err
+    payload, err = _twin_or_404(user, key)
+    if err:
+        return err
+    sess = _session(payload, sid)
+    if not sess:
+        return jsonify({'success': False, 'error': 'session not found'}), 404
+    from migration import digital_twin_panel as P
+    if not P.can_delete_room(sess, _uname(user), DT.is_admin(user)):
+        return jsonify({'success': False, 'error': 'Only the person who opened this room, or an admin, can delete it.'}), 403
+    removed = P.delete_room(_s3(), key, payload, sid, deleted_by=_uname(user))
+    if removed is None:
+        return jsonify({'success': False, 'error': 'session not found'}), 404
+    DT.save_twin(_s3(), key, payload)
+    undo_until = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(time.time() + P.DELETED_ROOM_KEEP_DAYS * 86400))
+    return _nocache(jsonify({'success': True, 'deleted': sid, 'sessions_left': len(payload.get('panel_sessions') or []),
+                             'undo_until': undo_until, 'message': 'Room deleted. It can be restored within 30 days by an admin.'}))
 
 
 @bp.route(f'{PREFIX}/<path:key>/panel/<sid>/export.csv', methods=['GET'])
@@ -619,7 +730,39 @@ def dt_panel_pdf(key, sid):
     if not sess:
         return jsonify({'success': False, 'error': 'session not found'}), 404
     from migration import digital_twin_exports as X
-    return Response(X.build_panel_pdf(payload, sess), mimetype='application/pdf', headers={'Content-Disposition': f'attachment; filename="{X.panel_pdf_filename(payload, sess)}"'})
+    PT = _portraits()
+    portrait_fn = (lambda h: PT.read_portrait(_s3(), h, PT.THUMB_SIZE)) if PT is not None else None
+    return Response(X.build_panel_pdf(payload, sess, portrait_fn=portrait_fn), mimetype='application/pdf', headers={'Content-Disposition': f'attachment; filename="{X.panel_pdf_filename(payload, sess)}"'})
+
+
+_PORTRAIT_HASH_RX = re.compile(r"^[0-9a-f]{16,64}$")
+
+
+@bp.route(f'{PREFIX}/portrait/<hash_>', methods=['GET'])
+def dt_portrait(hash_):
+    """A twin's generated portrait: the 512 px JPEG, or the 128 px thumb
+    with ``?size=128``. Gated like the rest of the blueprint (a signed-in
+    seat with the product); the hash is unguessable, so no per-twin
+    check. 404 when the image is absent or portraits are off."""
+    user, err = _gate()
+    if err:
+        return err
+    h = str(hash_ or '').strip().lower()
+    if not _PORTRAIT_HASH_RX.match(h):
+        return jsonify({'success': False, 'error': 'portrait not found'}), 404
+    PT = _portraits()
+    if PT is None:
+        return jsonify({'success': False, 'error': 'portrait not found'}), 404
+    size = PT.THUMB_SIZE if str(request.args.get('size') or '') == str(PT.THUMB_SIZE) else PT.OUT_SIZE
+    data = PT.read_portrait(_s3(), h, size)
+    if not data:
+        return jsonify({'success': False, 'error': 'portrait not found'}), 404
+    resp = Response(data, mimetype='image/jpeg')
+    resp.headers['Cache-Control'] = 'private, max-age=31536000, immutable'
+    resp.headers['ETag'] = f'"{h[:24]}-{size}-{len(data)}"'
+    resp.headers['Content-Length'] = str(len(data))
+    resp.headers['X-Content-Type-Options'] = 'nosniff'
+    return resp
 
 
 @bp.route(f'{PREFIX}/<path:key>', methods=['GET'])

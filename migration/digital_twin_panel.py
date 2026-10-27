@@ -176,10 +176,97 @@ def _segment_share(t, f: dict) -> float:
     return clamp(s, 0.002, 1.0)
 
 
+def strip_twin_words(label: str, t: dict) -> str:
+    """The segment label with the twin's own name and subject taken out,
+    so the twin's words never read as a filter: 'Gilmore Girls' is not
+    'girls' (2026-10-26, the room stood for 76% of the twin and seated
+    twelve women). 'Gilmore Girls Hulu viewers, women 25 to 44' still
+    reads women 25 to 44."""
+    out = str(label or '')
+    words = {str(_meta(t).get('name') or '').strip(), str(_meta(t).get('subject') or '').strip()}
+    for w in sorted((w for w in words if len(w) >= 3), key=len, reverse=True):
+        out = re.sub(r"(?<![A-Za-z0-9])" + re.escape(w) + r"(?![A-Za-z0-9])", ' ', out, flags=re.I)
+    return ' '.join(out.split())
+
+
+def _filter_clean(f: dict) -> dict:
+    return {k: (list(v) if isinstance(v, tuple) else v) for k, v in (f or {}).items()}
+
+
+def _size_segments(segs: list, by_key: dict, seed: str) -> int:
+    """People per segment from each twin's size: a segment with no filter
+    stands for the whole twin, a filtered one for its share; the
+    segments of one twin together never exceed that twin (overlap is
+    taken out in proportion). Sets ``people`` and ``share_pct``; returns
+    the room's size, which equals the sum of the segments."""
+    for s in segs:
+        t = by_key.get(s['twin']) or {}
+        s['_raw'] = max(50.0, float(_meta(t).get('size_us') or 1_000_000) * _segment_share(t, s.get('_filter') or {}))
+    by_twin = {}
+    for s in segs:
+        by_twin.setdefault(s['twin'], []).append(s)
+    for tkey, group in by_twin.items():
+        cap = int(float(_meta(by_key.get(tkey) or {}).get('size_us') or 0) or 0)
+        raw_total = sum(s['_raw'] for s in group)
+        if cap > 0 and raw_total > cap:
+            for s in group:
+                s['_raw'] = s['_raw'] * cap / raw_total
+        for s in group:
+            s['people'] = natural_count(seed, f"seg|{s['label']}|people", max(1, int(s['_raw'])))
+        if cap > 0 and raw_total >= cap:
+            # the twin's segments add up to the twin exactly, never beyond it
+            big = max(group, key=lambda x: x['people'])
+            big['people'] = max(1, big['people'] + (cap - sum(s['people'] for s in group)))
+    for s in segs:
+        s.pop('_raw', None)
+    total_people = sum(s['people'] for s in segs) or 1
+    for s in segs:
+        s['share_pct'] = pct1(s['people'] / total_people * 100.0)
+    return total_people
+
+
+def recompute_group_sizes(sess: dict, twins_by_key: dict) -> bool:
+    """Re-derive a saved room's header figures (each segment's people and
+    share, the room's ``size_people``) from the twins' current size, with
+    the twin's own words never read as a filter and the segments of one
+    twin capped at the twin. A filter the caller gave stays; one that
+    was read off the label is read again with the twin's words taken
+    out. The roster and the answered questions stay as they were.
+    True when a figure changed."""
+    g = (sess or {}).get('group') or {}
+    segs = g.get('segments') or []
+    if not segs:
+        return False
+    by_key = {k: t for k, t in (twins_by_key or {}).items()}
+    before = [(s.get('people'), s.get('share_pct'), dict(s.get('filter') or {})) for s in segs] + [g.get('size_people')]
+    for s in segs:
+        t = by_key.get(str(s.get('twin') or '')) or {}
+        stored = {k: (list(v) if isinstance(v, tuple) else v) for k, v in (s.get('filter') or {}).items()}
+        legacy = _filter_clean(parse_segment(str(s.get('label') or '')))
+        if not stored or stored == legacy:
+            f = parse_segment(strip_twin_words(str(s.get('label') or ''), t))
+        else:
+            f = dict(s.get('filter') or {})
+            if isinstance(f.get('age'), list):
+                f['age'] = tuple(f['age'])
+        s['_filter'] = f
+        s['filter'] = _filter_clean(f)
+    seed = f"panel|{sess.get('id')}|{'|'.join(str(k) for k in (sess.get('twin_keys') or g.get('twins') or []))}|{VERSION}"
+    g['size_people'] = _size_segments(segs, by_key, seed)
+    for s in segs:
+        s.pop('_filter', None)
+    after = [(s.get('people'), s.get('share_pct'), dict(s.get('filter') or {})) for s in segs] + [g.get('size_people')]
+    if after != before:
+        sess['updated_at'] = _now()
+        return True
+    return False
+
+
 def build_group(twins: list, segments: Optional[list] = None, in_room: int = DEFAULT_IN_ROOM, seed: str = '') -> dict:
     """The group: segments with their share of the room and the people
     they stand for, and a seated roster with stable names, ages and
-    cities."""
+    cities. ``size_people`` is the sum of the segments; a segment with
+    no filter is the whole twin."""
     in_room = int(clamp(int(in_room or DEFAULT_IN_ROOM), 2, MAX_IN_ROOM))
     by_key = {_twin_key(t): t for t in twins}
     segs = []
@@ -190,14 +277,12 @@ def build_group(twins: list, segments: Optional[list] = None, in_room: int = DEF
         label = str(s.get('label') or '').strip()
         tkey = str(s.get('twin') or s.get('twin_key') or '')
         t = by_key.get(tkey) or next((tw for tw in twins if _twin_name(tw).lower() in label.lower()), None) or (twins[i % len(twins)] if twins else {})
-        f = dict(s.get('filter') or {}) or parse_segment(label)
-        share = _segment_share(t, f)
-        people = max(50, int(float(_meta(t).get('size_us') or 1_000_000) * share))
-        segs.append({'label': label or _twin_name(t), 'twin': _twin_key(t), 'twin_name': _twin_name(t), 'filter': {k: (list(v) if isinstance(v, tuple) else v) for k, v in f.items()},
-                     'people': natural_count(seed, f"seg|{label}|people", people), 'share_pct': 0.0, 'seats': 0})
-    total_people = sum(s['people'] for s in segs) or 1
+        f = dict(s.get('filter') or {}) or parse_segment(strip_twin_words(label, t))
+        segs.append({'label': label or _twin_name(t), 'twin': _twin_key(t), 'twin_name': _twin_name(t), 'filter': _filter_clean(f), '_filter': f,
+                     'people': 0, 'share_pct': 0.0, 'seats': 0})
+    total_people = _size_segments(segs, by_key, seed)
     for s in segs:
-        s['share_pct'] = pct1(s['people'] / total_people * 100.0)
+        s.pop('_filter', None)
     # seats: largest remainder, at least one each
     raw = [s['people'] / total_people * in_room for s in segs]
     seats = [max(1, int(r)) for r in raw]
@@ -610,6 +695,16 @@ _VOICE_BANK = {
 }
 
 
+def voice_record(seat: dict, line: str) -> dict:
+    """A voice names its seat (``seat``) so the page can put the twin's
+    portrait beside the line; the url rides along once the seat has
+    one (2026-10-26, portraits)."""
+    out = {'seat': seat.get('seat'), 'name': seat['name'], 'age': seat['age'], 'city': seat['city'], 'segment': seat['segment'], 'line': line}
+    if seat.get('portrait_url'):
+        out['portrait_url'] = seat['portrait_url']
+    return out
+
+
 def fallback_voices(twin: dict, roster: list, q: str, kind: str, dist: dict, options: list, qi: int, seed: str, n: int = 4) -> list:
     """First-person lines from named twins in the room, keyed on the
     traits and the answer, when the model is off or late."""
@@ -646,7 +741,7 @@ def fallback_voices(twin: dict, roster: list, q: str, kind: str, dist: dict, opt
             other = b_txt if win == a_txt else a_txt
             line = line.replace('{a}', win if u < 0.65 else other).replace('{b}', other if u < 0.65 else win)
         line = line.replace('{they}', 'they')
-        out.append({'name': s['name'], 'age': s['age'], 'city': s['city'], 'segment': s['segment'], 'line': line})
+        out.append(voice_record(s, line))
     return out
 
 
@@ -702,12 +797,120 @@ def one_line_read(q: str, kind: str, dist: dict, by_segment: list, options: list
 
 def open_session(twins: list, *, segments: Optional[list] = None, in_room: int = DEFAULT_IN_ROOM, title: str = '',
                  created_by: str = '', session_id: str = '') -> dict:
+    """A new room. Opening is free: ``questions_paid`` starts at 0 and the
+    session price is taken on the first question (``charge_due``)."""
     sid = session_id or uuid.uuid4().hex[:10]
     seed = f"panel|{sid}|{'|'.join(_twin_key(t) for t in twins)}|{VERSION}"
     group = build_group(twins, segments, in_room, seed)
     names = ', '.join(dict.fromkeys(_twin_name(t) for t in twins))
     return {'id': sid, 'title': title or f"Room: {names}", 'group': group, 'questions': [], 'created_by': created_by or 'prometheus',
-            'created_at': _now(), 'updated_at': _now(), 'version': VERSION}
+            'created_at': _now(), 'updated_at': _now(), 'version': VERSION, 'questions_paid': 0}
+
+
+# ------------------------------------------------- rooms: reuse, pay, delete
+def segment_labels(twins: list, segments: Optional[list] = None) -> list:
+    """The segment labels a room spec resolves to (the twin names when
+    none are given), for comparing rooms."""
+    if not segments:
+        return sorted(_twin_name(t).strip().lower() for t in twins)
+    out = []
+    for s in segments:
+        if isinstance(s, str):
+            out.append(s.strip().lower())
+        elif isinstance(s, dict):
+            out.append(str(s.get('label') or '').strip().lower())
+    return sorted(out)
+
+
+def find_reusable_session(payload: dict, twins: list, segments: Optional[list] = None, in_room: int = DEFAULT_IN_ROOM, created_by: str = '') -> Optional[dict]:
+    """An existing room on the twin with no questions yet and the same
+    twins, segments and seat count (2026-10-26, Jenna: repeated clicks
+    on Open the room left four empty 'Room: Gilmore Girls'). The
+    caller's own empty room first, then anyone's. None when there is
+    none."""
+    want_keys = sorted(_twin_key(t) for t in twins)
+    want_labels = segment_labels(twins, segments)
+    want_room = int(clamp(int(in_room or DEFAULT_IN_ROOM), 2, MAX_IN_ROOM))
+    hits = []
+    for s in (payload or {}).get('panel_sessions') or []:
+        if s.get('questions'):
+            continue
+        g = s.get('group') or {}
+        keys = sorted(str(k) for k in (s.get('twin_keys') or g.get('twins') or []))
+        labels = sorted(str(x.get('label') or '').strip().lower() for x in (g.get('segments') or []))
+        if keys == want_keys and labels == want_labels and int(g.get('in_room') or 0) == want_room:
+            hits.append(s)
+    if not hits:
+        return None
+    mine = [s for s in hits if created_by and str(s.get('created_by') or '') == str(created_by)]
+    return (mine or hits)[0]
+
+
+def charge_due(sess: dict, included: int = 12) -> Optional[str]:
+    """Which price the next question carries: 'digital_twin_panel' (the
+    session, on its first question), 'digital_twin_panel_more' when the
+    paid block is used up, None while questions remain. Opening a room
+    never charges."""
+    asked = len((sess or {}).get('questions') or [])
+    paid = int((sess or {}).get('questions_paid') or 0)
+    if asked < paid:
+        return None
+    return 'digital_twin_panel' if paid <= 0 else 'digital_twin_panel_more'
+
+
+def mark_paid(sess: dict, included: int = 12) -> int:
+    sess['questions_paid'] = int(sess.get('questions_paid') or 0) + int(included)
+    return sess['questions_paid']
+
+
+DELETED_ROOMS_PREFIX = 'system/digital_twins/deleted_rooms/'
+DELETED_ROOM_KEEP_DAYS = 30
+
+
+def deleted_room_key(twin_key: str, sid: str) -> str:
+    """system/digital_twins/deleted_rooms/<key-slug>/<sid>.json"""
+    stem = str(twin_key or '')
+    if stem.startswith('digital-twins/'):
+        stem = stem[len('digital-twins/'):]
+    stem = re.sub(r"\.json(\.gz)?$", '', stem)
+    slug = re.sub(r"[^A-Za-z0-9._-]+", '_', stem).strip('_') or 'twin'
+    return f"{DELETED_ROOMS_PREFIX}{slug}/{re.sub(r'[^A-Za-z0-9_-]+', '', str(sid or ''))}.json"
+
+
+def can_delete_room(sess: dict, username: str, is_admin: bool = False) -> bool:
+    """The room's creator, or an admin."""
+    if is_admin:
+        return True
+    return bool(username) and str((sess or {}).get('created_by') or '') == str(username)
+
+
+def remove_session(payload: dict, sid: str) -> Optional[dict]:
+    """Take the session out of the twin payload in place; the record
+    removed, or None when absent."""
+    sessions = (payload or {}).get('panel_sessions') or []
+    for i, s in enumerate(sessions):
+        if str(s.get('id')) == str(sid):
+            return sessions.pop(i)
+    return None
+
+
+def delete_room(s3, twin_key: str, payload: dict, sid: str, deleted_by: str = '') -> Optional[dict]:
+    """Remove a room from the twin in place and keep it under
+    ``deleted_room_key`` for a 30-day undo (never emailed). The removed
+    session, or None when absent. The caller saves the twin."""
+    sess = remove_session(payload, sid)
+    if sess is None:
+        return None
+    rec = {'twin_key': twin_key, 'session_id': sess.get('id'), 'deleted_by': deleted_by or '', 'deleted_at': _now(),
+           'undo_until': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(time.time() + DELETED_ROOM_KEEP_DAYS * 86400)), 'session': sess}
+    if s3 is not None:
+        try:
+            import json as _json
+            s3.put_object(Bucket='dashboard-inputs', Key=deleted_room_key(twin_key, sid), Body=_json.dumps(rec, ensure_ascii=False, default=str).encode('utf-8'),
+                          ContentType='application/json', Metadata={'undo-until': rec['undo_until']})
+        except Exception as e:
+            print(f"[panel] undo copy failed (room still deleted): {e}")
+    return sess
 
 
 def ask(session: dict, twins_by_key: dict, q: str, *, kind: Optional[str] = None, options: Optional[list] = None,
@@ -785,7 +988,7 @@ def ask(session: dict, twins_by_key: dict, q: str, *, kind: Optional[str] = None
                     if isinstance(v, dict) and v.get('line'):
                         r = names.get(str(v.get('name') or ''))
                         if r:
-                            voices.append({'name': r['name'], 'age': r['age'], 'city': r['city'], 'segment': r['segment'], 'line': str(v['line'])[:300]})
+                            voices.append(voice_record(r, str(v['line'])[:300]))
                 voices = voices or None
         except Exception:
             voices = None
@@ -836,5 +1039,7 @@ def session_csv(session: dict) -> str:
     return buf.getvalue()
 
 
-__all__ = ['open_session', 'ask', 'build_group', 'classify_question', 'distribution', 'propensity', 'parse_segment', 'fallback_voices',
-           'with_time_budget', 'session_lines', 'session_csv', 'one_line_read', 'topic_of', 'KINDS', 'DEFAULT_IN_ROOM', 'MAX_IN_ROOM', 'TIME_BUDGET_S']
+__all__ = ['open_session', 'ask', 'build_group', 'classify_question', 'distribution', 'propensity', 'parse_segment', 'fallback_voices', 'voice_record',
+           'with_time_budget', 'session_lines', 'session_csv', 'one_line_read', 'topic_of', 'strip_twin_words', 'recompute_group_sizes',
+           'segment_labels', 'find_reusable_session', 'charge_due', 'mark_paid', 'deleted_room_key', 'can_delete_room', 'remove_session', 'delete_room',
+           'DELETED_ROOMS_PREFIX', 'DELETED_ROOM_KEEP_DAYS', 'KINDS', 'DEFAULT_IN_ROOM', 'MAX_IN_ROOM', 'TIME_BUDGET_S']

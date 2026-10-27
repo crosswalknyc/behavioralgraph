@@ -702,6 +702,26 @@ def panel_reply(payload, session, rec, key, user):
                     open_view='digitalTwinsIQ', twin_key=key, action_hint={'view': 'digitalTwinsIQ', 'tab': 'panel', 'twin_key': key, 'session_id': session.get('id')})
 
 
+def _charge_panel_question(user, payload, sess):
+    """The session price on the room's first question, a further block
+    when the paid questions are used up; None when nothing is due or it
+    was charged (opening a room is free, 2026-10-26)."""
+    from migration import digital_twins as DT
+    from migration import digital_twin_panel as P
+    due = P.charge_due(sess, DT.PANEL_QUESTIONS_INCLUDED)
+    if not due:
+        return None
+    name = (payload.get('meta') or {}).get('name')
+    sid = str(sess.get('id') or '')
+    asked = len(sess.get('questions') or [])
+    desc = f"Focus Group IQ session: {name}" if due == 'digital_twin_panel' else f"Focus Group IQ, {DT.PANEL_QUESTIONS_INCLUDED} more questions: {name}"
+    funds = _charge(user, due, desc, sid if due == 'digital_twin_panel' else f"{sid}-{asked}")
+    if funds is not None:
+        return funds
+    P.mark_paid(sess, DT.PANEL_QUESTIONS_INCLUDED)
+    return None
+
+
 def run_panel(text, body, history, user, ppu=None):
     """Open a room, or ask the active one. None when the words are not a
     panel order."""
@@ -723,13 +743,9 @@ def run_panel(text, body, history, user, ppu=None):
         q = _reask_text(text, last, sess) if re.search(r"^\s*re-?ask\b", str(text or ''), re.I) else panel_question(text)
         if not q:
             return _payload('What should I ask the room?', ['Would you watch a new season?', 'Would you pay $29 for the box?', 'Show of hands, who watched season 1?'])
-        asked = len(sess.get('questions') or [])
-        paid = int(sess.get('questions_paid') or DT.PANEL_QUESTIONS_INCLUDED)
-        if asked >= paid:
-            funds = _charge(user, 'digital_twin_panel_more', f"Focus Group IQ, {DT.PANEL_QUESTIONS_INCLUDED} more questions: {payload['meta'].get('name')}", f"{sess['id']}-{asked}")
-            if funds is not None:
-                return funds
-            sess['questions_paid'] = paid + DT.PANEL_QUESTIONS_INCLUDED
+        funds = _charge_panel_question(user, payload, sess)      # the session on its first question, a further block after twelve
+        if funds is not None:
+            return funds
         twins_by_key = {active['key']: payload}
         for tk in sess.get('twin_keys') or []:
             if tk not in twins_by_key:
@@ -760,19 +776,41 @@ def run_panel(text, body, history, user, ppu=None):
     m = _IN_ROOM_RX.search(str(text or ''))
     if m:
         in_room = int(m.group(1))
-    sid = uuid.uuid4().hex[:10]
-    funds = _charge(user, 'digital_twin_panel', f"Focus Group IQ session: {payload['meta'].get('name')}", sid)
-    if funds is not None:
-        return funds
-    sess = P.open_session(twins, segments=panel_segments(text, found), in_room=in_room, created_by=uname, session_id=sid)
-    sess['twin_keys'] = [str((t.get('meta') or {}).get('key') or '') for t in twins]
-    sess['questions_paid'] = DT.PANEL_QUESTIONS_INCLUDED
-    payload.setdefault('panel_sessions', []).insert(0, sess)
+    segments = panel_segments(text, found)
+    # opening is free (the session price rides the first question); an
+    # empty room with the same twins, segments and seats is reused
+    sess = P.find_reusable_session(payload, twins, segments, in_room, created_by=uname)
+    if sess is None:
+        sid = uuid.uuid4().hex[:10]
+        sess = P.open_session(twins, segments=segments, in_room=in_room, created_by=uname, session_id=sid)
+        sess['twin_keys'] = [str((t.get('meta') or {}).get('key') or '') for t in twins]
+        payload.setdefault('panel_sessions', []).insert(0, sess)
+    sid = str(sess['id'])
+    twins_by_key = {str((t.get('meta') or {}).get('key') or ''): t for t in twins}
+    try:
+        from migration import digital_twin_portraits as _PT
+        _PT.attach_portraits(sess, s3)            # seats already pictured carry their url at once
+    except Exception:
+        _PT = None
     q = panel_question(text) if re.search(r"\bask\b", low) else ''
     rec = None
     if q:
-        rec = P.ask(sess, {str((t.get('meta') or {}).get('key') or ''): t for t in twins}, q, stimulus=_stimulus(text), voices_fn=_voices_fn(), asked_by=uname)
+        funds = _charge_panel_question(user, payload, sess)
+        if funds is not None:
+            DT.save_twin(s3, key, payload)        # the room stays open and free
+            set_active_session(user, key, sid)
+            return funds
+        rec = P.ask(sess, twins_by_key, q, stimulus=_stimulus(text), voices_fn=_voices_fn(), asked_by=uname)
     DT.save_twin(s3, key, payload)
+    if _PT is not None:
+        try:
+            _PT.schedule_room_portraits(s3, key, sess, twins_by_key, payload)   # the faces land in the session when they finish
+        except Exception as _px:
+            try:
+                from . import faults as _faults
+                _faults.note('digital_twin_lane.schedule_portraits', _px)
+            except Exception:
+                pass
     set_active_session(user, key, sid)
     try:
         host.ask_hint(route='panel_lab', outcome='opened', subject=payload['meta'].get('name'))

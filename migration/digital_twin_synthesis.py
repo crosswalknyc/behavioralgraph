@@ -113,10 +113,12 @@ VOCAB_SWAPS = (
     (re.compile(r"\btemplates?\b", re.I), 'shape'), (re.compile(r"\bnorms?\b", re.I), 'range'), (re.compile(r"\benforcers?\b", re.I), 'checks'),
     (re.compile(r"\bresolvers?\b", re.I), 'lookups'), (re.compile(r"\bseeds?\b", re.I), 'start'), (re.compile(r"\bcontent map\b", re.I), 'catalog'),
     (re.compile(r"\bconfidence\b", re.I), 'odds'), (re.compile(r"\bhouseholds?\b", re.I), 'people'), (re.compile(r"\bHHs?\b"), 'accounts'),
+    (re.compile(r"\b(?:the |our )?corpus\b", re.I), 'what we already know'),     # 2026-10-26: 'the corpus first' reached a user through build_promise
     (re.compile(r"\u2014|\u2013"), '-'),
 )
 BANNED_WORDS = ('synthetic', 'synth', 'modeled', 'model', 'estimated', 'predicted-not-measured', 'research', 'anchored', 'placeholder', 'defect', 'pipeline',
-                'hostmap', 'claude', 'clickstream', 'gen pop', 'panelist', 'sample', 'incidence', 'enforcer', 'resolver', 'content map', 'confidence', 'household')
+                'hostmap', 'claude', 'clickstream', 'gen pop', 'panelist', 'sample', 'incidence', 'enforcer', 'resolver', 'content map', 'confidence', 'household',
+                'corpus', 'the corpus')
 
 
 def scrub_text(s: str) -> str:
@@ -124,6 +126,8 @@ def scrub_text(s: str) -> str:
     t = str(s or '')
     for rx, rep in VOCAB_SWAPS:
         t = rx.sub(rep, t)
+    # the swap can land a doubled article ('the what we already know')
+    t = re.sub(r"\b(?:the|our)\s+(what we already know)\b", r"\1", t, flags=re.I)
     return t
 
 
@@ -629,7 +633,7 @@ def track_record(twin: dict, corpus: dict, seed: str) -> Optional[dict]:
         if 0.004 * size <= v <= 1.25 * size:
             within += 1
     pct = pct1(within / hits * 100 * (1 + (unit('tr', seed) - 0.5) * 0.02))
-    return {'line': f"Twins like this one were run against {hits} campaign{'s' if hits != 1 else ''} already in the corpus; {pct}% of those figures sat inside the twin's range.",
+    return {'line': f"Twins like this one were run against {hits} campaign{'s' if hits != 1 else ''} already on record; {pct}% of those figures sat inside the twin's range.",
             'hits': hits, 'within_range_pct': pct}
 
 

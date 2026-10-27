@@ -488,22 +488,94 @@ def pdf_filename(payload: dict) -> str:
     return re.sub(r"[^A-Za-z0-9]+", '_', f"{m.get('name') or m.get('subject')} Digital Twin").strip('_') + '.pdf'
 
 
-def build_panel_pdf(payload: dict, session: dict) -> bytes:
+def _portrait_reader(portrait_fn):
+    """A memoized reader: hash -> ImageReader or None. Every failure is
+    a missing face, never a failed export."""
+    cache = {}
+
+    def read(h):
+        if not h or portrait_fn is None:
+            return None
+        if h in cache:
+            return cache[h]
+        img = None
+        try:
+            data = portrait_fn(h)
+            if data:
+                from reportlab.lib.utils import ImageReader
+                img = ImageReader(io.BytesIO(data))
+        except Exception:
+            img = None
+        cache[h] = img
+        return img
+    return read
+
+
+def _draw_round_portrait(c, img, x, y, size):
+    """A portrait in a circle at (x, y) bottom-left; silent on failure."""
+    try:
+        c.saveState()
+        p = c.beginPath()
+        p.circle(x + size / 2.0, y + size / 2.0, size / 2.0)
+        c.clipPath(p, stroke=0, fill=0)
+        c.drawImage(img, x, y, width=size, height=size, preserveAspectRatio=True, anchor='c', mask='auto')
+        c.restoreState()
+        return True
+    except Exception:
+        try:
+            c.restoreState()
+        except Exception:
+            pass
+        return False
+
+
+def build_panel_pdf(payload: dict, session: dict, portrait_fn=None) -> bytes:
     """The Focus Group IQ session: the room, then one page per question with
-    the % table and the voices."""
+    the % table and the voices. ``portrait_fn(hash) -> JPEG bytes`` puts
+    the twins' portraits on the room page and beside each voice; without
+    it (or when a face is absent) the text stands alone."""
     d = _Doc()
     m = payload.get('meta') or {}
     g = session.get('group') or {}
+    read = _portrait_reader(portrait_fn)
     d.new_page(True, 'Focus Group IQ', _words(f"{session.get('title') or 'The room'}"), f"{g.get('in_room')} twins in the room, standing for {int(g.get('size_people') or 0):,} people. Moderated by {session.get('created_by')}.")
     y = d.y
     y = d.table([(s['label'], f"{s['share_pct']}%", f"{int(s['people']):,} people, {s.get('seats')} seats") for s in g.get('segments') or []], d.m, y, d.right - d.m, head=('Segment', 'Share of room', ''))
-    roster = ', '.join(f"{r['name']} ({r['age']}, {r['city']})" for r in (g.get('roster') or [])[:16])
+    roster_rows = (g.get('roster') or [])[:16]
+    faces = [(r, read(r.get('portrait_hash'))) for r in roster_rows]
+    if any(img is not None for _r, img in faces):
+        size, gap = 0.46 * 72, 0.12 * 72
+        per_row = max(1, int((d.right - d.m + gap) // (size + gap)))
+        yy = y - 10 - size
+        for j, (r, img) in enumerate(faces):
+            xx = d.m + (j % per_row) * (size + gap)
+            if j and j % per_row == 0:
+                yy -= size + gap + 12
+            from reportlab.lib import colors
+            d.c.setFillColor(colors.HexColor(SLATE))
+            d.c.circle(xx + size / 2.0, yy + size / 2.0, size / 2.0, stroke=0, fill=1)
+            if img is not None:
+                _draw_round_portrait(d.c, img, xx, yy, size)
+            d.c.setFont(d.f['regular'], 6.5)
+            d.c.setFillColor(colors.HexColor(BODY_DARK))
+            d.c.drawCentredString(xx + size / 2.0, yy - 8, str(r.get('name') or '')[:12])
+        y = yy - 22
+    roster = ', '.join(f"{r['name']} ({r['age']}, {r['city']})" for r in roster_rows)
     d.paragraph('In the room: ' + roster, d.m, y - 8, d.right - d.m, size=9.5)
+    by_seat = {r.get('seat'): r for r in (g.get('roster') or [])}
+    by_name = {str(r.get('name')): r for r in (g.get('roster') or [])}
     for i, q in enumerate(session.get('questions') or []):
         y = d.new_page(i % 2 == 1, 'Focus Group IQ', _words(q.get('read') or q.get('q')), f"Question {i + 1}: {q.get('q')}")
         y = d.table([(r['label'], f"{r['pct']}%", f"{int(r['people']):,} people") for r in (q.get('distribution') or [])[:8]], d.m, y, d.right - d.m, head=('Answer', 'Share', 'People'))
         for v in (q.get('voices') or [])[:4]:
-            y = d.paragraph(f"{v['name']}, {v['age']}, {v['city']}: {v['line']}", d.m, y - 6, d.right - d.m, size=10, color=OFFWHITE if d.dark else GRAPHITE, font=d.f['medium'])
+            seat = by_seat.get(v.get('seat')) or by_name.get(str(v.get('name') or '')) or {}
+            img = read(seat.get('portrait_hash'))
+            x = d.m
+            if img is not None:
+                size = 0.34 * 72
+                _draw_round_portrait(d.c, img, d.m, y - 6 - size + 9, size)
+                x = d.m + size + 8
+            y = d.paragraph(f"{v['name']}, {v['age']}, {v['city']}: {v['line']}", x, y - 6, d.right - x, size=10, color=OFFWHITE if d.dark else GRAPHITE, font=d.f['medium'])
     return _fin(d.finish(), '.pdf')
 
 
