@@ -587,7 +587,7 @@ def dt_panel_open(key):
             doc['session'] = sess        # the room stays open and free; the question waits on funds
             return jsonify(doc), funds[1]
         rec = P.ask(sess, twins_by_key, first_q, options=body.get('options'), stimulus=body.get('stimulus') if isinstance(body.get('stimulus'), dict) else None,
-                    voices_fn=_voices_fn(), asked_by=_uname(user))
+                    voices_fn=_voices_fn(), asked_by=_uname(user), s3=_s3(), twin_key=key)
         DT.save_twin(_s3(), key, payload)
     if PT is not None:
         try:
@@ -599,7 +599,7 @@ def dt_panel_open(key):
                 _faults.note('digital_twins_api.schedule_portraits', e)
             except Exception:
                 pass
-    return jsonify({'success': True, 'session': sess, 'question': rec, 'reused': reused is not None})
+    return jsonify({'success': True, 'session': sess, 'question': rec, 'reused': reused is not None, 'job_id': (rec or {}).get('job_id'), 'stage': (rec or {}).get('stage')})
 
 
 def _charge_question(user, payload, sess):
@@ -668,10 +668,14 @@ def dt_panel_ask(key, sid):
             PT.attach_portraits(sess, _s3())      # so the voices of this answer carry the portraits that exist
         except Exception:
             pass
+    # The room engine (migration/digital_twin_room.py) answers as a job: the record returns at once at stage
+    # 'researching' with a job_id; poll GET /api/digital-twins/jobs/<job_id> for the stage and the seat answers as
+    # they arrive, then the finished record (read, options, voices) lands here on the session (2026-10-26).
     rec = P.ask(sess, twins_by_key, q, kind=body.get('kind'), options=body.get('options'), stimulus=body.get('stimulus') if isinstance(body.get('stimulus'), dict) else None,
-                voices_fn=_voices_fn(), asked_by=_uname(user))
+                voices_fn=_voices_fn(), asked_by=_uname(user), s3=_s3(), twin_key=key)
     DT.save_twin(_s3(), key, payload)
-    return jsonify({'success': True, 'question': rec, 'session_id': sid, 'questions_asked': len(sess['questions']), 'questions_paid': sess.get('questions_paid')})
+    return jsonify({'success': True, 'question': rec, 'session_id': sid, 'questions_asked': len(sess['questions']), 'questions_paid': sess.get('questions_paid'),
+                    'job_id': rec.get('job_id'), 'stage': rec.get('stage')})
 
 
 @bp.route(f'{PREFIX}/<path:key>/panel/<sid>', methods=['DELETE'])

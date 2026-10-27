@@ -685,12 +685,25 @@ def _reask_text(text, last, session=None):
     return lq
 
 
+def _room_notify(body, uname):
+    """Who the room job tells when it lands: the thread it was asked in."""
+    return {'username': uname, 'thread_id': str((body or {}).get('thread_id') or '')}
+
+
 def panel_reply(payload, session, rec, key, user):
     from migration import digital_twin_panel as P
-    lines = P.session_lines(session, rec)
     asked = len(session.get('questions') or [])
     paid = int(session.get('questions_paid') or 12)
     tail = f" ({asked} of {paid} questions in this session used.)" if asked >= paid - 2 else ''
+    if rec and rec.get('job_id') and rec.get('stage') not in (None, 'done', 'stopped'):
+        # the room engine answers as a job: the read, the table and the voices land in this thread when it finishes
+        n = int((session.get('group') or {}).get('in_room') or 12)
+        reply = (f"The room is on it. First the record on {payload['meta'].get('name')} and this question, then the {n} people in the room answer in their own words, "
+                 f"then the moderator reads the room. The read, the table and the voices land here in about a minute; Focus Group IQ shows the seats answering live." + tail)
+        return _payload(reply, ['Open Focus Group IQ'], panel_session={'key': key, 'sid': session.get('id'), 'question_id': rec.get('id')},
+                        twin_job_id=rec['job_id'], job_id=rec['job_id'], job_type='twin_panel', open_view='digitalTwinsIQ', twin_key=key,
+                        action_hint={'view': 'digitalTwinsIQ', 'tab': 'panel', 'twin_key': key, 'session_id': session.get('id'), 'job_id': rec['job_id']})
+    lines = P.session_lines(session, rec)
     reply = '\n'.join(lines) + tail
     chips = ['Ask them why', 'What would change their mind?', 'Open Focus Group IQ']
     if rec and rec.get('kind') == 'price' and rec.get('price'):
@@ -752,7 +765,8 @@ def run_panel(text, body, history, user, ppu=None):
                 t = DT.load_twin(s3, tk)
                 if t:
                     twins_by_key[tk] = t
-        rec = P.ask(sess, twins_by_key, q, stimulus=_stimulus(text, last), voices_fn=_voices_fn(), asked_by=uname)
+        rec = P.ask(sess, twins_by_key, q, stimulus=_stimulus(text, last), voices_fn=_voices_fn(), asked_by=uname, s3=s3, twin_key=active['key'],
+                    usage_extras=ppu or None, notify=_room_notify(body, uname))
         DT.save_twin(s3, active['key'], payload)
         set_active_session(user, active['key'], sess['id'])
         try:
@@ -800,7 +814,8 @@ def run_panel(text, body, history, user, ppu=None):
             DT.save_twin(s3, key, payload)        # the room stays open and free
             set_active_session(user, key, sid)
             return funds
-        rec = P.ask(sess, twins_by_key, q, stimulus=_stimulus(text), voices_fn=_voices_fn(), asked_by=uname)
+        rec = P.ask(sess, twins_by_key, q, stimulus=_stimulus(text), voices_fn=_voices_fn(), asked_by=uname,
+                    s3=s3, twin_key=key, usage_extras=ppu or None, notify=_room_notify(body, uname))
     DT.save_twin(s3, key, payload)
     if _PT is not None:
         try:
