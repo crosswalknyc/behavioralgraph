@@ -20134,7 +20134,7 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
                     <span class="credits-info-label" id="modalCreditsAvailableLabel">Available</span>
                     <span class="credits-info-value" id="modalCreditsAvailable">{% if credits == -1 %}Unlimited{% elif paying_customer|default(false) %}{{ cur }}{{ '{:,.2f}'.format(wallet_balance_usd|default(0)) }}{% else %}{{ credits }}{% endif %}</span>
                 </div>
-                <div class="credits-info-row credits-used-row" id="creditsUsedRow" onclick="toggleCreditUsageDetail()" style="cursor: pointer;" title="Click to see what each dollar went to">
+                <div class="credits-info-row credits-used-row" id="creditsUsedRow" onclick="toggleCreditUsageDetail()" style="cursor: pointer;" title="Click to see what each {{ 'pound' if cur == '£' else 'dollar' }} went to">
                     <span class="credits-info-label">Spend to date</span>
                     <span class="credits-used-value-wrap">
                         <span class="credits-info-value" id="modalCreditsUsed">{{ credits_used }}</span>
@@ -20143,7 +20143,7 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
                 </div>
                 <div id="creditUsageDetail" style="display: none; margin: 0 0 0.35rem; max-height: 260px; overflow-y: auto; overflow-x: hidden;">
                     <div style="display:flex; justify-content:space-between; align-items:baseline; gap:0.75rem; padding-bottom:0.15rem;">
-                        <span style="font-size:0.56rem; font-weight:600; color:#7C878A; text-transform:uppercase; letter-spacing:0.09em;">What each dollar went to</span>
+                        <span style="font-size:0.56rem; font-weight:600; color:#7C878A; text-transform:uppercase; letter-spacing:0.09em;">What each {{ 'pound' if cur == '£' else 'dollar' }} went to</span>
                         <button type="button" class="wallet-link-btn" onclick="event.stopPropagation(); downloadTxnHistory('self');">Download CSV</button>
                     </div>
                     <div id="creditUsageList"></div>

@@ -2047,6 +2047,19 @@ def display_symbol(user, users_data=None) -> str:
     return money_symbol(currency=display_currency(user, users_data))
 
 
+def ledger_amount_header(user=None, users_data=None, subject=None) -> str:
+    """Column name on a wallet history download.
+
+    A pound wallet downloads as GBP. Everyone else downloads as USD.
+    The figures stay the same numbers already on the wallet.
+    """
+    if isinstance(user, dict):
+        cur = display_currency(user, users_data)
+    else:
+        cur = billing_currency(subject if isinstance(subject, dict) else None)
+    return "GBP" if cur == "gbp" else "USD"
+
+
 def money_label(amount, currency="usd") -> str:
     """Short price label in the seat's currency: $300 / £1,000 / £12.50,
     whole units when they are whole. '' on junk."""
@@ -5279,7 +5292,8 @@ __all__ = [
     "billing_mode", "billing_currency", "money_symbol", "format_money",
     "SUPPORTED_BILLING_CURRENCIES", "normalize_billing_currency",
     "apply_billing_currency", "stamp_wallet_currency",
-    "display_currency", "display_symbol", "money_label",
+    "display_currency", "display_symbol", "ledger_amount_header",
+    "money_label",
     "apply_auto_reload_preference",
     "parse_auto_reload_flag",
     "auto_reload_threshold", "auto_reload_amount",

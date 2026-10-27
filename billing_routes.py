@@ -337,16 +337,24 @@ def wallet_state():
     return jsonify(payload)
 
 
-def _txn_history_csv_response(rows, filename):
-    """UTF-8 CSV download of collect_transaction_history rows."""
+def _txn_history_csv_response(rows, filename, currency_code="USD"):
+    """UTF-8 CSV download of collect_transaction_history rows.
+
+    `currency_code` is the column header the seat actually spends
+    in (GBP for a pound wallet, USD otherwise). The cells stay the
+    ledger numbers.
+    """
     import csv
     import io
     import re
+    code = str(currency_code or "USD").strip().upper()
+    if code not in ("USD", "GBP"):
+        code = "USD"
     buf = io.StringIO()
     w = csv.writer(buf)
     w.writerow([
         "Date (UTC)", "Type", "Company", "User", "Email",
-        "Description", "Pull Type", "Credits", "USD",
+        "Description", "Pull Type", "Credits", code,
         "Balance After", "Job ID", "Stripe Ref",
     ])
     for r in rows or []:
@@ -412,7 +420,9 @@ def wallet_transactions_csv():
         label = ctx["uname"] or "me"
     day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     return _txn_history_csv_response(
-        rows, f"Crosswalk_Wallet_{label}_{day}")
+        rows, f"Crosswalk_Wallet_{label}_{day}",
+        currency_code=wallet.ledger_amount_header(
+            ctx["user"], ctx["users_data"]))
 
 
 @billing_bp.route("/api/admin/transaction-history", methods=["GET"])
@@ -432,13 +442,17 @@ def admin_transaction_history():
         rows = wallet.collect_transaction_history(
             data, username="", scope="company", company_name=key)
         label = key
+        subject = (data.get("companies") or {}).get(key) or {}
+        code = wallet.ledger_amount_header(subject=subject)
     else:
         rows = wallet.collect_transaction_history(
             data, username=key, scope="self")
         label = key
+        seat = (data.get("users") or {}).get(key) or {}
+        code = wallet.ledger_amount_header(seat, data)
     day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     return _txn_history_csv_response(
-        rows, f"Crosswalk_Wallet_{label}_{day}")
+        rows, f"Crosswalk_Wallet_{label}_{day}", currency_code=code)
 
 
 # ---------------------------------------------------------------------------
