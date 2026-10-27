@@ -50960,6 +50960,16 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-fg-act:hover { border-color: var(--dtw-body); color: var(--dtw-ink); }
         #digitalTwinsIQView .dtw-fg-act b { font-weight: 600; color: var(--dtw-body); font-variant-numeric: tabular-nums; }
         #digitalTwinsIQView .dtw-fg-act.go { background: var(--dtw-accent); color: var(--dtw-accent-ink); border-color: var(--dtw-accent); font-weight: 600; }
+        /* Close room (Jenna 2026-10-27: 'you should have a way to exit/close a room'): the quiet control at the far right of the header row */
+        #digitalTwinsIQView .dtw-fg-act.close { margin-left: 4px; color: var(--dtw-body); }
+        #digitalTwinsIQView .dtw-fg-act.close .x { font-size: 15px; line-height: 1; margin-top: -1px; }
+        #digitalTwinsIQView .dtw-fg-act.close:hover { color: var(--dtw-ink); }
+        /* the one-line note after a close */
+        #digitalTwinsIQView .dtw-fg-toast { position: fixed; left: 50%; bottom: 28px; transform: translate(-50%, 8px); background: var(--dtw-raised); color: var(--dtw-ink); border: 1px solid var(--dtw-rule); border-radius: 999px; padding: 9px 16px; font-size: 12px; line-height: 16px; box-shadow: 0 10px 28px rgba(8,17,19,.35); opacity: 0; pointer-events: none; transition: opacity .18s, transform .18s; z-index: 2147481999; max-width: min(92vw, 560px); text-align: center; overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-fg-toast.show { opacity: 1; transform: translate(-50%, 0); }
+        /* the Rooms drawer: which twin's rooms, so a reader moves to another twin's rooms from here */
+        #digitalTwinsIQView .dtw-fg-twinrow { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; font-size: 11.5px; color: var(--dtw-body); flex-wrap: wrap; }
+        #digitalTwinsIQView .dtw-fg-twinsel { width: auto; max-width: 100%; padding: 0.3rem 0.5rem; font-size: 0.76rem; }
         #digitalTwinsIQView .dtw-fg-saved { font-size: 11px; color: var(--dtw-mute); }
         #digitalTwinsIQView .dtw-fg-saved:empty { display: none; }
         /* the band (Jenna 2026-10-27: 'put the pics in circles above the title and put their name, age, location attached and if you click you
@@ -51364,7 +51374,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // Every other product view; hidden when this one shows (the dropdown guard does the same on a user pick).
             var HIDE_IDS = ['formView', 'dashboardView', 'subscriberIQView', 'llmoIQView', 'rankerIQView', 'ticketSalesIQView', 'ticketSalesTrackerView', 'hedgeFundIQView', 'sentimentIQView', 'roasIQView', 'ecommerceIQView', 'shareOfTimeIQView', 'sfConversionView', 'flywheelConversionView', 'flywheelIQView', 'customAnalysisView', 'talentSearchIQView', 'talentTheaterIQView', 'talentFitIQView', 'journeyIQView', 'blueIQView', 'intentIQView', 'helmIQView', 'microdramasIQView', 'trendsIQView', 'impactIQView', 'brandTrackingIQView'];
             // Where the reader was (twin and tab) survives a reload, like the product itself (localStorage['bg_last_product']).
-            function remember() { try { localStorage.setItem('bg_dtw_last', JSON.stringify({ key: S.key || '', tab: S.tab || 'twins' })); } catch (_) {} }
+            function remember() { try { localStorage.setItem('bg_dtw_last', JSON.stringify({ key: S.key || '', tab: S.tab || 'twins', sid: S.session ? S.session.id : '' })); } catch (_) {} }
             function remembered() { try { var d = JSON.parse(localStorage.getItem('bg_dtw_last') || 'null'); return d && typeof d === 'object' ? d : null; } catch (_) { return null; } }
             // A deep link: ?view=digitalTwinsIQ&twin=<key>&tab=<tab>, or #digitalTwinsIQ?twin=<key>&tab=<tab>. Read once per page load.
             function urlHint() {
@@ -51396,8 +51406,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     else if (hint && hint.tab) { dtwTab(hint.tab); }
                     else if (fromUrl && known(fromUrl.twin_key)) { dtwOpen(fromUrl.twin_key, null, null, null, fromUrl.tab || null); }
                     else if (fromUrl && fromUrl.tab) { if (!S.twin && S.runs.length === 1) dtwOpen(S.runs[0].key, null, null, null, fromUrl.tab); else dtwTab(fromUrl.tab); }
-                    else if (mem && known(mem.key)) { dtwOpen(mem.key, null, null, null, mem.tab || null); }
-                    else if (!S.twin && S.runs.length === 1) { dtwOpen(S.runs[0].key, null, null, null, (mem && mem.tab) || null); }
+                    else if (mem && known(mem.key)) { dtwOpen(mem.key, null, mem.sid || null, null, mem.tab || null); }
+                    else if (!S.twin && S.runs.length === 1) { dtwOpen(S.runs[0].key, null, (mem && mem.key === S.runs[0].key && mem.sid) || null, null, (mem && mem.tab) || null); }
                     else if (mem && mem.tab) { dtwTab(mem.tab); }
                 });
                 if (!S.howto) { api('/how-to').then(function(d) { S.howto = d; renderHowto(); renderEmptyAll(); }).catch(function() {}); }
@@ -52163,7 +52173,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             function topHtml(s) {
                 var n = ((S.twin || {}).panel_sessions || []).length;
                 var acts = '<span class="dtw-fg-saved" id="dtwPnSaved"></span><button type="button" class="dtw-fg-act" onclick="dtwRoomsOpen(true)">Rooms<b id="dtwFgRoomsN">' + n + '</b></button><button type="button" class="dtw-fg-act' + (s ? '' : ' go') + '" onclick="dtwNewRoomOpen(true)">New room</button>';
-                if (s) acts += '<button type="button" class="dtw-fg-act" onclick="dtwPanelSave()">Save</button><a class="dtw-fg-act" href="/api/digital-twins/' + esc(S.key) + '/panel/' + esc(s.id) + '/export.csv">Export CSV</a><a class="dtw-fg-act" href="/api/digital-twins/' + esc(S.key) + '/panel/' + esc(s.id) + '/export.pdf">Export PDF</a>';
+                if (s) acts += '<button type="button" class="dtw-fg-act" onclick="dtwPanelSave()">Save</button><a class="dtw-fg-act" href="/api/digital-twins/' + esc(S.key) + '/panel/' + esc(s.id) + '/export.csv">Export CSV</a><a class="dtw-fg-act" href="/api/digital-twins/' + esc(S.key) + '/panel/' + esc(s.id) + '/export.pdf">Export PDF</a><button type="button" class="dtw-fg-act close" title="Close this room (Escape). It stays under Rooms." aria-label="Close room" onclick="dtwPanelClose()"><span class="x" aria-hidden="true">&#215;</span>Close room</button>';
                 return '<div class="dtw-fg-top"><div class="dtw-eyebrow">Focus Group IQ' + (s ? SEP + esc(roomTitle(s)) : '') + '</div><div class="dtw-fg-acts">' + acts + '</div></div>';
             }
             function popHtml() { return '<div id="dtwSeatPop" class="dtw-fg-pop" role="dialog" aria-label="Who they are"><span class="arrow"></span><button type="button" class="close" aria-label="Close" onclick="dtwSeatOpen(null)">&#215;</button><div class="dtw-fg-pop-in" id="dtwSeatBody"></div></div>'; }
@@ -52237,7 +52247,38 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var p = el('dtwSeatPop'); if (p && p.classList.contains('open')) { dtwSeatOpen(null); return; }
                 var nd = el('dtwNewRoomDrawer'); if (nd && nd.classList.contains('open')) { dtwNewRoomOpen(false); return; }
                 var rd = el('dtwRoomsDrawer'); if (rd && rd.classList.contains('open')) { dtwRoomsOpen(false); return; }
+                // with no popover or drawer open, Escape closes the room (Jenna 2026-10-27); a first Escape inside the composer only leaves the field
+                var hd = el('dtwHowtoDrawer'); if (hd && hd.classList.contains('open')) return;
+                if (S.tab !== 'panel' || !S.session || e.defaultPrevented) return;
+                var v = el('digitalTwinsIQView'); if (!v || getComputedStyle(v).display === 'none') return;
+                var pw = el('prometheusWidget'); if (pw && pw.classList.contains('pm-on')) return;
+                var t = e.target;
+                if (t instanceof Element && t !== document.body && t !== document.documentElement) {
+                    if (!t.closest('#digitalTwinsIQView')) return;
+                    if (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) { try { t.blur(); } catch (_) {} return; }
+                }
+                dtwPanelClose();
             });
+            // Close room (Jenna 2026-10-27: 'you should have a way to exit/close a room'): nothing new is saved (the room autosaves), the console
+            // returns to the no-room state, the remembered view drops the room, and the room stays under Rooms to reopen. A question still in
+            // flight keeps running on the server; the room reads 'working' under Rooms until it lands.
+            window.dtwPanelClose = function() {
+                var s = S.session; if (!s) return;
+                var working = (s.questions || []).some(qInFlight);
+                clearRoomPoll(); clearPortraitTimers();
+                try { dtwSeatOpen(null); } catch (_) {}
+                S.session = null; S.panelKind = ''; fgReset(null);
+                renderPanelConsole(); renderPanelSessions();
+                try { remember(); } catch (_) {}
+                fgToast(working ? 'Room closed. The question keeps running; find it under Rooms.' : 'Room closed. Find it under Rooms.');
+            };
+            function fgToast(text) {
+                var t = el('dtwFgToast');
+                if (!t) { t = document.createElement('div'); t.id = 'dtwFgToast'; t.className = 'dtw-fg-toast'; t.setAttribute('role', 'status'); t.setAttribute('aria-live', 'polite'); (el('digitalTwinsIQView') || document.body).appendChild(t); }
+                t.textContent = text || ''; clearTimeout(S.fgToastT);
+                t.classList.add('show');
+                S.fgToastT = setTimeout(function() { t.classList.remove('show'); }, 5200);
+            }
             document.addEventListener('click', function(e) {
                 var p = el('dtwSeatPop'); if (!p || !p.classList.contains('open')) return;
                 var t = e.target; if (!(t instanceof Element)) return;
@@ -52252,19 +52293,21 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var nb = el('dtwFgRoomsN'); if (nb) nb.textContent = ss.length;
                 if (!h) return;
                 if (!S.twin) { h.innerHTML = '<div class="dtw-fg-note">Pick a twin on the Twins tab to see its rooms.</div>'; return; }
-                if (!ss.length) { h.innerHTML = '<div class="dtw-fg-note">No rooms on ' + esc(twinName()) + ' yet. Open the first one.</div><div class="dtw-fg-note" id="dtwFgNote"></div>'; return; }
+                var pick = (S.runs || []).length > 1 ? '<div class="dtw-fg-twinrow"><span>Rooms on</span><select class="dtw-in dtw-fg-twinsel" aria-label="Rooms on which twin" onchange="dtwRoomsSwitchTwin(this.value)">' + S.runs.map(function(r) { return '<option value="' + esc(r.key) + '"' + (r.key === S.key ? ' selected' : '') + '>' + esc(r.name || r.subject) + (r.key === S.key ? ' (' + ss.length + ')' : (r.panel_sessions ? ' (' + r.panel_sessions + ')' : '')) + '</option>'; }).join('') + '</select></div>' : '';
+                if (!ss.length) { h.innerHTML = pick + '<div class="dtw-fg-note">No rooms on ' + esc(twinName()) + ' yet. Open the first one.</div><div class="dtw-fg-note" id="dtwFgNote"></div>'; return; }
                 var live = ss.filter(function(s) { return (s.questions || []).length; }), empty = ss.filter(function(s) { return !(s.questions || []).length; });
                 var row = function(s) {
                     var n = (s.questions || []).length, sid = esc(s.id), on = S.session && S.session.id === s.id, working = (s.questions || []).some(qInFlight);
                     return '<div class="dtw-run dtw-roomrow' + (on ? ' on' : '') + '" role="button" tabindex="0" onclick="dtwPanelResume(\'' + sid + '\')" onkeydown="if(event.key===\'Enter\'){dtwPanelResume(\'' + sid + '\');}"><div style="display:flex; gap:0.5rem; align-items:flex-start;"><div style="min-width:0; flex:1 1 auto;"><div class="q"><span>' + esc(roomTitle(s)) + '</span>' + (on ? '<span class="dtw-fg-tag">open</span>' : '') + (working ? '<span class="dtw-fg-tag"><span class="dtw-fg-dot" style="background:var(--dtw-accent)"></span>working</span>' : '') + '</div><div class="m">' + fmtN((s.group || {}).in_room || 0) + ' twins &middot; ' + n + (n === 1 ? ' question' : ' questions') + ' &middot; ' + esc(fmtDay(s.updated_at || s.created_at)) + '</div></div><button type="button" class="dtw-x" title="Delete this room" aria-label="Delete this room" onclick="event.stopPropagation(); dtwPanelDeleteAsk(\'' + sid + '\')">&#215;</button></div><div class="dtw-confirm" id="dtwDel-' + sid + '" style="display:none;" onclick="event.stopPropagation()"><span>Delete this room? Its questions and answers go with it.</span><button type="button" class="dtw-btn dtw-btn-sm dtw-btn-primary" onclick="event.stopPropagation(); dtwPanelDelete(\'' + sid + '\')">Delete</button><button type="button" class="dtw-btn dtw-btn-sm" onclick="event.stopPropagation(); dtwPanelDeleteAsk(\'' + sid + '\', false)">Keep</button></div></div>';
                 };
-                var out = '';
+                var out = pick;
                 if (live.length) out += '<div class="dtw-fg-group">' + esc(twinName()) + '</div>' + live.map(row).join('');
                 if (empty.length) out += '<div class="dtw-fg-group quiet">Empty rooms</div>' + empty.map(row).join('');
                 out += '<div class="dtw-fg-note" id="dtwFgNote"></div>';
                 h.innerHTML = out;
             }
             function fgNote(text) { var n = el('dtwFgNote'); if (n) n.textContent = text || ''; }
+            window.dtwRoomsSwitchTwin = async function(key) { if (!key || key === S.key) return; await dtwOpen(key, null, null, null, 'panel'); dtwRoomsOpen(true); };
             window.dtwPanelDeleteAsk = function(sid, on) {
                 var c = el('dtwDel-' + sid); if (!c) return;
                 var show = (on == null) ? c.style.display === 'none' : !!on;
@@ -52283,7 +52326,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     return;
                 }
                 S.twin.panel_sessions = (S.twin.panel_sessions || []).filter(function(x) { return x.id !== sid; });
-                if (S.session && S.session.id === sid) { S.session = null; S.panelKind = ''; clearPortraitTimers(); dtwSeatOpen(null); renderPanelConsole(); }
+                if (S.session && S.session.id === sid) { S.session = null; S.panelKind = ''; clearPortraitTimers(); dtwSeatOpen(null); renderPanelConsole(); try { remember(); } catch (_) {} }
                 var r = S.runs.filter(function(x) { return x.key === S.key; })[0]; if (r) r.panel_sessions = S.twin.panel_sessions.length;
                 renderSpine(); renderLibrary(); renderPanelSessions();
                 fgNote((d && d.message) || 'Room deleted.');
@@ -52294,6 +52337,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 S.session = ((S.twin || {}).panel_sessions || []).filter(function(s) { return s.id === sid; })[0] || null;
                 S.panelKind = ''; fgReset(S.session ? S.session.id : null); S.fg.seat = null;
                 dtwRoomsOpen(false); renderPanelSessions(); renderPanelConsole();
+                try { remember(); } catch (_) {}
             };
             window.dtwPanelOpen = async function() {
                 var key = S.key, st = el('dtwPnStatus');
