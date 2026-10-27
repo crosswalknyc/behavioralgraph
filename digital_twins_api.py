@@ -212,6 +212,11 @@ def dt_list():
         return err
     runs = DT.list_runs(_s3())
     vis = DT.visible_runs(runs, user)
+    try:
+        from migration.digital_twin_covers import schedule_missing
+        schedule_missing(_s3(), vis)
+    except Exception:
+        traceback.print_exc()
     return _nocache(jsonify({'success': True, 'runs': vis, 'is_admin': DT.is_admin(user), 'allow_all': DT.is_admin(user) or '*' in DT.allowed_keys(user),
                              'pricing': DT.pricing_lines(_price_fn(_uname(user)))}))
 

@@ -225,6 +225,12 @@ REQUIRED_ANCHORS: list[tuple[str, str]] = [
      "Prometheus-only seats keep SELECT PRODUCT when they hold files"),
     ('selfServeProductRail',
      "Prometheus-only complimentary seats show SELECT PRODUCT next to the logo"),
+    ('id="dtwLibrary"',
+     "Digital Twins IQ Twins tab library (cover wall)"),
+    ('class="dtw-wall"',
+     "Digital Twins IQ cover wall grid"),
+    ('function renderLibrary',
+     "Digital Twins IQ library renderer (covers, logos or person photos)"),
 ]
 
 # Anchors we DO NOT want in the file (false negatives).

@@ -153,14 +153,6 @@ def run_job(job_id, username, inputs, extras=None):
             if str((status_read(job_id) or {}).get('status') or '') == 'cancelled':
                 print(f"[twin-job {job_id}] cancelled while building; nothing persisted")
                 return
-            try:   # the hero image, best effort
-                from .jiq_image import resolve_jiq_image, attach_hero
-                url, src = resolve_jiq_image(host, {'subject': payload['meta'].get('subject'), 'platform': payload['meta'].get('platform_home')})
-                if url:
-                    payload['meta']['hero_image'] = url
-                print(f"[twin-job {job_id}] hero image: {src}")
-            except Exception as e:
-                print(f"[twin-job {job_id}] hero image skipped: {e}")
             key = SYN.persist(s3, payload, username or 'prometheus', job_id)
             _grant(username, key)
             m = payload['meta']
