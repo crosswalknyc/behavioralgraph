@@ -50962,6 +50962,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-q:last-child { border-bottom: 0; }
         #digitalTwinsIQView .dtw-q .ask { font-weight: 600; font-size: 0.92rem; line-height: 1.35; display: flex; gap: 0.5rem; align-items: baseline; flex-wrap: wrap; }
         #digitalTwinsIQView .dtw-q .read { font-size: 0.84rem; margin: 0.55rem 0 0.2rem; font-weight: 500; }
+        #digitalTwinsIQView .dtw-btn.busy, #digitalTwinsIQView .dtw-btn:disabled { opacity: 0.55; cursor: progress; }
+        #digitalTwinsIQView .dtw-working { display: flex; align-items: center; gap: 0.55rem; margin-top: 0.6rem; font-size: 0.8rem; color: var(--dtw-body); }
+        #digitalTwinsIQView .dtw-working .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--dtw-accent); box-shadow: 0 0 0 0 rgba(199,242,62,0.5); animation: dtwPulse 1.5s ease-in-out infinite; flex: none; }
+        #digitalTwinsIQView .dtw-working.slow .dot { animation-duration: 3s; background: var(--dtw-mute); box-shadow: none; }
+        #digitalTwinsIQView .dtw-working .el { font-variant-numeric: tabular-nums; }
+        @keyframes dtwPulse { 0%, 100% { opacity: 0.35; transform: scale(0.8); box-shadow: 0 0 0 0 rgba(199,242,62,0.45); } 50% { opacity: 1; transform: scale(1); box-shadow: 0 0 0 5px rgba(199,242,62,0); } }
         #digitalTwinsIQView .dtw-voice { display: flex; gap: 0.65rem; align-items: flex-start; padding: 0.5rem 0; border-bottom: 1px dashed var(--dtw-hair); }
         #digitalTwinsIQView .dtw-voice:last-child { border-bottom: 0; }
         #digitalTwinsIQView .dtw-voice .who { font-size: 0.72rem; color: var(--dtw-mute); }
@@ -51120,7 +51126,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         </div>
         <script>
         (function() {
-            var S = window._dtw = window._dtw || { runs: [], twin: null, key: '', tab: 'twins', openRun: null, session: null, plan: null, howto: null, loaded: false, horizon: '10', spendDay: 1, spendMode: 'chip', pricing: [], summary: null, panelKind: '', portraitTimers: [] };
+            var S = window._dtw = window._dtw || { runs: [], twin: null, key: '', tab: 'twins', openRun: null, session: null, plan: null, howto: null, loaded: false, horizon: '10', spendDay: 1, spendMode: 'chip', pricing: [], summary: null, panelKind: '', portraitTimers: [], roomPollTimer: null, roomTick: null };
             var TABS = ['twins', 'greenlight', 'launch', 'spend', 'panel'];
             var LAB_LABEL = { greenlight: 'Greenlight', launch: 'Launch', spend: 'Spend Engine', panel: 'Focus Group IQ', compare: 'Compare', content: 'Content drop', platform_move: 'Platform move', partnership: 'Partnership', pricing: 'Pricing', talent_attach: 'Talent attach', merch_drop: 'Merch drop' };
             // Fixed hues for the initials tiles, one per seat, from the brand palette. Never Signal Green.
@@ -51655,6 +51661,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (!S.session) return;
                 var inp = el('dtwPnQ'); var q = presetQ || (inp && inp.value.trim());
                 if (!q) return;
+                var inflight = (S.session.questions || []).filter(qInFlight);
+                if (inflight.length) {
+                    var same = inflight.some(function(x) { return normQ(x.q) === normQ(q); });
+                    var live0 = el('dtwPnLive'); if (live0) live0.textContent = same ? 'That question is already in the room; the answer is on its way.' : 'The room is still working on the last question. Ask the next one when it lands.';
+                    return;
+                }
+                if (S.asking) return;
+                S.asking = true; setAskEnabled(false);
                 var body = { q: q };
                 if (S.panelKind) body.kind = S.panelKind;
                 var optsRaw = (el('dtwPnOptions') || {}).value || '';
@@ -51662,10 +51676,96 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var live = el('dtwPnLive'); if (live) live.textContent = 'Asking the room...';
                 if (inp && !presetQ) inp.value = '';
                 try { var d = await api('/' + S.key + '/panel/' + S.session.id + '/ask', { method: 'POST', body: JSON.stringify(body) }); }
-                catch (e) { if (live) live.textContent = e.message; return; }
+                catch (e) { S.asking = false; setAskEnabled(true); if (live) live.textContent = e.message; return; }
+                S.asking = false;
                 S.session.questions = S.session.questions || []; S.session.questions.push(d.question); S.session.questions_paid = d.questions_paid;
                 renderPanelConsole();
             };
+            // ---- the room at work: a question answers as a job over a minute or two; the page shows the stage and polls until it lands.
+            function normQ(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9$ ]+/g, ' ').replace(/\s+/g, ' ').trim(); }
+            function qInFlight(q) { var st = String((q || {}).stage || ''); return !!st && st !== 'done' && st !== 'stopped' && !(q || {}).finished_at; }
+            function qElapsedS(q) { var t = Date.parse(String((q || {}).started_at || (q || {}).asked_at || '')); if (!isFinite(t)) return 0; return Math.max(0, Math.round((Date.now() - t) / 1000)); }
+            function stageWords(q) {
+                var st = String(q.stage || ''), n = (q.answers || []).length, seats = Number(q.seats_total || ((S.session || {}).group || {}).in_room || 0);
+                if (st === 'researching') return 'getting the facts on the question';
+                if (st === 'the room is thinking') return 'the twins are answering' + (seats ? ', ' + n + ' of ' + seats : '');
+                if (st === 'moderator is reading') return 'the moderator is reading the room';
+                return st.replace(/_/g, ' ');
+            }
+            function workingLine(q) {
+                var e = qElapsedS(q), slow = e > 300;
+                return '<div class="dtw-working' + (slow ? ' slow' : '') + '" data-qid="' + esc(q.id || '') + '"><span class="dot"></span><span>' + (slow ? 'This one is taking longer than usual; it will finish in the background.' : 'The room is working: ' + esc(stageWords(q)) + ' &middot; <span class="el">' + e + '</span>s') + '</span></div>';
+            }
+            function anyInFlight() { return ((S.session || {}).questions || []).some(qInFlight); }
+            function setAskEnabled(on) { var b = el('dtwPnAskBtn'); if (!b) return; var busy = !on || anyInFlight(); b.disabled = busy; b.textContent = busy ? 'Working...' : 'Ask the room'; b.classList.toggle('busy', busy); }
+            function clearRoomPoll() { if (S.roomPollTimer) { clearTimeout(S.roomPollTimer); S.roomPollTimer = null; } if (S.roomTick) { clearInterval(S.roomTick); S.roomTick = null; } }
+            function rerenderTranscript() {
+                var tr = el('dtwPnTranscript'); if (!tr || !S.session) return;
+                var keep = tr.scrollTop, atEnd = tr.scrollHeight - tr.scrollTop - tr.clientHeight < 40;
+                var roster = (S.session.group || {}).roster || [];
+                tr.innerHTML = (S.session.questions || []).map(function(q) { return questionBlock(q, roster); }).join('');
+                tr.scrollTop = atEnd ? tr.scrollHeight : keep;
+                setAskEnabled(true);
+            }
+            function adoptQuestion(fq) {
+                if (!fq || !fq.id || !S.session) return false;
+                var qs = S.session.questions = S.session.questions || [];
+                for (var i = 0; i < qs.length; i++) {
+                    if (qs[i].id !== fq.id) continue;
+                    var cq = qs[i];
+                    var moved = cq.stage !== fq.stage || (cq.answers || []).length !== (fq.answers || []).length || (!!cq.read) !== (!!fq.read) || (cq.distribution || []).length !== (fq.distribution || []).length;
+                    if (!moved) return false;
+                    if (!fq.job_id && cq.job_id) fq.job_id = cq.job_id;
+                    qs[i] = fq; return true;
+                }
+                qs.push(fq); return true;
+            }
+            function scheduleRoomPoll() {
+                clearRoomPoll();
+                var s = S.session; if (!s || !S.key) { setAskEnabled(true); return; }
+                setAskEnabled(true);
+                if (!anyInFlight()) return;
+                var sid = s.id, key = S.key;
+                S.roomTick = setInterval(function() {
+                    if (!S.session || S.session.id !== sid || S.key !== key) { clearRoomPoll(); return; }
+                    (S.session.questions || []).forEach(function(q) {
+                        if (!qInFlight(q)) return;
+                        var w = document.querySelector('#dtwPnTranscript .dtw-working[data-qid="' + (q.id || '') + '"]'); if (!w) return;
+                        var e = qElapsedS(q);
+                        if (e > 300 && !w.classList.contains('slow')) { w.outerHTML = workingLine(q); return; }
+                        var sp = w.querySelector('.el'); if (sp) sp.textContent = e;
+                    });
+                }, 1000);
+                var tick = async function() {
+                    S.roomPollTimer = null;
+                    if (!S.session || S.session.id !== sid || S.key !== key) { clearRoomPoll(); return; }
+                    var open = (S.session.questions || []).filter(qInFlight);
+                    if (!open.length) { clearRoomPoll(); setAskEnabled(true); return; }
+                    var changed = false;
+                    try {
+                        var d = await api('/' + key + '/panel/' + sid);
+                        ((d.session || {}).questions || []).forEach(function(fq) { if (adoptQuestion(fq)) changed = true; });
+                        if (d.session && d.session.updated_at) S.session.updated_at = d.session.updated_at;
+                        if (d.session && d.session.questions_paid != null) S.session.questions_paid = d.session.questions_paid;
+                    } catch (_) {}
+                    // the seats land one by one on the job document; the session only moves at the stage boundaries
+                    for (var i = 0; i < open.length; i++) {
+                        var q = open[i]; if (!q.job_id) continue;
+                        try { var j = await api('/jobs/' + q.job_id); var jq = ((j || {}).job || {}).question; if (jq && jq.id) { if (!jq.job_id) jq.job_id = q.job_id; if (adoptQuestion(jq)) changed = true; } } catch (_) {}
+                    }
+                    if (!S.session || S.session.id !== sid) { clearRoomPoll(); return; }
+                    if (changed) {
+                        rerenderTranscript();
+                        var ss = (S.twin || {}).panel_sessions || []; for (var k = 0; k < ss.length; k++) { if (ss[k].id === sid) ss[k] = S.session; }
+                        renderPanelSessions();
+                    }
+                    var still = (S.session.questions || []).filter(qInFlight);
+                    if (!still.length) { clearRoomPoll(); setAskEnabled(true); return; }
+                    var slow = still.every(function(x) { return qElapsedS(x) > 300; });
+                    S.roomPollTimer = setTimeout(tick, slow ? 20000 : 4000);
+                };
+                S.roomPollTimer = setTimeout(tick, 4000);
+            }
             // ---- portraits: the seat's photo when it has one, a deterministic initials tile when it does not.
             function seatHue(seat, i) { return hueFor(seat && seat.seat != null ? Number(seat.seat) - 1 : i); }
             function thumb(url) { url = String(url || ''); if (!url || /[?&]size=/.test(url)) return url; return url + (url.indexOf('?') >= 0 ? '&' : '?') + 'size=128'; }
@@ -51691,7 +51791,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }
             function distBars(rows) { return (rows || []).map(function(r) { return bar(r.label, r.pct, 100, false, pct(r.pct, 1) + ' (' + fmtN(r.people) + ')'); }).join(''); }
             function questionBlock(q, roster) {
-                var out = '<div class="dtw-q" data-q="' + esc(q.id || '') + '"><div class="ask"><span class="dtw-tag">' + esc(String(q.kind || '').replace(/_/g, ' ')) + '</span><span>' + esc(q.q) + '</span></div>';
+                var qs = (S.session || {}).questions || [], at = qs.indexOf(q), again = false;
+                for (var j = 0; j < at; j++) { if (normQ(qs[j].q) === normQ(q.q) && (qs[j].kind || '') === (q.kind || '')) { again = true; break; } }
+                var out = '<div class="dtw-q" data-q="' + esc(q.id || '') + '"><div class="ask"><span class="dtw-tag">' + esc(String(q.kind || '').replace(/_/g, ' ')) + '</span><span>' + esc(q.q) + '</span>' + (again ? '<span class="dtw-tag" title="The same question was asked earlier in this room">asked again</span>' : '') + '</div>';
+                if (qInFlight(q)) { out += workingLine(q); return out + '</div>'; }
                 out += '<div style="margin-top:0.5rem;">' + distBars(q.distribution) + '</div>';
                 if (q.read) out += '<div class="read">' + esc(q.read) + '</div>';
                 if ((q.by_segment || []).length > 1) { out += '<h4>By segment</h4><table class="dtw-table"><tr><th>Segment</th>' + (q.distribution || []).slice(0, 5).map(function(r) { return '<th class="num">' + esc(r.label) + '</th>'; }).join('') + '</tr>' + q.by_segment.map(function(sg) { return '<tr><td>' + esc(sg.segment) + '</td>' + (q.distribution || []).slice(0, 5).map(function(r) { var x = (sg.distribution || []).filter(function(y) { return y.label === r.label; })[0]; return '<td class="num">' + (x ? pct(x.pct, 1) : '') + '</td>'; }).join('') + '</tr>'; }).join('') + '</table>'; }
@@ -51701,7 +51804,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // The console: header with Save and Export, the room on the left, the transcript in the middle, the composer pinned at the bottom.
             function renderPanelConsole() {
                 var h = el('dtwPnConsole'); if (!h) return;
-                var s = S.session; if (!s) { renderEmpty('dtwPnConsole', 'panel'); return; }
+                var s = S.session; if (!s) { clearRoomPoll(); renderEmpty('dtwPnConsole', 'panel'); return; }
                 var g = s.group || {}, qs = s.questions || [], roster = g.roster || [];
                 var typed = (el('dtwPnQ') || {}).value || '', typedOpts = (el('dtwPnOptions') || {}).value || '';
                 var out = '<div class="dtw-card dtw-console"><div class="dtw-console-h"><div style="min-width:0; flex:1 1 260px;"><div class="dtw-eyebrow">Focus Group IQ</div><h3 style="margin-top:0.25rem;">' + esc(s.title) + '</h3><div class="dtw-muted">' + fmtN(g.in_room) + ' twins standing for ' + fmtN(g.size_people) + ' people. ' + qs.length + ' of ' + (s.questions_paid || 12) + ' questions used.' + (s.updated_at ? ' Saved ' + esc(fmtWhen(s.updated_at)) + '.' : '') + '</div></div><div class="dtw-actions"><span class="dtw-muted" id="dtwPnSaved"></span><button type="button" class="dtw-btn dtw-btn-sm" onclick="dtwPanelSave()">Save</button><a class="dtw-btn dtw-btn-sm" href="/api/digital-twins/' + esc(S.key) + '/panel/' + esc(s.id) + '/export.csv">Export CSV</a><a class="dtw-btn dtw-btn-sm" href="/api/digital-twins/' + esc(S.key) + '/panel/' + esc(s.id) + '/export.pdf">Export PDF</a></div></div>';
@@ -51709,11 +51812,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 out += '<div class="dtw-transcol"><div class="dtw-transcript" id="dtwPnTranscript">' + (qs.length ? qs.map(function(q) { return questionBlock(q, roster); }).join('') : '<div class="dtw-empty-t">The room is seated. Ask the first question below; the shares, the read and a few voices come back in seconds.</div>') + '</div>';
                 out += '<div class="dtw-composer"><div id="dtwPnKinds" class="dtw-chips">' + [['yes_no', 'Yes / no'], ['multiple_choice', 'Multiple choice'], ['rating', 'Rate 1 to 5'], ['price', 'Would you pay $X'], ['ab', 'A vs B'], ['show_of_hands', 'Show of hands'], ['open', 'Open question'], ['probe', 'Probe the last answer']].map(function(k) { return '<button type="button" class="dtw-chip' + (S.panelKind === k[0] ? ' on' : '') + '" data-k="' + k[0] + '" onclick="dtwPanelKind(\'' + k[0] + '\')">' + k[1] + '</button>'; }).join('') + '</div>';
                 out += '<textarea id="dtwPnOptions" class="dtw-in" style="display:' + ((S.panelKind === 'multiple_choice' || S.panelKind === 'ab') ? 'block' : 'none') + '; min-height:48px; margin-bottom:0.45rem;" placeholder="Options, one per line (or comma separated)">' + esc(typedOpts) + '</textarea>';
-                out += '<div style="display:flex; gap:0.5rem;"><input id="dtwPnQ" class="dtw-in" value="' + esc(typed) + '" placeholder="Would you watch a new season on Netflix? Would you pay $29 for the box? Show of hands, who watched season 1?" onkeydown="if(event.key===\'Enter\'){dtwPanelAsk();}"><button type="button" class="dtw-btn dtw-btn-primary" onclick="dtwPanelAsk()">Ask the room</button></div>';
+                out += '<div style="display:flex; gap:0.5rem;"><input id="dtwPnQ" class="dtw-in" value="' + esc(typed) + '" placeholder="Would you watch a new season on Netflix? Would you pay $29 for the box? Show of hands, who watched season 1?" onkeydown="if(event.key===\'Enter\'){dtwPanelAsk();}"><button type="button" id="dtwPnAskBtn" class="dtw-btn dtw-btn-primary" onclick="dtwPanelAsk()">Ask the room</button></div>';
                 out += '<div class="dtw-actions" style="margin-top:0.45rem;"><button type="button" class="dtw-chip" onclick="dtwPanelAsk(\'Why?\')">Why?</button><button type="button" class="dtw-chip" onclick="dtwPanelAsk(\'What would change your mind?\')">What would change your mind?</button><button type="button" class="dtw-chip" onclick="dtwPanelAsk(\'Show of hands, who watched the last one?\')">Show of hands</button><span class="dtw-muted dtw-right" id="dtwPnLive"></span></div></div></div></div></div>';
                 h.innerHTML = out;
                 var tr = el('dtwPnTranscript'); if (tr) { var lastQ = tr.querySelector('.dtw-q:last-child'); tr.scrollTop = lastQ ? Math.max(0, lastQ.offsetTop - tr.offsetTop - 8) : tr.scrollHeight; }
                 schedulePortraitRefresh();
+                scheduleRoomPoll();
             }
             // Portraits finish after the room is seated: re-read the session once or twice and redraw the room and the voices, nothing else.
             function schedulePortraitRefresh() {
