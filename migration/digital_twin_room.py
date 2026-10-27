@@ -48,23 +48,38 @@ THE AGENTS (one question = one job)
      when the seats depart far from it the moderator reasons about why
      (flagged on the internal trail); it never overrides the room.
 
+THE PUBLISHED SPLIT (the seats drive the shape, the prior fills the tails)
+  Twelve seats make a coarse tally (0 / 1 / 8 / 3 of 12) and a bare 0.0% reads as 'nobody in America would'. The
+  published share is the seat votes smoothed with the twin's trait-based prior: the deterministic engine's distribution
+  over the moderator's options (``prior_over_options``: the yes / maybe / no masses of the old engine spread over the
+  options by lean and keyword affinity; stars, A/B sides and supplied choices map one to one). Each seat's people carry
+  its vote by its confidence (0.8 at 1, 1.0 at 5); the rest of its people plus one seat's worth of the room follow the
+  prior (``ALPHA_SEATS``). Shares sum to 100.0 and people to the room, in each segment too (the room rows are the sum of
+  the segments); no row prints 0.0% or a bare k/n multiple of the seats; people counts end the way real counts do. The
+  raw tally stays on every option (``seats``, ``seats_n``, ``tally`` 'eight of twelve', ``room_pct``) so the console can
+  show 'in the room: 8 of 12' beside the projected share, and the read says shares in plain words ('about two in three',
+  'a sliver').
+
 OUTPUT SHAPE (the question record on session['questions']; the UI reads this)
   {id, q, kind, framing,
-   options: [{id, label, lean, pct, people, seats: [seat ids]}],
+   options: [{id, label, lean, pct, people, seats: [seat ids], seats_n, tally: '8 of 12', room_pct}],   pct = published share
    option_labels: [str],                       the labels alone
    distribution: [{label, pct, people}],       the same rows for the table (older readers)
-   by_segment: [{segment, people, distribution: [{label, pct, people}], yes_pct}],
+   tally: [{label, seats, of, room_pct}], seats_total,     the raw seat tally for the console
+   by_segment: [{segment, people, distribution: [{label, pct, people}], yes_pct, tally: [{label, seats}]}],
    read: str,
    voices: [{seat, name, age, city, segment, line}],
-   answers: [{seat, name, option, option_label, line, confidence, reason}],
+   answers: [{seat, name, option, option_label, line, confidence, reason}],     the raw seat answers
    probes_next: [str], facts_used: [str],
    stage: researching | the room is thinking | moderator is reading | done | stopped,
+   timings: {research_s, options_s, seats_s, read_s, total_s}          for the page's stage display (filled as stages finish)
    job_id, started_at, finished_at, asked_at, asked_by, follows, stimulus, topic, price, yes_pct,
-   trail: {research_key, facts_key, models: {research, moderator, persona}, tokens: {in, out, cache_read, cache_write},
-           searches, cost_usd, calls: [...], timings: {...}, prior: {...}, stages: [...], fallbacks: [...]}}
+   trail: {research_key, facts_key, research_cached, research_reused_from, models: {research, moderator, persona},
+           tokens: {in, out, cache_read, cache_write}, searches, cost_usd, calls: [...], timings, prior: {...},
+           prior_over_options: {...}, stages: [...], fallbacks: [...], facts_brief: {...}, persona_cards: {...}}}
   Client-facing strings (read, framing, voices, option labels, facts_used, probes_next, answer lines) pass the house
   scrub: no synthetic, modeled, estimated, research, panel, sample, confidence, pipeline, corpus, lane, no source names,
-  no em or en dashes, individual-level nouns. The trail is internal and never rendered.
+  no em or en dashes, individual-level nouns. The trail is internal and never rendered (the job document omits it).
 
 THE JOB
   ask_room() appends the record at stage 'researching' and returns at once with job_id; the stages run on a background
@@ -411,19 +426,43 @@ def _twin_name(t):
     return str(_meta(t).get('name') or _meta(t).get('subject') or 'the twin')
 
 
-def topic_hash(q: str) -> str:
-    """The question's topic: content words without prices and numbers,
-    so a re-ask at another price shares the research."""
-    words = re.findall(r"[a-z]+", re.sub(r"\$\s?\d[\d,]*(?:\.\d+)?", ' ', str(q or '').lower()))
-    stop = {'would', 'you', 'the', 'a', 'an', 'for', 'if', 'at', 'to', 'of', 'in', 'on', 'it', 'is', 'do', 'does', 'did', 'and', 'or', 'your', 'be', 'that', 'this',
-            'what', 'which', 'who', 'how', 'many', 'much', 'pay', 'buy', 'with', 'from', 'by', 'about', 'them', 'they', 'their', 'we', 'our', 'i', 'me', 'my',
-            'sold', 'sell', 'were', 'was', 'are', 'am', 'will', 'can', 'could', 'should', 'make', 'get', 'take', 'go', 'not', 'no', 'yes', 'any', 'some', 'all'}
-    keep = sorted({w for w in words if w not in stop and len(w) > 2})
-    return hashlib.sha1(' '.join(keep).encode('utf-8')).hexdigest()[:12]
+_TOPIC_STOP = {'would', 'you', 'the', 'a', 'an', 'for', 'if', 'at', 'to', 'of', 'in', 'on', 'it', 'is', 'do', 'does', 'did', 'and', 'or', 'your', 'be', 'that', 'this',
+               'what', 'which', 'who', 'how', 'many', 'much', 'pay', 'buy', 'with', 'from', 'by', 'about', 'them', 'they', 'their', 'we', 'our', 'i', 'me', 'my',
+               'sold', 'sell', 'were', 'was', 'are', 'am', 'will', 'can', 'could', 'should', 'make', 'get', 'take', 'go', 'not', 'no', 'yes', 'any', 'some', 'all',
+               'show', 'hands', 'rate', 'scale', 'one', 'five', 'out', 'star', 'stars', 'why', 'change', 'mind', 'still', 'ever', 'really', 'just', 'like', 'want', 'tell', 'think', 'feel', 'say', 'know', 'see', 'look', 'own', 'have', 'has', 'had'}
+
+
+def _stem(w: str) -> str:
+    for suf in ('ing', 'ed', 'es', 's'):
+        if w.endswith(suf) and len(w) - len(suf) >= 3:
+            return w[:-len(suf)]
+    return w
+
+
+def topic_tokens(q: str, subject: str = '') -> set:
+    """The question's content words, stemmed, without prices, numbers and
+    the subject's own name."""
+    text = re.sub(r"\$\s?\d[\d,]*(?:\.\d+)?", ' ', str(q or '').lower())
+    subj = {_stem(w) for w in re.findall(r"[a-z]+", str(subject or '').lower())}
+    return {_stem(w) for w in re.findall(r"[a-z]+", text) if w not in _TOPIC_STOP and _stem(w) not in _TOPIC_STOP and len(w) > 2 and _stem(w) not in subj}
+
+
+def topic_hash(q: str, subject: str = '') -> str:
+    """The question's topic key, so a re-ask at another price (or in
+    other words) shares the research."""
+    return hashlib.sha1(' '.join(sorted(topic_tokens(q, subject))).encode('utf-8')).hexdigest()[:12]
+
+
+def topics_overlap(a: str, b: str, subject: str = '') -> float:
+    """Jaccard overlap of two questions' topic words (0 to 1)."""
+    ta, tb = topic_tokens(a, subject), topic_tokens(b, subject)
+    if not ta or not tb:
+        return 0.0
+    return len(ta & tb) / float(len(ta | tb))
 
 
 def research_key(subject: str, q: str) -> str:
-    return f"{RESEARCH_PREFIX}{_slug(subject)}/{topic_hash(q)}.json"
+    return f"{RESEARCH_PREFIX}{_slug(subject)}/{topic_hash(q, subject)}.json"
 
 
 def facts_key(subject: str) -> str:
@@ -584,7 +623,8 @@ PERSONA_SYSTEM = """You are one person in a focus group, answering as yourself. 
 Stay in character: your age, your city, how you came to the subject, your habits with money, merchandise and discs, your streaming life. Reason from the facts the way you would (if the show ended years ago and you can stream it any night, say what that means for you; if you own the DVDs already, say so). Answer the moderator in two or three natural spoken sentences, concrete the way real people are (what you own, what you paid, who you would give it to), with no lists and no hedging. Never mention being an AI, a twin, a persona or a character. When this is a follow-up, stay consistent with what you said earlier. Pick exactly one option by id, or 'other' with a short label when none fits. Give a confidence from 1 (unsure) to 5 (certain) and a one-sentence reason. No em dashes.
 Return JSON only: {"option": "<id or other>", "other_label": "<when other>", "line": "<two or three sentences>", "confidence": <1 to 5>, "reason": "<one sentence>"}"""
 
-READ_SYSTEM = """You are the moderator writing up the room for a senior executive. Plain English a high school student follows; the thinking is senior consultant. You are given the question, the options with the room's split (percent and people, already computed; never change a number), the split by segment, every seat's answer, the facts brief and a prior note.
+READ_SYSTEM = """You are the moderator writing up the room for a senior executive. Plain English a high school student follows; the thinking is senior consultant. You are given the question, the options with the room's split (the published share of the whole audience in percent and people, and the raw tally of the seats in the room, both already computed; never change a number), the split by segment, every seat's answer, the facts brief and a prior note.
+The published share is the room projected onto the audience: the seats drive the shape, and the small tails stand for people the twelve seats could not show, so a 1% option means a sliver of the audience, never nobody. Say shares in plain words first ('about two in three', 'about one in ten', 'a sliver') and cite the raw count when it helps ('eight of the twelve'); never print a percentage with a decimal in the read.
 Write:
 - read: one paragraph, three to five sentences, on what the room said and why, grounded in the facts and the comparables in plain words. Say what the share means (who these people are, what it would take). Vary the sentence shapes. Never name a source or a publication; never use the words research, model, modeled, synthetic, estimated, panel, sample, confidence, pipeline, data. If the prior note says the seats departed from the audience's own leaning, explain what accounts for it in the read rather than overriding the room.
 - voices: the seat ids of the three or four most telling answers, spread across the options in proportion to the split.
@@ -639,7 +679,7 @@ def research(models: Models, twin: dict, q: str, kind: str, stimulus: Optional[d
              'facts': [f for f in (data.get('facts') or []) if isinstance(f, dict) and f.get('fact')][:16],
              'not_found': [str(x) for x in (data.get('not_found') or [])][:8], 'implications': [str(x) for x in (data.get('implications') or [])][:5], '_key': rkey}
     if s3 is not None:
-        _put_json(s3, rkey, {'subject': subject, 'question': q, 'topic_hash': topic_hash(q), 'at': time.time(), 'brief': {k: v for k, v in brief.items() if not k.startswith('_')}, 'version': ROOM_VERSION})
+        _put_json(s3, rkey, {'subject': subject, 'question': q, 'topic_hash': topic_hash(q, subject), 'at': time.time(), 'brief': {k: v for k, v in brief.items() if not k.startswith('_')}, 'version': ROOM_VERSION})
         subj_facts = [f for f in brief['facts'] if str(f.get('topic') or '') == 'subject']
         if brief['subject_status'] or subj_facts:
             _put_json(s3, fkey, {'subject': subject, 'slug': _slug(subject), 'subject_status': brief['subject_status'] or (facts_doc or {}).get('subject_status'),
@@ -753,62 +793,301 @@ def seat_answer(models: Models, card: dict, q: str, framing: str, options: list,
             'confidence': 2, 'reason': 'answered from habit', 'fallback': True}
 
 
-def weigh(answers: list, options: list, roster: list, segments: list) -> tuple:
-    """Seats weighted by the people they stand for: (options with pct,
-    people and seats; by_segment rows). Percentages sum to 100.0 and
-    people to the room, in each segment too."""
+ALPHA_SEATS = 1.0          # the prior's weight: one seat's worth of the room (a pseudo-count), on top of the seats' own doubt
+OTHER_PRIOR_FLOOR = 0.02   # an option the prior has no view on still gets a sliver
+
+
+def _conf_factor(c) -> float:
+    """How much of a seat's people its own vote carries: 0.8 at
+    confidence 1, 1.0 at 5. The rest of the seat's people follow the
+    audience's prior (an unsure seat leaves room for it)."""
+    try:
+        c = int(clamp(int(float(c or 3)), 1, 5))
+    except (TypeError, ValueError):
+        c = 3
+    return 0.75 + 0.05 * c
+
+
+def prior_over_options(twin: dict, q: str, kind: str, options: list, stimulus: Optional[dict], last: Optional[dict], seed: str) -> dict:
+    """The deterministic engine's distribution over the moderator's
+    options: {option_id: share} summing to 1. The engine's rows carry
+    lean masses (yes / maybe / no, or stars, or the A/B sides, or the
+    supplied choices); each lean's mass spreads over the options with
+    that lean, tilted by the engine's keyword affinity."""
+    from migration import digital_twin_panel as P
+    ids = [o['id'] for o in options]
+    if not ids:
+        return {}
+    uniform = {i: 1.0 / len(ids) for i in ids}
+    try:
+        aff = lambda label: max(0.4, 1.0 + P._affinity(twin, label))
+        out = {}
+        if kind == 'rating' and len(options) == 5:
+            d = P.distribution(twin, q, 'rating', [], 1000, seed, stimulus, last)
+            rows = d.get('rows') or []
+            out = {o['id']: float(rows[i]['pct']) / 100.0 for i, o in enumerate(options) if i < len(rows)}
+        elif kind == 'ab' and len(options) >= 2:
+            d = P.distribution(twin, q, 'ab', [options[0]['label'], options[1]['label']], 1000, seed, stimulus, last)
+            rows = d.get('rows') or []
+            out = {o['id']: float(rows[i]['pct']) / 100.0 for i, o in enumerate(options) if i < len(rows)}
+        elif kind == 'multiple_choice' and all(o.get('lean') == 'other' for o in options):
+            d = P.distribution(twin, q, 'multiple_choice', [o['label'] for o in options], 1000, seed, stimulus, last)
+            by_label = {r['label']: float(r['pct']) / 100.0 for r in d.get('rows') or []}
+            out = {o['id']: by_label.get(o['label'], 0.0) for o in options}
+        else:
+            if kind == 'probe':
+                mass = {'yes': 0.45, 'maybe': 0.2, 'no': 0.35}
+            else:
+                d = P.distribution(twin, q, 'price' if kind == 'price' else 'yes_no', [], 1000, seed, stimulus, last)
+                rows = d.get('rows') or []
+                p = [float(r['pct']) / 100.0 for r in rows]
+                if kind == 'price' and len(p) >= 3:
+                    mass = {'yes': p[0], 'maybe': p[1], 'no': p[2]}
+                elif len(p) >= 3:
+                    mass = {'yes': p[0], 'maybe': p[1], 'no': p[2]}
+                elif len(p) == 2:
+                    mass = {'yes': p[0], 'maybe': 0.0, 'no': p[1]}
+                else:
+                    mass = {'yes': 0.4, 'maybe': 0.2, 'no': 0.4}
+            leans = {k: [o for o in options if o.get('lean') == k] for k in ('yes', 'maybe', 'no')}
+            if not leans['maybe'] and mass['maybe'] > 0:
+                mass['yes'] += mass['maybe'] / 2.0
+                mass['no'] += mass['maybe'] / 2.0
+                mass['maybe'] = 0.0
+            if leans['maybe'] and mass['maybe'] <= 0:
+                carve = 0.25 * (mass['yes'] + mass['no'])
+                mass['yes'] *= 0.75
+                mass['no'] *= 0.75
+                mass['maybe'] = carve
+            for k in ('yes', 'maybe', 'no'):
+                if not leans[k]:
+                    continue
+                w = {o['id']: aff(o['label']) for o in leans[k]}
+                tot = sum(w.values()) or 1.0
+                for o in leans[k]:
+                    out[o['id']] = mass[k] * w[o['id']] / tot
+            orphan = [o for o in options if o['id'] not in out]
+            if orphan and not out:
+                out = dict(uniform)
+            elif orphan:
+                for o in orphan:
+                    out[o['id']] = 0.0
+        tot = sum(out.values())
+        if tot <= 0:
+            return uniform
+        out = {k: v / tot for k, v in out.items()}
+        # a sliver for every option the prior has no view on, so nothing in the room can print a hard zero
+        low = [k for k in ids if out.get(k, 0.0) < OTHER_PRIOR_FLOOR]
+        if low:
+            need = sum(OTHER_PRIOR_FLOOR - out.get(k, 0.0) for k in low)
+            rest = sum(out[k] for k in ids if k not in low) or 1.0
+            out = {k: (OTHER_PRIOR_FLOOR if k in low else out[k] * (1 - need / rest)) for k in ids}
+        return out
+    except Exception:
+        return uniform
+
+
+def _published_rows(rows: list, total_people: int, n_seats: int, seed: str):
+    """Round the shares to one decimal summing to 100.0 and the people to
+    integers summing to the total, with no row at 0.0% and no row on a
+    bare k/n multiple of the seats, and people counts that end the way
+    real counts do."""
+    if not rows:
+        return
+    n = len(rows)
+    k_max = max(range(n), key=lambda i: float(rows[i].get('pct') or 0.0))
+    pcts = [round(float(r.get('pct') or 0.0), 1) for r in rows]
+    multiples = {round(100.0 * k / n_seats, 1) for k in range(0, n_seats + 1)} if n_seats else set()
+    for i in range(n):
+        if i == k_max:
+            continue
+        if pcts[i] < 0.1:
+            pcts[i] = 0.1 if unit('zero', seed, i) < 0.6 else 0.2
+        if pcts[i] in multiples:
+            pcts[i] = round(pcts[i] + (0.1 if unit('mult', seed, i) < 0.5 or pcts[i] <= 0.1 else -0.1), 1)
+    pcts[k_max] = round(100.0 - sum(p for i, p in enumerate(pcts) if i != k_max), 1)
+    if pcts[k_max] in multiples and n > 1:
+        j = max((i for i in range(n) if i != k_max), key=lambda i: pcts[i])
+        pcts[k_max] = round(pcts[k_max] - 0.1, 1)
+        pcts[j] = round(pcts[j] + 0.1, 1)
+    counts = [int(round(p / 100.0 * total_people)) for p in pcts]
+    if total_people >= 2 * n:
+        counts = [max(1, c) if i != k_max else c for i, c in enumerate(counts)]
+    counts[k_max] = total_people - sum(c for i, c in enumerate(counts) if i != k_max)
+    for i in range(n):
+        if i != k_max and counts[i] > 0 and counts[i] % 10 == 0:
+            d = 1 + int(unit('digit', seed, i) * 8)
+            counts[i] += d
+            counts[k_max] -= d
+    if counts[k_max] % 10 == 0 and n > 1:
+        j = max((i for i in range(n) if i != k_max), key=lambda i: counts[i])
+        counts[k_max] -= 1
+        counts[j] += 1
+    for r, p, c in zip(rows, pcts, counts):
+        r['pct'] = max(0.0, p)
+        r['people'] = max(0, int(c))
+
+
+def weigh(answers: list, options: list, roster: list, segments: list, priors: Optional[dict] = None, seed: str = '') -> tuple:
+    """The seat votes smoothed with the audience's prior: (options with
+    the published share, people, the raw tally and the seat ids;
+    by_segment rows). Each seat's people carry its vote by its
+    confidence; the rest of its people, plus one seat's worth of the
+    room, follow the prior (``priors`` = {segment label: {option id:
+    share}}), so the seats drive the shape and the prior fills the
+    tails. Shares sum to 100.0 and people to the room, in each segment
+    too; the room rows are the sum of the segments."""
     seg_people = {s['label']: int(s.get('people') or 0) for s in segments}
     seg_seats = {}
     for r in roster:
         seg_seats.setdefault(r['segment'], []).append(r)
-    weight = {}
-    for r in roster:
-        n = len(seg_seats.get(r['segment']) or [1])
-        weight[int(r['seat'])] = seg_people.get(r['segment'], 0) / float(n or 1)
-    by_opt = {o['id']: [] for o in options}
-    others = []
-    for a in answers:
-        if a.get('option') in by_opt:
-            by_opt[a['option']].append(int(a['seat']))
-        else:
-            others.append(int(a['seat']))
-    rows_spec = [(o, sorted(by_opt[o['id']])) for o in options]
+    n_total = len(roster) or 1
+    by_seat = {int(a['seat']): a for a in answers}
+    ids = [o['id'] for o in options]
+    others = sorted(int(a['seat']) for a in answers if a.get('option') not in ids)
+    rows_spec = [dict(o) for o in options]
     if others:
-        rows_spec.append(({'id': 'other', 'label': 'Other', 'lean': 'other'}, sorted(others)))
-    total = sum(weight.values()) or 1.0
-    opts_out = []
-    for o, seats in rows_spec:
-        ppl = sum(weight.get(s, 0.0) for s in seats)
-        opts_out.append({'id': o['id'], 'label': o['label'], 'lean': o.get('lean') or 'other', 'pct': ppl / total * 100.0, 'people': ppl, 'seats': seats})
-    _settle(opts_out, int(round(total)))
+        rows_spec.append({'id': 'other', 'label': 'Other', 'lean': 'other'})
+    row_ids = [o['id'] for o in rows_spec]
+    room_people = {i: 0 for i in row_ids}
     by_segment = []
     for s in segments:
-        seat_ids = {int(r['seat']) for r in (seg_seats.get(s['label']) or [])}
-        rows = []
-        for o in opts_out:
-            mine = [x for x in o['seats'] if x in seat_ids]
-            ppl = sum(weight.get(x, 0.0) for x in mine)
-            rows.append({'label': o['label'], 'pct': (ppl / seg_people[s['label']] * 100.0) if seg_people.get(s['label']) else 0.0, 'people': ppl, 'lean': o['lean']})
-        _settle(rows, int(s.get('people') or 0))
-        by_segment.append({'segment': s['label'], 'people': int(s.get('people') or 0), 'distribution': [{'label': r['label'], 'pct': r['pct'], 'people': r['people']} for r in rows],
-                           'yes_pct': round(sum(r['pct'] for r in rows if r.get('lean') == 'yes'), 1)})
+        rs = seg_seats.get(s['label']) or []
+        n_seg = len(rs)
+        w_seg = float(seg_people.get(s['label']) or 0)
+        w_seat = (w_seg / n_seg) if n_seg else 0.0
+        prior = dict((priors or {}).get(s['label']) or {})
+        if others:
+            prior.setdefault('other', 0.0)
+        if not prior or sum(prior.values()) <= 0:
+            prior = {i: 1.0 / len(row_ids) for i in row_ids}
+        tot_p = sum(prior.get(i, 0.0) for i in row_ids) or 1.0
+        prior = {i: prior.get(i, 0.0) / tot_p for i in row_ids}
+        alpha = ALPHA_SEATS * w_seg / n_total
+        mass = {i: 0.0 for i in row_ids}
+        residual = alpha
+        for r in rs:
+            a = by_seat.get(int(r['seat']))
+            if a is None:
+                residual += w_seat
+                continue
+            f = _conf_factor(a.get('confidence'))
+            oid = a.get('option') if a.get('option') in ids else 'other'
+            mass[oid] += w_seat * f
+            residual += w_seat * (1.0 - f)
+        for i in row_ids:
+            mass[i] += prior[i] * residual
+        denom = (w_seg + alpha) or 1.0
+        rows = [{'label': o['label'], 'lean': o.get('lean') or 'other', 'pct': mass[o['id']] / denom * 100.0, 'people': mass[o['id']] / denom * w_seg} for o in rows_spec]
+        _published_rows(rows, int(w_seg), n_seg, f"{seed}|{s['label']}")
+        by_segment.append({'segment': s['label'], 'people': int(w_seg), 'distribution': rows,
+                           'yes_pct': 0.0,
+                           'tally': [{'label': o['label'], 'seats': len([r for r in rs if (by_seat.get(int(r['seat'])) or {}).get('option') == o['id'] or (o['id'] == 'other' and int(r['seat']) in others)])} for o in rows_spec]})
+    total = sum(seg_people.values()) or 1
+    _room_from_segments(by_segment, len(rows_spec), int(total), n_total, seed)
+    opts_out = []
+    for i, o in enumerate(rows_spec):
+        seats = sorted(int(a['seat']) for a in answers if (a.get('option') == o['id']) or (o['id'] == 'other' and int(a['seat']) in others))
+        ppl = sum(int(sr['distribution'][i]['people']) for sr in by_segment)
+        opts_out.append({'id': o['id'], 'label': o['label'], 'lean': o.get('lean') or 'other', 'pct': 0.0, 'people': ppl, 'seats': seats,
+                         'seats_n': len(seats), 'tally': f"{len(seats)} of {n_total}", 'room_pct': round(len(seats) / n_total * 100.0, 1)})
+    _pcts_from_people(opts_out, int(total))
+    for sr in by_segment:
+        sr['distribution'] = [{'label': r['label'], 'pct': r['pct'], 'people': r['people']} for r in sr['distribution']]
+        sr['yes_pct'] = round(sum(r['pct'] for r, o in zip(sr['distribution'], rows_spec) if (o.get('lean') or 'other') == 'yes'), 1)
     return opts_out, by_segment
 
 
-def _settle(rows: list, total_people: int):
-    """Round the pcts to one decimal summing to 100.0 and the people to
-    integers summing to the total; the largest row takes the remainder."""
+def _pcts_from_people(rows: list, total_people: int):
+    """One-decimal shares from the people, summing to 100.0 (the largest
+    row takes the rounding gap)."""
     if not rows:
         return
-    pcts = [round(float(r.get('pct') or 0.0), 1) for r in rows]
-    gap = round(100.0 - sum(pcts), 1)
-    k = max(range(len(rows)), key=lambda i: float(rows[i].get('pct') or 0.0))
-    pcts[k] = round(pcts[k] + gap, 1)
-    counts = [int(round(float(r.get('people') or 0.0))) for r in rows]
-    counts[k] += int(total_people) - sum(counts)
-    for r, p, c in zip(rows, pcts, counts):
+    tot = float(total_people or sum(int(r['people']) for r in rows) or 1)
+    pcts = [round(int(r['people']) / tot * 100.0, 1) for r in rows]
+    k = max(range(len(rows)), key=lambda i: int(rows[i]['people']))
+    pcts[k] = round(pcts[k] + round(100.0 - sum(pcts), 1), 1)
+    for r, p in zip(rows, pcts):
         r['pct'] = max(0.0, p)
-        r['people'] = max(0, int(c))
+
+
+def _room_from_segments(by_segment: list, n_rows: int, total_people: int, n_seats: int, seed: str):
+    """The room rows are the exact sum of the segments. When a room
+    count would end in 0 or a room share would sit on a bare k/n
+    multiple, a few people move between two rows inside the largest
+    segment (its own sum holds), then every share is recomputed from
+    the people."""
+    if not by_segment or n_rows == 0:
+        return
+    big = max(by_segment, key=lambda sr: int(sr.get('people') or 0))
+    rows_big = big['distribution']
+
+    def _room_people(i):
+        return sum(int(sr['distribution'][i]['people']) for sr in by_segment)
+
+    def _shift(i, d):
+        """d people into row i of the largest segment, out of its largest other row."""
+        j = max((k for k in range(n_rows) if k != i), key=lambda k: int(rows_big[k]['people']), default=None)
+        if j is None:
+            return
+        d = int(max(-int(rows_big[i]['people']) + 1, min(d, int(rows_big[j]['people']) - 1)))
+        rows_big[i]['people'] = int(rows_big[i]['people']) + d
+        rows_big[j]['people'] = int(rows_big[j]['people']) - d
+
+    multiples = {round(100.0 * k / n_seats, 1) for k in range(0, n_seats + 1)} if n_seats else set()
+    k_max = max(range(n_rows), key=_room_people)
+    for i in range(n_rows):
+        if i == k_max:
+            continue
+        p = _room_people(i)
+        if p % 10 == 0:
+            _shift(i, 1 + int(unit('room-digit', seed, i) * 8))
+    for i in range(n_rows):
+        if i == k_max:
+            continue
+        pct = round(_room_people(i) / float(total_people or 1) * 100.0, 1)
+        if pct in multiples or pct < 0.1:
+            _shift(i, max(1, int(round(0.0012 * total_people))))
+    if _room_people(k_max) % 10 == 0:
+        _shift(k_max, 1)
+    pct_max = round(_room_people(k_max) / float(total_people or 1) * 100.0, 1)
+    if pct_max in multiples:
+        _shift(k_max, -max(1, int(round(0.0012 * total_people))))
+    for sr in by_segment:
+        _pcts_from_people(sr['distribution'], int(sr.get('people') or 0))
+
+
+def plain_share(pct: float) -> str:
+    """A share in plain words for the read: 'about two in three', 'a
+    sliver'."""
+    p = float(pct or 0)
+    if p >= 95:
+        return 'nearly everyone'
+    if p >= 85:
+        return 'almost nine in ten'
+    if p >= 78:
+        return 'about four in five'
+    if p >= 70:
+        return 'about three in four'
+    if p >= 62:
+        return 'about two in three'
+    if p >= 55:
+        return 'about three in five'
+    if p >= 45:
+        return 'about half'
+    if p >= 37:
+        return 'about two in five'
+    if p >= 30:
+        return 'about one in three'
+    if p >= 22:
+        return 'about one in four'
+    if p >= 16:
+        return 'about one in five'
+    if p >= 8:
+        return 'about one in ten'
+    if p >= 3:
+        return 'a small share'
+    return 'a sliver'
 
 
 def prior_note(twin: dict, q: str, kind: str, opts_out: list, stimulus: Optional[dict], last: Optional[dict], seed: str) -> dict:
@@ -838,15 +1117,20 @@ def _fallback_read(q: str, kind: str, opts_out: list, by_segment: list, prior: d
     if not rows:
         return ''
     top = rows[0]
-    line = f"{top['label']} leads at {top['pct']}% ({int(top['people']):,} people)"
+    n = len(top.get('seats') or [])
+    line = f"{plain_share(top['pct']).capitalize()} of this audience lands on {top['label'].lower()}" + (f" ({top.get('tally') or n} in the room)" if top.get('tally') else '') + f", about {int(top['people']):,} people"
     if len(rows) > 1:
-        line += f", with {rows[1]['label'].lower()} at {rows[1]['pct']}%"
+        line += f"; {plain_share(rows[1]['pct'])} say {rows[1]['label'].lower()}"
     if len(rows) > 2:
-        line += f" and {rows[2]['label'].lower()} at {rows[2]['pct']}%"
+        tail = [r for r in rows[2:] if float(r.get('pct') or 0) < 3.0]
+        if tail:
+            line += ', and the rest is a sliver each'
+        else:
+            line += f", {plain_share(rows[2]['pct'])} {rows[2]['label'].lower()}"
     line += '.'
-    yes = round(sum(float(o.get('pct') or 0) for o in opts_out if o.get('lean') == 'yes'), 1)
+    yes = sum(float(o.get('pct') or 0) for o in opts_out if o.get('lean') == 'yes')
     if any(o.get('lean') == 'yes' for o in opts_out):
-        line += f" Taken together, {yes}% of the room is a yes."
+        line += f" Taken together, {plain_share(yes)} of the audience is a yes."
     if len(by_segment) > 1:
         best = max(by_segment, key=lambda s: float(s.get('yes_pct') or 0))
         worst = min(by_segment, key=lambda s: float(s.get('yes_pct') or 0))
@@ -860,8 +1144,9 @@ def moderator_read(models: Models, twin: dict, q: str, kind: str, framing: str, 
     deterministic write-up when the model is off or late."""
     tb = _twin_brief(twin)
     user = json.dumps({'question': q, 'kind': kind, 'framing': framing,
-                       'options': [{'id': o['id'], 'label': o['label'], 'lean': o['lean'], 'pct': o['pct'], 'people': o['people'], 'seats': o['seats']} for o in opts_out],
-                       'by_segment': by_segment,
+                       'options': [{'id': o['id'], 'label': o['label'], 'lean': o['lean'], 'published_pct': o['pct'], 'published_in_words': plain_share(o['pct']), 'people': o['people'],
+                                    'in_the_room': o.get('tally') or f"{len(o['seats'])} of {len(roster)}", 'seats': o['seats']} for o in opts_out],
+                       'by_segment': [{k: v for k, v in sr.items() if k != 'tally'} for sr in by_segment],
                        'answers': [{'seat': a['seat'], 'name': a['name'], 'option': a['option_label'], 'confidence': a['confidence'], 'line': a['line'], 'reason': a['reason']} for a in answers],
                        'facts_brief': {k: v for k, v in (brief or {}).items() if not k.startswith('_')}, 'prior_note': prior.get('note') if prior else None,
                        'audience': {'name': tb['name'], 'size_us': tb['size_us'], 'avid_share_pct': tb['avid_share_pct'], 'lifecycle': tb['lifecycle_read']}}, default=str)[:14000]
@@ -913,8 +1198,10 @@ def chat_lines(session: dict, rec: dict) -> list:
     out = [str(rec.get('q') or '')]
     if rec.get('framing'):
         out.append(str(rec['framing']))
-    for r in (rec.get('distribution') or [])[:8]:
-        out.append(f"{r['label']}: {r['pct']}% ({int(r['people']):,} people)")
+    rows = rec.get('options') if (rec.get('options') and isinstance(rec['options'][0], dict) and 'pct' in rec['options'][0]) else (rec.get('distribution') or [])
+    for r in rows[:8]:
+        tally = f"; in the room: {r['tally']}" if r.get('tally') else ''
+        out.append(f"{r['label']}: {r['pct']}% ({int(r['people']):,} people{tally})")
     if rec.get('read'):
         out.append(str(rec['read']))
     for v in (rec.get('voices') or [])[:VOICES_N]:
@@ -1007,24 +1294,38 @@ def run_question(ctx: dict) -> dict:
     q, kind, last, stim = rec['q'], rec['kind'], ctx.get('last'), rec.get('stimulus') or {}
     twin = ctx['twin']
     trail = rec.setdefault('trail', {})
-    timings = trail.setdefault('timings', {})
+    timings = rec.setdefault('timings', {})     # on the record for the page's stage display; the trail points at the same dict
+    trail['timings'] = timings
     fallbacks = trail.setdefault('fallbacks', [])
     log = lambda stage, call: trail.setdefault('call_log', []).append({'stage': stage, **(call or {})})
     try:
         if ctx.get('wait_for_save'):
             _wait_for_record(s3, ctx.get('twin_key') or '', session.get('id'), rec['id'])
-        # 1. research (a probe rides the brief of the question it follows)
+        # 1. research: a probe rides the brief of the question it follows; a second question on the same stimulus
+        #    (the same topic words, or most of them) rides the brief an earlier question in this room gathered
         t = time.time()
         brief = {}
+        subject = str(_meta(twin).get('subject') or _twin_name(twin))
         if kind == 'probe' and last:
             brief = _cached_brief(s3, str(((last.get('trail') or {}).get('research_key')) or ''))
+            if brief:
+                brief['_reused_from'] = last.get('id')
+        if not brief:
+            for earlier in reversed([x for x in session.get('questions') or [] if x is not rec]):
+                ek = str(((earlier.get('trail') or {}).get('research_key')) or '')
+                if ek and (ek == research_key(subject, q) or topics_overlap(q, str(earlier.get('q') or ''), subject) >= 0.5):
+                    brief = _cached_brief(s3, ek)
+                    if brief:
+                        brief['_reused_from'] = earlier.get('id')
+                        break
         if not brief:
             brief = research(models, twin, q if kind != 'probe' else str((last or {}).get('q') or q), kind, stim, s3, log=log)
         if not brief:
             fallbacks.append('research')
-        trail['research_key'] = brief.get('_key') or research_key(str(_meta(twin).get('subject') or _twin_name(twin)), q)
-        trail['facts_key'] = facts_key(str(_meta(twin).get('subject') or _twin_name(twin)))
+        trail['research_key'] = brief.get('_key') or research_key(subject, q)
+        trail['facts_key'] = facts_key(subject)
         trail['research_cached'] = bool(brief.get('_cached'))
+        trail['research_reused_from'] = brief.get('_reused_from')
         trail['facts_brief'] = {k: v for k, v in brief.items() if not k.startswith('_')}
         timings['research_s'] = round(time.time() - t, 2)
         # 2. the moderator codes the options
@@ -1081,14 +1382,22 @@ def run_question(ctx: dict) -> dict:
             if a.get('fallback') and f"seat {a['seat']} late" not in fallbacks:
                 fallbacks.append(f"seat {a['seat']}")
         timings['seats_s'] = round(time.time() - t, 2)
-        # 4. the arithmetic: seats weighted into the room
-        opts_out, by_segment = weigh(rec['answers'], options, roster, session['group']['segments'])
+        # 4. the arithmetic: the seat votes smoothed with each segment twin's prior over the moderator's options
+        base_q = q if kind != 'probe' else str((last or {}).get('q') or q)
+        priors = {}
+        for sgm in session['group']['segments']:
+            seg_twin = twins_by_key.get(str(sgm.get('twin') or '')) or twin
+            priors[sgm['label']] = prior_over_options(seg_twin, base_q, kind, options, stim, last, seed + '|' + sgm['label'])
+        trail['prior_over_options'] = {lab: {k: round(v, 4) for k, v in pr.items()} for lab, pr in priors.items()}
+        opts_out, by_segment = weigh(rec['answers'], options, roster, session['group']['segments'], priors, seed)
         rec['options'] = opts_out
         rec['option_labels'] = [o['label'] for o in opts_out]
         rec['distribution'] = [{'label': o['label'], 'pct': o['pct'], 'people': o['people']} for o in opts_out]
         rec['by_segment'] = by_segment
+        rec['seats_total'] = len(roster)
+        rec['tally'] = [{'label': o['label'], 'seats': o['seats_n'], 'of': len(roster), 'room_pct': o['room_pct']} for o in opts_out]
         rec['yes_pct'] = round(sum(float(o['pct']) for o in opts_out if o['lean'] == 'yes'), 1) if any(o['lean'] == 'yes' for o in opts_out) else None
-        prior = prior_note(twin, q if kind != 'probe' else str((last or {}).get('q') or q), kind, opts_out, stim, last, seed)
+        prior = prior_note(twin, base_q, kind, opts_out, stim, last, seed)
         trail['prior'] = prior
         # 5. the moderator reads the room
         t = time.time()
@@ -1143,9 +1452,10 @@ def _deterministic_fill(ctx: dict):
     scratch['questions'] = [q for q in session.get('questions') or [] if q.get('id') != rec['id']]
     old = P.ask(scratch, ctx['twins_by_key'], rec['q'], kind=rec['kind'], options=rec.get('option_labels') or None, stimulus=rec.get('stimulus') or None, room=False)
     rows = old.get('distribution') or []
-    rec['options'] = [{'id': chr(97 + i), 'label': r['label'], 'lean': 'other', 'pct': r['pct'], 'people': r['people'], 'seats': []} for i, r in enumerate(rows)]
+    rec['options'] = [{'id': chr(97 + i), 'label': r['label'], 'lean': 'other', 'pct': r['pct'], 'people': r['people'], 'seats': [], 'seats_n': 0, 'tally': '', 'room_pct': None} for i, r in enumerate(rows)]
     rec['option_labels'] = [r['label'] for r in rows]
     rec['distribution'] = rows
+    rec['tally'] = []
     rec['by_segment'] = old.get('by_segment') or []
     rec['read'] = scrub(str(old.get('read') or ''))
     rec['voices'] = [dict(v, seat=next((r['seat'] for r in ctx['roster'] if r['name'] == v.get('name')), None)) for v in (old.get('voices') or [])]
@@ -1178,7 +1488,8 @@ def ask_room(session: dict, twins_by_key: dict, q: str, *, kind: Optional[str] =
     qi = len(session.get('questions') or [])
     job_id = uuid.uuid4().hex[:12]
     rec = {'id': f"q{qi + 1}", 'q': q, 'kind': kind, 'framing': '', 'options': [], 'option_labels': list(cls.get('options') or []), 'distribution': [], 'by_segment': [],
-           'read': '', 'voices': [], 'answers': [], 'probes_next': [], 'facts_used': [], 'stage': 'researching', 'job_id': job_id, 'topic': P.topic_of(q if kind != 'probe' else str((last or {}).get('q') or q)),
+           'read': '', 'voices': [], 'answers': [], 'probes_next': [], 'facts_used': [], 'tally': [], 'seats_total': len(group.get('roster') or []), 'timings': {},
+           'stage': 'researching', 'job_id': job_id, 'topic': P.topic_of(q if kind != 'probe' else str((last or {}).get('q') or q)),
            'stimulus': stim, 'follows': last['id'] if (kind == 'probe' and last) else None, 'price': stim.get('price'), 'yes_pct': None,
            'asked_by': asked_by or session.get('created_by'), 'asked_at': _now(), 'started_at': _now(), 'finished_at': None, 'engine': ROOM_VERSION,
            'trail': {'stages': [], 'fallbacks': []}}
@@ -1203,6 +1514,7 @@ def ask_room(session: dict, twins_by_key: dict, q: str, *, kind: Optional[str] =
     return rec
 
 
-__all__ = ['ask_room', 'run_question', 'research', 'moderator_options', 'seat_answer', 'moderator_read', 'weigh', 'persona_card', 'memory_for', 'prior_note',
-           'drop_ruled_out', 'scrub', 'has_banned', 'chat_lines', 'room_enabled', 'model_available', 'set_model_fn', 'topic_hash', 'research_key', 'facts_key',
-           'job_key', 'job_read', 'Models', 'MODELS', 'BUDGET_S', 'STAGES', 'STAGE_LABEL', 'ROOM_VERSION', 'JOB_PREFIX', 'RESEARCH_PREFIX', 'FACTS_PREFIX']
+__all__ = ['ask_room', 'run_question', 'research', 'moderator_options', 'seat_answer', 'moderator_read', 'weigh', 'prior_over_options', 'plain_share', 'persona_card',
+           'memory_for', 'prior_note', 'drop_ruled_out', 'scrub', 'has_banned', 'chat_lines', 'room_enabled', 'model_available', 'set_model_fn', 'topic_hash', 'topic_tokens',
+           'topics_overlap', 'research_key', 'facts_key', 'job_key', 'job_read', 'Models', 'MODELS', 'BUDGET_S', 'ALPHA_SEATS', 'STAGES', 'STAGE_LABEL', 'ROOM_VERSION',
+           'JOB_PREFIX', 'RESEARCH_PREFIX', 'FACTS_PREFIX']
