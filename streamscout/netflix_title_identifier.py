@@ -58,6 +58,79 @@ PROFILE_DIR = os.path.expanduser("~/.netflix_scraper_profile")
 UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/126.0 Safari/537.36")
 
+# ── unattended auth (storage_state replay) ──────────────────────────────────────
+# Like Max's MAX_AUTH_JSON, Netflix can run headless/server-side WITHOUT the
+# on-disk persistent profile by replaying an exported Playwright storage_state
+# (account cookies). Precedence: NETFLIX_AUTH_JSON (inline blob, for Render
+# deploys) -> NETFLIX_AUTH_PATH (file) -> ~/.netflix_auth.json (default). Capture
+# / refresh it on a desktop with:  python3 netflix_title_identifier.py --save-auth
+_DEFAULT_AUTH_PATH = os.path.expanduser("~/.netflix_auth.json")
+
+
+class _AuthError(RuntimeError):
+    """Raised when a Netflix session token is present but stale/invalid, so the
+    miss surfaces upstream as 'unverified' (loud) rather than a silent 0 rows."""
+
+
+def _auth_path():
+    return os.environ.get("NETFLIX_AUTH_PATH") or _DEFAULT_AUTH_PATH
+
+
+def load_saved_auth():
+    """Return a Playwright storage_state dict from NETFLIX_AUTH_JSON (inline),
+    NETFLIX_AUTH_PATH, or the default path — else None."""
+    blob = os.environ.get("NETFLIX_AUTH_JSON")
+    if blob:
+        try:
+            return json.loads(blob)
+        except Exception:
+            pass
+    p = _auth_path()
+    if os.path.exists(p):
+        try:
+            with open(p) as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return None
+
+
+def save_auth(state, path=None):
+    path = path or _auth_path()
+    with open(path, "w") as f:
+        json.dump(state, f)
+    return path
+
+
+def capture_auth(profile="Jenna", browser="firefox", headed=True, path=None):
+    """Open the logged-in persistent profile, pick `profile`, and export its
+    account cookies as a storage_state blob (for NETFLIX_AUTH_JSON). Returns the
+    saved path. Run on a desktop (first time may need --headed for device code)."""
+    env = load_env()
+    email = env.get("NETFLIX_EMAIL") or ""
+    pw = env.get("NETFLIX_PASSWORD") or ""
+    profile_dir = PROFILE_DIR + ("" if browser == "chromium" else "_" + browser)
+    os.makedirs(profile_dir, exist_ok=True)
+    with sync_playwright() as pw_ctx:
+        launcher = getattr(pw_ctx, browser)
+        ctx = launcher.launch_persistent_context(
+            profile_dir, headless=not headed, user_agent=UA,
+            viewport={"width": 1360, "height": 1000})
+        page = ctx.pages[0] if ctx.pages else ctx.new_page()
+        try:
+            ensure_login(page, email, pw, profile, headed=headed)
+            if _auth_state(page) in ("login", "verify", None):
+                raise _AuthError(
+                    "Not logged in — re-run with --headed to complete "
+                    "login / device verification before --save-auth.")
+            state = ctx.storage_state()
+        finally:
+            ctx.close()
+    # Netflix auth is cookie-based; drop localStorage origins so the token stays
+    # small (~3-4 KB) and env-var-friendly, and carries no extra app state.
+    state = {"cookies": state.get("cookies", []), "origins": []}
+    return save_auth(state, path)
+
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 def load_env(path=".env.local") -> dict:
@@ -574,11 +647,16 @@ def resolve(title=None, title_id=None, kind="series", seasons=None,
     (season/episode/title are "" for a movie).  `seasons` is a set or None (all).
     Raises RuntimeError if credentials are missing.
     """
+    # Unattended/server path: a saved session token (NETFLIX_AUTH_JSON etc.) lets
+    # us run headless with NO on-disk profile and NO interactive login — this is
+    # how Netflix stays "always searching" in production (Render), mirroring Max.
+    auth = load_saved_auth()
     env = load_env()
     email = env.get("NETFLIX_EMAIL")
     pw = env.get("NETFLIX_PASSWORD")
-    if not email or not pw:
-        raise RuntimeError("Missing NETFLIX_EMAIL / NETFLIX_PASSWORD in .env.local.")
+    if not auth and (not email or not pw):
+        raise RuntimeError("Missing NETFLIX_EMAIL / NETFLIX_PASSWORD in .env.local "
+                           "(and no NETFLIX_AUTH_JSON session token).")
 
     profile_dir = PROFILE_DIR + ("" if browser == "chromium" else "_" + browser)
     os.makedirs(profile_dir, exist_ok=True)
@@ -592,14 +670,29 @@ def resolve(title=None, title_id=None, kind="series", seasons=None,
     rows = []
     with sync_playwright() as pw_ctx:
         launcher = getattr(pw_ctx, browser)
-        kwargs = dict(headless=not headed,
-                      viewport={"width": 1360, "height": 1000}, user_agent=UA)
-        if browser == "chromium":
-            kwargs["args"] = ["--disable-blink-features=AutomationControlled"]
-        ctx = launcher.launch_persistent_context(profile_dir, **kwargs)
+        if auth:
+            # Token replay: fresh, non-persistent context seeded with the saved
+            # account cookies. No profile dir, no email/pw login needed.
+            browser_obj = launcher.launch(headless=not headed)
+            ctx = browser_obj.new_context(
+                storage_state=auth, user_agent=UA,
+                viewport={"width": 1360, "height": 1000})
+        else:
+            kwargs = dict(headless=not headed,
+                          viewport={"width": 1360, "height": 1000}, user_agent=UA)
+            if browser == "chromium":
+                kwargs["args"] = ["--disable-blink-features=AutomationControlled"]
+            ctx = launcher.launch_persistent_context(profile_dir, **kwargs)
         page = ctx.pages[0] if ctx.pages else ctx.new_page()
         try:
-            ensure_login(page, email, pw, profile, headed=headed)
+            ensure_login(page, email or "", pw or "", profile, headed=headed)
+            # A present-but-stale token can't log in headless — fail LOUD
+            # (surfaces as 'unverified' upstream) instead of a silent 0 rows.
+            if auth and _auth_state(page) in ("login", "verify"):
+                raise _AuthError(
+                    "Netflix session token (NETFLIX_AUTH_JSON) is stale — "
+                    "re-capture on a desktop with: "
+                    "python3 netflix_title_identifier.py --save-auth")
             # Read the full season list from Netflix's own GraphQL response
             # rather than the DOM (which only renders ~10 episode cards).
             cap = install_episode_capture(page)
@@ -691,8 +784,24 @@ def main() -> int:
     ap.add_argument("--headed", action="store_true",
                     help="show the browser window (needed only for first-time "
                          "login / device verification)")
+    ap.add_argument("--save-auth", action="store_true",
+                    help="capture the logged-in session as a storage_state token "
+                         "(for NETFLIX_AUTH_JSON) so Netflix can run unattended "
+                         "headless in production; writes to NETFLIX_AUTH_PATH or "
+                         "~/.netflix_auth.json")
     ap.add_argument("--outdir", default=os.path.expanduser("~/Desktop"))
     args = ap.parse_args()
+
+    if args.save_auth:
+        try:
+            p = capture_auth(profile=args.profile, browser=args.browser,
+                             headed=args.headed or True)
+        except RuntimeError as e:
+            print(f"  ! {e}"); return 1
+        print(f"\nSaved Netflix session token -> {p}  ({os.path.getsize(p)} bytes)")
+        print("Deploy it to Render as NETFLIX_AUTH_JSON (inline JSON) so Netflix "
+              "stays searchable server-side.")
+        return 0
 
     kind = args.type
     title = args.title
