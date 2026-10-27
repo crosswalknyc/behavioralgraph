@@ -50922,7 +50922,6 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-cover .photo.logo { background-size: contain; background-position: center; background-color: #15252A; }
         #digitalTwinsIQView .dtw-cover .photo.person { background-size: cover; background-position: center 18%; }
         #digitalTwinsIQView .dtw-cover .wash { position: absolute; inset: 0; background: linear-gradient(180deg, #08111300 0%, #08111314 42%, #08111366 72%, #081113CC 100%); }
-        #digitalTwinsIQView .dtw-cover .kind { position: relative; z-index: 1; font-size: 10px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: #9AA09B; }
         #digitalTwinsIQView .dtw-cover h2 { position: relative; z-index: 1; margin: 8px 0 0; font-size: 22px; line-height: 26px; font-weight: 600; color: #E9E8E1; letter-spacing: -0.02em; overflow-wrap: anywhere; }
         #digitalTwinsIQView .dtw-cover .fig { position: relative; z-index: 1; margin-top: 18px; font-size: 20px; line-height: 24px; font-weight: 600; color: #E9E8E1; font-variant-numeric: tabular-nums; }
         #digitalTwinsIQView .dtw-cover.on .fig { color: var(--dtw-accent); }
@@ -51978,10 +51977,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 });
                 var tiles = shown.map(function(r) {
                     var on = r.key === S.key;
-                    var kind = twinKindLabel(r);
-                    var home = r.platform_home ? ' · ' + r.platform_home : '';
                     var photo = r.hero_image ? '<div class="photo logo" style="background-image:url(\'' + esc(r.hero_image) + '\')"></div>' : '';
-                    return '<article class="dtw-cover' + (on ? ' on' : '') + '" data-key="' + esc(r.key) + '" onclick="dtwOpen(\'' + esc(r.key) + '\')" title="' + esc(r.name || r.subject) + '">' + photo + '<div class="wash"></div><div class="kind">' + esc(kind + home) + '</div><h2>' + esc(r.name || r.subject) + '</h2><div class="fig">' + fmtN(r.size_us) + '<span>people in the US</span></div><div class="foot">' + esc(coverActivity(r)) + '</div>' + (on ? '<div class="open">Open</div>' : '') + '</article>';
+                    return '<article class="dtw-cover' + (on ? ' on' : '') + '" data-key="' + esc(r.key) + '" onclick="dtwOpen(\'' + esc(r.key) + '\')" title="' + esc(r.name || r.subject) + '">' + photo + '<div class="wash"></div><h2>' + esc(r.name || r.subject) + '</h2><div class="fig">' + fmtN(r.size_us) + '<span>people in the US</span></div><div class="foot">' + esc(coverActivity(r)) + '</div>' + (on ? '<div class="open">Open</div>' : '') + '</article>';
                 });
                 tiles.push('<article class="dtw-cover build" onclick="dtwBuildTwin()"><div class="plus">+</div><h2>Build a twin.</h2><p>' + esc(twinPrice()) + '. From a profile, or demographics you choose. Prometheus walks you through it.</p></article>');
                 h.innerHTML = tiles.join('');
