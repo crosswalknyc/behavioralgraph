@@ -193,9 +193,13 @@ def scrub(s: str) -> str:
     t = str(s or '')
     t = _SOURCE_NAMES_RX.sub('the record', t)
     t = re.sub(r"\b(according to|per) the record\b,?\s*", '', t, flags=re.I)
+    # the room's own swaps first, so the grammar survives ('the panel' -> 'the room')
+    for rx, rep in ((r"\bresearch(?:ed|ing)?\b", 'record'), (r"\bmodel(?:ed|led|ing|s)?\b", 'read'), (r"\bestimated\b", 'expected'), (r"\bestimates?\b", 'figures'),
+                    (r"\bpanel(?:ists?|s)?\b", 'room'), (r"\bsamples?\b", 'group'), (r"\bconfidence\b", 'certainty'), (r"\bsynthetic(?:ally)?\b", 'twin-based'),
+                    (r"\bsynth\b", 'twin'), (r"\bpipelines?\b", 'process'), (r"\bcorpus\b", 'library'), (r"\blanes?\b", 'path')):
+        t = re.sub(rx, rep, t, flags=re.I)
     t = scrub_text(t)
-    t = re.sub(r"\bcorpus\b", 'library', t, flags=re.I)
-    t = re.sub(r"\blanes?\b", 'path', t, flags=re.I)
+    t = re.sub(r"\b(the|a|an) (the|a|an)\b", r"\1", t, flags=re.I)
     t = t.replace('\u2014', '-').replace('\u2013', '-')
     t = re.sub(r"\s{2,}", ' ', t).strip()
     return t
@@ -993,7 +997,6 @@ def run_question(ctx: dict) -> dict:
             _wait_for_record(s3, ctx.get('twin_key') or '', session.get('id'), rec['id'])
         # 1. research (a probe rides the brief of the question it follows)
         t = time.time()
-        _publish(ctx, 'researching')
         brief = {}
         if kind == 'probe' and last:
             brief = _cached_brief(s3, str(((last.get('trail') or {}).get('research_key')) or ''))
