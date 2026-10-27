@@ -50983,11 +50983,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView.is-fg-room .dtw-spine-foot .dtw-fg-acts { display: none !important; }
         #digitalTwinsIQView .dtw-body.is-fg-room { overflow: visible; display: block; height: auto; padding: 0.75rem 1.5rem 0.55rem; }
         #digitalTwinsIQView .dtw-body.is-fg-room .dtw-pane-fg.active { display: block; height: auto; }
-        #digitalTwinsIQView .dtw-body.is-fg-room .dtw-fg { height: auto; min-height: 0; }
+        #digitalTwinsIQView .dtw-body.is-fg-room .dtw-fg { height: auto; min-height: 0; overflow: visible; }
         #digitalTwinsIQView .dtw-fg-dock { display: none; }
-        #digitalTwinsIQView.is-fg-room .dtw-fg-dock { display: block; position: sticky; top: 0; z-index: 6; background: var(--dtw-page); padding: 8px 0 10px; margin: 0 0 2px; border-bottom: 1px solid var(--dtw-rule); }
+        #digitalTwinsIQView.is-fg-room .dtw-fg-dock { display: block; position: sticky; top: 0; z-index: 8; flex: 0 0 auto; background: var(--dtw-page); padding: 10px 0 12px; margin: 0; border-bottom: 1px solid var(--dtw-rule); box-shadow: 0 -18px 0 0 var(--dtw-page); }
         #digitalTwinsIQView.is-fg-room .dtw-fg-dock .dtw-fg-acts { display: flex; justify-content: flex-end; padding: 0 0 8px; }
-        #digitalTwinsIQView.is-fg-room .dtw-fg-hero { border-bottom: 0; padding-bottom: 0; }
+        #digitalTwinsIQView.is-fg-room .dtw-fg-hero { border-bottom: 0; padding-bottom: 0; overflow: visible; z-index: 1; }
         #digitalTwinsIQView.is-fg-room .dtw-fg-htext { margin-top: 0; }
         #digitalTwinsIQView .dtw-body.is-fg-room .dtw-fg-main { height: var(--dtw-main-h, 58vh); min-height: 240px; overflow: hidden; align-items: stretch; }
         #digitalTwinsIQView .dtw-body.is-fg-room .dtw-fg-main > * { min-height: 0; }
@@ -52196,6 +52196,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     var a = bySeat[String(r.seat)], landed = !!flyBySeat[String(r.seat)];
                     return seatCircle(r, i, { edge: a ? edgeOf(rk, answerOptId(fq, a)) : '', mark: fly ? (landed ? '<span class="mark"></span>' : '<span class="mark wait"></span>') : '', pending: !!fly && !landed });
                 }).join('');
+                return '<div class="dtw-fg-seatrow" role="list">' + seats + '</div>';
+            }
+            function dockHtml(s, g, roster, fq, fly) {
                 var meta, qsAll = s.questions || [];
                 if (fly && (!fq || fly === fq)) {
                     meta = '<span class="dtw-fg-pulse"></span><span>' + stageLead(fly) + SEP + '<span id="dtwFgStageEl">' + qElapsedS(fly) + '</span>s</span>';
@@ -52210,7 +52213,16 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     meta = '<span>' + fmtN(g.in_room || roster.length) + ' twins standing for <b>' + fmtN(g.size_people) + '</b> people' + SEP + 'Ask the first question below; the shares, the read and the voices come back in a minute or two.</span>';
                 }
                 var big = fq ? weightPair(fq.q) : 'The room is seated.';
-                return '<div class="dtw-fg-seatrow" role="list">' + seats + '</div><div class="dtw-fg-dock" id="dtwFgDock"><div class="dtw-fg-acts" id="dtwFgDockActs"></div><div class="dtw-fg-htext"><div class="dtw-fg-rt">' + esc(roomTitle(s)) + '</div><div class="dtw-fg-fq">' + big + '</div><div class="dtw-fg-fm">' + meta + '</div></div></div>';
+                return '<div class="dtw-fg-acts" id="dtwFgDockActs"></div><div class="dtw-fg-htext"><div class="dtw-fg-rt">' + esc(roomTitle(s)) + '</div><div class="dtw-fg-fq">' + big + '</div><div class="dtw-fg-fm">' + meta + '</div></div>';
+            }
+            function paintFgDock(s, g, roster, fq, fly) {
+                var hero = el('dtwFgHero'), dock = el('dtwFgDock');
+                if (!hero || !dock) return false;
+                hero.innerHTML = heroHtml(s, g, roster, fq, fly);
+                dock.innerHTML = dockHtml(s, g, roster, fq, fly);
+                syncFgActs();
+                fgLayoutSeats();
+                return true;
             }
             // The row fits the width it has: one row when the seats fit at their pitch, else as few rows as needed, filled evenly (never one seat alone on a second row).
             function fgLayoutSeats() {
@@ -52363,7 +52375,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 S.fg.tallyQ = id || null;
                 var s = S.session, h = el('dtwFgTally'); if (!s || !h) { fgRefresh(); return; }
                 var g = s.group || {}, roster = g.roster || [], fq = tallyFocusQ(), fly = flyQ();
-                var hero = el('dtwFgHero'); if (hero) { hero.innerHTML = heroHtml(s, g, roster, fq, fly); syncFgActs(); fgLayoutSeats(); }
+                if (!paintFgDock(s, g, roster, fq, fly)) { fgRefresh(); return; }
                 h.innerHTML = tallyHtml(s, g, roster, fq);
                 var inn = el('dtwFgTallyIn'); if (inn) inn.scrollTop = 0;
             };
@@ -52444,6 +52456,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var g = s.group || {}, roster = g.roster || [], fq = tallyFocusQ(), latest = focusQ(), fly = flyQ();
                 var typed = (el('dtwPnQ') || {}).value || '', typedOpts = (el('dtwPnOptions') || {}).value || '';
                 var out = '<div class="dtw-fg-hero" id="dtwFgHero">' + heroHtml(s, g, roster, fq, fly) + '</div>';
+                out += '<div class="dtw-fg-dock" id="dtwFgDock">' + dockHtml(s, g, roster, fq, fly) + '</div>';
                 out += '<div class="dtw-fg-main"><div class="dtw-fg-chat"><div class="dtw-fg-stream" id="dtwPnTranscript">' + threadHtml(s, roster, latest, fly) + '</div>' + composerHtml(typed, typedOpts) + '</div>';
                 out += '<aside class="dtw-fg-tally" id="dtwFgTally" aria-label="The split">' + tallyHtml(s, g, roster, fq) + '</aside></div>';
                 out += popHtml();
@@ -52458,10 +52471,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }
             // A refresh while the room works or a portrait lands: the band, the thread and the tally redraw; the composer keeps what was typed.
             function fgRefresh() {
-                var s = S.session, h = el('dtwPnConsole'); if (!s || !h || !el('dtwFgHero')) { renderPanelConsole(); return; }
+                var s = S.session, h = el('dtwPnConsole'); if (!s || !h || !el('dtwFgHero') || !el('dtwFgDock')) { renderPanelConsole(); return; }
                 var g = s.group || {}, roster = g.roster || [], fq = tallyFocusQ(), latest = focusQ(), fly = flyQ();
-                el('dtwFgHero').innerHTML = heroHtml(s, g, roster, fq, fly);
-                fgLayoutSeats();
+                paintFgDock(s, g, roster, fq, fly);
                 var tr = el('dtwPnTranscript');
                 if (tr) { var atEnd = fgAtEnd(); tr.innerHTML = threadHtml(s, roster, latest, fly); if (atEnd) fgScrollEnd(); }
                 var ta = el('dtwFgTally'); if (ta) ta.innerHTML = tallyHtml(s, g, roster, fq);
