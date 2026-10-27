@@ -51968,7 +51968,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     var banner = '<div class="banner">' + (r.hero_image ? '<img src="' + esc(r.hero_image) + '" alt="">' : '') + '</div>';
                     return '<article class="dtw-cover' + (on ? ' on' : '') + '" data-key="' + esc(r.key) + '" onclick="dtwOpen(\'' + esc(r.key) + '\')" title="' + esc(r.name || r.subject) + '">' + banner + '<div class="body"><h2>' + esc(r.name || r.subject) + '</h2><div class="fig">' + fmtN(r.size_us) + '<span>people in the US</span></div><div class="foot">' + esc(coverActivity(r)) + '</div></div>' + (on ? '<div class="open">Open</div>' : '') + '</article>';
                 });
-                tiles.push('<article class="dtw-cover build" onclick="dtwBuildTwin()"><div class="banner"><div class="plus">+</div></div><div class="body"><h2>Build a twin.</h2><div class="fig">' + esc(twinPrice()) + '<span>per twin</span></div><p>From a profile, or demographics you choose. Prometheus walks you through it.</p></div></article>');
+                tiles.push('<article class="dtw-cover build" onclick="dtwBuildTwin()"><div class="banner"><div class="plus">+</div></div><div class="body"><h2>Build a twin.</h2><div class="fig">' + esc(twinPrice()) + '<span>per twin</span></div><p>Build from a profile or demographics. Prometheus walks you through the twin-building process.</p></div></article>');
                 h.innerHTML = tiles.join('');
             }
             window.dtwOpen = async function(key, runId, sessionId, planId, tab) {
