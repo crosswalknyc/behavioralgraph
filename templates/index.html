@@ -50784,7 +50784,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
 
         <!-- DIGITAL TWINS IQ VIEW (2026-10-26, Jenna: twins, Greenlight Lab, Launch Lab, Spend Engine, Focus Group IQ, How to) -->
         <!-- Redesign 2026-10-26 (Jenna: 'it feels disjointed and confusing'): one spine for the selected twin, one tab rail for the labs, the same lab anatomy on every tab (input card left, results right), How to as a drawer. -->
-        <!-- Focus Group IQ 2026-10-27 (Jenna picked option F, 'love it go for it'): the room's portraits as a band under the title and the question, the room as a conversation thread with the composer under it, the tally pinned on the right, a seat's bio as a popover, the saved rooms and the room builder as drawers. -->
+        <!-- Focus Group IQ 2026-10-27 (Jenna picked option F, 'love it go for it'): the room's seats as a row of circular portraits above the title and the question (name, age, city under each; the bio on click), the room as a conversation thread with the composer under it, the tally pinned on the right, a seat's bio as a popover, the saved rooms and the room builder as drawers. -->
         <style>
         #digitalTwinsIQView {
             --dtw-page: var(--cw-page, #111F22); --dtw-raised: var(--cw-raised, #1B2E34); --dtw-input: var(--cw-input, #22383F);
@@ -50941,12 +50941,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-move { border-left: 3px solid var(--dtw-second); padding: 0.5rem 0.75rem; margin: 0.5rem 0; background: var(--dtw-page); border-radius: 0 8px 8px 0; font-size: 0.8rem; line-height: 1.45; }
         #digitalTwinsIQView .dtw-move.ok { border-left-color: var(--dtw-accent); }
         #digitalTwinsIQView .dtw-move .w { font-weight: 600; }
-        /* ---- focus group iq console: option F (2026-10-27, Jenna: 'love it go for it') ----
-           The portrait band header (E) over the conversation thread and the pinned tally (C): a compact mosaic of the room's seats under a
-           Graphite scrim with the room title and the question set over it, each tile edged in its answer's color; the thread on the left
-           (the question as a Prometheus-style message, the answers as messages, the read as the closing message, the next probes as chips,
-           the composer pinned under it); the tally on the right (one stacked bar, what the room knew, two voices, the split by segment);
-           a seat's bio as a popover under its portrait; the saved rooms and the room builder behind Rooms and New room in the header row. */
+        /* ---- focus group iq console: option F (2026-10-27, Jenna: 'love it go for it'), the header as a circle row (Jenna, same day) ----
+           A row of the room's seats as circular portraits above the room title and the question, each ringed in its answer's color once
+           answered, name and 'age, city' under it; the thread on the left (the question as a Prometheus-style message, the answers as
+           messages, the read as the closing message, the next probes as chips, the composer pinned under it); the tally on the right (one
+           stacked bar, what the room knew, two voices, the split by segment); a seat's bio as a popover under its portrait; the saved rooms
+           and the room builder behind Rooms and New room in the header row. */
         #digitalTwinsIQView { --dtw-s1: #C7F23E; --dtw-s2: #E682FF; --dtw-s3: #3358FF; --dtw-s4: #B7B3D8; --dtw-s5: #3B3D38; --dtw-cbody: #A8AFA9; --dtw-clabel: #9BAAAC; --dtw-ink2: #081113; }
         body[data-theme="light"] #digitalTwinsIQView { --dtw-s1: #5E7E12; --dtw-s2: #8E3FA8; --dtw-cbody: #5C6560; --dtw-clabel: #5C6466; }
         #digitalTwinsIQView .dtw-body.is-fg { overflow: hidden; display: flex; flex-direction: column; padding: 0.85rem 1.5rem 1rem; }
@@ -50962,34 +50962,38 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-fg-act.go { background: var(--dtw-accent); color: var(--dtw-accent-ink); border-color: var(--dtw-accent); font-weight: 600; }
         #digitalTwinsIQView .dtw-fg-saved { font-size: 11px; color: var(--dtw-mute); }
         #digitalTwinsIQView .dtw-fg-saved:empty { display: none; }
-        /* the band: the seats as a mosaic, the scrim, the title and the question over it */
-        #digitalTwinsIQView .dtw-fg-hero { position: relative; flex: 0 0 auto; border-radius: 10px; overflow: hidden; background: var(--dtw-ink2); min-height: 114px; display: flex; flex-direction: column; justify-content: flex-end; padding: 14px 18px 11px; }
-        #digitalTwinsIQView .dtw-fg-mosaic { position: absolute; inset: 0; display: flex; }
-        #digitalTwinsIQView .dtw-fg-tile { position: relative; flex: 1 1 0; min-width: 0; height: 100%; appearance: none; border: 0; padding: 0; margin: 0; background: var(--dtw-tile); cursor: pointer; overflow: hidden; color: #E9E8E1; }
-        #digitalTwinsIQView .dtw-fg-tile img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 18%; filter: saturate(.88); display: block; }
-        #digitalTwinsIQView .dtw-fg-tile .ini { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 15px; letter-spacing: -0.01em; background: var(--hue, #3358FF); opacity: .6; }
-        #digitalTwinsIQView .dtw-fg-tile .edge { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; z-index: 3; background: var(--edge, transparent); }
-        #digitalTwinsIQView .dtw-fg-tile .mark { position: absolute; left: 8px; top: 8px; width: 16px; height: 16px; border-radius: 50%; background: #E9E8E1; z-index: 3; box-shadow: 0 1px 3px rgba(8,17,19,.6); }
-        #digitalTwinsIQView .dtw-fg-tile .mark::after { content: ''; position: absolute; left: 4px; top: 4px; width: 6px; height: 3.5px; border-left: 1.6px solid #0C1618; border-bottom: 1.6px solid #0C1618; transform: rotate(-45deg) translate(1px, -1px); }
-        #digitalTwinsIQView .dtw-fg-tile .mark.wait { background: rgba(12,22,24,.55); border: 1.5px solid rgba(233,232,225,.8); }
-        #digitalTwinsIQView .dtw-fg-tile .mark.wait::after { display: none; }
-        #digitalTwinsIQView .dtw-fg-tile.pending::before { content: ''; position: absolute; inset: 0; background: rgba(8,17,19,.32); z-index: 1; }
-        #digitalTwinsIQView .dtw-fg-tile.sel, #digitalTwinsIQView .dtw-fg-tile:focus-visible { outline: 2px solid #E9E8E1; outline-offset: -2px; z-index: 4; }
-        #digitalTwinsIQView .dtw-fg-scrim, #digitalTwinsIQView .dtw-fg-scrim2 { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
-        #digitalTwinsIQView .dtw-fg-scrim { background: linear-gradient(180deg, rgba(8,17,19,.14) 0%, rgba(8,17,19,.30) 40%, rgba(8,17,19,.88) 100%); }
-        #digitalTwinsIQView .dtw-fg-scrim2 { background: linear-gradient(90deg, rgba(8,17,19,.70) 0%, rgba(8,17,19,.46) 36%, rgba(8,17,19,.06) 66%, rgba(8,17,19,0) 100%); }
-        #digitalTwinsIQView .dtw-fg-htext { position: relative; z-index: 5; max-width: 64%; text-shadow: 0 1px 3px rgba(8,17,19,.75); pointer-events: none; }
-        #digitalTwinsIQView .dtw-fg-rt { font-size: 15px; line-height: 19px; color: #E9E8E1; font-weight: 600; overflow-wrap: anywhere; }
-        #digitalTwinsIQView .dtw-fg-fq { font-size: 23px; line-height: 28px; color: #E9E8E1; font-weight: 300; letter-spacing: -0.01em; margin-top: 3px; overflow-wrap: anywhere; }
+        /* the band (Jenna 2026-10-27: 'put the pics in circles above the title and put their name, age, location attached and if you click you
+           get their bio'): a row of circular portraits on the Graphite ground, each ringed in its answer's color once answered, the name and
+           'age, city' under it, then the room title, the question and the meta line (the stage line while a question runs) in the same type. */
+        #digitalTwinsIQView .dtw-fg-hero { position: relative; flex: 0 0 auto; padding: 2px 0 12px; border-bottom: 1px solid var(--dtw-rule); min-height: 0; }
+        #digitalTwinsIQView .dtw-fg-seatrow { --seat-pitch: 108; --circ: 64px; display: grid; grid-template-columns: repeat(12, minmax(0, 124px)); gap: 4px 8px; justify-content: start; }
+        #digitalTwinsIQView .dtw-fg-seatrow.mini { --seat-pitch: 72; --circ: 48px; grid-template-columns: repeat(12, minmax(0, 72px)); gap: 4px 6px; }
+        #digitalTwinsIQView .dtw-fg-seat { appearance: none; background: transparent; border: 0; padding: 6px 2px 2px; margin: 0; display: flex; flex-direction: column; align-items: center; gap: 2px; color: inherit; cursor: pointer; text-align: center; min-width: 0; width: 100%; font-family: inherit; border-radius: 10px; }
+        #digitalTwinsIQView .dtw-fg-seat:focus-visible { outline: none; }
+        #digitalTwinsIQView .dtw-fg-circ { position: relative; width: var(--circ); height: var(--circ); border-radius: 50%; background: var(--hue, #3358FF); box-shadow: 0 0 0 3px var(--edge, transparent); display: flex; align-items: center; justify-content: center; margin: 3px 3px 7px; flex: none; color: #E9E8E1; font-weight: 600; font-size: 17px; letter-spacing: -0.01em; transition: box-shadow .12s; }
+        #digitalTwinsIQView .dtw-fg-seat:hover .dtw-fg-circ { filter: brightness(1.08); }
+        #digitalTwinsIQView .dtw-fg-circ .ini { position: absolute; inset: 0; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+        #digitalTwinsIQView .dtw-fg-circ img { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 50%; object-fit: cover; object-position: 50% 25%; display: block; }
+        #digitalTwinsIQView .dtw-fg-circ .mark { position: absolute; right: -4px; top: -4px; width: 16px; height: 16px; border-radius: 50%; background: var(--dtw-ink); box-shadow: 0 0 0 2px var(--dtw-page); z-index: 2; }
+        #digitalTwinsIQView .dtw-fg-circ .mark::after { content: ''; position: absolute; left: 4px; top: 4px; width: 6px; height: 3.5px; border-left: 1.6px solid var(--dtw-page); border-bottom: 1.6px solid var(--dtw-page); transform: rotate(-45deg) translate(1px, -1px); }
+        #digitalTwinsIQView .dtw-fg-circ .mark.wait { background: var(--dtw-page); border: 1.5px solid var(--dtw-body); }
+        #digitalTwinsIQView .dtw-fg-circ .mark.wait::after { display: none; }
+        #digitalTwinsIQView .dtw-fg-seat.pending .dtw-fg-circ img, #digitalTwinsIQView .dtw-fg-seat.pending .dtw-fg-circ .ini { opacity: .45; }
+        #digitalTwinsIQView .dtw-fg-seat.sel .dtw-fg-circ, #digitalTwinsIQView .dtw-fg-seat:focus-visible .dtw-fg-circ { box-shadow: 0 0 0 3px var(--edge, var(--dtw-page)), 0 0 0 5px var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-fg-seat .nm { font-size: 12px; line-height: 15px; font-weight: 600; color: var(--dtw-ink); overflow-wrap: anywhere; max-width: 100%; }
+        #digitalTwinsIQView .dtw-fg-seat .ag { font-size: 10.5px; line-height: 14px; color: var(--dtw-mute); overflow-wrap: anywhere; max-width: 100%; }
+        #digitalTwinsIQView .dtw-fg-htext { position: relative; margin-top: 8px; }
+        #digitalTwinsIQView .dtw-fg-rt { font-size: 15px; line-height: 19px; color: var(--dtw-ink); font-weight: 600; overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-fg-fq { font-size: 23px; line-height: 28px; color: var(--dtw-ink); font-weight: 300; letter-spacing: -0.01em; margin-top: 3px; overflow-wrap: anywhere; }
         #digitalTwinsIQView .dtw-fg-fq b { font-weight: 700; }
-        #digitalTwinsIQView .dtw-fg-fm { font-size: 11.5px; line-height: 15px; color: #C9CCC6; margin-top: 5px; display: flex; align-items: center; flex-wrap: wrap; gap: 2px 0; font-variant-numeric: tabular-nums; }
-        #digitalTwinsIQView .dtw-fg-fm b { color: #E9E8E1; font-weight: 600; }
+        #digitalTwinsIQView .dtw-fg-fm { font-size: 11.5px; line-height: 15px; color: var(--dtw-body); margin-top: 5px; display: flex; align-items: center; flex-wrap: wrap; gap: 2px 0; font-variant-numeric: tabular-nums; }
+        #digitalTwinsIQView .dtw-fg-fm b { color: var(--dtw-ink); font-weight: 600; }
         #digitalTwinsIQView .dtw-fg-sep { display: inline-block; margin: 0 8px; opacity: .8; }
-        #digitalTwinsIQView .dtw-fg-pulse { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #E9E8E1; box-shadow: 0 0 0 3px rgba(233,232,225,.22); margin-right: 8px; flex: none; animation: dtwPulse 1.5s ease-in-out infinite; }
+        #digitalTwinsIQView .dtw-fg-pulse { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--dtw-ink); box-shadow: 0 0 0 3px var(--dtw-track); margin-right: 8px; flex: none; animation: dtwPulse 1.5s ease-in-out infinite; }
         @keyframes dtwPulse { 0%, 100% { opacity: 0.45; transform: scale(0.85); } 50% { opacity: 1; transform: scale(1); } }
-        #digitalTwinsIQView .dtw-fg-hero.blank .dtw-fg-tile { cursor: default; }
-        #digitalTwinsIQView .dtw-fg-hero.blank .dtw-fg-tile .ini { opacity: .22; }
-        #digitalTwinsIQView .dtw-fg-hero.blank .dtw-fg-tile img { opacity: .55; }
+        #digitalTwinsIQView .dtw-fg-hero.blank .dtw-fg-circ { cursor: default; }
+        #digitalTwinsIQView .dtw-fg-hero.blank .dtw-fg-circ .ini { opacity: .35; }
+        #digitalTwinsIQView .dtw-fg-hero.blank .dtw-fg-circ img { opacity: .7; }
         /* the thread and the tally */
         #digitalTwinsIQView .dtw-fg-main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 34%); gap: 20px; flex: 1 1 0%; min-height: 0; align-items: stretch; }
         #digitalTwinsIQView .dtw-fg-chat { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
@@ -51131,27 +51135,28 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-fg-rooms .dtw-run .q .dtw-fg-tag { font-size: 10px; }
         #digitalTwinsIQView .dtw-fg-note { font-size: 12px; color: var(--dtw-body); min-height: 1em; margin-top: 10px; line-height: 1.4; }
         #digitalTwinsIQView .dtw-fg-price { font-size: 0.74rem; color: var(--dtw-body); margin-top: 0.6rem; line-height: 1.4; }
-        /* under about 1100 px the band collapses to a strip of circles and the tally sits under the thread */
+        /* on a short window (a laptop at 800 px tall) the circles step down so the row keeps the thread and the composer in view */
+        @media (max-height: 860px) and (min-width: 1101px) {
+            #digitalTwinsIQView .dtw-fg-seatrow { --seat-pitch: 100; --circ: 52px; gap: 2px 6px; }
+            #digitalTwinsIQView .dtw-fg-circ { font-size: 15px; margin: 3px 3px 6px; }
+            #digitalTwinsIQView .dtw-fg-seat .nm { font-size: 11.5px; line-height: 14px; }
+            #digitalTwinsIQView .dtw-fg-seat .ag { font-size: 10px; line-height: 13px; }
+            #digitalTwinsIQView .dtw-fg-fq { font-size: 21px; line-height: 26px; }
+        }
+        /* under about 1100 px the row becomes two rows of smaller circles and the tally sits under the thread */
         @media (max-width: 1100px) {
             #digitalTwinsIQView .dtw-body.is-fg { overflow: auto; display: block; }
             #digitalTwinsIQView .dtw-body.is-fg #dtwTabPanel.active { display: block; }
             #digitalTwinsIQView .dtw-fg { display: block; }
             #digitalTwinsIQView .dtw-fg > * { margin-bottom: 10px; }
-            #digitalTwinsIQView .dtw-fg-hero { min-height: 0; padding: 0; background: transparent; overflow: visible; border-radius: 0; display: block; }
-            #digitalTwinsIQView .dtw-fg-mosaic { position: static; display: flex; gap: 6px; flex-wrap: wrap; }
-            #digitalTwinsIQView .dtw-fg-tile { flex: 0 0 auto; width: 40px; height: 40px; border-radius: 50%; border: 3px solid var(--edge, var(--dtw-rule)); background-clip: padding-box; }
-            #digitalTwinsIQView .dtw-fg-tile img { object-position: 50% 30%; }
-            #digitalTwinsIQView .dtw-fg-tile .edge { display: none; }
-            #digitalTwinsIQView .dtw-fg-tile .mark { left: auto; right: -4px; top: -4px; width: 14px; height: 14px; }
-            #digitalTwinsIQView .dtw-fg-tile .mark::after { left: 3px; top: 3px; }
-            #digitalTwinsIQView .dtw-fg-tile.sel, #digitalTwinsIQView .dtw-fg-tile:focus-visible { outline-offset: 1px; }
-            #digitalTwinsIQView .dtw-fg-scrim, #digitalTwinsIQView .dtw-fg-scrim2 { display: none; }
-            #digitalTwinsIQView .dtw-fg-htext { max-width: none; text-shadow: none; margin-top: 10px; }
-            #digitalTwinsIQView .dtw-fg-rt { color: var(--dtw-ink); }
-            #digitalTwinsIQView .dtw-fg-fq { color: var(--dtw-ink); font-size: 19px; line-height: 24px; }
-            #digitalTwinsIQView .dtw-fg-fm { color: var(--dtw-body); }
-            #digitalTwinsIQView .dtw-fg-fm b { color: var(--dtw-ink); }
-            #digitalTwinsIQView .dtw-fg-pulse { background: var(--dtw-ink); box-shadow: 0 0 0 3px var(--dtw-track); }
+            #digitalTwinsIQView .dtw-fg-seatrow { --seat-pitch: 88; --circ: 48px; gap: 2px 6px; }
+            #digitalTwinsIQView .dtw-fg-seatrow.mini { --seat-pitch: 60; --circ: 40px; }
+            #digitalTwinsIQView .dtw-fg-circ { font-size: 14px; }
+            #digitalTwinsIQView .dtw-fg-circ .mark { width: 14px; height: 14px; }
+            #digitalTwinsIQView .dtw-fg-circ .mark::after { left: 3px; top: 3px; }
+            #digitalTwinsIQView .dtw-fg-seat .nm { font-size: 11px; line-height: 14px; }
+            #digitalTwinsIQView .dtw-fg-seat .ag { font-size: 10px; line-height: 13px; }
+            #digitalTwinsIQView .dtw-fg-fq { font-size: 19px; line-height: 24px; }
             #digitalTwinsIQView .dtw-fg-main { display: block; }
             #digitalTwinsIQView .dtw-fg-stream { overflow: visible; }
             #digitalTwinsIQView .dtw-fg-msgs { min-height: 0; }
@@ -51801,9 +51806,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // confirm, save, export, the job poll every 4 s while a question is in flight, the 20 s / 75 s portrait re-reads.
             var KINDS = [['yes_no', 'Yes / no'], ['multiple_choice', 'Multiple choice'], ['rating', 'Rate 1 to 5'], ['price', 'Would you pay $X'], ['ab', 'A vs B'], ['show_of_hands', 'Show of hands'], ['open', 'Open question'], ['probe', 'Probe']];
             var KIND_WORDS = { yes_no: 'Yes / no', multiple_choice: 'Multiple choice', rating: 'Rate 1 to 5', price: 'Price', ab: 'A vs B', show_of_hands: 'Show of hands', open: 'Open question', probe: 'Probe' };
-            // The five series: the lead answer (by published share) in Signal Green, then Orchid, Cobalt, Dusk, Pavement for the rest.
-            // On the band they sit over photographs and keep the dark-ground colors; in the tally and the tags they follow the theme.
-            var EDGE = ['#C7F23E', '#E682FF', '#3358FF', '#B7B3D8', '#3B3D38'];
+            // The five series: the lead answer (by published share) in Signal Green, then Orchid, Cobalt, Dusk, Pavement for the rest;
+            // on a light page the Signal and Orchid twins (Olive, Amethyst) take over through the view's variables.
             var SERIES = ['var(--dtw-s1)', 'var(--dtw-s2)', 'var(--dtw-s3)', 'var(--dtw-s4)', 'var(--dtw-s5)'];
             var STD_PROBES = [['Why?', 'Why?'], ['What would change your mind?', 'What would change your mind?'], ['Show of hands', 'Show of hands, who watched the last one?']];
             var ORD = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth', 'ninth', 'tenth', 'eleventh', 'twelfth', 'thirteenth', 'fourteenth', 'fifteenth', 'sixteenth', 'seventeenth', 'eighteenth', 'nineteenth', 'twentieth', 'twenty-first', 'twenty-second', 'twenty-third', 'twenty-fourth'];
@@ -51979,7 +51983,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var m = {}; idx.forEach(function(oi, rank) { m[String(opts[oi].id)] = Math.min(rank, 4); }); return m;
             }
             function seriesOf(rk, optId) { var r = rk[String(optId)]; return r == null ? SERIES[4] : SERIES[r]; }
-            function edgeOf(rk, optId) { var r = rk[String(optId)]; return r == null ? '' : EDGE[r]; }
+            function edgeOf(rk, optId) { var r = rk[String(optId)]; return r == null ? '' : SERIES[r]; }
             function optTag(q, rk, optId, label) { var lab = label || optionLabelOf(q, optId); if (!lab) return ''; return '<span class="dtw-fg-tag"><span class="dtw-fg-dot" style="background:' + seriesOf(rk, optId) + '"></span>' + esc(lab) + '</span>'; }
             function stack(parts, cls) {
                 // parts: [{pct, color}] in option order; the remainder of 100 stays the Pavement track
@@ -51989,32 +51993,49 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var opts = optsOf(q), rk = rankMap(q), live = qInFlight(q), counts = live ? liveCounts(q) : null, seats = seatsTotal(q);
                 return stack(opts.map(function(o) { var v = live ? (seats ? (counts[String(o.id)] || 0) / seats * 100 : 0) : Number(o.pct || 0); return { pct: v, color: seriesOf(rk, o.id) }; }), cls);
             }
-            // ---- the band: the seats as a mosaic under the scrim, the title and the question over it, the stage line while a question runs.
+            // ---- the band: the seats as a row of circles (ring in the answer's color once answered, the check or the hollow mark while a
+            // question runs, name and 'age, city' under each), then the room title, the question and the meta or stage line.
+            function seatCircle(r, i, opts) {
+                opts = opts || {};
+                var nm = titleCase(r.name || ''), who = nm + (r.age != null && r.age !== '' ? ', ' + r.age : '') + (r.city ? ', ' + titleCase(r.city) : '');
+                var img = r.portrait_url ? '<img src="' + esc(r.portrait_url) + '" alt="" onerror="this.remove()">' : '';
+                var circ = '<span class="dtw-fg-circ"><span class="ini">' + esc(initials(nm)) + '</span>' + img + (opts.mark || '') + '</span>';
+                if (opts.still) return '<span class="dtw-fg-seat" style="--hue:' + seatHue(r, i) + '" title="' + esc(who) + '">' + circ + '</span>';
+                return '<button type="button" class="dtw-fg-seat' + (opts.pending ? ' pending' : '') + (S.fg.seat === Number(r.seat) ? ' sel' : '') + '" data-seat="' + Number(r.seat) + '" data-fg-seat="' + Number(r.seat) + '" style="--hue:' + seatHue(r, i) + ';--edge:' + (opts.edge || 'transparent') + '" title="Who ' + esc(nm) + ' is" aria-label="Who ' + esc(nm) + ' is" onclick="dtwSeatOpen(' + Number(r.seat) + ', this)">' + circ + '<span class="nm">' + esc(nm) + '</span><span class="ag">' + esc(r.age != null ? r.age : '') + (r.city ? ', ' + esc(titleCase(r.city)) : '') + '</span></button>';
+            }
             function heroHtml(s, g, roster, fq, fly) {
                 var rk = fq ? rankMap(fq) : {}, bySeat = {}, flyBySeat = {};
                 if (fq) (fq.answers || []).forEach(function(a) { bySeat[String(a.seat)] = a; });
                 if (fly) (fly.answers || []).forEach(function(a) { flyBySeat[String(a.seat)] = a; });
-                var tiles = roster.map(function(r, i) {
-                    var a = bySeat[String(r.seat)], edge = a ? edgeOf(rk, answerOptId(fq, a)) : '';
-                    var mark = fly ? (flyBySeat[String(r.seat)] ? '<span class="mark"></span>' : '<span class="mark wait"></span>') : '';
-                    var nm = titleCase(r.name), who = nm + ', ' + r.age + ', ' + titleCase(r.city);
-                    return '<button type="button" class="dtw-fg-tile' + (fly && !flyBySeat[String(r.seat)] ? ' pending' : '') + (S.fg.seat === Number(r.seat) ? ' sel' : '') + '" data-seat="' + Number(r.seat) + '" data-fg-seat="' + Number(r.seat) + '" style="--hue:' + seatHue(r, i) + ';--edge:' + (edge || 'transparent') + '" title="' + esc(who) + '" aria-label="Who ' + esc(nm) + ' is" onclick="dtwSeatOpen(' + Number(r.seat) + ', this)">' + '<span class="ini">' + esc(initials(nm)) + '</span>' + (r.portrait_url ? '<img src="' + esc(r.portrait_url) + '" alt="" onerror="this.remove()">' : '') + '<span class="edge"></span>' + mark + '</button>';
+                var seats = roster.map(function(r, i) {
+                    var a = bySeat[String(r.seat)], landed = !!flyBySeat[String(r.seat)];
+                    return seatCircle(r, i, { edge: a ? edgeOf(rk, answerOptId(fq, a)) : '', mark: fly ? (landed ? '<span class="mark"></span>' : '<span class="mark wait"></span>') : '', pending: !!fly && !landed });
                 }).join('');
                 var meta;
                 if (fly) {
                     meta = '<span class="dtw-fg-pulse"></span><span>' + stageLead(fly) + SEP + '<span id="dtwFgStageEl">' + qElapsedS(fly) + '</span>s</span>' + (fly !== fq ? SEP + '<span>' + (fly.kind && normQ(fly.q).indexOf(normQ(kindWord(fly.kind))) !== 0 ? esc(kindWord(fly.kind)) + ': ' : '') + esc(fly.q) + '</span>' : '');
                 } else if (fq) {
-                    var qs = s.questions || [], n = qs.indexOf(fq) + 1, took = qTookS(fq), nA = (fq.answers || []).length, seats = seatsTotal(fq);
+                    var qs = s.questions || [], n = qs.indexOf(fq) + 1, took = qTookS(fq), nA = (fq.answers || []).length, total = seatsTotal(fq);
                     meta = '<span>Question ' + n + (fq.kind ? SEP + esc(kindWord(fq.kind)) : '');
                     if (qFailed(fq)) meta += SEP + 'did not finish';
-                    else meta += SEP + '<b>' + nA + (seats ? ' of ' + seats : '') + '</b> answered' + (took != null ? ' in ' + took + 's' : '');
+                    else meta += SEP + '<b>' + nA + (total ? ' of ' + total : '') + '</b> answered' + (took != null ? ' in ' + took + 's' : '');
                     meta += SEP + fmtN(g.in_room || roster.length) + ' twins standing for <b>' + fmtN(g.size_people) + '</b> people' + (s.updated_at ? SEP + 'Saved ' + esc(fmtDay(s.updated_at)) : '') + '</span>';
                 } else {
                     meta = '<span>' + fmtN(g.in_room || roster.length) + ' twins standing for <b>' + fmtN(g.size_people) + '</b> people' + SEP + 'Ask the first question below; the shares, the read and the voices come back in a minute or two.</span>';
                 }
                 var big = fq ? weightPair(fq.q) : 'The room is seated.';
-                return '<div class="dtw-fg-mosaic">' + tiles + '</div><div class="dtw-fg-scrim"></div><div class="dtw-fg-scrim2"></div><div class="dtw-fg-htext"><div class="dtw-fg-rt">' + esc(roomTitle(s)) + '</div><div class="dtw-fg-fq">' + big + '</div><div class="dtw-fg-fm">' + meta + '</div></div>';
+                return '<div class="dtw-fg-seatrow" role="list">' + seats + '</div><div class="dtw-fg-htext"><div class="dtw-fg-rt">' + esc(roomTitle(s)) + '</div><div class="dtw-fg-fq">' + big + '</div><div class="dtw-fg-fm">' + meta + '</div></div>';
             }
+            // The row fits the width it has: one row when the seats fit at their pitch, else as few rows as needed, filled evenly (never one seat alone on a second row).
+            function fgLayoutSeats() {
+                document.querySelectorAll('#dtwPnConsole .dtw-fg-seatrow').forEach(function(row) {
+                    var n = row.children.length, w = row.clientWidth; if (!n || w <= 0) return;
+                    var cs = getComputedStyle(row), pitch = parseFloat(cs.getPropertyValue('--seat-pitch')) || 108, gap = parseFloat(cs.columnGap) || 8;
+                    var rows = Math.max(1, Math.ceil(n * pitch / (w + gap))), per = Math.ceil(n / rows);
+                    row.style.gridTemplateColumns = 'repeat(' + per + ', minmax(0, ' + (row.classList.contains('mini') ? 72 : 124) + 'px))';
+                });
+            }
+            window.addEventListener('resize', function() { if (S.tab !== 'panel') return; clearTimeout(S.fgResizeT); S.fgResizeT = setTimeout(fgLayoutSeats, 120); });
             // ---- the thread: the question as the moderator's message, the answers as messages, the read as the closing message.
             function qMeta(q, i, extra) {
                 var qs = (S.session || {}).questions || [], again = false;
@@ -52151,11 +52172,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var t = S.twin, nm = twinName(), it = ((S.howto || {}).items || []).filter(function(x) { return x.id === 'panel'; })[0] || {};
                 var ss = (t || {}).panel_sessions || [], pictured = ss.filter(function(x) { return ((x.group || {}).roster || []).some(function(r) { return r.portrait_url; }); })[0];
                 var roster = pictured ? ((pictured.group || {}).roster || []) : [];
-                var tiles = roster.length ? roster.map(function(r, i) { return '<span class="dtw-fg-tile" style="--hue:' + seatHue(r, i) + '"><span class="ini">' + esc(initials(titleCase(r.name))) + '</span>' + (r.portrait_url ? '<img src="' + esc(r.portrait_url) + '" alt="" onerror="this.remove()">' : '') + '</span>'; }).join('')
-                    : Array.apply(null, Array(12)).map(function(_, i) { return '<span class="dtw-fg-tile" style="--hue:' + hueFor(i) + '"><span class="ini"></span></span>'; }).join('');
+                var strip = roster.length ? roster.map(function(r, i) { return seatCircle(r, i, { still: true }); }).join('')
+                    : Array.apply(null, Array(12)).map(function(_, i) { return '<span class="dtw-fg-seat" style="--hue:' + hueFor(i) + '"><span class="dtw-fg-circ"><span class="ini"></span></span></span>'; }).join('');
                 var meta = t ? '<span>' + esc(nm) + SEP + fmtN(((t.meta || {}).size_us)) + ' US people' + SEP + (ss.length ? ss.length + (ss.length === 1 ? ' saved room' : ' saved rooms') : 'no rooms yet') + '</span>' : '<span>Pick a twin on the Twins tab first, or build one.</span>';
                 var out = topHtml(null);
-                out += '<div class="dtw-fg-hero blank"><div class="dtw-fg-mosaic">' + tiles + '</div><div class="dtw-fg-scrim"></div><div class="dtw-fg-scrim2"></div><div class="dtw-fg-htext"><div class="dtw-fg-rt">' + esc(nm || 'Focus Group IQ') + '</div><div class="dtw-fg-fq">Open a room <b>to start.</b></div><div class="dtw-fg-fm">' + meta + '</div></div></div>';
+                out += '<div class="dtw-fg-hero blank"><div class="dtw-fg-seatrow mini">' + strip + '</div><div class="dtw-fg-htext"><div class="dtw-fg-rt">' + esc(nm || 'Focus Group IQ') + '</div><div class="dtw-fg-fq">Open a room <b>to start.</b></div><div class="dtw-fg-fm">' + meta + '</div></div></div>';
                 out += '<div class="dtw-fg-dir"><div><h3>' + esc(it.title || 'Focus Group IQ') + '</h3><p>' + esc(it.answers || 'A focus group you moderate. Seat the twins, ask anything in plain words, and get the shares, the people counts, a read and a few voices in a minute or two.') + '</p>' + (it.put_in ? '<p>' + esc(it.put_in) + '</p>' : '') + (it.cost ? '<p>' + esc(it.cost) + '.</p>' : '') + '<div class="dtw-actions" style="margin-top:0.5rem;">' + (t ? '<button type="button" class="dtw-fg-act go" onclick="dtwNewRoomOpen(true)">Open a room</button>' : '<button type="button" class="dtw-fg-act go" onclick="dtwTab(\'twins\')">Pick a twin</button>') + (ss.length ? '<button type="button" class="dtw-fg-act" onclick="dtwRoomsOpen(true)">Resume a room</button>' : '') + '<button type="button" class="dtw-link" onclick="dtwHowtoOpen(true)">Full directions</button></div></div><div><h3>Or type this to Prometheus</h3>' + (it.type_this || ['Open a focus group with the ' + (nm || 'Gilmore Girls') + ' twin and ask whether they would watch a new season', 'Ask them why']).slice(0, 3).map(function(x) { return '<button type="button" class="dtw-fg-chip" onclick="dtwChatFill(\'' + esc(jsq(x)) + '\')">' + esc(x) + '</button>'; }).join('') + '</div></div>';
                 return out;
             }
@@ -52164,7 +52185,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var h = el('dtwPnConsole'); if (!h) return;
                 syncFgBody();
                 var s = S.session;
-                if (!s) { clearRoomPoll(); clearPortraitTimers(); fgReset(null); h.innerHTML = noRoomHtml(); return; }
+                if (!s) { clearRoomPoll(); clearPortraitTimers(); fgReset(null); h.innerHTML = noRoomHtml(); fgLayoutSeats(); return; }
                 fgReset(s.id);
                 var g = s.group || {}, roster = g.roster || [], fq = focusQ(), fly = flyQ();
                 var typed = (el('dtwPnQ') || {}).value || '', typedOpts = (el('dtwPnOptions') || {}).value || '';
@@ -52174,6 +52195,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 out += '<aside class="dtw-fg-tally" id="dtwFgTally" aria-label="The split">' + tallyHtml(s, g, roster, fq) + '</aside></div>';
                 out += popHtml();
                 h.innerHTML = out;
+                fgLayoutSeats();
                 fgScrollEnd();
                 setAskEnabled(true);
                 if (S.fg.seat != null) { renderSeatPanel(); placePop(); }
@@ -52185,6 +52207,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var s = S.session, h = el('dtwPnConsole'); if (!s || !h || !el('dtwFgHero')) { renderPanelConsole(); return; }
                 var g = s.group || {}, roster = g.roster || [], fq = focusQ(), fly = flyQ();
                 el('dtwFgHero').innerHTML = heroHtml(s, g, roster, fq, fly);
+                fgLayoutSeats();
                 var tr = el('dtwPnTranscript');
                 if (tr) { var keep = tr.scrollTop, atEnd = tr.scrollHeight - tr.scrollTop - tr.clientHeight < 60; tr.innerHTML = threadHtml(s, roster, fq, fly); tr.scrollTop = atEnd ? tr.scrollHeight : keep; }
                 var ta = el('dtwFgTally'); if (ta) ta.innerHTML = tallyHtml(s, g, roster, fq);
@@ -52195,7 +52218,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             function fgScrollEnd() { var tr = el('dtwPnTranscript'); if (tr) tr.scrollTop = tr.scrollHeight; }
             // the note under the composer; when it appears the composer grows, so a thread that sat at its end stays there
             function liveNote(text) { var live = el('dtwPnLive'); if (!live) return; var tr = el('dtwPnTranscript'), atEnd = tr ? (tr.scrollHeight - tr.scrollTop - tr.clientHeight < 60) : false; live.textContent = text || ''; if (tr && atEnd) tr.scrollTop = tr.scrollHeight; }
-            function fgShown() { fgScrollEnd(); if (S.fg.seat != null) placePop(); }
+            function fgShown() { fgLayoutSeats(); fgScrollEnd(); if (S.fg.seat != null) placePop(); }
             window.dtwFgToggle = function(qid) { S.fg.open[qid] = !S.fg.open[qid]; var tr = el('dtwPnTranscript'), keep = tr ? tr.scrollTop : 0; fgRefresh(); var blk = document.querySelector('#dtwPnTranscript [data-q="' + esc(qid) + '"]'); if (tr) tr.scrollTop = keep; if (blk && S.fg.open[qid]) blk.scrollIntoView({ block: 'nearest' }); };
             window.dtwFgEarlier = function(qid, on) { S.fg.earlier[qid] = !!on; var tr = el('dtwPnTranscript'), keep = tr ? tr.scrollTop : 0; fgRefresh(); if (tr) tr.scrollTop = on ? keep : Math.min(keep, tr.scrollHeight); };
             // ---- the drawers: the saved rooms behind Rooms, the room builder behind New room (the drawer component How to uses).
@@ -52329,12 +52352,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 S.fg.seat = Number(seatNo); renderSeatPanel(); placePop(anchor); markSeat();
             };
             function markSeat() {
-                document.querySelectorAll('#dtwPnConsole .dtw-fg-tile[data-seat]').forEach(function(b) { b.classList.toggle('sel', S.fg.seat != null && Number(b.getAttribute('data-seat')) === S.fg.seat); });
+                document.querySelectorAll('#dtwPnConsole .dtw-fg-seat[data-seat]').forEach(function(b) { b.classList.toggle('sel', S.fg.seat != null && Number(b.getAttribute('data-seat')) === S.fg.seat); });
                 document.querySelectorAll('#dtwPnConsole .dtw-fg-faceb[data-fg-seat]').forEach(function(b) { b.classList.toggle('on', S.fg.seat != null && Number(b.getAttribute('data-fg-seat')) === S.fg.seat); });
             }
             function placePop(anchor) {
                 var root = el('dtwPnConsole'), p = el('dtwSeatPop'); if (!root || !p || S.fg.seat == null) return;
-                if (!anchor || !(anchor instanceof Element) || !root.contains(anchor)) anchor = root.querySelector('.dtw-fg-tile[data-seat="' + S.fg.seat + '"]') || root.querySelector('[data-fg-seat="' + S.fg.seat + '"]');
+                if (!anchor || !(anchor instanceof Element) || !root.contains(anchor)) anchor = root.querySelector('.dtw-fg-seat[data-seat="' + S.fg.seat + '"]') || root.querySelector('[data-fg-seat="' + S.fg.seat + '"]');
                 p.classList.add('open'); p.classList.remove('up'); p.style.removeProperty('--pop-max');
                 var rr = root.getBoundingClientRect(), pw = p.offsetWidth;
                 if (!anchor) { p.style.left = Math.max(8, rr.width - pw - 8) + 'px'; p.style.top = '8px'; p.style.setProperty('--pop-max', Math.max(160, rr.height - 24) + 'px'); return; }
