@@ -307,6 +307,14 @@ def claude_reason_json(
                     "duration_s": round(time.monotonic() - _t0, 3),
                     "web_search_requests": int(getattr(
                         _stu, "web_search_requests", 0) or 0),
+                    # token counts for callers that keep their own cost
+                    # trail (Focus Group IQ room jobs, 2026-10-26)
+                    "input_tokens": int(getattr(_u, "input_tokens", 0) or 0),
+                    "output_tokens": int(getattr(_u, "output_tokens", 0) or 0),
+                    "cache_read_input_tokens": int(getattr(
+                        _u, "cache_read_input_tokens", 0) or 0),
+                    "cache_creation_input_tokens": int(getattr(
+                        _u, "cache_creation_input_tokens", 0) or 0),
                 }
             except Exception:
                 pass

@@ -915,9 +915,29 @@ def delete_room(s3, twin_key: str, payload: dict, sid: str, deleted_by: str = ''
 
 def ask(session: dict, twins_by_key: dict, q: str, *, kind: Optional[str] = None, options: Optional[list] = None,
         stimulus: Optional[dict] = None, voices_fn: Optional[Callable] = None, time_budget_s: float = TIME_BUDGET_S,
-        asked_by: str = '') -> dict:
+        asked_by: str = '', s3=None, twin_key: str = '', room: Optional[bool] = None, model_fn: Optional[Callable] = None,
+        usage_extras: Optional[dict] = None, run_async: bool = True, notify: Optional[dict] = None) -> dict:
     """Ask the room one question. Appends the record to the session and
-    returns it."""
+    returns it.
+
+    The multi-agent room engine (migration/digital_twin_room.py:
+    research agent, moderator, one persona agent per seat) answers when
+    it is on (DTIQ_ROOM, default on) and a model is available
+    (REGRESSION_TEST_MODE never calls one); the record then comes back
+    at stage 'researching' with a job_id and fills in on a background
+    thread (run_async) or here (run_async=False). ``room=False`` or
+    DTIQ_ROOM=0 restores this deterministic engine."""
+    use_room = room
+    if use_room is None:
+        try:
+            from migration import digital_twin_room as _R
+            use_room = _R.room_enabled() and _R.model_available(model_fn)
+        except Exception:
+            use_room = False
+    if use_room:
+        from migration import digital_twin_room as _R
+        return _R.ask_room(session, twins_by_key, q, kind=kind, options=options, stimulus=stimulus, asked_by=asked_by, s3=s3, twin_key=twin_key,
+                           run_async=run_async, model_fn=model_fn, usage_extras=usage_extras, notify=notify)
     q = ' '.join(str(q or '').split())[:400]
     last = session['questions'][-1] if session.get('questions') else None
     cls = classify_question(q, options, last, kind)
