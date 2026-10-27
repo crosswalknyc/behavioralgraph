@@ -50972,12 +50972,19 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
            the saved rooms as cards, no placeholder faces). */
         #digitalTwinsIQView { --dtw-s1: #C7F23E; --dtw-s2: #E682FF; --dtw-s3: #3358FF; --dtw-s4: #B7B3D8; --dtw-s5: #3B3D38; --dtw-cbody: #A8AFA9; --dtw-clabel: #9BAAAC; --dtw-ink2: #081113; }
         body[data-theme="light"] #digitalTwinsIQView { --dtw-s1: #5E7E12; --dtw-s2: #8E3FA8; --dtw-cbody: #5C6560; --dtw-clabel: #5C6466; }
-        /* The view body is the page here (the dashboard shell is a fixed 100vh frame; .dtw-body is what scrolls on every tab). The room grows
-           with its content and the body scrolls through all of it (Jenna 2026-10-27: 'allow this page to scroll to where it stops and
-           freezes here'): no fixed height, no inner scroll on the thread or the tally; the tally sticks while the thread scrolls by and the
-           composer sticks to the bottom edge only while the thread runs past it. Rooms, New room, Save, Export and Close room sit in the
-           frozen spine, not in the scrolling body. */
+        /* Landing still pages in .dtw-body. An open room freezes the spine, the pills and the seat band; the thread and the split
+           each scroll on their own (Jenna 2026-10-27: 'these should scroll independently like the right card should scroll itstelf
+           and the left chatbox should scroll by itself'). The composer sits under the thread, inside the left column. */
         #digitalTwinsIQView .dtw-body.is-fg { padding: 0.85rem 1.5rem 1rem; }
+        #digitalTwinsIQView .dtw-body.is-fg-room { overflow: hidden; display: flex; flex-direction: column; padding: 0.75rem 1.5rem 0.55rem; }
+        #digitalTwinsIQView .dtw-body.is-fg-room .dtw-pane-fg.active { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; height: 100%; }
+        #digitalTwinsIQView .dtw-body.is-fg-room .dtw-fg { flex: 1 1 auto; min-height: 0; height: 100%; }
+        #digitalTwinsIQView .dtw-body.is-fg-room .dtw-fg-main { flex: 1 1 auto; min-height: 0; align-items: stretch; }
+        #digitalTwinsIQView .dtw-body.is-fg-room .dtw-fg-main > * { min-height: 0; }
+        #digitalTwinsIQView .dtw-body.is-fg-room .dtw-fg-chat { height: 100%; overflow: hidden; }
+        #digitalTwinsIQView .dtw-body.is-fg-room .dtw-fg-stream { flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 8px; scrollbar-width: thin; overscroll-behavior: contain; }
+        #digitalTwinsIQView .dtw-body.is-fg-room .dtw-fg-composer { position: relative; bottom: auto; z-index: 2; flex: 0 0 auto; padding: 10px 0 2px; }
+        #digitalTwinsIQView .dtw-body.is-fg-room .dtw-fg-tally { position: static; align-self: stretch; height: 100%; max-height: 100%; overflow: auto; scrollbar-width: thin; overscroll-behavior: contain; }
         #digitalTwinsIQView .dtw-fg { position: relative; display: flex; flex-direction: column; min-width: 0; width: 100%; gap: 10px; }
         #digitalTwinsIQView .dtw-fg-top { display: flex; justify-content: space-between; align-items: center; gap: 10px 14px; flex-wrap: wrap; min-height: 24px; flex: 0 0 auto; }
         #digitalTwinsIQView .dtw-fg-top .dtw-eyebrow { color: var(--dtw-body); font-weight: 400; letter-spacing: 0.25em; font-size: 10px; min-width: 0; overflow-wrap: anywhere; }
@@ -51227,6 +51234,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             #digitalTwinsIQView .dtw-fg-seat .ag { font-size: 10px; line-height: 13px; }
             #digitalTwinsIQView .dtw-fg-fq { font-size: 19px; line-height: 24px; }
             #digitalTwinsIQView .dtw-fg-main { display: block; }
+            #digitalTwinsIQView .dtw-body.is-fg-room .dtw-fg-main { display: flex; flex-direction: column; overflow: hidden; }
+            #digitalTwinsIQView .dtw-body.is-fg-room .dtw-fg-chat { flex: 1 1 52%; min-height: 200px; height: auto; }
+            #digitalTwinsIQView .dtw-body.is-fg-room .dtw-fg-tally { flex: 1 1 40%; min-height: 160px; height: auto; margin-top: 10px; }
             #digitalTwinsIQView .dtw-fg-steps { grid-template-columns: minmax(0, 1fr); }
             #digitalTwinsIQView .dtw-fg-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
             #digitalTwinsIQView .dtw-fg-land-h { font-size: 24px; line-height: 30px; }
@@ -51955,7 +51965,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             S.fg = S.fg || { sid: null, open: {}, earlier: {}, seat: null };
             function modav() { return '<span class="dtw-fg-modav">' + MARK_SVG + '</span>'; }
             function fgReset(sid) { if (S.fg.sid !== sid) { S.fg.sid = sid; S.fg.open = {}; S.fg.earlier = {}; S.fg.seat = null; } }
-            function syncFgBody() { var b = document.querySelector('#digitalTwinsIQView .dtw-body'); if (b) b.classList.toggle('is-fg', S.tab === 'panel'); syncFgActs(); }
+            function syncFgBody() {
+                var b = document.querySelector('#digitalTwinsIQView .dtw-body');
+                if (b) {
+                    b.classList.toggle('is-fg', S.tab === 'panel');
+                    b.classList.toggle('is-fg-room', S.tab === 'panel' && !!S.session);
+                }
+                syncFgActs();
+            }
             function ordWord(n) { n = Number(n || 0); return ORD[n - 1] || (n + 'th'); }
             function kindWord(k) { return KIND_WORDS[String(k || '')] || cap(String(k || '').replace(/_/g, ' ')); }
             function roomTitle(s) { return titleWords((s || {}).title || 'Room'); }
@@ -52391,8 +52408,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 setAskEnabled(true);
                 if (S.fg.seat != null) placePop();
             }
-            // The view body is the page: it scrolls through the band, the thread and the tally (Jenna 2026-10-27: 'allow this page to scroll').
-            function fgScroller() { return document.querySelector('#digitalTwinsIQView .dtw-body'); }
+            // An open room: the thread is the scroller. The landing still uses the view body.
+            function fgScroller() { return el('dtwPnTranscript') || document.querySelector('#digitalTwinsIQView .dtw-body'); }
             function fgAtEnd() { var sc = fgScroller(); return !sc || (sc.scrollHeight - sc.scrollTop - sc.clientHeight < 80); }
             function fgScrollEnd() { var sc = fgScroller(); if (sc) sc.scrollTop = sc.scrollHeight; }
             function fgScrollTop() { var sc = fgScroller(); if (sc) sc.scrollTop = 0; }
@@ -52593,8 +52610,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 p.style.left = left + 'px'; p.style.top = top + 'px';
                 var arrow = p.querySelector('.arrow'); if (arrow) arrow.style.left = Math.max(12, Math.min(pw - 24, cx - left - 6)) + 'px';
                 var inner = el('dtwSeatBody'); if (inner) inner.scrollTop = 0;
-                // the page scrolls, so a card that runs past the bottom edge is brought up, never past its own seat
-                if (sc && !p.classList.contains('up')) { var pr = p.getBoundingClientRect(), over = pr.bottom - (sr.bottom - 10); if (over > 0) sc.scrollTop += Math.min(over, Math.max(0, ar.top + 40 - sr.top)); }
+                // the thread scrolls, so a card that runs past the bottom edge is brought up, never past its own seat
+                if (sc && anchor && sc.contains(anchor) && !p.classList.contains('up')) { var pr = p.getBoundingClientRect(), over = pr.bottom - (sr.bottom - 10); if (over > 0) sc.scrollTop += Math.min(over, Math.max(0, ar.top + 40 - sr.top)); }
             }
             function seatSaid(s, seatNo) { var out = []; (s.questions || []).forEach(function(q, i) { var a = (q.answers || []).filter(function(x) { return Number(x.seat) === Number(seatNo); })[0]; if (a && (a.line || a.option_label)) out.push({ i: i, q: q, a: a }); }); return out; }
             function bioParas(text) {
