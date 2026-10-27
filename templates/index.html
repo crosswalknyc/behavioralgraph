@@ -50811,6 +50811,13 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-seg { appearance: none; background: transparent; border: 0; border-bottom: 2px solid transparent; color: var(--dtw-mute); padding: 0.62rem 0; margin: 0 1.8rem -1px 0; font-size: 0.7rem; font-weight: 600; letter-spacing: 0.13em; text-transform: uppercase; cursor: pointer; white-space: nowrap; transition: color .14s, border-color .14s; }
         #digitalTwinsIQView .dtw-seg:hover { color: var(--dtw-ink); }
         #digitalTwinsIQView .dtw-seg.active { color: var(--dtw-ink); border-bottom-color: var(--dtw-accent); }
+        /* Focus Group room pills live in the frozen spine (Jenna 2026-10-27:
+           'in focus group add this to the frozen part not scrollable'). Same
+           row as the tabs, right side; they never scroll with the room. */
+        #digitalTwinsIQView .dtw-spine-foot { display: flex; align-items: flex-end; justify-content: space-between; gap: 8px 18px; flex-wrap: wrap; }
+        #digitalTwinsIQView .dtw-spine-foot .dtw-segs { flex: 1 1 240px; min-width: 0; }
+        #digitalTwinsIQView .dtw-spine-foot .dtw-fg-acts { flex: 0 1 auto; padding: 0 0 10px; justify-content: flex-end; }
+        #digitalTwinsIQView .dtw-spine-foot .dtw-fg-acts[hidden] { display: none !important; }
         /* ---- the body ---- */
         #digitalTwinsIQView .dtw-body { flex: 1 1 0%; min-height: 0; overflow: auto; padding: 1.1rem 1.5rem 3rem; }
         #digitalTwinsIQView .dtw-pane { display: none; }
@@ -50961,14 +50968,15 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
            answered, name and 'age, city' under it; the thread on the left (the question as a Prometheus-style message, the answers as
            messages, the read as the closing message, the next probes as chips, the composer pinned under it); the tally on the right (one
            stacked bar, what the room knew, two voices, the split by segment); a seat's bio as a popover under its portrait; the saved rooms
-           and the room builder behind Rooms and New room in the header row; with no room open, the landing (the claim, the three steps,
+           and the room builder behind Rooms and New room in the frozen spine; with no room open, the landing (the claim, the three steps,
            the saved rooms as cards, no placeholder faces). */
         #digitalTwinsIQView { --dtw-s1: #C7F23E; --dtw-s2: #E682FF; --dtw-s3: #3358FF; --dtw-s4: #B7B3D8; --dtw-s5: #3B3D38; --dtw-cbody: #A8AFA9; --dtw-clabel: #9BAAAC; --dtw-ink2: #081113; }
         body[data-theme="light"] #digitalTwinsIQView { --dtw-s1: #5E7E12; --dtw-s2: #8E3FA8; --dtw-cbody: #5C6560; --dtw-clabel: #5C6466; }
         /* The view body is the page here (the dashboard shell is a fixed 100vh frame; .dtw-body is what scrolls on every tab). The room grows
            with its content and the body scrolls through all of it (Jenna 2026-10-27: 'allow this page to scroll to where it stops and
            freezes here'): no fixed height, no inner scroll on the thread or the tally; the tally sticks while the thread scrolls by and the
-           composer sticks to the bottom edge only while the thread runs past it. */
+           composer sticks to the bottom edge only while the thread runs past it. Rooms, New room, Save, Export and Close room sit in the
+           frozen spine, not in the scrolling body. */
         #digitalTwinsIQView .dtw-body.is-fg { padding: 0.85rem 1.5rem 1rem; }
         #digitalTwinsIQView .dtw-fg { position: relative; display: flex; flex-direction: column; min-width: 0; width: 100%; gap: 10px; }
         #digitalTwinsIQView .dtw-fg-top { display: flex; justify-content: space-between; align-items: center; gap: 10px 14px; flex-wrap: wrap; min-height: 24px; flex: 0 0 auto; }
@@ -51253,12 +51261,15 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         <button type="button" class="dtw-btn dtw-btn-primary" onclick="dtwBuildTwin()">Build a twin</button>
                     </div>
                 </div>
+                <div class="dtw-spine-foot">
                 <div class="dtw-segs" role="tablist">
                     <button type="button" class="dtw-seg active" data-tab="twins" role="tab" onclick="dtwTab('twins')">Twins</button>
                     <button type="button" class="dtw-seg" data-tab="greenlight" role="tab" onclick="dtwTab('greenlight')">Greenlight</button>
                     <button type="button" class="dtw-seg" data-tab="launch" role="tab" onclick="dtwTab('launch')">Launch</button>
                     <button type="button" class="dtw-seg" data-tab="spend" role="tab" onclick="dtwTab('spend')">Spend Engine</button>
                     <button type="button" class="dtw-seg" data-tab="panel" role="tab" onclick="dtwTab('panel')">Focus Group IQ</button>
+                </div>
+                <div class="dtw-fg-acts" id="dtwFgActs" hidden></div>
                 </div>
             </div>
             <div class="dtw-body">
@@ -51944,7 +51955,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             S.fg = S.fg || { sid: null, open: {}, earlier: {}, seat: null };
             function modav() { return '<span class="dtw-fg-modav">' + MARK_SVG + '</span>'; }
             function fgReset(sid) { if (S.fg.sid !== sid) { S.fg.sid = sid; S.fg.open = {}; S.fg.earlier = {}; S.fg.seat = null; } }
-            function syncFgBody() { var b = document.querySelector('#digitalTwinsIQView .dtw-body'); if (b) b.classList.toggle('is-fg', S.tab === 'panel'); }
+            function syncFgBody() { var b = document.querySelector('#digitalTwinsIQView .dtw-body'); if (b) b.classList.toggle('is-fg', S.tab === 'panel'); syncFgActs(); }
             function ordWord(n) { n = Number(n || 0); return ORD[n - 1] || (n + 'th'); }
             function kindWord(k) { return KIND_WORDS[String(k || '')] || cap(String(k || '').replace(/_/g, ' ')); }
             function roomTitle(s) { return titleWords((s || {}).title || 'Room'); }
@@ -52288,11 +52299,17 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 out += '<div class="dtw-fg-live" id="dtwPnLive"></div></div>';
                 return out;
             }
-            function topHtml(s) {
+            function actsHtml(s) {
                 var n = ((S.twin || {}).panel_sessions || []).length;
                 var acts = '<span class="dtw-fg-saved" id="dtwPnSaved"></span><button type="button" class="dtw-fg-act" onclick="dtwRoomsOpen(true)">Rooms<b id="dtwFgRoomsN">' + n + '</b></button><button type="button" class="dtw-fg-act" onclick="dtwNewRoomOpen(true)">New room</button>';
                 if (s) acts += '<button type="button" class="dtw-fg-act" onclick="dtwPanelSave()">Save</button><a class="dtw-fg-act" href="/api/digital-twins/' + esc(S.key) + '/panel/' + esc(s.id) + '/export.csv">Export CSV</a><a class="dtw-fg-act" href="/api/digital-twins/' + esc(S.key) + '/panel/' + esc(s.id) + '/export.pdf">Export PDF</a><button type="button" class="dtw-fg-act close" title="Close this room (Escape). It stays under Rooms." aria-label="Close room" onclick="dtwPanelClose()"><span class="x" aria-hidden="true">&#215;</span>Close room</button>';
-                return '<div class="dtw-fg-top"><div class="dtw-eyebrow">Focus Group IQ' + (s ? SEP + esc(roomTitle(s)) : (twinName() ? SEP + esc(twinName()) : '')) + '</div><div class="dtw-fg-acts">' + acts + '</div></div>';
+                return acts;
+            }
+            function syncFgActs() {
+                var slot = el('dtwFgActs'); if (!slot) return;
+                var on = S.tab === 'panel';
+                slot.hidden = !on;
+                if (on) slot.innerHTML = actsHtml(S.session);
             }
             function popHtml() { return '<div id="dtwSeatPop" class="dtw-fg-pop" role="dialog" aria-label="Who they are"><span class="arrow"></span><button type="button" class="close" aria-label="Close" onclick="dtwSeatOpen(null)">&#215;</button><div class="dtw-fg-pop-in" id="dtwSeatBody"></div></div>'; }
             // ---- the landing, no room open (Jenna 2026-10-27: 'CAN you redesign this page to look better I dont like the circles'): no placeholder
@@ -52321,7 +52338,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var t = S.twin, nm = twinName(), it = ((S.howto || {}).items || []).filter(function(x) { return x.id === 'panel'; })[0] || {};
                 var ss = (t || {}).panel_sessions || [], runs = S.runs || [];
                 var examples = (it.type_this || ['Open a focus group with the ' + (nm || 'Gilmore Girls') + ' twin and ask whether they would watch a new season', 'Ask them why']).slice(0, 3);
-                var out = topHtml(null) + '<div class="dtw-fg-land">';
+                var out = '<div class="dtw-fg-land">';
                 if (t) {
                     var seats = parseInt((el('dtwPnRoom') || {}).value || '12', 10) || 12;
                     out += '<div class="dtw-fg-land-hero"><h2 class="dtw-fg-land-h">Put the twins in a room <b>and ask.</b></h2><p class="dtw-fg-land-sub"><b>' + seats + ' twins</b> stand for <b>' + fmtN((t.meta || {}).size_us) + '</b> people. Ask in plain words; the room answers with the split, who said what, and why.</p><div class="dtw-fg-land-acts"><button type="button" class="dtw-fg-act go" onclick="dtwNewRoomOpen(true)">Open a room</button><button type="button" class="dtw-fg-act" onclick="dtwChatFill(\'' + esc(jsq(examples[0])) + '\')">Type it to Prometheus</button></div></div>';
@@ -52338,7 +52355,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 out += '<div class="dtw-fg-land-pm"><div class="k">Or say it to Prometheus</div>' + examples.map(function(x) { return '<button type="button" class="dtw-fg-chip" onclick="dtwChatFill(\'' + esc(jsq(x)) + '\')">' + esc(x) + '</button>'; }).join('') + '</div>';
                 return out + '</div>';
             }
-            // The console: the top row, the band, the thread with the composer under it, the tally on the right, the seat popover.
+            // The console: the band, the thread with the composer under it, the tally on the right, the seat popover.
+            // Room pills (Rooms, New room, Save, Export, Close) live in the frozen spine via syncFgActs.
             function renderPanelConsole() {
                 var h = el('dtwPnConsole'); if (!h) return;
                 syncFgBody();
@@ -52348,8 +52366,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 fgReset(s.id);
                 var g = s.group || {}, roster = g.roster || [], fq = focusQ(), fly = flyQ();
                 var typed = (el('dtwPnQ') || {}).value || '', typedOpts = (el('dtwPnOptions') || {}).value || '';
-                var out = topHtml(s);
-                out += '<div class="dtw-fg-hero" id="dtwFgHero">' + heroHtml(s, g, roster, fq, fly) + '</div>';
+                var out = '<div class="dtw-fg-hero" id="dtwFgHero">' + heroHtml(s, g, roster, fq, fly) + '</div>';
                 out += '<div class="dtw-fg-main"><div class="dtw-fg-chat"><div class="dtw-fg-stream" id="dtwPnTranscript">' + threadHtml(s, roster, fq, fly) + '</div>' + composerHtml(typed, typedOpts) + '</div>';
                 out += '<aside class="dtw-fg-tally" id="dtwFgTally" aria-label="The split">' + tallyHtml(s, g, roster, fq) + '</aside></div>';
                 out += popHtml();
@@ -52370,7 +52387,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var tr = el('dtwPnTranscript');
                 if (tr) { var atEnd = fgAtEnd(); tr.innerHTML = threadHtml(s, roster, fq, fly); if (atEnd) fgScrollEnd(); }
                 var ta = el('dtwFgTally'); if (ta) ta.innerHTML = tallyHtml(s, g, roster, fq);
-                var top = h.querySelector('.dtw-fg-top'); if (top) top.outerHTML = topHtml(s);
+                syncFgActs();
                 setAskEnabled(true);
                 if (S.fg.seat != null) placePop();
             }

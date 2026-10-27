@@ -231,6 +231,8 @@ REQUIRED_ANCHORS: list[tuple[str, str]] = [
      "Digital Twins IQ cover wall grid"),
     ('function renderLibrary',
      "Digital Twins IQ library renderer (covers, logos or person photos)"),
+    ('id="dtwFgActs"',
+     "Digital Twins IQ Focus Group room pills in the frozen spine"),
 ]
 
 # Anchors we DO NOT want in the file (false negatives).
