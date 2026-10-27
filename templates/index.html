@@ -51549,7 +51549,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 try { var d = await api('/list'); S.runs = d.runs || []; S.pricing = d.pricing || []; S.loaded = true; }
                 catch (e) { if (el('dtwLibrary')) el('dtwLibrary').innerHTML = '<div class="dtw-card dtw-muted" style="grid-column:1/-1">' + esc(e.message) + '</div>'; return []; }
                 renderLibrary(); fillTwinSelects(); renderPrices(); syncInputCards();
-                if (S.runs.some(function(r) { return !r.hero_image; }) && S.coverTries < 3) { S.coverTries += 1; setTimeout(function() { dtwLoadList(true); }, 8000); }
+                if (S.runs.some(function(r) { return !r.hero_image || Number(r.cover_rev || 0) < 2; }) && S.coverTries < 5) { S.coverTries += 1; setTimeout(function() { dtwLoadList(true); }, 5000); }
                 return S.runs;
             };
             function renderPrices() {
@@ -51648,8 +51648,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     var on = r.key === S.key;
                     var kind = twinKindLabel(r);
                     var home = r.platform_home ? ' · ' + r.platform_home : '';
-                    var fit = (r.cover_kind === 'person') ? 'person' : 'logo';
-                    var photo = r.hero_image ? '<div class="photo ' + fit + '" style="background-image:url(\'' + esc(r.hero_image) + '\')"></div>' : '';
+                    var photo = r.hero_image ? '<div class="photo logo" style="background-image:url(\'' + esc(r.hero_image) + '\')"></div>' : '';
                     return '<article class="dtw-cover' + (on ? ' on' : '') + '" data-key="' + esc(r.key) + '" onclick="dtwOpen(\'' + esc(r.key) + '\')" title="' + esc(r.name || r.subject) + '">' + photo + '<div class="wash"></div><div class="kind">' + esc(kind + home) + '</div><h2>' + esc(r.name || r.subject) + '</h2><div class="fig">' + fmtN(r.size_us) + '<span>people in the US</span></div><div class="foot">' + esc(coverActivity(r)) + '</div>' + (on ? '<div class="open">Open</div>' : '') + '</article>';
                 });
                 tiles.push('<article class="dtw-cover build" onclick="dtwBuildTwin()"><div class="plus">+</div><h2>Build a twin.</h2><p>' + esc(twinPrice()) + '. Name a title, a talent or a brand.</p></article>');
@@ -51690,7 +51689,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (!t) { h.innerHTML = ''; return; }
                 var m = t.meta || {}, ident = t.identity || {}, ltv = t.ip_lifetime_value || null, rd = t.the_read || {}, key = m.key || S.key, lc = t.lifecycle || {};
                 var out = '<div class="dtw-sec" style="margin-top:1.6rem;"><h3>' + esc(m.name || m.subject) + '</h3><em>The twin</em></div>';
-                out += '<div class="dtw-card"><div class="dtw-hero">' + (m.hero_image ? '<img src="' + esc(m.hero_image) + '" alt="" style="' + (m.cover_kind === 'logo' ? 'object-fit:contain;background:#15252A' : '') + '">' : '') + '<div style="flex:1 1 300px; min-width:0;"><p class="dtw-p" style="margin-top:0;">' + esc(ident.read || '') + '</p><div class="dtw-muted">' + esc(m.format ? cap(m.format) : '') + (m.ip_related ? (m.format ? ', ' : '') + 'IP-related' : '') + (m.created_by ? '. Built ' + esc(fmtDate(m.created_at)) + ' by ' + esc(m.created_by) : '') + '</div></div><div class="dtw-actions" style="align-self:flex-start;"><a class="dtw-btn dtw-btn-sm" href="/api/digital-twins/' + esc(key) + '/export.csv">CSV</a><a class="dtw-btn dtw-btn-sm" href="/api/digital-twins/' + esc(key) + '/export.pdf">PDF</a><a class="dtw-btn dtw-btn-sm" href="/api/digital-twins/' + esc(key) + '/export.pptx">Deck</a></div></div>';
+                out += '<div class="dtw-card"><div class="dtw-hero">' + (m.hero_image ? '<img src="' + esc(m.hero_image) + '" alt="" style="object-fit:contain;background:#15252A">' : '') + '<div style="flex:1 1 300px; min-width:0;"><p class="dtw-p" style="margin-top:0;">' + esc(ident.read || '') + '</p><div class="dtw-muted">' + esc(m.format ? cap(m.format) : '') + (m.ip_related ? (m.format ? ', ' : '') + 'IP-related' : '') + (m.created_by ? '. Built ' + esc(fmtDate(m.created_at)) + ' by ' + esc(m.created_by) : '') + '</div></div><div class="dtw-actions" style="align-self:flex-start;"><a class="dtw-btn dtw-btn-sm" href="/api/digital-twins/' + esc(key) + '/export.csv">CSV</a><a class="dtw-btn dtw-btn-sm" href="/api/digital-twins/' + esc(key) + '/export.pdf">PDF</a><a class="dtw-btn dtw-btn-sm" href="/api/digital-twins/' + esc(key) + '/export.pptx">Deck</a></div></div>';
                 out += '<div style="display:flex; gap:0.5rem; margin-top:0.9rem;"><input id="dtwAskInput" class="dtw-in" placeholder="Ask the twin anything: what are the odds a new season clears 4,000,000 on Hulu? Would they pay $12.99?" onkeydown="if(event.key===\'Enter\'){dtwAsk();}"><button type="button" class="dtw-btn dtw-btn-primary" onclick="dtwAsk()">Ask the twin</button></div></div>';
                 // Identity
                 var idb = '<div class="dtw-two"><div>';

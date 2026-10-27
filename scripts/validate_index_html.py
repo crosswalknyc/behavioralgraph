@@ -230,7 +230,7 @@ REQUIRED_ANCHORS: list[tuple[str, str]] = [
     ('class="dtw-wall"',
      "Digital Twins IQ cover wall grid"),
     ('function renderLibrary',
-     "Digital Twins IQ library renderer (covers, logos or person photos)"),
+     "Digital Twins IQ library renderer (covers are logos)"),
     ('id="dtwFgActs"',
      "Digital Twins IQ Focus Group room pills in the frozen spine"),
     ('is-fg-room',

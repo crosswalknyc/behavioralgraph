@@ -847,6 +847,7 @@ def index_entry(key: str, payload: dict) -> dict:
             'created_at': m.get('created_at'), 'updated_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
             'window_start': m.get('window_start'), 'window_end': m.get('window_end'),
             'hero_image': m.get('hero_image') or '', 'cover_kind': m.get('cover_kind') or '',
+            'cover_rev': m.get('cover_rev') or 0,
             'runs': len(payload.get('runs') or []), 'spend_plans': len(((payload.get('labs') or {}).get('spend')) or []),
             'panel_sessions': len(payload.get('panel_sessions') or []), 'has_ltv': bool(ltv),
             'ltv_5y': (ltv.get('total') or {}).get('5', {}).get('expected') if ltv else None,

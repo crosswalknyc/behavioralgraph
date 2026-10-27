@@ -1,34 +1,26 @@
-"""Cover art for a Digital Twin (2026-10-27, Jenna: "those images are
-awful. it should use logos or photos of people if it's a person").
+"""Cover art for a Digital Twin.
 
-The Twins tab is a cover wall. Each tile is the subject's own mark:
-
-- a person (talent, a creator, a MUSICIAN/BAND or other TALENT
-  category) gets a photo of that person;
-- everything else (a series, a film, a brand, an audience named after
-  a title) gets the official logo.
-
-Never a mood photograph of a place, a ranch, a store aisle or a set.
-Those were the tiles Jenna rejected. The lookup never searches the
-bare subject name as a stock-photo query.
+Jenna 2026-10-27: "this looks bad lets just go back to using the logo
+for now." The Twins tab is a cover wall of official logos. A person
+photo, a Profile IQ headshot, a title poster and a mood still are all
+out. The lookup never searches the bare subject name as a stock-photo
+query.
 
 Resolution, in order, fail-safe, never raises:
 
-  1. the subject's Profile IQ image when we already hold one;
-  2. a person: the image_backfill TALENT ladder (IMDb headshot,
-     Wikipedia, then a "{name} photo" web image);
-  3. a logo: Wikipedia (the infobox mark), then "{name} official logo"
-     / "{name} logo", then the CONTENT poster only as a last resort
-     for a title, then the site favicon.
+  1. "{name} official logo" then "{name} logo";
+  2. Wikipedia infobox, brands only (a series wiki page is usually a
+     poster of people, which is what Jenna just rejected);
+  3. the site favicon.
 
-The bytes land under ``digital-twins/covers/<sha>.<ext>`` and the twin
-meta carries ``hero_image`` (the dashboard URL) and ``cover_kind``
-(``person`` or ``logo``). The index copies both so the wall does not
-open every twin. A twin that already has a hero is left alone.
+The bytes land under ``digital-twins/covers/<sha>.<ext>``. Twin meta
+carries ``hero_image``, ``cover_kind`` (always ``logo``) and
+``cover_rev`` (``COVER_REV``). A twin below that rev is replaced on
+the next list load so Gilmore Girls drops the Lauren Graham still.
 
-``schedule_missing`` fills twins that shipped without a cover, on a
-thread, the same way room portraits do. Kill switch ``DTIQ_COVERS=0``.
-Tests inject the lookups and never reach the network.
+``schedule_missing`` fills a missing or stale cover on a thread.
+Kill switch ``DTIQ_COVERS=0``. Tests inject the lookups and never
+reach the network.
 """
 from __future__ import annotations
 
@@ -41,6 +33,8 @@ from typing import Callable, Optional
 PREFIX = 'digital-twins/covers/'
 BUCKET = 'dashboard-inputs'
 URL_BASE = '/api/profile-image-file/'
+# 1 = person-or-logo era (Profile IQ first). 2 = logos only.
+COVER_REV = 2
 
 _AUDIENCE_TAIL = re.compile(
     r"\b(viewers?|fans?|audience|shoppers?|buyers?|customers?|"
@@ -102,25 +96,26 @@ def clean_entity(subject: str) -> str:
 
 def cover_kind(subject: str = '', kind: str = '', fmt: str = '',
                brand_category: str = '') -> str:
-    """``person`` or ``logo``. A person is talent, a creator, or a
-    TALENT-family brand category. A title, a brand and an audience
-    named after either of those are a logo."""
-    k = str(kind or '').strip().lower()
-    f = str(fmt or '').strip().lower()
-    if k in _PERSON_KIND or f in _PERSON_FMT:
-        return 'person'
-    try:
-        from image_backfill import master_category
-        if master_category(brand_category) == 'TALENT':
-            return 'person'
-    except Exception:
-        cat = str(brand_category or '').strip().upper()
-        if cat in ('ACTOR', 'ATHLETE', 'COMEDIAN', 'CREATOR/INFLUENCER',
-                   'INFLUENCER/CREATOR', 'EMERGING TALENT', 'HOST/PERSONALITY',
-                   'MUSICIAN/BAND', 'PODCASTER', 'POLITICS/ACTIVIST',
-                   'WRITER/DIRECTOR/AUTHOR/ARTIST'):
-            return 'person'
+    """Always ``logo``. The person-photo branch is parked (Jenna
+    2026-10-27: use the logo for now). Arguments stay so callers and
+    tests do not change shape."""
     return 'logo'
+
+
+def _rev_of(row: dict) -> int:
+    try:
+        return int((row or {}).get('cover_rev') or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def needs_cover(row: dict) -> bool:
+    """Missing hero, or a tile from the person-photo / Profile IQ pass."""
+    if not isinstance(row, dict) or not row.get('key'):
+        return False
+    if _rev_of(row) < COVER_REV:
+        return True
+    return not str(row.get('hero_image') or '').strip()
 
 
 def search_names(subject: str, kind: str = '', fmt: str = '') -> list:
@@ -285,70 +280,45 @@ def resolve_cover_url(subject: str, *, kind: str = '', fmt: str = '',
                       brand_category: str = '', s3=None, host=None) -> tuple:
     """(url, cover_kind, note). url is None on a miss. Never raises."""
     if not enabled():
-        return None, cover_kind(subject, kind, fmt, brand_category), 'off'
-    mode = cover_kind(subject, kind, fmt, brand_category)
+        return None, 'logo', 'off'
     names = search_names(subject, kind, fmt)
     if not names:
-        return None, mode, 'none'
-    for name in names:
-        hit = _profile_image(name, host=host)
-        if hit:
-            kept = _keep(hit, s3) or (hit if _is_ours(hit) else None)
-            if kept:
-                return kept, mode, f'profile:{name}'
-    if mode == 'person':
-        for name in names:
-            url = _resolve_bucket(name, 'TALENT')
-            kept = _keep(url, s3) if url else None
-            if kept:
-                return kept, mode, f'talent:{name}'
-        for name in names:
-            url = _search(f"{name} photo")
-            kept = _keep(url, s3) if url else None
-            if kept:
-                return kept, mode, f'photo:{name}'
-        return None, mode, 'none'
-    for name in names:
-        url = _wiki(name)
-        kept = _keep(url, s3) if url else None
-        if kept:
-            return kept, mode, f'wiki:{name}'
+        return None, 'logo', 'none'
     for name in names:
         for q in (f"{name} official logo", f"{name} logo"):
             url = _search(q)
             kept = _keep(url, s3) if url else None
             if kept:
-                return kept, mode, f'logo:{q}'
-    if str(fmt or '').strip().lower() in _TITLE_FMT:
+                return kept, 'logo', f'logo:{q}'
+    # A series / film wiki page is usually a poster of people. Skip it.
+    if str(fmt or '').strip().lower() not in _TITLE_FMT:
         for name in names:
-            url = _resolve_bucket(name, 'CONTENT')
+            url = _wiki(name)
             kept = _keep(url, s3) if url else None
             if kept:
-                return kept, mode, f'poster:{name}'
-    try:
-        from image_backfill import google_favicon
-        fav = google_favicon(names[-1])
-        kept = _keep(fav, s3) if fav else None
-        if kept:
-            return kept, mode, f'favicon:{names[-1]}'
-    except Exception:
-        pass
-    return None, mode, 'none'
+                return kept, 'logo', f'wiki:{name}'
+    if not callable(_cfg.get('search')):
+        try:
+            from image_backfill import google_favicon
+            fav = google_favicon(names[-1])
+            kept = _keep(fav, s3) if fav else None
+            if kept:
+                return kept, 'logo', f'favicon:{names[-1]}'
+        except Exception:
+            pass
+    return None, 'logo', 'none'
 
 
 def attach_cover(s3, payload: dict, *, host=None, force: bool = False) -> bool:
-    """Write hero_image + cover_kind on the twin meta when missing.
-    Returns True when the meta changed. Never raises."""
+    """Write hero_image + cover_kind on the twin meta when missing or
+    below COVER_REV. Returns True when the meta changed. Never raises."""
     if not isinstance(payload, dict):
         return False
     meta = payload.setdefault('meta', {})
     have = str(meta.get('hero_image') or '').strip()
-    if have and not force:
-        if not meta.get('cover_kind'):
-            meta['cover_kind'] = cover_kind(meta.get('subject') or meta.get('name') or '',
-                                            meta.get('subject_kind') or '',
-                                            meta.get('format') or '',
-                                            meta.get('brand_category') or '')
+    if have and not force and _rev_of(meta) >= COVER_REV:
+        if meta.get('cover_kind') != 'logo':
+            meta['cover_kind'] = 'logo'
             return True
         return False
     try:
@@ -362,24 +332,26 @@ def attach_cover(s3, payload: dict, *, host=None, force: bool = False) -> bool:
     except Exception as e:
         print(f"[twin-cover] resolve failed: {e}")
         return False
-    meta['cover_kind'] = mode
+    meta['cover_kind'] = 'logo'
     if url:
         meta['hero_image'] = url
+        meta['cover_rev'] = COVER_REV
         print(f"[twin-cover] {meta.get('name') or meta.get('subject')}: {note}")
         return True
+    # Keep the old tile and do not stamp the rev, so the next list
+    # load tries the logo again.
     print(f"[twin-cover] {meta.get('name') or meta.get('subject')}: no cover ({note})")
     return bool(meta.get('cover_kind'))
 
 
 def schedule_missing(s3, runs: list, *, load_fn: Optional[Callable] = None,
                      save_fn: Optional[Callable] = None, limit: int = 6) -> int:
-    """Fill twins whose index row has no hero_image. Returns how many
-    were queued. The list route stays fast; the wall picks the image
-    up on the next list load."""
+    """Fill twins whose index row has no hero, or a stale person /
+    Profile IQ tile. Returns how many were queued. The list route
+    stays fast; the wall picks the logo up on the next list load."""
     if not enabled() or s3 is None:
         return 0
-    missing = [r for r in (runs or []) if isinstance(r, dict) and r.get('key')
-               and not str(r.get('hero_image') or '').strip()]
+    missing = [r for r in (runs or []) if needs_cover(r)]
     if not missing:
         return 0
     queued = []
@@ -414,6 +386,7 @@ def schedule_missing(s3, runs: list, *, load_fn: Optional[Callable] = None,
                     save(s3, key, payload)
                     r['hero_image'] = (payload.get('meta') or {}).get('hero_image') or ''
                     r['cover_kind'] = (payload.get('meta') or {}).get('cover_kind') or ''
+                    r['cover_rev'] = (payload.get('meta') or {}).get('cover_rev') or 0
             except Exception as e:
                 print(f"[twin-cover] fill {key}: {e}")
             finally:
@@ -427,5 +400,6 @@ def schedule_missing(s3, runs: list, *, load_fn: Optional[Callable] = None,
     return len(queued)
 
 
-__all__ = ['PREFIX', 'clean_entity', 'cover_kind', 'search_names', 'resolve_cover_url',
-           'attach_cover', 'schedule_missing', 'configure', 'enabled']
+__all__ = ['PREFIX', 'COVER_REV', 'clean_entity', 'cover_kind', 'needs_cover',
+           'search_names', 'resolve_cover_url', 'attach_cover', 'schedule_missing',
+           'configure', 'enabled']
