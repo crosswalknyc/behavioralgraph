@@ -106,11 +106,14 @@ MODELS = {
     'research': (os.environ.get('DTIQ_ROOM_RESEARCH_MODEL') or '').strip() or None,     # None: the analysis chain (Opus class first)
     'moderator': (os.environ.get('DTIQ_ROOM_MODERATOR_MODEL') or '').strip() or None,
     'persona': [m for m in ((os.environ.get('DTIQ_ROOM_PERSONA_MODEL') or '').strip(), 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001') if m],
+    # the strong chain when the Prometheus host is not bound (a script, the box): the same candidates the analysis chain walks
+    'strong': ['claude-opus-5', 'claude-opus-4-8', 'claude-opus-4-7', 'claude-opus-4-6', 'claude-sonnet-4-6'],
 }
 BUDGET_S = {'research': 75.0, 'options': 40.0, 'persona': 50.0, 'read': 50.0}
 MAX_OPTIONS = 5
 VOICES_N = 4
 RESEARCH_CACHE_TTL_S = 14 * 86400
+RESEARCH_MAX_SEARCHES = 4
 _SOURCE_NAMES_RX = re.compile(r"\b(Nielsen|Circana|NPD(?: Group)?|Statista|eMarketer|Insider Intelligence|YouGov|Pew(?: Research(?: Center)?)?|Box Office Mojo|The Numbers|Sensor Tower|data\.ai|App Annie|Comscore|Luminate|Deadline|Variety|The Hollywood Reporter|Hollywood Reporter|Media Play News|Home Media Magazine|TVLine|Vulture|Tudum|SEC filings?|10-K|earnings (?:call|report)s?|per (?:the )?trade press|trade press)\b", re.I)
 _BANNED_RX = re.compile(r"\b(synthetic|synth|modell?ed|model|estimated|estimate|research(?:ed)?|panel|panelists?|sample|confidence|pipeline|corpus|lane)\b", re.I)
 _MODEL_FN: Optional[Callable] = None
@@ -236,9 +239,12 @@ class Models:
 
     @staticmethod
     def _tools():
+        """The web_search tool for the research agent, capped at
+        RESEARCH_MAX_SEARCHES rounds so a question stays inside the
+        budget (the brief is cached per subject + topic)."""
         try:
             import prometheus_analysis as _pma
-            return [_pma.WEB_SEARCH_TOOL]
+            return [dict(_pma.WEB_SEARCH_TOOL, max_uses=RESEARCH_MAX_SEARCHES)]
         except Exception:
             return None
 
@@ -290,13 +296,15 @@ class Models:
             if data is not None:
                 return data, self._log(role, model, self._stats_now(), t0, True)
         want = MODELS.get(role) if role in ('research', 'moderator') else None
+        research_tools = tools if tools is not None else (self._tools() if role == 'research' else None)
         if want:
-            data, model = self._chain(system, user, max_tokens, temperature, surface, [want], tools=(tools if tools is not None else (self._tools() if role == 'research' else None)))
+            data, model = self._chain(system, user, max_tokens, temperature, surface, [want] + [m for m in MODELS['strong'] if m != want], tools=research_tools)
             if data is not None:
                 return data, self._log(role, model, self._stats_now(), t0, True)
         cj = self._host_claude()
         if cj is None:
-            data, model = self._chain(system, user, max_tokens, temperature, surface, MODELS['persona'], tools=(self._tools() if role == 'research' else None))
+            chain = MODELS['strong'] if role in ('research', 'moderator') else MODELS['persona']
+            data, model = self._chain(system, user, max_tokens, temperature, surface, chain, tools=research_tools)
             return data, self._log(role, model, self._stats_now(), t0, data is not None)
         try:
             got = cj(system, user, max_tokens=max_tokens, temperature=temperature, surface=surface, usage_extras=self.extras,
@@ -318,16 +326,26 @@ class Models:
         except Exception:
             return None, ''
         tag = (surface, 'chatbot', self.extras) if self.extras else (surface, 'chatbot')
-        for m in chain:
+        plans = [tools]
+        if tools:
+            # the current web_search tool type, then the legacy type, then none: research is additive and never blocks the room
             try:
-                raw = claude_reason_json(system=system, user=user, model=m, max_tokens=max_tokens, temperature=temperature, max_retries=2,
-                                         raise_on_error=True, usage_tag=tag, tools=tools)
-            except Exception as e:
-                print(f"[twin-room] {m} failed on {surface}: {str(e)[:160]}; trying next")
-                continue
-            data = _parse_json(raw)
-            if isinstance(data, dict) and data:
-                return data, m
+                import prometheus_analysis as _pma
+                plans.append([_pma.WEB_SEARCH_TOOL_LEGACY])
+            except Exception:
+                pass
+            plans.append(None)
+        for plan in plans:
+            for m in chain:
+                try:
+                    raw = claude_reason_json(system=system, user=user, model=m, max_tokens=max_tokens, temperature=temperature, max_retries=2,
+                                             raise_on_error=True, usage_tag=tag, tools=plan)
+                except Exception as e:
+                    print(f"[twin-room] {m} failed on {surface}: {str(e)[:160]}; trying next")
+                    continue
+                data = _parse_json(raw)
+                if isinstance(data, dict) and data:
+                    return data, m
         return None, ''
 
     def totals(self) -> dict:
@@ -670,7 +688,7 @@ def moderator_options(models: Models, twin: dict, q: str, kind: str, opts: list,
                        'audience': {'name': tb['name'], 'format': tb['format'], 'stage': tb['stage'], 'size_us': tb['size_us'], 'avid_share_pct': tb['avid_share_pct'],
                                     'lifecycle': tb['lifecycle_read'], 'read': tb['identity_read'], 'traits': {k: v.get('read') for k, v in tb['traits'].items()}},
                        'facts_brief': {k: v for k, v in (brief or {}).items() if not k.startswith('_')}}, default=str)[:9000]
-    data, call = models.call('moderator', OPTIONS_SYSTEM, user, max_tokens=900, temperature=0.3, tools=None)
+    data, call = models.call('moderator', OPTIONS_SYSTEM, user, max_tokens=1400, temperature=0.3, tools=None)
     if log:
         log('options', call)
     out = []
@@ -847,7 +865,7 @@ def moderator_read(models: Models, twin: dict, q: str, kind: str, framing: str, 
                        'answers': [{'seat': a['seat'], 'name': a['name'], 'option': a['option_label'], 'confidence': a['confidence'], 'line': a['line'], 'reason': a['reason']} for a in answers],
                        'facts_brief': {k: v for k, v in (brief or {}).items() if not k.startswith('_')}, 'prior_note': prior.get('note') if prior else None,
                        'audience': {'name': tb['name'], 'size_us': tb['size_us'], 'avid_share_pct': tb['avid_share_pct'], 'lifecycle': tb['lifecycle_read']}}, default=str)[:14000]
-    data, call = models.call('moderator', READ_SYSTEM, user, max_tokens=1100, temperature=0.4, tools=None)
+    data, call = models.call('moderator', READ_SYSTEM, user, max_tokens=2400, temperature=0.4, tools=None)
     if log:
         log('read', call)
     by_seat = {int(a['seat']): a for a in answers}
