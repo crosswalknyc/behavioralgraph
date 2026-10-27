@@ -52015,7 +52015,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if ((ident.purchase || []).length) { idb += '<h4>What they buy</h4>' + ident.purchase.slice(0, 10).map(function(r) { return bar(r.label, r.pct, 100, true, pct(r.pct, 1)); }).join(''); }
                 if ((ident.talent || []).length) { idb += '<h4>People they follow</h4><div class="dtw-muted">' + ident.talent.slice(0, 8).map(function(r) { return esc(r.label) + ' ' + pct(r.pct, 1); }).join(', ') + '</div>'; }
                 idb += '</div></div>';
-                out += fold('identity', 'Identity', 'who they are', idb, true);
+                out += fold('identity', 'Identity', 'who they are', idb, false);
                 // Traits
                 var tr = '<div class="dtw-muted" style="margin-bottom:0.5rem;">Twelve dials, 0 to 100. 50 is an ordinary US audience.</div><div class="dtw-two">';
                 var keys = Object.keys(t.traits || {}), half = Math.ceil(keys.length / 2);
@@ -52035,7 +52035,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var rb = '<div class="dtw-muted" style="margin-bottom:0.3rem;">Every lab result lands here. Click one to open it on its tab.</div>';
                 (t.runs || []).forEach(function(r) { var o = r.outputs || {}; var usd = o.unit === 'usd'; rb += '<div class="dtw-run' + (r.id === S.openRun ? ' on' : '') + '" onclick="dtwOpenRun(\'' + esc(r.id) + '\')"><div class="q"><span class="dtw-tag" style="margin-right:0.4rem;">' + esc(r.label || kindLabel(r.kind)) + '</span>' + esc(r.question || '') + '</div><div class="m">Expected ' + (usd ? fmtMoney(o.expected) : fmtN(o.expected) + ' ' + esc(o.noun || 'people')) + (o.low != null ? ', range ' + (usd ? fmtMoney(o.low) : fmtN(o.low)) + ' to ' + (usd ? fmtMoney(o.high) : fmtN(o.high)) : '') + (o.odds_pct != null ? '. Odds ' + pct(o.odds_pct) + ' (' + esc(o.odds_words || '') + ')' : '') + '. ' + esc(fmtDate(r.created_at)) + ' by ' + esc(r.created_by || '') + '</div></div>'; });
                 if (!(t.runs || []).length) rb += '<p class="dtw-muted">No runs yet. Run Greenlight or Launch on this twin, or type the ask to Prometheus.</p>';
-                out += fold('runs', 'Runs', (t.runs || []).length + ' on this twin', rb, true);
+                out += fold('runs', 'Runs', (t.runs || []).length + ' on this twin', rb, false);
                 h.innerHTML = out;
             }
             window.dtwOpenRun = function(id) { var r = (S.twin.runs || []).filter(function(x) { return x.id === id; })[0]; if (!r) return; S.openRun = id; if (r.kind === 'launch') { renderLaunch(r); dtwTab('launch'); } else if (r.kind === 'spend') { S.plan = ((S.twin.labs || {}).spend || []).filter(function(p) { return p.plan_id === (r.inputs || {}).plan_id; })[0] || null; renderSpend(); dtwTab('spend'); } else { renderGreenlight(r); dtwTab('greenlight'); } };

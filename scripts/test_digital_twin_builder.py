@@ -211,6 +211,10 @@ class Moderator(unittest.TestCase):
         self.assertNotIn('new season clears', page)
         self.assertNotIn("<em>The twin</em>", page)
         self.assertNotIn('Home <b>', page)
+        self.assertIn("fold('identity', 'Identity', 'who they are', idb, false)", page)
+        self.assertIn("fold('traits', 'Traits', 'how they respond', tr, false)", page)
+        self.assertIn("fold('lifecycle', 'Lifecycle', 'where they sit', lcb, false)", page)
+        self.assertIn("fold('runs', 'Runs', (t.runs || []).length + ' on this twin', rb, false)", page)
 
 
 if __name__ == '__main__':
