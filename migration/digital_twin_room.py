@@ -667,7 +667,7 @@ def research(models: Models, twin: dict, q: str, kind: str, stimulus: Optional[d
                                    'size_us': tb['size_us'], 'avid_share_pct': tb['avid_share_pct'], 'window': tb['window']},
                        'subject_facts_on_file': (facts_doc or {}).get('subject_status') if isinstance(facts_doc, dict) else None,
                        'audience_read': tb.get('identity_read'), 'lifecycle': tb.get('lifecycle_read'), 'anchors_on_file': tb.get('anchors')}, default=str)[:7000]
-    data, call = models.call('research', RESEARCH_SYSTEM, user, max_tokens=2600, temperature=0.2, tools=None)
+    data, call = models.call('research', RESEARCH_SYSTEM, user, max_tokens=3600, temperature=0.2, tools=None)   # room for the search rounds' interim text; the brief itself stays under 1,600 tokens
     if log:
         log('research', call)
     if not isinstance(data, dict) or not (data.get('facts') or data.get('subject_status')):
