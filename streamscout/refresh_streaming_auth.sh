@@ -1,12 +1,17 @@
 #!/usr/bin/env bash
 # ──────────────────────────────────────────────────────────────────────────────
-# refresh_streaming_auth.sh — keep Max + Netflix "always searching" in production.
+# refresh_streaming_auth.sh — FALLBACK/emergency Max + Netflix auth refresh.
 #
-# Both resolvers replay a saved session token server-side (Render) instead of a
-# live login:  Max -> MAX_AUTH_JSON, Netflix -> NETFLIX_AUTH_JSON. Those tokens
-# eventually expire; when a lookup starts coming back "unverified", run THIS on a
-# desktop that has the logged-in profiles to re-capture both tokens and push them
-# to Render (prod + dev), then redeploy prod so they take effect.
+# PRIMARY path (what keeps them "always searching") is the shared session
+# donation: `donate_cookies.py netflix.com hbomax.com`, auto-re-donated daily and
+# read live from S3 by prod. Netflix needs nothing here; Max only needs this when
+# its stable x-disco CLIENT HEADERS change (rare) — the donation refreshes Max's
+# cookies, but not its headers.
+#
+# Use THIS when the donation route is unavailable or you must push a self-captured
+# token straight to Render: it re-captures both tokens on a desktop that has the
+# logged-in profiles and pushes them to Render (prod + dev) env vars, then
+# redeploys prod.
 #
 #   bash streamscout/refresh_streaming_auth.sh
 #
