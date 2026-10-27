@@ -440,31 +440,39 @@ I'll add it. Everything **not** on the list resolves normally with no change.
 > fine; for genuinely remade titles (*Dune*, *IT*, *The Italian Job*) add the
 > **year** — `"Dune (2021)"` — to pin the one you mean.
 
-### 5h. Netflix runs headless too — on a saved login (refresh when it goes stale)
+### 5h. Netflix + Max are "always searching" in production (deployed session tokens)
 
-Like Max, **Netflix** resolves **headless / unattended** (no window) through
-`streamscout_query`. The difference is what it rides on: Netflix uses a **saved
-login** in the resolver's own browser profile (not a token blob). That login
-lasts a long time but can eventually expire or trip a device-verification check.
+Both **Netflix** and **Max** resolve **headless / unattended** (no window) through
+`streamscout_query`, and both are now **always searching in production** because
+each rides a **saved session token** deployed to the server (Render), not a live
+login:
 
-- **Normal operation:** headless, no window, nothing to do.
-- **When the login expires:** the resolver can't clear Netflix's login/"verify"
-  gate headless, so affected Netflix lookups come back **empty**. The tell is a
-  **sudden drop to 0 across many Netflix titles at once** — one title being 0 is
-  just "not on Netflix"; *everything* Netflix going 0 is the login.
-- **Refresh it once (the Netflix analog of Max's `--refresh-auth`):** run the
-  resolver with a visible window to re-authenticate, then headless resumes:
-  ```bash
-  python3 netflix_title_identifier.py --headed --type series \
-    --title "Wednesday" --seasons 1
-  ```
-  Complete the login / "Email a code" step in the window and pick the profile;
-  the session is saved for every later headless run.
+- **Max** replays a token blob — `MAX_AUTH_JSON` (pure HTTP, no browser).
+- **Netflix** now does the same — `NETFLIX_AUTH_JSON`, a small (~3.6 KB) cookie
+  token captured from the logged-in profile and replayed into a fresh headless
+  browser. The on-disk browser profile is now just the *desktop capture source*;
+  production no longer depends on it.
 
-> **Operational note:** a stale Netflix login currently reads as **0 seeds**, not
-> "unverified" — so if Netflix titles vanish en masse, refresh the login *before*
-> treating them as gone. (Ask Jess/Spike if you'd like this hardened to raise a
-> hard "unverified" signal, like Max, so it can never be misread as absent.)
+**Normal operation:** headless, nothing to do — both platforms search every build.
+
+**When a token goes stale** (expires / trips device-verification): the resolver
+**fails LOUD — it now raises `unverified`**, exactly like Max, so a stale session
+can never be silently misread as "not on the platform." The tell is a **sudden
+run of `unverified` across many Netflix (or Max) titles at once** — one title
+being 0 is just "not there"; *everything* going `unverified` is the token.
+
+**Refresh both in one command (on a desktop with the logged-in profiles):**
+```bash
+bash streamscout/refresh_streaming_auth.sh
+```
+This re-captures both tokens, pushes them to Render (prod + dev), and redeploys
+prod. (First run of the day may pop a window for a one-time Netflix device code.)
+To refresh only Netflix: `python3 netflix_title_identifier.py --save-auth` (then
+deploy the file as `NETFLIX_AUTH_JSON`). First-ever login needs a visible window:
+```bash
+python3 netflix_title_identifier.py --headed --type series \
+  --title "Wednesday" --seasons 1
+```
 
 ### 5i. Amazon ALWAYS needs a pinned series-level URL (this is how Amazon works)
 

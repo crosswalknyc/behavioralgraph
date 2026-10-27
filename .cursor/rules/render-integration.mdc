@@ -1,0 +1,72 @@
+---
+description: Render deployment integration for behavioralgraph (services, IDs, API usage)
+alwaysApply: true
+---
+
+# Render Integration
+
+This repo (`crosswalknyc/behavioralgraph`) deploys on Render (team `tea-d5gns1uuk2gs739m7630`).
+
+## Auth
+
+- The Render REST API key is stored in `.env.local` as `RENDER_API_KEY` (gitignored — never commit it).
+- Load it before API calls: `export $(grep RENDER_API_KEY .env.local | xargs)`.
+- Call the API with: `curl -H "Authorization: Bearer $RENDER_API_KEY" https://api.render.com/v1/...`
+- Never paste the raw key into chat, commits, or rule files.
+
+## Web services
+
+| Environment | Name | Service ID | Branch |
+|---|---|---|---|
+| **Production** | `behavioralgraph` | `srv-d5gpci5actks73cr4lig` | `main` |
+| **Dev** | `behavioral-graph-dev` | `srv-d6ktpffgi27c73fk2v30` | `main` |
+
+- `behavioral-graph` (`srv-d6kti6lactks73a5nh10`) is an older, suspended web service.
+
+## Cron jobs
+
+| Name | ID | Branch | Status |
+|---|---|---|---|
+| `iq-rankers-daily-cron-dev` | `crn-d85n22v7f7vs73cp25fg` | `main` | active |
+| `netflix-ranker-daily-cron` | `crn-d92200btqb8s73b7e5fg` | `main` | suspended |
+| `llmo-daily-cron` | `crn-d7ptmook1i2s738c2gmg` | `dev` | suspended |
+| `activity-export-cron` | `crn-d6kti6lactks73a5ngv0` | `main` | suspended |
+
+## Deploy workflow
+
+- **`main` is a PROTECTED branch — direct pushes are rejected.** A required status check named `validate` must pass, so changes must land via a Pull Request, not `git push origin main`.
+- **"Ship to main" now means: open a PR into `main`, wait for the `validate` check to go green, then merge it** (the merge is what auto-deploys production + dev). The user's standing "always ship to main" preference is satisfied by merging the PR once CI is clean.
+- Recommended flow:
+  1. `git fetch origin` and sync: `git checkout main && git merge --ff-only origin/main` (local `main` can fall MANY commits behind — other agents merge `dev`→`main` frequently; always fetch before assuming code isn't present).
+  2. Create a feature branch, commit, `git push -u origin <branch>`.
+  3. `gh pr create --base main --head <branch>`.
+  4. Confirm the `validate` check succeeds (`gh pr view <n> --json mergeStateStatus,statusCheckRollup`), then `gh pr merge <n> --squash --delete-branch`.
+- ALWAYS edit the large `templates/index.html` with a Python read/replace/write (verify line count + trailing `</html>`). The StrReplace editor has truncated this file's tail (~2k lines) before — avoid it here.
+
+## Streaming resolver auth (Max + Netflix "always searching")
+
+StreamScout's two auth-gated resolvers run headless/server-side by replaying a
+saved **session token** stored as a Render env var (NOT a live login). Without
+the token they go blind in the wild (Ghost Hunters incident, 2026-10-26).
+
+| Platform | Env var | Token shape | Capture / refresh command |
+|---|---|---|---|
+| HBO Max | `MAX_AUTH_JSON` | `{headers, cookies}` (~20 KB) | `python3 streamscout/max_episode_identifier.py --refresh-auth` → `~/.max_auth.json` |
+| Netflix | `NETFLIX_AUTH_JSON` | Playwright `storage_state` cookies (~3.6 KB) | `python3 streamscout/netflix_title_identifier.py --save-auth` → `~/.netflix_auth.json` |
+
+- Both env vars are set on **prod** (`srv-d5gpci5actks73cr4lig`) and **dev**
+  (`srv-d6ktpffgi27c73fk2v30`). Max resolves via pure-HTTP token replay; Netflix
+  replays the cookie token into a fresh headless browser (no on-disk profile).
+- Setting the env var does NOT auto-deploy — trigger a prod redeploy after.
+- **One-command refresh (run on a desktop with the logged-in profiles):**
+  `bash streamscout/refresh_streaming_auth.sh` — re-captures both tokens, pushes
+  them to prod + dev env vars, and redeploys prod. (Never prints token contents.)
+- **Stale-token signal:** both resolvers now **raise `unverified`** (not a silent
+  0) when their token is stale, so a run of `unverified` across many Netflix/Max
+  titles = time to refresh. Env vars `MAX_AUTH_PATH` / `NETFLIX_AUTH_PATH`
+  override the default file locations; never commit the token files.
+
+## Notes
+
+- When asked about "production", use `srv-d5gpci5actks73cr4lig`; for "dev", use `srv-d6ktpffgi27c73fk2v30`.
+- Both web services currently deploy from the `main` branch.
