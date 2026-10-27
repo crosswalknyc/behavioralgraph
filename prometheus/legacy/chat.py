@@ -34,6 +34,7 @@ from prometheus import intake_predicates as _intake_predicates   # pure text pre
 from prometheus import subject_display as _subject_display   # a reader sees a name, never a key (2026-10-22)
 from prometheus import question_key as _question_key   # one fold for one question (2026-10-26)
 from prometheus import read_registry as _read_registry   # the caller's recent reads by question (2026-10-26)
+from prometheus import audience_referent as _audience_referent   # a bare "this audience" binds and is confirmed before work starts (2026-10-26)
 from prometheus import subiq_library as _subiq_library   # a question across the Subscriber IQ library (2026-10-26)
 from prometheus import deck_sources as _deck_sources   # a deck of something already delivered or attached (2026-10-26)
 from prometheus import digital_twin_lane as _twin_lane   # Digital Twins IQ: intake, labs, Focus Group IQ, catalog, status, directions (2026-10-26)
@@ -12890,6 +12891,15 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
     bind_subject = _page_default.quoted_subject(panel_confirm, bind_subject) or bind_subject   # the subject a quote named is the one the Approve runs on (2026-10-24)
     bind_subject = bind_subject or _subject_rules.pinned_bind_for(text, history, str(((ctx or {}).get('primary') or {}).get('name') or ''))   # the thread's own subject, never a which-one question from cross-session memory (Emmet Riley 2026-10-26)
     bind_cohort = str(bind_cohort or '').strip()
+    # A bare "this audience" that starts work binds to the audience on screen (or the thread's) and is confirmed in one line first; the confirmed name rides into the job (2026-10-26, Mark Valdez)
+    try:
+        _arg = _audience_referent.gate(text, bind_subject, ctx=ctx, thread=getattr(__import__('flask').g, '_pm_thread_binding', None), history=history,
+                                       confirmed=str(getattr(__import__('flask').g, '_pm_referent_confirmed', '') or ''))
+    except Exception as _fx:
+        _faults.note('chat', _fx); _arg = None
+    if _arg:
+        _pm_ask_hint(route='audience_referent', outcome=_arg.pop('outcome', ''), subject=_arg.get('subject'))
+        return jsonify(_arg)
     if bind_subject and not subj_hint:
         subj_hint = bind_subject
     # I2 (2026-10-20): a re-run accepted on its card is charged at the quoted price before anything is generated
@@ -15509,6 +15519,7 @@ def _pm_analyze_core(user, body, text, history):
     if _bind_subject:
         if ctx_err:
             return ctx_err
+        __import__('flask').g._pm_referent_confirmed = _bind_subject   # the chip confirmed the audience a bare "this audience" pointed at (2026-10-26)
         try:   # "Yes, {page}": the page is kept for this user's follow-ups
             _pg = str(((ctx or {}).get('primary') or {}).get('name') or '')
             if _pg and _H._normalize_for_match(_pg) == _H._normalize_for_match(_bind_subject):

@@ -1095,8 +1095,20 @@ def ask(user, body, *, via='session'):
             _faults.note('service.talent_list', _fx)
             _acc = None
         if _acc:
+            _aud = ''
+            try:   # a bare "this audience" on the offer binds to the screen / thread audience and rides into the job (2026-10-26); never blocks the start
+                from . import audience_referent as _ar
+                try:
+                    _tb = getattr(__import__('flask').g, '_pm_thread_binding', None)
+                except Exception:
+                    _tb = None
+                _ask0 = next((str(t0.get('text') or t0.get('content') or '') for t0 in reversed(history or [])
+                              if isinstance(t0, dict) and str(t0.get('role') or '') == 'user'), '')
+                _aud = _ar.job_audience(f"{_ask0} {text}", str(body.get('bind_subject') or ''), ctx=ctx, thread=_tb, history=history)
+            except Exception as _fx:
+                _faults.note('service.talent_list', _fx)
             try:
-                raw = _tl.start(user, uname, text, _acc, tid)
+                raw = _tl.start(user, uname, text, _acc, tid, audience=_aud)
             except Exception as _fx:
                 _faults.note('service.talent_list', _fx)
                 raw = {'success': False, 'guidance': True, 'followups': [],

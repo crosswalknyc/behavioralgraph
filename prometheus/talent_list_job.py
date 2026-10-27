@@ -134,12 +134,17 @@ def status_read(job_id):
 
 
 # --------------------------------------------------------------- start
-def start(user, username, question, off, thread_id=None, *, run_fn=None, start_fn=None, charge_fn=None):
+def start(user, username, question, off, thread_id=None, *, run_fn=None, start_fn=None, charge_fn=None, audience=''):
     """Charge the Custom Ask and queue the job. Returns the raw reply
     payload (the 'On it' promise, or the funds line when the seat cannot
-    cover it)."""
+    cover it). ``audience`` is the audience a bare "this audience" bound
+    to (screen or thread, confirmed); it rides in the job's inputs and in
+    the promise line (2026-10-26)."""
     off = dict(off or {})
     group = off.get('group') or LABEL
+    audience = str(audience or '').strip()
+    if audience and audience.lower() not in group.lower():
+        group = f"{group} for the {audience} audience"
     price = float(off.get('price_usd') or price_usd())
     job_id = uuid.uuid4().hex[:12]
     charge = charge_fn or (host.consume_credit if host.has('consume_credit') else None)
@@ -156,7 +161,8 @@ def start(user, username, question, off, thread_id=None, *, run_fn=None, start_f
                 'error': (f"The list runs {price_label()} and your account cannot cover it right now. "
                           f"Top up or ask your admin, and I will pick it right back up.")}
     inputs = {'question': str(question or '')[:400], 'group': group, 'qualifier': str(off.get('qualifier') or ''),
-              'price_usd': price, 'thread_id': thread_id or '', 'email': str((user or {}).get('email') or '')}
+              'price_usd': price, 'thread_id': thread_id or '', 'email': str((user or {}).get('email') or ''),
+              'audience': audience}
     from . import read_recovery as _rr
     starter = start_fn or _rr.start_engine_job
     starter(KIND, job_id, username, inputs, {}, status_write, run_fn or run_job)
