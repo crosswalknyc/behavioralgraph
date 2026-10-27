@@ -50950,10 +50950,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
            the saved rooms as cards, no placeholder faces). */
         #digitalTwinsIQView { --dtw-s1: #C7F23E; --dtw-s2: #E682FF; --dtw-s3: #3358FF; --dtw-s4: #B7B3D8; --dtw-s5: #3B3D38; --dtw-cbody: #A8AFA9; --dtw-clabel: #9BAAAC; --dtw-ink2: #081113; }
         body[data-theme="light"] #digitalTwinsIQView { --dtw-s1: #5E7E12; --dtw-s2: #8E3FA8; --dtw-cbody: #5C6560; --dtw-clabel: #5C6466; }
-        #digitalTwinsIQView .dtw-body.is-fg { overflow: hidden; display: flex; flex-direction: column; padding: 0.85rem 1.5rem 1rem; }
-        #digitalTwinsIQView .dtw-body.is-fg .dtw-pane { display: none; }
-        #digitalTwinsIQView .dtw-body.is-fg #dtwTabPanel.active { display: flex; flex: 1 1 0%; min-height: 0; }
-        #digitalTwinsIQView .dtw-fg { position: relative; display: flex; flex-direction: column; flex: 1 1 0%; min-height: 0; min-width: 0; width: 100%; gap: 10px; }
+        /* The view body is the page here (the dashboard shell is a fixed 100vh frame; .dtw-body is what scrolls on every tab). The room grows
+           with its content and the body scrolls through all of it (Jenna 2026-10-27: 'allow this page to scroll to where it stops and
+           freezes here'): no fixed height, no inner scroll on the thread or the tally; the tally sticks while the thread scrolls by and the
+           composer sticks to the bottom edge only while the thread runs past it. */
+        #digitalTwinsIQView .dtw-body.is-fg { padding: 0.85rem 1.5rem 1rem; }
+        #digitalTwinsIQView .dtw-fg { position: relative; display: flex; flex-direction: column; min-width: 0; width: 100%; gap: 10px; }
         #digitalTwinsIQView .dtw-fg-top { display: flex; justify-content: space-between; align-items: center; gap: 10px 14px; flex-wrap: wrap; min-height: 24px; flex: 0 0 auto; }
         #digitalTwinsIQView .dtw-fg-top .dtw-eyebrow { color: var(--dtw-body); font-weight: 400; letter-spacing: 0.25em; font-size: 10px; min-width: 0; overflow-wrap: anywhere; }
         #digitalTwinsIQView .dtw-fg-acts { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
@@ -51002,10 +51004,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-fg-pulse { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--dtw-ink); box-shadow: 0 0 0 3px var(--dtw-track); margin-right: 8px; flex: none; animation: dtwPulse 1.5s ease-in-out infinite; }
         @keyframes dtwPulse { 0%, 100% { opacity: 0.45; transform: scale(0.85); } 50% { opacity: 1; transform: scale(1); } }
         /* the thread and the tally */
-        #digitalTwinsIQView .dtw-fg-main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 34%); gap: 20px; flex: 1 1 0%; min-height: 0; align-items: stretch; }
-        #digitalTwinsIQView .dtw-fg-chat { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
-        #digitalTwinsIQView .dtw-fg-stream { flex: 1 1 0%; min-height: 0; overflow: auto; padding: 4px 8px 10px 0; scrollbar-width: thin; }
-        #digitalTwinsIQView .dtw-fg-msgs { display: flex; flex-direction: column; gap: 9px; justify-content: flex-end; min-height: 100%; }
+        #digitalTwinsIQView .dtw-fg-main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 34%); gap: 20px; align-items: start; }
+        #digitalTwinsIQView .dtw-fg-chat { display: flex; flex-direction: column; min-width: 0; }
+        #digitalTwinsIQView .dtw-fg-stream { padding: 4px 8px 6px 0; }
+        #digitalTwinsIQView .dtw-fg-msgs { display: flex; flex-direction: column; gap: 9px; }
         #digitalTwinsIQView .dtw-fg-modav { width: 28px; height: 28px; border-radius: 50%; background: var(--dtw-raised); border: 1px solid var(--dtw-rule); display: flex; align-items: center; justify-content: center; flex: none; color: var(--dtw-ink); }
         #digitalTwinsIQView .dtw-fg-modav svg { width: 12px; height: 12px; display: block; fill: currentColor; }
         #digitalTwinsIQView .dtw-fg-qmsg, #digitalTwinsIQView .dtw-fg-msg, #digitalTwinsIQView .dtw-fg-readmsg { display: flex; gap: 12px; align-items: flex-start; }
@@ -51058,7 +51060,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-fg-old.open .chev { transform: rotate(180deg); }
         #digitalTwinsIQView .dtw-fg-empty-t { padding: 10px 0 10px 40px; font-size: 12.5px; line-height: 17px; color: var(--dtw-body); }
         /* the composer: the kind chips above the field, Ask the room as the one Signal Green button */
-        #digitalTwinsIQView .dtw-fg-composer { flex: 0 0 auto; padding-top: 10px; }
+        #digitalTwinsIQView .dtw-fg-composer { position: sticky; bottom: -1rem; z-index: 6; padding: 10px 0 calc(1rem + 2px); background: var(--dtw-page); }
+        #digitalTwinsIQView .dtw-fg-composer::before { content: ''; position: absolute; left: 0; right: 0; top: -16px; height: 16px; background: linear-gradient(to bottom, transparent, var(--dtw-page)); pointer-events: none; }
         #digitalTwinsIQView .dtw-fg-kinds { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
         #digitalTwinsIQView .dtw-fg-kinds .dtw-fg-chip { min-height: 20px; font-size: 10.5px; padding: 1px 8px; }
         #digitalTwinsIQView .dtw-fg-opts { display: block; margin-bottom: 8px; min-height: 48px; }
@@ -51073,7 +51076,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-fg-live { font-size: 11.5px; color: var(--dtw-body); margin-top: 6px; line-height: 15px; overflow-wrap: anywhere; }
         #digitalTwinsIQView .dtw-fg-live:empty { display: none; }
         /* the tally, pinned while the thread scrolls */
-        #digitalTwinsIQView .dtw-fg-tally { background: var(--dtw-raised); border-radius: 10px; padding: 12px 16px 14px; display: flex; flex-direction: column; min-height: 0; max-height: 100%; overflow: auto; align-self: start; scrollbar-width: thin; min-width: 0; }
+        #digitalTwinsIQView .dtw-fg-tally { background: var(--dtw-raised); border-radius: 10px; padding: 12px 16px 14px; display: flex; flex-direction: column; position: sticky; top: 0; align-self: start; min-width: 0; }
         #digitalTwinsIQView .dtw-fg-tally > * { flex: none; }
         #digitalTwinsIQView .dtw-fg-th { display: flex; justify-content: space-between; align-items: baseline; gap: 6px 10px; font-size: 13px; font-weight: 600; color: var(--dtw-ink); line-height: 18px; flex-wrap: wrap; }
         #digitalTwinsIQView .dtw-fg-th span { font-size: 11px; color: var(--dtw-clabel); font-weight: 400; }
@@ -51130,7 +51133,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         /* ---- the landing, no room open (Jenna 2026-10-27: 'CAN you redesign this page to look better I dont like the circles'): a product
            entry page with no placeholder faces. The claim, one subline and the primary action; the three steps with the session line as a
            footnote; the saved rooms as cards, each with three real portraits of its seats; the Prometheus examples as a small block. */
-        #digitalTwinsIQView .dtw-fg-land { flex: 1 1 0%; min-height: 0; overflow: auto; padding: 2px 2px 14px; display: flex; flex-direction: column; gap: 18px; }
+        #digitalTwinsIQView .dtw-fg-land { padding: 2px 2px 14px; display: flex; flex-direction: column; gap: 18px; }
         #digitalTwinsIQView .dtw-fg-land-hero { padding: 8px 0 0; max-width: 860px; }
         #digitalTwinsIQView .dtw-fg-land-h { margin: 0; font-size: 28px; line-height: 34px; font-weight: 300; letter-spacing: -0.012em; color: var(--dtw-ink); overflow-wrap: anywhere; }
         #digitalTwinsIQView .dtw-fg-land-h b { font-weight: 700; }
@@ -51193,10 +51196,6 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         }
         /* under about 1100 px the row becomes two rows of smaller circles and the tally sits under the thread */
         @media (max-width: 1100px) {
-            #digitalTwinsIQView .dtw-body.is-fg { overflow: auto; display: block; }
-            #digitalTwinsIQView .dtw-body.is-fg #dtwTabPanel.active { display: block; }
-            #digitalTwinsIQView .dtw-fg { display: block; }
-            #digitalTwinsIQView .dtw-fg > * { margin-bottom: 10px; }
             #digitalTwinsIQView .dtw-fg-seatrow { --seat-pitch: 88; --circ: 48px; gap: 2px 6px; }
             #digitalTwinsIQView .dtw-fg-circ { font-size: 14px; }
             #digitalTwinsIQView .dtw-fg-circ .mark { width: 14px; height: 14px; }
@@ -51205,13 +51204,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             #digitalTwinsIQView .dtw-fg-seat .ag { font-size: 10px; line-height: 13px; }
             #digitalTwinsIQView .dtw-fg-fq { font-size: 19px; line-height: 24px; }
             #digitalTwinsIQView .dtw-fg-main { display: block; }
-            #digitalTwinsIQView .dtw-fg-land { overflow: visible; }
             #digitalTwinsIQView .dtw-fg-steps { grid-template-columns: minmax(0, 1fr); }
             #digitalTwinsIQView .dtw-fg-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
             #digitalTwinsIQView .dtw-fg-land-h { font-size: 24px; line-height: 30px; }
-            #digitalTwinsIQView .dtw-fg-stream { overflow: visible; }
-            #digitalTwinsIQView .dtw-fg-msgs { min-height: 0; }
-            #digitalTwinsIQView .dtw-fg-tally { max-height: none; overflow: visible; margin-top: 14px; }
+            #digitalTwinsIQView .dtw-fg-tally { position: static; margin-top: 14px; }
         }
         @media (max-width: 760px) { #digitalTwinsIQView .dtw-fg-cards { grid-template-columns: minmax(0, 1fr); } }
         /* ---- how to drawer ---- */
@@ -52267,7 +52263,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var h = el('dtwPnConsole'); if (!h) return;
                 syncFgBody();
                 var s = S.session;
-                if (!s) { clearRoomPoll(); clearPortraitTimers(); fgReset(null); h.innerHTML = noRoomHtml(); fgLayoutSeats(); return; }
+                if (!s) { var had = S.fg.sid != null; clearRoomPoll(); clearPortraitTimers(); fgReset(null); h.innerHTML = noRoomHtml(); fgLayoutSeats(); if (had) fgScrollTop(); return; }
+                var fresh = S.fg.sid !== s.id;
                 fgReset(s.id);
                 var g = s.group || {}, roster = g.roster || [], fq = focusQ(), fly = flyQ();
                 var typed = (el('dtwPnQ') || {}).value || '', typedOpts = (el('dtwPnOptions') || {}).value || '';
@@ -52278,7 +52275,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 out += popHtml();
                 h.innerHTML = out;
                 fgLayoutSeats();
-                fgScrollEnd();
+                if (fresh) fgScrollTop();
                 setAskEnabled(true);
                 if (S.fg.seat != null) { renderSeatPanel(); placePop(); }
                 schedulePortraitRefresh();
@@ -52291,18 +52288,28 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 el('dtwFgHero').innerHTML = heroHtml(s, g, roster, fq, fly);
                 fgLayoutSeats();
                 var tr = el('dtwPnTranscript');
-                if (tr) { var keep = tr.scrollTop, atEnd = tr.scrollHeight - tr.scrollTop - tr.clientHeight < 60; tr.innerHTML = threadHtml(s, roster, fq, fly); tr.scrollTop = atEnd ? tr.scrollHeight : keep; }
+                if (tr) { var atEnd = fgAtEnd(); tr.innerHTML = threadHtml(s, roster, fq, fly); if (atEnd) fgScrollEnd(); }
                 var ta = el('dtwFgTally'); if (ta) ta.innerHTML = tallyHtml(s, g, roster, fq);
                 var top = h.querySelector('.dtw-fg-top'); if (top) top.outerHTML = topHtml(s);
                 setAskEnabled(true);
                 if (S.fg.seat != null) placePop();
             }
-            function fgScrollEnd() { var tr = el('dtwPnTranscript'); if (tr) tr.scrollTop = tr.scrollHeight; }
+            // The view body is the page: it scrolls through the band, the thread and the tally (Jenna 2026-10-27: 'allow this page to scroll').
+            function fgScroller() { return document.querySelector('#digitalTwinsIQView .dtw-body'); }
+            function fgAtEnd() { var sc = fgScroller(); return !sc || (sc.scrollHeight - sc.scrollTop - sc.clientHeight < 80); }
+            function fgScrollEnd() { var sc = fgScroller(); if (sc) sc.scrollTop = sc.scrollHeight; }
+            function fgScrollTop() { var sc = fgScroller(); if (sc) sc.scrollTop = 0; }
+            // bring a block into the scrollport: its top a little under the edge when it sits below, or above, the visible band
+            function fgScrollTo(node, pad) {
+                var sc = fgScroller(); if (!sc || !node) return;
+                var sr = sc.getBoundingClientRect(), nr = node.getBoundingClientRect();
+                if (nr.top < sr.top + 8 || nr.bottom > sr.bottom - 8) sc.scrollTop += nr.top - sr.top - (pad == null ? 12 : pad);
+            }
             // the note under the composer; when it appears the composer grows, so a thread that sat at its end stays there
-            function liveNote(text) { var live = el('dtwPnLive'); if (!live) return; var tr = el('dtwPnTranscript'), atEnd = tr ? (tr.scrollHeight - tr.scrollTop - tr.clientHeight < 60) : false; live.textContent = text || ''; if (tr && atEnd) tr.scrollTop = tr.scrollHeight; }
-            function fgShown() { fgLayoutSeats(); fgScrollEnd(); if (S.fg.seat != null) placePop(); }
-            window.dtwFgToggle = function(qid) { S.fg.open[qid] = !S.fg.open[qid]; var tr = el('dtwPnTranscript'), keep = tr ? tr.scrollTop : 0; fgRefresh(); var blk = document.querySelector('#dtwPnTranscript [data-q="' + esc(qid) + '"]'); if (tr) tr.scrollTop = keep; if (blk && S.fg.open[qid]) blk.scrollIntoView({ block: 'nearest' }); };
-            window.dtwFgEarlier = function(qid, on) { S.fg.earlier[qid] = !!on; var tr = el('dtwPnTranscript'), keep = tr ? tr.scrollTop : 0; fgRefresh(); if (tr) tr.scrollTop = on ? keep : Math.min(keep, tr.scrollHeight); };
+            function liveNote(text) { var live = el('dtwPnLive'); if (!live) return; live.textContent = text || ''; }
+            function fgShown() { fgLayoutSeats(); if (S.fg.seat != null) placePop(); }
+            window.dtwFgToggle = function(qid) { S.fg.open[qid] = !S.fg.open[qid]; fgRefresh(); var blk = document.querySelector('#dtwPnTranscript [data-q="' + esc(qid) + '"]'); if (blk && S.fg.open[qid]) fgScrollTo(blk); };
+            window.dtwFgEarlier = function(qid, on) { S.fg.earlier[qid] = !!on; fgRefresh(); if (!on) { var blk = document.querySelector('#dtwPnTranscript [data-q="' + esc(qid) + '"]'); if (blk) fgScrollTo(blk); } };
             // ---- the drawers: the saved rooms behind Rooms, the room builder behind New room (the drawer component How to uses).
             function drawer(id, scrimId, on, onOpen) {
                 var d = el(id), sc = el(scrimId); if (!d) return;
@@ -52456,11 +52463,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     S.fg.open[d.question.id] = true;
                     renderPanelConsole();
                     liveNote(d.note || d.question.note || 'You asked this earlier in this session; here is that answer.');
-                    var blk = document.querySelector('#dtwPnTranscript [data-q="' + esc(d.question.id) + '"]'); if (blk) blk.scrollIntoView({ block: 'start', behavior: 'smooth' });
+                    var blk = document.querySelector('#dtwPnTranscript [data-q="' + esc(d.question.id) + '"]'); if (blk) fgScrollTo(blk);
                     return;
                 }
                 S.session.questions.push(d.question); if (d.questions_paid != null) S.session.questions_paid = d.questions_paid;
                 renderPanelConsole();
+                var nb = document.querySelector('#dtwPnTranscript [data-q="' + esc(d.question.id) + '"]'); if (nb) fgScrollTo(nb); else fgScrollEnd();
             };
             // ---- who they are: the seat popover. The bio the seat acts on (roster[].persona) when the room has written it, else what the twin
             // carries for the seat; then what this seat said in the room, across every question (answers[].seat). Jenna 2026-10-26: 'If you click
@@ -52478,15 +52486,18 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var root = el('dtwPnConsole'), p = el('dtwSeatPop'); if (!root || !p || S.fg.seat == null) return;
                 if (!anchor || !(anchor instanceof Element) || !root.contains(anchor)) anchor = root.querySelector('.dtw-fg-seat[data-seat="' + S.fg.seat + '"]') || root.querySelector('[data-fg-seat="' + S.fg.seat + '"]');
                 p.classList.add('open'); p.classList.remove('up'); p.style.removeProperty('--pop-max');
-                var rr = root.getBoundingClientRect(), pw = p.offsetWidth;
-                if (!anchor) { p.style.left = Math.max(8, rr.width - pw - 8) + 'px'; p.style.top = '8px'; p.style.setProperty('--pop-max', Math.max(160, rr.height - 24) + 'px'); return; }
+                var rr = root.getBoundingClientRect(), pw = p.offsetWidth, sc = fgScroller(), sr = sc ? sc.getBoundingClientRect() : rr;
+                var vTop = Math.max(rr.top, sr.top), vBottom = Math.min(rr.bottom, sr.bottom);
+                if (!anchor) { p.style.left = Math.max(8, rr.width - pw - 8) + 'px'; p.style.top = Math.max(8, vTop - rr.top + 8) + 'px'; p.style.setProperty('--pop-max', Math.max(160, vBottom - vTop - 40) + 'px'); return; }
                 var ar = anchor.getBoundingClientRect(), cx = ar.left - rr.left + ar.width / 2;
-                var left = Math.max(8, Math.min(cx - 48, rr.width - pw - 8)), top = ar.bottom - rr.top + 10, below = rr.height - top - 10, above = ar.top - rr.top - 20;
-                if (below < 260 && above > below) { p.classList.add('up'); p.style.setProperty('--pop-max', Math.max(160, Math.min(above, 560)) + 'px'); top = Math.max(4, ar.top - rr.top - 10 - p.offsetHeight); }
-                else p.style.setProperty('--pop-max', Math.max(160, Math.min(below, 560)) + 'px');
+                var left = Math.max(8, Math.min(cx - 48, rr.width - pw - 8)), top = ar.bottom - rr.top + 10, below = vBottom - ar.bottom - 20, above = ar.top - vTop - 20;
+                if (below < 260 && above > Math.max(below, 300)) { p.classList.add('up'); p.style.setProperty('--pop-max', Math.max(160, Math.min(above, 560)) + 'px'); top = Math.max(4, ar.top - rr.top - 10 - p.offsetHeight); }
+                else p.style.setProperty('--pop-max', Math.max(160, Math.min(Math.max(below, 240), 560)) + 'px');
                 p.style.left = left + 'px'; p.style.top = top + 'px';
                 var arrow = p.querySelector('.arrow'); if (arrow) arrow.style.left = Math.max(12, Math.min(pw - 24, cx - left - 6)) + 'px';
                 var inner = el('dtwSeatBody'); if (inner) inner.scrollTop = 0;
+                // the page scrolls, so a card that runs past the bottom edge is brought up, never past its own seat
+                if (sc && !p.classList.contains('up')) { var pr = p.getBoundingClientRect(), over = pr.bottom - (sr.bottom - 10); if (over > 0) sc.scrollTop += Math.min(over, Math.max(0, ar.top + 40 - sr.top)); }
             }
             function seatSaid(s, seatNo) { var out = []; (s.questions || []).forEach(function(q, i) { var a = (q.answers || []).filter(function(x) { return Number(x.seat) === Number(seatNo); })[0]; if (a && (a.line || a.option_label)) out.push({ i: i, q: q, a: a }); }); return out; }
             function bioParas(text) {
