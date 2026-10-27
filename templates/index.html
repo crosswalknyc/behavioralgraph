@@ -50882,13 +50882,13 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-chip { appearance: none; background: transparent; border: 1px solid var(--dtw-rule); color: var(--dtw-body); border-radius: 999px; padding: 0.26rem 0.7rem; font-size: 0.7rem; cursor: pointer; line-height: 1.3; }
         #digitalTwinsIQView .dtw-chip:hover { color: var(--dtw-ink); border-color: var(--dtw-body); }
         #digitalTwinsIQView .dtw-chip.on { border-color: var(--dtw-accent); color: var(--dtw-ink); background: var(--dtw-accent-soft); }
-        #digitalTwinsIQView .dtw-tag { display: inline-block; border: 1px solid var(--dtw-rule); color: var(--dtw-mute); border-radius: 999px; padding: 0.1rem 0.5rem; font-size: 0.6rem; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 600; vertical-align: middle; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        #digitalTwinsIQView .dtw-tag { display: inline-block; border: 1px solid var(--dtw-rule); color: var(--dtw-mute); border-radius: 999px; padding: 0.1rem 0.5rem; font-size: 0.6rem; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 600; vertical-align: middle; max-width: 100%; white-space: normal; overflow-wrap: anywhere; line-height: 1.5; text-align: left; }
         #digitalTwinsIQView .dtw-toggle { display: inline-flex; border: 1px solid var(--dtw-rule); border-radius: 999px; overflow: hidden; }
         #digitalTwinsIQView .dtw-toggle button { appearance: none; background: transparent; border: 0; color: var(--dtw-body); padding: 0.3rem 0.75rem; font-size: 0.68rem; font-weight: 600; letter-spacing: 0.06em; cursor: pointer; }
         #digitalTwinsIQView .dtw-toggle button.on { background: var(--dtw-accent-soft); color: var(--dtw-ink); }
         /* ---- data ---- */
         #digitalTwinsIQView .dtw-bar { display: grid; grid-template-columns: minmax(90px, 34%) 1fr minmax(64px, auto); align-items: center; gap: 0.6rem; font-size: 0.76rem; margin: 0.26rem 0; }
-        #digitalTwinsIQView .dtw-bar > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        #digitalTwinsIQView .dtw-bar > span:first-child { overflow-wrap: anywhere; line-height: 1.35; }
         #digitalTwinsIQView .dtw-bar .t { height: 6px; background: var(--dtw-track); border-radius: 999px; overflow: hidden; }
         #digitalTwinsIQView .dtw-bar .f { height: 100%; background: var(--dtw-accent); border-radius: 999px; }
         #digitalTwinsIQView .dtw-bar .f.alt { background: var(--dtw-second); }
@@ -50907,7 +50907,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-twin-card { background: var(--dtw-raised); border: 1px solid var(--dtw-rule); border-radius: 12px; padding: 0.85rem 0.95rem 0.8rem; cursor: pointer; min-width: 0; transition: border-color .12s; }
         #digitalTwinsIQView .dtw-twin-card:hover { border-color: var(--dtw-body); }
         #digitalTwinsIQView .dtw-twin-card.on { border-color: var(--dtw-accent); box-shadow: inset 0 0 0 1px var(--dtw-accent); }
-        #digitalTwinsIQView .dtw-twin-card .nm { font-weight: 600; font-size: 0.95rem; letter-spacing: -0.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        #digitalTwinsIQView .dtw-twin-card .nm { font-weight: 600; font-size: 0.95rem; letter-spacing: -0.01em; overflow-wrap: anywhere; line-height: 1.3; }
         #digitalTwinsIQView .dtw-twin-card .ln { font-size: 0.74rem; color: var(--dtw-body); margin-top: 0.18rem; }
         #digitalTwinsIQView .dtw-twin-card .ln b { color: var(--dtw-ink); font-weight: 500; font-variant-numeric: tabular-nums; }
         #digitalTwinsIQView .dtw-twin-card .ft { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.55rem; }
@@ -50949,19 +50949,48 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-roomcol { border-right: 1px solid var(--dtw-rule); overflow: auto; padding: 0.8rem 0.9rem 1rem; min-height: 0; }
         #digitalTwinsIQView .dtw-roomcol h4 { margin: 0 0 0.6rem; }
         #digitalTwinsIQView .dtw-room { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 0.55rem; }
-        #digitalTwinsIQView .dtw-seat { background: var(--dtw-page); border: 1px solid var(--dtw-rule); border-radius: 12px; padding: 0.65rem 0.45rem 0.6rem; text-align: center; min-width: 0; }
+        #digitalTwinsIQView .dtw-seat { background: var(--dtw-page); border: 1px solid var(--dtw-rule); border-radius: 12px; padding: 0.65rem 0.45rem 0.6rem; text-align: center; min-width: 0; cursor: pointer; transition: border-color .12s; }
+        #digitalTwinsIQView .dtw-seat:hover { border-color: var(--dtw-body); }
+        #digitalTwinsIQView .dtw-seat.on { border-color: var(--dtw-accent); box-shadow: inset 0 0 0 1px var(--dtw-accent); }
+        #digitalTwinsIQView .dtw-seat .ans { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 18px; padding: 0 6px; border-radius: 999px; margin-top: 0.35rem; font-size: 0.6rem; font-weight: 700; letter-spacing: .06em; color: var(--dtw-accent-ink); background: var(--dtw-accent); }
+        #digitalTwinsIQView .dtw-seat .ans.wait { background: transparent; color: var(--dtw-mute); border: 1px dashed var(--dtw-rule); }
         #digitalTwinsIQView .dtw-ava { position: relative; width: 76px; height: 76px; border-radius: 18px; margin: 0 auto 0.5rem; background: var(--dtw-tile); color: #E9E8E1; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 1.3rem; letter-spacing: -0.02em; overflow: hidden; flex: 0 0 auto; box-shadow: inset 0 0 0 2px var(--hue, #3358FF); }
         #digitalTwinsIQView .dtw-ava img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
         #digitalTwinsIQView .dtw-ava-sm { width: 36px; height: 36px; border-radius: 10px; font-size: 0.76rem; margin: 0; box-shadow: inset 0 0 0 1.5px var(--hue, #3358FF); }
-        #digitalTwinsIQView .dtw-seat .nm { font-weight: 600; font-size: 0.82rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        #digitalTwinsIQView .dtw-seat .sm { font-size: 0.7rem; color: var(--dtw-body); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 0.05rem; }
+        #digitalTwinsIQView .dtw-seat .nm { font-weight: 600; font-size: 0.82rem; overflow-wrap: anywhere; line-height: 1.25; }
+        #digitalTwinsIQView .dtw-seat .sm { font-size: 0.7rem; color: var(--dtw-body); overflow-wrap: anywhere; line-height: 1.3; margin-top: 0.05rem; }
         #digitalTwinsIQView .dtw-seat .dtw-tag { margin-top: 0.35rem; }
         #digitalTwinsIQView .dtw-transcol { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
         #digitalTwinsIQView .dtw-transcript { flex: 1 1 0%; min-height: 0; overflow: auto; padding: 0.8rem 1.15rem 0.6rem; }
         #digitalTwinsIQView .dtw-q { padding: 0.8rem 0 0.9rem; border-bottom: 1px solid var(--dtw-hair); }
         #digitalTwinsIQView .dtw-q:last-child { border-bottom: 0; }
         #digitalTwinsIQView .dtw-q .ask { font-weight: 600; font-size: 0.92rem; line-height: 1.35; display: flex; gap: 0.5rem; align-items: baseline; flex-wrap: wrap; }
-        #digitalTwinsIQView .dtw-q .read { font-size: 0.84rem; margin: 0.55rem 0 0.2rem; font-weight: 500; }
+        #digitalTwinsIQView .dtw-q .read { font-size: 0.84rem; margin: 0.55rem 0 0.2rem; font-weight: 500; line-height: 1.55; overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-q .ask > span, #digitalTwinsIQView .dtw-voice .line, #digitalTwinsIQView .dtw-q .dtw-bar > span:first-child { overflow-wrap: anywhere; }
+        /* the engine's context fields (2026-10-26): what the room knew, a line under each bar, the moderator's note, a voice's because */
+        #digitalTwinsIQView .dtw-facts { margin: 0.6rem 0 0.2rem; padding: 0.55rem 0.75rem 0.6rem; background: var(--dtw-page); border: 1px solid var(--dtw-hair); border-radius: 10px; }
+        #digitalTwinsIQView .dtw-facts h4 { margin: 0 0 0.3rem; }
+        #digitalTwinsIQView .dtw-facts li { font-size: 0.78rem; color: var(--dtw-body); line-height: 1.45; margin: 0.15rem 0 0.15rem 1rem; overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-facts ul { margin: 0; padding: 0; }
+        #digitalTwinsIQView .dtw-ctx { grid-column: 1 / -1; font-size: 0.72rem; color: var(--dtw-mute); line-height: 1.4; margin: -0.1rem 0 0.35rem; overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-ctx .dtw-tag { margin-right: 0.4rem; }
+        #digitalTwinsIQView .dtw-bars .dtw-bar { margin-top: 0.4rem; }
+        #digitalTwinsIQView .dtw-note { font-size: 0.78rem; color: var(--dtw-body); line-height: 1.5; margin: 0.35rem 0 0.2rem; border-left: 2px solid var(--dtw-rule); padding-left: 0.65rem; overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-voice .because { display: block; font-size: 0.72rem; color: var(--dtw-mute); margin-top: 0.2rem; line-height: 1.4; }
+        #digitalTwinsIQView .dtw-voice .dtw-ava { cursor: pointer; }
+        #digitalTwinsIQView .dtw-failed { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; margin-top: 0.6rem; font-size: 0.82rem; color: var(--dtw-ink); border-left: 2px solid var(--dtw-second); padding-left: 0.65rem; line-height: 1.5; }
+        #digitalTwinsIQView .dtw-live-tally { margin-top: 0.5rem; }
+        #digitalTwinsIQView .dtw-live-tally .f { background: var(--dtw-body); }
+        /* the seat panel: who they are and what they said (the same drawer component How to uses) */
+        #digitalTwinsIQView .dtw-drawer-seat { width: min(470px, 94vw); }
+        #digitalTwinsIQView .dtw-ava-lg { width: 108px; height: 108px; border-radius: 22px; font-size: 1.9rem; }
+        #digitalTwinsIQView .dtw-seat-hero { display: flex; gap: 1.1rem; align-items: center; margin-top: 0.9rem; }
+        #digitalTwinsIQView .dtw-seat-hero h2 { margin: 0; font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-seat-hero .facts { font-size: 0.84rem; color: var(--dtw-body); margin-top: 0.25rem; }
+        #digitalTwinsIQView .dtw-seat-said { border-top: 1px solid var(--dtw-hair); padding: 0.75rem 0 0.85rem; }
+        #digitalTwinsIQView .dtw-seat-said .q { font-size: 0.72rem; color: var(--dtw-mute); line-height: 1.4; overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-seat-said .pick { margin: 0.35rem 0; }
+        #digitalTwinsIQView .dtw-seat-said .line { font-size: 0.84rem; line-height: 1.5; overflow-wrap: anywhere; }
         #digitalTwinsIQView .dtw-btn.busy, #digitalTwinsIQView .dtw-btn:disabled { opacity: 0.55; cursor: progress; }
         #digitalTwinsIQView .dtw-working { display: flex; align-items: center; gap: 0.55rem; margin-top: 0.6rem; font-size: 0.8rem; color: var(--dtw-body); }
         #digitalTwinsIQView .dtw-working .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--dtw-accent); box-shadow: 0 0 0 0 rgba(199,242,62,0.5); animation: dtwPulse 1.5s ease-in-out infinite; flex: none; }
@@ -51123,6 +51152,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 <button type="button" class="dtw-btn dtw-btn-sm dtw-drawer-x" onclick="dtwHowtoOpen(false)">Close</button>
                 <div id="dtwHowto"></div>
             </aside>
+            <div id="dtwSeatScrim" class="dtw-scrim" onclick="dtwSeatOpen(null)"></div>
+            <aside id="dtwSeatDrawer" class="dtw-drawer dtw-drawer-seat" role="dialog" aria-label="Who they are" aria-hidden="true">
+                <button type="button" class="dtw-btn dtw-btn-sm dtw-drawer-x" onclick="dtwSeatOpen(null)">Close</button>
+                <div id="dtwSeatBody"></div>
+            </aside>
         </div>
         <script>
         (function() {
@@ -51237,7 +51271,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 d.setAttribute('aria-hidden', on ? 'false' : 'true');
                 if (on) { renderHowto(); if (!S.howto) api('/how-to').then(function(x) { S.howto = x; renderHowto(); renderEmptyAll(); }).catch(function() {}); }
             };
-            document.addEventListener('keydown', function(e) { if (e.key === 'Escape') { var d = el('dtwHowtoDrawer'); if (d && d.classList.contains('open')) dtwHowtoOpen(false); } });
+            document.addEventListener('keydown', function(e) { if (e.key !== 'Escape') return; var sd = el('dtwSeatDrawer'); if (sd && sd.classList.contains('open') && typeof dtwSeatOpen === 'function') { dtwSeatOpen(null); return; } var d = el('dtwHowtoDrawer'); if (d && d.classList.contains('open')) dtwHowtoOpen(false); });
             // The empty state of a lab tab: the directions once, short. The full text lives in the drawer.
             function renderEmpty(hostId, id) {
                 var h = el(hostId); if (!h) return;
@@ -51318,7 +51352,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 try { var d = await api('/' + key); } catch (e) { if (page) page.innerHTML = '<div class="dtw-card dtw-muted">' + esc(e.message) + '</div>'; return; }
                 var switched = S.key && S.key !== key;
                 S.twin = d.twin; S.key = key; S.summary = d.summary; S.openRun = runId || null; S.session = null; S.plan = null; S.spendDay = 1;
-                clearPortraitTimers();
+                clearPortraitTimers(); try { dtwSeatOpen(null); } catch (_) {}
                 fillTwinSelects(); renderSpine(); renderLibrary(); renderTwin(); syncInputCards();
                 if (switched) { ['dtwGlResults', 'dtwLaResults', 'dtwSpResults', 'dtwPnConsole'].forEach(function(id) { if (el(id)) el(id).innerHTML = ''; }); }
                 var run = runId ? (S.twin.runs || []).filter(function(x) { return x.id === runId; })[0] : null;
@@ -51639,13 +51673,13 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     return;
                 }
                 S.twin.panel_sessions = (S.twin.panel_sessions || []).filter(function(x) { return x.id !== sid; });
-                if (S.session && S.session.id === sid) { S.session = null; S.panelKind = ''; clearPortraitTimers(); renderPanelConsole(); }
+                if (S.session && S.session.id === sid) { S.session = null; S.panelKind = ''; clearPortraitTimers(); dtwSeatOpen(null); renderPanelConsole(); }
                 var r = S.runs.filter(function(x) { return x.key === S.key; })[0]; if (r) r.panel_sessions = S.twin.panel_sessions.length;
                 renderSpine(); renderLibrary(); renderPanelSessions();
                 if (el('dtwPnStatus')) el('dtwPnStatus').textContent = (d && d.message) || 'Room deleted.';
                 try { dtwLoadList(true); } catch (_) {}
             };
-            window.dtwPanelResume = function(sid) { S.session = ((S.twin || {}).panel_sessions || []).filter(function(s) { return s.id === sid; })[0] || null; S.panelKind = ''; renderPanelSessions(); renderPanelConsole(); };
+            window.dtwPanelResume = function(sid) { S.session = ((S.twin || {}).panel_sessions || []).filter(function(s) { return s.id === sid; })[0] || null; S.panelKind = ''; dtwSeatOpen(null); renderPanelSessions(); renderPanelConsole(); };
             window.dtwPanelOpen = async function() {
                 var key = S.key; if (!key) { el('dtwPnStatus').textContent = 'Pick a twin on the Twins tab first.'; return; }
                 var segs = (el('dtwPnSegments').value || '').split('\n').map(function(s) { return s.trim(); }).filter(Boolean).map(function(s) { return { label: s }; });
@@ -51657,10 +51691,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 await dtwOpen(key, null, d.session.id, null, 'panel');
             };
             window.dtwPanelKind = function(k) { S.panelKind = (S.panelKind === k) ? '' : k; document.querySelectorAll('#dtwPnKinds .dtw-chip').forEach(function(b) { b.classList.toggle('on', b.getAttribute('data-k') === S.panelKind); }); var o = el('dtwPnOptions'); if (o) o.style.display = (S.panelKind === 'multiple_choice' || S.panelKind === 'ab') ? 'block' : 'none'; };
-            window.dtwPanelAsk = async function(presetQ) {
+            window.dtwPanelAsk = async function(presetQ, askAgain) {
                 if (!S.session) return;
                 var inp = el('dtwPnQ'); var q = presetQ || (inp && inp.value.trim());
-                if (!q) return;
+                if (!q) { if (inp) { try { inp.focus(); } catch (_) {} } return; }
                 var inflight = (S.session.questions || []).filter(qInFlight);
                 if (inflight.length) {
                     var same = inflight.some(function(x) { return normQ(x.q) === normQ(q); });
@@ -51671,25 +51705,38 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 S.asking = true; setAskEnabled(false);
                 var body = { q: q };
                 if (S.panelKind) body.kind = S.panelKind;
+                if (askAgain) body.ask_again = true;
                 var optsRaw = (el('dtwPnOptions') || {}).value || '';
                 if (optsRaw.trim()) body.options = optsRaw.split(/\n|,/).map(function(s) { return s.trim(); }).filter(Boolean);
                 var live = el('dtwPnLive'); if (live) live.textContent = 'Asking the room...';
                 if (inp && !presetQ) inp.value = '';
                 try { var d = await api('/' + S.key + '/panel/' + S.session.id + '/ask', { method: 'POST', body: JSON.stringify(body) }); }
-                catch (e) { S.asking = false; setAskEnabled(true); if (live) live.textContent = e.message; return; }
+                catch (e) { S.asking = false; setAskEnabled(true); if (live) live.textContent = e.message; if (inp && !presetQ && !inp.value) inp.value = q; return; }
                 S.asking = false;
-                S.session.questions = S.session.questions || []; S.session.questions.push(d.question); S.session.questions_paid = d.questions_paid;
+                S.session.questions = S.session.questions || [];
+                if (d.duplicate && d.question) {
+                    // the same question again in this room: the record it already has comes back with a note; nothing was charged, no second job
+                    adoptQuestion(d.question, true);
+                    renderPanelConsole();
+                    var live2 = el('dtwPnLive'); if (live2) live2.textContent = d.note || d.question.note || 'You asked this earlier in this session; here is that answer.';
+                    var blk = document.querySelector('#dtwPnTranscript .dtw-q[data-q="' + esc(d.question.id) + '"]'); if (blk) blk.scrollIntoView({ block: 'start', behavior: 'smooth' });
+                    return;
+                }
+                S.session.questions.push(d.question); if (d.questions_paid != null) S.session.questions_paid = d.questions_paid;
                 renderPanelConsole();
             };
             // ---- the room at work: a question answers as a job over a minute or two; the page shows the stage and polls until it lands.
             function normQ(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9$ ]+/g, ' ').replace(/\s+/g, ' ').trim(); }
-            function qInFlight(q) { var st = String((q || {}).stage || ''); return !!st && st !== 'done' && st !== 'stopped' && !(q || {}).finished_at; }
+            var IN_FLIGHT = { 'researching': 1, 'the room is thinking': 1, 'moderator is reading': 1, 'picking it back up': 1 };
+            function qInFlight(q) { var st = String((q || {}).stage || ''); return !!IN_FLIGHT[st] && !(q || {}).finished_at; }
+            function qFailed(q) { return String((q || {}).stage || '') === 'failed'; }
             function qElapsedS(q) { var t = Date.parse(String((q || {}).started_at || (q || {}).asked_at || '')); if (!isFinite(t)) return 0; return Math.max(0, Math.round((Date.now() - t) / 1000)); }
             function stageWords(q) {
                 var st = String(q.stage || ''), n = (q.answers || []).length, seats = Number(q.seats_total || ((S.session || {}).group || {}).in_room || 0);
                 if (st === 'researching') return 'getting the facts on the question';
                 if (st === 'the room is thinking') return 'the twins are answering' + (seats ? ', ' + n + ' of ' + seats : '');
                 if (st === 'moderator is reading') return 'the moderator is reading the room';
+                if (st === 'picking it back up') return 'picking the question back up';
                 return st.replace(/_/g, ' ');
             }
             function workingLine(q) {
@@ -51707,13 +51754,13 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 tr.scrollTop = atEnd ? tr.scrollHeight : keep;
                 setAskEnabled(true);
             }
-            function adoptQuestion(fq) {
+            function adoptQuestion(fq, force) {
                 if (!fq || !fq.id || !S.session) return false;
                 var qs = S.session.questions = S.session.questions || [];
                 for (var i = 0; i < qs.length; i++) {
                     if (qs[i].id !== fq.id) continue;
                     var cq = qs[i];
-                    var moved = cq.stage !== fq.stage || (cq.answers || []).length !== (fq.answers || []).length || (!!cq.read) !== (!!fq.read) || (cq.distribution || []).length !== (fq.distribution || []).length;
+                    var moved = force || cq.stage !== fq.stage || (cq.answers || []).length !== (fq.answers || []).length || (!!cq.read) !== (!!fq.read) || (cq.distribution || []).length !== (fq.distribution || []).length || (cq.options || []).length !== (fq.options || []).length || (cq.note || '') !== (fq.note || '');
                     if (!moved) return false;
                     if (!fq.job_id && cq.job_id) fq.job_id = cq.job_id;
                     qs[i] = fq; return true;
@@ -51747,6 +51794,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         ((d.session || {}).questions || []).forEach(function(fq) { if (adoptQuestion(fq)) changed = true; });
                         if (d.session && d.session.updated_at) S.session.updated_at = d.session.updated_at;
                         if (d.session && d.session.questions_paid != null) S.session.questions_paid = d.session.questions_paid;
+                        var freshR = ((d.session || {}).group || {}).roster || [], curR = (S.session.group || {}).roster || [];
+                        freshR.forEach(function(fr) { var cur = curR.filter(function(r) { return r.seat === fr.seat; })[0]; if (!cur) return; ['persona', 'memory', 'portrait_url', 'portrait_hash'].forEach(function(k) { if (fr[k] != null && JSON.stringify(cur[k]) !== JSON.stringify(fr[k])) { cur[k] = fr[k]; changed = true; } }); });
                     } catch (_) {}
                     // the seats land one by one on the job document; the session only moves at the stage boundaries
                     for (var i = 0; i < open.length; i++) {
@@ -51756,6 +51805,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     if (!S.session || S.session.id !== sid) { clearRoomPoll(); return; }
                     if (changed) {
                         rerenderTranscript();
+                        var room = el('dtwPnSeats'); if (room) room.innerHTML = roomCards(S.session.group || {});
+                        var sd = el('dtwSeatDrawer'); if (sd && sd.classList.contains('open')) renderSeatPanel();
                         var ss = (S.twin || {}).panel_sessions || []; for (var k = 0; k < ss.length; k++) { if (ss[k].id === sid) ss[k] = S.session; }
                         renderPanelSessions();
                     }
@@ -51770,36 +51821,120 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             function seatHue(seat, i) { return hueFor(seat && seat.seat != null ? Number(seat.seat) - 1 : i); }
             function thumb(url) { url = String(url || ''); if (!url || /[?&]size=/.test(url)) return url; return url + (url.indexOf('?') >= 0 ? '&' : '?') + 'size=128'; }
             function avatar(seat, i, small) {
-                var hue = seatHue(seat, i), nm = titleCase((seat || {}).name || '');
+                var hue = seatHue(seat, i), nm = titleCase((seat || {}).name || ''), lg = small === 'lg'; small = small === true;
                 var src = (seat || {}).portrait_url ? (small ? thumb(seat.portrait_url) : seat.portrait_url) : '';
                 var img = src ? '<img src="' + esc(src) + '" alt="" loading="lazy" onerror="this.remove()">' : '';
-                return '<div class="dtw-ava' + (small ? ' dtw-ava-sm' : '') + '" style="--hue:' + hue + '" title="' + esc(nm) + '"><span>' + esc(initials(nm)) + '</span>' + img + '</div>';
+                return '<div class="dtw-ava' + (small ? ' dtw-ava-sm' : (lg ? ' dtw-ava-lg' : '')) + '" style="--hue:' + hue + '" title="' + esc(nm) + '"><span>' + esc(initials(nm)) + '</span>' + img + '</div>';
             }
             function multiSeg(roster) { var seen = {}; (roster || []).forEach(function(r) { seen[r.segment || ''] = 1; }); return Object.keys(seen).length > 1; }
             function seatFor(voice, roster) {
                 roster = roster || [];
+                if (voice && voice.seat != null) { var bySeat = roster.filter(function(r) { return Number(r.seat) === Number(voice.seat); })[0]; if (bySeat) return bySeat; }
                 var hit = roster.filter(function(r) { return r.name === voice.name && String(r.age) === String(voice.age) && r.city === voice.city; })[0];
                 if (!hit) hit = roster.filter(function(r) { return r.name === voice.name && String(r.age) === String(voice.age); })[0];
                 if (!hit) hit = roster.filter(function(r) { return r.name === voice.name; })[0];
                 return hit || null;
             }
+            function latestQ() { var qs = (S.session || {}).questions || []; return qs.length ? qs[qs.length - 1] : null; }
+            function optObjs(q) { var o = (q || {}).options || []; return (o.length && o[0] && typeof o[0] === 'object') ? o : []; }   // older records carry the options as plain strings
+            function optionIndex(q, optId) { var opts = optObjs(q); for (var i = 0; i < opts.length; i++) { if (String(opts[i].id) === String(optId)) return i; } return -1; }
+            function optionLetter(q, optId) { var i = optionIndex(q, optId); return i >= 0 ? String.fromCharCode(65 + i) : (String(optId || '') === 'other' ? 'Other' : ''); }
+            function optionLabelOf(q, optId) { var i = optionIndex(q, optId); return i >= 0 ? (optObjs(q)[i].label || '') : ''; }
             function roomCards(g) {
-                return '<div class="dtw-room">' + (g.roster || []).map(function(r, i) { return '<div class="dtw-seat">' + avatar(r, i, false) + '<div class="nm" title="' + esc(titleCase(r.name)) + '">' + esc(titleCase(r.name)) + '</div><div class="sm" title="' + esc(r.age + ', ' + titleCase(r.city)) + '">' + esc(r.age) + ', ' + esc(titleCase(r.city)) + '</div>' + (r.segment ? '<span class="dtw-tag" title="' + esc(r.segment) + '">' + esc(r.segment) + '</span>' : '') + '</div>'; }).join('') + '</div>';
+                var q = latestQ(), fly = q && qInFlight(q), show = q && (fly || q.stage === 'done'), bySeat = {};
+                if (q) (q.answers || []).forEach(function(a) { bySeat[String(a.seat)] = a; });
+                return '<div class="dtw-room">' + (g.roster || []).map(function(r, i) {
+                    var a = bySeat[String(r.seat)], tag = '';
+                    if (show && a) { var L = optionLetter(q, a.option); tag = '<div><span class="ans" title="' + esc(a.option_label || optionLabelOf(q, a.option) || 'Answered') + '">' + (L ? esc(L) : '&#10003;') + '</span></div>'; }
+                    else if (fly) tag = '<div><span class="ans wait" title="Still answering">&middot;&middot;&middot;</span></div>';
+                    return '<div class="dtw-seat' + (S.seatOpen === Number(r.seat) ? ' on' : '') + '" data-seat="' + esc(r.seat) + '" role="button" tabindex="0" title="Who ' + esc(titleCase(r.name)) + ' is" onclick="dtwSeatOpen(' + Number(r.seat) + ')" onkeydown="if(event.key===\'Enter\'){dtwSeatOpen(' + Number(r.seat) + ');}">' + avatar(r, i, false) + '<div class="nm">' + esc(titleCase(r.name)) + '</div><div class="sm">' + esc(r.age) + ', ' + esc(titleCase(r.city)) + '</div>' + (r.segment && multiSeg(g.roster) ? '<span class="dtw-tag">' + esc(r.segment) + '</span>' : '') + tag + '</div>';
+                }).join('') + '</div>';
             }
-            function voiceRows(voices, roster) {
-                return (voices || []).map(function(v, i) { var seat = seatFor(v, roster); var idx = v.seat ? Number(v.seat) - 1 : (seat ? (roster || []).indexOf(seat) : i); var face = { name: v.name, seat: v.seat || (seat || {}).seat, portrait_url: v.portrait_url || (seat || {}).portrait_url || '' }; return '<div class="dtw-voice">' + avatar(face, idx, true) + '<div><div class="who"><b>' + esc(titleCase(v.name)) + '</b>, ' + esc(v.age) + ', ' + esc(titleCase(v.city)) + (v.segment && multiSeg(roster) ? ', ' + esc(v.segment) : '') + '</div><div class="line">' + esc(v.line) + '</div></div></div>'; }).join('');
+            function voiceRows(voices, roster, q) {
+                return (voices || []).map(function(v, i) {
+                    var seat = seatFor(v, roster); var idx = v.seat ? Number(v.seat) - 1 : (seat ? (roster || []).indexOf(seat) : i);
+                    var face = { name: v.name, seat: v.seat || (seat || {}).seat, portrait_url: v.portrait_url || (seat || {}).portrait_url || '' };
+                    var open = seat ? ' onclick="dtwSeatOpen(' + Number(seat.seat) + ')" title="Who ' + esc(titleCase(v.name)) + ' is"' : '';
+                    var a = (seat && q) ? (q.answers || []).filter(function(x) { return Number(x.seat) === Number(seat.seat); })[0] : null;
+                    var because = v.because ? 'Because ' + String(v.because).replace(/^because\s+/i, '').replace(/\.?$/, '.') : ((a && a.reason) || '');
+                    return '<div class="dtw-voice"><div' + open + ' style="flex:0 0 auto;">' + avatar(face, idx, true) + '</div><div style="min-width:0;"><div class="who"><b' + (seat ? ' style="cursor:pointer;"' + open : '') + '>' + esc(titleCase(v.name)) + '</b>, ' + esc(v.age) + ', ' + esc(titleCase(v.city)) + (v.segment && multiSeg(roster) ? ', ' + esc(v.segment) : '') + '</div><div class="line">' + esc(v.line) + (because ? '<span class="because">' + esc(because) + '</span>' : '') + '</div></div></div>';
+                }).join('');
             }
-            function distBars(rows) { return (rows || []).map(function(r) { return bar(r.label, r.pct, 100, false, pct(r.pct, 1) + ' (' + fmtN(r.people) + ')'); }).join(''); }
+            // the split: the moderator's options with the published share and the people; the raw seat tally and the option's context when the engine carries them
+            function distBars(q) {
+                var opts = optObjs(q).length ? optObjs(q) : (q.distribution || []).map(function(d) { return { label: d.label, pct: d.pct, people: d.people }; });
+                return '<div class="dtw-bars">' + opts.map(function(o) {
+                    var tally = o.tally || (o.seats_n != null && q.seats_total ? o.seats_n + ' of ' + q.seats_total : '');
+                    return bar(o.label, o.pct, 100, false, pct(o.pct, 1) + ' (' + fmtN(o.people) + ')') + ((tally || o.context) ? '<div class="dtw-ctx">' + (tally ? '<span class="dtw-tag">In the room: ' + esc(tally) + '</span>' : '') + esc(o.context || '') + '</div>' : '');
+                }).join('') + '</div>';
+            }
+            function liveTally(q) {
+                var opts = optObjs(q), seats = Number(q.seats_total || ((S.session || {}).group || {}).in_room || 0); if (!opts.length) return '';
+                var counts = {}; (q.answers || []).forEach(function(a) { counts[String(a.option)] = (counts[String(a.option)] || 0) + 1; });
+                return '<div class="dtw-live-tally">' + opts.map(function(o) { var k = counts[String(o.id)] || 0; return bar(o.label, seats ? k / seats * 100 : 0, 100, false, k + (seats ? ' of ' + seats : '') + ' so far'); }).join('') + '</div>';
+            }
+            function factsBlock(q) { var f = (q.facts_used || []).filter(Boolean); if (!f.length) return ''; return '<div class="dtw-facts"><h4>What the room knew</h4><ul>' + f.map(function(x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul></div>'; }
             function questionBlock(q, roster) {
                 var qs = (S.session || {}).questions || [], at = qs.indexOf(q), again = false;
                 for (var j = 0; j < at; j++) { if (normQ(qs[j].q) === normQ(q.q) && (qs[j].kind || '') === (q.kind || '')) { again = true; break; } }
                 var out = '<div class="dtw-q" data-q="' + esc(q.id || '') + '"><div class="ask"><span class="dtw-tag">' + esc(String(q.kind || '').replace(/_/g, ' ')) + '</span><span>' + esc(q.q) + '</span>' + (again ? '<span class="dtw-tag" title="The same question was asked earlier in this room">asked again</span>' : '') + '</div>';
-                if (qInFlight(q)) { out += workingLine(q); return out + '</div>'; }
-                out += '<div style="margin-top:0.5rem;">' + distBars(q.distribution) + '</div>';
+                var isLast = at === qs.length - 1;
+                if (qInFlight(q)) { out += workingLine(q) + liveTally(q); return out + '</div>'; }
+                if (qFailed(q)) { out += '<div class="dtw-failed"><span>' + esc(q.read || 'The room did not finish this question. Ask it again and it runs fresh.') + '</span>' + (isLast ? '<button type="button" class="dtw-chip" onclick="dtwPanelAsk(\'' + esc(jsq(q.q)) + '\', true)">Ask again</button>' : '') + '</div>'; return out + '</div>'; }
+                if (q.framing) out += '<div class="dtw-muted" style="margin-top:0.35rem;">' + esc(q.framing) + '</div>';
+                out += factsBlock(q);
+                out += '<div style="margin-top:0.5rem;">' + distBars(q) + '</div>';
+                if (q.note) out += '<div class="dtw-note">' + esc(q.note) + '</div>';
                 if (q.read) out += '<div class="read">' + esc(q.read) + '</div>';
+                if (q.moderator_note) out += '<div class="dtw-note">' + esc(q.moderator_note) + '</div>';
                 if ((q.by_segment || []).length > 1) { out += '<h4>By segment</h4><table class="dtw-table"><tr><th>Segment</th>' + (q.distribution || []).slice(0, 5).map(function(r) { return '<th class="num">' + esc(r.label) + '</th>'; }).join('') + '</tr>' + q.by_segment.map(function(sg) { return '<tr><td>' + esc(sg.segment) + '</td>' + (q.distribution || []).slice(0, 5).map(function(r) { var x = (sg.distribution || []).filter(function(y) { return y.label === r.label; })[0]; return '<td class="num">' + (x ? pct(x.pct, 1) : '') + '</td>'; }).join('') + '</tr>'; }).join('') + '</table>'; }
-                if ((q.voices || []).length) out += '<h4>Voices from the room</h4>' + voiceRows(q.voices, roster);
+                if ((q.voices || []).length) out += '<h4>Voices from the room</h4>' + voiceRows(q.voices, roster, q);
+                if (isLast && (q.probes_next || []).length) out += '<h4>Ask next</h4><div class="dtw-chips">' + q.probes_next.slice(0, 3).map(function(p) { return '<button type="button" class="dtw-chip" onclick="dtwPanelAsk(\'' + esc(jsq(p)) + '\')">' + esc(p) + '</button>'; }).join('') + '</div>';
                 return out + '</div>';
+            }
+            // ---- who they are: the seat panel. The bio the seat acts on (roster[].persona) when the room has written it, else what the twin
+            // carries for the seat; then what this seat said in the room, across every question (answers[].seat). Jenna 2026-10-26: 'If you click
+            // on a panelist it should give you the bio about her ... so you can see who they are'.
+            window.dtwSeatOpen = function(seatNo) {
+                var d = el('dtwSeatDrawer'), sc = el('dtwSeatScrim'); if (!d) return;
+                if (seatNo == null) { S.seatOpen = null; d.classList.remove('open'); if (sc) sc.classList.remove('open'); d.setAttribute('aria-hidden', 'true'); markSeat(); return; }
+                S.seatOpen = Number(seatNo); renderSeatPanel();
+                d.classList.add('open'); if (sc) sc.classList.add('open'); d.setAttribute('aria-hidden', 'false'); d.scrollTop = 0; markSeat();
+            };
+            function markSeat() { document.querySelectorAll('#dtwPnSeats .dtw-seat').forEach(function(b) { b.classList.toggle('on', S.seatOpen != null && Number(b.getAttribute('data-seat')) === S.seatOpen); }); }
+            function seatSaid(s, seatNo) { var out = []; (s.questions || []).forEach(function(q, i) { var a = (q.answers || []).filter(function(x) { return Number(x.seat) === Number(seatNo); })[0]; if (a && (a.line || a.option_label)) out.push({ i: i, q: q, a: a }); }); return out; }
+            function bioParas(text) {
+                var parts = String(text || '').split(/\n+/).map(function(p) { return p.trim(); }).filter(Boolean);
+                if (parts.length === 1 && parts[0].length > 380) {
+                    var sents = parts[0].match(/[^.!?]+[.!?]+["']?(\s+|$)/g) || [parts[0]], per = Math.ceil(sents.length / Math.min(3, Math.ceil(sents.length / 3)));
+                    parts = []; for (var i = 0; i < sents.length; i += per) parts.push(sents.slice(i, i + per).join('').trim());
+                }
+                return parts.map(function(p) { return '<p class="dtw-p">' + esc(p) + '</p>'; }).join('');
+            }
+            function seatTwinCarries() {
+                var t = S.twin; if (!t) return '';
+                var demo = ((t.identity || {}).demographics || {}), bits = [];
+                [['age', 'Age'], ['income', 'Income'], ['education', 'Education'], ['parental', 'Children at home'], ['relationship', 'Relationship']].forEach(function(c) { var rows = (demo[c[0]] || []).slice().sort(function(a, b) { return Number(b.pct) - Number(a.pct); }); if (rows.length) bits.push([rows[0].label + ' (' + pct(rows[0].pct, 1) + ')', c[1] + ', the largest group']); });
+                var out = bits.length ? '<h4>What the twin carries</h4>' + kv(bits) : '';
+                var tr = t.traits || {}, keys = Object.keys(tr);
+                if (keys.length) out += '<h4>How they respond</h4>' + keys.map(function(k) { var v = tr[k] || {}; return bar(v.label || k, v.value, 100, false, String(v.value)); }).join('');
+                return out;
+            }
+            function renderSeatPanel() {
+                var h = el('dtwSeatBody'), s = S.session; if (!h) return;
+                if (!s) { h.innerHTML = '<div class="dtw-muted">Open a room first.</div>'; return; }
+                var roster = (s.group || {}).roster || [], r = roster.filter(function(x) { return Number(x.seat) === S.seatOpen; })[0];
+                if (!r) { h.innerHTML = '<div class="dtw-muted">That seat is not in this room.</div>'; return; }
+                var seg = ((s.group || {}).segments || []).filter(function(x) { return x.label === r.segment; })[0], nm = titleCase(r.name), inRoom = fmtN((s.group || {}).in_room || roster.length);
+                var out = '<div class="dtw-eyebrow">' + esc(titleWords(s.title)) + '</div><div class="dtw-seat-hero">' + avatar(r, Number(r.seat) - 1, 'lg') + '<div style="min-width:0;"><h2>' + esc(nm) + '</h2><div class="facts">' + esc(r.age) + ', ' + esc(titleCase(r.city)) + (r.gender ? ' &middot; ' + (r.gender === 'F' ? 'woman' : (r.gender === 'M' ? 'man' : esc(r.gender))) : '') + '</div><div class="dtw-chips" style="margin:0.5rem 0 0;">' + (r.segment ? '<span class="dtw-tag">' + esc(r.segment) + '</span>' : '') + '<span class="dtw-tag">Seat ' + esc(r.seat) + ' of ' + inRoom + '</span></div></div></div>';
+                out += '<h4 style="margin-top:1.4rem;">Who they are</h4>';
+                if (r.persona) out += bioParas(r.persona);
+                else out += '<p class="dtw-p">' + esc(nm) + ' holds one of ' + inRoom + ' seats standing for ' + fmtN(seg ? seg.people : (s.group || {}).size_people) + ' ' + esc(r.segment || twinName()) + ' people. Who ' + (r.gender === 'M' ? 'he' : 'she') + ' is, in full, is written the first time this room answers a question.</p>' + seatTwinCarries();
+                var said = seatSaid(s, r.seat);
+                out += '<h4 style="margin-top:1.4rem;">What they said in this room <span style="font-weight:500; letter-spacing:0.1em;">&middot; ' + said.length + (said.length === 1 ? ' answer' : ' answers') + '</span></h4>';
+                if (!said.length) out += '<p class="dtw-muted">Nothing yet. Ask the room a question and ' + esc(nm) + ' answers in character.</p>';
+                else out += said.map(function(x) { var L = optionLetter(x.q, x.a.option), lab = x.a.option_label || optionLabelOf(x.q, x.a.option); return '<div class="dtw-seat-said"><div class="q">' + ((x.i < 9 ? '0' : '') + (x.i + 1)) + ' &middot; ' + esc(x.q.q) + '</div>' + (lab ? '<div class="pick"><span class="dtw-tag">' + (L ? esc(L) + ' &middot; ' : '') + esc(lab) + '</span></div>' : '') + '<div class="line">' + esc(x.a.line || '') + '</div>' + (x.a.reason ? '<div class="dtw-muted" style="margin-top:0.3rem;">' + esc(x.a.reason) + '</div>' : '') + '</div>'; }).join('');
+                h.innerHTML = out;
             }
             // The console: header with Save and Export, the room on the left, the transcript in the middle, the composer pinned at the bottom.
             function renderPanelConsole() {
@@ -51808,8 +51943,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var g = s.group || {}, qs = s.questions || [], roster = g.roster || [];
                 var typed = (el('dtwPnQ') || {}).value || '', typedOpts = (el('dtwPnOptions') || {}).value || '';
                 var out = '<div class="dtw-card dtw-console"><div class="dtw-console-h"><div style="min-width:0; flex:1 1 260px;"><div class="dtw-eyebrow">Focus Group IQ</div><h3 style="margin-top:0.25rem;">' + esc(s.title) + '</h3><div class="dtw-muted">' + fmtN(g.in_room) + ' twins standing for ' + fmtN(g.size_people) + ' people. ' + qs.length + ' of ' + (s.questions_paid || 12) + ' questions used.' + (s.updated_at ? ' Saved ' + esc(fmtWhen(s.updated_at)) + '.' : '') + '</div></div><div class="dtw-actions"><span class="dtw-muted" id="dtwPnSaved"></span><button type="button" class="dtw-btn dtw-btn-sm" onclick="dtwPanelSave()">Save</button><a class="dtw-btn dtw-btn-sm" href="/api/digital-twins/' + esc(S.key) + '/panel/' + esc(s.id) + '/export.csv">Export CSV</a><a class="dtw-btn dtw-btn-sm" href="/api/digital-twins/' + esc(S.key) + '/panel/' + esc(s.id) + '/export.pdf">Export PDF</a></div></div>';
-                out += '<div class="dtw-console-b"><div class="dtw-roomcol"><h4 style="margin-top:0;">The room</h4><div class="dtw-muted" style="margin-bottom:0.6rem;">' + (g.segments || []).map(function(sg) { return esc(sg.label) + ' ' + pct(sg.share_pct, 1) + ' (' + fmtN(sg.people) + ' people, ' + sg.seats + ' seats)'; }).join('; ') + '</div><div id="dtwPnRoom">' + roomCards(g) + '</div></div>';
-                out += '<div class="dtw-transcol"><div class="dtw-transcript" id="dtwPnTranscript">' + (qs.length ? qs.map(function(q) { return questionBlock(q, roster); }).join('') : '<div class="dtw-empty-t">The room is seated. Ask the first question below; the shares, the read and a few voices come back in seconds.</div>') + '</div>';
+                out += '<div class="dtw-console-b"><div class="dtw-roomcol"><h4 style="margin-top:0;">The room</h4><div class="dtw-muted" style="margin-bottom:0.6rem;">' + (g.segments || []).map(function(sg) { return esc(sg.label) + ' ' + pct(sg.share_pct, 1) + ' (' + fmtN(sg.people) + ' people, ' + sg.seats + ' seats)'; }).join('; ') + '</div><div id="dtwPnSeats">' + roomCards(g) + '</div></div>';
+                out += '<div class="dtw-transcol"><div class="dtw-transcript" id="dtwPnTranscript">' + (qs.length ? qs.map(function(q) { return questionBlock(q, roster); }).join('') : '<div class="dtw-empty-t">The room is seated. Ask the first question below; the shares, the read and a few voices come back in about a minute.</div>') + '</div>';
                 out += '<div class="dtw-composer"><div id="dtwPnKinds" class="dtw-chips">' + [['yes_no', 'Yes / no'], ['multiple_choice', 'Multiple choice'], ['rating', 'Rate 1 to 5'], ['price', 'Would you pay $X'], ['ab', 'A vs B'], ['show_of_hands', 'Show of hands'], ['open', 'Open question'], ['probe', 'Probe the last answer']].map(function(k) { return '<button type="button" class="dtw-chip' + (S.panelKind === k[0] ? ' on' : '') + '" data-k="' + k[0] + '" onclick="dtwPanelKind(\'' + k[0] + '\')">' + k[1] + '</button>'; }).join('') + '</div>';
                 out += '<textarea id="dtwPnOptions" class="dtw-in" style="display:' + ((S.panelKind === 'multiple_choice' || S.panelKind === 'ab') ? 'block' : 'none') + '; min-height:48px; margin-bottom:0.45rem;" placeholder="Options, one per line (or comma separated)">' + esc(typedOpts) + '</textarea>';
                 out += '<div style="display:flex; gap:0.5rem;"><input id="dtwPnQ" class="dtw-in" value="' + esc(typed) + '" placeholder="Would you watch a new season on Netflix? Would you pay $29 for the box? Show of hands, who watched season 1?" onkeydown="if(event.key===\'Enter\'){dtwPanelAsk();}"><button type="button" id="dtwPnAskBtn" class="dtw-btn dtw-btn-primary" onclick="dtwPanelAsk()">Ask the room</button></div>';
@@ -51835,8 +51970,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                             var changed = false;
                             fresh.forEach(function(fr) { var cur = roster.filter(function(r) { return r.seat === fr.seat; })[0]; if (cur && fr.portrait_url && cur.portrait_url !== fr.portrait_url) { cur.portrait_url = fr.portrait_url; changed = true; } });
                             if (changed) {
-                                var room = el('dtwPnRoom'); if (room) room.innerHTML = roomCards(S.session.group || {});
+                                var room = el('dtwPnSeats'); if (room) room.innerHTML = roomCards(S.session.group || {});
                                 var tr = el('dtwPnTranscript'); if (tr) { var keep = tr.scrollTop; tr.innerHTML = (S.session.questions || []).length ? (S.session.questions || []).map(function(q) { return questionBlock(q, roster); }).join('') : tr.innerHTML; tr.scrollTop = keep; }
+                                var sd = el('dtwSeatDrawer'); if (sd && sd.classList.contains('open')) renderSeatPanel();
                             }
                         } catch (_) {}
                     }, ms));
