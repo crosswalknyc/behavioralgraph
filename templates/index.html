@@ -51913,7 +51913,6 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (!m) { h.innerHTML = '<div class="dtw-spine-name">No twin selected</div><div class="dtw-spine-facts">' + (S.runs.length ? 'Pick a twin below, or build one.' : 'Build the first twin with the button on the right; it walks you through it.') + '</div>'; return; }
                 var ltv = t.ip_lifetime_value || null, t5 = ltv && ltv.total ? (ltv.total['5'] || {}) : null;
                 var facts = ['<span><b>' + fmtN(m.size_us) + '</b> US people</span>', '<span>' + esc(fmtDate(m.window_start)) + ' to ' + esc(fmtDate(m.window_end)) + '</span>'];
-                if (m.platform_home) facts.push('<span>Home <b>' + esc(m.platform_home) + '</b></span>');
                 if (t5 && t5.expected != null) facts.push('<span>IP lifetime value <b>' + fmtMoney(t5.expected) + '</b> over 5 years</span>');
                 facts.push('<span><b>' + (t.runs || []).length + '</b> runs, <b>' + (t.panel_sessions || []).length + '</b> rooms, <b>' + (((t.labs || {}).spend) || []).length + '</b> plans</span>');
                 h.innerHTML = '<div class="dtw-spine-name">' + esc(m.name || m.subject) + '</div><div class="dtw-spine-facts">' + facts.join('') + '</div>';
@@ -51950,23 +51949,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             function renderLibrary() {
                 var h = el('dtwLibrary'); if (!h) return;
                 var c = el('dtwLibCount'); if (c) c.textContent = S.runs.length ? (S.runs.length + (S.runs.length === 1 ? ' twin' : ' twins')) : '';
-                var kinds = [];
-                S.runs.forEach(function(r) { var k = twinKindLabel(r); if (kinds.indexOf(k) < 0) kinds.push(k); });
                 var chips = el('dtwLibChips');
-                if (chips) {
-                    var all = [{ id: 'all', label: 'All' + (S.runs.length ? ' ' + S.runs.length : '') }].concat(kinds.map(function(k) {
-                        var n = S.runs.filter(function(r) { return twinKindLabel(r) === k; }).length;
-                        return { id: k, label: k + ' ' + n };
-                    }));
-                    chips.innerHTML = all.map(function(x) {
-                        return '<button type="button" class="dtw-chip' + (S.libKind === x.id ? ' on' : '') + '" onclick="dtwLibFilter(\'' + esc(x.id) + '\')">' + esc(x.label) + '</button>';
-                    }).join('');
-                    chips.style.display = S.runs.length ? '' : 'none';
-                }
+                if (chips) { chips.innerHTML = ''; chips.style.display = 'none'; }
                 var search = el('dtwLibSearch');
                 if (search) { search.style.display = S.runs.length ? '' : 'none'; if (S.libQ && search.value !== S.libQ) search.value = S.libQ; }
                 if (!S.runs.length) {
-                    h.innerHTML = '<div class="dtw-card" style="grid-column:1/-1; margin:0;"><h3>No twins yet.</h3><p class="dtw-p">A twin is an audience you can run plans, titles, prices and ideas forward on. Build the first one here, from a profile or from demographics you choose, or say <b>Build a twin of Gilmore Girls Hulu viewers</b> to Prometheus.</p><div class="dtw-actions"><button type="button" class="dtw-btn dtw-btn-primary" onclick="dtwBuildTwin()">Build your first twin</button><button type="button" class="dtw-link" onclick="dtwHowtoOpen(true)">How to</button></div></div>';
+                    h.innerHTML = '<div class="dtw-card" style="grid-column:1/-1; margin:0;"><h3>No twins yet.</h3><p class="dtw-p">A twin is an audience you can run plans, titles, prices and ideas forward on. Build the first one here, from a profile or from demographics you choose, or say <b>Build a twin of Costco shoppers</b> to Prometheus.</p><div class="dtw-actions"><button type="button" class="dtw-btn dtw-btn-primary" onclick="dtwBuildTwin()">Build your first twin</button><button type="button" class="dtw-link" onclick="dtwHowtoOpen(true)">How to</button></div></div>';
                     return;
                 }
                 var q = String(S.libQ || '').toLowerCase().trim();
@@ -52012,14 +52000,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             };
             function demoRows(cat) { return (((S.twin || {}).identity || {}).demographics || {})[cat] || []; }
             function fold(id, title, note, body, open) { return '<details class="dtw-fold" id="dtwFold-' + id + '"' + (open ? ' open' : '') + '><summary>' + esc(title) + (note ? '<span class="n">' + esc(note) + '</span>' : '') + '<span class="chev">&#9662;</span></summary><div class="dtw-fold-body">' + body + '</div></details>'; }
-            // The selected twin's page: header, then Identity, Traits, Lifecycle, Runs as folds.
+            // The selected twin: Identity, Traits, Lifecycle, Runs. No hero card.
             function renderTwin() {
                 var t = S.twin, h = el('dtwTwinPage'); if (!h) return;
                 if (!t) { h.innerHTML = ''; return; }
                 var m = t.meta || {}, ident = t.identity || {}, key = m.key || S.key, lc = t.lifecycle || {};
-                var out = '<div class="dtw-sec" style="margin-top:1.6rem;"><h3>' + esc(m.name || m.subject) + '</h3><em>The twin</em></div>';
-                out += '<div class="dtw-card"><div class="dtw-hero">' + (m.hero_image ? '<img src="' + esc(m.hero_image) + '" alt="" style="object-fit:contain;background:#15252A">' : '') + '<div style="flex:1 1 300px; min-width:0;"><p class="dtw-p" style="margin-top:0;">' + esc(ident.read || '') + '</p><div class="dtw-muted">' + (m.source === 'profile' && m.profile_name ? 'From the ' + esc(m.profile_name) + ' profile. ' : m.source === 'demographics' ? 'Shaped by the demographics you chose. ' : '') + (m.panelists || 12) + ' panelists in its rooms' + (m.created_by ? '. Built ' + esc(fmtDate(m.created_at)) + ' by ' + esc(m.created_by) : '') + '</div></div><div class="dtw-actions" style="align-self:flex-start;"><a class="dtw-btn dtw-btn-sm" href="/api/digital-twins/' + esc(key) + '/export.csv">CSV</a><a class="dtw-btn dtw-btn-sm" href="/api/digital-twins/' + esc(key) + '/export.pdf">PDF</a><a class="dtw-btn dtw-btn-sm" href="/api/digital-twins/' + esc(key) + '/export.pptx">Deck</a></div></div>';
-                out += '<div style="display:flex; gap:0.5rem; margin-top:0.9rem;"><input id="dtwAskInput" class="dtw-in" placeholder="Ask the twin anything: what are the odds a new season clears 4,000,000 on Hulu? Would they pay $12.99?" onkeydown="if(event.key===\'Enter\'){dtwAsk();}"><button type="button" class="dtw-btn dtw-btn-primary" onclick="dtwAsk()">Ask the twin</button></div></div>';
+                var out = '<div class="dtw-actions" style="margin-top:1.6rem;"><a class="dtw-btn dtw-btn-sm" href="/api/digital-twins/' + esc(key) + '/export.csv">CSV</a><a class="dtw-btn dtw-btn-sm" href="/api/digital-twins/' + esc(key) + '/export.pdf">PDF</a><a class="dtw-btn dtw-btn-sm" href="/api/digital-twins/' + esc(key) + '/export.pptx">Deck</a></div>';
                 // Identity
                 var idb = '<div class="dtw-two"><div>';
                 [['gender', 'Gender'], ['age', 'Age'], ['income', 'Income'], ['ethnicity', 'Ethnicity']].forEach(function(c) { var rows = demoRows(c[0]); if (rows.length) { idb += '<h4>' + c[1] + '</h4>' + rows.slice(0, 8).map(function(r) { return bar(r.label, r.pct, 100, false, pct(r.pct, 1)); }).join(''); } });
