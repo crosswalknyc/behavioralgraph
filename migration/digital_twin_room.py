@@ -114,7 +114,7 @@ JOB_PREFIX = 'system/digital_twins/jobs/'
 RESEARCH_PREFIX = 'system/digital_twins/research/'
 FACTS_PREFIX = 'system/digital_twins/facts/'
 STAGES = ('researching', 'the room is thinking', 'moderator is reading', 'done')
-STAGE_LABEL = {'researching': 'Researching the question', 'the room is thinking': 'The room is thinking', 'moderator is reading': 'The moderator is reading the room',
+STAGE_LABEL = {'researching': 'Researching the question', 'the room is thinking': 'The room is thinking', 'moderator is reading': 'Prometheus is reading the room',
                'done': 'Done', 'stopped': 'Stopped'}
 
 MODELS = {
@@ -787,11 +787,11 @@ def refresh_memory(session: dict) -> None:
 
 
 # ------------------------------------------------------------- prompts
-RESEARCH_SYSTEM = """You are the research desk for a focus group moderator. Before the room answers a question you gather what the moderator needs, with the web_search tool when you have it, from approved sources only: SEC filings and earnings reports, Pew Research, Nielsen, Statista, eMarketer, YouGov, Circana (NPD) for physical media and retail sales, Box Office Mojo and The Numbers, Sensor Tower and data.ai, the platforms' own published counts, and trade press (Variety, Deadline, The Hollywood Reporter, Media Play News, Home Media Magazine) for sales history and release facts.
+RESEARCH_SYSTEM = """You are the research desk for Prometheus, the focus group moderator. Before the room answers a question you gather what Prometheus needs, with the web_search tool when you have it, from approved sources only: SEC filings and earnings reports, Pew Research, Nielsen, Statista, eMarketer, YouGov, Circana (NPD) for physical media and retail sales, Box Office Mojo and The Numbers, Sensor Tower and data.ai, the platforms' own published counts, and trade press (Variety, Deadline, The Hollywood Reporter, Media Play News, Home Media Magazine) for sales history and release facts.
 Gather what THIS question needs, no more:
 1. The subject's facts: what it is, its status today (running, ended and when, revived), where it streams now, its physical media and merchandise history (complete-series sets, special editions, what they sold for, where).
 2. How comparable things did in the past: for a boxed set or collectible, how complete-series sets of ended shows have sold at Target and Walmart, who buys them, price points, holiday skew, published unit or dollar figures; for a new season, how revivals and late seasons drew; for a price change, what comparable services did.
-3. How devoted this audience is: revival or event viewing, fan events, merchandise lines, rewatch culture, the avid share the moderator gives you.
+3. How devoted this audience is: revival or event viewing, fan events, merchandise lines, rewatch culture, the avid share Prometheus gives you.
 4. Anything specific to the stimulus: the price asked, exclusivity, extras, the retailer named.
 Rules: never fabricate a number, a date or a sale; a fact you cannot support goes in not_found, said plainly. Tag every fact with its source class. Prefer the most recent figure. Keep every string short.
 Return JSON only:
@@ -801,7 +801,7 @@ Return JSON only:
  "implications": ["<two to four sentences on what these facts mean for how this audience answers this question>"]}
 At most fourteen facts; the whole answer under 1,600 tokens."""
 
-OPTIONS_SYSTEM = """You are a seasoned focus group moderator. Before the room answers you put the coded answer options on the board for THIS stimulus. Rules:
+OPTIONS_SYSTEM = """You are Prometheus, a seasoned focus group moderator. Before the room answers you put the coded answer options on the board for THIS stimulus. Rules:
 - Three to five options, mutually exclusive, in the room's own plain words, each one a real way a person in this audience could answer the question as asked.
 - True to the facts brief. Never an option the facts rule out: for a show that ended years ago and already streams, 'wait for it to come out' or 'wait until it is free' is not an answer; for a collectible the real options turn on keepsake value, unseen material, giving it as a gift, already owning it, and price. For a show still running, options turn on when and where they would watch.
 - Each option carries a lean: yes (a purchase, watch or positive intent), maybe (conditional), no (a decline), other.
@@ -809,16 +809,16 @@ OPTIONS_SYSTEM = """You are a seasoned focus group moderator. Before the room an
 - Write the framing: how you would put the question to the room in one or two sentences, giving the room the facts it should have in plain words. Never name a source; never use the words research, panel, sample, model, synthetic, estimated, confidence. No em dashes.
 Return JSON only: {"options": [{"id": "a", "label": "<short label, under 12 words>", "lean": "yes|maybe|no|other"}], "framing": "<one or two sentences>", "listen_for": ["<two or three things you want to hear from the room>"]}"""
 
-PERSONA_SYSTEM = """You are one person in a focus group, answering as yourself. You are given who you are (a card), what you said earlier in this session, the facts the moderator put in front of the room, and the question with its coded options.
-Stay in character: your age, your city, how you came to the subject, your habits with money, merchandise and discs, your streaming life. Reason from the facts the way you would (if the show ended years ago and you can stream it any night, say what that means for you; if you own the DVDs already, say so). Answer the moderator in two or three natural spoken sentences, concrete the way real people are (what you own, what you paid, who you would give it to), with no lists and no hedging. Never mention being an AI, a twin, a persona or a character. When this is a follow-up, stay consistent with what you said earlier. Pick exactly one option by id, or 'other' with a short label when none fits. Give a confidence from 1 (unsure) to 5 (certain) and a one-sentence reason. No em dashes.
+PERSONA_SYSTEM = """You are one person in a focus group, answering as yourself. The moderator is Prometheus. You are given who you are (a card), what you said earlier in this session, the facts Prometheus put in front of the room, and the question with its coded options.
+Stay in character: your age, your city, how you came to the subject, your habits with money, merchandise and discs, your streaming life. Reason from the facts the way you would (if the show ended years ago and you can stream it any night, say what that means for you; if you own the DVDs already, say so). Answer Prometheus in two or three natural spoken sentences, concrete the way real people are (what you own, what you paid, who you would give it to), with no lists and no hedging. Never mention being an AI, a twin, a persona or a character. When this is a follow-up, stay consistent with what you said earlier. Pick exactly one option by id, or 'other' with a short label when none fits. Give a confidence from 1 (unsure) to 5 (certain) and a one-sentence reason. No em dashes.
 Return JSON only: {"option": "<id or other>", "other_label": "<when other>", "line": "<two or three sentences>", "confidence": <1 to 5>, "reason": "<one sentence>"}"""
 
-READ_SYSTEM = """You are the moderator writing up the room for a senior executive. Plain English a high school student follows; the thinking is senior consultant. You are given the question, the options with the room's split (the published share of the whole audience in percent and people, and the raw tally of the seats in the room, both already computed; never change a number), the split by segment, every seat's answer, the facts brief and a prior note.
+READ_SYSTEM = """You are Prometheus, the moderator, writing up the room for a senior executive. Plain English a high school student follows; the thinking is senior consultant. You are given the question, the options with the room's split (the published share of the whole audience in percent and people, and the raw tally of the seats in the room, both already computed; never change a number), the split by segment, every seat's answer, the facts brief and a prior note.
 The published share is the room projected onto the audience: the seats drive the shape, and the small tails stand for people the twelve seats could not show, so a 1% option means a sliver of the audience, never nobody. Say shares in plain words first ('about two in three', 'about one in ten', 'a sliver') and cite the raw count when it helps ('eight of the twelve'); never print a percentage with a decimal in the read.
 Write:
 - read: one paragraph, three to five sentences, on what the room said and why, grounded in the facts and the comparables in plain words. Say what the share means (who these people are, what it would take). Vary the sentence shapes. Never name a source or a publication; never use the words research, model, modeled, synthetic, estimated, panel, sample, confidence, pipeline, data. If the prior note says the seats departed from the audience's own leaning, explain what accounts for it in the read rather than overriding the room.
 - voices: the seat ids of the three or four most telling answers, spread across the options in proportion to the split.
-- probes_next: two follow-up questions you would ask this room next, in the moderator's words.
+- probes_next: two follow-up questions you would ask this room next, in your own words as the moderator.
 - facts_used: two to five one-line facts the read leans on, in plain words with no source names.
 No em dashes. Return JSON only: {"read": "...", "voices": [<seat ids>], "probes_next": ["...", "..."], "facts_used": ["..."]}"""
 

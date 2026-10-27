@@ -51,8 +51,8 @@ def status_read(job_id):
 
 def build_promise(subject):
     # plain words only: 'corpus' is internal vocabulary (2026-10-26)
-    return (f"On it. Building the {subject} twin now: what we already know about audiences like this first, then the outside record, then the twin itself with its first three runs"
-            f" and the IP lifetime value when it applies. It lands on the Twins tab of Digital Twins IQ in a few minutes; I will confirm here when it is ready.")
+    return (f"On it. Building the {subject} twin now: what we already know about audiences like this first, then the outside record, then the twin itself with its first three runs."
+            f" It lands on the Twins tab of Digital Twins IQ in a few minutes; I will confirm here when it is ready.")
 
 
 def run_promise(kind, name):

@@ -95,8 +95,10 @@ Return JSON only, every number as a plain number:
  "ad_benchmarks": {"cpm_social": <USD>, "cpm_search": <USD>, "cpm_ctv": <USD>, "ctr_pct": <pct>},
  "trait_hints": {"discovery_social_vs_search": 0-100, "binge_vs_appointment": 0-100, "price_sensitivity": 0-100, "churn_propensity": 0-100, "franchise_loyalty": 0-100, "merch_propensity": 0-100, "second_screen": 0-100, "live_events": 0-100, "creator_follow": 0-100, "ad_tolerance": 0-100, "trial_speed": 0-100, "word_of_mouth": 0-100},
  "title_fit": <0.5 to 1.5: how a new entry from this subject lands against an average title of its kind>,
+ "demographics": {"gender": {"Women": <pct>, "Men": <pct>}, "age": {"18-24": <pct>, "25-34": <pct>, "35-44": <pct>, "45-54": <pct>, "55-64": <pct>, "65+": <pct>}, "income": {"Less than $25,000": <pct>, "$25,000-$49,999": <pct>, "$50,000-$74,999": <pct>, "$75,000-$99,999": <pct>, "$100,000-$149,999": <pct>, "$150,000+": <pct>}, "ethnicity": {"White": <pct>, "Hispanic": <pct>, "Black": <pct>, "Asian": <pct>, "Other": <pct>}},
  "notes": "<three sentences on who the audience is and what moves them, plain words>"}
-Use null where you have no approved-source basis. Keep every string short and the whole answer under 1,500 tokens: at most six title_history rows and eight platform_reach rows."""
+demographics is the shape of the US people who engaged with the subject in the window (each block sums to about 100), from the same approved sources; null when you have no basis.
+Use null where you have no approved-source basis. Keep every string short and the whole answer under 1,800 tokens: at most six title_history rows and eight platform_reach rows."""
 
 READ_SYSTEM_PROMPT = """You write the read on a digital twin for a senior media executive. Plain English a high school student follows; the thinking is senior consultant. Vary the sentence shapes; no two sentences built on the same frame; every number gets a plain comparison. Inferred reads use leans, skews, reads as; counts speak flat. Never use these words: synthetic, synth, modeled, model, estimated, predicted, research, anchored, placeholder, pipeline, panel, sample, confidence, tier, template, band, norm, seed, household. No em dashes.
 Keep each sentence under 30 words and the whole answer under 600 words; answer in one pass, no preamble.
@@ -291,7 +293,13 @@ def profile_identity(rows: list, subject: str) -> dict:
     streaming = [p for p in dedup if p['group'] in ('STREAMING/PLATFORM', 'STREAMING VIDEO', 'VMVPD/FAST', 'VIRTUAL MVPD/FAST', 'FAST PLATFORM')][:12]
     others = [p for p in dedup if p not in streaming][:12]
     out['platforms'] = sorted(streaming + others, key=lambda x: -x['reach_pct'])
-    out['purchase'] = sorted(purch, key=lambda x: -x['pct'])[:14]
+    seen_p, purch_dedup = set(), []
+    for p in sorted(purch, key=lambda x: -x['pct']):       # a brand in two purchase columns (MPB and WHERE THEY SHOP) is one brand
+        k = p['label'].lower()
+        if k not in seen_p:
+            seen_p.add(k)
+            purch_dedup.append(p)
+    out['purchase'] = purch_dedup[:14]
     out['media_diet'] = sorted(media, key=lambda x: -x['pct'])[:10]
     out['talent'] = sorted(talent, key=lambda x: -x['pct'])[:10]
     out['geography'] = sorted(geo, key=lambda x: -x['pct'])[:10]
@@ -314,9 +322,13 @@ def gen_pop_baseline(s3, labels: list) -> dict:
     return out
 
 
-def corpus_anchors(subject: str, window: Optional[dict], s3=None) -> dict:
-    """Everything the corpus already holds on the subject, in one dict."""
+def corpus_anchors(subject: str, window: Optional[dict], s3=None, profile_key: str = '') -> dict:
+    """Everything the corpus already holds on the subject, in one dict.
+    ``profile_key`` pins the Total Universe the twin reads (the profile
+    picked in the Build a twin walkthrough, 2026-10-27); without it the
+    catalog's anchor, then the dashboard catalog by name."""
     out = {'catalog': {}, 'profile_key': '', 'profile': None, 'journeys': [], 'bpiq': [], 'attribution': [], 'trends': [], 'ledger': [], 'gen_pop': {}, 'related': []}
+    pinned = str(profile_key or '').strip()
     try:
         from migration import corpus_catalog as _cc
         anchors = _cc.anchors_for(subject, window=window)
@@ -331,7 +343,7 @@ def corpus_anchors(subject: str, window: Optional[dict], s3=None) -> dict:
                 out['bpiq'].append(f)
             elif f.get('product') == 'attribution':
                 out['attribution'].append(f)
-        out['profile_key'] = find_profile_key(s3, subject, anchors)
+        out['profile_key'] = pinned or find_profile_key(s3, subject, anchors)
         try:
             pj = _cc.prior_journey(anchors, window)
             if pj:
@@ -340,7 +352,7 @@ def corpus_anchors(subject: str, window: Optional[dict], s3=None) -> dict:
             pass
     except Exception as e:
         print(f"[twin] catalog anchors skipped: {e}")
-        out['profile_key'] = find_profile_key(s3, subject, None)
+        out['profile_key'] = pinned or find_profile_key(s3, subject, None)
     if out['profile_key']:
         rows = _load_csv_rows(s3, out['profile_key'])
         if rows:
@@ -351,6 +363,302 @@ def corpus_anchors(subject: str, window: Optional[dict], s3=None) -> dict:
             out['gen_pop'] = gen_pop_baseline(s3, labels)
     except Exception:
         out['gen_pop'] = {}
+    return out
+
+
+# ------------------------------------------ a group shaped by demographics
+# The second door of the Build a twin walkthrough (Jenna 2026-10-27:
+# 'or they can specify by demographics'). The audience is Gen Pop cut
+# to the picks: each demographic category keeps only the chosen
+# buckets (re-spread to 100 in their Gen Pop proportions), the size is
+# the US population times the chosen shares, the markets come from the
+# Gen Pop LOCATION rows, and the platforms and brands are Gen Pop's,
+# tilted by the age and gender mix. The panelists are seated from
+# these distributions the way every room seats them.
+US_POP = 329_900_000
+DEMO_PICK_CATS = ('gender', 'age', 'income', 'ethnicity', 'parental', 'education')
+_DEMO_CAT_WORDS = {'gender': 'gender', 'age': 'age', 'income': 'income', 'ethnicity': 'ethnicity', 'parental': 'parents', 'education': 'education'}
+_GENDER_PICKS = {'women': 'female', 'woman': 'female', 'female': 'female', 'men': 'male', 'man': 'male', 'male': 'male'}
+_AGE_ALIASES = {'65+': '65orolder', '65 plus': '65orolder', '65 and over': '65orolder', '65 or older': '65orolder'}
+_AGE_ADULT_DROP = ('17andunder', 'other', 'prefernottosay')
+# youth and gender tilts on Gen Pop's platform and brand rows: exponent on the youth index (18 to 34 share
+# against Gen Pop's) and on the women index; small on purpose, the shape is the point, not a new number
+_YOUTH_TILT = {'tiktok': 0.9, 'snapchat': 1.0, 'instagram': 0.6, 'twitch': 0.9, 'discord': 0.9, 'reddit': 0.5, 'youtube': 0.2, 'spotify': 0.5,
+               'crunchyroll': 0.8, 'playstation': 0.5, 'xbox': 0.5, 'steam': 0.6, 'nintendo switch': 0.3, 'max': 0.2, 'hulu': 0.2, 'netflix': 0.1,
+               'facebook': -0.5, 'pinterest': -0.1, 'cbs': -0.8, 'nbc': -0.5, 'abc': -0.5, 'fox news': -0.9, 'cnn': -0.4, 'peacock': -0.2, 'paramount+': -0.2,
+               'qvc': -0.8, 'hsn': -0.8, 'aarp': -1.2, 'kohls': -0.4, 'jcpenney': -0.5, 'walgreens': -0.3, 'cvs': -0.3}
+_WOMEN_TILT = {'pinterest': 1.0, 'etsy': 0.9, 'ulta beauty': 1.1, 'sephora': 1.1, 'target': 0.3, 'tiktok': 0.2, 'instagram': 0.2, 'hulu': 0.15, 'bath & body works': 1.0,
+               'espn': -1.0, 'xbox': -0.6, 'playstation': -0.5, 'steam': -0.8, 'twitch': -0.6, 'home depot': -0.4, 'autozone': -0.9, 'draftkings': -0.9, 'fanduel': -0.9,
+               'barstool sports': -1.0, 'reddit': -0.3, 'discord': -0.4}
+def _norm_key(s) -> str:
+    return re.sub(r"[^a-z0-9]+", '', str(s or '').lower())
+
+
+def demographic_spec(raw) -> dict:
+    """The walkthrough's picks, cleaned: lists of short strings per
+    category, markets, interests. {} when nothing usable was picked."""
+    if not isinstance(raw, dict):
+        return {}
+    out = {}
+    for cat in DEMO_PICK_CATS:
+        vals = raw.get(cat)
+        if isinstance(vals, str):
+            vals = [v for v in re.split(r",|;|\n", vals)]
+        if not isinstance(vals, (list, tuple)):
+            continue
+        clean = []
+        for v in vals:
+            s = ' '.join(str(v or '').split())[:60]
+            if s and s.lower() not in ('everyone', 'any', 'all') and s not in clean:
+                clean.append(s)
+        if clean:
+            out[cat] = clean[:12]
+    markets = raw.get('markets')
+    if isinstance(markets, str):
+        markets = re.split(r",|;|\n", markets)
+    if isinstance(markets, (list, tuple)):
+        mk = []
+        for m in markets:
+            s = ' '.join(str(m or '').split())[:60]
+            if s and s.lower() not in ('national', 'us', 'usa', 'everywhere', 'all') and s not in mk:
+                mk.append(s)
+        if mk:
+            out['markets'] = mk[:8]
+    interests = ' '.join(str(raw.get('interests') or '').split())[:200]
+    if interests:
+        out['interests'] = interests
+    return out
+
+
+def _age_words(picks: list) -> str:
+    """'25-34' + '35-44' reads 25 to 44; gaps stay as a list."""
+    spans = []
+    for p in picks:
+        pk = _norm_key(p)
+        if pk in ('65orolder', '65', '65plus') or p.strip() == '65+':
+            spans.append((65, 999))
+            continue
+        m = re.match(r"^\s*(\d{2})\s*[-to ]+\s*(\d{2})\s*$", str(p))
+        if m:
+            spans.append((int(m.group(1)), int(m.group(2))))
+    if not spans or len(spans) != len(picks):
+        return ', '.join(picks)
+    spans.sort()
+    merged = [list(spans[0])]
+    for lo, hi in spans[1:]:
+        if lo <= merged[-1][1] + 1:
+            merged[-1][1] = max(merged[-1][1], hi)
+        else:
+            merged.append([lo, hi])
+    return ', '.join(f"{lo}+" if hi >= 999 else f"{lo} to {hi}" for lo, hi in merged)
+
+
+def _income_words(picks: list) -> str:
+    """Contiguous income buckets read as one band: $100,000 or more;
+    $25,000 to $74,999. Anything else lists the picks."""
+    spans = []
+    for p in picks:
+        nums = [int(n.replace(',', '')) for n in re.findall(r"\$?(\d[\d,]{2,})", str(p))]
+        low = str(p).lower()
+        if 'less' in low or 'under' in low:
+            spans.append((0, (nums[0] - 1) if nums else 0))
+        elif ('more' in low or '+' in low or 'over' in low) and nums:
+            spans.append((nums[0], 10 ** 9))
+        elif len(nums) >= 2:
+            spans.append((nums[0], nums[1]))
+        else:
+            return ', '.join(picks)
+    spans.sort()
+    merged = [list(spans[0])]
+    for lo, hi in spans[1:]:
+        if lo <= merged[-1][1] + 1:
+            merged[-1][1] = max(merged[-1][1], hi)
+        else:
+            merged.append([lo, hi])
+
+    def word(lo, hi):
+        if lo <= 0:
+            return f"under ${hi + 1:,}"
+        if hi >= 10 ** 9:
+            return f"${lo:,} or more"
+        return f"${lo:,} to ${hi:,}"
+    return ', '.join(word(lo, hi) for lo, hi in merged)
+
+
+def demographic_name(spec: dict) -> str:
+    """'Women 25 to 44, $100,000 or more, in Dallas and Los Angeles'.
+    Short enough for a tile; the later clauses leave before a word is
+    ever cut."""
+    spec = spec or {}
+    bits = []
+    g = [str(x) for x in spec.get('gender') or []]
+    if g:
+        bits.append(' and '.join(x[:1].upper() + x[1:] for x in g[:2]))
+    if spec.get('age'):
+        bits.append(_age_words([str(x) for x in spec['age']]))
+    head = ' '.join(bits) if bits else 'US adults'
+    tail = []
+    if spec.get('income'):
+        tail.append(_income_words([str(x) for x in spec['income']]))
+    for cat in ('ethnicity', 'parental', 'education'):
+        vals = [str(x) for x in spec.get(cat) or []]
+        if vals:
+            tail.append(', '.join(vals[:3]) + (' and more' if len(vals) > 3 else ''))
+    if spec.get('markets'):
+        mk = [str(x) for x in spec['markets']]
+        tail.append('in ' + (mk[0] if len(mk) == 1 else ', '.join(mk[:-1]) + ' and ' + mk[-1]) if len(mk) <= 4 else f"in {len(mk)} markets")
+    if spec.get('interests'):
+        tail.append('who ' + str(spec['interests']).rstrip('.'))
+    name = head + (', ' + ', '.join(tail) if tail else '')
+    while len(name) > 110 and tail:
+        tail.pop()
+        name = head + (', ' + ', '.join(tail) if tail else '')
+    return name[:120]
+
+
+def _gen_pop_rows(s3) -> list:
+    cache = globals().setdefault('_GP_ROWS', {'at': 0.0, 'rows': None})
+    if cache['rows'] is None or time.time() - cache['at'] > 3600:
+        cache['rows'] = _load_csv_rows(s3, GEN_POP_KEY) or []
+        cache['at'] = time.time()
+    return cache['rows']
+
+
+_SMALL_WORDS = frozenset({'or', 'and', 'than', 'of', 'a', 'in', 'the', 'to'})
+
+
+def _demo_pretty(label: str) -> str:
+    """A Gen Pop bucket (HIGH SCHOOL OR LESS, $250,000 OR MORE, NO
+    CHILDREN, or the half-cased High School OR Less profile_identity
+    hands back) as a reader's label: High School or Less, $250,000 or
+    More, No Children. Title case with the connecting words small."""
+    s = ' '.join(str(label or '').split())
+    if not s or not re.search(r"[A-Za-z]", s):
+        return s
+    words = []
+    for i, w in enumerate(s.split(' ')):
+        lw = w.lower()
+        if lw in _SMALL_WORDS and i > 0:
+            words.append(lw)
+        elif '/' in w:
+            words.append('/'.join(p[:1].upper() + p[1:].lower() for p in w.split('/')))
+        else:
+            words.append(w[:1].upper() + w[1:].lower())
+    return ' '.join(words)
+
+
+def _pick_matches(cat: str, pick: str, label: str) -> bool:
+    pk, lk = _norm_key(pick), _norm_key(label)
+    if cat == 'gender':
+        want = _GENDER_PICKS.get(str(pick).strip().lower())
+        return bool(want) and lk in (('female', 'women', 'woman') if want == 'female' else ('male', 'men', 'man'))
+    if cat == 'age':
+        pk = _norm_key(_AGE_ALIASES.get(str(pick).strip().lower(), pick))
+        return pk == lk
+    if cat == 'parental':
+        if pk in ('haschildren', 'parents', 'parent', 'kidsathome', 'childrenathome'):
+            return lk == 'haschildren'
+        if pk in ('nochildren', 'notparents', 'nokids', 'noparent'):
+            return lk == 'nochildren'
+    return pk == lk or (len(pk) >= 5 and (pk in lk or lk in pk))
+
+
+def demographic_identity(s3, spec: dict, seed: str) -> dict:
+    """Gen Pop cut to the picks, in the shape profile_identity returns
+    (demographics, geography, platforms, purchase, media_diet, talent,
+    size_us). Every category keeps only the picked buckets; the size is
+    the US population times the picked shares; the markets scale it
+    again."""
+    rows = _gen_pop_rows(s3)
+    gp = profile_identity(rows, 'gen pop') if rows else {'demographics': {}, 'geography': [], 'platforms': [], 'purchase': [], 'media_diet': [], 'talent': []}
+    base_demo = {k: list(v) for k, v in (gp.get('demographics') or {}).items()}
+    for k, v in _demo_prior('none', seed).items():       # Gen Pop missing a category falls back to the prior shape
+        base_demo.setdefault(k, v)
+    spec = spec or {}
+    demo, share = {}, 1.0
+    for cat, base_rows in base_demo.items():
+        picks = [str(x) for x in spec.get(cat) or []]
+        rows_c = [{'label': r['label'], 'pct': float(r.get('pct') or 0)} for r in base_rows]
+        if cat == 'age':                                 # an adult universe: the under-18 and empty rows leave before anything is picked
+            rows_c = [r for r in rows_c if _norm_key(r['label']) not in _AGE_ADULT_DROP]
+            tot = sum(r['pct'] for r in rows_c) or 100.0
+            if not picks:
+                share *= tot / 100.0
+        if picks:
+            kept = [r for r in rows_c if any(_pick_matches(cat, p, r['label']) for p in picks)]
+            if kept:
+                tot_all = sum(r['pct'] for r in rows_c) or 100.0
+                share *= max(0.001, sum(r['pct'] for r in kept) / tot_all) if cat != 'age' else max(0.001, sum(r['pct'] for r in kept) / 100.0)
+                rows_c = kept
+        if cat == 'gender':
+            rows_c = [{'label': {'female': 'Women', 'male': 'Men'}.get(_norm_key(r['label']), _demo_pretty(r['label'])), 'pct': r['pct']} for r in rows_c]
+        else:
+            rows_c = [{'label': '65+' if _norm_key(r['label']) == '65orolder' else _demo_pretty(r['label']), 'pct': r['pct']} for r in rows_c]
+        rows_c = [r for r in rows_c if r['pct'] > 0 and _norm_key(r['label']) not in ('prefernottosay', 'other')] or rows_c
+        demo[cat] = normalize_100(rows_c, 'demo', cat, seed)
+    # markets: the Gen Pop LOCATION rows the names match; an unknown name keeps a small share so the reader sees it
+    geo = []
+    markets = [str(m) for m in spec.get('markets') or []]
+    if markets:
+        # every LOCATION row, not the top ten profile_identity keeps: a picked market can sit anywhere in the 210
+        gp_geo = [{'label': pretty_label(str(r.get('Value') or '')), 'pct': _bp(r)} for r in rows
+                  if str(r.get('Column') or '').strip().upper() in ('LOCATION', 'DMA') and (_bp(r) or 0) > 0] or (gp.get('geography') or [])
+        m_share = 0.0
+        for m in markets:
+            mk = _norm_key(m)
+            hit = next((g for g in gp_geo if mk and (mk in _norm_key(g['label']) or _norm_key(g['label']).startswith(mk[:6]))), None)
+            if hit:
+                geo.append({'label': hit['label'], 'pct': float(hit['pct'] or 0)})
+                m_share += float(hit['pct'] or 0)
+            else:
+                geo.append({'label': m, 'pct': 0.8})
+                m_share += 0.8
+        share *= max(0.001, min(1.0, m_share / 100.0))
+        geo = normalize_100(geo, 'geo', seed)
+    else:
+        geo = (gp.get('geography') or [])[:10]
+    size = messy_count(seed, 'size_us', US_POP * share)
+    # platforms and brands: Gen Pop's rows tilted by the picked age and gender mix
+    def _young(rows_):
+        tot = sum(float(r.get('pct') or 0) for r in rows_) or 100.0
+        return sum(float(r.get('pct') or 0) for r in rows_ if str(r.get('label') or '')[:2] in ('18', '25')) / tot
+    gp_adult_age = [r for r in base_demo.get('age') or [] if _norm_key(r['label']) not in _AGE_ADULT_DROP]
+    youth_idx = clamp(_young(demo.get('age') or []) / max(0.05, _young(gp_adult_age) or 0.3), 0.25, 4.0)
+    women = next((float(r['pct']) for r in demo.get('gender') or [] if r['label'] == 'Women'), 50.0)
+    women_idx = clamp((women / 100.0) / 0.5, 0.05, 2.0)
+
+    def tilt(items, key):
+        out = []
+        for p in items:
+            lab = str(p.get('label') or '').lower()
+            v = float(p.get(key) or 0)
+            v *= youth_idx ** _YOUTH_TILT.get(lab, 0.0) * women_idx ** _WOMEN_TILT.get(lab, 0.0)
+            v *= 1 + (unit('tilt', lab, seed) - 0.5) * 0.06
+            q = dict(p)
+            q[key] = pct1(clamp(v, 0.3, 97.0))
+            out.append(q)
+        return sorted(out, key=lambda x: -float(x.get(key) or 0))
+    return {'demographics': demo, 'geography': geo, 'platforms': tilt(gp.get('platforms') or [], 'reach_pct')[:14], 'purchase': tilt(gp.get('purchase') or [], 'pct')[:14],
+            'media_diet': tilt(gp.get('media_diet') or [], 'pct')[:10], 'talent': (gp.get('talent') or [])[:6], 'size_us': size, 'sample': 0,
+            'avid_share_pct': pct1(9 + 9 * unit('avid', seed)), 'brand_category': '', 'window': None, 'subject_row': '', 'share_of_us': round(share, 6)}
+
+
+def research_demographics(research: dict, seed: str) -> dict:
+    """The research call's audience shape (the profile path with no
+    profile yet) as the identity's demographics; {} when it gave none."""
+    raw = (research or {}).get('demographics') if isinstance(research, dict) else None
+    if not isinstance(raw, dict):
+        return {}
+    out = {}
+    for cat in ('gender', 'age', 'income', 'ethnicity'):
+        block = raw.get(cat)
+        rows = []
+        if isinstance(block, dict):
+            rows = [{'label': str(k), 'pct': float(v)} for k, v in block.items() if _num(v) is not None and float(v) > 0]
+        elif isinstance(block, list):
+            rows = [{'label': str(r.get('label')), 'pct': float(r.get('pct'))} for r in block if isinstance(r, dict) and _num(r.get('pct')) is not None and float(r['pct']) > 0]
+        if len(rows) >= 2 and 70.0 <= sum(r['pct'] for r in rows) <= 130.0:
+            out[cat] = normalize_100(rows, 'demo', cat, seed)
     return out
 
 
@@ -708,26 +1016,55 @@ def build_twin(inputs: dict, claude_json: Optional[Callable] = None, *, tools=No
                with_research: bool = True) -> dict:
     """The build. ``inputs``: subject, subject_kind (audience|ip|brand|
     talent|idea), purpose, window {start,end} optional, format and
-    platform_home optional, name optional."""
+    platform_home optional, name optional.
+
+    The Build a twin walkthrough (2026-10-27) adds: ``source``
+    ('profile' or 'demographics'), ``profile_key`` (the Total Universe
+    the twin reads, when the reader picked one), ``demographics`` (the
+    picks for a group shaped by demographics; the subject may be blank
+    and is then composed from them) and ``panelists`` (the seats a room
+    on this twin opens with; the twelve a session covers by default)."""
     t0 = time.time()
+    demo_spec = demographic_spec(inputs.get('demographics'))
+    source = str(inputs.get('source') or '').lower()
+    if source not in ('profile', 'demographics'):
+        source = 'demographics' if demo_spec and not str(inputs.get('subject') or '').strip() else ''
+    by_demo = source == 'demographics' and bool(demo_spec)
     subject = ' '.join(str(inputs.get('subject') or '').split()).strip()[:140]
+    if not subject and by_demo:
+        subject = demographic_name(demo_spec)
     if not subject:
         raise ValueError('a twin needs a subject')
     kind = str(inputs.get('subject_kind') or 'audience').lower()
-    if kind not in ('audience', 'ip', 'brand', 'talent', 'idea'):
+    if kind not in ('audience', 'ip', 'brand', 'talent', 'idea') or by_demo:
         kind = 'audience'
     purpose = str(inputs.get('purpose') or '')[:400]
+    if by_demo and demo_spec.get('interests') and demo_spec['interests'].lower() not in purpose.lower():
+        purpose = (purpose + ' ' if purpose else '') + f"They {demo_spec['interests']}."
+        purpose = purpose[:400]
     window = inputs.get('window') if isinstance(inputs.get('window'), dict) and inputs['window'].get('start') else default_window()
     seed = f"{subject}|{window.get('start')}|{VERSION}"
     timings = {}
-    corpus = corpus_anchors(subject, window, s3=s3)
-    timings['corpus_s'] = round(time.time() - t0, 2)
-    research = research_anchors(subject, kind, purpose, window, claude_json if with_research else None, tools=tools, s3=s3) if with_research else {}
-    timings['research_s'] = round(time.time() - t0 - timings['corpus_s'], 2)
+    try:
+        panelists = int(inputs.get('panelists') or 0)
+    except (TypeError, ValueError):
+        panelists = 0
+    panelists = int(clamp(panelists, 2, 40)) if panelists else 12
+    if by_demo:
+        # the second door: Gen Pop cut to the picks; no catalog lookup and no outside research for a shape the reader chose
+        corpus = {'catalog': {}, 'profile_key': '', 'profile': demographic_identity(s3, demo_spec, seed), 'journeys': [], 'bpiq': [], 'attribution': [], 'trends': [], 'ledger': [], 'gen_pop': {}, 'related': []}
+        timings['corpus_s'] = round(time.time() - t0, 2)
+        research = {}
+        timings['research_s'] = 0.0
+    else:
+        corpus = corpus_anchors(subject, window, s3=s3, profile_key=str(inputs.get('profile_key') or ''))
+        timings['corpus_s'] = round(time.time() - t0, 2)
+        research = research_anchors(subject, kind, purpose, window, claude_json if with_research else None, tools=tools, s3=s3) if with_research else {}
+        timings['research_s'] = round(time.time() - t0 - timings['corpus_s'], 2)
     prof = corpus.get('profile') or {}
     bc = str(prof.get('brand_category') or '')
-    fmt = str(inputs.get('format') or '') or guess_format(subject, kind, purpose, bc, research)
-    ip_related = is_ip_related(subject, kind, bc, f"{purpose} {inputs.get('ask_text') or ''}", research)
+    fmt = 'none' if by_demo else (str(inputs.get('format') or '') or guess_format(subject, kind, purpose, bc, research))
+    ip_related = False if by_demo else is_ip_related(subject, kind, bc, f"{purpose} {inputs.get('ask_text') or ''}", research)
     if kind == 'idea':
         ip_related = True
     stage = str(research.get('franchise_stage') or inputs.get('franchise_stage') or ('new' if kind == 'idea' else 'established'))
@@ -761,11 +1098,18 @@ def build_twin(inputs: dict, claude_json: Optional[Callable] = None, *, tools=No
             'window_start': window.get('start'), 'window_end': window.get('end'), 'window_label': window.get('label') or 'Trailing 12 months',
             'created_by': created_by or 'prometheus', 'created_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()), 'hero_image': inputs.get('hero_image') or '',
             'size_us': size, 'avid_share_pct': avid, 'platform_home': home, 'format': fmt, 'franchise_stage': stage, 'version': VERSION,
-            'purpose': purpose, 'brand_category': bc}
+            'purpose': purpose, 'brand_category': bc,
+            # the walkthrough's record: where the audience came from and how many panelists a room on this twin seats
+            'source': 'demographics' if by_demo else ('profile' if corpus.get('profile_key') else 'research'),
+            'profile_key': '' if by_demo else str(corpus.get('profile_key') or ''), 'profile_name': '' if by_demo else str(prof.get('subject_row') or ''),
+            'demographics_spec': demo_spec if by_demo else None, 'panelists': panelists}
     # identity
     demo = prof.get('demographics') or {}
     if not demo:
-        demo = _demo_prior(fmt, seed)
+        # the profile path with no profile yet: the research call's audience shape first, the format prior only when it gave none
+        demo = research_demographics(research, seed) if research else {}
+        for k, v in _demo_prior(fmt, seed).items():
+            demo.setdefault(k, v)
     else:
         demo = {k: normalize_100(v, 'demo', k, seed) for k, v in demo.items() if v}
         for k, v in _demo_prior(fmt, seed).items():
@@ -808,11 +1152,19 @@ def build_twin(inputs: dict, claude_json: Optional[Callable] = None, *, tools=No
     goal_val = messy_count(subject, 'goal', size * 0.3)
     noun = E._noun_for(twin)
     anchors_for_runs = {'title_fit': research.get('title_fit')} if research.get('title_fit') else {}
-    scenarios = [
-        {'kind': 'greenlight', 'inputs': {'title': f"the next {name} release" if kind != 'idea' else subject, 'platforms': [home], 'goal': {'metric': noun, 'value': goal_val, 'platform': home, 'window_days': 30}, 'anchors': anchors_for_runs}},
-        {'kind': 'content', 'inputs': {'kind': 'season' if fmt == 'series' else 'sequel' if fmt in ('film', 'book', 'game') else 'episode', 'number': 2, 'platform': home}},
-        {'kind': 'platform_move', 'inputs': {'from': home, 'to': 'Netflix' if home.lower() != 'netflix' else 'Hulu'}},
-    ]
+    if by_demo:
+        # a group shaped by demographics has no release of its own: the odds on a new title for it, a price read and a platform move
+        scenarios = [
+            {'kind': 'greenlight', 'inputs': {'title': 'a new title made for this audience', 'platforms': [home], 'goal': {'metric': noun, 'value': goal_val, 'platform': home, 'window_days': 30}}},
+            {'kind': 'pricing', 'inputs': {'current_price': 9.99, 'new_price': 12.99, 'platform': home}},
+            {'kind': 'platform_move', 'inputs': {'from': home, 'to': 'Netflix' if home.lower() != 'netflix' else 'Hulu'}},
+        ]
+    else:
+        scenarios = [
+            {'kind': 'greenlight', 'inputs': {'title': f"the next {name} release" if kind != 'idea' else subject, 'platforms': [home], 'goal': {'metric': noun, 'value': goal_val, 'platform': home, 'window_days': 30}, 'anchors': anchors_for_runs}},
+            {'kind': 'content', 'inputs': {'kind': 'season' if fmt == 'series' else 'sequel' if fmt in ('film', 'book', 'game') else 'episode', 'number': 2, 'platform': home}},
+            {'kind': 'platform_move', 'inputs': {'from': home, 'to': 'Netflix' if home.lower() != 'netflix' else 'Hulu'}},
+        ]
     for sc in scenarios:
         try:
             twin['runs'].append(E.simulate(twin, sc, created_by=created_by))
@@ -847,7 +1199,7 @@ def index_entry(key: str, payload: dict) -> dict:
             'created_at': m.get('created_at'), 'updated_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
             'window_start': m.get('window_start'), 'window_end': m.get('window_end'),
             'hero_image': m.get('hero_image') or '', 'cover_kind': m.get('cover_kind') or '',
-            'cover_rev': m.get('cover_rev') or 0,
+            'cover_rev': m.get('cover_rev') or 0, 'source': m.get('source') or '', 'panelists': m.get('panelists') or 0,
             'runs': len(payload.get('runs') or []), 'spend_plans': len(((payload.get('labs') or {}).get('spend')) or []),
             'panel_sessions': len(payload.get('panel_sessions') or []), 'has_ltv': bool(ltv),
             'ltv_5y': (ltv.get('total') or {}).get('5', {}).get('expected') if ltv else None,
@@ -961,5 +1313,6 @@ def run_scenario(twin: dict, scenario: dict, *, claude_json: Optional[Callable] 
 
 __all__ = ['build_twin', 'persist', 'save_twin', 'load_twin', 'append_run', 'run_scenario', 'update_index', 'index_entry', 'corpus_anchors',
            'research_anchors', 'profile_identity', 'find_profile_key', 'is_ip_related', 'guess_format', 'scrub_text', 'scrub_payload',
+           'demographic_spec', 'demographic_name', 'demographic_identity', 'research_demographics', 'DEMO_PICK_CATS', 'US_POP',
            'standing_questions', 'track_record', 'write_read', 'default_window', 'S3_PREFIX', 'S3_INDEX_KEY', 'S3_BUCKET', 'RESEARCH_PREFIX',
            'RESEARCH_SYSTEM_PROMPT', 'READ_SYSTEM_PROMPT', 'BANNED_WORDS', 'PRODUCT']

@@ -30,18 +30,47 @@ PRODUCT_LABEL = 'Digital Twins IQ'
 
 # Pricing defaults (Jenna 2026-10-26). One line each; the live price an
 # admin sets in the billing panel wins over these (wallet.tool_price_usd).
+# Prometheus usage on a build and in a room is metered ON TOP of these
+# (Jenna 2026-10-27: 'aside from these fees there needs to be billed
+# prometheus metered pricing'): the model calls carry the seat's
+# pay-per-use attribution, so the session sweep bills them at the
+# published meter like any other Prometheus work.
 PRICING = {
-    'digital_twins_iq': 750.0,          # a twin build: the twin, the IP lifetime value and three runs
+    'digital_twins_iq': 750.0,          # a twin build: the twin and three runs
     'digital_twin_run': 100.0,          # each further Greenlight, Launch, content or compare run
     'digital_twin_spend': 250.0,        # Spend Engine plan activation for the plan window, daily runs included
     'digital_twin_panel': 5500.0,       # a Focus Group IQ session, 12 questions included (Jenna 2026-10-26: 'A session is $5,500 (twelve questions, any room)')
     'digital_twin_panel_more': 5500.0,  # each further 12 questions is another session at the session price
+    'digital_twin_panelist': 550.0,     # each panelist beyond the 12 a room seats, billed with the session (Jenna 2026-10-27: 'extra panelists for an extra $550 x panelist')
 }
 PANEL_QUESTIONS_INCLUDED = 12
+PANEL_SEATS_INCLUDED = 12               # panelists a session covers; every seat past this is a priced panelist
+PANEL_SEATS_MAX = 40
 PULL_TYPES = {
     'digital_twins_iq': 'Digital Twins IQ', 'digital_twin_run': 'Digital Twins IQ Run', 'digital_twin_spend': 'Digital Twins IQ Spend',
     'digital_twin_panel': 'Digital Twins IQ Focus Group', 'digital_twin_panel_more': 'Digital Twins IQ Focus Group More',
+    'digital_twin_panelist': 'Digital Twins IQ Focus Group Panelist',
 }
+
+
+def extra_panelists(in_room) -> int:
+    """How many seats in a room are priced panelists: the seats past the
+    included twelve, never negative."""
+    try:
+        n = int(in_room or 0)
+    except (TypeError, ValueError):
+        n = 0
+    return max(0, min(n, PANEL_SEATS_MAX) - PANEL_SEATS_INCLUDED)
+
+
+def panelists_for(payload: dict) -> int:
+    """The seats a room on this twin opens with: the number chosen when
+    the twin was built, else twelve."""
+    try:
+        n = int(((payload or {}).get('meta') or {}).get('panelists') or 0)
+    except (TypeError, ValueError):
+        n = 0
+    return max(2, min(n, PANEL_SEATS_MAX)) if n else PANEL_SEATS_INCLUDED
 
 
 # ------------------------------------------------------------- the index
@@ -197,6 +226,7 @@ def view_summary(payload: dict, run_id: str = '', session_id: str = '') -> dict:
     ltv = payload.get('ip_lifetime_value') or {}
     out = {'twin': m.get('name'), 'subject': m.get('subject'), 'key': m.get('key'), 'size_us': m.get('size_us'), 'window': f"{m.get('window_start')} to {m.get('window_end')}",
            'platform_home': m.get('platform_home'), 'format': m.get('format'), 'ip_related': m.get('ip_related'),
+           'source': m.get('source'), 'panelists': panelists_for(payload),
            'identity_read': (payload.get('identity') or {}).get('read'),
            'traits': {k: {'value': v.get('value'), 'read': v.get('read')} for k, v in (payload.get('traits') or {}).items()},
            'lifecycle': {k: v for k, v in (payload.get('lifecycle') or {}).items() if k.endswith('_pct')},
@@ -318,20 +348,24 @@ def pricing_lines(price_fn=None) -> list:
 
     def money(v):
         return f"${v:,.0f}" if abs(v - round(v)) < 0.009 else f"${v:,.2f}"
-    return [f"Digital Twin - {money(p('digital_twins_iq'))} for the twin, its IP lifetime value and three runs",
+    return [f"Digital Twin - {money(p('digital_twins_iq'))} for the twin and its first three runs",
             f"Each further Greenlight, Launch, content or compare run - {money(p('digital_twin_run'))}",
             f"Spend Engine - {money(p('digital_twin_spend'))} to activate a plan for its window, daily runs included",
-            f"Focus Group IQ - {money(p('digital_twin_panel'))} a session with {PANEL_QUESTIONS_INCLUDED} questions, then {money(p('digital_twin_panel_more'))} for each further {PANEL_QUESTIONS_INCLUDED}"]
+            f"Focus Group IQ - {money(p('digital_twin_panel'))} a session with {PANEL_QUESTIONS_INCLUDED} questions, then {money(p('digital_twin_panel_more'))} for each further {PANEL_QUESTIONS_INCLUDED}",
+            f"Extra panelist - {money(p('digital_twin_panelist'))} for each panelist past the {PANEL_SEATS_INCLUDED} a session seats, billed with the session",
+            "Prometheus usage - metered at the published rate on top of these, for the build and for every question in a room"]
 
 
 HOW_TO = [
     {
         'id': 'twin', 'title': 'Build a twin',
         'answers': 'Who an audience is and how it behaves: its people, platforms and buying, twelve dials for how it responds, where it sits in its lifecycle, and, when the subject is a title, franchise, creator, book, game or podcast, what that IP is worth over five and ten years.',
-        'put_in': 'A subject: a title, a franchise, a creator, a brand, an audience, or a bare idea. Say what you want to use the twin for. A window if it is not the last 12 months.',
-        'type_this': ['Build a twin of Gilmore Girls Hulu viewers', 'Build a twin of Mark Rober for a product launch', 'Build a twin of people who lapsed from Netflix this year'],
+        'put_in': ('Build a twin on the Twins tab walks you through it. First, what the twin stands for: a defined group from a profile (the audience of a title, a talent or a brand, pulled the way '
+                   'Profile IQ pulls it, with the panelists seated from that audience) or a group you shape by demographics (gender, age, income, ethnicity, markets). Then what you will use it for, '
+                   f'and how many panelists sit in its focus group rooms ({PANEL_SEATS_INCLUDED} come with a session; each one past that is priced). Or type the ask to Prometheus with a window if it is not the last 12 months.'),
+        'type_this': ['Build a twin of Gilmore Girls Hulu viewers', 'Build a twin of Mark Rober for a product launch', 'Build a twin of women 25 to 44 in Dallas who shop at Target'],
         'attach': 'Nothing is needed. If you have a brief or a deck on the subject, attach it with the paper clip and the twin reads it.',
-        'comes_back': 'The twin lands on the Twins tab in a few minutes, with its first three runs and the IP lifetime value when it applies. Prometheus confirms in the chat; there is no email.',
+        'comes_back': 'The twin lands on the Twins tab in a few minutes, with its first three runs. Prometheus confirms in the chat; there is no email.',
         'cost_key': 'digital_twins_iq', 'export': 'Twins tab: CSV, Deck or PDF at the top of the twin page.',
     },
     {
@@ -367,8 +401,8 @@ HOW_TO = [
     },
     {
         'id': 'panel', 'title': 'Focus Group IQ',
-        'answers': 'A focus group you moderate (Focus Group IQ). Pick the twins or the cohorts in the room, ask anything in plain words, and get the %s and people counts, the split by segment, a one-line read and a few twin voices, in seconds. Yes/no, multiple choice, rating 1 to 5, would you pay $X, A vs B, a show of hands, and probes (why? what would change your mind?) that follow the last question.',
-        'put_in': 'The twins or cohorts in the room (for example Gilmore Girls Hulu viewers, women 25 to 44; lapsed Netflix subscribers in Dallas), how many twins sit in the room (12 by default), then your questions.',
+        'answers': 'A focus group Prometheus moderates for you (Focus Group IQ). Pick the twins or the cohorts in the room, ask anything in plain words, and Prometheus runs the room: the %s and people counts, the split by segment, a one-line read and a few panelist voices, in a minute or two. Yes/no, multiple choice, rating 1 to 5, would you pay $X, A vs B, a show of hands, and probes (why? what would change your mind?) that follow the last question.',
+        'put_in': f'The twins or cohorts in the room (for example Gilmore Girls Hulu viewers, women 25 to 44; lapsed Netflix subscribers in Dallas), how many panelists sit in the room ({PANEL_SEATS_INCLUDED} come with a session; each one past that is priced and billed with the session), then your questions.',
         'type_this': ['Open a focus group with the Mark Rober twin and ask whether they would pay $29 for the Build Box', 'Ask them why', 'Show of hands, who watched season 1?',
                       'Ask the room: trailer A vs trailer B', 'Re-ask at $19'],
         'attach': 'Nothing is needed. Attach a trailer link, two loglines or a price sheet if the question is about them.',
@@ -399,9 +433,10 @@ def how_to(price_fn=None) -> dict:
     for it in HOW_TO:
         row = dict(it)
         if it['id'] == 'panel':
-            row['cost'] = f"{money(prices['digital_twin_panel'])} a session with {PANEL_QUESTIONS_INCLUDED} questions, then {money(prices['digital_twin_panel_more'])} for each further {PANEL_QUESTIONS_INCLUDED}"
+            row['cost'] = (f"{money(prices['digital_twin_panel'])} a session with {PANEL_QUESTIONS_INCLUDED} questions, then {money(prices['digital_twin_panel_more'])} for each further {PANEL_QUESTIONS_INCLUDED}; "
+                           f"{money(prices['digital_twin_panelist'])} for each panelist past {PANEL_SEATS_INCLUDED}; Prometheus usage metered on top")
         elif it['id'] == 'twin':
-            row['cost'] = f"{money(prices['digital_twins_iq'])}, with the IP lifetime value and three runs included"
+            row['cost'] = f"{money(prices['digital_twins_iq'])}, with three runs included; Prometheus usage on the build metered on top"
         elif it['id'] == 'spend':
             row['cost'] = f"{money(prices['digital_twin_spend'])} for the plan window, daily runs included"
         else:
@@ -458,4 +493,5 @@ def is_how_to_ask(text: str) -> bool:
 
 __all__ = ['list_runs', 'load_twin', 'save_twin', 'has_access', 'is_admin', 'can_open', 'visible_runs', 'allowed_keys', 'find_twin', 'csv_rows', 'csv_text', 'csv_filename',
            'view_summary', 'twin_lines', 'deck_context', 'how_to', 'how_to_text', 'is_how_to_ask', 'pricing_lines', 'PRICING', 'PULL_TYPES', 'PANEL_QUESTIONS_INCLUDED',
+           'PANEL_SEATS_INCLUDED', 'PANEL_SEATS_MAX', 'extra_panelists', 'panelists_for',
            'ACCESS_FLAG', 'RUNS_FIELD', 'PRODUCT_KEY', 'PRODUCT_LABEL', 'JOBS_PREFIX', 'REQUESTS_PREFIX', 'S3_PREFIX', 'S3_INDEX_KEY', 'S3_BUCKET', 'HOW_TO']

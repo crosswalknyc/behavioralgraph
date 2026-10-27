@@ -4,8 +4,10 @@ app.py so app.py stays small.
   GET  /api/digital-twins/list                       twins the caller can see (the shared library)
   GET  /api/digital-twins/how-to                     the in-product directions
   GET  /api/digital-twins/pricing                    the pricing lines for the seat
+  GET  /api/digital-twins/profiles?q=                the Profile IQ profiles the seat can build a twin from (the walkthrough's picker)
   GET  /api/digital-twins/jobs/<job_id>              a build or run job's status
-  POST /api/digital-twins/build                      queue a twin build
+  POST /api/digital-twins/build                      queue a twin build (the walkthrough: source profile|demographics, profile_key,
+                                                     demographics picks, panelists; or a bare subject from the chat)
   POST /api/digital-twins/connect-request            the Connect accounts request record
   GET  /api/digital-twins/<key>                      the twin
   POST /api/digital-twins/<key>/run                  queue a scenario run (Greenlight, Launch, content, compare, ...)
@@ -31,7 +33,12 @@ app.py so app.py stays small.
 Access: ``has_digital_twins_iq_access`` or admin / super_admin; the
 creator always sees their own; ``allowed_digital_twin_runs`` defaults
 to ['*']. Charges go through the pay-per-use ledger by pull type;
-super admins are free. No email is sent from here.
+super admins are free. On top of the priced steps, every model call a
+build, a run or a room question makes carries the seat's pay-per-use
+attribution (``_usage_extras``), so Prometheus usage is metered at the
+published rate like any other Prometheus work (Jenna 2026-10-27:
+'aside from these fees there needs to be billed prometheus metered
+pricing'). No email is sent from here.
 """
 from __future__ import annotations
 
@@ -49,7 +56,7 @@ from migration import digital_twin_synthesis as SYN
 
 bp = Blueprint('digital_twins_api', __name__)
 PREFIX = '/api/digital-twins'
-CREDITS = {'digital_twins_iq': 15, 'digital_twin_run': 3, 'digital_twin_spend': 5, 'digital_twin_panel': 4, 'digital_twin_panel_more': 3}
+CREDITS = {'digital_twins_iq': 15, 'digital_twin_run': 3, 'digital_twin_spend': 5, 'digital_twin_panel': 4, 'digital_twin_panel_more': 3, 'digital_twin_panelist': 1}
 
 
 # ---------------------------------------------------------------- host
@@ -127,9 +134,10 @@ def _price_label(key, username):
         return f"${DT.PRICING[key]:,.0f}"
 
 
-def _charge(user, key, description, job_id):
-    """Charge one priced step; super admins are free. Returns None when
-    charged (or free), else the funds reply."""
+def _charge(user, key, description, job_id, quantity=1):
+    """Charge one priced step (``quantity`` of it for the per-panelist
+    price); super admins are free. Returns None when charged (or free),
+    else the funds reply."""
     uname = _uname(user)
     if _role(user) == 'super_admin':
         return None
@@ -137,14 +145,37 @@ def _charge(user, key, description, job_id):
     if a is None or not hasattr(a, 'consume_credit'):
         return None
     try:
-        ok = a.consume_credit(uname, description=description, pull_type=DT.PULL_TYPES[key], credits_used=CREDITS[key], job_id=job_id)
+        qty = max(1, int(quantity or 1))
+    except (TypeError, ValueError):
+        qty = 1
+    try:
+        if qty > 1:
+            ok = a.consume_credit(uname, description=description, pull_type=DT.PULL_TYPES[key], credits_used=CREDITS[key] * qty, job_id=job_id, quantity=qty)
+        else:
+            ok = a.consume_credit(uname, description=description, pull_type=DT.PULL_TYPES[key], credits_used=CREDITS[key], job_id=job_id)
     except Exception:
         traceback.print_exc()
         ok = False
     if ok:
         return None
+    label = _price_label(key, uname)
+    if qty > 1:
+        label = f"{label} x {qty}"
     return jsonify({'success': False, 'guidance': True,
-                    'error': f"That step runs {_price_label(key, uname)} and your account cannot cover it right now. Add funds or ask your admin, and it runs the moment you are set."}), 402
+                    'error': f"That step runs {label} and your account cannot cover it right now. Add funds or ask your admin, and it runs the moment you are set."}), 402
+
+
+def _usage_extras(user):
+    """The seat's pay-per-use attribution for the model calls a build, a
+    run or a room question makes, so Prometheus usage on Digital Twins
+    work is metered on top of the priced steps. None when the seat is
+    not billed for usage (unlimited, super admin), exactly as the chat
+    decides it."""
+    try:
+        from prometheus.legacy.chat import _pm_usage_extras
+        return _pm_usage_extras(user)
+    except Exception:
+        return None
 
 
 def _claude_json():
@@ -237,6 +268,88 @@ def dt_pricing():
     return jsonify({'success': True, 'lines': DT.pricing_lines(_price_fn(_uname(user))), 'defaults': DT.PRICING})
 
 
+_PROFILE_TS_RX = re.compile(r"_\d{2}_\d{2}_\d{4}(?:_\d{2}_\d{2})?\.csv$", re.I)
+
+
+def _profile_catalog():
+    """The dashboard's profile catalog (system/s3_cache.json as the app
+    holds it): [{display_name, s3_key, category}] for root CSVs."""
+    a = _app()
+    jobs = []
+    try:
+        jobs = list((getattr(a, 's3_cache', None) or {}).get('jobs') or []) if a is not None else []
+        if not jobs and a is not None and hasattr(a, 'load_persisted_cache'):
+            a.load_persisted_cache()
+            jobs = list((getattr(a, 's3_cache', None) or {}).get('jobs') or [])
+    except Exception:
+        jobs = []
+    if not jobs:
+        try:
+            doc = json.loads(_s3().get_object(Bucket=DT.S3_BUCKET, Key='system/s3_cache.json')['Body'].read().decode('utf-8'))
+            jobs = list(doc.get('jobs') or [])
+        except Exception:
+            jobs = []
+    out = []
+    for j in jobs:
+        if not isinstance(j, dict):
+            continue
+        key = str(j.get('s3_key') or '')
+        if not key.endswith('.csv') or '/' in key or 'gen_pop' in key.lower() or key.lower().startswith('gen pop '):
+            continue
+        out.append({'display_name': str(j.get('display_name') or j.get('project_name') or key[:-4].replace('_', ' ')), 's3_key': key, 'category': str(j.get('category') or '')})
+    return out
+
+
+def _can_read_profile(user, key):
+    a = _app()
+    fn = getattr(a, '_user_can_access_profile_run', None) if a is not None else None
+    if fn is None:
+        return True
+    try:
+        return bool(fn(user, key))
+    except Exception:
+        return False
+
+
+@bp.route(f'{PREFIX}/profiles', methods=['GET'])
+def dt_profiles():
+    """The Profile IQ profiles the seat can build a twin from, for the
+    walkthrough's picker: base profiles first (no ' - ' cut suffix,
+    newest build of a name), cuts when the words ask for them."""
+    user, err = _gate()
+    if err:
+        return err
+    q = ' '.join(str(request.args.get('q') or '').split()).lower()
+    toks = [t for t in re.sub(r"[^a-z0-9 ]+", ' ', q).split() if t]
+    try:
+        limit = max(1, min(int(request.args.get('limit') or 30), 80))
+    except (TypeError, ValueError):
+        limit = 30
+    seen, out = set(), []
+    for j in _profile_catalog():
+        name = j['display_name']
+        low = name.lower()
+        if toks and not all(t in low for t in toks):
+            continue
+        is_cut = ' - ' in name
+        if is_cut and not q:
+            continue
+        score = (0 if is_cut else 2) + (1 if _PROFILE_TS_RX.search(j['s3_key']) else 0) + (1 if toks and low.startswith(q) else 0)
+        out.append((score, j))
+    out.sort(key=lambda x: (-x[0], x[1]['display_name'].lower()))
+    picked = []
+    for _score, j in out:
+        if j['display_name'].lower() in seen:
+            continue
+        if not _can_read_profile(user, j['s3_key']):
+            continue
+        seen.add(j['display_name'].lower())
+        picked.append(j)
+        if len(picked) >= limit:
+            break
+    return _nocache(jsonify({'success': True, 'profiles': picked, 'q': q}))
+
+
 @bp.route(f'{PREFIX}/jobs/<job_id>', methods=['GET'])
 def dt_job(job_id):
     user, err = _gate()
@@ -265,18 +378,42 @@ def dt_build():
         return err
     body = request.get_json(silent=True) or {}
     subject = ' '.join(str(body.get('subject') or '').split())[:140]
+    source = str(body.get('source') or '').lower()
+    demo_spec = SYN.demographic_spec(body.get('demographics'))
+    if source == 'demographics' and not demo_spec:
+        return jsonify({'success': False, 'error': 'Pick at least one thing about the group (gender, age, income, ethnicity, parents or a market).'}), 400
+    if source == 'demographics' and not subject:
+        subject = SYN.demographic_name(demo_spec)
     if not subject:
         return jsonify({'success': False, 'error': 'Name the subject of the twin (a title, a creator, a brand, an audience, or an idea).'}), 400
+    profile_key = str(body.get('profile_key') or '').strip()
+    profile_name = ''
+    if profile_key:
+        # the walkthrough picked a profile: a root Total Universe CSV the seat can open
+        if source == 'demographics':
+            profile_key = ''
+        elif '/' in profile_key or not profile_key.endswith('.csv') or not _can_read_profile(user, profile_key):
+            return jsonify({'success': False, 'error': 'That profile is not on your list. Pick another, or name the subject and the twin pulls the audience itself.'}), 400
+        else:
+            profile_name = next((p['display_name'] for p in _profile_catalog() if p['s3_key'] == profile_key), '') or profile_key[:-4].replace('_', ' ')
+    try:
+        panelists = int(body.get('panelists') or 0)
+    except (TypeError, ValueError):
+        panelists = 0
+    panelists = max(2, min(panelists, DT.PANEL_SEATS_MAX)) if panelists else DT.PANEL_SEATS_INCLUDED
     inputs = {'subject': subject, 'subject_kind': str(body.get('subject_kind') or 'audience'), 'purpose': str(body.get('purpose') or '')[:400],
               'format': str(body.get('format') or ''), 'platform_home': str(body.get('platform_home') or ''), 'name': str(body.get('name') or '')[:120],
-              'window': body.get('window') if isinstance(body.get('window'), dict) else None, 'ask_text': str(body.get('ask_text') or '')[:400], 'op': 'build'}
+              'window': body.get('window') if isinstance(body.get('window'), dict) else None, 'ask_text': str(body.get('ask_text') or '')[:400], 'op': 'build',
+              'source': source if source in ('profile', 'demographics') else '', 'profile_key': profile_key, 'profile_name': profile_name,
+              'demographics': demo_spec if source == 'demographics' else None, 'panelists': panelists}
     from prometheus import digital_twin_job as J
     job_id = uuid.uuid4().hex[:12]
     funds = _charge(user, 'digital_twins_iq', f"Digital Twin: {subject}", job_id)
     if funds is not None:
         return funds
-    rec = J.start('twin_build', job_id, _uname(user), inputs, thread_id=str(body.get('thread_id') or ''))
-    return jsonify({'success': True, 'job_id': job_id, 'status': rec.get('status'), 'message': J.build_promise(subject)})
+    rec = J.start('twin_build', job_id, _uname(user), inputs, thread_id=str(body.get('thread_id') or ''), extras=_usage_extras(user))
+    return jsonify({'success': True, 'job_id': job_id, 'status': rec.get('status'), 'subject': subject, 'panelists': panelists,
+                    'extra_panelists': DT.extra_panelists(panelists), 'message': J.build_promise(subject)})
 
 
 @bp.route(f'{PREFIX}/connect-request', methods=['POST'])
@@ -325,7 +462,8 @@ def dt_run(key):
     funds = _charge(user, 'digital_twin_run', f"Digital Twin run ({kind}): {(payload.get('meta') or {}).get('name')}", job_id)
     if funds is not None:
         return funds
-    rec = J.start('twin_run', job_id, _uname(user), {'op': 'run', 'key': key, 'scenario': scenario, 'other_key': other_key}, thread_id=str(body.get('thread_id') or ''))
+    rec = J.start('twin_run', job_id, _uname(user), {'op': 'run', 'key': key, 'scenario': scenario, 'other_key': other_key}, thread_id=str(body.get('thread_id') or ''),
+                  extras=_usage_extras(user))
     return jsonify({'success': True, 'job_id': job_id, 'status': rec.get('status'), 'message': J.run_promise(kind, (payload.get('meta') or {}).get('name'))})
 
 
@@ -566,7 +704,11 @@ def dt_panel_open(key):
             twins.append(other)
     from migration import digital_twin_panel as P
     segments = body.get('segments') or None
-    in_room = int(body.get('in_room') or P.DEFAULT_IN_ROOM)
+    try:
+        in_room = int(body.get('in_room') or 0)
+    except (TypeError, ValueError):
+        in_room = 0
+    in_room = in_room or DT.panelists_for(payload)       # the seats chosen when the twin was built, else the twelve a session covers
     title = str(body.get('title') or '')[:120]
     twins_by_key = {str((t.get('meta') or {}).get('key') or ''): t for t in twins}
     # Opening a room is free; the session price is taken on the first
@@ -598,7 +740,7 @@ def dt_panel_open(key):
             doc['session'] = sess        # the room stays open and free; the question waits on funds
             return jsonify(doc), funds[1]
         rec = P.ask(sess, twins_by_key, first_q, options=body.get('options'), stimulus=body.get('stimulus') if isinstance(body.get('stimulus'), dict) else None,
-                    voices_fn=_voices_fn(), asked_by=_uname(user), s3=_s3(), twin_key=key)
+                    voices_fn=_voices_fn(), asked_by=_uname(user), s3=_s3(), twin_key=key, usage_extras=_usage_extras(user))
         DT.save_twin(_s3(), key, payload)
     if PT is not None:
         try:
@@ -610,13 +752,16 @@ def dt_panel_open(key):
                 _faults.note('digital_twins_api.schedule_portraits', e)
             except Exception:
                 pass
-    return jsonify({'success': True, 'session': sess, 'question': rec, 'reused': reused is not None, 'job_id': (rec or {}).get('job_id'), 'stage': (rec or {}).get('stage')})
+    return jsonify({'success': True, 'session': sess, 'question': rec, 'reused': reused is not None, 'job_id': (rec or {}).get('job_id'), 'stage': (rec or {}).get('stage'),
+                    'extra_panelists': DT.extra_panelists((sess.get('group') or {}).get('in_room'))})
 
 
 def _charge_question(user, payload, sess):
     """The price the next question carries, if any: the session on its
-    first question, a further block when the paid questions are used
-    up. None when nothing is due or it was charged (or free)."""
+    first question (plus the panelists past the twelve a session seats,
+    at the per-panelist price, once per room), a further block when the
+    paid questions are used up. None when nothing is due or it was
+    charged (or free)."""
     from migration import digital_twin_panel as P
     due = P.charge_due(sess, DT.PANEL_QUESTIONS_INCLUDED)
     if not due:
@@ -624,12 +769,32 @@ def _charge_question(user, payload, sess):
     name = (payload.get('meta') or {}).get('name')
     sid = str(sess.get('id') or '')
     asked = len(sess.get('questions') or [])
+    extra = DT.extra_panelists((sess.get('group') or {}).get('in_room')) if due == 'digital_twin_panel' and not sess.get('panelists_paid') else 0
+    if extra:
+        # the extra seats first (the smaller line), then the session; a session that cannot be covered hands the seats back
+        funds = _charge(user, 'digital_twin_panelist', f"Focus Group IQ, {extra} extra panelist{'s' if extra != 1 else ''}: {name}", f"{sid}-seats", quantity=extra)
+        if funds is not None:
+            return funds
+        sess['panelists_paid'] = extra
     desc = f"Focus Group IQ session: {name}" if due == 'digital_twin_panel' else f"Focus Group IQ, {DT.PANEL_QUESTIONS_INCLUDED} more questions: {name}"
     funds = _charge(user, due, desc, sid if due == 'digital_twin_panel' else f"{sid}-{asked}")
     if funds is not None:
+        if extra:
+            sess.pop('panelists_paid', None)
+            _refund(user, CREDITS['digital_twin_panelist'] * extra, f"Focus Group IQ seats returned, the session could not be covered: {name}")
         return funds
     P.mark_paid(sess, DT.PANEL_QUESTIONS_INCLUDED)
     return None
+
+
+def _refund(user, credits, reason):
+    a = _app()
+    if a is None or not hasattr(a, 'refund_credit') or _role(user) == 'super_admin':
+        return
+    try:
+        a.refund_credit(_uname(user), credits=credits, reason=reason)
+    except Exception:
+        traceback.print_exc()
 
 
 @bp.route(f'{PREFIX}/<path:key>/panel/<sid>', methods=['GET'])
@@ -701,7 +866,7 @@ def dt_panel_ask(key, sid):
     # 'researching' with a job_id; poll GET /api/digital-twins/jobs/<job_id> for the stage and the seat answers as
     # they arrive, then the finished record (read, options, voices) lands here on the session (2026-10-26).
     rec = P.ask(sess, twins_by_key, q, kind=body.get('kind'), options=body.get('options'), stimulus=stimulus,
-                voices_fn=_voices_fn(), asked_by=_uname(user), s3=_s3(), twin_key=key, ask_again=ask_again)
+                voices_fn=_voices_fn(), asked_by=_uname(user), s3=_s3(), twin_key=key, ask_again=ask_again, usage_extras=_usage_extras(user))
     DT.save_twin(_s3(), key, payload)
     return jsonify({'success': True, 'question': rec, 'session_id': sid, 'questions_asked': len(sess['questions']), 'questions_paid': sess.get('questions_paid'),
                     'job_id': rec.get('job_id'), 'stage': rec.get('stage')})

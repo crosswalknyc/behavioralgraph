@@ -300,7 +300,7 @@ def confirm_reply(parsed, username=None):
              f"- Window: {w.get('label') or 'Trailing 12 months'} ({w.get('start')} to {w.get('end')})"]
     if parsed.get('platform_home'):
         lines.append(f"- Home: {parsed.get('platform_home')}")
-    lines.append(f"- Price: {_price_label('digital_twins_iq', username)} for the twin, its IP lifetime value and three runs; each further run {_price_label('digital_twin_run', username)}")
+    lines.append(f"- Price: {_price_label('digital_twins_iq', username)} for the twin and its first three runs; each further run {_price_label('digital_twin_run', username)}")
     lines.append(f"Say '{RUN_LABEL}' and I will line it up.")
     return '\n'.join(lines)
 
@@ -432,7 +432,7 @@ def set_active_twin(user, key):
 def _which_twin(runs, what='run this'):
     names = [str(r.get('name') or r.get('subject')) for r in runs[:5]]
     if not names:
-        return _payload(f"There is no twin in the library yet. Say 'Build a twin of <subject>' and I will build one ({_price_label('digital_twins_iq', None)}, with its IP lifetime value and three runs).",
+        return _payload(f"There is no twin in the library yet. Say 'Build a twin of <subject>' and I will build one ({_price_label('digital_twins_iq', None)}, with its first three runs).",
                         ['Build a twin of Gilmore Girls Hulu viewers'])
     return _payload(f"Which twin should I {what} on? " + ', '.join(names) + '.', [f"The {n} twin" for n in names[:4]])
 
@@ -705,7 +705,7 @@ def panel_reply(payload, session, rec, key, user):
         # the room engine answers as a job: the read, the table and the voices land in this thread when it finishes
         n = int((session.get('group') or {}).get('in_room') or 12)
         reply = (f"The room is on it. First the record on {payload['meta'].get('name')} and this question, then the {n} people in the room answer in their own words, "
-                 f"then the moderator reads the room. The read, the table and the voices land here in about a minute; Focus Group IQ shows the seats answering live." + tail)
+                 f"then Prometheus reads the room. The read, the table and the voices land here in about a minute; Focus Group IQ shows the seats answering live." + tail)
         return _payload(reply, ['Open Focus Group IQ'], panel_session={'key': key, 'sid': session.get('id'), 'question_id': rec.get('id')},
                         twin_job_id=rec['job_id'], job_id=rec['job_id'], job_type='twin_panel', open_view='digitalTwinsIQ', twin_key=key,
                         action_hint={'view': 'digitalTwinsIQ', 'tab': 'panel', 'twin_key': key, 'session_id': session.get('id'), 'job_id': rec['job_id']})
@@ -1004,7 +1004,7 @@ def catalog_reply(text, user):
         return _payload(line, [f"Run Greenlight Lab on the {r.get('name')} twin", f"Open a focus group with the {r.get('name')} twin", OPEN_CHIP], twin_key=r.get('key'), open_view='digitalTwinsIQ',
                         action_hint={'view': 'digitalTwinsIQ', 'tab': 'twins', 'twin_key': r.get('key')})
     subj = re.sub(r".*\btwins?\s+(?:of|for|on)\s+", '', str(text or ''), flags=re.I).strip(' ?.')
-    return _payload(f"No twin for {subj or 'that'} yet. Say 'Build a twin of {subj or '<subject>'}' and I will build it ({_price_label('digital_twins_iq', _uname(user))}, with its IP lifetime value and three runs).",
+    return _payload(f"No twin for {subj or 'that'} yet. Say 'Build a twin of {subj or '<subject>'}' and I will build it ({_price_label('digital_twins_iq', _uname(user))}, with its first three runs).",
                     [f"Build a twin of {subj}"] if subj else ['Build a twin of Gilmore Girls Hulu viewers'])
 
 
