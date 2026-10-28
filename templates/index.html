@@ -195235,6 +195235,21 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         row-gap: 3px;
         overflow: hidden !important;
     }
+    /* Books and Libby carry the count as plain text, not a pill: the
+       Libby units ("daily US library audiobook borrows") are too long for
+       a pill in a 291px column. The line wraps at a word, the move rides
+       at its end, and a move of zero leaves nothing after the unit. */
+    #trendsIQView[data-tiq-product="trends"] [data-tiq-panel="books"] .tiq-audience-chip {
+        display: block !important;
+        background: transparent !important;
+        border: 0 !important;
+        border-radius: 0 !important;
+        padding: 0 !important;
+        white-space: normal !important;
+        line-height: 1.3;
+        max-width: 100%;
+    }
+    #trendsIQView[data-tiq-product="trends"] [data-tiq-panel="books"] .tiq-audience-delta.flat { display: none; }
     /* ================================================================
        SUBSCRIBER IQ
        Graphite ground, the Library rail rather than a docked column,
