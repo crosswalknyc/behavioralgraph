@@ -1290,6 +1290,7 @@ def build_twin(inputs: dict, claude_json: Optional[Callable] = None, *, tools=No
     twin['runs'] = []
     twin['labs'] = {'spend': []}
     twin['panel_sessions'] = []
+    twin['pilot_sessions'] = []
     if ip_related:
         twin['standing_questions'] = standing_questions(twin, corpus, seed)
     # three runs with the build
@@ -1345,7 +1346,8 @@ def index_entry(key: str, payload: dict) -> dict:
             'cover_rev': m.get('cover_rev') or 0, 'cover_locked': bool(m.get('cover_locked')),
             'source': m.get('source') or '', 'panelists': m.get('panelists') or 0,
             'runs': len(payload.get('runs') or []), 'spend_plans': len(((payload.get('labs') or {}).get('spend')) or []),
-            'panel_sessions': len(payload.get('panel_sessions') or [])}
+            'panel_sessions': len(payload.get('panel_sessions') or []),
+            'pilot_sessions': len(payload.get('pilot_sessions') or [])}
 
 
 def update_index(s3, key: str, payload: dict) -> None:

@@ -46,6 +46,8 @@ PRICING = {
     'digital_twin_panel': 5500.0,       # a Focus Group IQ session, 12 questions included (Jenna 2026-10-26: 'A session is $5,500 (twelve questions, any room)')
     'digital_twin_panel_more': 5500.0,  # each further 12 questions is another session at the session price
     'digital_twin_panelist': 550.0,     # each panelist beyond the 12 a room seats, billed with the session (Jenna 2026-10-27: 'extra panelists for an extra $550 x panelist')
+    'digital_twin_pilot': 5500.0,       # a Pilot Testing session, same as a Focus Group IQ session (Jenna 2026-10-28)
+    'digital_twin_pilot_more': 5500.0,  # each further 12 questions in a Pilot Testing session
 }
 PANEL_QUESTIONS_INCLUDED = 12
 PANEL_SEATS_INCLUDED = 12               # panelists a session covers; every seat past this is a priced panelist
@@ -54,6 +56,7 @@ PULL_TYPES = {
     'digital_twins_iq': 'Digital Twins IQ', 'digital_twin_run': 'Digital Twins IQ Run', 'digital_twin_spend': 'Digital Twins IQ Spend',
     'digital_twin_panel': 'Digital Twins IQ Focus Group', 'digital_twin_panel_more': 'Digital Twins IQ Focus Group More',
     'digital_twin_panelist': 'Digital Twins IQ Focus Group Panelist',
+    'digital_twin_pilot': 'Digital Twins IQ Pilot Testing', 'digital_twin_pilot_more': 'Digital Twins IQ Pilot Testing More',
 }
 
 
@@ -403,6 +406,11 @@ def csv_rows(payload: dict) -> list:
         for q in ps.get('questions') or []:
             for r in q.get('distribution') or []:
                 rows.append(['Focus Group IQ', ps.get('id'), f"{q.get('q')}: {r.get('label')}", r.get('pct'), '%', f"{r.get('people')} people"])
+    for ps in payload.get('pilot_sessions') or []:
+        sc = ps.get('scorecard') or {}
+        rows.append(['Pilot Testing', ps.get('id'), ps.get('title'), sc.get('overall_like'), 'overall like', f"recommend {sc.get('recommend_pct')}"])
+        for e in (ps.get('events') or [])[:40]:
+            rows.append(['Pilot Testing', ps.get('id'), f"{e.get('type')} at {e.get('t')}", e.get('intensity'), 'event', e.get('line')])
     return rows
 
 
@@ -445,6 +453,14 @@ def view_summary(payload: dict, run_id: str = '', session_id: str = '') -> dict:
         if s:
             out['open_panel_session'] = {'id': s.get('id'), 'title': s.get('title'), 'in_room': (s.get('group') or {}).get('in_room'),
                                          'questions': [{'q': q.get('q'), 'kind': q.get('kind'), 'read': q.get('read'), 'distribution': q.get('distribution')} for q in (s.get('questions') or [])[-6:]]}
+        p = next((x for x in payload.get('pilot_sessions') or [] if x.get('id') == session_id), None)
+        if p:
+            sc = p.get('scorecard') or {}
+            out['open_pilot_session'] = {'id': p.get('id'), 'title': p.get('title'), 'status': p.get('status'),
+                                         'overall_like': sc.get('overall_like'), 'recommend_pct': sc.get('recommend_pct'),
+                                         'finish_intent_pct': sc.get('finish_intent_pct'),
+                                         'events_n': len(p.get('events') or []),
+                                         'questions': [{'q': q.get('q'), 'playhead_clock': q.get('playhead_clock'), 'read': q.get('read')} for q in (p.get('questions') or [])[-6:]]}
     spends = ((payload.get('labs') or {}).get('spend')) or []
     if spends:
         sp = spends[0]
@@ -500,6 +516,12 @@ def twin_lines(payload: dict) -> list:
         qs = ps.get('questions') or []
         if qs:
             out.append('FOCUS GROUP IQ, ' + str(ps.get('title')) + ':\n' + '\n'.join(f"{q.get('q')}: " + '; '.join(f"{r['label']} {r['pct']}%" for r in (q.get('distribution') or [])[:5]) for q in qs[-5:]))
+    for ps in (payload.get('pilot_sessions') or [])[:2]:
+        sc = ps.get('scorecard') or {}
+        fav = sc.get('favorite_moment') or {}
+        out.append('PILOT TESTING, ' + str(ps.get('title')) + ':\n' +
+                   f"Overall like {sc.get('overall_like')}. Recommend {sc.get('recommend_pct')}. Finish {sc.get('finish_intent_pct')}. "
+                   f"Favorite moment {fav.get('clock')}: {fav.get('line')}")
     if rd.get('what_to_do'):
         out.append('WHAT TO DO:\n' + '\n'.join(rd['what_to_do']))
     return [b for b in out if b.strip()]
@@ -536,6 +558,7 @@ def pricing_lines(price_fn=None) -> list:
             f"Each further Greenlight, Launch, content or compare run - {money(p('digital_twin_run'))}",
             f"Spend Engine - {money(p('digital_twin_spend'))} to activate a plan for its window, daily runs included",
             f"Focus Group IQ - {money(p('digital_twin_panel'))} a session with {PANEL_QUESTIONS_INCLUDED} questions, then {money(p('digital_twin_panel_more'))} for each further {PANEL_QUESTIONS_INCLUDED}",
+            f"Pilot Testing - {money(p('digital_twin_pilot'))} a session with {PANEL_QUESTIONS_INCLUDED} questions on the clock, then {money(p('digital_twin_pilot_more'))} for each further {PANEL_QUESTIONS_INCLUDED} (same as Focus Group IQ)",
             f"Extra panelist - {money(p('digital_twin_panelist'))} for each panelist past the {PANEL_SEATS_INCLUDED} a session seats, billed with the session",
             "Prometheus usage - metered at the published rate on top of these, for the build and for every question in a room"]
 
@@ -598,11 +621,29 @@ HOW_TO = [
         'comes_back': 'The % table, the voices and the read in the chat and on the Focus Group IQ tab, where the room, the live bars and the transcript sit. The session is saved on the twin and resumes where you left it.',
         'cost_key': 'digital_twin_panel', 'export': 'Focus Group IQ tab: Export (CSV or PDF) on the session.',
     },
+    {
+        'id': 'pilot', 'title': 'Pilot Testing',
+        'answers': ('A live watch of a pilot, movie, trailer or episode. Prometheus moderates. The twins in the room watch the cut '
+                    'from the moment you press Play: a dial of how the room feels second by second, laughs and loves marked on the clock, '
+                    'and you can ask them a question at any timestamp. After the cut: overall like, recommend, finish intent, the favorite '
+                    'moment, the dead spot, the transcript.'),
+        'put_in': (f'A name for the test, the twin (or a second twin) in the room, how many panelists sit '
+                   f'({PANEL_SEATS_INCLUDED} come with a session; each one past that is priced), and the cut: upload an mp4, mov or webm, '
+                   'or paste a title and a runtime if the file is not in hand yet. The seats match the twin\'s profile '
+                   '(gender, orientation, education, occupation); each persona is built from those attributes.'),
+        'type_this': ['Open Pilot Testing on the Gilmore Girls twin and play the season 2 pilot',
+                      'Ask the room at 12:40: would you keep watching?',
+                      'Show of hands, who laughed at the diner scene?'],
+        'attach': 'Upload the cut (mp4, mov or webm) on the Pilot Testing tab. A title and runtime still run the clock on a slate if the file is not ready.',
+        'comes_back': ('The dial draws as the cut plays, events land on the scrubber, and answers to your questions carry the playhead timestamp. '
+                       'The test is saved on the twin and resumes where you left it. Delete a test from the Pilot Testing tab; you can undo for 30 days.'),
+        'cost_key': 'digital_twin_pilot', 'export': 'Pilot Testing tab: Export CSV, PDF or Deck on the test.',
+    },
 ]
 
 
 def how_to(price_fn=None) -> dict:
-    """The directions as data: five things, each with what it answers,
+    """The directions as data: six things, each with what it answers,
     what to put in, the lines to type, how to attach, what comes back,
     the cost and how to export. The dashboard renders it; Prometheus
     reads it aloud."""
@@ -624,6 +665,10 @@ def how_to(price_fn=None) -> dict:
         if it['id'] == 'panel':
             row['cost'] = (f"{money(prices['digital_twin_panel'])} a session with {PANEL_QUESTIONS_INCLUDED} questions, then {money(prices['digital_twin_panel_more'])} for each further {PANEL_QUESTIONS_INCLUDED}; "
                            f"{money(prices['digital_twin_panelist'])} for each panelist past {PANEL_SEATS_INCLUDED}; Prometheus usage metered on top")
+        elif it['id'] == 'pilot':
+            row['cost'] = (f"{money(prices['digital_twin_pilot'])} a session (same as Focus Group IQ), charged on first Play, with {PANEL_QUESTIONS_INCLUDED} questions on the clock, "
+                           f"then {money(prices['digital_twin_pilot_more'])} for each further {PANEL_QUESTIONS_INCLUDED}; "
+                           f"{money(prices['digital_twin_panelist'])} for each panelist past {PANEL_SEATS_INCLUDED}; Prometheus usage metered on top")
         elif it['id'] == 'twin':
             row['cost'] = f"{money(prices['digital_twins_iq'])}, with three runs included; Prometheus usage on the build metered on top"
         elif it['id'] == 'spend':
@@ -636,23 +681,25 @@ def how_to(price_fn=None) -> dict:
                       'Everything here can be typed to Prometheus or done on this page. Type the example lines as written, with your own subject, '
                       'and attach files with the paper clip in the chat.'),
             'items': items, 'pricing': pricing_lines(price_fn),
-            'where': 'Twins land on the Twins tab; lab runs on their lab tab and in the twin\'s Runs list; focus group sessions on the Focus Group IQ tab. Prometheus confirms every one in the chat. Delete a twin from the Twins tab; you can undo for 30 days.'}
+            'where': 'Twins land on the Twins tab; lab runs on their lab tab and in the twin\'s Runs list; focus group sessions on the Focus Group IQ tab; watches on the Pilot Testing tab. Prometheus confirms every one in the chat. Delete a twin from the Twins tab; you can undo for 30 days.'}
 
 
 def how_to_text(topic: str = '', price_fn=None) -> str:
     """The directions as plain text for a chat answer: one thing when
-    the question names it, all five otherwise."""
+    the question names it, all six otherwise."""
     doc = how_to(price_fn)
     low = str(topic or '').lower()
     pick = []
     if re.search(r"\bdigital twins? iq\b|\btwin iq\b|\b(all|everything|whole|five)\b", low):
-        pick = []            # the whole product: all five things
+        pick = []            # the whole product: all six things
     elif re.search(r"\b(green ?light|odds|logline|idea)\b", low):
         pick = [it for it in doc['items'] if it['id'] == 'greenlight']
     elif re.search(r"\b(launch lab|launch|plan|budget)\b", low):
         pick = [it for it in doc['items'] if it['id'] == 'launch']
     elif re.search(r"\b(spend|moves?|daily|rule)\b", low):
         pick = [it for it in doc['items'] if it['id'] == 'spend']
+    elif re.search(r"\b(pilot test|pilot testing|movie test|trailer test|dial test|watch the cut)\b", low):
+        pick = [it for it in doc['items'] if it['id'] == 'pilot']
     elif re.search(r"\b(panel|focus group|survey|room|moderat)\b", low):
         pick = [it for it in doc['items'] if it['id'] == 'panel']
     elif re.search(r"\b(build|make|create)\b.*\btwin\b|\btwin\b.*\b(build|built)\b", low):
@@ -671,8 +718,8 @@ def how_to_text(topic: str = '', price_fn=None) -> str:
     return '\n\n'.join(out)
 
 
-HOW_TO_RX = re.compile(r"\b(how (?:do|can|would|should) (?:i|we|you) (?:use|run|open|build|start|work|get)|how does .* work|what (?:is|does) (?:digital twins?|twin iq|greenlight lab|launch lab|spend engine|panel lab|focus group iq|focus group)|directions|instructions|walk me through|how to (?:use|run|build|open))\b", re.I)
-TWIN_WORDS_RX = re.compile(r"\b(digital twins?|twins? iq|twin|greenlight lab|launch lab|spend engine|panel lab|focus group iq|focus group)\b", re.I)
+HOW_TO_RX = re.compile(r"\b(how (?:do|can|would|should) (?:i|we|you) (?:use|run|open|build|start|work|get)|how does .* work|what (?:is|does) (?:digital twins?|twin iq|greenlight lab|launch lab|spend engine|panel lab|focus group iq|focus group|pilot testing)|directions|instructions|walk me through|how to (?:use|run|build|open))\b", re.I)
+TWIN_WORDS_RX = re.compile(r"\b(digital twins?|twins? iq|twin|greenlight lab|launch lab|spend engine|panel lab|focus group iq|focus group|pilot testing|pilot test)\b", re.I)
 
 
 def is_how_to_ask(text: str) -> bool:

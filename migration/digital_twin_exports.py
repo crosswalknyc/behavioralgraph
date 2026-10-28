@@ -128,7 +128,7 @@ def _pages(payload: dict) -> list:
 
 
 # ------------------------------------------------------------------ pptx
-def build_deck(payload: dict) -> bytes:
+def build_deck(payload: dict, pages: Optional[list] = None) -> bytes:
     from pptx import Presentation
     from pptx.dml.color import RGBColor
     from pptx.enum.shapes import MSO_SHAPE
@@ -140,7 +140,7 @@ def build_deck(payload: dict) -> bytes:
     prs = Presentation()
     prs.slide_width, prs.slide_height = Inches(13.333), Inches(7.5)
     blank = prs.slide_layouts[6]
-    pages = _pages(payload)
+    pages = pages if pages is not None else _pages(payload)
     total = len(pages)
     L, R = 0.92, 12.413
 
@@ -573,4 +573,125 @@ def panel_pdf_filename(payload: dict, session: dict) -> str:
     return re.sub(r"[^A-Za-z0-9]+", '_', f"{m.get('name') or m.get('subject')} Focus Group IQ {session.get('id')}").strip('_') + '.pdf'
 
 
-__all__ = ['build_deck', 'deck_filename', 'build_pdf', 'pdf_filename', 'build_panel_pdf', 'panel_pdf_filename']
+def _clock(t) -> str:
+    try:
+        s = max(0, int(round(float(t))))
+    except (TypeError, ValueError):
+        s = 0
+    return f"{s // 60}:{s % 60:02d}"
+
+
+def _pilot_pages(payload: dict, session: dict) -> list:
+    m = payload.get('meta') or {}
+    name = str(m.get('name') or m.get('subject') or 'the twin')
+    sc = session.get('scorecard') or {}
+    fav = sc.get('favorite_moment') or {}
+    dead = sc.get('dead_spot') or {}
+    media = session.get('media') or {}
+    title = str(session.get('title') or media.get('title') or 'Pilot test')
+    pages = [
+        {'kind': 'tiles', 'header': f"{name} watched {title}.",
+         'sub': 'Overall like, recommend, and finish intent from the room.',
+         'tiles': [
+             (f"{float(sc.get('overall_like') or 0):.1f}", 'Overall like'),
+             (f"{float(sc.get('recommend_pct') or 0):.1f}%", 'Would recommend'),
+             (f"{float(sc.get('finish_intent_pct') or 0):.1f}%", 'Would finish'),
+         ],
+         'body': list(sc.get('notes') or [])[:3], 'dark': True},
+        {'kind': 'bullets', 'header': 'The moments that moved the room.',
+         'sub': f"Favorite at {fav.get('clock') or _clock(fav.get('t'))}. Dead spot at {dead.get('clock') or _clock(dead.get('t'))}.",
+         'body': [
+             f"Favorite moment: {fav.get('line') or 'The room peaked here.'}",
+             f"Dead spot: {dead.get('line') or 'The room dipped.'}",
+         ] + [f"{_clock(e.get('t'))}  {e.get('name')}: {e.get('line')}" for e in (session.get('events') or [])[:6]],
+         'dark': False},
+    ]
+    qs = session.get('questions') or []
+    if qs:
+        pages.append({'kind': 'bullets', 'header': 'What they said when asked.',
+                      'sub': 'Questions sit on the playhead.',
+                      'body': [f"{q.get('playhead_clock') or _clock(q.get('playhead_s'))}: {q.get('q')}  {q.get('read') or ''}" for q in qs[:6]],
+                      'dark': True})
+    pages.append({'kind': 'bullets', 'header': 'What this means for the cut.',
+                  'sub': '',
+                  'body': [
+                      f"{int(sc.get('people') or 0):,} people sit behind this room." if sc.get('people') else 'The room stands for the twin.',
+                      'Keep the favorite moment. Look hard at the dead spot.',
+                  ], 'dark': False})
+    return pages
+
+
+def build_pilot_deck(payload: dict, session: dict) -> bytes:
+    return build_deck(payload, pages=_pilot_pages(payload, session))
+
+
+def build_pilot_pdf(payload: dict, session: dict, portrait_fn=None) -> bytes:
+    d = _Doc()
+    m = payload.get('meta') or {}
+    g = session.get('group') or {}
+    sc = session.get('scorecard') or {}
+    fav = sc.get('favorite_moment') or {}
+    dead = sc.get('dead_spot') or {}
+    read = _portrait_reader(portrait_fn)
+    d.new_page(True, 'Pilot Testing', _words(f"{session.get('title') or 'The cut'}"),
+               f"{g.get('in_room')} twins in the room. Moderated by Prometheus.")
+    y = d.y
+    y = d.table([
+        ('Overall like', f"{float(sc.get('overall_like') or 0):.1f}", ''),
+        ('Would recommend', f"{float(sc.get('recommend_pct') or 0):.1f}%", ''),
+        ('Would finish', f"{float(sc.get('finish_intent_pct') or 0):.1f}%", ''),
+        ('Favorite moment', f"{fav.get('clock') or ''}", str(fav.get('line') or '')[:80]),
+        ('Dead spot', f"{dead.get('clock') or ''}", str(dead.get('line') or '')[:80]),
+    ], d.m, y, d.right - d.m, head=('Score', 'Value', 'Note'))
+    for n in (sc.get('notes') or [])[:4]:
+        y = d.paragraph(n, d.m, y - 4, d.right - d.m, size=10)
+    roster_rows = (g.get('roster') or [])[:16]
+    faces = [(r, read(r.get('portrait_hash'))) for r in roster_rows]
+    if any(img is not None for _r, img in faces):
+        size, gap = 0.40 * 72, 0.10 * 72
+        per_row = max(1, int((d.right - d.m + gap) // (size + gap)))
+        yy = y - 8 - size
+        for j, (r, img) in enumerate(faces):
+            xx = d.m + (j % per_row) * (size + gap)
+            if j and j % per_row == 0:
+                yy -= size + gap + 12
+            from reportlab.lib import colors
+            d.c.setFillColor(colors.HexColor(SLATE))
+            d.c.circle(xx + size / 2.0, yy + size / 2.0, size / 2.0, stroke=0, fill=1)
+            if img is not None:
+                _draw_round_portrait(d.c, img, xx, yy, size)
+            d.c.setFont(d.f['regular'], 6.5)
+            d.c.setFillColor(colors.HexColor(BODY_DARK))
+            d.c.drawCentredString(xx + size / 2.0, yy - 8, str(r.get('name') or '')[:12])
+        y = yy - 20
+    events = session.get('events') or []
+    if events:
+        y = d.new_page(False, 'Pilot Testing', _words('Moments on the clock'))
+        y = d.table(
+            [(f"{_clock(e.get('t'))} {e.get('type')}", f"{e.get('name')}, {e.get('age')}", str(e.get('line') or '')[:70])
+             for e in events[:18]],
+            d.m, y, d.right - d.m, head=('Clock', 'Twin', 'Line'))
+    for i, q in enumerate(session.get('questions') or []):
+        y = d.new_page(i % 2 == 0, 'Pilot Testing', _words(q.get('read') or q.get('q')),
+                       f"At {q.get('playhead_clock') or _clock(q.get('playhead_s'))}: {q.get('q')}")
+        y = d.table([(r['label'], f"{r['pct']}%", f"{int(r.get('people') or 0):,} people")
+                     for r in (q.get('distribution') or [])[:8]],
+                    d.m, y, d.right - d.m, head=('Answer', 'Share', 'People'))
+        for v in (q.get('voices') or [])[:4]:
+            y = d.paragraph(f"{v.get('name')}, {v.get('age')}, {v.get('city')}: {v.get('line')}",
+                            d.m, y - 6, d.right - d.m, size=10, color=OFFWHITE if d.dark else GRAPHITE, font=d.f['medium'])
+    return _fin(d.finish(), '.pdf')
+
+
+def pilot_pdf_filename(payload: dict, session: dict) -> str:
+    m = payload.get('meta') or {}
+    return re.sub(r"[^A-Za-z0-9]+", '_', f"{m.get('name') or m.get('subject')} Pilot Testing {session.get('id')}").strip('_') + '.pdf'
+
+
+def pilot_deck_filename(payload: dict, session: dict) -> str:
+    m = payload.get('meta') or {}
+    return re.sub(r"[^A-Za-z0-9]+", '_', f"{m.get('name') or m.get('subject')} Pilot Testing {session.get('id')}").strip('_') + '.pptx'
+
+
+__all__ = ['build_deck', 'deck_filename', 'build_pdf', 'pdf_filename', 'build_panel_pdf', 'panel_pdf_filename',
+           'build_pilot_pdf', 'pilot_pdf_filename', 'build_pilot_deck', 'pilot_deck_filename']

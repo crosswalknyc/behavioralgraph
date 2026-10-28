@@ -39,10 +39,12 @@ ROWS = (
     ('Digital Twin (with its first three runs)', 'digital_twins_iq', 750.0, 'twin'),
     ('Digital Twin Spend Engine (a plan for its window, daily runs included)', 'digital_twin_spend', 250.0, 'flat'),
     ('Digital Twin Focus Group IQ (a session with 12 questions, 12 panelists)', 'digital_twin_panel', 5500.0, 'panel'),
+    ('Digital Twin Pilot Testing (a session with 12 questions on the clock, 12 panelists)', 'digital_twin_pilot', 5500.0, 'pilot'),
 )
 TWIN_RUN_KEY, TWIN_RUN_DEFAULT = 'digital_twin_run', 100.0
 PANEL_MORE_KEY, PANEL_MORE_DEFAULT = 'digital_twin_panel_more', 5500.0   # a further twelve questions is another session (Jenna 2026-10-26)
 PANELIST_KEY, PANELIST_DEFAULT = 'digital_twin_panelist', 550.0           # each panelist past the twelve a session seats (Jenna 2026-10-27)
+PILOT_MORE_KEY, PILOT_MORE_DEFAULT = 'digital_twin_pilot_more', 5500.0
 DAILY_KEY, DAILY_DEFAULT = 'attribution_iq_daily', 100.0
 CUT_KEY, CUT_DEFAULT = 'profile_iq_derived_cut', 100.0
 # Jenna 2026-10-21: the initial custom ask is $100, then $50 for each
@@ -58,6 +60,7 @@ DEFAULTS[FOLLOWUP_KEY] = FOLLOWUP_DEFAULT
 DEFAULTS[TWIN_RUN_KEY] = TWIN_RUN_DEFAULT
 DEFAULTS[PANEL_MORE_KEY] = PANEL_MORE_DEFAULT
 DEFAULTS[PANELIST_KEY] = PANELIST_DEFAULT
+DEFAULTS[PILOT_MORE_KEY] = PILOT_MORE_DEFAULT
 
 
 def default(key):
@@ -103,6 +106,10 @@ def render(symbol='$', price_fn=None):
             more = _price(price_fn, PANEL_MORE_KEY, PANEL_MORE_DEFAULT)
             seat = _price(price_fn, PANELIST_KEY, PANELIST_DEFAULT)
             lines.append(f"{label} - {money(p, c)}, then {money(more, c)} for each further 12 questions, and {money(seat, c)} for each panelist past 12")
+        elif shape == 'pilot':
+            more = _price(price_fn, PILOT_MORE_KEY, PILOT_MORE_DEFAULT)
+            seat = _price(price_fn, PANELIST_KEY, PANELIST_DEFAULT)
+            lines.append(f"{label} - {money(p, c)} on first Play, then {money(more, c)} for each further 12 questions, and {money(seat, c)} for each panelist past 12")
         else:
             lines.append(f"{label} - {money(p, c)}")
     lines.append('')

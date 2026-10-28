@@ -32,6 +32,19 @@ app.py so app.py stays small.
   POST /api/digital-twins/<key>/delete               the same for clients that cannot send DELETE
   GET  /api/digital-twins/<key>/panel/<sid>/export.csv
   GET  /api/digital-twins/<key>/panel/<sid>/export.pdf
+  POST /api/digital-twins/<key>/pilot/open           open a Pilot Testing session (free; charge on first Play)
+  GET  /api/digital-twins/<key>/pilot/<sid>          the test
+  PATCH /api/digital-twins/<key>/pilot/<sid>         rename
+  POST /api/digital-twins/<key>/pilot/<sid>/upload   the cut (mp4 / mov / webm)
+  POST /api/digital-twins/<key>/pilot/<sid>/prepare  build the watch (beats, dial, events)
+  POST /api/digital-twins/<key>/pilot/<sid>/play     first Play charges; then the room is live on the clock
+  POST /api/digital-twins/<key>/pilot/<sid>/ask      a question at the playhead
+  POST /api/digital-twins/<key>/pilot/<sid>/stop     stop and keep the scorecard
+  DELETE /api/digital-twins/<key>/pilot/<sid>        delete (30-day undo)
+  GET  /api/digital-twins/<key>/pilot/<sid>/media    the uploaded cut
+  GET  /api/digital-twins/<key>/pilot/<sid>/export.csv
+  GET  /api/digital-twins/<key>/pilot/<sid>/export.pdf
+  GET  /api/digital-twins/<key>/pilot/<sid>/export.pptx
   GET  /api/digital-twins/portrait/<hash>?size=128   a twin's generated portrait (JPEG, long cache); 404 when absent
 
 Access: ``has_digital_twins_iq_access`` or admin / super_admin; the
@@ -60,7 +73,8 @@ from migration import digital_twin_synthesis as SYN
 
 bp = Blueprint('digital_twins_api', __name__)
 PREFIX = '/api/digital-twins'
-CREDITS = {'digital_twins_iq': 15, 'digital_twin_run': 3, 'digital_twin_spend': 5, 'digital_twin_panel': 4, 'digital_twin_panel_more': 3, 'digital_twin_panelist': 1}
+CREDITS = {'digital_twins_iq': 15, 'digital_twin_run': 3, 'digital_twin_spend': 5, 'digital_twin_panel': 4, 'digital_twin_panel_more': 3, 'digital_twin_panelist': 1,
+           'digital_twin_pilot': 4, 'digital_twin_pilot_more': 3}
 
 
 # ---------------------------------------------------------------- host
@@ -975,6 +989,463 @@ def dt_panel_pdf(key, sid):
 
 
 _PORTRAIT_HASH_RX = re.compile(r"^[0-9a-f]{16,64}$")
+
+
+# -------------------------------------------- pilot testing
+def _pilot(payload, sid):
+    return next((s for s in payload.get('pilot_sessions') or [] if s.get('id') == sid), None)
+
+
+def _charge_pilot(user, payload, sess, *, for_play=False):
+    """The session on first Play (plus extra panelists once), a further
+    question block after the included twelve. None when nothing is due."""
+    from migration import digital_twin_pilot as PI
+    due = PI.charge_due(sess)
+    if not due:
+        return None
+    if due == 'digital_twin_pilot' and not for_play and sess.get('play_charged'):
+        return None
+    if due == 'digital_twin_pilot_more' and for_play:
+        return None
+    if due == 'digital_twin_pilot' and not for_play:
+        return None
+    name = (payload.get('meta') or {}).get('name')
+    sid = str(sess.get('id') or '')
+    extra = DT.extra_panelists((sess.get('group') or {}).get('in_room')) if due == 'digital_twin_pilot' and not sess.get('panelists_paid') else 0
+    if extra:
+        funds = _charge(user, 'digital_twin_panelist', f"Pilot Testing, {extra} extra panelist{'s' if extra != 1 else ''}: {name}", f"{sid}-seats", quantity=extra)
+        if funds is not None:
+            return funds
+        sess['panelists_paid'] = extra
+    desc = f"Pilot Testing session: {name}" if due == 'digital_twin_pilot' else f"Pilot Testing, {DT.PANEL_QUESTIONS_INCLUDED} more questions: {name}"
+    asked = len(sess.get('questions') or [])
+    funds = _charge(user, due, desc, sid if due == 'digital_twin_pilot' else f"{sid}-q{asked}")
+    if funds is not None:
+        if extra:
+            sess.pop('panelists_paid', None)
+            _refund(user, CREDITS['digital_twin_panelist'] * extra, f"Pilot Testing seats returned, the session could not be covered: {name}")
+        return funds
+    if due == 'digital_twin_pilot':
+        PI.mark_play_paid(sess, DT.PANEL_QUESTIONS_INCLUDED)
+    else:
+        PI.mark_paid(sess, DT.PANEL_QUESTIONS_INCLUDED)
+    return None
+
+
+@bp.route(f'{PREFIX}/<path:key>/pilot/open', methods=['POST'])
+def dt_pilot_open(key):
+    user, err = _gate()
+    if err:
+        return err
+    payload, err = _twin_or_404(user, key)
+    if err:
+        return err
+    body = request.get_json(silent=True) or {}
+    twins = [payload]
+    for ok in [str(k) for k in (body.get('twins') or []) if str(k) and str(k) != key][:3]:
+        other, oerr = _twin_or_404(user, ok)
+        if other:
+            twins.append(other)
+    from migration import digital_twin_pilot as PI
+    from migration import digital_twin_room as ROOM
+    from migration.digital_twin_synthesis import hydrate_identity_from_profile
+    s3 = _s3()
+    for t in twins:
+        try:
+            hydrate_identity_from_profile(t, s3)
+        except Exception:
+            traceback.print_exc()
+    twins_by_key = {str((t.get('meta') or {}).get('key') or ''): t for t in twins}
+    segments = body.get('segments') or None
+    try:
+        in_room = int(body.get('in_room') or 0)
+    except (TypeError, ValueError):
+        in_room = 0
+    in_room = in_room or DT.panelists_for(payload)
+    title = str(body.get('title') or '')[:120]
+    reused = PI.find_reusable_session(payload, twins, title=title, created_by=_uname(user))
+    if reused is not None:
+        sess = reused
+    else:
+        media = {}
+        if body.get('cut_title') or body.get('runtime_s') or body.get('runtime'):
+            try:
+                runtime = float(body.get('runtime_s') or body.get('runtime') or 0)
+            except (TypeError, ValueError):
+                runtime = 0
+            media = {'title': str(body.get('cut_title') or title or '')[:160], 'runtime_s': runtime, 'source': 'slate'}
+        sess = PI.open_session(twins, segments=segments, in_room=in_room, title=title, created_by=_uname(user),
+                               session_id=uuid.uuid4().hex[:10], media=media)
+        sess['twin_keys'] = [str((t.get('meta') or {}).get('key') or '') for t in twins]
+        payload.setdefault('pilot_sessions', []).insert(0, sess)
+    try:
+        ROOM.ensure_personas(sess, twins_by_key, session_seed=str(sess.get('id') or ''))
+    except Exception:
+        traceback.print_exc()
+    PT = _portraits()
+    if PT is not None:
+        try:
+            PT.attach_portraits(sess, _s3())
+        except Exception:
+            pass
+    DT.save_twin(_s3(), key, payload)
+    if PT is not None:
+        try:
+            PT.schedule_room_portraits(_s3(), key, sess, twins_by_key, payload)
+        except Exception:
+            pass
+    return jsonify({'success': True, 'session': PI.public_session(sess), 'reused': reused is not None,
+                    'extra_panelists': DT.extra_panelists((sess.get('group') or {}).get('in_room'))})
+
+
+@bp.route(f'{PREFIX}/<path:key>/pilot/<sid>', methods=['GET'])
+def dt_pilot_get(key, sid):
+    user, err = _gate()
+    if err:
+        return err
+    payload, err = _twin_or_404(user, key)
+    if err:
+        return err
+    from migration import digital_twin_pilot as PI
+    sess = _pilot(payload, sid)
+    if not sess:
+        return jsonify({'success': False, 'error': 'test not found'}), 404
+    _attach_portraits(payload, key, sess)
+    return _nocache(jsonify({'success': True, 'session': PI.public_session(sess)}))
+
+
+@bp.route(f'{PREFIX}/<path:key>/pilot/<sid>', methods=['PATCH'])
+@bp.route(f'{PREFIX}/<path:key>/pilot/<sid>/rename', methods=['POST', 'PATCH'])
+def dt_pilot_rename(key, sid):
+    user, err = _gate()
+    if err:
+        return err
+    payload, err = _twin_or_404(user, key)
+    if err:
+        return err
+    from migration import digital_twin_pilot as PI
+    sess = _pilot(payload, sid)
+    if not sess:
+        return jsonify({'success': False, 'error': 'test not found'}), 404
+    body = request.get_json(silent=True) or {}
+    name = PI.rename_session(sess, str(body.get('title') or body.get('name') or ''))
+    if not name:
+        return jsonify({'success': False, 'error': 'Name the test.'}), 400
+    DT.save_twin(_s3(), key, payload)
+    return _nocache(jsonify({'success': True, 'session': PI.public_session(sess), 'title': name}))
+
+
+@bp.route(f'{PREFIX}/<path:key>/pilot/<sid>/upload', methods=['POST'])
+def dt_pilot_upload(key, sid):
+    user, err = _gate()
+    if err:
+        return err
+    payload, err = _twin_or_404(user, key)
+    if err:
+        return err
+    from migration import digital_twin_pilot as PI
+    sess = _pilot(payload, sid)
+    if not sess:
+        return jsonify({'success': False, 'error': 'test not found'}), 404
+    f = request.files.get('file') or request.files.get('cut') or request.files.get('video')
+    if f is None or not getattr(f, 'filename', ''):
+        return jsonify({'success': False, 'error': 'Upload the cut (mp4, mov or webm).'}), 400
+    if not PI.accept_upload_name(f.filename, getattr(f, 'mimetype', '') or ''):
+        return jsonify({'success': False, 'error': 'Use an mp4, mov or webm file.'}), 400
+    s3 = _s3()
+    if s3 is None:
+        return jsonify({'success': False, 'error': 'The cut could not be stored. Try again in a minute.'}), 500
+    mk = PI.media_s3_key(_uname(user), sid, f.filename)
+    raw = f.read()
+    if not raw or len(raw) < 64:
+        return jsonify({'success': False, 'error': 'That file is empty.'}), 400
+    if len(raw) > 2 * 1024 * 1024 * 1024:
+        return jsonify({'success': False, 'error': 'That file is too large for a test. Use a cut under 2 GB.'}), 400
+    ctype = getattr(f, 'mimetype', '') or 'video/mp4'
+    try:
+        s3.put_object(Bucket=DT.S3_BUCKET, Key=mk, Body=raw, ContentType=ctype)
+    except Exception:
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': 'The cut could not be stored. Try again in a minute.'}), 500
+    runtime = 0
+    try:
+        import tempfile, os
+        suffix = os.path.splitext(f.filename)[1] or '.mp4'
+        fd, tmp = tempfile.mkstemp(suffix=suffix)
+        os.close(fd)
+        with open(tmp, 'wb') as fh:
+            fh.write(raw)
+        probed = PI.process_local_cut(tmp, title=str(request.form.get('title') or sess.get('title') or ''))
+        runtime = float(probed.get('runtime_s') or 0)
+        if probed.get('transcript'):
+            sess['transcript'] = probed['transcript']
+        try:
+            os.remove(tmp)
+        except Exception:
+            pass
+    except Exception:
+        traceback.print_exc()
+    media = sess.setdefault('media', {})
+    media.update({
+        'filename': f.filename, 's3_key': mk, 'content_type': ctype,
+        'bytes': len(raw), 'source': 'upload',
+        'title': str(request.form.get('title') or media.get('title') or sess.get('title') or '')[:160],
+        'hash': PI.media_hash(media.get('title') or '', runtime or media.get('runtime_s') or 0, f.filename, str(len(raw))),
+    })
+    if runtime:
+        media['runtime_s'] = runtime
+    sess['status'] = 'draft'
+    sess['prepare_note'] = 'Preparing the cut' if runtime else 'Add a runtime if the clock looks short, then prepare.'
+    sess['updated_at'] = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
+    DT.save_twin(s3, key, payload)
+    return jsonify({'success': True, 'session': PI.public_session(sess), 'uploaded': True})
+
+
+@bp.route(f'{PREFIX}/<path:key>/pilot/<sid>/prepare', methods=['POST'])
+def dt_pilot_prepare(key, sid):
+    user, err = _gate()
+    if err:
+        return err
+    payload, err = _twin_or_404(user, key)
+    if err:
+        return err
+    from migration import digital_twin_pilot as PI
+    sess = _pilot(payload, sid)
+    if not sess:
+        return jsonify({'success': False, 'error': 'test not found'}), 404
+    body = request.get_json(silent=True) or {}
+    try:
+        duration = float(body.get('runtime_s') or body.get('duration_s') or (sess.get('media') or {}).get('runtime_s') or 0)
+    except (TypeError, ValueError):
+        duration = 0
+    title = str(body.get('cut_title') or body.get('title') or (sess.get('media') or {}).get('title') or sess.get('title') or '')
+    twins_by_key = {}
+    for tk in sess.get('twin_keys') or [key]:
+        t = payload if tk == key else DT.load_twin(_s3(), tk)
+        if t:
+            twins_by_key[tk] = t
+    if key not in twins_by_key:
+        twins_by_key[key] = payload
+    PI.prepare_watch(sess, twins_by_key, duration_s=duration, title=title,
+                     notes=str(body.get('notes') or ''), transcript=sess.get('transcript'))
+    DT.save_twin(_s3(), key, payload)
+    return jsonify({'success': True, 'session': PI.public_session(sess)})
+
+
+@bp.route(f'{PREFIX}/<path:key>/pilot/<sid>/play', methods=['POST'])
+def dt_pilot_play(key, sid):
+    user, err = _gate()
+    if err:
+        return err
+    payload, err = _twin_or_404(user, key)
+    if err:
+        return err
+    from migration import digital_twin_pilot as PI
+    sess = _pilot(payload, sid)
+    if not sess:
+        return jsonify({'success': False, 'error': 'test not found'}), 404
+    if sess.get('status') not in ('ready', 'playing', 'stopped') or not (sess.get('dial') or {}).get('value'):
+        body = request.get_json(silent=True) or {}
+        twins_by_key = {key: payload}
+        try:
+            duration = float(body.get('runtime_s') or (sess.get('media') or {}).get('runtime_s') or 0)
+        except (TypeError, ValueError):
+            duration = 0
+        PI.prepare_watch(sess, twins_by_key, duration_s=duration,
+                         title=str((sess.get('media') or {}).get('title') or sess.get('title') or ''),
+                         transcript=sess.get('transcript'))
+    funds = _charge_pilot(user, payload, sess, for_play=True)
+    if funds is not None:
+        return funds
+    PI.mark_playing(sess)
+    DT.save_twin(_s3(), key, payload)
+    return jsonify({'success': True, 'session': PI.public_session(sess), 'charged': True})
+
+
+@bp.route(f'{PREFIX}/<path:key>/pilot/<sid>/ask', methods=['POST'])
+def dt_pilot_ask(key, sid):
+    user, err = _gate()
+    if err:
+        return err
+    payload, err = _twin_or_404(user, key)
+    if err:
+        return err
+    from migration import digital_twin_pilot as PI
+    from migration import digital_twin_panel as P
+    sess = _pilot(payload, sid)
+    if not sess:
+        return jsonify({'success': False, 'error': 'test not found'}), 404
+    body = request.get_json(silent=True) or {}
+    q = ' '.join(str(body.get('q') or body.get('question') or '').split())
+    if not q:
+        return jsonify({'success': False, 'error': 'Ask the room something.'}), 400
+    if not sess.get('play_charged'):
+        return jsonify({'success': False, 'error': 'Press Play first. The room answers once the cut is running.'}), 400
+    funds = _charge_pilot(user, payload, sess, for_play=False)
+    if funds is not None:
+        return funds
+    twins_by_key = {}
+    for tk in sess.get('twin_keys') or [key]:
+        t = payload if tk == key else DT.load_twin(_s3(), tk)
+        if t:
+            twins_by_key[tk] = t
+    if key not in twins_by_key:
+        twins_by_key[key] = payload
+    try:
+        playhead = float(body.get('playhead_s') or body.get('t') or 0)
+    except (TypeError, ValueError):
+        playhead = 0
+    rec = P.ask(sess, twins_by_key, q, kind=body.get('kind'), options=body.get('options'),
+                stimulus=body.get('stimulus') if isinstance(body.get('stimulus'), dict) else None,
+                voices_fn=_voices_fn(), asked_by=_uname(user), s3=_s3(), twin_key=key,
+                ask_again=bool(body.get('ask_again')), usage_extras=_usage_extras(user))
+    PI.stamp_question(rec, playhead)
+    DT.save_twin(_s3(), key, payload)
+    return jsonify({'success': True, 'question': rec, 'session_id': sid, 'session': PI.public_session(sess),
+                    'job_id': rec.get('job_id'), 'stage': rec.get('stage')})
+
+
+@bp.route(f'{PREFIX}/<path:key>/pilot/<sid>/stop', methods=['POST'])
+def dt_pilot_stop(key, sid):
+    user, err = _gate()
+    if err:
+        return err
+    payload, err = _twin_or_404(user, key)
+    if err:
+        return err
+    from migration import digital_twin_pilot as PI
+    sess = _pilot(payload, sid)
+    if not sess:
+        return jsonify({'success': False, 'error': 'test not found'}), 404
+    PI.stop_session(sess)
+    DT.save_twin(_s3(), key, payload)
+    return jsonify({'success': True, 'session': PI.public_session(sess)})
+
+
+@bp.route(f'{PREFIX}/<path:key>/pilot/<sid>', methods=['DELETE'])
+@bp.route(f'{PREFIX}/<path:key>/pilot/<sid>/delete', methods=['POST'])
+def dt_pilot_delete(key, sid):
+    user, err = _gate()
+    if err:
+        return err
+    payload, err = _twin_or_404(user, key)
+    if err:
+        return err
+    from migration import digital_twin_pilot as PI
+    sess = _pilot(payload, sid)
+    if not sess:
+        return jsonify({'success': False, 'error': 'test not found'}), 404
+    if not PI.can_delete(sess, _uname(user), DT.is_admin(user)):
+        return jsonify({'success': False, 'error': 'Only the person who opened this test, or an admin, can delete it.'}), 403
+    removed = PI.delete_session(_s3(), key, payload, sid, deleted_by=_uname(user))
+    if removed is None:
+        return jsonify({'success': False, 'error': 'test not found'}), 404
+    DT.save_twin(_s3(), key, payload)
+    undo_until = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(time.time() + PI.DELETED_PILOT_KEEP_DAYS * 86400))
+    return _nocache(jsonify({'success': True, 'deleted': sid, 'sessions_left': len(payload.get('pilot_sessions') or []),
+                             'undo_until': undo_until, 'message': 'Test deleted. It can be restored within 30 days by an admin.'}))
+
+
+@bp.route(f'{PREFIX}/<path:key>/pilot/<sid>/media', methods=['GET'])
+def dt_pilot_media(key, sid):
+    user, err = _gate()
+    if err:
+        return err
+    payload, err = _twin_or_404(user, key)
+    if err:
+        return err
+    sess = _pilot(payload, sid)
+    if not sess:
+        return jsonify({'success': False, 'error': 'test not found'}), 404
+    media = sess.get('media') or {}
+    mk = media.get('s3_key')
+    if not mk:
+        return jsonify({'success': False, 'error': 'No cut is on this test yet.'}), 404
+    s3 = _s3()
+    if s3 is None:
+        return jsonify({'success': False, 'error': 'The cut is not available right now.'}), 500
+    kw = {'Bucket': DT.S3_BUCKET, 'Key': mk}
+    rng = request.headers.get('Range')
+    if rng and rng.lower().startswith('bytes='):
+        kw['Range'] = rng
+    try:
+        obj = s3.get_object(**kw)
+    except Exception:
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': 'The cut is not available right now.'}), 404
+    body = obj['Body']
+    ctype = media.get('content_type') or obj.get('ContentType') or 'video/mp4'
+    status = 206 if rng else 200
+
+    def chunks():
+        try:
+            while True:
+                bit = body.read(256 * 1024)
+                if not bit:
+                    break
+                yield bit
+        except Exception:
+            return
+    resp = Response(chunks(), status=status, mimetype=ctype)
+    resp.headers['Accept-Ranges'] = 'bytes'
+    resp.headers['Cache-Control'] = 'private, max-age=3600'
+    if obj.get('ContentRange'):
+        resp.headers['Content-Range'] = obj['ContentRange']
+    if obj.get('ContentLength') is not None:
+        resp.headers['Content-Length'] = str(obj['ContentLength'])
+    return resp
+
+
+@bp.route(f'{PREFIX}/<path:key>/pilot/<sid>/export.csv', methods=['GET'])
+def dt_pilot_csv(key, sid):
+    user, err = _gate()
+    if err:
+        return err
+    payload, err = _twin_or_404(user, key)
+    if err:
+        return err
+    sess = _pilot(payload, sid)
+    if not sess:
+        return jsonify({'success': False, 'error': 'test not found'}), 404
+    from migration import digital_twin_pilot as PI
+    name = str((payload.get('meta') or {}).get('name') or 'twin').replace(' ', '_')
+    return Response(PI.session_csv(sess), mimetype='text/csv',
+                    headers={'Content-Disposition': f'attachment; filename="{name}_pilot_{sid}.csv"'})
+
+
+@bp.route(f'{PREFIX}/<path:key>/pilot/<sid>/export.pdf', methods=['GET'])
+def dt_pilot_pdf(key, sid):
+    user, err = _gate()
+    if err:
+        return err
+    payload, err = _twin_or_404(user, key)
+    if err:
+        return err
+    sess = _pilot(payload, sid)
+    if not sess:
+        return jsonify({'success': False, 'error': 'test not found'}), 404
+    from migration import digital_twin_exports as X
+    PT = _portraits()
+    portrait_fn = (lambda h: PT.read_portrait(_s3(), h, PT.THUMB_SIZE)) if PT is not None else None
+    return Response(X.build_pilot_pdf(payload, sess, portrait_fn=portrait_fn), mimetype='application/pdf',
+                    headers={'Content-Disposition': f'attachment; filename="{X.pilot_pdf_filename(payload, sess)}"'})
+
+
+@bp.route(f'{PREFIX}/<path:key>/pilot/<sid>/export.pptx', methods=['GET'])
+def dt_pilot_pptx(key, sid):
+    user, err = _gate()
+    if err:
+        return err
+    payload, err = _twin_or_404(user, key)
+    if err:
+        return err
+    sess = _pilot(payload, sid)
+    if not sess:
+        return jsonify({'success': False, 'error': 'test not found'}), 404
+    from migration import digital_twin_exports as X
+    return Response(X.build_pilot_deck(payload, sess),
+                    mimetype='application/vnd.openxmlformats-officedocument.presentationml.presentation',
+                    headers={'Content-Disposition': f'attachment; filename="{X.pilot_deck_filename(payload, sess)}"'})
 
 
 @bp.route(f'{PREFIX}/portrait/<hash_>', methods=['GET'])

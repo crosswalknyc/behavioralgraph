@@ -137,7 +137,8 @@ def _price_label(key, username):
 def _charge(user, key, description, job_id):
     """None when charged or free (super admins), else the funds payload."""
     from migration.digital_twins import PULL_TYPES
-    credits = {'digital_twins_iq': 15, 'digital_twin_run': 3, 'digital_twin_spend': 5, 'digital_twin_panel': 4, 'digital_twin_panel_more': 3}
+    credits = {'digital_twins_iq': 15, 'digital_twin_run': 3, 'digital_twin_spend': 5, 'digital_twin_panel': 4, 'digital_twin_panel_more': 3,
+               'digital_twin_pilot': 4, 'digital_twin_pilot_more': 3, 'digital_twin_panelist': 1}
     if _is_super(user) or not host.has('consume_credit'):
         return None
     try:
@@ -168,15 +169,22 @@ def twin_intent(text, chip=''):
         return True
     if _PANEL_OPEN_RX.search(low) and ('twin' in low or 'panel lab' in low or 'focus group' in low or 'survey' in low):
         return True
-    if re.search(r"\b(greenlight lab|launch lab|spend engine|panel lab|focus group iq|digital twins? iq|twin iq)\b", low):
+    if re.search(r"\b(greenlight lab|launch lab|spend engine|panel lab|focus group iq|digital twins? iq|twin iq|pilot testing)\b", low):
+        return True
+    if re.search(r"\b(?:open|start|play)\b.+\b(?:pilot testing|movie test|trailer test)\b", low):
         return True
     if re.search(r"\btwins?\b", low) and not re.search(r"\btwin\s+(?:bed|peaks|cities|falls|flame|turbo|engine|sister|brother|size)s?\b", low) and question_kind(low):
         return True   # a question on a named twin that maps to a run (price, sequel, move, attach, drop, odds, plan)
     return False
 
 
+_PILOT_OPEN_RX = re.compile(r"\b(?:open|start|create|run|play)\s+(?:a\s+|the\s+)?(?:pilot\s+test(?:ing)?|movie\s+test|trailer\s+test)\b|\bpilot\s+testing\b", re.I)
+
+
 def lab_kind(text):
     low = _low(text)
+    if _PILOT_OPEN_RX.search(low):
+        return 'pilot'
     if _PANEL_OPEN_RX.search(low) or 'panel lab' in low or 'focus group' in low:
         return 'panel'
     if _SPEND_RX.search(low):
@@ -859,6 +867,63 @@ def run_panel(text, body, history, user, ppu=None):
                     panel_session={'key': key, 'sid': sid}, open_view='digitalTwinsIQ', twin_key=key, action_hint={'view': 'digitalTwinsIQ', 'tab': 'panel', 'twin_key': key, 'session_id': sid})
 
 
+def run_pilot(text, body, history, user, ppu=None):
+    """Open a Pilot Testing session on a twin. Charge stays on first Play."""
+    from migration import digital_twins as DT
+    from migration import digital_twin_pilot as PI
+    low = _low(text)
+    if not _PILOT_OPEN_RX.search(low):
+        return None
+    s3, _b = _s3()
+    uname = _uname(user)
+    found, runs = resolve_twins(text, body, history, user, limit=2)
+    if not found:
+        return _which_twin(runs, 'open Pilot Testing')
+    key = found[0]['key']
+    payload = DT.load_twin(s3, key)
+    if not payload:
+        return _which_twin(runs, 'open Pilot Testing')
+    twins = [payload]
+    for r in found[1:]:
+        t = DT.load_twin(s3, r['key'])
+        if t:
+            twins.append(t)
+    title = ''
+    m = re.search(r"(?:play|watch|test)\s+(?:the\s+)?(.{3,80}?)(?:\s+pilot|\s+cut|\s+trailer|\s+episode)?\s*$", str(text or ''), re.I)
+    if m:
+        title = m.group(1).strip()[:120]
+    sess = PI.find_reusable_session(payload, twins, title=title, created_by=uname)
+    if sess is None:
+        sess = PI.open_session(twins, title=title or 'Pilot test', created_by=uname, session_id=uuid.uuid4().hex[:10])
+        sess['twin_keys'] = [str((t.get('meta') or {}).get('key') or '') for t in twins]
+        payload.setdefault('pilot_sessions', []).insert(0, sess)
+    try:
+        from migration import digital_twin_room as ROOM
+        ROOM.ensure_personas(sess, {str((t.get('meta') or {}).get('key') or ''): t for t in twins}, session_seed=str(sess.get('id') or ''))
+    except Exception:
+        pass
+    try:
+        from migration import digital_twin_portraits as _PT
+        _PT.attach_portraits(sess, s3)
+    except Exception:
+        _PT = None
+    DT.save_twin(s3, key, payload)
+    if _PT is not None:
+        try:
+            _PT.schedule_room_portraits(s3, key, sess, {str((t.get('meta') or {}).get('key') or ''): t for t in twins}, payload)
+        except Exception:
+            pass
+    g = sess.get('group') or {}
+    roster = ', '.join(f"{r.get('name')} ({r.get('age')}, {r.get('city')})" for r in (g.get('roster') or [])[:6])
+    return _payload(
+        f"Pilot Testing is open on {payload['meta'].get('name')}: {g.get('in_room') or 12} twins in the room"
+        + (f" ({roster})" if roster else '')
+        + ". Upload the cut on the Pilot Testing tab and press Play. The dial and the laughs land on the clock from that moment. You can ask them a question at any timestamp.",
+        ['Open Pilot Testing', 'Ask the room at 12:40: would you keep watching?'],
+        open_view='digitalTwinsIQ', twin_key=key,
+        action_hint={'view': 'digitalTwinsIQ', 'tab': 'pilot', 'twin_key': key, 'session_id': sess.get('id')})
+
+
 # ------------------------------------------------------------ the labs
 def run_lab(kind, text, body, history, user, ppu, thread_id=''):
     from migration import digital_twins as DT
@@ -1072,14 +1137,18 @@ def analyze_hook(text, body, history, user, ppu, uname, g):
                 return run_lab(question_kind(t), t, body, history, user, ppu, thread_id)
             return None
         # 3. the directions
-        if DT.is_how_to_ask(t) or re.search(r"\bhow (?:do|does|can) (?:i|we|it) (?:use|run|open|work)\b.*\b(twin|greenlight|launch lab|spend engine|panel lab|focus group)", low):
+        if DT.is_how_to_ask(t) or re.search(r"\bhow (?:do|does|can) (?:i|we|it) (?:use|run|open|work)\b.*\b(twin|greenlight|launch lab|spend engine|panel lab|focus group|pilot testing)", low):
             try:
                 from prometheus.legacy.watch import _pm_usd
                 pf = lambda k, d: _pm_usd(k, d, uname)
             except Exception:
                 pf = None
-            return _payload(DT.how_to_text(t, pf), ['Build a twin of Gilmore Girls Hulu viewers', 'Open a focus group with the Gilmore Girls twin', OPEN_CHIP], open_view='digitalTwinsIQ',
-                            action_hint={'view': 'digitalTwinsIQ', 'tab': 'howto'})
+            chips = ['Build a twin of Gilmore Girls Hulu viewers', 'Open a focus group with the Gilmore Girls twin', OPEN_CHIP]
+            if re.search(r"pilot testing|movie test|trailer test", low):
+                chips = ['Open Pilot Testing on the Gilmore Girls twin', OPEN_CHIP]
+            tab = 'pilot' if re.search(r"pilot testing|movie test|trailer test", low) else 'howto'
+            return _payload(DT.how_to_text(t, pf), chips, open_view='digitalTwinsIQ',
+                            action_hint={'view': 'digitalTwinsIQ', 'tab': tab})
         # 4. status
         if _STATUS_RX.search(low):
             return status_reply(user)
@@ -1087,9 +1156,13 @@ def analyze_hook(text, body, history, user, ppu, uname, g):
         pr = run_panel(t, body, history, user, ppu)
         if pr is not None:
             return pr
+        # 5b. Pilot Testing
+        pir = run_pilot(t, body, history, user, ppu)
+        if pir is not None:
+            return pir
         # 6. the labs on a twin
         lk = lab_kind(t)
-        if lk and lk != 'panel':
+        if lk and lk not in ('panel', 'pilot'):
             return run_lab(lk, t, body, history, user, ppu, thread_id)
         # 7. the catalog: a question about what we hold, never a build order
         if _CATALOG_RX.search(low) and (low.endswith('?') or re.match(r"^(do|does|is|are|which|what|list|show)\b", low)) \
