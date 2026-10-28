@@ -1109,26 +1109,32 @@
         .howto-video-modal video { display: block; width: 100%; height: auto; background: #000; }
         @media (max-width: 900px) { .howto-video-modal { width: 90vw; } }
 
-        /* Prometheus pricing rate card (graphite, matches the Meet Prometheus panels) */
+        /* Prometheus pricing rate card (Prometheus Client Guide, slide 5) */
         #pricingModal { z-index: 2147483000; background: rgba(4, 10, 12, 0.78); font-family: 'Inter', system-ui, -apple-system, sans-serif; }
         #pricingModal, #pricingModal * { text-transform: none; }
-        #pricingModal .pricing-card { position: relative; width: 92vw; max-width: 720px; max-height: 88vh; overflow-y: auto; padding: 28px 28px 24px; border-radius: 16px; border: 1px solid #24383C; background: #0B1416; color: #E9E8E1; box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55); }
-        #pricingModal .pricing-close { position: absolute; top: 18px; right: 18px; width: 32px; height: 32px; border-radius: 50%; border: 1px solid #24383C; background: transparent; color: #9AA09B; font-size: 18px; line-height: 1; cursor: pointer; }
-        #pricingModal .pricing-close:hover { color: #E9E8E1; border-color: #9AA09B; }
-        #pricingModal .pricing-eyebrow { display: flex; align-items: center; gap: 8px; font-size: 10px; font-weight: 500; letter-spacing: 0.16em; text-transform: uppercase; color: #9AA09B; }
-        #pricingModal .pricing-eyebrow::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: #C7F23E; }
-        #pricingModal .pricing-title { margin: 14px 0 0; font-size: 38px; line-height: 1.1; font-weight: 300; letter-spacing: -0.02em; color: #E9E8E1; }
-        #pricingModal .pricing-title b { font-weight: 700; }
-        #pricingModal .pricing-sub { margin: 8px 0 0; font-size: 14px; color: #9AA09B; }
-        #pricingModal .pricing-panel { margin-top: 18px; padding: 18px 20px 6px; border-radius: 12px; border: 1px solid #24383C; background: #13262B; }
-        #pricingModal .pricing-kicker { font-size: 10px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: #C7F23E; margin-bottom: 4px; }
-        #pricingModal .pricing-row { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; padding: 12px 0; border-bottom: 1px solid #24383C; }
-        #pricingModal .pricing-row:last-child { border-bottom: none; }
-        #pricingModal .pricing-name { font-size: 15px; font-weight: 600; color: #E9E8E1; }
-        #pricingModal .pricing-note { display: block; margin-top: 3px; font-size: 12.5px; font-weight: 400; line-height: 1.4; color: #9AA09B; }
-        #pricingModal .pricing-price { flex-shrink: 0; font-size: 17px; font-weight: 700; color: #C7F23E; font-variant-numeric: tabular-nums; text-align: right; }
-        #pricingModal .pricing-metered { padding: 4px 0 14px; font-size: 14px; line-height: 1.55; color: #9AA09B; }
-        #pricingModal .pricing-metered b { color: #E9E8E1; font-weight: 600; }
+        #pricingModal .pricing-card { position: relative; width: 92vw; max-width: 760px; max-height: 90vh; overflow-y: auto; padding: 36px 44px 26px; border-radius: 14px; background: #E9E7E0; color: #111A1C; box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55); }
+        #pricingModal .pricing-top { display: flex; justify-content: flex-end; align-items: center; gap: 14px; }
+        #pricingModal .pricing-top img { height: 18px; width: auto; display: block; filter: brightness(0); opacity: 0.92; }
+        #pricingModal .pricing-close { width: 30px; height: 30px; border-radius: 50%; border: 1px solid #C9C7BF; background: transparent; color: #5E625F; font-size: 17px; line-height: 1; cursor: pointer; }
+        #pricingModal .pricing-close:hover { color: #111A1C; border-color: #111A1C; }
+        #pricingModal .pricing-eyebrow { margin-top: 26px; font-size: 11px; font-weight: 500; letter-spacing: 0.02em; text-transform: uppercase; color: #6E8F1E; }
+        #pricingModal .pricing-title { margin: 14px 0 0; font-size: 28px; line-height: 1.15; font-weight: 700; letter-spacing: -0.01em; color: #111A1C; }
+        #pricingModal .pricing-sub { margin: 8px 0 0; font-size: 14.5px; line-height: 1.5; color: #6B6E6A; }
+        #pricingModal .pricing-table { width: 100%; margin-top: 18px; border-collapse: collapse; font-size: 13px; line-height: 1.45; }
+        #pricingModal .pricing-table th { text-align: left; font-weight: 500; font-size: 11.5px; color: #8E908B; padding: 0 12px 8px; }
+        #pricingModal .pricing-table td { padding: 10px 12px; background: #E1DFD7; border-top: 2px solid #E9E7E0; vertical-align: top; }
+        #pricingModal .pricing-table td:first-child { width: 35%; color: #8E908B; }
+        #pricingModal .pricing-table td:last-child { color: #111A1C; }
+        #pricingModal .pricing-table tbody tr:first-child td { border-top: none; }
+        #pricingModal .pricing-table tbody tr:first-child td:first-child { border-top-left-radius: 8px; }
+        #pricingModal .pricing-table tbody tr:first-child td:last-child { border-top-right-radius: 8px; }
+        #pricingModal .pricing-table tbody tr:last-child td:first-child { border-bottom-left-radius: 8px; }
+        #pricingModal .pricing-table tbody tr:last-child td:last-child { border-bottom-right-radius: 8px; }
+        #pricingModal .pricing-short { margin: 24px 4% 0; padding: 22px 24px 18px; border-radius: 10px; background: #0F1719; color: #E9E8E1; }
+        #pricingModal .pricing-short h3 { margin: 0 0 12px; font-size: 17px; font-weight: 700; color: #FFFFFF; }
+        #pricingModal .pricing-short p { margin: 0 0 12px; font-size: 13.5px; line-height: 1.4; }
+        #pricingModal .pricing-short p span { color: #C7F23E; }
+        #pricingModal .pricing-foot { margin-top: 30px; font-size: 10.5px; letter-spacing: 0.04em; color: #6B6E6A; }
 
         /* Methodology modal */
         .methodology-header {
@@ -20330,29 +20336,33 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
     <!-- Prometheus pricing rate card -->
     <div id="pricingModal" class="modal-overlay" style="display: none;" onclick="if(event.target === this) closePricingModal()">
         <div class="pricing-card" role="dialog" aria-label="Prometheus Pricing">
-            <button type="button" class="pricing-close" onclick="closePricingModal()" aria-label="Close">&times;</button>
-            <div class="pricing-eyebrow">Prometheus Pricing</div>
-            <h2 class="pricing-title">Prometheus <b>rate card.</b></h2>
-            <p class="pricing-sub">What each pull costs &middot; October 2026</p>
-            <div class="pricing-panel">
-                <div class="pricing-kicker">01 Per pull</div>
-                <div class="pricing-row"><span class="pricing-name">Digital Journey</span><span class="pricing-price">$500</span></div>
-                <div class="pricing-row"><span class="pricing-name">Profile</span><span class="pricing-price">$300</span></div>
-                <div class="pricing-row"><span class="pricing-name">Subscriber Acquisition</span><span class="pricing-price">$500</span></div>
-                <div class="pricing-row"><span class="pricing-name">Viewership Metrics</span><span class="pricing-price">$500</span></div>
-                <div class="pricing-row"><span class="pricing-name">Flywheel</span><span class="pricing-price">$500</span></div>
-                <div class="pricing-row"><span class="pricing-name">Brand Partnership<span class="pricing-note">$500 + $500 control</span></span><span class="pricing-price">$1,000</span></div>
-                <div class="pricing-row"><span class="pricing-name">Ad Attribution<span class="pricing-note">Initial pull. Optional $100 / day per campaign to track.</span></span><span class="pricing-price">$500</span></div>
-                <div class="pricing-row"><span class="pricing-name">Custom Ask</span><span class="pricing-price">$500</span></div>
+            <div class="pricing-top">
+                <img src="{{ url_for('static', filename='crosswalk-logo-white-transparent.png') }}" alt="Crosswalk">
+                <button type="button" class="pricing-close" onclick="closePricingModal()" aria-label="Close">&times;</button>
             </div>
-            <div class="pricing-panel">
-                <div class="pricing-kicker">02 Pulls not based on pre-pulled data</div>
-                <div class="pricing-row"><span class="pricing-name">Fresh pull<span class="pricing-note">First ask. $50 for each follow-up.</span></span><span class="pricing-price">$100</span></div>
+            <div class="pricing-eyebrow">Pricing</div>
+            <h2 class="pricing-title">What it costs.</h2>
+            <p class="pricing-sub">Prometheus questions are metered, so you only pay for what you use. The reads and studies below are flat prices.</p>
+            <table class="pricing-table">
+                <thead><tr><th>Product</th><th>Price</th></tr></thead>
+                <tbody>
+                    <tr><td>Prometheus</td><td>Metered usage: $10.50 per million in and $52.50 per million out, plus $0.021 per search.</td></tr>
+                    <tr><td>Profile</td><td>$300.</td></tr>
+                    <tr><td>Digital Journey</td><td>$500.</td></tr>
+                    <tr><td>Subscriber Acquisition</td><td>$500.</td></tr>
+                    <tr><td>Flywheel</td><td>$500.</td></tr>
+                    <tr><td>Brand Partnership</td><td>$500, plus $500 for the control read. $1,000 total.</td></tr>
+                    <tr><td>Ad Attribution</td><td>$500 for the initial pull, plus an optional $100 per day to track each campaign.</td></tr>
+                </tbody>
+            </table>
+            <div class="pricing-short">
+                <h3>The short version.</h3>
+                <p><span>/</span> Bring the business question in plain English. The panel has the answer.</p>
+                <p><span>/</span> Name the audience, the window, and the shape you want.</p>
+                <p><span>/</span> Grab the CSV under any data answer, or have it emailed.</p>
+                <p><span>/</span> If the audience does not exist yet, let Prometheus build it.</p>
             </div>
-            <div class="pricing-panel">
-                <div class="pricing-kicker">03 Metered usage</div>
-                <div class="pricing-metered">All Prometheus (chat bot) usage is billed at a metered rate of <b>$10.50 / $52.50 per million</b> in / out, plus <b>$0.021 per search</b>.</div>
-            </div>
+            <div class="pricing-foot">CROSSWALK &nbsp;/&nbsp; BEHAVIORAL INTELLIGENCE ENGINE</div>
         </div>
     </div>
 
