@@ -51165,6 +51165,13 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-fg-old .qt .qm { color: var(--dtw-mute); margin-left: 8px; font-size: 11.5px; }
         #digitalTwinsIQView .dtw-fg-old .dtw-fg-stack { margin-top: 6px; height: 6px; max-width: 420px; }
         #digitalTwinsIQView .dtw-fg-old .dtw-fg-stack i { border-right-color: var(--dtw-page); }
+        #digitalTwinsIQView .dtw-fg-lolli { margin-top: 8px; max-width: 520px; display: grid; grid-template-columns: minmax(0, 190px) minmax(80px, 1fr) 38px; column-gap: 12px; row-gap: 5px; align-items: center; }
+        #digitalTwinsIQView .dtw-fg-lolli .lb { font-size: 11.5px; line-height: 15px; color: var(--dtw-body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        #digitalTwinsIQView .dtw-fg-lolli .tr { position: relative; height: 11px; }
+        #digitalTwinsIQView .dtw-fg-lolli .tr::before { content: ''; position: absolute; left: 0; right: 0; top: 5px; border-top: 1px dashed var(--dtw-hair); }
+        #digitalTwinsIQView .dtw-fg-lolli .ln { position: absolute; left: 0; top: 4.5px; height: 2px; border-radius: 1px; }
+        #digitalTwinsIQView .dtw-fg-lolli .dt { position: absolute; top: 0.5px; width: 10px; height: 10px; margin-left: -5px; border-radius: 50%; }
+        #digitalTwinsIQView .dtw-fg-lolli .vl { font-size: 11.5px; line-height: 15px; font-weight: 600; color: var(--dtw-ink); text-align: right; font-variant-numeric: tabular-nums; }
         #digitalTwinsIQView .dtw-fg-old .chev { color: var(--dtw-mute); font-size: 12px; margin-top: 2px; transition: transform .15s; flex: none; }
         #digitalTwinsIQView .dtw-fg-old.open .chev { transform: rotate(180deg); }
         #digitalTwinsIQView .dtw-fg-empty-t { padding: 10px 0 10px 40px; font-size: 12.5px; line-height: 17px; color: var(--dtw-body); }
@@ -52582,6 +52589,16 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var opts = optsOf(q), rk = rankMap(q), live = qInFlight(q), counts = live ? liveCounts(q) : null, seats = seatsTotal(q);
                 return stack(opts.map(function(o) { var v = live ? (seats ? (counts[String(o.id)] || 0) / seats * 100 : 0) : Number(o.pct || 0); return { pct: v, color: seriesOf(rk, o.id) }; }), cls);
             }
+            function questionLolli(q) {
+                var opts = optsOf(q), rk = rankMap(q), live = qInFlight(q), counts = live ? liveCounts(q) : null, seats = seatsTotal(q);
+                if (!opts.length) return '';
+                var rows = opts.map(function(o) { var v = live ? (seats ? (counts[String(o.id)] || 0) / seats * 100 : 0) : Number(o.pct || 0); return { o: o, v: Math.max(0, Math.min(100, v)), r: rk[String(o.id)] }; });
+                rows.sort(function(a, b) { return (a.r == null ? 99 : a.r) - (b.r == null ? 99 : b.r); });
+                return '<div class="dtw-fg-lolli">' + rows.map(function(x) {
+                    var c = seriesOf(rk, x.o.id), w = x.v.toFixed(1) + '%';
+                    return '<span class="lb" title="' + esc(x.o.label) + '">' + esc(x.o.label) + '</span><span class="tr"><span class="ln" style="width:' + w + ';background:' + c + '"></span><span class="dt" style="left:' + w + ';background:' + c + '"></span></span><span class="vl">' + Math.round(x.v) + '%</span>';
+                }).join('') + '</div>';
+            }
             // ---- the band: the seats as a row of circles (ring in the answer's color once answered, the check or the hollow mark while a
             // question runs, name and 'age, city' under each), then the room title, the question and the meta or stage line.
             function seatCircle(r, i, opts) {
@@ -52697,7 +52714,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             function oldHead(q, i, open) {
                 var seats = seatsTotal(q), nA = (q.answers || []).length;
                 var extra = qFailed(q) ? SEP + 'did not finish' : (nA ? SEP + nA + (seats ? ' of ' + seats : '') : '');
-                return '<button type="button" class="dtw-fg-old' + (open ? ' open' : '') + '" data-q="' + esc(q.id || '') + '" aria-expanded="' + (open ? 'true' : 'false') + '" onclick="dtwFgToggle(\'' + esc(jsq(q.id)) + '\')">' + modav() + '<div class="body"><div class="qt">' + esc(q.q) + qMeta(q, i, extra) + '</div>' + (qFailed(q) ? '' : questionStack(q)) + '</div><span class="chev">&#9662;</span></button>';
+                return '<button type="button" class="dtw-fg-old' + (open ? ' open' : '') + '" data-q="' + esc(q.id || '') + '" aria-expanded="' + (open ? 'true' : 'false') + '" onclick="dtwFgToggle(\'' + esc(jsq(q.id)) + '\')">' + modav() + '<div class="body"><div class="qt">' + esc(q.q) + qMeta(q, i, extra) + '</div>' + (qFailed(q) ? '' : questionLolli(q)) + '</div><span class="chev">&#9662;</span></button>';
             }
             function fullBlock(q, i, roster, isLast, fly, noHead) {
                 var out = noHead ? ((q.framing && normQ(q.framing) !== normQ(q.q)) || q.note ? '<div class="dtw-fg-qmsg" data-q="' + esc(q.id || '') + '"><span class="dtw-fg-modav" style="visibility:hidden"></span><div class="dtw-fg-qt">' + (q.framing && normQ(q.framing) !== normQ(q.q) ? '<div class="fr" style="margin-top:0">' + esc(q.framing) + '</div>' : '') + (q.note ? '<div class="nt">' + esc(q.note) + '</div>' : '') + '</div></div>' : '') : qMsg(q, i, roster);
