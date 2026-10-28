@@ -52441,8 +52441,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var MARK_SVG = '<svg viewBox="0 0 828 822" aria-hidden="true"><path d="M178.5,821.5 19.5,821.4 15.5,820.8 12.5,819.7 8.8,817.5 5.4,814.5 3.1,811.5 1.2,807.5 0.2,802.5 0.3,798.5 198.2,24.5 201.2,14.5 202.2,12.5 204.3,9.5 208.5,5.2 213.5,2.2 216.5,1.2 219.5,0.7 331.5,0.7 334.5,1.0 338.5,2.2 342.5,4.3 345.5,6.9 347.8,9.5 349.5,12.5 350.9,16.5 351.5,21.5 350.9,26.5 214.2,780.5 209.9,805.5 208.6,809.5 206.9,812.5 203.2,816.5 199.5,819.0 195.5,820.7 193.5,821.0 186.5,821.5ZM498.5,821.5 328.5,821.5 324.5,820.9 321.5,819.8 316.5,816.6 314.4,814.5 312.1,811.5 310.2,807.5 309.3,803.5 309.2,799.5 310.2,791.5 428.7,51.5 431.2,33.5 433.2,23.5 435.2,16.5 437.3,11.5 439.3,8.5 441.5,6.2 445.5,3.3 447.5,2.3 452.5,1.0 455.5,0.7 570.5,0.7 573.5,1.4 576.5,2.9 578.5,4.2 581.7,7.5 582.9,9.5 584.5,13.5 584.9,15.5 585.0,19.5 523.3,759.5 520.2,796.5 520.0,803.5 519.7,805.5 517.7,810.5 515.7,813.5 512.5,816.7 509.5,818.7 506.5,820.0 503.5,821.0ZM803.5,821.5 636.5,821.5 632.5,820.9 629.5,819.9 625.5,817.8 623.9,816.5 621.0,813.5 619.0,810.5 618.1,808.5 617.0,804.5 616.7,799.5 617.7,789.5 667.3,28.5 668.1,22.5 669.1,18.5 671.2,13.5 674.5,8.6 676.5,6.4 680.5,3.5 685.5,1.4 690.5,0.3 697.5,0.3 701.5,0.8 801.5,0.6 805.5,1.0 809.5,2.2 811.5,3.3 814.5,5.4 816.7,7.5 818.9,10.5 819.9,12.5 820.8,14.5 821.7,18.5 822.1,24.5 822.6,81.5 827.2,771.5 827.4,797.5 827.7,801.5 826.8,806.5 825.7,809.5 823.9,812.5 820.1,816.5 818.5,817.7 814.5,819.8 810.5,820.9Z"/></svg>';
             var SEP = '<span class="dtw-fg-sep">&middot;</span>';
             S.fg = S.fg || { sid: null, open: {}, earlier: {}, seat: null, tallyQ: null };
+            S.fg.vShown = S.fg.vShown || {};
             function modav() { return '<span class="dtw-fg-modav">' + MARK_SVG + '</span>'; }
-            function fgReset(sid) { if (S.fg.sid !== sid) { S.fg.sid = sid; S.fg.open = {}; S.fg.earlier = {}; S.fg.seat = null; S.fg.tallyQ = null; } }
+            function fgReset(sid) { if (S.fg.sid !== sid) { S.fg.sid = sid; S.fg.open = {}; S.fg.earlier = {}; S.fg.vShown = {}; S.fg.seat = null; S.fg.tallyQ = null; } }
             function syncFgBody() {
                 var room = S.tab === 'panel' && !!S.session;
                 var view = el('digitalTwinsIQView');
@@ -52686,7 +52687,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 } else {
                     meta = '<span>' + fmtN(g.in_room || roster.length) + ' twins standing for <b>' + fmtN(g.size_people) + '</b> people' + SEP + 'Ask the first question below; the shares, the read and the voices come back in a minute or two.</span>';
                 }
-                return '<div class="dtw-fg-acts" id="dtwFgDockActs"></div><div class="dtw-fg-htext"><div class="dtw-fg-rtwrap"><input id="dtwFgTitle" class="dtw-fg-rt" value="' + esc(roomTitle(s)) + '" size="' + Math.max(8, String(roomTitle(s) || '').length + 1) + '" maxlength="120" aria-label="Room name" placeholder="Name this room" onfocus="this.dataset.dirty=\'1\'" oninput="this.dataset.dirty=\'1\';this.size=Math.max(8,this.value.length+1)" onkeydown="if(event.key===\'Enter\'){event.preventDefault();this.blur();}" onblur="dtwPanelRename(this.value)"><button type="button" class="dtw-fg-rt-edit" onclick="event.preventDefault();var t=el(\'dtwFgTitle\');if(t){t.focus();t.select();}">Edit</button></div><div class="dtw-fg-fm" id="dtwFgFm">' + meta + '</div></div>';
+                return '<div class="dtw-fg-acts" id="dtwFgDockActs"></div><div class="dtw-fg-htext"><div class="dtw-fg-rtwrap"><input id="dtwFgTitle" class="dtw-fg-rt" value="' + esc(roomTitle(s)) + '" size="' + Math.max(8, String(roomTitle(s) || '').length + 1) + '" maxlength="120" aria-label="Room name" placeholder="Name this room" onfocus="this.dataset.dirty=\'1\'" oninput="this.dataset.dirty=\'1\';this.size=Math.max(8,this.value.length+1)" onkeydown="if(event.key===\'Enter\'){event.preventDefault();this.blur();}" onblur="dtwPanelRename(this.value)"><button type="button" class="dtw-fg-rt-edit" onclick="event.preventDefault();var t=document.getElementById(\'dtwFgTitle\');if(t){t.focus();t.select();}">Edit</button></div><div class="dtw-fg-fm" id="dtwFgFm">' + meta + '</div></div>';
             }
             function titleEditing() {
                 var t = el('dtwFgTitle');
@@ -52725,6 +52726,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (!view || !dock || !S.session) { if (view) view.style.removeProperty('--dtw-main-h'); return; }
                 view.style.setProperty('--dtw-main-h', Math.max(240, view.clientHeight - dock.offsetHeight) + 'px');
                 fgDockStuck();
+                fgVoicesFill();
             }
             window.addEventListener('resize', function() { if (S.tab !== 'panel') return; clearTimeout(S.fgResizeT); S.fgResizeT = setTimeout(fgLayoutSeats, 120); });
             // the dock paints over the strip above it only once it is frozen, so the seat row keeps its last line until then
@@ -52835,6 +52837,33 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var open = seat ? ' data-fg-seat="' + Number(seat.seat) + '" onclick="dtwSeatOpen(' + Number(seat.seat) + ', this)"' : '';
                 return '<div class="dtw-fg-vmini"><div class="who">' + face(f, idx, 24) + '<span' + open + '>' + esc(titleCase(v.name)) + '<span>, ' + esc(v.age) + ', ' + esc(titleCase(v.city)) + (v.segment && multiSeg(roster) ? ', ' + esc(v.segment) : '') + '</span></span></div><q>' + esc(v.line) + '</q>' + (because ? '<span class="why">' + esc(because) + '</span>' : '') + '</div>';
             }
+            // the voices the read picked, then every other seat that answered, so the list runs through the whole room
+            function voicesAll(q, roster) {
+                var out = [], used = {};
+                (q.voices || []).forEach(function(v) { var seat = v.seat != null ? Number(v.seat) : Number((seatFor(v, roster) || {}).seat); if (seat && !used[seat]) { used[seat] = 1; out.push(v); } else if (!seat) out.push(v); });
+                (q.answers || []).slice().sort(function(a, b) { return Number(a.seat) - Number(b.seat); }).forEach(function(a) {
+                    var seat = Number(a.seat); if (!seat || used[seat] || !a.line) return; used[seat] = 1;
+                    var r = roster.filter(function(x) { return Number(x.seat) === seat; })[0] || {};
+                    out.push({ seat: seat, name: r.name || a.name, age: r.age != null ? r.age : a.age, city: r.city || a.city, segment: r.segment, portrait_url: r.portrait_url, line: a.line });
+                });
+                return out;
+            }
+            function fgVoicesMore() {
+                var c = S.fg.vctx, box = el('dtwFgVoices'); if (!c || !box) return;
+                var have = box.children.length; if (have >= c.list.length) return;
+                var next = c.list.slice(have, have + 2);
+                box.insertAdjacentHTML('beforeend', next.map(function(v) { return voiceMini(v, c.roster, c.q); }).join(''));
+                S.fg.vShown[c.key] = have + next.length;
+                var n = el('dtwFgVoicesN'); if (n) n.textContent = (have + next.length) + ' of ' + c.list.length;
+            }
+            function fgVoicesFill() {
+                var t = el('dtwFgTallyIn'), box = el('dtwFgVoices'), c = S.fg.vctx; if (!t || !box || !c) return;
+                for (var i = 0; i < 12 && box.children.length < c.list.length && t.scrollHeight <= t.clientHeight + 80; i++) fgVoicesMore();
+            }
+            document.addEventListener('scroll', function(e) {
+                var t = e.target; if (!(t instanceof Element) || t.id !== 'dtwFgTallyIn') return;
+                if (t.scrollTop + t.clientHeight >= t.scrollHeight - 80) fgVoicesMore();
+            }, true);
             function factsSec(q) {
                 var f = ((q || {}).facts_used || []).filter(Boolean); if (!f.length) return '';
                 return '<div class="dtw-fg-sec"><div class="dtw-fg-th">What the room knew.</div>' + f.map(function(x, i) { return '<div class="dtw-fg-fact"><span class="num">' + (i < 9 ? '0' : '') + (i + 1) + '</span><span>' + esc(x) + '</span></div>'; }).join('') + '</div>';
@@ -52884,8 +52913,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         }).join('');
                     }
                     body += factsSec(fq);
-                    var voices = (fq.voices || []).slice(0, 2);
-                    if (voices.length) body += '<div class="dtw-fg-sec"><div class="dtw-fg-th">The voices.</div><div class="dtw-fg-vtwo">' + voices.map(function(v) { return voiceMini(v, roster, fq); }).join('') + '</div></div>';
+                    var voices = voicesAll(fq, roster), vn = Math.min(voices.length, S.fg.vShown[qId(fq, (s.questions || []).indexOf(fq))] || 2);
+                    S.fg.vctx = { q: fq, roster: roster, list: voices, key: qId(fq, (s.questions || []).indexOf(fq)) };
+                    if (voices.length) body += '<div class="dtw-fg-sec"><div class="dtw-fg-th">The voices.<span id="dtwFgVoicesN">' + vn + ' of ' + voices.length + '</span></div><div class="dtw-fg-vtwo" id="dtwFgVoices">' + voices.slice(0, vn).map(function(v) { return voiceMini(v, roster, fq); }).join('') + '</div></div>';
                     body += segmentsSec(fq, rk);
                 }
                 return qPickHtml(s, fq) + '<div class="dtw-fg-tally-in" id="dtwFgTallyIn">' + body + '</div>';
