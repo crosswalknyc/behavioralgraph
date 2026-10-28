@@ -52781,7 +52781,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             function oldHead(q, i, open) {
                 var seats = seatsTotal(q), nA = (q.answers || []).length;
                 var extra = qFailed(q) ? SEP + 'did not finish' : (nA ? SEP + nA + (seats ? ' of ' + seats : '') : '');
-                return '<button type="button" class="dtw-fg-old' + (open ? ' open' : '') + '" data-q="' + esc(q.id || '') + '" aria-expanded="' + (open ? 'true' : 'false') + '" onclick="dtwFgToggle(\'' + esc(jsq(q.id)) + '\')">' + modav() + '<div class="body"><div class="qt">' + esc(q.q) + qMeta(q, i, extra) + '</div>' + (qFailed(q) ? '' : questionLolli(q)) + '</div><span class="chev">&#9662;</span></button>';
+                return '<button type="button" class="dtw-fg-old' + (open ? ' open' : '') + '" data-q="' + esc(q.id || '') + '" aria-expanded="' + (open ? 'true' : 'false') + '" onclick="dtwFgToggle(\'' + esc(jsq(q.id)) + '\')">' + modav() + '<div class="body"><div class="qt">' + esc(q.q) + qMeta(q, i, extra) + '</div>' + (qFailed(q) || !open ? '' : questionLolli(q)) + '</div><span class="chev">&#9662;</span></button>';
             }
             function fullBlock(q, i, roster, isLast, fly, noHead) {
                 var out = noHead ? ((q.framing && normQ(q.framing) !== normQ(q.q)) || q.note ? '<div class="dtw-fg-qmsg" data-q="' + esc(q.id || '') + '"><span class="dtw-fg-modav" style="visibility:hidden"></span><div class="dtw-fg-qt">' + (q.framing && normQ(q.framing) !== normQ(q.q) ? '<div class="fr" style="margin-top:0">' + esc(q.framing) + '</div>' : '') + (q.note ? '<div class="nt">' + esc(q.note) + '</div>' : '') + '</div></div>' : '') : qMsg(q, i, roster);
