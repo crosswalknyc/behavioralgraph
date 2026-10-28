@@ -50914,8 +50914,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-lib-bar { display: flex; align-items: center; justify-content: space-between; gap: 0.8rem; flex-wrap: wrap; margin: 0 0 0.75rem; }
         #digitalTwinsIQView .dtw-lib-bar .dtw-chips { margin: 0; }
         #digitalTwinsIQView .dtw-lib-search { width: min(240px, 100%); }
-        #digitalTwinsIQView .dtw-wall { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
-        #digitalTwinsIQView .dtw-cover { position: relative; overflow: hidden; border-radius: 10px; border: 1px solid var(--dtw-rule); padding: 16px 18px 18px; background: #081113; color: #E9E8E1; display: flex; flex-direction: column; cursor: pointer; min-width: 0; }
+        #digitalTwinsIQView .dtw-wall { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; }
+        #digitalTwinsIQView #dtwTwinPage { margin-top: 2.4rem; }
+        #digitalTwinsIQView .dtw-export { padding: 0.2rem 0 1.5rem; gap: 0.65rem; }
+        #digitalTwinsIQView .dtw-cover { position: relative; overflow: hidden; border-radius: 10px; border: 1px solid var(--dtw-rule); padding: 22px 22px 24px; background: #081113; color: #E9E8E1; display: flex; flex-direction: column; cursor: pointer; min-width: 0; }
         #digitalTwinsIQView .dtw-cover:hover { border-color: #9AA09B; }
         #digitalTwinsIQView .dtw-cover.on { border-color: var(--dtw-accent); }
         #digitalTwinsIQView .dtw-cover .body { position: relative; }
@@ -51376,7 +51378,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         </div>
                     </div>
                     <div id="dtwLibrary" class="dtw-wall"></div>
-                    <div id="dtwTwinPage" style="margin-top: 1.1rem;"></div>
+                    <div id="dtwTwinPage"></div>
                 </section>
                 <section id="dtwTabGreenlight" class="dtw-pane">
                     <div class="dtw-lab">
@@ -52006,7 +52008,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var t = S.twin, h = el('dtwTwinPage'); if (!h) return;
                 if (!t) { h.innerHTML = ''; return; }
                 var m = t.meta || {}, ident = t.identity || {}, key = m.key || S.key, lc = t.lifecycle || {};
-                var out = '<div class="dtw-actions" style="margin-top:1.6rem;"><a class="dtw-btn dtw-btn-sm" href="/api/digital-twins/' + esc(key) + '/export.csv">CSV</a><a class="dtw-btn dtw-btn-sm" href="/api/digital-twins/' + esc(key) + '/export.pdf">PDF</a><a class="dtw-btn dtw-btn-sm" href="/api/digital-twins/' + esc(key) + '/export.pptx">Deck</a></div>';
+                var out = '<div class="dtw-actions dtw-export"><a class="dtw-btn dtw-btn-sm" href="/api/digital-twins/' + esc(key) + '/export.csv">CSV</a><a class="dtw-btn dtw-btn-sm" href="/api/digital-twins/' + esc(key) + '/export.pdf">PDF</a><a class="dtw-btn dtw-btn-sm" href="/api/digital-twins/' + esc(key) + '/export.pptx">Deck</a></div>';
                 // Identity
                 var idb = '<div class="dtw-two"><div>';
                 [['gender', 'Gender'], ['age', 'Age'], ['income', 'Income'], ['ethnicity', 'Ethnicity']].forEach(function(c) { var rows = demoRows(c[0]); if (rows.length) { idb += '<h4>' + c[1] + '</h4>' + rows.slice(0, 8).map(function(r) { return bar(r.label, r.pct, 100, false, pct(r.pct, 1)); }).join(''); } });
