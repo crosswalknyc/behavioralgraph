@@ -51102,7 +51102,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-fg-htext { position: relative; margin-top: 8px; }
         #digitalTwinsIQView .dtw-fg-rt { font-size: 15px; line-height: 19px; color: var(--dtw-ink); font-weight: 600; overflow-wrap: anywhere; }
         #digitalTwinsIQView .dtw-fg-rtwrap { display: flex; align-items: baseline; gap: 10px; max-width: 100%; }
-        #digitalTwinsIQView input.dtw-fg-rt { appearance: none; -webkit-appearance: none; background: transparent; border: 0; border-bottom: 1px solid transparent; color: var(--dtw-ink); font: inherit; font-size: 15px; line-height: 19px; font-weight: 600; padding: 0 0 1px; margin: 0; width: min(100%, 42rem); min-width: 8rem; outline: none; }
+        #digitalTwinsIQView input.dtw-fg-rt { appearance: none; -webkit-appearance: none; background: transparent; border: 0; border-bottom: 1px solid transparent; color: var(--dtw-ink); font: inherit; font-size: 15px; line-height: 19px; font-weight: 600; padding: 0 0 1px; margin: 0; width: auto; field-sizing: content; max-width: min(100%, 42rem); min-width: 8rem; outline: none; }
         #digitalTwinsIQView input.dtw-fg-rt:hover { border-bottom-color: var(--dtw-rule); }
         #digitalTwinsIQView input.dtw-fg-rt:focus { border-bottom-color: var(--dtw-ink); }
         #digitalTwinsIQView .dtw-fg-rt-edit { appearance: none; background: transparent; border: 0; padding: 0; margin: 0; font: inherit; font-size: 11px; line-height: 15px; color: var(--dtw-mute); cursor: pointer; flex: none; }
@@ -51127,9 +51127,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-fg-qt .qm { color: var(--dtw-mute); margin-left: 8px; font-size: 11.5px; }
         #digitalTwinsIQView .dtw-fg-qt .fr { color: var(--dtw-body); margin-top: 3px; font-size: 12px; line-height: 16px; }
         #digitalTwinsIQView .dtw-fg-qt .nt { color: var(--dtw-mute); margin-top: 3px; font-size: 11.5px; line-height: 15px; }
-        #digitalTwinsIQView .dtw-fg-earlier { appearance: none; background: transparent; border: 0; width: 100%; display: flex; align-items: center; gap: 12px; font-size: 11px; color: var(--dtw-mute); padding: 0 0 0 40px; cursor: pointer; text-align: left; font-family: inherit; }
+        #digitalTwinsIQView .dtw-fg-earlier { appearance: none; background: transparent; border: 0; width: 100%; display: flex; align-items: center; gap: 12px; font-size: 11px; font-weight: 600; color: var(--dtw-accent); padding: 0 0 0 40px; cursor: pointer; text-align: left; font-family: inherit; }
         #digitalTwinsIQView .dtw-fg-earlier::after { content: ''; flex: 1; height: 1px; background: var(--dtw-rule); }
-        #digitalTwinsIQView .dtw-fg-earlier:hover { color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-fg-earlier:hover { text-decoration: underline; }
         #digitalTwinsIQView .dtw-fg-faceb { position: relative; appearance: none; border: 0; padding: 0; width: 36px; height: 36px; border-radius: 50%; overflow: hidden; background: var(--hue, #3358FF); color: #E9E8E1; font-weight: 600; font-size: 12px; font-family: inherit; display: inline-flex; align-items: center; justify-content: center; flex: none; cursor: pointer; vertical-align: middle; }
         #digitalTwinsIQView .dtw-fg-faceb img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 30%; display: block; }
         #digitalTwinsIQView .dtw-fg-faceb.s24 { width: 24px; height: 24px; font-size: 9px; }
@@ -51168,7 +51168,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-fg-old .dtw-fg-stack { margin-top: 6px; height: 6px; max-width: 420px; }
         #digitalTwinsIQView .dtw-fg-old .dtw-fg-stack i { border-right-color: var(--dtw-page); }
         #digitalTwinsIQView .dtw-fg-lolli { margin-top: 8px; max-width: 520px; display: grid; grid-template-columns: minmax(0, 190px) minmax(80px, 1fr) 38px; column-gap: 12px; row-gap: 5px; align-items: center; }
-        #digitalTwinsIQView .dtw-fg-lolli .lb { font-size: 11.5px; line-height: 15px; color: var(--dtw-body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        #digitalTwinsIQView .dtw-fg-lolli .lb { font-size: 11.5px; line-height: 15px; color: var(--dtw-body); overflow-wrap: anywhere; }
         #digitalTwinsIQView .dtw-fg-lolli .tr { position: relative; height: 11px; }
         #digitalTwinsIQView .dtw-fg-lolli .tr::before { content: ''; position: absolute; left: 0; right: 0; top: 5px; border-top: 1px dashed var(--dtw-hair); }
         #digitalTwinsIQView .dtw-fg-lolli .ln { position: absolute; left: 0; top: 4.5px; height: 2px; border-radius: 1px; }
@@ -52686,7 +52686,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 } else {
                     meta = '<span>' + fmtN(g.in_room || roster.length) + ' twins standing for <b>' + fmtN(g.size_people) + '</b> people' + SEP + 'Ask the first question below; the shares, the read and the voices come back in a minute or two.</span>';
                 }
-                return '<div class="dtw-fg-acts" id="dtwFgDockActs"></div><div class="dtw-fg-htext"><div class="dtw-fg-rtwrap"><input id="dtwFgTitle" class="dtw-fg-rt" value="' + esc(roomTitle(s)) + '" maxlength="120" aria-label="Room name" placeholder="Name this room" onfocus="this.dataset.dirty=\'1\'" oninput="this.dataset.dirty=\'1\'" onkeydown="if(event.key===\'Enter\'){event.preventDefault();this.blur();}" onblur="dtwPanelRename(this.value)"><button type="button" class="dtw-fg-rt-edit" onclick="event.preventDefault();var t=el(\'dtwFgTitle\');if(t){t.focus();t.select();}">Edit</button></div><div class="dtw-fg-fm" id="dtwFgFm">' + meta + '</div></div>';
+                return '<div class="dtw-fg-acts" id="dtwFgDockActs"></div><div class="dtw-fg-htext"><div class="dtw-fg-rtwrap"><input id="dtwFgTitle" class="dtw-fg-rt" value="' + esc(roomTitle(s)) + '" size="' + Math.max(8, String(roomTitle(s) || '').length + 1) + '" maxlength="120" aria-label="Room name" placeholder="Name this room" onfocus="this.dataset.dirty=\'1\'" oninput="this.dataset.dirty=\'1\';this.size=Math.max(8,this.value.length+1)" onkeydown="if(event.key===\'Enter\'){event.preventDefault();this.blur();}" onblur="dtwPanelRename(this.value)"><button type="button" class="dtw-fg-rt-edit" onclick="event.preventDefault();var t=el(\'dtwFgTitle\');if(t){t.focus();t.select();}">Edit</button></div><div class="dtw-fg-fm" id="dtwFgFm">' + meta + '</div></div>';
             }
             function titleEditing() {
                 var t = el('dtwFgTitle');
