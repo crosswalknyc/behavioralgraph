@@ -1,22 +1,29 @@
 """Cover art for a Digital Twin.
 
 Jenna 2026-10-27: "this looks bad lets just go back to using the logo
-for now." The Twins tab is a cover wall of official logos. A person
-photo, a Profile IQ headshot, a title poster and a mood still are all
-out. The lookup never searches the bare subject name as a stock-photo
-query.
+for now." Default tiles are official logos. A person photo, a Profile
+IQ headshot, a title poster and a mood still are out unless Jenna
+picks one. The lookup never searches the bare subject name as a
+stock-photo query.
+
+Jenna 2026-10-27 later: "use this image for gilmore girls" (the
+official soundtrack still of Lorelai and Rory). That subject is in
+``COVER_OVERRIDES`` and stays locked. Logo search had landed a
+Jessie James Decker album on the Gilmore Girls tile.
 
 Resolution, in order, fail-safe, never raises:
 
+  0. A Jenna-picked override for this subject;
   1. "{name} official logo" then "{name} logo";
   2. Wikipedia infobox, brands only (a series wiki page is usually a
      poster of people, which is what Jenna just rejected);
   3. the site favicon.
 
 The bytes land under ``digital-twins/covers/<sha>.<ext>``. Twin meta
-carries ``hero_image``, ``cover_kind`` (always ``logo``) and
-``cover_rev`` (``COVER_REV``). A twin below that rev is replaced on
-the next list load so Gilmore Girls drops the Lauren Graham still.
+carries ``hero_image``, ``cover_kind`` (``logo`` or ``photo``),
+``cover_rev`` (``COVER_REV``) and ``cover_locked`` when Jenna picked
+the file. A twin below that rev is replaced on the next list load
+unless it is locked.
 
 ``schedule_missing`` fills a missing or stale cover on a thread.
 Kill switch ``DTIQ_COVERS=0``. Tests inject the lookups and never
@@ -35,6 +42,11 @@ BUCKET = 'dashboard-inputs'
 URL_BASE = '/api/profile-image-file/'
 # 1 = person-or-logo era (Profile IQ first). 2 = logos only.
 COVER_REV = 2
+# Jenna-picked files. Fold of clean_entity (letters+digits only).
+# Gilmore Girls: official soundtrack still, 2026-10-27.
+COVER_OVERRIDES = {
+    'gilmoregirls': '/api/profile-image-file/digital-twins/covers/e487416106c0ee6fa863.jpg',
+}
 
 _AUDIENCE_TAIL = re.compile(
     r"\b(viewers?|fans?|audience|shoppers?|buyers?|customers?|"
@@ -94,11 +106,21 @@ def clean_entity(subject: str) -> str:
     return s or ' '.join(str(subject or '').split())
 
 
+def _fold_name(s: str) -> str:
+    return re.sub(r'[^a-z0-9]+', '', str(s or '').lower())
+
+
+def override_url(subject: str) -> str:
+    """The Jenna-picked file for this subject, or ''."""
+    return COVER_OVERRIDES.get(_fold_name(clean_entity(subject))) or ''
+
+
 def cover_kind(subject: str = '', kind: str = '', fmt: str = '',
                brand_category: str = '') -> str:
-    """Always ``logo``. The person-photo branch is parked (Jenna
-    2026-10-27: use the logo for now). Arguments stay so callers and
-    tests do not change shape."""
+    """``photo`` when Jenna picked the file, else ``logo``. Arguments
+    stay so callers and tests do not change shape."""
+    if override_url(subject):
+        return 'photo'
     return 'logo'
 
 
@@ -110,12 +132,19 @@ def _rev_of(row: dict) -> int:
 
 
 def needs_cover(row: dict) -> bool:
-    """Missing hero, or a tile from the person-photo / Profile IQ pass."""
+    """Missing hero, a stale person-photo / Profile IQ tile, or a
+    Jenna-picked override that is not on the tile yet."""
     if not isinstance(row, dict) or not row.get('key'):
+        return False
+    have = str(row.get('hero_image') or '').strip()
+    ov = override_url(str(row.get('subject') or row.get('name') or ''))
+    if ov and have != ov:
+        return True
+    if row.get('cover_locked') and have:
         return False
     if _rev_of(row) < COVER_REV:
         return True
-    return not str(row.get('hero_image') or '').strip()
+    return not have
 
 
 def search_names(subject: str, kind: str = '', fmt: str = '') -> list:
@@ -281,6 +310,11 @@ def resolve_cover_url(subject: str, *, kind: str = '', fmt: str = '',
     """(url, cover_kind, note). url is None on a miss. Never raises."""
     if not enabled():
         return None, 'logo', 'off'
+    ov = override_url(subject)
+    if ov:
+        kept = ov if _is_ours(ov) else _keep(ov, s3)
+        if kept:
+            return kept, 'photo', 'override'
     names = search_names(subject, kind, fmt)
     if not names:
         return None, 'logo', 'none'
@@ -316,14 +350,19 @@ def attach_cover(s3, payload: dict, *, host=None, force: bool = False) -> bool:
         return False
     meta = payload.setdefault('meta', {})
     have = str(meta.get('hero_image') or '').strip()
-    if have and not force and _rev_of(meta) >= COVER_REV:
-        if meta.get('cover_kind') != 'logo':
-            meta['cover_kind'] = 'logo'
+    subject = str(meta.get('subject') or meta.get('name') or '')
+    ov = override_url(subject)
+    if ov and have != ov:
+        force = True
+    if have and not force and (meta.get('cover_locked') or _rev_of(meta) >= COVER_REV):
+        want = 'photo' if ov else 'logo'
+        if meta.get('cover_kind') != want:
+            meta['cover_kind'] = want
             return True
         return False
     try:
         url, mode, note = resolve_cover_url(
-            str(meta.get('subject') or meta.get('name') or ''),
+            subject,
             kind=str(meta.get('subject_kind') or ''),
             fmt=str(meta.get('format') or ''),
             brand_category=str(meta.get('brand_category') or ''),
@@ -332,10 +371,12 @@ def attach_cover(s3, payload: dict, *, host=None, force: bool = False) -> bool:
     except Exception as e:
         print(f"[twin-cover] resolve failed: {e}")
         return False
-    meta['cover_kind'] = 'logo'
+    meta['cover_kind'] = mode or 'logo'
     if url:
         meta['hero_image'] = url
         meta['cover_rev'] = COVER_REV
+        if note == 'override':
+            meta['cover_locked'] = True
         print(f"[twin-cover] {meta.get('name') or meta.get('subject')}: {note}")
         return True
     # Keep the old tile and do not stamp the rev, so the next list
@@ -387,6 +428,7 @@ def schedule_missing(s3, runs: list, *, load_fn: Optional[Callable] = None,
                     r['hero_image'] = (payload.get('meta') or {}).get('hero_image') or ''
                     r['cover_kind'] = (payload.get('meta') or {}).get('cover_kind') or ''
                     r['cover_rev'] = (payload.get('meta') or {}).get('cover_rev') or 0
+                    r['cover_locked'] = bool((payload.get('meta') or {}).get('cover_locked'))
             except Exception as e:
                 print(f"[twin-cover] fill {key}: {e}")
             finally:
@@ -400,6 +442,7 @@ def schedule_missing(s3, runs: list, *, load_fn: Optional[Callable] = None,
     return len(queued)
 
 
-__all__ = ['PREFIX', 'COVER_REV', 'clean_entity', 'cover_kind', 'needs_cover',
-           'search_names', 'resolve_cover_url', 'attach_cover', 'schedule_missing',
+__all__ = ['PREFIX', 'COVER_REV', 'COVER_OVERRIDES', 'clean_entity',
+           'override_url', 'cover_kind', 'needs_cover', 'search_names',
+           'resolve_cover_url', 'attach_cover', 'schedule_missing',
            'configure', 'enabled']

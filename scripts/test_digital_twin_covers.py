@@ -25,9 +25,9 @@ class CoverKind(unittest.TestCase):
         self.assertEqual(C.cover_kind('Reba McEntire', 'talent', '', ''), 'logo')
         self.assertEqual(C.cover_kind('iJustine', 'audience', 'creator', ''), 'logo')
         self.assertEqual(C.cover_kind('Reba McEntire', 'audience', '', 'MUSICIAN/BAND'), 'logo')
-        self.assertEqual(C.cover_kind('Gilmore Girls', 'ip', 'series', 'SERIES - DRAMA'), 'logo')
+        self.assertEqual(C.cover_kind('Gilmore Girls', 'ip', 'series', 'SERIES - DRAMA'), 'photo')
         self.assertEqual(C.cover_kind('Costco', 'brand', 'brand', 'RETAILERS'), 'logo')
-        self.assertEqual(C.cover_kind('Gilmore Girls Hulu viewers', 'audience', 'series', ''), 'logo')
+        self.assertEqual(C.cover_kind('Gilmore Girls Hulu viewers', 'audience', 'series', ''), 'photo')
         self.assertEqual(C.cover_kind('Yellowstone', 'ip', 'series', 'SERIES'), 'logo')
         self.assertEqual(C.cover_kind('a diner after a scandal', 'idea', '', ''), 'logo')
 
@@ -63,6 +63,8 @@ class Resolve(unittest.TestCase):
             self.queries.append(('search', q))
             if 'logo' in q and 'Landman' in q:
                 return 'https://example.com/landman-logo.png'
+            if 'logo' in q and 'Yellowstone' in q:
+                return 'https://example.com/ys-logo.png'
             if 'logo' in q and 'Gilmore Girls' in q:
                 return 'https://example.com/gg-logo.png'
             if q.endswith(' photo'):
@@ -91,8 +93,15 @@ class Resolve(unittest.TestCase):
     def tearDown(self):
         C.configure()
 
-    def test_series_uses_logo_search_not_the_profile_headshot(self):
+    def test_gilmore_girls_uses_the_picked_photo(self):
         url, mode, note = C.resolve_cover_url('Gilmore Girls', kind='ip', fmt='series')
+        self.assertEqual(mode, 'photo')
+        self.assertEqual(note, 'override')
+        self.assertEqual(url, C.COVER_OVERRIDES['gilmoregirls'])
+        self.assertFalse(self.queries)
+
+    def test_series_uses_logo_search_not_the_profile_headshot(self):
+        url, mode, note = C.resolve_cover_url('Yellowstone', kind='ip', fmt='series')
         self.assertEqual(mode, 'logo')
         self.assertTrue(note.startswith('logo:'))
         self.assertTrue(url.startswith('/api/profile-image-file/digital-twins/covers/'))
@@ -143,9 +152,10 @@ class Resolve(unittest.TestCase):
         }}
         self.assertTrue(C.needs_cover({'key': 'k', **payload['meta']}))
         self.assertTrue(C.attach_cover(None, payload))
-        self.assertNotEqual(payload['meta']['hero_image'], '/api/profile-image-file/lauren.jpg')
+        self.assertEqual(payload['meta']['hero_image'], C.COVER_OVERRIDES['gilmoregirls'])
+        self.assertEqual(payload['meta']['cover_kind'], 'photo')
+        self.assertTrue(payload['meta']['cover_locked'])
         self.assertEqual(payload['meta']['cover_rev'], C.COVER_REV)
-        self.assertTrue(payload['meta']['hero_image'].startswith('/api/profile-image-file/digital-twins/covers/'))
 
     def test_index_carries_the_cover(self):
         payload = {'meta': {'name': 'Costco', 'subject': 'Costco', 'subject_kind': 'brand',
@@ -220,7 +230,16 @@ class Schedule(unittest.TestCase):
             save_fn=lambda s3, key, p: saved.append(p['meta']['hero_image']),
         )
         self.assertEqual(n, 1)
-        self.assertEqual(saved, ['/api/profile-image-file/digital-twins/covers/gg.png'])
+        self.assertEqual(saved, [C.COVER_OVERRIDES['gilmoregirls']])
+
+    def test_locked_cover_is_left_alone(self):
+        n = C.schedule_missing(
+            object(),
+            [{'key': 'k', 'name': 'Costco', 'hero_image': '/x.png',
+              'cover_rev': C.COVER_REV, 'cover_locked': True}],
+            load_fn=lambda *a: None, save_fn=lambda *a: None,
+        )
+        self.assertEqual(n, 0)
 
 
 if __name__ == '__main__':
