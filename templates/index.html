@@ -1109,6 +1109,18 @@
         .howto-video-modal video { display: block; width: 100%; height: auto; background: #000; }
         @media (max-width: 900px) { .howto-video-modal { width: 90vw; } }
 
+        /* Prometheus pricing rate card */
+        .modal-overlay .modal-content.pricing-modal-content { max-width: 640px; width: 92vw; max-height: 88vh; overflow: hidden; display: flex; flex-direction: column; padding: 0; }
+        .pricing-body { overflow-y: auto; padding: 0.5rem 1.5rem 1.4rem; }
+        .pricing-kicker { margin: 1rem 0 0.35rem; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-secondary); }
+        .pricing-row { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; padding: 0.7rem 0; border-bottom: 1px solid var(--border-color); }
+        .pricing-row:last-child { border-bottom: none; }
+        .pricing-name { color: var(--text-primary); font-size: 0.92rem; font-weight: 600; }
+        .pricing-note { display: block; margin-top: 0.2rem; color: var(--text-secondary); font-size: 0.76rem; font-weight: 400; line-height: 1.35; }
+        .pricing-price { flex-shrink: 0; color: var(--accent-lime); font-size: 0.98rem; font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; }
+        .pricing-metered { margin-top: 1.1rem; padding: 0.85rem 1rem; border: 1px solid var(--border-color); border-radius: 8px; background: rgba(255,255,255,0.02); color: var(--text-secondary); font-size: 0.8rem; line-height: 1.5; }
+        .pricing-metered b { color: var(--text-primary); font-weight: 600; }
+
         /* Methodology modal */
         .methodology-header {
             display: flex;
@@ -20306,6 +20318,37 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
         </div>
     </div>
 
+    <!-- Prometheus pricing rate card -->
+    <div id="pricingModal" class="modal-overlay" style="display: none;" onclick="if(event.target === this) closePricingModal()">
+        <div class="modal-content pricing-modal-content">
+            <div class="methodology-header">
+                <div>
+                    <h2 style="margin: 0; color: var(--text-primary); font-size: 1.25rem;">Prometheus Pricing</h2>
+                    <div style="color: var(--text-secondary); font-size: 0.78rem; margin-top: 0.25rem;">Rate card &middot; October 2026</div>
+                </div>
+                <button type="button" onclick="closePricingModal()" aria-label="Close" style="background: transparent; border: none; color: var(--text-secondary); font-size: 1.6rem; cursor: pointer; line-height: 1; padding: 0 0.25rem;">&times;</button>
+            </div>
+            <div class="pricing-body">
+                <div class="pricing-kicker">Per pull</div>
+                <div>
+                    <div class="pricing-row"><span class="pricing-name">Digital Journey</span><span class="pricing-price">$500</span></div>
+                    <div class="pricing-row"><span class="pricing-name">Profile</span><span class="pricing-price">$300</span></div>
+                    <div class="pricing-row"><span class="pricing-name">Subscriber Acquisition</span><span class="pricing-price">$500</span></div>
+                    <div class="pricing-row"><span class="pricing-name">Viewership Metrics</span><span class="pricing-price">$500</span></div>
+                    <div class="pricing-row"><span class="pricing-name">Flywheel</span><span class="pricing-price">$500</span></div>
+                    <div class="pricing-row"><span class="pricing-name">Brand Partnership<span class="pricing-note">$500 + $500 control</span></span><span class="pricing-price">$1,000</span></div>
+                    <div class="pricing-row"><span class="pricing-name">Ad Attribution<span class="pricing-note">Initial pull. Optional $100 / day per campaign to track.</span></span><span class="pricing-price">$500</span></div>
+                    <div class="pricing-row"><span class="pricing-name">Custom Ask</span><span class="pricing-price">$500</span></div>
+                </div>
+                <div class="pricing-kicker">Pulls not based on pre-pulled data</div>
+                <div>
+                    <div class="pricing-row"><span class="pricing-name">Fresh pull<span class="pricing-note">First ask. $50 for each follow-up.</span></span><span class="pricing-price">$100</span></div>
+                </div>
+                <div class="pricing-metered">All Prometheus (chat bot) usage is billed at a metered rate of <b>$10.50 / $52.50 per million</b> in / out, plus <b>$0.021 per search</b>.</div>
+            </div>
+        </div>
+    </div>
+
     <!-- Methodology modal -->
     <div id="methodologyModal" class="modal-overlay" style="display: none;" onclick="if(event.target === this) closeMethodologyModal()">
         <div class="modal-content methodology-modal-content" style="max-width: 1100px; width: 92vw; max-height: 88vh; overflow: hidden; display: flex; flex-direction: column; padding: 0;">
@@ -20404,6 +20447,7 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
                                             <button type="button" class="user-dropdown-subitem2" data-howto-video="{{ url_for('static', filename='videos/indexing.mp4') }}" data-howto-title="Indexing">Indexing</button>
                                         </div>
                                         <button type="button" class="user-dropdown-subitem" id="btnOpenMethodology">Methodology</button>
+                                        <button type="button" class="user-dropdown-subitem" id="btnOpenPricing">Prometheus Pricing</button>
                                         <button type="button" class="user-dropdown-subitem user-dropdown-subitem-disabled" disabled>Metric Glossary<span class="user-dropdown-soon">Soon</span></button>
                                         <button type="button" class="user-dropdown-subitem user-dropdown-subitem-disabled" disabled>FAQs<span class="user-dropdown-soon">Soon</span></button>
                                     </div>
@@ -58350,6 +58394,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         if (typeof window.openMethodologyModal === 'function') window.openMethodologyModal();
                     });
                 }
+                var btnPricing = document.getElementById('btnOpenPricing');
+                if (btnPricing) {
+                    btnPricing.addEventListener('click', function(e) {
+                        e.stopPropagation();
+                        dropdown.classList.remove('open');
+                        if (typeof window.openPricingModal === 'function') window.openPricingModal();
+                    });
+                }
 
                 // Crosswalk Resource Center + nested Video Tutorials submenu toggles
                 function _wireSubmenuToggle(btnId, submenuId) {
@@ -58671,6 +58723,24 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 }
             });
         })();
+
+        window.openPricingModal = function openPricingModal() {
+            var modal = document.getElementById('pricingModal');
+            if (!modal) return;
+            modal.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+        };
+        window.closePricingModal = function closePricingModal() {
+            var modal = document.getElementById('pricingModal');
+            if (!modal) return;
+            modal.style.display = 'none';
+            document.body.style.overflow = '';
+        };
+        document.addEventListener('keydown', function(e) {
+            if (e.key !== 'Escape') return;
+            var modal = document.getElementById('pricingModal');
+            if (modal && modal.style.display !== 'none') window.closePricingModal();
+        });
 
         // ============================================================================
         // PROFILE SETTINGS MODAL (window.* so inline onclick in HTML resolves reliably)
