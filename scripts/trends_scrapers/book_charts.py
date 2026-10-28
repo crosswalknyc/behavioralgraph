@@ -59,6 +59,7 @@ from __future__ import annotations
 
 import html as _html
 import logging
+import random
 import re
 import sys
 import time
@@ -148,6 +149,49 @@ _KINDLE_LIKE_RE = re.compile(
 )
 
 
+_AMAZON_BOT_CHECK_MARKERS = (
+    'Enter the characters you see below',
+    '/errors/validateCaptcha',
+    'api-services-support@amazon.com',
+    'Sorry, we just need to make sure you',
+)
+
+
+def _amazon_bot_check(html: str) -> bool:
+    """True when Amazon answered with its robot check instead of the
+    list. It ships as HTTP 200, so the status code cannot tell."""
+    if not html:
+        return True
+    head = html[:60000]
+    return any(m in head for m in _AMAZON_BOT_CHECK_MARKERS)
+
+
+def _carried_amazon_books(max_age_days: int = 3) -> list[dict]:
+    """The Amazon rows from the last snapshot that actually had them,
+    for a night Amazon's bot check never cleared. Bounded so a dead
+    source cannot be relabelled as live for long; [] when the previous
+    snapshot is itself empty, carried for too long, or unreadable."""
+    try:
+        from ._base import read_snapshot
+        prev = read_snapshot('book_charts') or {}
+        panel = ((prev.get('sources') or {}).get('amazon') or {})
+        rows = [r for r in (panel.get('items') or []) if isinstance(r, dict)]
+        if not rows:
+            return []
+        from datetime import datetime, timezone
+        seen = datetime.fromisoformat(
+            (panel.get('observed_at') or prev.get('fetched_at') or '')
+            .replace('Z', '+00:00'))
+        if seen.tzinfo is None:
+            seen = seen.replace(tzinfo=timezone.utc)
+        if (datetime.now(timezone.utc) - seen).days > max_age_days:
+            return []
+        return rows
+    except Exception as e:
+        logger.info("amazon books carry-forward unavailable: %s", e)
+        return []
+
+
 def _fetch_amazon_books(limit: int = 60) -> list[dict]:
     """Parse `amazon.com/gp/bestsellers/books` into the standard chart
     row shape, paging across `?pg=1` and `?pg=2`.
@@ -159,25 +203,46 @@ def _fetch_amazon_books(limit: int = 60) -> list[dict]:
     legitimate scrape ceiling for this source. Rows re-rank 1..N in
     Amazon's own order. Silent failure returns [].
     """
+    from ._base import http_get
+
     items: list[dict] = []
     seen_titles: set[str] = set()
     for pg in (1, 2):
         if len(items) >= limit:
             break
         url = _AMAZON_BOOKS_URL + ('' if pg == 1 else f'?pg={pg}')
-        try:
-            r = requests.get(url,
-                             headers={'User-Agent': _UA,
-                                        'Accept-Language': 'en-US,en;q=0.9',
-                                        'Accept': 'text/html,application/xhtml+xml'},
-                             timeout=20)
-        except Exception as e:
-            logger.warning("amazon books pg%d: %s", pg, e)
-            continue
-        if not r.ok:
-            logger.warning("amazon books pg%d: http %s", pg, r.status_code)
-            continue
-        page_items = _parse_amazon_books_page(r.text or '', limit - len(items))
+        # Amazon's bot check is an HTTP 200 carrying "Enter the
+        # characters you see below" in place of the list (2026-10-28:
+        # both pages came back that way for one night and the panel
+        # shipped empty with no warning, because the status was fine).
+        # Chrome-TLS impersonation through http_get, the donated
+        # amazon.com session, and a few spaced re-tries clear it; a
+        # night that never clears is carried forward by fetch().
+        page_items: list[dict] = []
+        for attempt in range(1, 4):
+            r = http_get(url, cookie_domain='amazon.com', timeout=20,
+                         headers={'User-Agent': _UA,
+                                  'Accept-Language': 'en-US,en;q=0.9',
+                                  'Accept': 'text/html,application/xhtml+xml'})
+            if r is None or not getattr(r, 'ok', False):
+                logger.warning("amazon books pg%d attempt %d: http %s", pg,
+                               attempt, getattr(r, 'status_code', 'none'))
+            else:
+                body = r.text or ''
+                if _amazon_bot_check(body):
+                    logger.warning("amazon books pg%d attempt %d: bot check "
+                                   "page served instead of the list",
+                                   pg, attempt)
+                else:
+                    page_items = _parse_amazon_books_page(
+                        body, limit - len(items))
+                    if page_items:
+                        break
+                    logger.warning("amazon books pg%d attempt %d: page "
+                                   "parsed to 0 rows (%d bytes)",
+                                   pg, attempt, len(body))
+            if attempt < 3:
+                time.sleep(4.0 * attempt + random.random() * 2)
         for it in page_items:
             key = (it.get('title') or '').lower().strip()
             if not key or key in seen_titles:
@@ -531,6 +596,27 @@ def fetch() -> dict[str, Any]:
     change once a proxy is provisioned.
     """
     amazon_items = _fetch_amazon_books(limit=60)
+    amazon_observed_at = None
+    amazon_carried = False
+    if amazon_items:
+        from datetime import datetime, timezone
+        amazon_observed_at = datetime.now(timezone.utc).isoformat()
+    else:
+        carried = _carried_amazon_books()
+        if carried:
+            logger.warning("amazon books: live pull empty; carrying "
+                           "forward %d rows from the last good read",
+                           len(carried))
+            amazon_items = carried
+            amazon_carried = True
+            try:
+                from ._base import read_snapshot
+                prev = read_snapshot('book_charts') or {}
+                amazon_observed_at = (((prev.get('sources') or {})
+                                       .get('amazon') or {}).get('observed_at')
+                                      or prev.get('fetched_at'))
+            except Exception:
+                pass
     # Prefer paid chart when it's populated (books people are actually
     # buying); fall back to free (which is often padded with public-domain
     # classics + Amazon-published freebies).
@@ -548,6 +634,8 @@ def fetch() -> dict[str, Any]:
                 'sub':       'The Amazon Best-Sellers list. Refreshes hourly.',
                 'items':     amazon_items,
                 'available': bool(amazon_items),
+                'observed_at': amazon_observed_at,
+                'carried_forward': amazon_carried,
             },
             'apple': {
                 'label':     'Apple Books',
