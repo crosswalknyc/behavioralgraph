@@ -221,6 +221,9 @@ class Moderator(unittest.TestCase):
         self.assertNotIn('IP lifetime value', page)
         self.assertNotIn('IP, 5 years', page)
         self.assertNotIn('function renderLtv', page)
+        self.assertNotIn('min-height: 280px; border-radius: 10px; border: 1px solid var(--dtw-rule); padding: 0;', page)
+        self.assertNotIn("r.hero_image ? '<img", page)
+        self.assertNotIn('class="banner"', page)
 
 
 class LifetimeValueGone(unittest.TestCase):
