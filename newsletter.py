@@ -738,6 +738,29 @@ def put_send_snapshot(cid: str, snap: dict):
     _put_json(SEND_KEY.format(cid=cid), snap)
 
 
+def _update_send_snapshot(cid, mutate_fn):
+    """Read the send snapshot, apply mutate_fn, and write it back.
+
+    An open can land while a send is writing. A full overwrite drops that
+    open. Local tests take the state lock. Live writes use a conditional
+    put and retry, so the open and the send both stick.
+    """
+    key = SEND_KEY.format(cid=cid)
+    if _use_local():
+        with _state_lock:
+            snap = _get_json(key) or {}
+            nxt = mutate_fn(snap)
+            if nxt is None:
+                return snap
+            _put_json(key, nxt)
+            return nxt
+    try:
+        from s3_json_state import update_json
+    except ImportError:
+        from migration.s3_json_state import update_json  # type: ignore
+    return update_json(S3_BUCKET, key, mutate_fn, default={})
+
+
 ALLOWED_ATTACH_EXT = {
     "pdf", "ppt", "pptx", "xls", "xlsx", "csv", "zip", "doc", "docx",
 }
@@ -2097,10 +2120,15 @@ def _run_send(campaign_id):
         subject = (camp.get("subject") or camp.get("name") or "The Read").strip()
 
         snap = get_send_snapshot(campaign_id)
-        snap["links"] = links
         recips = _snapshot_recipient_map(snap.get("recipients") or {})
-        snap["recipients"] = recips
-        put_send_snapshot(campaign_id, snap)
+
+        def _set_links(current):
+            if not isinstance(current, dict):
+                current = {}
+            current["links"] = links
+            return current
+
+        _update_send_snapshot(campaign_id, _set_links)
         delivered = set()
         n = 0
         for email, row in recips.items():
@@ -2126,16 +2154,34 @@ def _run_send(campaign_id):
                 failed += 1
                 result["errors"].append(f"{email}: {row['error']}")
                 print(f"newsletter send failed {campaign_id} -> {email}: {e}")
-            snap["recipients"][email] = row
-            put_send_snapshot(campaign_id, snap)
+            def _mark(current, email=email, row=row):
+                if not isinstance(current, dict):
+                    current = {}
+                got = current.setdefault("recipients", {})
+                fresh = dict(got.get(email) or {})
+                fresh["status"] = row.get("status")
+                fresh["sent_at"] = row.get("sent_at")
+                fresh["error"] = row.get("error")
+                if row.get("name") and not fresh.get("name"):
+                    fresh["name"] = row.get("name")
+                got[email] = fresh
+                current["recipients"] = got
+                return current
+
+            _update_send_snapshot(campaign_id, _mark)
             n += 1
             if n % 10 == 0:
                 _heartbeat_send_lease(campaign_id, owner)
             time.sleep(0.08)
 
-        snap["finished_at"] = _utcnow()
-        snap["links"] = links
-        put_send_snapshot(campaign_id, snap)
+        def _finish(current):
+            if not isinstance(current, dict):
+                current = {}
+            current["finished_at"] = _utcnow()
+            current["links"] = links
+            return current
+
+        snap = _update_send_snapshot(campaign_id, _finish) or {}
         stats = _stats_from_snapshot(snap)
         result["sent"] = sent
         result["failed"] = failed
@@ -2275,37 +2321,42 @@ def _record_engagement(campaign_id, email, kind, url=None):
     email = _valid_email(email)
     if not email:
         return
-    snap = get_send_snapshot(campaign_id)
-    recips = snap.setdefault("recipients", {})
-    row = recips.setdefault(email, {
-        "name": "", "status": "sent", "open_count": 0, "clicks": [],
-    })
     now = _utcnow()
-    if kind == "open":
-        row["open_count"] = int(row.get("open_count") or 0) + 1
-        if not row.get("opened_at"):
-            row["opened_at"] = now
-    elif kind == "click" and url:
-        found = None
-        for c in row.get("clicks") or []:
-            if c.get("url") == url:
-                found = c
-                break
-        if found:
-            found["count"] = int(found.get("count") or 1) + 1
-            found["last_at"] = now
-        else:
-            row.setdefault("clicks", []).append({
-                "url": url, "count": 1, "at": now, "last_at": now,
-            })
-        if not row.get("opened_at"):
-            row["opened_at"] = now
-            row["open_count"] = max(int(row.get("open_count") or 0), 1)
-    elif kind == "unsub":
-        row["unsubscribed_at"] = now
-    recips[email] = row
-    snap["recipients"] = recips
-    put_send_snapshot(campaign_id, snap)
+
+    def _apply(snap):
+        if not isinstance(snap, dict):
+            snap = {}
+        recips = snap.setdefault("recipients", {})
+        row = recips.setdefault(email, {
+            "name": "", "status": "sent", "open_count": 0, "clicks": [],
+        })
+        if kind == "open":
+            row["open_count"] = int(row.get("open_count") or 0) + 1
+            if not row.get("opened_at"):
+                row["opened_at"] = now
+        elif kind == "click" and url:
+            found = None
+            for c in row.get("clicks") or []:
+                if c.get("url") == url:
+                    found = c
+                    break
+            if found:
+                found["count"] = int(found.get("count") or 1) + 1
+                found["last_at"] = now
+            else:
+                row.setdefault("clicks", []).append({
+                    "url": url, "count": 1, "at": now, "last_at": now,
+                })
+            if not row.get("opened_at"):
+                row["opened_at"] = now
+                row["open_count"] = max(int(row.get("open_count") or 0), 1)
+        elif kind == "unsub":
+            row["unsubscribed_at"] = now
+        recips[email] = row
+        snap["recipients"] = recips
+        return snap
+
+    snap = _update_send_snapshot(campaign_id, _apply) or {}
     stats = _stats_from_snapshot(snap)
 
     def mutate(st):
