@@ -195235,6 +195235,13 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         row-gap: 3px;
         overflow: visible !important;
     }
+    /* Rows here already size to their content, so a one-line title
+       doesn't hold an empty second line above the count. */
+    #trendsIQView[data-tiq-product="trends"] [data-tiq-panel="books"] .tiq-row-title,
+    #trendsIQView[data-tiq-product="trends"] [data-tiq-panel="comics"] .tiq-row-title {
+        height: auto;
+        max-height: 35px;
+    }
     /* Books (with Libby), Comics and Broadway carry the count as plain text, not a pill: the
        Libby units ("daily US library audiobook borrows") are too long for
        a pill in a 291px column. The line wraps at a word, the move rides
