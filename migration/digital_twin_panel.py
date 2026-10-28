@@ -795,6 +795,12 @@ def one_line_read(q: str, kind: str, dist: dict, by_segment: list, options: list
     return f"{top['label']} leads at {top['pct']}%" + (f", then {rows[1]['label'].lower()} at {rows[1]['pct']}%" if len(rows) > 1 else '') + '.' + seg_line
 
 
+def clean_room_title(title: str) -> str:
+    """The name the reader typed, trimmed and capped. Empty when they
+    did not name the room (Prometheus chat still falls back)."""
+    return ' '.join(str(title or '').split())[:120]
+
+
 def open_session(twins: list, *, segments: Optional[list] = None, in_room: int = DEFAULT_IN_ROOM, title: str = '',
                  created_by: str = '', session_id: str = '') -> dict:
     """A new room. Opening is free: ``questions_paid`` starts at 0 and the
@@ -803,8 +809,20 @@ def open_session(twins: list, *, segments: Optional[list] = None, in_room: int =
     seed = f"panel|{sid}|{'|'.join(_twin_key(t) for t in twins)}|{VERSION}"
     group = build_group(twins, segments, in_room, seed)
     names = ', '.join(dict.fromkeys(_twin_name(t) for t in twins))
-    return {'id': sid, 'title': title or f"Room: {names}", 'group': group, 'questions': [], 'created_by': created_by or 'prometheus',
+    name = clean_room_title(title)
+    return {'id': sid, 'title': name or f"Room: {names}", 'group': group, 'questions': [], 'created_by': created_by or 'prometheus',
             'created_at': _now(), 'updated_at': _now(), 'version': VERSION, 'questions_paid': 0}
+
+
+def rename_session(sess: dict, title: str) -> str:
+    """Set the room name in place. Empty string when the title is blank
+    (the caller leaves the current name)."""
+    name = clean_room_title(title)
+    if not name or not isinstance(sess, dict):
+        return ''
+    sess['title'] = name
+    sess['updated_at'] = _now()
+    return name
 
 
 # ------------------------------------------------- rooms: reuse, pay, delete
@@ -822,18 +840,23 @@ def segment_labels(twins: list, segments: Optional[list] = None) -> list:
     return sorted(out)
 
 
-def find_reusable_session(payload: dict, twins: list, segments: Optional[list] = None, in_room: int = DEFAULT_IN_ROOM, created_by: str = '') -> Optional[dict]:
+def find_reusable_session(payload: dict, twins: list, segments: Optional[list] = None, in_room: int = DEFAULT_IN_ROOM, created_by: str = '', title: str = '') -> Optional[dict]:
     """An existing room on the twin with no questions yet and the same
     twins, segments and seat count (2026-10-26, Jenna: repeated clicks
-    on Open the room left four empty 'Room: Gilmore Girls'). The
+    on Open the room left four empty 'Room: Gilmore Girls'). A named
+    room only reuses an empty room that already has that name, so
+    opening 'Holiday drop' does not swallow an empty 'Season 2'. The
     caller's own empty room first, then anyone's. None when there is
     none."""
     want_keys = sorted(_twin_key(t) for t in twins)
     want_labels = segment_labels(twins, segments)
     want_room = int(clamp(int(in_room or DEFAULT_IN_ROOM), 2, MAX_IN_ROOM))
+    want_title = clean_room_title(title)
     hits = []
     for s in (payload or {}).get('panel_sessions') or []:
         if s.get('questions'):
+            continue
+        if want_title and clean_room_title(s.get('title')) != want_title:
             continue
         g = s.get('group') or {}
         keys = sorted(str(k) for k in (s.get('twin_keys') or g.get('twins') or []))
@@ -1076,4 +1099,5 @@ def session_csv(session: dict) -> str:
 __all__ = ['open_session', 'ask', 'build_group', 'classify_question', 'distribution', 'propensity', 'parse_segment', 'fallback_voices', 'voice_record',
            'with_time_budget', 'session_lines', 'session_csv', 'one_line_read', 'topic_of', 'strip_twin_words', 'recompute_group_sizes',
            'segment_labels', 'find_reusable_session', 'charge_due', 'mark_paid', 'deleted_room_key', 'can_delete_room', 'remove_session', 'delete_room',
+           'clean_room_title', 'rename_session',
            'DELETED_ROOMS_PREFIX', 'DELETED_ROOM_KEEP_DAYS', 'KINDS', 'DEFAULT_IN_ROOM', 'MAX_IN_ROOM', 'TIME_BUDGET_S']

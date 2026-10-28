@@ -51035,6 +51035,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-fg-seat .ag { font-size: 10.5px; line-height: 14px; color: var(--dtw-mute); overflow-wrap: anywhere; max-width: 100%; }
         #digitalTwinsIQView .dtw-fg-htext { position: relative; margin-top: 8px; }
         #digitalTwinsIQView .dtw-fg-rt { font-size: 15px; line-height: 19px; color: var(--dtw-ink); font-weight: 600; overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-fg-rtwrap { display: flex; align-items: baseline; gap: 10px; max-width: 100%; }
+        #digitalTwinsIQView input.dtw-fg-rt { appearance: none; -webkit-appearance: none; background: transparent; border: 0; border-bottom: 1px solid transparent; color: var(--dtw-ink); font: inherit; font-size: 15px; line-height: 19px; font-weight: 600; padding: 0 0 1px; margin: 0; width: min(100%, 42rem); min-width: 8rem; outline: none; }
+        #digitalTwinsIQView input.dtw-fg-rt:hover { border-bottom-color: var(--dtw-rule); }
+        #digitalTwinsIQView input.dtw-fg-rt:focus { border-bottom-color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-fg-rt-edit { appearance: none; background: transparent; border: 0; padding: 0; margin: 0; font: inherit; font-size: 11px; line-height: 15px; color: var(--dtw-mute); cursor: pointer; flex: none; }
+        #digitalTwinsIQView .dtw-fg-rt-edit:hover, #digitalTwinsIQView .dtw-fg-rtwrap:focus-within .dtw-fg-rt-edit { color: var(--dtw-ink); }
         #digitalTwinsIQView .dtw-fg-fq { font-size: 23px; line-height: 28px; color: var(--dtw-ink); font-weight: 300; letter-spacing: -0.01em; margin-top: 3px; overflow-wrap: anywhere; }
         #digitalTwinsIQView .dtw-fg-fq b { font-weight: 700; }
         #digitalTwinsIQView .dtw-fg-fm { font-size: 11.5px; line-height: 15px; color: var(--dtw-body); margin-top: 5px; display: flex; align-items: center; flex-wrap: wrap; gap: 2px 0; font-variant-numeric: tabular-nums; }
@@ -51472,13 +51478,17 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 <button type="button" class="dtw-btn dtw-btn-sm dtw-drawer-x" onclick="dtwNewRoomOpen(false)">Close</button>
                 <div class="dtw-eyebrow">Focus Group IQ</div>
                 <h2>New room</h2>
-                <div class="dtw-sub">Prometheus moderates. Seat the panelists, ask anything in plain words, and Prometheus runs the room: the shares, the people counts, a read and the voices in a minute or two.</div>
+                <div class="dtw-sub">Name the room first. Prometheus moderates. Seat the panelists, ask anything in plain words, and Prometheus runs the room: the shares, the people counts, a read and the voices in a minute or two.</div>
                 <div class="dtw-on" data-dtw-on></div>
+                <label class="dtw-field" for="dtwPnTitle">What do you want to name this room?</label>
+                <input id="dtwPnTitle" class="dtw-in" placeholder="Season 2 pricing" maxlength="120" required autocomplete="off" onkeydown="if(event.key==='Enter'){event.preventDefault();dtwPanelOpen();}">
+                <div class="dtw-muted" style="margin: 0.25rem 0 0.15rem;">You can change this later on the room page.</div>
                 <label class="dtw-field">Add a second twin (optional)</label>
                 <select id="dtwPnTwin2" class="dtw-in"><option value="">Just this twin</option></select>
                 <label class="dtw-field">Cohorts in the room, one per line (blank is the whole twin)</label>
                 <textarea id="dtwPnSegments" class="dtw-in" placeholder="women 25 to 44&#10;lapsed subscribers in Dallas"></textarea>
-                <div class="dtw-row2"><div><label class="dtw-field">Panelists in the room</label><input id="dtwPnRoom" class="dtw-in" value="12" inputmode="numeric" oninput="dtwPnSeatsNote()"></div><div><label class="dtw-field">Room title (optional)</label><input id="dtwPnTitle" class="dtw-in" placeholder="Season 2 pricing"></div></div>
+                <label class="dtw-field">Panelists in the room</label>
+                <input id="dtwPnRoom" class="dtw-in" value="12" inputmode="numeric" oninput="dtwPnSeatsNote()">
                 <div class="dtw-fg-price" id="dtwPnSeats"></div>
                 <div class="dtw-lab-run"><button type="button" class="dtw-btn dtw-btn-primary" data-dtw-run onclick="dtwPanelOpen()">Open the room</button><button type="button" class="dtw-clip" onclick="dtwAttach('panel')" title="Attach a trailer link, two loglines or a price sheet">&#128206; Attach a file</button></div>
                 <div class="dtw-fg-price" id="dtwPnPrice"></div>
@@ -52271,7 +52281,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }
             function ordWord(n) { n = Number(n || 0); return ORD[n - 1] || (n + 'th'); }
             function kindWord(k) { return KIND_WORDS[String(k || '')] || cap(String(k || '').replace(/_/g, ' ')); }
-            function roomTitle(s) { return titleWords((s || {}).title || 'Room'); }
+            function roomTitle(s) { var t = String((s || {}).title || '').replace(/\s+/g, ' ').trim(); return t || 'Room'; }
             function seatsTotal(q) { return Number((q || {}).seats_total || ((S.session || {}).group || {}).in_room || (((S.session || {}).group || {}).roster || []).length || 0); }
             function perSeat(g, r) {
                 var seg = r ? ((g || {}).segments || []).filter(function(x) { return x.label === r.segment; })[0] : null;
@@ -52487,13 +52497,26 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 } else {
                     meta = '<span>' + fmtN(g.in_room || roster.length) + ' twins standing for <b>' + fmtN(g.size_people) + '</b> people' + SEP + 'Ask the first question below; the shares, the read and the voices come back in a minute or two.</span>';
                 }
-                return '<div class="dtw-fg-acts" id="dtwFgDockActs"></div><div class="dtw-fg-htext"><div class="dtw-fg-rt">' + esc(roomTitle(s)) + '</div><div class="dtw-fg-fm">' + meta + '</div></div>';
+                return '<div class="dtw-fg-acts" id="dtwFgDockActs"></div><div class="dtw-fg-htext"><div class="dtw-fg-rtwrap"><input id="dtwFgTitle" class="dtw-fg-rt" value="' + esc(roomTitle(s)) + '" maxlength="120" aria-label="Room name" placeholder="Name this room" onfocus="this.dataset.dirty=\'1\'" oninput="this.dataset.dirty=\'1\'" onkeydown="if(event.key===\'Enter\'){event.preventDefault();this.blur();}" onblur="dtwPanelRename(this.value)"><button type="button" class="dtw-fg-rt-edit" onclick="event.preventDefault();var t=el(\'dtwFgTitle\');if(t){t.focus();t.select();}">Edit</button></div><div class="dtw-fg-fm" id="dtwFgFm">' + meta + '</div></div>';
+            }
+            function titleEditing() {
+                var t = el('dtwFgTitle');
+                return !!(t && (document.activeElement === t || t.dataset.dirty === '1'));
             }
             function paintFgDock(s, g, roster, fq, fly) {
                 var hero = el('dtwFgHero'), dock = el('dtwFgDock');
                 if (!hero || !dock) return false;
+                var keep = titleEditing(), old = el('dtwFgTitle'), start = old ? old.selectionStart : 0, end = old ? old.selectionEnd : 0, typed = old ? old.value : '';
                 hero.innerHTML = heroHtml(s, g, roster, fq, fly);
                 dock.innerHTML = dockHtml(s, g, roster, fq, fly);
+                if (keep) {
+                    var neu = el('dtwFgTitle');
+                    if (neu) {
+                        neu.value = typed;
+                        neu.dataset.dirty = '1';
+                        try { neu.focus(); neu.setSelectionRange(start, end); } catch (_) {}
+                    }
+                }
                 syncFgActs();
                 fgLayoutSeats();
                 return true;
@@ -52708,7 +52731,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 } else {
                     out += '<div class="dtw-fg-land-hero"><h2 class="dtw-fg-land-h">Pick a twin <b>first.</b></h2><p class="dtw-fg-land-sub">A focus group runs on a twin, the audience its seats stand for. Prometheus moderates. ' + (runs.length ? 'Pick one here, then open a room.' : 'Build the first one with Build a twin, then open a room.') + '</p><div class="dtw-fg-land-acts">' + (runs.length ? '<select class="dtw-in" aria-label="Pick a twin" onchange="dtwSwitchTwin(this.value)"><option value="">Pick a twin</option>' + runs.map(function(r) { return '<option value="' + esc(r.key) + '">' + esc(r.name || r.subject) + '</option>'; }).join('') + '</select><button type="button" class="dtw-fg-act" onclick="dtwBuildTwin()">Build a twin</button>' : '<button type="button" class="dtw-fg-act go" onclick="dtwBuildTwin()">Build a twin</button>') + '</div></div>';
                 }
-                out += '<div class="dtw-fg-steps"><div class="dtw-fg-step"><span class="n">01</span><b>Open a room</b><span>Choose the twins or cohorts and how many seats.</span></div><div class="dtw-fg-step"><span class="n">02</span><b>Ask</b><span>Yes/no, multiple choice, rating, price, A vs B, show of hands, open question, probes.</span></div><div class="dtw-fg-step"><span class="n">03</span><b>Read the split</b><span>Percentages and people, who said what and why, the facts the room knew.</span></div></div>';
+                out += '<div class="dtw-fg-steps"><div class="dtw-fg-step"><span class="n">01</span><b>Open a room</b><span>Name it, then choose the twins or cohorts and how many seats.</span></div><div class="dtw-fg-step"><span class="n">02</span><b>Ask</b><span>Yes/no, multiple choice, rating, price, A vs B, show of hands, open question, probes.</span></div><div class="dtw-fg-step"><span class="n">03</span><b>Read the split</b><span>Percentages and people, who said what and why, the facts the room knew.</span></div></div>';
                 out += '<div class="dtw-fg-land-foot"><span>' + esc(String(it.cost || '$5,500 a session with 12 questions, then $5,500 for each further 12').replace(/\.$/, '')) + '.</span><button type="button" class="dtw-link" onclick="dtwHowtoOpen(true)">Full directions</button></div>';
                 if (t && ss.length) {
                     var when = function(s) { return String(s.updated_at || s.created_at || ''); };
@@ -52781,7 +52804,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             window.dtwRoomsOpen = function(on) { if (on) dtwNewRoomOpen(false); drawer('dtwRoomsDrawer', 'dtwRoomsScrim', on, function() { renderPanelSessions(); }); };
             window.dtwNewRoomOpen = function(on) {
                 if (on) dtwRoomsOpen(false);
-                drawer('dtwNewRoomDrawer', 'dtwNewRoomScrim', on, function() { syncInputCards(); renderPrices(); var st = el('dtwPnStatus'); if (st) st.textContent = S.key ? '' : 'Pick a twin on the Twins tab first.'; var seats = el('dtwPnRoom'); if (seats) seats.value = String(((S.twin || {}).meta || {}).panelists || BW_INCLUDED); try { dtwPnSeatsNote(); } catch (_) {} var t = el('dtwPnTitle'); if (t) setTimeout(function() { try { t.focus(); } catch (_) {} }, 120); });
+                drawer('dtwNewRoomDrawer', 'dtwNewRoomScrim', on, function() { syncInputCards(); renderPrices(); var st = el('dtwPnStatus'); if (st) st.textContent = S.key ? '' : 'Pick a twin on the Twins tab first.'; var seats = el('dtwPnRoom'); if (seats) seats.value = String(((S.twin || {}).meta || {}).panelists || BW_INCLUDED); try { dtwPnSeatsNote(); } catch (_) {} var t = el('dtwPnTitle'); if (t) { t.value = ''; setTimeout(function() { try { t.focus(); } catch (_) {} }, 120); } });
             };
             document.addEventListener('keydown', function(e) {
                 if (e.key !== 'Escape') return;
@@ -52887,9 +52910,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             window.dtwPanelOpen = async function() {
                 var key = S.key, st = el('dtwPnStatus');
                 if (!key) { if (st) st.textContent = 'Pick a twin on the Twins tab first.'; return; }
+                var title = ((el('dtwPnTitle') || {}).value || '').replace(/\s+/g, ' ').trim();
+                if (!title) { if (st) st.textContent = 'Name the room first.'; var tn = el('dtwPnTitle'); if (tn) { try { tn.focus(); } catch (_) {} } return; }
                 var segs = ((el('dtwPnSegments') || {}).value || '').split('\n').map(function(s) { return s.trim(); }).filter(Boolean).map(function(s) { return { label: s }; });
                 var other = (el('dtwPnTwin2') || {}).value;
-                var body = { segments: segs.length ? segs : null, in_room: parseInt((el('dtwPnRoom') || {}).value || '12', 10) || 12, title: ((el('dtwPnTitle') || {}).value || '').trim(), twins: other && other !== key ? [other] : [] };
+                var body = { segments: segs.length ? segs : null, in_room: parseInt((el('dtwPnRoom') || {}).value || '12', 10) || 12, title: title, twins: other && other !== key ? [other] : [] };
                 if (st) st.textContent = 'Seating the room...';
                 try { var d = await api('/' + key + '/panel/open', { method: 'POST', body: JSON.stringify(body) }); } catch (e) { if (st) st.textContent = e.message; return; }
                 if (st) st.textContent = d.reused ? 'That room was already open; here it is.' : 'The room is open.';
@@ -53024,6 +53049,33 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     }, ms));
                 });
             }
+            window.dtwPanelRename = async function(raw) {
+                var s = S.session, inp = el('dtwFgTitle');
+                if (!s || !S.key) return;
+                var title = String(raw == null ? ((inp && inp.value) || '') : raw).replace(/\s+/g, ' ').trim().slice(0, 120);
+                if (inp) inp.dataset.dirty = '';
+                if (!title) { if (inp) inp.value = roomTitle(s); return; }
+                if (title === String(s.title || '').trim()) { if (inp) inp.value = title; return; }
+                var prev = s.title;
+                s.title = title;
+                if (inp) inp.value = title;
+                renderPanelSessions();
+                try {
+                    var d = await api('/' + S.key + '/panel/' + s.id + '/rename', { method: 'POST', body: JSON.stringify({ title: title }) });
+                    if (d.session && d.session.title) {
+                        s.title = d.session.title;
+                        var ss = (S.twin || {}).panel_sessions || [];
+                        for (var i = 0; i < ss.length; i++) { if (ss[i].id === s.id) ss[i].title = d.session.title; }
+                        if (inp && document.activeElement !== inp) inp.value = d.session.title;
+                    }
+                    renderPanelSessions();
+                    var n = el('dtwPnSaved'); if (n) n.textContent = 'Name saved.';
+                } catch (e) {
+                    s.title = prev;
+                    if (inp && document.activeElement !== inp) inp.value = roomTitle(s);
+                    var n2 = el('dtwPnSaved'); if (n2) n2.textContent = e.message;
+                }
+            };
             window.dtwPanelSave = async function() {
                 if (!S.session || !S.key) return;
                 var n = el('dtwPnSaved'); if (n) n.textContent = 'Saving...';

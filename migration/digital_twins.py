@@ -378,7 +378,7 @@ HOW_TO = [
     {
         'id': 'panel', 'title': 'Focus Group IQ',
         'answers': 'A focus group Prometheus moderates for you (Focus Group IQ). Pick the twins or the cohorts in the room, ask anything in plain words, and Prometheus runs the room: the %s and people counts, the split by segment, a one-line read and a few panelist voices, in a minute or two. Yes/no, multiple choice, rating 1 to 5, would you pay $X, A vs B, a show of hands, and probes (why? what would change your mind?) that follow the last question.',
-        'put_in': f'The twins or cohorts in the room (for example Gilmore Girls Hulu viewers, women 25 to 44; lapsed Netflix subscribers in Dallas), how many panelists sit in the room ({PANEL_SEATS_INCLUDED} come with a session; each one past that is priced and billed with the session), then your questions.',
+        'put_in': f'A name for the room (you can change it later on the room page), the twins or cohorts in the room (for example Gilmore Girls Hulu viewers, women 25 to 44; lapsed Netflix subscribers in Dallas), how many panelists sit in the room ({PANEL_SEATS_INCLUDED} come with a session; each one past that is priced and billed with the session), then your questions.',
         'type_this': ['Open a focus group with the Mark Rober twin and ask whether they would pay $29 for the Build Box', 'Ask them why', 'Show of hands, who watched season 1?',
                       'Ask the room: trailer A vs trailer B', 'Re-ask at $19'],
         'attach': 'Nothing is needed. Attach a trailer link, two loglines or a price sheet if the question is about them.',

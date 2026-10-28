@@ -20,9 +20,11 @@ app.py so app.py stays small.
   POST /api/digital-twins/<key>/spend/<plan>/mode     chip or rule, with the guardrail
   GET  /api/digital-twins/<key>/spend/<plan>/moves.csv
   GET  /api/digital-twins/<key>/spend/<plan>/handoff  the Attribution IQ tracking package, prefilled
-  POST /api/digital-twins/<key>/panel/open           open a Focus Group IQ room (free; an empty room with the same twins, segments
-                                                     and seats is reused; portraits start on a thread)
+  POST /api/digital-twins/<key>/panel/open           open a Focus Group IQ room (free; an empty room with the same twins, segments,
+                                                     seats and name is reused; portraits start on a thread)
   GET  /api/digital-twins/<key>/panel/<sid>          the session; the roster carries portrait_url once the faces exist (re-poll)
+  PATCH /api/digital-twins/<key>/panel/<sid>         rename the room (title, 120 chars)
+  POST /api/digital-twins/<key>/panel/<sid>/rename   the same for clients that post
   POST /api/digital-twins/<key>/panel/<sid>/ask      ask the room (synchronous, seconds; the session price on the first question)
   DELETE /api/digital-twins/<key>/panel/<sid>        delete a room (creator or admin; 30-day undo copy under system/digital_twins/deleted_rooms/)
   POST /api/digital-twins/<key>/panel/<sid>/delete   the same for clients that cannot send DELETE
@@ -715,11 +717,9 @@ def dt_panel_open(key):
     # question (2026-10-26). An empty room with the same twins, segments
     # and seats is reused instead of opening another (Jenna: repeated
     # clicks on Open the room left four empty 'Room: Gilmore Girls').
-    reused = P.find_reusable_session(payload, twins, segments, in_room, created_by=_uname(user))
+    reused = P.find_reusable_session(payload, twins, segments, in_room, created_by=_uname(user), title=title)
     if reused is not None:
         sess = reused
-        if title and title != sess.get('title'):
-            sess['title'] = title
     else:
         sess = P.open_session(twins, segments=segments, in_room=in_room, title=title, created_by=_uname(user), session_id=uuid.uuid4().hex[:10])
         sess['twin_keys'] = [str((t.get('meta') or {}).get('key') or '') for t in twins]
@@ -816,6 +816,31 @@ def dt_panel_get(key, sid):
     except Exception:
         traceback.print_exc()
     return _nocache(jsonify({'success': True, 'session': sess}))
+
+
+@bp.route(f'{PREFIX}/<path:key>/panel/<sid>', methods=['PATCH'])
+@bp.route(f'{PREFIX}/<path:key>/panel/<sid>/rename', methods=['POST', 'PATCH'])
+def dt_panel_rename(key, sid):
+    """Rename a room (2026-10-27, Jenna: name it when you open it, then
+    edit the title on the room page). Anyone who can see the twin can
+    rename a room on it."""
+    user, err = _gate()
+    if err:
+        return err
+    payload, err = _twin_or_404(user, key)
+    if err:
+        return err
+    sess = _session(payload, sid)
+    if not sess:
+        return jsonify({'success': False, 'error': 'session not found'}), 404
+    from migration import digital_twin_panel as P
+    body = request.get_json(silent=True) or {}
+    title = str(body.get('title') or body.get('name') or '')
+    name = P.rename_session(sess, title)
+    if not name:
+        return jsonify({'success': False, 'error': 'Name the room.'}), 400
+    DT.save_twin(_s3(), key, payload)
+    return _nocache(jsonify({'success': True, 'session': sess, 'title': name}))
 
 
 @bp.route(f'{PREFIX}/<path:key>/panel/<sid>/ask', methods=['POST'])
