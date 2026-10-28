@@ -82,6 +82,10 @@ def list_runs(s3, *, username: Optional[str] = None, limit: int = 500) -> list:
         runs = [r for r in (idx.get('runs') or []) if isinstance(r, dict) and r.get('key')]
     except Exception:
         runs = []
+    for r in runs:
+        r.pop('ltv_5y', None)
+        r.pop('ltv_10y', None)
+        r.pop('has_ltv', None)
     runs.sort(key=lambda r: str(r.get('created_at') or ''), reverse=True)
     if username:
         runs = [r for r in runs if r.get('created_by') == username]
@@ -153,7 +157,7 @@ def find_twin(runs: list, name: str) -> Optional[dict]:
 
 # -------------------------------------------------------------- the rows
 def csv_rows(payload: dict) -> list:
-    """Identity, traits, lifecycle, runs, LTV, the Spend Engine ledger
+    """Identity, traits, lifecycle, runs, the Spend Engine ledger
     and the Focus Group IQ sessions as flat rows."""
     m = payload.get('meta') or {}
     name = m.get('name') or m.get('subject')
@@ -181,17 +185,6 @@ def csv_rows(payload: dict) -> list:
         rows.append(['Runs', r.get('id'), f"{r.get('label')}: {r.get('question')}", o.get('expected'), unit, f"range {o.get('low')} to {o.get('high')}" + (f"; odds {o.get('odds_pct')}%" if o.get('odds_pct') is not None else '')])
         for lv in (o.get('levers') or [])[:6]:
             rows.append(['Runs', r.get('id'), f"lever: {lv.get('lever')}", lv.get('delta_people'), unit, f"{lv.get('delta_pct')}%"])
-    ltv = payload.get('ip_lifetime_value') or {}
-    for h, tot in (ltv.get('total') or {}).items():
-        rows.append(['IP lifetime value', f"{h}y", 'total', tot.get('expected'), 'USD', f"range {tot.get('low')} to {tot.get('high')}"])
-        for who, v in ((ltv.get('value_per_fan') or {}).get(h) or {}).items():
-            rows.append(['IP lifetime value', f"{h}y", f"value per fan: {who}", v, 'USD', ''])
-        for s in (ltv.get('by_stream') or {}).get(h) or []:
-            rows.append(['IP lifetime value', f"{h}y", s.get('label'), s.get('expected'), 'USD', f"{s.get('share_pct')}%"])
-    for y in ltv.get('by_year') or []:
-        rows.append(['IP lifetime value', 'by year', f"year {y.get('year')}", y.get('expected'), 'USD', f"{y.get('retention_pct')}% retained"])
-    for s in ltv.get('sensitivity') or []:
-        rows.append(['IP lifetime value', 'lever', s.get('lever'), s.get('delta_pct'), '% on 10y', s.get('read')])
     for sp in ((payload.get('labs') or {}).get('spend')) or []:
         led = sp.get('ledger') or {}
         rows.append(['Spend Engine', sp.get('plan_id'), sp.get('label'), led.get('saved_total'), 'USD saved', led.get('read')])
@@ -223,7 +216,6 @@ def view_summary(payload: dict, run_id: str = '', session_id: str = '') -> dict:
     """What the page hands Prometheus as view_context.data: small,
     every headline figure, the open run or session when there is one."""
     m = payload.get('meta') or {}
-    ltv = payload.get('ip_lifetime_value') or {}
     out = {'twin': m.get('name'), 'subject': m.get('subject'), 'key': m.get('key'), 'size_us': m.get('size_us'), 'window': f"{m.get('window_start')} to {m.get('window_end')}",
            'platform_home': m.get('platform_home'), 'format': m.get('format'), 'ip_related': m.get('ip_related'),
            'source': m.get('source'), 'panelists': panelists_for(payload),
@@ -234,8 +226,6 @@ def view_summary(payload: dict, run_id: str = '', session_id: str = '') -> dict:
            'runs': [{'id': r.get('id'), 'kind': r.get('kind'), 'question': r.get('question'), 'expected': (r.get('outputs') or {}).get('expected'),
                      'low': (r.get('outputs') or {}).get('low'), 'high': (r.get('outputs') or {}).get('high'), 'odds_pct': (r.get('outputs') or {}).get('odds_pct'),
                      'recommendation': r.get('recommendation')} for r in (payload.get('runs') or [])[:8]]}
-    if ltv.get('total'):
-        out['ip_lifetime_value'] = {'5y': ltv['total'].get('5'), '10y': ltv['total'].get('10'), 'value_per_fan': ltv.get('value_per_fan'), 'read': ltv.get('read')}
     if payload.get('standing_questions'):
         out['standing_questions'] = payload['standing_questions']
     if run_id:
@@ -256,7 +246,7 @@ def view_summary(payload: dict, run_id: str = '', session_id: str = '') -> dict:
 
 def twin_lines(payload: dict) -> list:
     """The twin as plain lines a deck restates slide for slide."""
-    from migration.digital_twin_engine import fmt_money, human_money, human_people
+    from migration.digital_twin_engine import fmt_money, human_people
     m = payload.get('meta') or {}
     out = []
     rd = payload.get('the_read') or {}
@@ -290,17 +280,6 @@ def twin_lines(payload: dict) -> list:
         if r.get('recommendation'):
             blk.append('What to do: ' + r['recommendation'])
         out.append('RUN:\n' + '\n'.join(blk))
-    ltv = payload.get('ip_lifetime_value') or {}
-    if ltv.get('total'):
-        t5, t10 = ltv['total'].get('5') or {}, ltv['total'].get('10') or {}
-        blk = [f"Five years: {fmt_money(t5.get('expected'))} (range {fmt_money(t5.get('low'))} to {fmt_money(t5.get('high'))}).",
-               f"Ten years: {fmt_money(t10.get('expected'))} (range {fmt_money(t10.get('low'))} to {fmt_money(t10.get('high'))}).",
-               'Value per fan over ten years: ' + '; '.join(f"{k} {fmt_money(v)}" for k, v in ((ltv.get('value_per_fan') or {}).get('10') or {}).items()),
-               'By stream (ten years): ' + '; '.join(f"{s['label']} {fmt_money(s['expected'])} ({s['share_pct']}%)" for s in (ltv.get('by_stream') or {}).get('10') or []),
-               'Levers: ' + '; '.join(f"{s['lever']} {s['delta_pct']:+.1f}%" for s in ltv.get('sensitivity') or [])]
-        if ltv.get('read'):
-            blk.append(ltv['read'])
-        out.append('IP LIFETIME VALUE:\n' + '\n'.join(blk))
     sq = payload.get('standing_questions') or {}
     if sq:
         out.append('THE STANDING QUESTIONS:\n' + '\n'.join([sq.get('relative_popularity') or '', sq.get('demographics_line') or '',
@@ -324,9 +303,6 @@ def deck_context(run: dict, payload: dict) -> dict:
     name = str(m.get('name') or m.get('subject') or 'the twin')
     summ = view_summary(payload)
     data = {k: v for k, v in summ.items() if k in ('twin', 'subject', 'size_us', 'window', 'platform_home', 'format', 'ip_related')}
-    if summ.get('ip_lifetime_value'):
-        data['ltv_5y'] = (summ['ip_lifetime_value'].get('5y') or {}).get('expected')
-        data['ltv_10y'] = (summ['ip_lifetime_value'].get('10y') or {}).get('expected')
     material = [f"THE DIGITAL TWIN, {name}, part {i + 1}:\n{blk}" for i, blk in enumerate(twin_lines(payload))]
     return {'primary': None, 'cuts': [], 'extras': [], 'deck_source': 'twin',
             'view_context': {'view_id': PRODUCT_KEY, 'view_title': name[:80], 'data': data, 'material': material}}
@@ -359,7 +335,7 @@ def pricing_lines(price_fn=None) -> list:
 HOW_TO = [
     {
         'id': 'twin', 'title': 'Build a twin',
-        'answers': 'Who an audience is and how it behaves: its people, platforms and buying, twelve dials for how it responds, where it sits in its lifecycle, and, when the subject is a title, franchise, creator, book, game or podcast, what that IP is worth over five and ten years.',
+        'answers': 'Who an audience is and how it behaves: its people, platforms and buying, twelve dials for how it responds, and where it sits in its lifecycle.',
         'put_in': ('Build a twin on the Twins tab walks you through it. First, what the twin stands for: a defined group from a profile (the audience of a title, a talent or a brand, pulled the way '
                    'Profile IQ pulls it, with the panelists seated from that audience) or a group you shape by demographics (gender, age, income, ethnicity, markets). Then what you will use it for, '
                    f'and how many panelists sit in its focus group rooms ({PANEL_SEATS_INCLUDED} come with a session; each one past that is priced). Or type the ask to Prometheus with a window if it is not the last 12 months.'),

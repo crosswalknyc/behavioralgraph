@@ -568,7 +568,7 @@ _PRODUCT_FOR = {
     'valuation': ('Brand Partnership IQ', 'values a talent or title against a brand: audience fit, earned media, brand lift and conversion lenses, one dollar figure', 'Value a brand partnership'),
     'campaign': ('Attribution IQ', "tracks a campaign's creators, posts and assets to the people who reached a ticketing site, a product page or a signup", 'Set up Attribution IQ'),
     'tracker': ('Subscriber IQ', 'tracks a title on a streaming service: accounts that watched, new and reactivated subscribers, how long they stayed', 'Pull a Subscriber IQ'),
-    'twin': ('Digital Twins IQ', 'builds a twin of an audience and runs titles, plans, prices and ideas forward on it: Greenlight Lab, Launch Lab, the Spend Engine and Focus Group IQ, with the IP lifetime value when it applies', 'Build a twin'),
+    'twin': ('Digital Twins IQ', 'builds a twin of an audience and runs titles, plans, prices and ideas forward on it: Greenlight Lab, Launch Lab, the Spend Engine and Focus Group IQ', 'Build a twin'),
     'build_profile': ('a Profile IQ profile', 'builds the audience of any person, title, brand or behavior with demographics and the brands, platforms and talent they over-index on', 'Run a profile'),
     'cut': ('a cut', 'splits a profile we hold by gender, age, geography or behavior', 'Cut the profile'),
     'deck': ('a deck', 'turns any read or profile on screen into slides', 'Build a deck'),

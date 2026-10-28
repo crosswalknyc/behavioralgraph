@@ -1,6 +1,10 @@
-"""IP lifetime value for a Digital Twin (2026-10-26, Jenna: "the tool
-needs to tell you the life time value you would get from ip if it's
-related to that").
+"""Retired 2026-10-27 (Jenna: remove IP lifetime value from everywhere).
+
+This module is no longer called. Builds do not attach ``ip_lifetime_value``;
+the page, exports, index and ledger never show it.
+
+Original note, 2026-10-26: Jenna asked for "the life time value you would
+get from ip if it's related to that". Left here so the math is not lost.
 
 ``lifetime_value(twin, anchors)`` returns the block the twin payload
 carries as ``ip_lifetime_value`` when the subject is IP-related: the fan

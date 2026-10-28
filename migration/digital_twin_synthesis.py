@@ -15,8 +15,8 @@ reasoning to be predictive as to how content and things would go").
      per subject and window; fail-safe to the corpus and reasoned
      priors when the call fails;
   3. the deterministic engine: identity, traits, response curves,
-     lifecycle, the IP lifetime value when the subject is IP-related,
-     the standing IP questions, three runs, the track record;
+     lifecycle, the standing IP questions when they apply, three
+     runs, the track record;
   4. the model writes the plain-English read; the deterministic read
      ships when it is off.
 
@@ -41,7 +41,7 @@ from typing import Callable, Optional
 
 from migration import digital_twin_engine as E
 from migration.digital_twin_engine import (
-    VERSION, clamp, human_money, human_people, messy_count, normalize_100, pct1, pct4, unit,
+    VERSION, clamp, human_people, messy_count, normalize_100, pct1, pct4, unit,
 )
 
 S3_BUCKET = 'dashboard-inputs'
@@ -145,6 +145,29 @@ def scrub_payload(payload: dict) -> dict:
             return {k: (v if k in ('diagnostics', 'key', 's3_key', 'hero_image', 'id', 'plan_id') else walk(v)) for k, v in o.items()}
         return o
     return walk(payload)
+
+
+_LTV_LINE_RE = re.compile(
+    r"(as ip (the title )?is worth|ip lifetime value|worth .{0,48}over (five|5|ten|10) years"
+    r"|over five years and .{0,40}over ten|value as ip|per avid fan|per casual fan"
+    r"|on value, start with)",
+    re.I,
+)
+
+
+def strip_ip_lifetime_value(payload: dict) -> dict:
+    """IP lifetime value is retired. Drop the block and any sentence
+    that states it so a stored twin never shows the number again."""
+    if not isinstance(payload, dict):
+        return payload
+    payload.pop('ip_lifetime_value', None)
+    rd = payload.get('the_read')
+    if isinstance(rd, dict):
+        for k in ('tldr', 'reads', 'what_to_do'):
+            rows = rd.get(k)
+            if isinstance(rows, list):
+                rd[k] = [x for x in rows if not (isinstance(x, str) and _LTV_LINE_RE.search(x))]
+    return payload
 
 
 # ------------------------------------------------------------- corpus
@@ -951,14 +974,11 @@ def write_read(twin: dict, claude_json: Optional[Callable], seed: str) -> dict:
     ident = twin['identity']
     traits = twin['traits']
     lc = twin['lifecycle']
-    ltv = twin.get('ip_lifetime_value') or {}
     runs = twin.get('runs') or []
     top_traits = sorted(E.TRAIT_KEYS, key=lambda k: -abs(E.trait(twin, k) - 50))[:3]
     tldr = [ident.get('read') or f"{meta.get('name')} is {human_people(meta.get('size_us'))} people in the US.",
             f"They {traits[top_traits[0]]['read']}, and they {traits[top_traits[1]]['read']}.",
             lc.get('read') or '']
-    if ltv.get('total'):
-        tldr.append(f"As IP it is worth {human_money(ltv['total']['5']['expected'])} over five years and {human_money(ltv['total']['10']['expected'])} over ten.")
     reads = [f"{E.TRAIT_LABEL[k]}: they {traits[k]['read']}." for k in top_traits]
     if runs:
         r0 = runs[0]
@@ -967,15 +987,11 @@ def write_read(twin: dict, claude_json: Optional[Callable], seed: str) -> dict:
     for r in runs[:3]:
         if r.get('read', {}).get('what_to_do'):
             what.append(r['read']['what_to_do'][0])
-    if ltv.get('sensitivity'):
-        s0 = ltv['sensitivity'][0]
-        what.append(f"On value, start with {s0['lever'].lower()}: {s0['delta_pct']:+.1f}% on the ten-year total.")
     read = {'tldr': [t for t in tldr if t][:5], 'reads': [r for r in reads if r][:6], 'what_to_do': [w for w in what if w][:4]}
     if claude_json is None:
         return read
     try:
         brief = {'twin': meta, 'identity_read': ident.get('read'), 'traits': {k: v.get('read') for k, v in traits.items()}, 'lifecycle': lc,
-                 'ltv': {k: ltv.get(k) for k in ('total', 'value_per_fan', 'read')} if ltv else None,
                  'runs': [{'kind': r.get('kind'), 'question': r.get('question'), 'recommendation': r.get('recommendation'), 'expected': (r.get('outputs') or {}).get('expected')} for r in runs[:3]],
                  'deterministic_read': read}
         got = claude_json(READ_SYSTEM_PROMPT, json.dumps(brief, default=str)[:12000], max_tokens=3200, temperature=0.5, surface='twin_read')
@@ -1145,8 +1161,6 @@ def build_twin(inputs: dict, claude_json: Optional[Callable] = None, *, tools=No
     twin['labs'] = {'spend': []}
     twin['panel_sessions'] = []
     if ip_related:
-        from migration import digital_twin_ltv as L
-        twin['ip_lifetime_value'] = L.lifetime_value(twin, research)
         twin['standing_questions'] = standing_questions(twin, corpus, seed)
     # three runs with the build
     goal_val = messy_count(subject, 'goal', size * 0.3)
@@ -1193,7 +1207,6 @@ def _slug(s: str) -> str:
 
 def index_entry(key: str, payload: dict) -> dict:
     m = payload.get('meta') or {}
-    ltv = payload.get('ip_lifetime_value') or {}
     return {'key': key, 'name': m.get('name'), 'subject': m.get('subject'), 'subject_kind': m.get('subject_kind'), 'ip_related': bool(m.get('ip_related')),
             'format': m.get('format'), 'platform_home': m.get('platform_home'), 'size_us': m.get('size_us'), 'created_by': m.get('created_by'),
             'created_at': m.get('created_at'), 'updated_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
@@ -1202,9 +1215,7 @@ def index_entry(key: str, payload: dict) -> dict:
             'cover_rev': m.get('cover_rev') or 0, 'cover_locked': bool(m.get('cover_locked')),
             'source': m.get('source') or '', 'panelists': m.get('panelists') or 0,
             'runs': len(payload.get('runs') or []), 'spend_plans': len(((payload.get('labs') or {}).get('spend')) or []),
-            'panel_sessions': len(payload.get('panel_sessions') or []), 'has_ltv': bool(ltv),
-            'ltv_5y': (ltv.get('total') or {}).get('5', {}).get('expected') if ltv else None,
-            'ltv_10y': (ltv.get('total') or {}).get('10', {}).get('expected') if ltv else None}
+            'panel_sessions': len(payload.get('panel_sessions') or [])}
 
 
 def update_index(s3, key: str, payload: dict) -> None:
@@ -1226,6 +1237,7 @@ def update_index(s3, key: str, payload: dict) -> None:
 
 def save_twin(s3, key: str, payload: dict) -> str:
     """Write (or rewrite in place) the gz payload and refresh the index."""
+    strip_ip_lifetime_value(payload)
     payload.setdefault('meta', {})['key'] = key
     body = io.BytesIO()
     with gzip.GzipFile(fileobj=body, mode='wb') as gz:
@@ -1262,10 +1274,6 @@ def record_ledger(payload: dict, key: str) -> None:
     import insights_ledger as il
     m = payload.get('meta') or {}
     metrics = [{'name': 'twin audience, US people', 'value': float(m.get('size_us') or 0), 'unit': 'people', 'definition': 'people in the US in the twin'}]
-    ltv = payload.get('ip_lifetime_value') or {}
-    if ltv.get('total'):
-        metrics.append({'name': 'IP lifetime value, 5 years', 'value': float(ltv['total']['5']['expected']), 'unit': 'usd', 'definition': 'present value over five years'})
-        metrics.append({'name': 'IP lifetime value, 10 years', 'value': float(ltv['total']['10']['expected']), 'unit': 'usd', 'definition': 'present value over ten years'})
     il.persist(subject=str(m.get('subject') or ''), metric_family='audience', question=f"Digital twin: {m.get('name')}", route='digital_twin_build',
                metrics=metrics, reply=f"Digital Twins IQ {key}", window_start=str(m.get('window_start') or ''), window_end=str(m.get('window_end') or ''),
                provenance=getattr(il, 'PROV_DELIVERED', 'delivered_artifact'))
@@ -1281,6 +1289,7 @@ def load_twin(s3, key: str) -> Optional[dict]:
             raw = gzip.decompress(raw)
         doc = json.loads(raw.decode('utf-8'))
         if isinstance(doc, dict):
+            strip_ip_lifetime_value(doc)
             doc.setdefault('meta', {})['key'] = key
         return doc
     except Exception as e:
@@ -1312,7 +1321,7 @@ def run_scenario(twin: dict, scenario: dict, *, claude_json: Optional[Callable] 
     return E.simulate(twin, scenario, read_fn=read_fn, created_by=created_by)
 
 
-__all__ = ['build_twin', 'persist', 'save_twin', 'load_twin', 'append_run', 'run_scenario', 'update_index', 'index_entry', 'corpus_anchors',
+__all__ = ['build_twin', 'persist', 'save_twin', 'load_twin', 'append_run', 'run_scenario', 'update_index', 'index_entry', 'strip_ip_lifetime_value', 'corpus_anchors',
            'research_anchors', 'profile_identity', 'find_profile_key', 'is_ip_related', 'guess_format', 'scrub_text', 'scrub_payload',
            'demographic_spec', 'demographic_name', 'demographic_identity', 'research_demographics', 'DEMO_PICK_CATS', 'US_POP',
            'standing_questions', 'track_record', 'write_read', 'default_window', 'S3_PREFIX', 'S3_INDEX_KEY', 'S3_BUCKET', 'RESEARCH_PREFIX',

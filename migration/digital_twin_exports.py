@@ -16,7 +16,7 @@ import re
 from pathlib import Path
 from typing import List, Optional, Tuple
 
-from migration.digital_twin_engine import fmt_money, fmt_people, human_money, human_people
+from migration.digital_twin_engine import fmt_money, fmt_people, human_people
 
 GRAPHITE = '#0C1618'
 SLATE = '#15252A'
@@ -110,17 +110,6 @@ def _pages(payload: dict) -> list:
             tiles.append((f"{o.get('odds_pct')}%", f"Odds of clearing {fmt_people((o.get('goal') or {}).get('value'))}"))
         body = list(r.get('drivers') or [])[:3] + [r.get('recommendation') or '']
         pages.append({'kind': 'tiles', 'header': header, 'sub': f"{r.get('label')}: {r.get('question')}", 'tiles': tiles[:4], 'body': [b for b in body if b][:4], 'dark': len(pages) % 2 == 0})
-    ltv = payload.get('ip_lifetime_value') or {}
-    if ltv.get('total'):
-        t5, t10 = ltv['total'].get('5') or {}, ltv['total'].get('10') or {}
-        pages.append({'kind': 'tiles', 'header': _words(f"{name} is worth {human_money(t10.get('expected'))} over ten years"),
-                      'sub': ltv.get('read') or '', 'tiles': [(fmt_money(t5.get('expected')), 'Five years, today\'s dollars'), (fmt_money(t10.get('expected')), 'Ten years, today\'s dollars'),
-                                                              (fmt_money(((ltv.get('value_per_fan') or {}).get('10') or {}).get('avid')), 'An avid fan, ten years'),
-                                                              (fmt_money(((ltv.get('value_per_fan') or {}).get('10') or {}).get('casual')), 'A casual fan, ten years')], 'dark': True})
-        pages.append({'kind': 'table', 'header': 'Where the value comes from, stream by stream.', 'sub': f"Ten-year figures; range {fmt_money(t10.get('low'))} to {fmt_money(t10.get('high'))}.",
-                      'rows': [(s['label'], fmt_money(s['expected']), f"{s['share_pct']}%") for s in (ltv.get('by_stream') or {}).get('10') or []], 'head': ('Stream', 'Value', 'Share'), 'dark': False})
-        pages.append({'kind': 'table', 'header': 'The levers that move the value most.', 'sub': (ltv.get('platform_value') or {}).get('read') or '',
-                      'rows': [(s['lever'], f"{s['delta_pct']:+.1f}%", s.get('read') or '') for s in ltv.get('sensitivity') or []], 'head': ('Lever', 'On ten years', ''), 'dark': True})
     for sp in (((payload.get('labs') or {}).get('spend')) or [])[:1]:
         led = sp.get('ledger') or {}
         pages.append({'kind': 'tiles', 'header': _words(led.get('read') or sp.get('label') or 'The plan, run forward day by day'), 'sub': sp.get('label') or '',

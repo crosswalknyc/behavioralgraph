@@ -285,7 +285,7 @@ def propose_twin_field(parsed):
     p = parsed or {}
     p.pop('_ask', None)
     if p.get('subject') and not p.get('purpose'):
-        return 'purpose', 'run plans, titles and ideas forward on this audience, with the IP lifetime value when it applies'
+        return 'purpose', 'run plans, titles and ideas forward on this audience'
     return None
 
 
@@ -996,11 +996,9 @@ def catalog_reply(text, user):
                         [f"Open the {n} twin" for n in names[:3]])
     if found:
         r = found[0]
-        from migration.digital_twin_engine import human_people, human_money
-        line = f"Yes: the {r.get('name')} twin is in the library, {human_people(r.get('size_us'))} people in the US, built {str(r.get('created_at') or '')[:10]}"
-        if r.get('ltv_5y'):
-            line += f", worth {human_money(r['ltv_5y'])} over five years as IP"
-        line += f". It carries {r.get('runs') or 0} run{'s' if (r.get('runs') or 0) != 1 else ''}. Ask it anything, run a lab on it, or open a room with it."
+        from migration.digital_twin_engine import human_people
+        line = (f"Yes: the {r.get('name')} twin is in the library, {human_people(r.get('size_us'))} people in the US, built {str(r.get('created_at') or '')[:10]}"
+                f". It carries {r.get('runs') or 0} run{'s' if (r.get('runs') or 0) != 1 else ''}. Ask it anything, run a lab on it, or open a room with it.")
         return _payload(line, [f"Run Greenlight Lab on the {r.get('name')} twin", f"Open a focus group with the {r.get('name')} twin", OPEN_CHIP], twin_key=r.get('key'), open_view='digitalTwinsIQ',
                         action_hint={'view': 'digitalTwinsIQ', 'tab': 'twins', 'twin_key': r.get('key')})
     subj = re.sub(r".*\btwins?\s+(?:of|for|on)\s+", '', str(text or ''), flags=re.I).strip(' ?.')

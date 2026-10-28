@@ -156,12 +156,10 @@ def run_job(job_id, username, inputs, extras=None):
             key = SYN.persist(s3, payload, username or 'prometheus', job_id)
             _grant(username, key)
             m = payload['meta']
-            ltv = payload.get('ip_lifetime_value') or {}
-            from migration.digital_twin_engine import human_money, human_people
-            ready = (f"Your twin is ready: {m.get('name')} is live on the Twins tab of Digital Twins IQ, {human_people(m.get('size_us'))} people in the US"
-                     + (f", worth {human_money(ltv['total']['5']['expected'])} over five years as IP" if ltv.get('total') else '') + '. Ask it anything here, or open it.')
+            from migration.digital_twin_engine import human_people
+            ready = f"Your twin is ready: {m.get('name')} is live on the Twins tab of Digital Twins IQ, {human_people(m.get('size_us'))} people in the US. Ask it anything here, or open it."
             rec.update({'status': 'done', 'success': True, 'stage': 'done', 'finished_at': time.time(), 's3_key': key, 'subject': m.get('name'),
-                        'size_us': m.get('size_us'), 'ready_message': ready, 'ltv_5y': (ltv.get('total') or {}).get('5', {}).get('expected') if ltv else None})
+                        'size_us': m.get('size_us'), 'ready_message': ready})
             status_write(job_id, rec)
             _thread_note(username, inputs.get('thread_id'), ready, {'twin_key': key, 'twin_job_id': job_id, 'open_view': 'digitalTwinsIQ',
                                                                        'options': [{'label': 'Open in Digital Twins IQ', 'view': 'digitalTwinsIQ', 'twin_key': key}]})

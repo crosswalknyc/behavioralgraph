@@ -149,8 +149,8 @@ DEFAULT_PRICING = {
         # front through the user's chosen end date; no refunds).
         "attribution_iq_setup": 500.0,
         "attribution_iq_daily": 100.0,
-        # 2026-10-26 (Jenna): Digital Twins IQ. The twin (with its IP
-        # lifetime value and three runs) $750; each further run $100;
+        # 2026-10-26 (Jenna): Digital Twins IQ. The twin (with its
+        # first three runs) $750; each further run $100;
         # a Spend Engine plan $250 for its window; a Focus Group IQ session
         # $150 with 12 questions, then $100 per further 12. One line
         # each; the admin billing panel overrides them.

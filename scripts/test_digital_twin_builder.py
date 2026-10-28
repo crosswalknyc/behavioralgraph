@@ -139,6 +139,8 @@ class Build(unittest.TestCase):
         self.assertEqual([r['kind'] for r in twin['runs']], ['greenlight', 'pricing', 'platform_move'])
         entry = SYN.index_entry('k', twin)
         self.assertEqual((entry['source'], entry['panelists']), ('demographics', 20))
+        self.assertNotIn('ltv_5y', entry)
+        self.assertNotIn('has_ltv', entry)
 
     def test_pinned_profile_is_the_one_read(self):
         s3 = _s3()
@@ -152,6 +154,7 @@ class Build(unittest.TestCase):
         fem = next(r['pct'] for r in twin['identity']['demographics']['gender'] if r['label'].lower().startswith('f'))
         self.assertLess(abs(fem - 71.2), 1.0)
         self.assertEqual(m['size_us'], 6380694)
+        self.assertNotIn('ip_lifetime_value', twin)
 
     def test_research_shape_when_no_profile(self):
         demo = SYN.research_demographics({'demographics': {'gender': {'Women': 64, 'Men': 36}, 'age': {'18-24': 20, '25-34': 30, '35-44': 25, '45-54': 15, '55-64': 6, '65+': 4}, 'income': None}}, 'seed')
@@ -215,6 +218,27 @@ class Moderator(unittest.TestCase):
         self.assertIn("fold('traits', 'Traits', 'how they respond', tr, false)", page)
         self.assertIn("fold('lifecycle', 'Lifecycle', 'where they sit', lcb, false)", page)
         self.assertIn("fold('runs', 'Runs', (t.runs || []).length + ' on this twin', rb, false)", page)
+        self.assertNotIn('IP lifetime value', page)
+        self.assertNotIn('IP, 5 years', page)
+        self.assertNotIn('function renderLtv', page)
+
+
+class LifetimeValueGone(unittest.TestCase):
+    def test_strip_drops_stored_lifetime_value(self):
+        payload = {
+            'ip_lifetime_value': {'total': {'5': {'expected': 1843849793.41}}},
+            'the_read': {'tldr': ['They are fans.', 'As IP it is worth $1.84B over five years and $2.1B over ten.']},
+        }
+        SYN.strip_ip_lifetime_value(payload)
+        self.assertNotIn('ip_lifetime_value', payload)
+        self.assertEqual(payload['the_read']['tldr'], ['They are fans.'])
+
+    def test_how_to_does_not_name_lifetime_value(self):
+        doc = DT.how_to()
+        twin = next(it for it in doc['items'] if it['id'] == 'twin')
+        blob = ' '.join(str(v) for v in twin.values()).lower()
+        self.assertNotIn('lifetime value', blob)
+        self.assertNotIn('worth over five', blob)
 
 
 if __name__ == '__main__':

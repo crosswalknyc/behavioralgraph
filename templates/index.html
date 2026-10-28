@@ -51911,9 +51911,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var t = S.twin, m = t ? (t.meta || {}) : null;
                 var sw = el('dtwTwinSwitch'); if (sw) sw.value = S.key || '';
                 if (!m) { h.innerHTML = '<div class="dtw-spine-name">No twin selected</div><div class="dtw-spine-facts">' + (S.runs.length ? 'Pick a twin below, or build one.' : 'Build the first twin with the button on the right; it walks you through it.') + '</div>'; return; }
-                var ltv = t.ip_lifetime_value || null, t5 = ltv && ltv.total ? (ltv.total['5'] || {}) : null;
                 var facts = ['<span><b>' + fmtN(m.size_us) + '</b> US people</span>', '<span>' + esc(fmtDate(m.window_start)) + ' to ' + esc(fmtDate(m.window_end)) + '</span>'];
-                if (t5 && t5.expected != null) facts.push('<span>IP lifetime value <b>' + fmtMoney(t5.expected) + '</b> over 5 years</span>');
                 facts.push('<span><b>' + (t.runs || []).length + '</b> runs, <b>' + (t.panel_sessions || []).length + '</b> rooms, <b>' + (((t.labs || {}).spend) || []).length + '</b> plans</span>');
                 h.innerHTML = '<div class="dtw-spine-name">' + esc(m.name || m.subject) + '</div><div class="dtw-spine-facts">' + facts.join('') + '</div>';
             }
@@ -51938,7 +51936,6 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }
             function coverActivity(r) {
                 var bits = [];
-                if (r.ltv_5y) bits.push(humanMoney(r.ltv_5y) + ' IP, 5 years');
                 bits.push((r.runs || 0) + ((r.runs === 1) ? ' run' : ' runs'));
                 if (r.panel_sessions) bits.push(r.panel_sessions + ((r.panel_sessions === 1) ? ' room' : ' rooms'));
                 if (r.spend_plans) bits.push(r.spend_plans + ((r.spend_plans === 1) ? ' plan' : ' plans'));
@@ -52039,29 +52036,6 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 h.innerHTML = out;
             }
             window.dtwOpenRun = function(id) { var r = (S.twin.runs || []).filter(function(x) { return x.id === id; })[0]; if (!r) return; S.openRun = id; if (r.kind === 'launch') { renderLaunch(r); dtwTab('launch'); } else if (r.kind === 'spend') { S.plan = ((S.twin.labs || {}).spend || []).filter(function(p) { return p.plan_id === (r.inputs || {}).plan_id; })[0] || null; renderSpend(); dtwTab('spend'); } else { renderGreenlight(r); dtwTab('greenlight'); } };
-            window.dtwHorizon = function(h) { S.horizon = String(h); var f = el('dtwFold-ltv'); if (f && S.twin && S.twin.ip_lifetime_value) { f.querySelector('.dtw-fold-body').innerHTML = renderLtv(S.twin.ip_lifetime_value, S.twin.meta || {}); } else renderTwin(); };
-            function renderLtv(ltv, m) {
-                var H = S.horizon, tot = (ltv.total || {})[H] || {}, vpf = (ltv.value_per_fan || {})[H] || {}, streams = (ltv.by_stream || {})[H] || [];
-                var out = '<div class="dtw-card-h"><div><h3>What ' + esc(m.name || m.subject) + ' is worth as IP, in today\'s dollars</h3><div class="dtw-sub">Expected value with its range, per fan, by stream and by year.</div></div><div class="dtw-toggle dtw-right"><button type="button" class="' + (H === '5' ? 'on' : '') + '" onclick="dtwHorizon(5)">5 years</button><button type="button" class="' + (H === '10' ? 'on' : '') + '" onclick="dtwHorizon(10)">10 years</button></div></div>';
-                out += figs([[fmtMoney(tot.expected), 'Expected, ' + H + ' years', '', true], [fmtMoney(tot.low) + ' to ' + fmtMoney(tot.high), 'Range'], [fmtMoney(vpf.all), 'Per fan'], [fmtMoney(vpf.avid), 'Per avid fan'], [fmtMoney(vpf.casual), 'Per casual fan']]);
-                var fb = ltv.fan_base || {};
-                out += '<div class="dtw-muted">' + fmtN(fb.total_us) + ' US fans: ' + fmtN(fb.avid_us) + ' avid (' + pct(fb.avid_share_pct) + '), ' + fmtN(fb.casual_us) + ' casual. Discount rate ' + pct(ltv.discount_rate_pct, 2) + '.</div>';
-                out += '<div class="dtw-two" style="margin-top:0.6rem;"><div><h4>By stream</h4>' + streams.map(function(s) { return bar(s.label, s.expected, Math.max.apply(null, streams.map(function(x) { return x.expected; })), false, fmtMoney(s.expected) + ' (' + pct(s.share_pct) + ')'); }).join('') + '</div>';
-                out += '<div><h4>By year</h4>' + yearCurve(ltv.by_year || []) + '</div></div>';
-                var pv = ltv.platform_value || {};
-                out += '<div class="dtw-two"><div><h4>Value to ' + esc(pv.platform || 'the platform') + '</h4>' + figs([[fmtMoney(pv.value), 'Over five years'], [fmtN(pv.new_subscribers), 'New subscribers'], [fmtN(pv.retained_subscriber_months), 'Subscriber months kept']]) + '<p class="dtw-muted">' + esc(pv.read || '') + '</p></div>';
-                out += '<div><h4>What moves it</h4><table class="dtw-table"><tr><th>Lever</th><th class="num">On ' + H + ' years</th></tr>' + (ltv.sensitivity || []).map(function(s) { return '<tr><td>' + esc(s.lever) + '<div class="dtw-muted">' + esc(s.read || '') + '</div></td><td class="num">' + signed(s.delta_pct) + '</td></tr>'; }).join('') + '</table></div></div>';
-                out += '<p class="dtw-p" style="margin-top:0.6rem;">' + esc(ltv.read || '') + '</p>';
-                return out;
-            }
-            function yearCurve(rows) {
-                if (!rows.length) return '';
-                var W = 520, Hh = 150, pad = 28, max = Math.max.apply(null, rows.map(function(r) { return r.expected; })) || 1;
-                var pts = rows.map(function(r, i) { var x = pad + (W - 2 * pad) * (i / Math.max(1, rows.length - 1)); var y = Hh - pad - (Hh - 2 * pad) * (r.expected / max); return [x, y, r]; });
-                var path = pts.map(function(p, i) { return (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1); }).join(' ');
-                var area = path + ' L' + pts[pts.length - 1][0].toFixed(1) + ' ' + (Hh - pad) + ' L' + pts[0][0].toFixed(1) + ' ' + (Hh - pad) + ' Z';
-                return '<svg class="dtw-band" viewBox="0 0 ' + W + ' ' + Hh + '"><path d="' + area + '" fill="rgba(199,242,62,0.14)"></path><path d="' + path + '" fill="none" stroke="#C7F23E" stroke-width="2"></path>' + pts.map(function(p) { return '<circle cx="' + p[0].toFixed(1) + '" cy="' + p[1].toFixed(1) + '" r="3" fill="#C7F23E"><title>Year ' + p[2].year + ': ' + fmtMoney(p[2].expected) + '</title></circle><text x="' + p[0].toFixed(1) + '" y="' + (Hh - 8) + '" font-size="10" text-anchor="middle" fill="#7C878A">Y' + p[2].year + '</text>'; }).join('') + '</svg>';
-            }
             function renderHowto() {
                 var h = el('dtwHowto'); if (!h) return;
                 var d = S.howto; if (!d) { h.innerHTML = '<div class="dtw-eyebrow">How to</div><div class="dtw-muted" style="margin-top:0.6rem;">Loading the directions...</div>'; return; }
@@ -84927,7 +84901,6 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     { t: 'How do I run Greenlight Lab on a twin?' },
                     { t: 'Analyze the data on this screen' }
                 ];
-                if (data.ip_lifetime_value) dt.splice(1, 0, { t: 'What drives the lifetime value of ' + (tw || 'this IP') + '?' });
                 return dt;
             }
             if (viewId === 'journeyIQ') {
