@@ -51048,9 +51048,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-body.is-fg-room .dtw-pane-fg.active { display: block; height: auto; }
         #digitalTwinsIQView .dtw-body.is-fg-room .dtw-fg { height: auto; min-height: 0; overflow: visible; }
         #digitalTwinsIQView .dtw-fg-dock { display: none; }
-        #digitalTwinsIQView.is-fg-room .dtw-fg-dock { display: block; position: sticky; top: 0; z-index: 8; flex: 0 0 auto; background: var(--dtw-page); padding: 8px 0 10px; margin: 0; border-bottom: 1px solid var(--dtw-rule); box-shadow: 0 -18px 0 0 var(--dtw-page); }
-        #digitalTwinsIQView.is-fg-room .dtw-fg-dock .dtw-fg-acts { display: flex; justify-content: flex-end; padding: 0 0 6px; }
-        #digitalTwinsIQView.is-fg-room .dtw-fg-hero { border-bottom: 0; padding-bottom: 20px; overflow: visible; z-index: 1; }
+        #digitalTwinsIQView.is-fg-room .dtw-fg-dock { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 16px; align-items: end; position: sticky; top: 0; z-index: 8; flex: 0 0 auto; background: var(--dtw-page); padding: 8px 0 10px; margin: 0; border-bottom: 1px solid var(--dtw-rule); }
+        #digitalTwinsIQView.is-fg-room .dtw-fg-dock.stuck { box-shadow: 0 -18px 0 0 var(--dtw-page); }
+        #digitalTwinsIQView.is-fg-room .dtw-fg-dock .dtw-fg-htext { grid-column: 1; grid-row: 1; min-width: 0; }
+        #digitalTwinsIQView.is-fg-room .dtw-fg-dock .dtw-fg-acts { grid-column: 2; grid-row: 1; display: flex; justify-content: flex-end; padding: 0; margin-bottom: -7px; }
+        #digitalTwinsIQView.is-fg-room .dtw-fg-hero { border-bottom: 0; padding-bottom: 6px; overflow: visible; z-index: 1; }
         #digitalTwinsIQView.is-fg-room .dtw-fg-htext { margin-top: 0; }
         #digitalTwinsIQView .dtw-body.is-fg-room .dtw-fg-main { height: var(--dtw-main-h, 58vh); min-height: 240px; overflow: hidden; align-items: stretch; }
         #digitalTwinsIQView .dtw-body.is-fg-room .dtw-fg-main > * { min-height: 0; }
@@ -52722,8 +52724,25 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var view = el('digitalTwinsIQView'), dock = el('dtwFgDock');
                 if (!view || !dock || !S.session) { if (view) view.style.removeProperty('--dtw-main-h'); return; }
                 view.style.setProperty('--dtw-main-h', Math.max(240, view.clientHeight - dock.offsetHeight) + 'px');
+                fgDockStuck();
             }
             window.addEventListener('resize', function() { if (S.tab !== 'panel') return; clearTimeout(S.fgResizeT); S.fgResizeT = setTimeout(fgLayoutSeats, 120); });
+            // the dock paints over the strip above it only once it is frozen, so the seat row keeps its last line until then
+            function fgDockStuck() {
+                var hero = el('dtwFgHero'), dock = el('dtwFgDock'); if (!hero || !dock) return;
+                dock.classList.toggle('stuck', hero.getBoundingClientRect().bottom < dock.getBoundingClientRect().top - 0.5);
+            }
+            // the thread back at its top brings the seats and the twin back down
+            function fgSnapTop() { var v = el('digitalTwinsIQView'); if (v && v.classList.contains('is-fg-room') && v.scrollTop > 0) v.scrollTo({ top: 0, behavior: 'smooth' }); }
+            document.addEventListener('scroll', function(e) {
+                if (e.target === el('digitalTwinsIQView')) fgDockStuck();
+                var tr = el('dtwPnTranscript');
+                if (tr && e.target === tr) { if (tr.scrollTop <= 0 && (S.fgTrLast || 0) > 0) fgSnapTop(); S.fgTrLast = tr.scrollTop; }
+            }, true);
+            document.addEventListener('wheel', function(e) {
+                var tr = el('dtwPnTranscript'); if (!tr || e.deltaY >= 0 || !(e.target instanceof Element) || !tr.contains(e.target)) return;
+                if (tr.scrollTop <= 0) fgSnapTop();
+            }, { passive: true, capture: true });
             document.addEventListener('scroll', function(e) {
                 var p = el('dtwSeatPop'); if (!p || p.style.position !== 'fixed' || !p.classList.contains('open') || S.fg.seat == null) return;
                 if (e.target instanceof Element && p.contains(e.target)) return;
