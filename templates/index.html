@@ -195220,9 +195220,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
        a 291px column the two need 316px, so the author was being sliced
        mid-word against the column edge. These rows carry few enough
        items to stack instead: the count on its own line, the author
-       under it in full. Two lines are reserved either way, so rows stay
-       a single height, and a row with extra chips shows two of them
-       rather than the one and a half that fit across. Scoped to these
+       under it in full, then the price or holds chip. The box grows to
+       fit all three; a fixed height sliced the chip off the bottom.
+       Scoped to these
        two panels because Movers and Trending carry several chips each
        and genuinely read better running across. */
     #trendsIQView[data-tiq-product="trends"] [data-tiq-panel="books"] .tiq-row-meta,
@@ -195231,9 +195231,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         flex-direction: column !important;
         flex-wrap: nowrap !important;
         align-items: flex-start !important;
-        height: 44px !important;
+        height: auto !important;
         row-gap: 3px;
-        overflow: hidden !important;
+        overflow: visible !important;
     }
     /* Books (with Libby), Comics and Broadway carry the count as plain text, not a pill: the
        Libby units ("daily US library audiobook borrows") are too long for
