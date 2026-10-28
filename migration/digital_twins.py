@@ -14,12 +14,16 @@ sees their own; admins see everything.
 from __future__ import annotations
 
 import csv
+import gzip
 import io
 import json
 import re
+import time
 from typing import Optional
 
-from migration.digital_twin_synthesis import S3_BUCKET, S3_INDEX_KEY, S3_PREFIX, load_twin, save_twin  # noqa: F401
+from migration.digital_twin_synthesis import (  # noqa: F401
+    S3_BUCKET, S3_INDEX_KEY, S3_PREFIX, load_twin, remove_from_index, save_twin,
+)
 
 JOBS_PREFIX = 'system/digital_twins/jobs/'
 REQUESTS_PREFIX = 'system/digital_twins/requests/'
@@ -135,6 +139,210 @@ def can_open(user, key: str, run: Optional[dict] = None) -> bool:
 
 def visible_runs(runs: list, user) -> list:
     return [r for r in runs if can_open(user, str(r.get('key') or ''), r)]
+
+
+DELETED_TWINS_PREFIX = 'system/digital_twins/deleted_twins/'
+DELETED_TWIN_KEEP_DAYS = 30
+BACKUPS_PREFIX = '_backups/'
+
+
+def _twin_created_by(payload: Optional[dict] = None, run: Optional[dict] = None) -> str:
+    if isinstance(payload, dict):
+        who = str(((payload.get('meta') or {}).get('created_by') or '')).strip()
+        if who:
+            return who
+    if isinstance(run, dict):
+        return str(run.get('created_by') or '').strip()
+    return ''
+
+
+def can_delete_twin(payload: Optional[dict], username: str, is_admin: bool = False, run: Optional[dict] = None) -> bool:
+    """The twin's creator, or an admin / super_admin."""
+    if is_admin:
+        return True
+    who = _twin_created_by(payload, run)
+    return bool(username) and who == str(username)
+
+
+def deleted_twin_key(twin_key: str) -> str:
+    """system/digital_twins/deleted_twins/<safe_user>/<slug>_<id>.json.gz"""
+    stem = str(twin_key or '')
+    if stem.startswith(S3_PREFIX):
+        stem = stem[len(S3_PREFIX):]
+    stem = re.sub(r"\.json(\.gz)?$", '', stem)
+    parts = stem.split('/', 1)
+    if len(parts) == 2:
+        user, slug = parts
+    else:
+        user, slug = 'anon', parts[0]
+    safe_user = re.sub(r'[^A-Za-z0-9._-]+', '_', user).strip('_') or 'anon'
+    slug = re.sub(r'[^A-Za-z0-9._-]+', '_', slug).strip('_') or 'twin'
+    return f"{DELETED_TWINS_PREFIX}{safe_user}/{slug}.json.gz"
+
+
+def deleted_twin_sidecar_key(twin_key: str) -> str:
+    k = deleted_twin_key(twin_key)
+    return (k[:-8] if k.endswith('.json.gz') else k) + '.meta.json'
+
+
+def drop_twin_from_allowed_runs(users_doc: dict, key: str) -> int:
+    """Drop the key from every explicit-list seat. Leave ``['*']``
+    untouched. Returns how many seats changed."""
+    n = 0
+    if not key or not isinstance(users_doc, dict):
+        return 0
+    users = users_doc.get('users')
+    if not isinstance(users, dict):
+        return 0
+    for u in users.values():
+        if not isinstance(u, dict):
+            continue
+        cur = u.get(RUNS_FIELD)
+        if not isinstance(cur, list) or '*' in cur:
+            continue
+        nxt = [x for x in cur if str(x) != str(key)]
+        if nxt != list(cur):
+            u[RUNS_FIELD] = nxt
+            n += 1
+    return n
+
+
+def _revoke_twin_access(key: str, users_doc: Optional[dict] = None) -> int:
+    """Drop the key from explicit lists. ``users_doc`` is for tests;
+    live seats go through the app compare-and-swap. Never raises."""
+    if users_doc is not None:
+        try:
+            return drop_twin_from_allowed_runs(users_doc, key)
+        except Exception as e:
+            print(f"[twin] users list drop skipped: {e}")
+            return 0
+    try:
+        import sys as _sys
+        app = _sys.modules.get('app')
+        if app is None or not hasattr(app, '_users_cas_mutate'):
+            return 0
+        n = [0]
+
+        def mut(data):
+            n[0] = drop_twin_from_allowed_runs(data, key)
+            return data if n[0] else None
+        app._users_cas_mutate(mut)
+        return n[0]
+    except Exception as e:
+        print(f"[twin] users list drop skipped: {e}")
+        return 0
+
+
+def _gz_bytes(payload: dict) -> bytes:
+    body = io.BytesIO()
+    with gzip.GzipFile(fileobj=body, mode='wb') as gz:
+        gz.write(json.dumps(payload, ensure_ascii=False, default=str).encode('utf-8'))
+    return body.getvalue()
+
+
+def _object_bytes(s3, key: str, payload: Optional[dict] = None) -> Optional[bytes]:
+    if s3 is not None and key:
+        try:
+            raw = s3.get_object(Bucket=S3_BUCKET, Key=key)['Body'].read()
+            if raw:
+                return raw if isinstance(raw, (bytes, bytearray)) else str(raw).encode('utf-8')
+        except Exception:
+            pass
+    if isinstance(payload, dict):
+        try:
+            return _gz_bytes(payload)
+        except Exception:
+            return None
+    return None
+
+
+def delete_twin(s3, key: str, payload: Optional[dict] = None, deleted_by: str = '',
+                users_doc: Optional[dict] = None, run: Optional[dict] = None) -> Optional[dict]:
+    """Take the twin out of the library. A copy of the payload (and a
+    small sidecar with enough index metadata to restore) sits under
+    ``deleted_twins`` for 30 days. The index entry and any explicit
+    ``allowed_digital_twin_runs`` listing drop. ``['*']`` is left
+    alone. Never raises; None when it could not."""
+    key = str(key or '')
+    if not key:
+        return None
+    try:
+        return _delete_twin(s3, key, payload, deleted_by, users_doc, run)
+    except Exception as e:
+        print(f"[twin] delete failed: {e}")
+        return None
+
+
+def _delete_twin(s3, key: str, payload: Optional[dict], deleted_by: str,
+                 users_doc: Optional[dict], run: Optional[dict]) -> Optional[dict]:
+    if payload is None:
+        try:
+            payload = load_twin(s3, key)
+        except Exception:
+            payload = None
+    now = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
+    undo_until = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(time.time() + DELETED_TWIN_KEEP_DAYS * 86400))
+    name = ''
+    if isinstance(payload, dict):
+        name = str(((payload.get('meta') or {}).get('name') or (payload.get('meta') or {}).get('subject') or ''))
+    if not name and isinstance(run, dict):
+        name = str(run.get('name') or run.get('subject') or '')
+    raw = _object_bytes(s3, key, payload if isinstance(payload, dict) else None)
+    if raw is None:
+        return None
+    undo_key = deleted_twin_key(key)
+    side_key = deleted_twin_sidecar_key(key)
+    entry = dict(run) if isinstance(run, dict) else {}
+    if isinstance(payload, dict) and not entry:
+        try:
+            from migration.digital_twin_synthesis import index_entry
+            entry = index_entry(key, payload)
+        except Exception:
+            entry = {'key': key, 'name': name, 'created_by': _twin_created_by(payload, run)}
+    sidecar = {
+        'original_key': key, 'deleted_by': deleted_by or '', 'deleted_at': now,
+        'undo_until': undo_until, 'index': entry, 'name': name,
+        'created_by': _twin_created_by(payload, run or entry),
+        'rooms': len((payload or {}).get('panel_sessions') or []) if isinstance(payload, dict) else 0,
+    }
+    if s3 is not None:
+        if raw:
+            try:
+                s3.put_object(Bucket=S3_BUCKET, Key=undo_key, Body=raw,
+                              ContentType='application/json', ContentEncoding='gzip',
+                              Metadata={'undo-until': undo_until})
+            except Exception as e:
+                print(f"[twin] undo copy failed (twin still deleted): {e}")
+            try:
+                stamp = time.strftime('%Y%m%d_%H%M%S', time.gmtime())
+                bak = BACKUPS_PREFIX + re.sub(r'[/]+', '_', key) + f'.pre_twin_delete_{stamp}.json.gz'
+                s3.put_object(Bucket=S3_BUCKET, Key=bak, Body=raw,
+                              ContentType='application/json', ContentEncoding='gzip')
+            except Exception as e:
+                print(f"[twin] backup copy skipped: {e}")
+        try:
+            s3.put_object(Bucket=S3_BUCKET, Key=side_key,
+                          Body=json.dumps(sidecar, ensure_ascii=False, default=str).encode('utf-8'),
+                          ContentType='application/json', Metadata={'undo-until': undo_until})
+        except Exception as e:
+            print(f"[twin] undo sidecar failed (twin still deleted): {e}")
+        try:
+            s3.delete_object(Bucket=S3_BUCKET, Key=key)
+        except Exception as e:
+            print(f"[twin] object drop failed: {e}")
+            return None
+    try:
+        dropped = remove_from_index(s3, key) if s3 is not None else entry or None
+        if dropped:
+            sidecar['index'] = dropped
+    except Exception as e:
+        print(f"[twin] index drop skipped: {e}")
+    try:
+        _revoke_twin_access(key, users_doc)
+    except Exception as e:
+        print(f"[twin] users list drop skipped: {e}")
+    return {'deleted': key, 'undo_until': undo_until, 'undo_key': undo_key,
+            'sidecar_key': side_key, 'name': name}
 
 
 def find_twin(runs: list, name: str) -> Optional[dict]:
@@ -343,8 +551,9 @@ HOW_TO = [
                    f'and how many panelists sit in its focus group rooms ({PANEL_SEATS_INCLUDED} come with a session; each one past that is priced). Or type the ask to Prometheus with a window if it is not the last 12 months.'),
         'type_this': ['Build a twin of Gilmore Girls Hulu viewers', 'Build a twin of Mark Rober for a product launch', 'Build a twin of women 25 to 44 in Dallas who shop at Target'],
         'attach': 'Nothing is needed. If you have a brief or a deck on the subject, attach it with the paper clip and the twin reads it.',
-        'comes_back': 'The twin lands on the Twins tab in a few minutes, with its first three runs. Prometheus confirms in the chat; there is no email.',
-        'cost_key': 'digital_twins_iq', 'export': 'Twins tab: CSV, Deck or PDF at the top of the twin page.',
+        'comes_back': ('The twin lands on the Twins tab in a few minutes, with its first three runs. Prometheus confirms in the chat; there is no email. '
+                       'Delete a twin from the Twins tab; it leaves the library and you can undo for 30 days.'),
+        'cost_key': 'digital_twins_iq', 'export': 'Twins tab: CSV, Deck or PDF at the top of the twin page. Delete sits on the card and on the open twin.',
     },
     {
         'id': 'greenlight', 'title': 'Greenlight Lab',
@@ -427,7 +636,7 @@ def how_to(price_fn=None) -> dict:
                       'Everything here can be typed to Prometheus or done on this page. Type the example lines as written, with your own subject, '
                       'and attach files with the paper clip in the chat.'),
             'items': items, 'pricing': pricing_lines(price_fn),
-            'where': 'Twins land on the Twins tab; lab runs on their lab tab and in the twin\'s Runs list; focus group sessions on the Focus Group IQ tab. Prometheus confirms every one in the chat.'}
+            'where': 'Twins land on the Twins tab; lab runs on their lab tab and in the twin\'s Runs list; focus group sessions on the Focus Group IQ tab. Prometheus confirms every one in the chat. Delete a twin from the Twins tab; you can undo for 30 days.'}
 
 
 def how_to_text(topic: str = '', price_fn=None) -> str:
@@ -474,4 +683,6 @@ def is_how_to_ask(text: str) -> bool:
 __all__ = ['list_runs', 'load_twin', 'save_twin', 'has_access', 'is_admin', 'can_open', 'visible_runs', 'allowed_keys', 'find_twin', 'csv_rows', 'csv_text', 'csv_filename',
            'view_summary', 'twin_lines', 'deck_context', 'how_to', 'how_to_text', 'is_how_to_ask', 'pricing_lines', 'PRICING', 'PULL_TYPES', 'PANEL_QUESTIONS_INCLUDED',
            'PANEL_SEATS_INCLUDED', 'PANEL_SEATS_MAX', 'extra_panelists', 'panelists_for',
+           'can_delete_twin', 'delete_twin', 'deleted_twin_key', 'deleted_twin_sidecar_key', 'drop_twin_from_allowed_runs',
+           'DELETED_TWINS_PREFIX', 'DELETED_TWIN_KEEP_DAYS',
            'ACCESS_FLAG', 'RUNS_FIELD', 'PRODUCT_KEY', 'PRODUCT_LABEL', 'JOBS_PREFIX', 'REQUESTS_PREFIX', 'S3_PREFIX', 'S3_INDEX_KEY', 'S3_BUCKET', 'HOW_TO']

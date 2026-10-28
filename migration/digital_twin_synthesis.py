@@ -1365,6 +1365,37 @@ def update_index(s3, key: str, payload: dict) -> None:
         print(f"[twin] index update failed (non-fatal): {e}")
 
 
+def remove_from_index(s3, key: str) -> Optional[dict]:
+    """Drop the key from the library index. The removed entry, or None
+    when it was already gone or the write could not land. Never raises."""
+    if s3 is None or not key:
+        return None
+    try:
+        idx = {'runs': []}
+        try:
+            idx = json.loads(s3.get_object(Bucket=S3_BUCKET, Key=S3_INDEX_KEY)['Body'].read().decode('utf-8')) or {'runs': []}
+        except Exception:
+            pass
+        dropped = None
+        kept = []
+        for r in (idx.get('runs') or []):
+            if not isinstance(r, dict):
+                continue
+            if r.get('key') == key and dropped is None:
+                dropped = r
+            else:
+                kept.append(r)
+        if dropped is None:
+            return None
+        idx['runs'] = kept
+        idx['updated_at'] = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
+        s3.put_object(Bucket=S3_BUCKET, Key=S3_INDEX_KEY, Body=json.dumps(idx, ensure_ascii=False).encode('utf-8'), ContentType='application/json')
+        return dropped
+    except Exception as e:
+        print(f"[twin] index drop failed (non-fatal): {e}")
+        return None
+
+
 def save_twin(s3, key: str, payload: dict) -> str:
     """Write (or rewrite in place) the gz payload and refresh the index."""
     strip_ip_lifetime_value(payload)
@@ -1451,7 +1482,7 @@ def run_scenario(twin: dict, scenario: dict, *, claude_json: Optional[Callable] 
     return E.simulate(twin, scenario, read_fn=read_fn, created_by=created_by)
 
 
-__all__ = ['build_twin', 'persist', 'save_twin', 'load_twin', 'append_run', 'run_scenario', 'update_index', 'index_entry', 'strip_ip_lifetime_value', 'corpus_anchors',
+__all__ = ['build_twin', 'persist', 'save_twin', 'load_twin', 'append_run', 'run_scenario', 'update_index', 'remove_from_index', 'index_entry', 'strip_ip_lifetime_value', 'corpus_anchors',
            'research_anchors', 'profile_identity', 'find_profile_key', 'hydrate_identity_from_profile', 'queue_profile_for_twin',
            'is_ip_related', 'guess_format', 'scrub_text', 'scrub_payload',
            'demographic_spec', 'demographic_name', 'demographic_identity', 'research_demographics', 'DEMO_PICK_CATS', 'US_POP',

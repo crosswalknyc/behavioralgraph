@@ -28,6 +28,8 @@ app.py so app.py stays small.
   POST /api/digital-twins/<key>/panel/<sid>/ask      ask the room (synchronous, seconds; the session price on the first question)
   DELETE /api/digital-twins/<key>/panel/<sid>        delete a room (creator or admin; 30-day undo copy under system/digital_twins/deleted_rooms/)
   POST /api/digital-twins/<key>/panel/<sid>/delete   the same for clients that cannot send DELETE
+  DELETE /api/digital-twins/<key>                    delete a twin (creator or admin; 30-day undo copy under system/digital_twins/deleted_twins/)
+  POST /api/digital-twins/<key>/delete               the same for clients that cannot send DELETE
   GET  /api/digital-twins/<key>/panel/<sid>/export.csv
   GET  /api/digital-twins/<key>/panel/<sid>/export.pdf
   GET  /api/digital-twins/portrait/<hash>?size=128   a twin's generated portrait (JPEG, long cache); 404 when absent
@@ -1012,6 +1014,34 @@ def dt_get(key):
         return err
     out = {k: v for k, v in payload.items() if k != 'diagnostics'}
     return _nocache(jsonify({'success': True, 'twin': out, 'summary': DT.view_summary(payload)}))
+
+
+@bp.route(f'{PREFIX}/<path:key>', methods=['DELETE'])
+@bp.route(f'{PREFIX}/<path:key>/delete', methods=['POST'])
+def dt_delete(key):
+    """Delete a twin (2026-10-28, Jenna: "need to have a way to delete twins too.").
+    The twin's creator or an admin; the object leaves the library and a
+    copy is kept under system/digital_twins/deleted_twins/ for a 30-day
+    undo. Never emailed. No charge."""
+    user, err = _gate()
+    if err:
+        return err
+    payload, err = _twin_or_404(user, key)
+    if err:
+        return err
+    if not DT.can_delete_twin(payload, _uname(user), DT.is_admin(user)):
+        return jsonify({'success': False, 'error': 'Only the person who built this twin, or an admin, can delete it.'}), 403
+    try:
+        runs = DT.list_runs(_s3())
+        run = next((r for r in runs if r.get('key') == key), None)
+        removed = DT.delete_twin(_s3(), key, payload, deleted_by=_uname(user), run=run)
+    except Exception:
+        traceback.print_exc()
+        removed = None
+    if not removed:
+        return jsonify({'success': False, 'error': 'The twin could not be deleted. Try again in a minute.'}), 500
+    return _nocache(jsonify({'success': True, 'deleted': key, 'undo_until': removed.get('undo_until'),
+                             'message': 'The twin left the library. It can be restored within 30 days by an admin.'}))
 
 
 def register(app):

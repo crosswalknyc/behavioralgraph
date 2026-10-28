@@ -50930,6 +50930,13 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-cover.build { border-style: dashed; }
         #digitalTwinsIQView .dtw-cover.build:hover { border-color: var(--dtw-accent); }
         #digitalTwinsIQView .dtw-cover.build p { position: relative; margin: 10px 0 0; font-size: 11.5px; line-height: 16px; color: #9AA09B; }
+        #digitalTwinsIQView .dtw-cover .dtw-x { appearance: none; position: absolute; top: 10px; right: 10px; z-index: 3; background: transparent; border: 1px solid transparent; color: #9AA09B; border-radius: 999px; width: 26px; height: 26px; line-height: 1; font-size: 1rem; cursor: pointer; opacity: 0; transition: opacity .12s, border-color .12s, color .12s; }
+        #digitalTwinsIQView .dtw-cover:hover .dtw-x, #digitalTwinsIQView .dtw-cover.on .dtw-x, #digitalTwinsIQView .dtw-cover .dtw-x:focus { opacity: 1; }
+        #digitalTwinsIQView .dtw-cover .dtw-x:hover { border-color: #E9E8E1; color: #E9E8E1; }
+        @media (hover: none) { #digitalTwinsIQView .dtw-cover .dtw-x { opacity: 0.7; } }
+        #digitalTwinsIQView .dtw-cover .dtw-confirm { position: absolute; inset: 0; z-index: 4; margin: 0; padding: 16px 18px; background: #081113; align-content: center; }
+        #digitalTwinsIQView .dtw-cover.confirming { cursor: default; }
+        #digitalTwinsIQView .dtw-export .dtw-confirm { width: 100%; }
         #digitalTwinsIQView .dtw-twin-card { background: var(--dtw-raised); border: 1px solid var(--dtw-rule); border-radius: 12px; padding: 0.85rem 0.95rem 0.8rem; cursor: pointer; min-width: 0; }
         #digitalTwinsIQView .dtw-hero { display: flex; gap: 1rem; align-items: flex-start; flex-wrap: wrap; }
         #digitalTwinsIQView .dtw-hero img { width: 72px; height: 72px; object-fit: cover; border-radius: 12px; border: 1px solid var(--dtw-rule); flex: 0 0 auto; }
@@ -51948,6 +51955,61 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (r.spend_plans) bits.push(r.spend_plans + ((r.spend_plans === 1) ? ' plan' : ' plans'));
                 return bits.join(' · ');
             }
+            function twinDelId(key) { return String(key || '').replace(/[^A-Za-z0-9]+/g, '_'); }
+            function twinDeleteChrome(key, name) {
+                var k = esc(jsq(key)), id = 'dtwTwinDel-' + twinDelId(key);
+                return '<button type="button" class="dtw-x" title="Delete this twin" aria-label="Delete this twin" onclick="event.stopPropagation(); dtwTwinDeleteAsk(\'' + k + '\')">&#215;</button>'
+                    + '<div class="dtw-confirm" id="' + id + '" data-twin-del="' + esc(key) + '" style="display:none;" onclick="event.stopPropagation()"><span>Delete ' + esc(name || 'this twin') + '? The twin and its rooms leave the library. You can undo for 30 days.</span>'
+                    + '<button type="button" class="dtw-btn dtw-btn-sm dtw-btn-primary" onclick="event.stopPropagation(); dtwTwinDelete(\'' + k + '\')">Delete</button>'
+                    + '<button type="button" class="dtw-btn dtw-btn-sm" onclick="event.stopPropagation(); dtwTwinDeleteAsk(\'' + k + '\', false)">Keep</button></div>';
+            }
+            function twinPageConfirm(key, name) {
+                var k = esc(jsq(key)), id = 'dtwTwinDelP-' + twinDelId(key);
+                return '<div class="dtw-confirm" id="' + id + '" style="display:none;"><span>Delete ' + esc(name || 'this twin') + '? The twin and its rooms leave the library. You can undo for 30 days.</span>'
+                    + '<button type="button" class="dtw-btn dtw-btn-sm dtw-btn-primary" onclick="dtwTwinDelete(\'' + k + '\')">Delete</button>'
+                    + '<button type="button" class="dtw-btn dtw-btn-sm" onclick="dtwTwinDeleteAsk(\'' + k + '\', false, \'dtwTwinDelP-\')">Keep</button></div>';
+            }
+            window.dtwCoverOpen = function(ev, key) {
+                var t = ev && ev.target;
+                if (t && t.closest && t.closest('.dtw-x, .dtw-confirm')) return;
+                var art = ev && ev.currentTarget;
+                if (art && art.classList && art.classList.contains('confirming')) return;
+                dtwOpen(key);
+            };
+            window.dtwTwinDeleteAsk = function(key, on, prefix) {
+                var id = (prefix || 'dtwTwinDel-') + twinDelId(key);
+                var c = el(id); if (!c) return;
+                var show = (on == null) ? c.style.display === 'none' : !!on;
+                document.querySelectorAll('#dtwLibrary .dtw-confirm, #dtwTwinPage .dtw-confirm').forEach(function(x) { x.style.display = 'none'; });
+                document.querySelectorAll('#dtwLibrary .dtw-cover.confirming').forEach(function(x) { x.classList.remove('confirming'); });
+                c.style.display = show ? 'flex' : 'none';
+                var art = c.closest('.dtw-cover');
+                if (art) art.classList.toggle('confirming', show);
+            };
+            window.dtwTwinDelete = async function(key) {
+                if (!key) return;
+                var cs = [el('dtwTwinDel-' + twinDelId(key)), el('dtwTwinDelP-' + twinDelId(key))].filter(Boolean);
+                cs.forEach(function(x) { x.innerHTML = '<span>Deleting...</span>'; });
+                var d = null;
+                try {
+                    try { d = await api('/' + key, { method: 'DELETE' }); }
+                    catch (e1) { if (/\((404|405)\)$/.test(e1.message)) d = await api('/' + key + '/delete', { method: 'POST', body: '{}' }); else throw e1; }
+                } catch (e) {
+                    cs.forEach(function(x) { x.innerHTML = '<span>' + esc(e.message) + '</span><button type="button" class="dtw-btn dtw-btn-sm" onclick="event.stopPropagation(); dtwTwinDeleteAsk(\'' + esc(jsq(key)) + '\', false)">Keep</button>'; });
+                    return;
+                }
+                S.runs = (S.runs || []).filter(function(r) { return r.key !== key; });
+                if (S.key === key) {
+                    S.twin = null; S.key = ''; S.summary = null; S.openRun = null; S.session = null; S.plan = null; S.panelKind = '';
+                    clearPortraitTimers(); try { dtwSeatOpen(null); } catch (_) {}
+                    try { remember(); } catch (_) {}
+                    fillTwinSelects(); renderSpine(); renderTwin(); syncInputCards();
+                    dtwTab('twins');
+                }
+                renderLibrary(); fillTwinSelects();
+                fgToast((d && d.message) || 'Twin deleted.');
+                try { dtwLoadList(true); } catch (_) {}
+            };
             window.dtwLibFilter = function(kind) { S.libKind = kind || 'all'; renderLibrary(); };
             window.dtwLibQuery = function(q) { S.libQ = String(q || ''); renderLibrary(); };
             function renderLibrary() {
@@ -51969,7 +52031,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 });
                 var tiles = shown.map(function(r) {
                     var on = r.key === S.key;
-                    return '<article class="dtw-cover' + (on ? ' on' : '') + '" data-key="' + esc(r.key) + '" onclick="dtwOpen(\'' + esc(r.key) + '\')" title="' + esc(r.name || r.subject) + '"><div class="body"><h2>' + esc(r.name || r.subject) + '</h2><div class="fig">' + fmtN(r.size_us) + '<span>people in the US</span></div><div class="foot">' + esc(coverActivity(r)) + '</div></div>' + (on ? '<div class="open">Open</div>' : '') + '</article>';
+                    var kn = esc(jsq(r.key)), nm = r.name || r.subject || 'this twin';
+                    return '<article class="dtw-cover' + (on ? ' on' : '') + '" data-key="' + esc(r.key) + '" role="button" tabindex="0" onclick="dtwCoverOpen(event,\'' + kn + '\')" onkeydown="if(event.key===\'Enter\'){dtwCoverOpen(event,\'' + kn + '\');}" title="' + esc(nm) + '"><div class="body"><h2>' + esc(nm) + '</h2><div class="fig">' + fmtN(r.size_us) + '<span>people in the US</span></div><div class="foot">' + esc(coverActivity(r)) + '</div></div>' + twinDeleteChrome(r.key, nm) + (on ? '<div class="open">Open</div>' : '') + '</article>';
                 });
                 tiles.push('<article class="dtw-cover build" onclick="dtwBuildTwin()"><div class="body"><h2>Build a twin.</h2><div class="fig">' + esc(twinPrice()) + '<span>per twin</span></div><p>Build from a profile or demographics. Prometheus walks you through the twin-building process.</p></div></article>');
                 h.innerHTML = tiles.join('');
@@ -52008,7 +52071,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var t = S.twin, h = el('dtwTwinPage'); if (!h) return;
                 if (!t) { h.innerHTML = ''; return; }
                 var m = t.meta || {}, ident = t.identity || {}, key = m.key || S.key, lc = t.lifecycle || {};
-                var out = '<div class="dtw-actions dtw-export"><a class="dtw-btn dtw-btn-sm" href="/api/digital-twins/' + esc(key) + '/export.csv">CSV</a><a class="dtw-btn dtw-btn-sm" href="/api/digital-twins/' + esc(key) + '/export.pdf">PDF</a><a class="dtw-btn dtw-btn-sm" href="/api/digital-twins/' + esc(key) + '/export.pptx">Deck</a></div>';
+                var kn = esc(jsq(key)), nm = m.name || m.subject || 'this twin';
+                var out = '<div class="dtw-actions dtw-export"><a class="dtw-btn dtw-btn-sm" href="/api/digital-twins/' + esc(key) + '/export.csv">CSV</a><a class="dtw-btn dtw-btn-sm" href="/api/digital-twins/' + esc(key) + '/export.pdf">PDF</a><a class="dtw-btn dtw-btn-sm" href="/api/digital-twins/' + esc(key) + '/export.pptx">Deck</a><button type="button" class="dtw-btn dtw-btn-sm" onclick="dtwTwinDeleteAsk(\'' + kn + '\', null, \'dtwTwinDelP-\')">Delete</button>' + twinPageConfirm(key, nm) + '</div>';
                 // Identity
                 var idb = '<div class="dtw-two"><div>';
                 [['gender', 'Gender'], ['age', 'Age'], ['sexual_orientation', 'Orientation'], ['education', 'Education'], ['occupation', 'Occupation'], ['income', 'Income'], ['ethnicity', 'Ethnicity'], ['relationship', 'Relationship']].forEach(function(c) { var rows = demoRows(c[0]); if (rows.length) { idb += '<h4>' + c[1] + '</h4>' + rows.slice(0, 8).map(function(r) { return bar(r.label, r.pct, 100, false, pct(r.pct, 1)); }).join(''); } });
