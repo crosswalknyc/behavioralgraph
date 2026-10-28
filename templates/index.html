@@ -51140,6 +51140,17 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-fg-nm .ag { color: var(--dtw-mute); }
         #digitalTwinsIQView .dtw-fg-tag { min-height: 18px; padding: 1px 8px 1px 7px; border-radius: 999px; border: 1px solid var(--dtw-rule); display: inline-flex; align-items: center; gap: 6px; font-size: 10.5px; color: var(--dtw-body); line-height: 14px; overflow-wrap: anywhere; max-width: 100%; text-align: left; }
         #digitalTwinsIQView .dtw-fg-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; flex: none; }
+        #digitalTwinsIQView .dtw-fg-bubbles { display: flex; gap: 18px; align-items: flex-start; flex-wrap: wrap; padding: 2px 0 4px; }
+        #digitalTwinsIQView .dtw-fg-bcol { flex: 1 1 300px; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+        #digitalTwinsIQView .dtw-fg-bcol.r { padding-top: 34px; }
+        #digitalTwinsIQView .dtw-fg-ab { display: flex; gap: 10px; align-items: flex-start; }
+        #digitalTwinsIQView .dtw-fg-bcol.r .dtw-fg-ab { flex-direction: row-reverse; }
+        #digitalTwinsIQView .dtw-fg-ab .card { position: relative; flex: 1 1 auto; min-width: 0; background: var(--dtw-raised); border: 1px solid var(--dtw-rule); border-radius: 14px; padding: 10px 13px 11px; transition: border-color .15s; }
+        #digitalTwinsIQView .dtw-fg-ab:hover .card { border-color: var(--dtw-body); }
+        #digitalTwinsIQView .dtw-fg-ab .card::before { content: ''; position: absolute; top: 13px; left: -6px; width: 10px; height: 10px; background: var(--dtw-raised); border-left: 1px solid var(--dtw-rule); border-bottom: 1px solid var(--dtw-rule); transform: rotate(45deg); transition: border-color .15s; }
+        #digitalTwinsIQView .dtw-fg-bcol.r .dtw-fg-ab .card::before { left: auto; right: -6px; transform: rotate(-135deg); }
+        #digitalTwinsIQView .dtw-fg-ab:hover .card::before { border-color: var(--dtw-body); }
+        #digitalTwinsIQView .dtw-fg-ab .dtw-fg-tx { margin-top: 6px; }
         #digitalTwinsIQView .dtw-fg-tx { font-size: 12.5px; line-height: 17px; color: var(--dtw-body); margin-top: 2px; overflow-wrap: anywhere; }
         #digitalTwinsIQView .dtw-fg-bubble { background: var(--dtw-raised); border-radius: 10px; padding: 11px 14px; flex: 1 1 auto; min-width: 0; }
         #digitalTwinsIQView .dtw-fg-bubble .lab { font-size: 11px; color: var(--dtw-ink); font-weight: 600; line-height: 14px; }
@@ -52771,7 +52782,13 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var idx = a.seat != null ? Number(a.seat) - 1 : roster.indexOf(seat);
                 var optId = answerOptId(q, a), tag = optTag(q, rk, optId, a.option_label || '');
                 var open = seat.seat != null ? ' data-fg-seat="' + Number(seat.seat) + '" onclick="dtwSeatOpen(' + Number(seat.seat) + ', this)"' : '';
-                return '<div class="dtw-fg-msg">' + face(seat, idx, 36) + '<div><div class="dtw-fg-nm"><b' + open + '>' + esc(titleCase(seat.name || a.name || '')) + '</b><span class="ag">' + esc(seat.age != null ? seat.age : '') + (seat.city ? ', ' + esc(titleCase(seat.city)) : '') + (seat.segment && multiSeg(roster) ? ', ' + esc(seat.segment) : '') + '</span>' + tag + '</div>' + (a.line ? '<div class="dtw-fg-tx">' + esc(a.line) + '</div>' : '') + '</div></div>';
+                return '<div class="dtw-fg-ab">' + face(seat, idx, 36) + '<div class="card"><div class="dtw-fg-nm"><b' + open + '>' + esc(titleCase(seat.name || a.name || '')) + '</b><span class="ag">' + esc(seat.age != null ? seat.age : '') + (seat.city ? ', ' + esc(titleCase(seat.city)) : '') + (seat.segment && multiSeg(roster) ? ', ' + esc(seat.segment) : '') + '</span>' + tag + '</div>' + (a.line ? '<div class="dtw-fg-tx">' + esc(a.line) + '</div>' : '') + '</div></div>';
+            }
+            // the answers as speech bubbles in two staggered columns: faces on the outside edges, the right column set lower
+            function bubblesHtml(items) {
+                if (!items.length) return '';
+                var l = items.filter(function(x, i) { return i % 2 === 0; }), r = items.filter(function(x, i) { return i % 2 === 1; });
+                return '<div class="dtw-fg-bubbles"><div class="dtw-fg-bcol l">' + l.join('') + '</div>' + (r.length ? '<div class="dtw-fg-bcol r">' + r.join('') + '</div>' : '') + '</div>';
             }
             function answersHtml(q, roster) {
                 var rk = rankMap(q), bySeat = (q.answers || []).slice().sort(function(a, b) { return Number(a.seat) - Number(b.seat); }), ans = [], used = {};
@@ -52782,8 +52799,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     if (a && !used[seat]) { used[seat] = 1; ans.push(a); }
                 });
                 bySeat.forEach(function(a) { if (!used[Number(a.seat)]) ans.push(a); });
-                var rest = ans.length - 3, fold = rest > 0 && !S.fg.earlier[q.id], shown = fold ? ans.slice(0, 3) : ans;
-                var out = shown.map(function(a) { return answerMsg(q, rk, a, roster); }).join('');
+                var rest = ans.length - 4, fold = rest > 0 && !S.fg.earlier[q.id], shown = fold ? ans.slice(0, 4) : ans;
+                var out = bubblesHtml(shown.map(function(a) { return answerMsg(q, rk, a, roster); }));
                 if (fold) out += '<button type="button" class="dtw-fg-earlier" onclick="dtwFgEarlier(\'' + esc(jsq(q.id)) + '\', true)">Show ' + rest + ' more ' + (rest === 1 ? 'answer' : 'answers') + '</button>';
                 else if (rest > 0) out += '<button type="button" class="dtw-fg-earlier" onclick="dtwFgEarlier(\'' + esc(jsq(q.id)) + '\', false)">Hide ' + rest + ' ' + (rest === 1 ? 'answer' : 'answers') + '</button>';
                 return out;
@@ -52814,7 +52831,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }
             function flyBlock(q, i, roster) {
                 var rk = rankMap(q), ans = (q.answers || []).slice().sort(function(a, b) { return Number(a.seat) - Number(b.seat); });
-                return qMsg(q, i, roster) + workingLine(q) + ans.map(function(a) { return answerMsg(q, rk, a, roster); }).join('');
+                return qMsg(q, i, roster) + workingLine(q) + bubblesHtml(ans.map(function(a) { return answerMsg(q, rk, a, roster); }));
             }
             function threadHtml(s, roster, fq, fly) {
                 var qs = s.questions || [], parts = [];
