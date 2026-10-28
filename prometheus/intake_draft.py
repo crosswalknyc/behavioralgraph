@@ -1,12 +1,13 @@
 """Guided intakes propose, never interrogate (2026-10-09, item 4).
 
-"Create a digital journey" and "Value a brand partnership" drew a
-field-by-field intake five times in the week to 2026-10-08, every time
-with a profile open on the screen. The profile already carries what the
-brief needs: the subject, where its audience watches or buys, the
-brands it over-indexes on, and the standing window. This module drafts
-the full brief from the open profile so Prometheus asks for one
-confirmation instead of three fields.
+"Create a digital journey" drew a field-by-field intake five times in
+the week to 2026-10-08, every time with a profile open on the screen.
+The profile already carries what the brief needs: the subject, where
+its audience watches or buys, the brands it over-indexes on, and the
+standing window. This module drafts the full brief from the open
+profile so Prometheus asks for one confirmation instead of three
+fields. Brand Partnership Valuation is a one-question-at-a-time
+wizard (prometheus.bpiq_wizard, 2026-10-28).
 
   journey_draft(ctx, s3, bucket)  -> parsed inputs or None
   bpiq_draft(ctx, s3, bucket)     -> parsed inputs or None
@@ -244,15 +245,6 @@ JIQ_ASK_COPY = (
     "happened before and after: https://www.instagram.com/p/xxxxx/\"")
 
 
-BPIQ_ASK_COPY = (
-    "Happy to run a Brand Partnership Valuation. Give me, in one "
-    "message:\n"
-    "1. The brand being valued (e.g. RAM Trucks)\n"
-    "2. The partner - talent, show, event, or franchise (e.g. Glen "
-    "Powell)\n"
-    "3. The campaign window (e.g. Apr 2024 - Dec 2024)\n"
-    "Optional: a pre window (default: the year before), a post window "
-    "(default: campaign end through today), and the audience to "
-    "measure against (e.g. show viewers, ticket purchasers).\n\n"
-    "Example: \"Glen Powell x RAM Trucks, campaign Apr 2024 - Dec "
-    "2024, post through Jun 2025\"")
+# 2026-10-28: the one-message dump is retired. The live path is the
+# wizard in prometheus.bpiq_wizard (one question at a time).
+BPIQ_ASK_COPY = "Who is the property or talent?"

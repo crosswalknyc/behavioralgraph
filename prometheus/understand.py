@@ -38,6 +38,7 @@ ANALYZE_MODES = ('exec_summary', 'whitespace', 'new_consumers', 'personas',
 # analyze surface. Their presence is the decision.
 _ANALYZE_EXTRA_KEYS = ('bind_subject', 'bind_cohort', 'overall_ranks',
                        'panel_confirm', 'bpiq_inputs', 'bpiq_confirm',
+                       'bpiq_wizard',
                        'jiq_inputs', 'jiq_confirm', 'fw_inputs',
                        'fw_confirm', 'aiq_inputs', 'aiq_confirm',
                        'twin_inputs', 'twin_confirm')

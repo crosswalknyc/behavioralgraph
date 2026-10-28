@@ -21,7 +21,7 @@ from __future__ import annotations
 
 # (label, tool_key, published_usd, shape)
 #   shape 'flat'    -> "{label} - {c}{price}"
-#   shape 'split'   -> "{label} - {c}{half} + {c}{half} Control for a {c}{price} total"
+#   shape 'split'   -> "{label} - {c}{half} without a control group, {c}{price} with one"
 #   shape 'daily'   -> "{label} - {c}{price} for the initial pull and an optional {c}{daily} x day to track per campaign"
 #   shape 'followup'-> "{label} - {c}{price} for the first ask on a subject, then {c}{followup} for each follow-up on the same subject"
 ROWS = (
@@ -87,7 +87,7 @@ def render(symbol='$', price_fn=None):
         p = _price(price_fn, key, dflt)
         if shape == 'split':
             half = p / 2.0
-            lines.append(f"{label} - {money(half, c)} + {money(half, c)} Control for a {money(p, c)} total")
+            lines.append(f"{label} - {money(half, c)} without a control group, {money(p, c)} with one")
         elif shape == 'followup':
             fu = _price(price_fn, FOLLOWUP_KEY, FOLLOWUP_DEFAULT)
             lines.append(f"{label} - {money(p, c)} for the first ask on a subject, then {money(fu, c)} for each "

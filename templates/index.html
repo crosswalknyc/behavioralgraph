@@ -85436,6 +85436,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             _pmPanelOffer = null;
             _pmBpiqCollect = false;
             _pmBpiqConfirm = null;
+            _pmBpiqWizard = null;
+            try { sessionStorage.removeItem('pmBpiqWiz'); } catch (_) {}
             _pmJiqCollect = false;
             _pmJiqConfirm = null;
             _pmTwinCollect = false;
@@ -85475,6 +85477,16 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         // a guided input step; the parsed confirm arms the charge chip.
         var _pmBpiqCollect = false;
         var _pmBpiqConfirm = null;
+        var _pmBpiqWizard = null;
+        try {
+            var _bwSaved = sessionStorage.getItem('pmBpiqWiz');
+            if (_bwSaved) {
+                _pmBpiqWizard = JSON.parse(_bwSaved);
+                if (_pmBpiqWizard && _pmBpiqWizard.step) {
+                    _pmBpiqCollect = true;
+                }
+            }
+        } catch (_) { _pmBpiqWizard = null; }
         // Digital Journey pull flow (2026-09-16): same shape.
         var _pmJiqCollect = false;
         var _pmJiqConfirm = null;
@@ -85778,9 +85790,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 !(extra && (extra.bind_subject || extra.overall_ranks ||
                             extra.panel_confirm ||
                             extra.bpiq_inputs || extra.bpiq_confirm ||
+                            extra.bpiq_wizard ||
                             extra.jiq_inputs || extra.jiq_confirm ||
                             extra.fw_inputs || extra.fw_confirm)) &&
-                !_pmBpiqIntent(text) && !_pmJiqIntent(text) &&
+                !_pmBpiqIntent(text) && !_pmBpiqCollect && !_pmBpiqConfirm &&
+                !_pmBpiqWizard && !_pmJiqIntent(text) &&
                 !_pmFwIntent(text)) {
                 // No profile open. An analyze-MODE ask (exec summary,
                 // personas, whitespace, new consumers, convergences,
@@ -85829,6 +85843,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 }
                 if (extra && extra.bpiq_confirm) {
                     _abody.bpiq_confirm = extra.bpiq_confirm;
+                }
+                if (extra && extra.bpiq_wizard) {
+                    _abody.bpiq_wizard = extra.bpiq_wizard;
+                } else if (_pmBpiqWizard) {
+                    _abody.bpiq_wizard = _pmBpiqWizard;
                 }
                 if (extra && extra.jiq_inputs) {
                     _abody.jiq_inputs = true;
@@ -85904,6 +85923,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     // profile instead, or declines.
                     _pmPanelOffer = data.panel_offer;
                 }
+                if (data.bpiq_wizard) {
+                    _pmBpiqWizard = data.bpiq_wizard;
+                    try { sessionStorage.setItem('pmBpiqWiz', JSON.stringify(_pmBpiqWizard)); } catch (_) {}
+                }
                 if (data.bpiq_collect) {
                     // Valuation input step armed: the next message
                     // carries the partnership details.
@@ -85917,6 +85940,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (data.bpiq_job_id) {
                     _pmBpiqCollect = false;
                     _pmBpiqConfirm = null;
+                    _pmBpiqWizard = null;
+                    try { sessionStorage.removeItem('pmBpiqWiz'); } catch (_) {}
                     try { _pmPollBpiqJob(data.bpiq_job_id); } catch (_) {}
                 }
                 if (data.jiq_collect) {
@@ -86732,35 +86757,45 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             if (_pmBpiqConfirm) {
                 var _bqLow = text.trim().toLowerCase();
                 if (_bqLow.indexOf('run the valuation') === 0 ||
+                    _bqLow.indexOf('accept') === 0 ||
                     /^(yes|yeah|yep|ok(ay)?|sure|run it|go ahead|do it)[.! ]*$/i.test(_bqLow)) {
                     var _bq = _pmBpiqConfirm;
                     _pmBpiqConfirm = null;
                     await _pmAnalyze(text, _pmCollectPageContext(), '',
-                        { bpiq_confirm: _bq });
+                        { bpiq_confirm: _bq, bpiq_wizard: _pmBpiqWizard || undefined });
+                    return;
+                }
+                if (/^decline[.! ]*$/i.test(_bqLow)) {
+                    _pmBpiqConfirm = null;
+                    await _pmAnalyze(text, _pmCollectPageContext(), '',
+                        { bpiq_inputs: true, bpiq_wizard: _pmBpiqWizard || undefined });
                     return;
                 }
                 if (/^(never ?mind|no( thanks?)?|not now|cancel( (that|it))?)[.! ]*$/i.test(_bqLow)) {
                     _pmBpiqConfirm = null;
+                    _pmBpiqWizard = null;
+                    try { sessionStorage.removeItem('pmBpiqWiz'); } catch (_) {}
                     synthChatPushTurn('agent',
-                        'No problem - nothing was charged. Ask me ' +
-                        'anything else when ready.');
+                        'No problem. Ask me anything else when ready.');
                     return;
                 }
                 // Anything else reads as edited inputs: re-parse.
                 _pmBpiqConfirm = null;
                 await _pmAnalyze(text, _pmCollectPageContext(), '',
-                    { bpiq_inputs: true });
+                    { bpiq_inputs: true, bpiq_wizard: _pmBpiqWizard || undefined });
                 return;
             }
             if (_pmBpiqCollect) {
                 _pmBpiqCollect = false;
                 if (/^(never ?mind|no( thanks?)?|not now|cancel( (that|it))?)[.! ]*$/i.test(text.trim())) {
+                    _pmBpiqWizard = null;
+                    try { sessionStorage.removeItem('pmBpiqWiz'); } catch (_) {}
                     synthChatPushTurn('agent',
                         'No problem. Ask me anything else when ready.');
                     return;
                 }
                 await _pmAnalyze(text, _pmCollectPageContext(), '',
-                    { bpiq_inputs: true });
+                    { bpiq_inputs: true, bpiq_wizard: _pmBpiqWizard || undefined });
                 return;
             }
             if (_pmBpiqIntent(text)) {

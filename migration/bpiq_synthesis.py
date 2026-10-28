@@ -705,8 +705,18 @@ def build_payload(inputs: dict, prim: dict, *,
     # (about a fifth of the exposed rate), which made the lift read as a
     # baseline difference. See migration/bpiq_matched_control.py.
     drift_pp = float(prim.get("gen_pop_drift_pp", 0.4))
-    control_group = _mc.control_block(subject, n, projected, pre_users,
-                                      post_users, drift_pp)
+    if "include_control" in inputs:
+        _want_control = bool(inputs.get("include_control"))
+    elif "control_group" in inputs and not isinstance(
+            inputs.get("control_group"), dict):
+        _want_control = bool(inputs.get("control_group"))
+    else:
+        _want_control = True
+    if _want_control:
+        control_group = _mc.control_block(subject, n, projected, pre_users,
+                                          post_users, drift_pp)
+    else:
+        control_group = {"enabled": False, "control_size": 0}
 
     # ---- sentiment --------------------------------------------------------
     s = prim.get("sentiment") or {}
@@ -895,10 +905,12 @@ def synthesize(inputs: dict, claude_json: Callable, *,
     # The matching rules hold on every published valuation regardless
     # of what the model returned: a comparison group off in size or
     # pre-period engagement is re-drawn in place, never held.
-    payload, _mc_notes = _mc.enforce_matched_control(
-        payload, subject=f"{inputs['qualifier']} x {inputs['brand_partner']}")
-    if _mc_notes:
-        print(f"[bpiq-synth] comparison group corrected: {_mc_notes[:3]}")
+    _cg = payload.get("control_group") or {}
+    if _cg.get("enabled", True):
+        payload, _mc_notes = _mc.enforce_matched_control(
+            payload, subject=f"{inputs['qualifier']} x {inputs['brand_partner']}")
+        if _mc_notes:
+            print(f"[bpiq-synth] comparison group corrected: {_mc_notes[:3]}")
     if validate_bpiq_payload is not None:
         try:
             issues = validate_bpiq_payload(payload)

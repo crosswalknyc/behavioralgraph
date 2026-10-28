@@ -38,6 +38,7 @@ from prometheus import audience_referent as _audience_referent   # a bare "this 
 from prometheus import subiq_library as _subiq_library   # a question across the Subscriber IQ library (2026-10-26)
 from prometheus import deck_sources as _deck_sources   # a deck of something already delivered or attached (2026-10-26)
 from prometheus import digital_twin_lane as _twin_lane   # Digital Twins IQ: intake, labs, Focus Group IQ, catalog, status, directions (2026-10-26)
+from prometheus import bpiq_wizard as _bpiq_wiz   # Brand Partnership Valuation wizard (2026-10-28)
 import io
 import hashlib
 import time
@@ -9206,6 +9207,17 @@ def _pm_intake_turn(flow, text, body, history, user, ppu, first):
     Order: the open screen can draft the whole brief; the ask itself is parsed (model, then rules); a prior
     deliverable it points at lends its shape; a complete brief confirms; a partial one asks only for what is
     missing; only an ask that names nothing gets the opener."""
+    if flow == 'brand_partnership':
+        uname = (str((user or {}).get('username') or (user or {}).get('email') or '').strip()
+                 if isinstance(user, dict) else str(user or '').strip())
+        hit = _bpiq_wiz.analyze_hook(
+            text, body, history, user, ppu, uname, globals(), first=first)
+        if hit is not None:
+            return hit
+        reply, chips = _bpiq_wiz.step_prompt(_bpiq_wiz.empty_draft())
+        return {'success': True, 'action': 'answer', 'reply': reply,
+                'followups': chips, 'offer_deck': False, 'deck_angle': None,
+                'bpiq_collect': True, 'bpiq_wizard': _bpiq_wiz.empty_draft()}
     kind, confirm_name, run_label, payload_key, collect_key, labels = _PM_INTAKE_UI[flow]
     parse_fn, complete_fn, required, ask_copy, fallback_fn, propose_fn = _pm_intake_flow_table()[flow]
     base = {'success': True, 'action': 'answer', 'offer_deck': False, 'deck_angle': None}
@@ -15256,50 +15268,18 @@ def _pm_analyze_core(user, body, text, history):
                             return jsonify(_tj)
         except Exception:
             traceback.print_exc()
-    # ---- Brand Partnership Valuation flow (Jenna 2026-09-16) ----
-    # Chip -> guided inputs -> confirm -> charge -> background build.
+    # ---- Brand Partnership Valuation wizard (Jenna 2026-10-28) ----
+    # Chip walks talent, campaign, dates, attribution, control, assets,
+    # then charge. The one-message dump is retired.
     _bpiq_user = (session.get('username') or user.get('username')
                   or '').strip()
     _twin_resp = _twin_lane.analyze_hook(text, body, history, user, _pm_ppu, _bpiq_user, globals())   # Digital Twins IQ (2026-10-26): intake, labs, Focus Group IQ, catalog, status, directions
     if _twin_resp is not None:
         return jsonify(_twin_resp)
-    _bpiq_confirm = body.get('bpiq_confirm') or _pm_pending_intake('pick', user, 'brand_partnership', text)
-    if isinstance(_bpiq_confirm, dict) and _bpiq_confirm.get(
-            'brand_partner'):
-        _subj = (f"{_bpiq_confirm.get('qualifier')} x "
-                 f"{_bpiq_confirm.get('brand_partner')}")
-        _bpiq_job = uuid.uuid4().hex[:12]
-        if not _H.consume_credit(
-                _bpiq_user,
-                description=f'Brand Partnership Valuation: {_subj}',
-                pull_type='Brand Partnership IQ',
-                credits_used=_PM_BPIQ_CREDITS,
-                job_id=_bpiq_job):
-            return jsonify({
-                'success': True, 'action': 'answer',
-                'reply': ('That valuation needs '
-                          + _pm_tool_price_label(
-                              'brand_partnership_iq', '$1000')
-                          + ' and your account cannot cover it '
-                          'right now. Add funds or ask your admin, '
-                          'and I will run it the moment you are set.'),
-                'followups': [], 'offer_deck': False,
-                'deck_angle': None})
-        _bpiq_extras = _pm_merge_extras(_pm_attrib_extras(), _pm_ppu)
-        _rr.start_engine_job('bpiq', _bpiq_job, _bpiq_user, _bpiq_confirm, _bpiq_extras, _pm_bpiq_status_write, _pm_run_bpiq_job)   # the queue, never a web thread (audit item 5)
-        return jsonify({
-            'success': True, 'action': 'answer',
-            'reply': (f'On it. Building the {_subj} valuation now - '
-                      'the research and the numbers take a few '
-                      'minutes. It lands in the Brand Partnership '
-                      'tab, and I will confirm here when it is '
-                      'ready.'),
-            'bpiq_job_id': _bpiq_job,
-            'followups': [], 'offer_deck': False, 'deck_angle': None})
-    if body.get('bpiq_inputs') and not _pm_intake_breakout(text):
-        return jsonify(_pm_intake_turn('brand_partnership', text, body, history, user, _pm_ppu, first=False))
-    if _pm_bpiq_intent(text) or _pm_read_intent(body, 'valuation') or _intents.bpiq_reading(body):
-        return jsonify(_pm_intake_turn('brand_partnership', text, body, history, user, _pm_ppu, first=True))
+    _bpiq_resp = _bpiq_wiz.analyze_hook(
+        text, body, history, user, _pm_ppu, _bpiq_user, globals())
+    if _bpiq_resp is not None:
+        return jsonify(_bpiq_resp)
     # ---- Attribution IQ tracking flow (Jenna 2026-09-22) ----
     _aiq_confirm = body.get('aiq_confirm') or _pm_pending_intake('pick', user, 'attribution', text)
     if isinstance(_aiq_confirm, dict) \
@@ -16686,10 +16666,9 @@ def _pm_bpiq_confirm_reply(parsed):
         f"- Baseline window: {pre}\n"
         f"- Post window: {post}\n"
         f"- Audience: {aud}\n\n"
-        f"It prices at "
-        f"{_pm_tool_price_label('brand_partnership_iq', '$1000')}"
-        f" and lands in the Brand Partnership tab when finished. "
-        f"Run it?")
+        f"It prices at $500 without a control group, or $1,000 "
+        f"with one, and lands in the Brand Partnership tab when "
+        f"finished.")
 
 
 def _pm_run_bpiq_job(job_id, username, inputs, extras):
@@ -16797,8 +16776,21 @@ def _pm_run_bpiq_job(job_id, username, inputs, extras):
             from prometheus.delivered import on_done as _on_done
             _val = payload.get('valuation') or {}
             _tbv = _val.get('total_brand_value')
+            _em_lead = ''
+            try:
+                _em_subj, _em_body = _bpiq_wiz.email_copy({
+                    'talent': inputs.get('qualifier'),
+                    'campaign': (inputs.get('campaign')
+                                 or inputs.get('brand_partner')),
+                    'qualifier': inputs.get('qualifier'),
+                    'brand_partner': inputs.get('brand_partner'),
+                })
+                _em_lead = (_em_body.split('\n\n') or [''])[0]
+            except Exception:
+                _em_lead = ''
             _on_done('bpiq', username=username, subject=str(payload.get('project_name') or ''), s3_key=bare_key, payload=payload,
                      host=_H, s3_client=_H.s3_client, job_id=job_id,
+                     ready_message=_em_lead, intro=_em_lead,
                      figures=([{'name': 'Total brand value', 'value': _tbv, 'unit': 'usd', 'definition': 'Brand Partnership IQ valuation'}] if _tbv else []),
                      facts=([('Total brand value', f"${float(_tbv):,.2f}")] if _tbv else []))
         except Exception as _dl_err:

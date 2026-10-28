@@ -141,6 +141,8 @@ DEFAULT_PRICING = {
         # Prometheus / dashboard. Kartel keeps $925 via company
         # tool_price_overrides. Digital Journey is $500 (2026-09-18).
         "brand_partnership_iq": 1000.0,
+        # 2026-10-28: valuation without a control group.
+        "brand_partnership_iq_base": 500.0,
         "journey_iq": 500.0,
         # 2026-09-29: Flywheel report is $500 per pull.
         "flywheel_iq": 500.0,
@@ -1530,6 +1532,7 @@ _PULL_TYPE_TO_TOOL_KEY = {
     # ---- Impact / Brand ----
     "impact iq":                     "impact_iq",
     "brand partnership iq":          "brand_partnership_iq",
+    "brand partnership iq base":     "brand_partnership_iq_base",
     "brand partnership valuation":   "brand_partnership_iq",
     "brand tracking iq":             "brand_tracking_iq",
     # ---- Talent Fit ----

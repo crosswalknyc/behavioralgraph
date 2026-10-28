@@ -91,6 +91,22 @@ def pick(s3, bucket, user, flow, text):
     return payload if isinstance(payload, dict) else None
 
 
+def peek(s3, bucket, user, flow):
+    """The stashed brief for `flow` without consuming it. None when
+    nothing is waiting or the stash is older than a day."""
+    if not user or not flow:
+        return None
+    doc = _load(s3, bucket, user)
+    flows = doc.get('flows') if isinstance(doc.get('flows'), dict) else {}
+    hit = flows.get(str(flow))
+    if not isinstance(hit, dict):
+        return None
+    if time.time() - float(hit.get('ts') or 0) > TTL_S:
+        return None
+    payload = hit.get('payload')
+    return payload if isinstance(payload, dict) else None
+
+
 def clear(s3, bucket, user, flow=None):
     doc = _load(s3, bucket, user)
     flows = doc.get('flows') if isinstance(doc.get('flows'), dict) else {}
