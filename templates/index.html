@@ -52693,11 +52693,19 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 return '<div class="dtw-fg-msg">' + face(seat, idx, 36) + '<div><div class="dtw-fg-nm"><b' + open + '>' + esc(titleCase(seat.name || a.name || '')) + '</b><span class="ag">' + esc(seat.age != null ? seat.age : '') + (seat.city ? ', ' + esc(titleCase(seat.city)) : '') + (seat.segment && multiSeg(roster) ? ', ' + esc(seat.segment) : '') + '</span>' + tag + '</div>' + (a.line ? '<div class="dtw-fg-tx">' + esc(a.line) + '</div>' : '') + '</div></div>';
             }
             function answersHtml(q, roster) {
-                var rk = rankMap(q), ans = (q.answers || []).slice().sort(function(a, b) { return Number(a.seat) - Number(b.seat); }), out = '';
-                var fold = ans.length > 3 && !S.fg.earlier[q.id], shown = fold ? ans.slice(ans.length - 3) : ans;
-                if (fold) out += '<button type="button" class="dtw-fg-earlier" onclick="dtwFgEarlier(\'' + esc(jsq(q.id)) + '\', true)">Show ' + (ans.length - 3) + ' earlier ' + (ans.length - 3 === 1 ? 'answer' : 'answers') + '</button>';
-                else if (ans.length > 3) out += '<button type="button" class="dtw-fg-earlier" onclick="dtwFgEarlier(\'' + esc(jsq(q.id)) + '\', false)">Hide ' + (ans.length - 3) + ' earlier ' + (ans.length - 3 === 1 ? 'answer' : 'answers') + '</button>';
-                return out + shown.map(function(a) { return answerMsg(q, rk, a, roster); }).join('');
+                var rk = rankMap(q), bySeat = (q.answers || []).slice().sort(function(a, b) { return Number(a.seat) - Number(b.seat); }), ans = [], used = {};
+                // the voices the read picked lead, in the same order as the tally's The voices., then the rest by seat
+                (q.voices || []).forEach(function(v) {
+                    var seat = v.seat != null ? Number(v.seat) : Number((seatFor(v, roster) || {}).seat);
+                    var a = bySeat.filter(function(x) { return Number(x.seat) === seat; })[0];
+                    if (a && !used[seat]) { used[seat] = 1; ans.push(a); }
+                });
+                bySeat.forEach(function(a) { if (!used[Number(a.seat)]) ans.push(a); });
+                var rest = ans.length - 3, fold = rest > 0 && !S.fg.earlier[q.id], shown = fold ? ans.slice(0, 3) : ans;
+                var out = shown.map(function(a) { return answerMsg(q, rk, a, roster); }).join('');
+                if (fold) out += '<button type="button" class="dtw-fg-earlier" onclick="dtwFgEarlier(\'' + esc(jsq(q.id)) + '\', true)">Show ' + rest + ' more ' + (rest === 1 ? 'answer' : 'answers') + '</button>';
+                else if (rest > 0) out += '<button type="button" class="dtw-fg-earlier" onclick="dtwFgEarlier(\'' + esc(jsq(q.id)) + '\', false)">Hide ' + rest + ' ' + (rest === 1 ? 'answer' : 'answers') + '</button>';
+                return out;
             }
             function probesHtml(q) {
                 var seen = {}, chips = [];
