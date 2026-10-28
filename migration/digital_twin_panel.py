@@ -47,6 +47,7 @@ _NAMES_F = ('Maya', 'Priya', 'Dana', 'Elena', 'Jasmine', 'Nora', 'Carmen', 'Leah
             'Hannah', 'Tessa', 'Monica', 'Grace', 'Aaliyah', 'Brooke', 'Lauren', 'Renee', 'Isabel', 'Jordan', 'Camila', 'Erin', 'Yara', 'Nia')
 _NAMES_M = ('Marcus', 'Diego', 'Ethan', 'Andre', 'Caleb', 'Omar', 'Tyler', 'Luis', 'Jamal', 'Noah', 'Victor', 'Sean', 'Raj', 'Miles',
             'Owen', 'Derek', 'Mateo', 'Isaiah', 'Kenji', 'Brandon', 'Troy', 'Elijah', 'Gabriel', 'Reed', 'Hugo', 'Devin', 'Aaron', 'Cole')
+_NAMES_X = ('Jordan', 'Dana', 'Avery', 'Quinn', 'Riley', 'Cameron', 'Reese', 'Skyler', 'Rowan', 'Sage', 'Finley', 'Hayden')
 _CITIES = ('Austin', 'Atlanta', 'Chicago', 'Phoenix', 'Denver', 'Seattle', 'Nashville', 'Dallas', 'Charlotte', 'Tampa', 'Portland',
            'Columbus', 'Minneapolis', 'San Diego', 'Philadelphia', 'Houston', 'Sacramento', 'Kansas City', 'Raleigh', 'Pittsburgh',
            'Orlando', 'Las Vegas', 'Boston', 'Baltimore', 'Detroit', 'Salt Lake City', 'Indianapolis', 'Milwaukee', 'St. Louis', 'Richmond')
@@ -154,7 +155,80 @@ def _age_pred(rng):
 
 
 def _gender_pred(g):
-    return (lambda l: l.lower().startswith(('f', 'w'))) if g == 'F' else (lambda l: l.lower().startswith('m'))
+    if g == 'F':
+        return lambda l: bool(re.search(r"\b(female|woman|women|trans female|trans woman)\b", l, re.I) or l.lower().startswith(('f', 'w')))
+    if g == 'M':
+        return lambda l: bool(re.search(r"\b(male|man|men|trans male|trans man)\b", l, re.I) or (l.lower().startswith('m') and 'non' not in l.lower()))
+    return lambda l: bool(re.search(r"non-?binary|\bnb\b", l, re.I))
+
+
+def _gender_code(label: str) -> str:
+    k = str(label or '').lower()
+    if re.search(r"non-?binary|\bnb\b", k):
+        return 'X'
+    if 'trans female' in k or 'trans woman' in k:
+        return 'F'
+    if 'trans male' in k or 'trans man' in k:
+        return 'M'
+    if k.startswith(('f', 'w')) or 'female' in k or 'woman' in k or k == 'women':
+        return 'F'
+    if k.startswith('m') or 'male' in k or k in ('men', 'man'):
+        return 'M'
+    return 'F'
+
+
+def _is_lgbtq(label: str) -> bool:
+    return bool(re.search(r"lgbtq|lesbian|gay|queer|bisexual", str(label or ''), re.I))
+
+
+def quota_labels(rows: list, n: int) -> list:
+    """n labels from the rows' shares (largest remainder). Prefer-not-to-say
+    only keeps a seat when the remainder gives it one. The room's gender
+    and orientation match the profile, not a coin flip per seat."""
+    rows = [r for r in (rows or []) if isinstance(r, dict) and float(r.get('pct') or 0) > 0 and str(r.get('label') or '').strip()]
+    if n <= 0:
+        return []
+    if not rows:
+        return [''] * n
+    soft = [r for r in rows if 'prefer' not in str(r.get('label') or '').lower()]
+    use = soft or rows
+    tot = sum(float(r.get('pct') or 0) for r in use) or 100.0
+    raw = [(str(r['label']), n * float(r['pct']) / tot) for r in use]
+    counts = {lab: int(v) for lab, v in raw}
+    left = n - sum(counts.values())
+    for lab, _v in sorted(raw, key=lambda x: -(x[1] - int(x[1]))):
+        if left <= 0:
+            break
+        counts[lab] += 1
+        left -= 1
+    out = []
+    for lab, _v in raw:
+        out.extend([lab] * counts.get(lab, 0))
+    while len(out) < n:
+        out.append(use[0]['label'])
+    return out[:n]
+
+
+def _spread(labels: list, seed: str, salt: str) -> list:
+    keyed = sorted(enumerate(labels), key=lambda iv: (unit('spread', seed, salt, iv[0]), iv[0]))
+    return [lab for _i, lab in keyed]
+
+
+def _pair_orientation(genders: list, orients: list) -> list:
+    """LGBTQ+ seats go to women first when the profile is female-skewed,
+    so the room does not seat gay men in place of the lesbian share."""
+    n = len(genders)
+    out = [''] * n
+    queer = [o for o in orients if _is_lgbtq(o)]
+    rest = [o for o in orients if not _is_lgbtq(o)]
+    women = [i for i, g in enumerate(genders) if _gender_code(g) == 'F']
+    others = [i for i, g in enumerate(genders) if _gender_code(g) != 'F']
+    for i in women + others:
+        if queer:
+            out[i] = queer.pop(0)
+        elif rest:
+            out[i] = rest.pop(0)
+    return out
 
 
 def _segment_share(t, f: dict) -> float:
@@ -298,28 +372,40 @@ def build_group(twins: list, segments: Optional[list] = None, in_room: int = DEF
         s['seats'] = n
         t = by_key.get(s['twin']) or {}
         f = s['filter'] or {}
+        gender_labs = ([('Female' if f.get('gender') == 'F' else 'Male')] * n) if f.get('gender') in ('F', 'M') else quota_labels(_demo(t, 'gender'), n)
+        orient_labs = _pair_orientation(gender_labs, quota_labels(_demo(t, 'sexual_orientation'), n))
+        edu_labs = _spread(quota_labels(_demo(t, 'education'), n), seed, s['label'] + '|edu')
+        inc_labs = _spread(quota_labels(_demo(t, 'income'), n), seed, s['label'] + '|inc')
+        eth_labs = _spread(quota_labels(_demo(t, 'ethnicity'), n), seed, s['label'] + '|eth')
+        rel_labs = _spread(quota_labels(_demo(t, 'relationship'), n), seed, s['label'] + '|rel')
+        par_labs = _spread(quota_labels(_demo(t, 'parental'), n), seed, s['label'] + '|par')
+        occ_labs = _spread(quota_labels(_demo(t, 'occupation'), n), seed, s['label'] + '|occ')
+        age_labs = quota_labels(_demo(t, 'age'), n)
         for j in range(n):
             seat_no += 1
-            u = unit('seat', seed, s['label'], j)
-            g = f.get('gender')
-            if not g:
-                fem = _share_of(t, 'gender', _gender_pred('F'))
-                g = 'F' if u < fem else 'M'
-            bank = _NAMES_F if g == 'F' else _NAMES_M
+            g = f.get('gender') if f.get('gender') in ('F', 'M') else _gender_code(gender_labs[j] if j < len(gender_labs) else '')
+            bank = _NAMES_F if g == 'F' else (_NAMES_X if g == 'X' else _NAMES_M)
             name = bank[int(unit('name', seed, s['label'], j) * len(bank))]
             if f.get('age'):
                 lo, hi = f['age'] if isinstance(f['age'], (list, tuple)) else (18, 54)
                 age = int(lo + (hi - lo) * unit('age', seed, s['label'], j))
             else:
-                ages = _demo(t, 'age')
-                age = _draw_age(ages, unit('age', seed, s['label'], j))
+                age = _age_in_bucket(age_labs[j] if j < len(age_labs) else '', unit('age', seed, s['label'], j))
             city = f.get('city') or _draw_city(t, unit('city', seed, s['label'], j))
-            roster.append({'seat': seat_no, 'name': name, 'age': age, 'city': city, 'gender': g, 'segment': s['label'], 'twin': s['twin']})
+            roster.append({'seat': seat_no, 'name': name, 'age': age, 'city': city, 'gender': g, 'segment': s['label'], 'twin': s['twin'],
+                           'gender_label': gender_labs[j] if j < len(gender_labs) else '',
+                           'orientation': orient_labs[j] if j < len(orient_labs) else '',
+                           'education': edu_labs[j] if j < len(edu_labs) else '',
+                           'income': inc_labs[j] if j < len(inc_labs) else '',
+                           'ethnicity': eth_labs[j] if j < len(eth_labs) else '',
+                           'relationship': rel_labs[j] if j < len(rel_labs) else '',
+                           'parental': par_labs[j] if j < len(par_labs) else '',
+                           'occupation': occ_labs[j] if j < len(occ_labs) else ''})
     # no two seats share a name
     seen = set()
     for r in roster:
         base = r['name']
-        bank = _NAMES_F if r['gender'] == 'F' else _NAMES_M
+        bank = _NAMES_F if r['gender'] == 'F' else (_NAMES_X if r['gender'] == 'X' else _NAMES_M)
         k = 0
         while r['name'] in seen:
             k += 1
@@ -330,6 +416,53 @@ def build_group(twins: list, segments: Optional[list] = None, in_room: int = DEF
         seen.add(r['name'])
     return {'twins': [_twin_key(t) for t in twins], 'segments': [{k: v for k, v in s.items()} for s in segs],
             'size_people': total_people, 'in_room': in_room, 'roster': roster}
+
+
+def _age_in_bucket(label, u):
+    lab = str(label or '')
+    for key, lo, hi in _AGE_BUCKETS:
+        if lab.startswith(key) or lab.startswith(key[:2]) or (key.rstrip('+') and key.rstrip('+') in lab):
+            return lo + int((hi - lo) * (u if 0 <= u < 1 else ((u * 97) % 1.0)))
+    return _draw_age([], u)
+
+
+def rebuild_group(session: dict, twins: list, seed: str = '') -> dict:
+    """Reseat an empty room from the twins' current identity. Used when
+    the room was seated before the profile's mix landed on the twin."""
+    if not isinstance(session, dict):
+        return session
+    if session.get('questions'):
+        return session
+    g = session.get('group') or {}
+    session['group'] = build_group(twins, segments=g.get('segments') or None,
+                                   in_room=int(g.get('in_room') or DEFAULT_IN_ROOM),
+                                   seed=seed or str(session.get('id') or ''))
+    for seat in session['group'].get('roster') or []:
+        seat.pop('persona', None)
+        seat['memory'] = []
+    return session
+
+
+def needs_reseat(session: dict, twins: list) -> bool:
+    """True when an empty room's seats do not carry the profile mix
+    (no orientation / education on the roster, or the gender split is
+    off the file by two or more seats)."""
+    if not isinstance(session, dict) or session.get('questions'):
+        return False
+    roster = ((session.get('group') or {}).get('roster') or [])
+    if not roster:
+        return True
+    if not any(r.get('orientation') or r.get('education') or r.get('occupation') for r in roster):
+        return True
+    t0 = twins[0] if twins else {}
+    demo_g = _demo(t0, 'gender')
+    if demo_g:
+        want = quota_labels(demo_g, len(roster))
+        want_f = sum(1 for lab in want if _gender_code(lab) == 'F')
+        have_f = sum(1 for r in roster if str(r.get('gender') or '') == 'F')
+        if abs(want_f - have_f) >= 2:
+            return True
+    return False
 
 
 def _draw_age(ages, u):
@@ -1096,7 +1229,8 @@ def session_csv(session: dict) -> str:
     return buf.getvalue()
 
 
-__all__ = ['open_session', 'ask', 'build_group', 'classify_question', 'distribution', 'propensity', 'parse_segment', 'fallback_voices', 'voice_record',
+__all__ = ['open_session', 'ask', 'build_group', 'rebuild_group', 'needs_reseat', 'quota_labels',
+           'classify_question', 'distribution', 'propensity', 'parse_segment', 'fallback_voices', 'voice_record',
            'with_time_budget', 'session_lines', 'session_csv', 'one_line_read', 'topic_of', 'strip_twin_words', 'recompute_group_sizes',
            'segment_labels', 'find_reusable_session', 'charge_due', 'mark_paid', 'deleted_room_key', 'can_delete_room', 'remove_session', 'delete_room',
            'clean_room_title', 'rename_session',

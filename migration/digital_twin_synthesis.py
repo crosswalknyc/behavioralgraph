@@ -63,7 +63,9 @@ _FORMAT_WORDS = (
     ('brand', re.compile(r"\b(brand|retailer|shoppers|buyers|customers|members)\b", re.I)),
 )
 _DEMO_COLS = {'GENDER': 'gender', 'AGE': 'age', 'ETHNICITY': 'ethnicity', 'INCOME': 'income', 'EDUCATION': 'education',
-              'PARENTAL_STATUS': 'parental', 'PARENTAL STATUS': 'parental', 'RELATIONSHIP': 'relationship'}
+              'PARENTAL_STATUS': 'parental', 'PARENTAL STATUS': 'parental', 'RELATIONSHIP': 'relationship',
+              'SEXUAL_ORIENTATION': 'sexual_orientation', 'SEXUAL ORIENTATION': 'sexual_orientation',
+              'OCCUPATION': 'occupation'}
 _PLATFORM_COLS = ('STREAMING/PLATFORM', 'STREAMING VIDEO', 'STREAMING MUSIC', 'SOCIAL MEDIA', 'GAMES', 'PODCAST', 'VMVPD/FAST', 'VIRTUAL MVPD/FAST', 'FAST PLATFORM', 'APP/PLATFORM', 'APP/PLATFORM USAGE')
 _PURCHASE_COLS = ('MOST PURCHASED BRANDS', 'WHERE THEY SHOP', 'QSR', 'RETAILERS')
 _MEDIA_COLS = ('MEDIA', 'BROADCAST/CABLE', 'PODCAST')
@@ -203,6 +205,7 @@ def _bp(r):
 
 
 _CASE_FIX = {'youtube': 'YouTube', 'tiktok': 'TikTok', 'icloud': 'iCloud', 'imdb': 'IMDb', 'usps': 'USPS', 'hbo max': 'HBO Max', 'espn': 'ESPN',
+             'lgbtq+': 'LGBTQ+', 'lgbtq': 'LGBTQ+',
              'cnn': 'CNN', 'nbc': 'NBC', 'cbs': 'CBS', 'abc': 'ABC', 'fx now': 'FX Now', 'amc+': 'AMC+', 'bet+': 'BET+', 'nfl': 'NFL', 'nba': 'NBA',
              'mlb': 'MLB', 'ny times games': 'NY Times Games', 'linkedin': 'LinkedIn', 'paypal': 'PayPal', 'ebay': 'eBay', 'ulta beauty': 'Ulta Beauty',
              'lowes': "Lowe's", 'home depot': 'Home Depot', 'cvs': 'CVS', 'at&t': 'AT&T', 'dmv': 'DMV', 'irs': 'IRS', 'npr': 'NPR', 'pbs': 'PBS',
@@ -229,6 +232,107 @@ def pretty_label(label: str) -> str:
                 words.append(w[:1] + w[1:].lower())
         return ' '.join(words)
     return s
+
+
+def hydrate_identity_from_profile(twin: dict, s3) -> bool:
+    """Copy every demographic column from the twin's Total Universe onto
+    the identity (orientation, occupation, education, the rest). True
+    when the identity changed. Rooms then seat from the file, not a
+    thinner copy of it."""
+    if not isinstance(twin, dict) or s3 is None:
+        return False
+    key = str((twin.get('meta') or {}).get('profile_key') or '').strip()
+    if not key:
+        return False
+    rows = _load_csv_rows(s3, key)
+    if not rows:
+        return False
+    fresh = profile_identity(rows, str((twin.get('meta') or {}).get('subject') or ''))
+    ident = twin.setdefault('identity', {})
+    demo = ident.setdefault('demographics', {})
+    changed = False
+    for cat, rows_c in (fresh.get('demographics') or {}).items():
+        if not rows_c:
+            continue
+        cur = demo.get(cat) or []
+        if not cur or {str(r.get('label')) for r in cur} != {str(r.get('label')) for r in rows_c}:
+            demo[cat] = rows_c
+            changed = True
+        elif cat in ('sexual_orientation', 'occupation') and not cur:
+            demo[cat] = rows_c
+            changed = True
+    if changed:
+        ident['read'] = identity_read(ident, twin.get('meta') or {}, {})
+        if fresh.get('avid_share_pct') and not (twin.get('meta') or {}).get('avid_share_pct'):
+            twin.setdefault('meta', {})['avid_share_pct'] = fresh['avid_share_pct']
+    return changed
+
+
+def queue_profile_for_twin(subject: str, window: Optional[dict] = None, *, s3=None, created_by: str = '',
+                           progress: Optional[Callable] = None, wait_s: int = 3000) -> str:
+    """Pull a Total Universe for the subject through the profile pipeline
+    and return its S3 key. Empty string when the queue is off or the
+    wait runs out. Hermetic tests never call this (they inject
+    ``pull_profile``)."""
+    import os
+    if os.environ.get('REGRESSION_TEST_MODE') == '1' or os.environ.get('DIGITAL_TWIN_PROFILE_PULL') == '0':
+        return ''
+    url = str(os.environ.get('SYNTH_QUEUE_URL') or '').rstrip('/')
+    secret = str(os.environ.get('SYNTH_QUEUE_SECRET') or '')
+    if not url or not secret:
+        return ''
+    name = ' '.join(str(subject or '').split()).strip()[:140]
+    if not name:
+        return ''
+    stem = re.sub(r"[^A-Za-z0-9]+", '_', name).strip('_')[:80] or 'Subject'
+    window = window or default_window()
+    # size: the worker's own guards re-derive from the researched anchor;
+    # a messy placeholder here only lets the job start
+    raw = messy_count(name, 'subject_raw_tu', 48_317)
+    spec = {'name': name, 'file_stem': stem, 'brand_category': 'ACTOR',
+            'subject_raw_tu': raw, 'subject_raw_avid': max(3, int(raw * 0.22)),
+            'universe_anchor': int(raw * 32.99), 'engaged_share': 1.0,
+            'anchor_source': f"US people who engaged with {name} in the window",
+            'date_range': f"{window.get('start')} TO {window.get('end')}"}
+    body = {'decision': 'new_build', 'run_avid': True, 'user_email': created_by or 'prometheus',
+            'requested_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()), 'spec': spec}
+    try:
+        import requests
+        if callable(progress):
+            progress('pulling the audience first')
+        resp = requests.post(f"{url}/synth/queue", json=body, timeout=30,
+                             headers={'X-Synth-Auth': secret, 'Content-Type': 'application/json'})
+        if resp.status_code != 200:
+            print(f"[twin] profile queue returned {resp.status_code}")
+            return ''
+        run_id = str((resp.json() or {}).get('run_id') or '')
+    except Exception as e:
+        print(f"[twin] profile queue failed: {e}")
+        return ''
+    if not run_id:
+        return ''
+    deadline = time.time() + max(60, int(wait_s or 3000))
+    while time.time() < deadline:
+        time.sleep(12)
+        try:
+            st = requests.get(f"{url}/synth/status/{run_id}", timeout=15,
+                              headers={'X-Synth-Auth': secret})
+            doc = st.json() if st.status_code == 200 else {}
+        except Exception:
+            doc = {}
+        key = str(doc.get('tu_key') or '')
+        if key:
+            return key
+        if str(doc.get('status') or '') in ('error', 'failed', 'cancelled'):
+            print(f"[twin] profile pull stopped: {doc.get('status')}")
+            return ''
+        found = find_profile_key(s3, name) if s3 is not None else ''
+        if found:
+            return found
+        if callable(progress):
+            progress('pulling the audience first')
+    print(f"[twin] profile pull timed out for {name}")
+    return find_profile_key(s3, name) if s3 is not None else ''
 
 
 def find_profile_key(s3, subject: str, anchors: Optional[dict] = None) -> str:
@@ -673,7 +777,7 @@ def research_demographics(research: dict, seed: str) -> dict:
     if not isinstance(raw, dict):
         return {}
     out = {}
-    for cat in ('gender', 'age', 'income', 'ethnicity'):
+    for cat in ('gender', 'age', 'income', 'ethnicity', 'education', 'sexual_orientation', 'occupation', 'relationship', 'parental'):
         block = raw.get(cat)
         rows = []
         if isinstance(block, dict):
@@ -780,6 +884,11 @@ def _demo_prior(fmt: str, seed: str) -> dict:
         'education': [('High school or less', 36.2), ('Some college', 28.4), ('College graduate', 23.9), ('Graduate degree', 11.5)],
         'parental': [('Parent of children under 18', 31.4), ('Not a parent of children under 18', 68.6)],
         'relationship': [('Married or partnered', 56.3), ('Single', 43.7)],
+        'sexual_orientation': [('Straight / Heterosexual', 88.4), ('LGBTQ+', 11.6)],
+        'occupation': [('Management, Business & Professional', 28.1), ('Sales & Retail', 14.2), ('Service & Hospitality', 13.4),
+                       ('Healthcare Practitioners or Support', 11.8), ('Education or Library Services', 8.6),
+                       ('Science, Technology & Technical Professions', 8.1), ('Skilled Trades/Construction or Maintenance', 7.4),
+                       ('Transportation & Logistics', 4.6), ('Manufacturing & Production', 3.8)],
     }
     tilt = {'creator': {'age': {'18-24': 1.7, '25-34': 1.3, '55-64': 0.6, '65+': 0.4}, 'gender': {'Men': 1.15}},
             'game': {'age': {'18-24': 1.6, '25-34': 1.4, '65+': 0.4}, 'gender': {'Men': 1.3}},
@@ -878,6 +987,14 @@ def identity_read(identity: dict, meta: dict, gen_pop: dict) -> str:
         parts.append(f"{pct1(top_g['pct'])}% {str(top_g['label']).lower()}")
     if top_a:
         parts.append(f"the biggest age group is {top_a['label']} at {pct1(top_a['pct'])}%")
+    so = demo.get('sexual_orientation') or []
+    queer = next((r for r in so if re.search(r"lgbtq|lesbian|gay|queer", str(r.get('label') or ''), re.I)), None)
+    if queer and float(queer.get('pct') or 0) >= 18:
+        parts.append(f"{pct1(queer['pct'])}% LGBTQ+")
+    edu = demo.get('education') or []
+    college = sum(float(r.get('pct') or 0) for r in edu if re.search(r"bachelor|graduate|college graduate|professional", str(r.get('label') or ''), re.I))
+    if college >= 45:
+        parts.append(f"{pct1(college)}% college-educated")
     line = f"The {meta.get('name') or meta.get('subject')} audience is {human_people(meta.get('size_us'))} people in the US"
     if parts:
         line += ': ' + ', '.join(parts)
@@ -1075,6 +1192,19 @@ def build_twin(inputs: dict, claude_json: Optional[Callable] = None, *, tools=No
     else:
         corpus = corpus_anchors(subject, window, s3=s3, profile_key=str(inputs.get('profile_key') or ''))
         timings['corpus_s'] = round(time.time() - t0, 2)
+        if not (corpus.get('profile') or {}).get('size_us'):
+            # a named subject always sits on a Total Universe: pull one
+            # through the pipeline when none is on file (Jenna 2026-10-27)
+            pull = inputs.get('pull_profile')
+            if callable(pull):
+                try:
+                    new_key = pull(subject, window) or ''
+                except Exception as e:
+                    print(f"[twin] profile pull failed: {e}")
+                    new_key = ''
+                if new_key:
+                    corpus = corpus_anchors(subject, window, s3=s3, profile_key=str(new_key))
+                    timings['corpus_s'] = round(time.time() - t0, 2)
         research = research_anchors(subject, kind, purpose, window, claude_json if with_research else None, tools=tools, s3=s3) if with_research else {}
         timings['research_s'] = round(time.time() - t0 - timings['corpus_s'], 2)
     prof = corpus.get('profile') or {}
@@ -1322,7 +1452,8 @@ def run_scenario(twin: dict, scenario: dict, *, claude_json: Optional[Callable] 
 
 
 __all__ = ['build_twin', 'persist', 'save_twin', 'load_twin', 'append_run', 'run_scenario', 'update_index', 'index_entry', 'strip_ip_lifetime_value', 'corpus_anchors',
-           'research_anchors', 'profile_identity', 'find_profile_key', 'is_ip_related', 'guess_format', 'scrub_text', 'scrub_payload',
+           'research_anchors', 'profile_identity', 'find_profile_key', 'hydrate_identity_from_profile', 'queue_profile_for_twin',
+           'is_ip_related', 'guess_format', 'scrub_text', 'scrub_payload',
            'demographic_spec', 'demographic_name', 'demographic_identity', 'research_demographics', 'DEMO_PICK_CATS', 'US_POP',
            'standing_questions', 'track_record', 'write_read', 'default_window', 'S3_PREFIX', 'S3_INDEX_KEY', 'S3_BUCKET', 'RESEARCH_PREFIX',
            'RESEARCH_SYSTEM_PROMPT', 'READ_SYSTEM_PROMPT', 'BANNED_WORDS', 'PRODUCT']

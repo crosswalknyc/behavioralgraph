@@ -146,7 +146,11 @@ class Build(unittest.TestCase):
         s3 = _s3()
         rows = [('BRAND INPUT', 'Gilmore Girls', '100.0', '193413', '6380694'), ('SAMPLE SIZE', '2025-10-26 to 2026-10-26', '100.0', '193413', '6380694'),
                 ('BRAND CATEGORY', 'SERIES - DRAMA', '', '', ''), ('SUBJECT', 'Gilmore Girls', '100', '', ''), ('GENDER', 'Female', '71.2134', '', ''), ('GENDER', 'Male', '28.7866', '', ''),
-                ('AGE', '25-34', '60.0', '', ''), ('AGE', '35-44', '40.0', '', ''), ('STREAMING/PLATFORM', 'Hulu', '88.3', '', '')]
+                ('AGE', '25-34', '60.0', '', ''), ('AGE', '35-44', '40.0', '', ''),
+                ('SEXUAL_ORIENTATION', 'Straight / Heterosexual', '62.3226', '', ''), ('SEXUAL_ORIENTATION', 'LGBTQ+', '33.3786', '', ''),
+                ('EDUCATION', 'Bachelors Degree', '33.4009', '', ''), ('EDUCATION', 'Graduate or Professional Degree', '25.5933', '', ''),
+                ('OCCUPATION', 'Management/Business/Professional', '36.0779', '', ''),
+                ('STREAMING/PLATFORM', 'Hulu', '88.3', '', '')]
         s3.put_object(Bucket='b', Key='Picked_Profile_01_01_2026_00_00.csv', Body=_csv(rows))
         twin = SYN.build_twin({'subject': 'Something Else Entirely', 'source': 'profile', 'profile_key': 'Picked_Profile_01_01_2026_00_00.csv', 'panelists': 12}, None, s3=s3, with_research=False)
         m = twin['meta']
@@ -154,7 +158,35 @@ class Build(unittest.TestCase):
         fem = next(r['pct'] for r in twin['identity']['demographics']['gender'] if r['label'].lower().startswith('f'))
         self.assertLess(abs(fem - 71.2), 1.0)
         self.assertEqual(m['size_us'], 6380694)
+        so = twin['identity']['demographics']['sexual_orientation']
+        self.assertTrue(any('LGBTQ' in str(r['label']) for r in so))
+        self.assertIn('occupation', twin['identity']['demographics'])
+        self.assertIn('LGBTQ+', twin['identity']['read'])
+        self.assertIn('college-educated', twin['identity']['read'])
         self.assertNotIn('ip_lifetime_value', twin)
+
+    def test_named_subject_without_a_profile_pulls_one(self):
+        s3 = _s3()
+        key = 'Jennifer_Beals_06_17_2026_17_09.csv'
+        rows = [('BRAND INPUT', 'Jennifer Beals', '100.0', '283092', '9339205'),
+                ('SAMPLE SIZE', '2025-10-28 to 2026-10-28', '100.0', '283092', '9339205'),
+                ('GENDER', 'Female', '72.3516', '', ''), ('GENDER', 'Male', '24.0352', '', ''),
+                ('SEXUAL_ORIENTATION', 'LGBTQ+', '33.3786', '', ''),
+                ('SEXUAL_ORIENTATION', 'Straight / Heterosexual', '62.3226', '', ''),
+                ('EDUCATION', 'Bachelors Degree', '33.4009', '', ''),
+                ('EDUCATION', 'Graduate or Professional Degree', '25.5933', '', '')]
+        s3.put_object(Bucket='b', Key=key, Body=_csv(rows))
+        seen = []
+
+        def pull(subject, window):
+            seen.append(subject)
+            return key
+
+        twin = SYN.build_twin({'subject': 'Jennifer Beals', 'source': 'profile', 'panelists': 12, 'pull_profile': pull}, None, s3=s3, with_research=False)
+        self.assertEqual(seen, ['Jennifer Beals'])
+        self.assertEqual(twin['meta']['profile_key'], key)
+        self.assertEqual(twin['meta']['source'], 'profile')
+        self.assertTrue(any('LGBTQ' in str(r['label']) for r in twin['identity']['demographics']['sexual_orientation']))
 
     def test_research_shape_when_no_profile(self):
         demo = SYN.research_demographics({'demographics': {'gender': {'Women': 64, 'Men': 36}, 'age': {'18-24': 20, '25-34': 30, '35-44': 25, '45-54': 15, '55-64': 6, '65+': 4}, 'income': None}}, 'seed')
@@ -215,6 +247,9 @@ class Moderator(unittest.TestCase):
         self.assertNotIn("<em>The twin</em>", page)
         self.assertNotIn('Home <b>', page)
         self.assertIn("fold('identity', 'Identity', 'who they are', idb, false)", page)
+        self.assertIn("['sexual_orientation', 'Orientation']", page)
+        self.assertIn("['education', 'Education']", page)
+        self.assertIn("['occupation', 'Occupation']", page)
         self.assertIn("fold('traits', 'Traits', 'how they respond', tr, false)", page)
         self.assertIn("fold('lifecycle', 'Lifecycle', 'where they sit', lcb, false)", page)
         self.assertIn("fold('runs', 'Runs', (t.runs || []).length + ' on this twin', rb, false)", page)

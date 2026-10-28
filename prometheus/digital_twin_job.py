@@ -149,6 +149,17 @@ def run_job(job_id, username, inputs, extras=None):
         if op == 'build':
             rec['stage'] = 'building the twin'
             status_write(job_id, rec)
+
+            def _progress(msg):
+                rec['stage'] = str(msg or 'pulling the audience first')
+                status_write(job_id, rec)
+
+            def _pull(subject, window):
+                rec['stage'] = 'pulling the audience first'
+                status_write(job_id, rec)
+                return SYN.queue_profile_for_twin(subject, window, s3=s3, created_by=username or 'prometheus', progress=_progress)
+
+            inputs.setdefault('pull_profile', _pull)
             payload = SYN.build_twin(inputs, claude_json, tools=_tools(), created_by=username or 'prometheus', s3=s3)
             if str((status_read(job_id) or {}).get('status') or '') == 'cancelled':
                 print(f"[twin-job {job_id}] cancelled while building; nothing persisted")

@@ -336,8 +336,10 @@ HOW_TO = [
     {
         'id': 'twin', 'title': 'Build a twin',
         'answers': 'Who an audience is and how it behaves: its people, platforms and buying, twelve dials for how it responds, and where it sits in its lifecycle.',
-        'put_in': ('Build a twin on the Twins tab walks you through it. First, what the twin stands for: a defined group from a profile (the audience of a title, a talent or a brand, pulled the way '
-                   'Profile IQ pulls it, with the panelists seated from that audience) or a group you shape by demographics (gender, age, income, ethnicity, markets). Then what you will use it for, '
+        'put_in': ('Build a twin on the Twins tab walks you through it. First, what the twin stands for: a defined group from a profile (the audience of a title, a talent or a brand). '
+                   'A named subject sits on its Total Universe. If none is on file, one is pulled first and that file is what the twin and every room use. '
+                   'The seats in a room match that file\'s mix (gender, orientation, education, occupation) and each persona is built from those attributes. '
+                   'Or a group you shape by demographics (gender, age, income, ethnicity, markets). Then what you will use it for, '
                    f'and how many panelists sit in its focus group rooms ({PANEL_SEATS_INCLUDED} come with a session; each one past that is priced). Or type the ask to Prometheus with a window if it is not the last 12 months.'),
         'type_this': ['Build a twin of Gilmore Girls Hulu viewers', 'Build a twin of Mark Rober for a product launch', 'Build a twin of women 25 to 44 in Dallas who shop at Target'],
         'attach': 'Nothing is needed. If you have a brief or a deck on the subject, attach it with the paper clip and the twin reads it.',
@@ -378,7 +380,9 @@ HOW_TO = [
     {
         'id': 'panel', 'title': 'Focus Group IQ',
         'answers': 'A focus group Prometheus moderates for you (Focus Group IQ). Pick the twins or the cohorts in the room, ask anything in plain words, and Prometheus runs the room: the %s and people counts, the split by segment, a one-line read and a few panelist voices, in a minute or two. Yes/no, multiple choice, rating 1 to 5, would you pay $X, A vs B, a show of hands, and probes (why? what would change your mind?) that follow the last question.',
-        'put_in': f'A name for the room (you can change it later on the room page), the twins or cohorts in the room (for example Gilmore Girls Hulu viewers, women 25 to 44; lapsed Netflix subscribers in Dallas), how many panelists sit in the room ({PANEL_SEATS_INCLUDED} come with a session; each one past that is priced and billed with the session), then your questions.',
+        'put_in': (f'A name for the room (you can change it later on the room page), the twins or cohorts in the room (for example Gilmore Girls Hulu viewers, women 25 to 44; lapsed Netflix subscribers in Dallas), '
+                   f'how many panelists sit in the room ({PANEL_SEATS_INCLUDED} come with a session; each one past that is priced and billed with the session), then your questions. '
+                   'The seats match the twin\'s profile (the gender split, orientation, education and the rest); each persona is built from those attributes.'),
         'type_this': ['Open a focus group with the Mark Rober twin and ask whether they would pay $29 for the Build Box', 'Ask them why', 'Show of hands, who watched season 1?',
                       'Ask the room: trailer A vs trailer B', 'Re-ask at $19'],
         'attach': 'Nothing is needed. Attach a trailer link, two loglines or a price sheet if the question is about them.',

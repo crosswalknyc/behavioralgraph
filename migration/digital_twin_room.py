@@ -518,16 +518,24 @@ def persona_card(twin: dict, seat: dict, session_seed: str) -> dict:
     tv = {k: float((v.get('value') if isinstance(v, dict) else v) or 50) for k, v in ((twin or {}).get('traits') or {}).items()}
     g = lambda k: tv.get(k, 50.0)
     age = int(seat.get('age') or 35)
-    gender = 'woman' if str(seat.get('gender') or 'F') == 'F' else 'man'
-    pron = ('she', 'her') if gender == 'woman' else ('he', 'his')
+    gc = str(seat.get('gender') or 'F')
+    if gc == 'X':
+        gender, pron = 'nonbinary', ('they', 'their')
+    elif gc == 'F':
+        gender, pron = 'woman', ('she', 'her')
+    else:
+        gender, pron = 'man', ('he', 'his')
     lc = (twin or {}).get('lifecycle') or {}
     stages = [('discovering', float(lc.get('discovering_pct') or 15)), ('trying', float(lc.get('trying_pct') or 15)), ('in the habit', float(lc.get('habit_pct') or 40)),
               ('lapsing', float(lc.get('lapsing_pct') or 18)), ('returning', float(lc.get('returning_pct') or 12))]
     stage = _pick_by_share([{'label': a, 'pct': b} for a, b in stages], unit('stage', sid))
-    income = _pick_by_share(demo.get('income') or [], unit('income', sid), '')
-    education = _pick_by_share(demo.get('education') or [], unit('education', sid), '')
-    parental = _pick_by_share(demo.get('parental') or [], unit('parental', sid), '')
-    relationship = _pick_by_share(demo.get('relationship') or [], unit('relationship', sid), '')
+    income = str(seat.get('income') or '') or _pick_by_share(demo.get('income') or [], unit('income', sid), '')
+    education = str(seat.get('education') or '') or _pick_by_share(demo.get('education') or [], unit('education', sid), '')
+    parental = str(seat.get('parental') or '') or _pick_by_share(demo.get('parental') or [], unit('parental', sid), '')
+    relationship = str(seat.get('relationship') or '') or _pick_by_share(demo.get('relationship') or [], unit('relationship', sid), '')
+    orientation = str(seat.get('orientation') or '')
+    occupation = str(seat.get('occupation') or '')
+    ethnicity = str(seat.get('ethnicity') or '')
     fmt = str(m.get('format') or 'series')
     legacy = str(m.get('franchise_stage') or '') in ('legacy', 'established')
     price = {'low': f"spends freely on the things {pron[0]} loves and rarely waits for a sale", 'mid': 'watches price but pays for the right thing',
@@ -549,7 +557,7 @@ def persona_card(twin: dict, seat: dict, session_seed: str) -> dict:
              'high': 'cancels and re-subscribes around the shows; rarely keeps more than two or three services'}[_level(g('churn_propensity'), 35, 60)]
     social = {'low': 'finds things by searching and through friends, not by scrolling', 'mid': 'finds new things half from the feed, half from friends',
               'high': 'finds most new things on social feeds and short clips'}[_level(g('discovery_social_vs_search'), 40, 62)]
-    wom = {'low': f"keeps {pron[1]} viewing to {pron[1]}self" if gender == 'woman' else 'keeps his viewing to himself', 'mid': 'talks about shows with a couple of friends',
+    wom = {'low': f"keeps {pron[1]} viewing to {'themself' if gender == 'nonbinary' else (pron[1] + 'self')}", 'mid': 'talks about shows with a couple of friends',
            'high': 'texts the group chat about what they are watching and gets friends onto things'}[_level(g('word_of_mouth'), 40, 65)]
     live = {'low': 'does not go to fan events or live shows for this', 'mid': 'has been to one fan event or screening',
             'high': 'goes to fan events, screenings and live shows when they come near'}[_level(g('live_events'), 30, 55)]
@@ -584,6 +592,7 @@ def persona_card(twin: dict, seat: dict, session_seed: str) -> dict:
     shops = [s for s in shops if unit('shop', sid, s) < 0.7][:3]
     card = {'seat': seat.get('seat'), 'name': seat.get('name'), 'age': age, 'gender': gender, 'city': seat.get('city'), 'segment': str(seat.get('segment') or ''),
             'income': income, 'education': education, 'parental': parental, 'relationship_status': relationship,
+            'orientation': orientation, 'occupation': occupation, 'ethnicity': ethnicity,
             'lifecycle_stage': stage, 'relationship_to_subject': rel, 'how_often': freq, 'owns': owns,
             'habits': [price, loyal, merch, physical, churn, social, wom, live, ads, binge, second],
             'streams_on': services, 'shops_at': shops}
@@ -631,15 +640,51 @@ def _education_words(label: str, pron: str) -> str:
     low = str(label or '').lower()
     if not low or 'prefer' in low:
         return ''
+    they = pron.lower() == 'they'
+    has = 'have' if they else 'has'
+    holds = 'hold' if they else 'holds'
     if 'graduate' in low and ('degree' in low or 'professional' in low) and 'college graduate' not in low:
-        return f"{pron} holds a graduate degree"
+        return f"{pron} {holds} a graduate degree"
     if 'bachelor' in low or 'college graduate' in low:
-        return f"{pron} has a bachelor's degree"
+        return f"{pron} {has} a bachelor's degree"
     if 'some college' in low or 'associate' in low:
-        return f"{pron} has some college behind {'her' if pron.lower() == 'she' else 'him'}"
+        obj = 'them' if they else ('her' if pron.lower() == 'she' else 'him')
+        return f"{pron} {has} some college behind {obj}"
     if 'high school' in low:
         return f"{pron} finished high school"
     return ''
+
+
+def _orientation_words(label: str, gender: str) -> str:
+    """Lesbian / gay / queer from the seat's orientation and gender.
+    Straight is omitted so the bio does not lead with it."""
+    low = str(label or '').lower()
+    if not low or 'prefer' in low or 'straight' in low or 'heterosexual' in low:
+        return ''
+    if 'lesbian' in low:
+        return 'lesbian'
+    if 'bisexual' in low:
+        return 'bisexual'
+    if 'gay' in low:
+        return 'gay'
+    if 'queer' in low:
+        return 'queer'
+    if not re.search(r"lgbtq", low):
+        return ''
+    g = str(gender or '')
+    if g == 'woman':
+        return 'lesbian'
+    if g == 'man':
+        return 'gay'
+    return 'queer'
+
+
+def _occupation_words(label: str, pron: str) -> str:
+    lab = str(label or '').strip()
+    if not lab or 'prefer' in lab.lower() or lab.lower() in ('other', 'none', 'n/a'):
+        return ''
+    they = pron.lower() == 'they'
+    return f"{pron} work{'' if they else 's'} in {lab.lower()}"
 
 
 def _parental_words(label: str) -> str:
@@ -676,24 +721,41 @@ def persona_bio(card: dict, twin: dict, sid: str) -> str:
     m = _meta(twin)
     name = str(card.get('name') or 'This person')
     age = int(card.get('age') or 35)
-    she = str(card.get('gender') or 'woman') == 'woman'
-    pron, obj, poss = ('she', 'her', 'her') if she else ('he', 'him', 'his')
+    g = str(card.get('gender') or 'woman')
+    if g in ('nonbinary', 'non-binary', 'x'):
+        pron, obj, poss = ('they', 'them', 'their')
+        they = True
+    elif g == 'woman':
+        pron, obj, poss = ('she', 'her', 'her')
+        they = False
+    else:
+        pron, obj, poss = ('he', 'him', 'his')
+        they = False
+    be = 'are' if they else 'is'
     income = _income_words(card.get('income') or '')
     low_income = bool(re.search(r"under|\$25,000 to|\$35,000 to|\$25,000 -", income))
     high_income = bool(re.search(r"\$1\d\d,\d{3}|\$2\d\d,\d{3}|or more", income))
     bank = _JOBS_HIGH if high_income else _JOBS_EARLY if (low_income or age < 25) else _JOBS_MID
-    if age < 22:
-        work = 'a college student working part time'
+    occ = _occupation_words(card.get('occupation') or '', pron)
+    if occ and age >= 66:
+        work_sent = f"{name}, {age}, lives in {card.get('city') or 'the US'}. {pron.capitalize()} retired after years in {str(card.get('occupation') or '').lower()}."
+    elif occ:
+        work_sent = f"{name}, {age}, lives in {card.get('city') or 'the US'}. {occ[0].upper() + occ[1:]}."
+    elif age < 22:
+        work_sent = f"{name}, {age}, lives in {card.get('city') or 'the US'} and is a college student working part time."
     elif age >= 66:
-        work = f"retired after years as {bank[int(unit('job', sid) * len(bank))]}"
+        work_sent = f"{name}, {age}, lives in {card.get('city') or 'the US'} and is retired after years as {bank[int(unit('job', sid) * len(bank))]}."
     else:
-        work = bank[int(unit('job', sid) * len(bank))]
+        work_sent = f"{name}, {age}, lives in {card.get('city') or 'the US'} and works as {bank[int(unit('job', sid) * len(bank))]}."
     stage = {'discovering': 'just finding it', 'trying': 'still trying it on', 'in the habit': 'firmly in the habit', 'lapsing': 'drifting away from it lately', 'returning': 'back to it after a break'}.get(str(card.get('lifecycle_stage') or ''), 'in the habit')
-    sent = [f"{name}, {age}, lives in {card.get('city') or 'the US'} and works as {work}."]
+    sent = [work_sent]
+    ow = _orientation_words(card.get('orientation') or '', g)
+    if ow:
+        sent.append(f"{pron.capitalize()} {be} {ow}.")
     rel_w = _relationship_words(card.get('relationship_status') or '')
     par_w = _parental_words(card.get('parental') or '')
     bits = ([rel_w] if rel_w else []) + ([('with ' if rel_w else '') + par_w] if par_w else [])
-    hh = f"{pron.capitalize()} is {' '.join(bits)}" if bits else ''
+    hh = f"{pron.capitalize()} {be} {' '.join(bits)}" if bits else ''
     if income:
         hh = (hh + f", earning {income}") if hh else f"{pron.capitalize()} earns {income}"
     if hh:
@@ -704,7 +766,7 @@ def persona_bio(card: dict, twin: dict, sid: str) -> str:
     rel = str(card.get('relationship_to_subject') or '')
     rel = re.sub(r"^(found|started|has watched|has been|used to|came back)", lambda mm: {'found': f"{pron.capitalize()} found", 'started': f"{pron.capitalize()} started", 'has watched': f"{pron.capitalize()} has watched",
                                                                                             'has been': f"{pron.capitalize()} has been", 'used to': f"{pron.capitalize()} used to", 'came back': f"{pron.capitalize()} came back"}[mm.group(1)], rel, count=1)
-    sent.append(f"{rel} and {card.get('how_often')}; {pron} is {stage}." if rel else f"{pron.capitalize()} is {stage} with {m.get('name') or 'the subject'}.")
+    sent.append(f"{rel} and {card.get('how_often')}; {pron} {be} {stage}." if rel else f"{pron.capitalize()} {be} {stage} with {m.get('name') or 'the subject'}.")
     if card.get('owns'):
         sent.append(f"{pron.capitalize()} owns {' and '.join(card['owns'])}.")
     h = list(card.get('habits') or [])
@@ -741,6 +803,12 @@ def persona_bio(card: dict, twin: dict, sid: str) -> str:
     sent.append(f"{pron.capitalize()} {d1.replace('{pron}', pron)}, and {d2.replace('{pron}', pron)}.")
     text = ' '.join(s for s in sent if s and s.strip() not in ('.', ''))
     text = re.sub(r"\s+,", ',', re.sub(r"\s{2,}", ' ', text)).replace(' .', '.').replace(',.', '.')
+    if they:
+        text = re.sub(r"\b[Tt]hey is\b", 'They are', text)
+        _fix = {'buys': 'buy', 'finds': 'find', 'keeps': 'keep', 'owns': 'own', 'streams': 'stream', 'shops': 'shop',
+                'goes': 'go', 'pays': 'pay', 'watches': 'watch', 'cancels': 'cancel', 'trims': 'trim', 'texts': 'text',
+                'talks': 'talk', 'holds': 'hold', 'works': 'work', 'has': 'have', 'earns': 'earn'}
+        text = re.sub(r"\bThey (" + '|'.join(_fix) + r")\b", lambda mm: 'They ' + _fix[mm.group(1)], text)
     text = scrub(text)
     words = text.split()
     if len(words) > 200:   # trim from the end at a sentence boundary
@@ -810,7 +878,7 @@ OPTIONS_SYSTEM = """You are Prometheus, a seasoned focus group moderator. Before
 Return JSON only: {"options": [{"id": "a", "label": "<short label, under 12 words>", "lean": "yes|maybe|no|other"}], "framing": "<one or two sentences>", "listen_for": ["<two or three things you want to hear from the room>"]}"""
 
 PERSONA_SYSTEM = """You are one person in a focus group, answering as yourself. The moderator is Prometheus. You are given who you are (a card), what you said earlier in this session, the facts Prometheus put in front of the room, and the question with its coded options.
-Stay in character: your age, your city, how you came to the subject, your habits with money, merchandise and discs, your streaming life. Reason from the facts the way you would (if the show ended years ago and you can stream it any night, say what that means for you; if you own the DVDs already, say so). Answer Prometheus in two or three natural spoken sentences, concrete the way real people are (what you own, what you paid, who you would give it to), with no lists and no hedging. Never mention being an AI, a twin, a persona or a character. When this is a follow-up, stay consistent with what you said earlier. Pick exactly one option by id, or 'other' with a short label when none fits. Give a confidence from 1 (unsure) to 5 (certain) and a one-sentence reason. No em dashes.
+Stay in character: your age, your city, who you are (orientation, education, the work the card gives you), how you came to the subject, your habits with money, merchandise and discs, your streaming life. Reason from the facts the way you would (if the show ended years ago and you can stream it any night, say what that means for you; if you own the DVDs already, say so). Answer Prometheus in two or three natural spoken sentences, concrete the way real people are (what you own, what you paid, who you would give it to), with no lists and no hedging. Never mention being an AI, a twin, a persona or a character. When this is a follow-up, stay consistent with what you said earlier. Pick exactly one option by id, or 'other' with a short label when none fits. Give a confidence from 1 (unsure) to 5 (certain) and a one-sentence reason. No em dashes.
 Return JSON only: {"option": "<id or other>", "other_label": "<when other>", "line": "<two or three sentences>", "confidence": <1 to 5>, "reason": "<one sentence>"}"""
 
 READ_SYSTEM = """You are Prometheus, the moderator, writing up the room for a senior executive. Plain English a high school student follows; the thinking is senior consultant. You are given the question, the options with the room's split (the published share of the whole audience in percent and people, and the raw tally of the seats in the room, both already computed; never change a number), the split by segment, every seat's answer, the facts brief and a prior note.

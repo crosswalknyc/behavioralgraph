@@ -705,6 +705,15 @@ def dt_panel_open(key):
         if other:
             twins.append(other)
     from migration import digital_twin_panel as P
+    from migration import digital_twin_room as ROOM
+    from migration.digital_twin_synthesis import hydrate_identity_from_profile
+    s3 = _s3()
+    for t in twins:
+        try:
+            hydrate_identity_from_profile(t, s3)
+        except Exception:
+            traceback.print_exc()
+    twins_by_key = {str((t.get('meta') or {}).get('key') or ''): t for t in twins}
     segments = body.get('segments') or None
     try:
         in_room = int(body.get('in_room') or 0)
@@ -712,7 +721,6 @@ def dt_panel_open(key):
         in_room = 0
     in_room = in_room or DT.panelists_for(payload)       # the seats chosen when the twin was built, else the twelve a session covers
     title = str(body.get('title') or '')[:120]
-    twins_by_key = {str((t.get('meta') or {}).get('key') or ''): t for t in twins}
     # Opening a room is free; the session price is taken on the first
     # question (2026-10-26). An empty room with the same twins, segments
     # and seats is reused instead of opening another (Jenna: repeated
@@ -720,10 +728,16 @@ def dt_panel_open(key):
     reused = P.find_reusable_session(payload, twins, segments, in_room, created_by=_uname(user), title=title)
     if reused is not None:
         sess = reused
+        if P.needs_reseat(sess, twins):
+            P.rebuild_group(sess, twins, seed=str(sess.get('id') or ''))
     else:
         sess = P.open_session(twins, segments=segments, in_room=in_room, title=title, created_by=_uname(user), session_id=uuid.uuid4().hex[:10])
         sess['twin_keys'] = [str((t.get('meta') or {}).get('key') or '') for t in twins]
         payload.setdefault('panel_sessions', []).insert(0, sess)
+    try:
+        ROOM.ensure_personas(sess, twins_by_key, session_seed=str(sess.get('id') or ''))
+    except Exception:
+        traceback.print_exc()
     PT = _portraits()
     if PT is not None:
         try:
