@@ -51233,6 +51233,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-fg-pop.open { display: block; }
         #digitalTwinsIQView .dtw-fg-pop .arrow { position: absolute; top: -7px; left: 40px; width: 12px; height: 12px; background: var(--dtw-raised); border-left: 1px solid var(--dtw-rule); border-top: 1px solid var(--dtw-rule); transform: rotate(45deg); }
         #digitalTwinsIQView .dtw-fg-pop.up .arrow { top: auto; bottom: -7px; transform: rotate(225deg); }
+        #digitalTwinsIQView .dtw-fg-pop.side-r .arrow { left: -7px; transform: rotate(-45deg); }
+        #digitalTwinsIQView .dtw-fg-pop.side-l .arrow { left: auto; right: -7px; transform: rotate(135deg); }
         #digitalTwinsIQView .dtw-fg-pop-in { padding: 14px; max-height: var(--pop-max, 60vh); overflow: auto; scrollbar-width: thin; border-radius: 10px; }
         #digitalTwinsIQView .dtw-fg-pop .head { display: flex; gap: 12px; align-items: center; padding-right: 22px; }
         #digitalTwinsIQView .dtw-fg-pop .who { font-size: 13px; color: var(--dtw-ink); font-weight: 600; line-height: 17px; overflow-wrap: anywhere; }
@@ -53118,11 +53120,24 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             function placePop(anchor) {
                 var root = el('dtwPnConsole'), p = el('dtwSeatPop'); if (!root || !p || S.fg.seat == null) return;
                 if (!anchor || !(anchor instanceof Element) || !root.contains(anchor)) anchor = root.querySelector('.dtw-fg-seat[data-seat="' + S.fg.seat + '"]') || root.querySelector('[data-fg-seat="' + S.fg.seat + '"]');
-                p.classList.add('open'); p.classList.remove('up'); p.style.removeProperty('--pop-max');
+                p.classList.add('open'); p.classList.remove('up', 'side-r', 'side-l'); p.style.removeProperty('--pop-max');
+                var arrowEl = p.querySelector('.arrow'); if (arrowEl) { arrowEl.style.removeProperty('top'); arrowEl.style.removeProperty('left'); }
                 var rr = root.getBoundingClientRect(), pw = p.offsetWidth, sc = fgScroller(), sr = sc ? sc.getBoundingClientRect() : rr;
-                var vTop = Math.max(rr.top, sr.top), vBottom = Math.min(rr.bottom, sr.bottom);
+                var vTop = Math.max(rr.top, sr.top, 0), vBottom = Math.min(rr.bottom, sr.bottom, window.innerHeight);
                 if (!anchor) { p.style.left = Math.max(8, rr.width - pw - 8) + 'px'; p.style.top = Math.max(8, vTop - rr.top + 8) + 'px'; p.style.setProperty('--pop-max', Math.max(160, vBottom - vTop - 40) + 'px'); return; }
                 var ar = anchor.getBoundingClientRect(), cx = ar.left - rr.left + ar.width / 2;
+                // beside the seat when there is room, so the bio runs the full height instead of the strip under the row
+                var circ = anchor.querySelector('.dtw-fg-circ'), cr = circ ? circ.getBoundingClientRect() : ar, cy = cr.top + cr.height / 2;
+                var rightX = cr.right - rr.left + 14, leftX = cr.left - rr.left - 14 - pw, side = rightX + pw <= rr.width - 8 ? 'side-r' : (leftX >= 8 ? 'side-l' : '');
+                if (side) {
+                    p.classList.add(side);
+                    p.style.setProperty('--pop-max', Math.max(220, Math.min(vBottom - vTop - 16, 760)) + 'px');
+                    var ph = p.offsetHeight, sTop = Math.max(vTop + 8, Math.min(cy - 34, vBottom - 8 - ph)) - rr.top;
+                    p.style.left = (side === 'side-r' ? rightX : leftX) + 'px'; p.style.top = sTop + 'px';
+                    if (arrowEl) arrowEl.style.top = Math.max(12, Math.min(ph - 24, cy - rr.top - sTop - 6)) + 'px';
+                    var sb = el('dtwSeatBody'); if (sb) sb.scrollTop = 0;
+                    return;
+                }
                 var left = Math.max(8, Math.min(cx - 48, rr.width - pw - 8)), top = ar.bottom - rr.top + 10, below = vBottom - ar.bottom - 20, above = ar.top - vTop - 20;
                 if (below < 260 && above > Math.max(below, 300)) { p.classList.add('up'); p.style.setProperty('--pop-max', Math.max(160, Math.min(above, 560)) + 'px'); top = Math.max(4, ar.top - rr.top - 10 - p.offsetHeight); }
                 else p.style.setProperty('--pop-max', Math.max(160, Math.min(Math.max(below, 240), 560)) + 'px');
