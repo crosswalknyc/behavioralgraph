@@ -52674,6 +52674,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 view.style.setProperty('--dtw-main-h', Math.max(240, view.clientHeight - dock.offsetHeight) + 'px');
             }
             window.addEventListener('resize', function() { if (S.tab !== 'panel') return; clearTimeout(S.fgResizeT); S.fgResizeT = setTimeout(fgLayoutSeats, 120); });
+            document.addEventListener('scroll', function(e) {
+                var p = el('dtwSeatPop'); if (!p || p.style.position !== 'fixed' || !p.classList.contains('open') || S.fg.seat == null) return;
+                if (e.target instanceof Element && p.contains(e.target)) return;
+                var a = document.querySelector('#dtwPnConsole .dtw-fg-seat[data-seat="' + S.fg.seat + '"]'), r = a ? a.getBoundingClientRect() : null;
+                if (!r || r.bottom < 0 || r.top > window.innerHeight) { dtwSeatOpen(null); return; }
+                var sb = el('dtwSeatBody'), keep = sb ? sb.scrollTop : 0;
+                placePop(a); if (sb) sb.scrollTop = keep;
+            }, true);
             // ---- the thread: the question as the moderator's message, the answers as messages, the read as the closing message.
             function qMeta(q, i, extra) {
                 var qs = (S.session || {}).questions || [], again = false;
@@ -53120,7 +53128,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             function placePop(anchor) {
                 var root = el('dtwPnConsole'), p = el('dtwSeatPop'); if (!root || !p || S.fg.seat == null) return;
                 if (!anchor || !(anchor instanceof Element) || !root.contains(anchor)) anchor = root.querySelector('.dtw-fg-seat[data-seat="' + S.fg.seat + '"]') || root.querySelector('[data-fg-seat="' + S.fg.seat + '"]');
-                p.classList.add('open'); p.classList.remove('up', 'side-r', 'side-l'); p.style.removeProperty('--pop-max');
+                p.classList.add('open'); p.classList.remove('up', 'side-r', 'side-l'); p.style.removeProperty('--pop-max'); p.style.removeProperty('position');
                 var arrowEl = p.querySelector('.arrow'); if (arrowEl) { arrowEl.style.removeProperty('top'); arrowEl.style.removeProperty('left'); }
                 var rr = root.getBoundingClientRect(), pw = p.offsetWidth, sc = fgScroller(), sr = sc ? sc.getBoundingClientRect() : rr;
                 var vTop = Math.max(rr.top, sr.top, 0), vBottom = Math.min(rr.bottom, sr.bottom, window.innerHeight);
@@ -53130,13 +53138,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var circ = anchor.querySelector('.dtw-fg-circ'), cr = circ ? circ.getBoundingClientRect() : ar, cy = cr.top + cr.height / 2;
                 var rightX = cr.right - rr.left + 14, leftX = cr.left - rr.left - 14 - pw, side = rightX + pw <= rr.width - 8 ? 'side-r' : (leftX >= 8 ? 'side-l' : '');
                 if (side) {
-                    p.classList.add(side);
-                    // bounded by the window, not the thread: the seat row sits above the thread's scroll box
-                    var wTop = Math.max(rr.top, 0), wBottom = Math.min(rr.bottom, window.innerHeight);
-                    p.style.setProperty('--pop-max', Math.max(220, Math.min(wBottom - Math.max(wTop, cy - 34) - 16, 760)) + 'px');
-                    var ph = p.offsetHeight, sTop = Math.max(wTop + 8, Math.min(cy - 34, wBottom - 8 - ph)) - rr.top;
-                    p.style.left = (side === 'side-r' ? rightX : leftX) + 'px'; p.style.top = sTop + 'px';
-                    if (arrowEl) arrowEl.style.top = Math.max(12, Math.min(ph - 24, cy - rr.top - sTop - 6)) + 'px';
+                    // fixed to the window so it can rise above the scrolling body, its top level with the twin's facts line
+                    p.classList.add(side); p.style.position = 'fixed';
+                    var facts = document.querySelector('#dtwSpineTwin .dtw-spine-facts'), fr = facts ? facts.getBoundingClientRect() : null;
+                    var want = fr && fr.height && fr.top >= 0 ? Math.min(fr.top, cy - 34) : cy - 34, wBottom = window.innerHeight;
+                    p.style.setProperty('--pop-max', Math.max(220, Math.min(wBottom - Math.max(8, want) - 16, 760)) + 'px');
+                    var ph = p.offsetHeight, sTop = Math.max(8, Math.min(want, wBottom - 8 - ph));
+                    p.style.left = (side === 'side-r' ? cr.right + 14 : cr.left - 14 - pw) + 'px'; p.style.top = sTop + 'px';
+                    if (arrowEl) arrowEl.style.top = Math.max(12, Math.min(ph - 24, cy - sTop - 6)) + 'px';
                     var sb = el('dtwSeatBody'); if (sb) sb.scrollTop = 0;
                     return;
                 }
