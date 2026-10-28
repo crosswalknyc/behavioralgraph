@@ -248,6 +248,11 @@ def _add_text(
         "right":  PP_ALIGN.RIGHT,
     }.get(align, PP_ALIGN.LEFT)
     text = str(text)
+    try:
+        from migration.design_skill import scrub_door_metaphor
+        text = scrub_door_metaphor(text)
+    except Exception:
+        text = text
     if 0 < size < 9:
         size = 9          # the design pack's floor: notes run at 9pt, body at 10pt
     if size >= 26:

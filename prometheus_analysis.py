@@ -1572,6 +1572,7 @@ RULES
 - Titles are sentences in sentence case and they end with a period. They state the finding: "Streaming is where this audience already lives." not "Streaming Overview".
 - The read line under a chart is one sentence stating what the chart proves, with the key number.
 - NEVER use em dashes or en dashes anywhere. No "actually", no "absolutely". Never "real-time"; the data is T+1.
+- NEVER use the word door or doors. Not the door to, opens the door, or a door for. State the finding. The Door NYC as a venue name is the only proper-name exception.
 - Use each brand's CURRENT name as it appears in the profile data, not legacy names from memory: MSNBC is now MS NOW; always write "MS NOW" (at most one "(formerly MSNBC)" on the first mention).
 - Figures: 30M not 30 million, one decimal on percentages, whole-number indexes, 683 bare.
 - Chart rows: 4 to 6 rows max, ranked descending, values are penetration percentages (numbers only, no % sign in the value field).
@@ -6133,6 +6134,7 @@ VOICE
 - source lines name the read and window in product language: "Profile IQ interest rows, Jul 1 2025 to Jun 30 2026." or "Crosswalk Unique ID journeys, Jul 1 2025 to Jun 30 2026. n=84,213 subject-path sessions." Never name any internal system, model, vendor, or process.
 - reads are one or two sentences stating what the slide proves, with the key number. Hard counts stated flat; interpretive lines use leans, skews, reads as.
 - NEVER use em dashes or en dashes anywhere. No "actually", no "absolutely", no "real-time". Never the word "household".
+- NEVER use the word door or doors. Not the door to, opens the door, or a door for. State the finding. The Door NYC as a venue name is the only proper-name exception.
 - Use each brand's CURRENT name as it appears in the digest (MS NOW, not MSNBC).
 
 TOP-LEVEL JSON

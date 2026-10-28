@@ -33,8 +33,10 @@ checked (``cw_embed_fonts.py``, which runs ``cw_pptx_finalize.py``,
 ``cw_pptx_embed.py`` and ``cw_pptx_check.py``), a .docx goes through
 ``cw_docx_finalize.py`` and the embed, a .pdf is verified for embedded
 fonts, an .html gets its fonts inlined; then ``cw_brand_lint.py`` and
-``readability_check.py`` run. A finish NEVER raises and never holds a
-file: the fixes are applied in place and the report carries what ran.
+``readability_check.py`` run. Door metaphors are rewritten in place
+(``cw_door_copy.scrub_door_metaphor``) before the lint. A finish NEVER
+raises and never holds a file: the fixes are applied in place and the
+report carries what ran.
 ``gate_attachment`` is the same for in-memory bytes (the outbound mail
 door).
 """
@@ -84,7 +86,7 @@ PACKAGED_SCRIPTS = (
     "cw_embed_fonts.py", "cw_pptx_finalize.py", "cw_pptx_embed.py",
     "cw_pptx_check.py", "cw_docx_finalize.py", "cw_brand_lint.py",
     "readability_check.py", "cw_pptx_tools.py", "cw_email_check.py",
-    "render_preview.py",
+    "render_preview.py", "cw_door_copy.py",
 )
 PACKAGED_TEMPLATES = (
     "Crosswalk_Deck_Templates.pptx", "Crosswalk_SOW_Template.pptx",
@@ -475,6 +477,87 @@ def embed_fonts(path, render_check: bool = False, report: Optional[Report] = Non
     return rep
 
 
+_DOOR_MOD = None
+
+
+def door_copy_module():
+    """The pack's door-metaphor helper. None when the pack is absent."""
+    global _DOOR_MOD
+    if _DOOR_MOD is not None:
+        return _DOOR_MOD or None
+    sd = scripts_dir()
+    if sd is None or not (sd / "cw_door_copy.py").is_file():
+        _DOOR_MOD = False
+        return None
+    try:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "cw_door_copy", str(sd / "cw_door_copy.py"))
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        _DOOR_MOD = mod
+    except Exception:
+        _DOOR_MOD = False
+        return None
+    return _DOOR_MOD
+
+
+def _fallback_scrub_door(text) -> str:
+    s = "" if text is None else str(text)
+    if not s:
+        return s
+    held = []
+
+    def hold(m):
+        if re.match(r"\s+(to|for)\b", s[m.end():], re.I):
+            return m.group(0)
+        held.append(m.group(0))
+        return f"\x00DOOR{len(held) - 1}\x00"
+
+    out = re.sub(r"\bThe Door(?:\s+NYC)?\b", hold, s)
+    frames = (
+        (r"\bopens?\s+the\s+doors?\s+to\s+", "brings "),
+        (r"\bopen(?:ed|ing)\s+the\s+doors?\s+to\s+", "brings "),
+        (r"\bopens?\s+the\s+doors?\b", "brings"),
+        (r"\ba\s+doors?\s+for\s+", ""),
+        (r"\b(?:the\s+)?doors?\s+to\s+", ""),
+    )
+    for pat, repl in frames:
+        out = re.sub(pat, repl, out, flags=re.I)
+    out = re.sub(r"\bdoors?\b", "", out, flags=re.I)
+    for i, name in enumerate(held):
+        out = out.replace(f"\x00DOOR{i}\x00", name)
+    return re.sub(r"\s{2,}", " ", out).strip()
+
+
+def scrub_door_metaphor(text) -> str:
+    """Rewrite door metaphors in one string. Never raises."""
+    try:
+        mod = door_copy_module()
+        if mod is not None:
+            return mod.scrub_door_metaphor(text)
+    except Exception:
+        pass
+    try:
+        return _fallback_scrub_door(text)
+    except Exception:
+        return "" if text is None else str(text)
+
+
+def scrub_doors_in_file(path, report: Optional[Report] = None) -> Report:
+    """Rewrite door metaphors in a deck or document in place. Never holds."""
+    rep = report or Report(str(path))
+    try:
+        mod = door_copy_module()
+        n = 0
+        if mod is not None:
+            n = int(mod.scrub_file(path) or 0)
+        rep.add("door_scrub", True, f"rewrote {n} unit(s)" if n else "clean")
+    except Exception:
+        rep.add("door_scrub", True, "skipped")
+    return rep
+
+
 def brand_lint(path, report: Optional[Report] = None) -> Report:
     rep = report or Report(str(path))
     got = _run("cw_brand_lint.py", [str(path)])
@@ -506,6 +589,8 @@ def finish(path, *, render_check: bool = False, lint: bool = True, copy_check: b
     try:
         embed_fonts(path, render_check=render_check, report=rep)
         ext = Path(str(path)).suffix.lower()
+        if lint and ext in (".pptx", ".docx", ".html", ".htm", ".md", ".txt"):
+            scrub_doors_in_file(path, report=rep)
         if lint and ext in (".pptx", ".docx", ".html", ".htm"):
             brand_lint(path, report=rep)      # the linter reads Office, HTML and text; a .pdf is verified above
         if copy_check and ext in (".pptx", ".docx", ".html", ".htm", ".md", ".txt"):
@@ -652,6 +737,6 @@ __all__ = [
     "PACKAGED_TEMPLATES", "PACKAGED_ASSET_FILES", "skill_root", "full_skill_root", "available",
     "font_dir", "font_path", "legacy_font_path", "fonts", "using_house_font", "family_name",
     "register_reportlab", "tokens", "token", "color", "template_path", "deck_template", "logo_path",
-    "scripts_dir", "lint_module", "widow_safe_width", "Report", "verify_pdf_fonts", "embed_fonts", "brand_lint", "readability", "finish", "gate_attachment",
+    "scripts_dir", "lint_module", "door_copy_module", "widow_safe_width", "Report", "verify_pdf_fonts", "embed_fonts", "brand_lint", "readability", "scrub_door_metaphor", "scrub_doors_in_file", "finish", "gate_attachment",
     "finish_bytes", "render_preview", "soffice_available", "status",
 ]

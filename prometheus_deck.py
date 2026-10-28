@@ -57,6 +57,11 @@ def _tb(slide, x, y, w, h, text, *, size=11.5, bold=False, color=None,
     tf.vertical_anchor = anchor
     tf.margin_left = tf.margin_right = tf.margin_top = tf.margin_bottom = 0
     first = True
+    try:
+        from migration.design_skill import scrub_door_metaphor
+        text = scrub_door_metaphor(text)
+    except Exception:
+        text = text
     for para_text in str(text).split('\n'):
         p = tf.paragraphs[0] if first else tf.add_paragraph()
         first = False

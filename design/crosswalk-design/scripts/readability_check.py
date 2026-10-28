@@ -21,6 +21,7 @@ Reports:
       three or more cards on one page that open the same way, headers
       that repeat an opener, and phrases of five or more words that
       recur across cards or pages
+    - door / doors metaphor (no-doors-in-decks.mdc, 2026-10-28)
 
 Exit code 0 when there are no flags, 1 otherwise. No dependencies
 beyond the standard library; python-pptx is used only when a .pptx
@@ -36,6 +37,15 @@ import argparse
 import re
 import sys
 from pathlib import Path
+
+_HERE = Path(__file__).resolve().parent
+if str(_HERE) not in sys.path:
+    sys.path.insert(0, str(_HERE))
+try:
+    from cw_door_copy import door_hits
+except Exception:  # pragma: no cover
+    def door_hits(text: str) -> list[str]:
+        return [m.group(0) for m in re.finditer(r"\bdoors?\b", text or "", re.I)]
 
 HEADER_WORD_CEILING = 12
 SENTENCE_WORD_CEILING = 30
@@ -593,6 +603,8 @@ def main() -> int:
         if n > HEADER_WORD_CEILING:
             issues.append(f"{n} words (ceiling {HEADER_WORD_CEILING})")
         issues.extend(clever_flags(text))
+        for snippet in door_hits(text):
+            issues.append(f"door metaphor: '{snippet}'")
         for j in JARGON:
             if re.search(rf"\b{re.escape(j)}\b", text.lower()):
                 issues.append(f"jargon '{j}'" + (f" -> '{JARGON[j]}'" if JARGON[j] else " -> cut"))
@@ -637,6 +649,14 @@ def main() -> int:
             print(f"  [FLAG] '{w}' x{c} -> {limit} at most; cut the rest")
     if not bodies:
         print("  (none found)")
+
+    print("\nDOORS")
+    d_hits = door_hits(" ".join(headers) + " " + all_body)
+    for snippet in d_hits:
+        flags += 1
+        print(f"  [FLAG] door metaphor: '{snippet}'")
+    if not d_hits:
+        print("  [ ok ] no door / doors in copy")
 
     print("\nVOICE (one analyst wrote this)")
     v_flags, v_info = voice_flags(headers, pages)

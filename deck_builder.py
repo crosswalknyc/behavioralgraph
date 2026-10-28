@@ -214,6 +214,11 @@ def txt(s, x, y, w, h, text, *, size=12, bold=False, color=GRAPHITE,
     tf.margin_left = tf.margin_right = tf.margin_top = tf.margin_bottom = 0
     tf.vertical_anchor = anchor
     face = "Crosswalk Inter Light" if light else font
+    try:
+        from migration.design_skill import scrub_door_metaphor
+        text = scrub_door_metaphor(text)
+    except Exception:
+        text = text
     for i, line in enumerate(str(text).split("\n")):
         p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
         p.alignment = align

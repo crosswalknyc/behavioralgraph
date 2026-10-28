@@ -17,6 +17,13 @@ import io, json, math, os, re, sys, zipfile
 from html import unescape
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+if HERE not in sys.path:
+    sys.path.insert(0, HERE)
+try:
+    from cw_door_copy import door_hits as _door_hits
+except Exception:  # pragma: no cover
+    def _door_hits(text):
+        return [m.group(0) for m in re.finditer(r"\bdoors?\b", text or "", re.I)]
 TOK = json.load(open(os.path.join(HERE, "..", "assets", "tokens.json")))
 EMU = 914400
 
@@ -99,6 +106,8 @@ def check_copy(text, where, rep, allow_eyebrow=False):
     body = re.sub(r"(^|\n)[ \t]*—([ \t]+|$)", r"\1", body)  # an em-dash used as a list marker at the start of a line is a bullet, not punctuation
     for m in re.finditer("—", body):
         rep.fail(where, f"em-dash in copy: “{snip(body, m.start())}”. Use a period, comma, colon or parentheses.")
+    for snippet in _door_hits(body):
+        rep.fail(where, f"door metaphor: “{snippet}”. Decks never use the word door. State the claim.")
     for m in re.finditer("–", body):
         if re.match(r"\d", body[m.start() + 1:m.start() + 2] or "") and re.search(r"\d$", body[:m.start()]):
             rep.warn(where, f"en dash in a range: “{snip(body, m.start())}”. In copy write “to” (2026 to 2032).")

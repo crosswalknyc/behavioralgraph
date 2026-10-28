@@ -631,6 +631,9 @@ _ANALYST_SYSTEM_PROMPT = (
     "    takeaway ('Younger, higher-earning, and reachable on TikTok'),\n"
     "    NEVER the category ('Age and Income'). The reader must never\n"
     "    reverse-engineer your point from a chart.\n"
+    "  * NEVER use the word door or doors. Not in a header, a card, a\n"
+    "    tile, notes, or a label. Do not write 'the door to new\n"
+    "    viewers', 'opens the door', or 'a door for'. State the claim.\n"
     "\n"
     "\n"
     "=============================================================\n"
@@ -1635,6 +1638,11 @@ def _text(
     tf.vertical_anchor = anchor
     tb.line.fill.background()
 
+    try:
+        from migration.design_skill import scrub_door_metaphor
+        text = scrub_door_metaphor(text)
+    except Exception:
+        text = text
     lines = str(text).split("\n") if text is not None else [""]
     for i, line in enumerate(lines):
         p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
