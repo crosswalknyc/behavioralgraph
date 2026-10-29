@@ -177,16 +177,23 @@ def _s3_of(host):
     return s3, bucket
 
 
-def rerun_in_place(run_key, host, claude_json, *, tools=None, reason='', email='auto',
-                   material_rel=0.05, hints=None, research=True, log=print):
+def rerun_in_place(run_key, host, claude_json, *, tools=None, reason='', email='defer',
+                   material_rel=0.05, hints=None, research=True, send=None, log=print):
     """Research the valuation again under the SAME run key and write the
     corrected read over the SAME dated file (in-place corrections,
     2026-08-25). A copy of the prior file and of the prior underpinnings
     land under _backups/ first. The registry, the job document, the
     catalog, the ledger and the thread note move with it; a second run
-    is never created. When the total moved by more than `material_rel`
-    (or email=True) one short updated note goes to the requester from
-    Prometheus. Returns a summary dict; never a second file."""
+    is never created.
+
+    The updated note (2026-10-28, the Beals note went out at an interim
+    figure): a correction pass never mails on its own. It marks a note
+    pending; `send_corrected_note` sends ONE note from the LIVE document
+    after the last pass, and only when the figure the reader last saw
+    moved by more than `material_rel`. email='defer' (the default) leaves
+    the marker for that call; email=True or 'auto' runs it right after
+    this pass (a single-pass correction). Returns a summary dict; never
+    a second file."""
     import json as _json
     import time as _t
     from migration.bpiq_synthesis import (S3Registry, S3Underpinnings, registry_key, underpinnings_key,
@@ -255,11 +262,29 @@ def rerun_in_place(run_key, host, claude_json, *, tools=None, reason='', email='
     except Exception:
         pass
     # catalog and ledger: the new figures replace the old ones
+    _update_catalog_and_ledger(key, bare, payload, username)
+    # the thread note carries the corrected figure
+    _update_thread_note(username, job_id, bare, payload)
+    # the note is owed; it is sent from the live document, once, after the last pass
+    moved = (abs(new_total - old_total) / old_total) if old_total else 1.0
+    mark_note_pending(s3, bucket, run_key, prior_total=old_total, reason=reason)
+    sent = None
+    if email is True or email == 'auto':
+        sent = send_corrected_note(run_key, host, send=send, material_rel=material_rel,
+                                   force=(email is True), log=log).get('email')
+    return {'run_key': run_key, 'job_id': job_id, 's3_key': bare, 'old_total': old_total, 'new_total': new_total,
+            'moved_rel': round(moved, 4), 'email': sent, 'note_pending': sent is None, 'reason': reason}
+
+
+def _update_catalog_and_ledger(key, bare, payload, username):
+    """The catalog and the ledger carry the live figures (stubbed in tests)."""
+    import traceback as _tb
+    new_total = float((payload.get('valuation') or {}).get('total_brand_value') or 0)
     try:
         from migration import corpus_catalog as _cc
         _cc.index_bpiq(key, payload, user=username)
     except Exception:
-        traceback.print_exc()
+        _tb.print_exc()
     try:
         import insights_ledger as il
         subject = str(payload.get('project_name') or '')
@@ -272,10 +297,15 @@ def rerun_in_place(run_key, host, claude_json, *, tools=None, reason='', email='
                    reply=f'Brand Partnership IQ read {bare}',
                    provenance=getattr(il, 'PROV_DELIVERED', 'delivered_artifact'), sync=True)
     except Exception:
-        traceback.print_exc()
-    # the thread note carries the corrected figure
+        _tb.print_exc()
+
+
+def _update_thread_note(username, job_id, bare, payload):
+    """The thread note carries the corrected figure (stubbed in tests)."""
+    import traceback as _tb
     try:
         c = _chat()
+        new_total = float((payload.get('valuation') or {}).get('total_brand_value') or 0)
         tid = c._pm_thread_for_job(username, job_id)
         hist = c._pm_load_thread_or_active(username, tid)
         subject = str(payload.get('project_name') or '')
@@ -288,34 +318,128 @@ def rerun_in_place(run_key, host, claude_json, *, tools=None, reason='', email='
         for t in hist or []:
             if (t.get('meta') or {}).get('bpiq_job_id') == job_id:
                 t['text'] = text
-                t['meta']['corrected_at'] = payload['corrected_at']
+                t['meta']['corrected_at'] = payload.get('corrected_at')
                 hit = True
         if not hit:
             hist.append({'role': 'agent', 'text': text, 'ts': c._pm_iso_now(),
                          'meta': {'bpiq_job_id': job_id, 'kind': 'bpiq', 'subject': subject[:120], 's3_key': bare}})
         c._pm_save_thread_or_active(username, tid, hist)
     except Exception:
+        _tb.print_exc()
+
+
+# ---------------------------------------------------------------------------
+# the updated note: once, from the live document, after the last pass
+# ---------------------------------------------------------------------------
+
+def _pending_key(run_key):
+    from migration.bpiq_synthesis import RUNS_PREFIX
+    return f"{RUNS_PREFIX}{run_key}.note_pending.json"
+
+
+def mark_note_pending(s3, bucket, run_key, *, prior_total=None, reason=''):
+    """A correction landed and a note is owed. The marker keeps the
+    figure the reader last saw (the first pass's prior total, or the
+    figure of the last note sent) so a run of passes compares against
+    what is in the inbox, never against the previous pass."""
+    import json as _json
+    import time as _t
+    cur = pending_note(s3, bucket, run_key) or {}
+    doc = {'run_key': run_key, 'marked_at': _t.time(), 'passes': int(cur.get('passes') or 0) + 1,
+           'reason': str(reason or '')[:200],
+           'reader_total': cur.get('reader_total') if cur.get('reader_total') is not None else prior_total}
+    try:
+        s3.put_object(Bucket=bucket, Key=_pending_key(run_key), Body=_json.dumps(doc, default=str).encode('utf-8'),
+                      ContentType='application/json')
+    except Exception:
         traceback.print_exc()
-    # one updated note from Prometheus when the figure moved materially
-    sent = None
-    moved = (abs(new_total - old_total) / old_total) if old_total else 1.0
-    if email is True or (email == 'auto' and moved > material_rel):
-        try:
-            from prometheus.delivered import _seat, dashboard_url
-            from prometheus.outbound_mail import send_user_email
-            from prometheus import bpiq_wizard as _w
-            seat, who = _seat(username, host=host, s3_client=s3, bucket=bucket)
-            addr = str(seat.get('email') or '').strip()
-            if addr and '@' in addr:
-                talent = inputs.get('qualifier') or 'the talent'
-                campaign = inputs.get('campaign') or inputs.get('brand_partner') or 'the campaign'
-                subj = f"{campaign}: valuation with {talent} updated"
-                body = (f"Hi {who},\n\n" if who else "Hi,\n\n") + \
-                       (f"The {campaign} valuation with {talent} was updated. Total brand value: ${new_total:,.2f}.\n\n"
-                        f"Open it: {dashboard_url('bpiq')}\n\nPrometheus\nCrosswalk")
-                sent = send_user_email(to=addr, subject=subj, body=body, instructed=True, caller='delivered_bpiq_update')
-                log(f"[bpiq-rerun {job_id}] updated note sent: {sent}")
-        except Exception:
-            traceback.print_exc()
-    return {'run_key': run_key, 'job_id': job_id, 's3_key': bare, 'old_total': old_total, 'new_total': new_total,
-            'moved_rel': round(moved, 4), 'email': sent, 'reason': reason}
+    return doc
+
+
+def pending_note(s3, bucket, run_key):
+    import json as _json
+    try:
+        return _json.loads(s3.get_object(Bucket=bucket, Key=_pending_key(run_key))['Body'].read().decode('utf-8'))
+    except Exception:
+        return None
+
+
+def clear_note_pending(s3, bucket, run_key):
+    try:
+        s3.delete_object(Bucket=bucket, Key=_pending_key(run_key))
+    except Exception:
+        pass
+
+
+def note_copy(payload, inputs, who=''):
+    """Subject and body of the updated note, from the live payload only.
+    Plain lines: the final total with the four lenses, that it replaces
+    the earlier figure, and where to open it. No reason beyond updated."""
+    from prometheus.delivered import dashboard_url
+    v = payload.get('valuation') or {}
+    subject_name = str(payload.get('project_name') or
+                       f"{inputs.get('qualifier')} x {inputs.get('brand_partner')}").strip()
+    total = float(v.get('total_brand_value') or 0)
+    subj = f"{subject_name}: valuation updated"
+    lenses = (f"Earned media ${float(v.get('earned_media_value') or 0):,.2f}, "
+              f"brand engagement ${float(v.get('brand_engagement_value') or 0):,.2f}, "
+              f"brand lift ${float(v.get('brand_lift_value') or 0):,.2f}, "
+              f"conversions ${float(v.get('conversion_value') or 0):,.2f}.")
+    body = (f"Hi {who},\n\n" if who else "Hi,\n\n") + (
+        f"The {subject_name} valuation was updated. Total brand value: ${total:,.2f}. {lenses}\n\n"
+        f"This figure replaces the one in the earlier note.\n\n"
+        f"Open it: {dashboard_url('bpiq')}\n\nPrometheus\nCrosswalk")
+    return subj, body
+
+
+def send_corrected_note(run_key, host, *, send=None, material_rel=0.05, force=False, log=print):
+    """ONE updated note from Prometheus, built from the LIVE document at
+    send time (the registry, then the file it names), never from a pass's
+    local figure. Sends when the live total moved by more than
+    `material_rel` against the figure the reader last saw (the pending
+    marker's reader_total, else the last note's figure on the registry),
+    or when forced. Records the figure sent on the registry and clears
+    the marker, so a second call with nothing new sends nothing."""
+    import json as _json
+    import time as _t
+    from migration.bpiq_synthesis import S3Registry
+    s3, bucket = _s3_of(host)
+    reg = S3Registry(s3, bucket)
+    doc = reg.load(run_key) or {}
+    bare = str(doc.get('s3_key') or '')
+    inputs = dict(doc.get('inputs') or {})
+    username = str(doc.get('user') or '')
+    if not bare:
+        return {'sent': False, 'reason': 'no finished run owns the key', 'email': None}
+    payload = _json.loads(s3.get_object(Bucket=bucket, Key=f'brand-partnership-iq/{bare}')['Body'].read().decode('utf-8'))
+    live_total = float((payload.get('valuation') or {}).get('total_brand_value') or 0)
+    pend = pending_note(s3, bucket, run_key) or {}
+    seen = pend.get('reader_total')
+    if seen is None:
+        seen = doc.get('noted_total')
+    try:
+        seen_f = float(seen) if seen is not None else None
+    except (TypeError, ValueError):
+        seen_f = None
+    moved = (abs(live_total - seen_f) / seen_f) if seen_f else 1.0
+    if not force and seen_f is not None and moved <= material_rel:
+        clear_note_pending(s3, bucket, run_key)
+        return {'sent': False, 'reason': f'live figure within {material_rel:.0%} of the one the reader has', 'email': None,
+                'live_total': live_total, 'reader_total': seen_f}
+    if send is None:
+        from prometheus.outbound_mail import send_user_email as send
+    from prometheus.delivered import _seat
+    seat, who = _seat(username, host=host, s3_client=s3, bucket=bucket)
+    addr = str(seat.get('email') or '').strip()
+    if not (addr and '@' in addr):
+        return {'sent': False, 'reason': 'no email on seat', 'email': None, 'live_total': live_total}
+    subj, body = note_copy(payload, inputs, who)
+    sent = send(to=addr, subject=subj, body=body, instructed=True, caller='delivered_bpiq_update')
+    try:
+        doc.update({'noted_total': live_total, 'noted_at': _t.time()})
+        reg.put(run_key, doc)
+    except Exception:
+        traceback.print_exc()
+    clear_note_pending(s3, bucket, run_key)
+    log(f"[bpiq-note {run_key}] updated note sent at ${live_total:,.2f}: {sent}")
+    return {'sent': True, 'email': sent, 'live_total': live_total, 'reader_total': seen_f, 'subject': subj, 'body': body}
