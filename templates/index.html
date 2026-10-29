@@ -35990,6 +35990,37 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                   + more;
             }
 
+            // Every row, in the on-screen sort, as the counts the table shows.
+            window.iiqROIExportContentCsv = function() {
+                var rates = _iiqROIActiveRates();
+                var bd = _iiqROICompute((window.__iiqROICache && window.__iiqROICache.assets) || [], rates);
+                var rows = _iiqROISortRows(bd.perAsset, 'content');
+                if (!rows.length) return;
+                var midL = _iiqROIMidLabel();
+                var botL = _iiqROIBotLabel();
+                var cell = function(v) {
+                    var t = v == null ? '' : String(v);
+                    return /[",\r\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t;
+                };
+                var out = [['#', 'Content', 'Type', 'Posted', 'Format', 'Channel', 'Views', 'Engagements',
+                            midL + ' events', botL + (/visit$/i.test(botL) ? 's' : ' visits'), 'Share', 'URL']];
+                rows.forEach(function(r) {
+                    var a = r.asset;
+                    out.push([r.rank, _iiqROIAssetLabel(a, 100000), a.asset_type || '', a.posted_date || '',
+                              _iiqCreativeFormat(a), a.channel || '', Math.round(r.views), Math.round(r.eng),
+                              Math.round(r.info), Math.round(r.web), r.share.toFixed(1) + '%', a.url || '']);
+                });
+                var csv = '\ufeff' + out.map(function(row) { return row.map(cell).join(','); }).join('\r\n');
+                var slug = (window.__intentIQ && window.__intentIQ.currentSlug) || 'attribution';
+                var blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+                var link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = slug + '_content_resonance_' + new Date().toISOString().slice(0, 10) + '.csv';
+                document.body.appendChild(link);
+                link.click();
+                setTimeout(function() { URL.revokeObjectURL(link.href); link.remove(); }, 0);
+            };
+
             function _iiqROITile(label, value, sub, color) {
                 return ''
                   + '<div class="iiq-card" style="padding:0.85rem;">'
@@ -37571,7 +37602,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     ? '<section id="iiqMTACreativeCard" style="margin-top:1.1rem;">' + creativeHtml + '</section>' : '';
 
                 var roiMoved = (/influencer_project/.test(String((window.__intentIQ && window.__intentIQ.currentSlug) || '')))
-                    ? '<section style="margin-top:1.1rem;"><h5 class="iiq-res-title">Content Resonance</h5><div class="iiq-mta-roi-block"></div></section>' : '';
+                    ? '<section style="margin-top:1.1rem;"><div style="display:flex; align-items:center; justify-content:space-between; gap:1rem;"><h5 class="iiq-res-title">Content Resonance</h5><button type="button" onclick="iiqROIExportContentCsv()" title="Download this table as a CSV" style="background:transparent; color:#C7F23E; border:1px solid rgba(199,242,62,0.45); border-radius:999px; padding:0.3rem 0.85rem; font-size:0.72rem; font-weight:600; letter-spacing:0.04em; cursor:pointer; white-space:nowrap;">Download CSV</button></div><div class="iiq-mta-roi-block"></div></section>' : '';
                 host.innerHTML = dropdownRow + cohortStrip + howToRead + topStrip + sufficiencyCard + pathsCard + creativeCard + coefCard + roiMoved;
                 if (roiMoved) { try { window._iiqROIPaintMTABlock(); } catch (_) {} }
             }
