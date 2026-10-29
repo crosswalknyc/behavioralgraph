@@ -8,8 +8,8 @@ Pilot Testing, 2026-10-28).
                     ("the trim at 4:10 lifted the first act by 6 points").
   two audiences     two twins on one cut: one chart, two lines, where they
                     split and what each said there.
-  comps             a comp set from the twin's own runs, the catalog and
-                    the comps the test named; a "versus comps" column.
+  comps             a comp set from the twin's prior tests, the catalog
+                    and the comps the test named; a "versus comps" column.
   recruit block     quotas on the clock (65% under 35, 50 / 50, 40% fans of
                     the lead) set before Play and seated through the room
                     builder; a comp-title fanship screener ("must have seen
@@ -20,10 +20,11 @@ Pilot Testing, 2026-10-28).
                     has one, else a critics set with that occupation and a
                     stated reviewer lens; a critic score forecast and an
                     awards read.
-  hooks             a concept test from a Greenlight run (the read lands
-                    next to the odds and feeds the levers); talent attach
-                    by quadrant with "who would you watch this with"; an
-                    activation brief in the Spend Engine handoff shape.
+  hooks             talent attach by quadrant with "who would you watch
+                    this with"; an activation brief in the Spend Engine
+                    handoff shape. (The concept-test-from-a-Greenlight-run
+                    hook left with the old Greenlight run on 2026-10-28;
+                    a concept test opens from the Greenlight tab itself.)
 
 Deterministic per (twin, seat, stimulus); counts keep messy last digits;
 nothing here holds or quarantines a prepared test.
@@ -329,9 +330,9 @@ def two_audiences(session: dict, twins_by_key: dict) -> dict:
 # ---------------------------------------------------------------- comps
 def comp_set(payload: dict, session: dict, *, catalog_runs: Optional[list] = None, load_twin: Optional[Callable] = None, limit: int = 8) -> dict:
     """Comps for a test: the titles the test named (with any known
-    numbers), the twin's Greenlight runs (titles with odds), and prior
-    tests on other twins in the catalog (titles with a scorecard). The
-    "versus comps" column places this test among them."""
+    numbers), prior tests on this twin, and prior tests on other twins
+    in the catalog (titles with a scorecard). The "versus comps" column
+    places this test among them."""
     rows = []
     head = _head(session)
     for c in session.get('comps') or []:
@@ -342,15 +343,6 @@ def comp_set(payload: dict, session: dict, *, catalog_runs: Optional[list] = Non
             continue
         rows.append({'title': title[:120], 'source': 'named on the test', 'total_positive_pct': c.get('total_positive_pct'), 'definitely_recommend_pct': c.get('definitely_recommend_pct'),
                      'excellent_pct': c.get('excellent_pct'), 'odds_pct': c.get('odds_pct'), 'outcome': str(c.get('outcome') or '')[:160], 'ours': False})
-    for r in (payload or {}).get('runs') or []:
-        if not isinstance(r, dict) or r.get('kind') not in ('greenlight', 'content', 'compare'):
-            continue
-        o = r.get('outputs') or {}
-        title = str(o.get('title') or (r.get('inputs') or {}).get('title') or '').strip()
-        if not title or title.lower() in ('a new title made for this audience', 'the idea'):
-            continue
-        rows.append({'title': title[:120], 'source': 'Greenlight Lab', 'total_positive_pct': None, 'definitely_recommend_pct': None, 'excellent_pct': None, 'odds_pct': o.get('odds_pct'),
-                     'outcome': (f"{o.get('odds_pct')}% odds of clearing the goal; {human_people(o.get('expected'))} expected in the first month" if o.get('odds_pct') is not None else ''), 'ours': True, 'run_id': r.get('id')})
     # prior tests on this twin and on others in the catalog (a few loads at most)
     seen = {str(session.get('id'))}
     for s in (payload or {}).get('pilot_sessions') or []:
@@ -399,7 +391,7 @@ def comp_set(payload: dict, session: dict, *, catalog_runs: Optional[list] = Non
         versus[key] = {'mine': mine, 'line': line, 'rank': len(above) + 1, 'of': len(comps) + 1}
     for r in rows:
         r['versus'] = {k: (round(float(head[k]) - float(r[k]), 1) if r.get(k) is not None and head.get(k) is not None else None) for k in ('total_positive_pct', 'definitely_recommend_pct', 'excellent_pct')}
-    read = ' '.join(v['line'] for v in versus.values()) or ('No comp carries a number yet; name comps on the test or run them through Greenlight Lab.' if not rows else 'The comps carry no scorecard yet.')
+    read = ' '.join(v['line'] for v in versus.values()) or ('No comp carries a number yet; name comps on the test, or test them with the room first.' if not rows else 'The comps carry no scorecard yet.')
     return {'rows': rows, 'versus': versus, 'read': read}
 
 
@@ -636,66 +628,6 @@ def critic_forecast(session: dict) -> dict:
 
 
 # --------------------------------------------------------------- hooks
-def concept_inputs_from_run(run: dict) -> dict:
-    """What a Greenlight run hands a concept test: the idea in words."""
-    inputs = (run or {}).get('inputs') or {}
-    outputs = (run or {}).get('outputs') or {}
-    title = str(outputs.get('title') or inputs.get('title') or inputs.get('idea') or inputs.get('logline') or 'the idea')[:160]
-    parts = []
-    for k in ('logline', 'idea', 'synopsis', 'treatment', 'description', 'text'):
-        v = inputs.get(k)
-        if v and str(v).strip() and str(v).strip() not in parts:
-            parts.append(str(v).strip())
-    if not parts:
-        parts.append(title)
-    plats = [str(p) for p in (inputs.get('platforms') or []) if str(p).strip()]
-    text = ' '.join(parts)
-    if plats:
-        text += f" For {', '.join(plats[:3])}."
-    return {'title': f"Concept: {title}", 'text': text[:6000], 'logline': parts[0][:600], 'linked_run_id': run.get('id'), 'genre': ''}
-
-
-def attach_concept_to_run(run: dict, session: dict, norms: Optional[dict] = None) -> dict:
-    """The concept read lands on the Greenlight run next to the odds and
-    feeds the levers (a premise the room is definitely interested in
-    earns a lever; a doubt about a name attached lifts the attach
-    lever's read)."""
-    r = session.get('mode_read') or {}
-    if r.get('mode') != 'concept' or r.get('definitely_interested_pct') is None:
-        return {}
-    o = run.setdefault('outputs', {})
-    read = {'session_id': session.get('id'), 'definitely_interested_pct': r.get('definitely_interested_pct'), 'interested_pct': r.get('interested_pct'), 'unique_pct': r.get('unique_pct'),
-            'would_watch_pct': r.get('would_watch_pct'), 'who_for': (r.get('who_for') or {}).get('line'), 'strongest': (r.get('strongest') or [{}])[0].get('label'),
-            'doubt': (r.get('doubt') or [{}])[0].get('label'), 'read': r.get('read'), 'at': _now()}
-    norm = None
-    try:
-        norm = float((((norms or (session.get('scorecard') or {}).get('norms') or {}).get('all') or {}).get('tune_in') or {}).get('value') or 0) or None
-    except (TypeError, ValueError):
-        norm = None
-    levers = o.get('levers') or []
-    interest = float(r.get('definitely_interested_pct') or 0)
-    base = norm or 45.0
-    delta = round(clamp((interest - base) / max(1.0, base) * 10.0, -6.0, 12.0), 1)
-    expected = int(o.get('expected') or 0)
-    lever = {'lever': f"Lead with the premise the room liked ({(r.get('strongest') or [{}])[0].get('label', 'the premise').lower()})", 'delta_pct': delta,
-             'delta_people': messy_count(str(session.get('id')), 'lever|concept', abs(expected * delta / 100.0)) * (1 if delta >= 0 else -1),
-             'read': (f"{pct1(interest)}% of the room is definitely interested on the idea alone" + (f", against {base:.0f}% for a concept." if norm else '.')), 'from_concept_test': True}
-    levers = [lv for lv in levers if not lv.get('from_concept_test')] + [lever]
-    doubt = str((r.get('doubt') or [{}])[0].get('label') or '')
-    if 'name' in doubt.lower():
-        for lv in levers:
-            if 'attach a name' in str(lv.get('lever') or '').lower():
-                lv['read'] = f"The room's biggest doubt about the idea is that it needs a name attached ({pct1((r.get('doubt') or [{}])[0].get('pct'))}%). " + str(lv.get('read') or '')
-    levers.sort(key=lambda l: -float(l.get('delta_people') or 0))
-    for i, lv in enumerate(levers, 1):
-        lv['rank'] = i
-    o['levers'] = levers
-    run['concept_read'] = read
-    run['updated_at'] = _now()
-    session['linked_run_id'] = run.get('id')
-    return read
-
-
 def talent_fit_overlap(s3, talent: str, bucket: Optional[str] = None) -> Optional[dict]:
     """The audience overlap Talent Fit IQ already holds for a name, when a
     result file carries one. Best effort; None when nothing is found."""
@@ -847,5 +779,5 @@ def activation_brief(session: dict, twin: dict) -> dict:
 
 
 __all__ = ['CRITIC_RX', 'REVIEWER_LENS', 'prior_snapshot', 'open_recut', 'align_scenes', 'compare_recut', 'two_audiences', 'comp_set', 'screener_titles', 'apply_quotas', 'walkouts',
-           'finish_recruit_block', 'find_critics_twin', 'seat_critics', 'critic_forecast', 'concept_inputs_from_run', 'attach_concept_to_run', 'talent_fit_overlap', 'talent_attach',
+           'finish_recruit_block', 'find_critics_twin', 'seat_critics', 'critic_forecast', 'talent_fit_overlap', 'talent_attach',
            'activation_brief']

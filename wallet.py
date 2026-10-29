@@ -152,7 +152,7 @@ DEFAULT_PRICING = {
         "attribution_iq_setup": 500.0,
         "attribution_iq_daily": 100.0,
         # 2026-10-26 (Jenna): Digital Twins IQ. The twin (with its
-        # first three runs) $750; each further run $100;
+        # first two runs since 2026-10-28) $750; each further run $100;
         # a Spend Engine plan $250 for its window; a Focus Group IQ session
         # $150 with 12 questions, then $100 per further 12. One line
         # each; the admin billing panel overrides them.
@@ -553,7 +553,7 @@ MODULE_CATALOG = [
     # ---------- Digital Twins IQ (2026-10-26, Jenna) ----------
     ("digital_twins_iq",           "Digital Twins IQ - Twin",
      "modules", 15, 750.0, "has_digital_twins_iq_access"),
-    ("digital_twin_run",           "Digital Twins IQ - Run",
+    ("digital_twin_run",           "Digital Twins IQ - Run (Launch, content, pricing, platform or compare)",
      "modules", 3, 100.0, "has_digital_twins_iq_access"),
     ("digital_twin_spend",         "Digital Twins IQ - Spend Engine Plan",
      "modules", 5, 250.0, "has_digital_twins_iq_access"),
@@ -573,9 +573,9 @@ MODULE_CATALOG = [
      "modules", 2, 1500.0, "has_digital_twins_iq_access"),
     ("digital_twin_key_art",        "Digital Twins IQ - Key Art Test (up to six options)",
      "modules", 2, 1500.0, "has_digital_twins_iq_access"),
-    ("digital_twin_concept",        "Digital Twins IQ - Concept Test",
+    ("digital_twin_concept",        "Digital Twins IQ - Greenlight Concept Test",
      "modules", 3, 2500.0, "has_digital_twins_iq_access"),
-    ("digital_twin_script",         "Digital Twins IQ - Script Read",
+    ("digital_twin_script",         "Digital Twins IQ - Greenlight Script Read",
      "modules", 3, 3500.0, "has_digital_twins_iq_access"),
     ("digital_twin_recut",          "Digital Twins IQ - Recut Re-test (cut B on the same room)",
      "modules", 3, 2750.0, "has_digital_twins_iq_access"),
@@ -1545,7 +1545,9 @@ _PULL_TYPE_TO_TOOL_KEY = {
     "digital twins iq title test":   "digital_twin_title",
     "digital twins iq key art test": "digital_twin_key_art",
     "digital twins iq concept test": "digital_twin_concept",
+    "digital twins iq greenlight concept test": "digital_twin_concept",
     "digital twins iq script read":  "digital_twin_script",
+    "digital twins iq greenlight script read": "digital_twin_script",
     "digital twins iq recut re-test": "digital_twin_recut",
     # ---- Digital Journey / Intent / Sentiment ----
     "digital journey iq":            "journey_iq",

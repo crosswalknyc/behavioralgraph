@@ -85,12 +85,14 @@ ROWS = [
         'client_action': 'analyze', 'host_only': True,
         'note': 'Digital Twins IQ (Jenna 2026-10-26): a build order ("Build a twin of '
                 'Gilmore Girls Hulu viewers") opens the twin intake through the '
-                'tool_intake:twin row; a lab run on a twin ("Run Greenlight Lab on the '
-                'Gilmore Girls twin ...", "Run Launch Lab on this plan", "Put the '
+                'tool_intake:twin row; Greenlight on a twin ("Test this concept in '
+                'Greenlight on the Gilmore Girls twin: ...", "Read this script in '
+                'Greenlight on the Mark Rober twin"), a lab run on a twin ("Run Launch '
+                'Lab on this plan", "Put the '
                 'signal-led plan in the Spend Engine on the rule: max 15% a day", '
                 '"Compare the X and Y twins"), the twin catalog ("do you have a twin '
                 'for X"), the status ("is my twin ready") and the directions ("how do '
-                'I run Greenlight Lab") are served by prometheus.digital_twin_lane on '
+                'I use Greenlight") are served by prometheus.digital_twin_lane on '
                 'the analyze surface. Host intent; exercised in '
                 'scripts/test_pm_digital_twins.py.',
         'examples': [],
@@ -457,7 +459,7 @@ ROWS = [
                      # ask log 2026-10-20 (I9)
                      ("Give me unique US viewers per surface, not just hours, so we can see hours per viewer on television versus phone", False),('who watches love island?', False),
                      # Digital Twins IQ directions (2026-10-26): question-shaped, answered by the twin lane on the analyze surface
-                     ('how do I run Greenlight Lab on a twin?', False),
+                     ('how do I use Greenlight on a twin?', False),
                      ('do you have a twin for Mark Rober?', False),
                      ('what does the love island audience buy', False),
                      ('We want to understand the consumption over time '

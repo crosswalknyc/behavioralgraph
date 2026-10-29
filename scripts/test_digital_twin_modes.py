@@ -420,7 +420,8 @@ class Comparison(unittest.TestCase):
         titles = [r['title'] for r in comps['rows']]
         self.assertIn('Flashdance', titles)
         self.assertIn('The L Word', titles)
-        self.assertIn('Second Helping', titles)
+        self.assertNotIn('Second Helping', titles)      # the retired Greenlight run never feeds the comps (2026-10-28)
+        self.assertFalse(any('Greenlight' in str(r.get('source')) for r in comps['rows']))
         self.assertIn('Last season', titles)
         self.assertIn('Other pilot', titles)
         self.assertIn('definitely_recommend_pct', comps['versus'])
@@ -450,22 +451,20 @@ class Comparison(unittest.TestCase):
 
 
 class Hooks(unittest.TestCase):
-    def test_concept_test_attaches_to_a_greenlight_run(self):
+    def test_concept_test_seats_two_twins_in_one_room(self):
+        """Two twins on one idea is a Concept test with both in the room (the
+        compare-on-an-idea Greenlight run is gone, 2026-10-28)."""
         from migration import digital_twin_compare as C
-        twin = _beals()
-        run = {'id': 'r1', 'kind': 'greenlight', 'inputs': {'logline': LOGLINE, 'platforms': ['Hulu']},
-               'outputs': {'title': 'Second Helping', 'expected': 120345, 'odds_pct': 61.0, 'levers': [{'lever': 'Attach a name this group already follows', 'delta_pct': 6.1, 'delta_people': 7000, 'read': 'x', 'rank': 1}]}}
-        ci = C.concept_inputs_from_run(run)
-        self.assertTrue(ci['title'].startswith('Concept:'))
-        self.assertIn('Hulu', ci['text'])
-        sess = PI.open_session([twin], title=ci['title'], in_room=10, mode='concept', text=ci['text'], logline=ci['logline'])
-        PI.prepare_watch(sess, {'jb': twin}, title=ci['title'])
-        read = C.attach_concept_to_run(run, sess)
-        self.assertEqual(read['session_id'], sess['id'])
-        self.assertEqual(run['concept_read']['definitely_interested_pct'], sess['mode_read']['definitely_interested_pct'])
-        self.assertTrue(any(l.get('from_concept_test') for l in run['outputs']['levers']))
-        self.assertEqual([l['rank'] for l in run['outputs']['levers']], list(range(1, len(run['outputs']['levers']) + 1)))
-        self.assertEqual(sess['linked_run_id'], 'r1')
+        twin, young = _beals(), _young()
+        sess = PI.open_session([twin, young], title='Second Helping', in_room=12, mode='concept', text=LOGLINE)
+        PI.prepare_watch(sess, {'jb': twin, 'ym': young}, title='Second Helping')
+        self.assertEqual(sess['mode'], 'concept')
+        self.assertIsNotNone(sess['mode_read']['definitely_interested_pct'])
+        ta = sess.get('two_audiences')
+        self.assertTrue(ta and len(ta['lines']) == 2)
+        self.assertEqual(PI.charge_due(sess), 'digital_twin_concept')
+        self.assertFalse(hasattr(C, 'concept_inputs_from_run'))
+        self.assertFalse(hasattr(C, 'attach_concept_to_run'))
 
     def test_talent_attach_by_quadrant_with_watch_with(self):
         from migration import digital_twin_compare as C
@@ -656,7 +655,137 @@ class PartnerSurface(unittest.TestCase):
         self.assertEqual(r4.get_json()['screenings'][0]['screening_id'], sid)
         r5 = c.post('/api/v1/screenings', json={'prompt': 'Test the trailer on the Nobody twin'})
         self.assertEqual(r5.status_code, 404)
+        # the retired Greenlight run: refused with the plain line, nothing charged; a compare on that scenario the same
+        n_charges = len(charges)
+        for body_ in ({'kind': 'greenlight', 'inputs': {'title': 'Second Helping', 'platforms': ['Hulu']}}, {'inputs': {}},
+                      {'kind': 'compare', 'other_key': key, 'inputs': {'scenario_kind': 'greenlight'}}):
+            r6 = c.post(f'/api/digital-twins/{key}/run', json=body_)
+            self.assertEqual(r6.status_code, 400, r6.get_data(as_text=True)[:200])
+            out6 = r6.get_json()
+            self.assertEqual(out6['error'], DT.GREENLIGHT_RETIRED_LINE)
+            self.assertTrue(out6.get('retired'))
+            self.assertEqual(out6.get('tab'), 'greenlight')
+        self.assertEqual(len(charges), n_charges)
+        for tok in ('synth', 'pipeline', 'claude', '\u2014', 'odds'):
+            self.assertNotIn(tok, DT.GREENLIGHT_RETIRED_LINE.lower())
+        # a stored Greenlight run stays on the twin and never reaches the page
+        stored = SYN.load_twin(s3, key)
+        stored.setdefault('runs', []).insert(0, {'id': 'old', 'kind': 'greenlight', 'label': 'Greenlight Lab', 'question': 'odds?', 'outputs': {'expected': 1, 'low': 1, 'high': 2, 'odds_pct': 50.0}})
+        SYN.save_twin(s3, key, stored)
+        r7 = c.get(f'/api/digital-twins/{key}')
+        self.assertEqual(r7.status_code, 200)
+        self.assertNotIn('old', [x['id'] for x in r7.get_json()['twin']['runs']])
+        self.assertIn('old', [x['id'] for x in SYN.load_twin(s3, key)['runs']])
+        self.assertEqual(c.get(f'/api/digital-twins/{key}/status').get_json()['runs'], len(r7.get_json()['twin']['runs']))
+        self.assertEqual(c.post(f'/api/digital-twins/{key}/greenlight/old/ask-the-room', json={}).status_code, 404)
         sys.modules.pop('app', None)
+
+
+class GreenlightLane(unittest.TestCase):
+    """Prometheus routes Greenlight to its two options (Jenna 2026-10-28):
+    a logline / synopsis / idea is a Concept test, a script / treatment /
+    attached screenplay is a Script read, a bare 'run Greenlight' asks
+    which, and two twins on one idea is a Concept test with both seated."""
+
+    @classmethod
+    def setUpClass(cls):
+        from prometheus import digital_twin_lane as L
+        cls.L = L
+
+    def test_option_from_the_words_and_the_file(self):
+        L = self.L
+        self.assertEqual(L.greenlight_option('Test this concept in Greenlight on the Gilmore Girls twin: ' + LOGLINE), 'concept')
+        self.assertEqual(L.greenlight_option('What are the odds this logline clears 2M viewers on Peacock: ' + LOGLINE), 'concept')
+        self.assertEqual(L.greenlight_option('Run Greenlight on the Mark Rober twin on this idea: a build box'), 'concept')
+        self.assertEqual(L.greenlight_option('Read this script in Greenlight on the Mark Rober twin'), 'script')
+        self.assertEqual(L.greenlight_option('Run Greenlight on the Beals twin with the attached treatment'), 'script')
+        self.assertEqual(L.greenlight_option('Run Greenlight on the Beals twin with the attached file', SCRIPT), 'script')
+        self.assertEqual(L.greenlight_option('Run Greenlight on the Gilmore Girls twin'), '')
+        self.assertEqual(L.greenlight_option('Run Greenlight Lab on the Gilmore Girls twin', 'a one page memo with no sluglines'), '')
+        self.assertEqual(L.greenlight_text('Test this concept in Greenlight on the Gilmore Girls twin: ' + LOGLINE, 'concept'), LOGLINE)
+        self.assertEqual(L.greenlight_text('What are the odds this logline clears 2M viewers on Peacock: ' + LOGLINE, 'concept'), LOGLINE)
+        self.assertEqual(L.greenlight_text('Put this to the room: "' + LOGLINE + '"', 'concept'), LOGLINE)
+        self.assertEqual(L.greenlight_text('Test a concept in Greenlight on the Beals twin', 'concept', 'The one-sheet text.'), 'The one-sheet text.')
+        self.assertEqual(L.greenlight_text('Test a concept in Greenlight on the Beals twin', 'concept'), '')
+        self.assertEqual(L.greenlight_text('Read this script in Greenlight on the Beals twin', 'script', SCRIPT), SCRIPT.strip())
+        self.assertEqual(L.greenlight_text('Read this script in Greenlight on the Beals twin', 'script'), '')
+        self.assertEqual(L.greenlight_text('Read this script in Greenlight on the Beals twin. Script: ' + SCRIPT, 'script'), SCRIPT.strip())
+
+    def test_intents_route_to_greenlight(self):
+        L = self.L
+        for ask in ('Test this concept in Greenlight on the Gilmore Girls twin: ' + LOGLINE, 'Read this script in Greenlight on the Mark Rober twin',
+                    'Run Greenlight on the Gilmore Girls twin', 'Run Greenlight Lab on the Gilmore Girls twin: a new season', 'What are the odds this logline clears 2M viewers on the Beals twin: x'):
+            self.assertTrue(L.twin_intent(ask), ask)
+            self.assertEqual(L.lab_kind(ask), 'greenlight', ask)
+        self.assertEqual(L.lab_kind('Compare the Gilmore Girls and Mark Rober twins on this idea: ' + LOGLINE), 'compare')
+        self.assertEqual(L.question_kind('would this logline work for them: ' + LOGLINE), 'greenlight')
+        self.assertEqual(L.question_kind('where does the second act drag in this script?'), 'greenlight')
+        self.assertEqual(L.question_kind('what does $12.99 a month do to take rate?'), 'pricing')
+        self.assertEqual(L.question_kind('how does the next season land on Netflix?'), 'content')
+        self.assertFalse(hasattr(L, 'greenlight_inputs'))
+        self.assertIn('run_greenlight', L.__all__)
+
+    def test_run_greenlight_opens_the_option_or_asks(self):
+        L = self.L
+        from migration import digital_twin_synthesis as SYN
+        from prometheus.host import host
+        s3 = FakeS3()
+        twin, young = _beals(), _young()
+        twin['meta']['created_by'] = young['meta']['created_by'] = 'jenna'
+        k1 = 'digital-twins/jenna/Jennifer_Beals_20261028_120000_abc123def0.json.gz'
+        k2 = 'digital-twins/jenna/Young_Men_20261028_120000_abc123def1.json.gz'
+        SYN.save_twin(s3, k1, twin)
+        SYN.save_twin(s3, k2, young)
+        host.bind(s3_client=s3, bucket='b')
+        user = {'username': 'jenna', 'role': 'super_admin', 'has_digital_twins_iq_access': True}
+        name = twin['meta']['name']
+        # bare: one line, two chips
+        ask = L.run_greenlight(f'Run Greenlight on the {name} twin', {}, [], user, {}, '')
+        self.assertIn('two ways', ask['reply'])
+        self.assertIn('Script read', ask['reply'])
+        self.assertIn('Concept test', ask['reply'])
+        self.assertEqual(len(ask['followups']), 2)
+        self.assertEqual(ask['action_hint']['tab'], 'greenlight')
+        self.assertFalse(any(s.get('mode') in ('script', 'concept') for s in SYN.load_twin(s3, k1).get('pilot_sessions') or []))
+        # a concept without the text: asks for it, opens nothing
+        ask2 = L.run_greenlight(f'Test a concept in Greenlight on the {name} twin', {}, [], user, {}, '')
+        self.assertIn('Paste the logline', ask2['reply'])
+        self.assertEqual(ask2['action_hint']['tab'], 'concept')
+        # the concept: opens the test, free until Play, lands on Greenlight under Concept
+        out = L.run_greenlight(f'Test this concept in Greenlight on the {name} twin: ' + LOGLINE, {}, [], user, {}, '')
+        self.assertIn('Concept test', out['reply'])
+        self.assertIn('charged on Play', out['reply'])
+        self.assertEqual(out['action_hint']['tab'], 'concept')
+        stored = SYN.load_twin(s3, k1)
+        sess = next(s for s in stored['pilot_sessions'] if s['id'] == out['action_hint']['session_id'])
+        self.assertEqual(sess['mode'], 'concept')
+        self.assertEqual(sess['text'], LOGLINE)
+        self.assertFalse(sess.get('play_charged'))
+        self.assertEqual(PI.charge_due(sess), 'digital_twin_concept')
+        self.assertEqual(sess['status'], 'ready')
+        self.assertIsNotNone((sess.get('mode_read') or {}).get('definitely_interested_pct'))
+        # the script, pasted: a Script read
+        out3 = L.run_greenlight(f'Read this script in Greenlight on the {name} twin. Script: ' + SCRIPT, {}, [], user, {}, '')
+        self.assertIn('Script read', out3['reply'])
+        self.assertEqual(out3['action_hint']['tab'], 'script')
+        s3s = next(s for s in SYN.load_twin(s3, k1)['pilot_sessions'] if s['id'] == out3['action_hint']['session_id'])
+        self.assertEqual(s3s['mode'], 'script')
+        self.assertEqual(PI.charge_due(s3s), 'digital_twin_script')
+        # two twins on one idea through the compare lane: a Concept test with both seated, never a run
+        out4 = L.run_lab('compare', f"Compare the {name} and {young['meta']['name']} twins on this idea: " + LOGLINE, {}, [], user, {}, '')
+        self.assertIn('Concept test', out4['reply'])
+        self.assertNotIn('job_id', out4)
+        self.assertIn(out4['twin_key'], (k1, k2))
+        s4 = next(s for s in SYN.load_twin(s3, out4['twin_key'])['pilot_sessions'] if s['id'] == out4['action_hint']['session_id'])
+        self.assertEqual(sorted(s4['twin_keys']), sorted([k1, k2]))
+        self.assertTrue(s4.get('two_audiences'))
+        self.assertIn('seated too', out4['reply'])
+        for k in (k1, k2):
+            self.assertFalse(any(r.get('kind') in ('greenlight', 'compare') for r in SYN.load_twin(s3, k).get('runs') or []))
+        for payload in (ask, ask2, out, out3, out4):
+            blob = json.dumps(payload, default=str).lower()
+            for tok in ('synth', 'claude', 'pipeline', 'hostmap', '\u2014', 'odds'):
+                self.assertNotIn(tok, blob, tok)
 
 
 class Page(unittest.TestCase):
@@ -670,19 +799,52 @@ class Page(unittest.TestCase):
         cls.block = cls.html[start:cls.html.index('</script>', i)]
 
     def test_every_new_tab_is_on_the_page(self):
-        for tab, pane, host in (('trailer', 'dtwTabTrailer', 'dtwTrConsole'), ('titles', 'dtwTabTitles', 'dtwTiConsole'), ('script', 'dtwTabScript', 'dtwScConsole'),
-                                ('concept', 'dtwTabConcept', 'dtwCoConsole'), ('norms', 'dtwTabNorms', 'dtwNoConsole')):
+        for tab, pane, host in (('trailer', 'dtwTabTrailer', 'dtwTrConsole'), ('titles', 'dtwTabTitles', 'dtwTiConsole'), ('norms', 'dtwTabNorms', 'dtwNoConsole')):
             self.assertIn(f'data-tab="{tab}"', self.html, tab)
             self.assertIn(f'id="{pane}"', self.html, pane)
             self.assertIn(f'id="{host}"', self.html, host)
-        self.assertIn("var TABS = ['twins', 'greenlight', 'launch', 'spend', 'panel', 'pilot', 'trailer', 'titles', 'script', 'concept', 'norms'];", self.html)
-        for label in ('>Trailers<', '>Titles and Key Art<', '>Script Reads<', '>Concepts<', '>Norms<'):
+        self.assertIn("var TABS = ['twins', 'greenlight', 'launch', 'spend', 'panel', 'pilot', 'trailer', 'titles', 'norms'];", self.html)
+        for label in ('>Trailers<', '>Titles and Key Art<', '>Norms<', '>Greenlight<'):
             self.assertIn(label, self.html, label)
         self.assertIn('flex-wrap: wrap', self.html[self.html.index('.dtw-segs {'):self.html.index('.dtw-segs {') + 200])
 
+    def test_greenlight_is_two_options_and_the_standalone_tabs_are_gone(self):
+        """Jenna 2026-10-28: Greenlight opens on Script read and Concept; the
+        Script Reads and Concepts tabs fold into it; the odds run is gone."""
+        bar = self.html[self.html.index('<div class="dtw-segs" role="tablist">'):self.html.index('<div class="dtw-fg-acts" id="dtwFgActs"')]
+        labels = re.findall(r'role="tab" onclick="dtwTab\(\'[a-z]+\'\)">([^<]+)</button>', bar)
+        self.assertEqual(labels, ['Twins', 'Greenlight', 'Launch', 'Spend Engine', 'Focus Group IQ', 'Pilot Testing', 'Trailers', 'Titles and Key Art', 'Norms'])
+        for gone in ('data-tab="script"', 'data-tab="concept"', 'id="dtwTabScript"', 'id="dtwTabConcept"', '>Script Reads<', '>Concepts<'):
+            self.assertNotIn(gone, self.html, gone)
+        pane = self.html[self.html.index('<section id="dtwTabGreenlight"'):self.html.index('<section id="dtwTabLaunch"')]
+        for need in ('data-gl="script"', 'data-gl="concept"', "dtwGreenlightPick('script')", "dtwGreenlightPick('concept')", '>Script read<', '>Concept<',
+                     'id="dtwScConsole"', 'id="dtwCoConsole"', 'id="dtwGlScriptPrice"', 'id="dtwGlConceptPrice"'):
+            self.assertIn(need, pane, need)
+        for gone in ('dtwGlResults', 'Run Greenlight', 'Odds on a title', 'dtwGlText', 'dtwGlOther', 'data-dtw-run'):
+            self.assertNotIn(gone, pane, gone)
+        # deep links and chips land on Greenlight with the option picked
+        self.assertIn("if (GL_OPTIONS.indexOf(tab) >= 0) { S.glOption = tab; tab = 'greenlight'; }", self.block)
+        self.assertIn("var GL_OPTIONS = ['script', 'concept'];", self.block)
+        self.assertIn("PI_HOST = { pilot: 'dtwPiConsole', trailer: 'dtwTrConsole', titles: 'dtwTiConsole', script: 'dtwScConsole', concept: 'dtwCoConsole' }", self.block)
+        self.assertIn("script: 'Script read', concept: 'Concept'", self.block)
+        self.assertIn("greenlight: 'Greenlight'", self.block)
+        self.assertIn('window.dtwGreenlightPick = function(opt)', self.block)
+        self.assertIn('function syncGreenlightOptions()', self.block)
+        self.assertIn("find('greenlight script')", self.block)
+        self.assertIn("find('greenlight concept')", self.block)
+        # the old Greenlight run is off the page
+        for gone in ("renderEmpty('dtwGlResults', 'greenlight')", 'function renderGreenlight(', 'window.dtwGlAskRoom', 'Back to the Greenlight run', 'Run Greenlight Lab on the',
+                     "dtwRunLab('greenlight')", 'ask-the-room', 'Ask the room again', 'concept_read', "'compare': 'greenlight'", 'How do I run Greenlight Lab'):
+            self.assertNotIn(gone, self.html, gone)
+        for need in ('function renderRun(', 'id="dtwRunResults"', 'function isRetiredRun(r)', 'function productRuns(t)', "productRuns(t).forEach(", 'S.twin.runs = productRuns(S.twin);'):
+            self.assertIn(need, self.html, need)
+        self.assertIn("Test a concept in Greenlight on the ' + (tw || 'open') + ' twin'", self.html)
+        self.assertIn('How do I use Greenlight on a twin?', self.html)
+        self.assertNotIn('three runs', self.block)
+
     def test_block_has_the_phase_2_renderers_and_no_dashes(self):
         for fn in ('function renderModeRead(', 'function renderDiagnostics(', 'function renderPilotExtras(', 'async function renderNormsTab(', 'window.dtwPilotRecut', 'window.dtwPilotCompare',
-                   'window.dtwPilotComps', 'window.dtwPilotCritics', 'window.dtwPilotTalent', 'window.dtwPilotBrief', 'window.dtwGlAskRoom', 'Ask the room', 'report.pptx', 'Every screening adds to these'):
+                   'window.dtwPilotComps', 'window.dtwPilotCritics', 'window.dtwPilotTalent', 'window.dtwPilotBrief', 'Ask the room', 'report.pptx', 'Every screening adds to these'):
             self.assertIn(fn, self.block, fn)
         self.assertNotIn('\u2014', self.block)
         self.assertNotIn('\u2013', self.block)
@@ -714,20 +876,31 @@ class Pricing(unittest.TestCase):
 
     def test_how_to_items_for_every_tab(self):
         ids = [it['id'] for it in DT.how_to()['items']]
-        for tab in ('pilot', 'trailer', 'titles', 'script', 'concept', 'norms'):
+        for tab in ('pilot', 'trailer', 'titles', 'greenlight', 'norms'):
             self.assertIn(tab, ids)
+        for folded in ('script', 'concept'):
+            self.assertNotIn(folded, ids)          # the two options live inside the Greenlight item (2026-10-28)
+        gl = next(it for it in DT.how_to()['items'] if it['id'] == 'greenlight')
+        self.assertEqual([o['id'] for o in gl['options']], ['script', 'concept'])
         text = json.dumps(DT.how_to(), default=str).lower()
-        for tok in ('screen engine', 'nrg', 'marketcast', 'fishdog', 'synth', 'claude', 'pipeline', '\u2014'):
+        for tok in ('screen engine', 'nrg', 'marketcast', 'fishdog', 'synth', 'claude', 'pipeline', '\u2014', 'greenlight lab'):
             self.assertNotIn(tok, text)
         self.assertIn('Trailers', DT.how_to_text('how do I run a trailer test'))
         self.assertIn('Norms', DT.how_to_text('what is the norms tab'))
+        self.assertIn('Greenlight.', DT.how_to_text('how do I use greenlight'))
+        self.assertIn('Greenlight.', DT.how_to_text('how do I run a script read'))
+        self.assertIn('Greenlight.', DT.how_to_text('how do I run a concept test'))
 
     def test_rate_card_carries_the_modes(self):
         from prometheus import rate_card as RC
         text = RC.render()
-        for frag in ('Trailer or TV spot test', 'Title or logline test', 'Key art test', 'Concept test', 'Script read', 'Recut re-test'):
+        for frag in ('Trailer or TV spot test', 'Title or logline test', 'Key art test', 'Greenlight Concept test', 'Greenlight Script read', 'Recut re-test', 'with its first two runs'):
             self.assertIn(frag, text)
+        for gone in ('Greenlight, Launch', 'first three runs'):
+            self.assertNotIn(gone, text)
         self.assertEqual(RC.default('digital_twin_trailer'), 2500.0)
+        self.assertEqual(RC.default('digital_twin_concept'), 2500.0)
+        self.assertEqual(RC.default('digital_twin_script'), 3500.0)
         self.assertNotIn('\u2014', text)
 
 

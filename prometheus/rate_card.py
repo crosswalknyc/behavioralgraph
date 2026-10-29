@@ -35,8 +35,9 @@ ROWS = (
     ('Any other custom ask (a ranked list, a table, a cross, a top N, what they did next)', 'panel_report', 100.0, 'followup'),
     ('Audience size / sample check', 'derived_read', 100.0, 'flat'),
     ('Breakdown of a delivered figure (by device, daypart, geography or demographic)', 'derived_read', 100.0, 'flat'),
-    # Digital Twins IQ (Jenna 2026-10-26): the twin with its first three runs, then each further run
-    ('Digital Twin (with its first three runs)', 'digital_twins_iq', 750.0, 'twin'),
+    # Digital Twins IQ (Jenna 2026-10-26): the twin with its first runs, then each further run (two runs since 2026-10-28,
+    # when the Greenlight run left the build; Greenlight is now the Concept and Script read lines below)
+    ('Digital Twin (with its first two runs)', 'digital_twins_iq', 750.0, 'twin'),
     ('Digital Twin Spend Engine (a plan for its window, daily runs included)', 'digital_twin_spend', 250.0, 'flat'),
     ('Digital Twin Focus Group IQ (a session with 12 questions, 12 panelists)', 'digital_twin_panel', 5500.0, 'panel'),
     ('Digital Twin Pilot Testing (a session with 12 questions on the clock, 12 panelists)', 'digital_twin_pilot', 5500.0, 'pilot'),
@@ -44,8 +45,8 @@ ROWS = (
     ('Digital Twin Trailer or TV spot test (per asset, up to three side by side)', 'digital_twin_trailer', 2500.0, 'flat'),
     ('Digital Twin Title or logline test (up to six options)', 'digital_twin_title', 1500.0, 'flat'),
     ('Digital Twin Key art test (up to six options)', 'digital_twin_key_art', 1500.0, 'flat'),
-    ('Digital Twin Concept test', 'digital_twin_concept', 2500.0, 'flat'),
-    ('Digital Twin Script read', 'digital_twin_script', 3500.0, 'flat'),
+    ('Digital Twin Greenlight Concept test (a logline, synopsis or one-sheet to the room)', 'digital_twin_concept', 2500.0, 'flat'),
+    ('Digital Twin Greenlight Script read (the script, scene by scene)', 'digital_twin_script', 3500.0, 'flat'),
     ('Digital Twin Recut re-test (cut B on the same room)', 'digital_twin_recut', 2750.0, 'flat'),
 )
 TWIN_RUN_KEY, TWIN_RUN_DEFAULT = 'digital_twin_run', 100.0
@@ -108,7 +109,7 @@ def render(symbol='$', price_fn=None):
                          "day to track per campaign")
         elif shape == 'twin':
             run = _price(price_fn, TWIN_RUN_KEY, TWIN_RUN_DEFAULT)
-            lines.append(f"{label} - {money(p, c)}, then {money(run, c)} for each further Greenlight, Launch, content or compare run")
+            lines.append(f"{label} - {money(p, c)}, then {money(run, c)} for each further Launch, content, pricing, platform or compare run")
         elif shape == 'panel':
             more = _price(price_fn, PANEL_MORE_KEY, PANEL_MORE_DEFAULT)
             seat = _price(price_fn, PANELIST_KEY, PANELIST_DEFAULT)

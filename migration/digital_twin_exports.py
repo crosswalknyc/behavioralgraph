@@ -16,7 +16,7 @@ import re
 from pathlib import Path
 from typing import List, Optional, Tuple
 
-from migration.digital_twin_engine import fmt_money, fmt_people, human_people
+from migration.digital_twin_engine import fmt_money, fmt_people, human_people, product_runs
 
 GRAPHITE = '#0C1618'
 SLATE = '#15252A'
@@ -99,7 +99,8 @@ def _pages(payload: dict) -> list:
     if lc:
         pages.append({'kind': 'tiles', 'header': _words(f"{lc.get('habit_pct', 0):.1f}% are in the habit; {lc.get('lapsing_pct', 0):.1f}% are drifting away"),
                       'sub': lc.get('read') or '', 'tiles': [(f"{lc.get(k, 0):.1f}%", k[:-4].title()) for k in ('discovering_pct', 'trying_pct', 'habit_pct', 'lapsing_pct', 'returning_pct')], 'dark': False})
-    for r in (payload.get('runs') or [])[:4]:
+    # the runs the product shows (the retired Greenlight run never gets a page)
+    for r in product_runs(payload)[:4]:
         o = r.get('outputs') or {}
         usd = o.get('unit') == 'usd'
         f = (lambda v: fmt_money(v)) if usd else (lambda v: f"{human_people(v)} {o.get('noun') or 'people'}")

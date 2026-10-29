@@ -21,6 +21,9 @@ import re
 import time
 from typing import Optional
 
+from migration.digital_twin_engine import (  # noqa: F401
+    GREENLIGHT_RETIRED_LINE, RETIRED_RUN_KINDS, is_retired_run, product_runs,
+)
 from migration.digital_twin_synthesis import (  # noqa: F401
     S3_BUCKET, S3_INDEX_KEY, S3_PREFIX, load_twin, remove_from_index, save_twin,
 )
@@ -40,8 +43,8 @@ PRODUCT_LABEL = 'Digital Twins IQ'
 # pay-per-use attribution, so the session sweep bills them at the
 # published meter like any other Prometheus work.
 PRICING = {
-    'digital_twins_iq': 750.0,          # a twin build: the twin and three runs
-    'digital_twin_run': 100.0,          # each further Greenlight, Launch, content or compare run
+    'digital_twins_iq': 750.0,          # a twin build: the twin and its first two runs (the old Greenlight run left the seed 2026-10-28)
+    'digital_twin_run': 100.0,          # each further Launch, content, pricing, platform or compare run
     'digital_twin_spend': 250.0,        # Spend Engine plan activation for the plan window, daily runs included
     'digital_twin_panel': 5500.0,       # a Focus Group IQ session, 12 questions included (Jenna 2026-10-26: 'A session is $5,500 (twelve questions, any room)')
     'digital_twin_panel_more': 5500.0,  # each further 12 questions is another session at the session price
@@ -54,8 +57,8 @@ PRICING = {
     'digital_twin_trailer': 2500.0,     # a trailer or TV spot test, per asset (up to three side by side)
     'digital_twin_title': 1500.0,       # a title / logline test, up to six options
     'digital_twin_key_art': 1500.0,     # a key art test, up to six options
-    'digital_twin_concept': 2500.0,     # a concept test (logline, synopsis, one-sheet or deck text)
-    'digital_twin_script': 3500.0,      # a script read (the script text or a recorded table read)
+    'digital_twin_concept': 2500.0,     # Greenlight, Concept: a concept test (logline, synopsis, one-sheet or deck text)
+    'digital_twin_script': 3500.0,      # Greenlight, Script read: the script text or a recorded table read
     'digital_twin_recut': 2750.0,       # a recut re-test on the same room (cut B after cut A)
 }
 PANEL_QUESTIONS_INCLUDED = 12
@@ -408,7 +411,7 @@ def csv_rows(payload: dict) -> list:
     for k, v in (payload.get('lifecycle') or {}).items():
         if k.endswith('_pct'):
             rows.append(['Lifecycle', k[:-4], k[:-4], v, '%', ''])
-    for r in payload.get('runs') or []:
+    for r in product_runs(payload):
         o = r.get('outputs') or {}
         unit = 'USD' if o.get('unit') == 'usd' else (o.get('noun') or 'people')
         rows.append(['Runs', r.get('id'), f"{r.get('label')}: {r.get('question')}", o.get('expected'), unit, f"range {o.get('low')} to {o.get('high')}" + (f"; odds {o.get('odds_pct')}%" if o.get('odds_pct') is not None else '')])
@@ -462,11 +465,11 @@ def view_summary(payload: dict, run_id: str = '', session_id: str = '') -> dict:
            'tldr': (payload.get('the_read') or {}).get('tldr'),
            'runs': [{'id': r.get('id'), 'kind': r.get('kind'), 'question': r.get('question'), 'expected': (r.get('outputs') or {}).get('expected'),
                      'low': (r.get('outputs') or {}).get('low'), 'high': (r.get('outputs') or {}).get('high'), 'odds_pct': (r.get('outputs') or {}).get('odds_pct'),
-                     'recommendation': r.get('recommendation')} for r in (payload.get('runs') or [])[:8]]}
+                     'recommendation': r.get('recommendation')} for r in product_runs(payload)[:8]]}
     if payload.get('standing_questions'):
         out['standing_questions'] = payload['standing_questions']
     if run_id:
-        r = next((x for x in payload.get('runs') or [] if x.get('id') == run_id), None)
+        r = next((x for x in product_runs(payload) if x.get('id') == run_id), None)
         if r:
             out['open_run'] = {k: r.get(k) for k in ('id', 'kind', 'question', 'outputs', 'drivers', 'recommendation', 'read')}
     if session_id:
@@ -518,7 +521,7 @@ def twin_lines(payload: dict) -> list:
     lc = payload.get('lifecycle') or {}
     if lc:
         out.append('LIFECYCLE:\n' + '; '.join(f"{k[:-4]} {v}%" for k, v in lc.items() if k.endswith('_pct')))
-    for r in (payload.get('runs') or [])[:6]:
+    for r in product_runs(payload)[:6]:
         o = r.get('outputs') or {}
         unit = 'usd' if o.get('unit') == 'usd' else (o.get('noun') or 'people')
         fmt = (lambda v: fmt_money(v)) if unit == 'usd' else (lambda v: f"{int(v or 0):,} {unit}")
@@ -581,15 +584,15 @@ def pricing_lines(price_fn=None) -> list:
 
     def money(v):
         return f"${v:,.0f}" if abs(v - round(v)) < 0.009 else f"${v:,.2f}"
-    return [f"Digital Twin - {money(p('digital_twins_iq'))} for the twin and its first three runs",
-            f"Each further Greenlight, Launch, content or compare run - {money(p('digital_twin_run'))}",
+    return [f"Digital Twin - {money(p('digital_twins_iq'))} for the twin and its first two runs",
+            f"Each further Launch, content, pricing, platform or compare run - {money(p('digital_twin_run'))}",
             f"Spend Engine - {money(p('digital_twin_spend'))} to activate a plan for its window, daily runs included",
             f"Focus Group IQ - {money(p('digital_twin_panel'))} a session with {PANEL_QUESTIONS_INCLUDED} questions, then {money(p('digital_twin_panel_more'))} for each further {PANEL_QUESTIONS_INCLUDED}",
             f"Pilot Testing - {money(p('digital_twin_pilot'))} a session with {PANEL_QUESTIONS_INCLUDED} questions on the clock, then {money(p('digital_twin_pilot_more'))} for each further {PANEL_QUESTIONS_INCLUDED} (same as Focus Group IQ); a feature, an episode, a binge test or a critics room is a session at this price",
             f"Trailers - {money(p('digital_twin_trailer'))} per trailer or TV spot, up to three side by side",
             f"Titles and Key Art - {money(p('digital_twin_title'))} for a title or logline test and {money(p('digital_twin_key_art'))} for a key art test, up to six options each",
-            f"Concepts - {money(p('digital_twin_concept'))} a concept test",
-            f"Script Reads - {money(p('digital_twin_script'))} a script read",
+            f"Greenlight Concept - {money(p('digital_twin_concept'))} a concept test",
+            f"Greenlight Script read - {money(p('digital_twin_script'))} a script read",
             f"Recut re-test - {money(p('digital_twin_recut'))} for cut B on the same room",
             f"Extra panelist - {money(p('digital_twin_panelist'))} for each panelist past the {PANEL_SEATS_INCLUDED} a session seats, billed with the session",
             "Prometheus usage - metered at the published rate on top of these, for the build and for every question in a room"]
@@ -606,20 +609,32 @@ HOW_TO = [
                    f'and how many panelists sit in its focus group rooms ({PANEL_SEATS_INCLUDED} come with a session; each one past that is priced). Or type the ask to Prometheus with a window if it is not the last 12 months.'),
         'type_this': ['Build a twin of Gilmore Girls Hulu viewers', 'Build a twin of Mark Rober for a product launch', 'Build a twin of women 25 to 44 in Dallas who shop at Target'],
         'attach': 'Nothing is needed. If you have a brief or a deck on the subject, attach it with the paper clip and the twin reads it.',
-        'comes_back': ('The twin lands on the Twins tab in a few minutes, with its first three runs. Prometheus confirms in the chat; there is no email. '
+        'comes_back': ('The twin lands on the Twins tab in a few minutes, with its first two runs. Prometheus confirms in the chat; there is no email. '
                        'Delete a twin from the Twins tab; it leaves the library and you can undo for 30 days.'),
         'cost_key': 'digital_twins_iq', 'export': 'Twins tab: CSV, Deck or PDF at the top of the twin page. Delete sits on the card and on the open twin.',
     },
     {
-        'id': 'greenlight', 'title': 'Greenlight Lab',
-        'answers': 'The odds on a title or a bare idea: a seven in ten chance it clears your goal, the range of first-month viewers, buyers or listeners per platform, completion and return, which cohorts show up, the levers ranked by what they earn, and one package to run. Two candidates side by side when you ask.',
-        'put_in': 'A logline, a title, a script or treatment, a trailer link; the platforms you are weighing; the goal (for example 4M viewers in the first month).',
-        'type_this': ['Run Greenlight Lab on the Gilmore Girls twin: a new season on Hulu and Netflix, goal 4M viewers in the first month',
-                      'What are the odds this logline clears 2M viewers on Peacock: a chef returns to her hometown diner after a scandal',
-                      'Compare the Gilmore Girls and Mark Rober twins on the same idea'],
-        'attach': 'Attach the script, treatment or deck with the paper clip; its text becomes the inputs of the run.',
-        'comes_back': 'The run appears on the Greenlight Lab tab and in the twin\'s Runs list within a minute or two; Prometheus answers in the chat with the odds and a chip to open it.',
-        'cost_key': 'digital_twin_run', 'export': 'The run exports with the twin (CSV, Deck, PDF).',
+        # Jenna 2026-10-28: "remove what we currently have since I think it's nothing and replace with two options within it
+        # script reads and concepts." Greenlight is the tab; Script read and Concept are the two options inside it.
+        'id': 'greenlight', 'title': 'Greenlight',
+        'answers': ('Two ways to put a project to the room before cameras roll or money is committed. Script read: paste or upload the script and the room reads it '
+                    'scene by scene on a reading clock, with a dial per scene and story, structure and character notes (where it runs long, where a character '
+                    'arrives without a want, where the turn lands); or upload a recorded table read and it runs like a pilot. Concept: a logline, a synopsis, a '
+                    'one-sheet or deck text; interest and definite interest, how much it stands out, who it is for, would they watch, the strongest element and '
+                    'the biggest doubt, each next to the concept norm and by quadrant. Seat two twins in the room to see two audiences on the same idea.'),
+        'put_in': ('Pick Script read or Concept at the top of the Greenlight tab. Script read: a name for the test, the twin, and the script (paste the text, '
+                   'upload a pdf or txt, or upload the recorded read as mp4, mov or webm); scenes are split on the sluglines (INT. and EXT.). Concept: a name '
+                   'for the test, the twin, and the concept text (a logline is enough; a synopsis or one-sheet gives the room more to react to).'),
+        'type_this': ['Test this concept in Greenlight on the Gilmore Girls twin: a chef returns to her hometown diner after a scandal',
+                      'Read this script in Greenlight on the Mark Rober twin',
+                      'Test this concept in Greenlight on the Gilmore Girls and Mark Rober twins: a chef returns to her hometown diner after a scandal'],
+        'attach': 'For a script read, attach the script (pdf or txt) with the paper clip, or upload it on the tab. For a concept, paste the text, or attach the one-sheet or deck.',
+        'comes_back': ('The test opens on the Greenlight tab under its option, Script read or Concept, and sits in that option\'s past tests; Prometheus confirms in the chat '
+                       'with a chip to open it. Script read: the dial scene by scene, the notes per scene, the scorecard with its norm, the characters rated, pace '
+                       'and confusion by act, and the scenes liked best and least. Concept: the concept read with the norm beside every number and the pick by quadrant.'),
+        'options': [{'id': 'script', 'title': 'Script read', 'cost_key': 'digital_twin_script', 'line': 'Paste or upload a script; the room reads it scene by scene with story, structure and character notes.'},
+                    {'id': 'concept', 'title': 'Concept', 'cost_key': 'digital_twin_concept', 'line': 'A logline, synopsis or one-sheet; interest, stands out, who it is for, would watch, strongest element, biggest doubt.'}],
+        'cost_key': 'digital_twin_concept', 'export': 'Greenlight tab: CSV, PDF, Deck or Report on the test.',
     },
     {
         'id': 'launch', 'title': 'Launch Lab',
@@ -707,28 +722,6 @@ HOW_TO = [
         'cost_key': 'digital_twin_title', 'export': 'Titles and Key Art tab: CSV, PDF, Deck or Report on the test.',
     },
     {
-        'id': 'script', 'title': 'Script Reads',
-        'answers': ('A script read before cameras roll. Paste or upload the script (pdf or txt) and the room reads it scene by scene on a reading clock, with a dial '
-                    'per scene and the moments marked; or upload a recorded table read and it runs like a pilot. The same scorecard, plus story, structure and '
-                    'character notes per scene: where it runs long, where a character arrives without a want, where the turn lands.'),
-        'put_in': 'A name for the test, the twin, and the script (paste the text, upload a pdf or txt, or upload the recorded read as mp4, mov or webm). Scenes are split on the sluglines (INT. and EXT.).',
-        'type_this': ['Read this script with the Gilmore Girls twin', 'Where does the second act drag in this script?'],
-        'attach': 'Attach the script with the paper clip or on the Script Reads tab.',
-        'comes_back': 'The dial scene by scene, the notes per scene, the scorecard with its norm, the characters rated, pace and confusion by act, and the scenes liked best and least.',
-        'cost_key': 'digital_twin_script', 'export': 'Script Reads tab: CSV, PDF, Deck or Report on the test.',
-    },
-    {
-        'id': 'concept', 'title': 'Concepts',
-        'answers': ('A concept test on a logline, a synopsis, a one-sheet or deck text. Interest and definite interest, how much it stands out, who it is for, would '
-                    'they watch, the strongest element and the biggest doubt, each next to the concept norm and by quadrant. From a Greenlight Lab run, "Ask the '
-                    'room" opens the concept test on the same twin and the read shows next to the odds.'),
-        'put_in': 'A name for the test, the twin, and the concept text (a logline is enough; a synopsis or one-sheet gives the room more to react to).',
-        'type_this': ['Ask the Gilmore Girls twin about this concept: a chef returns to her hometown diner after a scandal', 'Ask the room about the Greenlight run'],
-        'attach': 'Paste the text, or attach the one-sheet or deck with the paper clip.',
-        'comes_back': 'The concept read on the Concepts tab and, when it came from a Greenlight run, next to the odds on that run.',
-        'cost_key': 'digital_twin_concept', 'export': 'Concepts tab: CSV, PDF, Deck or Report on the test.',
-    },
-    {
         'id': 'norms', 'title': 'Norms',
         'answers': 'The norms every scorecard is read against: by format (features, pilots, episodes, trailers, titles, key art, scripts, concepts) and by genre, with the count of our own tests behind each cell. Every screening adds to these.',
         'put_in': 'Nothing. Pick a genre on the Norms tab to see its column next to the all-genres column.',
@@ -768,7 +761,7 @@ def how_to(price_fn=None) -> dict:
                            f"then {money(prices['digital_twin_pilot_more'])} for each further {PANEL_QUESTIONS_INCLUDED}; "
                            f"{money(prices['digital_twin_panelist'])} for each panelist past {PANEL_SEATS_INCLUDED}; Prometheus usage metered on top")
         elif it['id'] == 'twin':
-            row['cost'] = f"{money(prices['digital_twins_iq'])}, with three runs included; Prometheus usage on the build metered on top"
+            row['cost'] = f"{money(prices['digital_twins_iq'])}, with its first two runs included; Prometheus usage on the build metered on top"
         elif it['id'] == 'spend':
             row['cost'] = f"{money(prices['digital_twin_spend'])} for the plan window, daily runs included"
         elif it['id'] == 'trailer':
@@ -777,12 +770,15 @@ def how_to(price_fn=None) -> dict:
         elif it['id'] == 'titles':
             row['cost'] = (f"{money(prices['digital_twin_title'])} for a title test and {money(prices['digital_twin_key_art'])} for a key art test, up to six options each, charged on first Play; "
                            f"{money(prices['digital_twin_panelist'])} for each panelist past {PANEL_SEATS_INCLUDED}; Prometheus usage metered on top")
-        elif it['id'] == 'script':
-            row['cost'] = (f"{money(prices['digital_twin_script'])} a script read, charged on first Play, with {PANEL_QUESTIONS_INCLUDED} questions on the clock; "
-                           f"{money(prices['digital_twin_panelist'])} for each panelist past {PANEL_SEATS_INCLUDED}; Prometheus usage metered on top")
-        elif it['id'] == 'concept':
-            row['cost'] = (f"{money(prices['digital_twin_concept'])} a concept test, charged on first Play; "
-                           f"{money(prices['digital_twin_panelist'])} for each panelist past {PANEL_SEATS_INCLUDED}; Prometheus usage metered on top")
+        elif it['id'] == 'greenlight':
+            seat = f"{money(prices['digital_twin_panelist'])} for each panelist past {PANEL_SEATS_INCLUDED}; Prometheus usage metered on top"
+            option_cost = {
+                'script': f"{money(prices['digital_twin_script'])} a script read, charged on first Play, with {PANEL_QUESTIONS_INCLUDED} questions on the clock; {seat}",
+                'concept': f"{money(prices['digital_twin_concept'])} a concept test, charged on first Play; {seat}",
+            }
+            row['options'] = [dict(o, cost=option_cost.get(o['id'], ''), price=money(prices[o['cost_key']])) for o in it.get('options') or []]
+            row['cost'] = (f"Concept {money(prices['digital_twin_concept'])} a concept test; Script read {money(prices['digital_twin_script'])} a script read; "
+                           f"each charged on first Play; {seat}")
         elif it['id'] == 'norms':
             row['cost'] = 'Nothing. The norms come with every test.'
         else:
@@ -793,9 +789,9 @@ def how_to(price_fn=None) -> dict:
                       'Everything here can be typed to Prometheus or done on this page. Type the example lines as written, with your own subject, '
                       'and attach files with the paper clip in the chat.'),
             'items': items, 'pricing': pricing_lines(price_fn),
-            'where': ('Twins land on the Twins tab; lab runs on their lab tab and in the twin\'s Runs list; focus group sessions on the Focus Group IQ tab; '
-                      'watches on the Pilot Testing tab; trailer, title and key art, script and concept tests on their own tabs; the norms on the Norms tab. '
-                      'Prometheus confirms every one in the chat. Delete a twin from the Twins tab; you can undo for 30 days.')}
+            'where': ('Twins land on the Twins tab; script reads and concept tests on the Greenlight tab under their option; Launch runs on the Launch tab and in '
+                      'the twin\'s Runs list; focus group sessions on the Focus Group IQ tab; watches on the Pilot Testing tab; trailer, title and key art tests on '
+                      'their own tabs; the norms on the Norms tab. Prometheus confirms every one in the chat. Delete a twin from the Twins tab; you can undo for 30 days.')}
 
 
 def how_to_text(topic: str = '', price_fn=None) -> str:
@@ -806,7 +802,7 @@ def how_to_text(topic: str = '', price_fn=None) -> str:
     pick = []
     if re.search(r"\bdigital twins? iq\b|\btwin iq\b|\b(all|everything|whole|five)\b", low):
         pick = []            # the whole product: all six things
-    elif re.search(r"\b(green ?light|odds|logline|idea)\b", low):
+    elif re.search(r"\b(green ?light|logline|idea|script|table read|screenplay|concept|one-sheet|one sheet|synopsis)\b", low):
         pick = [it for it in doc['items'] if it['id'] == 'greenlight']
     elif re.search(r"\b(launch lab|launch|plan|budget)\b", low):
         pick = [it for it in doc['items'] if it['id'] == 'launch']
@@ -816,10 +812,6 @@ def how_to_text(topic: str = '', price_fn=None) -> str:
         pick = [it for it in doc['items'] if it['id'] == 'trailer']
     elif re.search(r"\b(title test|titles?|key art|poster|logline test)\b", low):
         pick = [it for it in doc['items'] if it['id'] == 'titles']
-    elif re.search(r"\b(script|table read|screenplay)\b", low):
-        pick = [it for it in doc['items'] if it['id'] == 'script']
-    elif re.search(r"\b(concept|one-sheet|one sheet|synopsis)\b", low):
-        pick = [it for it in doc['items'] if it['id'] == 'concept']
     elif re.search(r"\b(norms?|benchmarks?)\b", low):
         pick = [it for it in doc['items'] if it['id'] == 'norms']
     elif re.search(r"\b(pilot test|pilot testing|movie test|dial test|watch the cut|critics room|recut|re-test)\b", low):
@@ -832,6 +824,8 @@ def how_to_text(topic: str = '', price_fn=None) -> str:
     out = [doc['intro']] if not pick else []
     for it in items:
         out.append(f"{it['title']}. {it['answers']}")
+        if it.get('options'):
+            out.append('The options: ' + ' | '.join(f"{o['title']} ({o.get('price') or ''}): {o.get('line') or ''}".replace(' ()', '') for o in it['options']))
         out.append(f"Put in: {it['put_in']}")
         out.append('Type to Prometheus: ' + ' | '.join(f'"{t}"' for t in it['type_this'][:3]))
         out.append(f"Files: {it['attach']}")
@@ -844,8 +838,8 @@ def how_to_text(topic: str = '', price_fn=None) -> str:
     return '\n\n'.join(out)
 
 
-HOW_TO_RX = re.compile(r"\b(how (?:do|can|would|should) (?:i|we|you) (?:use|run|open|build|start|work|get)|how does .* work|what (?:is|does) (?:digital twins?|twin iq|greenlight lab|launch lab|spend engine|panel lab|focus group iq|focus group|pilot testing|trailer test|title test|key art test|script read|concept test|the norms)|directions|instructions|walk me through|how to (?:use|run|build|open|test))\b", re.I)
-TWIN_WORDS_RX = re.compile(r"\b(digital twins?|twins? iq|twin|greenlight lab|launch lab|spend engine|panel lab|focus group iq|focus group|pilot testing|pilot test|trailer test|title test|key art test|script read|concept test|norms tab)\b", re.I)
+HOW_TO_RX = re.compile(r"\b(how (?:do|can|would|should) (?:i|we|you) (?:use|run|open|build|start|work|get)|how does .* work|what (?:is|does) (?:digital twins?|twin iq|greenlight(?: lab| tab)?|launch lab|spend engine|panel lab|focus group iq|focus group|pilot testing|trailer test|title test|key art test|script read|concept test|the norms)|directions|instructions|walk me through|how to (?:use|run|build|open|test))\b", re.I)
+TWIN_WORDS_RX = re.compile(r"\b(digital twins?|twins? iq|twin|greenlight(?: lab| tab)?|launch lab|spend engine|panel lab|focus group iq|focus group|pilot testing|pilot test|trailer test|title test|key art test|script read|concept test|norms tab)\b", re.I)
 
 
 def is_how_to_ask(text: str) -> bool:
@@ -855,6 +849,7 @@ def is_how_to_ask(text: str) -> bool:
 
 __all__ = ['list_runs', 'load_twin', 'save_twin', 'has_access', 'is_admin', 'can_open', 'visible_runs', 'allowed_keys', 'find_twin', 'csv_rows', 'csv_text', 'csv_filename',
            'view_summary', 'twin_lines', 'deck_context', 'how_to', 'how_to_text', 'is_how_to_ask', 'pricing_lines', 'PRICING', 'PULL_TYPES', 'MODE_PRICE_KEY', 'PANEL_QUESTIONS_INCLUDED',
+           'product_runs', 'is_retired_run', 'RETIRED_RUN_KINDS', 'GREENLIGHT_RETIRED_LINE',
            'PANEL_SEATS_INCLUDED', 'PANEL_SEATS_MAX', 'extra_panelists', 'panelists_for',
            'can_delete_twin', 'delete_twin', 'deleted_twin_key', 'deleted_twin_sidecar_key', 'drop_twin_from_allowed_runs',
            'DELETED_TWINS_PREFIX', 'DELETED_TWIN_KEEP_DAYS',

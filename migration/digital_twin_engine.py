@@ -17,9 +17,12 @@ read ships.
 
 Scenario kinds (``simulate(twin, scenario)``):
 
-  greenlight     a title or a bare idea: odds on a goal, range per
-                 platform, completion and return, cohorts, levers, one
-                 package to run
+  greenlight     RETIRED from the product (Jenna 2026-10-28: Greenlight
+                 is two options now, a Script read and a Concept test,
+                 both Pilot Testing sessions). The runner stays so a
+                 stored run still loads; ``RETIRED_RUN_KINDS`` hides
+                 those runs from every surface and ``simulate`` refuses
+                 a new one with ``GREENLIGHT_RETIRED_LINE``.
   launch         a plan and budget: three plans side by side, odds and
                  ranges week by week, levers, a holdout sized to prove
                  lift at the lowest spend
@@ -1102,6 +1105,33 @@ KIND_LABEL = {
     'partnership': 'Partnership', 'pricing': 'Pricing', 'talent_attach': 'Talent attach', 'merch_drop': 'Merch drop',
     'compare': 'Compare', 'spend': 'Spend Engine',
 }
+# The old Greenlight run (odds a title clears a goal) left the product on
+# 2026-10-28 (Jenna: "remove what we currently have since I think it's
+# nothing and replace with two options within it script reads and
+# concepts"). Stored runs of this kind are kept on the twin but never
+# shown, exported or counted; a new one is refused with the plain line.
+RETIRED_RUN_KINDS = ('greenlight',)
+GREENLIGHT_RETIRED_LINE = ('Greenlight is two options now: a Script read or a Concept test. Pick one on the Greenlight tab, '
+                           'or type "Test this concept in Greenlight on the <twin> twin: ..." or "Read this script in Greenlight on the <twin> twin" to Prometheus.')
+
+
+def is_retired_run(run) -> bool:
+    """True for a stored run the product no longer shows: the old
+    Greenlight run, and a compare that ran that scenario on two twins."""
+    if not isinstance(run, dict):
+        return False
+    kind = str(run.get('kind') or '').lower()
+    if kind in RETIRED_RUN_KINDS:
+        return True
+    if kind == 'compare':
+        return str(((run.get('inputs') or {}).get('scenario_kind')) or '').lower() in RETIRED_RUN_KINDS
+    return False
+
+
+def product_runs(payload) -> list:
+    """The runs a twin shows, exports and counts: everything stored on
+    it except the retired kinds."""
+    return [r for r in ((payload or {}).get('runs') or []) if isinstance(r, dict) and not is_retired_run(r)]
 
 
 def default_question(kind: str, inputs: dict, twin: dict) -> str:
@@ -1157,7 +1187,9 @@ def plain_read(run: dict, twin: dict) -> dict:
 def simulate(twin: dict, scenario: dict, read_fn: Optional[Callable] = None, created_by: str = '') -> dict:
     """One run on one twin. ``scenario``: {kind, question?, inputs}.
     Returns the run record to append to the twin's ``runs``."""
-    kind = str((scenario or {}).get('kind') or 'greenlight').lower().replace('-', '_')
+    kind = str((scenario or {}).get('kind') or '').lower().replace('-', '_')
+    if kind in RETIRED_RUN_KINDS or not kind:
+        raise ValueError(GREENLIGHT_RETIRED_LINE)
     if kind not in RUNNERS:
         raise ValueError(f'unknown scenario kind: {kind}')
     inputs = dict((scenario or {}).get('inputs') or {})
@@ -1246,7 +1278,7 @@ def parse_channels(text: str) -> list:
     return [{'channel': k, 'spend': round(v, 2)} for k, v in merged.items() if v > 0]
 
 
-__all__ = ['simulate', 'compare', 'RUNNERS', 'KIND_LABEL', 'TRAITS', 'TRAIT_KEYS', 'TRAIT_LABEL', 'CHANNELS',
+__all__ = ['simulate', 'compare', 'RUNNERS', 'KIND_LABEL', 'RETIRED_RUN_KINDS', 'GREENLIGHT_RETIRED_LINE', 'is_retired_run', 'product_runs', 'TRAITS', 'TRAIT_KEYS', 'TRAIT_LABEL', 'CHANNELS',
            'messy_count', 'natural_count', 'messy_money', 'pct4', 'pct1', 'off_boundary', 'normalize_100', 'unit', 'jit', 'seed_int',
            'odds_words', 'odds_of_clearing', 'trait', 'trait_block', 'trait_read', 'response_curves', 'channel_signal', 'channel_params',
            'allocate_signal_led', 'plan_outcome', 'canon_channel', 'platform_reach_pct', 'parse_channels', 'plain_read', 'default_question',

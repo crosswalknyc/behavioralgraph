@@ -9,11 +9,20 @@ legacy module stays under its line ratchet):
               guided intake (dual read, propose the missing field,
               confirm, never the same question twice); the confirm
               charges and queues ``twin_build``.
-  labs        'Run Greenlight Lab on the Gilmore Girls twin ...', 'Run
-              Launch Lab on this plan' (an attached budget sheet or a
-              pasted channel list), 'Put the signal-led plan in the
+  greenlight  'Test this concept in Greenlight on the Gilmore Girls
+              twin: ...' opens a Concept test; 'Read this script in
+              Greenlight on the Mark Rober twin' (the script attached or
+              pasted) opens a Script read; a bare 'run Greenlight on the
+              X twin' asks which of the two in one line with two chips.
+              Both are Pilot Testing sessions on the twin; opening is
+              free, the price lands on first Play. 'Compare the X and Y
+              twins on this idea' is a Concept test with both twins in
+              the room. (The old Greenlight run, odds a title clears a
+              goal, left the product on 2026-10-28.)
+  labs        'Run Launch Lab on this plan' (an attached budget sheet or
+              a pasted channel list), 'Put the signal-led plan in the
               Spend Engine on the rule: max 15% a day', 'Compare the X
-              and Y twins on ...': the twin resolves (named, open on
+              and Y twins on a price': the twin resolves (named, open on
               the page, or the reader's newest), the inputs are read
               from the words and the attached file, the run is charged
               and queued (Spend Engine activates on the request).
@@ -27,8 +36,8 @@ legacy module stays under its line ratchet):
               kind (odds, price, sequel, move, attach, drop) runs it.
   catalog     'do you have a twin for X' / 'which twins do we have'.
   status      'is my twin ready'.
-  how_to      'how do I use Digital Twins IQ' / 'how do I run
-              Greenlight Lab': the directions, free.
+  how_to      'how do I use Digital Twins IQ' / 'how do I use
+              Greenlight': the directions, free.
 
 Every exit runs the vocabulary scrub. No email is sent from here.
 """
@@ -53,7 +62,12 @@ ACTIVE_TTL_S = 6 * 3600
 OPEN_CHIP = 'Open in Digital Twins IQ'
 
 _BUILD_RX = re.compile(r"\b(build|make|create|spin up|start|run|pull|set up)\b[^.?!]{0,40}\b(?:digital\s+)?twins?\b|\b(?:digital\s+)?twin\s+(?:of|for|on)\b", re.I)
-_GREENLIGHT_RX = re.compile(r"\bgreen\s?light(?:\s+lab)?\b|\bodds\b[^.?!]{0,80}\b(?:clear|hit|reach|beat|make)s?\b|\bwhat are the odds\b", re.I)
+_GREENLIGHT_RX = re.compile(r"\bgreen\s?light(?:\s+(?:lab|tab))?\b|\bodds\b[^.?!]{0,80}\b(?:clear|hit|reach|beat|make)s?\b|\bwhat are the odds\b", re.I)
+# Greenlight's two options (Jenna 2026-10-28). A script, a treatment or an attached screenplay is a Script read; a logline, a
+# synopsis, a one-sheet or a bare idea is a Concept test. Neither word: Prometheus asks which of the two.
+_SCRIPT_RX = re.compile(r"\b(?:scripts?|screenplays?|teleplays?|treatments?|table\s+reads?|pilot\s+script|shooting\s+script|draft\s+\d|read\s+this)\b", re.I)
+_CONCEPT_RX = re.compile(r"\b(?:concepts?|loglines?|synops[ei]s|one[-\s]?sheets?|ideas?|pitch(?:es)?|premises?)\b", re.I)
+_SLUGLINE_RX = re.compile(r"^\s*(?:\d+[A-Z]?\s+)?(?:INT|EXT|INT/EXT|I/E)\.?\s", re.M)
 _LAUNCH_RX = re.compile(r"\blaunch\s+lab\b|\brun\s+launch\b|\b(?:run|test|try)\s+(?:this|the|my|our)\s+(?:media\s+)?plan\b", re.I)
 _SPEND_RX = re.compile(r"\bspend\s+engine\b|\bactivate\b[^.?!]{0,30}\bplan\b|\bput\b[^.?!]{0,40}\bplan\b[^.?!]{0,30}\b(?:in|into|on)\b", re.I)
 _PANEL_OPEN_RX = re.compile(r"\b(?:open|start|create|set up|convene|run|seat)\s+(?:a\s+|the\s+)?(?:panel(?:\s+lab)?|room|focus\s+group(?:\s+iq)?|survey)\b|\b(?:panel\s+lab|focus\s+group\s+iq)\b", re.I)
@@ -176,8 +190,10 @@ def twin_intent(text, chip=''):
         return True
     if _PANEL_OPEN_RX.search(low) and ('twin' in low or 'panel lab' in low or 'focus group' in low or 'survey' in low):
         return True
-    if re.search(r"\b(greenlight lab|launch lab|spend engine|panel lab|focus group iq|digital twins? iq|twin iq|pilot testing)\b", low):
+    if re.search(r"\b(greenlight (?:lab|tab)|launch lab|spend engine|panel lab|focus group iq|digital twins? iq|twin iq|pilot testing)\b", low):
         return True
+    if re.search(r"\bin greenlight\b", low) and (_SCRIPT_RX.search(low) or _CONCEPT_RX.search(low)):
+        return True   # 'Test this concept in Greenlight on the X twin', 'Read this script in Greenlight ...'
     if re.search(r"\b(?:open|start|play)\b.+\b(?:pilot testing|movie test|trailer test)\b", low):
         return True
     if re.search(r"\btwins?\b", low) and not re.search(r"\btwin\s+(?:bed|peaks|cities|falls|flame|turbo|engine|sister|brother|size)s?\b", low) and question_kind(low):
@@ -208,8 +224,8 @@ def lab_kind(text):
 def question_kind(text):
     """A free question on a twin mapped to a run kind, or ''."""
     low = _low(text)
-    if _GREENLIGHT_RX.search(low) or re.search(r"\b(logline|idea|greenlight|first month|first 30 days)\b", low):
-        return 'greenlight'
+    if _GREENLIGHT_RX.search(low) or re.search(r"\b(logline|idea|concept|synopsis|one[- ]?sheet|script|screenplay|treatment|table read)\b", low):
+        return 'greenlight'   # Greenlight: a Script read or a Concept test (run_greenlight decides which)
     if re.search(r"\b(price|pricing|\$\d|a month|per month|take rate|packaging|bundle)\b", low):
         return 'pricing'
     if re.search(r"\b(sequel|next season|season \d|another season|episode drop|new season|renewal)\b", low):
@@ -315,7 +331,7 @@ def confirm_reply(parsed, username=None):
              f"- Window: {w.get('label') or 'Trailing 12 months'} ({w.get('start')} to {w.get('end')})"]
     if parsed.get('platform_home'):
         lines.append(f"- Home: {parsed.get('platform_home')}")
-    lines.append(f"- Price: {_price_label('digital_twins_iq', username)} for the twin and its first three runs; each further run {_price_label('digital_twin_run', username)}")
+    lines.append(f"- Price: {_price_label('digital_twins_iq', username)} for the twin and its first two runs; each further run {_price_label('digital_twin_run', username)}")
     lines.append(f"Say '{RUN_LABEL}' and I will line it up.")
     return '\n'.join(lines)
 
@@ -380,10 +396,14 @@ def resolve_twins(text, body, history, user, limit=2, strict=False):
     found = []
     low = str(text or '')
     names = [m.group('name') for m in _WITH_TWIN_RX.finditer(low)] + [m.group('name') for m in _THE_X_TWIN_RX.finditer(low)]
+    # 'the Gilmore Girls and Mark Rober twins' (plural) names two twins; a singular 'the Ben and Jerry's twin' stays one name
+    plural = bool(re.search(r"\btwins\b", low, re.I))
     for nm in names:
-        hit = DT.find_twin(runs, nm)
-        if hit and hit not in found:
-            found.append(hit)
+        parts = [nm] + ([p.strip() for p in re.split(r"\s+(?:and|&|vs\.?|versus)\s+|,\s*", nm) if p.strip() and p.strip() != nm] if plural else [])
+        for part in parts:
+            hit = DT.find_twin(runs, part)
+            if hit and hit not in found:
+                found.append(hit)
     if not found:
         hit = DT.find_twin(runs, low)
         if hit:
@@ -447,7 +467,7 @@ def set_active_twin(user, key):
 def _which_twin(runs, what='run this'):
     names = [str(r.get('name') or r.get('subject')) for r in runs[:5]]
     if not names:
-        return _payload(f"There is no twin in the library yet. Say 'Build a twin of <subject>' and I will build one ({_price_label('digital_twins_iq', None)}, with its first three runs).",
+        return _payload(f"There is no twin in the library yet. Say 'Build a twin of <subject>' and I will build one ({_price_label('digital_twins_iq', None)}, with its first two runs).",
                         ['Build a twin of Gilmore Girls Hulu viewers'])
     return _payload(f"Which twin should I {what} on? " + ', '.join(names) + '.', [f"The {n} twin" for n in names[:4]])
 
@@ -497,7 +517,7 @@ def _goal_in(text):
     return {'metric': noun, 'value': int(val), 'window_days': days}
 
 
-def greenlight_inputs(text, doc_text=''):
+def idea_inputs(text, doc_text=''):
     plats = _platforms_in(text) or _platforms_in(doc_text)
     goal = _goal_in(text) or _goal_in(doc_text)
     title = ''
@@ -931,11 +951,168 @@ def run_pilot(text, body, history, user, ppu=None):
         action_hint={'view': 'digitalTwinsIQ', 'tab': 'pilot', 'twin_key': key, 'session_id': sess.get('id')})
 
 
+# ------------------------------------------------------------ greenlight
+def greenlight_option(text, doc_text=''):
+    """Which of Greenlight's two options the words (and the attached file)
+    ask for: 'script', 'concept', or '' when neither is named. A script,
+    a screenplay, a treatment or a table read is a Script read; a
+    logline, a synopsis, a one-sheet or a bare idea is a Concept test. An
+    attached file with sluglines (INT. / EXT.) is a script."""
+    low = _low(text)
+    doc = str(doc_text or '')
+    scripty = bool(_SCRIPT_RX.search(low))
+    concepty = bool(_CONCEPT_RX.search(low))
+    sluglines = len(_SLUGLINE_RX.findall(doc)) >= 2
+    if scripty and not concepty:
+        return 'script'
+    if concepty and not scripty:
+        return 'concept'
+    if scripty and concepty:
+        return 'script' if sluglines or re.search(r"\bread\b", low) else 'concept'
+    return 'script' if sluglines else ''
+
+
+def greenlight_text(text, option, doc_text=''):
+    """The stimulus for the option: for a Script read the attached file
+    (or a pasted script after 'script:'); for a Concept test the words
+    after the colon, the quoted idea, 'concept: ...', or the attached
+    one-sheet. '' when nothing usable is there."""
+    t = str(text or '').strip()
+    doc = str(doc_text or '').strip()
+    if option == 'script':
+        if doc:
+            return doc[:60000]
+        m = re.search(r"(?:script|screenplay|treatment|table read)\s*:\s*(.+)$", t, re.I | re.S)
+        pasted = m.group(1).strip() if m else ''
+        return pasted[:60000] if pasted and (_SLUGLINE_RX.search(pasted) or len(pasted) > 600) else ''
+    m = re.search(r"\b(?:concept|logline|idea|pitch|premise|synopsis|one[-\s]?sheet)\s*:\s*(.+)$", t, re.I | re.S)
+    if m:
+        return m.group(1).strip().strip('"\u201c\u201d')[:6000]
+    m = re.search(r"[\"\u201c]([^\"\u201d]{12,})[\"\u201d]", t)      # the idea in quotes
+    if m:
+        return m.group(1).strip()[:6000]
+    m = re.search(r"(?<!\d):\s*(?!\d{1,2}\b)(.{12,})$", t, re.S)      # 'Test this concept in Greenlight on the X twin: a chef ...'
+    if m:
+        return m.group(1).strip()[:6000]
+    if doc:
+        return doc[:6000]
+    m = re.search(r"\babout\s+(?:this\s+(?:concept|idea|logline|pitch|premise)\s*:?\s*)?(.{20,})$", t, re.I | re.S)
+    return m.group(1).strip()[:6000] if m else ''
+
+
+def _greenlight_title(text, option, stim):
+    m = re.search(r"[\"\u201c]([^\"\u201d]{2,80})[\"\u201d]", str(text or ''))
+    if m and m.group(1).strip() != str(stim or '').strip():
+        return m.group(1).strip()
+    if option == 'concept' and stim:
+        head = re.split(r"[.!?]\s", str(stim).strip(), maxsplit=1)[0]
+        words = head.split()
+        return ('Concept: ' + ' '.join(words[:7]) + ('...' if len(words) > 7 else ''))[:120]
+    if option == 'script' and stim:
+        first = next((ln.strip() for ln in str(stim).splitlines() if ln.strip()), '')
+        if first and len(first) <= 60 and not _SLUGLINE_RX.match(first):
+            return ('Script read: ' + first)[:120]      # a title line ahead of the first slugline
+        return 'Script read'
+    return ''
+
+
+def run_greenlight(text, body, history, user, ppu, thread_id='', option=''):
+    """Open one of Greenlight's two options on a twin from the words: a
+    Script read (the attached or pasted script) or a Concept test (the
+    logline, synopsis or one-sheet). Two named twins sit in one room.
+    Opening is free; the option's price lands on first Play. Neither
+    option named: one line asking which, with two chips. (Jenna
+    2026-10-28: Greenlight is these two options; the odds run is gone.)"""
+    from migration import digital_twins as DT
+    from migration import digital_twin_pilot as PI
+    s3, _b = _s3()
+    uname = _uname(user)
+    found, runs = resolve_twins(text, body, history, user, limit=2)
+    if not found:
+        return _which_twin(runs, 'open Greenlight')
+    key = found[0]['key']
+    payload = DT.load_twin(s3, key)
+    if not payload:
+        return _which_twin(runs, 'open Greenlight')
+    name = str((payload.get('meta') or {}).get('name') or found[0].get('name') or found[0].get('subject'))
+    doc_text = attached_text(uname, thread_id, limit=60000)
+    option = option if option in ('script', 'concept') else greenlight_option(text, doc_text)
+    script_price = _price_label('digital_twin_script', uname)
+    concept_price = _price_label('digital_twin_concept', uname)
+    if option not in ('script', 'concept'):
+        return _payload(f"Greenlight on the {name} twin runs two ways: a Script read ({script_price}; paste or attach the script and the room reads it scene by scene) "
+                        f"or a Concept test ({concept_price}; a logline, a synopsis or a one-sheet). Which one?",
+                        [f"Read this script in Greenlight on the {name} twin", f"Test a concept in Greenlight on the {name} twin"],
+                        open_view='digitalTwinsIQ', twin_key=key, action_hint={'view': 'digitalTwinsIQ', 'tab': 'greenlight', 'twin_key': key})
+    stim = greenlight_text(text, option, doc_text)
+    if not stim:
+        if option == 'script':
+            return _payload(f"Attach the script with the paper clip (pdf or txt), or paste it after 'script:', and I will open the Script read on the {name} twin "
+                            f"({script_price}, charged when you press Play).",
+                            [f"Read this script in Greenlight on the {name} twin"], open_view='digitalTwinsIQ', twin_key=key,
+                            action_hint={'view': 'digitalTwinsIQ', 'tab': 'script', 'twin_key': key})
+        return _payload(f"Paste the logline or synopsis, or attach the one-sheet, and I will put it to the {name} twin ({concept_price}, charged when you press Play). "
+                        f"For example: \"Test this concept in Greenlight on the {name} twin: a chef returns to her hometown diner after a scandal\".",
+                        [f"Test a concept in Greenlight on the {name} twin"], open_view='digitalTwinsIQ', twin_key=key,
+                        action_hint={'view': 'digitalTwinsIQ', 'tab': 'concept', 'twin_key': key})
+    twins, twins_by_key = [payload], {}
+    for r in found[1:]:
+        t = DT.load_twin(s3, r['key'])
+        if t:
+            twins.append(t)
+    for t, r in zip(twins, found):
+        twins_by_key[str((t.get('meta') or {}).get('key') or r.get('key') or '')] = t
+    title = _greenlight_title(text, option, stim)
+    sess = PI.open_session(twins, title=title, created_by=uname, session_id=uuid.uuid4().hex[:10], mode=option, text=stim)
+    sess['twin_keys'] = list(twins_by_key)
+    payload.setdefault('pilot_sessions', []).insert(0, sess)
+    try:
+        from migration import digital_twin_room as ROOM
+        ROOM.ensure_personas(sess, twins_by_key, session_seed=str(sess.get('id') or ''))
+    except Exception:
+        pass
+    try:
+        from migration import digital_twin_portraits as _PT
+        _PT.attach_portraits(sess, s3)
+    except Exception:
+        _PT = None
+    try:
+        PI.prepare_watch(sess, twins_by_key, title=sess.get('title') or title, usage_extras=ppu or {}, s3=s3)
+    except Exception:
+        traceback.print_exc()
+    DT.save_twin(s3, key, payload)
+    if _PT is not None:
+        try:
+            _PT.schedule_room_portraits(s3, key, sess, twins_by_key, payload)
+        except Exception:
+            pass
+    try:
+        host.ask_hint(route='greenlight', outcome='opened', subject=name)
+    except Exception:
+        pass
+    g = sess.get('group') or {}
+    others = [str((t.get('meta') or {}).get('name') or '') for t in twins[1:] if (t.get('meta') or {}).get('name')]
+    what = 'Script read' if option == 'script' else 'Concept test'
+    price = script_price if option == 'script' else concept_price
+    room = f"{g.get('in_room') or 12} in the room" + (f", the {' and '.join(others)} twin{'s' if len(others) > 1 else ''} seated too" if others else '')
+    ready = str(sess.get('status') or '') == 'ready'
+    return _payload(
+        f"Greenlight opened a {what} on the {name} twin: {sess.get('title') or title or what}, {room}. "
+        + ("The room has read it. " if ready else '')
+        + f"Press Play on the Greenlight tab, under {'Script read' if option == 'script' else 'Concept'}, to run it ({price}, charged on Play; nothing is charged before that)."
+        + (" Ask them anything at any point on the clock." if option == 'script' else ''),
+        [OPEN_CHIP, 'Open a focus group with the ' + name + ' twin'],
+        open_view='digitalTwinsIQ', twin_key=key,
+        action_hint={'view': 'digitalTwinsIQ', 'tab': option, 'twin_key': key, 'session_id': sess.get('id')})
+
+
 # ------------------------------------------------------------ the labs
 def run_lab(kind, text, body, history, user, ppu, thread_id=''):
     from migration import digital_twins as DT
     from migration.digital_twin_engine import KIND_LABEL
     from . import digital_twin_job as J
+    if kind in ('greenlight',):
+        return run_greenlight(text, body, history, user, ppu, thread_id)
     s3, _b = _s3()
     uname = _uname(user)
     found, runs = resolve_twins(text, body, history, user, limit=2 if kind == 'compare' else 1)
@@ -987,9 +1164,7 @@ def run_lab(kind, text, body, history, user, ppu, thread_id=''):
             pass
         return _payload(f"The Spend Engine is running the plan on the {name} twin. " + ' '.join(lines[:4]), chips, open_view='digitalTwinsIQ', twin_key=key,
                         action_hint={'view': 'digitalTwinsIQ', 'tab': 'spend', 'twin_key': key, 'plan_id': plan_id})
-    if kind == 'greenlight':
-        scenario = {'kind': 'greenlight', 'question': str(text)[:300], 'inputs': greenlight_inputs(text, doc_text)}
-    elif kind == 'launch':
+    if kind == 'launch':
         li = launch_inputs(text, doc_text)
         if not li['plan'].get('channels'):
             return _payload(f"What is the plan for the {name} twin? Paste the channels with spend and the window (Meta $120K, Google $80K, TikTok $40K over 6 weeks, goal 3M viewers) or attach the budget sheet.",
@@ -999,8 +1174,10 @@ def run_lab(kind, text, body, history, user, ppu, thread_id=''):
         if len(found) < 2:
             return _which_twin(runs, 'compare')
         inner = question_kind(re.sub(r"\btwins?\b", '', text)) or 'greenlight'
-        inputs = greenlight_inputs(text, doc_text) if inner == 'greenlight' else {}
-        inputs['scenario_kind'] = inner
+        if inner == 'greenlight':
+            # two twins on one idea or one script: a Greenlight test with both twins in the room, never the retired odds run
+            return run_greenlight(text, body, history, user, ppu, thread_id, option=greenlight_option(text, doc_text) or 'concept')
+        inputs = {'scenario_kind': inner, **_inputs_for(inner, text)}
         scenario = {'kind': 'compare', 'question': str(text)[:300], 'inputs': inputs}
     else:
         scenario = {'kind': kind, 'question': str(text)[:300], 'inputs': _inputs_for(kind, text)}
@@ -1009,7 +1186,7 @@ def run_lab(kind, text, body, history, user, ppu, thread_id=''):
     if funds is not None:
         return funds
     J.start('twin_run', job_id, uname, {'op': 'run', 'key': key, 'scenario': scenario, 'other_key': found[1]['key'] if (kind == 'compare' and len(found) > 1) else ''}, thread_id=thread_id, extras=ppu or {})
-    tab = {'greenlight': 'greenlight', 'launch': 'launch', 'compare': 'greenlight'}.get(kind, 'twins')
+    tab = {'launch': 'launch'}.get(kind, 'twins')
     return _payload(J.run_promise(kind, name), [OPEN_CHIP], twin_job_id=job_id, job_id=job_id, job_type='twin_run', open_view='digitalTwinsIQ', twin_key=key,
                     action_hint={'view': 'digitalTwinsIQ', 'tab': tab, 'twin_key': key, 'job_id': job_id})
 
@@ -1052,7 +1229,7 @@ def _inputs_for(kind, text):
         m = re.search(r"\b(?:drop|sell|selling|launch|launching)\s+(?:a|an|the)?\s*([\w' -]{3,50}?)\s+(?:at|for)\s+\$", t, re.I)
         pr = _PRICE_RX.search(t)
         return {'product': m.group(1).strip() if m else 'the drop', 'price': _num(pr.group(1), pr.group(2)) if pr else 39.0}
-    return greenlight_inputs(t)
+    return {}
 
 
 # ------------------------------------------------------- small lanes
@@ -1071,10 +1248,10 @@ def catalog_reply(text, user):
         from migration.digital_twin_engine import human_people
         line = (f"Yes: the {r.get('name')} twin is in the library, {human_people(r.get('size_us'))} people in the US, built {str(r.get('created_at') or '')[:10]}"
                 f". It carries {r.get('runs') or 0} run{'s' if (r.get('runs') or 0) != 1 else ''}. Ask it anything, run a lab on it, or open a room with it.")
-        return _payload(line, [f"Run Greenlight Lab on the {r.get('name')} twin", f"Open a focus group with the {r.get('name')} twin", OPEN_CHIP], twin_key=r.get('key'), open_view='digitalTwinsIQ',
+        return _payload(line, [f"Test a concept in Greenlight on the {r.get('name')} twin", f"Open a focus group with the {r.get('name')} twin", OPEN_CHIP], twin_key=r.get('key'), open_view='digitalTwinsIQ',
                         action_hint={'view': 'digitalTwinsIQ', 'tab': 'twins', 'twin_key': r.get('key')})
     subj = re.sub(r".*\btwins?\s+(?:of|for|on)\s+", '', str(text or ''), flags=re.I).strip(' ?.')
-    return _payload(f"No twin for {subj or 'that'} yet. Say 'Build a twin of {subj or '<subject>'}' and I will build it ({_price_label('digital_twins_iq', _uname(user))}, with its first three runs).",
+    return _payload(f"No twin for {subj or 'that'} yet. Say 'Build a twin of {subj or '<subject>'}' and I will build it ({_price_label('digital_twins_iq', _uname(user))}, with its first two runs).",
                     [f"Build a twin of {subj}"] if subj else ['Build a twin of Gilmore Girls Hulu viewers'])
 
 
@@ -1151,9 +1328,14 @@ def analyze_hook(text, body, history, user, ppu, uname, g):
             except Exception:
                 pf = None
             chips = ['Build a twin of Gilmore Girls Hulu viewers', 'Open a focus group with the Gilmore Girls twin', OPEN_CHIP]
+            tab = 'howto'
             if re.search(r"pilot testing|movie test|trailer test", low):
                 chips = ['Open Pilot Testing on the Gilmore Girls twin', OPEN_CHIP]
-            tab = 'pilot' if re.search(r"pilot testing|movie test|trailer test", low) else 'howto'
+                tab = 'pilot'
+            elif re.search(r"green ?light|script|screenplay|concept|logline|synopsis", low):
+                chips = ['Test this concept in Greenlight on the Gilmore Girls twin: a chef returns to her hometown diner after a scandal',
+                         'Read this script in Greenlight on the Gilmore Girls twin', OPEN_CHIP]
+                tab = 'greenlight'
             return _payload(DT.how_to_text(t, pf), chips, open_view='digitalTwinsIQ',
                             action_hint={'view': 'digitalTwinsIQ', 'tab': tab})
         # 4. status
@@ -1224,6 +1406,7 @@ def deck_from_twin(text, ctx, user, uname, s3, bucket):
 
 
 __all__ = ['twin_intent', 'lab_kind', 'question_kind', 'analyze_hook', 'parse_twin', 'keyword_parse_twin', 'twin_inputs_complete', 'propose_twin_field',
-           'confirm_reply', 'flow_table_entry', 'ui_entry', 'intake_armed', 'resolve_twins', 'greenlight_inputs', 'launch_inputs', 'spend_inputs',
+           'confirm_reply', 'flow_table_entry', 'ui_entry', 'intake_armed', 'resolve_twins', 'idea_inputs', 'launch_inputs', 'spend_inputs',
+           'greenlight_option', 'greenlight_text', 'run_greenlight',
            'panel_segments', 'panel_question', 'run_panel', 'run_lab', 'catalog_reply', 'status_reply', 'voices_call', 'deck_from_twin',
            'active_session', 'set_active_session', 'FLOW', 'RUN_LABEL', 'ASK_COPY', 'OPEN_CHIP']

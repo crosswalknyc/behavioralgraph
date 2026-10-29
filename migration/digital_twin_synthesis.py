@@ -1293,20 +1293,16 @@ def build_twin(inputs: dict, claude_json: Optional[Callable] = None, *, tools=No
     twin['pilot_sessions'] = []
     if ip_related:
         twin['standing_questions'] = standing_questions(twin, corpus, seed)
-    # three runs with the build
-    goal_val = messy_count(subject, 'goal', size * 0.3)
-    noun = E._noun_for(twin)
-    anchors_for_runs = {'title_fit': research.get('title_fit')} if research.get('title_fit') else {}
+    # two runs with the build (the old Greenlight run left the seed on 2026-10-28; Greenlight is now a Script read or a
+    # Concept test on the Pilot Testing room, opened from its tab, never run at build time)
     if by_demo:
-        # a group shaped by demographics has no release of its own: the odds on a new title for it, a price read and a platform move
+        # a group shaped by demographics has no release of its own: a price read and a platform move
         scenarios = [
-            {'kind': 'greenlight', 'inputs': {'title': 'a new title made for this audience', 'platforms': [home], 'goal': {'metric': noun, 'value': goal_val, 'platform': home, 'window_days': 30}}},
             {'kind': 'pricing', 'inputs': {'current_price': 9.99, 'new_price': 12.99, 'platform': home}},
             {'kind': 'platform_move', 'inputs': {'from': home, 'to': 'Netflix' if home.lower() != 'netflix' else 'Hulu'}},
         ]
     else:
         scenarios = [
-            {'kind': 'greenlight', 'inputs': {'title': f"the next {name} release" if kind != 'idea' else subject, 'platforms': [home], 'goal': {'metric': noun, 'value': goal_val, 'platform': home, 'window_days': 30}, 'anchors': anchors_for_runs}},
             {'kind': 'content', 'inputs': {'kind': 'season' if fmt == 'series' else 'sequel' if fmt in ('film', 'book', 'game') else 'episode', 'number': 2, 'platform': home}},
             {'kind': 'platform_move', 'inputs': {'from': home, 'to': 'Netflix' if home.lower() != 'netflix' else 'Hulu'}},
         ]
@@ -1345,7 +1341,7 @@ def index_entry(key: str, payload: dict) -> dict:
             'hero_image': m.get('hero_image') or '', 'cover_kind': m.get('cover_kind') or '',
             'cover_rev': m.get('cover_rev') or 0, 'cover_locked': bool(m.get('cover_locked')),
             'source': m.get('source') or '', 'panelists': m.get('panelists') or 0,
-            'runs': len(payload.get('runs') or []), 'spend_plans': len(((payload.get('labs') or {}).get('spend')) or []),
+            'runs': len(E.product_runs(payload)), 'spend_plans': len(((payload.get('labs') or {}).get('spend')) or []),
             'panel_sessions': len(payload.get('panel_sessions') or []),
             'pilot_sessions': len(payload.get('pilot_sessions') or [])}
 
@@ -1478,7 +1474,11 @@ def run_scenario(twin: dict, scenario: dict, *, claude_json: Optional[Callable] 
             return got if isinstance(got, dict) else None
     kind = str(scenario.get('kind') or '').lower()
     if kind == 'compare' and other_twin is not None:
-        inner = dict(scenario, kind=str((scenario.get('inputs') or {}).get('scenario_kind') or 'greenlight'))
+        inner_kind = str((scenario.get('inputs') or {}).get('scenario_kind') or '').lower()
+        if not inner_kind or inner_kind in E.RETIRED_RUN_KINDS:
+            # two twins on one idea is a Concept test with both twins in the room, never the retired run
+            raise ValueError(E.GREENLIGHT_RETIRED_LINE)
+        inner = dict(scenario, kind=inner_kind)
         inner['inputs'] = {k: v for k, v in (scenario.get('inputs') or {}).items() if k != 'scenario_kind'}
         return E.compare(twin, other_twin, inner, read_fn=read_fn, created_by=created_by)
     return E.simulate(twin, scenario, read_fn=read_fn, created_by=created_by)

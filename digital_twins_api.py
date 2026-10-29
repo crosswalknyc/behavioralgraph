@@ -10,7 +10,9 @@ app.py so app.py stays small.
                                                      demographics picks, panelists; or a bare subject from the chat)
   POST /api/digital-twins/connect-request            the Connect accounts request record
   GET  /api/digital-twins/<key>                      the twin
-  POST /api/digital-twins/<key>/run                  queue a scenario run (Greenlight, Launch, content, compare, ...)
+  POST /api/digital-twins/<key>/run                  queue a scenario run (Launch, content, pricing, platform move, compare, ...);
+                                                     kind greenlight is refused with a plain line (Greenlight is a Script read or a
+                                                     Concept test on the Pilot Testing room since 2026-10-28)
   GET  /api/digital-twins/<key>/status?job_id=       the job status (alias of /jobs)
   GET  /api/digital-twins/<key>/export.csv
   GET  /api/digital-twins/<key>/export.pdf
@@ -54,7 +56,6 @@ app.py so app.py stays small.
   POST /api/digital-twins/<key>/pilot/<sid>/critics   the critics room (reseats before Play)
   POST /api/digital-twins/<key>/pilot/<sid>/talent-attach  how much a name lifts interest, by quadrant
   GET  /api/digital-twins/<key>/pilot/<sid>/activation-brief  the Spend Engine / Launch Lab handoff from the top segments
-  POST /api/digital-twins/<key>/greenlight/<run_id>/ask-the-room  a concept test from a Greenlight run
   GET  /api/digital-twins/<key>/pilot/<sid>/report.pptx | report.pdf | dial.png  the studio report and the dial chart
   GET  /api/digital-twins/<key>/pilot/<sid>/export.csv
   GET  /api/digital-twins/<key>/pilot/<sid>/export.pdf
@@ -485,6 +486,10 @@ def dt_run(key):
     body = request.get_json(silent=True) or {}
     kind = str(body.get('kind') or 'greenlight').lower().replace('-', '_')
     from migration.digital_twin_engine import RUNNERS
+    inputs = body.get('inputs') if isinstance(body.get('inputs'), dict) else {}
+    # the old Greenlight run is retired (Jenna 2026-10-28); a compare on that scenario is a Concept test with two twins in the room
+    if kind in DT.RETIRED_RUN_KINDS or (kind == 'compare' and str(inputs.get('scenario_kind') or '').lower() in DT.RETIRED_RUN_KINDS + ('',)):
+        return jsonify({'success': False, 'error': DT.GREENLIGHT_RETIRED_LINE, 'retired': True, 'tab': 'greenlight'}), 400
     if kind not in RUNNERS and kind != 'compare':
         return jsonify({'success': False, 'error': f"unknown run kind: {kind}"}), 400
     other_key = str(body.get('other_key') or '')
@@ -494,7 +499,7 @@ def dt_run(key):
         _other, oerr = _twin_or_404(user, other_key)
         if oerr:
             return oerr
-    scenario = {'kind': kind, 'question': str(body.get('question') or '')[:300], 'inputs': body.get('inputs') if isinstance(body.get('inputs'), dict) else {}}
+    scenario = {'kind': kind, 'question': str(body.get('question') or '')[:300], 'inputs': inputs}
     from prometheus import digital_twin_job as J
     job_id = uuid.uuid4().hex[:12]
     funds = _charge(user, 'digital_twin_run', f"Digital Twin run ({kind}): {(payload.get('meta') or {}).get('name')}", job_id)
@@ -516,7 +521,7 @@ def dt_status(key):
     payload, err = _twin_or_404(user, key)
     if err:
         return err
-    return _nocache(jsonify({'success': True, 'key': key, 'runs': len(payload.get('runs') or []), 'updated_at': (payload.get('meta') or {}).get('updated_at')}))
+    return _nocache(jsonify({'success': True, 'key': key, 'runs': len(DT.product_runs(payload)), 'updated_at': (payload.get('meta') or {}).get('updated_at')}))
 
 
 @bp.route(f'{PREFIX}/<path:key>/export.csv', methods=['GET'])
@@ -1952,44 +1957,6 @@ def dt_pilot_brief(key, sid):
     return _nocache(jsonify({'success': True, 'brief': brief, 'session_id': sid}))
 
 
-@bp.route(f'{PREFIX}/<path:key>/greenlight/<run_id>/ask-the-room', methods=['POST'])
-def dt_greenlight_ask_room(key, run_id):
-    """A concept test on the same twin from a Greenlight run. Opening is
-    free; the concept price lands on first Play; the read lands next to
-    the odds on the run once the room has read it."""
-    user, err = _gate()
-    if err:
-        return err
-    payload, err = _twin_or_404(user, key)
-    if err:
-        return err
-    from migration import digital_twin_pilot as PI
-    from migration import digital_twin_compare as CMP
-    run = next((r for r in payload.get('runs') or [] if str(r.get('id')) == str(run_id)), None)
-    if not run:
-        return jsonify({'success': False, 'error': 'run not found'}), 404
-    existing = next((s for s in payload.get('pilot_sessions') or [] if str(s.get('linked_run_id') or '') == str(run_id) and str(s.get('mode') or '') == 'concept'), None)
-    if existing is not None:
-        return jsonify({'success': True, 'session': PI.public_session(existing), 'reused': True, 'run_id': run_id})
-    ci = CMP.concept_inputs_from_run(run)
-    body = request.get_json(silent=True) or {}
-    try:
-        in_room = int(body.get('in_room') or 0) or DT.panelists_for(payload)
-    except (TypeError, ValueError):
-        in_room = DT.panelists_for(payload)
-    sess = PI.open_session([payload], in_room=in_room, title=ci['title'], created_by=_uname(user), session_id=uuid.uuid4().hex[:10], mode='concept', text=ci['text'], logline=ci['logline'])
-    sess['twin_keys'] = [key]
-    sess['linked_run_id'] = str(run_id)
-    payload.setdefault('pilot_sessions', []).insert(0, sess)
-    try:
-        from migration import digital_twin_room as ROOM
-        ROOM.ensure_personas(sess, {key: payload}, session_seed=str(sess.get('id') or ''))
-    except Exception:
-        traceback.print_exc()
-    DT.save_twin(_s3(), key, payload)
-    return jsonify({'success': True, 'session': PI.public_session(sess), 'reused': False, 'run_id': run_id})
-
-
 @bp.route(f'{PREFIX}/pilot-norms/all', methods=['GET'])
 def dt_pilot_norms_all():
     """The Norms tab: every format's cells for a genre, with our test
@@ -2141,6 +2108,7 @@ def dt_get(key):
     if err:
         return err
     out = {k: v for k, v in payload.items() if k != 'diagnostics'}
+    out['runs'] = DT.product_runs(payload)       # stored runs of the retired Greenlight kind stay on the twin, never on the page
     return _nocache(jsonify({'success': True, 'twin': out, 'summary': DT.view_summary(payload)}))
 
 

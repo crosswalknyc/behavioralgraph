@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import csv
 import io
+import json
 import os
 import sys
 import unittest
@@ -136,8 +137,10 @@ class Build(unittest.TestCase):
         self.assertEqual(m['panelists'], 20)
         self.assertFalse(m['ip_related'])
         self.assertNotIn('ip_lifetime_value', twin)
-        self.assertEqual([r['kind'] for r in twin['runs']], ['greenlight', 'pricing', 'platform_move'])
+        # the old Greenlight run left the seed (Jenna 2026-10-28); a twin ships with its first two runs
+        self.assertEqual([r['kind'] for r in twin['runs']], ['pricing', 'platform_move'])
         entry = SYN.index_entry('k', twin)
+        self.assertEqual(entry['runs'], 2)
         self.assertEqual((entry['source'], entry['panelists']), ('demographics', 20))
         self.assertNotIn('ltv_5y', entry)
         self.assertNotIn('has_ltv', entry)
@@ -222,6 +225,70 @@ class Panelists(unittest.TestCase):
         twin = next(it for it in doc['items'] if it['id'] == 'twin')
         self.assertIn('walks you through it', twin['put_in'])
         self.assertIn('metered', twin['cost'])
+        self.assertIn('first two runs', twin['cost'])
+        self.assertIn('first two runs', twin['comes_back'])
+        self.assertTrue(any(l.startswith('Digital Twin - $750 for the twin and its first two runs') for l in lines))
+        self.assertFalse(any('three runs' in l for l in lines))
+
+    def test_greenlight_how_to_is_the_two_options(self):
+        """Jenna 2026-10-28: Greenlight is two options, Script read and Concept;
+        the odds run is gone from the directions and the seed."""
+        doc = DT.how_to()
+        ids = [it['id'] for it in doc['items']]
+        self.assertIn('greenlight', ids)
+        self.assertNotIn('script', ids)
+        self.assertNotIn('concept', ids)
+        gl = next(it for it in doc['items'] if it['id'] == 'greenlight')
+        self.assertEqual(gl['title'], 'Greenlight')
+        self.assertEqual([o['id'] for o in gl['options']], ['script', 'concept'])
+        self.assertEqual([o['title'] for o in gl['options']], ['Script read', 'Concept'])
+        self.assertEqual([o['price'] for o in gl['options']], ['$3,500', '$2,500'])
+        self.assertIn('Script read', gl['answers'])
+        self.assertIn('Concept', gl['answers'])
+        self.assertIn('$2,500', gl['cost'])
+        self.assertIn('$3,500', gl['cost'])
+        blob = json.dumps(gl, ensure_ascii=False).lower()
+        for tok in ('odds', 'clears your goal', 'greenlight lab', 'levers', 'package to run', '\u2014', '\u2013', 'synth', 'claude', 'pipeline'):
+            self.assertNotIn(tok, blob, tok)
+        self.assertTrue(any(t.startswith('Test this concept in Greenlight on the Gilmore Girls twin') for t in gl['type_this']))
+        self.assertTrue(any(t.startswith('Read this script in Greenlight on the Mark Rober twin') for t in gl['type_this']))
+        lines = DT.pricing_lines()
+        self.assertTrue(any(l.startswith('Greenlight Concept - $2,500') for l in lines))
+        self.assertTrue(any(l.startswith('Greenlight Script read - $3,500') for l in lines))
+        self.assertFalse(any('Greenlight, Launch' in l for l in lines))
+        self.assertIn('Greenlight tab', doc['where'])
+        for ask in ('how do I use Greenlight on a twin', 'how do I run a script read', 'how do I run a concept test'):
+            self.assertTrue(DT.is_how_to_ask(ask), ask)
+            text = DT.how_to_text(ask)
+            self.assertIn('Greenlight.', text)
+            self.assertIn('Script read ($3,500)', text)
+            self.assertIn('Concept ($2,500)', text)
+            self.assertNotIn('odds', text.lower())
+
+    def test_retired_greenlight_runs_are_hidden_not_deleted(self):
+        payload = {'meta': {'name': 'T', 'subject': 'T', 'key': 'k'},
+                   'runs': [{'id': 'g', 'kind': 'greenlight', 'label': 'Greenlight Lab', 'question': 'odds?', 'outputs': {'expected': 10, 'low': 5, 'high': 20, 'odds_pct': 61.0}},
+                            {'id': 'c', 'kind': 'compare', 'label': 'Compare', 'question': 'x', 'inputs': {'scenario_kind': 'greenlight'}, 'outputs': {'expected': 1, 'low': 1, 'high': 2}},
+                            {'id': 'p', 'kind': 'pricing', 'label': 'Pricing', 'question': 'price?', 'outputs': {'expected': 3.0, 'low': 2.0, 'high': 4.0, 'unit': 'usd'}},
+                            {'id': 'd', 'kind': 'compare', 'label': 'Compare', 'question': 'y', 'inputs': {'scenario_kind': 'pricing'}, 'outputs': {'expected': 1, 'low': 1, 'high': 2}}]}
+        self.assertEqual([r['id'] for r in DT.product_runs(payload)], ['p', 'd'])
+        self.assertEqual(len(payload['runs']), 4)                       # nothing deleted
+        self.assertEqual([r['id'] for r in DT.view_summary(payload)['runs']], ['p', 'd'])
+        self.assertNotIn('open_run', DT.view_summary(payload, run_id='g'))
+        rows = [r for r in DT.csv_rows(payload) if r[0] == 'Runs']
+        self.assertEqual(sorted({r[1] for r in rows}), ['d', 'p'])
+        self.assertFalse(any('odds' in str(r[5]) for r in rows))
+        self.assertNotIn('odds', ' '.join(DT.twin_lines(payload)).lower())
+        self.assertEqual(SYN.index_entry('k', payload)['runs'], 2)
+        from migration import digital_twin_exports as X
+        pages = X._pages(payload)
+        self.assertFalse(any('Odds of clearing' in str(t) for pg in pages for t in (pg.get('tiles') or [])))
+        from migration import digital_twin_engine as E
+        with self.assertRaises(ValueError) as ctx:
+            E.simulate(payload, {'kind': 'greenlight', 'inputs': {}})
+        self.assertIn('two options', str(ctx.exception))
+        with self.assertRaises(ValueError):
+            SYN.run_scenario(payload, {'kind': 'compare', 'inputs': {'scenario_kind': 'greenlight'}}, other_twin=payload)
 
 
 class Moderator(unittest.TestCase):
@@ -252,7 +319,7 @@ class Moderator(unittest.TestCase):
         self.assertIn("['occupation', 'Occupation']", page)
         self.assertIn("fold('traits', 'Traits', 'how they respond', tr, false)", page)
         self.assertIn("fold('lifecycle', 'Lifecycle', 'where they sit', lcb, false)", page)
-        self.assertIn("fold('runs', 'Runs', (t.runs || []).length + ' on this twin', rb, false)", page)
+        self.assertIn("fold('runs', 'Runs', productRuns(t).length + ' on this twin', rb, false)", page)
         self.assertNotIn('IP lifetime value', page)
         self.assertNotIn('IP, 5 years', page)
         self.assertNotIn('function renderLtv', page)

@@ -51,7 +51,7 @@ def status_read(job_id):
 
 def build_promise(subject):
     # plain words only: 'corpus' is internal vocabulary (2026-10-26)
-    return (f"On it. Building the {subject} twin now: what we already know about audiences like this first, then the outside record, then the twin itself with its first three runs."
+    return (f"On it. Building the {subject} twin now: what we already know about audiences like this first, then the outside record, then the twin itself with its first two runs."
             f" It lands on the Twins tab of Digital Twins IQ in a few minutes; I will confirm here when it is ready.")
 
 
@@ -188,7 +188,7 @@ def run_job(job_id, username, inputs, extras=None):
         if not payload:
             raise RuntimeError('twin not found for the run')
         other = DT.load_twin(s3, str(inputs.get('other_key') or '')) if inputs.get('other_key') else None
-        scenario = inputs.get('scenario') if isinstance(inputs.get('scenario'), dict) else {'kind': 'greenlight', 'inputs': {}}
+        scenario = inputs.get('scenario') if isinstance(inputs.get('scenario'), dict) else {'kind': 'content', 'inputs': {}}
         run = SYN.run_scenario(payload, scenario, claude_json=claude_json, created_by=username or 'prometheus', other_twin=other)
         if str((status_read(job_id) or {}).get('status') or '') == 'cancelled':
             return

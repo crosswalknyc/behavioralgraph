@@ -77,7 +77,7 @@ _bank_lock = threading.Lock()
 
 CHARTER = """You are the reader for Prometheus, the analyst inside the Crosswalk dashboard. Your only job is to say what the person is asking for, the way a careful senior analyst would after reading the whole thread. You do not answer the question.
 
-Crosswalk holds a library: Profile IQ audiences (a person, brand, title or behavior: demographics plus the brands, platforms and talent they over-index on), Subscriber IQ trackers (a title on a service: accounts, new and reactivated subscribers, how long they stayed), Digital Journeys (a post or clip to a watch, purchase or ticketing visit), Brand Partnership reads (a talent or title against a brand, one dollar figure), Attribution IQ campaigns (assets tracked to a ticketing site, product page or signup), Digital Twins (a twin of an audience that runs titles, plans, prices and ideas forward: Greenlight Lab, Launch Lab, Spend Engine, Focus Group IQ, Pilot Testing), decks and files. Counts are measured inside a 10 million person US sample and projected to the US (x 32.99).
+Crosswalk holds a library: Profile IQ audiences (a person, brand, title or behavior: demographics plus the brands, platforms and talent they over-index on), Subscriber IQ trackers (a title on a service: accounts, new and reactivated subscribers, how long they stayed), Digital Journeys (a post or clip to a watch, purchase or ticketing visit), Brand Partnership reads (a talent or title against a brand, one dollar figure), Attribution IQ campaigns (assets tracked to a ticketing site, product page or signup), Digital Twins (a twin of an audience that runs scripts, concepts, plans and prices forward: Greenlight with its Script read and Concept options, Launch Lab, Spend Engine, Focus Group IQ, Pilot Testing), decks and files. Counts are measured inside a 10 million person US sample and projected to the US (x 32.99).
 
 How to read:
 - A question is a question. "Do we have", "how big", "how many", "what is", "who skews", "which" are never build orders, even on the build screen. Only an order to build, pull, run, create or make is a build ("can you build me a Nike profile" and "run aprofile on X" included): build_profile on the named subject, however it is spelled, whatever is open. "Don't build, answer from what exists" is answer mode.
@@ -88,7 +88,7 @@ How to read:
 - "Like the one you did for X" names a precedent: precedent:X in flags, the new subject stays. When the library shows X as a journey, valuation, campaign or tracker, the intent is that product for the new subject.
 - A size question (how big, size of, incidence, projected band) is intent size. The audience on the open page is read off the page; any other audience, or a cross of audiences, is a $100 read quoted before any number. "How many people watched X" is analyze (a consumption count).
 - A path described while a Digital Journey is on screen (saw a clip and then watched) restates that journey: analyze_page. A new journey needs an order (build, pull, run, map, set up).
-- An order to build a twin, run Greenlight Lab, Launch Lab or the Spend Engine on a twin, open Focus Group IQ, a focus group or a room with a twin, open Pilot Testing, or ask the room a question: twin, with the twin's subject.
+- An order to build a twin, open Greenlight on a twin (a script read or a concept test), run Launch Lab or the Spend Engine on a twin, open Focus Group IQ, a focus group or a room with a twin, open Pilot Testing, or ask the room a question: twin, with the twin's subject.
 - Where is my X, have not received, still waiting, is it done: status. A short yes / run it / approve alone: run_pending. Is there a way to, can we, how do we set up: capability.
 - What does this number mean / how is this calculated: definition. What does X cost: pricing. Email me, send the file, download the csv, open X: command. Build a deck / one-pager / slides: deck.
 - Churn, retention, reactivation, overlap, demographics, over-indexing, trends on a title or audience: analyze (analyze_page when it is about the page).
@@ -139,7 +139,7 @@ SEED_EXAMPLES = [
     {"text": "pull an audience of yoga clothing buyers", "intent": "build_profile", "subjects": ["yoga clothing buyers"], "note": ""},
     {"text": "Pull Subscriber IQ for Livestream from Hell (movie) on Prime Video", "intent": "tracker", "subjects": ["Livestream from Hell"], "note": ""},
     {"text": "Build a twin of Gilmore Girls Hulu viewers", "intent": "twin", "subjects": ["Gilmore Girls"], "note": "Digital Twins IQ build (2026-10-26)"},
-    {"text": "Run Greenlight Lab on the Gilmore Girls twin: a new season on Hulu and Netflix, goal 4M viewers", "intent": "twin", "subjects": ["Gilmore Girls"], "note": "a lab run on a twin"},
+    {"text": "Test this concept in Greenlight on the Gilmore Girls twin: a chef returns to her hometown diner after a scandal", "intent": "twin", "subjects": ["Gilmore Girls"], "note": "Greenlight on a twin: a concept test (or a script read)"},
     {"text": "Open a focus group with the Mark Rober twin and ask whether they would pay $29 for the Build Box", "intent": "twin", "subjects": ["Mark Rober"], "note": "the room; the question is answered in the chat"},
     {"text": "Put the signal-led plan in the Spend Engine on the rule: max 15% a day", "intent": "twin", "subjects": [], "note": "the Spend Engine on the thread's twin"},
     {"text": "can you value Gunna x Nike?", "intent": "valuation", "subjects": ["Gunna", "Nike"], "note": ""},
@@ -568,7 +568,7 @@ _PRODUCT_FOR = {
     'valuation': ('Brand Partnership IQ', 'values a talent or title against a brand: audience fit, earned media, brand lift and conversion lenses, one dollar figure', 'Value a brand partnership'),
     'campaign': ('Attribution IQ', "tracks a campaign's creators, posts and assets to the people who reached a ticketing site, a product page or a signup", 'Set up Attribution IQ'),
     'tracker': ('Subscriber IQ', 'tracks a title on a streaming service: accounts that watched, new and reactivated subscribers, how long they stayed', 'Pull a Subscriber IQ'),
-    'twin': ('Digital Twins IQ', 'builds a twin of an audience and runs titles, plans, prices and ideas forward on it: Greenlight Lab, Launch Lab, the Spend Engine, Focus Group IQ and Pilot Testing', 'Build a twin'),
+    'twin': ('Digital Twins IQ', 'builds a twin of an audience and runs scripts, concepts, plans and prices forward on it: Greenlight (a script read or a concept test), Launch Lab, the Spend Engine, Focus Group IQ and Pilot Testing', 'Build a twin'),
     'build_profile': ('a Profile IQ profile', 'builds the audience of any person, title, brand or behavior with demographics and the brands, platforms and talent they over-index on', 'Run a profile'),
     'cut': ('a cut', 'splits a profile we hold by gender, age, geography or behavior', 'Cut the profile'),
     'deck': ('a deck', 'turns any read or profile on screen into slides', 'Build a deck'),
