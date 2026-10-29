@@ -70243,7 +70243,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var entity = table.getAttribute('data-entity') || 'Title';
             var fileLabel = table.getAttribute('data-export') || 'fast';
             var isTitle = (entity === 'Title');
-            var allRows = Array.prototype.slice.call(table.querySelectorAll('tbody tr.tiq-sheet-row')).filter(function(r) { return !r.classList.contains('tiq-genre-hidden') && !r.classList.contains('tiq-year-hidden'); });
+            var allRows = Array.prototype.slice.call(table.querySelectorAll('tbody tr.tiq-sheet-row')).filter(function(r) { return !r.classList.contains('tiq-genre-hidden') && !r.classList.contains('tiq-year-hidden') && r.style.display !== 'none'; });
             if (limit && limit > 0) {
                 allRows.sort(function(a, b) {
                     var av = parseFloat(a.getAttribute('data-views'));
@@ -70258,11 +70258,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var rows = (limit && limit > 0) ? allRows.slice(0, limit) : allRows;
             var metricLabel = table.getAttribute('data-metric') || 'Views';
             var header;
-            if (entity === 'Channel')      header = ['Rank', 'Channel', 'Channel Type', metricLabel, 'Change %'];
-            else if (entity === 'Music')   header = ['Rank', 'Title', 'Artist', metricLabel, 'Change %'];
-            else if (entity === 'Podcast') header = ['Rank', 'Title', 'Publisher', metricLabel, 'Change %'];
-            else if (entity === 'Gaming')  header = ['Rank', 'Title', 'Publisher', 'Genre', metricLabel, 'Change %'];
-            else                           header = ['Rank', 'Title', 'Year', 'Genres', metricLabel, 'Change %'];
+            if (entity === 'Channel')      header = ['Rank', 'Channel', metricLabel, '\u0394%'];
+            else if (entity === 'Music')   header = ['Rank', 'Title', 'Artist', metricLabel, '\u0394%'];
+            else if (entity === 'Podcast') header = ['Rank', 'Title', 'Publisher', metricLabel, '\u0394%'];
+            else if (entity === 'Gaming')  header = ['Rank', 'Title', 'Publisher', 'Genre', metricLabel, '\u0394%'];
+            else                           header = ['Rank', 'Title', 'Year', 'Genres', metricLabel, '\u0394%'];
             var q = function(v) {
                 v = (v == null) ? '' : String(v);
                 return (/[",\n]/.test(v)) ? '"' + v.replace(/"/g, '""') + '"' : v;
@@ -70275,18 +70275,26 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     : (rankEl ? (rankEl.textContent || '').trim() : String(idx + 1));
                 var name = r.getAttribute('data-name') || '';
                 var views = r.getAttribute('data-views') || '';
-                var delta = r.getAttribute('data-delta');
-                var deltaStr = (delta === null || delta === '') ? '' : ((Number(delta) > 0 ? '+' : '') + delta + '%');
+                var deltaEl = r.querySelector('.tiq-sheet-delta');
+                var deltaStr = deltaEl ? (deltaEl.textContent || '').trim() : '';
+                if (deltaStr === '\u2014') deltaStr = '';
+                var subEl = r.querySelector('.tiq-fast-genres');
+                var sub = subEl ? (subEl.textContent || '').trim() : '';
                 var cols;
-                if (entity === 'Channel')      cols = [rank, name, r.getAttribute('data-chantype') || '', views, deltaStr];
-                else if (entity === 'Music')   cols = [rank, name, r.getAttribute('data-artist') || '', views, deltaStr];
-                else if (entity === 'Podcast') cols = [rank, name, r.getAttribute('data-artist') || '', views, deltaStr];
-                else if (entity === 'Gaming')  cols = [rank, name, r.getAttribute('data-artist') || '', r.getAttribute('data-genres') || '', views, deltaStr];
+                if (entity === 'Channel')      cols = [rank, name, views, deltaStr];
+                else if (entity === 'Music' || entity === 'Podcast') cols = [rank, name, sub, views, deltaStr];
+                else if (entity === 'Gaming') {
+                    var genre = r.getAttribute('data-genres') || '';
+                    var pub = sub;
+                    if (genre && sub === genre) pub = '';
+                    else if (genre && sub.slice(-(genre.length + 3)) === ' \u00b7 ' + genre) pub = sub.slice(0, -(genre.length + 3));
+                    cols = [rank, name, pub, genre, views, deltaStr];
+                }
                 else                           cols = [rank, name, r.getAttribute('data-year') || '', r.getAttribute('data-genres') || '', views, deltaStr];
                 lines.push(cols.map(q).join(','));
             });
             var csv = lines.join('\r\n');
-            var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            var blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
             var url = URL.createObjectURL(blob);
             var a = document.createElement('a');
             var suffix = (limit && limit > 0) ? ('top' + limit) : 'full';
@@ -71248,9 +71256,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         // methodology copy, tooltip text, or the "how to read this"
         // captions - only the raw row data users see on the page.
         //
-        // Common schema (9 columns):
-        //   Tab, Section, Rank, Title, Subtitle, Change,
-        //   US Audience, Audience Unit, Why
+        // Columns are per tab: each builder lists only the fields that
+        // tab prints on screen (see _tiqBuildTab).
         //
         // Empty cells are '' - never null. Numeric values are stringified.
         // Trend direction (up/down/flat) folds into Change so a
@@ -71262,11 +71269,6 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         // CSVs. Row builders may still populate URL or Source fields;
         // the emitter ignores keys not in the header list.
         // ============================================================
-        var _TIQ_EXPORT_HEADERS = [
-            'Tab', 'Section', 'Rank', 'Title', 'Subtitle',
-            'Change', 'US Audience', 'Audience Unit', 'Why'
-        ];
-
         function _tiqCsvCell(v) {
             if (v == null || v === undefined) return '';
             var s = String(v);
@@ -71278,10 +71280,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             return s;
         }
 
-        function _tiqRowsToCsv(rows) {
-            var out = [_TIQ_EXPORT_HEADERS.join(',')];
+        function _tiqRowsToCsv(rows, cols) {
+            var out = [cols.map(_tiqCsvCell).join(',')];
             rows.forEach(function(r) {
-                out.push(_TIQ_EXPORT_HEADERS.map(function(h) {
+                out.push(cols.map(function(h) {
                     return _tiqCsvCell(r[h]);
                 }).join(','));
             });
@@ -71306,21 +71308,6 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var d = new Date();
             var pad = function(n) { return (n < 10 ? '0' : '') + n; };
             return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
-        }
-
-        // Pick the same stream-estimate value the row chip shows.
-        function _tiqExtractStreamValue(row) {
-            if (!row || typeof row !== 'object') return { value: '', unit: '', change: '' };
-            var e = row.us_streams || row.stream_estimate || row.us_audience || null;
-            if (!e) return { value: '', unit: '', change: '' };
-            var v = e.us_estimate || e.estimate || e.value || e.count || '';
-            var u = _tiqCleanUnit(e.unit_label || e.unit) || '';
-            var change = '';
-            if (typeof e.delta_pct === 'number' && e.delta_pct !== 0 && e.direction) {
-                var pct = Math.round(Math.abs(e.delta_pct) * 100);
-                if (pct >= 1) change = (e.direction === 'up' ? '+' : e.direction === 'down' ? '-' : '') + pct + '%';
-            }
-            return { value: v === 0 ? 0 : (v || ''), unit: u || '', change: change };
         }
 
         // Extract the same US-audience integer + unit the on-card chip
@@ -71381,13 +71368,13 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         }
 
         // Companion to _tiqFilterRowsByLens: when a lens is active, swap
-        // every export row's `US Audience` value to that lens's persona-
-        // scaled count. Column name stays 'US Audience' (the filename
-        // slug already carries the lens tag via _tiqLensFilenameSlug).
-        // Also swaps the `Audience Unit` to the persona-noun form so a
-        // downstream analyst reading the CSV sees "weekly Gen Z readers"
-        // instead of "weekly US readers". Rows with no by-lens value or
-        // no active lens pass through unchanged.
+        // every export row's audience value to that lens's persona-
+        // scaled count, the same swap the chips and sheet cells make on
+        // screen. Chip rows carry 'US Audience' + 'Audience Unit'; sheet
+        // rows name their metric column in `_auCol` (Views / Streams /
+        // Listeners / Plays) and carry no unit. Sheet rows are then
+        // re-sorted by the lensed value and renumbered per Section, the
+        // way _tiqLensResortPanelsByAudience reorders the sheets.
         function _tiqRescaleRowsByLens(rows) {
             var lensId = (window.__trendsIQ && window.__trendsIQ.activeLens) || '';
             if (!lensId || !rows || !rows.length) return rows || [];
@@ -71398,458 +71385,616 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (!m) continue;
                 var v = Number(m[lensId]);
                 if (!(v > 0)) continue;
+                if (row._auCol) {
+                    row[row._auCol] = Math.round(v);
+                    continue;
+                }
                 row['US Audience'] = v;
                 var u = String(row['Audience Unit'] || '').trim();
-                if (u) {
-                    // Reuse the chip renderer's unit swap.
-                    row['Audience Unit'] = _tiqLensAudienceUnit(u, lensId);
+                if (u) row['Audience Unit'] = _tiqLensAudienceUnit(u, lensId);
+            }
+            var out = [];
+            var i2 = 0;
+            while (i2 < rows.length) {
+                var r0 = rows[i2];
+                if (!r0 || !r0._resort) { out.push(r0); i2++; continue; }
+                var group = [];
+                var sec = r0.Section;
+                while (i2 < rows.length && rows[i2] && rows[i2]._resort && rows[i2].Section === sec) {
+                    group.push({ row: rows[i2], idx: group.length });
+                    i2++;
                 }
+                group.sort(function(a, b) {
+                    var av = Number(a.row[a.row._auCol]); av = (isFinite(av) && av > 0) ? av : -1;
+                    var bv = Number(b.row[b.row._auCol]); bv = (isFinite(bv) && bv > 0) ? bv : -1;
+                    if (bv !== av) return bv - av;
+                    return a.idx - b.idx;
+                });
+                group.forEach(function(g, gi) {
+                    g.row.Rank = gi + 1;
+                    out.push(g.row);
+                });
             }
-            return rows;
+            return out;
         }
 
-        // Fold a mover row's rank_change into a single Change string.
-        function _tiqMoverChange(row) {
+        // ---- on-screen text mirrors ----------------------------------
+        // Each helper reproduces exactly what a renderer prints, so a
+        // CSV cell reads the same as the page.
+        function _tiqGlyph(dir) {
+            return dir === 'up' ? '\u2191' : (dir === 'down' ? '\u2193' : '\u00B7');
+        }
+
+        // The Δ% cell of a Rankers sheet row (renderCol / _tiqSourceSheet).
+        function _tiqSheetDeltaText(us) {
+            us = us || {};
+            if (us.delta_kind === 'rank' && typeof us.delta_positions === 'number' &&
+                us.delta_positions !== 0 && us.direction) {
+                return _tiqGlyph(us.direction) + ' ' + Math.abs(us.delta_positions);
+            }
+            if (us.direction === 'new') return 'NEW';
+            if (typeof us.delta_pct === 'number' && us.direction) {
+                var raw = Math.abs(us.delta_pct) * 100;
+                var pct = raw >= 1 ? Math.round(raw) : Math.round(raw * 10) / 10;
+                return _tiqGlyph(us.direction) + ' ' + pct + '%';
+            }
+            return '';
+        }
+
+        // The arrow inside an audience chip (_tiqAudienceChip).
+        function _tiqChipDeltaText(us) {
+            us = us || {};
+            if (us.delta_kind === 'rank' && typeof us.delta_positions === 'number' &&
+                us.delta_positions !== 0 && us.direction) {
+                return _tiqGlyph(us.direction) + ' ' + Math.abs(us.delta_positions);
+            }
+            if (String(us.direction || '').toLowerCase() === 'new') return 'NEW';
+            if (us.delta_kind === 'rank' && us.direction) return '\u00B7 0';
+            if (typeof us.delta_pct === 'number' && us.delta_pct !== 0 && us.direction) {
+                var pct = Math.round(Math.abs(us.delta_pct) * 100);
+                if (pct >= 1) return _tiqGlyph(us.direction) + ' ' + pct + '%';
+                return '\u00B7 0%';
+            }
+            if (us.direction) return '\u00B7 0%';
+            return '';
+        }
+
+        // Audience chip -> three columns. Blank when the row renders no
+        // chip (no positive us_estimate).
+        function _tiqChipCols(us, row) {
+            row = row || {};
+            if (!us || !(Number(us.us_estimate) > 0)) {
+                row['US Audience'] = '';
+                row['Audience Unit'] = '';
+                row['Audience Change'] = '';
+                return row;
+            }
+            row['US Audience'] = us.us_estimate;
+            row['Audience Unit'] = (_tiqCleanUnit(us.unit_label) || 'weekly US views')
+                                     .replace(/\s*\([^)]*\)\s*$/, '');
+            row['Audience Change'] = _tiqChipDeltaText(us);
+            row._auByLens = us.us_estimate_by_lens || null;
+            return row;
+        }
+
+        // Italic caption under a row (_tiqWhyLine).
+        function _tiqWhyText(row, strict) {
             if (!row) return '';
+            var text = row.why;
+            if (!text && !strict) text = row.description || row.extract || '';
+            if (!text) return '';
+            if (text.length > 180) text = text.slice(0, 178).replace(/\s+\S*$/, '') + '\u2026';
+            return text;
+        }
+
+        // Person caption (_tiqPersonWhyLine).
+        function _tiqPersonWhyText(p) {
+            if (!p) return '';
+            if (p.why) return _tiqWhyText(p);
+            var meta = (p.context_meta || [])[0];
+            if (meta && meta.text) return meta.text + (meta.source ? ' \u2014 ' + meta.source : '');
+            if ((p.context || []).length) return String(p.context[0]);
+            return '';
+        }
+
+        // Person trend pill label (_tiqRenderPersonTrend).
+        function _tiqPersonTrendText(p) {
+            var t = p && p.trend;
+            if (!t) return '';
+            var pct = p.mentions_change_pct;
+            var hasPct = (typeof pct === 'number' && isFinite(pct));
+            var rounded = hasPct ? Math.round(pct * 100) : null;
+            var pctLabel = hasPct ? ((rounded > 0 ? '+' : '') + rounded + '%') : '';
+            if (t === 'new') return 'NEW';
+            if ((hasPct && rounded === 0) || t === 'stable') return 'stable';
+            if (t === 'rising') return '\u25B2 ' + (pctLabel || 'up');
+            if (t === 'falling') return '\u25BC ' + (pctLabel || 'down');
+            return 'stable';
+        }
+
+        // Mover rank badge (_tiqMoverBadge).
+        function _tiqMoverBadgeText(row) {
             var rc = row.rank_change;
-            if (rc == null && row.rank_today && !row.rank_prev)  return 'new';
-            if (rc == null && row.rank_prev  && !row.rank_today) return 'dropped';
+            if (rc == null && row.rank_today && !row.rank_prev) return 'NEW';
+            if (rc == null && row.rank_prev && !row.rank_today) return 'DROPPED OFF';
             if (rc == null) return '';
-            if (rc > 0) return '+' + rc;
-            if (rc < 0) return String(rc);
-            return 'flat';
+            if (rc > 0) return '\u25B2 ' + rc;
+            if (rc < 0) return '\u25BC ' + Math.abs(rc);
+            return 'FLAT';
         }
 
-        function _tiqDirectionLabel(row) {
-            var t = (row && row.trend) || '';
-            var d = (row && row.delta_pct);
-            if (d != null && typeof d === 'number') {
-                var sign = d > 0 ? '+' : '';
-                return sign + Math.round(d) + '%';
-            }
-            return t || '';
+        function _tiqCardHidden(cardId) {
+            var m = (window.__trendsIQ && window.__trendsIQ.tiqHidden) || {};
+            return !!m[cardId];
         }
 
-        // -------------- per-tab row builders --------------
-        function _tiqExportRowsMovers(cards, tabLabel) {
-            var out = [];
-            var movers = cards.movers || {};
-            var buckets = [
-                { key: 'breakout',  label: 'Breakout' },
-                { key: 'rising',    label: 'Climbing' },
-                { key: 'falling',   label: 'Cooling' },
-                { key: 'sustained', label: 'Sustained heat' }
-            ];
-            buckets.forEach(function(b) {
-                (movers[b.key] || []).forEach(function(r, i) {
-                    var mix = r.platform_mix || {};
-                    var driven = mix.primary ? ('driven by ' + mix.primary) : '';
-                    var aud = _tiqExportAudience(r);
-                    out.push({
-                        Tab: tabLabel, Section: b.label,
-                        Rank: r.rank_today || (i + 1),
-                        Title: r.term || '',
-                        Subtitle: r.rank_prev ? ('was #' + r.rank_prev) : '',
-                        Change: _tiqMoverChange(r),
-                        'US Audience': aud.value,
-                        '_auByLens':   aud.by_lens,
-                        'Audience Unit': aud.unit,
-                        Why: r.why || ((r.related || [])[0] || ''),
-                        URL: ''
-                    });
-                });
-            });
-            return out;
-        }
-
-        function _tiqExportRowsHeadlines(cards, tabLabel) {
-            var out = [];
-            (cards.trending_headlines || []).forEach(function(r, i) {
-                var aud = _tiqExportAudience(r);
-                out.push({
-                    Tab: tabLabel, Section: 'Top trending',
-                    Rank: i + 1,
-                    Title: r.title || '',
-                    Subtitle: r.seendate || '',
-                    Change: '',
-                    'US Audience': aud.value,
-                    '_auByLens':   aud.by_lens,
-                    'Audience Unit': aud.unit,
-                    Why: '', URL: r.url || ''
-                });
-            });
-            (cards.articles_by_source || []).forEach(function(src) {
-                (src.articles || []).forEach(function(a, i) {
-                    var aud = _tiqExportAudience(a);
-                    out.push({
-                        Tab: tabLabel, Section: 'By source - ' + (src.source || ''),
-                        Rank: i + 1,
-                        Title: a.title || '',
-                        Subtitle: a.seendate || '',
-                        Change: '',
-                        'US Audience': aud.value,
-                        '_auByLens':   aud.by_lens,
-                        'Audience Unit': aud.unit,
-                        Why: '', URL: a.url || ''
-                    });
-                });
-            });
-            (cards.philanthropy_news || []).forEach(function(r, i) {
-                var aud = _tiqExportAudience(r);
-                out.push({
-                    Tab: tabLabel, Section: 'Philanthropy',
-                    Rank: i + 1,
-                    Title: r.title || '',
-                    Subtitle: r.published || '',
-                    Change: '',
-                    'US Audience': aud.value,
-                    '_auByLens':   aud.by_lens,
-                    'Audience Unit': aud.unit,
-                    Why: '', URL: r.url || ''
-                });
-            });
-            (cards.business_news || []).forEach(function(r, i) {
-                var aud = _tiqExportAudience(r);
-                out.push({
-                    Tab: tabLabel, Section: 'Business',
-                    Rank: i + 1,
-                    Title: r.title || '',
-                    Subtitle: r.published || r.seendate || '',
-                    Change: '',
-                    'US Audience': aud.value,
-                    '_auByLens':   aud.by_lens,
-                    'Audience Unit': aud.unit,
-                    Why: '', URL: r.url || ''
-                });
-            });
-            (cards.wall_street_news || []).forEach(function(r, i) {
-                var aud = _tiqExportAudience(r);
-                out.push({
-                    Tab: tabLabel, Section: 'Wall Street',
-                    Rank: i + 1,
-                    Title: r.title || '',
-                    Subtitle: r.published || r.seendate || '',
-                    Change: '',
-                    'US Audience': aud.value,
-                    '_auByLens':   aud.by_lens,
-                    'Audience Unit': aud.unit,
-                    Why: '', URL: r.url || ''
-                });
-            });
-            return out;
-        }
+        // -------------- per-tab builders --------------
+        // Each returns { cols: [...], rows: [...] }. `cols` lists only the
+        // fields that tab prints on screen; rows may carry extra keys
+        // (Title for lens matching, `_`-prefixed internals) that the
+        // emitter never writes.
 
         function _tiqExportRowsSearches(cards, tabLabel) {
-            var out = [];
-            var byCat = cards.trending_searches_by_category || {};
-            var pushList = function(sectionLabel, rows) {
-                (rows || []).forEach(function(r, i) {
-                    var aud = _tiqExportAudience(r);
-                    out.push({
-                        Tab: tabLabel, Section: sectionLabel,
-                        Rank: r.rank || (i + 1),
-                        Title: r.term || '',
-                        Subtitle: (r.related || []).slice(0, 1).join(''),
-                        Change: (typeof r.volume_growth_pct === 'number')
-                                    ? (r.volume_growth_pct > 0 ? '+' : '') + Math.round(r.volume_growth_pct) + '%'
-                                    : '',
-                        'US Audience': aud.value,
-                        '_auByLens':   aud.by_lens,
-                        'Audience Unit': aud.unit,
-                        Why: r.why || '',
-                        URL: ''
-                    });
+            var master = cards.trending_searches ||
+                         ((cards.trending_searches_by_category || {}).overall) || [];
+            var rows = master.slice(0, 300).map(function(r, i) {
+                return _tiqChipCols(r.us_streams, {
+                    Tab: tabLabel, Section: 'Overall', Rank: i + 1,
+                    Title: r.term || '',
+                    Why: _tiqWhyText(r)
                 });
-            };
-            pushList('All', cards.trending_searches);
-            Object.keys(byCat).forEach(function(catKey) {
-                pushList(catKey.charAt(0).toUpperCase() + catKey.slice(1),
-                          byCat[catKey]);
             });
-            return out;
+            return { cols: ['Tab', 'Section', 'Rank', 'Title', 'Why',
+                            'US Audience', 'Audience Unit', 'Audience Change'],
+                     rows: rows };
         }
 
+        function _tiqExportRowsMovers(cards, tabLabel) {
+            var movers = cards.movers || {};
+            var rows = [];
+            if (movers.available) {
+                [{ key: 'breakout',  label: 'Breakout' },
+                 { key: 'rising',    label: 'Climbing' },
+                 { key: 'falling',   label: 'Cooling' },
+                 { key: 'sustained', label: 'Sustained heat' }].forEach(function(b) {
+                    (movers[b.key] || []).forEach(function(r) {
+                        var mix = r.platform_mix || {};
+                        var driven = '';
+                        if (mix.primary) {
+                            driven = mix.primary === 'search' ? 'search'
+                                   : (mix.primary === 'media' ? 'media' : 'social');
+                        }
+                        rows.push(_tiqChipCols(r.us_streams, {
+                            Tab: tabLabel, Section: b.label,
+                            Rank: r.rank_today || '',
+                            Title: r.term || '',
+                            Change: _tiqMoverBadgeText(r),
+                            'Previous Rank': r.rank_prev || '',
+                            Related: (r.related || [])[0] || '',
+                            'Driven By': driven
+                        }));
+                    });
+                });
+            }
+            return { cols: ['Tab', 'Section', 'Rank', 'Title', 'Change', 'Previous Rank',
+                            'Related', 'US Audience', 'Audience Unit', 'Audience Change',
+                            'Driven By'],
+                     rows: rows };
+        }
+
+        // Only the Headlines sub-tab on screen, resolved the same way
+        // renderTIQHeadlines picks it.
+        function _tiqExportRowsHeadlines(cards, tabLabel) {
+            var top      = cards.trending_headlines || [];
+            var sources  = cards.articles_by_source || [];
+            var business = cards.business_news      || [];
+            var wall     = cards.wall_street_news   || [];
+            var view = (window.__trendsIQ && window.__trendsIQ.headlinesView) || 'top';
+            if (view === 'philanthropy') view = 'top';
+            if (((view === 'sources'     && !sources.length) ||
+                 (view === 'business'    && !business.length) ||
+                 (view === 'wall_street' && !wall.length)) && top.length) {
+                view = 'top';
+            }
+            var rows = [];
+            if (view === 'sources') {
+                sources.forEach(function(src) {
+                    (src.articles || []).forEach(function(a, i) {
+                        rows.push(_tiqChipCols(a.us_readers, {
+                            Tab: tabLabel, Section: 'By news source - ' + (src.source || ''),
+                            Rank: i + 1, Title: a.title || '', Source: '', Why: ''
+                        }));
+                    });
+                });
+            } else if (view === 'business' || view === 'wall_street') {
+                var list = (view === 'business') ? business : wall;
+                var sec  = (view === 'business') ? 'Business' : 'Wall Street';
+                list.forEach(function(r, i) {
+                    rows.push(_tiqChipCols(r.us_readers, {
+                        Tab: tabLabel, Section: sec, Rank: i + 1,
+                        Title: r.title || '',
+                        Source: r.source_label || r.source || '',
+                        Why: _tiqWhyText(r)
+                    }));
+                });
+            } else {
+                top.forEach(function(r, i) {
+                    rows.push(_tiqChipCols(r.us_readers, {
+                        Tab: tabLabel, Section: 'Top trending', Rank: i + 1,
+                        Title: r.title || '', Source: r.source || '', Why: ''
+                    }));
+                });
+            }
+            var cols = ['Tab', 'Section', 'Rank', 'Title'];
+            if (view !== 'sources') cols.push('Source');
+            if (view === 'business' || view === 'wall_street') cols.push('Why');
+            return { cols: cols.concat(['US Audience', 'Audience Unit', 'Audience Change']),
+                     rows: rows };
+        }
+
+        // The single fused, sorted person grid renderTIQPeople last drew.
         function _tiqExportRowsPeople(cards, tabLabel) {
-            var out = [];
-            (cards.wikipedia_trending || []).forEach(function(r, i) {
-                var aud = _tiqExportAudience(r);
-                out.push({
-                    Tab: tabLabel, Section: 'Wikipedia',
-                    Rank: i + 1,
-                    Title: r.title || '',
-                    Subtitle: r.description || '',
-                    Change: _tiqDirectionLabel(r),
-                    'US Audience': aud.value,
-                    '_auByLens':   aud.by_lens,
-                    'Audience Unit': aud.unit,
-                    Why: r.why || '',
-                    URL: r.url || ''
-                });
-            });
-            (cards.trending_people || []).forEach(function(p, i) {
-                var aud = _tiqExportAudience(p);
-                out.push({
+            var list = (window.__trendsIQ && window.__trendsIQ.peopleRendered) || null;
+            if (!list) {
+                var clone = function(a) { return (a || []).map(function(o) { return Object.assign({}, o); }); };
+                list = _tiqSortPeople(_tiqFusePeople(clone(cards.trending_people),
+                                                     clone(cards.wikipedia_trending)), 'pageviews');
+            }
+            var rows = list.map(function(p) {
+                var pv = Number(p.pageviews_projected != null ? p.pageviews_projected
+                                : (Number(p.pageviews) || 0) * 329990000) || 0;
+                return _tiqChipCols(p.us_streams, {
                     Tab: tabLabel, Section: 'Trending people',
-                    Rank: i + 1,
                     Title: p.name || '',
-                    Subtitle: p.description || '',
-                    Change: _tiqDirectionLabel(p),
-                    'US Audience': aud.value,
-                    '_auByLens':   aud.by_lens,
-                    'Audience Unit': aud.unit,
-                    Why: p.why || '',
-                    URL: p.url || ''
+                    Change: _tiqPersonTrendText(p),
+                    'Digital Touchpoints': pv > 0 ? Math.round(pv) : '',
+                    Why: _tiqPersonWhyText(p)
                 });
             });
-            return out;
+            return { cols: ['Tab', 'Section', 'Title', 'Change', 'Digital Touchpoints',
+                            'US Audience', 'Audience Unit', 'Audience Change', 'Why'],
+                     rows: rows };
         }
 
-        function _tiqExportRowsBroadway(dict, tabLabel) {
-            // Broadway is a single-panel tab today (Show Rank).
-            // One row per currently-running production. Change column
-            // carries weekly_change_attendance (%, derived from Playbill's
-            // week-over-week capacity delta), US Audience carries the
-            // native attendance integer, Why carries % capacity so the
-            // CSV keeps that context in a human-readable form without
-            // widening the 9-column header shape (see _TIQ_EXPORT_HEADERS).
-            var out = [];
-            Object.keys(dict || {}).forEach(function(slug) {
-                var panel = dict[slug] || {};
-                (panel.items || []).forEach(function(it, i) {
-                    var aud = _tiqExportAudience(it);
-                    var change = '';
-                    var wca = it.weekly_change_attendance;
-                    if (typeof wca === 'number') {
-                        var pct = Math.round(Math.abs(wca) * 1000) / 10;
-                        if (pct >= 0.1) {
-                            change = (wca > 0 ? '+' : '-') + pct + '%';
-                        } else {
-                            change = 'flat';
-                        }
-                    }
-                    var why = '';
-                    if (typeof it.pct_capacity === 'number') {
-                        why = 'capacity ' + Math.round(it.pct_capacity * 1000) / 10 + '%';
-                        if (typeof it.performances === 'number' && it.performances > 0) {
-                            why += ', ' + it.performances + ' perfs';
-                        }
-                        if (it.is_preview) why += ', in previews';
-                    }
-                    out.push({
-                        Tab: tabLabel,
-                        // Fixed section label per Jenna 2026-09-01: the
-                        // panel + CSV both read "Show Rank" now
-                        // that dollar columns are dropped. If a future
-                        // rail lands (Off-Broadway, Broadway matinees,
-                        // etc.) it can use its own panel.label instead.
-                        Section: 'Broadway - Show Rank',
-                        Rank: it.rank || (i + 1),
-                        Title: it.title || '',
-                        Subtitle: it.theatre || it.subtitle || '',
-                        Change: change,
-                        'US Audience': aud.value,
-                        '_auByLens':   aud.by_lens,
-                        'Audience Unit': aud.unit,
-                        Why: why,
-                        URL: it.url || ''
-                    });
+        // One Rankers sheet row: Title | <metric> | Δ%, plus whatever the
+        // row's subline shows (passed in `extra`).
+        function _tiqSheetRow(tabLabel, section, it, rank, metric, extra) {
+            var us = it.us_streams || {};
+            var est = Number(us.us_estimate);
+            var row = { Tab: tabLabel, Section: section, Rank: rank, Title: it.title || '' };
+            Object.keys(extra || {}).forEach(function(k) { row[k] = extra[k]; });
+            row[metric] = (isFinite(est) && est > 0) ? est : '';
+            row['\u0394%'] = _tiqSheetDeltaText(us);
+            row._auCol = metric;
+            row._auByLens = us.us_estimate_by_lens || null;
+            row._resort = true;
+            return row;
+        }
+
+        // Music / Podcasts: every source card on screen (TikTok never
+        // renders; placeholder and user-hidden cards are skipped).
+        function _tiqExportRowsSourceCards(dict, tabLabel, order, metric, subCol, skipKeys) {
+            dict = dict || {};
+            var allKeys = Object.keys(dict);
+            var keys = order.filter(function(k) { return dict[k]; })
+                .concat(allKeys.filter(function(k) {
+                    return order.indexOf(k) === -1 && (skipKeys || []).indexOf(k) === -1;
+                }));
+            var rows = [];
+            keys.forEach(function(k) {
+                var s = dict[k] || {};
+                var items = s.items || [];
+                if (!s.available || !items.length) return;
+                var label = s.label || k;
+                if (_tiqCardHidden(k + '-' + label)) return;
+                _tiqSortByDisplayedEstimate(items).forEach(function(it, i) {
+                    var extra = {};
+                    extra[subCol] = it.artist || '';
+                    rows.push(_tiqSheetRow(tabLabel, label, it, i + 1, metric, extra));
                 });
             });
-            return out;
+            return { cols: ['Tab', 'Section', 'Rank', 'Title', subCol, metric, '\u0394%'],
+                     rows: rows };
         }
 
-        function _tiqExportRowsPanelDict(dict, tabLabel, sectionPrefix) {
-            // Generic per-platform panel exporter used by Music /
-            // Podcasts / Books / Films / Gaming (single-list per
-            // platform). Streaming / FAST use a dedicated Film/TV
-            // split builder below.
-            var out = [];
-            Object.keys(dict || {}).forEach(function(slug) {
-                var panel = dict[slug] || {};
-                var label = panel.label || slug;
-                _tiqSortByDisplayedEstimate(panel.items || []).forEach(function(it, i) {
-                    var se = _tiqExtractStreamValue(it);
-                    var aud = _tiqExportAudience(it);
-                    out.push({
-                        Tab: tabLabel,
-                        Section: (sectionPrefix ? (sectionPrefix + ' - ') : '') + label,
-                        Rank: i + 1,
-                        Title: it.title || '',
-                        Subtitle: it.artist || it.author || it.publisher ||
-                                  it.subtitle || '',
-                        Change: it.weeks_in_top10
-                                    ? ('week ' + it.weeks_in_top10)
-                                    : se.change,
-                        'US Audience': aud.value,
-                        '_auByLens':   aud.by_lens,
-                        'Audience Unit': aud.unit,
-                        Why: it.why || '',
-                        URL: it.url || ''
-                    });
+        // Film / TV board columns (renderCol sort: shown views desc, then
+        // bucket_rank).
+        function _tiqBoardSort(rows) {
+            return (rows || []).slice().sort(function(a, b) {
+                var av = Number(((a && a.us_streams) || {}).us_estimate);
+                var bv = Number(((b && b.us_streams) || {}).us_estimate);
+                var ah = isFinite(av) && av > 0;
+                var bh = isFinite(bv) && bv > 0;
+                if (ah !== bh) return ah ? -1 : 1;
+                if (ah && bh && bv !== av) return bv - av;
+                return (Number(a && a.bucket_rank) || 1e9) - (Number(b && b.bucket_rank) || 1e9);
+            });
+        }
+        function _tiqSplitFilmTv(s) {
+            var film = (s.films || []).slice();
+            var tv   = (s.tv    || []).slice();
+            if (!film.length && !tv.length) {
+                (s.items || []).forEach(function(it) {
+                    var cd = (it.category_display || '').toLowerCase();
+                    if (cd === 'film' || cd === 'films' || cd === 'movie') film.push(it);
+                    else tv.push(it);
+                });
+            }
+            return { film: film, tv: tv };
+        }
+        function _tiqBoardRows(tabLabel, platLabel, split) {
+            var rows = [];
+            [['Film', split.film], ['TV', split.tv]].forEach(function(pair) {
+                _tiqBoardSort(pair[1]).forEach(function(it, i) {
+                    rows.push(_tiqSheetRow(tabLabel, platLabel + ' - ' + pair[0], it, i + 1, 'Views', {
+                        Year: it.year ? String(it.year) : '',
+                        Genres: (it.genres && it.genres.length) ? it.genres.slice(0, 3).join(' \u00B7 ') : ''
+                    }));
                 });
             });
-            return out;
+            return rows;
+        }
+        var _TIQ_BOARD_COLS = ['Tab', 'Section', 'Rank', 'Title', 'Year', 'Genres', 'Views', '\u0394%'];
+
+        // Streaming: the active platform sub-tab only.
+        function _tiqExportRowsStreaming(dict, tabLabel) {
+            dict = dict || {};
+            var k = window.__trendsIQ && window.__trendsIQ.activeStreaming;
+            if (!k || !dict[k]) {
+                if (dict.netflix && dict.netflix.available) k = 'netflix';
+                else k = Object.keys(dict).find(function(x) { return (dict[x] || {}).available; });
+            }
+            var s = (k && dict[k]) || {};
+            var rows = s.available ? _tiqBoardRows(tabLabel, s.label || k, _tiqSplitFilmTv(s)) : [];
+            return { cols: _TIQ_BOARD_COLS, rows: rows };
         }
 
-        function _tiqExportRowsBooks(cards, tabLabel) {
-            var out = _tiqExportRowsPanelDict(
-                cards.books_trending || {}, tabLabel, 'Books');
-            out = out.concat(_tiqExportRowsPanelDict(
-                cards.libby_trending || {}, tabLabel, 'Libby'));
-            return out;
-        }
-
-        // Shared Film/TV-split builder used by both Streaming and FAST.
-        function _tiqExportRowsFilmTvSplit(dict, tabLabel) {
-            var out = [];
-            Object.keys(dict || {}).forEach(function(slug) {
-                var panel = dict[slug] || {};
-                var label = panel.label || slug;
-                var pushList = function(kind, rows) {
-                    _tiqSortByDisplayedEstimate(rows).forEach(function(it, i) {
-                        var se = _tiqExtractStreamValue(it);
-                        var aud = _tiqExportAudience(it);
-                        out.push({
-                            Tab: tabLabel,
-                            Section: label + ' - ' + kind,
-                            Rank: i + 1,
-                            Title: it.title || '',
-                            Subtitle: '',
-                            Change: it.weeks_in_top10
-                                        ? ('week ' + it.weeks_in_top10)
-                                        : se.change,
-                            'US Audience': aud.value,
-                            '_auByLens':   aud.by_lens,
-                            'Audience Unit': aud.unit,
-                            Why: it.why || '',
-                            URL: it.url || ''
-                        });
-                    });
-                };
-                pushList('Film', panel.films);
-                pushList('TV',   panel.tv);
-                // FAST panels also carry a channels list. Emit it as
-                // its own section so the ranker view is exportable too.
-                _tiqSortByDisplayedEstimate(panel.channels || []).forEach(function(ch, i) {
-                    var se = _tiqExtractStreamValue(ch);
-                    var aud = _tiqExportAudience(ch);
-                    out.push({
-                        Tab: tabLabel,
-                        Section: label + ' - Channels',
-                        Rank: i + 1,
-                        Title: ch.title || ch.name || '',
-                        Subtitle: ch.content_type || '',
-                        Change: se.change,
-                        'US Audience': aud.value,
-                        '_auByLens':   aud.by_lens,
-                        'Audience Unit': aud.unit,
-                        Why: '',
-                        URL: ch.url || ''
-                    });
-                });
+        // FAST: the active platform sub-tab, in the active mode (Titles
+        // board, or Channel Ranker honouring the channel-type filter).
+        function _tiqExportRowsFast(dict, tabLabel) {
+            dict = dict || {};
+            var k = window.__trendsIQ && window.__trendsIQ.activeFast;
+            if (!k || !dict[k]) {
+                var keys = _tiqFastOrder.filter(function(x) { return dict[x]; })
+                    .concat(Object.keys(dict).filter(function(x) { return _tiqFastOrder.indexOf(x) === -1; }));
+                k = keys.find(function(x) { return (dict[x] || {}).available; }) || keys[0];
+            }
+            var s = (k && dict[k]) || {};
+            if (!s.available) return { cols: _TIQ_BOARD_COLS, rows: [] };
+            var label = s.label || k;
+            var hasTitles = !!((s.items || []).length || (s.films || []).length || (s.tv || []).length);
+            var mode = (window.__trendsIQ && window.__trendsIQ.activeFastMode) || 'titles';
+            if (!hasTitles) mode = 'channels';
+            if (mode !== 'channels') {
+                return { cols: _TIQ_BOARD_COLS, rows: _tiqBoardRows(tabLabel, label, _tiqSplitFilmTv(s)) };
+            }
+            var channels = s.channels || [];
+            var typeCounts = {};
+            channels.forEach(function(c) {
+                var g = String(c.genre || '').trim();
+                if (g) typeCounts[g] = (typeCounts[g] || 0) + 1;
             });
-            return out;
+            var want = String((window.__trendsIQ || {}).activeFastChannelType || '');
+            var activeType = (Object.keys(typeCounts).length > 1 && typeCounts[want]) ? want : '';
+            var rows = [];
+            channels.forEach(function(ch, i) {
+                if (activeType && String(ch.genre || '').trim() !== activeType) return;
+                var row = _tiqSheetRow(tabLabel, label + ' - Channels', { title: ch.name, us_streams: ch.us_streams },
+                                       ch.rank || (i + 1), 'Views', {});
+                row.Channel = ch.name || '';
+                rows.push(row);
+            });
+            return { cols: ['Tab', 'Section', 'Rank', 'Channel', 'Views', '\u0394%'], rows: rows };
         }
 
-        // Gaming exporter. Handles both panel shapes:
-        //   - single-list (Xbox): iterate panel.items.
-        //   - grouped (Meta Quest): iterate free + paid buckets,
-        //     labeling sections "Meta Quest - Free" / "Meta Quest -
-        //     Paid" (same "-" style FAST uses for Film / TV / Channels).
+        // Gaming: every source / bucket card on screen, minus hidden ones.
         function _tiqExportRowsGaming(dict, tabLabel) {
-            var out = [];
-            // Bucket-key -> section-suffix map for every grouped
-            // gaming panel. `Meta Quest` panel uses free / paid;
-            // `Steam` panel uses most_played / top_sellers. Adding
-            // a new grouped platform is a one-line addition here
-            // (plus the matching entries in renderTIQGaming's
-            // groupedBuckets and trends_iq.py's GAMING_PLATFORMS).
-            var bucketSuffix = {
-                'free':        'Free',
-                'paid':        'Paid',
-                'most_played': 'Most Played',
-                'top_sellers': 'Top Sellers'
+            dict = dict || {};
+            var order = ['xbox_gamepass', 'meta_quest', 'steam'];
+            var keys = order.filter(function(k) { return dict[k]; })
+                .concat(Object.keys(dict).filter(function(k) { return order.indexOf(k) === -1; }));
+            var grouped = {
+                'meta_quest': [['free', 'Free'], ['paid', 'Paid']],
+                'steam':      [['most_played', 'Most Played'], ['top_sellers', 'Top Sellers']]
             };
-            var bucketKeys = Object.keys(bucketSuffix);
-            Object.keys(dict || {}).forEach(function(slug) {
-                var panel = dict[slug] || {};
-                var label = panel.label || slug;
-                var pushRow = function(sectionSuffix, it, i) {
-                    var se = _tiqExtractStreamValue(it);
-                    var aud = _tiqExportAudience(it);
-                    out.push({
-                        Tab: tabLabel,
-                        Section: sectionSuffix
-                                    ? (label + ' - ' + sectionSuffix)
-                                    : label,
-                        Rank: i + 1,
-                        Title: it.title || '',
-                        Subtitle: it.publisher || it.subtitle || '',
-                        Change: se.change,
-                        'US Audience': aud.value,
-                        '_auByLens':   aud.by_lens,
-                        'Audience Unit': aud.unit,
-                        Why: it.why || '',
-                        URL: it.url || ''
-                    });
-                };
-                var populatedBucketKeys = bucketKeys.filter(function(bk) {
-                    return Array.isArray(panel[bk]);
+            var rows = [];
+            var pushCol = function(colLabel, items) {
+                if (_tiqCardHidden('gaming-' + colLabel)) return;
+                _tiqSortByDisplayedEstimate(items || []).forEach(function(it, i) {
+                    rows.push(_tiqSheetRow(tabLabel, colLabel, it, i + 1, 'Plays', {
+                        Publisher: it.publisher || '',
+                        Genre: it.genre || ''
+                    }));
                 });
-                if (populatedBucketKeys.length) {
-                    populatedBucketKeys.forEach(function(bk) {
-                        _tiqSortByDisplayedEstimate(panel[bk] || []).forEach(function(it, i) {
-                            pushRow(bucketSuffix[bk], it, i);
-                        });
+            };
+            keys.forEach(function(k) {
+                var s = dict[k] || {};
+                if (!s.available) return;
+                var buckets = grouped[k];
+                if (buckets && buckets.some(function(b) { return Array.isArray(s[b[0]]); })) {
+                    buckets.forEach(function(b) {
+                        if ((s[b[0]] || []).length) {
+                            pushCol((s.label ? s.label + ' \u00b7 ' : '') + b[1], s[b[0]]);
+                        }
                     });
-                    return;
+                } else if ((s.items || []).length) {
+                    pushCol(s.label || k, s.items);
                 }
-                _tiqSortByDisplayedEstimate(panel.items || []).forEach(function(it, i) {
-                    pushRow('', it, i);
-                });
             });
-            return out;
+            return { cols: ['Tab', 'Section', 'Rank', 'Title', 'Publisher', 'Genre', 'Plays', '\u0394%'],
+                     rows: rows };
         }
 
-        function _tiqExportRowsWatchlist() {
-            var out = [];
+        var _TIQ_LIST_COLS = ['Tab', 'Section', 'Rank', 'Title', 'Author',
+                              'US Audience', 'Audience Unit', 'Audience Change'];
+        function _tiqListRows(tabLabel, section, items, sorted, authorOf) {
+            var list = sorted ? _tiqSortByDisplayedEstimate(items || []) : (items || []);
+            return list.map(function(it, i) {
+                return _tiqChipCols(it.us_streams, {
+                    Tab: tabLabel, Section: section, Rank: i + 1,
+                    Title: it.title || '', Author: authorOf(it) || ''
+                });
+            });
+        }
+
+        // Books: store cards, Libby cards, Goodreads, and the active
+        // Wattpad rail, in the order renderTIQBooks draws them.
+        function _tiqExportRowsBooks(cards, tabLabel) {
+            var books = cards.books_trending || {};
+            var libby = cards.libby_trending || {};
+            var rows = [];
+            var byArtist = function(it) { return it.artist; };
+            var byAuthor = function(it) { return it.author || it.artist; };
+            ['amazon', 'apple', 'audible'].forEach(function(k) {
+                var s = books[k];
+                if (s && s.available && (s.items || []).length) {
+                    rows = rows.concat(_tiqListRows(tabLabel, s.label || k, s.items, true, byArtist));
+                }
+            });
+            var libbyLabels = { ebook: 'Libby: eBooks', audiobook: 'Libby: Audiobooks', magazine: 'Libby: Magazines' };
+            ['ebook', 'audiobook', 'magazine'].forEach(function(k) {
+                var s = libby[k];
+                if (s && s.available && (s.items || []).length) {
+                    rows = rows.concat(_tiqListRows(tabLabel, libbyLabels[k], s.items, true, byArtist));
+                }
+            });
+            var gr = books.goodreads_most_read;
+            if (gr && gr.available && (gr.items || []).length) {
+                rows = rows.concat(_tiqListRows(tabLabel, 'Goodreads', gr.items, false, byAuthor));
+            }
+            var wpKeys = ['wattpad_hot', 'wattpad_originals', 'wattpad_romance',
+                          'wattpad_teen_fiction', 'wattpad_fanfiction', 'wattpad_fantasy'];
+            var wpLabels = { wattpad_hot: 'Hot Stories', wattpad_originals: 'Originals',
+                             wattpad_romance: 'Romance', wattpad_teen_fiction: 'Teen Fiction',
+                             wattpad_fanfiction: 'Fanfiction', wattpad_fantasy: 'Fantasy' };
+            var wpPresent = wpKeys.filter(function(k) { return books[k]; });
+            if (wpPresent.length) {
+                var wk = (window.__trendsIQ && window.__trendsIQ.activeWattpad);
+                if (wpPresent.indexOf(wk) === -1) wk = wpPresent[0];
+                var wp = books[wk] || {};
+                if (wp.available && (wp.items || []).length) {
+                    rows = rows.concat(_tiqListRows(tabLabel, 'Wattpad - ' + (wpLabels[wk] || wk),
+                                                    wp.items, false, byAuthor));
+                }
+            }
+            return { cols: _TIQ_LIST_COLS, rows: rows };
+        }
+
+        function _tiqExportRowsComics(cards, tabLabel) {
+            var src = cards.comics_trending || {};
+            var rows = [];
+            ['amazon_kindle', 'apple_comics', 'libby_comics'].forEach(function(k) {
+                var s = src[k];
+                if (s && s.available && (s.items || []).length) {
+                    rows = rows.concat(_tiqListRows(tabLabel, s.label || k, s.items, true,
+                                                    function(it) { return it.artist; }));
+                }
+            });
+            return { cols: _TIQ_LIST_COLS, rows: rows };
+        }
+
+        function _tiqExportRowsBroadway(cards, tabLabel) {
+            var panel = (cards.broadway_trending || {}).broadway_weekly_attendance || {};
+            var rows = (panel.items || []).map(function(it, i) {
+                var cap = '';
+                if (typeof it.pct_capacity === 'number' && it.pct_capacity > 0) {
+                    cap = (Math.round(it.pct_capacity * 1000) / 10) + '%';
+                }
+                var change = '';
+                var wca = it.weekly_change_attendance;
+                if (typeof wca === 'number') {
+                    var absPct = Math.round(Math.abs(wca) * 1000) / 10;
+                    change = (absPct >= 0.1) ? ((wca > 0 ? '\u25B2 ' : '\u25BC ') + absPct + '%') : '\u00B7 flat';
+                }
+                return _tiqChipCols(it.us_streams, {
+                    Tab: tabLabel, Section: 'Show Rank', Rank: i + 1,
+                    Title: it.title || '',
+                    Theatre: it.theatre || '',
+                    Capacity: cap,
+                    Change: change,
+                    Performances: (typeof it.performances === 'number' && it.performances > 0) ? it.performances : '',
+                    Status: it.is_preview ? 'in previews' : ''
+                });
+            });
+            return { cols: ['Tab', 'Section', 'Rank', 'Title', 'Theatre', 'US Audience',
+                            'Audience Unit', 'Audience Change', 'Capacity', 'Change',
+                            'Performances', 'Status'],
+                     rows: rows };
+        }
+
+        // Films rows show rank + title only, in the site's own order.
+        function _tiqExportRowsFilms(cards, tabLabel) {
+            var src = cards.films_ticketing || {};
+            var rows = [];
+            ['fandango', 'cinemark', 'amc', 'regal'].forEach(function(k) {
+                var s = src[k];
+                if (!s || !s.available) return;
+                (s.items || []).forEach(function(it, i) {
+                    rows.push({ Tab: tabLabel, Section: s.label || k, Rank: i + 1, Title: it.title || '' });
+                });
+            });
+            return { cols: ['Tab', 'Section', 'Rank', 'Title'], rows: rows };
+        }
+
+        function _tiqExportRowsWatchlist(tabLabel) {
             var items = (window.__trendsIQ && window.__trendsIQ.watchList) || [];
-            items.forEach(function(w, i) {
-                var aud = _tiqExportAudience(w);
-                out.push({
-                    Tab: 'Watchlist', Section: w.kind || '',
-                    Rank: i + 1,
-                    Title: w.title || w.name || '',
-                    Subtitle: w.geo || '',
-                    Change: '',
-                    'US Audience': aud.value,
-                    '_auByLens':   aud.by_lens,
-                    'Audience Unit': aud.unit,
-                    Why: '', URL: ''
-                });
+            var rows = items.map(function(e) {
+                var arc = e.arc || {};
+                return {
+                    Tab: tabLabel,
+                    Title: e.label || e.key || '',
+                    Kind: e.kind || '',
+                    Source: e.source || '',
+                    Geo: e.geo || 'National',
+                    Current: arc.current_rank != null ? '#' + arc.current_rank : '-',
+                    Best: arc.best_rank != null ? '#' + arc.best_rank : '-'
+                };
             });
-            return out;
+            return { cols: ['Tab', 'Title', 'Kind', 'Source', 'Geo', 'Current', 'Best'], rows: rows };
         }
 
-        function _tiqBuildRowsForTab(tabKey, cards) {
+        function _tiqBuildTab(tabKey, cards) {
             var tabLabel = _TIQ_TAB_LABELS[tabKey] || tabKey;
             switch (tabKey) {
                 case 'searches':  return _tiqExportRowsSearches(cards, tabLabel);
                 case 'movers':    return _tiqExportRowsMovers(cards, tabLabel);
                 case 'headlines': return _tiqExportRowsHeadlines(cards, tabLabel);
                 case 'people':    return _tiqExportRowsPeople(cards, tabLabel);
-                case 'music':     return _tiqExportRowsPanelDict(cards.music_trending, tabLabel, '');
-                case 'podcasts':  return _tiqExportRowsPanelDict(cards.podcasts_trending, tabLabel, '');
+                case 'music':     return _tiqExportRowsSourceCards(cards.music_trending, tabLabel,
+                                      ['spotify', 'apple', 'youtube', 'shazam', 'amazon'],
+                                      'Streams', 'Artist', ['tiktok']);
+                case 'podcasts':  return _tiqExportRowsSourceCards(cards.podcasts_trending, tabLabel,
+                                      ['apple', 'spotify', 'youtube_podcasts', 'netflix', 'amazon', 'audible'],
+                                      'Listeners', 'Publisher', []);
                 case 'books':     return _tiqExportRowsBooks(cards, tabLabel);
-                case 'comics':    return _tiqExportRowsPanelDict(cards.comics_trending, tabLabel, '');
-                case 'streaming': return _tiqExportRowsFilmTvSplit(cards.streaming_trending || {}, tabLabel);
-                case 'broadway':  return _tiqExportRowsBroadway(cards.broadway_trending || {}, tabLabel);
-                case 'films':     return _tiqExportRowsPanelDict(cards.films_ticketing, tabLabel, '');
-                case 'fast':      return _tiqExportRowsFilmTvSplit(cards.fast_trending || {}, tabLabel);
-                case 'gaming':    return _tiqExportRowsGaming(cards.gaming_trending || {}, tabLabel);
-                case 'watchlist': return _tiqExportRowsWatchlist();
-                default:          return [];
+                case 'comics':    return _tiqExportRowsComics(cards, tabLabel);
+                case 'streaming': return _tiqExportRowsStreaming(cards.streaming_trending, tabLabel);
+                case 'broadway':  return _tiqExportRowsBroadway(cards, tabLabel);
+                case 'films':     return _tiqExportRowsFilms(cards, tabLabel);
+                case 'fast':      return _tiqExportRowsFast(cards.fast_trending, tabLabel);
+                case 'gaming':    return _tiqExportRowsGaming(cards.gaming_trending, tabLabel);
+                case 'watchlist': return _tiqExportRowsWatchlist(tabLabel);
+                default:          return { cols: [], rows: [] };
             }
+        }
+
+        // Tabs currently in the strip, in strip order (product routing
+        // and per-tab grants already applied by renderTrendsIQ).
+        function _tiqVisibleTabKeys() {
+            var els = document.querySelectorAll('#trendsIQTabStrip [data-tiq-tab]');
+            var keys = [];
+            for (var i = 0; i < els.length; i++) keys.push(els[i].getAttribute('data-tiq-tab'));
+            if (keys.length) return keys;
+            var prod = (window.__trendsIQ && window.__trendsIQ.product === 'rankers') ? 'rankers' : 'trends';
+            var list = (prod === 'rankers')
+                ? ['fast', 'music', 'podcasts', 'streaming', 'gaming']
+                : ['searches', 'movers', 'headlines', 'people', 'books', 'comics',
+                   'broadway', 'films', 'watchlist'];
+            return list.filter(function(k) { return _tiqTabAllowed(k, prod); });
+        }
+
+        function _tiqExportPrefix() {
+            return (window.__trendsIQ && window.__trendsIQ.product === 'rankers') ? 'rankers-iq-' : 'trends-iq-';
         }
 
         // Labels match what the tab strip displays.
@@ -71882,6 +72027,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         function _tiqFilterRowsByLens(rows, tabKey) {
             var lensId = (window.__trendsIQ && window.__trendsIQ.activeLens) || '';
             if (!lensId || !rows || !rows.length) return rows || [];
+            if ((((window.__trendsIQ.lensMeta || {})[lensId]) || {}).mode === 'rank') return rows;
             var byTitle = (window.__trendsIQ && window.__trendsIQ.lensScores) || {};
             if (!Object.keys(byTitle).length) return rows;
             var cutoffs = ((window.__trendsIQ.lensCutoffs || {})[lensId]) || {};
@@ -71958,7 +72104,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 alert('No trends data loaded yet. Click Apply first.');
                 return;
             }
-            var rows = _tiqBuildRowsForTab(tabKey, data.cards);
+            var built = _tiqBuildTab(tabKey, data.cards);
+            var rows = built.rows;
             var lensId = (window.__trendsIQ && window.__trendsIQ.activeLens) || '';
             if (lensId) rows = _tiqFilterRowsByLens(rows, tabKey);
             if (lensId) rows = _tiqRescaleRowsByLens(rows);
@@ -71968,31 +72115,34 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     : 'This tab has no rows to export in the current window.');
                 return;
             }
-            var csv = _tiqRowsToCsv(rows);
+            var csv = _tiqRowsToCsv(rows, built.cols);
             var label = (_TIQ_TAB_LABELS[tabKey] || tabKey).toLowerCase().replace(/\s+/g, '-');
             var slug = _tiqLensFilenameSlug(lensId);
             var stamp = _tiqExportDateStamp();
-            var fname = 'trends-iq-' + label + '-' + stamp
+            var fname = _tiqExportPrefix() + label + '-' + stamp
                         + (slug ? '-' + slug : '') + '.csv';
             _tiqDownloadCsv(fname, csv);
         };
 
+        // Every tab in the current product's strip, one file. Columns are
+        // the union of those tabs' on-screen columns, in first-seen order.
         window.tiqExportAllTabs = function() {
             var data = (window.__trendsIQ && window.__trendsIQ.lastData) || null;
             if (!data || !data.cards) {
                 alert('No trends data loaded yet. Click Apply first.');
                 return;
             }
-            var order = ['searches', 'movers', 'headlines', 'people',
-                          'music', 'podcasts', 'books', 'comics', 'streaming',
-                          'broadway', 'films', 'fast', 'gaming', 'watchlist'];
             var lensId = (window.__trendsIQ && window.__trendsIQ.activeLens) || '';
             var all = [];
-            order.forEach(function(k) {
-                var built = _tiqBuildRowsForTab(k, data.cards);
-                if (lensId) built = _tiqFilterRowsByLens(built, k);
-                if (lensId) built = _tiqRescaleRowsByLens(built);
-                all = all.concat(built);
+            var cols = [];
+            _tiqVisibleTabKeys().forEach(function(k) {
+                var built = _tiqBuildTab(k, data.cards);
+                var rows = built.rows;
+                if (lensId) rows = _tiqFilterRowsByLens(rows, k);
+                if (lensId) rows = _tiqRescaleRowsByLens(rows);
+                if (!rows.length) return;
+                built.cols.forEach(function(c) { if (cols.indexOf(c) === -1) cols.push(c); });
+                all = all.concat(rows);
             });
             if (!all.length) {
                 alert(lensId
@@ -72000,10 +72150,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     : 'Nothing to export yet.');
                 return;
             }
-            var csv = _tiqRowsToCsv(all);
+            var csv = _tiqRowsToCsv(all, cols);
             var slug = _tiqLensFilenameSlug(lensId);
             var stamp = _tiqExportDateStamp();
-            var fname = 'trends-iq-all-' + stamp
+            var fname = _tiqExportPrefix() + 'all-' + stamp
                         + (slug ? '-' + slug : '') + '.csv';
             _tiqDownloadCsv(fname, csv);
         };
@@ -73542,6 +73692,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // through to the figure the card actually shows.
             if (mode === 'mentions') mode = 'pageviews';
             var sorted = _tiqSortPeople(rows, mode);
+            window.__trendsIQ.peopleRendered = sorted;
             var opts = [
                 { v: 'pageviews', label: 'Digital touchpoints (high to low)' },
                 { v: 'name',      label: 'Name (A to Z)' },
@@ -166857,7 +167008,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             if (rows.length === 0 && lastDate && netflixRankerData.by_date_all[lastDate]) {
                 date = lastDate;
                 if (dateInp) dateInp.value = date;
-                rows = (netflixRankerData.by_date_all[date] || []).map(r => ({
+                rows = (netflixRankerData.by_date_all[date] || []).filter(r => !(r.genre || '').toLowerCase().includes('indian')).map(r => ({
                     ...r,
                     show_name: _normalizeNetflixAllField(r.show_name),
                     season: _normalizeNetflixAllField(r.season),
@@ -166886,11 +167037,15 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }
         }
         
+        function _netflixCsvQ(v) {
+            return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+        }
+
         function exportNetflixAllCSV() {
             if (!netflixRankerData || !netflixRankerData.by_date_all) return;
             const dateInp = document.getElementById('netflixAllDate');
             const date = dateInp ? dateInp.value : (netflixRankerData.date_range && netflixRankerData.date_range.max);
-            let rows = (netflixRankerData.by_date_all[date] || []).slice().sort((a, b) => (b.views || 0) - (a.views || 0));
+            let rows = (netflixRankerData.by_date_all[date] || []).filter(r => !(r.genre || '').toLowerCase().includes('indian')).sort((a, b) => (b.views || 0) - (a.views || 0));
             rows = rows.map(r => ({
                 ...r,
                 show_name: _normalizeNetflixAllField(r.show_name),
@@ -166898,7 +167053,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 episode: _normalizeNetflixAllField(r.episode),
                 episode_name: _normalizeNetflixAllField(r.episode_name)
             }));
-            const csv = 'Rank,Name of Show,Season,Episode #,Episode Name,Views,Avg Watch Time,Run Time\n' + rows.map((r, i) => [i + 1, '"' + (r.show_name || 'N/A').replace(/"/g, '""') + '"', '"' + (r.season || '').replace(/"/g, '""') + '"', '"' + (r.episode || '').replace(/"/g, '""') + '"', '"' + (r.episode_name || '').replace(/"/g, '""') + '"', netflixProjectedViews(r.views), (r.avg_watch_time != null && r.avg_watch_time !== '' ? r.avg_watch_time : ''), (r.run_time != null && r.run_time !== '' ? r.run_time : '')].join(',')).join('\n');
+            const q = _netflixCsvQ;
+            const csv = 'Rank,Name of Show,Season,Episode #,Episode Name,Views,Avg Watch Time,Run Time\n' + rows.map((r, i) => [i + 1, q(r.show_name || 'N/A'), q(r.season || ''), q(r.episode || ''), q(r.episode_name || ''), netflixProjectedViews(r.views), q(netflixFormatMin(r.avg_watch_time)), q(netflixFormatMin(r.run_time))].join(',')).join('\n');
             const a = document.createElement('a'); a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv); a.download = 'netflix_all_ranker_' + date + '.csv'; a.click();
         }
 
@@ -167321,7 +167477,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             if (sortBy === 'views') rows = rows.slice().sort((a, b) => (b.views || 0) - (a.views || 0));
             else if (sortBy === 'type-movie') rows = rows.slice().sort((a, b) => { const oa = ((a.type || '').toLowerCase() === 'movie') ? 0 : 1; const ob = ((b.type || '').toLowerCase() === 'movie') ? 0 : 1; if (oa !== ob) return oa - ob; return (b.views || 0) - (a.views || 0); });
             else if (sortBy === 'type-show') rows = rows.slice().sort((a, b) => { const oa = ((a.type || '').toLowerCase() === 'show') ? 0 : 1; const ob = ((b.type || '').toLowerCase() === 'show') ? 0 : 1; if (oa !== ob) return oa - ob; return (b.views || 0) - (a.views || 0); });
-            const csv = 'Rank,Show,Views,Genre,Type,Avg Watch Time,Run Time\n' + rows.map((r, i) => (i + 1) + ',"' + (r.show_name || '').replace(/"/g, '""') + '",' + netflixProjectedViews(r.views) + ',"' + (r.genre || '').replace(/"/g, '""') + '","' + (r.type || '').replace(/"/g, '""') + '",' + (r.avg_watch_time != null && r.avg_watch_time !== '' ? r.avg_watch_time : '') + ',' + (r.run_time != null && r.run_time !== '' ? r.run_time : '')).join('\n');
+            const q = _netflixCsvQ;
+            const csv = 'Rank,Show,Views,Genre,Avg Watch Time,Run Time\n' + rows.map((r, i) => [i + 1, q(r.show_name || ''), netflixProjectedViews(r.views), q(r.genre || ''), q(netflixFormatMin(r.avg_watch_time)), q(netflixFormatMin(r.run_time))].join(',')).join('\n');
             const a = document.createElement('a'); a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv); a.download = 'netflix_daily_ranker_' + date + '.csv'; a.click();
         }
         function exportNetflixSeasonsCSV() {
@@ -167329,7 +167486,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             const dateInp = document.getElementById('netflixSeasonsDate');
             const date = dateInp ? dateInp.value : (netflixRankerData.date_range && netflixRankerData.date_range.max);
             let rows = (netflixRankerData.by_date_season[date] || []).slice().sort((a, b) => (b.views || 0) - (a.views || 0));
-            const csv = 'Rank,Name of Show,Season,Views,Avg Watch Time,Run Time\n' + rows.map((r, i) => (i + 1) + ',"' + (r.show_name || '').replace(/"/g, '""') + '","' + (r.season || '').replace(/"/g, '""') + '",' + netflixProjectedViews(r.views) + ',' + (r.avg_watch_time != null && r.avg_watch_time !== '' ? r.avg_watch_time : '') + ',' + (r.run_time != null && r.run_time !== '' ? r.run_time : '')).join('\n');
+            const q = _netflixCsvQ;
+            const csv = 'Rank,Name of Show,Season,Views,Avg Watch Time,Run Time\n' + rows.map((r, i) => [i + 1, q(r.show_name || ''), q(r.season || ''), netflixProjectedViews(r.views), q(netflixFormatMin(r.avg_watch_time)), q(netflixFormatMin(r.run_time))].join(',')).join('\n');
             const a = document.createElement('a'); a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv); a.download = 'netflix_daily_ranker_seasons_' + date + '.csv'; a.click();
         }
         function exportNetflixEpisodesCSV() {
@@ -167337,7 +167495,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             const dateInp = document.getElementById('netflixEpisodesDate');
             const date = dateInp ? dateInp.value : (netflixRankerData.date_range && netflixRankerData.date_range.max);
             let rows = (netflixRankerData.by_date_episode[date] || []).slice().sort((a, b) => (b.views || 0) - (a.views || 0));
-            const csv = 'Rank,Show,Episode #,Episode,Season,Views,Avg Watch Time,Run Time\n' + rows.map((r, i) => (i + 1) + ',"' + (r.show_name || '').replace(/"/g, '""') + '","' + (r.episode !== undefined && r.episode !== '' ? String(r.episode).replace(/"/g, '""') : '') + '","' + (r.episode_name || '').replace(/"/g, '""') + '","' + (r.season || '').replace(/"/g, '""') + '",' + netflixProjectedViews(r.views) + ',' + (r.avg_watch_time != null && r.avg_watch_time !== '' ? r.avg_watch_time : '') + ',' + (r.run_time != null && r.run_time !== '' ? r.run_time : '')).join('\n');
+            const q = _netflixCsvQ;
+            const csv = 'Rank,Show,Episode #,Episode,Season,Views,Avg Watch Time,Run Time\n' + rows.map((r, i) => [i + 1, q(r.show_name || ''), q(r.episode !== undefined && r.episode !== '' ? r.episode : ''), q(r.episode_name || ''), q(r.season || ''), netflixProjectedViews(r.views), q(netflixFormatMin(r.avg_watch_time)), q(netflixFormatMin(r.run_time))].join(',')).join('\n');
             const a = document.createElement('a'); a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv); a.download = 'netflix_daily_ranker_episodes_' + date + '.csv'; a.click();
         }
         function exportNetflixTrendsCSV() {
@@ -167352,7 +167511,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             const rows = netflixRankerData.top_shows_over_time.slice(0, 20);
             const dates = netflixRankerData.dates_sorted || [];
             const header = 'Show,' + dates.join(',') + '\n';
-            const body = rows.map(s => s.show_name + ',' + dates.map(d => netflixProjectedViews(s.by_date[d] || 0)).join(',')).join('\n');
+            const body = rows.map(s => _netflixCsvQ(s.show_name) + ',' + dates.map(d => netflixProjectedViews(s.by_date[d] || 0)).join(',')).join('\n');
             const a = document.createElement('a'); a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(header + body); a.download = 'netflix_top_shows_over_time.csv'; a.click();
         }
 
