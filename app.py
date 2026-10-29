@@ -41403,67 +41403,23 @@ def export_brand_partnership_iq_deck():
     user-edited valuation rates and any active year-cut slice) plus
     the s3_key so we can resolve the admin-managed metadata sidecar
     (image_url, category, display_name). The deck builder lives in
-    `migration/bpiq_deck_builder.py`; this endpoint is a thin adapter.
+    `migration/bpiq_deck_builder.py`; the adapter around it lives in
+    `migration/bpiq_deck_export.py` (2026-10-29) so the same response
+    runs on a bare Flask app in scripts/test_bpiq_deck_export.py. The
+    builder import happens inside the adapter so a missing dependency
+    surfaces as a readable 503 instead of crashing app startup.
     """
-    # Import inside the handler so a missing dependency surfaces as a
-    # readable 503 instead of crashing app startup. (python-pptx +
-    # Pillow are pinned in requirements.txt, but this guards against
-    # build-time/runtime drift on Render.)
-    try:
-        from migration.bpiq_deck_builder import build_deck, suggested_filename
-    except ImportError as exc:
-        return jsonify({
-            'success': False,
-            'error': (
-                'Deck builder is not available on this server '
-                f'({exc.name or exc}). The python-pptx and Pillow '
-                'packages must be installed in the deployment.'
-            ),
-        }), 503
-    try:
-        payload = request.get_json(force=True, silent=True) or {}
-        data = payload.get('data') or {}
-        if not data:
-            return jsonify({'success': False,
-                            'error': 'data payload required'}), 400
+    from migration.bpiq_deck_export import deck_response
 
-        # Resolve image_url + category from the metadata sidecar when the
-        # caller provides an s3_key; fall back to whatever the caller
-        # passed inline (handles year-cut slices that already have
-        # `category` threaded onto data.category).
-        s3_key = (payload.get('s3_key') or '').strip()
-        image_url = payload.get('image_url') or ''
-        category  = payload.get('category')  or data.get('category') or ''
-        if s3_key:
-            try:
-                bare_key = s3_key.replace(BRAND_PARTNERSHIP_IQ_S3_PREFIX, '')
-                meta = (load_bpiq_metadata() or {}).get(bare_key, {}) or {}
-                image_url = image_url or (meta.get('image_url') or '').strip()
-                category  = category  or (meta.get('category')  or '').strip()
-            except Exception:
-                pass
+    def _meta_for_key(bare_key):
+        # The admin-managed sidecar: image_url + category per bare key.
+        return (load_bpiq_metadata() or {}).get(bare_key, {}) or {}
 
-        pptx_bytes = build_deck(
-            data,
-            image_url=image_url or None,
-            category=category or None,
-        )
-        fname = suggested_filename(data, ext='pptx')
-        # Stream the .pptx back as an attachment - browser triggers the
-        # download via the Content-Disposition header.
-        from flask import send_file
-        return send_file(
-            io.BytesIO(pptx_bytes),
-            mimetype=('application/vnd.openxmlformats-officedocument.'
-                      'presentationml.presentation'),
-            as_attachment=True,
-            download_name=fname,
-            max_age=0,
-        )
-    except Exception as exc:
-        import traceback
-        traceback.print_exc()
-        return jsonify({'success': False, 'error': str(exc)}), 500
+    return deck_response(
+        request.get_json(force=True, silent=True) or {},
+        meta_for_key=_meta_for_key,
+        s3_prefix=BRAND_PARTNERSHIP_IQ_S3_PREFIX,
+    )
 
 
 # =====================================================================

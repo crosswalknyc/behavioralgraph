@@ -119,6 +119,30 @@ def fmt_num(n: Any) -> str:
     return f"{int(round(n)):,}"
 
 
+def _num(n: Any, default: float = 0.0) -> float:
+    """A run document's number as a float: None, '', a non-numeric
+    string, a list or a dict all read as `default`. The context derive
+    runs before the per-slide safety net, so a run shape the builder has
+    not seen (an in-place rerun, a field the research left as text)
+    must never raise out of it (2026-10-29)."""
+    if isinstance(n, bool):
+        return float(n)
+    if isinstance(n, (int, float)):
+        return float(n)
+    try:
+        return float(str(n).replace(",", "").replace("$", "").replace("%", "").strip() or default)
+    except (TypeError, ValueError):
+        return float(default)
+
+
+def _count(n: Any, default: int = 0) -> int:
+    """`_num` rounded to a whole count."""
+    try:
+        return int(round(_num(n, default)))
+    except (TypeError, ValueError, OverflowError):
+        return int(default)
+
+
 def _stat_font(txt: Any, base: int) -> int:
     """Length-aware font size for giant stat renders so exact numbers
     ('$19,234,567') never overflow a tile that was sized for '$19M'."""
@@ -605,38 +629,39 @@ def _adjusted_lift_rel(cg: dict) -> float:
     """Matched lift (pp) as a share of the exposed group's pre-period
     rate, in percent. Falls back to the payload's own relative figure
     when the baseline is missing."""
-    try:
-        pp = float(cg.get("incremental_lift_pp") or 0)
-        pre = float(cg.get("treat_pre_pen_pct") or 0)
-        if pre > 0:
-            return round(pp / pre * 100.0, 1)
-    except (TypeError, ValueError):
-        pass
-    try:
-        return float(cg.get("incremental_lift_rel_pct") or 0)
-    except (TypeError, ValueError):
-        return 0.0
+    cg = cg if isinstance(cg, dict) else {}
+    pp = _num(cg.get("incremental_lift_pp"))
+    pre = _num(cg.get("treat_pre_pen_pct"))
+    if pre > 0:
+        return round(pp / pre * 100.0, 1)
+    return _num(cg.get("incremental_lift_rel_pct"))
+
+
+def _dict(o: Any) -> dict:
+    """A sub-document that may be missing, null, or the wrong type."""
+    return o if isinstance(o, dict) else {}
 
 
 def _derive_context(data: dict, image_url: Optional[str],
                     category: Optional[str]) -> DeckCtx:
-    totals = data.get("totals") or {}
-    val    = data.get("valuation") or {}
-    rates  = val.get("rates") or {}
-    cg     = data.get("control_group") or {}
+    data   = _dict(data)
+    totals = _dict(data.get("totals"))
+    val    = _dict(data.get("valuation"))
+    rates  = _dict(val.get("rates"))
+    cg     = _dict(data.get("control_group"))
     is_auto = (str(category or "").strip().lower() == "automotive")
-    conv = data.get("conversions") or {}
+    conv = _dict(data.get("conversions"))
     has_conv = (
         not is_auto
         and bool(conv.get("enabled"))
         and not bool(conv.get("low_signal"))
-        and (conv.get("post_users_projected") or 0) > 0
+        and _num(conv.get("post_users_projected")) > 0
     )
     yearly = data.get("yearly_breakdown") or []
     has_yearly = isinstance(yearly, list) and len(yearly) >= 2
 
-    pre_pen  = float(totals.get("audience_pen_pre_pct")  or 0)
-    post_pen = float(totals.get("audience_pen_post_pct") or 0)
+    pre_pen  = _num(totals.get("audience_pen_pre_pct"))
+    post_pen = _num(totals.get("audience_pen_post_pct"))
     delta_pp = round(post_pen - pre_pen, 2)
     delta_rel = ((post_pen - pre_pen) / pre_pen * 100) if pre_pen else 0.0
 
@@ -645,16 +670,16 @@ def _derive_context(data: dict, image_url: Optional[str],
     # cleanly with no letterboxing.
     cover = _download_image(image_url, crop_aspect=7.6 / 7.5) if image_url else None
     if cover is None:
-        cover = _generate_typographic_hero(data.get("brand_partner")
-                                           or data.get("project_name") or "BPIQ")
+        cover = _generate_typographic_hero(str(data.get("brand_partner")
+                                               or data.get("project_name") or "BPIQ"))
 
     logo = _render_crosswalk_logo_png(on_dark=True)
 
-    project = data.get("project_name") or "Brand Partnership Valuation"
-    brand   = data.get("brand_partner") or "Brand"
+    project = str(data.get("project_name") or "Brand Partnership Valuation")
+    brand   = str(data.get("brand_partner") or "Brand")
     cat_lbl = (category or "").strip().title() or "Brand Partnership"
-    start   = data.get("start_date") or ""
-    end     = data.get("end_date")   or ""
+    start   = str(data.get("start_date") or "")
+    end     = str(data.get("end_date")   or "")
     win     = f"{start} → {end}" if start and end else ""
 
     # Always project up (Jenna 2026-09-23): the raw observed n never
@@ -662,9 +687,9 @@ def _derive_context(data: dict, image_url: Optional[str],
     # only sample figure a reader sees.
     src = (
         f"Source: Crosswalk BehaviorGraph · 30M+ opted-in U.S. consumer panel · "
-        f"projected universe n={int(data.get('projected_audience_size') or 0):,} · "
+        f"projected universe n={_count(data.get('projected_audience_size')):,} · "
         f"window {win} · "
-        f"attribution {int(data.get('attribution_window_days') or 0)}d"
+        f"attribution {_count(data.get('attribution_window_days'))}d"
     )
 
     return DeckCtx(
@@ -674,33 +699,33 @@ def _derive_context(data: dict, image_url: Optional[str],
         is_auto=is_auto,
         cover_image=cover,
         logo=logo,
-        total_value=float(val.get("total_brand_value") or 0),
-        emv=float(val.get("earned_media_value") or 0),
-        bev=float(val.get("brand_engagement_value") or 0),
-        blv=float(val.get("brand_lift_value") or 0),
-        cv=float(val.get("conversion_value") or 0) if has_conv else 0.0,
-        incr_users=int(val.get("incremental_users") or 0),
-        target_size=int(data.get("audience_size") or 0),
-        audience_proj=int(data.get("projected_audience_size") or 0),
-        pre_users=int(totals.get("pre_users") or 0),
-        post_users=int(totals.get("post_users") or 0),
-        pre_users_proj=int(totals.get("pre_users_projected") or 0),
-        post_users_proj=int(totals.get("post_users_projected") or 0),
+        total_value=_num(val.get("total_brand_value")),
+        emv=_num(val.get("earned_media_value")),
+        bev=_num(val.get("brand_engagement_value")),
+        blv=_num(val.get("brand_lift_value")),
+        cv=_num(val.get("conversion_value")) if has_conv else 0.0,
+        incr_users=_count(val.get("incremental_users")),
+        target_size=_count(data.get("audience_size")),
+        audience_proj=_count(data.get("projected_audience_size")),
+        pre_users=_count(totals.get("pre_users")),
+        post_users=_count(totals.get("post_users")),
+        pre_users_proj=_count(totals.get("pre_users_projected")),
+        post_users_proj=_count(totals.get("post_users_projected")),
         pre_pen=pre_pen,
         post_pen=post_pen,
         delta_pp=delta_pp,
         delta_rel=delta_rel,
-        incr_lift_pp=float(cg.get("incremental_lift_pp") or 0),
+        incr_lift_pp=_num(cg.get("incremental_lift_pp")),
         # the adjusted lift the deck argues from is the matched lift as a
         # share of the exposed group's own baseline (the ratio the house
         # attributable formula uses); against the comparison group's tiny
         # drift it read as thousands of percent (2026-10-28)
         incr_lift_rel=_adjusted_lift_rel(cg),
         campaign_window=win,
-        attribution_d=int(data.get("attribution_window_days") or 0),
-        panel_size=int(data.get("audience_size") or 0),
-        sample_pre=int(totals.get("pre_users") or 0),
-        sample_post=int(totals.get("post_users") or 0),
+        attribution_d=_count(data.get("attribution_window_days")),
+        panel_size=_count(data.get("audience_size")),
+        sample_pre=_count(totals.get("pre_users")),
+        sample_post=_count(totals.get("post_users")),
         has_conversions=has_conv,
         has_yearly=has_yearly,
         sources_line=src,
@@ -2388,7 +2413,8 @@ def build_deck(data: dict,
 
 
 def suggested_filename(data: dict, ext: str = "pptx") -> str:
-    name = safe_filename(data.get("project_name") or "BPIQ_Deck")
-    stamp = (data.get("created_at") or "")[:10] or "deck"
+    data = _dict(data)
+    name = safe_filename(str(data.get("project_name") or "BPIQ_Deck"))
+    stamp = str(data.get("created_at") or "")[:10] or "deck"
     return f"{name}_Analysis_{stamp}.{ext}"
 
