@@ -239,7 +239,13 @@ def looks_metric_kpi(text):
 
 def tool_intent(text):
     """Which guided tool intake the ask opens, if any."""
-    for name in ('aiq', 'fw', 'jiq', 'bpiq', 'twin'):
+    try:
+        from prometheus.bpiq_wizard import is_start
+        if is_start(text):
+            return 'bpiq'
+    except Exception:
+        pass
+    for name in ('bpiq', 'aiq', 'fw', 'jiq', 'twin'):
         cap = name + '_intent'
         if host.has(cap) and _safe(getattr(host, cap), text):
             return name

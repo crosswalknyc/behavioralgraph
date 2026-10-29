@@ -41,10 +41,18 @@ _FIT_WHY_RX = re.compile(
 
 
 def bpiq_intent(text, chip=''):
+    try:
+        from prometheus.bpiq_wizard import is_start
+        if is_start(text):
+            return True
+    except Exception:
+        pass
     low = _low(text)
     if chip and low == chip.lower():
         return True
-    if 'brand partnership' in low and any(k in low for k in ('valuation', 'value', 'pull', 'run one', 'measure')):
+    if 'brand partnership' in low and any(k in low for k in ('valuation', 'value', 'pull', 'run one', 'measure', 'bpiq')):
+        return True
+    if low in ('bpiq', 'run bpiq', 'pull bpiq', 'start bpiq'):
         return True
     # 'value the Stanley x Target partnership', 'can you value Gunna x Nike' (2026-10-14)
     if (re.search(r"\b(value|valuation|valuing|worth)\b", low) is not None

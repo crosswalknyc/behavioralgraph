@@ -23,7 +23,22 @@ CHIP_ALIASES = (
     'pull brand partnership valuation',
     'value a brand partnership',
     'run a brand partnership valuation',
+    'brand partnership valuation',
+    'value this partnership',
+    'pull a brand partnership valuation',
+    'run brand partnership valuation',
+    'bpiq',
 )
+_START_EXACT = frozenset(
+    re.sub(r'[^a-z0-9]+', ' ', c.lower()).strip() for c in CHIP_ALIASES
+) | frozenset((
+    'value brand partnership',
+    'run bpiq',
+    'pull bpiq',
+    'start bpiq',
+    'start a brand partnership valuation',
+    'open a brand partnership valuation',
+))
 PRICE_BASE = 500
 PRICE_CONTROL = 1000
 CREDITS_BASE = 8
@@ -240,6 +255,66 @@ def extract_urls(text):
 
 def is_chip(text):
     return _low(text) in {_low(c) for c in CHIP_ALIASES}
+
+
+def is_start(text):
+    """True when the words are a fresh Brand Partnership Valuation
+    open (the chip, a typed equivalent, BPIQ, or a legacy one-shot
+    phrasing). Punctuation and case do not matter. A longer question
+    that only mentions a partnership is not a start."""
+    f = re.sub(r'[^a-z0-9]+', ' ', str(text or '').lower()).strip()
+    if not f:
+        return False
+    if f in _START_EXACT:
+        return True
+    for lead in ('please ', 'can you ', 'could you ', 'i want to ',
+                 'i need to ', 'lets ', 'let us '):
+        if f.startswith(lead) and f[len(lead):] in _START_EXACT:
+            return True
+    return False
+
+
+def wants(text, body=None, history=None):
+    """True when this turn belongs to the wizard: a start phrase, an
+    armed body, or the last agent turn already asked a wizard step."""
+    if is_start(text):
+        return True
+    body = body or {}
+    extra = body.get('extra') if isinstance(body.get('extra'), dict) else {}
+    if any((body.get(k) or extra.get(k)) for k in (
+            'bpiq_wizard', 'bpiq_inputs', 'bpiq_confirm')):
+        return True
+    for turn in reversed(list(history or [])):
+        if not isinstance(turn, dict):
+            continue
+        if str(turn.get('role') or '') not in ('agent', 'assistant'):
+            continue
+        meta = turn.get('meta') if isinstance(turn.get('meta'), dict) else {}
+        if meta.get('bpiq_wizard') or turn.get('bpiq_wizard'):
+            return True
+        txt = str(turn.get('text') or turn.get('content') or '').strip()
+        if txt == ASK_TALENT or txt.startswith('Who is the property or talent'):
+            return True
+        break
+    return False
+
+
+def _start_fresh(store, user, thread_id, today):
+    """Cancel any leftover draft and open step 1. Never raises."""
+    try:
+        if store is not None:
+            store.clear(user, thread_id)
+    except Exception:
+        pass
+    draft = empty_draft()
+    draft['step'] = STEP_TALENT
+    try:
+        if store is not None:
+            store.save(user, thread_id, draft)
+    except Exception:
+        pass
+    reply, chips = step_prompt(draft, today=today)
+    return _payload(reply, chips, draft=draft)
 
 
 def is_cancel(text):
@@ -608,6 +683,26 @@ class MemoryStore:
         return True
 
 
+def _safe_store(g):
+    """Best-effort draft store. A host miss still starts the wizard."""
+    try:
+        from .host import host as _host
+        if _host.has('s3_client'):
+            return _s3_store(_host)
+    except Exception:
+        pass
+    try:
+        if g:
+            return _s3_store(type('H', (), {
+                's3_client': getattr(g.get('_H'), 's3_client', None),
+                'S3_BUCKET': getattr(g.get('_H'), 'S3_BUCKET',
+                                    'dashboard-inputs'),
+            })())
+    except Exception:
+        pass
+    return MemoryStore()
+
+
 def _s3_store(host):
     """Draft store on the thread (and a per-user peek) so a refresh
     does not lose the in-progress valuation."""
@@ -793,11 +888,18 @@ def analyze_hook(text, body, history, user, ppu, uname, g,
 def _analyze_hook(text, body, history, user, ppu, uname, g,
                   first=None, today=None, store=None, charge_fn=None,
                   start_fn=None):
-    from .host import host as _host
     t = str(text or '').strip()
     thread_id = str((body or {}).get('thread_id') or '')
     uname = uname or _uname(user)
     today = _today(today)
+    # A start phrase always opens step 1. Cancel any leftover draft
+    # first so a prior subject on the thread cannot become the talent
+    # or fall through to a library-comp read.
+    if is_start(t):
+        if store is None:
+            store = _safe_store(g)
+        return _start_fresh(store, uname or user, thread_id, today)
+    from .host import host as _host
     if store is None:
         store = _s3_store(_host if _host.has('s3_client') else type('H', (), {
             's3_client': getattr(g.get('_H'), 's3_client', None) if g else None,

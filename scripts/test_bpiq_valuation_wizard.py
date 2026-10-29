@@ -229,6 +229,119 @@ def test_ahead_and_cancel():
           and store.load('tester', '') is None)
 
 
+PAIR_LEAKS = (
+    'To price a partnership I need the pair',
+    'four numbers',
+    'Colin and Samir',
+)
+
+
+def _real_intent(text):
+    from prometheus.intents import bpiq_intent
+    return bpiq_intent(text, 'Pull Brand Partnership Valuation')
+
+
+def turn_live(text, store, history=None, body=None, draft=None):
+    """Production-shaped turn: real intent gate, no first=True."""
+    body = dict(body or {})
+    if draft is not None:
+        body['bpiq_wizard'] = draft
+    return W.analyze_hook(
+        text, body, list(history or []), 'tester', {}, 'tester',
+        {'_pm_bpiq_intent': _real_intent},
+        first=None, today=TODAY, store=store)
+
+
+def _starts_step1(out, store=None):
+    reply = str((out or {}).get('reply') or '')
+    check("chip/typed start is not None", out is not None)
+    check("first reply is property/talent",
+          'Who is the property or talent' in reply)
+    check("no pair-read lead",
+          'To price a partnership I need the pair' not in reply)
+    check("no four-numbers frame",
+          'four numbers' not in reply.lower())
+    check("no Colin and Samir library comp",
+          'Colin and Samir' not in reply)
+    if store is not None:
+        d = store.load('tester', '') or {}
+        check("draft reset to talent step",
+              d.get('step') == W.STEP_TALENT and not d.get('talent'))
+
+
+def test_exact_chip_text_starts_wizard():
+    store = W.MemoryStore()
+    out = turn_live(W.CHIP, store)
+    _starts_step1(out, store)
+    check("is_start matches the chip", W.is_start(W.CHIP))
+    check("real intent matches the chip", _real_intent(W.CHIP))
+
+
+def test_typed_value_a_brand_partnership_starts():
+    store = W.MemoryStore()
+    out = turn_live('value a brand partnership', store)
+    _starts_step1(out, store)
+    for phrase in (
+            'Value a brand partnership.',
+            'brand partnership valuation',
+            'value this partnership',
+            'BPIQ',
+            'Pull Brand Partnership Valuation'):
+        store2 = W.MemoryStore()
+        hit = turn_live(phrase, store2)
+        check("start phrase %r opens step 1" % phrase,
+              hit is not None
+              and 'Who is the property or talent' in str(hit.get('reply')))
+        check("start phrase %r is not a pair-read" % phrase,
+              not any(p in str(hit.get('reply')) for p in PAIR_LEAKS))
+
+
+def test_chip_resets_unrelated_prior_subject():
+    store = W.MemoryStore()
+    store.save('tester', '', {
+        **W.empty_draft(),
+        'step': W.STEP_CAMPAIGN,
+        'talent': 'Colin and Samir',
+        'campaign': 'Lexus',
+    })
+    hist = [
+        {'role': 'user',
+         'text': 'what did Colin and Samir do with Lexus?'},
+        {'role': 'agent',
+         'text': 'The Lexus campaign with Colin and Samir ran on four '
+                 'numbers. Reach, cold start, first action, talent lift.'},
+    ]
+    out = turn_live(W.CHIP, store, history=hist)
+    _starts_step1(out, store)
+    d = store.load('tester', '') or {}
+    check("leftover Colin and Samir draft was cancelled",
+          d.get('talent') in (None, ''))
+    check("wants() is true for the chip even with prior subject",
+          W.wants(W.CHIP, {}, hist))
+
+
+def test_router_start_beats_pair_read():
+    from prometheus.intents import bpiq_intent
+    from prometheus import understand
+    from prometheus.service import LANE_ORDER, lane_markers
+    check("LANE_ORDER leads with the wizard",
+          LANE_ORDER[0] == 'bpiq_wizard')
+    check("LANE_ORDER matches ask() markers",
+          list(LANE_ORDER) == lane_markers())
+    check("intents treat the chip as BPIQ",
+          bpiq_intent('Value a brand partnership',
+                      'Pull Brand Partnership Valuation'))
+    check("intents treat typed value a brand partnership",
+          bpiq_intent('value a brand partnership'))
+    ti = understand.tool_intent('Value a brand partnership')
+    check("understand.tool_intent is bpiq for the chip", ti == 'bpiq')
+    d = understand.decide('Value a brand partnership', has_ctx=True)
+    check("understand sends the chip to analyze",
+          d.get('surface') == 'analyze')
+    check("understand reason is the wizard intake",
+          'bpiq' in str(d.get('reason') or ''))
+
+
 def test_funds_fail_does_not_start():
     started = []
     store = W.MemoryStore()
@@ -252,6 +365,10 @@ def main():
     test_index_dump_gone()
     test_ahead_and_cancel()
     test_funds_fail_does_not_start()
+    test_exact_chip_text_starts_wizard()
+    test_typed_value_a_brand_partnership_starts()
+    test_chip_resets_unrelated_prior_subject()
+    test_router_start_beats_pair_read()
     print("\n" + ("OK" if not FAIL else f"{FAIL} FAILED"))
     return 1 if FAIL else 0
 

@@ -446,6 +446,7 @@ def accept_offered_run(history, text):
 # "# lane: <name>" marker; scripts/test_pm_custom_ask_pricing.py holds
 # the source order to this tuple.
 LANE_ORDER = (
+    'bpiq_wizard',
     'offer_acceptance', 'priced_offer_acceptance', 'offer_answer', 'referents', 'document', 'confirm_answer', 'short_reply',
     'spend_cap_precheck',
     'continuation',
@@ -541,6 +542,51 @@ def ask(user, body, *, via='session'):
         open_tabs = len((ctx or {}).get('other_tabs') or [])
     except Exception as _fx:
         _faults.note('service', _fx)
+
+    # lane: bpiq_wizard
+    # Chip "Value a brand partnership" always opens step 1 (Jenna
+    # 2026-10-28). Must beat the Reader, the library-comp read, and
+    # interpret generate. A leftover draft is cancelled on the chip.
+    try:
+        from prometheus import bpiq_wizard as _bwiz
+        if _bwiz.wants(text, body, history):
+            _g = {}
+            try:
+                if host.has('bpiq_intent'):
+                    _g['_pm_bpiq_intent'] = host.bpiq_intent
+            except Exception:
+                pass
+            _g['_H'] = host
+            _hit = _bwiz.analyze_hook(
+                text, dict(body, thread_id=tid or ''), history, user,
+                {}, uname, _g, first=_bwiz.is_start(text))
+            if _hit is not None:
+                raw = dict(_hit)
+                _cs = str(body.get('_client_surface_sent')
+                          or body.get('surface') or '').strip().lower()
+                if _cs == 'interpret':
+                    raw = _interpret_shape(_hit)
+                    raw['followups'] = list(_hit.get('followups') or [])
+                    if _hit.get('bpiq_wizard'):
+                        raw['bpiq_wizard'] = _hit['bpiq_wizard']
+                    if _hit.get('bpiq_collect') is not None:
+                        raw['bpiq_collect'] = _hit['bpiq_collect']
+                decision = {'surface': 'analyze', 'mode': None,
+                            'reason': 'bpiq_wizard', 'client_hint': None}
+                try:
+                    host.ask_hint(route='bpiq_wizard',
+                                  outcome='intake' if _bwiz.is_start(text)
+                                  else 'turn')
+                except Exception as _fx:
+                    _faults.note('service', _fx)
+                env = envelope.wrap(raw, surface='analyze',
+                                    decision=decision, thread_id=tid,
+                                    via=via)
+                _persist_turn(persist, uname, tid, history, text, env,
+                              raw, 'analyze')
+                return env, 200
+    except Exception as e:
+        _faults.note('service.bpiq_wizard', e)
 
     # lane: offer_acceptance
     # Accepting an offered run (2026-10-06, Eliot / Gunna): the build-
@@ -2459,10 +2505,12 @@ def _interpret_shape(raw):
     out = {'success': False, 'guidance': True, 'analysis_read': True,
            'error': str(raw['reply'])}
     for k in ('read_job_id', 'memory_confirm', 'panel_offer',
-              'referent_clarify', 'file_link'):
+              'referent_clarify', 'file_link',
+              'bpiq_wizard', 'bpiq_collect', 'bpiq_confirm_payload'):
         if raw.get(k):
             out[k] = raw[k]
-    if raw.get('memory_confirm') or raw.get('panel_offer'):
+    if raw.get('memory_confirm') or raw.get('panel_offer') \
+            or raw.get('bpiq_wizard') or raw.get('bpiq_collect'):
         out['followups'] = [str(f) for f in (raw.get('followups') or []) if f]
     return out
 

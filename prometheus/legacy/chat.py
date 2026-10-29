@@ -5627,6 +5627,20 @@ def _pm_interpret_core(user, body, text, history):
     surface itself and returns a Flask response exactly as before.
     """
 
+    # Brand Partnership Valuation wizard (Jenna 2026-10-28): the chip
+    # must never become a library-comp read on this surface.
+    try:
+        if _bpiq_wiz.wants(text, body, history):
+            _bw_user = (session.get('username') or (user or {}).get('username')
+                        or '').strip()
+            _bw_hit = _bpiq_wiz.analyze_hook(
+                text, body, history, user, _pm_usage_extras(user),
+                _bw_user, globals(), first=_bpiq_wiz.is_start(text))
+            if _bw_hit is not None:
+                return jsonify(_bw_hit)
+    except Exception:
+        traceback.print_exc()
+
     # PRICING QUESTIONS (2026-09-23 Jenna): the flat rate card, never the build intake.
     # Runs before every detector ('how much is a credit' once reached interpret and drafted a build brief).
     if _pm_pricing_question(text):
@@ -15220,6 +15234,16 @@ def _pm_analyze_core(user, body, text, history):
     # Runs before routing so an open profile never hijacks it.
     if _pm_email_file_intent(text):
         return _pm_email_file_response(user, text)
+    # Brand Partnership Valuation wizard (Jenna 2026-10-28): the chip
+    # opens step 1 before any other analyze lane, including twins.
+    _bpiq_user = (session.get('username') or user.get('username')
+                  or '').strip()
+    if _bpiq_wiz.wants(text, body, history):
+        _bpiq_resp = _bpiq_wiz.analyze_hook(
+            text, body, history, user, _pm_ppu, _bpiq_user, globals(),
+            first=_bpiq_wiz.is_start(text))
+        if _bpiq_resp is not None:
+            return jsonify(_bpiq_resp)
     # ---- Multi-year trend asks (2026-09-22, Jenna: "it should have
     # forced him to pay for profiles to be run on Will and Grace for
     # the past 4-5 years so it could then compare") ----
@@ -15268,18 +15292,15 @@ def _pm_analyze_core(user, body, text, history):
                             return jsonify(_tj)
         except Exception:
             traceback.print_exc()
-    # ---- Brand Partnership Valuation wizard (Jenna 2026-10-28) ----
-    # Chip walks talent, campaign, dates, attribution, control, assets,
-    # then charge. The one-message dump is retired.
-    _bpiq_user = (session.get('username') or user.get('username')
-                  or '').strip()
     _twin_resp = _twin_lane.analyze_hook(text, body, history, user, _pm_ppu, _bpiq_user, globals())   # Digital Twins IQ (2026-10-26): intake, labs, Focus Group IQ, catalog, status, directions
     if _twin_resp is not None:
         return jsonify(_twin_resp)
-    _bpiq_resp = _bpiq_wiz.analyze_hook(
+    # Mid-wizard answers whose start phrase already passed still land
+    # here when a leftover S3 draft is the only signal.
+    _bpiq_late = _bpiq_wiz.analyze_hook(
         text, body, history, user, _pm_ppu, _bpiq_user, globals())
-    if _bpiq_resp is not None:
-        return jsonify(_bpiq_resp)
+    if _bpiq_late is not None:
+        return jsonify(_bpiq_late)
     # ---- Attribution IQ tracking flow (Jenna 2026-09-22) ----
     _aiq_confirm = body.get('aiq_confirm') or _pm_pending_intake('pick', user, 'attribution', text)
     if isinstance(_aiq_confirm, dict) \
