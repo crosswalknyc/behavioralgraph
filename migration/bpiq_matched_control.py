@@ -260,7 +260,12 @@ def apply_lenses(payload: dict, subject: str) -> dict:
         post_p = int(src.get("post_users_projected", row.get("post_users_projected")) or 0)
         pre_p = int(src.get("pre_users_projected", row.get("pre_users_projected")) or 0)
         raw = max(post_p - pre_p, 0)
-        incr = _messy((subject, p, "emv_incr"), raw * share) if raw > 0 and share > 0 else 0
+        if row.get("earned_direct"):
+            # the press and the launch event (2026-10-28): exposures the
+            # campaign earned, counted as they are, not a lift to net
+            incr = raw
+        else:
+            incr = _messy((subject, p, "emv_incr"), raw * share) if raw > 0 and share > 0 else 0
         rate = float(row.get("emv_per_user_rate") or emv_rates.get(str(p)) or 0.0)
         row["post_users_projected"] = post_p
         row["pre_users_projected"] = pre_p
@@ -297,6 +302,13 @@ def apply_lenses(payload: dict, subject: str) -> dict:
     val["attributable_to_partnership"] = round(compute_bpiq_attributable(
         val.get("brand_lift_value"), val.get("conversion_value"),
         cg.get("incremental_lift_pp"), cg.get("treat_pre_pen_pct")), 2)
+    # her share of the settled total (2026-10-28); the share itself was
+    # read from the asset mix and this holdout upstream
+    if val.get("talent_share") is not None:
+        try:
+            val["attributable_to_talent"] = round(float(val["total_brand_value"]) * float(val["talent_share"]), 2)
+        except (TypeError, ValueError):
+            pass
     val["comparison_note"] = READER_NOTE
     return payload
 

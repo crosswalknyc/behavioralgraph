@@ -977,7 +977,8 @@ def _slide_methodology(prs, ctx: DeckCtx, idx: int, total: int):
     # band, the sell-out and what one order carried, as the payload's
     # own read. No source is named.
     camp_line = str(((ctx.data.get("campaign") or {}).get("read_line")) or "").strip()
-    foot = " ".join(x for x in (camp_line, str(study_ctx or "").strip()) if x)
+    reach_line = str(((ctx.data.get("campaign") or {}).get("reach_line")) or "").strip()
+    foot = " ".join(x for x in (reach_line, camp_line, str(study_ctx or "").strip()) if x)
     if foot:
         _add_text(s, Inches(0.6), Inches(5.35), Inches(7), Inches(1.35),
                   foot, size=10, italic=True,
@@ -1316,6 +1317,22 @@ def _slide_total_value_hero(prs, ctx: DeckCtx, idx: int, total: int):
               "Earned Media price the observed audience footprint, "
               "which includes pre-existing brand interest.",
               size=9, italic=True, color=FG_DARK, spacing=1.3)
+    # Her share (2026-10-28): the talent's share of the campaign's value
+    # from the assets that carried her and the matched group.
+    _val = ctx.data.get("valuation") or {}
+    _ts = _val.get("talent_share")
+    _tv = _val.get("attributable_to_talent")
+    if _ts is not None and _tv:
+        _who = str(((ctx.data.get("qualifier_value") or [""]) or [""])[0] or "the talent")
+        _add_text(s, Inches(7.3), Inches(4.75), Inches(5.3), Inches(0.35),
+                  f"OF WHICH {_who.upper()}'S SHARE",
+                  size=10, bold=True, color=FG_DARK, letter_spacing=0.16)
+        _add_text(s, Inches(7.3), Inches(5.05), Inches(5.3), Inches(0.55),
+                  f"{fmt_money(float(_tv))}  ({float(_ts) * 100:.0f}%)",
+                  size=32, bold=True, color=FG_DARK, font=FONT_NUMERIC)
+        _add_text(s, Inches(7.3), Inches(5.55), Inches(5.3), Inches(0.55),
+                  str(_val.get("talent_share_basis") or "").strip().capitalize() + ".",
+                  size=9, italic=True, color=FG_DARK, spacing=1.3)
     # 4-up breakdown bar across the bottom
     parts = [
         ("Earned Media",      ctx.emv),
@@ -1376,6 +1393,8 @@ CPM_SOURCE_ATTRIBUTION = {
     "LinkedIn":   "LinkedIn Marketing Solutions 2026 Ratecard",
     "Direct (Brand Site)":
         "IAB Display / owned-property engagement equivalent (not paid social)",
+    "Press": "Editorial earned-media equivalent, per reader reached",
+    "Launch event": "Experiential earned-media equivalent, per person reached",
 }
 
 
@@ -1406,7 +1425,10 @@ def _slide_emv(prs, ctx: DeckCtx, idx: int, total: int):
     by_platform = {(r.get("platform") or "").strip(): r for r in all_rows}
     # Show the full fixed roster (11 platforms). Row height is
     # tightened to keep the whole table within the slide grid.
-    display_roster = FIXED_PLATFORM_ROSTER
+    # the press and the launch event join the roster when the campaign
+    # earned them (2026-10-28); other decks keep the fixed 11 rows
+    display_roster = list(FIXED_PLATFORM_ROSTER) + [
+        p for p in ("Press", "Launch event") if float((by_platform.get(p) or {}).get("emv_value") or 0) > 0]
     rows = []
     for plat in display_roster:
         r = by_platform.get(plat, {})
@@ -1430,7 +1452,8 @@ def _slide_emv(prs, ctx: DeckCtx, idx: int, total: int):
     # WHY IT MATTERS callout. Column widths and starts are computed
     # up front so no header can overrun another (fixes item 18).
     table_top = Inches(2.6)
-    row_h = Inches(0.30)
+    row_h = Inches(0.30) if len(rows) <= 11 else Inches(0.245)
+    _row_size = 11 if len(rows) <= 11 else 10
     C_PLAT     = (Inches(0.60), Inches(2.60))
     C_INCR     = (Inches(3.30), Inches(2.10))
     C_RATE     = (Inches(5.55), Inches(1.70))
@@ -1459,19 +1482,19 @@ def _slide_emv(prs, ctx: DeckCtx, idx: int, total: int):
         is_zero = r["emv_value"] <= 0
         row_color = MUTED_DK if is_zero else FG_LIGHT
         _add_text(s, C_PLAT[0], y, C_PLAT[1], row_h,
-                  r["platform"], size=11, bold=True, color=row_color)
+                  r["platform"], size=_row_size, bold=True, color=row_color)
         # C11: use literal 0 (not em-dash) for platforms with no
         # observed signal, matching the slide's own note that zero
         # rows indicate absence of signal.
         _add_text(s, C_INCR[0], y, C_INCR[1], row_h,
                   fmt_num(r["incremental_users_projected"]) if r["incremental_users_projected"] else "0",
-                  size=11, color=row_color, font=FONT_NUMERIC, align="right")
+                  size=_row_size, color=row_color, font=FONT_NUMERIC, align="right")
         _add_text(s, C_RATE[0], y, C_RATE[1], row_h,
                   f"${r['emv_per_user_rate']:.2f}",
-                  size=11, color=MUTED_DK, font=FONT_NUMERIC, align="right")
+                  size=_row_size, color=MUTED_DK, font=FONT_NUMERIC, align="right")
         _add_text(s, C_EMV[0], y, C_EMV[1], row_h,
                   fmt_money(r["emv_value"]) if not is_zero else "$0",
-                  size=11, bold=(not is_zero),
+                  size=_row_size, bold=(not is_zero),
                   color=(ACCENT if not is_zero else MUTED_DK),
                   font=FONT_NUMERIC, align="right")
     # Right-side "WHY IT MATTERS" callout, LISA-style
@@ -1765,14 +1788,15 @@ def _slide_conversion_value(prs, ctx: DeckCtx, idx: int, total: int):
               "WHY IT MATTERS", size=9, bold=True, color=FG_DARK,
               letter_spacing=0.18)
     conv_note = (str(conv.get("note") or "")).strip()
+    drop_line = str(((ctx.data.get("campaign") or {}).get("drop_line")) or "").strip()
     detail = (
         "Direct purchase-funnel signal: brand.com order confirmations "
         "and geo-panel retail visits observed for brand-owned storefronts "
         "and brand-tagged SKU landing pages within the attribution "
         "window. AOV is editable in the live dashboard."
     )
-    if conv_note:
-        detail = conv_note
+    if conv_note or drop_line:
+        detail = " ".join(x for x in (drop_line, conv_note) if x)
     _add_text(s, Inches(9.25), Inches(3.5), Inches(3.4), Inches(2.2),
               detail, size=10, color=FG_DARK, spacing=1.35)
     # C4: read the AOV source from the payload so the internal-

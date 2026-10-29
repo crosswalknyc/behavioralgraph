@@ -355,10 +355,12 @@ def test_sellout_second_pass():
             return campaign(sold_out=False)
         if kw.get('surface') == 'bpiq_sellout_check':
             return chk
+        if kw.get('surface') == 'bpiq_campaign_footprint':
+            return {}
         return prim()
     c = S.research_campaign(inputs(), fake_claude)
-    check("research runs the collection pass and the sell-out pass",
-          calls == ['bpiq_campaign_research', 'bpiq_sellout_check'])
+    check("research runs the collection pass, the sell-out pass and the footprint pass",
+          calls == ['bpiq_campaign_research', 'bpiq_sellout_check', 'bpiq_campaign_footprint'])
     check("the researched campaign reads sold out after the second pass",
           c['sell_out']['sold_out'] is True and c['sell_out']['days_to_sell_out'] == 1.0)
     p = S.build_payload(inputs(), prim(), campaign=c)
@@ -375,7 +377,7 @@ def test_underpinnings_reuse():
         calls.append(kw.get('surface'))
         if kw.get('surface') == 'bpiq_campaign_research':
             return campaign()
-        if kw.get('surface') == 'bpiq_sellout_check':
+        if kw.get('surface') in ('bpiq_sellout_check', 'bpiq_campaign_footprint'):
             return {}
         return prim()
 

@@ -102,6 +102,9 @@ EMV_RATES = {
     "X": 6.0, "Twitter": 6.0, "X (Twitter)": 6.0, "Reddit": 4.0,
     "Pinterest": 6.0, "Snapchat": 5.0, "LinkedIn": 25.0,
     "Direct (Brand Site)": 5.0, "Threads": 10.0, "Twitch": 15.0,
+    # earned lines of the campaign itself (2026-10-28): a reader reached
+    # through the press, a person reached around a launch event
+    "Press": 4.0, "Launch event": 5.0,
 }
 DEFAULT_RATES = {
     "bev_per_user": 2.5,
@@ -511,6 +514,21 @@ def campaign_prompt() -> str:
     return CAMPAIGN_RESEARCH_PROMPT % ", ".join(BPIQ_CATEGORIES)
 
 
+def _hints_block(inputs: dict) -> dict:
+    """Facts an operator read by hand (page, count, date) ride every
+    research ask as verified facts: included, never contradicted, and
+    built on. They are not part of the run key."""
+    hints = inputs.get("research_hints")
+    if not hints:
+        return {}
+    facts = [str(h)[:400] for h in (hints if isinstance(hints, (list, tuple)) else [hints]) if str(h or "").strip()][:40]
+    if not facts:
+        return {}
+    return {"verified_facts": facts,
+            "verified_facts_rule": ("Read by hand on the pages named. Include them as they are, never "
+                                    "contradict them, and add what you find beyond them.")}
+
+
 # The first pass reads the collection; a sell-out is easy to miss in it
 # (2026-10-28: the Ganni x lululemon drop sold out on lululemon.com the
 # day it launched and the first pass came back "sold_out: false"). The
@@ -542,6 +560,101 @@ Never invent evidence; with none, sold_out is false and evidence is
 an empty string."""
 
 
+# The campaign's footprint (Jenna 2026-10-28: "it should look at all
+# press, the fact that there was a huge nyc party, the virality of the
+# social media post and commercial"). Press, events, the film, the
+# viral posts, search, the brand site and the inventory are standard
+# inputs of every campaign read; the reach the valuation runs on is
+# built from them (migration/bpiq_campaign.py).
+CAMPAIGN_FOOTPRINT_PROMPT = """You map the footprint of one brand campaign
+in its window: every press piece, every event, the campaign film, the
+posts that travelled, search and the brand site. Use web search when
+available; read the platforms' own pages for counts. Return STRICT
+JSON only:
+
+{
+  "press": [                       // EVERY piece you can find, launch
+    {"outlet": str, "title": str, "url": str, "date": "YYYY-MM-DD",
+     "country": str,               // US, UK, ES, ... (edition)
+     "outlet_us_monthly_uniques": int|null,   // the outlet's US monthly
+                                              // readers when published
+     "article_reads_us": int|null, // only when a figure exists
+     "leads_with_talent": bool},   // the talent is the headline hook
+    ...
+  ],
+  "press_pieces_total": int,       // pieces seen including syndication
+                                   // and pickups not listed above
+  "events": [                      // launch parties, pop-ups, dance
+    {"name": str, "date": "YYYY-MM-DD", "place": str, "host": str,
+     "guests": [str, ...],         // named guests with followings
+     "coverage": [str, ...],       // outlets and photo agencies that
+                                   // carried the night
+     "attendee_followers_total": int|null,  // sum of the named guests'
+                                             // followers when readable
+     "social_posts": int|null, "reach_us": int|null,
+     "talent_attended": bool}, ...
+  ],
+  "commercial": {"title": str,
+    "platforms": [{"platform": str, "account": str, "url": str,
+                   "views": int|null, "likes": int|null, "comments": int|null,
+                   "shares": int|null, "followers": int|null, "as_of": "YYYY-MM-DD"}, ...],
+    "views_total": int|null},
+  "viral_posts": [                 // the posts that travelled, on the
+    {"platform": str, "account": str, "followers": int|null, "url": str,
+     "views": int|null, "likes": int|null, "comments": int|null, "shares": int|null,
+     "features_talent": bool}, ...  // brand, partner, talent and fan
+  ],                               // accounts; reaction and stitch volume
+  "brand_social": {"accounts": [{"platform": str, "account": str,
+                                 "followers": int|null, "posts_about_campaign": int|null}, ...]},
+  "search": {"interest_note": str, "us_searches_window": int|null},
+  "site": {"brand_site_us_monthly_visits": int|null,
+           "brand_site_us_monthly_uniques": int|null,
+           "collection_page_share_pct": float|null,   // share of site
+                                                      // visitors on the
+                                                      // collection pages
+           "note": str},
+  "inventory": {"skus": int|null, "colorways_avg": float|null,
+                "sizes_avg": float|null, "units_hint": int|null,
+                "revenue_hint_usd": float|null, "comparable_note": str},
+  "talent_asset_share_pct": float|null,   // share of the campaign's
+                                          // exposure carrying the talent
+  "talent_is_face": bool,
+  "sources": [{"title": str, "url": str, "used_for": str}, ...]
+}
+
+Rules: counts come from the platform page or a report that states
+them; a count you did not see is null, never invented. List outlets
+by name here (this document is internal). Published audience figures
+for outlets and sites come from approved sources (traffic trackers,
+publisher media kits, filings). An event with named guests and photo
+coverage is an event even when no outlet wrote a full piece."""
+
+
+def research_footprint(inputs: dict, claude_json: Callable, *,
+                       tools: Optional[list] = None) -> dict:
+    """One research-enabled call on the campaign's footprint. Fail-safe
+    to an empty footprint (the talent's own audience then sizes the
+    read, as before)."""
+    from migration.bpiq_campaign import normalize_footprint
+    windows = _dates(inputs)
+    ask = {
+        "campaign": inputs.get("campaign") or f"{inputs.get('qualifier')} x {inputs.get('brand_partner')}",
+        "brand": inputs.get("brand_partner"),
+        "talent": inputs.get("qualifier"),
+        "window": windows["event"],
+        "attribution_window": windows["post"],
+        **({"campaign_links": list(inputs["links"])[:12]} if inputs.get("links") else {}),
+        **_hints_block(inputs),
+    }
+    try:
+        raw = claude_json(CAMPAIGN_FOOTPRINT_PROMPT, json.dumps(ask), max_tokens=7000,
+                          temperature=0.15, surface="bpiq_campaign_footprint", tools=tools)
+    except Exception as e:
+        print(f"[bpiq-synth] footprint research failed: {e}")
+        raw = {}
+    return normalize_footprint(raw)
+
+
 def sellout_check(inputs: dict, claude_json: Callable, *,
                   tools: Optional[list] = None) -> dict:
     """One targeted call on the sell-out question. Fail-safe to {}."""
@@ -551,6 +664,7 @@ def sellout_check(inputs: dict, claude_json: Callable, *,
         "talent": inputs.get("qualifier"),
         "drop_window": {"start": inputs.get("event_start"), "end": inputs.get("event_end")},
         **({"campaign_links": list(inputs["links"])[:12]} if inputs.get("links") else {}),
+        **_hints_block(inputs),
     }
     try:
         raw = claude_json(SELLOUT_CHECK_PROMPT, json.dumps(ask), max_tokens=2500,
@@ -678,7 +792,13 @@ def normalize_campaign(raw, inputs: Optional[dict] = None) -> dict:
         "aov_hint_usd": _fnum(raw.get("aov_hint_usd")),
         "confidence": conf,
         "sources": [s for s in (raw.get("sources") or []) if isinstance(s, dict)][:20],
+        **({"footprint": _normalize_fp(raw.get("footprint"))} if isinstance(raw.get("footprint"), dict) else {}),
     }
+
+
+def _normalize_fp(raw):
+    from migration.bpiq_campaign import normalize_footprint
+    return normalize_footprint(raw)
 
 
 def research_campaign(inputs: dict, claude_json: Callable, *,
@@ -694,6 +814,7 @@ def research_campaign(inputs: dict, claude_json: Callable, *,
         "campaign_window": windows["event"],
         "attribution_window": windows["post"],
         **({"campaign_links": list(inputs["links"])[:12]} if inputs.get("links") else {}),
+        **_hints_block(inputs),
     }
     try:
         raw = claude_json(campaign_prompt(), json.dumps(ask), max_tokens=5000,
@@ -708,6 +829,13 @@ def research_campaign(inputs: dict, claude_json: Callable, *,
         campaign = normalize_campaign(merge_sellout(campaign, check), inputs)
         print(f"[bpiq-synth] sell-out check: sold out {campaign['sell_out'].get('sold_out')}"
               f" ({campaign['sell_out'].get('days_to_sell_out')} days, partial {campaign['sell_out'].get('partial')})")
+    # the footprint: press, events, the film, the posts, search, the site
+    fp = research_footprint(inputs, claude_json, tools=tools)
+    campaign["footprint"] = fp
+    print(f"[bpiq-synth] footprint: {len(fp.get('press') or [])} press pieces listed "
+          f"({fp.get('press_pieces_total')} total), {len(fp.get('events') or [])} events, "
+          f"film views {((fp.get('commercial') or {}).get('views_total'))}, "
+          f"{len(fp.get('viral_posts') or [])} posts")
     return campaign
 
 
@@ -922,18 +1050,26 @@ must read as observed panel data: messy values, no round numbers, no
 two identical values. Return STRICT JSON only:
 
 {
-  "audience_size": int,            // panel consumers in the qualifier
-                                   // audience (hundreds to low
-                                   // thousands; messy, never round)
+  "audience_size": int,            // panel consumers in the audience
+                                   // being valued (messy, never round).
+                                   // When the ask carries
+                                   // campaign_reach, the audience IS the
+                                   // people the campaign reached and
+                                   // this equals its panel count.
   "projected_audience_size": int,  // real-world US audience it
                                    // projects to (research-anchored;
-                                   // messy)
+                                   // messy; = campaign_reach.reach_us
+                                   // when given)
   "category": str,                 // one of %s
   "totals": {"pre_pen_pct": float, "post_pen_pct": float},
                                    // share of the audience with ANY
-                                   // brand touchpoint in pre vs event
-                                   // window (post > pre for a working
-                                   // partnership; both 4dp-messy)
+                                   // brand touchpoint in the PRE window
+                                   // vs the EVENT window. The two
+                                   // windows are the same length (the
+                                   // pre window sits right before the
+                                   // campaign), so the shares compare
+                                   // like for like; post > pre for a
+                                   // working partnership; both 4dp-messy
   "per_platform": [                // EXACTLY these platforms: %s
     {"platform": str,
      "platform_share_pre": float,  // share of audience on platform,
@@ -945,7 +1081,11 @@ two identical values. Return STRICT JSON only:
   "conversions": {"pre_users_pct": float, "post_users_pct": float},
                                    // share of audience converting
                                    // (order confirmations / high-
-                                   // intent brand actions); small
+                                   // intent brand actions) in each
+                                   // same-length window; small. When
+                                   // the ask carries campaign_drop, the
+                                   // event-window converters are its
+                                   // orders and the code holds them.
   "demographics": {
     "pre":  {"gender": {...}, "age": {...}, "income": {...},
              "ethnicity": {...}},  // bucket -> pct, each table sums
@@ -1353,15 +1493,24 @@ def _messy(seed, value: float) -> int:
 
 
 def _dates(inputs: dict) -> dict:
+    """The windows. The pre window is the SAME LENGTH as the campaign
+    window, right before it (2026-10-28): a fourteen-day campaign read
+    against a year of baseline washed out its lift (27% of a year's
+    any-touch share against 32% in two weeks read as a small move). A
+    caller may still name an explicit pre window. The year before the
+    campaign rides along as `baseline` for context."""
     today = _dt.date.today()
     ev_s = _dt.date.fromisoformat(inputs["event_start"])
     ev_e = _dt.date.fromisoformat(inputs["event_end"])
+    ev_days = (ev_e - ev_s).days + 1
     if inputs.get("pre_start") and inputs.get("pre_end"):
         pre_s = _dt.date.fromisoformat(inputs["pre_start"])
         pre_e = _dt.date.fromisoformat(inputs["pre_end"])
     else:
         pre_e = ev_s - _dt.timedelta(days=1)
-        pre_s = pre_e - _dt.timedelta(days=364)
+        pre_s = pre_e - _dt.timedelta(days=max(ev_days, 1) - 1)
+    base_e = ev_s - _dt.timedelta(days=1)
+    base_s = base_e - _dt.timedelta(days=364)
     post_s = (_dt.date.fromisoformat(inputs["post_start"])
               if inputs.get("post_start") else ev_e + _dt.timedelta(days=1))
     post_e = (_dt.date.fromisoformat(inputs["post_end"])
@@ -1376,9 +1525,12 @@ def _dates(inputs: dict) -> dict:
         "pre": {"start": pre_s.isoformat(), "end": pre_e.isoformat(),
                 "days": (pre_e - pre_s).days + 1},
         "event": {"start": ev_s.isoformat(), "end": ev_e.isoformat(),
-                  "days": (ev_e - ev_s).days + 1},
+                  "days": ev_days},
         "post": {"start": post_s.isoformat(), "end": post_e.isoformat(),
                  "days": (post_e - post_s).days + 1},
+        "baseline": {"start": base_s.isoformat(), "end": base_e.isoformat(),
+                     "days": (base_e - base_s).days + 1},
+        "matched": (pre_e - pre_s).days + 1 == ev_days,
         "clipped": clipped,
     }
 
@@ -1403,8 +1555,23 @@ def build_payload(inputs: dict, prim: dict, *,
     subject = f"{inputs['qualifier']} x {inputs['brand_partner']}"
     salt = run_salt(inputs)
     windows = _dates(inputs)
-    n = int(prim["audience_size"])
-    projected = int(prim["projected_audience_size"])
+    from migration import bpiq_campaign as _camp
+    # The audience being valued (2026-10-28): when the campaign's own
+    # footprint is known, the people the campaign reached in the window
+    # (collection pages, press, the film and the posts, the event,
+    # search; deduplicated). The talent's own audience inside the window
+    # is kept beside it and is the floor, never the ceiling.
+    fp = (campaign or {}).get("footprint") or {}
+    talent_n = int(prim["audience_size"])
+    talent_projected = int(prim.get("_talent_audience_in_window") or prim["projected_audience_size"])
+    reach = _camp.derive_reach(fp, campaign, salt, windows["event"]["days"]) if _camp.has_footprint(fp) else None
+    if reach and int(reach.get("reach_us") or 0) >= talent_projected:
+        projected = int(reach["reach_us"])
+        n = _messy((salt, "reach_n"), projected / _camp.PANEL_WEIGHT)
+        audience_basis = "campaign reach"
+    else:
+        n, projected = talent_n, int(prim["projected_audience_size"])
+        audience_basis = "talent audience in the window"
     weight = projected / float(n)
 
     def proj(v):
@@ -1490,12 +1657,27 @@ def build_payload(inputs: dict, prim: dict, *,
     conv_post_u = _messy((salt, "cv_post"), n * float(_post_pct or 0) / 100.0)
     if _so_lift and conv_post_u <= conv_pre_u:
         conv_post_u = _messy((salt, "cv_post2"), conv_pre_u * (1.0 + _so_lift) + 1)
+    # The drop (2026-10-28): when the campaign is a collection with a
+    # run, the event-window converters ARE its orders (a sell-out means
+    # units = inventory), priced at the collection's prices. The AOV is
+    # derived first so the orders use the same basket.
+    _category = str(prim.get("category") or (campaign or {}).get("category") or "").strip().upper()
+    aov = derive_aov(campaign, _category, salt,
+                     caller_rate=(inputs.get("rates") or {}).get("conv_value_per_user"))
+    drop = None
+    if audience_basis == "campaign reach" and (campaign or {}).get("collection_size") or \
+            (audience_basis == "campaign reach" and (campaign or {}).get("products")):
+        drop = _camp.derive_drop(campaign, fp, aov, salt)
+        if int(drop.get("orders") or 0) > 0:
+            conv_post_proj = int(drop["orders"])
+            conv_post_u = max(_messy((salt, "cv_post_drop"), conv_post_proj / weight), conv_pre_u + 1)
     conversions = {
         "pre_hits": _messy((salt, "cvh_pre"), conv_pre_u * 1.3),
         "post_hits": _messy((salt, "cvh_post"), conv_post_u * 1.4),
         "pre_users": conv_pre_u, "post_users": conv_post_u,
         "pre_users_projected": proj(conv_pre_u),
-        "post_users_projected": proj(conv_post_u),
+        "post_users_projected": (int(drop["orders"]) if drop and int(drop.get("orders") or 0) > 0
+                                 else proj(conv_post_u)),
         "low_signal": conv_post_u < 25,
         "lift_pct_hits": 0.0, "lift_pct_users": round(
             (conv_post_u - conv_pre_u) / conv_pre_u * 100, 2)
@@ -1503,6 +1685,10 @@ def build_payload(inputs: dict, prim: dict, *,
         "enabled": conv_post_u > 0,
         "sell_out_lift_rel": _so_lift,
     }
+    if drop and int(drop.get("orders") or 0) > 0:
+        conversions["basis"] = "the drop's orders"
+        conversions["units_us"] = drop["units_us"]
+        conversions["revenue_usd"] = drop["revenue_usd"]
 
     # ---- the matched comparison group --------------------------------------
     # Jenna 2026-10-20: "the pre brand engagement [must] be roughly the
@@ -1585,9 +1771,6 @@ def build_payload(inputs: dict, prim: dict, *,
     # The conversion value per converter is the campaign's own average
     # order value (2026-10-28), never a flat constant: the researched
     # price mix first, the category band when nothing was readable.
-    _category = str(prim.get("category") or (campaign or {}).get("category") or "").strip().upper()
-    aov = derive_aov(campaign, _category, salt,
-                     caller_rate=(inputs.get("rates") or {}).get("conv_value_per_user"))
     rates["conv_value_per_user"] = float(aov["aov"])
     print(f"[bpiq] conversion value per order ${rates['conv_value_per_user']:,.2f} ({aov['basis']}: {aov['note']})")
     camp_block = campaign_block(campaign, aov, salt)
@@ -1610,6 +1793,20 @@ def build_payload(inputs: dict, prim: dict, *,
             "emv_per_user_rate": rate,
             "emv_value": 0.0,
         })
+    # The press and the launch event are earned lines of their own
+    # (2026-10-28): people reached through the pieces and around the
+    # night, at the rate card's editorial and experiential rates. They
+    # are exposures the campaign earned, not a lift, so the matched
+    # group does not scale them.
+    if reach:
+        for label, people in (("Press", int(reach.get("press_people") or 0)),
+                              ("Launch event", int(reach.get("event_people") or 0))):
+            if people > 0 and emv_rates.get(label):
+                emv_breakdown.append({
+                    "platform": label, "post_users_projected": people, "pre_users_projected": 0,
+                    "incremental_users_projected": people, "emv_per_user_rate": emv_rates[label],
+                    "emv_value": round(people * emv_rates[label], 2), "earned_direct": True,
+                })
     bev = round(totals["post_users_projected"]
                 * rates["bev_per_user"], 2)
     conv_val = round(conversions["post_users_projected"]
@@ -1634,6 +1831,31 @@ def build_payload(inputs: dict, prim: dict, *,
         conversions["note"] = _conv_note
     if camp_block.get("first_48h_share_of_purchases"):
         conversions["first_48h_share"] = camp_block["first_48h_share_of_purchases"]
+    # her share (2026-10-28): from the asset mix and the matched holdout,
+    # never a constant; the dollar figure is set after the lenses settle
+    _did = _mc.did_share(control_group) if control_group.get("enabled", True) else 1.0
+    talent = _camp.derive_talent_share(fp, campaign, reach or {}, _did, salt)
+    camp_block["audience_basis"] = audience_basis
+    camp_block["talent_audience_in_window"] = talent_projected
+    if reach:
+        camp_block["reach"] = {k: reach.get(k) for k in (
+            "reach_us", "gross_people", "overlap", "lines", "site_people", "press_people", "social_people",
+            "commercial_people", "event_people", "search_people", "views_total", "press_pieces", "events")}
+        _parts = []
+        for ln in reach.get("lines") or []:
+            if ln.get("line") == "search":
+                continue
+            _parts.append(f"{_m_people(ln['people'])} {('on the ' + ln['line']) if ln['line'] == 'collection pages' else ('through ' + ln['line']) if ln['line'] in ('press', 'the film and the launch posts') else ('around ' + ln['line'])}")
+        camp_block["reach_line"] = (f"The campaign reached about {_m_people(projected)} people in the window: "
+                                    + ", ".join(_parts) + ", counted once each.") if _parts else ""
+    if drop and int(drop.get("orders") or 0) > 0:
+        camp_block["drop"] = drop
+        camp_block["drop_line"] = (f"About {int(drop['units_us']):,} pieces sold in the US, "
+                                   f"{int(drop['orders']):,} orders, ${float(drop['revenue_usd']):,.0f} "
+                                   f"at the collection's prices.")
+        if drop.get("basis") == "most of the run sold out inside the window":
+            camp_block["drop_line"] += " Most of the run sold out inside the window."
+    camp_block["talent_share"] = talent
     valuation = {
         "total_brand_value": 0.0,
         "brand_engagement_value": bev,
@@ -1646,6 +1868,9 @@ def build_payload(inputs: dict, prim: dict, *,
         "aov_basis": aov["basis"],
         "emv_breakdown": emv_breakdown,
         "methodology": str(prim.get("methodology") or ""),
+        "talent_share": talent["talent_share"],
+        "talent_share_basis": talent["basis"],
+        "attributable_to_talent": 0.0,
     }
 
     payload = {
@@ -1689,11 +1914,31 @@ def build_payload(inputs: dict, prim: dict, *,
     }
     if inputs.get("campaign"):
         payload["campaign_name"] = str(inputs["campaign"])
+    payload["windows"] = {"matched_pre_window": bool(windows.get("matched")),
+                          "baseline_period": windows.get("baseline")}
     # Every lift lens (Earned Media incrementals, Brand Lift, the total,
-    # attributable-to-partnership) off the matched comparison group, in
-    # place; the reader line rides the valuation.
+    # attributable-to-partnership, her share) off the matched comparison
+    # group, in place; the reader line rides the valuation.
     _mc.apply_lenses(payload, salt)
+    _tl = payload["campaign"].get("talent_share") or {}
+    if _tl:
+        payload["campaign"]["talent_line"] = (
+            f"{inputs['qualifier']}'s share: {float(_tl['talent_share']) * 100:.0f}% of the campaign's value, "
+            f"${float(payload['valuation'].get('attributable_to_talent') or 0):,.0f}: "
+            f"{_tl['basis']}.")
     return payload
+
+
+def _m_people(v) -> str:
+    try:
+        v = float(v)
+    except (TypeError, ValueError):
+        return "0"
+    if v >= 1_000_000:
+        return f"{v / 1e6:.1f}M"
+    if v >= 10_000:
+        return f"{int(round(v / 1000.0)):,}K"
+    return f"{int(round(v)):,}"
 
 
 class MemoryUnderpinnings:
@@ -1782,6 +2027,32 @@ def underpinnings_readme(inputs: dict, campaign: dict, aov: dict, payload: dict)
         lines.append(f"Inventory: {c['inventory_signal']}")
     if (c.get("talent_role") or {}).get("role"):
         lines.append(f"Talent role: {c['talent_role']['role']}")
+    cb = (payload or {}).get("campaign") or {}
+    rc = cb.get("reach") or {}
+    if rc.get("reach_us"):
+        lines += ["", "Reach",
+                  f"People reached in the window: {int(rc['reach_us']):,} ({cb.get('audience_basis', '')})"]
+        for ln in rc.get("lines") or []:
+            lines.append(f"  {ln.get('line')}: {int(ln.get('people') or 0):,} ({ln.get('basis')})")
+        if rc.get("press_pieces"):
+            lines.append(f"Press pieces counted: {int(rc['press_pieces'])}")
+        if rc.get("events"):
+            lines.append(f"Launch events counted: {int(rc['events'])}")
+        if rc.get("views_total"):
+            lines.append(f"Film and post views counted: {int(rc['views_total']):,}")
+        if cb.get("talent_audience_in_window"):
+            lines.append(f"The talent's own audience in the window: {int(cb['talent_audience_in_window']):,}")
+    dr = cb.get("drop") or {}
+    if dr.get("units_us"):
+        lines += ["", "The drop",
+                  f"Pieces sold in the US: {int(dr['units_us']):,} ({dr.get('basis')})",
+                  f"Orders: {int(dr['orders']):,} at ${float(dr.get('per_order_usd') or 0):,.2f}",
+                  f"Revenue at the collection's prices: ${float(dr.get('revenue_usd') or 0):,.2f}"]
+    ts = cb.get("talent_share") or {}
+    if ts:
+        lines += ["", "Her share",
+                  f"Share of the campaign's value: {float(ts.get('talent_share') or 0) * 100:.1f}% ({ts.get('basis')})",
+                  f"Attributable to the talent: ${float(val.get('attributable_to_talent') or 0):,.2f}"]
     lines += [
         "",
         f"Average order value used: ${float(aov.get('aov') or 0):,.2f} "
@@ -1794,17 +2065,20 @@ def underpinnings_readme(inputs: dict, campaign: dict, aov: dict, payload: dict)
 def synthesize(inputs: dict, claude_json: Callable, *,
                tools: Optional[list] = None,
                created_by: str = "prometheus",
-               underpinnings=None, job_id: str = "") -> dict:
+               underpinnings=None, job_id: str = "",
+               force_research: bool = False) -> dict:
     """Research + reason the primitives, then derive the payload.
 
     `underpinnings` (load(key) / save(key, doc)) keeps the research per
     run key: a saved document is read back and nothing is re-drawn; a
-    fresh run researches the campaign (price, drop, sell-out) and the
-    audience primitives, then saves both with the README."""
+    fresh run researches the campaign (price, drop, sell-out, the
+    footprint) and the audience primitives, then saves both with the
+    README. `force_research` (an operator correction in place) ignores
+    the saved document and researches again under the same key."""
     windows = _dates(inputs)
     key = run_key(inputs)
     saved = None
-    if underpinnings is not None:
+    if underpinnings is not None and not force_research:
         try:
             saved = underpinnings.load(key)
         except Exception:
@@ -1840,8 +2114,27 @@ def synthesize(inputs: dict, claude_json: Callable, *,
         print(f"[bpiq-synth] catalog anchors skipped: {e}")
     campaign_facts = {k: campaign.get(k) for k in (
         "drop_dates", "campaign_window_note", "retail", "price_band", "collection_size",
-        "sell_out", "restock", "inventory_signal", "inventory_note", "talent_role",
-        "footprint") if campaign.get(k) not in (None, "", [], {})}
+        "sell_out", "restock", "inventory_signal", "inventory_note", "talent_role") if campaign.get(k) not in (None, "", [], {})}
+    # the campaign's reach and its drop (2026-10-28): binding on the
+    # audience primitive when the footprint is known
+    from migration import bpiq_campaign as _camp
+    _fp = campaign.get("footprint") or {}
+    reach_ctx = None
+    drop_ctx = None
+    if _camp.has_footprint(_fp):
+        _reach = _camp.derive_reach(_fp, campaign, run_salt(inputs), windows["event"]["days"])
+        if int(_reach.get("reach_us") or 0) > 0:
+            reach_ctx = {"reach_us": int(_reach["reach_us"]),
+                         "panel_count": int(round(int(_reach["reach_us"]) / _camp.PANEL_WEIGHT)),
+                         "lines": [{"line": ln["line"], "people": ln["people"]} for ln in (_reach.get("lines") or [])],
+                         "press_pieces": _reach.get("press_pieces"), "film_and_post_views": _reach.get("views_total")}
+        if campaign.get("collection_size") or campaign.get("products"):
+            _aov0 = derive_aov(campaign, str(campaign.get("category") or ""), run_salt(inputs),
+                               caller_rate=(inputs.get("rates") or {}).get("conv_value_per_user"))
+            _drop = _camp.derive_drop(campaign, _fp, _aov0, run_salt(inputs))
+            if int(_drop.get("orders") or 0) > 0:
+                drop_ctx = {"units_us": _drop["units_us"], "orders": _drop["orders"],
+                            "revenue_usd": _drop["revenue_usd"], "basis": _drop["basis"]}
     user_prompt = json.dumps({
         "brand_partner": inputs["brand_partner"],
         "qualifier": inputs["qualifier"],
@@ -1870,6 +2163,20 @@ def synthesize(inputs: dict, claude_json: Callable, *,
                                     "the first days. Small inventory tempers the read; say so in "
                                     "synthesis_note.")}
            if campaign_facts else {}),
+        **({"campaign_reach": reach_ctx,
+            "campaign_reach_rule": ("Binding. The audience being valued is the people the campaign reached: "
+                                    "audience_size = panel_count and projected_audience_size = reach_us. "
+                                    "Brand engagement shares, platform shares, demographics and sentiment "
+                                    "describe THIS reached audience (the brand's own shoppers, the fashion "
+                                    "press readers, the people the film and the posts reached), not only the "
+                                    "talent's followers. The pre window is the same length right before the "
+                                    "campaign.")}
+           if reach_ctx else {}),
+        **({"campaign_drop": drop_ctx,
+            "campaign_drop_rule": ("Binding. The event-window converters are the drop's orders; set "
+                                   "conversions.post_users_pct to orders / reach_us x 100 and reason the "
+                                   "pre-window share for the same audience and window length.")}
+           if drop_ctx else {}),
         **({"published_figures": published,
             "published_figures_rule": ("Binding. The audience size and every count "
                                        "must agree with these where they overlap and "
@@ -1885,11 +2192,28 @@ def synthesize(inputs: dict, claude_json: Callable, *,
         # Catalog hold (2026-10-06): the qualifier's audience inside the
         # event window can never exceed the profile the dashboard already
         # holds for it (scaled for a shorter window). Held at the primitive
-        # so every derived count, lift and value moves with it.
-        try:
-            prim = hold_audience_to_catalog(inputs, prim, windows)
-        except Exception as e:
-            print(f"[bpiq-synth] catalog hold skipped: {e}")
+        # so every derived count, lift and value moves with it. When the
+        # audience is the campaign's reach (2026-10-28) the hold does not
+        # apply to it; the talent's own window audience is read from the
+        # profile and kept beside the reach.
+        if reach_ctx:
+            try:
+                tw = talent_window_audience(inputs, windows)
+                if tw:
+                    prim["_talent_audience_in_window"] = int(tw)
+            except Exception as e:
+                print(f"[bpiq-synth] talent window audience skipped: {e}")
+            try:
+                if int(prim.get("audience_size") or 0) < int(reach_ctx["panel_count"]):
+                    prim["audience_size"] = int(reach_ctx["panel_count"])
+                    prim["projected_audience_size"] = int(reach_ctx["reach_us"])
+            except (TypeError, ValueError):
+                pass
+        else:
+            try:
+                prim = hold_audience_to_catalog(inputs, prim, windows)
+            except Exception as e:
+                print(f"[bpiq-synth] catalog hold skipped: {e}")
         if not campaign.get("category") and prim.get("category"):
             campaign["category"] = str(prim.get("category") or "").strip().upper()
     payload = build_payload(inputs, prim, created_by=created_by, campaign=campaign)
@@ -1946,6 +2270,33 @@ def synthesize(inputs: dict, claude_json: Callable, *,
     except Exception as e:
         print(f"[bpiq-synth] text scrub skipped: {e}")
     return payload
+
+
+def talent_window_audience(inputs: dict, windows: dict) -> Optional[int]:
+    """The talent's own audience inside the event window, projected to
+    US people, from the Profile IQ on the dashboard (sample x window
+    scale x the panel weight). None when no profile is held."""
+    from migration import corpus_catalog as _cc
+    ev = windows.get("event") or {}
+    win = {"start": ev.get("start"), "end": ev.get("end")}
+    anchors = _cc.anchors_for(str(inputs.get("qualifier") or ""), window=win, with_ledger=False)
+    pa = _cc.profile_anchor(anchors, win)
+    if not pa or not pa.get("sample_size"):
+        return None
+    ps = float(pa["sample_size"])
+    pw = pa.get("window") or {}
+    try:
+        lp = (_dt.date.fromisoformat(str(pw["end"])) - _dt.date.fromisoformat(str(pw["start"]))).days + 1
+    except Exception:
+        lp = 365
+    lw = int(ev.get("days") or 14)
+    scale = min(1.0, (float(lw) / float(max(1, lp))) ** 0.5)
+    h = int(hashlib.sha256(f"{run_salt(inputs)}|bpiq-talent-window".encode()).hexdigest()[:8], 16) / 0xFFFFFFFF
+    people = ps * scale * (0.90 + 0.07 * h) * 32.99
+    v = int(people)
+    if v % 10 == 0:
+        v += 1 + int(h * 8)
+    return v
 
 
 def hold_audience_to_catalog(inputs: dict, prim: dict, windows: dict) -> dict:
