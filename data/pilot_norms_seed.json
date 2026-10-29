@@ -1,0 +1,2102 @@
+{
+ "version": 1,
+ "as_of": "2026-10-28",
+ "note": "Internal. Published anchors for the Pilot Testing norms ledger; sources never reach a page a user reads.",
+ "cells": [
+  {
+   "format": "feature",
+   "genre": "all",
+   "metric": "excellent",
+   "value": 30.0,
+   "range": [
+    25.0,
+    45.0
+   ],
+   "n_hint": null,
+   "basis": "published norm",
+   "as_of": "2014-05",
+   "context": "recruited_screening",
+   "sources": [
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/INTERVIEW/Screening%20%233%20and%20%234%20%285-13-14%29/5.13%20The%20Interview%20Report%20%28730pm%29%20-%20FINAL.pdf",
+     "note": "[recruited screening / Screen Engine (2014) and Nielsen NRG 5-year all-movies norm (2013) agree] Screen Engine recruited audience screening, The Interview 5.13.14 (7:30pm): topline table Industry Benchmarks column prints Excellent 30%, Very Good 35%, Total Positive 65%, Yes definitely recommend 50%; text: 'compared with an industry norm of 30%' and 'general audience norm of 65%'."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/INTERVIEW/Screening%20%231%20%284-2-14%29/4.2%20The%20Interview%20Report%20-%20FINAL.PDF",
+     "note": "[recruited screening / Screen Engine (2014) and Nielsen NRG 5-year all-movies norm (2013) agree] The Interview 4.2.14 report: 'Half (52%) rated the film excellent, compared with an industry norm of 30% ... 87% rated it excellent or very good, compared with a general audience norm of 65%'; 'definitely recommend ... compared with a general audience norm of 50%'."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/WEDDING%20RINGER/Screening%20%233%20%285-21-14%29/5.21%20The%20Wedding%20Ringer%20Report%20-%20FINAL.PDF",
+     "note": "[recruited screening / Screen Engine (2014) and Nielsen NRG 5-year all-movies norm (2013) agree] The Wedding Ringer 5.21.14 report: Industry Benchmarks column Excellent 30%, Very Good 35%, Total Positive 65%, Yes definitely 50%."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/EQUALIZER/Screening%20%231%20%2812.16.13%29/THE%20EQUALIZER%20RA1%2012-16-13%20report.doc",
+     "note": "[recruited screening / Screen Engine (2014) and Nielsen NRG 5-year all-movies norm (2013) agree] Nielsen NRG recruited audience survey, The Equalizer 12.16.13: 'NRG Norms* (5-year all movies norms)' column prints Excellent 30, Very Good 35, Total Highly Favorable 65, Definitely Recommend 50."
+    },
+    {
+     "url": "https://silentbobspeaks.com/?p=254",
+     "note": "[recruited screening, 2006 era norm as relayed by the filmmaker: value 25] Kevin Smith on the Clerks II Kansas City test screening (2006): 'The percentage ... excellent was 56%. The normal average is 25%. The combined score of the top two boxes was 84%; the normal top two boxes average is 55%. ... The definite recommends score norm is 45%.'"
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/INTERVIEW/Screening%20%237%20%287-31-14%29%20Mktg/7.31%20The%20Interview%20Marketing%20Report%20-%20FINAL.pdf",
+     "note": "[marketing screening (general audience norm used on Screen Engine marketing screenings) / Screen Engine: value 36] Recruited Audience Marketing Screening, The Interview 7.31.14 Plano TX: Industry Benchmark column Excellent 36%, Very Good 33%, Total Positive 69%, Good 20%, Fair 8%, Poor 3%; Yes definitely 53%; Expectations: better than expected 61%, about what expected 26%, not as good 13%."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/WEDDING%20RINGER/Screening%20%234%20%288-27-14%29%20Mktg/8%2027%20The%20Wedding%20Ringer%20Marketing%20Report%20-%20FINAL.pdf",
+     "note": "[marketing screening (general audience norm used on Screen Engine marketing screenings) / Screen Engine: value 36] Marketing screening, The Wedding Ringer 8.27.14 Peoria AZ: 'general audience norm of 36%' (excellent), 'general audience norm of 69%' (excellent or very good), 'general audience norm of 53%' (definitely recommend), 'better than they expected, compared with a benchmark of 6 in 10'."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/EQUALIZER/EXITS/FINAL%20REPORT%20The%20Equalizer%20-%20OWIT.docx",
+     "note": "[exit poll (opening weekend in-theater; self-selected paying audience, not a recruited screening): value 40] The Equalizer Opening Weekend In-Theater Report, Friday Sept 26 2014: '(Norms are: 40% excellent; 70% total positive; 55% definite.)'; by ethnicity '(Norms are 40-45% excellent; 55-60% definite; higher norms associated with Non-Caucasian groups)'; expectations '(Norms are: 50% exceeded expectations; 30% met; 20% below.)'"
+    }
+   ],
+   "populations": [
+    {
+     "context": "recruited_screening",
+     "basis": "published norm",
+     "value": 30.0
+    },
+    {
+     "context": "recruited_screening, 2006 era norm as relayed by the filmmaker",
+     "basis": "published norm",
+     "value": 25.0
+    },
+    {
+     "context": "marketing_screening (general audience norm used on Screen Engine marketing screenings)",
+     "basis": "published norm",
+     "value": 36.0
+    },
+    {
+     "context": "exit_poll (opening weekend in-theater; self-selected paying audience, not a recruited screening)",
+     "basis": "published norm",
+     "value": 40.0
+    }
+   ]
+  },
+  {
+   "format": "feature",
+   "genre": "all",
+   "metric": "total_positive",
+   "value": 65.0,
+   "range": [
+    43.0,
+    97.0
+   ],
+   "n_hint": null,
+   "basis": "published norm",
+   "as_of": "2014-05",
+   "context": "recruited_screening",
+   "sources": [
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/INTERVIEW/Screening%20%233%20and%20%234%20%285-13-14%29/5.13%20The%20Interview%20Report%20%28730pm%29%20-%20FINAL.pdf",
+     "note": "[recruited screening / Screen Engine (2014) and Nielsen NRG (2013) agree] Screen Engine recruited audience screening, The Interview 5.13.14 (7:30pm): topline table Industry Benchmarks column prints Excellent 30%, Very Good 35%, Total Positive 65%, Yes definitely recommend 50%; text: 'compared with an industry norm of 30%' and 'general audience norm of 65%'."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/INTERVIEW/Screening%20%231%20%284-2-14%29/4.2%20The%20Interview%20Report%20-%20FINAL.PDF",
+     "note": "[recruited screening / Screen Engine (2014) and Nielsen NRG (2013) agree] The Interview 4.2.14 report: 'Half (52%) rated the film excellent, compared with an industry norm of 30% ... 87% rated it excellent or very good, compared with a general audience norm of 65%'; 'definitely recommend ... compared with a general audience norm of 50%'."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/WEDDING%20RINGER/Screening%20%233%20%285-21-14%29/5.21%20The%20Wedding%20Ringer%20Report%20-%20FINAL.PDF",
+     "note": "[recruited screening / Screen Engine (2014) and Nielsen NRG (2013) agree] The Wedding Ringer 5.21.14 report: Industry Benchmarks column Excellent 30%, Very Good 35%, Total Positive 65%, Yes definitely 50%."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/EQUALIZER/Screening%20%231%20%2812.16.13%29/THE%20EQUALIZER%20RA1%2012-16-13%20report.doc",
+     "note": "[recruited screening / Screen Engine (2014) and Nielsen NRG (2013) agree] Nielsen NRG recruited audience survey, The Equalizer 12.16.13: 'NRG Norms* (5-year all movies norms)' column prints Excellent 30, Very Good 35, Total Highly Favorable 65, Definitely Recommend 50."
+    },
+    {
+     "url": "https://silentbobspeaks.com/?p=254",
+     "note": "[recruited screening, 2006 era norm as relayed by the filmmaker: value 55] Kevin Smith on the Clerks II Kansas City test screening (2006): 'The percentage ... excellent was 56%. The normal average is 25%. The combined score of the top two boxes was 84%; the normal top two boxes average is 55%. ... The definite recommends score norm is 45%.'"
+    },
+    {
+     "url": "https://www.latimes.com/archives/la-xpm-1998-sep-18-ca-23820-story.html",
+     "note": "[recruited screening; average per studio marketers; 80 to 90s well received; below 75 concern: value 78] LA Times Sept 1998 (NRG era): 'Studio marketers say that a movie is well-received if its excellent and very good ratings (the top-two boxes) add up to a number in the 80s or 90s. A high-70s number would be average; anything below 75 is cause for concern.' Value is the midpoint of high 70s (77 to 79)."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/INTERVIEW/Screening%20%237%20%287-31-14%29%20Mktg/7.31%20The%20Interview%20Marketing%20Report%20-%20FINAL.pdf",
+     "note": "[marketing screening / Screen Engine: value 69] Recruited Audience Marketing Screening, The Interview 7.31.14 Plano TX: Industry Benchmark column Excellent 36%, Very Good 33%, Total Positive 69%, Good 20%, Fair 8%, Poor 3%; Yes definitely 53%; Expectations: better than expected 61%, about what expected 26%, not as good 13%."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/WEDDING%20RINGER/Screening%20%234%20%288-27-14%29%20Mktg/8%2027%20The%20Wedding%20Ringer%20Marketing%20Report%20-%20FINAL.pdf",
+     "note": "[marketing screening / Screen Engine: value 69] Marketing screening, The Wedding Ringer 8.27.14 Peoria AZ: 'general audience norm of 36%' (excellent), 'general audience norm of 69%' (excellent or very good), 'general audience norm of 53%' (definitely recommend), 'better than they expected, compared with a benchmark of 6 in 10'."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/EQUALIZER/EXITS/FINAL%20REPORT%20The%20Equalizer%20-%20OWIT.docx",
+     "note": "[exit poll: value 70] The Equalizer Opening Weekend In-Theater Report, Friday Sept 26 2014: '(Norms are: 40% excellent; 70% total positive; 55% definite.)'; by ethnicity '(Norms are 40-45% excellent; 55-60% definite; higher norms associated with Non-Caucasian groups)'; expectations '(Norms are: 50% exceeded expectations; 30% met; 20% below.)'"
+    },
+    {
+     "url": "https://www.boxofficepro.com/weekend-box-office-terrifier-3-scares-up-1-business/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 76; Beetlejuice Beetlejuice 81; The Front Room 43; IF 84; The Strangers: Chapter 1 50; Challengers 77; Unsung Hero 96; Boy Kills World 71; One of Them Days 84; Wolf Man 54; Despicable Me 4 82; Sound of Hope: The Story of Possum Trot 94; Lilo & Stitch 90; Mission: Impossible - The Final Reckoning 89; F1 92; M3GAN 2.0 84; Sinners 92; Dune: Part Two 94; Dune 84; Wicked 90; Gladiator II 77; Taylor Swift: The Eras Tour 96; Renaissance: A Film by Beyonce 97; Godzilla Minus One 92"
+    },
+    {
+     "url": "https://web.archive.org/web/20240907200813/https:/deadline.com/2024/09/box-office-beetlejuice-beetlejuice-1236079763/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 76; Beetlejuice Beetlejuice 81; The Front Room 43; IF 84; The Strangers: Chapter 1 50; Challengers 77; Unsung Hero 96; Boy Kills World 71; One of Them Days 84; Wolf Man 54; Despicable Me 4 82; Sound of Hope: The Story of Possum Trot 94; Lilo & Stitch 90; Mission: Impossible - The Final Reckoning 89; F1 92; M3GAN 2.0 84; Sinners 92; Dune: Part Two 94; Dune 84; Wicked 90; Gladiator II 77; Taylor Swift: The Eras Tour 96; Renaissance: A Film by Beyonce 97; Godzilla Minus One 92"
+    },
+    {
+     "url": "https://deadline.com/2024/05/box-office-if-back-to-black-amy-winehouse-strangers-2-1235920634/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 76; Beetlejuice Beetlejuice 81; The Front Room 43; IF 84; The Strangers: Chapter 1 50; Challengers 77; Unsung Hero 96; Boy Kills World 71; One of Them Days 84; Wolf Man 54; Despicable Me 4 82; Sound of Hope: The Story of Possum Trot 94; Lilo & Stitch 90; Mission: Impossible - The Final Reckoning 89; F1 92; M3GAN 2.0 84; Sinners 92; Dune: Part Two 94; Dune 84; Wicked 90; Gladiator II 77; Taylor Swift: The Eras Tour 96; Renaissance: A Film by Beyonce 97; Godzilla Minus One 92"
+    },
+    {
+     "url": "https://deadline.com/2024/04/box-office-challengers-zendaya-1235896116/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 76; Beetlejuice Beetlejuice 81; The Front Room 43; IF 84; The Strangers: Chapter 1 50; Challengers 77; Unsung Hero 96; Boy Kills World 71; One of Them Days 84; Wolf Man 54; Despicable Me 4 82; Sound of Hope: The Story of Possum Trot 94; Lilo & Stitch 90; Mission: Impossible - The Final Reckoning 89; F1 92; M3GAN 2.0 84; Sinners 92; Dune: Part Two 94; Dune 84; Wicked 90; Gladiator II 77; Taylor Swift: The Eras Tour 96; Renaissance: A Film by Beyonce 97; Godzilla Minus One 92"
+    },
+    {
+     "url": "https://deadline.com/2025/01/box-office-wolf-man-one-of-them-days-1236259743/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 76; Beetlejuice Beetlejuice 81; The Front Room 43; IF 84; The Strangers: Chapter 1 50; Challengers 77; Unsung Hero 96; Boy Kills World 71; One of Them Days 84; Wolf Man 54; Despicable Me 4 82; Sound of Hope: The Story of Possum Trot 94; Lilo & Stitch 90; Mission: Impossible - The Final Reckoning 89; F1 92; M3GAN 2.0 84; Sinners 92; Dune: Part Two 94; Dune 84; Wicked 90; Gladiator II 77; Taylor Swift: The Eras Tour 96; Renaissance: A Film by Beyonce 97; Godzilla Minus One 92"
+    },
+    {
+     "url": "https://deadline.com/2024/07/box-office-despicable-me-4-1236001250/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 76; Beetlejuice Beetlejuice 81; The Front Room 43; IF 84; The Strangers: Chapter 1 50; Challengers 77; Unsung Hero 96; Boy Kills World 71; One of Them Days 84; Wolf Man 54; Despicable Me 4 82; Sound of Hope: The Story of Possum Trot 94; Lilo & Stitch 90; Mission: Impossible - The Final Reckoning 89; F1 92; M3GAN 2.0 84; Sinners 92; Dune: Part Two 94; Dune 84; Wicked 90; Gladiator II 77; Taylor Swift: The Eras Tour 96; Renaissance: A Film by Beyonce 97; Godzilla Minus One 92"
+    },
+    {
+     "url": "https://deadline.com/2025/05/box-office-lilo-stitch-wild-mission-impossible-final-reckoning-1236409244/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 76; Beetlejuice Beetlejuice 81; The Front Room 43; IF 84; The Strangers: Chapter 1 50; Challengers 77; Unsung Hero 96; Boy Kills World 71; One of Them Days 84; Wolf Man 54; Despicable Me 4 82; Sound of Hope: The Story of Possum Trot 94; Lilo & Stitch 90; Mission: Impossible - The Final Reckoning 89; F1 92; M3GAN 2.0 84; Sinners 92; Dune: Part Two 94; Dune 84; Wicked 90; Gladiator II 77; Taylor Swift: The Eras Tour 96; Renaissance: A Film by Beyonce 97; Godzilla Minus One 92"
+    },
+    {
+     "url": "https://deadline.com/2025/06/box-office-f1-megan-2-0-1236444277/comment-page-6/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 76; Beetlejuice Beetlejuice 81; The Front Room 43; IF 84; The Strangers: Chapter 1 50; Challengers 77; Unsung Hero 96; Boy Kills World 71; One of Them Days 84; Wolf Man 54; Despicable Me 4 82; Sound of Hope: The Story of Possum Trot 94; Lilo & Stitch 90; Mission: Impossible - The Final Reckoning 89; F1 92; M3GAN 2.0 84; Sinners 92; Dune: Part Two 94; Dune 84; Wicked 90; Gladiator II 77; Taylor Swift: The Eras Tour 96; Renaissance: A Film by Beyonce 97; Godzilla Minus One 92"
+    },
+    {
+     "url": "https://deadline.com/2025/04/box-office-sinners-a-minecraft-movie-1236371775/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 76; Beetlejuice Beetlejuice 81; The Front Room 43; IF 84; The Strangers: Chapter 1 50; Challengers 77; Unsung Hero 96; Boy Kills World 71; One of Them Days 84; Wolf Man 54; Despicable Me 4 82; Sound of Hope: The Story of Possum Trot 94; Lilo & Stitch 90; Mission: Impossible - The Final Reckoning 89; F1 92; M3GAN 2.0 84; Sinners 92; Dune: Part Two 94; Dune 84; Wicked 90; Gladiator II 77; Taylor Swift: The Eras Tour 96; Renaissance: A Film by Beyonce 97; Godzilla Minus One 92"
+    },
+    {
+     "url": "https://deadline.com/2024/03/box-office-dune-part-two-1235842667/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 76; Beetlejuice Beetlejuice 81; The Front Room 43; IF 84; The Strangers: Chapter 1 50; Challengers 77; Unsung Hero 96; Boy Kills World 71; One of Them Days 84; Wolf Man 54; Despicable Me 4 82; Sound of Hope: The Story of Possum Trot 94; Lilo & Stitch 90; Mission: Impossible - The Final Reckoning 89; F1 92; M3GAN 2.0 84; Sinners 92; Dune: Part Two 94; Dune 84; Wicked 90; Gladiator II 77; Taylor Swift: The Eras Tour 96; Renaissance: A Film by Beyonce 97; Godzilla Minus One 92"
+    },
+    {
+     "url": "https://deadline.com/2024/11/box-office-wicked-gladiator-ii-1236184897/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 76; Beetlejuice Beetlejuice 81; The Front Room 43; IF 84; The Strangers: Chapter 1 50; Challengers 77; Unsung Hero 96; Boy Kills World 71; One of Them Days 84; Wolf Man 54; Despicable Me 4 82; Sound of Hope: The Story of Possum Trot 94; Lilo & Stitch 90; Mission: Impossible - The Final Reckoning 89; F1 92; M3GAN 2.0 84; Sinners 92; Dune: Part Two 94; Dune 84; Wicked 90; Gladiator II 77; Taylor Swift: The Eras Tour 96; Renaissance: A Film by Beyonce 97; Godzilla Minus One 92"
+    },
+    {
+     "url": "https://deadline.com/2023/10/box-office-taylor-swift-eras-tour-concert-film-opening-1235572671/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 76; Beetlejuice Beetlejuice 81; The Front Room 43; IF 84; The Strangers: Chapter 1 50; Challengers 77; Unsung Hero 96; Boy Kills World 71; One of Them Days 84; Wolf Man 54; Despicable Me 4 82; Sound of Hope: The Story of Possum Trot 94; Lilo & Stitch 90; Mission: Impossible - The Final Reckoning 89; F1 92; M3GAN 2.0 84; Sinners 92; Dune: Part Two 94; Dune 84; Wicked 90; Gladiator II 77; Taylor Swift: The Eras Tour 96; Renaissance: A Film by Beyonce 97; Godzilla Minus One 92"
+    },
+    {
+     "url": "https://deadline.com/2023/12/box-office-renaissance-a-film-by-beyonce-godzilla-minus-one-hunger-games-1235647651/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 76; Beetlejuice Beetlejuice 81; The Front Room 43; IF 84; The Strangers: Chapter 1 50; Challengers 77; Unsung Hero 96; Boy Kills World 71; One of Them Days 84; Wolf Man 54; Despicable Me 4 82; Sound of Hope: The Story of Possum Trot 94; Lilo & Stitch 90; Mission: Impossible - The Final Reckoning 89; F1 92; M3GAN 2.0 84; Sinners 92; Dune: Part Two 94; Dune 84; Wicked 90; Gladiator II 77; Taylor Swift: The Eras Tour 96; Renaissance: A Film by Beyonce 97; Godzilla Minus One 92"
+    },
+    {
+     "url": "https://entertainmentindustryreporter.com/novocaine-leading-lowest-weekend-of-2025/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 76; Beetlejuice Beetlejuice 81; The Front Room 43; IF 84; The Strangers: Chapter 1 50; Challengers 77; Unsung Hero 96; Boy Kills World 71; One of Them Days 84; Wolf Man 54; Despicable Me 4 82; Sound of Hope: The Story of Possum Trot 94; Lilo & Stitch 90; Mission: Impossible - The Final Reckoning 89; F1 92; M3GAN 2.0 84; Sinners 92; Dune: Part Two 94; Dune 84; Wicked 90; Gladiator II 77; Taylor Swift: The Eras Tour 96; Renaissance: A Film by Beyonce 97; Godzilla Minus One 92"
+    },
+    {
+     "url": "https://en.wikipedia.org/wiki/Conclave_(film)",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 76; Beetlejuice Beetlejuice 81; The Front Room 43; IF 84; The Strangers: Chapter 1 50; Challengers 77; Unsung Hero 96; Boy Kills World 71; One of Them Days 84; Wolf Man 54; Despicable Me 4 82; Sound of Hope: The Story of Possum Trot 94; Lilo & Stitch 90; Mission: Impossible - The Final Reckoning 89; F1 92; M3GAN 2.0 84; Sinners 92; Dune: Part Two 94; Dune 84; Wicked 90; Gladiator II 77; Taylor Swift: The Eras Tour 96; Renaissance: A Film by Beyonce 97; Godzilla Minus One 92"
+    },
+    {
+     "url": "https://en.wikipedia.org/wiki/Eternity_(2025_film)",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 76; Beetlejuice Beetlejuice 81; The Front Room 43; IF 84; The Strangers: Chapter 1 50; Challengers 77; Unsung Hero 96; Boy Kills World 71; One of Them Days 84; Wolf Man 54; Despicable Me 4 82; Sound of Hope: The Story of Possum Trot 94; Lilo & Stitch 90; Mission: Impossible - The Final Reckoning 89; F1 92; M3GAN 2.0 84; Sinners 92; Dune: Part Two 94; Dune 84; Wicked 90; Gladiator II 77; Taylor Swift: The Eras Tour 96; Renaissance: A Film by Beyonce 97; Godzilla Minus One 92"
+    },
+    {
+     "url": "https://www.reddit.com/r/boxoffice/comments/1etzcnx/per_deadline_thursday_night_posttrak_scores_for/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 76; Beetlejuice Beetlejuice 81; The Front Room 43; IF 84; The Strangers: Chapter 1 50; Challengers 77; Unsung Hero 96; Boy Kills World 71; One of Them Days 84; Wolf Man 54; Despicable Me 4 82; Sound of Hope: The Story of Possum Trot 94; Lilo & Stitch 90; Mission: Impossible - The Final Reckoning 89; F1 92; M3GAN 2.0 84; Sinners 92; Dune: Part Two 94; Dune 84; Wicked 90; Gladiator II 77; Taylor Swift: The Eras Tour 96; Renaissance: A Film by Beyonce 97; Godzilla Minus One 92"
+    },
+    {
+     "url": "https://www.reddit.com/r/boxoffice/comments/1ecrc5k/per_deadline_thursday_night_posttrak_scores_for/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 76; Beetlejuice Beetlejuice 81; The Front Room 43; IF 84; The Strangers: Chapter 1 50; Challengers 77; Unsung Hero 96; Boy Kills World 71; One of Them Days 84; Wolf Man 54; Despicable Me 4 82; Sound of Hope: The Story of Possum Trot 94; Lilo & Stitch 90; Mission: Impossible - The Final Reckoning 89; F1 92; M3GAN 2.0 84; Sinners 92; Dune: Part Two 94; Dune 84; Wicked 90; Gladiator II 77; Taylor Swift: The Eras Tour 96; Renaissance: A Film by Beyonce 97; Godzilla Minus One 92"
+    },
+    {
+     "url": "https://www.reddit.com/r/boxoffice/comments/121oy1a/posttrak_scores_for_john_wick_chapter_4_are_93/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 76; Beetlejuice Beetlejuice 81; The Front Room 43; IF 84; The Strangers: Chapter 1 50; Challengers 77; Unsung Hero 96; Boy Kills World 71; One of Them Days 84; Wolf Man 54; Despicable Me 4 82; Sound of Hope: The Story of Possum Trot 94; Lilo & Stitch 90; Mission: Impossible - The Final Reckoning 89; F1 92; M3GAN 2.0 84; Sinners 92; Dune: Part Two 94; Dune 84; Wicked 90; Gladiator II 77; Taylor Swift: The Eras Tour 96; Renaissance: A Film by Beyonce 97; Godzilla Minus One 92"
+    },
+    {
+     "url": "https://www.reddit.com/r/boxoffice/comments/11ovzcr/posttrak_scores_for_scream_vi_are_87_positive74/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 76; Beetlejuice Beetlejuice 81; The Front Room 43; IF 84; The Strangers: Chapter 1 50; Challengers 77; Unsung Hero 96; Boy Kills World 71; One of Them Days 84; Wolf Man 54; Despicable Me 4 82; Sound of Hope: The Story of Possum Trot 94; Lilo & Stitch 90; Mission: Impossible - The Final Reckoning 89; F1 92; M3GAN 2.0 84; Sinners 92; Dune: Part Two 94; Dune 84; Wicked 90; Gladiator II 77; Taylor Swift: The Eras Tour 96; Renaissance: A Film by Beyonce 97; Godzilla Minus One 92"
+    },
+    {
+     "url": "https://www.reddit.com/r/boxoffice/comments/1hmsvyc/per_deadline_posttrak_scores_for_a_complete/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 76; Beetlejuice Beetlejuice 81; The Front Room 43; IF 84; The Strangers: Chapter 1 50; Challengers 77; Unsung Hero 96; Boy Kills World 71; One of Them Days 84; Wolf Man 54; Despicable Me 4 82; Sound of Hope: The Story of Possum Trot 94; Lilo & Stitch 90; Mission: Impossible - The Final Reckoning 89; F1 92; M3GAN 2.0 84; Sinners 92; Dune: Part Two 94; Dune 84; Wicked 90; Gladiator II 77; Taylor Swift: The Eras Tour 96; Renaissance: A Film by Beyonce 97; Godzilla Minus One 92"
+    },
+    {
+     "url": "https://forums.boxofficetheory.com/topic/33589-august-8-to-10-weekend-thread-weapons-425-freaky-29-fantastic-four-drop-redacted/page/7/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 76; Beetlejuice Beetlejuice 81; The Front Room 43; IF 84; The Strangers: Chapter 1 50; Challengers 77; Unsung Hero 96; Boy Kills World 71; One of Them Days 84; Wolf Man 54; Despicable Me 4 82; Sound of Hope: The Story of Possum Trot 94; Lilo & Stitch 90; Mission: Impossible - The Final Reckoning 89; F1 92; M3GAN 2.0 84; Sinners 92; Dune: Part Two 94; Dune 84; Wicked 90; Gladiator II 77; Taylor Swift: The Eras Tour 96; Renaissance: A Film by Beyonce 97; Godzilla Minus One 92"
+    }
+   ],
+   "populations": [
+    {
+     "context": "recruited_screening",
+     "basis": "published norm",
+     "value": 65.0
+    },
+    {
+     "context": "recruited_screening, 2006 era norm as relayed by the filmmaker",
+     "basis": "published norm",
+     "value": 55.0
+    },
+    {
+     "context": "recruited_screening; average per studio marketers; 80 to 90s well received; below 75 concern",
+     "basis": "stated threshold",
+     "value": 78.0
+    },
+    {
+     "context": "marketing_screening",
+     "basis": "published norm",
+     "value": 69.0
+    },
+    {
+     "context": "exit_poll",
+     "basis": "published norm",
+     "value": 70.0
+    },
+    {
+     "context": "exit_poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 76; Beetlejuice Beetlejuice 81; The Front Room 43; IF 84; The Strangers: Chapter 1 50; Challengers 77; Unsung Hero 96; Boy Kills World 71; One of Them Days 84; Wolf Man 54; Despicable Me 4 82; Sound of Hope: The Story of Possum Trot 94; Lilo & Stitch 90; Mission: Impossible - The Final Reckoning 89; F1 92; M3GAN 2.0 84; Sinners 92; Dune: Part Two 94; Dune 84; Wicked 90; Gladiator II 77; Taylor Swift: The Eras Tour 96; Renaissance: A Film by Beyonce 97; Godzilla Minus One 92; Black Bag 75; Conclave 84; Eternity 84; Alien: Romulus 82; Deadpool & Wolverine 96; John Wick: Chapter 4 93; Scream VI 87; Scream 78; A Complete Unknown 93; Longlegs 70",
+     "basis": "averaged from published reads",
+     "value": 82.7
+    }
+   ]
+  },
+  {
+   "format": "feature",
+   "genre": "all",
+   "metric": "definitely_recommend",
+   "value": 50.0,
+   "range": [
+    34.0,
+    90.0
+   ],
+   "n_hint": null,
+   "basis": "published norm",
+   "as_of": "2014-05",
+   "context": "recruited_screening",
+   "sources": [
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/INTERVIEW/Screening%20%233%20and%20%234%20%285-13-14%29/5.13%20The%20Interview%20Report%20%28730pm%29%20-%20FINAL.pdf",
+     "note": "[recruited screening / Screen Engine (2014) and Nielsen NRG (2013) agree] Screen Engine recruited audience screening, The Interview 5.13.14 (7:30pm): topline table Industry Benchmarks column prints Excellent 30%, Very Good 35%, Total Positive 65%, Yes definitely recommend 50%; text: 'compared with an industry norm of 30%' and 'general audience norm of 65%'."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/INTERVIEW/Screening%20%231%20%284-2-14%29/4.2%20The%20Interview%20Report%20-%20FINAL.PDF",
+     "note": "[recruited screening / Screen Engine (2014) and Nielsen NRG (2013) agree] The Interview 4.2.14 report: 'Half (52%) rated the film excellent, compared with an industry norm of 30% ... 87% rated it excellent or very good, compared with a general audience norm of 65%'; 'definitely recommend ... compared with a general audience norm of 50%'."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/WEDDING%20RINGER/Screening%20%233%20%285-21-14%29/5.21%20The%20Wedding%20Ringer%20Report%20-%20FINAL.PDF",
+     "note": "[recruited screening / Screen Engine (2014) and Nielsen NRG (2013) agree] The Wedding Ringer 5.21.14 report: Industry Benchmarks column Excellent 30%, Very Good 35%, Total Positive 65%, Yes definitely 50%."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/EQUALIZER/Screening%20%231%20%2812.16.13%29/THE%20EQUALIZER%20RA1%2012-16-13%20report.doc",
+     "note": "[recruited screening / Screen Engine (2014) and Nielsen NRG (2013) agree] Nielsen NRG recruited audience survey, The Equalizer 12.16.13: 'NRG Norms* (5-year all movies norms)' column prints Excellent 30, Very Good 35, Total Highly Favorable 65, Definitely Recommend 50."
+    },
+    {
+     "url": "https://silentbobspeaks.com/?p=254",
+     "note": "[recruited screening, 2006 era norm as relayed by the filmmaker: value 45] Kevin Smith on the Clerks II Kansas City test screening (2006): 'The percentage ... excellent was 56%. The normal average is 25%. The combined score of the top two boxes was 84%; the normal top two boxes average is 55%. ... The definite recommends score norm is 45%.'"
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/INTERVIEW/Screening%20%237%20%287-31-14%29%20Mktg/7.31%20The%20Interview%20Marketing%20Report%20-%20FINAL.pdf",
+     "note": "[marketing screening / Screen Engine: value 53] Recruited Audience Marketing Screening, The Interview 7.31.14 Plano TX: Industry Benchmark column Excellent 36%, Very Good 33%, Total Positive 69%, Good 20%, Fair 8%, Poor 3%; Yes definitely 53%; Expectations: better than expected 61%, about what expected 26%, not as good 13%."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/WEDDING%20RINGER/Screening%20%234%20%288-27-14%29%20Mktg/8%2027%20The%20Wedding%20Ringer%20Marketing%20Report%20-%20FINAL.pdf",
+     "note": "[marketing screening / Screen Engine: value 53] Marketing screening, The Wedding Ringer 8.27.14 Peoria AZ: 'general audience norm of 36%' (excellent), 'general audience norm of 69%' (excellent or very good), 'general audience norm of 53%' (definitely recommend), 'better than they expected, compared with a benchmark of 6 in 10'."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/EQUALIZER/EXITS/FINAL%20REPORT%20The%20Equalizer%20-%20OWIT.docx",
+     "note": "[exit poll: value 55] The Equalizer Opening Weekend In-Theater Report, Friday Sept 26 2014: '(Norms are: 40% excellent; 70% total positive; 55% definite.)'; by ethnicity '(Norms are 40-45% excellent; 55-60% definite; higher norms associated with Non-Caucasian groups)'; expectations '(Norms are: 50% exceeded expectations; 30% met; 20% below.)'"
+    },
+    {
+     "url": "https://deadline.com/2025/11/screen-engine-kevin-goetz-how-to-score-in-hollywood-1236618086/",
+     "note": "[exit poll (PostTrak); 55 is the hinge for legs: value 55] Deadline Nov 14 2025 on Kevin Goetz's book: 'One of the valued metrics in any PostTrak report ... is PostTrak's definite recommend; the more significantly north of 55% it is, generally the longer the legs of the movie.'"
+    },
+    {
+     "url": "https://www.boxofficepro.com/weekend-box-office-terrifier-3-scares-up-1-business/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 59; Beetlejuice Beetlejuice 68; The Front Room 34; IF 64; Challengers 59; Unsung Hero 90; Boy Kills World 50; One of Them Days 63; Wolf Man 34; Despicable Me 4 63; Sound of Hope: The Story of Possum Trot 87; Lilo & Stitch 81; Mission: Impossible - The Final Reckoning 79; F1 78; M3GAN 2.0 62; Superman 74; I Know What You Did Last Summer 43; Smurfs 50; Eddington 39; Sinners 84; The Wedding Banquet 50; Final Destination Bloodlines 69; The Monkey 49; The Conjuring: Last Rites 5"
+    },
+    {
+     "url": "https://web.archive.org/web/20240907200813/https:/deadline.com/2024/09/box-office-beetlejuice-beetlejuice-1236079763/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 59; Beetlejuice Beetlejuice 68; The Front Room 34; IF 64; Challengers 59; Unsung Hero 90; Boy Kills World 50; One of Them Days 63; Wolf Man 34; Despicable Me 4 63; Sound of Hope: The Story of Possum Trot 87; Lilo & Stitch 81; Mission: Impossible - The Final Reckoning 79; F1 78; M3GAN 2.0 62; Superman 74; I Know What You Did Last Summer 43; Smurfs 50; Eddington 39; Sinners 84; The Wedding Banquet 50; Final Destination Bloodlines 69; The Monkey 49; The Conjuring: Last Rites 5"
+    },
+    {
+     "url": "https://deadline.com/2024/05/box-office-if-back-to-black-amy-winehouse-strangers-2-1235920634/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 59; Beetlejuice Beetlejuice 68; The Front Room 34; IF 64; Challengers 59; Unsung Hero 90; Boy Kills World 50; One of Them Days 63; Wolf Man 34; Despicable Me 4 63; Sound of Hope: The Story of Possum Trot 87; Lilo & Stitch 81; Mission: Impossible - The Final Reckoning 79; F1 78; M3GAN 2.0 62; Superman 74; I Know What You Did Last Summer 43; Smurfs 50; Eddington 39; Sinners 84; The Wedding Banquet 50; Final Destination Bloodlines 69; The Monkey 49; The Conjuring: Last Rites 5"
+    },
+    {
+     "url": "https://deadline.com/2024/04/box-office-challengers-zendaya-1235896116/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 59; Beetlejuice Beetlejuice 68; The Front Room 34; IF 64; Challengers 59; Unsung Hero 90; Boy Kills World 50; One of Them Days 63; Wolf Man 34; Despicable Me 4 63; Sound of Hope: The Story of Possum Trot 87; Lilo & Stitch 81; Mission: Impossible - The Final Reckoning 79; F1 78; M3GAN 2.0 62; Superman 74; I Know What You Did Last Summer 43; Smurfs 50; Eddington 39; Sinners 84; The Wedding Banquet 50; Final Destination Bloodlines 69; The Monkey 49; The Conjuring: Last Rites 5"
+    },
+    {
+     "url": "https://deadline.com/2025/01/box-office-wolf-man-one-of-them-days-1236259743/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 59; Beetlejuice Beetlejuice 68; The Front Room 34; IF 64; Challengers 59; Unsung Hero 90; Boy Kills World 50; One of Them Days 63; Wolf Man 34; Despicable Me 4 63; Sound of Hope: The Story of Possum Trot 87; Lilo & Stitch 81; Mission: Impossible - The Final Reckoning 79; F1 78; M3GAN 2.0 62; Superman 74; I Know What You Did Last Summer 43; Smurfs 50; Eddington 39; Sinners 84; The Wedding Banquet 50; Final Destination Bloodlines 69; The Monkey 49; The Conjuring: Last Rites 5"
+    },
+    {
+     "url": "https://deadline.com/2024/07/box-office-despicable-me-4-1236001250/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 59; Beetlejuice Beetlejuice 68; The Front Room 34; IF 64; Challengers 59; Unsung Hero 90; Boy Kills World 50; One of Them Days 63; Wolf Man 34; Despicable Me 4 63; Sound of Hope: The Story of Possum Trot 87; Lilo & Stitch 81; Mission: Impossible - The Final Reckoning 79; F1 78; M3GAN 2.0 62; Superman 74; I Know What You Did Last Summer 43; Smurfs 50; Eddington 39; Sinners 84; The Wedding Banquet 50; Final Destination Bloodlines 69; The Monkey 49; The Conjuring: Last Rites 5"
+    },
+    {
+     "url": "https://deadline.com/2025/05/box-office-lilo-stitch-wild-mission-impossible-final-reckoning-1236409244/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 59; Beetlejuice Beetlejuice 68; The Front Room 34; IF 64; Challengers 59; Unsung Hero 90; Boy Kills World 50; One of Them Days 63; Wolf Man 34; Despicable Me 4 63; Sound of Hope: The Story of Possum Trot 87; Lilo & Stitch 81; Mission: Impossible - The Final Reckoning 79; F1 78; M3GAN 2.0 62; Superman 74; I Know What You Did Last Summer 43; Smurfs 50; Eddington 39; Sinners 84; The Wedding Banquet 50; Final Destination Bloodlines 69; The Monkey 49; The Conjuring: Last Rites 5"
+    },
+    {
+     "url": "https://deadline.com/2025/06/box-office-f1-megan-2-0-1236444277/comment-page-6/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 59; Beetlejuice Beetlejuice 68; The Front Room 34; IF 64; Challengers 59; Unsung Hero 90; Boy Kills World 50; One of Them Days 63; Wolf Man 34; Despicable Me 4 63; Sound of Hope: The Story of Possum Trot 87; Lilo & Stitch 81; Mission: Impossible - The Final Reckoning 79; F1 78; M3GAN 2.0 62; Superman 74; I Know What You Did Last Summer 43; Smurfs 50; Eddington 39; Sinners 84; The Wedding Banquet 50; Final Destination Bloodlines 69; The Monkey 49; The Conjuring: Last Rites 5"
+    },
+    {
+     "url": "https://deadline.com/2025/07/box-office-superman-i-know-what-you-did-smurfs-1236462233/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 59; Beetlejuice Beetlejuice 68; The Front Room 34; IF 64; Challengers 59; Unsung Hero 90; Boy Kills World 50; One of Them Days 63; Wolf Man 34; Despicable Me 4 63; Sound of Hope: The Story of Possum Trot 87; Lilo & Stitch 81; Mission: Impossible - The Final Reckoning 79; F1 78; M3GAN 2.0 62; Superman 74; I Know What You Did Last Summer 43; Smurfs 50; Eddington 39; Sinners 84; The Wedding Banquet 50; Final Destination Bloodlines 69; The Monkey 49; The Conjuring: Last Rites 5"
+    },
+    {
+     "url": "https://deadline.com/2025/04/box-office-sinners-a-minecraft-movie-1236371775/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 59; Beetlejuice Beetlejuice 68; The Front Room 34; IF 64; Challengers 59; Unsung Hero 90; Boy Kills World 50; One of Them Days 63; Wolf Man 34; Despicable Me 4 63; Sound of Hope: The Story of Possum Trot 87; Lilo & Stitch 81; Mission: Impossible - The Final Reckoning 79; F1 78; M3GAN 2.0 62; Superman 74; I Know What You Did Last Summer 43; Smurfs 50; Eddington 39; Sinners 84; The Wedding Banquet 50; Final Destination Bloodlines 69; The Monkey 49; The Conjuring: Last Rites 5"
+    },
+    {
+     "url": "https://deadline.com/2025/05/box-office-final-destination-bloodlines-1236400414/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 59; Beetlejuice Beetlejuice 68; The Front Room 34; IF 64; Challengers 59; Unsung Hero 90; Boy Kills World 50; One of Them Days 63; Wolf Man 34; Despicable Me 4 63; Sound of Hope: The Story of Possum Trot 87; Lilo & Stitch 81; Mission: Impossible - The Final Reckoning 79; F1 78; M3GAN 2.0 62; Superman 74; I Know What You Did Last Summer 43; Smurfs 50; Eddington 39; Sinners 84; The Wedding Banquet 50; Final Destination Bloodlines 69; The Monkey 49; The Conjuring: Last Rites 5"
+    },
+    {
+     "url": "https://deadline.com/2025/02/box-office-the-monkey-captain-america-1236297207/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 59; Beetlejuice Beetlejuice 68; The Front Room 34; IF 64; Challengers 59; Unsung Hero 90; Boy Kills World 50; One of Them Days 63; Wolf Man 34; Despicable Me 4 63; Sound of Hope: The Story of Possum Trot 87; Lilo & Stitch 81; Mission: Impossible - The Final Reckoning 79; F1 78; M3GAN 2.0 62; Superman 74; I Know What You Did Last Summer 43; Smurfs 50; Eddington 39; Sinners 84; The Wedding Banquet 50; Final Destination Bloodlines 69; The Monkey 49; The Conjuring: Last Rites 5"
+    },
+    {
+     "url": "https://deadline.com/2025/09/box-office-conjuring-the-last-rites-1236508461/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 59; Beetlejuice Beetlejuice 68; The Front Room 34; IF 64; Challengers 59; Unsung Hero 90; Boy Kills World 50; One of Them Days 63; Wolf Man 34; Despicable Me 4 63; Sound of Hope: The Story of Possum Trot 87; Lilo & Stitch 81; Mission: Impossible - The Final Reckoning 79; F1 78; M3GAN 2.0 62; Superman 74; I Know What You Did Last Summer 43; Smurfs 50; Eddington 39; Sinners 84; The Wedding Banquet 50; Final Destination Bloodlines 69; The Monkey 49; The Conjuring: Last Rites 5"
+    },
+    {
+     "url": "https://deadline.com/2026/05/box-office-obsession-1236914476/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 59; Beetlejuice Beetlejuice 68; The Front Room 34; IF 64; Challengers 59; Unsung Hero 90; Boy Kills World 50; One of Them Days 63; Wolf Man 34; Despicable Me 4 63; Sound of Hope: The Story of Possum Trot 87; Lilo & Stitch 81; Mission: Impossible - The Final Reckoning 79; F1 78; M3GAN 2.0 62; Superman 74; I Know What You Did Last Summer 43; Smurfs 50; Eddington 39; Sinners 84; The Wedding Banquet 50; Final Destination Bloodlines 69; The Monkey 49; The Conjuring: Last Rites 5"
+    },
+    {
+     "url": "https://deadline.com/2024/03/box-office-dune-part-two-1235842667/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 59; Beetlejuice Beetlejuice 68; The Front Room 34; IF 64; Challengers 59; Unsung Hero 90; Boy Kills World 50; One of Them Days 63; Wolf Man 34; Despicable Me 4 63; Sound of Hope: The Story of Possum Trot 87; Lilo & Stitch 81; Mission: Impossible - The Final Reckoning 79; F1 78; M3GAN 2.0 62; Superman 74; I Know What You Did Last Summer 43; Smurfs 50; Eddington 39; Sinners 84; The Wedding Banquet 50; Final Destination Bloodlines 69; The Monkey 49; The Conjuring: Last Rites 5"
+    },
+    {
+     "url": "https://deadline.com/2024/11/box-office-wicked-gladiator-ii-1236184897/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 59; Beetlejuice Beetlejuice 68; The Front Room 34; IF 64; Challengers 59; Unsung Hero 90; Boy Kills World 50; One of Them Days 63; Wolf Man 34; Despicable Me 4 63; Sound of Hope: The Story of Possum Trot 87; Lilo & Stitch 81; Mission: Impossible - The Final Reckoning 79; F1 78; M3GAN 2.0 62; Superman 74; I Know What You Did Last Summer 43; Smurfs 50; Eddington 39; Sinners 84; The Wedding Banquet 50; Final Destination Bloodlines 69; The Monkey 49; The Conjuring: Last Rites 5"
+    },
+    {
+     "url": "https://deadline.com/2023/10/box-office-taylor-swift-eras-tour-concert-film-opening-1235572671/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 59; Beetlejuice Beetlejuice 68; The Front Room 34; IF 64; Challengers 59; Unsung Hero 90; Boy Kills World 50; One of Them Days 63; Wolf Man 34; Despicable Me 4 63; Sound of Hope: The Story of Possum Trot 87; Lilo & Stitch 81; Mission: Impossible - The Final Reckoning 79; F1 78; M3GAN 2.0 62; Superman 74; I Know What You Did Last Summer 43; Smurfs 50; Eddington 39; Sinners 84; The Wedding Banquet 50; Final Destination Bloodlines 69; The Monkey 49; The Conjuring: Last Rites 5"
+    },
+    {
+     "url": "https://deadline.com/2023/12/box-office-renaissance-a-film-by-beyonce-godzilla-minus-one-hunger-games-1235647651/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 59; Beetlejuice Beetlejuice 68; The Front Room 34; IF 64; Challengers 59; Unsung Hero 90; Boy Kills World 50; One of Them Days 63; Wolf Man 34; Despicable Me 4 63; Sound of Hope: The Story of Possum Trot 87; Lilo & Stitch 81; Mission: Impossible - The Final Reckoning 79; F1 78; M3GAN 2.0 62; Superman 74; I Know What You Did Last Summer 43; Smurfs 50; Eddington 39; Sinners 84; The Wedding Banquet 50; Final Destination Bloodlines 69; The Monkey 49; The Conjuring: Last Rites 5"
+    },
+    {
+     "url": "https://deadline.com/2025/08/box-office-fantastic-four-bad-guys-2-naked-gun-1236476381/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 59; Beetlejuice Beetlejuice 68; The Front Room 34; IF 64; Challengers 59; Unsung Hero 90; Boy Kills World 50; One of Them Days 63; Wolf Man 34; Despicable Me 4 63; Sound of Hope: The Story of Possum Trot 87; Lilo & Stitch 81; Mission: Impossible - The Final Reckoning 79; F1 78; M3GAN 2.0 62; Superman 74; I Know What You Did Last Summer 43; Smurfs 50; Eddington 39; Sinners 84; The Wedding Banquet 50; Final Destination Bloodlines 69; The Monkey 49; The Conjuring: Last Rites 5"
+    },
+    {
+     "url": "https://entertainmentindustryreporter.com/novocaine-leading-lowest-weekend-of-2025/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 59; Beetlejuice Beetlejuice 68; The Front Room 34; IF 64; Challengers 59; Unsung Hero 90; Boy Kills World 50; One of Them Days 63; Wolf Man 34; Despicable Me 4 63; Sound of Hope: The Story of Possum Trot 87; Lilo & Stitch 81; Mission: Impossible - The Final Reckoning 79; F1 78; M3GAN 2.0 62; Superman 74; I Know What You Did Last Summer 43; Smurfs 50; Eddington 39; Sinners 84; The Wedding Banquet 50; Final Destination Bloodlines 69; The Monkey 49; The Conjuring: Last Rites 5"
+    },
+    {
+     "url": "https://en.wikipedia.org/wiki/Conclave_(film)",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 59; Beetlejuice Beetlejuice 68; The Front Room 34; IF 64; Challengers 59; Unsung Hero 90; Boy Kills World 50; One of Them Days 63; Wolf Man 34; Despicable Me 4 63; Sound of Hope: The Story of Possum Trot 87; Lilo & Stitch 81; Mission: Impossible - The Final Reckoning 79; F1 78; M3GAN 2.0 62; Superman 74; I Know What You Did Last Summer 43; Smurfs 50; Eddington 39; Sinners 84; The Wedding Banquet 50; Final Destination Bloodlines 69; The Monkey 49; The Conjuring: Last Rites 5"
+    },
+    {
+     "url": "https://en.wikipedia.org/wiki/Anyone_But_You",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 59; Beetlejuice Beetlejuice 68; The Front Room 34; IF 64; Challengers 59; Unsung Hero 90; Boy Kills World 50; One of Them Days 63; Wolf Man 34; Despicable Me 4 63; Sound of Hope: The Story of Possum Trot 87; Lilo & Stitch 81; Mission: Impossible - The Final Reckoning 79; F1 78; M3GAN 2.0 62; Superman 74; I Know What You Did Last Summer 43; Smurfs 50; Eddington 39; Sinners 84; The Wedding Banquet 50; Final Destination Bloodlines 69; The Monkey 49; The Conjuring: Last Rites 5"
+    },
+    {
+     "url": "https://en.wikipedia.org/wiki/Eternity_(2025_film)",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 59; Beetlejuice Beetlejuice 68; The Front Room 34; IF 64; Challengers 59; Unsung Hero 90; Boy Kills World 50; One of Them Days 63; Wolf Man 34; Despicable Me 4 63; Sound of Hope: The Story of Possum Trot 87; Lilo & Stitch 81; Mission: Impossible - The Final Reckoning 79; F1 78; M3GAN 2.0 62; Superman 74; I Know What You Did Last Summer 43; Smurfs 50; Eddington 39; Sinners 84; The Wedding Banquet 50; Final Destination Bloodlines 69; The Monkey 49; The Conjuring: Last Rites 5"
+    },
+    {
+     "url": "https://www.reddit.com/r/boxoffice/comments/1etzcnx/per_deadline_thursday_night_posttrak_scores_for/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 59; Beetlejuice Beetlejuice 68; The Front Room 34; IF 64; Challengers 59; Unsung Hero 90; Boy Kills World 50; One of Them Days 63; Wolf Man 34; Despicable Me 4 63; Sound of Hope: The Story of Possum Trot 87; Lilo & Stitch 81; Mission: Impossible - The Final Reckoning 79; F1 78; M3GAN 2.0 62; Superman 74; I Know What You Did Last Summer 43; Smurfs 50; Eddington 39; Sinners 84; The Wedding Banquet 50; Final Destination Bloodlines 69; The Monkey 49; The Conjuring: Last Rites 5"
+    },
+    {
+     "url": "https://www.reddit.com/r/boxoffice/comments/1ecrc5k/per_deadline_thursday_night_posttrak_scores_for/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 59; Beetlejuice Beetlejuice 68; The Front Room 34; IF 64; Challengers 59; Unsung Hero 90; Boy Kills World 50; One of Them Days 63; Wolf Man 34; Despicable Me 4 63; Sound of Hope: The Story of Possum Trot 87; Lilo & Stitch 81; Mission: Impossible - The Final Reckoning 79; F1 78; M3GAN 2.0 62; Superman 74; I Know What You Did Last Summer 43; Smurfs 50; Eddington 39; Sinners 84; The Wedding Banquet 50; Final Destination Bloodlines 69; The Monkey 49; The Conjuring: Last Rites 5"
+    },
+    {
+     "url": "https://www.reddit.com/r/boxoffice/comments/121oy1a/posttrak_scores_for_john_wick_chapter_4_are_93/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 59; Beetlejuice Beetlejuice 68; The Front Room 34; IF 64; Challengers 59; Unsung Hero 90; Boy Kills World 50; One of Them Days 63; Wolf Man 34; Despicable Me 4 63; Sound of Hope: The Story of Possum Trot 87; Lilo & Stitch 81; Mission: Impossible - The Final Reckoning 79; F1 78; M3GAN 2.0 62; Superman 74; I Know What You Did Last Summer 43; Smurfs 50; Eddington 39; Sinners 84; The Wedding Banquet 50; Final Destination Bloodlines 69; The Monkey 49; The Conjuring: Last Rites 5"
+    },
+    {
+     "url": "https://www.reddit.com/r/boxoffice/comments/11ovzcr/posttrak_scores_for_scream_vi_are_87_positive74/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 59; Beetlejuice Beetlejuice 68; The Front Room 34; IF 64; Challengers 59; Unsung Hero 90; Boy Kills World 50; One of Them Days 63; Wolf Man 34; Despicable Me 4 63; Sound of Hope: The Story of Possum Trot 87; Lilo & Stitch 81; Mission: Impossible - The Final Reckoning 79; F1 78; M3GAN 2.0 62; Superman 74; I Know What You Did Last Summer 43; Smurfs 50; Eddington 39; Sinners 84; The Wedding Banquet 50; Final Destination Bloodlines 69; The Monkey 49; The Conjuring: Last Rites 5"
+    },
+    {
+     "url": "https://www.reddit.com/r/boxoffice/comments/1hmsvyc/per_deadline_posttrak_scores_for_a_complete/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 59; Beetlejuice Beetlejuice 68; The Front Room 34; IF 64; Challengers 59; Unsung Hero 90; Boy Kills World 50; One of Them Days 63; Wolf Man 34; Despicable Me 4 63; Sound of Hope: The Story of Possum Trot 87; Lilo & Stitch 81; Mission: Impossible - The Final Reckoning 79; F1 78; M3GAN 2.0 62; Superman 74; I Know What You Did Last Summer 43; Smurfs 50; Eddington 39; Sinners 84; The Wedding Banquet 50; Final Destination Bloodlines 69; The Monkey 49; The Conjuring: Last Rites 5"
+    },
+    {
+     "url": "https://www.reddit.com/r/boxoffice/comments/1ml5hlx/per_deadline_thursday_posttrak_scores_for_weapons/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 59; Beetlejuice Beetlejuice 68; The Front Room 34; IF 64; Challengers 59; Unsung Hero 90; Boy Kills World 50; One of Them Days 63; Wolf Man 34; Despicable Me 4 63; Sound of Hope: The Story of Possum Trot 87; Lilo & Stitch 81; Mission: Impossible - The Final Reckoning 79; F1 78; M3GAN 2.0 62; Superman 74; I Know What You Did Last Summer 43; Smurfs 50; Eddington 39; Sinners 84; The Wedding Banquet 50; Final Destination Bloodlines 69; The Monkey 49; The Conjuring: Last Rites 5"
+    },
+    {
+     "url": "https://forums.boxofficetheory.com/topic/33589-august-8-to-10-weekend-thread-weapons-425-freaky-29-fantastic-four-drop-redacted/page/7/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 59; Beetlejuice Beetlejuice 68; The Front Room 34; IF 64; Challengers 59; Unsung Hero 90; Boy Kills World 50; One of Them Days 63; Wolf Man 34; Despicable Me 4 63; Sound of Hope: The Story of Possum Trot 87; Lilo & Stitch 81; Mission: Impossible - The Final Reckoning 79; F1 78; M3GAN 2.0 62; Superman 74; I Know What You Did Last Summer 43; Smurfs 50; Eddington 39; Sinners 84; The Wedding Banquet 50; Final Destination Bloodlines 69; The Monkey 49; The Conjuring: Last Rites 5"
+    }
+   ],
+   "populations": [
+    {
+     "context": "recruited_screening",
+     "basis": "published norm",
+     "value": 50.0
+    },
+    {
+     "context": "recruited_screening, 2006 era norm as relayed by the filmmaker",
+     "basis": "published norm",
+     "value": 45.0
+    },
+    {
+     "context": "marketing_screening",
+     "basis": "published norm",
+     "value": 53.0
+    },
+    {
+     "context": "exit_poll",
+     "basis": "published norm",
+     "value": 55.0
+    },
+    {
+     "context": "exit_poll (PostTrak); 55 is the hinge for legs",
+     "basis": "stated threshold",
+     "value": 55.0
+    },
+    {
+     "context": "exit_poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 59; Beetlejuice Beetlejuice 68; The Front Room 34; IF 64; Challengers 59; Unsung Hero 90; Boy Kills World 50; One of Them Days 63; Wolf Man 34; Despicable Me 4 63; Sound of Hope: The Story of Possum Trot 87; Lilo & Stitch 81; Mission: Impossible - The Final Reckoning 79; F1 78; M3GAN 2.0 62; Superman 74; I Know What You Did Last Summer 43; Smurfs 50; Eddington 39; Sinners 84; The Wedding Banquet 50; Final Destination Bloodlines 69; The Monkey 49; The Conjuring: Last Rites 58; Obsession 70; Dune: Part Two 80; Dune 66; Wicked 80; Gladiator II 64; Taylor Swift: The Eras Tour 89; Renaissance: A Film by Beyonce 90; Godzilla Minus One 83; The Naked Gun 73; Black Bag 51; Novocaine 59; Conclave 62; Anyone But You 57; Eternity 54; Alien: Romulus 65; Deadpool & Wolverine 85; John Wick: Chapter 4 82; Scream VI 74; Scream 59; A Complete Unknown 76; Weapons 65; 28 Years Later 54",
+     "basis": "averaged from published reads",
+     "value": 65.8
+    }
+   ]
+  },
+  {
+   "format": "feature",
+   "genre": "all",
+   "metric": "lead_character",
+   "value": 50.0,
+   "range": null,
+   "n_hint": null,
+   "basis": "published norm",
+   "as_of": "2014-05",
+   "context": "recruited_screening",
+   "sources": [
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/INTERVIEW/Screening%20%233%20and%20%234%20%285-13-14%29/5.13%20The%20Interview%20Report%20%28730pm%29%20-%20FINAL.pdf",
+     "note": "[recruited screening / Screen Engine and Nielsen NRG agree] Lead characters 'rated way above average (the industry benchmark is 50%)'; table prints 50% benchmark for Dave Skylark / James Franco."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/WEDDING%20RINGER/Screening%20%232%20%285-15-14%29/5.15%20The%20Wedding%20Ringer%20Report%20-%20FINAL.pdf",
+     "note": "[recruited screening / Screen Engine and Nielsen NRG agree] '86% excellent, compared with an industry norm of 50% for lead characters' (Jimmy / Kevin Hart)."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/EQUALIZER/Screening%20%231%20%2812.16.13%29/THE%20EQUALIZER%20RA1%2012-16-13%20report.doc",
+     "note": "[recruited screening / Screen Engine and Nielsen NRG agree] NRG 5-year all movies performance norms column: lead (Robert McCall / Denzel Washington) norm 50; support roles 40."
+    }
+   ]
+  },
+  {
+   "format": "feature",
+   "genre": "all",
+   "metric": "secondary_character",
+   "value": 45.0,
+   "range": null,
+   "n_hint": null,
+   "basis": "published norm",
+   "as_of": "2014-05",
+   "context": "recruited_screening",
+   "sources": [
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/INTERVIEW/Screening%20%233%20and%20%234%20%285-13-14%29/5.13%20The%20Interview%20Report%20%28730pm%29%20-%20FINAL.pdf",
+     "note": "[recruited screening / Screen Engine] 'Kim Jung Un (Randall Park) ... compared with a norm of 45% for secondary leads'; table benchmark 45%."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/INTERVIEW/Screening%20%231%20%284-2-14%29/4.2%20The%20Interview%20Report%20-%20FINAL.PDF",
+     "note": "[recruited screening / Screen Engine] 'rated solidly above average at 71% excellent, compared with a norm of 45% for secondary leads'."
+    }
+   ]
+  },
+  {
+   "format": "feature",
+   "genre": "all",
+   "metric": "supporting_character",
+   "value": 40.0,
+   "range": null,
+   "n_hint": null,
+   "basis": "published norm",
+   "as_of": "2014-05",
+   "context": "recruited_screening",
+   "sources": [
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/INTERVIEW/Screening%20%233%20and%20%234%20%285-13-14%29/5.13%20The%20Interview%20Report%20%28730pm%29%20-%20FINAL.pdf",
+     "note": "[recruited screening / Screen Engine and Nielsen NRG agree] 'above the supporting character norm of 40%'; table benchmark 40% for Sook / Diana Bang."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/WEDDING%20RINGER/Screening%20%232%20%285-15-14%29/5.15%20The%20Wedding%20Ringer%20Report%20-%20FINAL.pdf",
+     "note": "[recruited screening / Screen Engine and Nielsen NRG agree] 'above the norm of 40% for supporting characters' (Edmundo, Ed Palmer, Alison Palmer)."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/EQUALIZER/Screening%20%231%20%2812.16.13%29/THE%20EQUALIZER%20RA1%2012-16-13%20report.doc",
+     "note": "[recruited screening / Screen Engine and Nielsen NRG agree] NRG performance norms: Teddy / Marton Csokas and Teri / Chloe Grace Moretz support role norm 40."
+    }
+   ]
+  },
+  {
+   "format": "feature",
+   "genre": "all",
+   "metric": "component_humor",
+   "value": 40.0,
+   "range": null,
+   "n_hint": null,
+   "basis": "published norm",
+   "as_of": "2014-05",
+   "context": "recruited_screening",
+   "sources": [
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/INTERVIEW/Screening%20%233%20and%20%234%20%285-13-14%29/5.13%20The%20Interview%20Report%20%28730pm%29%20-%20FINAL.pdf",
+     "note": "[recruited screening / Screen Engine] Components table: The humor benchmark 40%; text 'compared with a benchmark of 40%'."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/WEDDING%20RINGER/Screening%20%232%20%285-15-14%29/5.15%20The%20Wedding%20Ringer%20Report%20-%20FINAL.pdf",
+     "note": "[recruited screening / Screen Engine] '82% rating it excellent, more than double the industry norm of 40%' (The Humor)."
+    }
+   ]
+  },
+  {
+   "format": "feature",
+   "genre": "all",
+   "metric": "component_story",
+   "value": 35.0,
+   "range": [
+    30.0,
+    40.0
+   ],
+   "n_hint": null,
+   "basis": "published norm",
+   "as_of": "2014-05",
+   "context": "recruited_screening",
+   "sources": [
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/WEDDING%20RINGER/Screening%20%232%20%285-15-14%29/5.15%20The%20Wedding%20Ringer%20Report%20-%20FINAL.pdf",
+     "note": "[recruited screening / Screen Engine 30 vs Nielsen NRG 40; value is the midpoint] Screen Engine: 'The Story: ... well above average ratings (norm is 30%)'; Interview 5.13 table also prints story benchmark 30%."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/INTERVIEW/Screening%20%233%20and%20%234%20%285-13-14%29/5.13%20The%20Interview%20Report%20%28730pm%29%20-%20FINAL.pdf",
+     "note": "[recruited screening / Screen Engine 30 vs Nielsen NRG 40; value is the midpoint] Components table: The story benchmark 30%."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/EQUALIZER/Screening%20%231%20%2812.16.13%29/THE%20EQUALIZER%20RA1%2012-16-13%20report.doc",
+     "note": "[recruited screening / Screen Engine 30 vs Nielsen NRG 40; value is the midpoint] Nielsen NRG 5-year all movies element norms: Story 40."
+    }
+   ]
+  },
+  {
+   "format": "feature",
+   "genre": "all",
+   "metric": "component_beginning",
+   "value": 32.5,
+   "range": [
+    30.0,
+    35.0
+   ],
+   "n_hint": null,
+   "basis": "published norm",
+   "as_of": "2014-05",
+   "context": "recruited_screening",
+   "sources": [
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/INTERVIEW/Screening%20%233%20and%20%234%20%285-13-14%29/5.13%20The%20Interview%20Report%20%28730pm%29%20-%20FINAL.pdf",
+     "note": "[recruited screening / Screen Engine 30 vs Nielsen NRG 35; value is the midpoint] Components table: The beginning benchmark 30%; 4.17 report: 'twice the industry benchmark of 30%'."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/WEDDING%20RINGER/Screening%20%232%20%285-15-14%29/5.15%20The%20Wedding%20Ringer%20Report%20-%20FINAL.pdf",
+     "note": "[recruited screening / Screen Engine 30 vs Nielsen NRG 35; value is the midpoint] 'The Beginning ... compared with a norm of 30%'."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/EQUALIZER/Screening%20%231%20%2812.16.13%29/THE%20EQUALIZER%20RA1%2012-16-13%20report.doc",
+     "note": "[recruited screening / Screen Engine 30 vs Nielsen NRG 35; value is the midpoint] Nielsen NRG element norms: Beginning 35."
+    }
+   ]
+  },
+  {
+   "format": "feature",
+   "genre": "all",
+   "metric": "component_ending",
+   "value": 37.5,
+   "range": [
+    35.0,
+    40.0
+   ],
+   "n_hint": null,
+   "basis": "published norm",
+   "as_of": "2014-05",
+   "context": "recruited_screening",
+   "sources": [
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/INTERVIEW/Screening%20%233%20and%20%234%20%285-13-14%29/5.13%20The%20Interview%20Report%20%28730pm%29%20-%20FINAL.pdf",
+     "note": "[recruited screening / Screen Engine 35 vs Nielsen NRG 40; value is the midpoint] Components table: The ending benchmark 35%; 4.2 report notes the ending norm is slightly higher than the beginning norm."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/WEDDING%20RINGER/Screening%20%232%20%285-15-14%29/5.15%20The%20Wedding%20Ringer%20Report%20-%20FINAL.pdf",
+     "note": "[recruited screening / Screen Engine 35 vs Nielsen NRG 40; value is the midpoint] 'The Ending ... 72% vs. norm of 35%'."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/EQUALIZER/Screening%20%231%20%2812.16.13%29/THE%20EQUALIZER%20RA1%2012-16-13%20report.doc",
+     "note": "[recruited screening / Screen Engine 35 vs Nielsen NRG 40; value is the midpoint] Nielsen NRG element norms: Ending 40."
+    }
+   ]
+  },
+  {
+   "format": "feature",
+   "genre": "all",
+   "metric": "component_music",
+   "value": 35.0,
+   "range": [
+    30.0,
+    40.0
+   ],
+   "n_hint": null,
+   "basis": "published norm",
+   "as_of": "2014-05",
+   "context": "recruited_screening",
+   "sources": [
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/WEDDING%20RINGER/Screening%20%232%20%285-15-14%29/5.15%20The%20Wedding%20Ringer%20Report%20-%20FINAL.pdf",
+     "note": "[recruited screening / Screen Engine 30 vs Nielsen NRG 40; value is the midpoint] 'The Music/Soundtrack: ... 56% excellent, also compared with a norm of 30%'."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/EQUALIZER/Screening%20%231%20%2812.16.13%29/THE%20EQUALIZER%20RA1%2012-16-13%20report.doc",
+     "note": "[recruited screening / Screen Engine 30 vs Nielsen NRG 40; value is the midpoint] Nielsen NRG music rating table: NRG Norms Excellent 40 ('12 points above the norm' for a 52% score)."
+    }
+   ]
+  },
+  {
+   "format": "feature",
+   "genre": "all",
+   "metric": "component_action",
+   "value": 45.0,
+   "range": null,
+   "n_hint": null,
+   "basis": "published norm",
+   "as_of": "2013-12",
+   "context": "recruited_screening",
+   "sources": [
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/EQUALIZER/Screening%20%231%20%2812.16.13%29/THE%20EQUALIZER%20RA1%2012-16-13%20report.doc",
+     "note": "[recruited screening / Nielsen NRG] Nielsen NRG 5-year all movies element norms: Action 45 ('nearly doubled its norm' at 83% excellent)."
+    }
+   ]
+  },
+  {
+   "format": "feature",
+   "genre": "all",
+   "metric": "component_suspense",
+   "value": 30.0,
+   "range": null,
+   "n_hint": null,
+   "basis": "published norm",
+   "as_of": "2014-05",
+   "context": "recruited_screening",
+   "sources": [
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/INTERVIEW/Screening%20%233%20and%20%234%20%285-13-14%29/5.13%20The%20Interview%20Report%20%28730pm%29%20-%20FINAL.pdf",
+     "note": "[recruited screening / Screen Engine] 'suspense was excellent ... quite a bit above the industry norm of 30%'; components table suspense benchmark 30%."
+    }
+   ]
+  },
+  {
+   "format": "feature",
+   "genre": "comedy",
+   "metric": "excellent",
+   "value": 48.0,
+   "range": null,
+   "n_hint": null,
+   "basis": "published norm",
+   "as_of": "2014-05",
+   "context": "recruited_screening; blockbuster comedy benchmark",
+   "sources": [
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/INTERVIEW/Screening%20%233%20and%20%234%20%285-13-14%29/5.13%20The%20Interview%20Report%20%28730pm%29%20-%20FINAL.pdf",
+     "note": "[recruited screening; blockbuster comedy benchmark / Screen Engine] Blockbuster Comedy Benchmarks column: Excellent 48%, Very Good 34%, Total Positive 82%, Yes definitely recommend 71%. Caveat: this is Screen Engine's 'blockbuster comedy' benchmark (a high bar), not an all-comedy norm."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/INTERVIEW/Screening%20%231%20%284-2-14%29/4.2%20The%20Interview%20Report%20-%20FINAL.PDF",
+     "note": "[recruited screening; blockbuster comedy benchmark / Screen Engine] 'industry norm of 30% and a Blockbuster Comedy benchmark of 48% ... general audience norm of 65% and a Blockbuster Comedy benchmark of 82%'; 'general audience norm of 50%, and a Blockbuster Comedy benchmark of 71%'."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/INTERVIEW/Screening%20%232%20%284-17-14%29/4.17%20The%20Interview%20Report%20-%20FINAL.pdf",
+     "note": "[recruited screening; blockbuster comedy benchmark / Screen Engine] Same benchmarks repeated: 48 / 82 / 71."
+    }
+   ]
+  },
+  {
+   "format": "feature",
+   "genre": "comedy",
+   "metric": "total_positive",
+   "value": 82.0,
+   "range": [
+    81.0,
+    84.0
+   ],
+   "n_hint": null,
+   "basis": "published norm",
+   "as_of": "2014-05",
+   "context": "recruited_screening; blockbuster comedy benchmark",
+   "sources": [
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/INTERVIEW/Screening%20%233%20and%20%234%20%285-13-14%29/5.13%20The%20Interview%20Report%20%28730pm%29%20-%20FINAL.pdf",
+     "note": "[recruited screening; blockbuster comedy benchmark / Screen Engine] Blockbuster Comedy Benchmarks column: Excellent 48%, Very Good 34%, Total Positive 82%, Yes definitely recommend 71%. Caveat: this is Screen Engine's 'blockbuster comedy' benchmark (a high bar), not an all-comedy norm."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/INTERVIEW/Screening%20%231%20%284-2-14%29/4.2%20The%20Interview%20Report%20-%20FINAL.PDF",
+     "note": "[recruited screening; blockbuster comedy benchmark / Screen Engine] 'industry norm of 30% and a Blockbuster Comedy benchmark of 48% ... general audience norm of 65% and a Blockbuster Comedy benchmark of 82%'; 'general audience norm of 50%, and a Blockbuster Comedy benchmark of 71%'."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/INTERVIEW/Screening%20%232%20%284-17-14%29/4.17%20The%20Interview%20Report%20-%20FINAL.pdf",
+     "note": "[recruited screening; blockbuster comedy benchmark / Screen Engine] Same benchmarks repeated: 48 / 82 / 71."
+    },
+    {
+     "url": "https://web.archive.org/web/20240907200813/https:/deadline.com/2024/09/box-office-beetlejuice-beetlejuice-1236079763/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Beetlejuice Beetlejuice 81; One of Them Days 84: value 82.5] Beetlejuice Beetlejuice (2024, comedy): total_positive 81%"
+    },
+    {
+     "url": "https://deadline.com/2025/01/box-office-wolf-man-one-of-them-days-1236259743/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Beetlejuice Beetlejuice 81; One of Them Days 84: value 82.5] One of Them Days (2025, comedy): total_positive 84%"
+    }
+   ],
+   "populations": [
+    {
+     "context": "recruited_screening; blockbuster comedy benchmark",
+     "basis": "published norm",
+     "value": 82.0
+    },
+    {
+     "context": "exit_poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Beetlejuice Beetlejuice 81; One of Them Days 84",
+     "basis": "averaged from published reads",
+     "value": 82.5
+    }
+   ]
+  },
+  {
+   "format": "feature",
+   "genre": "comedy",
+   "metric": "definitely_recommend",
+   "value": 71.0,
+   "range": [
+    39.0,
+    73.0
+   ],
+   "n_hint": null,
+   "basis": "published norm",
+   "as_of": "2014-05",
+   "context": "recruited_screening; blockbuster comedy benchmark",
+   "sources": [
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/INTERVIEW/Screening%20%233%20and%20%234%20%285-13-14%29/5.13%20The%20Interview%20Report%20%28730pm%29%20-%20FINAL.pdf",
+     "note": "[recruited screening; blockbuster comedy benchmark / Screen Engine] Blockbuster Comedy Benchmarks column: Excellent 48%, Very Good 34%, Total Positive 82%, Yes definitely recommend 71%. Caveat: this is Screen Engine's 'blockbuster comedy' benchmark (a high bar), not an all-comedy norm."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/INTERVIEW/Screening%20%231%20%284-2-14%29/4.2%20The%20Interview%20Report%20-%20FINAL.PDF",
+     "note": "[recruited screening; blockbuster comedy benchmark / Screen Engine] 'industry norm of 30% and a Blockbuster Comedy benchmark of 48% ... general audience norm of 65% and a Blockbuster Comedy benchmark of 82%'; 'general audience norm of 50%, and a Blockbuster Comedy benchmark of 71%'."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/INTERVIEW/Screening%20%232%20%284-17-14%29/4.17%20The%20Interview%20Report%20-%20FINAL.pdf",
+     "note": "[recruited screening; blockbuster comedy benchmark / Screen Engine] Same benchmarks repeated: 48 / 82 / 71."
+    },
+    {
+     "url": "https://web.archive.org/web/20240907200813/https:/deadline.com/2024/09/box-office-beetlejuice-beetlejuice-1236079763/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Beetlejuice Beetlejuice 68; One of Them Days 63; Eddington 39; The Naked Gun 73: value 60.8] Beetlejuice Beetlejuice (2024, comedy): definite_recommend 68%"
+    },
+    {
+     "url": "https://deadline.com/2025/01/box-office-wolf-man-one-of-them-days-1236259743/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Beetlejuice Beetlejuice 68; One of Them Days 63; Eddington 39; The Naked Gun 73: value 60.8] One of Them Days (2025, comedy): definite_recommend 63%"
+    },
+    {
+     "url": "https://deadline.com/2025/07/box-office-superman-i-know-what-you-did-smurfs-1236462233/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Beetlejuice Beetlejuice 68; One of Them Days 63; Eddington 39; The Naked Gun 73: value 60.8] Eddington (2025, comedy): definite_recommend 39%"
+    },
+    {
+     "url": "https://deadline.com/2025/08/box-office-fantastic-four-bad-guys-2-naked-gun-1236476381/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Beetlejuice Beetlejuice 68; One of Them Days 63; Eddington 39; The Naked Gun 73: value 60.8] The Naked Gun (2025, comedy): definite_recommend 73%"
+    }
+   ],
+   "populations": [
+    {
+     "context": "recruited_screening; blockbuster comedy benchmark",
+     "basis": "published norm",
+     "value": 71.0
+    },
+    {
+     "context": "exit_poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Beetlejuice Beetlejuice 68; One of Them Days 63; Eddington 39; The Naked Gun 73",
+     "basis": "averaged from published reads",
+     "value": 60.8
+    }
+   ]
+  },
+  {
+   "format": "feature",
+   "genre": "drama",
+   "metric": "total_positive",
+   "value": 93.2,
+   "range": [
+    90.0,
+    96.0
+   ],
+   "n_hint": 4,
+   "basis": "averaged from published reads",
+   "as_of": "2026-10",
+   "context": "exit_poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Unsung Hero 96; Sound of Hope: The Story of Possum Trot 94; Wicked 90; A Complete Unknown 93",
+   "sources": [
+    {
+     "url": "https://deadline.com/2024/04/box-office-challengers-zendaya-1235896116/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Unsung Hero 96; Sound of Hope: The Story of Possum Trot 94; Wicked 90; A Complete Unknown 93] Unsung Hero (2024, drama): total_positive 96%"
+    },
+    {
+     "url": "https://deadline.com/2024/07/box-office-despicable-me-4-1236001250/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Unsung Hero 96; Sound of Hope: The Story of Possum Trot 94; Wicked 90; A Complete Unknown 93] Sound of Hope: The Story of Possum Trot (2024, drama): total_positive 94%"
+    },
+    {
+     "url": "https://deadline.com/2024/11/box-office-wicked-gladiator-ii-1236184897/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Unsung Hero 96; Sound of Hope: The Story of Possum Trot 94; Wicked 90; A Complete Unknown 93] Wicked (2024, drama): total_positive 90%"
+    },
+    {
+     "url": "https://www.reddit.com/r/boxoffice/comments/1hmsvyc/per_deadline_posttrak_scores_for_a_complete/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Unsung Hero 96; Sound of Hope: The Story of Possum Trot 94; Wicked 90; A Complete Unknown 93] A Complete Unknown (2024, drama): total_positive 93% [secondary]"
+    }
+   ]
+  },
+  {
+   "format": "feature",
+   "genre": "drama",
+   "metric": "definitely_recommend",
+   "value": 83.2,
+   "range": [
+    76.0,
+    90.0
+   ],
+   "n_hint": 4,
+   "basis": "averaged from published reads",
+   "as_of": "2026-10",
+   "context": "exit_poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Unsung Hero 90; Sound of Hope: The Story of Possum Trot 87; Wicked 80; A Complete Unknown 76",
+   "sources": [
+    {
+     "url": "https://deadline.com/2024/04/box-office-challengers-zendaya-1235896116/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Unsung Hero 90; Sound of Hope: The Story of Possum Trot 87; Wicked 80; A Complete Unknown 76] Unsung Hero (2024, drama): definite_recommend 90%"
+    },
+    {
+     "url": "https://deadline.com/2024/07/box-office-despicable-me-4-1236001250/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Unsung Hero 90; Sound of Hope: The Story of Possum Trot 87; Wicked 80; A Complete Unknown 76] Sound of Hope: The Story of Possum Trot (2024, drama): definite_recommend 87%"
+    },
+    {
+     "url": "https://deadline.com/2024/11/box-office-wicked-gladiator-ii-1236184897/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Unsung Hero 90; Sound of Hope: The Story of Possum Trot 87; Wicked 80; A Complete Unknown 76] Wicked (2024, drama): definite_recommend 80%"
+    },
+    {
+     "url": "https://www.reddit.com/r/boxoffice/comments/1hmsvyc/per_deadline_posttrak_scores_for_a_complete/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Unsung Hero 90; Sound of Hope: The Story of Possum Trot 87; Wicked 80; A Complete Unknown 76] A Complete Unknown (2024, drama): definite_recommend 76% [secondary]"
+    }
+   ]
+  },
+  {
+   "format": "feature",
+   "genre": "action",
+   "metric": "total_positive",
+   "value": 87.6,
+   "range": [
+    71.0,
+    96.0
+   ],
+   "n_hint": 9,
+   "basis": "averaged from published reads",
+   "as_of": "2026-10",
+   "context": "exit_poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Boy Kills World 71; Mission: Impossible - The Final Reckoning 89; F1 92; Dune: Part Two 94; Dune 84; Gladiator II 77; Godzilla Minus One 92; Deadpool & Wolverine 96; John Wick: Chapter 4 93",
+   "sources": [
+    {
+     "url": "https://deadline.com/2024/04/box-office-challengers-zendaya-1235896116/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Boy Kills World 71; Mission: Impossible - The Final Reckoning 89; F1 92; Dune: Part Two 94; Dune 84; Gladiator II 77; Godzilla Minus One 92; Deadpool & Wolverine 96; John Wick: Chapter 4 93] Boy Kills World (2024, action): total_positive 71%"
+    },
+    {
+     "url": "https://deadline.com/2025/05/box-office-lilo-stitch-wild-mission-impossible-final-reckoning-1236409244/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Boy Kills World 71; Mission: Impossible - The Final Reckoning 89; F1 92; Dune: Part Two 94; Dune 84; Gladiator II 77; Godzilla Minus One 92; Deadpool & Wolverine 96; John Wick: Chapter 4 93] Mission: Impossible - The Final Reckoning (2025, action): total_positive 89%"
+    },
+    {
+     "url": "https://deadline.com/2025/06/box-office-f1-megan-2-0-1236444277/comment-page-6/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Boy Kills World 71; Mission: Impossible - The Final Reckoning 89; F1 92; Dune: Part Two 94; Dune 84; Gladiator II 77; Godzilla Minus One 92; Deadpool & Wolverine 96; John Wick: Chapter 4 93] F1 (2025, action): total_positive 92%"
+    },
+    {
+     "url": "https://deadline.com/2024/03/box-office-dune-part-two-1235842667/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Boy Kills World 71; Mission: Impossible - The Final Reckoning 89; F1 92; Dune: Part Two 94; Dune 84; Gladiator II 77; Godzilla Minus One 92; Deadpool & Wolverine 96; John Wick: Chapter 4 93] Dune: Part Two (2024, action): total_positive 94%"
+    },
+    {
+     "url": "https://deadline.com/2024/11/box-office-wicked-gladiator-ii-1236184897/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Boy Kills World 71; Mission: Impossible - The Final Reckoning 89; F1 92; Dune: Part Two 94; Dune 84; Gladiator II 77; Godzilla Minus One 92; Deadpool & Wolverine 96; John Wick: Chapter 4 93] Gladiator II (2024, action): total_positive 77%"
+    },
+    {
+     "url": "https://deadline.com/2023/12/box-office-renaissance-a-film-by-beyonce-godzilla-minus-one-hunger-games-1235647651/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Boy Kills World 71; Mission: Impossible - The Final Reckoning 89; F1 92; Dune: Part Two 94; Dune 84; Gladiator II 77; Godzilla Minus One 92; Deadpool & Wolverine 96; John Wick: Chapter 4 93] Godzilla Minus One (2023, action): total_positive 92%"
+    },
+    {
+     "url": "https://www.reddit.com/r/boxoffice/comments/1ecrc5k/per_deadline_thursday_night_posttrak_scores_for/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Boy Kills World 71; Mission: Impossible - The Final Reckoning 89; F1 92; Dune: Part Two 94; Dune 84; Gladiator II 77; Godzilla Minus One 92; Deadpool & Wolverine 96; John Wick: Chapter 4 93] Deadpool & Wolverine (2024, action): total_positive 96% [secondary]"
+    },
+    {
+     "url": "https://www.reddit.com/r/boxoffice/comments/121oy1a/posttrak_scores_for_john_wick_chapter_4_are_93/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Boy Kills World 71; Mission: Impossible - The Final Reckoning 89; F1 92; Dune: Part Two 94; Dune 84; Gladiator II 77; Godzilla Minus One 92; Deadpool & Wolverine 96; John Wick: Chapter 4 93] John Wick: Chapter 4 (2023, action): total_positive 93% [secondary]"
+    }
+   ]
+  },
+  {
+   "format": "feature",
+   "genre": "action",
+   "metric": "definitely_recommend",
+   "value": 72.7,
+   "range": [
+    50.0,
+    85.0
+   ],
+   "n_hint": 11,
+   "basis": "averaged from published reads",
+   "as_of": "2026-10",
+   "context": "exit_poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Boy Kills World 50; Mission: Impossible - The Final Reckoning 79; F1 78; Superman 74; Dune: Part Two 80; Dune 66; Gladiator II 64; Godzilla Minus One 83; Novocaine 59; Deadpool & Wolverine 85; John Wick: Chapter 4 82",
+   "sources": [
+    {
+     "url": "https://deadline.com/2024/04/box-office-challengers-zendaya-1235896116/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Boy Kills World 50; Mission: Impossible - The Final Reckoning 79; F1 78; Superman 74; Dune: Part Two 80; Dune 66; Gladiator II 64; Godzilla Minus One 83; Novocaine 59; Deadpool & Wolverine 85; John Wick: Chapter 4 82] Boy Kills World (2024, action): definite_recommend 50%"
+    },
+    {
+     "url": "https://deadline.com/2025/05/box-office-lilo-stitch-wild-mission-impossible-final-reckoning-1236409244/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Boy Kills World 50; Mission: Impossible - The Final Reckoning 79; F1 78; Superman 74; Dune: Part Two 80; Dune 66; Gladiator II 64; Godzilla Minus One 83; Novocaine 59; Deadpool & Wolverine 85; John Wick: Chapter 4 82] Mission: Impossible - The Final Reckoning (2025, action): definite_recommend 79%"
+    },
+    {
+     "url": "https://deadline.com/2025/06/box-office-f1-megan-2-0-1236444277/comment-page-6/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Boy Kills World 50; Mission: Impossible - The Final Reckoning 79; F1 78; Superman 74; Dune: Part Two 80; Dune 66; Gladiator II 64; Godzilla Minus One 83; Novocaine 59; Deadpool & Wolverine 85; John Wick: Chapter 4 82] F1 (2025, action): definite_recommend 78%"
+    },
+    {
+     "url": "https://deadline.com/2025/07/box-office-superman-i-know-what-you-did-smurfs-1236462233/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Boy Kills World 50; Mission: Impossible - The Final Reckoning 79; F1 78; Superman 74; Dune: Part Two 80; Dune 66; Gladiator II 64; Godzilla Minus One 83; Novocaine 59; Deadpool & Wolverine 85; John Wick: Chapter 4 82] Superman (2025, action): definite_recommend 74%"
+    },
+    {
+     "url": "https://deadline.com/2024/03/box-office-dune-part-two-1235842667/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Boy Kills World 50; Mission: Impossible - The Final Reckoning 79; F1 78; Superman 74; Dune: Part Two 80; Dune 66; Gladiator II 64; Godzilla Minus One 83; Novocaine 59; Deadpool & Wolverine 85; John Wick: Chapter 4 82] Dune: Part Two (2024, action): definite_recommend 80%"
+    },
+    {
+     "url": "https://deadline.com/2024/11/box-office-wicked-gladiator-ii-1236184897/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Boy Kills World 50; Mission: Impossible - The Final Reckoning 79; F1 78; Superman 74; Dune: Part Two 80; Dune 66; Gladiator II 64; Godzilla Minus One 83; Novocaine 59; Deadpool & Wolverine 85; John Wick: Chapter 4 82] Gladiator II (2024, action): definite_recommend 64%"
+    },
+    {
+     "url": "https://deadline.com/2023/12/box-office-renaissance-a-film-by-beyonce-godzilla-minus-one-hunger-games-1235647651/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Boy Kills World 50; Mission: Impossible - The Final Reckoning 79; F1 78; Superman 74; Dune: Part Two 80; Dune 66; Gladiator II 64; Godzilla Minus One 83; Novocaine 59; Deadpool & Wolverine 85; John Wick: Chapter 4 82] Godzilla Minus One (2023, action): definite_recommend 83%"
+    },
+    {
+     "url": "https://entertainmentindustryreporter.com/novocaine-leading-lowest-weekend-of-2025/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Boy Kills World 50; Mission: Impossible - The Final Reckoning 79; F1 78; Superman 74; Dune: Part Two 80; Dune 66; Gladiator II 64; Godzilla Minus One 83; Novocaine 59; Deadpool & Wolverine 85; John Wick: Chapter 4 82] Novocaine (2025, action): definite_recommend 59% [secondary]"
+    },
+    {
+     "url": "https://www.reddit.com/r/boxoffice/comments/1ecrc5k/per_deadline_thursday_night_posttrak_scores_for/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Boy Kills World 50; Mission: Impossible - The Final Reckoning 79; F1 78; Superman 74; Dune: Part Two 80; Dune 66; Gladiator II 64; Godzilla Minus One 83; Novocaine 59; Deadpool & Wolverine 85; John Wick: Chapter 4 82] Deadpool & Wolverine (2024, action): definite_recommend 85% [secondary]"
+    },
+    {
+     "url": "https://www.reddit.com/r/boxoffice/comments/121oy1a/posttrak_scores_for_john_wick_chapter_4_are_93/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Boy Kills World 50; Mission: Impossible - The Final Reckoning 79; F1 78; Superman 74; Dune: Part Two 80; Dune 66; Gladiator II 64; Godzilla Minus One 83; Novocaine 59; Deadpool & Wolverine 85; John Wick: Chapter 4 82] John Wick: Chapter 4 (2023, action): definite_recommend 82% [secondary]"
+    }
+   ]
+  },
+  {
+   "format": "feature",
+   "genre": "horror",
+   "metric": "total_positive",
+   "value": 71.6,
+   "range": [
+    43.0,
+    92.0
+   ],
+   "n_hint": 10,
+   "basis": "averaged from published reads",
+   "as_of": "2026-10",
+   "context": "exit_poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 76; The Front Room 43; The Strangers: Chapter 1 50; Wolf Man 54; M3GAN 2.0 84; Sinners 92; Alien: Romulus 82; Scream VI 87; Scream 78; Longlegs 70",
+   "sources": [
+    {
+     "url": "https://www.boxofficepro.com/weekend-box-office-terrifier-3-scares-up-1-business/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 76; The Front Room 43; The Strangers: Chapter 1 50; Wolf Man 54; M3GAN 2.0 84; Sinners 92; Alien: Romulus 82; Scream VI 87; Scream 78; Longlegs 70] Terrifier 3 (2024, horror): total_positive 76%"
+    },
+    {
+     "url": "https://web.archive.org/web/20240907200813/https:/deadline.com/2024/09/box-office-beetlejuice-beetlejuice-1236079763/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 76; The Front Room 43; The Strangers: Chapter 1 50; Wolf Man 54; M3GAN 2.0 84; Sinners 92; Alien: Romulus 82; Scream VI 87; Scream 78; Longlegs 70] The Front Room (2024, horror): total_positive 43%"
+    },
+    {
+     "url": "https://deadline.com/2024/05/box-office-if-back-to-black-amy-winehouse-strangers-2-1235920634/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 76; The Front Room 43; The Strangers: Chapter 1 50; Wolf Man 54; M3GAN 2.0 84; Sinners 92; Alien: Romulus 82; Scream VI 87; Scream 78; Longlegs 70] The Strangers: Chapter 1 (2024, horror): total_positive 50%"
+    },
+    {
+     "url": "https://deadline.com/2025/01/box-office-wolf-man-one-of-them-days-1236259743/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 76; The Front Room 43; The Strangers: Chapter 1 50; Wolf Man 54; M3GAN 2.0 84; Sinners 92; Alien: Romulus 82; Scream VI 87; Scream 78; Longlegs 70] Wolf Man (2025, horror): total_positive 54%"
+    },
+    {
+     "url": "https://deadline.com/2025/06/box-office-f1-megan-2-0-1236444277/comment-page-6/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 76; The Front Room 43; The Strangers: Chapter 1 50; Wolf Man 54; M3GAN 2.0 84; Sinners 92; Alien: Romulus 82; Scream VI 87; Scream 78; Longlegs 70] M3GAN 2.0 (2025, horror): total_positive 84%"
+    },
+    {
+     "url": "https://deadline.com/2025/04/box-office-sinners-a-minecraft-movie-1236371775/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 76; The Front Room 43; The Strangers: Chapter 1 50; Wolf Man 54; M3GAN 2.0 84; Sinners 92; Alien: Romulus 82; Scream VI 87; Scream 78; Longlegs 70] Sinners (2025, horror): total_positive 92%"
+    },
+    {
+     "url": "https://www.reddit.com/r/boxoffice/comments/1etzcnx/per_deadline_thursday_night_posttrak_scores_for/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 76; The Front Room 43; The Strangers: Chapter 1 50; Wolf Man 54; M3GAN 2.0 84; Sinners 92; Alien: Romulus 82; Scream VI 87; Scream 78; Longlegs 70] Alien: Romulus (2024, horror): total_positive 82% [secondary]"
+    },
+    {
+     "url": "https://www.reddit.com/r/boxoffice/comments/11ovzcr/posttrak_scores_for_scream_vi_are_87_positive74/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 76; The Front Room 43; The Strangers: Chapter 1 50; Wolf Man 54; M3GAN 2.0 84; Sinners 92; Alien: Romulus 82; Scream VI 87; Scream 78; Longlegs 70] Scream VI (2023, horror): total_positive 87% [secondary]"
+    },
+    {
+     "url": "https://forums.boxofficetheory.com/topic/33589-august-8-to-10-weekend-thread-weapons-425-freaky-29-fantastic-four-drop-redacted/page/7/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 76; The Front Room 43; The Strangers: Chapter 1 50; Wolf Man 54; M3GAN 2.0 84; Sinners 92; Alien: Romulus 82; Scream VI 87; Scream 78; Longlegs 70] Longlegs (2024, horror): total_positive 70% [secondary]"
+    }
+   ]
+  },
+  {
+   "format": "feature",
+   "genre": "horror",
+   "metric": "definitely_recommend",
+   "value": 58.6,
+   "range": [
+    34.0,
+    84.0
+   ],
+   "n_hint": 15,
+   "basis": "averaged from published reads",
+   "as_of": "2026-10",
+   "context": "exit_poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 59; The Front Room 34; Wolf Man 34; M3GAN 2.0 62; I Know What You Did Last Summer 43; Sinners 84; Final Destination Bloodlines 69; The Monkey 49; The Conjuring: Last Rites 58; Obsession 70; Alien: Romulus 65; Scream VI 74; Scream 59; Weapons 65; 28 Years Later 54",
+   "sources": [
+    {
+     "url": "https://www.boxofficepro.com/weekend-box-office-terrifier-3-scares-up-1-business/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 59; The Front Room 34; Wolf Man 34; M3GAN 2.0 62; I Know What You Did Last Summer 43; Sinners 84; Final Destination Bloodlines 69; The Monkey 49; The Conjuring: Last Rites 58; Obsession 70; Alien: Romulus 65; Scream VI 74; Scream 59; Weapons 65; 28 Years Later 54] Terrifier 3 (2024, horror): definite_recommend 59%"
+    },
+    {
+     "url": "https://web.archive.org/web/20240907200813/https:/deadline.com/2024/09/box-office-beetlejuice-beetlejuice-1236079763/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 59; The Front Room 34; Wolf Man 34; M3GAN 2.0 62; I Know What You Did Last Summer 43; Sinners 84; Final Destination Bloodlines 69; The Monkey 49; The Conjuring: Last Rites 58; Obsession 70; Alien: Romulus 65; Scream VI 74; Scream 59; Weapons 65; 28 Years Later 54] The Front Room (2024, horror): definite_recommend 34%"
+    },
+    {
+     "url": "https://deadline.com/2025/01/box-office-wolf-man-one-of-them-days-1236259743/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 59; The Front Room 34; Wolf Man 34; M3GAN 2.0 62; I Know What You Did Last Summer 43; Sinners 84; Final Destination Bloodlines 69; The Monkey 49; The Conjuring: Last Rites 58; Obsession 70; Alien: Romulus 65; Scream VI 74; Scream 59; Weapons 65; 28 Years Later 54] Wolf Man (2025, horror): definite_recommend 34%"
+    },
+    {
+     "url": "https://deadline.com/2025/06/box-office-f1-megan-2-0-1236444277/comment-page-6/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 59; The Front Room 34; Wolf Man 34; M3GAN 2.0 62; I Know What You Did Last Summer 43; Sinners 84; Final Destination Bloodlines 69; The Monkey 49; The Conjuring: Last Rites 58; Obsession 70; Alien: Romulus 65; Scream VI 74; Scream 59; Weapons 65; 28 Years Later 54] M3GAN 2.0 (2025, horror): definite_recommend 62%"
+    },
+    {
+     "url": "https://deadline.com/2025/07/box-office-superman-i-know-what-you-did-smurfs-1236462233/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 59; The Front Room 34; Wolf Man 34; M3GAN 2.0 62; I Know What You Did Last Summer 43; Sinners 84; Final Destination Bloodlines 69; The Monkey 49; The Conjuring: Last Rites 58; Obsession 70; Alien: Romulus 65; Scream VI 74; Scream 59; Weapons 65; 28 Years Later 54] I Know What You Did Last Summer (2025, horror): definite_recommend 43%"
+    },
+    {
+     "url": "https://deadline.com/2025/04/box-office-sinners-a-minecraft-movie-1236371775/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 59; The Front Room 34; Wolf Man 34; M3GAN 2.0 62; I Know What You Did Last Summer 43; Sinners 84; Final Destination Bloodlines 69; The Monkey 49; The Conjuring: Last Rites 58; Obsession 70; Alien: Romulus 65; Scream VI 74; Scream 59; Weapons 65; 28 Years Later 54] Sinners (2025, horror): definite_recommend 84%"
+    },
+    {
+     "url": "https://deadline.com/2025/05/box-office-final-destination-bloodlines-1236400414/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 59; The Front Room 34; Wolf Man 34; M3GAN 2.0 62; I Know What You Did Last Summer 43; Sinners 84; Final Destination Bloodlines 69; The Monkey 49; The Conjuring: Last Rites 58; Obsession 70; Alien: Romulus 65; Scream VI 74; Scream 59; Weapons 65; 28 Years Later 54] Final Destination Bloodlines (2025, horror): definite_recommend 69%"
+    },
+    {
+     "url": "https://deadline.com/2025/02/box-office-the-monkey-captain-america-1236297207/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 59; The Front Room 34; Wolf Man 34; M3GAN 2.0 62; I Know What You Did Last Summer 43; Sinners 84; Final Destination Bloodlines 69; The Monkey 49; The Conjuring: Last Rites 58; Obsession 70; Alien: Romulus 65; Scream VI 74; Scream 59; Weapons 65; 28 Years Later 54] The Monkey (2025, horror): definite_recommend 49%"
+    },
+    {
+     "url": "https://deadline.com/2025/09/box-office-conjuring-the-last-rites-1236508461/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 59; The Front Room 34; Wolf Man 34; M3GAN 2.0 62; I Know What You Did Last Summer 43; Sinners 84; Final Destination Bloodlines 69; The Monkey 49; The Conjuring: Last Rites 58; Obsession 70; Alien: Romulus 65; Scream VI 74; Scream 59; Weapons 65; 28 Years Later 54] The Conjuring: Last Rites (2025, horror): definite_recommend 58%"
+    },
+    {
+     "url": "https://deadline.com/2026/05/box-office-obsession-1236914476/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 59; The Front Room 34; Wolf Man 34; M3GAN 2.0 62; I Know What You Did Last Summer 43; Sinners 84; Final Destination Bloodlines 69; The Monkey 49; The Conjuring: Last Rites 58; Obsession 70; Alien: Romulus 65; Scream VI 74; Scream 59; Weapons 65; 28 Years Later 54] Obsession (2026, horror): definite_recommend 70%"
+    },
+    {
+     "url": "https://www.reddit.com/r/boxoffice/comments/1etzcnx/per_deadline_thursday_night_posttrak_scores_for/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 59; The Front Room 34; Wolf Man 34; M3GAN 2.0 62; I Know What You Did Last Summer 43; Sinners 84; Final Destination Bloodlines 69; The Monkey 49; The Conjuring: Last Rites 58; Obsession 70; Alien: Romulus 65; Scream VI 74; Scream 59; Weapons 65; 28 Years Later 54] Alien: Romulus (2024, horror): definite_recommend 65% [secondary]"
+    },
+    {
+     "url": "https://www.reddit.com/r/boxoffice/comments/11ovzcr/posttrak_scores_for_scream_vi_are_87_positive74/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 59; The Front Room 34; Wolf Man 34; M3GAN 2.0 62; I Know What You Did Last Summer 43; Sinners 84; Final Destination Bloodlines 69; The Monkey 49; The Conjuring: Last Rites 58; Obsession 70; Alien: Romulus 65; Scream VI 74; Scream 59; Weapons 65; 28 Years Later 54] Scream VI (2023, horror): definite_recommend 74% [secondary]"
+    },
+    {
+     "url": "https://www.reddit.com/r/boxoffice/comments/1ml5hlx/per_deadline_thursday_posttrak_scores_for_weapons/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 59; The Front Room 34; Wolf Man 34; M3GAN 2.0 62; I Know What You Did Last Summer 43; Sinners 84; Final Destination Bloodlines 69; The Monkey 49; The Conjuring: Last Rites 58; Obsession 70; Alien: Romulus 65; Scream VI 74; Scream 59; Weapons 65; 28 Years Later 54] Weapons (2025, horror): definite_recommend 65% [secondary]"
+    },
+    {
+     "url": "https://forums.boxofficetheory.com/topic/33589-august-8-to-10-weekend-thread-weapons-425-freaky-29-fantastic-four-drop-redacted/page/7/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 59; The Front Room 34; Wolf Man 34; M3GAN 2.0 62; I Know What You Did Last Summer 43; Sinners 84; Final Destination Bloodlines 69; The Monkey 49; The Conjuring: Last Rites 58; Obsession 70; Alien: Romulus 65; Scream VI 74; Scream 59; Weapons 65; 28 Years Later 54] 28 Years Later (2025, horror): definite_recommend 54% [secondary]"
+    }
+   ]
+  },
+  {
+   "format": "feature",
+   "genre": "thriller",
+   "metric": "total_positive",
+   "value": 79.5,
+   "range": [
+    75.0,
+    84.0
+   ],
+   "n_hint": 2,
+   "basis": "averaged from published reads",
+   "as_of": "2026-10",
+   "context": "exit_poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Black Bag 75; Conclave 84",
+   "sources": [
+    {
+     "url": "https://entertainmentindustryreporter.com/novocaine-leading-lowest-weekend-of-2025/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Black Bag 75; Conclave 84] Black Bag (2025, thriller): total_positive 75% [secondary]"
+    },
+    {
+     "url": "https://en.wikipedia.org/wiki/Conclave_(film)",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Black Bag 75; Conclave 84] Conclave (2024, thriller): total_positive 84% [secondary]"
+    }
+   ]
+  },
+  {
+   "format": "feature",
+   "genre": "thriller",
+   "metric": "definitely_recommend",
+   "value": 56.5,
+   "range": [
+    51.0,
+    62.0
+   ],
+   "n_hint": 2,
+   "basis": "averaged from published reads",
+   "as_of": "2026-10",
+   "context": "exit_poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Black Bag 51; Conclave 62",
+   "sources": [
+    {
+     "url": "https://entertainmentindustryreporter.com/novocaine-leading-lowest-weekend-of-2025/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Black Bag 51; Conclave 62] Black Bag (2025, thriller): definite_recommend 51% [secondary]"
+    },
+    {
+     "url": "https://en.wikipedia.org/wiki/Conclave_(film)",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Black Bag 51; Conclave 62] Conclave (2024, thriller): definite_recommend 62% [secondary]"
+    }
+   ]
+  },
+  {
+   "format": "feature",
+   "genre": "romance",
+   "metric": "total_positive",
+   "value": 80.5,
+   "range": [
+    77.0,
+    84.0
+   ],
+   "n_hint": 2,
+   "basis": "averaged from published reads",
+   "as_of": "2026-10",
+   "context": "exit_poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Challengers 77; Eternity 84",
+   "sources": [
+    {
+     "url": "https://deadline.com/2024/04/box-office-challengers-zendaya-1235896116/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Challengers 77; Eternity 84] Challengers (2024, romance): total_positive 77%"
+    },
+    {
+     "url": "https://en.wikipedia.org/wiki/Eternity_(2025_film)",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Challengers 77; Eternity 84] Eternity (2025, romance): total_positive 84% [secondary]"
+    }
+   ]
+  },
+  {
+   "format": "feature",
+   "genre": "romance",
+   "metric": "definitely_recommend",
+   "value": 55.0,
+   "range": [
+    50.0,
+    59.0
+   ],
+   "n_hint": 4,
+   "basis": "averaged from published reads",
+   "as_of": "2026-10",
+   "context": "exit_poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Challengers 59; The Wedding Banquet 50; Anyone But You 57; Eternity 54",
+   "sources": [
+    {
+     "url": "https://deadline.com/2024/04/box-office-challengers-zendaya-1235896116/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Challengers 59; The Wedding Banquet 50; Anyone But You 57; Eternity 54] Challengers (2024, romance): definite_recommend 59%"
+    },
+    {
+     "url": "https://deadline.com/2025/04/box-office-sinners-a-minecraft-movie-1236371775/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Challengers 59; The Wedding Banquet 50; Anyone But You 57; Eternity 54] The Wedding Banquet (2025, romance): definite_recommend 50%"
+    },
+    {
+     "url": "https://en.wikipedia.org/wiki/Anyone_But_You",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Challengers 59; The Wedding Banquet 50; Anyone But You 57; Eternity 54] Anyone But You (2023, romance): definite_recommend 57% [secondary]"
+    },
+    {
+     "url": "https://en.wikipedia.org/wiki/Eternity_(2025_film)",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Challengers 59; The Wedding Banquet 50; Anyone But You 57; Eternity 54] Eternity (2025, romance): definite_recommend 54% [secondary]"
+    }
+   ]
+  },
+  {
+   "format": "feature",
+   "genre": "documentary",
+   "metric": "total_positive",
+   "value": 96.5,
+   "range": [
+    96.0,
+    97.0
+   ],
+   "n_hint": 2,
+   "basis": "averaged from published reads",
+   "as_of": "2026-10",
+   "context": "exit_poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Taylor Swift: The Eras Tour 96; Renaissance: A Film by Beyonce 97",
+   "sources": [
+    {
+     "url": "https://deadline.com/2023/10/box-office-taylor-swift-eras-tour-concert-film-opening-1235572671/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Taylor Swift: The Eras Tour 96; Renaissance: A Film by Beyonce 97] Taylor Swift: The Eras Tour (2023, documentary): total_positive 96%"
+    },
+    {
+     "url": "https://deadline.com/2023/12/box-office-renaissance-a-film-by-beyonce-godzilla-minus-one-hunger-games-1235647651/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Taylor Swift: The Eras Tour 96; Renaissance: A Film by Beyonce 97] Renaissance: A Film by Beyonce (2023, documentary): total_positive 97%"
+    }
+   ]
+  },
+  {
+   "format": "feature",
+   "genre": "documentary",
+   "metric": "definitely_recommend",
+   "value": 89.5,
+   "range": [
+    89.0,
+    90.0
+   ],
+   "n_hint": 2,
+   "basis": "averaged from published reads",
+   "as_of": "2026-10",
+   "context": "exit_poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Taylor Swift: The Eras Tour 89; Renaissance: A Film by Beyonce 90",
+   "sources": [
+    {
+     "url": "https://deadline.com/2023/10/box-office-taylor-swift-eras-tour-concert-film-opening-1235572671/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Taylor Swift: The Eras Tour 89; Renaissance: A Film by Beyonce 90] Taylor Swift: The Eras Tour (2023, documentary): definite_recommend 89%"
+    },
+    {
+     "url": "https://deadline.com/2023/12/box-office-renaissance-a-film-by-beyonce-godzilla-minus-one-hunger-games-1235647651/",
+     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Taylor Swift: The Eras Tour 89; Renaissance: A Film by Beyonce 90] Renaissance: A Film by Beyonce (2023, documentary): definite_recommend 90%"
+    }
+   ]
+  },
+  {
+   "format": "trailer",
+   "genre": "all",
+   "metric": "total_positive",
+   "value": 80.0,
+   "range": [
+    80.0,
+    88.0
+   ],
+   "n_hint": null,
+   "basis": "published norm",
+   "as_of": "2014-08",
+   "context": "definite plus probable interest after the trailer; top 10% norm 88",
+   "sources": [
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/WEDDING%20RINGER/TRLR%201/The%20Wedding%20Ringer%20Trailer%20Test%201%20Report.pdf",
+     "note": "[definite plus probable interest after the trailer; top 10% norm 88 / Screen Engine] Screen Engine Trailer Test #1 (Aug 20 2014), general moviegoers table: PRE-INTEREST Definitely interested General Norms 25%, Top 10% General Norms 45%; Probably 35 / 36; Total Positive 60 / 81. POST-INTEREST Definitely interested norm 50%, top 10% 64%; Probably 30 / 24; Total Positive 80 / 88. African-American norms: pre 23 / 35, post 65 / 76."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/WEDDING%20RINGER/TRLR%202/The%20Wedding%20Ringer%20Trailer%20Test%202%20Report%20FINAL.PDF",
+     "note": "[definite plus probable interest after the trailer; top 10% norm 88 / Screen Engine] Trailer Test #2: same Gen'l Norms (definite pre-interest 25, top 10% 45; definite post-interest 50, top 10% 64) and AA norms (23/35; 65/76)."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/WEDDING%20RINGER/TRLR%203/The%20Wedding%20Ringer%20Trailer%20Test%203%20Report%20FINAL.pdf",
+     "note": "[definite plus probable interest after the trailer; top 10% norm 88 / Screen Engine] Trailer Test #3 (Sept 3 2014): same norm columns repeated."
+    }
+   ]
+  },
+  {
+   "format": "trailer",
+   "genre": "all",
+   "metric": "definitely_recommend",
+   "value": 44.0,
+   "range": [
+    35.0,
+    44.0
+   ],
+   "n_hint": null,
+   "basis": "published norm",
+   "as_of": "2014-08",
+   "context": "very likely to recommend based on the trailer (44) or TV spot (35)",
+   "sources": [
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/EQUALIZER/TRLR%204/Final_EQUALIZER_TR4.pdf",
+     "note": "[very likely to recommend based on the trailer (44) or TV spot (35) / MarketCast] '47% of general viewers ... say they are very likely to recommend this movie to others (based on the trailer), around or well above the 44% norm'."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/INTERVIEW/TV%20%231/FINAL_THE%20INTERVIEW_TV1.pdf",
+     "note": "[very likely to recommend based on the trailer (44) or TV spot (35) / MarketCast] TV spot test: '42% say they are very likely to recommend the film ... above the 35% norm' (30-second spot norm)."
+    }
+   ]
+  },
+  {
+   "format": "trailer",
+   "genre": "all",
+   "metric": "tune_in",
+   "value": 50.0,
+   "range": [
+    32.0,
+    65.0
+   ],
+   "n_hint": null,
+   "basis": "published norm",
+   "as_of": "2014-08",
+   "context": "definite interest in seeing the film after viewing the trailer (intent to view) among general moviegoers; top 10% norm 64 to 65",
+   "sources": [
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/WEDDING%20RINGER/TRLR%201/The%20Wedding%20Ringer%20Trailer%20Test%201%20Report.pdf",
+     "note": "[definite interest in seeing the film after viewing the trailer (intent to view) among general moviegoers; top 10% norm 64 to 65 / Screen Engine and MarketCast agree at 50] Screen Engine Trailer Test #1 (Aug 20 2014), general moviegoers table: PRE-INTEREST Definitely interested General Norms 25%, Top 10% General Norms 45%; Probably 35 / 36; Total Positive 60 / 81. POST-INTEREST Definitely interested norm 50%, top 10% 64%; Probably 30 / 24; Total Positive 80 / 88. African-American norms: pre 23 / 35, post 65 / 76."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/WEDDING%20RINGER/TRLR%202/The%20Wedding%20Ringer%20Trailer%20Test%202%20Report%20FINAL.PDF",
+     "note": "[definite interest in seeing the film after viewing the trailer (intent to view) among general moviegoers; top 10% norm 64 to 65 / Screen Engine and MarketCast agree at 50] Trailer Test #2: same Gen'l Norms (definite pre-interest 25, top 10% 45; definite post-interest 50, top 10% 64) and AA norms (23/35; 65/76)."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/WEDDING%20RINGER/TRLR%203/The%20Wedding%20Ringer%20Trailer%20Test%203%20Report%20FINAL.pdf",
+     "note": "[definite interest in seeing the film after viewing the trailer (intent to view) among general moviegoers; top 10% norm 64 to 65 / Screen Engine and MarketCast agree at 50] Trailer Test #3 (Sept 3 2014): same norm columns repeated."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/EQUALIZER/TRLR%204/Final_EQUALIZER_TR4.pdf",
+     "note": "[definite interest in seeing the film after viewing the trailer (intent to view) among general moviegoers; top 10% norm 64 to 65 / Screen Engine and MarketCast agree at 50] MarketCast trailer test, The Equalizer TR4 (2014): definite post interest 'Norm 50%', 'Top 10% Norm 65%' (general); African Americans 'Norm 55%', 'Top 10% Norm 70%'."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/ANGRY%20BIRDS/Greenlight%20Study/Angry%20Birds%20Franchise%20Study%20Topline%2011%2012%2013%20with%20US.pdf",
+     "note": "[PSB online norm for definite interest after a full-length trailer; much lower than the in-person Screen Engine / MarketCast norm of 50 because of methodology / Penn Schoen Berland: value 32] Penn Schoen Berland Angry Birds franchise study topline (Nov 2013): 'Definite Interest in an Angry Birds Film Post Video' with 'Norms* = 32' for the United States column; footnote 'Norms are based on definite interest after watching a full length trailer'. Online general moviegoers; other countries UK 34, Germany 33, Russia 39, Korea 22, Mexico 54 as read off the chart order."
+    }
+   ],
+   "populations": [
+    {
+     "context": "definite interest in seeing the film after viewing the trailer (intent to view) among general moviegoers; top 10% norm 64 to 65",
+     "basis": "published norm",
+     "value": 50.0
+    },
+    {
+     "context": "PSB online norm for definite interest after a full-length trailer; much lower than the in-person Screen Engine / MarketCast norm of 50 because of methodology",
+     "basis": "published norm",
+     "value": 32.0
+    }
+   ]
+  },
+  {
+   "format": "trailer",
+   "genre": "all",
+   "metric": "urgency_opening",
+   "value": 36.0,
+   "range": [
+    36.0,
+    37.0
+   ],
+   "n_hint": null,
+   "basis": "published norm",
+   "as_of": "2014-08",
+   "context": "share of definitely interested who would see it in a theater opening weekend",
+   "sources": [
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/EQUALIZER/TRLR%204/Final_EQUALIZER_TR4.pdf",
+     "note": "[share of definitely interested who would see it in a theater opening weekend / MarketCast] MarketCast trailer test: 'Where/When Will You See This Movie? (among definitely interested) Theater, opening weekend ... Opening weekend norm (36%)'; 'Likelihood of Buying Opening Weekend Ticket (% very likely) Norm (24%)'."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/INTERVIEW/TV%20%231/FINAL_THE%20INTERVIEW_TV1.pdf",
+     "note": "[share of definitely interested who would see it in a theater opening weekend / MarketCast] MarketCast TV spot test: 'Opening weekend norm (37%)' among definitely interested; buy-ticket-opening-weekend very likely 'Norm (22%)'."
+    }
+   ]
+  },
+  {
+   "format": "title",
+   "genre": "all",
+   "metric": "total_positive",
+   "value": 60.0,
+   "range": [
+    60.0,
+    81.0
+   ],
+   "n_hint": null,
+   "basis": "published norm",
+   "as_of": "2014-08",
+   "context": "definite plus probable interest on title and stars alone",
+   "sources": [
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/WEDDING%20RINGER/TRLR%201/The%20Wedding%20Ringer%20Trailer%20Test%201%20Report.pdf",
+     "note": "[definite plus probable interest on title and stars alone / Screen Engine] Pre-interest Total Positive General Norms 60%, top 10% 81%."
+    }
+   ]
+  },
+  {
+   "format": "title",
+   "genre": "all",
+   "metric": "tune_in",
+   "value": 25.0,
+   "range": [
+    19.0,
+    25.0
+   ],
+   "n_hint": null,
+   "basis": "published norm",
+   "as_of": "2014-08",
+   "context": "definite interest based on title and stars alone (pre-interest); Screen Engine 25, PSB 19",
+   "sources": [
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/WEDDING%20RINGER/TRLR%201/The%20Wedding%20Ringer%20Trailer%20Test%201%20Report.pdf",
+     "note": "[definite interest based on title and stars alone (pre-interest); Screen Engine 25, PSB 19 / Screen Engine 25 / PSB 19] Screen Engine pre-interest based on title and stars: 'Definitely interested' General Norms 25%, Top 10% 45%; Total Positive 60% / 81%."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/PIXELS/DOMESTIC/Positioning%20Study%20%28PSB%29/PIXELS%20Positioning%20Report%2010-31-14.pdf",
+     "note": "[definite interest based on title and stars alone (pre-interest); Screen Engine 25, PSB 19 / Screen Engine 25 / PSB 19] Penn Schoen Berland Pixels positioning study (Oct 2014): 'T/S Norm = 19' (title/star definite interest) among general moviegoers 13-49."
+    }
+   ]
+  },
+  {
+   "format": "key_art",
+   "genre": "all",
+   "metric": "tune_in",
+   "value": 27.0,
+   "range": null,
+   "n_hint": null,
+   "basis": "published norm",
+   "as_of": "2014-10",
+   "context": "definite interest after seeing the poster",
+   "sources": [
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/WEDDING%20RINGER/Print%20Test%20%231/The%20Wedding%20Ringer%20Print%20Test%20Report%2010.29.14.docx",
+     "note": "[definite interest after seeing the poster / Penn Schoen Berland] PSB The Wedding Ringer print (poster) test, Oct 2014, 1,500 general moviegoers: 'While all five posters test above the PSB norm (27) ...' (definite interest based on the poster)."
+    }
+   ]
+  },
+  {
+   "format": "concept",
+   "genre": "all",
+   "metric": "tune_in",
+   "value": 32.0,
+   "range": null,
+   "n_hint": null,
+   "basis": "published norm",
+   "as_of": "2014-10",
+   "context": "definite interest after reading the concept",
+   "sources": [
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/PIXELS/DOMESTIC/Positioning%20Study%20%28PSB%29/PIXELS%20Positioning%20Report%2010-31-14.pdf",
+     "note": "[definite interest after reading the concept / Penn Schoen Berland] PSB Pixels positioning: 'Concept Norm = 32*' definite interest post-concept, '*Norm is among general moviegoers 13-49'; kid concept norm 45, parent concept norm 43."
+    }
+   ]
+  }
+ ],
+ "statements": [
+  {
+   "who": "Kevin Goetz (Screen Engine/ASI), via Deadline",
+   "quote_or_paraphrase": "One of the valued metrics in any PostTrak report for a motion picture executive is PostTrak's definite recommend; the more significantly north of 55% it is, generally the longer the legs of the movie.",
+   "url": "https://deadline.com/2025/11/screen-engine-kevin-goetz-how-to-score-in-hollywood-1236618086/",
+   "implies": {
+    "format": "feature",
+    "genre": "all",
+    "metric": "definitely_recommend",
+    "value": 55,
+    "meaning": "hinge for strong legs (exit poll)"
+   }
+  },
+  {
+   "who": "Kevin Goetz",
+   "quote_or_paraphrase": "Calls 'definitely recommend' the money number. 'A lot of people say, oh, my scores were so high, they were 90. Well, they might be 90 in the top two boxes. But you always wanna ask, what was your excellent score and what was your definite recommend score?' Also distinguishes good confusions from frustrating confusions; filmmaker battles center on confusion, endings, and pace or length.",
+   "url": "https://kevingoetz360.substack.com/p/inside-the-room-how-audience-test",
+   "implies": {
+    "format": "feature",
+    "genre": "all",
+    "metric": "total_positive",
+    "value": 90,
+    "meaning": "a 90 top-two-box can mislead; read excellent and definite recommend instead"
+   }
+  },
+  {
+   "who": "Kevin Goetz (then OTX), THR 2006",
+   "quote_or_paraphrase": "'The two key measures are your ratings and your recommendation score ... We only look at the definite-recommend because in the real world, if you are not committing to definite, then chances are you are not going to recommend it.' No numeric norm stated. Also: screenings cost $10,000 to $20,000, audiences of 300 to 500, studios hold three to five screenings per film; one film improved by 30 points after reshoots.",
+   "url": "https://www.hollywoodreporter.com/business/business-news/test-screenings-138436/",
+   "implies": null
+  },
+  {
+   "who": "Kevin Goetz, Creative Curve excerpt (B2BNN 2018)",
+   "quote_or_paraphrase": "The two most important questions: how likely are you to definitely recommend the movie, and how do you rate the movie overall. No numeric norm stated.",
+   "url": "https://www.b2bnn.com/2018/06/creative-curve-allen-gannett-excerpt/",
+   "implies": null
+  },
+  {
+   "who": "Kevin Goetz, QRCA 2022",
+   "quote_or_paraphrase": "Screen Engine/ASI tests 60 to 70 percent of all movies that conduct early test previews and the same for pilots on broadcast, cable and streaming; Virtuworks at-home screenings of 150 to 300 people. No numeric norm stated.",
+   "url": "https://www.qrcaviews.org/2022/03/02/going-behind-the-scenes-of-the-movie-research-business-with-audience-ologist-kevin-goetz/",
+   "implies": null
+  },
+  {
+   "who": "LA Times (Patrick Goldstein) quoting studio marketers, 1998",
+   "quote_or_paraphrase": "A movie is well-received if its top-two boxes add up to a number in the 80s or 90s. A high-70s number would be average; anything below 75 is cause for concern. Disturbing Behavior (teen thriller) tested at 54 then 37 top-two-box.",
+   "url": "https://www.latimes.com/archives/la-xpm-1998-sep-18-ca-23820-story.html",
+   "implies": {
+    "format": "feature",
+    "genre": "all",
+    "metric": "total_positive",
+    "value": 78,
+    "meaning": "average (high 70s); 80s to 90s well received; below 75 concern"
+   }
+  },
+  {
+   "who": "Kevin Smith on the Clerks II NRG screening, 2006",
+   "quote_or_paraphrase": "Excellent 56% vs normal average 25%; top two boxes 84% vs normal 55%; definite recommends 74% vs norm 45%.",
+   "url": "https://silentbobspeaks.com/?p=254",
+   "implies": {
+    "format": "feature",
+    "genre": "comedy",
+    "metric": "definitely_recommend",
+    "value": 45,
+    "meaning": "2006 era NRG general norm as relayed by the filmmaker"
+   }
+  },
+  {
+   "who": "Deadline (Anthony D'Alessandro), The Monkey box office",
+   "quote_or_paraphrase": "'49% definite recommend with PostTrak audiences; that diagnostic always being a better indicator of word of mouth then PostTrak's overall positive/star score.'",
+   "url": "https://deadline.com/2025/02/box-office-the-monkey-captain-america-1236297207/",
+   "implies": {
+    "format": "feature",
+    "genre": "horror",
+    "metric": "definitely_recommend",
+    "value": 49,
+    "meaning": "a middling horror read that still drove the high end of the range"
+   }
+  },
+  {
+   "who": "Deadline (Obsession box office, 2026)",
+   "quote_or_paraphrase": "'an A- CinemaScore, extremely rare for a horror movie which typically averages between a B and a C on that pollster's scale'; PostTrak 70% definite recommend called very good.",
+   "url": "https://deadline.com/2026/05/box-office-obsession-1236914476/",
+   "implies": {
+    "format": "feature",
+    "genre": "horror",
+    "metric": "definitely_recommend",
+    "value": 70,
+    "meaning": "very good for horror"
+   }
+  },
+  {
+   "who": "Puck (Matthew Belloni) as relayed by ComicBasics, Ebenezer test screening Aug 2025",
+   "quote_or_paraphrase": "Depp scored an 86 for his performance against a typical lead norm of 67; the film scored an 80 compared with a historical test screening norm of 72; only the top 10% of movies hit 93 or better. The metric is not labeled in the report (most consistent with top-two-box). Secondary source.",
+   "url": "https://www.comicbasics.com/johnny-depps-ebenezer-test-screening-scores-stun-hollywood-one-of-the-highest-lead-ratings-in-years-signals-a-comeback-few-saw-coming/",
+   "implies": {
+    "format": "feature",
+    "genre": "all",
+    "metric": "lead_character",
+    "value": 67,
+    "meaning": "typical lead norm per Puck; metric scale unlabeled"
+   }
+  },
+  {
+   "who": "Screen Engine, The Equalizer UK screening (Aug 2014)",
+   "quote_or_paraphrase": "UK locked norms: excellent 20%, top-two box 55%, definite recommend 40%, urgency to recommend seeing it as soon as it opens 26%, would have been satisfied paying full ticket price 33%, action element 25%. UK only, not US.",
+   "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/EQUALIZER/INTERNATIONAL/Screening%20-%20UK%208.11/Final%20Report/%28REP%29%20THE%20EQUALIZER_SCREENING_UK.pdf",
+   "implies": {
+    "format": "feature",
+    "genre": "all",
+    "metric": "urgency_opening",
+    "value": 26,
+    "meaning": "UK locked norm for recommend as soon as it opens"
+   }
+  },
+  {
+   "who": "Screen Engine, The Equalizer opening weekend exit poll (Sept 2014)",
+   "quote_or_paraphrase": "Exit poll norms: 40% excellent; 70% total positive; 55% definite; norms 40 to 45 excellent and 55 to 60 definite with higher norms for non-Caucasian groups; expectations norms 50% exceeded, 30% met, 20% below.",
+   "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/EQUALIZER/EXITS/FINAL%20REPORT%20The%20Equalizer%20-%20OWIT.docx",
+   "implies": {
+    "format": "feature",
+    "genre": "all",
+    "metric": "definitely_recommend",
+    "value": 55,
+    "meaning": "opening weekend exit poll norm"
+   }
+  },
+  {
+   "who": "Nielsen NRG, Annie recruited audience survey (Apr 2014)",
+   "quote_or_paraphrase": "NRG 5-year family movie norms (parents): excellent 40, very good 35, total highly favorable 75, definitely recommend to friends 60, definitely recommend to parents 65. Recorded here only; family cells were excluded per the brief.",
+   "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/ANNIE/DOMESTIC/Screening%20%234%20%284-26-14%29/ANNIE%20RA1%204-26-14%20Report.doc",
+   "implies": {
+    "format": "feature",
+    "genre": "family",
+    "metric": "definitely_recommend",
+    "value": 60,
+    "meaning": "NRG 5-year family movie norm (parents, recommend to friends)"
+   }
+  },
+  {
+   "who": "Screen Engine, The Equalizer competitive trailer test (PSB, 2014)",
+   "quote_or_paraphrase": "'Female interest is still just below the Top 10% Norm (48%)' for definite interest in the horserace; PSB pillar scores are indexed (Summary Norm 138), not percents.",
+   "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/EQUALIZER/PSB%20Competitive%20Trailer%20Test/The%20Equalizer%20Competitive%20Trailer%20Test%20.pdf",
+   "implies": {
+    "format": "trailer",
+    "genre": "all",
+    "metric": "tune_in",
+    "value": 48,
+    "meaning": "PSB top 10% norm for definite interest"
+   }
+  },
+  {
+   "who": "Screen Engine, Annie Australia trailer test (Feb 2014)",
+   "quote_or_paraphrase": "Australia norms printed: 40% kids norm and 40% parent take norm for definite interest; 30% norm for the general sample. Not US.",
+   "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/ANNIE/INT%27L/TRLR%20Test%201-%20UK%2c%20AU%2c%20JP/AU/Full%20Report/ANNIE%20AU%20TR1%20Report.pdf",
+   "implies": null
+  },
+  {
+   "who": "Penn Schoen Berland, Annie Germany poster test (2014)",
+   "quote_or_paraphrase": "Germany: title/star norm 10, post-print norm 15 for definite interest. Not US.",
+   "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/ANNIE/INT%27L/Poster%20Test%20-%20UK%2c%20DE/DE/Full%20Report/Annie%20DE%20Poster%20Test%20Report.pdf",
+   "implies": null
+  },
+  {
+   "who": "Ormax Media title testing overview (Jan 2025, India)",
+   "quote_or_paraphrase": "Title Appeal index bands: under 50 poor, 51 to 60 average, 61 to 70 good, 71 plus excellent; Title Fit bands: under 60 poor, 61 to 70 average, 71 to 80 good, 81 plus excellent. Index scores, not percents; India market.",
+   "url": "https://www.ormaxmedia.com/data/library/OrmaxTitleTesting-ProductOverview-Jan2025.pdf",
+   "implies": null
+  },
+  {
+   "who": "Dawson's guides on test screenings",
+   "quote_or_paraphrase": "Buyers ask about two numbers, Excellent (top box) and Definitely recommend; a raw percentage is meaningless in isolation and is read against same genre and budget films; one leading firm has run over 3,000 in-theatre screenings. No numeric norm stated.",
+   "url": "https://dawsonagents.com/guides/playability-and-marketability/",
+   "implies": null
+  },
+  {
+   "who": "THR 2014 on Screen Engine buying ASI",
+   "quote_or_paraphrase": "ASI's ViewTrac dial testing asks audiences to turn dials second by second; no norms stated.",
+   "url": "https://www.hollywoodreporter.com/business/business-news/pioneering-tv-show-dial-testing-726641/",
+   "implies": null
+  },
+  {
+   "who": "Broadcasting & Cable 2000 (nexttv), CS Monitor 2006, LA Times 2003, Gulf News",
+   "quote_or_paraphrase": "Describe pilot testing methods (ASI dials, cable testing, Magid VCR tests, 48-seat theaters, $20,000 for two hours of testing, red tune-out button). None prints a pilot norm for intent to view, would watch again, top-box great, or dial average.",
+   "url": "https://www.nexttv.com/news/tvs-test-pilots-89501",
+   "implies": null
+  }
+ ],
+ "reads": [
+  {
+   "title": "Terrifier 3",
+   "year": 2024,
+   "genre": "horror",
+   "total_positive": 76,
+   "definite_recommend": 59,
+   "url": "https://www.boxofficepro.com/weekend-box-office-terrifier-3-scares-up-1-business/",
+   "note": "Boxoffice Pro: 'PostTrak was four stars (76% positive, 59% definite recommend)' (citing Deadline). [trade source]"
+  },
+  {
+   "title": "Beetlejuice Beetlejuice",
+   "year": 2024,
+   "genre": "comedy",
+   "total_positive": 81,
+   "definite_recommend": 68,
+   "url": "https://web.archive.org/web/20240907200813/https:/deadline.com/2024/09/box-office-beetlejuice-beetlejuice-1236079763/",
+   "note": "Deadline: 'PostTrak grades were 81% positive with a 68% definite recommend'. Comedy / fantasy sequel. [trade source]"
+  },
+  {
+   "title": "The Front Room",
+   "year": 2024,
+   "genre": "horror",
+   "total_positive": 43,
+   "definite_recommend": 34,
+   "url": "https://web.archive.org/web/20240907200813/https:/deadline.com/2024/09/box-office-beetlejuice-beetlejuice-1236079763/",
+   "note": "Deadline: 'PostTrak was ticked off at 43% positive and a must avoid with a 34% definite recommend'. [trade source]"
+  },
+  {
+   "title": "IF",
+   "year": 2024,
+   "genre": "family",
+   "total_positive": 84,
+   "definite_recommend": 64,
+   "url": "https://deadline.com/2024/05/box-office-if-back-to-black-amy-winehouse-strangers-2-1235920634/",
+   "note": "Deadline: 'PostTrak audiences gave the pics 84% positive and a 64% definite recommend'. [trade source]"
+  },
+  {
+   "title": "The Strangers: Chapter 1",
+   "year": 2024,
+   "genre": "horror",
+   "total_positive": 50,
+   "definite_recommend": null,
+   "url": "https://deadline.com/2024/05/box-office-if-back-to-black-amy-winehouse-strangers-2-1235920634/",
+   "note": "Deadline: 'PostTrak exits were 50% positive'. [trade source]"
+  },
+  {
+   "title": "Challengers",
+   "year": 2024,
+   "genre": "romance",
+   "total_positive": 77,
+   "definite_recommend": 59,
+   "url": "https://deadline.com/2024/04/box-office-challengers-zendaya-1235896116/",
+   "note": "Deadline: 'Updated PostTrak exits are 4 stars and 77% positive, and a 59% definite recommend' (Deadline calls it a sexy romantic comedy). [trade source]"
+  },
+  {
+   "title": "Unsung Hero",
+   "year": 2024,
+   "genre": "drama",
+   "total_positive": 96,
+   "definite_recommend": 90,
+   "url": "https://deadline.com/2024/04/box-office-challengers-zendaya-1235896116/",
+   "note": "Deadline: 'great PostTrak at 96%/90% definite recommend' (faith-based drama). [trade source]"
+  },
+  {
+   "title": "Boy Kills World",
+   "year": 2024,
+   "genre": "action",
+   "total_positive": 71,
+   "definite_recommend": 50,
+   "url": "https://deadline.com/2024/04/box-office-challengers-zendaya-1235896116/",
+   "note": "Deadline: 'PostTrak of 71%/50% definite recommend'. [trade source]"
+  },
+  {
+   "title": "One of Them Days",
+   "year": 2025,
+   "genre": "comedy",
+   "total_positive": 84,
+   "definite_recommend": 63,
+   "url": "https://deadline.com/2025/01/box-office-wolf-man-one-of-them-days-1236259743/",
+   "note": "Deadline: '84% positive and 63% definite recommend on PostTrak' (R-rated comedy). [trade source]"
+  },
+  {
+   "title": "Wolf Man",
+   "year": 2025,
+   "genre": "horror",
+   "total_positive": 54,
+   "definite_recommend": 34,
+   "url": "https://deadline.com/2025/01/box-office-wolf-man-one-of-them-days-1236259743/",
+   "note": "Deadline: 'PostTrak giving the R-rated horror pic 54% positive and a very low 34% definite recommend'. [trade source]"
+  },
+  {
+   "title": "Despicable Me 4",
+   "year": 2024,
+   "genre": "animation",
+   "total_positive": 82,
+   "definite_recommend": 63,
+   "url": "https://deadline.com/2024/07/box-office-despicable-me-4-1236001250/",
+   "note": "Deadline: 'PostTrak audience were very good at 82% positive and a 63% definite recommend'. [trade source]"
+  },
+  {
+   "title": "Sound of Hope: The Story of Possum Trot",
+   "year": 2024,
+   "genre": "drama",
+   "total_positive": 94,
+   "definite_recommend": 87,
+   "url": "https://deadline.com/2024/07/box-office-despicable-me-4-1236001250/",
+   "note": "Deadline: 'PostTrak exits, with 94% positive and an 87% definite recommend' (faith-based drama). [trade source]"
+  },
+  {
+   "title": "Lilo & Stitch",
+   "year": 2025,
+   "genre": "family",
+   "total_positive": 90,
+   "definite_recommend": 81,
+   "url": "https://deadline.com/2025/05/box-office-lilo-stitch-wild-mission-impossible-final-reckoning-1236409244/",
+   "note": "Deadline: '5 stars and 90% positive on Comscore/Screen Engine's PostTrak and an 81% definite recommend'. [trade source]"
+  },
+  {
+   "title": "Mission: Impossible - The Final Reckoning",
+   "year": 2025,
+   "genre": "action",
+   "total_positive": 89,
+   "definite_recommend": 79,
+   "url": "https://deadline.com/2025/05/box-office-lilo-stitch-wild-mission-impossible-final-reckoning-1236409244/",
+   "note": "Deadline: '5 stars and 89% positive on PostTrak and great 79% definite recommend'. [trade source]"
+  },
+  {
+   "title": "F1",
+   "year": 2025,
+   "genre": "action",
+   "total_positive": 92,
+   "definite_recommend": 78,
+   "url": "https://deadline.com/2025/06/box-office-f1-megan-2-0-1236444277/comment-page-6/",
+   "note": "Deadline: '5 Stars PostTrak at 92%, and an amazing 78% definite recommend'. [trade source]"
+  },
+  {
+   "title": "M3GAN 2.0",
+   "year": 2025,
+   "genre": "horror",
+   "total_positive": 84,
+   "definite_recommend": 62,
+   "url": "https://deadline.com/2025/06/box-office-f1-megan-2-0-1236444277/comment-page-6/",
+   "note": "Deadline: 'audience exit at 84% ... M3GAN 2.0 has a 62% definite recommend on PostTrak'. [trade source]"
+  },
+  {
+   "title": "Superman",
+   "year": 2025,
+   "genre": "action",
+   "total_positive": null,
+   "definite_recommend": 74,
+   "url": "https://deadline.com/2025/07/box-office-superman-i-know-what-you-did-smurfs-1236462233/",
+   "note": "Deadline (second weekend): 'PostTrak polling showing a high definite recommend at 74%'. [trade source]"
+  },
+  {
+   "title": "I Know What You Did Last Summer",
+   "year": 2025,
+   "genre": "horror",
+   "total_positive": null,
+   "definite_recommend": 43,
+   "url": "https://deadline.com/2025/07/box-office-superman-i-know-what-you-did-smurfs-1236462233/",
+   "note": "Deadline: 'Low definite recommend on Summer at 43%'. [trade source]"
+  },
+  {
+   "title": "Smurfs",
+   "year": 2025,
+   "genre": "animation",
+   "total_positive": null,
+   "definite_recommend": 50,
+   "url": "https://deadline.com/2025/07/box-office-superman-i-know-what-you-did-smurfs-1236462233/",
+   "note": "Deadline: 'Definite recommend at 50% isn't a rush' (kids under 12 gave 80% positive). [trade source]"
+  },
+  {
+   "title": "Eddington",
+   "year": 2025,
+   "genre": "comedy",
+   "total_positive": null,
+   "definite_recommend": 39,
+   "url": "https://deadline.com/2025/07/box-office-superman-i-know-what-you-did-smurfs-1236462233/",
+   "note": "Deadline: 'Definite recommend on PostTrak is 39%' (dark comedy / western mash-up per Deadline). [trade source]"
+  },
+  {
+   "title": "Sinners",
+   "year": 2025,
+   "genre": "horror",
+   "total_positive": 92,
+   "definite_recommend": 84,
+   "url": "https://deadline.com/2025/04/box-office-sinners-a-minecraft-movie-1236371775/",
+   "note": "Deadline: '5 stars PostTrak, 92% positive and a massive 84% definite recommend' (opening weekend; Thursday was 80%). [trade source]"
+  },
+  {
+   "title": "The Wedding Banquet",
+   "year": 2025,
+   "genre": "romance",
+   "total_positive": null,
+   "definite_recommend": 50,
+   "url": "https://deadline.com/2025/04/box-office-sinners-a-minecraft-movie-1236371775/",
+   "note": "Deadline: 'The movie gets 3 stars from PostTrak audiences and a 50% definite recommend' (romantic comedy remake). [trade source]"
+  },
+  {
+   "title": "Final Destination Bloodlines",
+   "year": 2025,
+   "genre": "horror",
+   "total_positive": null,
+   "definite_recommend": 69,
+   "url": "https://deadline.com/2025/05/box-office-final-destination-bloodlines-1236400414/",
+   "note": "Deadline (Thursday previews): 'Very strong PostTrak exits from the fan crowd last night with 4 stars and 69% definite recommend'. [trade source]"
+  },
+  {
+   "title": "The Monkey",
+   "year": 2025,
+   "genre": "horror",
+   "total_positive": null,
+   "definite_recommend": 49,
+   "url": "https://deadline.com/2025/02/box-office-the-monkey-captain-america-1236297207/",
+   "note": "Deadline: '49% definite recommend with PostTrak audiences; that diagnostic always being a better indicator of word of mouth then PostTrak's overall positive/star score' (2 1/2 star PostTrak). [trade source]"
+  },
+  {
+   "title": "The Conjuring: Last Rites",
+   "year": 2025,
+   "genre": "horror",
+   "total_positive": null,
+   "definite_recommend": 58,
+   "url": "https://deadline.com/2025/09/box-office-conjuring-the-last-rites-1236508461/",
+   "note": "Deadline: 'Comscore/Screen Engine PostTrak definite recommend is still solid at 58%' (Thursday night 60%). [trade source]"
+  },
+  {
+   "title": "Obsession",
+   "year": 2026,
+   "genre": "horror",
+   "total_positive": null,
+   "definite_recommend": 70,
+   "url": "https://deadline.com/2026/05/box-office-obsession-1236914476/",
+   "note": "Deadline: 'Screen Engine/Comscore's PostTrak showed a very good 70% definite recommend' (romance horror). [trade source]"
+  },
+  {
+   "title": "Dune: Part Two",
+   "year": 2024,
+   "genre": "action",
+   "total_positive": 94,
+   "definite_recommend": 80,
+   "url": "https://deadline.com/2024/03/box-office-dune-part-two-1235842667/",
+   "note": "Deadline: 'PostTrak is still high at 5 stars, 94% positive' and 'an excellent 80% definite recommend' (sci-fi epic). [trade source]"
+  },
+  {
+   "title": "Dune",
+   "year": 2021,
+   "genre": "action",
+   "total_positive": 84,
+   "definite_recommend": 66,
+   "url": "https://deadline.com/2024/03/box-office-dune-part-two-1235842667/",
+   "note": "Deadline: 'The last Dune received ... 4 1/2 stars, 84% positive on Comscore/Screen Engine's PostTrak, with a 66% definite recommend'. [trade source]"
+  },
+  {
+   "title": "Wicked",
+   "year": 2024,
+   "genre": "drama",
+   "total_positive": 90,
+   "definite_recommend": 80,
+   "url": "https://deadline.com/2024/11/box-office-wicked-gladiator-ii-1236184897/",
+   "note": "Deadline: 'Wicked gets a 90% positive with a through-the-roof 80% definite recommend' (musical; later update 92% positive). [trade source]"
+  },
+  {
+   "title": "Gladiator II",
+   "year": 2024,
+   "genre": "action",
+   "total_positive": 77,
+   "definite_recommend": 64,
+   "url": "https://deadline.com/2024/11/box-office-wicked-gladiator-ii-1236184897/",
+   "note": "Deadline: '4 stars on PostTrak with a strong 64% definite recommend' and 'PostTrak exits are also solid at 4 stars and a 77% positive'. [trade source]"
+  },
+  {
+   "title": "Taylor Swift: The Eras Tour",
+   "year": 2023,
+   "genre": "documentary",
+   "total_positive": 96,
+   "definite_recommend": 89,
+   "url": "https://deadline.com/2023/10/box-office-taylor-swift-eras-tour-concert-film-opening-1235572671/",
+   "note": "Deadline: 'Updated Comscore/Screen Engine PostTrak exits for Eras Tour are 96% positive, 89% definite recommend' (concert film). [trade source]"
+  },
+  {
+   "title": "Renaissance: A Film by Beyonce",
+   "year": 2023,
+   "genre": "documentary",
+   "total_positive": 97,
+   "definite_recommend": 90,
+   "url": "https://deadline.com/2023/12/box-office-renaissance-a-film-by-beyonce-godzilla-minus-one-hunger-games-1235647651/",
+   "note": "Deadline: 'current 97% positive and 5-star audience exits on Comscore/Screen Engine's PostTrak'; Thursday '99% positive and 90% definite recommend' (concert documentary). [trade source]"
+  },
+  {
+   "title": "Godzilla Minus One",
+   "year": 2023,
+   "genre": "action",
+   "total_positive": 92,
+   "definite_recommend": 83,
+   "url": "https://deadline.com/2023/12/box-office-renaissance-a-film-by-beyonce-godzilla-minus-one-hunger-games-1235647651/",
+   "note": "Deadline: 'updated PostTrak exits of 92% positive, 83% definite recommend'. [trade source]"
+  },
+  {
+   "title": "The Naked Gun",
+   "year": 2025,
+   "genre": "comedy",
+   "total_positive": null,
+   "definite_recommend": 73,
+   "url": "https://deadline.com/2025/08/box-office-fantastic-four-bad-guys-2-naked-gun-1236476381/",
+   "note": "Deadline (Thursday previews): 'a good night in PostTrak exits with 4 1/2 stars and a 73% definite recommend'. [trade source]"
+  },
+  {
+   "title": "Get Out",
+   "year": 2017,
+   "genre": "horror",
+   "total_positive": 84,
+   "definite_recommend": 66,
+   "url": "https://deadline.com/2017/02/get-out-collide-rock-dog-lego-batman-fifty-shades-darker-box-office-1201964096/",
+   "note": "Deadline: 'total positive score of 84% ... Those definitely recommending Get Out to a friend numbered 66%'. Pre-2019, kept for reference, excluded from averages. [trade source]"
+  },
+  {
+   "title": "Split",
+   "year": 2017,
+   "genre": "thriller",
+   "total_positive": 78,
+   "definite_recommend": 54,
+   "url": "https://deadline.com/2017/02/get-out-collide-rock-dog-lego-batman-fifty-shades-darker-box-office-1201964096/",
+   "note": "Deadline: Split 78% positive, 54% definite recommend (psychological thriller). Pre-2019, excluded from averages. [trade source]"
+  },
+  {
+   "title": "Black Bag",
+   "year": 2025,
+   "genre": "thriller",
+   "total_positive": 75,
+   "definite_recommend": 51,
+   "url": "https://entertainmentindustryreporter.com/novocaine-leading-lowest-weekend-of-2025/",
+   "note": "Entertainment Industry Reporter mirror of Deadline text: 'Black Bag is seeing a B CinemaScore, 75% positive Posttrak, but a solid 51% definite recommend'. Secondary source. [secondary source]"
+  },
+  {
+   "title": "Novocaine",
+   "year": 2025,
+   "genre": "action",
+   "total_positive": null,
+   "definite_recommend": 59,
+   "url": "https://entertainmentindustryreporter.com/novocaine-leading-lowest-weekend-of-2025/",
+   "note": "Mirror of Deadline text: 'PostTrak audiences gave Novocaine 4 1/2 stars and a 59% definite recommend last night' (action comedy). Secondary source. [secondary source]"
+  },
+  {
+   "title": "Conclave",
+   "year": 2024,
+   "genre": "thriller",
+   "total_positive": 84,
+   "definite_recommend": 62,
+   "url": "https://en.wikipedia.org/wiki/Conclave_(film)",
+   "note": "Wikipedia: 'those surveyed by PostTrak gave it an 84% overall positive score, with 62% saying they would definitely recommend it'. Secondary source. [secondary source]"
+  },
+  {
+   "title": "Anyone But You",
+   "year": 2023,
+   "genre": "romance",
+   "total_positive": null,
+   "definite_recommend": 57,
+   "url": "https://en.wikipedia.org/wiki/Anyone_But_You",
+   "note": "Wikipedia: 'PostTrak reported filmgoers gave it an average of four out of five stars, with 57% saying they would definitely recommend the film'. Secondary source. [secondary source]"
+  },
+  {
+   "title": "Eternity",
+   "year": 2025,
+   "genre": "romance",
+   "total_positive": 84,
+   "definite_recommend": 54,
+   "url": "https://en.wikipedia.org/wiki/Eternity_(2025_film)",
+   "note": "Wikipedia: 'Audiences surveyed by PostTrak gave the film an 84% overall positive score, with 54% saying they would definitely recommend it'. Secondary source. [secondary source]"
+  },
+  {
+   "title": "Alien: Romulus",
+   "year": 2024,
+   "genre": "horror",
+   "total_positive": 82,
+   "definite_recommend": 65,
+   "url": "https://www.reddit.com/r/boxoffice/comments/1etzcnx/per_deadline_thursday_night_posttrak_scores_for/",
+   "note": "Reddit r/boxoffice post title citing Deadline Thursday night: '82% positive, 4 stars, and 65% definite recommend'. Secondary source. [secondary source]"
+  },
+  {
+   "title": "Deadpool & Wolverine",
+   "year": 2024,
+   "genre": "action",
+   "total_positive": 96,
+   "definite_recommend": 85,
+   "url": "https://www.reddit.com/r/boxoffice/comments/1ecrc5k/per_deadline_thursday_night_posttrak_scores_for/",
+   "note": "Reddit post title citing Deadline Thursday night: '5 Stars, 96% Positive, and 85% Definite Recommend'. Secondary source. [secondary source]"
+  },
+  {
+   "title": "John Wick: Chapter 4",
+   "year": 2023,
+   "genre": "action",
+   "total_positive": 93,
+   "definite_recommend": 82,
+   "url": "https://www.reddit.com/r/boxoffice/comments/121oy1a/posttrak_scores_for_john_wick_chapter_4_are_93/",
+   "note": "Reddit post title: 'PostTrak scores for John Wick: Chapter 4 are 93% Positive, 82% Definite Recommend'. Secondary source. [secondary source]"
+  },
+  {
+   "title": "Scream VI",
+   "year": 2023,
+   "genre": "horror",
+   "total_positive": 87,
+   "definite_recommend": 74,
+   "url": "https://www.reddit.com/r/boxoffice/comments/11ovzcr/posttrak_scores_for_scream_vi_are_87_positive74/",
+   "note": "Reddit post title: 'PostTrak scores for Scream VI are 87% Positive/74% Definite Recommend, a significant improvement over Scream (78%/59%)'. Secondary source. [secondary source]"
+  },
+  {
+   "title": "Scream",
+   "year": 2022,
+   "genre": "horror",
+   "total_positive": 78,
+   "definite_recommend": 59,
+   "url": "https://www.reddit.com/r/boxoffice/comments/11ovzcr/posttrak_scores_for_scream_vi_are_87_positive74/",
+   "note": "Same Reddit post title: Scream (2022) 78% positive / 59% definite recommend. Secondary source. [secondary source]"
+  },
+  {
+   "title": "A Complete Unknown",
+   "year": 2024,
+   "genre": "drama",
+   "total_positive": 93,
+   "definite_recommend": 76,
+   "url": "https://www.reddit.com/r/boxoffice/comments/1hmsvyc/per_deadline_posttrak_scores_for_a_complete/",
+   "note": "Reddit post title citing Deadline: '93% positive, 76% definite recommend'. Secondary source. [secondary source]"
+  },
+  {
+   "title": "Weapons",
+   "year": 2025,
+   "genre": "horror",
+   "total_positive": null,
+   "definite_recommend": 65,
+   "url": "https://www.reddit.com/r/boxoffice/comments/1ml5hlx/per_deadline_thursday_posttrak_scores_for_weapons/",
+   "note": "Reddit post title citing Deadline Thursday: '65% definite recommend and four stars'. Secondary source. [secondary source]"
+  },
+  {
+   "title": "28 Years Later",
+   "year": 2025,
+   "genre": "horror",
+   "total_positive": null,
+   "definite_recommend": 54,
+   "url": "https://forums.boxofficetheory.com/topic/33589-august-8-to-10-weekend-thread-weapons-425-freaky-29-fantastic-four-drop-redacted/page/7/",
+   "note": "Box Office Theory forum quoting Deadline: 'PostTrak audiences ... giving it 3 stars and a 54% definite recommend'. Secondary source. [secondary source]"
+  },
+  {
+   "title": "Longlegs",
+   "year": 2024,
+   "genre": "horror",
+   "total_positive": 70,
+   "definite_recommend": null,
+   "url": "https://forums.boxofficetheory.com/topic/33589-august-8-to-10-weekend-thread-weapons-425-freaky-29-fantastic-four-drop-redacted/page/7/",
+   "note": "Forum quoting Deadline: 'C+ CinemaScore and 70% positive/3 stars on PostTrak'. Secondary source. [secondary source]"
+  }
+ ]
+}

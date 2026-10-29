@@ -581,43 +581,118 @@ def _clock(t) -> str:
     return f"{s // 60}:{s % 60:02d}"
 
 
+def _pct(v) -> str:
+    try:
+        return f"{float(v):.1f}%"
+    except (TypeError, ValueError):
+        return ''
+
+
+def _top_events(events: list, n: int) -> list:
+    """The strongest moments in clock order (a page holds a few)."""
+    picked = sorted(events, key=lambda e: -float(e.get('intensity') or 0))[:n]
+    return sorted(picked, key=lambda e: float(e.get('t') or 0))
+
+
+def _norm_note(sc: dict, metric: str) -> str:
+    """'norm 50, comedy norm 71' for a scorecard row, from the norm
+    columns (never a source)."""
+    col = ((sc.get('norm_columns') or {}).get(metric)) or {}
+    genre = str(sc.get('genre') or '')
+    parts = []
+    if col.get('norm') is not None:
+        parts.append(f"norm {float(col['norm']):.0f}%")
+    if genre and col.get('genre_norm') is not None and col.get('genre_norm') != col.get('norm'):
+        parts.append(f"{genre} norm {float(col['genre_norm']):.0f}%")
+    return ', '.join(parts)
+
+
+def _scorecard_rows(sc: dict) -> list:
+    """(label, value, note) rows for the studio battery with the norm
+    beside each money number."""
+    bat = sc.get('battery') or {}
+    head = bat.get('headline') or {}
+    rows = []
+    if head.get('excellent_pct') is not None:
+        rows.append(('Excellent', _pct(head.get('excellent_pct')), _norm_note(sc, 'excellent')))
+        rows.append(('Total positive (excellent + very good)', _pct(head.get('total_positive_pct')), _norm_note(sc, 'total_positive')))
+    if head.get('definitely_recommend_pct') is not None:
+        rows.append(('Definitely recommend', _pct(head.get('definitely_recommend_pct')), _norm_note(sc, 'definitely_recommend')))
+    for q in bat.get('questions') or []:
+        if q.get('id') in ('overall', 'recommend'):
+            continue
+        if q.get('kind') == 'yes_no':
+            metric = 'finish' if q.get('id') == 'finish' else ('tune_in' if q.get('id') == 'tune_in' else '')
+            rows.append((q.get('label'), _pct(q.get('yes_pct')), _norm_note(sc, metric) if metric else ''))
+        elif q.get('rows'):
+            top = q['rows'][0]
+            metric = 'urgency_opening' if q.get('id') in ('urgency', 'urgency_pilot') else ''
+            rows.append((f"{q.get('label')}: {top.get('label')}", _pct(top.get('pct')), _norm_note(sc, metric) if metric else ''))
+    rows.append(('Dial average', f"{float(sc.get('overall_like') or 0):.1f}", 'where the room sat on the dial'))
+    return rows
+
+
+def _quadrant_rows(sc: dict) -> list:
+    bat = sc.get('battery') or {}
+    rows = []
+    for qd in bat.get('quadrants') or []:
+        if not qd.get('n'):
+            continue
+        rows.append((f"{qd.get('label')} ({qd.get('n')} seats)", _pct(qd.get('total_positive_pct')), f"definitely recommend {_pct(qd.get('definitely_recommend_pct'))}, excellent {_pct(qd.get('excellent_pct'))}"))
+    norms = sc.get('norms') or {}
+    a = norms.get('all') or {}
+    if a.get('total_positive'):
+        rows.append(('Norm', _pct((a.get('total_positive') or {}).get('value')), f"definitely recommend {_pct((a.get('definitely_recommend') or {}).get('value'))}, excellent {_pct((a.get('excellent') or {}).get('value'))}"))
+    g = norms.get('genre') or {}
+    genre = str(sc.get('genre') or '')
+    if genre and g.get('total_positive') and (g.get('total_positive') or {}).get('genre_used') not in (None, 'all'):
+        rows.append((f"{genre.title()} norm", _pct((g.get('total_positive') or {}).get('value')), f"definitely recommend {_pct((g.get('definitely_recommend') or {}).get('value'))}, excellent {_pct((g.get('excellent') or {}).get('value'))}"))
+    return rows
+
+
 def _pilot_pages(payload: dict, session: dict) -> list:
     m = payload.get('meta') or {}
     name = str(m.get('name') or m.get('subject') or 'the twin')
     sc = session.get('scorecard') or {}
+    head = ((sc.get('battery') or {}).get('headline')) or {}
     fav = sc.get('favorite_moment') or {}
     dead = sc.get('dead_spot') or {}
     media = session.get('media') or {}
     title = str(session.get('title') or media.get('title') or 'Pilot test')
+    tiles = [(_pct(head.get('total_positive_pct')) or f"{float(sc.get('overall_like') or 0):.1f}", 'Total positive' if head.get('total_positive_pct') is not None else 'Dial average'),
+             (_pct(head.get('definitely_recommend_pct')) or '', 'Definitely recommend'),
+             (_pct(head.get('excellent_pct')) or '', 'Excellent')]
     pages = [
         {'kind': 'tiles', 'header': f"{name} watched {title}.",
-         'sub': 'Overall like, recommend, and finish intent from the room.',
-         'tiles': [
-             (f"{float(sc.get('overall_like') or 0):.1f}", 'Overall like'),
-             (f"{float(sc.get('recommend_pct') or 0):.1f}%", 'Would recommend'),
-             (f"{float(sc.get('finish_intent_pct') or 0):.1f}%", 'Would finish'),
-         ],
-         'body': list(sc.get('notes') or [])[:3], 'dark': True},
-        {'kind': 'bullets', 'header': 'The moments that moved the room.',
-         'sub': f"Favorite at {fav.get('clock') or _clock(fav.get('t'))}. Dead spot at {dead.get('clock') or _clock(dead.get('t'))}.",
-         'body': [
-             f"Favorite moment: {fav.get('line') or 'The room peaked here.'}",
-             f"Dead spot: {dead.get('line') or 'The room dipped.'}",
-         ] + [f"{_clock(e.get('t'))}  {e.get('name')}: {e.get('line')}" for e in (session.get('events') or [])[:6]],
-         'dark': False},
+         'sub': 'The scorecard, with the norm beside each number.',
+         'tiles': [t for t in tiles if t[0]],
+         'body': list(sc.get('norm_lines') or [])[:3] or list(sc.get('notes') or [])[:3], 'dark': True},
+        {'kind': 'table', 'header': 'The scorecard.', 'sub': f"{(session.get('cut_label') or 'Cut A')}. {str(sc.get('format') or 'pilot').title()}" + (f", {sc.get('genre')}." if sc.get('genre') else '.'),
+         'head': ('Measure', 'Room', 'Norm'), 'rows': _scorecard_rows(sc)[:12], 'dark': False},
     ]
+    qrows = _quadrant_rows(sc)
+    if qrows:
+        pages.append({'kind': 'table', 'header': 'By quadrant.', 'sub': 'Total positive, with definitely recommend and excellent beside it.',
+                      'head': ('Group', 'Total positive', 'And'), 'rows': qrows[:12], 'dark': True})
+    pages.append({'kind': 'bullets', 'header': 'The moments that moved the room.',
+                  'sub': f"Favorite at {fav.get('clock') or _clock(fav.get('t'))}. Dead spot at {dead.get('clock') or _clock(dead.get('t'))}.",
+                  'body': [
+                      f"Favorite moment: {fav.get('line') or 'The room peaked here.'}",
+                      f"Dead spot: {dead.get('line') or 'The room dipped.'}",
+                  ] + [f"{_clock(e.get('t'))}  {e.get('name')}: {str(e.get('line') or '')[:90]}" for e in _top_events(session.get('events') or [], 3)],
+                  'dark': False})
     qs = session.get('questions') or []
     if qs:
         pages.append({'kind': 'bullets', 'header': 'What they said when asked.',
                       'sub': 'Questions sit on the playhead.',
-                      'body': [f"{q.get('playhead_clock') or _clock(q.get('playhead_s'))}: {q.get('q')}  {q.get('read') or ''}" for q in qs[:6]],
+                      'body': [f"{q.get('playhead_clock') or _clock(q.get('playhead_s'))}: {str(q.get('q') or '')[:70]}  {str(q.get('read') or '')[:110]}" for q in qs[:4]],
                       'dark': True})
     pages.append({'kind': 'bullets', 'header': 'What this means for the cut.',
                   'sub': '',
                   'body': [
                       f"{int(sc.get('people') or 0):,} people sit behind this room." if sc.get('people') else 'The room stands for the twin.',
-                      'Keep the favorite moment. Look hard at the dead spot.',
-                  ], 'dark': False})
+                  ] + list(sc.get('notes') or [])[:2] + ['Keep the favorite moment. Look hard at the dead spot.'],
+                  'dark': False})
     return pages
 
 
@@ -634,17 +709,19 @@ def build_pilot_pdf(payload: dict, session: dict, portrait_fn=None) -> bytes:
     dead = sc.get('dead_spot') or {}
     read = _portrait_reader(portrait_fn)
     d.new_page(True, 'Pilot Testing', _words(f"{session.get('title') or 'The cut'}"),
-               f"{g.get('in_room')} twins in the room. Moderated by Prometheus.")
+               f"{g.get('in_room')} twins in the room. Moderated by Prometheus." + (f" {str(sc.get('format') or '').title()}" + (f", {sc.get('genre')}." if sc.get('genre') else '.') if sc.get('format') else ''))
     y = d.y
-    y = d.table([
-        ('Overall like', f"{float(sc.get('overall_like') or 0):.1f}", ''),
-        ('Would recommend', f"{float(sc.get('recommend_pct') or 0):.1f}%", ''),
-        ('Would finish', f"{float(sc.get('finish_intent_pct') or 0):.1f}%", ''),
+    rows = _scorecard_rows(sc)[:9] + [
         ('Favorite moment', f"{fav.get('clock') or ''}", str(fav.get('line') or '')[:80]),
         ('Dead spot', f"{dead.get('clock') or ''}", str(dead.get('line') or '')[:80]),
-    ], d.m, y, d.right - d.m, head=('Score', 'Value', 'Note'))
-    for n in (sc.get('notes') or [])[:4]:
+    ]
+    y = d.table(rows, d.m, y, d.right - d.m, head=('Measure', 'Room', 'Norm'))
+    for n in (sc.get('norm_lines') or [])[:2] + (sc.get('notes') or [])[:2]:
         y = d.paragraph(n, d.m, y - 4, d.right - d.m, size=10)
+    qrows = _quadrant_rows(sc)
+    if qrows:
+        y = d.new_page(False, 'Pilot Testing', _words('By quadrant'), 'Total positive, with definitely recommend and excellent beside it.')
+        y = d.table(qrows[:10], d.m, y, d.right - d.m, head=('Group', 'Total positive', 'And'))
     roster_rows = (g.get('roster') or [])[:16]
     faces = [(r, read(r.get('portrait_hash'))) for r in roster_rows]
     if any(img is not None for _r, img in faces):

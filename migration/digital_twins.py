@@ -408,7 +408,10 @@ def csv_rows(payload: dict) -> list:
                 rows.append(['Focus Group IQ', ps.get('id'), f"{q.get('q')}: {r.get('label')}", r.get('pct'), '%', f"{r.get('people')} people"])
     for ps in payload.get('pilot_sessions') or []:
         sc = ps.get('scorecard') or {}
-        rows.append(['Pilot Testing', ps.get('id'), ps.get('title'), sc.get('overall_like'), 'overall like', f"recommend {sc.get('recommend_pct')}"])
+        head = ((sc.get('battery') or {}).get('headline')) or {}
+        rows.append(['Pilot Testing', ps.get('id'), ps.get('title'), head.get('total_positive_pct') if head.get('total_positive_pct') is not None else sc.get('overall_like'),
+                     'total positive %' if head.get('total_positive_pct') is not None else 'dial average',
+                     f"excellent {head.get('excellent_pct')}, definitely recommend {head.get('definitely_recommend_pct')}, dial {sc.get('overall_like')}"])
         for e in (ps.get('events') or [])[:40]:
             rows.append(['Pilot Testing', ps.get('id'), f"{e.get('type')} at {e.get('t')}", e.get('intensity'), 'event', e.get('line')])
     return rows
@@ -456,9 +459,12 @@ def view_summary(payload: dict, run_id: str = '', session_id: str = '') -> dict:
         p = next((x for x in payload.get('pilot_sessions') or [] if x.get('id') == session_id), None)
         if p:
             sc = p.get('scorecard') or {}
-            out['open_pilot_session'] = {'id': p.get('id'), 'title': p.get('title'), 'status': p.get('status'),
-                                         'overall_like': sc.get('overall_like'), 'recommend_pct': sc.get('recommend_pct'),
-                                         'finish_intent_pct': sc.get('finish_intent_pct'),
+            head = ((sc.get('battery') or {}).get('headline')) or {}
+            out['open_pilot_session'] = {'id': p.get('id'), 'title': p.get('title'), 'status': p.get('status'), 'format': sc.get('format'), 'genre': p.get('genre'),
+                                         'dial_average': sc.get('overall_like'), 'excellent_pct': head.get('excellent_pct'), 'total_positive_pct': head.get('total_positive_pct'),
+                                         'definitely_recommend_pct': head.get('definitely_recommend_pct'), 'finish_pct': head.get('finish_pct'), 'tune_in_pct': head.get('tune_in_pct'),
+                                         'norm_lines': sc.get('norm_lines') or [], 'quadrants': ((sc.get('battery') or {}).get('quadrants')) or [],
+                                         'favorite_moment': sc.get('favorite_moment'), 'dead_spot': sc.get('dead_spot'),
                                          'events_n': len(p.get('events') or []),
                                          'questions': [{'q': q.get('q'), 'playhead_clock': q.get('playhead_clock'), 'read': q.get('read')} for q in (p.get('questions') or [])[-6:]]}
     spends = ((payload.get('labs') or {}).get('spend')) or []
@@ -519,8 +525,11 @@ def twin_lines(payload: dict) -> list:
     for ps in (payload.get('pilot_sessions') or [])[:2]:
         sc = ps.get('scorecard') or {}
         fav = sc.get('favorite_moment') or {}
+        head = ((sc.get('battery') or {}).get('headline')) or {}
         out.append('PILOT TESTING, ' + str(ps.get('title')) + ':\n' +
-                   f"Overall like {sc.get('overall_like')}. Recommend {sc.get('recommend_pct')}. Finish {sc.get('finish_intent_pct')}. "
+                   (f"Excellent {head.get('excellent_pct')}%, total positive {head.get('total_positive_pct')}%, definitely recommend {head.get('definitely_recommend_pct')}%. "
+                    if head.get('total_positive_pct') is not None else f"Dial average {sc.get('overall_like')}. ") +
+                   ' '.join(sc.get('norm_lines') or []) + ' ' +
                    f"Favorite moment {fav.get('clock')}: {fav.get('line')}")
     if rd.get('what_to_do'):
         out.append('WHAT TO DO:\n' + '\n'.join(rd['what_to_do']))
@@ -623,20 +632,31 @@ HOW_TO = [
     },
     {
         'id': 'pilot', 'title': 'Pilot Testing',
-        'answers': ('A live watch of a pilot, movie, trailer or episode. Prometheus moderates. The twins in the room watch the cut '
-                    'from the moment you press Play: a dial of how the room feels second by second, laughs and loves marked on the clock, '
-                    'and you can ask them a question at any timestamp. After the cut: overall like, recommend, finish intent, the favorite '
-                    'moment, the dead spot, the transcript.'),
+        'answers': ('A live watch of a pilot, movie, trailer or episode. Prometheus moderates. The twins in the room watch the cut itself, '
+                    'scene by scene, from the moment you press Play: a dial of how the room feels second by second, laughs and loves marked '
+                    'on the clock in each person\'s own words, and you can ask them a question at any timestamp; the question carries the '
+                    'last minute of what played, so "would you keep watching?" at 12:40 is about minute 12. After the cut: the scorecard '
+                    'studios use (excellent / very good and total positive, definitely recommend, would finish, would watch the next one, '
+                    'how soon, against expectations, worth full price), each next to the norm and the genre norm, the four quadrants '
+                    '(women and men, under and over 35), the dial split by any group in the room (age, ethnicity, orientation, education, '
+                    'where they are with the title, avid or casual), the favorite moment, the dead spot, the transcript.'),
         'put_in': (f'A name for the test, the twin (or a second twin) in the room, how many panelists sit '
                    f'({PANEL_SEATS_INCLUDED} come with a session; each one past that is priced), and the cut: upload an mp4, mov or webm, '
                    'or paste a title and a runtime if the file is not in hand yet. The seats match the twin\'s profile '
-                   '(gender, orientation, education, occupation); each persona is built from those attributes.'),
+                   '(gender, orientation, education, occupation); each persona is built from those attributes. '
+                   'The genre is read from the cut; change it with the chip on the test if it reads wrong.'),
         'type_this': ['Open Pilot Testing on the Gilmore Girls twin and play the season 2 pilot',
                       'Ask the room at 12:40: would you keep watching?',
                       'Show of hands, who laughed at the diner scene?'],
         'attach': 'Upload the cut (mp4, mov or webm) on the Pilot Testing tab. A title and runtime still run the clock on a slate if the file is not ready.',
-        'comes_back': ('The dial draws as the cut plays, events land on the scrubber, and answers to your questions carry the playhead timestamp. '
-                       'The test is saved on the twin and resumes where you left it. Delete a test from the Pilot Testing tab; you can undo for 30 days.'),
+        'comes_back': ('Once the room has watched the cut (a few minutes for an episode) Play is ready. The dial draws as the cut plays, '
+                       'events land on the scrubber, a suggested question appears at each dip and peak, and a moderator guide sits beside '
+                       'the player with questions at the act turns and the ending. Answers to your questions carry the playhead timestamp and '
+                       'name the scene. The scorecard and its norms land on Stop. The test is saved on the twin and resumes where you left it. '
+                       'Delete a test from the Pilot Testing tab; you can undo for 30 days.'),
+        'protect': ('How we protect your cut: the file plays through links that expire after ten minutes and only for the person who '
+                    'uploaded it, your name sits on every frame while it plays, and a switch on the test removes the file the moment the '
+                    'scorecard is final (the read, the dial and the transcript stay).'),
         'cost_key': 'digital_twin_pilot', 'export': 'Pilot Testing tab: Export CSV, PDF or Deck on the test.',
     },
 ]
@@ -712,6 +732,8 @@ def how_to_text(topic: str = '', price_fn=None) -> str:
         out.append('Type to Prometheus: ' + ' | '.join(f'"{t}"' for t in it['type_this'][:3]))
         out.append(f"Files: {it['attach']}")
         out.append(f"What comes back: {it['comes_back']}")
+        if it.get('protect'):
+            out.append(it['protect'])
         out.append(f"Cost: {it['cost']}. Export: {it['export']}")
     if not pick:
         out.append(doc['where'])

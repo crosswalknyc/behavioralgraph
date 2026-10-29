@@ -36,12 +36,15 @@ app.py so app.py stays small.
   GET  /api/digital-twins/<key>/pilot/<sid>          the test
   PATCH /api/digital-twins/<key>/pilot/<sid>         rename
   POST /api/digital-twins/<key>/pilot/<sid>/upload   the cut (mp4 / mov / webm)
-  POST /api/digital-twins/<key>/pilot/<sid>/prepare  build the watch (beats, dial, events)
-  POST /api/digital-twins/<key>/pilot/<sid>/play     first Play charges; then the room is live on the clock
-  POST /api/digital-twins/<key>/pilot/<sid>/ask      a question at the playhead
-  POST /api/digital-twins/<key>/pilot/<sid>/stop     stop and keep the scorecard
-  DELETE /api/digital-twins/<key>/pilot/<sid>        delete (30-day undo)
-  GET  /api/digital-twins/<key>/pilot/<sid>/media    the uploaded cut
+  POST /api/digital-twins/<key>/pilot/<sid>/prepare  the room watches the cut: a file goes to the read worker (job_id; poll /jobs/<id>), a slate runs here
+  POST /api/digital-twins/<key>/pilot/<sid>/play     first Play charges; then the room is live on the clock (409 preparing while the worker watches)
+  POST /api/digital-twins/<key>/pilot/<sid>/ask      a question at the playhead; it carries the last 60 to 90 seconds of what played
+  POST /api/digital-twins/<key>/pilot/<sid>/stop     stop, keep the scorecard, add the test to the norms, remove the file when the test asked for it
+  PATCH /api/digital-twins/<key>/pilot/<sid>         rename, or set genre / mode / cut_label / rough_cut / purge_media_after
+  DELETE /api/digital-twins/<key>/pilot/<sid>        delete (30-day undo; the file follows the test into the undo copy)
+  GET  /api/digital-twins/<key>/pilot/<sid>/media-url  a signed link to the cut (ten minutes; creator or admin only)
+  GET  /api/digital-twins/<key>/pilot/<sid>/media    the uploaded cut streamed (creator or admin only; the fallback player path)
+  GET  /api/digital-twins/pilot-norms?format=&genre=  the norm and genre norm columns (no sources)
   GET  /api/digital-twins/<key>/pilot/<sid>/export.csv
   GET  /api/digital-twins/<key>/pilot/<sid>/export.pdf
   GET  /api/digital-twins/<key>/pilot/<sid>/export.pptx
@@ -1111,6 +1114,10 @@ def dt_pilot_get(key, sid):
     if not sess:
         return jsonify({'success': False, 'error': 'test not found'}), 404
     _attach_portraits(payload, key, sess)
+    if sess.get('status') == 'preparing':
+        _prepare_job_live(sess)             # a worker job that ended without a ready test flips the test back to draft
+        if sess.get('status') != 'preparing':
+            DT.save_twin(_s3(), key, payload)
     return _nocache(jsonify({'success': True, 'session': PI.public_session(sess)}))
 
 
@@ -1128,11 +1135,16 @@ def dt_pilot_rename(key, sid):
     if not sess:
         return jsonify({'success': False, 'error': 'test not found'}), 404
     body = request.get_json(silent=True) or {}
-    name = PI.rename_session(sess, str(body.get('title') or body.get('name') or ''))
-    if not name:
-        return jsonify({'success': False, 'error': 'Name the test.'}), 400
+    changed = PI.set_options(sess, body)   # genre chip, mode, cut label, rough cut, remove-the-file-when-done
+    name = ''
+    if body.get('title') or body.get('name'):
+        name = PI.rename_session(sess, str(body.get('title') or body.get('name') or ''))
+        if not name:
+            return jsonify({'success': False, 'error': 'Name the test.'}), 400
+    elif not changed:
+        return jsonify({'success': False, 'error': 'Nothing to change.'}), 400
     DT.save_twin(_s3(), key, payload)
-    return _nocache(jsonify({'success': True, 'session': PI.public_session(sess), 'title': name}))
+    return _nocache(jsonify({'success': True, 'session': PI.public_session(sess), 'title': name or sess.get('title'), 'changed': changed}))
 
 
 @bp.route(f'{PREFIX}/<path:key>/pilot/<sid>/upload', methods=['POST'])
@@ -1186,19 +1198,86 @@ def dt_pilot_upload(key, sid):
     except Exception:
         traceback.print_exc()
     media = sess.setdefault('media', {})
+    if sess.get('created_by') and str(sess.get('created_by')) != _uname(user) and not DT.is_admin(user):
+        return jsonify({'success': False, 'error': 'Only the person who opened this test can add the cut.'}), 403
     media.update({
         'filename': f.filename, 's3_key': mk, 'content_type': ctype,
         'bytes': len(raw), 'source': 'upload',
         'title': str(request.form.get('title') or media.get('title') or sess.get('title') or '')[:160],
         'hash': PI.media_hash(media.get('title') or '', runtime or media.get('runtime_s') or 0, f.filename, str(len(raw))),
     })
+    media.pop('purged_at', None)
+    media.pop('purged_reason', None)
     if runtime:
         media['runtime_s'] = runtime
     sess['status'] = 'draft'
+    sess['watch'] = {}          # a new file is a new watch
     sess['prepare_note'] = 'Preparing the cut' if runtime else 'Add a runtime if the clock looks short, then prepare.'
     sess['updated_at'] = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
     DT.save_twin(s3, key, payload)
     return jsonify({'success': True, 'session': PI.public_session(sess), 'uploaded': True})
+
+
+def _twins_for(payload, key, sess):
+    twins_by_key = {}
+    for tk in sess.get('twin_keys') or [key]:
+        t = payload if tk == key else DT.load_twin(_s3(), tk)
+        if t:
+            twins_by_key[tk] = t
+    if key not in twins_by_key:
+        twins_by_key[key] = payload
+    return twins_by_key
+
+
+PREPARE_ATTEMPTS_MAX = 2   # after two worker attempts the clock beat sheet runs here, so Play never dead-ends
+
+
+def _prepare_job_live(sess):
+    """The running prepare job on this test, or None. A job that ended
+    without a ready session flips the test back to draft so the page
+    offers Play again."""
+    jid = str(sess.get('prepare_job_id') or '')
+    if not jid or sess.get('status') != 'preparing':
+        return None
+    try:
+        from prometheus import digital_twin_job as J
+        rec = J.status_read(jid)
+    except Exception:
+        rec = None
+    st = str((rec or {}).get('status') or '')
+    if not rec:
+        return None
+    if st in ('error', 'cancelled'):
+        sess['status'] = 'draft'
+        sess['prepare_note'] = 'The cut could not be prepared this time. Press Play and the room runs on the clock.'
+        sess['updated_at'] = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
+        return None
+    if st == 'done':
+        return None
+    return rec
+
+
+def _start_prepare(user, key, sess, payload, body):
+    """Queue the cut for the read worker (ffmpeg and the room live
+    there). Returns the job id, or None when the worker has already
+    tried twice (the caller prepares on the clock right here)."""
+    from prometheus import pilot_prepare_job as PJ
+    live = _prepare_job_live(sess)
+    if live:
+        return str(live.get('job_id') or sess.get('prepare_job_id'))
+    attempts = int(sess.get('prepare_attempts') or 0)
+    if attempts >= PREPARE_ATTEMPTS_MAX:
+        return None
+    job_id = uuid.uuid4().hex[:12]
+    sess['status'] = 'preparing'
+    sess['prepare_note'] = 'Preparing the cut'
+    sess['prepare_job_id'] = job_id
+    sess['prepare_attempts'] = attempts + 1
+    sess['updated_at'] = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
+    DT.save_twin(_s3(), key, payload)
+    PJ.start(job_id, _uname(user), {'key': key, 'session_id': str(sess.get('id') or ''), 'notes': str((body or {}).get('notes') or '')[:400],
+                                    'title': str((body or {}).get('cut_title') or (body or {}).get('title') or '')[:160]}, extras=_usage_extras(user))
+    return job_id
 
 
 @bp.route(f'{PREFIX}/<path:key>/pilot/<sid>/prepare', methods=['POST'])
@@ -1219,15 +1298,19 @@ def dt_pilot_prepare(key, sid):
     except (TypeError, ValueError):
         duration = 0
     title = str(body.get('cut_title') or body.get('title') or (sess.get('media') or {}).get('title') or sess.get('title') or '')
-    twins_by_key = {}
-    for tk in sess.get('twin_keys') or [key]:
-        t = payload if tk == key else DT.load_twin(_s3(), tk)
-        if t:
-            twins_by_key[tk] = t
-    if key not in twins_by_key:
-        twins_by_key[key] = payload
+    media = sess.setdefault('media', {})
+    if title:
+        media['title'] = title[:160]
+    if duration:
+        media['runtime_s'] = duration
+    if media.get('s3_key'):
+        # a file: the read worker reads it (scenes, frames, words) and the room watches there
+        job_id = _start_prepare(user, key, sess, payload, body)
+        if job_id:
+            return jsonify({'success': True, 'session': PI.public_session(sess), 'job_id': job_id, 'preparing': True})
+    twins_by_key = _twins_for(payload, key, sess)
     PI.prepare_watch(sess, twins_by_key, duration_s=duration, title=title,
-                     notes=str(body.get('notes') or ''), transcript=sess.get('transcript'))
+                     notes=str(body.get('notes') or ''), transcript=sess.get('transcript'), usage_extras=_usage_extras(user), s3=_s3())
     DT.save_twin(_s3(), key, payload)
     return jsonify({'success': True, 'session': PI.public_session(sess)})
 
@@ -1246,14 +1329,20 @@ def dt_pilot_play(key, sid):
         return jsonify({'success': False, 'error': 'test not found'}), 404
     if sess.get('status') not in ('ready', 'playing', 'stopped') or not (sess.get('dial') or {}).get('value'):
         body = request.get_json(silent=True) or {}
-        twins_by_key = {key: payload}
+        if (sess.get('media') or {}).get('s3_key'):
+            # the room is still watching the file on the worker: Play waits for it (no charge yet)
+            job_id = _start_prepare(user, key, sess, payload, body)
+            if job_id:
+                return jsonify({'success': False, 'preparing': True, 'job_id': job_id, 'session': PI.public_session(sess),
+                                'error': 'Preparing the cut. Play is ready the moment the room has watched it.'}), 409
+        twins_by_key = _twins_for(payload, key, sess)
         try:
             duration = float(body.get('runtime_s') or (sess.get('media') or {}).get('runtime_s') or 0)
         except (TypeError, ValueError):
             duration = 0
         PI.prepare_watch(sess, twins_by_key, duration_s=duration,
                          title=str((sess.get('media') or {}).get('title') or sess.get('title') or ''),
-                         transcript=sess.get('transcript'))
+                         transcript=sess.get('transcript'), usage_extras=_usage_extras(user), s3=_s3())
     funds = _charge_pilot(user, payload, sess, for_play=True)
     if funds is not None:
         return funds
@@ -1295,11 +1384,15 @@ def dt_pilot_ask(key, sid):
         playhead = float(body.get('playhead_s') or body.get('t') or 0)
     except (TypeError, ValueError):
         playhead = 0
+    # the question carries the moment: the last 60 to 90 seconds of what played, the scene on screen,
+    # the top events in that window and every seat's own dial in those seconds
+    stimulus = PI.ask_stimulus(sess, playhead, extra=body.get('stimulus') if isinstance(body.get('stimulus'), dict) else None)
     rec = P.ask(sess, twins_by_key, q, kind=body.get('kind'), options=body.get('options'),
-                stimulus=body.get('stimulus') if isinstance(body.get('stimulus'), dict) else None,
+                stimulus=stimulus,
                 voices_fn=_voices_fn(), asked_by=_uname(user), s3=_s3(), twin_key=key,
                 ask_again=bool(body.get('ask_again')), usage_extras=_usage_extras(user))
     PI.stamp_question(rec, playhead)
+    rec['moment'] = {'frame': (stimulus.get('window') or {}).get('frame'), 'scene': (stimulus.get('window') or {}).get('scene'), 'dial_now': (stimulus.get('window') or {}).get('dial_now')}
     DT.save_twin(_s3(), key, payload)
     return jsonify({'success': True, 'question': rec, 'session_id': sid, 'session': PI.public_session(sess),
                     'job_id': rec.get('job_id'), 'stage': rec.get('stage')})
@@ -1318,8 +1411,13 @@ def dt_pilot_stop(key, sid):
     if not sess:
         return jsonify({'success': False, 'error': 'test not found'}), 404
     PI.stop_session(sess)
+    if sess.get('scorecard'):
+        PI.record_norms(sess, s3=_s3())     # every finished test grows the norms (idempotent per test)
+    purged = False
+    if sess.get('purge_media_after') and (sess.get('media') or {}).get('s3_key'):
+        purged = PI.purge_media(_s3(), sess, reason='done')
     DT.save_twin(_s3(), key, payload)
-    return jsonify({'success': True, 'session': PI.public_session(sess)})
+    return jsonify({'success': True, 'session': PI.public_session(sess), 'media_removed': purged})
 
 
 @bp.route(f'{PREFIX}/<path:key>/pilot/<sid>', methods=['DELETE'])
@@ -1357,6 +1455,9 @@ def dt_pilot_media(key, sid):
     sess = _pilot(payload, sid)
     if not sess:
         return jsonify({'success': False, 'error': 'test not found'}), 404
+    from migration import digital_twin_pilot as PI
+    if not PI.can_view_media(sess, _uname(user), DT.is_admin(user)):
+        return jsonify({'success': False, 'error': 'The cut plays only for the person who uploaded it.'}), 403
     media = sess.get('media') or {}
     mk = media.get('s3_key')
     if not mk:
@@ -1394,6 +1495,42 @@ def dt_pilot_media(key, sid):
     if obj.get('ContentLength') is not None:
         resp.headers['Content-Length'] = str(obj['ContentLength'])
     return resp
+
+
+@bp.route(f'{PREFIX}/<path:key>/pilot/<sid>/media-url', methods=['GET'])
+def dt_pilot_media_url(key, sid):
+    """A signed link to the cut that lives ten minutes, for the person
+    who uploaded it (or an admin). The player asks again before it
+    expires. The file's storage key never travels to the browser."""
+    user, err = _gate()
+    if err:
+        return err
+    payload, err = _twin_or_404(user, key)
+    if err:
+        return err
+    sess = _pilot(payload, sid)
+    if not sess:
+        return jsonify({'success': False, 'error': 'test not found'}), 404
+    from migration import digital_twin_pilot as PI
+    if not PI.can_view_media(sess, _uname(user), DT.is_admin(user)):
+        return jsonify({'success': False, 'error': 'The cut plays only for the person who uploaded it.'}), 403
+    if not (sess.get('media') or {}).get('s3_key'):
+        return jsonify({'success': False, 'error': 'No cut is on this test.' if not (sess.get('media') or {}).get('purged_at') else 'The file was removed when the test finished. The read stays.'}), 404
+    link = PI.signed_media_url(_s3(), sess)
+    if not link:
+        return jsonify({'success': False, 'error': 'The cut is not available right now.'}), 500
+    return _nocache(jsonify({'success': True, **link, 'watermark': {'who': str((user or {}).get('email') or _uname(user) or ''), 'test': sid}}))
+
+
+@bp.route(f'{PREFIX}/pilot-norms', methods=['GET'])
+def dt_pilot_norms():
+    """The norm and genre norm columns for a format and genre (no
+    sources leave the server). For the scorecard and for Phase 2."""
+    user, err = _gate()
+    if err:
+        return err
+    from migration import digital_twin_pilot as PI
+    return _nocache(jsonify({'success': True, 'norms': PI.norms_for(str(request.args.get('format') or 'pilot'), str(request.args.get('genre') or 'all'), s3=_s3())}))
 
 
 @bp.route(f'{PREFIX}/<path:key>/pilot/<sid>/export.csv', methods=['GET'])

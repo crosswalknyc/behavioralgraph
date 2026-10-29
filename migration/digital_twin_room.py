@@ -874,17 +874,19 @@ OPTIONS_SYSTEM = """You are Prometheus, a seasoned focus group moderator. Before
 - True to the facts brief. Never an option the facts rule out: for a show that ended years ago and already streams, 'wait for it to come out' or 'wait until it is free' is not an answer; for a collectible the real options turn on keepsake value, unseen material, giving it as a gift, already owning it, and price. For a show still running, options turn on when and where they would watch.
 - Each option carries a lean: yes (a purchase, watch or positive intent), maybe (conditional), no (a decline), other.
 - When the question kind is probe, the options are the reasons or the levers you expect to hear, tied to what the room answered on the question it follows.
+- When the stimulus carries what_just_played (the room is watching a cut and it was paused at that clock), the question is about that moment: open the framing with the clock and the scene in plain words ('At 12:40, right after the hallway reveal: would you keep watching?'), make the options about the cut as watched (keep watching, who they are following, what confused them, what landed), never about buying or subscribing unless the question asks, and never name an actor.
 - Write the framing: how you would put the question to the room in one or two sentences, giving the room the facts it should have in plain words. Never name a source; never use the words research, panel, sample, model, synthetic, estimated, confidence. No em dashes.
 Return JSON only: {"options": [{"id": "a", "label": "<short label, under 12 words>", "lean": "yes|maybe|no|other"}], "framing": "<one or two sentences>", "listen_for": ["<two or three things you want to hear from the room>"]}"""
 
 PERSONA_SYSTEM = """You are one person in a focus group, answering as yourself. The moderator is Prometheus. You are given who you are (a card), what you said earlier in this session, the facts Prometheus put in front of the room, and the question with its coded options.
 Stay in character: your age, your city, who you are (orientation, education, the work the card gives you), how you came to the subject, your habits with money, merchandise and discs, your streaming life. Reason from the facts the way you would (if the show ended years ago and you can stream it any night, say what that means for you; if you own the DVDs already, say so). Answer Prometheus in two or three natural spoken sentences, concrete the way real people are (what you own, what you paid, who you would give it to), with no lists and no hedging. Never mention being an AI, a twin, a persona or a character. When this is a follow-up, stay consistent with what you said earlier. Pick exactly one option by id, or 'other' with a short label when none fits. Give a confidence from 1 (unsure) to 5 (certain) and a one-sentence reason. No em dashes.
+When you are given what_just_played, you are in a screening and the cut was paused at that clock: answer about what you just saw, name the scene in your own words (the hallway, the diner argument), let your own dial in those seconds and what you said during them show in the answer, and never name an actor.
 Return JSON only: {"option": "<id or other>", "other_label": "<when other>", "line": "<two or three sentences>", "confidence": <1 to 5>, "reason": "<one sentence>"}"""
 
 READ_SYSTEM = """You are Prometheus, the moderator, writing up the room for a senior executive. Plain English a high school student follows; the thinking is senior consultant. You are given the question, the options with the room's split (the published share of the whole audience in percent and people, and the raw tally of the seats in the room, both already computed; never change a number), the split by segment, every seat's answer, the facts brief and a prior note.
 The published share is the room projected onto the audience: the seats drive the shape, and the small tails stand for people the twelve seats could not show, so a 1% option means a sliver of the audience, never nobody. Say shares in plain words first ('about two in three', 'about one in ten', 'a sliver') and cite the raw count when it helps ('eight of the twelve'); never print a percentage with a decimal in the read.
 Write:
-- read: one paragraph, three to five sentences, on what the room said and why, grounded in the facts and the comparables in plain words. Say what the share means (who these people are, what it would take). Vary the sentence shapes. Never name a source or a publication; never use the words research, model, modeled, synthetic, estimated, panel, sample, confidence, pipeline, data. If the prior note says the seats departed from the audience's own leaning, explain what accounts for it in the read rather than overriding the room.
+- read: one paragraph, three to five sentences, on what the room said and why, grounded in the facts and the comparables in plain words. Say what the share means (who these people are, what it would take). Vary the sentence shapes. Never name a source or a publication; never use the words research, model, modeled, synthetic, estimated, panel, sample, confidence, pipeline, data. If the prior note says the seats departed from the audience's own leaning, explain what accounts for it in the read rather than overriding the room. When the question was asked on the clock (the stimulus carries what_just_played), open the read with the clock and the scene ('At 12:40, after the hallway reveal, ...') and keep the read about that moment and the seats' own dials.
 - voices: the seat ids of the three or four most telling answers, spread across the options in proportion to the split.
 - probes_next: two follow-up questions you would ask this room next, in your own words as the moderator.
 - facts_used: two to five one-line facts the read leans on, in plain words with no source names.
@@ -980,7 +982,8 @@ def moderator_options(models: Models, twin: dict, q: str, kind: str, opts: list,
     if kind in ('rating', 'ab') or (kind == 'multiple_choice' and len(opts) >= 2):
         return {'options': fixed, 'framing': '', 'listen_for': [], 'fallback': False, 'fixed': True}
     tb = _twin_brief(twin)
-    user = json.dumps({'question': q, 'kind': kind, 'stimulus': stimulus or {}, 'supplied_options': opts,
+    stim_view = ({'what_just_played': _moment_view(stimulus), 'cut': stimulus.get('cut') or {}} if _in_cut(stimulus) else (stimulus or {}))
+    user = json.dumps({'question': q, 'kind': kind, 'stimulus': stim_view, 'supplied_options': opts,
                        'follows': ({'question': last.get('q'), 'options': last.get('option_labels') or last.get('options'),
                                     'split': [{'label': r.get('label'), 'pct': r.get('pct')} for r in (last.get('distribution') or [])[:6]]} if last else None),
                        'audience': {'name': tb['name'], 'format': tb['format'], 'stage': tb['stage'], 'size_us': tb['size_us'], 'avid_share_pct': tb['avid_share_pct'],
@@ -1017,12 +1020,46 @@ def memory_for(session: dict, seat_no: int, limit: int = 6) -> list:
     return out[-limit:]
 
 
-def seat_answer(models: Models, card: dict, q: str, framing: str, options: list, brief: dict, memory: list, seed: str, log=None) -> dict:
+def _in_cut(stimulus: Optional[dict]) -> bool:
+    return bool(isinstance(stimulus, dict) and stimulus.get('in_cut') and isinstance(stimulus.get('window'), dict))
+
+
+def _moment_view(stimulus: Optional[dict]) -> Optional[dict]:
+    """The moment for the moderator: the clock, the scene on screen, the
+    last minute of beats, the top events, the room's dial."""
+    if not _in_cut(stimulus):
+        return None
+    win = dict(stimulus.get('window') or {})
+    return {'clock': win.get('clock'), 'from_clock': win.get('from_clock'), 'frame': win.get('frame'), 'on_screen_now': (win.get('scene') or {}).get('on_screen'),
+            'dialogue_now': (win.get('scene') or {}).get('dialogue'),
+            'the_last_minute': [{'clock': b.get('clock'), 'on_screen': b.get('on_screen'), 'dialogue': b.get('dialogue'), 'room_dial': b.get('dial')} for b in (win.get('beats') or [])[-12:]],
+            'what_the_room_did': win.get('events') or [], 'room_dial_now': win.get('dial_now'), 'room_dial_last_minute': win.get('dial_window_mean'),
+            'the_cut': stimulus.get('cut') or {}}
+
+
+def _moment_for_seat(stimulus: Optional[dict], seat_no) -> Optional[dict]:
+    """What just played, with this seat's own dial in those seconds
+    (Pilot Testing questions on the clock)."""
+    if not _in_cut(stimulus):
+        return None
+    win = dict(stimulus.get('window') or {})
+    mine = (stimulus.get('seat_windows') or {}).get(str(seat_no)) or {}
+    return {'clock': win.get('clock'), 'from_clock': win.get('from_clock'), 'on_screen_now': (win.get('scene') or {}).get('on_screen'),
+            'the_last_minute': [{'clock': b.get('clock'), 'on_screen': b.get('on_screen'), 'dialogue': b.get('dialogue')} for b in (win.get('beats') or [])[-10:]],
+            'your_dial_in_these_seconds': {'now': mine.get('dial_now'), 'a_minute_ago': mine.get('dial_start'), 'moved': mine.get('moved')},
+            'what_you_said_in_these_seconds': mine.get('events') or [], 'the_cut': stimulus.get('cut') or {}}
+
+
+def seat_answer(models: Models, card: dict, q: str, framing: str, options: list, brief: dict, memory: list, seed: str, log=None, stimulus: Optional[dict] = None) -> dict:
     """One seat's answer in character; the deterministic fallback when
     the model is late or off."""
-    user = json.dumps({'you': _card_text(card), 'earlier_in_this_session': memory,
-                       'facts_the_moderator_gave_the_room': facts_lines(brief, 12), 'what_could_not_be_confirmed': (brief or {}).get('not_found') or [],
-                       'moderator': framing or q, 'question': q, 'options': [{'id': o['id'], 'label': o['label']} for o in options]}, default=str)[:7000]
+    body = {'you': _card_text(card), 'earlier_in_this_session': memory,
+            'facts_the_moderator_gave_the_room': facts_lines(brief, 12), 'what_could_not_be_confirmed': (brief or {}).get('not_found') or [],
+            'moderator': framing or q, 'question': q, 'options': [{'id': o['id'], 'label': o['label']} for o in options]}
+    moment = _moment_for_seat(stimulus, card.get('seat'))
+    if moment:
+        body['what_just_played'] = moment
+    user = json.dumps(body, default=str)[:9000]
     data, call = models.call('persona', PERSONA_SYSTEM, user, max_tokens=420, temperature=0.85, tools=None)
     if log:
         log('persona', call)
@@ -1587,6 +1624,12 @@ def run_question(ctx: dict) -> dict:
                     if brief:
                         brief['_reused_from'] = earlier.get('id')
                         break
+        if not brief and _in_cut(stim):
+            # a question on the clock: the cut is the stimulus; the moderator and the seats reason from what just played
+            win = stim.get('window') or {}
+            brief = {'subject_status': {'line': f"The room is watching {((stim.get('cut') or {}).get('title') or 'the cut')} and the cut was paused at {win.get('clock')}."},
+                     'facts': [], 'not_found': [], 'implications': [f"Answer about the moment: {win.get('frame') or win.get('clock')}."],
+                     'what_just_played': _moment_view(stim), '_in_cut': True}
         if not brief:
             brief = research(models, twin, q if kind != 'probe' else str((last or {}).get('q') or q), kind, stim, s3, log=log)
         if not brief:
@@ -1621,7 +1664,7 @@ def run_question(ctx: dict) -> dict:
 
         def _one(seat_no):
             card = cards[seat_no]
-            return seat_answer(models, card, q, rec.get('framing') or '', options, brief, memories[seat_no], seed, log=log)
+            return seat_answer(models, card, q, rec.get('framing') or '', options, brief, memories[seat_no], seed, log=log, stimulus=stim)
         pool = ThreadPoolExecutor(max_workers=max(1, min(len(roster), 16)))
         futures = {pool.submit(_one, int(r['seat'])): int(r['seat']) for r in roster}
         pending = set(futures)
