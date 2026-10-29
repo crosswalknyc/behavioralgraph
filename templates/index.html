@@ -36259,8 +36259,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (!cf || cf.slug !== slug || !cf.map || !a) return '';
                 return cf.map[_iiqCreativeFmtKey(a.url)] || '';
             }
-            // One table, one file: only the rows and columns of the table
-            // the button sits on, for the campaign on screen.
+            // One table, one file: exactly what the table shows on screen
+            // (its rows, columns, sort and the top-20 / show-all state),
+            // for the campaign on screen. Nothing the table does not show.
             window.iiqROIMTACsv = function(tbl) {
                 var slug = (window.__intentIQ && window.__intentIQ.currentSlug) || '';
                 var c = window.__iiqROICache || {};
@@ -36280,11 +36281,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     name = 'Resonance_by_channel';
                 } else {
                     var rows = _iiqROISortRows(bd.perAsset, 'content');
-                    lines = [['#', 'Content', 'Asset type', 'Posted', 'Creative format', 'Channel', 'Views', 'Engagements', midL + ' events', botH, 'Share %', 'URL']];
+                    rows = rows.slice(0, window.__iiqROIShowAll ? rows.length : Math.min(rows.length, 20));
+                    lines = [['#', 'Content', 'Asset type', 'Posted', 'Creative format', 'Channel', 'Views', 'Engagements', midL + ' events', botH, 'Share %']];
                     rows.forEach(function(r) {
                         var a = r.asset || {};
-                        lines.push([r.rank, _iiqROIAssetLabel(a, 1000), a.asset_type || '', String(a.posted_date || '').slice(0, 10),
-                            _iiqCreativeFormat(a), a.channel || '', R(r.views), R(r.eng), R(r.info), R(r.web), r.share.toFixed(1), a.url || '']);
+                        lines.push([r.rank, _iiqROIAssetLabel(a, 96), a.asset_type || '', String(a.posted_date || '').slice(0, 10),
+                            _iiqCreativeFormat(a), a.channel || '', R(r.views), R(r.eng), R(r.info), R(r.web), r.share.toFixed(1) + '%']);
                     });
                     name = 'Content_Resonance';
                 }
