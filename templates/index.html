@@ -35968,7 +35968,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     : '';
                 return ''
                   + (isStatic ? '' : '<div style="margin-top:0.5rem; margin-bottom:0.4rem; font-size:0.85rem; font-weight:600; color:#e5e7eb;">Value of every piece of content</div>')
-                  + '<div style="font-size:0.7rem; color:var(--text-secondary); margin-bottom:0.4rem;">' + (isStatic ? '<button type="button" onclick="iiqROIMTACsv(\'content\')" title="Download this table as CSV" style="float:right; margin-left:0.6rem; padding:3px 9px; border:1px solid #3B3D38; border-radius:5px; background:transparent; color:#9AA09B; font-size:9.5px; font-weight:600; letter-spacing:.12em; text-transform:uppercase; cursor:pointer; font-family:inherit;">CSV</button>' + 'Ranked by counts. Click a column header to sort.' : 'Ranked by total value. Click any row to value that post on its own.') + (slim ? '' : ' Per 1K is total value per thousand views, the cleanest read of which content is doing more with each view.') + '</div>'
+                  + '<div style="font-size:0.7rem; color:var(--text-secondary); margin-bottom:0.4rem;">' + (isStatic ? 'Ranked by counts. Click a column header to sort.' : 'Ranked by total value. Click any row to value that post on its own.') + (slim ? '' : ' Per 1K is total value per thousand views, the cleanest read of which content is doing more with each view.') + '</div>'
                   + '<div style="overflow-x:auto; border:1px solid rgba(255,255,255,0.06); border-radius:8px;">'
                   +   '<table style="width:100%; border-collapse:collapse; font-size:0.76rem;">'
                   +     '<thead><tr style="background: rgba(0,0,0,0.35); color:#94a3b8; font-size:0.66rem; text-transform:uppercase; letter-spacing:0.05em;">'
@@ -36003,12 +36003,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     return /[",\r\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t;
                 };
                 var out = [['#', 'Content', 'Type', 'Posted', 'Format', 'Channel', 'Views', 'Engagements',
-                            midL + ' events', botL + (/visit$/i.test(botL) ? 's' : ' visits'), 'Share', 'URL']];
+                            midL + ' events', botL + (/visit$/i.test(botL) ? 's' : ' visits'), 'Share']];
                 rows.forEach(function(r) {
                     var a = r.asset;
                     out.push([r.rank, _iiqROIAssetLabel(a, 100000), a.asset_type || '', a.posted_date || '',
                               _iiqCreativeFormat(a), a.channel || '', Math.round(r.views), Math.round(r.eng),
-                              Math.round(r.info), Math.round(r.web), r.share.toFixed(1) + '%', a.url || '']);
+                              Math.round(r.info), Math.round(r.web), r.share.toFixed(1) + '%']);
                 });
                 var csv = '\ufeff' + out.map(function(row) { return row.map(cell).join(','); }).join('\r\n');
                 var slug = (window.__intentIQ && window.__intentIQ.currentSlug) || 'attribution';
@@ -36055,9 +36055,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 }).join('');
                 return ''
                   + (isStatic
-                      ? '<div class="iiq-res-title" style="margin-top:2.4rem;">Resonance by channel</div>'
+                      ? '<div style="display:flex; align-items:center; justify-content:space-between; gap:1rem; margin-top:2.4rem;"><div class="iiq-res-title" style="margin-top:0 !important;">Resonance by channel</div><button type="button" onclick="iiqROIMTACsv(\'channel\')" title="Download this table as a CSV" style="background:transparent; color:#C7F23E; border:1px solid rgba(199,242,62,0.45); border-radius:999px; padding:0.3rem 0.85rem; font-size:0.72rem; font-weight:600; letter-spacing:0.04em; cursor:pointer; white-space:nowrap;">Download CSV</button></div>'
                       : '<div style="margin-top:1rem; margin-bottom:0.4rem; font-size:0.85rem; font-weight:600; color:#e5e7eb;">Value by channel</div>')
-                  + '<div style="font-size:0.7rem; color:var(--text-secondary); margin-bottom:0.4rem;">' + (isStatic ? '<button type="button" onclick="iiqROIMTACsv(\'channel\')" title="Download this table as CSV" style="float:right; margin-left:0.6rem; padding:3px 9px; border:1px solid #3B3D38; border-radius:5px; background:transparent; color:#9AA09B; font-size:9.5px; font-weight:600; letter-spacing:.12em; text-transform:uppercase; cursor:pointer; font-family:inherit;">CSV</button>' + 'Views, engagements, ' + escapeHtml(_iiqROIMidLabel().toLowerCase()) + ' events and ' + escapeHtml(botL.toLowerCase()) + 's across every piece of content on each channel. Click a column header to sort.' : slim ? 'Views, engagements, ' + escapeHtml(_iiqROIMidLabel().toLowerCase()) + ' events and ' + escapeHtml(botL.toLowerCase()) + 's summed across every piece of content on each channel.' : 'Views are priced at each channel\'s CPM. Engagement, ' + escapeHtml(_iiqROIMidLabel().toLowerCase()) + ' and ' + escapeHtml(_iiqROIBotLabel().toLowerCase()) + ' values use the flat rates below and do not vary by channel.') + '</div>'
+                  + '<div style="font-size:0.7rem; color:var(--text-secondary); margin-bottom:0.4rem;">' + (isStatic ? 'Views, engagements, ' + escapeHtml(_iiqROIMidLabel().toLowerCase()) + ' events and ' + escapeHtml(botL.toLowerCase()) + 's across every piece of content on each channel. Click a column header to sort.' : slim ? 'Views, engagements, ' + escapeHtml(_iiqROIMidLabel().toLowerCase()) + ' events and ' + escapeHtml(botL.toLowerCase()) + 's summed across every piece of content on each channel.' : 'Views are priced at each channel\'s CPM. Engagement, ' + escapeHtml(_iiqROIMidLabel().toLowerCase()) + ' and ' + escapeHtml(_iiqROIBotLabel().toLowerCase()) + ' values use the flat rates below and do not vary by channel.') + '</div>'
                   + '<div style="overflow-x:auto; border:1px solid rgba(255,255,255,0.06); border-radius:8px;">'
                   +   '<table style="width:100%; border-collapse:collapse; font-size:0.78rem;">'
                   +     '<thead><tr style="background: rgba(0,0,0,0.35); color:#94a3b8; font-size:0.68rem; text-transform:uppercase; letter-spacing:0.05em;">'
@@ -36259,9 +36259,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (!cf || cf.slug !== slug || !cf.map || !a) return '';
                 return cf.map[_iiqCreativeFmtKey(a.url)] || '';
             }
-            // One table, one file: exactly what the table shows on screen
-            // (its rows, columns, sort and the top-20 / show-all state),
-            // for the campaign on screen. Nothing the table does not show.
+            // One table, one file: the table's own columns in its on-screen
+            // sort, every row, for the campaign on screen. Never a field the
+            // dashboard does not show.
             window.iiqROIMTACsv = function(tbl) {
                 var slug = (window.__intentIQ && window.__intentIQ.currentSlug) || '';
                 var c = window.__iiqROICache || {};
@@ -36281,7 +36281,6 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     name = 'Resonance_by_channel';
                 } else {
                     var rows = _iiqROISortRows(bd.perAsset, 'content');
-                    rows = rows.slice(0, window.__iiqROIShowAll ? rows.length : Math.min(rows.length, 20));
                     lines = [['#', 'Content', 'Asset type', 'Posted', 'Creative format', 'Channel', 'Views', 'Engagements', midL + ' events', botH, 'Share %']];
                     rows.forEach(function(r) {
                         var a = r.asset || {};
