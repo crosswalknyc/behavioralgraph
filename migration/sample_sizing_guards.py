@@ -66,6 +66,100 @@ _ANCHOR_NOUNS = (
     'employee', 'rider', 'driver', 'passenger', 'guest', 'reader',
 )
 
+# ── Anchor-source vocabulary (2026-10-29, Jennifer Beals audit) ──────
+# The intake accepted `universe_anchor: 4,200,000` with the source
+# "estimated US adults with meaningful digital engagement with Jennifer
+# Beals across social, search, and entertainment content" and then
+# applied `engaged_share` 0.662 on top of it: an engager ESTIMATE was
+# treated as a countable anchor and discounted a second time. An anchor
+# must be a countable published figure (followers on a named platform,
+# subscribers, viewers of a named title, buyers, a pageview count, a Gen
+# Pop row); `engaged_share` applies once to that count; when the figure
+# already counts the engaged audience the share is 1.0.
+import re as _re
+
+# A countable published figure names what it counts.
+_COUNTABLE_RE = _re.compile(
+    r"\b(followers?|following|subscribers?|subs|members?|memberships?|buyers?|"
+    r"purchasers?|customers?|clients?|voters?|electorate|users?|mau|dau|wau|"
+    r"downloads?|installs?|page ?views?|views?|viewers?|viewership|listeners?|"
+    r"listens|streams?|plays?|tickets?|admissions?|attendees?|attendance|"
+    r"accounts?|enrollees?|enrollment|policyholders?|players?|shoppers?|"
+    r"registered|registrations?|licens(?:e|es|ed|ees)|households?|panelists?|"
+    r"units?|copies|sales|box office|gross|circulation|readers?|readership|"
+    r"visitors?|visits|owners?|riders?|drivers?|passengers?|guests?|patients?|"
+    r"students?|employees?|donors?|renters?|holders?|residents?|population|"
+    r"census|ratings?|gen pop row|gen pop|benchmark row|total universe|"
+    r"prior (?:profile|window|file|total universe)|checkouts?|orders?|"
+    r"transactions?|sign-?ups?|likes|comments|searches|queries|impressions|"
+    r"sessions|uniques?|unique (?:people|individuals|visitors|viewers)|"
+    r"tam|nielsen|comscore|earnings|10-k|sec filing|verified|published|reported|"
+    r"counted|measured|client-supplied)\b", _re.I)
+
+# An estimate of engagement, not a count of anything.
+_ESTIMATE_RE = _re.compile(
+    r"\b(estimated?|estimates?|estimation|approx(?:imately|\.)?|roughly|"
+    r"about|around|assumed?|assumption|modell?ed|inferred|guess(?:ed)?|"
+    r"reasoned|likely|plausible|implied|meaningful(?:ly)?)\b", _re.I)
+_ENGAGER_RE = _re.compile(
+    r"\b(engag(?:ed|ement|ers?|ing)|audiences?|fan(?:s|base|dom)?|reach(?:ed)?|"
+    r"touch(?:ed|points?)?|aware(?:ness)?|interest(?:ed)?|affinity|interacted|"
+    r"exposure|exposed)\b", _re.I)
+
+# The figure already counts the engaged audience itself: applying the
+# engaged share again would discount it twice.
+_ENGAGER_COUNT_RE = _re.compile(
+    r"\b(engagers?|engaged (?:audience|people|individuals|users|adults|"
+    r"panelists|us people)|(?:people|individuals|adults|users|panelists) who "
+    r"(?:touched|engaged|interacted|searched|clicked|visited|viewed|watched|"
+    r"followed|opened)|us people who|digital engagers?|gen pop row|"
+    r"total universe|prior (?:profile|window|total universe)|benchmark row|"
+    r"touchpoints?|same quantity|identical quantity)\b", _re.I)
+
+ROUND_ANCHOR_UNIT = 100_000
+
+
+def classify_anchor_source(anchor_source):
+    """What an anchor_source phrase describes.
+
+    'engagement_estimate': estimate / engagement vocabulary with no
+        countable noun ("estimated US adults with meaningful digital
+        engagement with X"). Never usable as the anchor.
+    'engager_count': a count of the engaged audience itself (a Gen Pop
+        row, a prior Total Universe, "US people who touched the
+        subject"). The anchor IS the audience: engaged_share is 1.0.
+    'countable': a published figure that counts something (followers,
+        subscribers, viewers of a title, buyers, a pageview count).
+    'unknown': empty or unclassifiable; treated as today.
+    """
+    s = ' '.join(str(anchor_source or '').split())
+    if not s:
+        return 'unknown'
+    has_count = bool(_COUNTABLE_RE.search(s))
+    is_est = bool(_ESTIMATE_RE.search(s))
+    is_eng = bool(_ENGAGER_RE.search(s))
+    # An estimate of anything with no count behind it is never an anchor,
+    # whatever else the phrase says.
+    if is_est and not has_count:
+        return 'engagement_estimate'
+    if _ENGAGER_COUNT_RE.search(s):
+        return 'engager_count'
+    if is_eng and not has_count:
+        return 'engagement_estimate'
+    if has_count:
+        return 'countable'
+    return 'unknown'
+
+
+def is_round_anchor(value, unit=ROUND_ANCHOR_UNIT):
+    """A universe_anchor divisible by 100,000 is a placeholder tell when
+    its source is not a countable published figure."""
+    try:
+        v = int(value)
+    except (TypeError, ValueError):
+        return False
+    return v >= unit and v % unit == 0
+
 
 def _norm_subject(subject):
     return ''.join(ch for ch in str(subject or '').lower() if ch.isalnum())
@@ -91,8 +185,10 @@ def parse_anchor(value):
 
 
 def parse_share(value):
-    """Coerce a draft's engaged_share to a fraction in (0, 1), or None.
-    Accepts 0.106, '10.6%', '10.6' (values in (1, 100] read as percent)."""
+    """Coerce a draft's engaged_share to a fraction in (0, 1], or None.
+    Accepts 0.106, '10.6%', '10.6' (values in (1, 100] read as percent).
+    Exactly 1.0 (or '100%') is a valid share: the anchor already counts
+    the engaged audience (2026-10-29)."""
     if value in (None, '', 'null', 'None'):
         return None
     try:
@@ -101,7 +197,7 @@ def parse_share(value):
         return None
     if 1.0 < v <= 100.0:
         v = v / 100.0
-    if not (0.0 < v < 1.0):
+    if not (0.0 < v <= 1.0):
         return None
     return v
 
@@ -109,15 +205,24 @@ def parse_share(value):
 _ANCHOR_RE = None
 
 
-def extract_anchor_from_prose(text):
+def extract_anchor_from_prose(text, exclude=(), reject_round=False):
     """Regex-recover a countable universe anchor from draft prose
     (persona_notes, assumptions, decision_reason): the largest counted
     figure that sits within ~60 characters of an anchor-ish noun.
-    Returns (anchor_int_or_None, source_phrase_or_None)."""
+    ``exclude`` lists values that may not be recovered (an anchor the
+    caller just rejected); ``reject_round`` also skips figures divisible
+    by 100,000 (the placeholder tell). Returns
+    (anchor_int_or_None, source_phrase_or_None)."""
     global _ANCHOR_RE
     import re
     if not text:
         return None, None
+    excluded = set()
+    for x in (exclude or ()):
+        try:
+            excluded.add(int(x))
+        except (TypeError, ValueError):
+            pass
     if _ANCHOR_RE is None:
         noun = '|'.join(_ANCHOR_NOUNS)
         _ANCHOR_RE = re.compile(
@@ -143,6 +248,8 @@ def extract_anchor_from_prose(text):
             continue
         if not (ANCHOR_MIN <= v <= ANCHOR_MAX):
             continue
+        if v in excluded or (reject_round and is_round_anchor(v)):
+            continue
         if best is None or v > best:
             best = v
             gap = ' '.join((m.group('gap') or '').split())
@@ -163,10 +270,21 @@ def _is_international_country(country):
             return False
 
 
+def _benchmark_people(bench):
+    """US people on a benchmark dict ({'people': n, 'label': ...}) or 0."""
+    if not isinstance(bench, dict):
+        return 0
+    try:
+        return int(round(float(bench.get('people') or 0)))
+    except (TypeError, ValueError):
+        return 0
+
+
 def enforce_anchor_derivation(subject, subject_raw_tu, subject_raw_avid,
                               universe_anchor=None, engaged_share=None,
                               anchor_source=None, prose=None, log=print,
-                              country='US', refresh_locked=False):
+                              country='US', refresh_locked=False,
+                              benchmark=None, prior_universe=None):
     """Jenna 2026-08-24 mandate: 'the sample always has to be based to
     the researched anchor.' Every fresh-build sample must equal
     anchor x engaged_share (within ANCHOR_FIT_TOLERANCE); when it does
@@ -174,6 +292,18 @@ def enforce_anchor_derivation(subject, subject_raw_tu, subject_raw_avid,
     a missing/absurd anchor is recovered from the draft prose when
     possible, otherwise flagged with anchor_missing=True (the run
     status and ops email surface the flag).
+
+    2026-10-29 (Jennifer Beals audit): the anchor must be a countable
+    published figure. An anchor_source that is itself an engagement
+    estimate is rejected, and so is a round anchor (divisible by
+    100,000) with a non-countable source; the rejected anchor is
+    replaced by ``benchmark`` (the subject's Gen Pop row, {'people',
+    'label'}) when one exists, else ``prior_universe`` (the subject's
+    prior Total Universe), else the draft proceeds unanchored on the
+    scale band the prompt carries (never the round figure). When the
+    anchor already counts the engaged audience (a Gen Pop row, a prior
+    universe, "US people who touched the subject"), engaged_share is
+    1.0 so the count is never discounted twice.
 
     Returns (subject_raw_tu, subject_raw_avid, meta). meta always has
     keys: anchor, anchor_source, engaged_share, engaged_share_derived,
@@ -196,6 +326,89 @@ def enforce_anchor_derivation(subject, subject_raw_tu, subject_raw_avid,
                 f"[{ANCHOR_MIN}, {ANCHOR_MAX:,}]); attempting prose repair")
         except Exception:
             pass
+
+    # ── Countable anchors only (2026-10-29) ─────────────────────────
+    source_kind = classify_anchor_source(anchor_source)
+    meta['anchor_source_kind'] = source_kind
+    rejected = None
+    allow_over_anchor = False
+    if anchor is not None:
+        if source_kind == 'engagement_estimate':
+            rejected = ('the anchor source is an engagement estimate, not a '
+                        'countable published figure')
+        elif is_round_anchor(anchor) and source_kind != 'countable':
+            rejected = (f"a round figure ({anchor:,}) with no countable "
+                        f"source behind it")
+    if rejected:
+        meta['anchor_rejected'] = {
+            'anchor': anchor, 'anchor_source': (str(anchor_source).strip()
+                                                if anchor_source else None),
+            'reason': rejected,
+        }
+        try:
+            log(f"[anchor-guard] {subject!r}: REJECTED universe_anchor "
+                f"{anchor:,} ({anchor_source!r}): {rejected}")
+        except Exception:
+            pass
+        rejected_value = anchor
+        anchor = None
+        anchor_source = None
+        engaged_share = None
+        for kind, bench in (('genpop', benchmark), ('prior', prior_universe)):
+            people = _benchmark_people(bench)
+            if people >= ANCHOR_MIN:
+                anchor = people
+                anchor_source = str(bench.get('label') or
+                                    ('the subject\'s Gen Pop row' if kind == 'genpop'
+                                     else 'the subject\'s prior Total Universe'))
+                engaged_share = 1.0
+                allow_over_anchor = True
+                meta['anchor_replaced_with'] = kind
+                try:
+                    log(f"[anchor-guard] {subject!r}: anchor replaced with "
+                        f"{anchor_source} = {people:,} US people (engaged share "
+                        f"1.0: the figure already counts the audience)")
+                except Exception:
+                    pass
+                break
+        if anchor is None:
+            # Prose repair may still surface a real count, never the
+            # rejected figure and never another round one.
+            anchor, prose_src = extract_anchor_from_prose(
+                prose, exclude=(rejected_value,), reject_round=True)
+            if anchor is not None:
+                meta['repaired_from_prose'] = True
+                anchor_source = prose_src
+                try:
+                    log(f"[anchor-guard] {subject!r}: recovered anchor "
+                        f"{anchor:,} from draft prose ({prose_src!r})")
+                except Exception:
+                    pass
+        if anchor is None:
+            meta['anchor_missing'] = True
+            meta['projected'] = projected_audience(tu)
+            try:
+                log(f"[anchor-guard] {subject!r}: no benchmark, prior "
+                    f"universe or countable prose figure to replace the "
+                    f"rejected anchor; sample {tu:,} proceeds on the scale "
+                    f"band (anchor_missing=true), never the round figure")
+            except Exception:
+                pass
+            return subject_raw_tu, subject_raw_avid, meta
+    elif anchor is not None and source_kind == 'engager_count':
+        # The figure already counts the engaged audience.
+        if parse_share(engaged_share) not in (None, 1.0):
+            try:
+                log(f"[anchor-guard] {subject!r}: anchor {anchor:,} already "
+                    f"counts the engaged audience ({anchor_source!r}); "
+                    f"engaged_share {engaged_share!r} -> 1.0 (never "
+                    f"discounted twice)")
+            except Exception:
+                pass
+        engaged_share = 1.0
+        allow_over_anchor = True
+        meta['engaged_share_forced'] = True
+
     if anchor is None:
         anchor, prose_src = extract_anchor_from_prose(prose)
         if anchor is not None:
@@ -274,7 +487,7 @@ def enforce_anchor_derivation(subject, subject_raw_tu, subject_raw_avid,
         # Below the ceiling, the share is restated from the delivered
         # sample so the derivation chain stays coherent.
         meta['refresh_locked'] = True
-        if projected > anchor:
+        if projected > anchor and not allow_over_anchor:
             new_tu, _sc_meta = scale_under_anchor(
                 subject, tu, anchor, salt='tu-refresh-ceiling')
             if new_tu != tu:
@@ -306,6 +519,8 @@ def enforce_anchor_derivation(subject, subject_raw_tu, subject_raw_avid,
             except Exception:
                 pass
         _share_final = projected_audience(tu) / float(anchor)
+        if allow_over_anchor:
+            _share_final = min(1.0, _share_final)
         meta.update({
             'anchor': anchor,
             'anchor_source': (str(anchor_source).strip() or None)
@@ -325,7 +540,11 @@ def enforce_anchor_derivation(subject, subject_raw_tu, subject_raw_avid,
         h2 = int(hashlib.sha256(
             f"{subject}|anchor-walk".encode()).hexdigest()[:8], 16)
         guard = 0
-        while projected_audience(new_tu) > anchor and guard < 50:
+        # An anchor that already counts the engaged audience (a Gen Pop
+        # row, a prior universe) is a level, not a ceiling: the messy
+        # sample may sit a hair above it.
+        while (not allow_over_anchor and projected_audience(new_tu) > anchor
+               and guard < 50):
             new_tu -= 1 + (h2 % 7)
             guard += 1
         try:
@@ -385,6 +604,10 @@ def format_anchor_line(meta, tu_sample=None):
     line = ' '.join(parts).replace(' ;', ';')
     if meta.get('repaired_from_prose'):
         line += ' (anchor recovered from draft prose)'
+    if meta.get('anchor_replaced_with') == 'genpop':
+        line += " (draft anchor rejected; the subject's Gen Pop row is the anchor)"
+    elif meta.get('anchor_replaced_with') == 'prior':
+        line += " (draft anchor rejected; the subject's prior Total Universe is the anchor)"
     if meta.get('recomputed'):
         line += ' (sample recomputed from anchor)'
     return line
@@ -621,15 +844,19 @@ def apply_sizing_guards(subject, subject_raw_tu, subject_raw_avid,
                         universe_anchor=None, engaged_share=None,
                         anchor_source=None, prose=None, s3_client=None,
                         bucket='dashboard-inputs', log=print, country='US',
-                        refresh_locked=False, persona_signature=None):
+                        refresh_locked=False, persona_signature=None,
+                        benchmark=None, prior_universe=None):
     """One-call convenience wrapper used by both wire points.
 
     Runs the MANDATORY anchor derivation on TU (Jenna 2026-08-24:
     'the sample always has to be based to the researched anchor';
     avid scales proportionally when TU moves), then the cross-spec
     duplicate guard on both values against the S3 ledger, then records
-    the final values. Returns
-    (subject_raw_tu, subject_raw_avid, anchor_meta)."""
+    the final values. ``benchmark`` / ``prior_universe`` (2026-10-29)
+    are the subject's Gen Pop row and prior Total Universe as
+    {'people', 'label'}; they replace an anchor the derivation rejects
+    (an engagement estimate, or a round figure with no countable
+    source). Returns (subject_raw_tu, subject_raw_avid, anchor_meta)."""
     # 1. Mandatory universe-anchor derivation (reject-or-repair).
     subject_raw_tu, subject_raw_avid, anchor_meta = \
         enforce_anchor_derivation(
@@ -637,6 +864,7 @@ def apply_sizing_guards(subject, subject_raw_tu, subject_raw_avid,
             universe_anchor=universe_anchor, engaged_share=engaged_share,
             anchor_source=anchor_source, prose=prose, log=log,
             country=country, refresh_locked=refresh_locked,
+            benchmark=benchmark, prior_universe=prior_universe,
         )
     # 2. Cross-spec duplicate guard (S3 ledger).
     entries = []

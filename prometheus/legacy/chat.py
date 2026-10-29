@@ -871,7 +871,18 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "individuals) and an engaged share: emit `universe_anchor` (int), "
         "`anchor_source` (one plain phrase naming what it counts) and "
         "`engaged_share` (fraction). The implied projection must sit BELOW "
-        "the anchor. Rough scale: near-universal brands 6.5M-9M panelists; "
+        "the anchor. The anchor is a countable PUBLISHED figure (followers "
+        "on a named platform, subscribers, viewers of a named title, "
+        "buyers, a pageview count, the subject's own Gen Pop row), never "
+        "an estimate of engagement or an audience guess: an anchor_source "
+        "like 'estimated US adults with meaningful digital engagement' is "
+        "rejected, and so is a round universe_anchor (divisible by "
+        "100,000) with no countable source. engaged_share applies ONCE to "
+        "that count; when the anchor already counts the engaged audience "
+        "(a Gen Pop row, a prior Total Universe), engaged_share is 1.0. A "
+        "fresh build is held near the subject's own Gen Pop row (0.55x to "
+        "1.8x) and its prior Total Universe. "
+        "Rough scale: near-universal brands 6.5M-9M panelists; "
         "mass-market brands 1.5M-3.5M; high-scale talent 250K-800K; "
         "mid-scale talent 60K-200K; niche acts 8K-40K; a whole-population "
         "demographic + behavioral persona sizes to US-population incidence "
@@ -7151,6 +7162,27 @@ def _spec_from_draft(draft):
             for k in ('persona_notes', 'assumptions', 'decision_reason',
                       'category_note')
         )
+        # ── Subject benchmark anchors (2026-10-29, Jennifer Beals
+        # audit). The subject's own Gen Pop row (US people who touched
+        # the subject in the Gen Pop window) and its most recent prior
+        # Total Universe replace a draft anchor the derivation rejects:
+        # an anchor_source that is itself an engagement estimate, or a
+        # round universe_anchor (divisible by 100,000) with no countable
+        # source. The Beals draft carried 4,200,000 "estimated US adults
+        # with meaningful digital engagement" and then discounted it
+        # again by engaged_share 0.662. Fresh-build decisions only; a
+        # subject with neither anchor keeps today's path. Fail-safe.
+        _size_bench = _size_prior = None
+        try:
+            from migration.profile_build_size_guards import anchors_for_draft
+            _size_bench, _size_prior = anchors_for_draft(
+                draft, subject, stem, audience_type_out, s3=_guard_s3)
+        except Exception as _sa_err:
+            try:
+                print(f"[size-benchmark] {subject!r}: anchor lookup skipped "
+                      f"({type(_sa_err).__name__}: {_sa_err})")
+            except Exception as _fx:
+                _faults.note('chat', _fx)
         subject_raw_tu, subject_raw_avid, _anchor_meta = apply_sizing_guards(
             subject, subject_raw_tu, subject_raw_avid,
             universe_anchor=draft.get('universe_anchor'),
@@ -7159,6 +7191,8 @@ def _spec_from_draft(draft):
             prose=_anchor_prose,
             s3_client=_guard_s3,
             persona_signature=draft.get('_persona_signature'),
+            benchmark=_size_bench,
+            prior_universe=_size_prior,
         )
     except Exception as _sg_err:
         try:
