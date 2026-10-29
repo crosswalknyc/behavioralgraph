@@ -19748,19 +19748,21 @@ def api_intent_weekly_pdf(title_slug):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
-@app.route('/api/intent/<title_slug>/export.xlsx', methods=['GET'])
+@app.route('/api/intent/<title_slug>/export.xlsx', methods=['GET', 'POST'])
 @requires_auth
 def api_intent_export_xlsx(title_slug):
-    """Download every Attribution IQ dataset for a campaign as one
-    Excel workbook (one sheet per dataset: campaign facts, phases,
-    assets, content types, paid vs organic, top assets, audiences,
-    districts, cohorts, demographics, touchpoints, journeys, funnel,
-    co-exposure, per-audience views). See
-    ``attribution_excel_export.build_workbook``.
+    """Download the Attribution IQ tables on screen for a campaign as one
+    Excel workbook. See ``attribution_excel_export.build_workbook``.
+
+    The client says which tabs are live (``tabs``, validated against
+    ``attribution_excel_export.TAB_IDS``) so only those sheets are
+    written, plus the picked audience (``audience``) and, for tables the
+    browser computes (Performance), the rows it drew (``tables``, POST
+    JSON only). GET with ``?tabs=&audience=&as_of=`` still works for the
+    server-built sheets.
 
     Same gate as every other ``/api/intent/<slug>/*`` route: the
-    per-user title allow-list applies. ``?as_of=YYYY-MM-DD`` is
-    optional and only steers the dated multi-touch read.
+    per-user title allow-list applies.
     """
     ok, err = _require_intent_iq(title_slug)
     if not ok:
@@ -19774,10 +19776,18 @@ def api_intent_export_xlsx(title_slug):
         return jsonify({'success': False, 'error': 'campaign lookup failed'}), 500
     if not ov or not ov.get('success'):
         return jsonify({'success': False, 'error': 'campaign not found'}), 404
-    as_of = (request.args.get('as_of') or '').strip()[:10] or None
+    body = (request.get_json(silent=True) or {}) if request.method == 'POST' else {}
+    if not isinstance(body, dict):
+        body = {}
+    raw_tabs = body.get('tabs') if 'tabs' in body else request.args.get('tabs')
+    tabs = _attribution_excel_export.parse_tabs(raw_tabs)
+    as_of = str(body.get('as_of') or request.args.get('as_of') or '').strip()[:10] or None
+    audience = str(body.get('audience') or request.args.get('audience') or '').strip()[:200] or None
+    tables = body.get('tables') if isinstance(body.get('tables'), dict) else None
     try:
         xlsx_bytes, fname = _attribution_excel_export.build_workbook(
-            title_slug, _intent_iq, mta_iq=_mta_iq, as_of=as_of)
+            title_slug, _intent_iq, mta_iq=_mta_iq, as_of=as_of,
+            tabs=tabs, audience=audience, tables=tables)
         resp = Response(
             xlsx_bytes,
             mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
