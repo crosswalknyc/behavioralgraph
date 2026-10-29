@@ -601,6 +601,23 @@ class DeckCtx:
     data:           dict
 
 
+def _adjusted_lift_rel(cg: dict) -> float:
+    """Matched lift (pp) as a share of the exposed group's pre-period
+    rate, in percent. Falls back to the payload's own relative figure
+    when the baseline is missing."""
+    try:
+        pp = float(cg.get("incremental_lift_pp") or 0)
+        pre = float(cg.get("treat_pre_pen_pct") or 0)
+        if pre > 0:
+            return round(pp / pre * 100.0, 1)
+    except (TypeError, ValueError):
+        pass
+    try:
+        return float(cg.get("incremental_lift_rel_pct") or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
 def _derive_context(data: dict, image_url: Optional[str],
                     category: Optional[str]) -> DeckCtx:
     totals = data.get("totals") or {}
@@ -674,7 +691,11 @@ def _derive_context(data: dict, image_url: Optional[str],
         delta_pp=delta_pp,
         delta_rel=delta_rel,
         incr_lift_pp=float(cg.get("incremental_lift_pp") or 0),
-        incr_lift_rel=float(cg.get("incremental_lift_rel_pct") or 0),
+        # the adjusted lift the deck argues from is the matched lift as a
+        # share of the exposed group's own baseline (the ratio the house
+        # attributable formula uses); against the comparison group's tiny
+        # drift it read as thousands of percent (2026-10-28)
+        incr_lift_rel=_adjusted_lift_rel(cg),
         campaign_window=win,
         attribution_d=int(data.get("attribution_window_days") or 0),
         panel_size=int(data.get("audience_size") or 0),
