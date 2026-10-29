@@ -470,6 +470,28 @@ def _platform_key(a: dict) -> str:
     return _asset_channel(a).strip().lower()
 
 
+# An article is read once and read mostly by the publication's own market,
+# whatever masthead carries it. A sponsor story on a local newspaper site
+# (USA TODAY Network, 2026-10-29) keeps its publication as the channel for
+# grouping and display, and takes the press profile for its reach math.
+_PRESS_LIKE_TYPES = ("story", "article", "editorial", "column", "op-ed", "interview", "review", "feature")
+
+
+def _press_like(a: dict) -> bool:
+    at = str(a.get("asset_type") or "").lower()
+    ch = _platform_key(a)
+    return any(w in at for w in _PRESS_LIKE_TYPES) or any(w in ch for w in ("press", "editorial", "news"))
+
+
+def _reach_profile_key(a: dict) -> str:
+    """The reach-table key for an asset: its platform when the tables know
+    it, the press profile for an article on a masthead they do not."""
+    pk = _platform_key(a)
+    if pk in _REACH_VIEWS_PER_VIEWER:
+        return pk
+    return "press" if _press_like(a) else pk
+
+
 def _reach_union(parts, overlap: float) -> float:
     """The unique people behind several overlapping reaches: the largest
     plus (1 - overlap) of the rest."""
@@ -484,7 +506,7 @@ def _asset_unique_people(a: dict) -> float:
     views = float(a.get("ext_view_count") or 0)
     if views <= 0:
         return 0.0
-    pk = _platform_key(a)
+    pk = _reach_profile_key(a)
     vpv = _REACH_VIEWS_PER_VIEWER.get(pk, _REACH_VIEWS_PER_VIEWER_DEFAULT)
     if "trailer" in str(a.get("asset_type") or "").lower():
         vpv *= _REACH_TRAILER_REPLAY
@@ -508,7 +530,7 @@ def _touchpoint_reach_people(card: dict) -> float:
     member_views = card.get("member_views")
     if not member_views:
         return _asset_unique_people(card)
-    pk = _platform_key(card)
+    pk = _reach_profile_key(card)
     vpv = _REACH_VIEWS_PER_VIEWER.get(pk, _REACH_VIEWS_PER_VIEWER_DEFAULT)
     us = _REACH_US_SHARE.get(pk, _REACH_US_SHARE_DEFAULT)
     types = card.get("member_types") or []
@@ -538,7 +560,7 @@ def _campaign_reach(touch: list[dict]) -> dict:
     rows = []
     for pk, ts in by_plat.items():
         reach = _reach_union([float(t.get("reach_people") or 0) for t in ts],
-                             _REACH_PLATFORM_OVERLAP.get(pk, _REACH_PLATFORM_OVERLAP_DEFAULT))
+                             _REACH_PLATFORM_OVERLAP.get(_reach_profile_key(ts[0]), _REACH_PLATFORM_OVERLAP_DEFAULT))
         rows.append({
             "platform": ts[0].get("channel") or pk,
             "key": pk,
@@ -677,6 +699,33 @@ def _established_conversion_rate(slug: str, before_as_of: str) -> float:
     except Exception as e:
         logger.warning("MTA: established conversion rate lookup failed for %s: %s", slug, e)
     return 0.0
+
+
+def _asset_funnel_rate(cards: list, reach_us: float) -> float:
+    """A first read of a campaign whose conversions live on its assets
+    (no earlier read to hold): the assets' own action-page visits over the
+    exposed audience, views x the asset's action rate summed over the
+    assets, divided by the unique US people reached. 0.0 when the assets
+    carry no views or no rates, or the result is out of range, so the
+    caller falls back as before. Without this the first read of such a
+    campaign drew its rate from the title-type band and the nest sat on a
+    scale its own assets never produced (USA TODAY Network sponsor
+    stories, 2026-10-29)."""
+    if not cards or not reach_us or reach_us <= 0:
+        return 0.0
+    visits = 0.0
+    for a in cards:
+        try:
+            views = float(a.get("ext_view_count") or 0)
+            pct = float(a.get("ext_website_visit_pct") or 0)
+        except (TypeError, ValueError):
+            continue
+        if views > 0 and pct > 0:
+            visits += views * pct / 100.0
+    if visits <= 0:
+        return 0.0
+    rate = visits / float(reach_us)
+    return rate if 0.0008 <= rate <= 0.30 else 0.0
 
 
 def _held_conversion_rate(slug: str, ttype: str, n_panel: int, converters_us: int) -> float:
@@ -1000,9 +1049,10 @@ def _freq_ceiling_for(t: dict) -> int:
         return 3
     if ch in ("x", "twitter", "facebook", "snapchat", "reddit"):
         return 8
-    if "press" in ch or "editorial" in ch or "news" in ch:
-        # An article (review, interview, trailer write-up) is read once,
-        # occasionally twice. No ambient repeat play like a feed clip.
+    if "press" in ch or "editorial" in ch or "news" in ch or _press_like(t):
+        # An article (review, interview, trailer write-up, sponsor story)
+        # is read once, occasionally twice. No ambient repeat play like a
+        # feed clip.
         return 2
     return 6
 
@@ -1175,7 +1225,7 @@ def _build_exposure_matrix_from_reach(slug: str, touch: list[dict], n_panel: int
         local = prng.permutation(members.shape[0]).astype(np.int64)
         touched = np.zeros(members.shape[0], dtype=bool)
         lptr = 0
-        ov = _REACH_PLATFORM_OVERLAP.get(pk, _REACH_PLATFORM_OVERLAP_DEFAULT)
+        ov = _REACH_PLATFORM_OVERLAP.get(_reach_profile_key(touch[cols[0]]), _REACH_PLATFORM_OVERLAP_DEFAULT)
         for j, k in enumerate(cols):
             n_k = int(round(float(touch[k].get("reach_people") or 0) / plat_total * members.shape[0]))
             n_k = max(1, min(members.shape[0], n_k))
@@ -2083,8 +2133,11 @@ def compute_mta_coefficients(campaign_slug: str,
         held_rate = 0.0
         if _asset_funnel_basis(cards):
             # conversions are read from the assets: hold the rate, the
-            # converters follow the exposed audience
+            # converters follow the exposed audience; a first read with
+            # nothing to hold seeds the rate from the assets themselves
             held_rate = _established_conversion_rate(slug, as_of_iso)
+            if held_rate <= 0:
+                held_rate = _asset_funnel_rate(cards, reach["us_people"])
         if held_rate > 0:
             held_us = int(round(reach["us_people"] * held_rate))
         else:
@@ -2985,6 +3038,56 @@ _CARD_CONFIG: dict[str, dict] = {
             ),
         },
         "paths_conversion_noun": "civic action page",
+    },
+    # USA TODAY Network sponsor stories (2026-10-29). Paid brand-integrated
+    # stories on local newspaper sites; the sponsor pays the paper to
+    # write the article. The middle of the funnel is looking the sponsor
+    # up away from the paper (Google, social search, Reddit, Nextdoor);
+    # the bottom is reaching the sponsor's own property (its website, a
+    # page it runs elsewhere, its Google Business profile). No checkout.
+    "usa_today_sponsor_stories": {
+        "kind": "brand",
+        "ticketer_partition_surfaces": ["Sponsor website", "Sponsor's own pages on other platforms",
+                                          "Google Business profile", "Sponsor event or program page"],
+        "infoseek_overlap_surfaces":   ["Google search for the sponsor", "Instagram, TikTok or Facebook search",
+                                          "Reddit threads", "Nextdoor posts",
+                                          "Local news coverage of the sponsor"],
+        "assist_touchpoints":          ["Story read", "Story From module on the homepage",
+                                          "Sponsor search", "Second sponsor story from the same paper"],
+        "leak_competing_label":        "Reached a competing provider instead",
+        "leak_competing_note":         ("Looked the sponsor up within 14d and reached a different "
+                                          "provider's site in the same category instead"),
+        "nest_labels": {
+            "2_infoseek": "Mid funnel: Looked the sponsor up within 14d",
+            "3_ticketer": "Lower funnel: Reached a sponsor property within 14d",
+            "4_paid":     "Reached the sponsor's own site within 14d",
+        },
+        "fork_questions": {
+            "1_exposed":  "Read the story to the end",
+            "2_infoseek": "Looked the sponsor up on more than one surface",
+            "3_ticketer": "Reached more than one sponsor property",
+        },
+        "archetypes": [
+            {"archetype": "Straight-through",
+             "description": "Story to the sponsor's site through an in-article link, no research step"},
+            {"archetype": "Researched",
+             "description": "Story to a Google or social search for the sponsor to the sponsor's site"},
+            {"archetype": "Re-exposed",
+             "description": "Left after the story and came back after seeing it again on the paper's homepage"},
+            {"archetype": "Compared",
+             "description": "Looked the sponsor up on Reddit or Nextdoor before reaching its site"},
+        ],
+        "leak_labels": {
+            "infoseek_no_conv": (
+                "Looked the sponsor up, no sponsor site",
+                "Searched for the sponsor within 14d but never reached one of its own properties",
+            ),
+            "conv_visit_no_pay": (
+                "Sponsor property, no website",
+                "Reached a sponsor page on another platform or its Google Business profile within 14d but not its website",
+            ),
+        },
+        "paths_conversion_noun": "sponsor site visit",
     },
 }
 
