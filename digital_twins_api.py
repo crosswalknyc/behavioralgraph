@@ -1247,7 +1247,12 @@ def _prepare_job_live(sess):
     st = str((rec or {}).get('status') or '')
     if not rec:
         return None
-    if st in ('error', 'cancelled'):
+    try:
+        age = time.time() - float(rec.get('started_run_at') or rec.get('queued_at') or rec.get('started_at') or time.time())
+    except (TypeError, ValueError):
+        age = 0.0
+    stranded = (st == 'queued' and age > 20 * 60) or (st in ('running', 'claimed', 'working') and age > 3 * 3600)
+    if st in ('error', 'cancelled') or stranded:
         sess['status'] = 'draft'
         sess['prepare_note'] = 'The cut could not be prepared this time. Press Play and the room runs on the clock.'
         sess['updated_at'] = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
