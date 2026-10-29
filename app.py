@@ -16052,7 +16052,7 @@ def _bfi_run(started_by: str) -> None:
     try:
         from image_backfill import (
             master_category, normalize_search_name,
-            resolve_image_url, download_image,
+            pick_best_image, download_image,
         )
     except Exception as e:
         with _bfi_lock:
@@ -16218,7 +16218,7 @@ def _bfi_run(started_by: str) -> None:
                 continue
 
             try:
-                img_url, source = resolve_image_url(g['search_name'], master)
+                img_url, source = pick_best_image(g['search_name'], master)
             except Exception as e:
                 img_url, source = None, f'error:{e}'
 

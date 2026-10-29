@@ -8,6 +8,7 @@ only what the Flask endpoint needs:
   * `master_category(cat)`         - category bucket (TALENT / CONTENT / BRAND / ...)
   * `normalize_search_name(name)`  - strip cohort / fan-tier / year suffixes
   * `resolve_image_url(name, master)` -> (url, source_tag) or (None, 'none')
+  * `pick_best_image(name, master)`   -> same, scored for the Profile IQ frame
   * `download_image(url)`          -> (bytes, ext) or None
 
 Rules (per user, 2026-07-01, restated 2026-07-08, updated 2026-07-29):
@@ -331,6 +332,11 @@ def _google_cse_search(name: str) -> Optional[str]:
 
 
 def _bing_image_scrape(name: str) -> Optional[str]:
+    hits = _bing_image_results(name, limit=1)
+    return hits[0] if hits else None
+
+
+def _bing_image_results(name: str, limit: int = 6) -> list[str]:
     """Bing image search - the practical no-API-key stand-in for Google.
 
     Modern Google image search returns a "please enable JavaScript" gate to
@@ -345,7 +351,7 @@ def _bing_image_scrape(name: str) -> Optional[str]:
     poorly in the profile grid).
     """
     if not name:
-        return None
+        return []
     url = BING_IMAGES_URL.format(q=urllib.parse.quote(name))
     req = urllib.request.Request(url, headers={
         "User-Agent": HEADERS_JSON["User-Agent"],
@@ -356,19 +362,24 @@ def _bing_image_scrape(name: str) -> Optional[str]:
         with urllib.request.urlopen(req, timeout=8) as resp:
             html = resp.read().decode("utf-8", errors="replace")
     except Exception:
-        return None
+        return []
+    out: list[str] = []
+
+    def keep(u: str) -> bool:
+        u = (u or "").strip()
+        if not u.startswith(("http://", "https://")) or u in out:
+            return False
+        if not u.lower().split("?", 1)[0].endswith((".jpg", ".jpeg", ".png", ".webp")):
+            return False
+        out.append(u)
+        return len(out) >= limit
     # Bing embeds each image result's metadata as m="{...}" where the JSON is
     # HTML-entity-encoded (&quot; instead of "). Pull out murl values directly
     # from the entity-encoded blob so we don't have to un-escape the whole
     # attribute value.
-    murls = re.findall(r'&quot;murl&quot;:&quot;([^&\"]+)&quot;', html)
-    for raw in murls:
-        u = raw.strip()
-        if not u.startswith(("http://", "https://")):
-            continue
-        low = u.lower().split("?", 1)[0]
-        if low.endswith((".jpg", ".jpeg", ".png", ".webp")):
-            return u
+    for raw in re.findall(r'&quot;murl&quot;:&quot;([^&\"]+)&quot;', html):
+        if keep(raw):
+            return out
     # Second pass: some results carry the URL in a `m=` attribute that
     # url-encodes rather than html-entity-encodes. Try that shape too.
     metas = re.findall(r'\bm="(\{[^"]+\})"', html)
@@ -377,13 +388,9 @@ def _bing_image_scrape(name: str) -> Optional[str]:
             data = json.loads(meta.replace("&quot;", '"'))
         except Exception:
             continue
-        u = (data.get("murl") or "").strip()
-        if not u.startswith(("http://", "https://")):
-            continue
-        low = u.lower().split("?", 1)[0]
-        if low.endswith((".jpg", ".jpeg", ".png", ".webp")):
-            return u
-    return None
+        if keep(data.get("murl") or ""):
+            return out
+    return out
 
 
 def google_image_search(name: str) -> tuple[Optional[str], str]:
@@ -466,6 +473,7 @@ def _ext_from(content_type: str, url: str) -> str:
 def _wikimedia_thumb_candidates(url: str) -> list[str]:
     """Wikimedia refuses full-res originals with HTTP 400. Try a ladder of
     thumbnail sizes so we degrade gracefully as sizes miss."""
+    url = url.replace("://thumb.wikimedia.org/", "://upload.wikimedia.org/")
     if "upload.wikimedia.org" not in url:
         return [url]
     # The wiki summary API returns URLs carrying ?utm_* params; the
@@ -487,12 +495,16 @@ def _wikimedia_thumb_candidates(url: str) -> list[str]:
         return f"{base}/thumb/{a}/{ab}/{filename}/{px}px-{thumb_name}"
 
     candidates: list[str] = []
-    if existing_px:
+    # A summary thumbnail can be as small as 40px; only lead with it when
+    # it is already at least as large as the ladder's first rung.
+    if existing_px and int(existing_px) >= 640:
         candidates.append(url)
     for px in (640, 800, 1024, 320, 1280, 240):
         u = make(px)
         if u not in candidates:
             candidates.append(u)
+    if existing_px and url not in candidates:
+        candidates.append(url)
     return candidates
 
 
@@ -500,7 +512,7 @@ def download_image(url: str) -> Optional[tuple[bytes, str]]:
     """Fetch image bytes + normalized extension. Retries transient 429/5xx once."""
     if not url:
         return None
-    candidates = _wikimedia_thumb_candidates(url) if "upload.wikimedia.org" in url else [url]
+    candidates = _wikimedia_thumb_candidates(url) if "wikimedia.org" in url else [url]
 
     data = ct = None
     for candidate in candidates:
@@ -622,3 +634,95 @@ def resolve_image_url(name: str, master: str) -> tuple[Optional[str], str]:
     if fav_url:
         return fav_url, "google-favicon"
     return None, "none"
+
+
+# --------------------------------------------------------------------------- scored pick
+
+# The Profile IQ portrait is 380 x 400 and filled with object-fit: cover,
+# so anything far from that shape is cropped hard, and anything small is
+# stretched until it blurs.
+FRAME_RATIO = 380 / 400
+MIN_SHORT_SIDE = 300
+_PROBE_BYTES = 256 * 1024
+
+
+def probe_dimensions(url: str) -> Optional[tuple[int, int]]:
+    """(width, height) from the head of the file, without the full download."""
+    if not url:
+        return None
+    try:
+        from PIL import Image, ImageFile
+    except Exception:
+        return None
+    candidates = _wikimedia_thumb_candidates(url) if "wikimedia.org" in url else [url]
+    for candidate in candidates[:3]:
+        req = urllib.request.Request(candidate, headers=HEADERS_IMG)
+        try:
+            with urllib.request.urlopen(req, timeout=6) as resp:
+                data = resp.read(_PROBE_BYTES)
+        except Exception:
+            continue
+        parser = ImageFile.Parser()
+        try:
+            parser.feed(data)
+            if parser.image:
+                return parser.image.size
+            return Image.open(io.BytesIO(data)).size
+        except Exception:
+            continue
+    return None
+
+
+def score_dimensions(w: int, h: int) -> float:
+    """1.0 for a sharp image the frame barely crops, falling toward 0."""
+    if not w or not h:
+        return 0.0
+    ratio = w / h
+    kept = min(ratio / FRAME_RATIO, FRAME_RATIO / ratio)
+    fit = 1.0 if kept >= 0.85 else kept / 0.85
+    short = min(w, h)
+    sharp = 1.0 if short >= 500 else 0.85 if short >= MIN_SHORT_SIDE else 0.4
+    return fit * sharp
+
+
+def pick_best_image(name: str, master: str) -> tuple[Optional[str], str]:
+    """Like resolve_image_url, but scores every source's offer for the frame.
+
+    IMDb and Wikipedia are matched to the subject, so they carry more
+    weight than a web search hit, which only has the search rank to go
+    on. A source's offer still loses to a later one that fits the frame
+    and stays sharp. Falls back to resolve_image_url when nothing can be
+    measured.
+    """
+    q = normalize_search_name(name)
+    if not q:
+        return None, "none"
+
+    offers: list[tuple[str, str, float]] = []
+    if master in ("TALENT", "CONTENT"):
+        prefix, tag = ("nm", "imdb") if master == "TALENT" else ("tt", "imdb-title")
+        try:
+            label, url = imdb_lookup(q, want_prefix=prefix)
+        except RateLimited:
+            return None, "rate_limited"
+        if url:
+            offers.append((url, f"{tag}:{label}", 1.0))
+    wiki_url = wiki_lookup(q)
+    if wiki_url:
+        offers.append((wiki_url, "wiki", 0.92))
+    # A bare brand name searches up product shots and storefronts.
+    hits = _bing_image_results(q if master in ("TALENT", "CONTENT") else f"{q} logo", limit=6)
+    for rank, url in enumerate(hits):
+        offers.append((url, "bing", 0.85 - 0.04 * rank))
+
+    best: Optional[tuple[float, str, str]] = None
+    for url, tag, weight in offers:
+        dims = probe_dimensions(url)
+        if not dims:
+            continue
+        score = weight * score_dimensions(*dims)
+        if best is None or score > best[0]:
+            best = (score, url, tag)
+    if best:
+        return best[1], best[2]
+    return resolve_image_url(name, master)
