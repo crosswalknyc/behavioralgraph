@@ -1,0 +1,49 @@
+---
+description: Every dashboard download (CSV, Excel) exports only what is on screen for the open profile, never another profile's data
+alwaysApply: true
+---
+
+# Downloads mirror the screen
+
+Applies to every product: Profile IQ, Attribution IQ, Brand Partnership IQ,
+Journey IQ, Subscriber IQ, Trends / Rankers IQ, Fin IQ, Microdramas, Ticket
+Sales, and anything added later. Product owner's rule (2026-10-29): start bare
+bones and strict; loosen only case by case, by name, in the Exceptions list below.
+
+## The rules
+
+1. **Never cross profiles.** A download holds data for the open profile or
+   campaign only. Scope server routes by slug/key and re-check access.
+2. **Only on-screen fields.** Every column must exist in the table the button
+   belongs to, under the same header label and in the same display mode
+   (% vs US #, hidden Gen Pop, Data Cuts, Index Source). No URLs, IDs, raw
+   values, "Numbers" twins, notes or other fields the table doesn't show.
+3. **No bonus or retired data.** Nothing from hidden tabs, hidden or removed
+   cards, the tab-shell attic, retired sections, or other platforms/sub-tabs
+   than the one showing. No "Read me" or methodology sheets.
+4. **Full-length rows are allowed** when the screen can extend the list
+   (Top N with a Show all / All option). Rows follow the on-screen sort and
+   any active filter or search.
+5. **A button exports the table it sits on.** A per-table button exports that
+   table only. A "Download all" or "Export to Excel" exports one section or
+   sheet per visible table, each following the rules above.
+6. **Allowed extras:** the `DATE DOWNLOADED` / `STUDY DATE RANGE` stamp rows,
+   and a sheet title line (profile, tab, date, picked audience).
+
+## How to build one
+
+- Prefer building rows with the same functions the table renders with, or read
+  the rendered table, instead of re-deriving from the raw payload.
+- Do not add a server route that streams a whole source file (S3 object, full
+  dataset) to the browser.
+- When adding a column to a table, add it to that table's export; when
+  removing one, remove it from the export.
+
+## Exempt
+
+- Slide decks (PPTX) and image (PNG) exports.
+
+## Exceptions (approved loosenings)
+
+None yet. Add each approved exception here: product, export, what's allowed,
+and the date approved.
