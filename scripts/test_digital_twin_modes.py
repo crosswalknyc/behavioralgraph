@@ -659,6 +659,38 @@ class PartnerSurface(unittest.TestCase):
         sys.modules.pop('app', None)
 
 
+class Page(unittest.TestCase):
+    """The dashboard page carries every new tab and its console."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.html = open(os.path.join(ROOT, 'templates', 'index.html'), encoding='utf-8').read()
+        i = cls.html.index("var TABS = ['twins'")
+        start = cls.html.rfind('<script', 0, i)
+        cls.block = cls.html[start:cls.html.index('</script>', i)]
+
+    def test_every_new_tab_is_on_the_page(self):
+        for tab, pane, host in (('trailer', 'dtwTabTrailer', 'dtwTrConsole'), ('titles', 'dtwTabTitles', 'dtwTiConsole'), ('script', 'dtwTabScript', 'dtwScConsole'),
+                                ('concept', 'dtwTabConcept', 'dtwCoConsole'), ('norms', 'dtwTabNorms', 'dtwNoConsole')):
+            self.assertIn(f'data-tab="{tab}"', self.html, tab)
+            self.assertIn(f'id="{pane}"', self.html, pane)
+            self.assertIn(f'id="{host}"', self.html, host)
+        self.assertIn("var TABS = ['twins', 'greenlight', 'launch', 'spend', 'panel', 'pilot', 'trailer', 'titles', 'script', 'concept', 'norms'];", self.html)
+        for label in ('>Trailers<', '>Titles and Key Art<', '>Script Reads<', '>Concepts<', '>Norms<'):
+            self.assertIn(label, self.html, label)
+        self.assertIn('flex-wrap: wrap', self.html[self.html.index('.dtw-segs {'):self.html.index('.dtw-segs {') + 200])
+
+    def test_block_has_the_phase_2_renderers_and_no_dashes(self):
+        for fn in ('function renderModeRead(', 'function renderDiagnostics(', 'function renderPilotExtras(', 'async function renderNormsTab(', 'window.dtwPilotRecut', 'window.dtwPilotCompare',
+                   'window.dtwPilotComps', 'window.dtwPilotCritics', 'window.dtwPilotTalent', 'window.dtwPilotBrief', 'window.dtwGlAskRoom', 'Ask the room', 'report.pptx', 'Every screening adds to these'):
+            self.assertIn(fn, self.block, fn)
+        self.assertNotIn('\u2014', self.block)
+        self.assertNotIn('\u2013', self.block)
+        phase2 = self.block[self.block.index('Pilot Testing phase 2: the mode reads'):self.block.index('window._dtwRender.renderPilotConsole = renderPilotConsole;')]
+        for tok in ('synth', 'Claude', 'hostmap', 'Screen Engine', 'NRG', 'MarketCast', 'FishDog', 'persona'):
+            self.assertNotIn(tok, phase2, tok)
+
+
 class Pricing(unittest.TestCase):
     def test_charge_due_per_mode(self):
         twin = _beals()

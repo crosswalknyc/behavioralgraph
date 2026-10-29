@@ -50865,7 +50865,18 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-spine-facts b { color: var(--dtw-ink); font-weight: 500; font-variant-numeric: tabular-nums; }
         #digitalTwinsIQView .dtw-spine-actions { margin-left: auto; display: flex; gap: 0.5rem; align-items: center; flex-wrap: nowrap; justify-content: flex-end; }
         #digitalTwinsIQView .dtw-switch { width: 220px; min-width: 140px; text-overflow: ellipsis; }
-        #digitalTwinsIQView .dtw-segs { display: flex; gap: 0; margin-top: 0.9rem; overflow-x: auto; scrollbar-width: none; }
+        #digitalTwinsIQView .dtw-segs { display: flex; gap: 0; margin-top: 0.9rem; flex-wrap: wrap; overflow: visible; scrollbar-width: none; row-gap: 2px; }
+        #digitalTwinsIQView .dtw-pi-diag { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; margin-top: 12px; }
+        #digitalTwinsIQView .dtw-pi-diag .dtw-card { margin: 0; }
+        #digitalTwinsIQView .dtw-pi-opts { display: grid; gap: 6px; margin: 6px 0 10px; }
+        #digitalTwinsIQView .dtw-pi-opts input { width: 100%; }
+        #digitalTwinsIQView .dtw-pi-rank { display: flex; align-items: baseline; gap: 10px; padding: 7px 0; border-bottom: 1px solid rgba(233,232,225,0.08); }
+        #digitalTwinsIQView .dtw-pi-rank .r { font-size: 0.72rem; color: var(--dtw-mute); min-width: 1.4em; }
+        #digitalTwinsIQView .dtw-pi-rank .v { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--dtw-accent); font-weight: 600; }
+        #digitalTwinsIQView .dtw-pi-quote { font-size: 0.82rem; color: var(--dtw-body); margin: 2px 0 0 1.6em; }
+        #digitalTwinsIQView .dtw-pi-cmp { width: 100%; height: 150px; display: block; margin-top: 8px; }
+        #digitalTwinsIQView .dtw-norms-table td.n, #digitalTwinsIQView .dtw-norms-table th.n { text-align: right; font-variant-numeric: tabular-nums; }
+        #digitalTwinsIQView .dtw-norms-table .cnt { color: var(--dtw-mute); font-size: 0.72rem; margin-left: 4px; }
         #digitalTwinsIQView .dtw-segs::-webkit-scrollbar { display: none; }
         #digitalTwinsIQView .dtw-seg { appearance: none; background: transparent; border: 0; border-bottom: 2px solid transparent; color: var(--dtw-mute); padding: 0.62rem 0; margin: 0 1.8rem -1px 0; font-size: 0.7rem; font-weight: 600; letter-spacing: 0.13em; text-transform: uppercase; cursor: pointer; white-space: nowrap; transition: color .14s, border-color .14s; }
         #digitalTwinsIQView .dtw-seg:hover { color: var(--dtw-ink); }
@@ -51529,6 +51540,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     <button type="button" class="dtw-seg" data-tab="spend" role="tab" onclick="dtwTab('spend')">Spend Engine</button>
                     <button type="button" class="dtw-seg" data-tab="panel" role="tab" onclick="dtwTab('panel')">Focus Group IQ</button>
                     <button type="button" class="dtw-seg" data-tab="pilot" role="tab" onclick="dtwTab('pilot')">Pilot Testing</button>
+                    <button type="button" class="dtw-seg" data-tab="trailer" role="tab" onclick="dtwTab('trailer')">Trailers</button>
+                    <button type="button" class="dtw-seg" data-tab="titles" role="tab" onclick="dtwTab('titles')">Titles and Key Art</button>
+                    <button type="button" class="dtw-seg" data-tab="script" role="tab" onclick="dtwTab('script')">Script Reads</button>
+                    <button type="button" class="dtw-seg" data-tab="concept" role="tab" onclick="dtwTab('concept')">Concepts</button>
+                    <button type="button" class="dtw-seg" data-tab="norms" role="tab" onclick="dtwTab('norms')">Norms</button>
                 </div>
                 <div class="dtw-fg-acts" id="dtwFgActs" hidden></div>
                 </div>
@@ -51625,6 +51641,21 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 <section id="dtwTabPilot" class="dtw-pane">
                     <div id="dtwPiConsole" class="dtw-pi"></div>
                 </section>
+                <section id="dtwTabTrailer" class="dtw-pane">
+                    <div id="dtwTrConsole" class="dtw-pi"></div>
+                </section>
+                <section id="dtwTabTitles" class="dtw-pane">
+                    <div id="dtwTiConsole" class="dtw-pi"></div>
+                </section>
+                <section id="dtwTabScript" class="dtw-pane">
+                    <div id="dtwScConsole" class="dtw-pi"></div>
+                </section>
+                <section id="dtwTabConcept" class="dtw-pane">
+                    <div id="dtwCoConsole" class="dtw-pi"></div>
+                </section>
+                <section id="dtwTabNorms" class="dtw-pane">
+                    <div id="dtwNoConsole" class="dtw-pi"></div>
+                </section>
             </div>
                         <div id="dtwHowtoScrim" class="dtw-scrim" onclick="dtwHowtoOpen(false)"></div>
             <aside id="dtwHowtoDrawer" class="dtw-drawer" role="dialog" aria-label="How to use Digital Twins IQ" aria-hidden="true">
@@ -51671,7 +51702,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         <script>
         (function() {
             var S = window._dtw = window._dtw || { runs: [], twin: null, key: '', tab: 'twins', openRun: null, session: null, pilot: null, plan: null, howto: null, loaded: false, horizon: '10', spendDay: 1, spendMode: 'chip', pricing: [], summary: null, panelKind: '', portraitTimers: [], roomPollTimer: null, roomTick: null, libKind: 'all', libQ: '', coverTries: 0 };
-            var TABS = ['twins', 'greenlight', 'launch', 'spend', 'panel', 'pilot'];
+            var TABS = ['twins', 'greenlight', 'launch', 'spend', 'panel', 'pilot', 'trailer', 'titles', 'script', 'concept', 'norms'];
+            var PI_TABS = { pilot: ['pilot', 'feature', 'episode', 'binge'], trailer: ['trailer', 'spot'], titles: ['title', 'key_art'], script: ['script'], concept: ['concept'] };
+            var PI_TAB_LABEL = { pilot: 'Pilot Testing', trailer: 'Trailers', titles: 'Titles and Key Art', script: 'Script Reads', concept: 'Concepts', norms: 'Norms' };
+            var PI_MODE_LABEL = { pilot: 'Pilot test', feature: 'Feature screening', episode: 'Episode test', binge: 'Binge test', trailer: 'Trailer test', spot: 'TV spot test', title: 'Title test', key_art: 'Key art test', script: 'Script read', concept: 'Concept test' };
+            var PI_HOST = { pilot: 'dtwPiConsole', trailer: 'dtwTrConsole', titles: 'dtwTiConsole', script: 'dtwScConsole', concept: 'dtwCoConsole' };
             var LAB_LABEL = { greenlight: 'Greenlight', launch: 'Launch', spend: 'Spend Engine', panel: 'Focus Group IQ', pilot: 'Pilot Testing', compare: 'Compare', content: 'Content drop', platform_move: 'Platform move', partnership: 'Partnership', pricing: 'Pricing', talent_attach: 'Talent attach', merch_drop: 'Merch drop' };
             // Fixed hues for the initials tiles, one per seat, from the brand palette. Never Signal Green.
             var HUES = ['#3358FF', '#E682FF', '#B7B3D8', '#8E3FA8', '#5E7E12'];
@@ -51752,7 +51787,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     else if (hint && hint.tab) { dtwTab(hint.tab); }
                     else if (fromUrl && known(fromUrl.twin_key)) { dtwOpen(fromUrl.twin_key, null, null, null, fromUrl.tab || null); }
                     else if (fromUrl && fromUrl.tab) { if (!S.twin && S.runs.length === 1) dtwOpen(S.runs[0].key, null, null, null, fromUrl.tab); else dtwTab(fromUrl.tab); }
-                    else if (mem && known(mem.key)) { dtwOpen(mem.key, null, mem.tab === 'pilot' ? (mem.pid || mem.sid) : mem.sid, null, mem.tab || null); }
+                    else if (mem && known(mem.key)) { dtwOpen(mem.key, null, (mem.tab === 'pilot' || mem.tab === 'trailer' || mem.tab === 'titles' || mem.tab === 'script' || mem.tab === 'concept') ? (mem.pid || mem.sid) : mem.sid, null, mem.tab || null); }
                     else if (!S.twin && S.runs.length === 1) { dtwOpen(S.runs[0].key, null, (mem && mem.key === S.runs[0].key && mem.sid) || null, null, (mem && mem.tab) || null); }
                     else if (mem && mem.tab) { dtwTab(mem.tab); }
                 });
@@ -51768,7 +51803,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 syncInputCards();
                 syncFgBody();
                 if (tab === 'panel') { renderPanelSessions(); if (!S.session || !el('dtwFgHero')) renderPanelConsole(); else fgShown(); }
-                if (tab === 'pilot') { renderPilotConsole(); }
+                if (tab === 'pilot' || tab === 'trailer' || tab === 'titles' || tab === 'script' || tab === 'concept') { S.piTab = tab; if (S.pilot && piTabFor(S.pilot.mode) !== tab) { S.pilot = null; } renderPilotConsole(); }
+                if (tab === 'norms') { renderNormsTab(); }
                 if (tab === 'spend') { syncSpendSources(); if (!S.plan) { var plans = ((S.twin || {}).labs || {}).spend || []; if (plans.length) { S.plan = plans[0]; S.spendDay = 1; } } renderSpend(); }
                 if (tab === 'greenlight' && el('dtwGlResults') && !el('dtwGlResults').innerHTML) renderEmpty('dtwGlResults', 'greenlight');
                 if (tab === 'launch' && el('dtwLaResults') && !el('dtwLaResults').innerHTML) renderEmpty('dtwLaResults', 'launch');
@@ -51798,6 +51834,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (!S.plan && el('dtwSpResults')) renderEmpty('dtwSpResults', 'spend');
                 if (!S.session && el('dtwPnConsole')) renderPanelConsole();
                 if (!S.pilot && el('dtwPiConsole')) renderPilotConsole();
+                if (el('dtwNoConsole') && !el('dtwNoConsole').innerHTML && S.tab === 'norms') renderNormsTab();
             }
             // ---- Build a twin, the walkthrough (Jenna 2026-10-27: 'when you click to build a twin we need to have it walk someone thru how to do it').
             // Five short steps in a drawer: what the twin stands for (a defined group from a profile, pulled the way Profile IQ pulls it, or a group
@@ -52208,9 +52245,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 S.twin = d.twin; S.key = key; S.summary = d.summary; S.openRun = runId || null; S.session = null; S.pilot = null; S.plan = null; S.spendDay = 1;
                 clearPortraitTimers(); try { dtwSeatOpen(null); } catch (_) {}
                 fillTwinSelects(); renderSpine(); renderLibrary(); renderTwin(); syncInputCards();
-                if (switched) { ['dtwGlResults', 'dtwLaResults', 'dtwSpResults', 'dtwPnConsole', 'dtwPiConsole'].forEach(function(id) { if (el(id)) el(id).innerHTML = ''; }); }
+                if (switched) { ['dtwGlResults', 'dtwLaResults', 'dtwSpResults', 'dtwPnConsole', 'dtwPiConsole', 'dtwTrConsole', 'dtwTiConsole', 'dtwScConsole', 'dtwCoConsole', 'dtwNoConsole'].forEach(function(id) { if (el(id)) el(id).innerHTML = ''; }); S.pilotCompare = null; }
                 var run = runId ? (S.twin.runs || []).filter(function(x) { return x.id === runId; })[0] : null;
-                if (sessionId && tab === 'pilot') { S.pilot = (S.twin.pilot_sessions || []).filter(function(s) { return s.id === sessionId; })[0] || null; }
+                if (sessionId && (tab === 'pilot' || tab === 'trailer' || tab === 'titles' || tab === 'script' || tab === 'concept')) { S.pilot = (S.twin.pilot_sessions || []).filter(function(s) { return s.id === sessionId; })[0] || null; }
                 else if (sessionId) { S.session = (S.twin.panel_sessions || []).filter(function(s) { return s.id === sessionId; })[0] || S.pilot; if (!S.session) S.pilot = (S.twin.pilot_sessions || []).filter(function(s) { return s.id === sessionId; })[0] || null; }
                 if (planId) { S.plan = ((S.twin.labs || {}).spend || []).filter(function(p) { return p.plan_id === planId; })[0] || null; }
                 if (run) { if (run.kind === 'launch') renderLaunch(run); else if (run.kind === 'spend') { S.plan = ((S.twin.labs || {}).spend || []).filter(function(p) { return p.plan_id === (run.inputs || {}).plan_id; })[0] || S.plan; } else renderGreenlight(run); }
@@ -52218,9 +52255,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 syncSpendSources();
                 if (S.session) renderPanelConsole(); else renderPanelConsole();
                 renderPanelSessions();
+                if (S.pilot) { S.piTab = piTabFor(S.pilot.mode); }
                 if (S.pilot || el('dtwPiConsole')) renderPilotConsole();
                 if (S.plan) renderSpend();
-                dtwTab(tab || (S.pilot ? 'pilot' : S.session ? 'panel' : S.plan ? 'spend' : run ? ({'launch': 'launch', 'spend': 'spend'}[run.kind] || 'greenlight') : 'twins'));
+                dtwTab(tab || (S.pilot ? piTabFor(S.pilot.mode) : S.session ? 'panel' : S.plan ? 'spend' : run ? ({'launch': 'launch', 'spend': 'spend'}[run.kind] || 'greenlight') : 'twins'));
                 try { if (typeof _pmWarmScreen === 'function') _pmWarmScreen(); } catch (_) {}
             };
             window.dtwAsk = function() {
@@ -52361,7 +52399,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 } else {
                     head += figs([[fmtN(o.expected) + ' ' + noun, 'Expected, first ' + days + ' days' + (o.platform ? ' on ' + o.platform : ''), '', o.odds_pct == null], [fmtN(o.low) + ' to ' + fmtN(o.high), 'Range'], [pct(o.completion_pct), 'Completion'], [pct(o.return_pct), 'Come back for the next one']]);
                 }
-                out += card(r.question || kindLabel(r.kind), kindLabel(r.kind) + '. ' + runMeta(r), head + (o.window_note ? '<p class="dtw-muted">' + esc(o.window_note) + '</p>' : ''));
+                var cr = r.concept_read || null;
+                var concept = cr ? ('<div class="dtw-eyebrow" style="margin-top:0.6rem;">The room on the idea</div>' + figs([[pct(cr.definitely_interested_pct), 'Definitely interested', cr.interested_pct != null ? pct(cr.interested_pct) + ' at least somewhat' : '', true], [pct(cr.unique_pct), 'Stands out'], [pct(cr.would_watch_pct), 'Would watch'], [cr.strongest || '', 'Strongest element'], [cr.doubt || '', 'Biggest doubt']]) + (cr.who_for ? '<p class="dtw-muted">' + esc(cr.who_for) + '</p>' : '') + '<div class="dtw-actions"><button type="button" class="dtw-btn dtw-btn-sm" onclick="dtwPilotPick(\'' + esc(cr.session_id || '') + '\')">Open the concept test</button></div>') : '';
+                var askRoom = (r.kind === 'greenlight' || r.kind === 'content') ? '<div class="dtw-actions" style="margin-top:0.5rem;"><button type="button" class="dtw-btn dtw-btn-sm" onclick="dtwGlAskRoom(\'' + esc(r.id) + '\')">' + (cr ? 'Ask the room again' : 'Ask the room') + '</button><span class="dtw-muted">A concept test on this twin; the read lands here next to the odds.</span></div>' : '';
+                out += card(r.question || kindLabel(r.kind), kindLabel(r.kind) + '. ' + runMeta(r), head + (o.window_note ? '<p class="dtw-muted">' + esc(o.window_note) + '</p>' : '') + concept + askRoom);
                 if ((o.per_platform || []).length || (o.cohorts || []).length) {
                     out += '<div class="dtw-two">';
                     if ((o.per_platform || []).length) out += card('Range per platform', 'Expected and range for the first ' + days + ' days.', (o.per_platform || []).map(function(p) { return bar(p.platform, p.expected, Math.max.apply(null, (o.per_platform || []).map(function(x) { return x.high; })), false, fmtN(p.low) + ' to ' + fmtN(p.high) + (p.odds_pct != null ? ', odds ' + pct(p.odds_pct) : '')); }).join(''));
@@ -53413,6 +53454,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var PI_EVT = { love: 'Loved it', laugh: 'Laughed', 'lean-in': 'Leaned in', confuse: 'Lost', 'check-out': 'Checked out', wow: 'Wow' };
             function clockFmt(t) { t = Math.max(0, Math.round(Number(t) || 0)); var m = Math.floor(t / 60), s = t % 60; return m + ':' + (s < 10 ? '0' : '') + s; }
             function pilotPrice() { var it = ((S.howto || {}).items || []).filter(function(x) { return x.id === 'pilot'; })[0]; return it ? String(it.cost || '') : '$5,500 a session (same as Focus Group IQ), charged on first Play'; }
+            S.piTab = S.piTab || 'pilot'; S.piMode = S.piMode || 'pilot'; S.pilotCompare = S.pilotCompare || null;
             function adoptPilot(sess) {
                 if (!sess) return;
                 S.pilot = sess;
@@ -53467,7 +53509,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 return 'url("data:image/svg+xml;utf8,' + encodeURIComponent(svg) + '")';
             }
             function ensureWatermark(s) {
-                var stage = document.querySelector('#dtwPiConsole .dtw-pi-stage'); if (!stage) return;
+                var stage = document.querySelector('.dtw-pane.active .dtw-pi .dtw-pi-stage'); if (!stage) return;
                 var a = stage.querySelector('.dtw-pi-wm.a'), b = stage.querySelector('.dtw-pi-wm.b');
                 if (!a) { a = document.createElement('div'); a.className = 'dtw-pi-wm a'; a.innerHTML = '<span class="tag"></span>'; stage.appendChild(a); }
                 if (!b) { b = document.createElement('div'); b.className = 'dtw-pi-wm b'; stage.appendChild(b); }
@@ -53482,7 +53524,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 }
                 if (!S.pilotWm.timer) {
                     S.pilotWm.timer = setInterval(function() {
-                        var st = document.querySelector('#dtwPiConsole .dtw-pi-stage'); if (!st) return;
+                        var st = document.querySelector('.dtw-pane.active .dtw-pi .dtw-pi-stage'); if (!st) return;
                         var tg = st.querySelector('.dtw-pi-wm.a .tag'); if (!tg) { if (S.pilot && hasMedia(S.pilot)) ensureWatermark(S.pilot); return; }
                         var x = 4 + Math.random() * 62, y = 6 + Math.random() * 78;
                         tg.style.left = x.toFixed(1) + '%'; tg.style.top = y.toFixed(1) + '%';
@@ -53514,7 +53556,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (num) num.textContent = val ? Number(val).toFixed(1) : '';
                 var on = el('dtwPiOn');
                 if (on) { var sc = sceneAt(s, t); var cap = sc ? (sc.caption || '') : ''; on.textContent = cap ? ('On screen: ' + cap) : ''; }
-                var tg = document.querySelector('#dtwPiConsole .dtw-pi-wm.a .tag'); if (tg) tg.textContent = wmText(s) + '  ' + clockFmt(t);
+                var tg = document.querySelector('.dtw-pane.active .dtw-pi .dtw-pi-wm.a .tag'); if (tg) tg.textContent = wmText(s) + '  ' + clockFmt(t);
             }
             function splitLines(s) {
                 var d = (s || {}).dial || {}, sp = d.splits || {};
@@ -53619,31 +53661,88 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 }
             }
             function pilotProtectLine() { var it = ((S.howto || {}).items || []).filter(function(x) { return x.id === 'pilot'; })[0]; return it && it.protect ? String(it.protect) : 'How we protect your cut: it plays through links that expire after ten minutes and only for you, your name sits on every frame while it plays, and a switch on the test removes the file the moment the scorecard is final.'; }
+            function piTabFor(mode) { var m = String(mode || 'pilot'); for (var t in PI_TABS) { if (PI_TABS[t].indexOf(m) >= 0) return t; } return 'pilot'; }
+            function piTab() { return S.piTab && PI_HOST[S.piTab] ? S.piTab : 'pilot'; }
+            function piHostEl() { return el(PI_HOST[piTab()] || 'dtwPiConsole'); }
+            function piModeLabel(s) { return PI_MODE_LABEL[String((s || {}).mode || 'pilot')] || 'Pilot test'; }
+            function piDefaultMode(tab) { return (PI_TABS[tab] || ['pilot'])[0]; }
+            function piPrice(tab) {
+                var id = tab === 'pilot' ? 'pilot' : tab;
+                var it = ((S.howto || {}).items || []).filter(function(x) { return x.id === id; })[0];
+                return it ? String(it.cost || '') : pilotPrice();
+            }
             function renderPilotStart() {
+                var tab = piTab(), mode = S.piMode && PI_TABS[tab].indexOf(S.piMode) >= 0 ? S.piMode : piDefaultMode(tab);
+                S.piMode = mode;
                 var others = (S.runs || []).filter(function(r) { return r.key && r.key !== S.key; }).map(function(r) {
                     return '<option value="' + esc(r.key) + '">' + esc(r.name || r.subject || r.key) + '</option>';
                 }).join('');
-                var past = ((S.twin || {}).pilot_sessions || []);
+                var past = ((S.twin || {}).pilot_sessions || []).filter(function(s) { return piTabFor(s.mode) === tab; });
                 var rows = past.map(function(s) {
                     var on = S.pilot && S.pilot.id === s.id;
                     var sc = s.scorecard || {}, hd = ((sc.battery || {}).headline) || {};
                     var st = s.status || 'draft';
                     var money = hd.total_positive_pct != null ? ('  total positive ' + Number(hd.total_positive_pct).toFixed(1) + '%') : (sc.overall_like != null ? '  dial ' + Number(sc.overall_like).toFixed(1) : '');
-                    return '<button type="button" class="dtw-pi-row' + (on ? ' on' : '') + '" onclick="dtwPilotPick(\'' + esc(s.id) + '\')"><div class="h">' + esc(s.title || 'Untitled test') + '</div><div class="m">' + esc(st) + esc(money) + '  ' + esc(fmtWhen(s.updated_at || s.created_at)) + '</div></button>';
+                    return '<button type="button" class="dtw-pi-row' + (on ? ' on' : '') + '" onclick="dtwPilotPick(\'' + esc(s.id) + '\')"><div class="h">' + esc(s.title || 'Untitled test') + (s.cut_label && s.lineage ? ' <span class="dtw-muted">' + esc(s.cut_label) + '</span>' : '') + '</div><div class="m">' + esc(PI_MODE_LABEL[s.mode] || 'Pilot test') + '  ' + esc(st) + esc(money) + '  ' + esc(fmtWhen(s.updated_at || s.created_at)) + '</div></button>';
                 }).join('');
-                return '<div class="dtw-card"><div class="dtw-eyebrow">Pilot Testing</div><h3 style="margin-top:0.35rem;">Watch a cut with the room</h3>'
-                    + '<div class="dtw-sub">Upload a pilot, movie, trailer or episode. Prometheus moderates. The twins watch the cut itself, scene by scene: a dial, laughs and loves at the second they happen in their own words, a question at any timestamp that knows what just played, and the scorecard studios use with the norm beside every number.</div>'
+                var intro = {
+                    pilot: 'Upload a pilot, movie or episode. Prometheus moderates. The twins watch the cut itself, scene by scene: a dial, laughs and loves at the second they happen in their own words, a question at any timestamp that knows what just played, and the scorecard studios use with the norm beside every number.',
+                    trailer: 'Up to three trailers or spots, 15 seconds to three minutes, to the same room. Interest in the title before the trailer plays and after, the lift in definite interest, what they understood, the moments that sold it, who it is for, would they watch, would they recommend.',
+                    titles: 'Up to six titles, or up to six pieces of key art, to the same room. Titles: appeal from the title alone, fit once the logline is read, how much it stands out, the preferred option with reasons, by quadrant. Key art: preference, what holds the eye, what it says the title is, the lift in interest.',
+                    script: 'Paste or upload the script and the room reads it scene by scene on a reading clock, with a dial per scene and story, structure and character notes. Or upload a recorded table read and it runs like a pilot.',
+                    concept: 'A logline, a synopsis, a one-sheet or deck text. Interest and definite interest, how much it stands out, who it is for, would they watch, the strongest element and the biggest doubt, each next to the concept norm and by quadrant.'
+                }[tab];
+                var modeSel = '';
+                if (tab === 'pilot') {
+                    modeSel = '<label class="dtw-field">What is this</label><select id="dtwPiMode" class="dtw-in" onchange="S.piMode=this.value;renderPilotConsole();"><option value="pilot"' + (mode === 'pilot' ? ' selected' : '') + '>A pilot</option><option value="feature"' + (mode === 'feature' ? ' selected' : '') + '>A feature</option><option value="episode"' + (mode === 'episode' ? ' selected' : '') + '>An episode after the pilot</option><option value="binge"' + (mode === 'binge' ? ' selected' : '') + '>A binge test across episodes</option></select>'
+                        + '<label class="dtw-pi-switch"><input type="checkbox" id="dtwPiRough"> Rough cut (temp music, missing effects)</label>'
+                        + '<label class="dtw-pi-switch"><input type="checkbox" id="dtwPiCritics"> Critics room (critics and journalists in the seats)</label>';
+                } else if (tab === 'trailer') {
+                    modeSel = '<label class="dtw-field">What is this</label><select id="dtwPiMode" class="dtw-in" onchange="S.piMode=this.value;"><option value="trailer"' + (mode === 'trailer' ? ' selected' : '') + '>A trailer</option><option value="spot"' + (mode === 'spot' ? ' selected' : '') + '>A TV spot</option></select>';
+                } else if (tab === 'titles') {
+                    modeSel = '<label class="dtw-field">What is this</label><select id="dtwPiMode" class="dtw-in" onchange="S.piMode=this.value;renderPilotConsole();"><option value="title"' + (mode === 'title' ? ' selected' : '') + '>Titles (type up to six)</option><option value="key_art"' + (mode === 'key_art' ? ' selected' : '') + '>Key art (upload up to six images)</option></select>';
+                }
+                var stim = '';
+                if (tab === 'pilot') {
+                    stim = '<label class="dtw-field">The cut (mp4, mov or webm)</label><input id="dtwPiFile" class="dtw-in" type="file" accept="video/mp4,video/quicktime,video/webm,.mp4,.mov,.webm">'
+                        + (mode === 'binge' ? '<label class="dtw-field">More episodes (up to six in all)</label><input id="dtwPiFiles" class="dtw-in" type="file" multiple accept="video/mp4,video/quicktime,video/webm,.mp4,.mov,.webm">' : '')
+                        + '<div class="dtw-row2"><div><label class="dtw-field">Title if you do not have the file yet</label><input id="dtwPiCutTitle" class="dtw-in" placeholder="NCIS: New York, episode 1"></div><div><label class="dtw-field">Runtime, minutes</label><input id="dtwPiMins" class="dtw-in" inputmode="decimal" placeholder="42"></div></div>'
+                        + (mode === 'episode' ? '<label class="dtw-field">The prior cut the room watched</label><select id="dtwPiPrior" class="dtw-in"><option value="">None</option>' + ((S.twin || {}).pilot_sessions || []).filter(function(s) { return s.scorecard; }).map(function(s) { return '<option value="' + esc(s.id) + '">' + esc(s.title) + '</option>'; }).join('') + '</select>' : '')
+                        + '<label class="dtw-field">Cast (optional, one name per line or comma separated)</label><input id="dtwPiCast" class="dtw-in" placeholder="Mae, Ray, Lorelai">';
+                } else if (tab === 'trailer') {
+                    stim = '<div class="dtw-row2"><div><label class="dtw-field">Title</label><input id="dtwPiCutTitle" class="dtw-in" placeholder="Hurry Up Tomorrow"></div><div><label class="dtw-field">Runtime, seconds (if no file yet)</label><input id="dtwPiSecs" class="dtw-in" inputmode="numeric" placeholder="120"></div></div>'
+                        + '<label class="dtw-field">Logline (what the room reads before the trailer plays)</label><input id="dtwPiLogline" class="dtw-in" placeholder="A chef returns to her hometown diner after a scandal.">'
+                        + '<label class="dtw-field">Trailer A (mp4, mov or webm)</label><input id="dtwPiFile" class="dtw-in" type="file" accept="video/mp4,video/quicktime,video/webm,.mp4,.mov,.webm">'
+                        + '<label class="dtw-field">Trailer B and C (optional, side by side)</label><input id="dtwPiFiles" class="dtw-in" type="file" multiple accept="video/mp4,video/quicktime,video/webm,.mp4,.mov,.webm">';
+                } else if (tab === 'titles') {
+                    stim = '<label class="dtw-field">Logline</label><input id="dtwPiLogline" class="dtw-in" placeholder="A chef returns to her hometown diner after a scandal.">';
+                    if (mode === 'title') {
+                        stim += '<label class="dtw-field">The titles (up to six)</label><div class="dtw-pi-opts">' + [0, 1, 2, 3, 4, 5].map(function(i) { return '<input class="dtw-in dtw-pi-opt" placeholder="Title ' + String.fromCharCode(65 + i) + '">'; }).join('') + '</div>';
+                    } else {
+                        stim += '<label class="dtw-field">The art (jpg, png or webp, up to six)</label><input id="dtwPiFiles" class="dtw-in" type="file" multiple accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"><label class="dtw-field">Title</label><input id="dtwPiCutTitle" class="dtw-in" placeholder="Second Helping">';
+                    }
+                } else if (tab === 'script') {
+                    stim = '<label class="dtw-field">Paste the script</label><textarea id="dtwPiText" class="dtw-in" rows="8" placeholder="INT. DINER - MORNING&#10;&#10;MAE wipes the counter..."></textarea>'
+                        + '<label class="dtw-field">Or upload it (txt or pdf), or a recorded table read (mp4, mov or webm)</label><input id="dtwPiFile" class="dtw-in" type="file" accept=".txt,.pdf,.fountain,.fdx,.md,text/plain,application/pdf,video/mp4,video/quicktime,video/webm,.mp4,.mov,.webm">'
+                        + '<label class="dtw-field">Title</label><input id="dtwPiCutTitle" class="dtw-in" placeholder="Second Helping">';
+                } else if (tab === 'concept') {
+                    stim = '<label class="dtw-field">Title (optional)</label><input id="dtwPiCutTitle" class="dtw-in" placeholder="Second Helping">'
+                        + '<label class="dtw-field">The concept (a logline is enough; a synopsis or one-sheet gives the room more)</label><textarea id="dtwPiText" class="dtw-in" rows="6" placeholder="A chef returns to her hometown diner after a scandal. She has one summer to win the town back."></textarea>';
+                }
+                var quotas = '<details class="dtw-pi-details" style="margin-top:8px"><summary class="dtw-muted">Recruit the room to quotas (optional)</summary><div class="dtw-row2"><div><label class="dtw-field">% under 35</label><input id="dtwPiQUnder" class="dtw-in" inputmode="numeric" placeholder="65"></div><div><label class="dtw-field">% women</label><input id="dtwPiQWomen" class="dtw-in" inputmode="numeric" placeholder="50"></div></div><div class="dtw-row2"><div><label class="dtw-field">% fans of the lead</label><input id="dtwPiQFans" class="dtw-in" inputmode="numeric" placeholder="40"></div><div><label class="dtw-field">Must have seen (how many of the comps)</label><input id="dtwPiQSeen" class="dtw-in" inputmode="numeric" placeholder="2"></div></div><label class="dtw-field">Comp titles (comma separated)</label><input id="dtwPiComps" class="dtw-in" placeholder="Flashdance, The L Word"></details>';
+                return '<div class="dtw-card"><div class="dtw-eyebrow">' + esc(PI_TAB_LABEL[tab]) + '</div><h3 style="margin-top:0.35rem;">' + esc({ pilot: 'Watch a cut with the room', trailer: 'Test a trailer with the room', titles: 'Test titles or key art with the room', script: 'Read a script with the room', concept: 'Put a concept to the room' }[tab]) + '</h3>'
+                    + '<div class="dtw-sub">' + esc(intro) + '</div>'
                     + (S.twin ? '<div class="dtw-on">On <b>' + esc(twinName()) + '</b></div>' : '<p class="dtw-p">Pick a twin on the Twins tab first, or build one.</p>')
-                    + '<label class="dtw-field" for="dtwPiTitle">Name this test</label><input id="dtwPiTitle" class="dtw-in" placeholder="Season 2 pilot" maxlength="120" autocomplete="off">'
-                    + '<label class="dtw-field">The cut (mp4, mov or webm)</label><input id="dtwPiFile" class="dtw-in" type="file" accept="video/mp4,video/quicktime,video/webm,.mp4,.mov,.webm">'
-                    + '<div class="dtw-row2"><div><label class="dtw-field">Title if you do not have the file yet</label><input id="dtwPiCutTitle" class="dtw-in" placeholder="NCIS: New York, episode 1"></div><div><label class="dtw-field">Runtime, minutes</label><input id="dtwPiMins" class="dtw-in" inputmode="decimal" placeholder="42"></div></div>'
-                    + '<label class="dtw-field">Add a second twin (optional)</label><select id="dtwPiTwin2" class="dtw-in"><option value="">Just this twin</option>' + others + '</select>'
+                    + '<label class="dtw-field" for="dtwPiTitle">Name this test</label><input id="dtwPiTitle" class="dtw-in" placeholder="' + esc({ pilot: 'Season 2 pilot', trailer: 'Trailer A vs B', titles: 'Six titles', script: 'Second Helping, draft 3', concept: 'Second Helping' }[tab]) + '" maxlength="120" autocomplete="off">'
+                    + modeSel + stim
+                    + '<label class="dtw-field">Add a second twin (optional; two audiences on one cut)</label><select id="dtwPiTwin2" class="dtw-in"><option value="">Just this twin</option>' + others + '</select>'
                     + '<label class="dtw-field">Panelists in the room</label><input id="dtwPiRoom" class="dtw-in" value="12" inputmode="numeric">'
-                    + '<label class="dtw-pi-switch"><input type="checkbox" id="dtwPiPurgeNew"> Remove the file when the test is done</label>'
-                    + '<div class="dtw-lab-run"><button type="button" class="dtw-btn dtw-btn-primary" onclick="dtwPilotOpen()">Start the test</button><span class="dtw-price">' + esc(pilotPrice()) + '</span></div>'
-                    + '<div class="dtw-pi-protect">' + esc(pilotProtectLine()) + '</div>'
+                    + quotas
+                    + (tab === 'pilot' || tab === 'trailer' || tab === 'script' ? '<label class="dtw-pi-switch"><input type="checkbox" id="dtwPiPurgeNew"> Remove the file when the test is done</label>' : '')
+                    + '<div class="dtw-lab-run"><button type="button" class="dtw-btn dtw-btn-primary" onclick="dtwPilotOpen()">Start the test</button><span class="dtw-price">' + esc(piPrice(tab)) + '</span></div>'
+                    + (tab === 'pilot' || tab === 'trailer' || tab === 'titles' || tab === 'script' ? '<div class="dtw-pi-protect">' + esc(pilotProtectLine()) + '</div>' : '')
                     + '<div class="dtw-status" id="dtwPiStatus"></div></div>'
-                    + '<div class="dtw-card"><h3>Past tests</h3>' + (rows || '<p class="dtw-muted">No tests on this twin yet.</p>') + '</div>';
+                    + '<div class="dtw-card"><h3>Past tests</h3>' + (rows || '<p class="dtw-muted">No tests of this kind on this twin yet.</p>') + '</div>';
             }
             function normCell(sc, metric, which) {
                 var col = ((sc || {}).norm_columns || {})[metric] || {};
@@ -53736,10 +53835,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var prep = preparing ? ('<div class="dtw-pi-prep"><div><b>Preparing the cut.</b> ' + esc(s.prepare_stage || 'The room is watching it scene by scene. Play is ready the moment it has.') + '</div><div class="bar"><i></i></div></div>') : '';
                 var genreSel = '<select class="dtw-in" style="display:inline-block;width:auto;padding:3px 6px;font-size:12px" onchange="dtwPilotGenre(this.value)"><option value=""' + (!s.genre ? ' selected' : '') + '>Genre: not set</option>' + PI_GENRES.map(function(g) { return '<option value="' + g + '"' + (s.genre === g ? ' selected' : '') + '>' + g.charAt(0).toUpperCase() + g.slice(1) + '</option>'; }).join('') + '</select>';
                 var fmt = s.format || (s.scorecard || {}).format || '';
-                var meta = '<div class="dtw-pi-splitbar" style="margin-top:4px">' + genreSel + (fmt ? '<span class="dtw-muted">Read as a ' + esc(fmt === 'feature' ? 'feature' : fmt) + '</span>' : '') + '<span class="dtw-muted">' + esc(s.cut_label || 'Cut A') + '</span></div>';
+                var modeChip = '<span class="dtw-muted">' + esc(piModeLabel(s)) + (s.rough_cut ? ', rough cut' : (s.mode === 'pilot' || s.mode === 'feature' || s.mode === 'episode' || s.mode === 'binge') ? ', locked cut' : '') + (s.critics_room ? ', critics room' : '') + '</span>';
+                var lineage = s.lineage && s.lineage.parent ? '<button type="button" class="dtw-link" onclick="dtwPilotPick(\'' + esc(s.lineage.parent) + '\')">against ' + esc(s.lineage.parent_cut_label || 'Cut A') + '</button>' : '';
+                var meta = '<div class="dtw-pi-splitbar" style="margin-top:4px">' + genreSel + modeChip + (fmt ? '<span class="dtw-muted">Read as a ' + esc(fmt === 'feature' ? 'feature' : fmt.replace('_', ' ')) + '</span>' : '') + '<span class="dtw-muted">' + esc(s.cut_label || 'Cut A') + '</span>' + lineage + '</div>';
                 var purge = '<label class="dtw-pi-switch"><input type="checkbox" id="dtwPiPurge"' + (s.purge_media_after ? ' checked' : '') + ' onchange="dtwPilotPurgeToggle(this.checked)"> Remove the file when the test is done' + ((s.media || {}).purged_at ? ' <span class="dtw-muted">(removed; the read stays)</span>' : '') + '</label>';
-                var exp = S.key ? ('<div class="dtw-actions"><a class="dtw-btn" href="/api/digital-twins/' + esc(S.key) + '/pilot/' + esc(s.id) + '/export.csv">CSV</a><a class="dtw-btn" href="/api/digital-twins/' + esc(S.key) + '/pilot/' + esc(s.id) + '/export.pdf">PDF</a><a class="dtw-btn" href="/api/digital-twins/' + esc(S.key) + '/pilot/' + esc(s.id) + '/export.pptx">Deck</a><button type="button" class="dtw-btn" onclick="dtwPilotDelete()">Delete this test</button></div>') : '';
-                return '<div class="dtw-card"><div class="dtw-eyebrow">Pilot Testing</div>'
+                var exp = S.key ? ('<div class="dtw-actions"><a class="dtw-btn" href="/api/digital-twins/' + esc(S.key) + '/pilot/' + esc(s.id) + '/export.csv">CSV</a><a class="dtw-btn" href="/api/digital-twins/' + esc(S.key) + '/pilot/' + esc(s.id) + '/export.pdf">PDF</a><a class="dtw-btn" href="/api/digital-twins/' + esc(S.key) + '/pilot/' + esc(s.id) + '/export.pptx">Deck</a>' + (s.scorecard ? '<a class="dtw-btn dtw-btn-primary" href="/api/digital-twins/' + esc(S.key) + '/pilot/' + esc(s.id) + '/report.pptx">Report (deck)</a><a class="dtw-btn" href="/api/digital-twins/' + esc(S.key) + '/pilot/' + esc(s.id) + '/report.pdf">Report (PDF)</a>' : '') + '<button type="button" class="dtw-btn" onclick="dtwPilotDelete()">Delete this test</button></div>') : '';
+                return '<div class="dtw-card"><div class="dtw-eyebrow">' + esc(PI_TAB_LABEL[piTabFor(s.mode)] || 'Pilot Testing') + '</div>'
                     + '<div class="dtw-fg-rtwrap"><input id="dtwPiName" class="dtw-fg-rt" value="' + esc(s.title || '') + '" onblur="dtwPilotRename()"><button type="button" class="dtw-link" onclick="S.pilot=null;renderPilotConsole();">New test</button></div>'
                     + meta
                     + '<div class="dtw-pi-seats" style="margin:10px 0 12px">' + seats + '</div>'
@@ -53759,15 +53860,17 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     + '<div id="dtwPiAskNote" class="dtw-status"></div>'
                     + renderGuide(s)
                     + '<div class="dtw-eyebrow" style="margin-top:16px">On the clock</div><div id="dtwPiThread">' + (qhtml || '<p class="dtw-muted">No questions yet. Ask while the cut plays, or take a suggested one.</p>') + '</div></div></div>'
-                    + renderScorecard(s) + exp + '</div>';
+                    + renderModeRead(s) + renderScorecard(s) + renderDiagnostics(s) + renderPilotExtras(s) + exp + '</div>';
             }
             function renderPilotConsole() {
-                var h = el('dtwPiConsole'); if (!h) return;
+                var h = piHostEl(); if (!h) return;
                 if (!S.twin) { h.innerHTML = renderPilotStart(); return; }
                 if (!S.pilot) { h.innerHTML = renderPilotStart(); return; }
+                Object.keys(PI_HOST).forEach(function(t) { var o = el(PI_HOST[t]); if (o && o !== h) o.innerHTML = ''; });
                 h.innerHTML = renderPilotPlayer(S.pilot);
                 bindPilotMedia();
                 revealPilot(playheadNow());
+                drawCompareChart();
                 if (S.pilot.status === 'preparing') pollPilotPrepare();
                 try { remember(); } catch (_) {}
             }
@@ -53784,7 +53887,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         adoptPilot(r.data.session);
                         if (S.pilot.status !== 'preparing') { renderPilotConsole(); return; }
                     }
-                    var p = document.querySelector('#dtwPiConsole .dtw-pi-prep > div'); if (p && stage) p.innerHTML = '<b>Preparing the cut.</b> ' + esc(stage);
+                    var p = document.querySelector('.dtw-pane.active .dtw-pi .dtw-pi-prep > div'); if (p && stage) p.innerHTML = '<b>Preparing the cut.</b> ' + esc(stage);
                     pollPilotPrepare();
                 }, 4000);
             }
@@ -53799,43 +53902,105 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 try { var d = await api('/' + S.key + '/pilot/' + s.id + '/rename', { method: 'POST', body: JSON.stringify({ purge_media_after: !!on }) }); if (d.session) adoptPilot(d.session); } catch (e) { var n = el('dtwPiNote'); if (n) n.textContent = e.message; }
             };
             window.dtwPilotPick = function(sid) {
-                S.pilot = ((S.twin || {}).pilot_sessions || []).filter(function(s) { return s.id === sid; })[0] || null;
-                S.pilotSplits = null; S.pilotMedia = null;
-                dtwTab('pilot'); renderPilotConsole();
+                var s = ((S.twin || {}).pilot_sessions || []).filter(function(x) { return x.id === sid; })[0] || null;
+                S.pilot = s;
+                S.pilotSplits = null; S.pilotMedia = null; S.pilotCompare = null;
+                var tab = piTabFor((s || {}).mode);
+                S.piTab = tab;
+                dtwTab(tab); renderPilotConsole();
+                if (s && s.lineage && s.lineage.parent && s.scorecard) dtwPilotCompare();
             };
+            function piReadQuotas() {
+                var q = {};
+                var u = parseFloat((el('dtwPiQUnder') || {}).value || ''), w = parseFloat((el('dtwPiQWomen') || {}).value || ''), f = parseFloat((el('dtwPiQFans') || {}).value || ''), n = parseInt((el('dtwPiQSeen') || {}).value || '', 10);
+                if (isFinite(u)) q.under_35_pct = u; if (isFinite(w)) q.women_pct = w; if (isFinite(f)) q.fans_of_lead_pct = f; if (isFinite(n)) q.must_have_seen = n;
+                var comps = ((el('dtwPiComps') || {}).value || '').split(',').map(function(x) { return x.trim(); }).filter(Boolean);
+                if (comps.length) q.comps = comps;
+                return { quotas: Object.keys(q).length ? q : null, comps: comps };
+            }
+            async function piUploadAsset(key, sid, file, slot, label, kind) {
+                var fd = new FormData(); fd.append('file', file); fd.append('slot', String(slot)); if (label) fd.append('label', label); if (kind) fd.append('kind', kind);
+                var r = await fetch('/api/digital-twins/' + encodeURIComponent(key) + '/pilot/' + encodeURIComponent(sid) + '/assets', { method: 'POST', credentials: 'same-origin', body: fd });
+                var u = null; try { u = await r.json(); } catch (_) { u = null; }
+                if (!r.ok || !u || u.success === false) throw new Error((u && u.error) || 'The file could not be stored.');
+                return u;
+            }
             window.dtwPilotOpen = async function() {
                 var key = S.key, st = el('dtwPiStatus');
                 if (!key) { if (st) st.textContent = 'Pick a twin on the Twins tab first.'; return; }
+                var tab = piTab(), mode = ((el('dtwPiMode') || {}).value) || S.piMode || piDefaultMode(tab);
                 var title = ((el('dtwPiTitle') || {}).value || '').replace(/\s+/g, ' ').trim();
                 if (!title) { if (st) st.textContent = 'Name the test first.'; var tn = el('dtwPiTitle'); if (tn) { try { tn.focus(); } catch (_) {} } return; }
                 var other = (el('dtwPiTwin2') || {}).value;
                 var mins = parseFloat((el('dtwPiMins') || {}).value || '0') || 0;
+                var secs = parseFloat((el('dtwPiSecs') || {}).value || '0') || 0;
                 var cutTitle = ((el('dtwPiCutTitle') || {}).value || '').trim();
+                var logline = ((el('dtwPiLogline') || {}).value || '').trim();
+                var text = ((el('dtwPiText') || {}).value || '').trim();
                 var purgeNew = !!((el('dtwPiPurgeNew') || {}).checked);
-                var body = { title: title, in_room: parseInt((el('dtwPiRoom') || {}).value || '12', 10) || 12, twins: other && other !== key ? [other] : [] };
+                var options = Array.prototype.slice.call(document.querySelectorAll('#' + (PI_HOST[tab] || 'dtwPiConsole') + ' .dtw-pi-opt')).map(function(i) { return (i.value || '').trim(); }).filter(Boolean);
+                var cast = ((el('dtwPiCast') || {}).value || '').split(/[,\n]/).map(function(x) { return x.trim(); }).filter(Boolean);
+                var rq = piReadQuotas();
+                var file = (el('dtwPiFile') || {}).files && el('dtwPiFile').files[0];
+                var more = (el('dtwPiFiles') || {}).files ? Array.prototype.slice.call(el('dtwPiFiles').files) : [];
+                if (mode === 'title' && options.length < 2) { if (st) st.textContent = 'Type at least two titles.'; return; }
+                if (mode === 'key_art' && !more.length) { if (st) st.textContent = 'Upload the art (up to six images).'; return; }
+                if (mode === 'concept' && !text) { if (st) st.textContent = 'Paste the concept first.'; return; }
+                if (mode === 'script' && !text && !file) { if (st) st.textContent = 'Paste the script or upload it.'; return; }
+                var body = { title: title, in_room: parseInt((el('dtwPiRoom') || {}).value || '12', 10) || 12, twins: other && other !== key ? [other] : [], mode: mode };
                 if (cutTitle) body.cut_title = cutTitle;
                 if (mins > 0) body.runtime_s = Math.round(mins * 60);
+                if (secs > 0) body.runtime_s = Math.round(secs);
+                if (logline) body.logline = logline;
+                if (text && mode !== 'script') body.text = text;
+                if (text && mode === 'script') body.text = text;
+                if (options.length && mode === 'title') body.options = options;
+                if (cast.length) body.cast = cast;
+                if (rq.quotas) body.quotas = rq.quotas;
+                if (rq.comps.length) body.comps = rq.comps;
+                if ((el('dtwPiRough') || {}).checked) body.rough_cut = true;
+                if ((el('dtwPiCritics') || {}).checked) body.critics_room = true;
+                var prior = (el('dtwPiPrior') || {}).value;
                 if (st) st.textContent = 'Seating the room...';
                 try { var d = await api('/' + key + '/pilot/open', { method: 'POST', body: JSON.stringify(body) }); } catch (e) { if (st) st.textContent = e.message; return; }
                 adoptPilot(d.session);
-                S.pilotSplits = null; S.pilotMedia = null;
-                if (purgeNew) { try { await api('/' + key + '/pilot/' + d.session.id + '/rename', { method: 'POST', body: JSON.stringify({ purge_media_after: true }) }); } catch (_) {} }
-                var file = (el('dtwPiFile') || {}).files && el('dtwPiFile').files[0];
-                if (file) {
-                    if (st) st.textContent = 'Uploading the cut...';
-                    try {
-                        var fd = new FormData(); fd.append('file', file); fd.append('title', cutTitle || title);
-                        var r = await fetch('/api/digital-twins/' + encodeURIComponent(key) + '/pilot/' + encodeURIComponent(d.session.id) + '/upload', { method: 'POST', credentials: 'same-origin', body: fd });
-                        var u = null; try { u = await r.json(); } catch (_) { u = null; }
-                        if (!r.ok || !u || u.success === false) throw new Error((u && u.error) || 'The cut could not be stored.');
-                        adoptPilot(u.session);
-                    } catch (e) { if (st) st.textContent = e.message; }
+                S.pilotSplits = null; S.pilotMedia = null; S.pilotCompare = null;
+                var sid = d.session.id;
+                if (purgeNew) { try { await api('/' + key + '/pilot/' + sid + '/rename', { method: 'POST', body: JSON.stringify({ purge_media_after: true }) }); } catch (_) {} }
+                if (prior) {
+                    var ps = ((S.twin || {}).pilot_sessions || []).filter(function(x) { return x.id === prior; })[0];
+                    if (ps) { try { var pr = await api('/' + key + '/pilot/' + sid + '/stimulus', { method: 'POST', body: JSON.stringify({ cut_label: 'Cut A' }) }); } catch (_) {} }
                 }
-                if (st) st.textContent = 'Preparing the cut';
                 try {
-                    var p = await api('/' + key + '/pilot/' + d.session.id + '/prepare', { method: 'POST', body: JSON.stringify({ title: cutTitle || title, runtime_s: body.runtime_s || 0 }) });
+                    if (file) {
+                        var isVideo = /\.(mp4|mov|webm|m4v)$/i.test(file.name || '');
+                        if (st) st.textContent = isVideo ? 'Uploading the cut...' : 'Reading the file...';
+                        if (isVideo && mode !== 'key_art') {
+                            var fd = new FormData(); fd.append('file', file); fd.append('title', cutTitle || title);
+                            var r = await fetch('/api/digital-twins/' + encodeURIComponent(key) + '/pilot/' + encodeURIComponent(sid) + '/upload', { method: 'POST', credentials: 'same-origin', body: fd });
+                            var u = null; try { u = await r.json(); } catch (_) { u = null; }
+                            if (!r.ok || !u || u.success === false) throw new Error((u && u.error) || 'The cut could not be stored.');
+                            adoptPilot(u.session);
+                            if (mode === 'trailer' || mode === 'spot' || mode === 'binge') { try { var a0 = await piUploadAsset(key, sid, file, 0, cutTitle || (mode === 'binge' ? 'Episode 1' : 'Trailer A'), 'video'); adoptPilot(a0.session); } catch (_) {} }
+                        } else {
+                            var ux = await piUploadAsset(key, sid, file, 0, cutTitle || title, 'text');
+                            adoptPilot(ux.session);
+                        }
+                    }
+                    for (var i = 0; i < more.length && i < 6; i++) {
+                        if (st) st.textContent = 'Uploading ' + (i + 1) + ' of ' + more.length + '...';
+                        var kind = mode === 'key_art' ? 'image' : 'video';
+                        var slot = mode === 'key_art' ? i : (file ? i + 1 : i);
+                        var lab = mode === 'key_art' ? ('Art ' + String.fromCharCode(65 + i)) : (mode === 'binge' ? ('Episode ' + (slot + 1)) : ('Trailer ' + String.fromCharCode(65 + slot)));
+                        var ua = await piUploadAsset(key, sid, more[i], slot, lab, kind);
+                        adoptPilot(ua.session);
+                    }
+                } catch (e) { if (st) st.textContent = e.message; }
+                if (st) st.textContent = 'Preparing...';
+                try {
+                    var p = await api('/' + key + '/pilot/' + sid + '/prepare', { method: 'POST', body: JSON.stringify({ title: cutTitle || title, runtime_s: body.runtime_s || 0 }) });
                     adoptPilot(p.session);
-                } catch (e) { if (st) st.textContent = e.message || 'Preparing the cut'; }
+                } catch (e) { if (st) st.textContent = e.message || 'Preparing'; }
                 renderPilotConsole();
             };
             window.dtwPilotPlay = async function() {
@@ -53938,7 +54103,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         adoptPilot(r.data.session);
                         var th = el('dtwPiThread');
                         if (th) { var tmp = document.createElement('div'); tmp.innerHTML = renderPilotPlayer(S.pilot); var fresh = tmp.querySelector('#dtwPiThread'); if (fresh) th.innerHTML = fresh.innerHTML; }
-                        var scw = document.querySelector('#dtwPiConsole .dtw-card'); if (scw && S.pilot.status === 'stopped') { renderPilotConsole(); dtwPilotSeek(t); }
+                        var scw = document.querySelector('.dtw-pane.active .dtw-pi .dtw-card'); if (scw && S.pilot.status === 'stopped') { renderPilotConsole(); dtwPilotSeek(t); }
                     }
                     pollPilotQuestions();
                 }, 5000);
@@ -53961,6 +54126,257 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 S.pilot = null;
                 renderPilotConsole();
             };
+            // ------------------------------------------------------------ Pilot Testing phase 2: the mode reads, the diagnostics, the extras
+            function piTable(head, rows) {
+                return '<table class="dtw-pi-table"><thead><tr>' + head.map(function(h, i) { return '<th' + (i ? ' class="n"' : '') + '>' + esc(h) + '</th>'; }).join('') + '</tr></thead><tbody>' + rows.map(function(r) { return '<tr>' + r.map(function(c, i) { return '<td' + (i ? ' class="n"' : '') + '>' + c + '</td>'; }).join('') + '</tr>'; }).join('') + '</tbody></table>';
+            }
+            function piNorm(v) { return v == null ? '-' : Number(v).toFixed(1) + '%'; }
+            function renderModeRead(s) {
+                var r = s.mode_read || {}, mode = r.mode || s.mode || 'pilot';
+                if (!s.scorecard) return '';
+                var out = '';
+                if ((mode === 'trailer' || mode === 'spot') && r.interest_after_pct != null) {
+                    var lift = Number(r.definite_interest_lift_pp || 0);
+                    out += '<div class="dtw-card"><div class="dtw-eyebrow">The trailer</div>'
+                        + '<div class="dtw-pi-money"><div class="m"><div class="k">Definitely interested before</div><div class="v">' + pct1(r.interest_before_pct) + '</div><div class="n">From the title and logline alone</div></div>'
+                        + '<div class="m"><div class="k">Definitely interested after</div><div class="v">' + pct1(r.interest_after_pct) + '</div><div class="n">Lift ' + (lift >= 0 ? '+' : '') + lift.toFixed(1) + ' points</div></div>'
+                        + '<div class="m"><div class="k">Would watch or see it</div><div class="v">' + pct1(r.would_watch_pct) + '</div><div class="n">' + esc((r.who_for || {}).line || '') + '</div></div></div>'
+                        + '<p class="dtw-p" style="margin-top:8px">' + esc(r.read || '') + '</p>'
+                        + ((r.sold_it || []).length ? '<h4>The moments that sold it</h4>' + (r.sold_it || []).map(function(m) { return '<div class="dtw-pi-voice"><span class="k">' + esc(m.clock) + '  ' + esc(PI_EVT[m.type] || m.type) + '  ' + esc(m.name || '') + '</span><div>' + esc(m.line || '') + '</div></div>'; }).join('') : '')
+                        + '<h4>What they understood it is about</h4>' + (r.understood || []).slice(0, 5).map(function(u) { return '<div class="dtw-pi-quote">' + esc(u.name) + ': ' + esc(u.line) + '</div>'; }).join('')
+                        + '<h4>What they expect</h4>' + (r.expect || []).slice(0, 4).map(function(u) { return '<div class="dtw-pi-quote">' + esc(u.name) + ': ' + esc(u.line) + '</div>'; }).join('')
+                        + ((r.quadrants || []).length ? '<h4>By quadrant</h4>' + piTable(['Quadrant', 'Seats', 'Before', 'After', 'Lift', 'Would watch'], (r.quadrants || []).filter(function(q) { return q.n; }).map(function(q) { return [esc(q.label), esc(q.n), pct1(q.interest_before_pct), pct1(q.interest_after_pct), (q.definite_interest_lift_pp != null ? (q.definite_interest_lift_pp >= 0 ? '+' : '') + q.definite_interest_lift_pp : ''), pct1(q.would_watch_pct)]; })) : '');
+                    var cmp = r.compare || null, reads = Object.keys(s.asset_reads || {}).map(function(k) { return s.asset_reads[k]; });
+                    if (cmp && (cmp.ranked || []).length) {
+                        out += '<h4>Side by side</h4><p class="dtw-p">' + esc(cmp.read || '') + '</p>' + piTable(['Asset', 'Lift', 'After', 'Would watch', 'Recommend'], cmp.ranked.map(function(x) { return [esc(x.asset_label), (x.definite_interest_lift_pp >= 0 ? '+' : '') + esc(x.definite_interest_lift_pp), pct1(x.interest_after_pct), pct1(x.would_watch_pct), pct1(x.recommend_pct)]; }));
+                    }
+                    if (reads.length) out += '<canvas id="dtwPiAssets" class="dtw-pi-cmp"></canvas>';
+                    out += '</div>';
+                } else if ((mode === 'title' || mode === 'key_art') && (r.options || []).length) {
+                    out += '<div class="dtw-card"><div class="dtw-eyebrow">' + (mode === 'title' ? 'The titles, ranked' : 'The art, ranked') + '</div><p class="dtw-p" style="margin-top:6px">' + esc(r.read || '') + '</p>'
+                        + (r.options || []).map(function(o) {
+                            var sub = mode === 'title' ? ('fits the logline ' + pct1(o.fit_pct) + ', stands out ' + pct1(o.unique_pct) + ', love it ' + pct1(o.love_it_pct)) : ('holds the eye ' + pct1(o.attention_pct) + ', interest ' + (o.interest_lift_pp != null ? ((o.interest_lift_pp >= 0 ? '+' : '') + o.interest_lift_pp + ' points') : '-') + ', love it ' + pct1(o.love_it_pct));
+                            return '<div class="dtw-pi-rank"><span class="r">' + esc(o.rank) + '</span><div><div><b>' + esc(o.label) + '</b>' + (o.caption ? ' <span class="dtw-muted">' + esc(o.caption) + '</span>' : '') + '</div><div class="dtw-muted" style="font-size:0.78rem">' + esc(sub) + '</div>' + (o.reasons || []).slice(0, 2).map(function(q) { return '<div class="dtw-pi-quote">' + esc(q.name) + ': ' + esc(q.line) + '</div>'; }).join('') + '</div><span class="v">' + pct1(o.preference_pct) + '</span></div>';
+                        }).join('')
+                        + ((r.quadrants || []).filter(function(q) { return q.n; }).length ? '<h4>By quadrant</h4>' + piTable(['Quadrant', 'Seats', 'Prefers'], (r.quadrants || []).filter(function(q) { return q.n; }).map(function(q) { return [esc(q.label), esc(q.n), esc(q.winner || '') + (q.winner_pct != null ? ' (' + pct1(q.winner_pct) + ')' : '')]; })) : '')
+                        + '</div>';
+                } else if (mode === 'concept' && r.definitely_interested_pct != null) {
+                    out += '<div class="dtw-card"><div class="dtw-eyebrow">The idea</div>'
+                        + '<div class="dtw-pi-money"><div class="m"><div class="k">Definitely interested</div><div class="v">' + pct1(r.definitely_interested_pct) + '</div><div class="n">' + pct1(r.interested_pct) + ' at least somewhat</div></div>'
+                        + '<div class="m"><div class="k">Stands out</div><div class="v">' + pct1(r.unique_pct) + '</div><div class="n">' + esc((r.who_for || {}).line || '') + '</div></div>'
+                        + '<div class="m"><div class="k">Would watch</div><div class="v">' + pct1(r.would_watch_pct) + '</div><div class="n">' + ((r.strongest || [])[0] ? 'Strongest: ' + esc(r.strongest[0].label) + ' ' + pct1(r.strongest[0].pct) : '') + '</div></div></div>'
+                        + '<p class="dtw-p" style="margin-top:8px">' + esc(r.read || '') + '</p>'
+                        + '<div class="dtw-pi-diag"><div class="dtw-card"><h4>The strongest element</h4>' + piTable(['Element', 'Share'], (r.strongest || []).map(function(x) { return [esc(x.label), pct1(x.pct)]; })) + '</div><div class="dtw-card"><h4>The biggest doubt</h4>' + piTable(['Doubt', 'Share'], (r.doubt || []).map(function(x) { return [esc(x.label), pct1(x.pct)]; })) + '</div></div>'
+                        + (s.linked_run_id ? '<div class="dtw-actions"><button type="button" class="dtw-btn dtw-btn-sm" onclick="dtwOpenRun(\'' + esc(s.linked_run_id) + '\')">Back to the Greenlight run</button></div>' : '')
+                        + '</div>';
+                } else if (mode === 'script' && (r.scenes || []).length) {
+                    out += '<div class="dtw-card"><div class="dtw-eyebrow">Scene by scene</div><p class="dtw-p" style="margin-top:6px">' + esc(r.read || '') + '</p>'
+                        + piTable(['Scene', 'Dial', 'Notes'], (r.scenes || []).map(function(x) { var notes = Object.keys(x.notes || {}).map(function(k) { return x.notes[k]; }).filter(Boolean).join(' '); return ['<button type="button" class="dtw-link" onclick="dtwPilotSeek(' + Number((s.scenes || []).filter(function(sc) { return sc.id === x.id; }).map(function(sc) { return sc.t_start; })[0] || 0) + ')">' + esc(x.clock) + ' ' + esc(x.slug) + '</button>', x.dial != null ? esc(Number(x.dial).toFixed(1)) : '', esc(notes)]; }))
+                        + '<div class="dtw-pi-money" style="margin-top:10px"><div class="m"><div class="k">Story works</div><div class="v">' + pct1(r.story_pct) + '</div></div><div class="m"><div class="k">Structure works</div><div class="v">' + pct1(r.structure_pct) + '</div></div><div class="m"><div class="k">Characters work</div><div class="v">' + pct1(r.character_pct) + '</div></div></div></div>';
+                } else if (mode === 'episode' && r.commitment_pct != null) {
+                    out += '<div class="dtw-card"><div class="dtw-eyebrow">After the pilot</div><div class="dtw-pi-money"><div class="m"><div class="k">Would keep going</div><div class="v">' + pct1(r.commitment_pct) + '</div></div><div class="m"><div class="k">Better than the last one</div><div class="v">' + pct1(r.better_than_prior_pct) + '</div></div>' + (r.tune_in_delta_pp != null ? '<div class="m"><div class="k">Would watch the next one</div><div class="v">' + (r.tune_in_delta_pp >= 0 ? '+' : '') + esc(r.tune_in_delta_pp) + ' pts</div><div class="n">against ' + esc((r.prior || {}).title || 'the prior cut') + '</div></div>' : '') + '</div><p class="dtw-p" style="margin-top:8px">' + esc(r.read || '') + '</p></div>';
+                } else if (mode === 'binge' && (r.episodes || []).length) {
+                    out += '<div class="dtw-card"><div class="dtw-eyebrow">Across the episodes</div><p class="dtw-p" style="margin-top:6px">' + esc(r.read || '') + '</p>' + piTable(['Episode', 'Total positive', 'Would watch the next one', 'Cumulative'], (r.episodes || []).map(function(e, i) { return [esc(e.label), pct1(e.total_positive_pct), pct1(e.tune_in_pct), pct1((r.cumulative_tune_in || [])[i])]; })) + '</div>';
+                }
+                var mk = s.marketing_read || null;
+                if (mk && mk.read) {
+                    out += '<div class="dtw-card"><div class="dtw-eyebrow">Locked cut: the marketing read</div><p class="dtw-p" style="margin-top:6px">' + esc(mk.read) + '</p>' + ((mk.trailer_moments || []).length ? '<div class="dtw-chips">' + mk.trailer_moments.map(function(m) { return '<button type="button" class="dtw-chip" onclick="dtwPilotSeek(' + Number(m.t || 0) + ')">' + esc(m.clock) + ' ' + esc(PI_EVT[m.type] || m.type) + '</button>'; }).join('') + '</div>' : '') + '</div>';
+                }
+                return out;
+            }
+            function renderDiagnostics(s) {
+                var d = s.diagnostics || {};
+                if (!s.scorecard || !Object.keys(d).length) return '';
+                var ch = d.characters || {}, pace = d.pace || {}, sc = d.scenes || {}, comps = d.components || {};
+                var out = '<div class="dtw-pi-diag">';
+                if ((ch.characters || []).length) {
+                    out += '<div class="dtw-card"><div class="dtw-eyebrow">Characters</div><p class="dtw-p" style="margin-top:6px">' + esc(ch.read || '') + '</p>'
+                        + piTable(['Character', 'Excellent', 'Norm', 'On screen'], ch.characters.map(function(c) { return [esc(c.name) + ' <span class="dtw-muted">' + esc(c.role) + '</span>', pct1(c.excellent_pct), piNorm(c.norm), esc(c.screen_clock) + ' <span class="dtw-muted">' + esc(c.time_vs_like) + '</span>']; }))
+                        + (ch.relationship ? '<p class="dtw-muted" style="margin-top:6px">The key relationship, ' + esc(ch.relationship.pair.join(' and ')) + ': ' + pct1(ch.relationship.excellent_pct) + ' excellent.</p>' : '')
+                        + ((ch.follow || []).length ? '<p class="dtw-muted">Who they would follow into a second episode: ' + ch.follow.map(function(f) { return esc(f.name) + ' ' + pct1(f.pct); }).join(', ') + '.</p>' : '')
+                        + '</div>';
+                } else if (ch.read) {
+                    out += '<div class="dtw-card"><div class="dtw-eyebrow">Characters</div><p class="dtw-muted" style="margin-top:6px">' + esc(ch.read) + '</p><div class="dtw-actions"><input id="dtwPiCastLate" class="dtw-in" placeholder="Mae, Ray, Lorelai" style="max-width:260px"><button type="button" class="dtw-btn dtw-btn-sm" onclick="dtwPilotSetCast()">Add the cast</button></div></div>';
+                }
+                if ((pace.acts || []).length) {
+                    out += '<div class="dtw-card"><div class="dtw-eyebrow">Pace, confusion, the ending</div><p class="dtw-p" style="margin-top:6px">' + esc(pace.read || '') + '</p>'
+                        + piTable(['Stretch', 'Too slow', 'Just right', 'Too fast'], pace.acts.map(function(a) { return ['<button type="button" class="dtw-link" onclick="dtwPilotSeek(' + Number(((s.beats || []).filter(function(b) { return clockFmt(b.t) === a.from_clock; })[0] || {}).t || 0) + ')">' + esc(a.label) + ' <span class="dtw-muted">' + esc(a.from_clock) + ' to ' + esc(a.to_clock) + '</span></button>', pct1(a.too_slow_pct), pct1(a.just_right_pct), pct1(a.too_fast_pct)]; }))
+                        + '<div class="dtw-pi-money" style="margin-top:10px"><div class="m"><div class="k">Beginning</div><div class="v">' + pct1((pace.beginning || {}).excellent_pct) + '</div><div class="n">excellent</div></div><div class="m"><div class="k">Ending</div><div class="v">' + pct1((pace.ending || {}).excellent_pct) + '</div><div class="n">excellent</div></div><div class="m"><div class="k">Confused somewhere</div><div class="v">' + pct1(pace.confusion_pct) + '</div><div class="n">' + esc(pace.confused_seats || 0) + ' seats</div></div></div>'
+                        + ((pace.confusions || []).length ? '<h4>What confused them</h4>' + pace.confusions.slice(0, 6).map(function(c) { return '<div class="dtw-pi-quote"><button type="button" class="dtw-link" onclick="dtwPilotSeek(' + Number(c.t || 0) + ')">' + esc(c.clock) + '</button> ' + esc(c.name) + ': ' + esc(c.line) + '</div>'; }).join('') : '')
+                        + '</div>';
+                }
+                if ((sc.liked_best || []).length || (sc.liked_least || []).length) {
+                    function sceneList(rows) { return rows.map(function(x) { return '<div class="dtw-pi-rank"><span class="r">' + esc(x.mentions) + '</span><div><div><button type="button" class="dtw-link" onclick="dtwPilotSeek(' + Number(((s.scenes || []).filter(function(z) { return z.id === x.scene_id; })[0] || {}).t_start || 0) + ')">' + esc(x.clock) + '</button> ' + esc(x.on_screen || 'the scene') + '</div>' + (x.quotes || []).slice(0, 2).map(function(q) { return '<div class="dtw-pi-quote">' + esc(q.name) + ': ' + esc(q.line) + '</div>'; }).join('') + '</div></div>'; }).join(''); }
+                    out += '<div class="dtw-card"><div class="dtw-eyebrow">Scenes liked best and least</div><p class="dtw-p" style="margin-top:6px">' + esc(sc.read || '') + '</p><h4>Liked best</h4>' + sceneList(sc.liked_best || []) + '<h4>Liked least</h4>' + sceneList(sc.liked_least || [])
+                        + ((sc.not_recommending || []).length ? '<h4>Why some would not recommend it</h4>' + sc.not_recommending.slice(0, 5).map(function(n) { return '<div class="dtw-pi-quote">' + esc(n.name) + ': ' + esc(n.line) + '</div>'; }).join('') : '')
+                        + ((sc.similar_titles || []).length ? '<p class="dtw-muted" style="margin-top:8px">It reminded them of: ' + sc.similar_titles.map(function(t) { return esc(t.title) + ' (' + esc(t.mentions) + ')'; }).join(', ') + '.</p>' : '')
+                        + '</div>';
+                }
+                if ((comps.rows || []).length) {
+                    out += '<div class="dtw-card"><div class="dtw-eyebrow">Components</div><p class="dtw-p" style="margin-top:6px">' + esc(comps.read || '') + '</p>' + piTable(['Component', 'Excellent', 'Norm', 'Against the norm'], comps.rows.map(function(c) { return [esc(c.label), pct1(c.excellent_pct), piNorm(c.norm), c.vs_norm_pp != null ? ((c.vs_norm_pp >= 0 ? '+' : '') + esc(c.vs_norm_pp)) : '']; })) + '</div>';
+                }
+                return out + '</div>';
+            }
+            function renderPilotExtras(s) {
+                if (!S.key) return '';
+                var out = '<div class="dtw-pi-diag">';
+                // the recut re-test and the compare
+                var cmp = S.pilotCompare && S.pilotCompare.sid === s.id ? S.pilotCompare.data : null;
+                out += '<div class="dtw-card"><div class="dtw-eyebrow">Recut re-test</div><p class="dtw-muted" style="margin-top:6px">' + (s.lineage && s.lineage.parent ? 'This is ' + esc(s.cut_label || 'Cut B') + ' on the same room as ' + esc(s.lineage.parent_cut_label || 'Cut A') + '.' : 'Upload the next cut to the same room: the same seats watch it fresh, and the two dials sit side by side with the deltas scene by scene.') + '</p>'
+                    + '<div class="dtw-actions">' + (s.scorecard && !(s.lineage && s.lineage.parent) ? '<button type="button" class="dtw-btn dtw-btn-sm" onclick="dtwPilotRecut()">Open the recut on this room</button>' : '') + (s.lineage && s.lineage.parent && s.scorecard ? '<button type="button" class="dtw-btn dtw-btn-sm" onclick="dtwPilotCompare()">Compare with ' + esc(s.lineage.parent_cut_label || 'Cut A') + '</button>' : '') + ((s.recuts || []).length ? s.recuts.map(function(r) { return '<button type="button" class="dtw-link" onclick="dtwPilotPick(\'' + esc(r.id) + '\')">' + esc(r.label) + '</button>'; }).join('') : '') + '</div>'
+                    + (cmp && cmp.recut ? '<p class="dtw-p">' + esc(cmp.recut.read || '') + '</p><canvas id="dtwPiCompare" class="dtw-pi-cmp"></canvas>' + piTable(['Measure', esc(cmp.recut.a.label), esc(cmp.recut.b.label), 'Delta'], (cmp.recut.scorecard_deltas || []).map(function(d) { return [esc(d.label), pct1(d.a), pct1(d.b), (d.delta >= 0 ? '+' : '') + esc(d.delta)]; })) + ((cmp.recut.act_deltas || []).length ? '<h4>By act</h4>' + piTable(['Act', esc(cmp.recut.a.label), esc(cmp.recut.b.label), 'Delta'], cmp.recut.act_deltas.map(function(d) { return [esc(d.label), esc(d.a), esc(d.b), (d.delta >= 0 ? '+' : '') + esc(d.delta)]; })) : '') + ((cmp.recut.trims || []).length ? '<p class="dtw-muted">Trims: ' + cmp.recut.trims.slice(0, 5).map(function(t) { return esc(t.clock) + ' (' + esc(t.act_label) + (t.act_delta != null ? ', ' + (t.act_delta >= 0 ? '+' : '') + esc(t.act_delta) : '') + ')'; }).join('; ') + '.</p>' : '') : '')
+                    + '</div>';
+                // two audiences
+                var ta = s.two_audiences || null;
+                if (ta && (ta.lines || []).length >= 2) {
+                    out += '<div class="dtw-card"><div class="dtw-eyebrow">Two audiences on one cut</div><p class="dtw-p" style="margin-top:6px">' + esc(ta.read || '') + '</p><canvas id="dtwPiTwo" class="dtw-pi-cmp"></canvas>'
+                        + piTable(['Audience', 'Seats', 'Dial', 'Total positive', 'Definitely recommend'], ta.lines.map(function(l) { return [esc(l.name), esc(l.n), esc(l.mean), pct1(l.total_positive_pct), pct1(l.definitely_recommend_pct)]; }))
+                        + ((ta.splits || []).length ? '<h4>Where they split</h4>' + ta.splits.slice(0, 4).map(function(sp) { var said = Object.keys(sp.said || {}).map(function(n) { return (sp.said[n] || []).slice(0, 1).map(function(e) { return '<div class="dtw-pi-quote">' + esc(n) + ': ' + esc(e.line) + '</div>'; }).join(''); }).join(''); return '<div class="dtw-pi-rank"><span class="r">' + esc(sp.gap) + '</span><div><div><button type="button" class="dtw-link" onclick="dtwPilotSeek(' + Number(sp.from_s || 0) + ')">' + esc(sp.from_clock) + ' to ' + esc(sp.to_clock) + '</button> ' + esc(sp.higher) + ' higher' + (sp.on_screen ? ', on ' + esc(sp.on_screen) : '') + '</div>' + said + '</div></div>'; }).join('') : '')
+                        + '</div>';
+                }
+                // comps
+                var cs = s.comp_set || null;
+                out += '<div class="dtw-card"><div class="dtw-eyebrow">Versus comps</div>' + (cs && (cs.rows || []).length ? '<p class="dtw-p" style="margin-top:6px">' + esc(cs.read || '') + '</p>' + piTable(['Comp', 'Total positive', 'Definitely recommend', 'Excellent', 'From'], cs.rows.map(function(c) { return [esc(c.title), pct1(c.total_positive_pct), pct1(c.definitely_recommend_pct), pct1(c.excellent_pct), '<span class="dtw-muted">' + esc(c.source) + (c.outcome ? '. ' + esc(c.outcome) : '') + '</span>']; })) : '<p class="dtw-muted" style="margin-top:6px">Name comps (with any numbers you know) and the test is placed among them, next to the twin\'s own Greenlight runs and prior tests.</p>')
+                    + '<div class="dtw-actions"><input id="dtwPiCompsIn" class="dtw-in" placeholder="Flashdance, The L Word" style="max-width:300px" value="' + esc(((s.comps || []).map(function(c) { return c.title || c; })).join(', ')) + '"><button type="button" class="dtw-btn dtw-btn-sm" onclick="dtwPilotComps()">' + (cs ? 'Refresh the comps' : 'Place it among the comps') + '</button></div></div>';
+                // recruit block
+                var rec = s.recruit || null;
+                if (rec) {
+                    var w = rec.walkouts || {};
+                    out += '<div class="dtw-card"><div class="dtw-eyebrow">Preview stats</div><p class="dtw-p" style="margin-top:6px">Recruited to ' + esc(rec.concept || "the twin's own mix") + '.</p>'
+                        + '<div class="dtw-pi-money"><div class="m"><div class="k">Seated</div><div class="v">' + esc(rec.seated || '') + '</div><div class="n">' + (rec.invited ? fmtN(rec.invited) + ' invited, ' + esc(rec.invite_ratio) : 'the twin\'s own mix') + '</div></div><div class="m"><div class="k">Walked out</div><div class="v">' + esc(w.count != null ? w.count : '-') + '</div><div class="n">' + esc(w.read || '') + '</div></div>' + ((rec.screener || {}).titles && rec.screener.titles.length ? '<div class="m"><div class="k">Screener</div><div class="v">' + esc(rec.screener.must_have_seen || 0) + ' of ' + esc(rec.screener.titles.length) + '</div><div class="n">' + esc(rec.screener.titles.slice(0, 3).join(', ')) + '</div></div>' : '') + '</div>'
+                        + ((rec.quotas_met || []).length ? piTable(['Quota', 'Asked for', 'Seated'], rec.quotas_met.map(function(q) { return [esc(q.quota), pct1(q.target_pct), pct1(q.seated_pct)]; })) : '')
+                        + '</div>';
+                }
+                // critics
+                var cr = s.critics || null;
+                if (cr && cr.critic_score != null) {
+                    out += '<div class="dtw-card"><div class="dtw-eyebrow">Critics room</div><div class="dtw-pi-money"><div class="m"><div class="k">Critic score forecast</div><div class="v">' + esc(Math.round(cr.critic_score)) + '</div><div class="n">likely ' + esc(Math.round(cr.range[0])) + ' to ' + esc(Math.round(cr.range[1])) + '</div></div></div><p class="dtw-p" style="margin-top:8px">' + esc(cr.awards_read || '') + '</p></div>';
+                } else if (!s.play_charged && !s.critics_room) {
+                    out += '<div class="dtw-card"><div class="dtw-eyebrow">Critics room</div><p class="dtw-muted" style="margin-top:6px">Seat critics and journalists instead of fans before Play: a critic score forecast and an awards read, at the session price.</p><div class="dtw-actions"><button type="button" class="dtw-btn dtw-btn-sm" onclick="dtwPilotCritics()">Make this a critics room</button></div></div>';
+                }
+                // talent attach
+                var tal = (s.talent_attach || []);
+                out += '<div class="dtw-card"><div class="dtw-eyebrow">Talent attach</div><p class="dtw-muted" style="margin-top:6px">How much a name lifts interest, by quadrant, and who they would watch it with.</p>'
+                    + tal.slice(-2).map(function(t) { return '<p class="dtw-p">' + esc(t.read || '') + '</p>' + piTable(['Quadrant', 'Lift'], (t.by_quadrant || []).filter(function(q) { return q.n; }).map(function(q) { return [esc(q.label), pct1(q.reach_lift_pct)]; })) + ((t.watch_with || []).length ? '<p class="dtw-muted">Who they would watch it with: ' + t.watch_with.slice().sort(function(a, b) { return b.pct - a.pct; }).slice(0, 3).map(function(r) { return esc(r.label) + ' ' + pct1(r.pct); }).join(', ') + '.</p>' : ''); }).join('')
+                    + '<div class="dtw-actions"><input id="dtwPiTalentIn" class="dtw-in" placeholder="Jennifer Beals" style="max-width:240px"><select id="dtwPiTalentRole" class="dtw-in" style="width:auto"><option value="lead">Lead</option><option value="supporting">Supporting</option><option value="host">Host</option></select><button type="button" class="dtw-btn dtw-btn-sm" onclick="dtwPilotTalent()">Attach a name</button></div></div>';
+                // activation brief
+                var br = s.activation_brief || null;
+                out += '<div class="dtw-card"><div class="dtw-eyebrow">Activation brief</div>' + (br ? '<p class="dtw-p" style="margin-top:6px">' + esc(br.read || '') + '</p>' + piTable(['Segment', 'Definitely recommend', 'People'], (br.segments || []).map(function(g) { return [esc(g.label), pct1(g.definitely_recommend_pct), fmtN(g.people)]; })) + '<p class="dtw-muted" style="margin-top:6px">' + esc(br.text || '') + '</p><div class="dtw-actions"><button type="button" class="dtw-btn dtw-btn-sm" onclick="dtwChatFill(\'' + esc(jsq(br.launch_prompt || '')) + '\')">Plan the launch on these segments</button><button type="button" class="dtw-btn dtw-btn-sm" onclick="dtwTab(\'launch\')">Open Launch Lab</button></div>' : '<p class="dtw-muted" style="margin-top:6px">The segments that scored highest on definitely recommend, handed to Launch Lab and the Spend Engine in the shape they take.</p><div class="dtw-actions">' + (s.scorecard ? '<button type="button" class="dtw-btn dtw-btn-sm" onclick="dtwPilotBrief()">Write the activation brief</button>' : '<span class="dtw-muted">Play the test first.</span>') + '</div>') + '</div>';
+                return out + '</div>';
+            }
+            function drawLines(canvasId, ts, series, colors, dur) {
+                var c = el(canvasId); if (!c || !ts || !ts.length) return;
+                var w = c.clientWidth || 640, h = c.clientHeight || 150;
+                if (c.width !== w) c.width = w; if (c.height !== h) c.height = h;
+                var ctx = c.getContext('2d'); if (!ctx) return;
+                ctx.clearRect(0, 0, w, h);
+                dur = dur || ts[ts.length - 1] || 1;
+                function X(sec) { return (sec / dur) * w; }
+                function Y(v) { return h - 10 - (Math.max(0, Math.min(100, v)) / 100) * (h - 20); }
+                ctx.strokeStyle = 'rgba(233,232,225,0.12)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(0, Y(50)); ctx.lineTo(w, Y(50)); ctx.stroke();
+                series.forEach(function(vals, k) {
+                    if (!vals || !vals.length) return;
+                    ctx.strokeStyle = colors[k % colors.length]; ctx.lineWidth = k === 0 ? 2.2 : 1.6; ctx.beginPath();
+                    var started = false;
+                    for (var i = 0; i < ts.length && i < vals.length; i++) { var x = X(ts[i]), y = Y(vals[i]); if (!started) { ctx.moveTo(x, y); started = true; } else ctx.lineTo(x, y); }
+                    if (started) ctx.stroke();
+                });
+            }
+            function drawCompareChart() {
+                var s = S.pilot; if (!s) return;
+                var cmp = S.pilotCompare && S.pilotCompare.sid === s.id ? S.pilotCompare.data : null;
+                if (cmp && cmp.recut && el('dtwPiCompare')) drawLines('dtwPiCompare', cmp.recut.dial.t, [cmp.recut.dial.b, cmp.recut.dial.a], ['#E9E8E1', '#B7B3D8'], Number((s.media || {}).runtime_s || 0));
+                var ta = s.two_audiences;
+                if (ta && el('dtwPiTwo')) drawLines('dtwPiTwo', ta.t, ta.lines.map(function(l) { return l.dial; }), [PI_SPLIT_A, PI_SPLIT_B, '#C7F23E', '#E9E8E1'], Number((s.media || {}).runtime_s || 0));
+                var reads = Object.keys(s.asset_reads || {}).map(function(k) { return s.asset_reads[k]; });
+                if (reads.length && el('dtwPiAssets')) {
+                    var primary = (s.dial || {}).value || [], ts = (s.dial || {}).t || [];
+                    var maxT = Math.max.apply(null, [Number((s.media || {}).runtime_s || 0)].concat(reads.map(function(r) { return Number(r.runtime_s || 0); })));
+                    var c = el('dtwPiAssets'); var w = c.clientWidth || 640, h = c.clientHeight || 150; if (c.width !== w) c.width = w; if (c.height !== h) c.height = h;
+                    var ctx = c.getContext('2d'); if (!ctx) return; ctx.clearRect(0, 0, w, h);
+                    function X(sec) { return (sec / (maxT || 1)) * w; } function Y(v) { return h - 10 - (Math.max(0, Math.min(100, v)) / 100) * (h - 20); }
+                    [[ts, primary, '#E9E8E1']].concat(reads.map(function(r, i) { return [r.t || [], r.dial || [], ['#E682FF', '#3358FF'][i % 2]]; })).forEach(function(row) { var t = row[0], v = row[1]; ctx.strokeStyle = row[2]; ctx.lineWidth = 1.8; ctx.beginPath(); var st = false; for (var i = 0; i < t.length && i < v.length; i++) { var x = X(t[i]), y = Y(v[i]); if (!st) { ctx.moveTo(x, y); st = true; } else ctx.lineTo(x, y); } if (st) ctx.stroke(); });
+                }
+            }
+            window.dtwPilotRecut = async function() {
+                var s = S.pilot; if (!s || !S.key) return;
+                var note = el('dtwPiNote'); if (note) note.textContent = 'Opening the recut on the same room...';
+                try { var d = await api('/' + S.key + '/pilot/' + s.id + '/recut', { method: 'POST', body: '{}' }); adoptPilot(d.session); S.pilotCompare = null; S.pilotMedia = null; renderPilotConsole(); if (el('dtwPiNote')) el('dtwPiNote').textContent = 'Add ' + (d.session.cut_label || 'Cut B') + ' with the upload below the player, or press Play on a slate.'; }
+                catch (e) { if (note) note.textContent = e.message; }
+            };
+            window.dtwPilotCompare = async function() {
+                var s = S.pilot; if (!s || !S.key) return;
+                try { var d = await api('/' + S.key + '/pilot/' + s.id + '/compare'); S.pilotCompare = { sid: s.id, data: d }; renderPilotConsole(); } catch (e) { var n = el('dtwPiNote'); if (n) n.textContent = e.message; }
+            };
+            window.dtwPilotComps = async function() {
+                var s = S.pilot; if (!s || !S.key) return;
+                var comps = ((el('dtwPiCompsIn') || {}).value || '').split(',').map(function(x) { return x.trim(); }).filter(Boolean);
+                try { var d = await api('/' + S.key + '/pilot/' + s.id + '/comps', { method: 'POST', body: JSON.stringify({ comps: comps }) }); s.comps = comps.map(function(c) { return { title: c }; }); s.comp_set = d.comps; renderPilotConsole(); } catch (e) { var n = el('dtwPiNote'); if (n) n.textContent = e.message; }
+            };
+            window.dtwPilotCritics = async function() {
+                var s = S.pilot; if (!s || !S.key) return;
+                try { var d = await api('/' + S.key + '/pilot/' + s.id + '/critics', { method: 'POST', body: '{}' }); adoptPilot(d.session); renderPilotConsole(); var n = el('dtwPiNote'); if (n) n.textContent = d.critics_twin ? ('The room is critics and journalists. A critics twin also exists: ' + d.critics_twin.name + '.') : 'The room is critics and journalists. Press Play.'; } catch (e) { var n2 = el('dtwPiNote'); if (n2) n2.textContent = e.message; }
+            };
+            window.dtwPilotTalent = async function() {
+                var s = S.pilot; if (!s || !S.key) return;
+                var name = ((el('dtwPiTalentIn') || {}).value || '').trim(); if (!name) return;
+                var role = (el('dtwPiTalentRole') || {}).value || 'lead';
+                try { var d = await api('/' + S.key + '/pilot/' + s.id + '/talent-attach', { method: 'POST', body: JSON.stringify({ talent: name, role: role }) }); if (d.session) adoptPilot(d.session); renderPilotConsole(); } catch (e) { var n = el('dtwPiNote'); if (n) n.textContent = e.message; }
+            };
+            window.dtwPilotBrief = async function() {
+                var s = S.pilot; if (!s || !S.key) return;
+                try { var d = await api('/' + S.key + '/pilot/' + s.id + '/activation-brief', { method: 'POST', body: '{}' }); s.activation_brief = d.brief; renderPilotConsole(); } catch (e) { var n = el('dtwPiNote'); if (n) n.textContent = e.message; }
+            };
+            window.dtwPilotSetCast = async function() {
+                var s = S.pilot; if (!s || !S.key) return;
+                var cast = ((el('dtwPiCastLate') || {}).value || '').split(/[,\n]/).map(function(x) { return x.trim(); }).filter(Boolean);
+                if (!cast.length) return;
+                try { var d = await api('/' + S.key + '/pilot/' + s.id + '/stimulus', { method: 'POST', body: JSON.stringify({ cast: cast }) }); adoptPilot(d.session); var p = await api('/' + S.key + '/pilot/' + s.id + '/prepare', { method: 'POST', body: '{}' }); if (p.session) adoptPilot(p.session); renderPilotConsole(); } catch (e) { var n = el('dtwPiNote'); if (n) n.textContent = e.message; }
+            };
+            window.dtwGlAskRoom = async function(runId) {
+                var key = S.key; if (!key) return;
+                var st = el('dtwGlStatus'); if (st) st.textContent = 'Opening a concept test on this twin...';
+                try {
+                    var d = await api('/' + key + '/greenlight/' + encodeURIComponent(runId) + '/ask-the-room', { method: 'POST', body: '{}' });
+                    adoptPilot(d.session); S.pilotSplits = null; S.pilotMedia = null; S.piTab = 'concept'; S.piMode = 'concept';
+                    if (!d.reused) { try { var p = await api('/' + key + '/pilot/' + d.session.id + '/prepare', { method: 'POST', body: '{}' }); adoptPilot(p.session); } catch (_) {} }
+                    dtwTab('concept'); renderPilotConsole();
+                    if (st) st.textContent = '';
+                } catch (e) { if (st) st.textContent = e.message; }
+            };
+            // the concept read lands next to the odds on the Greenlight run once the room has read it
+            var _piOrigStop = window.dtwPilotStop;
+            window.dtwPilotStop = async function(fromEnd) {
+                await _piOrigStop(fromEnd);
+                var s = S.pilot;
+                if (s && s.mode === 'concept' && s.linked_run_id && S.key) {
+                    try { var t = await api('/' + S.key); if (t.twin) { S.twin.runs = t.twin.runs || S.twin.runs; } } catch (_) {}
+                }
+            };
+            // ------------------------------------------------------------ the Norms tab
+            S.normsGenre = S.normsGenre || 'all';
+            async function renderNormsTab() {
+                var h = el('dtwNoConsole'); if (!h) return;
+                if (!S.norms || S.norms.genre !== S.normsGenre) {
+                    h.innerHTML = '<div class="dtw-card"><div class="dtw-eyebrow">Norms</div><p class="dtw-muted" style="margin-top:6px">Loading the norms...</p></div>';
+                    try { S.norms = await api('/pilot-norms/all?genre=' + encodeURIComponent(S.normsGenre)); } catch (e) { h.innerHTML = '<div class="dtw-card"><div class="dtw-eyebrow">Norms</div><p class="dtw-muted">' + esc(e.message) + '</p></div>'; return; }
+                }
+                var d = S.norms, fmts = d.formats || [], metrics = d.metrics || [];
+                var sel = '<select class="dtw-in" style="display:inline-block;width:auto;padding:3px 6px;font-size:12px" onchange="S.normsGenre=this.value;renderNormsTab();">' + (d.genres || []).map(function(g) { return '<option value="' + esc(g) + '"' + (g === S.normsGenre ? ' selected' : '') + '>' + esc((d.genre_labels || {})[g] || g) + '</option>'; }).join('') + '</select>';
+                var head = '<tr><th>Measure</th>' + fmts.map(function(f) { return '<th class="n">' + esc((d.format_labels || {})[f] || f) + '</th>'; }).join('') + '</tr>';
+                var rows = metrics.map(function(m) {
+                    var cells = fmts.map(function(f) {
+                        var col = S.normsGenre === 'all' ? ((d.norms[f] || {}).all || {}) : ((d.norms[f] || {}).genre || {});
+                        var c = col[m];
+                        if (!c || c.value == null) return '<td class="n dtw-muted">-</td>';
+                        var from = c.format_used && c.format_used !== f ? ' title="reads from ' + esc((d.format_labels || {})[c.format_used] || c.format_used) + ' until our own tests fill it"' : '';
+                        return '<td class="n"' + from + '>' + Number(c.value).toFixed(1) + '%<span class="cnt">' + (c.n ? esc(c.n) + (c.n === 1 ? ' test' : ' tests') : (c.format_used && c.format_used !== f ? 'nearest' : 'published')) + '</span></td>';
+                    }).join('');
+                    return '<tr><td>' + esc((d.metric_labels || {})[m] || m) + '</td>' + cells + '</tr>';
+                }).join('');
+                h.innerHTML = '<div class="dtw-card"><div class="dtw-eyebrow">Norms</div><h3 style="margin-top:0.35rem;">What a number means, by format and genre</h3><div class="dtw-sub">' + esc(d.line || 'Every screening adds to these.') + ' The count under a cell is how many of our own tests sit behind it; a published cell stands until they do.</div><div class="dtw-pi-splitbar" style="margin-top:8px">Genre ' + sel + '</div><div style="overflow-x:auto"><table class="dtw-pi-table dtw-norms-table"><thead>' + head + '</thead><tbody>' + rows + '</tbody></table></div></div>';
+            }
+            window.renderNormsTab = renderNormsTab;
             window._dtwRender.renderPilotConsole = renderPilotConsole;
             window._dtwRender.renderGreenlight = renderGreenlight; window._dtwRender.renderLaunch = renderLaunch; window._dtwRender.renderSpend = renderSpend; window._dtwRender.renderPanelConsole = renderPanelConsole; window._dtwRender.renderPanelSessions = renderPanelSessions; window._dtwRender.renderPilotConsole = renderPilotConsole;
         })();
