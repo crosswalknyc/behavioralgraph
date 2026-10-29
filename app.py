@@ -19046,6 +19046,29 @@ def api_trends_iq_history():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/api/trends-iq/compare', methods=['POST'])
+@requires_auth
+def api_trends_iq_compare():
+    """Daily US audience trajectories for several rows, for the compare chart.
+
+    Body: {"series": [{"key": <est_key>, "platform": <slug or "">}, ...],
+           "days": 7..62}
+    """
+    ok, err = _require_trends_iq()
+    if not ok:
+        return err
+    try:
+        req = request.get_json(silent=True) or {}
+        series = req.get('series') or []
+        if not isinstance(series, list) or not series:
+            return jsonify({'success': False, 'error': 'series is required'}), 400
+        result = _trends_iq.compare_audience(series, days=req.get('days') or 30)
+        return jsonify({'success': True, **result})
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 # ============================================================================
 # MICRODRAMAS IQ - Peacock mobile-first microdrama audience insights
 # ============================================================================

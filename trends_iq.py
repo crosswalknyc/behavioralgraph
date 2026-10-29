@@ -1522,6 +1522,89 @@ def _rewrite_unit_label(label: Optional[str], noun: str) -> str:
     return f'{noun} {stripped}'
 
 
+# ============================================================================
+# Compare - daily audience trajectories for several rows side by side
+# ============================================================================
+# A row's chip carries `est_key` (the stream_estimates item key) and
+# `platform` (the by_platform slug, empty for an item-level reading).
+# The daily US audience is on one scale across platforms, so an Amazon
+# row and a Libby row plot against the same axis. Values come from the
+# same dated reads the window sum uses. Read values are cached per
+# (day, key, platform); days that could not be read are not.
+_COMPARE_MAX_SERIES = 12
+_COMPARE_MAX_DAYS   = 62
+_COMPARE_CACHE_TTL_S = 6 * 3600
+_COMPARE_CACHE: dict = {}
+_COMPARE_CACHE_LOCK = threading.Lock()
+
+
+def _compare_value(items: dict, key: str, platform: str):
+    entry = items.get(key)
+    if not isinstance(entry, dict):
+        return None
+    if platform:
+        per = (entry.get('by_platform') or {}).get(platform) or {}
+        v = per.get('us_estimate') if isinstance(per, dict) else None
+    else:
+        v = entry.get('us_estimate')
+    return v if isinstance(v, (int, float)) and v > 0 else None
+
+
+def compare_audience(series: list, days: int = 30,
+                     asof: Optional[str] = None) -> dict:
+    """Daily US audience for each {key, platform} over the last `days`
+    measured days, oldest first. Missing days are None."""
+    try:
+        n = int(days or 30)
+    except Exception:
+        n = 30
+    n = max(2, min(n, _COMPARE_MAX_DAYS))
+    ref_iso = asof or _latest_measured_day() or _today_iso()
+    ref = date.fromisoformat(ref_iso)
+    day_list = [(ref - timedelta(days=i)).isoformat() for i in range(n)][::-1]
+
+    wanted: list[tuple[str, str]] = []
+    for s in (series or [])[:_COMPARE_MAX_SERIES]:
+        key = str((s or {}).get('key') or '').strip()
+        if key:
+            wanted.append((key, str((s or {}).get('platform') or '').strip()))
+
+    now = time.time()
+    with _COMPARE_CACHE_LOCK:
+        if len(_COMPARE_CACHE) > 200000:
+            _COMPARE_CACHE.clear()
+        def cached(d, kp):
+            hit = _COMPARE_CACHE.get((d,) + kp)
+            return hit is not None and now - hit[1] < _COMPARE_CACHE_TTL_S
+        need = [d for d in day_list if any(not cached(d, kp) for kp in wanted)]
+
+    def fetch(d_iso: str):
+        day = _read_stream_day(d_iso)
+        items = day.get('items') if isinstance(day, dict) else None
+        if not isinstance(items, dict):
+            return d_iso, None
+        return d_iso, {kp: _compare_value(items, *kp) for kp in wanted}
+
+    if need and wanted:
+        with ThreadPoolExecutor(max_workers=3, thread_name_prefix='tiq-compare') as ex:
+            for d_iso, vals in ex.map(fetch, need):
+                if vals is None:
+                    continue
+                with _COMPARE_CACHE_LOCK:
+                    for kp, v in vals.items():
+                        _COMPARE_CACHE[(d_iso,) + kp] = (v, now)
+
+    out = []
+    with _COMPARE_CACHE_LOCK:
+        for kp in wanted:
+            vals = []
+            for d in day_list:
+                hit = _COMPARE_CACHE.get((d,) + kp)
+                vals.append(hit[0] if hit else None)
+            out.append({'key': kp[0], 'platform': kp[1], 'values': vals})
+    return {'dates': day_list, 'series': out}
+
+
 def _accumulate_stream_estimates_over_window(
         lookback_days: int,
         asof: Optional[str] = None,
@@ -4529,6 +4612,10 @@ def _stamp_stream_estimate(row: dict, entry: dict,
     # language as the scope label.
     if out.get('method'):
         out['method'] = _scrub_household_language(out['method'])
+    # The estimates key lets the compare chart read this row's daily
+    # history back out of the dated snapshots.
+    if entry.get('_est_key'):
+        out['est_key'] = entry['_est_key']
 
     row['us_streams'] = {k: v for k, v in out.items() if v is not None}
 
@@ -13100,6 +13187,9 @@ def _compute_view_impl(filters: dict, force_refresh: bool = False) -> dict:
             _no_measurement_asof = asof
         else:
             stream_estimates_snap = results.get('stream_estimates') or {}
+    for _ek, _ev in ((stream_estimates_snap or {}).get('items') or {}).items():
+        if isinstance(_ev, dict):
+            _ev['_est_key'] = _ek
     _annotate_music_with_streams(music_charts,       stream_estimates_snap)
     _annotate_podcasts_with_streams(podcast_charts,  stream_estimates_snap)
     _annotate_streaming_with_streams(streaming_trending, stream_estimates_snap)

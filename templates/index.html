@@ -31787,6 +31787,55 @@ https://www.instagram.com/p/..."></textarea>
             #trendsIQView .tiq-action-btn { cursor: pointer; background: transparent; border: 1px solid rgba(255,255,255,0.12); color: var(--text-secondary); border-radius: 6px; padding: 2px 6px; font-size: 0.78rem; line-height: 1; user-select: none; transition: all 0.15s; }
             #trendsIQView .tiq-action-btn:hover { border-color: rgba(167, 139, 250, 0.5); color: #a78bfa; }
             #trendsIQView .tiq-action-btn.watched { background: rgba(250, 204, 21, 0.08); border-color: rgba(250, 204, 21, 0.45); color: #facc15; }
+            #trendsIQView .tiq-row:not(:has(.tiq-audience-chip[data-est-key])) .tiq-cmp-btn,
+            #trendsIQView .tiq-person-card:not(:has(.tiq-audience-chip[data-est-key])) .tiq-cmp-btn,
+            #trendsIQView .tiq-product-card:not(:has(.tiq-audience-chip[data-est-key])) .tiq-cmp-btn,
+            #trendsIQView tr:not(:has(.tiq-audience-chip[data-est-key])) .tiq-cmp-btn { display: none; }
+            #trendsIQView .tiq-action-btn.tiq-cmp-btn.on { background: rgba(199, 242, 62, 0.12); border-color: #C7F23E !important; color: #C7F23E !important; }
+            #trendsIQView .tiq-row:has(.tiq-cmp-btn.on) .tiq-actions,
+            #trendsIQView .tiq-person-card:has(.tiq-cmp-btn.on) .tiq-actions,
+            #trendsIQView tr:has(.tiq-cmp-btn.on) .tiq-actions { opacity: 1 !important; }
+
+            .tiq-cmp-tray { position: fixed; left: 50%; transform: translateX(-50%); bottom: 18px; z-index: 9000; display: flex; align-items: center; gap: 10px; max-width: min(1100px, calc(100vw - 460px)); padding: 8px 10px; background: #0f172a; border: 1px solid rgba(199, 242, 62, 0.45); border-radius: 12px; box-shadow: 0 12px 30px rgba(0,0,0,0.45); }
+            .tiq-cmp-pills { display: flex; gap: 6px; overflow-x: auto; min-width: 0; }
+            .tiq-cmp-pill { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; font-size: 0.76rem; color: #e5e7eb; background: rgba(255,255,255,0.06); border-radius: 999px; padding: 3px 6px 3px 9px; }
+            .tiq-cmp-pill i, .tiq-cmp-leg i, .tiq-cmp-tip i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; flex: none; }
+            .tiq-cmp-pill em { font-style: normal; color: #94a3b8; }
+            .tiq-cmp-pill b { cursor: pointer; color: #94a3b8; padding: 0 3px; font-weight: 600; }
+            .tiq-cmp-pill b:hover { color: #fff; }
+            .tiq-cmp-go, .tiq-cmp-clear { flex: none; cursor: pointer; border-radius: 8px; font-size: 0.8rem; font-weight: 700; padding: 6px 12px; border: 1px solid transparent; }
+            .tiq-cmp-go { background: #C7F23E; color: #0b0d12; }
+            .tiq-cmp-clear { background: transparent; color: #94a3b8; border-color: rgba(255,255,255,0.15); }
+            .tiq-cmp-toast { position: fixed; left: 50%; bottom: 80px; transform: translateX(-50%); z-index: 10060; background: #111827; color: #e5e7eb; border: 1px solid rgba(255,255,255,0.12); padding: 8px 14px; border-radius: 8px; font-size: 0.82rem; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
+            .tiq-cmp-toast.show { opacity: 1; }
+            #trendsIQView[data-tiq-product="rankers"] .tiq-cmp-tray { display: none; }
+            body[data-theme="light"] .tiq-modal.tiq-cmp-modal { background: #0f172a; color: #e5e7eb; }
+            .tiq-modal.tiq-cmp-modal { max-width: 960px; }
+            .tiq-cmp-days { display: flex; gap: 6px; margin-bottom: 10px; }
+            .tiq-cmp-days button { cursor: pointer; background: transparent; color: #94a3b8; border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; padding: 3px 10px; font-size: 0.78rem; font-weight: 600; }
+            .tiq-cmp-days button.on { color: #0b0d12; background: #C7F23E; border-color: #C7F23E; }
+            .tiq-cmp-chart { position: relative; width: 100%; aspect-ratio: 820 / 300; }
+            .tiq-cmp-svg { width: 100%; height: 100%; display: block; }
+            .tiq-cmp-svg text { font-size: 11px; fill: #94a3b8; }
+            .tiq-cmp-svg line.grid { stroke: rgba(255,255,255,0.08); }
+            .tiq-cmp-svg line.hover { stroke: rgba(255,255,255,0.35); stroke-dasharray: 3 3; }
+            .tiq-cmp-msg { display: flex; align-items: center; justify-content: center; height: 100%; color: #94a3b8; font-size: 0.88rem; text-align: center; }
+            .tiq-cmp-tip { display: none; position: absolute; pointer-events: none; background: #111827; border: 1px solid rgba(255,255,255,0.14); border-radius: 8px; padding: 8px 10px; font-size: 0.76rem; min-width: 220px; box-shadow: 0 8px 20px rgba(0,0,0,0.4); }
+            .tiq-cmp-tip .dt { font-weight: 700; margin-bottom: 4px; color: #e5e7eb; }
+            .tiq-cmp-tip div:not(.dt) { display: flex; align-items: center; gap: 6px; padding: 1px 0; color: #cbd5e1; }
+            .tiq-cmp-tip em { font-style: normal; color: #64748b; }
+            .tiq-cmp-tip b { margin-left: auto; padding-left: 10px; color: #fff; }
+            .tiq-cmp-legend { display: grid; gap: 6px; margin-top: 12px; }
+            .tiq-cmp-leg { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 8px; background: rgba(255,255,255,0.03); font-size: 0.82rem; }
+            .tiq-cmp-leg .nm { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+            .tiq-cmp-leg .nm strong { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+            .tiq-cmp-leg .nm span { color: #94a3b8; font-size: 0.74rem; }
+            .tiq-cmp-leg .st { color: #94a3b8; white-space: nowrap; }
+            .tiq-cmp-leg .st b { color: #e5e7eb; }
+            .tiq-cmp-leg .st .up { color: #34d399; }
+            .tiq-cmp-leg .st .down { color: #f87171; }
+            .tiq-cmp-leg .rm { cursor: pointer; color: #64748b; padding: 0 4px; }
+            .tiq-cmp-leg .rm:hover { color: #fff; }
 
             /* Historical-arc modal. Scope removed from #trendsIQView so
                the styles apply when the overlay is appended to
@@ -69815,11 +69864,16 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 // last N days." tooltip line when a user toggles the
                 // lens dropdown.
                 wc: (typeof us.window_days_covered === 'number') ? us.window_days_covered : null,
-                wt: (typeof us.window_days_total === 'number') ? us.window_days_total : null
+                wt: (typeof us.window_days_total === 'number') ? us.window_days_total : null,
+                ek: us.est_key || null,
+                ep: us.platform || null
             };
             var stashJson = JSON.stringify(stash).replace(/"/g, '&quot;');
+            var estAttrs = us.est_key
+                ? ' data-est-key="' + _tiqEsc(us.est_key) + '" data-est-platform="' + _tiqEsc(us.platform || '') + '"'
+                : '';
             return '<span class="tiq-audience-chip" title="' + tip + '"' +
-                   ' data-audience-value="' + Number(val) + '"' +
+                   ' data-audience-value="' + Number(val) + '"' + estAttrs +
                    ' data-audience-us="' + stashJson + '">' +
                    '\uD83D\uDC65 ' + _tiqEsc(num) + ' ' + _tiqEsc(unitShort) +
                    arrow + '</span>';
@@ -69855,7 +69909,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     prev_rank:            us.pr,
                     as_of_date:           us.a,
                     window_days_covered:  us.wc,
-                    window_days_total:    us.wt
+                    window_days_total:    us.wt,
+                    est_key:              us.ek,
+                    platform:             us.ep
                 };
                 var fresh = _tiqAudienceChip(rehydrated);
                 if (fresh) {
@@ -75883,8 +75939,334 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                    (watched ? '★' : '☆') + '</span>' +
                    '<span class="tiq-action-btn" title="View historical arc"' +
                    ' onclick="event.stopPropagation(); tiqShowDrilldown(' + args + ')">📈</span>' +
+                   '<span class="tiq-action-btn tiq-cmp-btn" title="Add to compare"' +
+                   ' onclick="event.stopPropagation(); tiqCompareToggle(this)">\u21C4</span>' +
                    '</span>';
         }
+
+        // ============================================================
+        // Compare: daily US audience trajectories for several rows on
+        // one chart. Any row whose audience chip carries an estimates
+        // key can be added, from any tab, one line per title per
+        // platform. Picks persist in localStorage.
+        // ============================================================
+        var _TIQ_CMP_MAX = 8;
+        var _TIQ_CMP_STORE = 'tiq_compare_v1';
+        var _TIQ_CMP_COLORS = ['#C7F23E', '#E682FF', '#5CE1E6', '#FFB547', '#3358FF', '#FF6B6B', '#9AA0FF', '#E9E8E1'];
+
+        function _tiqCmpList() {
+            var t = window.__trendsIQ = window.__trendsIQ || {};
+            if (!Array.isArray(t.compare)) {
+                var saved = [];
+                try { saved = JSON.parse(localStorage.getItem(_TIQ_CMP_STORE) || '[]'); } catch (e) {}
+                t.compare = Array.isArray(saved) ? saved.slice(0, _TIQ_CMP_MAX) : [];
+            }
+            return t.compare;
+        }
+        function _tiqCmpSave() {
+            try { localStorage.setItem(_TIQ_CMP_STORE, JSON.stringify(_tiqCmpList())); } catch (e) {}
+            _tiqCmpRenderTray();
+            tiqCompareSync();
+        }
+        function _tiqCmpRowOf(el) {
+            return el && el.closest('.tiq-row, .tiq-person-card, .tiq-product-card, tr');
+        }
+        function _tiqCmpChipOf(row) {
+            return row ? row.querySelector('.tiq-audience-chip[data-est-key]') : null;
+        }
+        function _tiqCmpId(chip) {
+            return chip.getAttribute('data-est-key') + '|' + (chip.getAttribute('data-est-platform') || '');
+        }
+        function _tiqCmpToast(msg) {
+            var el = document.getElementById('tiqCmpToast');
+            if (!el) {
+                el = document.createElement('div');
+                el.id = 'tiqCmpToast';
+                el.className = 'tiq-cmp-toast';
+                document.body.appendChild(el);
+            }
+            el.textContent = msg;
+            el.classList.add('show');
+            clearTimeout(el._t);
+            el._t = setTimeout(function() { el.classList.remove('show'); }, 2600);
+        }
+
+        window.tiqCompareToggle = function(btn) {
+            var row = _tiqCmpRowOf(btn);
+            var chip = _tiqCmpChipOf(row);
+            if (!chip) { _tiqCmpToast('No daily audience history for this one yet.'); return; }
+            var list = _tiqCmpList();
+            var id = _tiqCmpId(chip);
+            var at = list.findIndex(function(c) { return c.id === id; });
+            if (at >= 0) { list.splice(at, 1); _tiqCmpSave(); return; }
+            if (list.length >= _TIQ_CMP_MAX) {
+                _tiqCmpToast('Compare holds up to ' + _TIQ_CMP_MAX + ' lines. Remove one first.');
+                return;
+            }
+            var title = (typeof _tiqRowTitleText === 'function' ? _tiqRowTitleText(row) : '') || '';
+            title = String(title).trim() || chip.getAttribute('data-est-key').replace(/^[a-z_]+:/, '');
+            var card = row.closest('.tiq-card');
+            var h = card && card.querySelector('h4, h3');
+            var where = h ? (h.textContent || '').replace(/\s+/g, ' ').trim() : '';
+            if (!where) where = chip.getAttribute('data-est-platform') || 'All platforms';
+            var unit = '';
+            try { unit = (JSON.parse(chip.getAttribute('data-audience-us') || '{}').u) || ''; } catch (e) {}
+            list.push({
+                id: id,
+                key: chip.getAttribute('data-est-key'),
+                platform: chip.getAttribute('data-est-platform') || '',
+                title: title.slice(0, 120),
+                where: where.slice(0, 60),
+                unit: String(unit).replace(/\s*\([^)]*\)\s*$/, '')
+            });
+            _tiqCmpSave();
+            if (list.length === 1) _tiqCmpToast('Added. Pick more rows from any tab, then hit Compare.');
+        };
+
+        window.tiqCompareRemove = function(id) {
+            var list = _tiqCmpList();
+            var at = list.findIndex(function(c) { return c.id === id; });
+            if (at >= 0) list.splice(at, 1);
+            _tiqCmpSave();
+            if (document.getElementById('tiqCmpModal')) {
+                if (list.length) _tiqCmpLoad(); else tiqCompareClose();
+            }
+        };
+        window.tiqCompareClear = function() {
+            _tiqCmpList().length = 0;
+            _tiqCmpSave();
+            tiqCompareClose();
+        };
+
+        window.tiqCompareSync = function() {
+            var on = {};
+            _tiqCmpList().forEach(function(c) { on[c.id] = true; });
+            document.querySelectorAll('#trendsIQPanels .tiq-cmp-btn').forEach(function(btn) {
+                var chip = _tiqCmpChipOf(_tiqCmpRowOf(btn));
+                var active = !!(chip && on[_tiqCmpId(chip)]);
+                btn.classList.toggle('on', active);
+                btn.title = active ? 'Remove from compare' : 'Add to compare';
+            });
+        };
+
+        function _tiqCmpRenderTray() {
+            var host = document.getElementById('trendsIQView');
+            if (!host) return;
+            var tray = document.getElementById('tiqCmpTray');
+            var list = _tiqCmpList();
+            if (!list.length) { if (tray) tray.remove(); return; }
+            if (!tray) {
+                tray = document.createElement('div');
+                tray.id = 'tiqCmpTray';
+                tray.className = 'tiq-cmp-tray';
+                host.appendChild(tray);
+            }
+            var chips = list.map(function(c, i) {
+                return '<span class="tiq-cmp-pill" title="' + _tiqEsc(c.title + ' \u00b7 ' + c.where) + '">' +
+                       '<i style="background:' + _TIQ_CMP_COLORS[i % _TIQ_CMP_COLORS.length] + '"></i>' +
+                       _tiqEsc(c.title.length > 28 ? c.title.slice(0, 27) + '\u2026' : c.title) +
+                       ' <em>' + _tiqEsc(c.where) + '</em>' +
+                       '<b onclick="tiqCompareRemove(\'' + _tiqEsc(c.id).replace(/'/g, "\\'") + '\')" title="Remove">\u00d7</b></span>';
+            }).join('');
+            tray.innerHTML = '<div class="tiq-cmp-pills">' + chips + '</div>' +
+                '<button type="button" class="tiq-cmp-go" onclick="tiqCompareOpen()"' + (list.length < 1 ? ' disabled' : '') + '>Compare (' + list.length + ')</button>' +
+                '<button type="button" class="tiq-cmp-clear" onclick="tiqCompareClear()">Clear</button>';
+        }
+
+        window.tiqCompareClose = function() {
+            var m = document.getElementById('tiqCmpModal');
+            if (m) m.remove();
+            document.removeEventListener('keydown', _tiqCmpEsc);
+        };
+        function _tiqCmpEsc(e) { if (e.key === 'Escape') tiqCompareClose(); }
+
+        window.tiqCompareOpen = function() {
+            if (!_tiqCmpList().length) return;
+            tiqCompareClose();
+            var ov = document.createElement('div');
+            ov.id = 'tiqCmpModal';
+            ov.className = 'tiq-modal-overlay';
+            ov.onclick = function(e) { if (e.target === ov) tiqCompareClose(); };
+            var days = window.__trendsIQ.compareDays || 30;
+            var btns = [7, 14, 30, 60].map(function(d) {
+                return '<button type="button" data-days="' + d + '" class="' + (d === days ? 'on' : '') + '"' +
+                       ' onclick="tiqCompareDays(' + d + ')">' + d + 'D</button>';
+            }).join('');
+            ov.innerHTML = '<div class="tiq-modal tiq-cmp-modal">' +
+                '<button class="tiq-close" onclick="tiqCompareClose()" title="Close">\u00d7</button>' +
+                '<h3>Compare trajectories</h3>' +
+                '<div class="tiq-modal-sub">Estimated daily US audience, one line per title per platform. ' +
+                'Every platform is on the same scale, so lines can be read against each other.</div>' +
+                '<div class="tiq-cmp-days">' + btns + '</div>' +
+                '<div class="tiq-cmp-chart" id="tiqCmpChart"><div class="tiq-cmp-msg">Loading daily history\u2026</div></div>' +
+                '<div class="tiq-cmp-legend" id="tiqCmpLegend"></div>' +
+                '</div>';
+            document.body.appendChild(ov);
+            document.addEventListener('keydown', _tiqCmpEsc);
+            _tiqCmpLoad();
+        };
+
+        window.tiqCompareDays = function(d) {
+            window.__trendsIQ.compareDays = d;
+            document.querySelectorAll('#tiqCmpModal .tiq-cmp-days button').forEach(function(b) {
+                b.classList.toggle('on', Number(b.getAttribute('data-days')) === d);
+            });
+            _tiqCmpLoad();
+        };
+
+        function _tiqCmpLoad() {
+            var list = _tiqCmpList().slice();
+            var days = window.__trendsIQ.compareDays || 30;
+            var box = document.getElementById('tiqCmpChart');
+            if (!box) return;
+            var seq = (window.__trendsIQ._cmpSeq = (window.__trendsIQ._cmpSeq || 0) + 1);
+            box.innerHTML = '<div class="tiq-cmp-msg">Loading daily history\u2026</div>';
+            fetch('/api/trends-iq/compare', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ days: days, series: list.map(function(c) { return { key: c.key, platform: c.platform }; }) })
+            }).then(function(r) { return r.json(); }).then(function(res) {
+                if (seq !== window.__trendsIQ._cmpSeq) return;
+                if (!res || !res.success) throw new Error((res && res.error) || 'failed');
+                _tiqCmpDraw(list, res.dates || [], res.series || []);
+            }).catch(function(e) {
+                if (seq !== window.__trendsIQ._cmpSeq) return;
+                var b = document.getElementById('tiqCmpChart');
+                if (b) b.innerHTML = '<div class="tiq-cmp-msg">Could not load history (' + _tiqEsc(e.message || e) + ').</div>';
+            });
+        }
+
+        function _tiqCmpNiceMax(v) {
+            if (!(v > 0)) return 1;
+            var p = Math.pow(10, Math.floor(Math.log10(v)));
+            var f = v / p;
+            var n = f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10;
+            return n * p;
+        }
+        function _tiqCmpDate(iso, long) {
+            var d = new Date(iso + 'T12:00:00');
+            if (isNaN(d)) return iso;
+            return d.toLocaleDateString('en-US', long ? { weekday: 'short', month: 'short', day: 'numeric' } : { month: 'short', day: 'numeric' });
+        }
+
+        function _tiqCmpDraw(list, dates, series) {
+            var box = document.getElementById('tiqCmpChart');
+            var leg = document.getElementById('tiqCmpLegend');
+            if (!box || !leg) return;
+            var vals = series.map(function(s) { return s.values || []; });
+            var max = 0;
+            vals.forEach(function(v) { v.forEach(function(x) { if (x > max) max = x; }); });
+            if (!dates.length || !max) {
+                box.innerHTML = '<div class="tiq-cmp-msg">No daily audience recorded for these picks in this window.</div>';
+                leg.innerHTML = '';
+                return;
+            }
+            var W = 820, H = 300, L = 56, R = 14, T = 12, B = 30;
+            var yMax = _tiqCmpNiceMax(max * 1.05);
+            var n = dates.length;
+            var x = function(i) { return L + (n === 1 ? 0 : i * (W - L - R) / (n - 1)); };
+            var y = function(v) { return T + (H - T - B) * (1 - v / yMax); };
+            var g = '';
+            for (var k = 0; k <= 4; k++) {
+                var gv = yMax * k / 4, gy = y(gv);
+                g += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + gy + '" y2="' + gy + '" class="grid"/>' +
+                     '<text x="' + (L - 8) + '" y="' + (gy + 4) + '" text-anchor="end">' + _tiqCompactNum(gv) + '</text>';
+            }
+            var step = Math.max(1, Math.ceil(n / 8));
+            for (var i = 0; i < n; i += step) {
+                g += '<text x="' + x(i) + '" y="' + (H - 8) + '" text-anchor="middle">' + _tiqCmpDate(dates[i]) + '</text>';
+            }
+            var lines = '';
+            vals.forEach(function(v, si) {
+                var col = _TIQ_CMP_COLORS[si % _TIQ_CMP_COLORS.length];
+                var d = '', pen = false, dots = '';
+                v.forEach(function(val, i) {
+                    if (val == null) { pen = false; return; }
+                    d += (pen ? 'L' : 'M') + x(i).toFixed(1) + ',' + y(val).toFixed(1);
+                    var lone = !pen && (i + 1 >= v.length || v[i + 1] == null);
+                    if (lone) dots += '<circle cx="' + x(i).toFixed(1) + '" cy="' + y(val).toFixed(1) + '" r="2.6" fill="' + col + '"/>';
+                    pen = true;
+                });
+                lines += '<path d="' + d + '" stroke="' + col + '" fill="none" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>' + dots;
+            });
+            box.innerHTML = '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" class="tiq-cmp-svg">' +
+                g + lines +
+                '<line id="tiqCmpHover" class="hover" y1="' + T + '" y2="' + (H - B) + '" x1="-10" x2="-10"/>' +
+                '<g id="tiqCmpDots"></g>' +
+                '<rect x="' + L + '" y="' + T + '" width="' + (W - L - R) + '" height="' + (H - T - B) + '" fill="transparent" id="tiqCmpHit"/>' +
+                '</svg><div class="tiq-cmp-tip" id="tiqCmpTip"></div>';
+
+            leg.innerHTML = list.map(function(c, si) {
+                var v = vals[si] || [];
+                var seen = v.filter(function(z) { return z != null; });
+                var last = seen.length ? seen[seen.length - 1] : null;
+                var first = seen.length ? seen[0] : null;
+                var chg = (first && last != null && seen.length > 1) ? Math.round((last / first - 1) * 100) : null;
+                var avg = seen.length ? seen.reduce(function(a, b) { return a + b; }, 0) / seen.length : null;
+                var col = _TIQ_CMP_COLORS[si % _TIQ_CMP_COLORS.length];
+                return '<div class="tiq-cmp-leg">' +
+                    '<i style="background:' + col + '"></i>' +
+                    '<div class="nm"><strong>' + _tiqEsc(c.title) + '</strong><span>' + _tiqEsc(c.where) + (c.unit ? ' \u00b7 ' + _tiqEsc(c.unit) : '') + '</span></div>' +
+                    '<div class="st">' + (last != null
+                        ? '<b>' + _tiqCompactNum(last) + '</b> latest \u00b7 ' + _tiqCompactNum(avg) + ' avg' +
+                          (chg != null ? ' \u00b7 <span class="' + (chg > 0 ? 'up' : chg < 0 ? 'down' : '') + '">' + (chg > 0 ? '+' : '') + chg + '%</span>' : '') +
+                          ' \u00b7 ' + seen.length + '/' + n + ' days'
+                        : 'No readings in this window') + '</div>' +
+                    '<b class="rm" onclick="tiqCompareRemove(\'' + _tiqEsc(c.id).replace(/'/g, "\\'") + '\')" title="Remove">\u00d7</b>' +
+                    '</div>';
+            }).join('');
+
+            var hit = document.getElementById('tiqCmpHit');
+            var tipEl = document.getElementById('tiqCmpTip');
+            var hl = document.getElementById('tiqCmpHover');
+            var dotsG = document.getElementById('tiqCmpDots');
+            var svg = box.querySelector('svg');
+            hit.addEventListener('mousemove', function(ev) {
+                var r = svg.getBoundingClientRect();
+                var px = (ev.clientX - r.left) * W / r.width;
+                var i = Math.max(0, Math.min(n - 1, Math.round((px - L) / ((W - L - R) / Math.max(1, n - 1)))));
+                hl.setAttribute('x1', x(i)); hl.setAttribute('x2', x(i));
+                var rows = [], dots = '';
+                vals.forEach(function(v, si) {
+                    var col = _TIQ_CMP_COLORS[si % _TIQ_CMP_COLORS.length];
+                    if (v[i] != null) dots += '<circle cx="' + x(i) + '" cy="' + y(v[i]) + '" r="4" fill="' + col + '" stroke="#0f172a" stroke-width="1.5"/>';
+                    rows.push({ v: v[i], html: '<div><i style="background:' + col + '"></i>' + _tiqEsc(list[si].title.slice(0, 34)) +
+                        ' <em>' + _tiqEsc(list[si].where) + '</em><b>' + (v[i] != null ? _tiqCompactNum(v[i]) : '\u2014') + '</b></div>' });
+                });
+                rows.sort(function(a, b) { return (b.v || -1) - (a.v || -1); });
+                dotsG.innerHTML = dots;
+                tipEl.innerHTML = '<div class="dt">' + _tiqCmpDate(dates[i], true) + '</div>' + rows.map(function(z) { return z.html; }).join('');
+                tipEl.style.display = 'block';
+                var bx = box.getBoundingClientRect();
+                var left = ev.clientX - bx.left + 14;
+                if (left + tipEl.offsetWidth > bx.width) left = ev.clientX - bx.left - tipEl.offsetWidth - 14;
+                tipEl.style.left = Math.max(0, left) + 'px';
+                tipEl.style.top = '8px';
+            });
+            hit.addEventListener('mouseleave', function() {
+                tipEl.style.display = 'none';
+                dotsG.innerHTML = '';
+                hl.setAttribute('x1', -10); hl.setAttribute('x2', -10);
+            });
+        }
+
+        (function _tiqCmpBoot() {
+            var start = function() {
+                _tiqCmpRenderTray();
+                var panels = document.getElementById('trendsIQPanels');
+                if (!panels || panels._tiqCmpObs) return;
+                var pending = false;
+                panels._tiqCmpObs = new MutationObserver(function() {
+                    if (pending) return;
+                    pending = true;
+                    requestAnimationFrame(function() { pending = false; tiqCompareSync(); });
+                });
+                panels._tiqCmpObs.observe(panels, { childList: true, subtree: true });
+            };
+            if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
+            else start();
+        })();
 
         window.tiqLoadWatchlist = function() {
             return fetch('/api/trends-iq/watchlist', { credentials: 'same-origin' })
@@ -199181,7 +199563,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
        longer sits 7px taller than the one beside it, which is what was
        still walking the columns apart over a long list. */
     #trendsIQView[data-tiq-product="trends"] .tiq-row-title {
-        padding-right: 52px;
+        padding-right: 78px;
         height: 35px;
         overflow: hidden;
     }
