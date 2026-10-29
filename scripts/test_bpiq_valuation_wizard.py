@@ -614,7 +614,7 @@ def test_super_admin_and_unlimited_accept_is_free():
     check("second Accept does not double-charge", len(charged) == 1)
     check("second Accept does not double-enqueue", len(started) == 1)
     check("second Accept stays on the running line",
-          (out2 or {}).get('reply') == W.RUNNING_REPLY)
+          (out2 or {}).get('reply') in (W.RUNNING_REPLY, W.ALREADY_RUNNING_REPLY))   # one run per ask (2026-10-28)
 
     check("staff helper treats Jenna as free",
           W._seat_is_free(jenna))

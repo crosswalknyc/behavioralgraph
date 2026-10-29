@@ -16724,9 +16724,21 @@ def _pm_bpiq_confirm_reply(parsed):
 def _pm_run_bpiq_job(job_id, username, inputs, extras):
     """Background build: research + reason the partnership read, write
     the payload, register the metadata sidecar, and open access for
-    the requesting user. Mirrors the deck job's thread pattern."""
+    the requesting user. Mirrors the deck job's thread pattern.
+
+    One run per ask (2026-10-28): the run registry is checked before
+    anything is built; a key another job owns is followed, never
+    rebuilt. The campaign research and the primitives persist per key
+    so a repeat reads them back."""
+    reg = None
     try:
-        from migration.bpiq_synthesis import synthesize, s3_key_for
+        from migration.bpiq_synthesis import synthesize, s3_key_for, S3Underpinnings
+        from prometheus import bpiq_job as _bj
+        # one run per ask (2026-10-28): known casing, the key claimed, a
+        # key another job owns followed to its file instead of rebuilt
+        inputs, reg, _settled = _bj.prepare(job_id, username, inputs, extras, _H, _pm_bpiq_status_write)
+        if _settled:
+            return
         _pm_bpiq_status_write(job_id, {
             'job_id': job_id, 'user': username, 'status': 'running',
             'subject': f"{inputs['qualifier']} x "
@@ -16744,7 +16756,9 @@ def _pm_run_bpiq_job(job_id, username, inputs, extras):
             return _pm_claude_data(system, user_prompt, **kw)
 
         payload = synthesize(inputs, _cj, tools=tools,
-                             created_by=username or 'prometheus')
+                             created_by=username or 'prometheus',
+                             underpinnings=S3Underpinnings(_H.s3_client, _H.S3_BUCKET),
+                             job_id=job_id)
         category = payload.pop('_bpiq_category', None)
         out_key = s3_key_for(inputs)
         _H.s3_client.put_object(
@@ -16831,6 +16845,7 @@ def _pm_run_bpiq_job(job_id, username, inputs, extras):
             .get('total_brand_value'),
             'finished_at': time.time()})
         print(f"[bpiq-job {job_id}] done -> {out_key}")
+        _bj.settle(reg, inputs, job_id, username, bare_key, payload)   # registry closes; the thread gets its note
         try:   # delivered contract (2026-10-13)
             from prometheus.delivered import on_done as _on_done
             _val = payload.get('valuation') or {}
@@ -16862,6 +16877,11 @@ def _pm_run_bpiq_job(job_id, username, inputs, extras):
                 'finished_at': time.time()})
         except Exception as _fx:
             _faults.note('chat', _fx)
+        try:
+            from prometheus import bpiq_job as _bj_f
+            _bj_f.fail(reg, inputs, job_id, e)
+        except Exception:
+            pass
         _H._chatbot_error_email('brief-chat/bpiq-job', e)
 
 

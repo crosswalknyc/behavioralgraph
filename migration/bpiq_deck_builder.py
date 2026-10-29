@@ -973,9 +973,14 @@ def _slide_methodology(prs, ctx: DeckCtx, idx: int, total: int):
     # reader can misread this as the first-flight deck.
     study_ctx = ((ctx.data.get("diagnostics") or {})
                  .get("study_context"))
-    if study_ctx:
+    # The campaign in plain words (2026-10-28): the collection's price
+    # band, the sell-out and what one order carried, as the payload's
+    # own read. No source is named.
+    camp_line = str(((ctx.data.get("campaign") or {}).get("read_line")) or "").strip()
+    foot = " ".join(x for x in (camp_line, str(study_ctx or "").strip()) if x)
+    if foot:
         _add_text(s, Inches(0.6), Inches(5.35), Inches(7), Inches(1.35),
-                  str(study_ctx), size=10, italic=True,
+                  foot, size=10, italic=True,
                   color=MUTED_LT, spacing=1.3)
     # Right column - 3 stat tiles. Window tile uses the actual pre /
     # event / post dates so slide 2 never claims a window it doesn't

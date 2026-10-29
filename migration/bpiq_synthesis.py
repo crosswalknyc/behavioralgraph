@@ -33,6 +33,36 @@ Inputs (collected by the Prometheus flow):
 Output: a full Brand Partnership IQ payload (same schema as every
 shipped file under brand-partnership-iq/), written to S3 and enriched
 with the metadata sidecar so it renders in the dashboard immediately.
+
+One run per ask (Jenna 2026-10-28, Jennifer Beals x Ganni x Lululemon
+built twice with different numbers: "that can never happen"):
+
+  * `run_key(inputs)` is the valuation's identity: the normalized
+    talent, campaign, campaign start, campaign end and control-group
+    flag. Spelling, spacing and case do not matter ("lulu lemon" and
+    "lululemon" are one key).
+  * The run registry (`system/pm_bpiq_runs/<key>.json`) holds the one
+    job that owns a key. The wizard claims the key the moment Accept
+    is tapped, before the charge; a second Accept, a re-walk of the
+    wizard, or any other caller finds the claim and reuses that job.
+    The runner checks the registry again before it builds.
+  * Every salted draw in the engine is seeded by the key, and the
+    research primitives plus the campaign anchors are saved per key
+    (`system/bpiq_underpinnings/<key>.json`). A repeat run reads them
+    back instead of re-drawing, so the same subject and window always
+    produce the same numbers.
+
+The price (same day): the conversion value used to multiply converters
+by a flat $30 for every brand. Now one research pass per campaign
+reads the drop, where it sold, the products and their price points,
+the sell-out and restock signal, and the talent's role; the average
+order value is derived from that price mix (a basket of 1.2 to 1.6
+pieces at the collection's weighted price, never below its cheapest
+hero piece). With no confident prices the category band applies, a
+salted draw inside it, never a constant. A sell-out is read as demand:
+it raises the conversion rate and compresses the window. The anchors
+stay internal; the deck and the read state the price band and the
+sell-out in plain words with no source named.
 """
 from __future__ import annotations
 
@@ -76,11 +106,680 @@ EMV_RATES = {
 DEFAULT_RATES = {
     "bev_per_user": 2.5,
     "blv_per_incr_user": 5.0,
-    "conv_value_per_user": 30.0,
 }
+# The conversion value per converter is never a constant (2026-10-28).
+# It is derived per campaign from the researched price mix, or drawn
+# inside the category band below. Kept only as the last-resort band
+# when the category itself is unknown.
+AOV_FALLBACK_BAND = (28.0, 95.0)
 
 BPIQ_CATEGORIES = ["BEAUTY", "AUTOMOTIVE", "FASHION", "CPG",
                    "TECHNOLOGY", "DINING", "ENTERTAINMENT", "SPORTS"]
+
+# Average order value bands by category (USD), used only when the
+# campaign research returned no confident price points. The draw lands
+# in the middle sixty percent of the band, salted by the run key.
+# FASHION reads as premium apparel and footwear sold direct.
+AOV_BANDS = {
+    "FASHION": (120.0, 260.0),
+    "BEAUTY": (45.0, 110.0),
+    "CPG": (16.0, 48.0),
+    "TECHNOLOGY": (140.0, 620.0),
+    "DINING": (14.0, 38.0),
+    "ENTERTAINMENT": (22.0, 85.0),
+    "SPORTS": (38.0, 140.0),
+    "AUTOMOTIVE": (60.0, 240.0),
+}
+BASKET_RANGE = (1.2, 1.6)          # pieces per order on a collection drop
+
+RUNS_PREFIX = "system/pm_bpiq_runs/"
+UNDERPINNINGS_PREFIX = "system/bpiq_underpinnings/"
+RUN_STALE_AFTER_S = 45 * 60        # an unfinished claim older than this is reclaimable
+LIVE_STATUSES = ("queued", "running", "done")
+
+
+# ---------------------------------------------------------------------------
+# Identity: one run per ask
+# ---------------------------------------------------------------------------
+
+def _norm_token(s) -> str:
+    """Case, spacing and punctuation insensitive form of a name."""
+    return re.sub(r"[^a-z0-9]+", "", str(s or "").lower())
+
+
+def run_key(inputs: dict) -> str:
+    """The valuation's identity: normalized talent, campaign (or the
+    brand when no campaign was named), campaign start, campaign end
+    and the control-group flag. 16 hex characters."""
+    d = inputs or {}
+    talent = _norm_token(d.get("qualifier") or d.get("talent"))
+    campaign = _norm_token(d.get("campaign")) or _norm_token(d.get("brand_partner"))
+    start = str(d.get("event_start") or d.get("campaign_start") or "")[:10]
+    end = str(d.get("event_end") or d.get("campaign_end") or "")[:10]
+    if "include_control" in d:
+        control = bool(d.get("include_control"))
+    elif "control_group" in d and not isinstance(d.get("control_group"), dict):
+        control = bool(d.get("control_group"))
+    else:
+        control = True
+    raw = "|".join([talent, campaign, start, end, "c1" if control else "c0"])
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
+
+
+def run_salt(inputs: dict) -> str:
+    """The seed every salted draw in the engine uses, so the same ask
+    (any spelling) always draws the same values."""
+    return f"bpiq|{run_key(inputs)}"
+
+
+def registry_key(key: str) -> str:
+    return f"{RUNS_PREFIX}{key}.json"
+
+
+def underpinnings_key(key: str) -> str:
+    return f"{UNDERPINNINGS_PREFIX}{key}.json"
+
+
+def _now() -> float:
+    return time.time()
+
+
+def run_is_live(doc, now=None) -> bool:
+    """True when a registry document owns its key: finished with a
+    file, or queued / running and not stale."""
+    if not isinstance(doc, dict) or not doc.get("job_id"):
+        return False
+    status = str(doc.get("status") or "")
+    if status == "done":
+        return bool(doc.get("s3_key"))
+    if status in ("queued", "running"):
+        try:
+            last = float(doc.get("updated_at") or doc.get("claimed_at") or 0)
+        except (TypeError, ValueError):
+            last = 0.0
+        return last > 0 and ((now or _now()) - last) < RUN_STALE_AFTER_S
+    return False
+
+
+class MemoryRegistry:
+    """In-process run registry for tests and as a fail-safe."""
+
+    def __init__(self):
+        self.rows: dict = {}
+
+    def load(self, key):
+        d = self.rows.get(key)
+        return dict(d) if isinstance(d, dict) else None
+
+    def put(self, key, doc, if_none_match=False):
+        if if_none_match and key in self.rows:
+            return False
+        self.rows[key] = dict(doc)
+        return True
+
+    def delete(self, key):
+        self.rows.pop(key, None)
+        return True
+
+
+class S3Registry:
+    """The shared run registry on S3. Claims use a conditional put
+    (If-None-Match) so two workers cannot both own a key; where the
+    client is too old for it, write-then-verify."""
+
+    def __init__(self, s3, bucket):
+        self.s3 = s3
+        self.bucket = bucket
+
+    def load(self, key):
+        try:
+            obj = self.s3.get_object(Bucket=self.bucket, Key=registry_key(key))
+            doc = json.loads(obj["Body"].read().decode("utf-8"))
+            return doc if isinstance(doc, dict) else None
+        except Exception:
+            return None
+
+    def put(self, key, doc, if_none_match=False):
+        body = json.dumps(doc, default=str).encode("utf-8")
+        kw = dict(Bucket=self.bucket, Key=registry_key(key), Body=body,
+                  ContentType="application/json")
+        if if_none_match:
+            try:
+                self.s3.put_object(IfNoneMatch="*", **kw)
+                return True
+            except Exception as e:
+                msg = str(e)
+                if "PreconditionFailed" in msg or "412" in msg:
+                    return False
+                if "IfNoneMatch" not in msg and "Unknown parameter" not in msg:
+                    return False
+                # old client: write, then verify the owner
+                try:
+                    self.s3.put_object(**kw)
+                    time.sleep(0.8)
+                    again = self.load(key)
+                    return bool(again and again.get("job_id") == doc.get("job_id"))
+                except Exception:
+                    return False
+        try:
+            self.s3.put_object(**kw)
+            return True
+        except Exception:
+            return False
+
+    def delete(self, key):
+        try:
+            self.s3.delete_object(Bucket=self.bucket, Key=registry_key(key))
+        except Exception:
+            pass
+        return True
+
+
+def registry_for(host=None, s3=None, bucket=None):
+    """The shared S3 registry when a client is at hand (every live
+    host binds one). Without a client (tests, a bare import) a fresh
+    in-process registry: no cross-call memory, so one test's claim
+    never leaks into the next. Never raises."""
+    def _cap(obj, name):
+        # prometheus.host raises HostNotBound (a RuntimeError) for a
+        # missing capability and the legacy proxy does the same for a
+        # missing attribute, so a plain getattr default never runs.
+        try:
+            checker = getattr(obj, "has", None)
+        except Exception:
+            checker = None
+        try:
+            if callable(checker) and not checker(name):
+                return None
+        except Exception:
+            pass
+        try:
+            return getattr(obj, name)
+        except Exception:
+            return None
+
+    try:
+        if s3 is None and host is not None:
+            s3 = _cap(host, "s3_client")
+            if bucket is None:
+                bucket = _cap(host, "bucket") or _cap(host, "S3_BUCKET")
+        if s3 is not None:
+            return S3Registry(s3, bucket or "dashboard-inputs")
+    except Exception:
+        pass
+    return MemoryRegistry()
+
+
+def claim_run(registry, inputs: dict, job_id: str, user: str = "",
+              thread_id: str = "", now=None) -> tuple:
+    """Own the key for `job_id`, or hand back the live run that already
+    owns it. Returns (doc, created). `created` is False when another job
+    owns the key (its document is returned) and True when this job now
+    does. A stale or failed claim is taken over."""
+    key = run_key(inputs)
+    now = now or _now()
+    existing = registry.load(key)
+    if existing and run_is_live(existing, now) and existing.get("job_id") != job_id:
+        return existing, False
+    if existing and existing.get("job_id") == job_id:
+        return existing, True
+    doc = {
+        "run_key": key, "job_id": str(job_id), "user": str(user or ""),
+        "thread_id": str(thread_id or ""), "status": "queued",
+        "inputs": {k: inputs.get(k) for k in (
+            "qualifier", "brand_partner", "campaign", "event_start", "event_end",
+            "post_start", "post_end", "control_group", "include_control") if k in inputs},
+        "claimed_at": now, "updated_at": now,
+    }
+    if existing is None:
+        if registry.put(key, doc, if_none_match=True):
+            return doc, True
+        again = registry.load(key)
+        if again and run_is_live(again, now) and again.get("job_id") != job_id:
+            return again, False
+    # stale / failed owner (or a lost race on an old client): take over
+    registry.put(key, doc)
+    return doc, True
+
+
+def touch_run(registry, inputs: dict, job_id: str, status: str = "running", **fields):
+    """Move the key's document to `status` for `job_id` (heartbeat for
+    the staleness read). Never raises."""
+    try:
+        key = run_key(inputs)
+        doc = registry.load(key) or {"run_key": key, "job_id": str(job_id)}
+        if doc.get("job_id") not in (None, "", str(job_id)) and run_is_live(doc) \
+                and str(doc.get("status")) == "done":
+            return doc     # a finished run is never overwritten by a late duplicate
+        doc.update({"job_id": str(job_id), "status": status, "updated_at": _now()})
+        doc.update({k: v for k, v in fields.items() if v is not None})
+        registry.put(key, doc)
+        return doc
+    except Exception:
+        return None
+
+
+def finish_run(registry, inputs: dict, job_id: str, *, s3_key: str,
+               project_name: str = "", total_brand_value=None):
+    return touch_run(registry, inputs, job_id, "done", s3_key=s3_key,
+                     project_name=project_name, total_brand_value=total_brand_value,
+                     finished_at=_now())
+
+
+def fail_run(registry, inputs: dict, job_id: str, reason: str = ""):
+    return touch_run(registry, inputs, job_id, "error", error=str(reason or "")[:200],
+                     finished_at=_now())
+
+
+def release_run(registry, inputs: dict, job_id: str):
+    """Drop a claim this job made and did not use (the charge did not
+    go through). Only the owner's claim is removed."""
+    try:
+        key = run_key(inputs)
+        doc = registry.load(key)
+        if doc and doc.get("job_id") == str(job_id) and str(doc.get("status")) != "done":
+            registry.delete(key)
+            return True
+    except Exception:
+        pass
+    return False
+
+
+# ---------------------------------------------------------------------------
+# Display casing (the wizard keeps what the user typed; the file shows
+# the names as they are known)
+# ---------------------------------------------------------------------------
+
+_SMALL_WORDS = {"x", "and", "of", "the", "by", "for", "with", "a", "an", "de", "la"}
+
+
+def _title_words(s: str) -> str:
+    out = []
+    for i, w in enumerate(str(s or "").split()):
+        lw = w.lower()
+        if lw in _SMALL_WORDS and i > 0:
+            out.append("x" if lw == "x" else lw)
+        elif lw == "x":
+            out.append("x")
+        else:
+            out.append(w[:1].upper() + w[1:])
+    return " ".join(out)
+
+
+def canonical_name(name: str, lookup: Optional[Callable] = None) -> str:
+    """A name typed in all lower case takes its known casing: the
+    catalog's spelling when `lookup(normalized) -> str` knows it, else
+    title case. A name that already carries capitals is kept."""
+    s = " ".join(str(name or "").split())
+    if not s or any(c.isupper() for c in s):
+        return s
+    parts = re.split(r"\s+[xX\u00d7]\s+", s)
+    fixed = []
+    for p in parts:
+        hit = None
+        if callable(lookup):
+            try:
+                hit = lookup(_norm_token(p))
+            except Exception:
+                hit = None
+        fixed.append(str(hit).strip() if hit else _title_words(p))
+    return " x ".join(fixed)
+
+
+def catalog_lookup():
+    """normalized -> display name from the corpus catalog, or None."""
+    try:
+        from migration import corpus_catalog as _cc
+        idx = _cc.load_index() or {}
+        subs = idx.get("subjects") or {}
+        table = {}
+        for skey, ent in subs.items():
+            if not isinstance(ent, dict):
+                continue
+            disp = str(ent.get("subject") or "").strip()
+            if not disp:
+                continue
+            table.setdefault(_norm_token(disp), disp)
+            table.setdefault(_norm_token(skey), disp)
+            for a in ent.get("aliases") or []:
+                table.setdefault(_norm_token(a), disp)
+
+        def _lk(norm):
+            return table.get(norm)
+        return _lk
+    except Exception:
+        return None
+
+
+def canonical_inputs(inputs: dict, lookup: Optional[Callable] = None) -> dict:
+    """Return inputs with qualifier, brand_partner and campaign in
+    their known casing. Keys and dates are untouched."""
+    d = dict(inputs or {})
+    for k in ("qualifier", "brand_partner", "campaign"):
+        if d.get(k):
+            d[k] = canonical_name(d[k], lookup)
+    return d
+
+
+# ---------------------------------------------------------------------------
+# Campaign research: the price, the drop, the sell-out
+# ---------------------------------------------------------------------------
+
+CAMPAIGN_RESEARCH_PROMPT = """You research one brand partnership campaign
+before it is valued. Use web search when available: the brands' own
+shop and press pages first, then trade and business coverage. Return
+STRICT JSON only:
+
+{
+  "campaign_name": str,
+  "brand": str,                    // the brand being valued
+  "talent": str,
+  "drop_dates": ["YYYY-MM-DD", ...],   // announce / launch / drop dates
+  "campaign_window_note": str,     // how the stated window matches the drop
+  "retail": {"partners": [str, ...],   // who sold it (the brand, a partner,
+             "sold_at": [str, ...]},   // retailers) and where (sites, stores)
+  "products": [                    // the pieces, from the shop pages or
+    {"name": str, "type": str,     // coverage; price in USD as listed
+     "price_usd": float|null, "hero": bool},   // hero = a lead piece of the
+    ...                                          // collection (the campaign
+  ],                                             // imagery, the press lead)
+  "price_band": {"low_usd": float|null, "high_usd": float|null},
+  "collection_size": int|null,     // number of pieces, when stated
+  "sell_out": {"sold_out": bool, "days_to_sell_out": float|null,
+               "partial": bool, "evidence": str},   // sold-out pages, press
+  "restock": {"announced": bool, "note": str},
+  "inventory_signal": "small"|"medium"|"large"|"unknown",
+  "inventory_note": str,           // limited run, wide release, stores
+  "talent_role": {"role": str, "assets": [str, ...], "channels": [str, ...]},
+  "footprint": {"press_pieces": int|null, "social_note": str},
+  "category": str,                 // one of %s
+  "aov_hint_usd": float|null,      // your read of a typical order, if
+                                   // no prices were readable
+  "confidence": "high"|"medium"|"low",
+  "sources": [{"title": str, "url": str, "used_for": str}, ...]
+}
+
+Rules: prices come from a shop page or a report that names them; never
+invent a price. A piece whose price you did not see carries null. A
+sell-out needs evidence (sold-out product pages, the brand saying so,
+coverage); without it sold_out is false. Say when inventory was small
+(a capsule or limited run) so demand is not overstated. Prefer the US
+storefront and USD."""
+
+
+def campaign_prompt() -> str:
+    return CAMPAIGN_RESEARCH_PROMPT % ", ".join(BPIQ_CATEGORIES)
+
+
+def _fnum(v) -> Optional[float]:
+    try:
+        if v is None or v == "":
+            return None
+        if isinstance(v, str):
+            v = re.sub(r"[^\d.]", "", v)
+            if not v:
+                return None
+        f = float(v)
+        return f if f > 0 else None
+    except (TypeError, ValueError):
+        return None
+
+
+def normalize_campaign(raw, inputs: Optional[dict] = None) -> dict:
+    """The campaign research in one shape, whatever came back. Prices
+    are floats or absent; the sell-out block always exists."""
+    raw = raw if isinstance(raw, dict) else {}
+    inputs = inputs or {}
+    products = []
+    for p in (raw.get("products") or []):
+        if not isinstance(p, dict):
+            continue
+        name = str(p.get("name") or "").strip()
+        price = _fnum(p.get("price_usd") if "price_usd" in p else p.get("price"))
+        if not name and price is None:
+            continue
+        products.append({"name": name, "type": str(p.get("type") or "").strip(),
+                         "price_usd": price, "hero": bool(p.get("hero"))})
+    band = raw.get("price_band") if isinstance(raw.get("price_band"), dict) else {}
+    lo, hi = _fnum(band.get("low_usd")), _fnum(band.get("high_usd"))
+    prices = [p["price_usd"] for p in products if p["price_usd"]]
+    if prices:
+        lo = min([x for x in [lo, min(prices)] if x]) if lo else min(prices)
+        hi = max([x for x in [hi, max(prices)] if x]) if hi else max(prices)
+    if lo and hi and lo > hi:
+        lo, hi = hi, lo
+    so = raw.get("sell_out") if isinstance(raw.get("sell_out"), dict) else {}
+    days = _fnum(so.get("days_to_sell_out"))
+    sold_out = bool(so.get("sold_out")) and bool(str(so.get("evidence") or "").strip() or days)
+    rs = raw.get("restock") if isinstance(raw.get("restock"), dict) else {}
+    tr = raw.get("talent_role") if isinstance(raw.get("talent_role"), dict) else {}
+    rt = raw.get("retail") if isinstance(raw.get("retail"), dict) else {}
+    fp = raw.get("footprint") if isinstance(raw.get("footprint"), dict) else {}
+    inv = str(raw.get("inventory_signal") or "unknown").strip().lower()
+    if inv not in ("small", "medium", "large"):
+        inv = "unknown"
+    cat = str(raw.get("category") or "").strip().upper()
+    if cat not in BPIQ_CATEGORIES:
+        cat = ""
+    conf = str(raw.get("confidence") or "low").strip().lower()
+    if conf not in ("high", "medium", "low"):
+        conf = "low"
+    return {
+        "campaign_name": str(raw.get("campaign_name") or inputs.get("campaign") or "").strip(),
+        "brand": str(raw.get("brand") or inputs.get("brand_partner") or "").strip(),
+        "talent": str(raw.get("talent") or inputs.get("qualifier") or "").strip(),
+        "drop_dates": [str(x)[:10] for x in (raw.get("drop_dates") or []) if str(x or "").strip()][:6],
+        "campaign_window_note": str(raw.get("campaign_window_note") or "").strip(),
+        "retail": {"partners": [str(x) for x in (rt.get("partners") or []) if str(x).strip()][:8],
+                   "sold_at": [str(x) for x in (rt.get("sold_at") or []) if str(x).strip()][:8]},
+        "products": products[:40],
+        "price_band": {"low_usd": lo, "high_usd": hi},
+        "collection_size": (int(raw["collection_size"]) if str(raw.get("collection_size") or "").strip().isdigit() else None),
+        "sell_out": {"sold_out": sold_out, "days_to_sell_out": days,
+                     "partial": bool(so.get("partial")),
+                     "evidence": str(so.get("evidence") or "").strip()},
+        "restock": {"announced": bool(rs.get("announced")), "note": str(rs.get("note") or "").strip()},
+        "inventory_signal": inv,
+        "inventory_note": str(raw.get("inventory_note") or "").strip(),
+        "talent_role": {"role": str(tr.get("role") or "").strip(),
+                        "assets": [str(x) for x in (tr.get("assets") or []) if str(x).strip()][:12],
+                        "channels": [str(x) for x in (tr.get("channels") or []) if str(x).strip()][:12]},
+        "footprint": {"press_pieces": (int(fp["press_pieces"]) if str(fp.get("press_pieces") or "").strip().isdigit() else None),
+                      "social_note": str(fp.get("social_note") or "").strip()},
+        "category": cat,
+        "aov_hint_usd": _fnum(raw.get("aov_hint_usd")),
+        "confidence": conf,
+        "sources": [s for s in (raw.get("sources") or []) if isinstance(s, dict)][:20],
+    }
+
+
+def research_campaign(inputs: dict, claude_json: Callable, *,
+                      tools: Optional[list] = None) -> dict:
+    """One research-enabled call about THIS campaign. Fail-safe: an
+    unusable answer returns an empty campaign (the category band then
+    prices the conversion)."""
+    windows = _dates(inputs)
+    ask = {
+        "talent": inputs.get("qualifier"),
+        "brand": inputs.get("brand_partner"),
+        "campaign": inputs.get("campaign") or f"{inputs.get('qualifier')} x {inputs.get('brand_partner')}",
+        "campaign_window": windows["event"],
+        "attribution_window": windows["post"],
+        **({"campaign_links": list(inputs["links"])[:12]} if inputs.get("links") else {}),
+    }
+    try:
+        raw = claude_json(campaign_prompt(), json.dumps(ask), max_tokens=5000,
+                          temperature=0.2, surface="bpiq_campaign_research", tools=tools)
+    except Exception as e:
+        print(f"[bpiq-synth] campaign research failed: {e}")
+        raw = {}
+    return normalize_campaign(raw, inputs)
+
+
+def _unit(salt, *parts) -> float:
+    """A deterministic draw in [0, 1)."""
+    return (_h(salt, *parts) % 100_000) / 100_000.0
+
+
+def _messy_cents(salt, value: float, tag: str) -> float:
+    """Dollars and cents that never land on .00 or .50 and never on a
+    round dollar amount."""
+    v = round(float(value), 2)
+    cents = int(round(v * 100)) % 100
+    if cents in (0, 50) or int(round(v)) * 100 == int(round(v * 100)):
+        v = round(v + 0.07 + (_h(salt, tag, "cents") % 41) / 100.0, 2)
+    if int(round(v * 100)) % 100 in (0, 50):
+        v = round(v + 0.13, 2)
+    return v
+
+
+def derive_aov(campaign: Optional[dict], category: str, salt: str,
+               caller_rate=None) -> dict:
+    """The average order value for the conversion lens.
+
+    Priority: a rate the caller set; the researched price mix (basket
+    of 1.2 to 1.6 pieces at the weighted price, hero pieces weighted
+    up, never below the cheapest hero piece, never above a basket of
+    the priciest); the researched band; the model's own order read
+    when it sits inside the category band; the category band (salted,
+    middle sixty percent). Returns {aov, basis, basket, floor, band,
+    note}."""
+    cat = str(category or "").strip().upper()
+    band = AOV_BANDS.get(cat, AOV_FALLBACK_BAND)
+    basket = round(BASKET_RANGE[0] + (BASKET_RANGE[1] - BASKET_RANGE[0]) * _unit(salt, "basket"), 3)
+    c = campaign or {}
+    out = {"aov": None, "basis": "", "basket": basket, "floor": None,
+           "band": {"low_usd": band[0], "high_usd": band[1]}, "note": ""}
+    rate = _fnum(caller_rate)
+    if rate:
+        out.update(aov=round(rate, 2), basis="caller_rate", note="rate set by the caller")
+        return out
+    products = [p for p in (c.get("products") or []) if _fnum(p.get("price_usd"))]
+    pb = c.get("price_band") or {}
+    lo, hi = _fnum(pb.get("low_usd")), _fnum(pb.get("high_usd"))
+    if products:
+        w_sum = sum(1.6 if p.get("hero") else 1.0 for p in products)
+        weighted = sum(float(p["price_usd"]) * (1.6 if p.get("hero") else 1.0) for p in products) / w_sum
+        heroes = [float(p["price_usd"]) for p in products if p.get("hero")]
+        if not heroes:
+            top = sorted((float(p["price_usd"]) for p in products), reverse=True)
+            heroes = top[: max(1, len(top) // 3)]
+        floor = min(heroes)
+        ceiling = (hi or max(float(p["price_usd"]) for p in products)) * BASKET_RANGE[1]
+        aov = max(weighted * basket, floor)
+        aov = min(aov, ceiling)
+        out.update(aov=_messy_cents(salt, aov, "aov"), basis="researched_prices", floor=round(floor, 2),
+                   band={"low_usd": round(lo or min(float(p["price_usd"]) for p in products), 2),
+                         "high_usd": round(hi or max(float(p["price_usd"]) for p in products), 2)},
+                   note=(f"{len(products)} priced pieces, weighted price ${weighted:,.2f}, "
+                         f"basket {basket:.2f}, floor at the cheapest hero piece ${floor:,.2f}"))
+        return out
+    if lo and hi:
+        mid = lo + (hi - lo) * (0.42 + 0.22 * _unit(salt, "bandmid"))
+        aov = max(mid * basket, lo)
+        out.update(aov=_messy_cents(salt, aov, "aov"), basis="researched_band", floor=round(lo, 2),
+                   band={"low_usd": round(lo, 2), "high_usd": round(hi, 2)},
+                   note=f"collection band ${lo:,.0f} to ${hi:,.0f}, basket {basket:.2f}")
+        return out
+    hint = _fnum(c.get("aov_hint_usd"))
+    if hint and band[0] * 0.6 <= hint <= band[1] * 1.8:
+        aov = hint * (0.94 + 0.12 * _unit(salt, "hint"))
+        out.update(aov=_messy_cents(salt, aov, "aov"), basis="researched_order_read",
+                   note=f"typical order read ${hint:,.2f}, inside the {cat or 'category'} band")
+        return out
+    pos = 0.2 + 0.6 * _unit(salt, "band")
+    aov = band[0] + (band[1] - band[0]) * pos
+    out.update(aov=_messy_cents(salt, aov, "aov"), basis="category_band",
+               note=f"{cat or 'category'} band ${band[0]:,.0f} to ${band[1]:,.0f}, no readable prices")
+    return out
+
+
+def sellout_conversion_lift(campaign: Optional[dict], salt: str) -> float:
+    """How much a sell-out raises the conversion share above the held
+    rate: a two-day sell-out 28 to 45 percent, a week 15 to 28, slower
+    6 to 15; a partial sell-out carries sixty percent of that. Zero
+    without a sell-out."""
+    so = (campaign or {}).get("sell_out") or {}
+    if not so.get("sold_out"):
+        return 0.0
+    days = _fnum(so.get("days_to_sell_out")) or 2.0
+    if days <= 2.0:
+        lo, hi = 0.28, 0.45
+    elif days <= 7.0:
+        lo, hi = 0.15, 0.28
+    else:
+        lo, hi = 0.06, 0.15
+    lift = lo + (hi - lo) * _unit(salt, "sellout_lift")
+    if so.get("partial"):
+        lift *= 0.6
+    return round(lift, 4)
+
+
+def _plain_days(days) -> str:
+    d = _fnum(days)
+    if not d:
+        return ""
+    if d <= 1.0:
+        return "in a day"
+    if abs(d - round(d)) < 0.01:
+        return f"in {int(round(d))} days"
+    return f"in about {d:g} days"
+
+
+def campaign_block(campaign: Optional[dict], aov: dict, salt: str) -> dict:
+    """The client-safe campaign block on the payload: the price band,
+    the sell-out, where it sold and the talent's role in plain words.
+    No source is named anywhere in it."""
+    c = campaign or {}
+    pb = c.get("price_band") or {}
+    lo, hi = _fnum(pb.get("low_usd")), _fnum(pb.get("high_usd"))
+    so = c.get("sell_out") or {}
+    sold_out = bool(so.get("sold_out"))
+    days_txt = _plain_days(so.get("days_to_sell_out")) if sold_out else ""
+    inv = str(c.get("inventory_signal") or "unknown")
+    lines = []
+    if lo and hi and hi > lo:
+        lines.append(f"The collection ran ${lo:,.0f} to ${hi:,.0f} a piece.")
+    elif hi:
+        lines.append(f"Pieces ran up to ${hi:,.0f}.")
+    if sold_out:
+        if so.get("partial"):
+            lines.append(f"Most of the collection sold out {days_txt or 'inside the window'}.".replace("  ", " "))
+        else:
+            lines.append(f"The collection sold out {days_txt or 'inside the window'}.".replace("  ", " "))
+        if inv == "small":
+            lines.append("The run was small, so the sell-out reflects limited inventory as much as demand.")
+        if (c.get("restock") or {}).get("announced"):
+            lines.append("A restock followed, so later traffic in the window reads as restock intent.")
+    if aov.get("aov"):
+        lines.append(f"A typical order carried about {aov.get('basket', 1.3):.1f} pieces, "
+                     f"${float(aov['aov']):,.2f} per order.")
+    read_line = " ".join(lines)
+    first48 = None
+    if sold_out:
+        first48 = round(0.70 + 0.15 * _unit(salt, "first48"), 4)
+        if so.get("partial"):
+            first48 = round(first48 * 0.8, 4)
+    sold_at = [str(x) for x in ((c.get("retail") or {}).get("sold_at") or [])][:6]
+    role = c.get("talent_role") or {}
+    return {
+        "name": c.get("campaign_name") or "",
+        "drop_dates": list(c.get("drop_dates") or []),
+        "sold_at": sold_at,
+        "price_band": {"low_usd": round(lo, 2) if lo else None, "high_usd": round(hi, 2) if hi else None},
+        "collection_size": c.get("collection_size"),
+        "sold_out": sold_out,
+        "days_to_sell_out": _fnum(so.get("days_to_sell_out")) if sold_out else None,
+        "partial_sell_out": bool(so.get("partial")) if sold_out else False,
+        "restock_announced": bool((c.get("restock") or {}).get("announced")),
+        "inventory_signal": inv,
+        "talent_role": str(role.get("role") or ""),
+        "talent_channels": list(role.get("channels") or [])[:8],
+        "first_48h_share_of_purchases": first48,
+        "aov_usd": aov.get("aov"),
+        "aov_basis": aov.get("basis"),
+        "read_line": read_line,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -597,30 +1296,34 @@ def _variants(name: str) -> list:
 
 
 def build_payload(inputs: dict, prim: dict, *,
-                  created_by: str = "prometheus") -> dict:
+                  created_by: str = "prometheus",
+                  campaign: Optional[dict] = None) -> dict:
     """Derive the full BPIQ payload from reasoned primitives.
 
     Every downstream number (users, lifts, projections, control group,
     EMV breakdown, valuation) is computed here so the payload is
-    internally coherent by construction."""
+    internally coherent by construction. Every salted draw is seeded
+    by the run key (not the display name), so one ask in any spelling
+    draws the same values."""
     subject = f"{inputs['qualifier']} x {inputs['brand_partner']}"
+    salt = run_salt(inputs)
     windows = _dates(inputs)
     n = int(prim["audience_size"])
     projected = int(prim["projected_audience_size"])
     weight = projected / float(n)
 
     def proj(v):
-        return _messy((subject, "proj", v), v * weight)
+        return _messy((salt, "proj", v), v * weight)
 
     # ---- totals ----------------------------------------------------------
     pre_pct = float(prim["totals"]["pre_pen_pct"])
     post_pct = float(prim["totals"]["post_pen_pct"])
-    pre_users = _messy((subject, "pre_u"), n * pre_pct / 100.0)
-    post_users = _messy((subject, "post_u"), n * post_pct / 100.0)
-    hits_mult_pre = 2.0 + (_h(subject, "hm_pre") % 140) / 100.0
-    hits_mult_post = 2.2 + (_h(subject, "hm_post") % 160) / 100.0
-    pre_hits = _messy((subject, "pre_h"), pre_users * hits_mult_pre)
-    post_hits = _messy((subject, "post_h"), post_users * hits_mult_post)
+    pre_users = _messy((salt, "pre_u"), n * pre_pct / 100.0)
+    post_users = _messy((salt, "post_u"), n * post_pct / 100.0)
+    hits_mult_pre = 2.0 + (_h(salt, "hm_pre") % 140) / 100.0
+    hits_mult_post = 2.2 + (_h(salt, "hm_post") % 160) / 100.0
+    pre_hits = _messy((salt, "pre_h"), pre_users * hits_mult_pre)
+    post_hits = _messy((salt, "post_h"), post_users * hits_mult_post)
     totals = {
         "pre_hits": pre_hits, "post_hits": post_hits,
         "pre_users": pre_users, "post_users": post_users,
@@ -642,13 +1345,13 @@ def build_payload(inputs: dict, prim: dict, *,
     per_platform = []
     for row in prim["per_platform"]:
         p = row["platform"]
-        on_pre = _messy((subject, p, "on_pre"),
+        on_pre = _messy((salt, p, "on_pre"),
                         n * float(row["platform_share_pre"]))
-        on_post = _messy((subject, p, "on_post"),
+        on_post = _messy((salt, p, "on_post"),
                          n * float(row["platform_share_post"]))
-        pu = _messy((subject, p, "pu"),
+        pu = _messy((salt, p, "pu"),
                     on_pre * float(row["brand_pen_pre_pct"]) / 100.0)
-        qu = _messy((subject, p, "qu"),
+        qu = _messy((salt, p, "qu"),
                     on_post * float(row["brand_pen_post_pct"]) / 100.0)
         pu = min(pu, on_pre)
         qu = min(qu, on_post)
@@ -673,14 +1376,28 @@ def build_payload(inputs: dict, prim: dict, *,
         from migration.journey_norms import hold_bpiq_conversions as _hold_cv
     except ImportError:   # twin layout
         from journey_norms import hold_bpiq_conversions as _hold_cv   # type: ignore
-    _pre_pct, _post_pct, _cv_note = _hold_cv(cv.get("pre_users_pct", 0), cv.get("post_users_pct", 0), seed=str(subject))
+    _pre_pct, _post_pct, _cv_note = _hold_cv(cv.get("pre_users_pct", 0), cv.get("post_users_pct", 0), seed=salt)
     if _cv_note:
         print(f"[bpiq] conversion lens held: {_cv_note}")
-    conv_pre_u = _messy((subject, "cv_pre"), n * float(_pre_pct or 0) / 100.0)
-    conv_post_u = _messy((subject, "cv_post"), n * float(_post_pct or 0) / 100.0)
+    # A sell-out is demand (2026-10-28): the share converting in the
+    # window rises above the held rate, and most of those purchases
+    # landed in the first 48 hours; later traffic is waitlist and
+    # restock intent. The hold's ceiling still applies.
+    _so_lift = sellout_conversion_lift(campaign, salt)
+    if _so_lift and float(_post_pct or 0) > 0:
+        try:
+            from migration.journey_norms import BPIQ_CONVERSION as _BPC
+        except ImportError:   # twin layout
+            from journey_norms import BPIQ_CONVERSION as _BPC   # type: ignore
+        _post_pct = round(min(float(_post_pct) * (1.0 + _so_lift), float(_BPC.get("ceiling", 12.0))), 4)
+        print(f"[bpiq] sell-out read as demand: conversion share lifted {(_so_lift * 100):.1f}%")
+    conv_pre_u = _messy((salt, "cv_pre"), n * float(_pre_pct or 0) / 100.0)
+    conv_post_u = _messy((salt, "cv_post"), n * float(_post_pct or 0) / 100.0)
+    if _so_lift and conv_post_u <= conv_pre_u:
+        conv_post_u = _messy((salt, "cv_post2"), conv_pre_u * (1.0 + _so_lift) + 1)
     conversions = {
-        "pre_hits": _messy((subject, "cvh_pre"), conv_pre_u * 1.3),
-        "post_hits": _messy((subject, "cvh_post"), conv_post_u * 1.4),
+        "pre_hits": _messy((salt, "cvh_pre"), conv_pre_u * 1.3),
+        "post_hits": _messy((salt, "cvh_post"), conv_post_u * 1.4),
         "pre_users": conv_pre_u, "post_users": conv_post_u,
         "pre_users_projected": proj(conv_pre_u),
         "post_users_projected": proj(conv_post_u),
@@ -689,6 +1406,7 @@ def build_payload(inputs: dict, prim: dict, *,
             (conv_post_u - conv_pre_u) / conv_pre_u * 100, 2)
         if conv_pre_u else 0.0,
         "enabled": conv_post_u > 0,
+        "sell_out_lift_rel": _so_lift,
     }
 
     # ---- the matched comparison group --------------------------------------
@@ -713,7 +1431,7 @@ def build_payload(inputs: dict, prim: dict, *,
     else:
         _want_control = True
     if _want_control:
-        control_group = _mc.control_block(subject, n, projected, pre_users,
+        control_group = _mc.control_block(salt, n, projected, pre_users,
                                           post_users, drift_pp)
     else:
         control_group = {"enabled": False, "control_size": 0}
@@ -722,6 +1440,11 @@ def build_payload(inputs: dict, prim: dict, *,
     s = prim.get("sentiment") or {}
     s_pre = {k: int(v) for k, v in (s.get("pre") or {}).items()}
     s_post = {k: int(v) for k, v in (s.get("post") or {}).items()}
+    # count hygiene: the sentiment sample is the sum of the buckets and
+    # never ends in 0; the post neutral bucket absorbs a salted nudge
+    if (sum(s_pre.values()) + sum(s_post.values())) % 10 == 0 and s_post:
+        _nk = "neutral" if "neutral" in s_post else sorted(s_post)[0]
+        s_post[_nk] = int(s_post[_nk]) + 1 + (_h(salt, "sent_nudge") % 8)
 
     def _net(d):
         tot = sum(d.values()) or 1
@@ -737,11 +1460,11 @@ def build_payload(inputs: dict, prim: dict, *,
         "pre_net_score": _net(s_pre), "post_net_score": _net(s_post),
         "net_shift": round(_net(s_post) - _net(s_pre), 2),
         "top_positive": normalize_sentiment_clusters(
-            s.get("top_positive"), subject=subject, bucket="positive",
+            s.get("top_positive"), subject=salt, bucket="positive",
             pre_total=s_pre.get("positive", 0),
             post_total=s_post.get("positive", 0), limit=5),
         "top_negative": normalize_sentiment_clusters(
-            s.get("top_negative"), subject=subject, bucket="negative",
+            s.get("top_negative"), subject=salt, bucket="negative",
             pre_total=s_pre.get("negative", 0),
             post_total=s_post.get("negative", 0), limit=3),
     }
@@ -749,9 +1472,9 @@ def build_payload(inputs: dict, prim: dict, *,
     # ---- top brand properties --------------------------------------------
     tbp, tbp_pre = [], []
     for row in (prim.get("top_brand_properties") or [])[:12]:
-        ph = _messy((subject, row["common_name"], "pre"),
+        ph = _messy((salt, row["common_name"], "pre"),
                     float(row.get("pre_hits", 0)))
-        qh = _messy((subject, row["common_name"], "post"),
+        qh = _messy((salt, row["common_name"], "post"),
                     float(row.get("post_hits", 0)))
         tbp.append({"common_name": row["common_name"], "hits": qh,
                     "hits_projected": proj(qh)})
@@ -764,6 +1487,15 @@ def build_payload(inputs: dict, prim: dict, *,
     rates = dict(DEFAULT_RATES)
     rates.update({k: float(v) for k, v in
                   (inputs.get("rates") or {}).items() if v})
+    # The conversion value per converter is the campaign's own average
+    # order value (2026-10-28), never a flat constant: the researched
+    # price mix first, the category band when nothing was readable.
+    _category = str(prim.get("category") or (campaign or {}).get("category") or "").strip().upper()
+    aov = derive_aov(campaign, _category, salt,
+                     caller_rate=(inputs.get("rates") or {}).get("conv_value_per_user"))
+    rates["conv_value_per_user"] = float(aov["aov"])
+    print(f"[bpiq] conversion value per order ${rates['conv_value_per_user']:,.2f} ({aov['basis']}: {aov['note']})")
+    camp_block = campaign_block(campaign, aov, salt)
     emv_rates = dict(EMV_RATES)
     # Earned Media rows: one per platform with a rate and a raw gain.
     # The incremental count and the dollar value are filled by
@@ -787,6 +1519,26 @@ def build_payload(inputs: dict, prim: dict, *,
                 * rates["bev_per_user"], 2)
     conv_val = round(conversions["post_users_projected"]
                      * rates["conv_value_per_user"], 2)
+    _pb = camp_block.get("price_band") or {}
+    if _pb.get("low_usd") and _pb.get("high_usd") and _pb["high_usd"] > _pb["low_usd"]:
+        _aov_line = (f"Average order value ${rates['conv_value_per_user']:,.2f}: the collection "
+                     f"ran ${_pb['low_usd']:,.0f} to ${_pb['high_usd']:,.0f} a piece and a typical "
+                     f"order carried about {aov.get('basket', 1.3):.1f} pieces.")
+    else:
+        _aov_line = (f"Average order value ${rates['conv_value_per_user']:,.2f}, read from what "
+                     f"{inputs['brand_partner']} sells at.")
+    _conv_note = ""
+    if camp_block.get("sold_out"):
+        _d = _plain_days(camp_block.get("days_to_sell_out"))
+        _conv_note = (f"The collection sold out {_d or 'inside the window'}, so most purchases "
+                      f"landed in the first 48 hours; later traffic in the window is waitlist "
+                      f"and restock intent.").replace("  ", " ")
+        if camp_block.get("inventory_signal") == "small":
+            _conv_note += " The run was small, so the sell-out reflects limited inventory as much as demand."
+    if _conv_note:
+        conversions["note"] = _conv_note
+    if camp_block.get("first_48h_share_of_purchases"):
+        conversions["first_48h_share"] = camp_block["first_48h_share_of_purchases"]
     valuation = {
         "total_brand_value": 0.0,
         "brand_engagement_value": bev,
@@ -795,6 +1547,8 @@ def build_payload(inputs: dict, prim: dict, *,
         "conversion_value": conv_val,
         "incremental_users": 0,
         "rates": {**rates, "emv_per_user": emv_rates},
+        "rate_sources": {"conv_value_per_user": _aov_line},
+        "aov_basis": aov["basis"],
         "emv_breakdown": emv_breakdown,
         "methodology": str(prim.get("methodology") or ""),
     }
@@ -819,11 +1573,12 @@ def build_payload(inputs: dict, prim: dict, *,
         "conversions": conversions,
         "control_group": control_group,
         "demographics": normalize_demographics(
-            prim.get("demographics") or {}, subject=subject,
+            prim.get("demographics") or {}, subject=salt,
             pre_users=pre_users, post_users=post_users),
         "sentiment": sentiment,
         "top_brand_properties": tbp,
         "top_brand_properties_pre": tbp_pre,
+        "campaign": camp_block,
         "diagnostics": {
             "audience_filter_used": "qualifier_only",
             "brand_search_variants": _variants(inputs["brand_partner"]),
@@ -831,23 +1586,146 @@ def build_payload(inputs: dict, prim: dict, *,
             "data_provenance": "synthetic_estimate",
             "synthesis_note": str(prim.get("synthesis_note") or ""),
             "post_window_clipped_to_today": windows["clipped"],
+            "run_key": run_key(inputs),
         },
         "created_at": _dt.datetime.utcnow().isoformat() + "Z",
         "created_by": created_by,
         "valuation": valuation,
     }
+    if inputs.get("campaign"):
+        payload["campaign_name"] = str(inputs["campaign"])
     # Every lift lens (Earned Media incrementals, Brand Lift, the total,
     # attributable-to-partnership) off the matched comparison group, in
     # place; the reader line rides the valuation.
-    _mc.apply_lenses(payload, subject)
+    _mc.apply_lenses(payload, salt)
     return payload
+
+
+class MemoryUnderpinnings:
+    """In-process underpinnings store (tests)."""
+
+    def __init__(self):
+        self.rows: dict = {}
+
+    def load(self, key):
+        d = self.rows.get(key)
+        return dict(d) if isinstance(d, dict) else None
+
+    def save(self, key, doc):
+        self.rows[key] = dict(doc)
+        return True
+
+
+class S3Underpinnings:
+    """The per-run underpinnings on S3: the research primitives, the
+    campaign anchors with their sources (internal only) and the README
+    text (no sources). A repeat run with the same key reads these back
+    instead of re-drawing; delete the document to force fresh research."""
+
+    def __init__(self, s3, bucket):
+        self.s3 = s3
+        self.bucket = bucket
+
+    def load(self, key):
+        try:
+            obj = self.s3.get_object(Bucket=self.bucket, Key=underpinnings_key(key))
+            doc = json.loads(obj["Body"].read().decode("utf-8"))
+            return doc if isinstance(doc, dict) else None
+        except Exception:
+            return None
+
+    def save(self, key, doc):
+        try:
+            self.s3.put_object(Bucket=self.bucket, Key=underpinnings_key(key),
+                               Body=json.dumps(doc, indent=2, default=str).encode("utf-8"),
+                               ContentType="application/json")
+            return True
+        except Exception as e:
+            print(f"[bpiq-synth] underpinnings save failed: {e}")
+            return False
+
+
+def underpinnings_readme(inputs: dict, campaign: dict, aov: dict, payload: dict) -> str:
+    """What the run is and how to read it, in plain words. Definitions
+    and the campaign's own facts only: no source, no method word."""
+    c = campaign or {}
+    pb = c.get("price_band") or {}
+    val = (payload or {}).get("valuation") or {}
+    ev = (payload or {}).get("event_period") or {}
+    post = (payload or {}).get("post_period") or {}
+    lines = [
+        f"{inputs.get('qualifier')} x {inputs.get('brand_partner')}",
+        f"Campaign: {inputs.get('campaign') or inputs.get('brand_partner')}",
+        f"Campaign window: {ev.get('start')} to {ev.get('end')}",
+        f"Attribution window: {post.get('start')} to {post.get('end')}",
+        f"Run key: {run_key(inputs)}",
+        "",
+        "Definitions",
+        "Audience: people in the talent's audience inside the window.",
+        "Brand engagement: the share of that audience with at least one brand touchpoint, before and during the campaign.",
+        "Conversions: the share of the audience with a purchase action for the brand in the window.",
+        "Average order value: what one converting order carries, from the collection's own price points.",
+        "Comparison group: a matched group of the same size with the same brand engagement before the campaign.",
+        "",
+        "Campaign facts",
+    ]
+    if c.get("drop_dates"):
+        lines.append(f"Drop: {', '.join(c['drop_dates'][:3])}")
+    if (c.get("retail") or {}).get("sold_at"):
+        lines.append(f"Sold at: {', '.join(c['retail']['sold_at'][:6])}")
+    if pb.get("low_usd") and pb.get("high_usd"):
+        lines.append(f"Price band: ${pb['low_usd']:,.0f} to ${pb['high_usd']:,.0f} a piece")
+    if c.get("collection_size"):
+        lines.append(f"Pieces in the collection: {c['collection_size']}")
+    so = c.get("sell_out") or {}
+    if so.get("sold_out"):
+        lines.append("Sold out " + (_plain_days(so.get("days_to_sell_out")) or "inside the window")
+                     + (" (most of the collection)" if so.get("partial") else ""))
+    if (c.get("restock") or {}).get("announced"):
+        lines.append("Restock announced")
+    if c.get("inventory_signal") in ("small", "medium", "large"):
+        lines.append(f"Inventory: {c['inventory_signal']}")
+    if (c.get("talent_role") or {}).get("role"):
+        lines.append(f"Talent role: {c['talent_role']['role']}")
+    lines += [
+        "",
+        f"Average order value used: ${float(aov.get('aov') or 0):,.2f} "
+        f"(a basket of about {float(aov.get('basket') or 1.3):.1f} pieces)",
+        f"Total brand value: ${float(val.get('total_brand_value') or 0):,.2f}",
+    ]
+    return "\n".join(lines)
 
 
 def synthesize(inputs: dict, claude_json: Callable, *,
                tools: Optional[list] = None,
-               created_by: str = "prometheus") -> dict:
-    """Research + reason the primitives, then derive the payload."""
+               created_by: str = "prometheus",
+               underpinnings=None, job_id: str = "") -> dict:
+    """Research + reason the primitives, then derive the payload.
+
+    `underpinnings` (load(key) / save(key, doc)) keeps the research per
+    run key: a saved document is read back and nothing is re-drawn; a
+    fresh run researches the campaign (price, drop, sell-out) and the
+    audience primitives, then saves both with the README."""
     windows = _dates(inputs)
+    key = run_key(inputs)
+    saved = None
+    if underpinnings is not None:
+        try:
+            saved = underpinnings.load(key)
+        except Exception:
+            saved = None
+    campaign = None
+    prim = None
+    if isinstance(saved, dict) and isinstance(saved.get("primitives"), dict) \
+            and saved["primitives"].get("audience_size"):
+        prim = dict(saved["primitives"])
+        campaign = normalize_campaign(saved.get("campaign") or {}, inputs)
+        print(f"[bpiq-synth] underpinnings read back for {key}; no re-draw")
+    if campaign is None:
+        campaign = research_campaign(inputs, claude_json, tools=tools)
+        print(f"[bpiq-synth] campaign research: {len(campaign.get('products') or [])} priced pieces, "
+              f"band {campaign.get('price_band')}, sold out {campaign.get('sell_out', {}).get('sold_out')}, "
+              f"confidence {campaign.get('confidence')}")
     # Corpus catalog (2026-10-05): every figure already published on the
     # qualifier (its Profile IQ size, earlier partnership reads, journeys,
     # chat answers) and on the brand partner rides the research prompt as
@@ -865,6 +1743,10 @@ def synthesize(inputs: dict, claude_json: Callable, *,
                 published[label] = blk
     except Exception as e:
         print(f"[bpiq-synth] catalog anchors skipped: {e}")
+    campaign_facts = {k: campaign.get(k) for k in (
+        "drop_dates", "campaign_window_note", "retail", "price_band", "collection_size",
+        "sell_out", "restock", "inventory_signal", "inventory_note", "talent_role",
+        "footprint") if campaign.get(k) not in (None, "", [], {})}
     user_prompt = json.dumps({
         "brand_partner": inputs["brand_partner"],
         "qualifier": inputs["qualifier"],
@@ -882,35 +1764,75 @@ def synthesize(inputs: dict, claude_json: Callable, *,
             "campaign_links_rule": ("The partner is the account behind these links. Research them first: "
                                     "the channel or handle, its size, and the sponsored posts for the brand.")}
            if inputs.get("links") else {}),
+        # the campaign research already done (2026-10-28): the drop, where
+        # it sold, the price band, the sell-out and the talent's role bind
+        # the levels; a sell-out means the event-window conversion share
+        # and the platforms that carried creative moved hard and early
+        **({"campaign_facts": campaign_facts,
+            "campaign_facts_rule": ("Binding. A collection that sold out reads as strong demand: "
+                                    "conversions and brand touchpoints in the event window sit at "
+                                    "the high end of what the audience supports, concentrated in "
+                                    "the first days. Small inventory tempers the read; say so in "
+                                    "synthesis_note.")}
+           if campaign_facts else {}),
         **({"published_figures": published,
             "published_figures_rule": ("Binding. The audience size and every count "
                                        "must agree with these where they overlap and "
                                        "sit inside them for a sub-window.")}
            if published else {}),
     })
-    prim = claude_json(research_prompt(), user_prompt,
-                       max_tokens=9000, temperature=0.6,
-                       surface="bpiq_synthesis", tools=tools)
-    if not isinstance(prim, dict) or not prim.get("audience_size"):
-        raise RuntimeError("bpiq research returned no primitives")
-    # Catalog hold (2026-10-06): the qualifier's audience inside the
-    # event window can never exceed the profile the dashboard already
-    # holds for it (scaled for a shorter window). Held at the primitive
-    # so every derived count, lift and value moves with it.
-    try:
-        prim = hold_audience_to_catalog(inputs, prim, windows)
-    except Exception as e:
-        print(f"[bpiq-synth] catalog hold skipped: {e}")
-    payload = build_payload(inputs, prim, created_by=created_by)
+    if prim is None:
+        prim = claude_json(research_prompt(), user_prompt,
+                           max_tokens=9000, temperature=0.25,
+                           surface="bpiq_synthesis", tools=tools)
+        if not isinstance(prim, dict) or not prim.get("audience_size"):
+            raise RuntimeError("bpiq research returned no primitives")
+        # Catalog hold (2026-10-06): the qualifier's audience inside the
+        # event window can never exceed the profile the dashboard already
+        # holds for it (scaled for a shorter window). Held at the primitive
+        # so every derived count, lift and value moves with it.
+        try:
+            prim = hold_audience_to_catalog(inputs, prim, windows)
+        except Exception as e:
+            print(f"[bpiq-synth] catalog hold skipped: {e}")
+        if not campaign.get("category") and prim.get("category"):
+            campaign["category"] = str(prim.get("category") or "").strip().upper()
+    payload = build_payload(inputs, prim, created_by=created_by, campaign=campaign)
     # The matching rules hold on every published valuation regardless
     # of what the model returned: a comparison group off in size or
     # pre-period engagement is re-drawn in place, never held.
     _cg = payload.get("control_group") or {}
     if _cg.get("enabled", True):
         payload, _mc_notes = _mc.enforce_matched_control(
-            payload, subject=f"{inputs['qualifier']} x {inputs['brand_partner']}")
+            payload, subject=run_salt(inputs))
         if _mc_notes:
             print(f"[bpiq-synth] comparison group corrected: {_mc_notes[:3]}")
+    if underpinnings is not None and saved is None:
+        try:
+            aov_doc = {"aov": (payload.get("valuation") or {}).get("rates", {}).get("conv_value_per_user"),
+                       "basis": (payload.get("valuation") or {}).get("aov_basis"),
+                       "basket": None}
+            try:
+                aov_doc["basket"] = derive_aov(campaign, str(prim.get("category") or campaign.get("category") or ""),
+                                               run_salt(inputs),
+                                               caller_rate=(inputs.get("rates") or {}).get("conv_value_per_user")).get("basket")
+            except Exception:
+                pass
+            underpinnings.save(key, {
+                "run_key": key, "job_id": str(job_id or ""),
+                "inputs": {k: inputs.get(k) for k in (
+                    "qualifier", "brand_partner", "campaign", "event_start", "event_end",
+                    "post_start", "post_end", "control_group", "include_control", "links") if k in inputs},
+                "windows": windows,
+                "campaign": campaign,          # anchors and their sources: internal only
+                "primitives": prim,
+                "aov": aov_doc,
+                "readme": underpinnings_readme(inputs, campaign, aov_doc, payload),
+                "created_at": _dt.datetime.utcnow().isoformat() + "Z",
+            })
+            print(f"[bpiq-synth] underpinnings saved for {key}")
+        except Exception as e:
+            print(f"[bpiq-synth] underpinnings save skipped: {e}")
     if validate_bpiq_payload is not None:
         try:
             issues = validate_bpiq_payload(payload)
@@ -957,7 +1879,7 @@ def hold_audience_to_catalog(inputs: dict, prim: dict, windows: dict) -> dict:
     cur = float(prim.get("audience_size") or 0)
     if cur <= ceiling or ceiling <= 0:
         return prim
-    h = int(hashlib.sha256(f"{inputs.get('qualifier')}|{inputs.get('brand_partner')}|bpiq-hold".encode()).hexdigest()[:8], 16) / 0xFFFFFFFF
+    h = int(hashlib.sha256(f"{run_salt(inputs)}|bpiq-hold".encode()).hexdigest()[:8], 16) / 0xFFFFFFFF
     held = int(ceiling * (0.90 + 0.07 * h))
     if held % 10 == 0:
         held += 1 + int(h * 8)

@@ -70,6 +70,10 @@ DECLINE_REPLY = "Okay, I won't run it."
 CANCEL_REPLY = 'No problem. Ask me anything else when ready.'
 RUNNING_REPLY = ("It's running. Keep talking here as usual. I'll email "
                  "you when it is done.")
+ALREADY_RUNNING_REPLY = ("That valuation is already running, so I have not "
+                         "started a second one. I'll email you when it is done.")
+EXISTS_REPLY = ("That valuation already exists: {name} is in the Brand "
+                "Partnership tab. Nothing was charged.")
 FUNDS_REPLY = ('That valuation needs funds on the account first. Add '
                'funds or ask your admin, and I will run it the moment '
                'you are set.')
@@ -580,12 +584,24 @@ def _price_draft(d):
     return d
 
 
+def _cased(name):
+    """A name typed in all lower case takes title case for the file and
+    the recap; one that already carries capitals is kept. The runner
+    applies the catalog's own spelling on top."""
+    try:
+        from migration.bpiq_synthesis import canonical_name
+        return canonical_name(name)
+    except Exception:
+        s = ' '.join(str(name or '').split())
+        return s if any(c.isupper() for c in s) else s.title()
+
+
 def engine_inputs(draft):
     """The payload the existing valuation job already accepts."""
     d = dict(draft or {})
-    talent = str(d.get('talent') or '').strip()
-    campaign = str(d.get('campaign') or '').strip()
-    brand = str(d.get('brand_partner') or '').strip() or _brand_from_campaign(
+    talent = _cased(str(d.get('talent') or '').strip())
+    campaign = _cased(str(d.get('campaign') or '').strip())
+    brand = _cased(str(d.get('brand_partner') or '').strip()) or _brand_from_campaign(
         campaign, talent)
     start, end = d.get('campaign_start'), d.get('campaign_end')
     attr_s, attr_e = d.get('attr_start'), d.get('attr_end')
@@ -614,8 +630,8 @@ def recap_lines(draft):
     assets = ("I'll find the assets" if d.get('asset_mode') != 'links'
               else ('Links: ' + ', '.join(d.get('links') or [])))
     lines = [
-        f"{d.get('talent')}",
-        f"{d.get('campaign')}",
+        f"{_cased(d.get('talent'))}",
+        f"{_cased(d.get('campaign'))}",
         f"Campaign dates: {pretty_range(d['campaign_start'], d['campaign_end'])}",
         f"Attribution window: {pretty_range(d['attr_start'], d['attr_end'])}",
         f"Control group: {'yes' if control else 'no'}",
@@ -849,6 +865,13 @@ class MemoryStore:
         self.rows.pop(self._key(user, ''), None)
         return True
 
+    def save_marker(self, user, thread_id, marker):
+        self.rows['marker|' + self._key(user, thread_id)] = dict(marker or {})
+        return True
+
+    def load_marker(self, user, thread_id=''):
+        return self.rows.get('marker|' + self._key(user, thread_id))
+
 
 def shared_store(g=None):
     """The shared S3 store other intakes use. Never an in-process dict
@@ -962,6 +985,39 @@ def _s3_store(host):
             except Exception:
                 pass
             return True
+
+        # The run marker (the job id the last Accept on this thread
+        # owns) lives on its own key, never in the pending-intake stash:
+        # a stashed document would read as a brief waiting on a "yes".
+        def _marker_key(self, user, thread_id):
+            uk, tid = self._ids(user, thread_id)
+            return f"system/pm_pending_intake/{uk}/bpiq_run_{tid}.json"
+
+        def save_marker(self, user, thread_id, marker):
+            s3 = self._s3()
+            if s3 is None:
+                return False
+            try:
+                import json
+                s3.put_object(
+                    Bucket=self._bucket(), Key=self._marker_key(user, thread_id),
+                    Body=json.dumps(dict(marker or {}), default=str).encode('utf-8'),
+                    ContentType='application/json')
+                return True
+            except Exception:
+                return False
+
+        def load_marker(self, user, thread_id=''):
+            s3 = self._s3()
+            if s3 is None:
+                return None
+            try:
+                import json
+                obj = s3.get_object(Bucket=self._bucket(), Key=self._marker_key(user, thread_id))
+                doc = json.loads(obj['Body'].read().decode('utf-8'))
+                return doc if isinstance(doc, dict) else None
+            except Exception:
+                return None
     return _S()
 
 
@@ -1057,8 +1113,15 @@ def _charge_seat(user, uname, inputs, job_id, g, charge_fn):
         return False
 
 
-def _start_valuation(job_id, uname, inputs, extras, g, start_fn):
-    """Enqueue the valuation the same way the other engine jobs do."""
+def _start_valuation(job_id, uname, inputs, extras, g, start_fn,
+                     thread_id=''):
+    """Enqueue the valuation the same way the other engine jobs do.
+    The thread id rides the status document so the finished read's
+    note lands in the thread that asked (the worker is another
+    process)."""
+    extras = dict(extras or {})
+    if thread_id:
+        extras.setdefault('thread_id', thread_id)
     if start_fn is not None:
         start_fn(job_id, uname, inputs, extras)
         return True
@@ -1096,6 +1159,13 @@ def _start_valuation(job_id, uname, inputs, extras, g, start_fn):
     if status_write is None:
         def status_write(job_id, payload):
             return None
+    if thread_id:
+        _inner_write = status_write
+
+        def status_write(jid, payload, _w=_inner_write, _t=thread_id):   # noqa: F811
+            doc = dict(payload or {})
+            doc.setdefault('thread_id', _t)
+            return _w(jid, doc)
     try:
         rr.start_engine_job(
             'bpiq', job_id, uname, inputs, extras, status_write, runner)
@@ -1105,8 +1175,53 @@ def _start_valuation(job_id, uname, inputs, extras, g, start_fn):
         return False
 
 
+def _registry(g, registry=None):
+    """The shared run registry (S3 through the host), else the
+    process-local one. Never raises."""
+    if registry is not None:
+        return registry
+    try:
+        from migration import bpiq_synthesis as _bs
+    except Exception:
+        return None
+    host = (g or {}).get('_H') if g else None
+    if host is None:
+        try:
+            from .host import host as host
+        except Exception:
+            host = None
+    try:
+        return _bs.registry_for(host)
+    except Exception:
+        return None
+
+
+def _run_marker(store, user, thread_id):
+    """The step-less marker the last Accept on this thread left: the
+    run id and the key it owns. Invisible to the wizard's routing."""
+    if store is None:
+        return None
+    loader = getattr(store, 'load_marker', None)
+    if not callable(loader):
+        return None
+    try:
+        hit = loader(user, thread_id)
+    except Exception:
+        return None
+    if isinstance(hit, dict) and hit.get('job_id') and hit.get('run_key'):
+        return hit
+    return None
+
+
 def _charge_and_start(draft, user, uname, ppu, g, charge_fn, start_fn,
-                      store=None, thread_id=''):
+                      store=None, thread_id='', registry=None):
+    """Accept. One run per ask (Jenna 2026-10-28): the run key
+    (talent, campaign, dates, control group, spelling-insensitive) is
+    claimed in the shared registry BEFORE the charge. A second Accept
+    on the same draft, a re-walk of the wizard, or another caller with
+    the same ask finds the claim and gets the same run id back; a
+    finished one is pointed at. Nothing is charged twice and no second
+    job is enqueued."""
     draft = dict(draft or empty_draft())
     # A leftover funds / unpaid stamp is never a verdict. Accept
     # re-reads the live seat every tap.
@@ -1115,45 +1230,87 @@ def _charge_and_start(draft, user, uname, ppu, g, charge_fn, start_fn,
         draft.pop(k, None)
     inputs = engine_inputs(draft)
     if draft.get('charged') or draft.get('job_id'):
-        return _payload(RUNNING_REPLY, [], draft=None, bpiq_collect=False,
+        return _payload(ALREADY_RUNNING_REPLY, [], draft=None, bpiq_collect=False,
                         bpiq_job_id=draft.get('job_id'))
+    try:
+        from migration.bpiq_synthesis import run_key as _run_key, claim_run as _claim, \
+            release_run as _release
+    except Exception:
+        _run_key = _claim = _release = None
+    key = _run_key(inputs) if _run_key else ''
+    # the draft's own run id from an earlier Accept on this thread
+    marker = _run_marker(store, uname or user, thread_id)
+    if marker and key and marker.get('run_key') == key:
+        return _payload(ALREADY_RUNNING_REPLY, [], draft=None, bpiq_collect=False,
+                        bpiq_job_id=marker.get('job_id'))
     try:
         import uuid
         job_id = uuid.uuid4().hex[:12]
     except Exception:
         job_id = 'bpiq'
+    reg = _registry(g, registry) if _claim else None
+    if reg is not None:
+        try:
+            owner, created = _claim(reg, inputs, job_id, user=uname or _uname(user),
+                                    thread_id=thread_id)
+        except Exception:
+            traceback.print_exc()
+            owner, created = None, True
+        if owner and not created:
+            if store is not None:
+                try:
+                    store.clear(uname or user, thread_id)
+                except Exception:
+                    pass
+            if str(owner.get('status') or '') == 'done':
+                name = (owner.get('project_name')
+                        or f"{inputs.get('qualifier')} x {inputs.get('brand_partner')}")
+                return _payload(EXISTS_REPLY.format(name=name), [], draft=None,
+                                bpiq_collect=False, bpiq_job_id=owner.get('job_id'),
+                                bpiq_existing_key=owner.get('s3_key'))
+            return _payload(ALREADY_RUNNING_REPLY, [], draft=None, bpiq_collect=False,
+                            bpiq_job_id=owner.get('job_id'))
     ok = _charge_seat(user, uname, inputs, job_id, g, charge_fn)
     if not ok:
+        if reg is not None and _release:
+            try:
+                _release(reg, inputs, job_id)
+            except Exception:
+                pass
         return _payload(FUNDS_REPLY, [], draft=draft, bpiq_collect=False)
-    marked = dict(draft or empty_draft())
-    marked['charged'] = True
-    marked['job_id'] = job_id
-    if store is not None:
-        try:
-            store.save(uname or user, thread_id, marked)
-        except Exception:
-            pass
-    extras = ppu or {}
-    _start_valuation(job_id, uname, inputs, extras, g, start_fn)
+    extras = dict(ppu or {})
+    _start_valuation(job_id, uname, inputs, extras, g, start_fn,
+                     thread_id=thread_id)
+    # The draft leaves the store (later turns on the thread are not the
+    # wizard's); a step-less marker keeps the run id it owns.
     if store is not None:
         try:
             store.clear(uname or user, thread_id)
         except Exception:
             pass
+        saver = getattr(store, 'save_marker', None)
+        if callable(saver):
+            try:
+                saver(uname or user, thread_id, {
+                    'job_id': job_id, 'run_key': key, 'charged': True,
+                    'talent': inputs.get('qualifier'), 'campaign': inputs.get('campaign'),
+                    'started_at': datetime.utcnow().isoformat() + 'Z'})
+            except Exception:
+                pass
     return _payload(RUNNING_REPLY, [], draft=None, bpiq_collect=False,
                     bpiq_job_id=job_id)
 
 
 def analyze_hook(text, body, history, user, ppu, uname, g,
                  first=None, today=None, store=None, charge_fn=None,
-                 start_fn=None):
+                 start_fn=None, registry=None):
     """One wizard turn. Returns a chat payload, or None when this is
     not a Brand Partnership Valuation ask and no draft is open."""
     try:
         return _analyze_hook(
             text, body, history, user, ppu, uname, g,
             first=first, today=today, store=store,
-            charge_fn=charge_fn, start_fn=start_fn)
+            charge_fn=charge_fn, start_fn=start_fn, registry=registry)
     except Exception:
         traceback.print_exc()
         return None
@@ -1161,7 +1318,7 @@ def analyze_hook(text, body, history, user, ppu, uname, g,
 
 def _analyze_hook(text, body, history, user, ppu, uname, g,
                   first=None, today=None, store=None, charge_fn=None,
-                  start_fn=None):
+                  start_fn=None, registry=None):
     t = str(text or '').strip()
     thread_id = str((body or {}).get('thread_id') or '')
     uname = uname or _uname(user)
@@ -1207,7 +1364,9 @@ def _analyze_hook(text, body, history, user, ppu, uname, g,
     prev_txt = str((last_agent_turn(history) or {}).get('text') or '')
     if prev_txt.startswith("It's running") and (
             _ACCEPT_RE.match(t) or _low(t).startswith('accept')):
-        return _payload(RUNNING_REPLY, [], draft=None, bpiq_collect=False)
+        marker = _run_marker(store, uname or user, thread_id)
+        return _payload(ALREADY_RUNNING_REPLY, [], draft=None, bpiq_collect=False,
+                        bpiq_job_id=(marker or {}).get('job_id'))
 
     if isinstance(confirm, dict) and (confirm.get('qualifier') or confirm.get('talent')):
         if confirm.get('talent') and not (draft or {}).get('talent'):
@@ -1245,14 +1404,14 @@ def _analyze_hook(text, body, history, user, ppu, uname, g,
             }))
         hit = _charge_and_start(
             draft, user, uname, ppu, g, charge_fn, start_fn,
-            store=store, thread_id=thread_id)
+            store=store, thread_id=thread_id, registry=registry)
         return hit
 
     if draft and draft.get('step') == STEP_CHARGE and (
             _ACCEPT_RE.match(t) or _low(t).startswith('accept')):
         hit = _charge_and_start(
             draft, user, uname, ppu, g, charge_fn, start_fn,
-            store=store, thread_id=thread_id)
+            store=store, thread_id=thread_id, registry=registry)
         return hit
 
     if draft and is_decline(t):

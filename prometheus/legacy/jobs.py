@@ -178,7 +178,8 @@ def _pm_deck_status_write(job_id, payload):
         ContentType='application/json')
 
 
-_ENGINE_BOOKKEEPING = ('restarts', 'restart_reason', 'requeued', 'requeued_at', 'queued_at', 'claimed_by', 'claimed_at', 'resume')
+_ENGINE_BOOKKEEPING = ('restarts', 'restart_reason', 'requeued', 'requeued_at', 'queued_at', 'claimed_by', 'claimed_at', 'resume',
+                       'thread_id')   # the thread that asked rides every status write (2026-10-28: the finished valuation's note lands there)
 
 
 def _pm_engine_carry(prefix, job_id, payload):
