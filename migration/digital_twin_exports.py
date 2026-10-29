@@ -257,6 +257,18 @@ def build_deck(payload: dict, pages: Optional[list] = None) -> bytes:
             for b in (pg.get('body') or [])[:3]:
                 text(slide, L, y + 0.1, 11.4, 0.5, b, 10.5, body, 'Regular')
                 y += 0.5
+        elif pg['kind'] == 'image' and pg.get('image'):
+            # a chart drawn for the page: full width, the lines under it
+            try:
+                pic_w = R - L
+                pic_h = pic_w * 1190.0 / 3400.0
+                slide.shapes.add_picture(io.BytesIO(pg['image']), Inches(L), Inches(y), width=Inches(pic_w), height=Inches(pic_h))
+                y += pic_h + 0.18
+            except Exception:
+                pass
+            for b in (pg.get('body') or [])[:2]:
+                text(slide, L, y, 11.4, 0.4, b, 10.5, body, 'Regular')
+                y += 0.42
         elif pg['kind'] == 'tiles':
             tiles = pg.get('tiles') or []
             w = (R - L - 0.28 * (len(tiles) - 1)) / max(1, len(tiles))

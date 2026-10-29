@@ -143,6 +143,45 @@ def run_job(job_id, username, inputs, extras=None):
         PI.prepare_watch(sess, twins_by_key, duration_s=float(analysis.get('runtime_s') or media.get('runtime_s') or 0),
                          title=str(media.get('title') or sess.get('title') or ''), notes=str(inputs.get('notes') or ''),
                          transcript=analysis.get('transcript') or sess.get('transcript'), analysis=analysis, usage_extras=extras, progress=tell, s3=s3)
+        # the further assets on a trailer or binge test: the same room watches each one (a sub-read per asset)
+        extra_assets = [a for a in (sess.get('assets') or []) if isinstance(a, dict) and a.get('kind', 'video') == 'video' and int(a.get('slot') or 0) >= 1 and a.get('s3_key')]
+        if extra_assets:
+            from migration import digital_twin_modes as MODES
+            for a in extra_assets:
+                a_tmp = None
+                a_an = {}
+                try:
+                    tell(f"the room is watching {a.get('label') or 'the next asset'}")
+                    a_tmp = _download(s3, bucket, a['s3_key'], os.path.splitext(str(a.get('filename') or ''))[1] or '.mp4')
+                    a_an = CUT.analyze_cut(a_tmp, duration_s=float(a.get('runtime_s') or 0), progress=tell)
+                    if a_an.get('frames'):
+                        try:
+                            from migration import digital_twin_watch as W
+                            caps = W.caption_frames(a_an['frames'], transcript=a_an.get('transcript'), title=str(a.get('title') or a.get('label') or ''), usage_extras=extras)
+                            a_an['captions'] = caps.get('captions') or {}
+                            a_an['genre_votes'] = caps.get('genre_votes') or {}
+                        except Exception as e:
+                            print(f"[pilot-prepare {job_id}] asset captions skipped: {e}")
+                    MODES.prepare_extra_asset(sess, a, twins_by_key, analysis=a_an, transcript=a_an.get('transcript'), usage_extras=extras, s3=s3, progress=tell)
+                except Exception as e:
+                    print(f"[pilot-prepare {job_id}] asset {a.get('label')} skipped: {e}")
+                finally:
+                    try:
+                        CUT.cleanup(a_an)
+                    except Exception:
+                        pass
+                    if a_tmp and os.path.isfile(a_tmp):
+                        try:
+                            os.remove(a_tmp)
+                        except Exception:
+                            pass
+                    wd = (a_an or {}).get('work_dir')
+                    if wd and os.path.isdir(wd):
+                        shutil.rmtree(wd, ignore_errors=True)
+            try:
+                MODES.finish_mode_read(sess, twins_by_key, usage_extras=extras, prior=sess.get('prior_read') or None)
+            except Exception as e:
+                print(f"[pilot-prepare {job_id}] mode read after assets skipped: {e}")
         sess.pop('prepare_stage', None)
         sess['prepare_job_id'] = job_id
         if str((status_read(job_id) or {}).get('status') or '') == 'cancelled':
@@ -152,7 +191,8 @@ def run_job(job_id, username, inputs, extras=None):
         fresh = DT.load_twin(s3, key) or payload
         cur = _find(fresh, sid)
         if cur is not None:
-            keep = {k: cur.get(k) for k in ('questions', 'title', 'play_charged', 'questions_paid', 'panelists_paid', 'purge_media_after', 'genre_set_by_user', 'mode_set_by_user') if k in cur}
+            keep = {k: cur.get(k) for k in ('questions', 'title', 'play_charged', 'questions_paid', 'panelists_paid', 'purge_media_after', 'genre_set_by_user', 'mode_set_by_user',
+                                              'comps', 'talent_attach', 'linked_run_id', 'recuts', 'play_price_key', 'play_quantity') if k in cur}
             if keep.get('genre_set_by_user') and cur.get('genre'):
                 keep['genre'] = cur.get('genre')
             if keep.get('mode_set_by_user') and cur.get('mode'):

@@ -1127,6 +1127,12 @@ def norm_metrics(session: dict) -> dict:
         out.update(diagnostics_norm_metrics(session or {}))
     except Exception:
         pass
+    cr = (session or {}).get('critics') or {}
+    if isinstance(cr.get('norm_metrics'), dict):
+        out.update({k: float(v) for k, v in cr['norm_metrics'].items() if v is not None})
+    w = (((session or {}).get('recruit') or {}).get('walkouts') or {})
+    if w.get('pct') is not None:
+        out['walkouts'] = float(w['pct'])
     return out
 
 
@@ -1621,6 +1627,20 @@ def prepare_watch(session: dict, twins_by_key: dict, *, duration_s: float = 0,
         DIAG.run_diagnostics(session, twin, s3=s3)
     except Exception as e:
         print(f"[pilot] diagnostics skipped: {e}")
+    # the preview stats block (walkouts join the recruit), the critics room's forecast, two audiences on one cut
+    try:
+        from migration import digital_twin_compare as CMP
+        CMP.finish_recruit_block(session)
+        if session.get('critics_room'):
+            CMP.critic_forecast(session)
+        else:
+            session.pop('critics', None)
+        if len({str(r.get('twin') or '') for r in roster if r.get('twin')}) >= 2:
+            session['two_audiences'] = CMP.two_audiences(session, twins_by_key)
+        else:
+            session.pop('two_audiences', None)
+    except Exception as e:
+        print(f"[pilot] recruit / critics / audiences read skipped: {e}")
     session['status'] = 'ready'
     session['prepare_note'] = 'Ready to play'
     session['updated_at'] = _now()

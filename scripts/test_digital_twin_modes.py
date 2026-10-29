@@ -327,6 +327,338 @@ class Diagnostics(unittest.TestCase):
             self.assertNotIn('\u2014', l)
 
 
+class Comparison(unittest.TestCase):
+    def _pair(self):
+        from migration import digital_twin_compare as C
+        twin = _beals()
+        a = PI.open_session([twin], title='Pilot', in_room=10)
+        PI.prepare_watch(a, {'jb': twin}, duration_s=600, title='A comedy pilot', transcript=TRANSCRIPT)
+        b = C.open_recut(a, [twin], created_by='jenna')
+        PI.prepare_watch(b, {'jb': twin}, duration_s=540, title='A comedy pilot', transcript=[t for t in TRANSCRIPT if t['t'] != 300])
+        return twin, a, b
+
+    def test_recut_keeps_seats_and_personas_and_aligns_scenes(self):
+        from migration import digital_twin_compare as C
+        twin, a, b = self._pair()
+        self.assertEqual(b['lineage']['parent'], a['id'])
+        self.assertEqual(b['cut_label'], 'Cut B')
+        self.assertEqual([r['name'] for r in a['group']['roster']], [r['name'] for r in b['group']['roster']])
+        self.assertEqual([r.get('seat') for r in a['group']['roster']], [r.get('seat') for r in b['group']['roster']])
+        self.assertEqual(PI.charge_due(b), 'digital_twin_recut')
+        self.assertTrue(b['prior_read']['frame'].startswith('The room watched'))
+        self.assertEqual(a['recuts'][0]['id'], b['id'])
+        cmp_ = C.compare_recut(a, b)
+        self.assertEqual(len(cmp_['dial']['a']), len(cmp_['dial']['b']))
+        self.assertEqual(len(cmp_['dial']['t']), len(cmp_['dial']['b']))
+        self.assertTrue(cmp_['scorecard_deltas'])
+        self.assertTrue(cmp_['scene_deltas'])
+        self.assertTrue(cmp_['act_deltas'])
+        self.assertGreaterEqual(cmp_['aligned_by_words'], 1)
+        self.assertTrue(cmp_['same_room'])
+        self.assertTrue(cmp_['read'])
+        self.assertFalse(_no_banned(cmp_))
+        al = C.align_scenes([{'id': 0, 't_start': 0, 't_end': 10, 'dialogue': 'we are closed not for me you are not'}, {'id': 1, 't_start': 10, 't_end': 20, 'dialogue': 'say it to my face'}],
+                            [{'id': 0, 't_start': 0, 't_end': 9, 'dialogue': 'we are closed, not for me you are not'}], 20, 9)
+        self.assertEqual(al['pairs'][0]['a_id'], 0)
+        self.assertEqual(al['pairs'][0]['method'], 'words')
+        self.assertEqual(al['trimmed'], [1])
+
+    def test_two_audiences_overlay_returns_two_lines(self):
+        twin, young = _beals(), _young()
+        sess = PI.open_session([twin, young], title='Two', in_room=12)
+        PI.prepare_watch(sess, {'jb': twin, 'ym': young}, duration_s=300, title='An action pilot')
+        ta = sess.get('two_audiences')
+        self.assertTrue(ta)
+        self.assertEqual(len(ta['lines']), 2)
+        for line in ta['lines']:
+            self.assertEqual(len(line['dial']), len(ta['t']))
+            self.assertIsNotNone(line['total_positive_pct'])
+        self.assertIn('splits', ta)
+        self.assertTrue(ta['read'])
+        self.assertIn('two_audiences', PI.public_session(sess))
+
+    def test_quota_block_reseats_to_the_quotas(self):
+        from migration import digital_twin_compare as C
+        twin = _beals()
+        sess = PI.open_session([twin], title='Quota', in_room=12)
+        rec = C.apply_quotas(sess, [twin], {'under_35_pct': 65, 'women_pct': 50, 'fans_of_lead_pct': 40, 'must_have_seen': 2, 'lead': 'Jennifer Beals', 'comps': ['Flashdance', 'The L Word', 'Taken']})
+        roster = sess['group']['roster']
+        self.assertEqual(len(roster), 12)
+        women = sum(1 for r in roster if r['gender'] == 'F')
+        under = sum(1 for r in roster if int(r['age']) < 35)
+        self.assertEqual(women, 6)
+        self.assertIn(under, (7, 8))
+        self.assertEqual(sum(1 for r in roster if r.get('fan_of_lead')), 5)
+        self.assertTrue(all(len(r.get('seen_titles') or []) >= 2 for r in roster))
+        self.assertIn('65% under 35', rec['concept'])
+        self.assertIn('must have seen 2 of', rec['concept'])
+        self.assertGreater(rec['invited'], 12)
+        self.assertNotEqual(rec['invited'] % 10, 0)
+        self.assertIn('invited for every seat', rec['invite_ratio'])
+        self.assertEqual(len(rec['quotas_met']), 3)
+        PI.prepare_watch(sess, {'jb': twin}, duration_s=400, title='A pilot')
+        self.assertIn('walkouts', sess['recruit'])
+        self.assertIn('stats_line', sess['recruit'])
+        self.assertIn('seated', sess['recruit']['stats_line'])
+        # a room that has played is left alone
+        PI.mark_play_paid(sess)
+        before = [r['name'] for r in sess['group']['roster']]
+        C.apply_quotas(sess, [twin], {'women_pct': 100})
+        self.assertEqual(before, [r['name'] for r in sess['group']['roster']])
+
+    def test_comps_attach_from_a_fake_catalog(self):
+        from migration import digital_twin_compare as C
+        twin = _beals()
+        sess = PI.open_session([twin], title='Comps', in_room=8)
+        sess['comps'] = [{'title': 'Flashdance', 'total_positive_pct': 78.4, 'definitely_recommend_pct': 61.2}, 'The L Word']
+        PI.prepare_watch(sess, {'jb': twin}, duration_s=300, title='A drama pilot')
+        payload = {'meta': twin['meta'], 'runs': [{'id': 'r1', 'kind': 'greenlight', 'inputs': {'title': 'Second Helping'}, 'outputs': {'title': 'Second Helping', 'odds_pct': 64.2, 'expected': 120345}}],
+                   'pilot_sessions': [sess, {'id': 'older', 'title': 'Last season', 'scorecard': {'battery': {'headline': {'total_positive_pct': 70.3, 'definitely_recommend_pct': 48.9, 'excellent_pct': 31.1}}}}]}
+        other = {'meta': {'name': 'Other', 'key': 'k2'}, 'pilot_sessions': [{'id': 'o1', 'title': 'Other pilot', 'scorecard': {'battery': {'headline': {'total_positive_pct': 60.1, 'definitely_recommend_pct': 40.2, 'excellent_pct': 20.3}}}}]}
+        catalog = [{'key': 'k2', 'name': 'Other', 'has_pilot': True}]
+        comps = C.comp_set(payload, sess, catalog_runs=catalog, load_twin=lambda k: other)
+        titles = [r['title'] for r in comps['rows']]
+        self.assertIn('Flashdance', titles)
+        self.assertIn('The L Word', titles)
+        self.assertIn('Second Helping', titles)
+        self.assertIn('Last season', titles)
+        self.assertIn('Other pilot', titles)
+        self.assertIn('definitely_recommend_pct', comps['versus'])
+        self.assertTrue(comps['read'].startswith(('Lands between', 'Above every comp', 'Below every comp')), comps['read'])
+        self.assertEqual(comps['versus']['definitely_recommend_pct']['of'], 4)
+        self.assertTrue(all('versus' in r for r in comps['rows']))
+
+    def test_critics_room_seats_reviewer_personas(self):
+        from migration import digital_twin_compare as C
+        twin = _beals()
+        sess = PI.open_session([twin], title='Critics', in_room=8, critics_room=True)
+        C.seat_critics(sess)
+        for r in sess['group']['roster']:
+            self.assertIn(r['occupation'], ('Film and TV critic', 'Entertainment journalist'))
+            self.assertIn(r['reviewer_lens'], C.REVIEWER_LENS)
+            self.assertTrue(r.get('outlet'))
+        PI.prepare_watch(sess, {'jb': twin}, duration_s=400, title='A drama pilot')
+        cr = sess['critics']
+        self.assertGreater(cr['critic_score'], 0)
+        self.assertLess(cr['critic_score'], 100)
+        self.assertEqual(len(cr['range']), 2)
+        self.assertTrue(cr['awards_read'])
+        self.assertIn('critic_score', PI.norm_metrics(sess))
+        self.assertEqual(PI.charge_due(sess), 'digital_twin_pilot')
+        self.assertEqual(C.find_critics_twin([{'name': 'Gilmore Girls', 'key': 'a'}, {'name': 'TV Critics and Journalists', 'key': 'b'}])['key'], 'b')
+        self.assertIsNone(C.find_critics_twin([{'name': 'Gilmore Girls', 'key': 'a'}]))
+
+
+class Hooks(unittest.TestCase):
+    def test_concept_test_attaches_to_a_greenlight_run(self):
+        from migration import digital_twin_compare as C
+        twin = _beals()
+        run = {'id': 'r1', 'kind': 'greenlight', 'inputs': {'logline': LOGLINE, 'platforms': ['Hulu']},
+               'outputs': {'title': 'Second Helping', 'expected': 120345, 'odds_pct': 61.0, 'levers': [{'lever': 'Attach a name this group already follows', 'delta_pct': 6.1, 'delta_people': 7000, 'read': 'x', 'rank': 1}]}}
+        ci = C.concept_inputs_from_run(run)
+        self.assertTrue(ci['title'].startswith('Concept:'))
+        self.assertIn('Hulu', ci['text'])
+        sess = PI.open_session([twin], title=ci['title'], in_room=10, mode='concept', text=ci['text'], logline=ci['logline'])
+        PI.prepare_watch(sess, {'jb': twin}, title=ci['title'])
+        read = C.attach_concept_to_run(run, sess)
+        self.assertEqual(read['session_id'], sess['id'])
+        self.assertEqual(run['concept_read']['definitely_interested_pct'], sess['mode_read']['definitely_interested_pct'])
+        self.assertTrue(any(l.get('from_concept_test') for l in run['outputs']['levers']))
+        self.assertEqual([l['rank'] for l in run['outputs']['levers']], list(range(1, len(run['outputs']['levers']) + 1)))
+        self.assertEqual(sess['linked_run_id'], 'r1')
+
+    def test_talent_attach_by_quadrant_with_watch_with(self):
+        from migration import digital_twin_compare as C
+        twin = _beals()
+        twin['meta']['size_us'] = 9339205
+        sess = PI.open_session([twin], title='Pilot', in_room=10)
+        PI.prepare_watch(sess, {'jb': twin}, duration_s=300, title='A drama pilot')
+        rec = C.talent_attach(sess, twin, 'Jennifer Beals', 'lead')
+        self.assertEqual(rec['talent'], 'Jennifer Beals')
+        self.assertEqual(len(rec['by_quadrant']), 4)
+        self.assertTrue(any(q.get('reach_lift_pct') for q in rec['by_quadrant']))
+        self.assertTrue(rec['watch_with'])
+        self.assertAlmostEqual(sum(r['pct'] for r in rec['watch_with']), 100.0, delta=0.6)
+        self.assertIn('watch it with', rec['read'])
+        self.assertEqual(sess['talent_attach'][-1]['talent'], 'Jennifer Beals')
+
+    def test_activation_brief_has_the_spend_engine_handoff_shape(self):
+        from migration import digital_twin_compare as C
+        from migration import digital_twin_spend as SP
+        twin = _beals()
+        twin['identity']['platforms'] = [{'label': 'Netflix', 'reach_pct': 61.2}, {'label': 'Hulu', 'reach_pct': 44.3}, {'label': 'YouTube', 'reach_pct': 71.8}]
+        sess = PI.open_session([twin], title='Pilot', in_room=12)
+        PI.prepare_watch(sess, {'jb': twin}, duration_s=300, title='A drama pilot')
+        brief = C.activation_brief(sess, twin)
+        hand = SP.handoff_package(twin, {'channels': brief['channels'], 'goal': brief['goal'], 'window': {'days': 42}})
+        for k in ('campaign_name', 'text', 'channels', 'goal'):
+            self.assertIn(k, brief)
+            self.assertIn(k, hand)
+        self.assertEqual([c['channel'] for c in brief['channels']], ['YouTube', 'Netflix', 'Hulu'])
+        for c in brief['channels']:
+            self.assertNotEqual(int(c['spend']) % 10, 0)
+        self.assertTrue(brief['segments'])
+        self.assertTrue(brief['launch_prompt'].startswith('Run Launch Lab on the'))
+        self.assertIn('Daily tracking on', brief['text'])
+        self.assertFalse(_no_banned(brief))
+
+
+class Report(unittest.TestCase):
+    def _sess(self):
+        from migration import digital_twin_compare as C
+        twin = _beals()
+        sess = PI.open_session([twin], title='Second Helping pilot', in_room=12)
+        sess['cast'] = ['Mae', 'Ray']
+        C.apply_quotas(sess, [twin], {'under_35_pct': 60, 'women_pct': 55, 'fans_of_lead_pct': 40, 'must_have_seen': 1, 'lead': 'Mae'})
+        PI.prepare_watch(sess, {'jb': twin}, duration_s=600, title='A comedy pilot', transcript=TRANSCRIPT)
+        return twin, sess
+
+    def test_report_pages_tldr_first_and_clean(self):
+        from migration import digital_twin_report as R
+        twin, sess = self._sess()
+        pages = R.report_pages({'meta': twin['meta']}, sess)
+        self.assertEqual(pages[0]['kind'], 'cover')
+        self.assertEqual(pages[1]['kind'], 'bullets')
+        self.assertTrue(pages[1]['header'].startswith('What we found'))
+        kinds = [p['kind'] for p in pages]
+        self.assertIn('image', kinds)
+        self.assertGreaterEqual(kinds.count('table'), 5)
+        blob = json.dumps([{k: v for k, v in p.items() if k != 'image'} for p in pages], default=str).lower()
+        for tok in ('\u2014', '\u2013', 'door', 'synth', 'persona', 'claude', 'screen engine', 'nrg', 'marketcast', 'fishdog', 'pipeline', 'hostmap'):
+            self.assertNotIn(tok, blob, tok)
+        for p in pages:
+            self.assertLessEqual(len(p['header'].split()), 16, p['header'])
+        png = R.dial_chart_png(sess)
+        self.assertTrue(png and png[:8] == b'\x89PNG\r\n\x1a\n')
+
+    def test_report_deck_passes_brand_lint(self):
+        from migration import digital_twin_report as R
+        from migration import design_skill as ds
+        import tempfile
+        twin, sess = self._sess()
+        deck = R.build_report_deck({'meta': twin['meta']}, sess)
+        self.assertGreater(len(deck), 20000)
+        pdf = R.build_report_pdf({'meta': twin['meta']}, sess)
+        self.assertTrue(pdf[:4] == b'%PDF')
+        d = tempfile.mkdtemp()
+        p = os.path.join(d, 'report.pptx')
+        with open(p, 'wb') as fh:
+            fh.write(deck)
+        try:
+            from pptx import Presentation
+        except Exception:
+            self.skipTest('python-pptx not installed')
+        prs = Presentation(p)
+        texts = []
+        per_slide = []
+        for sl in prs.slides:
+            words = [sh.text_frame.text for sh in sl.shapes if sh.has_text_frame]
+            per_slide.append(' '.join(words).lower())
+            texts.extend(words)
+        blob = ' '.join(texts).lower()
+        self.assertIn('what we found', blob)
+        self.assertIn('what we found', per_slide[1], 'the TLDR is the page after the cover')
+        for tok in ('\u2014', '\u2013', ' door', 'synth', 'persona', 'claude', 'screen engine'):
+            self.assertNotIn(tok, blob, tok)
+        if ds.scripts_dir() is not None:
+            rep = ds.brand_lint(p)
+            step = next((s for s in rep.steps if s[0] == 'brand_lint'), None)
+            self.assertIsNotNone(step)
+            self.assertTrue(step[1], step[2][-800:])
+
+
+class PartnerSurface(unittest.TestCase):
+    def test_scrub_and_prompt_parsing(self):
+        import digital_twins_partner_api as P
+        self.assertEqual(P.scrub_text('Definitely recommend 54.5%, comedy pilots usually land near 50%.'), 'Definitely recommend 54.5%, comedy pilots usually land near 50%.')
+        for bad in ('the synth engine read it', 'Claude scored the room', 'the worker restarted', 'hostmap gap', 'the panel of twelve', 'the cohort skews', 'the pipeline ran', 'estimated at 40%'):
+            self.assertEqual(P.scrub_text(bad), '', bad)
+        self.assertEqual(P.mode_from_prompt('Test this trailer for Hurry Up Tomorrow on the Gilmore Girls twin'), 'trailer')
+        self.assertEqual(P.mode_from_prompt('Which of these six titles works for the Beals audience?'), 'title')
+        self.assertEqual(P.mode_from_prompt('Read this script with the room'), 'script')
+        self.assertEqual(P.mode_from_prompt('Screen the pilot'), 'pilot')
+        self.assertEqual(P.mode_from_prompt('anything', 'key art'), 'key_art')
+        cat = [{'key': 'a', 'name': 'Gilmore Girls Hulu viewers', 'subject': 'Gilmore Girls'}, {'key': 'b', 'name': 'Jennifer Beals', 'subject': 'Jennifer Beals'}]
+        self.assertEqual(P.twin_from_prompt('Test this trailer on the Jennifer Beals twin', cat)['key'], 'b')
+        self.assertEqual(P.twin_from_prompt('a trailer for gilmore girls', cat)['key'], 'a')
+        self.assertIsNone(P.twin_from_prompt('nothing here', cat))
+        self.assertEqual(P.twin_from_prompt('x', cat, explicit='Jennifer Beals')['key'], 'b')
+
+    def test_result_allowlist_scrubs_internal_terms(self):
+        import digital_twins_partner_api as P
+        twin = _beals()
+        sess = PI.open_session([twin], title='Pilot', in_room=10)
+        sess['cast'] = ['Mae', 'Ray']
+        PI.prepare_watch(sess, {'jb': twin}, duration_s=600, title='A comedy pilot', transcript=TRANSCRIPT)
+        sess['screening_id'] = 'scr_test'
+        PI.mark_play_paid(sess)
+        PI.stop_session(sess)
+        sess['scorecard']['norm_lines'].append('the synth engine says hello')
+        sess['events'][0]['line'] = 'Claude thought this was funny'
+        out = P._result(sess, 'Jennifer Beals')
+        self.assertEqual(out['status'], 'complete')
+        blob = json.dumps(out, default=str).lower()
+        for tok in P._BANNED:
+            self.assertNotIn(tok, blob, tok)
+        for k in ('scorecard', 'norms', 'quadrants', 'dial', 'reactions', 'characters', 'pace', 'scenes', 'components', 'exports'):
+            self.assertIn(k, out)
+        for forbidden in ('watch', 'seat_dials', 'prepare_job_id', 'media', 'group', 'created_by', 'twin_keys'):
+            self.assertNotIn(forbidden, out)
+        self.assertNotIn('the synth engine says hello', json.dumps(out))
+
+    def test_blueprint_routes_through_flask(self):
+        try:
+            import flask  # noqa: F401
+        except Exception:
+            self.skipTest('flask not installed in this interpreter')
+        import types
+        import digital_twins_api as A
+        import digital_twins_partner_api as P
+        from migration import digital_twin_synthesis as SYN
+        from prometheus.host import host
+        s3 = FakeS3()
+        s3.list_objects_v2 = lambda **kw: {'Contents': [{'Key': k, 'LastModified': '2026'} for k in list(s3.objs) if k.startswith(kw.get('Prefix', ''))]}
+        twin = _beals()
+        twin['meta']['created_by'] = 'jenna'
+        key = 'digital-twins/jenna/Jennifer_Beals_20261028_120000_abc123def0.json.gz'
+        SYN.save_twin(s3, key, twin)
+        user = {'username': 'acme', 'role': 'user', 'has_digital_twins_iq_access': True, '_auth_via': 'api_key', 'api_key_id': 'k1', 'api_key_scopes': ['ask', 'build']}
+        charges = []
+        fake_app = types.SimpleNamespace(s3_client=s3, get_current_user=lambda: user, _normalize_role=lambda r: r,
+                                         consume_credit=lambda *a, **k: charges.append(k) or True)
+        sys.modules['app'] = fake_app
+        host.bind(gate=lambda allow_api_key=False: (user, None))
+        app = flask.Flask('t')
+        app.secret_key = 'x'
+        A.register(app)
+        self.assertIn('digital_twins_partner_api', app.blueprints)
+        c = app.test_client()
+        r = c.post('/api/v1/screenings', json={'prompt': 'Run a concept test on the Jennifer Beals twin: ' + LOGLINE, 'mode': 'concept', 'text': LOGLINE})
+        self.assertIn(r.status_code, (200, 202), r.get_data(as_text=True)[:300])
+        body = r.get_json()
+        self.assertTrue(body['success'])
+        self.assertEqual(body['mode'], 'concept')
+        self.assertTrue(charges, 'the concept price was taken')
+        self.assertEqual(charges[-1]['pull_type'], 'Digital Twins IQ Concept Test')
+        sid = body['screening_id']
+        r2 = c.get(f'/api/v1/screenings/{sid}')
+        self.assertEqual(r2.status_code, 200)
+        out = r2.get_json()
+        self.assertEqual(out['status'], 'complete')
+        self.assertIn('scorecard', out)
+        self.assertIn('mode_read', out)
+        blob = json.dumps(out).lower()
+        for tok in P._BANNED:
+            self.assertNotIn(tok, blob, tok)
+        r3 = c.get(f'/api/v1/screenings/{sid}/dial.png')
+        self.assertEqual(r3.status_code, 200)
+        r4 = c.get('/api/v1/screenings')
+        self.assertEqual(r4.get_json()['screenings'][0]['screening_id'], sid)
+        r5 = c.post('/api/v1/screenings', json={'prompt': 'Test the trailer on the Nobody twin'})
+        self.assertEqual(r5.status_code, 404)
+        sys.modules.pop('app', None)
+
+
 class Pricing(unittest.TestCase):
     def test_charge_due_per_mode(self):
         twin = _beals()
