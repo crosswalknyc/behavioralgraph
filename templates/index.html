@@ -42027,12 +42027,75 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 });
             };
 
-            // Export to Excel. One click downloads every Attribution IQ
-            // dataset for the open campaign as a workbook, one sheet per
-            // dataset (see /api/intent/<slug>/export.xlsx). The server
-            // reads the campaign itself, so nothing on screen has to be
-            // serialised; the as-of date only steers the dated
-            // multi-touch read.
+            // Export to Excel. The workbook mirrors the screen: one sheet
+            // per live tab that holds a table, with that table's columns
+            // (see /api/intent/<slug>/export.xlsx). The server builds the
+            // sheets that show payload values as-is; the Performance rows
+            // are computed here, so they travel from the same builders
+            // the tables draw with.
+            function _aiqExportPerfTable(slug) {
+                var ov = (window.__intentIQ && window.__intentIQ.overview) || {};
+                if (!_iiqHasNewFilmLanding(ov) || _iiqGoatMode()) return null;
+                var stash = window.__intentIQAssetsRaw;
+                if (!stash || stash.slug !== slug || !Array.isArray(stash.cards) || !stash.cards.length) return null;
+                var asOf = _iiqAsOfGet();
+                if (!asOf) return null;
+                var opening = ov.opening_date || '';
+                var rows = _iiqComputeAssetRows(asOf, opening);
+                var useInfo = _iiqPhaseUsesInfo(asOf, opening);
+                var poLabels = { paid: 'Paid', earned: 'Earned', owned: 'Owned', official: 'Official' };
+                var showChip = !/influencer_project/.test(String(slug));
+                return {
+                    headers: ['Asset', 'Exposure', useInfo ? 'Info-seek %' : 'Ticketing site visit %',
+                              'Lift vs benchmark', 'Sample size', 'Confidence'],
+                    rows: rows.map(function(r, idx) {
+                        var a = r.asset;
+                        var label = a.action_label || a.asset_type || 'Untitled asset';
+                        var posted = a.posted_date ? String(a.posted_date).slice(0, 10) : '';
+                        var sub = (a.channel || 'other') + (posted ? ' \u00b7 posted ' + posted : '');
+                        if (showChip) sub = (poLabels[String(a.paid_or_organic || 'organic').toLowerCase()] || 'Organic') + ' \u00b7 ' + sub;
+                        var rowKey = a.asset_id || a.url || a.action_label || ('row' + idx);
+                        var lift = null;
+                        if (r.lift != null) {
+                            var b = _iiqAssetLiftBucket(r.lift);
+                            lift = (b === 'strong' ? 'Strong' : (b === 'onpace' ? 'On pace' : 'Soft')) + ' \u00b7 ' + r.lift.toFixed(1) + 'x';
+                        }
+                        return [
+                            label + '\n' + sub,
+                            r.views > 0 ? _iiqCountJitter(slug, 'row_views_' + rowKey, r.views) : null,
+                            r.primary_pct == null ? null : r.primary_pct,
+                            lift,
+                            r.views > 0 ? _iiqCountJitter(slug, 'row_sample_' + rowKey, r.views) : null,
+                            r.conf === 'high' ? 'High' : (r.conf === 'medium' ? 'Medium' : 'Low')
+                        ];
+                    })
+                };
+            }
+            // The legacy Performance grid, in the order and cut it drew.
+            function _aiqExportGridTable(slug) {
+                var view = window.__iiqAssetGridView;
+                if (!view || view.slug !== slug || !Array.isArray(view.cards)) return null;
+                var showPosted = window._iiqShowPostedCol ? window._iiqShowPostedCol() : false;
+                var term = (((window.__intentIQ && window.__intentIQ.overview) || {}).terminology) || {};
+                var bflHead = term.bottom_funnel_label ? (term.bottom_funnel_label + ' %') : 'Ticketing %';
+                return {
+                    headers: ['Asset'].concat(showPosted ? ['Posted'] : [], ['Views', 'Engagement', 'Eng. rate', 'Info-seek %', bflHead]),
+                    rows: view.cards.map(function(c) {
+                        var v = Number(c.ext_view_count) || 0;
+                        var e = Number(c.ext_engagement_count) || 0;
+                        var proj = c._proj || (v > 0 ? iiqAssetFunnelProjection(c) : null);
+                        var name = c.action_label || c.asset_type || '-';
+                        var sub = [c.asset_type || '', c.channel || '', 'Posted ' + (c.posted_date || '-')].filter(function(x) { return x; }).join(' \u00b7 ');
+                        var chips = [c.paid_or_organic || '', c.phase_name || ''].concat((Array.isArray(c.talent_tags) ? c.talent_tags : []).slice(0, 3))
+                            .filter(function(x) { return x; }).join(' \u00b7 ');
+                        var row = [name + '\n' + sub + (chips ? '\n' + chips : '')];
+                        if (showPosted) row.push(window._iiqFmtPosted(c.posted_date) || null);
+                        row.push(v, e, v > 0 ? (e / v * 100) : null,
+                                 proj ? Number(proj.info_pct) : null, proj ? Number(proj.ticket_pct) : null);
+                        return row;
+                    })
+                };
+            }
             window.aiqExportExcel = function(btnEl) {
                 var slug = (window.__intentIQ && window.__intentIQ.currentSlug) || '';
                 if (!slug) {
@@ -42041,16 +42104,32 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 }
                 var asOf = '';
                 try { asOf = (typeof _iiqAsOfGet === 'function' && _iiqAsOfGet()) || ''; } catch (e) { asOf = ''; }
+                var tabs = [];
+                Array.prototype.forEach.call(document.querySelectorAll('#intentIQView .aiq-tabs [data-aiq-go]'), function(b) {
+                    var id = b.getAttribute('data-aiq-go');
+                    if (id && tabs.indexOf(id) < 0) tabs.push(id);
+                });
+                var audience = '';
+                try { audience = _aiqAudienceKey() || ''; } catch (e) { audience = ''; }
+                var tables = {};
+                try { if (tabs.indexOf('assets') >= 0) { var perf = _aiqExportPerfTable(slug); if (perf) tables.assets = perf; } }
+                catch (e) { console.warn('[export-xlsx] performance rows failed', e); }
+                try { if (tabs.indexOf('l_assets') >= 0) { var grid = _aiqExportGridTable(slug); if (grid) tables.l_assets = grid; } }
+                catch (e) { console.warn('[export-xlsx] grid rows failed', e); }
                 var originalLabel = null;
                 if (btnEl) {
                     originalLabel = btnEl.innerHTML;
                     btnEl.setAttribute('disabled', 'disabled');
                     btnEl.innerHTML = 'Preparing...';
                 }
-                var url = '/api/intent/' + encodeURIComponent(slug) + '/export.xlsx'
-                    + (asOf ? ('?as_of=' + encodeURIComponent(asOf)) : '');
+                var url = '/api/intent/' + encodeURIComponent(slug) + '/export.xlsx';
                 var fname = '';
-                fetch(url, { method: 'GET', credentials: 'include' }).then(function(res) {
+                fetch(url, {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tabs: tabs, as_of: asOf, audience: audience, tables: tables })
+                }).then(function(res) {
                     if (!res.ok) {
                         return res.text().then(function(t) {
                             throw new Error('HTTP ' + res.status + ': ' + t);
@@ -44174,6 +44253,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     else r = r * sortDir;
                     return r;
                 });
+                window.__iiqAssetGridView = { slug: (window.__intentIQ && window.__intentIQ.currentSlug) || '', cards: cards };
                         var totalAssets = cards.length;
                         var totalViews = cards.reduce(function(a,c){ return a + (Number(c.ext_view_count)||0); }, 0);
                         var totalEng = cards.reduce(function(a,c){ return a + (Number(c.ext_engagement_count)||0); }, 0);
@@ -142913,7 +142993,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 box = document.createElement('div');
                 box.className = 'aiq-export';
                 box.innerHTML = '<button type="button" class="iiq-weekly-pdf-btn aiq-export-btn" onclick="aiqExportExcel(this)" '
-                    + 'title="Download every Attribution IQ table for this campaign as one Excel workbook">'
+                    + 'title="Download the tables on these tabs as one Excel workbook">'
                     + '<span class="iiq-weekly-pdf-arrow" aria-hidden="true">\u2193</span> Export to Excel</button>';
                 controls.appendChild(box);
             } else if (box !== controls.lastElementChild) {
