@@ -432,23 +432,131 @@ def _crosswalk_mark(slide, left, top, *, on_dark: bool = True, size: float = 0.1
 # ─────────────────────────────────────────────────────────────────────
 #  Image helpers - download + crop to slide-ready PNGs.
 # ─────────────────────────────────────────────────────────────────────
+_S3_BUCKET_NAME = "dashboard-inputs"
+_S3_REGION = "us-east-2"
+_IMAGE_PROXY_PREFIX = "/api/profile-image-file/"
+# A real browser header: the public photo hosts (press sites, CDNs) answer
+# a bare library User-Agent with 403 or an HTML interstitial.
+_BROWSER_UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+               "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+
+
+def _s3_client():
+    """A boto3 client on the app's own credentials, built only when a
+    cover photo lives in the private bucket. None when boto3 is absent."""
+    try:
+        import boto3  # deferred: the deck must build where boto3 is missing
+        from botocore.config import Config as _BotoConfig
+        return boto3.client("s3", region_name=_S3_REGION,
+                            config=_BotoConfig(retries={"max_attempts": 2, "mode": "standard"}))
+    except Exception:
+        return None
+
+
+def _proxy_key(url: str) -> Optional[str]:
+    """The S3 key behind a dashboard image path. The admin upload stores
+    the photo in the private bucket and the sidecar records it as
+    `/api/profile-image-file/<key>` (relative, or absolute on the
+    dashboard's own origin). None when the URL is not that proxy."""
+    try:
+        path = url
+        if re.match(r"^https?://", url, re.I):
+            path = urllib.parse.urlsplit(url).path or ""
+        if path.startswith(_IMAGE_PROXY_PREFIX):
+            key = urllib.parse.unquote(path[len(_IMAGE_PROXY_PREFIX):]).strip("/")
+            return key or None
+    except Exception:
+        pass
+    return None
+
+
+def _image_bytes(url: str, s3_client=None) -> Optional[bytes]:
+    """The cover photo's bytes, or None (the caller then draws the plate).
+
+      1. `/api/profile-image-file/<key>` (the admin upload, the shape the
+         Willow Smith, MMG, Jennifer Beals and Lainey Wilson runs carry):
+         the object is read from the private bucket; the proxy itself
+         needs a dashboard session, so a GET on it never worked (2026-10-29).
+      2. an absolute http(s) URL: fetched with a browser User-Agent.
+      3. anything else: None.
+    Never raises."""
+    if not url or not isinstance(url, str):
+        return None
+    url = url.strip()
+    key = _proxy_key(url)
+    if key:
+        try:
+            s3 = s3_client or _s3_client()
+            if s3 is None:
+                return None
+            data = s3.get_object(Bucket=_S3_BUCKET_NAME, Key=key)["Body"].read()
+            return data if data and len(data) > 200 else None
+        except Exception as exc:
+            print(f"[bpiq_deck_builder] cover photo read failed for {key!r}: {exc}")
+            return None
+    if re.match(r"^https?://", url, re.I):
+        try:
+            r = requests.get(url, timeout=8, headers={
+                "User-Agent": _BROWSER_UA,
+                "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+            })
+            if r.status_code != 200 or not r.content or len(r.content) < 200:
+                return None
+            return r.content
+        except Exception as exc:
+            print(f"[bpiq_deck_builder] cover photo fetch failed for {url!r}: {exc}")
+            return None
+    return None
+
+
+def _open_image(data: bytes):
+    """Decode uploaded photo bytes with Pillow, loaded. The admin upload
+    keeps whatever extension the file came with, so a `.jpg` can be an
+    AVIF inside (the Jennifer Beals photo, 2026-10-29): Pillow decodes
+    AVIF from 11.3.0 in its wheels; on an older Pillow the optional
+    pillow_avif plugin is tried once. None when nothing can read it."""
+    try:
+        im = Image.open(io.BytesIO(data))
+        im.load()
+        return im
+    except Exception as first:
+        if data[4:12] == b"ftypavif" or data[4:12] == b"ftypavis":
+            try:
+                import pillow_avif  # noqa: F401  (optional plugin for Pillow < 11.3)
+                im = Image.open(io.BytesIO(data))
+                im.load()
+                return im
+            except Exception:
+                pass
+        print(f"[bpiq_deck_builder] cover photo could not be decoded: {first}")
+        return None
+
+
 def _download_image(url: str, max_dim: int = 2000,
-                    crop_aspect: Optional[float] = None) -> Optional[str]:
-    """Fetch a remote image to a tmp JPEG. Optional `crop_aspect` (w/h)
-    center-crops the image to fit a target slot - lets the cover slide
-    place a fixed-aspect hero without distortion. Returns path or None
-    on any failure (deck-builder must NEVER crash because of a bad
-    photo URL)."""
+                    crop_aspect: Optional[float] = None,
+                    s3_client=None) -> Optional[str]:
+    """Resolve the cover photo (see `_image_bytes`) to a tmp JPEG. Pillow
+    decodes whatever the admin uploaded (webp, png, jpeg) and the save
+    is always JPEG, the format python-pptx places without a fuss.
+    Optional `crop_aspect` (w/h) center-crops the image to fit a target
+    slot - lets the cover slide place a fixed-aspect hero without
+    distortion. Returns path or None on any failure (deck-builder must
+    NEVER crash because of a bad photo URL)."""
     if not url or not isinstance(url, str):
         return None
     try:
-        r = requests.get(url, timeout=8, stream=True, headers={
-            "User-Agent": "BehaviorGraph-DeckBuilder/1.0",
-        })
-        if r.status_code != 200:
+        data = _image_bytes(url, s3_client=s3_client)
+        if not data:
             return None
-        raw = io.BytesIO(r.content)
-        im = Image.open(raw).convert("RGB")
+        im = _open_image(data)
+        if im is None:
+            return None
+        if im.mode in ("RGBA", "LA", "P"):
+            # flatten transparency onto the cover's dark ground
+            im = im.convert("RGBA")
+            ground = Image.new("RGBA", im.size, (0x0C, 0x16, 0x18, 255))
+            im = Image.alpha_composite(ground, im)
+        im = im.convert("RGB")
         # Center-crop to target aspect first so any subsequent resize
         # doesn't deform the subject.
         if crop_aspect and crop_aspect > 0:
@@ -643,7 +751,7 @@ def _dict(o: Any) -> dict:
 
 
 def _derive_context(data: dict, image_url: Optional[str],
-                    category: Optional[str]) -> DeckCtx:
+                    category: Optional[str], s3_client=None) -> DeckCtx:
     data   = _dict(data)
     totals = _dict(data.get("totals"))
     val    = _dict(data.get("valuation"))
@@ -668,7 +776,7 @@ def _derive_context(data: dict, image_url: Optional[str],
     # Cover image is placed in a 7.6"×7.5" slot - center-crop to the
     # matching aspect (≈1.013) so faces stay framed and the slot fills
     # cleanly with no letterboxing.
-    cover = _download_image(image_url, crop_aspect=7.6 / 7.5) if image_url else None
+    cover = _download_image(image_url, crop_aspect=7.6 / 7.5, s3_client=s3_client) if image_url else None
     if cover is None:
         cover = _generate_typographic_hero(str(data.get("brand_partner")
                                                or data.get("project_name") or "BPIQ"))
@@ -2329,7 +2437,8 @@ def _slide_source(prs, ctx: DeckCtx, idx: int, total: int):
 # ─────────────────────────────────────────────────────────────────────
 def build_deck(data: dict,
                image_url: Optional[str] = None,
-               category: Optional[str] = None) -> bytes:
+               category: Optional[str] = None,
+               s3_client=None) -> bytes:
     """Build a full BPIQ analysis deck and return the .pptx bytes.
 
     Parameters
@@ -2338,11 +2447,15 @@ def build_deck(data: dict,
                  results/<key> 'data' field).
     image_url  : admin-uploaded hero photo from the metadata sidecar
                  (used on the cover slide). Optional - falls back to a
-                 typographic plate if missing or unfetchable.
+                 typographic plate if missing or unfetchable. A
+                 `/api/profile-image-file/<key>` path is read from the
+                 private bucket (2026-10-29), an http(s) URL is fetched.
     category   : admin-managed category (case-insensitive). Used to
                  suppress conversion slides for 'automotive' runs.
+    s3_client  : optional boto3-style client for the bucket read (the
+                 app passes its own; tests pass a fake). None builds one.
     """
-    ctx = _derive_context(data, image_url, category)
+    ctx = _derive_context(data, image_url, category, s3_client=s3_client)
 
     prs = Presentation()
     prs.slide_width  = SLIDE_W

@@ -47,8 +47,12 @@ def resolve_meta(payload: dict, data: dict, *, meta_for_key: Optional[Callable] 
     return (image_url or None), (category or None)
 
 
-def deck_response(payload, *, meta_for_key: Optional[Callable] = None, s3_prefix: str = ''):
-    """The Flask response for one export-deck POST body."""
+def deck_response(payload, *, meta_for_key: Optional[Callable] = None, s3_prefix: str = '',
+                  s3_client=None):
+    """The Flask response for one export-deck POST body. `s3_client` is
+    the app's own client for the cover photo read (a
+    `/api/profile-image-file/<key>` image lives in the private bucket);
+    None lets the builder open one."""
     from flask import jsonify, send_file
     # Imported here so a missing dependency surfaces as a readable 503
     # instead of taking the app down at startup.
@@ -70,7 +74,7 @@ def deck_response(payload, *, meta_for_key: Optional[Callable] = None, s3_prefix
             return jsonify({'success': False, 'error': 'data payload required'}), 400
         image_url, category = resolve_meta(payload, data, meta_for_key=meta_for_key,
                                            s3_prefix=s3_prefix)
-        pptx_bytes = build_deck(data, image_url=image_url, category=category)
+        pptx_bytes = build_deck(data, image_url=image_url, category=category, s3_client=s3_client)
         fname = suggested_filename(data, ext='pptx')
         # Streamed as an attachment; the browser saves it from the
         # Content-Disposition header.

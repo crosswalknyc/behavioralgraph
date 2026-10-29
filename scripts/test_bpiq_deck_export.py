@@ -6,9 +6,10 @@ Deck) in its hidden attic; on 2026-10-23 only CSV came back on the tab
 row, so the deck had no visible home. These checks hold the restored
 option and the route behind it:
 
-  [1] the page's export row (the open-partnership tab row) carries the
-      Download as a deck button, wired to the existing export, with the
-      wait state on that button; the menu entry is still there too
+  [1] the page's export row (the open-partnership tab row) reads CSV,
+      PDF, Deck: Download as a deck and PDF wired to the existing
+      exports, each with its wait state on the pressed button; the PDF
+      capture shows every broadsheet section; the menu entries stay
   [2] the route in app.py delegates to migration/bpiq_deck_export
   [3] the route answers a .pptx for a run document in the NEW shape
       (campaign, windows, corrected_at, talent share) and in the OLD
@@ -20,6 +21,13 @@ option and the route behind it:
   [5] the output has no door, no em dash, no internal vocabulary, and
       the design pack's finish reports READY (fonts embedded, no lint
       FAIL) when the pack is on this machine
+  [6] the cover photo (2026-10-29): a `/api/profile-image-file/<key>`
+      image is read from the bucket (relative or on the dashboard's
+      origin) and lands on the cover, webp or AVIF converted to JPEG,
+      cropped to the slot, geometry unchanged; an http URL is fetched
+      with a browser User-Agent and a 404 or a refused connection lands
+      the plate; nothing ever raises; the route hands the sidecar's
+      image and the app's client to the builder
 
 Hermetic: no S3, no network, no app import. Run:
     python3 scripts/test_bpiq_deck_export.py
@@ -282,12 +290,27 @@ def test_page_carries_the_deck_option():
     row = html[i:j]
     check("the tab row renders the CSV button", 'data-bp-csv="1"' in row)
     check("the tab row renders Download as a deck", 'data-bp-deck="1"' in row and ">Download as a deck<" in row)
-    check("the deck button follows CSV and precedes Close all tabs",
-          row.index('data-bp-csv="1"') < row.index('data-bp-deck="1"') < row.index('data-bp-close-all="1"'))
+    check("the tab row renders PDF", 'data-bp-pdf="1"' in row and ">PDF<" in row)
+    check("the row reads CSV, PDF, Deck, then Close all tabs",
+          row.index('data-bp-csv="1"') < row.index('data-bp-pdf="1"') < row.index('data-bp-deck="1"')
+          < row.index('data-bp-close-all="1"'))
     check("the deck button is wired to the export",
           "closest('[data-bp-deck]')" in row and "_bpiqExportDeck();" in row)
+    check("the PDF button is wired to the print-to-PDF export",
+          "closest('[data-bp-pdf]')" in row and "_bpiqExportPdf();" in row)
     check("the CSV button still reaches its export", "_bpiqExportCsv();" in row)
-    check("the deck button has its own style rule", "#ecommerceIQView .bp-tab-deck {" in html)
+    check("the deck and PDF buttons share the style rule",
+          "#ecommerceIQView .bp-tab-deck, #ecommerceIQView .bp-tab-pdf {" in html)
+    p = html.index("function _bpiqExportPdf()")
+    pdf_fn = html[p:html.index("// Deck-with-Analysis export", p)]
+    check("the PDF export keeps its capture-and-print path",
+          "window.html2canvas(el" in pdf_fn and "w.print()" in pdf_fn)
+    check("the PDF wait state shows on the tab row button",
+          "querySelector('#bpTabsBar [data-bp-pdf]')" in pdf_fn and "pdfBusy(true)" in pdf_fn
+          and "pdfBusy(false)" in pdf_fn)
+    check("the PDF capture shows every broadsheet section and puts the open one back",
+          "bpShowAll();" in pdf_fn and pdf_fn.count("bpRestore();") >= 2)
+    check("the menu's PDF entry is still there", 'onclick="_bpiqExportPdf()"' in html)
     check("the menu entry behind the attic is still there",
           'id="bpiqDeckBtn" onclick="_bpiqExportDeck()"' in html)
     k = html.index("function _bpiqExportDeck()")
@@ -299,7 +322,8 @@ def test_page_carries_the_deck_option():
     check("the tab row button is restored when the deck lands",
           "rowNow.disabled = false" in fn and "origRowText" in fn)
     for tok in ("\u2014", "synth", "pipeline"):
-        check(f"no {tok!r} in the page copy that was added", tok not in row.lower() and tok not in fn.lower())
+        check(f"no {tok!r} in the page copy that was added",
+              tok not in row.lower() and tok not in fn.lower() and tok not in pdf_fn.lower())
 
 
 # ------------------------------------------------------------------ [2]
@@ -448,11 +472,184 @@ def test_finish_ready(decks):
         check(f"{label}: READY", rep.ready, rep.summary)
 
 
+# ------------------------------------------------------------------ [6]
+PHOTO_RGB = (230, 120, 20)      # a flat orange no plate could average to
+PHOTO_KEY = "brand-partnership-iq-images/287ec4820840449cbd2ad02d03fba175.webp"
+
+
+class FakeS3:
+    """get_object over a dict of key -> bytes; a missing key raises like boto3."""
+
+    def __init__(self, objects):
+        self.objects = dict(objects)
+        self.asked = []
+
+    def get_object(self, Bucket, Key):
+        self.asked.append((Bucket, Key))
+        if Key not in self.objects:
+            raise KeyError(f"NoSuchKey: {Key}")
+        return {"Body": io.BytesIO(self.objects[Key]), "ContentType": "image/webp"}
+
+
+def _photo_bytes(fmt):
+    """A 900x700 flat photo in `fmt` (WEBP / PNG / JPEG / AVIF), or None
+    when this Pillow cannot write that format."""
+    from PIL import Image
+    im = Image.new("RGB", (900, 700), PHOTO_RGB)
+    buf = io.BytesIO()
+    try:
+        im.save(buf, fmt)
+    except Exception:
+        return None
+    return buf.getvalue()
+
+
+def _cover_photo(pptx_bytes):
+    """The hero picture on slide 1 (the 7.6in slot at 5.8in), decoded."""
+    from pptx import Presentation
+    from PIL import Image
+    prs = Presentation(io.BytesIO(pptx_bytes))
+    for sh in prs.slides[0].shapes:
+        if sh.shape_type == 13 and abs(sh.left / 914400 - 5.8) < 0.05:
+            return Image.open(io.BytesIO(sh.image.blob)).convert("RGB"), sh
+    return None, None
+
+
+def _mean_rgb(im):
+    small = im.resize((40, 40))
+    px = list(small.getdata())
+    return tuple(sum(c[i] for c in px) / len(px) for i in range(3))
+
+
+def _is_photo(im):
+    m = _mean_rgb(im)
+    return all(abs(m[i] - PHOTO_RGB[i]) < 30 for i in range(3))
+
+
+def test_cover_photo():
+    print("[6] the cover photo")
+    from migration import bpiq_deck_builder as B
+    webp = _photo_bytes("WEBP")
+    if webp is None:
+        print("  skip  this Pillow cannot write webp; the cover photo checks use PNG instead")
+        webp = _photo_bytes("PNG")
+    doc = new_shape_doc()
+    slot = (7.6 / 7.5)
+
+    # 1. the admin upload path: relative proxy path, read from the bucket
+    s3 = FakeS3({PHOTO_KEY: webp})
+    data = B.build_deck(doc, image_url="/api/profile-image-file/" + PHOTO_KEY, category=None, s3_client=s3)
+    im, pic = _cover_photo(data)
+    check("proxy path: the bucket is read for the bare key", s3.asked == [("dashboard-inputs", PHOTO_KEY)], s3.asked)
+    check("proxy path: the photo lands on the cover", im is not None and _is_photo(im), im and _mean_rgb(im))
+    check("proxy path: a webp arrives as a JPEG python-pptx places",
+          pic is not None and pic.image.content_type == "image/jpeg", pic and pic.image.content_type)
+    check("proxy path: cropped to the cover slot's aspect",
+          im is not None and abs(im.width / im.height - slot) < 0.02, im and im.size)
+    check("proxy path: the slot geometry is unchanged (5.8in, 7.6 x 7.5)",
+          pic is not None and abs(pic.width / 914400 - 7.6) < 0.01 and abs(pic.height / 914400 - 7.5) < 0.01
+          and pic.top == 0)
+    n, blob = slide_texts(data)
+    check("proxy path: the rest of the deck is untouched", n >= 12 and "Slide build failed" not in blob)
+
+    # 2. the same path written as an absolute URL on the dashboard's origin
+    s3b = FakeS3({PHOTO_KEY: webp})
+    data = B.build_deck(doc, image_url="https://dashboard.crosswalknyc.com/api/profile-image-file/" + PHOTO_KEY,
+                        s3_client=s3b)
+    im, _ = _cover_photo(data)
+    check("absolute proxy URL: read from the bucket, photo on the cover",
+          s3b.asked == [("dashboard-inputs", PHOTO_KEY)] and im is not None and _is_photo(im))
+
+    # 3. the bucket has no such object: the plate, never a raise
+    s3c = FakeS3({})
+    data = B.build_deck(doc, image_url="/api/profile-image-file/brand-partnership-iq-images/missing.webp", s3_client=s3c)
+    im, _ = _cover_photo(data)
+    check("missing object: the plate stands in", im is not None and not _is_photo(im))
+
+    # 4. http URLs: a 404 lands the plate; a 200 webp converts; a browser User-Agent is sent
+    calls = []
+
+    class _Resp:
+        def __init__(self, status, content):
+            self.status_code, self.content = status, content
+
+    def fake_get(url, **kw):
+        calls.append((url, kw.get("headers") or {}))
+        if url.endswith("/gone.jpg"):
+            return _Resp(404, b"")
+        if url.endswith("/photo.webp"):
+            return _Resp(200, webp)
+        raise RuntimeError("connection refused")
+
+    real_get = B.requests.get
+    B.requests.get = fake_get
+    s3h = FakeS3({})
+    try:
+        data = B.build_deck(doc, image_url="https://example.com/press/gone.jpg", s3_client=s3h)
+        im, _ = _cover_photo(data)
+        check("http 404: the plate stands in", im is not None and not _is_photo(im))
+        data = B.build_deck(doc, image_url="https://example.com/press/photo.webp", s3_client=s3h)
+        im, pic = _cover_photo(data)
+        check("http 200 webp: the photo lands, converted to JPEG",
+              im is not None and _is_photo(im) and pic.image.content_type == "image/jpeg")
+        data = B.build_deck(doc, image_url="https://example.com/press/refused.png", s3_client=s3h)
+        im, _ = _cover_photo(data)
+        check("http connection failure: the plate stands in, no raise", im is not None and not _is_photo(im))
+        uas = [h.get("User-Agent", "") for _u, h in calls]
+        check("http fetches carry a browser User-Agent",
+              len(uas) == 3 and all(ua.startswith("Mozilla/5.0") for ua in uas), uas[:1])
+        check("http URLs never touch the bucket", not s3h.asked, s3h.asked)
+    finally:
+        B.requests.get = real_get
+
+    # 5. an AVIF saved with a .jpg name (the Jennifer Beals photo) decodes when Pillow can
+    avif = _photo_bytes("AVIF")
+    if avif is None:
+        print("  skip  this Pillow has no AVIF codec (wheels carry it from 11.3.0); the deploy floor is Pillow>=11.3.0")
+        req = (WEB / "requirements.txt").read_text(encoding="utf-8")
+        check("requirements pin a Pillow that decodes AVIF", "Pillow>=11.3.0" in req)
+    else:
+        key = "profile-images/53153082d3fb4d268aea58617230091d.jpg"
+        s3d = FakeS3({key: avif})
+        data = B.build_deck(doc, image_url="/api/profile-image-file/" + key, s3_client=s3d)
+        im, _ = _cover_photo(data)
+        check("avif inside a .jpg: the photo lands on the cover", im is not None and _is_photo(im), im and _mean_rgb(im))
+
+    # 6. bytes no decoder reads: the plate, never a raise
+    s3e = FakeS3({PHOTO_KEY: b"not an image at all, just text" * 20})
+    data = B.build_deck(doc, image_url="/api/profile-image-file/" + PHOTO_KEY, s3_client=s3e)
+    im, _ = _cover_photo(data)
+    check("undecodable bytes: the plate stands in", im is not None and not _is_photo(im))
+
+    # 7. the route hands the sidecar's image_url and the app's client to the builder
+    try:
+        import flask  # noqa: F401
+    except Exception:
+        print("  skip  flask is not installed in this interpreter; the route plumbing is not mounted here")
+        return
+    s3f = FakeS3({PHOTO_KEY: webp})
+    import flask as _fl
+    from migration.bpiq_deck_export import deck_response
+    app = _fl.Flask("bpiq-cover-test")
+
+    @app.route("/x", methods=["POST"])
+    def _x():
+        return deck_response(_fl.request.get_json(force=True, silent=True) or {},
+                             meta_for_key=lambda bare: {"image_url": "/api/profile-image-file/" + PHOTO_KEY},
+                             s3_prefix="brand-partnership-iq/", s3_client=s3f)
+
+    r = app.test_client().post("/x", json={"data": new_shape_doc(), "s3_key": "brand-partnership-iq/run.json"})
+    im, _ = _cover_photo(r.get_data())
+    check("route: the sidecar photo reaches the cover through the app's client",
+          r.status_code == 200 and im is not None and _is_photo(im) and s3f.asked == [("dashboard-inputs", PHOTO_KEY)])
+
+
 if __name__ == "__main__":
     test_page_carries_the_deck_option()
     test_route_delegates()
     decks = test_route_answers_both_shapes()
     test_builder_never_raises()
+    test_cover_photo()
     test_finish_ready(decks)
     print(f"\n{'PASS' if not FAIL else f'{FAIL} FAIL'}: Brand Partnership IQ deck export")
     sys.exit(1 if FAIL else 0)

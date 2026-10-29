@@ -41419,6 +41419,9 @@ def export_brand_partnership_iq_deck():
         request.get_json(force=True, silent=True) or {},
         meta_for_key=_meta_for_key,
         s3_prefix=BRAND_PARTNERSHIP_IQ_S3_PREFIX,
+        # the cover photo lives in the private bucket behind
+        # /api/profile-image-file/<key>; the app's own client reads it
+        s3_client=globals().get('s3_client'),
     )
 
 

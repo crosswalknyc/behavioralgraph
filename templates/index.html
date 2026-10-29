@@ -29830,15 +29830,15 @@ https://www.instagram.com/p/..."></textarea>
         /* Download as a deck sits beside CSV on the tab row (Jenna 2026-10-29).
            The broadsheet shell keeps the original Export menu in its hidden
            attic, so the tab row is where the exports live. */
-        #ecommerceIQView .bp-tab-deck { flex-shrink: 0; padding: 6px 11px; cursor: pointer;
+        #ecommerceIQView .bp-tab-deck, #ecommerceIQView .bp-tab-pdf { flex-shrink: 0; padding: 6px 11px; cursor: pointer;
             border: 1px solid #3B3D38; border-radius: 6px; background: transparent;
             color: #9AA09B; font-size: 9.5px; font-weight: 600; letter-spacing: .12em;
             text-transform: uppercase; font-family: inherit; }
-        #ecommerceIQView .bp-tab-deck:hover { color: #E9E8E1; border-color: #5C6560; }
-        #ecommerceIQView .bp-tab-deck[disabled] { opacity: 0.6; cursor: progress; }
-        #ecommerceIQView .bp-tab-deck + .bp-tab-close-all { margin-left: 0; }
-        body[data-theme="light"] #ecommerceIQView .bp-tab-deck { border-color: #C9C6BA; color: #5C6560; }
-        body[data-theme="light"] #ecommerceIQView .bp-tab-deck:hover { color: #0C1618; border-color: #9AA09B; }
+        #ecommerceIQView .bp-tab-deck:hover, #ecommerceIQView .bp-tab-pdf:hover { color: #E9E8E1; border-color: #5C6560; }
+        #ecommerceIQView .bp-tab-deck[disabled], #ecommerceIQView .bp-tab-pdf[disabled] { opacity: 0.6; cursor: progress; }
+        #ecommerceIQView .bp-tab-deck + .bp-tab-close-all, #ecommerceIQView .bp-tab-pdf + .bp-tab-close-all { margin-left: 0; }
+        body[data-theme="light"] #ecommerceIQView .bp-tab-deck, body[data-theme="light"] #ecommerceIQView .bp-tab-pdf { border-color: #C9C6BA; color: #5C6560; }
+        body[data-theme="light"] #ecommerceIQView .bp-tab-deck:hover, body[data-theme="light"] #ecommerceIQView .bp-tab-pdf:hover { color: #0C1618; border-color: #9AA09B; }
         body[data-theme="light"] #ecommerceIQView .bp-tab { background: #FFFFFF; border-color: #C9C6BA; color: #5C6560; }
         body[data-theme="light"] #ecommerceIQView .bp-tab.is-active { background: rgba(94, 126, 18, 0.08);
             border-color: rgba(94, 126, 18, 0.4); color: #5E7E12; }
@@ -78440,6 +78440,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                      + '<button type="button" class="bp-tab-x" data-bp-close="' + safe + '" aria-label="Close">\u00d7</button></span>';
             });
             html += '<button type="button" class="bp-tab-csv" data-bp-csv="1" title="Download this partnership as CSV">CSV</button>';
+            // PDF (2026-10-29): the same print-to-PDF capture the hidden Export
+            // menu carries, so the row reads CSV, PDF, Deck.
+            html += '<button type="button" class="bp-tab-pdf" data-bp-pdf="1" title="Download this partnership as PDF (opens the print dialog, Save as PDF)">PDF</button>';
             // Download as a deck (Jenna 2026-10-29): the broadsheet shell parks the
             // header's Export menu in its hidden attic, so the deck option lives
             // here beside CSV. Same builder, same route as the menu entry.
@@ -78460,6 +78463,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 ev.stopPropagation();
                 if (!(_bpiqState && _bpiqState.data)) { alert('Open a partnership first, then download it as a deck.'); return; }
                 _bpiqExportDeck();
+                return;
+            }
+            if (ev.target.closest('[data-bp-pdf]')) {
+                ev.stopPropagation();
+                if (!(_bpiqState && _bpiqState.data)) { alert('Open a partnership first, then download it as PDF.'); return; }
+                _bpiqExportPdf();
                 return;
             }
             var x = ev.target.closest('[data-bp-close]');
@@ -79788,13 +79797,35 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             if (m) m.style.display = 'none';
             var el = document.getElementById('bpiqDashboardPanels');
             if (!el) return;
+            // The tab row's PDF button (2026-10-29) shows the wait; the menu
+            // entry sits in the broadsheet's hidden attic.
+            var origPdfText = (function () {
+                var b = document.querySelector('#bpTabsBar [data-bp-pdf]');
+                return b ? b.textContent : 'PDF';
+            })();
+            function pdfBusy(on) {
+                var b = document.querySelector('#bpTabsBar [data-bp-pdf]');
+                if (!b) return;
+                b.disabled = !!on;
+                b.textContent = on ? 'Preparing the PDF' : (origPdfText || 'PDF');
+            }
+            // The broadsheet shows one section at a time. The PDF carries
+            // every section: each panel is shown for the capture and the
+            // open one is put back after.
+            var bpPanels = Array.prototype.slice.call(el.querySelectorAll('.bp-panel'));
+            var bpWasOn = bpPanels.map(function (p) { return p.classList.contains('on'); });
+            function bpShowAll() { bpPanels.forEach(function (p) { p.classList.add('on'); }); }
+            function bpRestore() { bpPanels.forEach(function (p, i) { p.classList.toggle('on', !!bpWasOn[i]); }); }
+            pdfBusy(true);
             function run() {
+                bpShowAll();
                 window.html2canvas(el, {
                     backgroundColor: '#0d1117',
                     scale: 2,
                     logging: false,
                     useCORS: true,
                 }).then(function(canvas) {
+                    bpRestore();
                     var imgData = canvas.toDataURL('image/png');
                     var name = (_bpiqState.data && _bpiqState.data.project_name) || 'BPIQ Run';
                     var slice = (_bpiqState.data && _bpiqState.data._bpiq_active_year) ? (' · ' + _bpiqState.data._bpiq_active_year_label) : '';
@@ -79816,15 +79847,18 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     w.document.close();
                     setTimeout(function() { w.print(); }, 500);
                 }).catch(function(err) {
+                    bpRestore();
                     console.error('BPIQ PDF capture failed', err);
                     alert('PDF export failed: ' + (err && err.message ? err.message : err));
+                }).finally(function() {
+                    pdfBusy(false);
                 });
             }
             if (typeof window.html2canvas === 'undefined') {
                 var s = document.createElement('script');
                 s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
                 s.onload = run;
-                s.onerror = function() { alert('Could not load PDF capture library.'); };
+                s.onerror = function() { pdfBusy(false); alert('Could not load PDF capture library.'); };
                 document.head.appendChild(s);
             } else {
                 run();
