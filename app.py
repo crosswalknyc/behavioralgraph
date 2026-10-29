@@ -19876,43 +19876,6 @@ def list_subscriber_iq_files():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
-@app.route('/api/subscriber-iq/download/<path:s3_key>')
-@requires_auth
-def download_subscriber_iq_csv(s3_key):
-    """Download the Subscriber IQ file behind the open read (2026-10-02).
-
-    Same access checks as the data route. The Profile IQ page has had an
-    export control from day one; this gives the Subscriber IQ page its
-    own download so users do not have to go to the storage bucket for
-    the file.
-    """
-    ok, err = _require_module_access(
-        'has_subscriber_iq_access',
-        'analysis_iq_modules::svod',
-        module_label='Subscriber IQ')
-    if not ok:
-        return err
-    if not s3_client:
-        return jsonify({'success': False, 'error': 'Storage not configured'}), 500
-    user = get_current_user()
-    if not _user_can_open_subscriber(user, s3_key):
-        return jsonify({'success': False,
-                        'error': 'Subscriber IQ access not granted for this file'}), 403
-    try:
-        resp = s3_client.get_object(Bucket=SUBSCRIBER_S3_BUCKET, Key=s3_key)
-        body = resp['Body'].read()
-    except Exception as e:
-        print(f"download_subscriber_iq_csv failed for {s3_key}: {e}")
-        return jsonify({'success': False, 'error': 'File not found'}), 404
-    fname = os.path.basename(s3_key) or 'subscriber_iq.csv'
-    if not fname.lower().endswith('.csv'):
-        fname += '.csv'
-    out = Response(body, mimetype='text/csv')
-    out.headers['Content-Disposition'] = f'attachment; filename="{fname}"'
-    out.headers['Cache-Control'] = 'no-store'
-    return out
-
-
 @app.route('/api/subscriber-iq/data/<path:s3_key>')
 @requires_auth
 def get_subscriber_iq_data(s3_key):
