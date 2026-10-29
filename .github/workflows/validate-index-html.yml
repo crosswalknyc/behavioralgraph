@@ -17,11 +17,9 @@ on:
       - "templates/index.html"
       - "scripts/validate_index_html.py"
       - ".github/workflows/validate-index-html.yml"
+  # No paths filter on PRs: `validate` is a required check on main, so a
+  # PR that skipped it could never merge.
   pull_request:
-    paths:
-      - "templates/index.html"
-      - "scripts/validate_index_html.py"
-      - ".github/workflows/validate-index-html.yml"
 
 jobs:
   validate:
