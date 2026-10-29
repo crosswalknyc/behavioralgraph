@@ -1457,6 +1457,26 @@
      "note": "[definite interest after reading the concept / Penn Schoen Berland] PSB Pixels positioning: 'Concept Norm = 32*' definite interest post-concept, '*Norm is among general moviegoers 13-49'; kid concept norm 45, parent concept norm 43."
     }
    ]
+  },
+  {
+   "format": "feature",
+   "genre": "all",
+   "metric": "component_settings",
+   "value": 35.0,
+   "range": [
+    30.0,
+    40.0
+   ],
+   "n_hint": null,
+   "basis": "published norm",
+   "as_of": "2014-05",
+   "context": "recruited_screening",
+   "sources": [
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/INTERVIEW/Screening%20%233%20and%20%234%20%285-13-14%29/5.13%20The%20Interview%20Report%20%28730pm%29%20-%20FINAL.pdf",
+     "note": "[recruited screening / Screen Engine] Components page: the nine element norms (settings among them) sit in a 30% to 40% band (top box); the midpoint is stored and the band kept."
+    }
+   ]
   }
  ],
  "statements": [
