@@ -28,6 +28,17 @@ option and the route behind it:
       with a browser User-Agent and a 404 or a refused connection lands
       the plate; nothing ever raises; the route hands the sidecar's
       image and the app's client to the builder
+  [7] layout (2026-10-29): the Jennifer Beals x Lululemon run put five
+      collisions on the exported deck (cover subtitle under the DRAFT
+      stamp, a 14-character total wrapping in its tile, the rate-sources
+      note on the note below it, an eight-row AGE column on the source
+      line, two four-line methodology paragraphs on each other). Every
+      block is now measured and fitted; `check_layout` proves on the
+      finished presentation that no two text frames' rendered extents
+      meet and no frame holds less than its text. The check itself is
+      proven on a deck built to collide; then the live run's document
+      shape, a long-text variant, both fixture shapes and the odd
+      documents all come back with zero findings, the figures intact.
 
 Hermetic: no S3, no network, no app import. Run:
     python3 scripts/test_bpiq_deck_export.py
@@ -252,6 +263,207 @@ def old_shape_doc():
                         "yearly_cuts": True, "conversions_disabled": True},
         "created_at": "2026-06-25T15:00:00Z", "created_by": "tester",
     }
+
+
+def beals_lululemon_doc():
+    """The live Jennifer Beals x Lululemon run (2026-10-29) in the shape
+    the dashboard POSTs: fourteen platforms in the earned-media breakdown
+    (press and the launch event among them), an eight-bucket AGE column,
+    a six-bucket GENDER column, the talent share, the matched-group
+    account, the campaign's own lines. This is the document that put
+    five collisions on the exported deck."""
+    def emv(platform, post, pre, incr, rate, value, **extra):
+        row = {"platform": platform, "post_users_projected": post, "pre_users_projected": pre,
+               "incremental_users_projected": incr, "emv_per_user_rate": rate, "emv_value": value}
+        row.update(extra)
+        return row
+
+    return {
+        "project_name": "Jennifer Beals x Lululemon",
+        "brand_partner": "Lululemon",
+        "campaign_name": "Ganni x Lululemon",
+        "qualifier_type": "other",
+        "qualifier_value": ["Jennifer Beals"],
+        "start_date": "2026-10-15", "end_date": "2026-10-28",
+        "attribution_window_days": 15,
+        "pre_period": {"start": "2026-10-01", "end": "2026-10-14", "days": 14},
+        "event_period": {"start": "2026-10-15", "end": "2026-10-28", "days": 14},
+        "post_period": {"start": "2026-10-15", "end": "2026-10-29", "days": 15},
+        "pre_period_days": 14, "post_period_days": 15,
+        "windows": {"matched_pre_window": True,
+                    "baseline_period": {"start": "2025-10-15", "end": "2026-10-14", "days": 365}},
+        "audience_size": 108937, "projected_audience_size": 3593822,
+        "totals": {"pre_hits": 122306, "post_hits": 190743, "pre_users": 43371, "post_users": 61529,
+                   "pre_users_projected": 1430805, "post_users_projected": 2029836,
+                   "lift_pct_hits": 55.96, "lift_pct_users": 41.87,
+                   "pre_hits_per_day": 8736.14, "post_hits_per_day": 13624.5,
+                   "audience_pen_pre_pct": 39.81, "audience_pen_post_pct": 56.48},
+        "control_group": {"enabled": True, "control_size": 108937, "projected_control_size": 3593822,
+                          "control_pre_users": 41791, "control_post_users": 42471,
+                          "control_pre_users_projected": 1378681, "control_post_users_projected": 1401115,
+                          "treat_pre_pen_pct": 39.81, "treat_post_pen_pct": 56.48,
+                          "control_pre_pen_pct": 38.36, "control_post_pen_pct": 38.99,
+                          "treat_delta_pp": 16.67, "control_delta_pp": 0.63,
+                          "incremental_lift_pp": 16.04, "incremental_lift_rel_pct": 2546.03,
+                          "control_lift_pct_users": 1.63, "background_drift_pp": 0.6238,
+                          "match": {"method": "difference_in_differences", "exposed_size": 108937,
+                                    "control_size": 108937, "exposed_pre_rate_pct": 39.8129,
+                                    "control_pre_rate_pct": 38.3625, "pre_rate_rel_diff_pct": 3.64,
+                                    "band_rel_pct": 5.0, "size_matched": True, "pre_rate_matched": True,
+                                    "note": "Compared against a matched group of the same size with the "
+                                            "same brand engagement before the partnership."}},
+        "conversions": {"pre_hits": 38, "post_hits": 563, "pre_users": 29, "post_users": 402,
+                        "pre_users_projected": 957, "post_users_projected": 13267, "low_signal": False,
+                        "lift_pct_hits": 0.0, "lift_pct_users": 1286.21, "enabled": True,
+                        "sell_out_lift_rel": 0.1979, "basis": "the drop's orders", "units_us": 19873,
+                        "revenue_usd": 3132869.38, "first_48h_share": 0.6219,
+                        "note": "The collection sold out in a day, so most purchases landed in the first "
+                                "48 hours; later traffic in the window is waitlist and restock intent. The "
+                                "run was small, so the sell-out reflects limited inventory as much as demand."},
+        "valuation": {"total_brand_value": 33409966.88, "brand_engagement_value": 5074590.0,
+                      "earned_media_value": 22319522.5, "brand_lift_value": 2882985.0,
+                      "conversion_value": 3132869.38, "incremental_users": 576597,
+                      "rates": {"bev_per_user": 2.5, "blv_per_incr_user": 5.0, "conv_value_per_user": 236.14,
+                                "emv_per_user": {"TikTok": 7.0, "Instagram": 11.0, "YouTube": 3.5, "Facebook": 14.0,
+                                                 "X (Twitter)": 6.0, "Reddit": 4.0, "Pinterest": 6.0, "Snapchat": 5.0,
+                                                 "LinkedIn": 25.0, "Direct (Brand Site)": 5.0, "Threads": 10.0,
+                                                 "Twitch": 15.0, "Press": 4.0, "Launch event": 5.0}},
+                      "rate_sources": {"conv_value_per_user": "Average order value $236.14: the collection ran "
+                                                              "$70 to $280 a piece and a typical order carried "
+                                                              "about 1.5 pieces."},
+                      "aov_basis": "researched_prices",
+                      "emv_breakdown": [
+                          emv("Instagram", 1581569, 1069236, 492971, 11.0, 5422681.0),
+                          emv("Launch event", 626476, 0, 626476, 5.0, 3132380.0, earned_direct=True),
+                          emv("Direct (Brand Site)", 1469503, 857045, 589312, 5.0, 2946560.0),
+                          emv("Press", 647929, 0, 647929, 4.0, 2591716.0, earned_direct=True),
+                          emv("TikTok", 834249, 472218, 348349, 7.0, 2438443.0),
+                          emv("Facebook", 595501, 477727, 113323, 14.0, 1586522.0),
+                          emv("YouTube", 1018926, 654421, 350729, 3.5, 1227551.5),
+                          emv("LinkedIn", 150467, 101642, 46986, 25.0, 1174650.0),
+                          emv("Pinterest", 341973, 228389, 109291, 6.0, 655746.0),
+                          emv("X (Twitter)", 225024, 151589, 70665, 6.0, 423990.0),
+                          emv("Threads", 116322, 73732, 40987, 10.0, 409870.0),
+                          emv("Reddit", 188578, 119687, 66287, 4.0, 265148.0),
+                          emv("Snapchat", 74326, 67202, 6855, 5.0, 34275.0),
+                          emv("Twitch", 8841, 8149, 666, 15.0, 9990.0)],
+                      "methodology": "matched comparison group",
+                      "talent_share": 0.208,
+                      "talent_share_basis": "65% of the campaign's exposure carried the talent; those assets drew "
+                                            "42% more response than the brand's alone; the matched group kept 96% "
+                                            "of the lift",
+                      "attributable_to_talent": 6949273.11, "attributable_to_partnership": 4145261.43,
+                      "comparison_note": "Compared against a matched group of the same size with the same brand "
+                                         "engagement before the partnership."},
+        "campaign": {"name": "GANNI x lululemon, Joy Is a Power Move",
+                     "drop_dates": ["2026-10-08", "2026-10-14", "2026-10-15"],
+                     "price_band": {"low_usd": 70.0, "high_usd": 280.0}, "collection_size": 22,
+                     "sold_out": True, "days_to_sell_out": 0.1, "partial_sell_out": True,
+                     "aov_usd": 236.14, "aov_basis": "researched_prices",
+                     "read_line": "The collection ran $70 to $280 a piece. Most of the collection sold out in a "
+                                  "day. The run was small, so the sell-out reflects limited inventory as much as "
+                                  "demand. A typical order carried about 1.5 pieces, $236.14 per order.",
+                     "reach_line": "The campaign reached about 3.6M people in the window: 637K on the collection "
+                                   "pages, 648K through press, 3.3M through the film and the launch posts, 626K "
+                                   "around the launch event, counted once each.",
+                     "drop_line": "About 19,873 pieces sold in the US, 13,267 orders, $3,132,869 at the "
+                                  "collection's prices. Most of the run sold out inside the window.",
+                     "audience_basis": "campaign reach", "talent_audience_in_window": 490001},
+        "demographics": {"post": {
+            "gender": _demo(("Female", 44392, 72.1489), ("Male", 14661, 23.8281), ("Prefer Not to Say", 973, 1.5759),
+                            ("Trans Male", 142, 0.2301), ("Trans Female", 326, 0.5298), ("Non-Binary", 1038, 1.6872)),
+            "age": _demo(("17 and Under", 1012, 1.6452), ("18-24", 7835, 12.7334), ("25-34", 16252, 26.4143),
+                         ("35-44", 14752, 23.9759), ("45-54", 11475, 18.6505), ("55-64", 7005, 11.3855),
+                         ("65 or Older", 2994, 4.8661), ("Other", 202, 0.3291)),
+            "ethnicity": _demo(("White", 35586, 57.8366), ("Hispanic or Latino", 9612, 15.6191),
+                               ("Black or African American", 7297, 11.8481), ("Asian", 7057, 11.4686),
+                               ("Another Race/Ethnicity", 1986, 3.2276)),
+            "income": _demo(("Less than $25,000", 3575, 5.8104), ("$25,000 - $49,999", 6729, 10.9359),
+                            ("$50,000 - $74,999", 9398, 15.2744), ("$75,000 - $99,999", 10488, 17.0461),
+                            ("$100,000 - $149,999", 14662, 23.8259), ("$150,000 - $249,999", 11237, 18.2632),
+                            ("$250,000 or More", 5442, 8.8441))}},
+        "per_platform": _per_platform(),
+        "top_brand_properties": [
+            {"common_name": "shop.lululemon.com/ganni-x-lululemon", "hits": 297418, "hits_projected": 9811794},
+            {"common_name": "@lululemon Instagram co-authored launch reel", "hits": 183472, "hits_projected": 6052725},
+            {"common_name": "lululemon.com women-new-arrivals", "hits": 126794, "hits_projected": 4182923},
+            {"common_name": "lululemon YouTube joy-is-a-power-move-film", "hits": 112346, "hits_projected": 3706285},
+            {"common_name": "lululemon TikTok campaign posts", "hits": 94271, "hits_projected": 3109992},
+            {"common_name": "shop.lululemon.com ruffle-trim-textured-jacket", "hits": 73629, "hits_projected": 2429014},
+            {"common_name": "lululemon app drop alert and cart", "hits": 69138, "hits_projected": 2280857},
+            {"common_name": "shop.lululemon.com define-jacket-ganni", "hits": 61837, "hits_projected": 2039997}],
+        "top_brand_properties_pre": [
+            {"common_name": "lululemon.com women-new-arrivals", "hits": 88341, "hits_projected": 2914362},
+            {"common_name": "@lululemon Instagram co-authored launch reel", "hits": 64729, "hits_projected": 2135404},
+            {"common_name": "shop.lululemon.com/ganni-x-lululemon", "hits": 41263, "hits_projected": 1361263},
+            {"common_name": "lululemon YouTube joy-is-a-power-move-film", "hits": 23817, "hits_projected": 785721}],
+        "sentiment": _sentiment(),
+        "diagnostics": {"audience_filter_used": "qualifier_only", "post_window_clipped_to_today": True,
+                        "run_key": "jennifer-beals|lululemon|2026-10-15"},
+        "created_at": "2026-10-29T03:17:43.991217Z", "corrected_at": "2026-10-29T04:56:45Z",
+        "created_by": "tester",
+    }
+
+
+def long_text_doc():
+    """The Beals run with every run-to-run line stretched well past what
+    any slide was drawn for: a long partnership name, a long brand name,
+    campaign lines three times as long, a sixteen-platform roster each
+    with its own long rate source, ten AGE buckets with long labels, long
+    touchpoint names, a long matched-group account, a study context. The
+    deck has to hold all of it without a collision."""
+    doc = beals_lululemon_doc()
+    doc["project_name"] = "Alexandra Montgomery-Whitfield x The Northwind Outdoor Apparel Company"
+    doc["brand_partner"] = "The Northwind Outdoor Apparel Company"
+    doc["qualifier_value"] = ["Alexandra Montgomery-Whitfield"]
+    filler = (" The press run opened with the long-lead titles and closed with the regional dailies, "
+              "and every placement named the collection, the talent and the drop date in its first "
+              "paragraph, which is why the search line rose on the same days as the film.")
+    camp = doc["campaign"]
+    camp["read_line"] = camp["read_line"] + filler + filler
+    camp["reach_line"] = camp["reach_line"] + filler + filler
+    camp["drop_line"] = camp["drop_line"] + filler + filler
+    doc["conversions"]["note"] = doc["conversions"]["note"] + filler + filler
+    val = doc["valuation"]
+    val["talent_share_basis"] = (val["talent_share_basis"] + "; the talent's own posts outdrew the brand's on "
+                                 "every platform where both posted; the launch-night coverage carried her name "
+                                 "in nine of every ten pieces; the matched group's movement was flat across the "
+                                 "same days")
+    val["rate_sources"]["bev_per_user"] = ("Rate: the open-market value of one engaged consumer at the 2026 "
+                                           "benchmark for premium apparel, set against the brand's own paid "
+                                           "social cost per engaged user over the same quarter." + filler)
+    val["rate_sources"]["blv_per_incr_user"] = val["rate_sources"]["bev_per_user"]
+    val["rate_sources"]["conv_value_per_user"] = val["rate_sources"]["conv_value_per_user"] + filler
+    long_src = ("Open-market benchmark for the platform's premium apparel inventory at typical exposure "
+                "frequency, restated per engaged consumer for the window")
+    val["rate_sources"]["emv_per_user"] = {p: f"{long_src} ({p})" for p in val["rates"]["emv_per_user"]}
+    val["rates"]["emv_per_user"].update({"Podcast": 9.0, "Newsletter": 3.0})
+    val["emv_breakdown"] += [
+        {"platform": "Podcast", "post_users_projected": 221003, "pre_users_projected": 110221,
+         "incremental_users_projected": 110782, "emv_per_user_rate": 9.0, "emv_value": 997038.0},
+        {"platform": "Newsletter", "post_users_projected": 98021, "pre_users_projected": 61003,
+         "incremental_users_projected": 37018, "emv_per_user_rate": 3.0, "emv_value": 111054.0}]
+    doc["control_group"]["match"]["note"] = doc["control_group"]["match"]["note"] + filler
+    doc["demographics"]["post"]["age"] = _demo(
+        ("17 and Under", 1012, 1.6452), ("18-20", 2835, 4.6), ("21-24", 5000, 8.1334), ("25-29", 8252, 13.4143),
+        ("30-34", 8000, 13.0), ("35-44", 14752, 23.9759), ("45-54", 11475, 18.6505), ("55-64", 7005, 11.3855),
+        ("65 to 74 Years Old", 1994, 3.2661), ("75 or Older, Including Retirees", 1000, 1.6))
+    doc["demographics"]["post"]["ethnicity"] = _demo(
+        ("White", 35586, 57.8366), ("Hispanic or Latino", 9612, 15.6191),
+        ("Black or African American", 7297, 11.8481), ("Asian", 7057, 11.4686),
+        ("Native Hawaiian or Other Pacific Islander", 986, 1.6), ("American Indian or Alaska Native", 1000, 1.6276))
+    doc["demographics"]["source_note"] = ("Source: Crosswalk BehaviorGraph. This is the audience that met the "
+                                          "campaign across the collection pages, the press, the film and the "
+                                          "launch posts, not the brand's engager base, and every column is the "
+                                          "post window." + filler)
+    doc["top_brand_properties"] = [
+        {"common_name": f"shop.northwindoutdoorapparel.com/the-alexandra-montgomery-whitfield-capsule-collection-{i}",
+         "hits": 297418 - i * 20000, "hits_projected": 9811794 - i * 700000} for i in range(7)]
+    doc["top_brand_properties_pre"] = [
+        {"common_name": doc["top_brand_properties"][0]["common_name"], "hits": 41263, "hits_projected": 1361263}]
+    doc["diagnostics"]["study_context"] = ("Rerun of the first-flight read with the post window closed on the "
+                                           "final day of the attribution window." + filler)
+    return doc
 
 
 # ------------------------------------------------------------- deck text
@@ -644,12 +856,104 @@ def test_cover_photo():
           r.status_code == 200 and im is not None and _is_photo(im) and s3f.asked == [("dashboard-inputs", PHOTO_KEY)])
 
 
+# ------------------------------------------------------------------ [7]
+def _colliding_deck():
+    """A presentation built to fail the check: two text frames whose text
+    lands on the same spot, and a frame whose text needs far more height
+    than its box. Proves the check sees collisions before it is trusted
+    to report none."""
+    from pptx import Presentation
+    from pptx.util import Inches, Pt
+    prs = Presentation()
+    prs.slide_width, prs.slide_height = Inches(13.333), Inches(7.5)
+    s = prs.slides.add_slide(prs.slide_layouts[6])
+
+    def box(left, top, width, height, text, size):
+        tb = s.shapes.add_textbox(Inches(left), Inches(top), Inches(width), Inches(height))
+        tf = tb.text_frame
+        tf.word_wrap = True
+        tf.margin_left = tf.margin_right = tf.margin_top = tf.margin_bottom = 0
+        r = tf.paragraphs[0].add_run()
+        r.text, r.font.size = text, Pt(size)
+        return tb
+
+    box(0.6, 1.0, 6.0, 0.5, "The first line of a claim that sits here.", 24)
+    box(0.6, 1.1, 6.0, 0.5, "A second claim written on top of the first one.", 24)
+    box(0.6, 4.0, 3.0, 0.3, " ".join(["overflow"] * 60), 12)
+    return prs
+
+
+def test_layout_fits():
+    print("[7] layout: nothing collides, nothing overflows")
+    from pptx import Presentation
+    from migration import bpiq_deck_builder as B
+
+    # the check sees a collision and an overflow when they are there
+    found = B.check_layout(_colliding_deck())
+    check("the check reports two frames whose text lands on the same spot",
+          any("collides" in f for f in found), found)
+    check("the check reports a frame whose text needs more height than its box",
+          any("more than its box" in f for f in found), found)
+
+    # the fit helpers do what the slides lean on
+    sz = B._fit_stat("$33,409,966.88", 3.5, 54, floor=20)
+    m = B._measure("$33,409,966.88", sz, 3.5, bold=True)
+    check(f"a 14-character total holds one line in a 3.5in tile ({sz}pt)",
+          m.lines == 1 and m.max_w_in <= 3.5, (sz, m))
+    check("a short stat keeps the tile's display size", B._fit_stat("3,593,822", 3.5, 54, floor=20) >= 40)
+    long_note = ("First sentence of a note. Second sentence of the note. Third sentence of the note. "
+                 "Fourth sentence of the note that is also long.")
+    fsz, fsp, ftxt, fm = B._fit_body(long_note, 3.0, 0.45, size=10, floor=9, spacing=1.3, min_spacing=1.1)
+    check("a note with no room steps down, tightens, then loses trailing sentences, never its first",
+          fm.height_in <= 0.45 and ftxt.startswith("First sentence of a note.") and fsz >= 9, (fsz, fsp, ftxt))
+    check("a note with room is left as written",
+          B._fit_body(long_note, 12.0, 2.0, size=10, floor=9, spacing=1.3)[2] == long_note)
+
+    # the live run, the long-text variant, both fixture shapes, the odd documents
+    out = {}
+    docs = {
+        "Beals x Lululemon": beals_lululemon_doc(),
+        "long text": long_text_doc(),
+        "new shape": new_shape_doc(),
+        "old shape": old_shape_doc(),
+        "empty document": {},
+        "name only": {"project_name": "Only A Name", "brand_partner": "Brand"},
+    }
+    for label, doc in docs.items():
+        data = B.build_deck(doc, image_url=None, category=None)
+        prs = Presentation(io.BytesIO(data))
+        issues = B.check_layout(prs)
+        check(f"{label}: zero layout findings on {len(prs.slides)} slides", not issues, issues[:3])
+        n, blob = slide_texts(data)
+        check(f"{label}: no slide fell back to the failure note", "Slide build failed" not in blob)
+        out[label] = (data, n)
+    _n, blob = slide_texts(out["Beals x Lululemon"][0])
+    for fig in ("$33,409,966.88", "$22,319,522.50", "$5,074,590", "$2,882,985", "$3,132,869.38",
+                "3,593,822", "$6,949,273.11", "$4,145,261.43"):
+        check(f"Beals x Lululemon: {fig} is on the deck", fig in blob)
+    check("Beals x Lululemon: the rate-sources note names every platform with a rate",
+          all(p in blob for p in ("Instagram $11.00", "Launch event $5.00", "Twitch $15.00")))
+    low = blob.lower()
+    check("Beals x Lululemon: the eight AGE buckets are all on the deck",
+          all(b in low for b in ("17 and under", "65 or older", "other", "18-24", "55-64")))
+    _n, blob = slide_texts(out["long text"][0])
+    check("long text: the total and the talent's share survive the fit",
+          "$33,409,966.88" in blob and "$6,949,273.11" in blob)
+    check("long text: a shortened account still opens with its first sentence",
+          "About 19,873 pieces sold in the US" in blob and "The collection ran $70 to $280 a piece." in blob)
+    check("long text: every one of the ten AGE buckets is on the deck",
+          all(b in blob.lower() for b in ("18-20", "21-24", "25-29", "30-34", "65 to 74 years old",
+                                          "75 or older, including retirees")))
+    return {k: out[k] for k in ("Beals x Lululemon", "long text")}
+
+
 if __name__ == "__main__":
     test_page_carries_the_deck_option()
     test_route_delegates()
     decks = test_route_answers_both_shapes()
     test_builder_never_raises()
     test_cover_photo()
+    decks.update(test_layout_fits())
     test_finish_ready(decks)
     print(f"\n{'PASS' if not FAIL else f'{FAIL} FAIL'}: Brand Partnership IQ deck export")
     sys.exit(1 if FAIL else 0)
