@@ -5630,13 +5630,23 @@ def _pm_interpret_core(user, body, text, history):
     # Brand Partnership Valuation wizard (Jenna 2026-10-28): the chip
     # must never become a library-comp read on this surface.
     try:
-        if _bpiq_wiz.wants(text, body, history):
-            _bw_user = (session.get('username') or (user or {}).get('username')
-                        or '').strip()
+        _bw_user = (session.get('username') or (user or {}).get('username')
+                    or '').strip()
+        _bw_store = _bpiq_wiz.shared_store(globals())
+        _bw_tid = str((body or {}).get('thread_id') or '')
+        if _bpiq_wiz.wants(text, body, history, store=_bw_store,
+                           user=_bw_user, thread_id=_bw_tid):
             _bw_hit = _bpiq_wiz.analyze_hook(
                 text, body, history, user, _pm_usage_extras(user),
-                _bw_user, globals(), first=_bpiq_wiz.is_start(text))
+                _bw_user, globals(), first=_bpiq_wiz.is_start(text),
+                store=_bw_store)
+            if _bw_hit is None:
+                _bw_hit = _bpiq_wiz.hold_payload(
+                    history, _bw_store, _bw_user, _bw_tid)
             if _bw_hit is not None:
+                _bw_hit = dict(_bw_hit)
+                _bw_hit.pop('read_job_id', None)
+                _bw_hit.pop('job_id', None)
                 return jsonify(_bw_hit)
     except Exception:
         traceback.print_exc()
@@ -15238,11 +15248,20 @@ def _pm_analyze_core(user, body, text, history):
     # opens step 1 before any other analyze lane, including twins.
     _bpiq_user = (session.get('username') or user.get('username')
                   or '').strip()
-    if _bpiq_wiz.wants(text, body, history):
+    _bpiq_store = _bpiq_wiz.shared_store(globals())
+    _bpiq_tid = str((body or {}).get('thread_id') or '')
+    if _bpiq_wiz.wants(text, body, history, store=_bpiq_store,
+                       user=_bpiq_user, thread_id=_bpiq_tid):
         _bpiq_resp = _bpiq_wiz.analyze_hook(
             text, body, history, user, _pm_ppu, _bpiq_user, globals(),
-            first=_bpiq_wiz.is_start(text))
+            first=_bpiq_wiz.is_start(text), store=_bpiq_store)
+        if _bpiq_resp is None:
+            _bpiq_resp = _bpiq_wiz.hold_payload(
+                history, _bpiq_store, _bpiq_user, _bpiq_tid)
         if _bpiq_resp is not None:
+            _bpiq_resp = dict(_bpiq_resp)
+            _bpiq_resp.pop('read_job_id', None)
+            _bpiq_resp.pop('job_id', None)
             return jsonify(_bpiq_resp)
     # ---- Multi-year trend asks (2026-09-22, Jenna: "it should have
     # forced him to pay for profiles to be run on Will and Grace for

@@ -274,9 +274,143 @@ def is_start(text):
     return False
 
 
-def wants(text, body=None, history=None):
+# Last-agent prompts that mean the wizard is already open. A bare
+# name like "Jennifer Beals" after any of these is the answer, never
+# a new subject read.
+_PROMPT_TO_STEP = (
+    (ASK_TALENT, STEP_TALENT),
+    ('Who is the property or talent', STEP_TALENT),
+    (ASK_CAMPAIGN, STEP_CAMPAIGN),
+    ('What campaign should I value', STEP_CAMPAIGN),
+    (ASK_DATES, STEP_DATES),
+    ('What are the campaign dates', STEP_DATES),
+    ('I could not read those dates', STEP_DATES),
+    ('I read the campaign as', STEP_ATTR),
+    (ASK_ATTR_CUSTOM, STEP_ATTR_CUSTOM),
+    ('What attribution window should I use', STEP_ATTR_CUSTOM),
+    (ASK_CONTROL, STEP_CONTROL),
+    ('Include a control group', STEP_CONTROL),
+    (ASK_ASSETS, STEP_ASSETS),
+    ('Do you have specific campaign links', STEP_ASSETS),
+    (ASK_LINKS, STEP_LINKS),
+    ('Paste the campaign links', STEP_LINKS),
+    ("Here's what I'll run", STEP_CHARGE),
+    ('Here is what I will run', STEP_CHARGE),
+)
+
+
+def _host_cap(host, *names):
+    """Read a bound host capability without raising HostNotBound.
+
+    The live host binds `bucket`, not `S3_BUCKET`. getattr on a missing
+    name is a RuntimeError, so the usual getattr default never runs.
+    """
+    if host is None:
+        return None
+    checker = None
+    try:
+        checker = getattr(host, 'has', None)
+    except Exception:
+        checker = None
+    for n in names:
+        try:
+            if callable(checker) and not checker(n):
+                continue
+            val = getattr(host, n)
+            if val is not None:
+                return val
+        except Exception:
+            continue
+    return None
+
+
+def last_agent_turn(history):
+    for turn in reversed(list(history or [])):
+        if not isinstance(turn, dict):
+            continue
+        if str(turn.get('role') or '') not in ('agent', 'assistant'):
+            continue
+        return turn
+    return None
+
+
+def step_from_prompt(text):
+    t = str(text or '').strip()
+    if not t:
+        return None
+    for head, step in _PROMPT_TO_STEP:
+        if t == head or t.startswith(head) or head in t:
+            return step
+    return None
+
+
+def last_agent_is_wizard(history):
+    turn = last_agent_turn(history)
+    if not turn:
+        return False
+    meta = turn.get('meta') if isinstance(turn.get('meta'), dict) else {}
+    if meta.get('bpiq_wizard') or turn.get('bpiq_wizard'):
+        return True
+    txt = str(turn.get('text') or turn.get('content') or '').strip()
+    return step_from_prompt(txt) is not None
+
+
+def replay_history(history, today=None):
+    """Rebuild the draft from the thread when the shared store misses.
+
+    Each agent prompt names the step; the user turn after it is the
+    answer. A start phrase resets. Cancel or Decline ends the walk.
+    """
+    today = _today(today)
+    d = empty_draft()
+    d['step'] = STEP_TALENT
+    pending = None
+    saw = False
+    for turn in list(history or []):
+        if not isinstance(turn, dict):
+            continue
+        role = str(turn.get('role') or '')
+        txt = str(turn.get('text') or turn.get('content') or '').strip()
+        meta = turn.get('meta') if isinstance(turn.get('meta'), dict) else {}
+        wiz = meta.get('bpiq_wizard') or turn.get('bpiq_wizard')
+        if isinstance(wiz, dict) and wiz.get('step'):
+            d = dict(wiz)
+            saw = True
+            pending = None
+            continue
+        if role in ('agent', 'assistant'):
+            pending = step_from_prompt(txt)
+            if pending:
+                saw = True
+            continue
+        if role != 'user' or not txt:
+            continue
+        if is_start(txt):
+            d = empty_draft()
+            d['step'] = STEP_TALENT
+            pending = None
+            saw = True
+            continue
+        if is_cancel(txt) or is_decline(txt):
+            return None
+        if pending:
+            d['step'] = pending
+            d2, err = apply_answer(d, txt, today=today)
+            if not err:
+                d = d2
+            pending = None
+            saw = True
+    if pending:
+        d['step'] = pending
+        saw = True
+    return _price_draft(d) if saw else None
+
+
+def wants(text, body=None, history=None, store=None, user=None,
+          thread_id=''):
     """True when this turn belongs to the wizard: a start phrase, an
-    armed body, or the last agent turn already asked a wizard step."""
+    armed body, a draft on the shared store, or the last agent turn
+    already asked a wizard step."""
     if is_start(text):
         return True
     body = body or {}
@@ -284,18 +418,20 @@ def wants(text, body=None, history=None):
     if any((body.get(k) or extra.get(k)) for k in (
             'bpiq_wizard', 'bpiq_inputs', 'bpiq_confirm')):
         return True
-    for turn in reversed(list(history or [])):
-        if not isinstance(turn, dict):
-            continue
-        if str(turn.get('role') or '') not in ('agent', 'assistant'):
-            continue
-        meta = turn.get('meta') if isinstance(turn.get('meta'), dict) else {}
-        if meta.get('bpiq_wizard') or turn.get('bpiq_wizard'):
-            return True
-        txt = str(turn.get('text') or turn.get('content') or '').strip()
-        if txt == ASK_TALENT or txt.startswith('Who is the property or talent'):
-            return True
-        break
+    if last_agent_is_wizard(history):
+        return True
+    if store is None and user:
+        try:
+            store = shared_store()
+        except Exception:
+            store = None
+    if store is not None:
+        try:
+            hit = store.load(user, thread_id or '')
+            if isinstance(hit, dict) and hit.get('step'):
+                return True
+        except Exception:
+            pass
     return False
 
 
@@ -520,7 +656,31 @@ def _payload(reply, followups, draft=None, **extra):
             out['bpiq_confirm_payload'] = engine_inputs(draft)
             out['bpiq_collect'] = False
     out.update(extra)
+    # A wizard turn is never a long subject read. The email-me card
+    # and the status lane key off these.
+    out.pop('read_job_id', None)
+    out.pop('job_id', None)
     return out
+
+
+def hold_payload(history=None, store=None, user=None, thread_id='',
+                 today=None):
+    """Repeat the open step. Used when the hook must not fall through."""
+    draft = None
+    if store is not None:
+        try:
+            hit = store.load(user, thread_id or '')
+            if isinstance(hit, dict) and hit.get('step'):
+                draft = dict(hit)
+        except Exception:
+            draft = None
+    if not draft:
+        draft = replay_history(history, today=today)
+    if not draft:
+        draft = empty_draft()
+        draft['step'] = STEP_TALENT
+    reply, chips = step_prompt(draft, today=today)
+    return _payload(reply, chips, draft=draft)
 
 
 def step_prompt(draft, today=None):
@@ -683,29 +843,33 @@ class MemoryStore:
         return True
 
 
-def _safe_store(g):
-    """Best-effort draft store. A host miss still starts the wizard."""
+def shared_store(g=None):
+    """The shared S3 store other intakes use. Never an in-process dict
+    when the host has a client: Render runs more than one worker."""
     try:
         from .host import host as _host
-        if _host.has('s3_client'):
+        if _host_cap(_host, 's3_client') is not None or (
+                callable(getattr(_host, 'has', None)) and (
+                    _host.has('s3_client') or _host.has('bucket'))):
             return _s3_store(_host)
     except Exception:
         pass
     try:
-        if g:
-            return _s3_store(type('H', (), {
-                's3_client': getattr(g.get('_H'), 's3_client', None),
-                'S3_BUCKET': getattr(g.get('_H'), 'S3_BUCKET',
-                                    'dashboard-inputs'),
-            })())
+        h = (g or {}).get('_H') if g else None
+        if h is not None and _host_cap(h, 's3_client') is not None:
+            return _s3_store(h)
     except Exception:
         pass
     return MemoryStore()
 
 
+def _safe_store(g):
+    return shared_store(g)
+
+
 def _s3_store(host):
-    """Draft store on the thread (and a per-user peek) so a refresh
-    does not lose the in-progress valuation."""
+    """Draft store on the same pending-intake document other guided
+    flows use, plus a per-thread key. Survives workers and reloads."""
     class _S:
         def _ids(self, user, thread_id):
             try:
@@ -722,18 +886,23 @@ def _s3_store(host):
             uk, tid = self._ids(user, thread_id)
             return f"system/pm_pending_intake/{uk}/bpiq_wizard_{tid}.json"
 
+        def _s3(self):
+            return _host_cap(host, 's3_client')
+
+        def _bucket(self):
+            return _host_cap(host, 'bucket', 'S3_BUCKET') or 'dashboard-inputs'
+
         def load(self, user, thread_id=''):
-            s3 = getattr(host, 's3_client', None)
-            bucket = getattr(host, 'S3_BUCKET', None) or getattr(
-                host, 'bucket', None) or 'dashboard-inputs'
+            s3 = self._s3()
+            bucket = self._bucket()
             if s3 is None:
                 return None
             try:
                 from prometheus import pending_intake as pi
                 hit = pi.peek(s3, bucket, user, WIZARD_FLOW)
                 if isinstance(hit, dict) and hit.get('step'):
-                    if thread_id and hit.get('thread_id') not in (
-                            None, '', thread_id):
+                    stash_tid = str(hit.get('thread_id') or '')
+                    if thread_id and stash_tid and stash_tid != str(thread_id):
                         pass
                     else:
                         return hit
@@ -748,15 +917,16 @@ def _s3_store(host):
                 return None
 
         def save(self, user, thread_id, draft):
-            s3 = getattr(host, 's3_client', None)
-            bucket = getattr(host, 'S3_BUCKET', None) or getattr(
-                host, 'bucket', None) or 'dashboard-inputs'
+            s3 = self._s3()
+            bucket = self._bucket()
             doc = dict(draft or {}, thread_id=thread_id or '')
             if s3 is None:
                 return False
+            ok = False
             try:
                 from prometheus import pending_intake as pi
-                pi.stash(s3, bucket, user, WIZARD_FLOW, doc, run_label=CHIP)
+                ok = bool(pi.stash(s3, bucket, user, WIZARD_FLOW, doc,
+                                   run_label=CHIP))
             except Exception:
                 traceback.print_exc()
             try:
@@ -768,12 +938,11 @@ def _s3_store(host):
                 return True
             except Exception:
                 traceback.print_exc()
-                return False
+                return ok
 
         def clear(self, user, thread_id=''):
-            s3 = getattr(host, 's3_client', None)
-            bucket = getattr(host, 'S3_BUCKET', None) or getattr(
-                host, 'bucket', None) or 'dashboard-inputs'
+            s3 = self._s3()
+            bucket = self._bucket()
             if s3 is None:
                 return False
             try:
@@ -789,21 +958,29 @@ def _s3_store(host):
     return _S()
 
 
-def _load_draft(store, user, thread_id, body, history):
+def _load_draft(store, user, thread_id, body, history, today=None):
     if isinstance((body or {}).get('bpiq_wizard'), dict):
-        return dict(body['bpiq_wizard'])
+        hit = dict(body['bpiq_wizard'])
+        if hit.get('step'):
+            return hit
     if store is not None:
-        hit = store.load(user, thread_id)
-        if isinstance(hit, dict) and hit.get('step'):
-            return dict(hit)
+        try:
+            hit = store.load(user, thread_id)
+            if isinstance(hit, dict) and hit.get('step'):
+                return dict(hit)
+        except Exception:
+            pass
     for turn in reversed(list(history or [])):
+        if not isinstance(turn, dict):
+            continue
         if str(turn.get('role') or '') not in ('agent', 'assistant'):
             continue
         meta = turn.get('meta') if isinstance(turn.get('meta'), dict) else {}
         wiz = meta.get('bpiq_wizard') or turn.get('bpiq_wizard')
         if isinstance(wiz, dict) and wiz.get('step'):
             return dict(wiz)
-    return None
+        break
+    return replay_history(history, today=today)
 
 
 def _uname(user):
@@ -897,15 +1074,12 @@ def _analyze_hook(text, body, history, user, ppu, uname, g,
     # or fall through to a library-comp read.
     if is_start(t):
         if store is None:
-            store = _safe_store(g)
+            store = shared_store(g)
         return _start_fresh(store, uname or user, thread_id, today)
-    from .host import host as _host
     if store is None:
-        store = _s3_store(_host if _host.has('s3_client') else type('H', (), {
-            's3_client': getattr(g.get('_H'), 's3_client', None) if g else None,
-            'S3_BUCKET': getattr(g.get('_H'), 'S3_BUCKET', 'dashboard-inputs') if g else 'dashboard-inputs',
-        })())
-    draft = _load_draft(store, uname or user, thread_id, body, history)
+        store = shared_store(g)
+    draft = _load_draft(store, uname or user, thread_id, body, history,
+                        today=today)
     intent = False
     if g and callable(g.get('_pm_bpiq_intent')):
         try:
@@ -984,15 +1158,18 @@ def _analyze_hook(text, body, history, user, ppu, uname, g,
             store.clear(uname or user, thread_id)
         return _payload(DECLINE_REPLY, [], draft=None, bpiq_collect=False)
 
-    # A new product ask while a draft is open leaves the wizard.
-    if draft and t and not collecting and not intent:
-        try:
-            from prometheus.intake_reader import is_new_ask
-            if is_new_ask(t) and not is_chip(t):
-                return None
-        except Exception:
-            pass
-
+    # Only Cancel (or Decline on the recap) leaves. A bare name, a
+    # new-looking ask, or a subject-shaped reply is the next answer.
+    if not draft:
+        draft = replay_history(history, today=today)
+        if draft:
+            collecting = True
+    if not draft and last_agent_is_wizard(history):
+        draft = empty_draft()
+        step = step_from_prompt(
+            str((last_agent_turn(history) or {}).get('text') or ''))
+        draft['step'] = step or STEP_TALENT
+        collecting = True
     if not draft and not intent and not collecting:
         return None
 
@@ -1036,4 +1213,6 @@ def _analyze_hook(text, body, history, user, ppu, uname, g,
         reply, chips = step_prompt(d2, today=today)
         return _payload(reply, chips, draft=d2)
 
+    if draft or last_agent_is_wizard(history) or collecting:
+        return hold_payload(history, store, uname or user, thread_id, today)
     return None

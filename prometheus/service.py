@@ -545,11 +545,15 @@ def ask(user, body, *, via='session'):
 
     # lane: bpiq_wizard
     # Chip "Value a brand partnership" always opens step 1 (Jenna
-    # 2026-10-28). Must beat the Reader, the library-comp read, and
-    # interpret generate. A leftover draft is cancelled on the chip.
+    # 2026-10-28). While a draft is open on this thread, EVERY later
+    # turn stays in the wizard (Jenna 2026-10-28 5:48pm: "Jennifer
+    # Beals" was read as a new subject). Peek the shared store first.
+    # Only Cancel (or Decline on the recap) leaves.
     try:
         from prometheus import bpiq_wizard as _bwiz
-        if _bwiz.wants(text, body, history):
+        _bw_store = _bwiz.shared_store({'_H': host})
+        if _bwiz.wants(text, body, history, store=_bw_store,
+                       user=uname, thread_id=tid or ''):
             _g = {}
             try:
                 if host.has('bpiq_intent'):
@@ -559,9 +563,15 @@ def ask(user, body, *, via='session'):
             _g['_H'] = host
             _hit = _bwiz.analyze_hook(
                 text, dict(body, thread_id=tid or ''), history, user,
-                {}, uname, _g, first=_bwiz.is_start(text))
+                {}, uname, _g, first=_bwiz.is_start(text),
+                store=_bw_store)
+            if _hit is None:
+                _hit = _bwiz.hold_payload(
+                    history, _bw_store, uname, tid or '')
             if _hit is not None:
                 raw = dict(_hit)
+                raw.pop('read_job_id', None)
+                raw.pop('job_id', None)
                 _cs = str(body.get('_client_surface_sent')
                           or body.get('surface') or '').strip().lower()
                 if _cs == 'interpret':
@@ -571,6 +581,8 @@ def ask(user, body, *, via='session'):
                         raw['bpiq_wizard'] = _hit['bpiq_wizard']
                     if _hit.get('bpiq_collect') is not None:
                         raw['bpiq_collect'] = _hit['bpiq_collect']
+                    raw.pop('read_job_id', None)
+                    raw.pop('job_id', None)
                 decision = {'surface': 'analyze', 'mode': None,
                             'reason': 'bpiq_wizard', 'client_hint': None}
                 try:
@@ -2583,6 +2595,8 @@ def _persist_turn(persist, uname, tid, history, text, env, raw, surface):
             meta['priced_paid'] = raw['priced_paid']
         if isinstance(raw, dict) and isinstance(raw.get('file_link'), dict) and raw['file_link'].get('url'):
             meta['link'] = {'url': str(raw['file_link']['url']), 'label': str(raw['file_link'].get('label') or 'Download CSV')}   # the CSV link survives a reload (2026-10-26)
+        if isinstance(raw, dict) and isinstance(raw.get('bpiq_wizard'), dict):
+            meta['bpiq_wizard'] = raw['bpiq_wizard']
         turns.append({'role': 'agent', 'text': env['text'],
                       'ts': _now(), 'meta': meta})
         save_thread(uname, tid, turns)

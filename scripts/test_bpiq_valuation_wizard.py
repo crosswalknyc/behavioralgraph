@@ -2,7 +2,9 @@
 """Brand Partnership Valuation wizard (Jenna 2026-10-28). Hermetic."""
 from __future__ import annotations
 
+import json
 import sys
+import tempfile
 from datetime import date
 from pathlib import Path
 
@@ -354,6 +356,228 @@ def test_funds_fail_does_not_start():
           'add funds' in out['reply'].lower())
 
 
+HOLD_LEAKS = (
+    'On it: reading',
+    'reading the data',
+    'Want me to email you',
+    'To price a partnership I need the pair',
+)
+
+
+class FileStore:
+    """Shared-store stand-in. A new instance per turn, same file."""
+
+    def __init__(self, path):
+        self.path = str(path)
+
+    def _rows(self):
+        p = Path(self.path)
+        if not p.exists() or not p.read_text().strip():
+            return {}
+        return json.loads(p.read_text())
+
+    def _write(self, rows):
+        Path(self.path).write_text(json.dumps(rows, default=str))
+
+    def _k(self, user, thread_id):
+        return f"{user or ''}|{thread_id or ''}"
+
+    def load(self, user, thread_id=''):
+        rows = self._rows()
+        return rows.get(self._k(user, thread_id)) or rows.get(self._k(user, ''))
+
+    def save(self, user, thread_id, draft):
+        rows = self._rows()
+        rows[self._k(user, thread_id)] = dict(draft or {})
+        if thread_id:
+            rows[self._k(user, '')] = dict(draft or {})
+        self._write(rows)
+        return True
+
+    def clear(self, user, thread_id=''):
+        rows = self._rows()
+        rows.pop(self._k(user, thread_id), None)
+        rows.pop(self._k(user, ''), None)
+        self._write(rows)
+        return True
+
+
+def _no_leaks(out, label):
+    reply = str((out or {}).get('reply') or '')
+    check("%s is a wizard reply" % label, out is not None and bool(reply))
+    for leak in HOLD_LEAKS:
+        check("%s has no %r" % (label, leak), leak not in reply)
+    check("%s has no email-me card" % label,
+          not (out or {}).get('read_job_id')
+          and not (out or {}).get('job_id'))
+    return reply
+
+
+def _service_turn(text, path, history, charge_fn=None, start_fn=None):
+    """One request the way service.ask runs it: new store object, no
+    body draft, real intent gate, wants() then analyze_hook."""
+    store = FileStore(path)
+    body = {'thread_id': 't1'}
+    armed = W.wants(text, body, history, store=store, user='tester',
+                    thread_id='t1')
+    check("wants() holds the thread for %r" % text[:40], armed)
+    out = W.analyze_hook(
+        text, body, list(history), 'tester', {}, 'tester',
+        {'_pm_bpiq_intent': _real_intent},
+        first=W.is_start(text), today=TODAY, store=store,
+        charge_fn=charge_fn, start_fn=start_fn)
+    if out is None:
+        out = W.hold_payload(history, store, 'tester', 't1', today=TODAY)
+    return out, store
+
+
+def test_thread_holds_across_isolated_turns():
+    """Chip through Accept, one fresh store object per turn, no body
+    draft. This is the 2026-10-28 5:48pm Jennifer Beals defect."""
+    charged, started = [], []
+
+    def charge(user, inputs, job_id):
+        charged.append((user, inputs, job_id))
+        return True
+
+    def start(job_id, user, inputs, extras):
+        started.append((job_id, user, inputs))
+
+    with tempfile.TemporaryDirectory() as td:
+        path = Path(td) / 'wizard.json'
+        history = []
+        script = [
+            (W.CHIP, 'Who is the property or talent'),
+            ('Jennifer Beals', 'What campaign should I value'),
+            ('Ganni x Lululemon', 'What are the campaign dates'),
+            ('October 7 - 28', 'I read the campaign as'),
+            ('Accept', 'Include a control group'),
+            ('No', 'Do you have specific campaign links'),
+            (W.CHIP_FIND, "Here's what I'll run"),
+            (W.accept_chip(500), "It's running"),
+        ]
+        for text, expect in script:
+            out, _store = _service_turn(
+                text, path, history,
+                charge_fn=charge, start_fn=start)
+            reply = _no_leaks(out, text[:40] or 'turn')
+            check("next question after %r" % text[:40], expect in reply)
+            history.append({'role': 'user', 'text': text})
+            history.append({
+                'role': 'agent',
+                'text': reply,
+                'meta': {'bpiq_wizard': (out or {}).get('bpiq_wizard')},
+            })
+        check("accept charges once after the isolated walk",
+              len(charged) == 1)
+        check("accept enqueues once after the isolated walk",
+              len(started) == 1)
+
+    with tempfile.TemporaryDirectory() as td:
+        path = Path(td) / 'wizard.json'
+        history = []
+        for text, expect in (
+                (W.CHIP, 'Who is the property or talent'),
+                ('Jennifer Beals', 'What campaign should I value'),
+                ('Ganni x Lululemon', 'What are the campaign dates'),
+                ('October 7 - 28', 'I read the campaign as'),
+                ('Accept', 'Include a control group'),
+                ('No', 'Do you have specific campaign links'),
+                (W.CHIP_FIND, "Here's what I'll run"),
+                ('Decline', "Okay, I won't run it")):
+            out, _store = _service_turn(text, path, history)
+            reply = _no_leaks(out, 'decline-walk ' + text[:30])
+            check("decline-walk next after %r" % text[:30], expect in reply)
+            history.append({'role': 'user', 'text': text})
+            history.append({'role': 'agent', 'text': reply})
+        check("decline did not add a charge", len(charged) == 1)
+        check("decline did not add a start", len(started) == 1)
+
+
+def test_history_only_talent_is_not_a_subject_read():
+    """No store hit, no body draft: last agent asked step 1, the user
+    typed a name. That name is the talent, never a subject read."""
+    hist = [
+        {'role': 'user', 'text': W.CHIP},
+        {'role': 'agent', 'text': W.ASK_TALENT},
+    ]
+    check("wants() is true for Jennifer Beals after step 1",
+          W.wants('Jennifer Beals', {}, hist))
+    out = W.analyze_hook(
+        'Jennifer Beals', {'thread_id': 't1'}, hist, 'tester', {},
+        'tester', {'_pm_bpiq_intent': _real_intent},
+        first=None, today=TODAY, store=W.MemoryStore())
+    reply = _no_leaks(out, 'history-only Jennifer Beals')
+    check("history-only talent answer asks for the campaign",
+          'What campaign should I value' in reply)
+    check("history-only draft stored Jennifer Beals",
+          ((out or {}).get('bpiq_wizard') or {}).get('talent')
+          == 'Jennifer Beals')
+
+
+def test_s3_store_uses_bucket_not_s3_bucket():
+    """Live host binds `bucket`. getattr(S3_BUCKET) raises HostNotBound."""
+
+    class _Body:
+        def __init__(self, raw):
+            self._raw = raw
+
+        def read(self):
+            return self._raw
+
+    class FakeS3:
+        def __init__(self):
+            self.obj = {}
+
+        def get_object(self, Bucket, Key):
+            if (Bucket, Key) not in self.obj:
+                raise KeyError(Key)
+            return {'Body': _Body(self.obj[(Bucket, Key)])}
+
+        def put_object(self, Bucket, Key, Body, ContentType=None):
+            if isinstance(Body, str):
+                Body = Body.encode('utf-8')
+            self.obj[(Bucket, Key)] = Body
+
+        def delete_object(self, Bucket, Key):
+            self.obj.pop((Bucket, Key), None)
+
+    class HostLike:
+        def __init__(self, s3, bucket='dashboard-inputs'):
+            self._b = {'s3_client': s3, 'bucket': bucket}
+
+        def has(self, name):
+            return name in self._b
+
+        def __getattr__(self, name):
+            if name.startswith('_'):
+                raise AttributeError(name)
+            try:
+                return self._b[name]
+            except KeyError:
+                raise RuntimeError(
+                    'prometheus host capability not bound: ' + name)
+
+    s3 = FakeS3()
+    host = HostLike(s3)
+    store = W._s3_store(host)
+    draft = {**W.empty_draft(), 'step': W.STEP_TALENT}
+    check("save does not raise HostNotBound",
+          store.save('tester', 't1', draft) is True)
+    hit = store.load('tester', 't1')
+    check("load sees the talent-step draft",
+          isinstance(hit, dict) and hit.get('step') == W.STEP_TALENT)
+    out = W.analyze_hook(
+        'Jennifer Beals', {'thread_id': 't1'}, [
+            {'role': 'user', 'text': W.CHIP},
+            {'role': 'agent', 'text': W.ASK_TALENT},
+        ], 'tester', {}, 'tester', {'_pm_bpiq_intent': _real_intent},
+        first=None, today=TODAY, store=store)
+    reply = _no_leaks(out, 'host-bucket Jennifer Beals')
+    check("host-bucket talent answer asks for the campaign",
+          'What campaign should I value' in reply)
+
+
 def main():
     print("Brand Partnership Valuation wizard")
     test_chip_starts_talent()
@@ -369,6 +593,9 @@ def main():
     test_typed_value_a_brand_partnership_starts()
     test_chip_resets_unrelated_prior_subject()
     test_router_start_beats_pair_read()
+    test_thread_holds_across_isolated_turns()
+    test_history_only_talent_is_not_a_subject_read()
+    test_s3_store_uses_bucket_not_s3_bucket()
     print("\n" + ("OK" if not FAIL else f"{FAIL} FAILED"))
     return 1 if FAIL else 0
 
