@@ -351,8 +351,11 @@ def keep_server_turns(stored, incoming):
             if j is None:
                 continue
             cur = out[j]
-            if isinstance(cur.get('meta'), dict) and cur['meta'].get('corrected_at') == meta.get('corrected_at'):
+            cur_c = str((cur.get('meta') or {}).get('corrected_at') or '') if isinstance(cur.get('meta'), dict) else ''
+            if cur_c == str(meta.get('corrected_at') or ''):
                 continue
+            if cur_c and cur_c > str(meta.get('corrected_at') or ''):
+                continue     # the incoming turn carries a newer correction (a correction of a correction, 2026-10-28)
             out[j] = dict(t)
         seen = {(str(t.get('ts') or ''), str(t.get('text') or '')[:80]) for t in out if isinstance(t, dict)}
         texts = {str(t.get('text') or '')[:80] for t in out if isinstance(t, dict)}
