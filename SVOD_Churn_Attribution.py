@@ -8304,7 +8304,7 @@ def run_synthetic_attribution(config: dict) -> dict:
             print(f"⚠️  S3 upload skipped: {type(e).__name__}: {e}")
 
     validation_meta = getattr(df_summary, 'attrs', {}).get('ai_validation', {})
-    return {
+    result = {
         "output_path":       str(output_path),
         "s3_key":            s3_key,
         "reach_us":          panel['reach_us'],
@@ -8316,6 +8316,34 @@ def run_synthetic_attribution(config: dict) -> dict:
         # can record the title's universe anchor (2026-08-25 coherence).
         "final_demo_pcts":   p.get('_final_demo_pcts') or {},
     }
+    # total_panel is the Total Show Watchers count the FILE displays, read back
+    # from the written CSV (2026-10-29, S.W.A.T. Exiles Season 1 to date). The
+    # in-memory panel['total_panel'] is the pre-divisor panel (OUTPUT_DIVISOR
+    # 10 above it), so the title anchor the worker records off it landed ten
+    # times over the file's own projection (18,720,835 against 1,872,084) until
+    # the hourly audit snapped it back. The file is the one source: whatever
+    # write_output settled on (divisor, validation overrides, hygiene) is what
+    # the anchor must carry.
+    _displayed = _displayed_total_show_watchers(output_path)
+    if _displayed:
+        result["total_panel"] = _displayed
+    return result
+
+
+def _displayed_total_show_watchers(path) -> int:
+    """The Total Show Watchers count in a written Subscriber IQ CSV (the
+    post-divisor figure the dashboard shows and projects x 32.99). 0 when the
+    row cannot be read; the caller then keeps the in-memory value."""
+    import csv as _csv
+    try:
+        with open(path, newline='', encoding='utf-8') as fh:
+            for row in _csv.reader(fh):
+                if row and str(row[0]).strip() == 'Total Show Watchers':
+                    cell = str(row[2]).replace(',', '').strip() if len(row) > 2 else ''
+                    return int(float(cell)) if cell else 0
+    except Exception as _read_err:
+        print(f"   ⚠️  Could not read Total Show Watchers back from {path}: {_read_err}")
+    return 0
 
 
 # =============
