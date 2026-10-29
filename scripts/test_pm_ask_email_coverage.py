@@ -184,5 +184,9 @@ check("question emails BCC Liz and Jessie",
 check("Liz and Jessie ride as BCC only, never in the To header",
       "msg['To'] = _TO" in _wn and "msg['To'] = _BCC" not in _wn
       and "msg['Bcc']" not in _wn)
+# Jenna 2026-10-28: a multi-step walk holds, then one email.
+check("notify routes a walk through the shared bundle",
+      "from prometheus.ask_email_bundle import handle_notify" in _wn
+      and "handle_notify(" in _wn)
 
 print("ALL CHECKS PASSED")

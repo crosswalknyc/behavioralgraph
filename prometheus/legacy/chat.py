@@ -5017,10 +5017,11 @@ from prometheus.ask_outcome import (  # noqa: E402,F401
 
 
 def _pm_watch_notify(username, question, payload, subject=None,
-                     probe=False, via=None, surface=None):
+                     probe=False, via=None, surface=None, thread_id=None):
     """Email Jenna the question and the answer for every account, API asks included (marked).
     Off the request thread; the 'On it' placeholder is skipped, the finished read calls again.
-    Probes (probe=True, a probe caller, a canary label) never mail. Never raises."""
+    Probes (probe=True, a probe caller, a canary label) never mail. Never raises.
+    A multi-step walk holds each turn and sends one email when it ends."""
     try:
         if probe or _pm_is_probe_user(username) or _pm_probe_caller():
             return
@@ -5028,12 +5029,21 @@ def _pm_watch_notify(username, question, payload, subject=None,
             via = 'api'
     except Exception as _fx:
         _faults.note('chat', _fx)
+    tid = thread_id
+    try:
+        if not tid:
+            from flask import g as _g, has_request_context
+            if has_request_context():
+                tid = getattr(_g, '_pm_thread_id', None)
+    except Exception as _fx:
+        _faults.note('chat', _fx)
 
     def _run():
         try:
             import prometheus_watch_notify as _pwn
             rec = _pwn.user_record(_H.load_users() or {}, username)
-            _pwn.notify(username, rec, question, payload, subject, via=via, surface=surface)
+            _pwn.notify(username, rec, question, payload, subject, via=via,
+                        surface=surface, thread_id=tid or '')
         except Exception:
             traceback.print_exc()
     try:

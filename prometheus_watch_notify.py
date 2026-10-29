@@ -177,7 +177,8 @@ def _correct_link(username, question, answer, subject):
 
 
 def _html(who, label, email, when, subject, question, answer,
-          correct_url='', subject_label='Open profile'):
+          correct_url='', subject_label='Open profile', turns=None,
+          outcome=''):
     ink, body, muted, olive, off = (
         '#0C1618', '#5C6560', '#888C89', '#5E7E12', '#E9E8E1')
     def block(title, text):
@@ -192,6 +193,20 @@ def _html(who, label, email, when, subject, question, answer,
                 f"line-height:1.5'>{safe}</div>")
     subj = (f"<div style='color:{muted};font-size:13px;margin-top:4px'>"
             f"{subject_label}: {subject}</div>" if subject else '')
+    if turns:
+        parts = []
+        for i, t in enumerate(turns, 1):
+            n = f' {i}' if len(turns) > 1 else ''
+            parts.append(block(f'Question{n}', (t or {}).get('q') or ''))
+            parts.append(block(f'Answer{n}', (t or {}).get('a')
+                               or 'No written answer on this step.'))
+        if outcome:
+            parts.append(block('Outcome', outcome))
+        mid = ''.join(parts)
+    else:
+        mid = (
+            f"{block('Question', question)}"
+            f"{block('Answer', answer or 'No written answer on this step.')}")
     return (
         f"<html><body style='margin:0;padding:0;background:{off};"
         f"font-family:Helvetica,Arial,sans-serif;color:{body}'>"
@@ -202,8 +217,7 @@ def _html(who, label, email, when, subject, question, answer,
         f"margin:10px 0 4px'>{who} at {label} asked a question.</h1>"
         f"<div style='color:{muted};font-size:13px'>{email} · {when}</div>"
         f"{subj}"
-        f"{block('Question', question)}"
-        f"{block('Answer', answer or 'No written answer on this step.')}"
+        f"{mid}"
         + ((f"<div style='margin:20px 0 0'><a href='{correct_url}' "
             f"style='display:inline-block;background:{ink};"
             f"color:{off};text-decoration:none;border-radius:10px;"
@@ -225,39 +239,24 @@ def _subject_label(surface):
     return 'Subject' if str(surface or '').lower() == 'interpret' else 'Open profile'
 
 
-def _send(username, record, question, answer, subject, via=None, surface=None):
-    from prometheus.mail_guard import sending_allowed, suppressed_note
-    if not sending_allowed():   # a test or replay process never reaches SES (2026-10-16)
-        print(suppressed_note('watch note', question))
-        return
-    import boto3
+def _address(record, username, via):
     email = str((record or {}).get('email') or '')
     company = str((record or {}).get('company') or '')
     label = watched_label(email, company)
-    if not label or not str(question or '').strip():
-        return
     first = str((record or {}).get('first_name') or '').strip()
     last = str((record or {}).get('last_name') or '').strip().rstrip('`')
     who = (f"{first} {last}".strip() or str(username or 'A user'))
-    when = datetime.now(timezone.utc).strftime('%b %d, %Y %I:%M %p UTC')
-    subj_line = str(subject or '').strip()
     api = str(via or '').lower() in ('api', 'api_key')
-    # an API ask mails exactly like a dashboard ask (Jenna 2026-10-14:
-    # "make sure if someone sends a query via api jessie/liz/me still get
-    # the email and the response"), marked so the surface is clear
     mail_subject = f"{label}: {who} asked Prometheus" + (' (API)' if api else '')
-    correct_url = _correct_link(username, question, answer, subj_line)
-    text = (
-        f"{who} at {label} asked Prometheus a question{' over the API' if api else ''}.\n"
-        f"{email}\n{when}\n"
-        + (f"{_subject_label(surface)}: {subj_line}\n" if subj_line else '')
-        + f"\nQUESTION\n{question.strip()}\n\nANSWER\n"
-        f"{(answer or 'No written answer on this step.').strip()}\n"
-        + (f"\nCorrect this answer: {correct_url}\n"
-           if correct_url else '')
-        + f"\nPrometheus\nCrosswalk")
-    html = _html(who, label, email, when, subj_line, question, answer,
-                 correct_url=correct_url, subject_label=_subject_label(surface))
+    return email, company, label, who, api, mail_subject
+
+
+def _ses_send(mail_subject, text, html):
+    from prometheus.mail_guard import sending_allowed, suppressed_note
+    if not sending_allowed():
+        print(suppressed_note('watch note', mail_subject))
+        return
+    import boto3
     msg = MIMEMultipart('alternative')
     msg['Subject'] = mail_subject[:180]
     msg['From'] = _FROM
@@ -270,10 +269,74 @@ def _send(username, record, question, answer, subject, via=None, surface=None):
         RawMessage={'Data': msg.as_string()})
 
 
-def notify(username, record, question, payload, subject=None, via=None, surface=None):
+def _send(username, record, question, answer, subject, via=None, surface=None):
+    email, company, label, who, api, mail_subject = _address(record, username, via)
+    if not label or not str(question or '').strip():
+        return
+    when = datetime.now(timezone.utc).strftime('%b %d, %Y %I:%M %p UTC')
+    subj_line = str(subject or '').strip()
+    correct_url = _correct_link(username, question, answer, subj_line)
+    text = (
+        f"{who} at {label} asked Prometheus a question{' over the API' if api else ''}.\n"
+        f"{email}\n{when}\n"
+        + (f"{_subject_label(surface)}: {subj_line}\n" if subj_line else '')
+        + f"\nQUESTION\n{question.strip()}\n\nANSWER\n"
+        f"{(answer or 'No written answer on this step.').strip()}\n"
+        + (f"\nCorrect this answer: {correct_url}\n"
+           if correct_url else '')
+        + f"\nPrometheus\nCrosswalk")
+    html = _html(who, label, email, when, subj_line, question, answer,
+                 correct_url=correct_url, subject_label=_subject_label(surface))
+    _ses_send(mail_subject, text, html)
+
+
+def send_single(username, record, question, payload, subject=None,
+                via=None, surface=None):
+    """One ask, one email. The standing single-turn path."""
+    if not str(question or '').strip():
+        return
+    _send(username, record, question, answer_text(payload), subject,
+          via=via, surface=surface)
+
+
+def send_walk(username, record, turns, outcome, subject=None,
+              recap_q='', recap_a='', via=None, surface=None):
+    """One email for a finished walk: every turn, then the outcome.
+    One correction button on the recap only."""
+    email, company, label, who, api, mail_subject = _address(record, username, via)
+    if not label or not turns:
+        return
+    when = datetime.now(timezone.utc).strftime('%b %d, %Y %I:%M %p UTC')
+    subj_line = str(subject or '').strip()
+    q_for_link = recap_q or str((turns[0] or {}).get('q') or '')
+    a_for_link = recap_a or str((turns[-1] or {}).get('a') or '')
+    correct_url = _correct_link(username, q_for_link, a_for_link, subj_line) if recap_a or recap_q else ''
+    blocks = []
+    for i, t in enumerate(turns, 1):
+        n = f' {i}' if len(turns) > 1 else ''
+        blocks.append(f"QUESTION{n}\n{str((t or {}).get('q') or '').strip()}")
+        blocks.append(f"ANSWER{n}\n{str((t or {}).get('a') or 'No written answer on this step.').strip()}")
+    if outcome:
+        blocks.append(f"OUTCOME\n{outcome}")
+    text = (
+        f"{who} at {label} asked Prometheus a question{' over the API' if api else ''}.\n"
+        f"{email}\n{when}\n"
+        + (f"{_subject_label(surface)}: {subj_line}\n" if subj_line else '')
+        + '\n' + '\n\n'.join(blocks) + '\n'
+        + (f"\nCorrect this answer: {correct_url}\n" if correct_url else '')
+        + f"\nPrometheus\nCrosswalk")
+    html = _html(who, label, email, when, subj_line, q_for_link, a_for_link,
+                 correct_url=correct_url, subject_label=_subject_label(surface),
+                 turns=turns, outcome=outcome)
+    _ses_send(mail_subject, text, html)
+
+
+def notify(username, record, question, payload, subject=None, via=None,
+           surface=None, thread_id='', store=None, send_fn=None, now=None):
     """Email Jenna the question and the answer. Never raises. Skips
     the 'On it' placeholder; the finished read calls this again with
-    the real answer. API asks mail too, marked (API)."""
+    the real answer. API asks mail too, marked (API). A multi-step
+    walk holds each turn and sends one email when the walk ends."""
     try:
         if not str(username or '').strip() and not (record or {}).get('email'):
             return
@@ -295,9 +358,9 @@ def notify(username, record, question, payload, subject=None, via=None, surface=
             return
         if is_placeholder(payload):
             return
-        answer = answer_text(payload)
-        # Caller already moved this off the request. Send here so the
-        # note is not left on a second thread that can die first.
-        _send(username, record, question, answer, subject, via=via, surface=surface)
+        from prometheus.ask_email_bundle import handle_notify
+        handle_notify(username, record, question, payload, subject=subject,
+                      via=via, surface=surface, thread_id=thread_id,
+                      store=store, send_fn=send_fn, now=now)
     except Exception:
         traceback.print_exc()

@@ -391,8 +391,13 @@ def _notify_key_ask(user: dict, question: str, v1: dict, subject, raw) -> None:
         from prometheus.legacy import chat as _chat
         payload = {'reply': txt}
         if isinstance(raw, dict):
-            for k in ('subject_label', 'profile'):
-                if raw.get(k):
+            for k in ('subject_label', 'profile', 'bpiq_wizard',
+                      'bpiq_collect', 'bpiq_confirm_payload', 'bpiq_job_id',
+                      'jiq_collect', 'jiq_confirm_payload',
+                      'fw_collect', 'fw_confirm_payload',
+                      'aiq_collect', 'aiq_confirm_payload',
+                      'twin_collect', 'twin_confirm_payload', 'spec_draft'):
+                if raw.get(k) is not None:
                     payload[k] = raw[k]
         subj = str(subject or (raw or {}).get('profile') or (raw or {}).get('subject_label') or '') or None
         _chat._pm_watch_notify(_username(user), question, payload, subj, via='api', surface='api')

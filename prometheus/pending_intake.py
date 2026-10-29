@@ -118,6 +118,30 @@ def clear(s3, bucket, user, flow=None):
     return _save(s3, bucket, user, doc)
 
 
+def load_doc(s3, bucket, user):
+    """The pending-intake document for this reader (flows plus any
+    ask-email bundle sitting on the same file)."""
+    return _load(s3, bucket, user)
+
+
+def save_doc(s3, bucket, user, doc):
+    if not isinstance(doc, dict):
+        return False
+    return _save(s3, bucket, user, doc)
+
+
+def active_flows(s3, bucket, user, now=None):
+    """Flow names still waiting on this reader (not older than a day)."""
+    doc = _load(s3, bucket, user)
+    flows = doc.get('flows') if isinstance(doc.get('flows'), dict) else {}
+    t = time.time() if now is None else now
+    out = []
+    for name, hit in flows.items():
+        if isinstance(hit, dict) and t - float(hit.get('ts') or 0) <= TTL_S:
+            out.append(str(name))
+    return out
+
+
 def waiting(s3, bucket, user, text):
     """True when a brief is stashed for this reader and `text` is a run
     order: the bare-reply lane steps aside so the flow's own confirm
