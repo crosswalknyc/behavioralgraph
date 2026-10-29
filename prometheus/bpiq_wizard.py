@@ -989,60 +989,139 @@ def _uname(user):
     return str(user or '').strip()
 
 
-def _charge_and_start(draft, user, uname, ppu, g, charge_fn, start_fn):
+def _seat_is_free(user):
+    """True for the seats other priced Prometheus steps never bill:
+    super_admin / Crosswalk staff, or an unlimited flag / credits."""
+    try:
+        from prometheus.priced_read import staff_user
+        if staff_user(user):
+            return True
+    except Exception:
+        pass
+    if not isinstance(user, dict):
+        return False
+    role = str(user.get('role') or '').strip().lower().replace(' ', '_')
+    if role in ('super_admin', 'superadmin'):
+        return True
+    if bool(user.get('unlimited')):
+        return True
+    try:
+        import wallet as _w
+        if _w.is_unlimited(user):
+            return True
+    except Exception:
+        try:
+            if int(user.get('credits', 0) or 0) == -1:
+                return True
+        except (TypeError, ValueError):
+            pass
+    return False
+
+
+def _charge_seat(user, uname, inputs, job_id, g, charge_fn):
+    """Same door as the other priced Prometheus reads: free for staff
+    and unlimited, else priced_read.charge. Never a private balance
+    check."""
+    if _seat_is_free(user):
+        return True
+    if charge_fn is not None:
+        return bool(charge_fn(uname or user, inputs, job_id))
+    host = (g or {}).get('_H') if g else None
+    if host is None:
+        try:
+            from .host import host as host
+        except Exception:
+            host = None
+    subj = (f"{inputs.get('qualifier')} x "
+            f"{inputs.get('campaign') or inputs.get('brand_partner')}")
+    pull = PULL_CONTROL if inputs.get('control_group') else PULL_BASE
+    credits = CREDITS_CONTROL if inputs.get('control_group') else CREDITS_BASE
+    desc = f'Brand Partnership Valuation: {subj}'
+    try:
+        from prometheus.priced_read import charge as pr_charge
+        return bool(pr_charge(host, uname, subj, pull, credits, desc))
+    except Exception:
+        traceback.print_exc()
+        return False
+
+
+def _start_valuation(job_id, uname, inputs, extras, g, start_fn):
+    """Enqueue the valuation the same way the other engine jobs do."""
+    if start_fn is not None:
+        start_fn(job_id, uname, inputs, extras)
+        return True
+    status_write = (g or {}).get('_pm_bpiq_status_write') if g else None
+    runner = (g or {}).get('_pm_run_bpiq_job') if g else None
+    rr = (g or {}).get('_rr') if g else None
+    host = (g or {}).get('_H') if g else None
+    if host is None:
+        try:
+            from .host import host as host
+        except Exception:
+            host = None
+    if runner is None:
+        runner = _host_cap(host, 'run_bpiq_job')
+    if status_write is None:
+        try:
+            from prometheus.legacy.jobs import _pm_bpiq_status_write
+            status_write = _pm_bpiq_status_write
+        except Exception:
+            status_write = None
+    if runner is None:
+        try:
+            from prometheus.legacy.chat import _pm_run_bpiq_job
+            runner = _pm_run_bpiq_job
+        except Exception:
+            runner = None
+    if rr is None:
+        try:
+            from prometheus import read_recovery as rr
+        except Exception:
+            rr = None
+    if runner is None or rr is None:
+        print('[bpiq-wizard] valuation runner missing; not started')
+        return False
+    if status_write is None:
+        def status_write(job_id, payload):
+            return None
+    try:
+        rr.start_engine_job(
+            'bpiq', job_id, uname, inputs, extras, status_write, runner)
+        return True
+    except Exception:
+        traceback.print_exc()
+        return False
+
+
+def _charge_and_start(draft, user, uname, ppu, g, charge_fn, start_fn,
+                      store=None, thread_id=''):
     inputs = engine_inputs(draft)
-    usd = int(inputs['price'])
-    control = bool(inputs.get('control_group'))
-    job_id = None
+    if (draft or {}).get('charged') or (draft or {}).get('job_id'):
+        return _payload(RUNNING_REPLY, [], draft=None, bpiq_collect=False,
+                        bpiq_job_id=(draft or {}).get('job_id'))
     try:
         import uuid
         job_id = uuid.uuid4().hex[:12]
     except Exception:
         job_id = 'bpiq'
-    subj = f"{inputs.get('qualifier')} x {inputs.get('campaign') or inputs.get('brand_partner')}"
-    pull = PULL_CONTROL if control else PULL_BASE
-    credits = CREDITS_CONTROL if control else CREDITS_BASE
-    desc = f'Brand Partnership Valuation: {subj}'
-    if charge_fn is not None:
-        ok = charge_fn(uname or user, inputs, job_id)
-    else:
-        ok = True
-        host = None
-        if g:
-            host = g.get('_H')
-        if host is None:
-            try:
-                from .host import host as host
-            except Exception:
-                host = None
-        consume = getattr(host, 'consume_credit', None) if host is not None else None
-        if consume:
-            try:
-                ok = bool(consume(
-                    uname,
-                    description=desc,
-                    pull_type=pull,
-                    credits_used=credits,
-                    job_id=job_id))
-            except Exception:
-                traceback.print_exc()
-                ok = False
+    ok = _charge_seat(user, uname, inputs, job_id, g, charge_fn)
     if not ok:
         return _payload(FUNDS_REPLY, [], draft=draft, bpiq_collect=False)
-    extras = ppu or {}
-    if start_fn is not None:
-        start_fn(job_id, uname, inputs, extras)
-    elif g:
+    marked = dict(draft or empty_draft())
+    marked['charged'] = True
+    marked['job_id'] = job_id
+    if store is not None:
         try:
-            rr = g.get('_rr')
-            if rr is None:
-                from prometheus import read_recovery as rr
-            rr.start_engine_job(
-                'bpiq', job_id, uname, inputs, extras,
-                g.get('_pm_bpiq_status_write'), g.get('_pm_run_bpiq_job'))
+            store.save(uname or user, thread_id, marked)
         except Exception:
-            traceback.print_exc()
-            return _payload(FUNDS_REPLY, [], draft=draft, bpiq_collect=False)
+            pass
+    extras = ppu or {}
+    _start_valuation(job_id, uname, inputs, extras, g, start_fn)
+    if store is not None:
+        try:
+            store.clear(uname or user, thread_id)
+        except Exception:
+            pass
     return _payload(RUNNING_REPLY, [], draft=None, bpiq_collect=False,
                     bpiq_job_id=job_id)
 
@@ -1107,6 +1186,11 @@ def _analyze_hook(text, body, history, user, ppu, uname, g,
             store.clear(uname or user, thread_id)
         return _payload(DECLINE_REPLY, [], draft=None, bpiq_collect=False)
 
+    prev_txt = str((last_agent_turn(history) or {}).get('text') or '')
+    if prev_txt.startswith("It's running") and (
+            _ACCEPT_RE.match(t) or _low(t).startswith('accept')):
+        return _payload(RUNNING_REPLY, [], draft=None, bpiq_collect=False)
+
     if isinstance(confirm, dict) and (confirm.get('qualifier') or confirm.get('talent')):
         if confirm.get('talent') and not (draft or {}).get('talent'):
             draft = dict(draft or empty_draft(), **{
@@ -1141,16 +1225,16 @@ def _analyze_hook(text, body, history, user, ppu, uname, g,
                 'brand_partner': confirm.get('brand_partner') or '',
                 'step': STEP_CHARGE,
             }))
-        hit = _charge_and_start(draft, user, uname, ppu, g, charge_fn, start_fn)
-        if store is not None and (hit or {}).get('bpiq_job_id'):
-            store.clear(uname or user, thread_id)
+        hit = _charge_and_start(
+            draft, user, uname, ppu, g, charge_fn, start_fn,
+            store=store, thread_id=thread_id)
         return hit
 
     if draft and draft.get('step') == STEP_CHARGE and (
             _ACCEPT_RE.match(t) or _low(t).startswith('accept')):
-        hit = _charge_and_start(draft, user, uname, ppu, g, charge_fn, start_fn)
-        if store is not None and (hit or {}).get('bpiq_job_id'):
-            store.clear(uname or user, thread_id)
+        hit = _charge_and_start(
+            draft, user, uname, ppu, g, charge_fn, start_fn,
+            store=store, thread_id=thread_id)
         return hit
 
     if draft and is_decline(t):

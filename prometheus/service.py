@@ -560,6 +560,16 @@ def ask(user, body, *, via='session'):
                     _g['_pm_bpiq_intent'] = host.bpiq_intent
             except Exception:
                 pass
+            try:
+                if host.has('run_bpiq_job'):
+                    _g['_pm_run_bpiq_job'] = host.run_bpiq_job
+            except Exception:
+                pass
+            try:
+                from prometheus.legacy.jobs import _pm_bpiq_status_write
+                _g['_pm_bpiq_status_write'] = _pm_bpiq_status_write
+            except Exception:
+                pass
             _g['_H'] = host
             _hit = _bwiz.analyze_hook(
                 text, dict(body, thread_id=tid or ''), history, user,

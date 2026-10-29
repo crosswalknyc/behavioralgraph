@@ -515,6 +515,115 @@ def test_history_only_talent_is_not_a_subject_read():
           == 'Jennifer Beals')
 
 
+def test_super_admin_and_unlimited_accept_is_free():
+    charged, started = [], []
+
+    def charge(*a):
+        charged.append(a)
+        return True
+
+    def start(*a):
+        started.append(a)
+
+    def accept_as(user, charge_fn=charge, start_fn=start, control=True):
+        store = W.MemoryStore()
+        walk_to_charge(store, control=control, mode='find')
+        chip = W.accept_chip(1000 if control else 500)
+        out = W.analyze_hook(
+            chip, {'thread_id': 't1'}, [], user, {}, 'tester',
+            {'_pm_bpiq_intent': _real_intent},
+            first=None, today=TODAY, store=store,
+            charge_fn=charge_fn, start_fn=start_fn)
+        return out, store
+
+    jenna = {
+        'username': 'jenna', 'role': 'super_admin',
+        'unlimited': True, 'credits': -1,
+        'email': 'jenna@crosswalknyc.com',
+    }
+    out, _ = accept_as(jenna, charge_fn=lambda *a: False)
+    check("super_admin Accept is the running line",
+          (out or {}).get('reply') == W.RUNNING_REPLY)
+    check("super_admin never sees the funds card",
+          W.FUNDS_REPLY not in str((out or {}).get('reply')))
+    check("super_admin is not billed", charged == [])
+    check("super_admin job enqueued", len(started) == 1)
+    inputs = started[0][2]
+    check("job talent is Jennifer Beals",
+          inputs.get('qualifier') == 'Jennifer Beals')
+    check("job campaign is Ganni x Lululemon",
+          inputs.get('campaign') == 'Ganni x Lululemon')
+    check("job dates are Oct 7-28",
+          inputs.get('event_start') == '2026-10-07'
+          and inputs.get('event_end') == '2026-10-28')
+    check("job attribution window is Oct 7-28",
+          inputs.get('post_start') == '2026-10-07'
+          and inputs.get('post_end') == '2026-10-28')
+    check("job control group is on",
+          inputs.get('control_group') is True)
+    check("job finds the assets",
+          inputs.get('asset_mode') == 'find'
+          and list(inputs.get('links') or []) == [])
+    check("job list price is 1000", inputs.get('price') == 1000)
+
+    charged.clear()
+    started.clear()
+    unlimited = {
+        'username': 'buyer', 'role': 'user',
+        'unlimited': True, 'credits': -1,
+    }
+    out, _ = accept_as(unlimited, charge_fn=lambda *a: False)
+    check("unlimited Accept is the running line",
+          (out or {}).get('reply') == W.RUNNING_REPLY)
+    check("unlimited is not billed", charged == [])
+    check("unlimited job enqueued", len(started) == 1)
+
+    charged.clear()
+    started.clear()
+    metered = {'username': 'paid', 'role': 'user', 'credits': 40}
+    out, _ = accept_as(metered)
+    check("metered with funds charged once", len(charged) == 1)
+    check("metered with funds enqueued", len(started) == 1)
+    check("metered running line",
+          (out or {}).get('reply') == W.RUNNING_REPLY)
+
+    charged.clear()
+    started.clear()
+    broke = {'username': 'broke', 'role': 'user', 'credits': 0}
+    out, _ = accept_as(broke, charge_fn=lambda *a: False)
+    check("metered without funds shows the funds card",
+          'needs funds' in str((out or {}).get('reply') or '').lower())
+    check("metered without funds does not enqueue", started == [])
+
+    charged.clear()
+    started.clear()
+    store = W.MemoryStore()
+    walk_to_charge(store, control=True, mode='find')
+    out1 = W.analyze_hook(
+        W.accept_chip(1000), {}, [], metered, {}, 'tester',
+        {'_pm_bpiq_intent': _real_intent},
+        today=TODAY, store=store, charge_fn=charge, start_fn=start)
+    out2 = W.analyze_hook(
+        W.accept_chip(1000), {}, [
+            {'role': 'agent', 'text': W.RUNNING_REPLY},
+        ], metered, {}, 'tester',
+        {'_pm_bpiq_intent': _real_intent},
+        today=TODAY, store=store, charge_fn=charge, start_fn=start)
+    check("first Accept ran",
+          (out1 or {}).get('reply') == W.RUNNING_REPLY)
+    check("second Accept does not double-charge", len(charged) == 1)
+    check("second Accept does not double-enqueue", len(started) == 1)
+    check("second Accept stays on the running line",
+          (out2 or {}).get('reply') == W.RUNNING_REPLY)
+
+    check("staff helper treats Jenna as free",
+          W._seat_is_free(jenna))
+    check("unlimited helper treats the flag as free",
+          W._seat_is_free(unlimited))
+    check("metered seat is not free",
+          not W._seat_is_free(metered))
+
+
 def test_s3_store_uses_bucket_not_s3_bucket():
     """Live host binds `bucket`. getattr(S3_BUCKET) raises HostNotBound."""
 
@@ -595,6 +704,7 @@ def main():
     test_router_start_beats_pair_read()
     test_thread_holds_across_isolated_turns()
     test_history_only_talent_is_not_a_subject_read()
+    test_super_admin_and_unlimited_accept_is_free()
     test_s3_store_uses_bucket_not_s3_bucket()
     print("\n" + ("OK" if not FAIL else f"{FAIL} FAILED"))
     return 1 if FAIL else 0
