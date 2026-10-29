@@ -387,10 +387,14 @@ def derive_drop(campaign: Optional[dict], fp: Optional[dict], aov: dict, salt: s
     pieces = int(c.get("collection_size") or 0) or len(c.get("products") or []) or 0
     if not pieces:
         return {"units_us": 0, "orders": 0, "revenue_usd": 0.0, "basis": "no collection size", "skus": 0}
+    colorways = _num(inv.get("colorways_avg")) or _band(salt, "colorways", _COLORWAYS_AVG)
+    sizes = _num(inv.get("sizes_avg")) or _band(salt, "sizes", _SIZES_AVG)
     skus = _num(inv.get("skus"))
-    if not skus:
-        skus = pieces * (_num(inv.get("colorways_avg")) or _band(salt, "colorways", _COLORWAYS_AVG)) \
-            * (_num(inv.get("sizes_avg")) or _band(salt, "sizes", _SIZES_AVG))
+    # a "skus" figure at or near the piece count is the style count
+    # (the first Beals rerun came back with skus = 22 for a 22-piece
+    # collection): stock-keeping units are styles x colorways x sizes
+    if not skus or skus <= pieces * 1.25:
+        skus = pieces * colorways * sizes
     signal = str(c.get("inventory_signal") or "unknown")
     if signal not in _UNITS_PER_SKU:
         signal = "unknown"

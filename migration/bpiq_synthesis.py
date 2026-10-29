@@ -613,8 +613,11 @@ JSON only:
                                                       // visitors on the
                                                       // collection pages
            "note": str},
-  "inventory": {"skus": int|null, "colorways_avg": float|null,
-                "sizes_avg": float|null, "units_hint": int|null,
+  "inventory": {"skus": int|null,         // stock-keeping units: styles x
+                                          // colorways x sizes, never the
+                                          // piece count
+                "colorways_avg": float|null, "sizes_avg": float|null,
+                "units_hint": int|null,   // a published units figure
                 "revenue_hint_usd": float|null, "comparable_note": str},
   "talent_asset_share_pct": float|null,   // share of the campaign's
                                           // exposure carrying the talent
@@ -647,7 +650,7 @@ def research_footprint(inputs: dict, claude_json: Callable, *,
         **_hints_block(inputs),
     }
     try:
-        raw = claude_json(CAMPAIGN_FOOTPRINT_PROMPT, json.dumps(ask), max_tokens=7000,
+        raw = claude_json(CAMPAIGN_FOOTPRINT_PROMPT, json.dumps(ask), max_tokens=9500,
                           temperature=0.15, surface="bpiq_campaign_footprint", tools=tools)
     except Exception as e:
         print(f"[bpiq-synth] footprint research failed: {e}")
@@ -817,7 +820,7 @@ def research_campaign(inputs: dict, claude_json: Callable, *,
         **_hints_block(inputs),
     }
     try:
-        raw = claude_json(campaign_prompt(), json.dumps(ask), max_tokens=5000,
+        raw = claude_json(campaign_prompt(), json.dumps(ask), max_tokens=8000,
                           temperature=0.2, surface="bpiq_campaign_research", tools=tools)
     except Exception as e:
         print(f"[bpiq-synth] campaign research failed: {e}")

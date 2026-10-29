@@ -178,7 +178,7 @@ def _s3_of(host):
 
 
 def rerun_in_place(run_key, host, claude_json, *, tools=None, reason='', email='auto',
-                   material_rel=0.05, hints=None, log=print):
+                   material_rel=0.05, hints=None, research=True, log=print):
     """Research the valuation again under the SAME run key and write the
     corrected read over the SAME dated file (in-place corrections,
     2026-08-25). A copy of the prior file and of the prior underpinnings
@@ -214,8 +214,10 @@ def rerun_in_place(run_key, host, claude_json, *, tools=None, reason='', email='
     except Exception:
         pass
     log(f'[bpiq-rerun {job_id}] backups written ({stamp}); researching again under {run_key}')
+    # research=False re-derives from the saved underpinnings (an engine
+    # correction on the same anchors; nothing is re-drawn)
     payload = synthesize(inputs, claude_json, tools=tools, created_by=prior.get('created_by') or username or 'prometheus',
-                         underpinnings=S3Underpinnings(s3, bucket), job_id=job_id, force_research=True)
+                         underpinnings=S3Underpinnings(s3, bucket), job_id=job_id, force_research=bool(research))
     category = payload.pop('_bpiq_category', None)
     payload['created_at'] = prior.get('created_at') or payload.get('created_at')   # the dated file keeps its build time
     payload['corrected_at'] = _t.strftime('%Y-%m-%dT%H:%M:%SZ', _t.gmtime())
