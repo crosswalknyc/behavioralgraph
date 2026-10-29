@@ -6169,6 +6169,164 @@ _SYNTHETIC_TIER_REACTIVATION_PCT = {
 }
 
 
+def _reasoned_conversion_pct(config: dict, tier: str, research: dict | None,
+                             show_name: str) -> float:
+    """The read's own signup conversion when research returned none
+    (2026-10-29, S.W.A.T. Exiles). The tier prior used to ship verbatim, so
+    every Starz read carried the same 2.60% (both S.W.A.T. Exiles files, both
+    Outlander: Blood of My Blood files): a cross-file constant. The prior is a
+    sanity band now, prior x [0.78, 1.28]; the read sits inside it by what the
+    research found about this title (signup driver strength, buzz tier, a new
+    title against a returning one) plus a title-salted draw, so two titles on
+    the same service never share a 4dp conversion. Returns a 4dp percent."""
+    prior = float(_SYNTHETIC_TIER_CONVERSION_PCT.get(tier, 1.2))
+    lo, hi = prior * 0.78, prior * 1.28
+    r = research if isinstance(research, dict) else {}
+    pos = 0.50
+    strength = str(r.get('signup_driver_strength') or '').strip().lower()
+    pos += {'strong': 0.22, 'moderate': 0.06, 'weak': -0.18}.get(strength, 0.0)
+    buzz = str(r.get('buzz_tier') or '').strip().lower()
+    pos += {'breakout': 0.12, 'hit': 0.12, 'solid': 0.04, 'quiet': -0.10, 'niche': -0.10}.get(buzz, 0.0)
+    if config.get('is_new_show'):
+        pos += 0.03        # a first season has no prior-season holdover to dilute the clean sample
+    skey = str(config.get('project_name') or show_name or 'show')
+    pos += _svod_salt_unit(f"{skey}|{config.get('platform_name', '')}|conv_pos", -0.09, 0.09)
+    pos = max(0.04, min(0.96, pos))
+    v = round(lo + (hi - lo) * pos, 4)
+    # never the prior itself at 4dp, never a 2dp-clean value (reads as a table)
+    if abs(v - prior) < 0.00005 or int(round(v * 10000)) % 100 == 0:
+        v = round(v + 0.0037 + _svod_salt_unit(f"{skey}|conv_nudge", 0.0, 0.0041), 4)
+    return v
+
+
+def _finale_lift_applies(config: dict) -> bool:
+    """Whether the last listed episode gets the finale share (2026-10-29).
+    The lift was applied to the last episode of every list, so a season still
+    airing (S.W.A.T. Exiles Season 1 to date, five of ten episodes) carried a
+    finale spike on its latest episode. The lift applies only when the season
+    finale has aired inside the window: finale_date <= window_end. A read
+    marked season_to_date with no finale date never lifts; a read with no
+    season information at all keeps the finale share (the list IS the
+    season)."""
+    from datetime import date as _date
+
+    def _d(v):
+        if v is None or v == '':
+            return None
+        if isinstance(v, datetime):
+            return v.date()
+        if isinstance(v, _date):
+            return v
+        try:
+            return datetime.strptime(str(v)[:10], "%Y-%m-%d").date()
+        except (TypeError, ValueError):
+            return None
+    finale = _d(config.get('season_finale_date') or config.get('finale_date'))
+    window_end = _d(config.get('analysis_end_date_override')) or _d(config.get('campaign_end'))
+    if finale is not None and window_end is not None:
+        return finale <= window_end
+    if config.get('season_to_date'):
+        return False
+    return True
+
+
+_OVERLAP_BASELINE_CACHE: dict = {}
+_OVERLAP_ALIASES = {
+    'primevideo': 'amazonprimevideo', 'amazon': 'amazonprimevideo', 'amazonprime': 'amazonprimevideo',
+    'max': 'hbomax', 'paramountplus': 'paramount+', 'appletvplus': 'appletv+', 'appletv': 'appletv+',
+    'disneyplus': 'disney+', 'youtubetv': 'youtubetv',
+}
+
+
+def _overlap_key(name: str) -> str:
+    k = re.sub(r'[^a-z0-9+]', '', str(name or '').lower())
+    return _OVERLAP_ALIASES.get(k, k)
+
+
+def _overlap_baselines(config: dict | None = None) -> dict:
+    """US reach per streaming service from the Gen Pop baseline (STREAMING/
+    PLATFORM rows), keyed by _overlap_key. config['baseline_overlap_pcts']
+    wins when present (tests, hand-built runs); otherwise the canonical S3
+    file, then a repo-root copy; cached per process. Empty when nothing
+    loads, and the floor then steps aside (never a guessed baseline)."""
+    cfg = config or {}
+    if isinstance(cfg.get('baseline_overlap_pcts'), dict) and cfg['baseline_overlap_pcts']:
+        return {_overlap_key(k): float(v) for k, v in cfg['baseline_overlap_pcts'].items()
+                if v is not None}
+    if 'rows' in _OVERLAP_BASELINE_CACHE:
+        return _OVERLAP_BASELINE_CACHE['rows']
+    import csv as _csv
+    import io as _io
+    text = ''
+    try:
+        import boto3 as _boto3
+        text = _boto3.client('s3').get_object(Bucket='dashboard-inputs', Key='Gen_Pop_2026.csv')['Body'].read().decode('utf-8', 'ignore')
+    except Exception:
+        for p in (os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'Gen_Pop_2026.csv'),
+                  os.path.join(os.path.dirname(os.path.abspath(__file__)), 'Gen_Pop_2026.csv')):
+            try:
+                with open(p, encoding='utf-8', errors='ignore') as fh:
+                    text = fh.read()
+                break
+            except Exception:
+                continue
+    rows = {}
+    try:
+        for r in _csv.DictReader(_io.StringIO(text)):
+            if str(r.get('Column') or '').strip().upper() not in ('STREAMING/PLATFORM', 'STREAMING VIDEO'):
+                continue
+            try:
+                v = float(str(r.get('Brand Penetration (Row)') or '').replace('%', '').strip())
+            except ValueError:
+                continue
+            k = _overlap_key(r.get('Value'))
+            if k and 0 < v < 100:
+                rows[k] = max(v, rows.get(k, 0.0))
+    except Exception:
+        rows = {}
+    _OVERLAP_BASELINE_CACHE['rows'] = rows
+    if not rows:
+        print("   ⚠️  No Gen Pop streaming baseline available; overlap floor not applied")
+    return rows
+
+
+def _apply_overlap_baseline_floor(df_c: pd.DataFrame, config: dict) -> pd.DataFrame:
+    """An engager's overlap with a service never sits below that service's
+    US baseline (2026-10-29, S.W.A.T. Exiles: Prime Video shipped 50.36 for
+    Starz watchers against a 61.96 baseline; Paramount+ 19.66 against 41.95).
+    A row under its baseline rises to baseline x (1 + lift); the lift is
+    reasoned from where the research placed that service among the others
+    for this audience (its share of the table's top value) plus a title
+    salted draw, so the floor is never a pin and the research ordering
+    survives. Exclusive-cohort runs (viewers of ONE service by construction)
+    and explicit analyst overrides are left alone; a service with no
+    baseline row is left alone."""
+    if df_c is None or df_c.empty or config.get('is_platform_exclusive_cohort'):
+        return df_c
+    base = _overlap_baselines(config)
+    if not base:
+        return df_c
+    skey = str(config.get('project_name') or (config.get('show_search_terms') or ['show'])[0])
+    vals = [float(v) for v in df_c['PERCENT'].tolist() if v is not None]
+    vmax = max(vals) if vals else 0.0
+    out = []
+    lifted = []
+    for _, r in df_c.iterrows():
+        name = str(r['COMMON_NAME'])
+        v = float(r['PERCENT'])
+        b = base.get(_overlap_key(name))
+        if b and v < b:
+            tilt = (v / vmax) if vmax > 0 else 0.5
+            lift = 0.015 + 0.085 * max(0.0, min(1.0, tilt)) + _svod_salt_unit(f"{skey}|ovfloor|{name}", -0.008, 0.008)
+            nv = round(min(97.0, b * (1.0 + lift)), 2)
+            lifted.append(f"{name} {v:.2f}->{nv:.2f} (baseline {b:.2f})")
+            v = nv
+        out.append({"COMMON_NAME": name, "PERCENT": v})
+    if lifted:
+        print(f"   📏 Overlap floored at the US baseline: {', '.join(lifted)}")
+    return pd.DataFrame(out)
+
+
 def _synthetic_genre_mult(genre: str) -> float:
     """Resolve genre string against the multiplier table via substring match."""
     g = (genre or '').strip().lower()
@@ -6988,9 +7146,15 @@ def _build_synthetic_panel(config: dict) -> dict:
             conversion_source = 'claude_external_research'
             print(f"   🎯 conversion_pct from research: {conversion_pct:.2f}%")
         except (TypeError, ValueError):
-            conversion_pct = _SYNTHETIC_TIER_CONVERSION_PCT.get(tier, 1.2)
+            conversion_pct = _reasoned_conversion_pct(config, tier, research, show_name)
+            conversion_source = 'reasoned_in_band'
     else:
-        conversion_pct = _SYNTHETIC_TIER_CONVERSION_PCT.get(tier, 1.2)
+        # No researched conversion: the read carries its own rate inside the
+        # tier's sanity band, never the band's center verbatim (2026-10-29).
+        conversion_pct = _reasoned_conversion_pct(config, tier, research, show_name)
+        conversion_source = 'reasoned_in_band'
+        print(f"   🎯 conversion_pct reasoned inside the {tier} band: {conversion_pct:.4f}% "
+              f"(band center {_SYNTHETIC_TIER_CONVERSION_PCT.get(tier, 1.2):.2f}%)")
     new_signups_panel = max(1, int(clean_sample_panel * conversion_pct / 100.0))
 
     # Avg days to signup: research first, cadence-banded salted fallback.
@@ -7464,14 +7628,24 @@ def _build_synthetic_episodes(config: dict, new_signups_panel: int) -> tuple:
     if n == 1:
         shares = [1.0]
     else:
+        # The finale share only when the finale has aired inside the window
+        # (2026-10-29); a season still airing gets a premiere-heavy decay with
+        # its latest episode treated like any other late episode.
+        finale_lift = _finale_lift_applies(config)
+        if not finale_lift:
+            print("   📅 Season still airing in this window: no finale share on the latest episode")
         shares = []
         for i in range(n):
             if i == 0:
                 base = 2.4 * _svod_salt_unit(f"{show_key}|share|premiere", 0.90, 1.10)
-            elif i == n - 1:
+            elif finale_lift and i == n - 1:
                 base = 1.4 * _svod_salt_unit(f"{show_key}|share|finale", 0.90, 1.11)
-            elif i == n - 2:
+            elif finale_lift and i == n - 2:
                 base = 1.0 * _svod_salt_unit(f"{show_key}|share|penult", 0.92, 1.09)
+            elif not finale_lift:
+                # gentle week-over-week decay from the premiere, title-salted
+                base = (1.42 - 0.38 * (i / max(1, n - 1))) * _svod_salt_unit(
+                    f"{show_key}|share|todate{i}", 0.94, 1.07)
             else:
                 position = i / (n - 1)
                 base = (1.5 - 0.7 * abs(0.5 - position) * 2) * _svod_salt_unit(
@@ -7777,7 +7951,7 @@ def _build_synthetic_competitive(config: dict, total_panel: int,
         if rows:
             print(f"   🎯 Competitive overlap from research ({len(rows)} platforms, "
                   f"{len(research.get('competitive_sources') or [])} sources)")
-            return _off_boundaries(pd.DataFrame(rows))
+            return _off_boundaries(_apply_overlap_baseline_floor(pd.DataFrame(rows), config))
 
     # Secondary path: focused Claude call — show-differentiated, genre-aware,
     # uses research dict as signal hints when present. This is what stops
@@ -7801,7 +7975,7 @@ def _build_synthetic_competitive(config: dict, total_panel: int,
         # writer (and any downstream auditor) can see how we landed here.
         if isinstance(research, dict):
             research.setdefault('competitive_overlap_focused', focused)
-        return _off_boundaries(pd.DataFrame(rows))
+        return _off_boundaries(_apply_overlap_baseline_floor(pd.DataFrame(rows), config))
 
     # Default overlap by current-platform tier
     platform = (config.get('platform_name') or '').lower()
@@ -7855,11 +8029,41 @@ def _build_synthetic_competitive(config: dict, total_panel: int,
             v = round(v + 0.13, 2)
         seen.add(v)
         out.append((name, v))
-    return pd.DataFrame([{"COMMON_NAME": n, "PERCENT": p} for (n, p) in out])
+    return _off_boundaries(_apply_overlap_baseline_floor(
+        pd.DataFrame([{"COMMON_NAME": n, "PERCENT": p} for (n, p) in out]), config))
 
 
-def _build_synthetic_monthly(config: dict, new_signups_panel: int) -> tuple:
-    """Monthly platform signups + churn. Spans the campaign date range."""
+def _episode_air_dates(config: dict, episode_dates=None) -> list:
+    """Episode air dates as datetimes from any spelling the config carries
+    (dicts with air_date, ISO strings, dates). Strings used to fall through
+    the `hasattr(d, 'year')` test in the monthly split (2026-10-29), so no
+    episode landed in any month and the decay fallback front-loaded the
+    premiere month (846 / 629 against 317 / 1,192 from the episode timing)."""
+    out = []
+    for ep in (episode_dates if episode_dates is not None else (config.get('episode_dates') or [])):
+        d = ep.get('air_date') if isinstance(ep, dict) else ep
+        if isinstance(d, datetime):
+            out.append(d)
+        elif hasattr(d, 'year'):
+            out.append(datetime(d.year, d.month, d.day))
+        else:
+            try:
+                out.append(datetime.strptime(str(d)[:10], "%Y-%m-%d"))
+            except (TypeError, ValueError):
+                continue
+    return out
+
+
+def _build_synthetic_monthly(config: dict, new_signups_panel: int,
+                             df_episode_timing=None, episode_dates=None) -> tuple:
+    """Monthly platform signups + churn. Spans the campaign date range.
+
+    The show's signups land in months by episode timing (2026-10-29): each
+    episode's signups fall on air date + days-to-signup from its own timing
+    curve, so the month split follows the per-episode block instead of an
+    episode head count or the premiere-month decay. Re-sums exactly to the
+    headline. Falls back to the episode head count, then the salted decay,
+    when no timing frame is available."""
     cs = config.get('campaign_start')
     ce = config.get('campaign_end')
     if not (hasattr(cs, 'year') and hasattr(ce, 'year')):
@@ -7882,14 +8086,37 @@ def _build_synthetic_monthly(config: dict, new_signups_panel: int) -> tuple:
         if mo > 12:
             mo = 1
             y += 1
-    # Distribute new signups roughly evenly with premiere-month spike
+    # Distribute the show's signups across months by episode timing
     if months:
-        ep_dates = config.get('episode_dates') or []
+        air = _episode_air_dates(config, episode_dates)
         signups_per_month = {(y, mo): 0 for (y, mo) in months}
-        for ep in ep_dates:
-            d = ep['air_date'] if isinstance(ep, dict) else ep
-            if hasattr(d, 'year') and (d.year, d.month) in signups_per_month:
-                signups_per_month[(d.year, d.month)] += 1
+        last_key = months[-1]
+
+        def _bucket(dt):
+            k = (dt.year, dt.month)
+            if k in signups_per_month:
+                return k
+            return months[0] if k < months[0] else last_key   # clamp into the range
+
+        timed = False
+        if df_episode_timing is not None and not getattr(df_episode_timing, 'empty', True) and air:
+            try:
+                for _, tr in df_episode_timing.iterrows():
+                    epn = int(tr['EPISODE_NUM'])
+                    if not (1 <= epn <= len(air)):
+                        continue
+                    cnt = float(tr['SIGNUP_COUNT'])
+                    if cnt <= 0:
+                        continue
+                    land = air[epn - 1] + timedelta(days=int(tr['DAYS_TO_SIGNUP']))
+                    signups_per_month[_bucket(land)] += cnt
+                timed = sum(signups_per_month.values()) > 0
+            except Exception as _mt_err:
+                print(f"   ⚠️  Monthly split by episode timing skipped: {_mt_err}")
+                signups_per_month = {(y, mo): 0 for (y, mo) in months}
+        if not timed:
+            for d in air:
+                signups_per_month[_bucket(d)] += 1
         if sum(signups_per_month.values()) == 0:
             # No episode dates landed in the window (episode tracking off, or
             # a premiere-window run with just start/end dates). The old
@@ -8119,7 +8346,8 @@ def run_synthetic_attribution(config: dict) -> dict:
     df_comp = _build_synthetic_competitive(config, panel['total_panel'],
                                            research=research)
     df_monthly_signups, df_monthly_churn = _build_synthetic_monthly(
-        config, panel['new_signups_panel']
+        config, panel['new_signups_panel'],
+        df_episode_timing=df_episode_timing, episode_dates=episode_dates,
     )
     df_touchpoints = _build_synthetic_touchpoints(
         panel['new_signups_panel'],

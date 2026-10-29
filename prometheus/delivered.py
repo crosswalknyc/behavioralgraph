@@ -29,6 +29,7 @@ import traceback
 from datetime import datetime, timezone
 
 RECORD_PREFIX = 'system/pm_deliveries/'
+SUBIQ_BUCKET = 'svod-acquisition'   # Subscriber IQ trackers live here, not in the dashboard bucket
 DASHBOARD = 'https://dashboard.crosswalknyc.com'
 KIND_LABEL = {
     'journey': 'Digital Journey', 'bpiq': 'Brand Partnership IQ read', 'attribution': 'Attribution IQ campaign',
@@ -178,6 +179,28 @@ def _persist(kind, payload, subject, s3_key, figures=None, window=None):
         return False
 
 
+def subiq_tracker_files(s3_key, *, s3_client=None, host=None, bucket=SUBIQ_BUCKET):
+    """The Subscriber IQ tracker bytes for its ready note, read from the
+    Subscriber IQ bucket (2026-10-29: every tracker ready note shipped
+    without its file because the caller fetched the key from the dashboard
+    bucket). Returns [(bytes, filename, 'text/csv')] or [] when the file
+    cannot be read; the note still goes out either way."""
+    key = str(s3_key or '').strip()
+    if not key:
+        return []
+    s3 = s3_client or (getattr(host, 's3_client', None) if host is not None else None)
+    if s3 is None:
+        return []
+    try:
+        data = s3.get_object(Bucket=bucket, Key=key)['Body'].read()
+    except Exception as e:
+        print(f"[delivered] subiq tracker fetch failed for s3://{bucket}/{key}: {e}")
+        return []
+    if not data:
+        return []
+    return [(data, os.path.basename(key), 'text/csv')]
+
+
 def _email(kind, *, username, name, who, email, shelf, files, facts, intro, ready_message, extra_bcc, send=None, dry_run=False):
     try:
         import welcome_email as we
@@ -254,6 +277,11 @@ def on_done(kind, *, username, subject='', s3_key='', payload=None, host=None, s
                                                intro=intro, ready_message=ready_message, extra_bcc=extra_bcc, to=addr, dry_run=dry_run, send=send)
             else:
                 use_files = list(files)
+                if not use_files and kind == 'subiq' and s3_key:
+                    # the tracker rides with its ready note (2026-10-29)
+                    use_files = subiq_tracker_files(s3_key, s3_client=s3_client, host=host)
+                    if use_files:
+                        rec['files'] = [f[1] for f in use_files]
                 if not use_files and payload:
                     use_files = [(numeric_leaves_csv(payload, subject).encode('utf-8'), f"{_slug(subject)}_{kind}_data.csv", 'text/csv')]
                     rec['files'] = [f[1] for f in use_files]
