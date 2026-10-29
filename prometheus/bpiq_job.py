@@ -232,7 +232,11 @@ def rerun_in_place(run_key, host, claude_json, *, tools=None, reason='', email='
     except Exception:
         traceback.print_exc()
     try:
-        jk = f"{getattr(host, '_PM_BPIQ_JOB_PREFIX', None) or 'system/pm_bpiq_jobs/'}{job_id}.json"
+        try:
+            _pfx = _chat()._PM_BPIQ_JOB_PREFIX
+        except Exception:
+            _pfx = 'system/pm_bpiq_jobs/'
+        jk = f"{_pfx}{job_id}.json"
         jd = _json.loads(s3.get_object(Bucket=bucket, Key=jk)['Body'].read())
         jd['total_brand_value'] = new_total
         jd['corrected_at'] = payload['corrected_at']
