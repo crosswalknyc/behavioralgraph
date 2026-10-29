@@ -624,6 +624,89 @@ def test_super_admin_and_unlimited_accept_is_free():
           not W._seat_is_free(metered))
 
 
+def test_jenna_live_seat_and_stale_funds_draft():
+    """Jenna 2026-10-28 7:24pm: credits == -1, no unlimited flag,
+    company Crosswalk is an empty row, wallet $1. A thin session
+    object and a leftover unpaid stamp must still run."""
+    import wallet as _w
+    from prometheus import priced_read as PR
+
+    jenna_live = {
+        'email': 'jenna@crosswalknyc.com',
+        'role': 'super_admin',
+        'credits': -1,
+        'credits_used': 3222,
+        'company': 'Crosswalk',
+        'wallet_balance_usd': 1.0,
+        'billing_mode': 'prepay_only',
+        'paying_customer': True,
+        'billing_source': 'user',
+        'company_billing_admin': False,
+    }
+    charged, started = [], []
+
+    class Host:
+        def has(self, name):
+            return name in ('load_users', 'consume_credit')
+
+        def load_users(self):
+            return {
+                'users': {'admin': dict(jenna_live, username='admin')},
+                'companies': {'Crosswalk': {}},
+            }
+
+        def consume_credit(self, *a, **k):
+            charged.append((a, k))
+            return False
+
+    host = Host()
+    check("credits -1 is unlimited without an unlimited flag",
+          _w.is_unlimited(jenna_live))
+    check("unlimited flag is unlimited even at 0 credits",
+          _w.is_unlimited({'credits': 0, 'unlimited': True}))
+    check("shared helper treats the live Jenna row as free",
+          PR.seat_is_free(None, 'admin', host))
+    check("shared charge does not consume for the live Jenna row",
+          PR.charge(host, 'admin', 'Jennifer Beals x Ganni',
+                    'Brand Partnership IQ', 15, 'test') is True
+          and charged == [])
+
+    store = W.MemoryStore()
+    walk_to_charge(store, control=True, mode='find')
+    d = store.load('tester', '') or {}
+    d['funds_required'] = True
+    d['charge_state'] = 'unpaid'
+    d['needs_funds'] = True
+    store.save('tester', '', d)
+    store.save('admin', 't1', d)
+    store.save('admin', '', d)
+    thin = {'username': 'admin'}
+    out = W.analyze_hook(
+        W.accept_chip(1000), {'thread_id': 't1'}, [
+            {'role': 'agent', 'text': W.FUNDS_REPLY},
+        ], thin, {}, 'admin',
+        {'_H': host, '_pm_bpiq_intent': _real_intent},
+        today=TODAY, store=store,
+        charge_fn=lambda *a: charged.append(a) or False,
+        start_fn=lambda *a: started.append(a))
+    check("thin admin session still gets the running line",
+          (out or {}).get('reply') == W.RUNNING_REPLY)
+    check("thin admin session is not billed", charged == [])
+    check("thin admin session enqueues", len(started) == 1)
+    check("stale unpaid stamp did not block Accept",
+          W.FUNDS_REPLY not in str((out or {}).get('reply')))
+    check("funds card still counts as the wizard",
+          W.last_agent_is_wizard([{'role': 'agent', 'text': W.FUNDS_REPLY}]))
+    check("recap still counts as the wizard",
+          W.last_agent_is_wizard([
+              {'role': 'agent', 'text': "Here's what I'll run:\nJennifer Beals"},
+          ]))
+    check("wants() holds Accept after the funds card",
+          W.wants(W.accept_chip(1000), {}, [
+              {'role': 'agent', 'text': W.FUNDS_REPLY},
+          ]))
+
+
 def test_s3_store_uses_bucket_not_s3_bucket():
     """Live host binds `bucket`. getattr(S3_BUCKET) raises HostNotBound."""
 
@@ -705,6 +788,7 @@ def main():
     test_thread_holds_across_isolated_turns()
     test_history_only_talent_is_not_a_subject_read()
     test_super_admin_and_unlimited_accept_is_free()
+    test_jenna_live_seat_and_stale_funds_draft()
     test_s3_store_uses_bucket_not_s3_bucket()
     print("\n" + ("OK" if not FAIL else f"{FAIL} FAILED"))
     return 1 if FAIL else 0

@@ -139,7 +139,14 @@ def _charge(user, key, description, job_id):
     from migration.digital_twins import PULL_TYPES
     credits = {'digital_twins_iq': 15, 'digital_twin_run': 3, 'digital_twin_spend': 5, 'digital_twin_panel': 4, 'digital_twin_panel_more': 3,
                'digital_twin_pilot': 4, 'digital_twin_pilot_more': 3, 'digital_twin_panelist': 1}
-    if _is_super(user) or not host.has('consume_credit'):
+    try:
+        from prometheus.priced_read import seat_is_free
+        if seat_is_free(user, _uname(user), host):
+            return None
+    except Exception:
+        if _is_super(user):
+            return None
+    if not host.has('consume_credit'):
         return None
     try:
         ok = bool(host.consume_credit(_uname(user), description=description, pull_type=PULL_TYPES[key], credits_used=credits[key], job_id=job_id))

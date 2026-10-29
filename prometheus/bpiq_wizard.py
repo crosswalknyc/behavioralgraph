@@ -352,7 +352,14 @@ def last_agent_is_wizard(history):
     if meta.get('bpiq_wizard') or turn.get('bpiq_wizard'):
         return True
     txt = str(turn.get('text') or turn.get('content') or '').strip()
-    return step_from_prompt(txt) is not None
+    if step_from_prompt(txt) is not None:
+        return True
+    low = txt.lower()
+    if txt.startswith("Here's what I'll run") or txt.startswith("It's running"):
+        return True
+    if 'needs funds on the account first' in low:
+        return True
+    return False
 
 
 def replay_history(history, today=None):
@@ -989,12 +996,14 @@ def _uname(user):
     return str(user or '').strip()
 
 
-def _seat_is_free(user):
+def _seat_is_free(user, uname=None, g=None):
     """True for the seats other priced Prometheus steps never bill:
-    super_admin / Crosswalk staff, or an unlimited flag / credits."""
+    super_admin / Crosswalk staff, or an unlimited flag / credits.
+    Re-reads the live users row when the passed object is thin."""
+    host = (g or {}).get('_H') if g else None
     try:
-        from prometheus.priced_read import staff_user
-        if staff_user(user):
+        from prometheus.priced_read import seat_is_free
+        if seat_is_free(user, uname or _uname(user), host):
             return True
     except Exception:
         pass
@@ -1003,7 +1012,9 @@ def _seat_is_free(user):
     role = str(user.get('role') or '').strip().lower().replace(' ', '_')
     if role in ('super_admin', 'superadmin'):
         return True
-    if bool(user.get('unlimited')):
+    if bool(user.get('unlimited')) or bool(user.get('is_super_admin')) or bool(user.get('no_cap')):
+        return True
+    if str(user.get('billing_mode') or '').strip().lower() == 'unlimited':
         return True
     try:
         import wallet as _w
@@ -1021,8 +1032,9 @@ def _seat_is_free(user):
 def _charge_seat(user, uname, inputs, job_id, g, charge_fn):
     """Same door as the other priced Prometheus reads: free for staff
     and unlimited, else priced_read.charge. Never a private balance
-    check."""
-    if _seat_is_free(user):
+    check. Always re-evaluates the live seat; a stored funds verdict
+    on the draft is ignored."""
+    if _seat_is_free(user, uname, g):
         return True
     if charge_fn is not None:
         return bool(charge_fn(uname or user, inputs, job_id))
@@ -1095,10 +1107,16 @@ def _start_valuation(job_id, uname, inputs, extras, g, start_fn):
 
 def _charge_and_start(draft, user, uname, ppu, g, charge_fn, start_fn,
                       store=None, thread_id=''):
+    draft = dict(draft or empty_draft())
+    # A leftover funds / unpaid stamp is never a verdict. Accept
+    # re-reads the live seat every tap.
+    for k in ('funds_required', 'charge_state', 'needs_funds',
+              'unpaid', 'funds_ok'):
+        draft.pop(k, None)
     inputs = engine_inputs(draft)
-    if (draft or {}).get('charged') or (draft or {}).get('job_id'):
+    if draft.get('charged') or draft.get('job_id'):
         return _payload(RUNNING_REPLY, [], draft=None, bpiq_collect=False,
-                        bpiq_job_id=(draft or {}).get('job_id'))
+                        bpiq_job_id=draft.get('job_id'))
     try:
         import uuid
         job_id = uuid.uuid4().hex[:12]

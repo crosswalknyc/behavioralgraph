@@ -1960,6 +1960,10 @@ def is_unlimited(user: dict) -> bool:
     """
     if not user:
         return False
+    if bool(user.get("unlimited")) or bool(user.get("no_cap")):
+        return True
+    if str(user.get("billing_mode") or "").strip().lower() == "unlimited":
+        return True
     try:
         return int(user.get("credits", 0) or 0) == -1
     except (TypeError, ValueError):

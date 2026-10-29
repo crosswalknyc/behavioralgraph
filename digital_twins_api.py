@@ -172,8 +172,13 @@ def _charge(user, key, description, job_id, quantity=1):
     price); super admins are free. Returns None when charged (or free),
     else the funds reply."""
     uname = _uname(user)
-    if _role(user) == 'super_admin':
-        return None
+    try:
+        from prometheus.priced_read import seat_is_free
+        if seat_is_free(user, uname, None):
+            return None
+    except Exception:
+        if _role(user) == 'super_admin':
+            return None
     a = _app()
     if a is None or not hasattr(a, 'consume_credit'):
         return None

@@ -2411,7 +2411,15 @@ def _get_company_pool(data, company_name):
     """Return the company pool dict if the company has one, else None."""
     if not company_name:
         return None
-    return data.get('companies', {}).get(company_name)
+    rec = (data.get('companies') or {}).get(company_name)
+    if not isinstance(rec, dict) or not rec:
+        return None
+    # A company row with no pool fields is not a credit pool. Crosswalk
+    # sits as an empty company on some seats; treating {} as a pool of 0
+    # would block an unlimited personal balance.
+    if rec.get('credit_pool') is None and rec.get('credit_pool_used') is None:
+        return None
+    return rec
 
 
 # ---------------------------------------------------------------------------
@@ -2755,10 +2763,18 @@ def check_user_credits(username):
         return False, 0
 
     user_credits = _numeric_credits_balance(user)
-    user_unlimited = user_credits == -1
+    user_unlimited = (
+        user_credits == -1
+        or bool(user.get('unlimited'))
+        or bool(user.get('no_cap'))
+        or str(user.get('billing_mode') or '').strip().lower() == 'unlimited'
+    )
 
     company = (user.get('company') or '').strip()
     pool = _get_company_pool(data, company)
+
+    if user_unlimited:
+        return True, -1
 
     if pool is not None:
         pool_total = _credit_num(pool.get('credit_pool'), 0)
@@ -3045,11 +3061,24 @@ def consume_credit(username, description=None, job_id=None, pull_type=None, cred
         if not user:
             return None
 
-        user_unlimited = _numeric_credits_balance(user) == -1
+        user_unlimited = (
+            _numeric_credits_balance(user) == -1
+            or bool(user.get('unlimited'))
+            or bool(user.get('no_cap'))
+            or str(user.get('billing_mode') or '').strip().lower() == 'unlimited'
+        )
 
         company = (user.get('company') or '').strip()
         pool = _get_company_pool(data, company)
         has_personal_override = user.get('credit_source') == 'personal'
+
+        if user_unlimited:
+            user['credits_used'] = _credit_num(user.get('credits_used'), 0) + credits_used
+            history = user.setdefault('credit_usage_history', [])
+            history.insert(0, entry)
+            user['credit_usage_history'] = history[:500]
+            outcome['ok'] = True
+            return data
 
         if pool is not None and not has_personal_override:
             pool_total = _credit_num(pool.get('credit_pool'), 0)

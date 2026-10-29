@@ -894,15 +894,98 @@ def staff_user(user):
         return False
 
 
+def _host_cap(host, name):
+    """Read a host capability without raising HostNotBound on a miss."""
+    if host is None:
+        return None
+    try:
+        if callable(getattr(host, 'has', None)) and not host.has(name):
+            return None
+        return getattr(host, name)
+    except Exception:
+        return None
+
+
+def live_user(host, username, user=None):
+    """The billed seat. Prefer the live users.json row so a thin
+    session object cannot hide unlimited / super_admin flags."""
+    uname = str(username or '').strip()
+    if not uname and isinstance(user, dict):
+        uname = str(user.get('username') or user.get('email') or '').strip()
+    if not uname and not isinstance(user, dict):
+        uname = str(user or '').strip()
+    rec = None
+    load = _host_cap(host, 'load_users')
+    if load is None:
+        try:
+            import app as _app
+            load = getattr(_app, 'load_users', None)
+        except Exception:
+            load = None
+    if callable(load) and uname:
+        try:
+            data = load() or {}
+            users = data.get('users') or {}
+            rec = users.get(uname)
+            if rec is None:
+                want = uname.lower()
+                for k, v in users.items():
+                    if not isinstance(v, dict):
+                        continue
+                    if str(v.get('email') or '').strip().lower() == want:
+                        rec = v
+                        break
+                    if str(v.get('username') or k).strip().lower() == want:
+                        rec = v
+                        break
+        except Exception:
+            rec = None
+    if isinstance(rec, dict) and rec:
+        out = dict(rec)
+        if not out.get('username'):
+            out['username'] = uname
+        return out
+    return user if isinstance(user, dict) else {}
+
+
+def seat_is_free(user, username=None, host=None):
+    """True when this seat is never billed: staff, super_admin, or
+    unlimited (credits == -1, unlimited flag, billing_mode unlimited,
+    or no_cap). Looks up the live row when the passed user is thin."""
+    u = live_user(host, username, user)
+    if staff_user(u):
+        return True
+    if not isinstance(u, dict) or not u:
+        return False
+    role = str(u.get('role') or '').strip().lower().replace(' ', '_')
+    if role in ('super_admin', 'superadmin'):
+        return True
+    if bool(u.get('is_super_admin')) or bool(u.get('unlimited')) or bool(u.get('no_cap')):
+        return True
+    if str(u.get('billing_mode') or '').strip().lower() == 'unlimited':
+        return True
+    try:
+        import wallet as _w
+        if _w.is_unlimited(u):
+            return True
+    except Exception:
+        try:
+            if int(u.get('credits', 0) or 0) == -1:
+                return True
+        except (TypeError, ValueError):
+            pass
+    return False
+
+
 def charge(host, username, subject, pull_type, credits, description, quantity=1):
     """True when the seat covered it (or is unlimited). False = no funds.
     The ledger line carries the tool (through pull_type) and the subject."""
     uname = str(username or '').strip()
     if not uname:
         return True
-    consume = None
-    if host is not None and hasattr(host, 'consume_credit'):
-        consume = host.consume_credit
+    if seat_is_free(None, uname, host):
+        return True
+    consume = _host_cap(host, 'consume_credit')
     if consume is None:
         return True
     try:
@@ -942,7 +1025,7 @@ def offer_or_charge(*, text, subject, kind, panel_confirm, username, user=None,
     """
     kind = str(kind or 'report')
     subj = str(subject or '').strip() or 'that subject'
-    staff = staff_user(user)
+    staff = staff_user(user) or seat_is_free(user, username, host)
     if kind == 'viewership':
         try:
             from prometheus.legacy.watch import _pm_viewership_read_price
