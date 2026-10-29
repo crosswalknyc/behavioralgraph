@@ -66843,7 +66843,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             } else {
                 // Data already cached - repaint so the tab strip switches
                 // from the Rankers set back to the Trends set immediately.
-                renderTrendsIQ(window.__trendsIQ.lastData);
+                renderTrendsIQ(window.__trendsIQ.baseData || window.__trendsIQ.lastData);
             }
         };
 
@@ -69289,44 +69289,58 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         async function applyTrendsIQFilters(opts) {
             opts = opts || {};
             var forceRefresh = !!opts.forceRefresh;
+            var T = window.__trendsIQ;
+            // Before the first load lands everything is the shared view;
+            // after it, Apply belongs to the tab it was pressed on.
+            var scopeTab = ('tab' in opts) ? opts.tab : (T.baseData ? (T.activeTab || null) : null);
+            var ctl = Object.assign({}, opts.controls || _tiqReadControls());
+            // Only write corrected dates back into the bar when the bar is
+            // showing this request's filters.
+            var shown = !opts.controls || (scopeTab ? T.activeTab === scopeTab
+                                                    : !_tiqTabStates()[T.activeTab]);
             // Date range -> (asof, lookback_days). End empty (or today)
             // = live path ending today; a past end date routes to the
             // dated snapshot folder. Window length = end - start + 1
             // days, so "Jun 1 - Jun 30" is a 30-day view ending Jun 30.
             // _tiqLoadAvailableDates() sets min/max on both pickers.
-            var startInput = document.getElementById('trendsIQStart');
-            var endInput   = document.getElementById('trendsIQEnd');
+            var startInput = shown ? document.getElementById('trendsIQStart') : null;
+            var endInput   = shown ? document.getElementById('trendsIQEnd') : null;
+            var minISO     = (document.getElementById('trendsIQStart') || {}).min || '';
             var todayISO   = _tiqTodayISO();
-            var endVal     = (endInput && endInput.value) || '';
+            var endVal     = ctl.end || '';
             if (!endVal || endVal > todayISO) {
+                if (endVal) ctl.end = todayISO;
                 endVal = todayISO;
                 if (endInput && endInput.value) endInput.value = todayISO;
             }
-            var startVal = (startInput && startInput.value) || '';
+            var startVal = ctl.start || '';
             if (!startVal) {
                 // No start picked: fall back to the Window preset length
                 // ending at the end date (default = live today).
-                var presetN = parseInt(document.getElementById('trendsIQLookback').value, 10);
+                var presetN = parseInt(ctl.lookback, 10);
                 if (!isFinite(presetN) || presetN < 1) presetN = 1;
                 startVal = _tiqShiftISO(endVal, -(presetN - 1));
             }
             if (startVal > endVal) {
                 // Swapped inputs: treat the earlier date as the start.
                 var _sw = startVal; startVal = endVal; endVal = _sw;
+                ctl.start = startVal; ctl.end = endVal;
                 if (startInput) startInput.value = startVal;
                 if (endInput)   endInput.value   = endVal;
             }
             // Clamp the start to available history so a range reaching
             // past coverage degrades to the covered part.
-            if (startInput && startInput.min && startVal < startInput.min) {
-                startVal = startInput.min;
-                startInput.value = startVal;
+            if (minISO && startVal < minISO) {
+                startVal = minISO;
+                ctl.start = startVal;
+                if (startInput) startInput.value = startVal;
             }
             var rangeDays = _tiqDaysBetween(startVal, endVal) + 1;
             if (rangeDays > 62) {
                 // Two-month cap, matching the backend accumulator.
                 rangeDays = 62;
                 startVal = _tiqShiftISO(endVal, -61);
+                ctl.start = startVal;
                 if (startInput) startInput.value = startVal;
             }
             var asOfVal = (endVal === todayISO) ? '' : endVal;
@@ -69354,8 +69368,13 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }
             document.getElementById('trendsIQLoading').style.display = 'flex';
             _tiqBootStart();
-            document.getElementById('trendsIQTabStrip').style.display = 'none';
-            document.getElementById('trendsIQPanels').innerHTML = '';
+            if (scopeTab) {
+                // The other tabs keep their data; just hide while loading.
+                document.getElementById('trendsIQPanels').style.display = 'none';
+            } else {
+                document.getElementById('trendsIQTabStrip').style.display = 'none';
+                document.getElementById('trendsIQPanels').innerHTML = '';
+            }
             document.getElementById('trendsIQMeta').textContent = '';
             try {
                 if (window.__trendsIQ.inFlight) { try { window.__trendsIQ.inFlight.abort(); } catch (e) {} }
@@ -69372,15 +69391,20 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 });
                 var data = await resp.json();
                 if (!data || !data.success) throw new Error('trends fetch retry');
-                window.__trendsIQ.lastData = data;
-                renderTrendsIQ(data);
+                if (scopeTab) {
+                    _tiqTabStates()[scopeTab] = { controls: ctl, data: data };
+                    _tiqRepaintPanel(scopeTab);
+                } else {
+                    T.baseControls = ctl;
+                    renderTrendsIQ(data);
+                }
                 // Cold recomputes can ship with a section still pending
                 // (its panel shows the warming-up state). Schedule one
                 // quiet re-fetch after the backend's short retry window
                 // so those panels fill in without user action.
                 if ((data.pending_sections || []).length && !opts._pendingRefetch) {
                     setTimeout(function () {
-                        applyTrendsIQFilters({ _pendingRefetch: true });
+                        applyTrendsIQFilters({ _pendingRefetch: true, tab: scopeTab, controls: ctl });
                     }, 11 * 60 * 1000);
                 }
             } catch (e) {
@@ -69393,12 +69417,13 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 document.getElementById('trendsIQMeta').textContent = 'Loading trends. This view refreshes automatically in a moment.';
                 if (!opts._retried) {
                     setTimeout(function () {
-                        applyTrendsIQFilters({ _retried: true });
+                        applyTrendsIQFilters({ _retried: true, tab: scopeTab, controls: ctl });
                     }, 15000);
                 }
             } finally {
                 _tiqBootFinish();
                 document.getElementById('trendsIQLoading').style.display = 'none';
+                document.getElementById('trendsIQPanels').style.display = '';
                 window.__trendsIQ.inFlight = null;
                 if (refreshBtn) {
                     refreshBtn.disabled = false;
@@ -69414,7 +69439,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         // recomputes the S3 cache tuple; every other user who visits after
         // this returns gets the same fresh data (24h TTL).
         function refreshTrendsIQNow() {
-            applyTrendsIQFilters({ forceRefresh: true });
+            // A tab on its own filters refreshes alone; otherwise the
+            // shared view (and every tab following it) refreshes.
+            var T = window.__trendsIQ;
+            var own = T.activeTab && _tiqTabStates()[T.activeTab];
+            applyTrendsIQFilters({ forceRefresh: true, tab: own ? T.activeTab : null,
+                                   controls: own ? own.controls : (T.baseControls || undefined) });
         }
 
         // Today (UTC) as YYYY-MM-DD. Matches the backend's cache-day
@@ -70661,20 +70691,44 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         };
 
         window.applyTrendsIQLens = function(from) {
-            var selL = document.getElementById('trendsIQLens');
-            var selG = document.getElementById('trendsIQGender');
-            // One lens at a time. The dropdown that just changed wins;
-            // the other resets to All.
-            if (from === 'gender' && selG && selG.value && selL) selL.value = '';
-            if (from === 'lens' && selL && selL.value && selG) selG.value = '';
-            var sel = (selG && selG.value) ? selG : selL;
-            var lensId = (sel && sel.value) || '';
-            window.__trendsIQ.activeLens = lensId;
+            var T = window.__trendsIQ;
+            if (from) {
+                var selL0 = document.getElementById('trendsIQLens');
+                var selG0 = document.getElementById('trendsIQGender');
+                // One lens at a time. The dropdown that just changed wins;
+                // the other resets to All.
+                if (from === 'gender' && selG0 && selG0.value && selL0) selL0.value = '';
+                if (from === 'lens' && selL0 && selL0.value && selG0) selG0.value = '';
+                // A lens change belongs to the tab it was made on.
+                var key = T.activeTab;
+                var st = _tiqTabStates()[key];
+                var base = (st && st.controls) || T.baseControls || _tiqReadControls();
+                var next = Object.assign({}, base, {
+                    lens: selL0 ? selL0.value : '', gender: selG0 ? selG0.value : '' });
+                _tiqTabStates()[key] = { controls: next, data: (st && st.data) || T.baseData || T.lastData };
+                _tiqLensPanels([key]);
+                return;
+            }
+            _tiqLensPanels(_TIQ_PANEL_KEYS);
+        };
+        function _tiqLensPanels(keys) {
+            var T = window.__trendsIQ;
+            var wrap = document.getElementById('trendsIQPanels');
+            if (!wrap) return;
+            keys.forEach(function(k) {
+                var p = wrap.querySelector('.tiq-panel[data-tiq-panel="' + k + '"]');
+                if (!p) return;
+                var c = _tiqControlsFor(k) || {};
+                var sel = document.getElementById(c.gender ? 'trendsIQGender' : 'trendsIQLens');
+                _tiqWithTab(k, function() { _tiqApplyLensTo(p, T.activeLens, sel, k === T.activeTab); });
+            });
+            T.activeLens = _tiqLensFor(T.activeTab);
+        }
+        function _tiqApplyLensTo(panels, lensId, sel, isActive) {
             var lensMeta = ((window.__trendsIQ.lensMeta || {})[lensId]) || {};
             var rankOnly = (lensMeta.mode === 'rank');
             var byTitle = window.__trendsIQ.lensScores || {};
             var cutoffs = (window.__trendsIQ.lensCutoffs || {})[lensId] || {};
-            var panels  = document.getElementById('trendsIQPanels');
             if (!panels) return;
             var hasScores = Object.keys(byTitle).length > 0;
 
@@ -70698,7 +70752,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 }
                 var oldBanners = panels.querySelectorAll('.tiq-lens-empty-banner');
                 for (var ob = 0; ob < oldBanners.length; ob++) oldBanners[ob].remove();
-                _tiqLensUpdateMetaBanner(sel, lensId);
+                if (isActive) _tiqLensUpdateMetaBanner(sel, lensId);
                 try { _tiqLensRewriteAudienceChips(panels); } catch (e) {}
                 try { _tiqLensRewriteSheetViews(panels, (hasScores && rankOnly) ? lensId : ''); } catch (e) {}
                 try { _tiqLensResortPanelsByAudience(panels); } catch (e) {}
@@ -70799,9 +70853,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // (either lens cleared, or new rows landed that pass the
             // filter). Bannering happens after the tooltip pass so we
             // never accidentally treat the banner itself as a row.
-            var _tiqLensPanels = panels.querySelectorAll('.tiq-panel[data-tiq-panel]');
-            for (var pi = 0; pi < _tiqLensPanels.length; pi++) {
-                var _p = _tiqLensPanels[pi];
+            var _lensPanelEls = panels.matches('.tiq-panel') ? [panels]
+                              : panels.querySelectorAll('.tiq-panel[data-tiq-panel]');
+            for (var pi = 0; pi < _lensPanelEls.length; pi++) {
+                var _p = _lensPanelEls[pi];
                 var _existing = _p.querySelector(':scope > .tiq-lens-empty-banner');
                 var _rows = _p.querySelectorAll(
                     '.tiq-row, .tiq-person-card, .tiq-sheet-row');
@@ -70833,7 +70888,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 }
             }
 
-            _tiqLensUpdateMetaBanner(sel, lensId);
+            if (isActive) _tiqLensUpdateMetaBanner(sel, lensId);
             // Per-lens audience rescaling (2026-09-03). Swap every
             // audience chip's number + unit to the lens-scoped value
             // when active, then re-sort visible rows so a Gen Z view
@@ -71089,11 +71144,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             else attach();
         })();
 
-        function renderTrendsIQ(data) {
-            window.__trendsIQ.lastData = data;
-            var cards = data.cards || {};
-            var counts = data.counts || {};
-            var filters = data.filters || {};
+        function _tiqRenderMeta(data) {
+            var filters = (data && data.filters) || {};
             var meta = document.getElementById('trendsIQMeta');
             var updatedAt = document.getElementById('trendsIQUpdatedAt');
             if (meta) {
@@ -71122,6 +71174,15 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var d = new Date(data.generated_at);
                 updatedAt.textContent = 'Updated ' + d.toLocaleString();
             }
+        }
+
+        function renderTrendsIQ(data) {
+            window.__trendsIQ.baseData = data;
+            window.__trendsIQ.lastData = data;
+            var cards = data.cards || {};
+            var counts = data.counts || {};
+            var filters = data.filters || {};
+            _tiqRenderMeta(data);
             // Refresh button becomes visible as soon as we have data in
             // hand. It stays hidden on the initial "click Apply" copy so
             // there's nothing to click before the first fetch lands.
@@ -71170,6 +71231,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 { key: 'watchlist', label: 'Watchlist',        count: watchCount,            icon: '★',
                   tip: 'Watchlist: The trends you have starred. Populates the daily digest email so you get pinged when anything on this list breaks out, drops off, or crosses a threshold you set.' },
             ];
+            tabs.forEach(function(t) {
+                var own = _tiqOwnData(t.key);
+                if (own) t.count = _tiqTabCount(t.key, own);
+            });
             // Product routing: the same Trends engine powers two products.
             // "Trends" shows search/news/retail tabs; "Rankers" shows
             // FAST / Music / Podcasts / Streaming / Gaming.
@@ -71208,28 +71273,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
 
             var panels = document.getElementById('trendsIQPanels');
             panels.innerHTML =
-                _renderTIQPanel('movers',    renderTIQMovers(cards.movers || {available:false})) +
-                _renderTIQPanel('headlines', renderTIQHeadlines(cards.trending_headlines || [],
-                                                                 cards.articles_by_source || [],
-                                                                 cards.philanthropy_news    || [],
-                                                                 cards.business_news        || [],
-                                                                 cards.wall_street_news     || [])) +
-                _renderTIQPanel('searches',  renderTIQSearches({
-                    all:         cards.trending_searches             || [],
-                    by_category: cards.trending_searches_by_category || {},
-                })) +
-                _renderTIQPanel('people',    renderTIQPeople(_tiqFusePeople(cards.trending_people || [],
-                                                                             cards.wikipedia_trending || []))) +
-                _renderTIQPanel('music',     renderTIQMusic(cards.music_trending || {})) +
-                _renderTIQPanel('podcasts',  renderTIQPodcasts(cards.podcasts_trending || {})) +
-                _renderTIQPanel('books',     renderTIQBooks(cards.books_trending || {}, cards.libby_trending || {})) +
-                _renderTIQPanel('comics',    renderTIQComics(cards.comics_trending || {})) +
-                _renderTIQPanel('streaming', renderTIQStreaming(cards.streaming_trending || {})) +
-                _renderTIQPanel('broadway',  renderTIQBroadway(cards.broadway_trending || {}, cards.broadway_week_ending || '')) +
-                _renderTIQPanel('films',     renderTIQFilms(cards.films_ticketing || {})) +
-                _renderTIQPanel('fast',      renderTIQFast(cards.fast_trending || {})) +
-                _renderTIQPanel('gaming',    renderTIQGaming(cards.gaming_trending || {})) +
-                _renderTIQPanel('watchlist', renderTIQWatchlist());
+                _tiqAllPanelsHtml();
 
             // Persona-lens filter setup.  `cards.lens_config` is the
             // list of available lenses (from the daily lens_relevance
@@ -71287,6 +71331,154 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     // watchlist tab also picks up its content here.
                     _tiqRepaintActivePanel();
                 });
+            }
+        }
+
+        // ---- Per-tab filters -------------------------------------------
+        // Each tab keeps its own Window, dates, Lens and Gender. A tab
+        // nobody has changed follows the shared first load (baseData /
+        // baseControls); applying on a tab gives it its own state and
+        // payload, and only that panel repaints.
+        var _TIQ_PANEL_KEYS = ['movers', 'headlines', 'searches', 'people', 'music', 'podcasts',
+                               'books', 'comics', 'streaming', 'broadway', 'films', 'fast',
+                               'gaming', 'watchlist'];
+        function _tiqTabStates() {
+            return window.__trendsIQ.tabState || (window.__trendsIQ.tabState = {});
+        }
+        function _tiqOwnData(key) {
+            var st = _tiqTabStates()[key];
+            return (st && st.data) || null;
+        }
+        function _tiqDataFor(key) {
+            return _tiqOwnData(key) || window.__trendsIQ.baseData || window.__trendsIQ.lastData || null;
+        }
+        function _tiqControlsFor(key) {
+            var st = _tiqTabStates()[key];
+            return (st && st.controls) || window.__trendsIQ.baseControls || null;
+        }
+        function _tiqLensFor(key) {
+            var c = _tiqControlsFor(key) || {};
+            return c.gender || c.lens || '';
+        }
+        function _tiqTabCount(key, data) {
+            var c = (data && data.counts) || {};
+            return key === 'headlines' ? (c.headlines || 0) + (c.sources || 0) : (c[key] || 0);
+        }
+        function _tiqReadControls() {
+            function v(id) { var el = document.getElementById(id); return el ? (el.value || '') : ''; }
+            return { lookback: v('trendsIQLookback'), start: v('trendsIQStart'), end: v('trendsIQEnd'),
+                     lens: v('trendsIQLens'), gender: v('trendsIQGender') };
+        }
+        function _tiqWriteControls(c) {
+            if (!c) return;
+            function set(id, val) { var el = document.getElementById(id); if (el) el.value = val || ''; }
+            set('trendsIQLookback', c.lookback || '1');
+            var start = c.start, end = c.end;
+            var n = parseInt(c.lookback || '1', 10);
+            if (!start && !end && isFinite(n) && n > 0) {
+                // A preset with no dates typed reads as the range it covers.
+                end = _tiqTodayISO();
+                start = _tiqShiftISO(end, -(n - 1));
+            }
+            set('trendsIQStart', start);
+            set('trendsIQEnd', end);
+            set('trendsIQLens', c.lens);
+            set('trendsIQGender', c.gender);
+        }
+        // Lens scores are stored per payload; a tab on its own payload
+        // swaps its own in while it is drawn or filtered.
+        function _tiqLensTablesFor(data) {
+            if (!data || !data.cards) return null;
+            if (!data.__lensTables) {
+                var T = window.__trendsIQ;
+                var keepS = T.lensScores, keepC = T.lensCutoffs;
+                _tiqStoreLensScores(data.cards.lens_scores || {});
+                _tiqStoreLensCutoffs(data.cards.lens_cutoffs || {});
+                data.__lensTables = { scores: T.lensScores, cutoffs: T.lensCutoffs };
+                T.lensScores = keepS; T.lensCutoffs = keepC;
+            }
+            return data.__lensTables;
+        }
+        // Run fn with the tab's payload, lens and lens tables in place of
+        // the globals the renderers and lens helpers read.
+        function _tiqWithTab(key, fn) {
+            var T = window.__trendsIQ;
+            var keep = { d: T.lastData, l: T.activeLens, s: T.lensScores, c: T.lensCutoffs };
+            var d = _tiqDataFor(key) || keep.d;
+            T.lastData = d;
+            T.activeLens = _tiqLensFor(key);
+            var lt = _tiqLensTablesFor(d);
+            if (lt) { T.lensScores = lt.scores; T.lensCutoffs = lt.cutoffs; }
+            try { return fn(d || {}); }
+            finally { T.lastData = keep.d; T.activeLens = keep.l; T.lensScores = keep.s; T.lensCutoffs = keep.c; }
+        }
+        function _tiqPanelInner(key, cards) {
+            switch (key) {
+                case 'movers':    return renderTIQMovers(cards.movers || {available:false});
+                case 'headlines': return renderTIQHeadlines(cards.trending_headlines || [],
+                                                            cards.articles_by_source || [],
+                                                            cards.philanthropy_news  || [],
+                                                            cards.business_news      || [],
+                                                            cards.wall_street_news   || []);
+                case 'searches':  return renderTIQSearches({
+                                      all:         cards.trending_searches             || [],
+                                      by_category: cards.trending_searches_by_category || {},
+                                  });
+                case 'people':    return renderTIQPeople(_tiqFusePeople(cards.trending_people || [],
+                                                                        cards.wikipedia_trending || []));
+                case 'music':     return renderTIQMusic(cards.music_trending || {});
+                case 'podcasts':  return renderTIQPodcasts(cards.podcasts_trending || {});
+                case 'books':     return renderTIQBooks(cards.books_trending || {}, cards.libby_trending || {});
+                case 'comics':    return renderTIQComics(cards.comics_trending || {});
+                case 'streaming': return renderTIQStreaming(cards.streaming_trending || {});
+                case 'broadway':  return renderTIQBroadway(cards.broadway_trending || {}, cards.broadway_week_ending || '');
+                case 'films':     return renderTIQFilms(cards.films_ticketing || {});
+                case 'fast':      return renderTIQFast(cards.fast_trending || {});
+                case 'gaming':    return renderTIQGaming(cards.gaming_trending || {});
+                case 'watchlist': return renderTIQWatchlist();
+            }
+            return '';
+        }
+        function _tiqPanelHtml(key) {
+            return _tiqWithTab(key, function(d) { return _renderTIQPanel(key, _tiqPanelInner(key, d.cards || {})); });
+        }
+        function _tiqAllPanelsHtml() {
+            return _TIQ_PANEL_KEYS.map(_tiqPanelHtml).join('');
+        }
+        // Repaint one tab from its own payload; every other panel stays.
+        function _tiqRepaintPanel(key) {
+            var wrap = document.getElementById('trendsIQPanels');
+            var old = wrap && wrap.querySelector('.tiq-panel[data-tiq-panel="' + key + '"]');
+            if (!old) { _tiqRepaintActivePanel(); return; }
+            var tmp = document.createElement('div');
+            tmp.innerHTML = _tiqPanelHtml(key);
+            var fresh = tmp.firstElementChild;
+            old.parentNode.replaceChild(fresh, old);
+            _tiqLensPanels([key]);
+            _tiqInstallCardSearches(fresh);
+            var badge = document.querySelector('#trendsIQTabStrip .tiq-tab[data-tiq-tab="' + key + '"] .tiq-tab-count');
+            if (badge && key !== 'watchlist') {
+                var n = _tiqTabCount(key, _tiqDataFor(key));
+                badge.textContent = n || '';
+                badge.style.display = n ? '' : 'none';
+            }
+            setTrendsIQTab(window.__trendsIQ.activeTab || key);
+        }
+        // Switching tabs loads that tab's filters into the bar and points
+        // the shared readers (exports, lazy repaints) at its payload.
+        function _tiqEnterTab(key) {
+            var T = window.__trendsIQ;
+            var d = _tiqDataFor(key);
+            if (d) T.lastData = d;
+            T.activeLens = _tiqLensFor(key);
+            var lt = _tiqLensTablesFor(d);
+            if (lt) { T.lensScores = lt.scores; T.lensCutoffs = lt.cutoffs; }
+            var c = _tiqControlsFor(key);
+            if (c) _tiqWriteControls(c);
+            if (d) {
+                _tiqRenderMeta(d);
+                var sel = document.getElementById(c && c.gender ? 'trendsIQGender' : 'trendsIQLens');
+                _tiqLensUpdateMetaBanner(sel, T.activeLens);
             }
         }
 
@@ -72194,10 +72386,15 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var all = [];
             var cols = [];
             _tiqVisibleTabKeys().forEach(function(k) {
-                var built = _tiqBuildTab(k, data.cards);
-                var rows = built.rows;
-                if (lensId) rows = _tiqFilterRowsByLens(rows, k);
-                if (lensId) rows = _tiqRescaleRowsByLens(rows);
+                // Each tab exports its own window and lens.
+                var built, rows;
+                _tiqWithTab(k, function(d) {
+                    var lensK = window.__trendsIQ.activeLens || '';
+                    built = _tiqBuildTab(k, d.cards || data.cards);
+                    rows = built.rows;
+                    if (lensK) rows = _tiqFilterRowsByLens(rows, k);
+                    if (lensK) rows = _tiqRescaleRowsByLens(rows);
+                });
                 if (!rows.length) return;
                 built.cols.forEach(function(c) { if (cols.indexOf(c) === -1) cols.push(c); });
                 all = all.concat(rows);
@@ -72707,6 +72904,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var _prod = (window.__trendsIQ.product === 'rankers') ? 'rankers' : 'trends';
             if (typeof _tiqTabAllowed === 'function' && !_tiqTabAllowed(key, _prod)) return;
             window.__trendsIQ.activeTab = key;
+            _tiqEnterTab(key);
             document.querySelectorAll('#trendsIQTabStrip .tiq-tab').forEach(function(el) {
                 el.classList.toggle('active', el.getAttribute('data-tiq-tab') === key);
             });
@@ -75796,28 +75994,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             if (!panels) return;
             var _tiqProduct = (window.__trendsIQ.product === 'rankers') ? 'rankers' : 'trends';
             panels.innerHTML =
-                _renderTIQPanel('movers',    renderTIQMovers(cards.movers || {available:false})) +
-                _renderTIQPanel('headlines', renderTIQHeadlines(cards.trending_headlines || [],
-                                                                 cards.articles_by_source || [],
-                                                                 cards.philanthropy_news    || [],
-                                                                 cards.business_news        || [],
-                                                                 cards.wall_street_news     || [])) +
-                _renderTIQPanel('searches',  renderTIQSearches({
-                    all:         cards.trending_searches             || [],
-                    by_category: cards.trending_searches_by_category || {},
-                })) +
-                _renderTIQPanel('people',    renderTIQPeople(_tiqFusePeople(cards.trending_people || [],
-                                                                             cards.wikipedia_trending || []))) +
-                _renderTIQPanel('music',     renderTIQMusic(cards.music_trending || {})) +
-                _renderTIQPanel('podcasts',  renderTIQPodcasts(cards.podcasts_trending || {})) +
-                _renderTIQPanel('books',     renderTIQBooks(cards.books_trending || {}, cards.libby_trending || {})) +
-                _renderTIQPanel('comics',    renderTIQComics(cards.comics_trending || {})) +
-                _renderTIQPanel('streaming', renderTIQStreaming(cards.streaming_trending || {})) +
-                _renderTIQPanel('broadway',  renderTIQBroadway(cards.broadway_trending || {}, cards.broadway_week_ending || '')) +
-                _renderTIQPanel('films',     renderTIQFilms(cards.films_ticketing || {})) +
-                _renderTIQPanel('fast',      renderTIQFast(cards.fast_trending || {})) +
-                _renderTIQPanel('gaming',    renderTIQGaming(cards.gaming_trending || {})) +
-                _renderTIQPanel('watchlist', renderTIQWatchlist());
+                _tiqAllPanelsHtml();
             // Re-run lens filter after the star-toggle repaint so rows
             // stay hidden/visible per the active lens.
             if (typeof applyTrendsIQLens === 'function') applyTrendsIQLens();
@@ -77272,7 +77449,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             } else if (!window.__trendsIQ.lastData) {
                 applyTrendsIQFilters();
             } else {
-                renderTrendsIQ(window.__trendsIQ.lastData);
+                renderTrendsIQ(window.__trendsIQ.baseData || window.__trendsIQ.lastData);
             }
         };
 
