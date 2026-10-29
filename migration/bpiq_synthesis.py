@@ -511,6 +511,94 @@ def campaign_prompt() -> str:
     return CAMPAIGN_RESEARCH_PROMPT % ", ".join(BPIQ_CATEGORIES)
 
 
+# The first pass reads the collection; a sell-out is easy to miss in it
+# (2026-10-28: the Ganni x lululemon drop sold out on lululemon.com the
+# day it launched and the first pass came back "sold_out: false"). The
+# second pass searches for exactly that and nothing else.
+SELLOUT_CHECK_PROMPT = """You check one question about a brand campaign:
+did the collection sell out, and how fast? Search for it directly
+(web search when available): "<campaign> sold out", "<campaign> sell
+out", "<campaign> restock", "<campaign> low stock", the brand's own
+product pages (sold-out sizes, waitlist buttons), shopping coverage
+the week of the drop. Return STRICT JSON only:
+
+{
+  "sold_out": bool,                // true only with evidence
+  "days_to_sell_out": float|null,  // from the drop; minutes or hours
+                                   // on launch day count as 1 or less
+  "partial": bool,                 // sold out on one storefront or in
+                                   // most styles while others remained
+  "where": str,                    // the storefront(s) that sold out
+  "evidence": str,                 // one plain sentence of what you saw
+  "restock": {"announced": bool, "note": str},
+  "inventory_signal": "small"|"medium"|"large"|"unknown",
+  "price_band": {"low_usd": float|null, "high_usd": float|null},
+                                   // only when a page or report lists
+                                   // the range; else nulls
+  "sources": [{"title": str, "url": str, "used_for": str}, ...]
+}
+
+Never invent evidence; with none, sold_out is false and evidence is
+an empty string."""
+
+
+def sellout_check(inputs: dict, claude_json: Callable, *,
+                  tools: Optional[list] = None) -> dict:
+    """One targeted call on the sell-out question. Fail-safe to {}."""
+    ask = {
+        "campaign": inputs.get("campaign") or f"{inputs.get('qualifier')} x {inputs.get('brand_partner')}",
+        "brand": inputs.get("brand_partner"),
+        "talent": inputs.get("qualifier"),
+        "drop_window": {"start": inputs.get("event_start"), "end": inputs.get("event_end")},
+        **({"campaign_links": list(inputs["links"])[:12]} if inputs.get("links") else {}),
+    }
+    try:
+        raw = claude_json(SELLOUT_CHECK_PROMPT, json.dumps(ask), max_tokens=2500,
+                          temperature=0.1, surface="bpiq_sellout_check", tools=tools)
+    except Exception as e:
+        print(f"[bpiq-synth] sell-out check failed: {e}")
+        raw = {}
+    return raw if isinstance(raw, dict) else {}
+
+
+def merge_sellout(campaign: dict, check: dict) -> dict:
+    """The targeted check wins on the sell-out block when it carries
+    evidence; the restock, inventory and a wider price band ride along.
+    Its sources join the campaign's (internal)."""
+    c = dict(campaign or {})
+    chk = check if isinstance(check, dict) else {}
+    if not chk:
+        return c
+    so_old = dict(c.get("sell_out") or {})
+    days = _fnum(chk.get("days_to_sell_out"))
+    evidence = str(chk.get("evidence") or "").strip()
+    if bool(chk.get("sold_out")) and (evidence or days):
+        c["sell_out"] = {"sold_out": True, "days_to_sell_out": days if days is not None else so_old.get("days_to_sell_out"),
+                         "partial": bool(chk.get("partial")),
+                         "evidence": " ".join(x for x in (evidence, f"({chk.get('where')})" if chk.get("where") else "") if x)}
+    rs = chk.get("restock") if isinstance(chk.get("restock"), dict) else {}
+    if rs.get("announced") and not (c.get("restock") or {}).get("announced"):
+        c["restock"] = {"announced": True, "note": str(rs.get("note") or "").strip()}
+    inv = str(chk.get("inventory_signal") or "").strip().lower()
+    if inv in ("small", "medium", "large") and c.get("inventory_signal") in (None, "", "unknown"):
+        c["inventory_signal"] = inv
+    pb = chk.get("price_band") if isinstance(chk.get("price_band"), dict) else {}
+    lo, hi = _fnum(pb.get("low_usd")), _fnum(pb.get("high_usd"))
+    cur = dict(c.get("price_band") or {})
+    if lo and (not cur.get("low_usd") or lo < float(cur["low_usd"])):
+        cur["low_usd"] = lo
+    if hi and (not cur.get("high_usd") or hi > float(cur["high_usd"])):
+        cur["high_usd"] = hi
+    if cur:
+        c["price_band"] = cur
+    srcs = list(c.get("sources") or [])
+    for s in (chk.get("sources") or []):
+        if isinstance(s, dict) and s not in srcs:
+            srcs.append(s)
+    c["sources"] = srcs[:30]
+    return c
+
+
 def _fnum(v) -> Optional[float]:
     try:
         if v is None or v == "":
@@ -613,7 +701,14 @@ def research_campaign(inputs: dict, claude_json: Callable, *,
     except Exception as e:
         print(f"[bpiq-synth] campaign research failed: {e}")
         raw = {}
-    return normalize_campaign(raw, inputs)
+    campaign = normalize_campaign(raw, inputs)
+    # the sell-out question gets its own pass; the first read misses it
+    check = sellout_check(inputs, claude_json, tools=tools)
+    if check:
+        campaign = normalize_campaign(merge_sellout(campaign, check), inputs)
+        print(f"[bpiq-synth] sell-out check: sold out {campaign['sell_out'].get('sold_out')}"
+              f" ({campaign['sell_out'].get('days_to_sell_out')} days, partial {campaign['sell_out'].get('partial')})")
+    return campaign
 
 
 def _unit(salt, *parts) -> float:

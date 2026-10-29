@@ -329,6 +329,45 @@ def test_sellout_and_determinism():
           and pe['control_group'].get('enabled') is True)
 
 
+def test_sellout_second_pass():
+    first = campaign(sold_out=False)
+    chk = {'sold_out': True, 'days_to_sell_out': 1.0, 'partial': True, 'where': 'lululemon.com',
+             'evidence': 'sold out on the brand site the day it launched; most styles stayed on the partner site',
+             'restock': {'announced': True, 'note': 'select sizes came back twelve days later'},
+             'inventory_signal': 'medium', 'price_band': {'low_usd': 70.0, 'high_usd': 280.0},
+             'sources': [{'title': 'coverage', 'url': 'https://example.com/x', 'used_for': 'sell-out'}]}
+    merged = S.normalize_campaign(S.merge_sellout(first, chk), inputs())
+    check("second pass turns the sell-out on", merged['sell_out']['sold_out'] is True)
+    check("second pass carries the speed and the partial flag",
+          merged['sell_out']['days_to_sell_out'] == 1.0 and merged['sell_out']['partial'] is True)
+    check("restock rides along", merged['restock']['announced'] is True)
+    check("price band widens to the checked range",
+          merged['price_band']['low_usd'] == 58.0 and merged['price_band']['high_usd'] == 348.0
+          or (merged['price_band']['low_usd'] <= 70.0 and merged['price_band']['high_usd'] >= 280.0))
+    check("the checked sources join the campaign's", len(merged['sources']) == 2)
+    unchanged = S.merge_sellout(first, {'sold_out': True, 'evidence': '', 'days_to_sell_out': None})
+    check("a claim without evidence does not turn the sell-out on", not unchanged['sell_out']['sold_out'])
+    calls = []
+
+    def fake_claude(system, user_prompt, **kw):
+        calls.append(kw.get('surface'))
+        if kw.get('surface') == 'bpiq_campaign_research':
+            return campaign(sold_out=False)
+        if kw.get('surface') == 'bpiq_sellout_check':
+            return chk
+        return prim()
+    c = S.research_campaign(inputs(), fake_claude)
+    check("research runs the collection pass and the sell-out pass",
+          calls == ['bpiq_campaign_research', 'bpiq_sellout_check'])
+    check("the researched campaign reads sold out after the second pass",
+          c['sell_out']['sold_out'] is True and c['sell_out']['days_to_sell_out'] == 1.0)
+    p = S.build_payload(inputs(), prim(), campaign=c)
+    check("a day-one partial sell-out lifts conversions inside the band",
+          0.28 * 0.6 - 1e-9 <= p['conversions']['sell_out_lift_rel'] <= 0.45 * 0.6 + 1e-9)
+    check("the read says most of the collection sold out in a day",
+          'Most of the collection sold out in a day' in p['campaign']['read_line'])
+
+
 def test_underpinnings_reuse():
     calls = []
 
@@ -336,6 +375,8 @@ def test_underpinnings_reuse():
         calls.append(kw.get('surface'))
         if kw.get('surface') == 'bpiq_campaign_research':
             return campaign()
+        if kw.get('surface') == 'bpiq_sellout_check':
+            return {}
         return prim()
 
     store = S.MemoryUnderpinnings()
@@ -411,8 +452,8 @@ def test_thread_id_rides_the_job():
 
 if __name__ == '__main__':
     for fn in (test_run_key, test_second_accept_same_draft, test_registry_claims, test_aov,
-               test_sellout_and_determinism, test_underpinnings_reuse, test_deliverable_text,
-               test_casing, test_thread_id_rides_the_job):
+               test_sellout_and_determinism, test_sellout_second_pass, test_underpinnings_reuse,
+               test_deliverable_text, test_casing, test_thread_id_rides_the_job):
         print(f"\n{fn.__name__}")
         fn()
     print(f"\n{'PASS' if not FAIL else f'{FAIL} FAILED'}")
