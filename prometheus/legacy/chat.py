@@ -16799,9 +16799,18 @@ def _pm_run_bpiq_job(job_id, username, inputs, extras):
                 u['has_brand_partnership_iq_access'] = True
                 u['brand_partnership_iq_journeys'] = [bare_key]
                 return True
-            _H._users_cas_mutate(
-                lambda data: _grant((data.get('users') or {})
-                                    .get(username)) or None)
+            def _grant_doc(data):
+                # The CAS mutator must hand back the WHOLE users doc
+                # (or None to skip the write). Returning _grant's bool
+                # here wrote the literal `true` over system/users.json
+                # on 2026-10-28 and took the dashboard down (every
+                # sign-in looped between / and /login).
+                if not isinstance(data, dict):
+                    return None
+                if _grant((data.get('users') or {}).get(username)):
+                    return data
+                return None
+            _H._users_cas_mutate(_grant_doc)
         except Exception as acc_err:
             print(f"[bpiq-job {job_id}] access grant skipped: {acc_err}")
         _pm_bpiq_status_write(job_id, {

@@ -454,7 +454,16 @@ def not_found(e):
                         'error': 'not found: unknown API path'}), 404
     if request.path.startswith('/api/'):
         return jsonify({'error': 'Endpoint not found', 'path': request.path}), 404
+    if _is_login_path(request.path):
+        return 'Not found', 404
     return redirect(url_for('login_page'))
+
+
+def _is_login_path(path):
+    """The sign-in page itself. An error handler must never answer a
+    request for /login with a redirect to /login."""
+    return (path or '').rstrip('/') == '/login'
+
 
 @app.errorhandler(500)
 def server_error(e):
@@ -464,6 +473,15 @@ def server_error(e):
                         'error': 'internal error'}), 500
     if request.path.startswith('/api/'):
         return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
+    if _is_login_path(request.path):
+        # The sign-in page failed. Drop the session so the next load
+        # renders a clean sign-in instead of looping through /.
+        try:
+            session.clear()
+        except Exception:
+            pass
+        return ('Something went wrong loading the sign-in page. '
+                'Please reload.'), 500
     return redirect(url_for('login_page'))
 
 
@@ -911,6 +929,14 @@ def _s3_json_cas_update(bucket, key, mutate_fn, max_retries=5, default=None,
                 obj = {}
         new_obj = mutate_fn(obj)
         if new_obj is None:
+            return None, None
+        if not isinstance(new_obj, (dict, list)):
+            # A mutator that returns a bool / str / number is a
+            # programming error (2026-10-28: a grant lambda returned
+            # True and the literal `true` landed on system/users.json,
+            # which took the dashboard down). Never write it.
+            print(f"[s3-cas] {label}: mutator returned "
+                  f"{type(new_obj).__name__}, not a document; write skipped")
             return None, None
         body = json.dumps(new_obj, indent=indent, default=str).encode('utf-8')
         put_kwargs = dict(Bucket=bucket, Key=key, Body=body,
@@ -1586,6 +1612,37 @@ def _users_s3_cache_store(raw_body, etag, mirror_written=False):
             _users_s3_cache['mirror_etag'] = etag
 
 
+def _users_doc_is_valid(doc):
+    """A users document is a dict whose 'users' section is a dict.
+    Anything else (the literal `true` that landed on 2026-10-28, an
+    empty body, a list) is corrupt and must never be served or saved."""
+    return isinstance(doc, dict) and isinstance(doc.get('users'), dict)
+
+
+def _users_last_known_good():
+    """The most recent valid users doc this process has seen: the
+    S3 read cache first, then the local mirror. None when neither
+    holds a valid document."""
+    with _users_s3_cache_lock:
+        c_raw = _users_s3_cache.get('raw')
+    if c_raw:
+        try:
+            cached = json.loads(c_raw)
+            if _users_doc_is_valid(cached):
+                return cached
+        except Exception:
+            pass
+    try:
+        if os.path.exists(USERS_FILE):
+            with open(USERS_FILE, 'r') as f:
+                local = json.load(f)
+            if _users_doc_is_valid(local):
+                return local
+    except Exception:
+        pass
+    return None
+
+
 def load_users():
     """Load users from S3 (persistent) or local file (fallback)."""
     _users_baseline.raw = None
@@ -1617,6 +1674,20 @@ def load_users():
                 raw_body = response['Body'].read().decode('utf-8')
                 etag = (response.get('ETag') or '').strip('"') or None
             data = json.loads(raw_body)
+            if not _users_doc_is_valid(data):
+                # Corrupt document in S3 (2026-10-28: the literal
+                # `true`). Serve the last valid doc this process saw
+                # instead of crashing every authenticated request, and
+                # never let the corrupt bytes into the read cache or
+                # the local mirror. save_users() keeps a None baseline
+                # here on purpose: a caller's doc then wins wholesale
+                # over the corrupt S3 copy.
+                print(f"🚨 users.json in S3 is not a users document "
+                      f"({type(data).__name__}); serving last known good")
+                good = _users_last_known_good()
+                if good is not None:
+                    return good
+                raise ValueError('corrupt users.json and no known-good copy')
             print(f"✅ Loaded users from S3")
             # Remember the exact doc this caller starts from, so a later
             # save_users(data) can replay only the caller's own changes.
@@ -1643,7 +1714,11 @@ def load_users():
     try:
         if os.path.exists(USERS_FILE):
             with open(USERS_FILE, 'r') as f:
-                return json.load(f)
+                local = json.load(f)
+            if _users_doc_is_valid(local):
+                return local
+            print(f"🚨 local users mirror is not a users document "
+                  f"({type(local).__name__}); ignoring it")
     except Exception as e:
         print(f"Error loading local users: {e}")
     
@@ -1792,6 +1867,12 @@ def save_users(data):
     wholesale; the conditional put still guarantees we only ever
     replace a state we have just read.
     """
+    if not _users_doc_is_valid(data):
+        # Never persist anything that is not a users document (a bool,
+        # None, a list). 2026-10-28 precedent: `true` on the S3 key.
+        print(f"🚨 save_users refused a {type(data).__name__}; "
+              f"users.json left untouched")
+        return False
     success = True
     
     # Save to local file first (fast)
@@ -4190,9 +4271,23 @@ def upload_to_s3(file_path, brand_name, start_date, end_date, created_by=None, u
 @app.route('/login', methods=['GET', 'POST'])
 def login_page():
     if request.method == 'GET':
-        # If already logged in, redirect to home
+        # If already logged in, redirect to home. Only when the session
+        # resolves to a real user record: a session whose user cannot
+        # be looked up (corrupt or unreadable users.json, a deleted
+        # seat) is dropped and the sign-in page renders. Bouncing it
+        # to / would come straight back here (the 500 handler sends
+        # page errors to /login) and the browser would give up with
+        # ERR_TOO_MANY_REDIRECTS, which is what took the dashboard
+        # down on 2026-10-28.
         if 'username' in session:
-            return redirect(url_for('index'))
+            try:
+                current = get_current_user()
+            except Exception as e:
+                print(f"⚠️ /login could not resolve the session's user: {e}")
+                current = None
+            if isinstance(current, dict):
+                return redirect(url_for('index'))
+            session.clear()
         return render_template('login.html')
     
     # POST - handle login
