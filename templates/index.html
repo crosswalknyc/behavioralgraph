@@ -29954,8 +29954,8 @@ https://www.instagram.com/p/..."></textarea>
                             <h2>What the partnership was worth, and how we know.</h2>
                             <p>Every endorsement is read against a matched control set with no
                                exposure to it, so the gap between the two is what the partnership
-                               itself delivered. Earned media, brand engagement and brand lift are
-                               priced separately.</p>
+                               itself delivered. Earned media, brand engagement, brand lift
+                               and conversion value are priced separately.</p>
                             <button type="button" class="bp-cover-cta" onclick="_bpLibraryOpen(true)">Open the library</button>
                         </div>
                     </div>
@@ -141944,14 +141944,20 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var heroTxt = hero ? (hero.textContent || '').replace(/\s+/g, ' ') : '';
             var total = (heroTxt.match(/\$[\d.,]+[KMB]?/) || [null])[0];
             var parts = [];
-            ['Earned media', 'Brand engagement', 'Brand lift'].forEach(function (name) {
+            // [matched label, shown label]. The hero writes the fourth
+            // lens as "Conversions"; Jenna 2026-10-29 wants it read as
+            // Conversion value, so the two differ here.
+            [['Earned media', 'Earned media'],
+             ['Brand engagement', 'Brand engagement'],
+             ['Brand lift', 'Brand lift'],
+             ['Conversions', 'Conversion value']].forEach(function (pair) {
                 // The label runs straight into its figure in textContent, and
                 // the summing line above it ("earned media + brand
                 // engagement + ...") carries the same words, so the figure
                 // has to follow immediately for the match to count.
-                var re = _bpPartRe(name);
+                var re = _bpPartRe(pair[0]);
                 var m = heroTxt.match(re);
-                if (m) parts.push({ name: name, raw: m[1].replace(/\s+/g, ''), v: _bpMoney(m[1]) });
+                if (m) parts.push({ name: pair[1], raw: m[1].replace(/\s+/g, ''), v: _bpMoney(m[1]) });
             });
             parts.sort(function (a, b) { return (b.v || 0) - (a.v || 0); });
             var tot = _bpMoney(total) || parts.reduce(function (s, p) { return s + (p.v || 0); }, 0);
