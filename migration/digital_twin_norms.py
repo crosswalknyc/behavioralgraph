@@ -39,7 +39,12 @@ GENRES = ('all', 'comedy', 'drama', 'action', 'horror', 'thriller', 'romance', '
 METRICS = ('excellent', 'total_positive', 'definitely_recommend', 'finish', 'tune_in', 'urgency_opening',
            'lead_character', 'secondary_character', 'supporting_character',
            'component_humor', 'component_story', 'component_beginning', 'component_ending', 'component_music',
-           'component_action', 'component_suspense', 'component_pace_just_right', 'confusion')
+           'component_action', 'component_suspense', 'component_settings', 'component_pace_just_right', 'confusion',
+           # the screening modes and the diagnostics (2026-10-28)
+           'interest_before', 'interest_after', 'definite_interest_lift', 'would_watch',
+           'title_appeal', 'title_fit', 'title_unique', 'option_preference', 'art_attention', 'art_interest_lift',
+           'concept_interest', 'concept_unique', 'script_story', 'script_structure', 'script_character',
+           'pace_too_slow', 'beginning', 'ending', 'key_relationship', 'follow_second_episode', 'critic_score', 'walkouts')
 # a format with no cell of its own reads the nearest format's cell
 FORMAT_FALLBACK = {
     'pilot': ('episode', 'feature'), 'episode': ('pilot', 'feature'), 'trailer': ('feature',),
@@ -50,8 +55,15 @@ METRIC_LABEL = {
     'finish': 'Would finish', 'tune_in': 'Would watch the next one', 'urgency_opening': 'Opening weekend',
     'lead_character': 'Lead', 'secondary_character': 'Second lead', 'supporting_character': 'Supporting',
     'component_humor': 'Humor', 'component_story': 'Story', 'component_beginning': 'Beginning', 'component_ending': 'Ending',
-    'component_music': 'Music', 'component_action': 'Action', 'component_suspense': 'Suspense',
+    'component_music': 'Music', 'component_action': 'Action', 'component_suspense': 'Suspense', 'component_settings': 'Settings',
     'component_pace_just_right': 'Pace just right', 'confusion': 'Confused',
+    'interest_before': 'Definitely interested before', 'interest_after': 'Definitely interested after', 'definite_interest_lift': 'Definite interest lift',
+    'would_watch': 'Would watch it', 'title_appeal': 'Title appeal', 'title_fit': 'Title fits the logline', 'title_unique': 'Title stands out',
+    'option_preference': 'Preferred option', 'art_attention': 'Art holds the eye', 'art_interest_lift': 'Interest lift from the art',
+    'concept_interest': 'Definitely interested in the idea', 'concept_unique': 'Idea stands out',
+    'script_story': 'Story works', 'script_structure': 'Structure works', 'script_character': 'Characters work',
+    'pace_too_slow': 'Too slow', 'beginning': 'Beginning', 'ending': 'Ending', 'key_relationship': 'Key relationship',
+    'follow_second_episode': 'Would follow the lead into a second episode', 'critic_score': 'Critic score', 'walkouts': 'Walkouts',
 }
 GENRE_LABEL = {'all': 'All', 'comedy': 'Comedy', 'drama': 'Drama', 'action': 'Action', 'horror': 'Horror', 'thriller': 'Thriller',
                'romance': 'Romance', 'family': 'Family', 'animation': 'Animation', 'documentary': 'Documentary', 'unscripted': 'Unscripted'}

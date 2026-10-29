@@ -62,9 +62,17 @@ BATTERY_FOR = {
     'pilot': ('overall', 'recommend', 'finish', 'tune_in', 'urgency_pilot', 'expectations'),
     'episode': ('overall', 'recommend', 'finish', 'tune_in', 'urgency_pilot', 'expectations'),
     'trailer': ('overall', 'recommend', 'tune_in', 'urgency', 'expectations'),
+    # the screening modes (2026-10-28): a title or key art option set, a script read, a concept
+    'title': ('overall', 'recommend', 'tune_in'),
+    'key_art': ('overall', 'recommend', 'tune_in'),
+    'script': ('overall', 'recommend', 'finish', 'tune_in', 'expectations'),
+    'concept': ('overall', 'recommend', 'tune_in', 'expectations'),
 }
-FINISH_LABEL = {'feature': 'Would finish the film', 'pilot': 'Would finish the episode', 'episode': 'Would finish the season', 'trailer': 'Would watch it'}
-TUNE_IN_LABEL = {'pilot': 'Would watch a second episode', 'episode': 'Would watch the next episode', 'trailer': 'Would watch the title'}
+FINISH_LABEL = {'feature': 'Would finish the film', 'pilot': 'Would finish the episode', 'episode': 'Would finish the season', 'trailer': 'Would watch it',
+                'script': 'Would finish the script'}
+TUNE_IN_LABEL = {'pilot': 'Would watch a second episode', 'episode': 'Would watch the next episode', 'trailer': 'Would watch the title',
+                 'title': 'Would watch a show with this title', 'key_art': 'Would watch the show on this art', 'script': 'Would watch it made', 'concept': 'Would watch it'}
+OVERALL_LABEL = {'title': 'Rating of the title set', 'key_art': 'Rating of the art', 'concept': 'Rating of the idea'}
 
 
 def act_of(frac: float) -> str:
@@ -402,7 +410,7 @@ def persona_watch(twin: dict, roster: list, scenes: list, *, cards: Optional[dic
 # ---------------------------------------------------------- the battery
 def battery_questions(fmt: str) -> list:
     """[(qid, label, kind, [(oid, label, lean)])] for the format."""
-    fmt = fmt if fmt in BATTERY_FOR else ('feature' if fmt in ('film', 'movie') else 'pilot')
+    fmt = fmt if fmt in BATTERY_FOR else ('feature' if fmt in ('film', 'movie') else ('trailer' if fmt == 'spot' else 'pilot'))
     out = []
     for qid in BATTERY_FOR[fmt]:
         spec = BATTERY[qid]
@@ -411,7 +419,64 @@ def battery_questions(fmt: str) -> list:
             label = FINISH_LABEL.get(fmt, label)
         elif qid == 'tune_in':
             label = TUNE_IN_LABEL.get(fmt, label)
+        elif qid == 'overall':
+            label = OVERALL_LABEL.get(fmt, label)
         out.append((qid, label, spec['kind'], list(spec['options'])))
+    return out
+
+
+def battery_with(questions: list, twin: dict, roster: list, seat_summaries: dict, *, cards: Optional[dict] = None, meta: Optional[dict] = None,
+                 models: Optional[Models] = None, session_seed: str = '', usage_extras: Optional[dict] = None, log: Optional[Callable] = None,
+                 system: str = '') -> dict:
+    """``battery`` on a caller's own question list (a mode's card: a
+    trailer's interest before and after, a concept's strongest element).
+    ``questions`` = [(qid, label, kind, [(oid, label, lean)])]. Same
+    return shape as ``battery``; the deterministic card fills what the
+    model leaves."""
+    out = {'answers': {}, 'why': {}, 'best': {}, 'worst': {}, 'fallback': False}
+    if not roster or not questions:
+        out['fallback'] = True
+        return out
+    models = models or Models(usage_extras=usage_extras)
+    if models.fn is None and (regression_mode() or not model_available()):
+        out['fallback'] = True
+        return out
+    cards = cards or {int(r['seat']): persona_card(twin, r, session_seed) for r in roster}
+    meta = meta or {}
+    user = json.dumps({'stimulus': {k: v for k, v in meta.items() if k in ('title', 'genre', 'format', 'logline', 'text', 'options', 'frame', 'rough_cut', 'runtime')},
+                       'card': [{'id': qid, 'question': label, 'options': [{'id': o[0], 'label': o[1]} for o in opts]} for qid, label, _k, opts in questions],
+                       'room': [{'seat': int(r['seat']), 'name': r.get('name'), 'who': _seat_card_text(cards[int(r['seat'])], 520),
+                                 'their_watch': (seat_summaries or {}).get(int(r['seat'])) or {}} for r in roster]}, default=str)
+    max_tokens = int(clamp(300 + len(roster) * 120, 1200, 6500))
+    data, call = models.call('battery', system or BATTERY_SYSTEM, user, max_tokens=max_tokens, temperature=0.5, tools=None)
+    if log:
+        log('battery', call)
+    if not isinstance(data, dict) or not isinstance(data.get('seats'), list):
+        out['fallback'] = True
+        return out
+    valid = {qid: {o[0] for o in opts} for qid, _l, _k, opts in questions}
+    for row in data['seats']:
+        if not isinstance(row, dict):
+            continue
+        try:
+            seat = int(row.get('seat'))
+        except (TypeError, ValueError):
+            continue
+        if seat not in cards:
+            continue
+        ans = {}
+        for qid, oid in (row.get('answers') or {}).items() if isinstance(row.get('answers'), dict) else []:
+            q = str(qid).strip().lower()
+            o = str(oid).strip().lower()
+            if q in valid and o in valid[q]:
+                ans[q] = o
+        if ans:
+            out['answers'][seat] = ans
+        why = scrub(str(row.get('why') or '').strip())[:200]
+        if why:
+            out['why'][seat] = why
+    if not out['answers']:
+        out['fallback'] = True
     return out
 
 
@@ -527,5 +592,5 @@ def guide(scenes: list, *, meta: Optional[dict] = None, models: Optional[Models]
     return out
 
 
-__all__ = ['TONES', 'EVENTS', 'GENRES', 'ACTS', 'BUDGET_S', 'BATTERY', 'BATTERY_FOR', 'FINISH_LABEL', 'TUNE_IN_LABEL', 'VISION_MODELS',
-           'act_of', 'caption_frames', 'genre_from_votes', 'persona_watch', 'battery', 'battery_questions', 'guide', 'Models', 'MODELS']
+__all__ = ['TONES', 'EVENTS', 'GENRES', 'ACTS', 'BUDGET_S', 'BATTERY', 'BATTERY_FOR', 'FINISH_LABEL', 'TUNE_IN_LABEL', 'OVERALL_LABEL', 'VISION_MODELS',
+           'act_of', 'caption_frames', 'genre_from_votes', 'persona_watch', 'battery', 'battery_with', 'battery_questions', 'guide', 'Models', 'MODELS', '_vision_json']

@@ -864,14 +864,15 @@ def format_for(session: dict) -> str:
     formats, else read from the runtime (a feature past 65 minutes, a
     trailer under four)."""
     mode = str((session or {}).get('mode') or 'pilot')
-    if mode in ('feature', 'episode', 'trailer'):
+    if mode in ('feature', 'episode', 'trailer', 'title', 'key_art', 'concept'):
         return mode
     if mode in ('spot',):
         return 'trailer'
     if mode in ('binge',):
         return 'episode'
-    if mode in ('title', 'key_art', 'script', 'concept'):
-        return 'feature'
+    if mode == 'script':
+        # a recorded table read runs as the thing it is (a pilot or a feature); the text read keeps its own battery
+        return 'script' if not ((session or {}).get('media') or {}).get('s3_key') else ('feature' if float(((session or {}).get('media') or {}).get('runtime_s') or 0) >= 65 * 60 else 'pilot')
     dur = float(((session or {}).get('media') or {}).get('runtime_s') or 0)
     if dur >= 65 * 60:
         return 'feature'
@@ -1115,6 +1116,17 @@ def norm_metrics(session: dict) -> dict:
         v = head.get(src)
         if v is not None:
             out[dst] = float(v)
+    # the mode read and the diagnostics add their own cells (trailer lift, title fit, characters, components, pace)
+    try:
+        from migration.digital_twin_modes import mode_norm_metrics
+        out.update(mode_norm_metrics(session or {}))
+    except Exception:
+        pass
+    try:
+        from migration.digital_twin_diagnostics import diagnostics_norm_metrics
+        out.update(diagnostics_norm_metrics(session or {}))
+    except Exception:
+        pass
     return out
 
 
@@ -1412,6 +1424,14 @@ def prepare_watch(session: dict, twins_by_key: dict, *, duration_s: float = 0,
     tell = (lambda m: progress(m)) if progress else (lambda m: None)
     media = session.setdefault('media', {})
     title = str(title or media.get('title') or session.get('title') or 'the cut')[:160]
+    if not analysis:
+        # a text or option stimulus (a script, a concept, titles, key art) is its own analysis: the text is the cut
+        try:
+            from migration import digital_twin_modes as MODES
+            analysis = MODES.text_analysis(session)
+        except Exception as e:
+            print(f"[pilot] text analysis skipped: {e}")
+            analysis = None
     an = analysis or {}
     dur = float(duration_s or an.get('runtime_s') or media.get('runtime_s') or 0) or 60.0
     dur = clamp(dur, MIN_RUNTIME_S, MAX_RUNTIME_S)
@@ -1469,7 +1489,7 @@ def prepare_watch(session: dict, twins_by_key: dict, *, duration_s: float = 0,
         beats = build_beats(title, dur, media_key, notes=notes, transcript=transcript, scenes=file_scenes, captions=captions, silences=silences)
     scenes_by_id = {int(s['id']): s for s in scenes}
     grounded = any(s.get('grounded') for s in scenes)
-    source = 'file' if grounded else 'clock'
+    source = str(an.get('source')) if an.get('source') in ('text', 'options') else ('file' if grounded else 'clock')
     # the prior: every seat's trait curve
     tell('the room takes its seats')
     prior = {}
@@ -1501,7 +1521,9 @@ def prepare_watch(session: dict, twins_by_key: dict, *, duration_s: float = 0,
                     per_act.setdefault(b.get('act'), series[i] if i < len(series) else 50.0)
                 starts[sno] = per_act
             got = W.persona_watch(twin, roster, scenes, cards=cards, prior_start=starts, models=models, session_seed=seed, usage_extras=usage_extras,
-                                  meta={'title': title, 'genre': session.get('genre') or '', 'notes': notes, 'rough_cut': bool(session.get('rough_cut'))}, duration_s=dur)
+                                  meta={'title': title, 'genre': session.get('genre') or '', 'notes': notes, 'rough_cut': bool(session.get('rough_cut')),
+                                        'mode': str(session.get('mode') or 'pilot'), 'logline': str(session.get('logline') or '')[:300],
+                                        'prior_cut': str(((session.get('prior_read') or {}).get('frame')) or '')[:300], 'critics_room': bool(session.get('critics_room'))}, duration_s=dur)
             read = got.get('by_seat') or {}
             act_notes = got.get('act_notes') or {}
             failed_acts = got.get('failed_acts') or []
@@ -1554,10 +1576,13 @@ def prepare_watch(session: dict, twins_by_key: dict, *, duration_s: float = 0,
                             meta={'title': title, 'genre': session.get('genre') or '', 'runtime_s': dur, 'rough_cut': bool(session.get('rough_cut'))})
             answers_in = bat.get('answers') or {}
             why_in = bat.get('why') or {}
+            best_in, worst_in = bat.get('best') or {}, bat.get('worst') or {}
         except Exception as e:
             print(f"[pilot] battery card skipped: {e}")
     if answers_in:
-        session['watch']['card'] = {'format': fmt, 'answers': {str(k): v for k, v in answers_in.items()}, 'why': {str(k): v for k, v in why_in.items()}}
+        session['watch']['card'] = {'format': fmt, 'answers': {str(k): v for k, v in answers_in.items()}, 'why': {str(k): v for k, v in why_in.items()},
+                                    'best': {str(k): v for k, v in (locals().get('best_in') or (cached_card or {}).get('best') or {}).items()},
+                                    'worst': {str(k): v for k, v in (locals().get('worst_in') or (cached_card or {}).get('worst') or {}).items()}}
     sc['battery'] = battery_scorecard(twin, roster, segments, seat_dials, beats, scenes, events, fmt=fmt, subject=subject, media_key=media_key,
                                       session_seed=seed, cards=cards, answers_in=answers_in, why_in=why_in)
     head = sc['battery']['headline']
@@ -1582,6 +1607,20 @@ def prepare_watch(session: dict, twins_by_key: dict, *, duration_s: float = 0,
         except Exception as e:
             print(f"[pilot] guide skipped: {e}")
     session['guide'] = guide_doc or fallback_guide(scenes, dur, fmt)
+    # the mode's own read (trailer lift, option ranking, concept read, script notes, episode commitment, the
+    # marketing read on a locked cut) and the diagnostics every screening carries (characters, pace, confusion,
+    # the ending, scenes liked best and least, components)
+    tell('the room is writing its notes')
+    try:
+        from migration import digital_twin_modes as MODES
+        MODES.finish_mode_read(session, twins_by_key, models=models, usage_extras=usage_extras, prior=session.get('prior_read') or None)
+    except Exception as e:
+        print(f"[pilot] mode read skipped: {e}")
+    try:
+        from migration import digital_twin_diagnostics as DIAG
+        DIAG.run_diagnostics(session, twin, s3=s3)
+    except Exception as e:
+        print(f"[pilot] diagnostics skipped: {e}")
     session['status'] = 'ready'
     session['prepare_note'] = 'Ready to play'
     session['updated_at'] = _now()
@@ -1590,33 +1629,53 @@ def prepare_watch(session: dict, twins_by_key: dict, *, duration_s: float = 0,
     return session
 
 
+MODE_TITLE_WORD = {'pilot': 'Pilot test', 'feature': 'Screening', 'episode': 'Episode test', 'binge': 'Binge test', 'trailer': 'Trailer test', 'spot': 'Spot test',
+                   'title': 'Title test', 'key_art': 'Key art test', 'script': 'Script read', 'concept': 'Concept test'}
+
+
 def open_session(twins: list, *, segments: Optional[list] = None, in_room: int = DEFAULT_IN_ROOM,
                  title: str = '', created_by: str = '', session_id: str = '',
-                 media: Optional[dict] = None, mode: str = 'pilot') -> dict:
-    """A new Pilot Testing session. Opening is free."""
+                 media: Optional[dict] = None, mode: str = 'pilot', logline: str = '', text: str = '',
+                 options: Optional[list] = None, rough_cut: bool = False, critics_room: bool = False, group: Optional[dict] = None) -> dict:
+    """A new Pilot Testing session in any screening mode. Opening is
+    free. ``group`` reuses a prior test's room (a recut re-test keeps
+    the same seats and personas)."""
     sid = session_id or uuid.uuid4().hex[:10]
     seed = f"pilot|{sid}|{'|'.join(_twin_key(t) for t in twins)}|{VERSION}"
-    group = build_group(twins, segments, in_room, seed)
+    mode = str(mode or 'pilot').lower()
+    mode = mode if mode in MODES else 'pilot'
+    group = group if isinstance(group, dict) and group.get('roster') else build_group(twins, segments, in_room, seed)
     names = ', '.join(dict.fromkeys(_twin_name(t) for t in twins))
     name = clean_room_title(title)
     media = dict(media or {})
     media.setdefault('title', name or names)
     media.setdefault('runtime_s', 0)
-    media.setdefault('source', 'slate')
-    mode = str(mode or 'pilot').lower()
+    media.setdefault('source', 'slate' if mode not in ('title', 'key_art', 'script', 'concept') else 'text')
+    opts = []
+    if options:
+        try:
+            from migration.digital_twin_modes import normalize_options
+            opts = normalize_options(options, mode)
+        except Exception:
+            opts = []
+    note = {'title': 'Name the test, type the titles and the logline.', 'key_art': 'Name the test and upload the art.', 'script': 'Name the test and add the script.',
+            'concept': 'Name the test and paste the concept.', 'trailer': 'Name the test and add the trailer.', 'spot': 'Name the test and add the spot.'}.get(mode, 'Name the test and add the cut.')
     return {
         'id': sid, 'kind': 'pilot',
-        'title': name or f"Pilot test: {names}",
+        'title': name or f"{MODE_TITLE_WORD.get(mode, 'Pilot test')}: {names}",
         'group': group, 'questions': [],
         'media': media, 'status': 'draft',
-        'mode': mode if mode in MODES else 'pilot', 'genre': '', 'cut_label': 'Cut A', 'lineage': None, 'rough_cut': False,
+        'mode': mode, 'genre': '', 'cut_label': 'Cut A' if mode not in ('trailer', 'spot') else 'Trailer A', 'lineage': None, 'rough_cut': bool(rough_cut),
+        'critics_room': bool(critics_room),
         'cast': [], 'comps': [], 'purge_media_after': False,
+        'assets': [], 'options': opts, 'logline': ' '.join(str(logline or '').split())[:600], 'text': str(text or '').strip()[:400000],
+        'mode_read': {}, 'asset_reads': {}, 'diagnostics': {}, 'quotas': None, 'recruit': None,
         'beats': [], 'scenes': [], 'dial': {'t': [], 'value': [], 'splits': {}},
         'seat_dials': {}, 'events': [], 'voices_live': [], 'probes': [], 'guide': None, 'watch': {},
         'scorecard': None, 'play_charged': False, 'questions_paid': 0,
         'created_by': created_by or 'prometheus',
         'created_at': _now(), 'updated_at': _now(), 'version': VERSION, 'pilot_version': PILOT_VERSION,
-        'prepare_note': 'Name the test and add the cut.',
+        'prepare_note': note,
     }
 
 
@@ -1638,16 +1697,42 @@ def find_reusable_session(payload: dict, twins: list, title: str = '', created_b
     return (mine or hits)[0]
 
 
+def play_price_key(sess: dict) -> str:
+    """The pull type first Play carries for this test's mode: the
+    session price for a pilot, feature, episode, binge or critics room;
+    the per-asset trailer price; the title, key art, concept or script
+    price; the recut price when the test is cut B on a prior test's
+    room. Opening an empty test never charges."""
+    from migration.digital_twins import MODE_PRICE_KEY
+    if (sess or {}).get('lineage') and ((sess or {}).get('lineage') or {}).get('parent'):
+        return MODE_PRICE_KEY['recut']
+    mode = str((sess or {}).get('mode') or 'pilot')
+    return MODE_PRICE_KEY.get(mode, 'digital_twin_pilot')
+
+
+def play_quantity(sess: dict) -> int:
+    """How many units first Play bills: one per asset on a trailer or
+    TV spot test (up to three), one everywhere else."""
+    mode = str((sess or {}).get('mode') or 'pilot')
+    if mode in ('trailer', 'spot') and not ((sess or {}).get('lineage') or {}).get('parent'):
+        n = len([a for a in (sess.get('assets') or []) if isinstance(a, dict) and (a.get('s3_key') or a.get('runtime_s'))])
+        return max(1, min(3, n or 1))
+    return 1
+
+
 def charge_due(sess: dict, included: int = QUESTIONS_INCLUDED) -> Optional[str]:
     """Which price the next action carries.
 
-    First Play: digital_twin_pilot. Questions after that sit in the
-    included block. A further block: digital_twin_pilot_more.
+    First Play: the mode's price (``play_price_key``: digital_twin_pilot
+    for a watch, digital_twin_trailer per asset, digital_twin_title,
+    digital_twin_key_art, digital_twin_concept, digital_twin_script,
+    digital_twin_recut for cut B on the same room). Questions after that
+    sit in the included block. A further block: digital_twin_pilot_more.
     """
     if not sess:
         return None
     if not sess.get('play_charged'):
-        return 'digital_twin_pilot'
+        return play_price_key(sess)
     asked = len(sess.get('questions') or [])
     paid = int(sess.get('questions_paid') or 0)
     if asked < paid:
@@ -1729,6 +1814,18 @@ def set_options(sess: dict, body: dict) -> dict:
         if v != bool(sess.get('purge_media_after')):
             sess['purge_media_after'] = v
             changed['purge_media_after'] = v
+    if 'critics_room' in body:
+        v = bool(body.get('critics_room'))
+        if v != bool(sess.get('critics_room')):
+            sess['critics_room'] = v
+            changed['critics_room'] = v
+    # the mode's stimulus: options (titles), logline, text (a script or a concept), cast
+    if any(k in body for k in ('options', 'logline', 'text', 'cast')):
+        try:
+            from migration.digital_twin_modes import set_stimulus
+            changed.update(set_stimulus(sess, {k: body[k] for k in ('options', 'logline', 'text', 'cast') if k in body}))
+        except Exception as e:
+            print(f"[pilot] stimulus not set: {e}")
     if changed:
         sess['updated_at'] = _now()
     return changed
@@ -1969,6 +2066,18 @@ def public_session(sess: dict) -> dict:
     w = out.get('watch') if isinstance(out.get('watch'), dict) else {}
     out['watch'] = {'source': w.get('source') or 'clock', 'persona': bool(w.get('persona')), 'scenes_n': w.get('scenes_n'), 'captions_n': w.get('captions_n')}
     out.pop('transcript_raw', None)
+    # the extra assets' reads travel without their caches or file keys; the options without storage keys
+    reads = {}
+    for aid, rec in (out.get('asset_reads') or {}).items():
+        if isinstance(rec, dict):
+            r = {k: v for k, v in rec.items() if k not in ('watch', 'seat_dials')}
+            reads[aid] = r
+    out['asset_reads'] = reads
+    out['assets'] = [{k: v for k, v in a.items() if k not in ('s3_key', 'local_path')} | {'has_file': bool(a.get('s3_key'))} for a in (out.get('assets') or []) if isinstance(a, dict)]
+    out['options'] = [{k: v for k, v in o.items() if k not in ('s3_key', 'local_path')} | {'has_file': bool(o.get('s3_key'))} for o in (out.get('options') or []) if isinstance(o, dict)]
+    pr = out.get('prior_read')
+    if isinstance(pr, dict):
+        out['prior_read'] = {k: v for k, v in pr.items() if k != 'seat_dials'}
     return out
 
 
@@ -2086,8 +2195,8 @@ def has_banned_copy(s: str) -> list:
 __all__ = [
     'EVENT_TYPES', 'EVENT_LABEL', 'KINDS', 'STATUS', 'MODES', 'MEDIA_PREFIX', 'PILOT_VERSION',
     'DELETED_PILOT_PREFIX', 'DELETED_PILOT_KEEP_DAYS', 'QUESTIONS_INCLUDED', 'WINDOW_BACK_S', 'MEDIA_URL_EXPIRES_S', 'PRIOR_WEIGHT',
-    'QUADRANTS', 'PHASE2_PRICE_NOTES',
-    'open_session', 'prepare_watch', 'find_reusable_session', 'charge_due',
+    'QUADRANTS', 'PHASE2_PRICE_NOTES', 'MODE_TITLE_WORD',
+    'open_session', 'prepare_watch', 'find_reusable_session', 'charge_due', 'play_price_key', 'play_quantity',
     'mark_play_paid', 'mark_paid', 'mark_playing', 'stop_session', 'rename_session', 'set_options',
     'stamp_question', 'can_delete', 'can_view_media', 'remove_session', 'delete_session', 'purge_media',
     'deleted_pilot_key', 'media_hash', 'build_beats', 'build_scenes', 'build_beats_from_scenes', 'seat_dial', 'blend_dial', 'seat_events', 'persona_events',

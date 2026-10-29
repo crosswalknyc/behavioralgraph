@@ -40,6 +40,13 @@ ROWS = (
     ('Digital Twin Spend Engine (a plan for its window, daily runs included)', 'digital_twin_spend', 250.0, 'flat'),
     ('Digital Twin Focus Group IQ (a session with 12 questions, 12 panelists)', 'digital_twin_panel', 5500.0, 'panel'),
     ('Digital Twin Pilot Testing (a session with 12 questions on the clock, 12 panelists)', 'digital_twin_pilot', 5500.0, 'pilot'),
+    # The screening modes on the same room (Jenna 2026-10-28): per asset, per option set, per read
+    ('Digital Twin Trailer or TV spot test (per asset, up to three side by side)', 'digital_twin_trailer', 2500.0, 'flat'),
+    ('Digital Twin Title or logline test (up to six options)', 'digital_twin_title', 1500.0, 'flat'),
+    ('Digital Twin Key art test (up to six options)', 'digital_twin_key_art', 1500.0, 'flat'),
+    ('Digital Twin Concept test', 'digital_twin_concept', 2500.0, 'flat'),
+    ('Digital Twin Script read', 'digital_twin_script', 3500.0, 'flat'),
+    ('Digital Twin Recut re-test (cut B on the same room)', 'digital_twin_recut', 2750.0, 'flat'),
 )
 TWIN_RUN_KEY, TWIN_RUN_DEFAULT = 'digital_twin_run', 100.0
 PANEL_MORE_KEY, PANEL_MORE_DEFAULT = 'digital_twin_panel_more', 5500.0   # a further twelve questions is another session (Jenna 2026-10-26)
