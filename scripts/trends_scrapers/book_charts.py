@@ -81,6 +81,18 @@ _UA = ('Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:120.0) '
 _WARMING_UP_HINT = 'Warming up. Check back later.'
 
 
+
+_AMAZON_IMG_MODS_RE = re.compile(
+    r'^(https://[^/]*(?:images-amazon|media-amazon)\.com/images/I/[^./]+)\.[^/]*_\.(jpg|png)$')
+
+
+def amazon_full_cover(url: str) -> str:
+    """The whole cover, 500px on its long side. The chart page's
+    `_SR400,600_` / `_UL300_` renderings shrink the cover onto a white
+    400x600 canvas, which shows as a white frame in the poster tile."""
+    m = _AMAZON_IMG_MODS_RE.match(url or '')
+    return f'{m.group(1)}._SL500_.{m.group(2)}' if m else (url or '')
+
 def _mark_cookie_gap(source: str, domain: str, reason: str = '') -> None:
     """Fire the operator-facing SES notification. Best-effort; never
     raises. The dashboard tile only ever sees `_WARMING_UP_HINT`."""
@@ -311,14 +323,7 @@ def _parse_amazon_books_page(html: str, limit: int) -> list[dict]:
         url_m = _ASIN_URL_RE.search(block)
         price_m = _ASIN_PRICE_RE.search(block)
 
-        image = img_m.group(1) if img_m else ''
-        # Amazon serves 300x200 thumbnails by default. Upgrade to a
-        # slightly larger, cropped rendering so cards render sharper
-        # on retina without ballooning payload sizes.
-        if image and '_SR300,200_' in image:
-            image = image.replace('_SR300,200_', '_SR400,600_')
-        elif image and '_UL300_' in image:
-            image = image.replace('_UL300_', '_UL500_')
+        image = amazon_full_cover(img_m.group(1) if img_m else '')
 
         detail_url = ''
         if url_m:
