@@ -218,18 +218,23 @@ def _fetch_spotify_podcasts(limit: int = 100) -> tuple[list[dict], str]:
         'Accept-Language': 'en-US,en;q=0.9',
     }
     resp = None
-    for attempt in range(3):
+    # Six tries over about two minutes. On 2026-10-30 the endpoint
+    # answered 504 for every one of three tries twenty seconds apart
+    # and was fine an hour later; the panel went out empty for the
+    # day. Longer backoff first, and `fetch()` carries the last good
+    # chart if it still fails.
+    for attempt in range(6):
         try:
             resp = requests.get(_SPOTIFY_PODCAST_URL,
                                 params=params, headers=headers, timeout=20)
         except Exception as e:
             logger.info("spotify podcasts attempt %d: %s", attempt + 1, e)
-            time.sleep(1 + attempt)
+            time.sleep(3 + 4 * attempt)
             continue
         if resp.status_code == 429 or resp.status_code >= 500:
             logger.info("spotify podcasts attempt %d: http %s",
                         attempt + 1, resp.status_code)
-            time.sleep(2 + attempt)
+            time.sleep(5 + 6 * attempt)
             continue
         break
     if not resp or not resp.ok:
@@ -1027,6 +1032,69 @@ def _fetch_netflix_podcasts(limit: int = 60) -> tuple[list[dict], str]:
     return items, ''
 
 
+# A chart may stand in for a failed read this long. Past it the panel
+# goes dark rather than showing a week-old chart as today's.
+_CARRY_MAX_AGE_DAYS = 3
+
+
+def _carry_forward(sources: dict[str, dict]) -> None:
+    """Fill any source that came back empty from the last snapshot
+    that had it, in place.
+
+    Each source here is pulled from a different host and any one of
+    them can fail for a night on its own (Spotify 504'd for the whole
+    run on 2026-10-30; Apple's RSS timed out on 2026-10-28), and the
+    panel then shipped empty with 'Warming up.' as its only content
+    while the other five were fine. A chart from yesterday is a far
+    better reading of what people are listening to than nothing, so
+    the previous snapshot's rows ride forward, marked `carried_forward`
+    with the time they were actually observed, for at most
+    `_CARRY_MAX_AGE_DAYS`. A fresh read stamps `observed_at` so the
+    age is measured from the read, not from the last carry.
+    """
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc)
+    stamp = now.isoformat()
+    try:
+        from ._base import read_snapshot
+        prev = read_snapshot('podcast_charts') or {}
+    except Exception as e:  # noqa: BLE001
+        logger.info("podcast carry-forward: previous snapshot unreadable (%s)", e)
+        prev = {}
+    prev_sources = prev.get('sources') or {}
+    for slug, panel in sources.items():
+        if panel.get('items'):
+            panel['observed_at'] = stamp
+            continue
+        old = prev_sources.get(slug) or {}
+        rows = [r for r in (old.get('items') or []) if isinstance(r, dict)]
+        if not rows:
+            continue
+        try:
+            seen = datetime.fromisoformat(
+                (old.get('observed_at') or prev.get('fetched_at') or '')
+                .replace('Z', '+00:00'))
+            if seen.tzinfo is None:
+                seen = seen.replace(tzinfo=timezone.utc)
+        except ValueError:
+            continue
+        if (now - seen).days > _CARRY_MAX_AGE_DAYS:
+            logger.warning("%s podcasts: live pull empty and the last good "
+                           "read (%s) is past the %d-day carry; panel "
+                           "renders empty", slug, seen.date(),
+                           _CARRY_MAX_AGE_DAYS)
+            continue
+        logger.warning("%s podcasts: live pull empty; carrying forward %d "
+                       "rows observed %s", slug, len(rows), seen.isoformat())
+        panel['items'] = rows
+        panel['available'] = True
+        panel['carried_forward'] = True
+        panel['observed_at'] = seen.isoformat()
+        panel['sub'] = old.get('sub') or panel.get('sub')
+        if panel.get('sub') == 'Warming up.':
+            panel['sub'] = ''
+
+
 def fetch() -> dict[str, Any]:
     """Pull all five sources. All are live:
       - Apple, Spotify, Netflix ship server-rendered / public API data.
@@ -1042,50 +1110,53 @@ def fetch() -> dict[str, Any]:
     aud_items,  aud_sub  = _fetch_audible_podcasts(limit=100)
     nfx_items,  nfx_sub  = _fetch_netflix_podcasts(limit=60)
 
+    sources = {
+        'apple': {
+            'label':     'Apple Podcasts Top 100 (US)',
+            'sub':       'The Apple Podcasts chart. Shows people are listening to right now.',
+            'items':     apple_items,
+            'available': bool(apple_items),
+        },
+        'spotify': {
+            'label':     'Spotify Podcast Charts (US)',
+            'sub':       (spot_sub or 'The Spotify US Top 200 podcasts. Refreshes daily.'),
+            'items':     spot_items,
+            'available': bool(spot_items),
+        },
+        'youtube_podcasts': {
+            'label':     'YouTube Popular Podcasts (US)',
+            'sub':       (yt_sub or "YouTube's Popular Podcasts shelf. What US viewers are watching on youtube.com/podcasts right now."),
+            'items':     yt_items,
+            'available': bool(yt_items),
+        },
+        'netflix': {
+            'label':     'Netflix video podcasts',
+            'sub':       (nfx_sub or 'Every podcast Netflix carries. Editorial list from Netflix Tudum.'),
+            'items':     nfx_items,
+            'available': bool(nfx_items),
+        },
+        'amazon': {
+            'label':     'Amazon Music Podcasts (US)',
+            'sub':       (amz_sub or "Top-listened podcasts across Amazon "
+                                      "Music's editorial carousels."),
+            'items':     amz_items,
+            'available': bool(amz_items),
+        },
+        'audible': {
+            'label':     'Audible Podcasts (US)',
+            'sub':       (aud_sub or 'What Audible is featuring on their podcast landing page across Popular, Originals, and top genres.'),
+            'items':     aud_items,
+            'available': bool(aud_items),
+        },
+    }
+    _carry_forward(sources)
+    apple_items = sources['apple']['items']
     return {
         # Mirror `national` off the biggest working source so the
         # standard summary in `_index.json` reports a real count.
         'national':  apple_items[:50],
-        'available': bool(apple_items or spot_items or yt_items or amz_items or aud_items or nfx_items),
-        'sources': {
-            'apple': {
-                'label':     'Apple Podcasts Top 100 (US)',
-                'sub':       'The Apple Podcasts chart. Shows people are listening to right now.',
-                'items':     apple_items,
-                'available': bool(apple_items),
-            },
-            'spotify': {
-                'label':     'Spotify Podcast Charts (US)',
-                'sub':       (spot_sub or 'The Spotify US Top 200 podcasts. Refreshes daily.'),
-                'items':     spot_items,
-                'available': bool(spot_items),
-            },
-            'youtube_podcasts': {
-                'label':     'YouTube Popular Podcasts (US)',
-                'sub':       (yt_sub or "YouTube's Popular Podcasts shelf. What US viewers are watching on youtube.com/podcasts right now."),
-                'items':     yt_items,
-                'available': bool(yt_items),
-            },
-            'netflix': {
-                'label':     'Netflix video podcasts',
-                'sub':       (nfx_sub or 'Every podcast Netflix carries. Editorial list from Netflix Tudum.'),
-                'items':     nfx_items,
-                'available': bool(nfx_items),
-            },
-            'amazon': {
-                'label':     'Amazon Music Podcasts (US)',
-                'sub':       (amz_sub or "Top-listened podcasts across Amazon "
-                                          "Music's editorial carousels."),
-                'items':     amz_items,
-                'available': bool(amz_items),
-            },
-            'audible': {
-                'label':     'Audible Podcasts (US)',
-                'sub':       (aud_sub or 'What Audible is featuring on their podcast landing page across Popular, Originals, and top genres.'),
-                'items':     aud_items,
-                'available': bool(aud_items),
-            },
-        },
+        'available': any(p.get('items') for p in sources.values()),
+        'sources':   sources,
     }
 
 
