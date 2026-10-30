@@ -1538,8 +1538,8 @@ _COMPARE_CACHE: dict = {}
 _COMPARE_CACHE_LOCK = threading.Lock()
 
 
-def _compare_value(items: dict, key: str, platform: str):
-    entry = items.get(key)
+def _compare_value(items: dict, fold: dict, key: str, platform: str):
+    entry = _resolve_day_entry(items, fold, key)
     if not isinstance(entry, dict):
         return None
     if platform:
@@ -1553,15 +1553,21 @@ def _compare_value(items: dict, key: str, platform: str):
 def compare_audience(series: list, days: int = 30,
                      asof: Optional[str] = None) -> dict:
     """Daily US audience for each {key, platform} over the last `days`
-    measured days, oldest first. Missing days are None."""
+    days, oldest first, labelled by the day each reading measured.
+    Missing days are None.
+
+    Days are walked by archive folder like the window sum: a folder
+    holds the reading for the day before it, and today's folder is
+    written in the morning, so the read starts one folder early when
+    today's does not exist yet. Keys resolve exact first, then folded,
+    as the window sum does, so the line and the row's chip agree."""
     try:
         n = int(days or 30)
     except Exception:
         n = 30
     n = max(2, min(n, _COMPARE_MAX_DAYS))
-    ref_iso = asof or _latest_measured_day() or _today_iso()
-    ref = date.fromisoformat(ref_iso)
-    day_list = [(ref - timedelta(days=i)).isoformat() for i in range(n)][::-1]
+    ref = date.fromisoformat(asof or _today_iso())
+    archive = [(ref - timedelta(days=i)).isoformat() for i in range(n + 1)]
 
     wanted: list[tuple[str, str]] = []
     for s in (series or [])[:_COMPARE_MAX_SERIES]:
@@ -1570,39 +1576,52 @@ def compare_audience(series: list, days: int = 30,
             wanted.append((key, str((s or {}).get('platform') or '').strip()))
 
     now = time.time()
+
+    def fresh(hit):
+        return hit is not None and now - hit[2] < _COMPARE_CACHE_TTL_S
+
     with _COMPARE_CACHE_LOCK:
         if len(_COMPARE_CACHE) > 200000:
             _COMPARE_CACHE.clear()
-        def cached(d, kp):
-            hit = _COMPARE_CACHE.get((d,) + kp)
-            return hit is not None and now - hit[1] < _COMPARE_CACHE_TTL_S
-        need = [d for d in day_list if any(not cached(d, kp) for kp in wanted)]
+        need = [d for d in archive
+                if any(not fresh(_COMPARE_CACHE.get((d,) + kp)) for kp in wanted)]
 
     def fetch(d_iso: str):
         day = _read_stream_day(d_iso)
         items = day.get('items') if isinstance(day, dict) else None
         if not isinstance(items, dict):
-            return d_iso, None
-        return d_iso, {kp: _compare_value(items, *kp) for kp in wanted}
+            return d_iso, None, None
+        measured = str(day.get('target_date') or '')[:10] or None
+        fold = _build_day_fold_index(items)
+        return d_iso, measured, {kp: _compare_value(items, fold, *kp) for kp in wanted}
 
     if need and wanted:
         with ThreadPoolExecutor(max_workers=3, thread_name_prefix='tiq-compare') as ex:
-            for d_iso, vals in ex.map(fetch, need):
+            for d_iso, measured, vals in ex.map(fetch, need):
                 if vals is None:
                     continue
                 with _COMPARE_CACHE_LOCK:
                     for kp, v in vals.items():
-                        _COMPARE_CACHE[(d_iso,) + kp] = (v, now)
+                        _COMPARE_CACHE[(d_iso,) + kp] = (v, measured, now)
 
-    out = []
     with _COMPARE_CACHE_LOCK:
+        read = lambda d: any(_COMPARE_CACHE.get((d,) + kp) for kp in wanted)
+        window = archive[1:] if not read(archive[0]) else archive[:-1]
+        window = window[::-1]
+        dates = []
+        for d in window:
+            hit = next((_COMPARE_CACHE.get((d,) + kp) for kp in wanted
+                        if _COMPARE_CACHE.get((d,) + kp)), None)
+            dates.append((hit and hit[1]) or
+                         (date.fromisoformat(d) - timedelta(days=1)).isoformat())
+        out = []
         for kp in wanted:
             vals = []
-            for d in day_list:
+            for d in window:
                 hit = _COMPARE_CACHE.get((d,) + kp)
                 vals.append(hit[0] if hit else None)
             out.append({'key': kp[0], 'platform': kp[1], 'values': vals})
-    return {'dates': day_list, 'series': out}
+    return {'dates': dates, 'series': out}
 
 
 def _accumulate_stream_estimates_over_window(
