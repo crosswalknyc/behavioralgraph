@@ -5,7 +5,7 @@
 # required `validate` check pending and unmergeable. Someone with `workflow`
 # scope should broaden the workflow's pull_request trigger to run on all PRs.
 # (Until that lands, non-index.html PRs touch this file to trigger the check.)
-# Trigger touch: Profile IQ thumbnail picker scores offers for the portrait frame.
+# Trigger touch: Trends compare chart lines up with the row chips.
 """Validate structural invariants of ``templates/index.html``.
 
 This file has been silently broken multiple times in a single week by
