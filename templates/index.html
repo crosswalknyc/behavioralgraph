@@ -51750,6 +51750,54 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-pi-switch { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--dtw-body); margin-top: 10px; }
         #digitalTwinsIQView .dtw-pi-protect { font-size: 12px; color: var(--dtw-body); margin-top: 8px; }
         @media (max-width: 860px) { #digitalTwinsIQView .dtw-pi-money { grid-template-columns: 1fr; } }
+        /* Pilot Testing control room (Jenna 2026-10-30): scores left, the cut and the dial center, the room and the ask right. One screen, nothing waits under the fold. */
+        #digitalTwinsIQView .dtw-pi-room { display: grid; grid-template-columns: 212px minmax(0, 1fr) 280px; gap: 18px; align-items: start; margin-top: 12px; }
+        #digitalTwinsIQView .dtw-pi-col { min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+        #digitalTwinsIQView .dtw-pi-col.side { border: 1px solid var(--dtw-rule); border-radius: 12px; padding: 14px; background: var(--dtw-raised); }
+        #digitalTwinsIQView .dtw-pi-h { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dtw-mute); font-weight: 600; display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+        #digitalTwinsIQView .dtw-pi-h .n { letter-spacing: 0; text-transform: none; font-weight: 500; font-variant-numeric: tabular-nums; }
+        #digitalTwinsIQView .dtw-pi-stat .v { font-size: 26px; font-weight: 300; font-variant-numeric: tabular-nums; color: var(--dtw-ink); line-height: 1.1; }
+        #digitalTwinsIQView .dtw-pi-stat .v.up { color: #C7F23E; }
+        #digitalTwinsIQView .dtw-pi-stat .k { font-size: 11px; color: var(--dtw-body); margin-top: 2px; line-height: 14px; }
+        #digitalTwinsIQView .dtw-pi-fn { font-size: 11px; color: var(--dtw-mute); line-height: 14px; }
+        #digitalTwinsIQView .dtw-pi-hr { height: 1px; background: var(--dtw-rule); margin: 4px 0; }
+        #digitalTwinsIQView .dtw-pi-bars { display: flex; flex-direction: column; gap: 8px; }
+        #digitalTwinsIQView .dtw-pi-bar .l { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; color: var(--dtw-body); margin-bottom: 3px; font-variant-numeric: tabular-nums; }
+        #digitalTwinsIQView .dtw-pi-bar .t { height: 5px; border-radius: 999px; background: var(--dtw-track); overflow: hidden; margin-bottom: 3px; }
+        #digitalTwinsIQView .dtw-pi-bar .t i { display: block; height: 100%; border-radius: 999px; background: #C7F23E; }
+        #digitalTwinsIQView .dtw-pi-bar .t.n i { background: #B7B3D8; }
+        #digitalTwinsIQView .dtw-pi-other { appearance: none; width: 100%; text-align: left; background: transparent; border: 0; padding: 4px 0; color: var(--dtw-ink); font-family: inherit; font-size: 12px; cursor: pointer; display: flex; justify-content: space-between; gap: 8px; }
+        #digitalTwinsIQView .dtw-pi-other .t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        #digitalTwinsIQView .dtw-pi-other .n { color: var(--dtw-mute); font-variant-numeric: tabular-nums; white-space: nowrap; }
+        #digitalTwinsIQView .dtw-pi-other:hover .t, #digitalTwinsIQView .dtw-pi-other:focus-visible .t { color: #C7F23E; }
+        #digitalTwinsIQView .dtw-pi-seatlist { display: flex; flex-direction: column; gap: 4px; }
+        #digitalTwinsIQView .dtw-pi-seatrow { position: relative; display: flex; gap: 10px; align-items: center; padding: 4px 6px; margin: 0 -6px; border-radius: 10px; outline: none; }
+        #digitalTwinsIQView .dtw-pi-seatrow:hover, #digitalTwinsIQView .dtw-pi-seatrow:focus-within { background: rgba(233,232,225,0.05); }
+        #digitalTwinsIQView .dtw-pi-seatrow .circ { width: 36px; height: 36px; flex: 0 0 36px; border-radius: 50%; background: var(--hue, #3358FF); color: #E9E8E1; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 12px; position: relative; overflow: hidden; }
+        #digitalTwinsIQView .dtw-pi-seatrow .circ img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 25%; }
+        #digitalTwinsIQView .dtw-pi-seatrow .txt { min-width: 0; flex: 1 1 auto; }
+        #digitalTwinsIQView .dtw-pi-seatrow .who { font-size: 12px; font-weight: 600; color: var(--dtw-ink); line-height: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        #digitalTwinsIQView .dtw-pi-seatrow .say { font-size: 11.5px; color: var(--dtw-body); line-height: 14px; margin-top: 1px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        #digitalTwinsIQView .dtw-pi-seatrow .say .c { color: var(--dtw-mute); font-variant-numeric: tabular-nums; }
+        #digitalTwinsIQView .dtw-pi-seatrow.lit .say { color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-pi-seatrow .bio { display: none; position: absolute; right: calc(100% + 10px); top: -6px; width: 320px; max-height: 340px; overflow-y: auto; overflow-x: hidden; z-index: 12; background: #0C1618; border: 1px solid var(--dtw-rule); border-radius: 12px; padding: 12px 14px; box-shadow: 0 12px 32px rgba(0,0,0,0.45); font-size: 12.5px; line-height: 17px; color: var(--dtw-ink); text-align: left; }
+        #digitalTwinsIQView .dtw-pi-seatrow:hover::before, #digitalTwinsIQView .dtw-pi-seatrow:focus-within::before { content: ''; position: absolute; right: 100%; top: 0; bottom: 0; width: 12px; }
+        #digitalTwinsIQView .dtw-pi-seatrow .bio h6 { margin: 0 0 6px; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dtw-mute); font-weight: 600; }
+        #digitalTwinsIQView .dtw-pi-seatrow .bio h6 .dtw-muted { text-transform: none; letter-spacing: 0; font-weight: 500; }
+        #digitalTwinsIQView .dtw-pi-seatrow .bio p { margin: 0 0 8px; }
+        #digitalTwinsIQView .dtw-pi-seatrow .bio p:last-child { margin-bottom: 0; }
+        #digitalTwinsIQView .dtw-pi-seatrow:hover .bio, #digitalTwinsIQView .dtw-pi-seatrow:focus-within .bio { display: block; }
+        @media (max-width: 1180px) {
+          #digitalTwinsIQView .dtw-pi-room { grid-template-columns: minmax(0, 1fr) 280px; }
+          #digitalTwinsIQView .dtw-pi-col.scores { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 16px; }
+          #digitalTwinsIQView .dtw-pi-col.scores .dtw-pi-hr, #digitalTwinsIQView .dtw-pi-col.scores .dtw-pi-h, #digitalTwinsIQView .dtw-pi-col.scores .dtw-pi-fn { grid-column: 1 / -1; }
+        }
+        @media (max-width: 860px) {
+          #digitalTwinsIQView .dtw-pi-room { grid-template-columns: 1fr; }
+          #digitalTwinsIQView .dtw-pi-col.scores { grid-template-columns: 1fr; }
+          #digitalTwinsIQView .dtw-pi-seatrow .bio { right: auto; left: 46px; top: 100%; width: min(320px, 82vw); }
+          #digitalTwinsIQView .dtw-pi-seatrow:hover::before, #digitalTwinsIQView .dtw-pi-seatrow:focus-within::before { display: none; }
+        }
         </style>
         <div id="digitalTwinsIQView" style="display: none; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden; position: relative;">
             <div class="dtw-spine">
@@ -53826,12 +53874,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 drawPilotDial(t);
                 paintPilotRail(t);
                 paintPilotLive(t);
+                paintPilotSeats(t);
                 var ck = el('dtwPiClock'); if (ck) ck.textContent = clockFmt(t);
                 var num = el('dtwPiDialNum');
                 var s = S.pilot || {}, d = s.dial || {}, ts = d.t || [], vs = d.value || [];
                 var val = vs.length ? vs[0] : 0;
                 for (var i = 0; i < ts.length; i++) { if (ts[i] <= t) val = vs[i]; }
                 if (num) num.textContent = val ? Number(val).toFixed(1) : '';
+                var now = el('dtwPiDialNow'); if (now) now.textContent = val ? Number(val).toFixed(1) : '-';
                 var on = el('dtwPiOn');
                 if (on) { var sc = sceneAt(s, t); var cap = sc ? (sc.caption || '') : ''; on.textContent = cap ? ('On screen: ' + cap) : ''; }
                 var tg = document.querySelector('.dtw-pane.active .dtw-pi .dtw-pi-wm.a .tag'); if (tg) tg.textContent = wmText(s) + '  ' + clockFmt(t);
@@ -54097,12 +54147,112 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     + '<label><span class="sw" style="background:' + PI_SPLIT_B + '"></span><select class="dtw-in" style="display:inline-block;width:auto;padding:3px 6px" onchange="dtwPilotSplit(\'b\', this.value)">' + opts(S.pilotSplits.b) + '</select></label>'
                     + '<span class="dtw-muted">Overlay any two groups on the room.</span></div>';
             }
+            // ---- the control room (Jenna 2026-10-30): the seats carry the generated portrait and the person's latest line on the clock; hover or focus opens who they are.
+            function piSeatLine(s, r, t) {
+                var ev = ((s || {}).events || []).filter(function(e) { return Number(e.seat) === Number(r.seat) && Number(e.t || 0) <= t + 0.05; });
+                if (ev.length) { var e = ev[ev.length - 1]; return { line: e.line || (PI_EVT[e.type] || e.type || ''), lit: true, clock: clockFmt(e.t) }; }
+                var bio = String(r.persona || '').trim();
+                if (bio) { var m = bio.match(/^[^.!?]+[.!?]/); return { line: (m ? m[0] : bio).trim(), lit: false, clock: '' }; }
+                return { line: r.city ? titleCase(r.city) : 'Seated', lit: false, clock: '' };
+            }
+            function piSeatBio(r) {
+                var nm = titleCase(r.name || '');
+                var head = '<h6>' + esc(nm) + ', ' + esc(r.age || '') + (r.city ? ', ' + esc(titleCase(r.city)) : '') + (r.segment ? ' <span class="dtw-muted">' + esc(r.segment) + '</span>' : '') + '</h6>';
+                var body = r.persona ? bioParas(r.persona) : '<p>' + esc(nm) + ' holds seat ' + esc(r.seat || '') + ' in this room. Who ' + (r.gender === 'M' ? 'he' : 'she') + ' is, in full, is written as the room watches.</p>';
+                return head + body;
+            }
+            function piSayHtml(sl) { return (sl.clock ? '<span class="c">' + esc(sl.clock) + '</span> ' : '') + esc(sl.line); }
+            function renderPilotSeats(s, t) {
+                return ((s.group || {}).roster || []).map(function(r, i) {
+                    var hue = seatHue(r, i), url = r.portrait_url || '', nm = titleCase(r.name || ''), sl = piSeatLine(s, r, t);
+                    return '<div class="dtw-pi-seatrow' + (sl.lit ? ' lit' : '') + '" tabindex="0" data-seat="' + Number(r.seat) + '" style="--hue:' + hue + '" aria-label="Who ' + esc(nm) + ' is">'
+                        + '<span class="circ">' + esc(initials(nm)) + (url ? '<img src="' + esc(thumb(url)) + '" alt="" loading="lazy" onerror="this.remove()">' : '') + '</span>'
+                        + '<div class="txt"><div class="who">' + esc(nm) + ', ' + esc(r.age || '') + '</div><div class="say">' + piSayHtml(sl) + '</div></div>'
+                        + '<div class="bio">' + piSeatBio(r) + '</div></div>';
+                }).join('');
+            }
+            function paintPilotSeats(t) {
+                var s = S.pilot || {}, box = el('dtwPiSeats');
+                if (box) {
+                    ((s.group || {}).roster || []).forEach(function(r) {
+                        var row = box.querySelector('.dtw-pi-seatrow[data-seat="' + Number(r.seat) + '"]'); if (!row) return;
+                        var sl = piSeatLine(s, r, t), say = row.querySelector('.say'), html = piSayHtml(sl);
+                        if (say && say.innerHTML !== html) say.innerHTML = html;
+                        row.classList.toggle('lit', sl.lit);
+                    });
+                }
+                var ac = el('dtwPiAskClock'); if (ac) ac.textContent = clockFmt(t);
+            }
+            function paintPilotPortraits() {
+                var s = S.pilot || {}, box = el('dtwPiSeats'); if (!box) return;
+                ((s.group || {}).roster || []).forEach(function(r) {
+                    var row = box.querySelector('.dtw-pi-seatrow[data-seat="' + Number(r.seat) + '"]'); if (!row) return;
+                    var circ = row.querySelector('.circ');
+                    if (circ && r.portrait_url && !circ.querySelector('img')) { var img = document.createElement('img'); img.alt = ''; img.loading = 'lazy'; img.onerror = function() { try { img.remove(); } catch (_) {} }; img.src = thumb(r.portrait_url); circ.appendChild(img); }
+                    var bio = row.querySelector('.bio'); if (bio && r.persona) bio.innerHTML = piSeatBio(r);
+                });
+            }
+            // Portraits and the written personas finish after the room is seated: re-read the test once or twice and fill the seats in place (a playing cut is never re-rendered).
+            function schedulePilotPortraits() {
+                (S.pilotPortraitTimers || []).forEach(function(x) { try { clearTimeout(x); } catch (_) {} });
+                S.pilotPortraitTimers = [];
+                var s = S.pilot; if (!s || !S.key) return;
+                var roster = (s.group || {}).roster || [];
+                if (!roster.length || roster.every(function(r) { return !!r.portrait_url && !!r.persona; })) return;
+                var sid = s.id, key = S.key;
+                [20000, 75000].forEach(function(ms) {
+                    S.pilotPortraitTimers.push(setTimeout(async function() {
+                        if (!S.pilot || S.pilot.id !== sid || S.key !== key) return;
+                        try {
+                            var r = await apiRaw('/' + encodeURIComponent(key) + '/pilot/' + encodeURIComponent(sid), { method: 'GET' });
+                            if (!r.ok || !r.data || !r.data.session) return;
+                            var fresh = ((r.data.session.group || {}).roster || []), mine = (S.pilot.group || {}).roster || [], changed = false;
+                            fresh.forEach(function(f) {
+                                mine.forEach(function(m) {
+                                    if (Number(m.seat) !== Number(f.seat)) return;
+                                    if (f.portrait_url && m.portrait_url !== f.portrait_url) { m.portrait_url = f.portrait_url; changed = true; }
+                                    if (f.persona && m.persona !== f.persona) { m.persona = f.persona; changed = true; }
+                                });
+                            });
+                            if (changed) { paintPilotPortraits(); paintPilotSeats(playheadNow()); }
+                        } catch (_) {}
+                    }, ms));
+                });
+            }
+            function renderPilotScores(s) {
+                var sc = s.scorecard || {}, hd = ((sc.battery || {}).headline || {});
+                var genre = s.genre || '', gl = genre ? cap(genre) : '', which = gl ? 'genre' : 'all', normWord = gl ? gl.toLowerCase() + ' norm' : 'norm';
+                var roster = ((s.group || {}).roster || []), people = Number((s.group || {}).size_people || 0);
+                var out = '<div class="dtw-pi-h">This cut</div>';
+                function stat(v, label, metric) {
+                    var norm = normCell(sc, metric, which), nv = norm ? parseFloat(norm) : NaN, up = isFinite(nv) && v != null && Number(v) >= nv;
+                    return '<div class="dtw-pi-stat"><div class="v' + (up ? ' up' : '') + '">' + (v == null ? '-' : Number(v).toFixed(1)) + '</div><div class="k">' + esc(label) + (norm ? ', ' + esc(normWord) + ' ' + esc(norm.replace('%', '')) : '') + '</div></div>';
+                }
+                if (hd.total_positive_pct != null) {
+                    out += stat(hd.total_positive_pct, 'Total positive', 'total_positive') + stat(hd.definitely_recommend_pct, 'Definitely recommend', 'definitely_recommend') + stat(hd.finish_pct, 'Would finish', 'finish');
+                    var w = function(x) { return Math.max(0, Math.min(100, Number(x) || 0)).toFixed(1) + '%'; };
+                    var bars = [['Total positive', hd.total_positive_pct, 'total_positive'], ['Recommend', hd.definitely_recommend_pct, 'definitely_recommend'], ['Finish', hd.finish_pct, 'finish']].map(function(r) {
+                        var norm = normCell(sc, r[2], which), nv = norm ? parseFloat(norm) : NaN, v = r[1] == null ? NaN : Number(r[1]);
+                        return '<div class="dtw-pi-bar"><div class="l"><span>' + esc(r[0]) + '</span><span>' + (isFinite(v) ? v.toFixed(1) : '-') + (isFinite(nv) ? ' / ' + nv.toFixed(1) : '') + '</span></div><div class="t"><i style="width:' + (isFinite(v) ? w(v) : '0%') + '"></i></div>' + (isFinite(nv) ? '<div class="t n"><i style="width:' + w(nv) + '"></i></div>' : '') + '</div>';
+                    }).join('');
+                    out += '<div class="dtw-pi-hr"></div><div class="dtw-pi-h">Against the ' + esc(normWord) + '</div><div class="dtw-pi-bars">' + bars + '</div><div class="dtw-pi-fn">Green is this cut. Grey is the ' + esc(normWord) + '.</div>';
+                    if (sc.overall_like != null) out += '<div class="dtw-pi-hr"></div><div class="dtw-pi-stat"><div class="v">' + Number(sc.overall_like).toFixed(1) + '</div><div class="k">Dial average, 0 to 100</div></div>';
+                } else {
+                    out += '<div class="dtw-pi-stat"><div class="v" id="dtwPiDialNow">-</div><div class="k">Dial now, 0 to 100</div></div>'
+                        + '<div class="dtw-pi-stat"><div class="v">' + roster.length + '</div><div class="k">Seated' + (people ? ', standing for ' + fmtN(people) + ' people' : '') + '</div></div>'
+                        + '<div class="dtw-pi-fn">Scores land here when the room finishes the cut.</div>';
+                }
+                var others = ((S.twin || {}).pilot_sessions || []).filter(function(x) { return x && x.id !== s.id; }).slice(0, 8);
+                if (others.length) {
+                    out += '<div class="dtw-pi-hr"></div><div class="dtw-pi-h">Other tests</div>' + others.map(function(o) {
+                        var h = (((o.scorecard || {}).battery || {}).headline || {});
+                        return '<button type="button" class="dtw-pi-other" onclick="dtwPilotPick(\'' + esc(o.id) + '\')" title="' + esc(o.title || '') + '"><span class="t">' + esc(o.title || 'Untitled') + '</span><span class="n">' + (h.total_positive_pct != null ? Number(h.total_positive_pct).toFixed(1) : (o.status === 'preparing' ? 'preparing' : 'open')) + '</span></button>';
+                    }).join('') + '<div class="dtw-pi-fn">Total positive, out of 100.</div>';
+                }
+                return '<div class="dtw-pi-col side scores">' + out + '</div>';
+            }
             function renderPilotPlayer(s) {
                 var roster = ((s.group || {}).roster || []);
-                var seats = roster.map(function(r, i) {
-                    var hue = hueFor(i), url = r.portrait_url || '';
-                    return '<button type="button" class="dtw-pi-seat" style="--hue:' + hue + '" title="' + esc((r.name || '') + ', ' + (r.age || '') + ', ' + (r.city || '')) + '"><span class="circ">' + esc(initials(r.name)) + (url ? '<img src="' + esc(url) + '" alt="" onerror="this.remove()">' : '') + '</span><span class="nm">' + esc(titleCase(r.name || '')) + '</span><span class="ag">' + esc((r.age || '') + (r.city ? ', ' + r.city : '')) + '</span></button>';
-                }).join('');
                 var preparing = s.status === 'preparing';
                 var ready = !preparing && (s.status === 'ready' || s.status === 'playing' || s.status === 'stopped' || ((s.dial || {}).value || []).length);
                 var qs = s.questions || [];
@@ -54117,29 +54267,36 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var fmt = s.format || (s.scorecard || {}).format || '';
                 var modeChip = '<span class="dtw-muted">' + esc(piModeLabel(s)) + (s.rough_cut ? ', rough cut' : (s.mode === 'pilot' || s.mode === 'feature' || s.mode === 'episode' || s.mode === 'binge') ? ', locked cut' : '') + (s.critics_room ? ', critics room' : '') + '</span>';
                 var lineage = s.lineage && s.lineage.parent ? '<button type="button" class="dtw-link" onclick="dtwPilotPick(\'' + esc(s.lineage.parent) + '\')">against ' + esc(s.lineage.parent_cut_label || 'Cut A') + '</button>' : '';
-                var meta = '<div class="dtw-pi-splitbar" style="margin-top:4px">' + genreSel + modeChip + (fmt ? '<span class="dtw-muted">Read as a ' + esc(fmt === 'feature' ? 'feature' : fmt.replace('_', ' ')) + '</span>' : '') + '<span class="dtw-muted">' + esc(s.cut_label || 'Cut A') + '</span>' + lineage + '</div>';
+                var meta = '<div class="dtw-pi-splitbar" style="margin-top:0">' + genreSel + modeChip + (fmt ? '<span class="dtw-muted">Read as a ' + esc(fmt === 'feature' ? 'feature' : fmt.replace('_', ' ')) + '</span>' : '') + '<span class="dtw-muted">' + esc(s.cut_label || 'Cut A') + '</span>' + lineage + '</div>';
                 var purge = '<label class="dtw-pi-switch"><input type="checkbox" id="dtwPiPurge"' + (s.purge_media_after ? ' checked' : '') + ' onchange="dtwPilotPurgeToggle(this.checked)"> Remove the file when the test is done' + ((s.media || {}).purged_at ? ' <span class="dtw-muted">(removed; the read stays)</span>' : '') + '</label>';
                 var exp = S.key ? ('<div class="dtw-actions"><a class="dtw-btn" href="/api/digital-twins/' + esc(S.key) + '/pilot/' + esc(s.id) + '/export.csv">CSV</a><a class="dtw-btn" href="/api/digital-twins/' + esc(S.key) + '/pilot/' + esc(s.id) + '/export.pdf">PDF</a><a class="dtw-btn" href="/api/digital-twins/' + esc(S.key) + '/pilot/' + esc(s.id) + '/export.pptx">Deck</a>' + (s.scorecard ? '<a class="dtw-btn dtw-btn-primary" href="/api/digital-twins/' + esc(S.key) + '/pilot/' + esc(s.id) + '/report.pptx">Report (deck)</a><a class="dtw-btn" href="/api/digital-twins/' + esc(S.key) + '/pilot/' + esc(s.id) + '/report.pdf">Report (PDF)</a>' : '') + '<button type="button" class="dtw-btn" onclick="dtwPilotDelete()">Delete this test</button></div>') : '';
-                return '<div class="dtw-card"><div class="dtw-eyebrow">' + esc(PI_TAB_LABEL[piTabFor(s.mode)] || 'Pilot Testing') + '</div>'
-                    + '<div class="dtw-fg-rtwrap"><input id="dtwPiName" class="dtw-fg-rt" value="' + esc(s.title || '') + '" onblur="dtwPilotRename()"><button type="button" class="dtw-link" onclick="S.pilot=null;renderPilotConsole();">New test</button></div>'
+                var t0 = Number((S.pilotClock || {}).t || 0);
+                var stage = '<div class="dtw-pi-stage"><video id="dtwPiVideo" playsinline controls controlsList="nodownload" disablePictureInPicture preload="metadata" style="display:none" oncontextmenu="return false"></video><iframe id="dtwPiFrame" class="dtw-pi-frame" title="The episode" allow="autoplay; fullscreen; encrypted-media; picture-in-picture" referrerpolicy="no-referrer-when-downgrade" style="display:none"></iframe><div id="dtwPiSlate" class="dtw-pi-slate"><div class="t">' + esc((s.media || {}).title || s.title || 'The cut') + '</div><div class="c" id="dtwPiSlateClock">0:00</div><div class="s">' + esc(preparing ? 'The room is watching the cut.' : (watchMedia(s) ? ('Press Play. The room watches with you' + ((s.media || {}).platform_label ? ' on ' + (s.media || {}).platform_label : '') + '.') : 'The room is seated. Press Play when you are ready.')) + '</div>' + (watchMedia(s) && (s.media || {}).url ? '<a class="dtw-btn dtw-btn-primary dtw-pi-open" href="' + esc((s.media || {}).url) + '" target="_blank" rel="noopener">' + esc((s.media || {}).open_label || 'Open the episode') + '</a>' : '') + '</div></div>';
+                var controls = '<div class="dtw-pi-controls" style="margin-top:0"><button type="button" class="dtw-btn dtw-btn-primary" id="dtwPiPlayBtn" onclick="dtwPilotPlay()"' + (preparing ? ' disabled' : '') + '>' + (s.status === 'playing' ? 'Playing' : 'Play') + '</button><button type="button" class="dtw-btn" onclick="dtwPilotStop()">Stop</button><span class="dtw-pi-clock" id="dtwPiClock">' + esc(clockFmt(t0)) + '</span><span class="dtw-pi-note" id="dtwPiNote">' + esc(preparing ? 'Preparing the cut' : (s.prepare_note || (ready ? 'Ready to play' : 'Preparing the cut'))) + '</span></div>';
+                var center = '<div class="dtw-pi-col center">'
                     + meta
-                    + '<div class="dtw-pi-seats" style="margin:10px 0 12px">' + seats + '</div>'
-                    + '<div class="dtw-pi-grid"><div><div class="dtw-pi-stage"><video id="dtwPiVideo" playsinline controls controlsList="nodownload" disablePictureInPicture preload="metadata" style="display:none" oncontextmenu="return false"></video><iframe id="dtwPiFrame" class="dtw-pi-frame" title="The episode" allow="autoplay; fullscreen; encrypted-media; picture-in-picture" referrerpolicy="no-referrer-when-downgrade" style="display:none"></iframe><div id="dtwPiSlate" class="dtw-pi-slate"><div class="t">' + esc((s.media || {}).title || s.title || 'The cut') + '</div><div class="c" id="dtwPiSlateClock">0:00</div><div class="s">' + esc(preparing ? 'The room is watching the cut.' : (watchMedia(s) ? ('Press Play. The room watches with you' + ((s.media || {}).platform_label ? ' on ' + (s.media || {}).platform_label : '') + '.') : 'The room is seated. Press Play when you are ready.')) + '</div>' + (watchMedia(s) && (s.media || {}).url ? '<a class="dtw-btn dtw-btn-primary dtw-pi-open" href="' + esc((s.media || {}).url) + '" target="_blank" rel="noopener">' + esc((s.media || {}).open_label || 'Open the episode') + '</a>' : '') + '</div></div>'
+                    + stage
                     + prep
-                    + '<div class="dtw-pi-controls"><button type="button" class="dtw-btn dtw-btn-primary" id="dtwPiPlayBtn" onclick="dtwPilotPlay()"' + (preparing ? ' disabled' : '') + '>' + (s.status === 'playing' ? 'Playing' : 'Play') + '</button><button type="button" class="dtw-btn" onclick="dtwPilotStop()">Stop</button><span class="dtw-pi-clock" id="dtwPiClock">0:00</span><span class="dtw-pi-note" id="dtwPiNote">' + esc(preparing ? 'Preparing the cut' : (s.prepare_note || (ready ? 'Ready to play' : 'Preparing the cut'))) + '</span></div>'
-                    + '<div class="dtw-pi-dialwrap"><canvas id="dtwPiDial"></canvas><div class="dtw-pi-dialnum" id="dtwPiDialNum"></div></div>'
+                    + controls
                     + '<div class="dtw-pi-on" id="dtwPiOn"></div>'
-                    + '<div class="dtw-pi-rail" id="dtwPiRail"></div>'
+                    + '<div class="dtw-pi-dialwrap"><canvas id="dtwPiDial"></canvas><div class="dtw-pi-dialnum" id="dtwPiDialNum"></div></div>'
                     + splitPicker(s)
+                    + '<div class="dtw-pi-rail" id="dtwPiRail"></div>'
                     + probeChips(s)
-                    + purge + '</div>'
-                    + '<div><div class="dtw-eyebrow">Live from the room</div><div id="dtwPiLive" class="dtw-pi-voices" style="margin-top:8px"></div>'
-                    + '<label class="dtw-field" style="margin-top:14px">Ask the room at this timestamp</label><input id="dtwPiQ" class="dtw-in" placeholder="Would you keep watching?" onkeydown="if(event.key===\'Enter\'){event.preventDefault();dtwPilotAsk();}">'
+                    + purge + '</div>';
+                var room = '<div class="dtw-pi-col side room"><div class="dtw-pi-h">The room <span class="n">' + roster.length + ' seated</span></div>'
+                    + '<div id="dtwPiSeats" class="dtw-pi-seatlist">' + renderPilotSeats(s, t0) + '</div>'
+                    + '<div class="dtw-pi-hr"></div><div class="dtw-pi-h">Ask the room at <span class="n" id="dtwPiAskClock">' + esc(clockFmt(t0)) + '</span></div>'
+                    + '<input id="dtwPiQ" class="dtw-in" placeholder="Would you keep watching?" onkeydown="if(event.key===\'Enter\'){event.preventDefault();dtwPilotAsk();}">'
                     + '<div class="dtw-chips" id="dtwPiKinds"><button type="button" class="dtw-chip" data-k="yes_no" onclick="dtwPilotKind(\'yes_no\')">Yes / no</button><button type="button" class="dtw-chip" data-k="open" onclick="dtwPilotKind(\'open\')">Open</button><button type="button" class="dtw-chip" data-k="rating" onclick="dtwPilotKind(\'rating\')">Rating</button><button type="button" class="dtw-chip" data-k="show_of_hands" onclick="dtwPilotKind(\'show_of_hands\')">Show of hands</button></div>'
-                    + '<div class="dtw-lab-run"><button type="button" class="dtw-btn" onclick="dtwPilotAsk()">Ask</button></div>'
+                    + '<div class="dtw-lab-run"><button type="button" class="dtw-btn dtw-btn-primary" onclick="dtwPilotAsk()">Ask the room</button></div>'
                     + '<div id="dtwPiAskNote" class="dtw-status"></div>'
                     + renderGuide(s)
-                    + '<div class="dtw-eyebrow" style="margin-top:16px">On the clock</div><div id="dtwPiThread">' + (qhtml || '<p class="dtw-muted">No questions yet. Ask while the cut plays, or take a suggested one.</p>') + '</div></div></div>'
+                    + '<div class="dtw-pi-hr"></div><div class="dtw-pi-h">Live from the room</div><div id="dtwPiLive" class="dtw-pi-voices"></div>'
+                    + '<div class="dtw-pi-h" style="margin-top:8px">On the clock</div><div id="dtwPiThread">' + (qhtml || '<p class="dtw-muted">No questions yet. Ask while the cut plays, or take a suggested one.</p>') + '</div></div>';
+                return '<div class="dtw-card"><div class="dtw-eyebrow">' + esc(PI_TAB_LABEL[piTabFor(s.mode)] || 'Pilot Testing') + '</div>'
+                    + '<div class="dtw-fg-rtwrap"><input id="dtwPiName" class="dtw-fg-rt" value="' + esc(s.title || '') + '" onblur="dtwPilotRename()"><button type="button" class="dtw-link" onclick="S.pilot=null;renderPilotConsole();">New test</button></div>'
+                    + '<div class="dtw-pi-room">' + renderPilotScores(s) + center + room + '</div>'
                     + renderModeRead(s) + renderScorecard(s) + renderDiagnostics(s) + renderPilotExtras(s) + exp + '</div>';
             }
             function renderPilotConsole() {
@@ -54150,6 +54307,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 Object.keys(PI_HOST).forEach(function(t) { var o = el(PI_HOST[t]); if (o && o !== h) o.innerHTML = ''; });
                 h.innerHTML = renderPilotPlayer(S.pilot);
                 bindPilotMedia();
+                schedulePilotPortraits();
                 revealPilot(playheadNow());
                 drawCompareChart();
                 if (S.pilot.status === 'preparing') pollPilotPrepare();
