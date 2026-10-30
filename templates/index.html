@@ -54473,7 +54473,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 } catch (e) { if (st) st.textContent = e.message || 'Preparing'; }
                 renderPilotConsole();
             };
-            window.dtwPilotPlay = async function() {
+            // resume=true is the automatic restart after an Ask: the clock picks up where it paused and the streamer tab the room is already watching is left alone.
+            window.dtwPilotPlay = async function(resume) {
                 var s = S.pilot; if (!s || !S.key) return;
                 var note = el('dtwPiNote');
                 if (s.status === 'preparing') { if (note) note.textContent = 'Preparing the cut. Play is ready the moment the room has watched it.'; pollPilotPrepare(); return; }
@@ -54492,7 +54493,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     if (mediaUrl(S.pilot)) { try { await v.play(); } catch (_) {} }
                 } else if (wm) {
                     bindWatchLink(S.pilot);
-                    openWatchWithRoom(S.pilot);
+                    if (!resume) openWatchWithRoom(S.pilot);
                     if (v && wm.kind === 'video' && v.src) { try { await v.play(); } catch (_) {} }
                 }
                 if (!(v && mediaUrl(S.pilot)) && !(wm && wm.kind === 'video' && v && v.src)) {
@@ -54563,7 +54564,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (note) note.textContent = 'Asked at ' + clockFmt(t) + '. The answer lands in a minute or two.';
                 pollPilotQuestions();
                 if (v && mediaUrl(S.pilot)) { try { await v.play(); } catch (_) {} }
-                else if (wasSlate) { S.pilotClock.slate = true; S.pilotClock.t0 = Date.now() - t * 1000; dtwPilotPlay(); }
+                else if (wasSlate) { S.pilotClock.slate = true; S.pilotClock.t0 = Date.now() - t * 1000; dtwPilotPlay(true); }
             };
             function pollPilotQuestions() {
                 var s = S.pilot; if (!s || !S.key) return;
