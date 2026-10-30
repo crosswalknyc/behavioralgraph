@@ -13329,6 +13329,16 @@ def _compute_view_impl(filters: dict, force_refresh: bool = False) -> dict:
         _book_genres.annotate(books_trending_merged, libby_trends)
     except Exception as _bg_err:
         logger.debug('trends_iq: book genres skipped (%s)', _bg_err)
+    # Stored charts carry Amazon's padded cover renderings; serve the
+    # whole cover so older days render like new scrapes.
+    try:
+        from scripts.trends_scrapers.book_charts import amazon_full_cover
+        for _panel in list(books_trending_merged.values()) + list((comics_charts or {}).values()):
+            for _it in (_panel or {}).get('items') or []:
+                if isinstance(_it, dict) and _it.get('image'):
+                    _it['image'] = amazon_full_cover(_it['image'])
+    except Exception as _cv_err:
+        logger.debug('trends_iq: cover normalise skipped (%s)', _cv_err)
     # Comics: same three-source (Amazon Comics / Apple Books Comics /
     # Libby Comics) card layout as the Books tab, but each row lands
     # in a comics-only platform anchor tier (see
