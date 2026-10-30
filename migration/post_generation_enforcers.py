@@ -3828,6 +3828,103 @@ def detect_top_cluster_convergence(df, bp_col=None):
     return out
 
 
+
+# ---------------------------------------------------------------------
+# No negative penetration (2026-10-30, found by the Sonnet 5.5 smoke build)
+# ---------------------------------------------------------------------
+def clamp_negative_bps(df, subject, verbose=True):
+    """Final safety net: a Brand Penetration below zero is impossible.
+
+    Found on the 2026-10-30 Johnny Weir smoke build (16 NFL rows from
+    -0.0058 to -0.2191) and on the previous night's file (210
+    COLLEGE/UNIVERSITY rows down to -3.04): a tight-cluster re-spread
+    walked through zero. The re-spread is fixed at the source; this pass
+    guarantees nothing negative reaches the writer from any other path.
+
+    For each negative row:
+      * a positive twin of the same brand elsewhere on the file (the
+        canonical SPORTS TEAM row for a league column, an MPB row for a
+        purchase mirror) supplies the value, which also restores the
+        companion / mirror coherence those rows are supposed to carry;
+      * otherwise the row joins a salted geometric tail below the
+        category's smallest positive value, in the category's own order,
+        always positive and strictly decreasing.
+    Demographic categories are never touched here (their sums are owned
+    by the demo enforcers). Raw, Projection and Category Share are
+    recomputed through _set_bp. Idempotent. Returns (df, n_changes).
+    """
+    if df is None or len(df) == 0:
+        return df, 0
+    bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
+    if bp_col is None:
+        return df, 0
+    sample_size = _detect_sample_size(df, bp_col, raw_col)
+    skip_cats = set(DEPIN_DEMO_CATS) | set(DEPIN_META_CATS)
+
+    def _val(idx):
+        try:
+            return float(str(df.at[idx, bp_col])
+                         .replace('%', '').replace(',', '').strip())
+        except (ValueError, TypeError):
+            return None
+
+    col_u = df['Column'].astype(str).str.strip().str.upper()
+    # positive twins by normalized brand: (category, value)
+    twins = {}
+    for idx in df.index:
+        v = _val(idx)
+        if v is None or v <= 0 or v >= 99.99:
+            continue
+        cat = col_u.at[idx]
+        if cat in skip_cats:
+            continue
+        twins.setdefault(_norm_brand(str(df.at[idx, 'Value'] or '')), []).append((cat, v))
+
+    n_changes = 0
+    for cat in sorted(set(col_u)):
+        if cat in skip_cats:
+            continue
+        rows = []
+        for idx in df.index[col_u == cat]:
+            v = _val(idx)
+            if v is not None:
+                rows.append((idx, v))
+        neg = [(i, v) for i, v in rows if v < 0]
+        if not neg:
+            continue
+        positives = sorted((v for _, v in rows if v > 0), reverse=True)
+        tail_floor = positives[-1] if positives else 0.05
+        # most negative last: keep the category's own order in the tail
+        neg.sort(key=lambda t: -t[1])
+        prev = tail_floor
+        for idx, old_v in neg:
+            brand = str(df.at[idx, 'Value'] or '').strip()
+            twin = [(c, v) for c, v in twins.get(_norm_brand(brand), [])
+                    if c != cat and c == 'SPORTS TEAM']
+            if not twin:
+                twin = [(c, v) for c, v in twins.get(_norm_brand(brand), [])
+                        if c != cat and c == 'MOST PURCHASED BRANDS']
+            if twin:
+                new_v = round(twin[0][1], 4)
+            else:
+                new_v = round(prev * (1.0 - _jitter_for(
+                    subject, brand, salt='negative-bp-tail',
+                    lo=0.12, hi=0.38)), 4)
+                if new_v >= prev:
+                    new_v = round(prev - 0.0001, 4)
+                if new_v < 0.0001:
+                    new_v = 0.0001
+                prev = new_v
+            if verbose:
+                print(f"   ⛔ negative penetration [{cat}] {brand} "
+                      f"{old_v:.4f}% -> {new_v:.4f}%")
+            _set_bp(df, idx, new_v, bp_col, cs_col, raw_col,
+                    proj_col, sample_size)
+            n_changes += 1
+    if verbose and n_changes:
+        print(f"   ⛔ clamp_negative_bps: {n_changes} row(s) lifted above zero")
+    return df, n_changes
+
 def respread_top_cluster_convergence(df, subject, verbose=True):
     """Break converged top clusters with a salted, order-preserving
     downward re-spread. The top row keeps its reasoned level; each
@@ -3937,6 +4034,22 @@ def respread_top_cluster_convergence(df, subject, verbose=True):
                 new_v = round(prev - 0.0102 - _jitter_for(
                     subject, brand, salt='convergence-mono',
                     lo=0.0001, hi=0.0090), 4)
+            # 2026-10-30 (Johnny Weir smoke build, 16 NFL rows negative;
+            # 210 COLLEGE/UNIVERSITY rows negative the night before): the
+            # mono guard above runs AFTER the 0.0102 floor, so once `prev`
+            # sits at the floor it subtracted straight through zero and
+            # every later row stepped further negative. With no headroom
+            # left, decay geometrically instead: always positive, still
+            # strictly below the previous row, salted so no two files land
+            # on the same tail. 4dp rounding can only tie at 0.0001.
+            if new_v < 0.0102:
+                new_v = round(prev * (1.0 - _jitter_for(
+                    subject, brand, salt='convergence-decay',
+                    lo=0.12, hi=0.38)), 4)
+                if new_v >= prev:
+                    new_v = round(prev - 0.0001, 4)
+                if new_v < 0.0001:
+                    new_v = 0.0001
             if verbose:
                 print(f"   🪜 convergence re-spread [{cat}] {brand} "
                       f"{old_v:.4f}% -> {new_v:.4f}% (top cluster within "
@@ -12890,6 +13003,16 @@ def run_all_enforcers(df, subject, brand_category=None, verbose=True,
         total += n
     except Exception as e:
         print(f"   ⚠️ enforcer depin_exact_100_non_subject failed: {e}")
+
+    # 2026-10-30: no Brand Penetration below zero may reach the writer
+    # (Johnny Weir smoke build: a tight-cluster re-spread walked through
+    # zero on 16 NFL rows; 210 COLLEGE/UNIVERSITY rows the night before).
+    # Runs before the final recompute so Raw / Proj follow the lifted BP.
+    try:
+        df, n = clamp_negative_bps(df, subject, verbose=verbose)
+        total += n
+    except Exception as e:
+        print(f"   ⚠️ enforcer clamp_negative_bps failed: {e}")
 
     # 2026-05-27 (D-Proj): VERY LAST -- recompute Raw + Proj from final BP.
     # Every previous enforcer that touched BP may have left stale Raw/Proj
