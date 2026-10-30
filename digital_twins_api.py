@@ -35,6 +35,7 @@ app.py so app.py stays small.
   GET  /api/digital-twins/<key>/panel/<sid>/export.csv
   GET  /api/digital-twins/<key>/panel/<sid>/export.pdf
   POST /api/digital-twins/<key>/pilot/open           open a Pilot Testing session (free; charge on first Play). watch_url = any streamer or digital link
+  POST /api/digital-twins/<key>/pilot/<sid>/frame    a frame off the mirrored screen at clock t; the room reads it and reacts (live watch-link tests)
   GET  /api/digital-twins/<key>/pilot/<sid>          the test
   PATCH /api/digital-twins/<key>/pilot/<sid>         rename
   POST /api/digital-twins/<key>/pilot/<sid>/upload   the cut (mp4 / mov / webm)
@@ -1180,6 +1181,11 @@ def dt_pilot_get(key, sid):
     _attach_portraits(payload, key, sess)
     if sess.get('status') == 'preparing':
         _prepare_job_live(sess)             # a worker job that ended without a ready test flips the test back to draft
+        try:
+            from migration import digital_twin_live as LIVE
+            LIVE.unstick(sess)              # a live finish that never came back flips to stopped
+        except Exception:
+            pass
         if sess.get('status') != 'preparing':
             DT.save_twin(_s3(), key, payload)
     return _nocache(jsonify({'success': True, 'session': PI.public_session(sess)}))
@@ -1378,6 +1384,12 @@ def dt_pilot_prepare(key, sid):
         if job_id:
             return jsonify({'success': True, 'session': PI.public_session(sess), 'job_id': job_id, 'preparing': True})
     twins_by_key = _twins_for(payload, key, sess)
+    from migration import digital_twin_live as LIVE
+    if LIVE.is_live(sess):
+        # a watch link: the room is seated and waits for the mirror; the dial, the reactions and the scorecard exist only for what it watches
+        LIVE.seat_live(sess, twins_by_key)
+        DT.save_twin(_s3(), key, payload)
+        return jsonify({'success': True, 'session': PI.public_session(sess), 'live': True})
     try:
         _caption_art_for(sess, user)
     except Exception:
@@ -1400,6 +1412,17 @@ def dt_pilot_play(key, sid):
     sess = _pilot(payload, sid)
     if not sess:
         return jsonify({'success': False, 'error': 'test not found'}), 404
+    from migration import digital_twin_live as LIVE
+    if LIVE.is_live(sess) and not ((sess.get('live') or {}).get('finished_at')):
+        if not (sess.get('live') or {}).get('on'):
+            LIVE.seat_live(sess, _twins_for(payload, key, sess))
+        funds = _charge_pilot(user, payload, sess, for_play=True)
+        if funds is not None:
+            return funds
+        LIVE.start_live(sess)
+        PI.mark_playing(sess)
+        DT.save_twin(_s3(), key, payload)
+        return jsonify({'success': True, 'session': PI.public_session(sess), 'charged': True, 'live': True})
     if sess.get('status') not in ('ready', 'playing', 'stopped') or not (sess.get('dial') or {}).get('value'):
         body = request.get_json(silent=True) or {}
         if (sess.get('media') or {}).get('s3_key'):
@@ -1426,6 +1449,43 @@ def dt_pilot_play(key, sid):
     PI.mark_playing(sess)
     DT.save_twin(_s3(), key, payload)
     return jsonify({'success': True, 'session': PI.public_session(sess), 'charged': True})
+
+
+@bp.route(f'{PREFIX}/<path:key>/pilot/<sid>/frame', methods=['POST'])
+def dt_pilot_frame(key, sid):
+    """One frame off the mirrored screen at clock t (a small JPEG as a
+    data URL). The room reads it and reacts; the reply carries only what
+    changed so the page paints without a reload. No charge: the frames
+    ride on the session price."""
+    user, err = _gate()
+    if err:
+        return err
+    payload, err = _twin_or_404(user, key)
+    if err:
+        return err
+    from migration import digital_twin_live as LIVE
+    sess = _pilot(payload, sid)
+    if not sess:
+        return jsonify({'success': False, 'error': 'test not found'}), 404
+    if not LIVE.is_live(sess):
+        return jsonify({'success': False, 'error': 'This test is not watching a mirrored screen.'}), 400
+    if not sess.get('play_charged') and sess.get('status') != 'playing':
+        return jsonify({'success': False, 'error': 'Press Play first.'}), 400
+    if (sess.get('live') or {}).get('finished_at'):
+        return jsonify({'success': False, 'error': 'This test has been scored.'}), 400
+    body = request.get_json(silent=True) or {}
+    image = str(body.get('image') or '')
+    mt = 'image/png' if image.startswith('data:image/png') else 'image/jpeg'
+    twins_by_key = _twins_for(payload, key, sess)
+    twin = twins_by_key.get(key) or payload
+    try:
+        t = float(body.get('t') or 0)
+    except (TypeError, ValueError):
+        t = 0.0
+    out = LIVE.frame(sess, twin, t, image, usage_extras=_usage_extras(user), media_type=mt)
+    if not out.get('skipped'):
+        DT.save_twin(_s3(), key, payload)
+    return jsonify(dict({'success': True}, **out))
 
 
 @bp.route(f'{PREFIX}/<path:key>/pilot/<sid>/ask', methods=['POST'])
@@ -1487,6 +1547,13 @@ def dt_pilot_stop(key, sid):
     sess = _pilot(payload, sid)
     if not sess:
         return jsonify({'success': False, 'error': 'test not found'}), 404
+    from migration import digital_twin_live as LIVE
+    live = sess.get('live') if isinstance(sess.get('live'), dict) else {}
+    if LIVE.is_live(sess) and live.get('frames') and not live.get('finished_at') and not live.get('finishing_at'):
+        LIVE.finish_in_background(sess, _twins_for(payload, key, sess), key=key, payload=payload,
+                                  save=lambda k, p: DT.save_twin(_s3(), k, p), usage_extras=_usage_extras(user), s3=_s3())
+        DT.save_twin(_s3(), key, payload)
+        return jsonify({'success': True, 'session': PI.public_session(sess), 'finishing': True})
     PI.stop_session(sess)
     if sess.get('scorecard'):
         PI.record_norms(sess, s3=_s3())     # every finished test grows the norms (idempotent per test)

@@ -51683,6 +51683,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-pi-stage video { width: 100%; display: block; max-height: 420px; background: #081113; }
         #digitalTwinsIQView .dtw-pi-stage iframe.dtw-pi-frame { width: 100%; height: 420px; border: 0; display: block; background: #081113; }
         #digitalTwinsIQView .dtw-pi-open { margin-top: 10px; }
+        #digitalTwinsIQView .dtw-pi-slatebtns { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+        #digitalTwinsIQView .dtw-pi-slatebtns .dtw-pi-open { margin-top: 6px; }
         #digitalTwinsIQView .dtw-pi-slate { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: #E9E8E1; padding: 24px; text-align: center; }
         #digitalTwinsIQView .dtw-pi-slate .t { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; }
         #digitalTwinsIQView .dtw-pi-slate .c { font-size: 42px; font-weight: 300; font-variant-numeric: tabular-nums; letter-spacing: -0.03em; }
@@ -51774,6 +51776,36 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
           #digitalTwinsIQView .dtw-pi-setup .dtw-pi-col.tests .dtw-pi-row { flex: 1 1 240px; width: auto; }
         }
         @media (max-width: 860px) { #digitalTwinsIQView .dtw-pi-setup { grid-template-columns: 1fr; } }
+        /* the calm player (the approved mockup): one title line, the cut, the dial, the moments; everything else folds under the grid */
+        #digitalTwinsIQView .dtw-pi-topbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        #digitalTwinsIQView .dtw-pi-room .dtw-pi-stage { min-height: 280px; }
+        #digitalTwinsIQView .dtw-pi-topbar .meta { flex: 1 1 200px; min-width: 0; font-size: 12px; color: var(--dtw-body); display: flex; gap: 4px 12px; flex-wrap: wrap; align-items: center; }
+        #digitalTwinsIQView .dtw-pi-topbar .dtw-pi-controls { margin-top: 0; }
+        #digitalTwinsIQView .dtw-pi-slate .s:empty { display: none; }
+        #digitalTwinsIQView .dtw-pi-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; font-size: 11px; color: var(--dtw-body); }
+        #digitalTwinsIQView .dtw-pi-legend .sw { display: inline-block; width: 14px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
+        #digitalTwinsIQView .dtw-pi-legend select.dtw-in { display: inline-block; width: auto; padding: 2px 6px; font-size: 11px; background: transparent; }
+        #digitalTwinsIQView .dtw-pi-marks { display: flex; flex-wrap: wrap; gap: 6px; min-height: 0; }
+        #digitalTwinsIQView .dtw-pi-mk { appearance: none; border: 1px solid var(--dtw-rule); background: var(--dtw-raised); color: var(--dtw-ink); border-radius: 999px; padding: 4px 10px; font-size: 11.5px; cursor: pointer; font-family: inherit; opacity: 0.45; }
+        #digitalTwinsIQView .dtw-pi-mk.seen { opacity: 1; }
+        #digitalTwinsIQView .dtw-pi-mk .c { font-variant-numeric: tabular-nums; color: var(--dtw-mute); margin-right: 5px; }
+        #digitalTwinsIQView .dtw-pi-mk.peak { border-color: #C7F23E; }
+        #digitalTwinsIQView .dtw-pi-mk.valley { border-color: #B7B3D8; }
+        #digitalTwinsIQView .dtw-pi-gsel { appearance: none; -webkit-appearance: none; background: transparent; border: 0; border-bottom: 1px dotted var(--dtw-body); color: var(--dtw-ink); font: inherit; font-size: 11px; line-height: 14px; padding: 0 0 1px; margin: 0; width: auto; field-sizing: content; max-width: 120px; cursor: pointer; }
+        #digitalTwinsIQView .dtw-pi-gsel option { background: var(--dtw-raised); color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-pi-sugg { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 8px; }
+        #digitalTwinsIQView .dtw-pi-sugg:empty { display: none; }
+        #digitalTwinsIQView .dtw-pi-askrow { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+        #digitalTwinsIQView .dtw-pi-askrow select.dtw-in { width: auto; flex: 0 0 auto; padding: 6px 8px; font-size: 12px; }
+        #digitalTwinsIQView .dtw-pi-foot { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin-top: 14px; }
+        #digitalTwinsIQView .dtw-pi-foot .dtw-actions { margin: 0; }
+        #digitalTwinsIQView .dtw-pi-foot .dtw-pi-switch { margin: 0; }
+        #digitalTwinsIQView .dtw-pi-more { border-top: 1px solid var(--dtw-rule); margin-top: 12px; padding-top: 10px; }
+        #digitalTwinsIQView .dtw-pi-more > summary { cursor: pointer; font-size: 12px; color: var(--dtw-body); list-style: none; display: flex; align-items: center; gap: 10px; }
+        #digitalTwinsIQView .dtw-pi-more > summary::-webkit-details-marker { display: none; }
+        #digitalTwinsIQView .dtw-pi-more > summary::before { content: ''; width: 6px; height: 6px; border-right: 1px solid currentColor; border-bottom: 1px solid currentColor; transform: rotate(-45deg); transition: transform 0.15s; flex: 0 0 auto; }
+        #digitalTwinsIQView .dtw-pi-more[open] > summary::before { transform: rotate(45deg); }
+        #digitalTwinsIQView .dtw-pi-more > summary .n { color: var(--dtw-mute); font-variant-numeric: tabular-nums; }
         #digitalTwinsIQView .dtw-pi-protect { font-size: 12px; color: var(--dtw-body); margin-top: 8px; }
         @media (max-width: 860px) { #digitalTwinsIQView .dtw-pi-money { grid-template-columns: 1fr; } }
         /* Pilot Testing control room (Jenna 2026-10-30): scores left, the cut and the dial center, the room and the ask right. One screen, nothing waits under the fold. */
@@ -51796,14 +51828,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-pi-other .t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         #digitalTwinsIQView .dtw-pi-other .n { color: var(--dtw-mute); font-variant-numeric: tabular-nums; white-space: nowrap; }
         #digitalTwinsIQView .dtw-pi-other:hover .t, #digitalTwinsIQView .dtw-pi-other:focus-visible .t { color: #C7F23E; }
-        #digitalTwinsIQView .dtw-pi-seatlist { display: flex; flex-direction: column; gap: 4px; }
-        #digitalTwinsIQView .dtw-pi-seatrow { position: relative; display: flex; gap: 10px; align-items: center; padding: 4px 6px; margin: 0 -6px; border-radius: 10px; outline: none; }
+        #digitalTwinsIQView .dtw-pi-seatlist { display: flex; flex-direction: column; gap: 1px; }
+        #digitalTwinsIQView .dtw-pi-seatrow { position: relative; display: flex; gap: 9px; align-items: center; padding: 3px 6px; margin: 0 -6px; border-radius: 10px; outline: none; }
         #digitalTwinsIQView .dtw-pi-seatrow:hover, #digitalTwinsIQView .dtw-pi-seatrow:focus-within { background: rgba(233,232,225,0.05); }
-        #digitalTwinsIQView .dtw-pi-seatrow .circ { width: 36px; height: 36px; flex: 0 0 36px; border-radius: 50%; background: var(--hue, #3358FF); color: #E9E8E1; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 12px; position: relative; overflow: hidden; }
+        #digitalTwinsIQView .dtw-pi-seatrow .circ { width: 30px; height: 30px; flex: 0 0 30px; border-radius: 50%; background: var(--hue, #3358FF); color: #E9E8E1; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 12px; position: relative; overflow: hidden; }
         #digitalTwinsIQView .dtw-pi-seatrow .circ img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 25%; }
         #digitalTwinsIQView .dtw-pi-seatrow .txt { min-width: 0; flex: 1 1 auto; }
         #digitalTwinsIQView .dtw-pi-seatrow .who { font-size: 12px; font-weight: 600; color: var(--dtw-ink); line-height: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        #digitalTwinsIQView .dtw-pi-seatrow .say { font-size: 11.5px; color: var(--dtw-body); line-height: 14px; margin-top: 1px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        #digitalTwinsIQView .dtw-pi-seatrow .say { font-size: 11.5px; color: var(--dtw-body); line-height: 14px; margin-top: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         #digitalTwinsIQView .dtw-pi-seatrow .say .c { color: var(--dtw-mute); font-variant-numeric: tabular-nums; }
         #digitalTwinsIQView .dtw-pi-seatrow.lit .say { color: var(--dtw-ink); }
         #digitalTwinsIQView .dtw-pi-seatrow .bio { display: none; position: absolute; right: calc(100% + 10px); top: -6px; width: 320px; max-height: 340px; overflow-y: auto; overflow-x: hidden; z-index: 12; background: #0C1618; border: 1px solid var(--dtw-rule); border-radius: 12px; padding: 12px 14px; box-shadow: 0 12px 32px rgba(0,0,0,0.45); font-size: 12.5px; line-height: 17px; color: var(--dtw-ink); text-align: left; }
@@ -53797,15 +53829,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     wirePilotVideo(v);
                     return true;
                 }
-                if (m.kind === 'embed' && m.embed_url && fr) {
-                    var src = m.embed_url;
-                    if (s.status === 'playing' && src.indexOf('autoplay=') < 0) src += (src.indexOf('?') >= 0 ? '&' : '?') + 'autoplay=1';
-                    if (S.pilotClock.bound !== src) { fr.src = src; S.pilotClock.bound = src; }
-                    fr.style.display = 'block';
-                    if (v) { try { v.removeAttribute('src'); } catch (_) {} v.style.display = 'none'; }
-                    if (slate) slate.style.display = 'none';
-                    return true;
-                }
+                // an embeddable player (YouTube, Vimeo) used to sit in an iframe here; a cross-site frame gives the room no
+                // frames to read, so every non-file link now opens on its own site and is mirrored into the stage (2026-10-30)
                 if (v) { try { v.removeAttribute('src'); } catch (_) {} v.style.display = 'none'; }
                 if (fr) { try { fr.removeAttribute('src'); } catch (_) {} fr.style.display = 'none'; }
                 if (slate) slate.style.display = 'flex';
@@ -53814,9 +53839,110 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }
             function openWatchWithRoom(s) {
                 var m = watchMedia(s);
-                if (!m || !m.url || m.kind === 'embed' || m.kind === 'video') return;
+                if (!m || !m.url || m.kind === 'video') return;
                 try { window.open(m.url, 'dtwWatch'); } catch (_) {}
             }
+            // ---- live watch (2026-10-30): a watch link is mirrored into the stage; a frame goes to the room every twelve seconds and the seats react to it.
+            var LIVE_FRAME_MS = 12000, LIVE_FRAME_W = 512;
+            function isLiveSess(s) { s = s || {}; return !!((s.live && s.live.on) || (watchMedia(s) && !hasMedia(s))); }
+            function liveFinished(s) { return !!(((s || {}).live || {}).finished_at); }
+            function attachLiveMirror(s) {
+                var L = S.pilotLive; if (!L || !L.stream || !s || L.sid !== s.id) return false;
+                var v = el('dtwPiVideo'), slate = el('dtwPiSlate'), fr = el('dtwPiFrame');
+                if (!v) return false;
+                if (fr) { try { fr.removeAttribute('src'); } catch (_) {} fr.style.display = 'none'; }
+                try { if (v.srcObject !== L.stream) v.srcObject = L.stream; v.muted = true; v.controls = false; v.style.display = 'block'; v.play().catch(function() {}); } catch (_) {}
+                if (slate) slate.style.display = 'none';
+                ensureWatermark(s);
+                return true;
+            }
+            function startLiveClock() {
+                var L = S.pilotLive; if (!L) return;
+                stopPilotClock(); S.pilotClock.slate = false;
+                L.t0 = Date.now() - (Number(S.pilotClock.t) || 0) * 1000;
+                L.running = true;
+                (function tick() {
+                    if (!S.pilotLive || !S.pilotLive.running) return;
+                    var t = (Date.now() - S.pilotLive.t0) / 1000;
+                    revealPilot(t);
+                    maybeSendLiveFrame(t);
+                    S.pilotClock.raf = requestAnimationFrame(tick);
+                })();
+            }
+            function pauseLiveClock() { if (S.pilotLive) S.pilotLive.running = false; stopPilotClock(); }
+            function stopLiveMirror() {
+                var L = S.pilotLive; if (!L) return;
+                pauseLiveClock();
+                try { (L.stream ? L.stream.getTracks() : []).forEach(function(tr) { try { tr.stop(); } catch (_) {} }); } catch (_) {}
+                L.stream = null;
+                var v = el('dtwPiVideo'); if (v) { try { v.pause(); v.srcObject = null; } catch (_) {} }
+            }
+            function maybeSendLiveFrame(t) {
+                var L = S.pilotLive; if (!L || L.busy || !L.stream) return;
+                var now = Date.now(); if (now - (L.lastSent || 0) < LIVE_FRAME_MS) return;
+                var v = el('dtwPiVideo'); if (!v || v.readyState < 2 || !v.videoWidth) return;
+                L.lastSent = now; L.busy = true;
+                var data = '';
+                try {
+                    var w = LIVE_FRAME_W, h = Math.max(1, Math.round(v.videoHeight * (w / v.videoWidth)));
+                    var c = L.canvas || (L.canvas = document.createElement('canvas')); c.width = w; c.height = h;
+                    c.getContext('2d').drawImage(v, 0, 0, w, h);
+                    data = c.toDataURL('image/jpeg', 0.6);
+                } catch (e) { L.busy = false; L.failed = (L.failed || 0) + 1; return; }
+                var s = S.pilot, key = S.key, sid = s ? s.id : ''; if (!s || !key) { L.busy = false; return; }
+                apiRaw('/' + encodeURIComponent(key) + '/pilot/' + encodeURIComponent(sid) + '/frame', { method: 'POST', body: JSON.stringify({ t: Math.round(t * 100) / 100, image: data }) }).then(function(r) {
+                    L.busy = false;
+                    if (!r.ok || !r.data || r.data.skipped || !S.pilot || S.pilot.id !== sid) return;
+                    mergeLiveFrame(S.pilot, r.data);
+                    L.sent = (L.sent || 0) + 1;
+                    revealPilot(playheadNow());
+                }).catch(function() { L.busy = false; L.failed = (L.failed || 0) + 1; });
+            }
+            function mergeLiveFrame(s, d) {
+                s.dial = s.dial || { t: [], value: [], splits: {} };
+                s.dial.t = s.dial.t || []; s.dial.value = s.dial.value || []; s.dial.splits = s.dial.splits || {};
+                if (d.dial) { s.dial.t.push(Number(d.dial.t)); s.dial.value.push(Number(d.dial.value)); }
+                var hadSplits = Object.keys(s.dial.splits).length > 0;
+                Object.keys(d.splits || {}).forEach(function(k) {
+                    var row = s.dial.splits[k] = s.dial.splits[k] || { label: k === 'women' ? 'Women' : (k === 'men' ? 'Men' : k), group: 'gender', n: 0, value: [] };
+                    while (row.value.length < s.dial.value.length - 1) row.value.push(row.value.length ? row.value[row.value.length - 1] : Number(d.splits[k]));
+                    row.value.push(Number(d.splits[k]));
+                });
+                if (!hadSplits && Object.keys(s.dial.splits).length) S.pilotSplits = null;   // the legend picks women and men up
+                (d.events || []).forEach(function(e) { (s.events = s.events || []).push(e); });
+                if (d.caption) { var sc = s.scenes = s.scenes || []; if (sc.length) sc[sc.length - 1].t_end = Number(d.t); sc.push({ id: sc.length, t_start: Number(d.t), t_end: Number(d.t) + 12, caption: d.caption }); }
+                s.watch = s.watch || {}; s.watch.source = 'live';
+                s.live = s.live || { on: true }; s.live.frames = s.live.frames || []; s.live.frames.push({ t: Number(d.t), caption: d.caption || '' });
+                s.media = s.media || {}; if (Number(d.t) > Number(s.media.runtime_s || 0)) s.media.runtime_s = Math.max(Number(s.media.runtime_s || 0), Number(d.t) + 60);
+            }
+            window.dtwPilotMirror = async function() {
+                var s = S.pilot; if (!s || !S.key) return;
+                var note = el('dtwPiNote');
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) { if (note) note.textContent = 'This browser cannot mirror a tab. Use Chrome or Edge on a computer.'; return; }
+                var stream;
+                try {
+                    stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: { ideal: 5, max: 10 } }, audio: false, selfBrowserSurface: 'exclude', surfaceSwitching: 'include' });
+                } catch (e) { if (note) note.textContent = 'The mirror was not started. Pick the tab or window with the episode.'; return; }
+                stopLiveMirror();
+                S.pilotLive = { stream: stream, sid: s.id, lastSent: 0, busy: false, sent: 0, failed: 0, running: false, t0: 0 };
+                var track = stream.getVideoTracks()[0];
+                if (track) track.addEventListener('ended', function() { dtwPilotMirrorEnded(); });
+                attachLiveMirror(s);
+                if (s.status !== 'playing') { await dtwPilotPlay(true); }
+                if (!S.pilotLive || !S.pilotLive.stream) return;
+                startLiveClock();
+                var n2 = el('dtwPiNote'); if (n2) n2.textContent = 'The room is watching with you.';
+                var b = el('dtwPiPlayBtn'); if (b) b.textContent = 'Playing';
+            };
+            window.dtwPilotMirrorEnded = function() {
+                var s = S.pilot;
+                stopLiveMirror();
+                var v = el('dtwPiVideo'), slate = el('dtwPiSlate');
+                if (v) v.style.display = 'none';
+                if (slate) { slate.style.display = 'flex'; var h = slate.querySelector('.s:not(#dtwPiOn)'); if (h) h.textContent = 'The mirror stopped. Mirror it again to keep going, or press Stop to score what the room watched.'; }
+                var note = el('dtwPiNote'); if (note) note.textContent = 'The mirror stopped.';
+                if (s) try { remember(); } catch (_) {}
+            };
             async function apiRaw(path, opts) {
                 var r = await fetch('/api/digital-twins' + path, Object.assign({ credentials: 'same-origin', headers: { 'Content-Type': 'application/json' } }, opts || {}));
                 var d = null; try { d = await r.json(); } catch (_) { d = null; }
@@ -53901,7 +54027,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 paintPilotRail(t);
                 paintPilotLive(t);
                 paintPilotSeats(t);
+                paintPilotMarks(t);
+                paintPilotSuggest(t);
                 var ck = el('dtwPiClock'); if (ck) ck.textContent = clockFmt(t);
+                var slc = el('dtwPiSlateClock'); if (slc) slc.textContent = clockFmt(t);
                 var num = el('dtwPiDialNum');
                 var s = S.pilot || {}, d = s.dial || {}, ts = d.t || [], vs = d.value || [];
                 var val = vs.length ? vs[0] : 0;
@@ -53982,6 +54111,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             function bindPilotMedia() {
                 var s = S.pilot; if (!s) return;
                 var v = el('dtwPiVideo'), slate = el('dtwPiSlate');
+                if (attachLiveMirror(s)) return;
                 if (watchMedia(s) && !hasMedia(s)) { bindWatchLink(s); return; }
                 if (v && hasMedia(s)) {
                     var wire = function(url) {
@@ -54048,13 +54178,13 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 }[tab];
                 var modeSel = '';
                 if (tab === 'pilot') {
-                    modeSel = '<label class="dtw-field">What is this</label><select id="dtwPiMode" class="dtw-in" onchange="S.piMode=this.value;renderPilotConsole();"><option value="pilot"' + (mode === 'pilot' ? ' selected' : '') + '>A pilot</option><option value="feature"' + (mode === 'feature' ? ' selected' : '') + '>A feature</option><option value="episode"' + (mode === 'episode' ? ' selected' : '') + '>An episode after the pilot</option><option value="binge"' + (mode === 'binge' ? ' selected' : '') + '>A binge test across episodes</option></select>'
+                    modeSel = '<label class="dtw-field">What is this</label><select id="dtwPiMode" class="dtw-in" onchange="dtwPilotMode(this.value, true)"><option value="pilot"' + (mode === 'pilot' ? ' selected' : '') + '>A pilot</option><option value="feature"' + (mode === 'feature' ? ' selected' : '') + '>A feature</option><option value="episode"' + (mode === 'episode' ? ' selected' : '') + '>An episode after the pilot</option><option value="binge"' + (mode === 'binge' ? ' selected' : '') + '>A binge test across episodes</option></select>'
                         + '<div class="dtw-pi-togs"><label class="dtw-pi-switch"><input type="checkbox" id="dtwPiRough"> Rough cut (temp music, missing effects)</label>'
                         + '<label class="dtw-pi-switch"><input type="checkbox" id="dtwPiCritics"> Critics room (critics and journalists in the seats)</label></div>';
                 } else if (tab === 'trailer') {
-                    modeSel = '<label class="dtw-field">What is this</label><select id="dtwPiMode" class="dtw-in" onchange="S.piMode=this.value;"><option value="trailer"' + (mode === 'trailer' ? ' selected' : '') + '>A trailer</option><option value="spot"' + (mode === 'spot' ? ' selected' : '') + '>A TV spot</option></select>';
+                    modeSel = '<label class="dtw-field">What is this</label><select id="dtwPiMode" class="dtw-in" onchange="dtwPilotMode(this.value, false)"><option value="trailer"' + (mode === 'trailer' ? ' selected' : '') + '>A trailer</option><option value="spot"' + (mode === 'spot' ? ' selected' : '') + '>A TV spot</option></select>';
                 } else if (tab === 'titles') {
-                    modeSel = '<label class="dtw-field">What is this</label><select id="dtwPiMode" class="dtw-in" onchange="S.piMode=this.value;renderPilotConsole();"><option value="title"' + (mode === 'title' ? ' selected' : '') + '>Titles (type up to six)</option><option value="key_art"' + (mode === 'key_art' ? ' selected' : '') + '>Key art (upload up to six images)</option></select>';
+                    modeSel = '<label class="dtw-field">What is this</label><select id="dtwPiMode" class="dtw-in" onchange="dtwPilotMode(this.value, true)"><option value="title"' + (mode === 'title' ? ' selected' : '') + '>Titles (type up to six)</option><option value="key_art"' + (mode === 'key_art' ? ' selected' : '') + '>Key art (upload up to six images)</option></select>';
                 }
                 var stim = '';
                 if (tab === 'pilot') {
@@ -54248,10 +54378,81 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     }, ms));
                 });
             }
+            // ---- the room's moments: one pill per place the dial peaked or dipped, named by what the seats did there. Click: jump the cut there and put the question in the box.
+            function piMomentLabel(s, p) {
+                var t = Number(p.t || 0), counts = {};
+                ((s || {}).events || []).forEach(function(e) { if (Math.abs(Number(e.t || 0) - t) <= 15 && e.type) counts[e.type] = (counts[e.type] || 0) + 1; });
+                var best = '', n = 0;
+                Object.keys(counts).forEach(function(k) { if (counts[k] > n) { n = counts[k]; best = k; } });
+                if (best) return PI_EVT[best] || best;
+                return p.kind === 'valley' ? 'The room dipped' : 'The room rose';
+            }
+            function renderPilotMarks(s, t) {
+                var ps = ((s || {}).probes || []).slice().sort(function(a, b) { return Number(a.t || 0) - Number(b.t || 0); }).slice(0, 6);
+                if (!ps.length) return '';
+                return ps.map(function(p) {
+                    var pt = Number(p.t || 0);
+                    return '<button type="button" class="dtw-pi-mk ' + esc(p.kind || '') + (pt <= t + 0.05 ? ' seen' : '') + '" data-t="' + pt + '" title="' + esc(p.on_screen || '') + '" onclick="dtwPilotMoment(' + pt + ', \'' + esc(jsq(p.q || '')) + '\')"><span class="c">' + esc(p.clock || clockFmt(pt)) + '</span>' + esc(piMomentLabel(s, p)) + '</button>';
+                }).join('');
+            }
+            function paintPilotMarks(t) {
+                var box = el('dtwPiMarks'); if (!box) return;
+                box.querySelectorAll('.dtw-pi-mk').forEach(function(b) { b.classList.toggle('seen', Number(b.getAttribute('data-t') || 0) <= t + 0.05); });
+            }
+            // Inline handlers run in the page scope, not this module's: these three reach S for them (the old inline S.* calls threw).
+            window.dtwPilotNew = function() { S.pilot = null; renderPilotConsole(); };
+            window.dtwPilotMode = function(v, rerender) { S.piMode = v; if (rerender) renderPilotConsole(); };
+            window.dtwPilotKindSel = function(v) { S.pilotKind = v || ''; };
+            window.dtwPilotMoment = function(t, q) {
+                dtwPilotSeek(Number(t || 0));
+                var inp = el('dtwPiQ'); if (inp && q) { inp.value = q; try { inp.focus(); } catch (_) {} }
+            };
+            // ---- two suggested questions for this second: the guide's next one and the nearest moment's
+            function piSuggestions(s, t) {
+                var out = [], seen = {};
+                function add(q, kind) { q = String(q || '').trim(); if (!q || seen[q.toLowerCase()]) return; seen[q.toLowerCase()] = 1; out.push({ q: q, kind: kind || '' }); }
+                var gq = (((s || {}).guide || {}).questions || []).slice().sort(function(a, b) { return Number(a.t || 0) - Number(b.t || 0); });
+                var next = gq.filter(function(q) { return Number(q.t || 0) >= t - 5; })[0] || gq[gq.length - 1];
+                if (next) add(next.q, next.kind);
+                var ps = ((s || {}).probes || []).slice().sort(function(a, b) { return Math.abs(Number(a.t || 0) - t) - Math.abs(Number(b.t || 0) - t); });
+                if (ps[0]) add(ps[0].q, '');
+                var qs = (s || {}).questions || [], last = qs[qs.length - 1];
+                if (out.length < 2 && last && (last.probes_next || [])[0]) add(last.probes_next[0], '');
+                return out.slice(0, 2);
+            }
+            function renderPilotSuggest(s, t) {
+                return piSuggestions(s, t).map(function(x) { return '<button type="button" class="dtw-pi-probe" onclick="dtwPilotSuggest(\'' + esc(jsq(x.q)) + '\', \'' + esc(x.kind || '') + '\')">' + esc(x.q) + '</button>'; }).join('');
+            }
+            function paintPilotSuggest(t) {
+                var box = el('dtwPiSugg'); if (!box) return;
+                var html = renderPilotSuggest(S.pilot || {}, t);
+                if (box.innerHTML !== html) box.innerHTML = html;
+            }
+            window.dtwPilotSuggest = function(q, kind) {
+                var inp = el('dtwPiQ'); if (inp) { inp.value = q || ''; try { inp.focus(); } catch (_) {} }
+                S.pilotKind = kind || '';
+                var sel = el('dtwPiKindSel'); if (sel) sel.value = S.pilotKind;
+            };
+            // ---- the thread: the latest question in full, the earlier ones folded
+            function piQuestionHtml(q) {
+                var voices = (q.voices || []).slice(0, 3).map(function(v) { return '<div class="dtw-pi-voice">' + esc(v.name || '') + ': ' + esc(v.line || '') + '</div>'; }).join('');
+                var frame = (q.moment || {}).frame || ('At ' + (q.playhead_clock || clockFmt(q.playhead_s)));
+                var probes = (q.probes_next || []).slice(0, 2).map(function(p) { return '<button type="button" class="dtw-pi-probe" onclick="dtwPilotAskAt(' + Number(q.playhead_s || 0) + ', \'' + esc(jsq(p)) + '\')">' + esc(p) + '</button>'; }).join('');
+                return '<div class="dtw-pi-voice"><span class="k">Prometheus, ' + esc(frame) + '</span><div>' + esc(q.q || '') + '</div>' + (q.framing ? '<div class="dtw-muted" style="margin-top:3px">' + esc(q.framing) + '</div>' : '') + (q.read ? '<div class="dtw-muted" style="margin-top:4px">' + esc(q.read) + '</div>' : (q.stage && q.stage !== 'done' ? '<div class="dtw-muted" style="margin-top:4px">' + esc(q.stage) + '</div>' : '')) + voices + (probes ? '<div class="dtw-pi-probes">' + probes + '</div>' : '') + '</div>';
+            }
+            function renderPilotThread(s) {
+                var qs = (s || {}).questions || [];
+                if (!qs.length) return '<p class="dtw-muted" style="margin:10px 0 0;font-size:12px">No questions yet. Ask while the cut plays, or take a suggested one.</p>';
+                var last = qs[qs.length - 1], earlier = qs.slice(0, -1).reverse();
+                return '<div class="dtw-pi-voices" style="margin-top:12px">' + piQuestionHtml(last) + '</div>'
+                    + (earlier.length ? '<details class="dtw-pi-more"><summary>Earlier questions <span class="n">' + earlier.length + '</span></summary><div class="dtw-pi-voices" style="margin-top:10px">' + earlier.map(piQuestionHtml).join('') + '</div></details>' : '');
+            }
             function renderPilotScores(s) {
-                var sc = s.scorecard || {}, hd = ((sc.battery || {}).headline || {});
+                var scored = s.status === 'stopped' && !!s.scorecard;   // the room's scores exist only once it has watched and stopped
+                var sc = scored ? (s.scorecard || {}) : {}, hd = ((sc.battery || {}).headline || {});
                 var genre = s.genre || '', gl = genre ? cap(genre) : '', which = gl ? 'genre' : 'all', normWord = gl ? gl.toLowerCase() + ' norm' : 'norm';
                 var roster = ((s.group || {}).roster || []), people = Number((s.group || {}).size_people || 0);
+                var gsel = '<select class="dtw-pi-gsel" onchange="dtwPilotGenre(this.value)" aria-label="Genre"><option value=""' + (!genre ? ' selected' : '') + '>all-genre</option>' + PI_GENRES.map(function(g) { return '<option value="' + g + '"' + (genre === g ? ' selected' : '') + '>' + g + '</option>'; }).join('') + '</select>';
                 var out = '<div class="dtw-pi-h">This cut</div>';
                 function stat(v, label, metric) {
                     var norm = normCell(sc, metric, which), nv = norm ? parseFloat(norm) : NaN, up = isFinite(nv) && v != null && Number(v) >= nv;
@@ -54264,14 +54465,13 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         var norm = normCell(sc, r[2], which), nv = norm ? parseFloat(norm) : NaN, v = r[1] == null ? NaN : Number(r[1]);
                         return '<div class="dtw-pi-bar"><div class="l"><span>' + esc(r[0]) + '</span><span>' + (isFinite(v) ? v.toFixed(1) : '-') + (isFinite(nv) ? ' / ' + nv.toFixed(1) : '') + '</span></div><div class="t"><i style="width:' + (isFinite(v) ? w(v) : '0%') + '"></i></div>' + (isFinite(nv) ? '<div class="t n"><i style="width:' + w(nv) + '"></i></div>' : '') + '</div>';
                     }).join('');
-                    out += '<div class="dtw-pi-hr"></div><div class="dtw-pi-h">Against the ' + esc(normWord) + '</div><div class="dtw-pi-bars">' + bars + '</div><div class="dtw-pi-fn">Green is this cut. Grey is the ' + esc(normWord) + '.</div>';
-                    if (sc.overall_like != null) out += '<div class="dtw-pi-hr"></div><div class="dtw-pi-stat"><div class="v">' + Number(sc.overall_like).toFixed(1) + '</div><div class="k">Dial average, 0 to 100</div></div>';
+                    out += '<div class="dtw-pi-hr"></div><div class="dtw-pi-h">Against the norm</div><div class="dtw-pi-bars">' + bars + '</div><div class="dtw-pi-fn">Green is this cut. Grey is the ' + gsel + ' norm.</div>';
                 } else {
                     out += '<div class="dtw-pi-stat"><div class="v" id="dtwPiDialNow">-</div><div class="k">Dial now, 0 to 100</div></div>'
                         + '<div class="dtw-pi-stat"><div class="v">' + roster.length + '</div><div class="k">Seated' + (people ? ', standing for ' + fmtN(people) + ' people' : '') + '</div></div>'
-                        + '<div class="dtw-pi-fn">Scores land here when the room finishes the cut.</div>';
+                        + '<div class="dtw-pi-hr"></div><div class="dtw-pi-fn">' + (s.status === 'preparing' ? 'The room is scoring what it watched.' : 'Scores land here when you press Stop, read against the ' + gsel + ' norm.') + '</div>';
                 }
-                var others = ((S.twin || {}).pilot_sessions || []).filter(function(x) { return x && x.id !== s.id; }).slice(0, 8);
+                var others = ((S.twin || {}).pilot_sessions || []).filter(function(x) { return x && x.id !== s.id; }).slice(0, 5);
                 if (others.length) {
                     out += '<div class="dtw-pi-hr"></div><div class="dtw-pi-h">Other tests</div>' + others.map(function(o) {
                         var h = (((o.scorecard || {}).battery || {}).headline || {});
@@ -54280,53 +54480,71 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 }
                 return '<div class="dtw-pi-col side scores">' + out + '</div>';
             }
+            function splitLegend(s) {
+                var sp = ((s || {}).dial || {}).splits || {}, keys = Object.keys(sp);
+                var room = '<span><i class="sw" style="background:#E9E8E1"></i>Room</span>';
+                if (!keys.length) return '<div class="dtw-pi-legend">' + room + '</div>';
+                splitLines(s);
+                var groups = {};
+                keys.forEach(function(k) { var g = sp[k].group || 'other'; (groups[g] = groups[g] || []).push(k); });
+                var order = ['gender', 'quadrant', 'age', 'ethnicity', 'orientation', 'education', 'lifecycle', 'fanship', 'other'];
+                var label = { gender: 'Gender', quadrant: 'Quadrant', age: 'Age', ethnicity: 'Ethnicity', orientation: 'Orientation', education: 'Education', lifecycle: 'Where they are with the title', fanship: 'Fanship', other: 'Other' };
+                function opts(sel) {
+                    var o = '<option value="">None</option>';
+                    order.forEach(function(g) { if (!groups[g]) return; o += '<optgroup label="' + esc(label[g] || g) + '">' + groups[g].map(function(k) { return '<option value="' + esc(k) + '"' + (sel === k ? ' selected' : '') + '>' + esc(sp[k].label || k) + ' (' + esc(sp[k].n) + ')</option>'; }).join('') + '</optgroup>'; });
+                    return o;
+                }
+                return '<div class="dtw-pi-legend">' + room
+                    + '<label><i class="sw" style="background:' + PI_SPLIT_A + '"></i><select class="dtw-in" onchange="dtwPilotSplit(\'a\', this.value)">' + opts(S.pilotSplits.a) + '</select></label>'
+                    + '<label><i class="sw" style="background:' + PI_SPLIT_B + '"></i><select class="dtw-in" onchange="dtwPilotSplit(\'b\', this.value)">' + opts(S.pilotSplits.b) + '</select></label></div>';
+            }
             function renderPilotPlayer(s) {
                 var roster = ((s.group || {}).roster || []);
                 var preparing = s.status === 'preparing';
                 var ready = !preparing && (s.status === 'ready' || s.status === 'playing' || s.status === 'stopped' || ((s.dial || {}).value || []).length);
-                var qs = s.questions || [];
-                var qhtml = qs.map(function(q) {
-                    var voices = (q.voices || []).slice(0, 3).map(function(v) { return '<div class="dtw-pi-voice">' + esc(v.name || '') + ': ' + esc(v.line || '') + '</div>'; }).join('');
-                    var frame = (q.moment || {}).frame || ('At ' + (q.playhead_clock || clockFmt(q.playhead_s)));
-                    var probes = (q.probes_next || []).slice(0, 2).map(function(p) { return '<button type="button" class="dtw-pi-probe" onclick="dtwPilotAskAt(' + Number(q.playhead_s || 0) + ', \'' + esc(jsq(p)) + '\')">' + esc(p) + '</button>'; }).join('');
-                    return '<div class="dtw-pi-voice"><span class="k">Prometheus, ' + esc(frame) + '</span><div>' + esc(q.q || '') + '</div>' + (q.framing ? '<div class="dtw-muted" style="margin-top:3px">' + esc(q.framing) + '</div>' : '') + (q.read ? '<div class="dtw-muted" style="margin-top:4px">' + esc(q.read) + '</div>' : (q.stage && q.stage !== 'done' ? '<div class="dtw-muted" style="margin-top:4px">' + esc(q.stage) + '</div>' : '')) + voices + (probes ? '<div class="dtw-pi-probes">' + probes + '</div>' : '') + '</div>';
-                }).join('');
-                var prep = preparing ? ('<div class="dtw-pi-prep"><div><b>Preparing the cut.</b> ' + esc(s.prepare_stage || 'The room is watching it scene by scene. Play is ready the moment it has.') + '</div><div class="bar"><i></i></div></div>') : '';
-                var genreSel = '<select class="dtw-in" style="display:inline-block;width:auto;padding:3px 6px;font-size:12px" onchange="dtwPilotGenre(this.value)"><option value=""' + (!s.genre ? ' selected' : '') + '>Genre: not set</option>' + PI_GENRES.map(function(g) { return '<option value="' + g + '"' + (s.genre === g ? ' selected' : '') + '>' + g.charAt(0).toUpperCase() + g.slice(1) + '</option>'; }).join('') + '</select>';
-                var fmt = s.format || (s.scorecard || {}).format || '';
-                var modeChip = '<span class="dtw-muted">' + esc(piModeLabel(s)) + (s.rough_cut ? ', rough cut' : (s.mode === 'pilot' || s.mode === 'feature' || s.mode === 'episode' || s.mode === 'binge') ? ', locked cut' : '') + (s.critics_room ? ', critics room' : '') + '</span>';
-                var lineage = s.lineage && s.lineage.parent ? '<button type="button" class="dtw-link" onclick="dtwPilotPick(\'' + esc(s.lineage.parent) + '\')">against ' + esc(s.lineage.parent_cut_label || 'Cut A') + '</button>' : '';
-                var meta = '<div class="dtw-pi-splitbar" style="margin-top:0">' + genreSel + modeChip + (fmt ? '<span class="dtw-muted">Read as a ' + esc(fmt === 'feature' ? 'feature' : fmt.replace('_', ' ')) + '</span>' : '') + '<span class="dtw-muted">' + esc(s.cut_label || 'Cut A') + '</span>' + lineage + '</div>';
-                var purge = '<label class="dtw-pi-switch"><input type="checkbox" id="dtwPiPurge"' + (s.purge_media_after ? ' checked' : '') + ' onchange="dtwPilotPurgeToggle(this.checked)"> Remove the file when the test is done' + ((s.media || {}).purged_at ? ' <span class="dtw-muted">(removed; the read stays)</span>' : '') + '</label>';
-                var exp = S.key ? ('<div class="dtw-actions"><a class="dtw-btn" href="/api/digital-twins/' + esc(S.key) + '/pilot/' + esc(s.id) + '/export.csv">CSV</a><a class="dtw-btn" href="/api/digital-twins/' + esc(S.key) + '/pilot/' + esc(s.id) + '/export.pdf">PDF</a><a class="dtw-btn" href="/api/digital-twins/' + esc(S.key) + '/pilot/' + esc(s.id) + '/export.pptx">Deck</a>' + (s.scorecard ? '<a class="dtw-btn dtw-btn-primary" href="/api/digital-twins/' + esc(S.key) + '/pilot/' + esc(s.id) + '/report.pptx">Report (deck)</a><a class="dtw-btn" href="/api/digital-twins/' + esc(S.key) + '/pilot/' + esc(s.id) + '/report.pdf">Report (PDF)</a>' : '') + '<button type="button" class="dtw-btn" onclick="dtwPilotDelete()">Delete this test</button></div>') : '';
                 var t0 = Number((S.pilotClock || {}).t || 0);
-                var stage = '<div class="dtw-pi-stage"><video id="dtwPiVideo" playsinline controls controlsList="nodownload" disablePictureInPicture preload="metadata" style="display:none" oncontextmenu="return false"></video><iframe id="dtwPiFrame" class="dtw-pi-frame" title="The episode" allow="autoplay; fullscreen; encrypted-media; picture-in-picture" referrerpolicy="no-referrer-when-downgrade" style="display:none"></iframe><div id="dtwPiSlate" class="dtw-pi-slate"><div class="t">' + esc((s.media || {}).title || s.title || 'The cut') + '</div><div class="c" id="dtwPiSlateClock">0:00</div><div class="s">' + esc(preparing ? 'The room is watching the cut.' : (watchMedia(s) ? ('Press Play. The room watches with you' + ((s.media || {}).platform_label ? ' on ' + (s.media || {}).platform_label : '') + '.') : 'The room is seated. Press Play when you are ready.')) + '</div>' + (watchMedia(s) && (s.media || {}).url ? '<a class="dtw-btn dtw-btn-primary dtw-pi-open" href="' + esc((s.media || {}).url) + '" target="_blank" rel="noopener">' + esc((s.media || {}).open_label || 'Open the episode') + '</a>' : '') + '</div></div>';
-                var controls = '<div class="dtw-pi-controls" style="margin-top:0"><button type="button" class="dtw-btn dtw-btn-primary" id="dtwPiPlayBtn" onclick="dtwPilotPlay()"' + (preparing ? ' disabled' : '') + '>' + (s.status === 'playing' ? 'Playing' : 'Play') + '</button><button type="button" class="dtw-btn" onclick="dtwPilotStop()">Stop</button><span class="dtw-pi-clock" id="dtwPiClock">' + esc(clockFmt(t0)) + '</span><span class="dtw-pi-note" id="dtwPiNote">' + esc(preparing ? 'Preparing the cut' : (s.prepare_note || (ready ? 'Ready to play' : 'Preparing the cut'))) + '</span></div>';
-                var center = '<div class="dtw-pi-col center">'
-                    + meta
-                    + stage
-                    + prep
-                    + controls
-                    + '<div class="dtw-pi-on" id="dtwPiOn"></div>'
+                var prep = preparing ? ('<div class="dtw-pi-prep"><div><b>' + (isLiveSess(s) && ((s.live || {}).frames || []).length ? 'Scoring.' : 'Preparing the cut.') + '</b> ' + esc(s.prepare_stage || (isLiveSess(s) ? 'The room is scoring what it watched. A minute or two.' : 'The room is watching it scene by scene. Play is ready the moment it has.')) + '</div><div class="bar"><i></i></div></div>') : '';
+                var fmt = s.format || (s.scorecard || {}).format || '';
+                var metaBits = [esc(piModeLabel(s)) + (s.rough_cut ? ', rough cut' : (s.mode === 'pilot' || s.mode === 'feature' || s.mode === 'episode' || s.mode === 'binge') ? ', locked cut' : '') + (s.critics_room ? ', critics room' : '')];
+                if (fmt && fmt !== s.mode) metaBits.push('Read as a ' + esc(fmt === 'feature' ? 'feature' : fmt.replace('_', ' ')));
+                metaBits.push(esc(s.cut_label || 'Cut A'));
+                if (s.lineage && s.lineage.parent) metaBits.push('<button type="button" class="dtw-link" onclick="dtwPilotPick(\'' + esc(s.lineage.parent) + '\')">against ' + esc(s.lineage.parent_cut_label || 'Cut A') + '</button>');
+                var topbar = '<div class="dtw-pi-topbar"><div class="meta">' + metaBits.map(function(b) { return '<span>' + b + '</span>'; }).join('') + '</div>'
+                    + '<div class="dtw-pi-controls"><span class="dtw-pi-note" id="dtwPiNote">' + esc(preparing ? 'Preparing the cut' : (s.prepare_note || (ready ? 'Ready to play' : 'Preparing the cut'))) + '</span><button type="button" class="dtw-btn dtw-btn-primary" id="dtwPiPlayBtn" onclick="dtwPilotPlay()"' + (preparing ? ' disabled' : '') + '>' + (s.status === 'playing' ? 'Playing' : 'Play') + '</button><button type="button" class="dtw-btn" onclick="dtwPilotStop()">Stop</button><span class="dtw-pi-clock" id="dtwPiClock">' + esc(clockFmt(t0)) + '</span></div></div>';
+                var live = isLiveSess(s) && (watchMedia(s) || {}).kind !== 'video', platform = (s.media || {}).platform_label || 'the service';
+                var hint = preparing ? (live && liveFinished(s) === false && (s.live || {}).frames && (s.live || {}).frames.length ? 'The room is scoring what it watched.' : 'The room is watching the cut.')
+                    : (live ? (s.status === 'playing' ? ('Open the episode on ' + platform + ', press play there, then mirror it here. The room reacts to what is on screen.') : (s.status === 'stopped' ? 'Stopped.' : 'Press Play to seat the room. Then open the episode on ' + platform + ' and mirror it here.'))
+                    : (watchMedia(s) ? ('Press Play. The room watches with you' + ((s.media || {}).platform_label ? ' on ' + (s.media || {}).platform_label : '') + '.') : 'The room is seated. Press Play when you are ready.'));
+                var slateBtns = (watchMedia(s) && (s.media || {}).url ? '<a class="dtw-btn dtw-pi-open" href="' + esc((s.media || {}).url) + '" target="_blank" rel="noopener">' + esc((s.media || {}).open_label || 'Open the episode') + '</a>' : '')
+                    + (live && s.status === 'playing' ? '<button type="button" class="dtw-btn dtw-btn-primary dtw-pi-open" onclick="dtwPilotMirror()">Mirror it here</button>' : '');
+                var stage = '<div class="dtw-pi-stage"><video id="dtwPiVideo" playsinline controls controlsList="nodownload" disablePictureInPicture preload="metadata" style="display:none" oncontextmenu="return false"></video><iframe id="dtwPiFrame" class="dtw-pi-frame" title="The episode" allow="autoplay; fullscreen; encrypted-media; picture-in-picture" referrerpolicy="no-referrer-when-downgrade" style="display:none"></iframe><div id="dtwPiSlate" class="dtw-pi-slate"><div class="t">' + esc((s.media || {}).title || s.title || 'The cut') + '</div><div class="c" id="dtwPiSlateClock">' + esc(clockFmt(t0)) + '</div><div class="s" id="dtwPiOn"></div><div class="s">' + esc(hint) + '</div>' + (slateBtns ? '<div class="dtw-pi-slatebtns">' + slateBtns + '</div>' : '') + '</div></div>';
+                var center = '<div class="dtw-pi-col center">' + topbar + stage + prep
                     + '<div class="dtw-pi-dialwrap"><canvas id="dtwPiDial"></canvas><div class="dtw-pi-dialnum" id="dtwPiDialNum"></div></div>'
-                    + splitPicker(s)
-                    + '<div class="dtw-pi-rail" id="dtwPiRail"></div>'
-                    + probeChips(s)
-                    + purge + '</div>';
+                    + splitLegend(s)
+                    + '<div class="dtw-pi-marks" id="dtwPiMarks">' + renderPilotMarks(s, t0) + '</div></div>';
+                var kindSel = '<select id="dtwPiKindSel" class="dtw-in" onchange="dtwPilotKindSel(this.value)" aria-label="Kind of question"><option value=""' + (!S.pilotKind ? ' selected' : '') + '>Open</option><option value="yes_no"' + (S.pilotKind === 'yes_no' ? ' selected' : '') + '>Yes / no</option><option value="rating"' + (S.pilotKind === 'rating' ? ' selected' : '') + '>Rating</option><option value="show_of_hands"' + (S.pilotKind === 'show_of_hands' ? ' selected' : '') + '>Show of hands</option></select>';
                 var room = '<div class="dtw-pi-col side room"><div class="dtw-pi-h">The room <span class="n">' + roster.length + ' seated</span></div>'
                     + '<div id="dtwPiSeats" class="dtw-pi-seatlist">' + renderPilotSeats(s, t0) + '</div>'
                     + '<div class="dtw-pi-hr"></div><div class="dtw-pi-h">Ask the room at <span class="n" id="dtwPiAskClock">' + esc(clockFmt(t0)) + '</span></div>'
+                    + '<div class="dtw-pi-sugg" id="dtwPiSugg">' + renderPilotSuggest(s, t0) + '</div>'
                     + '<input id="dtwPiQ" class="dtw-in" placeholder="Would you keep watching?" onkeydown="if(event.key===\'Enter\'){event.preventDefault();dtwPilotAsk();}">'
-                    + '<div class="dtw-chips" id="dtwPiKinds"><button type="button" class="dtw-chip" data-k="yes_no" onclick="dtwPilotKind(\'yes_no\')">Yes / no</button><button type="button" class="dtw-chip" data-k="open" onclick="dtwPilotKind(\'open\')">Open</button><button type="button" class="dtw-chip" data-k="rating" onclick="dtwPilotKind(\'rating\')">Rating</button><button type="button" class="dtw-chip" data-k="show_of_hands" onclick="dtwPilotKind(\'show_of_hands\')">Show of hands</button></div>'
-                    + '<div class="dtw-lab-run"><button type="button" class="dtw-btn dtw-btn-primary" onclick="dtwPilotAsk()">Ask the room</button></div>'
+                    + '<div class="dtw-pi-askrow">' + kindSel + '<button type="button" class="dtw-btn dtw-btn-primary" onclick="dtwPilotAsk()">Ask the room</button></div>'
                     + '<div id="dtwPiAskNote" class="dtw-status"></div>'
-                    + renderGuide(s)
-                    + '<div class="dtw-pi-hr"></div><div class="dtw-pi-h">Live from the room</div><div id="dtwPiLive" class="dtw-pi-voices"></div>'
-                    + '<div class="dtw-pi-h" style="margin-top:8px">On the clock</div><div id="dtwPiThread">' + (qhtml || '<p class="dtw-muted">No questions yet. Ask while the cut plays, or take a suggested one.</p>') + '</div></div>';
+                    + '<div id="dtwPiThread">' + renderPilotThread(s) + '</div></div>';
+                var purge = '<label class="dtw-pi-switch"><input type="checkbox" id="dtwPiPurge"' + (s.purge_media_after ? ' checked' : '') + ' onchange="dtwPilotPurgeToggle(this.checked)"> Remove the file when the test is done' + ((s.media || {}).purged_at ? ' <span class="dtw-muted">(removed; the read stays)</span>' : '') + '</label>';
+                var exp = S.key ? ('<div class="dtw-actions">' + (s.scorecard ? '<a class="dtw-btn dtw-btn-primary" href="/api/digital-twins/' + esc(S.key) + '/pilot/' + esc(s.id) + '/report.pptx">Report (deck)</a><a class="dtw-btn" href="/api/digital-twins/' + esc(S.key) + '/pilot/' + esc(s.id) + '/report.pdf">Report (PDF)</a>' : '') + '<a class="dtw-btn" href="/api/digital-twins/' + esc(S.key) + '/pilot/' + esc(s.id) + '/export.csv">CSV</a><a class="dtw-btn" href="/api/digital-twins/' + esc(S.key) + '/pilot/' + esc(s.id) + '/export.pdf">PDF</a><a class="dtw-btn" href="/api/digital-twins/' + esc(S.key) + '/pilot/' + esc(s.id) + '/export.pptx">Deck</a><button type="button" class="dtw-btn" onclick="dtwPilotDelete()">Delete this test</button></div>') : '';
+                var scoredNow = s.status === 'stopped' && !!s.scorecard;
+                var full = scoredNow ? renderScorecard(s) : '', diag = scoredNow ? (renderModeRead(s) + renderDiagnostics(s)) : '', extras = renderPilotExtras(s);
+                var guide = renderGuide(s);
+                var more = (full ? '<details class="dtw-pi-more" ontoggle="drawCompareChart()"><summary>Scorecard in full</summary>' + full + '</details>' : '')
+                    + (diag ? '<details class="dtw-pi-more" ontoggle="drawCompareChart()"><summary>Diagnostics</summary>' + diag + '</details>' : '')
+                    + (guide ? '<details class="dtw-pi-more"><summary>Moderator guide</summary>' + guide + '</details>' : '')
+                    + (extras ? '<details class="dtw-pi-more" ontoggle="drawCompareChart()"><summary>Recut, comps, talent and the brief</summary>' + extras + '</details>' : '');
                 return '<div class="dtw-card"><div class="dtw-eyebrow">' + esc(PI_TAB_LABEL[piTabFor(s.mode)] || 'Pilot Testing') + '</div>'
-                    + '<div class="dtw-fg-rtwrap"><input id="dtwPiName" class="dtw-fg-rt" value="' + esc(s.title || '') + '" onblur="dtwPilotRename()"><button type="button" class="dtw-link" onclick="S.pilot=null;renderPilotConsole();">New test</button></div>'
+                    + '<div class="dtw-fg-rtwrap"><input id="dtwPiName" class="dtw-fg-rt" value="' + esc(s.title || '') + '" onblur="dtwPilotRename()"><button type="button" class="dtw-link" onclick="dtwPilotNew()">New test</button></div>'
                     + '<div class="dtw-pi-room">' + renderPilotScores(s) + center + room + '</div>'
-                    + renderModeRead(s) + renderScorecard(s) + renderDiagnostics(s) + renderPilotExtras(s) + exp + '</div>';
+                    + '<div class="dtw-pi-foot">' + exp + purge + '</div>'
+                    + more + '</div>';
             }
             function renderPilotConsole() {
                 var h = piHostEl(); if (!h) return;
@@ -54491,6 +54709,13 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     if (!mediaUrl(S.pilot)) { await fetchMediaUrl(S.pilot); }
                     bindPilotMedia();
                     if (mediaUrl(S.pilot)) { try { await v.play(); } catch (_) {} }
+                } else if (wm && isLiveSess(S.pilot) && wm.kind !== 'video') {
+                    // a mirrored watch: the clock and the frames run while the mirror does
+                    if (S.pilotLive && S.pilotLive.stream && S.pilotLive.sid === S.pilot.id) { attachLiveMirror(S.pilot); startLiveClock(); }
+                    else { if (!resume) openWatchWithRoom(S.pilot); renderPilotConsole(); }
+                    var ln = el('dtwPiNote'); if (ln) ln.textContent = (S.pilotLive && S.pilotLive.stream) ? 'The room is watching with you.' : 'Open the episode, press play there, then mirror it here.';
+                    var lb = el('dtwPiPlayBtn'); if (lb) lb.textContent = 'Playing';
+                    return;
                 } else if (wm) {
                     bindWatchLink(S.pilot);
                     if (!resume) openWatchWithRoom(S.pilot);
@@ -54516,17 +54741,19 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             window.dtwPilotStop = async function(fromEnd) {
                 stopPilotClock();
                 S.pilotClock.slate = false;
+                var wasLive = !!(S.pilotLive && S.pilotLive.stream);
+                stopLiveMirror();
                 var v = el('dtwPiVideo'); if (v) { try { v.pause(); } catch (_) {} }
                 if (!S.pilot || !S.key) { renderPilotConsole(); return; }
-                var removed = false;
+                var removed = false, finishing = false;
                 try {
                     var d = await api('/' + S.key + '/pilot/' + S.pilot.id + '/stop', { method: 'POST', body: '{}' });
-                    adoptPilot(d.session); removed = !!d.media_removed;
+                    adoptPilot(d.session); removed = !!d.media_removed; finishing = !!d.finishing;
                 } catch (_) {}
                 if (removed) { S.pilotMedia = null; }
                 renderPilotConsole();
-                if (fromEnd) revealPilot(Number((S.pilot.media || {}).runtime_s || playheadNow()));
-                var note = el('dtwPiNote'); if (note) note.textContent = removed ? 'Stopped. The file was removed; the read stays.' : 'Stopped. The scorecard is in.';
+                if (fromEnd && !finishing) revealPilot(Number((S.pilot.media || {}).runtime_s || playheadNow()));
+                var note = el('dtwPiNote'); if (note) note.textContent = finishing ? 'The room is scoring what it watched.' : (removed ? 'Stopped. The file was removed; the read stays.' : (wasLive ? 'Stopped.' : 'Stopped. The scorecard is in.'));
             };
             window.dtwPilotSeek = function(t) {
                 t = Number(t || 0);
@@ -54548,7 +54775,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (!q) { if (inp) try { inp.focus(); } catch (_) {} return; }
                 var note = el('dtwPiAskNote');
                 var v = el('dtwPiVideo'); if (v) { try { v.pause(); } catch (_) {} }
-                var wasSlate = S.pilotClock.slate; S.pilotClock.slate = false; stopPilotClock();
+                var wasSlate = S.pilotClock.slate, wasLive = !!(S.pilotLive && S.pilotLive.running); S.pilotClock.slate = false; pauseLiveClock(); stopPilotClock();
                 var t = (atT != null && isFinite(atT)) ? Number(atT) : playheadNow();
                 if (note) note.textContent = 'Asking the room at ' + clockFmt(t) + '...';
                 var body = { q: q, playhead_s: t };
@@ -54564,6 +54791,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (note) note.textContent = 'Asked at ' + clockFmt(t) + '. The answer lands in a minute or two.';
                 pollPilotQuestions();
                 if (v && mediaUrl(S.pilot)) { try { await v.play(); } catch (_) {} }
+                else if (wasLive && S.pilotLive && S.pilotLive.stream) { S.pilotClock.t = t; startLiveClock(); }
                 else if (wasSlate) { S.pilotClock.slate = true; S.pilotClock.t0 = Date.now() - t * 1000; dtwPilotPlay(true); }
             };
             function pollPilotQuestions() {
@@ -54817,7 +55045,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     try { S.norms = await api('/pilot-norms/all?genre=' + encodeURIComponent(S.normsGenre)); } catch (e) { h.innerHTML = '<div class="dtw-card"><div class="dtw-eyebrow">Norms</div><p class="dtw-muted">' + esc(e.message) + '</p></div>'; return; }
                 }
                 var d = S.norms, fmts = d.formats || [], metrics = d.metrics || [];
-                var sel = '<select class="dtw-in" style="display:inline-block;width:auto;padding:3px 6px;font-size:12px" onchange="S.normsGenre=this.value;renderNormsTab();">' + (d.genres || []).map(function(g) { return '<option value="' + esc(g) + '"' + (g === S.normsGenre ? ' selected' : '') + '>' + esc((d.genre_labels || {})[g] || g) + '</option>'; }).join('') + '</select>';
+                var sel = '<select class="dtw-in" style="display:inline-block;width:auto;padding:3px 6px;font-size:12px" onchange="dtwNormsGenre(this.value)">' + (d.genres || []).map(function(g) { return '<option value="' + esc(g) + '"' + (g === S.normsGenre ? ' selected' : '') + '>' + esc((d.genre_labels || {})[g] || g) + '</option>'; }).join('') + '</select>';
                 var head = '<tr><th>Measure</th>' + fmts.map(function(f) { return '<th class="n">' + esc((d.format_labels || {})[f] || f) + '</th>'; }).join('') + '</tr>';
                 var rows = metrics.map(function(m) {
                     var cells = fmts.map(function(f) {
@@ -54832,6 +55060,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 h.innerHTML = '<div class="dtw-card"><div class="dtw-eyebrow">Norms</div><h3 style="margin-top:0.35rem;">What a number means, by format and genre</h3><div class="dtw-sub">' + esc(d.line || 'Every screening adds to these.') + ' The count under a cell is how many of our own tests sit behind it; a published cell stands until they do.</div><div class="dtw-pi-splitbar" style="margin-top:8px">Genre ' + sel + '</div><div style="overflow-x:auto"><table class="dtw-pi-table dtw-norms-table"><thead>' + head + '</thead><tbody>' + rows + '</tbody></table></div></div>';
             }
             window.renderNormsTab = renderNormsTab;
+            window.dtwNormsGenre = function(v) { S.normsGenre = v || 'all'; renderNormsTab(); };
             window._dtwRender.renderPilotConsole = renderPilotConsole;
             window._dtwRender.renderRun = renderRun; window._dtwRender.renderLaunch = renderLaunch; window._dtwRender.renderSpend = renderSpend; window._dtwRender.renderPanelConsole = renderPanelConsole; window._dtwRender.renderPanelSessions = renderPanelSessions; window._dtwRender.renderPilotConsole = renderPilotConsole;
         })();
