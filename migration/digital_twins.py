@@ -680,13 +680,13 @@ HOW_TO = [
                     'where they are with the title, avid or casual), the favorite moment, the dead spot, the transcript.'),
         'put_in': (f'A name for the test, the twin (or a second twin) in the room, how many panelists sit '
                    f'({PANEL_SEATS_INCLUDED} come with a session; each one past that is priced), and the cut: upload an mp4, mov or webm, '
-                   'or paste a title and a runtime if the file is not in hand yet. The seats match the twin\'s profile '
+                   'paste a watch link from any streamer, or type a title and a runtime if the file is not in hand yet. The seats match the twin\'s profile '
                    '(gender, orientation, education, occupation); each persona is built from those attributes. '
                    'The genre is read from the cut; change it with the chip on the test if it reads wrong.'),
         'type_this': ['Open Pilot Testing on the Gilmore Girls twin and play the season 2 pilot',
                       'Ask the room at 12:40: would you keep watching?',
                       'Show of hands, who laughed at the diner scene?'],
-        'attach': 'Upload the cut (mp4, mov or webm) on the Pilot Testing tab. A title and runtime still run the clock on a slate if the file is not ready.',
+        'attach': 'Upload the cut (mp4, mov or webm) on the Pilot Testing tab, or paste a watch link from any streamer (Paramount+, Netflix, Hulu, YouTube, a file link). A title and runtime still run the clock on a slate if the file is not ready.',
         'comes_back': ('Once the room has watched the cut (a few minutes for an episode) Play is ready. The dial draws as the cut plays, '
                        'events land on the scrubber, a suggested question appears at each dip and peak, and a moderator guide sits beside '
                        'the player with questions at the act turns and the ending. Answers to your questions carry the playhead timestamp and '
@@ -703,7 +703,7 @@ HOW_TO = [
                     'trailer plays (from the title and logline alone) and after, the lift in definite interest, what they understood it is about, what they '
                     'expect, the moments that sold it on the clock, who it reads as being for (gender and age), would they watch or see it, would they '
                     'recommend it, each next to the trailer norm and by quadrant.'),
-        'put_in': 'A name for the test, the twin, the title and a one-line logline, and the trailer files (mp4, mov or webm). Add a second and third asset to compare cuts of the same spot.',
+        'put_in': 'A name for the test, the twin, the title and a one-line logline, and the trailer files (mp4, mov or webm), or a watch link. Add a second and third asset to compare cuts of the same spot.',
         'type_this': ['Test the two trailers for Hurry Up Tomorrow on the Gilmore Girls twin', 'Which of these three spots sells the premiere best?'],
         'attach': 'Upload each trailer on the Trailers tab. The title and logline are what the room reads before the first one plays.',
         'comes_back': 'The dial and the moments for each asset, the interest before and after, the lift, the winner and why, by quadrant. Everything a Pilot Testing session carries (questions on the clock, splits, the moderator guide) is here too.',

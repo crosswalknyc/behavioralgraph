@@ -34,7 +34,7 @@ app.py so app.py stays small.
   POST /api/digital-twins/<key>/delete               the same for clients that cannot send DELETE
   GET  /api/digital-twins/<key>/panel/<sid>/export.csv
   GET  /api/digital-twins/<key>/panel/<sid>/export.pdf
-  POST /api/digital-twins/<key>/pilot/open           open a Pilot Testing session (free; charge on first Play)
+  POST /api/digital-twins/<key>/pilot/open           open a Pilot Testing session (free; charge on first Play). watch_url = any streamer or digital link
   GET  /api/digital-twins/<key>/pilot/<sid>          the test
   PATCH /api/digital-twins/<key>/pilot/<sid>         rename
   POST /api/digital-twins/<key>/pilot/<sid>/upload   the cut (mp4 / mov / webm)
@@ -49,7 +49,7 @@ app.py so app.py stays small.
   GET  /api/digital-twins/pilot-norms?format=&genre=  the norm and genre norm columns (no sources)
   GET  /api/digital-twins/pilot-norms/all?genre=      every format's cells for the Norms tab, with our test count per cell
   POST /api/digital-twins/<key>/pilot/<sid>/assets    a further trailer, an episode, key art (image) or a script file (text)
-  POST /api/digital-twins/<key>/pilot/<sid>/stimulus  options (titles), logline, text, cast, comps, quotas, mode flags
+  POST /api/digital-twins/<key>/pilot/<sid>/stimulus  options (titles), logline, text, cast, comps, quotas, mode flags, watch_url
   POST /api/digital-twins/<key>/pilot/<sid>/recut     cut B on the same room (lineage; the recut price on first Play)
   GET  /api/digital-twins/<key>/pilot/<sid>/compare   cut A against cut B; two audiences on one cut
   GET|POST /api/digital-twins/<key>/pilot/<sid>/comps the comp set and the versus-comps column
@@ -1104,7 +1104,8 @@ def dt_pilot_open(key):
     title = str(body.get('title') or '')[:120]
     mode = str(body.get('mode') or 'pilot').strip().lower()
     mode = mode if mode in PI.MODES else 'pilot'
-    reused = PI.find_reusable_session(payload, twins, title=title, created_by=_uname(user)) if mode == 'pilot' and not body.get('text') and not body.get('options') else None
+    watch_url = str(body.get('watch_url') or body.get('url') or '').strip()
+    reused = PI.find_reusable_session(payload, twins, title=title, created_by=_uname(user)) if mode == 'pilot' and not body.get('text') and not body.get('options') and not watch_url else None
     if reused is not None and str(reused.get('mode') or 'pilot') != mode:
         reused = None
     if reused is not None:
@@ -1121,6 +1122,12 @@ def dt_pilot_open(key):
                                session_id=uuid.uuid4().hex[:10], media=media, mode=mode, logline=str(body.get('logline') or ''), text=str(body.get('text') or ''),
                                options=body.get('options') if isinstance(body.get('options'), list) else None, rough_cut=bool(body.get('rough_cut')),
                                critics_room=bool(body.get('critics_room')))
+        if watch_url:
+            try:
+                runtime = float(body.get('runtime_s') or body.get('runtime') or (media.get('runtime_s') if media else 0) or 0)
+            except (TypeError, ValueError):
+                runtime = 0
+            PI.apply_watch_url(sess, watch_url, hint_title=str(body.get('cut_title') or title or ''), runtime_s=runtime, mode=mode)
         sess['twin_keys'] = [str((t.get('meta') or {}).get('key') or '') for t in twins]
         if isinstance(body.get('cast'), list):
             PI.set_options(sess, {'cast': body['cast']})
@@ -1777,6 +1784,16 @@ def dt_pilot_stimulus(key, sid):
         return jsonify({'success': False, 'error': 'test not found'}), 404
     body = request.get_json(silent=True) or {}
     changed = PI.set_options(sess, {k: body[k] for k in ('options', 'logline', 'text', 'cast', 'mode', 'genre', 'rough_cut', 'critics_room', 'cut_label') if k in body})
+    watch_url = str(body.get('watch_url') or body.get('url') or '').strip()
+    if watch_url:
+        try:
+            runtime = float(body.get('runtime_s') or (sess.get('media') or {}).get('runtime_s') or 0)
+        except (TypeError, ValueError):
+            runtime = 0
+        rec = PI.apply_watch_url(sess, watch_url, hint_title=str(body.get('cut_title') or sess.get('title') or ''),
+                                 runtime_s=runtime, mode=str(sess.get('mode') or ''))
+        if rec:
+            changed['watch_url'] = rec.get('url') or True
     if isinstance(body.get('comps'), list):
         sess['comps'] = [({'title': str(c)} if not isinstance(c, dict) else c) for c in body['comps'] if str(c).strip()][:8]
         changed['comps'] = len(sess['comps'])

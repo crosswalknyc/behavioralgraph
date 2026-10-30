@@ -51674,6 +51674,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-pi-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.8fr); gap: 20px; align-items: start; }
         #digitalTwinsIQView .dtw-pi-stage { position: relative; background: #081113; border: 1px solid var(--dtw-rule); border-radius: 12px; overflow: hidden; min-height: 220px; }
         #digitalTwinsIQView .dtw-pi-stage video { width: 100%; display: block; max-height: 420px; background: #081113; }
+        #digitalTwinsIQView .dtw-pi-stage iframe.dtw-pi-frame { width: 100%; height: 420px; border: 0; display: block; background: #081113; }
+        #digitalTwinsIQView .dtw-pi-open { margin-top: 10px; }
         #digitalTwinsIQView .dtw-pi-slate { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: #E9E8E1; padding: 24px; text-align: center; }
         #digitalTwinsIQView .dtw-pi-slate .t { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; }
         #digitalTwinsIQView .dtw-pi-slate .c { font-size: 42px; font-weight: 300; font-variant-numeric: tabular-nums; letter-spacing: -0.03em; }
@@ -53691,6 +53693,54 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }
             function hasMedia(s) { var m = (s || {}).media || {}; return !!m.has_file; }
             function mediaUrl(s) { return (hasMedia(s) && S.pilotMedia && S.pilotMedia.sid === s.id && S.pilotMedia.url) ? S.pilotMedia.url : ''; }
+            function watchMedia(s) { var m = (s || {}).media || {}; return (m.source === 'watch_url' && (m.url || m.embed_url)) ? m : null; }
+            function wirePilotVideo(v) {
+                if (!v || v._piBound) return;
+                v._piBound = true;
+                v.addEventListener('timeupdate', function() { revealPilot(v.currentTime); });
+                v.addEventListener('play', function() {
+                    stopPilotClock();
+                    (function tick() { if (!v || v.paused) return; revealPilot(v.currentTime); S.pilotClock.raf = requestAnimationFrame(tick); })();
+                });
+                v.addEventListener('pause', function() { stopPilotClock(); revealPilot(v.currentTime); });
+                v.addEventListener('ended', function() { try { dtwPilotStop(true); } catch (_) {} });
+            }
+            function bindWatchLink(s) {
+                var m = watchMedia(s);
+                var v = el('dtwPiVideo'), fr = el('dtwPiFrame'), slate = el('dtwPiSlate');
+                if (!m) {
+                    if (fr) { try { fr.removeAttribute('src'); } catch (_) {} fr.style.display = 'none'; }
+                    return false;
+                }
+                if (m.kind === 'video' && (m.embed_url || m.url) && v) {
+                    var url = m.embed_url || m.url;
+                    if (S.pilotClock.bound !== url) { v.src = url; S.pilotClock.bound = url; }
+                    v.style.display = 'block';
+                    if (fr) { try { fr.removeAttribute('src'); } catch (_) {} fr.style.display = 'none'; }
+                    if (slate) slate.style.display = 'none';
+                    wirePilotVideo(v);
+                    return true;
+                }
+                if (m.kind === 'embed' && m.embed_url && fr) {
+                    var src = m.embed_url;
+                    if (s.status === 'playing' && src.indexOf('autoplay=') < 0) src += (src.indexOf('?') >= 0 ? '&' : '?') + 'autoplay=1';
+                    if (S.pilotClock.bound !== src) { fr.src = src; S.pilotClock.bound = src; }
+                    fr.style.display = 'block';
+                    if (v) { try { v.removeAttribute('src'); } catch (_) {} v.style.display = 'none'; }
+                    if (slate) slate.style.display = 'none';
+                    return true;
+                }
+                if (v) { try { v.removeAttribute('src'); } catch (_) {} v.style.display = 'none'; }
+                if (fr) { try { fr.removeAttribute('src'); } catch (_) {} fr.style.display = 'none'; }
+                if (slate) slate.style.display = 'flex';
+                S.pilotClock.bound = 'slate';
+                return false;
+            }
+            function openWatchWithRoom(s) {
+                var m = watchMedia(s);
+                if (!m || !m.url || m.kind === 'embed' || m.kind === 'video') return;
+                try { window.open(m.url, 'dtwWatch'); } catch (_) {}
+            }
             async function apiRaw(path, opts) {
                 var r = await fetch('/api/digital-twins' + path, Object.assign({ credentials: 'same-origin', headers: { 'Content-Type': 'application/json' } }, opts || {}));
                 var d = null; try { d = await r.json(); } catch (_) { d = null; }
@@ -53854,22 +53904,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             function bindPilotMedia() {
                 var s = S.pilot; if (!s) return;
                 var v = el('dtwPiVideo'), slate = el('dtwPiSlate');
+                if (watchMedia(s) && !hasMedia(s)) { bindWatchLink(s); return; }
                 if (v && hasMedia(s)) {
                     var wire = function(url) {
                         if (S.pilotClock.bound !== url) { v.src = url; S.pilotClock.bound = url; }
                         v.style.display = 'block';
                         if (slate) slate.style.display = 'none';
                         ensureWatermark(s);
-                        if (!v._piBound) {
-                            v._piBound = true;
-                            v.addEventListener('timeupdate', function() { revealPilot(v.currentTime); });
-                            v.addEventListener('play', function() {
-                                stopPilotClock();
-                                (function tick() { if (!v || v.paused) return; revealPilot(v.currentTime); S.pilotClock.raf = requestAnimationFrame(tick); })();
-                            });
-                            v.addEventListener('pause', function() { stopPilotClock(); revealPilot(v.currentTime); });
-                            v.addEventListener('ended', function() { try { dtwPilotStop(true); } catch (_) {} });
-                        }
+                        wirePilotVideo(v);
                     };
                     var url = mediaUrl(s);
                     if (url) { wire(url); return; }
@@ -53920,7 +53962,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     return '<button type="button" class="dtw-pi-row' + (on ? ' on' : '') + '" onclick="dtwPilotPick(\'' + esc(s.id) + '\')"><div class="h">' + esc(s.title || 'Untitled test') + (s.cut_label && s.lineage ? ' <span class="dtw-muted">' + esc(s.cut_label) + '</span>' : '') + '</div><div class="m">' + esc(PI_MODE_LABEL[s.mode] || 'Pilot test') + '  ' + esc(st) + esc(money) + '  ' + esc(fmtWhen(s.updated_at || s.created_at)) + '</div></button>';
                 }).join('');
                 var intro = {
-                    pilot: 'Upload a pilot, movie or episode. Prometheus moderates. The twins watch the cut itself, scene by scene: a dial, laughs and loves at the second they happen in their own words, a question at any timestamp that knows what just played, and the scorecard studios use with the norm beside every number.',
+                    pilot: 'Upload a pilot, movie or episode, or paste a watch link from any streamer. Prometheus moderates. The twins watch it scene by scene: a dial, laughs and loves at the second they happen in their own words, a question at any timestamp that knows what just played, and the scorecard studios use with the norm beside every number.',
                     trailer: 'Up to three trailers or spots, 15 seconds to three minutes, to the same room. Interest in the title before the trailer plays and after, the lift in definite interest, what they understood, the moments that sold it, who it is for, would they watch, would they recommend.',
                     titles: 'Up to six titles, or up to six pieces of key art, to the same room. Titles: appeal from the title alone, fit once the logline is read, how much it stands out, the preferred option with reasons, by quadrant. Key art: preference, what holds the eye, what it says the title is, the lift in interest.',
                     script: 'Paste or upload the script and the room reads it scene by scene on a reading clock, with a dial per scene and story, structure and character notes. Or upload a recorded table read and it runs like a pilot.',
@@ -53940,6 +53982,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (tab === 'pilot') {
                     stim = '<label class="dtw-field">The cut (mp4, mov or webm)</label><input id="dtwPiFile" class="dtw-in" type="file" accept="video/mp4,video/quicktime,video/webm,.mp4,.mov,.webm">'
                         + (mode === 'binge' ? '<label class="dtw-field">More episodes (up to six in all)</label><input id="dtwPiFiles" class="dtw-in" type="file" multiple accept="video/mp4,video/quicktime,video/webm,.mp4,.mov,.webm">' : '')
+                        + '<label class="dtw-field">Or paste a watch link (any streamer)</label><input id="dtwPiWatchUrl" class="dtw-in" placeholder="https://www.paramountplus.com/shows/video/... or Netflix, Hulu, YouTube, a file link" autocomplete="off">'
                         + '<div class="dtw-row2"><div><label class="dtw-field">Title if you do not have the file yet</label><input id="dtwPiCutTitle" class="dtw-in" placeholder="NCIS: New York, episode 1"></div><div><label class="dtw-field">Runtime, minutes</label><input id="dtwPiMins" class="dtw-in" inputmode="decimal" placeholder="42"></div></div>'
                         + (mode === 'episode' ? '<label class="dtw-field">The prior cut the room watched</label><select id="dtwPiPrior" class="dtw-in"><option value="">None</option>' + ((S.twin || {}).pilot_sessions || []).filter(function(s) { return s.scorecard; }).map(function(s) { return '<option value="' + esc(s.id) + '">' + esc(s.title) + '</option>'; }).join('') + '</select>' : '')
                         + '<label class="dtw-field">Cast (optional, one name per line or comma separated)</label><input id="dtwPiCast" class="dtw-in" placeholder="Mae, Ray, Lorelai">';
@@ -53947,6 +53990,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     stim = '<div class="dtw-row2"><div><label class="dtw-field">Title</label><input id="dtwPiCutTitle" class="dtw-in" placeholder="Hurry Up Tomorrow"></div><div><label class="dtw-field">Runtime, seconds (if no file yet)</label><input id="dtwPiSecs" class="dtw-in" inputmode="numeric" placeholder="120"></div></div>'
                         + '<label class="dtw-field">Logline (what the room reads before the trailer plays)</label><input id="dtwPiLogline" class="dtw-in" placeholder="A chef returns to her hometown diner after a scandal.">'
                         + '<label class="dtw-field">Trailer A (mp4, mov or webm)</label><input id="dtwPiFile" class="dtw-in" type="file" accept="video/mp4,video/quicktime,video/webm,.mp4,.mov,.webm">'
+                        + '<label class="dtw-field">Or paste a watch link (any streamer)</label><input id="dtwPiWatchUrl" class="dtw-in" placeholder="https://www.youtube.com/watch?v=... or the trailer on any service" autocomplete="off">'
                         + '<label class="dtw-field">Trailer B and C (optional, side by side)</label><input id="dtwPiFiles" class="dtw-in" type="file" multiple accept="video/mp4,video/quicktime,video/webm,.mp4,.mov,.webm">';
                 } else if (tab === 'titles') {
                     stim = '<label class="dtw-field">Logline</label><input id="dtwPiLogline" class="dtw-in" placeholder="A chef returns to her hometown diner after a scandal.">';
@@ -54078,7 +54122,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     + '<div class="dtw-fg-rtwrap"><input id="dtwPiName" class="dtw-fg-rt" value="' + esc(s.title || '') + '" onblur="dtwPilotRename()"><button type="button" class="dtw-link" onclick="S.pilot=null;renderPilotConsole();">New test</button></div>'
                     + meta
                     + '<div class="dtw-pi-seats" style="margin:10px 0 12px">' + seats + '</div>'
-                    + '<div class="dtw-pi-grid"><div><div class="dtw-pi-stage"><video id="dtwPiVideo" playsinline controls controlsList="nodownload" disablePictureInPicture preload="metadata" style="display:none" oncontextmenu="return false"></video><div id="dtwPiSlate" class="dtw-pi-slate"><div class="t">' + esc((s.media || {}).title || s.title || 'The cut') + '</div><div class="c" id="dtwPiSlateClock">0:00</div><div class="s">' + esc(preparing ? 'The room is watching the cut.' : 'The room is seated. Press Play when you are ready.') + '</div></div></div>'
+                    + '<div class="dtw-pi-grid"><div><div class="dtw-pi-stage"><video id="dtwPiVideo" playsinline controls controlsList="nodownload" disablePictureInPicture preload="metadata" style="display:none" oncontextmenu="return false"></video><iframe id="dtwPiFrame" class="dtw-pi-frame" title="The episode" allow="autoplay; fullscreen; encrypted-media; picture-in-picture" referrerpolicy="no-referrer-when-downgrade" style="display:none"></iframe><div id="dtwPiSlate" class="dtw-pi-slate"><div class="t">' + esc((s.media || {}).title || s.title || 'The cut') + '</div><div class="c" id="dtwPiSlateClock">0:00</div><div class="s">' + esc(preparing ? 'The room is watching the cut.' : (watchMedia(s) ? ('Press Play. The room watches with you' + ((s.media || {}).platform_label ? ' on ' + (s.media || {}).platform_label : '') + '.') : 'The room is seated. Press Play when you are ready.')) + '</div>' + (watchMedia(s) && (s.media || {}).url ? '<a class="dtw-btn dtw-btn-primary dtw-pi-open" href="' + esc((s.media || {}).url) + '" target="_blank" rel="noopener">' + esc((s.media || {}).open_label || 'Open the episode') + '</a>' : '') + '</div></div>'
                     + prep
                     + '<div class="dtw-pi-controls"><button type="button" class="dtw-btn dtw-btn-primary" id="dtwPiPlayBtn" onclick="dtwPilotPlay()"' + (preparing ? ' disabled' : '') + '>' + (s.status === 'playing' ? 'Playing' : 'Play') + '</button><button type="button" class="dtw-btn" onclick="dtwPilotStop()">Stop</button><span class="dtw-pi-clock" id="dtwPiClock">0:00</span><span class="dtw-pi-note" id="dtwPiNote">' + esc(preparing ? 'Preparing the cut' : (s.prepare_note || (ready ? 'Ready to play' : 'Preparing the cut'))) + '</span></div>'
                     + '<div class="dtw-pi-dialwrap"><canvas id="dtwPiDial"></canvas><div class="dtw-pi-dialnum" id="dtwPiDialNum"></div></div>'
@@ -54182,7 +54226,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (mode === 'key_art' && !more.length) { if (st) st.textContent = 'Upload the art (up to six images).'; return; }
                 if (mode === 'concept' && !text) { if (st) st.textContent = 'Paste the concept first.'; return; }
                 if (mode === 'script' && !text && !file) { if (st) st.textContent = 'Paste the script or upload it.'; return; }
+                var watchUrl = ((el('dtwPiWatchUrl') || {}).value || '').trim();
                 var body = { title: title, in_room: parseInt((el('dtwPiRoom') || {}).value || '12', 10) || 12, twins: other && other !== key ? [other] : [], mode: mode };
+                if (watchUrl) body.watch_url = watchUrl;
                 if (cutTitle) body.cut_title = cutTitle;
                 if (mins > 0) body.runtime_s = Math.round(mins * 60);
                 if (secs > 0) body.runtime_s = Math.round(secs);
@@ -54250,12 +54296,17 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 }
                 adoptPilot(r.data.session);
                 var v = el('dtwPiVideo');
+                var wm = watchMedia(S.pilot);
                 if (v && hasMedia(S.pilot)) {
                     if (!mediaUrl(S.pilot)) { await fetchMediaUrl(S.pilot); }
                     bindPilotMedia();
                     if (mediaUrl(S.pilot)) { try { await v.play(); } catch (_) {} }
+                } else if (wm) {
+                    bindWatchLink(S.pilot);
+                    openWatchWithRoom(S.pilot);
+                    if (v && wm.kind === 'video' && v.src) { try { await v.play(); } catch (_) {} }
                 }
-                if (!(v && mediaUrl(S.pilot))) {
+                if (!(v && mediaUrl(S.pilot)) && !(wm && wm.kind === 'video' && v && v.src)) {
                     S.pilotClock.slate = true;
                     S.pilotClock.t0 = Date.now() - (S.pilotClock.t || 0) * 1000;
                     stopPilotClock();

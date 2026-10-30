@@ -1679,7 +1679,7 @@ def open_session(twins: list, *, segments: Optional[list] = None, in_room: int =
         except Exception:
             opts = []
     note = {'title': 'Name the test, type the titles and the logline.', 'key_art': 'Name the test and upload the art.', 'script': 'Name the test and add the script.',
-            'concept': 'Name the test and paste the concept.', 'trailer': 'Name the test and add the trailer.', 'spot': 'Name the test and add the spot.'}.get(mode, 'Name the test and add the cut.')
+            'concept': 'Name the test and paste the concept.', 'trailer': 'Name the test and add the trailer.', 'spot': 'Name the test and add the spot.'}.get(mode, 'Name the test and add the cut, or paste a watch link.')
     return {
         'id': sid, 'kind': 'pilot',
         'title': name or f"{MODE_TITLE_WORD.get(mode, 'Pilot test')}: {names}",
@@ -1697,6 +1697,25 @@ def open_session(twins: list, *, segments: Optional[list] = None, in_room: int =
         'created_at': _now(), 'updated_at': _now(), 'version': VERSION, 'pilot_version': PILOT_VERSION,
         'prepare_note': note,
     }
+
+
+def apply_watch_url(sess: dict, raw: str, *, hint_title: str = '', runtime_s: float = 0,
+                    mode: str = '', fetch=None) -> dict:
+    """Paste any streamer or digital link onto the test. The twins
+    watch that title; embeddable players play in the stage, the rest
+    open on their own site. Returns the resolved record (empty when
+    the string is not a URL)."""
+    from migration.digital_twin_watch_url import attach_media, resolve
+    rec = resolve(raw, hint_title=hint_title or str((sess or {}).get('title') or ''),
+                  runtime_s=runtime_s, mode=mode or str((sess or {}).get('mode') or ''), fetch=fetch)
+    if not rec:
+        return {}
+    media = attach_media((sess or {}).get('media') or {}, rec, fallback_title=hint_title or str((sess or {}).get('title') or ''))
+    media['hash'] = media.get('hash') or media_hash(media.get('title') or '', media.get('runtime_s') or 0, rec.get('url') or '', '')
+    sess['media'] = media
+    sess['prepare_note'] = 'The room is watching ' + (rec.get('platform_label') or 'the episode') + '.'
+    sess['updated_at'] = _now()
+    return rec
 
 
 def find_reusable_session(payload: dict, twins: list, title: str = '', created_by: str = '') -> Optional[dict]:
@@ -2216,7 +2235,7 @@ __all__ = [
     'EVENT_TYPES', 'EVENT_LABEL', 'KINDS', 'STATUS', 'MODES', 'MEDIA_PREFIX', 'PILOT_VERSION',
     'DELETED_PILOT_PREFIX', 'DELETED_PILOT_KEEP_DAYS', 'QUESTIONS_INCLUDED', 'WINDOW_BACK_S', 'MEDIA_URL_EXPIRES_S', 'PRIOR_WEIGHT',
     'QUADRANTS', 'PHASE2_PRICE_NOTES', 'MODE_TITLE_WORD',
-    'open_session', 'prepare_watch', 'find_reusable_session', 'charge_due', 'play_price_key', 'play_quantity',
+    'open_session', 'prepare_watch', 'apply_watch_url', 'find_reusable_session', 'charge_due', 'play_price_key', 'play_quantity',
     'mark_play_paid', 'mark_paid', 'mark_playing', 'stop_session', 'rename_session', 'set_options',
     'stamp_question', 'can_delete', 'can_view_media', 'remove_session', 'delete_session', 'purge_media',
     'deleted_pilot_key', 'media_hash', 'build_beats', 'build_scenes', 'build_beats_from_scenes', 'seat_dial', 'blend_dial', 'seat_events', 'persona_events',
