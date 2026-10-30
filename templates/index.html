@@ -29995,7 +29995,7 @@ https://www.instagram.com/p/..."></textarea>
                                                    background: transparent; border: 0; cursor: pointer; color: var(--text-primary);
                                                    font-size: 0.85rem;">
                                         <div style="font-weight: 600;">📊 Download as CSV</div>
-                                        <div style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 2px;">All sections, machine-readable</div>
+                                        <div style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 2px;">Every section on screen</div>
                                     </button>
                                     <div style="height: 1px; background: var(--border-color);"></div>
                                     <button type="button" onclick="_bpiqExportPdf()"
@@ -80168,6 +80168,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                      + (p.pre_users || 0) + (p.post_users || 0) > 0;
             });
             if (!hasAny) {
+                _bpiqState.platformRows = [];
                 host.innerHTML = '<div style="padding:1rem;color:var(--text-secondary);font-size:13px;">No per-platform brand engagement detected. Try a broader brand search term.</div>';
                 return;
             }
@@ -80262,6 +80263,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         + '</tr>';
                 }).join('')
                 + '</tbody></table>';
+            _bpiqState.platformRows = rows;
             host.innerHTML = html;
             // Wire up: header-click sort.
             host.querySelectorAll('th[data-bpiq-sort]').forEach(function(th) {
@@ -80844,12 +80846,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var v = (t.hits_projected != null) ? t.hits_projected : (t.hits || 0) * BPIQ_PROJ_MULT;
                 return Math.max(0, Math.round(v));
             };
+            _bpiqState.touchRows = { legacy: false, rows: [] };
             if (!topPreRaw.length && !topPostRaw.length) {
                 tpEl.innerHTML = '<div style="padding:0.75rem;color:var(--text-secondary);font-size:13px;">No brand properties matched in the qualifying audience.</div>';
             } else if (!topPreRaw.length) {
                 // Legacy: only post array exists - render the original
                 // single ordered list of property names.
                 var legacy = topPostRaw.slice(0, 10);
+                _bpiqState.touchRows = { legacy: true, rows: legacy.map(function(t) { return t.common_name || ''; }) };
                 tpEl.innerHTML = '<ol style="margin:0;padding:0 0 0 1.25rem;font-size:13px;line-height:1.7;">'
                     + legacy.map(function(t) {
                         return '<li style="padding:2px 0;font-weight:500;">' + (t.common_name || '') + '</li>';
@@ -80872,6 +80876,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var merged = Object.keys(byName).map(function(k) { return byName[k]; })
                     .sort(function(a, b) { return b.post - a.post; })
                     .slice(0, 10);
+                _bpiqState.touchRows = { legacy: false, rows: merged };
                 var liftCell = function(pre, post) {
                     if (pre === 0 && post === 0) return '<span style="color:var(--text-secondary);">-</span>';
                     if (pre === 0)               return '<span style="color:#c8e600;font-weight:700;">new ▲</span>';
@@ -80948,185 +80953,251 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }
         }
 
-        // Build a single CSV file with section dividers covering every
-        // user-visible data point on the BPIQ dashboard.
+        // One block per broadsheet section that is switched on, in tab
+        // order, carrying only the labels and figures that section shows.
+        // Sections follow the year slice on screen: everything but Year by
+        // year reads the sliced payload, which always lists every year.
         function _bpiqBuildCsv() {
             var d = _bpiqState.data || {};
             var orig = _bpiqState.originalData || d;
-            function esc(v) {
-                if (v == null) return '';
-                var s = String(v);
+            var v = d.valuation || {};
+            function esc(x) {
+                if (x == null) return '';
+                var s = String(x);
                 if (/[",\n\r]/.test(s)) s = '"' + s.replace(/"/g, '""') + '"';
                 return s;
             }
             function row(cells) { return cells.map(esc).join(',') + '\n'; }
             function section(title) { return '\n# ' + title + '\n'; }
-
-            var out = '';
-
-            // --- Header / metadata
-            out += '# Brand Partnership Valuation — Export\n';
-            out += row(['Project',                d.project_name || '']);
-            out += row(['Brand Partner',          d.brand_partner || '']);
-            out += row(['Qualifier',              (d.qualifier_type || '') + ': ' + (d.qualifier_value || '')]);
-            out += row(['Campaign Start',         d.start_date || '']);
-            out += row(['Campaign End',           d.end_date   || '']);
-            out += row(['Attribution Window (d)', d.attribution_window_days || 0]);
-            if (d._bpiq_active_year) {
-                out += row(['VIEWING SLICE', 'Year ' + d._bpiq_active_year + ' (' + (d._bpiq_active_year_label || '') + ')']);
+            function txt(html) {
+                return String(html == null ? '' : html).replace(/<[^>]*>/g, '')
+                    .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/\u2212/g, '-')
+                    .replace(/\s+/g, ' ').trim();
             }
-            out += row(['Audience (raw)',         d.audience_size || 0]);
-            out += row(['Audience (US-projected)', d.projected_audience_size || 0]);
-            out += row(['Exported At',            new Date().toISOString()]);
+            function off(el) {
+                if (!el) return true;
+                return (typeof _bpHidden === 'function') ? _bpHidden(el) : el.style.display === 'none';
+            }
+            function byId(id) { return document.getElementById(id); }
+            function pct2(x) { return (Number(x) || 0).toFixed(2) + '%'; }
+            function money(x) { return Math.round(Number(x) || 0); }
+            function rate(x) { return (Number(x) || 0).toFixed(2); }
+            function pp(x) {
+                if (x == null || !isFinite(x)) return '';
+                return (x > 0 ? '+' : '') + x.toFixed(2) + ' pp';
+            }
+            function rel(a, b) {
+                if (a == null || !isFinite(a) || b == null || !isFinite(b) || b === 0) return '-';
+                var x = (a - b) / Math.abs(b) * 100;
+                return (x > 0 ? '+' : '') + x.toFixed(2) + '%';
+            }
+            function fin(x) { return (x != null && isFinite(x)) ? x : null; }
 
-            // --- Headline KPIs (Target)
-            var t = d.totals || {};
-            out += section('Headline KPIs — Target');
-            out += row(['Metric', 'Raw Panel', 'US-Projected', 'Penetration %']);
-            out += row(['Pre-Campaign Consumer Engagement',  t.pre_users  || 0, t.pre_users_projected  || 0, t.audience_pen_pre_pct  || 0]);
-            out += row(['Post-Campaign Consumer Engagement', t.post_users || 0, t.post_users_projected || 0, t.audience_pen_post_pct || 0]);
-            out += row(['Brand Engagement Lift (% users)',   '', '', t.lift_pct_users || 0]);
-            out += row(['Brand Engagement Lift (% hits)',    '', '', t.lift_pct_hits  || 0]);
+            var out = '# ' + String(d.project_name || 'Brand Partnership Valuation')
+                + (d._bpiq_active_year ? ' · Viewing ' + (d._bpiq_active_year_label || d._bpiq_active_year) : '')
+                + ' · Exported ' + new Date().toISOString().slice(0, 10) + '\n';
 
-            // --- Control group
-            var c = d.control_group || {};
-            if (c.enabled) {
-                out += section('Headline KPIs — Control (Gen Pop)');
-                out += row(['Control Cohort Size',           c.control_size || 0, c.projected_control_size || 0, '']);
-                out += row(['Pre-Engagement %',  '', '', c.control_pre_pen_pct  || 0]);
-                out += row(['Post-Engagement %', '', '', c.control_post_pen_pct || 0]);
-                out += row(['Δ pp',              '', '', c.control_delta_pp     || 0]);
-                out += row(['Incremental Lift (pp)',           '', '', c.incremental_lift_pp      || 0]);
-                out += row(['Incremental Lift (relative %)',   '', '', c.incremental_lift_rel_pct || 0]);
+            var hero = byId('bpiqHeroValue');
+            if (hero && hero.style.display !== 'none') {
+                out += section('Total Brand Value Delivered');
+                out += row(['Total Brand Value Delivered', money(v.total_brand_value)]);
+                var heroParts = [['Earned Media', v.earned_media_value],
+                                 ['Brand Engagement', v.brand_engagement_value],
+                                 ['Brand Lift', v.brand_lift_value]];
+                if ((v.conversion_value || 0) > 0) heroParts.push(['Conversions', v.conversion_value]);
+                heroParts.forEach(function (p) { out += row([p[0], money(p[1])]); });
             }
 
-            // --- Valuation
-            var v = d.valuation || {};
-            out += section('Valuation');
-            out += row(['Component', 'Value (USD)']);
-            out += row(['Brand Engagement Value (BEV)', v.brand_engagement_value || 0]);
-            out += row(['Earned Media Value (EMV)',     v.earned_media_value     || 0]);
-            out += row(['Brand Lift Value (BLV)',       v.brand_lift_value       || 0]);
-            out += row(['Conversion Value',             v.conversion_value       || 0]);
-            out += row(['TOTAL BRAND VALUE',            v.total_brand_value      || 0]);
-            out += row(['Incremental Users (US-projected)', v.incremental_users  || 0]);
-            var rates = v.rates || {};
-            out += row(['Rate · BEV $/Consumer',        rates.bev_per_user        || 0]);
-            out += row(['Rate · BLV $/Incremental',     rates.blv_per_incr_user   || 0]);
-            out += row(['Rate · Conversion $/Consumer', rates.conv_value_per_user || 0]);
-
-            // --- Per-platform EMV breakdown
-            out += section('Per-Platform · EMV Breakdown');
-            out += row(['Platform','Pre Users (Proj)','Post Users (Proj)','Incremental (Proj)','CPM ($/Consumer)','EMV (USD)']);
-            (v.emv_breakdown || []).forEach(function(r) {
-                out += row([
-                    r.platform || '',
-                    r.pre_users_projected         || 0,
-                    r.post_users_projected        || 0,
-                    r.incremental_users_projected || 0,
-                    r.emv_per_user_rate           || 0,
-                    r.emv_value                   || 0,
-                ]);
-            });
-
-            // --- Per-platform engagement & lift table
-            out += section('Per-Platform · Brand Engagement & Lift');
-            out += row(['Platform','Pre Users on Platform','Post Users on Platform','Pre Brand Users','Post Brand Users','Pre %','Post %','Brand Lift (%)','Pre Users (Proj)','Post Users (Proj)']);
-            (d.per_platform || []).forEach(function(p) {
-                out += row([
-                    p.platform || '',
-                    p.pre_users_on_platform   || 0,
-                    p.post_users_on_platform  || 0,
-                    p.pre_users               || 0,
-                    p.post_users              || 0,
-                    p.pre_pen_pct             || 0,
-                    p.post_pen_pct            || 0,
-                    p.lift_pct_users          || 0,
-                    p.pre_users_projected     || 0,
-                    p.post_users_projected    || 0,
-                ]);
-            });
-
-            // --- Most Engaged With Brand Touchpoints
-            out += section('Most Engaged With Brand Touchpoints');
-            out += row(['Brand Touchpoint','Pre Reach (Proj)','Post Reach (Proj)','Lift']);
-            var preList  = d.top_brand_properties_pre || [];
-            var postList = d.top_brand_properties     || [];
-            function projHits(t) {
-                if (!t) return 0;
-                return Math.max(0, Math.round(t.hits_projected != null ? t.hits_projected : (t.hits||0) * 1485));
-            }
-            var byName = {};
-            postList.forEach(function(t) { byName[t.common_name] = { name: t.common_name, pre: 0, post: projHits(t) }; });
-            preList.forEach(function(t) {
-                if (!byName[t.common_name]) byName[t.common_name] = { name: t.common_name, pre: 0, post: 0 };
-                byName[t.common_name].pre = projHits(t);
-            });
-            Object.keys(byName).map(function(k) { return byName[k]; })
-                .sort(function(a, b) { return b.post - a.post; })
-                .forEach(function(r) {
-                    var lift = '';
-                    if (r.pre === 0 && r.post > 0)      lift = 'new';
-                    else if (r.post === 0 && r.pre > 0) lift = '-100%';
-                    else if (r.pre > 0)                 lift = (((r.post - r.pre) / r.pre) * 100).toFixed(1) + '%';
-                    out += row([r.name, r.pre, r.post, lift]);
-                });
-
-            // --- Demographics
-            var demo = d.demographics || {};
-            ['gender','age','ethnicity','income'].forEach(function(field) {
-                var pre  = demo.pre  ? (demo.pre[field]  || []) : [];
-                var post = demo.post ? (demo.post[field] || []) : [];
-                if (!pre.length && !post.length) return;
-                out += section('Demographics · ' + field.toUpperCase());
-                out += row(['Value','Pre %','Post %','Δ pp']);
-                var keys = {};
-                pre.forEach(function(x)  { keys[x.value] = true; });
-                post.forEach(function(x) { keys[x.value] = true; });
-                function pctOf(arr, k) {
-                    var hit = arr.filter(function(x){ return x.value === k; })[0];
-                    return hit ? Number(hit.percentage) : 0;
-                }
-                Object.keys(keys).forEach(function(k) {
-                    var pp = pctOf(pre, k), ps = pctOf(post, k);
-                    out += row([k, pp.toFixed(2), ps.toFixed(2), (ps - pp).toFixed(2)]);
-                });
-            });
-
-            // --- Yearly breakdown (uses ORIG so the export carries the
-            //     full picture even when viewing a single year-cut).
-            var years = (orig && orig.yearly_breakdown) || [];
-            if (years.length) {
-                out += section('Year-Over-Year Breakdown');
-                out += row(['Year','Label','Start','End','Days','Consumers (Proj)','Brand Hits (Proj)','Conversions (Proj)','EMV','BEV','BLV','Total Brand Value','Momentum']);
-                years.forEach(function(y) {
-                    var yv = y.valuation || {};
-                    out += row([
-                        y.year       || '',
-                        y.label      || '',
-                        y.start      || '',
-                        y.end        || '',
-                        y.days       || 0,
-                        y.users_projected            || 0,
-                        y.brand_hits_projected       || 0,
-                        y.conversions_users_projected || 0,
-                        yv.earned_media_value        || y.earned_media_value || 0,
-                        yv.brand_engagement_value    || 0,
-                        yv.brand_lift_value          || 0,
-                        yv.total_brand_value         || 0,
-                        y.momentum   || '',
-                    ]);
-                });
-
-                out += section('Year-Over-Year · Top Brand Touchpoints');
-                out += row(['Year','Rank','Brand Touchpoint','Hits (Proj)']);
-                years.forEach(function(y) {
-                    (y.top_brand_properties || []).slice(0, 10).forEach(function(p, i) {
-                        out += row([y.year, i + 1, p.common_name || '', p.hits_projected || 0]);
+            var build = {
+                lift: function () {
+                    if (off(byId('bpiqKpiAndLiftWrap'))) return '';
+                    var t = d.totals || {};
+                    var preP = t.audience_pen_pre_pct || 0, postP = t.audience_pen_post_pct || 0;
+                    var preN = t.pre_users_projected || 0, postN = t.post_users_projected || 0;
+                    var s = section('Lift');
+                    s += row(['', 'Consumers',
+                              'Pre-Campaign Consumer Engagement', 'Pre-Campaign %',
+                              'Post-Campaign Consumer Engagement', 'Post-Campaign %',
+                              'Brand Engagement Lift', 'Brand Engagement Lift %', 'Brand Engagement Lift (pp)']);
+                    s += row(['Target', d.projected_audience_size || 0, preN, pct2(preP), postN, pct2(postP),
+                              postN - preN, txt(_bpiqFmtLift(t.lift_pct_users)), pp(postP - preP)]);
+                    var cg = d.control_group || {};
+                    if (!cg.enabled || off(byId('bpiqGenPopKpiRow'))) return s;
+                    var gs = cg.projected_control_size || 0;
+                    var gpr = cg.control_pre_pen_pct || 0, gpo = cg.control_post_pen_pct || 0;
+                    var gPre = Math.round(gs * gpr / 100), gPost = Math.round(gs * gpo / 100);
+                    s += row(['Control', gs, gPre, pct2(gpr), gPost, pct2(gpo),
+                              gPost - gPre, txt(_bpiqFmtLift(cg.control_lift_pct_users)), pp(gpo - gpr)]);
+                    var mm = cg.match;
+                    if (mm && mm.exposed_size && !off(byId('bpiqMatchedNote'))) {
+                        s += section('Lift · Matched group');
+                        s += row(['Group', 'People', 'Engaged with the brand before']);
+                        s += row(['Exposed group', mm.exposed_size || 0, pct2(mm.exposed_pre_rate_pct)]);
+                        s += row(['Matched group', mm.control_size || 0, pct2(mm.control_pre_rate_pct)]);
+                    }
+                    if (!off(byId('bpiqDeltaRow'))) {
+                        var tL = fin(t.lift_pct_users), cL = fin(cg.control_lift_pct_users);
+                        s += section('Lift · Target vs. Control - Incremental Outperformance');
+                        s += row(['', 'Pre-Campaign', 'Post-Campaign', 'Brand Lift']);
+                        s += row(['Relative %', rel(preP, gpr), rel(postP, gpo), rel(tL, cL)]);
+                        s += row(['Percentage Points', pp(preP - gpr), pp(postP - gpo),
+                                  pp((postP - preP) - (gpo - gpr))]);
+                    }
+                    var bl = fin(t.lift_pct_users), gl = fin(cg.control_lift_pct_users);
+                    if (!off(byId('bpiqNetLiftCard')) && bl != null && gl != null) {
+                        var net = bl - gl;
+                        s += section('Lift · Target vs. Control Brand Lift');
+                        s += row(['Brand Lift', (net >= 0 ? '+' : '') + net.toFixed(2)]);
+                        s += row(['Brand Lift (pp)', pp((postP - preP) - (gpo - gpr))]);
+                    }
+                    return s;
+                },
+                yearly: function () {
+                    if (off(byId('bpiqYearlySection'))) return '';
+                    var years = (d._bpiq_active_year && orig.yearly_breakdown)
+                        ? orig.yearly_breakdown : (d.yearly_breakdown || []);
+                    if (!years.length) return '';
+                    var hasConv = years.some(function (y) { return Number(y.conversions_users_projected || 0) > 0; });
+                    var MOM = { peak: 'Peak', cooling: 'Cooling', trough: 'Trough', building: 'Building' };
+                    var s = section('Year by year');
+                    s += row(['Year', '', '', 'Consumers', 'Brand Hits'].concat(hasConv ? ['Conversions'] : []).concat(['EMV']));
+                    years.forEach(function (y) {
+                        s += row([y.year, y.label || '', MOM[y.momentum || ''] || '',
+                                  y.users_projected || 0, y.brand_hits_projected || 0]
+                            .concat(hasConv ? [y.conversions_users_projected || 0] : [])
+                            .concat([money(y.earned_media_value)]));
                     });
-                });
-            }
-
+                    var maxRows = Math.max.apply(null, years.map(function (y) {
+                        return (y.top_brand_properties || []).length;
+                    }).concat([0]));
+                    if (maxRows) {
+                        s += section('Year by year · Top brand touchpoints by year');
+                        var head = ['Rank'];
+                        years.forEach(function (y) { head.push(String(y.year)); head.push(y.year + ' reach'); });
+                        s += row(head);
+                        for (var i = 0; i < maxRows; i++) {
+                            var r = ['#' + (i + 1)];
+                            years.forEach(function (y) {
+                                var p = (y.top_brand_properties || [])[i];
+                                r.push(p ? (p.common_name || '') : '');
+                                r.push(p ? (p.hits_projected || 0) : '');
+                            });
+                            s += row(r);
+                        }
+                    }
+                    return s;
+                },
+                emv: function () {
+                    if (off(byId('bpiqEmvCard'))) return '';
+                    var s = section('Earned media');
+                    var f = byId('bpiqEmvFormula');
+                    s += row(['Total Earned Media Value', money(v.earned_media_value), f ? txt(f.innerHTML) : '']);
+                    var rows = _bpiqState.platformRows || [];
+                    if (!rows.length) return s;
+                    s += row(['Platform', 'Pre %', 'Post %', 'Brand Lift', 'Brand Lift (pp)',
+                              'Incremental Consumers', 'Benchmark CPM', 'CPM', 'EMV (Incr × CPM)']);
+                    rows.forEach(function (r) {
+                        s += row([
+                            r.platform || '',
+                            r.pre_pen  == null ? '-' : r.pre_pen.toFixed(1)  + '%',
+                            r.post_pen == null ? '-' : r.post_pen.toFixed(1) + '%',
+                            txt(_bpiqFmtBrandLiftPct(r.pre_pen, r.post_pen)),
+                            txt(_bpiqFmtPpDelta(r.pre_pen, r.post_pen)),
+                            r.incr_users > 0 ? r.incr_users : (r.incr_users === 0 ? 0 : '-'),
+                            rate(r.bench_cpm),
+                            rate(r.cpm),
+                            r.emv > 0 ? money(r.emv) : '-'
+                        ]);
+                    });
+                    return s;
+                },
+                value: function () {
+                    if (off(byId('bpiqValuationRow'))) return '';
+                    var bases = _bpiqState.valBases || {};
+                    var rr = v.rates || {};
+                    var bm = _bpiqState.benchmarks || {};
+                    var s = '';
+                    if (!off(byId('bpiqBevCard'))) {
+                        s += row(['Brand Engagement Value', 'Post-Campaign Engaged Consumers', bases.bev || 0]);
+                        s += row(['Brand Engagement Value', '$/consumer rate', rate(rr.bev_per_user)]);
+                        s += row(['Brand Engagement Value', 'benchmark', rate(bm.bev_per_user)]);
+                        s += row(['Brand Engagement Value', 'Brand Engagement Value', money(v.brand_engagement_value)]);
+                    }
+                    if (!off(byId('bpiqBlvCard'))) {
+                        var blvCount = (v.incremental_users != null) ? v.incremental_users : (bases.blv || 0);
+                        s += row(['Brand Lift Value', 'Incremental Consumers', blvCount]);
+                        s += row(['Brand Lift Value', '$/incremental-consumer rate', rate(rr.blv_per_incr_user)]);
+                        s += row(['Brand Lift Value', 'benchmark', rate(bm.blv_per_incr_user)]);
+                        s += row(['Brand Lift Value', 'Brand Lift Value', money(v.brand_lift_value)]);
+                    }
+                    if (!off(byId('bpiqConvValCard'))) {
+                        var conv = d.conversions || {};
+                        s += row(['Conversion Value', 'Pre Conversions', conv.pre_users_projected || 0]);
+                        s += row(['Conversion Value', 'Post Conversions', conv.post_users_projected || 0]);
+                        s += row(['Conversion Value', 'Consumer Lift', txt(_bpiqFmtLift(conv.lift_pct_users))]);
+                        s += row(['Conversion Value', 'Post-Campaign Conversions', bases.conv || 0]);
+                        s += row(['Conversion Value', 'Average Order Value (AOV)', rate(rr.conv_value_per_user)]);
+                        s += row(['Conversion Value', 'benchmark', rate(bm.conv_value_per_user)]);
+                        s += row(['Conversion Value', 'Conversion Value', money(v.conversion_value)]);
+                    }
+                    return s ? section('Valuation') + s : '';
+                },
+                demos: function () {
+                    var host = byId('bpiqDemographics');
+                    if (!host || off(host.closest('.tab-section'))) return '';
+                    var dr = _bpiqState.demoRows || {};
+                    var s = '';
+                    ['gender', 'age', 'ethnicity', 'income'].forEach(function (field) {
+                        var x = dr[field];
+                        if (!x) return;
+                        var label = _BPIQ_DEMO_LABELS[field] || field;
+                        s += section('Demographics · ' + label);
+                        if (!x.values.length) { s += row([label, 'No data']); return; }
+                        s += row([label, 'Pre %', 'Post %', 'Δ', 'Δ (pp)']);
+                        x.values.forEach(function (k) {
+                            var a = x.pre[k] || 0, b = x.post[k] || 0;
+                            var dp = _bpiqBrandLiftPctValue(a, b);
+                            var dt = (dp == null) ? '-'
+                                   : !isFinite(dp) ? (dp > 0 ? '+∞' : '-∞')
+                                   : (dp > 0 ? '+' : '') + dp.toFixed(1) + '%';
+                            s += row([k, a.toFixed(1) + '%', b.toFixed(1) + '%', dt, txt(_bpiqFmtPpDelta(a, b))]);
+                        });
+                    });
+                    return s;
+                },
+                touch: function () {
+                    var host = byId('bpiqTopProps');
+                    if (!host || off(host.closest('.tab-section'))) return '';
+                    var tr = _bpiqState.touchRows;
+                    if (!tr || !tr.rows.length) return '';
+                    var s = section('Most Engaged With Brand Touchpoints');
+                    if (tr.legacy) {
+                        s += row(['Brand Touchpoint']);
+                        tr.rows.forEach(function (n) { s += row([n]); });
+                        return s;
+                    }
+                    s += row(['Brand Touchpoint', 'Pre Reach', 'Post Reach', 'Lift']);
+                    tr.rows.forEach(function (r) {
+                        var lift = (r.pre === 0 && r.post === 0) ? '-'
+                                 : r.pre === 0 ? 'new'
+                                 : r.post === 0 ? '-100%'
+                                 : (function () {
+                                       var p = ((r.post - r.pre) / r.pre) * 100;
+                                       return (p >= 0 ? '+' : '') + p.toFixed(0) + '%';
+                                   })();
+                        s += row([r.common_name || '', r.pre > 0 ? r.pre : '-', r.post > 0 ? r.post : '-', lift]);
+                    });
+                    return s;
+                }
+            };
+            var order = (typeof _BP_SECTIONS !== 'undefined' && _BP_SECTIONS)
+                ? _BP_SECTIONS.map(function (s) { return s.id; })
+                : ['lift', 'yearly', 'emv', 'value', 'demos', 'touch'];
+            order.forEach(function (id) {
+                if (!build[id]) return;
+                try { out += build[id](); }
+                catch (e) { console.warn('[bpiq] CSV section ' + id + ' failed:', e); }
+            });
             return out;
         }
 
@@ -81762,6 +81833,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var el = document.getElementById('bpiqDemographics');
             if (!el) return;
             _bpiqDemoData = d || {};
+            _bpiqState.demoRows = {};
             var pre  = (_bpiqDemoData.pre)  || {};
             var post = (_bpiqDemoData.post) || {};
             var html = '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:1rem 4rem;">';
@@ -81780,6 +81852,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 Object.keys(postMap).forEach(function(k) { if ((preMap[k]||0)  > 0 || (postMap[k]||0) > 0) union[k] = true; });
                 var values = Object.keys(union);
                 if (!values.length) {
+                    _bpiqState.demoRows[field] = { values: [], pre: preMap, post: postMap };
                     html += '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;padding:1.25rem;"><h4 style="margin:0 0 0.5rem;font-size:13px;">' + _BPIQ_DEMO_LABELS[field] + '</h4>'
                          +  '<div style="padding:0.75rem;color:var(--text-secondary);font-size:12px;">No data</div></div>';
                     return;
@@ -81815,6 +81888,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     if (av === bv) return 0;
                     return (av < bv ? -1 : 1) * dirMul;
                 });
+                _bpiqState.demoRows[field] = { values: values.slice(), pre: preMap, post: postMap };
                 var arrow = function(key) {
                     if (sortState.key !== key) return '<span style="opacity:0.3;font-size:10px;margin-left:4px;">⇅</span>';
                     var glyph = sortState.dir === 'asc' ? '▲' : '▼';
@@ -93781,145 +93855,160 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         }
 
         // ---- CSV ----------------------------------------------------
-        // Walks the loaded payload rather than scraping the rendered
-        // page, so the numbers come out at full precision. Any array
-        // of objects anywhere in the payload becomes its own block,
-        // which is what makes this work across every story mode
-        // instead of only the one it was written against.
+        // Reads the cards as they sit on screen, the same set the PDF
+        // draws, so the file carries what the reader sees and nothing
+        // else. A table comes out as that table; a tile of stacked label
+        // and figure comes out as one row; anything the page has switched
+        // off (a pane of a tab not chosen, a body set to display:none)
+        // stays out. Text inside a closed <details> is kept, since the
+        // reader can open it. Charts carry no text and are skipped.
         function _jiqCsvCell(v) {
             if (v == null) return '';
             if (typeof v === 'object') return '';
             var s = String(v);
             return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
         }
-        // Fields that describe how the run was produced rather than
-        // what it found never reach the download (2026-10-19): the
-        // story mode, the build trail, the hero image path, and the
-        // tag a table carries on where its rows came from. A column
-        // whose only values are those tags goes with it. The reader
-        // gets the figures and the words on the page, nothing else.
-        var _JIQ_CSV_INTERNAL_KEY = /^(story_mode|target_type|created_by|hero_image|clip_url|norms|gold|diagnostics|data_provenance|anchors?_note|anchors|corpus_anchors|title_anchor|replayed_from|hot|no_purchase_claim|job_id|run_id|s3_key|trail|debug|_[A-Za-z0-9_]*)$/;
-        var _JIQ_CSV_INTERNAL_VAL = /^(research(ed)?|derived|standard|synthetic(_estimate)?|model(l?ed)?|anchor(ed)?|corpus|replay(ed)?|fallback|gold|estimate[ds]?)$/i;
-        function _jiqCsvInternalKey(k) {
-            k = String(k == null ? '' : k);
-            return _JIQ_CSV_INTERNAL_KEY.test(k)
-                || /synth|provenance|anchor|diagnostic|debug|internal/i.test(k);
+        var _JIQ_SCRAPE_SKIP = {
+            SCRIPT: 1, STYLE: 1, NOSCRIPT: 1, TEMPLATE: 1, SVG: 1, CANVAS: 1,
+            BUTTON: 1, INPUT: 1, SELECT: 1, TEXTAREA: 1, OPTION: 1, IMG: 1,
+            VIDEO: 1, AUDIO: 1, IFRAME: 1, PICTURE: 1
+        };
+        var _JIQ_SCRAPE_INLINE = {
+            SPAN: 1, B: 1, STRONG: 1, EM: 1, I: 1, SMALL: 1, SUP: 1, SUB: 1,
+            BR: 1, A: 1, ABBR: 1, CODE: 1, MARK: 1, U: 1, S: 1, TIME: 1,
+            LABEL: 1, WBR: 1, BDI: 1, Q: 1, CITE: 1
+        };
+        function _jiqScrapeTag(el) { return String(el.tagName || '').toUpperCase(); }
+        function _jiqScrapeOff(el) {
+            if (el.getAttribute && el.getAttribute('aria-hidden') === 'true') return true;
+            var cs = getComputedStyle(el);
+            return cs.display === 'none' || cs.visibility === 'hidden';
         }
-        function _jiqCsvInternalVal(v) {
-            return typeof v === 'string' && _JIQ_CSV_INTERNAL_VAL.test(v.trim());
+        function _jiqScrapeText(el) {
+            var t = el.innerText;
+            if (t == null || t === '') t = el.textContent;
+            return String(t || '').replace(/\s+/g, ' ').trim();
         }
-        // Cells stay raw until the file is joined; quoting happens once
-        // there. Quoting on the way in as well doubled the quotes on any
-        // value with a comma.
-        function _jiqCsvRaw(v) {
-            return (v == null || typeof v === 'object') ? '' : v;
+        function _jiqScrapeLeaf(el) {
+            for (var c = el.firstElementChild; c; c = c.nextElementSibling) {
+                if (!_JIQ_SCRAPE_INLINE[_jiqScrapeTag(c)] || !_jiqScrapeLeaf(c)) return false;
+            }
+            return true;
         }
-        var _jiqCsvSeen = {};
-        function _jiqCsvBlocks(node, path, out, depth) {
-            if (!node || typeof node !== 'object' || depth > 5) return;
-            if (Array.isArray(node)) {
-                var objs = node.filter(function (r) { return r && typeof r === 'object' && !Array.isArray(r); });
-                if (!objs.length) return;
-                var cols = [];
-                objs.forEach(function (r) {
-                    Object.keys(r).forEach(function (k) {
-                        if (cols.indexOf(k) === -1 && !_jiqCsvInternalKey(k) && !Array.isArray(r[k]) &&
-                            (r[k] === null || typeof r[k] !== 'object')) cols.push(k);
-                    });
-                });
-                // a column that only ever holds a build tag is a build tag
-                cols = cols.filter(function (c) {
-                    var vals = objs.map(function (r) { return r[c]; })
-                        .filter(function (v) { return v != null && v !== ''; });
-                    return !(vals.length && vals.every(_jiqCsvInternalVal));
-                });
-                if (cols.length) {
-                    var body = objs.map(function (r) {
-                        return cols.map(function (c) { return _jiqCsvRaw(r[c]); });
-                    });
-                    var sig = JSON.stringify([cols, body]);
-                    // the blob repeats a few blocks the payload also
-                    // carries at the top; one copy is enough
-                    if (!_jiqCsvSeen[sig]) {
-                        _jiqCsvSeen[sig] = 1;
-                        out.push([]);
-                        out.push([path]);
-                        out.push(cols);
-                        body.forEach(function (r) { out.push(r); });
+        function _jiqScrapeTable(tbl, out) {
+            [].forEach.call(tbl.rows || [], function (tr) {
+                if (_jiqScrapeOff(tr)) return;
+                var cells = [];
+                [].forEach.call(tr.cells, function (td) {
+                    var t = _jiqScrapeText(td);
+                    if (!t) {
+                        var inp = td.querySelector('input, select');
+                        if (inp) t = String(inp.value || '');
                     }
-                }
-                // A row can carry its own table, the way a detour
-                // carries the lines underneath it.
-                objs.forEach(function (r, i) {
-                    Object.keys(r).forEach(function (k) {
-                        if (r[k] && typeof r[k] === 'object' && !_jiqCsvInternalKey(k)) {
-                            var name = r.title || r.label || r.name || ('row ' + (i + 1));
-                            _jiqCsvBlocks(r[k], path + ' · ' + name + ' · ' + k, out, depth + 1);
-                        }
-                    });
+                    cells.push(t);
+                    for (var k = 1; k < (td.colSpan || 1); k++) cells.push('');
                 });
+                if (cells.some(function (c) { return c !== ''; })) out.push(cells);
+            });
+        }
+        function _jiqScrapeInto(el, out) {
+            var tag = _jiqScrapeTag(el);
+            if (_JIQ_SCRAPE_SKIP[tag] || _jiqScrapeOff(el)) return;
+            if (tag === 'TABLE') {
+                if (out.length && out[out.length - 1].length) out.push([]);
+                _jiqScrapeTable(el, out);
+                out.push([]);
                 return;
             }
-            Object.keys(node).forEach(function (k) {
-                var v = node[k];
-                if (v && typeof v === 'object' && !_jiqCsvInternalKey(k)) {
-                    _jiqCsvBlocks(v, path ? path + ' · ' + k : k, out, depth + 1);
-                }
-            });
-        }
-        function jiqExportCsv() {
-            var payload = window._jiqCurrentRun;
-            if (!payload) { alert('Open a journey first.'); return; }
-            var title = _jiqRunTitle();
-            var rows = [];
-            rows.push(['Crosswalk · Digital Journey IQ']);
-            rows.push([title]);
-            var win = _jiqRunWindow();
-            if (win) rows.push(['Window', win]);
-            rows.push(['Prepared', new Date().toISOString().slice(0, 10)]);
-
-            var meta = payload.meta || {};
-            _jiqCsvSeen = {};
-            var scalars = Object.keys(meta).filter(function (k) {
-                return meta[k] !== null && typeof meta[k] !== 'object'
-                    && String(meta[k]).indexOf('__') !== 0
-                    && !_jiqCsvInternalKey(k) && !_jiqCsvInternalVal(meta[k]);
-            });
-            if (scalars.length) {
-                rows.push([]);
-                rows.push(['Run']);
-                rows.push(['Field', 'Value']);
-                scalars.forEach(function (k) { rows.push([k, _jiqCsvRaw(meta[k])]); });
+            if (_jiqScrapeLeaf(el)) {
+                var t = _jiqScrapeText(el);
+                if (t) out.push([t]);
+                return;
             }
-            if (Array.isArray(payload.facts) && payload.facts.length) {
-                rows.push([]);
-                rows.push(['Notes']);
-                rows.push(['Label', 'Value']);
-                payload.facts.forEach(function (f) {
-                    rows.push([_jiqCsvRaw(f && f.label), _jiqCsvRaw(f && f.value)]);
+            // A tile: two to four short leaves, one of them a figure,
+            // read across as one row (label, value, note).
+            var kids = [].filter.call(el.children, function (c) {
+                return !_JIQ_SCRAPE_SKIP[_jiqScrapeTag(c)] && !_jiqScrapeOff(c);
+            });
+            var loose = [].some.call(el.childNodes, function (n) {
+                return n.nodeType === 3 && n.nodeValue.trim();
+            });
+            if (!loose && kids.length >= 2 && kids.length <= 4) {
+                var cells = kids.map(function (c) {
+                    return _jiqScrapeLeaf(c) ? _jiqScrapeText(c) : null;
                 });
-            }
-            var storyKey = String(meta.story_mode || '');
-            Object.keys(payload).forEach(function (k) {
-                if (k === 'meta' || k === 'facts' || _jiqCsvInternalKey(k)) return;
-                if (payload[k] && typeof payload[k] === 'object') {
-                    // the blob is keyed by its story mode; the file says Journey
-                    _jiqCsvBlocks(payload[k], (storyKey && k === storyKey) ? 'Journey' : k, rows, 0);
+                if (cells.every(function (c) { return c != null && c.length <= 80; }) &&
+                    cells.some(function (c) { return /\d/.test(c); })) {
+                    cells = cells.filter(Boolean);
+                    if (cells.length) out.push(cells);
+                    return;
                 }
+            }
+            for (var n = el.firstChild; n; n = n.nextSibling) {
+                if (n.nodeType === 3) {
+                    var s = n.nodeValue.replace(/\s+/g, ' ').trim();
+                    if (s) out.push([s]);
+                } else if (n.nodeType === 1) {
+                    _jiqScrapeInto(n, out);
+                }
+            }
+        }
+        // Rows for one on-screen element, blank runs collapsed.
+        function _jiqScrapeRows(el) {
+            var raw = [];
+            if (el) _jiqScrapeInto(el, raw);
+            var rows = [];
+            raw.forEach(function (r) {
+                var blank = !r.length;
+                var prev = rows[rows.length - 1];
+                if (blank && (!rows.length || !prev.length)) return;
+                if (!blank && prev && prev.join('\u0001') === r.join('\u0001')) return;
+                rows.push(r);
             });
-            if (rows.length < 6) { alert('No figures found on this journey to export.'); return; }
-
+            while (rows.length && !rows[rows.length - 1].length) rows.pop();
+            return rows;
+        }
+        function _jiqScrapeTitle(card) {
+            var hs = card.querySelectorAll('h1, h2, h3, h4');
+            for (var i = 0; i < hs.length; i++) {
+                if (_jiqScrapeOff(hs[i])) continue;
+                var t = _jiqScrapeText(hs[i]);
+                if (t) return t;
+            }
+            return '';
+        }
+        function _jiqCsvDownload(rows, name) {
             var csv = rows.map(function (r) {
                 return (r || []).map(function (c) { return _jiqCsvCell(c); }).join(',');
             }).join('\n');
             var blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
             var a = document.createElement('a');
             a.href = URL.createObjectURL(blob);
-            a.download = _jiqSlug(title) + '_' + new Date().toISOString().slice(0, 10) + '.csv';
+            a.download = name;
             document.body.appendChild(a);
             a.click();
             a.remove();
             setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+        }
+        function jiqExportCsv() {
+            if (!window._jiqCurrentRun) { alert('Open a journey first.'); return; }
+            var title = _jiqRunTitle();
+            var win = _jiqRunWindow();
+            var stamp = new Date().toISOString().slice(0, 10);
+            var rows = [[title + (win ? ' · ' + win : '') + ' · Prepared ' + stamp]];
+            var blocks = 0;
+            _jiqVisibleCards().forEach(function (card, i) {
+                var body = _jiqScrapeRows(card);
+                if (!body.length) return;
+                var head = _jiqScrapeTitle(card) || ('Section ' + (i + 1));
+                if (body[0].length === 1 && body[0][0] === head) body.shift();
+                rows.push([]);
+                rows.push(['# ' + head]);
+                body.forEach(function (r) { rows.push(r); });
+                blocks++;
+            });
+            if (!blocks) { alert('No figures found on this journey to export.'); return; }
+            _jiqCsvDownload(rows, _jiqSlug(title) + '_' + stamp + '.csv');
         }
 
         var _jiqCurrentRun = null;
@@ -113281,7 +113370,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                  +          'background:rgba(16,185,129,0.16); border:1px solid rgba(16,185,129,0.4); '
                  +          'font-size:0.66rem; color:#6ee7b7; font-weight:800; cursor:pointer; '
                  +          'letter-spacing:0.02em;" '
-                 +   'title="Download every number in this file.">'
+                 +   'title="Download this tab as a CSV.">'
                  +   '\u2b07 Download CSV'
                  + '</button>';
         }
@@ -115142,172 +115231,42 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             ].join(',');
         }
 
+        // The tab on screen and the cover figures above it, read off the
+        // page the way the reader sees them. Other tabs stay out.
+        function _jiqUfcCsvTab() {
+            return _JIQ_UFC_TABS.filter(function(t) { return t.id === _jiqUfcActiveTab; })[0] || _JIQ_UFC_TABS[0];
+        }
         function _jiqUfcBuildCsv() {
-            var d = _JIQ_UFC_DATA;
-            var rows = [];
-            rows.push('section,subsection,metric,value,unit,notes');
-
-            var pb = d.panel_basis || {};
-            rows.push(_jiqUfcCsvRow('panel_basis', '', 'geo',                    pb.geo, '', ''));
-            rows.push(_jiqUfcCsvRow('panel_basis', '', 'panel',                  pb.panel, '', ''));
-            rows.push(_jiqUfcCsvRow('panel_basis', '', 'sub_base_end_q2',        pb.sub_base_end_q2, '', ''));
-            rows.push(_jiqUfcCsvRow('panel_basis', '', 'ufc_us_fanbase',         pb.ufc_us_fanbase_m, 'M viewers', ''));
-            rows.push(_jiqUfcCsvRow('panel_basis', '', 'deal_note',              pb.deal_note, '', ''));
-            (pb.events_covered_ytd || []).forEach(function(ev) {
-                rows.push(_jiqUfcCsvRow('panel_basis', 'event:' + ev.code, 'date',              ev.date, '', ev.headline));
-                rows.push(_jiqUfcCsvRow('panel_basis', 'event:' + ev.code, 'us_avg_viewers',    ev.us_avg_viewers_m, 'M viewers', ev.note));
-                rows.push(_jiqUfcCsvRow('panel_basis', 'event:' + ev.code, 'us_peak_concurrent',ev.us_peak_concurrent_m, 'M viewers', ''));
-                rows.push(_jiqUfcCsvRow('panel_basis', 'event:' + ev.code, 'us_viewers_reached',ev.us_viewers_reached_m, 'M viewers', ''));
-            });
-
-            var cs = d.ufc_case || {};
-            rows.push(_jiqUfcCsvRow('case', '', 'subtitle', cs.subtitle, '', ''));
-            (cs.key_metrics || []).forEach(function(m, i) {
-                rows.push(_jiqUfcCsvRow('case', 'key_metric_' + (i+1), m.label, m.value, '', m.sub));
-            });
-            if (cs.hypothesis) {
-                rows.push(_jiqUfcCsvRow('case', 'hypothesis', 'claim', cs.hypothesis.claim, '', ''));
-                (cs.hypothesis.evidence_for || []).forEach(function(e, i) {
-                    rows.push(_jiqUfcCsvRow('case', 'evidence_for', 'point_' + (i+1), e, '', ''));
-                });
-                (cs.hypothesis.evidence_against || []).forEach(function(e, i) {
-                    rows.push(_jiqUfcCsvRow('case', 'evidence_against', 'point_' + (i+1), e, '', ''));
-                });
+            var tab = _jiqUfcCsvTab();
+            var host = document.getElementById('jiqUfcNestHost');
+            var paint = _JIQ_UFC_NEST_RENDER && _JIQ_UFC_NEST_RENDER[tab.id];
+            if (host && !host.children.length && paint) host.innerHTML = paint();
+            var metaEl = document.getElementById('jiqUfcNestMeta');
+            var meta = metaEl ? _jiqScrapeText(metaEl) : '';
+            var rows = [['UFC on Paramount+ · ' + tab.label + (meta ? ' · ' + meta : '')
+                         + ' · Prepared ' + new Date().toISOString().slice(0, 10)]];
+            var kpis = _jiqScrapeRows(document.getElementById('jiqUfcNestKpis'));
+            if (kpis.length) {
+                rows.push([]);
+                kpis.forEach(function(r) { rows.push(r); });
             }
-
-            var dis = d.ufc_discovery || {};
-            rows.push(_jiqUfcCsvRow('discovery', '', 'subtitle', dis.subtitle, '', ''));
-            rows.push(_jiqUfcCsvRow('discovery', '', 'total_first_exposure', dis.total_first_exposure_m, 'M viewers', ''));
-            (dis.channels || []).forEach(function(c) {
-                rows.push(_jiqUfcCsvRow('discovery', 'channel_rank_' + c.rank, c.channel, c.share_pct, '% of first exposures', c.note));
-                rows.push(_jiqUfcCsvRow('discovery', 'channel_rank_' + c.rank, c.channel + ' - reach',     c.reach_m,             'M viewers', ''));
-                rows.push(_jiqUfcCsvRow('discovery', 'channel_rank_' + c.rank, c.channel + ' - days_to_first_watch', c.avg_days_to_first_watch, 'days', ''));
-            });
-            rows.push(_jiqUfcCsvRow('discovery', '', 'takeaway', dis.takeaway, '', ''));
-
-            ['journey_a','journey_b','journey_c'].forEach(function(jkey) {
-                var j = d['ufc_' + jkey];
-                if (!j) return;
-                rows.push(_jiqUfcCsvRow(jkey, '', 'headline', j.headline, '', ''));
-                rows.push(_jiqUfcCsvRow(jkey, '', 'subtitle', j.subtitle, '', ''));
-                rows.push(_jiqUfcCsvRow(jkey, '', 'cohort_size', j.cohort_size_m, 'M viewers', ''));
-                (j.funnel || []).forEach(function(s) {
-                    rows.push(_jiqUfcCsvRow(jkey, 'funnel_step_' + s.step, s.label, s.count_m, 'M viewers', s.note + ' (pct_of_start=' + s.pct_of_start + '%)'));
-                });
-                (j.post_watch_behavior || []).forEach(function(b, i) {
-                    rows.push(_jiqUfcCsvRow(jkey, 'post_watch', b.behavior, b.pct, '%', b.note));
-                });
-                (j.immediate_reactions_24h || []).forEach(function(r) {
-                    rows.push(_jiqUfcCsvRow(jkey, 'reaction_24h', r.action, r.count_m, 'M viewers', r.note + ' (pct=' + r.pct + '%)'));
-                });
-                (j.longer_tail_14d || []).forEach(function(r) {
-                    rows.push(_jiqUfcCsvRow(jkey, 'longer_tail_14d', r.outcome, r.count_m, 'M viewers', r.note + ' (pct=' + r.pct + '%)'));
-                });
-                (j.promo_hunt_destinations || []).forEach(function(p) {
-                    rows.push(_jiqUfcCsvRow(jkey, 'promo_hunt', p.destination, p.count_m, 'M viewers', p.note));
-                });
-                (j.first_event || []).forEach(function(e) {
-                    rows.push(_jiqUfcCsvRow(jkey, 'first_event', e.event, e.signups_m, 'M viewers', e.note + ' (share=' + e.share_of_journey_b_pct + '%)'));
-                });
-                (j.payment_mix || []).forEach(function(p) {
-                    rows.push(_jiqUfcCsvRow(jkey, 'payment_mix', p.method, p.pct, '%', ''));
-                });
-                if (j.plan_mix) {
-                    rows.push(_jiqUfcCsvRow(jkey, 'plan_mix', 'essential_ad', j.plan_mix.essential_ad_pct, '%', j.plan_mix.note));
-                    rows.push(_jiqUfcCsvRow(jkey, 'plan_mix', 'premium_no_ad', j.plan_mix.premium_no_ad_pct, '%', ''));
-                }
-                (j.signup_door || []).forEach(function(r) {
-                    rows.push(_jiqUfcCsvRow(jkey, 'signup_door', r.door, r.pct, '%', ''));
-                });
-                if (j.promo_code_usage_pct != null) {
-                    rows.push(_jiqUfcCsvRow(jkey, 'promo_code', 'usage', j.promo_code_usage_pct, '%', j.promo_code_note));
-                }
-                if (j.free_trial_hunt_m != null) {
-                    rows.push(_jiqUfcCsvRow(jkey, 'free_trial', 'hunt_volume', j.free_trial_hunt_m, 'M viewers', j.free_trial_note));
-                }
-                if (j.note)      rows.push(_jiqUfcCsvRow(jkey, '', 'note', j.note, '', ''));
-                if (j.takeaway)  rows.push(_jiqUfcCsvRow(jkey, '', 'takeaway', j.takeaway, '', ''));
-            });
-
-            var ch = d.ufc_churn || {};
-            rows.push(_jiqUfcCsvRow('churn', '', 'headline', ch.headline, '', ''));
-            rows.push(_jiqUfcCsvRow('churn', '', 'subtitle', ch.subtitle, '', ''));
-            rows.push(_jiqUfcCsvRow('churn', '', 'avg_tenure', ch.avg_tenure_months, 'months', ''));
-            (ch.retention_curve || []).forEach(function(r) {
-                rows.push(_jiqUfcCsvRow('churn', 'retention_curve', 'day_' + r.day, r.retention_pct, '%', r.note));
-            });
-            (ch.top_churn_indicators_day30 || []).forEach(function(i) {
-                rows.push(_jiqUfcCsvRow('churn', 'churn_indicator_rank_' + i.rank, i.indicator, i.churn_index, 'x baseline', i.note));
-            });
-            (ch.where_they_go_next_30d || []).forEach(function(w) {
-                rows.push(_jiqUfcCsvRow('churn', 'where_they_go', w.destination, w.count_m, 'M viewers', w.note + ' (pct=' + w.pct + '%)'));
-            });
-            if (ch.return_pattern) {
-                rows.push(_jiqUfcCsvRow('churn', 'return_pattern', 'return_within_60d', ch.return_pattern.return_within_60d_pct, '%', ch.return_pattern.note));
+            var body = _jiqScrapeRows(host);
+            if (body.length) {
+                rows.push([]);
+                rows.push(['# ' + tab.label]);
+                body.forEach(function(r) { rows.push(r); });
             }
-
-            var sg = d.ufc_segments || {};
-            rows.push(_jiqUfcCsvRow('segments', '', 'subtitle', sg.subtitle, '', ''));
-            (sg.journeys || []).forEach(function(j) {
-                var sub = 'journey_' + j.id;
-                rows.push(_jiqUfcCsvRow('segments', sub, 'label', j.label, '', ''));
-                rows.push(_jiqUfcCsvRow('segments', sub, 'size', j.size_m, 'M viewers', ''));
-                rows.push(_jiqUfcCsvRow('segments', sub, 'gender_male', j.gender_male_pct, '%', ''));
-                rows.push(_jiqUfcCsvRow('segments', sub, 'gender_female', j.gender_female_pct, '%', ''));
-                rows.push(_jiqUfcCsvRow('segments', sub, 'avg_age', j.avg_age, 'years', ''));
-                rows.push(_jiqUfcCsvRow('segments', sub, 'vs_platform_age_delta', j.vs_platform_age_delta, 'years', 'negative = younger than P+ avg'));
-                (j.age_buckets || []).forEach(function(b) {
-                    rows.push(_jiqUfcCsvRow('segments', sub + '/age', b.bucket, b.pct, '%', ''));
-                });
-                rows.push(_jiqUfcCsvRow('segments', sub, 'income_100k_plus', j.income_100k_plus_pct, '% of individuals', 'personal-income $100K+ overlay'));
-                rows.push(_jiqUfcCsvRow('segments', sub, 'top_regions', j.top_regions, '', ''));
-                rows.push(_jiqUfcCsvRow('segments', sub, 'content_affinities', j.content_affinities, '', ''));
-                rows.push(_jiqUfcCsvRow('segments', sub, 'behavioral', j.behavioral, '', ''));
-            });
-            rows.push(_jiqUfcCsvRow('segments', '', 'cross_journey_note', sg.cross_journey_note, '', ''));
-
-            var rd = d.ufc_read || {};
-            rows.push(_jiqUfcCsvRow('read', '', 'headline', rd.headline, '', ''));
-            rows.push(_jiqUfcCsvRow('read', '', 'summary', rd.summary, '', ''));
-            (rd.implications || []).forEach(function(im, i) {
-                rows.push(_jiqUfcCsvRow('read', 'implication_' + (i+1), im.kind, im.body, '', ''));
-            });
-
-            var mth = d.ufc_methodology || {};
-            rows.push(_jiqUfcCsvRow('methodology', '', 'headline', mth.headline, '', ''));
-            rows.push(_jiqUfcCsvRow('methodology', '', 'intro',    mth.intro,    '', ''));
-            (mth.signals || []).forEach(function(sg, i) {
-                rows.push(_jiqUfcCsvRow('methodology', 'signal_' + (i+1), sg.label, sg.description, '', ''));
-            });
-            (mth.metric_constructions || []).forEach(function(mc, i) {
-                rows.push(_jiqUfcCsvRow('methodology', 'metric_construction_' + (i+1), mc.tab + ' | ' + mc.metric, mc.how, '', ''));
-            });
-            (mth.what_we_do_not_do || []).forEach(function(x, i) {
-                rows.push(_jiqUfcCsvRow('methodology', 'what_we_do_not_do', 'point_' + (i+1), x, '', ''));
-            });
-            (mth.invariants || []).forEach(function(x, i) {
-                rows.push(_jiqUfcCsvRow('methodology', 'invariant', 'point_' + (i+1), x, '', ''));
-            });
-
-            return rows.join('\n') + '\n';
+            return rows;
         }
 
         function _jiqUfcDownloadCsv() {
             try {
-                var csv = _jiqUfcBuildCsv();
-                var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-                var url  = URL.createObjectURL(blob);
-                var a    = document.createElement('a');
+                var rows = _jiqUfcBuildCsv();
                 var d    = new Date();
                 var stamp = d.getFullYear()
                           + String(d.getMonth()+1).padStart(2,'0')
                           + String(d.getDate()).padStart(2,'0');
-                a.href = url;
-                a.download = 'UFC_Paramount_DigitalJourney_' + stamp + '.csv';
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                setTimeout(function(){ URL.revokeObjectURL(url); }, 500);
+                _jiqCsvDownload(rows, 'UFC_Paramount_DigitalJourney_' + _jiqUfcCsvTab().id + '_' + stamp + '.csv');
             } catch (err) {
                 console.error('UFC CSV export failed', err);
                 alert('CSV export failed - see console for details.');
