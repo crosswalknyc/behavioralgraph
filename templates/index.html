@@ -52127,11 +52127,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // past that is priced), then the review with the prices. Prometheus usage is metered on top of the priced steps.
             var BW_STEPS = ['Source', 'Audience', 'Purpose', 'Panelists', 'Review'];
             var BW_DEMO = [
-                ['gender', 'Gender', ['Women', 'Men'], true],
-                ['age', 'Age', ['18-24', '25-34', '35-44', '45-54', '55-64', '65+'], false],
-                ['income', 'Household income', ['Less than $25,000', '$25,000 - $49,999', '$50,000 - $74,999', '$75,000 - $99,999', '$100,000 - $149,999', '$150,000 - $249,999', '$250,000 or more'], false],
-                ['ethnicity', 'Ethnicity', ['White', 'Hispanic or Latino', 'Black or African American', 'Asian', 'Another race/ethnicity'], false],
-                ['parental', 'Parents', ['Has children', 'No children'], true]
+                ['gender', 'Gender', ['Women', 'Men']],
+                ['age', 'Age', ['18-24', '25-34', '35-44', '45-54', '55-64', '65+']],
+                ['income', 'Household income', ['Less than $25,000', '$25,000 - $49,999', '$50,000 - $74,999', '$75,000 - $99,999', '$100,000 - $149,999', '$150,000 - $249,999', '$250,000 or more']],
+                ['ethnicity', 'Ethnicity', ['White', 'Hispanic or Latino', 'Black or African American', 'Asian', 'Another race/ethnicity']],
+                ['parental', 'Parents', ['Has children', 'No children']]
             ];
             var BW_PURPOSES = ['A new season or sequel', 'A product launch', 'Pricing', 'A partnership', 'Casting or talent', 'An ad plan', 'To ask it questions'];
             var BW_INCLUDED = 12, BW_MAX = 40;
@@ -52230,7 +52230,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     var out = '<div class="dtw-bw-q">Who is in the group?</div><div class="dtw-bw-sub">Pick as much or as little as you like. Anything you leave open stays the US mix.</div>';
                     BW_DEMO.forEach(function(g) {
                         var picks = b.demo[g[0]] || [];
-                        out += '<div class="dtw-bw-group"><div class="k"><span>' + esc(g[1]) + '</span><em>' + (g[3] ? 'pick one' : 'pick any') + '</em></div><div class="dtw-chips">' + g[2].map(function(o) {
+                        out += '<div class="dtw-bw-group"><div class="k"><span>' + esc(g[1]) + '</span><em>pick any</em></div><div class="dtw-chips">' + g[2].map(function(o) {
                             return '<button type="button" class="dtw-chip' + (picks.indexOf(o) >= 0 ? ' on' : '') + '" onclick="dtwBwPick(\'' + g[0] + '\', this)" data-v="' + esc(o) + '">' + esc(o) + '</button>';
                         }).join('') + '</div></div>';
                     });
@@ -52301,9 +52301,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             window.dtwBwNext = function() { if (!bwCanNext()) return; if (S.bw.step >= 4) { dtwBwSubmit(); return; } dtwBwGo(S.bw.step + 1); };
             window.dtwBwSource = function(src) { var b = S.bw; if (b.source !== src) { b.source = src; b.profile_key = ''; b.profile_name = ''; b.subject = ''; b.results = null; } dtwBwGo(1); };
             window.dtwBwPick = function(cat, btn) {
-                var b = S.bw, v = btn.getAttribute('data-v'), one = (BW_DEMO.filter(function(g) { return g[0] === cat; })[0] || [])[3];
+                var b = S.bw, v = btn.getAttribute('data-v');
                 var cur = b.demo[cat] || [], i = cur.indexOf(v);
-                if (i >= 0) cur.splice(i, 1); else if (one) cur = [v]; else cur.push(v);
+                if (i >= 0) cur.splice(i, 1); else cur.push(v);
                 b.demo[cat] = cur;
                 renderBuild();
             };
