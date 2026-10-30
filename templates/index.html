@@ -51748,7 +51748,28 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-pi-money .m .k { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dtw-mute); font-weight: 600; }
         #digitalTwinsIQView .dtw-pi-money .m .v { font-size: 26px; font-weight: 300; font-variant-numeric: tabular-nums; margin-top: 4px; }
         #digitalTwinsIQView .dtw-pi-money .m .n { font-size: 11px; color: var(--dtw-body); margin-top: 2px; }
-        #digitalTwinsIQView .dtw-pi-switch { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--dtw-body); margin-top: 10px; }
+        #digitalTwinsIQView .dtw-pi-switch { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--dtw-body); margin: 10px 0 0; text-transform: none; letter-spacing: 0; line-height: 16px; cursor: pointer; }
+        #digitalTwinsIQView .dtw-pi-switch input[type="checkbox"] { width: 14px; height: 14px; flex: 0 0 14px; margin: 0; padding: 0; accent-color: #C7F23E; cursor: pointer; }
+        #digitalTwinsIQView .dtw-pi-togs { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; }
+        #digitalTwinsIQView .dtw-pi-togs .dtw-pi-switch { margin-top: 0; }
+        /* the setup screen in the control room shape: past tests left, the cut center, the room and Start right */
+        #digitalTwinsIQView .dtw-pi-setup { display: grid; grid-template-columns: 212px minmax(0, 1fr) 300px; gap: 18px; align-items: start; margin-top: 14px; }
+        #digitalTwinsIQView .dtw-pi-setup .dtw-pi-col.side { gap: 0; }
+        #digitalTwinsIQView .dtw-pi-setup .dtw-pi-col.side > .dtw-pi-h { margin-bottom: 2px; }
+        #digitalTwinsIQView .dtw-pi-setup label.dtw-field { margin-top: 0.7rem; }
+        #digitalTwinsIQView .dtw-pi-setup .dtw-pi-list { margin-top: 8px; }
+        #digitalTwinsIQView .dtw-pi-setup .dtw-pi-row { padding: 8px 10px; background: transparent; }
+        #digitalTwinsIQView .dtw-pi-setup .dtw-pi-row .m { font-size: 11px; }
+        #digitalTwinsIQView .dtw-pi-setup .dtw-lab-run { margin-top: 14px; }
+        #digitalTwinsIQView .dtw-pi-setup .dtw-pi-details { margin-top: 12px; }
+        #digitalTwinsIQView .dtw-pi-setup .dtw-pi-details summary { cursor: pointer; font-size: 12px; }
+        @media (max-width: 1180px) {
+          #digitalTwinsIQView .dtw-pi-setup { grid-template-columns: minmax(0, 1fr) 300px; }
+          #digitalTwinsIQView .dtw-pi-setup .dtw-pi-col.tests { grid-column: 1 / -1; }
+          #digitalTwinsIQView .dtw-pi-setup .dtw-pi-col.tests .dtw-pi-list { display: flex; flex-wrap: wrap; gap: 8px; }
+          #digitalTwinsIQView .dtw-pi-setup .dtw-pi-col.tests .dtw-pi-row { flex: 1 1 240px; width: auto; }
+        }
+        @media (max-width: 860px) { #digitalTwinsIQView .dtw-pi-setup { grid-template-columns: 1fr; } }
         #digitalTwinsIQView .dtw-pi-protect { font-size: 12px; color: var(--dtw-body); margin-top: 8px; }
         @media (max-width: 860px) { #digitalTwinsIQView .dtw-pi-money { grid-template-columns: 1fr; } }
         /* Pilot Testing control room (Jenna 2026-10-30): scores left, the cut and the dial center, the room and the ask right. One screen, nothing waits under the fold. */
@@ -54024,8 +54045,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var modeSel = '';
                 if (tab === 'pilot') {
                     modeSel = '<label class="dtw-field">What is this</label><select id="dtwPiMode" class="dtw-in" onchange="S.piMode=this.value;renderPilotConsole();"><option value="pilot"' + (mode === 'pilot' ? ' selected' : '') + '>A pilot</option><option value="feature"' + (mode === 'feature' ? ' selected' : '') + '>A feature</option><option value="episode"' + (mode === 'episode' ? ' selected' : '') + '>An episode after the pilot</option><option value="binge"' + (mode === 'binge' ? ' selected' : '') + '>A binge test across episodes</option></select>'
-                        + '<label class="dtw-pi-switch"><input type="checkbox" id="dtwPiRough"> Rough cut (temp music, missing effects)</label>'
-                        + '<label class="dtw-pi-switch"><input type="checkbox" id="dtwPiCritics"> Critics room (critics and journalists in the seats)</label>';
+                        + '<div class="dtw-pi-togs"><label class="dtw-pi-switch"><input type="checkbox" id="dtwPiRough"> Rough cut (temp music, missing effects)</label>'
+                        + '<label class="dtw-pi-switch"><input type="checkbox" id="dtwPiCritics"> Critics room (critics and journalists in the seats)</label></div>';
                 } else if (tab === 'trailer') {
                     modeSel = '<label class="dtw-field">What is this</label><select id="dtwPiMode" class="dtw-in" onchange="S.piMode=this.value;"><option value="trailer"' + (mode === 'trailer' ? ' selected' : '') + '>A trailer</option><option value="spot"' + (mode === 'spot' ? ' selected' : '') + '>A TV spot</option></select>';
                 } else if (tab === 'titles') {
@@ -54060,20 +54081,23 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     stim = '<label class="dtw-field">Title (optional)</label><input id="dtwPiCutTitle" class="dtw-in" placeholder="Second Helping">'
                         + '<label class="dtw-field">The concept (a logline is enough; a synopsis or one-sheet gives the room more)</label><textarea id="dtwPiText" class="dtw-in" rows="6" placeholder="A chef returns to her hometown diner after a scandal. She has one summer to win the town back."></textarea>';
                 }
-                var quotas = '<details class="dtw-pi-details" style="margin-top:8px"><summary class="dtw-muted">Recruit the room to quotas (optional)</summary><div class="dtw-row2"><div><label class="dtw-field">% under 35</label><input id="dtwPiQUnder" class="dtw-in" inputmode="numeric" placeholder="65"></div><div><label class="dtw-field">% women</label><input id="dtwPiQWomen" class="dtw-in" inputmode="numeric" placeholder="50"></div></div><div class="dtw-row2"><div><label class="dtw-field">% fans of the lead</label><input id="dtwPiQFans" class="dtw-in" inputmode="numeric" placeholder="40"></div><div><label class="dtw-field">Must have seen (how many of the comps)</label><input id="dtwPiQSeen" class="dtw-in" inputmode="numeric" placeholder="2"></div></div><label class="dtw-field">Comp titles (comma separated)</label><input id="dtwPiComps" class="dtw-in" placeholder="Flashdance, The L Word"></details>';
-                return '<div class="dtw-card"><div class="dtw-eyebrow">' + esc(PI_TAB_LABEL[tab]) + '</div><h3 style="margin-top:0.35rem;">' + esc({ pilot: 'Watch a cut with the room', trailer: 'Test a trailer with the room', titles: 'Test titles or key art with the room', script: 'Read a script with the room', concept: 'Put a concept to the room' }[tab]) + '</h3>'
-                    + '<div class="dtw-sub">' + esc(intro) + '</div>'
-                    + (S.twin ? '<div class="dtw-on">On <b>' + esc(twinName()) + '</b></div>' : '<p class="dtw-p">Pick a twin on the Twins tab first, or build one.</p>')
+                var quotas = '<details class="dtw-pi-details"><summary class="dtw-muted">Recruit the room to quotas (optional)</summary><div class="dtw-row2"><div><label class="dtw-field">% under 35</label><input id="dtwPiQUnder" class="dtw-in" inputmode="numeric" placeholder="65"></div><div><label class="dtw-field">% women</label><input id="dtwPiQWomen" class="dtw-in" inputmode="numeric" placeholder="50"></div></div><div class="dtw-row2"><div><label class="dtw-field">% fans of the lead</label><input id="dtwPiQFans" class="dtw-in" inputmode="numeric" placeholder="40"></div><div><label class="dtw-field">Must have seen (how many of the comps)</label><input id="dtwPiQSeen" class="dtw-in" inputmode="numeric" placeholder="2"></div></div><label class="dtw-field">Comp titles (comma separated)</label><input id="dtwPiComps" class="dtw-in" placeholder="Flashdance, The L Word"></details>';
+                var cutHead = { pilot: 'The cut', trailer: 'The trailers', titles: mode === 'key_art' ? 'The art' : 'The titles', script: 'The script', concept: 'The concept' }[tab] || 'The cut';
+                var tests = '<div class="dtw-pi-col side tests"><div class="dtw-pi-h">Past tests <span class="n">' + past.length + '</span></div><div class="dtw-pi-list">' + (rows || '<p class="dtw-muted" style="margin:8px 0 0;font-size:12px">No tests of this kind on this twin yet. The first one lands here.</p>') + '</div></div>';
+                var cut = '<div class="dtw-pi-col side cut"><div class="dtw-pi-h">' + esc(cutHead) + '</div>' + modeSel + stim + '</div>';
+                var room = '<div class="dtw-pi-col side room"><div class="dtw-pi-h">The room' + (S.twin && twinName() ? ' <span class="n">on ' + esc(twinName()) + '</span>' : '') + '</div>'
+                    + (S.twin ? '' : '<p class="dtw-p" style="margin-top:8px">Pick a twin on the Twins tab first, or build one.</p>')
                     + '<label class="dtw-field" for="dtwPiTitle">Name this test</label><input id="dtwPiTitle" class="dtw-in" placeholder="' + esc({ pilot: 'Season 2 pilot', trailer: 'Trailer A vs B', titles: 'Six titles', script: 'Second Helping, draft 3', concept: 'Second Helping' }[tab]) + '" maxlength="120" autocomplete="off">'
-                    + modeSel + stim
                     + '<label class="dtw-field">Add a second twin (optional; two audiences on one cut)</label><select id="dtwPiTwin2" class="dtw-in"><option value="">Just this twin</option>' + others + '</select>'
                     + '<label class="dtw-field">Panelists in the room</label><input id="dtwPiRoom" class="dtw-in" value="12" inputmode="numeric">'
                     + quotas
                     + (tab === 'pilot' || tab === 'trailer' || tab === 'script' ? '<label class="dtw-pi-switch"><input type="checkbox" id="dtwPiPurgeNew"> Remove the file when the test is done</label>' : '')
                     + '<div class="dtw-lab-run"><button type="button" class="dtw-btn dtw-btn-primary" onclick="dtwPilotOpen()">Start the test</button><span class="dtw-price">' + esc(piPrice(tab)) + '</span></div>'
                     + (tab === 'pilot' || tab === 'trailer' || tab === 'titles' || tab === 'script' ? '<div class="dtw-pi-protect">' + esc(pilotProtectLine()) + '</div>' : '')
-                    + '<div class="dtw-status" id="dtwPiStatus"></div></div>'
-                    + '<div class="dtw-card"><h3>Past tests</h3>' + (rows || '<p class="dtw-muted">No tests of this kind on this twin yet.</p>') + '</div>';
+                    + '<div class="dtw-status" id="dtwPiStatus"></div></div>';
+                return '<div class="dtw-card"><div class="dtw-eyebrow">' + esc(PI_TAB_LABEL[tab]) + '</div><h3 style="margin-top:0.35rem;">' + esc({ pilot: 'Watch a cut with the room', trailer: 'Test a trailer with the room', titles: 'Test titles or key art with the room', script: 'Read a script with the room', concept: 'Put a concept to the room' }[tab]) + '</h3>'
+                    + '<div class="dtw-sub" style="margin-bottom:0">' + esc(intro) + '</div>'
+                    + '<div class="dtw-pi-setup">' + tests + cut + room + '</div></div>';
             }
             function normCell(sc, metric, which) {
                 var col = ((sc || {}).norm_columns || {})[metric] || {};
