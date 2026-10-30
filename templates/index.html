@@ -31754,6 +31754,10 @@ https://www.instagram.com/p/..."></textarea>
             #trendsIQView .tiq-bgenre-select { width: auto !important; max-width: 320px; flex: 0 0 auto; font-family: inherit; font-size: 0.8rem; font-weight: 600; color: var(--text-primary); background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 4px 8px; cursor: pointer; }
             #trendsIQView .tiq-bgenre-select option { background: var(--bg-card); color: var(--text-primary); }
             #trendsIQView .tiq-bgenre-clear { font-family: inherit; font-size: 0.72rem; font-weight: 600; background: transparent; color: var(--text-secondary); border: 1px solid var(--border-color); border-radius: 6px; padding: 3px 8px; cursor: pointer; }
+            #trendsIQView .tiq-row.tiq-bsearch-hidden { display: none !important; }
+            #trendsIQView .tiq-bsearch-sep { width: 1px; align-self: stretch; background: var(--border-color); margin: 0 4px; }
+            #trendsIQView .tiq-bsearch { width: 260px !important; max-width: 40vw; flex: 0 1 auto; font-family: inherit; font-size: 0.8rem; color: var(--text-primary); background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 5px 10px; }
+            #trendsIQView .tiq-bsearch-count { font-size: 0.75rem; color: var(--text-secondary); white-space: nowrap; text-transform: none; }
             #trendsIQView .tiq-bgenre-empty { text-transform: none; letter-spacing: normal; font-weight: 400; font-size: 0.8rem; color: var(--text-secondary); padding: 10px 2px; }
             #trendsIQView .tiq-sheet-row.tiq-year-hidden { display: none !important; }
             #trendsIQView .tiq-sheet-all td.tiq-sheet-td-num:last-child, #trendsIQView .tiq-sheet-all th.tiq-sheet-th-num:last-child { padding-left: 4rem; }
@@ -70999,6 +71003,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 _tiqWithTab(k, function() { _tiqApplyLensTo(p, T.activeLens, sel, k === T.activeTab); });
             });
             T.activeLens = _tiqLensFor(T.activeTab);
+            if (keys.indexOf('books') >= 0) { try { _tiqBookSearchApply(); } catch (e) {} }
         }
         function _tiqApplyLensTo(panels, lensId, sel, isActive) {
             var lensMeta = ((window.__trendsIQ.lensMeta || {})[lensId]) || {};
@@ -74888,8 +74893,80 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             return !g || _tiqBookGenreOf(it) === g;
         }
         function _tiqBookGenreRowAttrs(it) {
-            return (_tiqBookGenreKeep(it) ? '"' : ' tiq-bgenre-hidden"') +
-                   ' data-book-genre="' + _tiqEsc(_tiqBookGenreOf(it)) + '"';
+            var text = _tiqBookSearchText(it);
+            return (_tiqBookGenreKeep(it) ? '' : ' tiq-bgenre-hidden') +
+                   (_tiqBookSearchKeep(text) ? '"' : ' tiq-bsearch-hidden"') +
+                   ' data-book-genre="' + _tiqEsc(_tiqBookGenreOf(it)) + '"' +
+                   ' data-bsearch="' + _tiqEsc(text) + '"';
+        }
+        // Search all platforms: one query over every Books card at once
+        // (title + author). Rows hide by class so it stacks with the genre
+        // filter and each card's own search.
+        function _tiqBookSearchQ() {
+            return String((window.__trendsIQ && window.__trendsIQ.bookSearch) || '').trim().toLowerCase();
+        }
+        function _tiqBookSearchText(it) {
+            return [it && it.title, it && it.artist, it && it.author].filter(Boolean).join(' ')
+                .toLowerCase().replace(/\s+/g, ' ');
+        }
+        function _tiqBookSearchKeep(text) {
+            var q = _tiqBookSearchQ();
+            if (!q) return true;
+            return q.split(' ').every(function(w) { return !w || text.indexOf(w) >= 0; });
+        }
+        function _tiqBookSearchApply(panel) {
+            panel = panel || document.querySelector('#trendsIQPanels .tiq-panel[data-tiq-panel="books"]');
+            if (!panel) return;
+            var q = _tiqBookSearchQ();
+            var cards = panel.querySelectorAll('.tiq-card');
+            var hits = 0, where = 0;
+            for (var c = 0; c < cards.length; c++) {
+                var rows = cards[c].querySelectorAll('.tiq-row[data-bsearch]');
+                if (!rows.length) continue;
+                var n = 0;
+                for (var r = 0; r < rows.length; r++) {
+                    var keep = _tiqBookSearchKeep(rows[r].getAttribute('data-bsearch') || '');
+                    rows[r].classList.toggle('tiq-bsearch-hidden', !keep);
+                    if (keep && !rows[r].classList.contains('tiq-bgenre-hidden')) n++;
+                }
+                hits += n; if (n) where++;
+                var note = cards[c].querySelector('.tiq-bsearch-empty');
+                if (q && !n) {
+                    if (!note) {
+                        note = document.createElement('div');
+                        note.className = 'tiq-bgenre-empty tiq-bsearch-empty no-uppercase';
+                        var list = rows[0].parentElement;
+                        list.parentElement.insertBefore(note, list);
+                    }
+                    note.textContent = 'No match on this chart.';
+                } else if (note) {
+                    note.remove();
+                }
+            }
+            var count = panel.querySelector('.tiq-bsearch-count');
+            if (count) count.textContent = q ? (hits ? hits + (hits === 1 ? ' match' : ' matches') + ' on ' + where + (where === 1 ? ' chart' : ' charts') : 'No matches') : '';
+            var clr = panel.querySelector('.tiq-bsearch-clear');
+            if (clr) clr.style.display = q ? '' : 'none';
+        }
+        var _tiqBookSearchLater = _tiqCardSearchDebounce(function() { _tiqBookSearchApply(); }, 120);
+        window.tiqSetBookSearch = function(q, now) {
+            window.__trendsIQ = window.__trendsIQ || {};
+            window.__trendsIQ.bookSearch = q || '';
+            if (now) {
+                var inp = document.querySelector('#trendsIQPanels .tiq-bsearch');
+                if (inp) inp.value = q || '';
+                _tiqBookSearchApply();
+            } else {
+                _tiqBookSearchLater();
+            }
+        };
+        function _tiqBookSearchBox() {
+            var q = (window.__trendsIQ && window.__trendsIQ.bookSearch) || '';
+            return '<input type="search" class="tiq-bsearch" placeholder="Search all platforms\u2026" autocomplete="off" spellcheck="false"' +
+                   ' value="' + _tiqEsc(q) + '" oninput="tiqSetBookSearch(this.value)">' +
+                   '<button type="button" class="tiq-bgenre-clear tiq-bsearch-clear" onclick="tiqSetBookSearch(\'\', true)"' +
+                   (q.trim() ? '' : ' style="display:none"') + '>Clear</button>' +
+                   '<span class="tiq-bsearch-count"></span>';
         }
         function _tiqBookGenreEmptyNote(items) {
             var g = _tiqBookGenreActive();
@@ -74912,7 +74989,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 active = '';
                 window.__trendsIQ.bookGenre = '';
             }
-            if (names.length < 2 && !active) return '';
+            if (names.length < 2 && !active) return '<div class="tiq-bgenre-bar">' + _tiqBookSearchBox() + '</div>';
             var opts = '<option value="">All genres (' + (items || []).length + ')</option>' +
                 names.map(function(g) {
                     return '<option value="' + _tiqEsc(g) + '"' + (g === active ? ' selected' : '') + '>' +
@@ -74921,6 +74998,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             return '<div class="tiq-bgenre-bar"><label>Genre</label>' +
                    '<select class="tiq-bgenre-select" onchange="tiqSetBookGenre(this.value)">' + opts + '</select>' +
                    (active ? '<button type="button" class="tiq-bgenre-clear" onclick="tiqSetBookGenre(\'\')">Clear</button>' : '') +
+                   '<span class="tiq-bsearch-sep"></span>' + _tiqBookSearchBox() +
                    '</div>';
         }
         window.tiqSetBookGenre = function(g) {
@@ -76442,7 +76520,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             series.forEach(function(sr, i) {
                 var c = list[i];
                 if (!c) return;
-                var ident = sr.identity || sr.key;
+                var ident = sr.identity || sr.key || c.key;
                 if (ident in at) {
                     outList[at[ident]].id += '||' + c.id;
                     return;
@@ -76526,20 +76604,35 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var n = dates.length;
             var x = function(i) { return L + (n === 1 ? 0 : i * (W - L - R) / (n - 1)); };
             var y = function(v) { return T + (H - T - B) * (1 - v / yMax); };
-            // Averaged only on days every line has a reading, so a line
-            // joining or dropping out doesn't read as a move in the average.
-            // Too few shared days falls back to whichever lines report.
-            var avgV = null, avgAll = true;
+            // Average of the compared lines. Gaps inside a line are bridged
+            // straight across, lines read on under half the window are left
+            // out (they would make the average jump as they come and go),
+            // and a day is averaged only when every included line has a value.
+            var avgV = null, avgUsed = 0;
             if (vals.length > 1) {
-                var avgOn = function(needAll) {
-                    return dates.map(function(_, i) {
-                        var sum = 0, c = 0;
-                        vals.forEach(function(v) { if (v[i] != null) { sum += v[i]; c++; } });
-                        return (c && (!needAll || c === vals.length)) ? sum / c : null;
-                    });
-                };
-                avgV = avgOn(true);
-                if (avgV.filter(function(z) { return z != null; }).length < 2) { avgV = avgOn(false); avgAll = false; }
+                var filled = vals.map(function(v) {
+                    var out = v.slice(), prev = -1;
+                    for (var i = 0; i < out.length; i++) {
+                        if (out[i] == null) continue;
+                        if (prev >= 0 && i - prev > 1) {
+                            for (var k = prev + 1; k < i; k++) out[k] = out[prev] + (out[i] - out[prev]) * (k - prev) / (i - prev);
+                        }
+                        prev = i;
+                    }
+                    return out;
+                });
+                var cover = vals.map(function(v) { return v.filter(function(z) { return z != null; }).length / Math.max(1, dates.length); });
+                var use = filled.filter(function(_, si) { return cover[si] >= 0.5; });
+                if (use.length < 2) use = filled;
+                avgUsed = use.length;
+                avgV = dates.map(function(_, i) {
+                    var sum = 0;
+                    for (var u = 0; u < use.length; u++) {
+                        if (use[u][i] == null) return null;
+                        sum += use[u][i];
+                    }
+                    return sum / use.length;
+                });
             }
             var _AVG_COL = '#FFFFFF';
             var g = '';
@@ -76566,13 +76659,16 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 lines += '<path d="' + d + '" stroke="' + col + '" fill="none" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>' + dots;
             });
             if (avgV) {
-                var ad = '', apen = false;
+                var ad = '', apen = false, adots = '';
                 avgV.forEach(function(val, i) {
                     if (val == null) { apen = false; return; }
                     ad += (apen ? 'L' : 'M') + x(i).toFixed(1) + ',' + y(val).toFixed(1);
+                    if (!apen && (i + 1 >= avgV.length || avgV[i + 1] == null)) {
+                        adots += '<circle cx="' + x(i).toFixed(1) + '" cy="' + y(val).toFixed(1) + '" r="2.6" fill="' + _AVG_COL + '"/>';
+                    }
                     apen = true;
                 });
-                lines += '<path d="' + ad + '" stroke="' + _AVG_COL + '" fill="none" stroke-width="2.5" stroke-dasharray="6 4" stroke-linejoin="round" stroke-linecap="round" opacity="0.9"/>';
+                lines += '<path d="' + ad + '" stroke="' + _AVG_COL + '" fill="none" stroke-width="2.5" stroke-dasharray="6 4" stroke-linejoin="round" stroke-linecap="round" opacity="0.9"/>' + adots;
             }
             box.innerHTML = '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" class="tiq-cmp-svg">' +
                 g + lines +
@@ -76608,9 +76704,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var aavg = aseen.length ? aseen.reduce(function(a, b) { return a + b; }, 0) / aseen.length : null;
                 leg.innerHTML += '<div class="tiq-cmp-leg tiq-cmp-leg-avg">' +
                     '<i style="background:repeating-linear-gradient(90deg,' + _AVG_COL + ' 0 6px,transparent 6px 9px)"></i>' +
-                    '<div class="nm"><strong>Average</strong><span>' + (avgAll
-                        ? 'Mean of all ' + vals.length + ' lines, on days every line has a reading'
-                        : 'Mean of the lines with a reading each day') + '</span></div>' +
+                    '<div class="nm"><strong>Average</strong><span>' + (avgUsed === vals.length
+                        ? 'Mean of all ' + vals.length + ' lines'
+                        : 'Mean of ' + avgUsed + ' of ' + vals.length + ' lines (lines read on under half the days are left out)') + '</span></div>' +
                     '<div class="st">' + (alast != null
                         ? '<b>' + _tiqCompactNum(alast) + '</b> latest \u00b7 ' + _tiqCompactNum(aavg) + ' avg' +
                           (achg != null ? ' \u00b7 <span class="' + (achg > 0 ? 'up' : achg < 0 ? 'down' : '') + '">' + (achg > 0 ? '+' : '') + achg + '%</span>' : '')
