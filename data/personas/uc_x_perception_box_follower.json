@@ -1,0 +1,267 @@
+{
+  "lens_id": "uc_x_perception_box_follower",
+  "display_name": "Unlikely Collaborators x Perception Box Follower",
+  "short_label": "UC x Perception Box",
+  "emoji": "\u2728",
+  "pop_share": 0.0108,
+  "source_profile": "Aggregate_Unlikely_Collaborators_X_Perception_Box_Followers_10_29_2026_22_19.csv",
+  "one_line": "The combined Unlikely Collaborators and Perception Box following across Instagram, TikTok, and YouTube: young, college-educated, female-led and queer-inclusive, coastal and college-town, equally at home with a neuroscientist and a novelist. Treats self-understanding as both a science and a creative practice, and votes, reads, and spends in line with that.",
+
+  "demographics": {
+    "age_range": "18 to 44 with the mass in 25-34 (31.3%, idx 237) and 18-24 (27.8%, idx 286). 35-44 reads 20.4% (idx 151), a touch older than Perception Box alone because the Unlikely Collaborators side carries more mid-thirties readers. 45-54 reads 74, 55+ falls to 33 and below.",
+    "gender_skew": "Female 63.1% (idx 127), male 33.4% (idx 70), non-binary 2.2% (idx 147), trans male and trans female both read above 120. Queer-inclusive by composition, not just by sympathy.",
+    "income_band": "Middle to upper-middle. $75K-$99K idx 145, $100K-$149K idx 118, $50K-$74K idx 113. Under $25K reads 70 and $250K+ reads 59. Spends on subscriptions, studios, books, supplements, and travel rather than luxury goods.",
+    "education": "Bachelors 36.4% (idx 162), graduate or professional 18.6% (idx 108), some college 24.7% (idx 118). High school or less reads 47. The most degree-heavy of the three consciousness lenses.",
+    "geo_skew": ["San Francisco Oakland San Jose CA", "Austin TX", "Seattle Tacoma WA", "Boston MA Manchester NH", "Portland OR", "New York NY", "Denver CO", "Washington DC Hagerstown MD", "Los Angeles CA", "Raleigh Durham Fayetteville NC", "San Diego CA", "Madison WI", "Minneapolis St Paul MN"],
+    "life_stage": "Single 40.0% (idx 128) and in a relationship 23.0% (idx 352); married reads 59. Six in ten have no children at home. Occupation lifts on legal (270), education and library (163), STEM (121), and management and professional (120). Skilled trades and manufacturing read under 40."
+  },
+
+  "psychographics": {
+    "values": [
+      "Self-understanding as both science and craft. Mental Health 83% (idx 274 within interests), Meditation and Sleeping/Relaxing (idx 2,312), Alternative Medicine (1,457), Writing 23% (1,461), Music-Musicals (2,573), Stationery and Organization (3,103).",
+      "The scientists and the storytellers on the same shelf. Hidden Brain (2,735), Ten Percent Happier (7,694), On Being (6,972), Unlocking Us (6,651), The Science of Happiness (2,372) next to Roxane Gay (3,020), Chimamanda Ngozi Adichie (2,305), Ava DuVernay (2,460), Sally Rooney (1,700), Elizabeth Gilbert.",
+      "Personal growth with psychology behind it. Mel Robbins 74% (idx 787), Andrew Huberman 64% (740), Jay Shetty 52% (755), Brene Brown 49% (803), Dr Nicole LePera 30% (1,610), Nedra Glover Tawwab 20% (2,044), Tara Brach (1,620), Deepak Chopra (1,325), Byron Katie (1,858), Rick Hanson (2,233).",
+      "Queer belonging and progressive civic life. LGBTQ+ 23.4% (idx 203), LGBTQ Life (1,704), LGBTQ Activism (1,936), Social Justice (1,477). ACLU 31% (2,244), The Trevor Project 33% (1,858), GLAAD 20% (3,815), Planned Parenthood 39% (502), Everytown (2,230), Southern Poverty Law Center (2,210), Human Rights Watch (2,418).",
+      "Politically engaged on the progressive side. Kamala Harris 56% (idx 350), Barack Obama 48% (244), Michelle Obama 47% (321), AOC 37% (316), Elizabeth Warren (549), Tim Walz (544), Jasmine Crockett (562), Deb Haaland (1,660). Trump reads 31, MTG 38.",
+      "Wellness as a daily practice. Peloton 13% (idx 165), Equinox (890), Club Pilates (879), CorePower (468), SoulCycle (621), Barry's (598), Orangetheory (733), Alo Yoga, Athleta, Lululemon, Strava, Adriene Mishler (1,274), Thorne (1,171), AG1 (1,092), Bloom Nutrition 32% (2,454).",
+      "Curiosity as recreation. NYT Games 20% (idx 524), Wordle 18% (165), Sudoku (212), Chess.com 11%, Letterboxd (170), Patreon (272), Game of Thrones (825), Duolingo, Udemy 12%, Coursera 9%, Memrise (922)."
+    ],
+    "aesthetics": [
+      "Apple ecosystem and quiet-tech (Apple TV+ idx 150, Apple Music 290, Apple Pay, Apple Vision Pro 138)",
+      "Prestige indie screen and festival culture (A24 322, A24 Shop 1,599, Criterion 195, MUBI 191, Alamo Drafthouse 403, Sundance 301, Tribeca 426)",
+      "Studio-wear and performance basics (Alo Yoga, Athleta, Lululemon, Vuori, Peloton Apparel 1,461)",
+      "Clean beauty and skin science (CeraVe 32%, Bath and Body Works 32%, Neutrogena, e.l.f. 919, Thorne, Moon Juice 3,482, Frank Body 3,516, Maelove 3,811)",
+      "Ethical and indie fashion (Able Clothing 4,415, Whimsy and Row 3,003, Immaculate Vegan 2,150, DoneGood 2,254, Made Trade 1,689, Ted Baker 469)",
+      "Calm home (West Elm, Caraway, Avocado Green Mattress, Nanoleaf, Loop Earplugs 1,203)",
+      "Long-form essay and explainer (The New Yorker, The Atlantic, Substack, Wired, Vox, NPR, PBS)"
+    ],
+    "tone_they_respond_to": "Warm, curious, evidence-literate, first-person when it earns it. Explains the why before the what. Interviews and essays over debates. Willing to hold a contradiction. Dry humor about being human, never at a group's expense. Names the study and the novelist in the same breath.",
+    "tone_they_reject": "Ragebait, grindset and alpha framing, prosperity-gospel positivity, cable-news shouting, miracle-cure wellness with no mechanism, male-gaze fitness marketing, and anything that reduces a person to a tag or a diagnosis."
+  },
+
+  "consumption_signals": {
+    "reads_hard": [
+      "The New York Times 55% (idx 138)", "Google News 55% (185)", "Apple News 49% (185)", "CNN 52% (114)", "NPR 37% (223)", "PBS 25% (166)", "The New Yorker (332)", "The Atlantic (292)", "Wired (374)", "The Guardian", "Vox 7% (138)", "Associated Press"
+    ],
+    "reads_soft": [
+      "Psychology Today", "TED Talks", "Oprah Daily", "Substack", "Well+Good 11% (546)", "Goop and Goop Kitchen (1,481)", "Pride 15% (2,620)", "Gay Times 9% (2,258)", "Them 8% (1,377)", "Jezebel (1,300)", "HelloGiggles (1,720)", "Good On You (2,160)", "World of Vegan (1,650)", "Hip-Hop Wired (730)"
+    ],
+    "watches": {
+      "streaming": ["Netflix 74%", "Amazon Prime Video 60%", "Disney+ and Hulu 47%", "HBO Max 34%", "Apple TV+ 21% (idx 150)", "Paramount+", "Peacock", "The Criterion Channel (195)", "MUBI (191)", "Nebula", "Univision NOW (416)"],
+      "fast": ["Tubi 32%", "Google TV 26% (143)", "Roku Channel", "Pluto TV", "Plex (164)", "Philo (319)", "Sling TV (351)"],
+      "film": ["The Bear", "Past Lives", "Everything Everywhere All At Once", "Barbie (idx 201)", "Oppenheimer", "Andor", "Wicked (691)", "The Last of Us (320)", "Severance", "Shrinking", "Ted Lasso", "Heartstopper", "Hacks", "Abbott Elementary", "Only Murders in the Building", "Bridgerton", "White Lotus", "RuPaul's Drag Race", "Deadpool (327)", "Indiana Jones (822)"],
+      "cable": ["PBS 25% (166)", "CNN 41%", "NBC News 20% (145)", "CBS News 18% (144)", "MS NOW 13% (105)", "History Channel", "BBC America", "The CW", "Comedy Central", "Bravo"]
+    },
+    "listens": {
+      "podcasts": [
+        "Hidden Brain (idx 2,735)",
+        "Ten Percent Happier with Dan Harris (7,694)",
+        "On Being with Krista Tippett (6,972)",
+        "Unlocking Us with Brene Brown (6,651)",
+        "The Science of Happiness (2,372)",
+        "We Can Do Hard Things with Glennon Doyle (1,572)",
+        "The Science of Perception Box (800)",
+        "The Ezra Klein Show (950)",
+        "Lex Fridman Podcast (805)",
+        "Making Sense with Sam Harris",
+        "Armchair Expert with Dax Shepard (625)",
+        "The Mel Robbins Podcast",
+        "On Purpose with Jay Shetty",
+        "Huberman Lab",
+        "The Rich Roll Podcast",
+        "Where Should We Begin with Esther Perel",
+        "The Daily 13% (164)",
+        "Therapy for Black Girls (548)",
+        "If Books Could Kill (442)",
+        "Design Matters with Debbie Millman (387)",
+        "Baby, This Is Keke Palmer (371)",
+        "SmartLess", "This American Life", "Fresh Air", "Song Exploder"
+      ],
+      "music_artists": [
+        "Kendrick Lamar 71%", "Lady Gaga 68% (idx 357)", "Chappell Roan 63% (366)", "Taylor Swift 61%", "Ariana Grande 59%", "Sabrina Carpenter 58% (269)", "The Weeknd 57%", "Beyonce 56%", "Bad Bunny", "Billie Eilish", "SZA", "Olivia Rodrigo", "Doja Cat",
+        "Ava Max (1,746)", "Tracy Chapman (1,744)", "Troye Sivan (1,556)", "Pharrell Williams (1,444)", "Nick Jonas (1,446)", "Daft Punk (1,396)", "Fred Again (1,775)", "FKA twigs (1,499)", "Steve Aoki (1,484)", "Madison Beer (1,377)", "Maluma (1,328)", "Sam Smith (1,302)", "Sia (1,290)", "Norah Jones (1,253)", "Queen Latifah (1,239)", "Janet Jackson (1,180)", "Tiesto (1,181)", "Young Miko (1,407)", "Hayley Kiyoko (1,363)", "Girl in Red (1,512)", "FINNEAS (1,278)", "Phoebe Bridgers", "boygenius", "Hozier", "Noah Kahan", "Sufjan Stevens (776)"
+      ],
+      "music_genres": ["pop and queer-pop", "soft-pop, sad-hour, and romcom playlist moods (idx 5,500-6,500)", "electronic, house, and dance (Fred Again, Daft Punk, Tiesto, Steve Aoki)", "indie and singer-songwriter", "R&B and 90s R&B", "hip-hop (Kendrick-forward)", "Latin pop and reggaeton (Bad Bunny, Maluma, Young Miko)", "musicals (idx 2,573)", "smooth jazz and chill tracks for focus"]
+    },
+    "reads_books": {
+      "formats": ["Goodreads", "Libby library ebook", "Audible", "Kindle", "hardcover nonfiction", "small-press indie"],
+      "genres": [
+        "popular neuroscience and psychology",
+        "therapist-authored relationships, boundaries, and inner-child work",
+        "contemplative nonfiction and secular Buddhist practice",
+        "creativity and craft (Big Magic register)",
+        "memoir by thinkers, artists, comedians, and public figures",
+        "prestige literary fiction, especially by women and queer writers",
+        "essay collections on identity, race, and belonging",
+        "evidence-based habit and longevity books",
+        "BookTok romantasy and Colleen Hoover as the escape read (Colleen Hoover 24%, Fourth Wing)"
+      ],
+      "authors_or_titles": [
+        "Elizabeth Gilbert (Big Magic, Eat Pray Love, All The Way To The River)",
+        "Brene Brown (Atlas of the Heart, Daring Greatly)",
+        "Mel Robbins (The Let Them Theory)",
+        "Jay Shetty (Think Like a Monk)",
+        "Glennon Doyle (Untamed)",
+        "Dr Nicole LePera (How to Do the Work)",
+        "Nedra Glover Tawwab (Set Boundaries, Find Peace)",
+        "Esther Perel",
+        "Tara Brach (Radical Acceptance)",
+        "Rick Hanson (Hardwiring Happiness)",
+        "Byron Katie (Loving What Is)",
+        "Deepak Chopra",
+        "Peter Attia (Outlive)",
+        "Dr Mark Hyman",
+        "Sam Harris (Waking Up)",
+        "Roxane Gay (Bad Feminist, Hunger)",
+        "Chimamanda Ngozi Adichie (Americanah, Dream Count)",
+        "Ocean Vuong",
+        "Ann Patchett",
+        "Sally Rooney (Intermezzo)",
+        "Zadie Smith",
+        "Cheryl Strayed",
+        "Michelle Obama",
+        "bell hooks",
+        "Taylor Jenkins Reid",
+        "Emily Henry",
+        "Colleen Hoover",
+        "Fourth Wing (Rebecca Yarros)",
+        "James Clear (Atomic Habits)"
+      ]
+    },
+    "plays": [
+      "NYT Games 20% (idx 524), Wordle 18% (165), Sudoku 12% (212), Chess.com 11%",
+      "Game of Thrones (825), The Last of Us, Dragon Age franchise games",
+      "Stardew Valley (242), Animal Crossing, Minecraft, cozy sims",
+      "LEGO (249) builds, Apple Games (315), Amazon Prime Gaming (308)",
+      "Beat Saber and VR fitness",
+      "Call of Duty 5, GTA 7, NBA 2K 8, Madden 35 all deep under-index"
+    ],
+    "shops": [
+      "Target 57% (idx 192), Sephora 43% (287), Ulta 36% (228), Temu 34% (171), Etsy 33% (136), eBay 32%",
+      "Whole Foods, Trader Joe's, Erewhon 7% (1,316), Central Market, H Mart",
+      "IKEA, West Elm, REI 11% (329), Costco Optical (489)",
+      "Alo Yoga, Athleta, Lululemon, Vuori, A24 Shop (1,599), Ted Baker (469)",
+      "Able Clothing, Whimsy and Row, Immaculate Vegan, Made Trade, DoneGood",
+      "Amazon reads 57, the only mass retailer that under-indexes"
+    ],
+    "eats_at": [
+      "Starbucks 57% (140), Sweetgreen, Chipotle 32%, Panera 23% (116), Crumbl 23% (584), Dunkin 28%",
+      "The Coffee Snob (6,622), Health Nut (3,774), SunLife Organics (2,471), Boba Guys (1,649), Kreation juice, La Colombe, Alfred Coffee",
+      "The Cheesecake Factory 26% (219) with family, Olive Garden 22%",
+      "Chef-driven lists (Topolobampo, Benu, Addison, Girl and the Goat, Friedman's)"
+    ],
+    "buys": [
+      "Bloom Nutrition, Thorne, AG1, Moon Juice, OLIPOP, Poppi, Quest",
+      "Sakara Life, Fresh N Lean, Gobble, Splendid Spoon, Territory Foods meal plans",
+      "Headspace, Calm, BetterHelp 13% (347), Talkiatry, Klarity (994), Hims",
+      "Caraway, Avocado Green Mattress, Loop Earplugs, Nanoleaf, Ecoflow, Native Union",
+      "CeraVe, Tula, e.l.f., Frank Body, Maelove, Malibu C, Moon Juice",
+      "Duolingo, Udemy, Coursera, MasterClass, Memrise, Babbel",
+      "BarkBox (1,420), The Farmer's Dog (925), Zesty Paws (722)",
+      "Co Star Astrology (222), The Pattern (255), Astrology.com (305)"
+    ],
+    "follows_talent": [
+      "Mel Robbins 74%", "Andrew Huberman 64%", "Kamala Harris 56%", "Jay Shetty 52%", "Brene Brown 49%", "Barack Obama 48%", "Michelle Obama 47%", "Oprah 57%", "Esther Perel", "Dr Nicole LePera 30%", "Peter Attia 25%", "Glennon Doyle 24%", "Nedra Glover Tawwab 20%", "Deepak Chopra 19%", "Tony Robbins 19%",
+      "Elizabeth Gilbert", "Sam Harris", "Lex Fridman", "Rich Roll", "Tara Brach", "Krista Tippett", "Byron Katie", "Rick Hanson", "Dr Rhonda Patrick", "Dr Mark Hyman", "Becky Kennedy", "Adriene Mishler", "Steven Bartlett", "Ali Abdaal",
+      "Roxane Gay", "Chimamanda Ngozi Adichie", "Ava DuVernay", "Ryan Coogler 31%", "Ryan Murphy", "Ocean Vuong", "Sally Rooney", "Colleen Hoover", "Taylor Jenkins Reid",
+      "Pedro Pascal 66%", "Selena Gomez 62%", "Zendaya 56%", "Jenna Ortega 55%", "Timothee Chalamet 53%", "Laura Dern", "Jada Pinkett Smith", "Laverne Cox", "Janelle Monae", "Aziz Ansari", "Stanley Tucci", "Maya Rudolph", "Brie Larson", "Hunter Schafer", "Mindy Kaling", "Hasan Minhaj", "Trevor Noah", "John Oliver", "RuPaul",
+      "Lady Gaga", "Chappell Roan", "Kendrick Lamar", "Taylor Swift", "Sabrina Carpenter", "Troye Sivan", "Sam Smith", "Fred Again",
+      "Alexandria Ocasio-Cortez", "Elizabeth Warren", "Tim Walz", "Jasmine Crockett", "Deb Haaland", "Raphael Warnock", "Robert Reich", "Jen Psaki", "Greta Thunberg", "Autumn Peltier",
+      "Mark Rober", "Marques Brownlee", "Bill Nye", "Neil deGrasse Tyson", "Casey Neistat"
+    ]
+  },
+
+  "themes_they_care_about": [
+    "consciousness, perception, and how the mind works, told with evidence",
+    "mental health, therapy, boundaries, nervous-system regulation, inner-child and attachment work",
+    "meditation, mindfulness, secular spirituality, breathwork, sober-curious living",
+    "creativity and craft as a practice (Big Magic register, writing, journaling, musicals, design)",
+    "personal growth anchored in psychology, not hustle",
+    "queer belonging, LGBTQ+ rights, trans visibility, drag and ballroom culture",
+    "progressive civic life: voting rights, civil liberties, reproductive rights, gun safety, climate, criminal-justice reform",
+    "the people who carry progressive politics (Obamas, Harris, AOC, Warren, Walz, Crockett, Haaland)",
+    "prestige film and television with interior lives (A24, Apple TV+, Sundance, Tribeca, Criterion)",
+    "literary fiction and essay by women and queer writers of color",
+    "diverse pop culture: Black women in media, Latin crossover, Asian American film, K-pop entering mainstream",
+    "evidence-based wellness: longevity, nutrition science, sleep, strength and Zone 2, boutique studios",
+    "science communication and big ideas (TED, Hidden Brain, Ezra Klein, Lex Fridman, Sam Harris)",
+    "AI and technology as tools for learning, creativity, and self-work",
+    "pet parenting as identity",
+    "clean-label food, plant-forward eating, specialty coffee, meal-plan services",
+    "ethical and indie fashion, clean beauty, thoughtful consumption"
+  ],
+  "themes_they_avoid": [
+    "hustle culture, grindset, manosphere, and alpha-bro content",
+    "conservative culture-war media and MAGA-branded programming (Trump idx 31, Fox News 21, Ben Shapiro 25, Breitbart 96 at most)",
+    "cable-news anchor drama and ragebait from any direction",
+    "miracle-cure wellness, MLM supplements, prosperity-gospel self-help",
+    "mainstream pro sports as a primary read (NFL idx 47, NBA 50, MLB 45, NASCAR 28, UFC 38, WWE 46)",
+    "sports betting, meme-stock, and crypto-bro content (DraftKings 18, FanDuel 16)",
+    "shooters, sports sims, and military games (Call of Duty 5, GTA 7, NBA 2K 8)",
+    "reality-dating and tabloid celebrity as a primary read",
+    "hunting, fishing, trucks, outdoor-sportsman and auto-parts retail (Harbor Freight 27, O'Reilly 55)",
+    "senior-market topics (Medicare, retirement communities, AARP framing, SilverSneakers 26)",
+    "country radio, hard rock radio, and faith-broadcast programming (Morgan Wallen 43, Pantera 45, Bethel Music 73, TBN 18)"
+  ],
+
+  "filter_rules_for_agent": [
+    "KEEP anything about how the mind works and how to work with it: perception, cognitive bias, attention, habit, neuroscience, psychology research, therapy, boundaries, grief, sleep, nervous-system regulation. Hidden Brain, Huberman Lab, Ten Percent Happier, The Science of Happiness, The Science of Perception Box, Brene Brown, Esther Perel, Nedra Glover Tawwab, Dr Nicole LePera, Becky Kennedy, Mel Robbins, Jay Shetty, Glennon Doyle, Dan Harris, Rick Hanson, Scott Barry Kaufman, Adam Grant.",
+    "KEEP contemplative and secular-spiritual voices and practices: Tara Brach, Krista Tippett and On Being, Sam Harris and Waking Up, Byron Katie, Deepak Chopra, Jack Kornfield, Pema Chodron, meditation retreats, breathwork, sober-curious culture, Headspace and Calm releases.",
+    "KEEP creativity-and-craft content in the Big Magic register: Elizabeth Gilbert, Rha Goddess, Design Matters, Song Exploder, writing and journaling, musicals, small-press books, indie bookstores, Substack and Patreon launches, art-making.",
+    "KEEP big-ideas and science-communication items: TED, Lex Fridman, Ezra Klein, Hard Fork, Bill Nye, Neil deGrasse Tyson, Mark Rober, Ali Abdaal, long-form New Yorker, Atlantic, Wired, Substack essays, Vox explainers, NPR and PBS features, The Daily.",
+    "KEEP evidence-based wellness and movement: longevity and nutrition science (Peter Attia, Mark Hyman, Rhonda Patrick), supplements with a mechanism (Thorne, AG1, Bloom), sleep science, strength and Zone 2, Peloton, boutique studios (Equinox, Club Pilates, CorePower, SoulCycle, Barry's, Orangetheory), yoga (Adriene Mishler), Pilates, Strava, running, VR fitness.",
+    "KEEP queer belonging and LGBTQ+ culture: Pride, GLAAD, The Trevor Project, Lambda Legal, Them, Gay Times, drag (RuPaul, DragCon), Heartstopper, Troye Sivan, Chappell Roan, Girl in Red, Hayley Kiyoko, Sam Smith, Hunter Schafer, Laverne Cox, Janelle Monae, queer books and film, Outfest, World Pride.",
+    "KEEP progressive civic and social-justice coverage: ACLU, Planned Parenthood, Everytown, Southern Poverty Law Center, Innocence Project, Color of Change, Human Rights Watch, NRDC, voting rights, reproductive rights, climate action, and the people who carry it (Barack and Michelle Obama, Kamala Harris, AOC, Elizabeth Warren, Tim Walz, Jasmine Crockett, Deb Haaland, Raphael Warnock, Robert Reich, Jen Psaki, John Oliver, Hasan Minhaj, Trevor Noah, Greta Thunberg).",
+    "KEEP prestige film and television with interior lives: Apple TV+ originals (Severance, Shrinking, Ted Lasso), A24 and Neon titles, The Bear, Past Lives, Everything Everywhere All At Once, Andor, Hacks, Abbott Elementary, Only Murders, Bridgerton, White Lotus, Wicked, Barbie, Oppenheimer, Deadpool, The Last of Us, titles headlined by Pedro Pascal, Zendaya, Jenna Ortega, Timothee Chalamet, Laura Dern, Stanley Tucci, Maya Rudolph, Brie Larson, Ryan Coogler and Ryan Murphy projects. Sundance, Tribeca, Criterion, MUBI, Alamo Drafthouse.",
+    "KEEP literary fiction and essay by women and queer writers of color, plus memoir by thinkers and public figures: Roxane Gay, Chimamanda Ngozi Adichie, Ocean Vuong, Ann Patchett, Sally Rooney, Zadie Smith, Cheryl Strayed, Michelle Obama, bell hooks, Taylor Jenkins Reid, Emily Henry. Colleen Hoover and romantasy (Fourth Wing) pass mid-high as the escape read.",
+    "KEEP pop, queer-pop, electronic, R&B, Latin, and Kendrick-forward hip-hop that reads for a 25-34 coastal-metro listener: Taylor Swift, Lady Gaga, Chappell Roan, Sabrina Carpenter, Ariana Grande, Billie Eilish, SZA, Olivia Rodrigo, Beyonce, The Weeknd, Kendrick Lamar, Bad Bunny, Maluma, Young Miko, Troye Sivan, Sam Smith, Sia, Ava Max, Fred Again, Daft Punk, Tiesto, Pharrell, Janet Jackson, Tracy Chapman, Norah Jones, Phoebe Bridgers, boygenius, Hozier, Noah Kahan, Sufjan Stevens, soft-pop and sad-hour playlist moods, musicals.",
+    "KEEP diverse pop culture: Black women in TV and music, Essence Festival, BET Awards, NAACP Image Awards, Latin crossover, Asian American film, K-pop entering mainstream, drag and ballroom.",
+    "KEEP AI and technology stories framed around learning, thinking, creativity, or mental health (ChatGPT, Claude, Perplexity, Duolingo, Coursera, Udemy, MasterClass, Notion, Apple hardware). Drop pure enterprise-earnings and chip-supply stories.",
+    "KEEP puzzle, cozy, and franchise gaming: NYT Games, Wordle, Sudoku, Chess.com, Stardew Valley, Animal Crossing, Minecraft, LEGO, Game of Thrones and The Last of Us games, Beat Saber.",
+    "KEEP clean-label food and specialty coffee: Sweetgreen, Sakara, Erewhon, Whole Foods, Trader Joe's, H Mart, OLIPOP, Poppi, Health Nut, Boba Guys, La Colombe, Blue Bottle, plant-forward recipes, meal-plan services.",
+    "KEEP studio-wear, clean and ethical beauty and fashion, and calm-home brands: Alo Yoga, Athleta, Lululemon, Vuori, Able, Whimsy and Row, Immaculate Vegan, CeraVe, Tula, e.l.f., Frank Body, Moon Juice, Sephora and Ulta drops, West Elm, Caraway, Avocado, Loop Earplugs, Away.",
+    "KEEP pet-wellness items: BarkBox, The Farmer's Dog, Zesty Paws, DTC pet food, adoption and rescue stories.",
+    "KEEP astrology and self-reflection apps as mid-high (Co Star, The Pattern, Chani) when framed as reflection, not prediction.",
+    "DROP hustle-culture, grindset, manosphere, and alpha-bro content: Andrew Tate, Grant Cardone, Gary Vee, most Joe Rogan episodes unless the guest is a scientist or contemplative this follower already tracks (Huberman, Attia, Sam Harris).",
+    "DROP conservative culture-war media: Ben Shapiro, Tucker Carlson, Charlie Kirk, Candace Owens, Matt Walsh, PragerU, Turning Point USA, Fox News personalities, Newsmax, Breitbart, Truth Social, Libs of TikTok.",
+    "DROP mainstream pro-sports items as primary reads: NFL, NBA, MLB, NASCAR, WWE, UFC fight cards, college football, fantasy football, sports betting (DraftKings, FanDuel). Exceptions pass MID at best: WNBA, NWSL, MLS, F1 as culture, a documentary or memoir angle, an athlete speaking on mental health.",
+    "DROP first-person shooters, sports sims, and military games: Call of Duty, NBA 2K, Madden, GTA, Fortnite, Halo, Battlefield.",
+    "DROP reality-dating and tabloid celebrity as primary items (Bachelor, Love Island, 90 Day Fiance, Real Housewives). May pass MID when the person involved is already on this follower's list.",
+    "DROP miracle-cure wellness, MLM supplements, detox teas, and prosperity-gospel self-help without a mechanism.",
+    "DROP country-radio, hard-rock-radio, and faith-broadcast programming (Morgan Wallen, Blake Shelton, Luke Combs, Pantera, Shinedown, Bethel Music, Hillsong, TBN, 700 Club).",
+    "DROP hunting, fishing, trucks, outdoor-sportsman retail, auto parts, and home-improvement big-box (Bass Pro, Cabela's, Tractor Supply, Harbor Freight, O'Reilly).",
+    "DROP senior-market topics: Medicare supplements, retirement communities, SilverSneakers, AARP framing, mass-market cruise lines.",
+    "DROP kids-only franchises (Paw Patrol, Cocomelon, Peppa Pig). LEGO adult sets, Wicked, Barbie, Indiana Jones, Star Wars, and Monster High pass on adult crossover.",
+    "TIE-BREAK when unsure: does this help the reader understand their own mind, make something, or belong somewhere? If yes, lean KEEP. If it is pure spectacle with no idea or identity inside it, MID at best."
+  ],
+
+  "expected_kept_share_per_tab": "20-40% of items per tab. Podcasts and Books retain the most because both sides of this following are heavy long-form consumers. Search and Headlines narrow hardest because sports, weather, finance, and celebrity-gossip items are outgroup. Music and Streaming land mid-range: broad pop and prestige TV pass, country and shooters do not.",
+
+  "reasoned_from_profile": {
+    "profile_key": "Aggregate_Unlikely_Collaborators_X_Perception_Box_Followers_10_29_2026_22_19.csv",
+    "sample_size_row": "Aggregate Unlikely Collaborators X Perception Box Followers (Total Universe across Instagram, TikTok, YouTube, both accounts). Behavior window 2025-09-01 to 2026-10-28. Projects to 3.55M US people (1.08% of US), avid share 16.9%. The Perception Box side is 71% of this following and the Unlikely Collaborators side 41%, so the two overlap on roughly one in nine people.",
+    "notable_index_signals": [
+      "AGE 18-24 idx 286, 25-34 idx 237, 35-44 idx 151, 45-54 idx 74, 65+ idx 9",
+      "GENDER FEMALE 127, MALE 70, NON-BINARY 147, TRANS MALE 122, TRANS FEMALE 124",
+      "LGBTQ+ 203; IN A RELATIONSHIP 352; SINGLE 128; MARRIED 59",
+      "EDUCATION BACHELORS 162, GRAD 108, HS OR LESS 47",
+      "INCOME $75K-$99K 145, $100K-$149K 118, $250K+ 59, under $25K 70",
+      "LOCATION San Francisco 185, Austin 182, Seattle 173, Boston 168, Portland 157, New York 156, Denver 153, DC 152, Los Angeles 150",
+      "INTEREST Mental Health 83% idx 274, Stationery & Organization 3,103, Math & Stats 2,723, Music-Musicals 2,573, Sleeping/Relaxing 2,312, Goth Style 2,254, LGBTQ Activism 1,936, LGBTQ Life 1,704, Social Justice 1,477, Writing 1,461, Alternative Medicine 1,457",
+      "PODCAST Ten Percent Happier 7,694, On Being 6,972, Unlocking Us 6,651, Hidden Brain 2,735, Science of Happiness 2,372, We Can Do Hard Things 1,572, Ezra Klein 950, Lex Fridman 805, Science of Perception Box 800, Therapy for Black Girls 548",
+      "TALENT Mel Robbins 74% idx 787, Andrew Huberman 64% idx 740, Jay Shetty 52% idx 755, Brene Brown 49% idx 803, Oprah 57% idx 407, Dr Nicole LePera 1,610, Nedra Glover Tawwab 2,044, Tara Brach 1,620, Byron Katie 1,858, Rick Hanson 2,233, Sam Harris 3,106, Roxane Gay 3,020, Chimamanda Ngozi Adichie 2,305, Ava DuVernay 2,460, Sally Rooney 1,700",
+      "MEDIA Pride 2,620, Gay Times 2,258, Them 1,377, Goop Kitchen 1,481, Well+Good 546, Google News 185, Apple News 185, NPR 223, PBS 166, NYT 138",
+      "STREAMING Apple TV+ 150, Criterion 195, MUBI 191, Netflix 74%; FAST Tubi 32%, Google TV 143, Philo 319, Sling 351",
+      "MUSIC Lady Gaga 357, Chappell Roan 366, Sabrina Carpenter 269, Ava Max 1,746, Tracy Chapman 1,744, Fred Again 1,775, Troye Sivan 1,556, Pharrell 1,444, Nick Jonas 1,446, Daft Punk 1,396, Maluma 1,328; Morgan Wallen 43",
+      "APP Sakara Life 4,009, Fresh N Lean 2,495, Daily Workouts 2,242, Talkiatry 1,338, Co Star 222, The Pattern 255, Astrology.com 305",
+      "WORKOUT Equinox 890, Club Pilates 879, UFC Gym 865, Orangetheory 733, CrossFit 627, SoulCycle 621, Barry's 598, CorePower 468, Peloton 13% idx 165",
+      "BEAUTY/WELLNESS Bloom Nutrition 32% idx 2,454, Thorne 1,171, AG1 1,092, Moon Juice 3,482, Frank Body 3,516, Maelove 3,811, e.l.f. 919",
+      "NONPROFIT GLAAD 3,815, Color of Change 3,156, NRDC 3,054, Human Rights Watch 2,418, Innocence Project 2,373, ACLU 2,244, Everytown 2,230, SPLC 2,210, Trevor Project 1,858, Planned Parenthood 39% idx 502; Turning Point USA 14, NRA 43",
+      "POLITICS Kamala Harris 56% idx 350, Michelle Obama 321, AOC 316, Barack Obama 244, Elizabeth Warren 549, Tim Walz 544, Jasmine Crockett 562, Deb Haaland 1,660, Ilhan Omar 1,342; Donald Trump 31, MTG 38",
+      "SPORTS NFL 47, NBA 50, MLB 45, NASCAR 28, UFC 38, WWE 46; WNBA 144, NWSL 748, MLS 326, USA Pickleball 839",
+      "GAMES NYT Games 20% idx 524, Game of Thrones 825, Sudoku 212, Stardew Valley 242, LEGO 249; Call of Duty 5, GTA 7, NBA 2K 8",
+      "SHOP Target 192, Sephora 287, Ulta 228, REI 329, Erewhon 1,316, A24 Shop 1,599, Able Clothing 4,415; Amazon 57, Harbor Freight 27",
+      "QSR The Coffee Snob 6,622, Health Nut 3,774, SunLife Organics 2,471, Boba Guys 1,649, Crumbl 584, Starbucks 140"
+    ]
+  }
+}

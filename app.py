@@ -23991,6 +23991,8 @@ DEFAULT_LIVE_FEATURES = {
 # hidden-lens grid in templates/admin.html.
 TRENDS_IQ_LENS_IDS = (
     'unlikely_collaborators_follower',
+    'perception_box_follower',            # 2026-10-30
+    'uc_x_perception_box_follower',       # 2026-10-30
     'gen_z',
     'millennials',
     'gen_x',
@@ -24006,6 +24008,11 @@ TRENDS_IQ_LENS_IDS = (
 # 2026-09-03.)
 DEFAULT_HIDDEN_LENSES = {
     'unlikely_collaborators_follower':  True,
+    # 2026-10-30: the two new consciousness-cohort lenses follow the
+    # Unlikely Collaborators default (hidden until enabled in Live
+    # Features or granted per user). Super admins always see them.
+    'perception_box_follower':          True,
+    'uc_x_perception_box_follower':     True,
     'gen_z':                            False,
     'millennials':                      False,
     'gen_x':                            False,

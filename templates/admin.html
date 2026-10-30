@@ -2593,6 +2593,14 @@
                                 <span>🧭 Unlikely Collaborators Follower</span>
                             </label>
                             <label class="checkbox-group" style="padding: 0.6rem 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox" class="hidden-lens-checkbox" data-lens="perception_box_follower" onchange="updateHiddenLens('perception_box_follower', this.checked)">
+                                <span>🧠 Perception Box Follower</span>
+                            </label>
+                            <label class="checkbox-group" style="padding: 0.6rem 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox" class="hidden-lens-checkbox" data-lens="uc_x_perception_box_follower" onchange="updateHiddenLens('uc_x_perception_box_follower', this.checked)">
+                                <span>✨ Unlikely Collaborators x Perception Box Follower</span>
+                            </label>
+                            <label class="checkbox-group" style="padding: 0.6rem 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
                                 <input type="checkbox" class="hidden-lens-checkbox" data-lens="gen_z" onchange="updateHiddenLens('gen_z', this.checked)">
                                 <span>🌐 Gen Z (Ages 18-28)</span>
                             </label>
@@ -4782,6 +4790,14 @@
                             <label class="checkbox-group allowed-lens-row" style="padding: 0.5rem 0.6rem; background: var(--bg-card); border-radius: 6px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
                                 <input type="checkbox" class="allowed-lens-checkbox" data-lens="unlikely_collaborators_follower">
                                 <span>🧭 Unlikely Collaborators Follower</span>
+                            </label>
+                            <label class="checkbox-group allowed-lens-row" style="padding: 0.5rem 0.6rem; background: var(--bg-card); border-radius: 6px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox" class="allowed-lens-checkbox" data-lens="perception_box_follower">
+                                <span>🧠 Perception Box Follower</span>
+                            </label>
+                            <label class="checkbox-group allowed-lens-row" style="padding: 0.5rem 0.6rem; background: var(--bg-card); border-radius: 6px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox" class="allowed-lens-checkbox" data-lens="uc_x_perception_box_follower">
+                                <span>✨ Unlikely Collaborators x Perception Box Follower</span>
                             </label>
                             <label class="checkbox-group allowed-lens-row" style="padding: 0.5rem 0.6rem; background: var(--bg-card); border-radius: 6px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
                                 <input type="checkbox" class="allowed-lens-checkbox" data-lens="gen_z">
@@ -8092,6 +8108,8 @@
         // canonical lens ids under scripts/trends_scrapers/lens_personas/.
         let hiddenLensesData = {
             unlikely_collaborators_follower:  true,
+            perception_box_follower:          true,
+            uc_x_perception_box_follower:     true,
             gen_z:                            false,
             millennials:                      false,
             gen_x:                            false,

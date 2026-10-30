@@ -171,7 +171,16 @@ _PERSONA_POP_SHARE: dict[str, float] = {
     'millennials':                      0.216,   # 29-44
     'gen_x':                            0.196,   # 45-60
     'baby_boomers':                     0.211,   # 61-79
-    'unlikely_collaborators_follower':  0.041,   # cohort reach, per profile
+    # Consciousness-cohort lenses. Each share is the profile's own US
+    # Gen Pop projection over 329.9M (2026-10-30, read off the Oct 29
+    # Aggregate_*_Followers files). The UC share had been carried at
+    # 0.041 since launch, about ten times what its profile projects
+    # (0.0038 on the Aug 14 file, 0.0044 on the Oct 29 refresh); it
+    # is corrected here so the combined lens below reads larger than
+    # either side on its own, as it must.
+    'unlikely_collaborators_follower':  0.0044,  # 1.44M of 329.9M
+    'perception_box_follower':          0.0076,  # 2.51M of 329.9M
+    'uc_x_perception_box_follower':     0.0108,  # 3.55M of 329.9M
     'women':                            0.511,   # US adults 18+ (Census ACS)
     'men':                              0.489,
 }
@@ -422,6 +431,12 @@ _LENSES: list[dict[str, Any]] = [
 # ---------------------------------------------------------------------------
 _JSON_PERSONA_FILES: list[str] = [
     'unlikely_collaborators_follower',
+    # 2026-10-30 (Jenna: "add two extra lenses to trends which are
+    # perception box and then one that's a combo of perception box
+    # and unlikely collaborators"). Both personas were reasoned off
+    # the Oct 29 Aggregate_*_Followers profiles in S3.
+    'perception_box_follower',
+    'uc_x_perception_box_follower',
     'gen_z',
     'millennials',
     'gen_x',
@@ -735,6 +750,152 @@ _ANCHORS: dict[str, list[dict[str, Any]]] = {
         {'kind': 'game',     'title': 'Fortnite',                              'score': 22},
         {'kind': 'game',     'title': 'Call of Duty: Warzone',                 'score': 12},
         {'kind': 'game',     'title': 'Halo Infinite',                         'score': 15},
+    ],
+
+    # -----------------------------------------------------------------
+    # Perception Box follower (2026-10-30). The science-of-mind side of
+    # the consciousness cohort: 18-34 (61%), 63% female, 23% LGBTQ+,
+    # degree-heavy, SF / Austin / Seattle / Boston / NYC. Hidden Brain,
+    # Ten Percent Happier, On Being and Huberman are the spine; Sam
+    # Harris, Rich Roll and Scott Barry Kaufman index in the thousands.
+    # Prestige film and queer pop pass high. Pro sports, shooters,
+    # country radio and conservative media sit at the floor.
+    # -----------------------------------------------------------------
+    'perception_box_follower': [
+        {'kind': 'podcast',  'title': 'Hidden Brain',                          'score': 97},
+        {'kind': 'podcast',  'title': 'Ten Percent Happier',                   'score': 96},
+        {'kind': 'podcast',  'title': 'Huberman Lab',                          'score': 94},
+        {'kind': 'podcast',  'title': 'On Being with Krista Tippett',          'score': 93},
+        {'kind': 'podcast',  'title': 'The Mel Robbins Podcast',               'score': 91},
+        {'kind': 'podcast',  'title': 'Making Sense with Sam Harris',          'score': 90},
+        {'kind': 'podcast',  'title': 'The Daily',                             'score': 48},
+        {'kind': 'podcast',  'title': 'The Joe Rogan Experience',              'score': 18},
+        {'kind': 'podcast',  'title': 'The Ben Shapiro Show',                  'score': 4},
+        {'kind': 'song',     'title': 'Good Luck Babe! (Chappell Roan)',       'score': 93},
+        {'kind': 'song',     'title': 'Abracadabra (Lady Gaga)',               'score': 90},
+        {'kind': 'song',     'title': 'BIRDS OF A FEATHER (Billie Eilish)',    'score': 89},
+        {'kind': 'song',     'title': 'Fast Car (Tracy Chapman)',              'score': 86},
+        {'kind': 'song',     'title': 'Rush (Troye Sivan)',                    'score': 85},
+        {'kind': 'song',     'title': 'Not Like Us (Kendrick Lamar)',          'score': 70},
+        {'kind': 'song',     'title': 'Last Night (Morgan Wallen)',            'score': 14},
+        {'kind': 'book',     'title': 'The Let Them Theory (Mel Robbins)',     'score': 95},
+        {'kind': 'book',     'title': 'Atlas of the Heart (Brene Brown)',      'score': 94},
+        {'kind': 'book',     'title': 'Waking Up (Sam Harris)',                'score': 92},
+        {'kind': 'book',     'title': 'Outlive (Peter Attia)',                 'score': 88},
+        {'kind': 'book',     'title': 'Radical Acceptance (Tara Brach)',       'score': 90},
+        {'kind': 'book',     'title': 'Dream Count (Chimamanda Ngozi Adichie)', 'score': 84},
+        {'kind': 'book',     'title': 'Fourth Wing (Rebecca Yarros)',          'score': 66},
+        {'kind': 'book',     'title': 'Rich Dad Poor Dad',                     'score': 12},
+        {'kind': 'book',     'title': 'The Art of the Deal (Trump)',           'score': 3},
+        {'kind': 'film',     'title': 'Severance',                             'score': 95},
+        {'kind': 'film',     'title': 'Past Lives',                            'score': 94},
+        {'kind': 'film',     'title': 'Shrinking',                             'score': 92},
+        {'kind': 'film',     'title': 'The Bear',                              'score': 91},
+        {'kind': 'film',     'title': 'Heartstopper',                          'score': 88},
+        {'kind': 'film',     'title': 'Oppenheimer',                           'score': 82},
+        {'kind': 'film',     'title': 'Love Island USA',                       'score': 28},
+        {'kind': 'film',     'title': 'Yellowstone',                           'score': 24},
+        {'kind': 'headline', 'title': 'New study links eight hours of sleep to sharper memory', 'score': 95},
+        {'kind': 'headline', 'title': 'Supreme Court hears LGBTQ+ workplace case', 'score': 88},
+        {'kind': 'headline', 'title': 'Apple TV+ renews Severance for third season', 'score': 86},
+        {'kind': 'headline', 'title': 'Federal Reserve leaves rates unchanged', 'score': 26},
+        {'kind': 'headline', 'title': 'Cowboys clinch NFC East with overtime win', 'score': 8},
+        {'kind': 'search',   'title': 'huberman sleep protocol',               'score': 95},
+        {'kind': 'search',   'title': 'headspace vs calm',                     'score': 90},
+        {'kind': 'search',   'title': 'therapist near me accepting new patients', 'score': 86},
+        {'kind': 'search',   'title': 'nyt connections hint today',            'score': 72},
+        {'kind': 'search',   'title': 'nfl draft 2026',                        'score': 12},
+        {'kind': 'search',   'title': 'medicare supplement plans',             'score': 6},
+        {'kind': 'person',   'title': 'Andrew Huberman',                       'score': 96},
+        {'kind': 'person',   'title': 'Mel Robbins',                           'score': 95},
+        {'kind': 'person',   'title': 'Brene Brown',                           'score': 94},
+        {'kind': 'person',   'title': 'Esther Perel',                          'score': 93},
+        {'kind': 'person',   'title': 'Sam Harris',                            'score': 90},
+        {'kind': 'person',   'title': 'Chappell Roan',                         'score': 86},
+        {'kind': 'person',   'title': 'Patrick Mahomes',                       'score': 14},
+        {'kind': 'person',   'title': 'Andrew Tate',                           'score': 2},
+        {'kind': 'game',     'title': 'NYT Connections',                       'score': 78},
+        {'kind': 'game',     'title': 'Stardew Valley',                        'score': 64},
+        {'kind': 'game',     'title': 'Beat Saber',                            'score': 60},
+        {'kind': 'game',     'title': 'Fortnite',                              'score': 18},
+        {'kind': 'game',     'title': 'Call of Duty: Warzone',                 'score': 6},
+    ],
+
+    # -----------------------------------------------------------------
+    # Unlikely Collaborators x Perception Box follower (2026-10-30).
+    # The union of the two followings: Perception Box's science-of-mind
+    # register plus Unlikely Collaborators' creativity / Elizabeth
+    # Gilbert / indie register. 63% female, 59% 18-34, 23% LGBTQ+,
+    # 55% bachelors or higher, a touch older than PB alone (35-44 at
+    # 20%). Mel Robbins 74%, Huberman 64%, Kamala Harris 56%. Both the
+    # scientist and the novelist anchor at the top; everything that
+    # fails both sides sits at the floor.
+    # -----------------------------------------------------------------
+    'uc_x_perception_box_follower': [
+        {'kind': 'podcast',  'title': 'Hidden Brain',                          'score': 96},
+        {'kind': 'podcast',  'title': 'The Mel Robbins Podcast',               'score': 96},
+        {'kind': 'podcast',  'title': 'Unlocking Us with Brene Brown',         'score': 95},
+        {'kind': 'podcast',  'title': 'Ten Percent Happier',                   'score': 94},
+        {'kind': 'podcast',  'title': 'Huberman Lab',                          'score': 93},
+        {'kind': 'podcast',  'title': 'We Can Do Hard Things',                 'score': 91},
+        {'kind': 'podcast',  'title': 'Armchair Expert with Dax Shepard',      'score': 86},
+        {'kind': 'podcast',  'title': 'The Daily',                             'score': 50},
+        {'kind': 'podcast',  'title': 'The Joe Rogan Experience',              'score': 16},
+        {'kind': 'podcast',  'title': 'The Tucker Carlson Show',               'score': 4},
+        {'kind': 'song',     'title': 'Good Luck Babe! (Chappell Roan)',       'score': 94},
+        {'kind': 'song',     'title': 'Abracadabra (Lady Gaga)',               'score': 91},
+        {'kind': 'song',     'title': 'The Fate of Ophelia (Taylor Swift)',    'score': 88},
+        {'kind': 'song',     'title': 'Espresso (Sabrina Carpenter)',          'score': 87},
+        {'kind': 'song',     'title': 'Not Like Us (Kendrick Lamar)',          'score': 78},
+        {'kind': 'song',     'title': 'Fast Car (Tracy Chapman)',              'score': 84},
+        {'kind': 'song',     'title': 'God\u2019s Country (Blake Shelton)',    'score': 16},
+        {'kind': 'book',     'title': 'All The Way To The River (Elizabeth Gilbert)', 'score': 97},
+        {'kind': 'book',     'title': 'The Let Them Theory (Mel Robbins)',     'score': 96},
+        {'kind': 'book',     'title': 'Atlas of the Heart (Brene Brown)',      'score': 95},
+        {'kind': 'book',     'title': 'Big Magic (Elizabeth Gilbert)',         'score': 94},
+        {'kind': 'book',     'title': 'Waking Up (Sam Harris)',                'score': 88},
+        {'kind': 'book',     'title': 'Intermezzo (Sally Rooney)',             'score': 84},
+        {'kind': 'book',     'title': 'Fourth Wing (Rebecca Yarros)',          'score': 74},
+        {'kind': 'book',     'title': 'Atomic Habits (James Clear)',           'score': 66},
+        {'kind': 'book',     'title': 'Rich Dad Poor Dad',                     'score': 12},
+        {'kind': 'book',     'title': 'The Art of the Deal (Trump)',           'score': 3},
+        {'kind': 'film',     'title': 'Past Lives',                            'score': 95},
+        {'kind': 'film',     'title': 'The Bear',                              'score': 93},
+        {'kind': 'film',     'title': 'Severance',                             'score': 93},
+        {'kind': 'film',     'title': 'Everything Everywhere All At Once',     'score': 93},
+        {'kind': 'film',     'title': 'Barbie',                                'score': 90},
+        {'kind': 'film',     'title': 'Wicked',                                'score': 88},
+        {'kind': 'film',     'title': 'Andor',                                 'score': 86},
+        {'kind': 'film',     'title': 'The Bachelorette',                      'score': 28},
+        {'kind': 'film',     'title': 'Fast & Furious 12',                     'score': 16},
+        {'kind': 'headline', 'title': 'Elizabeth Gilbert launches new Perception Box workshop', 'score': 97},
+        {'kind': 'headline', 'title': 'New study links eight hours of sleep to sharper memory', 'score': 92},
+        {'kind': 'headline', 'title': 'Supreme Court hears LGBTQ+ workplace case', 'score': 90},
+        {'kind': 'headline', 'title': 'Kamala Harris announces book tour dates', 'score': 82},
+        {'kind': 'headline', 'title': 'Federal Reserve leaves rates unchanged', 'score': 26},
+        {'kind': 'headline', 'title': 'Nvidia earnings beat analyst estimates', 'score': 20},
+        {'kind': 'headline', 'title': 'Cowboys clinch NFC East with overtime win', 'score': 9},
+        {'kind': 'search',   'title': 'mel robbins let them theory',           'score': 95},
+        {'kind': 'search',   'title': 'huberman sleep protocol',               'score': 92},
+        {'kind': 'search',   'title': 'headspace app free trial',              'score': 90},
+        {'kind': 'search',   'title': 'best pilates studios near me',          'score': 86},
+        {'kind': 'search',   'title': 'nyt connections hint today',            'score': 74},
+        {'kind': 'search',   'title': 'nfl draft 2026',                        'score': 16},
+        {'kind': 'search',   'title': 'medicare supplement plans',             'score': 6},
+        {'kind': 'person',   'title': 'Mel Robbins',                           'score': 97},
+        {'kind': 'person',   'title': 'Elizabeth Gilbert',                     'score': 97},
+        {'kind': 'person',   'title': 'Brene Brown',                           'score': 96},
+        {'kind': 'person',   'title': 'Andrew Huberman',                       'score': 95},
+        {'kind': 'person',   'title': 'Kamala Harris',                         'score': 86},
+        {'kind': 'person',   'title': 'Pedro Pascal',                          'score': 84},
+        {'kind': 'person',   'title': 'Patrick Mahomes',                       'score': 16},
+        {'kind': 'person',   'title': 'Tucker Carlson',                        'score': 4},
+        {'kind': 'person',   'title': 'Andrew Tate',                           'score': 2},
+        {'kind': 'game',     'title': 'NYT Connections',                       'score': 80},
+        {'kind': 'game',     'title': 'Beat Saber',                            'score': 64},
+        {'kind': 'game',     'title': 'Stardew Valley',                        'score': 62},
+        {'kind': 'game',     'title': 'Fortnite',                              'score': 20},
+        {'kind': 'game',     'title': 'Call of Duty: Warzone',                 'score': 8},
     ],
 
     # -----------------------------------------------------------------
