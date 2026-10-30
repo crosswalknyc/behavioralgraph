@@ -150,7 +150,10 @@ _PER_SERVICE_BASES = _CAP_BASES + _CROSS_SERVICE_BASES
 # the sub-100 credibility floor below (which exists to catch a failed
 # research call) does not apply: a story with 65 lifetime reads has a
 # handful of readers a day and that is the honest reading.
-_FIRST_PARTY_BASES = ('first_party',)
+# `sales_pool`: an Amazon / Apple Books / Audible reading set from the
+# daily US book-sales pool by chart position (book_sales_level.py). The
+# chart tail legitimately sits in the dozens.
+_FIRST_PARTY_BASES = ('first_party', 'sales_pool')
 
 # A reading reasoned from the rows either side of it on its own list
 # for its own service, written by the terminal pass when research

@@ -472,7 +472,7 @@ def fill(payload: dict, still_missing: list[tuple[str, str]],
                 except (TypeError, ValueError):
                     had = 0
                 if (had >= rail_floor or (had > 0 and prev.get('est_basis')
-                                   == 'first_party')):
+                                   in ('first_party', 'sales_pool'))):
                     # A reading the gate would count as rendered exists
                     # in the store, so the row is blank for a render-
                     # side reason, not a data one. Named in the log;

@@ -36,6 +36,18 @@ def _get(s3, key):
     return json.loads(obj['Body'].read()), obj.get('ETag')
 
 
+def _backup_once(s3, backup_key: str, src_key: str) -> None:
+    """Keep the first pre-level copy; a re-run must not back up a
+    levelled file over it."""
+    try:
+        s3.head_object(Bucket=BUCKET, Key=backup_key)
+        return
+    except Exception:
+        pass
+    s3.copy_object(Bucket=BUCKET, Key=backup_key,
+                   CopySource={'Bucket': BUCKET, 'Key': src_key})
+
+
 def _level_day(snap: dict, charts: dict, prev: dict) -> set:
     items = snap.setdefault('items', {})
     target = snap.get('target_date')
@@ -86,9 +98,7 @@ def main() -> int:
             print(f"  {d} (target {snap.get('target_date')}): levelled {len(touched):3d}, "
                   f"new entries {new:3d}  |  {', '.join(tops)}")
             if not args.dry_run:
-                s3.copy_object(Bucket=BUCKET, Key=BACKUP.format(d=d),
-                               CopySource={'Bucket': BUCKET,
-                                           'Key': DATED.format(d=d, name='stream_estimates')})
+                _backup_once(s3, BACKUP.format(d=d), DATED.format(d=d, name='stream_estimates'))
                 s3.put_object(Bucket=BUCKET, Key=DATED.format(d=d, name='stream_estimates'),
                               Body=json.dumps(snap).encode(), ContentType='application/json')
                 swi.write_index(d, snap, s3=s3)
@@ -108,9 +118,7 @@ def main() -> int:
             body, _ = _get(s3, LATEST.format(name='stream_estimates'))
             charts, _ = _get(s3, LATEST.format(name='book_charts'))
             _level_day(body, charts, before_last)
-        s3.copy_object(Bucket=BUCKET, Key=BACKUP.format(d='latest'),
-                       CopySource={'Bucket': BUCKET,
-                                   'Key': LATEST.format(name='stream_estimates')})
+        _backup_once(s3, BACKUP.format(d='latest'), LATEST.format(name='stream_estimates'))
         s3.put_object(Bucket=BUCKET, Key=LATEST.format(name='stream_estimates'),
                       Body=json.dumps(body).encode(), ContentType='application/json')
     return 0
