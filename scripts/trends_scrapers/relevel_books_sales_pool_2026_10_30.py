@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """One-off: re-level stored Amazon / Apple Books / Audible readings to
-the 3M daily US book-sales pool and Libby ebook / audiobook readings to
-the 1.9M daily borrow pool (book_sales_level.py), Oct 1 to today plus
-latest/.
+the daily US book-sales band (floor 3M) and Libby ebook / audiobook
+readings to the daily borrow band (floor 1.9M), see book_sales_level.py,
+Oct 1 to today plus latest/. Re-run 2026-10-30 after Jenna moved both
+pools from a constant to a band that moves by day.
 
 Each dated folder is levelled from its own book_charts.json, so a
 title's number on a past day follows its rank that day. Day-over-day
