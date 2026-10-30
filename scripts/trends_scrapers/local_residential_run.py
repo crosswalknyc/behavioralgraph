@@ -216,14 +216,20 @@ RESIDENTIAL_SCRAPERS = [
     # deep. Fully-qualified module: it lives beside the other
     # Microdramas IQ scrapers, not under trends_scrapers.
     ('scripts.microdramas_scrapers.peacock', 'Peacock Microdramas'),
-    # Tubi's OWN Most Popular (moved here 2026-10-30). No session
-    # needed, but tubitv.com resolves the storefront off the request
-    # IP and sends the build box to gdpr.tubi.tv, a consent stub with
-    # no chart, so the nightly read returned 0 rows from 2026-09-24
-    # and the rail carried that one capture for five weeks. From the
-    # Mac the page serves all sixty tiles. The catalog pull
-    # (`fast_channels`, JustWatch) stays on the build box.
-    ('tubi_popular',  'Tubi Most Popular'),
+    # Tubi's OWN Most Popular (`tubi_popular`) is NOT in this list.
+    # tubitv.com sends the build box to gdpr.tubi.tv, a consent stub
+    # with no chart, so the read needs a residential address; Jenna
+    # asked (2026-10-30) that it come off the second MacBook Pro
+    # (Jennas-MacBook-Pro-3, always on) rather than this laptop. It
+    # runs there at 07:30 under `com.crosswalk.tubi-popular`
+    # (migration/systemd/com.crosswalk.tubi-popular.plist) from
+    # ~/cw-trends/bg-webapp, a clean rsync of scripts/trends_scrapers
+    # off main. This batch's pricing pass still re-levels Tubi, because
+    # it re-prices every declared chart whose snapshot moved. To ship a
+    # scraper change there:
+    #   rsync -az --delete --include='*/' --include='*.py' \
+    #     --include='*.json' --exclude='*' scripts/trends_scrapers/ \
+    #     jennamenking@192.168.254.23:~/cw-trends/bg-webapp/scripts/trends_scrapers/
 ]
 
 

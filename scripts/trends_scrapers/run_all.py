@@ -104,8 +104,8 @@ SCRAPERS = [
     # (2026-10-30). tubitv.com sends this box's IP to gdpr.tubi.tv, a
     # consent stub with no chart, so the read returned 0 rows every
     # night from 2026-09-24 and the rail carried one capture for five
-    # weeks. It runs from the residential lane now
-    # (`local_residential_run`), same split Paramount+ has.
+    # weeks. It runs from the second MacBook Pro now
+    # (`com.crosswalk.tubi-popular`, see `local_residential_run`).
     # Pluto TV's OWN Most Popular Movies and Top TV Series, for
     # the same reason: the JustWatch feed carries no Pluto
     # ranking. Anonymous, and pinned to the first healthy

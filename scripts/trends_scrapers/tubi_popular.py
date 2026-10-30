@@ -43,15 +43,16 @@ Session: none. Anonymous is the whole chart.
 
 Where it runs (2026-10-30)
 --------------------------
-From the residential lane (`local_residential_run`), not the build box.
+From the second MacBook Pro (`com.crosswalk.tubi-popular`, 07:30 local,
+see `local_residential_run` for the deploy note), not the build box.
 tubitv.com resolves the request IP and sends the box's datacenter
 address to `gdpr.tubi.tv`, a consent stub with no chart on it, so the
 reader returned 0 rows every night from 2026-09-24 on. The fallback
 below then kept republishing the 24 September capture as the day's
 chart, which is how Seeking Persephone sat at #1 for five weeks (Jenna
 2026-10-30: "Seeking Persephone is no 1 everyday which seems wrong").
-Two things changed: the scrape moved to the Mac, where the page serves
-in full, and the fallback now has an age limit (`_CARRY_DAYS`). Past
+Two things changed: the scrape moved to a Mac on a home address, where
+the page serves in full, and the fallback now has an age limit (`_CARRY_DAYS`). Past
 it the snapshot publishes with no rows and the rail renders without a
 chart, which is honest, rather than with a frozen one, which is not.
 
