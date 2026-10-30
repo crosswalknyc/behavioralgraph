@@ -93887,10 +93887,32 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var cs = getComputedStyle(el);
             return cs.display === 'none' || cs.visibility === 'hidden';
         }
+        // Links that only open or expand something ("more") are controls,
+        // not content.
+        function _jiqScrapeAction(el) {
+            if (_jiqScrapeTag(el) !== 'A') return false;
+            var h = (el.getAttribute('href') || '').trim();
+            return !h || h === '#' || /^javascript:/i.test(h);
+        }
         function _jiqScrapeText(el) {
-            var t = el.innerText;
-            if (t == null || t === '') t = el.textContent;
+            var t;
+            if (el.querySelector && el.querySelector('a, select, input')) {
+                var c = el.cloneNode(true);
+                [].forEach.call(c.querySelectorAll('a, select, input'), function (x) {
+                    if (_JIQ_SCRAPE_SKIP[_jiqScrapeTag(x)] || _jiqScrapeAction(x)) x.remove();
+                });
+                t = c.textContent;
+            } else {
+                t = el.innerText;
+                if (t == null || t === '') t = el.textContent;
+            }
             return String(t || '').replace(/\s+/g, ' ').trim();
+        }
+        // "33.8%  11.68M" in one cell is two figures.
+        function _jiqScrapeSplitFigures(c) {
+            var parts = c.split(' ');
+            return (parts.length > 1 && parts.every(function (x) { return /^[-+\u2212]?\$?[\d.,]+[%MKBx]?$/.test(x); }))
+                ? parts : [c];
         }
         function _jiqScrapeLeaf(el) {
             for (var c = el.firstElementChild; c; c = c.nextElementSibling) {
@@ -93923,7 +93945,29 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 out.push([]);
                 return;
             }
+            if (_jiqScrapeAction(el)) return;
+            if (tag === 'LABEL') {
+                var ctl = el.querySelector('select, input');
+                if (ctl) {
+                    var pick = (ctl.tagName === 'SELECT' && ctl.selectedIndex >= 0)
+                        ? ctl.options[ctl.selectedIndex].text : ctl.value;
+                    var lab = _jiqScrapeText(el);
+                    if (lab || pick) out.push([lab, String(pick || '').trim()]);
+                    return;
+                }
+            }
             if (_jiqScrapeLeaf(el)) {
+                var parts = [].filter.call(el.children, function (c) { return !_jiqScrapeAction(c); })
+                    .map(function (c) { return _jiqScrapeText(c); }).filter(Boolean);
+                var bare = ![].some.call(el.childNodes, function (n) {
+                    return n.nodeType === 3 && n.nodeValue.trim();
+                });
+                if (bare && parts.length >= 2 && parts.some(function (c) { return /\d/.test(c); })) {
+                    var split = [];
+                    parts.forEach(function (c) { split = split.concat(_jiqScrapeSplitFigures(c)); });
+                    out.push(split);
+                    return;
+                }
                 var t = _jiqScrapeText(el);
                 if (t) out.push([t]);
                 return;
@@ -94003,10 +94047,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             _jiqVisibleCards().forEach(function (card, i) {
                 var body = _jiqScrapeRows(card);
                 if (!body.length) return;
-                var head = _jiqScrapeTitle(card) || ('Section ' + (i + 1));
-                if (body[0].length === 1 && body[0][0] === head) body.shift();
+                var head = _jiqScrapeTitle(card);
+                if (head && body[0].length === 1 && body[0][0] === head) body.shift();
                 rows.push([]);
-                rows.push(['# ' + head]);
+                if (head) rows.push(['# ' + head]);
                 body.forEach(function (r) { rows.push(r); });
                 blocks++;
             });
