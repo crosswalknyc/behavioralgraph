@@ -111,10 +111,13 @@ def level(items: dict, book_charts: dict, day: str,
                 }
             bp = entry.setdefault('by_platform', {})
             blk = bp.setdefault(platform, {})
+            for stale in ('method', 'derived_from'):
+                blk.pop(stale, None)
             blk.update({'us_estimate': v,
                         'us_estimate_low': max(1, int(v * 0.8)),
                         'us_estimate_high': int(v * 1.25) + 1,
-                        'confidence': 'medium'})
+                        'confidence': 'medium',
+                        'est_basis': 'sales_pool'})
             entry['sales_level'] = LEVEL_TAG
             touched.add(key)
     for key in touched:

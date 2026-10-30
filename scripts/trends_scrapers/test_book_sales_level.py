@@ -42,6 +42,7 @@ class LevelTests(unittest.TestCase):
         self.assertGreater(fw['by_platform']['audible']['us_estimate'], 1000)
         self.assertEqual(fw['us_estimate'], 900 + fw['by_platform']['audible']['us_estimate'])
         self.assertIn('book:new book a writer', items)
+        self.assertEqual(fw['by_platform']['audible']['est_basis'], 'sales_pool')
         self.assertEqual(len(touched), 2)
 
 

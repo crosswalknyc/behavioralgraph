@@ -4595,7 +4595,8 @@ def _stamp_stream_estimate(row: dict, entry: dict,
             # by their own passes.
             'est_basis':           (per.get('est_basis')
                                     if per.get('est_basis') in ('first_party',
-                                                                'bracketed')
+                                                                'bracketed',
+                                                                'sales_pool')
                                     else None),
         }
     elif platform_key and (isinstance(entry.get('by_platform'), dict)
@@ -7229,7 +7230,8 @@ def _coverage_has_audience(it: dict, slug: str = '') -> bool:
                 if v >= floor:
                     return True
                 if v > 0 and (blk.get('est_basis') in ('first_party',
-                                                       'bracketed')
+                                                       'bracketed',
+                                                       'sales_pool')
                               or blk.get('derived_from')):
                     return True
             except (TypeError, ValueError):
