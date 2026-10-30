@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """One-off: re-level stored Amazon / Apple Books / Audible readings to
-the 3M daily US book-sales pool (book_sales_level.py), Oct 1 to today
-plus latest/.
+the 3M daily US book-sales pool and Libby ebook / audiobook readings to
+the 1.9M daily borrow pool (book_sales_level.py), Oct 1 to today plus
+latest/.
 
 Each dated folder is levelled from its own book_charts.json, so a
 title's number on a past day follows its rank that day. Day-over-day
@@ -29,6 +30,7 @@ DATED = 'trends_iq_snapshots/{d}/{name}.json'
 LATEST = 'trends_iq_snapshots/latest/{name}.json'
 BACKUP = 'trends_iq_snapshots/_backups/{d}.stream_estimates.pre_book_sales_level.json'
 SAMPLES = ('amazon', 'apple', 'audible')
+LIBBY_SAMPLES = (('ebook', 'libby_ebook'), ('audiobook', 'libby_audio'))
 
 
 def _get(s3, key):
@@ -48,10 +50,12 @@ def _backup_once(s3, backup_key: str, src_key: str) -> None:
                    CopySource={'Bucket': BUCKET, 'Key': src_key})
 
 
-def _level_day(snap: dict, charts: dict, prev: dict) -> set:
+def _level_day(snap: dict, charts: dict, prev: dict, libby: dict = None) -> set:
     items = snap.setdefault('items', {})
     target = snap.get('target_date')
     touched = bsl.level(items, charts, target)
+    if libby:
+        touched |= bsl.level(items, libby, target, panels=bsl.LIBBY_PANELS)
     _attach_dod_trend({k: items[k] for k in touched}, prev,
                       prev_date_iso=(prev or {}).get('target_date'),
                       today_iso=target)
@@ -78,6 +82,10 @@ def main() -> int:
         try:
             snap, etag = _get(s3, DATED.format(d=d, name='stream_estimates'))
             charts, _ = _get(s3, DATED.format(d=d, name='book_charts'))
+            try:
+                libby, _ = _get(s3, DATED.format(d=d, name='libby_trends'))
+            except Exception:
+                libby = None
         except Exception as e:
             print(f'  {d}: unreadable ({type(e).__name__}); skipped')
             prev = None
@@ -85,12 +93,18 @@ def main() -> int:
         before = {k: json.dumps(v.get('by_platform'), sort_keys=True)
                   for k, v in (snap.get('items') or {}).items()
                   if (v or {}).get('kind') == 'book'}
-        touched = _level_day(snap, charts, prev)
+        touched = _level_day(snap, charts, prev, libby)
         if i > 0:
             new = sum(1 for k in touched if k not in before)
             tops = []
             for pl in SAMPLES:
                 row = ((charts.get('sources') or {}).get(pl) or {}).get('items') or []
+                if row:
+                    k = 'book:' + _cp_normalize(
+                        f"{(row[0].get('title') or '').strip()} {(row[0].get('artist') or '').strip()}")
+                    tops.append(f"{pl} #1 {snap['items'].get(k, {}).get('by_platform', {}).get(pl, {}).get('us_estimate')}")
+            for slug, pl in LIBBY_SAMPLES:
+                row = (((libby or {}).get('sources') or {}).get(slug) or {}).get('items') or []
                 if row:
                     k = 'book:' + _cp_normalize(
                         f"{(row[0].get('title') or '').strip()} {(row[0].get('artist') or '').strip()}")
@@ -117,7 +131,8 @@ def main() -> int:
         else:
             body, _ = _get(s3, LATEST.format(name='stream_estimates'))
             charts, _ = _get(s3, LATEST.format(name='book_charts'))
-            _level_day(body, charts, before_last)
+            libby, _ = _get(s3, LATEST.format(name='libby_trends'))
+            _level_day(body, charts, before_last, libby)
         _backup_once(s3, BACKUP.format(d='latest'), LATEST.format(name='stream_estimates'))
         s3.put_object(Bucket=BUCKET, Key=LATEST.format(name='stream_estimates'),
                       Body=json.dumps(body).encode(), ContentType='application/json')

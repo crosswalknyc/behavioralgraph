@@ -1,8 +1,15 @@
-"""Daily US book-sales level for the Amazon, Apple Books and Audible rails.
+"""Daily US level for the Books tab's store and library rails.
 
-Jessie 2026-10-30: the three store charts share one pool of 3M daily US
-book sales (print + ebook + audiobook). The chart owns the order; this
-module owns the magnitude.
+Jessie 2026-10-30: the chart owns the order, a national daily pool owns
+the magnitude.
+
+  stores     3M daily US book sales (print + ebook + audiobook) across
+             Amazon, Apple Books and Audible
+  libby      1.9M daily US public-library digital borrows: ebooks 77%,
+             audiobooks 23% (OverDrive's annual loan split). Magazines
+             keep their holds projection.
+
+Store detail:
 
   pool       3,000,000 a day across the three stores
   split      Amazon 83.5%, Audible 11.5%, Apple Books 5%, from the unit
@@ -31,6 +38,12 @@ from typing import Callable, Optional
 
 POOL_DAILY = 3_000_000
 PLATFORM_SHARE = {'amazon': 0.835, 'audible': 0.115, 'apple': 0.05}
+LIBBY_POOL_DAILY = 1_900_000
+LIBBY_SHARE = {'libby_ebook': 0.77, 'libby_audio': 0.23}
+PLATFORM_DAILY = {**{k: POOL_DAILY * v for k, v in PLATFORM_SHARE.items()},
+                  **{k: LIBBY_POOL_DAILY * v for k, v in LIBBY_SHARE.items()}}
+STORE_PANELS = {'amazon': 'amazon', 'apple': 'apple', 'audible': 'audible'}
+LIBBY_PANELS = {'ebook': 'libby_ebook', 'audiobook': 'libby_audio'}
 TOP_TITLE_SHARE = 0.0033
 LEVEL_TAG = 'us_book_sales_3m'
 
@@ -50,8 +63,7 @@ def _rel(rank: int) -> float:
 
 def rank_level(platform: str, rank: int) -> float:
     """Unsalted daily US sales for `rank` on `platform`'s chart."""
-    pool = POOL_DAILY * PLATFORM_SHARE[platform]
-    return pool * TOP_TITLE_SHARE * _rel(rank)
+    return PLATFORM_DAILY[platform] * TOP_TITLE_SHARE * _rel(rank)
 
 
 def _salt(key: str, platform: str, day: str) -> float:
@@ -95,16 +107,19 @@ def _default_key(title: str, artist: str) -> str:
 
 
 def level(items: dict, book_charts: dict, day: str,
-          key_fn: Optional[Callable[[str, str], str]] = None) -> set:
-    """Set the Amazon / Apple / Audible reading of every chart row in
-    `items` (a stream_estimates `items` dict) from the sales pool.
-    Rows missing from `items` get an entry. Returns the touched keys."""
+          key_fn: Optional[Callable[[str, str], str]] = None,
+          panels: Optional[dict] = None) -> set:
+    """Set the store reading of every chart row in `items` (a
+    stream_estimates `items` dict) from its pool. `panels` maps chart
+    source slug to platform key: STORE_PANELS for book_charts (default),
+    LIBBY_PANELS for libby_trends. Rows missing from `items` get an
+    entry. Returns the touched keys."""
     key_fn = key_fn or _default_key
     sources = (book_charts or {}).get('sources') or {}
     touched: set = set()
-    for platform in PLATFORM_SHARE:
-        panel = sources.get(platform) or {}
-        label = panel.get('label') or platform
+    for slug, platform in (panels or STORE_PANELS).items():
+        panel = sources.get(slug) or {}
+        label = panel.get('label') or slug
         rows, keys, seen = [], [], set()
         for it in (panel.get('items') or [])[:100]:
             title = (it.get('title') or '').strip()
