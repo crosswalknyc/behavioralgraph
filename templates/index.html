@@ -70013,7 +70013,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var n = Number(dv);
                 return isFinite(n) ? n : -1;
             }
-            var panels = root.querySelectorAll('.tiq-panel[data-tiq-panel]');
+            var panels = root.matches('.tiq-panel[data-tiq-panel]') ? [root]
+                         : root.querySelectorAll('.tiq-panel[data-tiq-panel]');
             for (var pi = 0; pi < panels.length; pi++) {
                 var panel = panels[pi];
                 // Sheet-row containers first (Rankers product tabs).
