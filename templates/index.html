@@ -31833,6 +31833,8 @@ https://www.instagram.com/p/..."></textarea>
             .tiq-cmp-tip em { font-style: normal; color: #64748b; }
             .tiq-cmp-tip b { margin-left: auto; padding-left: 10px; color: #fff; }
             .tiq-cmp-legend { display: grid; gap: 6px; margin-top: 12px; }
+            .tiq-cmp-leg-avg i { width: 16px; height: 3px; border-radius: 0; }
+            .tiq-cmp-tip div.avg { border-top: 1px solid rgba(255,255,255,0.14); margin-top: 3px; padding-top: 4px; color: #fff; font-weight: 600; }
             .tiq-cmp-leg { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 8px; background: rgba(255,255,255,0.03); font-size: 0.82rem; }
             .tiq-cmp-leg .nm { display: flex; flex-direction: column; min-width: 0; flex: 1; }
             .tiq-cmp-leg .nm strong { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -76294,6 +76296,22 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var n = dates.length;
             var x = function(i) { return L + (n === 1 ? 0 : i * (W - L - R) / (n - 1)); };
             var y = function(v) { return T + (H - T - B) * (1 - v / yMax); };
+            // Averaged only on days every line has a reading, so a line
+            // joining or dropping out doesn't read as a move in the average.
+            // Too few shared days falls back to whichever lines report.
+            var avgV = null, avgAll = true;
+            if (vals.length > 1) {
+                var avgOn = function(needAll) {
+                    return dates.map(function(_, i) {
+                        var sum = 0, c = 0;
+                        vals.forEach(function(v) { if (v[i] != null) { sum += v[i]; c++; } });
+                        return (c && (!needAll || c === vals.length)) ? sum / c : null;
+                    });
+                };
+                avgV = avgOn(true);
+                if (avgV.filter(function(z) { return z != null; }).length < 2) { avgV = avgOn(false); avgAll = false; }
+            }
+            var _AVG_COL = '#FFFFFF';
             var g = '';
             for (var k = 0; k <= 4; k++) {
                 var gv = yMax * k / 4, gy = y(gv);
@@ -76317,6 +76335,15 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 });
                 lines += '<path d="' + d + '" stroke="' + col + '" fill="none" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>' + dots;
             });
+            if (avgV) {
+                var ad = '', apen = false;
+                avgV.forEach(function(val, i) {
+                    if (val == null) { apen = false; return; }
+                    ad += (apen ? 'L' : 'M') + x(i).toFixed(1) + ',' + y(val).toFixed(1);
+                    apen = true;
+                });
+                lines += '<path d="' + ad + '" stroke="' + _AVG_COL + '" fill="none" stroke-width="2.5" stroke-dasharray="6 4" stroke-linejoin="round" stroke-linecap="round" opacity="0.9"/>';
+            }
             box.innerHTML = '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" class="tiq-cmp-svg">' +
                 g + lines +
                 '<line id="tiqCmpHover" class="hover" y1="' + T + '" y2="' + (H - B) + '" x1="-10" x2="-10"/>' +
@@ -76343,6 +76370,23 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     '<b class="rm" onclick="tiqCompareRemove(\'' + _tiqEsc(c.id).replace(/'/g, "\\'") + '\')" title="Remove">\u00d7</b>' +
                     '</div>';
             }).join('');
+            if (avgV) {
+                var aseen = avgV.filter(function(z) { return z != null; });
+                var alast = aseen.length ? aseen[aseen.length - 1] : null;
+                var afirst = aseen.length ? aseen[0] : null;
+                var achg = (afirst && alast != null && aseen.length > 1) ? Math.round((alast / afirst - 1) * 100) : null;
+                var aavg = aseen.length ? aseen.reduce(function(a, b) { return a + b; }, 0) / aseen.length : null;
+                leg.innerHTML += '<div class="tiq-cmp-leg tiq-cmp-leg-avg">' +
+                    '<i style="background:repeating-linear-gradient(90deg,' + _AVG_COL + ' 0 6px,transparent 6px 9px)"></i>' +
+                    '<div class="nm"><strong>Average</strong><span>' + (avgAll
+                        ? 'Mean of all ' + vals.length + ' lines, on days every line has a reading'
+                        : 'Mean of the lines with a reading each day') + '</span></div>' +
+                    '<div class="st">' + (alast != null
+                        ? '<b>' + _tiqCompactNum(alast) + '</b> latest \u00b7 ' + _tiqCompactNum(aavg) + ' avg' +
+                          (achg != null ? ' \u00b7 <span class="' + (achg > 0 ? 'up' : achg < 0 ? 'down' : '') + '">' + (achg > 0 ? '+' : '') + achg + '%</span>' : '')
+                        : 'No readings in this window') + '</div>' +
+                    '</div>';
+            }
 
             var hit = document.getElementById('tiqCmpHit');
             var tipEl = document.getElementById('tiqCmpTip');
@@ -76362,6 +76406,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         ' <em>' + _tiqEsc(list[si].where) + '</em><b>' + (v[i] != null ? _tiqCompactNum(v[i]) : '\u2014') + '</b></div>' });
                 });
                 rows.sort(function(a, b) { return (b.v || -1) - (a.v || -1); });
+                if (avgV && avgV[i] != null) {
+                    dots += '<circle cx="' + x(i) + '" cy="' + y(avgV[i]) + '" r="4" fill="' + _AVG_COL + '" stroke="#0f172a" stroke-width="1.5"/>';
+                    rows.push({ v: avgV[i], html: '<div class="avg"><i style="background:' + _AVG_COL + '"></i>Average<b>' + _tiqCompactNum(avgV[i]) + '</b></div>' });
+                }
                 dotsG.innerHTML = dots;
                 tipEl.innerHTML = '<div class="dt">' + _tiqCmpDate(dates[i], true) + '</div>' + rows.map(function(z) { return z.html; }).join('');
                 tipEl.style.display = 'block';
