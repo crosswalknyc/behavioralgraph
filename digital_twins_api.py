@@ -134,9 +134,27 @@ def _gate():
         return None, (jsonify({'success': False, 'error': 'Sign in to use Digital Twins IQ.'}), 401)
     user = dict(user)
     user['role'] = _role(user)
+    if _menu_locked(user):
+        return None, (jsonify({'success': False, 'error': 'Digital Twins IQ is not open for this account yet.'}), 403)
     if not DT.has_access(user):
         return None, (jsonify({'success': False, 'error': 'Digital Twins IQ access required. Ask your admin to switch it on for your account.'}), 403)
     return user, None
+
+
+def _menu_locked(user):
+    """Company lock: the menu row stays, the product does not open."""
+    a = _app()
+    if a is None:
+        return False
+    try:
+        import wallet as w
+        data = a.load_users()
+    except Exception:
+        return False
+    try:
+        return bool(w.digital_twins_menu_locked(user, data))
+    except Exception:
+        return False
 
 
 def _twin_or_404(user, key):

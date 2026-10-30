@@ -10866,10 +10866,22 @@ def api_me_product_access():
         role = _normalize_role(user.get('role', 'user'))
         access = compute_product_access_flags(user, role)
         access = apply_cloak_product_access_overrides(access)
+        access['digital_twins_locked'] = _digital_twins_menu_locked(user)
         access['success'] = True
         return jsonify(access)
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+def _digital_twins_menu_locked(user):
+    """Company lock for the product menu. Fail open if the store misses."""
+    if not isinstance(user, dict):
+        return False
+    try:
+        import wallet as _w
+        return bool(_w.digital_twins_menu_locked(user, load_users()))
+    except Exception:
+        return False
 
 
 def _current_user_has_llmo_iq_access():
@@ -11009,6 +11021,7 @@ def index():
                            has_sentiment_iq_access=has_sentiment_iq,
                            has_journey_iq_access=has_journey_iq,
                            has_digital_twins_iq_access=has_digital_twins_iq,
+                           digital_twins_locked=_digital_twins_menu_locked(user),
                            has_share_of_time_access=has_share_of_time,
                            has_share_of_time_run_access=has_share_of_time_run,
                            has_blue_iq_access=has_blue_iq,

@@ -2108,6 +2108,35 @@ def display_symbol(user, users_data=None) -> str:
     return money_symbol(currency=display_currency(user, users_data))
 
 
+def digital_twins_menu_locked(user, users_data=None) -> bool:
+    """True when Digital Twins stays on the product menu and cannot open.
+
+    The company record carries digital_twins_locked. A seat can carry
+    the same flag. A super admin is never locked. No flag means the
+    product opens as usual.
+    """
+    if not isinstance(user, dict):
+        return False
+    role = str(user.get("role") or "").strip().lower().replace(" ", "_")
+    if role in ("super_admin", "superadmin"):
+        return False
+    if user.get("digital_twins_locked") is True:
+        return True
+    name = str(user.get("company") or "").strip()
+    if not name:
+        return False
+    data = users_data if isinstance(users_data, dict) else {}
+    companies = data.get("companies") or {}
+    rec = companies.get(name)
+    if not isinstance(rec, dict):
+        folded = name.lower()
+        for key, cand in companies.items():
+            if str(key).strip().lower() == folded and isinstance(cand, dict):
+                rec = cand
+                break
+    return bool(isinstance(rec, dict) and rec.get("digital_twins_locked") is True)
+
+
 def ledger_amount_header(user=None, users_data=None, subject=None) -> str:
     """Column name on a wallet history download.
 

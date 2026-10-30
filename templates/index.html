@@ -20528,7 +20528,7 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
                             <option value="profileIQ" {% if not has_profile_iq_access %}disabled{% endif %} {% if not default_view_hedge_fund_iq %}selected{% endif %}>🎯 Profile IQ</option>
                             <option value="subscriberIQ" {% if not has_subscriber_iq_access %}disabled{% endif %}>👥 Subscriber IQ</option>
                             <option value="journeyIQ" {% if not has_journey_iq_access and 'journey_iq' not in analysis_iq_modules and role != 'super_admin' and role != 'admin' %}disabled{% endif %}>🗺️ Digital Journey IQ</option>
-                            <option value="digitalTwinsIQ" {% if not has_digital_twins_iq_access and role != 'super_admin' and role != 'admin' %}disabled{% endif %}>🧬 Digital Twins IQ</option>
+                            <option value="digitalTwinsIQ" {% if digital_twins_locked|default(false) %}data-locked="1"{% elif not has_digital_twins_iq_access and role != 'super_admin' and role != 'admin' %}disabled{% endif %}>🧬 Digital Twins IQ</option>
                             <option value="intentIQ" {% if not has_intent_iq_access %}disabled{% endif %}>📈 Attribution IQ</option>
                             <option value="trendsIQ" {% if not has_trends_iq_access %}disabled{% endif %}>📈 Trends</option>
                             <option value="cultureRankerIQ" {% if not has_rankers_iq_access %}disabled{% endif %}>📊 Rankers</option>
@@ -27597,10 +27597,13 @@ https://www.instagram.com/p/..."></textarea>
         body[data-theme="light"] .view-nav-dot.signal { background: #5E7E12; }
         body[data-theme="light"] .view-nav-dot.orchid { background: #8E3FA8; }
         .view-nav-name { flex: 1 1 auto; min-width: 0; }
+        .view-nav-lock { flex: 0 0 auto; margin-left: auto; width: 12px; height: 12px; opacity: 0.85; }
+        .view-nav-option.locked, .view-nav-suboption.locked { opacity: 0.62; cursor: not-allowed; }
         .view-nav-option:hover,
         .view-nav-suboption:hover { background: #1B2F35 !important; color: #E9E8E1 !important; }
         body[data-theme="light"] .view-nav-option:hover,
         body[data-theme="light"] .view-nav-suboption:hover { background: #F4F3EE !important; color: #0C1618 !important; }
+        .view-nav-option.locked:hover, .view-nav-suboption.locked:hover { background: transparent !important; }
         /* The group row keeps its count badge, so it stays a plain row. */
         .view-nav-group-trigger { gap: 10px; }
         .view-nav-group-trigger:hover { background: #1B2F35 !important; color: #E9E8E1 !important; }
@@ -52096,6 +52099,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 } catch (_) { return null; }
             }
             window.showDigitalTwinsIQ = function(hint) {
+                if (window.digitalTwinsLocked) return;
+                var _lockOpt = document.querySelector('#viewNavDropdown option[value="digitalTwinsIQ"]');
+                if (_lockOpt && _lockOpt.getAttribute('data-locked') === '1') return;
                 hint = hint || window._dtwLastHint || null;
                 window._dtwLastHint = null;
                 try {
@@ -60998,6 +61004,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         
         // When true, user only has Fin IQ (no Profile IQ) - default to Fin IQ landing on load
         window.defaultViewHedgeFundIQ = {{ 'true' if default_view_hedge_fund_iq else 'false' }};
+        window.digitalTwinsLocked = {{ 'true' if digital_twins_locked|default(false) else 'false' }};
         
         // Live Features - controls which Analysis Tools are visible to non-admin users
         const userRole = '{{ role }}';
@@ -61433,7 +61440,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     var _lastProduct = localStorage.getItem('bg_last_product');
                     if (_lastProduct && viewDropdownEl) {
                         var _lastOpt = viewDropdownEl.querySelector('option[value="' + _lastProduct + '"]');
-                        if (_lastOpt && !_lastOpt.disabled) {
+                        if (_lastOpt && !_lastOpt.disabled && _lastOpt.getAttribute('data-locked') !== '1') {
                             initialVal = _lastProduct;
                             viewDropdownEl.value = _lastProduct;
                         }
@@ -61447,7 +61454,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     var _qv = new URLSearchParams(window.location.search).get('view');
                     if (_qv && /^[A-Za-z]+$/.test(_qv) && viewDropdownEl) {
                         var _qvOpt = viewDropdownEl.querySelector('option[value="' + _qv + '"]');
-                        if (_qvOpt && !_qvOpt.disabled) {
+                        if (_qvOpt && !_qvOpt.disabled && _qvOpt.getAttribute('data-locked') !== '1') {
                             initialVal = _qv;
                             viewDropdownEl.value = _qv;
                         }
@@ -61460,7 +61467,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     var _hv = String(window.location.hash || '').replace(/^#/, '').split(/[\/?&]/)[0];
                     if (_hv && /^[A-Za-z]+$/.test(_hv) && viewDropdownEl) {
                         var _hvOpt = viewDropdownEl.querySelector('option[value="' + _hv + '"]');
-                        if (_hvOpt && !_hvOpt.disabled) {
+                        if (_hvOpt && !_hvOpt.disabled && _hvOpt.getAttribute('data-locked') !== '1') {
                             initialVal = _hv;
                             viewDropdownEl.value = _hv;
                         }
@@ -61555,7 +61562,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 viewDropdown.addEventListener('change', function() {
                     const val = this.value;
                     const opt = this.options[this.selectedIndex];
-                    if (opt && opt.disabled) return;
+                    if (opt && (opt.disabled || opt.getAttribute('data-locked') === '1')) return;
                     try {
                         const handler = navHandlers[val];
                         if (handler) handler();
@@ -61689,13 +61696,24 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         var _sj = viewDropdown.querySelector('option[value="journeyIQ"]');
                         if (_sj) _sj.disabled = false;
                     }
+                    var _twLock = viewDropdown.querySelector('option[value="digitalTwinsIQ"]');
+                    if (d.digital_twins_locked) {
+                        window.digitalTwinsLocked = true;
+                        if (_twLock) {
+                            _twLock.disabled = false;
+                            _twLock.setAttribute('data-locked', '1');
+                        }
+                    } else if (_twLock) {
+                        window.digitalTwinsLocked = false;
+                        _twLock.removeAttribute('data-locked');
+                    }
                     if (typeof window._syncSelfServeProductNav === 'function') {
                         try { window._syncSelfServeProductNav(); } catch (_) {}
                     }
                     // If the current product was just revoked, land on the first granted one.
                     var _cur = viewDropdown.options[viewDropdown.selectedIndex];
-                    if (_cur && _cur.disabled) {
-                        var _fb = Array.from(viewDropdown.options).find(function(o) { return !o.disabled; });
+                    if (_cur && (_cur.disabled || _cur.getAttribute('data-locked') === '1')) {
+                        var _fb = Array.from(viewDropdown.options).find(function(o) { return !o.disabled && o.getAttribute('data-locked') !== '1'; });
                         if (_fb) {
                             viewDropdown.value = _fb.value;
                             try { viewDropdown.dispatchEvent(new Event('change', { bubbles: true })); } catch (_) {}
@@ -61768,13 +61786,19 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 function _buildLeafOption(opt) {
                     var val = opt.value;
                     var label = _navCleanLabel(opt.textContent);
-                    var disabled = opt.disabled;
+                    var locked = opt.getAttribute('data-locked') === '1';
+                    var disabled = opt.disabled && !locked;
                     var item = document.createElement('button');
                     item.type = 'button';
-                    item.className = 'view-nav-option' + (disabled ? ' disabled' : '') + ' has-tooltip';
+                    item.className = 'view-nav-option' + (disabled ? ' disabled' : '') + (locked ? ' locked' : '') + ' has-tooltip';
                     item.setAttribute('role', 'option');
                     item.setAttribute('data-value', val);
-                    if (!disabled && viewNavProductTooltips[val]) item.setAttribute('data-tooltip', viewNavProductTooltips[val]);
+                    if (locked) {
+                        item.setAttribute('aria-disabled', 'true');
+                        item.setAttribute('data-tooltip', 'Digital Twins is not open yet.');
+                    } else if (!disabled && viewNavProductTooltips[val]) {
+                        item.setAttribute('data-tooltip', viewNavProductTooltips[val]);
+                    }
                     var _dot = document.createElement('span');
                     _dot.className = 'view-nav-dot ' + _navDotTone(val, label);
                     _dot.setAttribute('aria-hidden', 'true');
@@ -61783,8 +61807,15 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     _txt.textContent = label;
                     item.appendChild(_dot);
                     item.appendChild(_txt);
-                    if (disabled) {
-                        item.disabled = true;
+                    if (locked) {
+                        var _lk = document.createElement('span');
+                        _lk.className = 'view-nav-lock';
+                        _lk.setAttribute('aria-hidden', 'true');
+                        _lk.textContent = '\u{1F512}';
+                        item.appendChild(_lk);
+                    }
+                    if (disabled || locked) {
+                        if (disabled) item.disabled = true;
                     } else {
                         _navBindTap(item, function() {
                             var v = this.getAttribute('data-value');
@@ -61817,7 +61848,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         var opt = viewDropdown.options[i];
                         var groupName = opt.getAttribute('data-group');
                         if (!groupName) {
-                            if (opt.disabled) continue;
+                            if (opt.disabled && opt.getAttribute('data-locked') !== '1') continue;
                             panelEl.appendChild(_buildLeafOption(opt));
                             continue;
                         }
@@ -61871,7 +61902,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         for (var k = 0; k < viewDropdown.options.length; k++) {
                             var sib = viewDropdown.options[k];
                             if (sib.getAttribute('data-group') !== groupName) continue;
-                            if (sib.disabled) continue;
+                            if (sib.disabled && sib.getAttribute('data-locked') !== '1') continue;
                             var leaf = _buildLeafOption(sib);
                             leaf.classList.add('view-nav-suboption');
                             submenu.appendChild(leaf);
