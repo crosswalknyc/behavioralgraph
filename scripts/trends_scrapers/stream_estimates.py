@@ -2119,8 +2119,8 @@ _PROMPT_HEADER = (
     "Prime Video ~48-58M (a subset of Prime members active-that-day). "
     "A single title's daily US HH cannot exceed the service's daily "
     "reach.\n"
-    "     Books: total daily US book buyers ~700K-1M (Circana daily "
-    "share); US Audible daily listeners ~3-4M; US daily public-"
+    "     Books: US book sales ~3M a day across Amazon, Apple Books and "
+    "Audible combined (print + ebook + audiobook); US Audible daily listeners ~3-4M; US daily public-"
     "library digital borrowers ~700K-1M (OverDrive). A single title's "
     "daily US buyers/borrowers must sit INSIDE those aggregate daily "
     "pools.\n"
@@ -2434,46 +2434,35 @@ _PODCAST_PLATFORMS = [
 _BOOK_PLATFORMS = [
     {'key': 'amazon',
      'label': 'Amazon Best-Sellers (Kindle + Print)',
-     'ceiling': 30_000,
+     'ceiling': 70_000,
      'anchors': (
-         "AMAZON ONLY - the Circana ladder below is CROSS-RETAILER "
-         "and must be apportioned before it lands on this row. "
-         "Observed Circana BookScan US weekly print units, Aug-Sep "
-         "2026 weeks (via Publishers Weekly): #1 41-55K (The Women "
-         "54,997; Great Big Beautiful Life 41,332 on debut), #3 "
-         "37,246, #4 25,776, #8 17,883, #10 16,456. So the ladder is "
-         "#1 40-56K, #2-5 24-42K, #6-10 15-26K, #11-25 7.5-16K, "
-         "#26-50 3.5-9K, #51-100 1.4-4K. The earlier '#1 in a release "
-         "week 100-300K' band was several times the observed weekly "
-         "reality and is retired. Amazon is ~40-50% of US print and "
-         "~55-65% of US ebook, so a blended ~50% applies to its own "
-         "print+Kindle list. Multiply the cross-retailer tier by that "
-         "share, THEN divide by 7. Amazon-only #1 therefore lands "
-         "near 20-28K weekly, about 2.9-4.0K a day. Bias LOW."
+         "AMAZON ONLY. US book sales run about 3M a day across Amazon, "
+         "Apple Books and Audible combined (print + ebook + audiobook); "
+         "Amazon takes about 83.5% of that, roughly 2.5M a day. The "
+         "chart's #1 takes about 0.33% of its store's daily sales and "
+         "the top 100 about 5% (Circana BookScan concentration), so "
+         "Amazon #1 lands near 8.3K a day, #10 near 2.8K, #50 near "
+         "600, #100 near 240. The final level is set from this pool "
+         "by chart position after research."
      )},
     {'key': 'apple',
      'label': 'Apple Books Top 100 (Paid US)',
-     'ceiling': 2_000,
+     'ceiling': 5_000,
      'anchors': (
-         "APPLE BOOKS ONLY. Apple Books is ~8-12% of the US ebook "
-         "market and ebooks are ~20-25% of US trade units, so Apple "
-         "carries roughly 2.5% of a title's cross-retailer weekly "
-         "units. Apply that to the Circana ladder in the Amazon row, "
-         "then divide by 7. Apple-only #1 lands near 1.0-1.4K weekly, "
-         "roughly 150-200 a day; top-10 a few hundred weekly. This is "
-         "a genuinely small list and must not be inflated to look "
-         "comparable to the Amazon panel. Bias LOW."
+         "APPLE BOOKS ONLY. Apple Books takes about 5% of the 3M daily "
+         "US book sales across Amazon, Apple Books and Audible, about "
+         "150K a day. #1 takes about 0.33% of that: near 500 a day, "
+         "#10 near 170, #50 near 36, #100 near 14. A genuinely small "
+         "list; it must not be inflated to look comparable to Amazon."
      )},
     {'key': 'audible',
      'label': 'Audible Best-Sellers (Audiobook)',
-     'ceiling': 4_800,
+     'ceiling': 12_000,
      'anchors': (
-         "AUDIBLE ONLY. Audible has ~10M US members and holds "
-         "~55-65% of US audiobook, but audiobooks are only ~10% of US "
-         "trade units, so Audible carries roughly 6% of a title's "
-         "cross-retailer weekly units. Apply that to the Circana "
-         "ladder in the Amazon row, then divide by 7. Audible-only #1 "
-         "lands near 2.4-3.4K weekly, roughly 340-480 a day. Bias LOW."
+         "AUDIBLE ONLY. Audible takes about 11.5% of the 3M daily US "
+         "book sales across Amazon, Apple Books and Audible, about "
+         "345K a day. #1 takes about 0.33% of that: near 1.1K a day, "
+         "#10 near 390, #50 near 83, #100 near 33."
      )},
     {'key': 'libby_ebook',
      'label': 'Libby Popular eBooks (US public-library projection)',
@@ -8706,6 +8695,18 @@ def fetch(only: Optional[set[str]] = None,
     # residential re-price runs, so the store always leaves a writer
     # in the same shape.
     _finalize_published_charts(researched, target_date_iso)
+
+    # Amazon / Apple Books / Audible: the chart sets the order, the 3M
+    # daily US book-sales pool sets the level (book_sales_level.py).
+    try:
+        from . import book_sales_level as _bsl
+        _nb = _bsl.level(researched, _read_snapshot('book_charts') or {},
+                          target_date_iso, key_fn=lambda t, a: 'book:' + _cp_normalize(f'{t} {a}'))
+        logger.info("stream_estimates: %d book chart row(s) levelled to "
+                     "the US sales pool for %s", len(_nb), target_date_iso)
+    except Exception:
+        logger.exception("stream_estimates: book sales level failed "
+                          "(non-fatal)")
 
     researched = _attach_dod_trend(researched, yesterday,
                                      prev_date_iso=prev_date_iso,
