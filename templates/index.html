@@ -85360,7 +85360,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     if (!d || !d.success) return;
                     _pmThreadsIdx = d;
                     _pmAdoptHistory([]);
-                    try { _pmFollow.key = null; } catch (_) {}
+                    // a new chat stays put until the project on screen actually changes
+                    try { var idn = _pmProjectIdentity(); _pmFollow.key = idn ? idn.subject_key : ''; } catch (_) {}
                     _pmThreadsRender();
                     var inp = document.getElementById('synthChatInput');
                     if (inp) inp.focus();
@@ -85386,9 +85387,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     if (!d || !d.success) return;
                     if (_pmThreadsIdx) _pmThreadsIdx.active = tid;
                     _pmAdoptHistory(d.history || []);
-                    // opened by hand: the page stays; the next project
-                    // change still moves the thread
-                    try { _pmFollow.key = null; _pmThreadsRender(); } catch (_) {}
+                    // opened by hand: the page stays; only the NEXT project change moves the thread.
+                    // (Jenna 2026-10-30: this used to clear the followed key, so the two-second follow
+                    // saw a change at once and dropped the thread you had just opened.)
+                    try { var idn = _pmProjectIdentity(); _pmFollow.key = idn ? idn.subject_key : ''; _pmThreadsRender(); } catch (_) {}
                     _pmThreadsLoad();
               }).catch(function () {});
         }
