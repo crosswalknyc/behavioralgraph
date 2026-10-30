@@ -41,6 +41,20 @@ The capture time rides on the snapshot either way.
 
 Session: none. Anonymous is the whole chart.
 
+Where it runs (2026-10-30)
+--------------------------
+From the residential lane (`local_residential_run`), not the build box.
+tubitv.com resolves the request IP and sends the box's datacenter
+address to `gdpr.tubi.tv`, a consent stub with no chart on it, so the
+reader returned 0 rows every night from 2026-09-24 on. The fallback
+below then kept republishing the 24 September capture as the day's
+chart, which is how Seeking Persephone sat at #1 for five weeks (Jenna
+2026-10-30: "Seeking Persephone is no 1 everyday which seems wrong").
+Two things changed: the scrape moved to the Mac, where the page serves
+in full, and the fallback now has an age limit (`_CARRY_DAYS`). Past
+it the snapshot publishes with no rows and the rail renders without a
+chart, which is honest, rather than with a frozen one, which is not.
+
 Standalone:
     python3 -m scripts.trends_scrapers.tubi_popular
 """
@@ -73,6 +87,14 @@ _MAX_ROWS = 60
 # here: the grid hydrates in chunks, so a short read means we caught it
 # mid-hydration, not that Tubi shortened its chart.
 _MIN_HEALTHY = 20
+
+# How long a healthy capture may stand in for a failed read before the
+# snapshot goes dark instead. Four days covers a long weekend of
+# blocked reads; a chart older than that is a snapshot of a past week
+# wearing today's date. `stream_estimates` keeps its own archive carry
+# (`_CHART_CARRY_DAYS`) on top of this, so the rail still renders a
+# dated recent chart for a few more days before it drops the positions.
+_CARRY_DAYS = 4
 
 _S3_BUCKET = 'dashboard-inputs'
 _S3_LATEST = 'trends_iq_snapshots/latest/tubi_popular.json'
@@ -176,6 +198,15 @@ def _healthy(rows: Any) -> bool:
     return isinstance(rows, list) and len(rows) >= _MIN_HEALTHY
 
 
+def _recent(capture_date: str, now: datetime) -> bool:
+    """Whether a capture dated `capture_date` may still stand in today."""
+    try:
+        captured = datetime.fromisoformat(str(capture_date)[:10]).date()
+    except ValueError:
+        return False
+    return (now.date() - captured).days <= _CARRY_DAYS
+
+
 def _drift(before: list[dict], after: list[dict]) -> tuple[int, float]:
     """How far the chart moved: set churn, and median rank shift.
 
@@ -254,7 +285,7 @@ def fetch() -> dict[str, Any]:
     reason = (f'tubi_popular: read {len(rows)} row(s), below the '
               f'{_MIN_HEALTHY}-row health floor')
     logger.warning(reason)
-    if _healthy(prev_rows):
+    if _healthy(prev_rows) and _recent(prev_date, now):
         logger.warning("tubi_popular: preserving previous capture from %s "
                        "(%d rows)", prev_at, len(prev_rows))
         return {
@@ -269,8 +300,15 @@ def fetch() -> dict[str, Any]:
             'last_observed_at':    now.isoformat(),
             'last_observed_count': len(rows),
         }
+    if _healthy(prev_rows):
+        logger.warning("tubi_popular: previous capture from %s is older "
+                       "than %d day(s); publishing no chart rather than "
+                       "a frozen one", prev_at, _CARRY_DAYS)
+        reason += f'; last capture {prev_date} is past the {_CARRY_DAYS}-day carry'
     return {'national': [], 'soft_block_reason': reason,
-            'chart_url': CHART_URL, 'chart_collection': COLLECTION}
+            'chart_url': CHART_URL, 'chart_collection': COLLECTION,
+            'last_observed_at': now.isoformat(),
+            'last_observed_count': len(rows)}
 
 
 if __name__ == '__main__':

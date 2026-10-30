@@ -100,7 +100,12 @@ SCRAPERS = [
     # capture lands at a consistent point each night, which matters
     # because Tubi recomputes the chart through the day and the first
     # healthy capture of each UTC day is the one that gets pinned.
-    ('tubi_popular',       'scripts.trends_scrapers.tubi_popular',       'Tubi Most Popular',    'fast'),
+    # Tubi's OWN Most Popular (`tubi_popular`) is NOT here any more
+    # (2026-10-30). tubitv.com sends this box's IP to gdpr.tubi.tv, a
+    # consent stub with no chart, so the read returned 0 rows every
+    # night from 2026-09-24 and the rail carried one capture for five
+    # weeks. It runs from the residential lane now
+    # (`local_residential_run`), same split Paramount+ has.
     # Pluto TV's OWN Most Popular Movies and Top TV Series, for
     # the same reason: the JustWatch feed carries no Pluto
     # ranking. Anonymous, and pinned to the first healthy

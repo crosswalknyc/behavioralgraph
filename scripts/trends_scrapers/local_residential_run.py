@@ -216,6 +216,14 @@ RESIDENTIAL_SCRAPERS = [
     # deep. Fully-qualified module: it lives beside the other
     # Microdramas IQ scrapers, not under trends_scrapers.
     ('scripts.microdramas_scrapers.peacock', 'Peacock Microdramas'),
+    # Tubi's OWN Most Popular (moved here 2026-10-30). No session
+    # needed, but tubitv.com resolves the storefront off the request
+    # IP and sends the build box to gdpr.tubi.tv, a consent stub with
+    # no chart, so the nightly read returned 0 rows from 2026-09-24
+    # and the rail carried that one capture for five weeks. From the
+    # Mac the page serves all sixty tiles. The catalog pull
+    # (`fast_channels`, JustWatch) stays on the build box.
+    ('tubi_popular',  'Tubi Most Popular'),
 ]
 
 
