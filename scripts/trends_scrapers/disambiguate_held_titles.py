@@ -70,7 +70,9 @@ _CHECKPOINT = '/tmp/disambiguate_held_checkpoint.json'
 # the spend report honest: `_spend_monitor` prices this exact string,
 # where an unpriced Opus alias would bill at the deliberately
 # pessimistic unknown-Opus rate.
-_DEFAULT_MODEL = 'claude-opus-4-5-20251101'
+# 2026-10-30: Opus 4.5's earliest retirement date is 2026-11-24; this
+# pass rides the research tier the Prometheus router already uses.
+_DEFAULT_MODEL = 'claude-opus-5'
 
 # The nightly default is 2000 and it is the right default there. This
 # pass asks a harder question (which work is this, does the service

@@ -98,7 +98,7 @@ _S3_DATED  = 'trends_iq_snapshots/{date}/'
 _MAX_HEADLINE_ITEMS  = 800
 
 _WEBSEARCH_MODEL      = (os.environ.get('HEADLINE_ESTIMATES_MODEL')
-                          or 'claude-sonnet-4-5')
+                          or 'claude-sonnet-5-5')
 _WEBSEARCH_MAX_TOKENS = 1200
 _WEBSEARCH_MAX_USES   = 3
 _WEBSEARCH_TIMEOUT_S  = 60

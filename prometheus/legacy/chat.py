@@ -8870,11 +8870,17 @@ _PM_CLASSIFY_MODEL_ENV = (os.environ.get('PROMETHEUS_CLASSIFY_MODEL')
 
 # 2026-09-04: dated ID first per Anthropic's Feb-2026 retirement of
 # claude-3-5-haiku-20241022. Migration notice explicitly recommends
-# the dated haiku-4-5-20251001 form. Alias kept as legacy fallback so
-# analytics keyed on the family name still resolve.
+# the dated haiku-4-5-20251001 form.
+# 2026-10-30 (Sonnet 4.5 retirement wave): the ask classifier keys on
+# a literal label, so it was compared live on the five most frequent
+# real asks before moving. Haiku 5.5 agreed on four; the 'Value a brand
+# partnership' chip read `other` on 4.5 and `analysis` on 5.5. Per the
+# rule (move only what passed) this chain stays on Haiku 4.5 first,
+# with Haiku 5.5 as the live fallback in place of the retiring alias
+# (Haiku 4.5's earliest retirement date, 2026-10-15, has passed).
 _PM_CLASSIFY_CANDIDATES = (
     ([_PM_CLASSIFY_MODEL_ENV] if _PM_CLASSIFY_MODEL_ENV else [])
-    + ['claude-haiku-4-5-20251001', 'claude-haiku-4-5'])
+    + ['claude-haiku-4-5-20251001', 'claude-haiku-5-5'])
 
 
 _PM_CLASSIFY_SURFACES = frozenset(('corpus_select', 'ask_classify', 'reader_notes'))

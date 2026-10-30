@@ -302,7 +302,7 @@ _MAX_GAMING_ITEMS    = 140
 _MAX_FAST_CHANNEL_ITEMS = 6_000
 
 _WEBSEARCH_MODEL      = (os.environ.get('STREAM_ESTIMATES_MODEL')
-                          or 'claude-sonnet-4-5')
+                          or 'claude-sonnet-5-5')
 # 2026-09-04: 1200 -> 2000. Items with NO previous-day reference (new
 # titles entering a chart, day-one platform additions like Paramount+/
 # Peacock) draw longer rationale plus the mandatory day_specificity
@@ -346,9 +346,9 @@ _CONCURRENCY          = 6
 # --------------------------------------------------------------------
 _MODEL_HI = (os.environ.get('STREAM_ESTIMATES_MODEL_HI')
               or _WEBSEARCH_MODEL
-              or 'claude-sonnet-4-5')
+              or 'claude-sonnet-5-5')
 _MODEL_LO = (os.environ.get('STREAM_ESTIMATES_MODEL_LO')
-              or 'claude-haiku-4-5-20251001')
+              or 'claude-haiku-5-5')
 
 # Threshold below which an item is 'hi' (top of its kind) vs 'lo'
 # (long-tail). best_rank is the item's best chart position in its

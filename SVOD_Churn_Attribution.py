@@ -3167,7 +3167,7 @@ def _research_engagement_metrics(*, show_name, platform_name, genre, content_cad
         'second_screen_reasoning':    (result.get('second_screen_reasoning') or '').strip(),
         'sources_cited':              result.get('sources_cited') or [],
         'confidence':                 result.get('confidence') or 'low',
-        'model':                      'claude-sonnet-4-5',
+        'model':                      os.environ.get('CLAUDE_REASONING_MODEL') or 'claude-sonnet-5-5',
     }
     if out['completion_rate_pct'] is not None:
         print(f"      🎬 Completion rate: {out['completion_rate_pct']}% "
@@ -3359,7 +3359,7 @@ def _reason_viewer_bracket_with_claude(*, show_name, platform_name, genre, date_
         'completion_discount_used': result.get('step5_completion_discount'),
         'sources': result.get('sources_cited', []),
         'confidence': str(result.get('confidence', 'medium')).lower(),
-        'model': os.environ.get('CLAUDE_REASONING_MODEL') or 'claude-sonnet-4-5',
+        'model': os.environ.get('CLAUDE_REASONING_MODEL') or 'claude-sonnet-5-5',
     }
 
 
@@ -4927,7 +4927,7 @@ def _reason_demographics_with_claude(*, show_name, platform_name, age_labels,
         'anchors_found': result.get('step2_anchors_found', []),
         'priors_used': bool(result.get('step3_priors_used', False)),
         'guardrails_applied': result.get('step5_guardrails_applied', []),
-        'model': os.environ.get('CLAUDE_REASONING_MODEL') or 'claude-sonnet-4-5',
+        'model': os.environ.get('CLAUDE_REASONING_MODEL') or 'claude-sonnet-5-5',
     }
 
 

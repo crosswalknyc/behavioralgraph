@@ -11481,7 +11481,7 @@ def api_dispatch_pool():
 #                                                  team can take to the client.
 #
 # Both routes share an underlying Claude wrapper (`_run_nflx_claude_agent`)
-# that pins claude-sonnet-4-5 (or whatever CLAUDE_REASONING_MODEL points at),
+# that pins claude-sonnet-5-5 (or whatever CLAUDE_REASONING_MODEL points at),
 # enforces strict JSON output via `_extract_json_object`, and short-circuits
 # with a clear error when no ANTHROPIC_API_KEY is configured.
 #
@@ -11619,7 +11619,7 @@ def _run_nflx_claude_agent(*, system_prompt, user_prompt, max_tokens=8192,
 
     chosen_model = (model
                     or os.environ.get('CLAUDE_REASONING_MODEL')
-                    or 'claude-sonnet-4-5')
+                    or 'claude-sonnet-5-5')
 
     try:
         from claude_client import ClaudeTruncatedError as _TruncErr
@@ -18826,7 +18826,7 @@ def _momentum_research(subject, category, start, end):
     text = ''
     try:
         resp = client.messages.create(
-            model=os.environ.get('MOMENTUM_MODEL', 'claude-sonnet-4-5'),
+            model=os.environ.get('MOMENTUM_MODEL', 'claude-sonnet-5-5'),
             max_tokens=1600,
             tools=[{'type': 'web_search_20250305', 'name': 'web_search', 'max_uses': 4}],
             messages=[{'role': 'user', 'content': prompt}],

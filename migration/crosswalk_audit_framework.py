@@ -33,6 +33,20 @@ from __future__ import annotations
 import io
 import json
 import os
+
+
+_TEMP_REJECTING_FAMILIES = ("opus-4-7", "opus-4-8", "opus-5", "sonnet-5",
+                            "haiku-5", "fable", "mythos", "thinking")
+
+
+def _temperature_kw(model, value):
+    """`temperature` only for models that still accept it. Claude 4.7+
+    lines (Sonnet 5.5, Opus 4.7+, Haiku 5.5) return 400 when it is sent.
+    2026-10-30, Sonnet 4.5 retirement."""
+    m = (model or "").lower()
+    if any(f in m for f in _TEMP_REJECTING_FAMILIES):
+        return {}
+    return {"temperature": value}
 import re
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -1092,7 +1106,7 @@ def claude_arbitrate_kept_failures(df,
                                      subject: str = '',
                                      persona_doc=None,
                                      audience_composition: dict | None = None,
-                                     model: str = 'claude-sonnet-4-5',
+                                     model: str = 'claude-sonnet-5-5',
                                      batch_size: int = 10,
                                      max_tokens: int = 4000,
                                      min_gap_pct: float = 1.5,
@@ -1172,8 +1186,8 @@ def claude_arbitrate_kept_failures(df,
             resp = anthropic_client.messages.create(
                 model=model,
                 max_tokens=max_tokens,
-                temperature=0.2,
                 messages=[{'role': 'user', 'content': prompt}],
+                **_temperature_kw(model, 0.2),
             )
             raw = resp.content[0].text.strip()
             raw = re.sub(r'^```(?:json)?\s*|\s*```$', '', raw).strip()
@@ -5034,7 +5048,7 @@ def claude_arbiter_on_vet_keeps(df,
                                   persona_doc=None,
                                   audience_composition: dict | None = None,
                                   brand_category: str | None = None,
-                                  model: str = 'claude-sonnet-4-5-20250929',
+                                  model: str = 'claude-sonnet-5-5',
                                   batch_size: int = 8,
                                   max_tokens: int = 4000,
                                   verbose: bool = True):
@@ -5052,7 +5066,7 @@ def claude_arbiter_on_vet_keeps(df,
     subject, persona_doc, audience_composition, brand_category :
         Context fed to Claude for persona-grounded reasoning.
     model : str
-        Claude model slug. Defaults to claude-sonnet-4-5 (latest fast
+        Claude model slug. Defaults to claude-sonnet-5-5 (latest fast
         thinking-class model — strong reasoning, ~$3/M input).
     batch_size : int
         Items per Claude call. Default 8 — smaller than GPT-4o because
@@ -5128,8 +5142,8 @@ def claude_arbiter_on_vet_keeps(df,
             resp = anthropic_client.messages.create(
                 model=model,
                 max_tokens=max_tokens,
-                temperature=0.2,
                 messages=[{'role': 'user', 'content': prompt}],
+                **_temperature_kw(model, 0.2),
             )
             raw = ''.join(b.text for b in resp.content if getattr(b, 'text', None))
             raw = re.sub(r'^```(?:json)?\s*|\s*```$', '', raw.strip()).strip()

@@ -9,7 +9,7 @@ Web research stays on GPT-4o-search-preview (it has native web grounding;
 Claude does not).  Per-step routing is controlled by env vars:
 
   USE_CLAUDE_REASONING     - if truthy, route reasoning calls to Claude
-  CLAUDE_REASONING_MODEL   - override model id (default: claude-sonnet-4-5)
+  CLAUDE_REASONING_MODEL   - override model id (default: claude-sonnet-5-5)
   ANTHROPIC_API_KEY        - required for any Claude call
 
 If anthropic is not installed or the API key is missing, every helper
@@ -46,7 +46,10 @@ def last_call_stats() -> dict:
 # "temperature is deprecated for this model"). Checked upfront to skip
 # a wasted roundtrip; the dynamic 400-retry below self-learns any new
 # family and memoizes it here for the process lifetime.
+# 2026-10-30: Sonnet 5.5 (the Sonnet 4.5 replacement) and every other
+# Claude 4.7+ line reject it too (verified live, 400).
 _TEMP_UNSUPPORTED_FAMILIES = {"opus-5", "opus-4-8", "opus-4-7", "opus-4-6",
+                              "sonnet-5", "haiku-5", "fable",
                               "thinking", "mythos"}
 _temp_rejecting_models: set = set()
 
@@ -241,7 +244,7 @@ def claude_reason_json(
     model_id = (
         model
         or os.environ.get("CLAUDE_REASONING_MODEL")
-        or "claude-sonnet-4-5"
+        or "claude-sonnet-5-5"
     )
 
     # Prompt caching: explicit cache_control on the system block so Anthropic
@@ -420,7 +423,7 @@ def claude_messages(
     model_id = (
         model
         or os.environ.get("CLAUDE_REASONING_MODEL")
-        or "claude-sonnet-4-5"
+        or "claude-sonnet-5-5"
     )
 
     _omit_temperature = _model_omits_temperature(model_id)

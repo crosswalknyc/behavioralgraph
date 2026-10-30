@@ -91,7 +91,7 @@ _S3_LATEST = 'trends_iq_snapshots/latest/'
 
 _CLAUDE_MODEL = (os.environ.get('LENS_RELEVANCE_MODEL')
                   or os.environ.get('WEBSEARCH_MODEL')
-                  or 'claude-sonnet-4-5')
+                  or 'claude-sonnet-5-5')
 _BATCH_SIZE   = int(os.environ.get('LENS_RELEVANCE_BATCH_SIZE')  or '25')
 _TIMEOUT_S    = int(os.environ.get('LENS_RELEVANCE_TIMEOUT_S')   or '120')
 

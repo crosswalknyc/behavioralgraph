@@ -120,7 +120,7 @@ STAGE_LABEL = {'researching': 'Researching the question', 'the room is thinking'
 MODELS = {
     'research': (os.environ.get('DTIQ_ROOM_RESEARCH_MODEL') or '').strip() or None,     # None: the analysis chain (Opus class first)
     'moderator': (os.environ.get('DTIQ_ROOM_MODERATOR_MODEL') or '').strip() or None,
-    'persona': [m for m in ((os.environ.get('DTIQ_ROOM_PERSONA_MODEL') or '').strip(), 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001') if m],
+    'persona': [m for m in ((os.environ.get('DTIQ_ROOM_PERSONA_MODEL') or '').strip(), 'claude-sonnet-4-6', 'claude-haiku-5-5') if m],
     # the strong chain when the Prometheus host is not bound (a script, the box): the same candidates the analysis chain walks
     'strong': ['claude-opus-5', 'claude-opus-4-8', 'claude-opus-4-7', 'claude-opus-4-6', 'claude-sonnet-4-6'],
 }

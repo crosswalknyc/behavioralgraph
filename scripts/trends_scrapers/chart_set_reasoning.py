@@ -67,7 +67,13 @@ logger = logging.getLogger(__name__)
 
 _MODEL = (os.environ.get('CHART_SET_MODEL')
           or os.environ.get('STREAM_ESTIMATES_MODEL_HI')
-          or 'claude-sonnet-4-5')
+          or 'claude-sonnet-5-5')
+
+_TEMP_REJECTING_FAMILIES = ("opus-4-7", "opus-4-8", "opus-5", "sonnet-5",
+                            "haiku-5", "fable", "mythos", "thinking")
+# Claude 4.7+ lines return 400 on `temperature` (2026-10-30, Sonnet 5.5).
+_TEMP_KW = ({} if any(f in _MODEL.lower() for f in _TEMP_REJECTING_FAMILIES)
+            else {'temperature': 0})
 # Headroom. The joint share constraint made the answers longer (a
 # reason per share plus a notes block), and at 4,000 the JSON was
 # being truncated mid-object, which `_extract_json` correctly refused
@@ -351,7 +357,7 @@ def _call(client, prompt: str) -> Optional[dict]:
         # a coin toss and the whole pass unreproducible. A chart is a
         # measurement, not a draft.
         resp = client.messages.create(
-            model=_MODEL, max_tokens=_MAX_TOKENS, temperature=0,
+            model=_MODEL, max_tokens=_MAX_TOKENS, **_TEMP_KW,
             messages=[{'role': 'user', 'content': prompt}])
     except TypeError:
         resp = client.messages.create(

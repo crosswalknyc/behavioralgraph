@@ -810,7 +810,7 @@ def _claude_json_cli():
     except Exception:
         tool_plans = [None]
     models = [m for m in (os.environ.get('PM_ANALYZE_MODEL') or os.environ.get('CLAUDE_REASONING_MODEL') or '',
-                          'claude-opus-4-6', 'claude-sonnet-4-5') if m]
+                          'claude-opus-4-6', 'claude-sonnet-5-5') if m]
 
     def _parse(text):
         t = str(text or '').strip()

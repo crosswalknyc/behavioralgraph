@@ -43,7 +43,7 @@ ACTS = ('open', 'setup', 'middle', 'turn', 'close', 'end')
 BUDGET_S = {'caption': 240.0, 'act': 170.0, 'battery': 90.0, 'guide': 60.0}
 CAPTION_BATCH = 6
 CAPTION_WORKERS = 6
-VISION_MODELS = [m for m in ((os.environ.get('DTIQ_WATCH_VISION_MODEL') or '').strip(), 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001') if m]
+VISION_MODELS = [m for m in ((os.environ.get('DTIQ_WATCH_VISION_MODEL') or '').strip(), 'claude-sonnet-4-6', 'claude-haiku-5-5') if m]
 
 # The battery studios quote. Option ids are stable; labels are what the page prints.
 BATTERY = {

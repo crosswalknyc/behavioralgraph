@@ -83,7 +83,7 @@ logger = logging.getLogger(__name__)
 
 _BUCKET = 'dashboard-inputs'
 _LATEST = 'trends_iq_snapshots/latest'
-_MODEL = os.environ.get('CARRIAGE_LEANS_MODEL', 'claude-sonnet-4-5-20250929')
+_MODEL = os.environ.get('CARRIAGE_LEANS_MODEL', 'claude-sonnet-5-5')
 # Titles per call. 110 keeps the reply well inside one turn and keeps
 # the model attending to each row rather than skimming a wall of them.
 _CHUNK = 110

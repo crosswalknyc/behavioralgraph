@@ -93,7 +93,7 @@ TAXONOMY: tuple[str, ...] = (
 _VALID = set(TAXONOMY) | {FALLBACK}
 _BY_LOWER = {g.lower(): g for g in _VALID}
 
-_MODEL = os.environ.get('FAST_GENRE_MODEL') or 'claude-haiku-4-5'
+_MODEL = os.environ.get('FAST_GENRE_MODEL') or 'claude-haiku-5-5'
 _BATCH_CHUNK = 60
 _BATCH_POLL_SECONDS = 15
 _BATCH_MAX_MINUTES = 45
@@ -577,7 +577,7 @@ def _model_labels(names: list[str],
             params=MessageCreateParamsNonStreaming(
                 model=_MODEL,
                 max_tokens=2048,
-                temperature=0,
+                # no `temperature`: Claude 4.7+ lines (Haiku 5.5) return 400 on it
                 metadata=_usage_tap.metadata_dict(),
                 messages=[{'role': 'user',
                            'content': _PROMPT_HEAD + listing}],

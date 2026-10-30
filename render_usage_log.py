@@ -91,26 +91,38 @@ _EXTRA_FIELDS = ('user', 'user_email', 'session_id', 'request_id')
 
 # USD per 1M tokens. Mirror of migration/usage_tracker.PRICING_USD_PER_MTOK.
 PRICING_USD_PER_MTOK = {
+    'claude-sonnet-5-5':      {'input': 2.00, 'output': 10.00,
+                                'cache_read': 0.10, 'cache_write': 2.50},
     'claude-sonnet-4-5':      {'input': 3.00, 'output': 15.00,
                                'cache_read': 0.30, 'cache_write': 3.75},
     'claude-sonnet-4-6':      {'input': 3.00, 'output': 15.00,
                                'cache_read': 0.30, 'cache_write': 3.75},
     'claude-3-5-sonnet-20241022': {'input': 3.00, 'output': 15.00,
                                    'cache_read': 0.30, 'cache_write': 3.75},
-    'claude-opus-4-5':        {'input': 15.00, 'output': 75.00,
-                               'cache_read': 1.50, 'cache_write': 18.75},
-    'claude-opus-4-6':        {'input': 15.00, 'output': 75.00,
-                               'cache_read': 1.50, 'cache_write': 18.75},
-    'claude-opus-4-7':        {'input': 15.00, 'output': 75.00,
-                               'cache_read': 1.50, 'cache_write': 18.75},
-    'claude-opus-4-8':        {'input': 15.00, 'output': 75.00,
-                               'cache_read': 1.50, 'cache_write': 18.75},
-    'claude-opus-5':          {'input': 15.00, 'output': 75.00,
-                               'cache_read': 1.50, 'cache_write': 18.75},
-    'claude-haiku-4-5':       {'input': 0.80, 'output': 4.00,
-                               'cache_read': 0.08, 'cache_write': 1.00},
-    'claude-haiku-4-5-20251001': {'input': 0.80, 'output': 4.00,
-                               'cache_read': 0.08, 'cache_write': 1.00},
+    # Opus 4.5 and later are $5 / $25 on the official sheet (cache read
+    # $0.50, cache write $6.25). These rows carried the retired Opus 4.1
+    # sheet ($15 / $75) until 2026-10-30 and overstated Opus three times.
+    'claude-opus-4-5':        {'input': 5.00, 'output': 25.00,
+                               'cache_read': 0.50, 'cache_write': 6.25},
+    'claude-opus-4-6':        {'input': 5.00, 'output': 25.00,
+                               'cache_read': 0.50, 'cache_write': 6.25},
+    'claude-opus-4-7':        {'input': 5.00, 'output': 25.00,
+                               'cache_read': 0.50, 'cache_write': 6.25},
+    'claude-opus-4-8':        {'input': 5.00, 'output': 25.00,
+                               'cache_read': 0.50, 'cache_write': 6.25},
+    'claude-opus-5':          {'input': 5.00, 'output': 25.00,
+                               'cache_read': 0.50, 'cache_write': 6.25},
+    'claude-opus-5-5':        {'input': 4.00, 'output': 20.00,
+                               'cache_read': 0.20, 'cache_write': 5.00},
+    # Haiku 4.5 is $1 / $5 (the $0.80 / $4 rows were the Haiku 3.5 sheet).
+    'claude-haiku-4-5':       {'input': 1.00, 'output': 5.00,
+                               'cache_read': 0.10, 'cache_write': 1.25},
+    'claude-haiku-4-5-20251001': {'input': 1.00, 'output': 5.00,
+                               'cache_read': 0.10, 'cache_write': 1.25},
+    # Haiku 5.5 (2026-10-30): prompts up to 100K tokens; above that the
+    # sheet is $0.50 / $2.50 (no dashboard classifier prompt is near it).
+    'claude-haiku-5-5':       {'input': 0.10, 'output': 0.50,
+                               'cache_read': 0.01, 'cache_write': 0.125},
 }
 _DEFAULT_PRICES = {'input': 3.00, 'output': 15.00,
                    'cache_read': 0.30, 'cache_write': 3.75}

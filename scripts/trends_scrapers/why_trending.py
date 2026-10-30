@@ -116,9 +116,10 @@ _TOTAL_ITEM_CAP          = 180
 
 # Single-sentence explanations don't need Opus. Match the model naming
 # convention the rest of the workspace uses (claude_client.py defaults
-# to claude-sonnet-4-5); haiku-4-5 is the cheap fast tier from the
-# same family. Overridable via WHY_TRENDING_MODEL env var.
-_CLAUDE_MODEL = os.environ.get('WHY_TRENDING_MODEL') or 'claude-haiku-4-5-20251001'
+# to claude-sonnet-5-5); haiku-5-5 is the cheap fast tier from the
+# same family (2026-10-30, off Haiku 4.5 whose earliest retirement
+# date has passed). Overridable via WHY_TRENDING_MODEL env var.
+_CLAUDE_MODEL = os.environ.get('WHY_TRENDING_MODEL') or 'claude-haiku-5-5'
 # Enough to fit 120 items of context-rich prompt (~200 tokens each) +
 # 120 responses (~30 tokens each). Empirical cap on haiku is 8k output.
 _MAX_TOKENS   = 8000
@@ -144,7 +145,7 @@ _MAX_TOKENS   = 8000
 # parallel with _WEBSEARCH_CONCURRENCY workers so a full pass fits
 # in the daily cron window.
 _WEBSEARCH_MODEL       = (os.environ.get('WHY_TRENDING_WEBSEARCH_MODEL')
-                           or 'claude-sonnet-4-5')
+                           or 'claude-sonnet-5-5')
 _WEBSEARCH_MAX_ITEMS   = 80
 _WEBSEARCH_CONCURRENCY = 8
 _WEBSEARCH_MAX_USES    = 2      # per-item cap on tool calls

@@ -48,16 +48,26 @@ logger = logging.getLogger(__name__)
 # both the Anthropic alias (claude-sonnet-4-5) and the pinned snapshot
 # form (claude-sonnet-4-5-20250929) so callers don't have to normalise.
 _PRICES_PER_MTOK: dict[str, dict[str, float]] = {
+    'claude-sonnet-5-5':            {'in': 2.00, 'out': 10.00},
     'claude-sonnet-4-5':            {'in': 3.00, 'out': 15.00},
     'claude-sonnet-4-5-20250929':   {'in': 3.00, 'out': 15.00},
     'claude-haiku-4-5':             {'in': 1.00, 'out': 5.00},
     'claude-haiku-4-5-20251001':    {'in': 1.00, 'out': 5.00},
+    # Haiku 5.5 (2026-10-30): $0.10 / $0.50 for prompts up to 100K tokens
+    # ($0.50 / $2.50 above that; no Trends prompt is near it).
+    'claude-haiku-5-5':             {'in': 0.10, 'out': 0.50},
     # Opus, added 2026-09-22 when the held-title disambiguation pass
     # started using it. Without an entry the fallback below charged
     # Opus at the Sonnet rate, which UNDER-reports a run and lets it
     # walk through its own cap.
     'claude-opus-4-5':              {'in': 5.00, 'out': 25.00},
     'claude-opus-4-5-20251101':     {'in': 5.00, 'out': 25.00},
+    # Opus 4.6 through Opus 5 share the $5 / $25 sheet; Opus 5.5 is $4 / $20.
+    'claude-opus-4-6':              {'in': 5.00, 'out': 25.00},
+    'claude-opus-4-7':              {'in': 5.00, 'out': 25.00},
+    'claude-opus-4-8':              {'in': 5.00, 'out': 25.00},
+    'claude-opus-5':                {'in': 5.00, 'out': 25.00},
+    'claude-opus-5-5':              {'in': 4.00, 'out': 20.00},
 }
 
 # Any other Opus snapshot bills at the highest rate Opus has ever
@@ -188,7 +198,7 @@ class SpendMonitor:
     def preflight_estimate(self, num_msgs: int,
                            tokens_in_per_msg: int = 3000,
                            tokens_out_per_msg: int = 500,
-                           model: str = 'claude-sonnet-4-5',
+                           model: str = 'claude-sonnet-5-5',
                            batch: bool = False,
                            searches_per_msg: int = 0) -> float:
         """Return the estimated USD cost of running `num_msgs`

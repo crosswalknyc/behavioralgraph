@@ -51,7 +51,7 @@ S3_BUCKET             = os.environ.get('MICRODRAMAS_IQ_BUCKET', 'dashboard-input
 S3_AUDIENCE_CACHE_KEY = 'microdramas_iq/audience_cache/{key}.json'
 CACHE_TTL_S           = int(os.environ.get('MICRODRAMAS_AUDIENCE_TTL', str(60 * 60 * 24 * 14)))  # 14 days
 
-CLAUDE_MODEL = os.environ.get('MICRODRAMAS_CLAUDE_MODEL') or 'claude-sonnet-4-5'
+CLAUDE_MODEL = os.environ.get('MICRODRAMAS_CLAUDE_MODEL') or 'claude-sonnet-5-5'
 
 # Canonical Gen Pop CSV in the dashboard S3 bucket. Same file the
 # BG.py pipeline reads for its own Gen Pop calibration (see bg.py

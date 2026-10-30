@@ -43,7 +43,7 @@ Output: `s3://dashboard-inputs/trends_iq_snapshots/system/rhythm_profiles.json`
 WIP checkpoint: `trends_iq_snapshots/_wip/rhythm_profiles_wip.json`
 (resume-safe; a crashed run picks up where it left off).
 
-Cost control: batches of 40 items per call, claude-haiku-4-5 by
+Cost control: batches of 40 items per call, claude-haiku-5-5 by
 default (override RHYTHM_PROFILE_MODEL), no web search. Whole-corpus
 cost lands well under $10. Calls are tagged via _usage_tap so spend
 attributes to the Trends / Ranker line of the daily cost email.
@@ -87,7 +87,7 @@ _WINDOW_START = date(2026, 6, 1)
 _WINDOW_END   = date(2026, 9, 3)
 
 _MODEL       = (os.environ.get('RHYTHM_PROFILE_MODEL')
-                or 'claude-haiku-4-5')
+                or 'claude-haiku-5-5')
 _BATCH_SIZE  = int(os.environ.get('RHYTHM_PROFILE_BATCH')   or '40')
 _CONCURRENCY = int(os.environ.get('RHYTHM_PROFILE_WORKERS') or '4')
 _TIMEOUT_S   = int(os.environ.get('RHYTHM_PROFILE_TIMEOUT') or '180')

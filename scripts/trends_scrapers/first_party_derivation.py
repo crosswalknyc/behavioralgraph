@@ -66,7 +66,13 @@ FIRST_PARTY_BASIS = 'first_party'
 
 _MODEL = (os.environ.get('FIRST_PARTY_PARAMS_MODEL')
           or os.environ.get('STREAM_ESTIMATES_MODEL_HI')
-          or 'claude-sonnet-4-5')
+          or 'claude-sonnet-5-5')
+
+_TEMP_REJECTING_FAMILIES = ("opus-4-7", "opus-4-8", "opus-5", "sonnet-5",
+                            "haiku-5", "fable", "mythos", "thinking")
+# Claude 4.7+ lines return 400 on `temperature` (2026-10-30, Sonnet 5.5).
+_TEMP_KW = ({} if any(f in _MODEL.lower() for f in _TEMP_REJECTING_FAMILIES)
+            else {'temperature': 0})
 _MAX_TOKENS = 3000
 
 
@@ -391,7 +397,7 @@ def reason_wattpad_params(client, rows: list[dict], target_date_iso: str,
     try:
         try:
             resp = client.messages.create(
-                model=_MODEL, max_tokens=_MAX_TOKENS, temperature=0,
+                model=_MODEL, max_tokens=_MAX_TOKENS, **_TEMP_KW,
                 messages=[{'role': 'user', 'content': prompt}])
         except TypeError:
             resp = client.messages.create(

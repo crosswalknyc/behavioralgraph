@@ -122,11 +122,12 @@ EXT_DEPTH          = 40      # ranks 11..40
 EXT_MAX_PER_KIND   = 400     # engagement-report universe cap per sheet
 EXT_WEEKLY_FLOOR   = 40_000  # min weekly US views to hold an extended rank
 
-MODEL       = os.environ.get('NPB_MODEL') or 'claude-haiku-4-5'
+MODEL       = os.environ.get('NPB_MODEL') or 'claude-haiku-5-5'
 BATCH_SIZE  = int(os.environ.get('NPB_BATCH') or '40')
 TIMEOUT_S   = int(os.environ.get('NPB_TIMEOUT') or '240')
-# claude-haiku-4-5 list pricing per MTok.
-PRICE_IN, PRICE_OUT = 1.00, 5.00
+# claude-haiku-5-5 list pricing per MTok (prompts under 100K tokens;
+# a 40-title batch is a few thousand). 2026-10-30.
+PRICE_IN, PRICE_OUT = 0.10, 0.50
 
 GLOBAL_RAILS = {
     'films (english)':     ('film', 'en',    'global_films_en'),

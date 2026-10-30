@@ -677,10 +677,10 @@ def preflight_subject_research_gate(
             "Given the subject and category, estimate their expected US "
             "digital engager reach (last 12mo)."
         )
+        _model = os.environ.get("CLAUDE_REASONING_MODEL") or "claude-sonnet-5-5"
         resp = client.messages.create(
-            model="claude-sonnet-4-5-20250929",
+            model=_model,
             max_tokens=400,
-            temperature=0.1,
             system=_PREFLIGHT_SYSTEM,
             messages=[{"role": "user", "content": prompt}],
         )
@@ -689,7 +689,7 @@ def preflight_subject_research_gate(
                 from migration import usage_tracker as _ut
             except Exception:
                 import usage_tracker as _ut  # type: ignore
-            _ut.record("claude-sonnet-4-5-20250929",
+            _ut.record(_model,
                        getattr(resp, "usage", None))
         except Exception:
             pass
