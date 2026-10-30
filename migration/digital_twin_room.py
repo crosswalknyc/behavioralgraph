@@ -565,7 +565,32 @@ def persona_card(twin: dict, seat: dict, session_seed: str) -> dict:
     binge = 'binges a season in a weekend' if g('binge_vs_appointment') >= 55 else 'watches an episode or two a night'
     second = 'scrolls the phone while watching' if g('second_screen') >= 55 else 'puts the phone down to watch'
     name = str(m.get('name') or m.get('subject') or 'the title')
-    if stage == 'discovering':
+    ident0 = (twin or {}).get('identity') or {}
+    base_kind = str((ident0.get('base') or {}).get('kind') or '')
+    civic = base_kind in ('electorate', 'residents')
+    party = str(seat.get('party') or '') or _pick_by_share(demo.get('party') or [], unit('party', sid), '')
+    urbanicity = str(seat.get('urbanicity') or '') or _pick_by_share(demo.get('urbanicity') or [], unit('urban', sid), '')
+    all_issues = [str(x) for x in (ident0.get('issues') or []) if str(x).strip()]
+    my_issues = []
+    if all_issues:
+        order = sorted(range(len(all_issues)), key=lambda i: unit('issue', sid, i) * (1.0 + 0.35 * i))   # the base's top issues come up most
+        my_issues = [all_issues[i] for i in order[:min(3, len(all_issues))]]
+    if civic and base_kind == 'electorate':
+        # an electorate: the relationship is a voting record, not a viewing one (Jenna 2026-10-30)
+        rel = {'discovering': 'registered to vote in the last two years and has voted once so far',
+               'trying': 'votes in presidential years and is deciding whether this race is worth the trip',
+               'in the habit': 'has voted in every November election for years, most primaries too',
+               'lapsing': 'voted for years but sat out the last two elections',
+               'returning': 'sat out a few cycles and is back on the rolls this year'}[stage]
+        freq = {'discovering': 'is still working out where ' + pron[0] + ' stands', 'trying': 'follows a race only when it gets close',
+                'in the habit': 'follows state politics through the year', 'lapsing': 'tunes in a week or two before an election',
+                'returning': 'is paying attention again this year'}[stage]
+    elif civic:
+        rel = {'discovering': f"moved to the area in the last two years", 'trying': 'has lived in the area a few years and is still finding ' + pron[1] + ' places',
+               'in the habit': 'has lived in the area most of ' + pron[1] + ' life', 'lapsing': 'has lived in the area for years and talks about leaving',
+               'returning': 'moved back to the area after years away'}[stage]
+        freq = 'keeps up with local news most weeks' if unit('local', sid) < 0.6 else 'catches local news when something big happens'
+    elif stage == 'discovering':
         rel = f"found {name} in the last year" + (' on streaming' if fmt in ('series', 'film') else '')
         freq = 'still working through it for the first time'
     elif stage == 'trying':
@@ -581,7 +606,9 @@ def persona_card(twin: dict, seat: dict, session_seed: str) -> dict:
         rel = f"came back to {name} after a long break"
         freq = 'rewatching with fresh eyes'
     owns = []
-    if 'owns DVDs' in physical and stage in ('in the habit', 'returning') and g('merch_propensity') >= 45:
+    if civic:
+        pass    # a voter or a resident owns no title merchandise
+    elif 'owns DVDs' in physical and stage in ('in the habit', 'returning') and g('merch_propensity') >= 45:
         owns.append(f"the complete {name} on DVD from years ago")
     if g('merch_propensity') >= 55 and unit('owns', sid) < 0.6:
         owns.append(f"a {name} mug or shirt")
@@ -593,6 +620,8 @@ def persona_card(twin: dict, seat: dict, session_seed: str) -> dict:
     card = {'seat': seat.get('seat'), 'name': seat.get('name'), 'age': age, 'gender': gender, 'city': seat.get('city'), 'segment': str(seat.get('segment') or ''),
             'income': income, 'education': education, 'parental': parental, 'relationship_status': relationship,
             'orientation': orientation, 'occupation': occupation, 'ethnicity': ethnicity,
+            'party': party, 'urbanicity': urbanicity, 'issues': my_issues, 'civic': civic, 'base_kind': base_kind,
+            'values': str(ident0.get('values') or ''),
             'lifecycle_stage': stage, 'relationship_to_subject': rel, 'how_often': freq, 'owns': owns,
             'habits': [price, loyal, merch, physical, churn, social, wom, live, ads, binge, second],
             'streams_on': services, 'shops_at': shops}
@@ -763,13 +792,60 @@ def persona_bio(card: dict, twin: dict, sid: str) -> str:
     edu = _education_words(card.get('education') or '', pron.capitalize())
     if edu:
         sent.append(edu + '.')
+    civic = bool(card.get('civic'))
+    urb = str(card.get('urbanicity') or '').strip().lower()
+    if urb and card.get('city'):
+        where = {'urban': f"in the city itself", 'suburban': f"in the suburbs outside {card.get('city')}", 'rural': f"out in the country, a drive from {card.get('city')}"}.get(urb, '')
+        if where:
+            sent.append(f"Home is {where}.")
+    party = str(card.get('party') or '').strip()
+    issues = [str(x) for x in (card.get('issues') or []) if str(x).strip()]
+    if party or issues:
+        pl = party.lower()
+        if 'republican' in pl:
+            lean = f"{pron} {be} a Republican"
+        elif 'democrat' in pl:
+            lean = f"{pron} {be} a Democrat"
+        elif 'independent' in pl or 'undecided' in pl or 'unaffiliated' in pl:
+            lean = f"{pron} {be} an independent who has not settled on this race"
+        elif party:
+            lean = f"{pron} {be} {party}"
+        else:
+            lean = ''
+        iss = ''
+        if issues:
+            iss = f"the issues {pron} weighs first are {', '.join(issues[:-1]) + (' and ' if len(issues) > 1 else '') + issues[-1]}".replace('weighs first are', 'weighs first ' + ('are' if len(issues) > 1 else 'is'))
+        if lean and iss:
+            sent.append(f"Politically, {lean}; {iss}.")
+        elif lean:
+            sent.append(f"Politically, {lean}.")
+        elif iss:
+            sent.append(f"{iss[0].upper() + iss[1:]}.")
     rel = str(card.get('relationship_to_subject') or '')
     rel = re.sub(r"^(found|started|has watched|has been|used to|came back)", lambda mm: {'found': f"{pron.capitalize()} found", 'started': f"{pron.capitalize()} started", 'has watched': f"{pron.capitalize()} has watched",
                                                                                             'has been': f"{pron.capitalize()} has been", 'used to': f"{pron.capitalize()} used to", 'came back': f"{pron.capitalize()} came back"}[mm.group(1)], rel, count=1)
-    sent.append(f"{rel} and {card.get('how_often')}; {pron} {be} {stage}." if rel else f"{pron.capitalize()} {be} {stage} with {m.get('name') or 'the subject'}.")
+    if civic:
+        sent.append(f"{pron.capitalize()} {rel} and {card.get('how_often')}." if rel else f"{pron.capitalize()} lives in the area.")
+    else:
+        sent.append(f"{rel} and {card.get('how_often')}; {pron} {be} {stage}." if rel else f"{pron.capitalize()} {be} {stage} with {m.get('name') or 'the subject'}.")
     if card.get('owns'):
         sent.append(f"{pron.capitalize()} owns {' and '.join(card['owns'])}.")
     h = list(card.get('habits') or [])
+    if civic and len(h) >= 11:
+        # a voter or a resident: money, subscriptions, how news and shows reach them; no title loyalty, merchandise or box sets
+        price, _loyal, _merch, _physical, churn, social, wom, _live, ads, _binge, second = h[:11]
+        sent.append(f"On money {pron} {price}.")
+        sent.append(f"{pron.capitalize()} {churn}, and {second}.")
+        diet = []
+        if card.get('streams_on'):
+            diet.append(f"streams on {', '.join(_media_names(card['streams_on']))}")
+        if card.get('shops_at'):
+            diet.append(f"shops at {', '.join(card['shops_at'][:3])}")
+        diet.append(social)
+        diet.append(wom)
+        sent.append(f"{pron.capitalize()} " + ', '.join(diet[:-1]) + f", and {diet[-1]}.")
+        sent.append(f"{pron.capitalize()} {ads}.")
+        h = []
     if len(h) >= 11:
         price, loyal, merch, physical, churn, social, wom, live, ads, binge, second = h[:11]
         stage_key = str(card.get('lifecycle_stage') or '')
@@ -822,7 +898,8 @@ def _card_text(card: dict) -> str:
     sees on the seat (``roster[].persona``), verbatim; the structured
     lines when a bio is missing."""
     if card.get('bio'):
-        return str(card['bio'])
+        vals = ' '.join(str(card.get('values') or '').split())
+        return str(card['bio']) + (f"\n\nWhat people like {card.get('name') or 'this'} tend to believe and weigh: {vals}" if vals else '')
     lines = [f"{card['name']}, {card['age']}, {card['gender']}, {card['city']}." + (f" Income {card['income']}." if card.get('income') else '') + (f" {card['education']}." if card.get('education') else ''),
              (f"{card['parental']}. " if card.get('parental') else '') + (f"{card['relationship_status']}." if card.get('relationship_status') else ''),
              f"Relationship to the subject: {card['relationship_to_subject']}; {card['how_often']}." + (f" Owns {', '.join(card['owns'])}." if card.get('owns') else ''),

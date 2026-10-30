@@ -380,6 +380,9 @@ def build_group(twins: list, segments: Optional[list] = None, in_room: int = DEF
         rel_labs = _spread(quota_labels(_demo(t, 'relationship'), n), seed, s['label'] + '|rel')
         par_labs = _spread(quota_labels(_demo(t, 'parental'), n), seed, s['label'] + '|par')
         occ_labs = _spread(quota_labels(_demo(t, 'occupation'), n), seed, s['label'] + '|occ')
+        # an electorate or a place seats by party lean and by urban / suburban / rural too (Jenna 2026-10-30)
+        party_labs = _spread(quota_labels(_demo(t, 'party'), n), seed, s['label'] + '|party')
+        urban_labs = _spread(quota_labels(_demo(t, 'urbanicity'), n), seed, s['label'] + '|urb')
         age_labs = quota_labels(_demo(t, 'age'), n)
         for j in range(n):
             seat_no += 1
@@ -400,7 +403,9 @@ def build_group(twins: list, segments: Optional[list] = None, in_room: int = DEF
                            'ethnicity': eth_labs[j] if j < len(eth_labs) else '',
                            'relationship': rel_labs[j] if j < len(rel_labs) else '',
                            'parental': par_labs[j] if j < len(par_labs) else '',
-                           'occupation': occ_labs[j] if j < len(occ_labs) else ''})
+                           'occupation': occ_labs[j] if j < len(occ_labs) else '',
+                           'party': party_labs[j] if j < len(party_labs) else '',
+                           'urbanicity': urban_labs[j] if j < len(urban_labs) else ''})
     # no two seats share a name
     seen = set()
     for r in roster:
@@ -482,12 +487,39 @@ def _draw_age(ages, u):
 
 
 def _draw_city(t, u):
-    geo = ((t or {}).get('identity') or {}).get('geography') or []
-    names = [re.sub(r"\s+(?:ca|tx|ny|fl|ga|il|pa|az|co|wa|or|nc|mi|oh|mn|nv|tn|mo|md|ma|va|in|wi|ut|dc|dma)$", '', str(r.get('label') or '').strip(), flags=re.I).title() for r in geo[:12] if r.get('label')]
-    names = [n for n in names if n]
-    if names and u < 0.72:
-        return names[int((u / 0.72) * len(names))]
-    return _CITIES[int(u * len(_CITIES))]
+    """A seat's city from the twin's own geography, weighted by each
+    market's share of the audience. A place-defined twin (a state's
+    voters, a city's residents) never seats anyone outside its markets;
+    a national twin whose listed markets cover under half the audience
+    lets the rest fall to a US city (Jenna 2026-10-30: the Ohio room
+    seated Salt Lake City, Baltimore and Florida)."""
+    ident = (t or {}).get('identity') or {}
+    rows = []
+    for r in (ident.get('geography') or []):
+        if not isinstance(r, dict) or not r.get('label'):
+            continue
+        name = re.sub(r"\s+(?:ca|tx|ny|fl|ga|il|pa|az|co|wa|or|nc|mi|oh|mn|nv|tn|mo|md|ma|va|in|wi|ut|dc|dma)$", '', str(r.get('label') or '').strip(), flags=re.I).title()
+        try:
+            w = float(r.get('pct') or 0)
+        except (TypeError, ValueError):
+            w = 0.0
+        if name:
+            rows.append((name, max(w, 0.0)))
+    rows = rows[:14]
+    if not rows:
+        return _CITIES[int(u * len(_CITIES))]
+    covered = sum(w for _n, w in rows)
+    scoped = bool(ident.get('place_scoped')) or covered >= 50.0
+    if not scoped and u >= 0.72:
+        return _CITIES[int(((u - 0.72) / 0.28) * len(_CITIES)) % len(_CITIES)]
+    uu = min(max(u / 0.72 if not scoped else u, 0.0), 0.999999)
+    total = covered or float(len(rows))
+    acc = 0.0
+    for name, w in rows:
+        acc += (w if covered else 1.0) / total
+        if uu < acc:
+            return name
+    return rows[-1][0]
 
 
 # ---------------------------------------------------------- the questions

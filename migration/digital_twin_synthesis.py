@@ -82,10 +82,21 @@ _TRAIT_PRIORS = {
     'none':    {'discovery_social_vs_search': 52, 'binge_vs_appointment': 54, 'price_sensitivity': 52, 'churn_propensity': 45, 'franchise_loyalty': 52, 'merch_propensity': 40, 'second_screen': 56, 'live_events': 30, 'creator_follow': 46, 'ad_tolerance': 48, 'trial_speed': 52, 'word_of_mouth': 55},
 }
 
-RESEARCH_SYSTEM_PROMPT = """You research the outside anchors for an audience model of a subject (a title, franchise, creator, brand or audience). Approved sources only: SEC filings and earnings reports, Pew Research, Nielsen, Statista, eMarketer, YouGov, Box Office Mojo / The Numbers, Sensor Tower or data.ai, the platforms' own published counts. Never store visits, household device counts, cable reach or total-brand-reach figures that mix offline.
+RESEARCH_SYSTEM_PROMPT = """You research the outside anchors for an audience model of a subject (a title, franchise, creator, brand or audience). Approved sources only: SEC filings and earnings reports, Pew Research, Nielsen, Statista, eMarketer, YouGov, Box Office Mojo / The Numbers, Sensor Tower or data.ai, the platforms' own published counts. For a civic, electoral or place-defined subject (the voters of a state, the residents of a city, an election's electorate) the approved sources are the US Census Bureau (ACS; the CPS Voting and Registration Supplement), the state Secretary of State's registration counts and certified election results, the FEC, the MIT Election Data and Science Lab, exit polls and Pew. Never store visits, household device counts, cable reach or total-brand-reach figures that mix offline.
+
+THE BASE COMES FIRST. Decide who is actually in this subject and count them from the record:
+- an electorate ("Ohio gubernatorial voters", "Texas primary voters"): count_us is the REGISTERED VOTERS of that jurisdiction from the Secretary of State (ceiling_us the voting-age population; turnout_us the votes cast in the most recent election of that kind). Never US adults overall and never the people who read about the race.
+- the residents or adults of a place: the Census count of that place.
+- a brand's customers: the brand's own reported US customer or account count.
+- a title, creator or franchise: US people who engaged with it in the window.
 
 Return JSON only, every number as a plain number:
-{"format": "film|series|book|game|podcast|creator|brand|none",
+{"base": {"kind": "electorate|residents|customers|fans|viewers|listeners|readers|players|other", "definition": "<who counts, one plain sentence>", "count_us": <people>, "ceiling_us": <the wider pool they sit in, or null>, "turnout_us": <votes cast in the most recent election of this kind, electorates only, else null>, "source_type": "<which approved source class>"},
+ "geography": {"<metro or media market, e.g. Columbus OH>": <pct of the base living there>, ...} (only when the subject is tied to a place: six to twelve markets covering most of the base, each a plain number; {} otherwise),
+ "composition": {"party": {"Republican": <pct>, "Democrat": <pct>, "Independent or undecided": <pct>}, "urbanicity": {"Urban": <pct>, "Suburban": <pct>, "Rural": <pct>}} (party only for an electorate or civic group, from registration, exit polls or Pew party identification for that place; urbanicity whenever the base is place-defined; {} otherwise),
+ "issues": ["<what this base weighs most, up to six, in order, plain words (electorates and civic groups only)>"],
+ "values": "<two or three sentences on what this base believes, cares about and is wary of, as its own members would say it; plain words; empty for a title or brand audience>",
+ "format": "film|series|book|game|podcast|creator|brand|none",
  "franchise_stage": "new|growing|established|legacy|none",
  "ip_related": true|false,
  "us_fans_estimate": <US people who engaged with the subject in the last 12 months, or null>,
@@ -99,7 +110,7 @@ Return JSON only, every number as a plain number:
  "title_fit": <0.5 to 1.5: how a new entry from this subject lands against an average title of its kind>,
  "demographics": {"gender": {"Women": <pct>, "Men": <pct>}, "age": {"18-24": <pct>, "25-34": <pct>, "35-44": <pct>, "45-54": <pct>, "55-64": <pct>, "65+": <pct>}, "income": {"Less than $25,000": <pct>, "$25,000-$49,999": <pct>, "$50,000-$74,999": <pct>, "$75,000-$99,999": <pct>, "$100,000-$149,999": <pct>, "$150,000+": <pct>}, "ethnicity": {"White": <pct>, "Hispanic": <pct>, "Black": <pct>, "Asian": <pct>, "Other": <pct>}},
  "notes": "<three sentences on who the audience is and what moves them, plain words>"}
-demographics is the shape of the US people who engaged with the subject in the window (each block sums to about 100), from the same approved sources; null when you have no basis.
+demographics is the shape of the people in the base (for an electorate the voters of that place, from the CPS Voting supplement and exit polls; for a title the US people who engaged with it in the window), each block summing to about 100, from the same approved sources; null when you have no basis. us_fans_estimate is the base's count_us when a base is given.
 Use null where you have no approved-source basis. Keep every string short and the whole answer under 1,800 tokens: at most six title_history rows and eight platform_reach rows."""
 
 READ_SYSTEM_PROMPT = """You write the read on a digital twin for a senior media executive. Plain English a high school student follows; the thinking is senior consultant. Vary the sentence shapes; no two sentences built on the same frame; every number gets a plain comparison. Inferred reads use leans, skews, reads as; counts speak flat. Never use these words: synthetic, synth, modeled, model, estimated, predicted, research, anchored, placeholder, pipeline, panel, sample, confidence, tier, template, band, norm, seed, household. No em dashes.
@@ -335,13 +346,51 @@ def queue_profile_for_twin(subject: str, window: Optional[dict] = None, *, s3=No
     return find_profile_key(s3, name) if s3 is not None else ''
 
 
+# Words that describe the audience noun or the window, never who the
+# subject is. Every other word of a subject is an identity word (a
+# place, a brand, a title, an office) and must appear in a profile's
+# name before that profile can stand for the subject (Jenna 2026-10-30:
+# "Ohio Gubernatorial Voters" was built on the 2026 Florida Gubernatorial
+# Voters profile because the old match forgave one missing word).
+_GENERIC_SUBJECT_TOKENS = frozenset((
+    'the', 'of', 'and', 'on', 'in', 'for', 'a', 'an', 'to', 'us', 'u', 's',
+    'viewers', 'fans', 'audience', 'audiences', 'people', 'users', 'buyers', 'shoppers', 'customers', 'members', 'subscribers',
+    'consumers', 'watchers', 'listeners', 'readers', 'players', 'owners', 'adults', 'households', 'followers', 'enthusiasts',
+    'total', 'universe', 'avid', 'casual', 'fan', 'base', 'cohort', 'group', 'panel', 'profile',
+    'voters', 'voter', 'electorate', 'residents', 'resident', 'drinkers', 'eaters', 'travelers', 'gamers', 'streamers', 'moviegoers',
+))
+
+
+def subject_identity_tokens(subject: str) -> list:
+    fold = re.sub(r"[^a-z0-9 ]+", ' ', str(subject or '').lower())
+    return [t for t in fold.split() if len(t) > 1 and t not in _GENERIC_SUBJECT_TOKENS and not re.fullmatch(r"(?:19|20)\d{2}", t)]
+
+
+def profile_fits_subject(name_or_key: str, subject: str) -> bool:
+    """True when the profile's name (the file stem when only a key is
+    known) carries exactly the subject's identity words: none missing
+    (Ohio is not Florida) and none extra beyond the generic audience
+    words and years (Apple buyers is not Apple TV EST Buyers; Gilmore
+    Girls is not Gilmore Girls Viewers on Hulu)."""
+    toks = set(subject_identity_tokens(subject))
+    if not toks:
+        return False
+    stem = str(name_or_key or '').rsplit('/', 1)[-1]
+    stem = re.sub(r"\.csv$", '', stem, flags=re.I)
+    stem = re.sub(r"_\d{2}_\d{2}_\d{4}(?:_\d{2}_\d{2})?$", '', stem)
+    ptoks = set(subject_identity_tokens(stem.replace('_', ' ')))
+    return toks <= ptoks and not (ptoks - toks)
+
+
 def find_profile_key(s3, subject: str, anchors: Optional[dict] = None) -> str:
     """The subject's Total Universe CSV: the catalog's profile anchor
-    first, then the dashboard catalog by name (base profile, newest)."""
+    first, then the dashboard catalog by name (base profile, newest).
+    Either way the profile's name must carry every identity word of
+    the subject; a near miss is no profile at all."""
     try:
         from migration import corpus_catalog as _cc
         pa = _cc.profile_anchor(anchors or {})
-        if pa and pa.get('source_key'):
+        if pa and pa.get('source_key') and profile_fits_subject(str(pa['source_key']), subject):
             return str(pa['source_key'])
     except Exception:
         pass
@@ -351,19 +400,20 @@ def find_profile_key(s3, subject: str, anchors: Optional[dict] = None) -> str:
         doc = json.loads(s3.get_object(Bucket=S3_BUCKET, Key='system/s3_cache.json')['Body'].read().decode('utf-8'))
     except Exception:
         return ''
-    fold = re.sub(r"[^a-z0-9 ]+", ' ', str(subject or '').lower())
-    toks = [t for t in fold.split() if len(t) > 1 and t not in ('the', 'of', 'and', 'on', 'viewers', 'fans', 'audience')]
+    toks = subject_identity_tokens(subject)
+    if not toks:
+        return ''
     best, best_score = '', 0.0
     for j in (doc.get('jobs') or []):
         name = str(j.get('display_name') or '')
         key = str(j.get('s3_key') or '')
         if not key.endswith('.csv') or '/' in key:
             continue
-        nf = re.sub(r"[^a-z0-9 ]+", ' ', name.lower())
-        present = sum(1 for t in toks if f" {t} " in f" {nf} ")
-        if not toks or present < max(1, len(toks) - 1):
+        if not (profile_fits_subject(name, subject) or profile_fits_subject(key, subject)):
             continue
-        score = present / len(toks) + (0.5 if ' - ' not in name else 0.0) + (0.2 if re.search(r"_\d{2}_\d{2}_\d{4}", key) else 0.0)
+        nf = re.sub(r"[^a-z0-9 ]+", ' ', name.lower())
+        extra = max(0, len([t for t in nf.split() if len(t) > 1]) - len(toks))
+        score = 1.0 - 0.05 * extra + (0.5 if ' - ' not in name else 0.0) + (0.2 if re.search(r"_\d{2}_\d{2}_\d{4}", key) else 0.0)
         if score > best_score or (score == best_score and key > best):
             best, best_score = key, score
     return best
@@ -787,6 +837,51 @@ def research_demographics(research: dict, seed: str) -> dict:
         if len(rows) >= 2 and 70.0 <= sum(r['pct'] for r in rows) <= 130.0:
             out[cat] = normalize_100(rows, 'demo', cat, seed)
     return out
+
+
+def research_composition(research: dict, seed: str) -> dict:
+    """The research call's party and urbanicity splits as demographic
+    categories the room seats by (quota per seat, like gender or age)."""
+    raw = (research or {}).get('composition') if isinstance(research, dict) else None
+    if not isinstance(raw, dict):
+        return {}
+    out = {}
+    for cat in ('party', 'urbanicity'):
+        block = raw.get(cat)
+        if not isinstance(block, dict):
+            continue
+        rows = [{'label': str(k), 'pct': float(v)} for k, v in block.items() if _num(v) is not None and float(v) > 0]
+        if len(rows) >= 2 and 70.0 <= sum(r['pct'] for r in rows) <= 130.0:
+            out[cat] = normalize_100(rows, 'demo', cat, seed)
+    return out
+
+
+def research_geography(research: dict) -> list:
+    """The research call's markets as the identity's geography rows
+    (label, pct), largest first; [] when it gave none."""
+    raw = (research or {}).get('geography') if isinstance(research, dict) else None
+    rows = []
+    if isinstance(raw, dict):
+        rows = [{'label': str(k).strip(), 'pct': float(v)} for k, v in raw.items() if str(k).strip() and _num(v) is not None and float(v) > 0]
+    elif isinstance(raw, list):
+        rows = [{'label': str(r.get('label') or '').strip(), 'pct': float(r.get('pct'))} for r in raw if isinstance(r, dict) and _num(r.get('pct')) is not None and float(r['pct']) > 0]
+    rows = [r for r in rows if r['label']]
+    rows.sort(key=lambda r: -r['pct'])
+    return rows[:14]
+
+
+def research_base(research: dict) -> dict:
+    """{kind, definition, count_us, ceiling_us, turnout_us, source_type}
+    when the research counted the base; {} otherwise."""
+    raw = (research or {}).get('base') if isinstance(research, dict) else None
+    if not isinstance(raw, dict):
+        return {}
+    out = {'kind': str(raw.get('kind') or 'other')[:24], 'definition': ' '.join(str(raw.get('definition') or '').split())[:240],
+           'source_type': str(raw.get('source_type') or '')[:80]}
+    for k in ('count_us', 'ceiling_us', 'turnout_us'):
+        v = _num(raw.get(k))
+        out[k] = int(float(v)) if v is not None and float(v) > 0 else None
+    return out if out.get('count_us') else {}
 
 
 # ----------------------------------------------------------- research
@@ -1216,9 +1311,19 @@ def build_twin(inputs: dict, claude_json: Optional[Callable] = None, *, tools=No
     stage = str(research.get('franchise_stage') or inputs.get('franchise_stage') or ('new' if kind == 'idea' else 'established'))
     if stage not in ('new', 'growing', 'established', 'legacy', 'none'):
         stage = 'established'
-    # size: the corpus first (the Total Universe projection), then a delivered ledger figure, then the research, then a prior
-    size = int(prof.get('size_us') or 0)
-    size_source = 'profile' if size else ''
+    # size: the researched base when it is a counted population (an electorate's registered voters, a place's residents,
+    # a brand's customers; Jenna 2026-10-30), else the corpus (the Total Universe projection), then a delivered ledger
+    # figure, then the research, then a prior
+    base = research_base(research) if research else {}
+    size = 0
+    size_source = ''
+    if base.get('count_us') and base.get('kind') in ('electorate', 'residents', 'customers'):
+        size, size_source = int(base['count_us']), 'base'
+    if not size:
+        size = int(prof.get('size_us') or 0)
+        size_source = 'profile' if size else ''
+    if not size and base.get('count_us'):
+        size, size_source = int(base['count_us']), 'base'
     if not size:
         for ent in corpus.get('ledger') or []:
             for m in (ent.get('metrics') or []):
@@ -1279,8 +1384,21 @@ def build_twin(inputs: dict, claude_json: Optional[Callable] = None, *, tools=No
                 if p['label'].lower() == home.lower():
                     p['reach_pct'] = pct1(max(p['reach_pct'], 58 + 30 * unit('home', seed)))
             plats.sort(key=lambda p: -p['reach_pct'])
-    identity = {'demographics': demo, 'geography': prof.get('geography') or [], 'platforms': plats, 'purchase': prof.get('purchase') or [],
+    # the room seats by these too: party and urbanicity when the research gave them (an electorate, a place)
+    for k, v in (research_composition(research, seed) if research else {}).items():
+        demo.setdefault(k, v)
+    geography = list(prof.get('geography') or []) or (research_geography(research) if research else [])
+    identity = {'demographics': demo, 'geography': geography, 'platforms': plats, 'purchase': prof.get('purchase') or [],
                 'media_diet': prof.get('media_diet') or [], 'talent': prof.get('talent') or [], 'avid_share_pct': avid}
+    if base:
+        identity['base'] = base
+    issues = [' '.join(str(x).split())[:60] for x in ((research or {}).get('issues') or []) if str(x).strip()][:6] if research else []
+    if issues:
+        identity['issues'] = issues
+    values = ' '.join(str((research or {}).get('values') or '').split())[:600] if research else ''
+    if values:
+        identity['values'] = values
+    identity['place_scoped'] = bool(geography) and bool(base.get('kind') in ('electorate', 'residents') or (research or {}).get('geography'))
     identity['read'] = identity_read(identity, meta, corpus.get('gen_pop') or {})
     momentum = _momentum_from_trends(corpus.get('trends') or [])
     traits = derive_traits(fmt, identity, corpus, research, momentum, seed)
@@ -1321,7 +1439,7 @@ def build_twin(inputs: dict, claude_json: Optional[Callable] = None, *, tools=No
         'corpus': {'profile_key': corpus.get('profile_key'), 'catalog': corpus.get('catalog'), 'journeys': len(corpus.get('journeys') or []),
                    'bpiq': len(corpus.get('bpiq') or []), 'attribution': len(corpus.get('attribution') or []), 'trends': len(corpus.get('trends') or []),
                    'ledger': len(corpus.get('ledger') or []), 'gen_pop_rows': len(corpus.get('gen_pop') or {})},
-        'research': {k: research.get(k) for k in ('format', 'franchise_stage', 'platform_home', 'us_fans_estimate', 'avid_share_pct', 'title_fit', 'notes', '_cached')} if research else {},
+        'research': {k: research.get(k) for k in ('format', 'franchise_stage', 'platform_home', 'us_fans_estimate', 'avid_share_pct', 'title_fit', 'notes', '_cached', 'base', 'composition', 'issues')} if research else {},
         'research_prices': research.get('prices') if research else None,
     }
     return scrub_payload(twin)
