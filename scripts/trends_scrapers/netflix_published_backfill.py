@@ -101,7 +101,7 @@ S3_BACKUP   = ('trends_iq_snapshots/_backups/'
 S3_PROFILES = 'trends_iq_snapshots/system/rhythm_profiles.json'
 S3_REASONED = ('trends_iq_snapshots/system/'
                'netflix_published_backfill_profiles.json')
-S3_CACHE_PREFIX = 'trends_iq/cache/'
+S3_CACHE_PREFIX = os.environ.get('TRENDS_IQ_CACHE_PREFIX', 'trends_iq/cache_v2/')
 
 TSV_GLOBAL    = 'https://www.netflix.com/tudum/top10/data/all-weeks-global.tsv'
 TSV_COUNTRIES = 'https://www.netflix.com/tudum/top10/data/all-weeks-countries.tsv'
