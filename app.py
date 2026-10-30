@@ -12061,6 +12061,43 @@ def api_ai_marketing():
     result = generate_marketing_strategy(profile_data)
     return jsonify(result)
 
+
+@app.route('/api/marketing-plan/<path:s3_key>')
+@requires_auth
+def api_marketing_plan(s3_key):
+    """Profile IQ Marketing tab (2026-10-30, Jenna: "it has to reason for
+    each profile"). Channel mix, platform split, priority pills, ad-format
+    allocations and row copy all derived from THIS profile's rows by
+    migration/marketing_plan.py, with one short cached model call on top.
+
+    Cached in S3 under system/marketing_plans/<key>.json keyed by the
+    profile CSV ETag + PLAN_VERSION, so a reload never re-bills. A cache
+    miss returns the deterministic plan at once with pending=True while a
+    background thread runs the model call; the page re-reads until the
+    reasoned plan lands. Admins may pass ?refresh=1 to rebuild."""
+    if s3_key and 'gen_pop' in s3_key.lower() and not re.match(r'^Gen_Pop_\d{4}\.csv$', s3_key, re.IGNORECASE):
+        s3_key = GEN_POP_CANONICAL_KEY
+    ok, err = _require_profile_run_access(s3_key)
+    if not ok:
+        return err
+    if not s3_client:
+        return jsonify({'success': False, 'error': 'storage unavailable'}), 503
+    try:
+        from migration.marketing_plan import get_or_build_plan
+        user = get_current_user() or {}
+        is_admin = _normalize_role(user.get('role', 'user')) in ('admin', 'super_admin')
+        force = bool(is_admin and request.args.get('refresh') == '1')
+        plan = get_or_build_plan(s3_key, s3_client=s3_client, bucket=S3_BUCKET, force=force)
+        resp = jsonify({'success': True, 'plan': plan})
+        resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        return resp
+    except Exception as e:
+        msg = str(e)
+        if 'NoSuchKey' in msg or 'Not Found' in msg or '(404)' in msg:
+            return jsonify({'success': False, 'error': 'Profile not found.'}), 404
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': 'marketing plan temporarily unavailable'}), 500
+
 @app.route('/api/ai/chat', methods=['POST'])
 @requires_auth
 def api_ai_chat():

@@ -29041,7 +29041,7 @@ https://www.instagram.com/p/..."></textarea>
                                 </div>
                             </div>
                             <div class="marketing-hero-actions">
-                                <button class="marketing-btn marketing-btn-secondary" onclick="renderMarketingTab()">↻ Refresh</button>
+                                <button class="marketing-btn marketing-btn-secondary" onclick="renderMarketingTab({reread: true})">↻ Refresh</button>
                                 <button class="marketing-btn marketing-btn-secondary" onclick="copyMarketingLookalikeSeed()">📋 Copy Seed</button>
                                 <!-- 2026-07-21 (Jenna): removed 'Generate AI Playbook' button
                                      and its subtab/section below. -->
@@ -29065,7 +29065,7 @@ https://www.instagram.com/p/..."></textarea>
                     <section class="marketing-section marketing-sub-panel active" data-mkt-panel="mix">
                         <div class="marketing-section-head">
                             <h3>Recommended Media Mix</h3>
-                            <span class="marketing-section-sub">Suggested budget allocation, weighted by this audience's panel-observed digital behavior over the trailing 12 months.</span>
+                            <span class="marketing-section-sub">Budget allocation read from this audience's own digital behavior over the trailing 12 months: the channels, the platforms inside each channel, and the ad formats inside each platform.</span>
                         </div>
                         <div id="marketingMediaMix" class="marketing-mediamix"></div>
                     </section>
@@ -29073,7 +29073,7 @@ https://www.instagram.com/p/..."></textarea>
                     <section class="marketing-section marketing-sub-panel" data-mkt-panel="platforms">
                         <div class="marketing-section-head">
                             <h3>Ad Platform Playbook</h3>
-                            <span class="marketing-section-sub">Per-platform priority, panel reach, and top brands to seed lookalikes.</span>
+                            <span class="marketing-section-sub">Per-platform priority, reach and index, lead format, and the brands to seed lookalikes.</span>
                         </div>
                         <div id="marketingPlatformGrid" class="marketing-platform-grid"></div>
                     </section>
@@ -147554,277 +147554,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 display: '🌐', audio: '🎧', podcast: '🎙️', gaming: '🎮', retail: '🛒'
             };
 
-            // Canonical marketing platform definitions.
-            // Each entry maps a media-buying surface to the brand names to look
-            // for in the panel data. `panelCats` are the category buckets to
-            // search first (fastest lookup); `matchNames` are brand-name
-            // substrings (case-insensitive). `bucket` = which media-mix channel.
-            const PLATFORMS = [
-                { key: 'meta', icon: '📘', name: 'Meta (Facebook + Instagram)', bucket: 'paidSocial',
-                  panelCats: ['SOCIAL MEDIA', 'SOCIAL MEDIA/USE', 'SOCIAL/MEDIA'],
-                  matchNames: ['facebook', 'instagram'],
-                  aggregateLabel: 'Combined Facebook + Instagram reach',
-                  buyingNote: 'Use Advantage+ campaigns. Seed with the top brands below as engaged-audience lookalikes; layer age + income + top DMAs. Both feeds and Reels.' },
-                { key: 'tiktok', icon: '🎵', name: 'TikTok', bucket: 'paidSocial',
-                  panelCats: ['SOCIAL MEDIA', 'SOCIAL MEDIA/USE'],
-                  matchNames: ['tiktok'],
-                  buyingNote: 'Spark Ads on creator content typically outperform brand-first units. Interest targeting: use the top brands/creators below as behavior seeds.' },
-                { key: 'youtube', icon: '▶️', name: 'YouTube (video + Shorts)', bucket: 'onlineVideo',
-                  panelCats: ['SOCIAL MEDIA', 'STREAMING/PLATFORM', 'STREAMING/VIDEO'],
-                  matchNames: ['youtube'],
-                  buyingNote: 'Buy via Google Ads. Custom Intent + Custom Affinity based on the search terms below. Pre-roll for reach, in-feed video Shorts for engagement.' },
-                { key: 'snap', icon: '👻', name: 'Snapchat', bucket: 'paidSocial',
-                  panelCats: ['SOCIAL MEDIA', 'SOCIAL MEDIA/USE'],
-                  matchNames: ['snapchat', 'snap'],
-                  buyingNote: 'Skews younger. Vertical video 5-6s. Ideal for reach among 18-34.' },
-                { key: 'x', icon: '𝕏', name: 'X (Twitter)', bucket: 'paidSocial',
-                  panelCats: ['SOCIAL MEDIA', 'SOCIAL MEDIA/USE'],
-                  matchNames: ['twitter', ' x ', 'x/twitter', 'x,'],
-                  matchExact: ['x'],
-                  buyingNote: 'Best for live moments, sports, news, and B2B. Conversation topics targeting still competitive.' },
-                { key: 'reddit', icon: '🤖', name: 'Reddit', bucket: 'paidSocial',
-                  panelCats: ['SOCIAL MEDIA', 'SOCIAL MEDIA/USE'],
-                  matchNames: ['reddit'],
-                  buyingNote: 'Subreddit-level targeting is the moat. Native, non-promotional creative wins. Great for tech, gaming, finance, hobbyist audiences.' },
-                { key: 'pinterest', icon: '📌', name: 'Pinterest', bucket: 'paidSocial',
-                  panelCats: ['SOCIAL MEDIA', 'SOCIAL MEDIA/USE'],
-                  matchNames: ['pinterest'],
-                  buyingNote: 'Skews female + planners. Idea/product/collections ads work well for retail, home, wedding, beauty.' },
-                { key: 'linkedin', icon: '💼', name: 'LinkedIn', bucket: 'paidSocial',
-                  panelCats: ['SOCIAL MEDIA', 'SOCIAL MEDIA/USE'],
-                  matchNames: ['linkedin'],
-                  buyingNote: 'Only justified for B2B, high-income, or professional/education audiences. Expensive CPMs; keep it for lead-gen or awareness among decision-makers.' },
-                { key: 'google_search', icon: '🔎', name: 'Google Search + PMax', bucket: 'paidSearch',
-                  panelCats: ['SEARCH ENGINE', 'SEARCH ENGINE/AI', 'SEARCH/ENGINE'],
-                  matchNames: ['google'],
-                  aggregateLabel: 'Google search panel reach',
-                  buyingNote: 'Always-on. Add branded, competitor conquesting, and category-intent keywords. Layer Performance Max with the audience signals from top-brand lookalikes.' },
-                { key: 'bing_ai', icon: '🧠', name: 'Bing + AI Search (Copilot, ChatGPT, Perplexity)', bucket: 'paidSearch',
-                  panelCats: ['SEARCH ENGINE', 'SEARCH ENGINE/AI'],
-                  matchNames: ['bing', 'chatgpt', 'perplexity', 'copilot', 'gemini'],
-                  buyingNote: 'Bing Ads for search-intent tail. AI-search ads emerging surface; test small budgets for future-proofing.' },
-                { key: 'amazon_ads', icon: '📦', name: 'Amazon Ads + DSP', bucket: 'retail',
-                  panelCats: ['RETAIL', 'MOST PURCHASED BRANDS', 'MPB'],
-                  matchNames: ['amazon'],
-                  buyingNote: 'Sponsored Products for consideration + Amazon DSP for CTV/audio retargeting. Retail media is 20-25% of most digital budgets in 2026.' },
-                { key: 'walmart_connect', icon: '🛒', name: 'Walmart Connect', bucket: 'retail',
-                  panelCats: ['RETAIL', 'MOST PURCHASED BRANDS', 'MPB'],
-                  matchNames: ['walmart'],
-                  buyingNote: 'Onsite + offsite via The Trade Desk. Strong for CPG, grocery, household. Match investment to Walmart panel reach.' },
-                { key: 'target_roundel', icon: '🎯', name: 'Target (Roundel)', bucket: 'retail',
-                  panelCats: ['RETAIL', 'MOST PURCHASED BRANDS', 'MPB'],
-                  matchNames: ['target'],
-                  matchExact: ['target'],
-                  buyingNote: 'Great for beauty, apparel, home, and family CPG when Target reach is high.' },
-                { key: 'hulu', icon: '📺', name: 'Hulu (Disney Advertising)', bucket: 'ctv',
-                  panelCats: ['STREAMING/PLATFORM', 'STREAMING/VIDEO', 'STREAMING VIDEO', 'VMVPD', 'FAST'],
-                  matchNames: ['hulu'],
-                  buyingNote: 'Disney Advertising DRAX platform. Combine with ESPN+ / Disney+ for household reach. Great mid-funnel CTV.' },
-                { key: 'netflix', icon: '🎬', name: 'Netflix (ad tier)', bucket: 'ctv',
-                  panelCats: ['STREAMING/PLATFORM', 'STREAMING/VIDEO', 'STREAMING VIDEO'],
-                  matchNames: ['netflix'],
-                  buyingNote: 'Growing ad tier. Bought via Microsoft Ads or Trade Desk. Premium CPMs; strong when Netflix reach in this audience > Gen Pop.' },
-                { key: 'peacock', icon: '🦚', name: 'Peacock', bucket: 'ctv',
-                  panelCats: ['STREAMING/PLATFORM', 'STREAMING/VIDEO', 'STREAMING VIDEO', 'VMVPD', 'FAST'],
-                  matchNames: ['peacock'],
-                  buyingNote: 'NBCU One Platform. Best when this audience over-indexes on NBC content, sports, or Bravo/Universal properties.' },
-                { key: 'max', icon: '🎭', name: 'Max / HBO', bucket: 'ctv',
-                  panelCats: ['STREAMING/PLATFORM', 'STREAMING/VIDEO', 'STREAMING VIDEO'],
-                  matchNames: ['max', 'hbo'],
-                  buyingNote: 'Premium CTV audience. Ad tier expanding. Buy via WBD ad platform or DSP.' },
-                { key: 'ytv_youtubeTV', icon: '📡', name: 'YouTube TV / vMVPD live', bucket: 'ctv',
-                  panelCats: ['VMVPD', 'FAST', 'BROADCAST/CABLE', 'STREAMING/PLATFORM'],
-                  matchNames: ['youtube tv', 'sling', 'fubo', 'philo', 'directv stream'],
-                  buyingNote: 'Live TV replacement audience. Great for sports + news day-parts. Buy via Google Ads (YouTube TV) or direct.' },
-                { key: 'roku', icon: '🟪', name: 'Roku Channel / RokuADS', bucket: 'ctv',
-                  panelCats: ['STREAMING/PLATFORM', 'STREAMING/VIDEO', 'FAST'],
-                  matchNames: ['roku'],
-                  buyingNote: 'OneView DSP + Roku homescreen. Strong for AVOD/FAST audience and connected-home brands.' },
-                { key: 'tubi_pluto', icon: '📼', name: 'Tubi / Pluto TV / FAST', bucket: 'ctv',
-                  panelCats: ['STREAMING/PLATFORM', 'FAST', 'STREAMING/VIDEO'],
-                  matchNames: ['tubi', 'pluto', 'freevee', 'xumo'],
-                  buyingNote: 'Ad-supported free streaming. Reach cord-cutters and price-sensitive households. Efficient CPMs.' },
-                { key: 'spotify', icon: '🎵', name: 'Spotify', bucket: 'audio',
-                  panelCats: ['STREAMING/MUSIC', 'STREAMING MUSIC'],
-                  matchNames: ['spotify'],
-                  buyingNote: 'Audio ads + video takeover + podcast pre-roll (Megaphone). Real-time context targeting available.' },
-                { key: 'pandora_iheart', icon: '📻', name: 'Pandora / iHeart / SiriusXM', bucket: 'audio',
-                  panelCats: ['STREAMING/MUSIC', 'RADIO'],
-                  matchNames: ['pandora', 'iheart', 'siriusxm', 'sirius'],
-                  buyingNote: 'SiriusXM Media (owns Pandora + Stitcher). Strong for older demos + streaming audio + podcast bundling.' },
-                { key: 'twitch_gaming', icon: '🎮', name: 'Twitch + Gaming/In-app', bucket: 'gaming',
-                  panelCats: ['GAMING', 'GAMES', 'GAMING/CONSOLE', 'STREAMING/PLATFORM'],
-                  matchNames: ['twitch', 'xbox', 'playstation', 'nintendo', 'steam', 'roblox', 'fortnite'],
-                  buyingNote: 'Twitch via Amazon DSP. In-app gaming via Unity Ads, AppLovin, Vungle. Rewarded video is highest completion.' },
-                { key: 'dsp_display', icon: '🌐', name: 'Programmatic Display + Video (The Trade Desk, DV360)', bucket: 'display',
-                  panelCats: [],
-                  matchNames: [],
-                  buyingNote: 'Always-on baseline: contextual + retargeting + 3P segments. Use top brand seeds below to build custom LiveRamp / Trade Desk lookalikes.' }
-            ];
-
-            // Media-mix channel labels + baseline weights (a floor so no channel
-            // drops out entirely for a normally-behaved audience). Weights get
-            // amplified by observed panel reach for the platforms above.
-            const CHANNEL_META = {
-                paidSocial:  { label: 'Paid Social',           icon: '📱', baseline: 12, description: 'Meta, TikTok, Snap, X, Reddit, Pinterest, LinkedIn — sized to social-media panel reach.' },
-                paidSearch:  { label: 'Paid Search',           icon: '🔎', baseline: 14, description: 'Google Search + PMax + Bing/AI. Always-on demand capture.' },
-                ctv:         { label: 'Connected TV / OTT',    icon: '📺', baseline: 10, description: 'Hulu, Netflix, Peacock, Max, YouTube TV, Roku, Tubi/Pluto. Sized to streaming panel reach.' },
-                onlineVideo: { label: 'Online Video (YouTube)',icon: '▶️', baseline:  8, description: 'YouTube pre-roll + Shorts + in-feed. Sized to YouTube panel reach.' },
-                audio:       { label: 'Streaming Audio',       icon: '🎧', baseline:  4, description: 'Spotify, Pandora/iHeart/SXM. Sized to music-streaming panel reach.' },
-                gaming:      { label: 'Gaming / In-app',       icon: '🎮', baseline:  3, description: 'Twitch, in-app rewarded video, Roblox/Fortnite when relevant.' },
-                retail:      { label: 'Retail Media',          icon: '🛒', baseline:  8, description: 'Amazon Ads/DSP, Walmart Connect, Target Roundel, Instacart. Sized to shopper reach.' },
-                display:     { label: 'Programmatic Display',  icon: '🌐', baseline: 12, description: 'Trade Desk / DV360. Always-on contextual, retargeting, and custom lookalikes.' }
-            };
-
-            // Canonical ad-format allocation per platform. Percents should
-            // sum to ~100 within each platform. These are 2026 planner
-            // defaults — the drill-down uses them to answer "within this
-            // platform, what should I buy?" independent of audience data.
-            // Keyed by PLATFORMS[].key so the drill-down can match by key.
-            const PLATFORM_AD_FORMATS = {
-                meta: [
-                    { name: 'Reels (short vertical video, 9-15s)', pct: 35, note: 'Best CPMs, highest scroll velocity' },
-                    { name: 'Advantage+ Shopping / Sales campaigns', pct: 20, note: 'Auto-optimized, conversion floor' },
-                    { name: 'Feed video (mid-funnel)',               pct: 20, note: 'Strong retention, brand story' },
-                    { name: 'Stories (vertical + tap-through)',      pct: 15, note: 'Frequency + retargeting' },
-                    { name: 'Feed static + carousel',                pct: 10, note: 'Efficient reach fallback' }
-                ],
-                tiktok: [
-                    { name: 'Spark Ads (boost creator content)',     pct: 40, note: 'Native, outperforms brand-first units' },
-                    { name: 'In-Feed video (5-15s, sound-on)',       pct: 30, note: 'Native placement' },
-                    { name: 'TopView / Brand Takeover',              pct: 15, note: 'High-impact awareness' },
-                    { name: 'Branded Hashtag Challenge / Effect',    pct: 10, note: 'Launches with creative budget' },
-                    { name: 'Shopping / Live Shopping',              pct:  5, note: 'Test for commerce brands' }
-                ],
-                youtube: [
-                    { name: 'In-stream pre-roll (skippable)',        pct: 35, note: 'Efficient CPV, brand-safe' },
-                    { name: 'YouTube Shorts',                        pct: 25, note: 'Vertical, mobile-first, low CPMs' },
-                    { name: 'Bumper (6s non-skippable)',             pct: 15, note: 'Reach + frequency booster' },
-                    { name: 'In-feed video discovery',               pct: 15, note: 'Intent-based, targeted' },
-                    { name: 'YouTube Masthead / CTV takeover',       pct: 10, note: 'Launch or tentpole days only' }
-                ],
-                snap: [
-                    { name: 'Snap Ads (5-6s vertical video)',        pct: 50, note: 'Core format' },
-                    { name: 'Story Ads / Discover placements',       pct: 25, note: 'Editorial context' },
-                    { name: 'AR Lens experiences',                   pct: 15, note: 'Creative-heavy, high engagement' },
-                    { name: 'Commercials (non-skippable, premium)',  pct: 10, note: 'Reach + brand-safe premium' }
-                ],
-                x: [
-                    { name: 'Promoted video (autoplay in feed)',     pct: 40, note: 'Core video buy' },
-                    { name: 'Promoted post + carousel',              pct: 30, note: 'Efficient conversation' },
-                    { name: 'Trend Takeover / Timeline Takeover',    pct: 20, note: 'Launch/tentpole days' },
-                    { name: 'Amplify pre-roll (video partners)',     pct: 10, note: 'Brand safety upgrade' }
-                ],
-                reddit: [
-                    { name: 'Promoted posts (image/video)',          pct: 55, note: 'Subreddit-targeted' },
-                    { name: 'Free-form / Conversation Ads',          pct: 25, note: 'Native, higher engagement' },
-                    { name: 'Trending Takeover',                     pct: 20, note: 'Launches only' }
-                ],
-                pinterest: [
-                    { name: 'Idea Pins (native video)',              pct: 35, note: 'Saveable, evergreen' },
-                    { name: 'Standard Pins (static image)',          pct: 30, note: 'Efficient reach' },
-                    { name: 'Shopping Ads (product feed)',           pct: 25, note: 'Product-tagged' },
-                    { name: 'Collections / Carousel',                pct: 10, note: 'Consideration' }
-                ],
-                linkedin: [
-                    { name: 'Sponsored Content (single + carousel)', pct: 40, note: 'In-feed, targeting by role/company' },
-                    { name: 'Video ads (autoplay)',                  pct: 25, note: 'Brand + thought leadership' },
-                    { name: 'Message / Conversation Ads',            pct: 20, note: 'Lead-gen, high CPC but qualified' },
-                    { name: 'Text / Dynamic Ads (right rail)',       pct: 15, note: 'Cheap impressions' }
-                ],
-                google_search: [
-                    { name: 'Branded + competitor keywords',         pct: 30, note: 'Defensive, high ROAS' },
-                    { name: 'Non-branded / category intent',         pct: 30, note: 'Demand capture' },
-                    { name: 'Performance Max (PMax)',                pct: 25, note: 'Cross-surface AI; needs audience signals' },
-                    { name: 'Shopping (retail only)',                pct: 10, note: 'When product feed exists' },
-                    { name: 'Discovery / Demand Gen',                pct:  5, note: 'Upper-funnel expansion' }
-                ],
-                bing_ai: [
-                    { name: 'Bing Search (branded + long-tail)',     pct: 50, note: 'Older demos, cheaper CPCs' },
-                    { name: 'Microsoft Audience Network (native)',   pct: 30, note: 'MSN, Outlook, Edge placements' },
-                    { name: 'ChatGPT / Copilot conversational (test)', pct: 20, note: 'Small budget, future-facing' }
-                ],
-                amazon_ads: [
-                    { name: 'Sponsored Products (SP)',               pct: 40, note: 'On-Amazon search-intent' },
-                    { name: 'Sponsored Brands (SB) + video',         pct: 25, note: 'Brand store traffic' },
-                    { name: 'Amazon DSP (off-Amazon + CTV via Freevee/Fire TV)', pct: 25, note: 'Reach + retargeting' },
-                    { name: 'Sponsored Display',                     pct: 10, note: 'Product page + off-site' }
-                ],
-                walmart_connect: [
-                    { name: 'Sponsored Products (onsite)',           pct: 45, note: 'Search + browse placements' },
-                    { name: 'Sponsored Brands + video',              pct: 20, note: 'Awareness on WMT.com' },
-                    { name: 'Onsite Display / Homepage',             pct: 15, note: 'Reach placements' },
-                    { name: 'Offsite via TTD DSP',                   pct: 20, note: 'Attribution back to WMT sales' }
-                ],
-                target_roundel: [
-                    { name: 'Onsite Search + Browse',                pct: 40, note: 'Category placements' },
-                    { name: 'Offsite Display + Video',               pct: 30, note: 'Retargeting Target guests' },
-                    { name: 'CTV via Roundel Media Network',         pct: 20, note: 'Brand halo' },
-                    { name: 'In-store digital + Circle promos',      pct: 10, note: 'Omnichannel layer' }
-                ],
-                hulu: [
-                    { name: '30s / 15s CTV in-stream',               pct: 55, note: 'Standard length, non-skip' },
-                    { name: 'Binge Ads / Pause Ads',                 pct: 15, note: 'Innovative units, high recall' },
-                    { name: 'Disney+ / ESPN+ co-buy (household)',    pct: 20, note: 'Cross-service reach' },
-                    { name: 'Interactive / GatewayGo',               pct: 10, note: 'Response-driven CTV' }
-                ],
-                netflix: [
-                    { name: '30s / 15s pre-roll + mid-roll',         pct: 65, note: 'Standard buy via Microsoft Ads or TTD' },
-                    { name: 'Sponsorships (Top 10, tentpoles)',      pct: 25, note: 'Higher CPM, unique inventory' },
-                    { name: 'Pause + branded moments',               pct: 10, note: 'Emerging placements' }
-                ],
-                peacock: [
-                    { name: '30s / 15s in-stream',                   pct: 60, note: 'NBCU One Platform buy' },
-                    { name: 'Sports + tentpole sponsorships',        pct: 25, note: 'NBC/Bravo/Universal contexts' },
-                    { name: 'Interactive Shoppable ads',             pct: 15, note: 'Growing surface on Peacock' }
-                ],
-                max: [
-                    { name: '30s / 15s in-stream',                   pct: 70, note: 'Premium HBO context' },
-                    { name: 'Tentpole / season sponsorship',         pct: 30, note: 'Prestige show halo' }
-                ],
-                ytv_youtubeTV: [
-                    { name: 'Live sports pre-roll + mid-roll',       pct: 60, note: 'Sports + news day-parts' },
-                    { name: 'Programmatic Guaranteed CTV',           pct: 25, note: 'Automated at scale' },
-                    { name: 'Cable-network channel takeovers',       pct: 15, note: 'Sponsorship-style buys' }
-                ],
-                roku: [
-                    { name: 'OneView DSP in-stream',                 pct: 45, note: 'CTV across Roku inventory' },
-                    { name: 'Roku Homescreen Billboard',             pct: 20, note: 'High-impact awareness' },
-                    { name: 'AVOD channel placements',               pct: 20, note: 'Roku Channel + partners' },
-                    { name: 'Action Ads (Marquee / CTA)',            pct: 15, note: 'Response-driven' }
-                ],
-                tubi_pluto: [
-                    { name: '30s / 15s pre-roll (AVOD standard)',    pct: 70, note: 'Core ad-supported inventory' },
-                    { name: 'Pause + interactive units',             pct: 15, note: 'Emerging inventory' },
-                    { name: 'Sponsorship / branded content',         pct: 15, note: 'Curated genre channels' }
-                ],
-                spotify: [
-                    { name: 'Audio Everywhere (15-30s spots)',       pct: 45, note: 'Core music + podcast ads' },
-                    { name: 'Video Takeover / Sponsored Sessions',   pct: 20, note: 'Higher-attention units' },
-                    { name: 'Podcast Ads via Spotify Ad Network',    pct: 25, note: 'Host-read + DAI' },
-                    { name: 'Sponsored Playlist + Marquee',          pct: 10, note: 'Discovery surfaces' }
-                ],
-                pandora_iheart: [
-                    { name: 'Audio pre-roll + mid-roll (30s)',       pct: 55, note: 'Standard streaming audio buy' },
-                    { name: 'Podcast host-read / DAI',               pct: 25, note: 'iHeart podcasts + SXM Media' },
-                    { name: 'Sponsorship of stations / shows',       pct: 15, note: 'SiriusXM programming' },
-                    { name: 'Companion display',                     pct:  5, note: 'Attribution layer' }
-                ],
-                twitch_gaming: [
-                    { name: 'Twitch mid-roll video',                 pct: 30, note: 'Live streamer inventory' },
-                    { name: 'Rewarded video (Unity, AppLovin)',      pct: 30, note: 'Highest completion, opt-in' },
-                    { name: 'In-game display / native (Anzu, Bidstack)', pct: 20, note: 'In-world contextual' },
-                    { name: 'Roblox / Fortnite branded worlds',      pct: 15, note: 'Deep-engagement plays' },
-                    { name: 'Direct streamer sponsorship',           pct:  5, note: 'Creator deals' }
-                ],
-                dsp_display: [
-                    { name: 'Contextual + retargeting display',      pct: 40, note: 'Baseline always-on' },
-                    { name: 'Programmatic video (VAST outstream + instream)', pct: 25, note: 'Cross-site reach' },
-                    { name: 'Native (Outbrain, Taboola)',            pct: 15, note: 'Editorial context' },
-                    { name: 'DOOH (place-based digital)',            pct: 15, note: 'Contextual moment ads' },
-                    { name: 'High-impact homepage takeovers',        pct:  5, note: 'Launch days only' }
-                ]
-            };
+            // 2026-10-30 (Jenna: "it has to reason for each profile"): the
+            // fixed PLATFORMS / CHANNEL_META / PLATFORM_AD_FORMATS tables that
+            // used to live here (Reels 35% on every profile) are gone. Channel
+            // mix, platform split, priority pills, ad-format allocations and
+            // row copy now come from /api/marketing-plan/<key>, built from
+            // this profile's own rows by migration/marketing_plan.py.
 
             function _mkNorm(s) { return (s || '').toString().toUpperCase().replace(/[^\w/]/g, ' ').replace(/\s+/g, ' ').trim(); }
 
@@ -147863,42 +147598,6 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 });
                 out.sort((a, b) => (Number(b.pct)||0) - (Number(a.pct)||0));
                 return out;
-            }
-
-            // Find a brand within a platform definition.
-            // Returns { pct, index, name, matched: [items] } or null.
-            function _mkFindPlatformSignal(plat) {
-                const items = _mkItemsFromCats(plat.panelCats);
-                const wanted = (plat.matchNames || []).map(s => s.trim().toLowerCase()).filter(Boolean);
-                const wantedExact = (plat.matchExact || []).map(s => s.trim().toLowerCase());
-                const matched = items.filter(it => {
-                    const nm = (it.name || '').toLowerCase();
-                    if (!nm) return false;
-                    if (wantedExact.some(x => nm === x)) return true;
-                    return wanted.some(w => nm.includes(w));
-                });
-                if (matched.length === 0) return null;
-                // Aggregate reach for platforms with multiple brand components
-                // (e.g. Meta = FB + IG). Use max index across matched brands as
-                // the platform's index signal, and combined pct floored at max.
-                const pcts = matched.map(m => Number(m.pct) || 0);
-                const idxs = matched.map(m => Number(m.index) || 0).filter(x => x > 0);
-                const pctMax = Math.max(...pcts);
-                // Use blended pct: max + 0.5 * (rest) capped at 100, so a
-                // combined Meta reach doesn't undercount vs either FB or IG
-                // alone but also doesn't naively double-count.
-                const pctBlend = matched.length === 1
-                    ? pctMax
-                    : Math.min(100, pctMax + pcts.slice(1).sort((a,b)=>b-a).reduce((s,x) => s + x*0.35, 0));
-                const idx = idxs.length ? Math.max(...idxs) : 100;
-                return { pct: pctBlend, pctMax, index: idx, matched };
-            }
-
-            function _mkPriorityForPct(pct, index) {
-                if (pct >= 25) return { key: 'high',    label: 'High Priority' };
-                if (pct >= 12) return { key: 'medium',  label: 'Medium Priority' };
-                if (pct >= 5)  return { key: 'consider',label: 'Consider' };
-                return { key: 'skip', label: 'Low Priority' };
             }
 
             function _mkMedianAge() {
@@ -147952,8 +147651,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
 
                 const tiles = [
                     { label: 'US Universe',        value: formatNumber(proj),                              sub: 'Projected total audience' },
-                    { label: 'Digitally Reachable', value: formatNumber(addressable),                       sub: 'Top-platform panel reach × universe' },
-                    { label: 'Sample',             value: formatNumber(sample),                             sub: 'Panelists in this segment' },
+                    { label: 'Digitally Reachable', value: formatNumber(addressable),                       sub: 'Top-platform reach × universe' },
+                    { label: 'Sample',             value: formatNumber(sample),                             sub: 'People measured in this audience' },
                     { label: 'Median Age',         value: (median && median > 0) ? median.toFixed(0) : '—', sub: 'Weighted from age distribution' },
                     { label: 'Skew',               value: gender.primary,                                   sub: gender.pct ? gender.pct.toFixed(0) + '% ' + gender.primary : '—' },
                     { label: 'Top Age',            value: topAge ? topAge.bucket : '—',                     sub: topAge ? topAge.pct.toFixed(0) + '% of audience' : '' },
@@ -147968,146 +147667,158 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     </div>`).join('');
             }
 
-            // ---------- Media Mix ----------
-            // For each channel, compute a weight = baseline + top-platform reach
-            // signal. Normalize to 100%. Attach a short reasoning note derived
-            // from the signal used.
-            function _mkComputeMediaMix() {
-                // Collect per-platform reach into a map by bucket
-                const bucketSignal = {}; // bucket -> {topPct, topName, count}
-                PLATFORMS.forEach(p => {
-                    const sig = _mkFindPlatformSignal(p);
-                    if (!sig) return;
-                    const b = bucketSignal[p.bucket] || { topPct: 0, topName: '', count: 0, contributors: [] };
-                    b.count += 1;
-                    b.contributors.push({ name: p.name, pct: sig.pct });
-                    if (sig.pct > b.topPct) {
-                        b.topPct = sig.pct;
-                        b.topName = p.name;
-                    }
-                    bucketSignal[p.bucket] = b;
-                });
-                // Weight formula: baseline + 0.9 * topPct + 0.15 * (sum of extra contributor pcts)
-                const rows = [];
-                Object.keys(CHANNEL_META).forEach(bucket => {
-                    const meta = CHANNEL_META[bucket];
-                    const sig = bucketSignal[bucket];
-                    const topPct = sig ? sig.topPct : 0;
-                    const rest = sig ? sig.contributors.slice().sort((a,b)=>b.pct-a.pct).slice(1).reduce((s,c)=>s+c.pct,0) : 0;
-                    const weight = meta.baseline + 0.9 * topPct + 0.15 * rest;
-                    rows.push({
-                        bucket,
-                        label: meta.label,
-                        icon: meta.icon,
-                        weight,
-                        topSignal: sig ? { name: sig.topName, pct: sig.topPct } : null,
-                        contributorCount: sig ? sig.count : 0,
-                        description: meta.description
-                    });
-                });
-                const total = rows.reduce((s,r)=>s+r.weight,0) || 1;
-                rows.forEach(r => { r.share = 100 * r.weight / total; });
-                rows.sort((a,b) => b.share - a.share);
-                return rows;
+            // ---------- Media Mix (plan payload from /api/marketing-plan) ----------
+            // 2026-10-30 (Jenna): channel mix, platform split, priority pills,
+            // ad-format allocations and row copy are built server-side from
+            // THIS profile's own rows (migration/marketing_plan.py) with one
+            // cached reasoning pass on top. Nothing on this tab is a fixed
+            // table any more. A cache miss returns the deterministic plan
+            // first (pending) and the page re-reads until the reasoned plan
+            // lands; the open drill-downs survive the swap.
+            let _mkPlan = null;
+            let _mkPlanKey = null;
+            let _mkPlanPollTimer = null;
+            let _mkPlanSeq = 0;
+            const _mkPlanCache = {};
+
+            function _mkEsc(s) { return (s == null ? '' : String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+            function _mkCurrentKey() {
+                try { if (typeof currentS3Key !== 'undefined' && currentS3Key) return currentS3Key; } catch(_) {}
+                return null;
+            }
+            function _mkOpenState() {
+                const open = { channels: [], platforms: [] };
+                document.querySelectorAll('.mkt-mix-detail[data-mkt-ch]').forEach(el => { if (el.style.display === 'block') open.channels.push(el.dataset.mktCh); });
+                document.querySelectorAll('.mkt-mix-plat-detail[data-mkt-plat]').forEach(el => { if (el.style.display === 'block') open.platforms.push(el.dataset.mktPlat); });
+                return open;
+            }
+            function _mkRestoreOpen(open) {
+                (open.channels || []).forEach(k => { try { toggleMediaMixRow(k, true); } catch(_) {} });
+                (open.platforms || []).forEach(k => { try { toggleMixPlatform(k, true); } catch(_) {} });
             }
 
-            // Compute the % of a bucket's spend that goes to each PLATFORMS
-            // entry in that bucket. Weight = max(panel reach, 8) so
-            // platforms with no signal still get a modest allocation and
-            // aren't dropped entirely — a planner still wants to know that
-            // e.g. LinkedIn exists as an option even if there's no direct
-            // panel signal in the profile. Returns [{platform, sig, weight,
-            // share, priority}] sorted by share desc.
-            function _mkComputePlatformSharesInBucket(bucket) {
-                const platsInBucket = PLATFORMS.filter(p => p.bucket === bucket);
-                if (!platsInBucket.length) return [];
-                const enriched = platsInBucket.map(p => {
-                    const sig = _mkFindPlatformSignal(p);
-                    const pct = sig ? sig.pct : 0;
-                    // Non-signal platforms get a small floor so they don't
-                    // vanish; signal platforms get boosted by their panel
-                    // reach. Cap at 100 to keep the normalization sane.
-                    const weight = sig ? Math.min(100, Math.max(pct, 8)) : 6;
-                    return { platform: p, sig, pct, weight };
-                });
-                const total = enriched.reduce((s, r) => s + r.weight, 0) || 1;
-                enriched.forEach(r => {
-                    r.share = 100 * r.weight / total;
-                    r.priority = r.sig ? _mkPriorityForPct(r.sig.pct, r.sig.index) : null; // 2026-08-25 (Jenna): no pill when there is no signal
-                });
-                enriched.sort((a, b) => b.share - a.share);
-                return enriched;
+            async function _mkFetchPlan(key, opts) {
+                opts = opts || {};
+                const url = `/api/marketing-plan/${encodeURIComponent(key)}` + (opts.refresh ? '?refresh=1' : '');
+                const r = await fetch(url, { credentials: 'same-origin', cache: 'no-store' });
+                const j = await r.json().catch(() => ({}));
+                if (!r.ok || !j || !j.success || !j.plan) throw new Error((j && j.error) || ('HTTP ' + r.status));
+                return j.plan;
             }
 
-            // Render the ad-format allocation for a single platform.
-            function _mkRenderAdFormatsForPlatform(platformKey) {
-                const formats = PLATFORM_AD_FORMATS[platformKey];
-                if (!formats || !formats.length) {
-                    return '<div class="mkt-mix-fmt-empty">Ad-format guidance not yet coded for this platform. Default to a 60/25/15 split of video / static / high-impact.</div>';
+            function _mkSchedulePoll(key, seq, attempt) {
+                if (_mkPlanPollTimer) { clearTimeout(_mkPlanPollTimer); _mkPlanPollTimer = null; }
+                if (attempt > 14) return;
+                _mkPlanPollTimer = setTimeout(async () => {
+                    if (seq !== _mkPlanSeq || _mkCurrentKey() !== key) return;
+                    try {
+                        const plan = await _mkFetchPlan(key);
+                        if (seq !== _mkPlanSeq) return;
+                        if (plan && !plan.pending) {
+                            _mkPlan = plan; _mkPlanCache[key] = plan;
+                            const open = _mkOpenState();
+                            _mkRenderMediaMix(); _mkRenderPlatformGrid();
+                            _mkRestoreOpen(open);
+                            return;
+                        }
+                    } catch(_) {}
+                    _mkSchedulePoll(key, seq, attempt + 1);
+                }, 5000);
+            }
+
+            async function _mkLoadPlan(opts) {
+                opts = opts || {};
+                const key = _mkCurrentKey();
+                const seq = ++_mkPlanSeq;
+                if (_mkPlanPollTimer) { clearTimeout(_mkPlanPollTimer); _mkPlanPollTimer = null; }
+                if (!key) { _mkPlan = null; _mkPlanKey = null; _mkRenderMediaMix(); _mkRenderPlatformGrid(); return; }
+                if (!opts.reread && _mkPlanCache[key] && !_mkPlanCache[key].pending) {
+                    _mkPlan = _mkPlanCache[key]; _mkPlanKey = key;
+                    _mkRenderMediaMix(); _mkRenderPlatformGrid();
+                    return;
                 }
-                const max = Math.max(...formats.map(f => f.pct || 0)) || 100;
+                _mkPlan = null; _mkPlanKey = key;
+                _mkRenderMediaMix(); _mkRenderPlatformGrid();
+                try {
+                    const plan = await _mkFetchPlan(key, opts);
+                    if (seq !== _mkPlanSeq) return;
+                    _mkPlan = plan; _mkPlanCache[key] = plan;
+                    _mkRenderMediaMix(); _mkRenderPlatformGrid();
+                    if (plan.pending) _mkSchedulePoll(key, seq, 1);
+                } catch (e) {
+                    if (seq !== _mkPlanSeq) return;
+                    _mkPlan = { error: (e && e.message) || 'unavailable' };
+                    _mkRenderMediaMix(); _mkRenderPlatformGrid();
+                }
+            }
+
+            function _mkPriorityPill(p) {
+                return p ? `<span class="marketing-plat-priority ${_mkEsc(p.key)}">${_mkEsc(p.label)}</span>` : '';
+            }
+
+            function _mkRenderFormats(plat) {
+                const formats = Array.isArray(plat.formats) ? plat.formats : [];
+                if (!formats.length) return '<div class="mkt-mix-fmt-empty">No format guidance for this surface.</div>';
+                const max = Math.max(...formats.map(f => Number(f.pct) || 0)) || 100;
                 return `<div class="mkt-mix-fmt-list">` + formats.map(f => {
-                    const w = Math.max(0, (f.pct / max) * 100);
+                    const pct = Number(f.pct) || 0;
+                    const w = Math.max(0, (pct / max) * 100);
                     return `
                         <div class="mkt-mix-fmt-row">
-                            <div class="mkt-mix-fmt-name">${(f.name||'').replace(/</g,'&lt;')}</div>
-                            <div class="mkt-mix-fmt-pct">${f.pct}%</div>
+                            <div class="mkt-mix-fmt-name">${_mkEsc(f.name)}</div>
+                            <div class="mkt-mix-fmt-pct">${pct.toFixed(1)}%</div>
                             <div class="mkt-mix-fmt-bar"><div class="mkt-mix-fmt-fill" style="width:${w.toFixed(1)}%"></div></div>
-                            <div class="mkt-mix-fmt-note">${(f.note||'').replace(/</g,'&lt;')}</div>
+                            <div class="mkt-mix-fmt-note">${_mkEsc(f.note)}</div>
                         </div>`;
                 }).join('') + `</div>`;
             }
 
-            // Render the full drill-down block for one bucket: per-platform
-            // shares + expandable ad-format detail underneath each.
-            function _mkRenderMixBucketDetail(bucket) {
-                const shares = _mkComputePlatformSharesInBucket(bucket);
-                if (!shares.length) return '<div class="mkt-mix-drill-empty">No platforms defined for this bucket.</div>';
+            function _mkRenderMixBucketDetail(ch) {
+                const plats = Array.isArray(ch.platforms) ? ch.platforms : [];
+                if (!plats.length) return '<div class="mkt-mix-drill-empty">No surfaces for this channel.</div>';
                 return `<div class="mkt-mix-drill-inner">
                     <div class="mkt-mix-drill-head">Within this channel, allocate spend across:</div>
-                    ${shares.map((r, idx) => {
-                        const p = r.platform;
-                        const sigLabel = r.sig
-                            ? `${r.sig.pct.toFixed(0)}% panel reach · ${Math.round(r.sig.index)} idx`
-                            : '';
+                    ${plats.map(p => {
+                        const pk = `${ch.key}-${p.key}`;
+                        const sig = (p.reach != null) ? `${Number(p.reach).toFixed(1)}% reach · ${p.index} index` : '';
                         return `
                             <div class="mkt-mix-plat">
-                                <div class="mkt-mix-plat-head" onclick="toggleMixPlatform('${bucket}', ${idx})">
+                                <div class="mkt-mix-plat-head" onclick="toggleMixPlatform('${pk}')">
                                     <div class="mkt-mix-plat-title">
-                                        <span class="mkt-mix-plat-chev" data-mix-plat-chev="${bucket}-${idx}">▸</span>
-                                        <span style="font-size:1.05rem;">${p.icon}</span>
-                                        <span>${p.name.replace(/</g,'&lt;')}</span>
+                                        <span class="mkt-mix-plat-chev" data-mix-plat-chev="${pk}">▸</span>
+                                        <span style="font-size:1.05rem;">${p.icon || ''}</span>
+                                        <span>${_mkEsc(p.name)}</span>
                                     </div>
                                     <div class="mkt-mix-plat-meta">
-                                        ${r.priority ? `<span class="marketing-plat-priority ${r.priority.key}">${r.priority.label}</span>` : ''}
-                                        <span class="mkt-mix-plat-share">${r.share.toFixed(0)}%</span>
+                                        ${_mkPriorityPill(p.priority)}
+                                        <span class="mkt-mix-plat-share">${Number(p.share).toFixed(1)}%</span>
                                     </div>
                                 </div>
-                                <div class="mkt-mix-plat-sig">${sigLabel ? sigLabel + ' · ' : ''}<span class="mkt-mix-plat-note">${p.buyingNote}</span></div>
-                                <div class="mkt-mix-plat-detail" id="mkt-mix-plat-detail-${bucket}-${idx}" style="display:none;">
-                                    <div class="mkt-mix-fmt-head">Ad-format allocation within ${p.name.replace(/</g,'&lt;')}:</div>
-                                    ${_mkRenderAdFormatsForPlatform(p.key)}
+                                <div class="mkt-mix-plat-sig">${sig ? sig + ' · ' : ''}<span class="mkt-mix-plat-note">${_mkEsc(p.copy)}</span></div>
+                                <div class="mkt-mix-plat-detail" data-mkt-plat="${pk}" id="mkt-mix-plat-detail-${pk}" style="display:none;">
+                                    <div class="mkt-mix-fmt-head">Ad-format allocation within ${_mkEsc(p.name)} for this audience:</div>
+                                    ${_mkRenderFormats(p)}
                                 </div>
                             </div>`;
                     }).join('')}
                 </div>`;
             }
 
-            // Click handler: toggle a media-mix bucket row's drill-down open/closed.
-            window.toggleMediaMixRow = function(bucket) {
+            // Click handler: toggle a media-mix channel row's drill-down.
+            window.toggleMediaMixRow = function(bucket, forceOpen) {
                 const detail = document.getElementById('mkt-mix-detail-' + bucket);
                 const chev   = document.getElementById('mkt-mix-chev-' + bucket);
                 const row    = document.getElementById('mkt-mix-row-' + bucket);
                 if (!detail) return;
                 const isOpen = detail.style.display === 'block';
-                if (isOpen) {
+                if (isOpen && !forceOpen) {
                     detail.style.display = 'none';
                     if (chev) chev.textContent = '▸';
                     if (row) row.classList.remove('open');
                 } else {
-                    // Lazy-render on first open (avoids computing all drill-downs upfront)
                     if (!detail.dataset.rendered) {
-                        detail.innerHTML = _mkRenderMixBucketDetail(bucket);
+                        const ch = (_mkPlan && Array.isArray(_mkPlan.channels)) ? _mkPlan.channels.find(c => c.key === bucket) : null;
+                        detail.innerHTML = ch ? _mkRenderMixBucketDetail(ch) : '<div class="mkt-mix-drill-empty">Plan not loaded.</div>';
                         detail.dataset.rendered = '1';
                     }
                     detail.style.display = 'block';
@@ -148116,100 +147827,90 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 }
             };
 
-            // Click handler: toggle a per-platform ad-format detail open/closed.
-            window.toggleMixPlatform = function(bucket, idx) {
-                const el = document.getElementById(`mkt-mix-plat-detail-${bucket}-${idx}`);
-                const chev = document.querySelector(`[data-mix-plat-chev="${bucket}-${idx}"]`);
+            // Click handler: toggle a per-platform ad-format detail.
+            window.toggleMixPlatform = function(pk, forceOpen) {
+                const el = document.getElementById(`mkt-mix-plat-detail-${pk}`);
+                const chev = document.querySelector(`[data-mix-plat-chev="${pk}"]`);
                 if (!el) return;
                 const isOpen = el.style.display === 'block';
-                el.style.display = isOpen ? 'none' : 'block';
-                if (chev) chev.textContent = isOpen ? '▸' : '▾';
+                const open = forceOpen ? true : !isOpen;
+                el.style.display = open ? 'block' : 'none';
+                if (chev) chev.textContent = open ? '▾' : '▸';
             };
 
             function _mkRenderMediaMix() {
                 const el = document.getElementById('marketingMediaMix');
                 if (!el) return;
-                const rows = _mkComputeMediaMix();
+                if (!_mkPlan) { el.innerHTML = '<div class="marketing-empty">Building the media plan for this audience...</div>'; return; }
+                if (_mkPlan.error) { el.innerHTML = `<div class="marketing-empty">The media plan is not available right now. <a href="#" onclick="renderMarketingTab({reread: true}); return false;">Try again</a>.</div>`; return; }
+                const rows = Array.isArray(_mkPlan.channels) ? _mkPlan.channels : [];
                 if (!rows.length) { el.innerHTML = '<div class="marketing-empty">No data.</div>'; return; }
-                const max = rows[0].share || 100;
-                el.innerHTML = `<div class="mkt-mix-hint">💡 Click any channel to see the per-platform split and, within each platform, the recommended ad-format allocation.</div>` + rows.map(r => {
-                    const w = Math.max(0, (r.share / max) * 100);
-                    const note = r.topSignal
-                        ? `${r.description} <b>Signal:</b> ${r.topSignal.name} at ${r.topSignal.pct.toFixed(0)}% panel reach${r.contributorCount > 1 ? ` (${r.contributorCount} platforms in bucket)` : ''}.`
-                        : r.description;
+                const max = Number(rows[0].share) || 100;
+                const pendingNote = _mkPlan.pending ? `<div class="mkt-mix-hint">Refining the read for this audience; the lines below update in a moment.</div>` : '';
+                el.innerHTML = `<div class="mkt-mix-hint">💡 Click any channel to see the per-platform split and, within each platform, the ad-format allocation for this audience.</div>` + pendingNote + rows.map(r => {
+                    const share = Number(r.share) || 0;
+                    const w = Math.max(0, (share / max) * 100);
+                    const note = `${_mkEsc(r.rationale || r.description)}${r.signal_line ? ` <b>Signal:</b> ${_mkEsc(r.signal_line)}` : ''}`;
                     return `
-                        <div class="marketing-mix-row mkt-mix-row-clickable" id="mkt-mix-row-${r.bucket}" onclick="toggleMediaMixRow('${r.bucket}')">
+                        <div class="marketing-mix-row mkt-mix-row-clickable" id="mkt-mix-row-${r.key}" onclick="toggleMediaMixRow('${r.key}')">
                             <div class="marketing-mix-label">
-                                <span class="mkt-mix-chev" id="mkt-mix-chev-${r.bucket}">▸</span>
-                                ${r.icon} ${r.label.replace(/</g,'&lt;')}
+                                <span class="mkt-mix-chev" id="mkt-mix-chev-${r.key}">▸</span>
+                                ${r.icon || ''} ${_mkEsc(r.label)}
                             </div>
-                            <div class="marketing-mix-pct">${r.share.toFixed(0)}%</div>
+                            <div class="marketing-mix-pct">${share.toFixed(1)}%</div>
                             <div class="marketing-mix-barwrap">
                                 <div class="marketing-mix-bartrack"><div class="marketing-mix-barfill" style="width:${w.toFixed(1)}%"></div></div>
                                 <div class="marketing-mix-note">${note}</div>
                             </div>
                         </div>
-                        <div class="mkt-mix-detail" id="mkt-mix-detail-${r.bucket}" style="display:none;"></div>`;
+                        <div class="mkt-mix-detail" data-mkt-ch="${r.key}" id="mkt-mix-detail-${r.key}" style="display:none;"></div>`;
                 }).join('');
             }
 
-            // ---------- Platform Playbook cards ----------
+            // ---------- Platform Playbook cards (from the plan) ----------
             function _mkRenderPlatformGrid() {
                 const el = document.getElementById('marketingPlatformGrid');
                 if (!el) return;
-                const median = _mkMedianAge();
-                const gender = _mkGenderSkew();
-                const topDMAs = _mkLocs()
-                    .filter(l => (l.name || '').toString().toUpperCase() !== 'UNITED STATES')
-                    .sort((a,b) => (Number(b.pct)||0) - (Number(a.pct)||0))
-                    .slice(0, 3)
-                    .map(l => l.name)
-                    .filter(Boolean);
-                // Top MPB / retail brands to seed lookalike custom audiences
-                const topAffinity = _mkItemsFromCats(['MOST PURCHASED BRANDS','MPB','APPAREL/FOOTWEAR','QSR','RETAIL','TALENT','MUSICIAN','ACTOR'])
-                    .slice(0, 6).map(x => x.name).filter(Boolean);
-
-                const cards = PLATFORMS.map(p => {
-                    const sig = _mkFindPlatformSignal(p);
-                    let priority, pctLabel, indexLabel, seedBrands;
-                    if (!sig) {
-                        priority = null; // 2026-08-25 (Jenna): no pill when there is no signal
-                        pctLabel = '—';
-                        indexLabel = '—';
-                        seedBrands = [];
-                    } else {
-                        priority = _mkPriorityForPct(sig.pct, sig.index);
-                        pctLabel = sig.pct.toFixed(0) + '% reach';
-                        indexLabel = (sig.index > 0 ? Math.round(sig.index) : '—') + ' idx';
-                        seedBrands = sig.matched.slice(0, 3).map(m => m.name);
-                    }
-                    const audienceBits = [];
-                    if (median) audienceBits.push(`age ${Math.max(18, median-8).toFixed(2)}-${(median+10).toFixed(2)}`);
-                    if (gender.primary && gender.primary !== '—') audienceBits.push(gender.primary.toLowerCase() + '-lean');
-                    if (topDMAs.length) audienceBits.push('DMAs: ' + topDMAs.join(', '));
-
-                    return `
+                if (!_mkPlan) { el.innerHTML = '<div class="marketing-empty">Building the platform playbook for this audience...</div>'; return; }
+                if (_mkPlan.error) { el.innerHTML = '<div class="marketing-empty">The platform playbook is not available right now.</div>'; return; }
+                const aud = _mkPlan.audience || {};
+                const audienceBits = [];
+                if (aud.top_age) audienceBits.push(`core age ${aud.top_age}`);
+                if (Number(aud.female_pct) >= 55) audienceBits.push(`${Number(aud.female_pct).toFixed(1)}% female`);
+                else if (Number(aud.male_pct) >= 55) audienceBits.push(`${Number(aud.male_pct).toFixed(1)}% male`);
+                if (aud.top_income) audienceBits.push(`income ${aud.top_income}`);
+                if (Array.isArray(aud.top_dmas) && aud.top_dmas.length) audienceBits.push('DMAs: ' + aud.top_dmas.join(', '));
+                const topBrands = Array.isArray(aud.top_brands) ? aud.top_brands : [];
+                const cards = [];
+                (_mkPlan.channels || []).forEach(ch => {
+                    (ch.platforms || []).forEach(p => {
+                        if (p.reach == null) return;
+                        const lead = (p.formats && p.formats[0]) ? `${_mkEsc(p.formats[0].name)} ${Number(p.formats[0].pct).toFixed(1)}%` : '';
+                        const seeds = ((p.seed && p.seed.length) ? p.seed : topBrands).slice(0, 4);
+                        cards.push({ weight: (Number(ch.share) || 0) * (Number(p.share) || 0), html: `
                         <div class="marketing-plat-card">
                             <div class="marketing-plat-head">
-                                <div class="marketing-plat-title"><span class="marketing-plat-icon">${p.icon}</span>${p.name.replace(/</g,'&lt;')}</div>
-                                ${priority ? `<span class="marketing-plat-priority ${priority.key}">${priority.label}</span>` : ''}
+                                <div class="marketing-plat-title"><span class="marketing-plat-icon">${p.icon || ''}</span>${_mkEsc(p.name)}</div>
+                                ${_mkPriorityPill(p.priority)}
                             </div>
                             <div class="marketing-plat-metrics">
-                                <div class="marketing-plat-metric"><b>${pctLabel}</b></div>
-                                <div class="marketing-plat-metric"><b>${indexLabel}</b></div>
+                                <div class="marketing-plat-metric"><b>${Number(p.reach).toFixed(1)}% reach</b></div>
+                                <div class="marketing-plat-metric"><b>${p.index} index</b></div>
+                                <div class="marketing-plat-metric"><b>${Number(p.share).toFixed(1)}% of ${_mkEsc(ch.label)}</b></div>
                             </div>
-                            <div class="marketing-plat-seed"><b>Buying note.</b> ${p.buyingNote}</div>
-                            <div class="marketing-plat-seed"><b>Audience.</b> ${audienceBits.join(' · ') || '—'}</div>
-                            ${(seedBrands.length || topAffinity.length) ? `
+                            <div class="marketing-plat-seed"><b>Buying note.</b> ${_mkEsc(p.copy)}</div>
+                            ${lead ? `<div class="marketing-plat-seed"><b>Lead format.</b> ${lead}</div>` : ''}
+                            <div class="marketing-plat-seed"><b>Audience.</b> ${_mkEsc(audienceBits.join(' · '))}</div>
+                            ${seeds.length ? `
                                 <div>
                                     <div class="marketing-plat-seed" style="margin-bottom:0.2rem;"><b>Seed / interests</b></div>
-                                    <div class="marketing-plat-tags">
-                                        ${(seedBrands.length ? seedBrands : topAffinity.slice(0,4)).map(x => `<span class="marketing-plat-tag">${(x||'').replace(/</g,'&lt;')}</span>`).join('')}
-                                    </div>
+                                    <div class="marketing-plat-tags">${seeds.map(x => `<span class="marketing-plat-tag">${_mkEsc(x)}</span>`).join('')}</div>
                                 </div>` : ''}
-                        </div>`;
-                }).join('');
-                el.innerHTML = cards;
+                        </div>` });
+                    });
+                });
+                cards.sort((a, b) => b.weight - a.weight);
+                el.innerHTML = cards.map(c => c.html).join('') || '<div class="marketing-empty">No platform rows in this profile.</div>';
             }
 
             // ---------- Lookalike composition ----------
@@ -148878,7 +148579,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             };
 
             // ---------- Main entry ----------
-            window.renderMarketingTab = function() {
+            window.renderMarketingTab = function(opts) {
                 const container = document.getElementById('marketingContainer');
                 if (!container) return;
                 const d = (typeof currentDashboardData !== 'undefined') ? currentDashboardData : null;
@@ -148895,10 +148596,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 }
                 const name = _mkProfileName();
                 if (heroName) heroName.textContent = `${name} - Marketing Playbook`;
-                if (heroSub)  heroSub.textContent  = `Ad-buying media mix, per-platform priority, lookalike seed, geo targeting, retargeting surfaces, creator roster, and brand-partner shortlist derived from ${formatNumber(Number(d.sampleSize||0))} panelists and their trailing-12-month digital behavior.`;
+                if (heroSub)  heroSub.textContent  = `Media mix, per-platform priority and ad formats, lookalike seed, geo targeting, retargeting surfaces, creator roster and brand-partner shortlist, each read from this audience of ${formatNumber(Number(d.sampleSize||0))} people and its trailing-12-month digital behavior.`;
                 _mkRenderSnapshot();
-                _mkRenderMediaMix();
-                _mkRenderPlatformGrid();
+                // Media mix + platform playbook render from the per-profile plan
+                // payload (async; loading state first, reasoned plan when it lands).
+                _mkLoadPlan({ reread: !!(opts && opts.reread) });
                 _mkRenderLookalike();
                 _mkRenderGeo();
                 _mkRenderRetarget();
