@@ -4866,6 +4866,7 @@ def _build_prompt(item: dict, target_date_iso: Optional[str] = None) -> str:
             f'  Date: {prev_date}\n'
             f'  This item\'s total US audience on {prev_date}: '
             f'{int(prev_est):,}\n'
+            + _prev_platform_prompt_line(item.get('_prev_day_by_platform')) +
             f'Your task: reason about what makes {target_date_iso} '
             f'different from {prev_date} for THIS item, then produce a '
             f'number that reflects that reasoning. Two adjacent days are '
@@ -5468,6 +5469,7 @@ def _sanitize_result(item: dict, parsed: dict) -> Optional[dict]:
         'day_specificity':  day_specificity,
         'prev_day_estimate': int(prev_day_est) if prev_day_est else None,
         'prev_day_date':    prev_day_date or None,
+        'prev_day_by_platform': item.get('_prev_day_by_platform') or None,
         'sources':          [s for s in (parsed.get('sources') or [])
                               if _usable_source(s)][:4],
         'by_platform':      by_platform,
@@ -6238,6 +6240,100 @@ def _continuity_scaled(v: Optional[int], scale: float, key: str,
     return _ensure_non_zero_last_digit(out, key, salt)
 
 
+def _prev_platform_levels(prev_entry: dict) -> dict:
+    """{platform: us_estimate} for yesterday's entry, positives only."""
+    out = {}
+    for pkey, blk in ((prev_entry or {}).get('by_platform') or {}).items():
+        try:
+            v = int((blk or {}).get('us_estimate') or 0)
+        except Exception:
+            v = 0
+        if v > 0:
+            out[str(pkey)] = v
+    return out
+
+
+def _prev_platform_prompt_line(prev_bp) -> str:
+    if not isinstance(prev_bp, dict) or not prev_bp:
+        return ''
+    parts = ', '.join(f'{k} {int(v):,}' for k, v in sorted(prev_bp.items()))
+    return (f'  By platform that day: {parts}\n'
+            f'  Compare each platform against its own number above. A '
+            f'platform missing from today\'s chart context is not a drop '
+            f'in the others.\n')
+
+
+def _continuity_guard_platforms(key: str, it: dict, prev_bp: dict,
+                                target_date_iso: str) -> bool:
+    """Continuity on each platform present on both days, against that
+    platform's own previous reading.
+
+    Used when the item's set of platforms changed overnight. The item
+    total then sums different things on the two days (five platforms
+    yesterday, Audible alone today), so comparing totals reads a scope
+    change as a collapse or a surge and pins the platform to the wrong
+    level - House of Sky and Breath went from 127 Audible listeners to
+    5,547 that way on 2026-10-27, and every following day continued
+    from there. Platforms new today have nothing to continue and are
+    left alone. Returns True when any platform moved."""
+    by_plat = it.get('by_platform') or {}
+    if _day_specificity_cites_event(str(it.get('day_specificity') or '')):
+        return False
+    try:
+        kind = (str(it.get('kind') or '').strip() or str(key).split(':', 1)[0])
+        floor = kind_plausibility_floor(kind)
+    except Exception:
+        floor = 0
+    old_sum = new_sum = 0
+    moved = False
+    for pkey, pblock in by_plat.items():
+        if not isinstance(pblock, dict):
+            continue
+        try:
+            cur = int(pblock.get('us_estimate') or 0)
+        except Exception:
+            cur = 0
+        if cur <= 0:
+            continue
+        old_sum += cur
+        prev = int(prev_bp.get(pkey) or 0)
+        ratio = cur / prev if prev > 0 else 1.0
+        if prev <= 0 or _CONTINUITY_DOWN_RATIO <= ratio <= _CONTINUITY_UP_RATIO \
+                or (floor > 0 and prev < floor <= cur):
+            new_sum += cur
+            continue
+        seed = f'{key}|{pkey}'
+        u = _h01(f'{seed}|{target_date_iso}|continuity')
+        f = (1.30 + u * 0.85) if ratio > _CONTINUITY_UP_RATIO else (0.47 + u * 0.30)
+        adjusted = max(1, int(round(prev * f)))
+        adjusted = _ensure_non_zero_last_digit(
+            adjusted, seed, f'{target_date_iso}|continuity')
+        if adjusted == prev:
+            adjusted += 1 + int(u * 8)
+        scale = adjusted / cur
+        pblock['us_estimate'] = adjusted
+        for fld in ('us_estimate_low', 'us_estimate_high'):
+            pblock[fld] = _continuity_scaled(
+                pblock.get(fld), scale, key,
+                f'{target_date_iso}|continuity|plat|{pkey}|{fld[12:]}')
+        if pblock.get('us_estimate_low') is not None and pblock['us_estimate_low'] > adjusted:
+            pblock['us_estimate_low'] = adjusted
+        if pblock.get('us_estimate_high') is not None and pblock['us_estimate_high'] < adjusted:
+            pblock['us_estimate_high'] = adjusted
+        new_sum += adjusted
+        moved = True
+        logger.info(
+            "stream_estimates continuity guard (platform): %r %s raw=%d "
+            "adjusted=%d (prev %s=%d)", it.get('display_title'), pkey,
+            cur, adjusted, it.get('prev_day_date') or 'prev-day', prev)
+    if moved and old_sum > 0:
+        scale = new_sum / old_sum
+        for fld in ('us_estimate', 'us_estimate_low', 'us_estimate_high'):
+            it[fld] = _continuity_scaled(
+                it.get(fld), scale, key, f'{target_date_iso}|continuity|{fld}')
+    return moved
+
+
 def _apply_continuity_guard(researched: dict[str, dict],
                              target_date_iso: str) -> int:
     """Bound day-over-day movement for items with a previous-day
@@ -6246,6 +6342,15 @@ def _apply_continuity_guard(researched: dict[str, dict],
     fired = 0
     for key, it in researched.items():
         if not isinstance(it, dict):
+            continue
+        prev_bp = it.pop('prev_day_by_platform', None)
+        cur_bp = it.get('by_platform')
+        if (isinstance(prev_bp, dict) and prev_bp and isinstance(cur_bp, dict)
+                and cur_bp and set(prev_bp) != set(
+                    k for k, b in cur_bp.items()
+                    if isinstance(b, dict) and (b.get('us_estimate') or 0) > 0)):
+            if _continuity_guard_platforms(key, it, prev_bp, target_date_iso):
+                fired += 1
             continue
         try:
             prev = int(it.get('prev_day_estimate') or 0)
@@ -8303,6 +8408,9 @@ def fetch(only: Optional[set[str]] = None,
         if _prev_est:
             _it['_prev_day_estimate'] = int(_prev_est)
             _it['_prev_day_date'] = _prev_iso
+            _prev_bp = _prev_platform_levels(_prev)
+            if _prev_bp:
+                _it['_prev_day_by_platform'] = _prev_bp
             _stamped += 1
     if _stamped:
         logger.info("stream_estimates: stamped previous-day reference "
