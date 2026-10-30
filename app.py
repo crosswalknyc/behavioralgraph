@@ -2255,8 +2255,8 @@ DEFAULT_PRICING = {
     'intent_ingest': 10,         # 2026-08-14 new tile (module added 2026-08-12)
     'panel_report': 1,           # custom ask: internal-unit twin of the 100 price
                                  # (Jenna 2026-10-21: first custom ask on a subject 100, then 50)
-    'panel_report_followup': 1,  # the follow-up on the same subject (50)
-    'viewership_read': 5,        # viewership over time: 5 per year of window (500/yr)
+    'panel_report_followup': 0,  # a follow-up on the same subject is metered, not priced (Jenna 2026-10-30)
+    'viewership_read': 1,        # viewership over time: one flat 100 for the first ask on a subject (Jenna 2026-10-30; was 5 per year)
     'derived_read': 1,           # breakdown of a delivered figure: internal-unit twin of the 100 price
 }
 

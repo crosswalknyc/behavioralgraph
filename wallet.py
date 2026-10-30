@@ -94,12 +94,21 @@ DEFAULT_PRICING = {
         # subject in a thread is panel_report, each later one on the
         # same subject is panel_report_followup.
         "panel_report": 100.0,
-        "panel_report_followup": 50.0,
+        # 2026-10-30 (Jenna): "change custom ask to the same $100 and
+        # metered for follow ups": a later ask on the same subject in
+        # the thread is not priced; it runs on the metered Prometheus
+        # usage like any other turn. The key stays so old ledgers
+        # resolve; 0 here means no flat charge.
+        "panel_report_followup": 0.0,
         # Viewership over time (2026-10-08 Jenna, verbatim: "viewership
         # asks is always 500 per year in the company's requested
         # currency"). Priced per year of window; the seat's currency
         # supplies the symbol (display_currency), the number is 1:1.
-        "viewership_read": 500.0,
+        # 2026-10-30 (Jenna): "change viewership to $100 on first ask and
+        # then metered for follow ups on that subject". One flat price for
+        # the first viewership read on a subject, whatever the window;
+        # follow-ups on that subject run metered. (Was 500 per year.)
+        "viewership_read": 100.0,
         # Derived read (2026-10-12 Jenna, Jordan / East Tree: "jordan
         # should be charged 100gbp for the device breakdown"): a figure
         # already delivered split by a dimension the panel observes
@@ -206,7 +215,7 @@ DEFAULT_PRICING = {
     "metered_tools": [],
     # Jenna 2026-09-23: the only preset add-funds amounts are $5k /
     # $10k / $15k. Custom is allowed at $5k or any amount above.
-    "top_up_packs_usd": [5000.0, 10000.0, 15000.0],
+    "top_up_packs_usd": [500.0, 1000.0, 2500.0, 5000.0, 10000.0, 15000.0],
     "top_up_min_custom_usd": 5000.0,
     "prometheus_markup_multiplier": 2.10,
     # Published Prometheus meter (Jenna 2026-10-07, verbatim: "All
@@ -235,9 +244,11 @@ DEFAULT_PRICING = {
     },
 }
 
-# Locked add-funds amounts (Jenna 2026-09-23). Presets are only
-# $5,000 / $10,000 / $15,000. Custom must be $5,000 or more.
-TOP_UP_PACKS_USD = (5000.0, 10000.0, 15000.0)
+# Locked add-funds amounts (Jenna 2026-09-23, packs widened 2026-10-30:
+# "add top up packs for $500, $1,000, $2,500 too"). Presets are
+# $500 / $1,000 / $2,500 / $5,000 / $10,000 / $15,000. Custom must be
+# $5,000 or more.
+TOP_UP_PACKS_USD = (500.0, 1000.0, 2500.0, 5000.0, 10000.0, 15000.0)
 TOP_UP_MIN_USD = 5000.0
 # Opening exception (Jenna 2026-09-25): a locked new seat can take a
 # one-time $500 card + top-up. Regular Add Funds stays at $5,000.
@@ -487,12 +498,12 @@ MODULE_CATALOG = [
      "pulls", 1, 100.0, "has_prometheus_access"),
     # 2026-10-21 (Jenna): each later custom ask on the same subject in
     # the same thread is the follow-up price.
-    ("panel_report_followup",      "Custom Ask (follow-up, same subject)",
+    ("panel_report_followup",      "Custom Ask (follow-up, same subject: metered)",
      "pulls", 1, 50.0, "has_prometheus_access"),
     # 2026-10-08 (Jenna): a viewership-over-time read (monthly viewers,
     # hours watched, consumption by month) is 500 per year of window,
     # charged in the seat's currency. Quantity = years.
-    ("viewership_read",            "Viewership Read (per year)",
+    ("viewership_read",            "Viewership Read (first ask on a subject)",
      "pulls", 5, 500.0, "has_prometheus_access"),
     # 2026-10-12 (Jenna): a delivered figure split by device / daypart /
     # geography / demographic is a derived read at the derived-cut

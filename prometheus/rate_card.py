@@ -23,12 +23,12 @@ from __future__ import annotations
 #   shape 'flat'    -> "{label} - {c}{price}"
 #   shape 'split'   -> "{label} - {c}{half} without a control group, {c}{price} with one"
 #   shape 'daily'   -> "{label} - {c}{price} for the initial pull and an optional {c}{daily} x day to track per campaign"
-#   shape 'followup'-> "{label} - {c}{price} for the first ask on a subject, then {c}{followup} for each follow-up on the same subject"
+#   shape 'followup'-> "{label} - {c}{price} for the first ask on a subject, then metered usage for each follow-up on the same subject"
 ROWS = (
     ('Digital Journey', 'journey_iq', 500.0, 'flat'),
     ('Profile', 'profile_iq_build', 300.0, 'flat'),
     ('Subscriber Acquisition', 'subscriber_iq_build', 500.0, 'flat'),
-    ('Viewership Metrics', 'viewership_read', 500.0, 'flat'),
+    ('Viewership Metrics', 'viewership_read', 100.0, 'followup'),
     ('Flywheel', 'flywheel_iq', 500.0, 'flat'),
     ('Brand Partnership', 'brand_partnership_iq', 1000.0, 'split'),
     ('Ad Attribution', 'attribution_iq_setup', 500.0, 'daily'),
@@ -55,9 +55,11 @@ PANELIST_KEY, PANELIST_DEFAULT = 'digital_twin_panelist', 550.0           # each
 PILOT_MORE_KEY, PILOT_MORE_DEFAULT = 'digital_twin_pilot_more', 5500.0
 DAILY_KEY, DAILY_DEFAULT = 'attribution_iq_daily', 100.0
 CUT_KEY, CUT_DEFAULT = 'profile_iq_derived_cut', 100.0
-# Jenna 2026-10-21: the initial custom ask is $100, then $50 for each
-# follow-up on the same subject in the thread.
-FOLLOWUP_KEY, FOLLOWUP_DEFAULT = 'panel_report_followup', 50.0
+# Jenna 2026-10-21: the initial custom ask is $100. Jenna 2026-10-30:
+# follow-ups on the same subject in the thread are metered, not priced
+# (viewership the same: $100 first, metered after). The key stays for
+# old ledgers; 0 means no flat price.
+FOLLOWUP_KEY, FOLLOWUP_DEFAULT = 'panel_report_followup', 0.0
 # Metered Prometheus usage, per million tokens in / out, per search.
 METERED_IN, METERED_OUT, METERED_SEARCH = 10.50, 52.50, 0.021
 
@@ -100,8 +102,7 @@ def render(symbol='$', price_fn=None):
             half = p / 2.0
             lines.append(f"{label} - {money(half, c)} without a control group, {money(p, c)} with one")
         elif shape == 'followup':
-            fu = _price(price_fn, FOLLOWUP_KEY, FOLLOWUP_DEFAULT)
-            lines.append(f"{label} - {money(p, c)} for the first ask on a subject, then {money(fu, c)} for each "
+            lines.append(f"{label} - {money(p, c)} for the first ask on a subject, then metered usage for each "
                          f"follow-up on the same subject")
         elif shape == 'daily':
             daily = _price(price_fn, DAILY_KEY, DAILY_DEFAULT)
@@ -132,6 +133,8 @@ def drift(price_fn):
     price is the truth and the card already shows it."""
     out = []
     for key, dflt in DEFAULTS.items():
+        if dflt <= 0:
+            continue    # metered, never a flat price
         live = _price(price_fn, key, dflt)
         if abs(live - dflt) > 0.009:
             out.append((key, dflt, live))

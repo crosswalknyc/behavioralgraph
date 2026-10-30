@@ -20,10 +20,12 @@ should have charged her $100"):
                         a cohort within the audience, anything that
                         reasons over the rows into a new artifact.
                         $100 for the first custom ask on a subject in
-                        a thread, $50 for each follow-up on the same
-                        subject (Jenna, same day).
+                        a thread; a follow-up on the same subject is
+                        metered, never priced (Jenna 2026-10-30).
   SIZING                $100 (the derived-read row).
-  VIEWERSHIP            $500 per year of window (its own row).
+  VIEWERSHIP            $100 for the first ask on a subject, whatever
+                        the window; follow-ups on it are metered
+                        (Jenna 2026-10-30; was $500 per year).
   BREAKDOWN             $100 (a delivered figure split by a dimension).
 
 One offer shape everywhere (Jenna, verbatim: "just say something like
@@ -66,8 +68,10 @@ CUSTOM_FAMILY = frozenset(('report', 'custom', 'overlap', 'path', 'list', 'cross
 # None for it so neither service_turn nor work_gate can offer it.
 NEVER_PRICED = frozenset(('where_watched',))
 CUSTOM_KEY, CUSTOM_DEFAULT = 'panel_report', 100.0
-FOLLOWUP_KEY, FOLLOWUP_DEFAULT = 'panel_report_followup', 50.0
+# 2026-10-30 (Jenna): follow-ups on a subject already paid for in the thread are metered, not priced (custom and viewership alike)
+FOLLOWUP_KEY, FOLLOWUP_DEFAULT = 'panel_report_followup', 0.0
 CUSTOM_PULL_TYPE, FOLLOWUP_PULL_TYPE = 'Panel Report', 'Panel Report Follow-up'
+METERED_LABEL = 'metered'
 
 _ACCEPT_WORDS_RX = re.compile(
     r"^\W*(?:approve\b.*|accept\b.*|yes|yeah|yep|ok(?:ay)?|sure|run it|go ahead|do it|charge (?:it|me)|"
@@ -428,7 +432,7 @@ _VIDEO_VERB_RX = re.compile(r"\b(?:watch(?:ed|es|ing)?|stream(?:ed|s|ing)?|view(
 
 def _viewership_ask(text):
     """A count of people who watched or streamed a title is the
-    Viewership read ($500 a year), whatever else rides the sentence
+    Viewership read ($100 first on a subject), whatever else rides the sentence
     (Marie's "how many people watched the series and what other
     platforms did those viewers also watch"). A readership or
     listenership count inside an overlap ask (Jay's Lore Olympus) is a
@@ -461,7 +465,7 @@ def classify(text, history=None, ctx=None):
     if is_where_watched(t, history, ctx):
         return None     # the free lane (service.py 'where_watched'), never a quote
     if _viewership_ask(t):
-        return {'kind': 'viewership', 'via': 'generate', 'usd': 500, 'same_frame': False,
+        return {'kind': 'viewership', 'via': 'generate', 'usd': 100, 'same_frame': False,
                 'frame': 'viewership', 'subject': ''}
     if _cross_ask(t):
         return {'kind': 'cross', 'via': 'service', 'usd': 100, 'same_frame': False,
@@ -534,9 +538,9 @@ def _label(usd, username=None):
 
 def custom_price(username=None, history=None, subject=''):
     """The custom-ask price for this thread: the first custom ask on a
-    subject is panel_report ($100), every later one on the same subject
-    is panel_report_followup ($50). Live prices from the billing panel
-    through the seat's company rates."""
+    subject is panel_report ($100); every later one on the same subject
+    is metered (Jenna 2026-10-30), no quote and no flat charge. Live
+    prices from the billing panel through the seat's company rates."""
     followup = bool(subject) and prior_custom_on_subject(history, subject)
     if not followup and history:
         # the ask stayed on the thread's subject (a cohort within it, a
@@ -554,11 +558,13 @@ def custom_price(username=None, history=None, subject=''):
                     break
         except Exception:
             pass
-    key = FOLLOWUP_KEY if followup else CUSTOM_KEY
-    usd = _usd(key, FOLLOWUP_DEFAULT if followup else CUSTOM_DEFAULT, username)
+    if followup:
+        # metered: no quote, no flat charge; the answer's own usage bills on the Prometheus meter
+        return {'label': METERED_LABEL, 'credits': 0, 'pull_type': FOLLOWUP_PULL_TYPE,
+                'tool_key': FOLLOWUP_KEY, 'usd': 0.0, 'followup': True, 'metered': True}
+    usd = _usd(CUSTOM_KEY, CUSTOM_DEFAULT, username)
     return {'label': _label(usd, username), 'credits': 1,
-            'pull_type': FOLLOWUP_PULL_TYPE if followup else CUSTOM_PULL_TYPE,
-            'tool_key': key, 'usd': usd, 'followup': followup}
+            'pull_type': CUSTOM_PULL_TYPE, 'tool_key': CUSTOM_KEY, 'usd': usd, 'followup': False, 'metered': False}
 
 
 def _derived_price(username=None):
@@ -1021,19 +1027,25 @@ def offer_or_charge(*, text, subject, kind, panel_confirm, username, user=None,
     ('error', payload) when the seat cannot cover it.
     ``kind``: report | custom | path | overlap | list |
     cross | sizing | derived | viewership. The price for the custom
-    family is the thread's: $100 first on this subject, $50 after.
+    family and viewership is the thread's: $100 first on this subject,
+    metered after (Jenna 2026-10-30).
     """
     kind = str(kind or 'report')
     subj = str(subject or '').strip() or 'that subject'
     staff = staff_user(user) or seat_is_free(user, username, host)
+    if kind not in ('sizing', 'derived') and custom_price(username, history, subj).get('metered'):
+        # a follow-up on a subject this thread already paid for (custom or viewership): metered, never quoted (Jenna 2026-10-30)
+        return 'charged', {'user': username, 'credits': 0, 'subject': subj, 'kind': kind,
+                           'pull_type': FOLLOWUP_PULL_TYPE, 'label': METERED_LABEL, 'metered': True}
     if kind == 'viewership':
         try:
             from prometheus.legacy.watch import _pm_viewership_read_price
             vw = _pm_viewership_read_price(text, username)
         except Exception:
             vw = None
-        label, credits, qty = (vw if vw else (_label(_usd('viewership_read', 500.0, username), username), 5, int(years or 1)))
-        pull_type = 'Viewership Read'
+        # one flat price for the first viewership read on a subject, whatever the window (Jenna 2026-10-30)
+        label, credits = (vw[0], vw[1]) if vw else (_label(_usd('viewership_read', 100.0, username), username), 1)
+        qty, pull_type = 1, 'Viewership Read'
     elif kind in ('sizing', 'derived'):
         label, credits = _derived_price(username)
         qty, pull_type = 1, 'Derived Read'
@@ -1051,7 +1063,7 @@ def offer_or_charge(*, text, subject, kind, panel_confirm, username, user=None,
     rc = panel_confirm.get('resume_charge')
     if isinstance(rc, dict):
         return 'charged', rc
-    desc = charge_description(kind, subj, text, dimension=dimension, years=qty)
+    desc = charge_description(kind, subj, text, dimension=dimension, years=int(years or 1))
     if staff:
         # Crosswalk staff see the offer and are never billed
         return 'charged', {'user': username, 'credits': 0, 'subject': subj, 'kind': kind,

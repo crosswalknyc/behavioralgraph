@@ -110,7 +110,7 @@ OFFER_OUTCOMES = frozenset({'panel_offer'})
 
 # Credit prices the replay child answers with (the live table lives in
 # wallet.DEFAULT_PRICING; only the shape matters here).
-_CREDIT_PRICES = {'derived_read': 1, 'viewership_read': 5, 'panel_report': 5}
+_CREDIT_PRICES = {'derived_read': 1, 'viewership_read': 1, 'panel_report': 1}
 
 # Library snapshot (2026-10-13). The nightly runners write the Select
 # Profile library (names + keys, no file bodies) to this path before a

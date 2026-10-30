@@ -626,21 +626,23 @@ def _pm_window_years(text):
 
 def _pm_viewership_read_price(text, username=None):
     """(label, credits, years) for a viewership-over-time ask in the
-    seat's currency, or None when the ask is not one. 500 per year
-    (live table key viewership_read), symbol from the seat."""
+    seat's currency, or None when the ask is not one. One flat price for
+    the first ask on a subject whatever the window (Jenna 2026-10-30:
+    $100, live table key viewership_read; was 500 per year); the years
+    ride along for the offer's wording only."""
     if not _pm_is_viewership_ask(text):
         return None
     years = _pm_window_years(text)
-    each = _pm_usd('viewership_read', 500.0, username=username)
+    each = _pm_usd('viewership_read', 100.0, username=username)
     try:
-        each = float(each or 500.0)
+        each = float(each or 100.0)
     except (TypeError, ValueError):
-        each = 500.0
+        each = 100.0
     try:
-        credits_each = int(_H.get_credit_cost('viewership_read') or 5)
+        credits_each = int(_H.get_credit_cost('viewership_read') or 1)
     except Exception:
-        credits_each = 5
-    return _pm_usd_label(each * years, username), max(credits_each, 1) * years, years
+        credits_each = 1
+    return _pm_usd_label(each, username), max(credits_each, 1), years
 
 
 def _pm_derived_read_price(username=None):
