@@ -1554,6 +1554,52 @@ def _compare_value(items: dict, fold: dict, key: str, platform: str):
     return v if isinstance(v, (int, float)) and v > 0 else None
 
 
+# Combined lines: platform '*' asks for one title across every platform.
+# Book stores word the same title differently ("The Hollow: A Harry Bosch
+# Novel" on Amazon, "The Hollow" on Apple), and each wording is its own
+# entry carrying small off-chart readings for the stores it isn't charted
+# on. A combined book line groups that day's charted wordings by core
+# title + author surname, takes each platform's largest reading across the
+# group (the charted one) and sums the platforms. Other kinds carry an
+# all-platform figure on the entry itself.
+_COMPARE_ALL = '*'
+_COMPARE_BOOK_CHARTS = (('book_charts', ('amazon', 'apple', 'audible')),
+                        ('libby_trends', ('ebook', 'audiobook')))
+_CORE_TITLE_DROP_RE = re.compile(r'\([^)]*\)|\[[^\]]*\]')
+_CORE_TITLE_TAIL_RE = re.compile(r'\b(?:a )?novel$')
+
+
+def _compare_core_title(title: str) -> str:
+    t = _CORE_TITLE_DROP_RE.sub(' ', str(title or '').lower()).split(':', 1)[0]
+    t = re.sub(r'[^a-z0-9]+', ' ', t).strip()
+    t = _CORE_TITLE_TAIL_RE.sub('', t).strip()
+    return re.sub(r'^(?:the|a|an) ', '', t)
+
+
+def _compare_book_keymap(d_iso: str) -> dict:
+    """{book est_key: identity} for every row charted in that archive
+    day's book and Libby charts."""
+    out: dict = {}
+    for source, slugs in _COMPARE_BOOK_CHARTS:
+        snap = _read_snapshot(source, asof=d_iso) or {}
+        for slug in slugs:
+            for it in ((snap.get('sources') or {}).get(slug) or {}).get('items') or []:
+                title = str(it.get('title') or '').strip()
+                artist = str(it.get('artist') or it.get('author') or '').strip()
+                core = _compare_core_title(title)
+                if not title or not core:
+                    continue
+                surname = (re.sub(r'[^a-z ]+', ' ', artist.lower()).split() or [''])[-1]
+                out['book:' + _cp_normalize(f'{title} {artist}')] = f'book:{core}|{surname}'
+    return out
+
+
+def _compare_parts(entry: Optional[dict]) -> dict:
+    return {p: per['us_estimate'] for p, per in ((entry or {}).get('by_platform') or {}).items()
+            if isinstance(per, dict) and isinstance(per.get('us_estimate'), (int, float))
+            and per['us_estimate'] > 0}
+
+
 def compare_audience(series: list, days: int = 30,
                      asof: Optional[str] = None) -> dict:
     """Daily US audience for each {key, platform} over the last `days`
@@ -1587,26 +1633,52 @@ def compare_audience(series: list, days: int = 30,
     with _COMPARE_CACHE_LOCK:
         if len(_COMPARE_CACHE) > 200000:
             _COMPARE_CACHE.clear()
+        need_groups = any(p == _COMPARE_ALL and k.startswith('book:') for k, p in wanted)
         need = [d for d in archive
-                if any(not fresh(_COMPARE_CACHE.get((d,) + kp)) for kp in wanted)]
+                if any(not fresh(_COMPARE_CACHE.get((d,) + kp)) for kp in wanted)
+                or (need_groups and not fresh(_COMPARE_CACHE.get((d, '#book_groups'))))]
 
     def fetch(d_iso: str):
         day = _read_stream_day(d_iso)
         items = day.get('items') if isinstance(day, dict) else None
         if not isinstance(items, dict):
-            return d_iso, None, None
+            return d_iso, None, None, None
         measured = str(day.get('target_date') or '')[:10] or None
         fold = _build_day_fold_index(items)
-        return d_iso, measured, {kp: _compare_value(items, fold, *kp) for kp in wanted}
+        out = {}
+        for kp in wanted:
+            if kp[1] != _COMPARE_ALL:
+                out[kp] = (_compare_value(items, fold, *kp), None)
+                continue
+            entry = _resolve_day_entry(items, fold, kp[0])
+            parts = _compare_parts(entry)
+            total = entry.get('us_estimate') if isinstance(entry, dict) else None
+            if kp[0].startswith('book:') and parts:
+                total = sum(parts.values())
+            out[kp] = ((total if isinstance(total, (int, float)) and total > 0 else None),
+                       parts or None)
+        groups = None
+        if any(p == _COMPARE_ALL and k.startswith('book:') for k, p in wanted):
+            keymap = _compare_book_keymap(d_iso)
+            byident: dict = {}
+            for k, ident in keymap.items():
+                slot = byident.setdefault(ident, {})
+                for plat, v in _compare_parts(items.get(k)).items():
+                    if v > slot.get(plat, 0):
+                        slot[plat] = v
+            groups = (keymap, byident)
+        return d_iso, measured, out, groups
 
     if need and wanted:
         with ThreadPoolExecutor(max_workers=3, thread_name_prefix='tiq-compare') as ex:
-            for d_iso, measured, vals in ex.map(fetch, need):
+            for d_iso, measured, vals, groups in ex.map(fetch, need):
                 if vals is None:
                     continue
                 with _COMPARE_CACHE_LOCK:
-                    for kp, v in vals.items():
-                        _COMPARE_CACHE[(d_iso,) + kp] = (v, measured, now)
+                    for kp, (v, parts) in vals.items():
+                        _COMPARE_CACHE[(d_iso,) + kp] = (v, measured, now, parts)
+                    if groups is not None:
+                        _COMPARE_CACHE[(d_iso, '#book_groups')] = (groups, measured, now)
 
     with _COMPARE_CACHE_LOCK:
         read = lambda d: any(_COMPARE_CACHE.get((d,) + kp) for kp in wanted)
@@ -1618,13 +1690,32 @@ def compare_audience(series: list, days: int = 30,
                         if _COMPARE_CACHE.get((d,) + kp)), None)
             dates.append((hit and hit[1]) or
                          (date.fromisoformat(d) - timedelta(days=1)).isoformat())
+        groups = {d: (_COMPARE_CACHE.get((d, '#book_groups')) or (None,))[0] for d in window}
         out = []
         for kp in wanted:
-            vals = []
+            combined = kp[1] == _COMPARE_ALL
+            ident = None
+            if combined and kp[0].startswith('book:'):
+                ident = next((g[0][kp[0]] for d in reversed(window)
+                              for g in [groups.get(d)] if g and kp[0] in g[0]), None)
+            vals, parts = [], []
             for d in window:
                 hit = _COMPARE_CACHE.get((d,) + kp)
-                vals.append(hit[0] if hit else None)
-            out.append({'key': kp[0], 'platform': kp[1], 'values': vals})
+                v = hit[0] if hit else None
+                pt = dict((hit[3] if hit and len(hit) > 3 else None) or {})
+                g = groups.get(d)
+                if ident and g and ident in g[1]:
+                    for plat, gv in g[1][ident].items():
+                        if gv > pt.get(plat, 0):
+                            pt[plat] = gv
+                    v = sum(pt.values()) or None
+                vals.append(v)
+                parts.append(pt or None)
+            row = {'key': kp[0], 'platform': kp[1], 'values': vals}
+            if combined:
+                row['parts'] = parts
+                row['identity'] = ident or _fold_stream_key(kp[0])
+            out.append(row)
     return {'dates': dates, 'series': out}
 
 

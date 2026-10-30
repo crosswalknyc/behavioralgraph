@@ -31833,6 +31833,7 @@ https://www.instagram.com/p/..."></textarea>
             .tiq-cmp-tip em { font-style: normal; color: #64748b; }
             .tiq-cmp-tip b { margin-left: auto; padding-left: 10px; color: #fff; }
             .tiq-cmp-legend { display: grid; gap: 6px; margin-top: 12px; }
+            .tiq-cmp-mode { display: inline-flex; gap: 6px; margin-left: 14px; padding-left: 14px; border-left: 1px solid rgba(255,255,255,0.14); }
             .tiq-cmp-leg-avg i { width: 16px; height: 3px; border-radius: 0; }
             .tiq-cmp-tip div.avg { border-top: 1px solid rgba(255,255,255,0.14); margin-top: 3px; padding-top: 4px; color: #fff; font-weight: 600; }
             .tiq-cmp-leg { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 8px; background: rgba(255,255,255,0.03); font-size: 0.82rem; }
@@ -76312,8 +76313,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
 
         window.tiqCompareRemove = function(id) {
             var list = _tiqCmpList();
-            var at = list.findIndex(function(c) { return c.id === id; });
-            if (at >= 0) list.splice(at, 1);
+            String(id).split('||').forEach(function(one) {
+                var at = list.findIndex(function(c) { return c.id === one; });
+                if (at >= 0) list.splice(at, 1);
+            });
             _tiqCmpSave();
             if (document.getElementById('tiqCmpModal')) {
                 if (list.length) _tiqCmpLoad(); else tiqCompareClose();
@@ -76379,11 +76382,15 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 return '<button type="button" data-days="' + d + '" class="' + (d === days ? 'on' : '') + '"' +
                        ' onclick="tiqCompareDays(' + d + ')">' + d + 'D</button>';
             }).join('');
+            var mode = _tiqCmpMode();
+            btns += '<span class="tiq-cmp-mode">' + [['split', 'By platform'], ['all', 'All platforms']].map(function(m) {
+                return '<button type="button" data-mode="' + m[0] + '" class="' + (m[0] === mode ? 'on' : '') + '"' +
+                       ' onclick="tiqCompareMode(\'' + m[0] + '\')">' + m[1] + '</button>';
+            }).join('') + '</span>';
             ov.innerHTML = '<div class="tiq-modal tiq-cmp-modal">' +
                 '<button class="tiq-close" onclick="tiqCompareClose()" title="Close">\u00d7</button>' +
                 '<h3>Compare trajectories</h3>' +
-                '<div class="tiq-modal-sub">Estimated daily US audience, one line per title per platform. ' +
-                'Every platform is on the same scale, so lines can be read against each other.</div>' +
+                '<div class="tiq-modal-sub" id="tiqCmpSub">' + _tiqCmpSubText() + '</div>' +
                 '<div class="tiq-cmp-days">' + btns + '</div>' +
                 '<div class="tiq-cmp-chart" id="tiqCmpChart"><div class="tiq-cmp-msg">Loading daily history\u2026</div></div>' +
                 '<div class="tiq-cmp-legend" id="tiqCmpLegend"></div>' +
@@ -76393,9 +76400,68 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             _tiqCmpLoad();
         };
 
+        var _TIQ_CMP_MODE_STORE = 'tiq_compare_mode_v1';
+        function _tiqCmpMode() {
+            var t = window.__trendsIQ;
+            if (!t.compareMode) {
+                try { t.compareMode = localStorage.getItem(_TIQ_CMP_MODE_STORE) || 'split'; } catch (e) { t.compareMode = 'split'; }
+            }
+            return t.compareMode === 'all' ? 'all' : 'split';
+        }
+        function _tiqCmpSubText() {
+            return _tiqCmpMode() === 'all'
+                ? 'Estimated daily US audience, one line per title with every platform added together. ' +
+                  'Picks of the same title from different platforms merge into one line.'
+                : 'Estimated daily US audience, one line per title per platform. ' +
+                  'Every platform is on the same scale, so lines can be read against each other.';
+        }
+        window.tiqCompareMode = function(m) {
+            window.__trendsIQ.compareMode = (m === 'all') ? 'all' : 'split';
+            try { localStorage.setItem(_TIQ_CMP_MODE_STORE, window.__trendsIQ.compareMode); } catch (e) {}
+            document.querySelectorAll('#tiqCmpModal .tiq-cmp-mode button').forEach(function(b) {
+                b.classList.toggle('on', b.getAttribute('data-mode') === window.__trendsIQ.compareMode);
+            });
+            var sub = document.getElementById('tiqCmpSub');
+            if (sub) sub.textContent = _tiqCmpSubText();
+            _tiqCmpLoad();
+        };
+        var _TIQ_CMP_PLAT_LABEL = {
+            amazon: 'Amazon', apple: 'Apple', audible: 'Audible', libby_ebook: 'Libby eBooks',
+            libby_audio: 'Libby audiobooks', netflix: 'Netflix', max: 'Max', hbomax: 'Max', hulu: 'Hulu',
+            disney: 'Disney+', disneyplus: 'Disney+', peacock: 'Peacock', paramount: 'Paramount+',
+            prime: 'Prime Video', primevideo: 'Prime Video', starz: 'Starz', tubi: 'Tubi',
+            spotify: 'Spotify', youtube: 'YouTube', youtube_podcasts: 'YouTube', apple_music: 'Apple Music'
+        };
+        function _tiqCmpPlatLabel(slug) {
+            return _TIQ_CMP_PLAT_LABEL[slug] || String(slug || '').replace(/_/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); });
+        }
+        // One line per title: picks are requested as platform '*' and
+        // lines the backend resolves to the same title identity merge.
+        function _tiqCmpCombine(list, series) {
+            var outList = [], outSeries = [], at = {};
+            series.forEach(function(sr, i) {
+                var c = list[i];
+                if (!c) return;
+                var ident = sr.identity || sr.key;
+                if (ident in at) {
+                    outList[at[ident]].id += '||' + c.id;
+                    return;
+                }
+                at[ident] = outList.length;
+                var parts = (sr.parts || []).filter(function(p) { return p; });
+                var lastParts = parts.length ? parts[parts.length - 1] : {};
+                var brk = Object.keys(lastParts).sort(function(a, b) { return lastParts[b] - lastParts[a]; })
+                    .map(function(k) { return _tiqCmpPlatLabel(k) + ' ' + _tiqCompactNum(lastParts[k]); }).join(' \u00b7 ');
+                outList.push({ id: c.id, title: c.title, where: 'All platforms',
+                               unit: brk || 'daily US audience', combined: true });
+                outSeries.push(sr);
+            });
+            return { list: outList, series: outSeries };
+        }
+
         window.tiqCompareDays = function(d) {
             window.__trendsIQ.compareDays = d;
-            document.querySelectorAll('#tiqCmpModal .tiq-cmp-days button').forEach(function(b) {
+            document.querySelectorAll('#tiqCmpModal .tiq-cmp-days button[data-days]').forEach(function(b) {
                 b.classList.toggle('on', Number(b.getAttribute('data-days')) === d);
             });
             _tiqCmpLoad();
@@ -76403,6 +76469,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
 
         function _tiqCmpLoad() {
             var list = _tiqCmpList().slice();
+            var all = _tiqCmpMode() === 'all';
             var days = window.__trendsIQ.compareDays || 30;
             var box = document.getElementById('tiqCmpChart');
             if (!box) return;
@@ -76412,11 +76479,16 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 method: 'POST',
                 credentials: 'same-origin',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ days: days, series: list.map(function(c) { return { key: c.key, platform: c.platform }; }) })
+                body: JSON.stringify({ days: days, series: list.map(function(c) { return { key: c.key, platform: all ? '*' : c.platform }; }) })
             }).then(function(r) { return r.json(); }).then(function(res) {
                 if (seq !== window.__trendsIQ._cmpSeq) return;
                 if (!res || !res.success) throw new Error((res && res.error) || 'failed');
-                _tiqCmpDraw(list, res.dates || [], res.series || []);
+                if (all) {
+                    var cm = _tiqCmpCombine(list, res.series || []);
+                    _tiqCmpDraw(cm.list, res.dates || [], cm.series);
+                } else {
+                    _tiqCmpDraw(list, res.dates || [], res.series || []);
+                }
             }).catch(function(e) {
                 if (seq !== window.__trendsIQ._cmpSeq) return;
                 var b = document.getElementById('tiqCmpChart');
@@ -76519,7 +76591,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var col = _TIQ_CMP_COLORS[si % _TIQ_CMP_COLORS.length];
                 return '<div class="tiq-cmp-leg">' +
                     '<i style="background:' + col + '"></i>' +
-                    '<div class="nm"><strong>' + _tiqEsc(c.title) + '</strong><span>' + _tiqEsc(c.where) + (c.unit ? ' \u00b7 ' + _tiqEsc(c.unit) : '') + '</span></div>' +
+                    '<div class="nm"><strong>' + _tiqEsc(c.title) + '</strong><span>' + _tiqEsc(c.where) + (c.unit ? (c.combined ? ': ' : ' \u00b7 ') + _tiqEsc(c.unit) : '') + '</span></div>' +
                     '<div class="st">' + (last != null
                         ? '<b>' + _tiqCompactNum(last) + '</b> latest \u00b7 ' + _tiqCompactNum(avg) + ' avg' +
                           (chg != null ? ' \u00b7 <span class="' + (chg > 0 ? 'up' : chg < 0 ? 'down' : '') + '">' + (chg > 0 ? '+' : '') + chg + '%</span>' : '') +
