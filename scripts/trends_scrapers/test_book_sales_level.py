@@ -62,5 +62,19 @@ class OffChartTests(unittest.TestCase):
         self.assertEqual(items['song:old hit someone']['by_platform']['apple']['us_estimate'], 90000)
 
 
+class LibbyTests(unittest.TestCase):
+    def test_libby_pool_and_magazines_untouched(self):
+        items = {'book:mag x': {'kind': 'book', 'by_platform': {'libby_magazine': {'us_estimate': 77}}}}
+        libby = {'sources': {
+            'ebook': {'items': [{'title': 'Whistler', 'artist': 'Ann Patchett'}]},
+            'audiobook': {'items': [{'title': 'Whistler', 'artist': 'Ann Patchett'}]},
+            'magazine': {'items': [{'title': 'Mag', 'artist': 'X'}]}}}
+        bsl.level(items, libby, '2026-10-29', key_fn=_key, panels=bsl.LIBBY_PANELS)
+        bp = items['book:whistler ann patchett']['by_platform']
+        self.assertAlmostEqual(bp['libby_ebook']['us_estimate'] / (1_900_000 * 0.77 * 0.0033), 1, delta=0.035)
+        self.assertAlmostEqual(bp['libby_audio']['us_estimate'] / (1_900_000 * 0.23 * 0.0033), 1, delta=0.035)
+        self.assertEqual(items['book:mag x']['by_platform']['libby_magazine']['us_estimate'], 77)
+
+
 if __name__ == '__main__':
     unittest.main()

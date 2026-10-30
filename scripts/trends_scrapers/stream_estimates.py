@@ -2121,7 +2121,7 @@ _PROMPT_HEADER = (
     "reach.\n"
     "     Books: US book sales ~3M a day across Amazon, Apple Books and "
     "Audible combined (print + ebook + audiobook); US Audible daily listeners ~3-4M; US daily public-"
-    "library digital borrowers ~700K-1M (OverDrive). A single title's "
+    "library digital borrows ~1.9M a day (ebook + audiobook). A single title's "
     "daily US buyers/borrowers must sit INSIDE those aggregate daily "
     "pools.\n"
     "  If your per-platform daily estimate exceeds a plausible "
@@ -2468,29 +2468,20 @@ _BOOK_PLATFORMS = [
      'label': 'Libby Popular eBooks (US public-library projection)',
      'ceiling': 60_000,
      'anchors': (
-         "OverDrive/Libby powers ~90% of US public library digital "
-         "circulation. Total US public library digital circulation = "
-         "~600M annual loans (OverDrive 2024-2025 press releases) = "
-         "~11.5M weekly. Top ~5K digital library titles get most "
-         "loans; #1 title ~15-40K US weekly library borrows; top-10 "
-         "5-15K; top-100 1-4K. THE RAW SIGNAL IS LA COUNTY LIBRARY "
-         "HOLDS - LA County ~10M residents = ~3-4% of US library-"
-         "served population. If a book has N holds at LA County, "
-         "the US weekly borrow rate is roughly N * 25-35x, but "
-         "cross-reference against OverDrive's National Digital Book "
-         "Awards / weekly bestsellers press when available. Bias LOW."
+         "US public-library digital borrows run about 1.9M a day "
+         "(ebook + audiobook); ebooks take about 77%, roughly 1.46M a "
+         "day. The chart's #1 takes about 0.33% of that: near 4.8K a "
+         "day, #10 near 1.6K, #50 near 350, #100 near 140. The raw "
+         "signal is LA County Library holds; it orders the chart, the "
+         "pool sets the level, applied by chart position after research."
      )},
     {'key': 'libby_audio',
      'label': 'Libby Popular Audiobooks (US public-library projection)',
      'ceiling': 40_000,
      'anchors': (
-         "US public library audiobook digital circulation = ~140M "
-         "annual loans (OverDrive 2025) = ~2.7M weekly. Top #1 "
-         "audiobook ~8-25K US weekly library borrows; top-10 2-8K; "
-         "top-100 <1K. RAW SIGNAL IS LA COUNTY LIBRARY HOLDS - "
-         "project up ~25-35x (LA County share of US library "
-         "audiobook demand), cross-check against OverDrive/AudioFile "
-         "quarterly reports when available. Bias LOW."
+         "Audiobooks take about 23% of the 1.9M daily US public-library "
+         "digital borrows, roughly 437K a day. #1 near 1.4K a day, #10 "
+         "near 500, #50 near 105, #100 near 42."
      )},
     {'key': 'libby_magazine',
      'label': 'Libby Popular Magazines (US public-library projection)',
@@ -8696,12 +8687,16 @@ def fetch(only: Optional[set[str]] = None,
     # in the same shape.
     _finalize_published_charts(researched, target_date_iso)
 
-    # Amazon / Apple Books / Audible: the chart sets the order, the 3M
-    # daily US book-sales pool sets the level (book_sales_level.py).
+    # Amazon / Apple Books / Audible and Libby: the chart sets the order,
+    # the daily US pool sets the level (book_sales_level.py).
     try:
         from . import book_sales_level as _bsl
+        _bk = lambda t, a: 'book:' + _cp_normalize(f'{t} {a}')
         _nb = _bsl.level(researched, _read_snapshot('book_charts') or {},
-                          target_date_iso, key_fn=lambda t, a: 'book:' + _cp_normalize(f'{t} {a}'))
+                          target_date_iso, key_fn=_bk)
+        _nb |= _bsl.level(researched, _read_snapshot('libby_trends') or {},
+                           target_date_iso, key_fn=_bk,
+                           panels=_bsl.LIBBY_PANELS)
         logger.info("stream_estimates: %d book chart row(s) levelled to "
                      "the US sales pool for %s", len(_nb), target_date_iso)
     except Exception:
