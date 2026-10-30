@@ -31748,6 +31748,13 @@ https://www.instagram.com/p/..."></textarea>
             #trendsIQView .tiq-sheet-yearsort { font-family: inherit; font-size: 0.66rem; font-weight: 600; letter-spacing: 0.02em; text-transform: none; color: var(--text-primary); background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 1px 4px; margin-left: 0.35rem; cursor: pointer; vertical-align: middle; -webkit-appearance: none; -moz-appearance: none; appearance: none; width: 2.9rem; box-sizing: border-box; text-align: center; text-align-last: center; }
             #trendsIQView .tiq-sheet-yearsort option { background: var(--bg-card); color: var(--text-primary); text-transform: none; }
             #trendsIQView .tiq-sheet-row.tiq-genre-hidden { display: none !important; }
+            #trendsIQView .tiq-row.tiq-bgenre-hidden { display: none !important; }
+            #trendsIQView .tiq-bgenre-bar { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; }
+            #trendsIQView .tiq-bgenre-bar label { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-secondary); }
+            #trendsIQView .tiq-bgenre-select { width: auto !important; max-width: 320px; flex: 0 0 auto; font-family: inherit; font-size: 0.8rem; font-weight: 600; color: var(--text-primary); background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 4px 8px; cursor: pointer; }
+            #trendsIQView .tiq-bgenre-select option { background: var(--bg-card); color: var(--text-primary); }
+            #trendsIQView .tiq-bgenre-clear { font-family: inherit; font-size: 0.72rem; font-weight: 600; background: transparent; color: var(--text-secondary); border: 1px solid var(--border-color); border-radius: 6px; padding: 3px 8px; cursor: pointer; }
+            #trendsIQView .tiq-bgenre-empty { text-transform: none; letter-spacing: normal; font-weight: 400; font-size: 0.8rem; color: var(--text-secondary); padding: 10px 2px; }
             #trendsIQView .tiq-sheet-row.tiq-year-hidden { display: none !important; }
             #trendsIQView .tiq-sheet-all td.tiq-sheet-td-num:last-child, #trendsIQView .tiq-sheet-all th.tiq-sheet-th-num:last-child { padding-left: 4rem; }
             #trendsIQView .tiq-sheet-cardhead { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.35rem; }
@@ -72133,14 +72140,17 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
 
         var _TIQ_LIST_COLS = ['Tab', 'Section', 'Rank', 'Title', 'Author',
                               'US Audience', 'Audience Unit', 'Audience Change'];
-        function _tiqListRows(tabLabel, section, items, sorted, authorOf) {
+        function _tiqListRows(tabLabel, section, items, sorted, authorOf, keep) {
             var list = sorted ? _tiqSortByDisplayedEstimate(items || []) : (items || []);
-            return list.map(function(it, i) {
-                return _tiqChipCols(it.us_streams, {
+            var out = [];
+            list.forEach(function(it, i) {
+                if (keep && !keep(it)) return;
+                out.push(_tiqChipCols(it.us_streams, {
                     Tab: tabLabel, Section: section, Rank: i + 1,
                     Title: it.title || '', Author: authorOf(it) || ''
-                });
+                }));
             });
+            return out;
         }
 
         // Books: store cards, Libby cards, Goodreads, and the active
@@ -72154,19 +72164,19 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             ['amazon', 'apple', 'audible'].forEach(function(k) {
                 var s = books[k];
                 if (s && s.available && (s.items || []).length) {
-                    rows = rows.concat(_tiqListRows(tabLabel, s.label || k, s.items, true, byArtist));
+                    rows = rows.concat(_tiqListRows(tabLabel, s.label || k, s.items, true, byArtist, _tiqBookGenreKeep));
                 }
             });
             var libbyLabels = { ebook: 'Libby: eBooks', audiobook: 'Libby: Audiobooks', magazine: 'Libby: Magazines' };
             ['ebook', 'audiobook', 'magazine'].forEach(function(k) {
                 var s = libby[k];
                 if (s && s.available && (s.items || []).length) {
-                    rows = rows.concat(_tiqListRows(tabLabel, libbyLabels[k], s.items, true, byArtist));
+                    rows = rows.concat(_tiqListRows(tabLabel, libbyLabels[k], s.items, true, byArtist, _tiqBookGenreKeep));
                 }
             });
             var gr = books.goodreads_most_read;
             if (gr && gr.available && (gr.items || []).length) {
-                rows = rows.concat(_tiqListRows(tabLabel, 'Goodreads', gr.items, false, byAuthor));
+                rows = rows.concat(_tiqListRows(tabLabel, 'Goodreads', gr.items, false, byAuthor, _tiqBookGenreKeep));
             }
             var wpKeys = ['wattpad_hot', 'wattpad_originals', 'wattpad_romance',
                           'wattpad_teen_fiction', 'wattpad_fanfiction', 'wattpad_fantasy'];
@@ -72180,7 +72190,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var wp = books[wk] || {};
                 if (wp.available && (wp.items || []).length) {
                     rows = rows.concat(_tiqListRows(tabLabel, 'Wattpad - ' + (wpLabels[wk] || wk),
-                                                    wp.items, false, byAuthor));
+                                                    wp.items, false, byAuthor, _tiqBookGenreKeep));
                 }
             }
             return { cols: _TIQ_LIST_COLS, rows: rows };
@@ -74404,7 +74414,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     // / 'weekly US library borrows' / etc.) rides on us_streams.
                     var audience = _tiqAudienceChip(it.us_streams);
                     if (audience) meta += audience;
-                    return '<div class="tiq-row"><div class="tiq-rank">' + (i + 1) + '</div>' + img +
+                    return '<div class="tiq-row' + _tiqBookGenreRowAttrs(it) + '><div class="tiq-rank">' + (i + 1) + '</div>' + img +
                            '<div class="tiq-row-body">' +
                            '<div class="tiq-row-title">' + titleLine +
                            _tiqCrossPlatformBadge(it) +
@@ -74428,7 +74438,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     // Sub-copy under the card title was removed 2026-07-27
                     // per Jenna - the books tab now shows title + row
                     // list only, matching the podcast tab.
-                    body = '<div class="tiq-headline-list" style="max-height:520px;overflow-y:auto;">' +
+                    body = _tiqBookGenreEmptyNote(items) +
+                           '<div class="tiq-headline-list" style="max-height:520px;overflow-y:auto;">' +
                            rowsFor(items, sourceKind, sourceSlug) +
                            '</div>';
                 }
@@ -74473,7 +74484,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                               '<div>' + _tiqEsc(_grPanel.sub || 'Warming up.') + '</div>' +
                               '</div>';
                 } else {
-                    _grBody = '<div class="tiq-headline-list" style="max-height:520px;overflow-y:auto;">' +
+                    _grBody = _tiqBookGenreEmptyNote(_grItems) +
+                              '<div class="tiq-headline-list" style="max-height:520px;overflow-y:auto;">' +
                               _grItems.map(function(it, i) {
                                   var img = _tiqPosterCell(it.image || it.cover_url, it.title);
                                   var storyUrl = it.book_url || it.url;
@@ -74510,7 +74522,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                                   }
                                   var audience = _tiqAudienceChip(it.us_streams);
                                   if (audience) meta += audience;
-                                  return '<div class="tiq-row"><div class="tiq-rank">' + (i + 1) + '</div>' + img +
+                                  return '<div class="tiq-row' + _tiqBookGenreRowAttrs(it) + '><div class="tiq-rank">' + (i + 1) + '</div>' + img +
                                          '<div class="tiq-row-body">' +
                                          '<div class="tiq-row-title">' + titleLine +
                                          _tiqCrossPlatformBadge(it) +
@@ -74602,7 +74614,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         }
                         var audience = _tiqAudienceChip(it.us_streams);
                         if (audience) meta += audience;
-                        return '<div class="tiq-row"><div class="tiq-rank">' + (i + 1) + '</div>' + img +
+                        return '<div class="tiq-row' + _tiqBookGenreRowAttrs(it) + '><div class="tiq-rank">' + (i + 1) + '</div>' + img +
                                '<div class="tiq-row-body">' +
                                '<div class="tiq-row-title">' + titleLine +
                                _tiqCrossPlatformBadge(it) +
@@ -74623,7 +74635,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                              '<div>' + _tiqEsc(wpPanel.sub || 'Warming up.') + '</div>' +
                              '</div>';
                 } else {
-                    wpBody = '<div class="tiq-headline-list" style="max-height:520px;overflow-y:auto;">' +
+                    wpBody = _tiqBookGenreEmptyNote(wpItems) +
+                             '<div class="tiq-headline-list" style="max-height:520px;overflow-y:auto;">' +
                              wpRowsFor(wpItems, activeWp) +
                              '</div>';
                 }
@@ -74636,10 +74649,72 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     '</div>';
             }
 
-            return '<div class="tiq-cards-grid" style="grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));">' +
+            var shownItems = [];
+            storePresent.forEach(function(k) { shownItems = shownItems.concat((sources[k] || {}).items || []); });
+            libbyPresent.forEach(function(k) { shownItems = shownItems.concat((libby[k] || {}).items || []); });
+            goodreadsPresent.forEach(function(k) { shownItems = shownItems.concat((sources[k] || {}).items || []); });
+            if (wattpadPresent.length) shownItems = shownItems.concat((sources[window.__trendsIQ.activeWattpad] || {}).items || []);
+            return _tiqBookGenreBar(shownItems) +
+                   '<div class="tiq-cards-grid" style="grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));">' +
                    storeCards + libbyCards + goodreadsHtml + wattpadHtml +
                    '</div>';
         }
+
+        // Books genre filter. One genre per row (`book_genre`, stamped by
+        // scripts/trends_scrapers/book_genres.py), applied to every card on
+        // the tab at once. Ranks stay as they are, so a filtered card reads
+        // 2, 9, 14 and stays comparable with the full chart.
+        function _tiqBookGenreOf(it) {
+            return (it && it.book_genre) || 'Unclassified';
+        }
+        function _tiqBookGenreActive() {
+            return (window.__trendsIQ && window.__trendsIQ.bookGenre) || '';
+        }
+        function _tiqBookGenreKeep(it) {
+            var g = _tiqBookGenreActive();
+            return !g || _tiqBookGenreOf(it) === g;
+        }
+        function _tiqBookGenreRowAttrs(it) {
+            return (_tiqBookGenreKeep(it) ? '"' : ' tiq-bgenre-hidden"') +
+                   ' data-book-genre="' + _tiqEsc(_tiqBookGenreOf(it)) + '"';
+        }
+        function _tiqBookGenreEmptyNote(items) {
+            var g = _tiqBookGenreActive();
+            if (!g || (items || []).some(_tiqBookGenreKeep)) return '';
+            return '<div class="tiq-bgenre-empty no-uppercase">No ' + _tiqEsc(g) + ' titles on this chart.</div>';
+        }
+        function _tiqBookGenreBar(items) {
+            var counts = {};
+            (items || []).forEach(function(it) {
+                var g = _tiqBookGenreOf(it);
+                counts[g] = (counts[g] || 0) + 1;
+            });
+            var names = Object.keys(counts).sort(function(a, b) {
+                if (a === 'Unclassified') return 1;
+                if (b === 'Unclassified') return -1;
+                return (counts[b] - counts[a]) || a.localeCompare(b);
+            });
+            var active = _tiqBookGenreActive();
+            if (active && !counts[active]) {
+                active = '';
+                window.__trendsIQ.bookGenre = '';
+            }
+            if (names.length < 2 && !active) return '';
+            var opts = '<option value="">All genres (' + (items || []).length + ')</option>' +
+                names.map(function(g) {
+                    return '<option value="' + _tiqEsc(g) + '"' + (g === active ? ' selected' : '') + '>' +
+                           _tiqEsc(g) + ' (' + counts[g] + ')</option>';
+                }).join('');
+            return '<div class="tiq-bgenre-bar"><label>Genre</label>' +
+                   '<select class="tiq-bgenre-select" onchange="tiqSetBookGenre(this.value)">' + opts + '</select>' +
+                   (active ? '<button type="button" class="tiq-bgenre-clear" onclick="tiqSetBookGenre(\'\')">Clear</button>' : '') +
+                   '</div>';
+        }
+        window.tiqSetBookGenre = function(g) {
+            window.__trendsIQ = window.__trendsIQ || {};
+            window.__trendsIQ.bookGenre = g || '';
+            if (typeof _tiqRepaintPanel === 'function') _tiqRepaintPanel('books');
+        };
 
         // Wattpad sub-pill handler. Flips the active rail and repaints
         // just the Wattpad body inside the Books panel. Preserves the

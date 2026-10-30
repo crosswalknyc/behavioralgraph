@@ -13316,6 +13316,13 @@ def _compute_view_impl(filters: dict, force_refresh: bool = False) -> dict:
         books_trending_merged[_wp_slug] = _wp_panel
     for _gr_slug, _gr_panel in (goodreads_trending or {}).items():
         books_trending_merged[_gr_slug] = _gr_panel
+    # One simple genre per row for the Books tab's genre filter. Reads
+    # a cache only; unresolved titles are looked up in the background.
+    try:
+        from scripts.trends_scrapers import book_genres as _book_genres
+        _book_genres.annotate(books_trending_merged, libby_trends)
+    except Exception as _bg_err:
+        logger.debug('trends_iq: book genres skipped (%s)', _bg_err)
     # Comics: same three-source (Amazon Comics / Apple Books Comics /
     # Libby Comics) card layout as the Books tab, but each row lands
     # in a comics-only platform anchor tier (see
