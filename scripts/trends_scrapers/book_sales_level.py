@@ -14,6 +14,10 @@ module owns the magnitude.
              #8 0.37, #10 0.34, #25 0.16, #50 0.073, #100 0.029),
              interpolated in log space, so the top 100 hold about 5%
 
+A book that holds a reading for one of the three stores but is not on
+that store's chart that day sits just under the chart: the level ten
+places past its last row, never above that row.
+
 Each row is salted +/-3% by title, store and day, never above the row
 over it, and never ends in 0. Deterministic: the same chart on
 the same day always gives the same numbers, which is what lets the
@@ -70,6 +74,21 @@ def chart_levels(platform: str, keys: list, day: str) -> list:
     return out
 
 
+OFF_CHART_STEP = 10
+
+
+def _set_block(entry: dict, platform: str, v: int) -> None:
+    blk = entry.setdefault('by_platform', {}).setdefault(platform, {})
+    for stale in ('method', 'derived_from'):
+        blk.pop(stale, None)
+    blk.update({'us_estimate': v,
+                'us_estimate_low': max(1, int(v * 0.8)),
+                'us_estimate_high': int(v * 1.25) + 1,
+                'confidence': 'medium',
+                'est_basis': 'sales_pool'})
+    entry['sales_level'] = LEVEL_TAG
+
+
 def _default_key(title: str, artist: str) -> str:
     from .stream_estimates import _cp_normalize
     return 'book:' + _cp_normalize(f'{title} {artist}')
@@ -109,16 +128,22 @@ def level(items: dict, book_charts: dict, day: str,
                     'unit_label': 'daily US readers', 'confidence': 'medium',
                     'by_platform': {},
                 }
-            bp = entry.setdefault('by_platform', {})
-            blk = bp.setdefault(platform, {})
-            for stale in ('method', 'derived_from'):
-                blk.pop(stale, None)
-            blk.update({'us_estimate': v,
-                        'us_estimate_low': max(1, int(v * 0.8)),
-                        'us_estimate_high': int(v * 1.25) + 1,
-                        'confidence': 'medium',
-                        'est_basis': 'sales_pool'})
-            entry['sales_level'] = LEVEL_TAG
+            _set_block(entry, platform, v)
+            touched.add(key)
+        if not keys:
+            continue
+        on_chart = set(keys)
+        floor_v = max(1, min(chart_levels(platform, keys, day)[-1],
+                             int(rank_level(platform, len(keys) + OFF_CHART_STEP))))
+        for key, entry in items.items():
+            if (key in on_chart or not isinstance(entry, dict)
+                    or entry.get('kind') != 'book'
+                    or platform not in (entry.get('by_platform') or {})):
+                continue
+            v = max(1, min(floor_v, int(round(floor_v * _salt(key, platform, day)))))
+            if v % 10 == 0 and v > 1:
+                v -= 1
+            _set_block(entry, platform, v)
             touched.add(key)
     for key in touched:
         entry = items[key]

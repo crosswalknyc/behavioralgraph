@@ -46,5 +46,21 @@ class LevelTests(unittest.TestCase):
         self.assertEqual(len(touched), 2)
 
 
+class OffChartTests(unittest.TestCase):
+    def test_book_off_the_chart_sits_under_it(self):
+        items = {'book:old hit someone': {'kind': 'book',
+                                          'by_platform': {'apple': {'us_estimate': 2213}}},
+                 'song:old hit someone': {'kind': 'song',
+                                          'by_platform': {'apple': {'us_estimate': 90000}}}}
+        charts = {'sources': {'apple': {'items': [
+            {'title': f'T{i}', 'artist': 'A'} for i in range(100)]}}}
+        bsl.level(items, charts, '2026-10-29', key_fn=_key)
+        last = items['book:t99 a']['by_platform']['apple']['us_estimate']
+        off = items['book:old hit someone']['by_platform']['apple']
+        self.assertLessEqual(off['us_estimate'], last)
+        self.assertEqual(off['est_basis'], 'sales_pool')
+        self.assertEqual(items['song:old hit someone']['by_platform']['apple']['us_estimate'], 90000)
+
+
 if __name__ == '__main__':
     unittest.main()
