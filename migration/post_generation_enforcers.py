@@ -3849,8 +3849,10 @@ def clamp_negative_bps(df, subject, verbose=True):
       * otherwise the row joins a salted geometric tail below the
         category's smallest positive value, in the category's own order,
         always positive and strictly decreasing.
-    Demographic categories are never touched here (their sums are owned
-    by the demo enforcers). Raw, Projection and Category Share are
+    Demographic categories and LOCATION keep their sum: a negative bucket
+    is lifted to a small salted positive value and the lift is taken back
+    out of the other buckets in proportion to their size (zero-sum), so a
+    demo still sums to 100. Raw, Projection and Category Share are
     recomputed through _set_bp. Idempotent. Returns (df, n_changes).
     """
     if df is None or len(df) == 0:
@@ -3881,8 +3883,11 @@ def clamp_negative_bps(df, subject, verbose=True):
         twins.setdefault(_norm_brand(str(df.at[idx, 'Value'] or '')), []).append((cat, v))
 
     n_changes = 0
+    sum_cats = set(DEPIN_DEMO_CATS) | {'LOCATION', 'PARENTAL STATUS',
+                                       'PARENTAL_STATUS', 'SEXUAL ORIENTATION',
+                                       'SEXUAL_ORIENTATION'}
     for cat in sorted(set(col_u)):
-        if cat in skip_cats:
+        if cat in DEPIN_META_CATS and cat != 'LOCATION':
             continue
         rows = []
         for idx in df.index[col_u == cat]:
@@ -3891,6 +3896,33 @@ def clamp_negative_bps(df, subject, verbose=True):
                 rows.append((idx, v))
         neg = [(i, v) for i, v in rows if v < 0]
         if not neg:
+            continue
+        if cat in sum_cats:
+            # Sum-preserving lift for demos and LOCATION.
+            lo, hi = (0.01, 0.10) if cat == 'LOCATION' else (0.05, 0.40)
+            lift = 0.0
+            for idx, old_v in neg:
+                brand = str(df.at[idx, 'Value'] or '').strip()
+                new_v = round(_jitter_for(subject, brand, salt='negative-bp-demo',
+                                          lo=lo, hi=hi), 4)
+                lift += new_v - old_v
+                if verbose:
+                    print(f"   ⛔ negative penetration [{cat}] {brand} "
+                          f"{old_v:.4f}% -> {new_v:.4f}% (sum preserved)")
+                _set_bp(df, idx, new_v, bp_col, cs_col, raw_col,
+                        proj_col, sample_size)
+                n_changes += 1
+            pos = [(i, v) for i, v in rows if v > 0]
+            pos_total = sum(v for _, v in pos)
+            if pos_total > lift > 0:
+                for idx, v in pos:
+                    new_v = round(v - lift * (v / pos_total), 4)
+                    if new_v <= 0:
+                        continue
+                    _set_bp(df, idx, new_v, bp_col, cs_col, raw_col,
+                            proj_col, sample_size)
+            continue
+        if cat in skip_cats:
             continue
         positives = sorted((v for _, v in rows if v > 0), reverse=True)
         tail_floor = positives[-1] if positives else 0.05
