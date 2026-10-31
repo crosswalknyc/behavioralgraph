@@ -109,6 +109,17 @@ def _fbp(v):
         return None
 
 
+def _parent_rows(df_parent, bp_col):
+    """(Column, Value, BP) triples off the parent frame as plain lists:
+    the same cells iterrows handed out (a missing cell reads 'nan', as
+    str(r.get(...)) did), a hundred times faster on Arrow strings."""
+    n = len(df_parent.index)
+    cols = df_parent["Column"].tolist() if "Column" in df_parent.columns else [""] * n
+    vals = df_parent["Value"].tolist() if "Value" in df_parent.columns else [""] * n
+    bps = df_parent[bp_col].tolist() if bp_col in df_parent.columns else [None] * n
+    return zip(cols, vals, bps)
+
+
 def _seed_jitter(seed: str, span: float) -> float:
     h = hashlib.md5(seed.encode()).hexdigest()
     u = int(h[:8], 16) / 0xFFFFFFFF
@@ -1242,11 +1253,15 @@ def enforce_avid_subset_coherence(df_avid, df_parent, subject: str,
     def _nkey(v):
         return _subset_norm.sub("", str(v or "").upper())
 
+    # Column lists, not iterrows (2026-10-30): on a 27K-row parent with
+    # Arrow-backed strings, iterrows built a Series per row and one pass
+    # of the ship-gate fix loop took ten minutes on the Godzilla Minus
+    # One avid. Same keys, same MAX-on-duplicates reading.
     parent_idx = {}
-    for _, r in df_parent.iterrows():
-        cu = str(r.get("Column", "")).strip().upper()
-        vn_k = _nkey(r.get("Value", ""))
-        bp = _fbp(r.get(p_bp_col))
+    for c, v, b in _parent_rows(df_parent, p_bp_col):
+        cu = str(c).strip().upper()
+        vn_k = _nkey(v)
+        bp = _fbp(b)
         if bp is None or not cu or not vn_k:
             continue
         k = (cu, vn_k)
@@ -1529,12 +1544,12 @@ def enforce_avid_ratio_collapse_guard(df_avid, df_parent, subject: str,
     if avid_sample and parent_sample and 0.0 < (avid_sample / parent_sample) < 1.0:
         sample_ratio = avid_sample / parent_sample
 
-    # Parent (CAT, VAL) -> bp
+    # Parent (CAT, VAL) -> bp (column lists, not iterrows; 2026-10-30)
     parent_idx = {}
-    for _, r in df_parent.iterrows():
-        cu = str(r.get("Column", "")).strip().upper()
-        vu = str(r.get("Value", "")).strip().upper()
-        bp = _fbp(r.get(p_bp_col))
+    for c, v, b in _parent_rows(df_parent, p_bp_col):
+        cu = str(c).strip().upper()
+        vu = str(v).strip().upper()
+        bp = _fbp(b)
         if bp is None or not cu or not vu:
             continue
         parent_idx[(cu, vu)] = bp
