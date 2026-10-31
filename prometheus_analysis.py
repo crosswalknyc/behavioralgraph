@@ -1278,6 +1278,8 @@ def _digest_shared_get(s3_client, bucket, s3_key, etag, norms_ver, want_name='')
         if isinstance(digest, str) and digest.strip() and isinstance(meta, dict):
             return digest, meta
     except Exception as _fx:
+        if is_missing_key_error(_fx):
+            return None            # a cache miss is the normal first read of a file, not a fault (2026-10-30)
         _faults.note('analysis', _fx)
     return None
 
@@ -2629,7 +2631,10 @@ def build_cross_module_block(s3_client, bucket, ctx, text,
                     lines.insert(0, line)
                     modules.insert(0, 'subscriber_iq')
                 except Exception as _fx:
-                    _faults.note('analysis', _fx)
+                    # a budget miss has its own label so the nightly can
+                    # see how often the Subscriber IQ context is dropped
+                    # (26 of them in three days, 2026-10-30)
+                    _faults.note('analysis.subiq_context_timeout' if 'Timeout' in type(_fx).__name__ else 'analysis', _fx)
         finally:
             ex.shutdown(wait=False)
     except Exception as _fx:

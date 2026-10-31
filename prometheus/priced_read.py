@@ -1017,6 +1017,72 @@ def charge_description(kind, subject, question='', dimension='', years=1):
     return f"Custom ask - {subj}" + (f": {q}" if q else '')
 
 
+# ---------------------------------------------------------------- the subject behind a price
+# Two weeks of the ask log (2026-10-19 to 10-30) carried quotes on "see
+# waht the", "high level on this", "Name of show", "Unique", "What About
+# Gender Age and International", "The 8,102,006 Mentions", "The Love
+# Hypotheis" ($500, three times, for a follow-up on the thread's own
+# read). A price is never put on words that do not name an audience, and
+# a misspelling of the thread's subject is the thread's subject.
+_JUNK_SUBJECT_WORDS = frozenset((
+    'unique', 'name', 'show', 'data', 'audience', 'sample', 'high', 'level', 'just', 'this', 'that', 'these',
+    'those', 'it', 'them', 'they', 'see', 'what', 'about', 'the', 'a', 'an', 'of', 'on', 'in', 'and', 'or',
+    'mentions', 'results', 'answer', 'numbers', 'figures', 'breakdown', 'trends', 'viewership', 'size',
+    'dma', 'county', 'counts', 'panelist', 'panelists', 'related', 'campaign', 'ad', 'read', 'pull', 'profile',
+    'waht', 'teh', 'hte', 'wht', 'ont', 'form', 'tihs', 'adn',
+))
+_QUESTION_LEAD_RX = re.compile(r"^(?:what|which|how|who|where|when|why|is|are|do|does|did|can|could|would|should)\b", re.I)
+
+
+def looks_like_subject(subject):
+    """True when the words could name an audience: a brand, a title, a
+    person, a place, a behavior phrase. False for question fragments,
+    figures, pronoun phrases, single generic nouns and typo salad."""
+    s = ' '.join(str(subject or '').split()).strip(" .,;:'\"")
+    if len(s) < 3:
+        return False
+    if _QUESTION_LEAD_RX.match(s):
+        return False
+    if re.search(r"\d{1,3}(?:,\d{3})+|\d{5,}", s):
+        return False
+    toks = [t for t in re.findall(r"[A-Za-z0-9&'+.-]+", s)]
+    if not toks:
+        return False
+    low = [t.lower() for t in toks]
+    if all(t in _JUNK_SUBJECT_WORDS for t in low):
+        return False
+    content = [t for t in low if t not in _JUNK_SUBJECT_WORDS]
+    if not content:
+        return False
+    # an all-lowercase phrase of three or more words with no content word
+    # longer than three letters is not a name ("see waht the")
+    if s == s.lower() and len(toks) >= 3 and max(len(t) for t in content) <= 3:
+        return False
+    return True
+
+
+def snap_to_thread_subject(subject, history, page=''):
+    """The thread's own subject when ``subject`` is a near spelling of it
+    ('The Love Hypotheis' -> 'The Love Hypothesis'); else ``subject``."""
+    s = ' '.join(str(subject or '').split())
+    if not s or not history:
+        return subject
+    try:
+        import difflib
+        from . import subject_rules as _sr
+        cands = list(_sr.thread_subjects(history, page) or [])
+    except Exception:
+        return subject
+    sf = _fold(s)
+    for c in cands:
+        cf = _fold(c)
+        if not cf or cf == sf:
+            return c if cf == sf else subject
+        if min(len(cf), len(sf)) >= 6 and difflib.SequenceMatcher(None, sf, cf).ratio() >= 0.86:
+            return c
+    return subject
+
+
 def offer_or_charge(*, text, subject, kind, panel_confirm, username, user=None,
                     history=None, host=None, consume=None, years=1, dimension='', what='',
                     verb='watched', series=False, condition='', frame=''):
@@ -1032,6 +1098,19 @@ def offer_or_charge(*, text, subject, kind, panel_confirm, username, user=None,
     """
     kind = str(kind or 'report')
     subj = str(subject or '').strip() or 'that subject'
+    if not isinstance(panel_confirm, dict):
+        # a misspelling of the thread's subject is the thread's subject; a
+        # price never lands on words that name no audience (2026-10-30)
+        subj = str(snap_to_thread_subject(subj, history) or subj)
+        if kind not in ('derived',) and not looks_like_subject(subj):
+            try:
+                from . import subject_rules as _sr
+                line = _sr.clarify_for(text)
+            except Exception:
+                line = ('Which subject should this be on? Name the show, brand or person '
+                        '(one line is enough) and I will take it from there.')
+            return 'offer', {'success': True, 'action': 'answer', 'reply': line, 'followups': [],
+                             'offer_deck': False, 'deck_angle': None, 'subject': '', 'subject_unclear': True}
     staff = staff_user(user) or seat_is_free(user, username, host)
     if kind not in ('sizing', 'derived') and custom_price(username, history, subj).get('metered'):
         # a follow-up on a subject this thread already paid for (custom or viewership): metered, never quoted (Jenna 2026-10-30)

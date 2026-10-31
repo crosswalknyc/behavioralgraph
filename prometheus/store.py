@@ -148,13 +148,26 @@ def migrate():
     if not enabled():
         return False
     try:
+        # Tables first, then the columns later releases added, then the
+        # indexes: an index on a column an older table does not carry
+        # yet failed before the ADD COLUMN ran, so migrate() never
+        # finished and every call retried it (229 faults in three days
+        # on pm_api_calls.question_hash, 2026-10-30).
+        _is_index = lambda st: str(st).lstrip().upper().startswith('CREATE INDEX')  # noqa: E731
         for stmt in DDL:
-            _exec(stmt)
+            if not _is_index(stmt):
+                _exec(stmt)
         for table, col, typ in DDL_ADD_COLUMNS:
             try:
                 _exec(f"ALTER TABLE {table} ADD COLUMN {'IF NOT EXISTS ' if _kind == 'pg' else ''}{col} {typ}")
             except Exception:
                 pass
+        for stmt in DDL:
+            if _is_index(stmt):
+                try:
+                    _exec(stmt)
+                except Exception as ie:
+                    _note('store.migrate_index', ie)   # an index never blocks the store
         _migrated = True
         return True
     except Exception as e:
