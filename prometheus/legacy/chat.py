@@ -15539,6 +15539,16 @@ def _pm_analyze_core(user, body, text, history):
     if _eb_subject:
         _pm_ask_hint(route='build_reroute', outcome='explicit_build_order', subject=_eb_subject)
         return jsonify(_subject_rules.build_reroute_payload())
+    # An order that points at the open profile ("can you make this profile?",
+    # "do one june 2024 - june 2025") builds that profile on that window; it
+    # is never a read (Jenna 2026-10-30, Jay Patel on Godzilla Minus One).
+    try:
+        _pb = _subject_rules.open_profile_build_order(text, str(((ctx or {}).get('primary') or {}).get('name') or ''), history)
+    except Exception:
+        _pb = None
+    if _pb:
+        _pm_ask_hint(route='build_reroute', outcome='page_build_order', subject=_pb['subject'])
+        return jsonify(dict(_subject_rules.build_reroute_payload(), prompt=_pb['prompt'], window=({'start': _pb['start'], 'end': _pb['end']} if _pb.get('start') else None)))
     if _pm_jiq_intent(text) or _pm_read_intent(body, 'journey'):
         return jsonify(_pm_intake_turn('digital_journey', text, body, history, user, _pm_ppu, first=True))
     # ------------------ SINGLE ROUTER (2026-08-28) ------------------

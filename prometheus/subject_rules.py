@@ -530,6 +530,122 @@ CONVERSATIONAL_NOTE = (
     "unclear, ask that one question in the reply.")
 
 
+# ---------------------------------------------------------------- a build order on the open page
+# Jenna 2026-10-30 (Jay Patel, Godzilla Minus One open): "can you do one june
+# 2024- june 2025" and then "can you make this profile?" were read as custom
+# asks and answered with a figure list and a made-up price. An order that
+# points at the open profile ("do one", "make this profile", "run this for
+# 2025") builds that profile on the window named in the ask or earlier in
+# the thread. Nothing else.
+_PAGE_BUILD_ORDER_RX = re.compile(
+    r"^\W*(?:(?:can|could|would|will)\s+(?:you|u)\s+|please\s+)?(?:please\s+|just\s+|also\s+|go ahead and\s+)?"
+    r"(?:do|make|run|build|pull|create|queue|start|kick off|generate|produce|spin up)\s+"
+    r"(?:one|another(?: one)?|this(?: one| profile| audience| file| same)?|that(?: one| profile| window)?|it|"
+    r"a(?:nother)? (?:profile|one|pull|run|build|version|file)|the (?:same|profile|same profile|same one|same thing)|"
+    r"(?:this|that|the) profile)\b", re.I)
+_MONTHS_RX = r"(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)"
+_MONTH_NUM = {'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6, 'jul': 7, 'aug': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12}
+_MY_RANGE_RX = re.compile(_MONTHS_RX + r"\.?\s*(\d{1,2})?,?\s*(20\d{2})\s*(?:-|to|through|thru|until|till|and)\s*" + _MONTHS_RX + r"\.?\s*(\d{1,2})?,?\s*(20\d{2})", re.I)
+_YEAR_RANGE_RX = re.compile(r"\b(20\d{2})\s*(?:-|/|to|through|thru)\s*(20\d{2})\b")
+_ONE_YEAR_RX = re.compile(r"\b(?:calendar\s+|cy\s*|for\s+|in\s+|the\s+)?(20\d{2})\b(?!\s*(?:-|/|to)\s*20)")
+_ISO_RANGE_RX = re.compile(r"(20\d{2}-\d{2}-\d{2})\s*(?:to|-|through)\s*(20\d{2}-\d{2}-\d{2})", re.I)
+_WINDOW_BUILD_ORDER_RX = re.compile(
+    r"^\W*(?:(?:can|could|would|will)\s+(?:you|u)\s+|please\s+)?(?:please\s+|just\s+|also\s+|go ahead and\s+)?"
+    r"(?:start|run|build|queue|launch|begin|kick off|pull|do|approve|order)\s+(?:the\s+|that\s+|this\s+|a\s+|an\s+)?"
+    r"[^.?!]{0,90}?\b(?:build|pull|profile|run)\b", re.I)
+
+
+def _mdays(y, m):
+    import calendar as _cal
+    return _cal.monthrange(y, m)[1]
+
+
+def window_in_text(text):
+    """(start_iso, end_iso) named in plain words, or None.
+    'june 2024- june 2025' -> 2024-06-01 to 2025-06-01; 'Jun 1 2024 to
+    Jun 1 2025' as written; '2023-2024' -> Jan 1 2023 to Dec 31 2024;
+    'for 2025' -> the calendar year."""
+    t = ' '.join(str(text or '').split())
+    if not t:
+        return None
+    m = _ISO_RANGE_RX.search(t)
+    if m:
+        return m.group(1), m.group(2)
+    m = _MY_RANGE_RX.search(t)
+    if m:
+        m1, d1, y1, m2, d2, y2 = m.groups()
+        a, b = _MONTH_NUM[m1[:3].lower()], _MONTH_NUM[m2[:3].lower()]
+        y1, y2 = int(y1), int(y2)
+        da = int(d1) if d1 else 1
+        db = int(d2) if d2 else (1 if d1 is None else _mdays(y2, b))
+        da, db = min(da, _mdays(y1, a)), min(db, _mdays(y2, b))
+        if (y2, b, db) > (y1, a, da):
+            return f"{y1:04d}-{a:02d}-{da:02d}", f"{y2:04d}-{b:02d}-{db:02d}"
+        return None
+    m = _YEAR_RANGE_RX.search(t)
+    if m:
+        y1, y2 = int(m.group(1)), int(m.group(2))
+        if y2 >= y1:
+            return f"{y1}-01-01", f"{y2}-12-31"
+    m = _ONE_YEAR_RX.search(t)
+    if m:
+        y = int(m.group(1))
+        return f"{y}-01-01", f"{y}-12-31"
+    return None
+
+
+def _window_from_thread(history, limit=6):
+    """The most recent window named in the thread's last few turns: the
+    reader's own words first, then an agent line that quoted one."""
+    turns = [x for x in (history or []) if isinstance(x, dict)][-limit:]
+    for x in reversed(turns):
+        if str(x.get('role') or '') == 'user':
+            w = window_in_text(x.get('text') or x.get('content') or '')
+            if w:
+                return w
+    for x in reversed(turns):
+        if str(x.get('role') or '') in ('agent', 'assistant'):
+            txt = str(x.get('text') or '')
+            m = re.search(r"Window:\s*([^\n]+)", txt)
+            w = window_in_text(m.group(1)) if m else None
+            if w:
+                return w
+    return None
+
+
+def open_profile_build_order(text, page, history=None):
+    """{subject, start, end, prompt} when the words order a build of the
+    open profile ("can you make this profile?", "do one june 2024 - june
+    2025", "run this for 2025"); None otherwise. The window comes from
+    the ask, else from the last few turns of the thread. The prompt is
+    the explicit order the build flow understands."""
+    t = ' '.join(str(text or '').split())
+    page = ' '.join(str(page or '').split())
+    if not t or not page or len(t) > 300:
+        return None
+    if conversational_turn(t) == 'why_keep':
+        return None
+    if explicit_build_subject(t):
+        return None     # a named subject has its own lane
+    stripped = strip_lead_negation(t)
+    win = window_in_text(stripped)
+    if not _PAGE_BUILD_ORDER_RX.match(stripped.rstrip('?')):
+        # "Start the June 1 2024 to June 1 2025 build now": a start verb,
+        # a window, and the word build / pull / profile / run.
+        if not (win and _WINDOW_BUILD_ORDER_RX.match(stripped)):
+            return None
+    win = win or _window_from_thread(history)
+    if win:
+        try:
+            from migration.event_window import format_window_label
+            label = format_window_label(win[0], win[1])
+        except Exception:
+            label = ''
+        prompt = f"Run a profile for {page}. Date range: {win[0]} to {win[1]}"
+        return {'subject': page, 'start': win[0], 'end': win[1], 'label': label, 'prompt': prompt}
+    return {'subject': page, 'start': '', 'end': '', 'label': '', 'prompt': f"Run a profile for {page}"}
+
+
 def build_reroute_payload():
     """The analyze surface handing an explicit profile order to the
     interpret flow (the widget's reroute contract)."""

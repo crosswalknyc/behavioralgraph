@@ -21,6 +21,7 @@ S3 round-trip and never raise.
 from __future__ import annotations
 
 import hashlib
+import re
 import json
 import time
 
@@ -170,9 +171,28 @@ def projected_audience(sample):
     return int(round(float(sample) / PANEL * US_POP))
 
 
+def is_year_like(raw, value):
+    """A bare four-digit figure in 1900..2100 is a year, never a count
+    of people (Godzilla Minus One, 2026-10-30: the prose "Netflix
+    availability since mid-2024 broadened the casual viewer base" was
+    read as anchor 2,024 x 83.6% and the profile shipped at a sample of
+    517 against a brief that said 5.3M to 7.1M). A comma-formatted
+    "2,024" or a stated "2024 people" count is not caught here; neither
+    reads as a year in a draft."""
+    try:
+        v = int(value)
+    except (TypeError, ValueError):
+        return False
+    if not (1900 <= v <= 2100):
+        return False
+    txt = str(raw if raw is not None else value).strip().lower()
+    return bool(re.fullmatch(r"(?:fy|cy)?\s*(?:19|20)\d{2}", txt))
+
+
 def parse_anchor(value):
     """Coerce a draft's universe_anchor to a usable int, or None when
-    missing, non-numeric, or absurd (< ANCHOR_MIN or > ANCHOR_MAX)."""
+    missing, non-numeric, absurd (< ANCHOR_MIN or > ANCHOR_MAX), or a
+    bare year."""
     if value in (None, '', 'null', 'None'):
         return None
     try:
@@ -180,6 +200,8 @@ def parse_anchor(value):
     except (TypeError, ValueError):
         return None
     if not (ANCHOR_MIN <= v <= ANCHOR_MAX):
+        return None
+    if is_year_like(value, v):
         return None
     return v
 
@@ -247,6 +269,8 @@ def extract_anchor_from_prose(text, exclude=(), reject_round=False):
         except (TypeError, ValueError):
             continue
         if not (ANCHOR_MIN <= v <= ANCHOR_MAX):
+            continue
+        if is_year_like(num_txt, v):
             continue
         if v in excluded or (reject_round and is_round_anchor(v)):
             continue

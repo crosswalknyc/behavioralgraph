@@ -88812,6 +88812,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }
             return 'interpret';
         }
+        var _pmRerouteText = '';
         async function _pmAnalyze(text, ctx, mode, extra) {
             if (!ctx && mode !== 'search_demand' &&
                 !(extra && (extra.bind_subject || extra.overall_ranks ||
@@ -88925,6 +88926,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     // Server router re-route (2026-08-28): build /
                     // Subscriber IQ asks that reached the analyze
                     // surface fall through to the interpret flow.
+                    // The server may hand back the order in full (the open
+                    // profile plus the window the reader named, 2026-10-30);
+                    // that is what the build flow reads, not the pronoun.
+                    _pmRerouteText = (data.prompt && String(data.prompt).trim()) ? String(data.prompt).trim() : '';
                     _pmAnalysisActive = false;
                     return 'reroute';
                 }
@@ -90132,8 +90137,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 ? new AbortController() : null;
             _synthChatShowStopButton();
             try {
+                var _interpretText = _pmRerouteText || text;
+                _pmRerouteText = '';
                 var _interpretBody = {
-                    text: text,
+                    text: _interpretText,
                     history: synthChatHistory.slice(0, -1)
                 };
                 if (_lockedSample) {
@@ -92022,9 +92029,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (panel) panel.style.display = 'none';
                 synthChatCurrentDraft = null;
                 _synthChatPushTurnWithMeta('agent',
-                    'Started ' + data.subject + '' +
+                    'Profile building: ' + data.subject +
                     (data.pending_position ? ' (number ' + data.pending_position + ' in line)' : '') +
-                    '.',
+                    '. I will email you when it is complete.',
                     { run_id: data.run_id, status: 'queued', subject: data.subject });
                 _synthChatStartPolling(data.run_id, data.subject);
             } catch (e) {

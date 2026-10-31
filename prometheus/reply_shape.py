@@ -208,12 +208,63 @@ def shape_payload(raw):
     return raw
 
 
+# A read answers; it never queues anything. Jay Patel (Amazon), Godzilla
+# Minus One, 2026-10-30: "Start the June 1 2024 to June 1 2025 build now"
+# reached the read job, which wrote "The ... build is started and in the
+# queue at position 1 ... at 306 usd". Nothing was queued and the price
+# was typed. Any sentence in a read that claims a build was started,
+# queued, approved, or priced is dropped, and one plain line tells the
+# reader how to actually order it.
+_FALSE_BUILD_CLAIM_RX = re.compile(
+    r"\b(?:build|profile|pull|run)\b[^.\n]{0,80}?\b(?:is|was|has been|are|were|got|now|already)\s+"
+    r"(?:started|queued|kicked off|launched|underway|in (?:the )?queue|in line|running|approved|"
+    r"accepted|scheduled|booked|confirmed)\b"
+    r"|\b(?:in the queue at position|at position \d|number \d+ in line|quoted and accepted)\b"
+    r"|^\W*(?:build|total) cost:?\s*\$?\d", re.I | re.M)
+_ORDER_LINE = "No build has been started from this answer. To build it, say: build this profile."
+
+
+def strip_false_build_claims(text):
+    """Drop every line or sentence in a read that claims a build was
+    started, queued, or priced; append the order line once. Text with
+    no such claim comes back untouched."""
+    t = str(text or '')
+    if not t or not _FALSE_BUILD_CLAIM_RX.search(t):
+        return t
+    kept = []
+    changed = False
+    for line in t.split('\n'):
+        if _FALSE_BUILD_CLAIM_RX.search(line):
+            # a bullet or label line goes whole; a prose line loses the sentence
+            parts = re.split(r"(?<=[.!?])\s+", line)
+            keep = [x for x in parts if not _FALSE_BUILD_CLAIM_RX.search(x)]
+            if len(keep) != len(parts):
+                changed = True
+            if keep and not re.match(r"^\W*[-*\u2022]\s|^\W*\w[^:]{0,40}:\s", line):
+                kept.append(' '.join(keep))
+            elif keep and len(keep) == len(parts):
+                kept.append(line)
+        else:
+            kept.append(line)
+    out = re.sub(r"\n{3,}", "\n\n", '\n'.join(kept)).strip()
+    if changed or out != t.strip():
+        if _ORDER_LINE not in out:
+            out = (out + "\n\n" + _ORDER_LINE).strip()
+    return out
+
+
 def shape_finished_read(payload, held=False):
     """A finished background read lands via the status doc the widget
     polls and the thread copy, bypassing the envelope; shape it here.
     A held read carries no answer to shape. Never raises."""
     if held or not isinstance(payload, dict):
         return payload
+    try:
+        for k in ('answer', 'reply', 'text', 'message'):
+            if isinstance(payload.get(k), str) and payload.get(k):
+                payload[k] = strip_false_build_claims(payload[k])
+    except Exception:
+        pass
     try:
         return shape_payload(payload)
     except Exception:
