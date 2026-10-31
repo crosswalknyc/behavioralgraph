@@ -1240,6 +1240,42 @@ def ask(user, body, *, via='session'):
             env = envelope.wrap(_out, surface='analyze', decision=_decision, thread_id=tid, via=via)
             _persist_turn(persist, uname, tid, history, text, env, _out, 'analyze')
             return env, 200
+    # lane: multi_ask
+    # Two asks in one message (Jenna 2026-10-30): each question routes on
+    # its own through this same door; priced parts come back as one
+    # itemized quote, metered and free parts answer alongside; Approve
+    # charges each part at its quoted price and runs each read. One
+    # question is one question and the lane steps aside.
+    if referent_decision is None and not body.get('_multi_part') and not body.get('_meta_replay') \
+            and _client_surface != 'interpret':
+        try:
+            from . import multi_ask as _multi
+            _mrb = {k: v for k, v in body.items() if k not in _ARMED_BODY_KEYS and k not in _ANALYZE_PASSTHROUGH and k != 'extra'}
+
+            def _multi_run_one(q, part_pc, prior=None, _rb=_mrb):
+                # the earlier questions ride as the turns just before this one
+                # so "they" / "that audience" in a later part binds to them
+                _hist = list(history or []) + [{'role': 'user', 'text': str(x)} for x in (prior or [])]
+                part_body = dict(_rb, text=q, _multi_part=True, persist=False, history=_hist)
+                if isinstance(part_pc, dict) and part_pc:
+                    part_body['panel_confirm'] = part_pc
+                return ask(user, part_body, via=via)
+
+            _multi_raw = _multi.handle(text, body, _multi_run_one)
+        except Exception as _fx:
+            _faults.note('service.multi_ask', _fx)
+            _multi_raw = None
+        if _multi_raw is not None:
+            _decision = {'surface': 'analyze', 'mode': None, 'reason': 'multi_ask', 'client_hint': None}
+            try:
+                host.ask_hint(route='multi_ask',
+                              outcome=('panel_offer' if _multi_raw.get('panel_offer') else 'answered'),
+                              subject=str(_multi_raw.get('subject') or ''))
+            except Exception as _fx:
+                _faults.note('service', _fx)
+            env = envelope.wrap(_multi_raw, surface='analyze', decision=_decision, thread_id=tid, via=via)
+            _persist_turn(persist, uname, tid, history, text, env, _multi_raw, 'analyze')
+            return env, 200
     # lane: where_watched
     # Where a named title is watched (Jay Patel 2026-10-20: "where people
     # watched the film mutiny" with Prime Video open). A lookup of

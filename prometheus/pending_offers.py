@@ -257,6 +257,7 @@ def record(uname, tid, raw, question, ts=None):
             'dimension': str(po.get('dimension') or ''),
             'years': po.get('years') or 1,
             'price_label': str(po.get('price_label') or ''),
+            'parts': [dict(x) for x in (po.get('parts') or []) if isinstance(x, dict)][:6],   # a multi-ask quote (2026-10-30)
         })
         _save(uname, doc)
         return oid
@@ -415,6 +416,8 @@ def confirm_body(offer):
             'dimension': str(offer.get('dimension') or '')}
     if offer.get('years') and offer.get('years') != 1:
         body['years'] = offer['years']
+    if offer.get('parts'):
+        body['parts'] = [dict(x) for x in offer['parts'] if isinstance(x, dict)]
     if offer.get('id'):
         body['offer_id'] = offer['id']
     return body

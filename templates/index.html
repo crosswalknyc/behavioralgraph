@@ -88937,11 +88937,18 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (data.read_job_id) {
                     // Fresh generation riding a background job: show
                     // the holding line, poll until the read lands.
+                    // Two asks in one message can ride two jobs
+                    // (2026-10-30); every one is polled.
                     synthChatPushTurn('agent', data.reply ||
                         'On it. The read will land right here when ' +
                         'it is ready.');
-                    try { _pmPollReadJob(data.read_job_id); } catch (_) {}
+                    var _rjIds = Array.isArray(data.read_job_ids) && data.read_job_ids.length
+                        ? data.read_job_ids : [data.read_job_id];
+                    _rjIds.forEach(function(_rj) {
+                        try { _pmPollReadJob(_rj); } catch (_) {}
+                    });
                     try { _pmShowNotifyOffer(data.read_job_id, 'read'); } catch (_) {}
+                    if (data.panel_offer) _pmPanelOffer = data.panel_offer;
                     return 'done';
                 }
                 if (data.memory_confirm) {
@@ -89860,7 +89867,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     await _pmAnalyze(_po.question || text,
                         _pmCollectPageContext(), '',
                         { panel_confirm: { subject: _po.subject, kind: _po.kind || '',
-                                           dimension: _po.dimension || '' } });
+                                           dimension: _po.dimension || '',
+                                           parts: Array.isArray(_po.parts) ? _po.parts : undefined } });
                     return;
                 }
                 if (/^(decline|never ?mind|no( thanks?)?|not now|cancel( (that|it))?)[.! ]*$/i.test(_poLow)) {
