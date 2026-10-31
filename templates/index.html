@@ -84580,11 +84580,29 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     })
                     .catch(function() { window._pmSetFundsLock(true); });
             };
+            // Fresh thread on return (Jenna 2026-10-30): "If I open
+            // prometheus after having it collapsed for more than 2 minutes
+            // it needs to open a fresh thread, catalog the old thread in
+            // the side bar and then ask me the chip questions. not just
+            // pick up a random thread." The collapse time is kept in
+            // localStorage so a reload while collapsed still counts.
+            var CKEY = 'pmCollapsedAt';
+            var _PM_FRESH_ON_RETURN_MS = 2 * 60 * 1000;
+            function _pmCollapsedFor() {
+                var at = 0;
+                try { at = parseInt(localStorage.getItem(CKEY) || '0', 10) || 0; } catch (_) {}
+                if (!at && window._pmCollapsedAt) at = window._pmCollapsedAt;
+                return at ? (Date.now() - at) : 0;
+            }
             window.prometheusExpand = function() {
                 var l = _el('prometheusLauncher'), w = _el('prometheusWidget');
                 if (!w) return;
+                var wasOpen = w.classList.contains('pm-on');
+                var away = wasOpen ? 0 : _pmCollapsedFor();
+                try { localStorage.removeItem(CKEY); } catch (_) {}
+                window._pmCollapsedAt = 0;
                 if (l) l.classList.remove('pm-on');
-                if (!w.classList.contains('pm-on')) {
+                if (!wasOpen) {
                     w.classList.add('pm-on');
                     _applyPos(w, WKEY);
                 }
@@ -84595,7 +84613,16 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 }
                 try { localStorage.setItem(OKEY, '1'); } catch (_) {}
                 if (typeof synthChatInit === 'function') synthChatInit();
-                if (typeof _synthChatShowWelcomeBack === 'function') _synthChatShowWelcomeBack();
+                if (away >= _PM_FRESH_ON_RETURN_MS && typeof pmNewChat === 'function') {
+                    // the thread it was on stays in the rail; the fresh one
+                    // opens with the greeting and its chips
+                    window._pmFreshOpenedAt = Date.now();
+                    pmNewChat(function () {
+                        if (typeof _synthChatShowWelcomeBack === 'function') _synthChatShowWelcomeBack(true);
+                    });
+                } else if (typeof _synthChatShowWelcomeBack === 'function') {
+                    _synthChatShowWelcomeBack();
+                }
                 var m = _el('synthChatMessages');
                 if (m) m.scrollTop = m.scrollHeight;
                 if (typeof window._pmCheckFundsOnOpen === 'function') {
@@ -84607,6 +84634,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (w) w.classList.remove('pm-on');
                 if (l) { l.classList.add('pm-on'); _applyPos(l, LKEY); }
                 try { localStorage.setItem(OKEY, '0'); } catch (_) {}
+                window._pmCollapsedAt = Date.now();
+                try { localStorage.setItem(CKEY, String(Date.now())); } catch (_) {}
             };
             function _initPrometheus() {
                 var l = _el('prometheusLauncher'), w = _el('prometheusWidget');
@@ -84738,6 +84767,15 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             fetch('/api/brief-chat/history', { credentials: 'same-origin' })
                 .then(function(r) { return r.ok ? r.json() : { history: [] }; })
                 .then(function(d) {
+                    // A return after two minutes collapsed opened a fresh
+                    // thread while this was in flight (2026-10-30): the
+                    // thread this fetch read is the one just parked, so it
+                    // is not adopted over the fresh one.
+                    if (window._pmFreshOpenedAt && Date.now() - window._pmFreshOpenedAt < 15000) {
+                        _synthChatResumeIfInFlight();
+                        try { _pmResumeReadJobs(); } catch (_) {}
+                        return;
+                    }
                     synthChatHistory = (d && d.history) || [];
                     window._pmLastActivityAt = Date.now();
                     // Idle rotation (2026-10-01 Jenna): the server
@@ -85382,12 +85420,24 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             e.preventDefault();
             if (!open && typeof window.prometheusExpand === 'function') {
                 window.prometheusExpand();
+                // a return after two minutes collapsed already opened a fresh thread
+                if (window._pmFreshOpenedAt && Date.now() - window._pmFreshOpenedAt < 2000) return;
             }
             pmNewChat();
         });
-        function pmNewChat() {
+        function pmNewChat(done) {
             _pmCarried = null;   // a fresh chat starts clean (2026-10-30)
             window._pmLastActivityAt = Date.now();
+            // the thread being left keeps what was typed in it
+            try {
+                if (Array.isArray(synthChatHistory) && synthChatHistory.length) {
+                    fetch('/api/brief-chat/history', {
+                        method: 'POST', credentials: 'same-origin', keepalive: true,
+                        headers: { 'Content-Type': 'application/json' },
+                        body: _pmHistoryBody(synthChatHistory)
+                    }).catch(function () {});
+                }
+            } catch (_) {}
             fetch('/api/brief-chat/threads/new', {
                 method: 'POST', credentials: 'same-origin',
                 headers: { 'Content-Type': 'application/json' },
@@ -85402,6 +85452,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     _pmThreadsRender();
                     var inp = document.getElementById('synthChatInput');
                     if (inp) inp.focus();
+                    if (typeof done === 'function') { try { done(d); } catch (_) {} }
               }).catch(function () {});
         }
         function pmSwitchThread(tid) {
@@ -85683,8 +85734,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var box = document.getElementById('synthChatMessages');
                 if (!box) return;
                 // Brand-new users already get the empty-state starter
-                // chips below the input.
-                if (!synthChatHistory.length) return;
+                // chips below the input; a fresh thread on return asks
+                // the chip questions outright (force).
+                if (!synthChatHistory.length && !force) return;
                 // Never stomp a pending approval / question mid-flow.
                 if (synthChatAwaitingDateConfirm || synthChatClarify ||
                     synthChatBatchClarify ||
@@ -85850,6 +85902,13 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 // away from someone reading an earlier reply.
                 var nearBottom = (box.scrollHeight - box.scrollTop -
                                   box.clientHeight) < 120;
+                if (!synthChatHistory.length) {
+                    // a fresh thread: the greeting stands in for the
+                    // empty-state panel and its example chips
+                    box.innerHTML = '';
+                    var _starterRow = document.getElementById('synthChatStarterChips');
+                    if (_starterRow) _starterRow.style.display = 'none';
+                }
                 box.appendChild(el);
                 if (force || nearBottom) box.scrollTop = box.scrollHeight;
             } catch (_) {}
