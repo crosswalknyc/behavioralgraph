@@ -108,5 +108,31 @@ class YearIsNeverAnAnchor(unittest.TestCase):
         self.assertFalse(meta['recomputed'])
 
 
+class IdentitySwap(unittest.TestCase):
+    """Ohio is not Florida (2026-10-30): a swapped naming word pushes a
+    catalog candidate down in the chat's existing-match shortlist."""
+
+    def test_swaps(self):
+        self.assertTrue(SR.identity_swapped('Ohio gubernatorial voters', 'Florida Gubernatorial Voters'))
+        self.assertTrue(SR.identity_swapped('Run a profile for Godzilla Minus One', 'Godzilla x Kong The New Empire'))
+
+    def test_not_swaps(self):
+        self.assertFalse(SR.identity_swapped('how big is the Reba audience', 'Reba McEntire'))
+        self.assertFalse(SR.identity_swapped('Taylor Swift Eras Tour fans', 'Taylor Swift'))
+        self.assertFalse(SR.identity_swapped('Florida gubernatorial voters', 'Florida Gubernatorial Voters'))
+        self.assertFalse(SR.identity_swapped('reba mcentire avid fans 2024', 'Reba McEntire'))
+        # a shorter ask inside a longer name is the qualifier rule's case (2026-08-25), not a swap
+        self.assertFalse(SR.identity_swapped('Apple buyers', 'Apple TV EST Buyers'))
+        self.assertFalse(SR.identity_swapped('mcentire', 'Reba McEntire', 'reba mcentire reba_mcentire_09_01_2026'))
+
+    def test_wired_into_the_shortlist(self):
+        src = open(os.path.join(ROOT, 'prometheus', 'legacy', 'chat.py'), encoding='utf-8').read()
+        self.assertIn('from prometheus.subject_rules import identity_swapped', src)
+        i = src.index('def _shortlist_profile_matches(')
+        j = src.index('_ident_swapped = _identity_swapped(', i)
+        self.assertGreater(j, i)
+        self.assertIn('or _ident_swapped', src[j:j + 4000])
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=1)

@@ -419,6 +419,9 @@ def bound_thread_subject():
     return ''
 
 
+_ON_SUBJECT_RX = re.compile(r"^On ([^:]{2,80}?)(?:\s+-\s+[^:]{1,80})?:\s")
+
+
 def thread_subjects(history, page='', limit=4, include_pin=True):
     """The subjects this thread has been about, most recent first: the
     subject the reader set or Prometheus quoted in the thread (the pin,
@@ -513,9 +516,55 @@ def thread_subjects(history, page='', limit=4, include_pin=True):
         m2 = _STARTED_RX.match(txt)
         if m2:
             _add(m2.group('what'))
+        m3 = _ON_SUBJECT_RX.match(txt)      # a landed read opens "On <subject>:" (2026-10-30)
+        if m3 and _norm(m3.group(1)) not in ('it', 'this', 'that'):
+            _add(m3.group(1))
         if len(out) >= limit:
             break
+    # The conversation's latest subject outranks the binding when the
+    # thread has moved (Jenna 2026-10-30, the mirror case: Reba open, a
+    # read on Gilmore Girls answered, then "how about the men?" stayed on
+    # Reba). The project is still the default for a thread that has not
+    # left it; once a read ran on something else, a bare follow-up is
+    # about that something else. Words still win over both.
+    if bound and len(out) >= 2 and _norm(out[0]) == _norm(bound):
+        recent = _most_recent_turn_subject(turns, _dropped)
+        if recent and _norm(recent) != _norm(bound) and any(_norm(x) == _norm(recent) for x in out[1:]):
+            out = [x for x in out if _norm(x) == _norm(recent)] + [x for x in out if _norm(x) != _norm(recent)]
     return out[:limit]
+
+
+def _most_recent_turn_subject(turns, dropped=lambda _n: False, lookback=6):
+    """The subject the last few agent turns were about: a run's
+    meta.subject, an 'On it: reading X now' promise, a 'Started X' line,
+    or an answer opening 'On X:'. '' when the recent turns name nothing."""
+    seen_agent = 0
+    for pos in range(len(turns) - 1, -1, -1):
+        turn = turns[pos]
+        if str(turn.get('role') or '') == 'user':
+            continue
+        seen_agent += 1
+        if seen_agent > lookback:
+            break
+        meta = turn.get('meta') if isinstance(turn.get('meta'), dict) else {}
+        txt = ' '.join(str(turn.get('text') or turn.get('content') or '').split())
+        cands = []
+        if meta.get('subject'):
+            cands.append(str(meta['subject']))
+        m = _READING_RX.match(txt)
+        if m and not re.search(r"\s+and\s+", m.group('what')):
+            cands.append(m.group('what'))
+        m2 = _STARTED_RX.match(txt)
+        if m2:
+            cands.append(m2.group('what'))
+        m3 = _ON_SUBJECT_RX.match(txt)
+        if m3 and _norm(m3.group(1)) not in ('it', 'this', 'that'):
+            cands.append(m3.group(1))
+        for c in cands:
+            c = ' '.join(str(c or '').split()).strip(' .,;:')
+            if c and len(c) <= 90 and not dropped(c) and not re.search(r"\b(?:all the|the best|which|what|how)\b", c, re.I):
+                return c
+    return ''
 
 
 CONVERSATIONAL_NOTE = (
@@ -644,6 +693,53 @@ def open_profile_build_order(text, page, history=None):
         prompt = f"Run a profile for {page}. Date range: {win[0]} to {win[1]}"
         return {'subject': page, 'start': win[0], 'end': win[1], 'label': label, 'prompt': prompt}
     return {'subject': page, 'start': '', 'end': '', 'label': '', 'prompt': f"Run a profile for {page}"}
+
+
+# ---------------------------------------------------------------- identity words
+_IDENTITY_STOP = frozenset((
+    'the', 'of', 'and', 'on', 'in', 'for', 'a', 'an', 'to', 'us', 'u', 's', 'with', 'from', 'about', 'who', 'that', 'this',
+    'viewers', 'fans', 'audience', 'audiences', 'people', 'users', 'buyers', 'shoppers', 'customers', 'members', 'subscribers',
+    'consumers', 'watchers', 'listeners', 'readers', 'players', 'owners', 'adults', 'households', 'followers', 'enthusiasts',
+    'total', 'universe', 'avid', 'casual', 'fan', 'base', 'cohort', 'group', 'panel', 'profile', 'profiles', 'run', 'build', 'pull',
+    'voters', 'voter', 'electorate', 'residents', 'resident', 'drinkers', 'eaters', 'travelers', 'gamers', 'streamers', 'moviegoers',
+    'size', 'how', 'big', 'is', 'are', 'what', 'many', 'much', 'can', 'you', 'me', 'please', 'want', 'need', 'give',
+    'show', 'tell', 'new', 'fresh', 'date', 'range', 'window', 'months', 'month', 'year', 'years', 'past', 'last', 'trailing',
+    'days', 'day', 'weeks', 'week', 'cut', 'cuts', 'male', 'female', 'men', 'women', 'gen', 'millennials', 'boomers',
+))
+
+
+def identity_tokens(text):
+    """The words that name a subject: no stop words, audience nouns,
+    years or bare numbers (mirrors migration.digital_twin_synthesis.
+    subject_identity_tokens for the chat side)."""
+    fold = re.sub(r"[^a-z0-9 ]+", ' ', str(text or '').lower())
+    return [t for t in fold.split() if len(t) > 1 and t not in _IDENTITY_STOP
+            and not re.fullmatch(r"(?:19|20)\d{2}", t) and not t.isdigit()]
+
+
+def identity_swapped(prompt, candidate_name, candidate_text=''):
+    """True when the prompt and a catalog candidate each carry a naming
+    word the other lacks: one name swapped for another (Ohio voters vs
+    Florida Gubernatorial Voters, Godzilla Minus One vs Godzilla x Kong).
+    A shorter ask inside a longer name ('Reba' in 'Reba McEntire') and a
+    longer ask over a base name ('Taylor Swift Eras Tour' over 'Taylor
+    Swift') are not swaps. 2026-10-30: the twin that seated Ohio voters
+    from the Florida profile came through this gap; the chat's
+    existing-match shortlist had the same one."""
+    p_ident = set(identity_tokens(prompt))
+    c_ident = set(identity_tokens(candidate_name))
+    if not p_ident or not c_ident:
+        return False
+    p_only = p_ident - c_ident
+    c_only = c_ident - p_ident
+    if not p_only or not c_only:
+        return False
+    hay = ' '.join(str(candidate_text or candidate_name).lower().split())
+    # a prompt word that still appears inside the candidate's longer text
+    # ('mcentire' in the file stem) is present, not swapped
+    if any(len(pt) >= 5 and pt in hay for pt in p_only):
+        return False
+    return True
 
 
 def build_reroute_payload():

@@ -523,6 +523,23 @@ def ask(user, body, *, via='session'):
     history = body.get('history')
     if not isinstance(history, list):
         history = load_thread(uname, tid) if tid else []
+    # Memory across an automatic thread switch (Jenna 2026-10-30): the
+    # chat follows the page (Debi 2026-10-21), so a conversation begun in
+    # one thread continues in the project's thread the moment a profile
+    # opens. The widget names the thread it just left (carried_from) for
+    # the first asks in the new one; its last turns ride ahead of this
+    # thread's own history as context for the binder and the model.
+    # Never persisted here (persist_turn drops them), never for a thread
+    # that already has a conversation of its own.
+    try:
+        _carried_from = str(body.get('carried_from') or '').strip()
+        if _carried_from and _carried_from != (tid or '') and thread_exists(uname, _carried_from) \
+                and sum(1 for t in history if isinstance(t, dict) and str(t.get('role') or '') == 'user') <= 3:
+            _prev = [t for t in (load_thread(uname, _carried_from) or []) if isinstance(t, dict) and str(t.get('text') or '').strip()]
+            if _prev:
+                history = [dict(t, carried=True) for t in _prev[-8:]] + list(history)
+    except Exception as _fx:
+        _faults.note('service.carried_context', _fx)
     # the thread's pinned subject applies to the conversation in hand: a
     # history with no trace of it (a cleared chat, another conversation
     # under the same id) gets none (prometheus.thread_subject)
@@ -2619,7 +2636,7 @@ def _persist_turn(persist, uname, tid, history, text, env, raw, surface):
     if not (persist and tid and env.get('text')):
         return
     try:
-        turns = list(history)
+        turns = [t for t in history if not (isinstance(t, dict) and t.get('carried'))]   # carried context is never written into this thread
         turns.append({'role': 'user', 'text': text, 'ts': _now()})
         meta = {'kind': env['kind'], 'surface': surface}
         if env.get('options'):

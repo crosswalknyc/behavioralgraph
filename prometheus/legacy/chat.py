@@ -168,6 +168,9 @@ def _profile_catalog_for_chat():
     return out
 
 
+from prometheus.subject_rules import identity_swapped as _identity_swapped   # 2026-10-30: Ohio is not Florida
+
+
 def _shortlist_profile_matches(prompt, catalog, max_candidates=SYNTH_CHAT_MAX_CANDIDATES):
     """Return the top-N profile candidates most likely to match the user's
     prompt. Uses token-overlap scoring against each candidate's subject
@@ -237,6 +240,24 @@ def _shortlist_profile_matches(prompt, catalog, max_candidates=SYNTH_CHAT_MAX_CA
                 and not (p_version_tokens & cand_versions):
             score *= 0.15
 
+        # Identity substitution (2026-10-30, the Ohio voters twin that was
+        # seated from the Florida Gubernatorial Voters profile): when the
+        # prompt carries a distinctive word the candidate lacks AND the
+        # candidate carries a distinctive word the prompt lacks, one name
+        # has been swapped for another (Ohio / Florida, Godzilla Minus One
+        # / Godzilla x Kong). Audience nouns, years and the stop words do
+        # not count, so 'Reba' still finds 'Reba McEntire' and 'Taylor
+        # Swift Eras Tour' still sees 'Taylor Swift'. Same push as a
+        # version mismatch.
+        _ident_swapped = False
+        try:
+            _ident_swapped = _identity_swapped(
+                prompt, str(c.get('display_name') or '').split(' - ', 1)[0] or c.get('subject') or '', combined)
+        except Exception:
+            _ident_swapped = False
+        if _ident_swapped:
+            score *= 0.15
+
         # Historical-year handling. If the display name contains a year
         # AND the prompt does NOT mention that exact year, this candidate
         # is a historical skin the user did not ask for -- push it down.
@@ -273,6 +294,7 @@ def _shortlist_profile_matches(prompt, catalog, max_candidates=SYNTH_CHAT_MAX_CA
         _penalized = bool(
             (p_version_tokens and cand_versions
              and not (p_version_tokens & cand_versions))
+            or _ident_swapped
             or (display_years and not (display_years & prompt_years)))
         if (_ent_toks and _ent_toks <= set(p_norm.split())
                 and not _penalized and not display_years

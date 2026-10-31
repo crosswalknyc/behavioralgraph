@@ -85269,9 +85269,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     _pmFollow.inflight = false;
                     if (!d || !d.success) return;
                     _pmFollow.key = key;
+                    var _prevActive = _pmThreadsIdx && _pmThreadsIdx.active;
                     _pmThreadsIdx = { active: d.active, threads: d.threads || [] };
                     if (d.switched || d.created) {
                         window._pmLastActivityAt = Date.now();
+                        // the conversation this switch left rides as context for
+                        // the first asks in the new thread (2026-10-30)
+                        _pmCarried = (_prevActive && _prevActive !== d.active)
+                            ? { from: _prevActive, at: Date.now(), count: 0 } : null;
                         _pmAdoptHistory(d.history || []);
                         _pmThreadSwitchNote(d.binding && d.binding.subject_label);
                     }
@@ -85381,6 +85386,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             pmNewChat();
         });
         function pmNewChat() {
+            _pmCarried = null;   // a fresh chat starts clean (2026-10-30)
             window._pmLastActivityAt = Date.now();
             fetch('/api/brief-chat/threads/new', {
                 method: 'POST', credentials: 'same-origin',
@@ -85399,6 +85405,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
               }).catch(function () {});
         }
         function pmSwitchThread(tid) {
+            _pmCarried = null;   // a thread opened by hand carries nothing over (2026-10-30)
             if (_pmThreadsIdx && _pmThreadsIdx.active === tid) return;
             window._pmLastActivityAt = Date.now();
             // Persist the current thread before leaving it.
@@ -90942,12 +90949,22 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             '/api/brief-chat/analyze': 'analyze',
             '/api/brief-chat/deck': 'deck'
         };
+        var _pmCarried = null;   // the thread an automatic switch left: { from, at, count }
         function _pmV1Request(url, body) {
             var surface = _PM_V1_SURFACES[url];
             if (!surface) return { url: url, body: body };
             var b = Object.assign({}, body || {});
             b.surface = surface;
             b.client = 'dashboard';
+            try {
+                if (_pmCarried && _pmCarried.from && _pmCarried.count < 4 &&
+                    (Date.now() - _pmCarried.at) < 30 * 60 * 1000) {
+                    b.carried_from = _pmCarried.from;
+                    _pmCarried.count++;
+                } else if (_pmCarried) {
+                    _pmCarried = null;
+                }
+            } catch (_) {}
             return { url: '/api/prometheus/v1/ask', body: b };
         }
         // The envelope carries its schema tag (pm.envelope.v1). The
