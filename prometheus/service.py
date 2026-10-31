@@ -834,6 +834,34 @@ def ask(user, body, *, via='session'):
                                 thread_id=tid, via=via)
             _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
             return env, 200
+        # lane: deck_conversion
+        # A deck or PowerPoint of something already delivered or attached
+        # ("you sent me the deck as a pdf, can you build a PPT", "recreate
+        # the uploaded deck as a PPT, exactly the same") is the deck
+        # surface's job whatever the router would call the words
+        # (2026-10-30 audit, Debi: both asks drew prose; the first a promise
+        # with nothing created, the second "I can't build or hand back a
+        # file here"). No question, no price: the deck core converts it.
+        try:
+            _is_conv = bool(_dsrc.is_conversion_ask(text)) and host.has('deck_core')
+        except Exception:
+            _is_conv = False
+        if _is_conv:
+            try:
+                resp = host.deck_core(user, _deck_body(body, text, history, ctx, tid))
+                raw, status = _unpack(resp)
+            except Exception as e:
+                _faults.note('service.deck_conversion', e)
+                raw, status = None, 200
+            if isinstance(raw, dict) and raw:
+                decision = {'surface': 'deck', 'mode': None, 'reason': 'deck_conversion', 'client_hint': None}
+                try:
+                    host.ask_hint(route='deck', outcome=('queued' if raw.get('job_id') else 'answered'))
+                except Exception as _fx:
+                    _faults.note('service', _fx)
+                env = envelope.wrap(raw, surface='deck', decision=decision, thread_id=tid, via=via)
+                _persist_turn(persist, uname, tid, history, text, env, raw, 'deck')
+                return env, status
 
     referent_decision = None
     _client_surface = str(body.get('_client_surface_sent') or body.get('surface') or '').strip().lower()
@@ -1089,6 +1117,40 @@ def ask(user, body, *, via='session'):
             env = envelope.wrap(_out, surface='analyze', decision=decision, thread_id=tid, via=via)
             _persist_turn(persist, uname, tid, history, text, env, _out, 'analyze')
             return env, 200
+
+    # lane: help_writing
+    # Words and help, never a build or a price (2026-10-30 audit, item 3):
+    # Liz's "3 killer bullets for my TVOT talk" became a $300 brief and
+    # then a $100 read with an invented audience; Scott's URL
+    # classification scheme became a profile brief. A writing, help or
+    # engineering ask is answered in plain English, metered only.
+    if referent_decision is None and not _armed(body):
+        try:
+            from . import help_lane as _help
+            _is_help = _help.is_help_ask(text)
+        except Exception as _fx:
+            _faults.note('service.help_lane', _fx)
+            _is_help = False
+        if _is_help:
+            try:
+                _pg_name = str(((ctx or {}).get('primary') or {}).get('name') or '').strip() if isinstance(ctx, dict) else ''
+                _help_raw = _help.answer(text, history, _pg_name)
+            except Exception as _fx:
+                _faults.note('service.help_lane_answer', _fx)
+                _help_raw = None
+            if _help_raw:
+                raw = {'success': True, 'action': 'answer', 'reply': _help_raw['reply'],
+                       'followups': list(_help_raw.get('followups') or []), 'offer_deck': False, 'deck_angle': None}
+                decision = {'surface': 'analyze', 'mode': None, 'reason': 'help_writing', 'client_hint': None}
+                if _client_surface == 'interpret':
+                    raw = _interpret_shape(raw)
+                try:
+                    host.ask_hint(route='help_writing', outcome='answered')
+                except Exception as _fx:
+                    _faults.note('service', _fx)
+                env = envelope.wrap(raw, surface='analyze', decision=decision, thread_id=tid, via=via)
+                _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
+                return env, 200
 
     # lane: dataset_build
     # "Can you help me query a dataset on UVA consumers for the unversity
@@ -2477,6 +2539,61 @@ def _pending_brief_waiting(uname, text):
         return False
 
 
+_PROMISE_RX = re.compile(
+    r"\b(?:I can\b|I'?ll\b|I will\b|happy to\b|it lands (?:here|in (?:this|the) thread)|lands (?:here|in this thread)|"
+    r"I will put (?:one|it|that) together|say (?:'|\")?yes|want me to\b|shall I\b|I can put (?:one|that|it) together|"
+    r"same deck, editable|editable powerpoint|goes to your inbox|and (?:I )?email you)", re.I)
+_PROMISE_DECK_RX = re.compile(r"\b(?:deck|slides|powerpoint|ppt|pptx|one[- ]pager|presentation)\b", re.I)
+
+
+def _prose_promise_order(prev, history):
+    """The order a bare yes stands for when the previous reply promised
+    something in words and created nothing: a deck promise becomes the
+    deck order (as a PowerPoint when that is what was asked), any other
+    promise re-runs the ask that drew it as an order. '' when the reply
+    promised nothing or already carried a job, chips or a quote."""
+    if not isinstance(prev, dict):
+        return ''
+    txt = ' '.join(str(prev.get('text') or '').split())
+    meta = prev.get('meta') if isinstance(prev.get('meta'), dict) else {}
+    if not txt or len(txt) > 2500:
+        return ''
+    if any(meta.get(k) for k in ('read_job_id', 'deck_job_id', 'jiq_job_id', 'bpiq_job_id', 'panel_offer', 'options', 'memory_confirm')):
+        return ''
+    if not _PROMISE_RX.search(txt):
+        return ''
+    hist = [t for t in (history or []) if isinstance(t, dict)]
+    prior_q = ''
+    try:
+        idx = hist.index(prev)
+    except ValueError:
+        idx = len(hist)
+    for t in reversed(hist[:idx]):
+        if str(t.get('role') or '') == 'user' and str(t.get('text') or '').strip():
+            prior_q = ' '.join(str(t['text']).split())
+            break
+    if not prior_q:
+        return ''
+    blob = prior_q + ' ' + txt
+    if _PROMISE_DECK_RX.search(blob):
+        subj = ''
+        try:
+            from . import subject_rules as _sr
+            subs = _sr.thread_subjects(hist, '') or []
+            subj = str(subs[0]) if subs else ''
+            if not subj:
+                b = _sr.bind(prior_q, hist, '')
+                subj = b.name if b and b.name else ''
+        except Exception:
+            subj = ''
+        wants_ppt = bool(re.search(r"\b(?:ppt|pptx|power\s?point|editable)\b", blob, re.I))
+        head = f"Build the {subj} deck" if subj else "Build the deck"
+        if wants_ppt:
+            return head + " as a PowerPoint, the same slides as the one you delivered"
+        return head
+    return prior_q
+
+
 def _bare_reply(body, text, history, has_ctx, uname=''):
     """(rewrite_text, payload). rewrite_text is set when the bare reply
     resolves to an option the previous turn offered (the ask continues
@@ -2539,6 +2656,14 @@ def _bare_reply(body, text, history, has_ctx, uname=''):
             return acts[0], None        # the one thing the reply offered: the yes is that
         if acts:
             return None, _p('Which one? ' + ' / '.join(acts[:4]) + '. Send the one you mean and I will run it.', acts[:4])
+        # A promise in prose is an offer too (2026-10-30 audit, Debi: "Yes.
+        # Same deck, editable PowerPoint. It lands here in the thread." then
+        # her "Yes!!" drew "Nothing is waiting on a yes right now"; Scott
+        # the next day). The yes runs the thing the reply promised: the
+        # order is rebuilt from the reply and the ask that drew it.
+        _promised = _prose_promise_order(prev, history)
+        if _promised:
+            return _promised, None
         if re.search(r'approv|go|run|ship|do it|proceed', low):
             return None, _p(
                 'Nothing is waiting on an approval right now. If you were '

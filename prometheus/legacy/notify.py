@@ -247,6 +247,12 @@ def _pm_send_output_email(kind, to_email, data, sync=False):
                                    'application/vnd.openxmlformats-officedocument.presentationml.presentation'))
                 except Exception:
                     traceback.print_exc()
+            if kind == 'deck' and (data or {}).get('pdf_s3_key'):
+                try:   # the PDF copy the ask wanted (2026-10-30)
+                    _pblob = _H.s3_client.get_object(Bucket=_H.S3_BUCKET, Key=data['pdf_s3_key'])['Body'].read()
+                    _files.append((_pblob, str(data.get('pdf_filename') or 'deck.pdf'), 'application/pdf'))
+                except Exception:
+                    traceback.print_exc()
             _om.send_user_email(
                 to=to_email, subject=subject_line[:200], body=body_text,
                 instructed=True, caller=f'pm-notify:{kind}', html=body_html,

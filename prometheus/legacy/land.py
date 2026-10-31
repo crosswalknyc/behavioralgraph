@@ -145,14 +145,19 @@ def _pm_append_deck_to_history(username, job_id, status):
         slides = (status or {}).get('slides')
         slide_note = (f" ({slides} slides)"
                       if isinstance(slides, int) and slides else '')
+        _pdf_url = str((status or {}).get('pdf_url') or '')
+        _meta = {'deck_job_id': job_id, 'kind': 'deck',
+                 'link': {'url': url, 'label': 'Download the deck'}}
+        if _pdf_url.lower().startswith('https://'):
+            _meta['files'] = [str((status or {}).get('filename') or 'deck.pptx'), str((status or {}).get('pdf_filename') or 'deck.pdf')]
+            _meta['pdf_link'] = {'url': _pdf_url, 'label': 'Download the PDF'}
         history.append({
             'role': 'agent',
             'text': (f"Deck ready: {title}{slide_note}. "
-                     "The link is good for 7 days."),
+                     + ("The PowerPoint and a PDF copy are attached to the email as well. " if _pdf_url else "")
+                     + "The link is good for 7 days."),
             'ts': _C._pm_iso_now(),
-            'meta': {'deck_job_id': job_id, 'kind': 'deck',
-                     'link': {'url': url,
-                              'label': 'Download the deck'}}})
+            'meta': _meta})
         _C._pm_save_thread_or_active(username, _tid, history)
         _pm_settle_ask(job_id, 'landed', f"Deck ready: {title}", (status or {}).get('started_at'))
     except Exception:

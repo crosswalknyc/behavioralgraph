@@ -553,7 +553,15 @@ def custom_price(username=None, history=None, subject=''):
             # conversation subject (prometheus.thread_subject): a pin says
             # what the thread is about, not what was paid for
             for ts in (_sr.thread_subjects(history, include_pin=False) or [])[:2]:
-                if prior_custom_on_subject(history, ts):
+                if not prior_custom_on_subject(history, ts):
+                    continue
+                # the ask stayed on that subject (named it, a cohort inside it, or
+                # named nothing); a different named audience is a new first ask
+                # (2026-10-30: 'top QSRs for Gilmore Girls viewers' after a paid
+                # Love Hypothesis read is a new $100 ask, not a follow-up)
+                sj = str(subject or '').strip()
+                if (not sj or not looks_like_subject(sj) or _same_subject(sj, ts)
+                        or _fold(ts) in _fold(sj) or _fold(sj) in _fold(ts)):
                     followup = True
                     break
         except Exception:
@@ -1083,6 +1091,73 @@ def snap_to_thread_subject(subject, history, page=''):
     return subject
 
 
+_FOLLOWUP_REF_RX = re.compile(
+    r"\b(?:the|that|this|those|these|your) (?:list|read|figure|figures|number|numbers|count|share|result|results|answer|"
+    r"film|title|show|audience|viewers|people|cohort|segment|group|one|ones|breakdown|table|top \d+)\b|"
+    r"\byou (?:started|began|opened|led|used|quoted|gave|said|listed|showed|pulled|ran)\b|"
+    r"^\W*(?:what|how) about\b|^\W*and (?:the|those|them|it|what|how)\b|\b(?:of|for|among) (?:them|those|these)\b|"
+    r"\bshould (?:\w+ )?be on the list\b|\bexpect (?:\w+ )?(?:on|in) (?:the|that) list\b", re.I)
+_STRONG_REF_RX = re.compile(
+    r"\b(?:of|for|among|within|inside) (?:them|those|these|that (?:group|cohort|audience)|the (?:same )?(?:group|cohort|audience|viewers|people))\b|"
+    r"\b(?:those|these) (?:viewers|people|readers|listeners|buyers|fans|users|subscribers)\b|\bthey\b|"
+    r"\bthe (?:list|film|title|show|read) you (?:started|began|gave|listed|used|opened|led|ran|pulled)\b|\bon the list\b", re.I)
+_LAST_READ_RX = re.compile(r"^On [^:]{2,120}:\s|\bUS people\b|\bprojected US audience\b|\bviewers\b|\bpenetration\b", re.I)
+
+
+def _last_read_turn(history):
+    """The most recent agent turn that delivered a read (a job turn, a
+    paid read, or an answer opening 'On <subject>:'), or None."""
+    turns = [t for t in (history or []) if isinstance(t, dict)]
+    for t in reversed(turns):
+        if str(t.get('role') or '') not in ('agent', 'assistant'):
+            continue
+        meta = t.get('meta') if isinstance(t.get('meta'), dict) else {}
+        txt = ' '.join(str(t.get('text') or '').split())
+        if meta.get('read_job_id') or meta.get('priced_paid') or meta.get('panel_charge'):
+            return t
+        if txt and _LAST_READ_RX.search(txt) and len(txt) > 120 and not meta.get('panel_offer'):
+            return t
+    return None
+
+
+def thread_read_subject(history):
+    """The subject of the last delivered read in the thread, or ''."""
+    t = _last_read_turn(history)
+    if not t:
+        return ''
+    meta = t.get('meta') if isinstance(t.get('meta'), dict) else {}
+    for src in (meta.get('subject'), (meta.get('priced_paid') or {}).get('subject') if isinstance(meta.get('priced_paid'), dict) else None):
+        if src:
+            return str(src).strip()
+    m = re.match(r"^On ([^:]{2,120}?)(?:\s+-\s+[^:]{1,120})?:\s", ' '.join(str(t.get('text') or '').split()))
+    return m.group(1).strip() if m else ''
+
+
+def is_followup_on_last_read(text, history, subject=''):
+    """True when the words point back at the last delivered read and name
+    no new audience of their own: a referent phrase, or a figure the
+    last reply quoted."""
+    t = ' '.join(str(text or '').split())
+    last = _last_read_turn(history)
+    if not t or last is None:
+        return False
+    last_txt = ' '.join(str(last.get('text') or '').split())
+    # the cohort itself pointed at ("of them", "those viewers", "the list you
+    # gave") is a follow-up whatever else the words name (a platform or
+    # brand being measured against it)
+    if _STRONG_REF_RX.search(t):
+        return True
+    # a new audience named outright is a new ask, not a follow-up
+    subj = str(subject or '').strip()
+    rs = thread_read_subject(history)
+    if subj and looks_like_subject(subj) and not (rs and (_fold(subj) == _fold(rs) or _fold(subj) in _fold(rs) or _fold(rs) in _fold(subj))):
+        return False
+    if _FOLLOWUP_REF_RX.search(t):
+        return True
+    nums = re.findall(r"\d{1,3}(?:,\d{3})+|\d{4,}|\d+(?:\.\d+)?%", t)
+    return any(n in last_txt for n in nums)
+
+
 def offer_or_charge(*, text, subject, kind, panel_confirm, username, user=None,
                     history=None, host=None, consume=None, years=1, dimension='', what='',
                     verb='watched', series=False, condition='', frame=''):
@@ -1102,6 +1177,16 @@ def offer_or_charge(*, text, subject, kind, panel_confirm, username, user=None,
         # a misspelling of the thread's subject is the thread's subject; a
         # price never lands on words that name no audience (2026-10-30)
         subj = str(snap_to_thread_subject(subj, history) or subj)
+        # a question that points back at the last reply ("the list", "the
+        # film you started with", "those viewers", "what about gender and
+        # age", a figure it quoted) is a follow-up on that read: metered,
+        # never a new quote (2026-10-30 audit, item 4: Jay was quoted $500
+        # three times for one follow-up)
+        if kind not in ('sizing', 'derived') and is_followup_on_last_read(text, history, subj):
+            ts = thread_read_subject(history) or subj
+            return 'charged', {'user': username, 'credits': 0, 'subject': ts, 'kind': kind,
+                               'pull_type': FOLLOWUP_PULL_TYPE, 'label': METERED_LABEL, 'metered': True,
+                               'followup_ref': True}
         if kind not in ('derived',) and not looks_like_subject(subj):
             try:
                 from . import subject_rules as _sr

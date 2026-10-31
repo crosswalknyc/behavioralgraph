@@ -17872,6 +17872,39 @@ def _pm_run_deck_job(job_id, username, ctx, history, angle,
                 Bucket=_H.S3_BUCKET, Key=s3_key, Body=fh.read(),
                 ContentType=('application/vnd.openxmlformats-officedocument'
                              '.presentationml.presentation'))
+        # A PDF copy when the ask wants one ("send me the deck as a pdf",
+        # "PDF to PowerPoint and back", 2026-10-30 audit item 2) and the
+        # build host can render it. Best effort: the PowerPoint always ships.
+        _pdf_extra = {}
+        if re.search(r"\bpdf\b", str(angle or ''), re.I):
+            try:
+                import shutil as _sh
+                import subprocess as _sp
+                _soff = _sh.which('soffice') or _sh.which('libreoffice')
+                if _soff:
+                    _pdf_dir = tempfile.mkdtemp(prefix='pm_deck_pdf_')
+                    _sp.run([_soff, '--headless', '--convert-to', 'pdf', '--outdir', _pdf_dir, local],
+                            timeout=300, capture_output=True)
+                    _pdf_local = os.path.join(_pdf_dir, os.path.splitext(os.path.basename(local))[0] + '.pdf')
+                    if os.path.exists(_pdf_local):
+                        _pdf_name = f"{stem}_Insights.pdf"
+                        _pdf_key = f"{_PM_DECK_FILE_PREFIX}{job_id}/{_pdf_name}"
+                        with open(_pdf_local, 'rb') as _pfh:
+                            _H.s3_client.put_object(Bucket=_H.S3_BUCKET, Key=_pdf_key, Body=_pfh.read(),
+                                                    ContentType='application/pdf')
+                        _pdf_extra = {
+                            'pdf_s3_key': _pdf_key, 'pdf_filename': _pdf_name,
+                            'pdf_url': _H.s3_client.generate_presigned_url(
+                                'get_object',
+                                Params={'Bucket': _H.S3_BUCKET, 'Key': _pdf_key,
+                                        'ResponseContentDisposition': f'attachment; filename="{_pdf_name}"'},
+                                ExpiresIn=7 * 24 * 3600)}
+                        try:
+                            os.remove(_pdf_local)
+                        except OSError:
+                            pass
+            except Exception:
+                traceback.print_exc()
         try:
             os.remove(local)
         except OSError:
@@ -17885,7 +17918,7 @@ def _pm_run_deck_job(job_id, username, ctx, history, angle,
         _pm_deck_status_write(job_id, {
             **base, 'status': 'done', 'url': url, 'filename': fname,
             'title': plan.get('title'),
-            'slides': len(plan.get('slides') or [])})
+            'slides': len(plan.get('slides') or []), **_pdf_extra})
         # Delivered-deck anchors (2026-08-27): the shipped deck's
         # headline figures become binding ledger anchors so every
         # later read or deck for this subject stays commensurate
@@ -17905,7 +17938,7 @@ def _pm_run_deck_job(job_id, username, ctx, history, angle,
         # opted in) email them the link.
         _deck_status = {'url': url, 'filename': fname, 's3_key': s3_key,
                         'title': plan.get('title'),
-                        'slides': len(plan.get('slides') or [])}
+                        'slides': len(plan.get('slides') or []), **_pdf_extra}
         _pm_append_deck_to_history(username, job_id, _deck_status)
         if not _pm_flush_notify(job_id, 'deck', _deck_status):
             # A finished deck always reaches the requester's inbox with the
@@ -17980,6 +18013,8 @@ def _pm_deck_core(user, body):
     if _ds:
         ctx, history = _ds
         angle = 'The same deck, slide for slide: every number, table and read exactly as delivered, in the same order, nothing added.'
+        if re.search(r"\b(?:as|to|into|in)\s+(?:an?\s+)?pdf\b|\bpdf\s+(?:version|copy|export|file)\b", text, re.I):
+            angle += ' Deliver a PDF copy too.'   # the deck job renders one where it can (2026-10-30)
     try:
         # a which-subject chip picked for a deck names the subject outright
         # (2026-10-31): resolve that name, keep the ask as the angle
