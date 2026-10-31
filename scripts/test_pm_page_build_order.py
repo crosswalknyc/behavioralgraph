@@ -134,5 +134,22 @@ class IdentitySwap(unittest.TestCase):
         self.assertIn('or _ident_swapped', src[j:j + 4000])
 
 
+class CountingBlockOnlyOnFigures(unittest.TestCase):
+    """The 'How these are counted' block attaches to a viewership FIGURE
+    (a count next to a viewing word in one sentence), never to a build
+    quote that says '4 or more views' or 'the streaming surge'."""
+
+    def test_trigger(self):
+        from prometheus import methodology as M
+        quote = ("On Godzilla Minus One: one profile scoring June 1 2024 to June 1 2025, read against the 17,056 "
+                 "projected US audience and 21.4% Avid share on file.\n- Avid share: 21.4% (4 or more views)\n"
+                 "- The June window reads larger than the 17,056 on file. The streaming surge lands inside it.")
+        self.assertFalse(M.is_viewership_read(quote, {}, 'can you make this profile?'))
+        self.assertTrue(M.is_viewership_read('3,108,219 US people played Stokes Twins on Netflix across the month.', {}, ''))
+        self.assertTrue(M.is_viewership_read('About 2.4 million viewers streamed it in the window.', {}, ''))
+        self.assertTrue(M.is_viewership_read('x', {'metric_family': 'viewership'}, ''))
+        self.assertFalse(M.is_viewership_read('Reba McEntire: 90,271,230 people in the US; audience range 2,368,833 to 3,112,291.', {}, ''))
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=1)

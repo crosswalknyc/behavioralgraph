@@ -117,17 +117,37 @@ def _fmt_date(v):
     return s
 
 
+# A viewership FIGURE: a count of at least a thousand (or a million-form
+# figure) within a few words of a viewing word. The word alone is not
+# one (Jay Patel 2026-10-30: a build quote that said "4 or more views"
+# and "the streaming surge" drew the whole counting block).
+_FIGURE_RX = re.compile(r"(?:\d{1,3}(?:,\d{3})+|\d{4,}|\d+(?:\.\d+)?\s*(?:million|m\b|k\b))", re.I)
+
+
+def carries_view_figure(text):
+    """A count and a viewing word in the same sentence."""
+    t = str(text or '')
+    if not t:
+        return False
+    for sent in re.split(r"(?<=[.;!?])\s+|\n+", t):
+        if VIEWERSHIP_RX.search(sent) and _FIGURE_RX.search(sent):
+            return True
+    return False
+
+
 def is_viewership_read(text='', res=None, question=''):
-    """True when the reply or the ask carries a viewership figure."""
-    blob = ' '.join([str(text or ''), str(question or '')])
+    """True when the reply or the ask carries a viewership figure: a
+    metric family that is viewing, a metric labeled as one, or a count
+    standing next to a viewing word in the reply or the question."""
     res = res if isinstance(res, dict) else {}
-    for m in (res.get('metrics') or []):
-        if isinstance(m, dict):
-            blob += ' ' + str(m.get('label') or '') + ' ' + str(m.get('name') or '')
     fam = str(res.get('metric_family') or '').lower()
     if fam in ('viewership', 'consumption', 'journey', 'streaming'):
         return True
-    return bool(VIEWERSHIP_RX.search(blob))
+    labels = ' '.join(str(m.get('label') or '') + ' ' + str(m.get('name') or '')
+                      for m in (res.get('metrics') or []) if isinstance(m, dict))
+    if labels and VIEWERSHIP_RX.search(labels):
+        return True
+    return carries_view_figure(text) or carries_view_figure(question)
 
 
 def block(window_start=None, window_end=None, window_label='',
