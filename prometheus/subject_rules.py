@@ -705,6 +705,7 @@ _IDENTITY_STOP = frozenset((
     'size', 'how', 'big', 'is', 'are', 'what', 'many', 'much', 'can', 'you', 'me', 'please', 'want', 'need', 'give',
     'show', 'tell', 'new', 'fresh', 'date', 'range', 'window', 'months', 'month', 'year', 'years', 'past', 'last', 'trailing',
     'days', 'day', 'weeks', 'week', 'cut', 'cuts', 'male', 'female', 'men', 'women', 'gen', 'millennials', 'boomers',
+    'podcast', 'show', 'series', 'film', 'movie', 'brand', 'channel', 'network', 'viewer', 'listener', 'reader', 'user',
 ))
 
 
@@ -750,6 +751,17 @@ def build_reroute_payload():
             'reply': 'Setting up the profile brief for you to approve.', 'followups': [], 'offer_deck': False, 'deck_angle': None}
 
 
+def words_name_page(text, page):
+    """True when the ask's words carry the page's own naming words
+    ('wicked tuna' for WICKED TUNA Viewers; 'new heights' for New
+    Heights Podcast Listeners). Audience nouns and years do not count."""
+    ptoks = [t for t in identity_tokens(page)]
+    if not ptoks:
+        return False
+    ttoks = set(identity_tokens(text))
+    return all(t in ttoks for t in ptoks)
+
+
 def open_screen_question(text, page, history, *, deck=False, what='this'):
     """The which-subject question for an ask that names no subject while
     a profile is open, when the thread has its own subject or has said
@@ -757,6 +769,12 @@ def open_screen_question(text, page, history, *, deck=False, what='this'):
     plain one-tap confirm on the page). The options carry the deck flag
     so the deck lane's memory confirm re-runs as a deck."""
     page = str(page or '').strip()
+    # the words name the page ("build a deck with the wicked tuna
+    # demographics" with WICKED TUNA Viewers open): nothing to ask
+    # (Armine Meseldzhyan 2026-10-31, asked "Tubi, New Heights podcast
+    # listeners vs Tubi or WICKED TUNA Viewers?")
+    if page and words_name_page(text, page):
+        return None
     # a subject the reader set in this thread that is not the page puts
     # the page out of the question for good (Emmet Riley 2026-10-26)
     rejected = page_rejected_in_thread(history, page) or pin_beats_page(page)

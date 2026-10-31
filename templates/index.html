@@ -89185,7 +89185,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             _pmStartDeck('Build a deck from this', ctx, _pmDeckClarifyAngle);
         }
 
-        async function _pmStartDeck(text, boundCtx, angleOverride, confirmOpen) {
+        async function _pmStartDeck(text, boundCtx, angleOverride, confirmOpen, bindSubject) {
             var ctx = boundCtx || _pmCollectPageContext();
             var angle = (angleOverride && String(angleOverride)) ||
                 _pmPendingDeckAngle ||
@@ -89201,6 +89201,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     history: synthChatHistory.slice(-14)
                 };
                 if (confirmOpen) _dbody.confirm_open_screen = true;
+                if (bindSubject) _dbody.bind_subject = String(bindSubject);
                 var _fr = await _synthChatFetchJson('/api/brief-chat/deck', _dbody);
                 var data = _fr.data;
                 if (data && data.success && data.pay_per_use_offer) {
@@ -89625,10 +89626,26 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var _mcLow = text.trim().toLowerCase();
                 var _mcPick = null;
                 var _mcList = _mc.options || [];
+                var _mcFold = function (v) { return String(v || '').toLowerCase().replace(/\(open on your screen\)/g, '').replace(/^on\s+/, '').replace(/[^a-z0-9]+/g, ' ').trim(); };
+                var _mcTyped = _mcFold(_mcLow);
                 for (var _mcI = 0; _mcI < _mcList.length; _mcI++) {
                     if (_mcLow === String(_mcList[_mcI].label || '').toLowerCase()) {
                         _mcPick = _mcList[_mcI];
                         break;
+                    }
+                }
+                // the typed name of an option is that option ("wicked tuna
+                // viewers" for "WICKED TUNA Viewers (open on your screen)",
+                // Armine Meseldzhyan 2026-10-31)
+                if (!_mcPick && _mcTyped.length >= 3) {
+                    for (var _mcJ = 0; _mcJ < _mcList.length; _mcJ++) {
+                        var _oSubj = _mcFold(_mcList[_mcJ].subject);
+                        var _oLabel = _mcFold(_mcList[_mcJ].label);
+                        if (_mcTyped === _oSubj || _mcTyped === _oLabel ||
+                            (_mcTyped.length >= 5 && (_oSubj.indexOf(_mcTyped) === 0 || _mcTyped.indexOf(_oSubj) === 0))) {
+                            _mcPick = _mcList[_mcJ];
+                            break;
+                        }
                     }
                 }
                 if (!_mcPick && _mcList.length &&
@@ -89642,8 +89659,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (_mcPick) {
                     _pmMemoryConfirm = null;
                     if (_mcPick.deck) {
+                        // the picked subject rides along so the deck is built on
+                        // it, not on whatever happens to be open
                         await _pmStartDeck(_mc.question || text,
-                            _pmCollectPageContext(), '', true);
+                            _pmCollectPageContext(), '', true, _mcPick.subject || '');
                         return;
                     }
                     if (_mcPick.overall) {

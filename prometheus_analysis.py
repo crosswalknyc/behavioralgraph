@@ -5804,6 +5804,22 @@ _DECK_GENERIC_TAIL_RE = re.compile(
     r'\s+for\s+(?:the\s+|a\s+|an\s+|our\s+|my\s+)?'
     r'(?:pitch|meeting|deal|renewal|rfp|client|presentation|upfront)'
     r's?\s*[.!?]?$', re.IGNORECASE)
+# A lens word names what the deck is ABOUT, not whom: demographics,
+# demos, interests, behaviors, platforms, brands, the overview. Typo
+# tolerant on the common ones ("demogrpahics", "demographcs").
+_DECK_LENS_WORDS = (r"(?:demo(?:graphic|grpahic|graphc|graph)s?|demos?|interests?|behaviou?rs?|platforms?|brands?|"
+                    r"overview|summary|insights?|findings|profile|audience|data)")
+_DECK_LENS_LEAD_RE = re.compile(
+    r"^(?:(?:the|a|an|our|their|its)\s+)?(?:" + _DECK_LENS_WORDS + r")(?:\s+(?:and|&)\s+" + _DECK_LENS_WORDS + r")*"
+    r"\s+(?:of|on|for|from|about)\s+(?:the\s+)?(?:profile\s+|audience\s+)?(?:of\s+)?", re.IGNORECASE)
+_DECK_LENS_TAIL_RE = re.compile(
+    r"(?:\s+(?:profile|audience))?\s+(?:" + _DECK_LENS_WORDS + r")(?:\s+(?:and|&)\s+" + _DECK_LENS_WORDS + r")*\s*$", re.IGNORECASE)
+_DECK_LENS_OF_RE = re.compile(
+    r"\b(?:deck|slides|presentation|powerpoint|pptx|one[- ]pager)s?\s+(?:on|of|about|covering|with)\s+(?:the\s+)?"
+    r"(?:" + _DECK_LENS_WORDS + r")(?:\s*,\s*" + _DECK_LENS_WORDS + r")*(?:\s+(?:and|&)\s+" + _DECK_LENS_WORDS + r")*"
+    r"\s+(?:of|for|on|behind)\s+(?:the\s+)?(?:profile\s+|audience\s+)?(?:of\s+)?(.+?)\s*[.!?]?$", re.IGNORECASE)
+_DECK_WITH_LENS_RE = re.compile(
+    r"\b(?:with|of|for|from|about|showing|covering)\s+(?:the\s+)?(.+?)\s+(?:" + _DECK_LENS_WORDS + r")\s*[.!?]?$", re.IGNORECASE)
 _DECK_SUBJ_STOPWORDS = {
     'this', 'that', 'it', 'the data', 'this data', 'the profile',
     'this profile', 'the page', 'this page', 'these', 'me', 'us', 'a', 'an',
@@ -5844,13 +5860,30 @@ def extract_deck_brief(text):
         m = _DECK_BUILT_FOR_RE.search(t) or _DECK_SUBJ_MID_RE.search(t)
         if m:
             subject = m.group(1)
-    subject = subject.strip(' \'"`,.!?')
-    subject = re.sub(r'^(?:a|an|the)\s+', '', subject, flags=re.IGNORECASE)
-    subject = re.sub(r'\s+(?:insights?|audience value|talent value|'
-                     r'audience|value)$', '', subject,
-                     flags=re.IGNORECASE).strip()
-    if subject.lower() in _DECK_SUBJ_STOPWORDS:
-        subject = ''
+    def _clean(subj):
+        subj = str(subj or '').strip(' \'"`,.!?')
+        subj = re.sub(r'^(?:a|an|the)\s+', '', subj, flags=re.IGNORECASE)
+        # a lens on the subject is not the subject: "demographics of the
+        # profile wicked tuna viewers" names WICKED TUNA Viewers (Armine
+        # Meseldzhyan 2026-10-31); the lens rides into the angle instead
+        subj = _DECK_LENS_LEAD_RE.sub('', subj).strip()
+        subj = _DECK_LENS_TAIL_RE.sub('', subj).strip()
+        subj = re.sub(r'^(?:a|an|the)\s+', '', subj, flags=re.IGNORECASE)
+        subj = re.sub(r'\s+(?:insights?|audience value|talent value|'
+                      r'audience|value)$', '', subj,
+                      flags=re.IGNORECASE).strip()
+        if subj.lower() in _DECK_SUBJ_STOPWORDS or subj.lower() in ('a', 'an', 'the', 'me', 'us'):
+            subj = ''
+        return subj
+
+    subject = _clean(subject)
+    if not subject:
+        # "build a deck with the wicked tuna demographics", "a deck of the
+        # interests and behaviors of X viewers": the subject sits beside
+        # the lens words
+        m = _DECK_LENS_OF_RE.search(t) or _DECK_WITH_LENS_RE.search(t)
+        if m:
+            subject = _clean(m.group(1))
     return {'subject': subject[:120], 'partner': partner[:80]}
 
 

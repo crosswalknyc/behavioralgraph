@@ -17535,9 +17535,25 @@ def _pm_deck_fuzzy_suggestions(query):
     except Exception:
         traceback.print_exc()
         return []
-    # Only ever suggest profiles this user can actually run.
+    # Rank first, in memory, then gate ONLY the shortlist. The access
+    # check reads the user record on every call; gating all 4,700
+    # catalog entries up front took a regular seat 17 minutes on one
+    # deck ask (Armine Meseldzhyan at Lionsgate, 2026-10-31) and the
+    # turn came back as the calm failure line. Admin seats short-circuit
+    # the check, which is why it never showed for us.
+    try:
+        ranked = _shortlist_profile_matches(
+            q, catalog or [], max_candidates=max(SYNTH_CHAT_MAX_CANDIDATES, 24))
+    except Exception:
+        ranked = None
+    pool = list(ranked or [])
+    if not pool:
+        try:
+            pool = pma.deck_fuzzy_pool(q, catalog or [])[:24] if hasattr(pma, 'deck_fuzzy_pool') else []
+        except Exception:
+            pool = []
     accessible = []
-    for c in (catalog or []):
+    for c in pool[:40]:
         k = str((c or {}).get('s3_key') or '').strip()
         if not k:
             continue
@@ -17550,12 +17566,7 @@ def _pm_deck_fuzzy_suggestions(query):
     if not accessible:
         return []
     try:
-        ranked = _shortlist_profile_matches(
-            q, accessible, max_candidates=SYNTH_CHAT_MAX_CANDIDATES)
-    except Exception:
-        ranked = None
-    try:
-        return pma.build_deck_suggestions(q, accessible, ranked=ranked)
+        return pma.build_deck_suggestions(q, accessible, ranked=accessible)
     except Exception:
         traceback.print_exc()
         return []
@@ -17970,7 +17981,15 @@ def _pm_deck_core(user, body):
         ctx, history = _ds
         angle = 'The same deck, slide for slide: every number, table and read exactly as delivered, in the same order, nothing added.'
     try:
-        resolution, res_err = _pm_resolve_deck_subject(text, ctx)
+        # a which-subject chip picked for a deck names the subject outright
+        # (2026-10-31): resolve that name, keep the ask as the angle
+        _bind_pick = str(body.get('bind_subject') or '').strip()
+        if _bind_pick and body.get('confirm_open_screen'):
+            resolution, res_err = _pm_resolve_deck_subject(f"build the {_bind_pick} insights deck", ctx)
+            if res_err or not resolution or resolution.get('clarify'):
+                resolution, res_err = _pm_resolve_deck_subject(text, ctx)
+        else:
+            resolution, res_err = _pm_resolve_deck_subject(text, ctx)
     except Exception as e:
         traceback.print_exc()
         _H._chatbot_error_email('brief-chat/deck', e,
