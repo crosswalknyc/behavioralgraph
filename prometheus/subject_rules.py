@@ -180,11 +180,14 @@ def _bare_name(as_written):
 # "run a profile on X", "build a profile for X", "pull a profile of X",
 # "run aprofile on X" (the missing space is the common typo), "profile X
 # for me" is NOT here (a bare noun order is the interpret step's call).
-_BUILD_VERBS = r"(?:run|build|pull|create|queue|start|launch|generate|make|do|kick off|spin up)"
-_PROFILE_NOUN = r"(?:a\s*)?(?:new\s+|fresh\s+|full\s+|total\s+universe\s+)?(?:profiles?|porfiles?|profles?|proifles?|profiels?|prfiles?)"
+# typo tolerant on the verb too (2026-10-30 audit, item 12: "run aprofile
+# on ncis: new york" went to a read; "runa profile", "buid a profile",
+# "creat a profile", "pul a profile" are the same order)
+_BUILD_VERBS = r"(?:run|rn|rub|runa|build|buid|biuld|bulid|biuld|pull|pul|pll|create|creat|crate|queue|start|launch|generate|make|mkae|do|kick off|spin up)"
+_PROFILE_NOUN = r"(?:a\s*)?(?:new\s+|fresh\s+|full\s+|total\s+universe\s+)?(?:profiles?|porfiles?|profles?|proifles?|profiels?|prfiles?|profil|porfile|profie|profl)"
 EXPLICIT_BUILD_RX = re.compile(
     r"^\W*(?:please\s+|can you\s+|could you\s+|would you\s+|i want you to\s+|i need you to\s+|let'?s\s+|go ahead and\s+)?"
-    r"(?:" + _BUILD_VERBS + r")\s+(?:me\s+|us\s+)?" + _PROFILE_NOUN +
+    r"(?:" + _BUILD_VERBS + r")\s*(?:me\s+|us\s+)?" + _PROFILE_NOUN +
     r"\s+(?:on|for|of|about|around)\s+(?P<subject>[^\n?!.;]{2,120}?)"
     r"(?:\s*[.!?;]|\s+(?:please|now|today|asap|thanks?|thank you)\b.*)?\s*$",
     re.I)

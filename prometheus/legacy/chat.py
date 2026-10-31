@@ -18035,8 +18035,13 @@ def _pm_deck_core(user, body):
     _pm_ask_stage('deck_resolve', _t_deck0)
     if resolution.get('clarify'):
         return jsonify({'success': True, 'clarify': resolution['clarify']})
+    _page_named = False
+    try:   # "make me a deck on New Heights" with New Heights Podcast Listeners open: the words confirm the page (2026-10-30, item 13)
+        _page_named = bool(_subject_rules.words_name_page(text, str(resolution.get('subject') or '')))
+    except Exception:
+        _page_named = False
     if resolution.get('used_open_page') \
-            and not body.get('confirm_open_screen'):
+            and not body.get('confirm_open_screen') and not _page_named:
         page = str(resolution.get('subject') or 'this profile').strip()
         # the thread's own subject leads; a page the reader said no to is
         # never the lead chip (2026-10-20 Jenna, Mark at Bent Pixels)

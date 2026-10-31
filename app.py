@@ -45545,7 +45545,27 @@ def _apply_universe_qualifier_gate(draft, prompt, allow_ask=False):
     # early exits below and always hard-demotes to new_build.
     _identity_mismatch = _subject_identity_mismatch(
         prompt, draft.get('subject'), disp)
-    if not _identity_mismatch and _universe_qualifiers_compatible(prompt, disp):
+    # A changed name is never a silent match (2026-10-30 audit, item 12:
+    # "Run a profile for Ordeal" matched L'Oreal as an existing profile
+    # because the draft had adopted the candidate's spelling, so the
+    # identity test saw its own name). The words the person typed are
+    # compared to the candidate; when they share no naming token the
+    # match is a question ("We have L'Oreal - is that what you meant?"),
+    # never a reuse.
+    _typed_swap = False
+    if not _identity_mismatch and decision == 'existing_match':
+        try:
+            from prometheus.subject_rules import explicit_build_subject as _ebs, identity_tokens as _idt
+            _typed = str(_ebs(prompt) or '').strip()
+            if _typed:
+                _tt = set(_idt(_typed))
+                _ct = set(_idt(disp.split(' - ', 1)[0]))
+                _cand_norm = _normalize_for_match(disp.split(' - ', 1)[0])
+                if _tt and _ct and not (_tt & _ct) and not any(len(t) >= 5 and t in _cand_norm for t in _tt):
+                    _typed_swap = True
+        except Exception:
+            _typed_swap = False
+    if not _identity_mismatch and not _typed_swap and _universe_qualifiers_compatible(prompt, disp):
         return False, ''
     # derive_cut parents: the parent's qualifier set only needs to be
     # a SUBSET of the ask's (a 'Vizio TV Owners' ask deriving off the
@@ -45555,7 +45575,7 @@ def _apply_universe_qualifier_gate(draft, prompt, allow_ask=False):
     # derive_cut, however cleanly the qualifier subset lines up.
     cand_sig = _universe_qualifier_signature(disp.split(' - ', 1)[0])
     req_sig = _universe_qualifier_signature(prompt)
-    if not _identity_mismatch and decision == 'derive_cut' and cand_sig <= req_sig:
+    if not _identity_mismatch and not _typed_swap and decision == 'derive_cut' and cand_sig <= req_sig:
         return False, ''
     days = _profile_age_days(key, draft.get('existing_match_last_modified'))
     built_label = _profile_built_label(
@@ -45581,7 +45601,20 @@ def _apply_universe_qualifier_gate(draft, prompt, allow_ask=False):
     _plat_mismatch = (not _identity_mismatch
                       and req_sig == cand_sig
                       and req_plat != cand_plat)
-    if _identity_mismatch:
+    if _typed_swap:
+        # the person's own spelling leads the fresh build they may want
+        try:
+            from prometheus.subject_rules import explicit_build_subject as _ebs2
+            _typed2 = str(_ebs2(prompt) or '').strip()
+            if _typed2:
+                draft['subject'] = _typed2
+                draft['name'] = _typed2
+                draft.pop('file_stem', None)
+        except Exception:
+            pass
+        note = (f"Changed-name gate: the typed subject {str(draft.get('subject') or '')!r} shares no naming "
+                f"word with candidate {disp!r}; {'asking' if allow_ask else 'demoted to new_build'}.")
+    elif _identity_mismatch:
         note = (f"Subject-identity gate: ask subject "
                 f"{str(draft.get('subject') or '')!r} shares no identity "
                 f"with candidate {disp!r} - unrelated audience; "

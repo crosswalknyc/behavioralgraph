@@ -247,9 +247,19 @@ def _anchor(cc, name):
     pa = cc.profile_anchor(a)
     if not pa or not pa.get('sample_size'):
         return None, a
-    return {'name': a.get('subject') or name, 'sample': int(pa['sample_size']),
-            'us': int(pa.get('audience_size') or round(int(pa['sample_size']) * 32.99)),
-            'window': pa.get('window') or {}, 'key': pa.get('source_key')}, a
+    hit = {'name': a.get('subject') or name, 'sample': int(pa['sample_size']),
+           'us': int(pa.get('audience_size') or round(int(pa['sample_size']) * 32.99)),
+           'window': pa.get('window') or {}, 'key': pa.get('source_key')}
+    # the Avid tier rides along when the subject's avid cut is on file
+    try:
+        for f in (a.get('facts') or []):
+            if (f.get('product') == 'profile' and f.get('kind') == 'audience_size' and f.get('cut')
+                    and 'avid' in str(f.get('source_key') or '').lower()):
+                hit['avid_us'] = int(round(float(f.get('value') or 0)))
+                break
+    except Exception:
+        pass
+    return hit, a
 
 
 def fuzzy_catalog_name(cc, phrase, cutoff=0.86):
@@ -341,17 +351,16 @@ def _band(host, sample):
 
 
 def profile_line(hit, host=None):
-    """One plain line for a held profile: sample, incidence, US people,
-    band, window."""
-    # I5 (2026-10-20): US people in plain words; the sample count, the
-    # incidence and the ten million stay inside (Tania Nasr asked what
-    # the 10 million was). The sizing block on the payload keeps the
-    # sample for the operator surfaces.
+    """One number with one definition for a held profile (2026-10-30
+    audit, item 9: "Chipotle: 77,895,196 people in the US; audience range
+    2,043,833 to 2,732,352" put two bases on one line and read wrong to
+    anyone who knows Chipotle). The projected US audience with its
+    definition and window, the Avid tier when the cut is on file, and
+    the measured count labeled as what it is."""
+    # I5 (2026-10-20): US people in plain words; the ten million stays
+    # inside (Tania Nasr asked what the 10 million was).
     sample = int(hit['sample'])
-    line = f"{hit['name']}: {_fmt(hit['us'])} people in the US"
-    band = _band(host, sample)
-    if band:
-        line += f"; audience range {_fmt(band[0])} to {_fmt(band[1])}"
+    name = str(hit['name'])
     w = _window_text(hit.get('window'))
     if w:
         try:
@@ -359,8 +368,12 @@ def profile_line(hit, host=None):
             w = _g.plain_window(w) or w
         except Exception:
             pass
-        line += f" ({w})"
-    return line + ". That is the profile on the dashboard."
+    line = (f"{name}: {_fmt(hit['us'])} US people with at least one digital touchpoint with {name}"
+            + (f" from {w}." if w else " in the window."))
+    if hit.get('avid_us'):
+        line += f" The Avid tier, the most engaged of them, is {_fmt(hit['avid_us'])}."
+    line += f" The measured count behind that projection is {_fmt(sample)} people inside the sample."
+    return line + " That is the profile on the dashboard."
 
 
 def _check_line(host, phrase, history, window_txt=''):

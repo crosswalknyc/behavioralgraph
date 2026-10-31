@@ -863,6 +863,31 @@ def ask(user, body, *, via='session'):
                 _persist_turn(persist, uname, tid, history, text, env, raw, 'deck')
                 return env, status
 
+    # lane: number_provenance
+    # "Where does the 12,004,203 come from?" is answered from the thread:
+    # the read that carried the figure, the sentence, its label and how
+    # it was counted (2026-10-30 audit, item 5: Alexia got a status update
+    # twice and then "12 is not one of the brands we carry").
+    if not _armed(body):
+        try:
+            from . import number_provenance as _np
+            _np_raw = _np.answer(text, history)
+        except Exception as _fx:
+            _faults.note('service.number_provenance', _fx)
+            _np_raw = None
+        if _np_raw:
+            raw = _np_raw
+            decision = {'surface': 'analyze', 'mode': None, 'reason': 'number_provenance', 'client_hint': None}
+            if str(body.get('_client_surface_sent') or body.get('surface') or '').strip().lower() == 'interpret':
+                raw = _interpret_shape(raw)
+            try:
+                host.ask_hint(route='number_provenance', outcome=('answered' if (_np_raw.get('number_provenance') or {}).get('found') else 'not_found'))
+            except Exception as _fx:
+                _faults.note('service', _fx)
+            env = envelope.wrap(raw, surface='analyze', decision=decision, thread_id=tid, via=via)
+            _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
+            return env, 200
+
     referent_decision = None
     _client_surface = str(body.get('_client_surface_sent') or body.get('surface') or '').strip().lower()
     try:

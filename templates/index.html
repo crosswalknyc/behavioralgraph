@@ -86377,6 +86377,57 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             _pmReadIndicatorHide(jobId);
             _pmUntrackReadJob(jobId);
         }
+        // Server turns land without a refresh (2026-10-30 audit, item 14):
+        // a read or deck finished on the server, a note banked into the
+        // thread, a correction. Every 20 seconds while the chat is open
+        // the active thread is read back and any server turn the widget
+        // has not shown is inserted in time order. Local turns are never
+        // dropped; nothing runs while a reply is in flight.
+        var _PM_SERVER_TURN_MARKS = ['read_job_id', 'deck_job_id', 'jiq_job_id', 'bpiq_job_id', 'fw_job_id', 'aiq_job_id',
+                                     'tlist_job_id', 'files', 'server_note', 'delivery', 'corrected_at'];
+        var _pmServerPullBusy = false;
+        function _pmIsServerTurn(t) {
+            var m = (t && t.meta) || {};
+            for (var i = 0; i < _PM_SERVER_TURN_MARKS.length; i++) { if (m[_PM_SERVER_TURN_MARKS[i]]) return true; }
+            return false;
+        }
+        function _pmTurnStamp(t) {
+            return String((t && t.ts) || '') + '|' + String((t && t.text) || '').slice(0, 80);
+        }
+        function _pmServerTurnsPull() {
+            try {
+                var w = document.getElementById('prometheusWidget');
+                if (!w || !w.classList.contains('pm-on') || _pmServerPullBusy) return;
+                if (synthChatInflightController || _pmDeckInFlight) return;
+                _pmServerPullBusy = true;
+                fetch('/api/brief-chat/history', { credentials: 'same-origin' })
+                    .then(function (r) { return r.ok ? r.json() : null; })
+                    .then(function (d) {
+                        _pmServerPullBusy = false;
+                        if (!d || d.rotated || !Array.isArray(d.history)) return;
+                        var have = {};
+                        (synthChatHistory || []).forEach(function (t) { have[_pmTurnStamp(t)] = true; });
+                        var added = 0;
+                        d.history.forEach(function (t) {
+                            if (!_pmIsServerTurn(t) || have[_pmTurnStamp(t)]) return;
+                            var ts = Date.parse(String(t.ts || '')) || 0;
+                            var idx = synthChatHistory.length;
+                            for (var i = synthChatHistory.length - 1; i >= 0; i--) {
+                                var lt = Date.parse(String((synthChatHistory[i] || {}).ts || '')) || 0;
+                                if (lt && ts && lt > ts) idx = i; else break;
+                            }
+                            synthChatHistory.splice(idx, 0, t);
+                            added++;
+                        });
+                        if (added) {
+                            try { synthChatRerender(); } catch (_) {}
+                            try { _pmThreadsLoad(); } catch (_) {}
+                        }
+                    }).catch(function () { _pmServerPullBusy = false; });
+            } catch (_) { _pmServerPullBusy = false; }
+        }
+        try { setInterval(_pmServerTurnsPull, 20000); } catch (_) {}
+
         function _pmResumeReadJobs() {
             var jobs = _pmReadJobsLoad(), now = Date.now();
             jobs.forEach(function(j) {

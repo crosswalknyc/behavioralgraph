@@ -120,6 +120,15 @@ def _pm_append_read_to_history(username, job_id, payload, held=False, started_at
                 _meta['link' if _k == 'file_link' else 'chart'] = dict((payload or {})[_k])
         if (payload or {}).get('profile'):
             _meta['subject'] = str((payload or {}).get('profile'))[:120]
+        # the read's figure ledger rides on the turn so "where does this
+        # number come from" can answer from the thread (2026-10-30)
+        try:
+            _figs = [f for f in ((payload or {}).get('figures') or []) if isinstance(f, dict) and f.get('value') is not None]
+            if _figs:
+                _meta['figures'] = [{'value': f.get('value'), 'kind': f.get('kind'), 'label': str(f.get('label') or '')[:120],
+                                     'source': str(f.get('source') or '')[:40]} for f in _figs[:40]]
+        except Exception:
+            pass
         history.append({'role': 'agent', 'text': reply, 'ts': _C._pm_iso_now(), 'meta': _meta})
         _C._pm_save_thread_or_active(username, _tid, history)
     except Exception:

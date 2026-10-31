@@ -1847,6 +1847,9 @@ def render_view_context_block(view_context):
 # repeat questions never re-fetch. The assembled block is byte-capped.
 
 XMOD_TIME_BUDGET_S = 2.5
+XMOD_SUBIQ_EXTRA_S = 2.0          # the Subscriber IQ fetch may run this much past the shared budget (2026-10-30)
+_XMOD_SUBIQ_TTL_S = 3600
+_xmod_subiq_parsed = {}            # {tracker key: (ts, parsed)} so a second ask never re-fetches
 XMOD_MAX_BYTES = 2048
 _XMOD_INDEX_TTL_S = 600
 _XMOD_TRENDS_TTL_S = 1800
@@ -2564,12 +2567,40 @@ def build_cross_module_block(s3_client, bucket, ctx, text,
                 elif local_key in subiq_index:
                     subiq_show, sq_key = subiq_index[local_key]
                 if sq_key and s3_client is not None and subiq_parser:
-                    def _fetch_subiq(k=sq_key):
-                        resp = s3_client.get_object(
-                            Bucket=subiq_bucket, Key=k)
-                        return subiq_parser(
-                            resp['Body'].read().decode('utf-8'))
-                    fut_subiq = ex.submit(_fetch_subiq)
+                    # Parsed trackers are kept for an hour (2026-10-30 audit,
+                    # item 15: 26 reads in three days went out without the
+                    # Subscriber IQ context because the fetch ran past the
+                    # budget). A fetch that outlives the budget still lands
+                    # in the cache, so the next ask on the subject has it.
+                    _sq_hit = None
+                    with _xmod_lock:
+                        _c = _xmod_subiq_parsed.get(sq_key)
+                        if _c and time.time() - _c[0] < _XMOD_SUBIQ_TTL_S:
+                            _sq_hit = _c[1]
+                    if _sq_hit is not None:
+                        class _Done:
+                            def __init__(self, v):
+                                self._v = v
+
+                            def result(self, timeout=None):
+                                return self._v
+                        fut_subiq = _Done(_sq_hit)
+                    else:
+                        def _fetch_subiq(k=sq_key):
+                            resp = s3_client.get_object(
+                                Bucket=subiq_bucket, Key=k)
+                            parsed = subiq_parser(
+                                resp['Body'].read().decode('utf-8'))
+                            try:
+                                with _xmod_lock:
+                                    _xmod_subiq_parsed[k] = (time.time(), parsed)
+                                    if len(_xmod_subiq_parsed) > 120:
+                                        for _old in sorted(_xmod_subiq_parsed.items(), key=lambda kv: kv[1][0])[:40]:
+                                            _xmod_subiq_parsed.pop(_old[0], None)
+                            except Exception:
+                                pass
+                            return parsed
+                        fut_subiq = ex.submit(_fetch_subiq)
                 elif sq_key:
                     lines.append(
                         f"SUBSCRIBER IQ: an acquisition read exists "
@@ -2622,8 +2653,10 @@ def build_cross_module_block(s3_client, bucket, ctx, text,
                     modules.append('trends')
 
             if fut_subiq is not None:
+                # the Subscriber IQ figures get a little past the shared
+                # budget: they are the context most often lost (item 15)
                 remaining = max(0.2,
-                                time_budget_s - (time.time() - started))
+                                time_budget_s + XMOD_SUBIQ_EXTRA_S - (time.time() - started))
                 try:
                     parsed = fut_subiq.result(timeout=remaining)
                     line = _xmod_subiq_line(parsed, subiq_show

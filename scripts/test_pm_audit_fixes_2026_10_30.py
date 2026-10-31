@@ -123,5 +123,78 @@ class FollowUpMetered(unittest.TestCase):
             self.assertIn('panel_offer', pl, text)
 
 
+class NumberProvenance(unittest.TestCase):
+    HIST = [{'role': 'user', 'text': 'how are the touchpoints tagged?'},
+            {'role': 'agent', 'text': "On The Influencer Project: Across the 12,004,203 potential ticket buyers, the report tags every asset to one of three phases.",
+             'meta': {'read_job_id': 'r1', 'subject': 'The Influencer Project',
+                      'figures': [{'value': 12004203, 'kind': 'count', 'label': 'potential ticket buyers (US people exposed to the campaign)', 'source': 'campaign_file'}]}}]
+
+    def test_found(self):
+        from prometheus import number_provenance as NP
+        r = NP.answer('where does the 12,004,203 potential ticket buyers number come from?', self.HIST)
+        self.assertTrue(r and r['number_provenance']['found'])
+        self.assertIn('potential ticket buyers (US people exposed to the campaign)', r['reply'])
+        self.assertIn("read off the campaign's own counts", r['reply'])
+
+    def test_not_found_and_not_a_question(self):
+        from prometheus import number_provenance as NP
+        r = NP.answer('where does 9,999,999 come from', self.HIST)
+        self.assertTrue(r and not r['number_provenance']['found'])
+        self.assertIn('12,004,203', r['reply'])
+        self.assertIsNone(NP.answer('Approve', self.HIST))
+        self.assertIsNone(NP.answer('how many people watched Mutiny in 2025?', self.HIST))
+
+    def test_read_turns_keep_their_ledger(self):
+        src = open(os.path.join(ROOT, 'prometheus', 'legacy', 'land.py'), encoding='utf-8').read()
+        self.assertIn("_meta['figures'] = [", src)
+        svc = open(os.path.join(ROOT, 'prometheus', 'service.py'), encoding='utf-8').read()
+        self.assertLess(svc.index('# lane: number_provenance'), svc.index('_refs.answer_merge(history, text)'))
+
+
+class SizingLine(unittest.TestCase):
+    def test_one_number_one_definition(self):
+        from prometheus import sizing_lane as SZ
+        line = SZ.profile_line({'name': 'Chipotle', 'sample': 2361167, 'us': 77895196,
+                                'window': {'start': '2025-01-01', 'end': '2025-12-31'}, 'avid_us': 21042337})
+        self.assertIn('77,895,196 US people with at least one digital touchpoint with Chipotle', line)
+        self.assertIn('The Avid tier, the most engaged of them, is 21,042,337.', line)
+        self.assertIn('measured count behind that projection is 2,361,167 people inside the sample', line)
+        self.assertNotIn('audience range', line)
+
+
+class TypoVerbsAndChangedName(unittest.TestCase):
+    def test_typo_verbs(self):
+        from prometheus import subject_rules as SR
+        self.assertEqual(SR.explicit_build_subject('runa profile on NCIS'), 'NCIS')
+        self.assertEqual(SR.explicit_build_subject('buid a profile on Nike'), 'Nike')
+        self.assertEqual(SR.explicit_build_subject('run aprofile on ncis: new york'), 'ncis: new york')
+        self.assertEqual(SR.explicit_build_subject('run the numbers on Nike'), '')
+
+    def test_changed_name_gate_wired(self):
+        src = open(os.path.join(ROOT, 'app.py'), encoding='utf-8').read()
+        self.assertIn('Changed-name gate', src)
+        self.assertIn('_typed_swap = True', src)
+
+
+class DeckPageNamed(unittest.TestCase):
+    def test_deck_core_skips_the_yes_no_when_the_words_name_the_page(self):
+        src = open(os.path.join(ROOT, 'prometheus', 'legacy', 'chat.py'), encoding='utf-8').read()
+        self.assertIn("and not body.get('confirm_open_screen') and not _page_named:", src)
+
+
+class ServerTurnsLand(unittest.TestCase):
+    def test_widget_pulls_server_turns(self):
+        html = open(os.path.join(ROOT, 'templates', 'index.html'), encoding='utf-8').read()
+        self.assertIn('function _pmServerTurnsPull()', html)
+        self.assertIn('setInterval(_pmServerTurnsPull, 20000)', html)
+
+
+class SubiqContext(unittest.TestCase):
+    def test_cache_and_extra_budget(self):
+        import prometheus_analysis as pma
+        self.assertTrue(hasattr(pma, '_xmod_subiq_parsed'))
+        self.assertGreaterEqual(pma.XMOD_SUBIQ_EXTRA_S, 1.0)
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=1)
