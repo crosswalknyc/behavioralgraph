@@ -1597,6 +1597,32 @@ def _cached_brief(s3, key: str) -> dict:
     return {}
 
 
+SESSION_LISTS = ('panel_sessions', 'pilot_sessions')
+
+
+def all_sessions(payload: Optional[dict]) -> list:
+    """Every room on a twin that can carry a question: the focus-group
+    rooms (panel_sessions) and the Pilot Testing rooms (pilot_sessions).
+    The room engine answers both; a Pilot Testing question asked at the
+    playhead ran its stages and never landed because every write-back
+    looked in panel_sessions alone (Jenna, 2026-11-02, "this never
+    landed")."""
+    out = []
+    for name in SESSION_LISTS:
+        for s in (payload or {}).get(name) or []:
+            if isinstance(s, dict):
+                out.append(s)
+    return out
+
+
+def find_session(payload: Optional[dict], session_id: str) -> Optional[dict]:
+    """The room with this id on the twin, whichever list it lives in."""
+    sid = str(session_id or '')
+    if not sid:
+        return None
+    return next((s for s in all_sessions(payload) if str(s.get('id') or '') == sid), None)
+
+
 def _update_payload(s3, twin_key: str, session_id: str, rec: dict, roster: Optional[list] = None):
     """The record in the twin payload, replaced in place (load, modify,
     save) so the page's session read sees the stage."""
@@ -1607,7 +1633,7 @@ def _update_payload(s3, twin_key: str, session_id: str, rec: dict, roster: Optio
         payload = SYN.load_twin(s3, twin_key)
         if not isinstance(payload, dict):
             return False
-        sess = next((s for s in payload.get('panel_sessions') or [] if s.get('id') == session_id), None)
+        sess = find_session(payload, session_id)
         if sess is None:
             return False
         qs = sess.setdefault('questions', [])
@@ -1643,7 +1669,7 @@ def _wait_for_record(s3, twin_key: str, session_id: str, qid: str, timeout: floa
         try:
             from migration import digital_twin_synthesis as SYN
             payload = SYN.load_twin(s3, twin_key)
-            sess = next((s for s in (payload or {}).get('panel_sessions') or [] if s.get('id') == session_id), None)
+            sess = find_session(payload, session_id)
             if sess and any(q.get('id') == qid for q in sess.get('questions') or []):
                 return
         except Exception:
@@ -1900,7 +1926,7 @@ def ask_room(session: dict, twins_by_key: dict, q: str, *, kind: Optional[str] =
     if not run_async:
         return run_question(ctx)
     payload = twins_by_key.get(twin_key)
-    if s3 is not None and isinstance(payload, dict) and any(s is session for s in payload.get('panel_sessions') or []):
+    if s3 is not None and isinstance(payload, dict) and any(s is session for s in all_sessions(payload)):
         try:   # the record is on the twin before the thread starts; the route's own save is a harmless repeat
             from migration import digital_twin_synthesis as SYN
             SYN.save_twin(s3, twin_key, payload)
@@ -1911,7 +1937,7 @@ def ask_room(session: dict, twins_by_key: dict, q: str, *, kind: Optional[str] =
     return rec
 
 
-__all__ = ['ask_room', 'run_question', 'research', 'moderator_options', 'seat_answer', 'moderator_read', 'weigh', 'prior_over_options', 'plain_share', 'persona_card', 'persona_bio', 'ensure_personas', 'refresh_memory',
+__all__ = ['ask_room', 'run_question', 'all_sessions', 'find_session', 'SESSION_LISTS', 'research', 'moderator_options', 'seat_answer', 'moderator_read', 'weigh', 'prior_over_options', 'plain_share', 'persona_card', 'persona_bio', 'ensure_personas', 'refresh_memory',
            'memory_for', 'prior_note', 'drop_ruled_out', 'scrub', 'has_banned', 'chat_lines', 'room_enabled', 'model_available', 'set_model_fn', 'topic_hash', 'topic_tokens',
            'topics_overlap', 'research_key', 'facts_key', 'job_key', 'job_read', 'Models', 'MODELS', 'BUDGET_S', 'ALPHA_SEATS', 'STAGES', 'STAGE_LABEL', 'ROOM_VERSION',
            'JOB_PREFIX', 'RESEARCH_PREFIX', 'FACTS_PREFIX']

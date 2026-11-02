@@ -1197,6 +1197,7 @@ def dt_pilot_get(key, sid):
     if not sess:
         return jsonify({'success': False, 'error': 'test not found'}), 404
     _attach_portraits(payload, key, sess)
+    dirty = False
     if sess.get('status') == 'preparing':
         _prepare_job_live(sess)             # a worker job that ended without a ready test flips the test back to draft
         try:
@@ -1204,8 +1205,16 @@ def dt_pilot_get(key, sid):
             LIVE.unstick(sess)              # a live finish that never came back flips to stopped
         except Exception:
             pass
-        if sess.get('status') != 'preparing':
-            DT.save_twin(_s3(), key, payload)
+        dirty = sess.get('status') != 'preparing'
+    try:   # a question the room finished (or stalled on) lands on the test here, the same sweep the focus-group room read runs;
+        # never 'researching' forever on the page (Jenna, 2026-11-02, the NCIS: NY room's "do you like the cast?")
+        from migration import digital_twin_room_jobs as RJ
+        if RJ.sweep_session(_s3(), key, sess):
+            dirty = True
+    except Exception:
+        traceback.print_exc()
+    if dirty:
+        DT.save_twin(_s3(), key, payload)
     return _nocache(jsonify({'success': True, 'session': PI.public_session(sess)}))
 
 

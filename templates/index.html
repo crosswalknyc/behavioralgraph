@@ -51832,16 +51832,25 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-pi-other .n { color: var(--dtw-mute); font-variant-numeric: tabular-nums; white-space: nowrap; }
         #digitalTwinsIQView .dtw-pi-other:hover .t, #digitalTwinsIQView .dtw-pi-other:focus-visible .t { color: #C7F23E; }
         #digitalTwinsIQView .dtw-pi-seatlist { display: flex; flex-direction: column; gap: 1px; }
-        #digitalTwinsIQView .dtw-pi-seatrow { position: relative; display: flex; gap: 9px; align-items: center; padding: 3px 6px; margin: 0 -6px; border-radius: 10px; outline: none; }
+        /* The room as a chat thread (Jenna, 2026-11-02): every remark up to the playhead, wrapped in full, in a thread that scrolls;
+           the seated roster is a strip of portraits above it once the room starts talking. */
+        #digitalTwinsIQView .dtw-pi-thread { display: flex; flex-direction: column; gap: 1px; max-height: clamp(260px, 56vh, 640px); overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; scrollbar-width: thin; padding-right: 2px; }
+        #digitalTwinsIQView .dtw-pi-strip { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0 8px; }
+        #digitalTwinsIQView .dtw-pi-strip .dtw-pi-chip { padding: 0; margin: 0; gap: 0; flex: none; width: 30px; border-radius: 50%; }
+        #digitalTwinsIQView .dtw-pi-seatrow { position: relative; display: flex; gap: 9px; align-items: flex-start; padding: 4px 6px; margin: 0 -6px; border-radius: 10px; outline: none; }
         #digitalTwinsIQView .dtw-pi-seatrow:hover, #digitalTwinsIQView .dtw-pi-seatrow:focus-within { background: rgba(233,232,225,0.05); }
         #digitalTwinsIQView .dtw-pi-seatrow .circ { width: 30px; height: 30px; flex: 0 0 30px; border-radius: 50%; background: var(--hue, #3358FF); color: #E9E8E1; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 12px; position: relative; overflow: hidden; }
         #digitalTwinsIQView .dtw-pi-seatrow .circ img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 25%; }
         #digitalTwinsIQView .dtw-pi-seatrow .txt { min-width: 0; flex: 1 1 auto; }
-        #digitalTwinsIQView .dtw-pi-seatrow .who { font-size: 12px; font-weight: 600; color: var(--dtw-ink); line-height: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        #digitalTwinsIQView .dtw-pi-seatrow .say { font-size: 11.5px; color: var(--dtw-body); line-height: 14px; margin-top: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        #digitalTwinsIQView .dtw-pi-seatrow .say .c { color: var(--dtw-mute); font-variant-numeric: tabular-nums; }
+        #digitalTwinsIQView .dtw-pi-seatrow .who { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; font-weight: 600; color: var(--dtw-ink); line-height: 15px; }
+        #digitalTwinsIQView .dtw-pi-seatrow .who .nm { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        #digitalTwinsIQView .dtw-pi-seatrow .who .c { flex: none; color: var(--dtw-mute); font-weight: 500; font-variant-numeric: tabular-nums; }
+        #digitalTwinsIQView .dtw-pi-seatrow .say { font-size: 11.5px; color: var(--dtw-body); line-height: 15px; margin-top: 1px; white-space: normal; overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-pi-seatrow.now { background: rgba(199,242,62,0.06); }
+        #digitalTwinsIQView .dtw-pi-working { display: flex; align-items: center; gap: 8px; margin-top: 5px; font-size: 11.5px; color: var(--dtw-body); line-height: 15px; }
+        #digitalTwinsIQView .dtw-pi-working .dtw-fg-pulse { margin-right: 0; }
         #digitalTwinsIQView .dtw-pi-seatrow.lit .say { color: var(--dtw-ink); }
-        #digitalTwinsIQView .dtw-pi-seatrow .bio { display: none; position: absolute; right: calc(100% + 10px); top: -6px; width: 320px; max-height: 340px; overflow-y: auto; overflow-x: hidden; z-index: 12; background: #0C1618; border: 1px solid var(--dtw-rule); border-radius: 12px; padding: 12px 14px; box-shadow: 0 12px 32px rgba(0,0,0,0.45); font-size: 12.5px; line-height: 17px; color: var(--dtw-ink); text-align: left; }
+        #digitalTwinsIQView .dtw-pi-seatrow .bio { display: none; position: fixed; left: -9999px; top: 0; width: 320px; max-height: 340px; overflow-y: auto; overflow-x: hidden; z-index: 12; background: #0C1618; border: 1px solid var(--dtw-rule); border-radius: 12px; padding: 12px 14px; box-shadow: 0 12px 32px rgba(0,0,0,0.45); font-size: 12.5px; line-height: 17px; color: var(--dtw-ink); text-align: left; }
         #digitalTwinsIQView .dtw-pi-seatrow:hover::before, #digitalTwinsIQView .dtw-pi-seatrow:focus-within::before { content: ''; position: absolute; right: 100%; top: 0; bottom: 0; width: 12px; }
         #digitalTwinsIQView .dtw-pi-seatrow .bio h6 { margin: 0 0 6px; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dtw-mute); font-weight: 600; }
         #digitalTwinsIQView .dtw-pi-seatrow .bio h6 .dtw-muted { text-transform: none; letter-spacing: 0; font-weight: 500; }
@@ -51856,7 +51865,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         @media (max-width: 860px) {
           #digitalTwinsIQView .dtw-pi-room { grid-template-columns: 1fr; }
           #digitalTwinsIQView .dtw-pi-col.scores { grid-template-columns: 1fr; }
-          #digitalTwinsIQView .dtw-pi-seatrow .bio { right: auto; left: 46px; top: 100%; width: min(320px, 82vw); }
+          #digitalTwinsIQView .dtw-pi-seatrow .bio { width: min(320px, 82vw); }
           #digitalTwinsIQView .dtw-pi-seatrow:hover::before, #digitalTwinsIQView .dtw-pi-seatrow:focus-within::before { display: none; }
         }
         </style>
@@ -54326,36 +54335,111 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var body = r.persona ? bioParas(r.persona) : '<p>' + esc(nm) + ' holds seat ' + esc(r.seat || '') + ' in this room. Who ' + (r.gender === 'M' ? 'he' : 'she') + ' is, in full, is written as the room watches.</p>';
                 return head + body;
             }
-            function piSayHtml(sl) { return (sl.clock ? '<span class="c">' + esc(sl.clock) + '</span> ' : '') + esc(sl.line); }
+            function piSayHtml(sl) { return esc(sl.line); }
+            // ---- the room as a chat thread (Jenna, 2026-11-02: "you should be able to scroll in this chat thread and the
+            // chats should wrap so you can see the whole thing"). Every remark up to the playhead, oldest first, each line in
+            // full; the thread scrolls and follows the newest remark unless the reader has scrolled up to read back. Before
+            // the first remark the rows are the seats themselves (who they are, in a line).
+            function piThreadEvents(s, t) {
+                var out = ((s || {}).events || []).filter(function(e) { return Number(e.t || 0) <= t + 0.05; });
+                out.sort(function(a, b) { return (Number(a.t) || 0) - (Number(b.t) || 0); });
+                return out;
+            }
+            function piThreadKey(s, t) {
+                var n = 0, last = null;
+                ((s || {}).events || []).forEach(function(e) { if (Number(e.t || 0) <= t + 0.05) { n++; if (!last || Number(e.t || 0) >= Number(last.t || 0)) last = e; } });
+                return n + '|' + (last ? (last.t + '|' + last.seat + '|' + String(last.line || '').length) : '');
+            }
+            function piSeatRowHtml(r, i, sl, opts) {
+                opts = opts || {};
+                var hue = seatHue(r, i), url = r.portrait_url || '', nm = titleCase(r.name || '');
+                return '<div class="dtw-pi-seatrow' + (sl.lit ? ' lit' : '') + (opts.now ? ' now' : '') + '" tabindex="0" data-seat="' + Number(r.seat) + '" style="--hue:' + hue + '" aria-label="Who ' + esc(nm) + ' is">'
+                    + '<span class="circ">' + esc(initials(nm)) + (url ? '<img src="' + esc(thumb(url)) + '" alt="" loading="lazy" onerror="this.remove()">' : '') + '</span>'
+                    + '<div class="txt"><div class="who"><span class="nm">' + esc(nm) + ', ' + esc(r.age || '') + '</span>' + (sl.clock ? '<span class="c">' + esc(sl.clock) + '</span>' : '') + '</div><div class="say">' + piSayHtml(sl) + '</div></div>'
+                    + '<div class="bio">' + piSeatBio(r) + '</div></div>';
+            }
+            function piChipHtml(r, i) {
+                var hue = seatHue(r, i), url = r.portrait_url || '', nm = titleCase(r.name || '');
+                return '<div class="dtw-pi-seatrow dtw-pi-chip" tabindex="0" data-seat="' + Number(r.seat) + '" style="--hue:' + hue + '" aria-label="Who ' + esc(nm) + ' is">'
+                    + '<span class="circ">' + esc(initials(nm)) + (url ? '<img src="' + esc(thumb(url)) + '" alt="" loading="lazy" onerror="this.remove()">' : '') + '</span>'
+                    + '<div class="bio">' + piSeatBio(r) + '</div></div>';
+            }
             function renderPilotSeats(s, t) {
-                return ((s.group || {}).roster || []).map(function(r, i) {
-                    var hue = seatHue(r, i), url = r.portrait_url || '', nm = titleCase(r.name || ''), sl = piSeatLine(s, r, t);
-                    return '<div class="dtw-pi-seatrow' + (sl.lit ? ' lit' : '') + '" tabindex="0" data-seat="' + Number(r.seat) + '" style="--hue:' + hue + '" aria-label="Who ' + esc(nm) + ' is">'
-                        + '<span class="circ">' + esc(initials(nm)) + (url ? '<img src="' + esc(thumb(url)) + '" alt="" loading="lazy" onerror="this.remove()">' : '') + '</span>'
-                        + '<div class="txt"><div class="who">' + esc(nm) + ', ' + esc(r.age || '') + '</div><div class="say">' + piSayHtml(sl) + '</div></div>'
-                        + '<div class="bio">' + piSeatBio(r) + '</div></div>';
+                var roster = ((s || {}).group || {}).roster || [];
+                var evs = piThreadEvents(s, t);
+                if (!evs.length) {
+                    return '<div class="dtw-pi-thread">' + roster.map(function(r, i) { return piSeatRowHtml(r, i, piSeatLine(s, r, t)); }).join('') + '</div>';
+                }
+                var bySeat = {};
+                roster.forEach(function(r, i) { bySeat[Number(r.seat)] = { r: r, i: i }; });
+                var last = evs[evs.length - 1];
+                var strip = '<div class="dtw-pi-strip">' + roster.map(function(r, i) { return piChipHtml(r, i); }).join('') + '</div>';
+                var rows = evs.map(function(e) {
+                    var hit = bySeat[Number(e.seat)] || {};
+                    var r = hit.r || { seat: e.seat, name: e.name, age: e.age, city: e.city, gender: e.gender, segment: e.segment };
+                    return piSeatRowHtml(r, hit.i || 0, { line: e.line || (PI_EVT[e.type] || e.type || ''), lit: true, clock: clockFmt(e.t) }, { now: e === last });
                 }).join('');
+                return strip + '<div class="dtw-pi-thread">' + rows + '</div>';
+            }
+            function piThreadFollow(box) {
+                var th = box && box.querySelector('.dtw-pi-thread'); if (!th) return;
+                th.scrollTop = th.scrollHeight;
+                var want = th.scrollTop;
+                // once more after the fonts and portraits settle, unless the reader has scrolled in the meantime
+                setTimeout(function() { if (th.isConnected && Math.abs(th.scrollTop - want) < 2) th.scrollTop = th.scrollHeight; }, 320);
             }
             function paintPilotSeats(t) {
                 var s = S.pilot || {}, box = el('dtwPiSeats');
                 if (box) {
-                    ((s.group || {}).roster || []).forEach(function(r) {
-                        var row = box.querySelector('.dtw-pi-seatrow[data-seat="' + Number(r.seat) + '"]'); if (!row) return;
-                        var sl = piSeatLine(s, r, t), say = row.querySelector('.say'), html = piSayHtml(sl);
-                        if (say && say.innerHTML !== html) say.innerHTML = html;
-                        row.classList.toggle('lit', sl.lit);
-                    });
+                    var key = piThreadKey(s, t);
+                    if (box.getAttribute('data-k') !== key) {
+                        var th = box.querySelector('.dtw-pi-thread');
+                        // the reader stays where they scrolled to; at the end of the thread it follows the newest remark
+                        var pinned = !th || !box.getAttribute('data-k') || (th.scrollHeight - th.scrollTop - th.clientHeight) < 28;
+                        var keep = (th && !pinned) ? th.scrollTop : null;
+                        box.innerHTML = renderPilotSeats(s, t);
+                        box.setAttribute('data-k', key);
+                        if (pinned) piThreadFollow(box);
+                        else { var th2 = box.querySelector('.dtw-pi-thread'); if (th2 && keep != null) th2.scrollTop = keep; }
+                    } else if (!((s.events || []).length)) {
+                        // the seats before the first remark: the bio line fills in as the personas are written
+                        ((s.group || {}).roster || []).forEach(function(r) {
+                            var row = box.querySelector('.dtw-pi-seatrow[data-seat="' + Number(r.seat) + '"]'); if (!row) return;
+                            var sl = piSeatLine(s, r, t), say = row.querySelector('.say'), html = piSayHtml(sl);
+                            if (say && say.innerHTML !== html) say.innerHTML = html;
+                        });
+                    }
                 }
                 var ac = el('dtwPiAskClock'); if (ac) ac.textContent = clockFmt(t);
             }
             function paintPilotPortraits() {
                 var s = S.pilot || {}, box = el('dtwPiSeats'); if (!box) return;
                 ((s.group || {}).roster || []).forEach(function(r) {
-                    var row = box.querySelector('.dtw-pi-seatrow[data-seat="' + Number(r.seat) + '"]'); if (!row) return;
-                    var circ = row.querySelector('.circ');
-                    if (circ && r.portrait_url && !circ.querySelector('img')) { var img = document.createElement('img'); img.alt = ''; img.loading = 'lazy'; img.onerror = function() { try { img.remove(); } catch (_) {} }; img.src = thumb(r.portrait_url); circ.appendChild(img); }
-                    var bio = row.querySelector('.bio'); if (bio && r.persona) bio.innerHTML = piSeatBio(r);
+                    box.querySelectorAll('.dtw-pi-seatrow[data-seat="' + Number(r.seat) + '"]').forEach(function(row) {
+                        var circ = row.querySelector('.circ');
+                        if (circ && r.portrait_url && !circ.querySelector('img')) { var img = document.createElement('img'); img.alt = ''; img.loading = 'lazy'; img.onerror = function() { try { img.remove(); } catch (_) {} }; img.src = thumb(r.portrait_url); circ.appendChild(img); }
+                        var bio = row.querySelector('.bio'); if (bio && r.persona) bio.innerHTML = piSeatBio(r);
+                    });
                 });
+            }
+            // The who-they-are card is placed on the viewport (the thread scrolls, and a scrolling box clips anything
+            // positioned inside it): to the left of the row where there is room, under it on a narrow screen.
+            function piPlaceBio(row) {
+                var bio = row.querySelector('.bio'); if (!bio) return;
+                var r = row.getBoundingClientRect(), w = Math.min(320, Math.max(200, window.innerWidth - 24));
+                bio.style.width = w + 'px';
+                var left, top;
+                if (window.innerWidth <= 860 || r.left - w - 10 < 8) { left = Math.max(8, Math.min(r.left + 46, window.innerWidth - w - 8)); top = r.bottom + 4; }
+                else { left = r.left - w - 10; top = r.top - 6; }
+                var h = Math.min(340, bio.scrollHeight || 340);
+                top = Math.max(8, Math.min(top, window.innerHeight - h - 8));
+                bio.style.left = left + 'px'; bio.style.top = top + 'px';
+            }
+            if (!window._piBioWired) {
+                window._piBioWired = true;
+                var _piBioOn = function(e) { var row = e.target && e.target.closest ? e.target.closest('#dtwPiSeats .dtw-pi-seatrow') : null; if (row) piPlaceBio(row); };
+                document.addEventListener('mouseover', _piBioOn, true);
+                document.addEventListener('focusin', _piBioOn, true);
             }
             // Portraits and the written personas finish after the room is seated: re-read the test once or twice and fill the seats in place (a playing cut is never re-rendered).
             function schedulePilotPortraits() {
@@ -54444,7 +54528,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var voices = (q.voices || []).slice(0, 3).map(function(v) { return '<div class="dtw-pi-voice">' + esc(v.name || '') + ': ' + esc(v.line || '') + '</div>'; }).join('');
                 var frame = (q.moment || {}).frame || ('At ' + (q.playhead_clock || clockFmt(q.playhead_s)));
                 var probes = (q.probes_next || []).slice(0, 2).map(function(p) { return '<button type="button" class="dtw-pi-probe" onclick="dtwPilotAskAt(' + Number(q.playhead_s || 0) + ', \'' + esc(jsq(p)) + '\')">' + esc(p) + '</button>'; }).join('');
-                return '<div class="dtw-pi-voice"><span class="k">Prometheus, ' + esc(frame) + '</span><div>' + esc(q.q || '') + '</div>' + (q.framing ? '<div class="dtw-muted" style="margin-top:3px">' + esc(q.framing) + '</div>' : '') + (q.read ? '<div class="dtw-muted" style="margin-top:4px">' + esc(q.read) + '</div>' : (q.stage && q.stage !== 'done' ? '<div class="dtw-muted" style="margin-top:4px">' + esc(q.stage) + '</div>' : '')) + voices + (probes ? '<div class="dtw-pi-probes">' + probes + '</div>' : '') + '</div>';
+                var st = String(q.stage || ''), failed = st === 'failed';
+                var status = '';
+                if (q.read) status = '<div class="dtw-muted" style="margin-top:4px">' + esc(q.read) + '</div>';
+                else if (st && st !== 'done' && st !== 'stopped' && !failed) status = '<div class="dtw-pi-working" data-qid="' + esc(q.id || '') + '"><span class="dtw-fg-pulse"></span><span>' + esc(cap(stageWords(q))) + '</span></div>';
+                if (failed && !probes) probes = '<button type="button" class="dtw-pi-probe" onclick="dtwPilotAskAt(' + Number(q.playhead_s || 0) + ', \'' + esc(jsq(q.q || '')) + '\')">Ask again</button>';
+                return '<div class="dtw-pi-voice"><span class="k">Prometheus, ' + esc(frame) + '</span><div>' + esc(q.q || '') + '</div>' + (q.framing ? '<div class="dtw-muted" style="margin-top:3px">' + esc(q.framing) + '</div>' : '') + status + voices + (probes ? '<div class="dtw-pi-probes">' + probes + '</div>' : '') + '</div>';
             }
             function renderPilotThread(s) {
                 var qs = (s || {}).questions || [];
@@ -54564,6 +54653,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 revealPilot(playheadNow());
                 drawCompareChart();
                 if (S.pilot.status === 'preparing') pollPilotPrepare();
+                pollPilotQuestions();   // a question still with the room keeps landing after a reload
                 try { remember(); } catch (_) {}
             }
             function pollPilotPrepare() {
@@ -54802,7 +54892,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             };
             function pollPilotQuestions() {
                 var s = S.pilot; if (!s || !S.key) return;
-                var open = (s.questions || []).filter(function(q) { return q.stage && q.stage !== 'done' && q.stage !== 'stopped'; });
+                var open = (s.questions || []).filter(function(q) { return q.stage && q.stage !== 'done' && q.stage !== 'stopped' && q.stage !== 'failed'; });
                 if (!open.length) return;
                 if (S.pilotQPoll) { try { clearTimeout(S.pilotQPoll); } catch (_) {} }
                 S.pilotQPoll = setTimeout(async function() {

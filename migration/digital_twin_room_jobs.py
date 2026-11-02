@@ -128,7 +128,8 @@ def _record_update(s3, twin_key: str, session_id: str, qid: str, mutate) -> Opti
     try:
         from migration import digital_twin_synthesis as SYN
         payload = SYN.load_twin(s3, twin_key)
-        sess = next((s for s in (payload or {}).get('panel_sessions') or [] if s.get('id') == session_id), None)
+        from migration import digital_twin_room as R
+        sess = R.find_session(payload, session_id)      # a focus-group room or a Pilot Testing room
         rec = next((q for q in (sess or {}).get('questions') or [] if q.get('id') == qid), None)
         if rec is None:
             return None
@@ -195,7 +196,7 @@ def resume_job(s3, job_id: str, *, model_fn=None, run_async: bool = False, count
     twin_key = str(job.get('twin_key') or job.get('s3_key') or '')
     sid, qid = str(job.get('session_id') or ''), str(job.get('question_id') or '')
     payload = SYN.load_twin(s3, twin_key)
-    sess = next((s for s in (payload or {}).get('panel_sessions') or [] if s.get('id') == sid), None)
+    sess = R.find_session(payload, sid)      # a focus-group room or a Pilot Testing room
     if not payload or not sess:
         return fail_job(s3, job, 'the room could not be found').get('question')
     idx = next((i for i, q in enumerate(sess.get('questions') or []) if q.get('id') == qid), None)
