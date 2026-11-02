@@ -56225,6 +56225,20 @@ def _v1_persona_class_ask(text):
             return True
     except Exception:
         pass
+    # A category audience with no proper noun ("yoga clothing buyers",
+    # "luxury handbag shoppers", "craft beer drinkers") is a persona
+    # universe by construction: the category words describe the behavior,
+    # there is no entity to verify (golden g044, 2026-11-02, "I could not
+    # find Yoga Clothing as a brand, person, or title").
+    _cat = _re.search(
+        r'\b((?:[a-z][a-z\'&-]*\s+){1,4})'
+        r'(buyers?|shoppers?|purchasers?|consumers?|owners?|drinkers?|eaters?|enthusiasts?|collectors?|'
+        r'travell?ers?|renters?|subscribers?|gamers?|readers?|hobbyists?|intenders?|seekers?|households?)\b', tl)
+    if _cat:
+        head_words = _cat.group(1).split()
+        if head_words and not any(w in ('the', 'of', 'an', 'a', 'and', 'or', 'our', 'your', 'their', 'all', 'any', 'these', 'those', 'profile', 'audience', 'pull', 'build')
+                                  for w in head_words[-1:]) and not _v1_text_names_entity(t):
+            return True
     interest = bool(_re.search(
         r'interest(?:ed)?\s+in|visitors?\s+to\s|users?\s+of\s|'
         r'\bshoppers?\b|\benthusiasts?\b|(?:have\s+)?downloaded\s|'

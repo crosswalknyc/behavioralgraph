@@ -84,6 +84,9 @@ _PEOPLE_WATCH_RX = re.compile(
     r"\b(?:people|persons|americans|adults|folks|consumers|viewers|readers|listeners|users|subscribers|fans|kids|teens|"
     r"parents|men|women|they|everyone|anyone|audiences?)\b\s+(?:(?:who|that)\s+)?(?:(?:have|has|had|did|do|does|will|would|can|could)\s+)?"
     r"(?:" + _WATCH_VERBS + r")\s+(?P<title>(?:the\s+)?[\"\u201c\u201d'\u2018\u2019]?[A-Za-z0-9][^?]{1,70}?)\s*\??$", re.I)
+_AUDIENCE_PLATFORMS_RX = re.compile(
+    r"\b(?:what|which)\s+(?:platforms?|services?|streamers?|apps?|networks?)\s+(?:do|does|did|are|is)\s+.{1,60}?"
+    r"\b(?:fans|viewers|audience|users|subscribers|buyers|customers|listeners|people)\b", re.I)
 _PRONOUN_OBJECT_RX = re.compile(r"\b(?:" + _WATCH_VERBS + r")\s+(?:it|that|this|the\s+(?:film|movie|show|series|title))\b\s*\??$", re.I)
 _TRAILING_RX = re.compile(
     r"\s+(?:outside\s+(?:of\s+)?(?:the\s+)?theat(?:er|re|rical)s?|at\s+home|online|without\s+paying(?:\s+for\s+it)?|"
@@ -127,6 +130,11 @@ def _clean_title(raw):
         return ''
     if s.lower() in _PLATFORM_WORDS or s.lower() in _ns._NEVER_SUBJECT:
         return ''
+    # a bare preposition or filler left over from "what platforms do Glen
+    # Powell fans stream on" is not a title (golden g074: "On is watched
+    # on YouTube"); that ask is about the audience's platforms
+    if re.fullmatch(r"(?:on|in|at|to|from|with|via|through|now|here|there|online|anywhere|where|it|them)", s, re.I):
+        return ''
     if len(s.split()) > 8 or _AUDIENCE_TAIL_RX.search(s):
         return ''      # "the Babylon 5 audience" is an audience, not a title
     return _ns._title(s.split()) if s == s.lower() else s
@@ -159,6 +167,8 @@ def parse(text, history=None, *, page='', plausible=None):
         return None     # "where do i find the howdy deck created last night": a file of ours, the deliverable lane's (2026-10-20)
     if _ns.has_audience_deixis(t) and not _PRONOUN_OBJECT_RX.search(t):
         return None     # "where do the people on this profile watch tv": the page's audience, not a title
+    if _AUDIENCE_PLATFORMS_RX.search(t):
+        return None     # "what platforms do Glen Powell fans stream on": the audience's platforms, a profile read (g074)
     title, kind = _ns.type_led_subject(t)
     if title and _AUDIENCE_TAIL_RX.search(title):
         return None

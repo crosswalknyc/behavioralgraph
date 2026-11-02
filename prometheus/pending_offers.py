@@ -49,10 +49,10 @@ KEEP = 30               # offers kept per user
 SCAN_THREADS = 6        # other recent threads the fallback reads
 
 _NO_PENDING_RX = re.compile(r"^\s*Nothing is waiting on (?:an approval|a yes)\b", re.I)
-_DECLINED_RX = re.compile(r"^\s*(?:No problem - nothing was charged|Closed\.)", re.I)
+_DECLINED_RX = re.compile(r"^\s*(?:No problem - nothing was charged|Understood\. Nothing is queued|Closed\.)", re.I)
 _OFFER_CHIP_LABELS = ('approve', 'cancel', 'accept', 'decline')
 
-DECLINE_REPLY = 'No problem - nothing was charged. Ask me anything else when ready.'
+DECLINE_REPLY = 'Understood. Nothing is queued and nothing was charged. Ask me anything else when ready.'
 
 
 def _now():

@@ -321,6 +321,8 @@ def _analyze_body(body, text, history, decision, tid=None):
         ctx = body.get('page_context')
     out = {'text': text, 'history': history, 'page_context': ctx or None,
            'thread_id': tid}
+    if body.get('persist') is False:
+        out['persist'] = False   # a probe ask: the intakes keep their drafts in process (bpiq_wizard.store_for)
     if isinstance(body.get('reading'), dict):
         out['reading'] = body['reading']   # the Reader's understanding (2026-10-14)
     mode = decision.get('mode') or body.get('mode')
@@ -447,11 +449,13 @@ def accept_offered_run(history, text):
 # the source order to this tuple.
 LANE_ORDER = (
     'bpiq_wizard',
-    'offer_acceptance', 'priced_offer_acceptance', 'offer_answer', 'referents', 'document', 'confirm_answer', 'short_reply',
+    'offer_acceptance', 'priced_offer_acceptance', 'offer_answer', 'referents', 'document',
+    'deck_conversion', 'number_provenance', 'confirm_answer', 'short_reply',
     'spend_cap_precheck',
     'continuation',
-    'subject_set', 'pull_discussion', 'dataset_build',
-    'talent_list_acceptance', 'meta_check', 'standing', 'where_watched', 'sizing_quote', 'status_fast',
+    'subject_set', 'pull_discussion', 'help_writing', 'dataset_build',
+    'talent_list_acceptance', 'meta_check', 'standing', 'multi_ask', 'catalog_exists', 'where_watched',
+    'sizing_quote', 'status_fast',
     'reader', 'pricing', 'design_request', 'spend_cap', 'thread_followups', 'subiq_library', 'catalog',
     'sizing_fallback', 'status', 'deliverable_lookup', 'email_file', 'brand_coverage',
     'definitions', 'capability',
@@ -459,13 +463,13 @@ LANE_ORDER = (
     'work_gate',
 )
 DETERMINISTIC_LANES = frozenset((
-    'subject_set', 'pull_discussion', 'dataset_build',
-    'meta_check', 'standing', 'where_watched', 'sizing_quote', 'status_fast', 'reader', 'pricing', 'design_request',
-    'thread_followups', 'subiq_library', 'catalog', 'sizing_fallback', 'status', 'deliverable_lookup', 'email_file',
-    'brand_coverage', 'definitions', 'capability'))
-NEVER_PRICED_LANES = frozenset(('subject_set', 'pull_discussion', 'where_watched', 'status_fast', 'status', 'pricing',
-                                'catalog', 'definitions', 'deliverable_lookup', 'email_file', 'brand_coverage',
-                                'capability'))
+    'subject_set', 'pull_discussion', 'help_writing', 'dataset_build',
+    'meta_check', 'standing', 'catalog_exists', 'where_watched', 'sizing_quote', 'status_fast', 'reader', 'pricing',
+    'design_request', 'thread_followups', 'subiq_library', 'catalog', 'sizing_fallback', 'status',
+    'deliverable_lookup', 'email_file', 'brand_coverage', 'definitions', 'capability', 'number_provenance'))
+NEVER_PRICED_LANES = frozenset(('subject_set', 'pull_discussion', 'help_writing', 'catalog_exists', 'where_watched',
+                                'status_fast', 'status', 'pricing', 'catalog', 'definitions', 'deliverable_lookup',
+                                'email_file', 'brand_coverage', 'capability', 'number_provenance'))
 
 
 def lane_markers(source=None):
@@ -497,6 +501,13 @@ def ask(user, body, *, via='session'):
     try:
         from flask import g as _g_ask
         _g_ask._pm_ask_text = text
+        # A probe (the golden set, the canary, a regression replay)
+        # leaves no state behind on the reader it runs as: no stashed
+        # brief, no memory, no wizard draft. Before this, one probe's
+        # open intake captured the next probe's unrelated question, and
+        # a night's stashes answered the next night's cases (2026-11-02).
+        if via == 'canary' or client in ('golden', 'canary', 'probe'):
+            _g_ask._pm_probe = True
     except Exception:
         pass
     if not text:
@@ -568,7 +579,7 @@ def ask(user, body, *, via='session'):
     # Only Cancel (or Decline on the recap) leaves.
     try:
         from prometheus import bpiq_wizard as _bwiz
-        _bw_store = _bwiz.shared_store({'_H': host})
+        _bw_store = _bwiz.store_for(body, {'_H': host})
         if _bwiz.wants(text, body, history, store=_bw_store,
                        user=uname, thread_id=tid or ''):
             _g = {}
@@ -1379,6 +1390,35 @@ def ask(user, body, *, via='session'):
                 _faults.note('service', _fx)
             env = envelope.wrap(_multi_raw, surface='analyze', decision=_decision, thread_id=tid, via=via)
             _persist_turn(persist, uname, tid, history, text, env, _multi_raw, 'analyze')
+            return env, 200
+    # lane: catalog_exists
+    # "do we have a data pull on fanduel customers", "is there a Gunna
+    # profile in the library", "do we have anything on Polymarket" are
+    # library lookups and run BEFORE where-watched and sizing, which
+    # used to grab them first (goldens g017, g020, g022, g091: a 152
+    # second where-watched search for "We Have a Data Pull", a Polymarket
+    # question answered about a Netflix title, "I can size pls tell me
+    # if"). The full catalog lane later still handles size and roster.
+    if referent_decision is None and not _armed(body):
+        try:
+            from . import catalog_lane as _cl0
+            _p0 = _cl0.parse(text)
+            _cat0 = _cl0.answer(text, ctx) if (_p0 and _p0[0] == 'exists') else None
+        except Exception as e:
+            _faults.note('service.catalog_exists', e)
+            _cat0 = None
+        if _cat0:
+            raw = _cat0
+            decision = {'surface': 'analyze', 'mode': None, 'reason': 'catalog_lookup', 'client_hint': None}
+            if _client_surface == 'interpret':
+                raw = _interpret_shape(raw)
+                raw['followups'] = list(_cat0.get('followups') or [])
+            try:
+                host.ask_hint(route='catalog_lookup', outcome='answered', subject=_cat0.get('subject'))
+            except Exception as _fx:
+                _faults.note('service', _fx)
+            env = envelope.wrap(raw, surface='analyze', decision=decision, thread_id=tid, via=via)
+            _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
             return env, 200
     # lane: where_watched
     # Where a named title is watched (Jay Patel 2026-10-20: "where people
@@ -2749,7 +2789,7 @@ def _persist_turn(persist, uname, tid, history, text, env, raw, surface):
     # turns, so this is the only record of the offer the server holds).
     # A typed approval binds to it (2026-10-22, Casey Pearson).
     try:
-        if isinstance(raw, dict) and isinstance(raw.get('panel_offer'), dict) and uname:
+        if isinstance(raw, dict) and isinstance(raw.get('panel_offer'), dict) and uname and not _faults.is_probe():
             from . import pending_offers as _pend
             _pend.record(uname, tid, raw, text)
     except Exception as e:

@@ -78,7 +78,14 @@ __all__ = ['explicit_build_subject', 'conversational_turn', 'priced_handoff_allo
 # A pointer at what is on the screen, never a subject of its own.
 _DEIXIS = frozenset(('<page>', 'this', 'that', 'it', 'this audience', 'this profile',
                      'the audience', 'the profile', 'this one', 'these', 'those',
-                     'the page', 'this page', 'the open profile', 'the file', 'this file'))
+                     'the page', 'this page', 'the open profile', 'the file', 'this file',
+                     # "what is the median age here" (golden g065, 2026-11-02): the
+                     # reader returned 'here' as the subject and the lane quoted a
+                     # custom read on "Here"
+                     'here', 'there', 'in here', 'on here', 'on this page', 'on screen',
+                     'this screen', 'the screen', 'this view', 'the view', 'this data', 'the data',
+                     'this dataset', 'the dataset', 'this report', 'the report', 'the current profile',
+                     'the one open', 'the open one', 'whats open', "what's open", 'the loaded profile'))
 # The Reader's kinds that name a thing of their own. 'audience' and
 # 'cohort' describe the page's people; 'metric' and 'unknown' name nothing.
 _NAMED_KINDS = frozenset(('title', 'show', 'series', 'film', 'movie', 'book', 'podcast', 'game',
@@ -763,6 +770,37 @@ def words_name_page(text, page):
         return False
     ttoks = set(identity_tokens(text))
     return all(t in ttoks for t in ptoks)
+
+
+# "make this a deck", "turn this into a one-pager", "deck this": the order
+# points at something and names nothing. With no answer in the thread to
+# point at, "this" is the screen (golden g083, 2026-11-02: Costco open, an
+# empty thread, and the reader was asked whether the deck should be on
+# Costco).
+_DEIXIS_DECK_ORDER_RX = re.compile(
+    r"^\W*(?:please\s+|can you\s+|could you\s+|pls\s+)?"
+    r"(?:(?:make|turn|put|build|create|convert|export|render)\s+(?:this|these|that|those|it)\b[^.?!\n]{0,40}\b(?:deck|slides?|one-?pager|pdf|presentation)\b"
+    r"|(?:deck|slide)\s+(?:this|these|that|it)\b"
+    r"|(?:a\s+|the\s+)?(?:deck|slides?|one-?pager|presentation)\s+(?:of|from|on|for)\s+(?:this|these|that|it)\b)"
+    r"\W*$", re.I)
+
+
+def deixis_points_at_screen(text, history):
+    """True when the ask is a deck order on "this" and the thread holds no
+    answer the word could point at, so the open screen is what is meant."""
+    t = ' '.join(str(text or '').split())
+    if not t or not _DEIXIS_DECK_ORDER_RX.match(t):
+        return False
+    for h in (history or []):
+        if not isinstance(h, dict):
+            continue
+        role = str(h.get('role') or '').lower()
+        if role in ('user', 'human'):
+            continue
+        body = str(h.get('text') or h.get('content') or '').strip()
+        if len(body) > 60:
+            return False   # an answer sits in the thread; "this" may be it
+    return True
 
 
 def open_screen_question(text, page, history, *, deck=False, what='this'):

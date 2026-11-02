@@ -433,7 +433,7 @@ def wants(text, body=None, history=None, store=None, user=None,
         return True
     if store is None and user:
         try:
-            store = shared_store()
+            store = store_for(body)
         except Exception:
             store = None
     if store is not None:
@@ -508,6 +508,48 @@ def _brand_from_campaign(campaign, talent=''):
     return name
 
 
+# The words around a one-shot valuation ask that are not a name: the
+# verb lead ("can you value", "value the", "what is ... worth"), the
+# tail noun ("partnership", "deal", "campaign"), and the connective
+# residue left when the dates are stripped ("ran", "is", "was").
+_ASK_LEAD_RX = re.compile(
+    r"^\W*(?:(?:hey|hi|ok|okay|so)[,\s]+)?"
+    r"(?:please\s+|can you\s+|could you\s+|would you\s+|can we\s+|i want (?:you )?to\s+|i need (?:you )?to\s+|"
+    r"i'?d like (?:you )?to\s+|let'?s\s+|i want a\s+|i need a\s+)?"
+    r"(?:(?:please\s+)?(?:value|valuate|valuation(?: of| on| for)?|price|appraise|assess|size up|run a valuation (?:on|of|for)|"
+    r"what(?:'s| is| was) the value of|how much (?:is|was)|what(?:'s| is| was))\s+)"
+    r"(?:the\s+|a\s+|this\s+|our\s+|my\s+)?", re.I)
+_ASK_TAIL_RX = re.compile(
+    r"\s*(?:(?:brand\s+)?partnership|deal|campaign|sponsorship|collab(?:oration)?|activation|program)?"
+    r"\s*(?:worth|valued at)?\s*[?.!]*\s*$", re.I)
+_FRAME_LEFTOVER_RX = re.compile(
+    r"^(?:ran|run|runs|running|is|was|were|are|from|between|starting|started|ended|ending|"
+    r"through|thru|to|until|till|in|on|during|for|the|a|an|and|with|it|that|this|which|"
+    r"please|thanks|thank you|ok|okay)(?:\s+(?:ran|run|is|was|from|between|through|to|in|on|during|for|the|a|an|and|with|it|that|this))*$",
+    re.I)
+
+
+def _strip_ask_frame(rest):
+    """Drop the verb lead and the tail noun of a one-shot ask so only
+    the names remain: "can you value Gunna x Nike? ran" -> "Gunna x
+    Nike"; "Value the Stanley x Target partnership. is" -> "Stanley x
+    Target". A message with no lead is returned as given."""
+    r = str(rest or '')
+    m = _ASK_LEAD_RX.match(r)
+    if m and m.end() > 0:
+        r = r[m.end():]
+    # The first sentence carries the names. A second sentence that is
+    # only connective residue ("ran", "is") after the dates were taken
+    # out is dropped; a second sentence with words of its own stays.
+    parts = re.split(r'(?<=[A-Za-z])[.?!]\s+', r, maxsplit=1)
+    if len(parts) == 2:
+        tail = parts[1].strip(' .,:;?!')
+        if not tail or _FRAME_LEFTOVER_RX.match(tail):
+            r = parts[0]
+    r = _ASK_TAIL_RX.sub('', r)
+    return r.strip()
+
+
 def apply_ahead(draft, text, today=None):
     """Fill any fields the message already named. Never overwrites a
     field the wizard already has."""
@@ -534,15 +576,28 @@ def apply_ahead(draft, text, today=None):
     rest = _NAMED_RANGE.sub(' ', rest)
     rest = _ISO_RANGE.sub(' ', rest)
     rest = _MDY_RANGE.sub(' ', rest)
-    bits = [b.strip(' .,:;') for b in re.split(r'\s*,\s*', rest) if b.strip(' .,:;')]
-    names = [b for b in bits if b and not parse_dates(b, today=today)[0]]
+    rest = _strip_ask_frame(rest)
+    bits = [re.sub(r'^(?:the\s+)?(?:is|was|=|:)\s+', '', b.strip(' .,:;?!'), flags=re.I).strip()
+            for b in re.split(r'\s*(?:,|\.\s|;|\?|!)\s*', rest) if b.strip(' .,:;?!')]
+    bits = [b for b in bits if b]
+    names = [b for b in bits if b and not parse_dates(b, today=today)[0]
+             and not _FRAME_LEFTOVER_RX.match(b)]
     if names and not d.get('talent'):
         # "Jennifer Beals, Ganni x Lululemon" or a lone name
         if len(names) == 1 and re.search(r'\s+[xX\u00d7]\s+', names[0]):
-            # a campaign dump with no separate talent
+            # a campaign dump with no separate talent: "Gunna x Nike" reads
+            # partner x brand, the standing order of a one-shot ask
+            # ("value the Glen Powell x RAM Trucks partnership"), so the
+            # first side is the talent and the wizard never asks for a
+            # name the message already gave (goldens g055, g056, 2026-11-02)
             if not d.get('campaign'):
                 d['campaign'] = names[0]
-                d['brand_partner'] = _brand_from_campaign(names[0], '')
+                a, b = re.split(r'\s+[xX\u00d7]\s+', names[0], maxsplit=1)
+                if a.strip() and b.strip():
+                    d['talent'] = a.strip()
+                    d['brand_partner'] = b.strip()
+                else:
+                    d['brand_partner'] = _brand_from_campaign(names[0], '')
         else:
             d['talent'] = names[0]
             extra = names[1:]
@@ -894,6 +949,23 @@ def shared_store(g=None):
 
 
 def _safe_store(g):
+    return shared_store(g)
+
+
+def store_for(body, g=None):
+    """The draft store for this request. A probe ask (the golden set,
+    the canary, a regression replay: body['persist'] is False) keeps
+    its draft in this process, so one probe's open wizard never
+    captures the next probe's unrelated question on the shared store
+    (2026-11-02). Every real ask uses the shared store."""
+    try:
+        if isinstance(body, dict) and body.get('persist') is False:
+            return MemoryStore()
+        from . import faults as _faults
+        if _faults.is_probe():
+            return MemoryStore()
+    except Exception:
+        pass
     return shared_store(g)
 
 
@@ -1328,10 +1400,10 @@ def _analyze_hook(text, body, history, user, ppu, uname, g,
     # or fall through to a library-comp read.
     if is_start(t):
         if store is None:
-            store = shared_store(g)
+            store = store_for(body, g)
         return _start_fresh(store, uname or user, thread_id, today)
     if store is None:
-        store = shared_store(g)
+        store = store_for(body, g)
     draft = _load_draft(store, uname or user, thread_id, body, history,
                         today=today)
     intent = False

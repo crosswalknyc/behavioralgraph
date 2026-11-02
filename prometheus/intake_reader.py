@@ -480,6 +480,8 @@ def journey_direction_from_text(text):
         return None
     if _BOTH_DIRECTIONS_RE.match(low):
         return 'to_watch'   # "I want all of that", "both", "you pick": the discovery shape, with the other offered (Debi 2026-10-21)
+    if find_template_reference(text):
+        return None         # "just like the one you did for Babylon 5": the precedent's shape decides, never a question (2026-11-02)
     if low.strip(' .!') == DIRECTION_CHIPS[1].lower() or _AFTER_WATCH_RE.search(low):
         return 'after_watch'
     if low.strip(' .!') == DIRECTION_CHIPS[0].lower() or _TO_WATCH_RE.search(low):
@@ -1735,6 +1737,10 @@ def apply_journey_template(parsed, shape, template_title=''):
         if p.get(field) or not shape.get(field):
             continue
         v = str(shape[field]).replace('{subject}', subj or 'the title')
+        if field == 'conversion_event' and plat and shape.get('platform') \
+                and re.sub(r'[^a-z0-9]+', '', str(shape['platform']).lower()) != re.sub(r'[^a-z0-9]+', '', plat.lower()):
+            # the prior ran on its own service; this brief names another one
+            v = re.sub(r"\bon\s+" + re.escape(str(shape['platform'])) + r"\b", f"on {plat}", v, flags=re.I)
         if field == 'conversion_event' and plat and ' on ' not in f' {v} ' and 'platform' not in v.lower():
             m = re.search(r"\s+within\b", v)   # "watched an episode on Prime Video within 30 days of the post"
             v = (v[:m.start()] + f" on {plat}" + v[m.start():]) if m else f"{v} on {plat}"
@@ -1743,6 +1749,14 @@ def apply_journey_template(parsed, shape, template_title=''):
     if 'conversion_event' in filled:
         p['_proposed'] = {'field': 'conversion_event', 'value': p['conversion_event'],
                           'from': template_title or 'the prior journey'}
+    # the precedent answers the direction question too: a journey built
+    # "just like the one you did for Babylon 5" runs the way that one ran
+    # (goldens g053 and g095, 2026-11-02: the direction question was still
+    # asked after the template filled every other field)
+    if str(p.get('journey_direction') or '').lower() in ('', 'unclear'):
+        kind = str(p.get('journey_kind') or shape.get('journey_kind') or '').lower()
+        p['journey_direction'] = 'after_watch' if kind == 'media_week' else 'to_watch'
+        p = apply_direction(p)
     p['missing'] = [k for k in ('subject', 'platform', 'conversion_event') if not p.get(k)]
     return p
 

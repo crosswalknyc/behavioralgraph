@@ -131,7 +131,48 @@ def describe(found):
     return f"I built {kind} for {found.get('name')}{when_txt}; the new one is built the same way."
 
 
-def apply(flow, parsed, found, name):
+def journey_file_shape(found, *, host=None, s3=None, bucket='dashboard-inputs'):
+    """The shape of a prior journey read off its own stored file
+    (journey-iq/<user>/<run>.json.gz): the spine's labels and the
+    meta's journey_kind. The corpus catalog carries stage facts for
+    only part of the library; the file itself always has them (goldens
+    g053 and g095, 2026-11-02: Babylon 5 was found but lent no shape).
+    None when the file cannot be read."""
+    try:
+        key = str((found or {}).get('key') or '')
+        if not key.startswith('journey-iq/') or not key.endswith(('.json.gz', '.json')):
+            return None
+        s3 = s3 or (getattr(host, 's3_client', None) if host is not None else None)
+        if s3 is None:
+            return None
+        import gzip as _gz
+        body = s3.get_object(Bucket=bucket, Key=key)['Body'].read()
+        if key.endswith('.gz'):
+            body = _gz.decompress(body)
+        doc = json.loads(body.decode('utf-8'))
+        meta = doc.get('meta') if isinstance(doc.get('meta'), dict) else {}
+        spine = None
+        for k, v in doc.items():
+            if isinstance(v, dict) and isinstance(v.get('spine'), list) and v['spine']:
+                spine = v['spine']
+                break
+        if not spine:
+            return None
+        from . import intake_reader as _ir
+        name = str(meta.get('project_name') or meta.get('target_name') or (found or {}).get('name') or '')
+        shape = _ir.journey_shape({'stages': spine}, name)
+        if not shape:
+            return None
+        kind = str(meta.get('journey_kind') or '').strip().lower()
+        if kind:
+            shape['journey_kind'] = kind
+        return shape
+    except Exception:
+        traceback.print_exc()
+        return None
+
+
+def apply(flow, parsed, found, name, *, host=None):
     """Lend the prior deliverable's shape to the new ask's parsed inputs.
     Journeys reuse start / end / kind; Brand Partnership, Attribution and
     Flywheel reuse structural inputs that the new ask did not name.
@@ -148,6 +189,8 @@ def apply(flow, parsed, found, name):
                 shape = _ir.journey_shape(prior, found.get('name') or name) if prior else None
             except Exception:
                 shape = None
+            if not shape:
+                shape = journey_file_shape(found, host=host)
             return _ir.apply_journey_template(parsed, shape, found.get('name') or name)
         inputs = found.get('inputs') or (found.get('anchor') or {}).get('inputs') or {}
         if isinstance(inputs, dict):

@@ -58,16 +58,17 @@ _LEAD_RX = re.compile(
     r"how many (?:people|users|customers|individuals|folks|panelists|consumers|respondents) (?:would|will|do|did|could|can) (?:we|you|i) (?:have|get|see|find|expect)\s+(?:for|on|in|with|of)\s+|"
     r"do (?:we|you) (?:have|know)\s+)?"
     r"(?:the |an? )?(?:total |projected |estimated |approximate |overall )?"
-    r"(?:sizes?|sizing|sample[- ]sizes?|audience[- ]sizes?|incidence|n|headcount|reach|projected band|band)?\s*"
+    r"(?:sizes?|sizing|sample[- ]sizes?|audience[- ]sizes?|incidence|n\b|headcount|reach|projected band|band)?\s*"
     r"(?:of|for|on)?\s*(?:the |these |those |both |our |your )?(?:two|three|four|2|3|4)?\s*"
     r"(?:data ?sets?|audiences?|profiles?|universes?|groups?|cohorts?|pulls?|segments?)?\s*[:,-]?\s*", re.I)
 _SPLIT_RX = re.compile(r"\s*(?:,|;|\band\b|\bvs\.?\b|\bversus\b|\bthen\b|\bplus\b|&)\s*", re.I)
 _ORDINAL_RX = re.compile(r"^(?:the\s+)?(?:first|second|third|fourth|1st|2nd|3rd|4th|one|two|three|\d\)|\d\.)\s*[:,-]?\s*(?:one |is |being )?", re.I)
 _TAIL_RX = re.compile(
-    r"(?<=\w)\s+(?:(?:you|we) (?:have|hold|carry)\b.*|to (?:decide|see|figure|know|understand)\b.*|so (?:i|we) can\b.*|before (?:i|we)\b.*|"
+    r"(?<=\w)\s+(?:(?:are|is) (?:out )?there\b.*|(?:you|we) (?:have|hold|carry)\b.*|to (?:decide|see|figure|know|understand)\b.*|so (?:i|we) can\b.*|before (?:i|we)\b.*|"
     r"in (?:the |your |our )?(?:data ?set|sample|panel|system|library|dashboard)\b.*|first|please|thanks?)$", re.I)
 _NOUN_TAIL_RX = re.compile(
-    r"\s+(?:audience[- ]size|data ?set|dataset|audience|universe|profile|sample|size|cohort|group|segment|numbers?|figures?|count)s?$", re.I)
+    r"\s+(?:audience[- ]size|data ?set|dataset|audience|universe|profile|sample|size|cohort|group|segment|numbers?|figures?|count)s?$|"
+    r"\s+one$", re.I)   # "the spotify one" is the Spotify profile (2026-11-02)
 _DATE_TAIL_RX = re.compile(
     r"\s+(?:from|since|between|during|over|in|for)\s+(?:(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?\s+\d|\d{4}\b|"
     r"the (?:last|past|trailing|previous|next)\b|(?:a |the )?(?:last |past |trailing |next )?\d+\s*(?:days?|weeks?|months?|years?)\b|"
@@ -194,6 +195,13 @@ def subjects(text, ctx=None):
     m = _IS_THE_BRAND_RX.match(t)
     if m:
         return [m.group('s').strip()]
+    # "<audience>, how many in the sample and projected": the audience is
+    # the clause before the comma, not the words after "how many" (2026-11-02)
+    m_front = re.match(r"^(?P<s>[^,?;:]{2,80}?),\s*(?:how (?:many|big|large)|what(?:'s| is) the (?:size|sample|count))\b", t, re.I)
+    if m_front and not _LEAD_RX.match(t).group(0).strip():
+        c = _clean(m_front.group('s'))
+        if c and _plausible(c) and not _is_panel_self(c):
+            return [c]
     body = _LEAD_RX.sub('', t, count=1)
     if body == t:
         body = re.sub(r"^.*?\b(?:size|sizes|sizing|incidence|how (?:big|large) (?:is|are)|how many)\b\s*(?:of|for|on|is|are)?\s*(?:the )?", '', t, count=1, flags=re.I)

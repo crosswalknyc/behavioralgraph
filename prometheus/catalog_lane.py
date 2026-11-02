@@ -21,7 +21,8 @@ _PRODUCT_WORDS = (
     r"audience|cut|file|report|analysis)s?"
 )
 _EXISTS_RX = re.compile(
-    r"^\s*(?:hey |hi |prometheus,? )?(?:do (?:we|you) (?:already )?(?:have|see|hold|carry|know)|"
+    r"^\s*(?:hey |hi |prometheus,? |pls |please |plz )?(?:(?:pls |please |plz )?tell me (?:if|whether) (?:we|you) (?:have|hold|carry)|"
+    r"do (?:we|you) (?:already )?(?:have|see|hold|carry|know)|"
     r"is there|are there|have we (?:got|built|run|pulled|done)|did we (?:build|run|pull)|"
     r"what do (?:we|you) have (?:on|for|about)|do you have anything (?:on|for|about)|"
     r"how much (?:data|information|coverage|history) (?:do (?:we|you) have|is there|have we got) (?:on|for|about)|"
@@ -74,6 +75,9 @@ _PULL_LEAD_RX = re.compile(r"^(?:(?:a |an |any |the )?(?:data )?pulls?|data|anyt
 
 def _clean_subject(rest):
     s = str(rest or '').strip().strip('"\'')
+    # "a nike profile and how big it is": the size question rides along; the
+    # existence answer carries the size anyway (golden g091, 2026-11-02)
+    s = re.sub(r"\s+(?:and|,)\s+(?:how (?:big|large|many)|what(?:'s| is) (?:the|its) (?:size|sample))\b.*$", '', s, flags=re.I)
     s = _PULL_LEAD_RX.sub('', s)   # "a data pull on fanduel customers" -> "fanduel customers" (2026-10-14)
     s = _STRIP_RX.sub('', s)
     s = _YET_RX.sub('', s)
@@ -193,6 +197,17 @@ def roster_ask(text):
     m = _ROSTER_RX.search(t)
     if not m:
         return None
+    # a name between the lead and the class noun ("is there a Gunna
+    # profile in the library") is a question about that one subject, not
+    # the roster (golden g020, 2026-11-02)
+    try:
+        if m.group('cls'):
+            pre = t[m.start():m.start('cls')]
+            pre_words = pre.split()
+            if any(re.match(r"^[A-Z][A-Za-z0-9&'.-]*$", w) and w != 'I' for w in pre_words[1:]):
+                return None
+    except (IndexError, ValueError):
+        pass
     words = [m.group(k) for k in ('cls', 'cls2', 'cls3', 'cls4', 'cls6', 'cls7', 'cls8') if m.group(k)]
     qual = next((m.group(k) for k in ('q1', 'q2', 'q4', 'q5') if m.group(k)), '')
     if m.group('db'):

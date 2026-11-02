@@ -295,12 +295,27 @@ def _fork_answer(payload):
     return lines, figs
 
 
+# "journey for Young Sheldon on Netflix, start from people who watched a
+# clip on TikTok, end at the first episode watched" and "set up
+# attribution for the Influencer Project campaign, conversion is a ticket
+# purchase, assets are the three TikToks I will paste" are ORDERS for a
+# new deliverable; the reads off a delivered journey never answer them
+_ORDER_RX = re.compile(
+    r"^\W*(?:please\s+|can you\s+|could you\s+|i want\s+|i need\s+|i'?d like\s+|let'?s\s+)?"
+    r"(?:(?:build|create|make|run|set\s*up|setup|start|launch|kick off|spin up|do|put together|draft)\s+(?:me\s+|us\s+)?(?:a\s+|an\s+|the\s+|another\s+|new\s+)*"
+    r"(?:digital\s+)?(?:journey|attribution|campaign|tracking)\b|"
+    r"(?:digital\s+)?journey\s+for\s+.{2,80}?,\s*(?:start|begin|end|from|to)\b|"
+    r"attribution\s+for\s+.{2,80}?\b(?:conversion|assets?)\b)", re.I)
+
+
 def answer(text, ctx=None, *, host=None, user=None, history=None, s3=None, bucket='dashboard-inputs'):
     """A raw reply read off the delivered journey, or None when the
     question is not about a journey the caller can see."""
     t = str(text or '').strip()
     if not t or not journey_vocabulary(t):
         return None
+    if _ORDER_RX.search(t):
+        return None     # an order for a new journey or campaign is the intake's, never a read off an old one (goldens g054, g057, 2026-11-02)
     s3 = s3 or (host.s3_client if host is not None and host.has('s3_client') else None)
     if s3 is None:
         return None

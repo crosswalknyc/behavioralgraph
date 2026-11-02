@@ -188,3 +188,14 @@ def retry_once(fn, args, kwargs, question, history, first_exc):
         except Exception:
             pass
         raise
+
+
+def is_probe():
+    """True inside a request that service.ask marked as a probe (the
+    golden set, the canary, a regression replay): state writes that
+    would outlive the request are skipped. False outside a request."""
+    try:
+        from flask import g as _g
+        return bool(getattr(_g, '_pm_probe', False))
+    except Exception:
+        return False

@@ -18,6 +18,20 @@ from prometheus.intake_draft import BPIQ_ASK_COPY  # noqa: E402
 TODAY = date(2026, 10, 28)
 FAIL = 0
 
+# The run registry stays in this process. When the Flask host is
+# importable (the deploy interpreter with the .env loaded) the wizard
+# would otherwise claim its run keys on the shared S3 registry, and a
+# key claimed by an earlier run of this suite reads back as "already
+# running" (2026-11-02). The live one-run-per-ask behavior is what the
+# registry is for; the test asserts it against its own copy.
+from migration.bpiq_synthesis import MemoryRegistry  # noqa: E402
+REGISTRY = MemoryRegistry()
+
+
+def fresh_registry():
+    REGISTRY.rows.clear()
+    return REGISTRY
+
 
 def check(label, cond):
     global FAIL
@@ -40,7 +54,7 @@ def turn(text, store, draft=None, confirm=None, first=None, charge_fn=None,
         text, body, hist, 'tester', {}, 'tester',
         {'_pm_bpiq_intent': W.is_chip},
         first=first, today=TODAY, store=store,
-        charge_fn=charge_fn, start_fn=start_fn)
+        charge_fn=charge_fn, start_fn=start_fn, registry=REGISTRY)
 
 
 def test_chip_starts_talent():
@@ -80,6 +94,7 @@ def test_prices():
 
 
 def walk_to_charge(store, control=False, mode='find', links=None):
+    fresh_registry()
     turn(W.CHIP, store, first=True)
     turn('Jennifer Beals', store)
     turn('Ganni x Lululemon', store)
@@ -425,7 +440,7 @@ def _service_turn(text, path, history, charge_fn=None, start_fn=None):
         text, body, list(history), 'tester', {}, 'tester',
         {'_pm_bpiq_intent': _real_intent},
         first=W.is_start(text), today=TODAY, store=store,
-        charge_fn=charge_fn, start_fn=start_fn)
+        charge_fn=charge_fn, start_fn=start_fn, registry=REGISTRY)
     if out is None:
         out = W.hold_payload(history, store, 'tester', 't1', today=TODAY)
     return out, store
@@ -533,7 +548,7 @@ def test_super_admin_and_unlimited_accept_is_free():
             chip, {'thread_id': 't1'}, [], user, {}, 'tester',
             {'_pm_bpiq_intent': _real_intent},
             first=None, today=TODAY, store=store,
-            charge_fn=charge_fn, start_fn=start_fn)
+            charge_fn=charge_fn, start_fn=start_fn, registry=fresh_registry())
         return out, store
 
     jenna = {
@@ -599,16 +614,17 @@ def test_super_admin_and_unlimited_accept_is_free():
     started.clear()
     store = W.MemoryStore()
     walk_to_charge(store, control=True, mode='find')
+    reg = fresh_registry()
     out1 = W.analyze_hook(
         W.accept_chip(1000), {}, [], metered, {}, 'tester',
         {'_pm_bpiq_intent': _real_intent},
-        today=TODAY, store=store, charge_fn=charge, start_fn=start)
+        today=TODAY, store=store, charge_fn=charge, start_fn=start, registry=reg)
     out2 = W.analyze_hook(
         W.accept_chip(1000), {}, [
             {'role': 'agent', 'text': W.RUNNING_REPLY},
         ], metered, {}, 'tester',
         {'_pm_bpiq_intent': _real_intent},
-        today=TODAY, store=store, charge_fn=charge, start_fn=start)
+        today=TODAY, store=store, charge_fn=charge, start_fn=start, registry=reg)
     check("first Accept ran",
           (out1 or {}).get('reply') == W.RUNNING_REPLY)
     check("second Accept does not double-charge", len(charged) == 1)
@@ -688,7 +704,7 @@ def test_jenna_live_seat_and_stale_funds_draft():
         {'_H': host, '_pm_bpiq_intent': _real_intent},
         today=TODAY, store=store,
         charge_fn=lambda *a: charged.append(a) or False,
-        start_fn=lambda *a: started.append(a))
+        start_fn=lambda *a: started.append(a), registry=fresh_registry())
     check("thin admin session still gets the running line",
           (out or {}).get('reply') == W.RUNNING_REPLY)
     check("thin admin session is not billed", charged == [])

@@ -86,6 +86,10 @@ _TALK_RX = re.compile(
     r"are you still working|still (?:working|running)|"
     r"rewrite|script for|"
     r"is (?:it |that )?(?:on|in) (?:the |that |this )?(?:list|table|csv)|"
+    # a question about a figure already shown ("Is that 55% of total viewers
+    # or of new and reactivated watchers?"): its definition, never a new read
+    # (golden g077, 2026-11-02)
+    r"(?:is|was|does|do|are|were) (?:that|this|it|the) \d[\d,.]*\s*(?:%|percent|k|m|million|thousand)?\b.{0,80}\bo[fr]\b|"
     r"how do you know)\b",
     re.I)
 _LIST_RX = re.compile(
@@ -332,6 +336,22 @@ _PRODUCT_ORDER_RX = re.compile(
     r"^\W*(?:please\s+)?cut\b[^.;\n]{0,80}\bby\b", re.I)
 
 
+_VALUATION_ORDER_RX = re.compile(
+    r"^\W*(?:please\s+|can you\s+|could you\s+|would you\s+|i want (?:you )?to\s+|i need (?:you )?to\s+|i'?d like (?:you )?to\s+|let'?s\s+)?"
+    r"(?:value|valuate|price|appraise)\s+(?:the\s+|a\s+|this\s+)?[^.?!;\n]{2,80}?"
+    r"(?:\s+x\s+|\s+and\s+|\s+with\s+|\s+for\s+)[^.?!;\n]{1,60}?(?:\s+(?:partnership|deal|campaign|sponsorship|collab(?:oration)?))?\s*(?:[.?!;]|$)|"
+    r"^\W*(?:please\s+|can you\s+|could you\s+)?(?:value|valuate|price)\s+(?:the\s+)?[^.?!;\n]{2,80}?\s+(?:partnership|deal|sponsorship|collab(?:oration)?)\b", re.I)
+
+
+# The product noun leads and no verb is written: "journey for Young Sheldon
+# on Netflix, start from people who watched a clip on TikTok" (golden g054,
+# 2026-11-02). A question about a product ("how big is the journey for
+# Landman") never matches: the noun has to open the message.
+_NOUN_LED_ORDER_RX = re.compile(
+    r"^\W*(?:a\s+|another\s+|new\s+|one\s+)?(?:digital\s+)?"
+    r"(?:journey|valuation|attribution(?: campaign)?|flywheel|deck|one-?pager|profile)\s+(?:for|on|of)\s+[A-Za-z0-9][^?\n]*$", re.I)
+
+
 def is_product_order(text):
     """A build order for a priced product (a profile, a cut, a journey,
     a valuation, an attribution campaign, a deck): never a custom-ask
@@ -339,6 +359,10 @@ def is_product_order(text):
     t = str(text or '')
     if _PRODUCT_ORDER_RX.search(t):
         return True
+    if _VALUATION_ORDER_RX.search(t):
+        return True     # "can you value Gunna x Nike?", "Value the Stanley x Target partnership" (goldens g055, g056, 2026-11-02)
+    if _NOUN_LED_ORDER_RX.search(t):
+        return True     # "journey for Young Sheldon on Netflix, start from ..." (golden g054, 2026-11-02)
     try:
         from . import guards as _g
         return bool(_g.is_build_order(t))

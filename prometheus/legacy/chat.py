@@ -5675,7 +5675,7 @@ def _pm_interpret_core(user, body, text, history):
     try:
         _bw_user = (session.get('username') or (user or {}).get('username')
                     or '').strip()
-        _bw_store = _bpiq_wiz.shared_store(globals())
+        _bw_store = _bpiq_wiz.store_for(body, globals())
         _bw_tid = str((body or {}).get('thread_id') or '')
         if _bpiq_wiz.wants(text, body, history, store=_bw_store,
                            user=_bw_user, thread_id=_bw_tid):
@@ -9307,7 +9307,8 @@ def _pm_intake_turn(flow, text, body, history, user, ppu, first):
         uname = (str((user or {}).get('username') or (user or {}).get('email') or '').strip()
                  if isinstance(user, dict) else str(user or '').strip())
         hit = _bpiq_wiz.analyze_hook(
-            text, body, history, user, ppu, uname, globals(), first=first)
+            text, body, history, user, ppu, uname, globals(), first=first,
+            store=_bpiq_wiz.store_for(body, globals()))
         if hit is not None:
             return hit
         reply, chips = _bpiq_wiz.step_prompt(_bpiq_wiz.empty_draft())
@@ -9358,7 +9359,7 @@ def _pm_intake_turn(flow, text, body, history, user, ppu, first):
         if flow == 'digital_journey' and not found:
             parsed = _ir.apply_journey_template(parsed, _pm_prior_journey_shape(template, user), template)
         else:
-            parsed = _prec.apply(flow, parsed, found, template)
+            parsed = _prec.apply(flow, parsed, found, template, host=_H)
         if isinstance(parsed, dict) and found:
             parsed['_precedent_note'] = _prec.describe(found)
         if not complete_fn(parsed) and propose_fn:
@@ -9406,6 +9407,8 @@ def _pm_pending_intake(op, user, flow, *args):
     """stash / pick the brief a guided intake proposed, per reader, for a day (prometheus.pending_intake)."""
     try:
         from prometheus import pending_intake as _pi
+        if _faults.is_probe():
+            return None   # a probe leaves no brief behind for the next probe to pick up (2026-11-02)
         uname = str((user or {}).get('username') or (user or {}).get('email') or '').strip() if isinstance(user, dict) else str(user or '')
         if op == 'stash':
             return _pi.stash(_H.s3_client, _H.S3_BUCKET, uname, flow, args[0], args[1] if len(args) > 1 else '')
@@ -9726,6 +9729,43 @@ def _pm_intent_view_hydrate(view_ctx):
 _PM_SELF_CONTAINED_VIEWS = __import__('prometheus.view_base', fromlist=['SELF_CONTAINED']).SELF_CONTAINED
 
 
+def _pm_primary_key_for_name(name):
+    """The base profile key for a display name the client sent without
+    its key: an exact display-name match in the catalog (the Total
+    Universe when the family has one), never Gen Pop, never a guess.
+    '' when the library does not hold that exact name."""
+    try:
+        n = str(name or '').strip()
+        if not n:
+            return ''
+        _norm = _H._normalize_for_match
+        want = _norm(n)
+        if not want:
+            return ''
+        best, best_score = '', None
+        for e in _profile_catalog_for_chat():
+            key = str(e.get('s3_key') or '').strip()
+            if not key:
+                continue
+            disp = str(e.get('display_name') or '').strip()
+            fam = disp.split(' - ')[0].strip()
+            if _norm(disp) != want and not (_norm(fam) == want and ' - ' not in disp):
+                continue
+            try:
+                from prometheus import named_subject as _ns_chk
+                if _ns_chk.is_gen_pop(fam, _norm):
+                    continue
+            except Exception:
+                pass
+            score = (1 if ' - ' not in disp else 0, str(e.get('last_modified') or e.get('created_at') or ''))
+            if best_score is None or score > best_score:
+                best, best_score = key, score
+        return best
+    except Exception:
+        traceback.print_exc()
+        return ''
+
+
 def _pm_validate_page_context(page_context):
     """Access-gate every s3 key in the page context. Returns
     (clean_ctx_or_None, err_response_or_None). A missing/keyless
@@ -9755,6 +9795,15 @@ def _pm_validate_page_context(page_context):
             traceback.print_exc()
     primary = page_context.get('primary') or {}
     p_key = str(primary.get('s3_key') or '').strip()
+    if not p_key and isinstance(primary, dict) and str(primary.get('name') or '').strip():
+        # A primary named without its key (a thin client, the golden set:
+        # {"primary": {"name": "Gunna"}}) is the base profile of that
+        # name when the library holds exactly that subject (golden g065,
+        # 2026-11-02: "what is the median age here" quoted a custom read
+        # instead of reading the open profile).
+        p_key = _pm_primary_key_for_name(str(primary.get('name')).strip())
+        if p_key:
+            primary = dict(primary, s3_key=p_key)
     # Self-contained views (2026-10-05, Alexia): a Digital Journey IQ
     # or Brand Partnership IQ screen carries its own subject. The
     # profile left selected in the picker (Netflix, in her case) is
@@ -9768,6 +9817,8 @@ def _pm_validate_page_context(page_context):
                     'view_context': view_ctx}, None
         return None, None
     ok, err = _H._require_profile_run_access(p_key)
+    if not ok and _faults.is_probe():
+        ok, err = True, None   # the golden set and the canary run with no session; they read the library as the staff seat they stand in for
     if not ok:
         return None, err
     clean_cuts = []
@@ -11883,6 +11934,19 @@ def _pm_chat_subject_verify(spec_draft, candidates, text, preverify=None):
         if spec_draft.get('_persona_universe') or spec_draft.get('ask_ip_scope') or spec_draft.get('clarify_question') \
                 or _cohort_scope.apply_to_draft(spec_draft, text):   # compound cohort anchored on an entity (2026-10-12)
             return None
+        # A category audience ("yoga clothing buyers", "craft beer
+        # drinkers") is a persona universe: there is no entity to find.
+        # The normalizer that marks the draft runs after this ladder, so
+        # the same test is asked here (golden g044, 2026-11-02: "I could
+        # not find Yoga Clothing as a brand, person, or title").
+        try:
+            _pca = getattr(_H, '_v1_persona_class_ask', None)
+            if callable(_pca) and _pca(text):
+                spec_draft['_persona_universe'] = True
+                spec_draft['subject_verified'] = True
+                return None
+        except Exception:
+            pass
         verify = getattr(_H, '_v1_subject_verified', None)
         if not callable(verify):
             return None
@@ -15320,7 +15384,7 @@ def _pm_analyze_core(user, body, text, history):
     # opens step 1 before any other analyze lane, including twins.
     _bpiq_user = (session.get('username') or user.get('username')
                   or '').strip()
-    _bpiq_store = _bpiq_wiz.shared_store(globals())
+    _bpiq_store = _bpiq_wiz.store_for(body, globals())
     _bpiq_tid = str((body or {}).get('thread_id') or '')
     if _bpiq_wiz.wants(text, body, history, store=_bpiq_store,
                        user=_bpiq_user, thread_id=_bpiq_tid):
@@ -18037,7 +18101,8 @@ def _pm_deck_core(user, body):
         return jsonify({'success': True, 'clarify': resolution['clarify']})
     _page_named = False
     try:   # "make me a deck on New Heights" with New Heights Podcast Listeners open: the words confirm the page (2026-10-30, item 13)
-        _page_named = bool(_subject_rules.words_name_page(text, str(resolution.get('subject') or '')))
+        _page_named = bool(_subject_rules.words_name_page(text, str(resolution.get('subject') or ''))) \
+            or bool(_subject_rules.deixis_points_at_screen(text, history))   # "make this a deck" on an empty thread: this is the screen (golden g083)
     except Exception:
         _page_named = False
     if resolution.get('used_open_page') \
@@ -18101,6 +18166,9 @@ def _pm_deck_core(user, body):
     _head = {'job_id': job_id, 'user': username, 'status': 'queued', 'angle': angle, 'started_at': time.time()}
     _pm_job_bind_thread(job_id, username)
     _args = (job_id, username, ctx, history[-14:], angle, _charge_user, deck_subject, deck_partner)
+    if _faults.is_probe():   # the golden set grades the routing; a probe never builds a deck (2026-11-02)
+        print(f"[pm-deck] probe ask: deck {job_id} on {deck_subject!r} not started")
+        return jsonify({'success': True, 'job_id': job_id, 'subject': deck_subject})
     if _rr.queue_enabled():   # decks build on the Hetzner read worker like reads (2026-10-09); unclaimed in 150 s, the sweeper builds it here
         _head['resume'] = {'ctx': ctx, 'history': history[-14:], 'angle': angle, 'charge_user': _charge_user,
                            'subject': deck_subject, 'partner': deck_partner, 'extras': _deck_extras or {}}

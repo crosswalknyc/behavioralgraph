@@ -215,6 +215,12 @@ def remember(user, question, subject=None, cohort=None, ledger_key=None,
     try:
         if not str(user or '').strip() or not str(question or '').strip():
             return
+        try:
+            from prometheus import faults as _faults
+            if _faults.is_probe():
+                return   # a probe ask is never remembered (2026-11-02)
+        except Exception:
+            pass
         rec = {
             'q': str(question)[:300],
             'subject': (str(subject)[:120] if subject else None),
@@ -287,6 +293,13 @@ def entity_fold(name):
     return ' '.join(t.split())
 
 
+_NOT_A_REFERENT_RX = re.compile(
+    r"^(?:profile ?iq|journey ?iq|subscriber ?iq|attribution ?iq|intent ?iq|brand ?partnership ?iq|digital ?twins? ?iq|"
+    r"trends ?iq|culture ?ranker ?iq|flywheel(?: ?conversion)?|microdramas ?iq|analysis ?iq|impact ?iq|"
+    r"profile|journey|campaign|deck|read|valuation|dashboard|prometheus|crosswalk|"
+    r"this|that|it|here|the (?:data|page|view|screen|profile|audience))$", re.I)
+
+
 def recent_referents(user, k=2):
     """The user's most recent distinct (subject, cohort) referents,
     newest first - the candidates a grounded confirm offers when an
@@ -295,6 +308,11 @@ def recent_referents(user, k=2):
     for a in recall(user):
         subj = str(a.get('subject') or '').strip()
         if not subj:
+            continue
+        # a view id or a product label that slipped into memory is never a
+        # subject to offer (golden g065, 2026-11-02: "Do you mean for
+        # journeyIQ, or Taylor Swift?")
+        if _NOT_A_REFERENT_RX.match(subj):
             continue
         cohort = str(a.get('cohort') or '').strip() or None
         # 2026-10-05 (Scott): 'Will And Grace' and 'Will & Grace on

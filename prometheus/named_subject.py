@@ -883,7 +883,11 @@ DEIXIS_RX = re.compile(
     r"(?:here|above|below|on\s+screen)\b"
     r"|\bwhat\s+you\s+(?:just\s+)?(?:said|showed|sent|gave|wrote)\b"
     r"|\bwhy\s+does\s+(?:this|that|it)\s+matter\b"
-    r"|\bwhat\s+(?:does|do)\s+(?:this|that|these|it)\s+(?:mean|tell|say)\b",
+    r"|\bwhat\s+(?:does|do)\s+(?:this|that|these|it)\s+(?:mean|tell|say)\b"
+    # "what is the median age here", "how many men in here", "the split here":
+    # a bare "here" at the end of a question points at the screen (golden
+    # g065, 2026-11-02: it drew "Do you mean for journeyIQ, or Taylor Swift?")
+    r"|\b(?:here|in\s+here|on\s+here)\s*[?.!]*\s*$",
     re.I)
 
 PLATFORM_WORDS = frozenset((
