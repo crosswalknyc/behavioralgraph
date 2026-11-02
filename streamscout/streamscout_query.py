@@ -40,12 +40,16 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import streamscout as ss  # noqa: E402  (needs the path insert above)
 
 # Convenience platform groups so a caller can say platforms="podcasts" for a
-# listener profile, "video" for viewers, etc. All are resolver-based. Peacock is
-# slug/ClickHouse (needs the company network) and is intentionally NOT here —
-# query it through the interactive tool.
+# listener profile, "video" for viewers, etc. All are resolver-based. Peacock IS
+# here: its direct resolver (peacock_episode_identifier.resolve) reads the public
+# /stream-tv or /watch-online episode tree over plain HTTP — no login, no
+# ClickHouse, no company network. (The clickstream title tool,
+# peacock_title_identifier.py, is the one that needs the network; this group
+# never touches it.)
 GROUPS = {
-    "video":    ["hulu", "netflix", "appletv", "paramount", "max", "disney",
-                 "starz", "hallmark", "amazon", "mgmplus", "britbox", "youtube"],
+    "video":    ["peacock", "hulu", "netflix", "appletv", "paramount", "max",
+                 "disney", "starz", "hallmark", "amazon", "mgmplus", "britbox",
+                 "youtube"],
     "podcasts": ["spotify", "applepodcasts", "iheart", "pandora",
                  "amazonpodcasts", "siriusxm", "npr", "youtube"],
     "audio":    ["audible"],
@@ -213,11 +217,17 @@ def _platform_keys(platforms, return_explicit=False):
     if isinstance(platforms, str):
         platforms = [platforms]
     keys, explicit = [], set()
+    # Peacock isn't in RESOLVER_PLATFORMS (the interactive tool registers it under
+    # SLUG_PLATFORMS with special direct-resolver handling), but it DOES have a
+    # resolver module and is now part of the "video" group, so accept any key
+    # that has a resolver module as an explicit platform too.
+    resolver_keys = set(ss.RESOLVER_PLATFORMS) | set(
+        getattr(ss, "RESOLVER_MODULE", {}))
     for p in platforms:
         p = (p or "").strip().lower()
         if p in GROUPS:
             keys.extend(GROUPS[p])
-        elif p in ss.RESOLVER_PLATFORMS:
+        elif p in resolver_keys:
             keys.append(p)
             explicit.add(p)
         else:
