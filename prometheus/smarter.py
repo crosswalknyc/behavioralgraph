@@ -294,8 +294,15 @@ def prune_rulebook(system_prompt, text, candidates=None, reading=None):
         return system_prompt, []
 
 
-def draft_output_ceiling(text, default=6000, long=16000):
-    """A list of subjects (multi-spec array) keeps the long budget."""
+def draft_output_ceiling(text, default=14000, long=24000):
+    """A list of subjects (multi-spec array) keeps the long budget.
+
+    2026-11-02: the ceiling counts the model's own reasoning as output
+    (a one-subject draft that parses to 3,500 tokens of JSON reports
+    11,000 output tokens on the current Sonnet line), so 6,000 cut
+    every draft off and the retry doubled the wall time (Jay Patel's
+    three-profile ask died at 181 s). 14,000 clears a single draft in
+    one pass; streaming carries anything at or above 12,000."""
     t = str(text or '')
     if len(re.findall(r",", t)) >= 2 or re.search(r"\b(each|both|all of|the following|separately|individual)\b", t, re.I) \
             or len(re.findall(r"\band\b", t, re.I)) >= 2 or len(t) > 600:

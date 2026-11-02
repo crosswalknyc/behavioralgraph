@@ -261,9 +261,27 @@ def handle(text, body, run_one, *, pma=None, approve_chip='Approve', cancel_chip
         return out
     if isinstance(pc, dict) and pc:
         return None             # a single confirm rides the single path
+    # one title asked across streaming services is ONE build with service
+    # cuts, never three questions (Jay Patel 2026-11-02: "three distinct
+    # profiles ... on any streaming service / on Amazon Prime Video / on
+    # HBO Max" ran as three "Working on it" parts); prometheus.platform_cuts
+    try:
+        from . import platform_cuts as _pcuts
+        if _pcuts.detect(text):
+            return None
+    except Exception:
+        pass
     parts = split(text, pma=pma)
     if len(parts) < 2:
         return None
+    # a numbered list of build orders is the build flow's batch, not a
+    # set of questions: the interpret step drafts one brief per subject
+    try:
+        from . import priced_read as _prd
+        if all(_prd.is_product_order(p) for p in parts):
+            return None
+    except Exception:
+        pass
     # a later part reads with the earlier ones behind it ("do they also
     # watch Yellowstone" binds "they" to the first question's audience)
     raws = [_raw_of(run_one(q, None, parts[:i])) for i, q in enumerate(parts)]

@@ -5988,13 +5988,36 @@ def _pm_interpret_core(user, body, text, history):
     # Samsung, LG)") defers to the plain splitter's cleaner
     # one-entity slices.
     # ------------------------------------------------------------------
+    # One title asked across services (Jay Patel 2026-11-02: "three
+    # distinct profiles: watched Wuthering Heights on any streaming
+    # service / on Amazon Prime Video / on HBO Max") is ONE build: the
+    # title's viewers on any service, with one behavioral cut per
+    # service named, pinned to 100 on it (Jenna: "a wuthering heights
+    # profile with two cuts based on streaming service"). The model
+    # reads the one-sentence universe; the cuts and the how-it-is-built
+    # note ride the draft below. Before this the model wrote three
+    # drafts, ran past its ceiling twice and the turn died at 181 s.
+    _platform_hit = None
+    try:
+        from prometheus import platform_cuts as _pcuts
+        _platform_hit = _pcuts.detect(text)
+        if _platform_hit:
+            print(f"[synth-chat interpret] platform cuts: {_platform_hit['title']!r} on "
+                  f"{_platform_hit['platforms']} (any={_platform_hit['any']}, method={_platform_hit['method_question']})")
+            text = _pcuts.rewrite_for_interpret(text, _platform_hit)
+            # the Reader read three subjects; the model must see one, or it
+            # writes three drafts again
+            body = dict(body or {}, reading=None)
+    except Exception as _fx:
+        _faults.note('chat', _fx)
+        _platform_hit = None
     # A single compound behavioral audience ("anyone who watched X and
     # any one of the following A, B, C on streaming") is ONE build, not
     # a batch - never let the list OR Cartesian splitters shatter it
     # into pseudo-subjects. Fall through to the single interpret, which
     # already reads stacked criteria as one persona. See
     # _is_single_compound_audience + profile-iq-pipeline-rules.mdc s2.
-    _single_compound = _H._is_single_compound_audience(text)
+    _single_compound = bool(_platform_hit) or _H._is_single_compound_audience(text)
     # 2026-10-02 audit: a question is never a batch. "Can I cut the
     # existing Apple TV+ profile by Quarter (i.e., 2Q 2026)?" was split
     # into two builds named "I.e Can I Cut ..." and "2Q 2026 Can I Cut
@@ -6504,6 +6527,19 @@ def _pm_interpret_core(user, body, text, history):
         # interpreter sometimes collapses them into a single mangled
         # subject - rescan the raw ask and merge any missing cohorts.
         _H._augment_multi_cohort_cuts(spec_draft, text)
+        if _platform_hit:
+            try:
+                _pcuts.apply_to_draft(spec_draft, _platform_hit, text)   # the service cuts + the how-it-is-built note
+            except Exception as _fx:
+                _faults.note('chat', _fx)
+        else:
+            try:   # "talk me through how you build it" on a single title audience: the note rides the brief
+                from prometheus import platform_cuts as _pcuts2
+                _mn = _pcuts2.note_for_title_build(spec_draft, text)
+                if _mn:
+                    spec_draft['method_note'] = _mn
+            except Exception as _fx:
+                _faults.note('chat', _fx)
         _H._drop_degenerate_addon_cuts(spec_draft)
         # Cuts-only promoter (2026-08-20): if the cleaned subject
         # already has a full-universe TU in the catalog, skip the

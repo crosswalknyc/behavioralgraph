@@ -53236,7 +53236,24 @@ def _v1_interpret(prompt, identity_context=None):
                              'retry in a few seconds'),
         }
     try:
-        return _v1_interpret_capped(prompt, identity_context=identity_context)
+        # One title asked across services is one build with service cuts
+        # (prometheus.platform_cuts, Jay Patel 2026-11-02): the model reads
+        # the one-sentence universe, the cuts ride the draft.
+        _ph = None
+        try:
+            from prometheus import platform_cuts as _pcuts
+            _ph = _pcuts.detect(prompt)
+            if _ph:
+                prompt = _pcuts.rewrite_for_interpret(prompt, _ph)
+        except Exception:
+            _ph = None
+        draft, cands, interp = _v1_interpret_capped(prompt, identity_context=identity_context)
+        if _ph and isinstance(draft, dict):
+            try:
+                _pcuts.apply_to_draft(draft, _ph, prompt)
+            except Exception:
+                pass
+        return draft, cands, interp
     finally:
         _V1_INTERPRET_SEM.release()
 

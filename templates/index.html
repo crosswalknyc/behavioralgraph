@@ -91978,6 +91978,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     line += '\n- ' + (_cuts[_ci].label || _cuts[_ci].cut_id);
                 }
             }
+            // The reader asked how the build works ("talk me through how you
+            // will build these"): the answer rides the brief (2026-11-02).
+            if (s.method_note) {
+                line += '\n\n' + String(s.method_note);
+            }
             if (refreshHint && _dec === 'time_shifted_refresh') {
                 line += '\n\n' + refreshHint;
             }
