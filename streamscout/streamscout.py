@@ -169,8 +169,8 @@ RESOLVER_MODULE = {
     "games": "games_identifier",
 }
 # resolvers that accept a pasted URL / UUID as a discovery hint
-URL_HINT_RESOLVERS = {"hulu", "peacock", "appletv", "paramount", "max", "disney",
-                      "starz", "hallmark", "amazon", "mgmplus", "britbox",
+URL_HINT_RESOLVERS = {"hulu", "peacock", "netflix", "appletv", "paramount", "max",
+                      "disney", "starz", "hallmark", "amazon", "mgmplus", "britbox",
                       "youtube", "spotify", "applepodcasts", "iheart", "pandora",
                       "amazonpodcasts", "siriusxm", "npr", "audible", "games"}
 

@@ -690,15 +690,35 @@ def scrape_episodes(page):
 
 
 # ── reusable resolver (imported by title_lookup.py) ───────────────────────────
+def _title_id_from_url(url):
+    """Pull the numeric Netflix id out of a pinned URL / id. Accepts
+    netflix.com/title/<id>, netflix.com/watch/<id> (with or without a country
+    prefix or query string), or a bare numeric id. Returns the id or None."""
+    if not url:
+        return None
+    s = str(url).strip()
+    m = re.search(r"(?:title|watch)/(\d+)", s)
+    if m:
+        return m.group(1)
+    return s if s.isdigit() else None
+
+
 def resolve(title=None, title_id=None, kind="series", seasons=None,
-            profile="Jenna", browser="firefox", headed=False):
+            profile="Jenna", browser="firefox", headed=False, url=None):
     """Resolve a Netflix title to episode watch ids.
 
     Returns (show_name, rows) where each row is a dict:
         {season, episode, title, identifier, watch_url}
     (season/episode/title are "" for a movie).  `seasons` is a set or None (all).
     Raises RuntimeError if credentials are missing.
+
+    A pinned ``url`` (netflix.com/title/<id>, /watch/<id>, or a bare numeric id)
+    skips fuzzy title search entirely — the reliable path for big titles whose
+    search match is ambiguous (e.g. "Heartland", which otherwise matches a
+    decoy id). An explicit ``title_id`` still wins if both are given.
     """
+    if url and not title_id:
+        title_id = _title_id_from_url(url)
     # Unattended/server path: a saved session token (NETFLIX_AUTH_JSON etc.) lets
     # us run headless with NO on-disk profile and NO interactive login — this is
     # how Netflix stays "always searching" in production (Render), mirroring Max.
@@ -831,6 +851,8 @@ def main() -> int:
     ap.add_argument("--title")
     ap.add_argument("--seasons", help="e.g. 1  |  1,3  |  1-4  |  all")
     ap.add_argument("--id", help="Netflix title id (skip search)")
+    ap.add_argument("--url", help="a netflix.com/title/<id> or /watch/<id> URL "
+                                  "(skip search — reliable for ambiguous titles)")
     ap.add_argument("--profile", default="Jenna")
     ap.add_argument("--browser", default="firefox",
                     choices=["firefox", "chromium", "webkit"],
@@ -865,17 +887,18 @@ def main() -> int:
     if not kind:
         a = ask("Movie or Series?  [m/s]: ").lower()
         kind = "movie" if a.startswith("m") else "series"
-    if not title:
+    if not title and not args.id and not args.url:
         title = ask("What title?: ")
     if kind == "series" and args.seasons is None:
         seasons = parse_seasons(ask("Which season(s)?  1 | 1,3 | 1-4 | all: "))
-    if not title and not args.id:
-        print("Need a title (or --id)."); return 1
+    if not title and not args.id and not args.url:
+        print("Need a title (or --id / --url)."); return 1
 
     try:
         show, rows = resolve(title=title, title_id=args.id, kind=kind,
                              seasons=seasons, profile=args.profile,
-                             browser=args.browser, headed=args.headed)
+                             browser=args.browser, headed=args.headed,
+                             url=args.url)
     except RuntimeError as e:
         print(f"  ! {e}"); return 1
     if not rows:

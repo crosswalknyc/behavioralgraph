@@ -164,10 +164,64 @@ def search_peacock_page(title):
     return None
 
 
+_SERIESURL = re.compile(r"/watch-online/tv/([a-z0-9-]+)/(\d+)")
+_TV_INDEX = None  # lazily-built {slug: seriesId} from the entertainment sitemaps
+
+
+def _tv_index():
+    """Build (and cache) a {slug: seriesId} map from Peacock's entertainment
+    sitemaps — the deterministic title -> canonical /watch-online/tv page index.
+
+    Mirrors ``_movie_index`` but for series: the ``content_page_entertainment``
+    sitemaps list every US series page as /watch-online/tv/<slug>/<seriesId>
+    (and its season/episode children, which dedupe to the same slug). This is a
+    reliable, login-free alternative to scraping a web-search engine for titles
+    whose public page is /watch-online/tv/... rather than /stream-tv/<slug>
+    (e.g. "Heartland").
+    """
+    global _TV_INDEX
+    if _TV_INDEX is not None:
+        return _TV_INDEX
+    idx = {}
+    try:
+        _, _, top = fetch(SITEMAP)
+        maps = [c for c in re.findall(r"<loc>([^<]+)</loc>", top)
+                if "content_page_entertainment" in c]
+        for m in maps:
+            try:
+                _, _, body = fetch(m)
+            except Exception:
+                continue
+            for slug, sid in _SERIESURL.findall(body):
+                idx.setdefault(slug, sid)  # series landing wins; episodes dedupe
+    except Exception:
+        pass
+    _TV_INDEX = idx
+    return idx
+
+
+def series_url_from_title(title):
+    """Return the canonical /watch-online/tv/<slug>/<seriesId> URL for a series
+    via an EXACT slug-token match in the sitemap index (a trailing release year
+    is allowed), so we never return a look-alike show. None if not found."""
+    if not title:
+        return None
+    want = tokens(title)
+    idx = _tv_index()
+    for slug, sid in idx.items():
+        if tokens(slug) == want:                      # exact title match
+            return "https://www.peacocktv.com/watch-online/tv/%s/%s" % (slug, sid)
+    for slug, sid in idx.items():                      # allow a trailing year
+        st = tokens(slug)
+        if len(st) == len(want) + 1 and st[:-1] == want and st[-1].isdigit():
+            return "https://www.peacocktv.com/watch-online/tv/%s/%s" % (slug, sid)
+    return None
+
+
 def _load_page(title, url):
     """Return (final_url, html) for a page carrying the episode tree, else
     (None, None). Order: pasted content URL -> /stream-tv/<slug> guess ->
-    web-search (stream-tv OR watch-online/tv/<seriesId>)."""
+    sitemap /watch-online index (deterministic) -> web-search fallback."""
     # 1) a pasted full content URL (stream-tv, or watch-online/tv/<seriesId>).
     if url:
         m = _CONTENT_URL.search(url)
@@ -186,7 +240,17 @@ def _load_page(title, url):
         final, html = _fetch_tree("https://www.peacocktv.com/stream-tv/" + slug)
         if html:
             return final, html
-    # 3) web-search fallback (covers titles with no stream-tv page at all).
+    # 3) sitemap index: the canonical /watch-online/tv/<slug>/<seriesId> page
+    #    (covers titles with no /stream-tv page, e.g. "Heartland"). Deterministic
+    #    and exact-matched, so it runs before the flaky web-search fallback.
+    if title:
+        link = series_url_from_title(title)
+        if link:
+            final, html = _fetch_tree(link)
+            if html:
+                return final, html
+    # 4) web-search fallback (last resort — titles outside the US entertainment
+    #    sitemap, e.g. some sports/news pages).
     if title:
         link = search_peacock_page(title)
         if link:
