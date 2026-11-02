@@ -1310,8 +1310,16 @@ def _find_defining_brand_rows(df, brand_query: str, subject: str):
                 continue
             if q_flat not in val_flat and val_flat not in q_flat:
                 continue
-        matches.append((idx, cat, val))
-    return matches
+        matches.append((idx, cat, val, exact))
+    # The brand itself, when the grid carries it, is the whole identity:
+    # "Amazon Prime Video Viewers" pins AMAZON PRIME VIDEO in every
+    # category it sits in and leaves AMAZON (the retailer) and AMAZON
+    # PRIME (the membership) to the reasoning (2026-11-02, Wuthering
+    # Heights platform cuts). The substring matches stand in only when
+    # the grid spells the brand another way ("Prime Video").
+    if any(m[3] for m in matches):
+        matches = [m for m in matches if m[3]]
+    return [(idx, cat, val) for idx, cat, val, _exact in matches]
 
 
 def _pin_defining_brand_to_100(df, cut_def, subject, new_sample,
