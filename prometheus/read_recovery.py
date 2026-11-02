@@ -865,6 +865,11 @@ def _finalize(job_id, status, reason):
         c._pm_notify_delete(job_id)
     except Exception:
         pass
+    # a probe's read (the golden set, the canary, a replay) is owed to no
+    # one: no deliver-by-email alert (2026-11-02, 'canary:golden')
+    if status.get('probe') or rr.get('probe') or uname.lower().startswith('canary'):
+        print(f"[pm-recover] probe read {job_id} finalized quietly ({reason})")
+        return
     try:
         h._chatbot_error_email(
             'brief-chat/read-recovery',

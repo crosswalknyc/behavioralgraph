@@ -13625,7 +13625,7 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
             _pm_ask_hint(outcome='clarify_subject')
             return jsonify({'success': True, 'action': 'answer', 'reply': _subject_rules.clarify_for(text), 'followups': [], 'offer_deck': False, 'deck_angle': None})
         job_id = inline_job_id or uuid.uuid4().hex[:12]
-        if _pm_probe_caller() == 'golden-set':   # grades the reply shape only: no job, no queue, no inflight mark
+        if _pm_probe_caller() == 'golden-set' or _faults.is_probe():   # a probe grades the reply shape only: no job, no queue, no inflight mark (2026-11-02: a local replay's orphaned read drew the deliver-by-email alert for 'canary:golden')
             _pm_ask_hint(outcome='answered', subject=_promised)
             return jsonify({'success': True, 'action': 'answer', 'read_job_id': 'golden-' + job_id, 'followups': [], 'offer_deck': False, 'deck_angle': None,
                             'reply': _pm_on_it_line(base, bound=bind_subject)})

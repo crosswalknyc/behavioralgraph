@@ -240,6 +240,35 @@ class ProbeState(unittest.TestCase):
         from prometheus import faults as F
         self.assertFalse(F.is_probe())
 
+    def test_an_orphaned_probe_read_never_alerts_ops(self):
+        """2026-11-02: a local replay's read for 'canary:golden' was orphaned and
+        the recovery sweeper mailed ops 'DELIVER THE ANSWER BY EMAIL TO:
+        canary:golden'. A probe is owed to no one."""
+        from prometheus import read_recovery as RR
+        calls = {'email': 0, 'status': 0, 'history': 0}
+
+        class _Chat:
+            def _pm_panel_refund(self, c): pass
+            def _pm_read_status_write(self, job_id, doc): calls['status'] += 1
+            def _pm_append_read_to_history(self, *a, **k): calls['history'] += 1
+            def _pm_notify_delete(self, job_id): pass
+
+        class _Host:
+            def _chatbot_error_email(self, *a, **k): calls['email'] += 1
+
+        orig_chat, orig_host = RR._chat, RR._host
+        RR._chat, RR._host = (lambda: _Chat()), (lambda: _Host())
+        try:
+            RR._finalize('47a5ba32dbe6', {'user': 'canary:golden', 'probe': True, 'question': 'what platforms do Glen Powell fans stream on',
+                                          'resume': {'text': 'x', 'probe': True}}, 'requester not found')
+            self.assertEqual(calls['email'], 0)
+            self.assertEqual(calls['history'], 0)
+            self.assertEqual(calls['status'], 1)
+            RR._finalize('abc', {'user': 'eriley', 'question': 'q', 'resume': {'text': 'q'}}, 'requester not found')
+            self.assertEqual(calls['email'], 1)   # a real reader still gets the alert
+        finally:
+            RR._chat, RR._host = orig_chat, orig_host
+
     def test_analyze_body_carries_persist_false(self):
         out = S._analyze_body({'text': 'x', 'persist': False}, 'x', [], {'surface': 'analyze'})
         self.assertIs(out.get('persist'), False)
