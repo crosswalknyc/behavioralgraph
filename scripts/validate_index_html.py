@@ -674,3 +674,5 @@ if __name__ == "__main__":
 # ci-trigger: streamscout-donation-backed-auth
 
 # ci-trigger: streamscout-peacock-netflix-discovery
+
+# ci-trigger: streamscout-doc-peacock-netflix

@@ -71,15 +71,21 @@ Pass a **single key** (`"youtube"`), a **list** (`["spotify","youtube"]`), or a
 
 | Group | Expands to |
 |---|---|
-| `video` | hulu, netflix, appletv, paramount, max, disney, starz, hallmark, amazon, mgmplus, britbox, **youtube** |
+| `video` | **peacock**, hulu, netflix, appletv, paramount, max, disney, starz, hallmark, amazon, mgmplus, britbox, **youtube** |
 | `podcasts` | spotify, applepodcasts, iheart, pandora, amazonpodcasts, siriusxm, **npr**, **youtube** |
 | `audio` | audible |
 | `books` | books |
 | `games` | games |
 | `all` | everything above (de-duped) |
 
-> **Peacock is intentionally not in any group** — it's slug/ClickHouse and needs
-> the company network. Query it through the interactive tool, not here.
+> **Peacock is in the `video` group** (and works as an explicit platform too). Its
+> resolver reads Peacock's **public** `/stream-tv` / `/watch-online` episode tree
+> over plain HTTP — **no login, no ClickHouse, no company network.** Bare-title
+> discovery is deterministic (a sitemap index, exact-title match), so a generic
+> word like *Heartland* resolves the real show and never a look-alike
+> (*Heartland Homicide* stays out). *(The separate `peacock_title_identifier.py`
+> clickstream tool is the one that needs the network — that's not what this group
+> uses.)*
 
 ---
 
@@ -480,6 +486,19 @@ Only if Max's **client headers** themselves change (rare) does Max need a deskto
 header re-capture: `python3 streamscout/max_episode_identifier.py --refresh-auth`
 (then redeploy `MAX_AUTH_JSON`). `streamscout/refresh_streaming_auth.sh` bundles
 that header refresh + Render push for the emergency/fallback case.
+
+> **Netflix can be pinned by id/URL (skip fuzzy search).** Netflix normally finds a
+> title by searching its name, but a **generic title can match a decoy** — e.g.
+> *Heartland* matched an empty look-alike id and returned 0, when the real CBC show
+> (`70171946`, S1–19) was right there. For those, pass the exact Netflix page via
+> `url=` and Netflix skips search entirely (same idea as Amazon's pin):
+> ```python
+> streamscout_query("Heartland", platforms="netflix", kind="series",
+>                   url="https://www.netflix.com/title/70171946")
+> ```
+> `url=` accepts `netflix.com/title/<id>`, `/watch/<id>`, or a bare numeric id.
+> A bare-title Netflix query still works for everything else — pin only when the
+> name is ambiguous.
 
 ### 5i. Amazon ALWAYS needs a pinned series-level URL (this is how Amazon works)
 
