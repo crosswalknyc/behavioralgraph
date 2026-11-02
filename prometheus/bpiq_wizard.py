@@ -714,7 +714,23 @@ def attr_reply(draft, today=None):
     else:
         why = ('The standard window is the campaign dates plus 30 days '
                'after it ends.')
-    return (f"I read the campaign as {camp}. {why} "
+    # the pair leads, so a one-shot ask sees what was read before it
+    # accepts the window ("Gunna x Nike: I read the campaign as ...",
+    # goldens g055 and g056, 2026-11-02)
+    lead = ''
+    talent = str(d.get('talent') or '').strip()
+    brand = str(d.get('brand_partner') or '').strip()
+    camp_name = str(d.get('campaign') or '').strip()
+    t_fold = re.sub(r'[^a-z0-9]+', '', talent.lower())
+    if camp_name:
+        # the campaign as the reader named it ("Ganni x Lululemon"); the
+        # talent joins when the campaign does not carry it ("Jennifer
+        # Beals, Ganni x Lululemon")
+        in_camp = bool(t_fold) and t_fold in re.sub(r'[^a-z0-9]+', '', camp_name.lower())
+        lead = (f"{camp_name}: " if (in_camp or not talent) else f"{_cased(talent)}, {camp_name}: ")
+    elif talent and brand and brand.lower() != talent.lower():
+        lead = f"{_cased(talent)} x {_cased(brand)}: "
+    return (f"{lead}I read the campaign as {camp}. {why} "
             f"Attribution window: {attr}.")
 
 

@@ -142,6 +142,13 @@ class ValuationOneShot(unittest.TestCase):
         self.assertEqual(W._strip_ask_frame('what is the Glen Powell x RAM Trucks deal worth?'), 'Glen Powell x RAM Trucks')
         self.assertEqual(W._strip_ask_frame('Jennifer Beals'), 'Jennifer Beals')
 
+    def test_window_prompt_names_the_pair(self):
+        from datetime import date
+        d = W.apply_ahead(W.empty_draft(), 'can you value Gunna x Nike? campaign ran June through August 2026', today=date(2026, 10, 28))
+        self.assertTrue(W.attr_reply(d, today=date(2026, 11, 2)).startswith('Gunna x Nike: I read the campaign as June 1 to August 31, 2026'))
+        d2 = W.apply_ahead(W.empty_draft(), 'Jennifer Beals, Ganni x Lululemon, October 7 - 28', today=date(2026, 10, 28))
+        self.assertTrue(W.attr_reply(d2, today=date(2026, 10, 28)).startswith('Jennifer Beals, Ganni x Lululemon: '))
+
     def test_probe_store_stays_in_process(self):
         self.assertIsInstance(W.store_for({'persist': False}), W.MemoryStore)
 
