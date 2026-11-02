@@ -319,6 +319,9 @@ def find_subject(text, platforms=None):
         if not cand:
             return None
         cand = _strip_platform_tail(cand, plats)
+        # a connective the clause cut left behind ("Young Sheldon and the",
+        # "Landman who") is not part of the name
+        cand = re.sub(r"\s+(?:and(?:\s+the(?:n)?)?|or|then|who|that|which|the)$", '', cand, flags=re.I).strip()
         low = cand.lower()
         if low in plats or low in _PLATFORM_NAMES_LOW:
             return None
@@ -411,6 +414,106 @@ def _resolve_amazon(canon, kind):
     if canon == 'Amazon' and kind == 'watch':
         return 'Prime Video'
     return canon
+
+
+# A cross-service end step (Carolyn Bisson, WBD, 2026-11-02: "anyone who
+# saw a post of Young Sheldon and then watched an episode either on
+# Netflix, HBOMAX, Paramount or Amazon"). Two or more video services
+# named as alternatives in the ask are ONE end step: the first play on
+# whichever of them the person used. The platform reads as the list
+# ("Netflix, Max, Paramount+ or Prime Video"), the members ride
+# ``platform_any_of`` so the build splits the watch by service.
+_ANY_OF_RX = re.compile(
+    r"\b(?:either|any of|any one of|one of|whichever of|on any of|across)\b|\bor\b", re.I)
+
+
+# the spellings a client uses for the services in an end step; a bare
+# "Amazon" or "Paramount" after a watch verb is the video service
+_ANY_OF_SPELLINGS = (
+    ('prime video', 'Prime Video'), ('amazon prime video', 'Prime Video'), ('amazon prime', 'Prime Video'),
+    ('primevideo', 'Prime Video'), ('amazon', 'Prime Video'), ('prime', 'Prime Video'),
+    ('netflix', 'Netflix'), ('hulu', 'Hulu'), ('hbo max', 'Max'), ('hbomax', 'Max'), ('hbo', 'Max'), ('max', 'Max'),
+    ('disney+', 'Disney+'), ('disney plus', 'Disney+'), ('disneyplus', 'Disney+'), ('disney', 'Disney+'),
+    ('peacock', 'Peacock'), ('paramount+', 'Paramount+'), ('paramount plus', 'Paramount+'),
+    ('paramountplus', 'Paramount+'), ('paramount', 'Paramount+'), ('apple tv+', 'Apple TV+'),
+    ('apple tv plus', 'Apple TV+'), ('apple tv', 'Apple TV+'), ('tubi', 'Tubi'), ('pluto tv', 'Pluto TV'),
+    ('the roku channel', 'The Roku Channel'), ('roku channel', 'The Roku Channel'), ('starz', 'Starz'),
+    ('amc+', 'AMC+'), ('amc plus', 'AMC+'), ('crunchyroll', 'Crunchyroll'), ('discovery+', 'Discovery+'),
+    ('britbox', 'BritBox'), ('fandango at home', 'Fandango at Home'), ('vudu', 'Fandango at Home'),
+)
+_ANY_OF_SPELLINGS = tuple(sorted(_ANY_OF_SPELLINGS, key=lambda t: -len(t[0])))
+_END_STEP_LEAD_RX = re.compile(
+    r"\b(?:watch(?:ed|es|ing)?|stream(?:ed|s|ing)?|view(?:ed|s|ing)?|play(?:ed|s|ing)?|binge(?:d|s|ing)?)\b"
+    r"[^.;\n]{0,80}?\b(?:on|via|through|at)\s+(?P<svc>[^.;\n]{3,140})", re.I)
+
+
+def any_of_platforms(text, kind='watch'):
+    """The video services an ask names as alternatives for the end step
+    ("watched an episode either on Netflix, HBOMAX, Paramount or
+    Amazon"), canonical and in order of mention, or [] when the ask
+    names fewer than two or does not join them as alternatives."""
+    t = str(text or '')
+    m = _END_STEP_LEAD_RX.search(t)
+    span = m.group('svc') if m else t
+    if not _ANY_OF_RX.search(span):
+        return []
+    low = span.lower()
+    taken = [False] * (len(low) + 1)
+    hits = []
+    for alias, canon in _ANY_OF_SPELLINGS:
+        for mm in re.finditer(r'(?<![\w])' + re.escape(alias) + r'(?![\w])', low):
+            if any(taken[mm.start():mm.end()]):
+                continue
+            for i in range(mm.start(), mm.end()):
+                taken[i] = True
+            hits.append((mm.start(), canon))
+    hits.sort()
+    out = []
+    for _pos, canon in hits:
+        if canon not in out:
+            out.append(canon)
+    # the services must be joined as alternatives, not "on Netflix after a TikTok clip"
+    if len(out) < 2:
+        return []
+    return out
+
+
+def any_of_label(platforms):
+    """'Netflix, Max, Paramount+ or Prime Video'."""
+    ps = [str(p) for p in (platforms or []) if str(p).strip()]
+    if len(ps) < 2:
+        return ps[0] if ps else ''
+    return ', '.join(ps[:-1]) + ' or ' + ps[-1]
+
+
+def apply_any_of_platforms(parsed, text):
+    """Rewrite a journey brief whose ask names several video services as
+    alternatives: platform = the list label, platform_any_of = the
+    members, the end step says "on any of ...". A single-service ask is
+    returned unchanged. Never raises."""
+    try:
+        p = dict(parsed or {})
+        if str(p.get('journey_kind') or '').lower() == 'media_week':
+            return p
+        members = any_of_platforms(text, kind='watch')
+        if len(members) < 2:
+            return p
+        label = any_of_label(members)
+        p['platform'] = label
+        p['platform_any_of'] = members
+        p.setdefault('journey_kind', 'watch')
+        if not p.get('journey_kind'):
+            p['journey_kind'] = 'watch'
+        conv = str(p.get('conversion_event') or '').strip()
+        subj = str(p.get('subject') or 'the title').strip()
+        if not conv or re.search(r"\bon\s+" + re.escape(members[0].split()[0]) + r"\b", conv, re.I) \
+                or not any(re.search(r"\b" + re.escape(m.split()[0]) + r"\b", conv, re.I) for m in members):
+            p['conversion_event'] = f"watched an episode of {subj} on any of {label} within 30 days of the first post"
+        if isinstance(p.get('missing'), list):
+            p['missing'] = [k for k in p['missing'] if k not in ('platform', 'conversion_event')]
+        return p
+    except Exception:
+        return parsed
 
 
 _CLIP_URL = re.compile(
@@ -676,6 +779,9 @@ def keyword_parse_journey(text):
     platform = _primary_platform(plats, kind, conv) \
         or _platform_from_clip(clip_url)
     subject = find_subject(t, plats)
+    _any = any_of_platforms(t, kind='watch')
+    if len(_any) >= 2:
+        platform = any_of_label(_any)      # several services named as alternatives: one cross-service end step
     sd, ed = find_window(t)
     direction = journey_direction_from_text(t)
     if kind == 'media_week':
@@ -696,6 +802,8 @@ def keyword_parse_journey(text):
         'start_behavior': start, 'start_date': sd, 'end_date': ed,
         'tam_label': None, 'tam_accounts': None, 'notes': None,
     }
+    if len(_any) >= 2:
+        out = apply_any_of_platforms(out, t)
     if kind == 'media_week':
         out['missing'] = [k for k in ('subject',) if not out.get(k)]
     else:
@@ -1771,7 +1879,7 @@ def watch_defaults(parsed):
     if str(p.get('journey_kind') or '').lower() == 'media_week' or direction_unclear(p):
         return p   # the after-watch read starts at the viewers, never on social; an unclear ask is asked first
     plat = str(p.get('platform') or '')
-    if _PLATFORM_KIND.get(plat) != 'video' and p.get('journey_kind') != 'watch':
+    if _PLATFORM_KIND.get(plat) != 'video' and p.get('journey_kind') != 'watch' and not p.get('platform_any_of'):
         return p
     p.setdefault('journey_kind', 'watch')
     if not p.get('journey_kind'):

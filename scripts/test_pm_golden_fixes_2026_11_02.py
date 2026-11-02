@@ -198,6 +198,37 @@ class JourneyPrecedent(unittest.TestCase):
         self.assertEqual(shape['platform'], 'Prime Video')
 
 
+class CrossServiceEndStep(unittest.TestCase):
+    """Carolyn Bisson (WBD) 2026-11-02: "anyone who saw a post of Young Sheldon
+    and then watched an episode either on Netflix, HBOMAX, Paramount or Amazon"
+    is ONE journey with a cross-service end step, never a Netflix-only brief."""
+
+    T = 'Build a digital journey for anyone who saw a post of Young Sheldon and then watched an episode either on Netflix, HBOMAX, Paramount or Amazon'
+
+    def test_services_read_as_the_client_spells_them(self):
+        self.assertEqual(IR.any_of_platforms(self.T), ['Netflix', 'Max', 'Paramount+', 'Prime Video'])
+        p = IR.keyword_parse_journey(self.T)
+        self.assertEqual(p['subject'], 'Young Sheldon')
+        self.assertEqual(p['platform'], 'Netflix, Max, Paramount+ or Prime Video')
+        self.assertEqual(p['platform_any_of'], ['Netflix', 'Max', 'Paramount+', 'Prime Video'])
+        self.assertIn('on any of Netflix, Max, Paramount+ or Prime Video', p['conversion_event'])
+        self.assertEqual(p['missing'], [])
+
+    def test_the_model_read_of_one_service_is_widened(self):
+        p = IR.apply_any_of_platforms({'subject': 'Young Sheldon', 'platform': 'Netflix', 'conversion_event': 'watched an episode on Netflix', 'journey_kind': 'watch'}, self.T)
+        self.assertEqual(p['platform_any_of'], ['Netflix', 'Max', 'Paramount+', 'Prime Video'])
+        self.assertIn('on any of', p['conversion_event'])
+
+    def test_single_service_asks_are_untouched(self):
+        for t in ('journey for Young Sheldon on Netflix, start from people who watched a clip on TikTok',
+                  'people who watched Landman on Paramount+ after seeing a clip on TikTok or Instagram',
+                  'viewers who streamed Severance on Apple TV+'):
+            self.assertEqual(IR.any_of_platforms(t), [], t)
+        p = IR.apply_any_of_platforms({'subject': 'Landman', 'platform': 'Paramount+', 'conversion_event': 'watched on Paramount+'}, 'people who watched Landman on Paramount+')
+        self.assertEqual(p['platform'], 'Paramount+')
+        self.assertNotIn('platform_any_of', p)
+
+
 class Deixis(unittest.TestCase):
     def test_here_is_never_a_subject(self):
         for w in ('here', 'there', 'this data', 'the screen'):

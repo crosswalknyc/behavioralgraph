@@ -9408,6 +9408,7 @@ def _pm_intake_turn(flow, text, body, history, user, ppu, first):
     if fault and not complete_fn(parsed):
         return _pm_intake_fault_payload()
     if flow == 'digital_journey' and isinstance(parsed, dict):
+        parsed = _ir.apply_any_of_platforms(parsed, ask_text)   # several services as alternatives: one cross-service end step (Carolyn 2026-11-02)
         parsed = _ir.apply_direction(parsed)
         if _ir.direction_unclear(parsed) and parsed.get('subject') and _ir.direction_asked_already(history):
             parsed = _ir.default_direction(parsed)   # asked once already: the default, never the same question twice (2026-10-26)
