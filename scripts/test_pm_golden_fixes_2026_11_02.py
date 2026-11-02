@@ -76,6 +76,13 @@ class CatalogExists(unittest.TestCase):
         self.assertIsNotNone(p)
         self.assertEqual(p[1], 'Gunna')
 
+    def test_early_lane_source_only_settles_a_hit(self):
+        import inspect
+        src = inspect.getsource(S.ask)
+        i = src.index('# lane: catalog_exists')
+        j = src.index('# lane: where_watched')
+        self.assertIn("if _cat0 and not _cat0.get('subject'):", src[i:j])   # a miss falls through (golden g088, "do we have peleton")
+
     def test_lane_order_matches_markers(self):
         self.assertEqual(list(S.LANE_ORDER), S.lane_markers())
         self.assertIn('catalog_exists', S.LANE_ORDER)

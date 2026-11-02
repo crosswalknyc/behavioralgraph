@@ -1399,13 +1399,20 @@ def ask(user, body, *, via='session'):
     # second where-watched search for "We Have a Data Pull", a Polymarket
     # question answered about a Netflix title, "I can size pls tell me
     # if"). The full catalog lane later still handles size and roster.
+    _exists_ask = False   # an "is it in the library" question that missed: where-watched and sizing never take it
     if referent_decision is None and not _armed(body):
         try:
             from . import catalog_lane as _cl0
             _p0 = _cl0.parse(text)
-            _cat0 = _cl0.answer(text, ctx) if (_p0 and _p0[0] == 'exists') else None
+            _exists_ask = bool(_p0 and _p0[0] == 'exists')
+            _cat0 = _cl0.answer(text, ctx) if _exists_ask else None
         except Exception as e:
             _faults.note('service.catalog_exists', e)
+            _cat0 = None
+        # only a hit settles here; a miss falls through so the reader can
+        # correct the spelling before the full catalog lane answers it
+        # ("do we have peleton" is Peloton, golden g088)
+        if _cat0 and not _cat0.get('subject'):
             _cat0 = None
         if _cat0:
             raw = _cat0
@@ -1428,7 +1435,7 @@ def ask(user, body, *, via='session'):
     # before any priced quote so no offer can stand in for it (regressed
     # on 2026-10-21 to "Pulling this data will cost $500."; the rule is the
     # work line: a lookup is free, a put-together read is the custom ask).
-    if referent_decision is None and not _armed(body):
+    if referent_decision is None and not _armed(body) and not _exists_ask:
         try:
             from . import where_watched as _ww
             _ww_raw = _ww.answer(text, ctx, host=host, user=user, history=history)
@@ -1446,8 +1453,9 @@ def ask(user, body, *, via='session'):
     # services (a custom ask in the sizing lane) quote first and wait for
     # approve (2026-10-21, Jenna). Runs armed or not so a confirm cannot
     # fall through to a compiled read. Where-watched is never here: it is
-    # the free lane above.
-    if referent_decision is None:
+    # the free lane above. A library question that missed ("do we have
+    # anything on Polymarket?") is not sized either.
+    if referent_decision is None and not (_exists_ask and not _armed(body)):
         try:
             from . import priced_read as _pr
             _ex = body.get('extra') if isinstance(body.get('extra'), dict) else {}
