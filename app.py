@@ -4002,7 +4002,9 @@ def check_s3_for_existing(brand_search, start_date, end_date):
         # List all objects in the bucket
         paginator = s3_client.get_paginator('list_objects_v2')
         
-        for page in paginator.paginate(Bucket=S3_BUCKET):
+        # Delimiter='/' keeps S3 from paging through every subfolder object
+        # (~190k, mostly _backups/ and system/); only root keys are used here.
+        for page in paginator.paginate(Bucket=S3_BUCKET, Delimiter='/'):
             for obj in page.get('Contents', []):
                 key = obj['Key']
                 # Profile IQ search ONLY considers files at the root of
@@ -29545,7 +29547,9 @@ def smart_cache_update():
     try:
         paginator = s3_client.get_paginator('list_objects_v2')
         
-        for page in paginator.paginate(Bucket=S3_BUCKET):
+        # Delimiter='/' keeps S3 from paging through every subfolder object
+        # (~190k, mostly _backups/ and system/); only root keys are used here.
+        for page in paginator.paginate(Bucket=S3_BUCKET, Delimiter='/'):
             for obj in page.get('Contents', []):
                 key = obj['Key']
                 # Profile IQ only shows files at the root of dashboard-inputs.
@@ -29732,7 +29736,9 @@ def refresh_s3_cache(incremental=True):
     try:
         paginator = s3_client.get_paginator('list_objects_v2')
         
-        for page in paginator.paginate(Bucket=S3_BUCKET):
+        # Delimiter='/' keeps S3 from paging through every subfolder object
+        # (~190k, mostly _backups/ and system/); only root keys are used here.
+        for page in paginator.paginate(Bucket=S3_BUCKET, Delimiter='/'):
             for obj in page.get('Contents', []):
                 key = obj['Key']
                 # Profile IQ only shows files at the root of dashboard-inputs —
