@@ -51354,6 +51354,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-fg-htext { position: relative; margin-top: 8px; }
         #digitalTwinsIQView .dtw-fg-rt { font-size: 19px; line-height: 24px; color: var(--dtw-ink); font-weight: 600; overflow-wrap: anywhere; }
         #digitalTwinsIQView .dtw-fg-rtwrap { display: flex; align-items: baseline; gap: 10px; max-width: 100%; }
+        #digitalTwinsIQView .dtw-pi-exit { margin-left: auto; align-self: center; flex: none; }
         #digitalTwinsIQView input.dtw-fg-rt { appearance: none; -webkit-appearance: none; background: transparent; border: 0; border-bottom: 1px solid transparent; color: var(--dtw-ink); font: inherit; font-size: 19px; line-height: 24px; font-weight: 600; padding: 0 0 1px; margin: 0; width: auto; field-sizing: content; max-width: min(100%, 42rem); min-width: 8rem; outline: none; }
         #digitalTwinsIQView input.dtw-fg-rt:hover { border-bottom-color: var(--dtw-rule); }
         #digitalTwinsIQView input.dtw-fg-rt:focus { border-bottom-color: var(--dtw-ink); }
@@ -54491,6 +54492,32 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }
             // Inline handlers run in the page scope, not this module's: these three reach S for them (the old inline S.* calls threw).
             window.dtwPilotNew = function() { S.pilot = null; renderPilotConsole(); };
+            // Exit test (Jenna, 2026-11-02: "you need to be able to exit the test here"). Leaves the test and
+            // returns to the Pilot Testing start page, where every test on the twin is listed. A test still
+            // playing cannot run without this page, so it is stopped first and the room scores what it watched;
+            // a test mid-scoring keeps scoring and opens with its scorecard when that lands.
+            window.dtwPilotClose = async function() {
+                var s = S.pilot, title = (s && s.title) || 'The test';
+                stopPilotClock(); S.pilotClock.slate = false;
+                stopLiveMirror();
+                var v = el('dtwPiVideo'); if (v) { try { v.pause(); } catch (_) {} }
+                if (S.pilotQPoll) { try { clearTimeout(S.pilotQPoll); } catch (_) {} S.pilotQPoll = null; }
+                if (S.pilotPrep && S.pilotPrep.timer) { try { clearTimeout(S.pilotPrep.timer); } catch (_) {} S.pilotPrep.timer = null; }
+                var note = '';
+                if (s && S.key && s.status === 'playing') {
+                    try {
+                        var d = await api('/' + S.key + '/pilot/' + s.id + '/stop', { method: 'POST', body: '{}' });
+                        if (d.session) adoptPilot(d.session);
+                        note = d.finishing ? ('Stopped ' + title + '. The room is scoring what it watched; open it again for the scorecard.')
+                                           : ('Stopped ' + title + '. The scorecard is in.');
+                    } catch (e) { note = 'Left ' + title + '. ' + (e && e.message ? e.message : ''); }
+                } else if (s && s.status === 'preparing') {
+                    note = title + ' is still scoring. Open it again for the scorecard when that lands.';
+                }
+                S.pilot = null; S.pilotSplits = null; S.pilotMedia = null; S.pilotCompare = null;
+                renderPilotConsole();
+                if (note) fgToast(note);
+            };
             window.dtwPilotMode = function(v, rerender) { S.piMode = v; if (rerender) renderPilotConsole(); };
             window.dtwPilotKindSel = function(v) { S.pilotKind = v || ''; };
             window.dtwPilotMoment = function(t, q) {
@@ -54636,7 +54663,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     + (guide ? '<details class="dtw-pi-more"><summary>Moderator guide</summary>' + guide + '</details>' : '')
                     + (extras ? '<details class="dtw-pi-more" ontoggle="drawCompareChart()"><summary>Recut, comps, talent and the brief</summary>' + extras + '</details>' : '');
                 return '<div class="dtw-card"><div class="dtw-eyebrow">' + esc(PI_TAB_LABEL[piTabFor(s.mode)] || 'Pilot Testing') + '</div>'
-                    + '<div class="dtw-fg-rtwrap"><input id="dtwPiName" class="dtw-fg-rt" value="' + esc(s.title || '') + '" onblur="dtwPilotRename()"><button type="button" class="dtw-link" onclick="dtwPilotNew()">New test</button></div>'
+                    + '<div class="dtw-fg-rtwrap"><input id="dtwPiName" class="dtw-fg-rt" value="' + esc(s.title || '') + '" onblur="dtwPilotRename()"><button type="button" class="dtw-link" onclick="dtwPilotNew()">New test</button>'
+                    + '<button type="button" class="dtw-btn dtw-btn-sm dtw-pi-exit" onclick="dtwPilotClose()" title="Leave this test. A test still playing is stopped and scored first.">Exit test</button></div>'
                     + '<div class="dtw-pi-room">' + renderPilotScores(s) + center + room + '</div>'
                     + '<div class="dtw-pi-foot">' + exp + purge + '</div>'
                     + more + '</div>';
