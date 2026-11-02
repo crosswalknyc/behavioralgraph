@@ -68,6 +68,48 @@
     header .user-name { font-weight: 600; color: var(--off-white); }
     header .user-email { color: rgba(255,255,255,0.55); font-size: 11px; }
     header .header-right { display: flex; align-items: center; gap: 20px; }
+
+    /* The account menu (Jenna 2026-11-02). It carries Log out, which
+       matters most on a locked account: the Back to dashboard link is
+       hidden in that state, so without this there is no way off this
+       page and no way to sign in as somebody else. */
+    header .user-menu-wrap { position: relative; }
+    header .user-chip { cursor: pointer; user-select: none; }
+    header .user-chip:hover { background: rgba(255,255,255,0.14); }
+    header .user-chip .caret {
+      margin-left: 2px;
+      font-size: 9px;
+      color: rgba(255,255,255,0.55);
+      transition: transform 0.15s ease;
+    }
+    header .user-menu-wrap.is-open .user-chip .caret { transform: rotate(180deg); }
+    header .user-menu {
+      display: none;
+      position: absolute;
+      top: calc(100% + 8px);
+      right: 0;
+      min-width: 190px;
+      background: #15252A;
+      border: 1px solid rgba(233,232,225,0.14);
+      border-radius: 10px;
+      box-shadow: 0 16px 36px rgba(0,0,0,0.42);
+      padding: 6px;
+      z-index: 50;
+    }
+    header .user-menu-wrap.is-open .user-menu { display: block; }
+    header .user-menu a {
+      display: block;
+      padding: 9px 12px;
+      border-radius: 7px;
+      font-size: 13px;
+      color: var(--off-white);
+      text-decoration: none;
+      white-space: nowrap;
+    }
+    header .user-menu a:hover {
+      background: rgba(233,232,225,0.08);
+      text-decoration: none;
+    }
     main {
       max-width: 900px;
       margin: 0 auto;
@@ -376,11 +418,18 @@
   <header>
     <div class="brand">Crosswalk / Wallet</div>
     <div class="header-right">
-      <div id="user-chip" class="user-chip" style="display: none;">
-        <div id="user-avatar" class="avatar">?</div>
-        <div class="user-meta">
-          <div id="user-name" class="user-name">-</div>
-          <div id="user-email" class="user-email">-</div>
+      <div id="user-menu-wrap" class="user-menu-wrap" style="display: none;">
+        <div id="user-chip" class="user-chip" role="button" tabindex="0"
+             aria-haspopup="true" aria-expanded="false">
+          <div id="user-avatar" class="avatar">?</div>
+          <div class="user-meta">
+            <div id="user-name" class="user-name">-</div>
+            <div id="user-email" class="user-email">-</div>
+          </div>
+          <span class="caret">&#9660;</span>
+        </div>
+        <div class="user-menu" id="user-menu">
+          <a href="/logout">Log out</a>
         </div>
       </div>
       <a href="/" id="nav-dashboard">Back to dashboard</a>
@@ -617,7 +666,9 @@
       const display = s.display_name || s.username || '';
       const email = s.email || '';
       if (display) {
-        $('user-chip').style.display = 'flex';
+        // The wrap is what hides; the chip itself is always a flex row
+        // inside it, so the menu stays anchored to the chip.
+        $('user-menu-wrap').style.display = '';
         $('user-name').textContent = display;
         $('user-email').textContent = email || s.username || '';
         // Initials for avatar: first letter of first word + first
@@ -1182,6 +1233,35 @@
         window.location = '/api/wallet/transactions.csv?scope=company';
       });
     }
+
+    // Account menu: the chip opens it, a click anywhere else or Escape
+    // closes it. Keyboard-reachable because on a locked account this is
+    // the only control that gets you off the page.
+    (function () {
+      const wrap = $('user-menu-wrap');
+      const chip = $('user-chip');
+      if (!wrap || !chip) return;
+      function setOpen(open) {
+        wrap.classList.toggle('is-open', open);
+        chip.setAttribute('aria-expanded', open ? 'true' : 'false');
+      }
+      chip.addEventListener('click', function (e) {
+        e.stopPropagation();
+        setOpen(!wrap.classList.contains('is-open'));
+      });
+      chip.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          setOpen(!wrap.classList.contains('is-open'));
+        }
+      });
+      document.addEventListener('click', function (e) {
+        if (!wrap.contains(e.target)) setOpen(false);
+      });
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') setOpen(false);
+      });
+    })();
 
     loadState();
     if (walletFlag === 'topup_success') {
