@@ -208,6 +208,19 @@ class Deixis(unittest.TestCase):
         self.assertFalse(SR.deixis_points_at_screen('make a deck on Costco', []))
 
 
+class AlreadyHave(unittest.TestCase):
+    """eriley 2026-10-27, banked case 422150b8cde0b080: "what? I already pulled
+    the data" with University of Virginia open drew the open-screen question."""
+
+    def test_pushback_is_a_conversational_turn(self):
+        for t in ('what? I already pulled the data', 'we already have that profile', 'I already ran it'):
+            self.assertEqual(SR.conversational_turn(t), 'already_have', t)
+
+    def test_an_order_beside_it_is_still_an_order(self):
+        self.assertEqual(SR.conversational_turn('I already pulled Nike, now run a profile on Adidas'), '')
+        self.assertFalse(SR.already_have_turn('I already know that, give me the top brands'))
+
+
 class DeclineCopy(unittest.TestCase):
     def test_decline_reads_nothing_is_queued(self):
         from prometheus import pending_offers as PO

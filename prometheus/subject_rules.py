@@ -227,6 +227,26 @@ _WHY_KEEP_RX = re.compile(
     r"(?:is|was|'s) (?:an? )?(?:independent|separate|unrelated|different) (?:pull|ask|question|request|read|build|profile|thing|subject|topic)|"
     r"independent of|unrelated to|"
     r"i (?:did ?n[o']?t|never) (?:say|mention|ask (?:about|for)) )", re.I)
+# "what? I already pulled the data", "we already have that profile", "I
+# already ran it": the reader is saying the thing exists and the last reply
+# (a which-subject question, a quote, a draft) missed that (Emmet Riley
+# 2026-10-27 with University of Virginia open: "Do you want this on
+# University of Virginia (open on your screen)?" drew this and he left).
+_ALREADY_HAVE_RX = re.compile(
+    r"^\W*(?:(?:what|huh|wait|hold on|um+|uh+|hey|no+|sorry)[?!., ]+\s*)*"
+    r"(?:i|we|i'?ve|we'?ve|i have|we have)\s+(?:already|just)\s+"
+    r"(?:pulled|ran|run|built|have|had|did|got|made|requested|ordered|bought|paid for|downloaded|opened|loaded)\s+"
+    r"(?:the|that|this|a|an|it|them|my|our)?\s*(?:data|profile|pull|read|file|report|one|build|numbers|audience|cut|deck|it|them)?\b", re.I)
+
+
+def already_have_turn(text):
+    """True when the words say the thing already exists on the reader's
+    side ("what? I already pulled the data"); a pushback, never an order
+    and never a which-subject question."""
+    t = ' '.join(str(text or '').split())
+    return bool(t) and bool(_ALREADY_HAVE_RX.match(t)) and not bool(_ORDER_RX.search(strip_lead_negation(t)))
+
+
 _CLARIFY_PREV_RX = re.compile(
     r"^\W*(?:what do you mean|i mean|i meant|to clarify|clarif(?:y|ication)|let me (?:clarify|rephrase|be clear)|"
     r"in other words|what i (?:meant|want|need|am after|am looking for) (?:is|was)|rather,?|instead,?)\b", re.I)
@@ -295,6 +315,8 @@ def conversational_turn(text):
         or bool(re.match(r"^\W*(?:run|build|pull|create|queue|start|launch|generate|make|value|map|set up|track)\b", stripped, re.I)))
     if _WHY_KEEP_RX.search(t):
         return 'why_keep'
+    if already_have_turn(t):
+        return 'already_have'
     if _CORRECTION_RX.match(t) and not carries_order:
         return 'correction'
     if _CLARIFY_PREV_RX.match(t) and not carries_order:

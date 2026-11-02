@@ -626,6 +626,24 @@ def gate(text, body, history, ctx, user, uname, tid, via, persist, *, client_sur
         # continue with what the reader asked for last, on the thread's
         # subject, with no charge and no draft.
         ct = str((cont.get('params') or {}).get('turn') or '')
+        if ct == 'already_have':
+            # "what? I already pulled the data" (Emmet Riley 2026-10-27, University
+            # of Virginia open): the file is on the screen; say so and answer
+            # from it from here, never the which-subject question again
+            have = str(page or subj or '').strip()
+            if have:
+                reply = (f"You did. {have} is open on your screen, and I will answer from that file. "
+                         f"Ask the question and it comes back from {have}.")
+            else:
+                reply = ("You did. Tell me which profile it is, or open it on the dashboard, "
+                         "and I will answer from that file.")
+            raw = {'success': True, 'action': 'answer', 'reply': reply, 'followups': [],
+                   'offer_deck': False, 'deck_angle': None, 'correction_ack': True, 'subject': have}
+            try:
+                host.ask_hint(route='correction', outcome='already_have_acknowledged', subject=have or None)
+            except Exception as _fx:
+                _faults.note('turn_gate', _fx)
+            return _answer(raw, 'correction_ack', route='correction', outcome='acknowledged', **common)
         if ct == 'why_keep' or negated:
             ack = _ack_line(negated, page, subj, history, text)
             last = ''
