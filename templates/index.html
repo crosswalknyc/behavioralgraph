@@ -87819,7 +87819,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 });
                 var out = {
                     title: meta.title || meta.target_label || meta.subject ||
-                           meta.label || null,
+                           meta.label || meta.project_name || meta.target_name || null,
+                    // the run's own key, so a send order with the journey open
+                    // ("email me this file") attaches this journey's workbook (2026-11-02)
+                    key: (window._jiqCurrentKey || meta.key || meta.s3_key || null),
                     story_mode: meta.story_mode || null,
                     window: meta.window_label || meta.date_range || null,
                     kpis: run.kpis || null

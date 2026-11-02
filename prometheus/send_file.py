@@ -7,8 +7,17 @@ it. What rides:
 
 * with a profile open: that profile's CSV (and the Avid Fan cut when
   the library has one), from the file store;
+* with a Digital Journey open, or a journey named ("email me the excel
+  file of the Young Sheldon Netflix journey that is in my library"):
+  that journey's breakdown workbook (Carolyn Bisson, WBD, 2026-11-02:
+  the lane knew only Profile IQ files, asked "Which file?" with the
+  journey open on her screen, and her answer to that question started a
+  cold read on a title her library already held);
 * otherwise: the most recent read Prometheus delivered in the thread,
   as the body, with its CSV when the read carries one.
+
+A send order is answered from what we hold. It never starts a read and
+never drafts a build.
 
 The mail goes through the house door (From Prometheus, Jenna and Liz
 on BCC, vocabulary scrubbed, logged). The reader asked for it, so the
@@ -21,39 +30,77 @@ import re
 _SEND_RX = re.compile(
     r"^\W*(?:please\s+)?(?:can you\s+|could you\s+|would you\s+)?(?:e-?mail|send|mail|forward)\s+"
     r"(?:me\s+|us\s+)?(?:a copy of\s+)?(?:this|that|the|those|these)\s*"
-    r"(?:profile|file|csv|read|report|answer|data|results?|numbers|analysis|output)?s?"
-    r"(?:\s+(?:to me|to my (?:e-?mail|inbox)|over|please))?\W*$", re.I)
+    r"(?:(?:excel|xlsx|xls|csv|spreadsheet|workbook|pdf)\s+)?(?:(?:file|workbook|export|copy|version)\s+)?(?:(?:of|for)\s+(?:this|that|the)\s+)?"
+    r"(?:profile|file|csv|read|report|answer|data|results?|numbers|analysis|output|journey|breakdown|workbook|spreadsheet|export|page)?s?"
+    r"(?:\s+(?:to me|to my (?:e-?mail|inbox)|over|please|in (?:excel|xlsx|csv)(?: format)?))?\W*$", re.I)
 _SEND_PLAIN_RX = re.compile(r"^\W*(?:e-?mail|send)\s+(?:it|this|that)\s+(?:to\s+)?me\W*$", re.I)
 # "email me the Babylon 5 breakdown", "send me the Nike profile" (2026-10-14: the
 # first drafted a profile build; a send order names a thing we hold, never a build)
+_FORMATS = r"(?:excel|xlsx|xls|csv|spreadsheet|workbook|pdf)"
+_NOUNS = r"(?:profile|file|csv|breakdown|read|report|numbers|data|analysis|journey|deck|results|answer|summary|output|tracker|valuation|campaign|workbook|spreadsheet|export)"
+# a trailing clause that says where the thing lives or what shape it should come in; it names no new thing
+_TAIL = (r"(?:\s+(?:to me|to my (?:e-?mail|inbox)|over|please|you (?:built|made|did|ran)|from (?:yesterday|last week|earlier)"
+         r"|(?:that(?:'s| is| was)?\s+|which (?:is|was)\s+)?(?:in|from|on)\s+(?:my|the|your)\s+(?:library|dashboard|account|files?|workspace|inbox)"
+         r"|(?:in|as)\s+(?:an?\s+)?" + _FORMATS + r"(?:\s+(?:file|format|export))?|" + _FORMATS + r"\s+(?:file|format|export)))*")
 _SEND_NAMED_RX = re.compile(
     r"^\W*(?:please\s+)?(?:can you\s+|could you\s+|would you\s+)?(?:e-?mail|send|mail|forward)\s+(?:me\s+|us\s+)?(?:a copy of\s+)?"
     r"(?:the|that|this|those|these|your|my|our)?\s*(?P<subj>[A-Za-z0-9][^,.?!]{1,80}?)\s+"
-    r"(?P<noun>profile|file|csv|breakdown|read|report|numbers|data|analysis|journey|deck|results|answer|summary|output|tracker|valuation|campaign)s?"
-    r"(?:\s+(?:to me|to my (?:e-?mail|inbox)|over|please|you (?:built|made|did|ran)|from (?:yesterday|last week|earlier)))?\W*$", re.I)
+    r"(?P<noun>" + _NOUNS + r")s?" + _TAIL + r"\W*$", re.I)
+# "Young Sheldon on Netflix - watch Journey excel format", "Babylon 5 journey in excel", "the Nike profile as a csv":
+# a named thing we hold, asked for in a file shape; a file we hold or a plain no, never a read
+_NAMED_FORMAT_RX = re.compile(
+    r"^\W*(?:the\s+)?(?P<subj>[A-Za-z0-9][^,.?!]{1,80}?)\s*(?:[-:,]\s*)?(?:watch\s+|digital\s+)?(?:" + _NOUNS + r")?s?\s*"
+    r"(?:(?:in|as)\s+(?:an?\s+)?)?" + _FORMATS + r"(?:\s+(?:file|format|export|version|copy))?(?:\s+please)?\W*$", re.I)
+# "the excel file of the Young Sheldon journey": the format rides in front of the name
+_FORMAT_LEAD_RX = re.compile(r"^(?:(?:an?|the)\s+)?(?:" + _FORMATS + r"\s+)?(?:file|workbook|spreadsheet|export|copy|version)\s+(?:of|for)\s+(?:the\s+)?", re.I)
+CLARIFIER_LEAD = 'Which file?'
 
 
 def parse(text):
     t = ' '.join(str(text or '').split())
-    if not t or len(t) > 120:
+    if not t or len(t) > 140:
         return False
+    if re.search(r"\bwhen\b", t, re.I):
+        return False   # "email me when it's ready" is the notify family, not this lane
     if _SEND_RX.match(t) or _SEND_PLAIN_RX.match(t):
-        # "email me when it's ready" is the notify family, not this lane
-        return not re.search(r"\bwhen\b", t, re.I)
-    return bool(named_subject(t)) and not re.search(r"\bwhen\b", t, re.I)
+        return True
+    return bool(named_subject(t))
 
 
 def named_subject(text):
     """The subject a send order names ('Babylon 5' in 'email me the Babylon
-    5 breakdown'), else ''."""
-    m = _SEND_NAMED_RX.match(' '.join(str(text or '').split()))
+    5 breakdown', 'Young Sheldon Netflix' in 'email me the excel file of
+    the Young Sheldon Netflix journey that is in my library'), else ''."""
+    t = ' '.join(str(text or '').split())
+    m = _SEND_NAMED_RX.match(t)
     if not m:
-        return ''
-    subj = ' '.join(m.group('subj').split()).strip(' ,.:;-"\'')
+        m = _NAMED_FORMAT_RX.match(t)
+        if not m or not re.search(r"\b(?:journey|profile|breakdown|report|file|workbook)\b", t, re.I):
+            return ''
+    return clean_subject(m.group('subj'))
+
+
+def clean_subject(subj):
+    subj = ' '.join(str(subj or '').split()).strip(' ,.:;-"\'')
+    subj = _FORMAT_LEAD_RX.sub('', subj)
     subj = re.sub(r"^(?:the|that|this|your|my|our|latest|last|new)\s+", '', subj, flags=re.I)
-    if not subj or subj.lower() in ('it', 'this', 'that', 'same', 'latest', 'last'):
+    subj = re.sub(r"\s+(?:watch|digital)\s*$", '', subj, flags=re.I)
+    subj = re.sub(r"^(?:" + _FORMATS + r")\s+(?:of\s+)?(?:the\s+)?", '', subj, flags=re.I).strip(' ,.:;-')
+    if not subj or subj.lower() in ('it', 'this', 'that', 'same', 'latest', 'last', 'excel', 'csv', 'file', 'the file',
+                                    'the', 'a', 'an', 'my', 'your', 'our', 'me', 'us'):
         return ''
     return subj
+
+
+def follows_clarifier(history):
+    """True when the last thing Prometheus said in this thread was the
+    "Which file?" question: the reader's next line is the name."""
+    for t in reversed(history or []):
+        if not isinstance(t, dict):
+            continue
+        if str(t.get('role') or '') == 'agent':
+            return str(t.get('text') or '').strip().startswith(CLARIFIER_LEAD)
+    return False
 
 
 def _named_library_file(subject, host):
@@ -72,6 +119,140 @@ def _named_library_file(subject, host):
     except Exception as e:
         print(f"[send-file] library lookup failed for {subject!r}: {e}")
     return '', ''
+
+
+# ------------------------------------------------------------ Digital Journeys
+_STOP = {'the', 'a', 'an', 'of', 'on', 'in', 'at', 'to', 'for', 'and', 'journey', 'journeys', 'digital', 'watch', 'file', 'workbook',
+         'excel', 'xlsx', 'csv', 'spreadsheet', 'breakdown', 'report', 'my', 'your', 'our', 'library', 'dashboard'}
+JOURNEY_INDEX_KEY = 'journey-iq/_index.json'
+
+
+def _tokens(s):
+    return [w for w in re.sub(r"[^a-z0-9+]+", " ", str(s or '').lower()).split() if w not in _STOP]
+
+
+def _bucket(host):
+    try:
+        return str(host.bucket)
+    except Exception:
+        return 'dashboard-inputs'
+
+
+def _user_record(uname, host):
+    try:
+        data = host.load_users()
+        return ((data.get('users') or {}).get(uname) or {}) if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def user_journeys(uname, host, *, user=None):
+    """[{name, key, created_at}] the reader can open in Digital Journey
+    IQ: their own runs, the runs on their seat's list, every run for an
+    admin. Newest first. Fail-safe: []."""
+    try:
+        idx = host.s3_json(JOURNEY_INDEX_KEY, None) if host.has('s3_json') else None
+        if not isinstance(idx, dict):
+            import json as _json
+            idx = _json.loads(host.s3_client.get_object(Bucket=_bucket(host), Key=JOURNEY_INDEX_KEY)['Body'].read().decode('utf-8'))
+    except Exception as e:
+        print(f"[send-file] journey index unavailable: {e}")
+        return []
+    rec = user if isinstance(user, dict) and user.get('username') == uname else _user_record(uname, host)
+    allowed = rec.get('allowed_journey_iq_runs')
+    allowed = set(allowed) if isinstance(allowed, list) else set()
+    everything = ('*' in allowed) or str(rec.get('role') or '').lower() in ('super_admin', 'admin', 'superadmin')
+    out = []
+    for r in (idx.get('runs') or []):
+        if not isinstance(r, dict) or not r.get('key'):
+            continue
+        key = str(r['key'])
+        if not (everything or str(r.get('created_by') or '') == uname or key in allowed):
+            continue
+        out.append({'name': str(r.get('project_name') or r.get('target') or key.rsplit('/', 1)[-1]).strip(),
+                    'key': key, 'created_at': str(r.get('created_at') or '')})
+    out.sort(key=lambda r: r['created_at'], reverse=True)
+    return out
+
+
+def match_journeys(subject, journeys):
+    """The journeys a name points at: every token of the name is in the
+    journey's name (platform and year words count). An exact name wins
+    alone; a name that fits several returns them all (the caller asks)."""
+    want = _tokens(subject)
+    if not want:
+        return []
+    exact = [j for j in journeys if _tokens(j['name']) == want]
+    if exact:
+        return exact[:1]
+    hits = []
+    for j in journeys:
+        have = set(_tokens(j['name']))
+        if all(w in have for w in want):
+            hits.append(j)
+    return hits
+
+
+def open_journey_key(ctx, uname, host):
+    """The journey on the reader's screen: the key the page sends with a
+    Digital Journey open, else the journey the newest thread binding on
+    this seat points at (the page binds a thread when it opens a run)."""
+    pc = ctx if isinstance(ctx, dict) else {}
+    vc = pc.get('view_context') if isinstance(pc.get('view_context'), dict) else {}
+    view = str(vc.get('view_id') or pc.get('view') or '')
+    if view != 'journeyIQ':
+        return ''
+    data = vc.get('data') if isinstance(vc.get('data'), dict) else {}
+    key = str(data.get('key') or data.get('run_key') or '').strip()
+    if key.startswith('journey-iq/'):
+        return key
+    sk = str(vc.get('subject_key') or '')
+    if sk.startswith('journey:journey-iq/'):
+        return sk.split(':', 1)[1]
+    try:
+        idx = host.load_threads_index(uname) if host.has('load_threads_index') else {}
+        best, when = '', ''
+        for t in (idx.get('threads') or []):
+            b = t.get('binding') if isinstance(t.get('binding'), dict) else {}
+            k = str(b.get('subject_key') or '')
+            if not k.startswith('journey:journey-iq/'):
+                continue
+            opened = str(t.get('opened') or t.get('updated') or t.get('created') or '')
+            if opened >= when:
+                best, when = k.split(':', 1)[1], opened
+        return best
+    except Exception:
+        return ''
+
+
+def journey_workbook(key, host):
+    """(bytes, filename, mime, project_name) of a journey's breakdown
+    workbook, built from the run as it stands; None when it cannot be
+    read."""
+    import gzip as _gzip
+    import json as _json
+    try:
+        raw = host.s3_client.get_object(Bucket=_bucket(host), Key=key)['Body'].read()
+        try:
+            raw = _gzip.decompress(raw)
+        except Exception:
+            pass
+        payload = _json.loads(raw.decode('utf-8'))
+    except Exception as e:
+        print(f"[send-file] journey fetch failed for {key}: {e}")
+        return None
+    name = str(((payload.get('meta') or {}).get('project_name') or (payload.get('meta') or {}).get('target_name') or '')).strip() or key.rsplit('/', 1)[-1]
+    try:
+        from migration import journey_iq as _jiq
+        try:
+            return _jiq.breakdown_xlsx(payload), _jiq.breakdown_filename(payload), \
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', name
+        except Exception as e:   # no workbook writer on this host: the same rows as a CSV
+            print(f"[send-file] workbook build failed for {key}: {e}")
+            return _jiq.breakdown_csv(payload).encode('utf-8'), _jiq.breakdown_filename(payload, 'csv'), 'text/csv', name
+    except Exception as e:
+        print(f"[send-file] journey breakdown failed for {key}: {e}")
+        return None
 
 
 def _fact_lines(anchors, limit=25):
@@ -131,9 +312,11 @@ def _clean_name(s):
     return re.sub(r"[^A-Za-z0-9]+", "_", str(s or '')).strip('_') or 'profile'
 
 
-def answer(text, uname, *, user, ctx, history, host, send=None):
+def answer(text, uname, *, user, ctx, history, host, send=None, subjects=None):
     """Payload for the chat, or None when nothing is in hand to send.
-    ``send`` is injected by tests; defaults to the house mail door."""
+    ``send`` is injected by tests; defaults to the house mail door.
+    ``subjects`` are the names the reader found in the ask, used when
+    the order itself names nothing we can parse."""
     email = str((user or {}).get('email') or '').strip()
     if not email or '@' not in email:
         try:
@@ -150,10 +333,64 @@ def answer(text, uname, *, user, ctx, history, host, send=None):
     subject_name = ''
     body = ''
     named = named_subject(text)
+    plain = ' '.join(str(text or '').split())
+    if not named and follows_clarifier(history) and not _SEND_RX.match(plain) and not _SEND_PLAIN_RX.match(plain):
+        named = clean_subject(plain)            # the reader answered "Which file?" with the name
+    wants_journey = bool(re.search(r"\bjourney\b", plain, re.I))
+    journeys = None
+    journey_key = ''
+    lib_name, lib_key = '', ''
     if named:
+        journeys = user_journeys(uname, host, user=user)
+        hits = match_journeys(named, journeys)
+        if not (wants_journey and hits):
+            lib_name, lib_key = _named_library_file(named, host)
+        if len(hits) > 1 and not lib_key:
+            open_key = open_journey_key(ctx, uname, host)
+            on_screen = [j for j in hits if j['key'] == open_key]
+            if on_screen:
+                hits = on_screen
+            else:
+                names = '; '.join(j['name'] for j in hits[:6])
+                return {'success': True, 'action': 'answer',
+                        'reply': f"I hold more than one journey by that name: {names}. Which one should I send?",
+                        'followups': [f"Email me the {j['name']} journey" for j in hits[:4]], 'offer_deck': False, 'deck_angle': None, 'subject': named}
+        if hits and not lib_key:
+            journey_key = hits[0]['key']
+            primary = None
+    if not journey_key and not lib_key and subjects:
+        # the reader's own read of the names in the ask ("mail over the Knots Landing one"): a journey or a
+        # library profile that name points at, when it points at exactly one
+        journeys = journeys if journeys is not None else user_journeys(uname, host, user=user)
+        for sname in subjects:
+            h2 = match_journeys(sname, journeys)
+            if len(h2) == 1:
+                journey_key, primary, named = h2[0]['key'], None, (named or str(sname))
+                break
+            if not h2:
+                lib_name, lib_key = _named_library_file(sname, host)
+                if lib_key:
+                    named = named or str(sname)
+                    break
+    if not named and not journey_key and not (isinstance(primary, dict) and primary.get('s3_key')):
+        journey_key = open_journey_key(ctx, uname, host)      # "email me this file" with a Digital Journey open
+    if journey_key:
+        wb = journey_workbook(journey_key, host)
+        if wb:
+            blob, fname, mime, jname = wb
+            attachments.append((blob, fname, mime))
+            subject_name = jname
+            body = (f"Here is the {jname} Digital Journey workbook you asked for. It matches the journey in your "
+                    "library row for row.")
+        else:
+            return {'success': True, 'action': 'answer',
+                    'reply': 'I could not read that journey just now. Open it in Digital Journey IQ and ask again.',
+                    'followups': [], 'offer_deck': False, 'deck_angle': None}
+    elif named:
         # a named send: the library file by that name, else the catalog's
         # reads on it as a plain summary; never the open page, never a build
-        lib_name, lib_key = _named_library_file(named, host)
+        if not lib_key:
+            lib_name, lib_key = _named_library_file(named, host)
         if lib_key:
             primary = {'name': lib_name, 's3_key': lib_key}
             ctx = dict(ctx or {}, primary=primary, cuts=[])
@@ -190,7 +427,7 @@ def answer(text, uname, *, user, ctx, history, host, send=None):
         body = (f"Here is the {subject_name} profile you asked for, attached as a CSV"
                 + (" with its cut" + ('s' if len(attachments) > 2 else '') + " alongside" if len(attachments) > 1 else '')
                 + ". It is also in your Select Profile dropdown.")
-    read = _last_read(history) if not named else None
+    read = _last_read(history) if not (named or journey_key) else None    # a workbook travels alone
     if read is not None:
         rtxt = str(read.get('text') or '').strip()
         body = (body + "\n\nThe latest read from this thread:\n\n" + rtxt) if body else rtxt
@@ -199,27 +436,31 @@ def answer(text, uname, *, user, ctx, history, host, send=None):
             subject_name = str(meta.get('subject') or read.get('subject') or '').strip() or 'your read'
     if not attachments and read is None and not body:
         return {'success': True, 'action': 'answer',
-                'reply': ('Which file? Open the profile you want and ask again, or name it '
-                          '("email me the Austin Sprinz profile") and I will send it.'),
+                'reply': (CLARIFIER_LEAD + ' Open the profile or journey you want and ask again, or name it '
+                          '("email me the Austin Sprinz profile", "email me the Young Sheldon on Netflix journey") and I will send it.'),
                 'followups': [], 'offer_deck': False, 'deck_angle': None}
-    subj_line = f"{subject_name}: your Crosswalk file" if attachments else f"{subject_name}: your read from Prometheus"
+    subj_line = (f"{subject_name}: your Digital Journey workbook" if journey_key
+                 else f"{subject_name}: your Crosswalk file" if attachments else f"{subject_name}: your read from Prometheus")
     sender = send
     if sender is None:
         from . import outbound_mail as _om
         sender = _om.send_user_email
-    first = attachments[0] if attachments else None
-    rest = attachments[1:] if attachments else []
+    csv_first = attachments and str(attachments[0][2] or '') == 'text/csv'
+    first = attachments[0] if csv_first else None
+    rest = attachments[1:] if csv_first else list(attachments)     # a workbook rides as the file it is, never as a .csv part
     r = sender(to=email, subject=subj_line, body="Hi,\n\n" + body + "\n\nPrometheus\nCrosswalk\n",
                instructed=True, caller='user:email_me_this_file',
                csv=(first[0] if first else None), csv_name=(first[1] if first else ''),
                files=rest)
     sent = bool((r or {}).get('sent'))
-    what = ('the profile' + (' and its cut' if len(attachments) > 1 else '')) if attachments else ('the summary' if named else 'the read')
+    what = ('the workbook' if journey_key else ('the profile' + (' and its cut' if len(attachments) > 1 else ''))) if attachments \
+        else ('the summary' if named else 'the read')
+    where = 'Digital Journey IQ' if journey_key else 'your Select Profile dropdown'
     reply = (f"Sent {what} to {email}." if sent
              else f"I could not send that just now ({str((r or {}).get('reason') or 'mail door closed')[:80]}). "
-                  f"The file is still in your Select Profile dropdown.")
+                  f"The file is still in {where}.")
     return {'success': True, 'action': 'answer', 'reply': reply, 'followups': [],
             'offer_deck': False, 'deck_angle': None, 'subject': subject_name, 'sent': sent}
 
 
-__all__ = ['parse', 'answer', 'named_subject']
+__all__ = ['parse', 'answer', 'named_subject', 'clean_subject', 'follows_clarifier', 'user_journeys', 'match_journeys', 'open_journey_key', 'journey_workbook', 'CLARIFIER_LEAD']

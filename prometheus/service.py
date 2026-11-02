@@ -1849,8 +1849,10 @@ def ask(user, body, *, via='session'):
     if referent_decision is None and not _armed(body):
         try:
             from . import send_file as _sf
+            # the name typed in answer to the lane's own "Which file?" is the order completed, never a new ask
+            # (Carolyn Bisson, 2026-11-02: it went to the reader and started a cold read on a title in her library)
             _sf_raw = (_sf.answer(text, uname, user=user, ctx=ctx, history=history, host=host)
-                       if _sf.parse(text) else None)
+                       if (_sf.parse(text) or (_sf.follows_clarifier(history) and len(' '.join(str(text or '').split())) <= 90)) else None)
         except Exception as e:
             _faults.note('service.send_file_lane', e)
             _sf_raw = None
@@ -2323,7 +2325,7 @@ def _execute_reading(reading, text, ctx, history, user, uname, body, tid, via, p
         from . import send_file as _sf
         if re.search(r"\b(e-?mail|send|mail|forward)\b", text, re.I) and (_sf.parse(text) or subs):
             _pg.say('Sending the file')
-            raw = _sf.answer(text, uname, user=user, ctx=ctx, history=history, host=host)
+            raw = _sf.answer(text, uname, user=user, ctx=ctx, history=history, host=host, subjects=list(subs or []))
             reason = 'email_file'
     elif intent == 'decline':
         from . import smarter as _sm
