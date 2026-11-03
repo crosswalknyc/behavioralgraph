@@ -51808,16 +51808,23 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-pi-coh-add { appearance: none; border: 1px dashed var(--dtw-rule); background: transparent; border-radius: 999px; color: var(--dtw-body); font: inherit; font-size: 11px; padding: 3px 10px; cursor: pointer; line-height: 16px; }
         #digitalTwinsIQView .dtw-pi-coh-add:hover, #digitalTwinsIQView .dtw-pi-coh-add.on { color: var(--dtw-ink); border-color: var(--dtw-ink); border-style: solid; }
         #digitalTwinsIQView .dtw-pi-coh-empty { font-size: 11px; color: var(--dtw-mute); }
-        #digitalTwinsIQView .dtw-pi-coh-picker { grid-area: pick; border: 1px solid var(--dtw-rule); border-radius: 10px; padding: 8px 10px 6px; background: var(--dtw-raised); margin-top: 2px; }
-        #digitalTwinsIQView .dtw-pi-dcat { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 6px 10px; align-items: start; padding: 5px 0; border-bottom: 1px solid var(--dtw-hair, var(--dtw-rule)); }
-        #digitalTwinsIQView .dtw-pi-dcat:last-of-type { border-bottom: 0; }
-        #digitalTwinsIQView .dtw-pi-dcat .k { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dtw-mute); padding-top: 5px; line-height: 13px; }
-        #digitalTwinsIQView .dtw-pi-dcat .pills { display: flex; flex-wrap: wrap; gap: 4px; }
+        #digitalTwinsIQView .dtw-demo-backdrop { position: fixed; inset: 0; z-index: 80; background: rgba(8, 17, 19, 0.62); display: flex; align-items: center; justify-content: center; padding: 16px; }
+        #digitalTwinsIQView .dtw-demo-panel { width: min(820px, 100%); max-height: 88vh; overflow: auto; scrollbar-width: thin; background: var(--dtw-raised); border: 1px solid var(--dtw-rule); border-radius: 14px; padding: 18px 22px 16px; box-shadow: 0 24px 70px rgba(8, 17, 19, 0.55); }
+        #digitalTwinsIQView .dtw-demo-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 6px; }
+        #digitalTwinsIQView .dtw-demo-head h3 { margin: 0; font-size: 16px; }
+        #digitalTwinsIQView .dtw-demo-head .dtw-eyebrow { margin-bottom: 2px; }
+        #digitalTwinsIQView .dtw-demo-words { font-size: 12.5px; color: var(--dtw-body); min-height: 18px; margin: 2px 0 12px; }
+        #digitalTwinsIQView .dtw-demo-words b { color: var(--dtw-ink); font-weight: 600; }
+        #digitalTwinsIQView .dtw-demo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 26px; }
+        @media (max-width: 720px) { #digitalTwinsIQView .dtw-demo-grid { grid-template-columns: 1fr; } }
+        #digitalTwinsIQView .dtw-pi-dcat { display: flex; flex-direction: column; gap: 6px; padding: 8px 0; border-bottom: 1px solid var(--dtw-hair, var(--dtw-rule)); }
+        #digitalTwinsIQView .dtw-pi-dcat .k { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dtw-mute); line-height: 13px; }
+        #digitalTwinsIQView .dtw-pi-dcat .pills { display: flex; flex-wrap: wrap; gap: 5px; }
         #digitalTwinsIQView .dtw-pill { appearance: none; background: transparent; border: 1px solid var(--dtw-rule); color: var(--dtw-body); border-radius: 999px; padding: 3px 9px; font: inherit; font-size: 11px; line-height: 15px; cursor: pointer; }
         #digitalTwinsIQView .dtw-pill:hover { color: var(--dtw-ink); border-color: var(--dtw-body); }
         #digitalTwinsIQView .dtw-pill.on { border-color: var(--dtw-accent); color: var(--dtw-ink); background: var(--dtw-accent-soft); }
-        #digitalTwinsIQView .dtw-pi-dcat-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding-top: 8px; font-size: 11px; color: var(--dtw-mute); }
-        #digitalTwinsIQView .dtw-pi-dcat-foot .dtw-btn { padding: 4px 12px; font-size: 11px; }
+        #digitalTwinsIQView .dtw-pi-dcat-foot { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding-top: 14px; font-size: 11.5px; color: var(--dtw-mute); flex-wrap: wrap; }
+        #digitalTwinsIQView .dtw-pi-dcat-foot .acts { display: flex; gap: 8px; }
         #digitalTwinsIQView .dtw-pi-cohort:last-of-type { border-bottom: 0; }
         #digitalTwinsIQView .dtw-pi-cohort .dtw-in { margin: 0; }
         #digitalTwinsIQView .dtw-pi-cohort .dtw-pi-coh-name { grid-area: name; }
@@ -54927,20 +54934,42 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var open = S.piCohortOpen === i;
                 return '<div class="dtw-pi-coh-demos">' + chips
                     + (chips ? '' : '<span class="dtw-pi-coh-empty">Who is in this cohort:</span>')
-                    + '<button type="button" class="dtw-pi-coh-add' + (open ? ' on' : '') + '" onclick="dtwCohortPick(' + i + ')">' + (open ? 'Done' : (chips ? 'Change' : '+ Pick demographics')) + '</button></div>'
-                    + (open ? piCohortPickerHtml(i, demos) : '');
+                    + '<button type="button" class="dtw-pi-coh-add' + (open ? ' on' : '') + '" onclick="dtwCohortPick(' + i + ')">' + (chips ? 'Change' : '+ Pick demographics') + '</button></div>';
             }
-            function piCohortPickerHtml(i, demos) {
-                var html = '<div class="dtw-pi-coh-picker">';
+            // The picker: one panel over the page with every standard demographic as a pill; a pick lands on the
+            // cohort's row as a chip the moment it is made. Esc, the backdrop or Done closes it.
+            function renderDemoPicker() {
+                var root = el('digitalTwinsIQView'); if (!root) return;
+                var i = S.piCohortOpen;
+                var panel = el('dtwDemoPicker');
+                if (i == null) { if (panel) panel.remove(); return; }
+                var c = (S.piCohorts || [])[i] || {}; var demos = c.demos || {};
+                var n = Number(S.piCohortN || 1);
+                var html = '<div class="dtw-demo-panel" role="dialog" aria-modal="true" aria-label="Pick the demographics for this cohort">'
+                    + '<div class="dtw-demo-head"><div><div class="dtw-eyebrow">Cohort ' + (i + 1) + ' of ' + n + '</div><h3>' + esc(c.name || 'Who is in this cohort') + '</h3></div>'
+                    + '<button type="button" class="dtw-btn dtw-btn-primary" onclick="dtwDemoPickerClose()">Done</button></div>'
+                    + '<div class="dtw-demo-words">' + (piDemosCount(demos) ? 'This cohort is <b>' + esc(piDemosWords(demos)) + '</b>.' : 'Pick from the standard demographics below. More than one in a row means either of them; picks in different rows all have to be true.') + '</div>'
+                    + '<div class="dtw-demo-grid">';
                 DTW_DEMOS.forEach(function(d) {
-                    var on = (demos || {})[d.key] || [];
-                    html += '<div class="dtw-pi-dcat"><span class="k">' + esc(d.label) + '</span><div class="pills">' + d.values.map(function(v) {
-                        return '<button type="button" class="dtw-pill' + (on.indexOf(v) >= 0 ? ' on' : '') + '" onclick="dtwCohortToggle(' + i + ', \'' + esc(d.key) + '\', \'' + esc(v).replace(/'/g, '&#39;') + '\')">' + esc(v) + '</button>';
+                    var on = demos[d.key] || [];
+                    html += '<div class="dtw-pi-dcat"><span class="k">' + esc(d.label) + (on.length ? ' <span style="letter-spacing:0;text-transform:none;color:var(--dtw-ink)">' + on.length + ' picked</span>' : '') + '</span><div class="pills">' + d.values.map(function(v) {
+                        return '<button type="button" class="dtw-pill' + (on.indexOf(v) >= 0 ? ' on' : '') + '" aria-pressed="' + (on.indexOf(v) >= 0 ? 'true' : 'false') + '" onclick="dtwCohortToggle(' + i + ', \'' + esc(d.key) + '\', \'' + esc(v).replace(/'/g, '&#39;') + '\')">' + esc(v) + '</button>';
                     }).join('') + '</div></div>';
                 });
-                html += '<div class="dtw-pi-dcat-foot"><span>Pick more than one in a row to mean either of them. Picks in different rows all have to be true.</span><button type="button" class="dtw-btn" onclick="dtwCohortPick(' + i + ')">Done</button></div></div>';
-                return html;
+                html += '</div><div class="dtw-pi-dcat-foot"><span>More than one in a row means either of them (18-24 or 25-34). Picks in different rows all have to be true (men who are 18 to 34).</span>'
+                    + '<div class="acts">' + (piDemosCount(demos) ? '<button type="button" class="dtw-btn" onclick="dtwCohortClear(' + i + ')">Clear</button>' : '') + '<button type="button" class="dtw-btn dtw-btn-primary" onclick="dtwDemoPickerClose()">Done</button></div></div></div>';
+                if (!panel) {
+                    panel = document.createElement('div'); panel.id = 'dtwDemoPicker'; panel.className = 'dtw-demo-backdrop';
+                    panel.addEventListener('click', function(e) { if (e.target === panel) dtwDemoPickerClose(); });
+                    root.appendChild(panel);
+                }
+                var keep = panel.querySelector('.dtw-demo-panel') ? panel.querySelector('.dtw-demo-panel').scrollTop : 0;
+                panel.innerHTML = html;
+                var inner = panel.querySelector('.dtw-demo-panel'); if (inner && keep) inner.scrollTop = keep;
             }
+            window.dtwDemoPickerClose = function() { S.piCohortOpen = null; renderDemoPicker(); piRerenderCohorts(); };
+            window.dtwCohortClear = function(i) { piCohortsSync(); var c = (S.piCohorts || [])[i]; if (c) { var wasAuto = !c.name || c.name === piSuggestName(c.demos || {}); c.demos = {}; if (wasAuto) c.name = ''; } piRerenderCohorts(); renderDemoPicker(); };
+            document.addEventListener('keydown', function(e) { if (e.key === 'Escape' && S.piCohortOpen != null && el('dtwDemoPicker')) { e.preventDefault(); dtwDemoPickerClose(); } });
             function piCohortsSync() {
                 // the names and seats as typed, into S.piCohorts (the picks already live there)
                 var names = document.querySelectorAll('#dtwPiCohorts .dtw-pi-coh-name'), seats = document.querySelectorAll('#dtwPiCohorts .dtw-pi-coh-seats');
@@ -54961,9 +54990,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }
             window.dtwCohortPick = function(i) {
                 piCohortsSync();
-                S.piCohortOpen = (S.piCohortOpen === i) ? null : i;
+                S.piCohortOpen = i;
                 piRerenderCohorts();
-                if (S.piCohortOpen === i) { var p = document.querySelector('#dtwPiCohorts .dtw-pi-coh-picker'); if (p && p.scrollIntoView) { try { p.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (_) {} } }
+                renderDemoPicker();
             };
             window.dtwCohortToggle = function(i, key, value) {
                 piCohortsSync();
@@ -54978,6 +55007,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (cur.length) c.demos[key] = cur; else delete c.demos[key];
                 if (wasAuto) c.name = piSuggestName(c.demos);     // a blank name follows the picks until it is typed over
                 piRerenderCohorts();
+                if (S.piCohortOpen === i) renderDemoPicker();
             };
             function piCohortBuilderHtml() {
                 var n = Math.max(1, Math.min(PI_COHORT_MAX, Number(S.piCohortN || 1)));
@@ -55168,7 +55198,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 renderPilotConsole();
             };
             window.dtwPilotCloseSetup = function() {
-                S.piSetupId = null; S.piPending = null; S.piCohorts = []; S.piCohortN = 1; S.piCohortCustom = false;
+                S.piSetupId = null; S.piPending = null; S.piCohorts = []; S.piCohortN = 1; S.piCohortCustom = false; S.piCohortOpen = null; renderDemoPicker();
                 piLocalClear();
                 renderPilotConsole();
             };
