@@ -160,3 +160,28 @@ if __name__ == '__main__':
     test_breakdown_words()
     print(f"\n{'ALL PASS' if not FAIL else str(FAIL) + ' FAILED'}")
     sys.exit(1 if FAIL else 0)
+
+
+def _overlap_sections_are_labeled():
+    """An overlap table says a person can be in more than one row; a path
+    table and a partition are not labeled (Carolyn Bisson, 2026-11-02:
+    the rows of 'Where they looked' added to 20M against an 8.5M step)."""
+    from migration import journey_iq as jiq
+    p = {'meta': {'project_name': 'T'}, 'fragrance_shop_journey': {'spine': [
+            {'id': 'tam', 'label': 'US population', 'accounts': 329900000}, {'id': 'social_view', 'label': 'Saw a post', 'accounts': 1000},
+            {'id': 'click_through', 'label': 'Clicked', 'accounts': 400}, {'id': 'watched_30d', 'label': 'Watched', 'accounts': 100}],
+         'fork': [], 'detours': [
+            {'title': 'Where they looked', 'kind': 'overlap', 'base': 400, 'rows': [{'label': 'A', 'accounts': 300, 'pct': 75.0}, {'label': 'B', 'accounts': 250, 'pct': 62.5}]},
+            {'title': 'The Netflix branch', 'kind': 'path', 'base': 400, 'rows': [{'label': 'Opened', 'accounts': 400, 'pct': 100.0}, {'label': 'Watched', 'accounts': 100, 'pct': 25.0}, {'label': 'Left', 'accounts': 300, 'pct': 75.0}]},
+            {'title': 'Timing', 'kind': 'partition', 'base': 100, 'rows': [{'label': 'Same day', 'accounts': 40, 'pct': 40.0}, {'label': 'Later', 'accounts': 60, 'pct': 60.0}]}]},
+         'kpis': {'total_users': 100, 'conversion_pct': 10.0}}
+    rows = jiq.breakdown_rows(p)
+    secs = [r[0] for r in rows]
+    assert 'Where they looked (one person can be in more than one row)' in secs, secs
+    assert 'The Netflix branch' in secs and 'Timing' in secs, secs
+    assert [r[2] for r in rows if r[0].startswith('Where they looked')] == [300, 250]
+    print('PASS overlap sections are labeled')
+
+
+if __name__ == '__main__':
+    _overlap_sections_are_labeled()

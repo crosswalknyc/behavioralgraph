@@ -2477,12 +2477,22 @@ def breakdown_rows(payload: dict) -> list:
         own = sum(_bd_int(r.get('accounts')) for r in drows)
         base = None
         own_base = _bd_int(d.get('base'))
+        # an overlap table counts a person in every row that applies, so its rows add to more than the
+        # step; the section says so in the workbook (Carolyn Bisson, 2026-11-02: "Numbers below add up to
+        # over 20M, does this mean people looked at nearly 3 places on average?"). The row shares stay
+        # shares of the step, never re-based to 100.
+        kind = str(d.get('kind') or '')
+        overlap = kind == 'overlap' or (kind != 'path' and own_base and own > int(1.05 * own_base))   # a path table nests its steps; it is not overlap
+        if overlap:
+            title = title + ' (one person can be in more than one row)'
         # a path table (the click path of a saw-then-watched journey, 2026-10-22) nests its
         # rows inside each other; its rows never sum to a step and are never re-based.
         # A table that records its own total and adds to it keeps its counts: the Knots
         # Landing viewer table (97,236) sat within 6% of the click step (98,096) and was
         # stretched onto it, so its first row stopped matching the end of the path.
         if own_base and abs(own - own_base) <= max(1, int(0.001 * own_base)):
+            pass
+        elif overlap:
             pass
         elif str(d.get('kind') or '') != 'path':
             for c in real:   # the spine step this detour partitions
@@ -2580,7 +2590,9 @@ def breakdown_xlsx(payload: dict) -> bytes:
         ('Kept of prior %', 'The share of the previous step that reached this step.'),
         ('Dropped', 'People at the previous step who did not reach this step.'),
         ('Of US %', 'The step as a share of the US population (329,900,000).'),
-        ('Detours', 'Each detour section partitions one spine step; its rows share that step\'s total.'),
+        ('Detours', 'Most detour sections split one spine step, so their rows add back to that step. A section marked '
+                    '"one person can be in more than one row" counts a person in every row that applies, so its rows add '
+                    'to more than the step; its percentages are each row\'s share of the step.'),
         ('What we count as a view', 'A view is one person, on any screen, who played the title in the window; '
                                     'repeat plays by the same person count once.'),
         ('Where to find it', f"Dashboard, Digital Journey IQ, {SHELF_LABELS.get(shelf_for(meta), 'All')}: "
