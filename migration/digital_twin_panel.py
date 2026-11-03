@@ -136,7 +136,205 @@ def parse_segment(label: str) -> dict:
         if re.search(rf"\b{lc}\b", low):
             f['lifecycle'] = lc
             break
+    # the cohort vocabulary (Jenna, 2026-11-02: "a group of men, one of women, one of men with children, one of spanish speakers")
+    if re.search(r"\b(?:with|have|has|raising)\s+(?:young\s+|small\s+|teen\s+)?(?:children|kids|a child|a kid|babies|toddlers)\b|\bparents?\b|\b(?:moms?|mothers?|dads?|fathers?)\b|\bfamilies with\b", low):
+        f['parent'] = True
+    elif re.search(r"\b(?:no|without)\s+(?:children|kids)\b|\bchild-?less\b|\bchild-?free\b|\bnon-?parents?\b", low):
+        f['parent'] = False
+    if re.search(r"\bspanish[- ]?(?:speakers?|speaking|language|dominant)\b|\bhablantes\b", low):
+        f['ethnicity'] = 'hispanic'
+        f['language'] = 'Spanish'
+    elif re.search(r"\b(?:hispanic|latinos?|latinas?|latinx|latine)\b", low):
+        f['ethnicity'] = 'hispanic'
+    elif re.search(r"\b(?:black|african[- ]american)\b", low):
+        f['ethnicity'] = 'black'
+    elif re.search(r"\b(?:asian|asian[- ]american|aapi)\b", low):
+        f['ethnicity'] = 'asian'
+    elif re.search(r"\b(?:white|caucasian)\b(?! collar)", low):
+        f['ethnicity'] = 'white'
+    m = re.search(r"(?:\$\s?)?(\d{2,3})\s?k\s?\+|\bover\s+\$?\s?(\d{2,3})\s?k\b|\b(?:at least|above|more than)\s+\$?\s?(\d{2,3})\s?k\b", low)
+    if m:
+        f['income_min'] = int(next(g for g in m.groups() if g)) * 1000
+    elif re.search(r"\b(?:high[- ]income|affluent|wealthy|upscale|high earners?)\b", low):
+        f['income_min'] = 100_000
+    m = re.search(r"\b(?:under|below|less than)\s+\$?\s?(\d{2,3})\s?k\b", low)
+    if m:
+        f['income_max'] = int(m.group(1)) * 1000
+    elif re.search(r"\b(?:low|lower)[- ]income\b|\bbudget[- ]conscious\b", low):
+        f['income_max'] = 50_000
+    if re.search(r"\bcollege[- ](?:grads?|graduates?|educated)\b|\bdegree[- ]holders?\b|\bbachelor'?s?\b|\bgrad(?:uate)? degree\b|\bpostgrad", low):
+        f['college'] = True
+    elif re.search(r"\bno (?:college )?degree\b|\bhigh[- ]school (?:only|grads?|educated)\b|\bnon-?college\b|\bwithout a degree\b", low):
+        f['college'] = False
+    if re.search(r"\bmarried\b|\bcouples?\b|\bspouses?\b", low):
+        f['relationship'] = 'married'
+    elif re.search(r"\bsingles?\b|\bunmarried\b", low):
+        f['relationship'] = 'single'
+    if re.search(r"\blgbtq?(?:ia)?\+?\b|\bqueer\b|\bgay\b|\blesbians?\b|\bbisexual\b", low):
+        f['lgbtq'] = True
+    if re.search(r"\bdemocrats?\b|\bliberals?\b|\bprogressives?\b", low):
+        f['party'] = 'democrat'
+    elif re.search(r"\brepublicans?\b|\bconservatives?\b|\bmaga\b", low):
+        f['party'] = 'republican'
+    elif re.search(r"\bindependents?\b|\bswing voters?\b|\bundecideds?\b", low):
+        f['party'] = 'independent'
+    if re.search(r"\burban\b|\bcity[- ]dwellers?\b|\bbig[- ]city\b", low):
+        f['urbanicity'] = 'urban'
+    elif re.search(r"\bsuburban\b|\bsuburbs\b|\bsuburbanites?\b", low):
+        f['urbanicity'] = 'suburban'
+    elif re.search(r"\brural\b|\bsmall[- ]town\b|\bcountry(?:side)?\b", low):
+        f['urbanicity'] = 'rural'
     return f
+
+
+# predicates over the twin's own demographic labels, one per cohort filter
+def _parent_pred(flag):
+    if flag:
+        return lambda l: bool(re.search(r"has child|have child|with child|parent|children at home|kids", l, re.I)) and not re.search(r"\bno\b|without|non-?parent", l, re.I)
+    return lambda l: bool(re.search(r"no child|without|child-?less|child-?free|non-?parent|no kids", l, re.I))
+
+
+_ETH_RX = {'hispanic': r"hispanic|latin", 'black': r"black|african", 'asian': r"asian|pacific", 'white': r"white|caucasian"}
+
+
+def _eth_pred(code):
+    rx = _ETH_RX.get(str(code or '').lower(), re.escape(str(code or '')))
+    return lambda l: bool(re.search(rx, l, re.I))
+
+
+def _income_bounds(label):
+    nums = [int(x.replace(',', '')) for x in re.findall(r"\$?\s?(\d{1,3}(?:,\d{3})+|\d{4,7})", str(label or ''))]
+    low = str(label or '').lower()
+    if not nums:
+        return None
+    if len(nums) >= 2:
+        return min(nums), max(nums)
+    if re.search(r"less than|under|below", low):
+        return 0, nums[0]
+    if re.search(r"or more|\+|over|above|and up", low):
+        return nums[0], 10_000_000
+    return nums[0], nums[0]
+
+
+def _income_overlap(lo, hi):
+    """The share of an income row that sits inside [lo, hi] (a row half
+    inside counts half)."""
+    def frac(label):
+        b = _income_bounds(label)
+        if not b:
+            return 0.0
+        a, z = b
+        if z <= a:
+            return 1.0 if lo <= a <= hi else 0.0
+        inter = max(0.0, min(z, hi) - max(a, lo))
+        return clamp(inter / float(z - a), 0.0, 1.0)
+    return frac
+
+
+def _college_pred(flag):
+    if flag:
+        return lambda l: bool(re.search(r"bachelor|graduate|professional|master|doctor|college graduate", l, re.I)) and not re.search(r"some college", l, re.I)
+    return lambda l: not (re.search(r"bachelor|graduate|professional|master|doctor|college graduate", l, re.I) and not re.search(r"some college", l, re.I))
+
+
+def _rel_pred(code):
+    if code == 'married':
+        return lambda l: bool(re.search(r"married|partnered|domestic partner", l, re.I))
+    return lambda l: bool(re.search(r"single|never married|divorced|separated|widowed", l, re.I))
+
+
+def _lgbtq_pred(l):
+    return bool(re.search(r"lgbtq|gay|lesbian|bisexual|queer|trans|non-?binary", l, re.I))
+
+
+def _party_pred(code):
+    return lambda l: bool(re.search({'democrat': r"democrat|liberal|progressive", 'republican': r"republican|conservative", 'independent': r"independent|unaffiliated|no party"}.get(code, code), l, re.I))
+
+
+def _urban_pred(code):
+    return lambda l: bool(re.search({'urban': r"urban|city", 'suburban': r"suburb", 'rural': r"rural|small town"}.get(code, code), l, re.I))
+
+
+# shares used only when the twin carries no rows for the category
+_FALLBACK_SHARE = {('party', 'democrat'): 0.33, ('party', 'republican'): 0.29, ('party', 'independent'): 0.38,
+                   ('urbanicity', 'urban'): 0.31, ('urbanicity', 'suburban'): 0.55, ('urbanicity', 'rural'): 0.14}
+SPANISH_AT_HOME = 0.72     # the share of US Hispanic adults who speak Spanish at home
+
+
+def _rows_where(t, cat, pred, stand_in: str) -> list:
+    """The twin's rows for a category that fit the cohort's filter; when
+    none do (or the twin has no rows), one stand-in row with the label
+    the filter implies, so the seats still read as the cohort."""
+    rows = [r for r in _demo(t, cat) if pred(str(r.get('label') or '')) and float(r.get('pct') or 0) > 0]
+    return rows or [{'label': stand_in, 'pct': 100.0}]
+
+
+def _rows_weighted(t, cat, frac_fn, stand_in: str) -> list:
+    rows = []
+    for r in _demo(t, cat):
+        w = float(r.get('pct') or 0) * frac_fn(str(r.get('label') or ''))
+        if w > 0:
+            rows.append({'label': str(r.get('label')), 'pct': w})
+    return rows or [{'label': stand_in, 'pct': 100.0}]
+
+
+def _share_or_fallback(t, cat, pred, fallback):
+    rows = _demo(t, cat)
+    if not rows:
+        return fallback
+    tot = sum(float(r.get('pct') or 0) for r in rows) or 100.0
+    hit = sum(float(r.get('pct') or 0) for r in rows if pred(str(r.get('label') or '')))
+    return clamp(hit / tot, 0.0, 1.0)
+
+
+def _weighted_share(t, cat, frac_fn, fallback=1.0):
+    rows = _demo(t, cat)
+    if not rows:
+        return fallback
+    tot = sum(float(r.get('pct') or 0) for r in rows) or 100.0
+    return clamp(sum(float(r.get('pct') or 0) * frac_fn(str(r.get('label') or '')) for r in rows) / tot, 0.0, 1.0)
+
+
+def cohort_filter_words(f: dict) -> str:
+    """The filter back in plain words, for the seat's card and the page."""
+    f = f or {}
+    bits = []
+    if f.get('gender') == 'F':
+        bits.append('women')
+    elif f.get('gender') == 'M':
+        bits.append('men')
+    if f.get('age'):
+        a = f['age']
+        bits.append(f"{a[0]} to {a[1]}")
+    if f.get('parent') is True:
+        bits.append('with children at home')
+    elif f.get('parent') is False:
+        bits.append('without children')
+    if f.get('language') == 'Spanish':
+        bits.append('who speak Spanish at home')
+    elif f.get('ethnicity'):
+        bits.append({'hispanic': 'Hispanic or Latino', 'black': 'Black', 'asian': 'Asian', 'white': 'white'}.get(f['ethnicity'], str(f['ethnicity'])))
+    if f.get('income_min'):
+        bits.append(f"household income ${int(f['income_min']) // 1000}k and up")
+    if f.get('income_max'):
+        bits.append(f"household income under ${int(f['income_max']) // 1000}k")
+    if f.get('college') is True:
+        bits.append('college graduates')
+    elif f.get('college') is False:
+        bits.append('without a college degree')
+    if f.get('relationship'):
+        bits.append(str(f['relationship']))
+    if f.get('lgbtq'):
+        bits.append('LGBTQ+')
+    if f.get('party'):
+        bits.append({'democrat': 'Democrats', 'republican': 'Republicans', 'independent': 'independents'}.get(f['party'], str(f['party'])))
+    if f.get('urbanicity'):
+        bits.append(str(f['urbanicity']))
+    if f.get('city'):
+        bits.append(f"in {f['city']}")
+    if f.get('lifecycle'):
+        bits.append(str(f['lifecycle']))
+    return ', '.join(bits)
 
 
 def _age_pred(rng):
@@ -247,6 +445,27 @@ def _segment_share(t, f: dict) -> float:
                'habit': 'habit_pct', 'returning': 'returning_pct', 'avid': 'habit_pct', 'casual': 'trying_pct'}.get(f['lifecycle'])
         if key and lc.get(key) is not None:
             s *= clamp(float(lc.get(key) or 0) / 100.0, 0.02, 1.0)
+    # the cohort filters: each one narrows the share by the twin's own rows for that category
+    if f.get('parent') is not None:
+        s *= _share_or_fallback(t, 'parental', _parent_pred(bool(f['parent'])), 0.38 if f['parent'] else 0.62)
+    if f.get('ethnicity'):
+        s *= _share_or_fallback(t, 'ethnicity', _eth_pred(f['ethnicity']), {'hispanic': 0.19, 'black': 0.13, 'asian': 0.07, 'white': 0.58}.get(str(f['ethnicity']).lower(), 0.1))
+        if f.get('language') == 'Spanish':
+            s *= SPANISH_AT_HOME
+    if f.get('income_min') or f.get('income_max'):
+        lo = float(f.get('income_min') or 0)
+        hi = float(f.get('income_max') or 10_000_000)
+        s *= _weighted_share(t, 'income', _income_overlap(lo, hi), 0.35)
+    if f.get('college') is not None:
+        s *= _share_or_fallback(t, 'education', _college_pred(bool(f['college'])), 0.4 if f['college'] else 0.6)
+    if f.get('relationship'):
+        s *= _share_or_fallback(t, 'relationship', _rel_pred(str(f['relationship'])), 0.5)
+    if f.get('lgbtq'):
+        s *= _share_or_fallback(t, 'sexual_orientation', _lgbtq_pred, 0.08)
+    if f.get('party'):
+        s *= _share_or_fallback(t, 'party', _party_pred(str(f['party'])), _FALLBACK_SHARE.get(('party', str(f['party'])), 0.33))
+    if f.get('urbanicity'):
+        s *= _share_or_fallback(t, 'urbanicity', _urban_pred(str(f['urbanicity'])), _FALLBACK_SHARE.get(('urbanicity', str(f['urbanicity'])), 0.33))
     return clamp(s, 0.002, 1.0)
 
 
@@ -267,12 +486,17 @@ def _filter_clean(f: dict) -> dict:
     return {k: (list(v) if isinstance(v, tuple) else v) for k, v in (f or {}).items()}
 
 
-def _size_segments(segs: list, by_key: dict, seed: str) -> int:
+def _size_segments(segs: list, by_key: dict, seed: str, cohorts: bool = False) -> int:
     """People per segment from each twin's size: a segment with no filter
     stands for the whole twin, a filtered one for its share; the
     segments of one twin together never exceed that twin (overlap is
     taken out in proportion). Sets ``people`` and ``share_pct``; returns
-    the room's size, which equals the sum of the segments."""
+    the room's size, which equals the sum of the segments.
+
+    ``cohorts`` (Jenna, 2026-11-02): the segments are cohorts the user
+    cut from one audience and may overlap (men, and men with children).
+    Each keeps its own share of the twin, ``share_pct`` is that share
+    of the whole twin audience, and the room stands for the twin."""
     for s in segs:
         t = by_key.get(s['twin']) or {}
         s['_raw'] = max(50.0, float(_meta(t).get('size_us') or 1_000_000) * _segment_share(t, s.get('_filter') or {}))
@@ -282,6 +506,11 @@ def _size_segments(segs: list, by_key: dict, seed: str) -> int:
     for tkey, group in by_twin.items():
         cap = int(float(_meta(by_key.get(tkey) or {}).get('size_us') or 0) or 0)
         raw_total = sum(s['_raw'] for s in group)
+        if cohorts:
+            for s in group:
+                s['people'] = natural_count(seed, f"seg|{s['label']}|people", max(1, int(min(s['_raw'], cap) if cap > 0 else s['_raw'])))
+                s['share_pct'] = pct1(s['people'] / float(cap) * 100.0) if cap > 0 else 0.0
+            continue
         if cap > 0 and raw_total > cap:
             for s in group:
                 s['_raw'] = s['_raw'] * cap / raw_total
@@ -293,6 +522,9 @@ def _size_segments(segs: list, by_key: dict, seed: str) -> int:
             big['people'] = max(1, big['people'] + (cap - sum(s['people'] for s in group)))
     for s in segs:
         s.pop('_raw', None)
+    if cohorts:
+        twins_total = sum(int(float(_meta(by_key.get(k) or {}).get('size_us') or 0) or 0) for k in by_twin)
+        return twins_total or (sum(s['people'] for s in segs) or 1)
     total_people = sum(s['people'] for s in segs) or 1
     for s in segs:
         s['share_pct'] = pct1(s['people'] / total_people * 100.0)
@@ -317,7 +549,12 @@ def recompute_group_sizes(sess: dict, twins_by_key: dict) -> bool:
         t = by_key.get(str(s.get('twin') or '')) or {}
         stored = {k: (list(v) if isinstance(v, tuple) else v) for k, v in (s.get('filter') or {}).items()}
         legacy = _filter_clean(parse_segment(str(s.get('label') or '')))
-        if not stored or stored == legacy:
+        if s.get('composition'):
+            # a cohort's filter is its composition in words, never its name
+            f = dict(s.get('filter') or {}) or parse_segment(strip_twin_words(str(s.get('composition') or ''), t))
+            if isinstance(f.get('age'), list):
+                f['age'] = tuple(f['age'])
+        elif not stored or stored == legacy:
             f = parse_segment(strip_twin_words(str(s.get('label') or ''), t))
         else:
             f = dict(s.get('filter') or {})
@@ -326,7 +563,7 @@ def recompute_group_sizes(sess: dict, twins_by_key: dict) -> bool:
         s['_filter'] = f
         s['filter'] = _filter_clean(f)
     seed = f"panel|{sess.get('id')}|{'|'.join(str(k) for k in (sess.get('twin_keys') or g.get('twins') or []))}|{VERSION}"
-    g['size_people'] = _size_segments(segs, by_key, seed)
+    g['size_people'] = _size_segments(segs, by_key, seed, cohorts=any(s.get('composition') for s in segs))
     for s in segs:
         s.pop('_filter', None)
     after = [(s.get('people'), s.get('share_pct'), dict(s.get('filter') or {})) for s in segs] + [g.get('size_people')]
@@ -351,21 +588,41 @@ def build_group(twins: list, segments: Optional[list] = None, in_room: int = DEF
         label = str(s.get('label') or '').strip()
         tkey = str(s.get('twin') or s.get('twin_key') or '')
         t = by_key.get(tkey) or next((tw for tw in twins if _twin_name(tw).lower() in label.lower()), None) or (twins[i % len(twins)] if twins else {})
-        f = dict(s.get('filter') or {}) or parse_segment(strip_twin_words(label, t))
+        # a cohort (Jenna, 2026-11-02) names itself and describes its composition in words; the words are the filter
+        composition = ' '.join(str(s.get('composition') or '').split())[:160]
+        f = dict(s.get('filter') or {}) or parse_segment(strip_twin_words(composition or label, t))
+        try:
+            want_seats = int(s.get('seats') or 0)
+        except (TypeError, ValueError):
+            want_seats = 0
         segs.append({'label': label or _twin_name(t), 'twin': _twin_key(t), 'twin_name': _twin_name(t), 'filter': _filter_clean(f), '_filter': f,
-                     'people': 0, 'share_pct': 0.0, 'seats': 0})
-    total_people = _size_segments(segs, by_key, seed)
+                     'composition': composition, 'people': 0, 'share_pct': 0.0, 'seats': 0, '_want': max(0, want_seats)})
+    is_cohorts = any(s.get('composition') for s in segs)
+    total_people = _size_segments(segs, by_key, seed, cohorts=is_cohorts)
     for s in segs:
         s.pop('_filter', None)
-    # seats: largest remainder, at least one each
-    raw = [s['people'] / total_people * in_room for s in segs]
-    seats = [max(1, int(r)) for r in raw]
-    while sum(seats) < in_room:
-        k = max(range(len(segs)), key=lambda i: raw[i] - seats[i])
-        seats[k] += 1
-    while sum(seats) > in_room:
-        k = max(range(len(segs)), key=lambda i: seats[i] if seats[i] > 1 else -1)
-        seats[k] -= 1
+    wants = [s.pop('_want', 0) for s in segs]
+    if any(wants):
+        # the seats the user asked for in each cohort; the people each seat stands for still come from the
+        # cohort's share of the twin, so the numbers stay representative of the whole audience
+        seats = [max(1, w) for w in wants]
+        if sum(seats) > MAX_IN_ROOM:
+            scale = MAX_IN_ROOM / float(sum(seats))
+            seats = [max(1, int(round(w * scale))) for w in seats]
+            while sum(seats) > MAX_IN_ROOM:
+                k = max(range(len(seats)), key=lambda i: seats[i])
+                seats[k] -= 1
+        in_room = sum(seats)
+    else:
+        # seats: largest remainder, at least one each
+        raw = [s['people'] / total_people * in_room for s in segs]
+        seats = [max(1, int(r)) for r in raw]
+        while sum(seats) < in_room:
+            k = max(range(len(segs)), key=lambda i: raw[i] - seats[i])
+            seats[k] += 1
+        while sum(seats) > in_room:
+            k = max(range(len(segs)), key=lambda i: seats[i] if seats[i] > 1 else -1)
+            seats[k] -= 1
     roster = []
     seat_no = 0
     for s, n in zip(segs, seats):
@@ -373,16 +630,29 @@ def build_group(twins: list, segments: Optional[list] = None, in_room: int = DEF
         t = by_key.get(s['twin']) or {}
         f = s['filter'] or {}
         gender_labs = ([('Female' if f.get('gender') == 'F' else 'Male')] * n) if f.get('gender') in ('F', 'M') else quota_labels(_demo(t, 'gender'), n)
-        orient_labs = _pair_orientation(gender_labs, quota_labels(_demo(t, 'sexual_orientation'), n))
-        edu_labs = _spread(quota_labels(_demo(t, 'education'), n), seed, s['label'] + '|edu')
-        inc_labs = _spread(quota_labels(_demo(t, 'income'), n), seed, s['label'] + '|inc')
-        eth_labs = _spread(quota_labels(_demo(t, 'ethnicity'), n), seed, s['label'] + '|eth')
-        rel_labs = _spread(quota_labels(_demo(t, 'relationship'), n), seed, s['label'] + '|rel')
-        par_labs = _spread(quota_labels(_demo(t, 'parental'), n), seed, s['label'] + '|par')
+        # a cohort's seats are drawn from the twin's rows that fit its filter (a cohort of parents seats parents only)
+        orient_rows = _rows_where(t, 'sexual_orientation', _lgbtq_pred, 'LGBTQ+') if f.get('lgbtq') else _demo(t, 'sexual_orientation')
+        orient_labs = _pair_orientation(gender_labs, quota_labels(orient_rows, n))
+        edu_rows = _rows_where(t, 'education', _college_pred(bool(f['college'])), 'Bachelors Degree' if f['college'] else 'High School or Less') if f.get('college') is not None else _demo(t, 'education')
+        edu_labs = _spread(quota_labels(edu_rows, n), seed, s['label'] + '|edu')
+        if f.get('income_min') or f.get('income_max'):
+            inc_rows = _rows_weighted(t, 'income', _income_overlap(float(f.get('income_min') or 0), float(f.get('income_max') or 10_000_000)),
+                                      (f"${int(f['income_min']) // 1000},000 or More" if f.get('income_min') else f"Less than ${int(f['income_max']) // 1000},000"))
+        else:
+            inc_rows = _demo(t, 'income')
+        inc_labs = _spread(quota_labels(inc_rows, n), seed, s['label'] + '|inc')
+        eth_rows = _rows_where(t, 'ethnicity', _eth_pred(f['ethnicity']), {'hispanic': 'Hispanic or Latino', 'black': 'Black or African American', 'asian': 'Asian', 'white': 'White'}.get(str(f['ethnicity']).lower(), str(f['ethnicity']))) if f.get('ethnicity') else _demo(t, 'ethnicity')
+        eth_labs = _spread(quota_labels(eth_rows, n), seed, s['label'] + '|eth')
+        rel_rows = _rows_where(t, 'relationship', _rel_pred(str(f['relationship'])), 'Married' if f['relationship'] == 'married' else 'Single') if f.get('relationship') else _demo(t, 'relationship')
+        rel_labs = _spread(quota_labels(rel_rows, n), seed, s['label'] + '|rel')
+        par_rows = _rows_where(t, 'parental', _parent_pred(bool(f['parent'])), 'Has Children' if f['parent'] else 'No Children') if f.get('parent') is not None else _demo(t, 'parental')
+        par_labs = _spread(quota_labels(par_rows, n), seed, s['label'] + '|par')
         occ_labs = _spread(quota_labels(_demo(t, 'occupation'), n), seed, s['label'] + '|occ')
         # an electorate or a place seats by party lean and by urban / suburban / rural too (Jenna 2026-10-30)
-        party_labs = _spread(quota_labels(_demo(t, 'party'), n), seed, s['label'] + '|party')
-        urban_labs = _spread(quota_labels(_demo(t, 'urbanicity'), n), seed, s['label'] + '|urb')
+        party_rows = _rows_where(t, 'party', _party_pred(str(f['party'])), {'democrat': 'Democrat', 'republican': 'Republican', 'independent': 'Independent'}.get(f['party'], str(f['party']))) if f.get('party') else _demo(t, 'party')
+        party_labs = _spread(quota_labels(party_rows, n), seed, s['label'] + '|party')
+        urban_rows = _rows_where(t, 'urbanicity', _urban_pred(str(f['urbanicity'])), str(f['urbanicity']).capitalize()) if f.get('urbanicity') else _demo(t, 'urbanicity')
+        urban_labs = _spread(quota_labels(urban_rows, n), seed, s['label'] + '|urb')
         age_labs = quota_labels(_demo(t, 'age'), n)
         for j in range(n):
             seat_no += 1
@@ -405,7 +675,9 @@ def build_group(twins: list, segments: Optional[list] = None, in_room: int = DEF
                            'parental': par_labs[j] if j < len(par_labs) else '',
                            'occupation': occ_labs[j] if j < len(occ_labs) else '',
                            'party': party_labs[j] if j < len(party_labs) else '',
-                           'urbanicity': urban_labs[j] if j < len(urban_labs) else ''})
+                           'urbanicity': urban_labs[j] if j < len(urban_labs) else '',
+                           **({'language': str(f['language'])} if f.get('language') else {}),
+                           **({'cohort': s['label']} if s.get('composition') else {})})
     # no two seats share a name
     seen = set()
     for r in roster:

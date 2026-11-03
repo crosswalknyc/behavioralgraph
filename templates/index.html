@@ -51789,6 +51789,19 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-pi-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; font-size: 11px; color: var(--dtw-body); }
         #digitalTwinsIQView .dtw-pi-legend .sw { display: inline-block; width: 14px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
         #digitalTwinsIQView .dtw-pi-legend select.dtw-in { display: inline-block; width: auto; padding: 2px 6px; font-size: 11px; background: transparent; }
+        /* cohorts (2026-11-02): the builder rows in the setup form, the cohort tag on a seat, the cohort chips under the dial */
+        #digitalTwinsIQView .dtw-pi-cohorts { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 2px; }
+        #digitalTwinsIQView .dtw-pi-cohort { display: grid; grid-template-columns: minmax(0, 1fr) 56px; grid-template-areas: 'name seats' 'comp comp'; gap: 4px 6px; align-items: center; padding-bottom: 6px; border-bottom: 1px solid var(--dtw-hair, var(--dtw-rule)); }
+        #digitalTwinsIQView .dtw-pi-cohort:last-of-type { border-bottom: 0; }
+        #digitalTwinsIQView .dtw-pi-cohort .dtw-in { margin: 0; }
+        #digitalTwinsIQView .dtw-pi-cohort .dtw-pi-coh-name { grid-area: name; }
+        #digitalTwinsIQView .dtw-pi-cohort .dtw-pi-coh-seats { grid-area: seats; text-align: center; }
+        #digitalTwinsIQView .dtw-pi-cohort .dtw-pi-coh-comp { grid-area: comp; }
+        #digitalTwinsIQView .dtw-pi-cohort-head { display: grid; grid-template-columns: minmax(0, 1fr) 56px; gap: 6px; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dtw-mute); margin-top: 6px; }
+        #digitalTwinsIQView .dtw-pi-seatrow .who .cohort { color: var(--dtw-mute); font-weight: 500; }
+        #digitalTwinsIQView .dtw-pi-legend .coh { white-space: nowrap; }
+        #digitalTwinsIQView .dtw-pi-byco { margin-top: 5px; font-size: 11.5px; color: var(--dtw-body); line-height: 15px; }
+        #digitalTwinsIQView .dtw-pi-byco b { color: var(--dtw-ink); font-weight: 600; }
         #digitalTwinsIQView .dtw-pi-marks { display: flex; flex-wrap: wrap; gap: 6px; min-height: 0; }
         #digitalTwinsIQView .dtw-pi-mk { appearance: none; border: 1px solid var(--dtw-rule); background: var(--dtw-raised); color: var(--dtw-ink); border-radius: 999px; padding: 4px 10px; font-size: 11.5px; cursor: pointer; font-family: inherit; opacity: 0.45; }
         #digitalTwinsIQView .dtw-pi-mk.seen { opacity: 1; }
@@ -54060,7 +54073,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             function splitLines(s) {
                 var d = (s || {}).dial || {}, sp = d.splits || {};
                 var keys = Object.keys(sp);
-                if (!S.pilotSplits) { S.pilotSplits = { a: keys.indexOf('women') >= 0 ? 'women' : '', b: keys.indexOf('men') >= 0 ? 'men' : '' }; }
+                if (!S.pilotSplits) {
+                    var hasCohorts = keys.some(function(k) { return sp[k].group === 'cohort'; });
+                    S.pilotSplits = hasCohorts ? { a: '', b: '' } : { a: keys.indexOf('women') >= 0 ? 'women' : '', b: keys.indexOf('men') >= 0 ? 'men' : '' };
+                }
                 return { a: S.pilotSplits.a && sp[S.pilotSplits.a] ? sp[S.pilotSplits.a] : null, b: S.pilotSplits.b && sp[S.pilotSplits.b] ? sp[S.pilotSplits.b] : null };
             }
             function drawPilotDial(upto) {
@@ -54089,6 +54105,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     if (started) ctx.stroke();
                 }
                 var sl = splitLines(s);
+                piCohortSplits(s).forEach(function(c) { line(c.value, c.color, 1.6); });
                 if (sl.a) line(sl.a.value, PI_SPLIT_A, 1.4);
                 if (sl.b) line(sl.b.value, PI_SPLIT_B, 1.4);
                 line(vs, '#E9E8E1', 2.2);
@@ -54241,6 +54258,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     + '<label class="dtw-field" for="dtwPiTitle">Name this test</label><input id="dtwPiTitle" class="dtw-in" placeholder="' + esc({ pilot: 'Season 2 pilot', trailer: 'Trailer A vs B', titles: 'Six titles', script: 'Second Helping, draft 3', concept: 'Second Helping' }[tab]) + '" maxlength="120" autocomplete="off">'
                     + '<label class="dtw-field">Add a second twin (optional; two audiences on one cut)</label><select id="dtwPiTwin2" class="dtw-in"><option value="">Just this twin</option>' + others + '</select>'
                     + '<label class="dtw-field">Panelists in the room</label><input id="dtwPiRoom" class="dtw-in" value="12" inputmode="numeric">'
+                    + piCohortBuilderHtml()
                     + quotas
                     + (tab === 'pilot' || tab === 'trailer' || tab === 'script' ? '<label class="dtw-pi-switch"><input type="checkbox" id="dtwPiPurgeNew"> Remove the file when the test is done</label>' : '')
                     + '<div class="dtw-lab-run"><button type="button" class="dtw-btn dtw-btn-primary" onclick="dtwPilotOpen()">Start the test</button><span class="dtw-price">' + esc(piPrice(tab)) + '</span></div>'
@@ -54311,8 +54329,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 splitLines(s);
                 var groups = {};
                 keys.forEach(function(k) { var g = sp[k].group || 'other'; (groups[g] = groups[g] || []).push(k); });
-                var order = ['gender', 'quadrant', 'age', 'ethnicity', 'orientation', 'education', 'lifecycle', 'fanship', 'other'];
-                var label = { gender: 'Gender', quadrant: 'Quadrant', age: 'Age', ethnicity: 'Ethnicity', orientation: 'Orientation', education: 'Education', lifecycle: 'Where they are with the title', fanship: 'Fanship', other: 'Other' };
+                var order = ['cohort', 'gender', 'quadrant', 'age', 'ethnicity', 'orientation', 'education', 'lifecycle', 'fanship', 'other'];
+                var label = { cohort: 'Cohort', gender: 'Gender', quadrant: 'Quadrant', age: 'Age', ethnicity: 'Ethnicity', orientation: 'Orientation', education: 'Education', lifecycle: 'Where they are with the title', fanship: 'Fanship', other: 'Other' };
                 function opts(sel) {
                     var o = '<option value="">None</option>';
                     order.forEach(function(g) { if (!groups[g]) return; o += '<optgroup label="' + esc(label[g] || g) + '">' + groups[g].map(function(k) { return '<option value="' + esc(k) + '"' + (sel === k ? ' selected' : '') + '>' + esc(sp[k].label || k) + ' (' + esc(sp[k].n) + ')</option>'; }).join('') + '</optgroup>'; });
@@ -54338,6 +54356,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 return head + body;
             }
             function piSayHtml(sl) { return esc(sl.line); }
+            function piRoomHasCohorts() {
+                var seen = {}, n = 0;
+                (((S.pilot || {}).group || {}).roster || []).forEach(function(r) { var k = String(r.segment || ''); if (k && !seen[k]) { seen[k] = 1; n++; } });
+                return n > 1;
+            }
             // ---- the room as a chat thread (Jenna, 2026-11-02: "you should be able to scroll in this chat thread and the
             // chats should wrap so you can see the whole thing"). Every remark up to the playhead, oldest first, each line in
             // full; the thread scrolls and follows the newest remark unless the reader has scrolled up to read back. Before
@@ -54357,7 +54380,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var hue = seatHue(r, i), url = r.portrait_url || '', nm = titleCase(r.name || '');
                 return '<div class="dtw-pi-seatrow' + (sl.lit ? ' lit' : '') + (opts.now ? ' now' : '') + '" tabindex="0" data-seat="' + Number(r.seat) + '" style="--hue:' + hue + '" aria-label="Who ' + esc(nm) + ' is">'
                     + '<span class="circ">' + esc(initials(nm)) + (url ? '<img src="' + esc(thumb(url)) + '" alt="" loading="lazy" onerror="this.remove()">' : '') + '</span>'
-                    + '<div class="txt"><div class="who"><span class="nm">' + esc(nm) + ', ' + esc(r.age || '') + '</span>' + (sl.clock ? '<span class="c">' + esc(sl.clock) + '</span>' : '') + '</div><div class="say">' + piSayHtml(sl) + '</div></div>'
+                    + '<div class="txt"><div class="who"><span class="nm">' + esc(nm) + ', ' + esc(r.age || '') + (piRoomHasCohorts() && r.segment ? ' <span class="cohort">' + esc(r.segment) + '</span>' : '') + '</span>' + (sl.clock ? '<span class="c">' + esc(sl.clock) + '</span>' : '') + '</div><div class="say">' + piSayHtml(sl) + '</div></div>'
                     + '<div class="bio">' + piSeatBio(r) + '</div></div>';
             }
             function piChipHtml(r, i) {
@@ -54557,11 +54580,20 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var frame = (q.moment || {}).frame || ('At ' + (q.playhead_clock || clockFmt(q.playhead_s)));
                 var probes = (q.probes_next || []).slice(0, 2).map(function(p) { return '<button type="button" class="dtw-pi-probe" onclick="dtwPilotAskAt(' + Number(q.playhead_s || 0) + ', \'' + esc(jsq(p)) + '\')">' + esc(p) + '</button>'; }).join('');
                 var st = String(q.stage || ''), failed = st === 'failed';
+                var byco = '';
+                if (q.read && Array.isArray(q.by_segment) && q.by_segment.length > 1 && piRoomHasCohorts()) {
+                    var bits = q.by_segment.map(function(b) {
+                        var top = (b.distribution || []).slice().sort(function(x, y) { return (Number(y.pct) || 0) - (Number(x.pct) || 0); })[0];
+                        var v = (b.yes_pct != null) ? (Math.round(Number(b.yes_pct)) + '% yes') : (b.average != null ? (Number(b.average).toFixed(1) + ' average') : (top ? (Math.round(Number(top.pct) || 0) + '% ' + String(top.label || '')) : ''));
+                        return v ? '<b>' + esc(b.segment || '') + '</b> ' + esc(v) : '';
+                    }).filter(Boolean);
+                    if (bits.length) byco = '<div class="dtw-pi-byco">By cohort: ' + bits.join(' \u00b7 ') + '</div>';
+                }
                 var status = '';
                 if (q.read) status = '<div class="dtw-muted" style="margin-top:4px">' + esc(q.read) + '</div>';
                 else if (st && st !== 'done' && st !== 'stopped' && !failed) status = '<div class="dtw-pi-working" data-qid="' + esc(q.id || '') + '"><span class="dtw-fg-pulse"></span><span>' + esc(cap(stageWords(q))) + '</span></div>';
                 if (failed && !probes) probes = '<button type="button" class="dtw-pi-probe" onclick="dtwPilotAskAt(' + Number(q.playhead_s || 0) + ', \'' + esc(jsq(q.q || '')) + '\')">Ask again</button>';
-                return '<div class="dtw-pi-voice"><span class="k">Prometheus, ' + esc(frame) + '</span><div>' + esc(q.q || '') + '</div>' + (q.framing ? '<div class="dtw-muted" style="margin-top:3px">' + esc(q.framing) + '</div>' : '') + status + voices + (probes ? '<div class="dtw-pi-probes">' + probes + '</div>' : '') + '</div>';
+                return '<div class="dtw-pi-voice"><span class="k">Prometheus, ' + esc(frame) + '</span><div>' + esc(q.q || '') + '</div>' + (q.framing ? '<div class="dtw-muted" style="margin-top:3px">' + esc(q.framing) + '</div>' : '') + status + byco + voices + (probes ? '<div class="dtw-pi-probes">' + probes + '</div>' : '') + '</div>';
             }
             function renderPilotThread(s) {
                 var qs = (s || {}).questions || [];
@@ -54608,10 +54640,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var room = '<span><i class="sw" style="background:#E9E8E1"></i>Room</span>';
                 if (!keys.length) return '<div class="dtw-pi-legend">' + room + '</div>';
                 splitLines(s);
+                piCohortSplits(s).forEach(function(c) { room += '<span class="coh"><i class="sw" style="background:' + c.color + '"></i>' + esc(c.label) + ' (' + esc(c.n) + ')</span>'; });
                 var groups = {};
                 keys.forEach(function(k) { var g = sp[k].group || 'other'; (groups[g] = groups[g] || []).push(k); });
-                var order = ['gender', 'quadrant', 'age', 'ethnicity', 'orientation', 'education', 'lifecycle', 'fanship', 'other'];
-                var label = { gender: 'Gender', quadrant: 'Quadrant', age: 'Age', ethnicity: 'Ethnicity', orientation: 'Orientation', education: 'Education', lifecycle: 'Where they are with the title', fanship: 'Fanship', other: 'Other' };
+                var order = ['cohort', 'gender', 'quadrant', 'age', 'ethnicity', 'orientation', 'education', 'lifecycle', 'fanship', 'other'];
+                var label = { cohort: 'Cohort', gender: 'Gender', quadrant: 'Quadrant', age: 'Age', ethnicity: 'Ethnicity', orientation: 'Orientation', education: 'Education', lifecycle: 'Where they are with the title', fanship: 'Fanship', other: 'Other' };
                 function opts(sel) {
                     var o = '<option value="">None</option>';
                     order.forEach(function(g) { if (!groups[g]) return; o += '<optgroup label="' + esc(label[g] || g) + '">' + groups[g].map(function(k) { return '<option value="' + esc(k) + '"' + (sel === k ? ' selected' : '') + '>' + esc(sp[k].label || k) + ' (' + esc(sp[k].n) + ')</option>'; }).join('') + '</optgroup>'; });
@@ -54721,6 +54754,54 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 dtwTab(tab); renderPilotConsole();
                 if (s && s.lineage && s.lineage.parent && s.scorecard) dtwPilotCompare();
             };
+            // ---- cohorts (Jenna, 2026-11-02): cut the audience into named groups at setup, each with its composition
+            // in words (from the twin's base: men, women, men with children, Spanish speakers) and the panelists wanted
+            // in it; every cohort stands for its own share of the twin, and the results split by cohort.
+            var PI_COHORT_COLORS = ['#E682FF', '#3358FF', '#C7F23E', '#B7B3D8', '#FF9F43', '#2ED8C3', '#F25C54', '#8E3FA8'];
+            var PI_COHORT_EXAMPLES = [['Men', 'men'], ['Women', 'women'], ['Dads', 'men with children'], ['Spanish speakers', 'Spanish speakers'], ['Under 35', 'adults 18 to 34'], ['Parents', 'parents'], ['College grads', 'college graduates'], ['Suburban', 'suburban']];
+            function piCohortBuilderHtml() {
+                var n = Number(S.piCohortN || 1);
+                var opts = [1, 2, 3, 4, 5, 6].map(function(k) { return '<option value="' + k + '"' + (k === n ? ' selected' : '') + '>' + (k === 1 ? 'One room, no cohorts' : k + ' cohorts') + '</option>'; }).join('');
+                var rows = '';
+                if (n > 1) {
+                    rows = '<div class="dtw-pi-cohort-head"><span>Name, then who is in it</span><span>Seats</span></div>';
+                    for (var i = 0; i < n; i++) {
+                        var ex = PI_COHORT_EXAMPLES[i % PI_COHORT_EXAMPLES.length], saved = (S.piCohorts || [])[i] || {};
+                        rows += '<div class="dtw-pi-cohort"><input class="dtw-in dtw-pi-coh-name" placeholder="' + esc(ex[0]) + '" value="' + esc(saved.name || '') + '" maxlength="60" aria-label="Cohort name">'
+                            + '<input class="dtw-in dtw-pi-coh-seats" inputmode="numeric" value="' + esc(saved.seats || 4) + '" aria-label="Seats in this cohort">'
+                            + '<input class="dtw-in dtw-pi-coh-comp" placeholder="' + esc(ex[1]) + '" value="' + esc(saved.composition || '') + '" maxlength="160" aria-label="Who is in this cohort"></div>';
+                    }
+                    rows += '<div class="dtw-pi-fn">Describe each cohort in plain words from this audience (men with children, Spanish speakers, women 25 to 44, college grads $100k+). Each one stands for its own share of the whole audience, and the dial, the scorecard and every answer split by cohort.</div>';
+                }
+                return '<label class="dtw-field">Cohorts</label><select id="dtwPiCohortN" class="dtw-in" onchange="dtwPilotCohortN(this.value)">' + opts + '</select><div class="dtw-pi-cohorts" id="dtwPiCohorts">' + rows + '</div>';
+            }
+            function piReadCohorts() {
+                var n = Number(S.piCohortN || 1);
+                if (n <= 1) return [];
+                var names = document.querySelectorAll('#dtwPiCohorts .dtw-pi-coh-name'), comps = document.querySelectorAll('#dtwPiCohorts .dtw-pi-coh-comp'), seats = document.querySelectorAll('#dtwPiCohorts .dtw-pi-coh-seats');
+                var out = [];
+                for (var i = 0; i < names.length; i++) {
+                    var name = (names[i].value || '').trim(), comp = ((comps[i] || {}).value || '').trim(), k = parseInt((seats[i] || {}).value || '0', 10) || 0;
+                    if (!name && !comp) continue;
+                    if (!name || !comp) return null;
+                    out.push({ name: name, composition: comp, seats: Math.max(1, Math.min(24, k || 4)) });
+                }
+                if (out.length < 2) return null;
+                S.piCohorts = out;
+                return out;
+            }
+            window.dtwPilotCohortN = function(v) {
+                try { piReadCohorts(); } catch (_) {}
+                S.piCohortN = parseInt(v || '1', 10) || 1;
+                var box = el('dtwPiCohorts'); if (!box) return;
+                var tmp = document.createElement('div'); tmp.innerHTML = piCohortBuilderHtml();
+                var fresh = tmp.querySelector('#dtwPiCohorts'); if (fresh) box.innerHTML = fresh.innerHTML;
+                var room = el('dtwPiRoom'); if (room && S.piCohortN > 1) room.value = String(S.piCohortN * 4);
+            };
+            function piCohortSplits(s) {
+                var sp = ((s || {}).dial || {}).splits || {};
+                return Object.keys(sp).filter(function(k) { return sp[k].group === 'cohort'; }).map(function(k, i) { return { key: k, label: sp[k].label || k, n: sp[k].n, value: sp[k].value || [], color: PI_COHORT_COLORS[i % PI_COHORT_COLORS.length] }; });
+            }
             function piReadQuotas() {
                 var q = {};
                 var u = parseFloat((el('dtwPiQUnder') || {}).value || ''), w = parseFloat((el('dtwPiQWomen') || {}).value || ''), f = parseFloat((el('dtwPiQFans') || {}).value || ''), n = parseInt((el('dtwPiQSeen') || {}).value || '', 10);
@@ -54760,6 +54841,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (mode === 'script' && !text && !file) { if (st) st.textContent = 'Paste the script or upload it.'; return; }
                 var watchUrl = ((el('dtwPiWatchUrl') || {}).value || '').trim();
                 var body = { title: title, in_room: parseInt((el('dtwPiRoom') || {}).value || '12', 10) || 12, twins: other && other !== key ? [other] : [], mode: mode };
+                var cohorts = piReadCohorts();
+                if (cohorts === null) { if (st) st.textContent = 'Give every cohort a name and a composition.'; return; }
+                if (cohorts.length) { body.cohorts = cohorts; body.in_room = cohorts.reduce(function(a, c) { return a + c.seats; }, 0); }
                 if (watchUrl) body.watch_url = watchUrl;
                 if (cutTitle) body.cut_title = cutTitle;
                 if (mins > 0) body.runtime_s = Math.round(mins * 60);

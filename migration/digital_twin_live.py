@@ -223,6 +223,12 @@ def frame(sess: dict, twin: dict, t: float, image_b64: str, *, usage_extras: Opt
     seat_dials = live.setdefault('seat_dials', {})
     vals = []
     by_gender = {'F': [], 'M': []}
+    by_cohort = {}
+    try:
+        from migration.digital_twin_pilot import cohort_labels, cohort_key
+        cohorts = cohort_labels(roster)
+    except Exception:
+        cohorts, cohort_key = [], None
     for r in roster:
         sno = str(r.get('seat'))
         try:
@@ -235,18 +241,22 @@ def frame(sess: dict, twin: dict, t: float, image_b64: str, *, usage_extras: Opt
         g = str(r.get('gender') or '').upper()[:1]
         if g in by_gender:
             by_gender[g].append(v)
+        lab = str(r.get('segment') or '')
+        if lab in cohorts:
+            by_cohort.setdefault(lab, []).append(v)
     room = round(sum(vals) / len(vals), 2) if vals else DEFAULT_DIAL
     dial = sess.setdefault('dial', {'t': [], 'value': [], 'splits': {}})
     dial.setdefault('t', []).append(round(t, 2))
     dial.setdefault('value', []).append(room)
     splits = dial.setdefault('splits', {})
     split_now = {}
-    for key, label, g in (('women', 'Women', 'F'), ('men', 'Men', 'M')):
-        xs = by_gender.get(g) or []
+    split_defs = [(cohort_key(lab), lab, 'cohort', by_cohort.get(lab) or []) for lab in cohorts] if cohort_key else []
+    split_defs += [('women', 'Women', 'gender', by_gender.get('F') or []), ('men', 'Men', 'gender', by_gender.get('M') or [])]
+    for key, label, grp, xs in split_defs:
         if not xs:
             continue
         v = round(sum(xs) / len(xs), 2)
-        sp = splits.setdefault(key, {'label': label, 'group': 'gender', 'n': len(xs), 'value': []})
+        sp = splits.setdefault(key, {'label': label, 'group': grp, 'n': len(xs), 'value': []})
         # the split series rides the same clock as the room: pad to the room's length so the page can draw it point for point
         while len(sp['value']) < len(dial['value']) - 1:
             sp['value'].append(sp['value'][-1] if sp['value'] else v)

@@ -1099,13 +1099,13 @@ def dt_pilot_open(key):
     if err:
         return err
     body = request.get_json(silent=True) or {}
+    from migration import digital_twin_pilot as PI
+    from migration import digital_twin_room as ROOM
     twins = [payload]
     for ok in [str(k) for k in (body.get('twins') or []) if str(k) and str(k) != key][:3]:
         other, oerr = _twin_or_404(user, ok)
         if other:
             twins.append(other)
-    from migration import digital_twin_pilot as PI
-    from migration import digital_twin_room as ROOM
     from migration.digital_twin_synthesis import hydrate_identity_from_profile
     s3 = _s3()
     for t in twins:
@@ -1115,10 +1115,17 @@ def dt_pilot_open(key):
             traceback.print_exc()
     twins_by_key = {str((t.get('meta') or {}).get('key') or ''): t for t in twins}
     segments = body.get('segments') or None
+    # cohorts (Jenna, 2026-11-02): the audience cut into named groups at setup, each with its composition in
+    # words and the panelists wanted in it; every cohort stands for its own share of the twin, and the dial,
+    # the scorecard and the answers split by cohort
+    if not segments:
+        segments = PI.cohort_segments(body.get('cohorts'), key) or None
     try:
         in_room = int(body.get('in_room') or 0)
     except (TypeError, ValueError):
         in_room = 0
+    if segments and any(int(x.get('seats') or 0) for x in segments if isinstance(x, dict)):
+        in_room = sum(int(x.get('seats') or 0) or 1 for x in segments if isinstance(x, dict))
     in_room = in_room or DT.panelists_for(payload)
     title = str(body.get('title') or '')[:120]
     mode = str(body.get('mode') or 'pilot').strip().lower()

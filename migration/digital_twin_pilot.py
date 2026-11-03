@@ -795,10 +795,29 @@ _SPLIT_LABEL = {'women': 'Women', 'men': 'Men', 'avid': 'Avid', 'casual': 'Casua
                 'college': 'College graduates', 'no_college': 'No degree', 'fan_of_lead': 'Fans of the lead', 'not_fan_of_lead': 'Not fans of the lead'}
 
 
+def cohort_labels(roster: list) -> list:
+    """The cohort names in seat order when the room was cut into cohorts
+    (two or more segments), else []."""
+    seen = []
+    for r in roster or []:
+        lab = str(r.get('segment') or '').strip()
+        if lab and lab not in seen:
+            seen.append(lab)
+    return seen if len(seen) > 1 else []
+
+
+def cohort_key(label: str) -> str:
+    return 'cohort_' + (re.sub(r"[^0-9a-z]+", '_', str(label or '').lower()).strip('_') or 'x')
+
+
 def split_specs(roster: list, twin: dict) -> list:
     """[(key, label, group, predicate)] for every split the room can
-    make from what the seats carry."""
-    specs = [
+    make from what the seats carry. The cohorts the room was cut into
+    come first (Jenna, 2026-11-02)."""
+    specs = []
+    for lab in cohort_labels(roster):
+        specs.append((cohort_key(lab), lab, 'cohort', (lambda s, ll=lab: str(s.get('segment') or '') == ll)))
+    specs += [
         ('women', 'Women', 'gender', _is_woman), ('men', 'Men', 'gender', _is_man),
     ]
     for key, label in QUADRANTS:
@@ -1052,6 +1071,14 @@ def battery_scorecard(twin: dict, roster: list, segments: list, seat_dials: dict
     all_ids = [int(r['seat']) for r in roster]
     room_q, room_mean = run(all_ids, 'Whole room', room_people, 'room')
     quadrants = [{'key': 'total', 'label': 'Total', 'n': len(roster), 'people': int(room_people), **_money(room_q)}]
+    seg_people = {str(sg.get('label')): int(sg.get('people') or 0) for sg in (segments or []) if isinstance(sg, dict)}
+    for lab in cohort_labels(roster):   # the cohorts the room was cut into, each read on its own
+        ids = [int(r['seat']) for r in roster if str(r.get('segment') or '') == lab]
+        if not ids:
+            continue
+        ppl = int(seg_people.get(lab) or 0) or messy_count(subject, f"cohort-{lab}", sum(people_by_seat.get(i, 0) for i in ids))
+        q, _m = run(ids, lab, ppl, f"cohort-{cohort_key(lab)}")
+        quadrants.append({'key': cohort_key(lab), 'label': lab, 'group': 'cohort', 'n': len(ids), 'people': int(ppl), **_money(q)})
     for key, label in QUADRANTS:
         ids = [int(r['seat']) for r in roster if quadrant_of(r) == key]
         if not ids:
@@ -1654,6 +1681,26 @@ MODE_TITLE_WORD = {'pilot': 'Pilot test', 'feature': 'Screening', 'episode': 'Ep
                    'title': 'Title test', 'key_art': 'Key art test', 'script': 'Script read', 'concept': 'Concept test'}
 
 
+def cohort_segments(cohorts, twin_key: str) -> list:
+    """The segments a setup's cohorts become (Jenna, 2026-11-02): each
+    cohort's name, its composition in words (the filter), the seats
+    wanted in it. [] when there are fewer than two usable cohorts."""
+    out = []
+    for c in (cohorts or [])[:8]:
+        if not isinstance(c, dict):
+            continue
+        name = ' '.join(str(c.get('name') or c.get('label') or '').split())[:60]
+        if not name:
+            continue
+        try:
+            n_seats = int(c.get('seats') or c.get('panelists') or 0)
+        except (TypeError, ValueError):
+            n_seats = 0
+        out.append({'label': name, 'composition': ' '.join(str(c.get('composition') or name).split())[:160],
+                    'seats': max(1, min(24, n_seats)) if n_seats else 0, 'twin': str(twin_key or '')})
+    return out if len(out) >= 2 else []
+
+
 def open_session(twins: list, *, segments: Optional[list] = None, in_room: int = DEFAULT_IN_ROOM,
                  title: str = '', created_by: str = '', session_id: str = '',
                  media: Optional[dict] = None, mode: str = 'pilot', logline: str = '', text: str = '',
@@ -1681,10 +1728,13 @@ def open_session(twins: list, *, segments: Optional[list] = None, in_room: int =
             opts = []
     note = {'title': 'Name the test, type the titles and the logline.', 'key_art': 'Name the test and upload the art.', 'script': 'Name the test and add the script.',
             'concept': 'Name the test and paste the concept.', 'trailer': 'Name the test and add the trailer.', 'spot': 'Name the test and add the spot.'}.get(mode, 'Name the test and add the cut, or paste a watch link.')
+    cohorts = [{'label': str(sg.get('label') or ''), 'composition': str(sg.get('composition') or ''), 'seats': int(sg.get('seats') or 0),
+                'people': int(sg.get('people') or 0), 'share_pct': float(sg.get('share_pct') or 0), 'filter': dict(sg.get('filter') or {})}
+               for sg in (group.get('segments') or []) if isinstance(sg, dict) and sg.get('composition')]
     return {
         'id': sid, 'kind': 'pilot',
         'title': name or f"{MODE_TITLE_WORD.get(mode, 'Pilot test')}: {names}",
-        'group': group, 'questions': [],
+        'group': group, 'questions': [], 'cohorts': cohorts,
         'media': media, 'status': 'draft',
         'mode': mode, 'genre': '', 'cut_label': 'Cut A' if mode not in ('trailer', 'spot') else 'Trailer A', 'lineage': None, 'rough_cut': bool(rough_cut),
         'critics_room': bool(critics_room),
@@ -2240,7 +2290,7 @@ __all__ = [
     'mark_play_paid', 'mark_paid', 'mark_playing', 'stop_session', 'rename_session', 'set_options',
     'stamp_question', 'can_delete', 'can_view_media', 'remove_session', 'delete_session', 'purge_media',
     'deleted_pilot_key', 'media_hash', 'build_beats', 'build_scenes', 'build_beats_from_scenes', 'seat_dial', 'blend_dial', 'seat_events', 'persona_events',
-    'aggregate_dial', 'split_dial', 'split_specs', 'all_splits', 'quadrant_of', 'scorecard', 'battery_scorecard', 'norms_for', 'norm_metrics', 'record_norms',
+    'aggregate_dial', 'split_dial', 'split_specs', 'all_splits', 'cohort_labels', 'cohort_key', 'cohort_segments', 'quadrant_of', 'scorecard', 'battery_scorecard', 'norms_for', 'norm_metrics', 'record_norms',
     'attach_norms', 'probe_points', 'fallback_guide', 'question_window', 'seat_window', 'ask_stimulus', 'format_for', 'norms_genre',
     'session_csv', 'session_lines', 'public_session', 'signed_media_url',
     'media_s3_key', 'accept_upload_name', 'ffmpeg_available', 'probe_duration',

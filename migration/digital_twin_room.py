@@ -620,6 +620,7 @@ def persona_card(twin: dict, seat: dict, session_seed: str) -> dict:
     card = {'seat': seat.get('seat'), 'name': seat.get('name'), 'age': age, 'gender': gender, 'city': seat.get('city'), 'segment': str(seat.get('segment') or ''),
             'income': income, 'education': education, 'parental': parental, 'relationship_status': relationship,
             'orientation': orientation, 'occupation': occupation, 'ethnicity': ethnicity,
+            'language': str(seat.get('language') or ''), 'cohort': str(seat.get('cohort') or ''),
             'party': party, 'urbanicity': urbanicity, 'issues': my_issues, 'civic': civic, 'base_kind': base_kind,
             'values': str(ident0.get('values') or ''),
             'lifecycle_stage': stage, 'relationship_to_subject': rel, 'how_often': freq, 'owns': owns,
@@ -792,6 +793,9 @@ def persona_bio(card: dict, twin: dict, sid: str) -> str:
     edu = _education_words(card.get('education') or '', pron.capitalize())
     if edu:
         sent.append(edu + '.')
+    if str(card.get('language') or '').strip().lower() == 'spanish':
+        # a Spanish-speaking cohort (2026-11-02): the seat's home language is part of who they are and what they watch
+        sent.append(f"At home {pron} {'speak' if pron == 'they' else 'speaks'} Spanish, and {pron} {'move' if pron == 'they' else 'moves'} between Spanish and English TV without thinking about it.")
     civic = bool(card.get('civic'))
     urb = str(card.get('urbanicity') or '').strip().lower()
     if urb and card.get('city'):
