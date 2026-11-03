@@ -51071,7 +51071,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         </div><!-- End hedgeFundIQView -->
 
 
-        <!-- DIGITAL TWINS IQ VIEW (2026-10-26, Jenna: twins, Greenlight (Script read and Concept since 2026-10-28), Launch Lab, Spend Engine, Focus Group IQ, Pilot Testing, How to) -->
+        <!-- DIGITAL TWINS IQ VIEW (2026-10-26, Jenna: twins, Greenlight (Script read and Concept since 2026-10-28), Launch (the plan and the Spend Engine in one tab since 2026-11-03), Focus Group IQ, Pilot Testing, How to) -->
         <!-- Redesign 2026-10-26 (Jenna: 'it feels disjointed and confusing'): one spine for the selected twin, one tab rail for the labs, the same lab anatomy on every tab (input card left, results right), How to as a drawer. -->
         <!-- Focus Group IQ 2026-10-27 (Jenna picked option F, 'love it go for it'): the room's seats as a row of circular portraits above the title and the question (name, age, city under each; the bio on click), the room as a conversation thread with the composer under it, the tally pinned on the right, a seat's bio as a popover, the saved rooms and the room builder as drawers; with no room open, the landing (the claim, the three steps, the saved rooms as cards, no placeholder faces; Jenna 2026-10-27: 'I dont like the circles'). -->
         <style>
@@ -51913,7 +51913,6 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     <button type="button" class="dtw-seg active" data-tab="twins" role="tab" onclick="dtwTab('twins')">Twins</button>
                     <button type="button" class="dtw-seg" data-tab="greenlight" role="tab" onclick="dtwTab('greenlight')">Greenlight</button>
                     <button type="button" class="dtw-seg" data-tab="launch" role="tab" onclick="dtwTab('launch')">Launch</button>
-                    <button type="button" class="dtw-seg" data-tab="spend" role="tab" onclick="dtwTab('spend')">Spend Engine</button>
                     <button type="button" class="dtw-seg" data-tab="panel" role="tab" onclick="dtwTab('panel')">Focus Group IQ</button>
                     <button type="button" class="dtw-seg" data-tab="pilot" role="tab" onclick="dtwTab('pilot')">Pilot Testing</button>
                     <button type="button" class="dtw-seg" data-tab="trailer" role="tab" onclick="dtwTab('trailer')">Trailers</button>
@@ -51946,6 +51945,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     <div id="dtwCoConsole" class="dtw-pi dtw-gl-body" hidden></div>
                 </section>
                 <section id="dtwTabLaunch" class="dtw-pane">
+                    <!-- Launch is two options in one tab (Jenna 2026-11-03: "combine launch and spend engine into one"): the plan before money goes out, then the Spend Engine that runs it day by day. -->
+                    <div class="dtw-gl-opts" role="tablist" aria-label="Launch options">
+                        <button type="button" class="dtw-gl-opt dtw-la-opt active" data-la="plan" role="tab" aria-selected="true" onclick="dtwLaunchPick('plan')"><span class="t">The plan</span><span class="d">A plan and budget before money goes out. Three plans side by side, odds and ranges week by week, the levers ranked, and a holdout sized to prove lift.</span></button>
+                        <button type="button" class="dtw-gl-opt dtw-la-opt" data-la="spend" role="tab" aria-selected="false" onclick="dtwLaunchPick('spend')"><span class="t">Spend Engine</span><span class="d">The plan, run forward day by day. Daily spend and signal by channel, the moves that earn more each day, tests inside the flight, a lift read, and the savings ledger.</span></button>
+                    </div>
+                    <div id="dtwLaBody" class="dtw-gl-body">
                     <div class="dtw-lab">
                         <div>
                             <div class="dtw-card">
@@ -51964,8 +51969,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         </div>
                         <div id="dtwLaResults"></div>
                     </div>
-                </section>
-                <section id="dtwTabSpend" class="dtw-pane">
+                    </div>
+                    <div id="dtwSpBody" class="dtw-gl-body" hidden>
                     <div class="dtw-lab">
                         <div>
                             <div class="dtw-card">
@@ -51996,6 +52001,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                             </div>
                         </div>
                         <div id="dtwSpResults"></div>
+                    </div>
                     </div>
                 </section>
                 <section id="dtwTabPanel" class="dtw-pane dtw-pane-fg">
@@ -52162,6 +52168,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             window.dtwTab = function(tab) {
                 if (tab === 'howto') { dtwHowtoOpen(true); return; }
                 if (GL_OPTIONS.indexOf(tab) >= 0) { S.glOption = tab; tab = 'greenlight'; }
+                // Launch holds the plan and the Spend Engine (2026-11-03): 'spend' lands on Launch with that option picked
+                if (tab === 'spend') { S.laOption = 'spend'; tab = 'launch'; }
+                else if (tab === 'launch' && S.laOption !== 'spend') { S.laOption = 'plan'; }
                 if (TABS.indexOf(tab) < 0) tab = 'twins';
                 S.tab = tab;
                 document.querySelectorAll('#digitalTwinsIQView .dtw-seg').forEach(function(b) { b.classList.toggle('active', b.getAttribute('data-tab') === tab); });
@@ -52173,11 +52182,28 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var piT = tab === 'greenlight' ? (GL_OPTIONS.indexOf(S.glOption) >= 0 ? S.glOption : 'script') : (PI_HOST[tab] ? tab : '');
                 if (piT) { S.piTab = piT; if (S.pilot && piTabFor(S.pilot.mode) !== piT) { S.pilot = null; } if (tab === 'greenlight') syncGreenlightOptions(); renderPilotConsole(); }
                 if (tab === 'norms') { renderNormsTab(); }
-                if (tab === 'spend') { syncSpendSources(); if (!S.plan) { var plans = ((S.twin || {}).labs || {}).spend || []; if (plans.length) { S.plan = plans[0]; S.spendDay = 1; } } renderSpend(); }
-                if (tab === 'launch' && el('dtwLaResults') && !el('dtwLaResults').innerHTML) renderEmpty('dtwLaResults', 'launch');
+                if (tab === 'launch') {
+                    syncLaunchOptions();
+                    if (S.laOption === 'spend') { syncSpendSources(); if (!S.plan) { var plans = ((S.twin || {}).labs || {}).spend || []; if (plans.length) { S.plan = plans[0]; S.spendDay = 1; } } renderSpend(); }
+                    else if (el('dtwLaResults') && !el('dtwLaResults').innerHTML) renderEmpty('dtwLaResults', 'launch');
+                }
                 var body = document.querySelector('#digitalTwinsIQView .dtw-body'); if (body) body.scrollTop = 0;
                 remember();
                 try { if (typeof _pmRefreshStarterChips === 'function') _pmRefreshStarterChips(); } catch (_) {}
+            };
+            // The two Launch options: the plan and the Spend Engine, one body shown at a time.
+            var LA_OPTIONS = ['plan', 'spend'];
+            function syncLaunchOptions() {
+                var opt = LA_OPTIONS.indexOf(S.laOption) >= 0 ? S.laOption : 'plan';
+                S.laOption = opt;
+                document.querySelectorAll('#dtwTabLaunch .dtw-la-opt').forEach(function(b) { var on = b.getAttribute('data-la') === opt; b.classList.toggle('active', on); b.setAttribute('aria-selected', on ? 'true' : 'false'); });
+                var la = el('dtwLaBody'), sp = el('dtwSpBody');
+                if (la) la.hidden = opt !== 'plan';
+                if (sp) sp.hidden = opt !== 'spend';
+            }
+            window.dtwLaunchPick = function(opt) {
+                S.laOption = LA_OPTIONS.indexOf(opt) >= 0 ? opt : 'plan';
+                dtwTab(S.laOption === 'spend' ? 'spend' : 'launch');
             };
             // The two Greenlight options: the chooser at the top of the pane, one console shown at a time.
             function syncGreenlightOptions() {

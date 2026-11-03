@@ -677,7 +677,8 @@ class PartnerSurface(unittest.TestCase):
         self.assertNotIn('old', [x['id'] for x in r7.get_json()['twin']['runs']])
         self.assertIn('old', [x['id'] for x in SYN.load_twin(s3, key)['runs']])
         self.assertEqual(c.get(f'/api/digital-twins/{key}/status').get_json()['runs'], len(r7.get_json()['twin']['runs']))
-        self.assertEqual(c.post(f'/api/digital-twins/{key}/greenlight/old/ask-the-room', json={}).status_code, 404)
+        # the retired route is gone: 404, or 405 since the twin's own <path:key> GET and DELETE routes (2026-10-28) now match the path
+        self.assertIn(c.post(f'/api/digital-twins/{key}/greenlight/old/ask-the-room', json={}).status_code, (404, 405))
         sys.modules.pop('app', None)
 
 
@@ -813,7 +814,16 @@ class Page(unittest.TestCase):
         Script Reads and Concepts tabs fold into it; the odds run is gone."""
         bar = self.html[self.html.index('<div class="dtw-segs" role="tablist">'):self.html.index('<div class="dtw-fg-acts" id="dtwFgActs"')]
         labels = re.findall(r'role="tab" onclick="dtwTab\(\'[a-z]+\'\)">([^<]+)</button>', bar)
-        self.assertEqual(labels, ['Twins', 'Greenlight', 'Launch', 'Spend Engine', 'Focus Group IQ', 'Pilot Testing', 'Trailers', 'Titles and Key Art', 'Norms'])
+        # Launch holds the plan and the Spend Engine as two options (Jenna 2026-11-03: "combine launch and spend engine into one")
+        self.assertEqual(labels, ['Twins', 'Greenlight', 'Launch', 'Focus Group IQ', 'Pilot Testing', 'Trailers', 'Titles and Key Art', 'Norms'])
+        self.assertNotIn('id="dtwTabSpend"', self.html)
+        launch = self.html[self.html.index('<section id="dtwTabLaunch"'):self.html.index('<section id="dtwTabPanel"')]
+        for need in ('data-la="plan"', 'data-la="spend"', "dtwLaunchPick('plan')", "dtwLaunchPick('spend')", '>The plan<', '>Spend Engine<',
+                     'id="dtwLaBody"', 'id="dtwSpBody"', 'id="dtwLaResults"', 'id="dtwSpResults"', 'id="dtwSpSource"'):
+            self.assertIn(need, launch, need)
+        self.assertIn("if (tab === 'spend') { S.laOption = 'spend'; tab = 'launch'; }", self.block)
+        self.assertIn('window.dtwLaunchPick = function(opt)', self.block)
+        self.assertIn('function syncLaunchOptions()', self.block)
         for gone in ('data-tab="script"', 'data-tab="concept"', 'id="dtwTabScript"', 'id="dtwTabConcept"', '>Script Reads<', '>Concepts<'):
             self.assertNotIn(gone, self.html, gone)
         pane = self.html[self.html.index('<section id="dtwTabGreenlight"'):self.html.index('<section id="dtwTabLaunch"')]

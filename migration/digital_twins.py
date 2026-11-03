@@ -653,8 +653,8 @@ HOW_TO = [
         'type_this': ['Put the signal-led plan in the Spend Engine on the rule: max 15% a day', 'Activate this plan in the Spend Engine: Meta $60K, YouTube $40K over 14 days, approve by chip',
                       'Approve the day 3 move on the Gilmore Girls plan'],
         'attach': 'Attach the budget sheet (xlsx or csv) or paste the channels.',
-        'comes_back': 'The day strip, the channel table, the moves feed and the ledger on the Spend Engine tab. Approving a move writes it to the ledger and the moves list for your buyers. Export moves gives the CSV; the Attribution IQ tracking intake measures the plan with the package prefilled. Connected-account execution is switched on per account by Crosswalk; the Connect accounts card files the request.',
-        'cost_key': 'digital_twin_spend', 'export': 'Export moves (CSV) on the Spend Engine tab; the plan also exports with the twin.',
+        'comes_back': 'The day strip, the channel table, the moves feed and the ledger under Spend Engine on the Launch tab. Approving a move writes it to the ledger and the moves list for your buyers. Export moves gives the CSV; the Attribution IQ tracking intake measures the plan with the package prefilled. Connected-account execution is switched on per account by Crosswalk; the Connect accounts card files the request.',
+        'cost_key': 'digital_twin_spend', 'export': 'Export moves (CSV) under Spend Engine on the Launch tab; the plan also exports with the twin.',
     },
     {
         'id': 'panel', 'title': 'Focus Group IQ',
@@ -789,7 +789,7 @@ def how_to(price_fn=None) -> dict:
                       'Everything here can be typed to Prometheus or done on this page. Type the example lines as written, with your own subject, '
                       'and attach files with the paper clip in the chat.'),
             'items': items, 'pricing': pricing_lines(price_fn),
-            'where': ('Twins land on the Twins tab; script reads and concept tests on the Greenlight tab under their option; Launch runs on the Launch tab and in '
+            'where': ('Twins land on the Twins tab; script reads and concept tests on the Greenlight tab under their option; Launch plans and the Spend Engine on the Launch tab (its two options) and in '
                       'the twin\'s Runs list; focus group sessions on the Focus Group IQ tab; watches on the Pilot Testing tab; trailer, title and key art tests on '
                       'their own tabs; the norms on the Norms tab. Prometheus confirms every one in the chat. Delete a twin from the Twins tab; you can undo for 30 days.')}
 
