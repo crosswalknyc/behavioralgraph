@@ -21013,7 +21013,8 @@ def _user_can_open_flywheel(user, key, label=''):
 def _flywheel_title_from_name(stem):
     """Turn a file stem into something a person would call the study."""
     import re as _re
-    s = _re.sub(r'_\d{4}_\d{2}_\d{2}$', '', stem)       # trailing date
+    s = _re.sub(r'_\d{2}_\d{2}_\d{4}(?:_\d{2}_\d{2})?$', '', stem)   # the engine's stamp, MM_DD_YYYY[_HH_MM] (2026-11-03)
+    s = _re.sub(r'_\d{4}_\d{2}_\d{2}$', '', s)          # or a trailing YYYY_MM_DD
     s = s.replace('_', ' ').strip()
     return s or stem
 
