@@ -53051,7 +53051,7 @@ def _v1_draft_cache_put(prompt: str, draft, candidates, extra: str = ''):
         traceback.print_exc()
 
 
-def _v1_interpret_capped(prompt, identity_context=None):
+def _v1_interpret_capped(prompt, identity_context=None, actor=None):
     """Shared interpret helper used by /check and /run. Runs the Claude
     interpret step against the current profile catalog and returns
     (draft_dict, candidates_list) or raises with a jsonify error.
@@ -53099,10 +53099,20 @@ def _v1_interpret_capped(prompt, identity_context=None):
         prompt, chat_history=[], master_categories=MASTER_CATEGORIES,
         candidate_matches=candidates, identity_context=ictx or None,
     )
+    # Stamp the partner account on the usage record (2026-11-03,
+    # per-user hard cost): without it every /check and /run interpret
+    # call sat in the spend report with no account on it.
+    _usage_extras = None
+    if isinstance(actor, dict) and (actor.get('username') or actor.get('email')):
+        _usage_extras = {
+            'user': actor.get('username') or '',
+            'user_email': (actor.get('email') or '').strip().lower(),
+        }
     interp = _run_nflx_claude_agent(
         system_prompt=system_prompt, user_prompt=user_prompt,
         max_tokens=8192, temperature=0.4,
-        usage_tag=('interpret', 'partner_api'),
+        usage_tag=(('interpret', 'partner_api', _usage_extras)
+                   if _usage_extras else ('interpret', 'partner_api')),
     )
     if not interp.get('success'):
         return None, candidates, interp
@@ -53223,7 +53233,7 @@ _V1_INTERPRET_WAIT_S = float(os.environ.get('V1_INTERPRET_WAIT_S', '5'))
 _V1_INTERPRET_SEM = threading.BoundedSemaphore(_V1_INTERPRET_SLOTS)
 
 
-def _v1_interpret(prompt, identity_context=None):
+def _v1_interpret(prompt, identity_context=None, actor=None):
     """Interpret, but never more than _V1_INTERPRET_SLOTS at a time."""
     if not _V1_INTERPRET_SEM.acquire(timeout=_V1_INTERPRET_WAIT_S):
         try:
@@ -53250,7 +53260,8 @@ def _v1_interpret(prompt, identity_context=None):
                 prompt = _pcuts.rewrite_for_interpret(prompt, _ph)
         except Exception:
             _ph = None
-        draft, cands, interp = _v1_interpret_capped(prompt, identity_context=identity_context)
+        draft, cands, interp = _v1_interpret_capped(
+            prompt, identity_context=identity_context, actor=actor)
         if _ph and isinstance(draft, dict):
             try:
                 _pcuts.apply_to_draft(draft, _ph, prompt)
@@ -56825,7 +56836,7 @@ def _v1_build_brief_summary(draft, decision, d_type=None, cuts=None,
 
 
 def _v1_conclude(prompt, run_avid=True, identity_context=None,
-                 competitor_brands=None):
+                 competitor_brands=None, actor=None):
     """THE single decision function for /api/v1/profiles/check and
     /api/v1/profiles/run. Runs interpret -> promoters -> normalize ->
     spec construction -> enqueue-validation mirror, identically for
@@ -56851,7 +56862,7 @@ def _v1_conclude(prompt, run_avid=True, identity_context=None,
     nothing on either route)."""
     try:
         draft, candidates, interp = _v1_interpret(
-            prompt, identity_context=identity_context)
+            prompt, identity_context=identity_context, actor=actor)
         if draft is None:
             try:
                 print(f"[v1_conclude] interpret failed: "
@@ -57620,7 +57631,8 @@ def api_v1_profiles_check():
     # host enforces at enqueue time.
     conclusion, err_resp = _v1_conclude(prompt, run_avid=run_avid,
                                         identity_context=identity_ctx,
-                                        competitor_brands=competitor_brands)
+                                        competitor_brands=competitor_brands,
+                                        actor=user)
     if err_resp is not None:
         return err_resp
 
@@ -57826,7 +57838,8 @@ def api_v1_profiles_run():
     # the /check the partner quoted from.
     conclusion, err_resp = _v1_conclude(prompt, run_avid=run_avid,
                                         identity_context=identity_ctx,
-                                        competitor_brands=competitor_brands)
+                                        competitor_brands=competitor_brands,
+                                        actor=user)
     if err_resp is not None:
         return err_resp
 

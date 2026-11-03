@@ -34,17 +34,29 @@ CSV_COLUMNS = (
     "total_openai_spend",
 )
 
-# Labels that are not a person. Leftover vs the day's billed total
-# is split across these rows, never smeared onto a user.
+# Named rows for spend that is not a person's work (2026-11-03, Jenna:
+# "accurately capturing hard cost spend per user"). Leftover vs the
+# day's billed total is split across these rows in this order; what no
+# computed figure explains lands on "billed, not logged". Never smeared
+# onto a user. Mirrors migration/daily_cost_report.fold_system_residual.
 TRENDS_USERNAME = "trends and rankers"
+AGENTS_USERNAME = "agents off the build server"
 LOCAL_OPS_USERNAME = "local-ops"
+NO_RUN_USERNAME = "build server, no run attached"
+OTHER_KEYS_USERNAME = "other api keys"
+UNLOGGED_USERNAME = "billed, not logged"
+# Legacy names (store rows written before 2026-11-03); recognized on read.
 UNTAGGED_USERNAME = "untagged box"
 OTHER_USERNAME = "other"
 SYSTEM_USERNAME = "system"
 SYSTEM_COMPANY = "system"
 SYSTEM_ROW_ORDER = (
     TRENDS_USERNAME,
+    AGENTS_USERNAME,
     LOCAL_OPS_USERNAME,
+    NO_RUN_USERNAME,
+    OTHER_KEYS_USERNAME,
+    UNLOGGED_USERNAME,
     UNTAGGED_USERNAME,
     OTHER_USERNAME,
     SYSTEM_USERNAME,
@@ -54,9 +66,15 @@ UNASSIGNABLE_USERS = frozenset({
     "local-ops",
     "trends_ranker",
     "trends and rankers",
+    "agents off the build server",
+    "agents",
+    "dev key",
+    "build server, no run attached",
     "untagged box",
     "untagged",
+    "other api keys",
     "other",
+    "billed, not logged",
     "system",
 })
 
@@ -132,8 +150,18 @@ def _canonical_system_row(label: str) -> str:
     lab = (label or "").strip().lower()
     if lab in ("trends and rankers", "trends_ranker", "trends", "rankers"):
         return TRENDS_USERNAME
+    if lab in ("agents off the build server", "agents", "dev key",
+               "agent runs", "agent_runs"):
+        return AGENTS_USERNAME
     if lab in ("local-ops", "local ops", "localops"):
         return LOCAL_OPS_USERNAME
+    if lab in ("build server, no run attached", "no run", "no-run",
+               "build server no run"):
+        return NO_RUN_USERNAME
+    if lab in ("other api keys", "other keys"):
+        return OTHER_KEYS_USERNAME
+    if lab in ("billed, not logged", "unlogged", "not logged"):
+        return UNLOGGED_USERNAME
     if lab in ("untagged box", "untagged", "untagged box spend"):
         return UNTAGGED_USERNAME
     if lab in ("other",):
@@ -170,9 +198,11 @@ def _round2(v: float) -> float:
 
 
 def fold_system_residual(anth: dict, day_total, entry=None) -> dict:
-    """Keep assignable people. Leftover vs the day's billed total
-    is split onto trends and rankers, local-ops, untagged box, and
-    other. Any remainder after those asks lands on other."""
+    """Keep assignable people. Leftover vs the day's billed total is
+    split onto the named rows: trends and rankers, agents off the build
+    server, local-ops, build server work with no run attached, other
+    api keys, and finally billed-not-logged for whatever no computed
+    figure explains. Never spreads a remainder onto a user."""
     people = {}
     for k, v in (anth or {}).items():
         lab = str(k or "").strip().lower()
@@ -187,14 +217,20 @@ def fold_system_residual(anth: dict, day_total, entry=None) -> dict:
 
     day = entry if isinstance(entry, dict) else {}
     detail = (day.get("detail") or {}) if day else {}
+    box = detail.get("box") or {}
+    agent_ask = _round2(day.get("agent_runs") or 0.0)
+    # agent_runs travels INSIDE the trends figure (memo), so the trends
+    # row is the trends figure net of it.
+    trends_ask = _round2(max(0.0, float(day.get("trends") or 0.0) - agent_ask))
     local_ops_ask = _round2(
         detail.get("local_ops_usd")
         if detail.get("local_ops_usd") is not None
         else 0.0)
-    trends_ask = _round2(day.get("trends") or 0.0)
-    system_ch = _round2(day.get("system") or 0.0)
-    untagged_ask = _round2(max(0.0, system_ch - local_ops_ask))
+    no_run_ask = _round2(box.get("no_run_usd")
+                         if box.get("no_run_usd") is not None
+                         else (box.get("non_run_usd") or 0.0))
     other_ask = _round2(day.get("other") or 0.0)
+    system_ch = _round2(day.get("system") or 0.0)
 
     def take(asked: float) -> float:
         nonlocal leftover
@@ -202,25 +238,27 @@ def fold_system_residual(anth: dict, day_total, entry=None) -> dict:
         leftover = _round2(leftover - amt)
         return amt
 
-    # Named asks first. If the day has no channel fields, the whole
-    # leftover falls through to other.
     has_channels = any(v > 0.0 for v in (
-        trends_ask, local_ops_ask, system_ch, other_ask))
+        trends_ask, agent_ask, local_ops_ask, no_run_ask, other_ask,
+        system_ch))
     if has_channels:
         t = take(trends_ask)
         if t:
             people[TRENDS_USERNAME] = t
+        a = take(agent_ask)
+        if a:
+            people[AGENTS_USERNAME] = a
         lo = take(local_ops_ask)
         if lo:
             people[LOCAL_OPS_USERNAME] = lo
-        u = take(untagged_ask)
-        if u:
-            people[UNTAGGED_USERNAME] = u
-        o = take(other_ask + leftover)
+        nr = take(no_run_ask)
+        if nr:
+            people[NO_RUN_USERNAME] = nr
+        o = take(other_ask)
         if o:
-            people[OTHER_USERNAME] = o
-    else:
-        people[OTHER_USERNAME] = leftover
+            people[OTHER_KEYS_USERNAME] = o
+    if leftover > 0.0:
+        people[UNLOGGED_USERNAME] = leftover
     return {k: _round2(v) for k, v in people.items() if _round2(v) > 0.0}
 
 
@@ -388,8 +426,9 @@ def build_month(year: int, month: int, *, s3=None, users=None,
 __all__ = [
     "BUCKET", "STORE_KEY", "USERS_KEY", "CSV_COLUMNS",
     "UNASSIGNABLE_USERS", "SYSTEM_USERNAME", "SYSTEM_COMPANY",
-    "TRENDS_USERNAME", "LOCAL_OPS_USERNAME", "UNTAGGED_USERNAME",
-    "OTHER_USERNAME", "SYSTEM_ROW_ORDER",
+    "TRENDS_USERNAME", "AGENTS_USERNAME", "LOCAL_OPS_USERNAME",
+    "NO_RUN_USERNAME", "OTHER_KEYS_USERNAME", "UNLOGGED_USERNAME",
+    "UNTAGGED_USERNAME", "OTHER_USERNAME", "SYSTEM_ROW_ORDER",
     "parse_month", "month_label", "previous_month", "month_dates",
     "load_store", "load_users_dict", "users_index", "resolve_identity",
     "is_assignable_user", "is_system_row", "fold_system_residual",
