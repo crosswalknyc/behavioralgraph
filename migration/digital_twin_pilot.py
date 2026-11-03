@@ -322,7 +322,8 @@ def build_scenes(title: str, duration_s: float, media_key: str, *, scenes: Optio
             'silence' if silent else ('music swell' if tone in ('tender', 'wow') and unit(media_key, 'cue', sid) < 0.28 else ('dialogue heavy' if dialogue else 'on-screen action')))
         rows.append({'id': sid, 't_start': round(a, 3), 't_end': round(b, 3), 'act': act, 'caption': caption[:160], 'action': action[:160],
                      'dialogue': dialogue, 'speaker': speaker[:40], 'tone': tone, 'joke': joke, 'silence': silent, 'cue': cue,
-                     'setting': str(use.get('setting') or '')[:40], 'grounded': bool(cap) or bool(dialogue)})
+                     'setting': str(use.get('setting') or '')[:40], 'grounded': bool(cap) or bool(dialogue),
+                     'cast': [str(x) for x in (cap.get('cast') or []) if str(x or '').strip()][:8]})   # the cast on screen, by face (digital_twin_cast)
     return rows
 
 

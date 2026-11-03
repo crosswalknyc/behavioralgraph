@@ -55,7 +55,10 @@ LIVE_SYSTEM = (
     "dull stretch or a confusing one (5 to 12). Never the same number for everyone.\n"
     "reactions: 0 to 3 seats who visibly reacted to THIS moment, type one of love, laugh, lean-in, confuse, check-out, wow, and a "
     "line of 90 characters max in that person's first-person voice about what they just saw. Most frames earn 0 or 1 reaction; "
-    "a quiet frame earns none. Never invent what is not in the frame. Never name the actors; use what the screen shows."
+    "a quiet frame earns none. Never invent what is not in the frame.\n"
+    "The cast: when the notes for this frame list cast on screen (confirmed by face, from the show's cast list), name them by "
+    "those names, exactly as given, in the caption and in the seats' lines; anyone the notes do not list is described by what "
+    "the screen shows. Never name an actor the notes do not give for this frame, and never guess a name from a face yourself."
 )
 
 
@@ -183,9 +186,20 @@ def frame(sess: dict, twin: dict, t: float, image_b64: str, *, usage_extras: Opt
     meta = sess.get('media') or {}
     recent = frames[-4:]
     seats_txt = '\n'.join(f"seat {r.get('seat')}: {r.get('name')}, {r.get('age')}, {r.get('city')}; now at {dials.get(str(r.get('seat')), DEFAULT_DIAL):.0f}. {_seat_line(r)}" for r in roster)
+    # the cast on screen, by face (digital_twin_cast): prepared once per test, read on every frame
+    cast_hits, cast_note = [], ''
+    try:
+        from migration import digital_twin_cast as _CAST
+        people = _CAST.people_for(sess, title=str(meta.get('title') or sess.get('title') or ''), usage_extras=usage_extras)
+        if people:
+            cast_hits = _CAST.faces_in_frame(raw, people)
+            cast_note = '\nThe cast list for this show: ' + ', '.join(_CAST.label(p) for p in people) + '. ' + _CAST.on_screen_line(cast_hits)
+    except Exception as e:
+        print(f"[twin-live] cast read skipped: {e}")
     head = (f"The show: {meta.get('title') or sess.get('title') or 'the cut'} ({sess.get('mode') or 'pilot'}" + (f", {sess.get('genre')}" if sess.get('genre') else '') + ")."
             + (f" Logline: {str(sess.get('logline'))[:240]}." if sess.get('logline') else '')
             + f"\nClock: {_clock(t)}." + (" What the room has seen so far:\n" + '\n'.join(f"{_clock(f.get('t'))}: {f.get('caption')}" for f in recent) if recent else ' This is the first frame.')
+            + cast_note
             + f"\nThe seats:\n{seats_txt}")
     data = None
     if not (regression_mode() or not model_available()):
@@ -201,6 +215,8 @@ def frame(sess: dict, twin: dict, t: float, image_b64: str, *, usage_extras: Opt
     tone = str(data.get('tone') or '').strip().lower()
     tone = tone if tone in TONES else ''
     rec = {'t': round(t, 2), 'caption': caption, 'tone': tone, 'joke': bool(data.get('joke')), 'setting': scrub(str(data.get('setting') or ''))[:40], 'shift': bool(data.get('shift'))}
+    if cast_hits:
+        rec['cast'] = [str(h.get('actor') or '') for h in cast_hits if h.get('actor')]
     frames.append(rec)
     # the dials: every seat moves (a missing seat keeps its reading)
     given = data.get('dial') if isinstance(data.get('dial'), dict) else {}
@@ -252,12 +268,14 @@ def frame(sess: dict, twin: dict, t: float, image_b64: str, *, usage_extras: Opt
         new_events.append(ev)
     live.setdefault('events', []).extend(new_events)
     sess.setdefault('events', []).extend(new_events)
-    sess.setdefault('scenes', []).append({'id': len(frames) - 1, 't_start': round(t, 2), 't_end': round(t + 12.0, 2), 'caption': caption, 'tone': tone, 'act': ''})
+    sess.setdefault('scenes', []).append({'id': len(frames) - 1, 't_start': round(t, 2), 't_end': round(t + 12.0, 2), 'caption': caption, 'tone': tone, 'act': '',
+                                          'cast': list(rec.get('cast') or [])})
     if len(sess['scenes']) >= 2:
         sess['scenes'][-2]['t_end'] = round(t, 2)
     sess['watch'] = {'source': 'live', 'persona': False, 'captions_n': len(frames), 'scenes_n': len(frames)}
     sess['updated_at'] = _now()
-    return {'t': round(t, 2), 'caption': caption, 'events': new_events, 'dial': {'t': round(t, 2), 'value': room}, 'splits': split_now, 'frames': len(frames)}
+    return {'t': round(t, 2), 'caption': caption, 'events': new_events, 'dial': {'t': round(t, 2), 'value': room}, 'splits': split_now, 'frames': len(frames),
+            'cast': list(rec.get('cast') or [])}
 
 
 # ------------------------------------------------------------ the finish

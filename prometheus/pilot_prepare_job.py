@@ -114,6 +114,7 @@ def run_job(job_id, username, inputs, extras=None):
                 print(f"[pilot-prepare {job_id}] fetch failed: {e}")
                 notes.append('the file could not be fetched this time')
                 tmp_path = None
+        cast_people = []
         if tmp_path:
             if not tools.get('ffmpeg'):
                 print(f"[pilot-prepare {job_id}] ffmpeg missing on this host; clock beat sheet (install ffmpeg on the read worker for the scene read)")
@@ -124,8 +125,14 @@ def run_job(job_id, username, inputs, extras=None):
                 tell('the room is looking at the frames')
                 try:
                     from migration import digital_twin_watch as W
+                    cast_people = []
+                    try:   # the cast the user entered, resolved to faces once per test (digital_twin_cast)
+                        from migration import digital_twin_cast as CAST
+                        cast_people = CAST.people_for(sess, title=str(media.get('title') or sess.get('title') or ''), usage_extras=extras, s3=s3)
+                    except Exception as e:
+                        print(f"[pilot-prepare {job_id}] cast skipped: {e}")
                     caps = W.caption_frames(analysis['frames'], transcript=analysis.get('transcript'), title=str(media.get('title') or sess.get('title') or ''),
-                                            notes=str(inputs.get('notes') or ''), usage_extras=extras)
+                                            notes=str(inputs.get('notes') or ''), usage_extras=extras, cast=cast_people)
                     analysis['captions'] = caps.get('captions') or {}
                     analysis['genre_votes'] = caps.get('genre_votes') or {}
                     analysis['format_votes'] = caps.get('format_votes') or {}
@@ -157,7 +164,8 @@ def run_job(job_id, username, inputs, extras=None):
                     if a_an.get('frames'):
                         try:
                             from migration import digital_twin_watch as W
-                            caps = W.caption_frames(a_an['frames'], transcript=a_an.get('transcript'), title=str(a.get('title') or a.get('label') or ''), usage_extras=extras)
+                            caps = W.caption_frames(a_an['frames'], transcript=a_an.get('transcript'), title=str(a.get('title') or a.get('label') or ''), usage_extras=extras,
+                                                    cast=cast_people)
                             a_an['captions'] = caps.get('captions') or {}
                             a_an['genre_votes'] = caps.get('genre_votes') or {}
                         except Exception as e:

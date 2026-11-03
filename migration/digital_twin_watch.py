@@ -117,14 +117,14 @@ def _parse(raw):
 
 
 # ------------------------------------------------------------- prompts
-CAPTION_SYSTEM = """You are the eyes of a test-screening room. You are shown a few frames from one cut, in order, each with its clock time and any dialogue heard around it. For each frame write what is on screen the way a sharp viewer would say it in one breath: who is there (by role or look, never a real actor's name), what they are doing, the setting, the mood. Say when a joke is landing, a reveal is happening, a fight or chase is on, a quiet beat is holding, titles or credits are up, or the frame is black.
-Rules: one caption per frame, under 18 words, present tense, concrete. tone is one of: funny, tender, tense, action, wow, quiet, warm, curious. joke is true only when the frame and the words read as a joke landing. Never guess the title or the actors. No em dashes.
+CAPTION_SYSTEM = """You are the eyes of a test-screening room. You are shown a few frames from one cut, in order, each with its clock time and any dialogue heard around it. For each frame write what is on screen the way a sharp viewer would say it in one breath: who is there, what they are doing, the setting, the mood. A frame line may say who is on screen, confirmed by face, from the cut's cast list: name those people by those names, exactly as given (an actor's name, or 'actor as character' when the line gives one). Anyone the line does not name is described by role or look. Say when a joke is landing, a reveal is happening, a fight or chase is on, a quiet beat is holding, titles or credits are up, or the frame is black.
+Rules: one caption per frame, under 18 words, present tense, concrete. tone is one of: funny, tender, tense, action, wow, quiet, warm, curious. joke is true only when the frame and the words read as a joke landing. Never guess the title. Never name an actor the frame line does not give, and never guess a name from a face yourself. No em dashes.
 At the end guess the genre of the whole cut from everything you saw (one of: comedy, drama, action, horror, thriller, romance, family, animation, documentary, unscripted) and whether it reads as a pilot (TV episode), a feature, or a trailer.
 Return JSON only: {"frames": [{"k": 1, "caption": "...", "tone": "...", "joke": false, "setting": "<two or three words>", "people": <count>, "text_on_screen": "<words on screen or empty>"}], "genre_guess": "...", "format_guess": "pilot|feature|trailer"}"""
 
 WATCH_SYSTEM = """You are running a test screening. The people in the room are described to you one by one (a card each: who they are, their habits, how they came to this title). They are watching ONE act of a cut, scene by scene; for every scene you have the clock, what is on screen, the dialogue heard, the tone, and cues (a joke landing, a silence, music). Each person also carries a starting level on a 0 to 100 dial, which is where their habits alone would put them before the act plays.
 For EVERY person and EVERY scene, decide where their dial sits after that scene (0 to 100): up when the scene lands for THEM, down when it drags, confuses or loses them. Move from the person, not the average: a 58 year old lesbian fan of the lead and a 22 year old man who found the show last month do not react the same; a second-screen scroller drifts in a quiet dialogue stretch; a loyal rewatcher leans in at a callback; a price-conscious skeptic needs more before a wow. Let the dial move in steps of a few points, bigger on a real turn, and let it carry forward scene to scene.
-Mark an event ONLY when something notable happens for that person at that scene (at most two in five scenes per person): love (a moment they would rewind), laugh (they laughed out loud), lean-in (they sat forward), wow (something landed hard), confuse (they lost the thread: who, what, why), check-out (they drifted or looked at the phone). With an event, write one short line in that person's own spoken voice about THAT scene (under 20 words, first person, concrete: what they saw and how it hit; no actor names, no analysis words, never 'as a' anything). With no event, leave say empty.
+Mark an event ONLY when something notable happens for that person at that scene (at most two in five scenes per person): love (a moment they would rewind), laugh (they laughed out loud), lean-in (they sat forward), wow (something landed hard), confuse (they lost the thread: who, what, why), check-out (they drifted or looked at the phone). With an event, write one short line in that person's own spoken voice about THAT scene (under 20 words, first person, concrete: what they saw and how it hit; a cast member by the name the scene's description gives, never an actor name the scene does not give; no analysis words, never 'as a' anything). With no event, leave say empty.
 After the act, one sentence per person on how the act sat with them.
 Never mention being an AI, a twin, a persona or a character. No em dashes.
 Return JSON only: {"seats": [{"seat": <id>, "scenes": [{"id": <scene id>, "dial": <0-100>, "event": "<love|laugh|lean-in|wow|confuse|check-out or empty>", "say": "<line or empty>"}], "act_note": "<one sentence>"}]}"""
@@ -197,13 +197,18 @@ def _dialogue_near(transcript: Optional[list], t: float, span: float = 6.0, limi
 
 def caption_frames(frames: list, *, models: Optional[Models] = None, transcript: Optional[list] = None, title: str = '', notes: str = '',
                    batch: int = CAPTION_BATCH, workers: int = CAPTION_WORKERS, budget_s: float = BUDGET_S['caption'], usage_extras: Optional[dict] = None,
-                   log: Optional[Callable] = None) -> dict:
-    """{captions: {scene_id: {caption, tone, joke, setting, people, text}},
+                   log: Optional[Callable] = None, cast: Optional[list] = None, faces_fn: Optional[Callable] = None) -> dict:
+    """{captions: {scene_id: {caption, tone, joke, setting, people, text, cast}},
     genre_votes: {genre: n}, format_votes: {...}, calls: n, failed: n}.
     Frames come from digital_twin_cut.sample_frames. With a fake model
     installed (tests) the frames travel as text and the fake answers;
     REGRESSION_TEST_MODE with no fake returns nothing (the beat sheet
-    falls back to dialogue and timing)."""
+    falls back to dialogue and timing).
+
+    ``cast`` is the resolved cast (digital_twin_cast.people_for): each
+    frame is read for their faces first and the frame line says who is
+    on screen, so the caption names them (Jenna, 2026-11-02). ``faces_fn``
+    is a test's stand-in for digital_twin_cast.faces_in_frame."""
     out = {'captions': {}, 'genre_votes': {}, 'format_votes': {}, 'calls': 0, 'failed': 0}
     frames = [f for f in (frames or []) if f and f.get('path') is not None]
     if not frames:
@@ -213,6 +218,16 @@ def caption_frames(frames: list, *, models: Optional[Models] = None, transcript:
         return out
     batches = [frames[i:i + max(1, batch)] for i in range(0, len(frames), max(1, batch))]
     lock = threading.Lock()
+    cast_people = [p for p in (cast or []) if isinstance(p, dict)]
+    cast_by_scene = {}
+    if cast_people:
+        try:
+            from migration import digital_twin_cast as _CAST
+            faces_fn = faces_fn or _CAST.faces_in_frame
+            on_screen_line = _CAST.on_screen_line
+            cast_names = _CAST.names
+        except Exception:
+            cast_people = []
 
     def one(group):
         lines = []
@@ -220,9 +235,17 @@ def caption_frames(frames: list, *, models: Optional[Models] = None, transcript:
         for k, f in enumerate(group, 1):
             t = float(f.get('t') or 0)
             line = f"Frame {k}: scene {f.get('scene_id')} at {_clock(t)}" + (f". Heard: {_dialogue_near(transcript, t)}" if _dialogue_near(transcript, t) else '')
+            raw = _frame_bytes(str(f.get('path') or '')) if (models.fn is None or cast_people) else None
+            if cast_people and raw is not None:
+                try:
+                    hits = faces_fn(raw, cast_people)
+                except Exception:
+                    hits = []
+                line += ' ' + on_screen_line(hits)
+                with lock:
+                    cast_by_scene[int(f.get('scene_id'))] = cast_names(hits)
             lines.append(line)
             if models.fn is None:
-                raw = _frame_bytes(str(f.get('path') or ''))
                 if raw is None:
                     continue
                 blocks.append({'type': 'text', 'text': line})
@@ -270,7 +293,8 @@ def caption_frames(frames: list, *, models: Optional[Models] = None, transcript:
                         'caption': scrub(str(row.get('caption')).strip())[:160], 'tone': tone if tone in TONES else '',
                         'joke': bool(row.get('joke')), 'setting': scrub(str(row.get('setting') or ''))[:40],
                         'people': int(row.get('people') or 0) if str(row.get('people') or '').lstrip('-').isdigit() else 0,
-                        'text': scrub(str(row.get('text_on_screen') or ''))[:80]}
+                        'text': scrub(str(row.get('text_on_screen') or ''))[:80],
+                        'cast': list(cast_by_scene.get(int(fr.get('scene_id')), []))}
                 g = str(data.get('genre_guess') or '').strip().lower()
                 if g in GENRES:
                     out['genre_votes'][g] = out['genre_votes'].get(g, 0) + 1
@@ -301,7 +325,8 @@ def _scene_rows(scenes: list) -> list:
     for s in scenes:
         rows.append({'id': int(s.get('id')), 'clock': _clock(s.get('t_start')), 'seconds': round(float(s.get('t_end') or 0) - float(s.get('t_start') or 0), 1),
                      'on_screen': str(s.get('caption') or s.get('action') or '')[:160], 'dialogue': str(s.get('dialogue') or '')[:200],
-                     'tone': s.get('tone') or '', 'cues': [c for c in ((['a joke lands'] if s.get('joke') else []) + (['silence'] if s.get('silence') else []) + ([str(s.get('cue'))] if s.get('cue') in ('music swell', 'credits') else [])) if c]})
+                     'tone': s.get('tone') or '', 'cues': [c for c in ((['a joke lands'] if s.get('joke') else []) + (['silence'] if s.get('silence') else []) + ([str(s.get('cue'))] if s.get('cue') in ('music swell', 'credits') else [])) if c],
+                     **({'cast_on_screen': [str(x) for x in s.get('cast') if str(x or '').strip()][:6]} if isinstance(s.get('cast'), list) and s.get('cast') else {})})
     return rows
 
 
