@@ -91,18 +91,26 @@ def _rekognition():
         return _REK
 
 
+_S3 = None
+
+
 def _s3_default():
+    global _S3
+    if _S3 is not None:
+        return _S3
+    try:
+        import boto3
+        _S3 = boto3.client('s3')
+        return _S3
+    except Exception:
+        pass
     try:
         from prometheus.host import host
         if host.has('s3_client'):
             return host.s3_client
     except Exception:
         pass
-    try:
-        import boto3
-        return boto3.client('s3')
-    except Exception:
-        return None
+    return None
 
 
 # ------------------------------------------------------------ the names

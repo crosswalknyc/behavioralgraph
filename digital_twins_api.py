@@ -1446,6 +1446,11 @@ def dt_pilot_play(key, sid):
         funds = _charge_pilot(user, payload, sess, for_play=True)
         if funds is not None:
             return funds
+        try:   # the cast's faces, resolved before the room goes live (digital_twin_cast); the frames then read them at once
+            from migration import digital_twin_cast as CAST
+            CAST.people_for(sess, title=str((sess.get('media') or {}).get('title') or sess.get('title') or ''), usage_extras=_usage_extras(user), s3=_s3())
+        except Exception:
+            traceback.print_exc()
         LIVE.start_live(sess)
         PI.mark_playing(sess)
         DT.save_twin(_s3(), key, payload)
