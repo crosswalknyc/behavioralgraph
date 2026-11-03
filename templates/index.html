@@ -124542,6 +124542,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var plat = ((d && d.meta) || {}).platform
                 || ((d && d.copy && d.copy.eyebrow) || '').split('\u00b7')[0] || '';
             var cs = (d && d.clickstream) || null;
+            // a clickstream the build stamped (2026-11-03) is the file; it is
+            // never rewritten on the page
+            if (cs && (cs.steps || []).length && (cs.built_at || cs.family)) return cs;
             if (cs && (cs.steps || []).length >= 8
                     && !_jiqClickstreamLooksForeign(cs, subj)) {
                 if (_jiqClickstreamLooksRepeated(cs) || _jiqLooksSearchNotAsset(cs)) {
@@ -124604,7 +124607,28 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             if (num) num.textContent = copy.clickSec || 'Clickstream';
             var head = document.getElementById('jiqFragClickHead');
             if (head) head.textContent = copy.clickHead || 'The URLs on each step.';
-            host.innerHTML = _jiqRenderClickstreamTable(_jiqFragOwnClickstream(d));
+            var html = _jiqRenderClickstreamTable(_jiqFragOwnClickstream(d));
+            // the one person's pages, the same table Music to Long Form prints
+            var ij = (d && d.individual_journey) || {};
+            var ps = ij.person_steps || [];
+            if (ps.length) {
+                var E = _jiqFragEsc;
+                var rows = ps.map(function(s) {
+                    var links = '';
+                    if (s.url) links += '<a href="' + E(s.url) + '" target="_blank" rel="noopener noreferrer">open</a>';
+                    if (s.url_2) links += ' \u00b7 <a href="' + E(s.url_2) + '" target="_blank" rel="noopener noreferrer">also</a>';
+                    return '<tr><td>' + E(String(s.step || '')) + '</td><td>' + E(s.date || '') + '</td><td>' + E(s.surface || '') + '</td>'
+                        + '<td>' + E(s.action || '') + '</td><td>' + links + '</td></tr>';
+                }).join('');
+                var dm = ij.demographics || {};
+                html += '<div class="jiq-frag-sec"><div class="jiq-frag-num">' + E((ij.section_label || 'One viewer') + ' URLs') + '</div>'
+                    + '<h3>' + E(ij.label || (ij.section_label || 'One viewer')) + '</h3>'
+                    + '<em>' + E([dm.gender, dm.age, dm.location].filter(Boolean).join(', ') + (ps.length ? ' \u00b7 ' + ps.length + ' steps' : '')) + '</em></div>'
+                    + '<div class="jiq-song-pad" style="overflow-x:auto;"><table class="jiq-music-table"><thead><tr>'
+                    + '<th>#</th><th>Date</th><th>Surface</th><th>Action</th><th>URL</th>'
+                    + '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+            }
+            host.innerHTML = html;
         }
         function _jiqPaintFragClickstream(d) {
             _jiqFragClickData = d;
@@ -125307,10 +125331,157 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     || (copy.tldr && copy.tldr.length) || (copy.recommendations && copy.recommendations.length)) {
                 list.push({ id: 'read', label: 'What to do next', head: '', tables: [] });
             }
-            if (typeof _jiqFragKeepsClickstream === 'function' && _jiqFragKeepsClickstream(d)) {
-                list.push({ id: 'clickstream', label: 'The URLs on each step', head: '', tables: [] });
+            // Pathways, One viewer and Clickstream on every journey (Jenna
+            // 2026-11-03: "like we have in music to long form ... standard for
+            // all digital journeys going forward"). Each shows when the file
+            // carries the block; the generator puts all three on every build.
+            var pw = (d && d.pathways) || {};
+            if ((pw.sequences || []).length) list.push({ id: 'pathways', label: 'Pathways', head: '', tables: [] });
+            var ij = (d && d.individual_journey) || {};
+            if ((ij.steps || []).length) list.push({ id: 'person', label: ij.section_label || 'One viewer', head: '', tables: [] });
+            var cs = (d && d.clickstream) || {};
+            if ((cs.steps || []).length || (typeof _jiqFragKeepsClickstream === 'function' && _jiqFragKeepsClickstream(d))) {
+                list.push({ id: 'clickstream', label: 'Clickstream', head: '', tables: [] });
             }
             return list;
+        }
+        // The host under the tables for the Pathways and the one-person pages.
+        function _jiqSecPathsHost() {
+            var host = document.getElementById('jiqFragSecPaths');
+            if (host) return host;
+            var det = document.getElementById('jiqFragDetours');
+            if (!det || !det.parentNode) return null;
+            host = document.createElement('div');
+            host.id = 'jiqFragSecPaths';
+            host.className = 'jiq-frag-paths';
+            det.parentNode.insertBefore(host, det.nextSibling);
+            return host;
+        }
+        function _jiqFragSecNum(n, label) {
+            return (n < 10 ? '0' + n : String(n)) + ' ' + label;
+        }
+        // Pathways: the handful of ordered routes that cover almost every
+        // person who reached the end. Same shape as Music to Long Form; the
+        // words come from the file (base_label, depth_label, end_label).
+        function _jiqFragRenderPathways(d, n) {
+            var p = (d && d.pathways) || {};
+            var seq = p.sequences || [];
+            var E = _jiqFragEsc, C = _jiqFragNum;
+            var P = function(x) { return (Math.round((Number(x) || 0) * 10) / 10).toFixed(1) + '%'; };
+            var baseLabel = String(p.base_label || 'people').toLowerCase();
+            var depthLabel = String(p.depth_label || 'came back').toLowerCase();
+            var endLabel = String(p.end_label || 'the end').toLowerCase();
+            var words = ['Zero', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight'];
+            var html = '<div class="jiq-frag-sec"><div class="jiq-frag-num">' + E(_jiqFragSecNum(n, 'Pathways')) + '</div>'
+                + '<h3>' + E((words[seq.length] || seq.length) + ' paths cover almost every ' + baseLabel.replace(/s$/, '') + '.') + '</h3>'
+                + '<em>' + E(C(p.base) + ' ' + baseLabel + '. These paths cover ' + P(p.covered_pct) + '. The rest are too small to name.') + '</em></div>';
+            html += '<div class="jiq-song-pad"><p class="jiq-frag-read">'
+                + E('Read each path left to right. Solid boxes are the steps on the way to ' + endLabel + '. '
+                    + 'Dashed boxes are the everyday apps the same person used in between. '
+                    + 'The green box is where the path ends. Average journey is the time from the first touch to the last step.')
+                + '</p></div>';
+            seq.forEach(function(s, i) {
+                var steps = s.steps || [];
+                var surfaces = s.surfaces || [];
+                var kinds = s.kinds || [];
+                var between = s.between || [];
+                var chain = '';
+                steps.forEach(function(st, j) {
+                    var isLast = j === steps.length - 1;
+                    if (j > 0) {
+                        var stop = between[j - 1];
+                        chain += '<i class="jiq-path-arrow">&rarr;</i>';
+                        if (stop && stop.apps && stop.apps.length) {
+                            chain += '<div class="jiq-path-chip is-life"><span class="jiq-path-chip-s">' + E('In between \u00b7 ' + (stop.gap || '')) + '</span>'
+                                + '<span class="jiq-path-chip-a">' + E(stop.apps.join(', ')) + '</span></div><i class="jiq-path-arrow">&rarr;</i>';
+                        }
+                    }
+                    var kind = isLast ? 'end' : (kinds[j] === 'wall' ? 'wall' : '');
+                    chain += '<div class="jiq-path-chip' + (kind ? ' is-' + kind : '') + '">'
+                        + '<span class="jiq-path-chip-s">' + E(surfaces[j] || '') + '</span>'
+                        + '<span class="jiq-path-chip-a">' + E(st) + '</span></div>';
+                });
+                var avgDays = Number(s.avg_days);
+                var avgTxt = !isFinite(avgDays) || avgDays <= 0 ? '' : (avgDays < 1 ? 'under a day' : avgDays.toFixed(1) + ' days');
+                var fin = Number(s.depth_pct) || 0;
+                html += '<div class="jiq-path">'
+                    + '<div class="jiq-path-head">'
+                    + '<span class="jiq-path-tag">Path ' + (s.rank || (i + 1)) + ' \u00b7 <b>' + C(s.viewers) + ' people</b> \u00b7 '
+                    + P(s.share_of_base_pct) + ' of ' + E(baseLabel)
+                    + (avgTxt ? ' \u00b7 avg journey <b>' + E(avgTxt) + '</b>' : '') + '</span>'
+                    + '<span class="jiq-path-fin"><b>' + P(fin) + '</b> ' + E(depthLabel) + '</span>'
+                    + '</div>'
+                    + '<div class="jiq-path-chain">' + chain + '</div>'
+                    + (s.note ? '<p class="jiq-path-note">' + E(s.note) + '</p>' : '')
+                    + '</div>';
+            });
+            if (p.other && p.other > 0) {
+                html += '<div class="jiq-path is-other"><div class="jiq-path-head">'
+                    + '<span class="jiq-path-tag">Other paths \u00b7 <b>' + C(p.other) + ' people</b> \u00b7 '
+                    + P(p.other_pct) + ' of ' + E(baseLabel) + '</span></div>'
+                    + '<p class="jiq-path-note">' + E(p.note || 'Routes with too few people to show on their own.') + '</p></div>';
+            }
+            return html;
+        }
+        // One viewer (one shopper on a purchase journey): a single walk, step
+        // by step, in the same shape as the Pathways page.
+        function _jiqFragRenderPerson(d, n) {
+            var j = (d && d.individual_journey) || {};
+            var dm = j.demographics || {};
+            var steps = j.steps || [];
+            var E = _jiqFragEsc;
+            var who = [dm.gender, dm.age, dm.location].filter(Boolean).join(', ');
+            var secLabel = j.section_label || 'One viewer';
+            var endLabel = String(j.end_label || 'the end').toLowerCase();
+            var days = function(a, b) { return (typeof _jiqMusicDaysBetween === 'function') ? _jiqMusicDaysBetween(a, b) : null; };
+            var gapOf = function(x) { return (typeof _jiqMusicGapLabel === 'function') ? _jiqMusicGapLabel(x) : ''; };
+            var keyIdx = -1;
+            steps.forEach(function(st, i) { if (keyIdx < 0 && st.kind === 'key') keyIdx = i; });
+            if (keyIdx < 0 && j.key_step) keyIdx = Math.max(0, Math.min(steps.length - 1, Number(j.key_step) - 1));
+            if (keyIdx < 0) keyIdx = steps.length - 1;
+            var toKey = steps.length ? days(steps[0].date, steps[keyIdx].date) : null;
+            var whole = steps.length ? days(steps[0].date, steps[steps.length - 1].date) : null;
+            var html = '<div class="jiq-frag-sec"><div class="jiq-frag-num">' + E(_jiqFragSecNum(n, secLabel)) + '</div>'
+                + '<h3>' + E(j.label || secLabel + '.') + '</h3>'
+                + '<em>' + E(who || 'One walk, step by step') + '</em></div>';
+            var kpis = '<div class="jiq-frag-kpis">';
+            if (dm.age) kpis += '<div class="jiq-frag-kpi"><div class="jiq-frag-kpi-l">Age</div><div class="jiq-frag-kpi-v">' + E(String(dm.age)) + '</div></div>';
+            if (dm.household || dm.income) kpis += '<div class="jiq-frag-kpi"><div class="jiq-frag-kpi-l">Home</div><div class="jiq-frag-kpi-v">' + E(dm.household || dm.income) + '</div></div>';
+            if (toKey !== null) kpis += '<div class="jiq-frag-kpi is-hot"><div class="jiq-frag-kpi-l">' + E('First touch to ' + endLabel) + '</div><div class="jiq-frag-kpi-v">' + toKey + (toKey === 1 ? ' day' : ' days') + '</div></div>';
+            if (whole !== null && whole !== toKey) kpis += '<div class="jiq-frag-kpi"><div class="jiq-frag-kpi-l">Whole walk</div><div class="jiq-frag-kpi-v">' + whole + (whole === 1 ? ' day' : ' days') + '</div></div>';
+            if (j.spend_usd) kpis += '<div class="jiq-frag-kpi"><div class="jiq-frag-kpi-l">The order came to</div><div class="jiq-frag-kpi-v">$' + Number(j.spend_usd).toFixed(2) + '</div></div>';
+            kpis += '</div>';
+            var photo = (typeof _jiqMusicPersonPhoto === 'function') ? _jiqMusicPersonPhoto(dm, (j.label || '') + '|' + (dm.location || '')) : '';
+            var read = (j.outcome ? '<p class="jiq-frag-read">' + E(j.outcome) + '</p>' : '')
+                + (j.spend_note ? '<p class="jiq-frag-read">' + E(j.spend_note) + '</p>' : '');
+            html += '<div class="jiq-song-pad"><div class="jiq-person-hero">' + photo
+                + '<div class="jiq-person-hero-b">' + kpis + read + '</div></div></div>';
+            var chain = '';
+            steps.forEach(function(st, i) {
+                var last = i === steps.length - 1;
+                if (i > 0) {
+                    var gap = gapOf(days(steps[i - 1].date, st.date));
+                    chain += '<i class="jiq-path-arrow' + (gap ? ' has-gap' : '') + '">' + (gap ? '<span>' + E(gap) + '</span>' : '') + '&rarr;</i>';
+                }
+                var kind = last ? 'end' : (i === keyIdx ? 'watch' : '');
+                var ico = (typeof _jiqMusicSurfaceIconSm === 'function') ? _jiqMusicSurfaceIconSm(st.surface) : '';
+                var links = (st.clips || []).slice(0, 2).map(function(c) {
+                    return c && c.url ? '<a href="' + E(c.url) + '" target="_blank" rel="noopener noreferrer">' + E(c.label || 'open') + '</a>' : '';
+                }).filter(Boolean).join(' \u00b7 ');
+                chain += '<div class="jiq-path-chip is-person' + (kind ? ' is-' + kind : '') + '">'
+                    + '<span class="jiq-path-chip-s">' + ico + E(st.surface || '') + '</span>'
+                    + '<span class="jiq-path-chip-a">' + E(st.action || '') + '</span>'
+                    + '<span class="jiq-path-chip-d">' + E(st.date || '') + (st.detail ? ' \u00b7 ' + E(st.detail) : '')
+                    + (links ? ' \u00b7 ' + links : '') + '</span></div>';
+            });
+            html += '<div class="jiq-path jiq-person-path">'
+                + '<div class="jiq-path-head"><span class="jiq-path-tag">The walk \u00b7 <b>' + steps.length + ' steps</b>'
+                + (whole !== null ? ' \u00b7 ' + whole + (whole === 1 ? ' day' : ' days') + ' end to end' : '') + '</span></div>'
+                + '<div class="jiq-path-chain">' + chain + '</div>'
+                + '<p class="jiq-path-note">' + E('Read left to right. The label between boxes is the time between steps. '
+                    + 'The orchid box is ' + endLabel + '; the green box is where the walk ends.') + '</p>'
+                + '</div>';
+            return html;
         }
         function _jiqSecReset() {
             // every node this select hides is shared with the other
@@ -125337,6 +125508,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }
             var read = document.getElementById('jiqFragSecRead');
             if (read) { read.innerHTML = ''; read.style.display = 'none'; }
+            var paths = document.getElementById('jiqFragSecPaths');
+            if (paths) { paths.innerHTML = ''; paths.style.display = 'none'; }
         }
         function _jiqSecReadHost() {
             var host = document.getElementById('jiqFragSecRead');
@@ -125362,6 +125535,20 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             if (click) click.style.display = onClick ? '' : 'none';
             if (onClick && typeof _jiqFillFragClickstream === 'function') {
                 _jiqFillFragClickstream((typeof _jiqFragClickData !== 'undefined' && _jiqFragClickData) || d);
+                var clickNum = document.getElementById('jiqFragClickNum');
+                if (clickNum) clickNum.textContent = _jiqFragSecNum(list.indexOf(cur) + 1, 'Clickstream');
+            }
+            var pathsHost = _jiqSecPathsHost();
+            if (pathsHost) {
+                var onPaths = (cur.id === 'pathways' || cur.id === 'person');
+                _jiqSecShow(pathsHost, onPaths);
+                if (onPaths) {
+                    pathsHost.innerHTML = (cur.id === 'pathways')
+                        ? _jiqFragRenderPathways(d, list.indexOf(cur) + 1)
+                        : _jiqFragRenderPerson(d, list.indexOf(cur) + 1);
+                } else {
+                    pathsHost.innerHTML = '';
+                }
             }
             var onPath = (cur.id === 'path');
             _jiqSecShow(_jiqSecOf(document.getElementById('jiqFragSpineNum')), onPath);

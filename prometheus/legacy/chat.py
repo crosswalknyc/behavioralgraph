@@ -17197,9 +17197,10 @@ def _pm_jiq_confirm_reply(parsed):
         f"{clip_line}"
         f"- Window: {win}\n"
         f"{start_line}\n\n"
-        f"{shape}. Every journey includes a Clickstream last tab of "
-        f"the public URLs on each step. It lands in the Digital "
-        f"Journey tab when finished. It prices at "
+        f"{shape}. Every journey carries Pathways, One viewer and "
+        f"Clickstream sections: the routes people took, one person's "
+        f"walk step by step, and the public URLs on each step. It lands "
+        f"in the Digital Journey tab when finished. It prices at "
         f"{_pm_tool_price_label('journey_iq', '$500')}. Run it?")
 
 

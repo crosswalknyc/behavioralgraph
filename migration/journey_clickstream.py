@@ -1,9 +1,19 @@
-"""Clickstream last tab for The Influencer Project.
+"""Clickstream section on every Digital Journey.
 
-Music to Long Form keeps its own nest. Other Digital Journeys do not
-ship this tab. When this builder runs for TIP it still uses 8 to 13
-steps with 6 to 10 public URLs on each step (people + share of that
-step). Same shape as Music to Long Form.
+Jenna, 2026-11-03: Pathways, One viewer and Clickstream are standard on
+every journey (Music to Long Form was the model). Until then the tab
+shipped on The Influencer Project only, because the generic builder
+stamped the same search pages on every step. Every journey now carries
+8 to 13 steps with 6 to 10 public URLs on each (people + share of that
+step), the same shape as Music to Long Form.
+
+A purchase journey (Ghost Energy, Online Soda Shoppers) is a retail read:
+its steps carry retailer search and listing pages for the product, the
+brand's own pages, typed searches and the social searches that found it,
+never title pages or ticketing sites. A watch or ticketing journey keeps
+the title catalog. Pages the research named are kept when they are
+public https pages; a page that answers 404 or 410 is dropped before the
+file ships (``prune_dead_urls``), so an invented deep link never lands.
 
 URL people overlap and do not sum to the step. Steps decrease. Counts
 are messy. TikTok video IDs are never invented: search, tag, and
@@ -12,7 +22,9 @@ account pages only, unless the ask itself named a real clip URL.
 from __future__ import annotations
 
 import hashlib
+import os
 import re
+from contextlib import contextmanager
 from typing import Any, Iterable, Optional
 from urllib.parse import quote_plus
 
@@ -712,10 +724,144 @@ _HINT_BANDS = (
 )
 
 
+# --------------------------------------------------------------- retail
+# A purchase journey's clickstream is a retail read. The context is set
+# by attach_clickstream for the length of one build so every step builder
+# underneath (fallback, pad, urls_for_step) knows the product and where
+# it is sold without threading it through every signature.
+_CTX: dict = {'retail': False, 'product': '', 'retailers': []}
+# the spine's own counts for the build in progress: a clickstream step that
+# IS a spine step carries the spine's number exactly (2026-11-03; the jitter
+# had the first step at 177.1M under a spine that said 178.9M)
+_SPINE_COUNTS: set = set()
+
+_RETAILER_SEARCH = (
+    ('amazon', 'https://www.amazon.com/s?k={q}', 'Amazon listing search'),
+    ('walmart', 'https://www.walmart.com/search?q={q}', 'Walmart listing search'),
+    ('instacart', 'https://www.instacart.com/store/s?k={q}', 'Instacart search'),
+    ('target', 'https://www.target.com/s?searchTerm={q}', 'Target listing search'),
+    ('kroger', 'https://www.kroger.com/search?query={q}', 'Kroger search'),
+    ('gopuff', 'https://www.gopuff.com/search?q={q}', 'Gopuff search'),
+    ('doordash', 'https://www.doordash.com/search/store/{q}/', 'DoorDash store search'),
+    ('uber eats', 'https://www.ubereats.com/search?q={q}', 'Uber Eats search'),
+    ('ubereats', 'https://www.ubereats.com/search?q={q}', 'Uber Eats search'),
+    ('costco', 'https://www.costco.com/CatalogSearch?keyword={q}', 'Costco search'),
+    ('sams club', 'https://www.samsclub.com/s/{q}', "Sam's Club search"),
+    ("sam's club", 'https://www.samsclub.com/s/{q}', "Sam's Club search"),
+    ('cvs', 'https://www.cvs.com/search?searchTerm={q}', 'CVS search'),
+    ('walgreens', 'https://www.walgreens.com/search/results.jsp?Ntt={q}', 'Walgreens search'),
+    ('chewy', 'https://www.chewy.com/s?query={q}', 'Chewy search'),
+    ('thrive market', 'https://thrivemarket.com/search?q={q}', 'Thrive Market search'),
+    ('shipt', 'https://shop.shipt.com/search?query={q}', 'Shipt search'),
+    ('best buy', 'https://www.bestbuy.com/site/searchpage.jsp?st={q}', 'Best Buy search'),
+    ('sephora', 'https://www.sephora.com/search?keyword={q}', 'Sephora search'),
+    ('ulta', 'https://www.ulta.com/search?Ntt={q}', 'Ulta search'),
+    ('tiktok shop', 'https://www.tiktok.com/search?q={q}+shop', 'TikTok Shop search'),
+)
+_DEFAULT_RETAILERS = ('amazon', 'walmart', 'instacart', 'target')
+_RETAIL_WORDS = ('cart', 'bag', 'checkout', 'listing', 'product page', 'order', 'bought', 'paid', 'buy',
+                 'retailer', 'grocery', 'delivery', 'subscribe', 'reorder', 'basket', 'shop', 'store',
+                 'coupon', 'deal', 'price', 'restock', 'brand site')
+
+
+@contextmanager
+def retail_context(product: str = '', platform: str = '', retailers: Optional[list] = None):
+    """Mark one build as a retail read (a purchase journey)."""
+    before = dict(_CTX)
+    names = [str(r).lower() for r in (retailers or [])]
+    plat = str(platform or '').lower()
+    for key, _u, _w in _RETAILER_SEARCH:
+        if key in plat and key not in names:
+            names.append(key)
+    if not names:
+        names = list(_DEFAULT_RETAILERS)
+    _CTX.update({'retail': True, 'product': str(product or '').strip(), 'retailers': names})
+    try:
+        yield
+    finally:
+        _CTX.clear()
+        _CTX.update(before)
+
+
+def retailers_in(text: str) -> list[str]:
+    low = str(text or '').lower()
+    seen = []
+    for key, _u, _w in _RETAILER_SEARCH:
+        if key in low and key not in seen:
+            seen.append(key)
+    return seen
+
+
+def retail_urls_for_step(product: str, surface: str = '', action: str = '',
+                         retailers: Optional[list] = None) -> list[tuple[str, str]]:
+    """Public retail pages for THIS step of a purchase journey, in the
+    order the step calls for: the retailer named on the step first, then
+    the product's other stores, then the social and typed searches that
+    found it. Never a title page, a ticketing site or a made-up listing."""
+    prod = str(product or '').strip() or 'the product'
+    q = _q(prod)
+    surf = str(surface or '').lower()
+    act = str(action or '').lower()
+    blob = f'{surf} {act}'
+    store_keys = [k for k in retailers_in(blob)]
+    for k in (retailers or _CTX.get('retailers') or _DEFAULT_RETAILERS):
+        if k not in store_keys:
+            store_keys.append(k)
+    stores = []
+    for k in store_keys:
+        for key, tmpl, why in _RETAILER_SEARCH:
+            if key == k:
+                stores.append((tmpl.format(q=q), why))
+                break
+    social = [
+        (f'https://www.tiktok.com/search?q={q}', 'Short-form search for the product'),
+        (f'https://www.instagram.com/explore/search/keyword/?q={q}', 'Instagram keyword search'),
+        (f'https://www.youtube.com/results?search_query={q}', 'Video results for the product'),
+        (f'https://www.reddit.com/search/?q={q}', 'Forum threads on the product'),
+        (f'https://www.pinterest.com/search/pins/?q={q}', 'Pinterest search'),
+    ]
+    typed = [
+        (f'https://www.google.com/search?q={q}', 'Typed search for the product'),
+        (f'https://www.google.com/search?q={_q(prod + " near me delivery")}', 'Where to get it delivered'),
+        (f'https://www.google.com/search?q={_q(prod + " review")}', 'Review search'),
+        (f'https://www.bing.com/search?q={q}', 'Second typed search'),
+        (f'https://www.google.com/search?q={_q(prod + " coupon")}', 'Coupon and deal search'),
+        (f'https://slickdeals.net/newsearch.php?q={q}', 'Deal site search'),
+    ]
+    is_social = any(x in blob for x in ('tiktok', 'instagram', 'youtube', 'reddit', 'feed', 'creator', 'social',
+                                        'post', 'clip', 'short', 'reel', 'pinterest', 'facebook', 'x.com', 'meme'))
+    is_search = any(x in blob for x in ('search', 'google', 'typed', 'looked', 'compare', 'research'))
+    is_order = any(x in blob for x in ('cart', 'bag', 'checkout', 'order', 'bought', 'paid', 'buy', 'basket', 'listing',
+                                       'product page', 'reorder', 'subscribe'))
+    is_nudge = any(x in blob for x in ('email', 'push', 'retarget', 'reminder', 'remind', 'came back', 'returned'))
+    if is_social and not is_order:
+        order = social + typed[:2] + stores[:2]
+    elif is_search:
+        order = typed[:3] + stores[:3] + social[2:4]
+    elif is_nudge:
+        order = typed[4:6] + stores[:3] + typed[:1] + social[:1]
+    elif is_order:
+        order = stores + typed[:1] + typed[4:5]
+    else:
+        order = stores[:2] + typed[:2] + social[:2]
+    out, seen = [], set()
+    for url, why in order:
+        key = url.rstrip('/').lower()
+        if key in seen or not is_safe_url(url):
+            continue
+        seen.add(key)
+        out.append((url, why))
+    return out[:MAX_URLS]
+
+
 def step_family(surface: str, action: str, step_id: str = '',
                 subject: str = '', platform: str = '') -> str:
     """Which URL set this step is allowed to carry."""
     blob = f'{surface} {action} {step_id} {subject} {platform}'.lower()
+    if _CTX.get('retail') and 'tracked' not in blob:
+        # a purchase journey is a retail read: the retailer, the brand,
+        # the searches that found it (2026-11-03)
+        return 'retail'
     if any(x in blob for x in (
             'tracked campaign', 'saw tracked', 'exposed to',
             'campaign content')):
@@ -995,6 +1141,38 @@ def urls_for_step(subject: str, platform: str, surface: str = '',
     / video. Invented theater search paths never ship.
     """
     family = step_family(surface, action, subject=subject, platform=platform)
+    if family == 'retail':
+        lock0 = surface_host_lock(surface, action)
+        rows0 = retail_urls_for_step(_CTX.get('product') or subject, surface, action)
+        if lock0:
+            rows0 = [r for r in rows0 if lock0 in r[0].lower()]
+            q0 = _q(_CTX.get('product') or subject)
+            tag0 = re.sub(r'[^a-z0-9]+', '', str(_CTX.get('product') or subject).lower())[:32] or 'fyp'
+            for url, why in ((f'https://www.{lock0}/search?q={q0}', 'On-app search') if lock0 == 'tiktok.com' else
+                             (f'https://www.instagram.com/explore/search/keyword/?q={q0}', 'On-app search'),
+                             (f'https://www.tiktok.com/tag/{tag0}', 'On-app tag') if lock0 == 'tiktok.com' else
+                             (f'https://www.instagram.com/explore/tags/{tag0}/', 'On-app tag'),
+                             (f'https://www.{lock0}/search?q={q0}+review' if lock0 == 'tiktok.com' else
+                              f'https://www.instagram.com/explore/search/keyword/?q={q0}+review', 'Review search on the app'),
+                             (f'https://www.{lock0}/search?q={q0}+haul' if lock0 == 'tiktok.com' else
+                              f'https://www.instagram.com/explore/search/keyword/?q={q0}+haul', 'Haul search on the app'),
+                             (('https://www.tiktok.com/explore', 'Opened Explore') if lock0 == 'tiktok.com' else
+                              ('https://www.instagram.com/explore/', 'Opened Explore')),
+                             (('https://www.tiktok.com/discover', 'Opened Discover') if lock0 == 'tiktok.com' else
+                              ('https://www.instagram.com/reels/', 'Opened Reels'))):
+                if all(u[0].rstrip('/').lower() != url.rstrip('/').lower() for u in rows0):
+                    rows0.append((url, why))
+        # the named research pages for this product ride along when public
+        for url, why in researched_extras_for(subject, platform):
+            if len(rows0) >= MAX_URLS:
+                break
+            if is_safe_url(url) and all(u[0].rstrip('/').lower() != url.rstrip('/').lower() for u in rows0):
+                rows0.append((url, why))
+        hinted0 = [(u, w, 12.0) for u, w in rows0[:MAX_URLS]]
+        rot0 = (max(step_i, 1) - 1) % max(len(hinted0), 1)
+        if hinted0 and rot0:
+            hinted0 = hinted0[rot0:] + hinted0[:rot0]
+        return _apply_hints(hinted0[:MAX_URLS], step_i)
     catalog = researched_catalog(subject, platform)
     lock = surface_host_lock(surface, action)
     named_ok = {u[0].rstrip('/').lower()
@@ -1151,7 +1329,10 @@ def _pad_urls(urls: list[tuple[str, str, float]],
               ) -> list[tuple[str, str, float]]:
     family_rows = urls_for_step(
         subject, platform, surface, action, step_i, tracked=tracked)
-    if (looks_generic_bag(urls) or looks_search_not_asset(urls)
+    # a retail read lives on search and listing pages, so "search, not an
+    # asset" is not a defect there; the generic bag and the theater checks still hold
+    search_bag = (not _CTX.get('retail')) and looks_search_not_asset(urls)
+    if (looks_generic_bag(urls) or search_bag
             or looks_invented_theater(urls) or not urls):
         return family_rows
     if len(urls) >= MIN_URLS:
@@ -1178,8 +1359,9 @@ def _step_from_raw(raw: dict, i: int, prev_people: Optional[int],
     if prev_people is not None and people >= prev_people:
         people = messy_people((seed, 'dec', i), int(prev_people * 0.71))
         people = min(people, prev_people - 1)
-    people = messy_people((seed, 'step', i, raw.get('action') or raw.get('label')),
-                          people)
+    if people not in _SPINE_COUNTS:
+        people = messy_people((seed, 'step', i, raw.get('action') or raw.get('label')),
+                              people)
     if prev_people is not None:
         people = min(people, prev_people - 1)
     date = str(raw.get('date') or raw.get('step_date') or '')
@@ -1239,7 +1421,21 @@ def fallback_clickstream(spine: list[dict], subject: str, platform: str,
                     f'{lab} on this step'))
     # Need 8-13 steps. Repeat timing across the window if the nest is short.
     if len(steps_src) < MIN_STEPS:
-        fillers = [
+        prod = _CTX.get('product') or subject
+        fillers = ([
+            {'label': f'Searched {prod}', 'surface': 'Google',
+             'doing': f'Typed {prod}'},
+            {'label': 'Watched a short clip about it', 'surface': 'TikTok',
+             'doing': 'Watched a short clip'},
+            {'label': 'Read a review or a thread', 'surface': 'Reddit',
+             'doing': 'Read what buyers said'},
+            {'label': 'Compared the listing on a second store', 'surface': 'Walmart',
+             'doing': 'Opened a second listing'},
+            {'label': 'Came back after a reminder', 'surface': 'Email or push',
+             'doing': 'Returned'},
+            {'label': 'Looked for a coupon', 'surface': 'Google',
+             'doing': 'Searched for a deal'},
+        ] if _CTX.get('retail') else [
             {'label': f'Searched {subject}', 'surface': 'Search',
              'doing': f'Typed {subject}'},
             {'label': 'Opened a short-form clip', 'surface': 'TikTok',
@@ -1252,7 +1448,7 @@ def fallback_clickstream(spine: list[dict], subject: str, platform: str,
              'doing': 'Returned'},
             {'label': 'Compared a second page', 'surface': 'Search',
              'doing': 'Opened a second result'},
-        ]
+        ])
         for f in fillers:
             if len(steps_src) >= MIN_STEPS:
                 break
@@ -1261,19 +1457,33 @@ def fallback_clickstream(spine: list[dict], subject: str, platform: str,
     out = []
     prev = None
     n = max(len(steps_src) - 1, 1)
+    # Dates move forward through the window, one representative day per
+    # step: the first step near the start, the last inside the final
+    # third, the rest spaced between with a salted nudge so no two share
+    # a day (2026-11-03; the old builder stamped the window's first and
+    # last day on every step).
+    import datetime as _dt
+    d0 = _dt.date.fromisoformat(start) if re.match(r'^\d{4}-\d{2}-\d{2}$', start) else None
+    d1 = _dt.date.fromisoformat(end) if re.match(r'^\d{4}-\d{2}-\d{2}$', end) else None
+    span = max(1, (d1 - d0).days) if (d0 and d1 and d1 > d0) else 0
     for i, src in enumerate(steps_src, start=1):
-        # Spread dates from window start to end.
-        if i == 1:
-            date = start
-        elif i == len(steps_src):
-            date = end
+        if d0 and span:
+            frac = 0.04 + 0.62 * (i - 1) / float(n)
+            off = int(span * frac) + (_h(seed, 'day', i) % max(1, int(span * 0.03)))
+            date = (d0 + _dt.timedelta(days=min(off, span))).isoformat()
         else:
             date = start if i <= n // 2 else end
+        surface = str(src.get('surface') or src.get('where') or 'Search')
+        if _CTX.get('retail') or len(surface) > 28:
+            # the app or site, not the whole list of places (the spine's
+            # where/surface fields describe every surface on the step)
+            first = re.split(r'\s*(?:,|/| and | or |\+|;)\s*', surface)[0].strip()
+            surface = first[:28] if first else 'Web'
         raw = {
             'people': src.get('accounts') or src.get('people') or (
                 int(prev * 0.68) if prev else 1_000_000),
             'date': src.get('date') or date,
-            'surface': src.get('surface') or src.get('where') or 'Search',
+            'surface': surface,
             'action': src.get('action') or src.get('label') or src.get('doing'),
             'urls': [],
         }
@@ -1390,11 +1600,71 @@ def _rewrite_step_urls(cs: dict, subject: str, platform: str, seed: str,
 
 
 def clickstream_allowed(subject: str = '', platform: str = '') -> bool:
-    """Clickstream last tab ships only on The Influencer Project.
+    """Every journey carries the Clickstream section (Jenna 2026-11-03).
 
+    From 2026-10-06 to 2026-11-03 only The Influencer Project kept it,
+    because the generic builder stamped the same search pages on every
+    step. The retail family and the dead-link prune replace that gate.
     Music to Long Form has its own nest and is not built here.
     """
-    return 'influencer project' in f'{subject} {platform}'.lower()
+    return True
+
+
+def _url_check_enabled() -> bool:
+    if os.environ.get('REGRESSION_TEST_MODE'):
+        return False
+    return str(os.environ.get('JOURNEY_URL_CHECK', '1')).strip().lower() not in ('0', 'false', 'no', 'off')
+
+
+def _url_alive(url: str, timeout: float = 4.0) -> bool:
+    """False only on a definite 404 / 410. A bot wall (403, 429, 503), a
+    timeout or a refused connection is not evidence the page is gone."""
+    try:
+        import requests  # type: ignore
+    except Exception:
+        return True
+    headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) '
+                             'Chrome/124.0 Safari/537.36', 'Accept-Language': 'en-US,en;q=0.9'}
+    try:
+        r = requests.head(url, allow_redirects=True, timeout=timeout, headers=headers)
+        if r.status_code in (405, 403, 400):
+            r = requests.get(url, allow_redirects=True, timeout=timeout, headers=headers, stream=True)
+            r.close()
+        return r.status_code not in (404, 410)
+    except Exception:
+        return True
+
+
+def prune_dead_urls(cs: dict, subject: str = '', platform: str = '', seed: str = '',
+                    tracked: Optional[list] = None, timeout: float = 4.0, workers: int = 8) -> dict:
+    """Drop URL rows that answer 404 or 410, refill a short step from its
+    family, re-split the people. In place; returns cs. Never raises."""
+    steps = list((cs or {}).get('steps') or [])
+    if not steps or not _url_check_enabled():
+        return cs
+    try:
+        from concurrent.futures import ThreadPoolExecutor
+        urls = sorted({str(u.get('url') or '') for s in steps for u in (s.get('urls') or []) if isinstance(u, dict) and u.get('url')})
+        alive: dict[str, bool] = {}
+        with ThreadPoolExecutor(max_workers=max(1, workers)) as ex:
+            for url, ok in zip(urls, ex.map(lambda u: _url_alive(u, timeout), urls)):
+                alive[url] = ok
+        dropped = 0
+        for i, s in enumerate(steps, start=1):
+            rows = [u for u in (s.get('urls') or []) if isinstance(u, dict) and alive.get(str(u.get('url') or ''), True)]
+            if len(rows) == len(s.get('urls') or []):
+                continue
+            dropped += len(s.get('urls') or []) - len(rows)
+            keep = [(str(u['url']), str(u.get('why') or 'Page on this step'), float(u.get('share_of_step_pct') or 12.0)) for u in rows]
+            keep = _pad_urls(keep, subject, platform, str(s.get('surface') or ''), str(s.get('action') or ''), i, tracked=tracked)
+            keep = [k for k in keep if alive.get(k[0], True)]
+            s['urls'] = split_urls(f'{seed}|{i}', int(s.get('people') or 0), keep)
+        if dropped:
+            print(f'[journey] clickstream: {dropped} dead URL rows dropped')
+        cs['url_check'] = {'checked': len(urls), 'dropped': dropped}
+    except Exception as exc:
+        print(f'[journey] clickstream url check skipped: {exc}')
+    return cs
 
 
 def _drop_clickstream(payload: dict) -> dict:
@@ -1405,9 +1675,36 @@ def _drop_clickstream(payload: dict) -> dict:
     return payload
 
 
+def _subject_from_meta(meta: dict) -> str:
+    """The subject a stored journey was built for. target_display carries
+    '<subject> - <platform> journey'; target_name carries '<subject> on
+    <platform>'. A stored file never says which, so both are read."""
+    disp = str((meta or {}).get('target_display') or '')
+    m = re.match(r'^(.*?)\s+-\s+.*\bjourney$', disp)
+    if m and m.group(1).strip():
+        return m.group(1).strip()
+    name = str((meta or {}).get('target_name') or meta.get('subject') or meta.get('project_name') or 'this journey')
+    plat = str((meta or {}).get('platform_label') or '')
+    if plat and name.lower().endswith(' on ' + plat.lower()):
+        return name[:-(len(plat) + 4)].strip()
+    return name
+
+
+def is_retail_journey(payload: dict, inputs: Optional[dict] = None, prim: Optional[dict] = None) -> bool:
+    """A purchase journey that is not movie ticketing: a retail read."""
+    meta = (payload or {}).get('meta') or {}
+    kind = str((inputs or {}).get('journey_kind') or meta.get('journey_kind') or '').lower()
+    if meta.get('no_purchase_claim') or kind == 'ticketing':
+        return False
+    tt = str(meta.get('target_type') or '').lower()
+    if kind in ('watch', 'before_after', 'discovery_existing', 'music', 'media_week', 'premiere'):
+        return False
+    return kind == 'purchase' or tt == 'purchase_journey'
+
+
 def attach_clickstream(payload: dict, prim: Optional[dict] = None,
-                       inputs: Optional[dict] = None) -> dict:
-    """Put clickstream on The Influencer Project only."""
+                       inputs: Optional[dict] = None, check_urls: bool = True) -> dict:
+    """The Clickstream section on every journey (2026-11-03)."""
     inputs = inputs or {}
     prim = prim or {}
     blob = (payload.get('fragrance_shop_journey')
@@ -1417,11 +1714,9 @@ def attach_clickstream(payload: dict, prim: Optional[dict] = None,
     spine = blob.get('spine') or payload.get('spine') or []
     detours = blob.get('detours') or payload.get('detours') or []
     meta = payload.get('meta') or blob.get('meta') or {}
-    subject = (str(inputs.get('subject') or '')
-               or str(meta.get('target_name') or meta.get('subject')
-                      or meta.get('project_name') or 'this journey'))
+    subject = str(inputs.get('subject') or '') or _subject_from_meta(meta)
     platform = (str(inputs.get('platform') or '')
-                or str(meta.get('platform') or ''))
+                or str(meta.get('platform') or meta.get('platform_label') or ''))
     if not clickstream_allowed(subject, platform):
         return _drop_clickstream(payload)
     window = str((blob.get('meta') or {}).get('window')
@@ -1436,15 +1731,41 @@ def attach_clickstream(payload: dict, prim: Optional[dict] = None,
     raw = (prim.get('clickstream')
            or blob.get('clickstream')
            or payload.get('clickstream'))
-    cs = normalize_clickstream(
-        raw, spine, subject, platform, seed, window, detours, named,
-        tracked=tracked)
+    retail = is_retail_journey(payload, inputs, prim)
+    product = str(meta.get('product') or prim.get('product') or '').strip()
+    if retail and not product:
+        product = re.sub(r'\s+on\s+.*$', '', subject).strip() or subject
+    ctx = retail_context(product or subject, platform) if retail else _null_context()
+    _SPINE_COUNTS.clear()
+    _SPINE_COUNTS.update(int(s.get('accounts') or 0) for s in spine if isinstance(s, dict) and int(s.get('accounts') or 0) > 0)
+    try:
+        with ctx:
+            cs = normalize_clickstream(
+                raw, spine, subject, platform, seed, window, detours, named,
+                tracked=tracked)
+            if check_urls:
+                prune_dead_urls(cs, subject, platform, seed, tracked=tracked)
+    finally:
+        _SPINE_COUNTS.clear()
     if tracked:
         cs['tracked_assets'] = tracked
+    if retail:
+        cs['family'] = 'retail'
+    cs['built_at'] = _now_iso()
     payload['clickstream'] = cs
     if 'fragrance_shop_journey' in payload:
         payload['fragrance_shop_journey']['clickstream'] = cs
     return payload
+
+
+@contextmanager
+def _null_context():
+    yield
+
+
+def _now_iso() -> str:
+    import datetime as _dt
+    return _dt.datetime.utcnow().replace(microsecond=0).isoformat() + 'Z'
 
 
 def from_csv_rows(rows: Iterable[dict], subject: str, platform: str,

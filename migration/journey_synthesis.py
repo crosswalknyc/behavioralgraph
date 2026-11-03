@@ -2120,6 +2120,11 @@ def synthesize(inputs: dict, claude_json: Callable, *,
             attach_clickstream(replay, {}, inputs)
         except Exception as exc:
             print(f'[journey] clickstream attach on replay skipped: {exc}')
+        try:
+            from migration.journey_paths import attach_paths
+            attach_paths(replay, claude_json, inputs, tools=tools)
+        except Exception as exc:
+            print(f'[journey] paths attach on replay skipped: {exc}')
         return reconcile_payload(replay)
     norms_on = _norms_enabled()
     band0 = None
@@ -2219,6 +2224,14 @@ def synthesize(inputs: dict, claude_json: Callable, *,
         attach_clickstream(payload, prim, inputs)
     except Exception as exc:
         print(f'[journey] clickstream attach skipped: {exc}')
+    # Pathways and One viewer on every journey (Jenna 2026-11-03), reasoned
+    # from the finished spine, fork, tables and clickstream so the three
+    # reads agree with the rest of the file.
+    try:
+        from migration.journey_paths import attach_paths
+        attach_paths(payload, claude_json, inputs, tools=tools)
+    except Exception as exc:
+        print(f'[journey] paths attach skipped: {exc}')
     return scrub_payload_text(reconcile_payload(payload))
 
 
@@ -2230,7 +2243,7 @@ def _acc_int(v) -> int:
 
 
 _FORK_BASE = {'retargeted': 'abandoned', 'returned': 'retargeted', 'paid_return': 'returned'}
-_MIRRORED_BLOCKS = ('who_they_are', 'the_read', 'before_after')
+_MIRRORED_BLOCKS = ('who_they_are', 'the_read', 'before_after', 'pathways', 'individual_journey')
 
 
 def reconcile_payload(payload: dict) -> dict:

@@ -2608,6 +2608,36 @@ def breakdown_xlsx(payload: dict) -> bytes:
         about[f'B{about.max_row}'].alignment = Alignment(wrap_text=True, vertical='top')
     about.column_dimensions['A'].width = 26
     about.column_dimensions['B'].width = 96
+    # Pathways, One viewer and Clickstream (Jenna 2026-11-03): one sheet each
+    # when the journey carries the block, the same shape the tab shows.
+    try:
+        from migration import journey_paths as _jp
+        extra = _jp.export_rows(payload)
+    except Exception:
+        extra = {}
+    for name, rows in extra.items():
+        if not rows:
+            continue
+        sh = wb.create_sheet(str(name)[:31])
+        for r in rows:
+            sh.append(r)
+        for c in sh[1]:
+            c.font = Font(bold=True, color='E9E8E1')
+            c.fill = head_fill
+            c.alignment = Alignment(vertical='center')
+        for i in range(1, len(rows[0]) + 1):
+            sh.column_dimensions[get_column_letter(i)].width = 22 if i > 1 else 14
+        sh.freeze_panes = 'A2'
+    if extra:
+        about.append(['Pathways', 'The handful of ordered routes that together cover almost every person who reached the end, each with '
+                                  'its surfaces, the everyday apps used in between, the average days from first touch to the end, and '
+                                  'the share who went further (ordered again, finished the title).'])
+        about.append(['One viewer', "One person's walk, step by step, with the date, the app or site, and the public pages behind each step."])
+        about.append(['Clickstream', 'The people on each step and the public URLs they sat on. People on a URL can sit on more than one; '
+                                     'they do not add to the step.'])
+        for _r in range(about.max_row - 2, about.max_row + 1):
+            about[f'A{_r}'].font = Font(bold=True)
+            about[f'B{_r}'].alignment = Alignment(wrap_text=True, vertical='top')
     out = io.BytesIO()
     wb.save(out)
     return out.getvalue()
