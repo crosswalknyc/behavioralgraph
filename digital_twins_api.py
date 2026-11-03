@@ -46,6 +46,8 @@ app.py so app.py stays small.
   PATCH /api/digital-twins/<key>/pilot/<sid>         rename, or set genre / mode / cut_label / rough_cut / purge_media_after
   DELETE /api/digital-twins/<key>/pilot/<sid>        delete (30-day undo; the file follows the test into the undo copy)
   POST /api/digital-twins/<key>/pilot/<sid>/restore  the deleted test back from its undo copy (the deleter or an admin)
+  POST /api/digital-twins/<key>/pilot/setups         save the setup form as a named setup on the twin (upsert by id); nothing seated or charged
+  DELETE /api/digital-twins/<key>/pilot/setups/<id>  remove a saved setup (the person who saved it, or an admin)
   GET  /api/digital-twins/<key>/pilot/<sid>/media-url  a signed link to the cut (ten minutes; creator or admin only)
   GET  /api/digital-twins/<key>/pilot/<sid>/media    the uploaded cut streamed (creator or admin only; the fallback player path)
   GET  /api/digital-twins/pilot-norms?format=&genre=  the norm and genre norm columns (no sources)
@@ -1626,6 +1628,50 @@ def dt_pilot_delete(key, sid):
     undo_until = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(time.time() + PI.DELETED_PILOT_KEEP_DAYS * 86400))
     return _nocache(jsonify({'success': True, 'deleted': sid, 'sessions_left': len(payload.get('pilot_sessions') or []),
                              'undo_until': undo_until, 'message': 'Test deleted. It can be restored within 30 days by an admin.'}))
+
+
+@bp.route(f'{PREFIX}/<path:key>/pilot/setups', methods=['POST'])
+def dt_pilot_setup_save(key):
+    """Save the Pilot Testing form as a named setup on the twin (Jenna,
+    2026-11-03: come back later and edit it without typing it all again).
+    Upserts when the body carries the id of a setup on this twin. Nothing
+    is seated or charged."""
+    user, err = _gate()
+    if err:
+        return err
+    payload, err = _twin_or_404(user, key)
+    if err:
+        return err
+    from migration import digital_twin_pilot as PI
+    body = request.get_json(silent=True) or {}
+    sid = str(body.get('id') or '').strip()
+    if sid:
+        cur = next((x for x in (payload.get('pilot_setups') or []) if isinstance(x, dict) and str(x.get('id')) == sid), None)
+        if cur is not None and not PI.can_edit_setup(cur, _uname(user), DT.is_admin(user)):
+            return jsonify({'success': False, 'error': 'Only the person who saved this setup, or an admin, can change it.'}), 403
+    rec = PI.save_setup(payload, body, _uname(user))
+    DT.save_twin(_s3(), key, payload)
+    return _nocache(jsonify({'success': True, 'setup': rec, 'setups': payload.get('pilot_setups') or []}))
+
+
+@bp.route(f'{PREFIX}/<path:key>/pilot/setups/<sid>', methods=['DELETE'])
+@bp.route(f'{PREFIX}/<path:key>/pilot/setups/<sid>/delete', methods=['POST'])
+def dt_pilot_setup_delete(key, sid):
+    user, err = _gate()
+    if err:
+        return err
+    payload, err = _twin_or_404(user, key)
+    if err:
+        return err
+    from migration import digital_twin_pilot as PI
+    cur = next((x for x in (payload.get('pilot_setups') or []) if isinstance(x, dict) and str(x.get('id')) == str(sid)), None)
+    if cur is None:
+        return jsonify({'success': False, 'error': 'setup not found'}), 404
+    if not PI.can_edit_setup(cur, _uname(user), DT.is_admin(user)):
+        return jsonify({'success': False, 'error': 'Only the person who saved this setup, or an admin, can delete it.'}), 403
+    gone = PI.delete_setup(payload, sid)
+    DT.save_twin(_s3(), key, payload)
+    return _nocache(jsonify({'success': True, 'deleted': gone, 'setups': payload.get('pilot_setups') or []}))
 
 
 @bp.route(f'{PREFIX}/<path:key>/pilot/<sid>/restore', methods=['POST'])

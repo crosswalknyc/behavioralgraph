@@ -1956,6 +1956,94 @@ def can_delete(sess: dict, username: str, is_admin: bool = False) -> bool:
     return bool(username) and str((sess or {}).get('created_by') or '') == str(username)
 
 
+# ----------------------------------------------------------- saved setups
+# Jenna, 2026-11-03: "have a way to save a room without having to re-enter
+# everything if you come back later". A setup is the Pilot Testing form as
+# typed (what it is, the link, title, runtime, the prior cut, the cast, the
+# room name, the second twin, panelists, cohorts, quotas), saved on the
+# twin under its own name and reopened into the form later. It is not a
+# test: nothing is seated, nothing is charged, no file is stored (a browser
+# cannot hand a chosen file back, so the setup keeps the file's name as a
+# reminder to pick it again).
+MAX_SETUPS = 40
+SETUP_TEXT_MAX = 120_000       # a pasted script
+_SETUP_FIELD_RX = re.compile(r'^dtwPi[A-Za-z0-9]{1,40}$')
+
+
+def _setup_clean(body: dict) -> dict:
+    fields = {}
+    for k, v in (body.get('fields') or {}).items() if isinstance(body.get('fields'), dict) else []:
+        k = str(k)
+        if not _SETUP_FIELD_RX.match(k) or v is None:
+            continue
+        if isinstance(v, bool):
+            fields[k] = v
+        else:
+            txt = str(v)
+            fields[k] = txt[:SETUP_TEXT_MAX] if k == 'dtwPiText' else txt[:2000]
+    options = [str(x)[:120] for x in (body.get('options') or []) if str(x or '').strip()][:6]
+    cohorts = []
+    for c in (body.get('cohorts') or [])[:20]:
+        if not isinstance(c, dict):
+            continue
+        name, comp = str(c.get('name') or '')[:60], str(c.get('composition') or '')[:160]
+        if not (name or comp):
+            continue
+        try:
+            seats = int(c.get('seats') or 0)
+        except (TypeError, ValueError):
+            seats = 0
+        cohorts.append({'name': name, 'composition': comp, 'seats': max(1, min(24, seats or 4))})
+    try:
+        cohort_n = max(1, min(20, int(body.get('cohort_n') or (len(cohorts) if cohorts else 1))))
+    except (TypeError, ValueError):
+        cohort_n = max(1, len(cohorts))
+    files = [str(x)[:160] for x in (body.get('files') or []) if str(x or '').strip()][:7]
+    tab = str(body.get('tab') or 'pilot').strip().lower()
+    tab = tab if tab in ('pilot', 'trailer', 'titles', 'script', 'concept') else 'pilot'
+    mode = str(body.get('mode') or '').strip().lower()
+    mode = mode if mode in MODES else ''
+    name = str(body.get('name') or fields.get('dtwPiTitle') or fields.get('dtwPiCutTitle') or '').replace('\n', ' ').strip()[:120]
+    return {'name': name or 'Untitled setup', 'tab': tab, 'mode': mode, 'fields': fields, 'options': options,
+            'cohorts': cohorts, 'cohort_n': cohort_n, 'cohort_custom': bool(body.get('cohort_custom')),
+            'file_name': str(body.get('file_name') or '')[:160], 'files': files}
+
+
+def save_setup(payload: dict, body: dict, username: str = '') -> dict:
+    """Upsert one saved setup on the twin (by id when the body carries one
+    the twin knows; otherwise new, newest first). Returns the record."""
+    setups = [x for x in (payload.get('pilot_setups') or []) if isinstance(x, dict)]
+    rec = _setup_clean(body or {})
+    sid = str((body or {}).get('id') or '').strip()
+    cur = next((x for x in setups if str(x.get('id')) == sid), None) if sid else None
+    now = _now()
+    if cur is not None:
+        cur.update(rec)
+        cur['updated_at'] = now
+        cur['updated_by'] = str(username or '')
+        rec = cur
+    else:
+        rec.update({'id': uuid.uuid4().hex[:10], 'created_by': str(username or ''), 'created_at': now, 'updated_at': now})
+        setups.insert(0, rec)
+    payload['pilot_setups'] = setups[:MAX_SETUPS]
+    return rec
+
+
+def delete_setup(payload: dict, setup_id: str) -> Optional[dict]:
+    setups = [x for x in (payload.get('pilot_setups') or []) if isinstance(x, dict)]
+    gone = next((x for x in setups if str(x.get('id')) == str(setup_id)), None)
+    if gone is None:
+        return None
+    payload['pilot_setups'] = [x for x in setups if x is not gone]
+    return gone
+
+
+def can_edit_setup(rec: dict, username: str, is_admin: bool = False) -> bool:
+    if is_admin:
+        return True
+    return bool(username) and str((rec or {}).get('created_by') or '') in ('', str(username))
+
+
 def can_view_media(sess: dict, username: str, is_admin: bool = False) -> bool:
     """The cut streams only to the person who uploaded it (or an admin).
     Everyone else on the twin sees the read, never the file."""

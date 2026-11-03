@@ -202,5 +202,88 @@ class PilotDeleteRestore(unittest.TestCase):
         self.assertIn(N.cell_key('pilot', 'all', 'finish'), doc['cells'])
 
 
+class PilotSavedSetups(unittest.TestCase):
+    """The Pilot Testing form kept under a name and reopened later
+    (Jenna, 2026-11-03: "have a way to save a room without having to
+    re-enter everything if you come back later")."""
+
+    def _body(self, **over):
+        b = {'name': 'NCIS: New York Episode 2', 'tab': 'pilot', 'mode': 'episode',
+             'fields': {'dtwPiTitle': 'NCIS: New York Episode 2', 'dtwPiWatchUrl': 'https://www.paramountplus.com/shows/video/ALVE01M3QWCT83E8FAJFMWD16QMV0G/',
+                        'dtwPiCutTitle': 'NCIS: New York Episode 2', 'dtwPiMins': '40:13', 'dtwPiPrior': 'd69f2a5181', 'dtwPiCast': 'LL Cool J, Scott Caan, Jennifer Beals',
+                        'dtwPiRoom': '16', 'dtwPiRough': False, 'dtwPiCritics': True, 'evil': 'x', 'dtwPiText': 'a' * 200_000},
+             'options': [], 'cohorts': [{'name': 'Men', 'composition': 'men', 'seats': 4}, {'name': 'Women', 'composition': 'women', 'seats': 4},
+                                        {'name': '', 'composition': '', 'seats': 4}],
+             'cohort_n': 4, 'cohort_custom': False, 'file_name': 'ncis_ny_ep2_rough.mp4', 'files': []}
+        b.update(over)
+        return b
+
+    def test_save_edit_and_delete(self):
+        from migration import digital_twin_pilot as PI
+        payload = _payload()
+        rec = PI.save_setup(payload, self._body(), 'jenna')
+        self.assertEqual(payload['pilot_setups'][0], rec)
+        self.assertEqual(rec['name'], 'NCIS: New York Episode 2')
+        self.assertEqual((rec['tab'], rec['mode'], rec['cohort_n'], rec['file_name']), ('pilot', 'episode', 4, 'ncis_ny_ep2_rough.mp4'))
+        self.assertEqual(rec['fields']['dtwPiMins'], '40:13')
+        self.assertIs(rec['fields']['dtwPiCritics'], True)
+        self.assertNotIn('evil', rec['fields'])                         # only the form's own ids
+        self.assertEqual(len(rec['fields']['dtwPiText']), PI.SETUP_TEXT_MAX)
+        self.assertEqual([c['name'] for c in rec['cohorts']], ['Men', 'Women'])   # the blank row does not travel
+        self.assertEqual(rec['created_by'], 'jenna')
+        # editing the same setup keeps its id and place; saving as new adds one on top
+        rec2 = PI.save_setup(payload, self._body(id=rec['id'], fields={'dtwPiTitle': 'NCIS: New York Episode 2', 'dtwPiRoom': '20'}), 'jenna')
+        self.assertEqual(rec2['id'], rec['id'])
+        self.assertEqual(len(payload['pilot_setups']), 1)
+        self.assertEqual(payload['pilot_setups'][0]['fields']['dtwPiRoom'], '20')
+        self.assertNotIn('dtwPiCast', payload['pilot_setups'][0]['fields'])
+        rec3 = PI.save_setup(payload, self._body(name='Trailer A vs B', tab='trailer', mode='trailer'), 'jenna')
+        self.assertEqual([x['id'] for x in payload['pilot_setups']], [rec3['id'], rec['id']])
+        self.assertTrue(PI.can_edit_setup(rec, 'jenna'))
+        self.assertFalse(PI.can_edit_setup(rec, 'someone'))
+        self.assertTrue(PI.can_edit_setup(rec, 'someone', is_admin=True))
+        gone = PI.delete_setup(payload, rec['id'])
+        self.assertEqual(gone['id'], rec['id'])
+        self.assertEqual([x['id'] for x in payload['pilot_setups']], [rec3['id']])
+        self.assertIsNone(PI.delete_setup(payload, 'nope'))
+        # a stranger's body: bad tab and mode fall back, name comes from the title field
+        odd = PI.save_setup(payload, {'tab': 'weird', 'mode': 'weird', 'fields': {'dtwPiTitle': 'From the title'}}, '')
+        self.assertEqual((odd['tab'], odd['mode'], odd['name']), ('pilot', '', 'From the title'))
+
+    def test_setups_ride_on_the_twin_and_through_the_routes(self):
+        try:
+            import flask  # noqa: F401
+        except Exception:
+            self.skipTest('flask not installed in this interpreter')
+        import types
+        import digital_twins_api as A
+        from prometheus.host import host
+        s3 = FakeS3()
+        s3.list_objects_v2 = lambda **kw: {'Contents': [{'Key': k, 'LastModified': '2026'} for k in list(s3.objs) if k.startswith(kw.get('Prefix', ''))]}
+        _seed(s3)
+        user = {'username': 'jenna', 'role': 'super_admin', 'has_digital_twins_iq_access': True}
+        fake_app = types.SimpleNamespace(s3_client=s3, get_current_user=lambda: user, _normalize_role=lambda r: r, consume_credit=lambda *a, **k: True)
+        sys.modules['app'] = fake_app
+        host.bind(gate=lambda allow_api_key=False: (user, None))
+        app = flask.Flask('t')
+        app.secret_key = 'x'
+        A.register(app)
+        c = app.test_client()
+        r = c.post(f'/api/digital-twins/{KEY}/pilot/setups', json=self._body())
+        self.assertEqual(r.status_code, 200, r.get_data(as_text=True)[:300])
+        out = r.get_json()
+        sid = out['setup']['id']
+        self.assertEqual(len(out['setups']), 1)
+        twin = SYN.load_twin(s3, KEY)
+        self.assertEqual(twin['pilot_setups'][0]['id'], sid)             # stored on the twin, so it loads with it
+        g = c.get(f'/api/digital-twins/{KEY}').get_json()
+        self.assertEqual(g['twin']['pilot_setups'][0]['name'], 'NCIS: New York Episode 2')
+        r2 = c.post(f'/api/digital-twins/{KEY}/pilot/setups/{sid}/delete', json={})
+        self.assertEqual(r2.status_code, 200)
+        self.assertEqual(r2.get_json()['setups'], [])
+        self.assertEqual(SYN.load_twin(s3, KEY).get('pilot_setups'), [])
+        self.assertEqual(c.post(f'/api/digital-twins/{KEY}/pilot/setups/{sid}/delete', json={}).status_code, 404)
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=1)

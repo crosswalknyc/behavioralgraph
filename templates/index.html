@@ -51844,6 +51844,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-pi-stat .v.up { color: #C7F23E; }
         #digitalTwinsIQView .dtw-pi-stat .k { font-size: 11px; color: var(--dtw-body); margin-top: 2px; line-height: 14px; }
         #digitalTwinsIQView .dtw-pi-fn { font-size: 11px; color: var(--dtw-mute); line-height: 14px; }
+        /* saved setups (2026-11-03): the form kept under a name, reopened later */
+        #digitalTwinsIQView .dtw-pi-editing { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 10px 0 2px; padding: 8px 12px; border: 1px solid var(--dtw-rule); border-radius: 10px; background: var(--dtw-raised); font-size: 12px; }
+        #digitalTwinsIQView .dtw-pi-editing b { font-weight: 600; }
+        #digitalTwinsIQView .dtw-pi-editing .sp { flex: 1; }
+        #digitalTwinsIQView .dtw-pi-restored { display: flex; align-items: center; gap: 8px; margin: 10px 0 0; font-size: 11.5px; color: var(--dtw-mute); }
+        #digitalTwinsIQView .dtw-pi-restored button, #digitalTwinsIQView .dtw-pi-editing button.lnk { appearance: none; background: transparent; border: 0; padding: 0; color: var(--dtw-ink); font: inherit; font-size: inherit; text-decoration: underline; cursor: pointer; }
+        #digitalTwinsIQView .dtw-pi-filehint { font-size: 11px; color: var(--dtw-mute); margin-top: 4px; }
+        #digitalTwinsIQView .dtw-pi-col.tests .dtw-pi-h + .dtw-pi-h { margin-top: 14px; }
         #digitalTwinsIQView .dtw-pi-hr { height: 1px; background: var(--dtw-rule); margin: 4px 0; }
         #digitalTwinsIQView .dtw-pi-bars { display: flex; flex-direction: column; gap: 8px; }
         #digitalTwinsIQView .dtw-pi-bar .l { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; color: var(--dtw-body); margin-bottom: 3px; font-variant-numeric: tabular-nums; }
@@ -54293,7 +54301,15 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 }
                 var quotas = '<details class="dtw-pi-details"><summary class="dtw-muted">Recruit the room to quotas (optional)</summary><div class="dtw-row2"><div><label class="dtw-field">% under 35</label><input id="dtwPiQUnder" class="dtw-in" inputmode="numeric" placeholder="65"></div><div><label class="dtw-field">% women</label><input id="dtwPiQWomen" class="dtw-in" inputmode="numeric" placeholder="50"></div></div><div class="dtw-row2"><div><label class="dtw-field">% fans of the lead</label><input id="dtwPiQFans" class="dtw-in" inputmode="numeric" placeholder="40"></div><div><label class="dtw-field">Must have seen (how many of the comps)</label><input id="dtwPiQSeen" class="dtw-in" inputmode="numeric" placeholder="2"></div></div><label class="dtw-field">Comp titles (comma separated)</label><input id="dtwPiComps" class="dtw-in" placeholder="Flashdance, The L Word"></details>';
                 var cutHead = { pilot: 'The cut', trailer: 'The trailers', titles: mode === 'key_art' ? 'The art' : 'The titles', script: 'The script', concept: 'The concept' }[tab] || 'The cut';
-                var tests = '<div class="dtw-pi-col side tests"><div class="dtw-pi-h">Past tests <span class="n">' + past.length + '</span></div><div class="dtw-pi-list">' + (rows || '<p class="dtw-muted" style="margin:8px 0 0;font-size:12px">No tests of this kind on this twin yet. The first one lands here.</p>') + '</div></div>';
+                // Saved setups (Jenna, 2026-11-03): the form kept under a name so it can be reopened and edited later
+                var setups = ((S.twin || {}).pilot_setups || []).filter(function(x) { return (x.tab || 'pilot') === tab; });
+                var srows = setups.map(function(x) {
+                    var on = S.piSetupId === x.id;
+                    return '<div class="dtw-pi-rowwrap"><button type="button" class="dtw-pi-row' + (on ? ' on' : '') + '" onclick="dtwPilotLoadSetup(\'' + esc(x.id) + '\')"><div class="h">' + esc(x.name || 'Untitled setup') + '</div><div class="m">' + esc(PI_MODE_LABEL[x.mode] || PI_TAB_LABEL[tab] || 'Setup') + (x.file_name ? '  file: ' + esc(x.file_name) : '') + '  saved ' + esc(fmtWhen(x.updated_at || x.created_at)) + '</div></button>'
+                        + '<button type="button" class="dtw-pi-rowdel" title="Delete this saved setup" aria-label="Delete ' + esc(x.name || 'this setup') + '" onclick="dtwPilotDeleteSetup(\'' + esc(x.id) + '\')">Delete</button></div>';
+                }).join('');
+                var saved = '<div class="dtw-pi-h">Saved setups <span class="n">' + setups.length + '</span></div><div class="dtw-pi-list">' + (srows || '<p class="dtw-muted" style="margin:8px 0 0;font-size:12px">Fill in the form and press Save setup to keep it here. Come back any time and open it to edit, without typing it again.</p>') + '</div>';
+                var tests = '<div class="dtw-pi-col side tests">' + saved + '<div class="dtw-pi-h">Past tests <span class="n">' + past.length + '</span></div><div class="dtw-pi-list">' + (rows || '<p class="dtw-muted" style="margin:8px 0 0;font-size:12px">No tests of this kind on this twin yet. The first one lands here.</p>') + '</div></div>';
                 var cut = '<div class="dtw-pi-col side cut"><div class="dtw-pi-h">' + esc(cutHead) + '</div>' + modeSel + stim + '</div>';
                 var room = '<div class="dtw-pi-col side room"><div class="dtw-pi-h">The room' + (S.twin && twinName() ? ' <span class="n">on ' + esc(twinName()) + '</span>' : '') + '</div>'
                     + (S.twin ? '' : '<p class="dtw-p" style="margin-top:8px">Pick a twin on the Twins tab first, or build one.</p>')
@@ -54303,11 +54319,21 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     + piCohortBuilderHtml()
                     + quotas
                     + (tab === 'pilot' || tab === 'trailer' || tab === 'script' ? '<label class="dtw-pi-switch"><input type="checkbox" id="dtwPiPurgeNew"> Remove the file when the test is done</label>' : '')
-                    + '<div class="dtw-lab-run"><button type="button" class="dtw-btn dtw-btn-primary" onclick="dtwPilotOpen()">Start the test</button><span class="dtw-price">' + esc(piPrice(tab)) + '</span></div>'
+                    + '<div class="dtw-lab-run"><button type="button" class="dtw-btn dtw-btn-primary" onclick="dtwPilotOpen()">Start the test</button><button type="button" class="dtw-btn" onclick="dtwPilotSaveSetup()" title="Keep this form under its name to come back to later">' + (S.piSetupId ? 'Save changes' : 'Save setup') + '</button><span class="dtw-price">' + esc(piPrice(tab)) + '</span></div>'
+                    + '<div class="dtw-pi-fn" style="margin-top:6px">Save setup keeps everything typed here on this twin, under Saved setups on the left. Nothing is seated or charged until you start the test.</div>'
                     + (tab === 'pilot' || tab === 'trailer' || tab === 'titles' || tab === 'script' ? '<div class="dtw-pi-protect">' + esc(pilotProtectLine()) + '</div>' : '')
                     + '<div class="dtw-status" id="dtwPiStatus"></div></div>';
+                var editing = '';
+                if (S.piSetupId) {
+                    var cur = setups.filter(function(x) { return x.id === S.piSetupId; })[0];
+                    if (cur) {
+                        editing = '<div class="dtw-pi-editing">Editing the saved setup <b>' + esc(cur.name || 'Untitled setup') + '</b><span class="sp"></span>'
+                            + '<button type="button" class="lnk" onclick="dtwPilotSaveSetup(true)">Save as a new setup</button>'
+                            + '<button type="button" class="lnk" onclick="dtwPilotCloseSetup()">Start a blank form</button></div>';
+                    }
+                }
                 return '<div class="dtw-card"><div class="dtw-eyebrow">' + esc(PI_TAB_LABEL[tab]) + '</div><h3 style="margin-top:0.35rem;">' + esc({ pilot: 'Watch a cut with the room', trailer: 'Test a trailer with the room', titles: 'Test titles or key art with the room', script: 'Read a script with the room', concept: 'Put a concept to the room' }[tab]) + '</h3>'
-                    + '<div class="dtw-sub" style="margin-bottom:0">' + esc(intro) + '</div>'
+                    + '<div class="dtw-sub" style="margin-bottom:0">' + esc(intro) + '</div>' + editing
                     + '<div class="dtw-pi-setup">' + tests + cut + room + '</div></div>';
             }
             function normCell(sc, metric, which) {
@@ -54750,7 +54776,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var h = piHostEl(); if (!h) return;
                 if (GL_OPTIONS.indexOf(piTab()) >= 0 && S.glOption !== piTab()) { S.glOption = piTab(); syncGreenlightOptions(); }
                 if (!S.twin) { h.innerHTML = renderPilotStart(); return; }
-                if (!S.pilot) { h.innerHTML = renderPilotStart(); return; }
+                if (!S.pilot) { h.innerHTML = renderPilotStart(); piAfterStartPaint(); return; }
                 Object.keys(PI_HOST).forEach(function(t) { var o = el(PI_HOST[t]); if (o && o !== h) o.innerHTML = ''; });
                 h.innerHTML = renderPilotPlayer(S.pilot);
                 bindPilotMedia();
@@ -54873,6 +54899,146 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (comps.length) q.comps = comps;
                 return { quotas: Object.keys(q).length ? q : null, comps: comps };
             }
+            // ------------------------------------------------------------ saved setups
+            // Jenna, 2026-11-03: "have a way to save a room without having to re-enter everything if you come back
+            // later". Two layers: everything typed into the setup form is kept in this browser as you type (so a
+            // page away and back, or a mode change, never empties the form), and Save setup keeps it on the twin
+            // under a name for anyone with the twin to reopen and edit. A browser cannot hand a chosen file back,
+            // so a setup keeps the file's name as the reminder to pick it again.
+            function piFormSnapshot() {
+                var host = piHostEl(); var setup = host ? host.querySelector('.dtw-pi-setup') : null;
+                var snap = { tab: piTab(), mode: S.piMode || piDefaultMode(piTab()), fields: {}, options: [], cohorts: [], cohort_n: Number(S.piCohortN || 1), cohort_custom: !!S.piCohortCustom, file_name: '', files: [] };
+                if (!setup) return snap;
+                Array.prototype.forEach.call(setup.querySelectorAll('input[id^="dtwPi"], select[id^="dtwPi"], textarea[id^="dtwPi"]'), function(i) {
+                    if (i.type === 'file') return;
+                    if (i.id === 'dtwPiCohortN' || i.id === 'dtwPiCohortCustom' || i.id === 'dtwPiMode') return;   // mode and cohorts ride as their own fields
+                    snap.fields[i.id] = (i.type === 'checkbox') ? !!i.checked : String(i.value == null ? '' : i.value);
+                });
+                snap.options = Array.prototype.map.call(setup.querySelectorAll('.dtw-pi-opt'), function(i) { return String(i.value || ''); });
+                var names = setup.querySelectorAll('#dtwPiCohorts .dtw-pi-coh-name'), comps = setup.querySelectorAll('#dtwPiCohorts .dtw-pi-coh-comp'), seats = setup.querySelectorAll('#dtwPiCohorts .dtw-pi-coh-seats');
+                for (var k = 0; k < names.length; k++) {
+                    snap.cohorts.push({ name: String(names[k].value || ''), composition: String((comps[k] || {}).value || ''), seats: parseInt((seats[k] || {}).value || '0', 10) || piCohortSeatsDefault(names.length) });
+                }
+                var f = el('dtwPiFile'); if (f && f.files && f.files[0]) snap.file_name = f.files[0].name || '';
+                var fs = el('dtwPiFiles'); if (fs && fs.files) snap.files = Array.prototype.map.call(fs.files, function(x) { return x.name || ''; });
+                return snap;
+            }
+            function piFormApply(snap) {
+                if (!snap) return;
+                var host = piHostEl(); var setup = host ? host.querySelector('.dtw-pi-setup') : null;
+                if (!setup) return;
+                var fields = snap.fields || {};
+                Object.keys(fields).forEach(function(id) {
+                    var i = el(id); if (!i || i.type === 'file' || id === 'dtwPiMode') return;
+                    if (i.type === 'checkbox') i.checked = !!fields[id]; else i.value = fields[id] == null ? '' : String(fields[id]);
+                });
+                var opts = setup.querySelectorAll('.dtw-pi-opt');
+                (snap.options || []).forEach(function(v, k) { if (opts[k]) opts[k].value = v || ''; });
+                // cohorts: the count and the rows come back exactly as typed
+                var n = Math.max(1, Math.min(PI_COHORT_MAX, Number(snap.cohort_n || (snap.cohorts || []).length || 1)));
+                S.piCohorts = (snap.cohorts || []).map(function(c) { return { name: c.name || '', composition: c.composition || '', seats: c.seats || 4 }; });
+                if (n !== Number(S.piCohortN || 1) || !!snap.cohort_custom !== !!S.piCohortCustom || (snap.cohorts || []).length) {
+                    S.piCohortN = n; S.piCohortCustom = !!snap.cohort_custom || n > 6;
+                    var box = el('dtwPiCohorts'); var sel = el('dtwPiCohortN');
+                    if (box) { var tmp = document.createElement('div'); tmp.innerHTML = piCohortBuilderHtml(); var fresh = tmp.querySelector('#dtwPiCohorts'); if (fresh) box.innerHTML = fresh.innerHTML; }
+                    if (sel) sel.value = S.piCohortCustom ? 'custom' : String(n);
+                }
+                var fi = el('dtwPiFile');
+                var old = setup.querySelector('.dtw-pi-filehint'); if (old) old.remove();
+                var names = [snap.file_name].concat(snap.files || []).filter(Boolean);
+                if (fi && names.length) {
+                    var hint = document.createElement('div'); hint.className = 'dtw-pi-filehint';
+                    hint.textContent = (names.length === 1 ? 'Last time the file was ' + names[0] + '. ' : 'Last time the files were ' + names.join(', ') + '. ') + 'Pick ' + (names.length === 1 ? 'it' : 'them') + ' again to run the test; everything else is filled in.';
+                    fi.parentNode.insertBefore(hint, fi.nextSibling);
+                }
+            }
+            function piLocalKey() { return 'bg_dtw_pilot_form:' + String(S.key || '') + ':' + piTab(); }
+            function piLocalSave() { try { localStorage.setItem(piLocalKey(), JSON.stringify({ ts: Date.now(), setup_id: S.piSetupId || '', snap: piFormSnapshot() })); } catch (_) {} }
+            function piLocalLoad() { try { var d = JSON.parse(localStorage.getItem(piLocalKey()) || 'null'); return d && d.snap ? d : null; } catch (_) { return null; } }
+            function piLocalClear() { try { localStorage.removeItem(piLocalKey()); } catch (_) {} }
+            function piAutosaveSoon() { clearTimeout(S.piAutosaveT); S.piAutosaveT = setTimeout(piLocalSave, 350); }
+            function piSnapshotEmpty(snap) {
+                var f = (snap || {}).fields || {};
+                return !Object.keys(f).some(function(k) { var v = f[k]; return k !== 'dtwPiRoom' && k !== 'dtwPiTwin2' && k !== 'dtwPiMode' && (v === true || (typeof v === 'string' && v.trim())); })
+                    && !((snap || {}).options || []).some(function(v) { return v && v.trim(); })
+                    && !((snap || {}).cohorts || []).some(function(c) { return (c.name || c.composition || '').trim(); });
+            }
+            function piAfterStartPaint() {
+                var host = piHostEl(); var setup = host ? host.querySelector('.dtw-pi-setup') : null;
+                if (!setup || !S.key) return;
+                setup.addEventListener('input', piAutosaveSoon);
+                setup.addEventListener('change', piAutosaveSoon);
+                var pending = S.piPending;
+                if (pending) {
+                    if (pending.mode && PI_TABS[piTab()].indexOf(pending.mode) >= 0 && pending.mode !== S.piMode) { S.piMode = pending.mode; renderPilotConsole(); return; }
+                    S.piPending = null;
+                    piFormApply(pending);
+                    piLocalSave();
+                    return;
+                }
+                var local = piLocalLoad();
+                if (local && local.snap && !piSnapshotEmpty(local.snap)) {
+                    if (local.setup_id && !S.piSetupId) S.piSetupId = local.setup_id;
+                    piFormApply(local.snap);
+                    if (!setup.querySelector('.dtw-pi-restored')) {
+                        var note = document.createElement('div'); note.className = 'dtw-pi-restored';
+                        note.innerHTML = '<span>Picked up what you typed here last time.</span><button type="button" onclick="dtwPilotCloseSetup()">Start a blank form</button>';
+                        var cutCol = setup.querySelector('.dtw-pi-col.cut'); if (cutCol) cutCol.insertBefore(note, cutCol.firstChild.nextSibling);
+                    }
+                }
+            }
+            window.dtwPilotSaveSetup = async function(asNew) {
+                var key = S.key, st = el('dtwPiStatus');
+                if (!key) { if (st) st.textContent = 'Pick a twin on the Twins tab first.'; return; }
+                var snap = piFormSnapshot();
+                var title = String((snap.fields || {}).dtwPiTitle || '').replace(/\s+/g, ' ').trim();
+                var name = title || String((snap.fields || {}).dtwPiCutTitle || '').trim();
+                if (!name) { if (st) st.textContent = 'Name the test first, so the setup has a name.'; var tn = el('dtwPiTitle'); if (tn) { try { tn.focus(); } catch (_) {} } return; }
+                var body = { id: asNew ? '' : (S.piSetupId || ''), name: name, tab: snap.tab, mode: snap.mode, fields: snap.fields, options: snap.options, cohorts: snap.cohorts.filter(function(c) { return (c.name || c.composition || '').trim(); }), cohort_n: snap.cohort_n, cohort_custom: snap.cohort_custom, file_name: snap.file_name, files: snap.files };
+                if (st) st.textContent = 'Saving the setup...';
+                try {
+                    var d = await api('/' + key + '/pilot/setups', { method: 'POST', body: JSON.stringify(body) });
+                    if (S.twin) S.twin.pilot_setups = d.setups || [];
+                    S.piSetupId = (d.setup || {}).id || S.piSetupId;
+                    piLocalSave();
+                    fgToast('Saved as ' + name + '. It is under Saved setups on the left; open it any time to edit or start the test.');
+                    renderPilotConsole();
+                } catch (e) { if (st) st.textContent = e.message || 'The setup could not be saved.'; }
+            };
+            window.dtwPilotLoadSetup = function(id) {
+                var x = (((S.twin || {}).pilot_setups) || []).filter(function(s) { return s.id === id; })[0];
+                if (!x) return;
+                S.pilot = null;
+                S.piSetupId = x.id;
+                if (x.tab && PI_HOST[x.tab]) S.piTab = x.tab;
+                if (x.mode && PI_TABS[piTab()].indexOf(x.mode) >= 0) S.piMode = x.mode;
+                S.piCohortN = Number(x.cohort_n || (x.cohorts || []).length || 1); S.piCohortCustom = !!x.cohort_custom; S.piCohorts = (x.cohorts || []).slice();
+                S.piPending = { mode: x.mode, fields: x.fields || {}, options: x.options || [], cohorts: x.cohorts || [], cohort_n: S.piCohortN, cohort_custom: S.piCohortCustom, file_name: x.file_name || '', files: x.files || [] };
+                renderPilotConsole();
+            };
+            window.dtwPilotCloseSetup = function() {
+                S.piSetupId = null; S.piPending = null; S.piCohorts = []; S.piCohortN = 1; S.piCohortCustom = false;
+                piLocalClear();
+                renderPilotConsole();
+            };
+            window.dtwPilotDeleteSetup = async function(id) {
+                var key = S.key; if (!key) return;
+                var x = (((S.twin || {}).pilot_setups) || []).filter(function(s) { return s.id === id; })[0];
+                try {
+                    var d = await api('/' + key + '/pilot/setups/' + encodeURIComponent(id) + '/delete', { method: 'POST', body: '{}' });
+                    if (S.twin) S.twin.pilot_setups = d.setups || [];
+                    if (S.piSetupId === id) S.piSetupId = null;
+                    renderPilotConsole();
+                    fgToast('Deleted the saved setup' + (x && x.name ? ' ' + x.name : '') + '.', { label: 'Undo', onclick: async function() {
+                        if (!x) return;
+                        try {
+                            var back = await api('/' + key + '/pilot/setups', { method: 'POST', body: JSON.stringify({ id: '', name: x.name, tab: x.tab, mode: x.mode, fields: x.fields, options: x.options, cohorts: x.cohorts, cohort_n: x.cohort_n, cohort_custom: x.cohort_custom, file_name: x.file_name, files: x.files }) });
+                            if (S.twin) S.twin.pilot_setups = back.setups || [];
+                            renderPilotConsole();
+                        } catch (e) { fgToast(e.message || 'The setup could not be restored.'); }
+                    } });
+                } catch (e) { fgToast(e.message || 'The setup could not be deleted.'); }
+            };
             async function piUploadAsset(key, sid, file, slot, label, kind) {
                 var fd = new FormData(); fd.append('file', file); fd.append('slot', String(slot)); if (label) fd.append('label', label); if (kind) fd.append('kind', kind);
                 var r = await fetch('/api/digital-twins/' + encodeURIComponent(key) + '/pilot/' + encodeURIComponent(sid) + '/assets', { method: 'POST', credentials: 'same-origin', body: fd });
@@ -54924,6 +55090,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (st) st.textContent = 'Seating the room...';
                 try { var d = await api('/' + key + '/pilot/open', { method: 'POST', body: JSON.stringify(body) }); } catch (e) { if (st) st.textContent = e.message; return; }
                 adoptPilot(d.session);
+                piLocalClear(); S.piPending = null;      // the test is open; the saved setup (if any) stays on the twin for next time
                 S.pilotSplits = null; S.pilotMedia = null; S.pilotCompare = null;
                 var sid = d.session.id;
                 if (purgeNew) { try { await api('/' + key + '/pilot/' + sid + '/rename', { method: 'POST', body: JSON.stringify({ purge_media_after: true }) }); } catch (_) {} }
