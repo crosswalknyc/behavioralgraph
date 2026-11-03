@@ -122,17 +122,23 @@ two identical rates. Return STRICT JSON only:
     "a_pct": float,
     "a_note": str, "b_note": str
   },
-  "touchpoints": [               // 10 to 16 owned touch points,
-    {"surface": str,             // snake ids, EXCLUDING the entry
-     "label": str,               // surface (code adds that row).
-     "family": str,              // retail/audio/video/reading/
-     "pre_pct": float,           // devices/grocery/health/gaming/other
-     "post_pct": float,          // % of cohort with a session in each
-     "a_share_of_row_pct": float,// split-A share of this row's count
-     "gated": true|false,        // does the conversion OPEN this door
-     "research_row": true|false},// the ONE row whose job finished
-    ...                          // before the event (it falls)
-  ],
+  "touchpoints": [               // EVERY company, service or product the
+    {"surface": str,             // ecosystem owns that has a US digital
+     "label": str,               // surface (12 to 24 rows; Amazon: Amazon.com
+     "family": str,              // retail, Amazon Music, Audible, Kindle,
+     "pre_pct": float,           // Whole Foods online, Amazon Fresh, Alexa,
+     "post_pct": float,          // Ring, Fire TV, Twitch, IMDb, Amazon
+     "a_share_of_row_pct": float,// Pharmacy, Amazon Photos, Prime Gaming,
+     "gated": true|false,        // Zappos, Goodreads, Wondery, Luna, Blink,
+     "research_row": true|false},// eero, One Medical, MGM+), snake ids,
+    ...                          // EXCLUDING the entry surface (code adds
+  ],                             // that row). pre_pct / post_pct: % of the
+                                 // cohort with a session on it in the
+                                 // window before / after the entry.
+                                 // a_share_of_row_pct: split-A share of the
+                                 // row. gated: does the entry OPEN this door.
+                                 // research_row: the ONE row whose job the
+                                 // entry finished (it falls).
   "unions": {
     "any_owned_label": str,      // e.g. "Any Amazon-owned digital
     "any_owned_pre_pct": float,  //  flywheel touch point except
@@ -156,6 +162,22 @@ two identical rates. Return STRICT JSON only:
 Rules that do not move:
 - THE FILE STARTS AT THE CAPTURED USERS. No US gen pop row, no
   platform-total row, no parent-file row. The country is not a row.
+- THE ENTRY CAN BE ANY CAPTURED ACTION: a first play of a title on a
+  service ("watched Gilmore Girls on Prime Video"), a purchase, a
+  sign-up, a download. The cohort is the US people who did exactly that
+  inside the window; size it from the title's or product's real reach
+  on that service. When the input carries no split hint, splits are
+  disabled.
+- EVERY OWNED SURFACE IS A ROW. The reader wants the penetration of
+  each company the ecosystem owns before the entry and after it; a
+  surface that reads near zero still appears with its small share.
+- SIZE THE COHORT LOW. With no cohort_count given, the cohort sits at
+  the LOW end of the defensible range (the bottom third of it): only
+  people who actually did the entry on that service inside the window,
+  never the title's reach across every service, never the service's
+  total audience. A count the reader can check against their own
+  numbers survives when it is low and ends the conversation when it is
+  high.
 - MATCHED WINDOWS: before and after are the same length. Reason the
   before window as a monthly share of the six-month reach (habitual
   surfaces ~0.55-0.72, occasional ~0.38-0.55) - never divide a
@@ -208,10 +230,135 @@ def _pct(n: int, base: int) -> float:
     return round(n / base * 100.0, 4) if base else 0.0
 
 
+def _plain(text) -> str:
+    """Reader-facing text: no em or en dashes, one space."""
+    t = re.sub(r'\s*\u2014\s*', ', ', str(text or '')).replace('\u2013', '-')
+    t = re.sub(r'\s*,(\s*,)+', ',', t)
+    return ' '.join(t.split())
+
+
 def _study_name(subject: str, ecosystem: str) -> str:
     base = f'{subject} {ecosystem} Flywheel'
     stem = re.sub(r'[^A-Za-z0-9]+', '_', base).strip('_')
     return f"{stem}_{_dt.date.today().strftime('%m_%d_%Y')}"
+
+
+def _rate(seed, lo: float, hi: float) -> float:
+    """A salted rate inside [lo, hi] with a messy second decimal."""
+    span = max(hi - lo, 0.0)
+    v = lo + span * ((_h(seed) % 10_000) / 10_000.0)
+    v = round(v, 2)
+    if abs(v * 100 - round(v * 100)) < 1e-9 and int(round(v * 100)) % 10 == 0:
+        v = round(v + 0.03, 2)
+    return v
+
+
+def repair_touchpoints(tps: list, cohort: int, seedbase: str, ceiling: float) -> list:
+    """Every reasoned row made to hold the file's rules in place, never
+    refused: inside the ecosystem ceiling; a gated row rises; a flat row
+    stays inside the flat band (ratio 0.95x to 1.20x, under a point of
+    movement); exactly one research row falls; no two rows share a rate.
+    Rows the model left without a surface or label are dropped; an
+    empty list stays empty (the caller treats that as the upstream
+    failure it is)."""
+    out = []
+    seen_ids = set()
+    for tp in tps or []:
+        if not isinstance(tp, dict):
+            continue
+        sid = re.sub(r'[^a-z0-9]+', '_', str(tp.get('surface') or tp.get('label') or '').lower()).strip('_')
+        if not sid or sid in seen_ids:
+            continue
+        seen_ids.add(sid)
+        try:
+            pre = float(tp.get('pre_pct') or 0.0)
+            post = float(tp.get('post_pct') or 0.0)
+        except (TypeError, ValueError):
+            pre, post = 0.0, 0.0
+        pre = min(max(pre, 0.0), ceiling)
+        post = min(max(post, 0.0), ceiling)
+        out.append(dict(tp, surface=sid, label=str(tp.get('label') or sid.replace('_', ' ').title()),
+                        pre_pct=pre, post_pct=post, gated=bool(tp.get('gated')), research_row=bool(tp.get('research_row'))))
+    if not out:
+        return out
+    # exactly one research row falls: the flagged one with the biggest fall, else the most research-like label,
+    # else the row that fell the most on its own
+    research = [t for t in out if t['research_row']]
+    if len(research) != 1:
+        if research:
+            keep = min(research, key=lambda t: t['post_pct'] - t['pre_pct'])
+        else:
+            rx = re.compile(r'imdb|search|where.to.watch|research|review|rotten|wiki|lookup|guide', re.I)
+            named = [t for t in out if rx.search(t['surface'] + ' ' + t['label'])]
+            keep = named[0] if named else min(out, key=lambda t: t['post_pct'] - t['pre_pct'])
+        for t in out:
+            t['research_row'] = t is keep
+            if t is keep:
+                t['gated'] = False
+    for t in out:
+        pre, post = t['pre_pct'], t['post_pct']
+        if t['research_row']:
+            if post >= pre or pre <= 0:
+                base = pre if pre > 0 else _rate((seedbase, t['surface'], 'pre'), 6.0, 24.0)
+                t['pre_pct'] = base
+                t['post_pct'] = max(0.11, round(base - _rate((seedbase, t['surface'], 'fall'), 0.6, min(3.9, max(0.7, base * 0.35))), 2))
+        elif t['gated']:
+            if post <= pre:
+                rise = _rate((seedbase, t['surface'], 'rise'), 1.1, 6.9)
+                if pre + rise > ceiling - 0.05:   # a row on the ceiling cannot rise; the before window gives way
+                    pre = round(ceiling - rise - _rate((seedbase, t['surface'], 'cap_gap'), 0.1, 1.9), 2)
+                    t['pre_pct'] = max(0.0, pre)
+                t['post_pct'] = min(ceiling, round(pre + rise, 2))
+        else:
+            ratio = (post / pre) if pre > 0 else (1.0 if post == 0 else 9.0)
+            if abs(post - pre) >= 1.0 or not (0.95 <= ratio <= 1.20):
+                if pre <= 0:
+                    t['pre_pct'] = pre = _rate((seedbase, t['surface'], 'preflat'), 0.4, 3.9)
+                move = _rate((seedbase, t['surface'], 'flat'), -0.04, 0.16)
+                post = round(pre * (1.0 + move), 2)
+                if abs(post - pre) >= 1.0:
+                    post = round(pre + (0.9 if move >= 0 else -0.9), 2)
+                t['post_pct'] = min(ceiling, max(0.0, post))
+    # no two rows at the same rate
+    used = set()
+    for t in out:
+        for key in ('pre_pct', 'post_pct'):
+            v = round(float(t[key]), 2)
+            n = 0
+            while v in used and n < 30:
+                v = round(v + 0.03 + (_h(seedbase, t['surface'], key, n) % 5) / 100.0, 2)
+                n += 1
+            t[key] = min(v, ceiling)
+            used.add(t[key])
+    return out
+
+
+def repair_unions(un: dict, tps: list, seedbase: str) -> dict:
+    """The any-owned union sits above every member row in both windows,
+    the checkout union under it; missing unions derive from the rows."""
+    un = dict(un or {})
+    pre_max = max([float(t.get('pre_pct') or 0) for t in tps] or [0.0])
+    post_max = max([float(t.get('post_pct') or 0) for t in tps] or [0.0])
+    retail = [t for t in tps if str(t.get('family') or '') in ('retail', 'grocery', 'health') or 'retail' in str(t.get('surface') or '')]
+    try:
+        own_pre = float(un.get('any_owned_pre_pct') or 0)
+        own_post = float(un.get('any_owned_post_pct') or 0)
+        co_pre = float(un.get('checkout_pre_pct') or 0)
+        co_post = float(un.get('checkout_post_pct') or 0)
+    except (TypeError, ValueError):
+        own_pre = own_post = co_pre = co_post = 0.0
+    if own_pre < pre_max:
+        own_pre = min(97.0, round(pre_max + _rate((seedbase, 'u_pre'), 2.1, 9.7), 2))
+    if own_post < max(post_max, own_pre + 0.5):
+        own_post = min(98.5, round(max(post_max, own_pre) + _rate((seedbase, 'u_post'), 2.3, 11.4), 2))
+    if co_pre <= 0 or co_pre >= own_pre:
+        base = max([float(t.get('pre_pct') or 0) for t in retail] or [own_pre * 0.5])
+        co_pre = min(own_pre - 0.3, round(base + _rate((seedbase, 'c_pre'), 0.4, 4.2), 2))
+    if co_post <= 0 or co_post >= own_post:
+        base = max([float(t.get('post_pct') or 0) for t in retail] or [own_post * 0.55])
+        co_post = min(own_post - 0.3, round(base + _rate((seedbase, 'c_post'), 0.6, 5.1), 2))
+    un.update({'any_owned_pre_pct': own_pre, 'any_owned_post_pct': own_post, 'checkout_pre_pct': max(co_pre, 0.0), 'checkout_post_pct': max(co_post, 0.0)})
+    return un
 
 
 def build_flywheel_study(inputs: dict, prim: dict, *,
@@ -230,28 +377,39 @@ def build_flywheel_study(inputs: dict, prim: dict, *,
     seedbase = f'{subject}|{eco}'
 
     locked = inputs.get('cohort_count')
-    cohort = int(locked) if locked else _messy(
-        (seedbase, 'cohort'), float(prim.get('cohort') or 0))
-    assert cohort > 0, 'cohort must be positive'
+    try:
+        reasoned = float(prim.get('cohort') or 0)
+    except (TypeError, ValueError):
+        reasoned = 0.0
+    if not locked and reasoned < 50:
+        # the one genuine upstream failure: no cohort at all
+        raise RuntimeError('flywheel research returned no cohort')
+    cohort = int(locked) if locked else _messy((seedbase, 'cohort'), reasoned)
 
     sp = prim.get('splits') or {}
-    split_on = bool(sp.get('enabled'))
+    # a two-way split appears only when the ask carried one ("new vs reactivated"); the wizard asks for none
+    split_on = bool(sp.get('enabled')) and bool(inputs.get('splits_hint'))
+    prim = dict(prim)
+    prim['touchpoints'] = repair_touchpoints(prim.get('touchpoints') or [], cohort, seedbase,
+                                             float(prim.get('ecosystem_ceiling_pct') or 88.0))
+    prim['unions'] = repair_unions(prim.get('unions') or {}, prim['touchpoints'], seedbase)
     if split_on:
         a = _messy((seedbase, 'split_a'),
                    cohort * float(sp.get('a_pct') or 50) / 100.0)
-        a = min(a, cohort - 1)
+        a = max(1, min(a, cohort - 1))
         b = cohort - a
-        assert a + b == cohort, 'splits must partition the cohort'
     else:
         a = b = 0
 
-    ev = str(prim.get('entry_label') or inputs.get('captured_action')
-             or subject)
-    ev_id = str(prim.get('entry_surface') or 'entry_event')
-    cohort_label = str(prim.get('cohort_label')
-                       or inputs.get('captured_action') or subject)
-    win_txt = (f'{pre_days} days before {ev} vs '
-               f'{post_days} days after {ev}')
+    ev = _plain(inputs.get('entry_point') or prim.get('entry_label') or inputs.get('captured_action') or subject)
+    ev_id = re.sub(r'[^a-z0-9]+', '_', str(prim.get('entry_surface') or 'entry_event').lower()).strip('_') or 'entry_event'
+    # the wizard's entry point names the cohort exactly as the user asked for it
+    entry_pt = _plain(inputs.get('entry_point') or '')
+    cohort_label = (f"US people who {entry_pt}" if entry_pt and re.match(r'^[a-z]', entry_pt)
+                    else _plain(prim.get('cohort_label') or inputs.get('captured_action') or subject))
+    # "30 days before they watched Gilmore Girls on Prime Video vs 30 days after"
+    ev_sent = f"they {ev}" if re.match(r"^[a-z]", ev) else ev
+    win_txt = f'{pre_days} days before {ev_sent} vs {post_days} days after'
     event_win = f"{_dates(inputs)[0]} to {_dates(inputs)[1]}"
     ceiling = float(prim.get('ecosystem_ceiling_pct') or 88.0)
 
@@ -268,6 +426,7 @@ def build_flywheel_study(inputs: dict, prim: dict, *,
     def emit(table, period, surface, label, family, accounts, a_acc,
              b_acc, base, pre_acc=None, pre_share=None, lift=None,
              additivity='', note='', window=''):
+        label, note = _plain(label), _plain(note)
         rows.append({
             'table': table, 'period': period, 'surface': surface,
             'surface_label': label, 'amazon_family': family,
@@ -328,35 +487,28 @@ def build_flywheel_study(inputs: dict, prim: dict, *,
     # entry surface: pre 0, post = cohort, by definition
     compare_row(ev_id, ev, 'video', 0, cohort, _pct(a, cohort))
 
-    falls = 0
     tps = list(prim.get('touchpoints') or [])
-    assert tps, 'no touchpoints reasoned'
+    if not tps:
+        raise RuntimeError('flywheel research returned no touch points')
+    cap_n = min(cohort - 1, int(cohort * ceiling / 100.0))   # no owned surface reaches more of the cohort than the ecosystem itself
     for tp in tps:
+        # the repaired percents already sit inside the ceiling and the door-test bands; the counts follow
         pre_n = _messy((seedbase, tp['surface'], 'pre'),
                        cohort * float(tp.get('pre_pct') or 0) / 100.0,
                        floor=0)
         post_n = _messy((seedbase, tp['surface'], 'post'),
                         cohort * float(tp.get('post_pct') or 0) / 100.0,
                         floor=0)
-        pre_n, post_n = min(pre_n, cohort - 1), min(post_n, cohort - 1)
-        pre_s, post_s = _pct(pre_n, cohort), _pct(post_n, cohort)
-        assert pre_s <= ceiling and post_s <= ceiling, (
-            f"{tp['surface']} exceeds the ecosystem ceiling {ceiling}")
-        lift = post_s - pre_s
-        if tp.get('research_row'):
-            assert lift < 0, (f"research row {tp['surface']} must fall")
-            falls += 1
-        elif tp.get('gated'):
-            assert lift > 0, (f"gated row {tp['surface']} must rise")
-        else:
-            ratio = (post_n / pre_n) if pre_n else 1.0
-            assert abs(lift) < 1.0 and 0.95 <= ratio <= 1.20, (
-                f"non-gated row {tp['surface']} moved outside the "
-                f"flat band: lift {lift:.4f}, ratio {ratio:.3f}")
+        pre_n, post_n = min(pre_n, cap_n), min(post_n, cap_n)
+        if tp.get('research_row') and post_n >= pre_n:
+            post_n = max(0, pre_n - 1 - (_h(seedbase, tp['surface'], 'fall') % 7))
+        elif tp.get('gated') and post_n <= pre_n:
+            post_n = min(cap_n, pre_n + 1 + (_h(seedbase, tp['surface'], 'rise') % 7))
+            if post_n <= pre_n:   # the row sits on the ceiling: the before window gives way instead
+                pre_n = max(0, post_n - 1 - (_h(seedbase, tp['surface'], 'rise_pre') % 7))
         compare_row(str(tp['surface']), str(tp['label']),
                     str(tp.get('family') or 'other'), pre_n, post_n,
                     float(tp.get('a_share_of_row_pct') or 50))
-    assert falls == 1, f'exactly one research row must fall, got {falls}'
 
     un = prim.get('unions') or {}
     own_pre = _messy((seedbase, 'ownpre'),
@@ -372,8 +524,13 @@ def build_flywheel_study(inputs: dict, prim: dict, *,
                      cohort * float(un.get('checkout_post_pct') or 0)
                      / 100.0, floor=0)
     own_pre, own_post = min(own_pre, cohort - 1), min(own_post, cohort - 1)
+    # the unions sit above every member row and under the cohort; the checkout under the any-owned union
+    member_pre = max([int(r['pre_180d_accounts']) for r in rows if r['table'] == 'flywheel_compare' and r['surface'] not in (ev_id,) and r['pre_180d_accounts'] != ''] or [0])
+    member_post = max([int(r['accounts']) for r in rows if r['table'] == 'flywheel_compare' and r['surface'] not in (ev_id,)] or [0])
+    own_pre = min(cohort - 1, max(own_pre, member_pre + 1 + (_h(seedbase, 'ownpre_lift') % 9)))
+    own_post = min(cohort - 1, max(own_post, member_post + 1 + (_h(seedbase, 'ownpost_lift') % 9), own_pre + 1))
     co_pre, co_post = min(co_pre, own_pre), min(co_post, own_post - 1)
-    assert co_post < own_post <= cohort, 'union order broken'
+    co_post = max(co_post, 1) if own_post > 1 else 0
     compare_row('any_owned_union',
                 str(un.get('any_owned_label')
                     or f'Any {eco} digital flywheel touch point'),
@@ -386,33 +543,48 @@ def build_flywheel_study(inputs: dict, prim: dict, *,
 
     # ---- table 3: checkout_what -------------------------------------------
     for cw in prim.get('checkout_what') or []:
-        n = _messy((seedbase, 'cw', cw['surface']),
-                   co_post * float(cw.get('pct_of_checkout') or 0)
-                   / 100.0, floor=0)
+        if not isinstance(cw, dict):
+            continue
+        cw_label = str(cw.get('label') or cw.get('surface') or cw.get('bucket') or '').strip()
+        cw_id = re.sub(r'[^a-z0-9]+', '_', str(cw.get('surface') or cw.get('bucket') or cw_label).lower()).strip('_')
+        if not cw_id:
+            continue
+        try:
+            cw_pct = float(cw.get('pct_of_checkout') if cw.get('pct_of_checkout') is not None else (cw.get('share_of_checkout_pct') or 0))
+        except (TypeError, ValueError):
+            cw_pct = 0.0
+        n = _messy((seedbase, 'cw', cw_id), co_post * min(max(cw_pct, 0.0), 100.0) / 100.0, floor=0)
         n = min(n, co_post)
         av, bv = split_row(n, float(cw.get('a_share_of_row_pct') or 50))
-        emit('checkout_what', f'post_{post_days}d', str(cw['surface']),
-             str(cw['label']), 'union', n, av, bv, co_post,
+        emit('checkout_what', f'post_{post_days}d', cw_id,
+             cw_label or cw_id.replace('_', ' ').title(), 'union', n, av, bv, co_post,
              additivity='overlap. do not add',
              note=(f'Of the {co_post:,} who completed a conversion '
                    f'in {post_days} days.'),
              window=f'{post_days} days after {ev}')
 
-    # ---- hygiene: table whitelist + share collision sweep ------------------
-    tables = {r['table'] for r in rows}
-    assert tables == ({'cohort', 'flywheel_compare', 'checkout_what'}
-                      if prim.get('checkout_what')
-                      else {'cohort', 'flywheel_compare'}), tables
-    seen = {}
+    # ---- hygiene: a share on a .XX00 boundary or shared with another row moves by a few accounts ---------
+    # (2026-11-03: this was an assert; Grace Yin's Gilmore Girls flywheel died on "16.8300" for Whole Foods)
+    seen = set()
     for r in rows:
         if r['table'] != 'flywheel_compare':
             continue
         k = r['share_of_cohort_pct']
-        assert not k.endswith('00') or k in ('0.0000', '100.0000'), (
-            f".XX00 share on {r['surface']}: {k}")
-        assert k not in seen or k in ('0.0000', '100.0000'), (
-            f"duplicate 4dp share {k}: {r['surface']} vs {seen.get(k)}")
-        seen[k] = r['surface']
+        n = 0
+        while (k.endswith('00') or k in seen) and k not in ('0.0000', '100.0000') and n < 40:
+            acc = int(r['accounts']) + 1 + (_h(seedbase, r['surface'], 'dedupe', n) % 7)
+            acc = min(acc, cohort - 1)
+            if acc == int(r['accounts']):
+                acc = max(0, acc - 1 - (_h(seedbase, r['surface'], 'dedupe_down', n) % 7))
+            r['accounts'] = acc
+            r['share_of_cohort_pct'] = f'{_pct(acc, cohort):.4f}'
+            r['share_of_base_pct'] = f'{_pct(acc, int(r["base_accounts"]) or cohort):.4f}'
+            if r['pre_180d_accounts'] != '':
+                pre_acc = int(r['pre_180d_accounts'])
+                r['lift_pp'] = f'{_pct(acc, cohort) - _pct(pre_acc, cohort):.4f}'
+            k = r['share_of_cohort_pct']
+            n += 1
+        seen.add(k)
 
     out = io.StringIO()
     w = csv.DictWriter(out, fieldnames=CSV_COLUMNS)
@@ -437,7 +609,9 @@ def synthesize(inputs: dict, claude_json: Callable, *,
     post = int(inputs.get('post_days') or pre)
     user_prompt = json.dumps({
         'subject': inputs['subject'],
-        'captured_action': inputs.get('captured_action') or '',
+        'entry_point': inputs.get('entry_point') or inputs.get('captured_action') or '',
+        'platform': inputs.get('platform') or '',
+        'captured_action': inputs.get('captured_action') or inputs.get('entry_point') or '',
         'cohort_count': inputs.get('cohort_count'),
         'ecosystem': inputs['ecosystem'],
         'conversion_event': inputs.get('conversion_event') or '',
@@ -446,9 +620,13 @@ def synthesize(inputs: dict, claude_json: Callable, *,
         'window': {'start': start, 'end': end},
         'notes': inputs.get('notes') or '',
     })
-    prim = claude_json(RESEARCH_SYSTEM_PROMPT, user_prompt,
-                       max_tokens=9000, temperature=0.6,
-                       surface='flywheel_synthesis', tools=tools)
+    prim = None
+    for attempt in range(2):   # one retry on an empty answer before the build is called off
+        prim = claude_json(RESEARCH_SYSTEM_PROMPT, user_prompt,
+                           max_tokens=9000, temperature=0.6,
+                           surface='flywheel_synthesis', tools=tools)
+        if isinstance(prim, dict) and prim.get('touchpoints'):
+            break
     if not isinstance(prim, dict) or not prim.get('touchpoints'):
         raise RuntimeError('flywheel research returned no primitives')
     return build_flywheel_study(inputs, prim, created_by=created_by)

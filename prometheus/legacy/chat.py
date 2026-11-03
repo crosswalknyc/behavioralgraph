@@ -9351,6 +9351,21 @@ def _pm_intake_turn(flow, text, body, history, user, ppu, first):
         return {'success': True, 'action': 'answer', 'reply': reply,
                 'followups': chips, 'offer_deck': False, 'deck_angle': None,
                 'bpiq_collect': True, 'bpiq_wizard': _bpiq_wiz.empty_draft()}
+    if flow == 'flywheel':
+        # The Flywheel wizard (Jenna 2026-11-03, after Grace Yin's Gilmore Girls on Prime Video attempt): the
+        # entry point, the ecosystem, the date range, one at a time, then the card with the price.
+        from prometheus import flywheel_wizard as _fw_wiz
+        uname = (str((user or {}).get('username') or (user or {}).get('email') or '').strip()
+                 if isinstance(user, dict) else str(user or '').strip())
+        hit = _fw_wiz.analyze_hook(text, body, history, user, ppu, uname, globals(), first=first,
+                                   store=_fw_wiz.store_for(body, globals()),
+                                   price_label=_pm_tool_price_label('flywheel_iq', '$500'))
+        if hit is not None:
+            if hit.get('fw_confirm_payload'):
+                _pm_pending_intake('stash', user, 'flywheel', hit['fw_confirm_payload'], _fw_wiz.RUN_CHIP)   # "run the flywheel" typed later still finds it
+            return hit
+        return {'success': True, 'action': 'answer', 'reply': _fw_wiz.ASK_ENTRY,
+                'followups': ['Cancel'], 'offer_deck': False, 'deck_angle': None, 'fw_collect': True}
     kind, confirm_name, run_label, payload_key, collect_key, labels = _PM_INTAKE_UI[flow]
     parse_fn, complete_fn, required, ask_copy, fallback_fn, propose_fn = _pm_intake_flow_table()[flow]
     base = {'success': True, 'action': 'answer', 'offer_deck': False, 'deck_angle': None}
@@ -15606,13 +15621,14 @@ def _pm_analyze_core(user, body, text, history):
                 'deck_angle': None})
         _fw_extras = _pm_merge_extras(_pm_attrib_extras(), _pm_ppu)
         _rr.start_engine_job('fw', _fw_job, _bpiq_user, _fw_confirm, _fw_extras, _pm_fw_status_write, _pm_run_fw_job)   # the queue, never a web thread (audit item 5)
+        try:
+            from prometheus import flywheel_wizard as _fw_wiz2
+            _fw_line = _fw_wiz2.running_reply(_fw_confirm)
+        except Exception:
+            _fw_line = (f'On it. Building the {_fsubj} now. It lands on the Flywheel IQ page, and I will confirm here when it is ready.')
         return jsonify({
             'success': True, 'action': 'answer',
-            'reply': (f'On it. Building the {_fsubj} now - it starts '
-                      'at your captured users and maps their '
-                      'ecosystem life before and after the event. '
-                      'It lands on the Flywheel IQ page, and I '
-                      'will confirm here when it is ready.'),
+            'reply': _fw_line,
             'fw_job_id': _fw_job,
             'followups': [], 'offer_deck': False, 'deck_angle': None})
     if body.get('fw_inputs') and not _pm_intake_breakout(text):
@@ -17457,9 +17473,15 @@ def _pm_run_fw_job(job_id, username, inputs, extras):
             print(f"[fw-job {job_id}] delivery skipped: {_dl_err}")
     except Exception as e:
         traceback.print_exc()
+        refunded = False
+        try:   # the build could not be completed: the credits go back (no "snag", no hold)
+            _H.refund_credit(username, credits=_PM_FW_CREDITS, reason=f"Flywheel did not deliver - {(inputs or {}).get('subject') or 'flywheel'}")
+            refunded = True
+        except Exception as _rx:
+            _faults.note('chat', _rx)
         try:
             _pm_fw_status_write(job_id, {
-                'job_id': job_id, 'user': username, 'status': 'error',
+                'job_id': job_id, 'user': username, 'status': 'error', 'refunded': refunded,
                 'finished_at': time.time()})
         except Exception as _fx:
             _faults.note('chat', _fx)

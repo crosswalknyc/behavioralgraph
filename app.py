@@ -21132,6 +21132,8 @@ def _flywheel_parse_text(text):
             if key in _FLYWHEEL_STUDY_COLS:
                 if key not in study and (v or '').strip():
                     study[key] = _flywheel_num(v) if key == 'cohort_accounts' else v.strip()
+                if key == 'window' and table == 'flywheel_compare' and (v or '').strip():
+                    row['window'] = v.strip()      # the compare rows name their own before / after windows (2026-11-03)
                 continue
             if key in _FLYWHEEL_NUMERIC_COLS:
                 row[key] = _flywheel_num(v)
