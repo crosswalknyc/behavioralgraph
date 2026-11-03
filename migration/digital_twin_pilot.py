@@ -1681,12 +1681,15 @@ MODE_TITLE_WORD = {'pilot': 'Pilot test', 'feature': 'Screening', 'episode': 'Ep
                    'title': 'Title test', 'key_art': 'Key art test', 'script': 'Script read', 'concept': 'Concept test'}
 
 
+MAX_COHORTS = 20     # the Custom count on the setup form runs to twenty (Jenna, 2026-11-03); the room still caps at MAX_IN_ROOM seats
+
+
 def cohort_segments(cohorts, twin_key: str) -> list:
     """The segments a setup's cohorts become (Jenna, 2026-11-02): each
     cohort's name, its composition in words (the filter), the seats
     wanted in it. [] when there are fewer than two usable cohorts."""
     out = []
-    for c in (cohorts or [])[:8]:
+    for c in (cohorts or [])[:MAX_COHORTS]:
         if not isinstance(c, dict):
             continue
         name = ' '.join(str(c.get('name') or c.get('label') or '').split())[:60]
@@ -2328,7 +2331,7 @@ __all__ = [
     'mark_play_paid', 'mark_paid', 'mark_playing', 'stop_session', 'rename_session', 'set_options',
     'stamp_question', 'can_delete', 'can_view_media', 'remove_session', 'delete_session', 'purge_media',
     'deleted_pilot_key', 'media_hash', 'build_beats', 'build_scenes', 'build_beats_from_scenes', 'seat_dial', 'blend_dial', 'seat_events', 'persona_events',
-    'aggregate_dial', 'split_dial', 'split_specs', 'all_splits', 'cohort_labels', 'cohort_key', 'cohort_segments', 'restore_session', 'quadrant_of', 'scorecard', 'battery_scorecard', 'norms_for', 'norm_metrics', 'record_norms',
+    'aggregate_dial', 'split_dial', 'split_specs', 'all_splits', 'cohort_labels', 'cohort_key', 'cohort_segments', 'restore_session', 'MAX_COHORTS', 'quadrant_of', 'scorecard', 'battery_scorecard', 'norms_for', 'norm_metrics', 'record_norms',
     'attach_norms', 'probe_points', 'fallback_guide', 'question_window', 'seat_window', 'ask_stimulus', 'format_for', 'norms_genre',
     'session_csv', 'session_lines', 'public_session', 'signed_media_url',
     'media_s3_key', 'accept_upload_name', 'ffmpeg_available', 'probe_duration',

@@ -114,6 +114,18 @@ class Room(unittest.TestCase):
         self.assertEqual([(s['label'], s['people'], s['share_pct']) for s in g['segments']], [('Paramount+', 83_791_763, 100.0)])
         self.assertFalse(any(r.get('cohort') for r in g['roster']))
 
+    def test_many_cohorts_fit_the_room(self):
+        # Custom on the picker (2026-11-03): up to twenty cohorts; the seats scale down to the room's cap, at least one each
+        t = _twin()
+        many = [{'name': f'Cohort {i + 1}', 'composition': ('men' if i % 2 else 'women'), 'seats': 3} for i in range(14)]
+        segs = PI.cohort_segments(many, t['meta']['key'])
+        self.assertEqual(len(segs), 14)
+        g = P.build_group([t], segments=segs, in_room=12, seed='t|many')
+        self.assertLessEqual(g['in_room'], P.MAX_IN_ROOM)
+        self.assertEqual(len(g['segments']), 14)
+        self.assertTrue(all(sg['seats'] >= 1 for sg in g['segments']))
+        self.assertEqual(len(PI.cohort_segments([{'name': f'C{i}', 'seats': 1} for i in range(30)], 'k')), PI.MAX_COHORTS)
+
     def test_cohort_segments_needs_two(self):
         self.assertEqual(PI.cohort_segments([{'name': 'Men', 'composition': 'men', 'seats': 4}], 'k'), [])
         self.assertEqual(PI.cohort_segments(None, 'k'), [])

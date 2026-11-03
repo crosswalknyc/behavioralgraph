@@ -51805,6 +51805,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-pi-cohort .dtw-pi-coh-seats { grid-area: seats; text-align: center; }
         #digitalTwinsIQView .dtw-pi-cohort .dtw-pi-coh-comp { grid-area: comp; }
         #digitalTwinsIQView .dtw-pi-cohort-head { display: grid; grid-template-columns: minmax(0, 1fr) 56px; gap: 6px; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dtw-mute); margin-top: 6px; }
+        #digitalTwinsIQView .dtw-pi-cohort-custom { margin: 2px 0 4px; }
+        #digitalTwinsIQView .dtw-pi-cohort-custom .dtw-in { width: 96px; }
         #digitalTwinsIQView .dtw-pi-seatrow .who .cohort { color: var(--dtw-mute); font-weight: 500; }
         #digitalTwinsIQView .dtw-pi-legend .coh { white-space: nowrap; }
         #digitalTwinsIQView .dtw-pi-byco { margin-top: 5px; font-size: 11.5px; color: var(--dtw-body); line-height: 15px; }
@@ -54772,23 +54774,29 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // ---- cohorts (Jenna, 2026-11-02): cut the audience into named groups at setup, each with its composition
             // in words (from the twin's base: men, women, men with children, Spanish speakers) and the panelists wanted
             // in it; every cohort stands for its own share of the twin, and the results split by cohort.
-            var PI_COHORT_COLORS = ['#E682FF', '#3358FF', '#C7F23E', '#B7B3D8', '#FF9F43', '#2ED8C3', '#F25C54', '#8E3FA8'];
+            var PI_COHORT_COLORS = ['#E682FF', '#3358FF', '#C7F23E', '#B7B3D8', '#FF9F43', '#2ED8C3', '#F25C54', '#8E3FA8', '#FFD166', '#06D6A0', '#EF476F', '#73C2FB'];
+            var PI_COHORT_MAX = 20;
+            function piCohortSeatsDefault(n) { return n <= 9 ? 4 : (n <= 13 ? 3 : 2); }
             var PI_COHORT_EXAMPLES = [['Men', 'men'], ['Women', 'women'], ['Dads', 'men with children'], ['Spanish speakers', 'Spanish speakers'], ['Under 35', 'adults 18 to 34'], ['Parents', 'parents'], ['College grads', 'college graduates'], ['Suburban', 'suburban']];
             function piCohortBuilderHtml() {
-                var n = Number(S.piCohortN || 1);
-                var opts = [1, 2, 3, 4, 5, 6].map(function(k) { return '<option value="' + k + '"' + (k === n ? ' selected' : '') + '>' + (k === 1 ? 'One room, no cohorts' : k + ' cohorts') + '</option>'; }).join('');
+                var n = Math.max(1, Math.min(PI_COHORT_MAX, Number(S.piCohortN || 1)));
+                var custom = !!S.piCohortCustom || n > 6;
+                var opts = [1, 2, 3, 4, 5, 6].map(function(k) { return '<option value="' + k + '"' + (k === n && !custom ? ' selected' : '') + '>' + (k === 1 ? 'One room, no cohorts' : k + ' cohorts') + '</option>'; }).join('')
+                    + '<option value="custom"' + (custom ? ' selected' : '') + '>Custom</option>';
+                // Custom (Jenna, 2026-11-03): type any number of cohorts, up to twenty
+                var customBox = custom ? '<div class="dtw-pi-cohort-custom"><label class="dtw-field" for="dtwPiCohortCustom">How many cohorts</label><input id="dtwPiCohortCustom" class="dtw-in" inputmode="numeric" value="' + esc(n > 1 ? n : '') + '" placeholder="8" onchange="dtwPilotCohortN(this.value, true)" onkeydown="if(event.key===\'Enter\'){event.preventDefault();dtwPilotCohortN(this.value, true);}"></div>' : '';
                 var rows = '';
                 if (n > 1) {
                     rows = '<div class="dtw-pi-cohort-head"><span>Name, then who is in it</span><span>Seats</span></div>';
                     for (var i = 0; i < n; i++) {
                         var ex = PI_COHORT_EXAMPLES[i % PI_COHORT_EXAMPLES.length], saved = (S.piCohorts || [])[i] || {};
                         rows += '<div class="dtw-pi-cohort"><input class="dtw-in dtw-pi-coh-name" placeholder="' + esc(ex[0]) + '" value="' + esc(saved.name || '') + '" maxlength="60" aria-label="Cohort name">'
-                            + '<input class="dtw-in dtw-pi-coh-seats" inputmode="numeric" value="' + esc(saved.seats || 4) + '" aria-label="Seats in this cohort">'
+                            + '<input class="dtw-in dtw-pi-coh-seats" inputmode="numeric" value="' + esc(saved.seats || piCohortSeatsDefault(n)) + '" aria-label="Seats in this cohort">'
                             + '<input class="dtw-in dtw-pi-coh-comp" placeholder="' + esc(ex[1]) + '" value="' + esc(saved.composition || '') + '" maxlength="160" aria-label="Who is in this cohort"></div>';
                     }
                     rows += '<div class="dtw-pi-fn">Describe each cohort in plain words from this audience (men with children, Spanish speakers, women 25 to 44, college grads $100k+). Each one stands for its own share of the whole audience, and the dial, the scorecard and every answer split by cohort.</div>';
                 }
-                return '<label class="dtw-field">Cohorts</label><select id="dtwPiCohortN" class="dtw-in" onchange="dtwPilotCohortN(this.value)">' + opts + '</select><div class="dtw-pi-cohorts" id="dtwPiCohorts">' + rows + '</div>';
+                return '<label class="dtw-field">Cohorts</label><select id="dtwPiCohortN" class="dtw-in" onchange="dtwPilotCohortN(this.value)">' + opts + '</select><div class="dtw-pi-cohorts" id="dtwPiCohorts">' + customBox + rows + '</div>';
             }
             function piReadCohorts() {
                 var n = Number(S.piCohortN || 1);
@@ -54805,13 +54813,27 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 S.piCohorts = out;
                 return out;
             }
-            window.dtwPilotCohortN = function(v) {
+            window.dtwPilotCohortN = function(v, typed) {
                 try { piReadCohorts(); } catch (_) {}
-                S.piCohortN = parseInt(v || '1', 10) || 1;
+                var wasCustom = !!S.piCohortCustom;
+                if (String(v) === 'custom') {
+                    // the picker's Custom: keep the typed count if there is one, else start at eight and wait for the number
+                    S.piCohortCustom = true;
+                    S.piCohortN = Math.max(2, Math.min(PI_COHORT_MAX, Number(S.piCohortN || 0) > 6 ? Number(S.piCohortN) : 8));
+                } else if (typed) {
+                    var k = parseInt(v || '0', 10) || 0;
+                    if (k < 2) { fgToast('Type a number of cohorts from 2 to ' + PI_COHORT_MAX + '.'); return; }
+                    S.piCohortCustom = true;
+                    S.piCohortN = Math.min(PI_COHORT_MAX, k);
+                } else {
+                    S.piCohortCustom = false;
+                    S.piCohortN = parseInt(v || '1', 10) || 1;
+                }
                 var box = el('dtwPiCohorts'); if (!box) return;
                 var tmp = document.createElement('div'); tmp.innerHTML = piCohortBuilderHtml();
                 var fresh = tmp.querySelector('#dtwPiCohorts'); if (fresh) box.innerHTML = fresh.innerHTML;
-                var room = el('dtwPiRoom'); if (room && S.piCohortN > 1) room.value = String(S.piCohortN * 4);
+                var room = el('dtwPiRoom'); if (room && S.piCohortN > 1) room.value = String(S.piCohortN * piCohortSeatsDefault(S.piCohortN));
+                if (S.piCohortCustom && !wasCustom && !typed) { var ci = el('dtwPiCohortCustom'); if (ci) { try { ci.focus(); ci.select(); } catch (_) {} } }
             };
             function piCohortSplits(s) {
                 var sp = ((s || {}).dial || {}).splits || {};
