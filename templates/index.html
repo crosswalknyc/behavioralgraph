@@ -51798,7 +51798,26 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-pi-legend select.dtw-in { display: inline-block; width: auto; padding: 2px 6px; font-size: 11px; background: transparent; }
         /* cohorts (2026-11-02): the builder rows in the setup form, the cohort tag on a seat, the cohort chips under the dial */
         #digitalTwinsIQView .dtw-pi-cohorts { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 2px; }
-        #digitalTwinsIQView .dtw-pi-cohort { display: grid; grid-template-columns: minmax(0, 1fr) 56px; grid-template-areas: 'name seats' 'comp comp'; gap: 4px 6px; align-items: center; padding-bottom: 6px; border-bottom: 1px solid var(--dtw-hair, var(--dtw-rule)); }
+        #digitalTwinsIQView .dtw-pi-cohort { display: grid; grid-template-columns: minmax(0, 1fr) 56px; grid-template-areas: 'name seats' 'comp comp' 'pick pick'; gap: 4px 6px; align-items: center; padding-bottom: 6px; border-bottom: 1px solid var(--dtw-hair, var(--dtw-rule)); }
+        /* a cohort's demographics are picked from the standard list (2026-11-03): chips on the row, an inline picker under it */
+        #digitalTwinsIQView .dtw-pi-coh-demos { grid-area: comp; display: flex; flex-wrap: wrap; gap: 5px; align-items: center; min-height: 26px; }
+        #digitalTwinsIQView .dtw-pi-coh-chip { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--dtw-rule); border-radius: 999px; padding: 2px 8px 2px 9px; font-size: 11px; color: var(--dtw-ink); background: var(--dtw-raised); line-height: 16px; }
+        #digitalTwinsIQView .dtw-pi-coh-chip .k { color: var(--dtw-mute); font-size: 10px; letter-spacing: 0.04em; }
+        #digitalTwinsIQView .dtw-pi-coh-chip button { appearance: none; border: 0; background: transparent; color: var(--dtw-mute); font: inherit; font-size: 13px; line-height: 1; padding: 0 0 0 2px; cursor: pointer; }
+        #digitalTwinsIQView .dtw-pi-coh-chip button:hover { color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-pi-coh-add { appearance: none; border: 1px dashed var(--dtw-rule); background: transparent; border-radius: 999px; color: var(--dtw-body); font: inherit; font-size: 11px; padding: 3px 10px; cursor: pointer; line-height: 16px; }
+        #digitalTwinsIQView .dtw-pi-coh-add:hover, #digitalTwinsIQView .dtw-pi-coh-add.on { color: var(--dtw-ink); border-color: var(--dtw-ink); border-style: solid; }
+        #digitalTwinsIQView .dtw-pi-coh-empty { font-size: 11px; color: var(--dtw-mute); }
+        #digitalTwinsIQView .dtw-pi-coh-picker { grid-area: pick; border: 1px solid var(--dtw-rule); border-radius: 10px; padding: 8px 10px 6px; background: var(--dtw-raised); margin-top: 2px; }
+        #digitalTwinsIQView .dtw-pi-dcat { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 6px 10px; align-items: start; padding: 5px 0; border-bottom: 1px solid var(--dtw-hair, var(--dtw-rule)); }
+        #digitalTwinsIQView .dtw-pi-dcat:last-of-type { border-bottom: 0; }
+        #digitalTwinsIQView .dtw-pi-dcat .k { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dtw-mute); padding-top: 5px; line-height: 13px; }
+        #digitalTwinsIQView .dtw-pi-dcat .pills { display: flex; flex-wrap: wrap; gap: 4px; }
+        #digitalTwinsIQView .dtw-pill { appearance: none; background: transparent; border: 1px solid var(--dtw-rule); color: var(--dtw-body); border-radius: 999px; padding: 3px 9px; font: inherit; font-size: 11px; line-height: 15px; cursor: pointer; }
+        #digitalTwinsIQView .dtw-pill:hover { color: var(--dtw-ink); border-color: var(--dtw-body); }
+        #digitalTwinsIQView .dtw-pill.on { border-color: var(--dtw-accent); color: var(--dtw-ink); background: var(--dtw-accent-soft); }
+        #digitalTwinsIQView .dtw-pi-dcat-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding-top: 8px; font-size: 11px; color: var(--dtw-mute); }
+        #digitalTwinsIQView .dtw-pi-dcat-foot .dtw-btn { padding: 4px 12px; font-size: 11px; }
         #digitalTwinsIQView .dtw-pi-cohort:last-of-type { border-bottom: 0; }
         #digitalTwinsIQView .dtw-pi-cohort .dtw-in { margin: 0; }
         #digitalTwinsIQView .dtw-pi-cohort .dtw-pi-coh-name { grid-area: name; }
@@ -54828,8 +54847,138 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // in it; every cohort stands for its own share of the twin, and the results split by cohort.
             var PI_COHORT_COLORS = ['#E682FF', '#3358FF', '#C7F23E', '#B7B3D8', '#FF9F43', '#2ED8C3', '#F25C54', '#8E3FA8', '#FFD166', '#06D6A0', '#EF476F', '#73C2FB'];
             var PI_COHORT_MAX = 20;
+            // The standard demographics a cohort is picked from (Jenna, 2026-11-03: "selected from our standard
+            // demographics"). Generated from migration/digital_twin_demos.py; scripts/test_digital_twin_demos.py
+            // holds the two in step. Within a category the picks combine as either; across categories as both.
+            var DTW_DEMOS = [{"key": "GENDER", "label": "Gender", "values": ["Female", "Male", "Non-Binary", "Trans Female", "Trans Male"]}, {"key": "AGE", "label": "Age", "values": ["17 and Under", "18-24", "25-34", "35-44", "45-54", "55-64", "65 or Older"]}, {"key": "ETHNICITY", "label": "Ethnicity", "values": ["White", "Hispanic or Latino", "Black or African American", "Asian", "Another Race/Ethnicity"]}, {"key": "PRIMARY_LANGUAGE", "label": "Primary language", "values": ["English", "Spanish", "Chinese", "Other"]}, {"key": "INCOME", "label": "Household income", "values": ["Less than $25,000", "$25,000 - $49,999", "$50,000 - $74,999", "$75,000 - $99,999", "$100,000 - $149,999", "$150,000 - $249,999", "$250,000 or More"]}, {"key": "EDUCATION", "label": "Education", "values": ["High School or Less", "Some College / Associate Degree", "Bachelors Degree", "Graduate or Professional Degree"]}, {"key": "RELATIONSHIP", "label": "Relationship", "values": ["Single", "In a Relationship", "Married", "Divorced or Separated", "Widowed"]}, {"key": "PARENTAL_STATUS", "label": "Children at home", "values": ["Has Children", "No Children"]}, {"key": "NUMBER_OF_CHILDREN", "label": "Number of children", "values": ["1", "2", "3", "4+"]}, {"key": "AGE_OF_CHILDREN", "label": "Age of children", "values": ["Under 3", "3 to 5", "6 to 10", "11 to 13", "14 to 17"]}, {"key": "OCCUPATION", "label": "Occupation", "values": ["Management, Business & Professional", "Healthcare Practitioners or Support", "Sales & Retail", "Education or Library Services", "Service & Hospitality", "Science, Technology & Technical Professions", "Skilled Trades/Construction or Maintenance", "Agriculture & Outdoor", "Transportation & Logistics", "Manufacturing & Production", "Public Safety & Protective Services", "Legal", "Other"]}, {"key": "SEXUAL_ORIENTATION", "label": "Sexual orientation", "values": ["Straight / Heterosexual", "Gay or Lesbian", "Another Sexual Orientation"]}];
+            var DTW_DEMO_BY_KEY = {}; DTW_DEMOS.forEach(function(d) { DTW_DEMO_BY_KEY[d.key] = d; });
             function piCohortSeatsDefault(n) { return n <= 9 ? 4 : (n <= 13 ? 3 : 2); }
             var PI_COHORT_EXAMPLES = [['Men', 'men'], ['Women', 'women'], ['Dads', 'men with children'], ['Spanish speakers', 'Spanish speakers'], ['Under 35', 'adults 18 to 34'], ['Parents', 'parents'], ['College grads', 'college graduates'], ['Suburban', 'suburban']];
+            // ---- the selection in words (a mirror of digital_twin_demos.demos_words; the server rewrites it anyway)
+            var PI_AGE_LO = { '17 and Under': 13, '18-24': 18, '25-34': 25, '35-44': 35, '45-54': 45, '55-64': 55, '65 or Older': 65 };
+            var PI_AGE_HI = { '17 and Under': 17, '18-24': 24, '25-34': 34, '35-44': 44, '45-54': 54, '55-64': 64, '65 or Older': 80 };
+            function piRuns(values, order) {
+                var idx = (values || []).map(function(v) { return order.indexOf(v); }).filter(function(i) { return i >= 0; }).sort(function(a, b) { return a - b; });
+                var runs = [], cur = [];
+                idx.forEach(function(i) { if (cur.length && i !== cur[cur.length - 1] + 1) { runs.push(cur); cur = []; } cur.push(i); });
+                if (cur.length) runs.push(cur);
+                return runs.map(function(r) { return r.map(function(i) { return order[i]; }); });
+            }
+            function piAgeWords(values) {
+                return piRuns(values, DTW_DEMO_BY_KEY.AGE.values).map(function(run) {
+                    var a = run[0], z = run[run.length - 1];
+                    if (a === '17 and Under' && z === '17 and Under') return '17 and under';
+                    if (z === '65 or Older') return a === '17 and Under' ? 'all ages' : (PI_AGE_LO[a] + ' and older');
+                    if (a === '17 and Under') return PI_AGE_HI[z] + ' and under';
+                    return PI_AGE_LO[a] + ' to ' + PI_AGE_HI[z];
+                }).join(' or ');
+            }
+            function piIncomeWords(values) {
+                var order = DTW_DEMO_BY_KEY.INCOME.values;
+                var lo = { 'Less than $25,000': 0, '$25,000 - $49,999': 25, '$50,000 - $74,999': 50, '$75,000 - $99,999': 75, '$100,000 - $149,999': 100, '$150,000 - $249,999': 150, '$250,000 or More': 250 };
+                var hi = { 'Less than $25,000': 25, '$25,000 - $49,999': 50, '$50,000 - $74,999': 75, '$75,000 - $99,999': 100, '$100,000 - $149,999': 150, '$150,000 - $249,999': 250, '$250,000 or More': 0 };
+                return piRuns(values, order).map(function(run) {
+                    var a = lo[run[0]], z = hi[run[run.length - 1]];
+                    if (a === 0 && z === 0) return '';
+                    if (a === 0) return 'household income under $' + z + 'k';
+                    if (z === 0) return 'household income $' + a + 'k and up';
+                    return 'household income $' + a + 'k to $' + z + 'k';
+                }).filter(Boolean).join(' or ');
+            }
+            function piDemosWords(demos) {
+                demos = demos || {};
+                var bits = [];
+                var gw = { 'Female': 'women', 'Male': 'men', 'Non-Binary': 'non-binary people', 'Trans Female': 'trans women', 'Trans Male': 'trans men' };
+                if ((demos.GENDER || []).length) bits.push(demos.GENDER.map(function(v) { return gw[v] || v.toLowerCase(); }).join(' or '));
+                if ((demos.AGE || []).length) bits.push(piAgeWords(demos.AGE));
+                if ((demos.ETHNICITY || []).length) bits.push(demos.ETHNICITY.join(' or '));
+                if ((demos.PRIMARY_LANGUAGE || []).length) { var L = demos.PRIMARY_LANGUAGE.filter(function(v) { return v !== 'Other'; }); bits.push(L.length ? L.join(' or ') + ' speakers' : 'speakers of another language'); }
+                if ((demos.INCOME || []).length) { var iw = piIncomeWords(demos.INCOME); if (iw) bits.push(iw); }
+                if ((demos.EDUCATION || []).length) { var ew = { 'High School or Less': 'high school or less', 'Some College / Associate Degree': 'some college', 'Bachelors Degree': 'college graduates', 'Graduate or Professional Degree': 'graduate degrees' }; bits.push(demos.EDUCATION.map(function(v) { return ew[v] || v.toLowerCase(); }).join(' or ')); }
+                if ((demos.RELATIONSHIP || []).length) bits.push(demos.RELATIONSHIP.map(function(v) { return v.toLowerCase(); }).join(' or '));
+                if ((demos.PARENTAL_STATUS || []).length === 1) bits.push(demos.PARENTAL_STATUS[0] === 'Has Children' ? 'with children at home' : 'without children');
+                if ((demos.NUMBER_OF_CHILDREN || []).length) bits.push(demos.NUMBER_OF_CHILDREN.join(' or ') + (demos.NUMBER_OF_CHILDREN.length === 1 && demos.NUMBER_OF_CHILDREN[0] === '1' ? ' child' : ' children'));
+                if ((demos.AGE_OF_CHILDREN || []).length) bits.push('children ' + demos.AGE_OF_CHILDREN.map(function(v) { return v.toLowerCase(); }).join(' or '));
+                if ((demos.OCCUPATION || []).length) bits.push('working in ' + demos.OCCUPATION.map(function(v) { return v === 'Other' ? 'other fields' : v.toLowerCase(); }).join(' or '));
+                if ((demos.SEXUAL_ORIENTATION || []).length) { var ow = { 'Straight / Heterosexual': 'straight', 'Gay or Lesbian': 'gay or lesbian', 'Another Sexual Orientation': 'another sexual orientation' }; bits.push(demos.SEXUAL_ORIENTATION.map(function(v) { return ow[v] || v.toLowerCase(); }).join(' or ')); }
+                return bits.filter(Boolean).join(', ');
+            }
+            function piSuggestName(demos) {
+                demos = demos || {};
+                var bits = [];
+                var gw = { 'Female': 'Women', 'Male': 'Men', 'Non-Binary': 'Non-binary people', 'Trans Female': 'Trans women', 'Trans Male': 'Trans men' };
+                if ((demos.GENDER || []).length) bits.push(demos.GENDER.map(function(v, i) { return i ? (gw[v] || v).toLowerCase() : (gw[v] || v); }).join(' or '));
+                if ((demos.AGE || []).length) bits.push(piAgeWords(demos.AGE));
+                var L = (demos.PRIMARY_LANGUAGE || []).filter(function(v) { return v !== 'Other'; });
+                if (L.length) bits.push(L.join(' or ') + ' speakers');
+                if (!bits.length && (demos.ETHNICITY || []).length) bits.push(demos.ETHNICITY.join(' or '));
+                if ((demos.PARENTAL_STATUS || []).join() === 'Has Children') bits.push('with kids');
+                if (!bits.length) { var w = piDemosWords(demos); return w ? (w.charAt(0).toUpperCase() + w.slice(1)).slice(0, 60) : ''; }
+                return bits.join(' ').slice(0, 60);
+            }
+            function piDemosCount(demos) { var n = 0; Object.keys(demos || {}).forEach(function(k) { n += (demos[k] || []).length; }); return n; }
+            function piCohortDemosHtml(i, demos) {
+                var chips = '';
+                DTW_DEMOS.forEach(function(d) {
+                    ((demos || {})[d.key] || []).forEach(function(v) {
+                        chips += '<span class="dtw-pi-coh-chip"><span class="k">' + esc(d.label) + '</span>' + esc(v) + '<button type="button" aria-label="Remove ' + esc(v) + '" onclick="dtwCohortToggle(' + i + ', \'' + esc(d.key) + '\', \'' + esc(v).replace(/'/g, '&#39;') + '\')">&times;</button></span>';
+                    });
+                });
+                var open = S.piCohortOpen === i;
+                return '<div class="dtw-pi-coh-demos">' + chips
+                    + (chips ? '' : '<span class="dtw-pi-coh-empty">Who is in this cohort:</span>')
+                    + '<button type="button" class="dtw-pi-coh-add' + (open ? ' on' : '') + '" onclick="dtwCohortPick(' + i + ')">' + (open ? 'Done' : (chips ? 'Change' : '+ Pick demographics')) + '</button></div>'
+                    + (open ? piCohortPickerHtml(i, demos) : '');
+            }
+            function piCohortPickerHtml(i, demos) {
+                var html = '<div class="dtw-pi-coh-picker">';
+                DTW_DEMOS.forEach(function(d) {
+                    var on = (demos || {})[d.key] || [];
+                    html += '<div class="dtw-pi-dcat"><span class="k">' + esc(d.label) + '</span><div class="pills">' + d.values.map(function(v) {
+                        return '<button type="button" class="dtw-pill' + (on.indexOf(v) >= 0 ? ' on' : '') + '" onclick="dtwCohortToggle(' + i + ', \'' + esc(d.key) + '\', \'' + esc(v).replace(/'/g, '&#39;') + '\')">' + esc(v) + '</button>';
+                    }).join('') + '</div></div>';
+                });
+                html += '<div class="dtw-pi-dcat-foot"><span>Pick more than one in a row to mean either of them. Picks in different rows all have to be true.</span><button type="button" class="dtw-btn" onclick="dtwCohortPick(' + i + ')">Done</button></div></div>';
+                return html;
+            }
+            function piCohortsSync() {
+                // the names and seats as typed, into S.piCohorts (the picks already live there)
+                var names = document.querySelectorAll('#dtwPiCohorts .dtw-pi-coh-name'), seats = document.querySelectorAll('#dtwPiCohorts .dtw-pi-coh-seats');
+                var out = S.piCohorts || [];
+                for (var i = 0; i < names.length; i++) {
+                    out[i] = out[i] || {};
+                    out[i].name = (names[i].value || '').trim();
+                    out[i].seats = parseInt((seats[i] || {}).value || '0', 10) || out[i].seats || piCohortSeatsDefault(names.length);
+                    out[i].demos = out[i].demos || {};
+                }
+                S.piCohorts = out;
+            }
+            function piRerenderCohorts() {
+                var box = el('dtwPiCohorts'); if (!box) return;
+                var tmp = document.createElement('div'); tmp.innerHTML = piCohortBuilderHtml();
+                var fresh = tmp.querySelector('#dtwPiCohorts'); if (fresh) box.innerHTML = fresh.innerHTML;
+                try { piAutosaveSoon(); } catch (_) {}
+            }
+            window.dtwCohortPick = function(i) {
+                piCohortsSync();
+                S.piCohortOpen = (S.piCohortOpen === i) ? null : i;
+                piRerenderCohorts();
+                if (S.piCohortOpen === i) { var p = document.querySelector('#dtwPiCohorts .dtw-pi-coh-picker'); if (p && p.scrollIntoView) { try { p.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (_) {} } }
+            };
+            window.dtwCohortToggle = function(i, key, value) {
+                piCohortsSync();
+                var c = S.piCohorts[i] = S.piCohorts[i] || { name: '', seats: piCohortSeatsDefault(Number(S.piCohortN || 2)), demos: {} };
+                c.demos = c.demos || {};
+                var cur = c.demos[key] || [];
+                var at = cur.indexOf(value);
+                var wasAuto = !c.name || c.name === piSuggestName(c.demos);
+                if (at >= 0) cur.splice(at, 1); else cur.push(value);
+                var order = (DTW_DEMO_BY_KEY[key] || {}).values || [];
+                cur.sort(function(a, b) { return order.indexOf(a) - order.indexOf(b); });
+                if (cur.length) c.demos[key] = cur; else delete c.demos[key];
+                if (wasAuto) c.name = piSuggestName(c.demos);     // a blank name follows the picks until it is typed over
+                piRerenderCohorts();
+            };
             function piCohortBuilderHtml() {
                 var n = Math.max(1, Math.min(PI_COHORT_MAX, Number(S.piCohortN || 1)));
                 var custom = !!S.piCohortCustom || n > 6;
@@ -54842,27 +54991,28 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     rows = '<div class="dtw-pi-cohort-head"><span>Name, then who is in it</span><span>Seats</span></div>';
                     for (var i = 0; i < n; i++) {
                         var ex = PI_COHORT_EXAMPLES[i % PI_COHORT_EXAMPLES.length], saved = (S.piCohorts || [])[i] || {};
-                        rows += '<div class="dtw-pi-cohort"><input class="dtw-in dtw-pi-coh-name" placeholder="' + esc(ex[0]) + '" value="' + esc(saved.name || '') + '" maxlength="60" aria-label="Cohort name">'
+                        rows += '<div class="dtw-pi-cohort" data-ci="' + i + '"><input class="dtw-in dtw-pi-coh-name" placeholder="' + esc(ex[0]) + '" value="' + esc(saved.name || '') + '" maxlength="60" aria-label="Cohort name">'
                             + '<input class="dtw-in dtw-pi-coh-seats" inputmode="numeric" value="' + esc(saved.seats || piCohortSeatsDefault(n)) + '" aria-label="Seats in this cohort">'
-                            + '<input class="dtw-in dtw-pi-coh-comp" placeholder="' + esc(ex[1]) + '" value="' + esc(saved.composition || '') + '" maxlength="160" aria-label="Who is in this cohort"></div>';
+                            + piCohortDemosHtml(i, saved.demos || {}) + '</div>';
                     }
-                    rows += '<div class="dtw-pi-fn">Describe each cohort in plain words from this audience (men with children, Spanish speakers, women 25 to 44, college grads $100k+). Each one stands for its own share of the whole audience, and the dial, the scorecard and every answer split by cohort.</div>';
+                    rows += '<div class="dtw-pi-fn">Pick each cohort from the standard demographics: gender, age, ethnicity, language, income, education, relationship, children, occupation, orientation. Each cohort stands for its own share of the whole audience, and the dial, the scorecard and every answer split by cohort.</div>';
                 }
                 return '<label class="dtw-field">Cohorts</label><select id="dtwPiCohortN" class="dtw-in" onchange="dtwPilotCohortN(this.value)">' + opts + '</select><div class="dtw-pi-cohorts" id="dtwPiCohorts">' + customBox + rows + '</div>';
             }
             function piReadCohorts() {
                 var n = Number(S.piCohortN || 1);
                 if (n <= 1) return [];
-                var names = document.querySelectorAll('#dtwPiCohorts .dtw-pi-coh-name'), comps = document.querySelectorAll('#dtwPiCohorts .dtw-pi-coh-comp'), seats = document.querySelectorAll('#dtwPiCohorts .dtw-pi-coh-seats');
+                piCohortsSync();
                 var out = [];
-                for (var i = 0; i < names.length; i++) {
-                    var name = (names[i].value || '').trim(), comp = ((comps[i] || {}).value || '').trim(), k = parseInt((seats[i] || {}).value || '0', 10) || 0;
-                    if (!name && !comp) continue;
-                    if (!name || !comp) return null;
-                    out.push({ name: name, composition: comp, seats: Math.max(1, Math.min(24, k || 4)) });
+                for (var i = 0; i < n; i++) {
+                    var c = (S.piCohorts || [])[i] || {};
+                    var name = (c.name || '').trim(), demos = c.demos || {}, k = Number(c.seats) || 0;
+                    var picked = piDemosCount(demos) > 0;
+                    if (!name && !picked) continue;
+                    if (!picked) return null;                       // a cohort needs at least one pick
+                    out.push({ name: name || piSuggestName(demos), demos: demos, composition: piDemosWords(demos), seats: Math.max(1, Math.min(24, k || 4)) });
                 }
                 if (out.length < 2) return null;
-                S.piCohorts = out;
                 return out;
             }
             window.dtwPilotCohortN = function(v, typed) {
@@ -54915,9 +55065,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     snap.fields[i.id] = (i.type === 'checkbox') ? !!i.checked : String(i.value == null ? '' : i.value);
                 });
                 snap.options = Array.prototype.map.call(setup.querySelectorAll('.dtw-pi-opt'), function(i) { return String(i.value || ''); });
-                var names = setup.querySelectorAll('#dtwPiCohorts .dtw-pi-coh-name'), comps = setup.querySelectorAll('#dtwPiCohorts .dtw-pi-coh-comp'), seats = setup.querySelectorAll('#dtwPiCohorts .dtw-pi-coh-seats');
+                var names = setup.querySelectorAll('#dtwPiCohorts .dtw-pi-coh-name'), seats = setup.querySelectorAll('#dtwPiCohorts .dtw-pi-coh-seats');
                 for (var k = 0; k < names.length; k++) {
-                    snap.cohorts.push({ name: String(names[k].value || ''), composition: String((comps[k] || {}).value || ''), seats: parseInt((seats[k] || {}).value || '0', 10) || piCohortSeatsDefault(names.length) });
+                    var dem = ((S.piCohorts || [])[k] || {}).demos || {};
+                    snap.cohorts.push({ name: String(names[k].value || ''), demos: dem, composition: piDemosWords(dem), seats: parseInt((seats[k] || {}).value || '0', 10) || piCohortSeatsDefault(names.length) });
                 }
                 var f = el('dtwPiFile'); if (f && f.files && f.files[0]) snap.file_name = f.files[0].name || '';
                 var fs = el('dtwPiFiles'); if (fs && fs.files) snap.files = Array.prototype.map.call(fs.files, function(x) { return x.name || ''; });
@@ -54936,7 +55087,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 (snap.options || []).forEach(function(v, k) { if (opts[k]) opts[k].value = v || ''; });
                 // cohorts: the count and the rows come back exactly as typed
                 var n = Math.max(1, Math.min(PI_COHORT_MAX, Number(snap.cohort_n || (snap.cohorts || []).length || 1)));
-                S.piCohorts = (snap.cohorts || []).map(function(c) { return { name: c.name || '', composition: c.composition || '', seats: c.seats || 4 }; });
+                S.piCohorts = (snap.cohorts || []).map(function(c) { return { name: c.name || '', demos: (c.demos && typeof c.demos === 'object') ? c.demos : {}, composition: c.composition || '', seats: c.seats || 4 }; });
                 if (n !== Number(S.piCohortN || 1) || !!snap.cohort_custom !== !!S.piCohortCustom || (snap.cohorts || []).length) {
                     S.piCohortN = n; S.piCohortCustom = !!snap.cohort_custom || n > 6;
                     var box = el('dtwPiCohorts'); var sel = el('dtwPiCohortN');
@@ -55071,7 +55222,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var watchUrl = ((el('dtwPiWatchUrl') || {}).value || '').trim();
                 var body = { title: title, in_room: parseInt((el('dtwPiRoom') || {}).value || '12', 10) || 12, twins: other && other !== key ? [other] : [], mode: mode };
                 var cohorts = piReadCohorts();
-                if (cohorts === null) { if (st) st.textContent = 'Give every cohort a name and a composition.'; return; }
+                if (cohorts === null) { if (st) st.textContent = 'Pick at least one demographic for every cohort (at least two cohorts).'; return; }
                 if (cohorts.length) { body.cohorts = cohorts; body.in_room = cohorts.reduce(function(a, c) { return a + c.seats; }, 0); }
                 if (watchUrl) body.watch_url = watchUrl;
                 if (cutTitle) body.cut_title = cutTitle;

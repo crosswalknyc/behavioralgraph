@@ -298,6 +298,16 @@ def _weighted_share(t, cat, frac_fn, fallback=1.0):
 def cohort_filter_words(f: dict) -> str:
     """The filter back in plain words, for the seat's card and the page."""
     f = f or {}
+    if f.get('demos'):
+        # a cohort picked from the standard demographics (2026-11-03)
+        from migration.digital_twin_demos import demos_words
+        words = demos_words(f['demos'])
+        extra = []
+        if f.get('city'):
+            extra.append(f"in {f['city']}")
+        if f.get('lifecycle'):
+            extra.append(str(f['lifecycle']))
+        return ', '.join([w for w in [words] + extra if w])
     bits = []
     if f.get('gender') == 'F':
         bits.append('women')
@@ -429,8 +439,50 @@ def _pair_orientation(genders: list, orients: list) -> list:
     return out
 
 
+def _demos_share(t, demos: dict) -> float:
+    """The share of the twin a standard-demographics selection stands for:
+    each category narrows by the twin's own rows for it (the labels are
+    the same vocabulary), the panel-wide share when the twin has none;
+    language reads off the twin's Hispanic share; the children categories
+    condition on the twin's parents once."""
+    from migration import digital_twin_demos as D
+    s = 1.0
+    parents_done = False
+    for d in D.DEMOS:
+        vals = demos.get(d['key'])
+        if not vals:
+            continue
+        key, cat = d['key'], d['cat']
+        if key == 'PRIMARY_LANGUAGE':
+            share = 0.0
+            for v in vals:
+                if v == 'Spanish' and _demo(t, 'ethnicity'):
+                    share += _share_or_fallback(t, 'ethnicity', _eth_pred('hispanic'), 0.19) * SPANISH_AT_HOME
+                else:
+                    share += D.fallback_share(key, [v])
+            s *= clamp(share, 0.002, 1.0)
+            continue
+        if key in ('NUMBER_OF_CHILDREN', 'AGE_OF_CHILDREN'):
+            if not parents_done:
+                s *= _share_or_fallback(t, 'parental', D.value_pred('PARENTAL_STATUS', ['Has Children']), 0.35)
+                parents_done = True
+            s *= D.fallback_share(key, vals)
+            continue
+        if key == 'PARENTAL_STATUS' and vals == ['Has Children']:
+            if not parents_done:
+                s *= _share_or_fallback(t, 'parental', D.value_pred(key, vals), D.fallback_share(key, vals))
+                parents_done = True
+            continue
+        s *= _share_or_fallback(t, cat, D.value_pred(key, vals), D.fallback_share(key, vals))
+    return s
+
+
 def _segment_share(t, f: dict) -> float:
     s = 1.0
+    if f.get('demos'):
+        # the standard-demographics selection carries every category; only the legacy place and lifecycle add to it
+        s *= _demos_share(t, f['demos'])
+        f = {k: v for k, v in f.items() if k in ('city', 'lifecycle')}
     if f.get('gender'):
         s *= _share_of(t, 'gender', _gender_pred(f['gender']))
     if f.get('age'):
@@ -629,37 +681,72 @@ def build_group(twins: list, segments: Optional[list] = None, in_room: int = DEF
         s['seats'] = n
         t = by_key.get(s['twin']) or {}
         f = s['filter'] or {}
-        gender_labs = ([('Female' if f.get('gender') == 'F' else 'Male')] * n) if f.get('gender') in ('F', 'M') else quota_labels(_demo(t, 'gender'), n)
-        # a cohort's seats are drawn from the twin's rows that fit its filter (a cohort of parents seats parents only)
-        orient_rows = _rows_where(t, 'sexual_orientation', _lgbtq_pred, 'LGBTQ+') if f.get('lgbtq') else _demo(t, 'sexual_orientation')
-        orient_labs = _pair_orientation(gender_labs, quota_labels(orient_rows, n))
-        edu_rows = _rows_where(t, 'education', _college_pred(bool(f['college'])), 'Bachelors Degree' if f['college'] else 'High School or Less') if f.get('college') is not None else _demo(t, 'education')
-        edu_labs = _spread(quota_labels(edu_rows, n), seed, s['label'] + '|edu')
-        if f.get('income_min') or f.get('income_max'):
-            inc_rows = _rows_weighted(t, 'income', _income_overlap(float(f.get('income_min') or 0), float(f.get('income_max') or 10_000_000)),
-                                      (f"${int(f['income_min']) // 1000},000 or More" if f.get('income_min') else f"Less than ${int(f['income_max']) // 1000},000"))
+        demos = f.get('demos') if isinstance(f.get('demos'), dict) else {}
+        if demos:
+            from migration import digital_twin_demos as D
+
+            def picked_rows(key, cat):
+                vals = demos.get(key) or []
+                return _rows_where(t, cat, D.value_pred(key, vals), vals[0]) if vals else _demo(t, cat)
         else:
-            inc_rows = _demo(t, 'income')
+            picked_rows = None
+        if demos and demos.get('GENDER'):
+            gender_labs = _spread(quota_labels(picked_rows('GENDER', 'gender'), n), seed, s['label'] + '|gen')
+        else:
+            gender_labs = ([('Female' if f.get('gender') == 'F' else 'Male')] * n) if f.get('gender') in ('F', 'M') else quota_labels(_demo(t, 'gender'), n)
+        # a cohort's seats are drawn from the twin's rows that fit its filter (a cohort of parents seats parents only)
+        if demos:
+            orient_rows = picked_rows('SEXUAL_ORIENTATION', 'sexual_orientation')
+            edu_rows = picked_rows('EDUCATION', 'education')
+            inc_rows = picked_rows('INCOME', 'income')
+            eth_rows = picked_rows('ETHNICITY', 'ethnicity')
+            rel_rows = picked_rows('RELATIONSHIP', 'relationship')
+            kids_picked = bool(demos.get('NUMBER_OF_CHILDREN') or demos.get('AGE_OF_CHILDREN'))
+            par_rows = _rows_where(t, 'parental', D.value_pred('PARENTAL_STATUS', ['Has Children']), 'Has Children') if (kids_picked and not demos.get('PARENTAL_STATUS')) else picked_rows('PARENTAL_STATUS', 'parental')
+            occ_rows = picked_rows('OCCUPATION', 'occupation')
+        else:
+            orient_rows = _rows_where(t, 'sexual_orientation', _lgbtq_pred, 'LGBTQ+') if f.get('lgbtq') else _demo(t, 'sexual_orientation')
+            edu_rows = _rows_where(t, 'education', _college_pred(bool(f['college'])), 'Bachelors Degree' if f['college'] else 'High School or Less') if f.get('college') is not None else _demo(t, 'education')
+            if f.get('income_min') or f.get('income_max'):
+                inc_rows = _rows_weighted(t, 'income', _income_overlap(float(f.get('income_min') or 0), float(f.get('income_max') or 10_000_000)),
+                                          (f"${int(f['income_min']) // 1000},000 or More" if f.get('income_min') else f"Less than ${int(f['income_max']) // 1000},000"))
+            else:
+                inc_rows = _demo(t, 'income')
+            eth_rows = _rows_where(t, 'ethnicity', _eth_pred(f['ethnicity']), {'hispanic': 'Hispanic or Latino', 'black': 'Black or African American', 'asian': 'Asian', 'white': 'White'}.get(str(f['ethnicity']).lower(), str(f['ethnicity']))) if f.get('ethnicity') else _demo(t, 'ethnicity')
+            rel_rows = _rows_where(t, 'relationship', _rel_pred(str(f['relationship'])), 'Married' if f['relationship'] == 'married' else 'Single') if f.get('relationship') else _demo(t, 'relationship')
+            par_rows = _rows_where(t, 'parental', _parent_pred(bool(f['parent'])), 'Has Children' if f['parent'] else 'No Children') if f.get('parent') is not None else _demo(t, 'parental')
+            occ_rows = _demo(t, 'occupation')
+        orient_labs = _pair_orientation(gender_labs, quota_labels(orient_rows, n))
+        edu_labs = _spread(quota_labels(edu_rows, n), seed, s['label'] + '|edu')
         inc_labs = _spread(quota_labels(inc_rows, n), seed, s['label'] + '|inc')
-        eth_rows = _rows_where(t, 'ethnicity', _eth_pred(f['ethnicity']), {'hispanic': 'Hispanic or Latino', 'black': 'Black or African American', 'asian': 'Asian', 'white': 'White'}.get(str(f['ethnicity']).lower(), str(f['ethnicity']))) if f.get('ethnicity') else _demo(t, 'ethnicity')
         eth_labs = _spread(quota_labels(eth_rows, n), seed, s['label'] + '|eth')
-        rel_rows = _rows_where(t, 'relationship', _rel_pred(str(f['relationship'])), 'Married' if f['relationship'] == 'married' else 'Single') if f.get('relationship') else _demo(t, 'relationship')
         rel_labs = _spread(quota_labels(rel_rows, n), seed, s['label'] + '|rel')
-        par_rows = _rows_where(t, 'parental', _parent_pred(bool(f['parent'])), 'Has Children' if f['parent'] else 'No Children') if f.get('parent') is not None else _demo(t, 'parental')
         par_labs = _spread(quota_labels(par_rows, n), seed, s['label'] + '|par')
-        occ_labs = _spread(quota_labels(_demo(t, 'occupation'), n), seed, s['label'] + '|occ')
+        occ_labs = _spread(quota_labels(occ_rows, n), seed, s['label'] + '|occ')
+        # the children categories and the language, when picked, ride on every seat of the cohort
+        kids_n_labs = kids_age_labs = lang_labs = None
+        if demos:
+            if demos.get('NUMBER_OF_CHILDREN'):
+                kids_n_labs = _spread(quota_labels([{'label': v, 'pct': D.SHARE['NUMBER_OF_CHILDREN'].get(v, 1.0)} for v in demos['NUMBER_OF_CHILDREN']], n), seed, s['label'] + '|kidn')
+            if demos.get('AGE_OF_CHILDREN'):
+                kids_age_labs = _spread(quota_labels([{'label': v, 'pct': D.SHARE['AGE_OF_CHILDREN'].get(v, 1.0)} for v in demos['AGE_OF_CHILDREN']], n), seed, s['label'] + '|kida')
+            if demos.get('PRIMARY_LANGUAGE'):
+                lang_labs = _spread(quota_labels([{'label': v, 'pct': D.SHARE['PRIMARY_LANGUAGE'].get(v, 1.0)} for v in demos['PRIMARY_LANGUAGE']], n), seed, s['label'] + '|lang')
         # an electorate or a place seats by party lean and by urban / suburban / rural too (Jenna 2026-10-30)
         party_rows = _rows_where(t, 'party', _party_pred(str(f['party'])), {'democrat': 'Democrat', 'republican': 'Republican', 'independent': 'Independent'}.get(f['party'], str(f['party']))) if f.get('party') else _demo(t, 'party')
         party_labs = _spread(quota_labels(party_rows, n), seed, s['label'] + '|party')
         urban_rows = _rows_where(t, 'urbanicity', _urban_pred(str(f['urbanicity'])), str(f['urbanicity']).capitalize()) if f.get('urbanicity') else _demo(t, 'urbanicity')
         urban_labs = _spread(quota_labels(urban_rows, n), seed, s['label'] + '|urb')
-        age_labs = quota_labels(_demo(t, 'age'), n)
+        age_labs = _spread(quota_labels(picked_rows('AGE', 'age'), n), seed, s['label'] + '|age') if (demos and demos.get('AGE')) else quota_labels(_demo(t, 'age'), n)
         for j in range(n):
             seat_no += 1
-            g = f.get('gender') if f.get('gender') in ('F', 'M') else _gender_code(gender_labs[j] if j < len(gender_labs) else '')
+            g = f.get('gender') if (f.get('gender') in ('F', 'M') and not (demos and demos.get('GENDER'))) else _gender_code(gender_labs[j] if j < len(gender_labs) else '')
             bank = _NAMES_F if g == 'F' else (_NAMES_X if g == 'X' else _NAMES_M)
             name = bank[int(unit('name', seed, s['label'], j) * len(bank))]
-            if f.get('age'):
+            if demos and demos.get('AGE'):
+                lab_j = age_labs[j] if j < len(age_labs) else ''
+                age = (14 + int(4 * unit('age', seed, s['label'], j))) if str(lab_j).startswith('17') else _age_in_bucket(lab_j, unit('age', seed, s['label'], j))
+            elif f.get('age'):
                 lo, hi = f['age'] if isinstance(f['age'], (list, tuple)) else (18, 54)
                 age = int(lo + (hi - lo) * unit('age', seed, s['label'], j))
             else:
@@ -676,7 +763,10 @@ def build_group(twins: list, segments: Optional[list] = None, in_room: int = DEF
                            'occupation': occ_labs[j] if j < len(occ_labs) else '',
                            'party': party_labs[j] if j < len(party_labs) else '',
                            'urbanicity': urban_labs[j] if j < len(urban_labs) else '',
-                           **({'language': str(f['language'])} if f.get('language') else {}),
+                           **({'language': str(f['language'])} if f.get('language') and not lang_labs else {}),
+                           **({'language': lang_labs[j]} if lang_labs and j < len(lang_labs) and lang_labs[j] != 'Other' else {}),
+                           **({'children': kids_n_labs[j]} if kids_n_labs and j < len(kids_n_labs) else {}),
+                           **({'children_ages': kids_age_labs[j]} if kids_age_labs and j < len(kids_age_labs) else {}),
                            **({'cohort': s['label']} if s.get('composition') else {})})
     # no two seats share a name
     seen = set()

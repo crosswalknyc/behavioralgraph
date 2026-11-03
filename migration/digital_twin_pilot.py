@@ -1709,14 +1709,36 @@ def cohort_segments(cohorts, twin_key: str) -> list:
         if not isinstance(c, dict):
             continue
         name = ' '.join(str(c.get('name') or c.get('label') or '').split())[:60]
+        if not name and isinstance(c.get('demos'), dict):
+            # a cohort picked from the standard demographics names itself when the name is left blank
+            from migration import digital_twin_demos as _D
+            name = _D.suggest_name(c.get('demos'))[:60]
         if not name:
             continue
         try:
             n_seats = int(c.get('seats') or c.get('panelists') or 0)
         except (TypeError, ValueError):
             n_seats = 0
-        out.append({'label': name, 'composition': ' '.join(str(c.get('composition') or name).split())[:160],
-                    'seats': max(1, min(24, n_seats)) if n_seats else 0, 'twin': str(twin_key or '')})
+        seg = {'label': name, 'composition': ' '.join(str(c.get('composition') or name).split())[:160],
+               'seats': max(1, min(24, n_seats)) if n_seats else 0, 'twin': str(twin_key or '')}
+        # a cohort picked from the standard demographics (Jenna, 2026-11-03): the selection is the filter and
+        # its words are the composition; free text never has to be read
+        from migration import digital_twin_demos as D
+        demos = D.clean_demos(c.get('demos'))
+        if demos:
+            seg['demos'] = demos
+            seg['composition'] = (D.demos_words(demos) or name)[:160]
+            f = {'demos': demos}
+            codes = D.gender_codes(demos.get('GENDER') or [])
+            if len(codes) == 1:
+                f['gender'] = codes[0]
+            span = D.age_span(demos.get('AGE') or [])
+            if span:
+                f['age'] = list(span)
+            if demos.get('PRIMARY_LANGUAGE') == ['Spanish']:
+                f['language'] = 'Spanish'
+            seg['filter'] = f
+        out.append(seg)
     return out if len(out) >= 2 else []
 
 
@@ -1987,13 +2009,22 @@ def _setup_clean(body: dict) -> dict:
         if not isinstance(c, dict):
             continue
         name, comp = str(c.get('name') or '')[:60], str(c.get('composition') or '')[:160]
-        if not (name or comp):
+        if not (name or comp or (isinstance(c.get('demos'), dict) and any(c['demos'].values()))):
             continue
         try:
             seats = int(c.get('seats') or 0)
         except (TypeError, ValueError):
             seats = 0
-        cohorts.append({'name': name, 'composition': comp, 'seats': max(1, min(24, seats or 4))})
+        row = {'name': name, 'composition': comp, 'seats': max(1, min(24, seats or 4))}
+        try:
+            from migration import digital_twin_demos as D
+            demos = D.clean_demos(c.get('demos'))
+            if demos:
+                row['demos'] = demos
+                row['composition'] = (D.demos_words(demos) or comp)[:160]
+        except Exception:
+            pass
+        cohorts.append(row)
     try:
         cohort_n = max(1, min(20, int(body.get('cohort_n') or (len(cohorts) if cohorts else 1))))
     except (TypeError, ValueError):
