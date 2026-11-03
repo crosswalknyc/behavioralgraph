@@ -225,6 +225,46 @@ class Answer(unittest.TestCase):
         self.assertTrue(out.get('sent'), out)
         self.assertEqual(cap.calls[0]['files'][0][1], 'Knots_Landing_on_Prime_Video_Digital_Journey.xlsx')
 
+    def test_a_profile_with_a_read_that_carries_a_door_word_still_goes(self):
+        # Armine Meseldzhyan (Lionsgate), 2026-11-03: "Email me this file" with New Heights Podcast Listeners open;
+        # the thread's last read said "football-anchored" and the door refused the whole send on 'anchor'.
+        host = _host()
+        host.s3_client.objs['New_Heights_Podcast_Listeners_10_21_2026_21_17.csv'] = b'Column,Value\nBRAND INPUT,New Heights\n'
+        host.s3_client.objs['New Heights Podcast Listeners - Avid Fan.csv'] = b'Column,Value\nBRAND INPUT,New Heights\n'
+        ctx = {'view': 'profile-iq', 'primary': {'s3_key': 'New_Heights_Podcast_Listeners_10_21_2026_21_17.csv', 'name': 'New Heights Podcast Listeners'},
+               'cuts': [{'s3_key': 'New Heights Podcast Listeners - Avid Fan.csv', 'name': 'New Heights Podcast Listeners - Avid Fan'}], 'view_context': None}
+        read = ("On New Heights Podcast Listeners:\n\n43.1% of New Heights listeners, 7,876,358 people, already use a free ad-supported service.\n\n"
+                "- The 1,380,038 Avid New Heights listeners are the sharpest slice: football-anchored, male-tilted and carrying the heaviest fantasy signals.\n"
+                "- Panel reach on Tubi is 4,112,004.\n- Pluto TV follows at 2,901,117.")
+        hist = [{'role': 'user', 'text': 'how many use FAST'}, {'role': 'agent', 'text': read, 'meta': {'read_job_id': 'abc'}}]
+        out, cap = self._run('Email me this file', history=hist, ctx=ctx, host=host)
+        self.assertTrue(out.get('sent'), out)
+        call = cap.calls[0]
+        self.assertEqual(call['csv_name'], 'New_Heights_Podcast_Listeners_Profile.csv')
+        self.assertEqual(call['files'][0][1], 'New_Heights_Podcast_Listeners_Avid_Fan.csv')
+        body = call['body']
+        self.assertIn('football-centered', body)
+        self.assertNotIn('anchored', body)
+        self.assertNotIn('Panel reach', body)                   # a line the door would refuse is dropped
+        self.assertIn('Pluto TV follows', body)
+        from prometheus import outbound_mail as om
+        self.assertEqual(om.banned_tokens(body), [])
+        self.assertIn('Sent the profile and its cut', out['reply'])
+
+    def test_a_refusal_never_shows_the_doors_reason(self):
+        def refusing(**kw):
+            return {'sent': False, 'reason': "banned vocabulary after scrub: ['anchor']"}
+        out = sf.answer('email me this file', 'cbisson', user=USER, ctx=JOURNEY_PAGE, history=[], host=_host(), send=refusing)
+        self.assertFalse(out.get('sent'))
+        self.assertNotIn('banned', out['reply'])
+        self.assertNotIn('scrub', out['reply'])
+        self.assertIn('still in Digital Journey IQ', out['reply'])
+
+    def test_mail_safe_rewords_then_drops(self):
+        self.assertEqual(sf.mail_safe('The anchor brand is Tubi. A football-anchored read.'), 'The lead brand is Tubi. A football-centered read.')
+        self.assertEqual(sf.mail_safe('Line one.\nThe pipeline built it.\nLine three.'), 'Line one.\nLine three.')
+        self.assertEqual(sf.mail_safe('Only the panel.'), '')
+
     def test_nothing_in_hand_asks_once(self):
         out, cap = self._run('email me this file', ctx={'view': 'profile-iq', 'primary': None, 'view_context': None},
                              host=_host(threads={'threads': []}))

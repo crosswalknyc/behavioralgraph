@@ -312,6 +312,44 @@ def _clean_name(s):
     return re.sub(r"[^A-Za-z0-9]+", "_", str(s or '')).strip('_') or 'profile'
 
 
+# A read that travels with a file is cleaned for the mail door, never
+# refused at it (2026-11-03, Armine Meseldzhyan: "football-anchored" in
+# the New Heights read tripped the door's 'anchor' token and the file
+# did not go). Descriptive uses of a banned word are reworded; a line
+# that still carries one is dropped; the file always goes.
+_MAIL_SWAPS = (
+    (re.compile(r'\b(\w+)-anchored\b', re.I), r'\1-centered'),
+    (re.compile(r'\banchored\b', re.I), 'centered'),
+    (re.compile(r'\banchors\b', re.I), 'leads'),
+    (re.compile(r'\banchor\b', re.I), 'lead'),
+    (re.compile(r'\bplaceholder\b', re.I), 'stand-in'),
+    (re.compile(r'\bresearch(?:ed|ing)?\b', re.I), 'read'),
+    (re.compile(r'\breasoned\b', re.I), 'read'),
+)
+
+
+def mail_safe(text):
+    """The text with the mail door's banned tokens reworded or, when a
+    line still carries one, that line removed. Empty when nothing safe
+    is left."""
+    try:
+        from . import outbound_mail as _om
+        banned = _om.banned_tokens
+    except Exception:
+        return str(text or '')
+    out = []
+    for line in str(text or '').split('\n'):
+        fixed = line
+        for rx, rep in _MAIL_SWAPS:
+            fixed = rx.sub(rep, fixed)
+        if banned(fixed):
+            continue
+        out.append(fixed)
+    txt = '\n'.join(out)
+    txt = re.sub(r'\n{3,}', '\n\n', txt).strip()
+    return txt
+
+
 def answer(text, uname, *, user, ctx, history, host, send=None, subjects=None):
     """Payload for the chat, or None when nothing is in hand to send.
     ``send`` is injected by tests; defaults to the house mail door.
@@ -429,8 +467,13 @@ def answer(text, uname, *, user, ctx, history, host, send=None, subjects=None):
                 + ". It is also in your Select Profile dropdown.")
     read = _last_read(history) if not (named or journey_key) else None    # a workbook travels alone
     if read is not None:
-        rtxt = str(read.get('text') or '').strip()
-        body = (body + "\n\nThe latest read from this thread:\n\n" + rtxt) if body else rtxt
+        rtxt = mail_safe(str(read.get('text') or '').strip())
+        if rtxt and attachments:
+            body = body + "\n\nThe latest read from this thread:\n\n" + rtxt
+        elif rtxt:
+            body = rtxt
+        elif not attachments:
+            read = None
         if not subject_name:
             meta = read.get('meta') if isinstance(read.get('meta'), dict) else {}
             subject_name = str(meta.get('subject') or read.get('subject') or '').strip() or 'your read'
@@ -456,11 +499,13 @@ def answer(text, uname, *, user, ctx, history, host, send=None, subjects=None):
     what = ('the workbook' if journey_key else ('the profile' + (' and its cut' if len(attachments) > 1 else ''))) if attachments \
         else ('the summary' if named else 'the read')
     where = 'Digital Journey IQ' if journey_key else 'your Select Profile dropdown'
+    if not sent:
+        # the door's reason is for the log, never for the reader
+        print(f"[send-file] not sent to {email}: {str((r or {}).get('reason') or 'mail door closed')[:160]}")
     reply = (f"Sent {what} to {email}." if sent
-             else f"I could not send that just now ({str((r or {}).get('reason') or 'mail door closed')[:80]}). "
-                  f"The file is still in {where}.")
+             else f"I could not send that just now. The file is still in {where}; ask me again in a minute.")
     return {'success': True, 'action': 'answer', 'reply': reply, 'followups': [],
             'offer_deck': False, 'deck_angle': None, 'subject': subject_name, 'sent': sent}
 
 
-__all__ = ['parse', 'answer', 'named_subject', 'clean_subject', 'follows_clarifier', 'user_journeys', 'match_journeys', 'open_journey_key', 'journey_workbook', 'CLARIFIER_LEAD']
+__all__ = ['parse', 'answer', 'mail_safe', 'named_subject', 'clean_subject', 'follows_clarifier', 'user_journeys', 'match_journeys', 'open_journey_key', 'journey_workbook', 'CLARIFIER_LEAD']
