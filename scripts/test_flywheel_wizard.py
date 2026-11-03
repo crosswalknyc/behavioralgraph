@@ -233,11 +233,75 @@ def test_upstream_failure_and_retry():
     check('the research asks for every owned surface', 'EVERY company, service or product' in seen['system'] and 'EVERY OWNED SURFACE IS A ROW' in seen['system'])
 
 
+class _FakeS3:
+    """Just enough of S3 for existing_studies: a flywheel/ listing and the study bodies."""
+    def __init__(self, files):
+        self.files = files
+
+    def list_objects_v2(self, Bucket, Prefix, **kw):
+        return {'Contents': [{'Key': k} for k in self.files if k.startswith(Prefix)], 'IsTruncated': False}
+
+    def get_object(self, Bucket, Key):
+        return {'Body': io.BytesIO(self.files[Key].encode('utf-8'))}
+
+
+def test_existing_study():
+    print('5. a study already on the page is offered before anything is charged')
+    csv_text, name, _s = FW.build_flywheel_study(WIZARD_INPUTS, PRIM)
+    other, _n2, _s2 = FW.build_flywheel_study(dict(WIZARD_INPUTS, subject='Reacher', entry_point='watched Reacher on Prime Video', captured_action='watched Reacher on Prime Video'), PRIM)
+    s3 = _FakeS3({f'flywheel/{name}.csv': csv_text,
+                  'flywheel/Gilmore_Girls_Acquired_Reactivated_Amazon_Flywheel_2026_09_17.csv': csv_text,
+                  'flywheel/Reacher_Amazon_Flywheel_11_03_2026.csv': other,
+                  'flywheel/notes.txt': 'x'})
+    found = FW.existing_studies('Gilmore Girls', 'Amazon', s3)
+    check('the same subject and ecosystem match; a different subject and a longer one do not',
+          [f['name'] for f in found] == [name], str([f['name'] for f in found]))
+    check('the hit carries the window and the cohort read from the file',
+          found and found[0]['window_start'] == '2025-11-03' and found[0]['window_end'] == '2026-11-03' and found[0]['cohort'] == 68473, str(found[:1]))
+    check('"Amazon-owned" reads as Amazon', [f['name'] for f in FW.existing_studies('gilmore girls', 'Amazon-owned', s3)] == [name])
+    check('a multi-word ecosystem parses', FW._split_study_stem('Reacher_Warner_Bros_Discovery_Flywheel_11_03_2026_14_22') == ['Reacher', 'Warner', 'Bros', 'Discovery'])
+    check('no S3, no match, never an error', FW.existing_studies('Gilmore Girls', 'Amazon', None) == [])
+    check('the deep link opens the study on the Flywheel IQ page',
+          FW.study_url(f'flywheel/{name}.csv') == f'https://dashboard.crosswalknyc.com/?view=flywheelIQ&run={name}.csv')
+    lookup = lambda inputs: FW.existing_studies(inputs['subject'], inputs['ecosystem'], s3)
+    st = W.MemoryStore()
+    r = W.analyze_hook('run a flywheel for watched Gilmore Girls on Prime Video, Amazon, trailing 12 months', {}, [], 'e1', None, 'e1', {},
+                       first=True, store=st, today=TODAY, existing_lookup=lookup)
+    check('same window: it says one exists for that date range, links it, offers the rebuild',
+          r and not r.get('fw_confirm_payload') and 'already exists for that date range' in r['reply'] and 'November 3, 2025 to November 3, 2026' in r['reply']
+          and r['followups'] == [W.REBUILD_CHIP, 'Cancel'] and (r.get('file_link') or {}).get('label') == W.OPEN_LABEL and name in (r.get('file_link') or {}).get('url', ''), str(r)[:300])
+    check('nothing was charged: no confirm payload, the draft waits at the exists step', (st.load('e1') or {}).get('step') == W.STEP_EXISTS)
+    r = W.analyze_hook('open it', {'fw_inputs': True}, [], 'e1', None, 'e1', {}, first=False, store=st, today=TODAY, existing_lookup=lookup)
+    check('"open it" repeats the link and keeps the offer', r and (r.get('file_link') or {}).get('url', '').endswith(f'{name}.csv') and r['followups'] == [W.REBUILD_CHIP, 'Cancel'])
+    r = W.analyze_hook(W.REBUILD_CHIP, {'fw_inputs': True}, [], 'e1', None, 'e1', {}, first=False, store=st, today=TODAY, existing_lookup=lookup)
+    check('"Build it again" goes to the priced card', r and r.get('fw_confirm_payload') and r['followups'] == [W.RUN_CHIP, 'Cancel'] and '$500' in r['reply'])
+    st = W.MemoryStore()
+    r = W.analyze_hook('run a flywheel for watched Gilmore Girls on Prime Video, Amazon, calendar 2025', {}, [], 'e2', None, 'e2', {},
+                       first=True, store=st, today=TODAY, existing_lookup=lookup)
+    check('a different window: it names both windows and offers to build this one',
+          r and 'already exists, for November 3, 2025 to November 3, 2026' in r['reply'] and 'January 1 to December 31, 2025' in r['reply'] and r['followups'] == ['Build this window', 'Cancel'])
+    r = W.analyze_hook('Build this window', {'fw_inputs': True}, [], 'e2', None, 'e2', {}, first=False, store=st, today=TODAY, existing_lookup=lookup)
+    check('"Build this window" carries the asked window to the card', r and (r.get('fw_confirm_payload') or {}).get('start_date') == '2025-01-01')
+    r = W.analyze_hook('run a flywheel for watched The Bear on Hulu, Disney, trailing 12 months', {}, [], 'e3', None, 'e3', {},
+                       first=True, store=W.MemoryStore(), today=TODAY, existing_lookup=lookup)
+    check('no study on the page: straight to the card as before', r and r.get('fw_confirm_payload'))
+    st = W.MemoryStore()
+    W.analyze_hook('run a flywheel for watched Gilmore Girls on Prime Video, Amazon, trailing 12 months', {}, [], 'e4', None, 'e4', {}, first=True, store=st, today=TODAY, existing_lookup=lookup)
+    r = W.analyze_hook('Cancel', {'fw_inputs': True}, [], 'e4', None, 'e4', {}, first=False, store=st, today=TODAY, existing_lookup=lookup)
+    check('cancel at the exists step clears the draft', r and r['reply'] == W.CANCEL_REPLY and st.load('e4') is None)
+    def boom(inputs):
+        raise RuntimeError('s3 down')
+    r = W.analyze_hook('run a flywheel for watched Gilmore Girls on Prime Video, Amazon, trailing 12 months', {}, [], 'e5', None, 'e5', {},
+                       first=True, store=W.MemoryStore(), today=TODAY, existing_lookup=boom)
+    check('a failing lookup never blocks the card', r and r.get('fw_confirm_payload'))
+
+
 if __name__ == '__main__':
     test_wizard_steps()
     test_fill_ahead_and_cancel()
     test_builder_repairs()
     test_upstream_failure_and_retry()
+    test_existing_study()
     print()
     if FAILS:
         print(f'{len(FAILS)} failing: ' + '; '.join(FAILS))

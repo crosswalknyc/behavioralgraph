@@ -9357,9 +9357,19 @@ def _pm_intake_turn(flow, text, body, history, user, ppu, first):
         from prometheus import flywheel_wizard as _fw_wiz
         uname = (str((user or {}).get('username') or (user or {}).get('email') or '').strip()
                  if isinstance(user, dict) else str(user or '').strip())
+        def _fw_existing(inputs):
+            # the studies already on the Flywheel IQ page for this entry and ecosystem (Jenna 2026-11-03: tell the
+            # user one exists for that date range and offer it before building again)
+            try:
+                from migration.flywheel_synthesis import existing_studies as _fx
+                return _fx(str((inputs or {}).get('subject') or ''), str((inputs or {}).get('ecosystem') or ''), _H.s3_client)
+            except Exception as _ex:
+                _faults.note('chat', _ex)
+                return []
         hit = _fw_wiz.analyze_hook(text, body, history, user, ppu, uname, globals(), first=first,
                                    store=_fw_wiz.store_for(body, globals()),
-                                   price_label=_pm_tool_price_label('flywheel_iq', '$500'))
+                                   price_label=_pm_tool_price_label('flywheel_iq', '$500'),
+                                   existing_lookup=_fw_existing)
         if hit is not None:
             if hit.get('fw_confirm_payload'):
                 _pm_pending_intake('stash', user, 'flywheel', hit['fw_confirm_payload'], _fw_wiz.RUN_CHIP)   # "run the flywheel" typed later still finds it

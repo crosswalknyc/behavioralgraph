@@ -95628,6 +95628,21 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         });
 
         // ---- Load ---------------------------------------------------
+        // A deep link from an email or a chat pill (2026-11-03): ?view=flywheelIQ&run=<study>.csv, or
+        // #flywheelIQ?run=<study>.csv. Read once per page load; honored only for a study the seat can see.
+        var _fwUrlRunUsed = false;
+        function _fwUrlRunOnce() {
+            if (_fwUrlRunUsed) return null;
+            _fwUrlRunUsed = true;
+            try {
+                var run = new URLSearchParams(window.location.search).get('run') || '';
+                var h = String(window.location.hash || '').replace(/^#/, '');
+                if (!run && h.indexOf('flywheelIQ') === 0) run = new URLSearchParams(h.split('?')[1] || '').get('run') || '';
+                run = String(run || '').trim();
+                if (!run || !/\.csv$/i.test(run) || /[\/\\]/.test(run)) return null;
+                return _fwRuns.some(function (r) { return r.key === run; }) ? run : null;
+            } catch (_) { return null; }
+        }
         function loadFlywheelIqRuns(preferredKey) {
             return fetch('/api/flywheel-iq/runs', { credentials: 'same-origin' })
                 .then(function (r) { return r.json(); })
@@ -95643,7 +95658,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     if (!_fwActiveTab && _fwOpenTabs.length) _fwActiveTab = _fwOpenTabs[0].key;
                     _fwRenderLibrary();
                     _fwRenderTabs();
-                    var key = preferredKey || _fwActiveTab
+                    var key = preferredKey || _fwUrlRunOnce() || _fwActiveTab
                         || (_fwRuns[0] && _fwRuns[0].key) || null;
                     if (key) openFlywheelRun(key); else _fwShowEmpty();
                 })

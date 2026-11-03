@@ -42,7 +42,10 @@ RUN_CHIP = 'Run the flywheel'
 STEP_ENTRY = 'entry'
 STEP_ECOSYSTEM = 'ecosystem'
 STEP_DATES = 'dates'
+STEP_EXISTS = 'exists'     # a study for this entry and ecosystem is already on the page (2026-11-03)
 STEP_CONFIRM = 'confirm'
+REBUILD_CHIP = 'Build it again'
+OPEN_LABEL = 'Open it on Flywheel IQ'
 
 ASK_ENTRY = ("Happy to build a Flywheel. What is the entry point? The thing people did that starts it, in one "
              "line: for example, watched Gilmore Girls on Prime Video, or bought a Ring doorbell on Amazon.")
@@ -136,6 +139,9 @@ _OTHER_RX = re.compile(r"^\s*other(?: dates?)?\s*[.!]?\s*$", re.I)
 # "Other" at the ecosystem step is a request to name one, never a company called Other
 _OTHER_ECO_RX = re.compile(r"^\s*(?:other|another|an ?other one|a different one|different|something else|none of (?:these|those|them)|"
                            r"not (?:these|those)|(?:an?\s+)?(?:other|another|different) (?:ecosystem|company|one))\s*[.!]?\s*$", re.I)
+# at the exists step: build anyway, or open the one that is there
+_REBUILD_RX = re.compile(r"^\s*(?:build (?:it |this |that )?(?:again|anyway|this window|a new one|fresh)|build this window|rebuild(?: it)?|run it anyway|again|yes,? build(?: it)?(?: again)?|new one|build another)\s*[.!]?\s*$", re.I)
+_OPEN_RX = re.compile(r"^\s*(?:open|view|show|see|look at|take me to)\b.*$", re.I)
 # a bare yes at the ecosystem step takes the company the entry already pointed at
 _YES_RX = re.compile(r"^\s*(?:yes|yep|yeah|sure|ok(?:ay)?|correct|right|fine|that works|sounds good|do it|go with (?:it|that)|use (?:it|that)|that one)\s*[.!]?\s*$", re.I)
 
@@ -439,6 +445,8 @@ def step_prompt(d):
         return lead + ASK_ECOSYSTEM, list(ECO_CHIPS) + [OTHER_CHIP, 'Cancel']
     if step == STEP_DATES:
         return ASK_DATES, list(DATE_CHIPS) + ['Cancel']
+    if step == STEP_EXISTS:
+        return '', [REBUILD_CHIP, 'Cancel']
     return '', []
 
 
@@ -553,18 +561,23 @@ def _uname(user):
 
 
 # ---------------------------------------------------------------- the turn
-def analyze_hook(text, body, history, user, ppu, uname, g, first=None, store=None, price_label='$500', today=None):
+def analyze_hook(text, body, history, user, ppu, uname, g, first=None, store=None, price_label='$500', today=None,
+                 existing_lookup=None):
     """One wizard turn: a chat payload, or None when this is not a
-    flywheel ask and no draft is open. Never raises."""
+    flywheel ask and no draft is open. `existing_lookup(inputs)` returns
+    the studies already on the page for the same entry and ecosystem
+    (see flywheel_synthesis.existing_studies); with one the wizard offers
+    the existing study before anything is charged. Never raises."""
     try:
         return _analyze_hook(text, body, history, user, ppu, uname, g, first=first, store=store,
-                             price_label=price_label, today=today)
+                             price_label=price_label, today=today, existing_lookup=existing_lookup)
     except Exception:
         traceback.print_exc()
         return None
 
 
-def _analyze_hook(text, body, history, user, ppu, uname, g, first=None, store=None, price_label='$500', today=None):
+def _analyze_hook(text, body, history, user, ppu, uname, g, first=None, store=None, price_label='$500', today=None,
+                  existing_lookup=None):
     t = str(text or '').strip()
     uname = uname or _uname(user)
     thread_id = str((body or {}).get('thread_id') or '')
@@ -575,7 +588,7 @@ def _analyze_hook(text, body, history, user, ppu, uname, g, first=None, store=No
     if is_start(t) or (first is True and not draft and not collecting):
         # a start always opens fresh; the words after the verb fill ahead ("run a flywheel for Gilmore Girls on PV")
         d = apply_ahead(empty_draft(), t, today=today)
-        return _advance(d, store, uname, thread_id, price_label, today)
+        return _advance(d, store, uname, thread_id, price_label, today, existing_lookup=existing_lookup)
     if not draft and not collecting:
         return None
     if is_cancel(t):
@@ -585,6 +598,21 @@ def _analyze_hook(text, body, history, user, ppu, uname, g, first=None, store=No
     d = dict(draft) if isinstance(draft, dict) else empty_draft()
     if not d.get('step'):
         d['step'] = next_step(d)
+    if d.get('step') == STEP_EXISTS:
+        # the study is already on the page: build anyway, open it, or stop
+        if _REBUILD_RX.match(t) or _YES_RX.match(t):
+            return _advance(d, store, uname, thread_id, price_label, today, existing_lookup=None)
+        if _OPEN_RX.match(t):
+            if store is not None:
+                store.save(uname, thread_id, d)
+            return exists_reply(d, d.get('existing') or [], again=True)
+        # anything else restarts the wizard with the new words
+        d2 = apply_ahead(empty_draft(), t, today=today)
+        if d2.get('entry_point'):
+            return _advance(d2, store, uname, thread_id, price_label, today, existing_lookup=existing_lookup)
+        if store is not None:
+            store.save(uname, thread_id, d)
+        return exists_reply(d, d.get('existing') or [], again=True)
     d, err = apply_answer(d, t, today=today)
     if err:
         if store is not None:
@@ -596,10 +624,22 @@ def _analyze_hook(text, body, history, user, ppu, uname, g, first=None, store=No
     return _advance(d, store, uname, thread_id, price_label, today)
 
 
-def _advance(d, store, uname, thread_id, price_label, today):
+def _advance(d, store, uname, thread_id, price_label, today, existing_lookup=None):
     d['step'] = next_step(d)
     if d['step'] == STEP_CONFIRM:
         inputs = engine_inputs(d)
+        if existing_lookup is not None:
+            try:
+                found = list(existing_lookup(inputs) or [])
+            except Exception:
+                traceback.print_exc()
+                found = []
+            if found:
+                d['step'] = STEP_EXISTS
+                d['existing'] = [{k: v for k, v in (f or {}).items() if k in ('key', 'title', 'window_start', 'window_end', 'cohort')} for f in found[:3]]
+                if store is not None:
+                    store.save(uname, thread_id, d)
+                return exists_reply(d, d['existing'])
         if store is not None:
             store.clear(uname, thread_id)
         return _payload(confirm_reply(d, price_label=price_label, today=today), [RUN_CHIP, 'Cancel'],
@@ -608,6 +648,45 @@ def _advance(d, store, uname, thread_id, price_label, today):
         store.save(uname, thread_id, d)
     reply, chips = step_prompt(d)
     return _payload(reply, chips, fw_collect=True)
+
+
+def _pretty(a, b):
+    try:
+        from .bpiq_wizard import pretty_range
+        return pretty_range(a, b) if a and b else ''
+    except Exception:
+        return f"{a} to {b}" if a and b else ''
+
+
+def exists_reply(d, found, again=False):
+    """The study is already on the Flywheel IQ page: say so, link it, offer the rebuild (2026-11-03)."""
+    try:
+        from migration.flywheel_synthesis import study_url
+    except Exception:
+        def study_url(key):
+            from urllib.parse import quote
+            return 'https://dashboard.crosswalknyc.com/?view=flywheelIQ&run=' + quote(str(key or '').rsplit('/', 1)[-1], safe='')
+    top = (found or [{}])[0] or {}
+    entry = str(d.get('entry_point') or '')
+    eco = str(d.get('ecosystem') or '')
+    have = _pretty(top.get('window_start'), top.get('window_end'))
+    want = _pretty(d.get('start_date'), d.get('end_date'))
+    same = bool(have) and have == want
+    who = f"the people who {entry}" if entry and re.match(r'^[a-z]', entry) else (entry or 'this entry')
+    scope = f"{who} across the {eco} ecosystem" if eco else who
+    if same:
+        line = (f"A flywheel for {scope} already exists for that date range ({have}). "
+                f"Open it on the Flywheel IQ page, or I can build it again.")
+    elif have:
+        line = (f"A flywheel for {scope} already exists, for {have}. Your ask covers {want or 'a different window'}. "
+                f"Open the existing one on the Flywheel IQ page, or I can build this window.")
+    else:
+        line = f"A flywheel for {scope} is already on the Flywheel IQ page. Open it there, or I can build it again."
+    if again:
+        line = f"It is on the Flywheel IQ page: {top.get('title') or 'the existing study'}. " + ("Build it again, or ask me anything else." if same else "Build this window, or ask me anything else.")
+    chips = [REBUILD_CHIP if same or not have else 'Build this window', 'Cancel']
+    return _payload(line, chips, fw_collect=True,
+                    file_link={'url': study_url(top.get('key') or ''), 'label': OPEN_LABEL})
 
 
 def running_reply(inputs):
@@ -620,5 +699,5 @@ def running_reply(inputs):
 
 __all__ = ['analyze_hook', 'is_start', 'is_cancel', 'parse_entry', 'parse_window', 'normalize_ecosystem', 'normalize_platform',
            'apply_ahead', 'apply_answer', 'engine_inputs', 'confirm_reply', 'step_prompt', 'family_short', 'running_reply', 'empty_draft',
-           'next_step', 'CHIP', 'RUN_CHIP', 'OTHER_CHIP', 'ECO_CHIPS', 'ASK_ENTRY', 'ASK_ECOSYSTEM', 'ASK_ECOSYSTEM_OTHER', 'ASK_DATES',
-           'MemoryStore', 'store_for']
+           'next_step', 'exists_reply', 'CHIP', 'RUN_CHIP', 'OTHER_CHIP', 'REBUILD_CHIP', 'OPEN_LABEL', 'ECO_CHIPS', 'ASK_ENTRY',
+           'ASK_ECOSYSTEM', 'ASK_ECOSYSTEM_OTHER', 'ASK_DATES', 'STEP_EXISTS', 'MemoryStore', 'store_for']

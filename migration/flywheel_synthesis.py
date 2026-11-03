@@ -38,6 +38,7 @@ import datetime as _dt
 import hashlib
 import io
 import json
+import os
 import re
 from typing import Callable, Optional, Tuple
 
@@ -630,6 +631,97 @@ def synthesize(inputs: dict, claude_json: Callable, *,
     if not isinstance(prim, dict) or not prim.get('touchpoints'):
         raise RuntimeError('flywheel research returned no primitives')
     return build_flywheel_study(inputs, prim, created_by=created_by)
+
+
+def _norm_token(text) -> str:
+    return re.sub(r'[^a-z0-9]+', '', str(text or '').lower())
+
+
+def _eco_norm(text) -> str:
+    """'Amazon', 'Amazon-owned', 'Amazon_owned', 'the Amazon ecosystem' read as one."""
+    t = re.sub(r'\b(?:owned|ecosystem|family|the)\b', ' ', str(text or '').lower())
+    return _norm_token(t)
+
+
+def study_url(key: str) -> str:
+    """The Flywheel IQ page open on one study (deep link, 2026-11-03)."""
+    from urllib.parse import quote
+    base = (os.environ.get('APP_URL') or '').rstrip('/')
+    base = base if base and 'onrender.com' not in base else 'https://dashboard.crosswalknyc.com'
+    name = str(key or '').rsplit('/', 1)[-1]
+    return f"{base}/?view=flywheelIQ&run={quote(name, safe='')}"
+
+
+def _split_study_stem(stem: str):
+    """('Gilmore Girls', 'Amazon') from 'Gilmore_Girls_Amazon_Flywheel_11_03_2026'; the ecosystem is the
+    token run before 'Flywheel'. Returns (subject_tokens, ecosystem_tokens) or None."""
+    s = re.sub(r'_\d{2}_\d{2}_\d{4}(?:_\d{2}_\d{2})?$', '', str(stem or ''))
+    s = re.sub(r'_\d{4}_\d{2}_\d{2}$', '', s)
+    toks = [t for t in s.split('_') if t]
+    if len(toks) < 3 or toks[-1].lower() != 'flywheel':
+        return None
+    return toks[:-1]
+
+
+def existing_studies(subject: str, ecosystem: str, s3_client, bucket: str = S3_BUCKET) -> list:
+    """Studies already on the Flywheel IQ page for this subject and ecosystem (2026-11-03, Jenna: 'it should
+    have told the user one exists for that date range and asked if they wanted to view it'). Each hit carries
+    the key, the title, the window and the cohort read from the file. Never raises; [] when nothing matches
+    or S3 is unreachable."""
+    want_subject = _norm_token(subject)
+    want_eco = _eco_norm(ecosystem)
+    if not want_subject or not want_eco or s3_client is None:
+        return []
+    out = []
+    try:
+        token = None
+        keys = []
+        while True:
+            kw = {'Bucket': bucket, 'Prefix': FLYWHEEL_PREFIX}
+            if token:
+                kw['ContinuationToken'] = token
+            resp = s3_client.list_objects_v2(**kw)
+            keys += [o['Key'] for o in resp.get('Contents', []) if str(o.get('Key', '')).lower().endswith('.csv')]
+            token = resp.get('NextContinuationToken') if resp.get('IsTruncated') else None
+            if not token:
+                break
+    except Exception:
+        return []
+    for key in keys:
+        stem = key.rsplit('/', 1)[-1][:-4]
+        toks = _split_study_stem(stem)
+        if not toks:
+            continue
+        hit = False
+        for n in range(1, min(4, len(toks) - 1) + 1):   # the ecosystem is the last 1 to 4 tokens before Flywheel
+            if _eco_norm(' '.join(toks[-n:])) == want_eco and _norm_token(' '.join(toks[:-n])) == want_subject:
+                hit = True
+                break
+        if not hit:
+            continue
+        rec = {'key': key, 'name': stem, 'title': ' '.join(toks) + ' Flywheel',
+               'window_start': '', 'window_end': '', 'cohort': None, 'cohort_label': ''}
+        try:
+            body = s3_client.get_object(Bucket=bucket, Key=key)['Body'].read().decode('utf-8', 'replace')
+            rows = list(csv.DictReader(io.StringIO(body)))
+            head = rows[0] if rows else {}
+            win = str(head.get('window') or '')
+            m = re.match(r'(\d{4}-\d{2}-\d{2}) to (\d{4}-\d{2}-\d{2})', win)
+            if m:
+                rec['window_start'], rec['window_end'] = m.group(1), m.group(2)
+            try:
+                rec['cohort'] = int(float(head.get('cohort_accounts') or 0)) or None
+            except (TypeError, ValueError):
+                pass
+            for r in rows:
+                if r.get('table') == 'cohort' and r.get('surface') == 'captured_cohort':
+                    rec['cohort_label'] = str(r.get('surface_label') or '')
+                    break
+        except Exception:
+            pass
+        out.append(rec)
+    out.sort(key=lambda r: (r['window_end'] or '', r['key']), reverse=True)
+    return out
 
 
 def persist(s3_client, csv_text: str, study_name: str) -> str:
