@@ -51,8 +51,12 @@ ASK_ECOSYSTEM = ("Which ecosystem should the flywheel examine? Name the company 
                  "Warner Bros. Discovery, Netflix, or another.")
 ASK_DATES = ("What date range? The entry events come from this window, and each person is measured over the 30 days "
              "before their entry against the 30 days after it. Trailing 12 months is the default.")
+ASK_ECOSYSTEM_OTHER = ("Name the company whose ecosystem I should examine, for example Amazon, Disney, Apple, Google, "
+                       "Walmart, Paramount, NBCUniversal, Warner Bros. Discovery or Netflix.")
 CANCEL_REPLY = 'No problem. Nothing is queued and nothing was charged. Ask me anything else when ready.'
 DATE_CHIPS = ('Trailing 12 months', 'Calendar 2025', 'Other dates')
+ECO_CHIPS = ('Amazon', 'Disney', 'Apple', 'Google')
+OTHER_CHIP = 'Other'
 OTHER_DATES_REPLY = 'Give me the start and end, for example March 1, 2026 to August 31, 2026.'
 PRE_DAYS = 30
 POST_DAYS = 30
@@ -129,6 +133,11 @@ _CANCEL_RX = re.compile(r"^\s*(?:never ?mind|no(?: thanks?)?|not now|cancel(?: (
 _TRAILING_RX = re.compile(r"\b(?:trailing|last|past|previous)\s+(?:12|twelve)\s+months?\b|\bt12\b|\blast year\b|\bdefault\b|\btrailing year\b", re.I)
 _CAL_YEAR_RX = re.compile(r"\b(?:calendar\s+)?(20\d{2})\b(?!\s*[-/]\s*\d)", re.I)
 _OTHER_RX = re.compile(r"^\s*other(?: dates?)?\s*[.!]?\s*$", re.I)
+# "Other" at the ecosystem step is a request to name one, never a company called Other
+_OTHER_ECO_RX = re.compile(r"^\s*(?:other|another|an ?other one|a different one|different|something else|none of (?:these|those|them)|"
+                           r"not (?:these|those)|(?:an?\s+)?(?:other|another|different) (?:ecosystem|company|one))\s*[.!]?\s*$", re.I)
+# a bare yes at the ecosystem step takes the company the entry already pointed at
+_YES_RX = re.compile(r"^\s*(?:yes|yep|yeah|sure|ok(?:ay)?|correct|right|fine|that works|sounds good|do it|go with (?:it|that)|use (?:it|that)|that one)\s*[.!]?\s*$", re.I)
 
 
 def _low(t):
@@ -338,6 +347,10 @@ def apply_answer(draft, text, today=None):
         # the same message may carry the rest
         d = apply_ahead(d, t, today=today) if not d.get('ecosystem') or not d.get('start_date') else d
     elif step == STEP_ECOSYSTEM:
+        if _OTHER_ECO_RX.match(t):
+            return d, ASK_ECOSYSTEM_OTHER
+        if _YES_RX.match(t) and d.get('ecosystem_hint'):
+            t = str(d['ecosystem_hint'])
         eco = normalize_ecosystem(t)
         if not eco:
             if 1 <= len(t.split()) <= 4 and re.match(r"^[A-Za-z][\w.&' +-]+$", t):
@@ -397,15 +410,33 @@ def confirm_reply(d, price_label='$500', today=None):
             f"after it, and what the buyers bought. It lands on the Flywheel IQ page when finished. It prices at {price_label}. Run it?")
 
 
+def family_short(eco, n=9):
+    """The first few owned surfaces of an ecosystem, for the question line."""
+    fam = _ECO_FAMILY.get(eco)
+    if not fam:
+        return f"every {eco}-owned service and product with a digital surface"
+    _head, _, tail = fam.partition(':')
+    names = [x.strip() for x in tail.replace(' and the rest', '').split(',') if x.strip()]
+    if len(names) > n:
+        return ', '.join(names[:n]) + ' and the rest'
+    return ', '.join(names) + (' and the rest' if 'and the rest' in fam else '')
+
+
 def step_prompt(d):
     step = d.get('step') or next_step(d)
     if step == STEP_ENTRY:
         return ASK_ENTRY, ['Cancel']
     if step == STEP_ECOSYSTEM:
         hint = str(d.get('ecosystem_hint') or '')
-        chips = ([hint] if hint else []) + [c for c in ('Amazon', 'Disney', 'Apple', 'Google') if c != hint][:3] + ['Cancel']
         lead = f"Got it: {d.get('entry_point')}. " if d.get('entry_point') else ''
-        return lead + ASK_ECOSYSTEM, chips
+        if hint:
+            # the entry's own service names the company (APV -> Prime Video -> Amazon): propose it, one tap to
+            # accept, Other to name a different one (Jenna 2026-11-03)
+            plat = str(d.get('platform') or '')
+            tie = (f"{plat} belongs to {hint}" if plat and plat != hint else f"The entry is on {hint} itself")
+            return (lead + f"{tie}, so the flywheel would examine the {hint} ecosystem: {family_short(hint)}. "
+                    f"Go with {hint}, or name a different company."), [hint, OTHER_CHIP, 'Cancel']
+        return lead + ASK_ECOSYSTEM, list(ECO_CHIPS) + [OTHER_CHIP, 'Cancel']
     if step == STEP_DATES:
         return ASK_DATES, list(DATE_CHIPS) + ['Cancel']
     return '', []
@@ -559,7 +590,9 @@ def _analyze_hook(text, body, history, user, ppu, uname, g, first=None, store=No
         if store is not None:
             store.save(uname, thread_id, d)
         _reply, chips = step_prompt(d)
-        return _payload(err, chips if d.get('step') != STEP_CONFIRM else ['Cancel'], fw_collect=True)
+        if err in (ASK_ECOSYSTEM_OTHER, OTHER_DATES_REPLY) or d.get('step') == STEP_CONFIRM:
+            chips = ['Cancel']   # they asked to type it; the chips they just declined do not come back
+        return _payload(err, chips, fw_collect=True)
     return _advance(d, store, uname, thread_id, price_label, today)
 
 
@@ -586,5 +619,6 @@ def running_reply(inputs):
 
 
 __all__ = ['analyze_hook', 'is_start', 'is_cancel', 'parse_entry', 'parse_window', 'normalize_ecosystem', 'normalize_platform',
-           'apply_ahead', 'apply_answer', 'engine_inputs', 'confirm_reply', 'step_prompt', 'running_reply', 'empty_draft', 'next_step',
-           'CHIP', 'RUN_CHIP', 'ASK_ENTRY', 'ASK_ECOSYSTEM', 'ASK_DATES', 'MemoryStore', 'store_for']
+           'apply_ahead', 'apply_answer', 'engine_inputs', 'confirm_reply', 'step_prompt', 'family_short', 'running_reply', 'empty_draft',
+           'next_step', 'CHIP', 'RUN_CHIP', 'OTHER_CHIP', 'ECO_CHIPS', 'ASK_ENTRY', 'ASK_ECOSYSTEM', 'ASK_ECOSYSTEM_OTHER', 'ASK_DATES',
+           'MemoryStore', 'store_for']
