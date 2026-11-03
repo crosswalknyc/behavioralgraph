@@ -17071,7 +17071,9 @@ def _pm_run_bpiq_job(job_id, username, inputs, extras):
             _bj_f.fail(reg, inputs, job_id, e)
         except Exception:
             pass
-        _H._chatbot_error_email('brief-chat/bpiq-job', e)
+        _pm_engine_failure_alert(
+            'brief-chat/bpiq-job', e, job_id, username, inputs, 'the valuation error line in the widget',
+            f"Brand Partnership: {(inputs or {}).get('brand') or (inputs or {}).get('subject') or ''} x {(inputs or {}).get('partner') or (inputs or {}).get('brand_partner') or ''}")
 
 
 # ---------------------------------------------------------------------------
@@ -17307,7 +17309,9 @@ def _pm_run_jiq_job(job_id, username, inputs, extras):
                 'finished_at': time.time()})
         except Exception as _fx:
             _faults.note('chat', _fx)
-        _H._chatbot_error_email('brief-chat/jiq-job', e)
+        _pm_engine_failure_alert(
+            'brief-chat/jiq-job', e, job_id, username, inputs, 'the journey error line in the widget',
+            f"Digital Journey: {(inputs or {}).get('subject') or ''} on {(inputs or {}).get('platform') or ''}")
 
 
 # --- Build a Flywheel through Prometheus (2026-09-17, Jenna) ----------------
@@ -17421,6 +17425,27 @@ def _pm_fw_confirm_reply(parsed):
         f"{_pm_tool_price_label('flywheel_iq', '$500')}. Run it?")
 
 
+def _pm_engine_failure_alert(route, err, job_id, username, inputs, told_user, what):
+    """The ops alert for an engine job that failed on the worker (2026-11-03). The worker has no request, so
+    the alert used to read "User: (unknown) / Question: (no question captured)" and the three Gilmore Girls
+    flywheel failures (Grace Yin on the jaypatel14 seat) went to Jenna and Jessie looking like anonymous
+    noise. The alert now carries the seat and its email, the ask as the person framed it, the job id, and
+    exactly what the user was told; the promise banner is off because the user was told the build could
+    not be completed and the credits went back, so nothing is owed by email."""
+    try:
+        who = str(username or '')
+        try:
+            em = _pm_user_email(username)
+        except Exception:
+            em = ''
+        label = f"{who} ({em})" if em and em.lower() != who.lower() else (em or who or '(unknown seat)')
+        payload = {'_no_promise': True, 'text': str(what or '')[:400], 'job_id': job_id,
+                   'user_told': str(told_user or ''), 'inputs': _smart.jsonable(inputs) if inputs else None}
+        _H._chatbot_error_email(route, err, user_email=label, payload=payload)
+    except Exception as _ax:
+        _faults.note('chat', _ax)
+
+
 def _pm_run_fw_job(job_id, username, inputs, extras):
     try:
         from migration.flywheel_synthesis import synthesize, persist
@@ -17485,7 +17510,12 @@ def _pm_run_fw_job(job_id, username, inputs, extras):
                 'finished_at': time.time()})
         except Exception as _fx:
             _faults.note('chat', _fx)
-        _H._chatbot_error_email('brief-chat/fw-job', e)
+        _pm_engine_failure_alert(
+            'brief-chat/fw-job', e, job_id, username, inputs,
+            'This build could not be completed. Credits for this run have been refunded.' if refunded
+            else 'This build could not be completed. (the refund did not post; check the seat)',
+            f"Flywheel: {(inputs or {}).get('entry_point') or (inputs or {}).get('captured_action') or (inputs or {}).get('subject') or ''}"
+            f" / {(inputs or {}).get('ecosystem') or ''} ecosystem")
 
 
 # ---- Attribution IQ tracking pull (Jenna 2026-09-22) -----------------
@@ -17636,7 +17666,9 @@ def _pm_run_aiq_job(job_id, username, inputs, extras):
                 'finished_at': time.time()})
         except Exception as _fx:
             _faults.note('chat', _fx)
-        _H._chatbot_error_email('brief-chat/aiq-job', e)
+        _pm_engine_failure_alert(
+            'brief-chat/aiq-job', e, job_id, username, inputs, 'the tracking error line in the widget',
+            f"Attribution tracking: {(inputs or {}).get('campaign_name') or (inputs or {}).get('subject') or ''}")
 
 
 def _pm_deck_fuzzy_suggestions(query):
