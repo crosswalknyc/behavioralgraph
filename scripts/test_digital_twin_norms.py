@@ -91,16 +91,45 @@ class Seed(unittest.TestCase):
     def test_seed_never_overwrites_an_accumulated_cell(self):
         s3 = FakeS3()
         N.seed(s3)
-        N.record(s3, 'feature', 'comedy', {'excellent': 60.0}, 't1')
-        before = json.loads(s3.objs[N.NORMS_KEY].decode('utf-8'))['cells'][N.cell_key('feature', 'comedy', 'excellent')]
+        N.record(s3, 'feature', 'all', {'excellent': 60.0}, 't1')
+        before = json.loads(s3.objs[N.NORMS_KEY].decode('utf-8'))['cells'][N.cell_key('feature', 'all', 'excellent')]
         self.assertFalse(before['seeded'])
-        changed = [dict(c, value=99.0) if (c['format'], c['genre'], c['metric']) == ('feature', 'comedy', 'excellent') else c for c in N.SEED_CELLS]
+        changed = [dict(c, value=99.0) if (c['format'], c['genre'], c['metric']) == ('feature', 'all', 'excellent') else c for c in N.SEED_CELLS]
         N.seed(s3, cells=changed)
-        after = json.loads(s3.objs[N.NORMS_KEY].decode('utf-8'))['cells'][N.cell_key('feature', 'comedy', 'excellent')]
+        after = json.loads(s3.objs[N.NORMS_KEY].decode('utf-8'))['cells'][N.cell_key('feature', 'all', 'excellent')]
         self.assertFalse(after['seeded'])
         self.assertEqual(after['seed_value'], 99.0)
         self.assertEqual(after['our_n'], 1)
         self.assertAlmostEqual(after['value'], (99.0 * N.SEED_WEIGHT + 60.0) / (N.SEED_WEIGHT + 1), places=3)
+
+    def test_drop_tests_puts_a_cell_back_on_its_seed(self):
+        s3 = FakeS3()
+        N.seed(s3)
+        N.record(s3, 'pilot', 'all', {'total_positive': 43.7, 'finish': 91.3}, 'trial-1')
+        N.record(s3, 'pilot', 'all', {'total_positive': 40.0, 'finish': 90.0}, 'trial-2')
+        doc = json.loads(s3.objs[N.NORMS_KEY].decode('utf-8'))
+        self.assertEqual(doc['cells'][N.cell_key('pilot', 'all', 'total_positive')]['our_n'], 2)
+        self.assertEqual(doc['cells'][N.cell_key('pilot', 'all', 'finish')]['seed_value'], None)   # no anchor anywhere for finish
+        st = N.seed(s3, drop_tests=['trial-1', 'trial-2'])
+        self.assertEqual(st['dropped_tests'], 4)
+        doc = json.loads(s3.objs[N.NORMS_KEY].decode('utf-8'))
+        tp = doc['cells'][N.cell_key('pilot', 'all', 'total_positive')]
+        self.assertTrue(tp['seeded'])
+        self.assertEqual((tp['value'], tp['our_n'], tp['tests']), (65.0, 0, []))
+        self.assertNotIn(N.cell_key('pilot', 'all', 'finish'), doc['cells'])    # a cell with no seed and no tests is gone
+        self.assertEqual(st['removed'], 1)
+
+    def test_a_cell_with_no_anchor_needs_several_tests_before_it_is_a_norm(self):
+        s3 = FakeS3()
+        N.seed(s3)
+        for i in range(N.MIN_OWN_TESTS - 1):
+            N.record(s3, 'pilot', 'all', {'finish': 90.0 + i}, f'p{i}')
+        n = N.norms_for('pilot', 'all', s3=s3)
+        self.assertNotIn('finish', n['all'])             # four tests of our own are not a norm yet
+        N.record(s3, 'pilot', 'all', {'finish': 95.0}, 'p-last')
+        n = N.norms_for('pilot', 'all', s3=s3)
+        self.assertEqual(n['all']['finish']['n'], N.MIN_OWN_TESTS)
+        self.assertFalse(n['all']['finish']['seeded'])
 
     def test_dry_run_writes_nothing(self):
         s3 = FakeS3()
@@ -119,11 +148,13 @@ class Record(unittest.TestCase):
         self.assertEqual(cell['n'], 1)
         self.assertEqual(cell['our_n'], 1)
         self.assertFalse(cell['seeded'])
-        self.assertEqual(cell['value'], 68.0)          # no seed on the pilot cell: our value alone
+        # the pilot comedy cell has no seed of its own: it inherits the pilot all-genres anchor (50, weight 8), so one test blends in
+        self.assertEqual(cell['seed_value'], 50.0)
+        self.assertAlmostEqual(cell['value'], (50.0 * N.SEED_WEIGHT + 68.0) / (N.SEED_WEIGHT + 1), places=3)
         doc = N.record(s3, 'pilot', 'comedy', {'definitely_recommend': 52.0}, 'test-2')
         cell = doc['cells'][k]
         self.assertEqual(cell['n'], 2)
-        self.assertEqual(cell['value'], 60.0)
+        self.assertAlmostEqual(cell['value'], (50.0 * N.SEED_WEIGHT + 68.0 + 52.0) / (N.SEED_WEIGHT + 2), places=3)
         # the all-genres cell for the format moves too
         cell_all = doc['cells'][N.cell_key('pilot', 'all', 'definitely_recommend')]
         self.assertEqual(cell_all['n'], 2)
@@ -187,24 +218,31 @@ class Lookup(unittest.TestCase):
     def test_norms_for_falls_back_genre_then_format(self):
         s3 = FakeS3()
         N.seed(s3)
-        n = N.norms_for('pilot', 'unscripted', s3=s3)   # no pilot cells, no unscripted cells: feature / all
+        n = N.norms_for('pilot', 'unscripted', s3=s3)   # pilot cells of their own (the recruited-screening anchors); no unscripted cells: all
         self.assertEqual(n['format'], 'pilot')
         self.assertEqual(n['genre_used'], 'all')
         self.assertEqual(n['all']['excellent']['value'], 30.0)
-        self.assertEqual(n['all']['excellent']['format_used'], 'feature')
+        self.assertEqual(n['all']['excellent']['format_used'], 'pilot')
         self.assertEqual(n['genre']['excellent']['value'], 30.0)
         self.assertEqual(n['genre']['excellent']['genre_used'], 'all')
+        t = N.norms_for('trailer', 'all', s3=s3)       # a trailer reads its own tune-in and the feature's character norms
+        self.assertEqual(t['all']['tune_in']['format_used'], 'trailer')
+        self.assertEqual(t['all']['lead_character']['format_used'], 'feature')
         c = N.norms_for('feature', 'comedy', s3=s3)
-        self.assertEqual(c['genre_used'], 'comedy')
-        self.assertEqual(c['genre']['excellent']['value'], 48.0)
-        self.assertEqual(c['genre']['total_positive']['value'], 82.0)
-        self.assertEqual(c['genre']['lead_character']['genre_used'], 'all')   # no comedy character cell: all
+        self.assertEqual(c['genre_used'], 'all')        # no comedy norm is published; the blockbuster benchmark is not the comedy average
+        self.assertEqual(c['genre']['excellent']['value'], 30.0)
+        f = N.norms_for('feature', 'family', s3=s3)     # the NRG five-year family norms
+        self.assertEqual(f['genre_used'], 'family')
+        self.assertEqual((f['genre']['excellent']['value'], f['genre']['total_positive']['value'], f['genre']['definitely_recommend']['value']), (40.0, 75.0, 60.0))
+        self.assertEqual(N.norms_for('feature', 'animation', s3=s3)['genre']['total_positive']['value'], 75.0)
+        self.assertEqual(f['genre']['lead_character']['genre_used'], 'all')   # no family character cell: all
         self.assertNotIn('sources', json.dumps(c))
 
     def test_norms_for_without_a_ledger_uses_the_seed(self):
         n = N.norms_for('pilot', 'comedy', s3=FakeS3())
         self.assertTrue(n['from_seed_only'])
-        self.assertEqual(n['genre']['definitely_recommend']['value'], 71.0)
+        self.assertEqual(n['genre']['definitely_recommend']['value'], 50.0)
+        self.assertEqual(n['genre']['definitely_recommend']['genre_used'], 'all')
 
     def test_values_at_one_decimal_after_our_tests(self):
         s3 = FakeS3()
@@ -218,12 +256,14 @@ class Lookup(unittest.TestCase):
 
     def test_norm_line(self):
         n = N.norms_for('pilot', 'comedy', s3=FakeS3())
-        line = N.norm_line('definitely_recommend', 68.0, n, 'pilot', 'comedy')
-        self.assertEqual(line, 'Definitely recommend 68.0%, comedy screenings usually land near 71%.')
+        line = N.norm_line('definitely_recommend', 54.0, n, 'pilot', 'comedy')
+        self.assertEqual(line, 'Definitely recommend 54.0%, pilots usually land near 50%.')
         line2 = N.norm_line('definitely_recommend', 82.0, n, 'pilot', 'comedy')
         self.assertIn('sits well above', line2)
+        fam = N.norm_line('total_positive', 80.0, N.norms_for('feature', 'family', s3=FakeS3()), 'feature', 'family')
+        self.assertEqual(fam, 'Total positive 80.0%, family features usually land near 75%.')
         plain = N.norm_line('excellent', 20.0, N.norms_for('pilot', 'all', s3=FakeS3()), 'pilot', 'all')
-        self.assertEqual(plain, 'Excellent 20.0%, screenings usually land near 30%; this one sits below.')
+        self.assertEqual(plain, 'Excellent 20.0%, pilots usually land near 30%; this one sits below.')
         for l in (line, line2, plain):
             self.assertNotIn('\u2014', l)
 

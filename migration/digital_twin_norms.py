@@ -33,6 +33,8 @@ BACKUP_PREFIX = 'system/digital_twins/norms/_backups/'
 LEDGER_VERSION = 1
 SEED_WEIGHT = 8          # tests a published anchor stands for once our own tests blend in
 MAX_TESTS_PER_CELL = 400  # test ids kept per cell for the dedupe
+MIN_OWN_TESTS = 5         # a cell with no published anchor needs this many of our tests before it reads as a norm (2026-11-03:
+                          # three trial runs of one pilot had become the pilot norm, 43.7 total positive)
 
 FORMATS = ('feature', 'pilot', 'episode', 'trailer', 'title', 'key_art', 'script', 'concept')
 GENRES = ('all', 'comedy', 'drama', 'action', 'horror', 'thriller', 'romance', 'family', 'animation', 'documentary', 'unscripted')
@@ -304,13 +306,18 @@ def _same_seed(cur: dict, want: dict) -> bool:
             and [s.get('note') for s in cur.get('sources') or []] == [s.get('note') for s in want.get('sources') or []])
 
 
-def seed(s3=None, cells: Optional[list] = None, dry_run: bool = False) -> dict:
+def seed(s3=None, cells: Optional[list] = None, dry_run: bool = False, drop_tests: Optional[list] = None, prune_unseeded: bool = False) -> dict:
     """Write the published anchors. Idempotent: an existing seeded cell
     with the same seed is left alone; a cell our own tests have blended
     into is never overwritten (its seed fields are refreshed only).
-    Returns counts and the distinct source URLs."""
+    ``drop_tests`` names test ids whose reads leave every cell first
+    (trial runs of the product); a cell left with no tests of its own is
+    rebuilt from its seed, or removed when it has none. ``prune_unseeded``
+    also removes cells that have no seed and no tests. Returns counts and
+    the distinct source URLs."""
     cells = list(cells if cells is not None else SEED_CELLS)
-    stats = {'written': 0, 'updated': 0, 'skipped': 0, 'kept_accumulated': 0, 'cells': 0, 'sources': 0}
+    stats = {'written': 0, 'updated': 0, 'skipped': 0, 'kept_accumulated': 0, 'cells': 0, 'sources': 0, 'dropped_tests': 0, 'removed': 0}
+    drop = {str(t) for t in (drop_tests or []) if str(t)}
     urls = set()
     for c in cells:
         for s in c.get('sources') or []:
@@ -321,6 +328,38 @@ def seed(s3=None, cells: Optional[list] = None, dry_run: bool = False) -> dict:
 
     def mutate(doc):
         changed = False
+        if drop:
+            for k, cur in list(doc['cells'].items()):
+                tests = [t for t in (cur.get('tests') or [])]
+                hit = [t for t in tests if t in drop]
+                if not hit:
+                    continue
+                # the trial reads leave the running mean; the cell goes back to its seed (or away, when it never had one)
+                stats['dropped_tests'] += len(hit)
+                kept = [t for t in tests if t not in drop]
+                if kept:
+                    # the per-test values are not kept, so the mean of the remaining tests cannot be rebuilt exactly: scale the sum
+                    cur['our_sum'] = round(float(cur.get('our_sum') or 0.0) * len(kept) / float(len(tests)), 4)
+                    cur['our_n'] = len(kept)
+                    cur['tests'] = kept
+                    cur['n'] = cur['our_n']
+                    cur['value'] = _blend(cur)
+                elif cur.get('seed_value') is not None:
+                    cur.update({'our_sum': 0.0, 'our_n': 0, 'tests': [], 'n': 0, 'seeded': True, 'value': float(cur['seed_value'])})
+                    cur['sources'] = [x for x in (cur.get('sources') or []) if not str(x.get('note') or '').startswith('Seed ')]
+                else:
+                    del doc['cells'][k]
+                    stats['removed'] += 1
+                    changed = True
+                    continue
+                cur['updated_at'] = _now()
+                changed = True
+        if prune_unseeded:
+            for k, cur in list(doc['cells'].items()):
+                if cur.get('seed_value') is None and not int(cur.get('our_n') or 0):
+                    del doc['cells'][k]
+                    stats['removed'] += 1
+                    changed = True
         for c in cells:
             if not all(c.get(k) for k in ('format', 'genre', 'metric')) or c.get('value') is None:
                 stats['skipped'] += 1
@@ -386,6 +425,15 @@ def record(s3, fmt: str, genre: str, metrics: dict, test_id: str) -> Optional[di
                 if cell is None:
                     cell = {'value': 0.0, 'n': 0, 'seeded': False, 'seed_value': None, 'seed_weight': 0, 'seed_n_hint': None, 'range': None,
                             'our_sum': 0.0, 'our_n': 0, 'tests': [], 'sources': [], 'basis': 'our tests', 'as_of': '', 'updated_at': _now()}
+                    # a format with no cell of its own starts from the nearest format's published anchor (a pilot from the recruited-screening
+                    # norms), so the first test blends into the anchor instead of standing as the norm (2026-11-03)
+                    near, near_fmt = _lookup(doc['cells'], fmt, g, m)
+                    if near is None and g != 'all':
+                        near, near_fmt = _lookup(doc['cells'], fmt, 'all', m)
+                    if near is not None and near.get('seed_value') is not None:
+                        cell.update({'seed_value': float(near['seed_value']), 'seed_weight': int(near.get('seed_weight') or SEED_WEIGHT), 'range': near.get('range'),
+                                     'sources': [dict(x) for x in (near.get('sources') or []) if not str(x.get('note') or '').startswith('Seed ')],
+                                     'basis': f"{near.get('basis') or 'published norm'} ({near_fmt} {g if g != 'all' else 'all genres'} anchor)", 'as_of': near.get('as_of') or ''})
                     doc['cells'][k] = cell
                 tests = cell.setdefault('tests', [])
                 if tid in tests:
@@ -406,6 +454,46 @@ def record(s3, fmt: str, genre: str, metrics: dict, test_id: str) -> Optional[di
     return update(s3, mutate)
 
 
+def forget_test(s3, test_id: str) -> Optional[dict]:
+    """A deleted test leaves every cell it joined (its share of the
+    running mean goes with it; a cell left with no tests of its own goes
+    back to its published anchor, or away when it never had one). The
+    test's own values are not kept per cell, so the remaining mean is
+    rebuilt by scaling the sum. Idempotent; never raises into a route."""
+    tid = str(test_id or '').strip()
+    if not tid:
+        return None
+
+    def mutate(doc):
+        changed = False
+        for k, cur in list(doc['cells'].items()):
+            tests = list(cur.get('tests') or [])
+            if tid not in tests:
+                continue
+            kept = [t for t in tests if t != tid]
+            if kept:
+                cur['our_sum'] = round(float(cur.get('our_sum') or 0.0) * len(kept) / float(len(tests)), 4)
+                cur['our_n'] = len(kept)
+                cur['tests'] = kept
+                cur['n'] = cur['our_n']
+                cur['value'] = _blend(cur)
+            elif cur.get('seed_value') is not None:
+                cur.update({'our_sum': 0.0, 'our_n': 0, 'tests': [], 'n': 0, 'seeded': True, 'value': float(cur['seed_value'])})
+                cur['sources'] = [x for x in (cur.get('sources') or []) if not str(x.get('note') or '').startswith('Seed ')]
+            else:
+                del doc['cells'][k]
+                changed = True
+                continue
+            cur['updated_at'] = _now()
+            changed = True
+        return doc if changed else None
+    try:
+        return update(s3, mutate)
+    except Exception as e:
+        print(f"[norms] forget {tid} skipped: {e}")
+        return None
+
+
 def _is_num(v) -> bool:
     try:
         float(v)
@@ -419,7 +507,7 @@ def _lookup(cells: dict, fmt: str, genre: str, metric: str):
     Returns (cell, format_used) or (None, None)."""
     for f in (fmt,) + tuple(FORMAT_FALLBACK.get(fmt) or ()):
         c = cells.get(cell_key(f, genre, metric))
-        if c is not None:
+        if c is not None and (c.get('seed_value') is not None or int(c.get('our_n') or 0) >= MIN_OWN_TESTS):
             return c, f
     return None, None
 

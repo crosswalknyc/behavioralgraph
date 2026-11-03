@@ -460,13 +460,17 @@ class Battery(unittest.TestCase):
         self.assertEqual(sc['genre'], 'comedy')
         cols = sc['norm_columns']
         self.assertEqual(cols['excellent']['norm'], 30.0)
-        self.assertEqual(cols['excellent']['genre_norm'], 48.0)
+        self.assertEqual(cols['excellent']['genre_norm'], 30.0)        # no published comedy norm: the genre column reads the all-genres anchor
         self.assertEqual(cols['total_positive']['norm'], 65.0)
-        self.assertEqual(cols['definitely_recommend']['genre_norm'], 71.0)
+        self.assertEqual(cols['definitely_recommend']['genre_norm'], 50.0)
         self.assertTrue(sc['norm_lines'])
-        self.assertTrue(any(l.startswith('Definitely recommend') and 'comedy screenings usually land near 71%' in l for l in sc['norm_lines']))
+        self.assertTrue(any(l.startswith('Definitely recommend') and 'pilots usually land near 50%' in l for l in sc['norm_lines']))
         for l in sc['norm_lines']:
             self.assertFalse(PI.has_banned_copy(l), l)
+        # a genre with a published norm of its own reads it in the genre column
+        fam = PI.attach_norms({'battery': {'headline': {'total_positive_pct': 80.0}}}, 'feature', 'family')
+        self.assertEqual(fam['norm_columns']['total_positive'], {'norm': 65.0, 'genre_norm': 75.0})
+        self.assertEqual(fam['norm_lines'], ['Total positive 80.0%, family features usually land near 75%.'])
 
     def test_norm_metrics_for_the_ledger(self):
         sess = _run('funny', sid='metrics')
@@ -685,9 +689,10 @@ class Seams(unittest.TestCase):
 
     def test_norms_for_is_public(self):
         n = PI.norms_for('pilot', 'comedy')
-        self.assertEqual(n['genre_used'], 'comedy')
-        self.assertEqual(n['genre']['definitely_recommend']['value'], 71.0)
+        self.assertEqual(n['genre_used'], 'all')             # no published comedy norm; the blockbuster benchmark is a ceiling, not the average
+        self.assertEqual(n['genre']['definitely_recommend']['value'], 50.0)
         self.assertEqual(n['all']['definitely_recommend']['value'], 50.0)
+        self.assertEqual(PI.norms_for('feature', 'family')['genre']['definitely_recommend']['value'], 60.0)
         self.assertNotIn('sources', json.dumps(n))
         n2 = PI.norms_for('pilot', 'unscripted')
         self.assertEqual(n2['genre_used'], 'all')

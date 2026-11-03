@@ -1164,6 +1164,22 @@ def norm_metrics(session: dict) -> dict:
     return out
 
 
+def forget_norms(session: dict, s3=None) -> Optional[dict]:
+    """A deleted test leaves the ledger. Never raises."""
+    try:
+        from migration import digital_twin_norms as N
+        sid = str((session or {}).get('id') or '')
+        if not sid or not (session or {}).get('norms_recorded_at'):
+            return None
+        doc = N.forget_test(_norms_s3(s3), sid)
+        if doc is not None:
+            session.pop('norms_recorded_at', None)
+        return doc
+    except Exception as e:
+        print(f"[pilot] norms forget skipped: {e}")
+        return None
+
+
 def record_norms(session: dict, s3=None) -> Optional[dict]:
     """Every stopped test adds to the ledger (format x genre x metric).
     Idempotent per test id. Never raises."""
@@ -2008,6 +2024,7 @@ def delete_session(s3, twin_key: str, payload: dict, sid: str, deleted_by: str =
     sess = remove_session(payload, sid)
     if sess is None:
         return None
+    forget_norms(sess, s3)
     undo_key = deleted_pilot_key(twin_key, sid)
     media_undo = _move_media_to_undo(s3, sess, undo_key)
     rec = {
@@ -2061,6 +2078,8 @@ def restore_session(s3, twin_key: str, payload: dict, sid: str, restored_by: str
     sess['restored_by'] = restored_by or ''
     sess['updated_at'] = _now()
     payload.setdefault('pilot_sessions', []).insert(0, sess)
+    if str(sess.get('status') or '') in ('stopped', 'done', 'finished', 'complete'):
+        record_norms(sess, s3)     # a restored finished test joins the ledger again (it left when it was deleted)
     try:
         s3.delete_object(Bucket='dashboard-inputs', Key=undo_key)
     except Exception:

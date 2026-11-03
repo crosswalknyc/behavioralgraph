@@ -1,7 +1,7 @@
 {
- "version": 1,
- "as_of": "2026-10-28",
- "note": "Internal. Published anchors for the Pilot Testing norms ledger; sources never reach a page a user reads.",
+ "version": 2,
+ "as_of": "2026-11-03",
+ "note": "Internal. Published anchors for the Pilot Testing norms ledger; sources never reach a page a user reads. v2 (2026-11-03, Jenna: the norms felt off): one instrument per cell (the recruited-screening card for features and pilots; trailer, title, key art and concept tests for theirs); the PostTrak exit-poll genre averages and the blockbuster-comedy benchmark left the norm cells for the reference lists; the NRG five-year family norms seed family and animation; the pilot cells carry the recruited-screening anchors so our own tests blend in instead of standing alone.",
  "cells": [
   {
    "format": "feature",
@@ -10,7 +10,7 @@
    "value": 30.0,
    "range": [
     25.0,
-    45.0
+    30.0
    ],
    "n_hint": null,
    "basis": "published norm",
@@ -48,6 +48,14 @@
     {
      "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/EQUALIZER/EXITS/FINAL%20REPORT%20The%20Equalizer%20-%20OWIT.docx",
      "note": "[exit poll (opening weekend in-theater; self-selected paying audience, not a recruited screening): value 40] The Equalizer Opening Weekend In-Theater Report, Friday Sept 26 2014: '(Norms are: 40% excellent; 70% total positive; 55% definite.)'; by ethnicity '(Norms are 40-45% excellent; 55-60% definite; higher norms associated with Non-Caucasian groups)'; expectations '(Norms are: 50% exceeded expectations; 30% met; 20% below.)'"
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/EQUALIZER/Screening%20%231%20%2812.16.13%29/THE%20EQUALIZER%20RA1%2012-16-13%20report.doc",
+     "note": "[recruited screening / Nielsen NRG five-year all-movies norms, printed on the NRG recruited audience screening report for The Equalizer, Long Beach 12.16.13] NRG Norms column: Excellent 30, Very Good 35, Total Highly Favorable 65, Definitely Recommend 50; performance norms lead 50, support 40; element norms Action 45, Story 40, Ending 40, Settings 40, Beginning 35; music 40 (the report reads 'excellent ratings that were 12 points above the norm' against a 52). The Equalizer test score summary prints the same NORMS column (30 / 35 / 65 / 50) for both screenings."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/EQUALIZER/EQUALIZER%20Test%20Score%20Summary.xls",
+     "note": "[recruited screening / NRG] EQUALIZER Test Score Summary.xls: NORMS column Excellent 30, Very Good 35, Ttl Highly Favorable 65, Definite Recommend 50 beside both recruited screenings (12.16.13 Long Beach, 7.29.14 Olathe)."
     }
    ],
    "populations": [
@@ -71,7 +79,8 @@
      "basis": "published norm",
      "value": 40.0
     }
-   ]
+   ],
+   "instrument": "recruited_screening"
   },
   {
    "format": "feature",
@@ -79,8 +88,8 @@
    "metric": "total_positive",
    "value": 65.0,
    "range": [
-    43.0,
-    97.0
+    55.0,
+    65.0
    ],
    "n_hint": null,
    "basis": "published norm",
@@ -210,6 +219,14 @@
     {
      "url": "https://forums.boxofficetheory.com/topic/33589-august-8-to-10-weekend-thread-weapons-425-freaky-29-fantastic-four-drop-redacted/page/7/",
      "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 76; Beetlejuice Beetlejuice 81; The Front Room 43; IF 84; The Strangers: Chapter 1 50; Challengers 77; Unsung Hero 96; Boy Kills World 71; One of Them Days 84; Wolf Man 54; Despicable Me 4 82; Sound of Hope: The Story of Possum Trot 94; Lilo & Stitch 90; Mission: Impossible - The Final Reckoning 89; F1 92; M3GAN 2.0 84; Sinners 92; Dune: Part Two 94; Dune 84; Wicked 90; Gladiator II 77; Taylor Swift: The Eras Tour 96; Renaissance: A Film by Beyonce 97; Godzilla Minus One 92"
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/EQUALIZER/Screening%20%231%20%2812.16.13%29/THE%20EQUALIZER%20RA1%2012-16-13%20report.doc",
+     "note": "[recruited screening / Nielsen NRG five-year all-movies norms, printed on the NRG recruited audience screening report for The Equalizer, Long Beach 12.16.13] NRG Norms column: Excellent 30, Very Good 35, Total Highly Favorable 65, Definitely Recommend 50; performance norms lead 50, support 40; element norms Action 45, Story 40, Ending 40, Settings 40, Beginning 35; music 40 (the report reads 'excellent ratings that were 12 points above the norm' against a 52). The Equalizer test score summary prints the same NORMS column (30 / 35 / 65 / 50) for both screenings."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/EQUALIZER/EQUALIZER%20Test%20Score%20Summary.xls",
+     "note": "[recruited screening / NRG] EQUALIZER Test Score Summary.xls: NORMS column Excellent 30, Very Good 35, Ttl Highly Favorable 65, Definite Recommend 50 beside both recruited screenings (12.16.13 Long Beach, 7.29.14 Olathe)."
     }
    ],
    "populations": [
@@ -243,7 +260,8 @@
      "basis": "averaged from published reads",
      "value": 82.7
     }
-   ]
+   ],
+   "instrument": "recruited_screening"
   },
   {
    "format": "feature",
@@ -251,8 +269,8 @@
    "metric": "definitely_recommend",
    "value": 50.0,
    "range": [
-    34.0,
-    90.0
+    45.0,
+    50.0
    ],
    "n_hint": null,
    "basis": "published norm",
@@ -414,6 +432,14 @@
     {
      "url": "https://forums.boxofficetheory.com/topic/33589-august-8-to-10-weekend-thread-weapons-425-freaky-29-fantastic-four-drop-redacted/page/7/",
      "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 59; Beetlejuice Beetlejuice 68; The Front Room 34; IF 64; Challengers 59; Unsung Hero 90; Boy Kills World 50; One of Them Days 63; Wolf Man 34; Despicable Me 4 63; Sound of Hope: The Story of Possum Trot 87; Lilo & Stitch 81; Mission: Impossible - The Final Reckoning 79; F1 78; M3GAN 2.0 62; Superman 74; I Know What You Did Last Summer 43; Smurfs 50; Eddington 39; Sinners 84; The Wedding Banquet 50; Final Destination Bloodlines 69; The Monkey 49; The Conjuring: Last Rites 5"
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/EQUALIZER/Screening%20%231%20%2812.16.13%29/THE%20EQUALIZER%20RA1%2012-16-13%20report.doc",
+     "note": "[recruited screening / Nielsen NRG five-year all-movies norms, printed on the NRG recruited audience screening report for The Equalizer, Long Beach 12.16.13] NRG Norms column: Excellent 30, Very Good 35, Total Highly Favorable 65, Definitely Recommend 50; performance norms lead 50, support 40; element norms Action 45, Story 40, Ending 40, Settings 40, Beginning 35; music 40 (the report reads 'excellent ratings that were 12 points above the norm' against a 52). The Equalizer test score summary prints the same NORMS column (30 / 35 / 65 / 50) for both screenings."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/EQUALIZER/EQUALIZER%20Test%20Score%20Summary.xls",
+     "note": "[recruited screening / NRG] EQUALIZER Test Score Summary.xls: NORMS column Excellent 30, Very Good 35, Ttl Highly Favorable 65, Definite Recommend 50 beside both recruited screenings (12.16.13 Long Beach, 7.29.14 Olathe)."
     }
    ],
    "populations": [
@@ -447,7 +473,8 @@
      "basis": "averaged from published reads",
      "value": 65.8
     }
-   ]
+   ],
+   "instrument": "recruited_screening"
   },
   {
    "format": "feature",
@@ -471,8 +498,17 @@
     {
      "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/EQUALIZER/Screening%20%231%20%2812.16.13%29/THE%20EQUALIZER%20RA1%2012-16-13%20report.doc",
      "note": "[recruited screening / Screen Engine and Nielsen NRG agree] NRG 5-year all movies performance norms column: lead (Robert McCall / Denzel Washington) norm 50; support roles 40."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/EQUALIZER/Screening%20%231%20%2812.16.13%29/THE%20EQUALIZER%20RA1%2012-16-13%20report.doc",
+     "note": "[recruited screening / Nielsen NRG five-year all-movies norms, printed on the NRG recruited audience screening report for The Equalizer, Long Beach 12.16.13] NRG Norms column: Excellent 30, Very Good 35, Total Highly Favorable 65, Definitely Recommend 50; performance norms lead 50, support 40; element norms Action 45, Story 40, Ending 40, Settings 40, Beginning 35; music 40 (the report reads 'excellent ratings that were 12 points above the norm' against a 52). The Equalizer test score summary prints the same NORMS column (30 / 35 / 65 / 50) for both screenings."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/EQUALIZER/EQUALIZER%20Test%20Score%20Summary.xls",
+     "note": "[recruited screening / NRG] EQUALIZER Test Score Summary.xls: NORMS column Excellent 30, Very Good 35, Ttl Highly Favorable 65, Definite Recommend 50 beside both recruited screenings (12.16.13 Long Beach, 7.29.14 Olathe)."
     }
-   ]
+   ],
+   "instrument": "recruited_screening"
   },
   {
    "format": "feature",
@@ -493,7 +529,8 @@
      "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/INTERVIEW/Screening%20%231%20%284-2-14%29/4.2%20The%20Interview%20Report%20-%20FINAL.PDF",
      "note": "[recruited screening / Screen Engine] 'rated solidly above average at 71% excellent, compared with a norm of 45% for secondary leads'."
     }
-   ]
+   ],
+   "instrument": "recruited_screening"
   },
   {
    "format": "feature",
@@ -517,8 +554,17 @@
     {
      "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/EQUALIZER/Screening%20%231%20%2812.16.13%29/THE%20EQUALIZER%20RA1%2012-16-13%20report.doc",
      "note": "[recruited screening / Screen Engine and Nielsen NRG agree] NRG performance norms: Teddy / Marton Csokas and Teri / Chloe Grace Moretz support role norm 40."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/EQUALIZER/Screening%20%231%20%2812.16.13%29/THE%20EQUALIZER%20RA1%2012-16-13%20report.doc",
+     "note": "[recruited screening / Nielsen NRG five-year all-movies norms, printed on the NRG recruited audience screening report for The Equalizer, Long Beach 12.16.13] NRG Norms column: Excellent 30, Very Good 35, Total Highly Favorable 65, Definitely Recommend 50; performance norms lead 50, support 40; element norms Action 45, Story 40, Ending 40, Settings 40, Beginning 35; music 40 (the report reads 'excellent ratings that were 12 points above the norm' against a 52). The Equalizer test score summary prints the same NORMS column (30 / 35 / 65 / 50) for both screenings."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/EQUALIZER/EQUALIZER%20Test%20Score%20Summary.xls",
+     "note": "[recruited screening / NRG] EQUALIZER Test Score Summary.xls: NORMS column Excellent 30, Very Good 35, Ttl Highly Favorable 65, Definite Recommend 50 beside both recruited screenings (12.16.13 Long Beach, 7.29.14 Olathe)."
     }
-   ]
+   ],
+   "instrument": "recruited_screening"
   },
   {
    "format": "feature",
@@ -539,7 +585,8 @@
      "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/WEDDING%20RINGER/Screening%20%232%20%285-15-14%29/5.15%20The%20Wedding%20Ringer%20Report%20-%20FINAL.pdf",
      "note": "[recruited screening / Screen Engine] '82% rating it excellent, more than double the industry norm of 40%' (The Humor)."
     }
-   ]
+   ],
+   "instrument": "recruited_screening"
   },
   {
    "format": "feature",
@@ -566,8 +613,17 @@
     {
      "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/EQUALIZER/Screening%20%231%20%2812.16.13%29/THE%20EQUALIZER%20RA1%2012-16-13%20report.doc",
      "note": "[recruited screening / Screen Engine 30 vs Nielsen NRG 40; value is the midpoint] Nielsen NRG 5-year all movies element norms: Story 40."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/EQUALIZER/Screening%20%231%20%2812.16.13%29/THE%20EQUALIZER%20RA1%2012-16-13%20report.doc",
+     "note": "[recruited screening / Nielsen NRG five-year all-movies norms, printed on the NRG recruited audience screening report for The Equalizer, Long Beach 12.16.13] NRG Norms column: Excellent 30, Very Good 35, Total Highly Favorable 65, Definitely Recommend 50; performance norms lead 50, support 40; element norms Action 45, Story 40, Ending 40, Settings 40, Beginning 35; music 40 (the report reads 'excellent ratings that were 12 points above the norm' against a 52). The Equalizer test score summary prints the same NORMS column (30 / 35 / 65 / 50) for both screenings."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/EQUALIZER/EQUALIZER%20Test%20Score%20Summary.xls",
+     "note": "[recruited screening / NRG] EQUALIZER Test Score Summary.xls: NORMS column Excellent 30, Very Good 35, Ttl Highly Favorable 65, Definite Recommend 50 beside both recruited screenings (12.16.13 Long Beach, 7.29.14 Olathe)."
     }
-   ]
+   ],
+   "instrument": "recruited_screening"
   },
   {
    "format": "feature",
@@ -594,8 +650,17 @@
     {
      "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/EQUALIZER/Screening%20%231%20%2812.16.13%29/THE%20EQUALIZER%20RA1%2012-16-13%20report.doc",
      "note": "[recruited screening / Screen Engine 30 vs Nielsen NRG 35; value is the midpoint] Nielsen NRG element norms: Beginning 35."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/EQUALIZER/Screening%20%231%20%2812.16.13%29/THE%20EQUALIZER%20RA1%2012-16-13%20report.doc",
+     "note": "[recruited screening / Nielsen NRG five-year all-movies norms, printed on the NRG recruited audience screening report for The Equalizer, Long Beach 12.16.13] NRG Norms column: Excellent 30, Very Good 35, Total Highly Favorable 65, Definitely Recommend 50; performance norms lead 50, support 40; element norms Action 45, Story 40, Ending 40, Settings 40, Beginning 35; music 40 (the report reads 'excellent ratings that were 12 points above the norm' against a 52). The Equalizer test score summary prints the same NORMS column (30 / 35 / 65 / 50) for both screenings."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/EQUALIZER/EQUALIZER%20Test%20Score%20Summary.xls",
+     "note": "[recruited screening / NRG] EQUALIZER Test Score Summary.xls: NORMS column Excellent 30, Very Good 35, Ttl Highly Favorable 65, Definite Recommend 50 beside both recruited screenings (12.16.13 Long Beach, 7.29.14 Olathe)."
     }
-   ]
+   ],
+   "instrument": "recruited_screening"
   },
   {
    "format": "feature",
@@ -622,8 +687,17 @@
     {
      "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/EQUALIZER/Screening%20%231%20%2812.16.13%29/THE%20EQUALIZER%20RA1%2012-16-13%20report.doc",
      "note": "[recruited screening / Screen Engine 35 vs Nielsen NRG 40; value is the midpoint] Nielsen NRG element norms: Ending 40."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/EQUALIZER/Screening%20%231%20%2812.16.13%29/THE%20EQUALIZER%20RA1%2012-16-13%20report.doc",
+     "note": "[recruited screening / Nielsen NRG five-year all-movies norms, printed on the NRG recruited audience screening report for The Equalizer, Long Beach 12.16.13] NRG Norms column: Excellent 30, Very Good 35, Total Highly Favorable 65, Definitely Recommend 50; performance norms lead 50, support 40; element norms Action 45, Story 40, Ending 40, Settings 40, Beginning 35; music 40 (the report reads 'excellent ratings that were 12 points above the norm' against a 52). The Equalizer test score summary prints the same NORMS column (30 / 35 / 65 / 50) for both screenings."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/EQUALIZER/EQUALIZER%20Test%20Score%20Summary.xls",
+     "note": "[recruited screening / NRG] EQUALIZER Test Score Summary.xls: NORMS column Excellent 30, Very Good 35, Ttl Highly Favorable 65, Definite Recommend 50 beside both recruited screenings (12.16.13 Long Beach, 7.29.14 Olathe)."
     }
-   ]
+   ],
+   "instrument": "recruited_screening"
   },
   {
    "format": "feature",
@@ -646,8 +720,17 @@
     {
      "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/EQUALIZER/Screening%20%231%20%2812.16.13%29/THE%20EQUALIZER%20RA1%2012-16-13%20report.doc",
      "note": "[recruited screening / Screen Engine 30 vs Nielsen NRG 40; value is the midpoint] Nielsen NRG music rating table: NRG Norms Excellent 40 ('12 points above the norm' for a 52% score)."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/EQUALIZER/Screening%20%231%20%2812.16.13%29/THE%20EQUALIZER%20RA1%2012-16-13%20report.doc",
+     "note": "[recruited screening / Nielsen NRG five-year all-movies norms, printed on the NRG recruited audience screening report for The Equalizer, Long Beach 12.16.13] NRG Norms column: Excellent 30, Very Good 35, Total Highly Favorable 65, Definitely Recommend 50; performance norms lead 50, support 40; element norms Action 45, Story 40, Ending 40, Settings 40, Beginning 35; music 40 (the report reads 'excellent ratings that were 12 points above the norm' against a 52). The Equalizer test score summary prints the same NORMS column (30 / 35 / 65 / 50) for both screenings."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/EQUALIZER/EQUALIZER%20Test%20Score%20Summary.xls",
+     "note": "[recruited screening / NRG] EQUALIZER Test Score Summary.xls: NORMS column Excellent 30, Very Good 35, Ttl Highly Favorable 65, Definite Recommend 50 beside both recruited screenings (12.16.13 Long Beach, 7.29.14 Olathe)."
     }
-   ]
+   ],
+   "instrument": "recruited_screening"
   },
   {
    "format": "feature",
@@ -663,8 +746,17 @@
     {
      "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/EQUALIZER/Screening%20%231%20%2812.16.13%29/THE%20EQUALIZER%20RA1%2012-16-13%20report.doc",
      "note": "[recruited screening / Nielsen NRG] Nielsen NRG 5-year all movies element norms: Action 45 ('nearly doubled its norm' at 83% excellent)."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/EQUALIZER/Screening%20%231%20%2812.16.13%29/THE%20EQUALIZER%20RA1%2012-16-13%20report.doc",
+     "note": "[recruited screening / Nielsen NRG five-year all-movies norms, printed on the NRG recruited audience screening report for The Equalizer, Long Beach 12.16.13] NRG Norms column: Excellent 30, Very Good 35, Total Highly Favorable 65, Definitely Recommend 50; performance norms lead 50, support 40; element norms Action 45, Story 40, Ending 40, Settings 40, Beginning 35; music 40 (the report reads 'excellent ratings that were 12 points above the norm' against a 52). The Equalizer test score summary prints the same NORMS column (30 / 35 / 65 / 50) for both screenings."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/EQUALIZER/EQUALIZER%20Test%20Score%20Summary.xls",
+     "note": "[recruited screening / NRG] EQUALIZER Test Score Summary.xls: NORMS column Excellent 30, Very Good 35, Ttl Highly Favorable 65, Definite Recommend 50 beside both recruited screenings (12.16.13 Long Beach, 7.29.14 Olathe)."
     }
-   ]
+   ],
+   "instrument": "recruited_screening"
   },
   {
    "format": "feature",
@@ -681,580 +773,8 @@
      "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/INTERVIEW/Screening%20%233%20and%20%234%20%285-13-14%29/5.13%20The%20Interview%20Report%20%28730pm%29%20-%20FINAL.pdf",
      "note": "[recruited screening / Screen Engine] 'suspense was excellent ... quite a bit above the industry norm of 30%'; components table suspense benchmark 30%."
     }
-   ]
-  },
-  {
-   "format": "feature",
-   "genre": "comedy",
-   "metric": "excellent",
-   "value": 48.0,
-   "range": null,
-   "n_hint": null,
-   "basis": "published norm",
-   "as_of": "2014-05",
-   "context": "recruited_screening; blockbuster comedy benchmark",
-   "sources": [
-    {
-     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/INTERVIEW/Screening%20%233%20and%20%234%20%285-13-14%29/5.13%20The%20Interview%20Report%20%28730pm%29%20-%20FINAL.pdf",
-     "note": "[recruited screening; blockbuster comedy benchmark / Screen Engine] Blockbuster Comedy Benchmarks column: Excellent 48%, Very Good 34%, Total Positive 82%, Yes definitely recommend 71%. Caveat: this is Screen Engine's 'blockbuster comedy' benchmark (a high bar), not an all-comedy norm."
-    },
-    {
-     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/INTERVIEW/Screening%20%231%20%284-2-14%29/4.2%20The%20Interview%20Report%20-%20FINAL.PDF",
-     "note": "[recruited screening; blockbuster comedy benchmark / Screen Engine] 'industry norm of 30% and a Blockbuster Comedy benchmark of 48% ... general audience norm of 65% and a Blockbuster Comedy benchmark of 82%'; 'general audience norm of 50%, and a Blockbuster Comedy benchmark of 71%'."
-    },
-    {
-     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/INTERVIEW/Screening%20%232%20%284-17-14%29/4.17%20The%20Interview%20Report%20-%20FINAL.pdf",
-     "note": "[recruited screening; blockbuster comedy benchmark / Screen Engine] Same benchmarks repeated: 48 / 82 / 71."
-    }
-   ]
-  },
-  {
-   "format": "feature",
-   "genre": "comedy",
-   "metric": "total_positive",
-   "value": 82.0,
-   "range": [
-    81.0,
-    84.0
    ],
-   "n_hint": null,
-   "basis": "published norm",
-   "as_of": "2014-05",
-   "context": "recruited_screening; blockbuster comedy benchmark",
-   "sources": [
-    {
-     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/INTERVIEW/Screening%20%233%20and%20%234%20%285-13-14%29/5.13%20The%20Interview%20Report%20%28730pm%29%20-%20FINAL.pdf",
-     "note": "[recruited screening; blockbuster comedy benchmark / Screen Engine] Blockbuster Comedy Benchmarks column: Excellent 48%, Very Good 34%, Total Positive 82%, Yes definitely recommend 71%. Caveat: this is Screen Engine's 'blockbuster comedy' benchmark (a high bar), not an all-comedy norm."
-    },
-    {
-     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/INTERVIEW/Screening%20%231%20%284-2-14%29/4.2%20The%20Interview%20Report%20-%20FINAL.PDF",
-     "note": "[recruited screening; blockbuster comedy benchmark / Screen Engine] 'industry norm of 30% and a Blockbuster Comedy benchmark of 48% ... general audience norm of 65% and a Blockbuster Comedy benchmark of 82%'; 'general audience norm of 50%, and a Blockbuster Comedy benchmark of 71%'."
-    },
-    {
-     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/INTERVIEW/Screening%20%232%20%284-17-14%29/4.17%20The%20Interview%20Report%20-%20FINAL.pdf",
-     "note": "[recruited screening; blockbuster comedy benchmark / Screen Engine] Same benchmarks repeated: 48 / 82 / 71."
-    },
-    {
-     "url": "https://web.archive.org/web/20240907200813/https:/deadline.com/2024/09/box-office-beetlejuice-beetlejuice-1236079763/",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Beetlejuice Beetlejuice 81; One of Them Days 84: value 82.5] Beetlejuice Beetlejuice (2024, comedy): total_positive 81%"
-    },
-    {
-     "url": "https://deadline.com/2025/01/box-office-wolf-man-one-of-them-days-1236259743/",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Beetlejuice Beetlejuice 81; One of Them Days 84: value 82.5] One of Them Days (2025, comedy): total_positive 84%"
-    }
-   ],
-   "populations": [
-    {
-     "context": "recruited_screening; blockbuster comedy benchmark",
-     "basis": "published norm",
-     "value": 82.0
-    },
-    {
-     "context": "exit_poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Beetlejuice Beetlejuice 81; One of Them Days 84",
-     "basis": "averaged from published reads",
-     "value": 82.5
-    }
-   ]
-  },
-  {
-   "format": "feature",
-   "genre": "comedy",
-   "metric": "definitely_recommend",
-   "value": 71.0,
-   "range": [
-    39.0,
-    73.0
-   ],
-   "n_hint": null,
-   "basis": "published norm",
-   "as_of": "2014-05",
-   "context": "recruited_screening; blockbuster comedy benchmark",
-   "sources": [
-    {
-     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/INTERVIEW/Screening%20%233%20and%20%234%20%285-13-14%29/5.13%20The%20Interview%20Report%20%28730pm%29%20-%20FINAL.pdf",
-     "note": "[recruited screening; blockbuster comedy benchmark / Screen Engine] Blockbuster Comedy Benchmarks column: Excellent 48%, Very Good 34%, Total Positive 82%, Yes definitely recommend 71%. Caveat: this is Screen Engine's 'blockbuster comedy' benchmark (a high bar), not an all-comedy norm."
-    },
-    {
-     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/INTERVIEW/Screening%20%231%20%284-2-14%29/4.2%20The%20Interview%20Report%20-%20FINAL.PDF",
-     "note": "[recruited screening; blockbuster comedy benchmark / Screen Engine] 'industry norm of 30% and a Blockbuster Comedy benchmark of 48% ... general audience norm of 65% and a Blockbuster Comedy benchmark of 82%'; 'general audience norm of 50%, and a Blockbuster Comedy benchmark of 71%'."
-    },
-    {
-     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/INTERVIEW/Screening%20%232%20%284-17-14%29/4.17%20The%20Interview%20Report%20-%20FINAL.pdf",
-     "note": "[recruited screening; blockbuster comedy benchmark / Screen Engine] Same benchmarks repeated: 48 / 82 / 71."
-    },
-    {
-     "url": "https://web.archive.org/web/20240907200813/https:/deadline.com/2024/09/box-office-beetlejuice-beetlejuice-1236079763/",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Beetlejuice Beetlejuice 68; One of Them Days 63; Eddington 39; The Naked Gun 73: value 60.8] Beetlejuice Beetlejuice (2024, comedy): definite_recommend 68%"
-    },
-    {
-     "url": "https://deadline.com/2025/01/box-office-wolf-man-one-of-them-days-1236259743/",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Beetlejuice Beetlejuice 68; One of Them Days 63; Eddington 39; The Naked Gun 73: value 60.8] One of Them Days (2025, comedy): definite_recommend 63%"
-    },
-    {
-     "url": "https://deadline.com/2025/07/box-office-superman-i-know-what-you-did-smurfs-1236462233/",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Beetlejuice Beetlejuice 68; One of Them Days 63; Eddington 39; The Naked Gun 73: value 60.8] Eddington (2025, comedy): definite_recommend 39%"
-    },
-    {
-     "url": "https://deadline.com/2025/08/box-office-fantastic-four-bad-guys-2-naked-gun-1236476381/",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Beetlejuice Beetlejuice 68; One of Them Days 63; Eddington 39; The Naked Gun 73: value 60.8] The Naked Gun (2025, comedy): definite_recommend 73%"
-    }
-   ],
-   "populations": [
-    {
-     "context": "recruited_screening; blockbuster comedy benchmark",
-     "basis": "published norm",
-     "value": 71.0
-    },
-    {
-     "context": "exit_poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Beetlejuice Beetlejuice 68; One of Them Days 63; Eddington 39; The Naked Gun 73",
-     "basis": "averaged from published reads",
-     "value": 60.8
-    }
-   ]
-  },
-  {
-   "format": "feature",
-   "genre": "drama",
-   "metric": "total_positive",
-   "value": 93.2,
-   "range": [
-    90.0,
-    96.0
-   ],
-   "n_hint": 4,
-   "basis": "averaged from published reads",
-   "as_of": "2026-10",
-   "context": "exit_poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Unsung Hero 96; Sound of Hope: The Story of Possum Trot 94; Wicked 90; A Complete Unknown 93",
-   "sources": [
-    {
-     "url": "https://deadline.com/2024/04/box-office-challengers-zendaya-1235896116/",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Unsung Hero 96; Sound of Hope: The Story of Possum Trot 94; Wicked 90; A Complete Unknown 93] Unsung Hero (2024, drama): total_positive 96%"
-    },
-    {
-     "url": "https://deadline.com/2024/07/box-office-despicable-me-4-1236001250/",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Unsung Hero 96; Sound of Hope: The Story of Possum Trot 94; Wicked 90; A Complete Unknown 93] Sound of Hope: The Story of Possum Trot (2024, drama): total_positive 94%"
-    },
-    {
-     "url": "https://deadline.com/2024/11/box-office-wicked-gladiator-ii-1236184897/",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Unsung Hero 96; Sound of Hope: The Story of Possum Trot 94; Wicked 90; A Complete Unknown 93] Wicked (2024, drama): total_positive 90%"
-    },
-    {
-     "url": "https://www.reddit.com/r/boxoffice/comments/1hmsvyc/per_deadline_posttrak_scores_for_a_complete/",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Unsung Hero 96; Sound of Hope: The Story of Possum Trot 94; Wicked 90; A Complete Unknown 93] A Complete Unknown (2024, drama): total_positive 93% [secondary]"
-    }
-   ]
-  },
-  {
-   "format": "feature",
-   "genre": "drama",
-   "metric": "definitely_recommend",
-   "value": 83.2,
-   "range": [
-    76.0,
-    90.0
-   ],
-   "n_hint": 4,
-   "basis": "averaged from published reads",
-   "as_of": "2026-10",
-   "context": "exit_poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Unsung Hero 90; Sound of Hope: The Story of Possum Trot 87; Wicked 80; A Complete Unknown 76",
-   "sources": [
-    {
-     "url": "https://deadline.com/2024/04/box-office-challengers-zendaya-1235896116/",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Unsung Hero 90; Sound of Hope: The Story of Possum Trot 87; Wicked 80; A Complete Unknown 76] Unsung Hero (2024, drama): definite_recommend 90%"
-    },
-    {
-     "url": "https://deadline.com/2024/07/box-office-despicable-me-4-1236001250/",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Unsung Hero 90; Sound of Hope: The Story of Possum Trot 87; Wicked 80; A Complete Unknown 76] Sound of Hope: The Story of Possum Trot (2024, drama): definite_recommend 87%"
-    },
-    {
-     "url": "https://deadline.com/2024/11/box-office-wicked-gladiator-ii-1236184897/",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Unsung Hero 90; Sound of Hope: The Story of Possum Trot 87; Wicked 80; A Complete Unknown 76] Wicked (2024, drama): definite_recommend 80%"
-    },
-    {
-     "url": "https://www.reddit.com/r/boxoffice/comments/1hmsvyc/per_deadline_posttrak_scores_for_a_complete/",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Unsung Hero 90; Sound of Hope: The Story of Possum Trot 87; Wicked 80; A Complete Unknown 76] A Complete Unknown (2024, drama): definite_recommend 76% [secondary]"
-    }
-   ]
-  },
-  {
-   "format": "feature",
-   "genre": "action",
-   "metric": "total_positive",
-   "value": 87.6,
-   "range": [
-    71.0,
-    96.0
-   ],
-   "n_hint": 9,
-   "basis": "averaged from published reads",
-   "as_of": "2026-10",
-   "context": "exit_poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Boy Kills World 71; Mission: Impossible - The Final Reckoning 89; F1 92; Dune: Part Two 94; Dune 84; Gladiator II 77; Godzilla Minus One 92; Deadpool & Wolverine 96; John Wick: Chapter 4 93",
-   "sources": [
-    {
-     "url": "https://deadline.com/2024/04/box-office-challengers-zendaya-1235896116/",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Boy Kills World 71; Mission: Impossible - The Final Reckoning 89; F1 92; Dune: Part Two 94; Dune 84; Gladiator II 77; Godzilla Minus One 92; Deadpool & Wolverine 96; John Wick: Chapter 4 93] Boy Kills World (2024, action): total_positive 71%"
-    },
-    {
-     "url": "https://deadline.com/2025/05/box-office-lilo-stitch-wild-mission-impossible-final-reckoning-1236409244/",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Boy Kills World 71; Mission: Impossible - The Final Reckoning 89; F1 92; Dune: Part Two 94; Dune 84; Gladiator II 77; Godzilla Minus One 92; Deadpool & Wolverine 96; John Wick: Chapter 4 93] Mission: Impossible - The Final Reckoning (2025, action): total_positive 89%"
-    },
-    {
-     "url": "https://deadline.com/2025/06/box-office-f1-megan-2-0-1236444277/comment-page-6/",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Boy Kills World 71; Mission: Impossible - The Final Reckoning 89; F1 92; Dune: Part Two 94; Dune 84; Gladiator II 77; Godzilla Minus One 92; Deadpool & Wolverine 96; John Wick: Chapter 4 93] F1 (2025, action): total_positive 92%"
-    },
-    {
-     "url": "https://deadline.com/2024/03/box-office-dune-part-two-1235842667/",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Boy Kills World 71; Mission: Impossible - The Final Reckoning 89; F1 92; Dune: Part Two 94; Dune 84; Gladiator II 77; Godzilla Minus One 92; Deadpool & Wolverine 96; John Wick: Chapter 4 93] Dune: Part Two (2024, action): total_positive 94%"
-    },
-    {
-     "url": "https://deadline.com/2024/11/box-office-wicked-gladiator-ii-1236184897/",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Boy Kills World 71; Mission: Impossible - The Final Reckoning 89; F1 92; Dune: Part Two 94; Dune 84; Gladiator II 77; Godzilla Minus One 92; Deadpool & Wolverine 96; John Wick: Chapter 4 93] Gladiator II (2024, action): total_positive 77%"
-    },
-    {
-     "url": "https://deadline.com/2023/12/box-office-renaissance-a-film-by-beyonce-godzilla-minus-one-hunger-games-1235647651/",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Boy Kills World 71; Mission: Impossible - The Final Reckoning 89; F1 92; Dune: Part Two 94; Dune 84; Gladiator II 77; Godzilla Minus One 92; Deadpool & Wolverine 96; John Wick: Chapter 4 93] Godzilla Minus One (2023, action): total_positive 92%"
-    },
-    {
-     "url": "https://www.reddit.com/r/boxoffice/comments/1ecrc5k/per_deadline_thursday_night_posttrak_scores_for/",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Boy Kills World 71; Mission: Impossible - The Final Reckoning 89; F1 92; Dune: Part Two 94; Dune 84; Gladiator II 77; Godzilla Minus One 92; Deadpool & Wolverine 96; John Wick: Chapter 4 93] Deadpool & Wolverine (2024, action): total_positive 96% [secondary]"
-    },
-    {
-     "url": "https://www.reddit.com/r/boxoffice/comments/121oy1a/posttrak_scores_for_john_wick_chapter_4_are_93/",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Boy Kills World 71; Mission: Impossible - The Final Reckoning 89; F1 92; Dune: Part Two 94; Dune 84; Gladiator II 77; Godzilla Minus One 92; Deadpool & Wolverine 96; John Wick: Chapter 4 93] John Wick: Chapter 4 (2023, action): total_positive 93% [secondary]"
-    }
-   ]
-  },
-  {
-   "format": "feature",
-   "genre": "action",
-   "metric": "definitely_recommend",
-   "value": 72.7,
-   "range": [
-    50.0,
-    85.0
-   ],
-   "n_hint": 11,
-   "basis": "averaged from published reads",
-   "as_of": "2026-10",
-   "context": "exit_poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Boy Kills World 50; Mission: Impossible - The Final Reckoning 79; F1 78; Superman 74; Dune: Part Two 80; Dune 66; Gladiator II 64; Godzilla Minus One 83; Novocaine 59; Deadpool & Wolverine 85; John Wick: Chapter 4 82",
-   "sources": [
-    {
-     "url": "https://deadline.com/2024/04/box-office-challengers-zendaya-1235896116/",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Boy Kills World 50; Mission: Impossible - The Final Reckoning 79; F1 78; Superman 74; Dune: Part Two 80; Dune 66; Gladiator II 64; Godzilla Minus One 83; Novocaine 59; Deadpool & Wolverine 85; John Wick: Chapter 4 82] Boy Kills World (2024, action): definite_recommend 50%"
-    },
-    {
-     "url": "https://deadline.com/2025/05/box-office-lilo-stitch-wild-mission-impossible-final-reckoning-1236409244/",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Boy Kills World 50; Mission: Impossible - The Final Reckoning 79; F1 78; Superman 74; Dune: Part Two 80; Dune 66; Gladiator II 64; Godzilla Minus One 83; Novocaine 59; Deadpool & Wolverine 85; John Wick: Chapter 4 82] Mission: Impossible - The Final Reckoning (2025, action): definite_recommend 79%"
-    },
-    {
-     "url": "https://deadline.com/2025/06/box-office-f1-megan-2-0-1236444277/comment-page-6/",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Boy Kills World 50; Mission: Impossible - The Final Reckoning 79; F1 78; Superman 74; Dune: Part Two 80; Dune 66; Gladiator II 64; Godzilla Minus One 83; Novocaine 59; Deadpool & Wolverine 85; John Wick: Chapter 4 82] F1 (2025, action): definite_recommend 78%"
-    },
-    {
-     "url": "https://deadline.com/2025/07/box-office-superman-i-know-what-you-did-smurfs-1236462233/",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Boy Kills World 50; Mission: Impossible - The Final Reckoning 79; F1 78; Superman 74; Dune: Part Two 80; Dune 66; Gladiator II 64; Godzilla Minus One 83; Novocaine 59; Deadpool & Wolverine 85; John Wick: Chapter 4 82] Superman (2025, action): definite_recommend 74%"
-    },
-    {
-     "url": "https://deadline.com/2024/03/box-office-dune-part-two-1235842667/",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Boy Kills World 50; Mission: Impossible - The Final Reckoning 79; F1 78; Superman 74; Dune: Part Two 80; Dune 66; Gladiator II 64; Godzilla Minus One 83; Novocaine 59; Deadpool & Wolverine 85; John Wick: Chapter 4 82] Dune: Part Two (2024, action): definite_recommend 80%"
-    },
-    {
-     "url": "https://deadline.com/2024/11/box-office-wicked-gladiator-ii-1236184897/",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Boy Kills World 50; Mission: Impossible - The Final Reckoning 79; F1 78; Superman 74; Dune: Part Two 80; Dune 66; Gladiator II 64; Godzilla Minus One 83; Novocaine 59; Deadpool & Wolverine 85; John Wick: Chapter 4 82] Gladiator II (2024, action): definite_recommend 64%"
-    },
-    {
-     "url": "https://deadline.com/2023/12/box-office-renaissance-a-film-by-beyonce-godzilla-minus-one-hunger-games-1235647651/",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Boy Kills World 50; Mission: Impossible - The Final Reckoning 79; F1 78; Superman 74; Dune: Part Two 80; Dune 66; Gladiator II 64; Godzilla Minus One 83; Novocaine 59; Deadpool & Wolverine 85; John Wick: Chapter 4 82] Godzilla Minus One (2023, action): definite_recommend 83%"
-    },
-    {
-     "url": "https://entertainmentindustryreporter.com/novocaine-leading-lowest-weekend-of-2025/",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Boy Kills World 50; Mission: Impossible - The Final Reckoning 79; F1 78; Superman 74; Dune: Part Two 80; Dune 66; Gladiator II 64; Godzilla Minus One 83; Novocaine 59; Deadpool & Wolverine 85; John Wick: Chapter 4 82] Novocaine (2025, action): definite_recommend 59% [secondary]"
-    },
-    {
-     "url": "https://www.reddit.com/r/boxoffice/comments/1ecrc5k/per_deadline_thursday_night_posttrak_scores_for/",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Boy Kills World 50; Mission: Impossible - The Final Reckoning 79; F1 78; Superman 74; Dune: Part Two 80; Dune 66; Gladiator II 64; Godzilla Minus One 83; Novocaine 59; Deadpool & Wolverine 85; John Wick: Chapter 4 82] Deadpool & Wolverine (2024, action): definite_recommend 85% [secondary]"
-    },
-    {
-     "url": "https://www.reddit.com/r/boxoffice/comments/121oy1a/posttrak_scores_for_john_wick_chapter_4_are_93/",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Boy Kills World 50; Mission: Impossible - The Final Reckoning 79; F1 78; Superman 74; Dune: Part Two 80; Dune 66; Gladiator II 64; Godzilla Minus One 83; Novocaine 59; Deadpool & Wolverine 85; John Wick: Chapter 4 82] John Wick: Chapter 4 (2023, action): definite_recommend 82% [secondary]"
-    }
-   ]
-  },
-  {
-   "format": "feature",
-   "genre": "horror",
-   "metric": "total_positive",
-   "value": 71.6,
-   "range": [
-    43.0,
-    92.0
-   ],
-   "n_hint": 10,
-   "basis": "averaged from published reads",
-   "as_of": "2026-10",
-   "context": "exit_poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 76; The Front Room 43; The Strangers: Chapter 1 50; Wolf Man 54; M3GAN 2.0 84; Sinners 92; Alien: Romulus 82; Scream VI 87; Scream 78; Longlegs 70",
-   "sources": [
-    {
-     "url": "https://www.boxofficepro.com/weekend-box-office-terrifier-3-scares-up-1-business/",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 76; The Front Room 43; The Strangers: Chapter 1 50; Wolf Man 54; M3GAN 2.0 84; Sinners 92; Alien: Romulus 82; Scream VI 87; Scream 78; Longlegs 70] Terrifier 3 (2024, horror): total_positive 76%"
-    },
-    {
-     "url": "https://web.archive.org/web/20240907200813/https:/deadline.com/2024/09/box-office-beetlejuice-beetlejuice-1236079763/",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 76; The Front Room 43; The Strangers: Chapter 1 50; Wolf Man 54; M3GAN 2.0 84; Sinners 92; Alien: Romulus 82; Scream VI 87; Scream 78; Longlegs 70] The Front Room (2024, horror): total_positive 43%"
-    },
-    {
-     "url": "https://deadline.com/2024/05/box-office-if-back-to-black-amy-winehouse-strangers-2-1235920634/",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 76; The Front Room 43; The Strangers: Chapter 1 50; Wolf Man 54; M3GAN 2.0 84; Sinners 92; Alien: Romulus 82; Scream VI 87; Scream 78; Longlegs 70] The Strangers: Chapter 1 (2024, horror): total_positive 50%"
-    },
-    {
-     "url": "https://deadline.com/2025/01/box-office-wolf-man-one-of-them-days-1236259743/",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 76; The Front Room 43; The Strangers: Chapter 1 50; Wolf Man 54; M3GAN 2.0 84; Sinners 92; Alien: Romulus 82; Scream VI 87; Scream 78; Longlegs 70] Wolf Man (2025, horror): total_positive 54%"
-    },
-    {
-     "url": "https://deadline.com/2025/06/box-office-f1-megan-2-0-1236444277/comment-page-6/",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 76; The Front Room 43; The Strangers: Chapter 1 50; Wolf Man 54; M3GAN 2.0 84; Sinners 92; Alien: Romulus 82; Scream VI 87; Scream 78; Longlegs 70] M3GAN 2.0 (2025, horror): total_positive 84%"
-    },
-    {
-     "url": "https://deadline.com/2025/04/box-office-sinners-a-minecraft-movie-1236371775/",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 76; The Front Room 43; The Strangers: Chapter 1 50; Wolf Man 54; M3GAN 2.0 84; Sinners 92; Alien: Romulus 82; Scream VI 87; Scream 78; Longlegs 70] Sinners (2025, horror): total_positive 92%"
-    },
-    {
-     "url": "https://www.reddit.com/r/boxoffice/comments/1etzcnx/per_deadline_thursday_night_posttrak_scores_for/",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 76; The Front Room 43; The Strangers: Chapter 1 50; Wolf Man 54; M3GAN 2.0 84; Sinners 92; Alien: Romulus 82; Scream VI 87; Scream 78; Longlegs 70] Alien: Romulus (2024, horror): total_positive 82% [secondary]"
-    },
-    {
-     "url": "https://www.reddit.com/r/boxoffice/comments/11ovzcr/posttrak_scores_for_scream_vi_are_87_positive74/",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 76; The Front Room 43; The Strangers: Chapter 1 50; Wolf Man 54; M3GAN 2.0 84; Sinners 92; Alien: Romulus 82; Scream VI 87; Scream 78; Longlegs 70] Scream VI (2023, horror): total_positive 87% [secondary]"
-    },
-    {
-     "url": "https://forums.boxofficetheory.com/topic/33589-august-8-to-10-weekend-thread-weapons-425-freaky-29-fantastic-four-drop-redacted/page/7/",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 76; The Front Room 43; The Strangers: Chapter 1 50; Wolf Man 54; M3GAN 2.0 84; Sinners 92; Alien: Romulus 82; Scream VI 87; Scream 78; Longlegs 70] Longlegs (2024, horror): total_positive 70% [secondary]"
-    }
-   ]
-  },
-  {
-   "format": "feature",
-   "genre": "horror",
-   "metric": "definitely_recommend",
-   "value": 58.6,
-   "range": [
-    34.0,
-    84.0
-   ],
-   "n_hint": 15,
-   "basis": "averaged from published reads",
-   "as_of": "2026-10",
-   "context": "exit_poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 59; The Front Room 34; Wolf Man 34; M3GAN 2.0 62; I Know What You Did Last Summer 43; Sinners 84; Final Destination Bloodlines 69; The Monkey 49; The Conjuring: Last Rites 58; Obsession 70; Alien: Romulus 65; Scream VI 74; Scream 59; Weapons 65; 28 Years Later 54",
-   "sources": [
-    {
-     "url": "https://www.boxofficepro.com/weekend-box-office-terrifier-3-scares-up-1-business/",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 59; The Front Room 34; Wolf Man 34; M3GAN 2.0 62; I Know What You Did Last Summer 43; Sinners 84; Final Destination Bloodlines 69; The Monkey 49; The Conjuring: Last Rites 58; Obsession 70; Alien: Romulus 65; Scream VI 74; Scream 59; Weapons 65; 28 Years Later 54] Terrifier 3 (2024, horror): definite_recommend 59%"
-    },
-    {
-     "url": "https://web.archive.org/web/20240907200813/https:/deadline.com/2024/09/box-office-beetlejuice-beetlejuice-1236079763/",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 59; The Front Room 34; Wolf Man 34; M3GAN 2.0 62; I Know What You Did Last Summer 43; Sinners 84; Final Destination Bloodlines 69; The Monkey 49; The Conjuring: Last Rites 58; Obsession 70; Alien: Romulus 65; Scream VI 74; Scream 59; Weapons 65; 28 Years Later 54] The Front Room (2024, horror): definite_recommend 34%"
-    },
-    {
-     "url": "https://deadline.com/2025/01/box-office-wolf-man-one-of-them-days-1236259743/",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 59; The Front Room 34; Wolf Man 34; M3GAN 2.0 62; I Know What You Did Last Summer 43; Sinners 84; Final Destination Bloodlines 69; The Monkey 49; The Conjuring: Last Rites 58; Obsession 70; Alien: Romulus 65; Scream VI 74; Scream 59; Weapons 65; 28 Years Later 54] Wolf Man (2025, horror): definite_recommend 34%"
-    },
-    {
-     "url": "https://deadline.com/2025/06/box-office-f1-megan-2-0-1236444277/comment-page-6/",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 59; The Front Room 34; Wolf Man 34; M3GAN 2.0 62; I Know What You Did Last Summer 43; Sinners 84; Final Destination Bloodlines 69; The Monkey 49; The Conjuring: Last Rites 58; Obsession 70; Alien: Romulus 65; Scream VI 74; Scream 59; Weapons 65; 28 Years Later 54] M3GAN 2.0 (2025, horror): definite_recommend 62%"
-    },
-    {
-     "url": "https://deadline.com/2025/07/box-office-superman-i-know-what-you-did-smurfs-1236462233/",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 59; The Front Room 34; Wolf Man 34; M3GAN 2.0 62; I Know What You Did Last Summer 43; Sinners 84; Final Destination Bloodlines 69; The Monkey 49; The Conjuring: Last Rites 58; Obsession 70; Alien: Romulus 65; Scream VI 74; Scream 59; Weapons 65; 28 Years Later 54] I Know What You Did Last Summer (2025, horror): definite_recommend 43%"
-    },
-    {
-     "url": "https://deadline.com/2025/04/box-office-sinners-a-minecraft-movie-1236371775/",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 59; The Front Room 34; Wolf Man 34; M3GAN 2.0 62; I Know What You Did Last Summer 43; Sinners 84; Final Destination Bloodlines 69; The Monkey 49; The Conjuring: Last Rites 58; Obsession 70; Alien: Romulus 65; Scream VI 74; Scream 59; Weapons 65; 28 Years Later 54] Sinners (2025, horror): definite_recommend 84%"
-    },
-    {
-     "url": "https://deadline.com/2025/05/box-office-final-destination-bloodlines-1236400414/",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 59; The Front Room 34; Wolf Man 34; M3GAN 2.0 62; I Know What You Did Last Summer 43; Sinners 84; Final Destination Bloodlines 69; The Monkey 49; The Conjuring: Last Rites 58; Obsession 70; Alien: Romulus 65; Scream VI 74; Scream 59; Weapons 65; 28 Years Later 54] Final Destination Bloodlines (2025, horror): definite_recommend 69%"
-    },
-    {
-     "url": "https://deadline.com/2025/02/box-office-the-monkey-captain-america-1236297207/",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 59; The Front Room 34; Wolf Man 34; M3GAN 2.0 62; I Know What You Did Last Summer 43; Sinners 84; Final Destination Bloodlines 69; The Monkey 49; The Conjuring: Last Rites 58; Obsession 70; Alien: Romulus 65; Scream VI 74; Scream 59; Weapons 65; 28 Years Later 54] The Monkey (2025, horror): definite_recommend 49%"
-    },
-    {
-     "url": "https://deadline.com/2025/09/box-office-conjuring-the-last-rites-1236508461/",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 59; The Front Room 34; Wolf Man 34; M3GAN 2.0 62; I Know What You Did Last Summer 43; Sinners 84; Final Destination Bloodlines 69; The Monkey 49; The Conjuring: Last Rites 58; Obsession 70; Alien: Romulus 65; Scream VI 74; Scream 59; Weapons 65; 28 Years Later 54] The Conjuring: Last Rites (2025, horror): definite_recommend 58%"
-    },
-    {
-     "url": "https://deadline.com/2026/05/box-office-obsession-1236914476/",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 59; The Front Room 34; Wolf Man 34; M3GAN 2.0 62; I Know What You Did Last Summer 43; Sinners 84; Final Destination Bloodlines 69; The Monkey 49; The Conjuring: Last Rites 58; Obsession 70; Alien: Romulus 65; Scream VI 74; Scream 59; Weapons 65; 28 Years Later 54] Obsession (2026, horror): definite_recommend 70%"
-    },
-    {
-     "url": "https://www.reddit.com/r/boxoffice/comments/1etzcnx/per_deadline_thursday_night_posttrak_scores_for/",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 59; The Front Room 34; Wolf Man 34; M3GAN 2.0 62; I Know What You Did Last Summer 43; Sinners 84; Final Destination Bloodlines 69; The Monkey 49; The Conjuring: Last Rites 58; Obsession 70; Alien: Romulus 65; Scream VI 74; Scream 59; Weapons 65; 28 Years Later 54] Alien: Romulus (2024, horror): definite_recommend 65% [secondary]"
-    },
-    {
-     "url": "https://www.reddit.com/r/boxoffice/comments/11ovzcr/posttrak_scores_for_scream_vi_are_87_positive74/",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 59; The Front Room 34; Wolf Man 34; M3GAN 2.0 62; I Know What You Did Last Summer 43; Sinners 84; Final Destination Bloodlines 69; The Monkey 49; The Conjuring: Last Rites 58; Obsession 70; Alien: Romulus 65; Scream VI 74; Scream 59; Weapons 65; 28 Years Later 54] Scream VI (2023, horror): definite_recommend 74% [secondary]"
-    },
-    {
-     "url": "https://www.reddit.com/r/boxoffice/comments/1ml5hlx/per_deadline_thursday_posttrak_scores_for_weapons/",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 59; The Front Room 34; Wolf Man 34; M3GAN 2.0 62; I Know What You Did Last Summer 43; Sinners 84; Final Destination Bloodlines 69; The Monkey 49; The Conjuring: Last Rites 58; Obsession 70; Alien: Romulus 65; Scream VI 74; Scream 59; Weapons 65; 28 Years Later 54] Weapons (2025, horror): definite_recommend 65% [secondary]"
-    },
-    {
-     "url": "https://forums.boxofficetheory.com/topic/33589-august-8-to-10-weekend-thread-weapons-425-freaky-29-fantastic-four-drop-redacted/page/7/",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Terrifier 3 59; The Front Room 34; Wolf Man 34; M3GAN 2.0 62; I Know What You Did Last Summer 43; Sinners 84; Final Destination Bloodlines 69; The Monkey 49; The Conjuring: Last Rites 58; Obsession 70; Alien: Romulus 65; Scream VI 74; Scream 59; Weapons 65; 28 Years Later 54] 28 Years Later (2025, horror): definite_recommend 54% [secondary]"
-    }
-   ]
-  },
-  {
-   "format": "feature",
-   "genre": "thriller",
-   "metric": "total_positive",
-   "value": 79.5,
-   "range": [
-    75.0,
-    84.0
-   ],
-   "n_hint": 2,
-   "basis": "averaged from published reads",
-   "as_of": "2026-10",
-   "context": "exit_poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Black Bag 75; Conclave 84",
-   "sources": [
-    {
-     "url": "https://entertainmentindustryreporter.com/novocaine-leading-lowest-weekend-of-2025/",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Black Bag 75; Conclave 84] Black Bag (2025, thriller): total_positive 75% [secondary]"
-    },
-    {
-     "url": "https://en.wikipedia.org/wiki/Conclave_(film)",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Black Bag 75; Conclave 84] Conclave (2024, thriller): total_positive 84% [secondary]"
-    }
-   ]
-  },
-  {
-   "format": "feature",
-   "genre": "thriller",
-   "metric": "definitely_recommend",
-   "value": 56.5,
-   "range": [
-    51.0,
-    62.0
-   ],
-   "n_hint": 2,
-   "basis": "averaged from published reads",
-   "as_of": "2026-10",
-   "context": "exit_poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Black Bag 51; Conclave 62",
-   "sources": [
-    {
-     "url": "https://entertainmentindustryreporter.com/novocaine-leading-lowest-weekend-of-2025/",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Black Bag 51; Conclave 62] Black Bag (2025, thriller): definite_recommend 51% [secondary]"
-    },
-    {
-     "url": "https://en.wikipedia.org/wiki/Conclave_(film)",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Black Bag 51; Conclave 62] Conclave (2024, thriller): definite_recommend 62% [secondary]"
-    }
-   ]
-  },
-  {
-   "format": "feature",
-   "genre": "romance",
-   "metric": "total_positive",
-   "value": 80.5,
-   "range": [
-    77.0,
-    84.0
-   ],
-   "n_hint": 2,
-   "basis": "averaged from published reads",
-   "as_of": "2026-10",
-   "context": "exit_poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Challengers 77; Eternity 84",
-   "sources": [
-    {
-     "url": "https://deadline.com/2024/04/box-office-challengers-zendaya-1235896116/",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Challengers 77; Eternity 84] Challengers (2024, romance): total_positive 77%"
-    },
-    {
-     "url": "https://en.wikipedia.org/wiki/Eternity_(2025_film)",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Challengers 77; Eternity 84] Eternity (2025, romance): total_positive 84% [secondary]"
-    }
-   ]
-  },
-  {
-   "format": "feature",
-   "genre": "romance",
-   "metric": "definitely_recommend",
-   "value": 55.0,
-   "range": [
-    50.0,
-    59.0
-   ],
-   "n_hint": 4,
-   "basis": "averaged from published reads",
-   "as_of": "2026-10",
-   "context": "exit_poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Challengers 59; The Wedding Banquet 50; Anyone But You 57; Eternity 54",
-   "sources": [
-    {
-     "url": "https://deadline.com/2024/04/box-office-challengers-zendaya-1235896116/",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Challengers 59; The Wedding Banquet 50; Anyone But You 57; Eternity 54] Challengers (2024, romance): definite_recommend 59%"
-    },
-    {
-     "url": "https://deadline.com/2025/04/box-office-sinners-a-minecraft-movie-1236371775/",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Challengers 59; The Wedding Banquet 50; Anyone But You 57; Eternity 54] The Wedding Banquet (2025, romance): definite_recommend 50%"
-    },
-    {
-     "url": "https://en.wikipedia.org/wiki/Anyone_But_You",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Challengers 59; The Wedding Banquet 50; Anyone But You 57; Eternity 54] Anyone But You (2023, romance): definite_recommend 57% [secondary]"
-    },
-    {
-     "url": "https://en.wikipedia.org/wiki/Eternity_(2025_film)",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Challengers 59; The Wedding Banquet 50; Anyone But You 57; Eternity 54] Eternity (2025, romance): definite_recommend 54% [secondary]"
-    }
-   ]
-  },
-  {
-   "format": "feature",
-   "genre": "documentary",
-   "metric": "total_positive",
-   "value": 96.5,
-   "range": [
-    96.0,
-    97.0
-   ],
-   "n_hint": 2,
-   "basis": "averaged from published reads",
-   "as_of": "2026-10",
-   "context": "exit_poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Taylor Swift: The Eras Tour 96; Renaissance: A Film by Beyonce 97",
-   "sources": [
-    {
-     "url": "https://deadline.com/2023/10/box-office-taylor-swift-eras-tour-concert-film-opening-1235572671/",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Taylor Swift: The Eras Tour 96; Renaissance: A Film by Beyonce 97] Taylor Swift: The Eras Tour (2023, documentary): total_positive 96%"
-    },
-    {
-     "url": "https://deadline.com/2023/12/box-office-renaissance-a-film-by-beyonce-godzilla-minus-one-hunger-games-1235647651/",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Taylor Swift: The Eras Tour 96; Renaissance: A Film by Beyonce 97] Renaissance: A Film by Beyonce (2023, documentary): total_positive 97%"
-    }
-   ]
-  },
-  {
-   "format": "feature",
-   "genre": "documentary",
-   "metric": "definitely_recommend",
-   "value": 89.5,
-   "range": [
-    89.0,
-    90.0
-   ],
-   "n_hint": 2,
-   "basis": "averaged from published reads",
-   "as_of": "2026-10",
-   "context": "exit_poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Taylor Swift: The Eras Tour 89; Renaissance: A Film by Beyonce 90",
-   "sources": [
-    {
-     "url": "https://deadline.com/2023/10/box-office-taylor-swift-eras-tour-concert-film-opening-1235572671/",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Taylor Swift: The Eras Tour 89; Renaissance: A Film by Beyonce 90] Taylor Swift: The Eras Tour (2023, documentary): definite_recommend 89%"
-    },
-    {
-     "url": "https://deadline.com/2023/12/box-office-renaissance-a-film-by-beyonce-godzilla-minus-one-hunger-games-1235647651/",
-     "note": "[exit poll (PostTrak, wide releases 2019 to 2026 as reported in the trades); simple mean of the films listed: Taylor Swift: The Eras Tour 89; Renaissance: A Film by Beyonce 90] Renaissance: A Film by Beyonce (2023, documentary): definite_recommend 90%"
-    }
-   ]
+   "instrument": "recruited_screening"
   },
   {
    "format": "trailer",
@@ -1282,7 +802,8 @@
      "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/WEDDING%20RINGER/TRLR%203/The%20Wedding%20Ringer%20Trailer%20Test%203%20Report%20FINAL.pdf",
      "note": "[definite plus probable interest after the trailer; top 10% norm 88 / Screen Engine] Trailer Test #3 (Sept 3 2014): same norm columns repeated."
     }
-   ]
+   ],
+   "instrument": "trailer_test"
   },
   {
    "format": "trailer",
@@ -1306,7 +827,8 @@
      "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/INTERVIEW/TV%20%231/FINAL_THE%20INTERVIEW_TV1.pdf",
      "note": "[very likely to recommend based on the trailer (44) or TV spot (35) / MarketCast] TV spot test: '42% say they are very likely to recommend the film ... above the 35% norm' (30-second spot norm)."
     }
-   ]
+   ],
+   "instrument": "trailer_test"
   },
   {
    "format": "trailer",
@@ -1354,7 +876,8 @@
      "basis": "published norm",
      "value": 32.0
     }
-   ]
+   ],
+   "instrument": "trailer_test"
   },
   {
    "format": "trailer",
@@ -1378,7 +901,8 @@
      "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/INTERVIEW/TV%20%231/FINAL_THE%20INTERVIEW_TV1.pdf",
      "note": "[share of definitely interested who would see it in a theater opening weekend / MarketCast] MarketCast TV spot test: 'Opening weekend norm (37%)' among definitely interested; buy-ticket-opening-weekend very likely 'Norm (22%)'."
     }
-   ]
+   ],
+   "instrument": "trailer_test"
   },
   {
    "format": "title",
@@ -1398,7 +922,8 @@
      "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/WEDDING%20RINGER/TRLR%201/The%20Wedding%20Ringer%20Trailer%20Test%201%20Report.pdf",
      "note": "[definite plus probable interest on title and stars alone / Screen Engine] Pre-interest Total Positive General Norms 60%, top 10% 81%."
     }
-   ]
+   ],
+   "instrument": "title_test"
   },
   {
    "format": "title",
@@ -1422,7 +947,8 @@
      "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/PIXELS/DOMESTIC/Positioning%20Study%20%28PSB%29/PIXELS%20Positioning%20Report%2010-31-14.pdf",
      "note": "[definite interest based on title and stars alone (pre-interest); Screen Engine 25, PSB 19 / Screen Engine 25 / PSB 19] Penn Schoen Berland Pixels positioning study (Oct 2014): 'T/S Norm = 19' (title/star definite interest) among general moviegoers 13-49."
     }
-   ]
+   ],
+   "instrument": "title_test"
   },
   {
    "format": "key_art",
@@ -1439,7 +965,8 @@
      "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/WEDDING%20RINGER/Print%20Test%20%231/The%20Wedding%20Ringer%20Print%20Test%20Report%2010.29.14.docx",
      "note": "[definite interest after seeing the poster / Penn Schoen Berland] PSB The Wedding Ringer print (poster) test, Oct 2014, 1,500 general moviegoers: 'While all five posters test above the PSB norm (27) ...' (definite interest based on the poster)."
     }
-   ]
+   ],
+   "instrument": "key_art_test"
   },
   {
    "format": "concept",
@@ -1456,7 +983,8 @@
      "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/PIXELS/DOMESTIC/Positioning%20Study%20%28PSB%29/PIXELS%20Positioning%20Report%2010-31-14.pdf",
      "note": "[definite interest after reading the concept / Penn Schoen Berland] PSB Pixels positioning: 'Concept Norm = 32*' definite interest post-concept, '*Norm is among general moviegoers 13-49'; kid concept norm 45, parent concept norm 43."
     }
-   ]
+   ],
+   "instrument": "concept_test"
   },
   {
    "format": "feature",
@@ -1475,6 +1003,629 @@
     {
      "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/INTERVIEW/Screening%20%233%20and%20%234%20%285-13-14%29/5.13%20The%20Interview%20Report%20%28730pm%29%20-%20FINAL.pdf",
      "note": "[recruited screening / Screen Engine] Components page: the nine element norms (settings among them) sit in a 30% to 40% band (top box); the midpoint is stored and the band kept."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/EQUALIZER/Screening%20%231%20%2812.16.13%29/THE%20EQUALIZER%20RA1%2012-16-13%20report.doc",
+     "note": "[recruited screening / Nielsen NRG five-year all-movies norms, printed on the NRG recruited audience screening report for The Equalizer, Long Beach 12.16.13] NRG Norms column: Excellent 30, Very Good 35, Total Highly Favorable 65, Definitely Recommend 50; performance norms lead 50, support 40; element norms Action 45, Story 40, Ending 40, Settings 40, Beginning 35; music 40 (the report reads 'excellent ratings that were 12 points above the norm' against a 52). The Equalizer test score summary prints the same NORMS column (30 / 35 / 65 / 50) for both screenings."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/EQUALIZER/EQUALIZER%20Test%20Score%20Summary.xls",
+     "note": "[recruited screening / NRG] EQUALIZER Test Score Summary.xls: NORMS column Excellent 30, Very Good 35, Ttl Highly Favorable 65, Definite Recommend 50 beside both recruited screenings (12.16.13 Long Beach, 7.29.14 Olathe)."
+    }
+   ],
+   "instrument": "recruited_screening"
+  },
+  {
+   "format": "feature",
+   "genre": "family",
+   "metric": "excellent",
+   "value": 40.0,
+   "range": null,
+   "n_hint": null,
+   "basis": "published norm",
+   "as_of": "2014-04",
+   "context": "recruited_screening",
+   "instrument": "recruited_screening",
+   "sources": [
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/ANNIE/DOMESTIC/Screening%20%234%20%284-26-14%29/ANNIE%20RA1%204-26-14%20Report.doc",
+     "note": "[recruited screening / Nielsen NRG five-year family movie norms, parents, printed on the Annie recruited audience screening report 4.26.14] Excellent 40, Very Good 35, Total Highly Favorable 75, Definitely Recommend to friends 60 (to other parents 65). Family films are read against these, not the all-movies 30 / 65 / 50."
+    }
+   ]
+  },
+  {
+   "format": "feature",
+   "genre": "family",
+   "metric": "total_positive",
+   "value": 75.0,
+   "range": null,
+   "n_hint": null,
+   "basis": "published norm",
+   "as_of": "2014-04",
+   "context": "recruited_screening",
+   "instrument": "recruited_screening",
+   "sources": [
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/ANNIE/DOMESTIC/Screening%20%234%20%284-26-14%29/ANNIE%20RA1%204-26-14%20Report.doc",
+     "note": "[recruited screening / Nielsen NRG five-year family movie norms, parents, printed on the Annie recruited audience screening report 4.26.14] Excellent 40, Very Good 35, Total Highly Favorable 75, Definitely Recommend to friends 60 (to other parents 65). Family films are read against these, not the all-movies 30 / 65 / 50."
+    }
+   ]
+  },
+  {
+   "format": "feature",
+   "genre": "family",
+   "metric": "definitely_recommend",
+   "value": 60.0,
+   "range": [
+    60.0,
+    65.0
+   ],
+   "n_hint": null,
+   "basis": "published norm",
+   "as_of": "2014-04",
+   "context": "recruited_screening",
+   "instrument": "recruited_screening",
+   "sources": [
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/ANNIE/DOMESTIC/Screening%20%234%20%284-26-14%29/ANNIE%20RA1%204-26-14%20Report.doc",
+     "note": "[recruited screening / Nielsen NRG five-year family movie norms, parents, printed on the Annie recruited audience screening report 4.26.14] Excellent 40, Very Good 35, Total Highly Favorable 75, Definitely Recommend to friends 60 (to other parents 65). Family films are read against these, not the all-movies 30 / 65 / 50."
+    }
+   ]
+  },
+  {
+   "format": "feature",
+   "genre": "animation",
+   "metric": "excellent",
+   "value": 40.0,
+   "range": null,
+   "n_hint": null,
+   "basis": "published norm",
+   "as_of": "2014-04",
+   "context": "recruited_screening",
+   "instrument": "recruited_screening",
+   "sources": [
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/ANNIE/DOMESTIC/Screening%20%234%20%284-26-14%29/ANNIE%20RA1%204-26-14%20Report.doc",
+     "note": "[recruited screening / Nielsen NRG five-year family movie norms, parents, printed on the Annie recruited audience screening report 4.26.14] Excellent 40, Very Good 35, Total Highly Favorable 75, Definitely Recommend to friends 60 (to other parents 65). Family films are read against these, not the all-movies 30 / 65 / 50. Animation reads the family norm as its nearest published genre (most family releases in the norm set are animated)."
+    }
+   ]
+  },
+  {
+   "format": "feature",
+   "genre": "animation",
+   "metric": "total_positive",
+   "value": 75.0,
+   "range": null,
+   "n_hint": null,
+   "basis": "published norm",
+   "as_of": "2014-04",
+   "context": "recruited_screening",
+   "instrument": "recruited_screening",
+   "sources": [
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/ANNIE/DOMESTIC/Screening%20%234%20%284-26-14%29/ANNIE%20RA1%204-26-14%20Report.doc",
+     "note": "[recruited screening / Nielsen NRG five-year family movie norms, parents, printed on the Annie recruited audience screening report 4.26.14] Excellent 40, Very Good 35, Total Highly Favorable 75, Definitely Recommend to friends 60 (to other parents 65). Family films are read against these, not the all-movies 30 / 65 / 50. Animation reads the family norm as its nearest published genre (most family releases in the norm set are animated)."
+    }
+   ]
+  },
+  {
+   "format": "feature",
+   "genre": "animation",
+   "metric": "definitely_recommend",
+   "value": 60.0,
+   "range": [
+    60.0,
+    65.0
+   ],
+   "n_hint": null,
+   "basis": "published norm",
+   "as_of": "2014-04",
+   "context": "recruited_screening",
+   "instrument": "recruited_screening",
+   "sources": [
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/ANNIE/DOMESTIC/Screening%20%234%20%284-26-14%29/ANNIE%20RA1%204-26-14%20Report.doc",
+     "note": "[recruited screening / Nielsen NRG five-year family movie norms, parents, printed on the Annie recruited audience screening report 4.26.14] Excellent 40, Very Good 35, Total Highly Favorable 75, Definitely Recommend to friends 60 (to other parents 65). Family films are read against these, not the all-movies 30 / 65 / 50. Animation reads the family norm as its nearest published genre (most family releases in the norm set are animated)."
+    }
+   ]
+  },
+  {
+   "format": "pilot",
+   "genre": "all",
+   "metric": "excellent",
+   "value": 30.0,
+   "range": [
+    25.0,
+    30.0
+   ],
+   "n_hint": null,
+   "basis": "published norm (nearest instrument)",
+   "as_of": "2014-05",
+   "context": "recruited_screening",
+   "instrument": "recruited_screening",
+   "sources": [
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/INTERVIEW/Screening%20%233%20and%20%234%20%285-13-14%29/5.13%20The%20Interview%20Report%20%28730pm%29%20-%20FINAL.pdf",
+     "note": "[recruited screening / television pilots read against the NRG and Screen Engine recruited-screening norms] Network pilot tests use the same excellent-to-poor card and read each pilot against the average of all pilots tested (NBC rated pilots strong / moderate / weak against that average; CBS Television City dial tests; ASI and MarketCast pilot tests). No network or vendor publishes the pilot averages themselves, so the all-movies anchors (Excellent 30, Total positive 65, Definitely recommend 50; lead 50, second lead 45, supporting 40; components 30 to 45) stand in with the seed weight until our own pilot tests accumulate. Revisit when a published pilot norm surfaces."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/EQUALIZER/Screening%20%231%20%2812.16.13%29/THE%20EQUALIZER%20RA1%2012-16-13%20report.doc",
+     "note": "[recruited screening / Nielsen NRG five-year all-movies norms, printed on the NRG recruited audience screening report for The Equalizer, Long Beach 12.16.13] NRG Norms column: Excellent 30, Very Good 35, Total Highly Favorable 65, Definitely Recommend 50; performance norms lead 50, support 40; element norms Action 45, Story 40, Ending 40, Settings 40, Beginning 35; music 40 (the report reads 'excellent ratings that were 12 points above the norm' against a 52). The Equalizer test score summary prints the same NORMS column (30 / 35 / 65 / 50) for both screenings."
+    },
+    {
+     "url": "http://revengeofthemaskedscheduler.blogspot.com/2016/05/setting-schedule-pilot-testing.html",
+     "note": "Former NBC and FOX scheduler: networks 'ask the subjects to rank the show on a scale of Excellent to Poor. They then compare the score for a pilot with the average score of all previously tested pilots', then intent to watch another episode, then the characters against norms; a rejected test never succeeds, a high test is no guarantee; sci-fi/fantasy tests above the drama average on idea and below on characters."
+    },
+    {
+     "url": "https://www.tvguide.com/news/seinfeld-research-memo-1083639/",
+     "note": "NBC's 1989 Seinfeld Chronicles memo: pilots rated strong / moderate / weak against the network's history; 'a large majority of NBC pilots received' weak; 'no segment of the audience was eager to watch the show again'."
+    },
+    {
+     "url": "https://timbrooks.net/program-research-1991/",
+     "note": "Tim Brooks (network research, 1991): norms depend on the questions and scales used and must be built per test program; strong-testing pilots were more than twice as likely to succeed."
+    }
+   ]
+  },
+  {
+   "format": "pilot",
+   "genre": "all",
+   "metric": "total_positive",
+   "value": 65.0,
+   "range": [
+    55.0,
+    65.0
+   ],
+   "n_hint": null,
+   "basis": "published norm (nearest instrument)",
+   "as_of": "2014-05",
+   "context": "recruited_screening",
+   "instrument": "recruited_screening",
+   "sources": [
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/INTERVIEW/Screening%20%233%20and%20%234%20%285-13-14%29/5.13%20The%20Interview%20Report%20%28730pm%29%20-%20FINAL.pdf",
+     "note": "[recruited screening / television pilots read against the NRG and Screen Engine recruited-screening norms] Network pilot tests use the same excellent-to-poor card and read each pilot against the average of all pilots tested (NBC rated pilots strong / moderate / weak against that average; CBS Television City dial tests; ASI and MarketCast pilot tests). No network or vendor publishes the pilot averages themselves, so the all-movies anchors (Excellent 30, Total positive 65, Definitely recommend 50; lead 50, second lead 45, supporting 40; components 30 to 45) stand in with the seed weight until our own pilot tests accumulate. Revisit when a published pilot norm surfaces."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/EQUALIZER/Screening%20%231%20%2812.16.13%29/THE%20EQUALIZER%20RA1%2012-16-13%20report.doc",
+     "note": "[recruited screening / Nielsen NRG five-year all-movies norms, printed on the NRG recruited audience screening report for The Equalizer, Long Beach 12.16.13] NRG Norms column: Excellent 30, Very Good 35, Total Highly Favorable 65, Definitely Recommend 50; performance norms lead 50, support 40; element norms Action 45, Story 40, Ending 40, Settings 40, Beginning 35; music 40 (the report reads 'excellent ratings that were 12 points above the norm' against a 52). The Equalizer test score summary prints the same NORMS column (30 / 35 / 65 / 50) for both screenings."
+    },
+    {
+     "url": "http://revengeofthemaskedscheduler.blogspot.com/2016/05/setting-schedule-pilot-testing.html",
+     "note": "Former NBC and FOX scheduler: networks 'ask the subjects to rank the show on a scale of Excellent to Poor. They then compare the score for a pilot with the average score of all previously tested pilots', then intent to watch another episode, then the characters against norms; a rejected test never succeeds, a high test is no guarantee; sci-fi/fantasy tests above the drama average on idea and below on characters."
+    },
+    {
+     "url": "https://www.tvguide.com/news/seinfeld-research-memo-1083639/",
+     "note": "NBC's 1989 Seinfeld Chronicles memo: pilots rated strong / moderate / weak against the network's history; 'a large majority of NBC pilots received' weak; 'no segment of the audience was eager to watch the show again'."
+    },
+    {
+     "url": "https://timbrooks.net/program-research-1991/",
+     "note": "Tim Brooks (network research, 1991): norms depend on the questions and scales used and must be built per test program; strong-testing pilots were more than twice as likely to succeed."
+    }
+   ]
+  },
+  {
+   "format": "pilot",
+   "genre": "all",
+   "metric": "definitely_recommend",
+   "value": 50.0,
+   "range": [
+    45.0,
+    50.0
+   ],
+   "n_hint": null,
+   "basis": "published norm (nearest instrument)",
+   "as_of": "2014-05",
+   "context": "recruited_screening",
+   "instrument": "recruited_screening",
+   "sources": [
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/INTERVIEW/Screening%20%233%20and%20%234%20%285-13-14%29/5.13%20The%20Interview%20Report%20%28730pm%29%20-%20FINAL.pdf",
+     "note": "[recruited screening / television pilots read against the NRG and Screen Engine recruited-screening norms] Network pilot tests use the same excellent-to-poor card and read each pilot against the average of all pilots tested (NBC rated pilots strong / moderate / weak against that average; CBS Television City dial tests; ASI and MarketCast pilot tests). No network or vendor publishes the pilot averages themselves, so the all-movies anchors (Excellent 30, Total positive 65, Definitely recommend 50; lead 50, second lead 45, supporting 40; components 30 to 45) stand in with the seed weight until our own pilot tests accumulate. Revisit when a published pilot norm surfaces."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/EQUALIZER/Screening%20%231%20%2812.16.13%29/THE%20EQUALIZER%20RA1%2012-16-13%20report.doc",
+     "note": "[recruited screening / Nielsen NRG five-year all-movies norms, printed on the NRG recruited audience screening report for The Equalizer, Long Beach 12.16.13] NRG Norms column: Excellent 30, Very Good 35, Total Highly Favorable 65, Definitely Recommend 50; performance norms lead 50, support 40; element norms Action 45, Story 40, Ending 40, Settings 40, Beginning 35; music 40 (the report reads 'excellent ratings that were 12 points above the norm' against a 52). The Equalizer test score summary prints the same NORMS column (30 / 35 / 65 / 50) for both screenings."
+    },
+    {
+     "url": "http://revengeofthemaskedscheduler.blogspot.com/2016/05/setting-schedule-pilot-testing.html",
+     "note": "Former NBC and FOX scheduler: networks 'ask the subjects to rank the show on a scale of Excellent to Poor. They then compare the score for a pilot with the average score of all previously tested pilots', then intent to watch another episode, then the characters against norms; a rejected test never succeeds, a high test is no guarantee; sci-fi/fantasy tests above the drama average on idea and below on characters."
+    },
+    {
+     "url": "https://www.tvguide.com/news/seinfeld-research-memo-1083639/",
+     "note": "NBC's 1989 Seinfeld Chronicles memo: pilots rated strong / moderate / weak against the network's history; 'a large majority of NBC pilots received' weak; 'no segment of the audience was eager to watch the show again'."
+    },
+    {
+     "url": "https://timbrooks.net/program-research-1991/",
+     "note": "Tim Brooks (network research, 1991): norms depend on the questions and scales used and must be built per test program; strong-testing pilots were more than twice as likely to succeed."
+    }
+   ]
+  },
+  {
+   "format": "pilot",
+   "genre": "all",
+   "metric": "lead_character",
+   "value": 50.0,
+   "range": null,
+   "n_hint": null,
+   "basis": "published norm (nearest instrument)",
+   "as_of": "2014-05",
+   "context": "recruited_screening",
+   "instrument": "recruited_screening",
+   "sources": [
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/INTERVIEW/Screening%20%233%20and%20%234%20%285-13-14%29/5.13%20The%20Interview%20Report%20%28730pm%29%20-%20FINAL.pdf",
+     "note": "[recruited screening / television pilots read against the NRG and Screen Engine recruited-screening norms] Network pilot tests use the same excellent-to-poor card and read each pilot against the average of all pilots tested (NBC rated pilots strong / moderate / weak against that average; CBS Television City dial tests; ASI and MarketCast pilot tests). No network or vendor publishes the pilot averages themselves, so the all-movies anchors (Excellent 30, Total positive 65, Definitely recommend 50; lead 50, second lead 45, supporting 40; components 30 to 45) stand in with the seed weight until our own pilot tests accumulate. Revisit when a published pilot norm surfaces."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/EQUALIZER/Screening%20%231%20%2812.16.13%29/THE%20EQUALIZER%20RA1%2012-16-13%20report.doc",
+     "note": "[recruited screening / Nielsen NRG five-year all-movies norms, printed on the NRG recruited audience screening report for The Equalizer, Long Beach 12.16.13] NRG Norms column: Excellent 30, Very Good 35, Total Highly Favorable 65, Definitely Recommend 50; performance norms lead 50, support 40; element norms Action 45, Story 40, Ending 40, Settings 40, Beginning 35; music 40 (the report reads 'excellent ratings that were 12 points above the norm' against a 52). The Equalizer test score summary prints the same NORMS column (30 / 35 / 65 / 50) for both screenings."
+    },
+    {
+     "url": "http://revengeofthemaskedscheduler.blogspot.com/2016/05/setting-schedule-pilot-testing.html",
+     "note": "Former NBC and FOX scheduler: networks 'ask the subjects to rank the show on a scale of Excellent to Poor. They then compare the score for a pilot with the average score of all previously tested pilots', then intent to watch another episode, then the characters against norms; a rejected test never succeeds, a high test is no guarantee; sci-fi/fantasy tests above the drama average on idea and below on characters."
+    },
+    {
+     "url": "https://www.tvguide.com/news/seinfeld-research-memo-1083639/",
+     "note": "NBC's 1989 Seinfeld Chronicles memo: pilots rated strong / moderate / weak against the network's history; 'a large majority of NBC pilots received' weak; 'no segment of the audience was eager to watch the show again'."
+    },
+    {
+     "url": "https://timbrooks.net/program-research-1991/",
+     "note": "Tim Brooks (network research, 1991): norms depend on the questions and scales used and must be built per test program; strong-testing pilots were more than twice as likely to succeed."
+    }
+   ]
+  },
+  {
+   "format": "pilot",
+   "genre": "all",
+   "metric": "secondary_character",
+   "value": 45.0,
+   "range": null,
+   "n_hint": null,
+   "basis": "published norm (nearest instrument)",
+   "as_of": "2014-05",
+   "context": "recruited_screening",
+   "instrument": "recruited_screening",
+   "sources": [
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/INTERVIEW/Screening%20%233%20and%20%234%20%285-13-14%29/5.13%20The%20Interview%20Report%20%28730pm%29%20-%20FINAL.pdf",
+     "note": "[recruited screening / television pilots read against the NRG and Screen Engine recruited-screening norms] Network pilot tests use the same excellent-to-poor card and read each pilot against the average of all pilots tested (NBC rated pilots strong / moderate / weak against that average; CBS Television City dial tests; ASI and MarketCast pilot tests). No network or vendor publishes the pilot averages themselves, so the all-movies anchors (Excellent 30, Total positive 65, Definitely recommend 50; lead 50, second lead 45, supporting 40; components 30 to 45) stand in with the seed weight until our own pilot tests accumulate. Revisit when a published pilot norm surfaces."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/EQUALIZER/Screening%20%231%20%2812.16.13%29/THE%20EQUALIZER%20RA1%2012-16-13%20report.doc",
+     "note": "[recruited screening / Nielsen NRG five-year all-movies norms, printed on the NRG recruited audience screening report for The Equalizer, Long Beach 12.16.13] NRG Norms column: Excellent 30, Very Good 35, Total Highly Favorable 65, Definitely Recommend 50; performance norms lead 50, support 40; element norms Action 45, Story 40, Ending 40, Settings 40, Beginning 35; music 40 (the report reads 'excellent ratings that were 12 points above the norm' against a 52). The Equalizer test score summary prints the same NORMS column (30 / 35 / 65 / 50) for both screenings."
+    },
+    {
+     "url": "http://revengeofthemaskedscheduler.blogspot.com/2016/05/setting-schedule-pilot-testing.html",
+     "note": "Former NBC and FOX scheduler: networks 'ask the subjects to rank the show on a scale of Excellent to Poor. They then compare the score for a pilot with the average score of all previously tested pilots', then intent to watch another episode, then the characters against norms; a rejected test never succeeds, a high test is no guarantee; sci-fi/fantasy tests above the drama average on idea and below on characters."
+    },
+    {
+     "url": "https://www.tvguide.com/news/seinfeld-research-memo-1083639/",
+     "note": "NBC's 1989 Seinfeld Chronicles memo: pilots rated strong / moderate / weak against the network's history; 'a large majority of NBC pilots received' weak; 'no segment of the audience was eager to watch the show again'."
+    },
+    {
+     "url": "https://timbrooks.net/program-research-1991/",
+     "note": "Tim Brooks (network research, 1991): norms depend on the questions and scales used and must be built per test program; strong-testing pilots were more than twice as likely to succeed."
+    }
+   ]
+  },
+  {
+   "format": "pilot",
+   "genre": "all",
+   "metric": "supporting_character",
+   "value": 40.0,
+   "range": null,
+   "n_hint": null,
+   "basis": "published norm (nearest instrument)",
+   "as_of": "2014-05",
+   "context": "recruited_screening",
+   "instrument": "recruited_screening",
+   "sources": [
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/INTERVIEW/Screening%20%233%20and%20%234%20%285-13-14%29/5.13%20The%20Interview%20Report%20%28730pm%29%20-%20FINAL.pdf",
+     "note": "[recruited screening / television pilots read against the NRG and Screen Engine recruited-screening norms] Network pilot tests use the same excellent-to-poor card and read each pilot against the average of all pilots tested (NBC rated pilots strong / moderate / weak against that average; CBS Television City dial tests; ASI and MarketCast pilot tests). No network or vendor publishes the pilot averages themselves, so the all-movies anchors (Excellent 30, Total positive 65, Definitely recommend 50; lead 50, second lead 45, supporting 40; components 30 to 45) stand in with the seed weight until our own pilot tests accumulate. Revisit when a published pilot norm surfaces."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/EQUALIZER/Screening%20%231%20%2812.16.13%29/THE%20EQUALIZER%20RA1%2012-16-13%20report.doc",
+     "note": "[recruited screening / Nielsen NRG five-year all-movies norms, printed on the NRG recruited audience screening report for The Equalizer, Long Beach 12.16.13] NRG Norms column: Excellent 30, Very Good 35, Total Highly Favorable 65, Definitely Recommend 50; performance norms lead 50, support 40; element norms Action 45, Story 40, Ending 40, Settings 40, Beginning 35; music 40 (the report reads 'excellent ratings that were 12 points above the norm' against a 52). The Equalizer test score summary prints the same NORMS column (30 / 35 / 65 / 50) for both screenings."
+    },
+    {
+     "url": "http://revengeofthemaskedscheduler.blogspot.com/2016/05/setting-schedule-pilot-testing.html",
+     "note": "Former NBC and FOX scheduler: networks 'ask the subjects to rank the show on a scale of Excellent to Poor. They then compare the score for a pilot with the average score of all previously tested pilots', then intent to watch another episode, then the characters against norms; a rejected test never succeeds, a high test is no guarantee; sci-fi/fantasy tests above the drama average on idea and below on characters."
+    },
+    {
+     "url": "https://www.tvguide.com/news/seinfeld-research-memo-1083639/",
+     "note": "NBC's 1989 Seinfeld Chronicles memo: pilots rated strong / moderate / weak against the network's history; 'a large majority of NBC pilots received' weak; 'no segment of the audience was eager to watch the show again'."
+    },
+    {
+     "url": "https://timbrooks.net/program-research-1991/",
+     "note": "Tim Brooks (network research, 1991): norms depend on the questions and scales used and must be built per test program; strong-testing pilots were more than twice as likely to succeed."
+    }
+   ]
+  },
+  {
+   "format": "pilot",
+   "genre": "all",
+   "metric": "component_humor",
+   "value": 40.0,
+   "range": null,
+   "n_hint": null,
+   "basis": "published norm (nearest instrument)",
+   "as_of": "2014-05",
+   "context": "recruited_screening",
+   "instrument": "recruited_screening",
+   "sources": [
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/INTERVIEW/Screening%20%233%20and%20%234%20%285-13-14%29/5.13%20The%20Interview%20Report%20%28730pm%29%20-%20FINAL.pdf",
+     "note": "[recruited screening / television pilots read against the NRG and Screen Engine recruited-screening norms] Network pilot tests use the same excellent-to-poor card and read each pilot against the average of all pilots tested (NBC rated pilots strong / moderate / weak against that average; CBS Television City dial tests; ASI and MarketCast pilot tests). No network or vendor publishes the pilot averages themselves, so the all-movies anchors (Excellent 30, Total positive 65, Definitely recommend 50; lead 50, second lead 45, supporting 40; components 30 to 45) stand in with the seed weight until our own pilot tests accumulate. Revisit when a published pilot norm surfaces."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/EQUALIZER/Screening%20%231%20%2812.16.13%29/THE%20EQUALIZER%20RA1%2012-16-13%20report.doc",
+     "note": "[recruited screening / Nielsen NRG five-year all-movies norms, printed on the NRG recruited audience screening report for The Equalizer, Long Beach 12.16.13] NRG Norms column: Excellent 30, Very Good 35, Total Highly Favorable 65, Definitely Recommend 50; performance norms lead 50, support 40; element norms Action 45, Story 40, Ending 40, Settings 40, Beginning 35; music 40 (the report reads 'excellent ratings that were 12 points above the norm' against a 52). The Equalizer test score summary prints the same NORMS column (30 / 35 / 65 / 50) for both screenings."
+    },
+    {
+     "url": "http://revengeofthemaskedscheduler.blogspot.com/2016/05/setting-schedule-pilot-testing.html",
+     "note": "Former NBC and FOX scheduler: networks 'ask the subjects to rank the show on a scale of Excellent to Poor. They then compare the score for a pilot with the average score of all previously tested pilots', then intent to watch another episode, then the characters against norms; a rejected test never succeeds, a high test is no guarantee; sci-fi/fantasy tests above the drama average on idea and below on characters."
+    },
+    {
+     "url": "https://www.tvguide.com/news/seinfeld-research-memo-1083639/",
+     "note": "NBC's 1989 Seinfeld Chronicles memo: pilots rated strong / moderate / weak against the network's history; 'a large majority of NBC pilots received' weak; 'no segment of the audience was eager to watch the show again'."
+    },
+    {
+     "url": "https://timbrooks.net/program-research-1991/",
+     "note": "Tim Brooks (network research, 1991): norms depend on the questions and scales used and must be built per test program; strong-testing pilots were more than twice as likely to succeed."
+    }
+   ]
+  },
+  {
+   "format": "pilot",
+   "genre": "all",
+   "metric": "component_story",
+   "value": 35.0,
+   "range": [
+    30.0,
+    40.0
+   ],
+   "n_hint": null,
+   "basis": "published norm (nearest instrument)",
+   "as_of": "2014-05",
+   "context": "recruited_screening",
+   "instrument": "recruited_screening",
+   "sources": [
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/INTERVIEW/Screening%20%233%20and%20%234%20%285-13-14%29/5.13%20The%20Interview%20Report%20%28730pm%29%20-%20FINAL.pdf",
+     "note": "[recruited screening / television pilots read against the NRG and Screen Engine recruited-screening norms] Network pilot tests use the same excellent-to-poor card and read each pilot against the average of all pilots tested (NBC rated pilots strong / moderate / weak against that average; CBS Television City dial tests; ASI and MarketCast pilot tests). No network or vendor publishes the pilot averages themselves, so the all-movies anchors (Excellent 30, Total positive 65, Definitely recommend 50; lead 50, second lead 45, supporting 40; components 30 to 45) stand in with the seed weight until our own pilot tests accumulate. Revisit when a published pilot norm surfaces."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/EQUALIZER/Screening%20%231%20%2812.16.13%29/THE%20EQUALIZER%20RA1%2012-16-13%20report.doc",
+     "note": "[recruited screening / Nielsen NRG five-year all-movies norms, printed on the NRG recruited audience screening report for The Equalizer, Long Beach 12.16.13] NRG Norms column: Excellent 30, Very Good 35, Total Highly Favorable 65, Definitely Recommend 50; performance norms lead 50, support 40; element norms Action 45, Story 40, Ending 40, Settings 40, Beginning 35; music 40 (the report reads 'excellent ratings that were 12 points above the norm' against a 52). The Equalizer test score summary prints the same NORMS column (30 / 35 / 65 / 50) for both screenings."
+    },
+    {
+     "url": "http://revengeofthemaskedscheduler.blogspot.com/2016/05/setting-schedule-pilot-testing.html",
+     "note": "Former NBC and FOX scheduler: networks 'ask the subjects to rank the show on a scale of Excellent to Poor. They then compare the score for a pilot with the average score of all previously tested pilots', then intent to watch another episode, then the characters against norms; a rejected test never succeeds, a high test is no guarantee; sci-fi/fantasy tests above the drama average on idea and below on characters."
+    },
+    {
+     "url": "https://www.tvguide.com/news/seinfeld-research-memo-1083639/",
+     "note": "NBC's 1989 Seinfeld Chronicles memo: pilots rated strong / moderate / weak against the network's history; 'a large majority of NBC pilots received' weak; 'no segment of the audience was eager to watch the show again'."
+    },
+    {
+     "url": "https://timbrooks.net/program-research-1991/",
+     "note": "Tim Brooks (network research, 1991): norms depend on the questions and scales used and must be built per test program; strong-testing pilots were more than twice as likely to succeed."
+    }
+   ]
+  },
+  {
+   "format": "pilot",
+   "genre": "all",
+   "metric": "component_beginning",
+   "value": 32.5,
+   "range": [
+    30.0,
+    35.0
+   ],
+   "n_hint": null,
+   "basis": "published norm (nearest instrument)",
+   "as_of": "2014-05",
+   "context": "recruited_screening",
+   "instrument": "recruited_screening",
+   "sources": [
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/INTERVIEW/Screening%20%233%20and%20%234%20%285-13-14%29/5.13%20The%20Interview%20Report%20%28730pm%29%20-%20FINAL.pdf",
+     "note": "[recruited screening / television pilots read against the NRG and Screen Engine recruited-screening norms] Network pilot tests use the same excellent-to-poor card and read each pilot against the average of all pilots tested (NBC rated pilots strong / moderate / weak against that average; CBS Television City dial tests; ASI and MarketCast pilot tests). No network or vendor publishes the pilot averages themselves, so the all-movies anchors (Excellent 30, Total positive 65, Definitely recommend 50; lead 50, second lead 45, supporting 40; components 30 to 45) stand in with the seed weight until our own pilot tests accumulate. Revisit when a published pilot norm surfaces."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/EQUALIZER/Screening%20%231%20%2812.16.13%29/THE%20EQUALIZER%20RA1%2012-16-13%20report.doc",
+     "note": "[recruited screening / Nielsen NRG five-year all-movies norms, printed on the NRG recruited audience screening report for The Equalizer, Long Beach 12.16.13] NRG Norms column: Excellent 30, Very Good 35, Total Highly Favorable 65, Definitely Recommend 50; performance norms lead 50, support 40; element norms Action 45, Story 40, Ending 40, Settings 40, Beginning 35; music 40 (the report reads 'excellent ratings that were 12 points above the norm' against a 52). The Equalizer test score summary prints the same NORMS column (30 / 35 / 65 / 50) for both screenings."
+    },
+    {
+     "url": "http://revengeofthemaskedscheduler.blogspot.com/2016/05/setting-schedule-pilot-testing.html",
+     "note": "Former NBC and FOX scheduler: networks 'ask the subjects to rank the show on a scale of Excellent to Poor. They then compare the score for a pilot with the average score of all previously tested pilots', then intent to watch another episode, then the characters against norms; a rejected test never succeeds, a high test is no guarantee; sci-fi/fantasy tests above the drama average on idea and below on characters."
+    },
+    {
+     "url": "https://www.tvguide.com/news/seinfeld-research-memo-1083639/",
+     "note": "NBC's 1989 Seinfeld Chronicles memo: pilots rated strong / moderate / weak against the network's history; 'a large majority of NBC pilots received' weak; 'no segment of the audience was eager to watch the show again'."
+    },
+    {
+     "url": "https://timbrooks.net/program-research-1991/",
+     "note": "Tim Brooks (network research, 1991): norms depend on the questions and scales used and must be built per test program; strong-testing pilots were more than twice as likely to succeed."
+    }
+   ]
+  },
+  {
+   "format": "pilot",
+   "genre": "all",
+   "metric": "component_ending",
+   "value": 37.5,
+   "range": [
+    35.0,
+    40.0
+   ],
+   "n_hint": null,
+   "basis": "published norm (nearest instrument)",
+   "as_of": "2014-05",
+   "context": "recruited_screening",
+   "instrument": "recruited_screening",
+   "sources": [
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/INTERVIEW/Screening%20%233%20and%20%234%20%285-13-14%29/5.13%20The%20Interview%20Report%20%28730pm%29%20-%20FINAL.pdf",
+     "note": "[recruited screening / television pilots read against the NRG and Screen Engine recruited-screening norms] Network pilot tests use the same excellent-to-poor card and read each pilot against the average of all pilots tested (NBC rated pilots strong / moderate / weak against that average; CBS Television City dial tests; ASI and MarketCast pilot tests). No network or vendor publishes the pilot averages themselves, so the all-movies anchors (Excellent 30, Total positive 65, Definitely recommend 50; lead 50, second lead 45, supporting 40; components 30 to 45) stand in with the seed weight until our own pilot tests accumulate. Revisit when a published pilot norm surfaces."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/EQUALIZER/Screening%20%231%20%2812.16.13%29/THE%20EQUALIZER%20RA1%2012-16-13%20report.doc",
+     "note": "[recruited screening / Nielsen NRG five-year all-movies norms, printed on the NRG recruited audience screening report for The Equalizer, Long Beach 12.16.13] NRG Norms column: Excellent 30, Very Good 35, Total Highly Favorable 65, Definitely Recommend 50; performance norms lead 50, support 40; element norms Action 45, Story 40, Ending 40, Settings 40, Beginning 35; music 40 (the report reads 'excellent ratings that were 12 points above the norm' against a 52). The Equalizer test score summary prints the same NORMS column (30 / 35 / 65 / 50) for both screenings."
+    },
+    {
+     "url": "http://revengeofthemaskedscheduler.blogspot.com/2016/05/setting-schedule-pilot-testing.html",
+     "note": "Former NBC and FOX scheduler: networks 'ask the subjects to rank the show on a scale of Excellent to Poor. They then compare the score for a pilot with the average score of all previously tested pilots', then intent to watch another episode, then the characters against norms; a rejected test never succeeds, a high test is no guarantee; sci-fi/fantasy tests above the drama average on idea and below on characters."
+    },
+    {
+     "url": "https://www.tvguide.com/news/seinfeld-research-memo-1083639/",
+     "note": "NBC's 1989 Seinfeld Chronicles memo: pilots rated strong / moderate / weak against the network's history; 'a large majority of NBC pilots received' weak; 'no segment of the audience was eager to watch the show again'."
+    },
+    {
+     "url": "https://timbrooks.net/program-research-1991/",
+     "note": "Tim Brooks (network research, 1991): norms depend on the questions and scales used and must be built per test program; strong-testing pilots were more than twice as likely to succeed."
+    }
+   ]
+  },
+  {
+   "format": "pilot",
+   "genre": "all",
+   "metric": "component_music",
+   "value": 35.0,
+   "range": [
+    30.0,
+    40.0
+   ],
+   "n_hint": null,
+   "basis": "published norm (nearest instrument)",
+   "as_of": "2014-05",
+   "context": "recruited_screening",
+   "instrument": "recruited_screening",
+   "sources": [
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/INTERVIEW/Screening%20%233%20and%20%234%20%285-13-14%29/5.13%20The%20Interview%20Report%20%28730pm%29%20-%20FINAL.pdf",
+     "note": "[recruited screening / television pilots read against the NRG and Screen Engine recruited-screening norms] Network pilot tests use the same excellent-to-poor card and read each pilot against the average of all pilots tested (NBC rated pilots strong / moderate / weak against that average; CBS Television City dial tests; ASI and MarketCast pilot tests). No network or vendor publishes the pilot averages themselves, so the all-movies anchors (Excellent 30, Total positive 65, Definitely recommend 50; lead 50, second lead 45, supporting 40; components 30 to 45) stand in with the seed weight until our own pilot tests accumulate. Revisit when a published pilot norm surfaces."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/EQUALIZER/Screening%20%231%20%2812.16.13%29/THE%20EQUALIZER%20RA1%2012-16-13%20report.doc",
+     "note": "[recruited screening / Nielsen NRG five-year all-movies norms, printed on the NRG recruited audience screening report for The Equalizer, Long Beach 12.16.13] NRG Norms column: Excellent 30, Very Good 35, Total Highly Favorable 65, Definitely Recommend 50; performance norms lead 50, support 40; element norms Action 45, Story 40, Ending 40, Settings 40, Beginning 35; music 40 (the report reads 'excellent ratings that were 12 points above the norm' against a 52). The Equalizer test score summary prints the same NORMS column (30 / 35 / 65 / 50) for both screenings."
+    },
+    {
+     "url": "http://revengeofthemaskedscheduler.blogspot.com/2016/05/setting-schedule-pilot-testing.html",
+     "note": "Former NBC and FOX scheduler: networks 'ask the subjects to rank the show on a scale of Excellent to Poor. They then compare the score for a pilot with the average score of all previously tested pilots', then intent to watch another episode, then the characters against norms; a rejected test never succeeds, a high test is no guarantee; sci-fi/fantasy tests above the drama average on idea and below on characters."
+    },
+    {
+     "url": "https://www.tvguide.com/news/seinfeld-research-memo-1083639/",
+     "note": "NBC's 1989 Seinfeld Chronicles memo: pilots rated strong / moderate / weak against the network's history; 'a large majority of NBC pilots received' weak; 'no segment of the audience was eager to watch the show again'."
+    },
+    {
+     "url": "https://timbrooks.net/program-research-1991/",
+     "note": "Tim Brooks (network research, 1991): norms depend on the questions and scales used and must be built per test program; strong-testing pilots were more than twice as likely to succeed."
+    }
+   ]
+  },
+  {
+   "format": "pilot",
+   "genre": "all",
+   "metric": "component_action",
+   "value": 45.0,
+   "range": null,
+   "n_hint": null,
+   "basis": "published norm (nearest instrument)",
+   "as_of": "2014-05",
+   "context": "recruited_screening",
+   "instrument": "recruited_screening",
+   "sources": [
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/INTERVIEW/Screening%20%233%20and%20%234%20%285-13-14%29/5.13%20The%20Interview%20Report%20%28730pm%29%20-%20FINAL.pdf",
+     "note": "[recruited screening / television pilots read against the NRG and Screen Engine recruited-screening norms] Network pilot tests use the same excellent-to-poor card and read each pilot against the average of all pilots tested (NBC rated pilots strong / moderate / weak against that average; CBS Television City dial tests; ASI and MarketCast pilot tests). No network or vendor publishes the pilot averages themselves, so the all-movies anchors (Excellent 30, Total positive 65, Definitely recommend 50; lead 50, second lead 45, supporting 40; components 30 to 45) stand in with the seed weight until our own pilot tests accumulate. Revisit when a published pilot norm surfaces."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/EQUALIZER/Screening%20%231%20%2812.16.13%29/THE%20EQUALIZER%20RA1%2012-16-13%20report.doc",
+     "note": "[recruited screening / Nielsen NRG five-year all-movies norms, printed on the NRG recruited audience screening report for The Equalizer, Long Beach 12.16.13] NRG Norms column: Excellent 30, Very Good 35, Total Highly Favorable 65, Definitely Recommend 50; performance norms lead 50, support 40; element norms Action 45, Story 40, Ending 40, Settings 40, Beginning 35; music 40 (the report reads 'excellent ratings that were 12 points above the norm' against a 52). The Equalizer test score summary prints the same NORMS column (30 / 35 / 65 / 50) for both screenings."
+    },
+    {
+     "url": "http://revengeofthemaskedscheduler.blogspot.com/2016/05/setting-schedule-pilot-testing.html",
+     "note": "Former NBC and FOX scheduler: networks 'ask the subjects to rank the show on a scale of Excellent to Poor. They then compare the score for a pilot with the average score of all previously tested pilots', then intent to watch another episode, then the characters against norms; a rejected test never succeeds, a high test is no guarantee; sci-fi/fantasy tests above the drama average on idea and below on characters."
+    },
+    {
+     "url": "https://www.tvguide.com/news/seinfeld-research-memo-1083639/",
+     "note": "NBC's 1989 Seinfeld Chronicles memo: pilots rated strong / moderate / weak against the network's history; 'a large majority of NBC pilots received' weak; 'no segment of the audience was eager to watch the show again'."
+    },
+    {
+     "url": "https://timbrooks.net/program-research-1991/",
+     "note": "Tim Brooks (network research, 1991): norms depend on the questions and scales used and must be built per test program; strong-testing pilots were more than twice as likely to succeed."
+    }
+   ]
+  },
+  {
+   "format": "pilot",
+   "genre": "all",
+   "metric": "component_suspense",
+   "value": 30.0,
+   "range": null,
+   "n_hint": null,
+   "basis": "published norm (nearest instrument)",
+   "as_of": "2014-05",
+   "context": "recruited_screening",
+   "instrument": "recruited_screening",
+   "sources": [
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/INTERVIEW/Screening%20%233%20and%20%234%20%285-13-14%29/5.13%20The%20Interview%20Report%20%28730pm%29%20-%20FINAL.pdf",
+     "note": "[recruited screening / television pilots read against the NRG and Screen Engine recruited-screening norms] Network pilot tests use the same excellent-to-poor card and read each pilot against the average of all pilots tested (NBC rated pilots strong / moderate / weak against that average; CBS Television City dial tests; ASI and MarketCast pilot tests). No network or vendor publishes the pilot averages themselves, so the all-movies anchors (Excellent 30, Total positive 65, Definitely recommend 50; lead 50, second lead 45, supporting 40; components 30 to 45) stand in with the seed weight until our own pilot tests accumulate. Revisit when a published pilot norm surfaces."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/EQUALIZER/Screening%20%231%20%2812.16.13%29/THE%20EQUALIZER%20RA1%2012-16-13%20report.doc",
+     "note": "[recruited screening / Nielsen NRG five-year all-movies norms, printed on the NRG recruited audience screening report for The Equalizer, Long Beach 12.16.13] NRG Norms column: Excellent 30, Very Good 35, Total Highly Favorable 65, Definitely Recommend 50; performance norms lead 50, support 40; element norms Action 45, Story 40, Ending 40, Settings 40, Beginning 35; music 40 (the report reads 'excellent ratings that were 12 points above the norm' against a 52). The Equalizer test score summary prints the same NORMS column (30 / 35 / 65 / 50) for both screenings."
+    },
+    {
+     "url": "http://revengeofthemaskedscheduler.blogspot.com/2016/05/setting-schedule-pilot-testing.html",
+     "note": "Former NBC and FOX scheduler: networks 'ask the subjects to rank the show on a scale of Excellent to Poor. They then compare the score for a pilot with the average score of all previously tested pilots', then intent to watch another episode, then the characters against norms; a rejected test never succeeds, a high test is no guarantee; sci-fi/fantasy tests above the drama average on idea and below on characters."
+    },
+    {
+     "url": "https://www.tvguide.com/news/seinfeld-research-memo-1083639/",
+     "note": "NBC's 1989 Seinfeld Chronicles memo: pilots rated strong / moderate / weak against the network's history; 'a large majority of NBC pilots received' weak; 'no segment of the audience was eager to watch the show again'."
+    },
+    {
+     "url": "https://timbrooks.net/program-research-1991/",
+     "note": "Tim Brooks (network research, 1991): norms depend on the questions and scales used and must be built per test program; strong-testing pilots were more than twice as likely to succeed."
+    }
+   ]
+  },
+  {
+   "format": "pilot",
+   "genre": "all",
+   "metric": "component_settings",
+   "value": 35.0,
+   "range": [
+    30.0,
+    40.0
+   ],
+   "n_hint": null,
+   "basis": "published norm (nearest instrument)",
+   "as_of": "2014-05",
+   "context": "recruited_screening",
+   "instrument": "recruited_screening",
+   "sources": [
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/INTERVIEW/Screening%20%233%20and%20%234%20%285-13-14%29/5.13%20The%20Interview%20Report%20%28730pm%29%20-%20FINAL.pdf",
+     "note": "[recruited screening / television pilots read against the NRG and Screen Engine recruited-screening norms] Network pilot tests use the same excellent-to-poor card and read each pilot against the average of all pilots tested (NBC rated pilots strong / moderate / weak against that average; CBS Television City dial tests; ASI and MarketCast pilot tests). No network or vendor publishes the pilot averages themselves, so the all-movies anchors (Excellent 30, Total positive 65, Definitely recommend 50; lead 50, second lead 45, supporting 40; components 30 to 45) stand in with the seed weight until our own pilot tests accumulate. Revisit when a published pilot norm surfaces."
+    },
+    {
+     "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/EQUALIZER/Screening%20%231%20%2812.16.13%29/THE%20EQUALIZER%20RA1%2012-16-13%20report.doc",
+     "note": "[recruited screening / Nielsen NRG five-year all-movies norms, printed on the NRG recruited audience screening report for The Equalizer, Long Beach 12.16.13] NRG Norms column: Excellent 30, Very Good 35, Total Highly Favorable 65, Definitely Recommend 50; performance norms lead 50, support 40; element norms Action 45, Story 40, Ending 40, Settings 40, Beginning 35; music 40 (the report reads 'excellent ratings that were 12 points above the norm' against a 52). The Equalizer test score summary prints the same NORMS column (30 / 35 / 65 / 50) for both screenings."
+    },
+    {
+     "url": "http://revengeofthemaskedscheduler.blogspot.com/2016/05/setting-schedule-pilot-testing.html",
+     "note": "Former NBC and FOX scheduler: networks 'ask the subjects to rank the show on a scale of Excellent to Poor. They then compare the score for a pilot with the average score of all previously tested pilots', then intent to watch another episode, then the characters against norms; a rejected test never succeeds, a high test is no guarantee; sci-fi/fantasy tests above the drama average on idea and below on characters."
+    },
+    {
+     "url": "https://www.tvguide.com/news/seinfeld-research-memo-1083639/",
+     "note": "NBC's 1989 Seinfeld Chronicles memo: pilots rated strong / moderate / weak against the network's history; 'a large majority of NBC pilots received' weak; 'no segment of the audience was eager to watch the show again'."
+    },
+    {
+     "url": "https://timbrooks.net/program-research-1991/",
+     "note": "Tim Brooks (network research, 1991): norms depend on the questions and scales used and must be built per test program; strong-testing pilots were more than twice as likely to succeed."
     }
    ]
   }
@@ -1665,6 +1816,30 @@
    "quote_or_paraphrase": "Describe pilot testing methods (ASI dials, cable testing, Magid VCR tests, 48-seat theaters, $20,000 for two hours of testing, red tune-out button). None prints a pilot norm for intent to view, would watch again, top-box great, or dial average.",
    "url": "https://www.nexttv.com/news/tvs-test-pilots-89501",
    "implies": null
+  },
+  {
+   "who": "Screen Engine, The Interview recruited screening reports (2014)",
+   "quote_or_paraphrase": "Blockbuster Comedy Benchmarks column: excellent 48, very good 34, total positive 82, definitely recommend 71. A top-tier benchmark the studio asked for, not the comedy average; kept here as the ceiling band for a comedy, not as the comedy norm.",
+   "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/INTERVIEW/Screening%20%233%20and%20%234%20%285-13-14%29/5.13%20The%20Interview%20Report%20%28730pm%29%20-%20FINAL.pdf",
+   "implies": null
+  },
+  {
+   "who": "Sony Pictures theatrical research overview (NRG)",
+   "quote_or_paraphrase": "TV spot tests: 'The goal for TV test scores for the US market is about 50-60% definite interest and about 70-80% positive interest.' Movie tracking US norms: unaided awareness 12%, total awareness 77%, definite interest 40%, first choice 12%.",
+   "url": "https://slidetodoc.com/sony-pictures-entertainment-theatrical-research-capabilities-methodologies-in/",
+   "implies": null
+  },
+  {
+   "who": "MarketCast TV spot norms (Equalizer and Goosebumps test score summaries)",
+   "quote_or_paraphrase": "Definite interest norms printed beside the spot scores: title and stars alone 15 (top 10% 30); a :60 spot 50 (top 10% 65); a :30 spot 45 (top 10% 60).",
+   "url": "https://wikileaks.org/sony/docs/03_03/Mktrsch/F%20I%20L%20M%20S/EQUALIZER/EQUALIZER%20Test%20Score%20Summary.xls",
+   "implies": {
+    "format": "trailer",
+    "genre": "all",
+    "metric": "tune_in",
+    "value": 45,
+    "meaning": "MarketCast :30 spot definite interest norm"
+   }
   }
  ],
  "reads": [
@@ -2117,6 +2292,140 @@
    "definite_recommend": null,
    "url": "https://forums.boxofficetheory.com/topic/33589-august-8-to-10-weekend-thread-weapons-425-freaky-29-fantastic-four-drop-redacted/page/7/",
    "note": "Forum quoting Deadline: 'C+ CinemaScore and 70% positive/3 stars on PostTrak'. Secondary source. [secondary source]"
+  }
+ ],
+ "exit_poll_genre_reference": [
+  {
+   "genre": "drama",
+   "metric": "total_positive",
+   "value": 93.2,
+   "range": [
+    90.0,
+    96.0
+   ],
+   "instrument": "exit_poll_posttrak",
+   "note": "PostTrak opening-night exit polls of wide releases as the trades reported them (2019 to 2026): a paying, self-selected audience, so far above a recruited screening of the same film. Reference only; never a scorecard norm."
+  },
+  {
+   "genre": "drama",
+   "metric": "definitely_recommend",
+   "value": 83.2,
+   "range": [
+    76.0,
+    90.0
+   ],
+   "instrument": "exit_poll_posttrak",
+   "note": "PostTrak opening-night exit polls of wide releases as the trades reported them (2019 to 2026): a paying, self-selected audience, so far above a recruited screening of the same film. Reference only; never a scorecard norm."
+  },
+  {
+   "genre": "action",
+   "metric": "total_positive",
+   "value": 87.6,
+   "range": [
+    71.0,
+    96.0
+   ],
+   "instrument": "exit_poll_posttrak",
+   "note": "PostTrak opening-night exit polls of wide releases as the trades reported them (2019 to 2026): a paying, self-selected audience, so far above a recruited screening of the same film. Reference only; never a scorecard norm."
+  },
+  {
+   "genre": "action",
+   "metric": "definitely_recommend",
+   "value": 72.7,
+   "range": [
+    50.0,
+    85.0
+   ],
+   "instrument": "exit_poll_posttrak",
+   "note": "PostTrak opening-night exit polls of wide releases as the trades reported them (2019 to 2026): a paying, self-selected audience, so far above a recruited screening of the same film. Reference only; never a scorecard norm."
+  },
+  {
+   "genre": "horror",
+   "metric": "total_positive",
+   "value": 71.6,
+   "range": [
+    43.0,
+    92.0
+   ],
+   "instrument": "exit_poll_posttrak",
+   "note": "PostTrak opening-night exit polls of wide releases as the trades reported them (2019 to 2026): a paying, self-selected audience, so far above a recruited screening of the same film. Reference only; never a scorecard norm."
+  },
+  {
+   "genre": "horror",
+   "metric": "definitely_recommend",
+   "value": 58.6,
+   "range": [
+    34.0,
+    84.0
+   ],
+   "instrument": "exit_poll_posttrak",
+   "note": "PostTrak opening-night exit polls of wide releases as the trades reported them (2019 to 2026): a paying, self-selected audience, so far above a recruited screening of the same film. Reference only; never a scorecard norm."
+  },
+  {
+   "genre": "thriller",
+   "metric": "total_positive",
+   "value": 79.5,
+   "range": [
+    75.0,
+    84.0
+   ],
+   "instrument": "exit_poll_posttrak",
+   "note": "PostTrak opening-night exit polls of wide releases as the trades reported them (2019 to 2026): a paying, self-selected audience, so far above a recruited screening of the same film. Reference only; never a scorecard norm."
+  },
+  {
+   "genre": "thriller",
+   "metric": "definitely_recommend",
+   "value": 56.5,
+   "range": [
+    51.0,
+    62.0
+   ],
+   "instrument": "exit_poll_posttrak",
+   "note": "PostTrak opening-night exit polls of wide releases as the trades reported them (2019 to 2026): a paying, self-selected audience, so far above a recruited screening of the same film. Reference only; never a scorecard norm."
+  },
+  {
+   "genre": "romance",
+   "metric": "total_positive",
+   "value": 80.5,
+   "range": [
+    77.0,
+    84.0
+   ],
+   "instrument": "exit_poll_posttrak",
+   "note": "PostTrak opening-night exit polls of wide releases as the trades reported them (2019 to 2026): a paying, self-selected audience, so far above a recruited screening of the same film. Reference only; never a scorecard norm."
+  },
+  {
+   "genre": "romance",
+   "metric": "definitely_recommend",
+   "value": 55.0,
+   "range": [
+    50.0,
+    59.0
+   ],
+   "instrument": "exit_poll_posttrak",
+   "note": "PostTrak opening-night exit polls of wide releases as the trades reported them (2019 to 2026): a paying, self-selected audience, so far above a recruited screening of the same film. Reference only; never a scorecard norm."
+  },
+  {
+   "genre": "documentary",
+   "metric": "total_positive",
+   "value": 96.5,
+   "range": [
+    96.0,
+    97.0
+   ],
+   "instrument": "exit_poll_posttrak",
+   "note": "PostTrak opening-night exit polls of wide releases as the trades reported them (2019 to 2026): a paying, self-selected audience, so far above a recruited screening of the same film. Reference only; never a scorecard norm."
+  },
+  {
+   "genre": "documentary",
+   "metric": "definitely_recommend",
+   "value": 89.5,
+   "range": [
+    89.0,
+    90.0
+   ],
+   "instrument": "exit_poll_posttrak",
+   "note": "PostTrak opening-night exit polls of wide releases as the trades reported them (2019 to 2026): a paying, self-selected audience, so far above a recruited screening of the same film. Reference only; never a scorecard norm."
   }
  ]
 }

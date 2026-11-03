@@ -176,6 +176,31 @@ class PilotDeleteRestore(unittest.TestCase):
         self.assertIsNone(PI.restore_session(s3, KEY, payload, 'p1'))        # nothing left to restore
         self.assertIsNone(PI.restore_session(s3, KEY, payload, 'nope'))
 
+    def test_deleted_test_leaves_the_norms_and_a_restore_brings_it_back(self):
+        from migration import digital_twin_pilot as PI
+        from migration import digital_twin_norms as N
+        s3 = self._s3()
+        N.seed(s3)
+        k = N.cell_key('pilot', 'all', 'total_positive')
+        sess = {'id': 'p9', 'title': 'Season 2 pilot', 'created_by': 'jenna', 'status': 'stopped', 'genre': 'drama', 'media': {},
+                'scorecard': {'format': 'pilot', 'battery': {'headline': {'total_positive_pct': 80.0, 'finish_pct': 92.0}}}}
+        payload = {'meta': {'name': 'Paramount+', 'key': KEY, 'size_us': 1000}, 'panel_sessions': [], 'pilot_sessions': [sess]}
+        PI.record_norms(sess, s3)
+        doc = json.loads(s3.objs[N.NORMS_KEY].decode('utf-8'))
+        self.assertEqual(doc['cells'][k]['tests'], ['p9'])
+        self.assertAlmostEqual(doc['cells'][k]['value'], (65.0 * N.SEED_WEIGHT + 80.0) / (N.SEED_WEIGHT + 1), places=3)
+        self.assertIn(N.cell_key('pilot', 'all', 'finish'), doc['cells'])
+        PI.delete_session(s3, KEY, payload, 'p9', deleted_by='jenna')
+        doc = json.loads(s3.objs[N.NORMS_KEY].decode('utf-8'))
+        self.assertEqual((doc['cells'][k]['value'], doc['cells'][k]['tests'], doc['cells'][k]['seeded']), (65.0, [], True))   # back on the anchor
+        self.assertNotIn(N.cell_key('pilot', 'all', 'finish'), doc['cells'])    # no anchor, no tests: gone
+        self.assertNotIn(N.cell_key('pilot', 'drama', 'finish'), doc['cells'])
+        back = PI.restore_session(s3, KEY, payload, 'p9', restored_by='jenna')
+        self.assertEqual(back['id'], 'p9')
+        doc = json.loads(s3.objs[N.NORMS_KEY].decode('utf-8'))
+        self.assertEqual(doc['cells'][k]['tests'], ['p9'])                        # the restored test counts again
+        self.assertIn(N.cell_key('pilot', 'all', 'finish'), doc['cells'])
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=1)
