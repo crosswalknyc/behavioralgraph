@@ -44,6 +44,7 @@ AGENTS_USERNAME = "agents off the build server"
 LOCAL_OPS_USERNAME = "local-ops"
 NO_RUN_USERNAME = "build server, no run attached"
 OTHER_KEYS_USERNAME = "other api keys"
+UNSTAMPED_USERNAME = "calls not stamped to a user"
 UNLOGGED_USERNAME = "billed, not logged"
 # Legacy names (store rows written before 2026-11-03); recognized on read.
 UNTAGGED_USERNAME = "untagged box"
@@ -56,6 +57,7 @@ SYSTEM_ROW_ORDER = (
     LOCAL_OPS_USERNAME,
     NO_RUN_USERNAME,
     OTHER_KEYS_USERNAME,
+    UNSTAMPED_USERNAME,
     UNLOGGED_USERNAME,
     UNTAGGED_USERNAME,
     OTHER_USERNAME,
@@ -74,9 +76,50 @@ UNASSIGNABLE_USERS = frozenset({
     "untagged",
     "other api keys",
     "other",
+    "calls not stamped to a user",
+    "unstamped",
     "billed, not logged",
     "system",
 })
+
+# Standing reassignments (Jenna 2026-11-03, verbatim: "Billed by Anthropic,
+# not logged by any tracker ... should go to trends and rankers, Builds we
+# started ourselves (local-ops) should go to lions gate and armine and
+# Partner API check/interpret calls and dashboard calls not stamped to a
+# user ... should all go to kartel"). Applied at read time, per day, after
+# the named-row fold, so the store stays raw and every surface (monthly
+# sheet, admin billing page, exports) agrees. Each rule: the named row it
+# moves, the first and last day it applies (None = open), and the label it
+# moves the dollars to (a user email or username resolves through
+# users.json; a named row stays a named row). The two dated rules end on
+# the day per-call stamping began: from 2026-11-04 an ops build is tagged
+# with the user it is for at queue time, and a partner API call carries
+# its account, so anything that still lands on those rows is visible and
+# can be assigned rather than silently charged.
+ATTRIBUTION_OVERRIDES = (
+    (UNLOGGED_USERNAME, None, None, TRENDS_USERNAME),
+    (LOCAL_OPS_USERNAME, "2026-08-18", "2026-11-03", "ameseldzhyan@lionsgate.com"),
+    (UNSTAMPED_USERNAME, "2026-08-18", "2026-11-03", "bkusin"),
+)
+
+
+def apply_attribution_overrides(spend: dict, date: Optional[str] = None,
+                                overrides=ATTRIBUTION_OVERRIDES) -> dict:
+    """Move named-row dollars per ATTRIBUTION_OVERRIDES for one day.
+    `date` is YYYY-MM-DD; when unknown only the undated rules apply.
+    Never changes the day's total."""
+    out = {str(k).strip().lower(): float(v or 0.0) for k, v in (spend or {}).items()}
+    for row, first, last, target in overrides or ():
+        if first and (not date or date < first):
+            continue
+        if last and (not date or date > last):
+            continue
+        amt = out.pop(row, 0.0)
+        if amt <= 0.0:
+            continue
+        tgt = str(target or "").strip().lower()
+        out[tgt] = out.get(tgt, 0.0) + amt
+    return {k: _round2(v) for k, v in out.items() if _round2(v) > 0.0}
 
 
 def parse_month(ym: str) -> tuple[int, int]:
@@ -160,6 +203,8 @@ def _canonical_system_row(label: str) -> str:
         return NO_RUN_USERNAME
     if lab in ("other api keys", "other keys"):
         return OTHER_KEYS_USERNAME
+    if lab in ("calls not stamped to a user", "unstamped", "not stamped"):
+        return UNSTAMPED_USERNAME
     if lab in ("billed, not logged", "unlogged", "not logged"):
         return UNLOGGED_USERNAME
     if lab in ("untagged box", "untagged", "untagged box spend"):
@@ -230,6 +275,9 @@ def fold_system_residual(anth: dict, day_total, entry=None) -> dict:
                          if box.get("no_run_usd") is not None
                          else (box.get("non_run_usd") or 0.0))
     other_ask = _round2(day.get("other") or 0.0)
+    # Dashboard and partner API calls that carried no account on the
+    # record. Computed per day by the daily report; scaled with the rest.
+    unstamped_ask = _round2(detail.get("chat_unstamped_usd") or 0.0)
     system_ch = _round2(day.get("system") or 0.0)
 
     def take(asked: float) -> float:
@@ -240,7 +288,7 @@ def fold_system_residual(anth: dict, day_total, entry=None) -> dict:
 
     has_channels = any(v > 0.0 for v in (
         trends_ask, agent_ask, local_ops_ask, no_run_ask, other_ask,
-        system_ch))
+        unstamped_ask, system_ch))
     if has_channels:
         t = take(trends_ask)
         if t:
@@ -257,12 +305,16 @@ def fold_system_residual(anth: dict, day_total, entry=None) -> dict:
         o = take(other_ask)
         if o:
             people[OTHER_KEYS_USERNAME] = o
+        u = take(unstamped_ask)
+        if u:
+            people[UNSTAMPED_USERNAME] = u
     if leftover > 0.0:
         people[UNLOGGED_USERNAME] = leftover
     return {k: _round2(v) for k, v in people.items() if _round2(v) > 0.0}
 
 
-def day_user_spend(entry: dict) -> tuple[dict, dict]:
+def day_user_spend(entry: dict, date: Optional[str] = None,
+                   apply_overrides: bool = True) -> tuple[dict, dict]:
     detail = (entry or {}).get("detail") or {}
     anth = (detail.get("anthropic_by_user")
             or detail.get("prometheus_by_user")
@@ -279,6 +331,8 @@ def day_user_spend(entry: dict) -> tuple[dict, dict]:
     else:
         anth = {str(k).strip().lower(): float(v or 0.0)
                 for k, v in anth.items() if str(k or "").strip()}
+    if apply_overrides:
+        anth = apply_attribution_overrides(anth, date)
     return anth, oai
 
 
@@ -291,7 +345,7 @@ def roll_month(days: dict, year: int, month: int):
         if not isinstance(e, dict):
             continue
         days_used += 1
-        a, o = day_user_spend(e)
+        a, o = day_user_spend(e, date=d)
         for k, v in a.items():
             if k:
                 anth[str(k).strip().lower()] += float(v or 0.0)
@@ -427,8 +481,9 @@ __all__ = [
     "BUCKET", "STORE_KEY", "USERS_KEY", "CSV_COLUMNS",
     "UNASSIGNABLE_USERS", "SYSTEM_USERNAME", "SYSTEM_COMPANY",
     "TRENDS_USERNAME", "AGENTS_USERNAME", "LOCAL_OPS_USERNAME",
-    "NO_RUN_USERNAME", "OTHER_KEYS_USERNAME", "UNLOGGED_USERNAME",
-    "UNTAGGED_USERNAME", "OTHER_USERNAME", "SYSTEM_ROW_ORDER",
+    "NO_RUN_USERNAME", "OTHER_KEYS_USERNAME", "UNSTAMPED_USERNAME",
+    "UNLOGGED_USERNAME", "UNTAGGED_USERNAME", "OTHER_USERNAME",
+    "SYSTEM_ROW_ORDER", "ATTRIBUTION_OVERRIDES", "apply_attribution_overrides",
     "parse_month", "month_label", "previous_month", "month_dates",
     "load_store", "load_users_dict", "users_index", "resolve_identity",
     "is_assignable_user", "is_system_row", "fold_system_residual",
