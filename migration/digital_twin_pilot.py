@@ -2027,6 +2027,44 @@ def delete_session(s3, twin_key: str, payload: dict, sid: str, deleted_by: str =
     return sess
 
 
+def restore_session(s3, twin_key: str, payload: dict, sid: str, restored_by: str = '') -> Optional[dict]:
+    """A deleted test back on its twin from the 30-day undo copy: the
+    record returns to pilot_sessions (newest first), the file moves back
+    beside it, the undo copy goes. None when there is no copy or the
+    test is already on the twin. The person who deleted it or an admin
+    (the route checks)."""
+    if s3 is None or any(str(x.get('id')) == str(sid) for x in (payload or {}).get('pilot_sessions') or []):
+        return None
+    undo_key = deleted_pilot_key(twin_key, sid)
+    try:
+        rec = json.loads(s3.get_object(Bucket='dashboard-inputs', Key=undo_key)['Body'].read().decode('utf-8'))
+    except Exception:
+        return None
+    sess = rec.get('session') if isinstance(rec, dict) else None
+    if not isinstance(sess, dict) or not sess.get('id'):
+        return None
+    media = sess.get('media') if isinstance(sess.get('media'), dict) else {}
+    undo_media = str(rec.get('media_undo_key') or media.get('undo_key') or '')
+    if undo_media:
+        back = media_s3_key(str(sess.get('created_by') or restored_by or 'seat'), str(sess['id']), str(media.get('filename') or os.path.basename(undo_media)))
+        try:
+            s3.copy_object(Bucket='dashboard-inputs', CopySource={'Bucket': 'dashboard-inputs', 'Key': undo_media}, Key=back, MetadataDirective='COPY')
+            s3.delete_object(Bucket='dashboard-inputs', Key=undo_media)
+            media['s3_key'] = back
+            media.pop('undo_key', None)
+        except Exception as e:
+            print(f"[pilot] media restore skipped (the read is back, the file is not): {e}")
+    sess['restored_at'] = _now()
+    sess['restored_by'] = restored_by or ''
+    sess['updated_at'] = _now()
+    payload.setdefault('pilot_sessions', []).insert(0, sess)
+    try:
+        s3.delete_object(Bucket='dashboard-inputs', Key=undo_key)
+    except Exception:
+        pass
+    return sess
+
+
 def media_s3_key(username: str, sid: str, filename: str) -> str:
     safe = re.sub(r"[^A-Za-z0-9._-]+", '_', os.path.basename(str(filename) or 'cut.mp4')).strip('._') or 'cut.mp4'
     user = re.sub(r"[^A-Za-z0-9._-]+", '_', str(username or 'seat'))[:40] or 'seat'
@@ -2290,7 +2328,7 @@ __all__ = [
     'mark_play_paid', 'mark_paid', 'mark_playing', 'stop_session', 'rename_session', 'set_options',
     'stamp_question', 'can_delete', 'can_view_media', 'remove_session', 'delete_session', 'purge_media',
     'deleted_pilot_key', 'media_hash', 'build_beats', 'build_scenes', 'build_beats_from_scenes', 'seat_dial', 'blend_dial', 'seat_events', 'persona_events',
-    'aggregate_dial', 'split_dial', 'split_specs', 'all_splits', 'cohort_labels', 'cohort_key', 'cohort_segments', 'quadrant_of', 'scorecard', 'battery_scorecard', 'norms_for', 'norm_metrics', 'record_norms',
+    'aggregate_dial', 'split_dial', 'split_specs', 'all_splits', 'cohort_labels', 'cohort_key', 'cohort_segments', 'restore_session', 'quadrant_of', 'scorecard', 'battery_scorecard', 'norms_for', 'norm_metrics', 'record_norms',
     'attach_norms', 'probe_points', 'fallback_guide', 'question_window', 'seat_window', 'ask_stimulus', 'format_for', 'norms_genre',
     'session_csv', 'session_lines', 'public_session', 'signed_media_url',
     'media_s3_key', 'accept_upload_name', 'ffmpeg_available', 'probe_duration',

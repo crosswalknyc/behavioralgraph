@@ -144,5 +144,38 @@ class Page(unittest.TestCase):
         self.assertIn('30 days', blob)
 
 
+class PilotDeleteRestore(unittest.TestCase):
+    """A pilot test deleted from the list comes back from its 30-day copy
+    (Jenna, 2026-11-03: "allow a way to delete pilot tests")."""
+
+    def _s3(self):
+        s3 = FakeS3()
+        s3.copy_object = lambda Bucket, CopySource, Key, **kw: s3.objs.__setitem__(Key, s3.objs[CopySource['Key']])
+        return s3
+
+    def test_delete_then_restore(self):
+        from migration import digital_twin_pilot as PI
+        s3 = self._s3()
+        s3.objs['pilot-media/jenna/p1/cut.mp4'] = b'video'
+        payload = {'meta': {'name': 'Paramount+', 'key': KEY, 'size_us': 1000}, 'panel_sessions': [],
+                   'pilot_sessions': [{'id': 'p1', 'title': 'Season 2 pilot', 'created_by': 'jenna', 'status': 'stopped',
+                                       'media': {'s3_key': 'pilot-media/jenna/p1/cut.mp4', 'filename': 'cut.mp4', 'title': 'x'}},
+                                      {'id': 'p2', 'title': 'Other', 'created_by': 'jenna', 'status': 'ready', 'media': {}}]}
+        gone = PI.delete_session(s3, KEY, payload, 'p1', deleted_by='jenna')
+        self.assertEqual(gone['id'], 'p1')
+        self.assertEqual([x['id'] for x in payload['pilot_sessions']], ['p2'])
+        undo_key = PI.deleted_pilot_key(KEY, 'p1')
+        self.assertIn(undo_key, s3.objs)
+        self.assertNotIn('pilot-media/jenna/p1/cut.mp4', s3.objs)           # the file followed the test into the undo copy
+        back = PI.restore_session(s3, KEY, payload, 'p1', restored_by='jenna')
+        self.assertEqual(back['id'], 'p1')
+        self.assertEqual([x['id'] for x in payload['pilot_sessions']], ['p1', 'p2'])
+        self.assertTrue(back['media']['s3_key'].endswith('/cut.mp4'))
+        self.assertIn(back['media']['s3_key'], s3.objs)                    # and came back with it
+        self.assertNotIn(undo_key, s3.objs)
+        self.assertIsNone(PI.restore_session(s3, KEY, payload, 'p1'))        # nothing left to restore
+        self.assertIsNone(PI.restore_session(s3, KEY, payload, 'nope'))
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=1)

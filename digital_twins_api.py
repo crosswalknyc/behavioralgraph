@@ -45,6 +45,7 @@ app.py so app.py stays small.
   POST /api/digital-twins/<key>/pilot/<sid>/stop     stop, keep the scorecard, add the test to the norms, remove the file when the test asked for it
   PATCH /api/digital-twins/<key>/pilot/<sid>         rename, or set genre / mode / cut_label / rough_cut / purge_media_after
   DELETE /api/digital-twins/<key>/pilot/<sid>        delete (30-day undo; the file follows the test into the undo copy)
+  POST /api/digital-twins/<key>/pilot/<sid>/restore  the deleted test back from its undo copy (the deleter or an admin)
   GET  /api/digital-twins/<key>/pilot/<sid>/media-url  a signed link to the cut (ten minutes; creator or admin only)
   GET  /api/digital-twins/<key>/pilot/<sid>/media    the uploaded cut streamed (creator or admin only; the fallback player path)
   GET  /api/digital-twins/pilot-norms?format=&genre=  the norm and genre norm columns (no sources)
@@ -1625,6 +1626,34 @@ def dt_pilot_delete(key, sid):
     undo_until = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(time.time() + PI.DELETED_PILOT_KEEP_DAYS * 86400))
     return _nocache(jsonify({'success': True, 'deleted': sid, 'sessions_left': len(payload.get('pilot_sessions') or []),
                              'undo_until': undo_until, 'message': 'Test deleted. It can be restored within 30 days by an admin.'}))
+
+
+@bp.route(f'{PREFIX}/<path:key>/pilot/<sid>/restore', methods=['POST'])
+def dt_pilot_restore(key, sid):
+    """A deleted test back from its 30-day undo copy (Jenna, 2026-11-03:
+    a way to delete tests, and the undo the delete promises). The person
+    who deleted it, or an admin."""
+    user, err = _gate()
+    if err:
+        return err
+    payload, err = _twin_or_404(user, key)
+    if err:
+        return err
+    from migration import digital_twin_pilot as PI
+    import json as _json
+    try:
+        rec = _json.loads(_s3().get_object(Bucket='dashboard-inputs', Key=PI.deleted_pilot_key(key, sid))['Body'].read().decode('utf-8'))
+    except Exception:
+        rec = None
+    if not isinstance(rec, dict):
+        return jsonify({'success': False, 'error': 'Nothing to restore: that test is not in the 30-day undo window.'}), 404
+    if not (DT.is_admin(user) or str(rec.get('deleted_by') or '') == _uname(user)):
+        return jsonify({'success': False, 'error': 'Only the person who deleted this test, or an admin, can restore it.'}), 403
+    sess = PI.restore_session(_s3(), key, payload, sid, restored_by=_uname(user))
+    if sess is None:
+        return jsonify({'success': False, 'error': 'That test could not be restored.'}), 409
+    DT.save_twin(_s3(), key, payload)
+    return _nocache(jsonify({'success': True, 'session': PI.public_session(sess), 'message': 'Test restored.'}))
 
 
 @bp.route(f'{PREFIX}/<path:key>/pilot/<sid>/media', methods=['GET'])

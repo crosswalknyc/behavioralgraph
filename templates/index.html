@@ -51327,6 +51327,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         /* the one-line note after a close */
         #digitalTwinsIQView .dtw-fg-toast { position: fixed; left: 50%; bottom: 28px; transform: translate(-50%, 8px); background: var(--dtw-raised); color: var(--dtw-ink); border: 1px solid var(--dtw-rule); border-radius: 999px; padding: 9px 16px; font-size: 12px; line-height: 16px; box-shadow: 0 10px 28px rgba(8,17,19,.35); opacity: 0; pointer-events: none; transition: opacity .18s, transform .18s; z-index: 2147481999; max-width: min(92vw, 560px); text-align: center; overflow-wrap: anywhere; }
         #digitalTwinsIQView .dtw-fg-toast.show { opacity: 1; transform: translate(-50%, 0); }
+        #digitalTwinsIQView .dtw-fg-toastact { appearance: none; margin-left: 12px; background: transparent; border: 1px solid var(--dtw-ink); border-radius: 999px; color: var(--dtw-ink); font: inherit; font-size: 11.5px; font-weight: 600; padding: 3px 10px; cursor: pointer; }
         /* the Rooms drawer: which twin's rooms, so a reader moves to another twin's rooms from here */
         #digitalTwinsIQView .dtw-fg-twinrow { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; font-size: 11.5px; color: var(--dtw-body); flex-wrap: wrap; }
         #digitalTwinsIQView .dtw-fg-twinsel { width: auto; max-width: 100%; padding: 0.3rem 0.5rem; font-size: 0.76rem; }
@@ -51719,6 +51720,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-pi-list { display: flex; flex-direction: column; gap: 8px; }
         #digitalTwinsIQView .dtw-pi-row { appearance: none; width: 100%; text-align: left; background: var(--dtw-raised); border: 1px solid var(--dtw-rule); border-radius: 10px; padding: 10px 12px; color: inherit; font-family: inherit; cursor: pointer; }
         #digitalTwinsIQView .dtw-pi-row.on { border-color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-pi-rowwrap { position: relative; }
+        #digitalTwinsIQView .dtw-pi-rowwrap .dtw-pi-row { padding-right: 58px; }
+        #digitalTwinsIQView .dtw-pi-rowdel { position: absolute; right: 10px; top: 10px; appearance: none; background: transparent; border: 1px solid var(--dtw-rule); border-radius: 999px; color: var(--dtw-mute); font: inherit; font-size: 10.5px; padding: 2px 8px; cursor: pointer; }
+        #digitalTwinsIQView .dtw-pi-rowdel:hover, #digitalTwinsIQView .dtw-pi-rowdel:focus-visible { color: var(--dtw-ink); border-color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-pi-del { align-self: center; flex: none; color: var(--dtw-mute); }
+        #digitalTwinsIQView .dtw-pi-del:hover { color: var(--dtw-ink); }
         #digitalTwinsIQView .dtw-pi-row .h { font-weight: 600; }
         #digitalTwinsIQView .dtw-pi-row .m { font-size: 12px; color: var(--dtw-body); margin-top: 2px; }
         #digitalTwinsIQView .dtw-pi-scores { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
@@ -53547,12 +53554,18 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 try { remember(); } catch (_) {}
                 fgToast(working ? 'Room closed. The question keeps running; find it under Rooms.' : 'Room closed. Find it under Rooms.');
             };
-            function fgToast(text) {
+            function fgToast(text, action) {
                 var t = el('dtwFgToast');
                 if (!t) { t = document.createElement('div'); t.id = 'dtwFgToast'; t.className = 'dtw-fg-toast'; t.setAttribute('role', 'status'); t.setAttribute('aria-live', 'polite'); (el('digitalTwinsIQView') || document.body).appendChild(t); }
                 t.textContent = text || ''; clearTimeout(S.fgToastT);
+                if (action && action.label && typeof action.onclick === 'function') {
+                    // an action on the toast (Undo after a delete, 2026-11-03); it stays up longer so it can be reached
+                    var b = document.createElement('button'); b.type = 'button'; b.className = 'dtw-fg-toastact'; b.textContent = action.label;
+                    b.onclick = function() { t.classList.remove('show'); try { action.onclick(); } catch (_) {} };
+                    t.appendChild(b);
+                }
                 t.classList.add('show');
-                S.fgToastT = setTimeout(function() { t.classList.remove('show'); }, 5200);
+                S.fgToastT = setTimeout(function() { t.classList.remove('show'); }, action ? 9000 : 5200);
             }
             document.addEventListener('click', function(e) {
                 var p = el('dtwSeatPop'); if (!p || !p.classList.contains('open')) return;
@@ -54200,7 +54213,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     var sc = s.scorecard || {}, hd = ((sc.battery || {}).headline) || {};
                     var st = s.status || 'draft';
                     var money = hd.total_positive_pct != null ? ('  total positive ' + Number(hd.total_positive_pct).toFixed(1) + '%') : (sc.overall_like != null ? '  dial ' + Number(sc.overall_like).toFixed(1) : '');
-                    return '<button type="button" class="dtw-pi-row' + (on ? ' on' : '') + '" onclick="dtwPilotPick(\'' + esc(s.id) + '\')"><div class="h">' + esc(s.title || 'Untitled test') + (s.cut_label && s.lineage ? ' <span class="dtw-muted">' + esc(s.cut_label) + '</span>' : '') + '</div><div class="m">' + esc(PI_MODE_LABEL[s.mode] || 'Pilot test') + '  ' + esc(st) + esc(money) + '  ' + esc(fmtWhen(s.updated_at || s.created_at)) + '</div></button>';
+                    return '<div class="dtw-pi-rowwrap"><button type="button" class="dtw-pi-row' + (on ? ' on' : '') + '" onclick="dtwPilotPick(\'' + esc(s.id) + '\')"><div class="h">' + esc(s.title || 'Untitled test') + (s.cut_label && s.lineage ? ' <span class="dtw-muted">' + esc(s.cut_label) + '</span>' : '') + '</div><div class="m">' + esc(PI_MODE_LABEL[s.mode] || 'Pilot test') + '  ' + esc(st) + esc(money) + '  ' + esc(fmtWhen(s.updated_at || s.created_at)) + '</div></button>'
+                        + '<button type="button" class="dtw-pi-rowdel" title="Delete this test" aria-label="Delete ' + esc(s.title || 'this test') + '" onclick="dtwPilotDeleteId(\'' + esc(s.id) + '\')">Delete</button></div>';
                 }).join('');
                 var intro = {
                     pilot: 'Upload a pilot, movie or episode, or paste a watch link from any streamer. Prometheus moderates. The twins watch it scene by scene: a dial, laughs and loves at the second they happen in their own words, a question at any timestamp that knows what just played, and the scorecard studios use with the norm beside every number.',
@@ -54698,7 +54712,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     + (extras ? '<details class="dtw-pi-more" ontoggle="drawCompareChart()"><summary>Recut, comps, talent and the brief</summary>' + extras + '</details>' : '');
                 return '<div class="dtw-card"><div class="dtw-eyebrow">' + esc(PI_TAB_LABEL[piTabFor(s.mode)] || 'Pilot Testing') + '</div>'
                     + '<div class="dtw-fg-rtwrap"><input id="dtwPiName" class="dtw-fg-rt" value="' + esc(s.title || '') + '" onblur="dtwPilotRename()"><button type="button" class="dtw-link" onclick="dtwPilotNew()">New test</button>'
-                    + '<button type="button" class="dtw-btn dtw-btn-sm dtw-pi-exit" onclick="dtwPilotClose()" title="Leave this test. A test still playing is stopped and scored first.">Exit test</button></div>'
+                    + '<button type="button" class="dtw-btn dtw-btn-sm dtw-pi-exit" onclick="dtwPilotClose()" title="Leave this test. A test still playing is stopped and scored first.">Exit test</button>'
+                    + '<button type="button" class="dtw-btn dtw-btn-sm dtw-pi-del" onclick="dtwPilotDelete()" title="Delete this test. An admin can restore it for 30 days.">Delete</button></div>'
                     + '<div class="dtw-pi-room">' + renderPilotScores(s) + center + room + '</div>'
                     + '<div class="dtw-pi-foot">' + exp + purge + '</div>'
                     + more + '</div>';
@@ -55030,14 +55045,28 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     if (d.session) adoptPilot(d.session);
                 } catch (_) {}
             };
-            window.dtwPilotDelete = async function() {
-                var s = S.pilot; if (!s || !S.key) return;
-                if (!window.confirm('Delete this test? You can undo for 30 days.')) return;
-                try { await api('/' + S.key + '/pilot/' + s.id + '/delete', { method: 'POST', body: '{}' }); } catch (e) { alert(e.message); return; }
-                var list = (S.twin || {}).pilot_sessions || [];
-                S.twin.pilot_sessions = list.filter(function(x) { return x.id !== s.id; });
-                S.pilot = null;
+            window.dtwPilotDelete = async function() { var s = S.pilot; if (!s) return; return dtwPilotDeleteId(s.id); };
+            // Delete any test from the list or the open test (Jenna, 2026-11-03: "allow a way to delete pilot tests").
+            // The server keeps a copy an admin can restore for 30 days; the page drops it at once.
+            window.dtwPilotDeleteId = async function(sid) {
+                if (!sid || !S.key) return;
+                var list = ((S.twin || {}).pilot_sessions || []);
+                var s = list.filter(function(x) { return x.id === sid; })[0] || (S.pilot && S.pilot.id === sid ? S.pilot : null);
+                var title = (s && s.title) || 'this test';
+                if (!window.confirm('Delete ' + title + '? An admin can restore it for 30 days.')) return;
+                if (S.pilot && S.pilot.id === sid) { stopPilotClock(); stopLiveMirror(); if (S.pilotQPoll) { try { clearTimeout(S.pilotQPoll); } catch (_) {} S.pilotQPoll = null; } }
+                try { await api('/' + S.key + '/pilot/' + encodeURIComponent(sid) + '/delete', { method: 'POST', body: '{}' }); }
+                catch (e) { fgToast(e && e.message ? e.message : 'That test could not be deleted just now.'); return; }
+                if (S.twin) S.twin.pilot_sessions = list.filter(function(x) { return x.id !== sid; });
+                if (S.pilot && S.pilot.id === sid) { S.pilot = null; S.pilotSplits = null; S.pilotMedia = null; S.pilotCompare = null; }
                 renderPilotConsole();
+                fgToast('Deleted ' + title + '.', { label: 'Undo', onclick: function() { dtwPilotRestoreId(sid); } });
+            };
+            window.dtwPilotRestoreId = async function(sid) {
+                if (!sid || !S.key) return;
+                try { var d = await api('/' + S.key + '/pilot/' + encodeURIComponent(sid) + '/restore', { method: 'POST', body: '{}' }); }
+                catch (e) { fgToast(e && e.message ? e.message : 'That test could not be restored.'); return; }
+                if (d && d.session) { adoptPilot(d.session); S.pilot = null; renderPilotConsole(); fgToast('Restored ' + (d.session.title || 'the test') + '.'); }
             };
             // ------------------------------------------------------------ Pilot Testing phase 2: the mode reads, the diagnostics, the extras
             function piTable(head, rows) {
