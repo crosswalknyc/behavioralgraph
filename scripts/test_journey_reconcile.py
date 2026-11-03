@@ -154,14 +154,6 @@ def test_breakdown_words():
     check('watch journey still says watching', bool(line) and line[0] == 'Already watching', str(line))
 
 
-if __name__ == '__main__':
-    test_reconcile()
-    test_gold_rescale()
-    test_breakdown_words()
-    print(f"\n{'ALL PASS' if not FAIL else str(FAIL) + ' FAILED'}")
-    sys.exit(1 if FAIL else 0)
-
-
 def _overlap_sections_are_labeled():
     """An overlap table says a person can be in more than one row; a path
     table and a partition are not labeled (Carolyn Bisson, 2026-11-02:
@@ -184,4 +176,10 @@ def _overlap_sections_are_labeled():
 
 
 if __name__ == '__main__':
+    test_reconcile()
+    test_gold_rescale()
+    test_breakdown_words()
     _overlap_sections_are_labeled()
+    print(f"\n{'ALL PASS' if not FAIL else str(FAIL) + ' FAILED'}")
+    sys.exit(1 if FAIL else 0)
+
