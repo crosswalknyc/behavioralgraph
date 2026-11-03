@@ -61,7 +61,7 @@ STAFF_ACCEPT_CHIP = "Approve ({price}, not billed to a staff account)"
 # no longer carries a refusal sentence.
 CONFIRM = ""
 
-CUSTOM_FAMILY = frozenset(('report', 'custom', 'overlap', 'path', 'list', 'cross'))
+CUSTOM_FAMILY = frozenset(('report', 'custom', 'overlap', 'path', 'list', 'cross', 'adaptation'))
 # Never priced: a lookup of carriage (where a named title is watched, the
 # content map, the library, one research call) is the free where-watched
 # lane in prometheus/service.py, ahead of every quote. classify() returns
@@ -468,6 +468,55 @@ def _viewership_ask(text):
         return False
 
 
+# A what-if about the audience on screen (Jay Patel, Amazon, 2026-11-03, with
+# the Ordeal readers open): "if there was an animated adaptation of the series,
+# how many of these readers do you think would tune in and sign up for Prime
+# Video?" Two numbers about the people on screen: how many would watch, and how
+# many of those would be new to the service. A put-together read on the open
+# audience, never a sizing of "sign up for Prime Video".
+_ADAPT_WORK_RX = re.compile(
+    r"\b(?:an? |the )?(?:animated |anime |live[- ]action |tv |television |streaming |film |movie |series |limited[- ]series |podcast |video ?game |stage )?"
+    r"(?:adaptation|spin-?off|reboot|remake|sequel|prequel|revival|movie version|film version|series version)\b|"
+    r"\b(?:adapted (?:into|as|for)|turned into|made into|becomes?) (?:an? |the )?(?:animated |live[- ]action |tv |streaming )?(?:series|show|film|movie|season|podcast|game)\b|"
+    r"\bif (?:there (?:was|were)|(?:\w+ ){0,3}(?:made|launched|released|greenlit|produced|put out|dropped|ordered|picked up)) (?:an? |the |another )?(?:[\w&':.+-]+ ){0,5}?(?:series|show|season|film|movie|adaptation|spin-?off|reboot|podcast|game)\b", re.I)
+_ADAPT_ACT_RX = re.compile(
+    r"\b(?:tune in|sign ?up|sign up for|subscribe|watch|stream|convert|would (?:come|show up|follow|pay|buy|try|join))\b", re.I)
+# a what-if, not a measured past ("how many people watched the Netflix adaptation of One Piece" is viewership)
+_ADAPT_IF_RX = re.compile(r"\b(?:would|could|might|if there|if \w+ (?:made|make|launched|launch|released|release|greenlit|produced|ordered|picked up|did)|what if|were to|hypothetical(?:ly)?|imagine)\b", re.I)
+_SERVICE_RX = re.compile(
+    r"\b(prime video|amazon prime video|amazon prime|netflix|hulu|max|hbo max|disney\+|disney plus|peacock|paramount\+|paramount plus|"
+    r"apple tv\+|apple tv plus|apple tv|youtube|youtube tv|tubi|pluto tv|roku channel|crunchyroll|starz|amc\+|britbox|discovery\+|espn\+|fubo|sling|mgm\+)\b", re.I)
+
+
+def is_adaptation_ask(text):
+    t = ' '.join(str(text or '').split())
+    if not t or len(t) > 600:
+        return False
+    return bool(_ADAPT_WORK_RX.search(t) and _ADAPT_ACT_RX.search(t) and _ADAPT_IF_RX.search(t)
+                and re.search(r"\b(?:how many|what (?:share|percent|percentage|portion|fraction)|would|do you think)\b", t, re.I))
+
+
+def adaptation_details(text):
+    """(the adaptation as written, the service named) for the offer line."""
+    t = ' '.join(str(text or '').split())
+    m = _ADAPT_WORK_RX.search(t)
+    work = (m.group(0).strip() if m else 'an adaptation')
+    work = re.sub(r"^if there (?:was|were) ", '', work, flags=re.I)
+    work = re.sub(r"^if (?:\w+ ){0,3}(?:made|launched|released|greenlit|produced|put out|dropped|ordered|picked up) ", '', work, flags=re.I)
+    work = re.sub(r"^(?:adapted (?:into|as|for)|turned into|made into|becomes?) ", '', work, flags=re.I)
+    work = work[:1].lower() + work[1:] if re.match(r"^(?:An?|The|Another|Animated|Live|Tv|Television|Streaming|Film|Movie|Series|Limited|Podcast|Video|Stage|Adaptation|Spin|Reboot|Remake|Sequel|Prequel|Revival)\b", work) else work
+    if not re.match(r"^(?:an?|the|another)\b", work, re.I):
+        work = ('an ' if re.match(r"^[aeiou]", work, re.I) else 'a ') + work
+    sm = _SERVICE_RX.search(t)
+    service = sm.group(1) if sm else ''
+    pretty = {'amazon prime video': 'Prime Video', 'amazon prime': 'Prime Video', 'prime video': 'Prime Video', 'hbo max': 'HBO Max', 'disney plus': 'Disney+',
+              'paramount plus': 'Paramount+', 'apple tv plus': 'Apple TV+', 'youtube tv': 'YouTube TV', 'pluto tv': 'Pluto TV', 'roku channel': 'The Roku Channel'}
+    service = pretty.get(service.lower(), service)
+    if service and not pretty.get(service.lower()) and service.lower() in ('netflix', 'hulu', 'max', 'peacock', 'tubi', 'crunchyroll', 'starz', 'britbox', 'fubo', 'sling', 'youtube'):
+        service = service.capitalize() if service.lower() != 'youtube' else 'YouTube'
+    return work, service
+
+
 def classify(text, history=None, ctx=None):
     """A priced read, or None when the ask stays metered / free / another
     product path. ``via`` is 'service' for deterministic lanes (sizing,
@@ -488,6 +537,10 @@ def classify(text, history=None, ctx=None):
         return None     # a build / journey / cut / deck / valuation order has its own lane and price
     if is_where_watched(t, history, ctx):
         return None     # the free lane (service.py 'where_watched'), never a quote
+    if is_adaptation_ask(t):
+        # how many of the audience on screen would watch a what-if adaptation, and how many would be new to the service
+        return {'kind': 'adaptation', 'via': 'generate', 'usd': 100, 'same_frame': False,
+                'frame': 'adaptation', 'subject': ''}
     if _viewership_ask(t):
         return {'kind': 'viewership', 'via': 'generate', 'usd': 100, 'same_frame': False,
                 'frame': 'viewership', 'subject': ''}
@@ -845,6 +898,13 @@ def lead_for(kind, subject, **kw):
         what = (f"month by month viewers and hours watched for {subj} across {span}" if kw.get('series')
                 else f"how many people in the US {verb} {title}" + (f" {cond}" if cond else '') + f" across {span}")
         return f"I can pull {what}."
+    if kind == 'adaptation':
+        work = str(kw.get('work') or 'an adaptation')
+        service = str(kw.get('service') or '')
+        where = f" on {service}" if service else ''
+        who = aud if _AUDIENCE_TAIL_RX.search(subj) else f"the {subj} audience"
+        return (f"I can read how many of {who} would tune in to {work}{where}, and how many of those would be new "
+                f"{service + ' ' if service else ''}sign-ups rather than people already on the service.")
     if kind == 'rerun':
         noun = str(kw.get('noun') or 'read')
         wp = str(kw.get('window') or '').strip()
@@ -1184,7 +1244,7 @@ def is_followup_on_last_read(text, history, subject=''):
 
 def offer_or_charge(*, text, subject, kind, panel_confirm, username, user=None,
                     history=None, host=None, consume=None, years=1, dimension='', what='',
-                    verb='watched', series=False, condition='', frame=''):
+                    verb='watched', series=False, condition='', frame='', work='', service=''):
     """The one gate for a priced read on any chat path.
 
     Returns ('offer', payload) when the ask has not been accepted yet,
@@ -1244,7 +1304,7 @@ def offer_or_charge(*, text, subject, kind, panel_confirm, username, user=None,
         span = 'one year' if int(years or 1) == 1 else f"{int(years)} years"
         reply, chips, off = offer(subj, label, text, kind=kind, frame=frame, years=years,
                                   staff=staff, dimension=dimension, verb=verb, series=series,
-                                  condition=condition, span=span, what=what)
+                                  condition=condition, span=span, what=what, work=work, service=service)
         return 'offer', {'success': True, 'action': 'answer', 'reply': reply,
                          'followups': chips, 'offer_deck': False, 'deck_angle': None,
                          'panel_offer': off, 'subject': subj}
@@ -1495,6 +1555,9 @@ def work_gate(text, history=None, ctx=None, user=None, body=None, username=None,
         extra['condition'] = str(_ask_cond(words) or '')
     except Exception:
         pass
+    if kind == 'adaptation':
+        work, service = adaptation_details(words)
+        extra = {'work': work, 'service': service}
     state, payload = offer_or_charge(text=words, subject=subject, kind=kind, panel_confirm=pc,
                                      username=uname, user=user, history=history, consume=consume,
                                      frame=str(hit.get('frame') or ''), **extra)

@@ -42,7 +42,9 @@ _CONSUME_RX = re.compile(r"\b(?:watch(?:ed|es|ing)?|view(?:ed|s|ing)?|read(?:s|i
 # The action verbs beyond consumption: saw, clicked, searched, visited,
 # posted, engaged, attended, signed up, subscribed, converted, ...
 _EVENT_RX = re.compile(
-    r"\bhow many (?:people|users|customers|individuals|folks|consumers|viewers|fans|accounts)\s+"
+    r"\bhow many (?:of (?:these|those|them|the|our|your) )?(?:(?:avid |casual |core |young |older |new |lapsed )?[\w&'.+-]+ ){0,3}"
+    r"(?:people|users|customers|individuals|folks|consumers|viewers|fans|accounts|readers|listeners|players|subscribers|members|buyers|shoppers)\s+"
+    r"(?:have |has |had |who |that |ever )?"
     r"(?:saw|see|seen|clicked|click(?:s|ed)?|searched|search(?:es|ed)?|visit(?:ed|s)?|post(?:ed|s)?|"
     r"engag(?:ed|es)|attend(?:ed|s)?|sign(?:ed)? up|subscrib(?:ed|es)?|convert(?:ed|s)?|open(?:ed|s)?|"
     r"shar(?:ed|es)?|lik(?:ed|es)?|follow(?:ed|s)?|comment(?:ed|s)?|went|came|left|return(?:ed|s)?|"
@@ -107,6 +109,28 @@ def strip_audience_nouns(phrase):
     return ' '.join(toks).strip(' ,.-')
 
 
+# "how many of these readers would tune in and sign up for Prime Video" (Jay
+# Patel, 2026-11-03, with the Ordeal readers open) is a question about the
+# people already on screen: what share of them would do a thing. It was read
+# as sizing a new audience called "sign up for Prime Video", quoted at $100,
+# and answered with the sign-up audience of the whole country. A "how many of
+# these / those / them" and a "would <act>" hypothetical are reads on the
+# audience, never an audience size.
+_OF_THESE_RX = re.compile(r"\bhow many of (?:these|those|them|the|our|your|his|her|its|that|this)\b", re.I)
+_WOULD_ACT_RX = re.compile(
+    r"\b(?:would|will|might|could)\b[^.?!]{0,40}\b(?:tune in|sign ?up|subscribe|watch|stream|convert|buy|pay|show up|"
+    r"come back|try|switch|follow|listen|read|play|attend|download|join|adopt)\b|"
+    r"\bif there (?:was|were)\b|\bif (?:it|they|we|you|someone|[A-Z][\w+&'.-]*) (?:made|make|launched|launch|released|release|"
+    r"adapted|adapt|greenlit|greenlight|produced|produce|put out|dropped|drop|did)\b", re.I)
+
+
+def is_audience_behavior_ask(text):
+    """True for a question about what the people on screen (or a named
+    group of them) would do or have done: never an audience size."""
+    t = ' '.join(str(text or '').split())
+    return bool(_OF_THESE_RX.search(t) or _WOULD_ACT_RX.search(t))
+
+
 def wants_sizing(text):
     """A question about how many people an audience holds."""
     t = ' '.join(str(text or '').split())
@@ -114,6 +138,8 @@ def wants_sizing(text):
         return False
     if not _SIZE_WORDS_RX.search(t) or _INSTRUCTION_RX.search(t) or _NOT_SIZING_RX.search(t):
         return False
+    if is_audience_behavior_ask(t):
+        return False   # "how many of these readers would sign up" is a read on the audience, not its size
     if _CONSUME_RX.search(t) and not re.search(r"\b(?:sample|incidence|data ?set)\b", t, re.I):
         return False   # "how many people watched X" is a viewership read
     if _EVENT_RX.search(t):
