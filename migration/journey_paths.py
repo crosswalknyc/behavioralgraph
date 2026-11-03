@@ -56,6 +56,9 @@ _BASE_NOUN = {'purchase': 'buyers', 'watch': 'viewers', 'ticketing': 'ticketing-
 _DEPTH_LABEL = {'purchase': 'ordered again', 'watch': 'finished', 'ticketing': 'came back to the site',
                 'signup': 'still subscribed', 'before_after': 'finished', 'discovery_existing': 'finished',
                 'music': 'finished'}
+# the end event in two or three words, for a KPI label and the walk's note
+_END_SHORT = {'purchase': 'the order', 'watch': 'the first watch', 'ticketing': 'the ticketing site', 'signup': 'the signup',
+              'before_after': 'the first watch', 'discovery_existing': 'the first watch', 'music': 'the first watch'}
 _END_WORDS = re.compile(r'\b(bought|paid|ordered|checked out|placed (?:the|an) order|purchase[ds]?|subscribed|'
                         r'signed up|watched|streamed|finished|played|went to the ticketing|reached the ticketing)\b', re.I)
 _WALL_WORDS = re.compile(r'\b(left|abandon|paywall|closed the app|gave up|did not)\b', re.I)
@@ -572,6 +575,7 @@ def normalize_pathways(raw: Any, payload: dict, inputs: Optional[dict] = None, s
         'base_label': noun[:1].upper() + noun[1:],
         'depth_label': _DEPTH_LABEL.get(fam, 'came back'),
         'end_label': str(spine[-1].get('label') or ''),
+        'end_short': _END_SHORT.get(fam, 'the end'),
         'covered': covered,
         'covered_pct': round(covered / base * 100.0, 4),
         'other': other,
@@ -850,6 +854,7 @@ def normalize_person(raw: Any, payload: dict, inputs: Optional[dict] = None, see
         'steps': steps,
         'key_step': key_idx + 1,
         'end_label': str(spine[-1].get('label') or ''),
+        'end_short': _END_SHORT.get(fam, 'the end'),
     }
     if spend is not None:
         out['spend_usd'] = spend
@@ -894,7 +899,7 @@ def attach_paths(payload: dict, claude_json: Optional[Callable] = None, inputs: 
         if not isinstance(blob, dict) or not _spine(payload):
             return payload
         if has_paths(payload) and not force:
-            return payload
+            return refresh_words(payload, inputs)
         subject = _subject(payload, inputs)
         seed = f"{subject}|{(payload.get('meta') or {}).get('start_date') or ''}|paths"
         raw = reason_paths(payload, claude_json, inputs, tools) if claude_json else {}
@@ -914,6 +919,34 @@ def attach_paths(payload: dict, claude_json: Optional[Callable] = None, inputs: 
     except Exception as exc:
         print(f'[journey] paths attach skipped: {exc}')
         return payload
+
+
+def refresh_words(payload: dict, inputs: Optional[dict] = None) -> dict:
+    """Labels a stored block may predate (section_label, end_short, depth
+    and base labels) without touching a number. In place; never raises."""
+    try:
+        fam = _family(payload, inputs)
+        blob = payload.get('fragrance_shop_journey') if isinstance(payload.get('fragrance_shop_journey'), dict) else {}
+        spine = _spine(payload)
+        for holder in (payload, blob):
+            p = holder.get('pathways') if isinstance(holder.get('pathways'), dict) else None
+            if p:
+                p.setdefault('end_short', _END_SHORT.get(fam, 'the end'))
+                p.setdefault('depth_label', _DEPTH_LABEL.get(fam, 'came back'))
+                if not p.get('base_label'):
+                    noun = _BASE_NOUN.get(fam, 'people')
+                    p['base_label'] = noun[:1].upper() + noun[1:]
+                if spine and not p.get('end_label'):
+                    p['end_label'] = str(spine[-1].get('label') or '')
+            w = holder.get('individual_journey') if isinstance(holder.get('individual_journey'), dict) else None
+            if w:
+                w.setdefault('end_short', _END_SHORT.get(fam, 'the end'))
+                w.setdefault('section_label', _SECTION_LABEL.get(fam, 'One viewer'))
+                if spine and not w.get('end_label'):
+                    w['end_label'] = str(spine[-1].get('label') or '')
+    except Exception as exc:
+        print(f'[journey] paths words refresh skipped: {exc}')
+    return payload
 
 
 def export_rows(payload: dict) -> dict:

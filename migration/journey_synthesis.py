@@ -1218,7 +1218,8 @@ def build_journey(inputs: dict, prim: dict, *,
         payload['the_read'] = prim['the_read']
         payload['fragrance_shop_journey']['the_read'] = prim['the_read']
     from migration.journey_clickstream import attach_clickstream
-    attach_clickstream(payload, prim, inputs)
+    # the dead-link check runs once, on the final attach in synthesize()
+    attach_clickstream(payload, prim, inputs, check_urls=False)
     return payload
 
 

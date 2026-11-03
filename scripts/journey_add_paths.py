@@ -162,10 +162,13 @@ def upgrade(payload: dict, claude_json, tools=None, force: bool = False, check_u
     had_paths = JP.has_paths(payload)
     if force or not had_paths:
         JP.attach_paths(payload, claude_json, inputs, tools=tools, force=True)
-        pw = payload.get('pathways') or {}
-        ij = payload.get('individual_journey') or {}
-        report['paths'] = f"{len(pw.get('sequences') or [])} paths covering {pw.get('covered_pct')}% of {pw.get('base_label', '').lower()}"
-        report['person'] = f"{ij.get('label')}: {len(ij.get('steps') or [])} steps, key step {ij.get('key_step')}"
+    else:
+        JP.refresh_words(payload, inputs)      # labels a stored block may predate; numbers untouched
+    pw = payload.get('pathways') or {}
+    ij = payload.get('individual_journey') or {}
+    verb = 'built' if (force or not had_paths) else 'kept'
+    report['paths'] = f"{verb}: {len(pw.get('sequences') or [])} paths covering {pw.get('covered_pct')}% of {pw.get('base_label', '').lower()}"
+    report['person'] = f"{verb}: {ij.get('label')}: {len(ij.get('steps') or [])} steps, key step {ij.get('key_step')}"
     JS.reconcile_payload(payload)
     JS.scrub_payload_text(payload)
     return report

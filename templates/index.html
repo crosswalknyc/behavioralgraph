@@ -125370,7 +125370,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var P = function(x) { return (Math.round((Number(x) || 0) * 10) / 10).toFixed(1) + '%'; };
             var baseLabel = String(p.base_label || 'people').toLowerCase();
             var depthLabel = String(p.depth_label || 'came back').toLowerCase();
-            var endLabel = String(p.end_label || 'the end').toLowerCase();
+            var endLabel = String(p.end_short || p.end_label || 'the end').toLowerCase();
             var words = ['Zero', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight'];
             var html = '<div class="jiq-frag-sec"><div class="jiq-frag-num">' + E(_jiqFragSecNum(n, 'Pathways')) + '</div>'
                 + '<h3>' + E((words[seq.length] || seq.length) + ' paths cover almost every ' + baseLabel.replace(/s$/, '') + '.') + '</h3>'
@@ -125432,7 +125432,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var E = _jiqFragEsc;
             var who = [dm.gender, dm.age, dm.location].filter(Boolean).join(', ');
             var secLabel = j.section_label || 'One viewer';
-            var endLabel = String(j.end_label || 'the end').toLowerCase();
+            var endLabel = String(j.end_short || j.end_label || 'the end').toLowerCase();
             var days = function(a, b) { return (typeof _jiqMusicDaysBetween === 'function') ? _jiqMusicDaysBetween(a, b) : null; };
             var gapOf = function(x) { return (typeof _jiqMusicGapLabel === 'function') ? _jiqMusicGapLabel(x) : ''; };
             var keyIdx = -1;
@@ -125465,8 +125465,13 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 }
                 var kind = last ? 'end' : (i === keyIdx ? 'watch' : '');
                 var ico = (typeof _jiqMusicSurfaceIconSm === 'function') ? _jiqMusicSurfaceIconSm(st.surface) : '';
+                var seenLab = {};
                 var links = (st.clips || []).slice(0, 2).map(function(c) {
-                    return c && c.url ? '<a href="' + E(c.url) + '" target="_blank" rel="noopener noreferrer">' + E(c.label || 'open') + '</a>' : '';
+                    if (!c || !c.url) return '';
+                    var lab = String(c.label || 'open');
+                    if (seenLab[lab.toLowerCase()]) lab = 'also';
+                    seenLab[lab.toLowerCase()] = 1;
+                    return '<a href="' + E(c.url) + '" target="_blank" rel="noopener noreferrer">' + E(lab) + '</a>';
                 }).filter(Boolean).join(' \u00b7 ');
                 chain += '<div class="jiq-path-chip is-person' + (kind ? ' is-' + kind : '') + '">'
                     + '<span class="jiq-path-chip-s">' + ico + E(st.surface || '') + '</span>'

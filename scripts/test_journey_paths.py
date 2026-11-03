@@ -287,6 +287,44 @@ class Wiring(unittest.TestCase):
         self.assertEqual(len(pi['spine']), 4)
         self.assertEqual(pi['window'], {'start': '2025-10-01', 'end': '2026-10-20'})
 
+    def test_a_fresh_build_carries_all_three_blocks(self):
+        os.environ['JOURNEY_CORPUS_ANCHORS'] = '0'
+        os.environ['JOURNEY_NORMS'] = '0'
+        prim = {
+            'customer_brand': 'Ghost', 'product': 'Ghost Energy Drink', 'category': 'Energy drinks', 'title_status': 'catalog',
+            'audience_age_skew': 'younger', 'post_type': 'mixed', 'following': 'mainstream', 'facts': [{'label': 'Window', 'value': 'x'}],
+            'nest': [
+                {'id': 'saw', 'label': 'Saw Ghost Energy content in feed', 'doing': 'Scrolled past a clip', 'where': 'TikTok, Instagram, YouTube', 'share_of_tam_pct': 7.2},
+                {'id': 'engaged', 'label': 'Engaged with the post', 'doing': 'Tapped it', 'where': 'Same platforms', 'kept_of_prior_pct': 4.3},
+                {'id': 'searched', 'label': 'Looked Ghost up by name', 'doing': 'Typed Ghost', 'where': 'Google, Amazon, Walmart', 'kept_of_prior_pct': 33.8},
+                {'id': 'cart', 'label': 'Added Ghost to an online cart', 'doing': 'Carted it', 'where': 'Amazon, Walmart, Instacart', 'kept_of_prior_pct': 28.3},
+                {'id': 'paid', 'label': 'Paid for Ghost in an online grocery order', 'doing': 'Checked out', 'where': 'Amazon, Walmart, ghostlifestyle.com', 'kept_of_prior_pct': 56.4},
+            ],
+            'fork': {'enabled': True, 'abandoned_of_stage_pct': 44.7, 'retargeted_of_abandoned_pct': 54.2, 'returned_of_retargeted_pct': 26.4,
+                     'paid_return_of_returned_pct': 17.7, 'surfaces': {}, 'timings': {}},
+            'detours': [{'title': 'First Ghost content they saw', 'kind': 'partition', 'of': 'stage:saw',
+                         'rows': [{'label': 'Flavor clip', 'pct': 61.3, 'doing': ''}, {'label': 'Collab post', 'pct': 38.7, 'doing': ''}]}],
+            'anchors_note': '', 'cover_title': 'Ghost Energy Drink',
+        }
+        calls = []
+
+        def fake(system, user, **kw):
+            calls.append(kw.get('surface'))
+            return prim if kw.get('surface') in ('journey_synthesis', 'journey_synthesis_retry') else {}
+        inputs = {'subject': 'Ghost Energy Drink', 'platform': 'online grocery', 'journey_kind': 'purchase', 'start_date': '2025-10-16', 'end_date': '2026-10-16'}
+        p = JS.synthesize(inputs, fake, tools=None, created_by='test')
+        b = p['fragrance_shop_journey']
+        self.assertIn('journey_paths', calls)
+        self.assertEqual((b['clickstream'] or {}).get('family'), 'retail')
+        self.assertTrue(JP.MIN_PATHS <= len(b['pathways']['sequences']) <= JP.MAX_PATHS)
+        self.assertTrue(JP.MIN_WALK <= len(b['individual_journey']['steps']) <= JP.MAX_WALK)
+        self.assertEqual(b['individual_journey']['section_label'], 'One shopper')
+        self.assertEqual(b['pathways']['end_short'], 'the order')
+        self.assertEqual(p['pathways'], b['pathways'])
+        end = b['spine'][-1]['accounts']
+        self.assertEqual(b['pathways']['base'], end)
+        self.assertIn(end, [s['people'] for s in b['clickstream']['steps']])   # a spine step keeps its count on the clickstream
+
     def test_no_method_words_reach_the_reader(self):
         p = _soda()
         JC.attach_clickstream(p, {}, {}, check_urls=False)
