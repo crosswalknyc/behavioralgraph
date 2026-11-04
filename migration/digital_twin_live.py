@@ -52,7 +52,12 @@ LIVE_SYSTEM = (
     "setting: two or three words. shift: true when this is a different scene from the last caption.\n"
     "dial: a 0 to 100 enjoyment reading for EVERY seat listed, moved from each seat's current reading by what this moment would do "
     "to that specific person given who they are. Small moves for ordinary moments (1 to 4 points), bigger for a laugh, a reveal, a "
-    "dull stretch or a confusing one (5 to 12). Never the same number for everyone.\n"
+    "dull stretch or a confusing one (5 to 12). Never the same number for everyone. The seats are different people in named "
+    "cohorts and the same moment does different things to them: a quip lands with one cohort and bores another, a tender beat "
+    "lifts one and loses another, a fight scene pulls some in and sends others to their phones. On an ordinary frame the moves "
+    "must not all point the same way; expect a third of the room to hold or move against the rest, and the cohorts to pull "
+    "apart. Only a moment the whole room shares (a big laugh, a reveal, a death) moves everyone together. A seat that has been "
+    "drifting keeps drifting until something on screen is for them.\n"
     "reactions: 0 to 3 seats who visibly reacted to THIS moment, type one of love, laugh, lean-in, confuse, check-out, wow, and a "
     "line of 90 characters max in that person's first-person voice about what they just saw. Most frames earn 0 or 1 reaction; "
     "a quiet frame earns none. Never invent what is not in the frame.\n"
@@ -160,6 +165,78 @@ def _fake_read(sess: dict, roster: list, t: float, dials: dict) -> dict:
             'dial': out_dial, 'reactions': reactions}
 
 
+def _unit(*parts) -> float:
+    """A salted uniform in [0, 1)."""
+    h = hashlib.sha256('|'.join(str(x) for x in parts).encode('utf-8')).hexdigest()
+    return int(h[:12], 16) / float(16 ** 12)
+
+
+def _seat_fit(twin: dict, seat: dict, tone: str, joke: bool, session_seed: str) -> float:
+    """Where this seat's own habits put this moment: the pilot's tone fit
+    (age, gender, orientation, lifecycle, the twin's traits) on the frame's
+    tone. 0 when the fit cannot be read."""
+    try:
+        from migration.digital_twin_pilot import _card_for, _tone_fit
+        card = _card_for(twin or {}, seat, session_seed)
+        return float(_tone_fit(card, {'tone': tone or '', 'joke': bool(joke), 'act': '', 'cue': ''}, twin or {}))
+    except Exception:
+        return 0.0
+
+
+HERD_SHARE = 0.8          # this share of the room moving one way on an ordinary frame is the room, not the people
+HERD_KEEP = 0.45          # how much of that shared move survives
+FIT_GAIN = 0.55           # points per frame per point of (centered) tone fit
+FIT_CAP = 4.5
+DRIFT_GAIN = 0.35         # a seat the last frames did nothing for keeps sliding
+
+
+def shape_moves(sess: dict, twin: dict, roster: list, rec: dict, before: dict, wanted: dict) -> dict:
+    """Each seat's reading after the model's read, shaped by who the seat
+    is (Jenna 2026-11-03: the cohort lines all ebbed and flowed together
+    at different levels; a cohort has to rise where its people lean in
+    and fall where they drift, not ride the room).
+
+    The model's move per seat is kept. When it herds (most of the room
+    moving one way on an ordinary frame) the shared part is damped and
+    each seat's own part kept. Then every seat moves by its own fit to
+    this moment's tone, centered across the room so the room's level is
+    still the model's, plus a slow drift for a seat the last frames did
+    nothing for, plus a small salted walk. Returns {seat: value}."""
+    if not roster:
+        return dict(wanted)
+    tone = str((rec or {}).get('tone') or '')
+    joke = bool((rec or {}).get('joke'))
+    shared = bool(joke or tone == 'wow' or (rec or {}).get('shift'))
+    seed = f"{sess.get('id')}|{(rec or {}).get('t')}"
+    snos = [str(r.get('seat')) for r in roster]
+    moves = {s: float(wanted.get(s, before.get(s, DEFAULT_DIAL))) - float(before.get(s, DEFAULT_DIAL)) for s in snos}
+    n = len(snos)
+    ups = sum(1 for s in snos if moves[s] > 0.4)
+    downs = sum(1 for s in snos if moves[s] < -0.4)
+    if n >= 4 and not shared and max(ups, downs) >= HERD_SHARE * n:
+        common = sum(moves.values()) / float(n)
+        for s in snos:
+            moves[s] = common * HERD_KEEP + (moves[s] - common)
+    fits = {}
+    for r in roster:
+        fits[str(r.get('seat'))] = _seat_fit(twin, r, tone, joke, str(sess.get('id') or ''))
+    mean_fit = sum(fits.values()) / float(n)
+    live = sess.get('live') or {}
+    out = {}
+    for r in roster:
+        s = str(r.get('seat'))
+        dev = max(-FIT_CAP, min(FIT_CAP, (fits[s] - mean_fit) * FIT_GAIN))
+        # the drift: the last three readings for this seat all fell or held while the fit stays under the room's
+        pts = (live.get('seat_dials') or {}).get(s) or []
+        drift = 0.0
+        if len(pts) >= 3 and fits[s] < mean_fit and all(float(pts[i][1]) <= float(pts[i - 1][1]) + 0.2 for i in range(len(pts) - 2, len(pts))):
+            drift = -DRIFT_GAIN * (1.0 + _unit(seed, s, 'drift'))
+        walk = (_unit(seed, s, 'walk') - 0.5) * 1.6
+        v = float(before.get(s, DEFAULT_DIAL)) + moves[s] + dev + drift + walk
+        out[s] = round(max(0.0, min(100.0, v)), 2)
+    return out
+
+
 def frame(sess: dict, twin: dict, t: float, image_b64: str, *, usage_extras: Optional[dict] = None, media_type: str = 'image/jpeg') -> dict:
     """One sampled frame at clock ``t``. Reads it, moves the seats, and
     returns what changed so the page can paint without a reload:
@@ -185,7 +262,7 @@ def frame(sess: dict, twin: dict, t: float, image_b64: str, *, usage_extras: Opt
     dials = _current_dials(sess, roster)
     meta = sess.get('media') or {}
     recent = frames[-4:]
-    seats_txt = '\n'.join(f"seat {r.get('seat')}: {r.get('name')}, {r.get('age')}, {r.get('city')}; now at {dials.get(str(r.get('seat')), DEFAULT_DIAL):.0f}. {_seat_line(r)}" for r in roster)
+    seats_txt = '\n'.join(f"seat {r.get('seat')}: {r.get('name')}, {r.get('age')}, {r.get('city')}" + (f", cohort: {r.get('segment')}" if r.get('segment') else '') + f"; now at {dials.get(str(r.get('seat')), DEFAULT_DIAL):.0f}. {_seat_line(r)}" for r in roster)
     # the cast on screen, by face (digital_twin_cast): prepared once per test, read on every frame
     cast_hits, cast_note = [], ''
     try:
@@ -229,13 +306,18 @@ def frame(sess: dict, twin: dict, t: float, image_b64: str, *, usage_extras: Opt
         cohorts = cohort_labels(roster)
     except Exception:
         cohorts, cohort_key = [], None
+    wanted = {}
     for r in roster:
         sno = str(r.get('seat'))
         try:
             v = float(given.get(sno, given.get(int(sno) if sno.isdigit() else sno, dials.get(sno, DEFAULT_DIAL))))
         except (TypeError, ValueError):
             v = dials.get(sno, DEFAULT_DIAL)
-        v = max(0.0, min(100.0, v))
+        wanted[sno] = max(0.0, min(100.0, v))
+    shaped = shape_moves(sess, twin, roster, rec, dials, wanted)
+    for r in roster:
+        sno = str(r.get('seat'))
+        v = shaped.get(sno, wanted.get(sno, dials.get(sno, DEFAULT_DIAL)))
         seat_dials.setdefault(sno, []).append([round(t, 2), round(v, 2)])
         vals.append(v)
         g = str(r.get('gender') or '').upper()[:1]

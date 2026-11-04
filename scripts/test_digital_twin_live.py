@@ -92,6 +92,51 @@ class LiveWatch(unittest.TestCase):
             self.assertTrue(ev.get('live'))
         self.assertIsNone(sess['scorecard'])
 
+    def test_seats_take_their_own_shape(self):
+        # Jenna 2026-11-03: the cohort lines all ebbed and flowed together at different levels. A model read that
+        # herds the room (+3 for everyone) on an ordinary frame comes out with the cohorts pulling apart; a tender
+        # beat moves the women and the men differently; a shared moment (a joke) keeps the room moving together.
+        tw, sess = _session()
+        LIVE.seat_live(sess, {'jb': tw})
+        LIVE.start_live(sess)
+        PI.mark_playing(sess)
+        roster = sess['group']['roster']
+        for i, r in enumerate(roster):   # two cohorts, by gender, so the split lines exist
+            r['segment'] = 'Women' if str(r.get('gender') or 'F').upper().startswith('F') else 'Men'
+        before = {str(r['seat']): 55.0 for r in roster}
+        herd = {str(r['seat']): 58.0 for r in roster}
+        quiet = LIVE.shape_moves(sess, tw, roster, {'t': 12.0, 'tone': 'quiet', 'joke': False, 'shift': False}, before, herd)
+        moves = [quiet[str(r['seat'])] - 55.0 for r in roster]
+        self.assertEqual(len(set(round(m, 2) for m in moves)), len(moves), 'no two seats move alike')
+        self.assertTrue(min(moves) < 0.6 or (max(moves) - min(moves)) > 3.0, f'the room is no longer a herd: {moves}')
+        self.assertLess(abs(sum(moves) / len(moves) - 3.0 * LIVE.HERD_KEEP), 2.0, 'the room level still follows the read, damped')
+        tender = LIVE.shape_moves(sess, tw, roster, {'t': 24.0, 'tone': 'tender', 'joke': False, 'shift': False}, before, herd)
+        w = [tender[str(r['seat'])] - 55.0 for r in roster if r['segment'] == 'Women']
+        m = [tender[str(r['seat'])] - 55.0 for r in roster if r['segment'] == 'Men']
+        if w and m:
+            self.assertGreater(sum(w) / len(w), sum(m) / len(m) + 1.0, 'a tender beat lifts the women past the men')
+        action = LIVE.shape_moves(sess, tw, roster, {'t': 36.0, 'tone': 'action', 'joke': False, 'shift': False}, before, herd)
+        w2 = [action[str(r['seat'])] - 55.0 for r in roster if r['segment'] == 'Women']
+        m2 = [action[str(r['seat'])] - 55.0 for r in roster if r['segment'] == 'Men']
+        if w2 and m2:
+            self.assertGreater(sum(m2) / len(m2), sum(w2) / len(w2), 'an action beat pulls the men past the women')
+        joke = LIVE.shape_moves(sess, tw, roster, {'t': 48.0, 'tone': 'funny', 'joke': True, 'shift': False}, before, herd)
+        jm = [joke[str(r['seat'])] - 55.0 for r in roster]
+        self.assertGreater(sum(jm) / len(jm), 2.2, 'a shared laugh still moves the whole room up')
+        # through frame(): the cohort split lines diverge in shape over a run, not only in level
+        img = _png_data_url()
+        for t in range(12, 12 * 9, 12):
+            LIVE.frame(sess, tw, float(t), img)
+        sp = sess['dial']['splits']
+        if 'cohort_women' in sp and 'cohort_men' in sp:
+            a, b = sp['cohort_women']['value'], sp['cohort_men']['value']
+            da = [a[i] - a[i - 1] for i in range(1, len(a))]
+            db = [b[i] - b[i - 1] for i in range(1, len(b))]
+            same = sum(1 for x, y in zip(da, db) if (x > 0) == (y > 0))
+            self.assertLess(same, len(da), 'the two cohort lines do not rise and fall in lockstep')
+        for r in roster:
+            r.pop('segment', None)
+
     def test_bad_frames_are_refused(self):
         tw, sess = _session()
         LIVE.seat_live(sess, {'jb': tw})
