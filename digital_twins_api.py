@@ -1142,20 +1142,14 @@ def dt_pilot_open(key):
     else:
         media = {}
         if body.get('cut_title') or body.get('runtime_s') or body.get('runtime'):
-            try:
-                runtime = float(body.get('runtime_s') or body.get('runtime') or 0)
-            except (TypeError, ValueError):
-                runtime = 0
+            runtime = _runtime_seconds(body.get('runtime_s') or body.get('runtime'))
             media = {'title': str(body.get('cut_title') or title or '')[:160], 'runtime_s': runtime, 'source': 'slate'}
         sess = PI.open_session(twins, segments=segments, in_room=in_room, title=title, created_by=_uname(user),
                                session_id=uuid.uuid4().hex[:10], media=media, mode=mode, logline=str(body.get('logline') or ''), text=str(body.get('text') or ''),
                                options=body.get('options') if isinstance(body.get('options'), list) else None, rough_cut=bool(body.get('rough_cut')),
                                critics_room=bool(body.get('critics_room')))
         if watch_url:
-            try:
-                runtime = float(body.get('runtime_s') or body.get('runtime') or (media.get('runtime_s') if media else 0) or 0)
-            except (TypeError, ValueError):
-                runtime = 0
+            runtime = _runtime_seconds(body.get('runtime_s') or body.get('runtime') or (media.get('runtime_s') if media else 0))
             PI.apply_watch_url(sess, watch_url, hint_title=str(body.get('cut_title') or title or ''), runtime_s=runtime, mode=mode)
         sess['twin_keys'] = [str((t.get('meta') or {}).get('key') or '') for t in twins]
         if isinstance(body.get('cast'), list):
@@ -1223,9 +1217,51 @@ def dt_pilot_get(key, sid):
             dirty = True
     except Exception:
         traceback.print_exc()
+    if _auto_stop(key, payload, sess, user):   # the runtime ran out while nobody was here to press Stop (2026-11-03)
+        return _nocache(jsonify({'success': True, 'session': PI.public_session(sess), 'auto_stopped': True}))
     if dirty:
         DT.save_twin(_s3(), key, payload)
     return _nocache(jsonify({'success': True, 'session': PI.public_session(sess)}))
+
+
+def _runtime_seconds(v) -> float:
+    """Seconds from a number of seconds or a typed '42:35' (2026-11-03)."""
+    if v in (None, ''):
+        return 0.0
+    try:
+        return max(0.0, float(v))
+    except (TypeError, ValueError):
+        pass
+    from migration import digital_twin_pilot as PI
+    return PI.parse_runtime(v)
+
+
+def _auto_stop(key, payload, sess, user) -> bool:
+    """Stop a playing test whose runtime has run out, exactly as the Stop
+    route would (a live room finishes in the background), and save. True
+    when it stopped here."""
+    from migration import digital_twin_pilot as PI
+    try:
+        if not PI.auto_stop_due(sess):
+            return False
+        from migration import digital_twin_live as LIVE
+        sess['auto_stopped_at'] = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
+        live = sess.get('live') if isinstance(sess.get('live'), dict) else {}
+        if LIVE.is_live(sess) and live.get('frames') and not live.get('finished_at') and not live.get('finishing_at'):
+            LIVE.finish_in_background(sess, _twins_for(payload, key, sess), key=key, payload=payload,
+                                      save=lambda k, p: DT.save_twin(_s3(), k, p), usage_extras=_usage_extras(user), s3=_s3())
+            DT.save_twin(_s3(), key, payload)
+            return True
+        PI.stop_session(sess)
+        if sess.get('scorecard'):
+            PI.record_norms(sess, s3=_s3())
+        if sess.get('purge_media_after') and (sess.get('media') or {}).get('s3_key'):
+            PI.purge_media(_s3(), sess, reason='done')
+        DT.save_twin(_s3(), key, payload)
+        return True
+    except Exception:
+        traceback.print_exc()
+        return False
 
 
 @bp.route(f'{PREFIX}/<path:key>/pilot/<sid>', methods=['PATCH'])

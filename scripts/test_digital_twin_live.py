@@ -189,6 +189,30 @@ class LiveWatch(unittest.TestCase):
         for r in roster:
             r.pop('segment', None)
 
+    def test_the_test_stops_on_its_own_when_the_runtime_runs_out(self):
+        # Jenna 2026-11-03: 'if they put in 42:35 it would stop automatically at 42 minutes and 35 seconds'
+        import time as _time
+        self.assertEqual(PI.parse_runtime('42:35'), 42 * 60 + 35)
+        self.assertEqual(PI.parse_runtime('1:02:10'), 3600 + 120 + 10)
+        self.assertEqual(PI.parse_runtime('42'), 2520.0)
+        self.assertEqual(PI.parse_runtime('42.5'), 2550.0)
+        self.assertEqual(PI.parse_runtime(''), 0.0)
+        self.assertEqual(PI.parse_runtime('abc'), 0.0)
+        tw, sess = _session()
+        sess['media']['runtime_s'] = 42 * 60 + 35
+        LIVE.seat_live(sess, {'jb': tw})
+        LIVE.start_live(sess)
+        PI.mark_playing(sess)
+        self.assertTrue(sess.get('play_started_at'))
+        now = _time.time()
+        self.assertFalse(PI.auto_stop_due(sess, now=now + 60), 'a minute in, the test runs')
+        self.assertFalse(PI.auto_stop_due(sess, now=now + 42 * 60 + 35 + 10), 'at the runtime the page stops it; the server waits out the grace')
+        self.assertTrue(PI.auto_stop_due(sess, now=now + 42 * 60 + 35 + PI.AUTO_STOP_GRACE_S + 5), 'past the grace the server stops it')
+        sess['status'] = 'stopped'
+        self.assertFalse(PI.auto_stop_due(sess, now=now + 10_000), 'a stopped test is never stopped again')
+        sess['status'] = 'playing'; sess['media']['runtime_s'] = 0
+        self.assertFalse(PI.auto_stop_due(sess, now=now + 10_000), 'no runtime, no auto-stop')
+
     def test_bad_frames_are_refused(self):
         tw, sess = _session()
         LIVE.seat_live(sess, {'jb': tw})

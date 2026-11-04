@@ -54020,6 +54020,22 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 ensureWatermark(s);
                 return true;
             }
+            function piPlannedRuntime(s) {
+                var m = (s || {}).media || {};
+                var v = Number(m.runtime_planned_s != null ? m.runtime_planned_s : (m.runtime_s || 0));
+                return isFinite(v) && v > 0 ? v : 0;
+            }
+            function piParseRuntime(text) {
+                // '42:35' is 42 minutes 35 seconds; '1:02:10' has hours; '42' or '42.5' is minutes
+                var t = String(text || '').trim(); if (!t) return 0;
+                if (t.indexOf(':') >= 0) {
+                    var parts = t.split(':').map(function(x) { return parseFloat(x || '0') || 0; });
+                    if (parts.length === 2) return Math.max(0, parts[0] * 60 + parts[1]);
+                    if (parts.length === 3) return Math.max(0, parts[0] * 3600 + parts[1] * 60 + parts[2]);
+                    return 0;
+                }
+                var mins = parseFloat(t); return isFinite(mins) && mins > 0 ? mins * 60 : 0;
+            }
             function startLiveClock() {
                 var L = S.pilotLive; if (!L) return;
                 stopPilotClock(); S.pilotClock.slate = false;
@@ -54028,6 +54044,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 (function tick() {
                     if (!S.pilotLive || !S.pilotLive.running) return;
                     var t = (Date.now() - S.pilotLive.t0) / 1000;
+                    var planned = piPlannedRuntime(S.pilot);
+                    if (planned > 0 && t >= planned && S.pilot && S.pilot.status === 'playing' && S.pilotAutoStopped !== S.pilot.id) {
+                        // the runtime ran out: the room is scored without anyone pressing Stop (Jenna 2026-11-03)
+                        S.pilotAutoStopped = S.pilot.id;
+                        revealPilot(planned);
+                        try { dtwPilotStop(true); } catch (_) {}
+                        return;
+                    }
                     revealPilot(t);
                     maybeSendLiveFrame(t);
                     S.pilotClock.raf = requestAnimationFrame(tick);
@@ -54077,7 +54101,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (d.caption) { var sc = s.scenes = s.scenes || []; if (sc.length) sc[sc.length - 1].t_end = Number(d.t); sc.push({ id: sc.length, t_start: Number(d.t), t_end: Number(d.t) + 12, caption: d.caption }); }
                 s.watch = s.watch || {}; s.watch.source = 'live';
                 s.live = s.live || { on: true }; s.live.frames = s.live.frames || []; s.live.frames.push({ t: Number(d.t), caption: d.caption || '' });
-                s.media = s.media || {}; if (Number(d.t) > Number(s.media.runtime_s || 0)) s.media.runtime_s = Math.max(Number(s.media.runtime_s || 0), Number(d.t) + 60);
+                s.media = s.media || {};
+                if (Number(d.t) > Number(s.media.runtime_s || 0)) {
+                    // the dial keeps drawing past a planned runtime, but the planned runtime is what the auto-stop reads
+                    if (s.media.runtime_planned_s == null && Number(s.media.runtime_s || 0) > 0) s.media.runtime_planned_s = Number(s.media.runtime_s);
+                    s.media.runtime_s = Math.max(Number(s.media.runtime_s || 0), Number(d.t) + 60);
+                }
             }
             window.dtwPilotMirror = async function() {
                 var s = S.pilot; if (!s || !S.key) return;
@@ -54399,7 +54428,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     stim = '<label class="dtw-field">The cut (mp4, mov or webm)</label><input id="dtwPiFile" class="dtw-in" type="file" accept="video/mp4,video/quicktime,video/webm,.mp4,.mov,.webm">'
                         + (mode === 'binge' ? '<label class="dtw-field">More episodes (up to six in all)</label><input id="dtwPiFiles" class="dtw-in" type="file" multiple accept="video/mp4,video/quicktime,video/webm,.mp4,.mov,.webm">' : '')
                         + '<label class="dtw-field">Or paste a watch link (any streamer)</label><input id="dtwPiWatchUrl" class="dtw-in" placeholder="https://www.paramountplus.com/shows/video/... or Netflix, Hulu, YouTube, a file link" autocomplete="off">'
-                        + '<div class="dtw-row2"><div><label class="dtw-field">Title if you do not have the file yet</label><input id="dtwPiCutTitle" class="dtw-in" placeholder="NCIS: New York, episode 1"></div><div><label class="dtw-field">Runtime, minutes</label><input id="dtwPiMins" class="dtw-in" inputmode="decimal" placeholder="42"></div></div>'
+                        + '<div class="dtw-row2"><div><label class="dtw-field">Title if you do not have the file yet</label><input id="dtwPiCutTitle" class="dtw-in" placeholder="NCIS: New York, episode 1"></div><div><label class="dtw-field">Runtime (42:35 or minutes)</label><input id="dtwPiMins" class="dtw-in" inputmode="decimal" placeholder="42:35" title="The test stops on its own when the clock reaches this."></div></div>'
                         + (mode === 'episode' ? '<label class="dtw-field">The prior cut the room watched</label><select id="dtwPiPrior" class="dtw-in"><option value="">None</option>' + ((S.twin || {}).pilot_sessions || []).filter(function(s) { return s.scorecard; }).map(function(s) { return '<option value="' + esc(s.id) + '">' + esc(s.title) + '</option>'; }).join('') + '</select>' : '')
                         + '<label class="dtw-field">Cast (optional, one name per line or comma separated)</label><input id="dtwPiCast" class="dtw-in" placeholder="LL Cool J, Scott Caan, Jennifer Beals as Lena">'
                         + '<div class="dtw-pi-fn" style="margin-top:4px">The room recognizes the cast on screen and names them in what it says. Add the character after the name to hear that name too.</div>';
@@ -55093,7 +55122,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var topbar = '<div class="dtw-pi-topbar"><div class="meta">' + metaBits.map(function(b) { return '<span>' + b + '</span>'; }).join('') + '</div></div>';
                 var live = isLiveSess(s) && (watchMedia(s) || {}).kind !== 'video', platform = (s.media || {}).platform_label || 'the service';
                 var hint = preparing ? (live && liveFinished(s) === false && (s.live || {}).frames && (s.live || {}).frames.length ? 'The room is scoring what it watched.' : 'The room is watching the cut.')
-                    : (live ? (s.status === 'playing' ? ('Open the episode on ' + platform + ', press play there, then mirror it here. The room reacts to what is on screen.') : (s.status === 'stopped' ? 'Stopped.' : 'Press Play to seat the room. Then open the episode on ' + platform + ' and mirror it here.'))
+                    : (live ? (s.status === 'playing' ? ('Open the episode on ' + platform + ', press play there, then mirror it here. The room reacts to what is on screen.' + (piPlannedRuntime(s) ? ' It stops on its own at ' + clockFmt(piPlannedRuntime(s)) + '.' : '')) : (s.status === 'stopped' ? 'Stopped.' : 'Press Play to seat the room. Then open the episode on ' + platform + ' and mirror it here.' + (piPlannedRuntime(s) ? ' It stops on its own at ' + clockFmt(piPlannedRuntime(s)) + '.' : '')))
                     : (watchMedia(s) ? ('Press Play. The room watches with you' + ((s.media || {}).platform_label ? ' on ' + (s.media || {}).platform_label : '') + '.') : 'The room is seated. Press Play when you are ready.'));
                 var slateBtns = (watchMedia(s) && (s.media || {}).url ? '<a class="dtw-btn dtw-pi-open" href="' + esc((s.media || {}).url) + '" target="_blank" rel="noopener">' + esc((s.media || {}).open_label || 'Open the episode') + '</a>' : '')
                     + (live && s.status === 'playing' ? '<button type="button" class="dtw-btn dtw-btn-primary dtw-pi-open" onclick="dtwPilotMirror()">Mirror it here</button>' : '');
@@ -55569,7 +55598,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var title = ((el('dtwPiTitle') || {}).value || '').replace(/\s+/g, ' ').trim();
                 if (!title) { if (st) st.textContent = 'Name the test first.'; var tn = el('dtwPiTitle'); if (tn) { try { tn.focus(); } catch (_) {} } return; }
                 var other = (el('dtwPiTwin2') || {}).value;
-                var mins = parseFloat((el('dtwPiMins') || {}).value || '0') || 0;
+                var mins = piParseRuntime((el('dtwPiMins') || {}).value || '') / 60;   // '42:35' or '42'
                 var secs = parseFloat((el('dtwPiSecs') || {}).value || '0') || 0;
                 var cutTitle = ((el('dtwPiCutTitle') || {}).value || '').trim();
                 var logline = ((el('dtwPiLogline') || {}).value || '').trim();
@@ -55683,8 +55712,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     (function tick() {
                         if (!S.pilotClock.slate) return;
                         var t = (Date.now() - S.pilotClock.t0) / 1000;
-                        var dur = Number((S.pilot.media || {}).runtime_s || 60);
-                        if (t >= dur) { t = dur; S.pilotClock.slate = false; revealPilot(t); try { dtwPilotStop(true); } catch (_) {} return; }
+                        var dur = piPlannedRuntime(S.pilot) || Number((S.pilot.media || {}).runtime_s || 60);
+                        if (t >= dur) { t = dur; S.pilotClock.slate = false; S.pilotAutoStopped = S.pilot.id; revealPilot(t); try { dtwPilotStop(true); } catch (_) {} return; }
                         revealPilot(t);
                         var sl = el('dtwPiSlateClock'); if (sl) sl.textContent = clockFmt(t);
                         S.pilotClock.raf = requestAnimationFrame(tick);

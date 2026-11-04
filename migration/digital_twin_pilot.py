@@ -1892,8 +1892,57 @@ def mark_paid(sess: dict, included: int = QUESTIONS_INCLUDED) -> int:
 def mark_playing(sess: dict) -> dict:
     if sess.get('status') in ('ready', 'stopped', 'draft'):
         sess['status'] = 'playing'
+        sess['play_started_at'] = _now()   # the clock the auto-stop reads when nobody is left to press Stop (2026-11-03)
+        sess.pop('auto_stopped_at', None)
     sess['updated_at'] = _now()
     return sess
+
+
+AUTO_STOP_GRACE_S = 90.0
+
+
+def parse_runtime(text) -> float:
+    """Seconds from what a moderator types: '42:35' (minutes and seconds),
+    '1:02:10' (hours), '42.5' or '42' (minutes). 0 when unreadable."""
+    t = str(text if text is not None else '').strip()
+    if not t:
+        return 0.0
+    if ':' in t:
+        parts = [p.strip() for p in t.split(':')]
+        try:
+            nums = [float(p or 0) for p in parts]
+        except ValueError:
+            return 0.0
+        if len(nums) == 2:
+            return max(0.0, nums[0] * 60 + nums[1])
+        if len(nums) == 3:
+            return max(0.0, nums[0] * 3600 + nums[1] * 60 + nums[2])
+        return 0.0
+    try:
+        return max(0.0, float(t) * 60.0)
+    except ValueError:
+        return 0.0
+
+
+def auto_stop_due(sess: dict, now: Optional[float] = None) -> bool:
+    """A playing test whose runtime has run out (plus a short grace) stops
+    on its own (Jenna 2026-11-03: 'if they put in 42:35 it would stop
+    automatically at 42 minutes and 35 seconds', so the moderator can
+    leave). Read on every poll and load of the test."""
+    if str((sess or {}).get('status') or '') != 'playing':
+        return False
+    try:
+        dur = float(((sess or {}).get('media') or {}).get('runtime_s') or 0)
+    except (TypeError, ValueError):
+        dur = 0.0
+    started = str(sess.get('play_started_at') or '')
+    if dur <= 0 or not started:
+        return False
+    try:
+        t0 = time.mktime(time.strptime(started, '%Y-%m-%dT%H:%M:%SZ')) - time.timezone
+    except Exception:
+        return False
+    return (now if now is not None else time.time()) >= t0 + dur + AUTO_STOP_GRACE_S
 
 
 def stop_session(sess: dict) -> dict:
@@ -2490,6 +2539,7 @@ __all__ = [
     'stamp_question', 'can_delete', 'can_view_media', 'remove_session', 'delete_session', 'purge_media',
     'deleted_pilot_key', 'media_hash', 'build_beats', 'build_scenes', 'build_beats_from_scenes', 'seat_dial', 'blend_dial', 'seat_events', 'persona_events',
     'aggregate_dial', 'split_dial', 'split_specs', 'all_splits', 'cohort_labels', 'cohort_key', 'cohort_segments', 'restore_session', 'MAX_COHORTS', 'quadrant_of', 'scorecard', 'battery_scorecard', 'norms_for', 'norm_metrics', 'record_norms',
+    'auto_stop_due', 'parse_runtime', 'AUTO_STOP_GRACE_S',
     'attach_norms', 'probe_points', 'fallback_guide', 'question_window', 'seat_window', 'ask_stimulus', 'format_for', 'norms_genre',
     'session_csv', 'session_lines', 'public_session', 'signed_media_url',
     'media_s3_key', 'accept_upload_name', 'ffmpeg_available', 'probe_duration',
