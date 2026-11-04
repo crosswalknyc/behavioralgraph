@@ -674,6 +674,22 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "the user's own words as the subject, set `identity_confident` "
         "to false, and list the top candidates in `identity_versions` "
         "(each with medium 'person') so the flow can ask.\n"
+        "  * SHORT NAMES AND STAGE NAMES (HARD RULE - 2026-11-04): a "
+        "one-word name or stage name (EJAE, Ado, Zoomaa, Cloakzy) can "
+        "belong to more than one public figure. Resolve it to the "
+        "person with the LARGER CURRENT DIGITAL FOOTPRINT (streams, "
+        "followers, recent search interest, recent press), name that "
+        "person in `identity_note` in one plain line from verified "
+        "facts ('EJAE, the singer behind Golden from KPop Demon "
+        "Hunters'), and list the other figures in `identity_versions` "
+        "(medium 'person') while keeping `identity_confident` true. "
+        "Never invent credits, collaborations, awards, labels or "
+        "releases for a name you cannot place; write the identity from "
+        "what you know for certain, and when you know nothing certain, "
+        "say so in `identity_note` instead of composing a biography. "
+        "The failure this rule exists to prevent: 'EJAE' drafted as a "
+        "US R&B songwriter with Beyonce credits when the name means "
+        "Kim Eun-jae, the singing voice of Rumi in KPop Demon Hunters.\n"
         "  * REBRANDS (HARD RULE - 2026-08-25): when a brand or network "
         "has renamed, resolve to the CURRENT name and use it as "
         "`subject` and `resolved_title` - never mint a new subject "
@@ -3678,6 +3694,17 @@ def api_synth_chat_clarify():
                     'next_step': 'identity',
                 })
             _H._apply_identity_version(draft, pick)
+            # A researched person pick (short-name picker, 2026-11-04)
+            # re-anchors the identity line, prose and category to that
+            # figure; a plain version pick is unchanged.
+            _person_head = ''
+            try:
+                from prometheus import short_name_identity as _sni_pick
+                if _sni_pick.apply_pick(draft, pick):
+                    _person_head = _sni_pick.confirm_head(
+                        pick, str(draft.get('subject') or title))
+            except Exception as _fx:
+                _faults.note('chat', _fx)
             draft.pop('ask_identity', None)
             draft.pop('identity_data', None)
             title = str(draft.get('subject') or title).strip()
@@ -3685,6 +3712,7 @@ def api_synth_chat_clarify():
             platform = str(pick.get('platform') or '').strip()
             where = f' on {platform}' if platform else ''
         else:
+            _person_head = ''
             said_yes = (bool(_re.search(
                 r'\b(yes|yep|yeah|yup|correct|right|confirm(ed)?|'
                 r'exactly|that one|it is)\b', low))
@@ -3718,7 +3746,7 @@ def api_synth_chat_clarify():
             _H._set_resolved_identity_line(draft)
         except Exception as _fx:
             _faults.note('chat', _fx)
-        head = f"Confirmed - {title}, the {medium}{where}."
+        head = _person_head or f"Confirmed - {title}, the {medium}{where}."
         # Continue the flow in the same order interpret queued it.
         if draft.get('ask_qualifier_match') and \
                 draft.get('qualifier_match_data'):
@@ -6844,6 +6872,18 @@ def _pm_interpret_core(user, body, text, history):
             # instead of just "0 credits (reusing the existing file)".
             try:
                 spec_draft['estimated_credits_new_build'] = _fresh_new_credits
+            except Exception as _fx:
+                _faults.note('chat', _fx)
+        # Short-name disambiguation (2026-11-04, EJAE): when more than
+        # one public figure carries the name, the card names the one
+        # picked and this chip opens the picker for the others.
+        if _chip_options is None:
+            try:
+                from prometheus import short_name_identity as _sni_chip
+                _chip_options = _sni_chip.chip_options(spec_draft)
+                if _chip_options:
+                    _chip_targets = {'identity_other': {
+                        'action': 'identity_picker'}}
             except Exception as _fx:
                 _faults.note('chat', _fx)
         spec_draft['price_table'] = _ptab = _pm_price_table()  # money, not credits

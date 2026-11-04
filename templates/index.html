@@ -86940,6 +86940,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         _synthChatExistingMatchChipClick(o);
                         return;
                     }
+                    // 2026-11-04 short-name identity: open the picker
+                    // over the other public figures with this name.
+                    if (o && o.chipAction === 'identity_other') {
+                        _synthChatIdentityOtherChipClick(o);
+                        return;
+                    }
                     // 2026-09-09 Jenna: out-of-credits guidance chip
                     // jumps straight to the wallet top-up page.
                     if (o && o.chipAction === 'buy_credits' && o.url) {
@@ -91857,6 +91863,24 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 // clicks Yes / No instead of typing. Every other
                 // decision path takes the plain synthChatPushTurn
                 // route below (unchanged).
+                // Short-name identity chip (2026-11-04, EJAE): the card
+                // names the figure picked; this chip opens the picker
+                // for the other public figures who carry the name.
+                var _idChip = (data.chip_options || []).filter(function(o) {
+                    return o && String(o.id || '') === 'identity_other';
+                });
+                if (_idChip.length &&
+                        String(synthChatCurrentDraft.decision || '')
+                            .toLowerCase() !== 'existing_match') {
+                    _synthChatPushTurnWithMeta('agent', summary, {
+                        options: _idChip.map(function(o) {
+                            return { label: String(o.label || o.id),
+                                     chipAction: 'identity_other' };
+                        })
+                    });
+                    _synthChatShowBrief(synthChatCurrentDraft, data.model);
+                    return;
+                }
                 if (data.chip_options && data.chip_options.length &&
                         String(synthChatCurrentDraft.decision || '')
                             .toLowerCase() === 'existing_match') {
@@ -93369,6 +93393,37 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         // is unchanged; the label just reads clean in the history)
         // and re-invokes approve with forceNewBuild so the backend
         // flips the draft to a fresh new_build.
+        // 2026-11-04 short-name identity (EJAE). The interpret step
+        // anchored the draft to the public figure with the largest
+        // current digital footprint and stashed the others on
+        // draft.identity_alternatives. The chip arms the existing
+        // identity clarify step with that list, so the reader picks by
+        // number (or chip) and the server re-anchors the brief to the
+        // chosen person. No server round trip to open the list.
+        function _synthChatIdentityOtherChipClick(o) {
+            var d = synthChatCurrentDraft || {};
+            var alts = Array.isArray(d.identity_alternatives)
+                ? d.identity_alternatives : [];
+            var lbl = String((o && o.label) || 'Pick another').trim();
+            if (lbl) synthChatPushTurn('user', lbl);
+            if (!alts.length) {
+                synthChatChipSend('a different ' +
+                    String(d.subject || 'person').split(' - ')[0]);
+                return;
+            }
+            d.ask_identity = true;
+            d.identity_data = {
+                title: String(d.subject || '').split(' - ')[0].trim(),
+                medium: 'person',
+                platform: '',
+                versions: alts
+            };
+            synthChatCurrentDraft = d;
+            synthChatClarify = { steps: ['identity'], idx: 0, draft: d };
+            _synthChatPushQuestion(_synthChatClarifyQuestion('identity'),
+                'identity', d);
+        }
+
         function _synthChatExistingMatchChipClick(o) {
             if (!o) return;
             var lbl = String(o.label || o.chipAction || '').trim();

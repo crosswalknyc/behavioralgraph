@@ -55088,6 +55088,94 @@ def _verify_content_identity(draft, prompt, sig):
     return parsed if isinstance(parsed, dict) else None
 
 
+def _verify_short_name_identity(draft, prompt):
+    """Web-search-enabled Claude call for a short-name person subject
+    (EJAE, Ado, Zoomaa): which public figures go by the name, largest
+    current digital footprint first, verified facts only. Returns the
+    parsed research dict or None on any failure (callers keep the
+    drafted identity). Prompt text lives in prometheus/short_name_identity."""
+    try:
+        from claude_client import claude_messages, is_claude_reasoning_enabled
+        if not is_claude_reasoning_enabled():
+            return None
+    except Exception:
+        return None
+    from prometheus import short_name_identity as _sni
+    drafted = ' '.join(str(draft.get('identity_note') or
+                           draft.get('resolved_identity') or '').split())
+    notes = ' '.join(str(draft.get('persona_notes') or '').split())
+    if notes:
+        drafted = f"{drafted} {notes[:360]}".strip()
+    system, user = _sni.research_prompt(draft.get('subject'), prompt, drafted)
+    raw = ''
+    for tool in (
+        {"type": "web_search_20260209", "name": "web_search", "max_uses": 6},
+        {"type": "web_search_20250305", "name": "web_search", "max_uses": 6},
+    ):
+        try:
+            raw = claude_messages(
+                system=system, user=user,
+                model=_SYNTH_CHAT_INTERPRET_MODEL,
+                max_tokens=2200, temperature=0.1, tools=[tool])
+        except Exception:
+            raw = ''
+        if raw:
+            break
+    if not raw:
+        return None
+    try:
+        parsed = _extract_json_object(raw)
+    except Exception:
+        parsed = None
+    return parsed if isinstance(parsed, dict) else None
+
+
+def _guard_short_name_identity(draft, prompt, allow_ask=True):
+    """Short-name disambiguation (2026-11-04, EJAE): a one-token or
+    stage-name person subject with no identity context in the request
+    is researched once; the draft anchors to the figure with the
+    largest current digital footprint, the card names that person in
+    one plain line, and the other figures ride as alternatives behind
+    a 'Pick another' chip. Never raises, never blocks."""
+    try:
+        from prometheus import short_name_identity as _sni
+        if not isinstance(draft, dict) or draft.get('ask_identity'):
+            return False
+        if str(draft.get('medium') or '').strip().lower() not in (
+                '', 'person'):
+            return False
+        subject = str(draft.get('subject') or '').strip()
+        cat = str(draft.get('brand_category') or '').strip().upper()
+        if cat and cat not in _sni._TALENT_CATEGORIES:
+            return False
+        is_person = (str(draft.get('medium') or '').strip().lower()
+                     == 'person') or (cat in _sni._TALENT_CATEGORIES
+                                      and bool(cat))
+        if not _sni.is_short_name(subject, person=is_person):
+            return False
+        if _sni.has_identity_context(prompt, subject):
+            return False
+        research = _verify_short_name_identity(draft, prompt)
+        if not research:
+            print(f"[identity] short-name research returned nothing "
+                  f"for {subject!r}; keeping the drafted identity")
+            return False
+        info = _sni.apply(draft, research, allow_ask=allow_ask)
+        if info.get('applied'):
+            pk = info.get('picked') or {}
+            print(f"[identity] short name {subject!r} anchored to "
+                  f"{pk.get('name')!r}: {pk.get('who')!r} "
+                  f"({info.get('alternatives')} other figure(s); "
+                  f"prose {'rewritten' if info.get('replaced_prose') else 'kept'})")
+        return bool(info.get('applied'))
+    except Exception as e:
+        try:
+            print(f"[identity] short-name guard skipped: {e}")
+        except Exception:
+            pass
+        return False
+
+
 def _resolve_subject_identity(draft, prompt, allow_ask=True):
     """In-place server-side identity backstop. Runs on every draft;
     only content-typed subjects with binding medium/platform words and
@@ -55146,6 +55234,9 @@ def _resolve_subject_identity(draft, prompt, allow_ask=True):
         or medium_field in ('series', 'movie', 'podcast', 'game',
                             'book', 'album', 'franchise'))
     if not content_typed:
+        # Short-name persons (2026-11-04, EJAE): research which public
+        # figure the name means before the identity line is composed.
+        _guard_short_name_identity(draft, prompt, allow_ask=allow_ask)
         _set_resolved_identity_line(draft)
         return draft
     # Fill identity fields the model omitted, from the request itself.
