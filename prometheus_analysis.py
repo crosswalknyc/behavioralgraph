@@ -7001,15 +7001,84 @@ _INLINE_PERIOD_RE = re.compile(
     r"Q[1-4] ?\d{4})\s*(?:[:|]|\s-\s)\s*\**(?P<value>\d{1,3}(?:,\d{3})+|\d{4,})\b")
 
 
+# A dimension named to say the figure is NOT cut by it is not a split
+# request (Emma Friedenberg, 2026-11-04, Microdramas IQ: a launch-day
+# brief whose counting rule read "US viewers on any screen" and whose
+# item 4 read "share of titles in the top quarter" was taken for a
+# device split of a held figure; her follow-up "please don't split by
+# device; count all devices together" drew the same clarify again and
+# the calm hold). Two shapes name a dimension without asking for it:
+#   negated:   don't split by device / not broken out by screen /
+#              without splitting / rather than cutting it by device
+#   universal: on any screen / across all devices / all devices
+#              together / regardless of device / every platform
+# Both are dropped before the verb and the dimension are looked for,
+# and in a brief (a long multi-part ask) the verb and the dimension must
+# sit in the same clause: "share of titles" three paragraphs away from
+# "on any screen" is two different sentences, not one request.
+_DIM_SPLIT_NEGATED_RE = re.compile(
+    r"\b(?:don'?t|do not|never|not|no|without|stop|rather than|instead of)\s+(?:please\s+)?(?:\w+\s+){0,2}?"
+    r"(?:split(?:s|ting)?|break(?:s|ing)?\s*(?:it\s+|them\s+|this\s+)?(?:out|down)|breakdown|"
+    r"cut(?:s|ting)?|slic(?:e|es|ing)|divid(?:e|es|ing)|segment\w*)\b", re.I)
+_DIM_UNIVERSAL_RE = re.compile(
+    r"\b(?:any|all|every|each)\s+(?:screen|device|surface|platform)s?\b"
+    r"|\bregardless of (?:the )?(?:screen|device|surface|platform)s?\b"
+    r"|\b(?:screen|device|surface|platform)s?\s+(?:together|combined|counted together)\b", re.I)
+_DIM_CLAUSE_SPLIT_RE = re.compile(r"[.?!;\n]+")
+_DIM_CONSUMPTION_RE = re.compile(
+    r"\b(?:where|how)\b[^.?!]{0,40}\b(?:consum\w+|watch\w*|view\w*|happen\w*)\b", re.I)
+_DIM_BRIEF_WORDS = 40   # above this an ask is a brief: verb and dimension must share a clause
+
+
+def _dim_split_clauses(text):
+    """The clauses of an ask that could still be asking for a split: a
+    clause that denies the split is dropped whole, and a universal
+    phrase ("on any screen") is blanked so the dimension word inside it
+    never reads as a request."""
+    out = []
+    for c in _DIM_CLAUSE_SPLIT_RE.split(str(text or '')):
+        if not c.strip() or _DIM_SPLIT_NEGATED_RE.search(c):
+            continue
+        out.append(_DIM_UNIVERSAL_RE.sub(' ', c))
+    return out
+
+
+def _dim_in(text):
+    for name, rx in _DIM_SPLIT_DIMS:
+        if rx.search(text):
+            return name
+    return ''
+
+
+def _clause_split_dimension(clause):
+    """The dimension one clause asks a figure to be split by, or ''."""
+    dim = _dim_in(clause)
+    if not dim:
+        return ''
+    if _DIM_SPLIT_VERB_RE.search(clause):
+        return dim
+    # "where consumption happens", "how this viewership breaks out"
+    if dim == 'device' and _DIM_CONSUMPTION_RE.search(clause):
+        return dim
+    return ''
+
+
 def split_dimension(text):
     """The panel-observed dimension an ask wants a figure split by, or
     ''. Device wins when several appear (an ask that says 'mobile and
-    tablet by age' is a device ask first)."""
+    tablet by age' is a device ask first). A dimension that is denied
+    ("don't split by device") or universal ("on any screen") does not
+    count; the clause that carries the request wins over a dimension
+    word elsewhere in the ask."""
     t = str(text or '')
-    for name, rx in _DIM_SPLIT_DIMS:
-        if rx.search(t):
-            return name
-    return ''
+    if not t.strip():
+        return ''
+    clauses = _dim_split_clauses(t)
+    for c in clauses:
+        dim = _clause_split_dimension(c)
+        if dim:
+            return dim
+    return _dim_in(' . '.join(clauses))
 
 
 # The reader's own word for each dimension in an offer or a read ('by
@@ -7022,8 +7091,10 @@ _DIM_WORDS = {'device': 'device', 'daypart': 'time of day', 'geography': 'region
 def split_dimensions(text):
     """Every dimension an ask names, in the order the ask names them
     (['age', 'gender', 'ethnicity', 'income', 'geography'] for 'by age,
-    gender, ethnicity, household income and region'); [] when none."""
-    t = str(text or '')
+    gender, ethnicity, household income and region'); [] when none. A
+    denied or universal dimension ("on any screen", "don't split by
+    device") is not one the ask names (same filter as split_dimension)."""
+    t = ' . '.join(_dim_split_clauses(text))
     hits = []
     for name, rx in _DIM_SPLIT_DIMS:
         m = rx.search(t)
@@ -7058,17 +7129,26 @@ def dimension_phrase(dims, text=''):
 def is_dimension_split_ask(text):
     """True when the ask wants a figure broken out by a dimension the
     panel observes on every stream (device, daypart, geography,
-    demographics, platform)."""
+    demographics, platform). Never for a denied or universal dimension,
+    and in a brief only when one clause carries both the verb and the
+    dimension."""
     t = str(text or '')
     if not t.strip():
         return False
-    dim = split_dimension(t)
+    clauses = _dim_split_clauses(t)
+    if any(_clause_split_dimension(c) for c in clauses):
+        return True
+    if len(t.split()) > _DIM_BRIEF_WORDS:
+        return False
+    # a short ask may put the verb and the dimension in different
+    # clauses ("Break those out. By device please.")
+    probe = ' . '.join(clauses)
+    dim = _dim_in(probe)
     if not dim:
         return False
-    if _DIM_SPLIT_VERB_RE.search(t):
+    if _DIM_SPLIT_VERB_RE.search(probe):
         return True
-    # "where consumption happens", "how this viewership breaks out"
-    return bool(re.search(r"\b(?:where|how)\b[^.?!]{0,40}\b(?:consum\w+|watch\w*|view\w*|happen\w*)\b", t, re.I)) and dim == 'device'
+    return dim == 'device' and bool(_DIM_CONSUMPTION_RE.search(probe))
 
 
 def extract_pasted_series(text):

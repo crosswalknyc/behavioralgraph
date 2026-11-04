@@ -33,6 +33,20 @@ def _article(name, text):
     return m.group(0) if m else name
 
 
+BRIEF_WORDS = 60
+
+
+def is_brief(text):
+    """A multi-part ask (a brief) rather than a one-line question: sixty
+    words or more, or three or more lines or numbered items."""
+    t = str(text or '')
+    if len(t.split()) >= BRIEF_WORDS:
+        return True
+    lines = [ln for ln in t.splitlines() if ln.strip()]
+    items = re.findall(r"(?m)^\s*(?:\d+[.)]|[-*])\s+", t)
+    return len(lines) >= 3 or len(items) >= 3
+
+
 def plan(text, history, ctx, body, *, pma, ns, normalize, stop, plausible, consumption):
     """None when the ask is not a derived read; otherwise
 
@@ -93,6 +107,14 @@ def plan(text, history, ctx, body, *, pma, ns, normalize, stop, plausible, consu
     except Exception:
         series = []
 
+    # A derived read splits a figure the reader HOLDS. A brief that names
+    # no subject and carries no figure (nothing pasted, nothing delivered
+    # in the thread) is a new question for the other lanes, not a split
+    # waiting for its subject (Emma Friedenberg, 2026-11-04: a 300-word
+    # launch-day brief drew "which title are the figures for?" twice).
+    if not confirm_derived and not subject and not series and is_brief(text):
+        return None
+
     out = {
         'subject': subject, 'dimension': dim, 'series': series,
         'panel_confirm': pc,
@@ -112,4 +134,4 @@ def plan(text, history, ctx, body, *, pma, ns, normalize, stop, plausible, consu
     return out
 
 
-__all__ = ['plan']
+__all__ = ['plan', 'is_brief', 'BRIEF_WORDS']

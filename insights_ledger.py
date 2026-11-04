@@ -1012,13 +1012,41 @@ _GENERIC_SUBJECT_TOKENS = {
 }
 
 
+# One family, many spellings (2026-11-04, Emma Friedenberg's launch-day
+# ask in Microdramas IQ). The vertical drama read is banked under one
+# subject, "Vertical Drama" (the one-sheets and The Read's Micro-Series,
+# Measured episodes), while readers write micro-series, microdramas,
+# micro drama, vertical shorts or short dramas. Resolution folds every
+# spelling onto the banked subject so the figures bind; the stored
+# question keys (qn) are untouched, so exact replay is unchanged.
+_SUBJECT_FAMILY_ALIASES = (
+    (re.compile(r"\b(?:micro ?dramas?|micro ?series|microseries|vertical ?(?:dramas?|shorts?|series)|short ?dramas?)\b"),
+     'vertical drama'),
+)
+
+
+def _fold_family_aliases(norm_text):
+    """Normalized text with every family spelling folded onto the
+    banked subject's spelling. Idempotent."""
+    t = str(norm_text or '')
+    for rx, canon in _SUBJECT_FAMILY_ALIASES:
+        t = rx.sub(canon, t)
+    return re.sub(r'\s+', ' ', t).strip()
+
+
 def _resolve_subject(index_doc, subject=None, question=None):
     """Find the subject bucket for this ask. Explicit subject first
     (normalized match), else the longest ledger subject whose
     normalized form appears inside the normalized question, else the
-    subject whose distinctive tokens all appear in the question."""
+    subject whose distinctive tokens all appear in the question. Family
+    spellings fold onto the banked subject first (_SUBJECT_FAMILY_ALIASES)."""
     subjects = index_doc.get('subjects') or {}
     if subject:
+        folded = _fold_family_aliases(normalize_subject(subject))
+        if folded != normalize_subject(subject):
+            for k, v in subjects.items():
+                if normalize_subject(v.get('subject')) == folded and (v.get('entries') or []):
+                    return k
         skey = subject_key(subject)
         if skey in subjects:
             return skey
@@ -1036,7 +1064,9 @@ def _resolve_subject(index_doc, subject=None, question=None):
         # to the token scan with the subject text folded in
         # (2026-08-27, rephrased toy ask).
         question = f"{subject} {question or ''}"
-    qn = ' ' + normalize_question(question) + ' '
+    # normalize_question caps at 300 chars; a brief names its subject
+    # anywhere, so the scan reads the ask (folded) past that cap
+    qn = ' ' + _fold_family_aliases(re.sub(r'[^a-z0-9]+', ' ', str(question or '').lower()).strip()[:1200]) + ' '
     best_key, best_len = None, 0
     for k, v in subjects.items():
         s_norm = normalize_subject(v.get('subject'))
