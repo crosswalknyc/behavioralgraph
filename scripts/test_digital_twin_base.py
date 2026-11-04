@@ -12,6 +12,7 @@ Florida profile, sized at 1.4M, seated in Salt Lake City and Orlando).
 Hermetic: the research is a stub, no network."""
 from __future__ import annotations
 
+import json
 import os
 import sys
 import unittest
@@ -172,6 +173,62 @@ class Build(unittest.TestCase):
         self.assertTrue('original run' in bio or 'for years' in bio, bio)
         self.assertTrue('mug' in bio or 'DVD' in bio, bio)   # a title keeps its merchandise and its shelf copy
         self.assertEqual(ROOM.subject_class(twin('Protein Enthusiasts', 'audience', '')), 'audience')
+
+    def test_bios_stand_on_a_researched_base_persona(self):
+        # Jenna 2026-11-03: 'for bios it should do the same kind of external research it does when creating profile iqs
+        # to ensure it's anchored in the right type of base level persona'. One research call per twin, kept on the
+        # twin; every seat's bio says why someone like them is here and what they reach for; the agent hears a line
+        # the base would say. Off (REGRESSION_TEST_MODE, no fake), the bios stand on the class vocabulary.
+        from scripts.test_digital_twin_pilot import _beals
+        base = _beals()
+        base['lifecycle'] = {'habit_pct': 100, 'discovering_pct': 0, 'trying_pct': 0, 'lapsing_pct': 0, 'returning_pct': 0}
+        tw = dict(base); tw['meta'] = dict(base['meta'], name='Paramount+', subject='Paramount+', subject_kind='audience', format='brand', platform_home='Paramount+', franchise_stage='established')
+        seat = {'seat': 1, 'name': 'Jasmine', 'age': 70, 'gender': 'F', 'city': 'New York'}
+        self.assertEqual(ROOM.persona_base(tw), {}, 'no model: no brief, no error')
+        plain = ROOM.persona_card(tw, seat, 's1')['bio']
+        self.assertNotIn('came to Paramount+ for', plain)
+        calls = []
+
+        def fake(role, system, user, **kw):
+            calls.append((role, json.loads(user)))
+            return {'who': 'A middle-income adult who skews older than the streaming average.',
+                    'motivations': ['the NFL on CBS', 'Yellowstone and the Taylor Sheridan shows', 'the low ad-tier price'],
+                    'tastes': ['NCIS and the NCIS franchise', 'Survivor and CBS reality', 'Star Trek series', 'UEFA Champions League'],
+                    'plan_mix': {'Essential with ads': 62.0, 'Premium': 38.0}, 'tenure': {}, 'churn': 'They come and go around the football season.',
+                    'devices': {'TV': 70.0, 'phone': 20.0, 'laptop or tablet': 10.0}, 'household': 'A family household in the middle of the income range.',
+                    'co_subscriptions': ['Netflix', 'Prime Video'], 'shopping': ['Walmart'], 'sayings': ['I keep it for the football', 'NCIS is my comfort show'],
+                    'notes': 'A gap in the schedule loses them.'}
+        models = ROOM.Models(model_fn=fake)
+        brief = ROOM.persona_base(tw, models=models)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0][0], 'research')
+        self.assertEqual(calls[0][1]['base_class'], 'platform')
+        self.assertNotIn('purpose', calls[0][1], 'the build purpose never steers the base')
+        self.assertIs(tw['persona_base'], brief)
+        self.assertEqual(brief['motivations'][2], 'the low ad plan price', 'tier never ships')
+        self.assertEqual(brief['shopping'], [], 'a service has no shopping list')
+        self.assertIn('plan_mix', brief)
+        self.assertIs(ROOM.persona_base(tw, models=models), brief, 'kept on the twin, not researched twice')
+        self.assertEqual(len(calls), 1)
+        card = ROOM.persona_card(tw, seat, 's1')
+        bio = card['bio']
+        self.assertIn('She came to Paramount+ for', bio)
+        self.assertIn('when she opens it', bio)
+        self.assertIn('on the', bio)   # the plan
+        self.assertTrue('Essential with ads plan' in bio or 'Premium plan' in bio, bio)
+        self.assertTrue(card['base']['voice'] in ('I keep it for the football', 'NCIS is my comfort show'))
+        self.assertIn('A line someone like Jasmine might say', ROOM._card_text(card))
+        self.assertNotIn('household', bio); self.assertNotIn('tier', bio.lower())
+        # a first-person phrase from the record is said about the seat, not by it
+        self.assertEqual(ROOM.base_sentence({'why': 'a show my mom and I both already know', 'tastes': []}, 'title', 'Gilmore Girls', 'she'),
+                         'She came to Gilmore Girls through a show her mom and she both already know.')
+        # the room's seating researches the base once for every twin that lacks one
+        tw2 = dict(base); tw2['meta'] = dict(tw['meta'])
+        sess = {'id': 'room9', 'group': {'roster': [dict(seat), {'seat': 2, 'name': 'Omar', 'age': 45, 'gender': 'M', 'city': 'Atlanta'}]}}
+        n = ROOM.ensure_personas(sess, {'p': tw2}, session_seed='room9', models=models)
+        self.assertEqual(n, 2)
+        self.assertEqual(len(calls), 2)
+        self.assertTrue(all('came to Paramount+ for' in r['persona'] for r in sess['group']['roster']))
 
     def test_a_title_twin_is_untouched(self):
         import unittest.mock as mock

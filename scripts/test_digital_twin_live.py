@@ -41,7 +41,7 @@ def _session():
     tw = _beals()
     tw['key'] = 'jb'
     tw['meta']['size_us'] = 4_237_511   # the people behind the room, which the forecast needs for its counts
-    sess = PI.open_session([tw], in_room=12, title='Season 2 pilot', created_by='t', mode='pilot')
+    sess = PI.open_session([tw], in_room=12, title='Season 2 pilot', created_by='t', mode='pilot', session_id='livetest0001')   # a fixed id seats the same room every run
     PI.apply_watch_url(sess, P_PLUS, hint_title='NCIS: New York, episode 1', mode='pilot')
     return tw, sess
 

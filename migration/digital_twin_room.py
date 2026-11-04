@@ -552,6 +552,208 @@ def subject_class(twin: dict) -> str:
     return 'audience'
 
 
+PERSONA_BASE_VERSION = 1
+PERSONA_BASE_SYSTEM = """You research who the base-level person behind a subject really is, so a room of digital twins is built on the right kind of person (the way a Profile IQ build is researched before it is written). Approved sources only: SEC filings and earnings reports, Pew Research, Nielsen, Statista, eMarketer, YouGov, Antenna and similar subscriber-behavior trackers, Sensor Tower or data.ai, Circana for retail, the service's or brand's own published counts and plan names, and trade press (Variety, Deadline, The Hollywood Reporter) for lineup and release facts. Use the web_search tool when you have it. Never store visits, device counts or total-brand-reach figures that mix offline.
+The subject is one of: a streaming service, app or network (its subscribers or users); a brand or retailer (its buyers); a person (their followers or fans); a title (its viewers, readers or players); an interest audience. Read which it is from the input and answer for that base.
+Return JSON only, plain words, every number a plain number, the whole answer under 1,400 tokens:
+{"who": "<two sentences: the typical person in this base and how they differ from US adults overall>",
+ "motivations": ["<why they are here, three to six, each a plain noun phrase in the third person (no I, my or we): 'the NFL on CBS', 'Yellowstone and 1923', 'kids shows for the family', 'live news'>"],
+ "tastes": ["<the titles, genres or categories this base reaches for most, four to eight, by name where the record gives them>"],
+ "plan_mix": {"<plan as the service names it, with ads or without>": <pct>} (a subscription service only; {} otherwise),
+ "tenure": {"under a year": <pct>, "one to three years": <pct>, "three years or more": <pct>} ({} when unknown),
+ "churn": "<one sentence on how this base comes and goes: seasonal, around shows, through bundles, through a carrier or a free trial>",
+ "devices": {"TV": <pct>, "phone": <pct>, "laptop or tablet": <pct>} ({} when unknown),
+ "household": "<one sentence on the household shape and the income skew>",
+ "co_subscriptions": ["<other services most of them also hold, up to five>"],
+ "shopping": ["<retailers, channels or brands this base buys through or alongside, up to five>"] (a brand or retailer only; [] otherwise),
+ "sayings": ["<six to ten short first-person lines a typical member would say about the subject, varied, plain, no two alike in shape>"],
+ "notes": "<two sentences on what moves this base and what loses it>"}
+Use null or an empty value where you have no approved-source basis; never invent a plan name, a title or a number. Write "plan" not "tier", and "home" or "family" not "household". The motivations are the base's own reasons for being there, never the question the twin was built to answer."""
+
+
+def _base_list(v, n: int, cap: int = 90) -> list:
+    out = []
+    for x in (v if isinstance(v, list) else []):
+        t = ' '.join(str(x or '').split()).strip(' .')
+        if t and t not in out:
+            out.append(t[:cap])
+        if len(out) >= n:
+            break
+    return out
+
+
+def _base_shares(v, n: int = 6) -> dict:
+    out = {}
+    if isinstance(v, dict):
+        for k, x in list(v.items())[:n]:
+            try:
+                f = float(x)
+            except (TypeError, ValueError):
+                continue
+            k2 = ' '.join(str(k or '').split())[:60]
+            if k2 and f > 0:
+                out[k2] = round(f, 1)
+    return out
+
+
+_BASE_FIXES = ((re.compile(r"\bad[- ]levels?\b", re.I), 'ad plan'), (re.compile(r"\blevels? price\b", re.I), 'plan price'), (re.compile(r"\bthe people account\b", re.I), 'the family account'),
+               (re.compile(r"\bpeople viewer\b", re.I), 'viewer'), (re.compile(r"\bcouple people\b", re.I), 'couple'), (re.compile(r"\bfamily or couple\b", re.I), 'family or a couple'))
+
+
+def _base_text(v, cap: int) -> str:
+    """A scrubbed sentence or two, cut at a sentence end, never mid-word."""
+    t = scrub(' '.join(str(v or '').split()))
+    for rx, rep in _BASE_FIXES:
+        t = rx.sub(rep, t)
+    if len(t) > cap:
+        cut = t[:cap]
+        t = cut[:cut.rfind('. ') + 1] if '. ' in cut[cap // 2:] else cut.rsplit(' ', 1)[0]
+    return t.strip()
+
+
+def normalize_persona_base(got: dict, klass: str) -> dict:
+    """The research answer as the room keeps it: short lists, clean
+    shares, scrubbed sentences."""
+    if not isinstance(got, dict):
+        return {}
+
+    def fixed(x):
+        t = scrub(x)
+        for rx, rep in _BASE_FIXES:
+            t = rx.sub(rep, t)
+        return t
+    out = {
+        'version': PERSONA_BASE_VERSION, 'class': klass, 'at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
+        'who': _base_text(got.get('who'), 420),
+        'motivations': [fixed(x) for x in _base_list(got.get('motivations'), 6)],
+        'tastes': [fixed(x) for x in _base_list(got.get('tastes'), 8)],
+        'plan_mix': _base_shares(got.get('plan_mix')) if klass == 'platform' else {},
+        'tenure': _base_shares(got.get('tenure'), 3),
+        'churn': _base_text(got.get('churn'), 260),
+        'devices': _base_shares(got.get('devices'), 3),
+        'household': _base_text(got.get('household'), 240),
+        'co_subscriptions': [fixed(x) for x in _base_list(got.get('co_subscriptions'), 5)],
+        'shopping': [fixed(x) for x in _base_list(got.get('shopping'), 5)] if klass in ('brand', 'audience') else [],
+        'sayings': [fixed(x) for x in _base_list(got.get('sayings'), 10, 160)],
+        'notes': _base_text(got.get('notes'), 420),
+    }
+    if not (out['who'] or out['motivations'] or out['tastes']):
+        return {}
+    return out
+
+
+def persona_base(twin: dict, *, models=None, usage_extras: Optional[dict] = None, force: bool = False) -> dict:
+    """The researched base persona behind a twin (Jenna 2026-11-03: 'for
+    bios it should do the same kind of external research it does when
+    creating profile iqs to ensure it's anchored in the right type of
+    base level persona'). One approved-source call per twin, kept on the
+    twin under ``persona_base`` and reused by every room on it. {} when
+    the model is off (REGRESSION_TEST_MODE, no key) or the call fails:
+    the bios then stand on the class vocabulary alone."""
+    have = (twin or {}).get('persona_base')
+    if isinstance(have, dict) and have.get('motivations') and not force and int(have.get('version') or 0) >= PERSONA_BASE_VERSION:
+        return have
+    klass = subject_class(twin)
+    if klass == 'civic':
+        return {}
+    if models is None and regression_mode():
+        return {}
+    m = _meta(twin)
+    diag = ((twin or {}).get('diagnostics') or {}).get('research') or {}
+    user = json.dumps({'subject': m.get('name') or m.get('subject'), 'base_class': klass, 'format': m.get('format'), 'platform_home': m.get('platform_home'),
+                       'subject_kind': m.get('subject_kind'), 'what_we_know': str(diag.get('notes') or '')[:400],
+                       'today': time.strftime('%Y-%m-%d', time.gmtime())})
+    try:
+        M = models or Models(usage_extras=usage_extras)
+        data, _rec = M.call('research', PERSONA_BASE_SYSTEM, user, max_tokens=2000, temperature=0.2)
+    except Exception as e:
+        print(f"[twin-room] persona base research failed: {str(e)[:160]}")
+        data = None
+    out = normalize_persona_base(data, klass) if isinstance(data, dict) else {}
+    if out and isinstance(twin, dict):
+        twin['persona_base'] = out
+    return out
+
+
+def _pick_list(items: list, u: float) -> str:
+    items = [str(x) for x in (items or []) if str(x).strip()]
+    return items[min(len(items) - 1, int(u * len(items)))] if items else ''
+
+
+def _device_phrase(label: str, age: int) -> str:
+    lab = str(label or '').lower()
+    if 'phone' in lab:
+        return 'watches on the phone as much as the TV'
+    if 'laptop' in lab or 'tablet' in lab:
+        return 'watches on a laptop or tablet more than the TV'
+    if 'tv' in lab:
+        return 'watches on the living room TV, the phone only for a clip' if age >= 40 else 'watches on the TV at night and the phone on the move'
+    return ''
+
+
+def base_picks(twin: dict, sid: str, age: int) -> dict:
+    """What the researched base gives one seat, picked by the seat's seed:
+    a reason they are here, one or two tastes, the plan, the screen, a
+    store, a line they might say."""
+    b = (twin or {}).get('persona_base') or {}
+    if not isinstance(b, dict) or not (b.get('motivations') or b.get('tastes')):
+        return {}
+    why = _pick_list(b.get('motivations'), unit('base-why', sid))
+    tastes = [t for t in b.get('tastes') or [] if t]
+    t1 = _pick_list(tastes, unit('base-t1', sid))
+    rest = [t for t in tastes if t != t1]
+    t2 = _pick_list(rest, unit('base-t2', sid)) if rest and unit('base-two', sid) < 0.6 else ''
+    plan = ''
+    if b.get('plan_mix'):
+        plan = _pick_by_share([{'label': k, 'pct': v} for k, v in b['plan_mix'].items()], unit('base-plan', sid))
+    device = ''
+    if b.get('devices'):
+        device = _device_phrase(_pick_by_share([{'label': k, 'pct': v} for k, v in b['devices'].items()], unit('base-dev', sid)), age)
+    shop = _pick_list(b.get('shopping'), unit('base-shop', sid))
+    voice = _pick_list(b.get('sayings'), unit('base-voice', sid))
+    return {'why': why, 'tastes': [t for t in (t1, t2) if t], 'plan': plan, 'device': device, 'shop': shop, 'voice': voice, 'churn': str(b.get('churn') or '')}
+
+
+def _third_person(text: str, pron: str) -> str:
+    """A phrase the base said in the first person, said about the seat."""
+    poss = {'she': 'her', 'he': 'his'}.get(pron, 'their')
+    obj = {'she': 'her', 'he': 'him'}.get(pron, 'them')
+    t = str(text or '')
+    t = re.sub(r"\bmy\b", poss, t)
+    t = re.sub(r"\bme\b", obj, t)
+    t = re.sub(r"\bI\b", pron, t)
+    t = re.sub(r"\bour\b", 'their', t)
+    t = re.sub(r"\bwe\b", 'they', t)
+    t = re.sub(r"\bus\b", 'them', t)
+    return t
+
+
+def base_sentence(picks: dict, klass: str, name: str, pron: str) -> str:
+    """The sentence the researched base adds to a bio, by class."""
+    if not picks or not (picks.get('why') or picks.get('tastes')):
+        return ''
+    P = pron.capitalize()
+    why = _third_person(picks.get('why') or '', pron)
+    tastes = [_third_person(t, pron) for t in (picks.get('tastes') or []) if t]
+    plan, shop = picks.get('plan') or '', picks.get('shop') or ''
+    tl = (tastes[0] if len(tastes) == 1 else ' and '.join(tastes)) if tastes else ''
+    if klass == 'platform':
+        s = (f"{P} came to {name} for {why}" if why else f"{P} keeps {name}") + (f" and reaches for {tl} when {pron} opens it" if tl else '') + '.'
+        if plan:
+            s += f" {P} {'is' if pron != 'they' else 'are'} on the {plan} plan."
+        return s
+    if klass == 'brand':
+        s = (f"{P} buys {name} for {why}" if why else f"{P} buys {name}") + (f"; {tl} {'is' if len(tastes) == 1 else 'are'} in the basket too" if tl else '') + '.'
+        if shop:
+            s += f" {P} {'gets' if pron != 'they' else 'get'} it at {shop} most of the time."
+        return s
+    if klass == 'talent':
+        return (f"{P} follows {name} for {why}" if why else f"{P} follows {name}") + (f" and also keeps up with {tl}" if tl else '') + '.'
+    if klass == 'audience':
+        return (f"What keeps {pron} in it is {why}" if why else f"{P} {'is' if pron != 'they' else 'are'} in it") + (f"; {tl} {'is' if len(tastes) == 1 else 'are'} part of the week too" if tl else '') + '.'
+    return (f"{P} came to {name} through {why}" if why else f"{P} watches {name}") + (f" and also watches {tl}" if tl else '') + '.'
+
+
 def talent_is_creator(twin: dict) -> bool:
     """A creator, host or musician puts work out; an actor is in it."""
     m = _meta(twin)
@@ -758,11 +960,15 @@ def persona_card(twin: dict, seat: dict, session_seed: str) -> dict:
     services = [p for i, p in enumerate(plats) if unit('pl', sid, p) < (0.95 - 0.12 * i)][:4] or plats[:2]
     shops = [str(p.get('label')) for p in (ident.get('purchase') or [])[:6] if isinstance(p, dict)]
     shops = [s for s in shops if unit('shop', sid, s) < 0.7][:3]
+    picks = base_picks(twin, sid, age)
+    if picks.get('device') and klass in ('platform', 'audience', 'title') or (picks.get('device') and klass == 'talent' and talent_is_creator(twin)):
+        physical = picks['device']   # the screen the base really watches on, from the record, over the age prior
     card = {'seat': seat.get('seat'), 'name': seat.get('name'), 'age': age, 'gender': gender, 'city': seat.get('city'), 'segment': str(seat.get('segment') or ''),
             'income': income, 'education': education, 'parental': parental, 'relationship_status': relationship,
             'orientation': orientation, 'occupation': occupation, 'ethnicity': ethnicity,
             'language': str(seat.get('language') or ''), 'cohort': str(seat.get('cohort') or ''),
             'party': party, 'urbanicity': urbanicity, 'issues': my_issues, 'civic': civic, 'base_kind': base_kind, 'subject_class': klass,
+            'base': picks,
             'values': str(ident0.get('values') or ''),
             'lifecycle_stage': stage, 'relationship_to_subject': rel, 'how_often': freq, 'owns': owns,
             'habits': [price, loyal, merch, physical, churn, social, wom, live, ads, binge, second],
@@ -974,6 +1180,9 @@ def persona_bio(card: dict, twin: dict, sid: str) -> str:
         if rel and not re.match(r"^(?:she|he|they)\b", rel, re.I):
             rel = f"{pron.capitalize()} {rel}"
         sent.append(f"{rel} and {card.get('how_often')}; {pron} {be} {stage}." if rel else f"{pron.capitalize()} {be} {stage} with {m.get('name') or 'the subject'}.")
+        bs = base_sentence(card.get('base') or {}, klass, str(m.get('name') or m.get('subject') or 'it'), pron)   # the researched base: why they are here, what they reach for
+        if bs:
+            sent.append(bs)
     if card.get('owns'):
         sent.append(f"{pron.capitalize()} owns {' and '.join(card['owns'])}.")
     h = list(card.get('habits') or [])
@@ -1048,7 +1257,9 @@ def _card_text(card: dict) -> str:
     lines when a bio is missing."""
     if card.get('bio'):
         vals = ' '.join(str(card.get('values') or '').split())
-        return str(card['bio']) + (f"\n\nWhat people like {card.get('name') or 'this'} tend to believe and weigh: {vals}" if vals else '')
+        voice = str(((card.get('base') or {}).get('voice')) or '').strip()
+        return (str(card['bio']) + (f"\n\nWhat people like {card.get('name') or 'this'} tend to believe and weigh: {vals}" if vals else '')
+                + (f"\n\nA line someone like {card.get('name') or 'this'} might say about it: \"{voice}\"" if voice else ''))
     lines = [f"{card['name']}, {card['age']}, {card['gender']}, {card['city']}." + (f" Income {card['income']}." if card.get('income') else '') + (f" {card['education']}." if card.get('education') else ''),
              (f"{card['parental']}. " if card.get('parental') else '') + (f"{card['relationship_status']}." if card.get('relationship_status') else ''),
              f"Relationship to the subject: {card['relationship_to_subject']}; {card['how_often']}." + (f" Owns {', '.join(card['owns'])}." if card.get('owns') else ''),
@@ -1057,12 +1268,22 @@ def _card_text(card: dict) -> str:
     return '\n'.join(l for l in lines if l.strip())
 
 
-def ensure_personas(session: dict, twins_by_key: dict, session_seed: str = '') -> int:
+def ensure_personas(session: dict, twins_by_key: dict, session_seed: str = '', *, models=None, usage_extras: Optional[dict] = None, research: bool = True) -> int:
     """Every seat in the room carries its bio (``roster[].persona``) and
     its memory list; written once, stable for the life of the room.
-    Returns the number of seats filled."""
+    The researched base persona is fetched first for any twin that does
+    not carry one yet (one call per twin, kept on the twin), so the bios
+    are anchored in the right kind of person. Returns the number of
+    seats filled."""
     from migration.digital_twin_engine import VERSION
     seed = session_seed or f"room|{session.get('id')}|{VERSION}"
+    if research:
+        for tw in (twins_by_key or {}).values():
+            try:
+                if isinstance(tw, dict) and any(not s.get('persona') for s in ((session.get('group') or {}).get('roster') or [])):
+                    persona_base(tw, models=models, usage_extras=usage_extras)
+            except Exception as e:
+                print(f"[twin-room] persona base skipped: {str(e)[:160]}")
     n = 0
     for seat in (session.get('group') or {}).get('roster') or []:
         if not seat.get('persona'):

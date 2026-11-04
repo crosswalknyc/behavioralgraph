@@ -1433,6 +1433,13 @@ def build_twin(inputs: dict, claude_json: Optional[Callable] = None, *, tools=No
     if tr:
         twin['track_record'] = tr
     twin['the_read'] = write_read(twin, claude_json, seed)
+    if with_research:
+        try:   # the base persona the rooms on this twin are written from (Jenna 2026-11-03): researched once, kept on the twin
+            from migration.digital_twin_room import persona_base as _persona_base
+            _persona_base(twin)
+            timings['persona_base_s'] = round(time.time() - t0 - sum(v for k, v in timings.items() if k.endswith('_s') and k != 'total_s'), 2)
+        except Exception as e:
+            print(f"[twin] persona base skipped: {e}")
     timings['total_s'] = round(time.time() - t0, 2)
     twin['diagnostics'] = {
         'version': VERSION, 'seed': seed, 'timings': timings, 'size_source': size_source, 'momentum': momentum,

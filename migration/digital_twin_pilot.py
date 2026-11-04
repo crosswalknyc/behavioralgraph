@@ -1939,7 +1939,8 @@ def auto_stop_due(sess: dict, now: Optional[float] = None) -> bool:
     if dur <= 0 or not started:
         return False
     try:
-        t0 = time.mktime(time.strptime(started, '%Y-%m-%dT%H:%M:%SZ')) - time.timezone
+        import calendar
+        t0 = calendar.timegm(time.strptime(started, '%Y-%m-%dT%H:%M:%SZ'))
     except Exception:
         return False
     return (now if now is not None else time.time()) >= t0 + dur + AUTO_STOP_GRACE_S
