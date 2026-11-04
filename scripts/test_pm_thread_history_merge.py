@@ -320,9 +320,19 @@ class _Host:
         self.S3_BUCKET = 'b'
         self.app = self
         self.requires_auth = lambda f: f
+        self.emails = []
 
     def route(self, *a, **k):
         return lambda f: f
+
+    def _chatbot_route_guard(self, label):
+        return lambda f: f
+
+    def _chatbot_error_email(self, label, err, tb=None):
+        self.emails.append((label, str(err)))
+
+    def _chatbot_calm_payload(self):
+        return {'success': False, 'error': 'calm'}
 
 
 class LegacyHandlers(unittest.TestCase):
@@ -368,13 +378,75 @@ class LegacyHandlers(unittest.TestCase):
         _C._pm_s3_put_json = staticmethod(_pm_s3_put_json)
         _C._synth_chat_gate = staticmethod(lambda allow_api_key=False: ({'username': 'jay'}, None))
         ns.update({'_C': _C, '_pm_safe_user': _pm_safe_user, '_pm_s3_json': _pm_s3_json, '_pm_s3_put_json': _pm_s3_put_json,
-                   '_load_threads_index': lambda u: idx, 'request': _Req()})
+                   '_load_threads_index': lambda u: idx, 'request': _Req(),
+                   '_synth_chat_gate': lambda allow_api_key=False: ({'username': 'jay'}, None),
+                   '_pm_rotate_idle_thread': lambda u: None})
         for name in ('_pm_threads_index_key', '_pm_thread_key', '_pm_thread_title_from'):
             exec(grab(thr, name), ns)
         exec(grab_route(thr, 'api_synth_chat_threads_delete'), ns)
-        for name in ('_pm_merge_save_thread', '_save_synth_chat_history', '_pm_active_thread_history'):
+        for name in ('_pm_merge_save_thread', '_save_synth_chat_history', '_pm_active_thread_history', 'api_synth_chat_history'):
             exec(grab(chat, name), ns)
         return ns
+
+    @staticmethod
+    def _unpack(resp):
+        return (resp[0], resp[1]) if isinstance(resp, tuple) else (resp, 200)
+
+    def test_history_get_names_the_thread_and_its_rev(self):
+        s3 = FakeS3()
+        s3.objs['system/synth_chat_threads/jay/abc.json'] = json.dumps(STORED).encode('utf-8')
+        ns = self._ns(s3, self._idx())
+        req = _Req(); req.method = 'GET'; ns['request'] = req
+        out, st = self._unpack(ns['api_synth_chat_history']())
+        self.assertEqual(st, 200)
+        self.assertEqual(out['thread_id'], 'abc')
+        self.assertEqual(out['rev'], tm.thread_rev(STORED))
+        self.assertEqual(len(out['history']), len(STORED))
+
+    def test_history_get_by_thread_id_reads_that_thread_without_rotating(self):
+        s3 = FakeS3()
+        s3.objs['system/synth_chat_threads/jay/def.json'] = json.dumps([Q1, A1]).encode('utf-8')
+        ns = self._ns(s3, self._idx())
+        rotated = []
+        ns['_pm_rotate_idle_thread'] = lambda u: rotated.append(u)
+        req = _Req(args={'thread_id': 'def'}); req.method = 'GET'; ns['request'] = req
+        out, st = self._unpack(ns['api_synth_chat_history']())
+        self.assertEqual((st, out['thread_id'], len(out['history'])), (200, 'def', 2))
+        self.assertEqual(rotated, [])
+        req = _Req(args={'thread_id': 'nope'}); req.method = 'GET'; ns['request'] = req
+        out, st = self._unpack(ns['api_synth_chat_history']())
+        self.assertEqual(st, 404)
+        req = _Req(args={'peek': '1'}); req.method = 'GET'; ns['request'] = req
+        out, st = self._unpack(ns['api_synth_chat_history']())
+        self.assertEqual((st, out['thread_id']), (200, 'abc'))
+        self.assertEqual(rotated, [])
+
+    def test_history_post_answers_with_the_merged_thread_when_the_tab_was_stale(self):
+        s3 = FakeS3()
+        s3.objs['system/synth_chat_threads/jay/abc.json'] = json.dumps(STORED).encode('utf-8')
+        ns = self._ns(s3, self._idx())
+        ns['request'] = _Req({'history': STALE_CLIENT, 'thread_id': 'abc'})
+        out, st = self._unpack(ns['api_synth_chat_history']())
+        self.assertEqual(st, 200)
+        self.assertTrue(out['success'] and out['changed'])
+        self.assertEqual(out['thread_id'], 'abc')
+        self.assertEqual(len(out['history']), len(STORED) + 3)
+        self.assertEqual(out['rev'], tm.thread_rev(out['history']))
+        # in step: no history rides back, the rev does
+        ns['request'] = _Req({'history': out['history'], 'thread_id': 'abc'})
+        again, st = self._unpack(ns['api_synth_chat_history']())
+        self.assertEqual(st, 200)
+        self.assertNotIn('changed', again)
+        self.assertNotIn('history', again)
+        self.assertEqual(again['rev'], out['rev'])
+
+    def test_history_post_to_a_lost_thread_is_404(self):
+        s3 = FakeS3()
+        ns = self._ns(s3, self._idx())
+        ns['request'] = _Req({'history': [Q1], 'thread_id': 'gone'})
+        out, st = self._unpack(ns['api_synth_chat_history']())
+        self.assertEqual(st, 404)
+        self.assertEqual(out['error'], 'unknown thread')
 
     def _idx(self):
         return {'active': 'abc', 'threads': [{'id': 'abc', 'title': 'New chat', 'created': 'x', 'updated': 'x', 'turns': 0},
