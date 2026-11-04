@@ -47,6 +47,7 @@ STORE_PREFIX = 'system/pm_pending_offers/'
 MAX_AGE_H = 24          # an offer older than this is stale, never approved by a bare word
 KEEP = 30               # offers kept per user
 SCAN_THREADS = 6        # other recent threads the fallback reads
+MAX_PARTS = 12          # parts kept on a multi-ask quote (multi_ask.MAX_ITEMS is 10; never truncate a quote's parts)
 
 _NO_PENDING_RX = re.compile(r"^\s*Nothing is waiting on (?:an approval|a yes)\b", re.I)
 _DECLINED_RX = re.compile(r"^\s*(?:No problem - nothing was charged|Understood\. Nothing is queued|Closed\.)", re.I)
@@ -257,7 +258,7 @@ def record(uname, tid, raw, question, ts=None):
             'dimension': str(po.get('dimension') or ''),
             'years': po.get('years') or 1,
             'price_label': str(po.get('price_label') or ''),
-            'parts': [dict(x) for x in (po.get('parts') or []) if isinstance(x, dict)][:6],   # a multi-ask quote (2026-10-30)
+            'parts': [dict(x) for x in (po.get('parts') or []) if isinstance(x, dict)][:MAX_PARTS],   # a multi-ask quote (2026-10-30)
         })
         _save(uname, doc)
         return oid
@@ -330,6 +331,9 @@ def open_in_history(history, ctx=None, now=None):
                  'kind': str(po.get('kind') or ''), 'frame': str(po.get('frame') or ''),
                  'dimension': str(po.get('dimension') or ''), 'years': po.get('years') or 1,
                  'price_label': str(po.get('price_label') or ''), 'source': 'history'}
+        if po.get('parts'):
+            # a multi-ask quote read back from the thread keeps every part it listed
+            offer['parts'] = [dict(x) for x in po['parts'] if isinstance(x, dict)][:MAX_PARTS]
         if not offer['subject'] or not offer['kind']:
             _fill_from_question(offer, turns[:i], ctx)
         return offer

@@ -38,6 +38,14 @@ Three jobs:
     in a connective ("and", "of", "the"), is not a subject. Callers
     that take a subject from a model or an extractor should treat an
     implausible one as empty.
+
+``placeholders(text)`` / ``placeholder_referent(text)``
+    Square brackets that hold no date are unnamed things (Jay Patel,
+    Amazon, 2026-11-04: "rank these titles ...: [The Beekeeper
+    comparable set], [a title WWSTA passed on], [a title that
+    underperformed]"). A bracketed date ("[June 2023]") is a window and
+    is never a referent. An unnamed set is a which-ones question, never
+    a silent drop and never a read quoted on the bracket text.
 """
 import re
 
@@ -182,11 +190,126 @@ def _count_of(m):
     return 0
 
 
+# ---------------------------------------------------------------------------
+# Bracketed placeholders (2026-11-04)
+# ---------------------------------------------------------------------------
+PLACEHOLDER_RX = re.compile(r"\[([^\[\]\n]{1,80})\](?!\()")
+_MONTH = (r"(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?")
+_YEAR = r"(?:19|20)\d{2}"
+_WINDOW_INNER_RX = re.compile(
+    r"^\s*(?:as\s+of\s+|since\s+|through\s+|thru\s+|until\s+|from\s+|to\s+|ending\s+|ended\s+|starting\s+|"
+    r"in\s+|during\s+|for\s+|the\s+)?(?:"
+    r"(?:early|mid|late|end\s+of|start\s+of|spring|summer|fall|autumn|winter)\s+" + _YEAR + r"|"
+    + _MONTH + r"\s+\d{1,2}(?:st|nd|rd|th)?,?\s+" + _YEAR + r"|"
+    + _MONTH + r"\s+" + _YEAR + r"(?:\s*(?:-|to|through|thru|until)\s*(?:" + _MONTH + r"\s+)?" + _YEAR + r")?|"
+    r"\d{1,2}\s+" + _MONTH + r",?\s+" + _YEAR + r"|"
+    + _YEAR + r"(?:\s*(?:-|/|to|through|thru|until)\s*(?:" + _YEAR + r"|\d{2}))?|"
+    r"[qh][1-4]\s*(?:of\s+)?" + _YEAR + r"|fy\s*(?:" + _YEAR + r"|\d{2})|"
+    r"\d{1,2}/" + _YEAR + r"|\d{1,2}/\d{1,2}/(?:" + _YEAR + r"|\d{2})|" + _YEAR + r"-\d{2}(?:-\d{2})?|"
+    r"(?:trailing|last|past|prior|previous|next|rolling)\s+(?:\d+|twelve|six|three|twenty-?four|ninety|thirty|seven)\s+(?:days?|weeks?|months?|years?)|"
+    r"t\d{1,3}[dmw]|ytd|mtd|qtd|year\s+to\s+date|month\s+to\s+date|quarter\s+to\s+date|calendar\s+year\s+" + _YEAR + r")\s*$",
+    re.I)
+_NOT_A_PLACEHOLDER = frozenset(('sic', 'link', 'image', 'img', 'attachment', 'attached', 'redacted'))
+# a footnote mark, a pasted inline image, a url: brackets that stand for nothing to name
+_NOT_A_PLACEHOLDER_RX = re.compile(
+    r"^\W*\d{1,3}\W*$|^\s*cid:|https?://|^\s*www\.|\.(?:png|jpe?g|gif|pdf|csv|xlsx?|docx?|pptx?)\b", re.I)
+_NUMBERED_LIST_RX = re.compile(r"(?:^|(?<=\s))(\d{1,2})[.)]\s+(?=\S)", re.M)
+
+
+def is_window_text(inner):
+    """True when a bracket's content is a date or a window ("June
+    2023", "2021-2023", "Q2 2024", "trailing 12 months"), never a thing
+    that still needs a name."""
+    s = ' '.join(str(inner or '').replace('\u2013', '-').replace('\u2014', '-').split())
+    return bool(s) and bool(_WINDOW_INNER_RX.match(s))
+
+
+def placeholders(text):
+    """The bracketed placeholders in the text that are not dates, in
+    order, as written with their brackets ('[a title WWSTA passed on]').
+    A markdown link, '[sic]' and a bracketed date are not placeholders."""
+    out = []
+    for m in PLACEHOLDER_RX.finditer(str(text or '')):
+        inner = m.group(1).strip()
+        if not inner or is_window_text(inner):
+            continue
+        if _NOT_A_PLACEHOLDER_RX.search(inner) or inner.lower().strip('.') in _NOT_A_PLACEHOLDER:
+            continue
+        ph = m.group(0)
+        if ph not in out:
+            out.append(ph)
+    return out
+
+
+def unbracket_windows(text):
+    """'as of [June 2023]' -> 'as of June 2023': a bracketed date is a
+    window and reads as one; a placeholder that names no date stays in
+    its brackets."""
+    def _sub(m):
+        inner = m.group(1).strip()
+        return inner if is_window_text(inner) else m.group(0)
+    return PLACEHOLDER_RX.sub(_sub, str(text or ''))
+
+
+def _is_numbered_list(text):
+    """True when the text is a numbered list of two or more items (the
+    multi-ask lane takes it item by item; a placeholder in one item is
+    that item's question, never the whole message's)."""
+    seen, expect = 0, 1
+    for m in _NUMBERED_LIST_RX.finditer(str(text or '')):
+        if int(m.group(1)) == expect:
+            seen += 1
+            expect += 1
+    return seen >= 2
+
+
+def _placeholder_noun(text, phs):
+    """The noun the brackets stand for: the referent noun written just
+    before them ('rank these titles ...: [a], [b]' -> titles), else the
+    first referent noun in the text, else 'names'."""
+    t = str(text or '')
+    first = t.find(phs[0]) if phs else -1
+    before = t[:first] if first > 0 else t
+    # the set the demonstrative points at ('rank these titles by ...')
+    # names the brackets; a noun inside the measure ('their audience')
+    # does not
+    dem = re.findall(r'\b(?:these|those|the\s+following|the\s+above|all\s+(?:of\s+)?(?:these|those|the))\s+'
+                     r'(?:\w+\s+)?(' + _NOUNS + r')\b', before, re.I)
+    if dem:
+        return _plural(dem[-1].lower())
+    hits = re.findall(r'\b(' + _NOUNS + r')\b', before, re.I)
+    if hits:
+        return _plural(hits[-1].lower())
+    hits = re.findall(r'\b(' + _NOUNS + r')\b', t, re.I)
+    return _plural(hits[0].lower()) if hits else 'names'
+
+
+def placeholder_referent(text):
+    """The unresolved referent a bracketed set makes, or None: the
+    phrase is the bracket run as written (what the names replace), the
+    noun is what they are, the count is how many."""
+    t = str(text or '')
+    phs = placeholders(t)
+    if not phs:
+        return None
+    i0 = t.find(phs[0])
+    last = phs[-1]
+    i1 = t.rfind(last) + len(last)
+    phrase = t[i0:i1].strip() if 0 <= i0 < i1 else ', '.join(phs)
+    n = len(phs)
+    words = {2: 'two', 3: 'three', 4: 'four', 5: 'five', 6: 'six', 7: 'seven', 8: 'eight', 9: 'nine', 10: 'ten'}
+    return {'phrase': phrase, 'noun': _placeholder_noun(t, phs), 'count': n,
+            'count_word': words.get(n, str(n)) if n > 1 else '', 'placeholders': phs}
+
+
 def _names_in_text(text):
     """True when the ask itself carries at least one name: a
     capitalized run that is not a sentence opener, a quoted string, a
-    handle, or a listed set after a colon."""
+    handle, or a listed set after a colon. A bracketed placeholder is
+    not a name and is read out first."""
     t = str(text or '')
+    if placeholders(t):
+        t = PLACEHOLDER_RX.sub(lambda m: m.group(0) if is_window_text(m.group(1)) else ' ', t)
     if _QUOTED_RX.search(t) or _HANDLE_RX.search(t):
         return True
     if _LIST_AFTER_COLON_RX.search(t):
@@ -239,6 +362,14 @@ def detect_unresolved(text, history=None, ctx=None):
     t = str(text or '').strip()
     if not t or len(t) > 1200:
         return None
+    # A bracketed set that names no date is unnamed whatever else the
+    # ask names ('Prime Video' is a name, the titles still are not). A
+    # numbered list of asks is read item by item by the multi-ask lane,
+    # which asks for the names on that item alone.
+    if not _is_numbered_list(t):
+        ph = placeholder_referent(t)
+        if ph:
+            return ph
     best = None
     for m in _REF_RX.finditer(t):
         dem = (m.group('dem') or '').strip().lower()
@@ -292,7 +423,9 @@ def _task_clause(text):
         return ("I'll run the comparison on exactly those: who "
                 "actually drives product purchases, and in which "
                 "categories.")
-    if re.search(r'\bcompare|\bversus\b|\bvs\.?\b|\bwhich of\b|\brank\b|'
+    if re.search(r'\brank(?:ed|ing)?\b|\border(?:ed)? by\b|\bsort(?:ed)? by\b', tl):
+        return "I'll run the ranking on exactly those."
+    if re.search(r'\bcompare|\bversus\b|\bvs\.?\b|\bwhich of\b|'
                  r'\bagainst\b|\bside by side\b', tl):
         return "I'll run the comparison on exactly those."
     if re.search(r'\breport\b|\bdeck\b|\bone.?pager\b|\bwrite.?up\b', tl):
@@ -300,10 +433,12 @@ def _task_clause(text):
     return "I'll answer on exactly those."
 
 
-def clarify_payload(ref, text):
+def clarify_payload(ref, text, append=''):
     """The clarifying question, as a chat payload. No charge, no
     offer, no model call. ``referent_clarify`` lets the next turn
-    merge the names back into this question."""
+    merge the names back into this question; ``append`` is a standing
+    instruction (a reporting rider from a multi-ask) that rides the
+    merged question when the names land."""
     noun = _plural(ref.get('noun') or 'names')
     cw = str(ref.get('count_word') or '').strip()
     count = int(ref.get('count') or 0)
@@ -313,7 +448,24 @@ def clarify_payload(ref, text):
                   int(cw), cw)
     head = f"Which {cw} {noun}?" if cw and cw != 'both' else (
         f"Which two {noun}?" if count == 2 else f"Which {noun}?")
-    reply = f"{head} Name them and {_task_clause(text)}"
+    phs = [str(p) for p in (ref.get('placeholders') or []) if str(p).strip()]
+    if phs:
+        # the brackets are the reader's own words for what is still unnamed
+        shown = ', '.join(phs)
+        what = 'The one in brackets' if len(phs) == 1 else f"The {cw or len(phs)} in brackets"
+        reply = f"{head} {what} ({shown}) {'is' if len(phs) == 1 else 'are'} not named yet. Name {'it' if len(phs) == 1 else 'them'} and {_task_clause(text)}"
+    else:
+        reply = f"{head} Name them and {_task_clause(text)}"
+    rc = {
+        'question': str(text or ''),
+        'noun': ref.get('noun'),
+        'count': count,
+        'phrase': ref.get('phrase'),
+    }
+    if phs:
+        rc['placeholders'] = phs
+    if str(append or '').strip():
+        rc['append'] = ' '.join(str(append).split())
     return {
         'success': True,
         'action': 'clarify',
@@ -321,12 +473,7 @@ def clarify_payload(ref, text):
         'followups': [],
         'offer_deck': False,
         'deck_angle': None,
-        'referent_clarify': {
-            'question': str(text or ''),
-            'noun': ref.get('noun'),
-            'count': count,
-            'phrase': ref.get('phrase'),
-        },
+        'referent_clarify': rc,
     }
 
 
@@ -378,9 +525,17 @@ def answer_merge(history, text):
     for i in range(len(turns) - 1, -1, -1):
         role = str(turns[i].get('role') or '').lower()
         if role in ('agent', 'assistant'):
-            last_agent = turns[i]
-            idx = i
-            break
+            if last_agent is None:
+                last_agent = turns[i]
+                idx = i
+            # a which-ones question a few agent turns back still stands
+            # when only our own turns (a read that landed, a status line)
+            # sit between it and the names (2026-11-04)
+            if _referent_of_clarify(turns[i]) is not None:
+                last_agent = turns[i]
+                idx = i
+                break
+            continue
         if role == 'user':
             break
     if last_agent is None:
@@ -419,6 +574,9 @@ def answer_merge(history, text):
         merged = orig[:i] + label + orig[i + len(phrase):]
     else:
         merged = f"{orig}\n\nNames: {label}"
+    extra = ' '.join(str((rc or {}).get('append') or '').split())
+    if extra and extra.lower() not in merged.lower():
+        merged = merged.rstrip() + ' ' + extra     # the standing reporting rider rides the merged question
     return merged, label
 
 
