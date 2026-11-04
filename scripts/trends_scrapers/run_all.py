@@ -594,6 +594,14 @@ def _run_main(argv: list[str] | None = None) -> int:
 
     logging.info("run_all: running %d scrapers with %d workers: %s",
                   len(plan), args.workers, ', '.join(p[0] for p in plan))
+    # A full run holds the dashboard's published copy until the 12:01 AM Pacific flip, so the new day's boards go
+    # live with the clickstream day (publish_board). A partial re-run (--only) is a refresh of the current board.
+    if not only:
+        try:
+            from . import publish_board as _pb
+            _pb.hold(measured=(datetime.now(timezone.utc).date() - timedelta(days=1)).isoformat())
+        except Exception as e:
+            logging.warning("run_all: publish hold not set (%s); the hourly copy may publish early", e)
     started = time.time()
     results: list[dict] = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.workers,

@@ -515,7 +515,12 @@ YOUTUBE_PLATFORMS = [
 # is flaky.
 _SNAPSHOT_MAX_AGE_S = int(os.environ.get('TRENDS_IQ_SNAPSHOT_MAX_AGE_S',
                                             str(2 * 24 * 3600)))
-_SNAPSHOT_PREFIX    = 'trends_iq_snapshots/latest/'
+# 2026-11-04 (Jenna: the boards and ranker tabs turn over with the data drop at 12:01 AM Pacific). The scrapers
+# still write latest/; the live read is published/, a copy that scripts/trends_scrapers/publish_board.py makes
+# at 12:01 AM Pacific (the flip) and hourly between flips while no nightly run is being held. A file published/
+# does not hold yet (an ad-hoc source, the first day) is read from latest/ as before.
+_SNAPSHOT_PREFIX    = 'trends_iq_snapshots/published/'
+_SNAPSHOT_LIVE_PREFIX = 'trends_iq_snapshots/latest/'
 # Historic snapshots (dated). Every scraper writes to BOTH
 # `latest/{source}.json` and `{YYYY-MM-DD}/{source}.json` via
 # scripts/trends_scrapers/_base.py::write_snapshot, so the daily archive
@@ -994,7 +999,15 @@ def _read_snapshot(source: str, asof: Optional[str] = None) -> Optional[dict]:
     try:
         resp = s3.get_object(Bucket=S3_CACHE_BUCKET, Key=key)
     except Exception:
-        return None
+        resp = None
+        if asof is None:
+            # not published yet (an ad-hoc source, or the first day of the published/ copy): the scrapers' own file
+            try:
+                resp = s3.get_object(Bucket=S3_CACHE_BUCKET, Key=f'{_SNAPSHOT_LIVE_PREFIX}{source}.json')
+            except Exception:
+                resp = None
+        if resp is None:
+            return None
     try:
         data = json.loads(resp['Body'].read().decode('utf-8'))
     except Exception as e:
