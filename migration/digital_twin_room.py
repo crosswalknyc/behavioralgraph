@@ -108,7 +108,7 @@ from typing import Callable, Optional
 
 from migration.digital_twin_engine import clamp, unit
 
-ROOM_VERSION = 'room-2'   # room-2 (2026-11-04): the media desk and the result anchor
+ROOM_VERSION = 'room-3'   # room-2 (2026-11-04): the media desk and the result anchor; room-3 (2026-11-04): the read opens with the room, a short read for the chat, answers stamped as they land
 S3_BUCKET = 'dashboard-inputs'
 JOB_PREFIX = 'system/digital_twins/jobs/'
 RESEARCH_PREFIX = 'system/digital_twins/research/'
@@ -1394,11 +1394,12 @@ Return JSON only: {"option": "<id or other>", "other_label": "<when other>", "li
 READ_SYSTEM = """You are Prometheus, the moderator, writing up the room for a senior executive. Plain English a high school student follows; the thinking is senior consultant. You are given the question, the options with the room's split (the published share of the whole audience in percent and people, and the raw tally of the seats in the room, both already computed; never change a number), the split by segment, every seat's answer, the facts brief and a prior note.
 The published share is the room projected onto the audience: the seats drive the shape, and the small tails stand for people the twelve seats could not show, so a 1% option means a sliver of the audience, never nobody. Say shares in plain words first ('about two in three', 'about one in ten', 'a sliver') and cite the raw count when it helps ('eight of the twelve'); never print a percentage with a decimal in the read.
 Write:
-- read: one paragraph, three to five sentences, on what the room said and why, grounded in the facts and the comparables in plain words. When the brief carries how an event came out, say so as fact in the first sentence and read the seats against it: the published split follows the count, the twelve seats are twelve people, so say what they show that the count does not. When the brief carries talk, name the loudest lines people used, in plain words. Say what the share means (who these people are, what it would take). Vary the sentence shapes. Never name a source or a publication; never use the words research, model, modeled, synthetic, estimated, panel, sample, confidence, pipeline, data. If the prior note says the seats departed from the audience's own leaning, explain what accounts for it in the read rather than overriding the room. When the question was asked on the clock (the stimulus carries what_just_played), open the read with the clock and the scene ('At 12:40, after the hallway reveal, ...') and keep the read about that moment and the seats' own dials.
+- read: one paragraph, three to five sentences, on what the room said and why, grounded in the facts and the comparables in plain words. When the brief carries how an event came out, say so as fact in the first sentence and read the seats against it: the published split follows the count, the twelve seats are twelve people, so say what they show that the count does not. When the brief carries talk, name the loudest lines people used, in plain words. Say what the share means (who these people are, what it would take). Vary the sentence shapes. Never name a source or a publication; never use the words research, model, modeled, synthetic, estimated, panel, sample, confidence, pipeline, data. If the prior note says the seats departed from the audience's own leaning, explain what accounts for it in the read rather than overriding the room. When the question was asked on the clock (the stimulus carries what_just_played), open the read with what the room said (the share in words and the reason that carried it), never with the clock or the scene; the reader is looking at that moment already. Keep the read about that moment and the seats' own dials.
+- chat: the read for the room's chat, two or three sentences: the share in words and the one reason that carried it. No clock, no scene, no preamble; it opens with what the room said.
 - voices: the seat ids of the three or four most telling answers, spread across the options in proportion to the split.
 - probes_next: two follow-up questions you would ask this room next, in your own words as the moderator.
 - facts_used: two to five one-line facts the read leans on, in plain words with no source names.
-No em dashes. Return JSON only: {"read": "...", "voices": [<seat ids>], "probes_next": ["...", "..."], "facts_used": ["..."]}"""
+No em dashes. Return JSON only: {"read": "...", "chat": "...", "voices": [<seat ids>], "probes_next": ["...", "..."], "facts_used": ["..."]}"""
 
 
 # ---------------------------------------------------------- the stages
@@ -2356,9 +2357,53 @@ def _fallback_read(q: str, kind: str, opts_out: list, by_segment: list, prior: d
     return line
 
 
-def moderator_read(models: Models, twin: dict, q: str, kind: str, framing: str, opts_out: list, by_segment: list, answers: list, brief: dict, prior: dict, roster: list, log=None) -> dict:
-    """The synthesis: read, voices, probes_next, facts_used; the
-    deterministic write-up when the model is off or late."""
+_CLOCK_OPEN = re.compile(r'^At\s+\d{1,3}:\d{2}(?::\d{2})?\b[,:]?\s*', re.I)
+_SCENE_LEAD = ('with', 'after', 'right', 'just', 'as', 'when', 'once', 'while', 'on', 'in', 'before', 'following', 'at', 'off', 'coming', 'having', 'seconds', 'moments')
+
+
+def _drop_clock_opening(text: str) -> str:
+    """A read on the clock that still opens with the clock and the scene
+    ('At 43:13, with the screen black and the network logo up, almost
+    nine in ten seats said ...') opens with what the room said instead
+    (Jenna, 2026-11-04: no context preamble, launch into what the seats
+    say). Only a leading 'At m:ss' goes; a clock later in the read
+    stays."""
+    s = str(text or '').strip()
+    m = _CLOCK_OPEN.match(s)
+    if not m:
+        return s
+    rest = s[m.end():].lstrip()
+    # the scene clause the clock introduces, set off by a comma ('with the screen black and the network logo up,')
+    first = re.split(r'[\s,]', rest, 1)[0].lower() if rest else ''
+    if first in _SCENE_LEAD:
+        cut = rest.find(',')
+        end = re.search(r'[.!?]', rest)
+        if 0 < cut < 110 and (end is None or cut < end.start()):
+            rest = rest[cut + 1:].lstrip()
+    if not rest:
+        return s
+    return rest[0].upper() + rest[1:]
+
+
+def short_read(text: str, n: int = 2) -> str:
+    """The first sentences of a read for the chat: two, or three when the
+    first two are short."""
+    s = str(text or '').strip()
+    if not s:
+        return ''
+    parts = [p.strip() for p in re.split(r'(?<=[.!?])\s+(?=[A-Z0-9"\'(])', s) if p.strip()]
+    if not parts:
+        return s
+    out = parts[:n]
+    if len(parts) > n and sum(len(p) for p in out) < 150:
+        out = parts[:n + 1]
+    return ' '.join(out)
+
+
+def moderator_read(models: Models, twin: dict, q: str, kind: str, framing: str, opts_out: list, by_segment: list, answers: list, brief: dict, prior: dict, roster: list, log=None, in_cut: bool = False) -> dict:
+    """The synthesis: read, read_short (the chat's version), voices,
+    probes_next, facts_used; the deterministic write-up when the model
+    is off or late."""
     tb = _twin_brief(twin)
     user = json.dumps({'question': q, 'kind': kind, 'framing': framing,
                        'options': [{'id': o['id'], 'label': o['label'], 'lean': o['lean'], 'published_pct': o['pct'], 'published_in_words': plain_share(o['pct']), 'people': o['people'],
@@ -2373,9 +2418,13 @@ def moderator_read(models: Models, twin: dict, q: str, kind: str, framing: str, 
     if log:
         log('read', call)
     by_seat = {int(a['seat']): a for a in answers}
-    out = {'read': '', 'voices': [], 'probes_next': [], 'facts_used': [], 'fallback': False}
+    out = {'read': '', 'read_short': '', 'voices': [], 'probes_next': [], 'facts_used': [], 'fallback': False}
     if isinstance(data, dict) and str(data.get('read') or '').strip():
         out['read'] = scrub(str(data['read']).strip())[:1400]
+        out['read_short'] = scrub(str(data.get('chat') or '').strip())[:600]
+        if in_cut:   # a question on the clock: the read opens with the room, never the clock and the scene
+            out['read'] = _drop_clock_opening(out['read'])
+            out['read_short'] = _drop_clock_opening(out['read_short'])
         picks = []
         for v in (data.get('voices') or [])[:VOICES_N + 1]:
             try:
@@ -2390,6 +2439,8 @@ def moderator_read(models: Models, twin: dict, q: str, kind: str, framing: str, 
     if not out['read']:
         out['fallback'] = True
         out['read'] = _fallback_read(q, kind, opts_out, by_segment, prior)
+    if not out['read_short']:
+        out['read_short'] = short_read(out['read'])
     if not out['voices']:
         # spread across the options in proportion to the split, highest confidence first
         picks = []
@@ -2412,11 +2463,10 @@ def moderator_read(models: Models, twin: dict, q: str, kind: str, framing: str, 
 
 
 def chat_lines(session: dict, rec: dict) -> list:
-    """Plain lines for chat: the question, the % table, the read and
-    the voices."""
+    """Plain lines for chat: the question as asked, the % table, the read
+    and the voices. The moderator's framing is the seats' briefing, never
+    a chat line (Jenna, 2026-11-04: launch into what the seats say)."""
     out = [str(rec.get('q') or '')]
-    if rec.get('framing'):
-        out.append(str(rec['framing']))
     rows = rec.get('options') if (rec.get('options') and isinstance(rec['options'][0], dict) and 'pct' in rec['options'][0]) else (rec.get('distribution') or [])
     for r in rows[:8]:
         tally = f"; in the room: {r['tally']}" if r.get('tally') else ''
@@ -2654,6 +2704,7 @@ def run_question(ctx: dict) -> dict:
                 except Exception as e:
                     print(f"[twin-room] seat {futures[f]} failed: {e}")
                     a = seat_answer(Models(model_fn=lambda *a_, **k_: None), cards[futures[f]], q, rec.get('framing') or '', options, brief, [], seed)
+                a['answered_at'] = round(time.time(), 3)   # the page places each seat's line in the chat in the order the seats answered
                 with lock:
                     rec['answers'].append(a)
             if time.time() - last_pub[0] >= 1.0 and s3 is not None:
@@ -2663,6 +2714,7 @@ def run_question(ctx: dict) -> dict:
         for f in pending:   # late seats land from habit; the thread keeps running and is dropped
             f.cancel()
             a = seat_answer(Models(model_fn=lambda *a_, **k_: None), cards[futures[f]], q, rec.get('framing') or '', options, brief, [], seed)
+            a['answered_at'] = round(time.time(), 3)
             rec['answers'].append(a)
             fallbacks.append(f"seat {futures[f]} late")
         pool.shutdown(wait=False)
@@ -2707,12 +2759,13 @@ def run_question(ctx: dict) -> dict:
         # 5. the moderator reads the room
         t = time.time()
         _publish(ctx, 'moderator is reading', payload_too=True)
-        mr = moderator_read(models, twin, q, kind, rec.get('framing') or '', opts_out, by_segment, rec['answers'], brief, prior, roster, log=log)
+        mr = moderator_read(models, twin, q, kind, rec.get('framing') or '', opts_out, by_segment, rec['answers'], brief, prior, roster, log=log, in_cut=_in_cut(stim))
         if mr.get('fallback'):
             fallbacks.append('read')
         by_seat = {int(a['seat']): a for a in rec['answers']}
         seats = {int(r['seat']): r for r in roster}
         rec['read'] = mr['read']
+        rec['read_short'] = mr.get('read_short') or short_read(mr['read'])
         rec['voices'] = []
         for sid in mr['voices']:
             a, r = by_seat.get(sid), seats.get(sid)
@@ -2772,6 +2825,7 @@ def _deterministic_fill(ctx: dict):
     rec['tally'] = []
     rec['by_segment'] = old.get('by_segment') or []
     rec['read'] = scrub(str(old.get('read') or ''))
+    rec['read_short'] = short_read(rec['read'])
     rec['voices'] = [dict(v, seat=next((r['seat'] for r in ctx['roster'] if r['name'] == v.get('name')), None)) for v in (old.get('voices') or [])]
     rec.setdefault('answers', [])
     rec['probes_next'] = ['Why?', 'What would change your mind?']
@@ -2802,7 +2856,7 @@ def ask_room(session: dict, twins_by_key: dict, q: str, *, kind: Optional[str] =
     qi = len(session.get('questions') or [])
     job_id = uuid.uuid4().hex[:12]
     rec = {'id': f"q{qi + 1}", 'q': q, 'kind': kind, 'framing': '', 'options': [], 'option_labels': list(cls.get('options') or []), 'distribution': [], 'by_segment': [],
-           'read': '', 'voices': [], 'answers': [], 'probes_next': [], 'facts_used': [], 'tally': [], 'seats_total': len(group.get('roster') or []), 'timings': {},
+           'read': '', 'read_short': '', 'voices': [], 'answers': [], 'probes_next': [], 'facts_used': [], 'tally': [], 'seats_total': len(group.get('roster') or []), 'timings': {},
            'stage': 'researching', 'job_id': job_id, 'topic': P.topic_of(q if kind != 'probe' else str((last or {}).get('q') or q)),
            'stimulus': stim, 'follows': last['id'] if (kind == 'probe' and last) else None, 'price': stim.get('price'), 'yes_pct': None,
            'asked_by': asked_by or session.get('created_by'), 'asked_at': _now(), 'started_at': _now(), 'finished_at': None, 'engine': ROOM_VERSION,
@@ -2834,6 +2888,6 @@ def ask_room(session: dict, twins_by_key: dict, q: str, *, kind: Optional[str] =
 
 __all__ = ['ask_room', 'run_question', 'all_sessions', 'find_session', 'SESSION_LISTS', 'research', 'media_desk', 'merge_media', 'talk_lines', 'coverage_lines',
            'match_targets', 'anchor_plan', 'anchor_rows', 'media_key', 'MEDIA_SYSTEM', 'RESEARCH_CLASS_GUIDANCE', 'moderator_options', 'seat_answer', 'moderator_read', 'weigh', 'prior_over_options', 'plain_share', 'persona_card', 'persona_bio', 'ensure_personas', 'refresh_memory',
-           'memory_for', 'prior_note', 'drop_ruled_out', 'scrub', 'has_banned', 'chat_lines', 'room_enabled', 'model_available', 'set_model_fn', 'topic_hash', 'topic_tokens',
+           'memory_for', 'prior_note', 'drop_ruled_out', 'scrub', 'has_banned', 'chat_lines', 'short_read', 'room_enabled', 'model_available', 'set_model_fn', 'topic_hash', 'topic_tokens',
            'topics_overlap', 'research_key', 'facts_key', 'job_key', 'job_read', 'Models', 'MODELS', 'BUDGET_S', 'ALPHA_SEATS', 'STAGES', 'STAGE_LABEL', 'ROOM_VERSION',
            'JOB_PREFIX', 'RESEARCH_PREFIX', 'FACTS_PREFIX']

@@ -51944,6 +51944,40 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-pi-seatrow.coh .who .cohort { color: var(--coh); }
         #digitalTwinsIQView .dtw-pi-strip .dtw-pi-chip.coh { margin: 3px; }
         #digitalTwinsIQView .dtw-pi-thread, #digitalTwinsIQView .dtw-pi-seatlist { padding-left: 2px; }
+        /* Ask the room lands in the chat (Jenna, 2026-11-04): the question as a Prometheus line, each seat's answer as its
+           remark, then one short Prometheus line with the read; under the ask box only the controls and the question list. */
+        #digitalTwinsIQView .dtw-pi-seatrow.prom .circ { background: var(--dtw-raised); border: 1px solid var(--dtw-rule); color: var(--dtw-ink); box-sizing: border-box; }
+        #digitalTwinsIQView .dtw-pi-seatrow.prom .circ svg { width: 12px; height: 12px; display: block; fill: currentColor; }
+        #digitalTwinsIQView .dtw-pi-seatrow.prom .who .nm { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dtw-mute); }
+        #digitalTwinsIQView .dtw-pi-seatrow.prom.ask .say { color: var(--dtw-ink); font-weight: 600; }
+        #digitalTwinsIQView .dtw-pi-seatrow.prom.read .say { color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-pi-seatrow.ans .say { color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-pi-qlist { display: flex; flex-direction: column; margin-top: 8px; }
+        #digitalTwinsIQView .dtw-pi-qitem { appearance: none; width: 100%; text-align: left; background: transparent; border: 0; border-top: 1px solid var(--dtw-hair); padding: 6px 2px; color: var(--dtw-ink); font: inherit; font-size: 12px; line-height: 16px; cursor: pointer; display: flex; gap: 8px; align-items: baseline; }
+        #digitalTwinsIQView .dtw-pi-qitem:first-child { border-top: 0; }
+        #digitalTwinsIQView .dtw-pi-qitem:hover .t, #digitalTwinsIQView .dtw-pi-qitem:focus-visible .t { color: #C7F23E; }
+        body[data-theme="light"] #digitalTwinsIQView .dtw-pi-qitem:hover .t, body[data-theme="light"] #digitalTwinsIQView .dtw-pi-qitem:focus-visible .t { color: #5E7E12; }
+        #digitalTwinsIQView .dtw-pi-qitem .c { flex: none; color: var(--dtw-mute); font-variant-numeric: tabular-nums; font-size: 11px; }
+        #digitalTwinsIQView .dtw-pi-qitem .t { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-pi-qitem .n { flex: none; color: var(--dtw-mute); font-size: 10.5px; font-variant-numeric: tabular-nums; }
+        /* the record of one question (the split with the tally, the read, the voices, what the room knew, what people were
+           saying): one card per window, over the page, opened from the question list under the ask box */
+        #digitalTwinsIQView .dtw-pi-recscrim { display: none; position: fixed; inset: 0; z-index: 13; background: rgba(12,22,24,0.55); }
+        #digitalTwinsIQView .dtw-pi-recscrim.on { display: block; }
+        #digitalTwinsIQView .dtw-pi-reccard { display: none; position: fixed; z-index: 14; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(600px, 94vw); max-height: 84vh; overflow-y: auto; overflow-x: hidden; box-sizing: border-box; background: #0C1618; border: 1px solid var(--dtw-rule); border-radius: 12px; padding: 14px 16px 16px; box-shadow: 0 16px 40px rgba(0,0,0,0.5); font-size: 12.5px; line-height: 17px; color: var(--dtw-ink); text-align: left; scrollbar-width: thin; }
+        #digitalTwinsIQView .dtw-pi-reccard.on { display: block; }
+        body[data-theme="light"] #digitalTwinsIQView .dtw-pi-reccard { background: #FFFFFF; }
+        #digitalTwinsIQView .dtw-pi-reccard .hd { display: flex; align-items: flex-start; gap: 10px; }
+        #digitalTwinsIQView .dtw-pi-reccard .hd > div { flex: 1 1 auto; min-width: 0; }
+        #digitalTwinsIQView .dtw-pi-reccard .hd .k { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dtw-mute); font-weight: 600; margin-bottom: 3px; }
+        #digitalTwinsIQView .dtw-pi-reccard .hd .q { font-size: 14px; font-weight: 600; line-height: 19px; overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-pi-reccard .x { appearance: none; background: transparent; border: 1px solid var(--dtw-rule); border-radius: 999px; color: var(--dtw-mute); font: inherit; font-size: 11px; padding: 2px 9px; cursor: pointer; flex: none; }
+        #digitalTwinsIQView .dtw-pi-reccard .x:hover, #digitalTwinsIQView .dtw-pi-reccard .x:focus-visible { color: var(--dtw-ink); border-color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-pi-reccard .rd { margin-top: 4px; font-size: 12.5px; line-height: 17px; color: var(--dtw-ink); overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-pi-reccard .fr { margin-top: 4px; font-size: 11.5px; line-height: 15px; color: var(--dtw-body); overflow-wrap: anywhere; }
+        #digitalTwinsIQView .dtw-pi-reccard .dtw-fg-qpick { margin-top: 10px; padding-bottom: 4px; }
+        #digitalTwinsIQView .dtw-pi-reccard .dtw-pi-thread { max-height: none; overflow: visible; padding-left: 0; margin-top: 4px; }
+        #digitalTwinsIQView .dtw-pi-reccard .dtw-pi-probes { margin-top: 12px; }
         /* the test bar locks at the top of the body while the page scrolls under it */
         #digitalTwinsIQView .dtw-pi-head { position: sticky; top: 0; z-index: 6; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin: -1rem -1.15rem 0; padding: 0.7rem 1.15rem 0.65rem; background: var(--dtw-raised); border-bottom: 1px solid var(--dtw-hair); border-radius: 12px 12px 0 0; }
         /* the body's top padding shows through above a stuck bar; a page-colored strip covers it */
@@ -54683,10 +54717,63 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 out.sort(function(a, b) { return (Number(a.t) || 0) - (Number(b.t) || 0); });
                 return out;
             }
+            // ---- Ask the room lands in this thread (Jenna, 2026-11-04: "have the ask the room show up in the panelist chat bar
+            // instead of below ... just launch in to what the panelists say"). A question is a Prometheus line at the clock it
+            // was asked (the words as typed, nothing else); each seat's answer is that seat's remark, in the order the seats
+            // answered, landing as they answer; after the last seat one short Prometheus line carries the read. An answer that
+            // lands while this page is watching takes the clock it landed at, so it sits at the foot of the thread; a question
+            // already answered when the page opens sits under its own line.
+            function piPosStore(s) {
+                var sid = String((s || {}).id || ''), st = S.piAnsPos;
+                if (!st || st.sid !== sid) st = S.piAnsPos = { sid: sid, pos: {}, fly: {} };
+                return st;
+            }
+            function piItemPos(st, q, key, tq, t) {
+                var k = String(q.id || '') + '|' + key;
+                if (st.pos[k] == null) st.pos[k] = st.fly[String(q.id || '')] ? Math.max(tq, Number(t) || 0) : tq;
+                return st.pos[k];
+            }
+            function piAnswersInOrder(q) {
+                var ans = ((q || {}).answers || []).filter(function(a) { return a && a.seat != null && String(a.line || '').trim(); }).map(function(a, i) { return { a: a, i: i }; });
+                ans.sort(function(x, y) {
+                    var p = Number(x.a.answered_at), r = Number(y.a.answered_at);
+                    p = isFinite(p) ? p : Infinity; r = isFinite(r) ? r : Infinity;
+                    return (p - r) || (x.i - y.i);
+                });
+                return ans.map(function(x) { return x.a; });
+            }
+            function piThreadItems(s, t) {
+                var items = [];
+                piThreadEvents(s, t).forEach(function(e, i) { items.push({ kind: 'event', t: Number(e.t || 0), seq: i, e: e }); });
+                var st = piPosStore(s);
+                ((s || {}).questions || []).forEach(function(q, qi) {
+                    if (!q || !String(q.q || '').trim()) return;
+                    var tq = Number(q.playhead_s); if (!isFinite(tq)) tq = 0;
+                    if (tq > t + 0.75) return;
+                    var base = 100000 + qi * 1000, fly = qInFlight(q), clock = q.playhead_clock || clockFmt(tq);
+                    if (fly) st.fly[String(q.id || '')] = true;
+                    items.push({ kind: 'ask', t: tq, seq: base, q: q, clock: clock });
+                    piAnswersInOrder(q).forEach(function(a, k) { items.push({ kind: 'answer', t: piItemPos(st, q, 's' + a.seat, tq, t), seq: base + 1 + k, q: q, a: a, clock: clock }); });
+                    var rd = String(q.read_short || q.read || '').trim();
+                    if (rd && !fly) items.push({ kind: 'read', t: piItemPos(st, q, 'read', tq, t), seq: base + 900, q: q, read: rd });
+                });
+                items.sort(function(a, b) { return (a.t - b.t) || (a.seq - b.seq); });
+                return items;
+            }
             function piThreadKey(s, t) {
-                var n = 0, last = null;
-                ((s || {}).events || []).forEach(function(e) { if (Number(e.t || 0) <= t + 0.05) { n++; if (!last || Number(e.t || 0) >= Number(last.t || 0)) last = e; } });
-                return n + '|' + (last ? (last.t + '|' + last.seat + '|' + String(last.line || '').length) : '');
+                var items = piThreadItems(s, t), last = items[items.length - 1], k = items.length + '|';
+                if (!last) return k;
+                if (last.kind === 'event') return k + last.t + '|' + last.e.seat + '|' + String(last.e.line || '').length;
+                if (last.kind === 'ask') return k + 'ask|' + last.q.id;
+                if (last.kind === 'answer') return k + 'ans|' + last.q.id + '|' + last.a.seat + '|' + String(last.a.line || '').length;
+                return k + 'read|' + last.q.id + '|' + last.read.length;
+            }
+            function piPromRowHtml(text, opts) {
+                // a Prometheus line in the thread: the question as typed, or the short read; no seat behind it, so no card, no pin
+                opts = opts || {};
+                return '<div class="dtw-pi-seatrow remark prom' + (opts.cls ? ' ' + opts.cls : '') + (opts.now ? ' now' : '') + '">'
+                    + '<span class="circ">' + MARK_SVG + '</span>'
+                    + '<div class="txt"><div class="who"><span class="nm">Prometheus</span>' + (opts.clock ? '<span class="c">' + esc(opts.clock) + '</span>' : '') + '</div><div class="say">' + esc(text) + '</div></div></div>';
             }
             function piCohortColorFor(r) {
                 // the color of the seat's cohort line on the dial (the legend uses the same), '' when the room has no cohorts
@@ -54708,7 +54795,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 opts = opts || {};
                 var hue = seatHue(r, i), url = r.portrait_url || '', nm = titleCase(r.name || ''), coh = piRoomHasCohorts() ? piCohortColorFor(r) : '';
                 var pinned = piView().seat != null && piView().seat === Number(r.seat);
-                return '<div class="dtw-pi-seatrow' + (sl.lit ? ' lit' : '') + (opts.now ? ' now' : '') + (opts.remark ? ' remark' : '') + (coh ? ' coh' : '') + (pinned ? ' pinned' : '') + '" tabindex="0" data-seat="' + Number(r.seat) + '" style="--hue:' + hue + (coh ? ';--coh:' + coh : '') + '"' + (opts.remark ? '' : ' aria-label="Who ' + esc(nm) + ' is"') + '>'
+                return '<div class="dtw-pi-seatrow' + (sl.lit ? ' lit' : '') + (opts.now ? ' now' : '') + (opts.remark ? ' remark' : '') + (opts.answer ? ' ans' : '') + (coh ? ' coh' : '') + (pinned ? ' pinned' : '') + '" tabindex="0" data-seat="' + Number(r.seat) + '" style="--hue:' + hue + (coh ? ';--coh:' + coh : '') + '"' + (opts.remark ? '' : ' aria-label="Who ' + esc(nm) + ' is"') + '>'
                     + '<span class="circ">' + esc(initials(nm)) + (url ? '<img src="' + esc(thumb(url)) + '" alt="" loading="lazy" onerror="this.remove()">' : '') + '</span>'
                     + '<div class="txt"><div class="who"><span class="nm">' + esc(nm) + ', ' + esc(r.age || '') + (piRoomHasCohorts() && r.segment ? ' <span class="cohort">' + esc(r.segment) + '</span>' : '') + '</span>' + (sl.clock ? '<span class="c">' + esc(sl.clock) + '</span>' : '') + '</div><div class="say">' + piSayHtml(sl) + '</div></div></div>';
             }
@@ -54719,18 +54806,27 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }
             function renderPilotSeats(s, t) {
                 var roster = ((s || {}).group || {}).roster || [];
-                var evs = piThreadEvents(s, t);
-                if (!evs.length) {
+                var items = piThreadItems(s, t);
+                if (!items.length) {
                     return '<div class="dtw-pi-thread">' + roster.map(function(r, i) { return piSeatRowHtml(r, i, piSeatLine(s, r, t)); }).join('') + '</div>';
                 }
                 var bySeat = {};
                 roster.forEach(function(r, i) { bySeat[Number(r.seat)] = { r: r, i: i }; });
-                var last = evs[evs.length - 1];
+                var last = items[items.length - 1];
                 var strip = '<div class="dtw-pi-strip">' + roster.map(function(r, i) { return piChipHtml(r, i); }).join('') + '</div>';
-                var rows = evs.map(function(e) {
-                    var hit = bySeat[Number(e.seat)] || {};
-                    var r = hit.r || { seat: e.seat, name: e.name, age: e.age, city: e.city, gender: e.gender, segment: e.segment };
-                    return piSeatRowHtml(r, hit.i || 0, { line: e.line || (PI_EVT[e.type] || e.type || ''), lit: true, clock: clockFmt(e.t) }, { now: e === last, remark: true });
+                var rows = items.map(function(it) {
+                    if (it.kind === 'event') {
+                        var e = it.e, hit = bySeat[Number(e.seat)] || {};
+                        var r = hit.r || { seat: e.seat, name: e.name, age: e.age, city: e.city, gender: e.gender, segment: e.segment };
+                        return piSeatRowHtml(r, hit.i || 0, { line: e.line || (PI_EVT[e.type] || e.type || ''), lit: true, clock: clockFmt(e.t) }, { now: it === last, remark: true });
+                    }
+                    if (it.kind === 'ask') return piPromRowHtml(it.q.q, { cls: 'ask', clock: it.clock, now: it === last });
+                    if (it.kind === 'answer') {
+                        var a = it.a, ah = bySeat[Number(a.seat)] || {};
+                        var ar = ah.r || { seat: a.seat, name: a.name };
+                        return piSeatRowHtml(ar, ah.i || 0, { line: a.line, lit: true, clock: it.clock }, { now: it === last, remark: true, answer: true });
+                    }
+                    return piPromRowHtml(it.read, { cls: 'read', now: it === last });
                 }).join('');
                 return strip + '<div class="dtw-pi-thread">' + rows + '</div>';
             }
@@ -54963,32 +55059,111 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var sel = el('dtwPiKindSel'); if (sel) sel.value = S.pilotKind;
             };
             // ---- the thread: the latest question in full, the earlier ones folded
-            function piQuestionHtml(q) {
-                var voices = (q.voices || []).slice(0, 3).map(function(v) { return '<div class="dtw-pi-voice">' + esc(v.name || '') + ': ' + esc(v.line || '') + '</div>'; }).join('');
-                var frame = (q.moment || {}).frame || ('At ' + (q.playhead_clock || clockFmt(q.playhead_s)));
-                var probes = (q.probes_next || []).slice(0, 2).map(function(p) { return '<button type="button" class="dtw-pi-probe" onclick="dtwPilotAskAt(' + Number(q.playhead_s || 0) + ', \'' + esc(jsq(p)) + '\')">' + esc(p) + '</button>'; }).join('');
-                var st = String(q.stage || ''), failed = st === 'failed';
-                var byco = '';
-                if (q.read && Array.isArray(q.by_segment) && q.by_segment.length > 1 && piRoomHasCohorts()) {
-                    var bits = q.by_segment.map(function(b) {
-                        var top = (b.distribution || []).slice().sort(function(x, y) { return (Number(y.pct) || 0) - (Number(x.pct) || 0); })[0];
-                        var v = (b.yes_pct != null) ? (Math.round(Number(b.yes_pct)) + '% yes') : (b.average != null ? (Number(b.average).toFixed(1) + ' average') : (top ? (Math.round(Number(top.pct) || 0) + '% ' + String(top.label || '')) : ''));
-                        return v ? '<b>' + esc(b.segment || '') + '</b> ' + esc(v) : '';
-                    }).filter(Boolean);
-                    if (bits.length) byco = '<div class="dtw-pi-byco">By cohort: ' + bits.join(' \u00b7 ') + '</div>';
-                }
-                var status = '';
-                if (q.read) status = '<div class="dtw-muted" style="margin-top:4px">' + esc(q.read) + '</div>';
-                else if (st && st !== 'done' && st !== 'stopped' && !failed) status = '<div class="dtw-pi-working" data-qid="' + esc(q.id || '') + '"><span class="dtw-fg-pulse"></span><span>' + esc(cap(stageWords(q))) + '</span></div>';
-                if (failed && !probes) probes = '<button type="button" class="dtw-pi-probe" onclick="dtwPilotAskAt(' + Number(q.playhead_s || 0) + ', \'' + esc(jsq(q.q || '')) + '\')">Ask again</button>';
-                return '<div class="dtw-pi-voice"><span class="k">Prometheus, ' + esc(frame) + '</span><div>' + esc(q.q || '') + '</div>' + (q.framing ? '<div class="dtw-muted" style="margin-top:3px">' + esc(q.framing) + '</div>' : '') + status + byco + voices + (probes ? '<div class="dtw-pi-probes">' + probes + '</div>' : '') + '</div>';
+            // ---- under the ask box: only the controls, the progress line while a question runs, and the questions asked,
+            // folded (Jenna, 2026-11-04). The question and the answers themselves are in the chat above; the record of a
+            // question (the split with the tally, the read, the voices, what the room knew, what people were saying) opens
+            // from the list, in the same shape Focus Group IQ keeps for a question.
+            function piQClock(q) { return (q || {}).playhead_clock || ((q || {}).playhead_s != null ? clockFmt(q.playhead_s) : ''); }
+            function piBycoHtml(q) {
+                if (!(q.read && Array.isArray(q.by_segment) && q.by_segment.length > 1 && piRoomHasCohorts())) return '';
+                var bits = q.by_segment.map(function(b) {
+                    var top = (b.distribution || []).slice().sort(function(x, y) { return (Number(y.pct) || 0) - (Number(x.pct) || 0); })[0];
+                    var v = (b.yes_pct != null) ? (Math.round(Number(b.yes_pct)) + '% yes') : (b.average != null ? (Number(b.average).toFixed(1) + ' average') : (top ? (Math.round(Number(top.pct) || 0) + '% ' + String(top.label || '')) : ''));
+                    return v ? '<b>' + esc(b.segment || '') + '</b> ' + esc(v) : '';
+                }).filter(Boolean);
+                return bits.length ? '<div class="dtw-pi-byco">By cohort: ' + bits.join(' \u00b7 ') + '</div>' : '';
             }
             function renderPilotThread(s) {
-                var qs = (s || {}).questions || [];
-                if (!qs.length) return '<p class="dtw-muted" style="margin:10px 0 0;font-size:12px">No questions yet. Ask while the cut plays, or take a suggested one.</p>';
-                var last = qs[qs.length - 1], earlier = qs.slice(0, -1).reverse();
-                return '<div class="dtw-pi-voices" style="margin-top:12px">' + piQuestionHtml(last) + '</div>'
-                    + (earlier.length ? '<details class="dtw-pi-more"><summary>Earlier questions <span class="n">' + earlier.length + '</span></summary><div class="dtw-pi-voices" style="margin-top:10px">' + earlier.map(piQuestionHtml).join('') + '</div></details>' : '');
+                var qs = ((s || {}).questions || []).filter(function(q) { return q && String(q.q || '').trim(); }), out = '';
+                qs.forEach(function(q) {
+                    if (qInFlight(q)) out += '<div class="dtw-pi-working" data-qid="' + esc(q.id || '') + '"><span class="dtw-fg-pulse"></span><span>' + esc(cap(stageWords(q))) + '</span></div>';
+                });
+                var last = qs[qs.length - 1];
+                if (last && qFailed(last)) out += '<div class="dtw-pi-probes"><button type="button" class="dtw-pi-probe" onclick="dtwPilotAskAt(' + Number(last.playhead_s || 0) + ', \'' + esc(jsq(last.q || '')) + '\')">Ask again</button></div>';
+                var done = qs.filter(function(q) { return !qInFlight(q); }).reverse();
+                if (done.length) {
+                    out += '<details class="dtw-pi-more"' + (S.piEarlierOpen ? ' open' : '') + ' ontoggle="dtwPilotEarlierToggle(this.open)"><summary>Earlier questions <span class="n">' + done.length + '</span></summary><div class="dtw-pi-qlist">'
+                        + done.map(function(q) {
+                            var n = (q.answers || []).length, seats = seatsTotal(q), meta = qFailed(q) ? 'did not finish' : (n ? n + (seats ? ' of ' + seats : '') : '');
+                            return '<button type="button" class="dtw-pi-qitem" onclick="dtwPilotRecord(\'' + esc(jsq(q.id || '')) + '\', this)" title="Open the record of this question"><span class="c">' + esc(piQClock(q)) + '</span><span class="t">' + esc(q.q || '') + '</span>' + (meta ? '<span class="n">' + esc(meta) + '</span>' : '') + '</button>';
+                        }).join('') + '</div></details>';
+                }
+                return out;
+            }
+            window.dtwPilotEarlierToggle = function(open) { S.piEarlierOpen = !!open; };
+            function piRecordCard(doc) {
+                doc = doc || document;
+                var card = null; try { card = doc.getElementById('dtwPiRecordCard'); } catch (_) { return null; }
+                if (card) return card;
+                var host = doc.getElementById('digitalTwinsIQView') || doc.body; if (!host) return null;
+                var scrim = doc.createElement('div'); scrim.id = 'dtwPiRecScrim'; scrim.className = 'dtw-pi-recscrim';
+                scrim.addEventListener('click', function() { dtwPilotRecordClose(scrim); });
+                card = doc.createElement('div'); card.id = 'dtwPiRecordCard'; card.className = 'dtw-pi-reccard'; card.setAttribute('role', 'dialog'); card.setAttribute('aria-label', 'The question in full');
+                host.appendChild(scrim); host.appendChild(card);
+                doc.addEventListener('keydown', function(e) { if (e.key === 'Escape' && card.classList.contains('on')) dtwPilotRecordClose(card); });
+                return card;
+            }
+            function piRecordKey(q) { return String((q || {}).stage || '') + '|' + ((q || {}).answers || []).length + '|' + String((q || {}).read || '').length + '|' + ((q || {}).facts_used || []).length; }
+            function piRecordHtml(s, q) {
+                var roster = ((s.group || {}).roster || []), qs = (s.questions || []).filter(function(x) { return x && String(x.q || '').trim(); });
+                var clock = piQClock(q), kind = q.kind && q.kind !== 'open' ? kindLabel(q.kind) : '';
+                var head = '<div class="hd"><div><div class="k">' + (clock ? 'Asked at ' + esc(clock) : 'Asked') + (kind ? SEP + esc(kind) : '') + '</div><div class="q">' + esc(q.q || '') + '</div></div><button type="button" class="x" onclick="dtwPilotRecordClose(this)">Close</button></div>';
+                var pick = qs.length > 1 ? '<div class="dtw-fg-qpick"><label for="dtwPiRecQ">Questions asked</label><select id="dtwPiRecQ" class="dtw-in" aria-label="Question to show" onchange="dtwPilotRecord(this.value, this)">' + qs.map(function(x, j) {
+                    var lab = (j + 1) + '. ' + String(x.q || ''); if (qInFlight(x)) lab += ' (working)'; else if (qFailed(x)) lab += ' (did not finish)'; if (lab.length > 92) lab = lab.slice(0, 89) + '...';
+                    return '<option value="' + esc(x.id || '') + '"' + (x === q ? ' selected' : '') + '>' + esc(lab) + '</option>';
+                }).join('') + '</select></div>' : '';
+                if (qFailed(q)) return head + pick + '<div class="dtw-fg-sec"><div class="rd">' + esc(q.read || 'The room did not finish this question. Ask it again and it runs fresh.') + '</div><div class="dtw-pi-probes"><button type="button" class="dtw-pi-probe" onclick="dtwPilotRecordClose(this);dtwPilotAskAt(' + Number(q.playhead_s || 0) + ', \'' + esc(jsq(q.q || '')) + '\')">Ask again</button></div></div>';
+                var live = qInFlight(q), opts = optsOf(q), rk = rankMap(q), seats = seatsTotal(q), counts = live ? liveCounts(q) : null, nA = (q.answers || []).length;
+                var body = '<div class="dtw-fg-sec"><div class="dtw-fg-th">' + (live ? 'The split so far.' : 'The split.') + '<span>' + (live ? nA + (seats ? ' of ' + seats : '') + ' answered' : 'Share of the room, by answer') + '</span></div>';
+                if (!opts.length) body += '<div class="dtw-pi-fn" style="margin-top:4px">' + (live ? 'The options land with the first answers.' : 'An open question: the read and the voices carry it.') + '</div>';
+                else {
+                    body += questionStack(q) + opts.map(function(o) {
+                        var v = live ? (seats ? (counts[String(o.id)] || 0) / seats * 100 : 0) : Number(o.pct || 0);
+                        var tally = live ? ((counts[String(o.id)] || 0) + (seats ? ' of ' + seats : '')) : (o.tally || (o.seats_n != null && seats ? o.seats_n + ' of ' + seats : ''));
+                        var det = [];
+                        if (!live && o.people != null) det.push(fmtN(o.people) + ' people');
+                        if (tally) det.push(tally);
+                        return '<div class="dtw-fg-lrow' + (rk[String(o.id)] === 0 ? ' lead' : '') + '"><span class="dtw-fg-dot" style="background:' + seriesOf(rk, o.id) + '"></span><div class="body"><div class="l1"><span class="lab">' + esc(o.label) + '</span>' + (det.length ? '<span class="det">' + det.join(SEP) + '</span>' : '') + '<b>' + pct(v, 1) + '</b></div></div></div>';
+                    }).join('');
+                }
+                body += piBycoHtml(q) + '</div>';
+                if (q.read) body += '<div class="dtw-fg-sec"><div class="dtw-fg-th">The read.</div><div class="rd">' + esc(q.read) + '</div></div>';
+                else if (live) body += '<div class="dtw-fg-sec"><div class="dtw-pi-working" data-qid="' + esc(q.id || '') + '"><span class="dtw-fg-pulse"></span><span>' + esc(cap(stageWords(q))) + '</span></div></div>';
+                if (q.framing && normQ(q.framing) !== normQ(q.q)) body += '<div class="dtw-fg-sec"><div class="dtw-fg-th">How it was put to the room.</div><div class="fr">' + esc(q.framing) + '</div></div>';
+                var voices = voicesAll(q, roster);
+                if (voices.length) body += '<div class="dtw-fg-sec"><div class="dtw-fg-th">The voices.<span>' + voices.length + (seats ? ' of ' + seats : '') + '</span></div><div class="dtw-pi-thread">' + voices.map(function(v) {
+                    var hit = v.seat != null ? piSeatByNo(v.seat) : null, r = hit ? hit.r : { seat: v.seat, name: v.name, age: v.age, city: v.city, segment: v.segment, portrait_url: v.portrait_url };
+                    return piSeatRowHtml(r, hit ? hit.i : 0, { line: v.line, lit: true, clock: '' }, { remark: true, answer: true });
+                }).join('') + '</div></div>';
+                body += factsSec(q) + talkSec(q) + segmentsSec(q, rk);
+                var probes = (q.probes_next || []).slice(0, 2);
+                if (probes.length) body += '<div class="dtw-pi-probes">' + probes.map(function(p) { return '<button type="button" class="dtw-pi-probe" onclick="dtwPilotRecordClose(this);dtwPilotAskAt(' + Number(q.playhead_s || 0) + ', \'' + esc(jsq(p)) + '\')">' + esc(p) + '</button>'; }).join('') + '</div>';
+                return head + pick + body;
+            }
+            window.dtwPilotRecord = function(qid, elm) {
+                var s = S.pilot; if (!s) return;
+                var q = (s.questions || []).filter(function(x) { return x && String(x.id) === String(qid); })[0]; if (!q) return;
+                var doc = (elm && elm.ownerDocument) || document, card = piRecordCard(doc); if (!card) return;
+                S.piRecord = { sid: s.id, qid: String(q.id), doc: doc };
+                card.innerHTML = piRecordHtml(s, q); card.setAttribute('data-k', piRecordKey(q));
+                card.classList.add('on'); card.scrollTop = 0;
+                var sc = doc.getElementById('dtwPiRecScrim'); if (sc) sc.classList.add('on');
+            };
+            window.dtwPilotRecordClose = function(elm) {
+                var docs = [document];
+                if (elm && elm.ownerDocument && docs.indexOf(elm.ownerDocument) < 0) docs.push(elm.ownerDocument);
+                if (S.piRecord && S.piRecord.doc && docs.indexOf(S.piRecord.doc) < 0) docs.push(S.piRecord.doc);
+                docs.forEach(function(d) { try { var c = d.getElementById('dtwPiRecordCard'); if (c) c.classList.remove('on'); var sc = d.getElementById('dtwPiRecScrim'); if (sc) sc.classList.remove('on'); } catch (_) {} });
+                S.piRecord = null;
+            };
+            function piRecordRefresh() {
+                // the open record follows a question still with the room: the answers so far, then the read
+                var rec = S.piRecord, s = S.pilot; if (!rec || !s || rec.sid !== s.id) return;
+                var q = (s.questions || []).filter(function(x) { return x && String(x.id) === rec.qid; })[0]; if (!q) return;
+                var card = null; try { card = rec.doc.getElementById('dtwPiRecordCard'); } catch (_) { card = null; }
+                if (!card || !card.classList.contains('on')) return;
+                var key = piRecordKey(q);
+                if (card.getAttribute('data-k') !== key) { var top = card.scrollTop; card.innerHTML = piRecordHtml(s, q); card.setAttribute('data-k', key); card.scrollTop = top; }
             }
             function renderPilotScores(s) {
                 var scored = s.status === 'stopped' && !!s.scorecard;   // the room's scores exist only once it has watched and stopped
@@ -55117,7 +55292,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 v.hover = n;
                 if (v.mode === 'people' || v.cohort) drawPilotDial(playheadNow());
             }
-            function piRowOf(t) { return t && t.closest ? t.closest('#dtwPiSeats .dtw-pi-seatrow') : null; }
+            function piRowOf(t) { return t && t.closest ? t.closest('#dtwPiSeats .dtw-pi-seatrow[data-seat]') : null; }   // a Prometheus line has no seat
             function piSeatRowOver(e) {
                 // a seat in the room: follow the line and open who they are; a remark in the chat: follow the line only
                 var row = piRowOf(e.target); if (!row) return;
@@ -56100,7 +56275,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 } catch (e) { if (note) note.textContent = e.message; if (inp && !inp.value) inp.value = q; return; }
                 renderPilotConsole();
                 dtwPilotSeek(t);
-                if (note) note.textContent = 'Asked at ' + clockFmt(t) + '. The answer lands in a minute or two.';
+                if (note) note.textContent = 'Asked at ' + clockFmt(t) + '. The twins answer in the chat as they go.';
                 pollPilotQuestions();
                 if (v && mediaUrl(S.pilot)) { try { await v.play(); } catch (_) {} }
                 else if (wasLive && S.pilotLive && S.pilotLive.stream) { S.pilotClock.t = t; startLiveClock(); }
@@ -56111,18 +56286,24 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var open = (s.questions || []).filter(function(q) { return q.stage && q.stage !== 'done' && q.stage !== 'stopped' && q.stage !== 'failed'; });
                 if (!open.length) return;
                 if (S.pilotQPoll) { try { clearTimeout(S.pilotQPoll); } catch (_) {} }
+                // the seats answer one by one and each lands in the chat as it does: every three seconds while the room is
+                // thinking, every five otherwise
+                var thinking = open.some(function(q) { return q.stage === 'the room is thinking'; });
                 S.pilotQPoll = setTimeout(async function() {
                     if (!S.pilot || S.pilot.id !== s.id) return;
+                    var before = {}; (S.pilot.questions || []).forEach(function(q) { before[String(q.id)] = String(q.stage || ''); });
                     var r = await apiRaw('/' + encodeURIComponent(S.key) + '/pilot/' + encodeURIComponent(s.id), { method: 'GET' });
                     if (r.ok && r.data.session) {
                         var t = playheadNow();
                         adoptPilot(r.data.session);
-                        var th = el('dtwPiThread');
-                        if (th) { var tmp = document.createElement('div'); tmp.innerHTML = piRoomHtml(S.pilot, t); var fresh = tmp.querySelector('#dtwPiThread'); if (fresh) th.innerHTML = fresh.innerHTML; }
-                        var scw = document.querySelector('.dtw-pane.active .dtw-pi .dtw-card'); if (scw && S.pilot.status === 'stopped') { renderPilotConsole(); dtwPilotSeek(t); }
+                        var th = el('dtwPiThread'); if (th) th.innerHTML = renderPilotThread(S.pilot);
+                        paintPilotSeats(t);     // the question, each seat's answer as it lands, then the read, in the chat
+                        piRecordRefresh();
+                        var landed = (S.pilot.questions || []).some(function(q) { var st = String(q.stage || ''); return before[String(q.id)] && before[String(q.id)] !== st && (st === 'done' || st === 'failed' || st === 'stopped'); });
+                        var scw = document.querySelector('.dtw-pane.active .dtw-pi .dtw-card'); if (scw && landed && S.pilot.status === 'stopped') { renderPilotConsole(); dtwPilotSeek(t); }
                     }
                     pollPilotQuestions();
-                }, 5000);
+                }, thinking ? 3000 : 5000);
             }
             window.dtwPilotRename = async function() {
                 var s = S.pilot, inp = el('dtwPiName'); if (!s || !S.key || !inp) return;

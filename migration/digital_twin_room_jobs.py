@@ -213,7 +213,7 @@ def resume_job(s3, job_id: str, *, model_fn=None, run_async: bool = False, count
     twin = twins_by_key.get(twin_key) or next(iter(twins_by_key.values()), {})
     last = sess['questions'][idx - 1] if idx > 0 else None
     # the record starts the stages over: the seats answer again (their memory of earlier questions is intact)
-    for k, v in (('options', []), ('distribution', []), ('by_segment', []), ('read', ''), ('voices', []), ('answers', []), ('probes_next', []), ('facts_used', []), ('tally', [])):
+    for k, v in (('options', []), ('distribution', []), ('by_segment', []), ('read', ''), ('read_short', ''), ('voices', []), ('answers', []), ('probes_next', []), ('facts_used', []), ('tally', [])):
         rec[k] = v
     rec['finished_at'] = None
     trail = rec.setdefault('trail', {})
@@ -307,15 +307,37 @@ def sweep_session(s3, twin_key: str, session: dict, *, resume: bool = True, now:
         elif str(job.get('stage') or '') == 'failed' or str(job.get('status') or '') == 'error':
             fail_record(rec, job.get('failed_reason') or 'stalled')   # the job failed elsewhere; the record carries the plain line
             changed += 1
-        elif str(job.get('stage') or '') and job.get('stage') != rec.get('stage'):
-            rec['stage'] = job['stage']   # the thread is ahead of the saved payload
-            if job.get('stage') == 'done' and isinstance(job.get('question'), dict) and job['question'].get('read'):
-                for k, v in job['question'].items():
-                    if k not in ('trail',):
-                        rec[k] = v
-            changed += 1
+        else:
+            jq = job.get('question') if isinstance(job.get('question'), dict) else {}
+            if str(job.get('stage') or '') and job.get('stage') != rec.get('stage'):
+                rec['stage'] = job['stage']   # the thread is ahead of the saved payload
+                if job.get('stage') == 'done' and jq.get('read'):
+                    for k, v in jq.items():
+                        if k not in ('trail',):
+                            rec[k] = v
+                changed += 1
+            # the seats' answers land on the job document one by one while the room is thinking; the record in hand
+            # carries them so the page places each seat's line in the chat as it arrives (Jenna, 2026-11-04). Read
+            # only: the thread's own stage write lands them on the saved twin, so this never counts as a change.
+            carry_answers(rec, jq)
     return changed
 
 
+def carry_answers(rec: dict, job_q: Optional[dict]) -> bool:
+    """The job document's seat answers onto the record when it has more
+    of them (with the framing and the options they answered against);
+    True when the record took them."""
+    jq = job_q if isinstance(job_q, dict) else {}
+    mine = rec.get('answers') if isinstance(rec.get('answers'), list) else []
+    theirs = [a for a in (jq.get('answers') or []) if isinstance(a, dict) and a.get('seat') is not None]
+    if len(theirs) <= len(mine):
+        return False
+    rec['answers'] = [dict(a) for a in theirs]
+    for k in ('framing', 'options', 'option_labels'):
+        if jq.get(k) and not rec.get(k):
+            rec[k] = jq[k]
+    return True
+
+
 __all__ = ['question_key', 'find_duplicate', 'in_flight', 'mark_asked_again', 'wants_fresh', 'check_stale', 'is_stale', 'is_too_old', 'fail_job', 'fail_record',
-           'resume_job', 'sweep_session', 'STALE_S', 'MAX_AGE_S', 'RESUMES_MAX', 'FAILED_LINE', 'ASKED_AGAIN_NOTE', 'IN_FLIGHT_NOTE', 'IN_FLIGHT_STAGES']
+           'resume_job', 'sweep_session', 'carry_answers', 'STALE_S', 'MAX_AGE_S', 'RESUMES_MAX', 'FAILED_LINE', 'ASKED_AGAIN_NOTE', 'IN_FLIGHT_NOTE', 'IN_FLIGHT_STAGES']
