@@ -5930,6 +5930,14 @@ def _pm_interpret_core(user, body, text, history):
                 'analysis_read': True,
                 'error': _reply_text,
             }
+            # A file handed over on this surface rides the guidance turn
+            # (2026-11-04, Bria: the download lane answered "Saved" here
+            # with nothing for the browser to save).
+            for _fk in ('download_url', 'filename', 'file_link'):
+                if _deflect_payload.get(_fk):
+                    _guid[_fk] = _deflect_payload[_fk]
+            if _deflect_payload.get('download_url') or _deflect_payload.get('file_link'):
+                _guid['followups'] = list(_deflect_payload.get('followups') or [])
             # Fresh generations ride a background job (2026-08-27):
             # the widget polls read-status and swaps the holding line
             # for the finished read when it lands.
@@ -12539,6 +12547,25 @@ def _pm_answer_file_payload(entry, auto_save=False, username='',
     return payload
 
 
+def _pm_replay_file(entry, text, username, chips):
+    """The CSV for a read served from the library rides the answer and
+    the Email chip joins the followups (2026-09-29 rule; Bria 2026-11-04:
+    the download chip these paths offered had no file behind it). {} when
+    the entry has no table or the upload fails; never blocks the reply."""
+    try:
+        if not (isinstance(entry, dict) and (entry.get('breakdown') or entry.get('metrics'))):
+            return {}
+        payload = _pm_answer_file_payload(
+            entry, auto_save=bool(_PM_FILE_ASK_RE.search(str(text or ''))),
+            username=username, question=text)
+        if payload and isinstance(chips, list) and 'Email me this file' not in chips:
+            chips.append('Email me this file')
+        return payload or {}
+    except Exception:
+        traceback.print_exc()
+        return {}
+
+
 _PM_EMAIL_FILE_RE = re.compile(
     r"\b(?:e-?mail|mail)\b[^.?!\n]{0,50}"
     r"\b(?:csv|file|spreadsheet|data|it|this|that)\b"
@@ -12562,22 +12589,28 @@ def _pm_email_file_intent(text):
     return bool(_PM_EMAIL_FILE_RE.search(t))
 
 
-def _pm_email_file_response(user, text):
-    """Email the most recent file handed to this account (2026-09-29
-    Jenna). Sent by Prometheus; an address typed in the message wins,
-    otherwise the account email on file."""
+def _pm_email_file_response(user, text, history=None):
+    """Email the very last thing in the thread (Jenna 2026-11-04). A
+    file the last reply carried goes as it is; a read with a table is
+    exported from the stored entry it shipped from and attached with
+    the read in the body; a reply with no table goes as the body. Sent
+    by Prometheus; an address typed in the message wins, otherwise the
+    account email on file."""
+    from prometheus import last_thing as _lt
     _pm_ask_hint(route='email_file')
     uname = (session.get('username') or user.get('username')
              or '').strip()
-    stash = _pm_file_stash_read(uname)
-    if not stash.get('s3_key'):
+    last = _pm_last_thing(user, history)
+    if last['kind'] == 'none':
+        pf = _pm_page_file()
+        if pf:
+            last.update(kind='file', file=pf, subject=pf.get('label') or '', why='the profile open on the page')
+    if last['kind'] == 'none':
         _pm_ask_hint(outcome='no_file')
         return jsonify({
             'success': True, 'action': 'answer',
-            'reply': ('I have not handed you a file yet. Ask me a '
-                      'data question first - every answer with data '
-                      'comes with its CSV - then say Email me this '
-                      'file.'),
+            'reply': ('Nothing has landed in this chat yet for me to send. '
+                      'Ask me a data question first and then say Email me this file.'),
             'followups': [], 'offer_deck': False, 'deck_angle': None})
     m = _PM_EMAIL_ADDR_RE.search(str(text or ''))
     addr = m.group(0) if m else ''
@@ -12600,46 +12633,58 @@ def _pm_email_file_response(user, text):
                       'it to name@company.com) and I will send it '
                       'right over.'),
             'followups': [], 'offer_deck': False, 'deck_angle': None})
-    fname = str(stash.get('filename') or 'data.csv')
     try:
-        _fbytes = _H.s3_client.get_object(
-            Bucket=_H.S3_BUCKET, Key=stash['s3_key'])['Body'].read()
-        from email.mime.multipart import MIMEMultipart
-        from email.mime.text import MIMEText
-        from email.mime.application import MIMEApplication
-        msg = MIMEMultipart('mixed')
-        msg['Subject'] = (fname.rsplit('.', 1)[0].replace('_', ' ')
-                          or 'Your data from Prometheus')
-        msg['From'] = 'Prometheus <prometheus@crosswalknyc.com>'
-        msg['To'] = addr
-        msg['Reply-To'] = 'jenna@crosswalknyc.com'
-        _sub = str(stash.get('subject') or '').strip()
-        _bl = (f"The data you asked for"
-               f"{' on ' + _sub if _sub else ''} is attached.\n\n"
-               "Prometheus\nCrosswalk")
-        msg.attach(MIMEText(_bl, 'plain'))
-        part = MIMEApplication(_fbytes, _subtype='csv')
-        part.add_header('Content-Disposition', 'attachment',
-                        filename=fname)
-        msg.attach(part)
+        from prometheus import send_file as _sfm
         from prometheus import outbound_mail as _om
-        _om.send_user_email(
-            to=addr, subject=str(msg['Subject']), body=_bl, instructed=True,
-            caller='csv-by-email', csv=_fbytes, csv_name=fname, bcc_liz=False)
+        _sub = str(last.get('subject') or '').strip()
+        _ltxt = str(last.get('text') or '').strip()
+        # the words of the read ride along, for a table or a file that a read handed over
+        words = _sfm.mail_safe(_ltxt) if (last['kind'] in ('read', 'text') or len(_ltxt) > 120) else ''
+        fname, fbytes, mime = '', None, 'text/csv'
+        if last['kind'] == 'file':
+            f = last['file']
+            fname = str(f.get('filename') or 'file')
+            mime = str(f.get('mime') or 'application/octet-stream')
+            fbytes = _lt.file_bytes(f, _H.s3_client, bucket=_H.S3_BUCKET, extra_buckets=('svod-acquisition',))
+            if fbytes is None:
+                raise RuntimeError(f"file not readable: {f.get('s3_key')}")
+        elif last['kind'] == 'read':
+            fname, csv_text = _pm_entry_csv(last['entry'], question=last.get('question'))
+            fbytes = csv_text.encode('utf-8')
+        if fbytes is not None:
+            what = ('The file you asked for' if last['kind'] == 'file' else 'The data you asked for')
+            _bl = f"{what}{' on ' + _sub if _sub else ''} is attached."
+            if words:
+                _bl += "\n\nThe read it came from:\n\n" + words
+        else:
+            _bl = (f"Here is the read you asked for{' on ' + _sub if _sub else ''}:\n\n" + words) if words \
+                else f"Here is what I had for you{' on ' + _sub if _sub else ''}."
+        _bl += "\n\nPrometheus\nCrosswalk"
+        subj_line = (fname.rsplit('.', 1)[0].replace('_', ' ') if fname else (_sub or 'Your read from Prometheus'))
+        kw = {}
+        if fbytes is not None and mime == 'text/csv':
+            kw = {'csv': fbytes, 'csv_name': fname}
+        elif fbytes is not None:
+            kw = {'files': [(fbytes, fname, mime)]}
+        r = _om.send_user_email(
+            to=addr, subject=subj_line, body=_bl, instructed=True,
+            caller='csv-by-email', bcc_liz=False, **kw)
+        if isinstance(r, dict) and r.get('sent') is False:
+            raise RuntimeError(str(r.get('reason') or 'mail door closed'))
     except Exception as e:
         traceback.print_exc()
         _H._chatbot_error_email('brief-chat/analyze', e)
         _pm_ask_hint(outcome='error')
         return jsonify({
             'success': True, 'action': 'answer',
-            'reply': ('The email did not go through just now. The '
-                      'download link on the reply still works, and '
-                      'you can ask me to email it again in a minute.'),
+            'reply': ('The email did not go through just now. Ask me to '
+                      'email it again in a minute.'),
             'followups': [], 'offer_deck': False, 'deck_angle': None})
-    _pm_ask_hint(outcome='answered', subject=stash.get('subject'))
+    _pm_ask_hint(outcome='answered', subject=last.get('subject'))
+    sent_what = fname if fname else 'the read'
     return jsonify({
         'success': True, 'action': 'answer',
-        'reply': f"Sent. {fname} is on its way to {addr}.",
+        'reply': f"Sent. {sent_what} is on its way to {addr}.",
         'followups': [], 'offer_deck': False, 'deck_angle': None})
 
 
@@ -12656,89 +12701,151 @@ def _pm_csv_point(subject, question, family):
         _faults.note('chat', _fx)
 
 
-def _pm_csv_download_response(user, text, history=None):
-    """Serve the CSV export of the most recent delivered read
-    (2026-08-27, Jenna: every generated-data reply offers its CSV
-    download). The file is built from the SAME ledger entry the chat
-    reply shipped from, so the file and the chat numbers always match
-    exactly. Uploaded under generated_data/ with a 7-day presigned
-    link (the generated-decks pattern). No charge: exporting an
-    already-delivered read is a formatting step, not a new analysis."""
+def _pm_upload_csv(fname, csv_text):
+    """Upload a CSV under generated_data/ and return (s3_key, 7-day url)."""
+    s3_key = f"{_PM_DATA_FILE_PREFIX}{uuid.uuid4().hex[:12]}/{fname}"
+    _H.s3_client.put_object(Bucket=_H.S3_BUCKET, Key=s3_key,
+                            Body=csv_text.encode('utf-8'),
+                            ContentType='text/csv')
+    url = _H.s3_client.generate_presigned_url(
+        'get_object',
+        Params={'Bucket': _H.S3_BUCKET, 'Key': s3_key,
+                'ResponseContentDisposition':
+                    f'attachment; filename="{fname}"'},
+        ExpiresIn=7 * 24 * 3600)
+    return s3_key, url
+
+
+def _pm_entry_csv(entry, question=''):
+    """(filename, stamped csv_text) for a stored read with a table."""
     import prometheus_analysis as pma
+    fname, csv_text = pma.build_generated_csv(entry)
+    _rng = ''
+    try:
+        if entry.get('ws') and entry.get('we'):
+            _rng = (f"{_H._fmt_study_date(entry['ws'])} - "
+                    f"{_H._fmt_study_date(entry['we'])}")
+        elif entry.get('wl'):
+            _rng = str(entry['wl'])
+    except Exception:
+        _rng = ''
+    csv_text = _H._stamp_csv_text(csv_text, _rng)
+    fname = _pm_csv_task_filename(entry) or fname
+    return fname, csv_text
+
+
+def _pm_page_file(bucket=''):
+    """The profile open on the page, as a resolved file, or None."""
+    try:
+        body = request.get_json(silent=True) or {}
+        prim = (body.get('page_context') or {}).get('primary') or {}
+        key = str(prim.get('s3_key') or '').strip()
+        if not key:
+            return None
+        fname = key.rsplit('/', 1)[-1]
+        return {'url': '', 's3_key': key, 'filename': fname, 'bucket': bucket or _H.S3_BUCKET,
+                'same_origin': False, 'ext': 'csv', 'mime': 'text/csv',
+                'label': str(prim.get('name') or fname), 'page': True}
+    except Exception:
+        return None
+
+
+def _pm_last_thing(user, history):
+    """The very last thing Prometheus handed over in this thread (Jenna
+    2026-11-04: "take the very last thing that happened in chat and
+    that's what they want emailed, downloaded, converted"). The thread
+    first; the account's last file and the session pointer only when
+    the thread holds nothing."""
+    from prometheus import last_thing as _lt
     import insights_ledger as il
-    _pm_ask_hint(route='csv_download')
-    entry = None
-    ptr = {}
+    uname = (session.get('username') or user.get('username') or '').strip()
+    stash = _pm_file_stash_read(uname)
+    last = _lt.resolve(history, consult=il.consult, stash=stash, bucket=_H.S3_BUCKET)
+    if last['kind'] != 'none':
+        return last
+    if any(str((t or {}).get('role') or '') != 'user' for t in (history or []) if isinstance(t, dict)):
+        return last   # a thread with nothing delivered yet answers as such; a file from another day is not "this"
+    # no thread in hand at all (an API caller): the session's pointer to
+    # the read the last reply shipped from, when it has a table; a
+    # text-only twin never counts
     try:
         ptr = session.get('pm_csv_last') or {}
     except Exception:
         ptr = {}
     if ptr.get('subject') and ptr.get('question'):
         try:
-            led = il.consult(subject=ptr['subject'],
-                             question=ptr['question'],
-                             metric_family=ptr.get('family'))
-            entry = led.get('exact')
+            led = il.consult(subject=ptr['subject'], question=ptr['question'])
+            for e in [led.get('exact')] + list(reversed(led.get('entries') or [])):
+                if _lt.has_data(e):
+                    last.update(kind='read', entry=e, subject=str(e.get('subject') or ''),
+                                question=str(ptr.get('question') or ''), why='the session pointer')
+                    return last
         except Exception:
             traceback.print_exc()
-    if entry is None:
-        # Fallback: the last data-bearing ask in the visible history.
-        for turn in reversed(history or []):
-            t = str((turn or {}).get('text') or '')
-            if (turn or {}).get('role') == 'user' and t.strip() \
-                    and not pma.detect_csv_download_intent(t):
-                try:
-                    led = il.consult(question=t)
-                    entry = led.get('exact')
-                except Exception:
-                    entry = None
-                break
-    if not entry or not (entry.get('breakdown') or entry.get('metrics')):
+    if stash.get('s3_key'):
+        fname = str(stash.get('filename') or stash['s3_key'].rsplit('/', 1)[-1])
+        last.update(kind='file', subject=str(stash.get('subject') or ''),
+                    question=str(stash.get('question') or ''), why='the account file',
+                    file={'url': str(stash.get('url') or ''), 's3_key': stash['s3_key'], 'filename': fname,
+                          'bucket': _H.S3_BUCKET, 'same_origin': False,
+                          'ext': fname.rsplit('.', 1)[-1].lower() if '.' in fname else '', 'mime': 'text/csv'})
+    return last
+
+
+def _pm_csv_download_response(user, text, history=None):
+    """Hand over the very last thing in the thread as a download (Jenna
+    2026-11-04). A file the last reply carried is re-linked as it is; a
+    read with a table behind it is exported from the SAME stored entry
+    the reply shipped from, so file and chat numbers match exactly; a
+    reply with no table is turned into a table of its figures. Nothing
+    in the thread yet: the profile open on the page. No charge: handing
+    over what was already delivered is a formatting step."""
+    from prometheus import last_thing as _lt
+    _pm_ask_hint(route='csv_download')
+    uname = (session.get('username') or user.get('username') or '').strip()
+    last = _pm_last_thing(user, history)
+    if last['kind'] == 'none':
+        pf = _pm_page_file()
+        if pf:
+            last.update(kind='file', file=pf, subject=pf.get('label') or '', why='the profile open on the page')
+    if last['kind'] == 'none':
         _pm_ask_hint(outcome='declined_no_csv_source')
         return jsonify({
             'success': True, 'action': 'answer',
-            'reply': ('I do not have a recent data read to export yet. '
-                      'Ask me for the data first, then tap the '
-                      'download chip on the reply.'),
+            'reply': ('Nothing has landed in this chat yet for me to hand over. '
+                      'Ask me for the data and the file will ride the answer.'),
             'followups': [], 'offer_deck': False, 'deck_angle': None})
     try:
-        fname, csv_text = pma.build_generated_csv(entry)
-        _rng = ''
-        try:
-            if entry.get('ws') and entry.get('we'):
-                _rng = (f"{_H._fmt_study_date(entry['ws'])} - "
-                        f"{_H._fmt_study_date(entry['we'])}")
-            elif entry.get('wl'):
-                _rng = str(entry['wl'])
-        except Exception:
-            _rng = ''
-        csv_text = _H._stamp_csv_text(csv_text, _rng)
-        fname = _pm_csv_task_filename(entry) or fname
-        s3_key = f"{_PM_DATA_FILE_PREFIX}{uuid.uuid4().hex[:12]}/{fname}"
-        _H.s3_client.put_object(Bucket=_H.S3_BUCKET, Key=s3_key,
-                             Body=csv_text.encode('utf-8'),
-                             ContentType='text/csv')
-        url = _H.s3_client.generate_presigned_url(
-            'get_object',
-            Params={'Bucket': _H.S3_BUCKET, 'Key': s3_key,
-                    'ResponseContentDisposition':
-                        f'attachment; filename="{fname}"'},
-            ExpiresIn=7 * 24 * 3600)
+        if last['kind'] == 'file':
+            # the file as it is, on a link that opens now (a week-old
+            # presigned link is re-signed; a same-origin link stays)
+            f = last['file']
+            fname = str(f.get('filename') or 'file')
+            url = _lt.fresh_url(f, _H.s3_client, bucket=_H.S3_BUCKET)
+            s3_key = str(f.get('s3_key') or '')
+        elif last['kind'] == 'read':
+            fname, csv_text = _pm_entry_csv(last['entry'], question=last.get('question'))
+            s3_key, url = _pm_upload_csv(fname, csv_text)
+        else:
+            fname, csv_text = _lt.text_csv(last['text'], subject=last.get('subject'),
+                                           question=last.get('question'))
+            csv_text = _H._stamp_csv_text(csv_text)
+            s3_key, url = _pm_upload_csv(fname, csv_text)
     except Exception as e:
         traceback.print_exc()
         _H._chatbot_error_email('brief-chat/analyze', e)
         _pm_ask_hint(outcome='error')
         return jsonify(_H._chatbot_calm_payload())
-    _pm_file_stash_write(
-        (session.get('username') or user.get('username') or '').strip(),
-        url, fname, s3_key, subject=entry.get('subject'),
-        question=text)
-    _pm_ask_hint(outcome='answered', subject=entry.get('subject'))
+    if s3_key and not (last['kind'] == 'file' and last['file'].get('page')):
+        _pm_file_stash_write(uname, url, fname, s3_key,
+                             subject=last.get('subject'), question=last.get('question') or text)
+    _pm_ask_hint(outcome='answered', subject=last.get('subject'))
     reply = f"Saved. {fname} is in your browser downloads."
     return jsonify({
         'success': True, 'action': 'answer', 'reply': reply,
-        'followups': [], 'offer_deck': False, 'deck_angle': None,
-        'download_url': url, 'filename': fname})
+        'followups': ['Email me this file'], 'offer_deck': False, 'deck_angle': None,
+        'download_url': url, 'filename': fname,
+        'file_link': {'url': url, 'label': f"Download {fname}"}})
 
 
 def _pm_search_demand_response(user, text, history):
@@ -12777,16 +12884,17 @@ def _pm_search_demand_response(user, text, history):
         _pm_ask_hint(outcome='answered', subject=led.get('subject'))
         # Served from the library: metered, never free (2026-09-14).
         _pm_meter_answer('replay_search', _pm_ppu)
-        _replay_chips = list(exact.get('followups') or [])[:3]
-        if pma.CSV_OFFER_CHIP not in _replay_chips:
-            _replay_chips.append(pma.CSV_OFFER_CHIP)
+        _replay_chips = [c for c in list(exact.get('followups') or [])[:3]
+                         if c != pma.CSV_OFFER_CHIP]
         _pm_csv_point(led.get('subject'), text, 'search')
+        _rp_file = _pm_replay_file(exact, text, _pm_user, _replay_chips)
         return jsonify({
             'success': True, 'action': 'answer',
             'reply': exact['reply'],
             'followups': _replay_chips,
             'offer_deck': False, 'deck_angle': None,
-            'profile': led.get('subject')})
+            'profile': led.get('subject'),
+            **_rp_file})
     _sd_led_block = led.get('block') or ''
     try:
         _cat_block = _pm_catalog_block(led.get('subject')
@@ -12879,14 +12987,13 @@ def _pm_search_demand_response(user, text, history):
         return jsonify(_H._chatbot_calm_payload())
     followups = [pma.scrub_user_text(str(f).strip())[:160]
                  for f in (data.get('followups') or [])
-                 if str(f).strip()][:3]
-    if pma.CSV_OFFER_CHIP not in followups:
-        followups.append(pma.CSV_OFFER_CHIP)
+                 if str(f).strip() and str(f).strip() != pma.CSV_OFFER_CHIP][:3]
+    _sd_metrics = il.metrics_from_study(study)
     try:
         il.persist(
             subject=study.get('subject'), metric_family='search',
             question=text, route='search_demand',
-            metrics=il.metrics_from_study(study),
+            metrics=_sd_metrics,
             anchors=[b for b in (
                 f"platform: {study.get('platform')}"
                 if study.get('platform') else None,
@@ -12900,12 +13007,17 @@ def _pm_search_demand_response(user, text, history):
     except Exception:
         traceback.print_exc()
     _pm_csv_point(study.get('subject'), text, 'search')
+    _sd_file = _pm_replay_file(
+        {'subject': study.get('subject'), 'metrics': _sd_metrics, 'question': text,
+         'ws': study.get('window_start'), 'we': study.get('window_end'), 'wl': study.get('window_label')},
+        text, _pm_user, followups)
     _pm_ask_hint(outcome='answered', subject=study.get('subject'))
     return jsonify({
         'success': True, 'action': 'answer', 'reply': reply,
         'followups': followups, 'offer_deck': False, 'deck_angle': None,
         'model': result.get('model'),
-        'profile': study.get('subject')})
+        'profile': study.get('subject'),
+        **_sd_file})
 
 
 def _pm_remember_ask(pm_user, question, subject=None, cohort=None,
@@ -13390,18 +13502,20 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
                                      cohort=_exact_nb.get('cohort'),
                                      ledger_key=_exact_nb.get('k'),
                                      route='replay')
-                    _nb_chips = list(_exact_nb.get('followups')
-                                     or [])[:3]
-                    if pma.CSV_OFFER_CHIP not in _nb_chips:
-                        _nb_chips.append(pma.CSV_OFFER_CHIP)
+                    _nb_chips = [c for c in list(_exact_nb.get('followups')
+                                                 or [])[:3] if c != pma.CSV_OFFER_CHIP]
                     _pm_csv_point(subj_name, text,
                                   _exact_nb.get('family'))
+                    # the file rides the answer (Bria 2026-11-04: the
+                    # chip this path offered had nothing behind it)
+                    _nb_file = _pm_replay_file(_exact_nb, text, _pm_user, _nb_chips)
                     return jsonify({
                         'success': True, 'action': 'answer',
                         'reply': _exact_nb['reply'],
                         'followups': _nb_chips,
                         'offer_deck': False, 'deck_angle': None,
-                        'profile': subj_name})
+                        'profile': subj_name,
+                        **_nb_file})
             except Exception:
                 traceback.print_exc()
         if not subj_name and _bf_subj:
@@ -13576,17 +13690,18 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
                          ledger_key=exact.get('k'), route='replay')
         # Served from the library: metered, never free (2026-09-14).
         _pm_meter_answer('replay_read', _pm_ppu)
-        _replay_chips = list(exact.get('followups') or [])[:3]
-        if pma.CSV_OFFER_CHIP not in _replay_chips:
-            _replay_chips.append(pma.CSV_OFFER_CHIP)
+        _replay_chips = [c for c in list(exact.get('followups') or [])[:3]
+                         if c != pma.CSV_OFFER_CHIP]
         _pm_csv_point(led.get('subject') or subj_hint, text,
                       exact.get('family'))
+        _rp_file = _pm_replay_file(exact, text, _pm_user, _replay_chips)
         return jsonify({
             'success': True, 'action': 'answer',
             'reply': exact['reply'],
             'followups': _replay_chips,
             'offer_deck': False, 'deck_angle': None,
-            'profile': led.get('subject') or subj_hint or None})
+            'profile': led.get('subject') or subj_hint or None,
+            **_rp_file})
     # PANEL FACTS (2026-09-30, Jenna: "lets now do the panel-fact
     # queries upgrades"): a factual ask the base file answers exactly
     # returns the file's own numbers now instead of riding the full
@@ -15441,7 +15556,7 @@ def _pm_analyze_core(user, body, text, history):
     # answer creates a CSV the user can download or have emailed).
     # Runs before routing so an open profile never hijacks it.
     if _pm_email_file_intent(text):
-        return _pm_email_file_response(user, text)
+        return _pm_email_file_response(user, text, history)
     # Brand Partnership Valuation wizard (Jenna 2026-10-28): the chip
     # opens step 1 before any other analyze lane, including twins.
     _bpiq_user = (session.get('username') or user.get('username')

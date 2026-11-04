@@ -11311,8 +11311,6 @@ def check_cache():
         return jsonify({'found': False, 'error': str(e)})
 
 
-@app.route('/api/download-cached/<path:s3_key>')
-@requires_auth
 def _fmt_study_date(iso):
     try:
         return datetime.strptime(str(iso), '%Y-%m-%d').strftime('%B %-d, %Y')
@@ -11364,6 +11362,8 @@ def _stamp_csv_bytes(content, study_range=''):
         return content
 
 
+@app.route('/api/download-cached/<path:s3_key>')
+@requires_auth
 def download_cached(s3_key):
     """Download a cached file from S3."""
     ok, err = _require_profile_run_access(s3_key)

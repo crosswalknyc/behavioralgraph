@@ -87113,8 +87113,16 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     : (_f && (_f.label || _f.send)) || '';
                 if (_fl) _fuOpts.push({ label: String(_fl) });
             }
-            if (_fuOpts.length) {
-                _synthChatPushTurnWithMeta('agent', text, { options: _fuOpts });
+            var _gMeta = {};
+            if (_fuOpts.length) _gMeta.options = _fuOpts;
+            if (data && data.file_link && data.file_link.url &&
+                String(data.file_link.url).indexOf('https://') === 0) {
+                // the file the lane handed over renders under the turn
+                _gMeta.link = { url: String(data.file_link.url),
+                                label: String(data.file_link.label || 'Download') };
+            }
+            if (_gMeta.options || _gMeta.link) {
+                _synthChatPushTurnWithMeta('agent', text, _gMeta);
             } else {
                 synthChatPushTurn('agent', text);
             }
@@ -92150,7 +92158,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         var _synthChatSavedUrls = {};
         function _synthChatMaybeSaveFile(data) {
             try {
-                if (!data || !data.success || !data.download_url) return;
+                // a guidance turn can hand a file over too (the download
+                // lane on the build surface, 2026-11-04)
+                if (!data || !(data.success || data.guidance) || !data.download_url) return;
                 var u = String(data.download_url);
                 if (_synthChatSavedUrls[u]) return;
                 _synthChatSavedUrls[u] = true;

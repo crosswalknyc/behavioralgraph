@@ -2780,7 +2780,7 @@ def _interpret_shape(raw):
     out = {'success': False, 'guidance': True, 'analysis_read': True,
            'error': str(raw['reply'])}
     for k in ('read_job_id', 'memory_confirm', 'panel_offer',
-              'referent_clarify', 'file_link',
+              'referent_clarify', 'file_link', 'download_url', 'filename',
               'bpiq_wizard', 'bpiq_collect', 'bpiq_confirm_payload'):
         if raw.get(k):
             out[k] = raw[k]

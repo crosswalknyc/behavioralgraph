@@ -5,16 +5,20 @@ It went to the build flow, which came back with an existing-match
 offer. A reader asking for their own file by email is a command: send
 it. What rides:
 
-* with a profile open: that profile's CSV (and the Avid Fan cut when
-  the library has one), from the file store;
-* with a Digital Journey open, or a journey named ("email me the excel
-  file of the Young Sheldon Netflix journey that is in my library"):
-  that journey's breakdown workbook (Carolyn Bisson, WBD, 2026-11-02:
-  the lane knew only Profile IQ files, asked "Which file?" with the
-  journey open on her screen, and her answer to that question started a
-  cold read on a title her library already held);
-* otherwise: the most recent read Prometheus delivered in the thread,
-  as the body, with its CSV when the read carries one.
+* a journey named ("email me the excel file of the Young Sheldon
+  Netflix journey that is in my library"), or a library profile named:
+  that file (Carolyn Bisson, WBD, 2026-11-02: the lane knew only
+  Profile IQ files, asked "Which file?" with the journey open on her
+  screen, and her answer to that question started a cold read on a
+  title her library already held);
+* otherwise THE VERY LAST THING in the thread (Jenna 2026-11-04: "take
+  the very last thing that happened in chat and that's what they want
+  emailed, downloaded, converted"): a file the last reply carried goes
+  as it is; a read with a table behind it goes as its CSV with the read
+  in the body (prometheus/last_thing.py resolves it);
+* a thread whose last reply has no file or table: with a profile or a
+  Digital Journey open, that file, with the read in the body; with
+  nothing open, the read as the body.
 
 A send order is answered from what we hold. It never starts a read and
 never drafts a build.
@@ -350,11 +354,54 @@ def mail_safe(text):
     return txt
 
 
-def answer(text, uname, *, user, ctx, history, host, send=None, subjects=None):
+def _thread_file(last, host):
+    """(bytes, filename, mime) for the last thing in the thread when it is
+    a file or a read with a table; None otherwise."""
+    from . import last_thing as _lt
+    try:
+        if last.get('kind') == 'file':
+            f = last['file']
+            extra = []
+            try:
+                if host.has('subiq_bucket'):
+                    extra.append(str(host.subiq_bucket))
+            except Exception:
+                pass
+            extra.append('svod-acquisition')
+            blob = _lt.file_bytes(f, host.s3_client, bucket=_bucket(host), extra_buckets=tuple(extra))
+            if blob is None:
+                return None
+            return blob, str(f.get('filename') or 'file'), str(f.get('mime') or 'application/octet-stream')
+        if last.get('kind') == 'read':
+            import prometheus_analysis as pma
+            fname, csv_text = pma.build_generated_csv(last['entry'])
+            e = last['entry']
+            rng = ''
+            try:
+                import sys as _sys
+                app_mod = _sys.modules.get('app')
+                if app_mod is not None and hasattr(app_mod, '_stamp_csv_text'):
+                    if e.get('ws') and e.get('we'):
+                        rng = f"{app_mod._fmt_study_date(e['ws'])} - {app_mod._fmt_study_date(e['we'])}"
+                    elif e.get('wl'):
+                        rng = str(e['wl'])
+                    csv_text = app_mod._stamp_csv_text(csv_text, rng)
+            except Exception:
+                pass
+            subj = str(e.get('subject') or last.get('subject') or 'Data')
+            return csv_text.encode('utf-8'), f"{_clean_name(subj)}.csv", 'text/csv'
+    except Exception as ex:
+        print(f"[send-file] thread file failed: {ex}")
+    return None
+
+
+def answer(text, uname, *, user, ctx, history, host, send=None, subjects=None, consult=None, stash=None):
     """Payload for the chat, or None when nothing is in hand to send.
     ``send`` is injected by tests; defaults to the house mail door.
     ``subjects`` are the names the reader found in the ask, used when
-    the order itself names nothing we can parse."""
+    the order itself names nothing we can parse. ``consult`` and
+    ``stash`` feed the last-thing resolver (the ledger lookup and the
+    account's last-file record; tests inject them)."""
     email = str((user or {}).get('email') or '').strip()
     if not email or '@' not in email:
         try:
@@ -410,7 +457,37 @@ def answer(text, uname, *, user, ctx, history, host, send=None, subjects=None):
                 if lib_key:
                     named = named or str(sname)
                     break
-    if not named and not journey_key and not (isinstance(primary, dict) and primary.get('s3_key')):
+    last = None
+    page_chip = []
+    if not named and not journey_key:
+        # the very last thing in the thread first (Jenna 2026-11-04)
+        from . import last_thing as _lt
+        if stash is None:
+            try:
+                from .legacy import jobs as _jobs
+                stash = _jobs._pm_file_stash_read(uname)
+            except Exception:
+                stash = None
+        try:
+            last = _lt.resolve(history, consult=consult, stash=stash, bucket=_bucket(host))
+        except Exception as ex:
+            print(f"[send-file] last-thing resolve failed: {ex}")
+            last = None
+        if last and last.get('kind') in ('file', 'read'):
+            tf = _thread_file(last, host)
+            if tf is not None:
+                attachments.append(tf)
+                subject_name = str(last.get('subject') or tf[1].rsplit('.', 1)[0].replace('_', ' ')).strip()
+                words = mail_safe(str(last.get('text') or '').strip()) if last.get('kind') == 'read' or len(str(last.get('text') or '')) > 120 else ''
+                body = (f"Here is the file you asked for" if last.get('kind') == 'file' else f"Here is the data you asked for")
+                body += (f" on {subject_name}." if subject_name and subject_name.lower() not in tf[1].lower() else '.')
+                if words:
+                    body += "\n\nThe read it came from:\n\n" + words
+                if isinstance(primary, dict) and primary.get('s3_key') and primary.get('name'):
+                    page_chip = [f"Email me the {primary['name']} profile"]   # a wrong guess is one tap away
+                primary = None
+                ctx = dict(ctx or {}, primary=None, cuts=[])
+    if not named and not journey_key and not attachments and not (isinstance(primary, dict) and primary.get('s3_key')):
         journey_key = open_journey_key(ctx, uname, host)      # "email me this file" with a Digital Journey open
     if journey_key:
         wb = journey_workbook(journey_key, host)
@@ -465,7 +542,12 @@ def answer(text, uname, *, user, ctx, history, host, send=None, subjects=None):
         body = (f"Here is the {subject_name} profile you asked for, attached as a CSV"
                 + (" with its cut" + ('s' if len(attachments) > 2 else '') + " alongside" if len(attachments) > 1 else '')
                 + ". It is also in your Select Profile dropdown.")
-    read = _last_read(history) if not (named or journey_key) else None    # a workbook travels alone
+    if named or journey_key or (last and last.get('kind') in ('file', 'read') and attachments):
+        read = None            # a workbook travels alone; a thread file carries its own read
+    elif last and last.get('kind') == 'text' and isinstance(last.get('turn'), dict):
+        read = last['turn']    # the words of the last thing ride in the body
+    else:
+        read = _last_read(history)
     if read is not None:
         rtxt = mail_safe(str(read.get('text') or '').strip())
         if rtxt and attachments:
@@ -482,6 +564,7 @@ def answer(text, uname, *, user, ctx, history, host, send=None, subjects=None):
                 'reply': (CLARIFIER_LEAD + ' Open the profile or journey you want and ask again, or name it '
                           '("email me the Austin Sprinz profile", "email me the Young Sheldon on Netflix journey") and I will send it.'),
                 'followups': [], 'offer_deck': False, 'deck_angle': None}
+    thread_file = bool(last and last.get('kind') in ('file', 'read') and attachments)
     subj_line = (f"{subject_name}: your Digital Journey workbook" if journey_key
                  else f"{subject_name}: your Crosswalk file" if attachments else f"{subject_name}: your read from Prometheus")
     sender = send
@@ -496,15 +579,15 @@ def answer(text, uname, *, user, ctx, history, host, send=None, subjects=None):
                csv=(first[0] if first else None), csv_name=(first[1] if first else ''),
                files=rest)
     sent = bool((r or {}).get('sent'))
-    what = ('the workbook' if journey_key else ('the profile' + (' and its cut' if len(attachments) > 1 else ''))) if attachments \
+    what = ('the workbook' if journey_key else (attachments[0][1] if thread_file else ('the profile' + (' and its cut' if len(attachments) > 1 else '')))) if attachments \
         else ('the summary' if named else 'the read')
-    where = 'Digital Journey IQ' if journey_key else 'your Select Profile dropdown'
+    where = 'Digital Journey IQ' if journey_key else ('this chat' if thread_file else 'your Select Profile dropdown')
     if not sent:
         # the door's reason is for the log, never for the reader
         print(f"[send-file] not sent to {email}: {str((r or {}).get('reason') or 'mail door closed')[:160]}")
     reply = (f"Sent {what} to {email}." if sent
              else f"I could not send that just now. The file is still in {where}; ask me again in a minute.")
-    return {'success': True, 'action': 'answer', 'reply': reply, 'followups': [],
+    return {'success': True, 'action': 'answer', 'reply': reply, 'followups': (page_chip if sent else []),
             'offer_deck': False, 'deck_angle': None, 'subject': subject_name, 'sent': sent}
 
 

@@ -122,12 +122,12 @@ check("replay payload carries the file", "**_rp_file})" in SRC)
 check("download chip retired from generate",
       "followups = [f for f in followups if f != pma.CSV_OFFER_CHIP]"
       in SRC)
-check("email intercept runs before routing",
+check("email intercept runs before routing, with the thread",
       "if _pm_email_file_intent(text):\n"
-      "        return _pm_email_file_response(user, text)" in SRC)
-check("email sends from Prometheus",
-      "msg['From'] = 'Prometheus <prometheus@crosswalknyc.com>'"
-      in SRC)
+      "        return _pm_email_file_response(user, text, history)" in SRC)
+check("email resolves the very last thing in the thread",
+      "last = _pm_last_thing(user, history)" in SRC
+      and "from prometheus import last_thing as _lt" in SRC)
 # One outbound mail door (2026-10-06): the CSV send goes through
 # prometheus.outbound_mail.send_user_email, which BCCs Jenna on every
 # user-facing send.
@@ -135,10 +135,21 @@ _om_src = (_WEB / 'prometheus' / 'outbound_mail.py').read_text(encoding='utf-8')
 check("Jenna rides every send",
       "_om.send_user_email(" in SRC and "caller='csv-by-email'" in SRC
       and "for b in [JENNA]" in _om_src)
-check("reply-to is Jenna",
-      "msg['Reply-To'] = 'jenna@crosswalknyc.com'" in SRC)
+check("reply-to is Jenna (at the house door)",
+      "msg['Reply-To'] = REPLY_TO" in _om_src and "REPLY_TO = 'jenna@crosswalknyc.com'" in _om_src)
 check("typed-download path stashes too",
-      "_pm_file_stash_write(\n        (session.get('username')" in SRC)
+      "_pm_file_stash_write(uname, url, fname, s3_key," in SRC)
+check("library replays hand over their file",
+      SRC.count("_pm_replay_file(") >= 4 and "def _pm_replay_file(entry, text, username, chips):" in SRC)
+check("the download chip is no longer offered anywhere",
+      "_replay_chips.append(pma.CSV_OFFER_CHIP)" not in SRC
+      and "_nb_chips.append(pma.CSV_OFFER_CHIP)" not in SRC
+      and "followups.append(pma.CSV_OFFER_CHIP)" not in SRC)
+check("the build surface carries the file it hands over",
+      "for _fk in ('download_url', 'filename', 'file_link'):" in SRC)
+check("a guidance turn saves and renders its file",
+      "if (!data || !(data.success || data.guidance) || !data.download_url) return;" in IDX
+      and "_gMeta.link = { url: String(data.file_link.url)," in IDX)
 
 # Frontend render wiring.
 check("analyze push renders the file link",

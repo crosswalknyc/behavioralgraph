@@ -5431,13 +5431,26 @@ def csv_content_ask(text):
     return content
 
 
+# "download this", "export that data", "save this as a spreadsheet": the
+# words point at what was just delivered, whatever the file word (Jenna
+# 2026-11-04: the very last thing in the chat is what they want).
+_DOWNLOAD_DEICTIC_RX = re.compile(
+    r"^\W*(?:please\s+)?(?:can (?:you|i)\s+|could (?:you|i)\s+|i(?:'d| would) like to\s+|let me\s+)?"
+    r"(?:download|export|save|pull down)\s+(?:a copy of\s+)?"
+    r"(?:this|that|it|these|those|the (?:data|numbers|figures|table|results?|read|answer|output|breakdown|list|rows|above|same))"
+    r"(?:\s+(?:data|numbers|figures|table|results?|read|answer|output|breakdown|list|rows))?"
+    r"(?:\s+(?:as|to|in|into)\s+(?:an?\s+)?(?:csv|excel|xlsx|spreadsheet|sheet|file|download))?"
+    r"(?:\s+(?:file|format|please|for me))?\W*$", re.I)
+
+
 def detect_csv_download_intent(text):
     """True when the message asks to EXPORT the data just delivered
-    (the CSV offer chip, or a typed "download as csv"). Conservative:
-    an ask that requests NEW data in CSV form ("a csv of all the
-    influencers you have", "build out a csv of what brands...") flows
-    to the normal path, which answers and then offers the download
-    chip itself."""
+    (the CSV offer chip, a typed "download as csv", or a bare "download
+    this" / "export that data" / "save this as a spreadsheet").
+    Conservative: an ask that requests NEW data in CSV form ("a csv of
+    all the influencers you have", "build out a csv of what brands...")
+    flows to the normal path, which answers with its file riding the
+    reply."""
     t = str(text or '').strip()
     if not t:
         return False
@@ -5447,6 +5460,8 @@ def detect_csv_download_intent(text):
         return False
     if csv_content_ask(t):
         return False
+    if _DOWNLOAD_DEICTIC_RX.match(t):
+        return True
     return bool(_CSV_DOWNLOAD_RX.search(t))
 
 
