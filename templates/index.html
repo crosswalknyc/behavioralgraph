@@ -51914,6 +51914,36 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-pi-working { display: flex; align-items: center; gap: 8px; margin-top: 5px; font-size: 11.5px; color: var(--dtw-body); line-height: 15px; }
         #digitalTwinsIQView .dtw-pi-working .dtw-fg-pulse { margin-right: 0; }
         #digitalTwinsIQView .dtw-pi-seatrow.lit .say { color: var(--dtw-ink); }
+        /* the cohort ring (2026-11-03): the seat's cohort color, the same as its line on the dial and the legend */
+        #digitalTwinsIQView .dtw-pi-seatrow.coh .circ { box-shadow: 0 0 0 2px var(--dtw-raised), 0 0 0 4px var(--coh); }
+        #digitalTwinsIQView .dtw-pi-seatrow.coh .who .cohort { color: var(--coh); }
+        #digitalTwinsIQView .dtw-pi-strip .dtw-pi-chip.coh { margin: 3px; }
+        #digitalTwinsIQView .dtw-pi-thread, #digitalTwinsIQView .dtw-pi-seatlist { padding-left: 2px; }
+        /* the test bar locks at the top of the body while the page scrolls under it */
+        #digitalTwinsIQView .dtw-pi-head { position: sticky; top: 0; z-index: 6; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin: -1rem -1.15rem 0; padding: 0.7rem 1.15rem 0.65rem; background: var(--dtw-raised); border-bottom: 1px solid var(--dtw-hair); border-radius: 12px 12px 0 0; }
+        #digitalTwinsIQView .dtw-pi-head .dtw-pi-head-l { display: flex; align-items: baseline; gap: 10px; flex: 1 1 240px; min-width: 0; flex-wrap: wrap; }
+        #digitalTwinsIQView .dtw-pi-head .dtw-pi-head-l .dtw-eyebrow { align-self: center; }
+        #digitalTwinsIQView .dtw-pi-head .dtw-fg-rtwrap { flex: 1 1 auto; min-width: 0; }
+        #digitalTwinsIQView .dtw-pi-head .dtw-pi-controls { margin-top: 0; flex: 0 1 auto; }
+        #digitalTwinsIQView .dtw-pi-head .dtw-pi-head-r { display: flex; gap: 6px; align-items: center; margin-left: auto; flex: none; }
+        #digitalTwinsIQView .dtw-pi-head .dtw-pi-exit, #digitalTwinsIQView .dtw-pi-head .dtw-pi-del { margin-left: 0; }
+        #digitalTwinsIQView .dtw-pi-reveal { display: none; align-items: center; gap: 4px; font-size: 11px; color: var(--dtw-mute); background: transparent; border: 1px solid var(--dtw-rule); border-radius: 999px; padding: 2px 9px; cursor: pointer; }
+        #digitalTwinsIQView .dtw-pi-reveal:hover { color: var(--dtw-ink); }
+        #digitalTwinsIQView.dtw-focus .dtw-pi-reveal { display: inline-flex; }
+        #digitalTwinsIQView .dtw-spine { max-height: 60vh; transition: max-height .22s ease, opacity .16s ease, padding .22s ease; }
+        #digitalTwinsIQView.dtw-focus .dtw-spine { max-height: 0; padding-top: 0; padding-bottom: 0; opacity: 0; overflow: hidden; border-bottom-width: 0; pointer-events: none; }
+        /* the room in its own window */
+        #digitalTwinsIQView .dtw-pi-pop { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--dtw-mute); background: transparent; border: 1px solid var(--dtw-rule); border-radius: 999px; padding: 1px 8px; cursor: pointer; font-weight: 600; }
+        #digitalTwinsIQView .dtw-pi-pop:hover { color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-pi-col.room.popped .dtw-pi-fn { margin: 8px 0 10px; }
+        #digitalTwinsIQView.dtw-popout { min-height: 100vh; }
+        #digitalTwinsIQView.dtw-popout .dtw-body { padding: 10px 12px 10px; height: 100vh; box-sizing: border-box; overflow: hidden; }
+        #digitalTwinsIQView.dtw-popout .dtw-card { margin: 0; height: 100%; box-sizing: border-box; display: flex; flex-direction: column; min-height: 0; }
+        #digitalTwinsIQView.dtw-popout .dtw-pi-room { grid-template-columns: 1fr; margin-top: 0; flex: 1 1 auto; min-height: 0; }
+        #digitalTwinsIQView.dtw-popout .dtw-pi-col.side.room { border: 0; padding: 0; background: transparent; min-height: 0; height: 100%; }
+        #digitalTwinsIQView.dtw-popout .dtw-pi-seatlist { flex: 1 1 auto; min-height: 120px; display: flex; flex-direction: column; }
+        #digitalTwinsIQView.dtw-popout .dtw-pi-seatlist .dtw-pi-thread { max-height: none; flex: 1 1 auto; min-height: 120px; }
+        #digitalTwinsIQView.dtw-popout #dtwPiThread { max-height: 34vh; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
         #digitalTwinsIQView .dtw-pi-seatrow .bio { display: none; position: fixed; left: -9999px; top: 0; width: 320px; max-height: 340px; overflow-y: auto; overflow-x: hidden; z-index: 12; background: #0C1618; border: 1px solid var(--dtw-rule); border-radius: 12px; padding: 12px 14px; box-shadow: 0 12px 32px rgba(0,0,0,0.45); font-size: 12.5px; line-height: 17px; color: var(--dtw-ink); text-align: left; }
         #digitalTwinsIQView .dtw-pi-seatrow:hover::before, #digitalTwinsIQView .dtw-pi-seatrow:focus-within::before { content: ''; position: absolute; right: 100%; top: 0; bottom: 0; width: 12px; }
         #digitalTwinsIQView .dtw-pi-seatrow .bio h6 { margin: 0 0 6px; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dtw-mute); font-weight: 600; }
@@ -52134,7 +52164,13 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             function titleCase(s) { return String(s || '').toLowerCase().replace(/(^|[\s\-'.])([a-z])/g, function(m, a, b) { return a + b.toUpperCase(); }); }
             function initials(name) { var p = String(name || '').trim().split(/\s+/).filter(Boolean); if (!p.length) return '?'; if (p.length === 1) return p[0].slice(0, 2).toUpperCase(); return (p[0][0] + p[p.length - 1][0]).toUpperCase(); }
             function hueFor(i) { return HUES[Math.abs(parseInt(i, 10) || 0) % HUES.length]; }
-            function el(id) { return document.getElementById(id); }
+            function el(id) {
+                var e = document.getElementById(id);
+                if (e) return e;
+                // the room's elements live in the popped-out window while it is open (2026-11-03)
+                var p = S.roomPop; if (p && p.win && !p.win.closed) { try { return p.win.document.getElementById(id); } catch (_) {} }
+                return null;
+            }
             function jsq(s) { return String(s || '').replace(/\\/g, '').replace(/'/g, '').replace(/"/g, ''); }
             function cap(s) { s = String(s || ''); return s.charAt(0).toUpperCase() + s.slice(1); }
             function kindLabel(k) { return LAB_LABEL[k] || cap(String(k || '').replace(/_/g, ' ')); }
@@ -52219,6 +52255,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var pane = el('dtwTab' + tab.charAt(0).toUpperCase() + tab.slice(1)); if (pane) pane.classList.add('active');
                 syncInputCards();
                 syncFgBody();
+                try { piFocusScroll(); } catch (_) {}
                 if (tab === 'panel') { renderPanelSessions(); if (!S.session || !el('dtwFgHero')) renderPanelConsole(); else fgShown(); }
                 var piT = tab === 'greenlight' ? (GL_OPTIONS.indexOf(S.glOption) >= 0 ? S.glOption : 'script') : (PI_HOST[tab] ? tab : '');
                 if (piT) { S.piTab = piT; if (S.pilot && piTabFor(S.pilot.mode) !== piT) { S.pilot = null; } if (tab === 'greenlight') syncGreenlightOptions(); renderPilotConsole(); }
@@ -54155,11 +54192,19 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             function splitLines(s) {
                 var d = (s || {}).dial || {}, sp = d.splits || {};
                 var keys = Object.keys(sp);
-                if (!S.pilotSplits) {
+                if (!S.pilotSplits || !S.pilotSplitsUser) {
+                    // the defaults follow the room until the reader picks a line: with cohorts the cohorts are the lines
+                    // (Jenna 2026-11-03: men and women were doubled up), without them women and men
                     var hasCohorts = keys.some(function(k) { return sp[k].group === 'cohort'; });
                     S.pilotSplits = hasCohorts ? { a: '', b: '' } : { a: keys.indexOf('women') >= 0 ? 'women' : '', b: keys.indexOf('men') >= 0 ? 'men' : '' };
                 }
                 return { a: S.pilotSplits.a && sp[S.pilotSplits.a] ? sp[S.pilotSplits.a] : null, b: S.pilotSplits.b && sp[S.pilotSplits.b] ? sp[S.pilotSplits.b] : null };
+            }
+            function piOverlayColors(s) {
+                // the two overlay lines take the first palette colors no cohort is wearing
+                var used = {}; piCohortSplits(s || S.pilot || {}).forEach(function(c) { used[String(c.color).toLowerCase()] = 1; });
+                var free = PI_COHORT_COLORS.filter(function(c) { return !used[String(c).toLowerCase()]; });
+                return [free[0] || PI_SPLIT_A, free[1] || PI_SPLIT_B];
             }
             function drawPilotDial(upto) {
                 var c = el('dtwPiDial'); if (!c) return;
@@ -54188,8 +54233,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 }
                 var sl = splitLines(s);
                 piCohortSplits(s).forEach(function(c) { line(c.value, c.color, 1.6); });
-                if (sl.a) line(sl.a.value, PI_SPLIT_A, 1.4);
-                if (sl.b) line(sl.b.value, PI_SPLIT_B, 1.4);
+                var oc = piOverlayColors(s);
+                if (sl.a) line(sl.a.value, oc[0], 1.4);
+                if (sl.b) line(sl.b.value, oc[1], 1.4);
                 line(vs, '#E9E8E1', 2.2);
                 ctx.fillStyle = '#E9E8E1';
                 var last = 0;
@@ -54433,13 +54479,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var order = ['cohort', 'gender', 'quadrant', 'age', 'ethnicity', 'orientation', 'education', 'lifecycle', 'fanship', 'other'];
                 var label = { cohort: 'Cohort', gender: 'Gender', quadrant: 'Quadrant', age: 'Age', ethnicity: 'Ethnicity', orientation: 'Orientation', education: 'Education', lifecycle: 'Where they are with the title', fanship: 'Fanship', other: 'Other' };
                 function opts(sel) {
-                    var o = '<option value="">None</option>';
+                    var o = '<option value="">Add a line</option>';
                     order.forEach(function(g) { if (!groups[g]) return; o += '<optgroup label="' + esc(label[g] || g) + '">' + groups[g].map(function(k) { return '<option value="' + esc(k) + '"' + (sel === k ? ' selected' : '') + '>' + esc(sp[k].label || k) + ' (' + esc(sp[k].n) + ')</option>'; }).join('') + '</optgroup>'; });
                     return o;
                 }
+                var oc0 = piOverlayColors(s);
                 return '<div class="dtw-pi-splitbar"><span><span class="sw" style="background:#E9E8E1"></span>Room</span>'
-                    + '<label><span class="sw" style="background:' + PI_SPLIT_A + '"></span><select class="dtw-in" style="display:inline-block;width:auto;padding:3px 6px" onchange="dtwPilotSplit(\'a\', this.value)">' + opts(S.pilotSplits.a) + '</select></label>'
-                    + '<label><span class="sw" style="background:' + PI_SPLIT_B + '"></span><select class="dtw-in" style="display:inline-block;width:auto;padding:3px 6px" onchange="dtwPilotSplit(\'b\', this.value)">' + opts(S.pilotSplits.b) + '</select></label>'
+                    + '<label><span class="sw" style="background:' + oc0[0] + '"></span><select class="dtw-in" style="display:inline-block;width:auto;padding:3px 6px" onchange="dtwPilotSplit(\'a\', this.value)">' + opts(S.pilotSplits.a) + '</select></label>'
+                    + '<label><span class="sw" style="background:' + oc0[1] + '"></span><select class="dtw-in" style="display:inline-block;width:auto;padding:3px 6px" onchange="dtwPilotSplit(\'b\', this.value)">' + opts(S.pilotSplits.b) + '</select></label>'
                     + '<span class="dtw-muted">Overlay any two groups on the room.</span></div>';
             }
             // ---- the control room (Jenna 2026-10-30): the seats carry the generated portrait and the person's latest line on the clock; hover or focus opens who they are.
@@ -54476,17 +54523,31 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 ((s || {}).events || []).forEach(function(e) { if (Number(e.t || 0) <= t + 0.05) { n++; if (!last || Number(e.t || 0) >= Number(last.t || 0)) last = e; } });
                 return n + '|' + (last ? (last.t + '|' + last.seat + '|' + String(last.line || '').length) : '');
             }
+            function piCohortColorFor(r) {
+                // the color of the seat's cohort line on the dial (the legend uses the same), '' when the room has no cohorts
+                var seg = String((r || {}).segment || '').replace(/\s+/g, ' ').trim().toLowerCase(); if (!seg) return '';
+                var cs = piCohortSplits(S.pilot || {});
+                for (var i = 0; i < cs.length; i++) {
+                    var lab = String(cs[i].label || '').replace(/\s+/g, ' ').trim().toLowerCase(), key = String(cs[i].key || '').toLowerCase();
+                    if (lab === seg || key === seg || key === seg.replace(/[^a-z0-9]+/g, '_') || key === 'cohort_' + seg.replace(/[^a-z0-9]+/g, '_')) return cs[i].color;
+                }
+                // a cohort the dial has no line for yet: a stable color after the cohorts' own
+                var segs = {}; (((S.pilot || {}).group || {}).roster || []).forEach(function(x) { var k = String(x.segment || '').replace(/\s+/g, ' ').trim().toLowerCase(); if (k) segs[k] = 1; });
+                var extra = Object.keys(segs).filter(function(k) { return !cs.some(function(c) { return String(c.label || '').replace(/\s+/g, ' ').trim().toLowerCase() === k; }); }).sort();
+                var at = extra.indexOf(seg); if (at < 0) return '';
+                return PI_COHORT_COLORS[(cs.length + at) % PI_COHORT_COLORS.length];
+            }
             function piSeatRowHtml(r, i, sl, opts) {
                 opts = opts || {};
-                var hue = seatHue(r, i), url = r.portrait_url || '', nm = titleCase(r.name || '');
-                return '<div class="dtw-pi-seatrow' + (sl.lit ? ' lit' : '') + (opts.now ? ' now' : '') + '" tabindex="0" data-seat="' + Number(r.seat) + '" style="--hue:' + hue + '" aria-label="Who ' + esc(nm) + ' is">'
+                var hue = seatHue(r, i), url = r.portrait_url || '', nm = titleCase(r.name || ''), coh = piRoomHasCohorts() ? piCohortColorFor(r) : '';
+                return '<div class="dtw-pi-seatrow' + (sl.lit ? ' lit' : '') + (opts.now ? ' now' : '') + (coh ? ' coh' : '') + '" tabindex="0" data-seat="' + Number(r.seat) + '" style="--hue:' + hue + (coh ? ';--coh:' + coh : '') + '" aria-label="Who ' + esc(nm) + ' is">'
                     + '<span class="circ">' + esc(initials(nm)) + (url ? '<img src="' + esc(thumb(url)) + '" alt="" loading="lazy" onerror="this.remove()">' : '') + '</span>'
                     + '<div class="txt"><div class="who"><span class="nm">' + esc(nm) + ', ' + esc(r.age || '') + (piRoomHasCohorts() && r.segment ? ' <span class="cohort">' + esc(r.segment) + '</span>' : '') + '</span>' + (sl.clock ? '<span class="c">' + esc(sl.clock) + '</span>' : '') + '</div><div class="say">' + piSayHtml(sl) + '</div></div>'
                     + '<div class="bio">' + piSeatBio(r) + '</div></div>';
             }
             function piChipHtml(r, i) {
-                var hue = seatHue(r, i), url = r.portrait_url || '', nm = titleCase(r.name || '');
-                return '<div class="dtw-pi-seatrow dtw-pi-chip" tabindex="0" data-seat="' + Number(r.seat) + '" style="--hue:' + hue + '" aria-label="Who ' + esc(nm) + ' is">'
+                var hue = seatHue(r, i), url = r.portrait_url || '', nm = titleCase(r.name || ''), coh = piRoomHasCohorts() ? piCohortColorFor(r) : '';
+                return '<div class="dtw-pi-seatrow dtw-pi-chip' + (coh ? ' coh' : '') + '" tabindex="0" data-seat="' + Number(r.seat) + '" style="--hue:' + hue + (coh ? ';--coh:' + coh : '') + '" aria-label="Who ' + esc(nm) + ' is">'
                     + '<span class="circ">' + esc(initials(nm)) + (url ? '<img src="' + esc(thumb(url)) + '" alt="" loading="lazy" onerror="this.remove()">' : '') + '</span>'
                     + '<div class="bio">' + piSeatBio(r) + '</div></div>';
             }
@@ -54552,13 +54613,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // positioned inside it): to the left of the row where there is room, under it on a narrow screen.
             function piPlaceBio(row) {
                 var bio = row.querySelector('.bio'); if (!bio) return;
-                var r = row.getBoundingClientRect(), w = Math.min(320, Math.max(200, window.innerWidth - 24));
+                var win = (row.ownerDocument && row.ownerDocument.defaultView) || window;   // the popped-out room has its own viewport
+                var r = row.getBoundingClientRect(), w = Math.min(320, Math.max(200, win.innerWidth - 24));
                 bio.style.width = w + 'px';
                 var left, top;
-                if (window.innerWidth <= 860 || r.left - w - 10 < 8) { left = Math.max(8, Math.min(r.left + 46, window.innerWidth - w - 8)); top = r.bottom + 4; }
+                if (win.innerWidth <= 860 || r.left - w - 10 < 8) { left = Math.max(8, Math.min(r.left + 46, win.innerWidth - w - 8)); top = r.bottom + 4; }
                 else { left = r.left - w - 10; top = r.top - 6; }
                 var h = Math.min(340, bio.scrollHeight || 340);
-                top = Math.max(8, Math.min(top, window.innerHeight - h - 8));
+                top = Math.max(8, Math.min(top, win.innerHeight - h - 8));
                 bio.style.left = left + 'px'; bio.style.top = top + 'px';
             }
             if (!window._piBioWired) {
@@ -54747,14 +54809,103 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var order = ['cohort', 'gender', 'quadrant', 'age', 'ethnicity', 'orientation', 'education', 'lifecycle', 'fanship', 'other'];
                 var label = { cohort: 'Cohort', gender: 'Gender', quadrant: 'Quadrant', age: 'Age', ethnicity: 'Ethnicity', orientation: 'Orientation', education: 'Education', lifecycle: 'Where they are with the title', fanship: 'Fanship', other: 'Other' };
                 function opts(sel) {
-                    var o = '<option value="">None</option>';
+                    var o = '<option value="">Add a line</option>';
                     order.forEach(function(g) { if (!groups[g]) return; o += '<optgroup label="' + esc(label[g] || g) + '">' + groups[g].map(function(k) { return '<option value="' + esc(k) + '"' + (sel === k ? ' selected' : '') + '>' + esc(sp[k].label || k) + ' (' + esc(sp[k].n) + ')</option>'; }).join('') + '</optgroup>'; });
                     return o;
                 }
+                var oc = piOverlayColors(s);
                 return '<div class="dtw-pi-legend">' + room
-                    + '<label><i class="sw" style="background:' + PI_SPLIT_A + '"></i><select class="dtw-in" onchange="dtwPilotSplit(\'a\', this.value)">' + opts(S.pilotSplits.a) + '</select></label>'
-                    + '<label><i class="sw" style="background:' + PI_SPLIT_B + '"></i><select class="dtw-in" onchange="dtwPilotSplit(\'b\', this.value)">' + opts(S.pilotSplits.b) + '</select></label></div>';
+                    + '<label title="Overlay a line"><i class="sw" style="background:' + oc[0] + '"></i><select class="dtw-in" onchange="dtwPilotSplit(\'a\', this.value)">' + opts(S.pilotSplits.a) + '</select></label>'
+                    + '<label title="Overlay a second line"><i class="sw" style="background:' + oc[1] + '"></i><select class="dtw-in" onchange="dtwPilotSplit(\'b\', this.value)">' + opts(S.pilotSplits.b) + '</select></label></div>';
             }
+            function piKindSel() {
+                return '<select id="dtwPiKindSel" class="dtw-in" onchange="dtwPilotKindSel(this.value)" aria-label="Kind of question"><option value=""' + (!S.pilotKind ? ' selected' : '') + '>Open</option><option value="yes_no"' + (S.pilotKind === 'yes_no' ? ' selected' : '') + '>Yes / no</option><option value="rating"' + (S.pilotKind === 'rating' ? ' selected' : '') + '>Rating</option><option value="show_of_hands"' + (S.pilotKind === 'show_of_hands' ? ' selected' : '') + '>Show of hands</option></select>';
+            }
+            function piRoomHtml(s, t0, kindSel) {
+                // the room column: the seats as a thread, the composer, the questions. Painted inline or into the popped-out window.
+                var roster = ((s.group || {}).roster || []);
+                kindSel = kindSel || piKindSel();
+                var popBtn = piRoomPopped() ? '<button type="button" class="dtw-pi-pop" onclick="dtwRoomPopIn()" title="Bring the room back into the page">Back to page</button>'
+                                            : '<button type="button" class="dtw-pi-pop" onclick="dtwRoomPopOut()" title="Open the room in its own window">Pop out</button>';
+                return '<div class="dtw-pi-h">The room <span class="n">' + roster.length + ' seated</span>' + popBtn + '</div>'
+                    + '<div id="dtwPiSeats" class="dtw-pi-seatlist">' + renderPilotSeats(s, t0) + '</div>'
+                    + '<div class="dtw-pi-hr"></div><div class="dtw-pi-h">Ask the room at <span class="n" id="dtwPiAskClock">' + esc(clockFmt(t0)) + '</span></div>'
+                    + '<div class="dtw-pi-sugg" id="dtwPiSugg">' + renderPilotSuggest(s, t0) + '</div>'
+                    + '<input id="dtwPiQ" class="dtw-in" placeholder="Would you keep watching?" onkeydown="if(event.key===\'Enter\'){event.preventDefault();dtwPilotAsk();}">'
+                    + '<div class="dtw-pi-askrow">' + kindSel + '<button type="button" class="dtw-btn dtw-btn-primary" onclick="dtwPilotAsk()">Ask the room</button></div>'
+                    + '<div id="dtwPiAskNote" class="dtw-status"></div>'
+                    + '<div id="dtwPiThread">' + renderPilotThread(s) + '</div>';
+            }
+            // ---- the room in its own window (Jenna 2026-11-03: "pop the chat box out as its own window so you can really
+            // interact and engage with them"). The page keeps the clock, the events and the questions; the window is the
+            // room's surface: the same markup, painted there, with the inline handlers routed back to this page.
+            function piRoomPopped() { var p = S.roomPop; return !!(p && p.win && !p.win.closed); }
+            function piPopoutShims(win, html) {
+                // every dtw* handler the page exposes answers in that window too (the markup's inline handlers call them by name)
+                var names = {}; String(html || '').replace(/\b(dtw[A-Za-z0-9_]+)\s*\(/g, function(_, n) { names[n] = 1; return ''; });
+                try { Object.keys(window).forEach(function(k) { if (/^dtw/.test(k) && typeof window[k] === 'function') names[k] = 1; }); } catch (_) {}
+                Object.keys(names).forEach(function(n) { if (typeof window[n] === 'function' && typeof win[n] !== 'function') win[n] = function() { return window[n].apply(window, arguments); }; });
+            }
+            function piPaintPopout(html) {
+                var p = S.roomPop; if (!p || !p.win || p.win.closed) return;
+                try {
+                    var box = p.win.document.getElementById('dtwPopRoom'); if (!box) return;
+                    piPopoutShims(p.win, html);
+                    box.innerHTML = html;
+                    var seats = box.querySelector('#dtwPiSeats'); if (seats) { seats.setAttribute('data-k', piThreadKey(S.pilot || {}, playheadNow())); piThreadFollow(seats); }
+                } catch (e) { console.warn('[pilot] popout paint', e); }
+            }
+            window.dtwRoomPopOut = function() {
+                var s = S.pilot; if (!s) return;
+                if (piRoomPopped()) { try { S.roomPop.win.focus(); } catch (_) {} return; }
+                var w = null;
+                try { w = window.open('', 'dtwRoom_' + String(s.id || 'room').replace(/[^A-Za-z0-9_]/g, ''), 'popup=yes,width=440,height=' + Math.min(900, Math.max(600, window.screen.availHeight - 80))); } catch (_) { w = null; }
+                if (!w) { var n = el('dtwPiAskNote'); if (n) n.textContent = 'The browser blocked the window. Allow pop-ups for this site and try again.'; return; }
+                var styles = Array.prototype.map.call(document.querySelectorAll('style'), function(st) { return st.textContent || ''; }).join('\n');
+                var links = Array.prototype.map.call(document.querySelectorAll('link[rel="stylesheet"], link[rel="preconnect"], link[rel="preload"]'), function(l) { return l.outerHTML; }).join('');
+                var theme = document.body.getAttribute('data-theme') || '';
+                var doc = w.document;
+                doc.open();
+                doc.write('<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><base href="' + location.origin + '/"><title>' + esc((s.title || 'The room') + ': the room') + '</title>' + links + '<style>' + styles + '</style><style>html,body{margin:0;background:#0C1618;} body[data-theme="light"]{background:#E9E8E1;}</style></head>'
+                    + '<body' + (theme ? ' data-theme="' + esc(theme) + '"' : '') + '><div id="digitalTwinsIQView" class="dtw-popout" style="display:flex;flex-direction:column;"><div class="dtw-body"><div class="dtw-card"><div class="dtw-pi-room"><div class="dtw-pi-col side room" id="dtwPopRoom"></div></div></div></div></div></body></html>');
+                doc.close();
+                S.roomPop = { win: w, id: s.id };
+                try {
+                    // the who-they-are card follows the pointer in that window too
+                    var onBio = function(e) { var row = e.target && e.target.closest ? e.target.closest('#dtwPiSeats .dtw-pi-seatrow') : null; if (row) piPlaceBio(row); };
+                    doc.addEventListener('mouseover', onBio, true);
+                    doc.addEventListener('focusin', onBio, true);
+                    w.addEventListener('pagehide', function() { setTimeout(function() { if (!piRoomPopped()) { S.roomPop = null; if (S.pilot) renderPilotConsole(); } }, 60); });
+                } catch (_) {}
+                if (S.roomPopTimer) { try { clearInterval(S.roomPopTimer); } catch (_) {} }
+                S.roomPopTimer = setInterval(function() { if (S.roomPop && (!S.roomPop.win || S.roomPop.win.closed)) { clearInterval(S.roomPopTimer); S.roomPopTimer = null; S.roomPop = null; if (S.pilot) renderPilotConsole(); } }, 1500);
+                renderPilotConsole();
+                try { w.focus(); } catch (_) {}
+            };
+            window.dtwRoomPopIn = function() {
+                var p = S.roomPop; S.roomPop = null;
+                if (S.roomPopTimer) { try { clearInterval(S.roomPopTimer); } catch (_) {} S.roomPopTimer = null; }
+                if (p && p.win && !p.win.closed) { try { p.win.close(); } catch (_) {} }
+                if (S.pilot) renderPilotConsole();
+            };
+            window.addEventListener('beforeunload', function() { if (piRoomPopped()) { try { S.roomPop.win.close(); } catch (_) {} } });
+            // ---- the test takes the screen while it scrolls (Jenna 2026-11-03): the twin masthead folds away once the
+            // body has scrolled, the test bar stays locked at the top; the top of the page, or the Show button, brings it back
+            function piFocusScroll() {
+                var v = el('digitalTwinsIQView'); if (!v) return;
+                var body = v.querySelector('.dtw-body'); if (!body) return;
+                var on = !!S.pilot && !!PI_HOST[piTab()] && !!document.querySelector('.dtw-pane.active .dtw-pi-head');
+                if (!on) { v.classList.remove('dtw-focus'); return; }
+                var st = body.scrollTop, room = body.scrollHeight - body.clientHeight;
+                if (!v.classList.contains('dtw-focus')) { if (st > 56 && room > 220) v.classList.add('dtw-focus'); }
+                else if (st <= 2) v.classList.remove('dtw-focus');
+            }
+            window.dtwPilotUnfocus = function() {
+                var v = el('digitalTwinsIQView'), body = v && v.querySelector('.dtw-body');
+                if (v) v.classList.remove('dtw-focus');
+                if (body) { try { body.scrollTo({ top: 0, behavior: 'smooth' }); } catch (_) { body.scrollTop = 0; } }
+            };
+            (function() { var b = document.querySelector('#digitalTwinsIQView .dtw-body'); if (b && !b._piFocusWired) { b._piFocusWired = true; b.addEventListener('scroll', piFocusScroll, { passive: true }); } })();
             function renderPilotPlayer(s) {
                 var roster = ((s.group || {}).roster || []);
                 var preparing = s.status === 'preparing';
@@ -54766,8 +54917,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (fmt && fmt !== s.mode) metaBits.push('Read as a ' + esc(fmt === 'feature' ? 'feature' : fmt.replace('_', ' ')));
                 metaBits.push(esc(s.cut_label || 'Cut A'));
                 if (s.lineage && s.lineage.parent) metaBits.push('<button type="button" class="dtw-link" onclick="dtwPilotPick(\'' + esc(s.lineage.parent) + '\')">against ' + esc(s.lineage.parent_cut_label || 'Cut A') + '</button>');
-                var topbar = '<div class="dtw-pi-topbar"><div class="meta">' + metaBits.map(function(b) { return '<span>' + b + '</span>'; }).join('') + '</div>'
-                    + '<div class="dtw-pi-controls"><span class="dtw-pi-note" id="dtwPiNote">' + esc(preparing ? 'Preparing the cut' : (s.prepare_note || (ready ? 'Ready to play' : 'Preparing the cut'))) + '</span><button type="button" class="dtw-btn dtw-btn-primary" id="dtwPiPlayBtn" onclick="dtwPilotPlay()"' + (preparing ? ' disabled' : '') + '>' + (s.status === 'playing' ? 'Playing' : 'Play') + '</button><button type="button" class="dtw-btn" onclick="dtwPilotStop()">Stop</button><span class="dtw-pi-clock" id="dtwPiClock">' + esc(clockFmt(t0)) + '</span></div></div>';
+                var controls = '<div class="dtw-pi-controls"><span class="dtw-pi-note" id="dtwPiNote">' + esc(preparing ? 'Preparing the cut' : (s.prepare_note || (ready ? 'Ready to play' : 'Preparing the cut'))) + '</span><button type="button" class="dtw-btn dtw-btn-primary" id="dtwPiPlayBtn" onclick="dtwPilotPlay()"' + (preparing ? ' disabled' : '') + '>' + (s.status === 'playing' ? 'Playing' : 'Play') + '</button><button type="button" class="dtw-btn" onclick="dtwPilotStop()">Stop</button><span class="dtw-pi-clock" id="dtwPiClock">' + esc(clockFmt(t0)) + '</span></div>';
+                // the controls ride in the locked test bar (2026-11-03); the meta line stays over the stage
+                var topbar = '<div class="dtw-pi-topbar"><div class="meta">' + metaBits.map(function(b) { return '<span>' + b + '</span>'; }).join('') + '</div></div>';
                 var live = isLiveSess(s) && (watchMedia(s) || {}).kind !== 'video', platform = (s.media || {}).platform_label || 'the service';
                 var hint = preparing ? (live && liveFinished(s) === false && (s.live || {}).frames && (s.live || {}).frames.length ? 'The room is scoring what it watched.' : 'The room is watching the cut.')
                     : (live ? (s.status === 'playing' ? ('Open the episode on ' + platform + ', press play there, then mirror it here. The room reacts to what is on screen.') : (s.status === 'stopped' ? 'Stopped.' : 'Press Play to seat the room. Then open the episode on ' + platform + ' and mirror it here.'))
@@ -54779,15 +54931,13 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     + '<div class="dtw-pi-dialwrap"><canvas id="dtwPiDial"></canvas><div class="dtw-pi-dialnum" id="dtwPiDialNum"></div></div>'
                     + splitLegend(s)
                     + '<div class="dtw-pi-marks" id="dtwPiMarks">' + renderPilotMarks(s, t0) + '</div></div>';
-                var kindSel = '<select id="dtwPiKindSel" class="dtw-in" onchange="dtwPilotKindSel(this.value)" aria-label="Kind of question"><option value=""' + (!S.pilotKind ? ' selected' : '') + '>Open</option><option value="yes_no"' + (S.pilotKind === 'yes_no' ? ' selected' : '') + '>Yes / no</option><option value="rating"' + (S.pilotKind === 'rating' ? ' selected' : '') + '>Rating</option><option value="show_of_hands"' + (S.pilotKind === 'show_of_hands' ? ' selected' : '') + '>Show of hands</option></select>';
-                var room = '<div class="dtw-pi-col side room"><div class="dtw-pi-h">The room <span class="n">' + roster.length + ' seated</span></div>'
-                    + '<div id="dtwPiSeats" class="dtw-pi-seatlist">' + renderPilotSeats(s, t0) + '</div>'
-                    + '<div class="dtw-pi-hr"></div><div class="dtw-pi-h">Ask the room at <span class="n" id="dtwPiAskClock">' + esc(clockFmt(t0)) + '</span></div>'
-                    + '<div class="dtw-pi-sugg" id="dtwPiSugg">' + renderPilotSuggest(s, t0) + '</div>'
-                    + '<input id="dtwPiQ" class="dtw-in" placeholder="Would you keep watching?" onkeydown="if(event.key===\'Enter\'){event.preventDefault();dtwPilotAsk();}">'
-                    + '<div class="dtw-pi-askrow">' + kindSel + '<button type="button" class="dtw-btn dtw-btn-primary" onclick="dtwPilotAsk()">Ask the room</button></div>'
-                    + '<div id="dtwPiAskNote" class="dtw-status"></div>'
-                    + '<div id="dtwPiThread">' + renderPilotThread(s) + '</div></div>';
+                var kindSel = piKindSel();
+                var roomInner = piRoomHtml(s, t0, kindSel);
+                var popped = piRoomPopped();
+                var room = popped
+                    ? '<div class="dtw-pi-col side room popped"><div class="dtw-pi-h">The room <span class="n">' + roster.length + ' seated</span></div><div class="dtw-pi-fn">The room is open in its own window. The conversation goes on there.</div><button type="button" class="dtw-btn" onclick="dtwRoomPopIn()">Bring it back here</button></div>'
+                    : '<div class="dtw-pi-col side room">' + roomInner + '</div>';
+                S.roomPopHtml = popped ? roomInner : '';
                 var purge = '<label class="dtw-pi-switch"><input type="checkbox" id="dtwPiPurge"' + (s.purge_media_after ? ' checked' : '') + ' onchange="dtwPilotPurgeToggle(this.checked)"> Remove the file when the test is done' + ((s.media || {}).purged_at ? ' <span class="dtw-muted">(removed; the read stays)</span>' : '') + '</label>';
                 var exp = S.key ? ('<div class="dtw-actions">' + (s.scorecard ? '<a class="dtw-btn dtw-btn-primary" href="/api/digital-twins/' + esc(S.key) + '/pilot/' + esc(s.id) + '/report.pptx">Report (deck)</a><a class="dtw-btn" href="/api/digital-twins/' + esc(S.key) + '/pilot/' + esc(s.id) + '/report.pdf">Report (PDF)</a>' : '') + '<a class="dtw-btn" href="/api/digital-twins/' + esc(S.key) + '/pilot/' + esc(s.id) + '/export.csv">CSV</a><a class="dtw-btn" href="/api/digital-twins/' + esc(S.key) + '/pilot/' + esc(s.id) + '/export.pdf">PDF</a><a class="dtw-btn" href="/api/digital-twins/' + esc(S.key) + '/pilot/' + esc(s.id) + '/export.pptx">Deck</a><button type="button" class="dtw-btn" onclick="dtwPilotDelete()">Delete this test</button></div>') : '';
                 var scoredNow = s.status === 'stopped' && !!s.scorecard;
@@ -54797,10 +54947,15 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     + (diag ? '<details class="dtw-pi-more" ontoggle="drawCompareChart()"><summary>Diagnostics</summary>' + diag + '</details>' : '')
                     + (guide ? '<details class="dtw-pi-more"><summary>Moderator guide</summary>' + guide + '</details>' : '')
                     + (extras ? '<details class="dtw-pi-more" ontoggle="drawCompareChart()"><summary>Recut, comps, talent and the brief</summary>' + extras + '</details>' : '');
-                return '<div class="dtw-card"><div class="dtw-eyebrow">' + esc(PI_TAB_LABEL[piTabFor(s.mode)] || 'Pilot Testing') + '</div>'
-                    + '<div class="dtw-fg-rtwrap"><input id="dtwPiName" class="dtw-fg-rt" value="' + esc(s.title || '') + '" onblur="dtwPilotRename()"><button type="button" class="dtw-link" onclick="dtwPilotNew()">New test</button>'
-                    + '<button type="button" class="dtw-btn dtw-btn-sm dtw-pi-exit" onclick="dtwPilotClose()" title="Leave this test. A test still playing is stopped and scored first.">Exit test</button>'
-                    + '<button type="button" class="dtw-btn dtw-btn-sm dtw-pi-del" onclick="dtwPilotDelete()" title="Delete this test. An admin can restore it for 30 days.">Delete</button></div>'
+                var twinName = String(((S.twin || {}).name || (S.twin || {}).subject || ((S.twin || {}).meta || {}).name || ((S.twin || {}).meta || {}).subject || 'the twin'));
+                var head = '<div class="dtw-pi-head"><div class="dtw-pi-head-l">'
+                    + '<button type="button" class="dtw-pi-reveal" onclick="dtwPilotUnfocus()" title="Show the twin and its tabs again">&#9650; ' + esc(twinName) + '</button>'
+                    + '<div class="dtw-eyebrow">' + esc(PI_TAB_LABEL[piTabFor(s.mode)] || 'Pilot Testing') + '</div>'
+                    + '<div class="dtw-fg-rtwrap"><input id="dtwPiName" class="dtw-fg-rt" value="' + esc(s.title || '') + '" onblur="dtwPilotRename()"><button type="button" class="dtw-link" onclick="dtwPilotNew()">New test</button></div></div>'
+                    + controls
+                    + '<div class="dtw-pi-head-r"><button type="button" class="dtw-btn dtw-btn-sm dtw-pi-exit" onclick="dtwPilotClose()" title="Leave this test. A test still playing is stopped and scored first.">Exit test</button>'
+                    + '<button type="button" class="dtw-btn dtw-btn-sm dtw-pi-del" onclick="dtwPilotDelete()" title="Delete this test. An admin can restore it for 30 days.">Delete</button></div></div>';
+                return '<div class="dtw-card">' + head
                     + '<div class="dtw-pi-room">' + renderPilotScores(s) + center + room + '</div>'
                     + '<div class="dtw-pi-foot">' + exp + purge + '</div>'
                     + more + '</div>';
@@ -54812,6 +54967,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (!S.pilot) { h.innerHTML = renderPilotStart(); piAfterStartPaint(); return; }
                 Object.keys(PI_HOST).forEach(function(t) { var o = el(PI_HOST[t]); if (o && o !== h) o.innerHTML = ''; });
                 h.innerHTML = renderPilotPlayer(S.pilot);
+                if (piRoomPopped() && S.roomPopHtml) piPaintPopout(S.roomPopHtml);
+                piFocusScroll();
                 bindPilotMedia();
                 schedulePilotPortraits();
                 revealPilot(playheadNow());
@@ -54838,7 +54995,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 }, 4000);
             }
             window.dtwPilotKind = function(k) { S.pilotKind = (S.pilotKind === k) ? '' : k; document.querySelectorAll('#dtwPiKinds .dtw-chip').forEach(function(b) { b.classList.toggle('on', b.getAttribute('data-k') === S.pilotKind); }); };
-            window.dtwPilotSplit = function(which, key) { S.pilotSplits = S.pilotSplits || { a: '', b: '' }; S.pilotSplits[which] = key || ''; drawPilotDial(playheadNow()); };
+            window.dtwPilotSplit = function(which, key) { S.pilotSplits = S.pilotSplits || { a: '', b: '' }; S.pilotSplits[which] = key || ''; S.pilotSplitsUser = true; drawPilotDial(playheadNow()); };
             window.dtwPilotGenre = async function(g) {
                 var s = S.pilot; if (!s || !S.key) return;
                 try { var d = await api('/' + S.key + '/pilot/' + s.id + '/rename', { method: 'POST', body: JSON.stringify({ genre: g || '' }) }); if (d.session) { adoptPilot(d.session); renderPilotConsole(); } } catch (e) { var n = el('dtwPiNote'); if (n) n.textContent = e.message; }
@@ -55433,7 +55590,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         var t = playheadNow();
                         adoptPilot(r.data.session);
                         var th = el('dtwPiThread');
-                        if (th) { var tmp = document.createElement('div'); tmp.innerHTML = renderPilotPlayer(S.pilot); var fresh = tmp.querySelector('#dtwPiThread'); if (fresh) th.innerHTML = fresh.innerHTML; }
+                        if (th) { var tmp = document.createElement('div'); tmp.innerHTML = piRoomHtml(S.pilot, t); var fresh = tmp.querySelector('#dtwPiThread'); if (fresh) th.innerHTML = fresh.innerHTML; }
                         var scw = document.querySelector('.dtw-pane.active .dtw-pi .dtw-card'); if (scw && S.pilot.status === 'stopped') { renderPilotConsole(); dtwPilotSeek(t); }
                     }
                     pollPilotQuestions();
