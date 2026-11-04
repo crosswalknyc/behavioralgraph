@@ -276,7 +276,12 @@ def shape_moves(sess: dict, twin: dict, roster: list, rec: dict, before: dict, w
 def frame(sess: dict, twin: dict, t: float, image_b64: str, *, usage_extras: Optional[dict] = None, media_type: str = 'image/jpeg') -> dict:
     """One sampled frame at clock ``t``. Reads it, moves the seats, and
     returns what changed so the page can paint without a reload:
-    {t, caption, events, dial, splits, skipped}."""
+    {t, caption, events, dial, splits, split_meta, seats, skipped}.
+
+    ``seats`` is every seat's own reading at this frame ({seat: value})
+    and ``split_meta`` names each split row ({key: {label, group, n}}),
+    so the page can draw the Cohorts and People views while the room is
+    still watching (Jenna 2026-11-04: the dial views switch live)."""
     live = sess.setdefault('live', {'on': True, 'frames': [], 'seat_dials': {}, 'events': []})
     roster = (sess.get('group') or {}).get('roster') or []
     try:
@@ -375,10 +380,12 @@ def frame(sess: dict, twin: dict, t: float, image_b64: str, *, usage_extras: Opt
         wanted[sno] = max(0.0, min(100.0, v))
     trusted = roster and thought_n >= max(1, int(0.75 * len(roster)))   # most seats came with their own thought
     shaped = shape_moves(sess, twin, roster, rec, dials, wanted, trusted=bool(trusted))
+    seat_now = {}
     for r in roster:
         sno = str(r.get('seat'))
         v = shaped.get(sno, wanted.get(sno, dials.get(sno, DEFAULT_DIAL)))
         seat_dials.setdefault(sno, []).append([round(t, 2), round(v, 2)])
+        seat_now[sno] = round(v, 2)
         vals.append(v)
         g = str(r.get('gender') or '').upper()[:1]
         if g in by_gender:
@@ -391,7 +398,7 @@ def frame(sess: dict, twin: dict, t: float, image_b64: str, *, usage_extras: Opt
     dial.setdefault('t', []).append(round(t, 2))
     dial.setdefault('value', []).append(room)
     splits = dial.setdefault('splits', {})
-    split_now = {}
+    split_now, split_meta = {}, {}
     split_defs = [(cohort_key(lab), lab, 'cohort', by_cohort.get(lab) or []) for lab in cohorts] if cohort_key else []
     split_defs += [('women', 'Women', 'gender', by_gender.get('F') or []), ('men', 'Men', 'gender', by_gender.get('M') or [])]
     for key, label, grp, xs in split_defs:
@@ -405,6 +412,7 @@ def frame(sess: dict, twin: dict, t: float, image_b64: str, *, usage_extras: Opt
         sp['value'].append(v)
         sp['n'] = len(xs)
         split_now[key] = v
+        split_meta[key] = {'label': label, 'group': grp, 'n': len(xs)}
     # the reactions
     by_seat = {str(r.get('seat')): r for r in roster}
     new_events = []
@@ -426,8 +434,8 @@ def frame(sess: dict, twin: dict, t: float, image_b64: str, *, usage_extras: Opt
         sess['scenes'][-2]['t_end'] = round(t, 2)
     sess['watch'] = {'source': 'live', 'persona': False, 'captions_n': len(frames), 'scenes_n': len(frames)}
     sess['updated_at'] = _now()
-    return {'t': round(t, 2), 'caption': caption, 'events': new_events, 'dial': {'t': round(t, 2), 'value': room}, 'splits': split_now, 'frames': len(frames),
-            'cast': list(rec.get('cast') or [])}
+    return {'t': round(t, 2), 'caption': caption, 'events': new_events, 'dial': {'t': round(t, 2), 'value': room}, 'splits': split_now, 'split_meta': split_meta,
+            'seats': seat_now, 'frames': len(frames), 'cast': list(rec.get('cast') or [])}
 
 
 # ------------------------------------------------------------ the finish

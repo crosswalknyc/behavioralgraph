@@ -51854,6 +51854,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-pi-legend button.coh.dim { opacity: 0.38; }
         #digitalTwinsIQView .dtw-pi-legend button.coh.cut { color: var(--dtw-ink); }
         #digitalTwinsIQView .dtw-pi-legend .hint { color: var(--dtw-mute); }
+        @media (max-width: 600px) { #digitalTwinsIQView .dtw-pi-views { max-width: 100%; } #digitalTwinsIQView .dtw-pi-views button { padding: 6px 11px; } }
         #digitalTwinsIQView .dtw-pi-seatrow.pinned { background: rgba(233,232,225,0.07); box-shadow: inset 2px 0 0 var(--coh, var(--hue, #3358FF)); }
         #digitalTwinsIQView .dtw-pi-seatrow .bio .dtw-pi-thought { margin: 0 0 8px; padding: 6px 8px; border-left: 2px solid var(--coh, var(--hue, #3358FF)); background: rgba(233,232,225,0.04); font-style: normal; color: var(--dtw-ink); }
         #digitalTwinsIQView .dtw-pi-byco { margin-top: 5px; font-size: 11.5px; color: var(--dtw-body); line-height: 15px; }
@@ -54094,24 +54095,37 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             function mergeLiveFrame(s, d) {
                 s.dial = s.dial || { t: [], value: [], splits: {} };
                 s.dial.t = s.dial.t || []; s.dial.value = s.dial.value || []; s.dial.splits = s.dial.splits || {};
+                s.live = s.live || { on: true }; s.live.frames = s.live.frames || []; s.live.seat_dials = s.live.seat_dials || {};
+                // a frame the page already holds (a poll of the test landed it first) is never laid down twice
+                if (s.live.frames.some(function(f) { return Number(f.t) === Number(d.t); })) return;
+                var modesBefore = piViewModesKey(s);
                 if (d.dial) { s.dial.t.push(Number(d.dial.t)); s.dial.value.push(Number(d.dial.value)); }
-                var hadSplits = Object.keys(s.dial.splits).length > 0;
+                var hadSplits = Object.keys(s.dial.splits).length > 0, meta = d.split_meta || {};
                 Object.keys(d.splits || {}).forEach(function(k) {
-                    var row = s.dial.splits[k] = s.dial.splits[k] || { label: k === 'women' ? 'Women' : (k === 'men' ? 'Men' : k), group: 'gender', n: 0, value: [] };
+                    // a new split row takes the label and group the room gave it: a cohort row is a cohort, not a gender (2026-11-04)
+                    var m = meta[k] || {};
+                    var row = s.dial.splits[k] = s.dial.splits[k] || { label: m.label || (k === 'women' ? 'Women' : (k === 'men' ? 'Men' : k)), group: m.group || (/^cohort_/.test(k) ? 'cohort' : 'gender'), n: Number(m.n || 0), value: [] };
+                    if (m.n != null) row.n = Number(m.n);
                     while (row.value.length < s.dial.value.length - 1) row.value.push(row.value.length ? row.value[row.value.length - 1] : Number(d.splits[k]));
                     row.value.push(Number(d.splits[k]));
                 });
                 if (!hadSplits && Object.keys(s.dial.splits).length) S.pilotSplits = null;   // the legend picks women and men up
+                // every seat's own reading at this frame: the People and Cohorts views draw it while the room is still watching
+                Object.keys(d.seats || {}).forEach(function(sno) {
+                    var v = Number(d.seats[sno]); if (!isFinite(v)) return;
+                    (s.live.seat_dials[String(sno)] = s.live.seat_dials[String(sno)] || []).push([Number(d.t), v]);
+                });
                 (d.events || []).forEach(function(e) { (s.events = s.events || []).push(e); });
                 if (d.caption) { var sc = s.scenes = s.scenes || []; if (sc.length) sc[sc.length - 1].t_end = Number(d.t); sc.push({ id: sc.length, t_start: Number(d.t), t_end: Number(d.t) + 12, caption: d.caption }); }
                 s.watch = s.watch || {}; s.watch.source = 'live';
-                s.live = s.live || { on: true }; s.live.frames = s.live.frames || []; s.live.frames.push({ t: Number(d.t), caption: d.caption || '' });
+                s.live.frames.push({ t: Number(d.t), caption: d.caption || '' });
                 s.media = s.media || {};
                 if (Number(d.t) > Number(s.media.runtime_s || 0)) {
                     // the dial keeps drawing past a planned runtime, but the planned runtime is what the auto-stop reads
                     if (s.media.runtime_planned_s == null && Number(s.media.runtime_s || 0) > 0) s.media.runtime_planned_s = Number(s.media.runtime_s);
                     s.media.runtime_s = Math.max(Number(s.media.runtime_s || 0), Number(d.t) + 60);
                 }
+                if (piViewModesKey(s) !== modesBefore) piLegendRepaint();   // the first frame turns a view on: the toggles show it at once
             }
             window.dtwPilotMirror = async function() {
                 var s = S.pilot; if (!s || !S.key) return;
@@ -54276,7 +54290,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     var started = false;
                     for (var i = 0; i < ts.length; i++) {
                         if (ts[i] > upto) break;
-                        var x = X(ts[i]), y = Y(vals[i]);
+                        var yv = Number(vals[i]); if (!isFinite(yv)) continue;   // a frame this line has no reading for
+                        var x = X(ts[i]), y = Y(yv);
                         if (!started) { ctx.moveTo(x, y); started = true; } else ctx.lineTo(x, y);
                     }
                     if (started) ctx.stroke();
@@ -54287,29 +54302,30 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     var started = false;
                     for (var i = 0; i < tArr.length && i < vals.length; i++) {
                         if (tArr[i] > upto) break;
-                        var x = X(tArr[i]), y = Y(vals[i]);
+                        var yv = Number(vals[i]); if (!isFinite(yv)) continue;
+                        var x = X(tArr[i]), y = Y(yv);
                         if (!started) { ctx.moveTo(x, y); started = true; } else ctx.lineTo(x, y);
                     }
                     if (started) ctx.stroke();
                 }
                 var sl = splitLines(s), view = piView();
+                // live or scored, the three views draw from one source: the live frame readings while the room is watching (the
+                // room line is the mean of every seat, a cohort line the mean of its seats), the scored series once the test is scored
                 var cohorts = piCohortSplits(s), roster = ((s.group || {}).roster || []);
                 var focusSeat = view.hover != null ? view.hover : view.seat;
                 function seatsOf(cohortKey) {
                     var c = cohorts.filter(function(x) { return x.key === cohortKey; })[0];
-                    return roster.filter(function(r) { return c && piCohortColorFor(r) === c.color; });
+                    return roster.filter(function(r) { return c && (piCohortKey(r.segment) === c.key || piCohortColorFor(r) === c.color); });
                 }
+                var cut = (view.mode === 'cohorts' && view.cohort) ? cohorts.filter(function(x) { return x.key === view.cohort; })[0] : null;
                 if (view.mode === 'people') {
                     // every seat thin in its cohort color; the followed seat full and on top
                     roster.forEach(function(r, i) { if (Number(r.seat) === focusSeat) return; var ss = piSeatSeries(s, r.seat); if (ss) lineT(ss.t, ss.v, piAlpha(piSeatLineColor(s, r, i), focusSeat != null ? 0.22 : 0.55), 1.1); });
                     if (focusSeat != null) roster.forEach(function(r, i) { if (Number(r.seat) !== focusSeat) return; var ss = piSeatSeries(s, r.seat); if (ss) lineT(ss.t, ss.v, piSeatLineColor(s, r, i), 2.2); });
-                } else if (view.mode === 'cohorts' && view.cohort) {
+                } else if (cut) {
                     // one cohort cut out: its people thin, its line full, the rest gone
-                    var cc = cohorts.filter(function(x) { return x.key === view.cohort; })[0];
-                    if (cc) {
-                        seatsOf(view.cohort).forEach(function(r, i) { var ss = piSeatSeries(s, r.seat); if (ss) lineT(ss.t, ss.v, piAlpha(cc.color, Number(r.seat) === focusSeat ? 0.95 : 0.35), Number(r.seat) === focusSeat ? 2.0 : 1.0); });
-                        line(cc.value, cc.color, 2.0);
-                    }
+                    seatsOf(cut.key).forEach(function(r, i) { var ss = piSeatSeries(s, r.seat); if (ss) lineT(ss.t, ss.v, piAlpha(cut.color, Number(r.seat) === focusSeat ? 0.95 : 0.35), Number(r.seat) === focusSeat ? 2.0 : 1.0); });
+                    line(cut.value, cut.color, 2.0);
                 } else if (view.mode === 'cohorts') {
                     cohorts.forEach(function(c) { line(c.value, c.color, 1.6); });
                 }
@@ -54940,9 +54956,26 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var sd = (s || {}).seat_dials || {};
                 if (sd[sno] && sd[sno].length && ts.length && sd[sno].length === ts.length) return { t: ts, v: sd[sno].map(Number) };
                 var live = ((s || {}).live || {}).seat_dials || {};
-                if (live[sno] && live[sno].length) return { t: live[sno].map(function(p) { return Number(p[0]); }), v: live[sno].map(function(p) { return Number(p[1]); }) };
+                if (live[sno] && live[sno].length) {
+                    // the pairs are split once per new frame, not on every tick of the clock
+                    var pts = live[sno], cache = S.piSeatCache || (S.piSeatCache = {}), c = cache[sno];
+                    if (c && c.src === pts && c.n === pts.length) return c.out;
+                    var out = { t: pts.map(function(p) { return Number(p[0]); }), v: pts.map(function(p) { return Number(p[1]); }) };
+                    cache[sno] = { src: pts, n: pts.length, out: out };
+                    return out;
+                }
                 if (sd[sno] && sd[sno].length) return { t: ts, v: sd[sno].map(Number) };
                 return null;
+            }
+            function piScored(s) {
+                // a scored test: a seat's dial sits on the dial's own clock
+                s = s || {}; var sd = s.seat_dials || {}, n = ((s.dial || {}).t || []).length;
+                return n > 0 && Object.keys(sd).some(function(k) { return (sd[k] || []).length === n; });
+            }
+            function piLiveSeries(s) {
+                // the room is still watching (or being scored): the live frame readings are the one source all three views draw from
+                s = s || {};
+                return !piScored(s) && isLiveSess(s);
             }
             function piSeatLineColor(s, r, i) {
                 return (piRoomHasCohorts() && piCohortColorFor(r)) || seatHue(r, i);
@@ -54952,9 +54985,21 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (!m) return hex;
                 return 'rgba(' + parseInt(m[1], 16) + ',' + parseInt(m[2], 16) + ',' + parseInt(m[3], 16) + ',' + a + ')';
             }
+            function piViewModes(s) {
+                // Room always. Cohorts when the room was cut into cohorts. People when a seat has a line, or the room is live and
+                // the lines land frame by frame (Jenna 2026-11-04: "these toggles should be active when the pilot testing is live
+                // so that you can toggle between them in real time to see whichever view you want").
+                s = s || S.pilot || {};
+                var roster = ((s.group || {}).roster || []);
+                var hasSeats = roster.some(function(r) { return !!piSeatSeries(s, r.seat); });
+                var modes = [['room', 'Room']];
+                if (piCohortSplits(s).length) modes.push(['cohorts', 'Cohorts']);
+                if (roster.length && (hasSeats || piLiveSeries(s))) modes.push(['people', 'People']);
+                return modes;
+            }
+            function piViewModesKey(s) { return piViewModes(s).map(function(m) { return m[0]; }).join(','); }
             function piViewControl(s) {
-                var v = piView(), hasSeats = (((s || {}).group || {}).roster || []).some(function(r) { return !!piSeatSeries(s, r.seat); });
-                var modes = [['room', 'Room']].concat(piCohortSplits(s).length ? [['cohorts', 'Cohorts']] : []).concat(hasSeats ? [['people', 'People']] : []);
+                var v = piView(), modes = piViewModes(s);
                 if (modes.length < 2) return '';
                 return '<span class="dtw-pi-views" role="tablist" aria-label="Dial view">' + modes.map(function(m) { return '<button type="button" class="' + (v.mode === m[0] ? 'on' : '') + '" onclick="dtwPilotView(\'' + m[0] + '\')">' + m[1] + '</button>'; }).join('') + '</span>';
             }
@@ -54999,14 +55044,16 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var v = piView();
                 var room = piViewControl(s) + '<span><i class="sw" style="background:#E9E8E1"></i>Room</span>';
                 if (v.mode === 'people') room += '<span class="hint">Every seat, in its cohort color. Hover a seat in the room to follow their line; click to pin it.</span>';
-                if (!keys.length) return '<div class="dtw-pi-legend">' + room + '</div>';
-                splitLines(s);
                 if (v.mode !== 'room') {
-                    piCohortSplits(s).forEach(function(c) {
-                        var cls = 'coh' + (v.mode === 'cohorts' && v.cohort ? (v.cohort === c.key ? ' cut' : ' dim') : '');
+                    // the chips ride on the room's own cohorts, so a live test has them before its first frame lands
+                    var cs = piCohortSplits(s), cutOn = v.mode === 'cohorts' && !!v.cohort && cs.some(function(c) { return c.key === v.cohort; });
+                    cs.forEach(function(c) {
+                        var cls = 'coh' + (cutOn ? (v.cohort === c.key ? ' cut' : ' dim') : '');
                         room += '<button type="button" class="' + cls + '" onclick="dtwPilotViewCohort(\'' + esc(c.key) + '\')" title="' + (v.mode === 'cohorts' ? 'Cut the dial to this cohort' : 'This cohort\'s color') + '"><i class="sw" style="background:' + c.color + '"></i>' + esc(c.label) + ' (' + esc(c.n) + ')</button>';
                     });
                 }
+                if (!keys.length) return '<div class="dtw-pi-legend">' + room + '</div>';
+                splitLines(s);
                 var groups = {};
                 keys.forEach(function(k) { var g = sp[k].group || 'other'; (groups[g] = groups[g] || []).push(k); });
                 var order = ['cohort', 'gender', 'quadrant', 'age', 'ethnicity', 'orientation', 'education', 'lifecycle', 'fanship', 'other'];
@@ -55436,9 +55483,50 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var room = el('dtwPiRoom'); if (room && S.piCohortN > 1) room.value = String(S.piCohortN * piCohortSeatsDefault(S.piCohortN));
                 if (S.piCohortCustom && !wasCustom && !typed) { var ci = el('dtwPiCohortCustom'); if (ci) { try { ci.focus(); ci.select(); } catch (_) {} } }
             };
+            function piCohortKey(label) {
+                // the split key the room gives a cohort (the same key live and scored, so a cut cohort survives the scoring)
+                return 'cohort_' + (String(label || '').toLowerCase().replace(/[^0-9a-z]+/g, '_').replace(/^_+|_+$/g, '') || 'x');
+            }
+            function piRosterCohorts(s) {
+                // the cohorts the room was cut into, in seat order (two or more), as [{key, label, seats}]
+                var out = [], by = {};
+                (((s || {}).group || {}).roster || []).forEach(function(r) {
+                    var lab = String(r.segment || '').replace(/\s+/g, ' ').trim(); if (!lab) return;
+                    var k = piCohortKey(lab);
+                    if (!by[k]) { by[k] = { key: k, label: lab, seats: [] }; out.push(by[k]); }
+                    by[k].seats.push(Number(r.seat));
+                });
+                return out.length > 1 ? out : [];
+            }
             function piCohortSplits(s) {
-                var sp = ((s || {}).dial || {}).splits || {};
-                return Object.keys(sp).filter(function(k) { return sp[k].group === 'cohort'; }).map(function(k, i) { return { key: k, label: sp[k].label || k, n: sp[k].n, value: sp[k].value || [], color: PI_COHORT_COLORS[i % PI_COHORT_COLORS.length] }; });
+                s = s || {};
+                var sp = (s.dial || {}).splits || {}, ts = (s.dial || {}).t || [], order = piRosterCohorts(s);
+                function colorOf(label, i) {
+                    // a cohort keeps its color from live to scored: the color follows the seat order, not the split order
+                    var want = String(label || '').replace(/\s+/g, ' ').trim().toLowerCase(), at = -1;
+                    for (var j = 0; j < order.length; j++) { if (order[j].label.toLowerCase() === want) { at = j; break; } }
+                    return PI_COHORT_COLORS[(at >= 0 ? at : i) % PI_COHORT_COLORS.length];
+                }
+                if (!piLiveSeries(s)) {
+                    return Object.keys(sp).filter(function(k) { return sp[k].group === 'cohort'; }).map(function(k, i) { return { key: k, label: sp[k].label || k, n: sp[k].n, value: sp[k].value || [], color: colorOf(sp[k].label, i) }; });
+                }
+                // the room is still watching (2026-11-04): each cohort's line is the mean of its seats' live readings, frame by
+                // frame, the same source the People view draws from (the room line is the mean of every seat)
+                var live = (s.live || {}).seat_dials || {}, last = ts.length ? ts[ts.length - 1] : '';
+                var sig = [s.id, ts.length, last, order.map(function(c) { return c.key + ':' + c.seats.length; }).join('|')].join('#');
+                var cache = S.piCohortCache || {};
+                if (cache.sig === sig && cache.live === live) return cache.list;
+                var list = order.map(function(c, i) {
+                    var sums = {}, counts = {};
+                    c.seats.forEach(function(seat) {
+                        (live[String(seat)] || []).forEach(function(p) { var tk = String(Number(p[0])), v = Number(p[1]); if (!isFinite(v)) return; sums[tk] = (sums[tk] || 0) + v; counts[tk] = (counts[tk] || 0) + 1; });
+                    });
+                    var value = [], prev = NaN;
+                    for (var k = 0; k < ts.length; k++) { var tk = String(Number(ts[k])); if (counts[tk]) prev = Math.round((sums[tk] / counts[tk]) * 100) / 100; value.push(prev); }
+                    return { key: c.key, label: c.label, n: c.seats.length, value: value, color: PI_COHORT_COLORS[i % PI_COHORT_COLORS.length] };
+                });
+                S.piCohortCache = { sig: sig, live: live, list: list };
+                return list;
             }
             function piReadQuotas() {
                 var q = {};
@@ -55700,7 +55788,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     if (mediaUrl(S.pilot)) { try { await v.play(); } catch (_) {} }
                 } else if (wm && isLiveSess(S.pilot) && wm.kind !== 'video') {
                     // a mirrored watch: the clock and the frames run while the mirror does
-                    if (S.pilotLive && S.pilotLive.stream && S.pilotLive.sid === S.pilot.id) { attachLiveMirror(S.pilot); startLiveClock(); }
+                    if (S.pilotLive && S.pilotLive.stream && S.pilotLive.sid === S.pilot.id) { attachLiveMirror(S.pilot); startLiveClock(); piLegendRepaint(); }
                     else { if (!resume) openWatchWithRoom(S.pilot); renderPilotConsole(); }
                     var ln = el('dtwPiNote'); if (ln) ln.textContent = (S.pilotLive && S.pilotLive.stream) ? 'The room is watching with you.' : 'Open the episode, press play there, then mirror it here.';
                     var lb = el('dtwPiPlayBtn'); if (lb) lb.textContent = 'Playing';
