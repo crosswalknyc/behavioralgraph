@@ -450,7 +450,7 @@ def accept_offered_run(history, text):
 LANE_ORDER = (
     'bpiq_wizard',
     'offer_acceptance', 'priced_offer_acceptance', 'offer_answer', 'referents', 'document',
-    'deck_conversion', 'reconcile', 'number_provenance', 'confirm_answer', 'short_reply',
+    'deck_conversion', 'reconcile', 'us_scope', 'number_provenance', 'confirm_answer', 'short_reply',
     'spend_cap_precheck',
     'continuation',
     'subject_set', 'pull_discussion', 'help_writing', 'dataset_build',
@@ -466,10 +466,11 @@ DETERMINISTIC_LANES = frozenset((
     'subject_set', 'pull_discussion', 'help_writing', 'dataset_build',
     'meta_check', 'standing', 'catalog_exists', 'where_watched', 'sizing_quote', 'status_fast', 'reader', 'pricing',
     'design_request', 'thread_followups', 'subiq_library', 'catalog', 'sizing_fallback', 'status',
-    'deliverable_lookup', 'email_file', 'brand_coverage', 'definitions', 'capability', 'number_provenance', 'reconcile'))
+    'deliverable_lookup', 'email_file', 'brand_coverage', 'definitions', 'capability', 'number_provenance', 'reconcile',
+    'us_scope'))
 NEVER_PRICED_LANES = frozenset(('subject_set', 'pull_discussion', 'help_writing', 'catalog_exists', 'where_watched',
                                 'status_fast', 'status', 'pricing', 'catalog', 'definitions', 'deliverable_lookup',
-                                'email_file', 'brand_coverage', 'capability', 'number_provenance', 'reconcile'))
+                                'email_file', 'brand_coverage', 'capability', 'number_provenance', 'reconcile', 'us_scope'))
 
 
 def lane_markers(source=None):
@@ -902,6 +903,37 @@ def ask(user, body, *, via='session'):
             try:
                 host.ask_hint(route='reconcile', outcome=('answered' if (_rc_raw.get('reconcile') or {}).get('found') else 'not_found'),
                               subject=str(_rc_raw.get('subject') or '') or None)
+            except Exception as _fx:
+                _faults.note('service', _fx)
+            env = envelope.wrap(raw, surface='analyze', decision=decision, thread_id=tid, via=via)
+            _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
+            return env, 200
+
+    # lane: us_scope
+    # "Are these numbers US only or global?" about a figure in the thread
+    # is a definition question about the previous answer, never a new read
+    # (Jenna 2026-11-04, Jay Patel at Amazon with Paramount+ open: three
+    # phrasings of it drew the open profile's interest mix three times).
+    # Answered from the house definition: the figures the reader pasted
+    # (or the last read's headline figures), the read's window, and the
+    # one line that every figure is US people measured on US consumers and
+    # projected to the US. No model call, nothing re-run, never priced.
+    # Ahead of number_provenance, the continuation gate, the Reader, the
+    # sizing lanes and the open-profile binding, on both surfaces.
+    if not _armed(body):
+        try:
+            from . import us_scope as _uss
+            _us_raw = _uss.answer(text, history, ctx=ctx) if _uss.wants_us_scope(text) else None
+        except Exception as _fx:
+            _faults.note('service.us_scope', _fx)
+            _us_raw = None
+        if _us_raw:
+            raw = _us_raw
+            decision = {'surface': 'analyze', 'mode': None, 'reason': 'us_scope', 'client_hint': None}
+            if str(body.get('_client_surface_sent') or body.get('surface') or '').strip().lower() == 'interpret':
+                raw = _interpret_shape(raw)
+            try:
+                host.ask_hint(route='us_scope', outcome='answered', subject=str(_us_raw.get('subject') or '') or None)
             except Exception as _fx:
                 _faults.note('service', _fx)
             env = envelope.wrap(raw, surface='analyze', decision=decision, thread_id=tid, via=via)

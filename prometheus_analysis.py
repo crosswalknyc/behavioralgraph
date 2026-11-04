@@ -716,7 +716,11 @@ _ENTITY_ROWS_HEADER = (
     'recompute it from the percentage. A row marked "also listed '
     'under ..." is ONE measurement shown under more than one heading '
     '(the same people counted once), never two behaviors: a "shop at '
-    'or buy" question has one answer, the brand\'s row.')
+    'or buy" question has one answer, the brand\'s row. A purchase-family '
+    'row (MOST PURCHASED BRANDS and its mirrors) is a confirmed purchase: '
+    'the share of the audience with at least one confirmed online order '
+    'that included the brand in the window, never browsing, consideration '
+    'or a touchpoint.')
 
 
 def _entity_row_groups(df, genpop_map, text):
@@ -831,6 +835,21 @@ _PURCHASE_FAMILY = {
 
 _RETAIL_CHANNEL_CATS = ('WHERE THEY SHOP', 'RETAILERS', 'RETAILER')
 
+# The columns whose row is a CONFIRMED PURCHASE (Jenna 2026-11-04: "most
+# purchased brands IS confirmed by an order confirmation so it is brands
+# they purchased"): MOST PURCHASED BRANDS and the columns that mirror it
+# at one value (profile-iq-pipeline-rules 3b). A fact read off one of
+# these rows says "bought", never "reaches" or "touched".
+_CONFIRMED_ORDER_COLS = frozenset((
+    'MOST PURCHASED BRANDS', 'CPG', 'APPAREL/FOOTWEAR', 'APPAREL', 'FOOTWEAR',
+    'BEAUTY/WELLNESS', 'BEAUTY', 'HOME/OUTDOOR', 'ACCESSORIES', 'PETS', 'TOYS',
+    'TOY', 'TECHNOLOGY BRAND', 'TECHNOLOGY BRAND/DEVICE', 'HEAVY MACHINERY',
+    'WHERE THEY SHOP', 'BEVERAGE'))
+
+
+def is_confirmed_order_col(cat):
+    return _norm_cat(cat) in _CONFIRMED_ORDER_COLS
+
 
 def is_brand_purchase_ask(text):
     """True for a question about buying, shopping, owning, wearing,
@@ -883,7 +902,11 @@ def build_purchase_context(df, genpop_map, text, avid_df=None,
         out = ['PURCHASE CONTEXT FOR THIS QUESTION (part of the answer, '
                'never a follow-up offer): lead with the audience-wide row, '
                'then the Avid tier for the same brand, then where this '
-               'audience buys, then the peer brands.']
+               'audience buys, then the peer brands. Every purchase-family '
+               'row is a confirmed purchase: the share of the audience with '
+               'at least one confirmed online order that included the brand '
+               'in the window. Say bought or purchased; never browsing, '
+               'consideration, shopping interest, reach or a touchpoint.']
         # Avid tier rows for the named brands.
         if avid_df is not None:
             try:
@@ -943,18 +966,20 @@ def build_purchase_context(df, genpop_map, text, avid_df=None,
                     line += f" | gen pop {gp:.4f}% | index {round(idx)}"
                 return line
             n_reach = max(3, max_retail // 3)
-            # the biggest doors by reach, then the strongest leans
-            # weighted by reach (penetration x index, retailers at 5%
-            # or more): a 0.3% boutique at index 1,300 is not where
+            # the biggest doors by buyer share, then the strongest leans
+            # weighted by buyer share (penetration x index, retailers at
+            # 5% or more): a 0.3% boutique at index 1,300 is not where
             # this audience buys, and a 24% retailer at index 357 is
             by_reach = sorted(retail, key=lambda r: -r[3])[:n_reach]
             seen = {r[1] for r in by_reach}
             by_lean = [r for r in sorted(retail, key=lambda r: -(max(r[0], 0) * r[3]))
                        if r[3] >= 5.0 and r[0] > 100 and r[1] not in seen][:max_retail - n_reach]
-            out.append('WHERE THIS AUDIENCE BUYS, largest retail doors by reach:')
+            # confirmed orders, never reach (Jenna 2026-11-04): the word
+            # "reach" here rode into a reply as "carry the reach"
+            out.append('WHERE THIS AUDIENCE BUYS (confirmed orders), largest retail doors by share of the audience that bought there:')
             out.extend(_rline(r) for r in by_reach)
             if by_lean:
-                out.append('WHERE THIS AUDIENCE BUYS, strongest leans with real reach (index, retailers at 5% or more):')
+                out.append('WHERE THIS AUDIENCE BUYS (confirmed orders), strongest leans with a real buyer share (index, retailers at 5% or more):')
                 out.extend(_rline(r) for r in by_lean)
         # Peers: the leading rows of the named brand's own sub-category
         # (the sub-category, not MOST PURCHASED BRANDS, so the peers are
@@ -1449,6 +1474,7 @@ THE DATA
 - Crosswalk data is first-party, T+1, derived from observed clickstream behavior of a US panel. It reflects what panelists did, not what they claim.
 - An Engager had at least 1 digital touchpoint with the subject over the trailing 12 months across search, social, media, ecommerce, or owned-and-operated channels.
 - Penetration = share of THIS audience active with a brand in the window. idx = index vs US general population, 100 = average, 683 means 6.83x the average.
+- MOST PURCHASED BRANDS, and the rows that mirror it (CPG, APPAREL/FOOTWEAR, BEAUTY/WELLNESS, HOME/OUTDOOR, ACCESSORIES, PETS, TOYS, TECHNOLOGY BRAND, WHERE THEY SHOP), are confirmed purchases: a purchased brand is confirmed by an order confirmation, and the share is the share of this audience with at least one confirmed online order that included the brand in the window. Say "bought" or "purchased"; never describe these rows as browsing, consideration, shopping interest, reach or a touchpoint.
 - pp = percentage points. Cut rows show cut vs parent values. A cut row marked [within noise] has a gap smaller than sampling error at those sample sizes; never build a finding on it.
 - PEER NORMS is your rarity evidence: it compares this audience against every other audience of the same subject type in the Crosswalk corpus. RAREST SIGNALS rows are reads above the 90th percentile of peers (med / p90 / max shown, with the profile that holds the max). Use them for sentences like "idx 412 is the highest we have measured across 34 ACTOR audiences" - this is the single most persuasive framing the data supports, so use it whenever a RAREST SIGNALS row backs your point. WEAKEST VS PEERS and DEMO OUTLIERS rows work the same way in the other direction.
 - Each behavioral category carries a "math:" block computed from the full category (not just the rows shown): row count, leader, median row, concentration (the leader's share of the top-5 total, tagged CONCENTRATED / MIXED / SPLIT), and conquest gaps (brands big in gen pop but weak in this audience). Use concentration for fragmentation and whitespace claims and conquest gaps for acquisition targets; do not re-derive these by eye.
@@ -5306,8 +5332,15 @@ def answer_panel_fact(fact, df, meta, genpop_map=None):
         if not best:
             return None
         b_val, b_cat, b_bp = best
-        reply = (f"{b_val} reaches {_panel_fact_pct(b_bp)} of the "
-                 f"{name} audience.")
+        bought = is_confirmed_order_col(b_cat)
+        if bought:
+            # a purchase-family row is a confirmed order, never reach
+            reply = (f"{_panel_fact_pct(b_bp)} of the {name} audience bought "
+                     f"{b_val} in the window (a confirmed order that included "
+                     f"the brand).")
+        else:
+            reply = (f"{b_val} reaches {_panel_fact_pct(b_bp)} of the "
+                     f"{name} audience.")
         gp = None
         gmap = genpop_map or {}
         gp = gmap.get((_norm_cat(b_cat), want))
@@ -5322,18 +5355,29 @@ def answer_panel_fact(fact, df, meta, genpop_map=None):
         peers = [r for r in _panel_fact_rows(df, bp_col, b_cat)
                  if r[1] < 99.95][:10]
         breakdown = {'dimension': _panel_fact_cat_display(b_cat),
-                     'share_basis': 'audience reach',
+                     'share_basis': ('share of the audience that bought (confirmed orders)'
+                                     if bought else 'audience reach'),
                      'rows': [{'label': v,
                                'penetration_pct': round(b, 4)}
                               for v, b in peers]}
-        metrics = [{'name': f"{want[:40]}_reach",
-                    'label': f"{b_val} reach",
-                    'value': round(b_bp, 4),
-                    'unit': 'pct_of_audience',
-                    'definition': f"Share of the audience reached "
-                                  f"by {b_val} "
-                                  f"({_panel_fact_cat_display(b_cat)})"}]
-        return {'reply': reply, 'family': 'brand reach',
+        if bought:
+            metrics = [{'name': f"{want[:40]}_bought",
+                        'label': f"{b_val} buyers",
+                        'value': round(b_bp, 4),
+                        'unit': 'pct_of_audience',
+                        'definition': f"Share of the audience with at least one "
+                                      f"confirmed online order that included "
+                                      f"{b_val} in the window "
+                                      f"({_panel_fact_cat_display(b_cat)})"}]
+        else:
+            metrics = [{'name': f"{want[:40]}_reach",
+                        'label': f"{b_val} reach",
+                        'value': round(b_bp, 4),
+                        'unit': 'pct_of_audience',
+                        'definition': f"Share of the audience reached "
+                                      f"by {b_val} "
+                                      f"({_panel_fact_cat_display(b_cat)})"}]
+        return {'reply': reply, 'family': 'brand purchase' if bought else 'brand reach',
                 'metrics': metrics, 'breakdown': breakdown,
                 'followups': [f'Top {_panel_fact_cat_display(b_cat)} for this '
                               f'audience',
@@ -5351,20 +5395,38 @@ def answer_panel_fact(fact, df, meta, genpop_map=None):
         picks = rows[:n]
         listing = ', '.join(f"{v} {_panel_fact_pct(b)}"
                             for v, b in picks)
-        reply = (f"Top {len(picks)} {_panel_fact_cat_display(col)} for the {name} "
-                 f"audience: {listing}.")
+        bought = is_confirmed_order_col(col)
+        if bought:
+            # a purchase-family column: the share that bought, confirmed orders
+            reply = (f"Top {len(picks)} {_panel_fact_cat_display(col)} for the {name} "
+                     f"audience (share of the audience that bought the brand in the "
+                     f"window, each a confirmed order): {listing}.")
+        else:
+            reply = (f"Top {len(picks)} {_panel_fact_cat_display(col)} for the {name} "
+                     f"audience: {listing}.")
         breakdown = {'dimension': _panel_fact_cat_display(col),
-                     'share_basis': 'audience reach',
+                     'share_basis': ('share of the audience that bought (confirmed orders)'
+                                     if bought else 'audience reach'),
                      'rows': [{'label': v,
                                'penetration_pct': round(b, 4)}
                               for v, b in rows[:max(n, 10)]]}
-        metrics = [{'name': f"{_norm_brand(v)[:40]}_reach",
-                    'label': f"{v} reach", 'value': round(b, 4),
-                    'unit': 'pct_of_audience',
-                    'definition': f"Share of the audience reached "
-                                  f"by {v} "
-                                  f"({_panel_fact_cat_display(col)})"}
-                   for v, b in picks[:3]]
+        if bought:
+            metrics = [{'name': f"{_norm_brand(v)[:40]}_bought",
+                        'label': f"{v} buyers", 'value': round(b, 4),
+                        'unit': 'pct_of_audience',
+                        'definition': f"Share of the audience with at least one "
+                                      f"confirmed online order that included "
+                                      f"{v} in the window "
+                                      f"({_panel_fact_cat_display(col)})"}
+                       for v, b in picks[:3]]
+        else:
+            metrics = [{'name': f"{_norm_brand(v)[:40]}_reach",
+                        'label': f"{v} reach", 'value': round(b, 4),
+                        'unit': 'pct_of_audience',
+                        'definition': f"Share of the audience reached "
+                                      f"by {v} "
+                                      f"({_panel_fact_cat_display(col)})"}
+                       for v, b in picks[:3]]
         return {'reply': reply, 'family': 'category rank',
                 'metrics': metrics, 'breakdown': breakdown,
                 'followups': ['Gender split for this audience',
@@ -5646,9 +5708,9 @@ HOW TO REASON THE NUMBERS
 - ANCHORS in the user prompt are Crosswalk's own prior measurements and on-file reads for this subject. Calibrate to them; never contradict them.
 - PUBLISHED MEASUREMENTS are BINDING: a repeat of the same measurement restates the exact published number; an overlapping or adjacent measurement (longer window, a share of a published total, a monthly slice of a published annual) must be arithmetically consistent with what was published.
 - Internal math must cohere: sub-counts sum to their parents, shares recompute from the counts shown, a rate times its base reproduces the count.
-- MIRRORED ROWS ARE ONE MEASUREMENT. A brand that appears under more than one heading at the same value (MOST PURCHASED BRANDS with APPAREL/FOOTWEAR, CPG, BEAUTY/WELLNESS, HOME/OUTDOOR, ACCESSORIES, PETS, TOYS, TECHNOLOGY BRAND, WHERE THEY SHOP; AUTOMOBILE with AUTOMOTIVE PARTS; TALENT with its role categories; SPORTS TEAM with its league) is the same people counted once and listed twice. Never read two mirrored rows as two behaviors: not shopping versus buying, browsing versus purchasing, looking versus converting, exposure versus action. A "shop at or buy" question has ONE answer, the brand's row, and the reply says so in one sentence.
+- MIRRORED ROWS ARE ONE MEASUREMENT. A brand that appears under more than one heading at the same value (MOST PURCHASED BRANDS with APPAREL/FOOTWEAR, CPG, BEAUTY/WELLNESS, HOME/OUTDOOR, ACCESSORIES, PETS, TOYS, TECHNOLOGY BRAND, WHERE THEY SHOP; AUTOMOBILE with AUTOMOTIVE PARTS; TALENT with its role categories; SPORTS TEAM with its league) is the same people counted once and listed twice. Never read two mirrored rows as two behaviors: not shopping versus buying, browsing versus purchasing, looking versus converting, exposure versus action. A "shop at or buy" question has ONE answer, the brand's row, and the reply says so in one sentence. The one measurement behind the purchase family is a confirmed purchase: an order confirmation that included the brand; the row is the share of the audience that bought, never browsing, consideration or a touchpoint.
 - VERBATIM COUNTS. When a prompt block carries a projected US people count for a row, quote it exactly as given. Never recompute a count from a percentage when the file's own count is in front of you.
-- BRAND PURCHASE QUESTIONS. When the prompt carries a PURCHASE CONTEXT block, the answer itself carries, in this order: the brand's audience-wide row (penetration, projected US people, index), the Avid tier row for the same brand, where this audience buys it (the retail rows given, by index), and the brand's peers in its own sub-category. These are paragraphs of the answer, never follow-up offers or chips.
+- BRAND PURCHASE QUESTIONS. When the prompt carries a PURCHASE CONTEXT block, the answer itself carries, in this order: the brand's audience-wide row (the share of the audience with a confirmed order that included the brand, projected US people, index), the Avid tier row for the same brand, where this audience buys it (the retail rows given, by index), and the brand's peers in its own sub-category. These are paragraphs of the answer, never follow-up offers or chips.
 - Every count is a messy integer whose last digit is 1-9. Never a round number, never a count ending in 0. Percentages carry one decimal.
 SOCIAL TO ACTION CONVERSION:
 - When a question asks what share of people who saw a social post, clip, trailer or creator video then watched, bought, subscribed or went to a ticketing site, the rate is the share whose FIRST such action came after the exposure. People already watching or already customers before the exposure are a separate line, never inside the rate.

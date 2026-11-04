@@ -144,6 +144,17 @@ def is_reconcile_ask(text):
         return False
 
 
+def is_scope_ask(text):
+    """"Is that the US audience size, or global?" asks what a figure in
+    hand covers, never for a size: prometheus.us_scope answers it from
+    the house definition (2026-11-04, Jay Patel)."""
+    try:
+        from . import us_scope as _uss
+        return bool(_uss.wants_us_scope(text))
+    except Exception:
+        return False
+
+
 def wants_sizing(text):
     """A question about how many people an audience holds."""
     t = ' '.join(str(text or '').split())
@@ -153,6 +164,8 @@ def wants_sizing(text):
         return False
     if is_reconcile_ask(t):
         return False   # "reconcile these ... state one universe definition, one window, the unprojected ..." reads the record
+    if is_scope_ask(t):
+        return False   # "is that the US audience size or global?" is a definition of what the figure covers
     if is_audience_behavior_ask(t):
         return False   # "how many of these readers would sign up" is a read on the audience, not its size
     if _CONSUME_RX.search(t) and not re.search(r"\b(?:sample|incidence|data ?set)\b", t, re.I):
@@ -496,6 +509,8 @@ def answer(text, ctx=None, *, host=None, history=None, subjects=None, staff=True
     try:
         if is_reconcile_ask(text):
             return None   # answered from the record by prometheus.reconcile_lane, never sized again (2026-11-04)
+        if is_scope_ask(text):
+            return None   # answered from the house definition by prometheus.us_scope (2026-11-04)
         try:
             from . import overlap_read as _ov
             if _ov.is_overlap_read(text):

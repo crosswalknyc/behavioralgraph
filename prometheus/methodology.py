@@ -66,8 +66,64 @@ VIEW_NOTE_SHORT = ("Views here are US viewers (persons) credited at one second o
                    "counts, TV ratings, or play counts.")
 
 
+# What we count as a purchase (Jenna 2026-11-04: "most purchased brands IS
+# confirmed by an order confirmation so it is brands they purchased").
+# Most Purchased Brands and the rows that mirror it are confirmed orders,
+# never a touchpoint, a browse, a consideration or "reach". The line rides
+# the counting block of any reply that carries a purchase-family figure.
+PURCHASE_HEADER = 'What we count as a purchase:'
+PURCHASE_DEFINITION = (
+    "A purchased brand is confirmed by an order confirmation. Most Purchased Brands, and "
+    "the category rows that mirror it, are the brands the audience actually purchased online "
+    "in the window: the share of the audience with at least one confirmed order that included "
+    "the brand, counted once per person. Browsing, consideration and visits to the brand are "
+    "not purchases and are never counted here.")
+PURCHASE_RX = re.compile(
+    r"\b(?:most purchased brands?|purchased brands?|purchase family|confirmed orders?|order confirmations?|"
+    r"where (?:this|the|that|these|they) (?:shared |whole |same )?(?:audience|people|viewers|fans|group|cohort)? ?(?:buy|buys|bought|shop|shops|shopped)\b|"
+    r"brands (?:they|the audience|this audience) (?:bought|buy|buys|purchased?)|"
+    r"(?:bought|purchased) (?:from|at|on) [A-Z][\w&'+.-]*)", re.I)
+
+
 def mentions_views(text):
     return bool(VIEWERSHIP_RX.search(str(text or '')))
+
+
+def mentions_purchase(text):
+    return bool(PURCHASE_RX.search(str(text or '')))
+
+
+def carries_purchase_definition(text):
+    t = str(text or '')
+    return PURCHASE_HEADER in t or 'confirmed by an order confirmation' in t
+
+
+def carries_purchase_figure(text):
+    """A purchase-family mention and a count or a share in the same
+    sentence ("Where this shared audience buys: Amazon 84.1189% ...")."""
+    t = str(text or '')
+    if not t:
+        return False
+    for sent in re.split(r"(?<=[.;!?])\s+|\n+", t):
+        if PURCHASE_RX.search(sent) and (_FIGURE_RX.search(sent) or re.search(r"\d+(?:\.\d+)?\s?%", sent)):
+            return True
+    return False
+
+
+def ensure_purchase_note(reply):
+    """Append the purchase definition once to a reply that carries a
+    purchase-family figure: as a bullet under an existing counting block,
+    else as its own line. Idempotent; never raises."""
+    try:
+        text = str(reply or '')
+        if not text.strip() or carries_purchase_definition(text) or not carries_purchase_figure(text):
+            return reply
+        body = text.rstrip()
+        if HEADER in body:
+            return body + '\n' + f"- {PURCHASE_HEADER} {PURCHASE_DEFINITION}"
+        return body + '\n\n' + f"{PURCHASE_HEADER} {PURCHASE_DEFINITION}"
+    except Exception:
+        return reply
 
 
 def carries_definition(text):
@@ -100,7 +156,13 @@ MODEL_RULES = (
     'Channels). Never claim a path the measurement cannot see.\n'
     '- The server appends the standard counting block (window, base, '
     'unit, threshold, carriage, session rules); do not restate it, and '
-    'never name a ratings vendor.\n')
+    'never name a ratings vendor.\n'
+    '- Most Purchased Brands and the rows that mirror it (CPG, Apparel/'
+    'Footwear, Beauty/Wellness, Home/Outdoor, Accessories, Pets, Toys, '
+    'Technology Brand, Where They Shop) are confirmed purchases: an order '
+    'confirmation that included the brand. Say "bought" or "purchased"; '
+    'never describe these rows as browsing, consideration, shopping '
+    'interest, reach or a touchpoint.\n')
 
 
 def _fmt_date(v):
@@ -294,9 +356,9 @@ def ensure(reply, res=None, question='', base_label='', base_people=None,
                 lines = []
             return (text.rstrip() + '\n\n' + '\n'.join(lines)) if lines else reply
         if not is_viewership_read(text, res, question):
-            return reply
+            return ensure_purchase_note(reply)
         if carries_definition(text):
-            return reply
+            return ensure_purchase_note(reply)
         lines = block(window_start=res.get('window_start'),
                       window_end=res.get('window_end'),
                       window_label=res.get('window_label') or '',
@@ -307,7 +369,10 @@ def ensure(reply, res=None, question='', base_label='', base_people=None,
         body = text.rstrip()
         if HEADER in body:
             # merge under the existing header
-            return body + '\n' + '\n'.join(lines[1:])
-        return body + '\n\n' + '\n'.join(lines)
+            return ensure_purchase_note(body + '\n' + '\n'.join(lines[1:]))
+        # a purchase-family figure in the same reply (Jay Patel's overlap read
+        # carried "Where this shared audience buys ...") gets the purchase line
+        # in the same block (Jenna 2026-11-04)
+        return ensure_purchase_note(body + '\n\n' + '\n'.join(lines))
     except Exception:
         return reply

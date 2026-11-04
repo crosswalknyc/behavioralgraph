@@ -267,8 +267,9 @@ def compose(subject, *, window='', build_label='', cut_label='', draft=None):
         f"Who counts: {universe_line(s)}",
         f"Window: {win}. {win_note}",
         ("What the file carries: who they are (age, gender, income, education, parental status) and where they are "
-         "by DMA, then the brands, platforms, streaming services, retailers, talent, events and nonprofits this "
-         "audience over-indexes on, each with its reach and its index against the US average."),
+         "by DMA, then the brands this audience bought (each a confirmed order, never a browse), and the platforms, "
+         "streaming services, retailers, talent, events and nonprofits it over-indexes on, each with its share of the "
+         "audience and its index against the US average."),
         ("Cuts on top of it: the Avid cut (the most engaged tier) comes with the build; gender, age and DMA cuts "
          + (f"are {cut_label} each." if cut_label else "can be added.")),
         (f"Cost: {cost} for the Total Universe with its Avid cut, charged only when you approve the brief."

@@ -41,11 +41,47 @@ DEFINITIONS = [
             "Penetration is the share of this audience that was active "
             "with the brand in the window. 21.8% penetration means about "
             "1 in 5 people in the audience showed that brand somewhere in "
-            "their digital life over the trailing 12 months."),
+            "their digital life over the trailing 12 months. For Most "
+            "Purchased Brands, active means a confirmed order that "
+            "included the brand."),
         'computed': (
             "People in the audience with at least one qualifying touch "
             "with the brand, divided by everyone in the audience, over "
-            "the window printed on the file."),
+            "the window printed on the file. For Most Purchased Brands "
+            "and the columns that mirror it, the qualifying event is a "
+            "confirmed order that included the brand, never a browse, a "
+            "visit or a consideration."),
+    },
+    {
+        # Jenna 2026-11-04: "most purchased brands IS confirmed by an order
+        # confirmation so it is brands they purchased". Never a touchpoint,
+        # never browsing or consideration, never "a purchase including the
+        # brand" as if the brand merely rode along.
+        'id': 'purchased_brands',
+        'label': 'Most Purchased Brands',
+        'views': '*',
+        'aliases': ('most purchased brands', 'most purchased brand', 'purchased brands',
+                    'purchased brand', 'brands purchased', 'brands they purchased',
+                    'brands they bought', 'brands they buy', 'brands bought',
+                    'purchase family', 'what counts as a purchase',
+                    'what counts as purchased', 'confirmed purchase',
+                    'confirmed purchases', 'confirmed order', 'order confirmation',
+                    'mpb', 'where they shop', 'cpg'),
+        'definition': (
+            "Most Purchased Brands are the brands this audience actually "
+            "purchased online in the window. A purchased brand is confirmed "
+            "by an order confirmation: the share shown is the share of the "
+            "audience with at least one confirmed order that included the "
+            "brand. Browsing, consideration and visits to the brand are not "
+            "purchases and are never counted here."),
+        'computed': (
+            "People in the audience with at least one confirmed online "
+            "order that included the brand in the window, divided by "
+            "everyone in the audience, each person counted once. The "
+            "category columns that mirror Most Purchased Brands (CPG, "
+            "Apparel/Footwear, Beauty/Wellness, Home/Outdoor, Accessories, "
+            "Pets, Toys, Technology Brand, Where They Shop) carry the same "
+            "confirmed buyers at the same value, listed under each heading."),
     },
     {
         'id': 'index',

@@ -532,6 +532,18 @@ def gate(text, body, history, ctx, user, uname, tid, via, persist, *, client_sur
                 return None   # the product fact about the ten million answers this one (Tania Nasr 2026-10-20)
         except Exception as e:
             _faults.note('turn_gate.sample_fact', e)
+        if (cont.get('params') or {}).get('us_scope'):
+            # "US only or global?" about the figures in hand: the house
+            # definition, from the thread (prometheus.us_scope; its lane in
+            # service.ask normally answers first)
+            try:
+                from . import us_scope as _uss
+                _us_hit = _uss.answer(text, history, ctx)
+            except Exception as e:
+                _faults.note('turn_gate.us_scope', e)
+                _us_hit = None
+            if _us_hit and _us_hit.get('reply'):
+                return _answer(_us_hit, 'us_scope', route='us_scope', outcome='answered', **common)
         if (cont.get('params') or {}).get('about_read'):
             try:
                 from . import read_answers as _ra

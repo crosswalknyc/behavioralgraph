@@ -328,6 +328,19 @@ def classify(text, history, reading=None, page=''):
         out.update(kind='question_about_answer', confidence=0.9, subject=(deliv or {}).get('subject', ''),
                    params={'figure': _q['figure'], 'figure_turn': _q['turn']})
         return out
+    # "are these numbers US only or global?" is a question about the answer
+    # in hand, never a new read (2026-11-04, Jay Patel: three phrasings drew
+    # the open profile three times). prometheus.us_scope answers it ahead of
+    # this gate; the class keeps the open-tab confirm and the priced offer
+    # away from it on any path that reaches here.
+    try:
+        from . import us_scope as _uss
+        _scope = bool(_uss.wants_us_scope(t))
+    except Exception:
+        _scope = False
+    if _scope:
+        out.update(kind='question_about_answer', confidence=0.9, subject=(deliv or {}).get('subject', ''), params={'us_scope': True})
+        return out
     # a yes/no about what the last read holds ("is the film you started with
     # The Love Hypotheis, if so I should expect Off Campus to be on the list?")
     # is a question about that answer, answered from its words (2026-10-26)
