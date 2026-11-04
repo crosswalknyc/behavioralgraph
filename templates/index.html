@@ -51721,7 +51721,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-pi-row { appearance: none; width: 100%; text-align: left; background: var(--dtw-raised); border: 1px solid var(--dtw-rule); border-radius: 10px; padding: 10px 12px; color: inherit; font-family: inherit; cursor: pointer; }
         #digitalTwinsIQView .dtw-pi-row.on { border-color: var(--dtw-ink); }
         #digitalTwinsIQView .dtw-pi-rowwrap { position: relative; }
-        #digitalTwinsIQView .dtw-pi-rowwrap .dtw-pi-row { padding-right: 58px; }
+        /* Room for the Delete pill. The .dtw-pi-setup rule below sets
+           `padding` shorthand at equal specificity and later in the
+           sheet, which reset this to 10px and ran the title straight
+           under the button (Jenna 2026-11-03). Naming the setup
+           scope here outranks it. The pill is 49px wide and sits
+           10px off the right edge, so 66px leaves a real gap. */
+        #digitalTwinsIQView .dtw-pi-rowwrap .dtw-pi-row,
+        #digitalTwinsIQView .dtw-pi-setup .dtw-pi-rowwrap .dtw-pi-row { padding-right: 66px; }
         #digitalTwinsIQView .dtw-pi-rowdel { position: absolute; right: 10px; top: 10px; appearance: none; background: transparent; border: 1px solid var(--dtw-rule); border-radius: 999px; color: var(--dtw-mute); font: inherit; font-size: 10.5px; padding: 2px 8px; cursor: pointer; }
         #digitalTwinsIQView .dtw-pi-rowdel:hover, #digitalTwinsIQView .dtw-pi-rowdel:focus-visible { color: var(--dtw-ink); border-color: var(--dtw-ink); }
         #digitalTwinsIQView .dtw-pi-del { align-self: center; flex: none; color: var(--dtw-mute); }
