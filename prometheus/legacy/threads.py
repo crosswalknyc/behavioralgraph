@@ -276,98 +276,29 @@ def _load_threads_index(username):
     return idx
 
 
-# Turns the server wrote while the widget held a stale copy of the thread
-# (2026-10-16: a correction note and a "your Digital Journey is ready" line
-# vanished when the next ask posted the widget's history over them).
-SERVER_TURN_MARKS = ('corrected_at', 'read_job_id', 'deck_job_id', 'jiq_job_id', 'bpiq_job_id', 'fw_job_id',
-                     'aiq_job_id', 'tlist_job_id', 'files', 'server_note', 'delivery')
+# The thread store is append-only from the server's side (2026-11-04,
+# Jenna: "the data should always be storing it so that it reconciles and
+# should always keep track"). The merge lives in prometheus.thread_merge;
+# these names stay for the callers that grew up on them. Before that
+# date keep_server_turns started from the CLIENT's list and folded back
+# only server-marked agent turns, so a tab holding a stale copy dropped
+# every plain turn the server held (Jay Patel's own questions and three
+# answers, twice in one afternoon).
+from prometheus import thread_merge as _tm  # noqa: E402
 
-
-def _turn_epoch(t):
-    v = (t or {}).get('ts')
-    try:
-        return float(v)
-    except (TypeError, ValueError):
-        pass
-    try:
-        return datetime.fromisoformat(str(v).replace('Z', '+00:00')).timestamp()
-    except Exception:
-        return 0.0
-
-
-def _is_server_turn(t):
-    meta = t.get('meta') if isinstance(t, dict) and isinstance(t.get('meta'), dict) else {}
-    return str(t.get('role') or '') in ('agent', 'assistant') and any(meta.get(k) for k in SERVER_TURN_MARKS)
-
-
-def fill_blank_agent_turns(turns, line="Working on it. Confirmed your task is in progress and I will email you when it completes."):
-    """No agent turn is stored blank (2026-10-22, Casey Pearson: the
-    widget saved {role: 'agent', ts} after a draft reached its analyze
-    handler). A blank agent turn with nothing attached becomes the calm
-    line (the widget's own), marked so the next pass can tell it apart
-    from an answer."""
-    try:
-        out = []
-        for t in (turns or []):
-            if isinstance(t, dict) and str(t.get('role') or '') in ('agent', 'assistant') \
-                    and not str(t.get('text') or '').strip():
-                meta = t.get('meta') if isinstance(t.get('meta'), dict) else {}
-                if not any(meta.get(k) for k in ('link', 'chart', 'files', 'options')):
-                    t = dict(t, text=line, meta=dict(meta, blank_filled=True))
-            out.append(t)
-        return out
-    except Exception:
-        return turns
+SERVER_TURN_MARKS = _tm.SERVER_TURN_MARKS
+_turn_epoch = _tm.turn_epoch
+_is_server_turn = _tm.is_server_turn
+fill_blank_agent_turns = _tm.fill_blank_agent_turns
 
 
 def keep_server_turns(stored, incoming):
-    """The client's history with the server's turns folded back in.
-
-    * A stored turn carrying meta.corrected_at replaces the client's copy
-      of the same turn (by timestamp, then position): corrections stick.
-    * A stored agent turn the server appended (a job's ready line, a
-      delivery note, a correction note) that the client never saw is
-      re-inserted in time order instead of being lost.
-    * No agent turn is stored blank: a client turn with no text and
-      nothing attached becomes the calm line (fill_blank_agent_turns).
-    Never raises; on any doubt the client's list is returned as given."""
-    try:
-        if not isinstance(incoming, list):
-            return incoming
-        incoming = fill_blank_agent_turns(incoming)
-        stored = [t for t in (stored or []) if isinstance(t, dict)]
-        out = list(incoming)
-        by_ts = {}
-        for j, t in enumerate(out):
-            if isinstance(t, dict) and t.get('ts'):
-                by_ts.setdefault(str(t.get('ts')), j)
-        for i, t in enumerate(stored):
-            meta = t.get('meta') if isinstance(t.get('meta'), dict) else {}
-            if not meta.get('corrected_at'):
-                continue
-            j = by_ts.get(str(t.get('ts') or ''))
-            if j is None and i < len(out) and isinstance(out[i], dict) and out[i].get('role') == t.get('role'):
-                j = i
-            if j is None:
-                continue
-            cur = out[j]
-            cur_c = str((cur.get('meta') or {}).get('corrected_at') or '') if isinstance(cur.get('meta'), dict) else ''
-            if cur_c == str(meta.get('corrected_at') or ''):
-                continue
-            if cur_c and cur_c > str(meta.get('corrected_at') or ''):
-                continue     # the incoming turn carries a newer correction (a correction of a correction, 2026-10-28)
-            out[j] = dict(t)
-        seen = {(str(t.get('ts') or ''), str(t.get('text') or '')[:80]) for t in out if isinstance(t, dict)}
-        texts = {str(t.get('text') or '')[:80] for t in out if isinstance(t, dict)}
-        missing = [t for t in stored if _is_server_turn(t)
-                   and (str(t.get('ts') or ''), str(t.get('text') or '')[:80]) not in seen
-                   and str(t.get('text') or '')[:80] not in texts]
-        if not missing:
-            return out
-        merged = out + [dict(t) for t in missing]
-        # time order where timestamps allow; a turn with no usable timestamp keeps its place at the end
-        keyed = [(_turn_epoch(t) or float('inf'), n, t) for n, t in enumerate(merged)]
-        keyed.sort(key=lambda x: (x[0], x[1]))
-        return [t for _e, _n, t in keyed]
-    except Exception:
+    """The stored thread with the client's turns merged in
+    (prometheus.thread_merge.merge_turns). Every stored turn survives,
+    plain or marked, user or agent; the client adds turns and patches
+    the meta of turns it holds; corrections stick (a newer correction
+    replaces an older one); exact repeats collapse; time order holds.
+    Never raises; on any doubt the stored list plus the client's."""
+    if not isinstance(incoming, list):
         return incoming
+    return _tm.merge_turns(stored, incoming)

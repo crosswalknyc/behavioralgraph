@@ -2139,8 +2139,8 @@ def _pm_rotate_idle_thread(username):
 
 
 def _pm_keep_corrected_turns(username, tid, incoming):
-    """Server-side turns survive the client's next save: corrections (meta.corrected_at) and turns the server appended
-    while the widget held a stale history (ready lines, delivery notes; 2026-10-16). prometheus.legacy.threads.keep_server_turns."""
+    """The stored thread with the incoming turns merged in: every turn the server holds survives a client's save
+    (2026-11-04); corrections (meta.corrected_at) and server-appended turns included (2026-10-16). prometheus.thread_merge."""
     try:
         from prometheus.legacy import threads as _thr
         return _thr.keep_server_turns(_pm_s3_json(_pm_thread_key(username, tid), []) or [], incoming)
@@ -2149,31 +2149,60 @@ def _pm_keep_corrected_turns(username, tid, incoming):
         return incoming
 
 
+def _pm_merge_save_thread(username, tid, history):
+    """Write one thread: the stored turns with ``history`` merged in, guarded
+    by the object's ETag so a landing or a note that arrives mid-save is
+    re-read and kept (prometheus.thread_merge.merge_save). Never shorter
+    than what was stored, except the 200-turn growth bound."""
+    from prometheus import thread_merge as _tm
+    return _tm.merge_save(_H.s3_client, _H.S3_BUCKET, _pm_thread_key(username, tid), list(history or []))
+
+
 def _save_synth_chat_history(username, history, thread_id=None):
+    """Merge the client's history into its thread and refresh the index.
+    Returns {'thread_id', 'history'} (the merged thread as written), or
+    False when nothing could be saved. A save naming a thread the caller
+    no longer has (deleted, rolled off the rail) is refused with
+    {'unknown_thread': True} rather than landed on another thread
+    (2026-11-04: that redirect is how one tab's stale copy reached
+    another tab's thread)."""
     try:
-        # Trim to last 200 turns to bound growth
-        trimmed = list(history or [])[-200:]
         idx = _load_threads_index(username)
         known = {th.get('id') for th in idx.get('threads', [])}
+        want = str(thread_id).strip() if thread_id and str(thread_id).strip() else ''
+        if want and want not in known:
+            return {'unknown_thread': True, 'thread_id': want}
         # the save names its thread (2026-10-21): a save that races a switch lands on the thread it came from, never the one just opened
-        tid = (str(thread_id).strip() if thread_id and str(thread_id).strip() in known else None) or idx.get('active') or (idx['threads'][0]['id'] if idx.get('threads') else None)
+        tid = want or idx.get('active') or (idx['threads'][0]['id'] if idx.get('threads') else None)
         if not tid:
             return False
-        trimmed = _pm_keep_corrected_turns(username, tid, trimmed)
-        _pm_s3_put_json(_pm_thread_key(username, tid), trimmed)
+        merged = _pm_merge_save_thread(username, tid, history)
         now = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
         for th in idx.get('threads', []):
             if th.get('id') == tid:
                 th['updated'] = now
-                th['turns'] = len(trimmed)
+                th['turns'] = len(merged)
                 if th.get('title') in (None, '', 'New chat'):
-                    th['title'] = _pm_thread_title_from(trimmed)
+                    th['title'] = _pm_thread_title_from(merged)
                 break
         _pm_s3_put_json(_pm_threads_index_key(username), idx)
-        return True
+        return {'thread_id': tid, 'history': merged}
     except Exception as e:
         print(f"[synth-chat] history save failed for {username}: {e}")
         return False
+
+
+def _pm_active_thread_history(username):
+    """(thread id, turns) of the caller's active thread."""
+    try:
+        idx = _load_threads_index(username)
+        tid = idx.get('active') or (idx['threads'][0]['id'] if idx.get('threads') else None)
+        if not tid:
+            return None, []
+        return tid, (_pm_s3_json(_pm_thread_key(username, tid), []) or [])
+    except Exception as e:
+        print(f"[synth-chat] history load failed for {username}: {e}")
+        return None, []
 
 
 # Deterministic wall-time estimator for the chatbot approval card.
@@ -8723,10 +8752,23 @@ def api_synth_chat_history():
     if err:
         return err
     uname = user.get('username') or user.get('email') or 'anon'
+    from prometheus import thread_merge as _tm
     if request.method == 'GET':
-        rotated_from = _pm_rotate_idle_thread(uname)
-        out = {'success': True,
-               'history': _load_synth_chat_history(uname)}
+        # One thread by id, read only (2026-11-04): a tab pulling its own
+        # thread's turns moves nothing (no rotation, no active switch).
+        want = str(request.args.get('thread_id') or '').strip()
+        if want:
+            idx = _load_threads_index(uname)
+            if not any(t.get('id') == want for t in idx.get('threads', [])):
+                return jsonify({'success': False, 'error': 'unknown thread'}), 404
+            hist = _pm_s3_json(_pm_thread_key(uname, want), []) or []
+            return jsonify({'success': True, 'history': hist, 'thread_id': want,
+                            'rev': _tm.thread_rev(hist)})
+        peek = str(request.args.get('peek') or '').strip() in ('1', 'true', 'yes')
+        rotated_from = None if peek else _pm_rotate_idle_thread(uname)
+        tid, hist = _pm_active_thread_history(uname)
+        out = {'success': True, 'history': hist, 'thread_id': tid,
+               'rev': _tm.thread_rev(hist)}
         if rotated_from is not None:
             out['rotated'] = True
             out['rotated_from'] = rotated_from
@@ -8742,8 +8784,22 @@ def api_synth_chat_history():
                              'history payload is not a list',
                              tb='(request validation)')
         return jsonify(_H._chatbot_calm_payload())
-    ok = _save_synth_chat_history(uname, history, body.get('thread_id'))
-    return jsonify({'success': ok})
+    saved = _save_synth_chat_history(uname, history, body.get('thread_id'))
+    if not saved:
+        return jsonify({'success': False})
+    if saved.get('unknown_thread'):
+        return jsonify({'success': False, 'error': 'unknown thread',
+                        'thread_id': saved.get('thread_id')}), 404
+    # The merged thread is the record (2026-11-04). When it is not the
+    # list the client sent (the client lacked turns the server held), it
+    # rides back so the tab takes them in instead of pushing over them.
+    merged = saved['history']
+    out = {'success': True, 'thread_id': saved['thread_id'],
+           'rev': _tm.thread_rev(merged), 'turns': len(merged)}
+    if _tm.differs(history, merged):
+        out['changed'] = True
+        out['history'] = merged
+    return jsonify(out)
 
 
 @_H.app.route('/api/prometheus/proactive', methods=['GET'])
@@ -14937,9 +14993,8 @@ def _pm_load_thread_or_active(username, tid):
 def _pm_save_thread_or_active(username, tid, history):
     if not tid:
         return _save_synth_chat_history(username, history)
-    trimmed = list(history or [])[-200:]
-    trimmed = _pm_keep_corrected_turns(username, tid, trimmed)
-    _pm_s3_put_json(_pm_thread_key(username, tid), trimmed)
+    # merged into what is stored, ETag-guarded: a landing never writes over a turn that arrived mid-save (2026-11-04)
+    trimmed = _pm_merge_save_thread(username, tid, history)
     _store.enabled() and _store.upsert_thread(username, tid, trimmed, _pm_thread_title_from(trimmed))   # shadow row (audit item 7)
     try:
         idx = _load_threads_index(username)

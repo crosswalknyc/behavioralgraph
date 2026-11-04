@@ -86203,6 +86203,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         return;
                     }
                     synthChatHistory = (d && d.history) || [];
+                    _pmHistoryTrack(d);
                     window._pmLastActivityAt = Date.now();
                     // Idle rotation (2026-10-01 Jenna): the server
                     // parked the thread you left and opened a fresh
@@ -86248,6 +86249,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (document.visibilityState === 'visible') {
                     _synthChatRefreshQueueBadge();
                     _pmIdleCheck();
+                    try { _pmServerTurnsPull(); } catch (_) {}   // a tab coming back reads its thread before it writes (2026-11-04)
                     // Tab-return welcome DISABLED (2026-09-02 Jenna
                     // directive): returning to the tab after 30+ min
                     // away no longer re-offers the day starters - that
@@ -86616,11 +86618,16 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 }
             } catch (_) {}
         }, 400);
-        function _pmThreadsLoad() {
+        function _pmThreadsLoad(adoptActive) {
             fetch('/api/brief-chat/threads', { credentials: 'same-origin' })
                 .then(function (r) { return r.json(); })
                 .then(function (d) {
                     if (!d || !d.success) return;
+                    // the rail's list is the server's; the thread this tab is on stays this tab's
+                    // (2026-11-04: taking the server's active here sent one tab's saves to the thread
+                    // another tab had opened). Only a rotation or a resync adopts the server's active.
+                    var mine = (!adoptActive && _pmThreadsIdx && _pmThreadsIdx.active) ? String(_pmThreadsIdx.active) : '';
+                    if (mine && (d.threads || []).some(function (t) { return String(t.id) === mine; })) d.active = mine;
                     _pmThreadsIdx = d;
                     _pmThreadsRender();
                 }).catch(function () {});
@@ -86638,6 +86645,136 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         function _pmHistoryBody(hist) {
             var tid = (typeof _pmThreadsIdx !== 'undefined' && _pmThreadsIdx && _pmThreadsIdx.active) || null;
             return JSON.stringify(tid ? { history: hist, thread_id: tid } : { history: hist });
+        }
+        // One record per thread (2026-11-04, Jenna: "the data should always be storing it so
+        // that it reconciles and should always keep track"). The server merges every save: this
+        // tab can add turns and patch its own, never remove what the server holds. A tab that
+        // held a stale copy (left open across a landing or a note, a second tab, a thread the
+        // rail moved under it) takes the server's turns in from the save's answer and from the
+        // pull, instead of pushing its copy over them. Every turn this tab mints carries an id.
+        var _pmHistoryRev = null;
+        function _pmTurnId() {
+            return 't' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+        }
+        function _pmTurnEpoch(t) {
+            var e = Date.parse(String((t && t.ts) || ''));
+            return isNaN(e) ? 0 : e;
+        }
+        function _pmTurnTextKey(t) {
+            return String((t && t.text) || '').replace(/\s+/g, ' ').trim();
+        }
+        function _pmTurnSame(a, b) {
+            // the same turn seen twice: one id, or one moment and role with one text; the same
+            // moment and role with a different text is still one turn when one side is the
+            // server's correction, the server's own turn or a blank the server filled
+            if (!a || !b) return false;
+            if (a.turn_id && b.turn_id && a.turn_id === b.turn_id) return true;
+            if (String(a.role || '') !== String(b.role || '')) return false;
+            var ea = _pmTurnEpoch(a), eb = _pmTurnEpoch(b);
+            if (!(ea && eb ? ea === eb : String(a.ts || '') === String(b.ts || ''))) return false;
+            if (_pmTurnTextKey(a) === _pmTurnTextKey(b)) return true;
+            if (a.turn_id && b.turn_id) return false;
+            var ma = a.meta || {}, mb = b.meta || {};
+            return !!(ma.corrected_at || mb.corrected_at || ma.blank_filled || mb.blank_filled || _pmIsServerTurn(a) || _pmIsServerTurn(b));
+        }
+        function _pmHistoryTrack(d, adopt) {
+            // the thread this tab is on, from the server's answer; saves and pulls name it from here on
+            if (!d) return;
+            if (d.rev) _pmHistoryRev = String(d.rev);
+            if (d.thread_id && (adopt || !_pmThreadsIdx || !_pmThreadsIdx.active)) {
+                _pmThreadsIdx = Object.assign({}, _pmThreadsIdx || { threads: [] }, { active: String(d.thread_id) });
+            }
+        }
+        function _pmHistoryMergeIn(serverHist, opts) {
+            // fold the server's copy of this thread into the tab's; never drops a local turn
+            if (!Array.isArray(serverHist) || !Array.isArray(synthChatHistory)) return false;
+            var added = 0, patched = false;
+            for (var i = 0; i < serverHist.length; i++) {
+                var s = serverHist[i];
+                if (!s || typeof s !== 'object') continue;
+                var local = null;
+                for (var j = 0; j < synthChatHistory.length; j++) {
+                    if (_pmTurnSame(synthChatHistory[j], s)) { local = synthChatHistory[j]; break; }
+                }
+                if (!local) { synthChatHistory.push(s); added++; continue; }
+                var sm = s.meta || {}, lm = local.meta || {};
+                if (!local.turn_id && s.turn_id) local.turn_id = s.turn_id;
+                // the server's correction and the server's own turn are the current text of a turn the tab holds
+                if ((sm.corrected_at && String(sm.corrected_at) > String(lm.corrected_at || '')) ||
+                        (_pmIsServerTurn(s) && !_pmIsServerTurn(local) && _pmTurnTextKey(s) !== _pmTurnTextKey(local))) {
+                    local.text = s.text;
+                    local.meta = Object.assign({}, lm, sm);
+                    patched = true;
+                    continue;
+                }
+                // a landed status and any server-held mark the tab's copy lacks ride along
+                if (sm.status && sm.status !== lm.status && /^(complete|error|failed)$/i.test(String(sm.status))) {
+                    local.meta = Object.assign({}, lm, { status: sm.status });
+                    lm = local.meta;
+                    patched = true;
+                }
+                for (var k in sm) {
+                    if (Object.prototype.hasOwnProperty.call(sm, k) && !Object.prototype.hasOwnProperty.call(lm, k)) {
+                        if (!local.meta) local.meta = {};
+                        local.meta[k] = sm[k];
+                        patched = true;
+                    }
+                }
+            }
+            if (added) {
+                var keyed = synthChatHistory.map(function (t, n) { return { e: _pmTurnEpoch(t), n: n, t: t }; });
+                keyed.sort(function (a, b) {
+                    if (a.e !== b.e) {
+                        if (!a.e) return 1;      // a turn with no usable stamp keeps its place at the end
+                        if (!b.e) return -1;
+                        return a.e - b.e;
+                    }
+                    return a.n - b.n;
+                });
+                for (var q = 0; q < keyed.length; q++) synthChatHistory[q] = keyed[q].t;
+            }
+            var changed = added > 0 || patched;
+            if (changed && !(opts && opts.quiet)) {
+                try { synthChatRerender(); } catch (_) {}
+            }
+            return changed;
+        }
+        function _pmHistoryResync() {
+            // the thread this tab was on is gone (deleted or rolled off the rail elsewhere): take the server's active one
+            fetch('/api/brief-chat/history?peek=1', { credentials: 'same-origin' })
+                .then(function (r) { return r.ok ? r.json() : null; })
+                .then(function (d) {
+                    if (!d || !Array.isArray(d.history)) return;
+                    _pmHistoryTrack(d, true);
+                    _pmAdoptHistory(d.history);
+                    if (d.rev) _pmHistoryRev = String(d.rev);
+                    try { _pmThreadsLoad(true); } catch (_) {}
+                }).catch(function () {});
+        }
+        function _pmHistorySave(opts) {
+            // every save of this tab's copy; the merged thread comes back when the tab lacked turns
+            var leaving = !!(opts && opts.leaving);
+            var sent = synthChatHistory;
+            var tid = (_pmThreadsIdx && _pmThreadsIdx.active) || null;
+            try {
+                return fetch('/api/brief-chat/history', {
+                    method: 'POST', credentials: 'same-origin', keepalive: !!(opts && opts.keepalive),
+                    headers: { 'Content-Type': 'application/json' },
+                    body: _pmHistoryBody(sent)
+                }).then(function (r) {
+                    if (r.status === 404 && !leaving) { _pmHistoryResync(); return null; }
+                    return r.ok ? r.json() : null;
+                }).then(function (d) {
+                    if (!d || !d.success || leaving) return;
+                    if (sent !== synthChatHistory) return;                       // the tab moved to another thread meanwhile
+                    if (d.thread_id && tid && String(d.thread_id) !== String(tid)) return;
+                    if (d.rev) _pmHistoryRev = String(d.rev);
+                    if (d.changed && Array.isArray(d.history)) {
+                        var busy = !!(synthChatInflightController || _pmDeckInFlight);
+                        _pmHistoryMergeIn(d.history, { quiet: busy });        // mid-reply: fold in now, draw with the reply
+                    }
+                }).catch(function () {});
+            } catch (_) { return Promise.resolve(null); }
         }
         var _pmFollow = { key: null, inflight: false, pending: false, timer: null };
         var _PM_FOLLOW_SUB_DEFAULT = 'Ask any read across your workspace.';
@@ -86717,11 +86854,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // the thread we are leaving keeps what was typed in it
             try {
                 if (_pmFollow.key !== null && Array.isArray(synthChatHistory) && synthChatHistory.length) {
-                    fetch('/api/brief-chat/history', {
-                        method: 'POST', credentials: 'same-origin', keepalive: true,
-                        headers: { 'Content-Type': 'application/json' },
-                        body: _pmHistoryBody(synthChatHistory)
-                    }).catch(function () {});
+                    _pmHistorySave({ leaving: true, keepalive: true });
                 }
             } catch (_) {}
             fetch('/api/brief-chat/threads/bind', {
@@ -86801,6 +86934,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         }
         function _pmAdoptHistory(hist) {
             synthChatHistory = Array.isArray(hist) ? hist : [];
+            _pmHistoryRev = null;
             _pmResetArmedStates();
             _pmSearchQ = '';
             var s = document.getElementById('pmThreadSearch');
@@ -86826,7 +86960,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     if (!d || !d.rotated) return;
                     window._pmLastActivityAt = Date.now();
                     _pmAdoptHistory([]);
-                    try { _pmThreadsLoad(); } catch (_) {}
+                    _pmHistoryTrack(d, true);
+                    try { _pmThreadsLoad(true); } catch (_) {}
                 }).catch(function () {});
         }
         // New chat shortcut (2026-10-01 Jenna: "the button with N").
@@ -86857,11 +86992,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // the thread being left keeps what was typed in it
             try {
                 if (Array.isArray(synthChatHistory) && synthChatHistory.length) {
-                    fetch('/api/brief-chat/history', {
-                        method: 'POST', credentials: 'same-origin', keepalive: true,
-                        headers: { 'Content-Type': 'application/json' },
-                        body: _pmHistoryBody(synthChatHistory)
-                    }).catch(function () {});
+                    _pmHistorySave({ leaving: true, keepalive: true });
                 }
             } catch (_) {}
             fetch('/api/brief-chat/threads/new', {
@@ -86886,13 +87017,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             if (_pmThreadsIdx && _pmThreadsIdx.active === tid) return;
             window._pmLastActivityAt = Date.now();
             // Persist the current thread before leaving it.
-            try {
-                fetch('/api/brief-chat/history', {
-                    method: 'POST', credentials: 'same-origin',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: _pmHistoryBody(synthChatHistory),
-                });
-            } catch (_) {}
+            try { _pmHistorySave({ leaving: true }); } catch (_) {}
             fetch('/api/brief-chat/threads/activate', {
                 method: 'POST', credentials: 'same-origin',
                 headers: { 'Content-Type': 'application/json' },
@@ -87390,16 +87515,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         }
         function synthChatPushTurn(role, text) {
             text = _synthChatAgentText(role, text);
-            synthChatHistory.push({ role: role, text: text, ts: new Date().toISOString() });
+            synthChatHistory.push({ role: role, text: text, ts: new Date().toISOString(), turn_id: _pmTurnId() });
             _synthChatBumpActivity();
             synthChatRerender();
-            try {
-                fetch('/api/brief-chat/history', {
-                    method: 'POST', credentials: 'same-origin',
-                    headers: {'Content-Type': 'application/json'},
-                    body: _pmHistoryBody(synthChatHistory),
-                });
-            } catch (_) {}
+            _pmHistorySave();
         }
 
         // Push a turn that also carries meta (e.g. run_id, status,
@@ -87407,17 +87526,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         // a Render redeploy that severs the poll connection.
         function _synthChatPushTurnWithMeta(role, text, meta) {
             text = _synthChatAgentText(role, text);
-            var turn = { role: role, text: text, ts: new Date().toISOString(), meta: meta || {} };
+            var turn = { role: role, text: text, ts: new Date().toISOString(), meta: meta || {}, turn_id: _pmTurnId() };
             synthChatHistory.push(turn);
             _synthChatBumpActivity();
             synthChatRerender();
-            try {
-                fetch('/api/brief-chat/history', {
-                    method: 'POST', credentials: 'same-origin',
-                    headers: {'Content-Type': 'application/json'},
-                    body: _pmHistoryBody(synthChatHistory),
-                });
-            } catch (_) {}
+            _pmHistorySave();
         }
 
         // Push a guidance-error turn from Prometheus / brief-chat. If
@@ -87471,13 +87584,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var t = synthChatHistory[i];
                 if (t && t.meta && t.meta.run_id === runId) {
                     t.meta.status = newStatus;
-                    try {
-                        fetch('/api/brief-chat/history', {
-                            method: 'POST', credentials: 'same-origin',
-                            headers: {'Content-Type': 'application/json'},
-                            body: _pmHistoryBody(synthChatHistory),
-                        });
-                    } catch (_) {}
+                    _pmHistorySave();
                     return;
                 }
             }
@@ -87833,32 +87940,32 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             return String((t && t.ts) || '') + '|' + String((t && t.text) || '').slice(0, 80);
         }
         function _pmServerTurnsPull() {
+            // This tab's OWN thread, read by id (2026-11-04): the server's active thread can be
+            // the one another tab opened, and folding its turns in here is how one tab's copy
+            // came to carry another thread's turns. Every turn the tab lacks comes in, plain or
+            // marked, user or agent; nothing local is dropped; the rev skips a pull with no news.
             try {
                 var w = document.getElementById('prometheusWidget');
                 if (!w || !w.classList.contains('pm-on') || _pmServerPullBusy) return;
                 if (synthChatInflightController || _pmDeckInFlight) return;
+                var tid = (_pmThreadsIdx && _pmThreadsIdx.active) ? String(_pmThreadsIdx.active) : '';
+                if (!tid) return;
+                var mine = synthChatHistory;
                 _pmServerPullBusy = true;
-                fetch('/api/brief-chat/history', { credentials: 'same-origin' })
-                    .then(function (r) { return r.ok ? r.json() : null; })
+                fetch('/api/brief-chat/history?thread_id=' + encodeURIComponent(tid), { credentials: 'same-origin' })
+                    .then(function (r) {
+                        if (r.status === 404) { _pmServerPullBusy = false; _pmHistoryResync(); return null; }
+                        return r.ok ? r.json() : null;
+                    })
                     .then(function (d) {
                         _pmServerPullBusy = false;
-                        if (!d || d.rotated || !Array.isArray(d.history)) return;
-                        var have = {};
-                        (synthChatHistory || []).forEach(function (t) { have[_pmTurnStamp(t)] = true; });
-                        var added = 0;
-                        d.history.forEach(function (t) {
-                            if (!_pmIsServerTurn(t) || have[_pmTurnStamp(t)]) return;
-                            var ts = Date.parse(String(t.ts || '')) || 0;
-                            var idx = synthChatHistory.length;
-                            for (var i = synthChatHistory.length - 1; i >= 0; i--) {
-                                var lt = Date.parse(String((synthChatHistory[i] || {}).ts || '')) || 0;
-                                if (lt && ts && lt > ts) idx = i; else break;
-                            }
-                            synthChatHistory.splice(idx, 0, t);
-                            added++;
-                        });
-                        if (added) {
-                            try { synthChatRerender(); } catch (_) {}
+                        if (!d || !Array.isArray(d.history)) return;
+                        if (mine !== synthChatHistory) return;                    // the tab moved threads while this was in flight
+                        if (String(d.thread_id || tid) !== tid) return;
+                        if (d.rev && _pmHistoryRev && String(d.rev) === _pmHistoryRev) return;
+                        var changed = _pmHistoryMergeIn(d.history);
+                        if (d.rev && !changed) _pmHistoryRev = String(d.rev);
+                        if (changed) {
                             try { _pmThreadsLoad(); } catch (_) {}
                         }
                     }).catch(function () { _pmServerPullBusy = false; });

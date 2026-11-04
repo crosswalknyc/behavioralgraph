@@ -92,9 +92,17 @@ def load_thread(uname, tid):
 def save_thread(uname, tid, history):
     """Write one thread by id and refresh its index entry. Never moves
     the caller's active thread: a request from the app or the API must
-    not switch what the dashboard shows."""
-    trimmed = list(history or [])[-200:]
-    host.s3_put_json(host.thread_key(uname, tid), trimmed)
+    not switch what the dashboard shows. The write MERGES into what is
+    stored (2026-11-04, prometheus.thread_merge): a client that sent a
+    partial history adds its turns and never removes the server's."""
+    from . import thread_merge as _tm
+    key = host.thread_key(uname, tid)
+    s3 = host.s3_client if host.has('s3_client') else None
+    if s3 is not None and host.has('bucket') and host.bucket:
+        trimmed = _tm.merge_save(s3, host.bucket, key, list(history or []))
+    else:
+        trimmed = _tm.merge_turns(host.s3_json(key, []) or [], list(history or []))[-_tm.MAX_TURNS:]
+        host.s3_put_json(key, trimmed)
     idx = threads_index(uname)
     now = _now()
     for th in idx.get('threads', []):
