@@ -38,6 +38,8 @@ S3_BUCKET = os.environ.get("S3_BUCKET", "dashboard-inputs")
 SES_REGION = os.environ.get("SES_REGION", "us-east-2")
 FROM_EMAIL = "no_reply@crosswalknyc.com"
 DEFAULT_FROM_NAME = "Liz Huszarik's The Read"
+# Dashboard users always ride the main send list (Jenna 2026-11-04).
+CROSSWALK_LIST_ID = "list-392ee732b1"
 DEFAULT_REPLY_TO = "hello@crosswalknyc.com"
 DEFAULT_COMPANY_ADDRESS = "Crosswalk, 23465 Civic Center Way Bldg 9, Malibu, CA 90265"
 DEFAULT_PUBLIC_BASE = "https://dashboard.crosswalknyc.com"
@@ -1501,7 +1503,7 @@ def sync_dashboard_users(state=None):
                     "email": email,
                     "name": row["name"],
                     "company": row["company"],
-                    "list_ids": ["dashboard-users"],
+                    "list_ids": ["dashboard-users", CROSSWALK_LIST_ID],
                     "status": "subscribed",
                     "source": "dashboard",
                     "username": row["username"],
@@ -1514,8 +1516,11 @@ def sync_dashboard_users(state=None):
             lists = list(cur.get("list_ids") or [])
             if "dashboard-users" not in lists:
                 lists.append("dashboard-users")
-                cur["list_ids"] = lists
                 changed = True
+            if CROSSWALK_LIST_ID not in lists:
+                lists.append(CROSSWALK_LIST_ID)
+                changed = True
+            cur["list_ids"] = lists
             for field in ("name", "company", "username"):
                 if row.get(field) and cur.get(field) != row[field]:
                     cur[field] = row[field]
