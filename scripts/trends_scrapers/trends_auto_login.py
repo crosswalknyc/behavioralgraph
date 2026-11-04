@@ -138,11 +138,27 @@ _R = {
         "success_url_substr": ["/home", "/select-profile", "/browse"],
     },
     "hulu.com": {
+        # Measured 2026-11-03: Hulu's login is MyDisney's two-step
+        # form. `/web/login` lands on `/web/login/enter-email`
+        # (`input#email-field`, a "Continue" submit), and the password
+        # box (`input#password`, a "Log In" submit) only exists on
+        # `/web/login/enter-password` after the email step. The old
+        # single-step recipe looked for the password on the first page
+        # and every nightly attempt since at least 2026-10-21 ended in
+        # "could not find the password field"; the Keychain self-heal
+        # fired on every run and never got past it. `/welcome` is the
+        # signed-out wall (`_auth_guard`), never a success URL.
         "login_url": "https://auth.hulu.com/web/login",
-        "user_sel": ['input[name="email"]', 'input[type="email"]'],
-        "pass_sel": ['input[name="password"]', 'input[type="password"]'],
-        "submit_sel": ['button[type="submit"]'],
-        "success_url_substr": ["/hub", "/home", "/welcome"],
+        "user_sel": ['input#email-field', 'input[name="email-field"]',
+                     'input[type="email"]', 'input[name="email"]'],
+        "continue_sel": ['button[type="submit"]:has-text("Continue")',
+                         'button[type="submit"]'],
+        "pass_sel": ['input#password', 'input[name="password"]',
+                     'input[type="password"]'],
+        "submit_sel": ['button[type="submit"]:has-text("Log In")',
+                       'button[type="submit"]'],
+        "two_step": True,
+        "success_url_substr": ["/hub", "/home", "/profiles"],
     },
     "hbomax.com": {
         # Measured 2026-09-24. The form lives on auth.hbomax.com, not
