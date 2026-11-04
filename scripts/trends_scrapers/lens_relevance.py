@@ -1263,11 +1263,13 @@ def _collect_all_items() -> list[dict]:
                   source_label='Wikipedia trending')
 
     # Social (Reddit / YouTube / TikTok posts).
-    for src, key in (('reddit', 'reddit'),
-                     ('youtube', 'youtube'),
-                     ('tiktok', 'tiktok')):
+    # youtube_top_videos: the Rankers YouTube tab (2026-11-03). Its
+    # full rail is scored so every row can carry a lens share.
+    for src, key, depth in (('reddit', 'reddit', 30),
+                            ('youtube_top_videos', 'youtube', 100),
+                            ('tiktok', 'tiktok', 30)):
         snap = _read(src) or {}
-        for it in (snap.get('national') or [])[:30]:
+        for it in (snap.get('national') or [])[:depth]:
             _add('social', it.get('title') or it.get('topic') or '',
                   extra=snap.get('label') or key,
                   source_label=snap.get('label') or key)

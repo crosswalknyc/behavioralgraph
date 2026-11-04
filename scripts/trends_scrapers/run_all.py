@@ -56,6 +56,11 @@ SCRAPERS = [
     # unpacking the consolidated snapshot. Same parser, so the two never
     # drift; extra cost is one public HTTP GET per day.
     ('youtube_podcasts',   'scripts.trends_scrapers.youtube_podcasts',   'YouTube Popular Podcasts', 'podcast'),
+    # YouTube top videos in the US (Rankers > YouTube tab, 2026-11-03).
+    # YouTube's own mostPopular chart owns the order and each row's view
+    # count is the figure YouTube publishes; the tab renders both as
+    # served and the estimator never prices these rows.
+    ('youtube_top_videos', 'scripts.trends_scrapers.youtube',            'YouTube Top Videos (US)', 'youtube'),
     ('book_charts',        'scripts.trends_scrapers.book_charts',        'Books',                'book'),
     # Comics / manga / graphic novels: Amazon Comics & Graphic Novels
     # bestsellers + Apple Books Comics genre RSS + Libby Comics via

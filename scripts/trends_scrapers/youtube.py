@@ -1,13 +1,21 @@
 """
-YouTube trending scraper via YouTube Data API v3.
+YouTube top videos (US) scraper via YouTube Data API v3.
 
-Uses YouTube's official `videos?chart=mostPopular` endpoint. Free tier
-allows 10K queries per day, plenty for a once-daily job.
+Uses YouTube's official `videos?chart=mostPopular&regionCode=US`
+endpoint, paged to the chart's full depth (up to 200 rows, four pages
+of 50). Free tier allows 10K queries per day, plenty for a once-daily
+job.
+
+The chart is YouTube's own: it owns the order of the rows and each
+row's view count is the figure YouTube publishes for that video. The
+Rankers tab renders both as published (Jenna 2026-11-03: "use the
+stamped us stream number from youtube don't model"). Nothing here is
+reasoned or scaled; a row with no published count stays blank.
 
 Requires: environment variable `YOUTUBE_API_KEY` set to a Google Cloud
-API key with the YouTube Data API v3 enabled. Add to
-`/root/finished_codes/.env.trends_scrapers` on Hetzner (gitignored,
-mode 600) - run_all.py will source it before spawning workers.
+API key with the YouTube Data API v3 enabled. Lives in
+`/root/finished_codes/.env.trends_scrapers` on the build box
+(gitignored, mode 600) - run_all.py sources it before spawning workers.
 
 Standalone:
 
@@ -28,13 +36,24 @@ logger = logging.getLogger(__name__)
 
 API_ROOT = 'https://www.googleapis.com/youtube/v3/videos'
 
+# Snapshot slug + panel label. The slug is distinct from the dormant
+# `youtube` social snapshot so the two never overwrite each other.
+SOURCE = 'youtube_top_videos'
+LABEL = 'YouTube Top Videos (US)'
+
+# Rows kept on the rail. The API serves the chart 50 at a time and
+# stops issuing `nextPageToken` once the chart is exhausted.
+MAX_ITEMS = 100
+_PAGE_SIZE = 50
+_MAX_PAGES = 4
+
 
 def _pull_page(api_key: str, page_token: str = '') -> dict:
     params = {
         'part':          'snippet,statistics,contentDetails',
         'chart':         'mostPopular',
         'regionCode':    'US',
-        'maxResults':    '25',
+        'maxResults':    str(_PAGE_SIZE),
         'key':           api_key,
     }
     if page_token:
@@ -54,14 +73,22 @@ def _pull_page(api_key: str, page_token: str = '') -> dict:
         return {}
 
 
-def _parse_items(items: list) -> list[dict]:
+def _int(v) -> int:
+    try:
+        return int(v or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _parse_items(items: list, start_rank: int = 1) -> list[dict]:
     out: list[dict] = []
-    for i, v in enumerate(items):
+    rank = start_rank
+    for v in items:
         vid = v.get('id') or ''
         sn  = v.get('snippet') or {}
         st  = v.get('statistics') or {}
         title = sn.get('title') or ''
-        if not title:
+        if not title or not vid:
             continue
         thumbs = (sn.get('thumbnails') or {})
         image = ''
@@ -71,16 +98,20 @@ def _parse_items(items: list) -> list[dict]:
                 image = t['url']
                 break
         out.append({
-            'rank':      i + 1,
-            'title':     title[:200],
-            'channel':   sn.get('channelTitle') or '',
-            'url':       f'https://www.youtube.com/watch?v={vid}',
-            'image':     image,
-            'views':     int(st.get('viewCount') or 0),
-            'likes':     int(st.get('likeCount') or 0),
-            'comments':  int(st.get('commentCount') or 0),
-            'published': sn.get('publishedAt') or '',
+            'rank':        rank,
+            'video_id':    vid,
+            'title':       title[:200],
+            'channel':     sn.get('channelTitle') or '',
+            'url':         f'https://www.youtube.com/watch?v={vid}',
+            'image':       image,
+            # YouTube's own published counts for the video, as served.
+            'views':       _int(st.get('viewCount')),
+            'likes':       _int(st.get('likeCount')),
+            'comments':    _int(st.get('commentCount')),
+            'published':   sn.get('publishedAt') or '',
+            'category_id': str(sn.get('categoryId') or ''),
         })
+        rank += 1
     return out
 
 
@@ -90,17 +121,43 @@ def fetch() -> dict[str, Any]:
         return {
             'national': [],
             'error':    'YOUTUBE_API_KEY not set; add to '
-                        '/root/finished_codes/.env.trends_scrapers on Hetzner',
+                        '/root/finished_codes/.env.trends_scrapers on the '
+                        'build box',
         }
-    page = _pull_page(api_key)
-    items = page.get('items') or []
-    national = _parse_items(items)[:20]
-    return {'national': national}
+    national: list[dict] = []
+    seen: set[str] = set()
+    token = ''
+    for _ in range(_MAX_PAGES):
+        page = _pull_page(api_key, token)
+        items = page.get('items') or []
+        if not items:
+            break
+        fresh = [v for v in items
+                 if (v.get('id') or '') and v.get('id') not in seen]
+        for v in fresh:
+            seen.add(v['id'])
+        national.extend(_parse_items(fresh, start_rank=len(national) + 1))
+        if len(national) >= MAX_ITEMS:
+            break
+        token = page.get('nextPageToken') or ''
+        if not token:
+            break
+    national = national[:MAX_ITEMS]
+    out: dict[str, Any] = {
+        'national':  national,
+        'label':     'YouTube',
+        'region':    'US',
+        'chart':     'mostPopular',
+        'metric':    'views',
+    }
+    if not national:
+        out['error'] = 'youtube mostPopular chart returned no rows'
+    return out
 
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO,
                          format='%(asctime)s %(levelname)s %(name)s %(message)s')
-    result = run_scraper('youtube', 'YouTube', 'social', fetch)
-    print(f"youtube: national={len(result.get('national', []))} "
+    result = run_scraper(SOURCE, LABEL, 'youtube', fetch)
+    print(f"{SOURCE}: national={len(result.get('national', []))} "
            f"error={result.get('error')}", file=sys.stderr)

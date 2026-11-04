@@ -499,6 +499,17 @@ GAMING_PLATFORMS = [
       ('top_sellers', 'steam_top_sellers')]),
 ]
 
+# YouTube top videos in the US (Rankers > YouTube tab, 2026-11-03).
+# Same tuple shape as GAMING_PLATFORMS. One panel: YouTube's own
+# mostPopular chart for the US, read from `youtube_top_videos.json`
+# (snap['national']). The chart owns the order and each row's view
+# count is the figure YouTube publishes for the video; both render as
+# served (`_annotate_youtube_with_views`). Nothing on this rail is
+# reasoned, so the estimator and the coverage passes leave it alone.
+YOUTUBE_PLATFORMS = [
+    ('youtube', 'YouTube', False, 'youtube_top_videos', None),
+]
+
 # How old a snapshot can be before we treat the source as unavailable
 # again. Two days = one missed nightly + one buffer. Bump if a scraper
 # is flaky.
@@ -6670,6 +6681,91 @@ def _annotate_gaming_with_rank_change(gaming_trending: dict,
 
 
 # ---------------------------------------------------------------------------
+# YouTube top videos (US): the number on every row is the view count
+# YouTube publishes for that video, as served by its own chart. It is
+# stamped straight into `us_streams` so the sheet, the CSV export and
+# the lens swap read it through the one path they already use, and so
+# the coverage passes see a covered row (`est_basis='first_party'`)
+# and never price it. The movement chip compares today's published
+# count with yesterday's for the same video. Nothing is reasoned.
+# ---------------------------------------------------------------------------
+
+def _youtube_row_key(row: dict) -> str:
+    return str(row.get('video_id') or row.get('url') or '').strip()
+
+
+def _annotate_youtube_with_views(youtube_trending: dict,
+                                  asof: Optional[str] = None) -> None:
+    if not youtube_trending:
+        return
+    today_iso = asof or _today_iso()
+    prev_iso = _yesterday_iso(asof)
+    stamped = total = 0
+    for panel_key, _label, _d, slug, _spec in YOUTUBE_PLATFORMS:
+        panel = youtube_trending.get(panel_key) or {}
+        items = panel.get('items') or []
+        if not items:
+            continue
+        prev_views: dict[str, int] = {}
+        try:
+            prev_snap = _read_snapshot(slug, asof=prev_iso)
+            for p in (_snapshot_items_for_geo(prev_snap, None)
+                      if prev_snap else []):
+                if not isinstance(p, dict):
+                    continue
+                k = _youtube_row_key(p)
+                try:
+                    v = int(p.get('views') or 0)
+                except (TypeError, ValueError):
+                    v = 0
+                if k and v > 0:
+                    prev_views[k] = v
+        except Exception:
+            logger.exception('youtube prior-day read failed (non-fatal)')
+        for row in items:
+            total += 1
+            try:
+                views = int(row.get('views') or 0)
+            except (TypeError, ValueError):
+                views = 0
+            if views <= 0:
+                # No published count: the cell stays blank rather than
+                # carrying a number from anywhere else.
+                row.pop('us_streams', None)
+                continue
+            blk = {
+                'us_estimate':      views,
+                'us_estimate_low':  views,
+                'us_estimate_high': views,
+                'confidence':       'high',
+                'unit_label':       'views',
+                'platform':         panel_key,
+                'as_of_date':       today_iso,
+                'est_basis':        'first_party',
+                'method':           'View count published by YouTube for '
+                                    'this video.',
+                'source_note':      'View count as published by YouTube.',
+                'delta_kind':       'metric',
+            }
+            pv = prev_views.get(_youtube_row_key(row))
+            if pv and pv > 0:
+                delta = (views - pv) / pv
+                blk['delta_pct'] = delta
+                blk['prev_estimate'] = pv
+                blk['prev_date'] = prev_iso
+                blk['direction'] = ('up' if delta > 0.0005 else
+                                    'down' if delta < -0.0005 else 'flat')
+            else:
+                blk['direction'] = 'new'
+                blk['delta_pct'] = 0.0
+                blk['prev_date'] = prev_iso
+            row['us_streams'] = blk
+            stamped += 1
+    logger.info('youtube views stamped: %d / %d rows (prev %s)',
+                 stamped, total, prev_iso)
+
+
+# ---------------------------------------------------------------------------
 # Headlines: two flat lists (business_news + wall_street_news) plus their
 # `*_by_source` per-outlet dicts.  Delta folds into `us_readers` (chip
 # on the headline row reads from us_readers, not us_streams).
@@ -7248,7 +7344,10 @@ def _annotate_fused_trending_with_audience(
 _COVERAGE_TITLE_KEYS = ('title', 'term', 'name', 'display_name', 'query',
                          'show', 'channel_name', 'headline')
 _COVERAGE_SKIP_CARD_KEYS = {'lens_config', 'lens_scores', 'lens_cutoffs'}
-_COVERAGE_EXEMPT_PREFIXES = ('films_ticketing',)
+# youtube_trending rows carry YouTube's own published view count
+# (`est_basis='first_party'`) or nothing; the baseline pass must never
+# put a reasoned number on one (2026-11-03).
+_COVERAGE_EXEMPT_PREFIXES = ('films_ticketing', 'youtube_trending')
 _COVERAGE_READER_PREFIXES = ('trending_headlines', 'articles_by_source',
                               'business_news', 'wall_street_news')
 
@@ -12428,6 +12527,44 @@ def _fetch_gaming_trending(state: Optional[str], lookback_days: int,
     return result
 
 
+def _fetch_youtube_trending(state: Optional[str], lookback_days: int,
+                             keywords: Optional[list[str]] = None,
+                             asof: Optional[str] = None) -> dict:
+    """Read the daily YouTube top-videos snapshot into the per-panel
+    dict the Rankers frontend consumes (same shape as gaming):
+
+        { 'youtube': { label, items, available, fetched_at[, note] } }
+
+    Items come from `youtube_top_videos.json` (`snap['national']`),
+    each `{ rank, video_id, title, channel, url, image, views, likes,
+    comments, published }` in the order YouTube's US mostPopular chart
+    serves them. `rank` is re-stamped 1..N so the rail is dense after
+    any row the scraper dropped. The view count YouTube publishes for
+    each row is stamped as the row's number by
+    `_annotate_youtube_with_views`, never here and never reasoned."""
+    result: dict[str, dict] = {}
+    for panel_key, label, _default_avail, snapshot_slug, _spec in YOUTUBE_PLATFORMS:
+        snap = (_read_snapshot(snapshot_slug, asof) if asof
+                else _read_snapshot(snapshot_slug))
+        if not snap:
+            result[panel_key] = {'label': label, 'items': [],
+                                  'available': False}
+            continue
+        raw_items = _snapshot_items_for_geo(snap, state, keywords=keywords)
+        items = [dict(it) for it in raw_items[:100] if isinstance(it, dict)]
+        for i, it in enumerate(items, 1):
+            it['rank'] = i
+        result[panel_key] = {
+            'label':      label,
+            'items':      items,
+            'available':  bool(items),
+            'fetched_at': snap.get('fetched_at'),
+        }
+        if snap.get('error'):
+            result[panel_key]['note'] = f"latest snapshot: {snap['error']}"
+    return result
+
+
 # ============================================================================
 # Card 6: Trending products by retailer
 # ============================================================================
@@ -12972,6 +13109,8 @@ def _compute_view_impl(filters: dict, force_refresh: bool = False) -> dict:
             'lens_scores':         lambda: _read_snapshot('lens_scores',        asof),
             'fast_trending':       lambda: _fetch_fast_trending(state, lookback_days,
                                                                   keywords=geo_kws, asof=asof),
+            'youtube_trending':    lambda: _fetch_youtube_trending(state, lookback_days,
+                                                                      keywords=geo_kws, asof=asof),
             # Streaming panel reads dated per-platform snapshots. The
             # Netflix archive spans back to 2026-01-01 (published
             # weekly Top 10 record); other platforms render for any
@@ -12995,6 +13134,8 @@ def _compute_view_impl(filters: dict, force_refresh: bool = False) -> dict:
                                                                    keywords=geo_kws),
             'gaming_trending':     lambda: _fetch_gaming_trending(state, lookback_days,
                                                                      keywords=geo_kws),
+            'youtube_trending':    lambda: _fetch_youtube_trending(state, lookback_days,
+                                                                      keywords=geo_kws),
             # Products by retailer removed from the dashboard 2026-07-28.
             # Aggregator + scrapers preserved in code so re-enabling is
             # a one-line change - just re-add the task here and the panel
@@ -13099,6 +13240,7 @@ def _compute_view_impl(filters: dict, force_refresh: bool = False) -> dict:
     # every helper it built for the Streaming panel.
     fast_trending      = results.get('fast_trending') or {}
     gaming_trending    = results.get('gaming_trending') or {}
+    youtube_trending   = results.get('youtube_trending') or {}
     # Products tab retired 2026-07-28; keep an empty list bound so the
     # payload contract (`cards.products_by_retailer` present + list-typed)
     # stays intact for any older cached frontend still deployed.
@@ -13354,6 +13496,10 @@ def _compute_view_impl(filters: dict, force_refresh: bool = False) -> dict:
     # estimate. Keyed `game:<norm_title>` in the estimates snapshot.
     _annotate_gaming_with_streams(gaming_trending, stream_estimates_snap)
     _annotate_gaming_with_rank_change(gaming_trending)
+    # YouTube: the row's number is YouTube's published view count, the
+    # order is YouTube's chart. Stamped as served, never reasoned.
+    _annotate_youtube_with_views(youtube_trending,
+                                 asof=asof if historic else None)
     # Books: pass BOTH the book_charts sub-dict (amazon/apple/audible)
     # AND the libby_trends sub-dict (ebook/audiobook) - a single item
     # can appear on both, and both share the same `book:<title
@@ -13627,6 +13773,7 @@ def _compute_view_impl(filters: dict, force_refresh: bool = False) -> dict:
             'streaming_trending':             streaming_trending,
             'fast_trending':                  fast_trending,
             'gaming_trending':                gaming_trending,
+            'youtube_trending':               youtube_trending,
             'broadway_trending':              broadway_trending,
             'broadway_week_ending':           broadway_week_ending,
             'products_by_retailer':           products,
@@ -13654,6 +13801,8 @@ def _compute_view_impl(filters: dict, force_refresh: bool = False) -> dict:
                                   for k, *_r in FAST_PLATFORMS),
             'gaming':        sum(_gaming_panel_count(gaming_trending.get(k) or {})
                                   for k, *_rest in GAMING_PLATFORMS),
+            'youtube':       sum(len(((youtube_trending.get(k) or {}).get('items') or []))
+                                  for k, *_rest in YOUTUBE_PLATFORMS),
             'music':         sum(len(((music_charts.get(k) or {}).get('items') or []))
                                   for k in ('spotify', 'apple', 'tiktok', 'shazam', 'amazon')),
             'podcasts':      sum(len(((podcast_charts.get(k) or {}).get('items') or []))

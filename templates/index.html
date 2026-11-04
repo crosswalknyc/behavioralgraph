@@ -71901,7 +71901,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // Steam). Talent Ranker leaderboard rows carry a person
             // kind when the name matches the scored set.
             fast:         'title',
-            gaming:       'game'
+            gaming:       'game',
+            // YouTube top videos score under the lens scorer's social
+            // kind (the scorer reads youtube_top_videos.json there).
+            youtube:      'social'
         };
 
         window.applyTrendsIQLens = function(from) {
@@ -72443,6 +72446,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                   tip: 'FAST channels: Top 100 titles on Roku Channel, Tubi, Pluto TV, and Amazon (ad-supported tier). Ranked by JustWatch US popularity, interleaved Film and TV.' },
                 { key: 'gaming',    label: 'Gaming',           count: counts.gaming    || 0, icon: '🎮',
                   tip: 'Gaming: Top games on Xbox Game Pass Ultimate (cloud-play popularity), Meta Quest Top Free and Top Paid (the store\'s own trending and revenue rails), and Steam Most Played and Top Sellers (Valve\'s 24-hour peak concurrent and weekly US revenue rails). PlayStation Plus and Nintendo Switch Online are on the roadmap.' },
+                { key: 'youtube',   label: 'YouTube',          count: counts.youtube   || 0, icon: '▶',
+                  tip: 'YouTube: The top videos in the United States on YouTube\'s own daily chart, in YouTube\'s order. The Views column is the view count YouTube publishes for each video; the change column compares it with yesterday\'s published count.' },
                 { key: 'watchlist', label: 'Watchlist',        count: watchCount,            icon: '★',
                   tip: 'Watchlist: The trends you have starred. Populates the daily digest email so you get pinged when anything on this list breaks out, drops off, or crosses a threshold you set.' },
             ];
@@ -72454,8 +72459,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // "Trends" shows search/news/retail tabs; "Rankers" shows
             // FAST / Music / Podcasts / Streaming / Gaming.
             var _tiqProduct = (window.__trendsIQ.product === 'rankers') ? 'rankers' : 'trends';
-            var _rankersOrder = ['fast', 'music', 'podcasts', 'streaming', 'gaming'];
-            var _rankersSet = { music: 1, podcasts: 1, streaming: 1, fast: 1, gaming: 1 };
+            var _rankersOrder = ['fast', 'music', 'podcasts', 'streaming', 'gaming', 'youtube'];
+            var _rankersSet = { music: 1, podcasts: 1, streaming: 1, fast: 1, gaming: 1, youtube: 1 };
             if (_tiqProduct === 'rankers') {
                 var _byKey = {}; tabs.forEach(function(t) { _byKey[t.key] = t; });
                 tabs = _rankersOrder.map(function(k) { return _byKey[k]; }).filter(Boolean);
@@ -72556,7 +72561,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         // payload, and only that panel repaints.
         var _TIQ_PANEL_KEYS = ['movers', 'headlines', 'searches', 'people', 'music', 'podcasts',
                                'books', 'comics', 'streaming', 'broadway', 'films', 'fast',
-                               'gaming', 'watchlist'];
+                               'gaming', 'youtube', 'watchlist'];
         function _tiqTabStates() {
             return window.__trendsIQ.tabState || (window.__trendsIQ.tabState = {});
         }
@@ -72650,6 +72655,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 case 'films':     return renderTIQFilms(cards.films_ticketing || {});
                 case 'fast':      return renderTIQFast(cards.fast_trending || {});
                 case 'gaming':    return renderTIQGaming(cards.gaming_trending || {});
+                case 'youtube':   return renderTIQYouTube(cards.youtube_trending || {});
                 case 'watchlist': return renderTIQWatchlist();
             }
             return '';
@@ -73290,6 +73296,28 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                      rows: rows };
         }
 
+        // YouTube top videos: rows stay in YouTube's chart order (the
+        // chart owns the order, no re-sort by value) and the Views cell
+        // is the count YouTube publishes for the video.
+        function _tiqExportRowsYouTube(dict, tabLabel) {
+            dict = dict || {};
+            var rows = [];
+            Object.keys(dict).forEach(function(k) {
+                var s = dict[k] || {};
+                if (!s.available) return;
+                var colLabel = s.label || k;
+                if (_tiqCardHidden('youtube-' + colLabel)) return;
+                (s.items || []).forEach(function(it, i) {
+                    rows.push(_tiqSheetRow(tabLabel, colLabel, it, i + 1, 'Views', {
+                        Channel: it.channel || '',
+                        URL: it.url || ''
+                    }));
+                });
+            });
+            return { cols: ['Tab', 'Section', 'Rank', 'Title', 'Channel', 'URL', 'Views', '\u0394%'],
+                     rows: rows };
+        }
+
         var _TIQ_LIST_COLS = ['Tab', 'Section', 'Rank', 'Title', 'Author',
                               'US Audience', 'Audience Unit', 'Audience Change'];
         function _tiqListRows(tabLabel, section, items, sorted, authorOf, keep) {
@@ -73441,6 +73469,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 case 'films':     return _tiqExportRowsFilms(cards, tabLabel);
                 case 'fast':      return _tiqExportRowsFast(cards.fast_trending, tabLabel);
                 case 'gaming':    return _tiqExportRowsGaming(cards.gaming_trending, tabLabel);
+                case 'youtube':   return _tiqExportRowsYouTube(cards.youtube_trending, tabLabel);
                 case 'watchlist': return _tiqExportRowsWatchlist(tabLabel);
                 default:          return { cols: [], rows: [] };
             }
@@ -73480,6 +73509,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             films:     'Films',
             fast:      'FAST',
             gaming:    'Gaming',
+            youtube:   'YouTube',
             watchlist: 'Watchlist'
         };
 
@@ -75297,7 +75327,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // Xbox is not the sort key — our US estimate often
             // disagrees, which used to ship CSVs whose Listeners /
             // Streams / Plays column was not descending.
-            rows = _tiqSortByDisplayedEstimate(rows);
+            // keepOrder: the list is the platform's own published chart
+            // (YouTube top videos), so its order stands as served.
+            if (!opts.keepOrder) rows = _tiqSortByDisplayedEstimate(rows);
             var rowsHtml = rows.map(function(it, i) {
                 var us = it.us_streams || {};
                 var estimate = Number(us.us_estimate);
@@ -75326,7 +75358,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var tipParts = [];
                 if (hasVal) {
                     tipParts.push(valNum + ' ' + (_tiqCleanUnit(us.unit_label) || metricLabel.toLowerCase()));
-                    tipParts.push('From our first party clickstream data.');
+                    tipParts.push(us.source_note || 'From our first party clickstream data.');
                     if (us.as_of_date) tipParts.push('As of ' + us.as_of_date);
                 }
                 var valTip = _tiqEsc(tipParts.join(' \u00b7 '));
@@ -77148,6 +77180,32 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             });
             if (typeof applyTrendsIQLens === 'function') applyTrendsIQLens();
         };
+
+        function renderTIQYouTube(yt) {
+            var allKeys = Object.keys(yt || {});
+            if (!allKeys.length) {
+                return '<div class="tiq-empty">YouTube rankings are warming up.</div>';
+            }
+            var order = ['youtube'];
+            var keys = order.filter(function(k) { return yt[k]; })
+                .concat(allKeys.filter(function(k) { return order.indexOf(k) === -1; }));
+            var cards = keys.map(function(k) {
+                var s = yt[k] || {};
+                var items = s.items || [];
+                var cid = 'youtube-' + (s.label || k);
+                if (!s.available || !items.length) {
+                    return _tiqSourceEmptyCard(cid, s.label || k, 'Loading.');
+                }
+                return _tiqSourceSheet({
+                    kind: 'youtube', source: 'youtube', label: s.label || k, rows: items,
+                    metricLabel: 'Views', entity: 'YouTube', wide: true, scroll: true, hideBtn: true,
+                    keepOrder: true,
+                    keyOf: function(it) { return it.title; },
+                    subOf: function(it) { return it.channel ? _tiqEsc(it.channel) : ''; }
+                });
+            }).join('');
+            return '<div class="tiq-cards-grid tiq-flat" style="grid-template-columns: 1fr;">' + cards + '</div>';
+        }
 
         function renderTIQProducts(retailers) {
             if (!retailers.length) return '<div class="tiq-empty">No retailer feeds returned data.</div>';
@@ -79244,7 +79302,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // (Music/Podcasts/Streaming/FAST/Gaming) keep all their
             // styling + state.
             window.__trendsIQ.product = 'rankers';
-            var _rOnly = ['music', 'podcasts', 'streaming', 'fast', 'gaming'];
+            var _rOnly = ['music', 'podcasts', 'streaming', 'fast', 'gaming', 'youtube'];
             if (_rOnly.indexOf(window.__trendsIQ.activeTab) < 0) window.__trendsIQ.activeTab = 'fast';
             if (typeof _trendsIQHideAllOtherViews === 'function') _trendsIQHideAllOtherViews();
             var view = document.getElementById('trendsIQView');
@@ -88283,7 +88341,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     out.headlines = c.headlines.slice(0, 6);
                 }
                 ['streaming_trending', 'fast_trending', 'gaming_trending',
-                 'social_trending', 'retail_trending'].forEach(function(k) {
+                 'youtube_trending', 'social_trending', 'retail_trending'].forEach(function(k) {
                     var g = c[k];
                     if (!g || typeof g !== 'object' || Array.isArray(g)) return;
                     var slim = {};

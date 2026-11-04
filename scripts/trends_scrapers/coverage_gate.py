@@ -82,7 +82,9 @@ _DEFAULT_FILTERS = {'geo_type': 'National', 'geo_value': '',
 _TITLE_KEYS = ('title', 'term', 'name', 'display_name', 'query', 'show',
                'channel_name', 'headline')
 _SKIP_CARD_KEYS = {'lens_config', 'lens_scores', 'lens_cutoffs'}
-_EXEMPT_PREFIXES = ('films_ticketing',)
+# youtube_trending carries YouTube's own published view counts
+# (est_basis='first_party') or nothing; never priced (2026-11-03).
+_EXEMPT_PREFIXES = ('films_ticketing', 'youtube_trending')
 _READER_PREFIXES = ('trending_headlines', 'articles_by_source',
                     'business_news', 'wall_street_news')
 
