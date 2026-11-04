@@ -157,6 +157,67 @@ class Desk(unittest.TestCase):
         self.assertEqual(plan2['kind'], 'poll')
         self.assertEqual(plan2['weight'], ROOM.ANCHOR_POLL_WEIGHT)
 
+    def test_the_stayed_home_row_is_found_however_it_is_worded(self):
+        # Jenna's live q3 (2026-11-04): 'Did not end up voting in this one' was not found and the count filled the whole room
+        self.assertTrue(ROOM.is_nonvote_label('Did not end up voting in this one'))
+        for lab in ['did not end up voting', "didn't vote", 'did not vote', 'never voted', 'stayed home', 'sat this one out', 'sat it out', 'skipped it',
+                    'did not make it to the polls', 'did not turn out', 'did not cast a ballot', 'no ballot', 'did not participate', 'not voting this time',
+                    'chose not to vote', 'Did not vote in this election', 'Did not cast a ballot in this election', 'Did not get a chance to vote',
+                    "Wasn't able to vote", 'Did not even bother to vote', 'Never made it to the polls', "Didn't show up", 'Did not go vote', 'Opted out this time',
+                    'Non-voter', 'Decided against voting', 'Stayed at home', 'Skipped this election', 'Did not see the point of voting']:
+            self.assertTrue(ROOM.is_nonvote_label(lab), lab)
+        for lab in ['Voted the ballot but left Senate blank', 'I voted for Ken Paxton', 'Ken Paxton, the Republican', 'James Talarico, the Democrat',
+                    'Someone else, third party or write-in', 'Not sure who I voted for', 'Did not go with either major party', 'Did not like either but voted Paxton',
+                    'Not Paxton, voted Talarico', 'Skipped the Senate race but voted the rest', 'Sat out the Senate race', 'Left the Senate line blank',
+                    'Did not vote for either, left it blank', 'Went with a third-party candidate', 'Voted, and would again']:
+            self.assertFalse(ROOM.is_nonvote_label(lab), lab)
+        q3 = [{'id': 'a', 'label': 'James Talarico, the Democrat', 'lean': 'other'}, {'id': 'b', 'label': 'Ken Paxton, the Republican', 'lean': 'other'},
+              {'id': 'c', 'label': 'Someone else, third party or write-in', 'lean': 'other'}, {'id': 'd', 'label': 'Voted the ballot but left Senate blank', 'lean': 'other'},
+              {'id': 'e', 'label': 'Did not end up voting in this one', 'lean': 'other'}]
+        self.assertEqual(ROOM.nonvote_option(q3), 'e')
+        self.assertEqual(ROOM.nonvote_option(q3, matched={'a', 'b'}), 'e')
+        # a candidate's row is never the stayed-home row, even when its label carries a negation
+        odd = [{'id': 'a', 'label': 'Did not vote Paxton, went Talarico', 'lean': 'other'}, {'id': 'b', 'label': 'Ken Paxton, the Republican', 'lean': 'other'},
+               {'id': 'e', 'label': 'Stayed home', 'lean': 'other'}]
+        self.assertEqual(ROOM.nonvote_option(odd, matched={'a', 'b'}), 'e')
+        # no label matches: the loose pick is a negated vote word, or a 'no' lean about voting; never a row that is not about not voting
+        loose = [{'id': 'a', 'label': 'Ken Paxton, the Republican', 'lean': 'other'}, {'id': 'b', 'label': 'James Talarico, the Democrat', 'lean': 'other'},
+                 {'id': 'c', 'label': 'Someone else, third party or write-in', 'lean': 'other'}, {'id': 'd', 'label': 'My vote never happened this year', 'lean': 'other'}]
+        self.assertIsNone(ROOM.nonvote_option(loose, matched={'a', 'b'}))
+        self.assertEqual(ROOM.nonvote_option(loose, matched={'a', 'b'}, loose=True), 'd')
+        self.assertIsNone(ROOM.nonvote_option([{'id': 'a', 'label': 'Yes, I voted', 'lean': 'yes'}, {'id': 'b', 'label': 'No', 'lean': 'no'}], loose=True))
+        self.assertEqual(ROOM.nonvote_option([{'id': 'a', 'label': 'Yes, I voted', 'lean': 'yes'}, {'id': 'b', 'label': 'No, my ballot stayed in the drawer', 'lean': 'no'}], loose=True), 'b')
+        self.assertIsNone(ROOM.nonvote_option([{'id': 'a', 'label': 'Ken Paxton', 'lean': 'other'}, {'id': 'b', 'label': 'Not sure', 'lean': 'other'}], loose=True))
+
+    def test_q3_as_the_moderator_coded_it_anchors_with_turnout(self):
+        q3 = [{'id': 'a', 'label': 'James Talarico, the Democrat', 'lean': 'other', 'pct': 40.1}, {'id': 'b', 'label': 'Ken Paxton, the Republican', 'lean': 'other', 'pct': 55.2},
+              {'id': 'c', 'label': 'Someone else, third party or write-in', 'lean': 'other', 'pct': 0.9}, {'id': 'd', 'label': 'Voted the ballot but left Senate blank', 'lean': 'other', 'pct': 0.8},
+              {'id': 'e', 'label': 'Did not end up voting in this one', 'lean': 'other', 'pct': 3.0}]
+        brief = ROOM.merge_media(dict(FACTS), ROOM._norm_media(json.loads(json.dumps(MEDIA))))
+        plan = ROOM.anchor_plan(q3, brief, 'civic')
+        self.assertEqual(plan['kind'], 'result')
+        self.assertAlmostEqual(plan['targets']['e'], 100.0 - 58.4, places=1, msg='stayed home is the whole electorate minus turnout')
+        self.assertAlmostEqual(plan['targets']['a'], 50.3 / 100 * 58.4, places=1, msg="a candidate's row is the count's share of the votes cast")
+        self.assertAlmostEqual(plan['targets']['b'], 47.9 / 100 * 58.4, places=1)
+        self.assertNotIn('c', plan['targets']); self.assertNotIn('d', plan['targets'])
+        self.assertEqual(plan['fill_voting'], 58.4)
+        self.assertNotIn('votes cast', plan['line'])
+        # the count carries no turnout: the twin's base turnout fills it
+        b1 = dict(brief, event=dict(brief['event'], turnout_pct=None))
+        plan1 = ROOM.anchor_plan(q3, b1, 'civic', turnout_fallback=61.2)
+        self.assertAlmostEqual(plan1['targets']['e'], 38.8, places=1)
+        self.assertAlmostEqual(plan1['targets']['a'], 50.3 / 100 * 61.2, places=1)
+        # the loose pick rides the same arithmetic
+        q3l = [dict(o) for o in q3]; q3l[4]['label'] = 'My vote never happened this year'
+        self.assertAlmostEqual(ROOM.anchor_plan(q3l, brief, 'civic')['targets']['e'], 41.6, places=1)
+        # no stayed-home option at all: the count's shares fill the room and the note says the split is of the votes cast
+        plan2 = ROOM.anchor_plan(q3[:4], brief, 'civic')
+        self.assertNotIn('e', plan2['targets'])
+        self.assertAlmostEqual(plan2['targets']['a'] + plan2['targets']['b'], 100.0, places=1)
+        self.assertIn('The published split is of the votes cast; the room had no stayed-home option.', plan2['line'])
+        self.assertIsNone(plan2['fill_voting'])
+        self.assertNotIn('votes cast', ROOM.anchor_plan(q3[:4], brief, 'title')['line'], 'the sentence is for civic rooms')
+
 
 class Room(unittest.TestCase):
     def _ask(self, q, fake=fake_model):
@@ -199,6 +260,33 @@ class Room(unittest.TestCase):
         for o in rec['options']:
             self.assertNotEqual(o['people'] % 10, 0, o['label'])
         self.assertIn('sits on the count', rec['trail']['prior']['note'])
+
+    def test_the_room_finds_the_stayed_home_row_as_the_moderator_worded_it(self):
+        # the live q3 of 2026-11-04: five options, the stayed-home one worded 'Did not end up voting in this one'
+        def fake(role, system, user, **kw):
+            d = json.loads(user)
+            if role == 'moderator' and 'supplied_options' in d:
+                return {'options': [{'id': 'a', 'label': 'James Talarico, the Democrat', 'lean': 'other'}, {'id': 'b', 'label': 'Ken Paxton, the Republican', 'lean': 'other'},
+                                    {'id': 'c', 'label': 'Someone else, third party or write-in', 'lean': 'other'}, {'id': 'd', 'label': 'Voted the ballot but left Senate blank', 'lean': 'other'},
+                                    {'id': 'e', 'label': 'Did not end up voting in this one', 'lean': 'other'}],
+                        'framing': 'Who did you vote for in the Senate race?', 'listen_for': ['the Musk money']}
+            if role == 'persona':
+                SEEN['persona'].append(d)
+                seat = int(SEATS.get(str(d['you']).split(',')[0].strip()) or 1)
+                return {'option': ('b' if seat % 3 else 'a'), 'line': 'As I said.', 'confidence': 4, 'reason': 'as said'}
+            return fake_model(role, system, user, **kw)
+        sess, rec = self._ask('who did you vote for for us senator today', fake)
+        self.assertEqual(rec['anchor']['kind'], 'result')
+        by = {o['label']: o for o in rec['options']}
+        tal, pax, home = by['James Talarico, the Democrat'], by['Ken Paxton, the Republican'], by['Did not end up voting in this one']
+        self.assertAlmostEqual(home['pct'], 41.6, delta=1.0, msg='the stayed-home row is the electorate minus turnout')
+        self.assertAlmostEqual(tal['pct'], 50.3 / 100 * 58.4, delta=1.0, msg='a candidate reads as a share of the whole electorate, not of the votes cast')
+        self.assertAlmostEqual(pax['pct'], 47.9 / 100 * 58.4, delta=1.0)
+        self.assertLess(tal['people'], 6_000_000, 'about 5.5M votes for Talarico, not 10M')
+        self.assertAlmostEqual(rec['anchor']['targets']['Did not end up voting in this one'], 41.6, places=1)
+        self.assertEqual(pax['seats_n'], 8, 'the seats keep their votes')
+        self.assertEqual(sum(o['people'] for o in rec['options']), 18_623_931)
+        self.assertNotIn('votes cast', rec['trail']['prior']['note'])
 
     def test_before_the_count_the_poll_leans_two_to_one(self):
         def fake(role, system, user, **kw):

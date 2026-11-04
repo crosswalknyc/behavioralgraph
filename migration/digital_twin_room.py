@@ -2039,8 +2039,61 @@ _PARTY_RX = [(re.compile(r"\((?:r|rep|gop|republican)\)", re.I), ' republican ')
 _LABEL_STOP = {'the', 'a', 'an', 'of', 'for', 'and', 'or', 'to', 'in', 'on', 'candidate', 'candidates', 'vote', 'voted', 'voting', 'today', 'party', 'ticket', 'side', 'option',
                'measure', 'proposition', 'prop', 'race', 'us', 'u', 's', 'senate', 'senator', 'governor', 'house', 'seat', 'nominee', 'incumbent', 'challenger', 'mr', 'ms', 'mrs'}
 _GENERIC_LABEL = {'republican', 'democrat', 'democratic', 'independent', 'libertarian', 'green', 'yes', 'no', 'other', 'another', 'write', 'blank', 'none'}
-_NONVOTE_RX = re.compile(r"\b(?:did not|didn'?t|not) (?:cast|vote|turn out|make it|go)\b|\bno ballot\b|\bstayed home\b|\bsat (?:this|it) out\b|\bskipped (?:it|the election|voting)\b|\bdid not cast a ballot\b", re.I)
-_BLANK_RX = re.compile(r"\bleft (?:it|the race|this race|the \w+ race) blank\b|\bblank\b|\bwrite-?in\b|\banother candidate\b|\bsomeone else\b|\bthird party\b", re.I)
+# The stayed-home row, however the moderator words it (Jenna 2026-11-04: 'Did
+# not end up voting in this one' was not found, the count filled the whole
+# room and Talarico read 54.6% of 18.6M registered voters). A negation, up to
+# three filler words that do not turn the sentence ('but', 'and'), then the
+# verb family: vote / voting / voted / cast / turn out / make it / go /
+# participate / show up. Plus the set phrases: stayed home, sat it out,
+# skipped it, no ballot, non-voter. 'I voted for ...' has no negation and
+# 'Voted the ballot but left Senate blank' is the blank row (_BLANK_RX).
+_NONVOTE_NEG = r"(?:did\s*not|didn'?t|do\s*not|don'?t|does\s*not|doesn'?t|could\s*not|couldn'?t|would\s*not|wouldn'?t|was\s*not|wasn'?t|never|not|chose\s+not\s+to|decided\s+not\s+to|decided\s+against|unable\s+to|failed\s+to|without)"
+# up to three filler words, none of which turns the sentence ('but voted'), asks a question ('who I voted for') or hedges ('sure')
+_NONVOTE_FILL = r"(?:(?!(?:but|and|yet|still|however|though|although|then|so|sure|who|whom|which|what|how|if|whether|know)\b)[\w'-]+\s+){0,3}?(?:(?:to|in|of|on)\s+)?"
+_NONVOTE_VERB = (r"(?:vot(?:e|ed|es|ing)|cast(?:ing)?|turn(?:ed|ing)?\s+out|ma(?:ke|de|king)\s+it|(?:go|went|going)(?!\s+(?:with|for|along|against|behind|back|near|all|big))"
+                 r"|participat(?:e|ed|ing)|show(?:ed|ing|n)?\s+up)")
+_NONVOTE_RX = re.compile(
+    r"\b" + _NONVOTE_NEG + r"\s+" + _NONVOTE_FILL + _NONVOTE_VERB + r"\b"
+    r"|\bno\s+(?:ballot|vote)s?\b|\bstay(?:ed|ing|s)?\s+(?:at\s+)?home\b|\bs(?:at|it|itting)\s+(?:this|it|that)(?:\s+one)?\s+out\b"
+    r"|\bs(?:at|it|itting)\s+out\b(?!\s+(?:the|that|this)\s+(?:\w+\s+)?(?:race|line|contest|seat))"
+    r"|\bskipp?(?:ed|ing|s)?\s+(?:it|this\s+one|that\s+one|the\s+election|this\s+election|voting|the\s+vote|the\s+whole\s+thing|the\s+polls)\b"
+    r"|\bopted\s+out\b|\bnon-?\s?vot(?:er|ers|ing)\b|\bnot\s+a\s+voter\b|\bmissed\s+(?:it|the\s+election|the\s+vote|voting)\b|\bno-?\s?shows?\b",
+    re.I)
+_BLANK_RX = re.compile(
+    r"\bleft (?:it|the race|this race|that race|the \w+ race|the \w+ line|that one|this one) (?:blank|empty)\b|\bblank\b|\bwrite-?\s?ins?\b|\banother candidate\b|\bsomeone else\b"
+    r"|\bthird[\s-]party\b|\bundervot|\b(?:skipped|sat\s+out|passed\s+on)\s+(?:the|that|this)\s+(?:\w+\s+)?(?:race|line|contest|seat)\b", re.I)
+_NEGATION_RX = re.compile(r"\b(?:not|never|none|without|neither|nor)\b|\b(?:did|does|do|could|would|should|was|were|is|are|has|have|had|ca|wo|ai)n'?t\b", re.I)
+_VOTE_WORD_RX = re.compile(r"\bvot(?:e|ed|es|er|ers|ing)\b|\bballots?\b|\bpolls\b|\bturn(?:ed)?\s+out\b|\bturnout\b", re.I)
+
+
+def is_nonvote_label(label: str) -> bool:
+    """True when an option's label means the person did not vote at all
+    (stayed home), not a blank line or a vote for someone else."""
+    s = str(label or '')
+    return bool(_NONVOTE_RX.search(s)) and not _BLANK_RX.search(s)
+
+
+def nonvote_option(options: list, matched: Optional[set] = None, loose: bool = False) -> Optional[str]:
+    """The id of the stayed-home option, or None. An option the count
+    already landed on (a candidate's row) is never it, nor is the blank
+    row. `loose` (only when the event happened and turnout is known): an
+    option whose label is about voting with a negation anywhere, or a
+    'no' lean whose label is about voting; never a row that is not about
+    not voting."""
+    skip = set(matched or ())
+    rows = [o for o in options or [] if o.get('id') and o['id'] not in skip]
+    for o in rows:
+        if is_nonvote_label(o.get('label')):
+            return o['id']
+    if not loose:
+        return None
+    for o in rows:
+        lab, lean = str(o.get('label') or ''), str(o.get('lean') or '').lower()
+        if lean == 'yes' or _BLANK_RX.search(lab) or not _VOTE_WORD_RX.search(lab):
+            continue
+        if _NEGATION_RX.search(lab) or lean == 'no':
+            return o['id']
+    return None
 
 
 def _label_tokens(label: str) -> set:
@@ -2092,15 +2145,20 @@ def anchor_plan(options: list, brief: dict, klass: str = '', turnout_fallback: O
     event anchors hard; a poll before the event blends two to one."""
     ev = (brief or {}).get('event') or {}
     results = [r for r in (ev.get('results') or []) if isinstance(r, dict) and str(r.get('status') or '') in ('final', 'called', 'projected')]
-    nonvote = next((o['id'] for o in options if _NONVOTE_RX.search(str(o.get('label') or ''))), None)
     turnout = ev.get('turnout_pct') or turnout_fallback   # the count's own turnout, else the twin's base (registered to voted)
+    try:
+        turnout_ok = bool(turnout) and 20.0 <= float(turnout) <= 95.0
+    except (TypeError, ValueError):
+        turnout_ok = False
     if str(ev.get('status') or '') == 'happened' and results:
         m = match_targets(options, results)
         if m:
+            # the stayed-home row: by its label, else (the event happened, turnout is known) by a negated vote word or a 'no' lean; never a candidate's row
+            nonvote = nonvote_option(options, matched=set(m), loose=bool(klass == 'civic' and turnout_ok))
             tot = sum(m.values()) or 1.0
             voting = 100.0
             targets = {}
-            if klass == 'civic' and nonvote and turnout and 20.0 <= float(turnout) <= 95.0:
+            if klass == 'civic' and nonvote and turnout_ok:
                 targets[nonvote] = round(100.0 - float(turnout), 2)
                 voting = float(turnout)
                 targets.update({k: round(v / 100.0 * voting, 2) for k, v in m.items()})     # the count's shares are of the votes cast
@@ -2108,8 +2166,11 @@ def anchor_plan(options: list, brief: dict, klass: str = '', turnout_fallback: O
                 targets.update({k: round(v / tot * voting, 2) for k, v in m.items()})
             parts = ', '.join(f"{next((o['label'] for o in options if o['id'] == k), k)} {round(float(m[k]), 1)}%" for k in m)
             status = results[0].get('status') or 'called'
-            return {'kind': 'result', 'targets': targets, 'weight': None, 'fill_voting': (voting if nonvote in targets else None),
-                    'line': f"The published split sits on the count ({parts}; {status}). The seats are twelve people and keep their votes; say what they show that the count does not."}
+            line = f"The published split sits on the count ({parts}; {status})."
+            if klass == 'civic' and not nonvote:
+                line += " The published split is of the votes cast; the room had no stayed-home option."
+            line += " The seats are twelve people and keep their votes; say what they show that the count does not."
+            return {'kind': 'result', 'targets': targets, 'weight': None, 'fill_voting': (voting if nonvote in targets else None), 'line': line}
     polls = (brief or {}).get('polls') or []
     if polls and str(ev.get('status') or '') in ('upcoming', 'today', 'none'):
         m = match_targets(options, polls)
