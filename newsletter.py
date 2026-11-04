@@ -101,13 +101,33 @@ def _ses_client():
     return _ses
 
 
+def _signing_secrets() -> list:
+    """Ordered candidate signing secrets. Signing uses the first one.
+
+    Verification accepts ANY of them (verify_token loops) because tracking
+    tokens can be minted on a host whose environment differs from the host
+    that serves /n/o /n/c /n/u. The 2026-11-04 Digital Twins send was
+    signed on a machine with no SECRET_KEY (legacy fallback), while the
+    public host verifies with its own SECRET_KEY; without the loop every
+    open and click bounced off signature verification and was dropped.
+    The legacy constant stays accepted so links in already-sent emails
+    keep tracking and unsubscribing.
+    """
+    out = []
+    for raw in (
+        os.environ.get("NEWSLETTER_SIGNING_SECRET"),
+        os.environ.get("SECRET_KEY"),
+        "crosswalk-newsletter-dev",
+    ):
+        if raw:
+            enc = raw.encode("utf-8")
+            if enc not in out:
+                out.append(enc)
+    return out
+
+
 def _signing_secret() -> bytes:
-    raw = (
-        os.environ.get("NEWSLETTER_SIGNING_SECRET")
-        or os.environ.get("SECRET_KEY")
-        or "crosswalk-newsletter-dev"
-    )
-    return raw.encode("utf-8")
+    return _signing_secrets()[0]
 
 
 def _public_base(settings=None) -> str:
@@ -182,13 +202,14 @@ def verify_token(token: str):
         body, sig = raw.rsplit("|", 1)
     except Exception:
         return None
-    expect = hmac.new(_signing_secret(), body.encode("utf-8"), hashlib.sha256).hexdigest()[:24]
-    if not hmac.compare_digest(sig, expect):
-        return None
-    try:
-        return json.loads(body)
-    except Exception:
-        return None
+    for secret in _signing_secrets():
+        expect = hmac.new(secret, body.encode("utf-8"), hashlib.sha256).hexdigest()[:24]
+        if hmac.compare_digest(sig, expect):
+            try:
+                return json.loads(body)
+            except Exception:
+                return None
+    return None
 
 
 # ---------------------------------------------------------------------------
