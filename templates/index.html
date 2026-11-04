@@ -72731,7 +72731,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 { key: 'gaming',    label: 'Gaming',           count: counts.gaming    || 0, icon: '🎮',
                   tip: 'Gaming: Top games on Xbox Game Pass Ultimate (cloud-play popularity), Meta Quest Top Free and Top Paid (the store\'s own trending and revenue rails), and Steam Most Played and Top Sellers (Valve\'s 24-hour peak concurrent and weekly US revenue rails). PlayStation Plus and Nintendo Switch Online are on the roadmap.' },
                 { key: 'youtube',   label: 'YouTube',          count: counts.youtube   || 0, icon: '▶',
-                  tip: 'YouTube: The top videos in the United States on YouTube\'s own daily chart, in YouTube\'s order. The Views column is the view count YouTube publishes for each video; the change column compares it with yesterday\'s published count.' },
+                  tip: 'YouTube: The top videos in the United States on YouTube\'s own daily chart, in YouTube\'s order. Pick a content type to switch to YouTube\'s own chart for that category. The Views column is the view count YouTube publishes for each video; the change column compares it with yesterday\'s published count.' },
                 { key: 'watchlist', label: 'Watchlist',        count: watchCount,            icon: '★',
                   tip: 'Watchlist: The trends you have starred. Populates the daily digest email so you get pinged when anything on this list breaks out, drops off, or crosses a threshold you set.' },
             ];
@@ -73591,7 +73591,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (!s.available) return;
                 var colLabel = s.label || k;
                 if (_tiqCardHidden('youtube-' + colLabel)) return;
-                (s.items || []).forEach(function(it, i) {
+                var sel = _tiqYouTubeSelected(s);
+                if (sel.key !== 'all' && sel.label) colLabel = colLabel + ': ' + sel.label;
+                (sel.items || []).forEach(function(it, i) {
                     rows.push(_tiqSheetRow(tabLabel, colLabel, it, i + 1, 'Views', {
                         Channel: it.channel || '',
                         URL: it.url || ''
@@ -77465,6 +77467,20 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             if (typeof applyTrendsIQLens === 'function') applyTrendsIQLens();
         };
 
+        // The content sorter. 'all' is YouTube's overall US chart; any
+        // other key is one of YouTube's own per-category Most Popular
+        // charts, carried in YouTube's order with YouTube's published
+        // view counts. The pill swaps charts; it never filters the
+        // overall list (which some days holds a single Sports row).
+        function _tiqYouTubeSelected(panel) {
+            var want = (window.__trendsIQ && window.__trendsIQ.youtubeChart) || 'all';
+            var charts = (panel && panel.charts) || [];
+            if (want === 'all') return { key: 'all', label: '', items: (panel && panel.items) || [] };
+            for (var i = 0; i < charts.length; i++) {
+                if (charts[i].key === want) return charts[i];
+            }
+            return { key: 'all', label: '', items: (panel && panel.items) || [] };
+        }
         function renderTIQYouTube(yt) {
             var allKeys = Object.keys(yt || {});
             if (!allKeys.length) {
@@ -77480,8 +77496,24 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (!s.available || !items.length) {
                     return _tiqSourceEmptyCard(cid, s.label || k, 'Loading.');
                 }
-                return _tiqSourceSheet({
-                    kind: 'youtube', source: 'youtube', label: s.label || k, rows: items,
+                var charts = s.charts || [];
+                var sel = _tiqYouTubeSelected(s);
+                var pills = '';
+                if (charts.length) {
+                    var all = [{ key: 'all', label: 'All' }].concat(charts);
+                    pills = '<div class="tiq-retailer-tabs" data-tiq-youtube-pills="1">' + all.map(function(c) {
+                        var active = (c.key === sel.key) ? ' active' : '';
+                        return '<div class="tiq-retailer-tab' + active + '" data-tiq-youtube-chart="' + _tiqEsc(c.key) + '"' +
+                               ' onclick="setTrendsIQYouTubeChart(\'' + _tiqEsc(c.key) + '\')">' +
+                               '<span>' + _tiqEsc(c.label) + '</span></div>';
+                    }).join('') + '</div>';
+                }
+                if (sel.key !== 'all' && sel.label) {
+                    pills += '<div class="tiq-sheet-note" style="margin:-0.35rem 0 0.6rem 0.15rem;font-size:0.78rem;opacity:0.75;">' +
+                             'YouTube\u2019s ' + _tiqEsc(sel.label) + ' chart, in YouTube\u2019s order. ' + (sel.items || []).length + ' videos.</div>';
+                }
+                return pills + _tiqSourceSheet({
+                    kind: 'youtube', source: 'youtube', label: s.label || k, rows: sel.items || [],
                     metricLabel: 'Views', entity: 'YouTube', wide: true, scroll: true, hideBtn: true,
                     keepOrder: true,
                     keyOf: function(it) { return it.title; },
@@ -77538,6 +77570,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             return '<div class="tiq-retailer-tabs">' + tabs + '</div>' + panels;
         }
 
+        window.setTrendsIQYouTubeChart = function(key) {
+            window.__trendsIQ.youtubeChart = key || 'all';
+            if (typeof _tiqRepaintPanel === 'function') _tiqRepaintPanel('youtube');
+        };
         window.setTrendsIQRetailer = function(key) {
             window.__trendsIQ.activeRetailer = key;
             var retailers = (window.__trendsIQ.lastData && window.__trendsIQ.lastData.cards && window.__trendsIQ.lastData.cards.products_by_retailer) || [];

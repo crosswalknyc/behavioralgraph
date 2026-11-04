@@ -6704,13 +6704,22 @@ def _annotate_youtube_with_views(youtube_trending: dict,
     for panel_key, _label, _d, slug, _spec in YOUTUBE_PLATFORMS:
         panel = youtube_trending.get(panel_key) or {}
         items = panel.get('items') or []
-        if not items:
+        charts = panel.get('charts') or []
+        if not items and not charts:
             continue
+        # Yesterday's published count per video, pooled across the
+        # overall chart and every category chart: the count is the
+        # video's, whichever list it sat on.
         prev_views: dict[str, int] = {}
         try:
             prev_snap = _read_snapshot(slug, asof=prev_iso)
-            for p in (_snapshot_items_for_geo(prev_snap, None)
-                      if prev_snap else []):
+            prev_rows: list = []
+            if prev_snap:
+                prev_rows.extend(_snapshot_items_for_geo(prev_snap, None))
+                for ch in (prev_snap.get('category_charts') or []):
+                    if isinstance(ch, dict):
+                        prev_rows.extend(ch.get('items') or [])
+            for p in prev_rows:
                 if not isinstance(p, dict):
                     continue
                 k = _youtube_row_key(p)
@@ -6722,7 +6731,11 @@ def _annotate_youtube_with_views(youtube_trending: dict,
                     prev_views[k] = v
         except Exception:
             logger.exception('youtube prior-day read failed (non-fatal)')
-        for row in items:
+        all_rows = list(items)
+        for ch in charts:
+            if isinstance(ch, dict):
+                all_rows.extend(ch.get('items') or [])
+        for row in all_rows:
             total += 1
             try:
                 views = int(row.get('views') or 0)
@@ -12554,9 +12567,26 @@ def _fetch_youtube_trending(state: Optional[str], lookback_days: int,
         items = [dict(it) for it in raw_items[:100] if isinstance(it, dict)]
         for i, it in enumerate(items, 1):
             it['rank'] = i
+        # YouTube's own per-category Most Popular charts (the content
+        # sorter, 2026-11-03). Each is a separate chart YouTube
+        # publishes, carried in the chart's own order; the tab's pills
+        # swap between them and the overall list. Never a filter of
+        # the overall 100, which some days holds one Sports row.
+        charts: list[dict] = []
+        for ch in (snap.get('category_charts') or []):
+            if not isinstance(ch, dict) or not ch.get('items'):
+                continue
+            rows = [dict(it) for it in ch['items'] if isinstance(it, dict)]
+            for i, it in enumerate(rows, 1):
+                it['rank'] = i
+            charts.append({'key':   str(ch.get('key') or ch.get('category_id')),
+                           'label': ch.get('label') or '',
+                           'category_id': str(ch.get('category_id') or ''),
+                           'items': rows})
         result[panel_key] = {
             'label':      label,
             'items':      items,
+            'charts':     charts,
             'available':  bool(items),
             'fetched_at': snap.get('fetched_at'),
         }
