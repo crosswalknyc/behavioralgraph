@@ -101,9 +101,58 @@ def _ses_client():
     return _ses
 
 
+SIGNING_SECRET_KEY = "system/newsletter/signing_secret.json"
+_shared_secret_cache = {"val": None}
+
+
+def _shared_signing_secret():
+    """The one signing secret every process shares.
+
+    It lives next to the newsletter data itself (S3), minted once and then
+    immutable, so the machine that signs a token and the machine that
+    verifies it can never disagree, whatever their environments hold. Any
+    process that can run a send already has this S3 access (recipients and
+    campaign HTML live in the same bucket), so the secret is available by
+    construction wherever signing happens.
+    """
+    cached = _shared_secret_cache.get("val")
+    if cached:
+        return cached
+    try:
+        doc = _get_json(SIGNING_SECRET_KEY) or {}
+        secret = (doc.get("secret") or "").strip()
+        if not secret:
+            import secrets as _pysecrets
+            fresh = _pysecrets.token_hex(32)
+
+            def _mint(obj):
+                if isinstance(obj, dict) and (obj.get("secret") or "").strip():
+                    return None  # another instance minted first; keep theirs
+                return {"secret": fresh, "created_at": _utcnow()}
+
+            try:
+                try:
+                    from s3_json_state import update_json
+                except ImportError:
+                    from migration.s3_json_state import update_json  # type: ignore
+                update_json(S3_BUCKET, SIGNING_SECRET_KEY, _mint, default={})
+            except Exception:
+                _put_json(SIGNING_SECRET_KEY, {"secret": fresh, "created_at": _utcnow()})
+            doc = _get_json(SIGNING_SECRET_KEY) or {}
+            secret = (doc.get("secret") or "").strip()
+        if secret:
+            _shared_secret_cache["val"] = secret.encode("utf-8")
+            return _shared_secret_cache["val"]
+    except Exception:
+        traceback.print_exc()
+    return None
+
+
 def _signing_secrets() -> list:
     """Ordered candidate signing secrets. Signing uses the first one.
 
+    The shared S3-stored secret leads, so every signer and every verifier
+    agree on the same first candidate regardless of environment.
     Verification accepts ANY of them (verify_token loops) because tracking
     tokens can be minted on a host whose environment differs from the host
     that serves /n/o /n/c /n/u. The 2026-11-04 Digital Twins send was
@@ -114,6 +163,9 @@ def _signing_secrets() -> list:
     keep tracking and unsubscribing.
     """
     out = []
+    shared = _shared_signing_secret()
+    if shared:
+        out.append(shared)
     for raw in (
         os.environ.get("NEWSLETTER_SIGNING_SECRET"),
         os.environ.get("SECRET_KEY"),
@@ -2119,6 +2171,117 @@ def _claim_send(campaign_id, list_id=None, emails=None, scheduled=False, segment
     return recips, None
 
 
+OPS_ALERT_TO = ["jenna@crosswalknyc.com", "jessie@crosswalknyc.com"]
+TRACKING_WATCH_MIN_SENT = 25
+TRACKING_WATCH_AFTER_SECS = 45 * 60
+TRACKING_WATCH_WINDOW_SECS = 7 * 24 * 3600
+
+
+def _ops_alert_once(campaign_id, kind, body_text):
+    """One ops email per campaign per condition, to Jenna + Jessie only."""
+    flag = f"ops_alert_{kind}_at"
+    fired = {"send": False}
+
+    def mutate(st):
+        c = _campaign(st, campaign_id)
+        if not c or c.get(flag):
+            fired["send"] = False
+            return None
+        c[flag] = _utcnow()
+        fired["send"] = True
+        return st
+
+    try:
+        _cas_update_state(mutate)
+    except Exception:
+        traceback.print_exc()
+    if not fired["send"]:
+        return False
+    try:
+        _ses().send_email(
+            Source="Crosswalk <jenna@crosswalknyc.com>",
+            Destination={"ToAddresses": list(OPS_ALERT_TO)},
+            Message={
+                "Subject": {"Data": "Newsletter engagement recording needs a look"},
+                "Body": {"Text": {"Data": (
+                    body_text
+                    + "\n\nThis is an automated check from the newsletter service."
+                )}},
+            },
+        )
+    except Exception:
+        traceback.print_exc()
+    return True
+
+
+def _tracking_probe(base, campaign_id):
+    """Ask the public host to verify a token this process just signed.
+
+    Proves end to end, before any copy goes out, that the opens and clicks
+    from this send will be accepted when they arrive. The 2026-11-04
+    Digital Twins send went out with signatures the public host rejected,
+    so engagement sat at zero until the verifier was widened; this check
+    turns that silent failure into a loud one.
+    """
+    token = sign_token({"p": "k", "c": campaign_id, "ts": _utcnow()})
+    url = f"{base}/n/ok/{token}"
+    try:
+        import urllib.request
+        req = urllib.request.Request(
+            url, headers={"User-Agent": "crosswalk-newsletter-selfcheck"},
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            body = resp.read(8).decode("ascii", "ignore")
+            return resp.status == 200 and body.startswith("ok")
+    except Exception as e:
+        print(f"newsletter tracking probe error {campaign_id}: {e}")
+        return False
+
+
+def _watch_dead_tracking():
+    """Page ops when a finished send still shows zero engagement.
+
+    A send to 25+ people that has recorded not one open and not one click
+    45 minutes after finishing means recording is down for that send, not
+    that nobody opened it. Catches every silent failure in the chain,
+    whatever the cause. One email per campaign, to Jenna + Jessie.
+    """
+    state = load_state_raw()
+    now = datetime.now(timezone.utc)
+    for camp in state.get("campaigns") or []:
+        if camp.get("status") != "sent" or camp.get("ops_alert_dead_tracking_at"):
+            continue
+        sent_at = camp.get("sent_at") or ""
+        try:
+            done = datetime.fromisoformat(sent_at.replace("Z", "+00:00"))
+        except Exception:
+            continue
+        if done.tzinfo is None:
+            done = done.replace(tzinfo=timezone.utc)
+        age = (now - done).total_seconds()
+        if age < TRACKING_WATCH_AFTER_SECS or age > TRACKING_WATCH_WINDOW_SECS:
+            continue
+        quick = camp.get("stats") or {}
+        if (quick.get("opens") or 0) > 0 or (quick.get("clicks") or 0) > 0:
+            continue
+        cid = camp.get("id")
+        try:
+            stats = _stats_from_snapshot(get_send_snapshot(cid))
+        except Exception:
+            continue
+        if (stats.get("sent") or 0) < TRACKING_WATCH_MIN_SENT:
+            continue
+        if (stats.get("opens") or 0) > 0 or (stats.get("clicks") or 0) > 0:
+            continue
+        _ops_alert_once(
+            cid, "dead_tracking",
+            f"\"{camp.get('name') or cid}\" finished sending to "
+            f"{stats.get('sent')} people over 45 minutes ago and not one open "
+            f"or click has been recorded. That pattern means engagement "
+            f"recording is down for this send, not that nobody opened it.",
+        )
+
+
 def _run_send(campaign_id):
     result = {"sent": 0, "failed": 0, "errors": []}
     owner = _acquire_send_lease(campaign_id)
@@ -2155,6 +2318,25 @@ def _run_send(campaign_id):
             return current
 
         _update_send_snapshot(campaign_id, _set_links)
+
+        # Signature self-check against the public host before the first
+        # copy goes out. A failure never blocks the send (tokens are
+        # verified at open time, hours later, so a transient miss here
+        # does not doom the send's engagement); it pages ops instead.
+        probe_ok = False
+        for _attempt in range(3):
+            if _tracking_probe(base, campaign_id):
+                probe_ok = True
+                break
+            time.sleep(5)
+        if not probe_ok:
+            _ops_alert_once(
+                campaign_id, "probe",
+                f"Open and click recording could not be confirmed before the "
+                f"\"{camp.get('name') or campaign_id}\" send started. The send "
+                f"is going out; engagement recording needs a look now.",
+            )
+
         delivered = set()
         n = 0
         for email, row in recips.items():
@@ -2474,6 +2656,10 @@ def start_scheduler():
         while True:
             try:
                 _kick_due_sends()
+            except Exception:
+                traceback.print_exc()
+            try:
+                _watch_dead_tracking()
             except Exception:
                 traceback.print_exc()
             time.sleep(30)
@@ -3584,6 +3770,16 @@ def api_upload_attachment(cid):
 # Public tracking + assets + preview
 # ---------------------------------------------------------------------------
 
+@newsletter_bp.route("/n/ok/<token>")
+def tracking_probe_ok(token):
+    """Senders call this before a send starts to prove this host will
+    accept their signatures. Returns ok for a valid probe token."""
+    payload = verify_token(token)
+    if payload and payload.get("p") == "k":
+        return Response("ok", mimetype="text/plain")
+    return Response("no", mimetype="text/plain", status=410)
+
+
 @newsletter_bp.route("/n/o/<token>.gif")
 @newsletter_bp.route("/n/o/<token>")
 def track_open(token):
@@ -3593,6 +3789,8 @@ def track_open(token):
             _record_engagement(payload.get("c"), payload.get("e"), "open")
         except Exception:
             traceback.print_exc()
+    elif token:
+        print("newsletter tracking token rejected on /n/o")
     return Response(
         TRANSPARENT_GIF,
         mimetype="image/gif",
@@ -3607,6 +3805,8 @@ def track_open(token):
 def track_click(token):
     payload = verify_token(token)
     dest = DEFAULT_PUBLIC_BASE
+    if not payload and token:
+        print("newsletter tracking token rejected on /n/c")
     if payload and payload.get("p") == "c":
         snap = get_send_snapshot(payload.get("c") or "")
         links = snap.get("links") or []
