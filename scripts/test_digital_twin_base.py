@@ -132,6 +132,47 @@ class Build(unittest.TestCase):
         text = ROOM._card_text(card)
         self.assertIn('keeps the lights on', text)
 
+    def test_bios_speak_the_subjects_language(self):
+        # Jenna 2026-11-03: 'Paramount+ is a streaming platform, not a show; you would not have Paramount+ merch or
+        # DVDs'. The persona vocabulary follows what the twin is built around: a service is subscribed to and kept,
+        # a brand is bought, a creator is followed, a title is watched; a title keeps its mugs and box sets.
+        from scripts.test_digital_twin_pilot import _beals
+        base = _beals()
+        base['traits']['merch_propensity'] = {'value': 70}
+        base['traits']['franchise_loyalty'] = {'value': 71.4}
+        base['lifecycle'] = {'habit_pct': 100, 'discovering_pct': 0, 'trying_pct': 0, 'lapsing_pct': 0, 'returning_pct': 0}
+        seat = {'seat': 1, 'name': 'Jasmine', 'age': 70, 'gender': 'F', 'city': 'New York', 'orientation': 'Lesbian'}
+
+        def twin(name, kind, fmt, home=''):
+            t = dict(base); t['meta'] = dict(base['meta'], name=name, subject=name, subject_kind=kind, format=fmt, platform_home=home, franchise_stage='established')
+            return t
+        plat = twin('Paramount+', 'audience', 'brand', 'Paramount+')
+        self.assertEqual(ROOM.subject_class(plat), 'platform')
+        bio = ROOM.persona_card(plat, seat, 's1')['bio']
+        for bad in ('DVD', 'mug', 'box set', 'original run', 'rewatches it', 'knows the episodes', 'show merchandise', 'disc'):
+            self.assertNotIn(bad, bio, bio)
+        self.assertIn('has had Paramount+ for years', bio)
+        self.assertIn('first stop', bio)
+        self.assertIn('top plan', bio)
+        brand = twin('Go-GURT', 'brand', 'brand')
+        self.assertEqual(ROOM.subject_class(brand), 'brand')
+        bio = ROOM.persona_card(brand, seat, 's1')['bio']
+        self.assertIn('has bought Go-GURT for years', bio)
+        self.assertNotIn('DVD', bio); self.assertNotIn('mug', bio)
+        creator = twin('Mark Rober', 'audience', 'creator', 'YouTube')
+        self.assertEqual(ROOM.subject_class(creator), 'talent')
+        bio = ROOM.persona_card(creator, seat, 's1')['bio']
+        self.assertIn('has followed Mark Rober for years', bio)
+        self.assertIn('puts out', bio)
+        self.assertNotIn('DVD', bio)
+        title = twin('Yellowstone', 'ip', 'series', 'Paramount+')
+        self.assertEqual(ROOM.subject_class(title), 'title')
+        bio = ROOM.persona_card(title, seat, 's1')['bio']
+        self.assertIn('Yellowstone', bio)
+        self.assertTrue('original run' in bio or 'for years' in bio, bio)
+        self.assertTrue('mug' in bio or 'DVD' in bio, bio)   # a title keeps its merchandise and its shelf copy
+        self.assertEqual(ROOM.subject_class(twin('Protein Enthusiasts', 'audience', '')), 'audience')
+
     def test_a_title_twin_is_untouched(self):
         import unittest.mock as mock
         research = {'format': 'series', 'franchise_stage': 'legacy', 'ip_related': True, 'us_fans_estimate': 9_400_000, 'avid_share_pct': 18, 'platform_home': 'Netflix',

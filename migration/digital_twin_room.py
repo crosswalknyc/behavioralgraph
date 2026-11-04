@@ -507,6 +507,59 @@ def _level(v, lo, hi):
     return 'low' if v < lo else ('high' if v > hi else 'mid')
 
 
+_PLATFORM_NAMES = ('paramount+', 'paramount plus', 'netflix', 'hulu', 'disney+', 'disney plus', 'max', 'hbo max', 'peacock', 'prime video', 'amazon prime video',
+                   'apple tv+', 'apple tv plus', 'apple tv', 'tubi', 'pluto tv', 'pluto', 'the roku channel', 'roku channel', 'roku', 'freevee', 'xumo', 'plex', 'crackle',
+                   'sling', 'sling tv', 'fubo', 'fubotv', 'philo', 'youtube tv', 'youtube', 'youtube premium', 'crunchyroll', 'starz', 'amc+', 'mgm+', 'bet+', 'discovery+',
+                   'espn+', 'espn', 'britbox', 'acorn tv', 'shudder', 'hallmark+', 'hallmark movies now', 'spotify', 'apple music', 'amazon music', 'pandora', 'siriusxm',
+                   'audible', 'kindle', 'twitch', 'tiktok', 'instagram', 'snapchat', 'facebook', 'x', 'threads', 'pinterest', 'reddit', 'dramabox', 'reelshort', 'goodshort',
+                   'xbox game pass', 'game pass', 'playstation plus', 'nintendo switch online', 'directv stream', 'directv', 'dish', 'xfinity', 'spectrum', 'verizon fios',
+                   'walmart+', 'amazon prime', 'prime', 'costco', 'doordash', 'uber eats', 'instacart')
+
+
+def subject_class(twin: dict) -> str:
+    """What the twin is built around, for the persona's vocabulary
+    (Jenna 2026-11-03: 'Paramount+ is a streaming platform, not a show;
+    you would not have Paramount+ merch or DVDs'):
+
+      civic     an electorate or the residents of a place
+      platform  a streaming service, app, network or subscription
+      brand     a product, retailer or company people buy from
+      talent    a person
+      title     a series, film, franchise, game, podcast or book
+      audience  an interest group or persona universe
+    """
+    m = _meta(twin)
+    ident = (twin or {}).get('identity') or {}
+    base_kind = str((ident.get('base') or {}).get('kind') or '')
+    if base_kind in ('electorate', 'residents'):
+        return 'civic'
+    kind = str(m.get('subject_kind') or '').lower()
+    fmt = str(m.get('format') or '').lower()
+    name = str(m.get('name') or m.get('subject') or '').strip()
+    low = name.lower()
+    cat = str(m.get('catalog_category') or m.get('category') or '').upper()
+    home = str(m.get('platform_home') or '').strip().lower()
+    if kind == 'talent' or fmt in ('talent', 'person', 'creator', 'influencer', 'host', 'personality', 'podcaster', 'musician', 'band', 'artist', 'author', 'comedian', 'actor', 'athlete'):
+        return 'talent'
+    if low in _PLATFORM_NAMES or (home and home == low) or cat in ('STREAMING/PLATFORM', 'STREAMING VIDEO', 'APP/PLATFORM', 'PLATFORMS', 'SOCIAL MEDIA', 'STREAMING MUSIC',
+                                                                   'FAST PLATFORM', 'FAST CHANNEL', 'VIRTUAL MVPD/FAST', 'VMVPD', 'BROADCAST/CABLE', 'MEDIA', 'SEARCH ENGINE/AI', 'TELECOM') \
+            or re.search(r"\b(?:tv|channel|network|streaming|app|platform|plus)\b|\+$", low):
+        return 'platform'
+    if kind == 'brand' or fmt == 'brand':
+        return 'brand'
+    if kind == 'ip' or fmt in ('series', 'film', 'movie', 'franchise', 'game', 'podcast', 'book', 'short', 'special', 'event'):
+        return 'title'
+    return 'audience'
+
+
+def talent_is_creator(twin: dict) -> bool:
+    """A creator, host or musician puts work out; an actor is in it."""
+    m = _meta(twin)
+    fmt = str(m.get('format') or '').lower()
+    home = str(m.get('platform_home') or '').lower()
+    return fmt in ('creator', 'influencer', 'host', 'personality', 'podcaster', 'musician', 'band', 'artist', 'author') or 'youtube' in home or 'tiktok' in home or 'twitch' in home
+
+
 def persona_card(twin: dict, seat: dict, session_seed: str) -> dict:
     """The full persona for one seat, deterministic for the session: the
     seat's identity, the twin's demographics as they apply, the traits
@@ -538,29 +591,77 @@ def persona_card(twin: dict, seat: dict, session_seed: str) -> dict:
     ethnicity = str(seat.get('ethnicity') or '')
     fmt = str(m.get('format') or 'series')
     legacy = str(m.get('franchise_stage') or '') in ('legacy', 'established')
+    klass = subject_class(twin)
+    name0 = str(m.get('name') or m.get('subject') or 'the title')
     price = {'low': f"spends freely on the things {pron[0]} loves and rarely waits for a sale", 'mid': 'watches price but pays for the right thing',
              'high': 'very price-conscious; compares, waits for deals, hates paying twice for the same thing'}[_level(g('price_sensitivity'), 35, 62)]
-    loyal = {'low': 'casual about the title; it is one of many things', 'mid': 'fond of the title and watches when it comes around',
-             'high': 'deeply loyal to the title; knows it by heart and rewatches'}[_level(g('franchise_loyalty'), 40, 65)]
-    merch = {'low': 'rarely buys merchandise of any kind', 'mid': 'has bought a piece or two of show merchandise over the years',
-             'high': 'buys show merchandise now and then: a mug, a shirt, a keepsake, a gift for a friend who loves it too'}[_level(g('merch_propensity'), 35, 60)]
+    lv_loyal, lv_merch = _level(g('franchise_loyalty'), 40, 65), _level(g('merch_propensity'), 35, 60)
     u_phys = unit('physical', sid)
-    if age >= 40 and (g('merch_propensity') >= 50 or u_phys < 0.5):
-        physical = 'still owns DVDs and a few box sets and likes a shelf copy of a favorite'
-    elif age < 30:
-        physical = 'streams everything; owns almost no discs and has nowhere to play one'
-    elif u_phys < 0.45:
-        physical = 'kept a few box sets from years back; mostly streams now'
+    if klass == 'platform':
+        # a service: loyalty is where it sits among the services, the extras are tiers and add-ons, the screen is the device
+        loyal = {'low': f"casual about {name0}; it is one service among several", 'mid': f"fond of what {name0} has and checks it most weeks",
+                 'high': f"{name0} is {pron[1]} first stop when {pron[0]} sits down to watch"}[lv_loyal]
+        merch = {'low': 'stays on the basic plan and skips the add-ons', 'mid': 'has added a channel or a bundle once or twice when a show called for it',
+                 'high': 'pays for the top plan and adds channels when a show calls for it'}[lv_merch]
+        if age >= 40 and u_phys < 0.6:
+            physical = 'watches on the living room TV, the phone only for a clip'
+        elif age < 30:
+            physical = 'watches on the phone and the laptop as much as the TV'
+        else:
+            physical = 'watches on the TV at night and the phone on the move'
+    elif klass == 'brand':
+        loyal = {'low': 'casual about brands; buys what is on sale', 'mid': f"fond of {name0} and reaches for it when it is there",
+                 'high': f"loyal to {name0}; would go to a second store for it"}[lv_loyal]
+        merch = {'low': 'rarely buys the branded extras', 'mid': 'has picked up a branded item or two over the years',
+                 'high': 'buys the branded extras and the gift sets when they show up'}[lv_merch]
+        physical = ('shops the aisle in person more than online' if (age >= 40 and u_phys < 0.6) else ('orders most of it online' if age < 30 or u_phys > 0.7 else 'splits it between the store and online'))
+    elif klass == 'talent':
+        loyal = {'low': f"casual about {name0}; one of many names {pron[0]} follows", 'mid': f"fond of {name0} and watches when something new comes out",
+                 'high': f"a real fan of {name0}; knows the work by heart and rewatches"}[lv_loyal]
+        merch = {'low': 'rarely buys merchandise of any kind', 'mid': 'has bought a piece or two of merchandise over the years',
+                 'high': 'buys merchandise now and then: a shirt, a poster, a keepsake, a gift for a friend who is a fan too'}[lv_merch]
+        if talent_is_creator(twin):
+            physical = ('watches on the living room TV, the phone only for a clip' if (age >= 40 and u_phys < 0.6) else ('watches on the phone and the laptop as much as the TV' if age < 30 else 'watches on the TV at night and the phone on the move'))
+        elif age >= 40 and (g('merch_propensity') >= 50 or u_phys < 0.5):
+            physical = 'still owns DVDs and a few box sets and likes a shelf copy of a favorite'
+        elif age < 30:
+            physical = 'streams everything; owns almost no discs and has nowhere to play one'
+        else:
+            physical = 'kept a few box sets from years back; mostly streams now' if u_phys < 0.45 else 'gave the discs away years ago; streaming only'
+    elif klass == 'audience':
+        loyal = {'low': 'casual about it; it is one of many things', 'mid': 'fond of it and makes time for it',
+                 'high': 'deeply into it; it is a big part of the week'}[lv_loyal]
+        merch = {'low': 'rarely buys the extras', 'mid': 'buys a related item now and then', 'high': 'spends on it happily: the gear, the extras, the gifts for friends who are into it too'}[lv_merch]
+        physical = ('watches on the living room TV, the phone only for a clip' if (age >= 40 and u_phys < 0.6) else ('watches on the phone and the laptop as much as the TV' if age < 30 else 'watches on the TV at night and the phone on the move'))
     else:
-        physical = 'gave the discs away years ago; streaming only'
+        loyal = {'low': 'casual about the title; it is one of many things', 'mid': 'fond of the title and watches when it comes around',
+                 'high': 'deeply loyal to the title; knows it by heart and rewatches'}[lv_loyal]
+        merch = {'low': 'rarely buys merchandise of any kind', 'mid': 'has bought a piece or two of show merchandise over the years',
+                 'high': 'buys show merchandise now and then: a mug, a shirt, a keepsake, a gift for a friend who loves it too'}[lv_merch]
+        if age >= 40 and (g('merch_propensity') >= 50 or u_phys < 0.5):
+            physical = 'still owns DVDs and a few box sets and likes a shelf copy of a favorite'
+        elif age < 30:
+            physical = 'streams everything; owns almost no discs and has nowhere to play one'
+        elif u_phys < 0.45:
+            physical = 'kept a few box sets from years back; mostly streams now'
+        else:
+            physical = 'gave the discs away years ago; streaming only'
     churn = {'low': 'keeps subscriptions for years without thinking about it', 'mid': 'trims a service now and then when the bill creeps up',
              'high': 'cancels and re-subscribes around the shows; rarely keeps more than two or three services'}[_level(g('churn_propensity'), 35, 60)]
     social = {'low': 'finds things by searching and through friends, not by scrolling', 'mid': 'finds new things half from the feed, half from friends',
               'high': 'finds most new things on social feeds and short clips'}[_level(g('discovery_social_vs_search'), 40, 62)]
     wom = {'low': f"keeps {pron[1]} viewing to {'themself' if gender == 'nonbinary' else (pron[1] + 'self')}", 'mid': 'talks about shows with a couple of friends',
            'high': 'texts the group chat about what they are watching and gets friends onto things'}[_level(g('word_of_mouth'), 40, 65)]
-    live = {'low': 'does not go to fan events or live shows for this', 'mid': 'has been to one fan event or screening',
-            'high': 'goes to fan events, screenings and live shows when they come near'}[_level(g('live_events'), 30, 55)]
+    lv_live = _level(g('live_events'), 30, 55)
+    if klass == 'platform':
+        live = {'low': 'does not go to premieres or fan events for its shows', 'mid': 'has been to a premiere or a fan screening for one of its shows',
+                'high': 'goes to premieres and fan screenings for its shows when they come near'}[lv_live]
+    elif klass == 'brand':
+        live = {'low': 'does not go to brand events or pop-ups', 'mid': 'has been to a pop-up or a sampling event once',
+                'high': 'goes to pop-ups and launch events when they come near'}[lv_live]
+    else:
+        live = {'low': 'does not go to fan events or live shows for this', 'mid': 'has been to one fan event or screening',
+                'high': 'goes to fan events, screenings and live shows when they come near'}[lv_live]
     ads = {'low': 'pays extra to skip ads', 'mid': 'takes the cheaper plan with ads on some services', 'high': 'fine with ads if it saves money'}[_level(g('ad_tolerance'), 40, 62)]
     binge = 'binges a season in a weekend' if g('binge_vs_appointment') >= 55 else 'watches an episode or two a night'
     second = 'scrolls the phone while watching' if g('second_screen') >= 55 else 'puts the phone down to watch'
@@ -590,6 +691,41 @@ def persona_card(twin: dict, seat: dict, session_seed: str) -> dict:
                'in the habit': 'has lived in the area most of ' + pron[1] + ' life', 'lapsing': 'has lived in the area for years and talks about leaving',
                'returning': 'moved back to the area after years away'}[stage]
         freq = 'keeps up with local news most weeks' if unit('local', sid) < 0.6 else 'catches local news when something big happens'
+    elif klass == 'platform':
+        # a service is subscribed to, kept, dropped and taken back; nobody rewatches a platform
+        rel, freq = {
+            'discovering': (f"signed up for {name} in the last few months", f"is still finding {pron[1]} way around what is on it"),
+            'trying': (f"took {name} for one show and is deciding whether to keep it", 'opens it a couple of nights a week'),
+            'in the habit': ((f"has had {name} for years and keeps it through the year" if (legacy and age >= 34) else f"has kept {name} for a few years now"), 'has a show or two going on it at any time'),
+            'lapsing': (f"still pays for {name} but has barely opened it this past year", 'is close to cancelling'),
+            'returning': (f"came back to {name} this year after cancelling for a while", 'resubscribed for a new season and is catching up'),
+        }[stage]
+    elif klass == 'brand':
+        rel, freq = {
+            'discovering': (f"tried {name} for the first time in the last year", 'has bought it a few times since'),
+            'trying': (f"has {name} in the rotation but has not settled on it", f"buys it when it is on sale or in front of {pron[1] if gender != 'nonbinary' else 'them'}"),
+            'in the habit': (f"has bought {name} for years", 'it is on the list most weeks'),
+            'lapsing': (f"used to buy {name} all the time; has drifted to other brands this past year", 'picks it up now and then'),
+            'returning': (f"came back to {name} after trying other brands", 'is buying it again most trips'),
+        }[stage]
+    elif klass == 'talent':
+        creator = talent_is_creator(twin)
+        rel, freq = {
+            'discovering': (f"found {name} in the last year", 'is working back through the earlier videos' if creator else 'is working back through the earlier work'),
+            'trying': ((f"has watched a few of {name}'s videos and is still deciding" if creator else f"has watched a few things with {name} and is still deciding"),
+                       (f"catches {name} when a new one comes up in the feed" if creator else f"catches {name} when a new project comes around")),
+            'in the habit': (f"has followed {name} for years", f"watches whatever {name} puts out" if creator else f"watches whatever {name} is in"),
+            'lapsing': (f"used to follow {name} closely; has drifted this past year", 'has not kept up lately'),
+            'returning': (f"came back to {name} after a long break", f"is catching up on what {name} has put out lately" if creator else f"is catching up on what {name} has done lately"),
+        }[stage]
+    elif klass == 'audience':
+        rel, freq = {
+            'discovering': ('got into this in the last year', 'is still finding the corners of it'),
+            'trying': (f"is still working out how much of this is {pron[1]} thing", 'dips in now and then'),
+            'in the habit': ('has been into this for years', 'makes time for it most weeks'),
+            'lapsing': ('has drifted from this over the past year', 'has not made time for it in months'),
+            'returning': ('came back to this after a break', 'is picking it up again'),
+        }[stage]
     elif stage == 'discovering':
         rel = f"found {name} in the last year" + (' on streaming' if fmt in ('series', 'film') else '')
         freq = 'still working through it for the first time'
@@ -605,13 +741,18 @@ def persona_card(twin: dict, seat: dict, session_seed: str) -> dict:
     else:
         rel = f"came back to {name} after a long break"
         freq = 'rewatching with fresh eyes'
+    if klass in ('platform', 'brand', 'talent', 'audience') and lv_loyal == 'high' and stage in ('discovering', 'trying'):
+        loyal = {'platform': f"warming to {name0} fast", 'brand': f"taking to {name0} fast", 'talent': f"becoming a fan of {name0} fast", 'audience': 'getting into it fast'}[klass]
+    elif klass in ('platform', 'brand', 'talent', 'audience') and lv_loyal == 'high' and stage == 'lapsing':
+        loyal = {'platform': f"still fond of {name0}, even with it barely open lately", 'brand': f"still partial to {name0}, even while buying other brands",
+                 'talent': f"still a fan of {name0}, even while not keeping up", 'audience': 'still into it at heart, even while not making time for it'}[klass]
     owns = []
-    if civic:
-        pass    # a voter or a resident owns no title merchandise
+    if civic or klass in ('platform', 'brand', 'audience'):
+        pass    # nobody owns a service, a retailer or an interest on DVD, and a platform sells no mugs
     elif 'owns DVDs' in physical and stage in ('in the habit', 'returning') and g('merch_propensity') >= 45:
-        owns.append(f"the complete {name} on DVD from years ago")
-    if g('merch_propensity') >= 55 and unit('owns', sid) < 0.6:
-        owns.append(f"a {name} mug or shirt")
+        owns.append(f"the complete {name} on DVD from years ago" if klass != 'talent' else f"{name}'s films on DVD from years ago")
+    if klass in ('title', 'talent') and g('merch_propensity') >= 55 and unit('owns', sid) < 0.6:
+        owns.append(f"a {name} mug or shirt" if klass == 'title' else f"a {name} shirt or poster")
     ident = (twin or {}).get('identity') or {}
     plats = [str(p.get('label')) for p in sorted((ident.get('platforms') or []), key=lambda p: -float(p.get('reach_pct') or 0)) if isinstance(p, dict)][:6]
     services = [p for i, p in enumerate(plats) if unit('pl', sid, p) < (0.95 - 0.12 * i)][:4] or plats[:2]
@@ -621,7 +762,7 @@ def persona_card(twin: dict, seat: dict, session_seed: str) -> dict:
             'income': income, 'education': education, 'parental': parental, 'relationship_status': relationship,
             'orientation': orientation, 'occupation': occupation, 'ethnicity': ethnicity,
             'language': str(seat.get('language') or ''), 'cohort': str(seat.get('cohort') or ''),
-            'party': party, 'urbanicity': urbanicity, 'issues': my_issues, 'civic': civic, 'base_kind': base_kind,
+            'party': party, 'urbanicity': urbanicity, 'issues': my_issues, 'civic': civic, 'base_kind': base_kind, 'subject_class': klass,
             'values': str(ident0.get('values') or ''),
             'lifecycle_stage': stage, 'relationship_to_subject': rel, 'how_often': freq, 'owns': owns,
             'habits': [price, loyal, merch, physical, churn, social, wom, live, ads, binge, second],
@@ -826,11 +967,12 @@ def persona_bio(card: dict, twin: dict, sid: str) -> str:
         elif iss:
             sent.append(f"{iss[0].upper() + iss[1:]}.")
     rel = str(card.get('relationship_to_subject') or '')
-    rel = re.sub(r"^(found|started|has watched|has been|used to|came back)", lambda mm: {'found': f"{pron.capitalize()} found", 'started': f"{pron.capitalize()} started", 'has watched': f"{pron.capitalize()} has watched",
-                                                                                            'has been': f"{pron.capitalize()} has been", 'used to': f"{pron.capitalize()} used to", 'came back': f"{pron.capitalize()} came back"}[mm.group(1)], rel, count=1)
+    klass = str(card.get('subject_class') or '')
     if civic:
         sent.append(f"{pron.capitalize()} {rel} and {card.get('how_often')}." if rel else f"{pron.capitalize()} lives in the area.")
     else:
+        if rel and not re.match(r"^(?:she|he|they)\b", rel, re.I):
+            rel = f"{pron.capitalize()} {rel}"
         sent.append(f"{rel} and {card.get('how_often')}; {pron} {be} {stage}." if rel else f"{pron.capitalize()} {be} {stage} with {m.get('name') or 'the subject'}.")
     if card.get('owns'):
         sent.append(f"{pron.capitalize()} owns {' and '.join(card['owns'])}.")
@@ -857,7 +999,10 @@ def persona_bio(card: dict, twin: dict, sid: str) -> str:
             loyal = 'getting attached to it fast'
         elif stage_key == 'lapsing' and loyal.startswith('deeply loyal'):
             loyal = 'still loyal to it and knows it by heart, even with the TV off lately'
-        sent.append(f"On money {pron} {price}, and {pron} is {loyal}.")
+        if klass == 'platform' and loyal.startswith(str(m.get('name') or m.get('subject') or '~')):
+            sent.append(f"On money {pron} {price}; {loyal}.")   # "Paramount+ is her first stop", not "she is Paramount+ is"
+        else:
+            sent.append(f"On money {pron} {price}, and {pron} is {loyal}.")
         sent.append(f"{pron.capitalize()} {merch}, and {pron} {physical}.")
         sent.append(f"{pron.capitalize()} {churn}, {binge}, and {second}.")
         diet = []
