@@ -116,6 +116,17 @@ DEFAULT_LOOKBACK_DAYS = int(os.environ.get('TRENDS_IQ_LOOKBACK_DAYS', '1'))
 # that miss the deadline are salvaged as loading placeholders instead of
 # killing the whole view with "N (of M) futures unfinished".
 SECTION_BUDGET_S   = int(os.environ.get('TRENDS_IQ_SECTION_BUDGET_S', '90'))
+# Budget for a BACKGROUND recompute (the in-place refresh the build box
+# runs after a store write, `invalidate_live_compute_view_caches`). No
+# request is waiting on it, and the process that runs it is usually
+# still busy (the board gate holds the interpreter while it fixes
+# rails and uploads the 54 MB stream_estimates store), so a 90s clock
+# shared with that work fires false alarms: 2026-11-04 17:31 UTC the
+# gate's own refresh timed stream_estimates out, published a partial
+# view over a complete one for two minutes, and emailed ops. The
+# background clock is longer, and a background pass that still ends
+# partial keeps the complete cached view instead of replacing it.
+REFRESH_SECTION_BUDGET_S = int(os.environ.get('TRENDS_IQ_REFRESH_SECTION_BUDGET_S', '300'))
 # A live payload that shipped with pending sections goes stale after 10
 # minutes instead of the full 24h TTL so the missing panels self-heal on
 # the next recompute once the slow feed recovers.
@@ -880,7 +891,9 @@ def invalidate_live_compute_view_caches() -> int:
                     'lookback_days': filters.get('lookback_days'),
                     'asof':          filters.get('asof') or None,
                 }
-                compute_view(view_filters, force_refresh=True)
+                compute_view(view_filters, force_refresh=True,
+                             section_budget_s=REFRESH_SECTION_BUDGET_S,
+                             background=True)
                 refreshed += 1
                 # The recompute wrote under today's key for these
                 # filters. If the stale entry sat under an older key
@@ -13078,7 +13091,9 @@ def _inflight_lock(key: str) -> threading.Lock:
         return lock
 
 
-def compute_view(filters: dict, force_refresh: bool = False) -> dict:
+def compute_view(filters: dict, force_refresh: bool = False,
+                 section_budget_s: Optional[int] = None,
+                 background: bool = False) -> dict:
     """Single-flight front door for `_compute_view_impl`.
 
     2026-10-08: when the cache is cold, every concurrent request for
@@ -13094,10 +13109,14 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     """
     lock = _inflight_lock(_cache_key(filters))
     with lock:
-        return _compute_view_impl(filters, force_refresh=force_refresh)
+        return _compute_view_impl(filters, force_refresh=force_refresh,
+                                  section_budget_s=section_budget_s,
+                                  background=background)
 
 
-def _compute_view_impl(filters: dict, force_refresh: bool = False) -> dict:
+def _compute_view_impl(filters: dict, force_refresh: bool = False,
+                       section_budget_s: Optional[int] = None,
+                       background: bool = False) -> dict:
     """Build the full Trends payload for the requested filters.
 
     Every surface fans out in a background thread so a slow feed on one
@@ -13219,10 +13238,11 @@ def _compute_view_impl(filters: dict, force_refresh: bool = False) -> dict:
     # is what let a pass where every section threw cache itself as a
     # complete view for a full day, silently.
     failed_sections: list = []
+    budget_s = int(section_budget_s or SECTION_BUDGET_S)
     ex = ThreadPoolExecutor(max_workers=len(tasks), thread_name_prefix='trends-iq')
     try:
         futures = {ex.submit(fn): key for key, fn in tasks.items()}
-        done, not_done = futures_wait(futures, timeout=SECTION_BUDGET_S)
+        done, not_done = futures_wait(futures, timeout=budget_s)
         for fut in done:
             key = futures[fut]
             try:
@@ -13239,12 +13259,12 @@ def _compute_view_impl(filters: dict, force_refresh: bool = False) -> dict:
     if pending_sections:
         logger.warning(
             "trends_iq sections missed the %ss budget and render as "
-            "loading: %s", SECTION_BUDGET_S, ', '.join(pending_sections))
+            "loading: %s", budget_s, ', '.join(pending_sections))
         _send_ops_alert(
             'section_timeout',
             'Trends IQ sections slow to load',
             ('These Trends IQ sections did not finish inside the '
-             f'{SECTION_BUDGET_S}s compute budget and rendered as '
+             f'{budget_s}s compute budget and rendered as '
              'loading placeholders (the rest of the view shipped '
              'normally):\n\n  ' + '\n  '.join(pending_sections) +
              '\n\nFilters: '
@@ -14042,7 +14062,21 @@ def _compute_view_impl(filters: dict, force_refresh: bool = False) -> dict:
     # write and let the next request retry the missing reads. Live
     # partials DO cache (with the short stale_until above) so concurrent
     # users get an instant view while the slow feed recovers.
-    if not (pending_sections and historic):
+    skip_write = bool(pending_sections and historic)
+    if (not skip_write and background
+            and (pending_sections or failed_sections)):
+        # A background refresh that ends partial must not replace a
+        # complete view someone may be reading. Keep the cached entry;
+        # the next store write or the next on-demand request recomputes.
+        prior = _cache_get(filters)
+        if prior is not None and not (prior.get('pending_sections')
+                                      or prior.get('failed_sections')):
+            skip_write = True
+            logger.warning(
+                "background refresh ended partial (pending=%s failed=%s); "
+                "kept the complete cached view for %s",
+                pending_sections, failed_sections, _cache_key(filters))
+    if not skip_write:
         _cache_put(filters, payload)
     _write_history_snapshots(headlines, trending_people)
     payload['from_cache'] = False
