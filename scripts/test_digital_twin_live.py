@@ -364,7 +364,13 @@ class PageLiveViews(unittest.TestCase):
             self.assertIn(must, merge)
         self.assertIn('piRosterCohorts(s)', self._fn('piCohortSplits'))
         legend = self._fn('splitLegend')
-        self.assertLess(legend.find('piCohortSplits(s).forEach'), legend.find('if (!keys.length) return'), 'the cohort chips do not wait for the split rows')
+        self.assertLess(legend.find('cs.forEach'), legend.find('if (!keys.length) return'), 'the cohort chips do not wait for the split rows')
+        # Jenna 2026-11-04: the cohort chips ride in every view (the Room view used to hide them), and the two
+        # overlay selects carry a one-line label and travel as one group
+        self.assertNotIn("if (v.mode !== 'room')", legend)
+        self.assertIn('class="ovl"', legend)
+        self.assertIn('Overlay up to two more lines on this view', legend)
+        self.assertIn('.dtw-pi-legend .ovl .lbl', self.page)
         self.assertIn('piLegendRepaint(); }', self.page[self.page.find('window.dtwPilotPlay = async'):self.page.find('window.dtwPilotStop = async')])
         for blob in (gate, merge, legend, self._fn('piCohortSplits'), self._fn('piSeatSeries'), self._fn('piLiveSeries')):
             self.assertNotIn('\u2014', blob)

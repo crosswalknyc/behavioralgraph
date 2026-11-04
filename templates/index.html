@@ -51861,6 +51861,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-pi-legend button.coh.dim { opacity: 0.38; }
         #digitalTwinsIQView .dtw-pi-legend button.coh.cut { color: var(--dtw-ink); }
         #digitalTwinsIQView .dtw-pi-legend .hint { color: var(--dtw-mute); }
+        #digitalTwinsIQView .dtw-pi-legend .ovl { display: inline-flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; margin-left: auto; padding-left: 6px; }
+        #digitalTwinsIQView .dtw-pi-legend .ovl .lbl { color: var(--dtw-mute); white-space: nowrap; }
+        #digitalTwinsIQView .dtw-pi-legend .ovl label { white-space: nowrap; }
         @media (max-width: 600px) { #digitalTwinsIQView .dtw-pi-views { max-width: 100%; } #digitalTwinsIQView .dtw-pi-views button { padding: 6px 11px; } }
         #digitalTwinsIQView .dtw-pi-seatrow.pinned { background: rgba(233,232,225,0.07); box-shadow: inset 2px 0 0 var(--coh, var(--hue, #3358FF)); }
         #digitalTwinsIQView .dtw-pi-seatrow .bio .dtw-pi-thought { margin: 0 0 8px; padding: 6px 8px; border-left: 2px solid var(--coh, var(--hue, #3358FF)); background: rgba(233,232,225,0.04); font-style: normal; color: var(--dtw-ink); }
@@ -55068,14 +55071,13 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var v = piView();
                 var room = piViewControl(s) + '<span><i class="sw" style="background:#E9E8E1"></i>Room</span>';
                 if (v.mode === 'people') room += '<span class="hint">Every seat, in its cohort color. Hover a seat in the room to follow their line; click to pin it.</span>';
-                if (v.mode !== 'room') {
-                    // the chips ride on the room's own cohorts, so a live test has them before its first frame lands
-                    var cs = piCohortSplits(s), cutOn = v.mode === 'cohorts' && !!v.cohort && cs.some(function(c) { return c.key === v.cohort; });
-                    cs.forEach(function(c) {
-                        var cls = 'coh' + (cutOn ? (v.cohort === c.key ? ' cut' : ' dim') : '');
-                        room += '<button type="button" class="' + cls + '" onclick="dtwPilotViewCohort(\'' + esc(c.key) + '\')" title="' + (v.mode === 'cohorts' ? 'Cut the dial to this cohort' : 'This cohort\'s color') + '"><i class="sw" style="background:' + c.color + '"></i>' + esc(c.label) + ' (' + esc(c.n) + ')</button>';
-                    });
-                }
+                // the cohort chips ride in every view (Jenna 2026-11-04: the Room view used to hide them, which read as
+                // cohorts missing); they ride on the room's own cohorts, so a live test has them before its first frame lands
+                var cs = piCohortSplits(s), cutOn = v.mode === 'cohorts' && !!v.cohort && cs.some(function(c) { return c.key === v.cohort; });
+                cs.forEach(function(c) {
+                    var cls = 'coh' + (cutOn ? (v.cohort === c.key ? ' cut' : ' dim') : '');
+                    room += '<button type="button" class="' + cls + '" onclick="dtwPilotViewCohort(\'' + esc(c.key) + '\')" title="' + (v.mode === 'cohorts' ? 'Cut the dial to this cohort' : 'Show the cohorts and cut the dial to this one') + '"><i class="sw" style="background:' + c.color + '"></i>' + esc(c.label) + ' (' + esc(c.n) + ')</button>';
+                });
                 if (!keys.length) return '<div class="dtw-pi-legend">' + room + '</div>';
                 splitLines(s);
                 var groups = {};
@@ -55089,8 +55091,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 }
                 var oc = piOverlayColors(s);
                 return '<div class="dtw-pi-legend">' + room
+                    + '<span class="ovl"><span class="lbl">Overlay up to two more lines on this view</span>'
                     + '<label title="Overlay a line"><i class="sw" style="background:' + oc[0] + '"></i><select class="dtw-in" onchange="dtwPilotSplit(\'a\', this.value)">' + opts(S.pilotSplits.a) + '</select></label>'
-                    + '<label title="Overlay a second line"><i class="sw" style="background:' + oc[1] + '"></i><select class="dtw-in" onchange="dtwPilotSplit(\'b\', this.value)">' + opts(S.pilotSplits.b) + '</select></label></div>';
+                    + '<label title="Overlay a second line"><i class="sw" style="background:' + oc[1] + '"></i><select class="dtw-in" onchange="dtwPilotSplit(\'b\', this.value)">' + opts(S.pilotSplits.b) + '</select></label></span></div>';
             }
             function piKindSel() {
                 return '<select id="dtwPiKindSel" class="dtw-in" onchange="dtwPilotKindSel(this.value)" aria-label="Kind of question"><option value=""' + (!S.pilotKind ? ' selected' : '') + '>Open</option><option value="yes_no"' + (S.pilotKind === 'yes_no' ? ' selected' : '') + '>Yes / no</option><option value="rating"' + (S.pilotKind === 'rating' ? ' selected' : '') + '>Rating</option><option value="show_of_hands"' + (S.pilotKind === 'show_of_hands' ? ' selected' : '') + '>Show of hands</option></select>';
