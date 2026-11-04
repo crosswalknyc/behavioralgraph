@@ -750,5 +750,250 @@ class UIStrings(unittest.TestCase):
             self.assertFalse(PI.has_banned_copy(l), l)
 
 
+class _S3Copy(FakeS3):
+    def copy_object(self, Bucket, CopySource, Key, **kw):
+        self.objs[Key] = self.objs[CopySource['Key']]
+
+
+# Jenna, 2026-11-04: "have a duplicate button where you could duplicate a room with all of the input
+# if you want to so if you just want to change one thing you can". A duplicate is a new saved setup
+# with every input of the source and none of its results, priced like a setup typed from scratch.
+RESULT_KEYS = ('scorecard', 'dial', 'seat_dials', 'events', 'voices_live', 'watch', 'forecast', 'questions', 'play_started_at', 'stopped_at',
+               'beats', 'scenes', 'probes', 'guide', 'group', 'play_charged', 'questions_paid', 'panelists_paid', 'status', 'mode_read', 'diagnostics')
+
+
+def _finished_test(s3, twin, other=None, sid='src1', title='NCIS: New York Pilot'):
+    """A scored test with every input filled: two twins, two cohorts, a cut in storage, the switches, the cast, the
+    logline, quotas and comps, a question asked and the session paid."""
+    from migration import digital_twin_room as R
+    twins = [twin] + ([other] if other else [])
+    segs = PI.cohort_segments([{'name': 'Women', 'demos': {'GENDER': ['Female']}, 'seats': 4}, {'name': 'Men', 'demos': {'GENDER': ['Male']}, 'seats': 4}], twin['meta']['key'])
+    sess = PI.open_session(twins, segments=segs, in_room=8, title=title, created_by='jenna', session_id=sid, mode='episode',
+                           logline='A chef returns to her hometown diner.', rough_cut=True, critics_room=False)
+    sess['twin_keys'] = [t['meta']['key'] for t in twins]
+    sess['media'].update({'s3_key': f"digital-twins/pilot-tests/jenna/{sid}/ncis_ep2.mp4", 'filename': 'ncis_ep2.mp4', 'source': 'upload',
+                          'content_type': 'video/mp4', 'bytes': 100, 'title': 'NCIS: New York, episode 2'})
+    s3.objs[sess['media']['s3_key']] = b'v' * 100
+    sess['transcript'] = [{'t': 2.0, 'end': 5.0, 'text': 'Did you really eat my leftovers again?'}]
+    sess['cast'] = ['LL Cool J', 'Scott Caan', 'Jennifer Beals as Lena']
+    sess['comps'] = [{'title': 'Flashdance'}, {'title': 'The L Word'}]
+    sess['quotas'] = {'under_35_pct': 65.0, 'women_pct': 50.0, 'fans_of_lead_pct': None, 'must_have_seen': 2, 'comps': ['Flashdance', 'The L Word'], 'lead': ''}
+    sess['purge_media_after'] = True
+    R.set_model_fn(None)
+    PI.prepare_watch(sess, {t['meta']['key']: t for t in twins}, duration_s=300, title='NCIS: New York, episode 2', analysis=_fake_cut('funny'))
+    PI.mark_play_paid(sess)
+    PI.mark_playing(sess)
+    sess['questions'] = [PI.stamp_question({'q': 'Would you keep watching?', 'kind': 'yes_no', 'read': 'Most would.'}, 90)]
+    PI.stop_session(sess)
+    return sess
+
+
+class Duplicate(unittest.TestCase):
+    def test_copy_name_counts_up(self):
+        self.assertEqual(PI.copy_name('NCIS: New York Pilot', []), 'NCIS: New York Pilot copy')
+        self.assertEqual(PI.copy_name('NCIS: New York Pilot', ['NCIS: New York Pilot copy']), 'NCIS: New York Pilot copy 2')
+        self.assertEqual(PI.copy_name('NCIS: New York Pilot copy', ['NCIS: New York Pilot copy']), 'NCIS: New York Pilot copy 2')
+        self.assertEqual(PI.copy_name('X copy 2', ['X copy', 'X copy 2']), 'X copy 3')
+        self.assertEqual(PI.copy_name('x', ['X COPY']), 'x copy 2')
+        self.assertLessEqual(len(PI.copy_name('a' * 130, [])), 120)
+
+    def test_saved_setup_duplicates_with_every_input(self):
+        twin = _beals()
+        payload = {'meta': twin['meta'], 'pilot_sessions': [], 'pilot_setups': []}
+        src = PI.save_setup(payload, {'name': 'NCIS: New York Episode 2', 'tab': 'pilot', 'mode': 'episode',
+                                      'fields': {'dtwPiTitle': 'NCIS: New York Episode 2', 'dtwPiMins': '42:35', 'dtwPiCast': 'LL Cool J, Scott Caan', 'dtwPiRough': True, 'dtwPiRoom': '8'},
+                                      'options': [], 'cohorts': [{'name': 'Women', 'demos': {'GENDER': ['Female']}, 'seats': 4}, {'name': 'Men', 'demos': {'GENDER': ['Male']}, 'seats': 4}],
+                                      'cohort_n': 2, 'file_name': 'ncis_ep2.mp4', 'files': []}, 'jenna')
+        before = json.dumps(src, sort_keys=True)
+        dup = PI.duplicate_setup(payload, src['id'], 'jenna')
+        self.assertIsNotNone(dup)
+        self.assertNotEqual(dup['id'], src['id'])
+        self.assertEqual(dup['name'], 'NCIS: New York Episode 2 copy')
+        self.assertEqual(dup['fields']['dtwPiTitle'], 'NCIS: New York Episode 2 copy')
+        for k in ('dtwPiMins', 'dtwPiCast', 'dtwPiRough', 'dtwPiRoom'):
+            self.assertEqual(dup['fields'][k], src['fields'][k])
+        for k in ('tab', 'mode', 'options', 'cohorts', 'cohort_n', 'cohort_custom', 'file_name', 'files'):
+            self.assertEqual(dup[k], src[k], k)
+        self.assertEqual(dup['duplicated_from'], src['id'])
+        self.assertEqual(payload['pilot_setups'][0] is dup, True)
+        self.assertEqual(json.dumps(src, sort_keys=True), before)
+        again = PI.duplicate_setup(payload, src['id'], 'jenna')
+        self.assertEqual(again['name'], 'NCIS: New York Episode 2 copy 2')
+        self.assertIsNone(PI.duplicate_setup(payload, 'nope', 'jenna'))
+
+    def test_finished_test_duplicates_into_a_setup_with_the_cut_and_no_results(self):
+        s3 = _S3Copy()
+        twin, other = _beals(), _young()
+        sess = _finished_test(s3, twin, other)
+        self.assertTrue(sess['scorecard'] and sess['events'] and sess['dial']['value'] and sess['questions'])
+        payload = {'meta': twin['meta'], 'pilot_sessions': [sess], 'pilot_setups': []}
+        before = json.dumps(sess, sort_keys=True, default=str)
+        rec = PI.duplicate_session_as_setup(s3, payload, 'src1', 'jenna')
+        self.assertIsNotNone(rec)
+        self.assertIs(payload['pilot_setups'][0], rec)
+        self.assertNotEqual(rec['id'], sess['id'])
+        self.assertEqual(rec['name'], 'NCIS: New York Pilot copy')
+        self.assertEqual(rec['duplicated_from'], 'src1')
+        self.assertEqual(rec['created_by'], 'jenna')
+        self.assertEqual((rec['tab'], rec['mode']), ('pilot', 'episode'))
+        f = rec['fields']
+        self.assertEqual(f['dtwPiTitle'], 'NCIS: New York Pilot copy')
+        self.assertTrue(f['dtwPiRough'])
+        self.assertFalse(f['dtwPiCritics'])
+        self.assertTrue(f['dtwPiPurgeNew'])
+        self.assertEqual(f['dtwPiCutTitle'], 'NCIS: New York, episode 2')
+        self.assertEqual(f['dtwPiMins'], '5:00')
+        self.assertEqual(f['dtwPiLogline'], 'A chef returns to her hometown diner.')
+        self.assertEqual(f['dtwPiCast'], 'LL Cool J, Scott Caan, Jennifer Beals as Lena')
+        self.assertEqual(f['dtwPiTwin2'], 'ym')
+        self.assertEqual(f['dtwPiRoom'], '8')
+        self.assertEqual((f['dtwPiQUnder'], f['dtwPiQWomen'], f['dtwPiQSeen']), ('65', '50', '2'))
+        self.assertNotIn('dtwPiQFans', f)
+        self.assertEqual(f['dtwPiComps'], 'Flashdance, The L Word')
+        self.assertNotIn('dtwPiWatchUrl', f)
+        self.assertEqual([c['name'] for c in rec['cohorts']], ['Women', 'Men'])
+        self.assertEqual([c['seats'] for c in rec['cohorts']], [4, 4])
+        self.assertEqual(rec['cohorts'][0]['demos'], {'GENDER': ['Female']})
+        self.assertEqual(rec['cohort_n'], 2)
+        self.assertEqual(rec['file_name'], 'ncis_ep2.mp4')
+        # the cut: copied to the setup's own key, the source file still where it was
+        m = rec['media']
+        self.assertEqual(m['s3_key'], f"digital-twins/pilot-tests/jenna/setup-{rec['id']}/ncis_ep2.mp4")
+        self.assertIn(m['s3_key'], s3.objs)
+        self.assertIn('digital-twins/pilot-tests/jenna/src1/ncis_ep2.mp4', s3.objs)
+        self.assertEqual(s3.objs[m['s3_key']], s3.objs['digital-twins/pilot-tests/jenna/src1/ncis_ep2.mp4'])
+        for k in ('filename', 'content_type', 'bytes', 'hash', 'title', 'runtime_s'):
+            self.assertEqual(m[k], sess['media'][k], k)
+        self.assertNotIn('purged_at', m)
+        self.assertEqual(rec['transcript'], sess['transcript'])
+        # no result travels
+        for k in RESULT_KEYS:
+            self.assertNotIn(k, rec, k)
+        blob = json.dumps(rec, default=str)
+        self.assertNotIn('overall_like', blob)
+        self.assertNotIn('Loved it', blob)
+        # the source is untouched
+        self.assertEqual(json.dumps(sess, sort_keys=True, default=str), before)
+        # again: copy 2
+        rec2 = PI.duplicate_session_as_setup(s3, payload, 'src1', 'jenna')
+        self.assertEqual(rec2['name'], 'NCIS: New York Pilot copy 2')
+        self.assertEqual(payload['pilot_setups'][0]['id'], rec2['id'])
+        self.assertIsNone(PI.duplicate_session_as_setup(s3, payload, 'missing', 'jenna'))
+
+    def test_start_from_the_duplicate_is_priced_like_a_fresh_setup(self):
+        s3 = _S3Copy()
+        twin = _beals()
+        sess = _finished_test(s3, twin)
+        payload = {'meta': twin['meta'], 'pilot_sessions': [sess], 'pilot_setups': []}
+        rec = PI.duplicate_session_as_setup(s3, payload, 'src1', 'jenna')
+        new = PI.open_session([twin], title=rec['name'], in_room=8, created_by='jenna', session_id='new1', mode=rec['mode'],
+                              media={'title': rec['name'], 'runtime_s': 2555, 'source': 'slate'})
+        self.assertTrue(PI.attach_setup_media(s3, new, rec, 'jenna'))
+        self.assertEqual(new['media']['s3_key'], 'digital-twins/pilot-tests/jenna/new1/ncis_ep2.mp4')
+        self.assertIn(new['media']['s3_key'], s3.objs)
+        self.assertIn(rec['media']['s3_key'], s3.objs)            # the setup keeps its copy for the next run
+        self.assertEqual(new['media']['runtime_s'], 2555.0)      # the runtime typed on the form wins
+        self.assertEqual(new['media']['title'], rec['name'])
+        self.assertEqual(new['media']['filename'], 'ncis_ep2.mp4')
+        self.assertEqual(new['transcript'], sess['transcript'])
+        self.assertEqual(new['status'], 'draft')
+        self.assertEqual(new['watch'], {})
+        self.assertFalse(new['play_charged'])
+        self.assertEqual(new['questions_paid'], 0)
+        self.assertEqual(new['questions'], [])
+        self.assertIsNone(new['scorecard'])
+        self.assertEqual(PI.charge_due(new), 'digital_twin_pilot')
+        self.assertFalse(PI.attach_setup_media(s3, PI.open_session([twin], title='x', in_room=4), {'fields': {}}, 'jenna'))
+
+    def test_only_the_owner_carries_the_cut(self):
+        s3 = _S3Copy()
+        twin = _beals()
+        sess = _finished_test(s3, twin)
+        payload = {'meta': twin['meta'], 'pilot_sessions': [sess], 'pilot_setups': []}
+        rec = PI.duplicate_session_as_setup(s3, payload, 'src1', 'someone_else')
+        self.assertNotIn('media', rec)
+        self.assertNotIn('transcript', rec)
+        self.assertEqual(rec['file_name'], 'ncis_ep2.mp4')      # the name stays as the reminder to pick it again
+        self.assertEqual(rec['fields']['dtwPiCast'], 'LL Cool J, Scott Caan, Jennifer Beals as Lena')
+        admin = PI.duplicate_session_as_setup(s3, payload, 'src1', 'someone_else', is_admin=True)
+        self.assertIn('media', admin)
+
+    def test_setup_cut_goes_with_the_setup_or_on_request(self):
+        s3 = _S3Copy()
+        twin = _beals()
+        sess = _finished_test(s3, twin)
+        payload = {'meta': twin['meta'], 'pilot_sessions': [sess], 'pilot_setups': []}
+        rec = PI.duplicate_session_as_setup(s3, payload, 'src1', 'jenna')
+        mk = rec['media']['s3_key']
+        pub = PI.public_setup(rec)
+        self.assertTrue(pub['media']['has_file'])
+        self.assertNotIn('s3_key', pub['media'])
+        self.assertNotIn('transcript', pub)
+        self.assertEqual(len(PI.public_setups(payload)), 1)
+        # a save that keeps the form keeps the cut; one that names another file, or asks, drops it
+        kept = PI.save_setup(payload, {'id': rec['id'], 'name': rec['name'], 'fields': rec['fields']}, 'jenna', s3=s3)
+        self.assertIn('media', kept)
+        self.assertEqual(kept['file_name'], 'ncis_ep2.mp4')
+        PI.save_setup(payload, {'id': rec['id'], 'name': rec['name'], 'fields': rec['fields'], 'drop_media': True}, 'jenna', s3=s3)
+        self.assertNotIn('media', rec)
+        self.assertNotIn(mk, s3.objs)
+        rec2 = PI.duplicate_session_as_setup(s3, payload, 'src1', 'jenna')
+        mk2 = rec2['media']['s3_key']
+        PI.save_setup(payload, {'id': rec2['id'], 'name': rec2['name'], 'fields': rec2['fields'], 'file_name': 'another_cut.mov'}, 'jenna', s3=s3)
+        self.assertNotIn('media', rec2)
+        self.assertNotIn(mk2, s3.objs)
+        rec3 = PI.duplicate_session_as_setup(s3, payload, 'src1', 'jenna')
+        mk3 = rec3['media']['s3_key']
+        self.assertIsNotNone(PI.delete_setup(payload, rec3['id'], s3=s3))
+        self.assertNotIn(mk3, s3.objs)
+        self.assertIn('digital-twins/pilot-tests/jenna/src1/ncis_ep2.mp4', s3.objs)   # the test's own file is never touched
+
+    def test_watch_link_and_trailer_runtimes_come_back_onto_the_form(self):
+        twin = _beals()
+        link = PI.open_session([twin], title='Linked test', in_room=6, created_by='jenna', session_id='lnk1')
+        link['media'] = {'source': 'watch_url', 'url': 'https://www.paramountplus.com/shows/video/abc', 'platform_label': 'Paramount+', 'runtime_s': 125, 'title': 'Linked test'}
+        rec = PI.setup_from_session(link, 'Linked test copy')
+        self.assertEqual(rec['fields']['dtwPiWatchUrl'], 'https://www.paramountplus.com/shows/video/abc')
+        self.assertEqual(rec['fields']['dtwPiMins'], '2:05')
+        self.assertNotIn('dtwPiCutTitle', rec['fields'])
+        self.assertEqual(rec['file_name'], '')
+        tr = PI.open_session([twin], title='Trailer A vs B', in_room=6, mode='trailer', logline='A chef returns.', options=['A', 'B'], session_id='tr1')
+        tr['media']['runtime_s'] = 118
+        rec = PI.setup_from_session(tr, 'Trailer A vs B copy')
+        self.assertEqual((rec['tab'], rec['mode']), ('trailer', 'trailer'))
+        self.assertEqual(rec['fields']['dtwPiSecs'], '118')
+        self.assertEqual(rec['fields']['dtwPiLogline'], 'A chef returns.')
+        ti = PI.open_session([twin], title='Six titles', in_room=6, mode='title', logline='A chef returns.', options=['Second Helping', 'The Diner', 'Hometown'], session_id='ti1')
+        rec = PI.setup_from_session(ti, 'Six titles copy')
+        self.assertEqual((rec['tab'], rec['mode']), ('titles', 'title'))
+        self.assertEqual(rec['options'], ['Second Helping', 'The Diner', 'Hometown'])
+
+    def test_routes_and_page_wiring(self):
+        with open(os.path.join(ROOT, 'digital_twins_api.py'), encoding='utf-8') as fh:
+            api = fh.read()
+        for must in ('/pilot/<sid>/duplicate', '/pilot/setups/<sid>/duplicate', '/panel/<sid>/duplicate', 'duplicate_session_as_setup', 'duplicate_setup',
+                     'duplicate_room', 'attach_setup_media', 'public_setups', "body.get('setup_id')"):
+            self.assertIn(must, api, must)
+        self.assertNotIn('\u2014', api)
+        with open(os.path.join(ROOT, 'templates', 'index.html'), encoding='utf-8') as fh:
+            page = fh.read()
+        for must in ('Duplicate this test', 'Duplicate this setup', 'Duplicate this room', 'dtwPilotDuplicateId', 'dtwPilotDuplicateSetup', 'dtwPilotDuplicate()',
+                     'dtwPanelDuplicate', 'dtw-pi-rowdup', 'dtw-roomdup', 'body.setup_id', 'function piSetupMedia', 'dtwPilotDropSetupMedia'):
+            self.assertIn(must, page, must)
+        # a Duplicate pill sits with every Delete in the Pilot Testing lists, the test page and the room lists
+        i = page.find('title="Delete this test" aria-label="Delete ')
+        self.assertIn('title="Duplicate this test"', page[i:i + 700])
+        j = page.find('title="Delete this saved setup"')
+        self.assertIn('title="Duplicate this setup"', page[j:j + 700])
+        k = page.find('class="dtw-btn dtw-btn-sm dtw-pi-del"')
+        self.assertIn('dtwPilotDuplicate()', page[k - 400:k])
+        r = page.find('class="dtw-roomdup"')
+        self.assertIn('class="dtw-x" title="Delete this room"', page[r:r + 400])
+        blob = page[page.find('function piSetupMedia'):page.find('async function piUploadAsset')]
+        self.assertNotIn('\u2014', blob)
+        for tok in ('synth', 'modeled', 'estimated', 'pipeline', 'claude', 'hostmap', 's3', 'panel'):
+            self.assertNotIn(tok, blob.lower(), tok)
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=1)

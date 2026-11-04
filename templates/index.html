@@ -51260,6 +51260,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-roomrow:hover .dtw-x, #digitalTwinsIQView .dtw-roomrow.on .dtw-x, #digitalTwinsIQView .dtw-roomrow .dtw-x:focus { opacity: 1; }
         #digitalTwinsIQView .dtw-roomrow .dtw-x:hover { border-color: var(--dtw-body); color: var(--dtw-ink); }
         @media (hover: none) { #digitalTwinsIQView .dtw-roomrow .dtw-x { opacity: 0.7; } }
+        /* Duplicate a room (Jenna 2026-11-04): a plain pill beside the delete mark on every row under Rooms. */
+        #digitalTwinsIQView .dtw-roomrow .dtw-roomdup { appearance: none; background: transparent; border: 1px solid var(--dtw-rule); color: var(--dtw-mute); border-radius: 999px; font: inherit; font-size: 10.5px; padding: 2px 8px; cursor: pointer; flex: 0 0 auto; align-self: center; white-space: nowrap; transition: border-color .12s, color .12s; }
+        #digitalTwinsIQView .dtw-roomrow .dtw-roomdup:hover, #digitalTwinsIQView .dtw-roomrow .dtw-roomdup:focus-visible { border-color: var(--dtw-ink); color: var(--dtw-ink); }
         #digitalTwinsIQView .dtw-confirm { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-top: 0.55rem; font-size: 0.76rem; color: var(--dtw-body); line-height: 1.4; }
         #digitalTwinsIQView .dtw-confirm > span { flex: 1 1 200px; }
         #digitalTwinsIQView .dtw-plans { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 0.8rem; }
@@ -51726,11 +51729,15 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
            sheet, which reset this to 10px and ran the title straight
            under the button (Jenna 2026-11-03). Naming the setup
            scope here outranks it. The pill is 49px wide and sits
-           10px off the right edge, so 66px leaves a real gap. */
+           10px off the right edge, so 66px leaves a real gap. The
+           Duplicate pill (Jenna 2026-11-04) sits under it and is
+           wider, about 66px, so the row now clears 84px. */
         #digitalTwinsIQView .dtw-pi-rowwrap .dtw-pi-row,
-        #digitalTwinsIQView .dtw-pi-setup .dtw-pi-rowwrap .dtw-pi-row { padding-right: 66px; }
-        #digitalTwinsIQView .dtw-pi-rowdel { position: absolute; right: 10px; top: 10px; appearance: none; background: transparent; border: 1px solid var(--dtw-rule); border-radius: 999px; color: var(--dtw-mute); font: inherit; font-size: 10.5px; padding: 2px 8px; cursor: pointer; }
-        #digitalTwinsIQView .dtw-pi-rowdel:hover, #digitalTwinsIQView .dtw-pi-rowdel:focus-visible { color: var(--dtw-ink); border-color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-pi-setup .dtw-pi-rowwrap .dtw-pi-row { padding-right: 84px; min-height: 64px; }
+        #digitalTwinsIQView .dtw-pi-rowdel, #digitalTwinsIQView .dtw-pi-rowdup { position: absolute; right: 10px; top: 10px; appearance: none; background: transparent; border: 1px solid var(--dtw-rule); border-radius: 999px; color: var(--dtw-mute); font: inherit; font-size: 10.5px; padding: 2px 8px; cursor: pointer; white-space: nowrap; }
+        #digitalTwinsIQView .dtw-pi-rowdup { top: 34px; }
+        #digitalTwinsIQView .dtw-pi-rowdel:hover, #digitalTwinsIQView .dtw-pi-rowdel:focus-visible,
+        #digitalTwinsIQView .dtw-pi-rowdup:hover, #digitalTwinsIQView .dtw-pi-rowdup:focus-visible { color: var(--dtw-ink); border-color: var(--dtw-ink); }
         #digitalTwinsIQView .dtw-pi-del { align-self: center; flex: none; color: var(--dtw-mute); }
         #digitalTwinsIQView .dtw-pi-del:hover { color: var(--dtw-ink); }
         #digitalTwinsIQView .dtw-pi-row .h { font-weight: 600; }
@@ -53532,7 +53539,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             function actsHtml(s) {
                 var n = ((S.twin || {}).panel_sessions || []).length;
                 var acts = '<span class="dtw-fg-saved" id="dtwPnSaved"></span><button type="button" class="dtw-fg-act" onclick="dtwRoomsOpen(true)">Rooms<b id="dtwFgRoomsN">' + n + '</b></button><button type="button" class="dtw-fg-act" onclick="dtwNewRoomOpen(true)">New room</button>';
-                if (s) acts += '<button type="button" class="dtw-fg-act" onclick="dtwPanelSave()">Save</button><a class="dtw-fg-act" href="/api/digital-twins/' + esc(S.key) + '/panel/' + esc(s.id) + '/export.csv">Export CSV</a><a class="dtw-fg-act" href="/api/digital-twins/' + esc(S.key) + '/panel/' + esc(s.id) + '/export.pdf">Export PDF</a><button type="button" class="dtw-fg-act close" title="Close this room (Escape). It stays under Rooms." aria-label="Close room" onclick="dtwPanelClose()"><span class="x" aria-hidden="true">&#215;</span>Close room</button>';
+                if (s) acts += '<button type="button" class="dtw-fg-act" onclick="dtwPanelSave()">Save</button><a class="dtw-fg-act" href="/api/digital-twins/' + esc(S.key) + '/panel/' + esc(s.id) + '/export.csv">Export CSV</a><a class="dtw-fg-act" href="/api/digital-twins/' + esc(S.key) + '/panel/' + esc(s.id) + '/export.pdf">Export PDF</a><button type="button" class="dtw-fg-act" title="Duplicate this room: the same twins, cohorts and seats, no questions yet" onclick="dtwPanelDuplicate(\'' + esc(s.id) + '\')">Duplicate</button><button type="button" class="dtw-fg-act close" title="Close this room (Escape). It stays under Rooms." aria-label="Close room" onclick="dtwPanelClose()"><span class="x" aria-hidden="true">&#215;</span>Close room</button>';
                 return acts;
             }
             function syncFgActs() {
@@ -53554,8 +53561,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }
             function roomCard(s) {
                 var qs = s.questions || [], n = qs.length, sid = esc(s.id), working = qs.some(qInFlight), last = n ? qs[n - 1] : null;
-                var meta = n ? '<span>' + n + (n === 1 ? ' question' : ' questions') + '</span>' + SEP + '<span>' + esc(fmtDay(s.updated_at || s.created_at)) + '</span>'
-                    : '<span>empty</span>' + SEP + '<button type="button" class="dtw-link" onclick="event.stopPropagation(); dtwPanelDeleteAsk(\'' + sid + '\', true, \'dtwDelC-\')">delete</button>';
+                var dup = SEP + '<button type="button" class="dtw-link" title="Duplicate this room" onclick="event.stopPropagation(); dtwPanelDuplicate(\'' + sid + '\')">duplicate</button>';
+                var meta = (n ? '<span>' + n + (n === 1 ? ' question' : ' questions') + '</span>' + SEP + '<span>' + esc(fmtDay(s.updated_at || s.created_at)) + '</span>'
+                    : '<span>empty</span>' + SEP + '<button type="button" class="dtw-link" onclick="event.stopPropagation(); dtwPanelDeleteAsk(\'' + sid + '\', true, \'dtwDelC-\')">delete</button>') + dup;
                 return '<div class="dtw-fg-card' + (n ? '' : ' empty') + '" role="button" tabindex="0" aria-label="Open the room ' + esc(roomTitle(s)) + '" onclick="dtwPanelResume(\'' + sid + '\')" onkeydown="if(event.key===\'Enter\'&&event.target===this){dtwPanelResume(\'' + sid + '\');}">'
                     + cardFaces(s)
                     + '<div class="t"><span>' + esc(roomTitle(s)) + '</span>' + (working ? '<span class="dtw-fg-tag"><span class="dtw-fg-dot" style="background:var(--dtw-accent)"></span>working</span>' : '') + '</div>'
@@ -53714,7 +53722,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var live = ss.filter(function(s) { return (s.questions || []).length; }), empty = ss.filter(function(s) { return !(s.questions || []).length; });
                 var row = function(s) {
                     var n = (s.questions || []).length, sid = esc(s.id), on = S.session && S.session.id === s.id, working = (s.questions || []).some(qInFlight);
-                    return '<div class="dtw-run dtw-roomrow' + (on ? ' on' : '') + '" role="button" tabindex="0" onclick="dtwPanelResume(\'' + sid + '\')" onkeydown="if(event.key===\'Enter\'){dtwPanelResume(\'' + sid + '\');}"><div style="display:flex; gap:0.5rem; align-items:flex-start;"><div style="min-width:0; flex:1 1 auto;"><div class="q"><span>' + esc(roomTitle(s)) + '</span>' + (on ? '<span class="dtw-fg-tag">open</span>' : '') + (working ? '<span class="dtw-fg-tag"><span class="dtw-fg-dot" style="background:var(--dtw-accent)"></span>working</span>' : '') + '</div><div class="m">' + fmtN((s.group || {}).in_room || 0) + ' twins &middot; ' + n + (n === 1 ? ' question' : ' questions') + ' &middot; ' + esc(fmtDay(s.updated_at || s.created_at)) + '</div></div><button type="button" class="dtw-x" title="Delete this room" aria-label="Delete this room" onclick="event.stopPropagation(); dtwPanelDeleteAsk(\'' + sid + '\')">&#215;</button></div><div class="dtw-confirm" id="dtwDel-' + sid + '" style="display:none;" onclick="event.stopPropagation()"><span>Delete this room? Its questions and answers go with it.</span><button type="button" class="dtw-btn dtw-btn-sm dtw-btn-primary" onclick="event.stopPropagation(); dtwPanelDelete(\'' + sid + '\')">Delete</button><button type="button" class="dtw-btn dtw-btn-sm" onclick="event.stopPropagation(); dtwPanelDeleteAsk(\'' + sid + '\', false)">Keep</button></div></div>';
+                    return '<div class="dtw-run dtw-roomrow' + (on ? ' on' : '') + '" role="button" tabindex="0" onclick="dtwPanelResume(\'' + sid + '\')" onkeydown="if(event.key===\'Enter\'){dtwPanelResume(\'' + sid + '\');}"><div style="display:flex; gap:0.5rem; align-items:flex-start;"><div style="min-width:0; flex:1 1 auto;"><div class="q"><span>' + esc(roomTitle(s)) + '</span>' + (on ? '<span class="dtw-fg-tag">open</span>' : '') + (working ? '<span class="dtw-fg-tag"><span class="dtw-fg-dot" style="background:var(--dtw-accent)"></span>working</span>' : '') + '</div><div class="m">' + fmtN((s.group || {}).in_room || 0) + ' twins &middot; ' + n + (n === 1 ? ' question' : ' questions') + ' &middot; ' + esc(fmtDay(s.updated_at || s.created_at)) + '</div></div><button type="button" class="dtw-roomdup" title="Duplicate this room" aria-label="Duplicate this room" onclick="event.stopPropagation(); dtwPanelDuplicate(\'' + sid + '\')">Duplicate</button><button type="button" class="dtw-x" title="Delete this room" aria-label="Delete this room" onclick="event.stopPropagation(); dtwPanelDeleteAsk(\'' + sid + '\')">&#215;</button></div><div class="dtw-confirm" id="dtwDel-' + sid + '" style="display:none;" onclick="event.stopPropagation()"><span>Delete this room? Its questions and answers go with it.</span><button type="button" class="dtw-btn dtw-btn-sm dtw-btn-primary" onclick="event.stopPropagation(); dtwPanelDelete(\'' + sid + '\')">Delete</button><button type="button" class="dtw-btn dtw-btn-sm" onclick="event.stopPropagation(); dtwPanelDeleteAsk(\'' + sid + '\', false)">Keep</button></div></div>';
                 };
                 var out = pick;
                 if (live.length) out += '<div class="dtw-fg-group">' + esc(twinName()) + '</div>' + live.map(row).join('');
@@ -53751,6 +53759,20 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (!S.session) fgToast((d && d.message) || 'Room deleted.');
                 var nb = el('dtwFgRoomsN'); if (nb) nb.textContent = S.twin.panel_sessions.length;
                 try { dtwLoadList(true); } catch (_) {}
+            };
+            // Duplicate a room (Jenna, 2026-11-04: "duplicate a room with all of the input if you want to so if you just want to change
+            // one thing you can"): a new room with the same twins, cohorts and seats, named '<room> copy', no questions yet and nothing
+            // paid (the session price waits for the first question, as on any new room). It opens at the ask screen, where the name
+            // can change; the source room stays as it was.
+            window.dtwPanelDuplicate = async function(sid) {
+                if (!S.key || !sid) return;
+                var src = ((S.twin || {}).panel_sessions || []).filter(function(s) { return s.id === sid; })[0] || null;
+                fgNote('Duplicating the room...');
+                try { var d = await api('/' + S.key + '/panel/' + encodeURIComponent(sid) + '/duplicate', { method: 'POST', body: '{}' }); }
+                catch (e) { fgNote(''); fgToast(e && e.message ? e.message : 'The room could not be duplicated.'); return; }
+                dtwRoomsOpen(false);
+                await dtwOpen(S.key, null, d.session.id, null, 'panel');
+                fgToast('Duplicated ' + ((src && roomTitle(src)) || 'the room') + ' as ' + roomTitle(d.session) + '. Same twins, cohorts and seats, no questions yet. Rename it here if you like.');
             };
             window.dtwPanelResume = function(sid) {
                 S.session = ((S.twin || {}).panel_sessions || []).filter(function(s) { return s.id === sid; })[0] || null;
@@ -54425,7 +54447,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     var st = s.status || 'draft';
                     var money = hd.total_positive_pct != null ? ('  total positive ' + Number(hd.total_positive_pct).toFixed(1) + '%') : (sc.overall_like != null ? '  dial ' + Number(sc.overall_like).toFixed(1) : '');
                     return '<div class="dtw-pi-rowwrap"><button type="button" class="dtw-pi-row' + (on ? ' on' : '') + '" onclick="dtwPilotPick(\'' + esc(s.id) + '\')"><div class="h">' + esc(s.title || 'Untitled test') + (s.cut_label && s.lineage ? ' <span class="dtw-muted">' + esc(s.cut_label) + '</span>' : '') + '</div><div class="m">' + esc(PI_MODE_LABEL[s.mode] || 'Pilot test') + '  ' + esc(st) + esc(money) + '  ' + esc(fmtWhen(s.updated_at || s.created_at)) + '</div></button>'
-                        + '<button type="button" class="dtw-pi-rowdel" title="Delete this test" aria-label="Delete ' + esc(s.title || 'this test') + '" onclick="dtwPilotDeleteId(\'' + esc(s.id) + '\')">Delete</button></div>';
+                        + '<button type="button" class="dtw-pi-rowdel" title="Delete this test" aria-label="Delete ' + esc(s.title || 'this test') + '" onclick="dtwPilotDeleteId(\'' + esc(s.id) + '\')">Delete</button>'
+                        + '<button type="button" class="dtw-pi-rowdup" title="Duplicate this test" aria-label="Duplicate ' + esc(s.title || 'this test') + '" onclick="dtwPilotDuplicateId(\'' + esc(s.id) + '\')">Duplicate</button></div>';
                 }).join('');
                 var intro = {
                     pilot: 'Upload a pilot, movie or episode, or paste a watch link from any streamer. Prometheus moderates. The twins watch it scene by scene: a dial, laughs and loves at the second they happen in their own words, a question at any timestamp that knows what just played, and the scorecard studios use with the norm beside every number.',
@@ -54480,8 +54503,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var setups = ((S.twin || {}).pilot_setups || []).filter(function(x) { return (x.tab || 'pilot') === tab; });
                 var srows = setups.map(function(x) {
                     var on = S.piSetupId === x.id;
-                    return '<div class="dtw-pi-rowwrap"><button type="button" class="dtw-pi-row' + (on ? ' on' : '') + '" onclick="dtwPilotLoadSetup(\'' + esc(x.id) + '\')"><div class="h">' + esc(x.name || 'Untitled setup') + '</div><div class="m">' + esc(PI_MODE_LABEL[x.mode] || PI_TAB_LABEL[tab] || 'Setup') + (x.file_name ? '  file: ' + esc(x.file_name) : '') + '  saved ' + esc(fmtWhen(x.updated_at || x.created_at)) + '</div></button>'
-                        + '<button type="button" class="dtw-pi-rowdel" title="Delete this saved setup" aria-label="Delete ' + esc(x.name || 'this setup') + '" onclick="dtwPilotDeleteSetup(\'' + esc(x.id) + '\')">Delete</button></div>';
+                    return '<div class="dtw-pi-rowwrap"><button type="button" class="dtw-pi-row' + (on ? ' on' : '') + '" onclick="dtwPilotLoadSetup(\'' + esc(x.id) + '\')"><div class="h">' + esc(x.name || 'Untitled setup') + '</div><div class="m">' + esc(PI_MODE_LABEL[x.mode] || PI_TAB_LABEL[tab] || 'Setup') + (x.media && x.media.has_file ? '  cut: ' + esc(x.media.filename || x.file_name || 'attached') : (x.file_name ? '  file: ' + esc(x.file_name) : '')) + '  saved ' + esc(fmtWhen(x.updated_at || x.created_at)) + '</div></button>'
+                        + '<button type="button" class="dtw-pi-rowdel" title="Delete this saved setup" aria-label="Delete ' + esc(x.name || 'this setup') + '" onclick="dtwPilotDeleteSetup(\'' + esc(x.id) + '\')">Delete</button>'
+                        + '<button type="button" class="dtw-pi-rowdup" title="Duplicate this setup" aria-label="Duplicate ' + esc(x.name || 'this setup') + '" onclick="dtwPilotDuplicateSetup(\'' + esc(x.id) + '\')">Duplicate</button></div>';
                 }).join('');
                 var saved = '<div class="dtw-pi-h">Saved setups <span class="n">' + setups.length + '</span></div><div class="dtw-pi-list">' + (srows || '<p class="dtw-muted" style="margin:8px 0 0;font-size:12px">Fill in the form and press Save setup to keep it here. Come back any time and open it to edit, without typing it again.</p>') + '</div>';
                 var tests = '<div class="dtw-pi-col side tests">' + saved + '<div class="dtw-pi-h">Past tests <span class="n">' + past.length + '</span></div><div class="dtw-pi-list">' + (rows || '<p class="dtw-muted" style="margin:8px 0 0;font-size:12px">No tests of this kind on this twin yet. The first one lands here.</p>') + '</div></div>';
@@ -55191,7 +55215,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     : '<div class="dtw-pi-col side room">' + roomInner + '</div>';
                 S.roomPopHtml = popped ? roomInner : '';
                 var purge = '<label class="dtw-pi-switch"><input type="checkbox" id="dtwPiPurge"' + (s.purge_media_after ? ' checked' : '') + ' onchange="dtwPilotPurgeToggle(this.checked)"> Remove the file when the test is done' + ((s.media || {}).purged_at ? ' <span class="dtw-muted">(removed; the read stays)</span>' : '') + '</label>';
-                var exp = S.key ? ('<div class="dtw-actions">' + (s.scorecard ? '<a class="dtw-btn dtw-btn-primary" href="/api/digital-twins/' + esc(S.key) + '/pilot/' + esc(s.id) + '/report.pptx">Report (deck)</a><a class="dtw-btn" href="/api/digital-twins/' + esc(S.key) + '/pilot/' + esc(s.id) + '/report.pdf">Report (PDF)</a>' : '') + '<a class="dtw-btn" href="/api/digital-twins/' + esc(S.key) + '/pilot/' + esc(s.id) + '/export.csv">CSV</a><a class="dtw-btn" href="/api/digital-twins/' + esc(S.key) + '/pilot/' + esc(s.id) + '/export.pdf">PDF</a><a class="dtw-btn" href="/api/digital-twins/' + esc(S.key) + '/pilot/' + esc(s.id) + '/export.pptx">Deck</a><button type="button" class="dtw-btn" onclick="dtwPilotDelete()">Delete this test</button></div>') : '';
+                var exp = S.key ? ('<div class="dtw-actions">' + (s.scorecard ? '<a class="dtw-btn dtw-btn-primary" href="/api/digital-twins/' + esc(S.key) + '/pilot/' + esc(s.id) + '/report.pptx">Report (deck)</a><a class="dtw-btn" href="/api/digital-twins/' + esc(S.key) + '/pilot/' + esc(s.id) + '/report.pdf">Report (PDF)</a>' : '') + '<a class="dtw-btn" href="/api/digital-twins/' + esc(S.key) + '/pilot/' + esc(s.id) + '/export.csv">CSV</a><a class="dtw-btn" href="/api/digital-twins/' + esc(S.key) + '/pilot/' + esc(s.id) + '/export.pdf">PDF</a><a class="dtw-btn" href="/api/digital-twins/' + esc(S.key) + '/pilot/' + esc(s.id) + '/export.pptx">Deck</a><button type="button" class="dtw-btn" onclick="dtwPilotDuplicate()" title="Duplicate this test">Duplicate this test</button><button type="button" class="dtw-btn" onclick="dtwPilotDelete()">Delete this test</button></div>') : '';
                 var scoredNow = s.status === 'stopped' && !!s.scorecard;
                 var full = scoredNow ? renderScorecard(s) : '', diag = scoredNow ? (renderModeRead(s) + renderDiagnostics(s)) : '', extras = renderPilotExtras(s);
                 var guide = renderGuide(s);
@@ -55206,6 +55230,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     + '<div class="dtw-fg-rtwrap"><input id="dtwPiName" class="dtw-fg-rt" value="' + esc(s.title || '') + '" onblur="dtwPilotRename()"><button type="button" class="dtw-link" onclick="dtwPilotNew()">New test</button></div></div>'
                     + controls
                     + '<div class="dtw-pi-head-r"><button type="button" class="dtw-btn dtw-btn-sm dtw-pi-exit" onclick="dtwPilotClose()" title="Leave this test. A test still playing is stopped and scored first.">Exit test</button>'
+                    + '<button type="button" class="dtw-btn dtw-btn-sm dtw-pi-dup" onclick="dtwPilotDuplicate()" title="Duplicate this test: every input into a new setup, none of the results. Change one thing and start it.">Duplicate</button>'
                     + '<button type="button" class="dtw-btn dtw-btn-sm dtw-pi-del" onclick="dtwPilotDelete()" title="Delete this test. An admin can restore it for 30 days.">Delete</button></div></div>';
                 return '<div class="dtw-card">' + head
                     + '<div class="dtw-pi-room">' + renderPilotScores(s) + center + room + '</div>'
@@ -55582,8 +55607,19 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     if (sel) sel.value = S.piCohortCustom ? 'custom' : String(n);
                 }
                 var fi = el('dtwPiFile');
-                var old = setup.querySelector('.dtw-pi-filehint'); if (old) old.remove();
+                setup.querySelectorAll('.dtw-pi-filehint').forEach(function(o) { o.remove(); });
                 var names = [snap.file_name].concat(snap.files || []).filter(Boolean);
+                var att = piSetupMedia();
+                if (fi && att) {
+                    // the cut a duplicated setup carries (Jenna 2026-11-04): it starts with the test; a picked file replaces it
+                    var ah = document.createElement('div'); ah.className = 'dtw-pi-filehint';
+                    var aw = document.createElement('span');
+                    aw.textContent = 'The cut' + (att.filename ? ' ' + att.filename : '') + ' comes with this setup' + (att.from_title ? ' from ' + att.from_title : '') + '. Start the test and the room watches it. Pick a different file to replace it, or ';
+                    var ab = document.createElement('button'); ab.type = 'button'; ab.className = 'dtw-link'; ab.textContent = 'remove it'; ab.onclick = function() { dtwPilotDropSetupMedia(); };
+                    ah.appendChild(aw); ah.appendChild(ab); ah.appendChild(document.createTextNode('.'));
+                    fi.parentNode.insertBefore(ah, fi.nextSibling);
+                    names = names.filter(function(n) { return n !== att.filename; });
+                }
                 if (fi && names.length) {
                     var hint = document.createElement('div'); hint.className = 'dtw-pi-filehint';
                     hint.textContent = (names.length === 1 ? 'Last time the file was ' + names[0] + '. ' : 'Last time the files were ' + names.join(', ') + '. ') + 'Pick ' + (names.length === 1 ? 'it' : 'them') + ' again to run the test; everything else is filled in.';
@@ -55677,6 +55713,66 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     } });
                 } catch (e) { fgToast(e.message || 'The setup could not be deleted.'); }
             };
+            // Duplicate (Jenna, 2026-11-04: "have a duplicate button where you could duplicate a room with all of the input if you want
+            // to so if you just want to change one thing you can"). A saved setup or a test becomes a NEW saved setup with every input
+            // and none of the results; a test's cut comes along so it is not uploaded again. It opens in the form so one thing can
+            // change before Start the test, and it is priced like a setup typed from scratch: nothing seated, nothing charged yet.
+            function piSetupMedia() {
+                var cur = S.piSetupId ? (((S.twin || {}).pilot_setups) || []).filter(function(x) { return x.id === S.piSetupId; })[0] : null;
+                if (!cur || !cur.media || !cur.media.has_file) return null;
+                return Object.assign({ from_title: cur.duplicated_from_title || '' }, cur.media);
+            }
+            function piLeaveQuiet() {
+                // leave the open test's page without stopping it (a Duplicate from the test page): the clock, the mirror and the polls rest
+                stopPilotClock(); if (S.pilotClock) S.pilotClock.slate = false;
+                stopLiveMirror();
+                var v = el('dtwPiVideo'); if (v) { try { v.pause(); } catch (_) {} }
+                if (S.pilotQPoll) { try { clearTimeout(S.pilotQPoll); } catch (_) {} S.pilotQPoll = null; }
+                if (S.pilotPrep && S.pilotPrep.timer) { try { clearTimeout(S.pilotPrep.timer); } catch (_) {} S.pilotPrep.timer = null; }
+                S.pilotSplits = null; S.pilotMedia = null; S.pilotCompare = null;
+            }
+            function piAdoptDuplicate(d, stay) {
+                if (S.twin) S.twin.pilot_setups = d.setups || (S.twin.pilot_setups || []);
+                var rec = d.setup;
+                if (!rec) { renderPilotConsole(); return; }
+                var withCut = !!(rec.media && rec.media.has_file);
+                if (stay) {
+                    // a test still playing keeps its page; the duplicate waits under Saved setups
+                    renderPilotConsole();
+                    fgToast('Duplicated as ' + (rec.name || 'a new setup') + '. It is under Saved setups; open it when this test is done.');
+                    return;
+                }
+                if (S.pilot) piLeaveQuiet();
+                if (rec.tab && PI_HOST[rec.tab] && rec.tab !== piTab()) { S.piTab = rec.tab; dtwTab(rec.tab); }
+                dtwPilotLoadSetup(rec.id);
+                fgToast('Duplicated as ' + (rec.name || 'a new setup') + '. Change what you want, then start the test.' + (withCut ? ' The cut comes with it.' : ''));
+            }
+            window.dtwPilotDuplicateSetup = async function(id) {
+                var key = S.key; if (!key || !id) return;
+                try { var d = await api('/' + key + '/pilot/setups/' + encodeURIComponent(id) + '/duplicate', { method: 'POST', body: '{}' }); }
+                catch (e) { fgToast(e && e.message ? e.message : 'The setup could not be duplicated.'); return; }
+                piAdoptDuplicate(d, false);
+            };
+            window.dtwPilotDuplicateId = async function(sid) {
+                var key = S.key; if (!key || !sid) return;
+                try { var d = await api('/' + key + '/pilot/' + encodeURIComponent(sid) + '/duplicate', { method: 'POST', body: '{}' }); }
+                catch (e) { fgToast(e && e.message ? e.message : 'The test could not be duplicated.'); return; }
+                piAdoptDuplicate(d, !!(S.pilot && S.pilot.id === sid && S.pilot.status === 'playing'));
+            };
+            window.dtwPilotDuplicate = function() { var s = S.pilot; if (!s) return; return dtwPilotDuplicateId(s.id); };
+            window.dtwPilotDropSetupMedia = async function() {
+                var key = S.key; if (!key || !S.piSetupId || !piSetupMedia()) return;
+                var cur = (((S.twin || {}).pilot_setups) || []).filter(function(x) { return x.id === S.piSetupId; })[0] || {};
+                var snap = piFormSnapshot();
+                var body = { id: S.piSetupId, drop_media: true, name: String((snap.fields || {}).dtwPiTitle || '').trim() || cur.name || '', tab: snap.tab, mode: snap.mode, fields: snap.fields, options: snap.options,
+                             cohorts: snap.cohorts.filter(function(c) { return (c.name || c.composition || '').trim(); }), cohort_n: snap.cohort_n, cohort_custom: snap.cohort_custom, file_name: snap.file_name, files: snap.files };
+                try { var d = await api('/' + key + '/pilot/setups', { method: 'POST', body: JSON.stringify(body) }); }
+                catch (e) { fgToast(e && e.message ? e.message : 'The cut could not be removed from the setup.'); return; }
+                if (S.twin) S.twin.pilot_setups = d.setups || [];
+                piLocalSave();
+                renderPilotConsole();
+                fgToast('The cut is off this setup. Pick a file or paste a watch link when you start the test.');
+            };
             async function piUploadAsset(key, sid, file, slot, label, kind) {
                 var fd = new FormData(); fd.append('file', file); fd.append('slot', String(slot)); if (label) fd.append('label', label); if (kind) fd.append('kind', kind);
                 var r = await fetch('/api/digital-twins/' + encodeURIComponent(key) + '/pilot/' + encodeURIComponent(sid) + '/assets', { method: 'POST', credentials: 'same-origin', body: fd });
@@ -55702,12 +55798,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var rq = piReadQuotas();
                 var file = (el('dtwPiFile') || {}).files && el('dtwPiFile').files[0];
                 var more = (el('dtwPiFiles') || {}).files ? Array.prototype.slice.call(el('dtwPiFiles').files) : [];
+                var carried = file ? null : piSetupMedia();   // the cut a duplicated setup carries starts with the test (Jenna 2026-11-04); a picked file wins
                 if (mode === 'title' && options.length < 2) { if (st) st.textContent = 'Type at least two titles.'; return; }
                 if (mode === 'key_art' && !more.length) { if (st) st.textContent = 'Upload the art (up to six images).'; return; }
                 if (mode === 'concept' && !text) { if (st) st.textContent = 'Paste the concept first.'; return; }
-                if (mode === 'script' && !text && !file) { if (st) st.textContent = 'Paste the script or upload it.'; return; }
+                if (mode === 'script' && !text && !file && !carried) { if (st) st.textContent = 'Paste the script or upload it.'; return; }
                 var watchUrl = ((el('dtwPiWatchUrl') || {}).value || '').trim();
                 var body = { title: title, in_room: parseInt((el('dtwPiRoom') || {}).value || '12', 10) || 12, twins: other && other !== key ? [other] : [], mode: mode };
+                if (carried) body.setup_id = S.piSetupId;
                 var cohorts = piReadCohorts();
                 if (cohorts === null) { if (st) st.textContent = 'Pick at least one demographic for every cohort (at least two cohorts).'; return; }
                 if (cohorts.length) { body.cohorts = cohorts; body.in_room = cohorts.reduce(function(a, c) { return a + c.seats; }, 0); }

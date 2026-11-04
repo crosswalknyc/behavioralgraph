@@ -28,6 +28,7 @@ so an answer always lands in real time.
 """
 from __future__ import annotations
 
+import copy
 import re
 import threading
 import time
@@ -1352,6 +1353,62 @@ def rename_session(sess: dict, title: str) -> str:
     return name
 
 
+# ------------------------------------------------------------- duplicates
+# Jenna, 2026-11-04: "have a duplicate button where you could duplicate a
+# room with all of the input if you want to so if you just want to change
+# one thing you can". The name of a duplicate is the source's name plus a
+# plain suffix; a duplicate of a duplicate counts up instead of stacking.
+_COPY_SUFFIX_RX = re.compile(r"\s+copy(?:\s+\d+)?$", re.I)
+
+
+def copy_name(name: str, taken=None, limit: int = 120) -> str:
+    """'<name> copy', or '<name> copy 2' (3, 4, ...) when that name is
+    already taken. 'X copy' duplicated again gives 'X copy 2', never
+    'X copy copy'. Case and spacing insensitive; capped at ``limit``."""
+    base = _COPY_SUFFIX_RX.sub('', ' '.join(str(name or '').split())) or 'Untitled'
+    used = {' '.join(str(t or '').split()).lower() for t in (taken or []) if str(t or '').strip()}
+    n = 1
+    while True:
+        suffix = ' copy' if n == 1 else f" copy {n}"
+        cand = base[:max(1, limit - len(suffix))].rstrip() + suffix
+        if cand.lower() not in used:
+            return cand
+        n += 1
+
+
+def duplicate_room(payload: dict, twins: list, sid: str, *, created_by: str = '', session_id: str = '') -> Optional[dict]:
+    """A new room with every input of an existing one: the same twins,
+    the same cohorts and seat count (seated fresh from the same plan,
+    so the room is new and the seats are its own), the name with the
+    copy suffix. No questions, nothing paid, nothing charged: opening is
+    free and the session price waits for the first question, exactly as
+    on a room opened from the form. The source room is untouched. The
+    new room sits first on the twin. None when the room is not on the
+    twin; the caller saves the twin."""
+    src = next((s for s in (payload or {}).get('panel_sessions') or [] if isinstance(s, dict) and str(s.get('id')) == str(sid)), None)
+    if src is None:
+        return None
+    g = src.get('group') if isinstance(src.get('group'), dict) else {}
+    segments = copy.deepcopy(g.get('segments') or None)
+    if segments:
+        for s in segments:
+            if isinstance(s, dict):
+                for k in ('people', 'share_pct', 'twin_name'):
+                    s.pop(k, None)          # re-derived by the builder; label, twin, composition, filter and seats are the plan
+    try:
+        in_room = int(g.get('in_room') or DEFAULT_IN_ROOM)
+    except (TypeError, ValueError):
+        in_room = DEFAULT_IN_ROOM
+    taken = [str(s.get('title') or '') for s in (payload.get('panel_sessions') or []) if isinstance(s, dict)]
+    sess = open_session(twins, segments=segments, in_room=in_room, title=copy_name(src.get('title') or 'Room', taken),
+                        created_by=created_by, session_id=session_id)
+    keys = [str(k) for k in (src.get('twin_keys') or g.get('twins') or []) if str(k)]
+    sess['twin_keys'] = keys or [_twin_key(t) for t in twins]
+    sess['duplicated_from'] = str(src.get('id') or '')
+    payload.setdefault('panel_sessions', []).insert(0, sess)
+    return sess
+
+
 # ------------------------------------------------- rooms: reuse, pay, delete
 def segment_labels(twins: list, segments: Optional[list] = None) -> list:
     """The segment labels a room spec resolves to (the twin names when
@@ -1636,5 +1693,5 @@ __all__ = ['open_session', 'ask', 'build_group', 'rebuild_group', 'needs_reseat'
            'classify_question', 'distribution', 'propensity', 'parse_segment', 'fallback_voices', 'voice_record',
            'with_time_budget', 'session_lines', 'session_csv', 'one_line_read', 'topic_of', 'strip_twin_words', 'recompute_group_sizes',
            'segment_labels', 'find_reusable_session', 'charge_due', 'mark_paid', 'deleted_room_key', 'can_delete_room', 'remove_session', 'delete_room',
-           'clean_room_title', 'rename_session',
+           'clean_room_title', 'rename_session', 'copy_name', 'duplicate_room',
            'DELETED_ROOMS_PREFIX', 'DELETED_ROOM_KEEP_DAYS', 'KINDS', 'DEFAULT_IN_ROOM', 'MAX_IN_ROOM', 'TIME_BUDGET_S']

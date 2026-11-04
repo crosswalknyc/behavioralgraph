@@ -48,6 +48,10 @@ app.py so app.py stays small.
   POST /api/digital-twins/<key>/pilot/<sid>/restore  the deleted test back from its undo copy (the deleter or an admin)
   POST /api/digital-twins/<key>/pilot/setups         save the setup form as a named setup on the twin (upsert by id); nothing seated or charged
   DELETE /api/digital-twins/<key>/pilot/setups/<id>  remove a saved setup (the person who saved it, or an admin)
+  POST /api/digital-twins/<key>/pilot/setups/<id>/duplicate  a new saved setup with every input of this one ('<name> copy'); the cut it carries comes along
+  POST /api/digital-twins/<key>/pilot/<sid>/duplicate  a test duplicated into a new saved setup: every input, none of the results, the cut copied,
+                                                     priced like a fresh setup (Jenna 2026-11-04: duplicate a room with all of the input, change one thing)
+  POST /api/digital-twins/<key>/panel/<sid>/duplicate  a new room with the same twins, cohorts and seats ('<name> copy'); no questions, nothing paid
   GET  /api/digital-twins/<key>/pilot/<sid>/media-url  a signed link to the cut (ten minutes; creator or admin only)
   GET  /api/digital-twins/<key>/pilot/<sid>/media    the uploaded cut streamed (creator or admin only; the fallback player path)
   GET  /api/digital-twins/pilot-norms?format=&genre=  the norm and genre norm columns (no sources)
@@ -1002,6 +1006,56 @@ def dt_panel_delete(key, sid):
                              'undo_until': undo_until, 'message': 'Room deleted. It can be restored within 30 days by an admin.'}))
 
 
+@bp.route(f'{PREFIX}/<path:key>/panel/<sid>/duplicate', methods=['POST'])
+def dt_panel_duplicate(key, sid):
+    """Duplicate a room (Jenna, 2026-11-04: "duplicate a room with all of
+    the input if you want to so if you just want to change one thing you
+    can"): a new room, first on the twin, with the same twins, cohorts
+    and seat count, the name with a copy suffix, no questions and nothing
+    paid. Opening is free, as from the form; the session price waits for
+    the first question. The source room is untouched. Anyone who can see
+    the twin may duplicate a room on it; the new room is theirs."""
+    user, err = _gate()
+    if err:
+        return err
+    payload, err = _twin_or_404(user, key)
+    if err:
+        return err
+    src = _session(payload, sid)
+    if not src:
+        return jsonify({'success': False, 'error': 'session not found'}), 404
+    from migration import digital_twin_panel as P
+    from migration import digital_twin_room as ROOM
+    from migration.digital_twin_synthesis import hydrate_identity_from_profile
+    s3 = _s3()
+    twins_by_key = _twins_for(payload, key, src)
+    for t in twins_by_key.values():
+        try:
+            hydrate_identity_from_profile(t, s3)
+        except Exception:
+            traceback.print_exc()
+    sess = P.duplicate_room(payload, list(twins_by_key.values()), sid, created_by=_uname(user), session_id=uuid.uuid4().hex[:10])
+    if sess is None:
+        return jsonify({'success': False, 'error': 'session not found'}), 404
+    try:
+        ROOM.ensure_personas(sess, twins_by_key, session_seed=str(sess.get('id') or ''))
+    except Exception:
+        traceback.print_exc()
+    PT = _portraits()
+    if PT is not None:
+        try:
+            PT.attach_portraits(sess, s3)
+        except Exception:
+            pass
+    DT.save_twin(s3, key, payload)
+    if PT is not None:
+        try:
+            PT.schedule_room_portraits(s3, key, sess, twins_by_key, payload)
+        except Exception:
+            pass
+    return _nocache(jsonify({'success': True, 'session': sess, 'source_id': sid, 'extra_panelists': DT.extra_panelists((sess.get('group') or {}).get('in_room'))}))
+
+
 @bp.route(f'{PREFIX}/<path:key>/panel/<sid>/export.csv', methods=['GET'])
 def dt_panel_csv(key, sid):
     user, err = _gate()
@@ -1134,11 +1188,21 @@ def dt_pilot_open(key):
     mode = str(body.get('mode') or 'pilot').strip().lower()
     mode = mode if mode in PI.MODES else 'pilot'
     watch_url = str(body.get('watch_url') or body.get('url') or '').strip()
+    # a test started from a saved setup that carries a cut (a duplicate of a test, 2026-11-04): the file comes
+    # onto the new test here, so nothing is uploaded again; the person who saved the setup, or an admin
+    setup = None
+    setup_id = str(body.get('setup_id') or '').strip()
+    if setup_id:
+        setup = next((x for x in (payload.get('pilot_setups') or []) if isinstance(x, dict) and str(x.get('id')) == setup_id), None)
+        if setup is not None and not (isinstance(setup.get('media'), dict) and setup['media'].get('s3_key') and PI.can_edit_setup(setup, _uname(user), DT.is_admin(user))):
+            setup = None
     reused = PI.find_reusable_session(payload, twins, title=title, created_by=_uname(user)) if mode == 'pilot' and not body.get('text') and not body.get('options') and not watch_url else None
     if reused is not None and str(reused.get('mode') or 'pilot') != mode:
         reused = None
     if reused is not None:
         sess = reused
+        if setup is not None and not (sess.get('media') or {}).get('s3_key'):
+            PI.attach_setup_media(s3, sess, setup, _uname(user))
     else:
         media = {}
         if body.get('cut_title') or body.get('runtime_s') or body.get('runtime'):
@@ -1148,6 +1212,8 @@ def dt_pilot_open(key):
                                session_id=uuid.uuid4().hex[:10], media=media, mode=mode, logline=str(body.get('logline') or ''), text=str(body.get('text') or ''),
                                options=body.get('options') if isinstance(body.get('options'), list) else None, rough_cut=bool(body.get('rough_cut')),
                                critics_room=bool(body.get('critics_room')))
+        if setup is not None:
+            PI.attach_setup_media(s3, sess, setup, _uname(user))
         if watch_url:
             runtime = _runtime_seconds(body.get('runtime_s') or body.get('runtime') or (media.get('runtime_s') if media else 0))
             PI.apply_watch_url(sess, watch_url, hint_title=str(body.get('cut_title') or title or ''), runtime_s=runtime, mode=mode)
@@ -1666,6 +1732,32 @@ def dt_pilot_delete(key, sid):
                              'undo_until': undo_until, 'message': 'Test deleted. It can be restored within 30 days by an admin.'}))
 
 
+@bp.route(f'{PREFIX}/<path:key>/pilot/<sid>/duplicate', methods=['POST'])
+def dt_pilot_duplicate(key, sid):
+    """Duplicate a test (Jenna, 2026-11-04: "duplicate a room with all of
+    the input if you want to so if you just want to change one thing you
+    can"): a new saved setup, first on the twin, with every input of the
+    test and none of its results. The cut comes along (copied to the
+    setup's own place, so it is not uploaded again) for the person who
+    opened the test or an admin. Nothing is seated or charged; the
+    setup is priced like one typed from scratch when it starts. The
+    test itself is untouched. The page opens the setup in the form."""
+    user, err = _gate()
+    if err:
+        return err
+    payload, err = _twin_or_404(user, key)
+    if err:
+        return err
+    from migration import digital_twin_pilot as PI
+    if not _pilot(payload, sid):
+        return jsonify({'success': False, 'error': 'test not found'}), 404
+    rec = PI.duplicate_session_as_setup(_s3(), payload, sid, _uname(user), DT.is_admin(user))
+    if rec is None:
+        return jsonify({'success': False, 'error': 'test not found'}), 404
+    DT.save_twin(_s3(), key, payload)
+    return _nocache(jsonify({'success': True, 'setup': PI.public_setup(rec), 'setups': PI.public_setups(payload), 'source_id': sid}))
+
+
 @bp.route(f'{PREFIX}/<path:key>/pilot/setups', methods=['POST'])
 def dt_pilot_setup_save(key):
     """Save the Pilot Testing form as a named setup on the twin (Jenna,
@@ -1685,9 +1777,9 @@ def dt_pilot_setup_save(key):
         cur = next((x for x in (payload.get('pilot_setups') or []) if isinstance(x, dict) and str(x.get('id')) == sid), None)
         if cur is not None and not PI.can_edit_setup(cur, _uname(user), DT.is_admin(user)):
             return jsonify({'success': False, 'error': 'Only the person who saved this setup, or an admin, can change it.'}), 403
-    rec = PI.save_setup(payload, body, _uname(user))
+    rec = PI.save_setup(payload, body, _uname(user), s3=_s3())
     DT.save_twin(_s3(), key, payload)
-    return _nocache(jsonify({'success': True, 'setup': rec, 'setups': payload.get('pilot_setups') or []}))
+    return _nocache(jsonify({'success': True, 'setup': PI.public_setup(rec), 'setups': PI.public_setups(payload)}))
 
 
 @bp.route(f'{PREFIX}/<path:key>/pilot/setups/<sid>', methods=['DELETE'])
@@ -1705,9 +1797,30 @@ def dt_pilot_setup_delete(key, sid):
         return jsonify({'success': False, 'error': 'setup not found'}), 404
     if not PI.can_edit_setup(cur, _uname(user), DT.is_admin(user)):
         return jsonify({'success': False, 'error': 'Only the person who saved this setup, or an admin, can delete it.'}), 403
-    gone = PI.delete_setup(payload, sid)
+    gone = PI.delete_setup(payload, sid, s3=_s3())
     DT.save_twin(_s3(), key, payload)
-    return _nocache(jsonify({'success': True, 'deleted': gone, 'setups': payload.get('pilot_setups') or []}))
+    return _nocache(jsonify({'success': True, 'deleted': PI.public_setup(gone), 'setups': PI.public_setups(payload)}))
+
+
+@bp.route(f'{PREFIX}/<path:key>/pilot/setups/<sid>/duplicate', methods=['POST'])
+def dt_pilot_setup_duplicate(key, sid):
+    """Duplicate a saved setup (Jenna, 2026-11-04): a new setup, first on
+    the twin, with every input of this one and the name '<name> copy'
+    ('<name> copy 2' when that exists). The cut it carries comes along
+    for the person who saved it or an admin. The page opens the new
+    setup in the form so one thing can change."""
+    user, err = _gate()
+    if err:
+        return err
+    payload, err = _twin_or_404(user, key)
+    if err:
+        return err
+    from migration import digital_twin_pilot as PI
+    rec = PI.duplicate_setup(payload, sid, _uname(user), DT.is_admin(user), s3=_s3())
+    if rec is None:
+        return jsonify({'success': False, 'error': 'setup not found'}), 404
+    DT.save_twin(_s3(), key, payload)
+    return _nocache(jsonify({'success': True, 'setup': PI.public_setup(rec), 'setups': PI.public_setups(payload), 'source_id': sid}))
 
 
 @bp.route(f'{PREFIX}/<path:key>/pilot/<sid>/restore', methods=['POST'])
@@ -2343,6 +2456,9 @@ def dt_get(key):
         return err
     out = {k: v for k, v in payload.items() if k != 'diagnostics'}
     out['runs'] = DT.product_runs(payload)       # stored runs of the retired Greenlight kind stay on the twin, never on the page
+    if payload.get('pilot_setups'):
+        from migration import digital_twin_pilot as PI
+        out['pilot_setups'] = PI.public_setups(payload)   # a saved setup's carried cut travels as has_file, never as its storage key
     return _nocache(jsonify({'success': True, 'twin': out, 'summary': DT.view_summary(payload)}))
 
 

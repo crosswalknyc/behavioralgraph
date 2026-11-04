@@ -29,6 +29,7 @@ copy never names how the room is produced.
 """
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import os
@@ -44,7 +45,7 @@ from migration.digital_twin_engine import (
     VERSION, clamp, jit, messy_count, natural_count, pct1, unit,
 )
 from migration.digital_twin_panel import (
-    DEFAULT_IN_ROOM, MAX_IN_ROOM, build_group, clean_room_title,
+    DEFAULT_IN_ROOM, MAX_IN_ROOM, build_group, clean_room_title, copy_name,
     rename_session as _rename_session,
 )
 
@@ -2095,15 +2096,26 @@ def _setup_clean(body: dict) -> dict:
             'file_name': str(body.get('file_name') or '')[:160], 'files': files}
 
 
-def save_setup(payload: dict, body: dict, username: str = '') -> dict:
+def save_setup(payload: dict, body: dict, username: str = '', s3=None) -> dict:
     """Upsert one saved setup on the twin (by id when the body carries one
-    the twin knows; otherwise new, newest first). Returns the record."""
+    the twin knows; otherwise new, newest first). Returns the record.
+
+    A setup that carries a cut (a duplicate of a test, see
+    ``duplicate_session_as_setup``) keeps it across saves; it goes when
+    the body says ``drop_media`` or names a different file (the person
+    picked another cut, which the browser hands over at Start)."""
     setups = [x for x in (payload.get('pilot_setups') or []) if isinstance(x, dict)]
     rec = _setup_clean(body or {})
     sid = str((body or {}).get('id') or '').strip()
     cur = next((x for x in setups if str(x.get('id')) == sid), None) if sid else None
     now = _now()
     if cur is not None:
+        carried = cur.get('media') if isinstance(cur.get('media'), dict) else None
+        new_file = str(rec.get('file_name') or '').strip()
+        if carried and ((body or {}).get('drop_media') or (new_file and new_file != str(carried.get('filename') or ''))):
+            _drop_setup_media(s3, cur)
+        elif carried and not new_file:
+            rec['file_name'] = str(carried.get('filename') or cur.get('file_name') or '')[:160]
         cur.update(rec)
         cur['updated_at'] = now
         cur['updated_by'] = str(username or '')
@@ -2115,13 +2127,341 @@ def save_setup(payload: dict, body: dict, username: str = '') -> dict:
     return rec
 
 
-def delete_setup(payload: dict, setup_id: str) -> Optional[dict]:
+def delete_setup(payload: dict, setup_id: str, s3=None) -> Optional[dict]:
     setups = [x for x in (payload.get('pilot_setups') or []) if isinstance(x, dict)]
     gone = next((x for x in setups if str(x.get('id')) == str(setup_id)), None)
     if gone is None:
         return None
     payload['pilot_setups'] = [x for x in setups if x is not gone]
+    _drop_setup_media(s3, gone)      # the cut a duplicate carried goes with the setup; the source test keeps its own file
     return gone
+
+
+# ----------------------------------------------------------- duplicates
+# Jenna, 2026-11-04: "have a duplicate button where you could duplicate a
+# room with all of the input if you want to so if you just want to change
+# one thing you can". A duplicate is a NEW saved setup: every input of the
+# source (a saved setup, or a test read back off its session), none of the
+# results, priced exactly like a setup typed from scratch (nothing seated,
+# nothing charged until Start the test). It opens in the setup form so the
+# one thing can change before the room is seated. A test's cut comes along:
+# the file is copied to the setup's own place so nothing is uploaded again.
+_TAB_FOR_MODE = {'pilot': 'pilot', 'feature': 'pilot', 'episode': 'pilot', 'binge': 'pilot', 'trailer': 'trailer', 'spot': 'trailer',
+                 'title': 'titles', 'key_art': 'titles', 'script': 'script', 'concept': 'concept'}
+_MEDIA_INPUT_KEYS = ('title', 'runtime_s', 'source', 'filename', 'content_type', 'bytes', 'hash', 'url', 'watch_url', 'platform', 'platform_label',
+                     'content_id', 'embed_url', 'kind', 'show', 'season', 'episode', 'open_label')
+
+
+def taken_names(payload: dict) -> list:
+    """Every name already in the Pilot Testing panel: the saved setups and
+    the tests, so a duplicate's name is new on both lists."""
+    out = []
+    for x in (payload or {}).get('pilot_setups') or []:
+        if isinstance(x, dict):
+            out.append(str(x.get('name') or ''))
+    for s in (payload or {}).get('pilot_sessions') or []:
+        if isinstance(s, dict):
+            out.append(str(s.get('title') or ''))
+    return out
+
+
+def setup_media_key(username: str, setup_id: str, filename: str) -> str:
+    """digital-twins/pilot-tests/<user>/setup-<id>/<file>: the cut a saved
+    setup carries."""
+    return media_s3_key(username, 'setup-' + re.sub(r"[^A-Za-z0-9_-]+", '', str(setup_id or '')), filename)
+
+
+def _copy_object(s3, src: str, dest: str) -> bool:
+    """A server-side copy inside the bucket. False (never raises) when
+    there is no client, no source, or the copy failed."""
+    if s3 is None or not src or not dest or src == dest:
+        return False
+    try:
+        s3.copy_object(Bucket='dashboard-inputs', CopySource={'Bucket': 'dashboard-inputs', 'Key': src}, Key=dest, MetadataDirective='COPY')
+        return True
+    except Exception as e:
+        print(f"[pilot] file copy skipped: {e}")
+        return False
+
+
+def _carry_media(media: dict) -> dict:
+    """The input side of a media record: the file's name, type, size,
+    hash, runtime, title and any watch link. Never the storage key (the
+    caller sets the new one), never the undo or purge marks."""
+    return {k: copy.deepcopy(v) for k, v in (media or {}).items() if k in _MEDIA_INPUT_KEYS}
+
+
+def _drop_setup_media(s3, rec: dict) -> bool:
+    """Remove the cut a saved setup carries (object and record). Never
+    raises; True when the record carried one."""
+    media = (rec or {}).get('media') if isinstance((rec or {}).get('media'), dict) else None
+    if not media:
+        return False
+    mk = str(media.get('s3_key') or '')
+    if mk and s3 is not None:
+        try:
+            s3.delete_object(Bucket='dashboard-inputs', Key=mk)
+        except Exception as e:
+            print(f"[pilot] setup file removal skipped: {e}")
+    rec.pop('media', None)
+    rec.pop('transcript', None)
+    return True
+
+
+def _runtime_text(seconds) -> str:
+    """'42:35' or '1:02:10', the way the setup form takes a runtime; ''
+    when there is none."""
+    try:
+        s = int(round(float(seconds or 0)))
+    except (TypeError, ValueError):
+        return ''
+    if s <= 0:
+        return ''
+    h, rem = divmod(s, 3600)
+    m, sec = divmod(rem, 60)
+    return f"{h}:{m:02d}:{sec:02d}" if h else f"{m}:{sec:02d}"
+
+
+def _num_text(v) -> str:
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return ''
+    return str(int(f)) if f == int(f) else f"{f:g}"
+
+
+def _names(items) -> list:
+    out = []
+    for c in items or []:
+        s = str((c.get('title') or c.get('name') or c.get('label') or '') if isinstance(c, dict) else c).strip()
+        if s:
+            out.append(s)
+    return out
+
+
+def setup_from_session(sess: dict, name: str) -> dict:
+    """The setup form a test was started from, read back off its session:
+    every input (what it is, the switches, the cut's title, runtime and
+    watch link, the prior cut, the cast, the logline, the text, the
+    titles, the second twin, the panelists, the cohorts, the quotas and
+    comps, the remove-the-file switch), none of the results. The cut
+    itself and the file names ride on top in
+    ``duplicate_session_as_setup``."""
+    sess = sess if isinstance(sess, dict) else {}
+    mode = str(sess.get('mode') or 'pilot').lower()
+    mode = mode if mode in MODES else 'pilot'
+    tab = _TAB_FOR_MODE.get(mode, 'pilot')
+    media = sess.get('media') if isinstance(sess.get('media'), dict) else {}
+    group = sess.get('group') if isinstance(sess.get('group'), dict) else {}
+    title = ' '.join(str(sess.get('title') or '').split())
+    fields = {'dtwPiTitle': str(name or '')[:120], 'dtwPiRough': bool(sess.get('rough_cut')), 'dtwPiCritics': bool(sess.get('critics_room')),
+              'dtwPiPurgeNew': bool(sess.get('purge_media_after'))}
+    cut_title = ' '.join(str(media.get('title') or '').split())
+    if cut_title and cut_title.lower() != title.lower():
+        fields['dtwPiCutTitle'] = cut_title[:160]
+    try:
+        runtime = float(media.get('runtime_s') or 0)
+    except (TypeError, ValueError):
+        runtime = 0.0
+    if runtime > 0:
+        if tab == 'trailer':
+            fields['dtwPiSecs'] = _num_text(round(runtime))
+        else:
+            fields['dtwPiMins'] = _runtime_text(runtime)
+    link = str(media.get('url') or '') if media.get('source') == 'watch_url' else str(media.get('watch_url') or '')
+    if link:
+        fields['dtwPiWatchUrl'] = link[:2000]
+    if str(sess.get('logline') or '').strip():
+        fields['dtwPiLogline'] = ' '.join(str(sess['logline']).split())[:600]
+    if str(sess.get('text') or '').strip():
+        fields['dtwPiText'] = str(sess['text'])[:SETUP_TEXT_MAX]
+    cast = _names(sess.get('cast'))
+    if cast:
+        fields['dtwPiCast'] = ', '.join(cast)[:2000]
+    keys = [str(k) for k in (sess.get('twin_keys') or group.get('twins') or []) if str(k)]
+    if len(keys) > 1:
+        fields['dtwPiTwin2'] = keys[1]
+    try:
+        in_room = int(group.get('in_room') or 0)
+    except (TypeError, ValueError):
+        in_room = 0
+    if in_room:
+        fields['dtwPiRoom'] = str(in_room)
+    quotas = sess.get('quotas') if isinstance(sess.get('quotas'), dict) else None
+    if quotas is None and isinstance(sess.get('recruit'), dict) and isinstance(sess['recruit'].get('quotas'), dict):
+        quotas = sess['recruit']['quotas']
+    quotas = quotas or {}
+    for fk, qk in (('dtwPiQUnder', 'under_35_pct'), ('dtwPiQWomen', 'women_pct'), ('dtwPiQFans', 'fans_of_lead_pct')):
+        if quotas.get(qk) is not None and _num_text(quotas.get(qk)):
+            fields[fk] = _num_text(quotas.get(qk))
+    try:
+        must = int(quotas.get('must_have_seen') or 0)
+    except (TypeError, ValueError):
+        must = 0
+    if must > 0:
+        fields['dtwPiQSeen'] = str(must)
+    comps = _names(sess.get('comps')) or _names(quotas.get('comps'))
+    if comps:
+        fields['dtwPiComps'] = ', '.join(comps)[:2000]
+    parent = (sess.get('lineage') or {}).get('parent') if isinstance(sess.get('lineage'), dict) else None
+    if parent:
+        fields['dtwPiPrior'] = str(parent)
+    options = [str(o.get('label') if isinstance(o, dict) else o).strip() for o in (sess.get('options') or [])]
+    options = [o[:120] for o in options if o][:6]
+    cohorts = []
+    for c in sess.get('cohorts') or []:
+        if not isinstance(c, dict):
+            continue
+        label = ' '.join(str(c.get('label') or c.get('name') or '').split())[:60]
+        comp = ' '.join(str(c.get('composition') or '').split())[:160]
+        if not (label or comp):
+            continue
+        try:
+            seats = int(c.get('seats') or 0)
+        except (TypeError, ValueError):
+            seats = 0
+        row = {'name': label, 'composition': comp, 'seats': max(1, min(24, seats or 4))}
+        demos = (c.get('filter') or {}).get('demos') if isinstance(c.get('filter'), dict) else None
+        if isinstance(demos, dict) and any(demos.values()):
+            row['demos'] = copy.deepcopy(demos)
+        cohorts.append(row)
+    if len(cohorts) < 2:
+        cohorts = []
+    cohort_n = len(cohorts) if cohorts else 1
+    files = [str(a.get('filename') or '') for a in (sess.get('assets') or [])
+             if isinstance(a, dict) and a.get('filename') and (str(a.get('kind') or 'video') != 'video' or int(a.get('slot') or 0) >= 1)]
+    files += [str(o.get('filename') or '') for o in (sess.get('options') or []) if isinstance(o, dict) and o.get('filename')]
+    file_name = str(media.get('filename') or '') if media.get('source') == 'upload' or media.get('s3_key') else ''
+    return {'name': str(name or '')[:120] or 'Untitled setup', 'tab': tab, 'mode': mode, 'fields': fields, 'options': options, 'cohorts': cohorts,
+            'cohort_n': cohort_n, 'cohort_custom': cohort_n > 6, 'file_name': file_name[:160], 'files': [f[:160] for f in files if f][:7]}
+
+
+def _carry_file_onto_setup(s3, rec: dict, media: dict, transcript, username: str) -> bool:
+    """Copy a cut to the new setup's own key and put its record (and the
+    file's words, when the source had them) on the setup. False when
+    there is nothing to copy or the copy failed; the setup then keeps
+    the file's name as the reminder to pick it again, as a setup saved
+    from the form does."""
+    src = str((media or {}).get('s3_key') or '')
+    if not src:
+        return False
+    dest = setup_media_key(username or str(rec.get('created_by') or 'seat'), str(rec.get('id') or ''), str(media.get('filename') or 'cut.mp4'))
+    if not _copy_object(s3, src, dest):
+        return False
+    carried = _carry_media(media)
+    carried['s3_key'] = dest
+    carried.setdefault('source', 'upload')
+    rec['media'] = carried
+    if transcript:
+        rec['transcript'] = copy.deepcopy(transcript)
+    return True
+
+
+def duplicate_setup(payload: dict, setup_id: str, username: str = '', is_admin: bool = False, s3=None) -> Optional[dict]:
+    """A saved setup duplicated: a new record, first on the twin, with
+    every input of the source and a new name ('<name> copy'). The cut
+    the source carries comes along for the person who saved it (or an
+    admin); anyone else gets the file's name as the reminder. None when
+    the setup is not on the twin; the caller saves the twin."""
+    setups = [x for x in (payload.get('pilot_setups') or []) if isinstance(x, dict)]
+    src = next((x for x in setups if str(x.get('id')) == str(setup_id)), None)
+    if src is None:
+        return None
+    rec = copy.deepcopy({k: v for k, v in src.items() if k not in ('id', 'created_by', 'created_at', 'updated_at', 'updated_by', 'media', 'transcript', 'duplicated_from', 'duplicated_from_title')})
+    rec['name'] = copy_name(src.get('name') or 'Untitled setup', taken_names(payload))
+    fields = rec.get('fields') if isinstance(rec.get('fields'), dict) else {}
+    fields['dtwPiTitle'] = rec['name']
+    rec['fields'] = fields
+    now = _now()
+    rec.update({'id': uuid.uuid4().hex[:10], 'created_by': str(username or ''), 'created_at': now, 'updated_at': now,
+                'duplicated_from': str(src.get('id') or ''), 'duplicated_from_title': str(src.get('name') or '')[:120]})
+    media = src.get('media') if isinstance(src.get('media'), dict) else None
+    if media and media.get('s3_key') and can_edit_setup(src, username, is_admin):
+        _carry_file_onto_setup(s3, rec, media, src.get('transcript'), username)
+    setups.insert(0, rec)
+    payload['pilot_setups'] = setups[:MAX_SETUPS]
+    return rec
+
+
+def duplicate_session_as_setup(s3, payload: dict, sid: str, username: str = '', is_admin: bool = False) -> Optional[dict]:
+    """A test duplicated into a new saved setup (first on the twin): every
+    input read back off the session (``setup_from_session``), the cut
+    copied to the setup's own key when the caller may see it (the person
+    who opened the test, or an admin), the file's words with it. No
+    result travels: no seats, no scorecard, no dial, no events, no
+    questions, no watch, no forecast, no play or stop clock, nothing
+    paid. None when the test is not on the twin; the caller saves the
+    twin."""
+    sess = next((s for s in (payload.get('pilot_sessions') or []) if isinstance(s, dict) and str(s.get('id')) == str(sid)), None)
+    if sess is None:
+        return None
+    rec = setup_from_session(sess, copy_name(sess.get('title') or 'Untitled test', taken_names(payload)))
+    now = _now()
+    rec.update({'id': uuid.uuid4().hex[:10], 'created_by': str(username or ''), 'created_at': now, 'updated_at': now,
+                'duplicated_from': str(sess.get('id') or ''), 'duplicated_from_title': str(sess.get('title') or '')[:120]})
+    media = sess.get('media') if isinstance(sess.get('media'), dict) else {}
+    if media.get('s3_key') and can_view_media(sess, username, is_admin):
+        _carry_file_onto_setup(s3, rec, media, sess.get('transcript'), username)
+    setups = [x for x in (payload.get('pilot_setups') or []) if isinstance(x, dict)]
+    setups.insert(0, rec)
+    payload['pilot_setups'] = setups[:MAX_SETUPS]
+    return rec
+
+
+def attach_setup_media(s3, sess: dict, setup: dict, username: str = '') -> bool:
+    """Start the test with the cut a saved setup carries: the file is
+    copied to the new test's own key (under its id), the record lands
+    on the test with the runtime and title typed on the form kept when
+    they were, and the file's words come along. The setup keeps its
+    copy for the next run. False when the setup carries no file or the
+    copy failed (the test opens without a file, as before)."""
+    media = (setup or {}).get('media') if isinstance((setup or {}).get('media'), dict) else {}
+    src = str(media.get('s3_key') or '')
+    if not src or not isinstance(sess, dict):
+        return False
+    dest = media_s3_key(username or str(sess.get('created_by') or 'seat'), str(sess.get('id') or ''), str(media.get('filename') or 'cut.mp4'))
+    if not _copy_object(s3, src, dest):
+        return False
+    carried = _carry_media(media)
+    carried['s3_key'] = dest
+    carried.setdefault('source', 'upload')
+    cur = sess.get('media') if isinstance(sess.get('media'), dict) else {}
+    if cur.get('title'):
+        carried['title'] = cur['title']
+    try:
+        typed = float(cur.get('runtime_s') or 0)
+    except (TypeError, ValueError):
+        typed = 0.0
+    if typed > 0:
+        carried['runtime_s'] = typed
+    carried.setdefault('runtime_s', 0)
+    sess['media'] = carried
+    if setup.get('transcript') and not sess.get('transcript'):
+        sess['transcript'] = copy.deepcopy(setup['transcript'])
+    sess['status'] = 'draft'
+    sess['watch'] = {}
+    sess['prepare_note'] = 'Preparing the cut'
+    sess['updated_at'] = _now()
+    return True
+
+
+def public_setup(rec: dict) -> dict:
+    """A saved setup for the page: the carried cut's storage key never
+    travels (``has_file`` says there is one) and the file's words stay
+    server-side."""
+    if not isinstance(rec, dict):
+        return {}
+    out = {k: v for k, v in rec.items() if k != 'transcript'}
+    media = rec.get('media') if isinstance(rec.get('media'), dict) else None
+    if media is not None:
+        m = {k: v for k, v in media.items() if k not in ('s3_key', 'undo_key')}
+        m['has_file'] = bool(media.get('s3_key'))
+        out['media'] = m
+    return out
+
+
+def public_setups(payload: dict) -> list:
+    return [public_setup(x) for x in (payload or {}).get('pilot_setups') or [] if isinstance(x, dict)]
 
 
 def can_edit_setup(rec: dict, username: str, is_admin: bool = False) -> bool:
@@ -2545,4 +2885,7 @@ __all__ = [
     'session_csv', 'session_lines', 'public_session', 'signed_media_url',
     'media_s3_key', 'accept_upload_name', 'ffmpeg_available', 'probe_duration',
     'process_local_cut', 'has_banned_copy', 'beat_step',
+    'save_setup', 'delete_setup', 'can_edit_setup', 'MAX_SETUPS',
+    'copy_name', 'taken_names', 'setup_media_key', 'setup_from_session', 'duplicate_setup', 'duplicate_session_as_setup',
+    'attach_setup_media', 'public_setup', 'public_setups',
 ]
