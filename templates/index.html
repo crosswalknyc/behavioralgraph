@@ -53455,6 +53455,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var f = ((q || {}).facts_used || []).filter(Boolean); if (!f.length) return '';
                 return '<div class="dtw-fg-sec"><div class="dtw-fg-th">What the room knew.</div>' + f.map(function(x, i) { return '<div class="dtw-fg-fact"><span class="num">' + (i < 9 ? '0' : '') + (i + 1) + '</span><span>' + esc(x) + '</span></div>'; }).join('') + '</div>';
             }
+            // What people were saying (2026-11-04): the lines the audience itself used, from the media desk, under the facts.
+            function talkSec(q) {
+                var t = ((q || {}).talk || []).filter(Boolean); if (!t.length) return '';
+                return '<div class="dtw-fg-sec"><div class="dtw-fg-th">What people were saying.</div>' + t.map(function(x, i) { return '<div class="dtw-fg-fact"><span class="num">' + (i < 9 ? '0' : '') + (i + 1) + '</span><span>' + esc(x) + '</span></div>'; }).join('') + '</div>';
+            }
             function segmentsSec(q, rk) {
                 var segs = (q || {}).by_segment || []; if (segs.length < 2) return '';
                 var opts = optsOf(q), byLabel = {}; opts.forEach(function(o) { byLabel[String(o.label)] = o; });
@@ -53499,7 +53504,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                             return '<div class="dtw-fg-lrow' + (rk[String(o.id)] === 0 ? ' lead' : '') + '"><span class="dtw-fg-dot" style="background:' + seriesOf(rk, o.id) + '"></span><div class="body"><div class="l1"><span class="lab">' + esc(o.label) + '</span>' + (det.length ? '<span class="det">' + det.join(SEP) + '</span>' : '') + '<b>' + pct(v, 1) + '</b></div>' + (o.context && !live ? '<div class="ctx">' + esc(o.context) + '</div>' : '') + '</div></div>';
                         }).join('');
                     }
-                    body += factsSec(fq);
+                    body += factsSec(fq) + talkSec(fq);
                     var voices = voicesAll(fq, roster), vn = Math.min(voices.length, S.fg.vShown[qId(fq, (s.questions || []).indexOf(fq))] || 2);
                     S.fg.vctx = { q: fq, roster: roster, list: voices, key: qId(fq, (s.questions || []).indexOf(fq)) };
                     if (voices.length) body += '<div class="dtw-fg-sec"><div class="dtw-fg-th">The voices.<span id="dtwFgVoicesN">' + vn + ' of ' + voices.length + '</span></div><div class="dtw-fg-vtwo" id="dtwFgVoices">' + voices.slice(0, vn).map(function(v) { return voiceMini(v, roster, fq); }).join('') + '</div></div>';

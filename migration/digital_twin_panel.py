@@ -1620,6 +1620,15 @@ def session_csv(session: dict) -> str:
     for q in session.get('questions') or []:
         for v in q.get('voices') or []:
             w.writerow([session.get('id'), q.get('id'), v.get('name'), v.get('age'), v.get('city'), v.get('segment'), v.get('line')])
+    # what the room knew and what people were saying (2026-11-04), one line each
+    if any((q.get('facts_used') or q.get('talk')) for q in session.get('questions') or []):
+        w.writerow([])
+        w.writerow(['Session', 'Question id', 'Block', 'Line'])
+        for q in session.get('questions') or []:
+            for f in q.get('facts_used') or []:
+                w.writerow([session.get('id'), q.get('id'), 'What the room knew', f])
+            for t in q.get('talk') or []:
+                w.writerow([session.get('id'), q.get('id'), 'What people were saying', t])
     return buf.getvalue()
 
 

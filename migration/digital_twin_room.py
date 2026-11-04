@@ -108,7 +108,7 @@ from typing import Callable, Optional
 
 from migration.digital_twin_engine import clamp, unit
 
-ROOM_VERSION = 'room-1'
+ROOM_VERSION = 'room-2'   # room-2 (2026-11-04): the media desk and the result anchor
 S3_BUCKET = 'dashboard-inputs'
 JOB_PREFIX = 'system/digital_twins/jobs/'
 RESEARCH_PREFIX = 'system/digital_twins/research/'
@@ -124,11 +124,19 @@ MODELS = {
     # the strong chain when the Prometheus host is not bound (a script, the box): the same candidates the analysis chain walks
     'strong': ['claude-opus-5', 'claude-opus-4-8', 'claude-opus-4-7', 'claude-opus-4-6', 'claude-sonnet-4-6'],
 }
-BUDGET_S = {'research': 75.0, 'options': 40.0, 'persona': 50.0, 'read': 50.0}
+BUDGET_S = {'research': 75.0, 'media': 150.0, 'options': 40.0, 'persona': 50.0, 'read': 50.0}   # the media desk's searches run longer than the facts desk's
 MAX_OPTIONS = 5
 VOICES_N = 4
 RESEARCH_CACHE_TTL_S = 14 * 86400
 RESEARCH_MAX_SEARCHES = 4
+# The media desk (Jenna 2026-11-04): what the audience has been seeing, hearing and
+# saying, and how an event came out. Cached by the day; a brief from this morning
+# is still this morning's, a brief from yesterday is not today's.
+MEDIA_PREFIX = 'system/digital_twins/media/'
+MEDIA_CACHE_TTL_S = 6 * 3600
+MEDIA_MAX_SEARCHES = 8
+ANCHOR_POLL_WEIGHT = 2.0      # a published poll outweighs the seats two to one before the event
+ANCHOR_RESULT_JITTER = 0.6    # the published split sits on the count, a few tenths off it
 _SOURCE_NAMES_RX = re.compile(r"\b(Nielsen|Circana|NPD(?: Group)?|Statista|eMarketer|Insider Intelligence|YouGov|Pew(?: Research(?: Center)?)?|Box Office Mojo|The Numbers|Sensor Tower|data\.ai|App Annie|Comscore|Luminate|Deadline|Variety|The Hollywood Reporter|Hollywood Reporter|Media Play News|Home Media Magazine|TVLine|Vulture|Tudum|SEC filings?|10-K|earnings (?:call|report)s?|per (?:the )?trade press|trade press)\b", re.I)
 _BANNED_RX = re.compile(r"\b(synthetic|synth|modell?ed|model|estimated|estimate|research(?:ed)?|panel|panelists?|sample|confidence|pipeline|corpus|lane)\b", re.I)
 _MODEL_FN: Optional[Callable] = None
@@ -253,13 +261,13 @@ class Models:
         return None
 
     @staticmethod
-    def _tools():
-        """The web_search tool for the research agent, capped at
-        RESEARCH_MAX_SEARCHES rounds so a question stays inside the
-        budget (the brief is cached per subject + topic)."""
+    def _tools(max_uses: int = RESEARCH_MAX_SEARCHES):
+        """The web_search tool for the research and media desks, capped
+        so a question stays inside the budget (the facts brief is cached
+        per subject + topic, the media brief per day)."""
         try:
             import prometheus_analysis as _pma
-            return [dict(_pma.WEB_SEARCH_TOOL, max_uses=RESEARCH_MAX_SEARCHES)]
+            return [dict(_pma.WEB_SEARCH_TOOL, max_uses=int(max_uses))]
         except Exception:
             return None
 
@@ -312,20 +320,20 @@ class Models:
             data, model = self._chain(system, user, max_tokens, temperature, surface, MODELS['persona'])
             if data is not None:
                 return data, self._log(role, model, self._stats_now(), t0, True)
-        want = MODELS.get(role) if role in ('research', 'moderator') else None
-        research_tools = tools if tools is not None else (self._tools() if role == 'research' else None)
+        want = MODELS.get('research' if role == 'media' else role) if role in ('research', 'media', 'moderator') else None
+        research_tools = tools if tools is not None else (self._tools(MEDIA_MAX_SEARCHES if role == 'media' else RESEARCH_MAX_SEARCHES) if role in ('research', 'media') else None)
         if want:
             data, model = self._chain(system, user, max_tokens, temperature, surface, [want] + [m for m in MODELS['strong'] if m != want], tools=research_tools)
             if data is not None:
                 return data, self._log(role, model, self._stats_now(), t0, True)
         cj = self._host_claude()
         if cj is None:
-            chain = MODELS['strong'] if role in ('research', 'moderator') else MODELS['persona']
+            chain = MODELS['strong'] if role in ('research', 'media', 'moderator') else MODELS['persona']
             data, model = self._chain(system, user, max_tokens, temperature, surface, chain, tools=research_tools)
             return data, self._log(role, model, self._stats_now(), t0, data is not None)
         try:
             got = cj(system, user, max_tokens=max_tokens, temperature=temperature, surface=surface, usage_extras=self.extras,
-                     tools=(tools if tools is not None else (self._tools() if role == 'research' else None)))
+                     tools=research_tools)
         except TypeError:
             got = cj(system, user)
         except Exception as e:
@@ -465,6 +473,12 @@ def topics_overlap(a: str, b: str, subject: str = '') -> float:
 
 def research_key(subject: str, q: str) -> str:
     return f"{RESEARCH_PREFIX}{_slug(subject)}/{topic_hash(q, subject)}.json"
+
+
+def media_key(subject: str, q: str, day: str = '') -> str:
+    """The media brief's key: subject + topic + the day it was gathered."""
+    day = day or time.strftime('%Y-%m-%d', time.gmtime())
+    return f"{MEDIA_PREFIX}{_slug(subject)}/{day}/{topic_hash(q, subject)}.json"
 
 
 def facts_key(subject: str) -> str:
@@ -1316,24 +1330,63 @@ Return JSON only:
  "implications": ["<two to four sentences on what these facts mean for how this audience answers this question>"]}
 At most fourteen facts; the whole answer under 1,600 tokens."""
 
+# What the facts desk looks for depends on what the twin is built around (the
+# boxed-set paragraphs above are written for a title; a room of Texas voters
+# or Costco members needs its own list).
+RESEARCH_CLASS_GUIDANCE = {
+    'civic': ("This audience is an electorate or the residents of a place. The subject's facts are the race, measure or issue the question turns on: the candidates or sides, the offices, the date, "
+              "how the race stood in the latest published polls and averages (with dates), turnout and registration, the money in the race and who spent it, endorsements, and the result when the "
+              "vote has been counted or the race called (the official count or the call, the shares, the margin). Approved sources add: the state's election authority, AP race calls, the FEC, "
+              "university and major-outlet polls and their averages, and the national and local news outlets that covered the race. Comparables are the last two elections for the same office."),
+    'brand': ("This audience is a brand's buyers or members. The subject's facts are the brand's products, prices, stores and app, what changed lately (a price move, a recall, a launch, a fee), "
+              "its published counts (members, stores, sales), and how comparable brands fared through the same kind of change."),
+    'platform': ("This audience is a service's subscribers or users. The subject's facts are the service's plans and prices, what it carries, what changed lately, its published counts, and how "
+                 "comparable services fared through the same kind of change. It is a service, not a show: no merchandise or disc history."),
+    'talent': ("This audience is a person's following. The subject's facts are the person's work, releases and appearances, what is current, their public business (tours, deals, channels), "
+               "and how comparable figures' audiences behaved through the same kind of moment."),
+    'audience': ("This audience is an interest group. The subject's facts are the category's products, brands and services, what changed lately, published counts, and how comparable categories "
+                 "behaved through the same kind of change."),
+}
+
+MEDIA_SYSTEM = """You are the media desk for Prometheus, the focus group moderator. Before the room answers a question you find what the people in THIS audience have actually been seeing, hearing and saying about it, with the web_search tool: news coverage of the last two weeks (national outlets and the outlets local to where this audience lives), what people are saying on X, Reddit, TikTok, Facebook groups, YouTube comments, talk radio, letters and interviews, the latest polls or published numbers, and, when the question turns on an event (an election, a premiere, a launch, a game, a verdict, a price change, an announcement), whether that event has already happened by today and how it came out.
+You are given what the room already knows (the subject's facts on file, the names of the candidates, sides, titles or products in play). Use those names in your searches; never spend a search on what is already on file.
+Work in this order, and spend your searches in this order:
+1. Date the question. 'today' is given. Name the event the question turns on, its date, and its status: upcoming, today, or happened. When the event's date is on or before today it has happened (a question that says 'today' the day after still means that event): your FIRST search is its result, by the names on file ('<race> results <candidate> <candidate>', '<race> called'), and your second search is the count and turnout when the first did not carry them. Report the official count or the call, the shares, who won and by how much, and turnout under results. Never guess a result; a race not yet called is 'leading' with the count so far.
+2. Coverage: the six to ten storylines that carried the subject in the last two weeks, each one plain sentence, with how wide it ran (dominant, common, niche), whether local outlets carried it, and how many days ago.
+3. Talk: the six to ten things people in this audience were actually saying, in their own words: the recurring lines, the phrases that trended, the complaints, the pride, the jokes. Each with who says it (which part of this audience), how loud it is (dominant, common, niche) and its feeling. Include the lines that cut against the coverage, and give both sides of a theme that split the audience.
+4. Polls and numbers: the latest polls or averages with their dates, turnout, money, published counts, and the result.
+5. Local: three to five things the audience's own places were talking about.
+Rules: never fabricate a number, a date, a quote or a result; a thing you looked for and could not support goes in not_found, said plainly. Quote people's lines the way they say them, short, no handles and no private names. Keep every string short.
+Return JSON only:
+{"event": {"what": "<the event the question turns on, or empty>", "date": "<yyyy-mm-dd or empty>", "status": "upcoming|today|happened|none", "outcome": "<one plain sentence on how it came out, or empty>",
+  "results": [{"label": "<the side or candidate as a voter would name it, with the party in parentheses when there is one>", "share_pct": <number or null>, "status": "final|called|leading|projected"}], "turnout_pct": <number or null>},
+ "polls": [{"label": "<side or candidate>", "share_pct": <number>, "as_of": "<yyyy-mm-dd>", "source_class": "<poll|average>"}],
+ "coverage": [{"line": "<one plain sentence>", "reach": "dominant|common|niche", "local": true|false, "days_ago": <n>}],
+ "talk": [{"line": "<what they say, in their words>", "who": "<which part of this audience>", "loudness": "dominant|common|niche", "feeling": "angry|proud|worried|hopeful|relieved|dismissive|amused|mixed"}],
+ "numbers": [{"fact": "<one plain sentence with the number and its date>", "source_class": "poll|results|turnout|official|platform published|news"}],
+ "local": ["<one plain sentence>"], "not_found": ["<what you looked for and could not support>"]}
+At most ten coverage lines, ten talk lines, eight numbers; the whole answer under 1,900 tokens. The searches you have are enough for the result, the talk and the coverage when you use the names on file; do not stop to say the budget ran out."""
+
 OPTIONS_SYSTEM = """You are Prometheus, a seasoned focus group moderator. Before the room answers you put the coded answer options on the board for THIS stimulus. Rules:
 - Three to five options, mutually exclusive, in the room's own plain words, each one a real way a person in this audience could answer the question as asked.
 - True to the facts brief. Never an option the facts rule out: for a show that ended years ago and already streams, 'wait for it to come out' or 'wait until it is free' is not an answer; for a collectible the real options turn on keepsake value, unseen material, giving it as a gift, already owning it, and price. For a show still running, options turn on when and where they would watch.
 - Each option carries a lean: yes (a purchase, watch or positive intent), maybe (conditional), no (a decline), other.
 - When the question kind is probe, the options are the reasons or the levers you expect to hear, tied to what the room answered on the question it follows.
+- When the brief carries talk (what people in this audience have been saying), the options reflect the real reasons people give, in the words they use; a theme the talk shows splitting the audience gets both of its sides as options when the question turns on it. When the brief carries how an event came out, never an option the result rules out, and the framing says how it came out when the question turns on it.
 - When the stimulus carries what_just_played (the room is watching a cut and it was paused at that clock), the question is about that moment: open the framing with the clock and the scene in plain words ('At 12:40, right after the hallway reveal: would you keep watching?'), make the options about the cut as watched (keep watching, who they are following, what confused them, what landed), never about buying or subscribing unless the question asks, and never name an actor.
 - Write the framing: how you would put the question to the room in one or two sentences, giving the room the facts it should have in plain words. Never name a source; never use the words research, panel, sample, model, synthetic, estimated, confidence. No em dashes.
 Return JSON only: {"options": [{"id": "a", "label": "<short label, under 12 words>", "lean": "yes|maybe|no|other"}], "framing": "<one or two sentences>", "listen_for": ["<two or three things you want to hear from the room>"]}"""
 
 PERSONA_SYSTEM = """You are one person in a focus group, answering as yourself. The moderator is Prometheus. You are given who you are (a card), what you said earlier in this session, the facts Prometheus put in front of the room, and the question with its coded options.
 Stay in character: your age, your city, who you are (orientation, education, the work the card gives you), how you came to the subject, your habits with money, merchandise and discs, your streaming life. Reason from the facts the way you would (if the show ended years ago and you can stream it any night, say what that means for you; if you own the DVDs already, say so). Answer Prometheus in two or three natural spoken sentences, concrete the way real people are (what you own, what you paid, who you would give it to), with no lists and no hedging. Never mention being an AI, a twin, a persona or a character. When this is a follow-up, stay consistent with what you said earlier. Pick exactly one option by id, or 'other' with a short label when none fits. Give a confidence from 1 (unsure) to 5 (certain) and a one-sentence reason. No em dashes.
+You are also given what people like you have been hearing and saying lately (the coverage, the talk, how an event came out). Let it show the way it would in a real person: pick up the lines you agree with in your own words, push back on the ones that are not you, ignore the rest; what made people like you angry or proud is part of your answer when it fits who you are. When the event the question is about has already happened, you know how it came out and speak from after it.
 When you are given what_just_played, you are in a screening and the cut was paused at that clock: answer about what you just saw, name the scene in your own words (the hallway, the diner argument), let your own dial in those seconds and what you said during them show in the answer, and never name an actor.
 Return JSON only: {"option": "<id or other>", "other_label": "<when other>", "line": "<two or three sentences>", "confidence": <1 to 5>, "reason": "<one sentence>"}"""
 
 READ_SYSTEM = """You are Prometheus, the moderator, writing up the room for a senior executive. Plain English a high school student follows; the thinking is senior consultant. You are given the question, the options with the room's split (the published share of the whole audience in percent and people, and the raw tally of the seats in the room, both already computed; never change a number), the split by segment, every seat's answer, the facts brief and a prior note.
 The published share is the room projected onto the audience: the seats drive the shape, and the small tails stand for people the twelve seats could not show, so a 1% option means a sliver of the audience, never nobody. Say shares in plain words first ('about two in three', 'about one in ten', 'a sliver') and cite the raw count when it helps ('eight of the twelve'); never print a percentage with a decimal in the read.
 Write:
-- read: one paragraph, three to five sentences, on what the room said and why, grounded in the facts and the comparables in plain words. Say what the share means (who these people are, what it would take). Vary the sentence shapes. Never name a source or a publication; never use the words research, model, modeled, synthetic, estimated, panel, sample, confidence, pipeline, data. If the prior note says the seats departed from the audience's own leaning, explain what accounts for it in the read rather than overriding the room. When the question was asked on the clock (the stimulus carries what_just_played), open the read with the clock and the scene ('At 12:40, after the hallway reveal, ...') and keep the read about that moment and the seats' own dials.
+- read: one paragraph, three to five sentences, on what the room said and why, grounded in the facts and the comparables in plain words. When the brief carries how an event came out, say so as fact in the first sentence and read the seats against it: the published split follows the count, the twelve seats are twelve people, so say what they show that the count does not. When the brief carries talk, name the loudest lines people used, in plain words. Say what the share means (who these people are, what it would take). Vary the sentence shapes. Never name a source or a publication; never use the words research, model, modeled, synthetic, estimated, panel, sample, confidence, pipeline, data. If the prior note says the seats departed from the audience's own leaning, explain what accounts for it in the read rather than overriding the room. When the question was asked on the clock (the stimulus carries what_just_played), open the read with the clock and the scene ('At 12:40, after the hallway reveal, ...') and keep the read about that moment and the seats' own dials.
 - voices: the seat ids of the three or four most telling answers, spread across the options in proportion to the split.
 - probes_next: two follow-up questions you would ask this room next, in your own words as the moderator.
 - facts_used: two to five one-line facts the read leans on, in plain words with no source names.
@@ -1342,7 +1395,13 @@ No em dashes. Return JSON only: {"read": "...", "voices": [<seat ids>], "probes_
 
 # ---------------------------------------------------------- the stages
 def facts_lines(brief: dict, limit: int = 14) -> list:
+    """What the room knew, in order: how the event came out (when it
+    has), the subject's status, the facts, then the media desk's
+    numbers."""
     out = []
+    ev = (brief or {}).get('event') or {}
+    if isinstance(ev, dict) and str(ev.get('status') or '') == 'happened' and str(ev.get('outcome') or '').strip():
+        out.append(str(ev['outcome']).strip())
     st = (brief or {}).get('subject_status') or {}
     if isinstance(st, dict) and st.get('line'):
         out.append(str(st['line']))
@@ -1351,7 +1410,166 @@ def facts_lines(brief: dict, limit: int = 14) -> list:
             out.append(str(f['fact']))
         elif isinstance(f, str):
             out.append(f)
+    seen, uniq = set(), []
+    for x in out:
+        k = re.sub(r'[^a-z0-9]+', ' ', x.lower()).strip()
+        if k and k not in seen:
+            seen.add(k)
+            uniq.append(x)
+    return uniq[:limit]
+
+
+_LOUD_WORD = {'dominant': 'heard everywhere', 'common': 'heard often', 'niche': 'heard in pockets'}
+
+
+def talk_lines(brief: dict, limit: int = 8) -> list:
+    """What people were saying, as plain lines for the room and the
+    page: the line in their words, who says it, how loud."""
+    out = []
+    for t in (brief or {}).get('talk') or []:
+        if not isinstance(t, dict) or not str(t.get('line') or '').strip():
+            continue
+        line = str(t['line']).strip().strip('"').strip()
+        who = str(t.get('who') or '').strip()
+        loud = _LOUD_WORD.get(str(t.get('loudness') or '').lower(), '')
+        tail = '; '.join(x for x in (who, loud) if x)
+        out.append(f"\u201c{line}\u201d" + (f" ({tail})" if tail else ''))
     return out[:limit]
+
+
+def coverage_lines(brief: dict, limit: int = 6) -> list:
+    out = []
+    for c in (brief or {}).get('coverage') or []:
+        if isinstance(c, dict) and str(c.get('line') or '').strip():
+            out.append(str(c['line']).strip())
+        elif isinstance(c, str) and c.strip():
+            out.append(c.strip())
+    return out[:limit]
+
+
+def _norm_media(data: dict) -> dict:
+    """The media desk's answer, shaped and bounded; {} when it carries
+    nothing the room can use."""
+    if not isinstance(data, dict):
+        return {}
+    ev = data.get('event') if isinstance(data.get('event'), dict) else {}
+    results = []
+    for r in (ev.get('results') or []):
+        if isinstance(r, dict) and str(r.get('label') or '').strip():
+            try:
+                share = float(r['share_pct']) if r.get('share_pct') not in (None, '') else None
+            except (TypeError, ValueError):
+                share = None
+            results.append({'label': str(r['label']).strip()[:80], 'share_pct': share, 'status': str(r.get('status') or '').lower()[:12]})
+    status = str(ev.get('status') or 'none').lower()
+    if status not in ('upcoming', 'today', 'happened', 'none'):
+        status = 'none'
+    try:
+        turnout = float(ev['turnout_pct']) if ev.get('turnout_pct') not in (None, '') else None
+    except (TypeError, ValueError):
+        turnout = None
+    event = {'what': str(ev.get('what') or '').strip()[:160], 'date': str(ev.get('date') or '').strip()[:10], 'status': status,
+             'outcome': scrub(str(ev.get('outcome') or '').strip())[:300], 'results': results[:8], 'turnout_pct': turnout}
+    polls = []
+    for r in (data.get('polls') or []):
+        if isinstance(r, dict) and str(r.get('label') or '').strip() and r.get('share_pct') not in (None, ''):
+            try:
+                polls.append({'label': str(r['label']).strip()[:80], 'share_pct': float(r['share_pct']), 'as_of': str(r.get('as_of') or '')[:10], 'source_class': str(r.get('source_class') or '')[:20]})
+            except (TypeError, ValueError):
+                continue
+    # the latest reading per side: an older poll never adds to a newer one
+    polls.sort(key=lambda r: r.get('as_of') or '', reverse=True)
+    seen_sides, latest = set(), []
+    for r in polls:
+        k = ' '.join(sorted(_label_tokens(r['label']))) or r['label'].lower()
+        if k in seen_sides:
+            continue
+        seen_sides.add(k)
+        latest.append(r)
+    polls = latest
+    coverage = [{'line': scrub(str(c.get('line')).strip())[:220], 'reach': str(c.get('reach') or '')[:10], 'local': bool(c.get('local')), 'days_ago': c.get('days_ago')}
+                for c in (data.get('coverage') or []) if isinstance(c, dict) and str(c.get('line') or '').strip()][:10]
+    talk = [{'line': scrub(str(t.get('line')).strip())[:200], 'who': scrub(str(t.get('who') or '').strip())[:80], 'loudness': str(t.get('loudness') or '')[:10], 'feeling': str(t.get('feeling') or '')[:12]}
+            for t in (data.get('talk') or []) if isinstance(t, dict) and str(t.get('line') or '').strip()][:10]
+    numbers = [{'fact': scrub(str(n.get('fact')).strip())[:240], 'source_class': str(n.get('source_class') or 'news')[:24], 'topic': 'media'}
+               for n in (data.get('numbers') or []) if isinstance(n, dict) and str(n.get('fact') or '').strip()][:8]
+    local = [scrub(str(x).strip())[:200] for x in (data.get('local') or []) if str(x).strip()][:5]
+    not_found = [str(x).strip()[:160] for x in (data.get('not_found') or []) if str(x).strip()][:6]
+    if not (coverage or talk or numbers or event['outcome'] or results or polls):
+        return {}
+    return {'event': event, 'polls': polls[:8], 'coverage': coverage, 'talk': talk, 'numbers': numbers, 'local': local, 'not_found': not_found}
+
+
+def media_desk(models: Models, twin: dict, q: str, kind: str, stimulus: Optional[dict], s3, *, force: bool = False, log=None, known: Optional[list] = None) -> dict:
+    """What the audience has been seeing, hearing and saying about this
+    question, and how the event it turns on came out (Jenna 2026-11-04:
+    the room predicted a win the day after the loss, and never heard the
+    'democracy is not for sale' line that ran through the state). Cached
+    per subject + topic + day; {} when nothing could be gathered."""
+    subject = str(_meta(twin).get('subject') or _twin_name(twin))
+    today = time.strftime('%Y-%m-%d', time.gmtime())
+    mkey = media_key(subject, q, today)
+    cached = _get_json(s3, mkey) if (s3 is not None and not force) else None
+    if isinstance(cached, dict) and cached.get('media') and (time.time() - float(cached.get('at') or 0)) < MEDIA_CACHE_TTL_S:
+        media = dict(cached['media'])
+        media['_cached'] = True
+        media['_key'] = mkey
+        return media
+    tb = _twin_brief(twin)
+    facts_doc = _get_json(s3, facts_key(subject)) if s3 is not None else None
+    on_file = []
+    if isinstance(facts_doc, dict):
+        st = facts_doc.get('subject_status') if isinstance(facts_doc.get('subject_status'), dict) else {}
+        if st.get('line'):
+            on_file.append(str(st['line']))
+        on_file += [str(f.get('fact')) for f in (facts_doc.get('facts') or []) if isinstance(f, dict) and f.get('fact')][:8]
+    on_file += [str(x) for x in (known or []) if str(x).strip()]
+    user = json.dumps({'question': q, 'kind': kind, 'stimulus': stimulus or {}, 'today': today,
+                       'audience': {'name': tb['name'], 'subject': tb['subject'], 'kind': tb['kind'], 'class': subject_class(twin), 'size_us': tb['size_us'],
+                                    'where_they_live': tb.get('identity_read'), 'demographics': {k: v for k, v in (tb.get('demographics') or {}).items() if k in ('age', 'gender', 'ethnicity', 'income', 'location', 'party')}},
+                       'what_the_room_already_knows': list(dict.fromkeys(on_file))[:14], 'anchors_on_file': tb.get('anchors')},
+                      default=str)[:7000]
+    data, call = models.call('media', MEDIA_SYSTEM, user, max_tokens=6500, temperature=0.2, tools=None)   # the search rounds' interim text rides inside the budget; the brief itself stays under 1,900 tokens
+    if log:
+        log('media', call)
+    media = _norm_media(data)
+    if not media:
+        return {}
+    media['_key'] = mkey
+    if s3 is not None:
+        _put_json(s3, mkey, {'subject': subject, 'question': q, 'topic_hash': topic_hash(q, subject), 'day': today, 'at': time.time(),
+                             'media': {k: v for k, v in media.items() if not k.startswith('_')}, 'version': ROOM_VERSION})
+    return media
+
+
+def merge_media(brief: dict, media: dict) -> dict:
+    """The media desk's brief folded into the facts brief: the event, the
+    polls, the coverage, the talk, the local lines; its numbers join the
+    facts under the media topic."""
+    out = dict(brief or {})
+    if not media:
+        return out
+    out['event'] = media.get('event') or {}
+    out['polls'] = list(media.get('polls') or [])
+    out['coverage'] = list(media.get('coverage') or [])
+    out['talk'] = list(media.get('talk') or [])
+    out['local'] = list(media.get('local') or [])
+    facts = [f for f in (out.get('facts') or []) if not (isinstance(f, dict) and f.get('topic') == 'media')]
+    have = {re.sub(r'[^a-z0-9]+', ' ', str(f.get('fact') if isinstance(f, dict) else f).lower()).strip() for f in facts}
+    for n in media.get('numbers') or []:
+        k = re.sub(r'[^a-z0-9]+', ' ', str(n.get('fact') or '').lower()).strip()
+        if k and k not in have:
+            facts.append(dict(n))
+            have.add(k)
+    out['facts'] = facts[:20]
+    nf = list(out.get('not_found') or [])
+    for x in media.get('not_found') or []:
+        if x not in nf:
+            nf.append(x)
+    out['not_found'] = nf[:10]
+    out['_media_cached'] = bool(media.get('_cached'))
+    out['_media_key'] = media.get('_key')
+    return out
 
 
 def research(models: Models, twin: dict, q: str, kind: str, stimulus: Optional[dict], s3, *, force: bool = False, log=None) -> dict:
@@ -1362,7 +1580,8 @@ def research(models: Models, twin: dict, q: str, kind: str, stimulus: Optional[d
     rkey = research_key(subject, q)
     fkey = facts_key(subject)
     cached = _get_json(s3, rkey) if (s3 is not None and not force) else None
-    if isinstance(cached, dict) and cached.get('brief') and (time.time() - float(cached.get('at') or 0)) < RESEARCH_CACHE_TTL_S:
+    ttl = 86400.0 if subject_class(twin) == 'civic' else RESEARCH_CACHE_TTL_S   # a race's facts turn over by the day
+    if isinstance(cached, dict) and cached.get('brief') and (time.time() - float(cached.get('at') or 0)) < ttl:
         brief = dict(cached['brief'])
         brief['_cached'] = True
         brief['_key'] = rkey
@@ -1374,7 +1593,9 @@ def research(models: Models, twin: dict, q: str, kind: str, stimulus: Optional[d
                                    'size_us': tb['size_us'], 'avid_share_pct': tb['avid_share_pct'], 'window': tb['window']},
                        'subject_facts_on_file': (facts_doc or {}).get('subject_status') if isinstance(facts_doc, dict) else None,
                        'audience_read': tb.get('identity_read'), 'lifecycle': tb.get('lifecycle_read'), 'anchors_on_file': tb.get('anchors')}, default=str)[:7000]
-    data, call = models.call('research', RESEARCH_SYSTEM, user, max_tokens=3600, temperature=0.2, tools=None)   # room for the search rounds' interim text; the brief itself stays under 1,600 tokens
+    klass = subject_class(twin)
+    system = RESEARCH_SYSTEM + ("\n" + RESEARCH_CLASS_GUIDANCE[klass] if klass in RESEARCH_CLASS_GUIDANCE else '')
+    data, call = models.call('research', system, user, max_tokens=5000, temperature=0.2, tools=None)   # room for the search rounds' interim text; the brief itself stays under 1,600 tokens
     if log:
         log('research', call)
     if not isinstance(data, dict) or not (data.get('facts') or data.get('subject_status')):
@@ -1503,6 +1724,12 @@ def seat_answer(models: Models, card: dict, q: str, framing: str, options: list,
     body = {'you': _card_text(card), 'earlier_in_this_session': memory,
             'facts_the_moderator_gave_the_room': facts_lines(brief, 12), 'what_could_not_be_confirmed': (brief or {}).get('not_found') or [],
             'moderator': framing or q, 'question': q, 'options': [{'id': o['id'], 'label': o['label']} for o in options]}
+    ev = (brief or {}).get('event') or {}
+    if isinstance(ev, dict) and str(ev.get('status') or '') == 'happened' and ev.get('outcome'):
+        body['how_it_came_out'] = {'what': ev.get('what'), 'date': ev.get('date'), 'outcome': ev.get('outcome')}
+    cov, talk, local = coverage_lines(brief, 6), talk_lines(brief, 8), list((brief or {}).get('local') or [])[:4]
+    if cov or talk or local:
+        body['what_people_like_you_have_been_hearing_and_saying'] = {'in_the_news': cov, 'what_people_say': talk, 'closer_to_home': local}
     moment = _moment_for_seat(stimulus, card.get('seat'))
     if moment:
         body['what_just_played'] = moment
@@ -1799,6 +2026,185 @@ def _room_from_segments(by_segment: list, n_rows: int, total_people: int, n_seat
         _pcts_from_people(sr['distribution'], int(sr.get('people') or 0))
 
 
+# --------------------------------------------------------- the anchor
+# Jenna 2026-11-04: the room predicted Abbott would win the day after he lost.
+# When the event the question turns on has a count, the published split sits
+# on the count (calibrate-low-anchor-to-actuals: actuals set the anchor); a
+# published poll before the event outweighs the twelve seats two to one. The
+# seats keep their votes and their lines: they are the voices, the count is
+# the count, and the read says what the seats show that the count does not.
+_PARTY_RX = [(re.compile(r"\((?:r|rep|gop|republican)\)", re.I), ' republican '), (re.compile(r"\((?:d|dem|democrat|democratic)\)", re.I), ' democrat '),
+             (re.compile(r"\((?:i|ind|independent)\)", re.I), ' independent '), (re.compile(r"\((?:l|lib|libertarian)\)", re.I), ' libertarian '),
+             (re.compile(r"\((?:g|green)\)", re.I), ' green ')]
+_LABEL_STOP = {'the', 'a', 'an', 'of', 'for', 'and', 'or', 'to', 'in', 'on', 'candidate', 'candidates', 'vote', 'voted', 'voting', 'today', 'party', 'ticket', 'side', 'option',
+               'measure', 'proposition', 'prop', 'race', 'us', 'u', 's', 'senate', 'senator', 'governor', 'house', 'seat', 'nominee', 'incumbent', 'challenger', 'mr', 'ms', 'mrs'}
+_GENERIC_LABEL = {'republican', 'democrat', 'democratic', 'independent', 'libertarian', 'green', 'yes', 'no', 'other', 'another', 'write', 'blank', 'none'}
+_NONVOTE_RX = re.compile(r"\b(?:did not|didn'?t|not) (?:cast|vote|turn out|make it|go)\b|\bno ballot\b|\bstayed home\b|\bsat (?:this|it) out\b|\bskipped (?:it|the election|voting)\b|\bdid not cast a ballot\b", re.I)
+_BLANK_RX = re.compile(r"\bleft (?:it|the race|this race|the \w+ race) blank\b|\bblank\b|\bwrite-?in\b|\banother candidate\b|\bsomeone else\b|\bthird party\b", re.I)
+
+
+def _label_tokens(label: str) -> set:
+    t = str(label or '').lower()
+    for rx, rep in _PARTY_RX:
+        t = rx.sub(rep, t)
+    return {w for w in re.sub(r"[^a-z0-9]+", ' ', t).split() if w and w not in _LABEL_STOP}
+
+
+def match_targets(options: list, rows: list) -> dict:
+    """{option_id: share_pct} for the rows (results or polls) that name an
+    option: a row's distinctive words (a surname, a party) sit in the
+    option's label. Two rows that land on one option add up; a row that
+    could be two options matches neither. {} when fewer than two options
+    match or the matched shares do not cover most of the vote."""
+    opts = [(o['id'], _label_tokens(o.get('label'))) for o in options if o.get('id')]
+    out = {}
+    for r in rows or []:
+        if not isinstance(r, dict) or r.get('share_pct') in (None, ''):
+            continue
+        try:
+            share = float(r['share_pct'])
+        except (TypeError, ValueError):
+            continue
+        rt = _label_tokens(r.get('label'))
+        if not rt:
+            continue
+        scored = []
+        wt = lambda toks: sum(2.0 if (tok not in _GENERIC_LABEL and len(tok) >= 4) else 1.0 for tok in toks)
+        for oid, ot in opts:
+            inter = rt & ot
+            if not inter:
+                continue
+            # the row's words covered by the option, or the option's words covered by the row ('The Democrat' is all of itself)
+            scored.append((max(wt(inter) / (wt(rt) or 1.0), wt(inter) / (wt(ot) or 1.0)), oid))
+        scored.sort(reverse=True)
+        if not scored or scored[0][0] < 0.34 or (len(scored) > 1 and abs(scored[0][0] - scored[1][0]) < 1e-9):
+            continue
+        out[scored[0][1]] = out.get(scored[0][1], 0.0) + share
+    if len(out) < 2 or sum(out.values()) < 60.0:
+        return {}
+    return out
+
+
+def anchor_plan(options: list, brief: dict, klass: str = '', turnout_fallback: Optional[float] = None) -> dict:
+    """How the published split anchors for this question, or {}:
+    {'kind': 'result'|'poll', 'targets': {option_id: pct of the whole
+    audience}, 'line': <for the read>, 'weight': None|float}. A counted
+    event anchors hard; a poll before the event blends two to one."""
+    ev = (brief or {}).get('event') or {}
+    results = [r for r in (ev.get('results') or []) if isinstance(r, dict) and str(r.get('status') or '') in ('final', 'called', 'projected')]
+    nonvote = next((o['id'] for o in options if _NONVOTE_RX.search(str(o.get('label') or ''))), None)
+    turnout = ev.get('turnout_pct') or turnout_fallback   # the count's own turnout, else the twin's base (registered to voted)
+    if str(ev.get('status') or '') == 'happened' and results:
+        m = match_targets(options, results)
+        if m:
+            tot = sum(m.values()) or 1.0
+            voting = 100.0
+            targets = {}
+            if klass == 'civic' and nonvote and turnout and 20.0 <= float(turnout) <= 95.0:
+                targets[nonvote] = round(100.0 - float(turnout), 2)
+                voting = float(turnout)
+                targets.update({k: round(v / 100.0 * voting, 2) for k, v in m.items()})     # the count's shares are of the votes cast
+            else:
+                targets.update({k: round(v / tot * voting, 2) for k, v in m.items()})
+            parts = ', '.join(f"{next((o['label'] for o in options if o['id'] == k), k)} {round(float(m[k]), 1)}%" for k in m)
+            status = results[0].get('status') or 'called'
+            return {'kind': 'result', 'targets': targets, 'weight': None, 'fill_voting': (voting if nonvote in targets else None),
+                    'line': f"The published split sits on the count ({parts}; {status}). The seats are twelve people and keep their votes; say what they show that the count does not."}
+    polls = (brief or {}).get('polls') or []
+    if polls and str(ev.get('status') or '') in ('upcoming', 'today', 'none'):
+        m = match_targets(options, polls)
+        if m:
+            tot = sum(m.values()) or 1.0
+            targets = {k: round(v / tot * 100.0, 2) for k, v in m.items()}
+            parts = ', '.join(f"{next((o['label'] for o in options if o['id'] == k), k)} {round(float(m[k]), 1)}%" for k in m)
+            asof = next((str(pp.get('as_of') or '') for pp in polls if pp.get('as_of')), '')
+            return {'kind': 'poll', 'targets': targets, 'weight': ANCHOR_POLL_WEIGHT, 'fill_voting': None,
+                    'line': f"The published split leans on the latest published numbers ({parts}{', as of ' + asof if asof else ''}) two to one over the seats."}
+    return {}
+
+
+def _base_turnout_pct(twin: dict) -> Optional[float]:
+    """Turnout as a share of the twin's base, from the twin's own identity
+    (an electorate's registered count and the votes cast last time)."""
+    try:
+        base = ((twin or {}).get('identity') or {}).get('base') or {}
+        reg, voted = float(base.get('count_us') or 0), float(base.get('turnout_us') or 0)
+        if reg > 0 and voted > 0 and 0.2 <= voted / reg <= 0.95:
+            return round(voted / reg * 100.0, 1)
+    except (TypeError, ValueError):
+        pass
+    return None
+
+
+def anchor_rows(opts_out: list, by_segment: list, plan: dict, total_people: int, n_seats: int, seed: str) -> bool:
+    """Move the published people onto the anchor (in place). The matched
+    rows take the plan's targets (a result exactly, a few tenths of
+    jitter; a poll blended by its weight); the other rows keep their
+    share of what is left; every segment moves in proportion so the room
+    stays the sum of its segments. True when anything moved."""
+    if not plan or not plan.get('targets') or not opts_out or total_people <= 0:
+        return False
+    ids = [o['id'] for o in opts_out]
+    cur = {o['id']: float(o.get('pct') or 0.0) for o in opts_out}
+    targets = {k: float(v) for k, v in plan['targets'].items() if k in cur}
+    if len(targets) < 2 and plan.get('kind') != 'result':
+        return False
+    if not targets:
+        return False
+    w = plan.get('weight')
+    rest_ids = [k for k in ids if k not in targets]
+    rest_cur = sum(cur[k] for k in rest_ids)
+    if plan.get('fill_voting') is None:
+        # the targets are shares of the vote: they fill what the unmatched rows (a blank, a write-in, stayed home) leave as the seats had them
+        tsum = sum(targets.values()) or 1.0
+        targets = {k: v / tsum * max(0.0, 100.0 - rest_cur) for k, v in targets.items()}
+    new = {}
+    if w is None:
+        for k, v in targets.items():
+            j = (unit('anchor', seed, k) - 0.5) * 2.0 * ANCHOR_RESULT_JITTER
+            new[k] = max(0.1, v + j)
+    else:
+        for k, v in targets.items():
+            new[k] = (float(w) * v + cur[k]) / (float(w) + 1.0)
+    matched_new = sum(new.values())
+    if matched_new > 100.0:
+        f = 100.0 / matched_new
+        new = {k: v * f for k, v in new.items()}
+        matched_new = 100.0
+    leftover = max(0.0, 100.0 - matched_new)   # what the count did not name (a write-in, a blank, a stay-home when turnout is unknown) shares what is left
+    for k in rest_ids:
+        new[k] = (cur[k] / rest_cur * leftover) if rest_cur > 0 else (leftover / len(rest_ids) if rest_ids else 0.0)
+    people_new = {k: int(round(new[k] / 100.0 * total_people)) for k in ids}
+    gap = total_people - sum(people_new.values())
+    k_max = max(ids, key=lambda k: people_new[k])
+    people_new[k_max] += gap
+    # every segment moves in proportion to its current people in each row
+    for i, k in enumerate(ids):
+        cur_seg = [int((sr['distribution'][i] or {}).get('people') or 0) for sr in by_segment]
+        tot_seg = sum(cur_seg)
+        sizes = [int(sr.get('people') or 0) for sr in by_segment]
+        base = cur_seg if tot_seg > 0 else sizes
+        tb = sum(base) or 1
+        alloc = [int(round(people_new[k] * b / tb)) for b in base]
+        alloc[max(range(len(alloc)), key=lambda j: alloc[j])] += people_new[k] - sum(alloc)
+        for sr, a in zip(by_segment, alloc):
+            sr['distribution'][i]['people'] = max(0, a)
+    for sr in by_segment:   # each segment keeps its own total
+        want = int(sr.get('people') or 0)
+        have = sum(int(r.get('people') or 0) for r in sr['distribution'])
+        if have != want and sr['distribution']:
+            j = max(range(len(sr['distribution'])), key=lambda i: int(sr['distribution'][i].get('people') or 0))
+            sr['distribution'][j]['people'] = max(0, int(sr['distribution'][j]['people']) + (want - have))
+    _room_from_segments(by_segment, len(ids), int(total_people), n_seats, seed + '|anchor')
+    for i, o in enumerate(opts_out):
+        o['people'] = sum(int(sr['distribution'][i]['people']) for sr in by_segment)
+    _pcts_from_people(opts_out, int(total_people))
+    for sr in by_segment:
+        _pcts_from_people(sr['distribution'], int(sr.get('people') or 0))
+        sr['yes_pct'] = round(sum(float(r['pct']) for r, o in zip(sr['distribution'], opts_out) if (o.get('lean') or 'other') == 'yes'), 1)
+    return True
+
+
 def plain_share(pct: float) -> str:
     """A share in plain words for the read: 'about two in three', 'a
     sliver'."""
@@ -1957,9 +2363,11 @@ def _twin_for_seat(seat: dict, twins_by_key: dict) -> dict:
     return twins_by_key.get(str(seat.get('twin') or '')) or next(iter(twins_by_key.values()), {})
 
 
-def _cached_brief(s3, key: str) -> dict:
+def _cached_brief(s3, key: str, max_age_s: Optional[float] = None) -> dict:
     doc = _get_json(s3, key) if (s3 and key) else None
     if isinstance(doc, dict) and isinstance(doc.get('brief'), dict):
+        if max_age_s is not None and (time.time() - float(doc.get('at') or 0)) > float(max_age_s):
+            return {}
         b = dict(doc['brief'])
         b['_cached'] = True
         b['_key'] = key
@@ -2085,15 +2493,16 @@ def run_question(ctx: dict) -> dict:
         t = time.time()
         brief = {}
         subject = str(_meta(twin).get('subject') or _twin_name(twin))
-        if kind == 'probe' and last:
-            brief = _cached_brief(s3, str(((last.get('trail') or {}).get('research_key')) or ''))
+        _reuse_age = 86400.0 if subject_class(twin) == 'civic' else None   # a race's facts turn over by the day
+        if kind == 'probe' and last and not ctx.get('fresh_research'):
+            brief = _cached_brief(s3, str(((last.get('trail') or {}).get('research_key')) or ''), _reuse_age)
             if brief:
                 brief['_reused_from'] = last.get('id')
-        if not brief:
+        if not brief and not ctx.get('fresh_research'):
             for earlier in reversed([x for x in session.get('questions') or [] if x is not rec]):
                 ek = str(((earlier.get('trail') or {}).get('research_key')) or '')
                 if ek and (ek == research_key(subject, q) or topics_overlap(q, str(earlier.get('q') or ''), subject) >= 0.5):
-                    brief = _cached_brief(s3, ek)
+                    brief = _cached_brief(s3, ek, _reuse_age)
                     if brief:
                         brief['_reused_from'] = earlier.get('id')
                         break
@@ -2103,10 +2512,36 @@ def run_question(ctx: dict) -> dict:
             brief = {'subject_status': {'line': f"The room is watching {((stim.get('cut') or {}).get('title') or 'the cut')} and the cut was paused at {win.get('clock')}."},
                      'facts': [], 'not_found': [], 'implications': [f"Answer about the moment: {win.get('frame') or win.get('clock')}."],
                      'what_just_played': _moment_view(stim), '_in_cut': True}
-        if not brief:
-            brief = research(models, twin, q if kind != 'probe' else str((last or {}).get('q') or q), kind, stim, s3, log=log)
+        base_q0 = q if kind != 'probe' else str((last or {}).get('q') or q)
+        media = {}
+        if not _in_cut(stim):
+            # the media desk runs alongside the facts desk: what the audience has been seeing, hearing and
+            # saying, and how the event came out (Jenna 2026-11-04); a cached facts brief still gets today's media
+            from concurrent.futures import ThreadPoolExecutor as _TPE
+            _mpool = _TPE(max_workers=1, thread_name_prefix='twin-media')
+            _known = []
+            for earlier in [x for x in session.get('questions') or [] if x is not rec]:
+                _known += [str(f) for f in (earlier.get('facts_used') or [])[:4]]
+            f_media = _mpool.submit(media_desk, models, twin, base_q0, kind, stim, s3, log=log, known=_known[-12:])
+            if not brief:
+                brief = research(models, twin, base_q0, kind, stim, s3, log=log, force=bool(ctx.get('fresh_research')))
+            try:
+                media = f_media.result(timeout=max(10.0, BUDGET_S['media'] - (time.time() - t))) or {}
+            except Exception as e:
+                print(f"[twin-room] media desk skipped: {str(e)[:120]}")
+                media = {}
+                fallbacks.append('media')
+            _mpool.shutdown(wait=False)
         if not brief:
             fallbacks.append('research')
+        if media:
+            brief = merge_media(brief or {'subject_status': {}, 'facts': [], 'not_found': [], 'implications': []}, media)
+        trail['media_key'] = media.get('_key')
+        trail['media_cached'] = bool(media.get('_cached'))
+        rec['talk'] = talk_lines(brief, 8)
+        _ev = brief.get('event') or {}
+        rec['event'] = {k: _ev.get(k) for k in ('what', 'date', 'status', 'outcome')} if _ev else {}
+        rec['outcome'] = str(_ev.get('outcome') or '') if (isinstance(_ev, dict) and str(_ev.get('status') or '') == 'happened') else ''
         trail['research_key'] = brief.get('_key') or research_key(subject, q)
         trail['facts_key'] = facts_key(subject)
         trail['research_cached'] = bool(brief.get('_cached'))
@@ -2175,6 +2610,18 @@ def run_question(ctx: dict) -> dict:
             priors[sgm['label']] = prior_over_options(seg_twin, base_q, kind, options, stim, last, seed + '|' + sgm['label'])
         trail['prior_over_options'] = {lab: {k: round(v, 4) for k, v in pr.items()} for lab, pr in priors.items()}
         opts_out, by_segment = weigh(rec['answers'], options, roster, session['group']['segments'], priors, seed)
+        # the anchor: a counted event sets the published split; a published poll before it leans on it (Jenna 2026-11-04)
+        plan = {}
+        try:
+            plan = anchor_plan(opts_out, brief, subject_class(twin), turnout_fallback=_base_turnout_pct(twin))
+            if plan and anchor_rows(opts_out, by_segment, plan, int(sum(int(sg.get('people') or 0) for sg in session['group']['segments'])), len(roster), seed):
+                rec['anchor'] = {'kind': plan['kind'], 'line': plan['line'], 'targets': {next((o['label'] for o in opts_out if o['id'] == k), k): v for k, v in plan['targets'].items()}}
+                trail['anchor'] = rec['anchor']
+            else:
+                plan = {}
+        except Exception as e:
+            print(f"[twin-room] anchor skipped: {str(e)[:120]}")
+            plan = {}
         rec['options'] = opts_out
         rec['option_labels'] = [o['label'] for o in opts_out]
         rec['distribution'] = [{'label': o['label'], 'pct': o['pct'], 'people': o['people']} for o in opts_out]
@@ -2183,6 +2630,10 @@ def run_question(ctx: dict) -> dict:
         rec['tally'] = [{'label': o['label'], 'seats': o['seats_n'], 'of': len(roster), 'room_pct': o['room_pct']} for o in opts_out]
         rec['yes_pct'] = round(sum(float(o['pct']) for o in opts_out if o['lean'] == 'yes'), 1) if any(o['lean'] == 'yes' for o in opts_out) else None
         prior = prior_note(twin, base_q, kind, opts_out, stim, last, seed)
+        if plan:
+            prior = dict(prior or {})
+            prior['anchor'] = {'kind': plan['kind'], 'line': plan['line']}
+            prior['note'] = (plan['line'] + ' ' + str(prior.get('note') or '')).strip()
         trail['prior'] = prior
         # 5. the moderator reads the room
         t = time.time()
@@ -2203,6 +2654,11 @@ def run_question(ctx: dict) -> dict:
                 rec['voices'].append(v)
         rec['probes_next'] = mr['probes_next']
         rec['facts_used'] = mr['facts_used']
+        if rec.get('outcome'):
+            _oc = str(rec['outcome']).strip()
+            _ock = re.sub(r'[^a-z0-9]+', ' ', _oc.lower()).strip()[:60]
+            if not any(re.sub(r'[^a-z0-9]+', ' ', str(f).lower()).strip()[:60] == _ock for f in rec['facts_used']):
+                rec['facts_used'] = ([_oc] + list(rec['facts_used']))[:6]
         timings['read_s'] = round(time.time() - t, 2)
     except Exception as e:
         traceback.print_exc()
@@ -2307,7 +2763,8 @@ def ask_room(session: dict, twins_by_key: dict, q: str, *, kind: Optional[str] =
     return rec
 
 
-__all__ = ['ask_room', 'run_question', 'all_sessions', 'find_session', 'SESSION_LISTS', 'research', 'moderator_options', 'seat_answer', 'moderator_read', 'weigh', 'prior_over_options', 'plain_share', 'persona_card', 'persona_bio', 'ensure_personas', 'refresh_memory',
+__all__ = ['ask_room', 'run_question', 'all_sessions', 'find_session', 'SESSION_LISTS', 'research', 'media_desk', 'merge_media', 'talk_lines', 'coverage_lines',
+           'match_targets', 'anchor_plan', 'anchor_rows', 'media_key', 'MEDIA_SYSTEM', 'RESEARCH_CLASS_GUIDANCE', 'moderator_options', 'seat_answer', 'moderator_read', 'weigh', 'prior_over_options', 'plain_share', 'persona_card', 'persona_bio', 'ensure_personas', 'refresh_memory',
            'memory_for', 'prior_note', 'drop_ruled_out', 'scrub', 'has_banned', 'chat_lines', 'room_enabled', 'model_available', 'set_model_fn', 'topic_hash', 'topic_tokens',
            'topics_overlap', 'research_key', 'facts_key', 'job_key', 'job_read', 'Models', 'MODELS', 'BUDGET_S', 'ALPHA_SEATS', 'STAGES', 'STAGE_LABEL', 'ROOM_VERSION',
            'JOB_PREFIX', 'RESEARCH_PREFIX', 'FACTS_PREFIX']
