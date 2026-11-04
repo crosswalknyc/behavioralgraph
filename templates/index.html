@@ -54856,11 +54856,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }
             function piSeatSeries(s, seatNo) {
                 // {t: [...], v: [...]} for one seat: the prepared cut aligns to the dial clock, the live room keeps [t, v] pairs
-                var sno = String(seatNo), d = (s || {}).dial || {};
+                var sno = String(seatNo), d = (s || {}).dial || {}, ts = d.t || [];
+                // a stopped test has been scored: its seat dials sit on the dial's own clock and level; the live frame
+                // readings are the picture while the room is still watching
+                var sd = (s || {}).seat_dials || {};
+                if (sd[sno] && sd[sno].length && ts.length && sd[sno].length === ts.length) return { t: ts, v: sd[sno].map(Number) };
                 var live = ((s || {}).live || {}).seat_dials || {};
                 if (live[sno] && live[sno].length) return { t: live[sno].map(function(p) { return Number(p[0]); }), v: live[sno].map(function(p) { return Number(p[1]); }) };
-                var sd = (s || {}).seat_dials || {};
-                if (sd[sno] && sd[sno].length) return { t: d.t || [], v: sd[sno].map(Number) };
+                if (sd[sno] && sd[sno].length) return { t: ts, v: sd[sno].map(Number) };
                 return null;
             }
             function piSeatLineColor(s, r, i) {
