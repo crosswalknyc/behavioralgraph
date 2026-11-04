@@ -46,21 +46,22 @@ LIVE_SYSTEM = (
     "You are the moderator's notes for a screening room of real people who are watching a show together right now. "
     "You see one frame from the screen plus what the room has seen so far. Return JSON only, no prose:\n"
     "{\"caption\": string, \"tone\": string, \"joke\": boolean, \"setting\": string, \"shift\": boolean, "
-    "\"dial\": {\"<seat>\": number}, \"reactions\": [{\"seat\": number, \"type\": string, \"line\": string}]}\n"
+    "\"seats\": {\"<seat>\": {\"say\": string, \"move\": number}}, \"reactions\": [{\"seat\": number, \"type\": string, \"line\": string}]}\n"
     "caption: what is on screen in one plain sentence (who, where, what is happening), 140 characters max, present tense. "
     "tone: one of funny, tender, tense, action, wow, quiet, warm, curious. joke: true only when the frame is a comic beat. "
     "setting: two or three words. shift: true when this is a different scene from the last caption.\n"
-    "dial: a 0 to 100 enjoyment reading for EVERY seat listed, moved from each seat's current reading by what this moment would do "
-    "to that specific person given who they are. Small moves for ordinary moments (1 to 4 points), bigger for a laugh, a reveal, a "
-    "dull stretch or a confusing one (5 to 12). Never the same number for everyone. The seats are different people in named "
-    "cohorts and the same moment does different things to them: a quip lands with one cohort and bores another, a tender beat "
-    "lifts one and loses another, a fight scene pulls some in and sends others to their phones. On an ordinary frame the moves "
-    "must not all point the same way; expect a third of the room to hold or move against the rest, and the cohorts to pull "
-    "apart. Only a moment the whole room shares (a big laugh, a reveal, a death) moves everyone together. A seat that has been "
-    "drifting keeps drifting until something on screen is for them.\n"
-    "reactions: 0 to 3 seats who visibly reacted to THIS moment, type one of love, laugh, lean-in, confuse, check-out, wow, and a "
-    "line of 90 characters max in that person's first-person voice about what they just saw. Most frames earn 0 or 1 reaction; "
-    "a quiet frame earns none. Never invent what is not in the frame.\n"
+    "seats: for EVERY seat listed, be that person for a second. say: what they are thinking at this moment, in their own "
+    "voice, 80 characters max, grounded in who they are (their cohort, their age, how they watch, what they want from a show "
+    "like this) and in what is on screen. move: where that thought takes their enjoyment reading from its current level, "
+    "-12 to +12 points, 0 when the moment does nothing for them. The thought comes first and the move follows from it. The "
+    "same moment moves different people differently and in different directions because they are different people: a quip "
+    "lands for one seat and bores the next, a quiet beat is a breath for one and a reason to check the phone for another, "
+    "a fight pulls some in and loses others. Nobody drifts in lockstep. Only a moment the whole room shares (a big laugh, "
+    "a reveal, a death) moves everyone the same way. A seat that has been drifting keeps drifting until something on "
+    "screen is for them.\n"
+    "reactions: 0 to 3 seats whose thought they would say out loud right now, type one of love, laugh, lean-in, confuse, "
+    "check-out, wow, and the line in that person's first-person voice (their thought, word for word, is fine), 90 "
+    "characters max. Most frames earn 0 or 1 reaction; a quiet frame earns none. Never invent what is not in the frame.\n"
     "The cast: when the notes for this frame list cast on screen (confirmed by face, from the show's cast list), name them by "
     "those names, exactly as given, in the caption and in the seats' lines; anyone the notes do not list is described by what "
     "the screen shows. Never name an actor the notes do not give for this frame, and never guess a name from a face yourself."
@@ -137,6 +138,29 @@ def _seat_line(r: dict) -> str:
     return bio or f"{r.get('age') or ''} {r.get('city') or ''}".strip()
 
 
+def _seat_who(twin: dict, r: dict, session_seed: str) -> str:
+    """The person behind the seat for the frame read: how they stand with
+    the title, how they watch, two of their habits. From the same persona
+    card the room's remarks come from, so the dial and the chat are the
+    same person."""
+    try:
+        from migration.digital_twin_pilot import _card_for
+        card = _card_for(twin or {}, r, session_seed)
+    except Exception:
+        card = {}
+    bits = []
+    if card.get('relationship_to_subject'):
+        bits.append(str(card['relationship_to_subject']))
+    habits = [str(h) for h in (card.get('habits') or []) if h]
+    for h in habits[1:2] + habits[-2:]:   # loyalty, binge or appointment, second screen
+        if h and h not in bits:
+            bits.append(h)
+    if card.get('occupation'):
+        bits.append(str(card['occupation']))
+    txt = '; '.join(bits)
+    return txt[:260]
+
+
 def _current_dials(sess: dict, roster: list) -> dict:
     live = sess.get('live') or {}
     out = {}
@@ -188,20 +212,25 @@ HERD_KEEP = 0.45          # how much of that shared move survives
 FIT_GAIN = 0.55           # points per frame per point of (centered) tone fit
 FIT_CAP = 4.5
 DRIFT_GAIN = 0.35         # a seat the last frames did nothing for keeps sliding
+THOUGHTS_KEEP = 24        # the last thoughts kept per seat
 
 
-def shape_moves(sess: dict, twin: dict, roster: list, rec: dict, before: dict, wanted: dict) -> dict:
-    """Each seat's reading after the model's read, shaped by who the seat
-    is (Jenna 2026-11-03: the cohort lines all ebbed and flowed together
-    at different levels; a cohort has to rise where its people lean in
-    and fall where they drift, not ride the room).
+def shape_moves(sess: dict, twin: dict, roster: list, rec: dict, before: dict, wanted: dict, trusted: bool = False) -> dict:
+    """Each seat's reading after the model's read.
 
-    The model's move per seat is kept. When it herds (most of the room
-    moving one way on an ordinary frame) the shared part is damped and
-    each seat's own part kept. Then every seat moves by its own fit to
-    this moment's tone, centered across the room so the room's level is
-    still the model's, plus a slow drift for a seat the last frames did
-    nothing for, plus a small salted walk. Returns {seat: value}."""
+    ``trusted`` (the read gave each seat its own thought and the move that
+    follows from it): the moves stand as the person's own. The one guard
+    is a lazy read, most of the room moving one way by about the same
+    amount on an ordinary frame; that is the room, not the people, and
+    only then is the shared part damped and each seat moved by its own
+    fit to the moment's tone.
+
+    Not trusted (an old-shape read, or the stand-in when no model runs):
+    the earlier shaping. When the read herds the shared part is damped;
+    every seat then moves by its own fit to this moment's tone, centered
+    across the room so the room's level is still the read's, plus a slow
+    drift for a seat the last frames did nothing for, plus a small salted
+    walk. Returns {seat: value}."""
     if not roster:
         return dict(wanted)
     tone = str((rec or {}).get('tone') or '')
@@ -213,7 +242,12 @@ def shape_moves(sess: dict, twin: dict, roster: list, rec: dict, before: dict, w
     n = len(snos)
     ups = sum(1 for s in snos if moves[s] > 0.4)
     downs = sum(1 for s in snos if moves[s] < -0.4)
-    if n >= 4 and not shared and max(ups, downs) >= HERD_SHARE * n:
+    herd = n >= 4 and not shared and max(ups, downs) >= HERD_SHARE * n
+    if trusted:
+        spread = (max(moves.values()) - min(moves.values())) if moves else 0.0
+        if not (herd and spread < 2.5):
+            return {s: round(max(0.0, min(100.0, float(wanted.get(s, before.get(s, DEFAULT_DIAL))))), 2) for s in snos}
+    if herd:
         common = sum(moves.values()) / float(n)
         for s in snos:
             moves[s] = common * HERD_KEEP + (moves[s] - common)
@@ -231,7 +265,9 @@ def shape_moves(sess: dict, twin: dict, roster: list, rec: dict, before: dict, w
         drift = 0.0
         if len(pts) >= 3 and fits[s] < mean_fit and all(float(pts[i][1]) <= float(pts[i - 1][1]) + 0.2 for i in range(len(pts) - 2, len(pts))):
             drift = -DRIFT_GAIN * (1.0 + _unit(seed, s, 'drift'))
-        walk = (_unit(seed, s, 'walk') - 0.5) * 1.6
+        walk = 0.0 if trusted else (_unit(seed, s, 'walk') - 0.5) * 1.6
+        if trusted:
+            drift = 0.0
         v = float(before.get(s, DEFAULT_DIAL)) + moves[s] + dev + drift + walk
         out[s] = round(max(0.0, min(100.0, v)), 2)
     return out
@@ -262,7 +298,8 @@ def frame(sess: dict, twin: dict, t: float, image_b64: str, *, usage_extras: Opt
     dials = _current_dials(sess, roster)
     meta = sess.get('media') or {}
     recent = frames[-4:]
-    seats_txt = '\n'.join(f"seat {r.get('seat')}: {r.get('name')}, {r.get('age')}, {r.get('city')}" + (f", cohort: {r.get('segment')}" if r.get('segment') else '') + f"; now at {dials.get(str(r.get('seat')), DEFAULT_DIAL):.0f}. {_seat_line(r)}" for r in roster)
+    seed = str(sess.get('id') or '')
+    seats_txt = '\n'.join(f"seat {r.get('seat')}: {r.get('name')}, {r.get('age')}, {r.get('city')}" + (f", cohort: {r.get('segment')}" if r.get('segment') else '') + f"; now at {dials.get(str(r.get('seat')), DEFAULT_DIAL):.0f}. {_seat_line(r)} " + _seat_who(twin, r, seed) for r in roster)
     # the cast on screen, by face (digital_twin_cast): prepared once per test, read on every frame
     cast_hits, cast_note = [], ''
     try:
@@ -281,7 +318,7 @@ def frame(sess: dict, twin: dict, t: float, image_b64: str, *, usage_extras: Opt
     data = None
     if not (regression_mode() or not model_available()):
         blocks = [{'type': 'text', 'text': head}, {'type': 'image', 'source': {'type': 'base64', 'media_type': media_type, 'data': raw}}]
-        data, model, stats = _vision_json(LIVE_SYSTEM, blocks, max_tokens=900, usage_extras=usage_extras, surface='twin_pilot_live')
+        data, model, stats = _vision_json(LIVE_SYSTEM, blocks, max_tokens=2200, usage_extras=usage_extras, surface='twin_pilot_live')
         live['calls'] = int(live.get('calls') or 0) + 1
         if not isinstance(data, dict):
             live['failed'] = int(live.get('failed') or 0) + 1
@@ -295,9 +332,13 @@ def frame(sess: dict, twin: dict, t: float, image_b64: str, *, usage_extras: Opt
     if cast_hits:
         rec['cast'] = [str(h.get('actor') or '') for h in cast_hits if h.get('actor')]
     frames.append(rec)
-    # the dials: every seat moves (a missing seat keeps its reading)
+    # the dials: every seat moves (a missing seat keeps its reading). The read gives each seat its own thought and
+    # the move that follows from it (Jenna 2026-11-03: "each seat should respond the way that persona would respond;
+    # each person's dial should match what they would think, then their cohort is the aggregate of that").
     given = data.get('dial') if isinstance(data.get('dial'), dict) else {}
+    given_seats = data.get('seats') if isinstance(data.get('seats'), dict) else {}
     seat_dials = live.setdefault('seat_dials', {})
+    thoughts = live.setdefault('thoughts', {})
     vals = []
     by_gender = {'F': [], 'M': []}
     by_cohort = {}
@@ -307,14 +348,33 @@ def frame(sess: dict, twin: dict, t: float, image_b64: str, *, usage_extras: Opt
     except Exception:
         cohorts, cohort_key = [], None
     wanted = {}
+    thought_n = 0
     for r in roster:
         sno = str(r.get('seat'))
-        try:
-            v = float(given.get(sno, given.get(int(sno) if sno.isdigit() else sno, dials.get(sno, DEFAULT_DIAL))))
-        except (TypeError, ValueError):
-            v = dials.get(sno, DEFAULT_DIAL)
+        row = given_seats.get(sno)
+        if row is None and sno.isdigit():
+            row = given_seats.get(int(sno))
+        cur = float(dials.get(sno, DEFAULT_DIAL))
+        if isinstance(row, dict) and row.get('move') is not None:
+            try:
+                mv = max(-12.0, min(12.0, float(row.get('move'))))
+            except (TypeError, ValueError):
+                mv = 0.0
+            v = cur + mv
+            thought_n += 1
+            say = scrub(' '.join(str(row.get('say') or '').split()))[:110]
+            if say:
+                lst = thoughts.setdefault(sno, [])
+                lst.append([round(t, 2), say])
+                del lst[:-THOUGHTS_KEEP]
+        else:
+            try:
+                v = float(given.get(sno, given.get(int(sno) if sno.isdigit() else sno, cur)))
+            except (TypeError, ValueError):
+                v = cur
         wanted[sno] = max(0.0, min(100.0, v))
-    shaped = shape_moves(sess, twin, roster, rec, dials, wanted)
+    trusted = roster and thought_n >= max(1, int(0.75 * len(roster)))   # most seats came with their own thought
+    shaped = shape_moves(sess, twin, roster, rec, dials, wanted, trusted=bool(trusted))
     for r in roster:
         sno = str(r.get('seat'))
         v = shaped.get(sno, wanted.get(sno, dials.get(sno, DEFAULT_DIAL)))

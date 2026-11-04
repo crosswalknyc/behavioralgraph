@@ -51852,6 +51852,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-pi-legend button.coh.cut { color: var(--dtw-ink); }
         #digitalTwinsIQView .dtw-pi-legend .hint { color: var(--dtw-mute); }
         #digitalTwinsIQView .dtw-pi-seatrow.pinned { background: rgba(233,232,225,0.07); box-shadow: inset 2px 0 0 var(--coh, var(--hue, #3358FF)); }
+        #digitalTwinsIQView .dtw-pi-seatrow .bio .dtw-pi-thought { margin: 0 0 8px; padding: 6px 8px; border-left: 2px solid var(--coh, var(--hue, #3358FF)); background: rgba(233,232,225,0.04); font-style: normal; color: var(--dtw-ink); }
         #digitalTwinsIQView .dtw-pi-byco { margin-top: 5px; font-size: 11.5px; color: var(--dtw-body); line-height: 15px; }
         #digitalTwinsIQView .dtw-pi-byco b { color: var(--dtw-ink); font-weight: 600; }
         #digitalTwinsIQView .dtw-pi-marks { display: flex; flex-wrap: wrap; gap: 6px; min-height: 0; }
@@ -54543,7 +54544,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var nm = titleCase(r.name || '');
                 var head = '<h6>' + esc(nm) + ', ' + esc(r.age || '') + (r.city ? ', ' + esc(titleCase(r.city)) : '') + (r.segment ? ' <span class="dtw-muted">' + esc(r.segment) + '</span>' : '') + '</h6>';
                 var body = r.persona ? bioParas(r.persona) : '<p>' + esc(nm) + ' holds seat ' + esc(r.seat || '') + ' in this room. Who ' + (r.gender === 'M' ? 'he' : 'she') + ' is, in full, is written as the room watches.</p>';
-                return head + body;
+                // the seat's latest thought at the playhead (a live room; 2026-11-03): the dial moves with it
+                var th = (((S.pilot || {}).live || {}).thoughts || {})[String(r.seat)] || [], now = playheadNow(), last = null;
+                for (var i = 0; i < th.length; i++) { if (Number(th[i][0]) <= now + 0.05) last = th[i]; }
+                var thought = last ? '<p class="dtw-pi-thought"><span class="dtw-muted">' + esc(clockFmt(last[0])) + '</span> ' + esc(last[1]) + '</p>' : '';
+                return head + thought + body;
             }
             function piSayHtml(sl) { return esc(sl.line); }
             function piRoomHasCohorts() {

@@ -137,6 +137,57 @@ class LiveWatch(unittest.TestCase):
         for r in roster:
             r.pop('segment', None)
 
+    def test_each_seat_follows_its_own_thought(self):
+        # Jenna 2026-11-03: each seat responds the way that persona would, the dial matches what they think, and the
+        # cohort is the aggregate of its seats. A read that carries a thought and a move per seat is taken as given.
+        tw, sess = _session()
+        LIVE.seat_live(sess, {'jb': tw})
+        LIVE.start_live(sess)
+        PI.mark_playing(sess)
+        roster = sess['group']['roster']
+        for r in roster:
+            r['segment'] = 'Women' if str(r.get('gender') or 'F').upper().startswith('F') else 'Men'
+        moves = {}
+        for i, r in enumerate(roster):
+            moves[str(r['seat'])] = [-6, 4, 0, 7, -2, 3, -5, 1, 6, -3, 2, -1][i % 12]
+        real_fake = LIVE._fake_read
+
+        def thoughtful(sess_, roster_, t, dials):
+            out = {'caption': 'Two detectives argue in a hallway.', 'tone': 'tense', 'joke': False, 'setting': 'precinct', 'shift': False,
+                   'seats': {s: {'say': f'seat {s} thinks about this', 'move': m} for s, m in moves.items()}, 'reactions': []}
+            return out
+        LIVE._fake_read = thoughtful
+        try:
+            before = {str(r['seat']): LIVE.DEFAULT_DIAL for r in roster}
+            LIVE.frame(sess, tw, 12.0, _png_data_url())
+        finally:
+            LIVE._fake_read = real_fake
+        sd = sess['live']['seat_dials']
+        for r in roster:
+            sno = str(r['seat'])
+            self.assertAlmostEqual(sd[sno][-1][1], before[sno] + moves[sno], places=2, msg='the seat moved exactly where its thought took it')
+            self.assertEqual(sess['live']['thoughts'][sno][-1][1], f'seat {sno} thinks about this')
+        sp = sess['dial']['splits']
+        for key, lab in (('cohort_women', 'Women'), ('cohort_men', 'Men')):
+            if key in sp:
+                xs = [sd[str(r['seat'])][-1][1] for r in roster if r['segment'] == lab]
+                self.assertAlmostEqual(sp[key]['value'][-1], round(sum(xs) / len(xs), 2), places=2, msg='the cohort line is the mean of its seats')
+        room = sess['dial']['value'][-1]
+        allv = [sd[str(r['seat'])][-1][1] for r in roster]
+        self.assertAlmostEqual(room, round(sum(allv) / len(allv), 2), places=2)
+        # a lazy read (everyone +3, give or take) on an ordinary frame is the room, not the people: it is reshaped
+        lazy = {str(r['seat']): 55.0 + 3.0 + (0.1 * (i % 3)) for i, r in enumerate(roster)}
+        base = {str(r['seat']): 55.0 for r in roster}
+        shaped = LIVE.shape_moves(sess, tw, roster, {'t': 24.0, 'tone': 'quiet', 'joke': False, 'shift': False}, base, lazy, trusted=True)
+        self.assertGreater(len(set(round(v, 1) for v in shaped.values())), 6, 'a lazy herd comes out as different people')
+        # an honest spread of thoughts stands untouched
+        honest = {str(r['seat']): 55.0 + moves[str(r['seat'])] for r in roster}
+        kept = LIVE.shape_moves(sess, tw, roster, {'t': 36.0, 'tone': 'quiet', 'joke': False, 'shift': False}, base, honest, trusted=True)
+        for sno, v in honest.items():
+            self.assertAlmostEqual(kept[sno], v, places=2)
+        for r in roster:
+            r.pop('segment', None)
+
     def test_bad_frames_are_refused(self):
         tw, sess = _session()
         LIVE.seat_live(sess, {'jb': tw})
