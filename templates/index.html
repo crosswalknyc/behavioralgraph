@@ -55115,7 +55115,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (last && qFailed(last)) out += '<div class="dtw-pi-probes"><button type="button" class="dtw-pi-probe" onclick="dtwPilotAskAt(' + Number(last.playhead_s || 0) + ', \'' + esc(jsq(last.q || '')) + '\')">Ask again</button></div>';
                 var done = qs.filter(function(q) { return !qInFlight(q); }).reverse();
                 if (done.length) {
-                    out += '<details class="dtw-pi-more"' + (S.piEarlierOpen ? ' open' : '') + ' ontoggle="dtwPilotEarlierToggle(this.open)"><summary>Earlier questions <span class="n">' + done.length + '</span></summary><div class="dtw-pi-qlist">'
+                    out += '<details class="dtw-pi-more" data-fold="earlier" data-sid="' + esc((s || {}).id || '') + '"' + (piFoldOpen(s, 'earlier') ? ' open' : '') + ' ontoggle="dtwPilotFoldToggle(this)"><summary>Earlier questions <span class="n">' + done.length + '</span></summary><div class="dtw-pi-qlist">'
                         + done.map(function(q) {
                             var n = (q.answers || []).length, seats = seatsTotal(q), meta = qFailed(q) ? 'did not finish' : (n ? n + (seats ? ' of ' + seats : '') : '');
                             return '<button type="button" class="dtw-pi-qitem" onclick="dtwPilotRecord(\'' + esc(jsq(q.id || '')) + '\', this)" title="Open the record of this question"><span class="c">' + esc(piQClock(q)) + '</span><span class="t">' + esc(q.q || '') + '</span>' + (meta ? '<span class="n">' + esc(meta) + '</span>' : '') + '</button>';
@@ -55123,7 +55123,6 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 }
                 return out;
             }
-            window.dtwPilotEarlierToggle = function(open) { S.piEarlierOpen = !!open; };
             function piRecordCard(doc) {
                 doc = doc || document;
                 var card = null; try { card = doc.getElementById('dtwPiRecordCard'); } catch (_) { return null; }
@@ -55470,8 +55469,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 try {
                     var box = p.win.document.getElementById('dtwPopRoom'); if (!box) return;
                     piPopoutShims(p.win, html);
+                    var keep = piScrollKeep(box);
                     box.innerHTML = html;
-                    var seats = box.querySelector('#dtwPiSeats'); if (seats) { seats.setAttribute('data-k', piThreadKey(S.pilot || {}, playheadNow())); piThreadFollow(seats); }
+                    piScrollRestore(box, keep);
+                    var seats = box.querySelector('#dtwPiSeats'); if (seats) { seats.setAttribute('data-k', piThreadKey(S.pilot || {}, playheadNow())); if (keep.thread != null) piThreadRestore(box, keep); else piThreadFollow(seats); }
                 } catch (e) { console.warn('[pilot] popout paint', e); }
             }
             window.dtwRoomPopOut = function() {
@@ -55528,6 +55529,47 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (body) { try { body.scrollTo({ top: 0, behavior: 'smooth' }); } catch (_) { body.scrollTop = 0; } }
             };
             (function() { var b = document.querySelector('#digitalTwinsIQView .dtw-body'); if (b && !b._piFocusWired) { b._piFocusWired = true; b.addEventListener('scroll', piFocusScroll, { passive: true }); } })();
+            // ---- what the reader opened, and where they scrolled, survive a repaint (Jenna 2026-11-04: "these dont stay open
+            // when I click one if something else is happening they should"). The test is repainted whole whenever its session
+            // refreshes: a question the room was answering lands, a forecast attaches, the norm changes, the room pops out or
+            // back. The folds (Scorecard in full, Diagnostics, Moderator guide, Recut, comps, talent and the brief, the room's
+            // Earlier questions) keep their open state on S by test and fold, written on toggle and applied on paint; the page
+            // and every scroller inside the test go back to where they were; the chat keeps following only when it was at its end.
+            function piFoldKey(sid, id) { return String(sid || '') + '|' + String(id || ''); }
+            function piFoldOpen(s, id) { return !!((S.piFolds || {})[piFoldKey((s || {}).id, id)]); }
+            function piFold(s, id, label, body) {
+                if (!body) return '';
+                return '<details class="dtw-pi-more" data-fold="' + esc(id) + '" data-sid="' + esc((s || {}).id || '') + '"' + (piFoldOpen(s, id) ? ' open' : '') + ' ontoggle="dtwPilotFoldToggle(this)"><summary>' + label + '</summary>' + body + '</details>';
+            }
+            window.dtwPilotFoldToggle = function(d) {
+                if (!d || !d.getAttribute) return;
+                S.piFolds = S.piFolds || {};
+                S.piFolds[piFoldKey(d.getAttribute('data-sid'), d.getAttribute('data-fold'))] = !!d.open;
+                if (d.open) drawCompareChart();   // a chart inside a closed fold has no width to draw on; it draws when the fold opens
+            };
+            function piScrollKeep(root) {
+                var m = { page: null, ids: {}, thread: null }; if (!root) return m;
+                try {
+                    var doc = root.ownerDocument || document, body = doc.querySelector('#digitalTwinsIQView .dtw-body');
+                    if (body && body.scrollTop > 0) m.page = body.scrollTop;
+                    root.querySelectorAll('[id]').forEach(function(n) { if (n.id && n.scrollTop > 0) m.ids[n.id] = n.scrollTop; });
+                    var seats = root.querySelector('#dtwPiSeats'), th = seats && seats.querySelector('.dtw-pi-thread');
+                    if (th && seats.getAttribute('data-k') && (th.scrollHeight - th.scrollTop - th.clientHeight) >= 28) m.thread = th.scrollTop;
+                } catch (_) {}
+                return m;
+            }
+            function piScrollRestore(root, m) {
+                if (!root || !m) return;
+                try {
+                    var doc = root.ownerDocument || document, body = doc.querySelector('#digitalTwinsIQView .dtw-body');
+                    if (body && m.page != null) body.scrollTop = m.page;
+                    Object.keys(m.ids).forEach(function(id) { var n = doc.getElementById(id); if (n && root.contains(n)) n.scrollTop = m.ids[id]; });
+                } catch (_) {}
+            }
+            function piThreadRestore(root, m) {
+                if (!root || !m || m.thread == null) return;
+                try { var seats = root.querySelector('#dtwPiSeats'), th = seats && seats.querySelector('.dtw-pi-thread'); if (th) th.scrollTop = m.thread; } catch (_) {}
+            }
             function renderPilotPlayer(s) {
                 var roster = ((s.group || {}).roster || []);
                 var preparing = s.status === 'preparing';
@@ -55566,10 +55608,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var scoredNow = s.status === 'stopped' && !!s.scorecard;
                 var full = scoredNow ? renderScorecard(s) : '', diag = scoredNow ? (renderModeRead(s) + renderDiagnostics(s)) : '', extras = renderPilotExtras(s);
                 var guide = renderGuide(s);
-                var more = (full ? '<details class="dtw-pi-more" ontoggle="drawCompareChart()"><summary>Scorecard in full</summary>' + full + '</details>' : '')
-                    + (diag ? '<details class="dtw-pi-more" ontoggle="drawCompareChart()"><summary>Diagnostics</summary>' + diag + '</details>' : '')
-                    + (guide ? '<details class="dtw-pi-more"><summary>Moderator guide</summary>' + guide + '</details>' : '')
-                    + (extras ? '<details class="dtw-pi-more" ontoggle="drawCompareChart()"><summary>Recut, comps, talent and the brief</summary>' + extras + '</details>' : '');
+                var more = piFold(s, 'scorecard', 'Scorecard in full', full)
+                    + piFold(s, 'diagnostics', 'Diagnostics', diag)
+                    + piFold(s, 'guide', 'Moderator guide', guide)
+                    + piFold(s, 'extras', 'Recut, comps, talent and the brief', extras);
                 var twinName = String(((S.twin || {}).name || (S.twin || {}).subject || ((S.twin || {}).meta || {}).name || ((S.twin || {}).meta || {}).subject || 'the twin'));
                 var head = '<div class="dtw-pi-head"><div class="dtw-pi-head-l">'
                     + '<button type="button" class="dtw-pi-reveal" onclick="dtwPilotUnfocus()" title="Show the twin and its tabs again">&#9650; ' + esc(twinName) + '</button>'
@@ -55587,15 +55629,19 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             function renderPilotConsole() {
                 var h = piHostEl(); if (!h) return;
                 if (GL_OPTIONS.indexOf(piTab()) >= 0 && S.glOption !== piTab()) { S.glOption = piTab(); syncGreenlightOptions(); }
-                if (!S.twin) { h.innerHTML = renderPilotStart(); return; }
-                if (!S.pilot) { h.innerHTML = renderPilotStart(); piAfterStartPaint(); return; }
+                if (!S.twin) { S.piPainted = null; h.innerHTML = renderPilotStart(); return; }
+                if (!S.pilot) { S.piPainted = null; h.innerHTML = renderPilotStart(); piAfterStartPaint(); return; }
                 Object.keys(PI_HOST).forEach(function(t) { var o = el(PI_HOST[t]); if (o && o !== h) o.innerHTML = ''; });
+                var keep = S.piPainted === S.pilot.id ? piScrollKeep(h) : null;   // the same test repainted: the reader stays put
                 h.innerHTML = renderPilotPlayer(S.pilot);
+                S.piPainted = S.pilot.id;
                 if (piRoomPopped() && S.roomPopHtml) piPaintPopout(S.roomPopHtml);
+                piScrollRestore(h, keep);
                 piFocusScroll();
                 bindPilotMedia();
                 schedulePilotPortraits();
                 revealPilot(playheadNow());
+                piThreadRestore(h, keep);
                 drawCompareChart();
                 if (S.pilot.status === 'preparing') pollPilotPrepare();
                 pollPilotQuestions();   // a question still with the room keeps landing after a reload
