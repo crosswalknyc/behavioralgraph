@@ -51842,6 +51842,16 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-pi-cohort-custom .dtw-in { width: 96px; }
         #digitalTwinsIQView .dtw-pi-seatrow .who .cohort { color: var(--dtw-mute); font-weight: 500; }
         #digitalTwinsIQView .dtw-pi-legend .coh { white-space: nowrap; }
+        /* the dial views (2026-11-03): Room, Cohorts, People; a cohort chip cuts the dial to that cohort */
+        #digitalTwinsIQView .dtw-pi-views { display: inline-flex; border: 1px solid var(--dtw-rule); border-radius: 999px; overflow: hidden; margin-right: 4px; }
+        #digitalTwinsIQView .dtw-pi-views button { background: transparent; border: 0; color: var(--dtw-mute); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 600; padding: 3px 9px; cursor: pointer; }
+        #digitalTwinsIQView .dtw-pi-views button + button { border-left: 1px solid var(--dtw-rule); }
+        #digitalTwinsIQView .dtw-pi-views button.on { background: var(--dtw-accent-soft); color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-pi-legend button.coh { background: transparent; border: 0; padding: 0; color: inherit; font: inherit; cursor: pointer; }
+        #digitalTwinsIQView .dtw-pi-legend button.coh.dim { opacity: 0.38; }
+        #digitalTwinsIQView .dtw-pi-legend button.coh.cut { color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-pi-legend .hint { color: var(--dtw-mute); }
+        #digitalTwinsIQView .dtw-pi-seatrow.pinned { background: rgba(233,232,225,0.07); box-shadow: inset 2px 0 0 var(--coh, var(--hue, #3358FF)); }
         #digitalTwinsIQView .dtw-pi-byco { margin-top: 5px; font-size: 11.5px; color: var(--dtw-body); line-height: 15px; }
         #digitalTwinsIQView .dtw-pi-byco b { color: var(--dtw-ink); font-weight: 600; }
         #digitalTwinsIQView .dtw-pi-marks { display: flex; flex-wrap: wrap; gap: 6px; min-height: 0; }
@@ -54233,12 +54243,42 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     }
                     if (started) ctx.stroke();
                 }
-                var sl = splitLines(s);
-                piCohortSplits(s).forEach(function(c) { line(c.value, c.color, 1.6); });
+                function lineT(tArr, vals, color, width) {
+                    if (!tArr || !vals || !vals.length) return;
+                    ctx.strokeStyle = color; ctx.lineWidth = width || 2; ctx.beginPath();
+                    var started = false;
+                    for (var i = 0; i < tArr.length && i < vals.length; i++) {
+                        if (tArr[i] > upto) break;
+                        var x = X(tArr[i]), y = Y(vals[i]);
+                        if (!started) { ctx.moveTo(x, y); started = true; } else ctx.lineTo(x, y);
+                    }
+                    if (started) ctx.stroke();
+                }
+                var sl = splitLines(s), view = piView();
+                var cohorts = piCohortSplits(s), roster = ((s.group || {}).roster || []);
+                var focusSeat = view.hover != null ? view.hover : view.seat;
+                function seatsOf(cohortKey) {
+                    var c = cohorts.filter(function(x) { return x.key === cohortKey; })[0];
+                    return roster.filter(function(r) { return c && piCohortColorFor(r) === c.color; });
+                }
+                if (view.mode === 'people') {
+                    // every seat thin in its cohort color; the followed seat full and on top
+                    roster.forEach(function(r, i) { if (Number(r.seat) === focusSeat) return; var ss = piSeatSeries(s, r.seat); if (ss) lineT(ss.t, ss.v, piAlpha(piSeatLineColor(s, r, i), focusSeat != null ? 0.22 : 0.55), 1.1); });
+                    if (focusSeat != null) roster.forEach(function(r, i) { if (Number(r.seat) !== focusSeat) return; var ss = piSeatSeries(s, r.seat); if (ss) lineT(ss.t, ss.v, piSeatLineColor(s, r, i), 2.2); });
+                } else if (view.mode === 'cohorts' && view.cohort) {
+                    // one cohort cut out: its people thin, its line full, the rest gone
+                    var cc = cohorts.filter(function(x) { return x.key === view.cohort; })[0];
+                    if (cc) {
+                        seatsOf(view.cohort).forEach(function(r, i) { var ss = piSeatSeries(s, r.seat); if (ss) lineT(ss.t, ss.v, piAlpha(cc.color, Number(r.seat) === focusSeat ? 0.95 : 0.35), Number(r.seat) === focusSeat ? 2.0 : 1.0); });
+                        line(cc.value, cc.color, 2.0);
+                    }
+                } else if (view.mode === 'cohorts') {
+                    cohorts.forEach(function(c) { line(c.value, c.color, 1.6); });
+                }
                 var oc = piOverlayColors(s);
                 if (sl.a) line(sl.a.value, oc[0], 1.4);
                 if (sl.b) line(sl.b.value, oc[1], 1.4);
-                line(vs, '#E9E8E1', 2.2);
+                line(vs, '#E9E8E1', view.mode === 'people' ? 1.6 : 2.2);
                 ctx.fillStyle = '#E9E8E1';
                 var last = 0;
                 for (var j = 0; j < ts.length; j++) { if (ts[j] <= upto) last = j; }
@@ -54542,7 +54582,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             function piSeatRowHtml(r, i, sl, opts) {
                 opts = opts || {};
                 var hue = seatHue(r, i), url = r.portrait_url || '', nm = titleCase(r.name || ''), coh = piRoomHasCohorts() ? piCohortColorFor(r) : '';
-                return '<div class="dtw-pi-seatrow' + (sl.lit ? ' lit' : '') + (opts.now ? ' now' : '') + (coh ? ' coh' : '') + '" tabindex="0" data-seat="' + Number(r.seat) + '" style="--hue:' + hue + (coh ? ';--coh:' + coh : '') + '" aria-label="Who ' + esc(nm) + ' is">'
+                var pinned = piView().seat != null && piView().seat === Number(r.seat);
+                return '<div class="dtw-pi-seatrow' + (sl.lit ? ' lit' : '') + (opts.now ? ' now' : '') + (coh ? ' coh' : '') + (pinned ? ' pinned' : '') + '" tabindex="0" data-seat="' + Number(r.seat) + '" style="--hue:' + hue + (coh ? ';--coh:' + coh : '') + '" aria-label="Who ' + esc(nm) + ' is">'
                     + '<span class="circ">' + esc(initials(nm)) + (url ? '<img src="' + esc(thumb(url)) + '" alt="" loading="lazy" onerror="this.remove()">' : '') + '</span>'
                     + '<div class="txt"><div class="who"><span class="nm">' + esc(nm) + ', ' + esc(r.age || '') + (piRoomHasCohorts() && r.segment ? ' <span class="cohort">' + esc(r.segment) + '</span>' : '') + '</span>' + (sl.clock ? '<span class="c">' + esc(sl.clock) + '</span>' : '') + '</div><div class="say">' + piSayHtml(sl) + '</div></div>'
                     + '<div class="bio">' + piSeatBio(r) + '</div></div>';
@@ -54800,12 +54841,86 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 }
                 return '<div class="dtw-pi-col side scores">' + out + '</div>';
             }
+            // ---- the dial views (Jenna 2026-11-03: "see each cohort's dial as well as cut it to see each individual
+            // person's dial and the overall"). Room: the room line. Cohorts: the cohort lines, a chip cuts to one cohort
+            // and its people. People: every seat's own line in its cohort color; hover a seat to follow it, click to pin.
+            function piView() {
+                var s = S.pilot || {};
+                if (!S.pilotView || S.pilotView.sid !== s.id) S.pilotView = { sid: s.id, mode: piCohortSplits(s).length ? 'cohorts' : 'room', cohort: '', seat: null, hover: null };
+                return S.pilotView;
+            }
+            function piSeatSeries(s, seatNo) {
+                // {t: [...], v: [...]} for one seat: the prepared cut aligns to the dial clock, the live room keeps [t, v] pairs
+                var sno = String(seatNo), d = (s || {}).dial || {};
+                var live = ((s || {}).live || {}).seat_dials || {};
+                if (live[sno] && live[sno].length) return { t: live[sno].map(function(p) { return Number(p[0]); }), v: live[sno].map(function(p) { return Number(p[1]); }) };
+                var sd = (s || {}).seat_dials || {};
+                if (sd[sno] && sd[sno].length) return { t: d.t || [], v: sd[sno].map(Number) };
+                return null;
+            }
+            function piSeatLineColor(s, r, i) {
+                return (piRoomHasCohorts() && piCohortColorFor(r)) || seatHue(r, i);
+            }
+            function piAlpha(hex, a) {
+                var m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(String(hex || '').trim());
+                if (!m) return hex;
+                return 'rgba(' + parseInt(m[1], 16) + ',' + parseInt(m[2], 16) + ',' + parseInt(m[3], 16) + ',' + a + ')';
+            }
+            function piViewControl(s) {
+                var v = piView(), hasSeats = (((s || {}).group || {}).roster || []).some(function(r) { return !!piSeatSeries(s, r.seat); });
+                var modes = [['room', 'Room']].concat(piCohortSplits(s).length ? [['cohorts', 'Cohorts']] : []).concat(hasSeats ? [['people', 'People']] : []);
+                if (modes.length < 2) return '';
+                return '<span class="dtw-pi-views" role="tablist" aria-label="Dial view">' + modes.map(function(m) { return '<button type="button" class="' + (v.mode === m[0] ? 'on' : '') + '" onclick="dtwPilotView(\'' + m[0] + '\')">' + m[1] + '</button>'; }).join('') + '</span>';
+            }
+            window.dtwPilotView = function(mode) {
+                var v = piView(); v.mode = mode || 'room'; if (mode !== 'cohorts') v.cohort = ''; if (mode !== 'people') { v.seat = null; v.hover = null; }
+                piLegendRepaint(); drawPilotDial(playheadNow()); piPinPaint();
+            };
+            window.dtwPilotViewCohort = function(key) {
+                var v = piView(); v.mode = 'cohorts'; v.cohort = (v.cohort === key) ? '' : (key || '');
+                piLegendRepaint(); drawPilotDial(playheadNow());
+            };
+            window.dtwPilotViewSeat = function(seatNo) {
+                var v = piView(); var n = Number(seatNo);
+                if (v.mode !== 'people') v.mode = 'people';
+                v.seat = (v.seat === n) ? null : n;
+                piLegendRepaint(); drawPilotDial(playheadNow()); piPinPaint();
+            };
+            function piPinPaint() {
+                var v = piView();
+                document.querySelectorAll('#dtwPiSeats .dtw-pi-seatrow').forEach(function(row) { row.classList.toggle('pinned', v.seat != null && Number(row.getAttribute('data-seat')) === v.seat); });
+                var p = S.roomPop; if (p && p.win && !p.win.closed) { try { p.win.document.querySelectorAll('#dtwPiSeats .dtw-pi-seatrow').forEach(function(row) { row.classList.toggle('pinned', v.seat != null && Number(row.getAttribute('data-seat')) === v.seat); }); } catch (_) {} }
+            }
+            function piLegendRepaint() {
+                var s = S.pilot; if (!s) return;
+                var tmp = document.createElement('div'); tmp.innerHTML = splitLegend(s);
+                document.querySelectorAll('.dtw-pane.active .dtw-pi-legend').forEach(function(lg) { var fresh = tmp.firstChild; if (fresh) lg.outerHTML = fresh.outerHTML; });
+            }
+            function piHoverSeat(seatNo) {
+                var v = piView(); var n = seatNo == null ? null : Number(seatNo);
+                if (v.hover === n) return;
+                v.hover = n;
+                if (v.mode === 'people' || v.cohort) drawPilotDial(playheadNow());
+            }
+            if (!window._piHoverWired) {
+                window._piHoverWired = true;
+                document.addEventListener('mouseover', function(e) { var row = e.target && e.target.closest ? e.target.closest('#dtwPiSeats .dtw-pi-seatrow') : null; if (row) piHoverSeat(row.getAttribute('data-seat')); }, true);
+                document.addEventListener('mouseout', function(e) { var row = e.target && e.target.closest ? e.target.closest('#dtwPiSeats .dtw-pi-seatrow') : null; if (row && !(e.relatedTarget && row.contains(e.relatedTarget))) piHoverSeat(null); }, true);
+                document.addEventListener('click', function(e) { var row = e.target && e.target.closest ? e.target.closest('#dtwPiSeats .dtw-pi-seatrow') : null; if (row && !(e.target.closest('button, a, input, select'))) dtwPilotViewSeat(row.getAttribute('data-seat')); }, true);
+            }
             function splitLegend(s) {
                 var sp = ((s || {}).dial || {}).splits || {}, keys = Object.keys(sp);
-                var room = '<span><i class="sw" style="background:#E9E8E1"></i>Room</span>';
+                var v = piView();
+                var room = piViewControl(s) + '<span><i class="sw" style="background:#E9E8E1"></i>Room</span>';
+                if (v.mode === 'people') room += '<span class="hint">Every seat, in its cohort color. Hover a seat in the room to follow their line; click to pin it.</span>';
                 if (!keys.length) return '<div class="dtw-pi-legend">' + room + '</div>';
                 splitLines(s);
-                piCohortSplits(s).forEach(function(c) { room += '<span class="coh"><i class="sw" style="background:' + c.color + '"></i>' + esc(c.label) + ' (' + esc(c.n) + ')</span>'; });
+                if (v.mode !== 'room') {
+                    piCohortSplits(s).forEach(function(c) {
+                        var cls = 'coh' + (v.mode === 'cohorts' && v.cohort ? (v.cohort === c.key ? ' cut' : ' dim') : '');
+                        room += '<button type="button" class="' + cls + '" onclick="dtwPilotViewCohort(\'' + esc(c.key) + '\')" title="' + (v.mode === 'cohorts' ? 'Cut the dial to this cohort' : 'This cohort\'s color') + '"><i class="sw" style="background:' + c.color + '"></i>' + esc(c.label) + ' (' + esc(c.n) + ')</button>';
+                    });
+                }
                 var groups = {};
                 keys.forEach(function(k) { var g = sp[k].group || 'other'; (groups[g] = groups[g] || []).push(k); });
                 var order = ['cohort', 'gender', 'quadrant', 'age', 'ethnicity', 'orientation', 'education', 'lifecycle', 'fanship', 'other'];
@@ -54874,9 +54989,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 S.roomPop = { win: w, id: s.id };
                 try {
                     // the who-they-are card follows the pointer in that window too
-                    var onBio = function(e) { var row = e.target && e.target.closest ? e.target.closest('#dtwPiSeats .dtw-pi-seatrow') : null; if (row) piPlaceBio(row); };
+                    var onBio = function(e) { var row = e.target && e.target.closest ? e.target.closest('#dtwPiSeats .dtw-pi-seatrow') : null; if (row) { piPlaceBio(row); piHoverSeat(row.getAttribute('data-seat')); } };
                     doc.addEventListener('mouseover', onBio, true);
                     doc.addEventListener('focusin', onBio, true);
+                    doc.addEventListener('mouseout', function(e) { var row = e.target && e.target.closest ? e.target.closest('#dtwPiSeats .dtw-pi-seatrow') : null; if (row && !(e.relatedTarget && row.contains(e.relatedTarget))) piHoverSeat(null); }, true);
+                    doc.addEventListener('click', function(e) { var row = e.target && e.target.closest ? e.target.closest('#dtwPiSeats .dtw-pi-seatrow') : null; if (row && !(e.target.closest('button, a, input, select'))) dtwPilotViewSeat(row.getAttribute('data-seat')); }, true);
                     w.addEventListener('pagehide', function() { setTimeout(function() { if (!piRoomPopped()) { S.roomPop = null; if (S.pilot) renderPilotConsole(); } }, 60); });
                 } catch (_) {}
                 if (S.roomPopTimer) { try { clearInterval(S.roomPopTimer); } catch (_) {} }
