@@ -124,7 +124,36 @@ def facts_of(raw: dict, *, subject: str = '', window: dict = None, product: str 
             _add(f.get('label'), f.get('value'))
     bd = raw.get('breakdown')
     if isinstance(bd, dict):
+        rows = bd.get('rows')
+        if isinstance(rows, list):
+            # a generated read's table: every row and every bucket, as
+            # facts a partner reads without parsing prose (2026-11-04)
+            dim = str(bd.get('dimension') or 'Category').strip()
+            for r in rows:
+                if not isinstance(r, dict) or not str(r.get('label') or '').strip():
+                    continue
+                lab = str(r['label']).strip()
+                rdim = str(r.get('dimension') or '').strip()
+                if isinstance(r.get('pool'), (int, float)) and r['pool']:
+                    _add(f"{lab} pool", r['pool'], 'people')
+                bks = r.get('buckets') if isinstance(r.get('buckets'), list) else []
+                if bks:
+                    for b in bks:
+                        if not isinstance(b, dict) or not str(b.get('label') or '').strip():
+                            continue
+                        head = f"{lab}: {b['label']}" if not rdim or rdim.lower() in lab.lower() else f"{lab} ({rdim}): {b['label']}"
+                        if isinstance(b.get('count'), (int, float)):
+                            _add(head, b['count'], 'people')
+                        if isinstance(b.get('share_pct'), (int, float)):
+                            _add(f"{head} share", b['share_pct'], 'percent')
+                else:
+                    if isinstance(r.get('share_pct'), (int, float)):
+                        _add(f"{lab} share of {dim}".strip(), r['share_pct'], 'percent')
+                    if isinstance(r.get('penetration_pct'), (int, float)):
+                        _add(f"{lab} penetration", r['penetration_pct'], 'percent')
         for k, v in bd.items():
+            if k in ('rows', 'dimension', 'share_basis'):
+                continue
             if isinstance(v, (int, float, str)):
                 _add(k, v)
             elif isinstance(v, dict):
@@ -160,7 +189,36 @@ def facts_of(raw: dict, *, subject: str = '', window: dict = None, product: str 
             m = re.search(rx, text)
             if m and not any(f.get('value') == _num(m.group(1).strip()) for f in out):
                 _add(label, m.group(1).strip(), unit)
-    return out[:60]
+    return out[:FACTS_MAX]
+
+
+# a 12 by 4 matrix with seven bands a cell is about 700 facts; the cap is
+# a runaway guard, never the 60 that cut a table short (2026-11-04)
+FACTS_MAX = 1200
+
+
+def file_blocks(raw: dict, job_id: str = '') -> dict:
+    """The file a data answer ships with, for the v1 answer block:
+    ``file_link`` (the direct link, good for 7 days, name and label) and,
+    when the answer came from a job, ``files`` as API paths the same key
+    downloads. {} when the answer carries no file."""
+    raw = raw if isinstance(raw, dict) else {}
+    fl = raw.get('file_link') if isinstance(raw.get('file_link'), dict) else {}
+    out = {}
+    url = str(fl.get('url') or raw.get('download_url') or '')
+    name = str(fl.get('name') or raw.get('filename') or '').strip()
+    if not name and url:
+        name = url.split('?', 1)[0].rsplit('/', 1)[-1]
+    if url.lower().startswith('https://'):
+        out['file_link'] = {'url': url, 'name': name or 'data.csv', 'label': str(fl.get('label') or f"Download {name or 'the file'}")[:120],
+                            'type': 'text/csv' if name.lower().endswith('.csv') else 'application/octet-stream'}
+    files = []
+    if job_id and name:
+        files.append({'name': name, 'type': out.get('file_link', {}).get('type') or 'text/csv',
+                      'url': f"{POLL_PREFIX}{job_id}/files/{name}"})
+    if files:
+        out['files'] = files
+    return out
 
 
 def _options(env: dict) -> list:
@@ -219,8 +277,10 @@ _JOB_STAGES = {'queued': 'lined up', 'claimed': 'starting', 'running': 'working'
 
 
 def to_v1(env: dict, raw: dict = None, *, billing: dict = None, conversation_id: str = None, subject: str = '',
-          window: dict = None) -> dict:
-    """Map the internal envelope (``envelope.wrap``) to the v1 contract."""
+          window: dict = None, job_id: str = '') -> dict:
+    """Map the internal envelope (``envelope.wrap``) to the v1 contract.
+    ``job_id`` names the finished job an answer came from, so its file
+    is also listed as an API path under that job."""
     env = env if isinstance(env, dict) else {}
     raw = raw if isinstance(raw, dict) else (env.get('_raw') if isinstance(env.get('_raw'), dict) else {})
     kind = str(env.get('kind') or '')
@@ -257,6 +317,14 @@ def to_v1(env: dict, raw: dict = None, *, billing: dict = None, conversation_id:
                        conversation_id=conversation_id, job_id=(jobd or {}).get('id'), billing=billing)
     followups = [o['label'] for o in opts][:6]
     answer = {'text': text, 'facts': facts_of(raw, subject=subject, window=window), 'followups': followups}
+    # the file under a data answer rides the envelope the same way it
+    # rides the widget (2026-11-04, Liz on the API door)
+    answer.update(file_blocks(raw, job_id=job_id))
+    mx = raw.get('matrix') if isinstance(raw.get('matrix'), dict) else None
+    if mx:
+        answer['table'] = {'groups': mx.get('groups'), 'dimensions': mx.get('dimensions'),
+                           'rows': len(((raw.get('breakdown') or {}).get('rows') or [])),
+                           'missing': list(mx.get('failed') or [])}
     return _frame('answer', trace, conversation_id, billing, answer=answer)
 
 

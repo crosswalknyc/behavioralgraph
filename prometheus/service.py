@@ -2978,8 +2978,9 @@ def job_status(user, job_id, *, via='session'):
                 content, surface=('deck' if jtype == 'deck' else 'analyze'),
                 decision={'reason': 'job_result'}, via=via)
         elif status in ('error', 'failed'):
+            _pl = payload.get('payload') if isinstance(payload.get('payload'), dict) else {}
             out['result'] = {'kind': 'error', 'text': (
-                payload.get('reply') or payload.get('error')
+                payload.get('reply') or (_pl.get('reply') if payload.get('fault') else '') or payload.get('error')
                 or 'That one did not land. Send the question again and I will take it from there.')}
             if via == 'api_key':
                 out['result']['text'] = envelope._INFRA_RX.sub(

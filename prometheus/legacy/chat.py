@@ -39,6 +39,7 @@ from prometheus import subiq_library as _subiq_library   # a question across the
 from prometheus import deck_sources as _deck_sources   # a deck of something already delivered or attached (2026-10-26)
 from prometheus import digital_twin_lane as _twin_lane   # Digital Twins IQ: intake, labs, Focus Group IQ, catalog, status, directions (2026-10-26)
 from prometheus import bpiq_wizard as _bpiq_wiz   # Brand Partnership Valuation wizard (2026-10-28)
+from prometheus import matrix_read as _matrix   # big matrix asks run in pieces and land whole (2026-11-04)
 import io
 import hashlib
 import time
@@ -12293,6 +12294,15 @@ def _pm_generation_base(subject_hint, text, ctx=None,
         from prometheus import view_base as _vb
         _vc0 = (ctx or {}).get('view_context') if isinstance(ctx, dict) else None
         if _vb.is_self_contained((_vc0 or {}).get('view_id')):
+            # An ask that names the open view's OWN title is the view's
+            # ask whatever else it lists: the services, platforms and
+            # cuts in a demographics ask are its dimensions, not another
+            # subject (2026-11-04: "Music to Long Form study ... Netflix,
+            # Amazon Prime Video, TikTok" was vetoed here and then bound
+            # to the Tracker and Gunna - 18-24 files by token luck).
+            _own_title = _vb.names_view(text, _vc0, product_nouns=False) or _vb.names_view(subject_hint, _vc0, product_nouns=False)
+            if _own_title:
+                return _vb.view_base(_vc0)
             _own = _vb.names_view(text, _vc0) or _vb.names_view(subject_hint, _vc0)
             if not _own:
                 try:
@@ -12396,6 +12406,17 @@ def _pm_generation_base(subject_hint, text, ctx=None,
     best, best_score = None, (0, 0)
     partial, partial_score = None, (0, 0.0, 0)
     ask_tokens = q_tokens | hint_tokens
+    # A long analytical ask lists things that are not its subject: the
+    # services, platforms and bands of a demographics ask (2026-11-04,
+    # Liz's Music to Long Form reads bound 'Tracker' off the word
+    # 'tracked', 'Gunna - 18-24' off the age band, 'ANIMATED' off 'Family
+    # animated' and 'Amazon Prime Video' off the streaming list). In such
+    # an ask a lone ordinary word is no identity, number tokens never
+    # count toward a partial match, the one-typo tier stays out, and a
+    # list of three or more fully named library subjects is a list, not
+    # a subject, unless the hint names one of them.
+    _long_ask = len(str(text or '')) > 350
+    _full_hits = set()
     # 2026-10-07 (Jenna, the Gunna-on-Warriors ask): a file named by
     # display name (bound chip, cut label) is the base; a subject named
     # in subject position beats token presence (Gen Pop, Under Armour
@@ -12450,12 +12471,18 @@ def _pm_generation_base(subject_hint, text, ctx=None,
                         'source': 'catalog'}
                 if (tset <= q_tokens or tset <= hint_tokens
                         or tset <= guess_tokens):
+                    if _long_ask and len(toks) == 1 and not (tset <= hint_tokens) \
+                            and re.search(r"(?:ed|ing|ly|ous|ful|ive|al|ic)$", toks[0]) \
+                            and not re.search(rf"(?<![A-Za-z])[A-Z][A-Za-z]*{re.escape(toks[0][1:])}\b", str(text or '')):
+                        continue   # a lone lowercase English word deep in a long ask ('animated') is not a subject
+                    if _long_ask and not (tset <= hint_tokens):
+                        _full_hits.add(_H._normalize_for_match(cand['subject']))
                     score = (1 if is_tu else 0, len(toks))
                     if score > best_score:
                         best_score = score
                         best = cand
                     continue
-                matched = len(tset & ask_tokens)
+                matched = len({t for t in (tset & ask_tokens) if not t.isdigit()})
                 frac = matched / len(tset)
                 if matched >= 2 and frac >= 0.66:
                     pscore = (1 if is_tu else 0, frac, matched)
@@ -12464,15 +12491,19 @@ def _pm_generation_base(subject_hint, text, ctx=None,
                         partial = cand
     except Exception:
         traceback.print_exc()
+    if best and len(_full_hits) >= 3 and not (set(_tokens(best.get('subject'))) <= hint_tokens):
+        print(f"[pm-base] {len(_full_hits)} library subjects named in one ask read as a list, not a subject; catalog tiers skipped")
+        best, partial = None, None
     if best:
         return best
     if partial:
         return partial
     # 2b. Fuzzy tier (2026-09-28, Phase 1): a unique one-typo-away
     # catalog subject binds instead of falling through to a duplicate
-    # build offer. Ambiguity never binds.
+    # build offer. Ambiguity never binds. A long ask never binds by a
+    # typo (2026-11-04: 'tracked' is not 'Tracker').
     try:
-        fz = _pm_fuzzy_catalog_subject(
+        fz = None if _long_ask else _pm_fuzzy_catalog_subject(
             f"{text or ''} {subject_hint or ''}")
         if fz and fz.get('s3_key'):
             print(f"[pm-base] fuzzy catalog bind: {fz['subject']!r}")
@@ -12570,7 +12601,7 @@ def _pm_answer_file_payload(entry, auto_save=False, username='',
     _pm_file_stash_write(username, url, fname, s3_key,
                          subject=entry.get('subject'),
                          question=question or entry.get('question'))
-    payload = {'file_link': {'url': url, 'label': f"Download {fname}"}}
+    payload = {'file_link': {'url': url, 'label': f"Download {fname}", 'name': fname, 'key': s3_key}}
     if auto_save:
         payload.update({'download_url': url, 'filename': fname})
     return payload
@@ -13226,7 +13257,7 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
                                   bind_subject=None, bind_cohort=None,
                                   panel_confirm=None,
                                   switch_page=None, inline_job_id=None,
-                                  force_local=False):
+                                  force_local=False, resume_base=None):
     """Reasoned measurement read (2026-08-26, Jenna): a concrete
     number for a digitally observable ask the open data does not
     cover, or the read for a sub-cohort the open data does not
@@ -13320,7 +13351,20 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
     # anywhere = no numbers; the subject needs its 5-credit Total
     # Universe build first.
     base = None
-    if bind_subject:
+    # A resumed read (the read worker, a recovery) runs on the base it
+    # was started on, pinned on the job record with its screen data, and
+    # never re-resolves without that screen (2026-11-04: nine of Liz's
+    # Digital Journey reads re-resolved to no base on the worker and
+    # landed the $100 offer line as their result).
+    _pinned_base = bool(isinstance(resume_base, dict) and (resume_base.get('subject') or resume_base.get('s3_key')))
+    if _pinned_base:
+        base = dict(resume_base)
+        if str(base.get('source') or '') == 'view' and not isinstance(base.get('view_context'), dict) \
+                and isinstance((ctx or {}).get('view_context'), dict):
+            base['view_context'] = ctx['view_context']
+        if not subj_hint:
+            subj_hint = str(base.get('subject') or '')
+    if bind_subject and not base:
         try:
             base = _pm_generation_base(
                 bind_subject, f"{bind_subject} {bind_cohort}".strip(),
@@ -13346,7 +13390,7 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
                                                prefer_catalog=True)
         except Exception:
             traceback.print_exc()
-    if base and str(base.get('source') or '') in ('page', 'catalog') and not str(base.get('s3_key') or '').startswith('subiq:'):
+    if base and not _pinned_base and str(base.get('source') or '') in ('page', 'catalog') and not str(base.get('s3_key') or '').startswith('subiq:'):
         _stands, _why = _page_default.base_stands(text, history, base, bind_subject, normalize=_H._normalize_for_match,
                                                   stop_tokens=_PM_CLARIFY_STOP_TOKENS, brand_named=_pm_page_brand_named, ask_user=_pm_ask_log_user(''))
         if not _stands:   # the open profile is context, never a default subject; a name the reader said no to is no base (2026-10-06, 2026-10-24)
@@ -13485,8 +13529,8 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
                 traceback.print_exc()
     panel_charge = None
     _view_base = __import__('prometheus.view_base', fromlist=['is_view_base']).is_view_base(base)   # the open product's own numbers: a lookup, never priced (2026-10-22)
-    if _view_base:
-        base['view_context'] = (ctx or {}).get('view_context')   # the read core reads the screen and its window from the base (2026-10-26)
+    if _view_base and not isinstance(base.get('view_context'), dict):
+        base['view_context'] = (ctx or {}).get('view_context')   # the read core reads the screen and its window from the base (2026-10-26); a resumed read already carries it
     # A figure an Attribution IQ campaign holds is broken down from the campaign's own assets, never generated
     # (2026-10-26, Alexia's 67,729 read the same-title Profile IQ file and printed invented asset groups under its
     # Jan to Dec 2025 window). Runs here too so a read reached without the service door, or resumed on the read
@@ -13717,8 +13761,17 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
     led = {'block': '', 'exact': None, 'entries': []}
     _t_ledger = time.monotonic()
     try:
-        led = il.consult(subject=subj_hint or None, question=text,
-                         metric_family=mr.get('metric_family'))
+        # A product view is one subject across every pass on it: the
+        # figures already stored under the view's title bind this pass
+        # before any model-written label is consulted (2026-11-04,
+        # Liz's gender by door: each pass had persisted under its own
+        # label, so no pass ever saw the one before it).
+        if _view_base and str(base.get('subject') or '').strip():
+            led = il.consult(subject=str(base.get('subject')), question=text,
+                             metric_family=mr.get('metric_family'))
+        if not led.get('entries'):
+            led = il.consult(subject=subj_hint or None, question=text,
+                             metric_family=mr.get('metric_family'))
         if not led.get('entries') and subj_hint:
             led = il.consult(question=text)
         if not led.get('entries') and base.get('subject'):
@@ -13824,10 +13877,24 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
             _pm_ask_hint(outcome='clarify_subject')
             return jsonify({'success': True, 'action': 'answer', 'reply': _subject_rules.clarify_for(text), 'followups': [], 'offer_deck': False, 'deck_angle': None})
         job_id = inline_job_id or uuid.uuid4().hex[:12]
+        # A matrix ask (many groups by several dimensions, more than one
+        # pass carries whole) runs piece by piece inside the one job and
+        # lands as one table plus one file (2026-11-04, Liz's genre
+        # demographics). The plan is read off the words, so a resumed
+        # copy of the job makes the same plan.
+        _mplan = None
+        try:
+            _mplan = _matrix.plan(text, mr)
+        except Exception as _fx:
+            _faults.note('chat', _fx); _mplan = None
+        _on_it = _pm_on_it_line(base, bound=bind_subject)
+        if _mplan:
+            _on_it = (_on_it.rstrip() + f" This one runs in pieces ({_matrix.describe(_mplan)}); "
+                      "the whole table lands here as one answer with the file under it.")
         if _pm_probe_caller() == 'golden-set' or _faults.is_probe():   # a probe grades the reply shape only: no job, no queue, no inflight mark (2026-11-02: a local replay's orphaned read drew the deliver-by-email alert for 'canary:golden')
             _pm_ask_hint(outcome='answered', subject=_promised)
             return jsonify({'success': True, 'action': 'answer', 'read_job_id': 'golden-' + job_id, 'followups': [], 'offer_deck': False, 'deck_angle': None,
-                            'reply': _pm_on_it_line(base, bound=bind_subject)})
+                            'reply': _on_it})
         # A probe's finished read never mails anyone (captured here,
         # on the request thread, and carried on the job).
         _probe = bool(_pm_probe_caller()) or _pm_is_probe_user(_pm_ask_log_user(''))
@@ -13838,9 +13905,12 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
                      text=text, history=history, base=base,
                      panel_charge=panel_charge, probe=_probe,
                      switch_page=switch_page, bind_cohort=bind_cohort)}
+        if _mplan:
+            _head['matrix'] = {'groups': len(_mplan['groups']), 'dimensions': len(_mplan['dimensions']),
+                               'pieces': len(_mplan['pieces'])}
         _args = (job_id, _pm_user, _pm_read_extras, text, list(history or [])[-10:],
                  mr, base, digest_block, anchors_block, led)
-        _kw = {'panel_charge': panel_charge, 'probe': _probe}
+        _kw = {'panel_charge': panel_charge, 'probe': _probe, 'matrix_plan': _mplan}
         _pm_read_inflight_mark(_pm_user, text, job_id, _promised)
         _head['thread_id'] = _pm_job_bind_thread(job_id, _pm_user)   # the worker is another process (API conversations, 2026-10-14)
         _head['via'] = 'api' if getattr(__import__('flask').g, '_pm_api_key_owner', None) else 'dashboard'
@@ -13855,7 +13925,7 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
         _pm_ask_hint(outcome='answered', subject=_promised)
         return jsonify({
             'success': True, 'action': 'answer', 'read_job_id': job_id, 'subject': _promised,
-            'reply': _pm_on_it_line(base, bound=bind_subject),
+            'reply': _on_it,
             'followups': [], 'offer_deck': False, 'deck_angle': None})
     payload = _pm_generate_read_core(
         text=text, history=history, mr=mr, base=base,
@@ -13910,7 +13980,7 @@ def _pm_verify_prior_entries(res, family, led):
 
 def _pm_generate_read_core(*, text, history, mr, base, digest_block,
                            anchors_block, led, pm_user, pm_ppu,
-                           stage_cb=None, switch_page=None):
+                           stage_cb=None, switch_page=None, bank=True):
     """Fresh generated read - the operating loop (2026-08-27, Jenna:
     "it truly needs to be really smart"). Request-context free so it
     runs identically inline and inside a background read job.
@@ -13947,9 +14017,16 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
     _pm_attrib_extras() call inside its model calls would return {};
     passing the pre-merged dict through the existing pm_ppu slot keeps
     every per-call render_calls record attributed to the right user
-    without a signature change."""
+    without a signature change.
+
+    `bank=False` (2026-11-04): one piece of a matrix read. The pass
+    runs whole (grounding, generation, binding, verification) but
+    nothing persists, no file and no chart are made and no ask outcome
+    is recorded; the caller assembles the pieces and banks once. The
+    payload then carries the structured result on '_res'."""
     import prometheus_analysis as pma
     import insights_ledger as il
+    from prometheus import figure_binding as _fb
 
     def _stage_note(label):
         if stage_cb is None:
@@ -14182,7 +14259,21 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
             _cw = __import__('prometheus.campaign_drilldown', fromlist=['window_for_base']).window_for_base(base)
             if _cw:   # the campaign's own window, never a profile's and never a default (2026-10-26)
                 res.update(window_label=_cw['label'], window_start=_cw['start'], window_end=_cw['end'])
+        # Stored figures bind this pass (2026-11-04, Liz's gender by door):
+        # a figure already reported for the same subject, definition and
+        # window is kept, and the reply says so in one line. The same on
+        # the dashboard and on the API door; the read core is the one path.
+        _bound = []
+        try:
+            res, _bound = _fb.bind_to_stored(
+                res, _pm_verify_prior_entries(res, res.get('metric_family'), led), ask_text=text)
+        except Exception as _fx:
+            _faults.note('chat', _fx); _bound = []
         reply, _fig_ledger2 = _fig.compose(pma.format_generated_metrics_reply(res), _figs2, anchors_block)
+        if _bound:
+            _ar = _fb.already_reported_line(_bound)
+            if _ar:
+                reply = reply.rstrip() + '\n\n' + _ar
     except Exception as e:
         traceback.print_exc()
         _H._chatbot_error_email('brief-chat/analyze', e)
@@ -14389,6 +14480,14 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
     # download chip is retired here; the email chip lands after
     # persist so it is never stored on the ledger entry.
     followups = [f for f in followups if f != pma.CSV_OFFER_CHIP]
+    if not bank:
+        # one piece of a matrix read: the structured result goes back to
+        # the assembler; nothing persists, files or lands here
+        stages['verify_outcome'] = (3 if verdict is None else (1 if verify_revised else 0))
+        return {'success': True, 'action': 'answer', 'reply': reply, 'followups': followups,
+                'offer_deck': False, 'deck_angle': None, 'profile': res.get('subject'),
+                '_res': res, '_family': ('strategy' if is_strategy else res.get('metric_family')),
+                '_verify': None, '_stages_ms': stages, '_bound': _bound}
     # The answer opens by naming the audience it used (2026-09-29
     # Jenna: the screen no longer binds by default, so the binding is
     # stated up front and a wrong one is visible in the first line).
@@ -14448,8 +14547,13 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
         # opener named, each metric's definition) and the unprojected
         # count behind it, so a later reconcile ask reads the record
         # instead of sizing anything again (Jenna 2026-11-04).
+        # Every row carries its definition and window before it banks, so
+        # the next pass reads the same base; a read on a product view
+        # banks under the view's own title (2026-11-04, Liz).
+        _fb.stamp_definitions(res)
+        _persist_subject, _persist_cohort = _pm_persist_identity(res, base)
         il.persist(
-            subject=res.get('subject'),
+            subject=_persist_subject,
             metric_family=fam0,
             question=text, route='reasoned_metrics',
             metrics=il.attach_sample_people(res.get('metrics'), universe=_aud),
@@ -14458,8 +14562,8 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
             window_end=res.get('window_end'),
             window_label=res.get('window_label'),
             reply=reply, followups=followups,
-            base_profile_key=base.get('s3_key'),
-            cohort=res.get('cohort'),
+            base_profile_key=base.get('s3_key') or (base.get('subject') if str(base.get('source') or '') == 'view' else ''),
+            cohort=_persist_cohort,
             breakdown=res.get('breakdown'),
             derivation=_derivation,
             verify=_verify_stamp,
@@ -14496,7 +14600,7 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
                                       'ResponseContentDisposition': f'attachment; filename="{_fn}"'},
                 ExpiresIn=7 * 24 * 3600)
             _file_payload = {'file_link': {
-                'url': _furl, 'label': f"Download {_fn}"}}
+                'url': _furl, 'label': f"Download {_fn}", 'name': _fn, 'key': _fkey}}
             if _explicit:
                 _file_payload.update(
                     {'download_url': _furl, 'filename': _fn})
@@ -14515,6 +14619,17 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
     except Exception:
         traceback.print_exc()
         _chart_payload = {}
+    # the whole table rides the payload too (the API door's facts, the
+    # job record); the chat shows its top rows and the file the rest
+    _table_payload = {}
+    try:
+        if res.get('breakdown') or res.get('metrics'):
+            _table_payload = {'metrics': list(res.get('metrics') or []),
+                              'breakdown': (dict(res['breakdown']) if isinstance(res.get('breakdown'), dict) else None)}
+            if res.get('_matrix'):
+                _table_payload['matrix'] = dict(res['_matrix'])
+    except Exception:
+        _table_payload = {}
     _pm_ask_hint(
         outcome=('corrected' if _pm_auto_corrected else 'answered'),
         subject=res.get('subject'))
@@ -14539,8 +14654,99 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
         '_family': fam0,
         '_verify': _verify_stamp,
         '_stages_ms': stages,
+        **_table_payload,
         **_sw_payload,
         **_file_payload}
+
+
+def _pm_persist_identity(res, base):
+    """(subject, cohort) a generated read banks under. A read on a
+    product view (Digital Journey IQ on screen) banks under the view's
+    own title, with the model's label folded into the cohort, so every
+    pass on that view consults and binds the same bucket (2026-11-04:
+    Liz's six passes on Music to Long Form sat under six different
+    subject labels and never saw one another). Everything else banks
+    under the read's subject as before."""
+    subj = str((res or {}).get('subject') or '').strip()
+    coh = str((res or {}).get('cohort') or '').strip()
+    try:
+        if str((base or {}).get('source') or '') == 'view':
+            anchor = str(base.get('subject') or '').strip()
+            if anchor and _H._normalize_for_match(anchor) != _H._normalize_for_match(subj):
+                bits = [b for b in (subj, coh) if b and _H._normalize_for_match(b) != _H._normalize_for_match(anchor)]
+                return anchor, ' - '.join(dict.fromkeys(bits))[:120]
+            if anchor:
+                return anchor, coh
+    except Exception:
+        pass
+    return subj, coh
+
+
+def _pm_finish_matrix_read(res, *, text, base, pm_user, followups=None, verify=None, derivation=''):
+    """Bank one assembled matrix read: the reply (top rows in the chat,
+    the full table named in the file), the ledger entry (every row and
+    bucket), the CSV with every row, and the payload the job lands
+    (2026-11-04). Request-context free; never raises past the reply."""
+    import prometheus_analysis as pma
+    import insights_ledger as il
+    from prometheus import figure_binding as _fb
+    from prometheus import methodology as _meth
+    reply = pma.format_generated_metrics_reply(res)
+    _aud = _meth.audience_label(res, '')
+    if _aud and _aud.lower() not in str(reply or '')[:90].lower():
+        reply = f"On {_aud}:\n\n{reply}"
+    try:
+        reply = _meth.ensure(reply, res, question=text, base_label=str(base.get('subject') or ''),
+                             domain=str(base.get('domain') or ''),
+                             view_context=(base.get('view_context') if str(base.get('source') or '') == 'view' else None))
+    except Exception:
+        traceback.print_exc()
+    followups = [f for f in list(followups or []) if isinstance(f, str) and f.strip()][:3]
+    fam = res.get('metric_family') or 'audience'
+    try:
+        _fb.stamp_definitions(res)
+        _ps, _pc = _pm_persist_identity(res, base)
+        _metrics = res.get('metrics')
+        try:
+            _metrics = il.attach_sample_people(_metrics, universe=_aud)
+        except Exception:
+            pass
+        il.persist(subject=_ps, metric_family=fam, question=text, route='reasoned_metrics',
+                   metrics=_metrics, anchors=[], window_start=res.get('window_start'),
+                   window_end=res.get('window_end'), window_label=res.get('window_label'),
+                   reply=reply, followups=followups,
+                   base_profile_key=base.get('s3_key') or (base.get('subject') if str(base.get('source') or '') == 'view' else ''),
+                   cohort=_pc, breakdown=res.get('breakdown'), derivation=derivation or 'matrix read, pieces assembled',
+                   verify=verify, universe=_aud)
+    except Exception:
+        traceback.print_exc()
+    try:
+        _pm_remember_ask(pm_user, text, subject=res.get('subject'), cohort=res.get('cohort'), route='generated')
+    except Exception:
+        pass
+    _file_payload = {}
+    try:
+        _fe = {'subject': res.get('subject'), 'cohort': res.get('cohort'), 'question': text,
+               'metrics': res.get('metrics'), 'breakdown': res.get('breakdown'),
+               'ws': res.get('window_start'), 'we': res.get('window_end'), 'wl': res.get('window_label')}
+        _file_payload = _pm_answer_file_payload(_fe, auto_save=bool(_PM_FILE_ASK_RE.search(str(text or ''))),
+                                                username=pm_user, question=text)
+        if _file_payload and 'Email me this file' not in followups:
+            followups.append('Email me this file')
+    except Exception:
+        traceback.print_exc()
+    try:
+        from prometheus import charts as _charts
+        _chart_payload = _charts.publish(res, text, pm_user, _H.s3_client, _H.S3_BUCKET)
+    except Exception:
+        _chart_payload = {}
+    out = {'success': True, 'action': 'answer', 'reply': reply, **(_chart_payload or {}), 'figures': [],
+           'followups': followups, 'offer_deck': False, 'deck_angle': None, 'profile': res.get('subject'),
+           'metrics': list(res.get('metrics') or []),
+           'breakdown': (dict(res['breakdown']) if isinstance(res.get('breakdown'), dict) else None),
+           'matrix': dict(res.get('_matrix') or {}), '_family': fam, '_verify': verify, '_stages_ms': {},
+           **_file_payload}
+    return out
 
 
 _PM_READ_PREFIX = 'system/prometheus_reads/'
@@ -14680,9 +14886,65 @@ def _pm_history_has_job_turn(history, meta_key, job_id):
     return False
 
 
+def _pm_payload_has_figures(payload):
+    """A finished read's payload carries figures (a table, metrics, a
+    file, a figure ledger) or a stated reason (not quantifiable, held).
+    Anything else is an empty pass and never lands as the answer."""
+    p = payload if isinstance(payload, dict) else {}
+    if p.get('not_quantifiable') or p.get('held') or p.get('_held') or p.get('faulted'):
+        return True
+    if p.get('metrics') or p.get('breakdown') or p.get('file_link') or p.get('figures'):
+        return True
+    reply = str(p.get('reply') or '')
+    low = reply.lower()
+    if 'pulling this data will cost' in low or low.startswith('which ') or low.startswith('i can pull') \
+            or low.startswith('i can split') or 'name the show, brand or person' in low:
+        return False
+    return bool(re.search(r"\d", reply)) and len(reply) > 120
+
+
+def _pm_run_matrix_read(plan, *, text, history, mr, base, digest_block, anchors_block, led,
+                        pm_user, pm_ppu, stage_cb=None):
+    """A big matrix ask inside one read job (2026-11-04, Liz): every
+    piece runs through the same read core on the same base, window and
+    definitions (bank=False); the pieces assemble into one result;
+    `_pm_finish_matrix_read` banks once, writes one file and returns the
+    one payload the job lands. A piece that fails retries once inside
+    `matrix_read.run`; a piece that still fails is named in the reply."""
+    from prometheus import matrix_read as _mx
+
+    def _core(piece_text, piece_label):
+        out = _pm_generate_read_core(
+            text=piece_text, history=history, mr=mr, base=base,
+            digest_block=digest_block, anchors_block=anchors_block,
+            led=led, pm_user=pm_user, pm_ppu=pm_ppu, stage_cb=None, bank=False)
+        if not isinstance(out, dict) or not out.get('success') or out.get('_held'):
+            return None
+        res = out.get('_res')
+        return res if isinstance(res, dict) and (res.get('breakdown') or res.get('metrics')) else None
+
+    results = _mx.run(plan, core=_core, text=text, stage_cb=stage_cb)
+    if stage_cb is not None:
+        try:
+            stage_cb('putting the table together')
+        except Exception:
+            pass
+    subject = str((base or {}).get('subject') or '').strip() or 'this audience'
+    res = _mx.assemble(plan, results, subject=subject, text=text)
+    if not results or not res.get('breakdown'):
+        # no piece came back: the honest line, never an empty table
+        missing = [p['label'] for p in plan['pieces']]
+        return {'success': True, 'action': 'answer', 'followups': [], 'offer_deck': False, 'deck_angle': None,
+                'reply': ('None of the pieces of this read came back, so there is no table to give. '
+                          + __import__('prometheus_analysis').missing_pieces_line(missing)),
+                'faulted': 'no_figures', '_family': 'audience', '_verify': None, '_stages_ms': {}}
+    return _pm_finish_matrix_read(res, text=text, base=base, pm_user=pm_user,
+                                  derivation=f"matrix read: {_mx.describe(plan)}; landed {len(results)} of {len(plan['pieces'])}")
+
+
 def _pm_run_read_job(job_id, pm_user, pm_ppu, text, history, mr, base,
                      digest_block, anchors_block, led,
-                     panel_charge=None, probe=False):
+                     panel_charge=None, probe=False, matrix_plan=None):
     """Background body of one generated read. Writes the finished
     payload to the S3-backed job status the widget polls; a locked
     phone or reloaded tab picks the read up when it returns. As the
@@ -14710,13 +14972,38 @@ def _pm_run_read_job(job_id, pm_user, pm_ppu, text, history, mr, base,
             _faults.note('chat', _fx)
 
     try:
-        payload = _pm_generate_read_core(
-            text=text, history=history, mr=mr, base=base,
-            digest_block=digest_block, anchors_block=anchors_block,
-            led=led, pm_user=pm_user, pm_ppu=pm_ppu, stage_cb=_stage)
+        if matrix_plan:
+            payload = _pm_run_matrix_read(matrix_plan, text=text, history=history, mr=mr, base=base,
+                                          digest_block=digest_block, anchors_block=anchors_block,
+                                          led=led, pm_user=pm_user, pm_ppu=pm_ppu, stage_cb=_stage)
+        else:
+            payload = _pm_generate_read_core(
+                text=text, history=history, mr=mr, base=base,
+                digest_block=digest_block, anchors_block=anchors_block,
+                led=led, pm_user=pm_user, pm_ppu=pm_ppu, stage_cb=_stage)
         payload.pop('_family', None)
         held = bool(payload.pop('_held', False))
         _verify = payload.pop('_verify', None)
+        # a read that produced no figures never lands as an empty or a
+        # transport line: the plain words say what did not come back
+        # (2026-11-04); the ask log records one 'faulted' with the cause
+        if payload.get('success') and not held and (payload.get('faulted') or not _pm_payload_has_figures(payload)):
+            _why = str(payload.get('reply') or '').strip()
+            _line = _why if payload.get('faulted') else _rr.fault_reply(
+                {'subject': head.get('subject') or (base or {}).get('subject'), 'question': text}, 'no_figures',
+                {'base': {k: base.get(k) for k in ('subject', 'source', 'product') if isinstance(base, dict)}})
+            payload = {'success': True, 'action': 'answer', 'reply': _line, 'followups': [],
+                       'offer_deck': False, 'deck_angle': None, 'faulted': str(payload.get('faulted') or 'no_figures')}
+            _pm_read_status_write(job_id, {**head, 'status': 'done', 'fault': 'no_figures', 'final': True,
+                                           'final_reason': ('no figures: ' + _why)[:200],
+                                           'finished_at': time.time(), 'payload': payload})
+            _pm_append_read_to_history(pm_user, job_id, payload, started_at=head.get('started_at'))
+            _pm_settle_ask(job_id, 'faulted', _line, head.get('started_at'))
+            _pm_notify_delete(job_id)
+            if panel_charge:
+                _pm_panel_refund(panel_charge)
+            print(f"[pm-loop] read {job_id} faulted (no figures) for {pm_user}")
+            return
         # The finished read bypasses the envelope, so the plain-English
         # shaper runs here (2026-10-06).
         from prometheus import reply_shape as _rs
@@ -14730,6 +15017,11 @@ def _pm_run_read_job(job_id, pm_user, pm_ppu, text, history, mr, base,
                 _done['stages_ms'] = _stages
             if isinstance(_verify, dict) and _verify:
                 _done['verify'] = _verify
+            # the file the read wrote, as a job file the API door lists
+            # and serves under the same key (2026-11-04)
+            _fl = payload.get('file_link') if isinstance(payload.get('file_link'), dict) else {}
+            if _fl.get('key') and _fl.get('name'):
+                _done['files'] = {'csv': {'key': str(_fl['key']), 'name': str(_fl['name'])}}
             _pm_read_status_write(job_id, _done)
             # Land the finished read in the requester's chat thread so
             # it is waiting when they return, and (if they opted in)

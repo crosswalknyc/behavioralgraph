@@ -151,9 +151,20 @@ def view_base(view_ctx):
     view_id = str(vc.get('view_id') or '').strip()
     if view_id not in SELF_CONTAINED:
         return None
-    title = str(vc.get('view_title') or '').strip() or product_label(view_id)
+    label = product_label(view_id)
+    title = str(vc.get('view_title') or '').strip()
+    # the widget's view title is often the product's tab label ("Digital
+    # Journey IQ"); the study on screen names itself in the data
+    # ("Music to Long Form"), and that is the subject every pass on it
+    # binds and banks under (2026-11-04)
+    data_title = str(((vc.get('data') or {}) if isinstance(vc.get('data'), dict) else {}).get('title') or '').strip()
+    if data_title and '_' in data_title and ' ' not in data_title:
+        data_title = data_title.replace('_', ' ').strip().title()
+    if data_title and (not title or _norm(title) == _norm(label)):
+        title = data_title[:120]
+    title = title or label
     return {'subject': title, 's3_key': '', 'source': 'view',
-            'view_id': view_id, 'product': product_label(view_id),
+            'view_id': view_id, 'product': label,
             'domain': domain_for(view_id)}
 
 

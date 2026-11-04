@@ -135,6 +135,77 @@
           "items": {
             "type": "string"
           }
+        },
+        "file_link": {
+          "type": "object",
+          "description": "The file under a data answer: a direct link good for 7 days, with the file name.",
+          "properties": {
+            "url": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "url",
+            "name"
+          ]
+        },
+        "files": {
+          "type": "array",
+          "description": "The same file as API paths under the finished job (GET /api/prometheus/v1/jobs/{id}/files/{name}).",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string"
+              },
+              "url": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "url"
+            ]
+          }
+        },
+        "table": {
+          "type": "object",
+          "description": "Present when the answer is a groups by dimensions table assembled in pieces: its size and any piece that did not come back.",
+          "properties": {
+            "groups": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "dimensions": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "rows": {
+              "type": "integer"
+            },
+            "missing": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
         }
       },
       "required": [

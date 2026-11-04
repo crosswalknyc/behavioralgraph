@@ -94,6 +94,20 @@ def _entry(s3, bucket, user, text):
     return ent if isinstance(ent, dict) and ent.get('job_id') else None
 
 
+def clear(s3, bucket, user, text):
+    """Forget the caller's record for this question (a read that faulted
+    runs fresh next time instead of attaching). Never raises."""
+    try:
+        doc = _load(s3, bucket, user)
+        if doc.pop(_qk.key(text), None) is None:
+            return False
+        s3.put_object(Bucket=bucket, Key=doc_key(user), Body=json.dumps(doc).encode('utf-8'),
+                      ContentType='application/json')
+        return True
+    except Exception:
+        return False
+
+
 def inflight(s3, bucket, read_prefix, user, text, now=None):
     """{'job_id', 'stage'} for the caller's own RUNNING job on this question, or None."""
     try:
@@ -133,6 +147,8 @@ def recent(s3, bucket, read_prefix, user, text, now=None):
         payload = status.get('payload') if isinstance(status.get('payload'), dict) else {}
         reply = str(payload.get('reply') or '').strip()
         subject = str(ent.get('subject') or status.get('subject') or '')
+        if payload.get('faulted') or status.get('fault'):
+            return None        # a read that could not run never replays; the ask runs fresh (2026-11-04)
         if st == 'done' and reply:
             return {'status': 'done', 'job_id': str(ent['job_id']), 'reply': reply, 'subject': subject,
                     'followups': [f for f in (payload.get('followups') or []) if isinstance(f, str)][:6],

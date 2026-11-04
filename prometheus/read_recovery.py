@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import socket
 import threading
 import time
@@ -439,16 +440,51 @@ def run_inline(job_id, status):
     panel_confirm = None
     if isinstance(rr.get('panel_charge'), dict):
         panel_confirm = {'subject': rr.get('bind_subject') or '', 'resume_charge': rr['panel_charge']}
+    ctx = resumed_ctx(rr)
+    body_json = {'text': rr['text']}
+    if ctx:
+        body_json['page_context'] = ctx
     with h.app.test_request_context('/api/brief-chat/analyze', method='POST',
-                                    json={'text': rr['text']}, headers=headers):
+                                    json=body_json, headers=headers):
         from flask import session as _session
         _session['username'] = uname
-        c._pm_generate_metrics_response(
+        resp = c._pm_generate_metrics_response(
             user, rr['text'], list(rr.get('history') or []), prefer_catalog=True,
             bind_subject=rr.get('bind_subject') or None, bind_cohort=rr.get('bind_cohort') or None,
             panel_confirm=panel_confirm, switch_page=rr.get('switch_page') or None,
-            inline_job_id=job_id, force_local=True)
+            inline_job_id=job_id, force_local=True, ctx=ctx, resume_base=resumed_base(rr))
+    # The job body ran when the reply carries this job id (the status,
+    # the thread turn and the ask log were all settled inside it). Any
+    # other synchronous return (an offer, a clarify, a replay) is settled
+    # here, so the job never sits 'working' for the sweeper to re-run
+    # into the same hole, and never lands an offer as its result.
+    try:
+        body = resp.get_json() if hasattr(resp, 'get_json') else resp
+        body = body if isinstance(body, dict) else {}
+        other = str(body.get('read_job_id') or '').strip()
+        if other and other != str(job_id):
+            # attached to another running copy of the same question: this
+            # record follows it (the poll hops to the resumed job)
+            cur = _status_doc(job_id) or status
+            if str(cur.get('status') or '') == 'working':
+                c._pm_read_status_write(job_id, {**{k: v for k, v in cur.items() if k != 'resume'},
+                                                 'resume': rr, 'status': 'working', 'stage': STALE_STAGE,
+                                                 'resumed_as': other, 'resumed_at': time.time()})
+        elif not other:
+            cur = _status_doc(job_id) or status
+            if str(cur.get('status') or '') == 'working':
+                settle_sync_result(job_id, cur, body, rr=rr, uname=uname)
+    except Exception:
+        traceback.print_exc()
     return True
+
+
+def _status_doc(job_id):
+    try:
+        s3, bucket = _s3()
+        return json.loads(s3.get_object(Bucket=bucket, Key=f"{_prefix()}{job_id}.json")['Body'].read())
+    except Exception:
+        return None
 _INFLIGHT = {}               # job_id -> head, for the SIGTERM handoff
 _handoff_installed = False
 
@@ -531,9 +567,47 @@ def _trim_history(history, n=10, width=2000):
     return out
 
 
+VIEW_CONTEXT_MAX_CHARS = 60000     # the screen a view-based read answers from rides the resume record
+
+
+def _compact_view_context(vc):
+    """The view context the read was started on, small enough to ride the
+    job record (the product's own numbers, never the whole page)."""
+    if not isinstance(vc, dict) or not vc.get('view_id'):
+        return None
+    out = {'view_id': str(vc.get('view_id') or '')[:40], 'view_title': str(vc.get('view_title') or '')[:200],
+           'data': vc.get('data') if isinstance(vc.get('data'), dict) else {}}
+    try:
+        body = json.dumps(out, default=str)
+    except Exception:
+        return {'view_id': out['view_id'], 'view_title': out['view_title'], 'data': {}}
+    if len(body) <= VIEW_CONTEXT_MAX_CHARS:
+        return out
+    data = dict(out['data'])
+    # drop the largest lists first until it fits
+    for _ in range(40):
+        big = max((k for k in data if isinstance(data[k], (list, dict))), key=lambda k: len(json.dumps(data[k], default=str)), default=None)
+        if big is None:
+            break
+        v = data[big]
+        if isinstance(v, list) and len(v) > 3:
+            data[big] = v[:max(3, len(v) // 2)]
+        else:
+            data.pop(big, None)
+        out['data'] = data
+        if len(json.dumps(out, default=str)) <= VIEW_CONTEXT_MAX_CHARS:
+            break
+    return out
+
+
 def resume_record(*, text, history, base, panel_charge=None, probe=False,
                   switch_page=None, bind_cohort=None):
-    """Everything a fresh instance needs to run this read again."""
+    """Everything a fresh instance needs to run this read again,
+    including the base it was started on. A read begun on a product
+    view (Digital Journey IQ on screen) carries that screen's data, so
+    the worker and a recovery rebind the SAME base instead of
+    re-resolving without a screen and falling to an offer (2026-11-04:
+    nine of Liz's reads landed as "Pulling this data will cost $100")."""
     base = base if isinstance(base, dict) else {}
     rec = {
         'text': str(text or '')[:1200],
@@ -546,12 +620,206 @@ def resume_record(*, text, history, base, panel_charge=None, probe=False,
         'probe': bool(probe),
         'switch_page': str(switch_page or '')[:200] or None,
     }
+    if base.get('subject') or base.get('s3_key'):
+        rec['base'] = {k: (str(base.get(k) or '')[:300] if not isinstance(base.get(k), (int, float, bool)) else base.get(k))
+                       for k in ('subject', 's3_key', 'source', 'view_id', 'product', 'domain') if base.get(k) not in (None, '')}
+    vc = base.get('view_context') if str(base.get('source') or '') == 'view' else None
+    cvc = _compact_view_context(vc)
+    if cvc:
+        rec['view_context'] = cvc
     try:
         json.dumps(rec)
     except Exception:
         rec['history'] = []
         rec['panel_charge'] = None
+        rec.pop('view_context', None)
     return rec
+
+
+def resumed_base(rr):
+    """The base a resume record pins, with its screen data back on it;
+    None when the record predates the pin."""
+    rr = rr if isinstance(rr, dict) else {}
+    b = rr.get('base')
+    if not isinstance(b, dict) or not (b.get('subject') or b.get('s3_key')):
+        return None
+    base = dict(b)
+    base.setdefault('source', rr.get('base_source') or 'catalog')
+    if isinstance(rr.get('view_context'), dict):
+        base['view_context'] = rr['view_context']
+    return base
+
+
+def resumed_ctx(rr):
+    """The page context a resumed read runs under: the stored screen when
+    there is one (so the view base resolves again), else None."""
+    rr = rr if isinstance(rr, dict) else {}
+    vc = rr.get('view_context')
+    return {'view_context': vc, 'primary': None, 'cuts': [], 'extras': []} if isinstance(vc, dict) else None
+
+
+# ------------------------------------------------------- never empty
+# What a resumed read may hand back synchronously: a stored reply replayed
+# whole (an answer), or nothing that counts as one (an offer, a clarify, a
+# which-audience question). The second kind never lands as the result of
+# a read the reader was promised; the job finalizes with a plain-words
+# line and the ask log records one 'faulted' with the cause.
+_NOT_AN_ANSWER_KEYS = ('panel_offer', 'memory_confirm', 'referent_clarify', 'audience_confirm', 'spec_draft',
+                       'spec_drafts', 'draft', 'drafts', 'options', 'question')
+
+
+def is_real_answer(body):
+    """True when a synchronous payload is a delivered answer (figures or a
+    replayed read), not an offer or a question."""
+    b = body if isinstance(body, dict) else {}
+    if not b.get('success') or str(b.get('action') or 'answer') != 'answer':
+        return False
+    if any(b.get(k) for k in _NOT_AN_ANSWER_KEYS):
+        return False
+    reply = str(b.get('reply') or '').strip()
+    if not reply:
+        return False
+    low = reply.lower()
+    if 'pulling this data will cost' in low or 'will cost $' in low or low.startswith('which ') \
+            or 'name the show, brand or person' in low or low.startswith('i can pull') or low.startswith('i can split'):
+        return False
+    try:
+        from prometheus import ask_outcome as _ao
+        if _ao.is_faulted_text(reply):
+            return False
+    except Exception:
+        pass
+    return bool(b.get('figures') or b.get('file_link') or b.get('breakdown') or b.get('metrics')
+                or re.match(r"^On\s+[^:\n]{1,160}:", reply) or len(reply) > 200)
+
+
+def fault_reply(status, cause='', rr=None):
+    """The plain-words line for a read that could not run: what it could
+    not do and why, the cut as the reader typed it, and the nearest thing
+    to do next. No internal words."""
+    status = status if isinstance(status, dict) else {}
+    rr = rr if isinstance(rr, dict) else (status.get('resume') if isinstance(status.get('resume'), dict) else {})
+    subject = str(status.get('subject') or rr.get('bind_subject') or (rr.get('base') or {}).get('subject') or '').strip()
+    question = ' '.join(str(status.get('question') or rr.get('text') or '').split())
+    cut = _cut_as_typed(question)
+    what = cut or subject or (question[:90] + ('...' if len(question) > 90 else '')) or 'this read'
+    where = ''
+    b = rr.get('base') or {}
+    if str(b.get('source') or rr.get('base_source') or '') == 'view' and b.get('product'):
+        where = f"Open {b['product']}" + (f" on {subject}" if subject and subject != b.get('product') else '') + " and ask again, "
+    why = {
+        'no_base': 'the data it was started from was not available to me when it ran, so there were no figures to give',
+        'no_figures': 'the pass came back with no figures, so there was nothing to give',
+        'not_an_answer': 'the pass came back with no figures, so there was nothing to give',
+    }.get(str(cause or ''), 'the pass came back with no figures, so there was nothing to give')
+    on = f" on {subject}" if subject and subject.lower() not in what.lower() else ''
+    return (f"I could not run the read on {what}{on}: {why}. "
+            f"{where or 'Ask it again, '}or name the audience and the cut in one line and I will run it alone. "
+            f"Nothing is charged for a read that did not run.")
+
+
+_CUT_RXS = (
+    # "the series viewers with no music touch cut", "the Horror series cut"
+    re.compile(r"\bthe\s+([A-Za-z][A-Za-z0-9&'/ -]{3,70}?)\s+cut\b(?!\s+(?:off|out))", re.I),
+    # "Series - No music touch", "Film music first", "Series no music touch"
+    re.compile(r"\b((?:Film|Series)\s*-?\s*(?:No music touch|Music first|Content first))\b", re.I),
+    # "run it on X", "the read on X", "one cut only ...: X"
+    re.compile(r"(?:(?:cut|read|run|piece)\s+(?:on|for)\s+|(?:one|single)\s+cut\s+only[^:]{0,40}:\s*)([A-Z][^.,;:()]{3,70}?)(?=\s*(?:[,;:.(]|\s+(?:only|cut|every|with|two|split|by)\b|$))"),
+)
+_CUT_NOISE_RX = re.compile(r"^(?:same|that|this|first|second|third|last|next|one|single|full|whole|new|other|each|every)\b", re.I)
+
+
+def _cut_as_typed(question):
+    """The cut name as the reader wrote it ('series viewers with no music
+    touch', 'Series - No music touch'), or ''."""
+    q = ' '.join(str(question or '').split())
+    for rx in _CUT_RXS:
+        for m in rx.finditer(q):
+            cand = m.group(1).strip(' ,;:.-')
+            if len(cand) >= 4 and not _CUT_NOISE_RX.match(cand) and not re.search(r"\d{1,3}(?:,\d{3})+|\$", cand):
+                return cand
+    return ''
+
+
+def finalize_faulted(job_id, status, cause, rr=None, reply=None):
+    """A resumed read that could not run lands once, honestly: the job
+    reads 'error' with the cause, the plain-words line is in the thread,
+    the ask log record that promised it settles as 'faulted' with that
+    line, the charge (if any) reverses. No offer text, no clarify, no
+    calm promise. Never raises; returns the line."""
+    c = _chat()
+    status = status if isinstance(status, dict) else {}
+    rr = rr if isinstance(rr, dict) else (status.get('resume') if isinstance(status.get('resume'), dict) else {})
+    uname = str(status.get('user') or '').strip()
+    line = str(reply or '').strip() or fault_reply(status, cause, rr)
+    refunded = False
+    charge = rr.get('panel_charge') or status.get('panel_charge')
+    try:
+        if isinstance(charge, dict):
+            c._pm_panel_refund(charge)
+            refunded = True
+    except Exception:
+        traceback.print_exc()
+    payload = {'success': True, 'action': 'answer', 'reply': line, 'followups': [], 'offer_deck': False,
+               'deck_angle': None, 'faulted': str(cause or 'no_figures')[:40]}
+    try:
+        # status 'done' with the fault marked: the widget renders the plain
+        # line from the payload (an 'error' status would show its own
+        # "working on it" line, which is not true); the registry never
+        # replays a faulted record, so the same ask runs fresh next time
+        c._pm_read_status_write(job_id, {
+            **{k: v for k, v in status.items() if k != 'resume'},
+            'status': 'done', 'final': True, 'fault': str(cause or 'no_figures')[:40],
+            'final_reason': f"could not run: {cause}"[:200], 'refunded': refunded,
+            'finished_at': time.time(), 'payload': payload})
+    except Exception:
+        traceback.print_exc()
+    try:
+        if uname and not status.get('probe') and not rr.get('probe'):
+            # the line waits in the thread; the promise settles as faulted, once
+            tid = c._pm_thread_for_job(uname, job_id)
+            history = c._pm_load_thread_or_active(uname, tid)
+            if not c._pm_history_has_job_turn(history, 'read_job_id', job_id):
+                history.append({'role': 'agent', 'text': line, 'ts': c._pm_iso_now(),
+                                'meta': {'read_job_id': job_id, 'kind': 'read', 'faulted': str(cause or '')[:40]}})
+                c._pm_save_thread_or_active(uname, tid, history)
+    except Exception:
+        traceback.print_exc()
+    try:
+        c._pm_settle_ask(job_id, 'faulted', line, status.get('started_at'))
+    except Exception:
+        pass
+    try:
+        c._pm_notify_delete(job_id)
+    except Exception:
+        pass
+    try:
+        from prometheus import read_registry as _reg
+        _reg.clear(_s3()[0], _s3()[1], uname, str(rr.get('text') or status.get('question') or ''))
+    except Exception:
+        pass
+    print(f"[pm-recover] read {job_id} faulted ({cause}); landed the plain line")
+    return line
+
+
+def settle_sync_result(job_id, status, body, rr=None, uname=''):
+    """A resumed read answered synchronously. A real answer (a replayed
+    read) lands as the result; anything else (an offer, a clarify) is a
+    fault: the read the reader was promised did not run. Returns 'final'."""
+    c = _chat()
+    body = body if isinstance(body, dict) else {}
+    rr = rr if isinstance(rr, dict) else {}
+    if is_real_answer(body):
+        c._pm_read_status_write(job_id, {
+            **{k: v for k, v in status.items() if k != 'resume'},
+            'status': 'done', 'finished_at': time.time(), 'payload': body})
+        if uname and not rr.get('probe') and not status.get('probe'):
+            c._pm_append_read_to_history(uname, job_id, body, started_at=status.get('started_at'))
+        return 'final'
+    cause = 'no_base' if (body.get('panel_offer') or 'pulling this data will cost' in str(body.get('reply') or '').lower()
+                          or str(body.get('reply') or '').lower().startswith('which ')) else 'not_an_answer'
+    finalize_faulted(job_id, status, cause, rr=rr)
+    return 'final'
 
 
 def last_beat(status):
@@ -934,8 +1202,12 @@ def recover(job_id, status=None, reason='no heartbeat'):
         if isinstance(rr.get('panel_charge'), dict):
             panel_confirm = {'subject': rr.get('bind_subject') or '',
                              'resume_charge': rr['panel_charge']}
+        ctx = resumed_ctx(rr)
+        body_json = {'text': rr['text']}
+        if ctx:
+            body_json['page_context'] = ctx
         with h.app.test_request_context('/api/brief-chat/analyze', method='POST',
-                                        json={'text': rr['text']}, headers=headers):
+                                        json=body_json, headers=headers):
             from flask import session as _session
             _session['username'] = uname
             resp = c._pm_generate_metrics_response(
@@ -945,7 +1217,8 @@ def recover(job_id, status=None, reason='no heartbeat'):
                 bind_cohort=rr.get('bind_cohort') or None,
                 panel_confirm=panel_confirm,
                 switch_page=rr.get('switch_page') or None,
-                force_local=True)   # recovery never re-queues (a worker outage must not loop)
+                force_local=True,   # recovery never re-queues (a worker outage must not loop)
+                ctx=ctx, resume_base=resumed_base(rr))
         body = resp.get_json() if hasattr(resp, 'get_json') else resp
         body = body if isinstance(body, dict) else {}
         new_id = str(body.get('read_job_id') or '').strip()
@@ -973,13 +1246,10 @@ def recover(job_id, status=None, reason='no heartbeat'):
                 'status': 'working', 'stage': STALE_STAGE,
                 'resumed_as': new_id, 'resumed_at': time.time()})
             return new_id
-        # answered synchronously (replay, clarify): that is the result
-        ok = bool(body.get('success'))
-        c._pm_read_status_write(job_id, {
-            **{k: v for k, v in claimed.items() if k != 'resume'},
-            'status': 'done' if ok else 'error', 'payload': body})
-        if ok and not rr.get('probe'):
-            c._pm_append_read_to_history(uname, job_id, body)
+        # answered synchronously: a replayed read is the result; an offer
+        # or a clarify is not an answer to the read that was promised and
+        # finalizes as faulted, once, with the plain line (2026-11-04)
+        settle_sync_result(job_id, claimed, body, rr=rr, uname=uname)
         return 'final'
     except Exception as e:
         traceback.print_exc()

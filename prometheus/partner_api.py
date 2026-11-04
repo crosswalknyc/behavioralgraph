@@ -431,13 +431,24 @@ def handle_job(user: dict, job_id: str) -> tuple:
     billing = _billing(user, rid, sandbox, kid) if rid else {'charged_usd': 0.0, 'balance_after_usd': (None if sandbox else _balance(user)), 'basis': 'metered'}
     if st in ('done', 'complete', 'completed', 'ready'):
         res = out.get('result') or {}
-        v1 = C.to_v1(res, res.get('_raw') if isinstance(res, dict) else None, billing=billing)
+        v1 = C.to_v1(res, res.get('_raw') if isinstance(res, dict) else None, billing=billing, job_id=str(job_id))
         if v1.get('kind') == 'job':          # a finished job never reads as a job
-            v1 = C.to_v1(dict(res, kind='answer', job=None), res.get('_raw'), billing=billing)
+            v1 = C.to_v1(dict(res, kind='answer', job=None), res.get('_raw'), billing=billing, job_id=str(job_id))
+        # a read that could not run says so in plain words and is a
+        # decline, never an answer with no figures (2026-11-04)
+        raw_done = res.get('_raw') if isinstance(res, dict) and isinstance(res.get('_raw'), dict) else {}
+        if raw_done.get('faulted') and v1.get('kind') == 'answer':
+            _reason = 'no_base' if str(raw_done.get('faulted') or '') == 'no_base' else 'unsupported'
+            v1 = C.declined(_reason, str((v1.get('answer') or {}).get('text') or 'That one did not land. Send the question again.'),
+                            billing=billing)
     elif st == 'held':
         v1 = C.pending('Held for a moment on our side. Poll again shortly.', retry_after=120, job_id=job_id, billing=billing)
     elif st in ('error', 'failed'):
-        v1 = C.declined('error', 'That one did not land. Send the question again.', billing=billing)
+        # a read that could not run carries its own plain line (what it
+        # could not do and why); anything else stays the generic decline
+        _ftxt = str(((out.get('result') or {}).get('text') if isinstance(out.get('result'), dict) else '') or '').strip()
+        v1 = C.declined('error', _ftxt if (doc.get('fault') and _ftxt) else 'That one did not land. Send the question again.',
+                        billing=billing)
     elif st == 'timed_out':
         v1 = C.declined('error', 'That one ran out of time. Send the question again.', billing=billing)
     else:

@@ -56,8 +56,13 @@ INDEX_KEY = LEDGER_PREFIX + 'index.json'
 ENTRY_PREFIX = LEDGER_PREFIX + 'entries/'
 
 MAX_ENTRIES_PER_SUBJECT = 40
-MAX_METRICS_PER_ENTRY = 10
-MAX_REPLY_CHARS = 4000
+# A data answer is stored whole (Liz 2026-11-04, the 16-row cut): these
+# are runaway guards, never a cap a real read reaches. The reply limit
+# is long enough for a six-cut by four-dimension table.
+MAX_METRICS_PER_ENTRY = 40
+MAX_REPLY_CHARS = 16000
+MAX_BREAKDOWN_ROWS = 400
+MAX_BUCKETS_PER_ROW = 40
 
 # Every projected US figure stands on the people in the data behind it:
 # the ten million US consumers project to 329.9M, so one person in the
@@ -465,11 +470,15 @@ def make_entry(*, subject, metric_family, question, route, metrics,
 
 
 def _clean_breakdown(breakdown):
-    """Bound-checked copy of a breakdown table, or None."""
+    """Bound-checked copy of a breakdown table, or None. Every row
+    survives, and a distribution row keeps its pool and its full bucket
+    set (2026-11-04: the stored entry is what the file exports from and
+    what the next pass binds to, so 'gender by door' has to be here as
+    figures, not as a sentence)."""
     if not isinstance(breakdown, dict):
         return None
     rows = []
-    for r in (breakdown.get('rows') or [])[:16]:
+    for r in (breakdown.get('rows') or [])[:MAX_BREAKDOWN_ROWS]:
         if not isinstance(r, dict):
             continue
         label = str(r.get('label') or '').strip()[:60]
@@ -483,6 +492,31 @@ def _clean_breakdown(breakdown):
         note = str(r.get('note') or '').strip()[:160]
         if note:
             row['note'] = note
+        pool = r.get('pool')
+        if isinstance(pool, (int, float)) and pool > 0:
+            row['pool'] = int(round(pool))
+        for fld in ('group', 'dimension', 'definition'):
+            v = str(r.get(fld) or '').strip()
+            if v:
+                row[fld] = v[:160 if fld == 'definition' else 60]
+        bks = []
+        for b in (r.get('buckets') or [])[:MAX_BUCKETS_PER_ROW]:
+            if not isinstance(b, dict):
+                continue
+            bl = str(b.get('label') or '').strip()[:60]
+            try:
+                cnt = int(round(float(b.get('count') or 0)))
+                pct = float(b.get('share_pct') or 0)
+            except (TypeError, ValueError):
+                continue
+            if not bl or cnt < 0:
+                continue
+            bk = {'label': bl, 'count': cnt, 'share_pct': round(pct, 1)}
+            if b.get('mode'):
+                bk['mode'] = True
+            bks.append(bk)
+        if len(bks) >= 2:
+            row['buckets'] = bks
         rows.append(row)
     if not rows:
         return None
@@ -667,7 +701,7 @@ def _derive_list_subentries(entry):
             return []
         basis = str(bd.get('share_basis') or '').strip()
         children = []
-        for row in rows[:16]:
+        for row in rows[:60]:
             label = str(row.get('label') or '').strip()
             if len(label) < 2:
                 continue
@@ -1131,6 +1165,12 @@ def retire_conflicting_entries(subject, facts, tolerance=0.05):
     return len(retired)
 
 
+# the prompt block stays bounded; a stored matrix read (36 rows with
+# buckets) renders its rows first and the cap is wide enough for two
+ROW_LINES_PER_ENTRY = 48
+BLOCK_LINES_MAX = 120
+
+
 def render_block(entries, limit=12):
     """PUBLISHED MEASUREMENTS body for the prompt builders: one line
     per stored metric. Delivered-deck anchor entries render first
@@ -1156,14 +1196,32 @@ def render_block(entries, limit=12):
                          f"{win}: {m.get('label')} = {val}{d}")
         bd = e.get('breakdown') or {}
         coh = f", {e.get('cohort')}" if e.get('cohort') else ''
-        for r in (bd.get('rows') or [])[:6]:
+        brows = bd.get('rows') or []
+        # distribution rows carry their buckets: a stored 'gender by
+        # door' is a figure the next pass keeps, not a sentence it may
+        # redraw (2026-11-04). Rows with buckets render first, the
+        # plain share rows after; the block stays bounded.
+        with_b = [r for r in brows if isinstance(r.get('buckets'), list) and r.get('buckets')]
+        plain = [r for r in brows if r not in with_b]
+        for r in with_b[:ROW_LINES_PER_ENTRY]:
+            pool = f" (pool {int(r['pool']):,})" if isinstance(r.get('pool'), (int, float)) and r.get('pool') else ''
+            cells = ' | '.join(
+                f"{b.get('label')} {float(b.get('share_pct') or 0):.1f}%"
+                + (f" ({int(b['count']):,})" if isinstance(b.get('count'), (int, float)) else '')
+                for b in r['buckets'][:MAX_BUCKETS_PER_ROW])
+            lines.append(
+                f"- {e.get('subject')}{coh} | {e.get('family')} | {win}: "
+                f"{r.get('dimension') or bd.get('dimension') or 'Category'}, "
+                f"{r.get('label')}{pool} = {cells}")
+        for r in plain[:6]:
             lines.append(
                 f"- {e.get('subject')}{coh} | {e.get('family')} | {win}: "
                 f"{bd.get('dimension') or 'Category'} share, "
                 f"{r.get('label')} = {float(r.get('share_pct') or 0):.1f}%")
-        if len(lines) >= 30:
+        if len(lines) >= BLOCK_LINES_MAX:
             break
-    return '\n'.join(lines[:30])
+    return '\n'.join(lines[:BLOCK_LINES_MAX])
+
 
 
 # ---------------------------------------------------------------------------

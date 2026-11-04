@@ -6313,13 +6313,13 @@ def enforce_metrics_coherence(data, so_what=False, multi=None):
         metrics.append({'name': name, 'label': label or name,
                         'unit': unit or 'count', 'value': value,
                         'definition': definition})
-        if len(metrics) >= 8:
+        if len(metrics) >= 12:
             break
     out['cohort'] = _clip_label(data.get('cohort'))
     out['breakdown'] = _coherent_breakdown(data.get('breakdown'))
-    if out['breakdown']:
-        # Breakdown-primary reads keep the context stats to a preamble.
-        metrics = metrics[:3]
+    # A breakdown-primary read shows three context stats in the chat
+    # preamble (the formatter's [:3]); the rest stay on the result so the
+    # ledger entry and the file carry every figure (2026-11-04).
     if not metrics and not out['breakdown']:
         raise ValueError('measurement read carried no usable metrics')
     # Conversion norms (2026-10-13): a social-to-action rate sits inside the
@@ -6337,15 +6337,45 @@ def enforce_metrics_coherence(data, so_what=False, multi=None):
     return out
 
 
+# A data answer is delivered whole (Liz 2026-11-04: the widget "caps each
+# answer at 16 result blocks"). The 16 here was the cap on the breakdown
+# rows the read could carry: a six-cut by four-dimension ask lost its
+# last eight rows before the reply, the ledger or the file ever saw them.
+# The structured result now keeps every row (bounded only against a
+# runaway payload); the CHAT reply shows the top CHAT_BREAKDOWN_ROWS and
+# says the full table is in the file; the ledger entry and the CSV carry
+# every row and every bucket.
+BREAKDOWN_ROWS_MAX = 400
+BREAKDOWN_BUCKETS_MAX = 40
+CHAT_BREAKDOWN_ROWS = 16
+
+
+def full_table_line(res):
+    """The one plain sentence that tells the reader the whole table is in
+    the file under the answer. Names the groups by dimensions when the
+    read knows them (a matrix read), the row count otherwise."""
+    bd = (res or {}).get('breakdown') if isinstance(res, dict) else None
+    rows = (bd or {}).get('rows') or []
+    mx = (res or {}).get('_matrix') if isinstance(res, dict) else None
+    if isinstance(mx, dict) and mx.get('groups') and mx.get('dimensions'):
+        g, d = int(mx['groups']), int(mx['dimensions'])
+        return (f"The full table, all {g} groups by every dimension "
+                f"({d} dimension{'s' if d != 1 else ''}, {len(rows)} rows), "
+                f"is in the file under this answer.")
+    return f"The full table, all {len(rows)} rows, is in the file under this answer."
+
+
 def _coherent_breakdown(bd):
     """Validate + exactify a breakdown table: ranked rows, shares
     renormalized to sum to exactly 100 (residual absorbed by the
     largest row), penetrations bounded, labels capped. Returns the
-    cleaned dict or None."""
+    cleaned dict or None. Every row survives (BREAKDOWN_ROWS_MAX is a
+    runaway guard, never a 16): a distribution row keeps its full
+    bucket set and its pool."""
     if not isinstance(bd, dict):
         return None
     rows = []
-    for r in (bd.get('rows') or [])[:16]:
+    for r in (bd.get('rows') or [])[:BREAKDOWN_ROWS_MAX]:
         if not isinstance(r, dict):
             continue
         label = str(r.get('label') or '').strip()[:60]
@@ -6375,7 +6405,7 @@ def _coherent_breakdown(bd):
         bks = r.get('buckets')
         if isinstance(bks, list) and len(bks) >= 2:
             clean = []
-            for b in bks[:12]:
+            for b in bks[:BREAKDOWN_BUCKETS_MAX]:
                 if not isinstance(b, dict) or not str(b.get('label') or '').strip():
                     continue
                 try:
@@ -6385,14 +6415,22 @@ def _coherent_breakdown(bd):
                     continue
                 if cnt < 0 or pct < 0 or pct > 100:
                     continue
-                clean.append({'label': str(b['label']).strip()[:40], 'count': cnt,
+                clean.append({'label': str(b['label']).strip()[:60], 'count': cnt,
                               'share_pct': round(pct, 1)})
             if len(clean) >= 2:
                 top = max(range(len(clean)), key=lambda i: clean[i]['count'])
                 clean[top]['mode'] = True
                 row['buckets'] = clean
+        # the group and the dimension a cell belongs to, when the read
+        # names them (a matrix read assembled piece by piece)
+        for fld in ('group', 'dimension'):
+            v = str(r.get(fld) or '').strip()
+            if v:
+                row[fld] = v[:60]
         rows.append(row)
-    if len(rows) < 3:
+    # a one-cut, one-dimension ask is one row with its buckets; that is
+    # a table too (Liz 2026-11-04: "try it as one dimension only")
+    if len(rows) < 3 and not any(r.get('buckets') for r in rows):
         return None
     rows.sort(key=lambda r: -r['share_pct'])
     total = sum(r['share_pct'] for r in rows)
@@ -6436,6 +6474,7 @@ def format_generated_metrics_reply(res):
         if res.get('window_start') and res.get('window_end') else
         'trailing 12 months')
     bd = res.get('breakdown')
+    tail_lines = []
     if bd:
         ctx_bits = [f"{m['label']}: {_fmt_metric_value(m)}"
                     for m in (res.get('metrics') or [])[:3]]
@@ -6444,7 +6483,11 @@ def format_generated_metrics_reply(res):
             lines.append('')
         lines.append(f"{bd['dimension']} mix, {win} "
                      f"({bd['share_basis']})")
-        for r in bd['rows']:
+        all_rows = list(bd['rows'] or [])
+        # the chat stays readable: the top rows here, every row in the
+        # file (never a silent cut; the line below says where the rest is)
+        shown = all_rows if len(all_rows) <= CHAT_BREAKDOWN_ROWS else all_rows[:CHAT_BREAKDOWN_ROWS]
+        for r in shown:
             ln = f"- {r['label']}: {r['share_pct']:.1f}% share"
             if r.get('penetration_pct') is not None:
                 ln += f", {r['penetration_pct']:.1f}% penetration"
@@ -6458,6 +6501,11 @@ def format_generated_metrics_reply(res):
                     + (' most common' if b.get('mode') else '')
                     for b in r['buckets'])
             lines.append(ln)
+        if len(all_rows) > len(shown) or res.get('_matrix'):
+            tail_lines.append(full_table_line(res))
+        missing = [str(x) for x in (res.get('_missing') or []) if str(x).strip()]
+        if missing:
+            tail_lines.append(missing_pieces_line(missing))
     else:
         lines.append(f"MEASURED READ ({win})")
         for m in res.get('metrics') or []:
@@ -6469,13 +6517,62 @@ def format_generated_metrics_reply(res):
         lines.append('READS')
         for r in reads:
             lines.append(f"- {r}")
+    # where the rest of the table is, and what did not come back, close
+    # the answer in plain words (never a silent cut)
+    for tl in tail_lines:
+        lines.append('')
+        lines.append(tl)
     return scrub_user_text('\n'.join(lines).strip())
+
+
+def missing_pieces_line(missing):
+    """Pieces of a matrix read that did not come back, named in plain
+    words so a reader can ask for them alone (never an empty or a
+    partial-silent answer)."""
+    names = [str(x).strip() for x in (missing or []) if str(x).strip()]
+    if not names:
+        return ''
+    if len(names) == 1:
+        return f"{names[0]} did not come back; ask for it again and it runs alone."
+    shown = names[:6]
+    tail = f" and {len(names) - 6} more" if len(names) > 6 else ''
+    return (f"{len(names)} pieces did not come back: {', '.join(shown)}{tail}. "
+            f"Ask for any of them again and it runs alone.")
 
 
 def _csv_slug(s):
     s = scrub_user_text(str(s or '')).lower()
     s = re.sub(r'[^a-z0-9]+', '_', s)
     return s.strip('_')
+
+
+def _bucket_rows_csv(w, rows, subject, cohort, dim, share_col_basis):
+    """Long-format export for distribution rows: one line per group x
+    dimension x bucket, every row and every bucket (2026-11-04, the
+    whole answer in one file). Columns: Group, Dimension, Bucket, Count,
+    Share within the group %, Group pool, Row share of total %."""
+    w.writerow(['Group', 'Dimension', 'Bucket', 'Count',
+                'Share within the group %', 'Group pool',
+                f"Row share of total % ({subject}{', ' + cohort if cohort else ''})"])
+    for r in rows:
+        label = scrub_user_text(str(r.get('label') or ''))
+        grp = scrub_user_text(str(r.get('group') or '')) or label
+        rdim = scrub_user_text(str(r.get('dimension') or '')) or dim
+        pool = r.get('pool')
+        pool_txt = f"{int(pool):,}".replace(',', '') if isinstance(pool, (int, float)) and pool else ''
+        share_txt = f"{float(r.get('share_pct')):.4f}" if isinstance(r.get('share_pct'), (int, float)) else ''
+        bks = r.get('buckets') if isinstance(r.get('buckets'), list) else []
+        if not bks:
+            w.writerow([grp, rdim, label if grp != label else '', '', '', pool_txt, share_txt])
+            continue
+        for b in bks:
+            if not isinstance(b, dict):
+                continue
+            cnt = b.get('count')
+            w.writerow([grp, rdim, scrub_user_text(str(b.get('label') or '')),
+                        (str(int(cnt)) if isinstance(cnt, (int, float)) else ''),
+                        (f"{float(b.get('share_pct')):.1f}" if isinstance(b.get('share_pct'), (int, float)) else ''),
+                        pool_txt, share_txt])
 
 
 def build_generated_csv(entry):
@@ -6503,7 +6600,14 @@ def build_generated_csv(entry):
             and isinstance(r.get('share_pct'), (int, float))]
     buf = io.StringIO()
     w = _csv.writer(buf, lineterminator='\n')
-    if rows:
+    if rows and any(isinstance(r.get('buckets'), list) and r.get('buckets') for r in rows):
+        # distribution rows (a cut by age, gender, income ...): every row
+        # and every bucket, long format, never the first 16
+        dim = scrub_user_text(
+            str(bd.get('dimension') or 'Category').strip()) or 'Category'
+        _bucket_rows_csv(w, rows, subject, cohort, dim, str(bd.get('share_basis') or ''))
+        name_bits = [subject, cohort, dim]
+    elif rows:
         dim = scrub_user_text(
             str(bd.get('dimension') or 'Category').strip()) or 'Category'
         # The cells are fractions of 1 (they sum to 1.000000), so the
