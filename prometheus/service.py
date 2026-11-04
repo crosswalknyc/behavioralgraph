@@ -788,8 +788,17 @@ def ask(user, body, *, via='session'):
                 _cur._get_current_object(), _oid, _okind, via='chat',
                 user_text=text, append=persist)
         except Exception as e:
+            # the decision itself raised: the reader gets the calm line
+            # (the offer is still on the server), ops get the cause; the
+            # message is still the answer to the offer, never a new ask
             print(f"[prometheus] offer decision failed: {e}")
-            _state, _reply, _odoc = 'failed', '', None
+            _state, _reply, _odoc = 'held', _offers.CALM_LINE, None
+            try:
+                _offers._ops_email(f"offer {_oid}: the {_okind} decision from the chat raised {type(e).__name__}: "
+                                   f"{str(e)[:200]}; the user read the calm line, the offer is still on the server",
+                                   username=str(uname or ''), payload={'offer_id': _oid, 'action': _okind, 'via': 'chat'})
+            except Exception as _fx:
+                _faults.note('service', _fx)
         if _reply:
             raw = {'success': True, 'action': 'answer', 'reply': _reply,
                    'followups': [], 'offer_id': _oid, 'offer_state': _state}

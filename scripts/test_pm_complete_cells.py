@@ -62,6 +62,7 @@ from prometheus import methodology as M  # noqa: E402
 from prometheus import matrix_read as MX  # noqa: E402
 from prometheus import read_recovery as RR  # noqa: E402
 from prometheus import priced_read as PR  # noqa: E402
+from prometheus import offers as OF  # noqa: E402
 
 JAY_Q = ('Window: Sep 23 to Oct 22, 2026. A view = 30+ seconds of playback. Of all US people who watched The Love '
          'Hypothesis on Prime Video, how many had (a) watched Netflix or Hulu in the 6 months before Sep 23, 2026, '
@@ -558,7 +559,10 @@ class MatrixCompletion(unittest.TestCase):
 RETIRED_PHRASES = ('did not come back; ask', 'pieces did not come back', 'i could not run the read', 'i could not finish that',
                    'i could not confirm the named shows', 'did not finish on my side', 'stand behind for', 'not in this read',
                    'i do not have a figure', 'not available to me', 'nothing to give', 'no figures to give',
-                   'ask it again and i will run it fresh', 'ask for it again and it runs alone', 'ask again and i will retry')
+                   'ask it again and i will run it fresh', 'ask for it again and it runs alone', 'ask again and i will retry',
+                   # offers (2026-11-04): a pull that did not start is held and ops hear; never a notice
+                   'i could not start the', 'not started.', 'something went wrong.',
+                   'nothing was charged. open your prometheus chat')
 SWEEP_FILES = ['prometheus_analysis.py', 'prometheus_verify.py', os.path.join('prometheus', 'legacy', 'chat.py')]
 SWEEP_FILES += sorted(os.path.join('prometheus', f) for f in os.listdir(os.path.join(ROOT, 'prometheus')) if f.endswith('.py'))
 
@@ -613,6 +617,150 @@ class StringSweep(unittest.TestCase):
         with open(os.path.join(ROOT, 'prometheus', 'read_recovery.py'), encoding='utf-8') as fh:
             src = fh.read()
         self.assertIn("'brief-chat/read-recovery', fault_note(status, cause, rr)", src)
+        self.assertEqual(OF.CALM_LINE, calm)
+        self.assertEqual(OF.reply_for('yes', {'label': 'Gunna Concert Goers'}, {'success': False, 'error': calm}), calm)
+        self.assertEqual(OF.reply_for('yes', {'label': 'Gunna Concert Goers'}, {}), calm)
+        with open(os.path.join(ROOT, 'prometheus', 'offers.py'), encoding='utf-8') as fh:
+            src = fh.read()
+        self.assertIn("'held': 'Working on it.'", src)
+        self.assertNotIn("'failed': 'Not started.'", src)
+        self.assertIn("return page('Working on it.', CALM_LINE, ok=True), 200", src)
+        with open(os.path.join(ROOT, 'prometheus', 'service.py'), encoding='utf-8') as fh:
+            src = fh.read()
+        self.assertIn("_state, _reply, _odoc = 'held', _offers.CALM_LINE, None", src)
+
+
+class _FakeS3:
+    def __init__(self):
+        self.docs = {}
+
+    def get_object(self, Bucket, Key):
+        import io
+        if Key not in self.docs:
+            raise KeyError(Key)
+        return {'Body': io.BytesIO(self.docs[Key])}
+
+    def put_object(self, Bucket, Key, Body, **kw):
+        self.docs[Key] = Body
+
+
+class OffersHold(unittest.TestCase):
+    """A pull that did not start: one retry after a short backoff, then
+    the calm line, the offer back to pending, ops told; never a failure
+    notice, never a charge without a run (2026-11-04)."""
+    CALM = {'success': False, 'error': OF.CALM_LINE, '_http': 200}      # the approve route's calm payload (queue down)
+
+    def setUp(self):
+        self.s3 = _FakeS3()
+        self.orig = {k: getattr(OF, k) for k in ('_s3', 'launch', '_sleep', '_ops_email', '_refund', 'append_turns')}
+        self.sleeps, self.mails, self.refunds, self.turns = [], [], [], []
+        OF._s3 = lambda: (self.s3, 'bucket')
+        OF._sleep = self.sleeps.append
+        OF._ops_email = lambda err, username='', payload=None: (self.mails.append((err, username, payload)) or True)
+        OF._refund = lambda username, credits, reason: (self.refunds.append((username, credits, reason)) or True)
+        OF.append_turns = lambda doc, turns: self.turns.extend(turns)
+        self.doc, _links = OF.create('eliot', label='Gunna Concert Goers', prompt='people who attended a Gunna concert',
+                                     spec_draft={'subject': 'Gunna Concert Goers', 'decision': 'new_build'}, thread_id='t1')
+
+    def tearDown(self):
+        for k, v in self.orig.items():
+            setattr(OF, k, v)
+
+    def _launch_seq(self, *results):
+        it = iter(results)
+        calls = {'n': 0}
+
+        def launch(app, doc):
+            calls['n'] += 1
+            r = next(it)
+            if isinstance(r, Exception):
+                raise r
+            return dict(r)
+        OF.launch = launch
+        return calls
+
+    def test_a_queue_hiccup_self_heals_on_the_retry(self):
+        calls = self._launch_seq(self.CALM, {'success': True, 'run_id': 'run_1', 'credits_charged': 275})
+        state, reply, doc = OF.decide(None, self.doc['id'], 'yes', via='email')
+        self.assertEqual(state, 'launched')
+        self.assertEqual(calls['n'], 2)
+        self.assertEqual(self.sleeps, [OF.RETRY_BACKOFF_S])
+        self.assertEqual(doc['status'], 'launched')
+        self.assertEqual(doc['run_id'], 'run_1')
+        self.assertTrue(reply.startswith('On it. Pulling Gunna Concert Goers now.'))
+        self.assertIn('charged', reply)
+        self.assertEqual(self.mails, [])
+        self.assertEqual(self.refunds, [])
+        self.assertEqual(len(doc['last_attempt']['attempts']), 2)
+
+    def test_still_not_started_holds_the_offer_and_tells_ops(self):
+        calls = self._launch_seq(self.CALM, RuntimeError('queue refused'))
+        state, reply, doc = OF.decide(None, self.doc['id'], 'yes', via='chat', user_text='Yes, pull it')
+        self.assertEqual(state, 'held')
+        self.assertEqual(calls['n'], 2)
+        self.assertEqual(reply, OF.CALM_LINE)
+        for phrase in ('could not', 'not started', 'nothing was charged', 'ask me in the dashboard'):
+            self.assertNotIn(phrase, reply.lower())
+        stored = OF.load(self.doc['id'])
+        self.assertEqual(stored['status'], 'pending', 'the pull stays pending on the server')
+        self.assertIsNone(stored['decision'])
+        self.assertIsNone(stored['run_id'])
+        self.assertTrue(stored['held'])
+        self.assertEqual(stored['last_attempt']['state'], 'held')
+        self.assertEqual(stored['last_attempt']['refunded_credits'], 0)
+        self.assertEqual(len(self.mails), 1)
+        err, username, payload = self.mails[0]
+        self.assertEqual(username, 'eliot')
+        self.assertIn(self.doc['id'], err)
+        self.assertIn('Gunna Concert Goers', err)
+        self.assertIn('RuntimeError: queue refused', err)
+        self.assertIn('nothing charged', err)
+        self.assertEqual(payload['offer_id'], self.doc['id'])
+        self.assertEqual(payload['user'], 'eliot')
+        self.assertEqual(payload['subject'], 'Gunna Concert Goers')
+        self.assertEqual(len(payload['attempts']), 2)
+        # the thread got the user's yes and the calm line, marked held
+        self.assertEqual([t['role'] for t in self.turns], ['user', 'agent'])
+        self.assertEqual(self.turns[1]['text'], OF.CALM_LINE)
+        self.assertTrue(self.turns[1]['meta']['held'])
+        # a later yes (or an ops retry) starts it: the offer was never closed as failed
+        self.turns.clear()
+        self._launch_seq({'success': True, 'run_id': 'run_2', 'credits_charged': 0})
+        state2, reply2, doc2 = OF.retry(None, self.doc['id'])
+        self.assertEqual(state2, 'launched')
+        self.assertEqual(doc2['via'], 'ops')
+        self.assertEqual(OF.load(self.doc['id'])['status'], 'launched')
+
+    def test_a_reply_meant_for_the_reader_is_shown_and_the_offer_stays_open(self):
+        funds = {'success': True, 'action': 'answer', 'reply': 'This pull needs funds on your account. Add funds and say yes again.',
+                 'no_funds': True, '_http': 200}
+        calls = self._launch_seq(funds)
+        state, reply, doc = OF.decide(None, self.doc['id'], 'yes', via='email')
+        self.assertEqual(state, 'guidance')
+        self.assertEqual(calls['n'], 1, 'a reply for the reader is not retried')
+        self.assertEqual(self.sleeps, [])
+        self.assertEqual(reply, funds['reply'])
+        self.assertEqual(OF.load(self.doc['id'])['status'], 'pending')
+        self.assertEqual(self.mails, [])
+
+    def test_a_charge_with_no_run_is_refunded_and_reported(self):
+        bad = {'success': False, 'error': OF.CALM_LINE, 'credits_charged': 275, '_http': 200}
+        self._launch_seq(bad, bad)
+        state, reply, doc = OF.decide(None, self.doc['id'], 'yes', via='email')
+        self.assertEqual(state, 'held')
+        self.assertEqual(reply, OF.CALM_LINE)
+        self.assertEqual(self.refunds, [('eliot', 275, f"offer {self.doc['id']}: charged with no run id")] * 2)
+        self.assertEqual(doc['last_attempt']['refunded_credits'], 550)
+        self.assertEqual(len(self.mails), 1)
+        self.assertIn('refunded 550 credit(s) charged with no run', self.mails[0][0])
+
+    def test_no_declines_and_a_second_decision_sees_already(self):
+        state, reply, doc = OF.decide(None, self.doc['id'], 'no', via='chat', user_text='No')
+        self.assertEqual(state, 'declined')
+        self.assertIn('I will not pull the Gunna Concert Goers profile', reply)
+        state2, reply2, _ = OF.decide(None, self.doc['id'], 'yes', via='email')
+        self.assertEqual(state2, 'already')
+        self.assertIn('Already noted', reply2)
 
 
 if __name__ == '__main__':

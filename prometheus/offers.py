@@ -18,6 +18,21 @@ approve route as the user, which prices, charges and queues exactly
 like the dashboard button. One launch per offer: the first decision
 wins, a second click sees "already handled".
 
+A start that does not go through (the queue post failed, the route
+raised, no run id came back) is retried once after a short backoff
+(2026-11-04, Jenna: "it should never say anything like that ever. it
+should only send it to us."). When it still does not start, the user
+reads the calm line, the offer goes back to pending (so a later yes,
+in the chat or from the email, or an ops retry through
+``retry(app, oid)`` starts it), and ops get the offer id, the user,
+the subject, the queue response and the cause. The approve route
+charges only after the queue accepted the run, so a start that failed
+never charged; if a charge ever showed up without a run id, decide
+refunds it (host refund_credit) and says so in the ops note. A reply
+the route meant for the reader (out of funds, a duplicate build
+already running, a question back) is shown as it is and the offer
+stays open too.
+
 Signed with the shared approval secret (migration.hostmap_ingest),
 so a link cannot be forged or replayed onto another offer.
 """
@@ -40,6 +55,14 @@ BASE_URL = (os.environ.get('PM_OFFER_BASE_URL')
             or os.environ.get('PM_CORRECT_BASE_URL')
             or 'https://dashboard.crosswalknyc.com').rstrip('/')
 ACTIONS = ('yes', 'no')
+# The one line a reader gets when the pull did not start (app.py
+# _CHATBOT_CALM_MESSAGE, verbatim): it stays pending on the server and
+# ops are told. The old "I could not start the <label> pull just now ...
+# Ask me in the dashboard" is retired (Jenna 2026-11-04).
+CALM_LINE = ("Working on it. Confirmed your task is in progress and I will email you when it "
+             "completes.")
+RETRY_BACKOFF_S = 2.5        # one retry of the start after this pause
+OPS_ROUTE = 'prometheus/offers'
 
 bp = Blueprint('prometheus_offers', __name__, url_prefix='/prometheus/offer')
 
@@ -225,14 +248,30 @@ def append_turns(doc, turns):
         traceback.print_exc()
 
 
+def launched(result):
+    """The approve route queued the run: success with a run id."""
+    r = result if isinstance(result, dict) else {}
+    return bool(r.get('success')) and bool(r.get('run_id'))
+
+
+def guidance(result):
+    """The approve route answered the reader instead of queuing: out of
+    funds, a duplicate build already running, a question back. Shown as
+    it is; never a start failure."""
+    r = result if isinstance(result, dict) else {}
+    return bool(r.get('guidance') or r.get('no_funds'))
+
+
 def reply_for(decision, doc, result=None):
-    """The plain sentence the user reads after deciding."""
+    """The plain sentence the user reads after deciding. A start that
+    did not go through reads as the calm line (the pull stays pending
+    and ops are told), never as a failure notice."""
     label = str(doc.get('label') or 'that profile')
     if decision == 'no':
         return (f"Understood. I will not pull the {label} profile. "
                 f"Ask me in the dashboard whenever you want it.")
     result = result or {}
-    if result.get('success') and result.get('run_id'):
+    if launched(result):
         charged = result.get('credits_charged')
         money = ''
         try:
@@ -243,18 +282,90 @@ def reply_for(decision, doc, result=None):
         return (f"On it. Pulling {label} now. It lands in Select Profile "
                 f"in your dashboard when it finishes, and I will confirm "
                 f"here and by email.{money}")
-    err = str(result.get('error') or result.get('reply') or '').strip()
-    if err:
-        return err
-    return (f"I could not start the {label} pull just now. Nothing was "
-            f"charged. Ask me in the dashboard and I will run it.")
+    if guidance(result):
+        text = str(result.get('error') or result.get('reply') or '').strip()
+        if text:
+            return text
+    return CALM_LINE
+
+
+def _sleep(seconds):
+    time.sleep(max(0.0, float(seconds or 0)))
+
+
+def _try_launch(app, doc):
+    """One start attempt; a raise is a result, never an exception."""
+    try:
+        out = launch(app, doc)
+        return out if isinstance(out, dict) else {'success': False, 'error': '', '_http': None}
+    except Exception as e:
+        traceback.print_exc()
+        print(f"[pm-offer] launch raised for {doc.get('id')}: {e}")
+        return {'success': False, 'error': '', '_http': None, '_exc': f"{type(e).__name__}: {e}"[:300]}
+
+
+def _result_summary(result):
+    r = result if isinstance(result, dict) else {}
+    return {k: r.get(k) for k in ('success', 'run_id', 'credits_charged', 'error', 'reply', 'guidance',
+                                  'no_funds', '_http', '_exc') if r.get(k) not in (None, '', False)}
+
+
+def _ops_email(err, *, username='', payload=None):
+    """The ops alert for an offer that did not start (jenna@ + jessie@
+    through the chatbot error path). Never raises."""
+    try:
+        from prometheus.legacy import H as _h
+        _h._chatbot_error_email(OPS_ROUTE, err, user_email=username or None, payload=payload)
+        return True
+    except Exception:
+        try:
+            from .host import host
+            host.error_email(OPS_ROUTE, err, tb='(offer start)')
+            return True
+        except Exception:
+            return False
+
+
+def _refund(username, credits, reason):
+    """Reverse a charge that has no run behind it (host refund_credit,
+    the same reversal the build flow uses when a downstream step fails
+    after the charge). Returns True when it posted."""
+    try:
+        from prometheus.legacy import H as _h
+        fn = _h.get('refund_credit')
+        return bool(fn(username, credits=int(credits), reason=reason)) if callable(fn) else False
+    except Exception:
+        traceback.print_exc()
+        return False
+
+
+def _charged_without_run(result):
+    """A charge on a result with no run id: a half state the approve
+    route never produces (it charges after the queue accepted), guarded
+    here anyway."""
+    r = result if isinstance(result, dict) else {}
+    if launched(r):
+        return 0
+    try:
+        return int(float(r.get('credits_charged') or 0))
+    except (TypeError, ValueError):
+        return 0
 
 
 def decide(app, oid, action, *, via='email', user_text='', append=True):
     """Apply a decision. Returns (state, reply_text, doc):
-    state in already | invalid | launched | declined | failed.
-    ``append`` writes the two turns onto the thread (the email path;
-    the dashboard widget persists its own turns)."""
+    state in already | invalid | launched | declined | guidance | held.
+
+    yes: the approve route runs as the user (prices, charges after the
+    queue accepts, queues). A start that did not go through is retried
+    once after RETRY_BACKOFF_S. Still not started: the offer goes back
+    to pending (a later yes or `retry` starts it), the user reads the
+    calm line, ops get the cause ('held'). A reply the route meant for
+    the reader (out of funds, a duplicate build, a question back) is
+    shown as it is and the offer stays open ('guidance'). Never a
+    failure notice to the reader, never a charge without a run.
+    ``append`` writes the turns onto the thread (the email path; the
+    dashboard widget persists its own turns)."""
     doc = load(oid)
     if not doc:
         return 'invalid', 'This link is not valid.', None
@@ -275,17 +386,35 @@ def decide(app, oid, action, *, via='email', user_text='', append=True):
         if append:
             append_turns(doc, turns)
         return 'declined', reply, doc
-    try:
-        result = launch(app, doc)
-    except Exception as e:
-        traceback.print_exc()
-        result = {'success': False, 'error': ''}
-        print(f"[pm-offer] launch raised for {oid}: {e}")
-    ok = bool(result.get('success')) and bool(result.get('run_id'))
-    doc['status'] = 'launched' if ok else 'failed'
-    doc['run_id'] = result.get('run_id') if ok else None
-    doc['result'] = {k: result.get(k) for k in (
-        'success', 'run_id', 'credits_charged', 'error', '_http')}
+    attempts = [_try_launch(app, doc)]
+    if not launched(attempts[-1]) and not guidance(attempts[-1]):
+        # a transient queue hiccup self-heals: one more start, same offer
+        _sleep(RETRY_BACKOFF_S)
+        attempts.append(_try_launch(app, doc))
+    result = attempts[-1]
+    ok = launched(result)
+    refunded = 0
+    for a in attempts:
+        n = _charged_without_run(a)
+        if n and _refund(doc.get('username'), n, f"offer {oid}: charged with no run id"):
+            refunded += n
+    if ok:
+        state = 'launched'
+        doc['status'] = 'launched'
+        doc['run_id'] = result.get('run_id')
+    else:
+        # the pull stays pending on the server: a later yes (chat or
+        # email) or an ops retry starts it; nothing is closed as failed
+        state = 'guidance' if guidance(result) else 'held'
+        doc['status'] = 'pending'
+        doc['decision'] = None
+        doc['decided'] = None
+        doc['run_id'] = None
+        doc['held'] = (state == 'held')
+    doc['result'] = _result_summary(result)
+    doc['last_attempt'] = {'ts': _now(), 'via': via, 'state': state,
+                           'attempts': [_result_summary(a) for a in attempts],
+                           'refunded_credits': refunded}
     doc['via'] = via
     save(doc)
     reply = reply_for('yes', doc, result)
@@ -294,19 +423,32 @@ def decide(app, oid, action, *, via='email', user_text='', append=True):
                       'meta': {'via': via, 'offer_id': oid}})
     turns.append({'role': 'agent', 'text': reply, 'ts': _now(),
                   'meta': {'kind': 'answer', 'offer_id': oid, 'via': via,
-                           'run_id': doc['run_id']}})
+                           'run_id': doc['run_id'], 'held': state == 'held'}})
     if append:
         append_turns(doc, turns)
-    if not ok:
-        try:
-            from .host import host
-            host.error_email('prometheus/offer',
-                             f"offer {oid} for {doc.get('username')} did not "
-                             f"launch: {json.dumps(doc['result'])[:400]}",
-                             tb='(offer launch)')
-        except Exception:
-            pass
-    return ('launched' if ok else 'failed'), reply, doc
+    if state == 'held':
+        cause = (result.get('_exc') or
+                 ('the route answered without a run id' if result.get('success') else
+                  (str(result.get('error') or '').strip() or f"http {result.get('_http')}")))
+        _ops_email(
+            f"offer {oid} for {doc.get('username')} ({doc.get('label')}) did not start after a retry; "
+            f"held pending: the offer stays open, a later yes or retry(app, '{oid}') starts it, the user read "
+            f"the calm line | cause: {str(cause)[:200]} | queue: {json.dumps(_result_summary(result))[:400]}"
+            + (f" | refunded {refunded} credit(s) charged with no run" if refunded else " | nothing charged"),
+            username=str(doc.get('username') or ''),
+            payload={'offer_id': oid, 'user': doc.get('username'), 'subject': doc.get('label'), 'via': via,
+                     'attempts': [_result_summary(a) for a in attempts], 'refunded_credits': refunded})
+    elif refunded:
+        _ops_email(f"offer {oid} for {doc.get('username')} ({doc.get('label')}): {refunded} credit(s) were charged on "
+                   f"an attempt that returned no run id and were refunded; final state {state}",
+                   username=str(doc.get('username') or ''),
+                   payload={'offer_id': oid, 'user': doc.get('username'), 'subject': doc.get('label'), 'state': state})
+    return state, reply, doc
+
+
+def retry(app, oid):
+    """Ops: start a held offer again (the same decide path, via 'ops')."""
+    return decide(app, oid, 'yes', via='ops', append=True)
 
 
 def _already_text(doc):
@@ -361,14 +503,17 @@ def offer_action(action):
         state, reply, _doc = decide(current_app._get_current_object(), oid,
                                     action, via='email')
     except Exception as e:
+        # the decision itself raised: the reader gets the calm line (the
+        # offer is still on the server), ops get the cause
         traceback.print_exc()
-        return page('Something went wrong.',
-                    'Nothing was charged. Open your Prometheus chat in the '
-                    'dashboard and answer there.', ok=False), 500
+        _ops_email(f"offer {oid}: the {action} decision from the email link raised {type(e).__name__}: {str(e)[:200]}; "
+                   f"the user read the calm line, the offer is still on the server",
+                   payload={'offer_id': oid, 'action': action, 'via': 'email'})
+        return page('Working on it.', CALM_LINE, ok=True), 200
     titles = {'launched': 'Pulling it now.', 'declined': 'Understood.',
-              'already': 'Already handled.', 'failed': 'Not started.',
-              'invalid': 'This link is not valid.'}
-    code = 200 if state in ('launched', 'declined', 'already', 'failed') else 409
+              'already': 'Already handled.', 'held': 'Working on it.',
+              'guidance': 'Noted.', 'invalid': 'This link is not valid.'}
+    code = 200 if state in ('launched', 'declined', 'already', 'held', 'guidance') else 409
     return page(titles.get(state, 'Done.'), reply, ok=state != 'invalid'), code
 
 
