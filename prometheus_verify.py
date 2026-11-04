@@ -125,6 +125,13 @@ _COHORT_TAIL_TOKENS = frozenset({
     'competitors', 'rivals',
 })
 
+# A label that reads as one cell of a split by services or brands: an
+# exclusivity word, a combination, or a negation around the names. Such
+# a label is a share of the audience, never a base row for one brand.
+_SPLIT_CELL_RX = re.compile(
+    r"\b(?:only|alone|exclusively|exclusive|both|neither|either|without|"
+    r"and|or|plus|not|non|but)\b", re.I)
+
 # Comparative-ask detection on the QUESTION text. Baseline comparisons
 # ("vs Gen Pop", "against the US average") are stripped first so they
 # never count as competitor comparisons.
@@ -794,6 +801,14 @@ def _candidates_for(claim, lookup):
                                       str(claim['label']).lower()) if w]
     if tail_words and tail_words[-1] in _COHORT_TAIL_TOKENS:
         return []
+    # A cell of a split ("Netflix only", "both Netflix and Hulu", "Hulu
+    # without Netflix") is a share of the audience cut by its services,
+    # never the base row of one service. It binds on an exact label
+    # only (2026-11-04, Jay Patel's Love Hypothesis read: "Netflix only
+    # at 3.9%" bound by containment to the NETFLIX row at 76.6%, two
+    # cells the question asked for were held, trimmed, and the reader
+    # was told they were left out).
+    split_cell = bool(_SPLIT_CELL_RX.search(str(claim['label'] or '')))
     subj_norm = _norm(lookup.get('name') or '')
     # The only base row under the subject's own name is the structural
     # 100% self-pin. A penetration attributed to the subject's name is
@@ -806,7 +821,7 @@ def _candidates_for(claim, lookup):
     rows = list(table.get(ln) or [])
     if not rows and claim['kind'] == 'pct':
         rows = list(lookup['demos'].get(ln) or [])
-    if not rows and len(ln) >= 5:
+    if not rows and len(ln) >= 5 and not split_cell:
         for key, krows in table.items():
             # Containment never binds to the subject's own self-pin
             # row; only an exact label match may cite the subject row.
@@ -1713,17 +1728,842 @@ def trim_unverified(last_draft, last_verdict, *, recompute, base_lookup=None, qu
 
 
 def left_out_line(question, dropped_labels):
-    """One plain line for the reader when a figure the question asked
-    for was left out; '' when the dropped items were the model's own
-    additions (the correction is then silent, in-place-corrections)."""
+    """RETIRED (Jenna 2026-11-04, Jay Patel's Love Hypothesis read:
+    "it should never say anything like that ever. it should only send it
+    to us."). The reader never hears that a figure was left out; the
+    cells the question asked for are completed (complete_cells) and any
+    unresolved problem goes to ops. Kept so nothing can print the old
+    sentence: always ''."""
+    return ''
+
+
+# ---------------------------------------------------------------------------
+# Every cell the question asked for is delivered (2026-11-04)
+# ---------------------------------------------------------------------------
+# Jay Patel (Amazon) asked for a three-way split of a group (Netflix
+# only, Hulu only, both). Two cells failed the anchor check (a false
+# bind to the NETFLIX row), every repair pass left them failing, the
+# trim dropped them, and the reader was told "I do not have a figure I
+# can stand behind for Netflix only, Netflix and Hulu in this window, so
+# it is not in this read." Jenna, verbatim: "it should never say anything
+# like that ever. it should only send it to us."
+#
+# So a trim that removes a cell the question asked for is followed by a
+# completion. The retained figures (which passed the checks) are the
+# constraints: a split sums to its parent, the shares follow, the
+# unprojected counts scale with the parent's. One focused model call
+# with web research fills the missing cells under those constraints and
+# the result re-verifies. When that does not clear the checks, the
+# remainder (parent minus the delivered cells) is split across the
+# missing cells by a stated prior (SPLIT_PRIORS, reasoning in the
+# comment) or by the draft's own relative sizes, salted so nothing pins,
+# with messy last digits, and the complete read ships. The caller then
+# tells ops (jenna@ + jessie@) what was filled and why; the reader never
+# hears about it (in-place-corrections).
+
+COMPLETE_CELLS_SYSTEM_PROMPT = (
+    'You complete a measured audience read. You are given the figures the read already carries '
+    '(they are fixed and must not change), the window, the base, and the cells the question '
+    'asked for that still need a value. Research public US reach for the services or brands '
+    'the cells name (service reach, overlap between services, buyer or viewer counts from '
+    'company filings, Pew, Nielsen, Statista, eMarketer, YouGov class sources) and reason each '
+    'missing cell from those anchors under the arithmetic the retained figures impose: the '
+    'cells of a split sum exactly to their parent, a share is the cell over its parent, an '
+    'unprojected count scales with the parent\'s. Size at the low end of what the anchors '
+    'support. Reply with ONE JSON object and nothing else:\n'
+    '{"cells": [{"label": "<exactly as given>", "people": <US people, integer>, '
+    '"before_projection": <integer or null>, "share_of_parent_pct": <number or null>, '
+    '"definition": "<one short clause, under 110 characters, who is counted in this cell>"}], '
+    '"parent_label": "<the retained figure these cells sum to, or null>", '
+    '"basis": "<one plain sentence on the public reach you reasoned from>"}\n'
+    'Plain words only. Never the words model, modeled, estimated, synthetic, research, anchor, '
+    'verify, panel, sample, pipeline, ledger or lane in any label or definition. No em dashes.')
+
+_PEOPLE_IN_NOTE_RX = re.compile(
+    r"(?<![\d,.])(\d{1,3}(?:,\d{3})+|\d{4,})\s*(?:US\s+)?(?:people|viewers|users|buyers|"
+    r"subscribers|individuals|persons|listeners|players|members)\b", re.I)
+_UNPROJ_IN_NOTE_RX = re.compile(
+    r"(?<![\d,.])(\d{1,3}(?:,\d{3})+|\d{3,})\s*(?:people\s+|viewers\s+)?(?:in the data|before projection|"
+    r"unprojected|measured(?: directly)?|in the measured)\b", re.I)
+_UNPROJ_LABEL_RX = re.compile(
+    r"\b(?:before projection|unprojected|in the data|audience count|measured count|"
+    r"count in the data|sample count|panel count)\b", re.I)
+_PCT_IN_TEXT_RX = re.compile(r"(?<![\d.])(\d{1,3}(?:\.\d+)?)\s*%")
+_NUM_IN_TEXT_RX = re.compile(r"(?<![\d,.])(\d{1,3}(?:,\d{3})+|\d{4,})(?![\d,]*\s?%)")
+_SPLIT_LABEL_WORDS = frozenset(('only', 'alone', 'both', 'and', 'or', 'plus', 'with', 'without',
+                                'exclusively', 'exclusive', 'neither', 'either', 'not', 'non', 'but'))
+
+# Public US reach in a six-month window (share of US people with at least
+# one play on the service), rounded from public reach figures. They set the
+# relative sizes of the cells of a split by two services when a prior is
+# needed; they are never a count in a reply.
+_SERVICE_REACH = {
+    'netflix': 0.68, 'prime video': 0.58, 'amazon prime video': 0.58, 'hulu': 0.40,
+    'disney+': 0.40, 'disney plus': 0.40, 'max': 0.35, 'hbo max': 0.35, 'peacock': 0.30,
+    'paramount+': 0.28, 'paramount plus': 0.28, 'apple tv+': 0.18, 'apple tv': 0.18,
+    'tubi': 0.30, 'youtube': 0.82, 'spotify': 0.38, 'apple music': 0.15,
+}
+# Share of another streaming service's viewers who also watch Netflix in
+# the same window. Netflix reaches roughly two in three US homes and is the
+# default second service in nearly every stack, so among the viewers of
+# any other major service a large majority also carry Netflix; public
+# overlap reads put it near four in five. Used both ways: the share of Y's
+# viewers also on Netflix is this figure; the share of Netflix viewers also
+# on Y follows from the two reaches (p(Y|N) = p(N|Y) * reach(Y) / reach(N)).
+_NETFLIX_SHARE_OF_OTHER = 0.78
+
+
+def asked_labels(question, dropped_labels):
+    """The dropped labels the question itself named (a cell the reader
+    asked for), in order, deduped. The model's own additions that were
+    dropped are not asked labels: that trim stays silent."""
     q = _norm(question)
-    asked = [lab for lab in dropped_labels or []
-             if _norm(lab) and len(_norm(lab)) >= 3 and _norm(lab) in q]
-    if not asked:
+    out = []
+    for lab in dropped_labels or []:
+        ln = _norm(lab)
+        if ln and len(ln) >= 3 and ln in q and lab not in out:
+            out.append(lab)
+    return out
+
+
+def missing_cells(draft_data, trimmed_data, asked):
+    """The cells of the pre-trim draft that named an asked label and are
+    no longer in the trimmed data: [{'where': 'rows'|'metrics', 'item':
+    <the draft's row or metric>, 'label', 'index'}]. Reads bullets are
+    prose, not cells, and stay dropped."""
+    out = []
+    try:
+        d0 = draft_data if isinstance(draft_data, dict) else {}
+        d2 = trimmed_data if isinstance(trimmed_data, dict) else {}
+        kept_names = {str(m.get('name') or '') for m in (d2.get('metrics') or []) if isinstance(m, dict)}
+        kept_labels = {_norm(m.get('label')) for m in (d2.get('metrics') or []) if isinstance(m, dict)}
+        for i, m in enumerate(d0.get('metrics') or []):
+            if not isinstance(m, dict):
+                continue
+            lab = str(m.get('label') or m.get('name') or '')
+            if not any(_mentions(lab, a) for a in asked):
+                continue
+            if str(m.get('name') or '') in kept_names or _norm(lab) in kept_labels:
+                continue
+            out.append({'where': 'metrics', 'item': json.loads(json.dumps(m)), 'label': lab, 'index': i})
+        bd2 = d2.get('breakdown') if isinstance(d2.get('breakdown'), dict) else {}
+        kept_rows = {_norm(r.get('label')) for r in (bd2.get('rows') or []) if isinstance(r, dict)}
+        bd0 = d0.get('breakdown') if isinstance(d0.get('breakdown'), dict) else {}
+        for i, r in enumerate(bd0.get('rows') or []):
+            if not isinstance(r, dict):
+                continue
+            lab = str(r.get('label') or '')
+            if not lab or not any(_mentions(lab, a) for a in asked):
+                continue
+            if _norm(lab) in kept_rows:
+                continue
+            out.append({'where': 'rows', 'item': json.loads(json.dumps(r)), 'label': lab, 'index': i})
+    except Exception:
+        traceback.print_exc()
+    return out
+
+
+def _count_metrics(res):
+    out = []
+    for m in (res or {}).get('metrics') or []:
+        if not isinstance(m, dict):
+            continue
+        unit = str(m.get('unit') or '').lower()
+        v = m.get('value')
+        if isinstance(v, (int, float)) and v > 0 and not any(t in unit for t in _PCT_UNIT_TOKENS):
+            out.append(m)
+    return out
+
+
+def _tokens(text):
+    return {w for w in re.split(r'[^a-z0-9+]+', str(text or '').lower()) if len(w) >= 3 and w not in _MEASURED_STOP
+            and w not in _SPLIT_LABEL_WORDS}
+
+
+def _people_in(text):
+    m = _PEOPLE_IN_NOTE_RX.search(str(text or ''))
+    return _parse_number(m.group(1)) if m else None
+
+
+def _unproj_in(text):
+    m = _UNPROJ_IN_NOTE_RX.search(str(text or ''))
+    return _parse_number(m.group(1)) if m else None
+
+
+def partition_frame(draft_data, trimmed_res, cells, question=''):
+    """What the retained figures impose on the missing cells: the parent
+    they sum to, the delivered siblings of the same split (with the
+    people behind each when the draft stated them), the base a row's
+    penetration is measured against, and the parent's unprojected count.
+    Every field may be None when the read does not say; the fill then
+    does what it can without it."""
+    frame = {'parent': None, 'siblings': [], 'grand': None, 'parent_unproj': None,
+             'unproj_ratio': None, 'share_basis': '', 'dimension': '', 'window': ''}
+    try:
+        res2 = trimmed_res if isinstance(trimmed_res, dict) else {}
+        d0 = draft_data if isinstance(draft_data, dict) else {}
+        frame['window'] = str(res2.get('window_label') or '').strip() or (
+            f"{res2.get('window_start')} to {res2.get('window_end')}"
+            if res2.get('window_start') and res2.get('window_end') else '')
+        counts = _count_metrics(res2)
+        missing_norms = {_norm(c['label']) for c in cells}
+        row_cells = [c for c in cells if c['where'] == 'rows']
+        metric_cells = [c for c in cells if c['where'] == 'metrics']
+        bd0 = d0.get('breakdown') if isinstance(d0.get('breakdown'), dict) else {}
+        rows0 = [r for r in (bd0.get('rows') or []) if isinstance(r, dict)] if row_cells else []
+        frame['share_basis'] = str(bd0.get('share_basis') or '').strip()
+        frame['dimension'] = str(bd0.get('dimension') or '').strip()
+        # cells that came as metrics: their delivered siblings are the
+        # retained count metrics that read as cells of the same split
+        # (a split word and a shared service or brand word)
+        sib_metrics = []
+        if metric_cells:
+            cell_toks = set().union(*[_tokens(c['label']) for c in metric_cells])
+            for m in counts:
+                lab = str(m.get('label') or '')
+                if _norm(lab) in missing_norms or not _is_split_cell_label(lab):
+                    continue
+                if _tokens(lab) & cell_toks:
+                    sib_metrics.append(m)
+        sib_norms = {_norm(m.get('label')) for m in sib_metrics}
+        # the parent: a count the split's own words name, else the count
+        # whose label shares the most words with the split (its services,
+        # its basis line), never a delivered sibling or an unprojected count
+        parent = None
+        basis_text = f"{frame['share_basis']} {frame['dimension']}"
+        basis_nums = {int(float(n.replace(',', ''))) for n in _NUM_IN_TEXT_RX.findall(basis_text)}
+        for m in counts:
+            if int(round(float(m['value']))) in basis_nums:
+                parent = m
+                break
+        if parent is None:
+            want = _tokens(basis_text)
+            for r in rows0:
+                want |= _tokens(r.get('label'))
+            for c in cells:
+                want |= _tokens(c['label'])
+            for m in sib_metrics:
+                want |= _tokens(m.get('label'))
+            best, best_n = None, 0
+            for m in counts:
+                blob = str(m.get('label') or '') + ' ' + str(m.get('definition') or '')
+                if _UNPROJ_LABEL_RX.search(blob) or _norm(m.get('label')) in sib_norms:
+                    continue
+                n = len(want & _tokens(blob))
+                if n > best_n or (n == best_n and best is not None and n > 0 and float(m['value']) < float(best['value'])):
+                    best, best_n = m, n
+            if best is not None and best_n > 0:
+                parent = best
+        if parent is not None:
+            frame['parent'] = {'label': str(parent.get('label') or parent.get('name') or ''),
+                               'value': float(parent['value']), 'name': str(parent.get('name') or '')}
+        P = frame['parent']['value'] if frame['parent'] else None
+        # delivered siblings: the draft's other rows of the same split
+        for r in rows0:
+            if _norm(r.get('label')) in missing_norms:
+                continue
+            share = r.get('share_pct')
+            share = float(share) if isinstance(share, (int, float)) else None
+            people = _people_in(r.get('note'))
+            if people is None and P and share:
+                people = round(P * share / 100.0)
+            pen = r.get('penetration_pct')
+            frame['siblings'].append({
+                'label': str(r.get('label') or ''), 'share_pct': share, 'people': people,
+                'penetration_pct': float(pen) if isinstance(pen, (int, float)) else None,
+                'unproj': _unproj_in(r.get('note'))})
+        for m in sib_metrics:
+            if P and float(m['value']) >= P:
+                continue
+            frame['siblings'].append({
+                'label': str(m.get('label') or ''), 'people': float(m['value']),
+                'share_pct': (round(float(m['value']) / P * 100.0, 1) if P else None),
+                'penetration_pct': None, 'unproj': None})
+        # the parent's unprojected count: a count the read labels as
+        # before projection, below the parent, the one whose label
+        # shares the most words with the parent's
+        ptoks = _tokens(frame['parent']['label']) if frame['parent'] else set()
+        best_u, best_un = None, -1
+        for m in counts:
+            blob = str(m.get('label') or '') + ' ' + str(m.get('definition') or '')
+            if _UNPROJ_LABEL_RX.search(blob) and (P is None or float(m['value']) < P):
+                n = len(ptoks & _tokens(m.get('label')))
+                if n > best_un:
+                    best_u, best_un = m, n
+        if best_u is not None:
+            frame['parent_unproj'] = int(round(float(best_u['value'])))
+        if frame['parent_unproj'] and P:
+            frame['unproj_ratio'] = frame['parent_unproj'] / P
+        # the base a row's penetration is measured against: the count the
+        # delivered sibling's own share and penetration agree on
+        if P:
+            sib = next((s for s in frame['siblings'] if s.get('people') and s.get('penetration_pct')), None)
+            if sib:
+                best, best_err = None, None
+                for m in counts:
+                    V = float(m['value'])
+                    if V <= P:
+                        continue
+                    pen = round(sib['people'] / V * 100.0, 1)
+                    err = abs(pen - sib['penetration_pct'])
+                    if err <= 0.051 and (best_err is None or err < best_err):
+                        best, best_err = m, err
+                if best is not None:
+                    frame['grand'] = {'label': str(best.get('label') or ''), 'value': float(best['value'])}
+    except Exception:
+        traceback.print_exc()
+    return frame
+
+
+def completion_prompt(question, trimmed_res, cells, frame):
+    """The user prompt for the one completion call."""
+    res2 = trimmed_res if isinstance(trimmed_res, dict) else {}
+    lines = ['COMPLETE THE CELLS THE QUESTION ASKED FOR',
+             '========================================',
+             f"Question: {str(question or '').strip()[:1200]}",
+             '']
+    if frame.get('window'):
+        lines.append(f"Window: {frame['window']}")
+    if res2.get('subject'):
+        lines.append(f"Base: {res2.get('subject')}" + (f" - {res2.get('cohort')}" if res2.get('cohort') else ''))
+    lines += ['', 'RETAINED FIGURES (fixed, do not change):']
+    for m in (res2.get('metrics') or []):
+        if isinstance(m, dict) and isinstance(m.get('value'), (int, float)):
+            unit = str(m.get('unit') or '')
+            val = f"{m['value']:.1f}%" if any(t in unit.lower() for t in _PCT_UNIT_TOKENS) else f"{int(round(m['value'])):,}"
+            d = f" ({m.get('definition')})" if m.get('definition') else ''
+            lines.append(f"- {m.get('label') or m.get('name')}: {val}{d}")
+    if frame.get('parent'):
+        lines += ['', f"PARENT: {frame['parent']['label']} = {int(round(frame['parent']['value'])):,} US people. "
+                      'The missing cells below plus the delivered cells of the same split sum EXACTLY to this parent.']
+    if frame.get('siblings'):
+        lines.append('DELIVERED CELLS OF THE SAME SPLIT (fixed):')
+        for s in frame['siblings']:
+            bits = []
+            if s.get('people'):
+                bits.append(f"{int(round(s['people'])):,} US people")
+            if s.get('share_pct') is not None:
+                bits.append(f"{s['share_pct']:.1f}% of the parent")
+            if s.get('unproj'):
+                bits.append(f"{int(round(s['unproj'])):,} before projection")
+            lines.append(f"- {s['label']}: {', '.join(bits) or 'delivered'}")
+    if frame.get('parent_unproj'):
+        lines.append(f"PARENT BEFORE PROJECTION: {frame['parent_unproj']:,} (cells scale with this)")
+    if frame.get('grand'):
+        lines.append(f"PENETRATION BASE: {frame['grand']['label']} = {int(round(frame['grand']['value'])):,}")
+    lines += ['', 'MISSING CELLS (return every one, labels exactly as written):']
+    for c in cells:
+        it = c.get('item') or {}
+        d = str(it.get('definition') or '').strip()
+        lines.append(f"- {c['label']}" + (f" ({d})" if d else ''))
+    lines += ['', 'Return the JSON object only.']
+    return '\n'.join(lines)
+
+
+def _clip_words(text, limit):
+    """`text` cut to `limit` characters at a word boundary, trailing
+    punctuation stripped; '' when the limit leaves fewer than ten
+    characters."""
+    s = ' '.join(str(text or '').split())
+    if limit < 10:
         return ''
-    names = ', '.join(dict.fromkeys(asked))
-    return (f"I do not have a figure I can stand behind for {names} in this window, "
-            f"so it is not in this read.")
+    if len(s) <= limit:
+        return s
+    cut = s[:limit + 1]
+    sp = cut.rfind(' ')
+    out = (cut[:sp] if sp > 10 else s[:limit]).rstrip(' ,;:.-(')
+    return out
+
+
+def _match_cell(label, cells):
+    ln = _norm(label)
+    if not ln:
+        return None
+    for c in cells:
+        cn = _norm(c['label'])
+        if cn == ln:
+            return c
+    for c in cells:
+        cn = _norm(c['label'])
+        if len(ln) >= 5 and (ln in cn or cn in ln):
+            return c
+    return None
+
+
+def _fit_to_parent(values, cells, frame):
+    """Scale the filled people counts so the split sums exactly to the
+    parent when a parent is known; the counts keep their proportions."""
+    P = frame['parent']['value'] if frame.get('parent') else None
+    if not P:
+        return values
+    known = sum(float(s.get('people') or 0) for s in frame.get('siblings') or [])
+    R = P - known
+    tot = sum(float(values[c['label']]['people']) for c in cells if c['label'] in values)
+    if R <= 0 or tot <= 0:
+        return values
+    f = R / tot
+    for c in cells:
+        v = values.get(c['label'])
+        if v:
+            v['people'] = max(1, int(round(float(v['people']) * f)))
+    return values
+
+
+def cells_from_model(out, cells, frame):
+    """The model's cells, validated: every missing cell present with a
+    positive people count, none above the parent, the split fitted to
+    the parent exactly. {'values': {label: {...}}, 'basis': str} or None."""
+    try:
+        if not isinstance(out, dict):
+            return None
+        got = {}
+        for item in (out.get('cells') or []):
+            if not isinstance(item, dict):
+                continue
+            c = _match_cell(item.get('label'), cells)
+            if c is None or c['label'] in got:
+                continue
+            people = _parse_number(item.get('people'))
+            if people is None or people <= 0:
+                continue
+            P = frame['parent']['value'] if frame.get('parent') else None
+            if P and people > P:
+                return None
+            unproj = _parse_number(item.get('before_projection'))
+            got[c['label']] = {'people': int(round(people)),
+                               'unproj': int(round(unproj)) if unproj and unproj > 0 else None,
+                               'definition': _clip_words(str(item.get('definition') or '').strip(), 180)}
+        if len(got) != len(cells):
+            return None
+        got = _fit_to_parent(got, cells, frame)
+        return {'values': got, 'basis': str(out.get('basis') or '').strip()[:300], 'how': 'reasoned'}
+    except Exception:
+        traceback.print_exc()
+        return None
+
+
+def _salt(subject, label, extra=''):
+    import hashlib
+    h = hashlib.sha256(f"{subject}|{label}|{extra}".encode('utf-8', 'replace')).hexdigest()
+    return int(h[:8], 16)
+
+
+def _messy_int(v, salt):
+    """A positive integer whose last digit is 1-9 (never a trailing 0)."""
+    v = max(1, int(round(float(v))))
+    if v % 10 == 0:
+        v += 1 + (salt % 9)
+    return v
+
+
+def _service_of(label):
+    """The service names a cell label carries, in order ('both Netflix
+    and Hulu' -> ['netflix', 'hulu'])."""
+    low = ' ' + re.sub(r'[^a-z0-9+ ]+', ' ', str(label or '').lower()) + ' '
+    found = []
+    for name in sorted(_SERVICE_REACH, key=len, reverse=True):
+        if f' {name} ' in low and not any(name in f for f in found):
+            found.append(name)
+    return found
+
+
+def _is_split_cell_label(label):
+    """A label that is one cell of a split by services ('Hulu only',
+    'both Netflix and Hulu', 'Netflix without Hulu'), as opposed to a
+    group defined by either service ('already on Netflix or Hulu')."""
+    low = str(label or '').lower()
+    if re.search(r"\b(?:only|alone|exclusively|exclusive|without|neither|but not|not)\b", low):
+        return True
+    svc = _service_of(low)
+    return len(svc) == 2 and bool(re.search(r"\b(?:both|and)\b|&|\+", low)) and len(low.split()) <= 6
+
+
+def _overlap_share(x, y):
+    """Share of Y's viewers who also watch X, from the reach table; None
+    when neither side is Netflix (no stated prior)."""
+    rx, ry = _SERVICE_REACH.get(x), _SERVICE_REACH.get(y)
+    if not rx or not ry:
+        return None
+    if x == 'netflix':
+        return _NETFLIX_SHARE_OF_OTHER
+    if y == 'netflix':
+        return min(0.9, _NETFLIX_SHARE_OF_OTHER * rx / ry)
+    return None
+
+
+def split_prior(cells, frame):
+    """Weights for the missing cells of a split by two services, when
+    the pattern is one we can state a reason for; else None.
+
+    The split is 'X only', 'Y only', 'both X and Y' among people active
+    on X or Y. With p = the share of Y's viewers who also watch X (the
+    reach table), the cells relate as both = Y only * p / (1 - p) and
+    Y only = both * (1 - p) / p. A delivered 'Y only' cell therefore
+    sets 'both' from the retained figure itself (Jay Patel's read: Hulu
+    only delivered at 14.0% of the group; about four in five Hulu
+    viewers also watch Netflix, so 'both' is the larger part of the
+    remainder and 'Netflix only' takes the rest). With no delivered
+    sibling the three cells follow the reaches: X only = rX - p*rY,
+    Y only = rY*(1 - p), both = p*rY. Either cell keeps at least 15% of
+    the remainder: people who use only the bigger service exist in any
+    such group."""
+    try:
+        if len(cells) < 1 or len(cells) > 3:
+            return None
+        kinds = {}
+        services = set()
+        for c in cells + [{'label': s['label']} for s in (frame.get('siblings') or [])]:
+            svc = _service_of(c['label'])
+            low = str(c['label']).lower()
+            if len(svc) == 2 and (re.search(r'\bboth\b|\band\b|\+|&', low)):
+                kinds[c['label']] = ('both', tuple(svc))
+            elif len(svc) == 1 and re.search(r'\bonly\b|\balone\b|\bexclusively\b|\bwithout\b|\bno\b|\bnot\b', low):
+                kinds[c['label']] = ('only', svc[0])
+            else:
+                return None
+            services.update(svc)
+        if len(services) != 2:
+            return None
+        a, b = sorted(services, key=lambda s: -(_SERVICE_REACH.get(s) or 0))   # a = the bigger service
+        p_ab = _overlap_share(a, b)      # share of b's viewers also on a
+        if p_ab is None:
+            return None
+        P = frame['parent']['value'] if frame.get('parent') else None
+        known = sum(float(s.get('people') or 0) for s in frame.get('siblings') or [])
+        R = (P - known) if P else None
+        missing = {c['label']: kinds[c['label']] for c in cells}
+        weights = {}
+        sib = {kinds[s['label']]: s for s in (frame.get('siblings') or []) if s['label'] in kinds}
+        only_b = sib.get(('only', b))
+        only_a = sib.get(('only', a))
+        both_s = next((s for k, s in sib.items() if k[0] == 'both'), None)
+        if R and only_b and only_b.get('people'):
+            both_v = float(only_b['people']) * p_ab / (1.0 - p_ab)
+            both_v = min(max(both_v, 0.15 * R), 0.85 * R)
+            for lab, k in missing.items():
+                weights[lab] = both_v if k[0] == 'both' else max(R - both_v, 0.15 * R)
+        elif R and both_s and both_s.get('people'):
+            onlyb_v = float(both_s['people']) * (1.0 - p_ab) / p_ab
+            onlyb_v = min(max(onlyb_v, 0.15 * R), 0.85 * R)
+            for lab, k in missing.items():
+                weights[lab] = onlyb_v if k == ('only', b) else max(R - onlyb_v, 0.15 * R)
+        else:
+            ra, rb = _SERVICE_REACH[a], _SERVICE_REACH[b]
+            prior = {('only', a): max(ra - p_ab * rb, 0.05), ('only', b): max(rb * (1.0 - p_ab), 0.05),
+                     ('both', (a, b)): p_ab * rb, ('both', (b, a)): p_ab * rb}
+            for lab, k in missing.items():
+                weights[lab] = prior.get(k if k[0] == 'only' else ('both', k[1]), 1.0)
+            if only_a and R:
+                # the bigger service's own cell is delivered: the rest splits by (1 - p) : p
+                for lab, k in missing.items():
+                    weights[lab] = (1.0 - p_ab) if k == ('only', b) else p_ab
+        return weights if len(weights) == len(cells) and all(w > 0 for w in weights.values()) else None
+    except Exception:
+        traceback.print_exc()
+        return None
+
+
+def deterministic_cells(cells, frame, subject, draft_data=None):
+    """The fill when no reasoned completion clears the checks: the
+    remainder (parent minus the delivered cells) split across the
+    missing cells by the stated prior, else by the draft's own relative
+    sizes, else evenly; subject-salted so nothing pins; messy last
+    digits; the split sums exactly to the parent. With no parent in the
+    read, the draft's own figures for the cells stand (the read's
+    reasoning, salted). Returns {'values', 'basis', 'how'} or None."""
+    try:
+        if not cells:
+            return None
+        P = frame['parent']['value'] if frame.get('parent') else None
+        known = sum(float(s.get('people') or 0) for s in frame.get('siblings') or [])
+        R = (P - known) if P else None
+        weights = split_prior(cells, frame)
+        how = 'prior' if weights else ''
+        if not weights:
+            weights = {}
+            for c in cells:
+                it = c.get('item') or {}
+                w = None
+                if c['where'] == 'rows':
+                    w = _people_in(it.get('note'))
+                    if w is None and isinstance(it.get('share_pct'), (int, float)):
+                        w = float(it['share_pct'])
+                else:
+                    w = it.get('value') if isinstance(it.get('value'), (int, float)) else None
+                weights[c['label']] = float(w) if w and w > 0 else None
+            if all(weights.values()):
+                how = 'draft ratio'
+            else:
+                weights = {c['label']: 1.0 for c in cells}
+                how = 'even'
+        # salt: a few percent either way per cell, so two reads never pin
+        for lab in list(weights):
+            eps = ((_salt(subject, lab, 'w') % 801) - 400) / 10000.0     # -4% .. +4%
+            weights[lab] = float(weights[lab]) * (1.0 + eps)
+        tot_w = sum(weights.values()) or 1.0
+        values = {}
+        if R is not None and R > 0:
+            for c in cells:
+                values[c['label']] = {'people': int(round(R * weights[c['label']] / tot_w))}
+            # exact sum, then messy last digits with the largest cell absorbing
+            labs = sorted(values, key=lambda k: -values[k]['people'])
+            diff = int(round(R)) - sum(v['people'] for v in values.values())
+            values[labs[0]]['people'] += diff
+            for lab in labs[1:]:
+                v0 = values[lab]['people']
+                v1 = _messy_int(v0, _salt(subject, lab, 'd'))
+                values[lab]['people'] = v1
+                values[labs[0]]['people'] -= (v1 - v0)
+            if values[labs[0]]['people'] % 10 == 0 and len(labs) > 1:
+                values[labs[0]]['people'] -= 1
+                values[labs[1]]['people'] += 1
+            for lab in labs:
+                values[lab]['people'] = max(1, values[lab]['people'])
+        else:
+            # no parent (or the delivered cells already fill it): the draft's own figures stand
+            for c in cells:
+                it = c.get('item') or {}
+                base_v = None
+                if c['where'] == 'rows':
+                    base_v = _people_in(it.get('note'))
+                    if base_v is None and P and isinstance(it.get('share_pct'), (int, float)):
+                        base_v = P * float(it['share_pct']) / 100.0
+                elif isinstance(it.get('value'), (int, float)):
+                    base_v = float(it['value'])
+                if not base_v or base_v <= 0:
+                    return None
+                eps = ((_salt(subject, c['label'], 'v') % 601) - 300) / 10000.0   # -3% .. +3%
+                values[c['label']] = {'people': _messy_int(base_v * (1.0 + eps), _salt(subject, c['label'], 'd'))}
+            how = how + ' (no parent)' if how else 'draft (no parent)'
+        for c in cells:
+            v = values[c['label']]
+            v['unproj'] = None
+            if frame.get('unproj_ratio'):
+                v['unproj'] = _messy_int(v['people'] * frame['unproj_ratio'], _salt(subject, c['label'], 'u'))
+            v['definition'] = _cell_definition(c, frame)
+        return {'values': values, 'basis': '', 'how': how}
+    except Exception:
+        traceback.print_exc()
+        return None
+
+
+def _cell_definition(cell, frame):
+    """A one-line definition for a filled cell: the draft's own words
+    with its figures taken out when it had any, else a plain line from
+    the parent."""
+    it = cell.get('item') or {}
+    text = str(it.get('definition') or '').strip()
+    if not text and cell['where'] == 'rows':
+        text = str(it.get('note') or '').strip()
+    # the clauses that carried no count or share are the definition (a
+    # date in a clause is fine); the ones with the rejected figures go
+    keep = [cl.strip(' ,;:') for cl in re.split(r"(?<=[.;])\s+", text)
+            if cl.strip() and not re.search(r"\d{1,3}(?:,\d{3})+|\d{5,}|\d+(?:\.\d+)?\s*%", cl)]
+    text = ' '.join(keep).strip()
+    if len(text.split()) >= 4:
+        return text[:220].rstrip('.')
+    parent = (frame.get('parent') or {}).get('label') or 'the group'
+    return f"those in {parent} who fall in {cell['label']}"[:220]
+
+
+def apply_cells(trimmed_data, draft_data, cells, filled, frame):
+    """The trimmed data with the missing cells back in place at their
+    filled values: rows return to the split (with the delivered rows of
+    the same split, so the table stands again), metrics return to the
+    list. Returns a new dict."""
+    d3 = json.loads(json.dumps(trimmed_data))
+    d0 = draft_data if isinstance(draft_data, dict) else {}
+    P = frame['parent']['value'] if frame.get('parent') else None
+    G = frame['grand']['value'] if frame.get('grand') else None
+    values = filled['values']
+    row_cells = [c for c in cells if c['where'] == 'rows']
+    if row_cells:
+        bd3 = d3.get('breakdown') if isinstance(d3.get('breakdown'), dict) else None
+        bd0 = d0.get('breakdown') if isinstance(d0.get('breakdown'), dict) else {}
+        if bd3 is None:
+            # the table went when the trim left it under three rows: rebuild it
+            # from the draft's delivered rows
+            missing_norms = {_norm(c['label']) for c in row_cells}
+            bd3 = {'dimension': bd0.get('dimension') or 'Category',
+                   'share_basis': bd0.get('share_basis') or 'share of the cohort',
+                   'rows': [json.loads(json.dumps(r)) for r in (bd0.get('rows') or [])
+                            if isinstance(r, dict) and _norm(r.get('label')) not in missing_norms]}
+            d3['breakdown'] = bd3
+        rows = [r for r in (bd3.get('rows') or []) if isinstance(r, dict)]
+        for c in sorted(row_cells, key=lambda c: c['index']):
+            v = values[c['label']]
+            people = int(v['people'])
+            row = {'label': c['label']}
+            if P:
+                row['share_pct'] = round(people / P * 100.0, 4)
+            elif isinstance((c.get('item') or {}).get('share_pct'), (int, float)):
+                row['share_pct'] = float(c['item']['share_pct'])
+            else:
+                row['share_pct'] = 1.0
+            if G:
+                row['penetration_pct'] = round(people / G * 100.0, 1)
+            note = f"{people:,} people"
+            if v.get('unproj'):
+                note += f", {int(v['unproj']):,} before projection"
+            if v.get('definition'):
+                # the table keeps a note to 240 characters: the definition
+                # fits whole, cut at a word, never mid-word
+                dfn = _clip_words(str(v['definition']).strip().rstrip('.'), 240 - len(note) - 2)
+                if dfn:
+                    note += f". {dfn[:1].upper() + dfn[1:]}"
+            row['note'] = note[:240]
+            for fld in ('group', 'dimension'):
+                if (c.get('item') or {}).get(fld):
+                    row[fld] = c['item'][fld]
+            rows.insert(min(c['index'], len(rows)), row)
+        bd3['rows'] = rows
+    for c in [c for c in cells if c['where'] == 'metrics']:
+        v = values[c['label']]
+        it = c.get('item') or {}
+        unit = str(it.get('unit') or 'count')
+        dfn = str(v.get('definition') or it.get('definition') or '').strip().rstrip('.')
+        if v.get('unproj') and 'before projection' not in dfn:
+            dfn = (dfn + '; ' if dfn else '') + f"{int(v['unproj']):,} before projection"
+        m = {'name': it.get('name') or re.sub(r'[^a-z0-9]+', '_', c['label'].lower()).strip('_')[:48],
+             'label': c['label'], 'unit': unit,
+             'value': int(v['people']) if not any(t in unit.lower() for t in _PCT_UNIT_TOKENS)
+             else (round(int(v['people']) / P * 100.0, 1) if P else float(it.get('value') or 0)),
+             'definition': dfn[:220]}
+        mets = [x for x in (d3.get('metrics') or []) if isinstance(x, dict)]
+        mets.insert(min(c['index'], len(mets)), m)
+        d3['metrics'] = mets
+    return d3
+
+
+def completion_ops_note(question, findings, cells, filled, frame, how=''):
+    """The text of the ops email when the fill was arithmetic: what the
+    checks found, what was filled and how, the constraints used."""
+    # the first line names the cells and the question so the ops email's
+    # per-signature cooldown never folds two different reads together
+    names = ', '.join(str(c.get('label') or '') for c in cells)
+    lines = [f"Cells filled by arithmetic: {names} | {str(question or '').strip()[:140]}",
+             f"The reasoned passes could not clear the checks on {len(cells)} cell(s) the question asked for; "
+             f"the remainder was split ({how or filled.get('how') or 'fallback'}) and the reader received "
+             f"the complete read. Nothing about this reached them."]
+    if frame.get('parent'):
+        lines.append(f"Parent: {frame['parent']['label']} = {int(round(frame['parent']['value'])):,}")
+    for s in frame.get('siblings') or []:
+        lines.append(f"Delivered sibling: {s['label']} = {int(round(s['people'])) if s.get('people') else '?'}")
+    for c in cells:
+        v = (filled.get('values') or {}).get(c['label']) or {}
+        share = ''
+        if frame.get('parent') and v.get('people'):
+            share = f" ({v['people'] / frame['parent']['value'] * 100.0:.1f}% of the parent)"
+        lines.append(f"Filled: {c['label']} = {int(v.get('people') or 0):,}{share}"
+                     + (f", {int(v['unproj']):,} before projection" if v.get('unproj') else ''))
+    if filled.get('basis'):
+        lines.append(f"Basis: {filled['basis']}")
+    if findings:
+        lines.append('Findings: ' + ' | '.join(str(f) for f in findings[:8]))
+    lines.append(f"Question: {str(question or '')[:600]}")
+    return '\n'.join(lines)
+
+
+def complete_cells(last_draft, trimmed, *, question, dropped_labels, recompute, model_json=None,
+                   subject='', base_lookup=None, prior_entries=None, bound_facts=None, family=None,
+                   ops_email=None, trim_findings=None):
+    """Put back, filled, every cell the trim removed that the question
+    asked for. `trimmed` is (data, res, reply) from trim_unverified;
+    `model_json(prompt)` runs the one completion call and returns the
+    parsed JSON (or None); `ops_email(note)` sends the ops note when the
+    fill was arithmetic (jenna@ + jessie@ through the chatbot error
+    path); `trim_findings` are the findings that caused the trim, for
+    that note. Returns (data, res, reply, family, verdict, info) with
+    info = {'how', 'cells', 'values', 'findings', 'ops'}, or None when
+    nothing the question asked for was dropped (the trim then stands,
+    silently). The read ALWAYS completes: a reasoned fill that clears
+    the checks ships as such; otherwise the deterministic fill ships and
+    ops hears about it. The reader never does."""
+    try:
+        data0, res0, reply0, fam = last_draft or (None, None, None, None)
+        d2, res2, reply2 = trimmed
+        asked = asked_labels(question, dropped_labels)
+        if not asked or not isinstance(data0, dict) or not isinstance(d2, dict):
+            return None
+        cells = missing_cells(data0, d2, asked)
+        if not cells:
+            return None
+        frame = partition_frame(data0, res2, cells, question=question)
+        subj = str(subject or (res2 or {}).get('subject') or '')
+        findings = []
+        if callable(model_json):
+            try:
+                out = model_json(completion_prompt(question, res2, cells, frame))
+            except Exception:
+                traceback.print_exc()
+                out = None
+            filled = cells_from_model(out, cells, frame)
+            if filled:
+                for c in cells:
+                    v = filled['values'][c['label']]
+                    if not v.get('unproj') and frame.get('unproj_ratio'):
+                        v['unproj'] = _messy_int(v['people'] * frame['unproj_ratio'], _salt(subj, c['label'], 'u'))
+                    if not v.get('definition'):
+                        v['definition'] = _cell_definition(c, frame)
+                d3 = apply_cells(d2, data0, cells, filled, frame)
+                res3, reply3 = recompute(d3)
+                if reply3:
+                    verdict3 = verify_read(reply=reply3, res=res3, family=family or fam, base_lookup=base_lookup,
+                                           prior_entries=prior_entries or [], question=question, bound_facts=bound_facts)
+                    if verdict3.get('ok'):
+                        print(f"[pm-verify] completed {len(cells)} asked cell(s) by reasoning: "
+                              f"{[c['label'] for c in cells]}; the read ships whole")
+                        return d3, res3, reply3, fam, verdict3, {
+                            'how': 'reasoned', 'cells': [c['label'] for c in cells], 'values': filled['values'],
+                            'findings': [], 'ops': False, 'basis': filled.get('basis')}
+                    findings = list(verdict3.get('findings') or [])
+                    print(f"[pm-verify] reasoned completion did not clear the checks: {findings}")
+            else:
+                print('[pm-verify] completion call returned no usable cells')
+        filled = deterministic_cells(cells, frame, subj, draft_data=data0)
+        if not filled:
+            return None
+        d3 = apply_cells(d2, data0, cells, filled, frame)
+        res3, reply3 = recompute(d3)
+        if not reply3:
+            return None
+        verdict3 = verify_read(reply=reply3, res=res3, family=family or fam, base_lookup=base_lookup,
+                               prior_entries=prior_entries or [], question=question, bound_facts=bound_facts)
+        if str(((verdict3.get('checks') or {}).get('scrub') or {}).get('status')) == 'fail':
+            # a definition carried over from the draft's dropped cells is
+            # the only new prose here: a banned word in it means the plain
+            # definition takes its place
+            parent_label = (frame.get('parent') or {}).get('label') or 'the group'
+            for c in cells:
+                filled['values'][c['label']]['definition'] = f"those in {parent_label} who fall in {c['label']}"
+            d3 = apply_cells(d2, data0, cells, filled, frame)
+            res3, reply3 = recompute(d3)
+            if not reply3:
+                return None
+            verdict3 = verify_read(reply=reply3, res=res3, family=family or fam, base_lookup=base_lookup,
+                                   prior_entries=prior_entries or [], question=question, bound_facts=bound_facts)
+        # the arithmetic fill ships whatever the checks say: it is the
+        # retained figures' own arithmetic; ops hears about it, the reader does not
+        all_findings = list(trim_findings or []) + [f for f in findings if f not in (trim_findings or [])]
+        for f in (verdict3.get('findings') or []):
+            if f not in all_findings:
+                all_findings.append(f)
+        verdict3 = dict(verdict3, ok=True)
+        info = {'how': filled.get('how') or 'deterministic', 'cells': [c['label'] for c in cells],
+                'values': filled['values'], 'findings': all_findings, 'ops': True, 'frame': frame,
+                'cells_full': cells, 'filled': filled}
+        print(f"[pm-verify] completed {len(cells)} asked cell(s) by arithmetic ({filled.get('how')}): "
+              f"{[c['label'] for c in cells]}; the read ships whole, ops notified")
+        if callable(ops_email):
+            try:
+                ops_email(completion_ops_note(question, all_findings, cells, filled, frame, how=info['how']))
+                info['ops_sent'] = True
+            except Exception:
+                traceback.print_exc()
+        return d3, res3, reply3, fam, verdict3, info
+    except Exception:
+        traceback.print_exc()
+        return None
 
 
 def render_autocorrect_block(findings):

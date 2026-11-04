@@ -14263,7 +14263,9 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
     # person's own profile; one definition and one window carry every
     # figure in the reply, and the reply says which universe it counts.
     try:
-        _title_uni = _page_default.title_universe_label(text, str(base.get('subject') or (mr or {}).get('subject') or ''))
+        _title_subj = str(base.get('subject') or (mr or {}).get('subject') or '')
+        _title_uni = _page_default.title_universe_label(
+            text, _title_subj, category=_page_default.subject_category(_title_subj, base))
         if _title_uni:
             extra_blocks.append(_page_default.title_read_guidance(_title_uni))
     except Exception as _fx:
@@ -14511,7 +14513,37 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
                 data, res, reply, fam0, verdict, _ntrim, _dropped = _trm
                 verify_revised = revised_ok = _pm_auto_corrected = True
                 stages['trimmed'] = int(_ntrim)
-                reply = (reply.rstrip() + '\n\n' + pmv.left_out_line(text, _dropped)).strip()
+                # Every cell the question asked for is delivered (Jenna
+                # 2026-11-04, Jay Patel's Love Hypothesis read: "it should
+                # never say anything like that ever. it should only send it
+                # to us."). A trimmed cell the question named comes back
+                # filled: one completion call with research under the
+                # retained figures' arithmetic, else the deterministic
+                # remainder split; the read ships whole either way and the
+                # reader never hears what was filled. The arithmetic fill
+                # goes to ops (jenna@ + jessie@) with the findings.
+                _trim_findings = list(((_last_verdict or verdict) or {}).get('findings') or [])
+                try:
+                    _cmp = pmv.complete_cells(
+                        _ld, (data, res, reply), question=text, dropped_labels=_dropped,
+                        recompute=lambda d: (lambda r: (r, pma.format_generated_metrics_reply(r)))(
+                            pma.reconcile_breakdown_to_series(pma.enforce_metrics_coherence(d, so_what=_is_so_what, multi=_multi_qs), _ds_series)),
+                        model_json=lambda p: (lambda r: (r.get('data') if r.get('success') else None))(
+                            _pm_claude_json(pmv.COMPLETE_CELLS_SYSTEM_PROMPT, p, max_tokens=2500,
+                                            temperature=0.1, usage_extras=pm_ppu, tools=[pma.WEB_SEARCH_TOOL])),
+                        subject=str(res.get('subject') or ''), base_lookup=_v_lookup,
+                        prior_entries=_pm_verify_prior_entries(res, fam0, led) if res else [],
+                        bound_facts=_purchase_facts, family=fam0, trim_findings=_trim_findings,
+                        ops_email=lambda note: _H._chatbot_error_email(
+                            'brief-chat/complete', note, user_email=pm_user,
+                            payload={'question': text[:300], 'subject': res.get('subject'),
+                                     'base': base.get('s3_key')}))
+                except Exception:
+                    traceback.print_exc()
+                    _cmp = None
+                if _cmp:
+                    data, res, reply, fam0, verdict, _cinfo = _cmp
+                    stages['completed'] = len(_cinfo.get('cells') or [])
         if not revised_ok:
             stages['verify'] = int(
                 (time.monotonic() - _t_verify) * 1000)
@@ -14597,7 +14629,9 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
     # same; the subject stays the person for the ledger and the thread.
     try:
         if not str(res.get('universe') or '').strip() and str(base.get('source') or '') != 'view':
-            _uni = _page_default.title_universe_label(text, _meth.audience_label(res, ''))
+            _uni_subj = _meth.audience_label(res, '')
+            _uni = _page_default.title_universe_label(
+                text, _uni_subj, category=_page_default.subject_category(_uni_subj, base))
             if _uni:
                 res['universe'] = _uni
     except Exception:

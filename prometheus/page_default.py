@@ -225,7 +225,7 @@ _WORKS_RX = re.compile(
 _PLATFORMS = (r"prime video|amazon prime(?: video)?|netflix|hulu|hbo max|max|peacock|paramount\+?|disney\+?|apple tv\+?|"
               r"tubi|pluto tv|the roku channel|roku|youtube|starz|freevee|amc\+?|crunchyroll|discovery\+?|espn\+?|"
               r"any streaming service|streaming|free tv|free ad-supported")
-_PLATFORM_RX = re.compile(r"\bon (?:the )?(?P<p>" + _PLATFORMS + r")\b", re.I)
+_PLATFORM_RX = re.compile(r"\bon (?:the )?(?P<p>" + _PLATFORMS + r")(?![\w+])", re.I)   # (?![\w+]): 'Paramount+' keeps its plus
 _NEGATED_BEFORE_RX = re.compile(r"(?:\bnot\b|\bnever\b|n't\b|\bno\b|\brarely\b|\bwithout\b|\bexclusive to\b)[^.?!]{0,30}$", re.I)
 _VIEW_VERBS = r"(?:watch(?:ed|es|ing)?|stream(?:ed|s|ing)?|view(?:ed|s|ing)?|play(?:ed|s|ing)?|s(?:aw|een|ee)|binge[ds]?|tuned in to)"
 
@@ -327,48 +327,228 @@ def viewing_platform(text):
     return ''
 
 
-def title_universe_label(text, subject):
-    """The universe a title-viewing read on a person counts, in plain
-    words for the opener and the Base line: 'people who watched a Jason
-    Statham film on Prime Video in the window'. '' when the subject
-    already names its viewers ('Jason Statham film viewers (...)') or
-    the ask is not about titles."""
+# ---------------------------------------------------------------------------
+# The universe label is a plain sentence, never a concatenated key (Jenna
+# 2026-11-04, Jay Patel's Love Hypothesis read opened with "On people who
+# watched a The Love Hypothesis (Amazon Prime Video) - New to Prime Video
+# (zero plays in the six months before Sep 23 2026) with prior Netflix or
+# Hulu activity series on Prime Video in the window:"). The subject's
+# ' - <cut>' suffix becomes a plain cohort clause, a trailing '(<platform>)'
+# comes off the title, a title takes no article and no noun (the title
+# names itself; 'film' / 'series' is for a person's works), and an
+# imperative "Show" in the ask is not a series.
+# ---------------------------------------------------------------------------
+_PLATFORM_NAMES = {
+    'amazon prime video': 'Prime Video', 'prime video': 'Prime Video', 'amazon prime': 'Prime Video',
+    'netflix': 'Netflix', 'hulu': 'Hulu', 'max': 'Max', 'hbo max': 'HBO Max', 'peacock': 'Peacock',
+    'paramount+': 'Paramount+', 'paramount plus': 'Paramount+', 'disney+': 'Disney+', 'disney plus': 'Disney+',
+    'apple tv+': 'Apple TV+', 'apple tv': 'Apple TV+', 'youtube': 'YouTube', 'tubi': 'Tubi',
+    'pluto tv': 'Pluto TV', 'roku': 'Roku', 'the roku channel': 'The Roku Channel', 'starz': 'Starz',
+    'freevee': 'Freevee', 'crunchyroll': 'Crunchyroll', 'amc+': 'AMC+', 'discovery+': 'Discovery+',
+    'espn+': 'ESPN+', 'spotify': 'Spotify', 'apple music': 'Apple Music', 'siriusxm': 'SiriusXM',
+}
+_TITLE_CATEGORY_RX = re.compile(r"^(?:MOVIE|SERIES\b.*|PODCAST|GAMES?(?:\s*-\s*PLAYERS)?|GAME PLAYERS|VERTICAL SHORTS|FRANCHISE)$", re.I)
+_COMMON_CUT_WORDS = frozenset((
+    'gift', 'digital', 'online', 'heavy', 'light', 'new', 'lapsed', 'active', 'frequent', 'loyal', 'first',
+    'time', 'repeat', 'weekly', 'daily', 'monthly', 'premium', 'paid', 'free', 'mobile', 'sports', 'music',
+    'movie', 'film', 'series', 'podcast', 'game', 'video', 'streaming', 'prime', 'holiday', 'early', 'late',
+    'young', 'adult', 'teen', 'senior', 'super', 'casual', 'avid', 'potential', 'current', 'former', 'recent'))
+_PEOPLE_NOUN_TAIL_RX = re.compile(
+    r"\b(?:givers|users|members|subscribers|shoppers|buyers|viewers|owners|renters|parents|students|"
+    r"listeners|players|readers|fans|customers|drinkers|eaters|travelers|gamers|switchers|voters|"
+    r"enthusiasts|collectors|bettors|purchasers|watchers)$", re.I)
+
+
+def split_subject(subject):
+    """(head, cut) for 'Head - Cut' subjects: the split is the first
+    ' - ' outside parentheses. ('Head', '') when there is none."""
     s = ' '.join(str(subject or '').split()).strip()
-    if not s or re.search(r"\b(?:viewers?|watchers|audience|fans?|people|users|subscribers|buyers|listeners|readers|players)\b", s, re.I):
-        return ''
-    if not title_viewing_ask(text, s) or audience_of_person(text, s):
-        return ''
+    depth = 0
+    for i, ch in enumerate(s):
+        if ch == '(':
+            depth += 1
+        elif ch == ')':
+            depth = max(0, depth - 1)
+        elif ch == '-' and depth == 0 and i > 0 and s[i - 1] == ' ' and i + 1 < len(s) and s[i + 1] == ' ':
+            return s[:i].strip(), s[i + 2:].strip()
+    return s, ''
+
+
+def strip_platform_paren(head):
+    """('The Love Hypothesis', 'Prime Video') for 'The Love Hypothesis
+    (Amazon Prime Video)'; (head, '') when the parenthetical is not a
+    service we know."""
+    s = ' '.join(str(head or '').split()).strip()
+    m = re.search(r"\s*\(\s*(?:on\s+)?([^()]{2,40}?)\s*\)\s*$", s)
+    if m:
+        plat = _PLATFORM_NAMES.get(m.group(1).strip().lower())
+        if plat:
+            return s[:m.start()].strip(), plat
+    return s, ''
+
+
+def _works_noun(text, category=''):
+    """'film' / 'series' / 'song' / 'title' for a person's works, from
+    the profile's category first (MOVIE -> film, SERIES -> series), then
+    the ask. An imperative 'show' ("Show panel counts") is not a series."""
+    cat = str(category or '').strip().upper()
+    if cat == 'MOVIE':
+        return 'film'
+    if cat.startswith('SERIES'):
+        return 'series'
     t = str(text or '')
     if re.search(r"\b(?:films?|movies?|box office)\b", t, re.I):
-        work = 'film'
-    elif re.search(r"\b(?:series|shows?|episodes?|seasons?)\b", t, re.I):
-        work = 'series'
-    elif re.search(r"\b(?:albums?|songs?|tracks?|concerts?|tour)\b", t, re.I):
-        work = 'song'
+        return 'film'
+    if re.search(r"\b(?:series|episodes?|seasons?)\b", t, re.I) \
+            or re.search(r"(?<![.!?]\s)(?<!^)\b(?:shows?)\b(?!\s+(?:me|us|the|a|an|how|what|which|each|both|only|all|"
+                         r"counts?|figures?|numbers?|results?|them|it|this|that|these|those|your|our|by|per))", t, re.I | re.M):
+        return 'series'
+    if re.search(r"\b(?:albums?|songs?|tracks?|concerts?|tour)\b", t, re.I):
+        return 'song'
+    return 'title'
+
+
+def cut_clause(cut):
+    """The cut's own words as a plain cohort clause for the universe
+    label ('' when there is no cut). 'New to Prime Video (zero plays in
+    the six months before Sep 23 2026) with prior Netflix or Hulu
+    activity' -> ' who had no Prime Video plays in the six months before
+    Sep 23 2026 and had watched Netflix or Hulu in that time'."""
+    c = ' '.join(str(cut or '').split()).strip(' ,;')
+    if not c:
+        return ''
+    low = c.lower()
+    m = re.match(r"^new to (?P<p>[^(]+?)\s*(?:\((?:zero|no)\s+(?:[\w+ ]*?\s)?plays?(?: of any title)?\s+(?:in|during|over)\s+"
+                 r"(?P<per>[^)]+)\))?(?:\s*,?\s*(?P<rest>(?:with|and|who|whose)\b.*))?$", c, re.I)
+    if m:
+        p = m.group('p').strip()
+        per = (m.group('per') or '').strip()
+        rest = (m.group('rest') or '').strip()
+        first = f"who had no {p} plays in {per}" if per else f"who came to {p} new"
+        tail = ''
+        if rest:
+            mr = re.match(r"^with (?:prior |earlier |previous |existing )?(?P<svc>.+?)\s+(?:activity|viewing|use|usage|plays?|habit)$",
+                          rest, re.I)
+            if mr:
+                tail = f" and had watched {mr.group('svc').strip()} " + ('in that time' if per else 'before')
+            else:
+                tail = ' ' + rest
+        return ' ' + first + tail
+    if low in ('female', 'women', 'woman'):
+        return ' who are women'
+    if low in ('male', 'men', 'man'):
+        return ' who are men'
+    ma = re.match(r"^(?:ages?\s+)?(\d{2})\s*(?:-|to)\s*(\d{2})$", low)
+    if ma:
+        return f" aged {ma.group(1)} to {ma.group(2)}"
+    ma = re.match(r"^(?:ages?\s+)?(\d{2})\s*\+$", low)
+    if ma:
+        return f" aged {ma.group(1)} and over"
+    if low in ('avid fan', 'avid fans', 'avid'):
+        return ' who are avid fans'
+    if low in ('casual fan', 'casual fans', 'casual'):
+        return ' who are casual fans'
+    if low in ('gen z', 'millennials', 'gen x', 'boomers', 'gen alpha'):
+        return f" who are {c}"
+    if _PEOPLE_NOUN_TAIL_RX.search(c):
+        words = c.split()
+        out = []
+        for i, w in enumerate(words):
+            if w.isupper() and len(w) > 1:
+                out.append(w)                      # an acronym stays
+            elif i == len(words) - 1 or w.lower() in _COMMON_CUT_WORDS:
+                out.append(w.lower())              # the people noun and ordinary words read lower case
+            else:
+                out.append(w)                      # a brand or a place keeps its casing
+        return f" who are {' '.join(out)}"
+    return f" ({c})"
+
+
+def subject_category(subject, base=None, catalog=None):
+    """The catalog category of the subject a universe label is built
+    for: the base's own when the subject is the base, else a catalog
+    lookup by the subject's head. '' when unknown. Never raises."""
+    head, _cut = split_subject(subject)
+    try:
+        b = base if isinstance(base, dict) else {}
+        bhead, _bc = split_subject(b.get('subject') or '')
+        if bhead and _norm(bhead) == _norm(head):
+            return profile_category(b.get('s3_key') or '', bhead, catalog=catalog)
+        if not head:
+            return ''
+        cat = profile_category('', head, catalog=catalog)
+        if not cat:
+            title, plat = strip_platform_paren(head)
+            if plat and title:
+                cat = profile_category('', title, catalog=catalog)
+        return cat
+    except Exception:
+        return ''
+
+
+def title_universe_label(text, subject, category=''):
+    """The universe a title-viewing read counts, in plain words for the
+    opener and the Base line. A person's works: 'people who watched a
+    Jason Statham film on Prime Video in the window'. A title: 'people
+    who watched The Love Hypothesis on Prime Video in the window', plus
+    the cut's clause when the subject carries one. '' when the subject
+    already names its viewers ('Jason Statham film viewers (...)'), the
+    ask is not about titles, or the subject is neither a person nor a
+    title (a service, a brand)."""
+    head, cut = split_subject(subject)
+    if not head or re.search(r"\b(?:viewers?|watchers|audience|fans?|people|users|subscribers|buyers|listeners|readers|players)\b", head, re.I):
+        return ''
+    title, paren_plat = strip_platform_paren(head)
+    if not title:
+        return ''
+    if not title_viewing_ask(text, title) or audience_of_person(text, title):
+        return ''
+    cat = str(category or '').strip().upper()
+    t = str(text or '')
+    if cat and is_person_category(cat):
+        is_title = False
+    elif cat and _TITLE_CATEGORY_RX.match(cat):
+        is_title = True
+    elif cat:
+        return ''          # a service, a brand, a persona: no title universe to name
+    elif paren_plat or title.lower().startswith('the '):
+        is_title = True    # a title placement, or a name no person carries
     else:
-        work = 'title'
-    plat = viewing_platform(t)
+        n = _name_rx(title)
+        works = bool(re.search(rf"\b{n}(?:'s)?\s+(?:films?|movies?|titles?|series|shows?|episodes?|catalog(?:ue)?|filmography|"
+                               rf"specials?|albums?|songs?|concerts?)\b", t, re.I)
+                     or re.search(rf"\b(?:films?|movies?|titles?|series|shows?|episodes?|songs?|albums?)\s+(?:of|by|from|starring|with|featuring)\s+{n}\b", t, re.I)
+                     or re.search(rf"\b{_VIEW_VERBS}\s+(?:a |the |any |his |her |their )?{n}\b", t, re.I))
+        if not works:
+            return ''
+        is_title = False
+    plat = viewing_platform(t) or paren_plat
     where = f" on {plat}" if plat else ''
+    if is_title:
+        return f"people who watched {title}{where} in the window{cut_clause(cut)}"
+    work = _works_noun(t, cat)
     art = 'an' if work[:1] in 'aeiou' else 'a'
-    return f"people who watched {art} {s} {work}{where} in the window"
+    return f"people who watched {art} {title} {work}{where} in the window{cut_clause(cut)}"
 
 
 def title_read_guidance(universe_label):
-    """The prompt block for a title-viewing read on a person: the
-    universe, what anchors it, and the one-definition, one-window rule
-    for every figure in the reply."""
+    """The prompt block for a title-viewing read: the universe, what
+    anchors it, and the one-definition, one-window rule for every figure
+    in the reply. Every figure the question asks for is delivered."""
     u = str(universe_label or '').strip()
     return (
-        'TITLE READ ON A PERSON (house rule, 2026-11-04):\n'
-        f'- The universe is {u}: the people who watched the titles. It is NOT the audience of the person '
-        '(the people with digital touchpoints to them: their search, social, media, commerce and owned activity). '
-        'Never size it from, or hold it to, the person\'s own profile.\n'
+        'TITLE READ (house rule, 2026-11-04):\n'
+        f'- The universe is {u}: the people who watched the title(s). It is NOT the audience of the person '
+        'behind them (the people with digital touchpoints to them: their search, social, media, commerce and owned '
+        'activity). Never size it from, or hold it to, the person\'s own profile.\n'
         '- Anchor the universe on title viewing: the tracker figures carried in the grounding above when the titles '
         'have one, where the titles are carried and watched, and public title-viewing anchors; reason the share of '
         'US viewers from those. Size at the low end of what the anchors support.\n'
         '- One universe definition and one window carry EVERY figure in the reply. Each count and each share states '
         'the same base and the same window; a figure on another base (another title, another window, another cut of '
-        'the share) is labeled as such or left out.\n'
+        'the share) is labeled as such.\n'
+        '- Every cell the question asks for is in the reply with a figure (every part of a split, every count and '
+        'share named). Never say a figure is missing or unavailable, and never leave a cell blank.\n'
         f'- The first sentence names the universe in plain words ("On {u}:") so the reader knows which people the '
         'figures describe.\n')
 
@@ -376,4 +556,4 @@ def title_read_guidance(universe_label):
 __all__ = ['EVERYONE', 'is_everyone', 'quoted_subject', 'page_rejected', 'page_base_stands', 'base_stands', 'place_in_list',
            'fragment', 'not_a_subject', 'no_base_subject', 'PERSON_CATEGORIES', 'is_person_category', 'audience_of_person',
            'title_viewing_ask', 'person_page_for_title_ask', 'profile_category', 'viewing_platform', 'title_universe_label',
-           'title_read_guidance']
+           'title_read_guidance', 'split_subject', 'strip_platform_paren', 'cut_clause', 'subject_category']

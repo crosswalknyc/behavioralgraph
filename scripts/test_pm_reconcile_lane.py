@@ -372,7 +372,8 @@ class AnchorRule(unittest.TestCase):
         with open(os.path.join(ROOT, 'prometheus', 'legacy', 'chat.py'), encoding='utf-8') as fh:
             src = fh.read()
         self.assertGreaterEqual(src.count('_page_default.person_page_for_title_ask('), 3)   # page base, resolved base, sizing anchor
-        self.assertIn("_page_default.title_universe_label(text, _meth.audience_label(res, ''))", src)
+        self.assertIn("_uni_subj = _meth.audience_label(res, '')", src)
+        self.assertIn("text, _uni_subj, category=_page_default.subject_category(_uni_subj, base))", src)
         self.assertIn("extra_blocks.append(_page_default.title_read_guidance(_title_uni))", src)
         self.assertIn("digest_block = ''   # the profile's rows never ride the prompt", src)
         self.assertIn("universe=_aud)", src)
