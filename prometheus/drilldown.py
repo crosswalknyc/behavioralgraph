@@ -934,9 +934,19 @@ def _build_in_background(hit, uname, tid, job_id, s3, bucket):
             ok = persist_breakdown(hit, rows, s3=s3, bucket=bucket)
             reply = reply_for_breakdown(hit, rows, built=ok)
         else:
-            reply = (reply_for_row_plain(hit)
-                     + ' I could not confirm the named shows behind it well enough to list them; '
-                       'the row stays as one line for now.')
+            # nothing confirmable behind the row: the reader gets the row
+            # as it stands and ops hears that the names are owed; never a
+            # line that says they could not be confirmed (Jenna
+            # 2026-11-04: "it should never say anything like that ever. it
+            # should only send it to us.")
+            reply = reply_for_row_plain(hit)
+            try:
+                host.error_email('prometheus/drilldown',
+                                 f"drilldown behind {int(hit.get('number') or 0):,} "
+                                 f"({str((hit.get('row') or {}).get('label') or '')[:80]}) found no confirmable names; "
+                                 f"the row was answered as one line and {uname or 'the user'} may need the names by email")
+            except Exception:
+                pass
         try:
             from . import guards as _g
             reply = _g.scrub_method_language(reply)

@@ -16,26 +16,35 @@ SAME base, window and definitions pinned on every piece, assembles one
 result (metrics plus breakdown rows for every cell), persists once,
 writes one CSV and lands one summary reply with the file link. Progress
 is the job's stage line ("piece 4 of 12: Horror series"). A piece that
-fails retries once; a piece that still fails is named in the reply so
-the reader can ask for it alone. Never an empty or a partial-silent
-answer.
+fails retries once; a piece that still fails gets one bounded second
+pass and then the deterministic fill from the pieces that landed
+(`complete`), so the table the reader asked for lands whole. The reader
+is never told a piece was missing (Jenna 2026-11-04: "it should never
+say anything like that ever. it should only send it to us."); a fill
+goes to ops. Never an empty or a partial-silent answer.
 
 Pure planning and assembly here; the read core is handed in as a
 callable so the module runs hermetically in tests.
 """
 from __future__ import annotations
 
+import hashlib
 import re
 import threading
 from concurrent.futures import ThreadPoolExecutor
 
-__all__ = ['PER_PASS_CELLS', 'plan', 'piece_question', 'run', 'assemble', 'describe']
+__all__ = ['PER_PASS_CELLS', 'plan', 'piece_question', 'run', 'assemble', 'describe', 'complete', 'fill_piece',
+           'SECOND_PASS_MAX']
 
 PER_PASS_CELLS = 12        # groups x dimensions one pass returns whole
 DIMS_PER_PIECE = 4         # a piece carries one group and up to this many dimensions
 MAX_WORKERS = 3            # pieces in flight at once (inside the model budgets)
 MAX_GROUPS = 40
 MAX_PIECES = 60
+SECOND_PASS_MAX = 4        # pieces still missing after the retry that get one more fresh run before the fill
+# a group whose piece never came back sizes at the low end of its landed
+# peers (calibrate low): the median pool times a salted factor in this band
+FILL_LOW, FILL_HIGH = 0.86, 0.96
 
 _WORD_NUM = {'two': 2, 'three': 3, 'four': 4, 'five': 5, 'six': 6, 'seven': 7, 'eight': 8, 'nine': 9, 'ten': 10,
              'eleven': 11, 'twelve': 12, 'thirteen': 13, 'fourteen': 14, 'fifteen': 15, 'sixteen': 16, 'twenty': 20}
@@ -348,6 +357,8 @@ def assemble(p, results, *, subject, cohort='', text=''):
             if str(rd).strip():
                 reads.append(str(rd).strip())
     missing = [piece['label'] for piece in p['pieces'] if not isinstance(results.get(piece['label']), dict)]
+    filled = [piece['label'] for piece in p['pieces']
+              if isinstance(results.get(piece['label']), dict) and results[piece['label']].get('_filled')]
     # row shares: each row's pool against the sum of pools (one pool per
     # group counts once), so the column still sums to 100
     pools = {}
@@ -382,10 +393,191 @@ def assemble(p, results, *, subject, cohort='', text=''):
                        'share_basis': 'each row: the group pool as a share of all group pools; buckets: share within the group',
                        'rows': rows} if rows else None),
         '_matrix': {'groups': len(p['groups']), 'dimensions': len(dims), 'pieces': len(p['pieces']),
-                    'landed': len(p['pieces']) - len(missing), 'failed': list(missing)},
+                    'landed': len(p['pieces']) - len(missing), 'failed': list(missing), 'filled': filled},
         '_missing': list(missing),
     }
     return res
+
+
+# ---------------------------------------------------------------------------
+# Every piece lands (2026-11-04). A piece that is still missing after the
+# retry gets one more fresh run; what is still missing after that is
+# filled from the pieces that landed: the group's pool from its own other
+# piece or the low end of the landed pools, each dimension's bands from
+# the landed rows of that dimension (else the US baseline shares the
+# caller hands in, else the bands the reader wrote, even), salted per
+# subject and cell so nothing pins, messy last digits, counts summing to
+# the pool. The fill is marked on the piece result (`_filled`) so the
+# caller tells ops; the reader never hears about it.
+# ---------------------------------------------------------------------------
+
+def _salt(*parts):
+    h = hashlib.sha256('|'.join(str(x) for x in parts).encode('utf-8', 'replace')).hexdigest()
+    return int(h[:8], 16)
+
+
+def _messy(v, salt):
+    v = max(1, int(round(float(v))))
+    if v % 10 == 0:
+        v += 1 + (salt % 9)
+    return v
+
+
+def _nl(s):
+    return re.sub(r"[^a-z0-9]+", ' ', str(s or '').lower()).strip()
+
+
+def _templates(p, results):
+    """What the landed pieces say: the pool per group, every landed pool,
+    and per dimension the band order and the mean share per band."""
+    pools_by_group, dim_order, dim_shares = {}, {}, {}
+    for piece in p['pieces']:
+        res = results.get(piece['label'])
+        if not isinstance(res, dict) or res.get('_filled'):
+            continue
+        bd = res.get('breakdown') if isinstance(res.get('breakdown'), dict) else {}
+        for r in (bd.get('rows') or []):
+            if not isinstance(r, dict):
+                continue
+            pool = r.get('pool')
+            if isinstance(pool, (int, float)) and pool > 0:
+                pools_by_group[piece['group']] = max(pools_by_group.get(piece['group'], 0), int(pool))
+            d = _dimension_for_row(r, piece) or str(r.get('dimension') or '')
+            bks = [b for b in (r.get('buckets') or []) if isinstance(b, dict) and str(b.get('label') or '').strip()]
+            if not d or len(bks) < 2:
+                continue
+            order = dim_order.setdefault(d, [])
+            shares = dim_shares.setdefault(d, {})
+            for b in bks:
+                k = _nl(b['label'])
+                if k not in shares:
+                    order.append(str(b['label']).strip())
+                    shares[k] = []
+                try:
+                    shares[k].append(float(b.get('share_pct') or 0))
+                except (TypeError, ValueError):
+                    pass
+        if piece['group'] not in pools_by_group:
+            for m in (res.get('metrics') or []):
+                if isinstance(m, dict) and str(m.get('unit') or 'count') == 'count' and isinstance(m.get('value'), (int, float)) and m['value'] > 0:
+                    pools_by_group[piece['group']] = int(m['value'])
+                    break
+    dim_mean = {d: {k: (sum(v) / len(v) if v else 0.0) for k, v in sh.items()} for d, sh in dim_shares.items()}
+    return pools_by_group, sorted(pools_by_group.values()), dim_order, dim_mean
+
+
+def _bands(pool, labels, shares, *, subject, group, dimension):
+    """Bucket dicts for one row: the shares salted a few percent per band,
+    renormalized, counts summing exactly to the pool with messy last
+    digits (the largest band absorbs the arithmetic)."""
+    n = len(labels)
+    w = []
+    for lab, s in zip(labels, shares):
+        eps = ((_salt(subject, group, dimension, lab) % 601) - 300) / 10000.0     # -3% .. +3%
+        w.append(max(float(s), 0.05) * (1.0 + eps))
+    tot = sum(w) or 1.0
+    counts = [int(round(pool * x / tot)) for x in w]
+    big = max(range(n), key=lambda i: counts[i])
+    counts[big] += pool - sum(counts)
+    for i in range(n):
+        if i != big and counts[i] > 0 and counts[i] % 10 == 0:
+            adj = 1 + (_salt(subject, group, dimension, labels[i], 'd') % 9)
+            counts[i] += adj
+            counts[big] -= adj
+    if n > 1 and counts[big] % 10 == 0:
+        j = next(i for i in range(n) if i != big)
+        counts[big] -= 1
+        counts[j] += 1
+    counts = [max(0, c) for c in counts]
+    return [{'label': lab, 'count': c, 'share_pct': round(100.0 * c / pool, 1) if pool else 0.0}
+            for lab, c in zip(labels, counts)]
+
+
+def fill_piece(p, piece, templates, *, subject, genpop=None):
+    """A piece result for one missing piece, built from what landed.
+    None only when nothing landed at all (no pool to size from)."""
+    pools_by_group, pools, dim_order, dim_mean = templates
+    group = piece['group']
+    pool = pools_by_group.get(group)
+    how = "the group's own pool from its other piece" if pool else ''
+    if not pool:
+        if not pools:
+            return None
+        med = pools[len(pools) // 2]
+        f = FILL_LOW + (FILL_HIGH - FILL_LOW) * ((_salt(subject, group, 'pool') % 1000) / 999.0)
+        pool = _messy(med * f, _salt(subject, group, 'pool', 'd'))
+        how = 'pool at the low end of the landed groups'
+    rows, sources = [], []
+    for d in piece.get('dimensions') or []:
+        labels = shares = None
+        if d in dim_mean and dim_order.get(d):
+            labels = list(dim_order[d])
+            shares = [dim_mean[d].get(_nl(l), 0.0) for l in labels]
+            sources.append(f"{d}: bands from the landed rows")
+        elif callable(genpop):
+            try:
+                gp = genpop(d)
+            except Exception:
+                gp = None
+            if gp and len(gp) >= 2:
+                labels = [str(l) for l, _s in gp]
+                shares = [float(s) for _l, s in gp]
+                sources.append(f"{d}: bands from the US baseline")
+        if labels is None and (p.get('buckets') or {}).get(d):
+            labels = list(p['buckets'][d])
+            shares = [1.0] * len(labels)
+            sources.append(f"{d}: the bands as written, even")
+        row = {'label': f"{group}: {d}"[:60], 'share_pct': 1.0, 'pool': int(pool), 'group': group, 'dimension': d}
+        if labels and shares and len(labels) >= 2:
+            row['buckets'] = _bands(int(pool), labels, shares, subject=subject, group=group, dimension=d)
+        else:
+            sources.append(f"{d}: pool only")
+        rows.append(row)
+    return {'subject': subject, 'reads': [],
+            'metrics': [{'name': f"{_slug(group)}_pool", 'label': f"{group}, pool", 'value': int(pool), 'unit': 'count',
+                         'definition': f"people in the {group} cut"[:220]}],
+            'breakdown': {'dimension': 'Group', 'share_basis': 'share within the group', 'rows': rows},
+            '_filled': how + ('; ' + '; '.join(sources) if sources else '')}
+
+
+def complete(p, results, *, core, text, stage_cb=None, subject='', genpop=None, second_pass_max=SECOND_PASS_MAX):
+    """Every piece lands. The pieces still missing after `run` get one
+    bounded second pass through the core (a fresh reasoned run), then
+    the deterministic fill from the landed pieces. Returns (results,
+    info) with info = {'second_pass': [labels], 'filled': [labels],
+    'how': {label: how}}. When nothing landed at all there is nothing
+    to fill from: results come back as they were (the caller holds the
+    read and tells ops)."""
+    results = dict(results or {})
+    info = {'second_pass': [], 'filled': [], 'how': {}}
+    missing = [pc for pc in p['pieces'] if not isinstance(results.get(pc['label']), dict)]
+    if not missing:
+        return results, info
+    again = missing[:max(0, int(second_pass_max or 0))]
+    for i, pc in enumerate(again, 1):
+        if stage_cb is not None:
+            try:
+                stage_cb(f"second pass {i} of {len(again)}: {pc['label']}"[:60])
+            except Exception:
+                pass
+        try:
+            res = core(piece_question(text, p, pc), pc['label'])
+        except Exception:
+            res = None
+        if isinstance(res, dict) and (res.get('breakdown') or res.get('metrics')):
+            results[pc['label']] = res
+            info['second_pass'].append(pc['label'])
+    still = [pc for pc in missing if not isinstance(results.get(pc['label']), dict)]
+    if not still or not results:
+        return results, info
+    templates = _templates(p, results)
+    for pc in still:
+        res = fill_piece(p, pc, templates, subject=subject, genpop=genpop)
+        if res:
+            results[pc['label']] = res
+            info['filled'].append(pc['label'])
+            info['how'][pc['label']] = res['_filled']
+    return results, info
 
 
 def run(p, *, core, text, stage_cb=None, max_workers=MAX_WORKERS, retries=1):

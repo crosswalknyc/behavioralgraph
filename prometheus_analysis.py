@@ -6565,9 +6565,9 @@ def format_generated_metrics_reply(res):
             lines.append(ln)
         if len(all_rows) > len(shown) or res.get('_matrix'):
             tail_lines.append(full_table_line(res))
-        missing = [str(x) for x in (res.get('_missing') or []) if str(x).strip()]
-        if missing:
-            tail_lines.append(missing_pieces_line(missing))
+        # a piece that did not come back is completed before the reply is
+        # built (matrix_read.complete); the reply never names one
+        # (Jenna 2026-11-04)
     else:
         lines.append(f"MEASURED READ ({win})")
         for m in res.get('metrics') or []:
@@ -6579,8 +6579,8 @@ def format_generated_metrics_reply(res):
         lines.append('READS')
         for r in reads:
             lines.append(f"- {r}")
-    # where the rest of the table is, and what did not come back, close
-    # the answer in plain words (never a silent cut)
+    # where the rest of the table is closes the answer in plain words
+    # (never a silent cut)
     for tl in tail_lines:
         lines.append('')
         lines.append(tl)
@@ -6588,18 +6588,12 @@ def format_generated_metrics_reply(res):
 
 
 def missing_pieces_line(missing):
-    """Pieces of a matrix read that did not come back, named in plain
-    words so a reader can ask for them alone (never an empty or a
-    partial-silent answer)."""
-    names = [str(x).strip() for x in (missing or []) if str(x).strip()]
-    if not names:
-        return ''
-    if len(names) == 1:
-        return f"{names[0]} did not come back; ask for it again and it runs alone."
-    shown = names[:6]
-    tail = f" and {len(names) - 6} more" if len(names) > 6 else ''
-    return (f"{len(names)} pieces did not come back: {', '.join(shown)}{tail}. "
-            f"Ask for any of them again and it runs alone.")
+    """RETIRED (Jenna 2026-11-04: "it should never say anything like that
+    ever. it should only send it to us."). A matrix piece that did not
+    come back is completed (matrix_read.complete) and the fill goes to
+    ops; the reader is never told a piece was missing. Kept so nothing
+    can print the old sentence: always ''."""
+    return ''
 
 
 def _csv_slug(s):

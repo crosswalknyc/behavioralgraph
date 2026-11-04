@@ -44,10 +44,17 @@ SWEEP_EVERY = 300
 LOOKBACK = 6 * 3600          # a dead job's record stops changing at death
 MAX_RESUMES = 4              # deploys can come minutes apart
 STALE_STAGE = 'picking the read back up'
-FINAL_NOTE = ('That read did not finish on my side, so nothing is charged '
-              'for it. Ask it again and I will run it fresh.')
-FINAL_NOTE_FREE = ('That read did not finish on my side. Ask it again and I '
-                   'will run it fresh.')
+# The one thing a reader is told when a read did not land in the chat:
+# the standing calm line (app.py _CHATBOT_CALM_MESSAGE, Jenna 2026-09-30),
+# verbatim. A read that died, faulted or came back with nothing never
+# tells the reader so (Jenna 2026-11-04: "it should never say anything
+# like that ever. it should only send it to us."); ops gets the alert
+# and delivers the answer by email. The two old final notes ("That read
+# did not finish on my side ... Ask it again") are retired to this line.
+CALM_LINE = ("Working on it. Confirmed your task is in progress and I will email you when it "
+             "completes.")
+FINAL_NOTE = CALM_LINE
+FINAL_NOTE_FREE = CALM_LINE
 
 _INSTANCE = f"{socket.gethostname()}:{os.getpid()}"
 _started = False
@@ -694,28 +701,37 @@ def is_real_answer(body):
 
 
 def fault_reply(status, cause='', rr=None):
-    """The plain-words line for a read that could not run: what it could
-    not do and why, the cut as the reader typed it, and the nearest thing
-    to do next. No internal words."""
+    """RETIRED as a reader-facing line (Jenna 2026-11-04). It used to say
+    "I could not run the read on <cut>: the pass came back with no
+    figures ... Ask it again". The reader now gets the calm line and the
+    cause goes to ops (fault_note). Always CALM_LINE."""
+    return CALM_LINE
+
+
+def fault_note(status, cause='', rr=None):
+    """The ops text for a read that could not run: the cause, the cut as
+    the reader typed it, the subject, the screen it was started on, and
+    the question. Never shown to a reader."""
     status = status if isinstance(status, dict) else {}
     rr = rr if isinstance(rr, dict) else (status.get('resume') if isinstance(status.get('resume'), dict) else {})
     subject = str(status.get('subject') or rr.get('bind_subject') or (rr.get('base') or {}).get('subject') or '').strip()
     question = ' '.join(str(status.get('question') or rr.get('text') or '').split())
     cut = _cut_as_typed(question)
-    what = cut or subject or (question[:90] + ('...' if len(question) > 90 else '')) or 'this read'
-    where = ''
     b = rr.get('base') or {}
-    if str(b.get('source') or rr.get('base_source') or '') == 'view' and b.get('product'):
-        where = f"Open {b['product']}" + (f" on {subject}" if subject and subject != b.get('product') else '') + " and ask again, "
     why = {
-        'no_base': 'the data it was started from was not available to me when it ran, so there were no figures to give',
-        'no_figures': 'the pass came back with no figures, so there was nothing to give',
-        'not_an_answer': 'the pass came back with no figures, so there was nothing to give',
-    }.get(str(cause or ''), 'the pass came back with no figures, so there was nothing to give')
-    on = f" on {subject}" if subject and subject.lower() not in what.lower() else ''
-    return (f"I could not run the read on {what}{on}: {why}. "
-            f"{where or 'Ask it again, '}or name the audience and the cut in one line and I will run it alone. "
-            f"Nothing is charged for a read that did not run.")
+        'no_base': 'the base it was started from could not be resolved when it ran (the fresh run answered with an offer)',
+        'no_figures': 'the pass came back with no figures',
+        'not_an_answer': 'the fresh run answered with a question or an offer instead of the read',
+    }.get(str(cause or ''), 'the pass came back with no figures')
+    bits = [f"read did not run ({cause or 'no_figures'}): {why}; the user got the calm line and needs the answer by email",
+            f"question: {question[:600]}"]
+    if cut:
+        bits.append(f"cut as typed: {cut}")
+    if subject:
+        bits.append(f"subject: {subject}")
+    if b.get('product') or b.get('source'):
+        bits.append(f"started on: {b.get('product') or ''} ({b.get('source') or rr.get('base_source') or ''})".strip())
+    return ' | '.join(bits)
 
 
 _CUT_RXS = (
@@ -742,16 +758,27 @@ def _cut_as_typed(question):
 
 
 def finalize_faulted(job_id, status, cause, rr=None, reply=None):
-    """A resumed read that could not run lands once, honestly: the job
-    reads 'error' with the cause, the plain-words line is in the thread,
-    the ask log record that promised it settles as 'faulted' with that
-    line, the charge (if any) reverses. No offer text, no clarify, no
-    calm promise. Never raises; returns the line."""
+    """A resumed read that could not run lands once: the job reads
+    'done' with the fault marked (so the registry never replays it and
+    the same ask runs fresh next time), the calm line is in the thread,
+    the ask log record that promised it settles as 'faulted' (internal),
+    the charge (if any) reverses, and ops gets the cause (fault_note).
+    No offer text, no clarify, and never a line that tells the reader
+    the read did not run (Jenna 2026-11-04). Never raises; returns the
+    line the reader got."""
     c = _chat()
     status = status if isinstance(status, dict) else {}
     rr = rr if isinstance(rr, dict) else (status.get('resume') if isinstance(status.get('resume'), dict) else {})
     uname = str(status.get('user') or '').strip()
-    line = str(reply or '').strip() or fault_reply(status, cause, rr)
+    line = CALM_LINE
+    try:
+        if not (status.get('probe') or rr.get('probe') or uname.lower().startswith('canary')):
+            _host()._chatbot_error_email(
+                'brief-chat/read-recovery', fault_note(status, cause, rr), user_email=uname or None,
+                payload={'job_id': job_id, 'question': str(status.get('question') or rr.get('text') or '')[:300],
+                         'subject': rr.get('bind_subject'), 'cause': str(cause or '')[:40]})
+    except Exception:
+        traceback.print_exc()
     refunded = False
     charge = rr.get('panel_charge') or status.get('panel_charge')
     try:

@@ -60,6 +60,11 @@ STAFF_ACCEPT_CHIP = "Approve ({price}, not billed to a staff account)"
 # Kept under its historic name for callers that import it; the offer text
 # no longer carries a refusal sentence.
 CONFIRM = ""
+# The one line a reader gets when a priced pass came back with nothing
+# (app.py _CHATBOT_CALM_MESSAGE, verbatim): the answer comes by email, ops
+# is told. Never a line that says the read could not finish.
+CALM_LINE = ("Working on it. Confirmed your task is in progress and I will email you when it "
+             "completes.")
 
 CUSTOM_FAMILY = frozenset(('report', 'custom', 'overlap', 'path', 'list', 'cross', 'adaptation'))
 # Never priced: a lookup of carriage (where a named title is watched, the
@@ -1384,11 +1389,24 @@ def service_turn(text, *, user=None, ctx=None, history=None, host=None,
     paid = {'kind': hit['kind'], 'frame': hit.get('frame'), 'usd': hit.get('usd'),
             'subject': subject, 'pull_type': (payload or {}).get('pull_type')}
     if not raw:
+        # the sizing pass came back with nothing: the reader gets the calm
+        # line (the answer comes by email), ops gets the cause. Never "I
+        # could not finish that ... ask again" (Jenna 2026-11-04: "it
+        # should never say anything like that ever. it should only send
+        # it to us.")
+        try:
+            _mail = _host_cap(host, 'error_email')
+            if callable(_mail):
+                _mail('prometheus/priced-read',
+                      f"priced {hit['kind'].replace('_', ' ')} on {subject} came back with no figures; the user got the "
+                      f"calm line and needs the answer by email | {str(text or '')[:200]}")
+        except Exception:
+            pass
         return {
             'success': True, 'action': 'answer',
-            'reply': f"I could not finish that {hit['kind'].replace('_', ' ')} on {subject}. Ask again and I will retry.",
+            'reply': CALM_LINE,
             'followups': [], 'offer_deck': False, 'deck_angle': None,
-            'priced_paid': paid, 'subject': subject,
+            'priced_paid': paid, 'subject': subject, 'held': True,
         }
     out = dict(raw)
     out['priced_paid'] = paid

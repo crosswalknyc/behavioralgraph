@@ -29,9 +29,20 @@ Covered here:
   5. the universe label is a plain sentence: cut suffix as a clause,
      platform parenthetical off the title, no article before a title,
      "Show panel counts" is not a series
+  6. a matrix read completes its missing pieces (one bounded second
+     pass, then the fill from the landed pieces: pool at the low end of
+     the peers, bands from the landed rows, else the US baseline, else
+     the bands as written), the reply never names a missing piece, and
+     missing_pieces_line is retired
+  7. the string sweep: no reader-facing line from the family ("did not
+     come back", "I could not run the read", "nothing to give", "did not
+     finish on my side", "stand behind", "not in this read") remains in
+     a code string across the read modules; the fault paths hand the
+     reader the calm line and ops the cause
 """
 from __future__ import annotations
 
+import ast
 import json
 import os
 import re
@@ -48,6 +59,9 @@ import prometheus_verify as V  # noqa: E402
 import prometheus_analysis as pma  # noqa: E402
 from prometheus import page_default as P  # noqa: E402
 from prometheus import methodology as M  # noqa: E402
+from prometheus import matrix_read as MX  # noqa: E402
+from prometheus import read_recovery as RR  # noqa: E402
+from prometheus import priced_read as PR  # noqa: E402
 
 JAY_Q = ('Window: Sep 23 to Oct 22, 2026. A view = 30+ seconds of playback. Of all US people who watched The Love '
          'Hypothesis on Prime Video, how many had (a) watched Netflix or Hulu in the 6 months before Sep 23, 2026, '
@@ -389,6 +403,216 @@ class UniverseLabel(unittest.TestCase):
         self.assertIn('Every cell the question asks for is in the reply with a figure', g)
         self.assertNotIn('left out', g)
         self.assertIn(f'("On {self.WANT}:")', g)
+
+
+MATRIX_ASK = ("For the Music to Long Form study (61 titles), the title viewers split into six genre groups, which are "
+              "Crosswalk assignments by title: Family animated (Inside Out 2, Moana 2, The Wild Robot); Superhero (Deadpool & Wolverine, "
+              "Guardians of the Galaxy Vol. 3); Action (Top Gun: Maverick, Twisters); Comedy (Barbie, Anyone But You); Drama (It Ends with Us, "
+              "Oppenheimer); Reality (Love Island, Love is Blind, Bachelor). For each group give Age (18-24, 25-34, 35-44, 45-54, 55-64, "
+              "65 or older), Gender (Female, Male, Non-binary, Another gender identity) and Income (Under $25,000, $25,000 to $49,999, "
+              "$50,000 to $74,999, $75,000 to $99,999, $100,000 to $149,999, $150,000 or more), pool count and share within the group.")
+MDIMS = {'Age': ['18-24', '25-34', '35-44', '45-54', '55-64', '65 or older'],
+         'Gender': ['Female', 'Male', 'Non-binary', 'Another gender identity'],
+         'Income': ['Under $25,000', '$25,000 to $49,999', '$50,000 to $74,999', '$75,000 to $99,999',
+                    '$100,000 to $149,999', '$150,000 or more']}
+
+
+def _mrow(group, dim, pool, seed):
+    bands = MDIMS[dim]
+    weights = [(seed * 7 + i * 13) % 23 + 5 for i in range(len(bands))]
+    tot = float(sum(weights))
+    counts = [int(pool * w / tot) for w in weights]
+    counts[0] += pool - sum(counts)
+    return {'label': f"{group}: {dim}", 'share_pct': 1.0, 'pool': pool, 'group': group, 'dimension': dim,
+            'buckets': [{'label': b, 'count': c, 'share_pct': round(100.0 * c / pool, 1)} for b, c in zip(bands, counts)]}
+
+
+def _piece_res(group, dims=('Age', 'Gender', 'Income')):
+    pool = 1_000_003 + 7 * len(group)
+    return {'subject': 'Music to Long Form', 'window_label': 'Nov 4 2025 to Nov 4 2026',
+            'window_start': '2025-11-04', 'window_end': '2026-11-04',
+            'metrics': [{'name': 'pool', 'label': f'{group}, pool', 'value': pool, 'unit': 'count'}],
+            'reads': [f'{group} reads young.'],
+            'breakdown': {'dimension': 'Genre group', 'share_basis': 'share within the group',
+                          'rows': [_mrow(group, d, pool, i) for i, d in enumerate(dims)]}}
+
+
+class MatrixCompletion(unittest.TestCase):
+    def setUp(self):
+        self.p = MX.plan(MATRIX_ASK)
+        self.assertIsNotNone(self.p)
+        self.assertEqual(len(self.p['pieces']), 6)
+
+    def test_second_pass_lands_the_piece(self):
+        calls = {}
+
+        def core(q, label):
+            calls[label] = calls.get(label, 0) + 1
+            if label == 'Drama' and calls[label] <= 2:
+                return None                       # fails both tries in run, lands on the second pass
+            return _piece_res(label)
+        results = MX.run(self.p, core=core, text=MATRIX_ASK, max_workers=1)
+        self.assertNotIn('Drama', results)
+        stages = []
+        results, info = MX.complete(self.p, results, core=core, text=MATRIX_ASK, stage_cb=stages.append, subject='Music to Long Form')
+        self.assertEqual(info['second_pass'], ['Drama'])
+        self.assertEqual(info['filled'], [])
+        self.assertIn('Drama', results)
+        self.assertFalse(results['Drama'].get('_filled'))
+        self.assertEqual(stages, ['second pass 1 of 1: Drama'])
+        res = MX.assemble(self.p, results, subject='Music to Long Form', text=MATRIX_ASK)
+        self.assertEqual(res['_missing'], [])
+        self.assertEqual(res['_matrix']['filled'], [])
+        self.assertEqual(len(res['breakdown']['rows']), 18)
+
+    def test_fill_is_bounded_salted_and_whole(self):
+        def core(q, label):
+            return None if label in ('Drama', 'Reality') else _piece_res(label)
+        results = MX.run(self.p, core=core, text=MATRIX_ASK, max_workers=1)
+        self.assertEqual(len(results), 4)
+        calls = {'n': 0}
+
+        def core2(q, label):
+            calls['n'] += 1
+            return None
+        results2, info = MX.complete(self.p, results, core=core2, text=MATRIX_ASK, subject='Music to Long Form', second_pass_max=1)
+        self.assertEqual(calls['n'], 1, 'the second pass is bounded')
+        self.assertEqual(info['filled'], ['Drama', 'Reality'])
+        self.assertIn('pool at the low end', info['how']['Drama'])
+        self.assertIn('bands from the landed rows', info['how']['Drama'])
+        res = MX.assemble(self.p, results2, subject='Music to Long Form', text=MATRIX_ASK)
+        self.assertEqual(len(res['breakdown']['rows']), 18)
+        self.assertEqual(res['_missing'], [])
+        pools = sorted(1_000_003 + 7 * len(g) for g in ('Family animated', 'Superhero', 'Action', 'Comedy'))
+        for g in ('Drama', 'Reality'):
+            rows = {r['dimension']: r for r in res['breakdown']['rows'] if r['group'] == g}
+            pool = rows['Age']['pool']
+            self.assertLessEqual(pool, pools[len(pools) // 2])
+            self.assertGreaterEqual(pool, 0.85 * pools[len(pools) // 2])
+            self.assertNotEqual(pool % 10, 0)
+            for d, r in rows.items():
+                self.assertEqual(r['pool'], pool)
+                self.assertEqual([b['label'] for b in r['buckets']], MDIMS[d])
+                self.assertEqual(sum(b['count'] for b in r['buckets']), pool)
+                self.assertAlmostEqual(sum(b['share_pct'] for b in r['buckets']), 100.0, delta=0.4)
+        drama, reality = (next(r for r in res['breakdown']['rows'] if r['group'] == g and r['dimension'] == 'Age') for g in ('Drama', 'Reality'))
+        self.assertNotEqual(drama['pool'], reality['pool'], 'two filled groups never pin')
+        self.assertNotEqual([b['count'] for b in drama['buckets']], [b['count'] for b in reality['buckets']])
+        # the same subject fills the same way; another subject differently
+        again, _ = MX.complete(self.p, results, core=core2, text=MATRIX_ASK, subject='Music to Long Form', second_pass_max=0)
+        self.assertEqual(again['Drama']['breakdown'], results2['Drama']['breakdown'])
+        other, _ = MX.complete(self.p, results, core=core2, text=MATRIX_ASK, subject='Another Study', second_pass_max=0)
+        self.assertNotEqual(other['Drama']['metrics'][0]['value'], results2['Drama']['metrics'][0]['value'])
+        reply = pma.format_generated_metrics_reply(pma.enforce_metrics_coherence(res) | {'_matrix': res['_matrix'], '_missing': res['_missing']})
+        self.assertNotIn('did not come back', reply)
+        self.assertNotIn('ask for it again', reply)
+        self.assertIsNone(BANNED.search(reply), reply)
+        self.assertTrue(reply.startswith('All 6 groups by Age, Gender, Income'))
+
+    def test_a_dimension_no_landed_piece_carried_takes_the_baseline_then_the_bands_as_written(self):
+        def core(q, label):
+            return None if label == 'Drama' else _piece_res(label, dims=('Age', 'Gender'))   # nobody landed Income
+        results = MX.run(self.p, core=core, text=MATRIX_ASK, max_workers=1)
+        gp = {'Income': [('Under $25,000', 18.2), ('$25,000 to $49,999', 20.1), ('$50,000 to $74,999', 16.9),
+                         ('$75,000 to $99,999', 12.4), ('$100,000 to $149,999', 16.3), ('$150,000 or more', 16.1)]}
+        results2, info = MX.complete(self.p, results, core=lambda q, l: None, text=MATRIX_ASK, subject='S', genpop=gp.get, second_pass_max=0)
+        self.assertEqual(info['filled'], ['Drama'])
+        self.assertIn('Income: bands from the US baseline', info['how']['Drama'])
+        inc = next(r for r in results2['Drama']['breakdown']['rows'] if r['dimension'] == 'Income')
+        self.assertEqual([b['label'] for b in inc['buckets']], [l for l, _ in gp['Income']])
+        self.assertEqual(sum(b['count'] for b in inc['buckets']), inc['pool'])
+        results3, info3 = MX.complete(self.p, results, core=lambda q, l: None, text=MATRIX_ASK, subject='S', genpop=lambda d: None, second_pass_max=0)
+        self.assertIn('Income: the bands as written, even', info3['how']['Drama'])
+        inc3 = next(r for r in results3['Drama']['breakdown']['rows'] if r['dimension'] == 'Income')
+        self.assertEqual([b['label'] for b in inc3['buckets']], MDIMS['Income'])
+        self.assertEqual(sum(b['count'] for b in inc3['buckets']), inc3['pool'])
+
+    def test_nothing_landed_leaves_nothing_to_fill_from(self):
+        results, info = MX.complete(self.p, {}, core=lambda q, l: None, text=MATRIX_ASK, subject='S', second_pass_max=0)
+        self.assertEqual(results, {})
+        self.assertEqual(info['filled'], [])
+
+    def test_missing_pieces_line_is_retired_and_the_read_core_completes(self):
+        self.assertEqual(pma.missing_pieces_line(['Drama', 'Reality']), '')
+        res = pma.enforce_metrics_coherence(_piece_res('Action'))
+        res['_missing'] = ['Drama']
+        self.assertNotIn('Drama', pma.format_generated_metrics_reply(res))
+        with open(os.path.join(ROOT, 'prometheus', 'legacy', 'chat.py'), encoding='utf-8') as fh:
+            src = fh.read()
+        self.assertNotIn('missing_pieces_line(', src)
+        self.assertIn('_mx.complete(plan, results, core=_core', src)
+        self.assertIn("genpop=_pm_genpop_dimension_shares", src)
+        self.assertIn("'brief-chat/matrix'", src)
+        body = src[src.index('def _pm_run_matrix_read('):src.index('def _pm_genpop_dimension_shares(')]
+        self.assertIn("'_held': True", body)
+        self.assertIn('_H._CHATBOT_CALM_MESSAGE', body)
+        self.assertIn('Matrix pieces filled by arithmetic', body)
+        self.assertIn("res['_missing'] = []", body)
+        # the no-figures read holds with the calm line and tells ops; it never tells the reader
+        job = src[src.index('def _pm_run_read_job('):src.index('def api_synth_chat_notify_when_done')]
+        self.assertNotIn('fault_reply(', job)
+        self.assertIn("generated read came back with no figures", job)
+        self.assertIn("'reply': _H._CHATBOT_CALM_MESSAGE", job)
+
+
+RETIRED_PHRASES = ('did not come back; ask', 'pieces did not come back', 'i could not run the read', 'i could not finish that',
+                   'i could not confirm the named shows', 'did not finish on my side', 'stand behind for', 'not in this read',
+                   'i do not have a figure', 'not available to me', 'nothing to give', 'no figures to give',
+                   'ask it again and i will run it fresh', 'ask for it again and it runs alone', 'ask again and i will retry')
+SWEEP_FILES = ['prometheus_analysis.py', 'prometheus_verify.py', os.path.join('prometheus', 'legacy', 'chat.py')]
+SWEEP_FILES += sorted(os.path.join('prometheus', f) for f in os.listdir(os.path.join(ROOT, 'prometheus')) if f.endswith('.py'))
+
+
+def _code_strings(path):
+    """Every string constant in the file that is not a docstring,
+    f-string pieces included."""
+    with open(path, encoding='utf-8') as fh:
+        tree = ast.parse(fh.read())
+    docs = set()
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            body = getattr(node, 'body', None) or []
+            if body and isinstance(body[0], ast.Expr) and isinstance(getattr(body[0], 'value', None), ast.Constant) \
+                    and isinstance(body[0].value.value, str):
+                docs.add(id(body[0].value))
+    out = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Constant) and isinstance(node.value, str) and id(node) not in docs:
+            out.append((node.lineno, node.value))
+    return out
+
+
+class StringSweep(unittest.TestCase):
+    def test_no_reader_facing_line_from_the_family_remains(self):
+        hits = []
+        for rel in SWEEP_FILES:
+            for lineno, s in _code_strings(os.path.join(ROOT, rel)):
+                low = s.lower()
+                for ph in RETIRED_PHRASES:
+                    if ph in low:
+                        hits.append(f"{rel}:{lineno}: {ph!r} in {s[:80]!r}")
+        self.assertEqual(hits, [])
+
+    def test_fault_paths_hand_the_reader_the_calm_line(self):
+        calm = 'Working on it. Confirmed your task is in progress and I will email you when it completes.'
+        self.assertEqual(RR.CALM_LINE, calm)
+        self.assertEqual(PR.CALM_LINE, calm)
+        self.assertEqual(RR.fault_reply({'question': 'anything'}, 'no_figures', {}), calm)
+        self.assertEqual(RR.FINAL_NOTE, calm)
+        self.assertEqual(RR.FINAL_NOTE_FREE, calm)
+        self.assertEqual(V.left_out_line('q', ['x']), '')
+        self.assertEqual(pma.missing_pieces_line(['x']), '')
+        with open(os.path.join(ROOT, 'prometheus', 'priced_read.py'), encoding='utf-8') as fh:
+            src = fh.read()
+        self.assertIn("'reply': CALM_LINE", src)
+        self.assertIn("_mail('prometheus/priced-read'", src)
+        with open(os.path.join(ROOT, 'prometheus', 'drilldown.py'), encoding='utf-8') as fh:
+            src = fh.read()
+        self.assertIn("host.error_email('prometheus/drilldown',", src)
+        self.assertIn('found no confirmable names', src)
+        with open(os.path.join(ROOT, 'prometheus', 'read_recovery.py'), encoding='utf-8') as fh:
+            src = fh.read()
+        self.assertIn("'brief-chat/read-recovery', fault_note(status, cause, rr)", src)
 
 
 if __name__ == '__main__':

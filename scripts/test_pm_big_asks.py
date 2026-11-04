@@ -8,16 +8,18 @@ The three defects her agent reported, each pinned here:
             result, the ledger entry and the CSV (every row, every
             bucket); the chat shows the top rows and names the file.
 ran empty   a resumed read that comes back with an offer or a clarify
-            never lands as the result: the plain-words line lands once,
-            the ask log settles 'faulted' once, a re-ask runs fresh; the
-            resume record carries the base and the screen it was
-            started on.
+            never lands as the result: the calm line lands once, the
+            cause goes to ops, the ask log settles 'faulted' once, a
+            re-ask runs fresh; the resume record carries the base and
+            the screen it was started on.
 contradict  a second pass on a stored figure for the same definition
             and window keeps the stored figure and says so; a view's
             reads bank under the view's own title.
 matrix      a groups by dimensions ask splits deterministically, pieces
-            retry once, a piece that still fails is named in the reply,
-            the API envelope carries the file link and the table facts.
+            retry once, a piece that still fails is completed (one more
+            pass, then the fill from the landed pieces) and the reader
+            is never told (Jenna 2026-11-04), the API envelope carries
+            the file link and the table facts.
 """
 from __future__ import annotations
 
@@ -133,11 +135,15 @@ class NoSilentCap(unittest.TestCase):
         self.assertIn('The full table, all 12 groups by every dimension (3 dimensions, 36 rows), is in the file under this answer.', reply)
         self.assertNotIn('\u2014', reply)
 
-    def test_missing_piece_is_named(self):
+    def test_missing_piece_is_never_named_to_the_reader(self):
+        # Jenna 2026-11-04: a piece that did not come back is completed
+        # (matrix_read.complete) and ops hears; the reply never says so
         res = PMA.enforce_metrics_coherence(matrix_data())
         res['_missing'] = ['Horror series by Income']
         reply = PMA.format_generated_metrics_reply(res)
-        self.assertIn('Horror series by Income did not come back; ask for it again and it runs alone.', reply)
+        self.assertNotIn('did not come back', reply)
+        self.assertNotIn('Horror series by Income', reply)
+        self.assertEqual(PMA.missing_pieces_line(['Horror series by Income']), '')
 
 
 class MatrixPlan(unittest.TestCase):
@@ -189,7 +195,7 @@ class MatrixPlan(unittest.TestCase):
         self.assertIn("Label each row 'Action: <dimension>'", q)
         self.assertIn('Income bands, in this order: Under $25,000, $25,000 to $49,999', q)
 
-    def test_run_retries_once_and_names_the_piece_that_failed(self):
+    def test_run_retries_once_and_the_piece_that_failed_is_completed(self):
         p = MX.plan(self.ASK)
         calls = {}
 
@@ -217,11 +223,31 @@ class MatrixPlan(unittest.TestCase):
         self.assertEqual(res['_missing'], ['Drama'])
         self.assertEqual(res['_matrix']['failed'], ['Drama'])
         self.assertEqual(res['window_start'], '2025-11-04')
-        self.assertEqual({r['group'] for r in res['breakdown']['rows']} & {'Drama'}, set())
+        # the completion (2026-11-04): one bounded second pass, then the fill
+        # from the landed pieces; the table lands whole and the reader is
+        # never told a piece was missing
+        results, info = MX.complete(p, results, core=core, text=self.ASK, stage_cb=lambda s: None, subject='Music to Long Form')
+        self.assertEqual(calls['Drama'], 3)                   # the second pass ran once more
+        self.assertEqual(info['second_pass'], [])
+        self.assertEqual(info['filled'], ['Drama'])
+        res = MX.assemble(p, results, subject='Music to Long Form', text=self.ASK)
+        self.assertEqual(len(res['breakdown']['rows']), 36)
+        self.assertEqual(res['_missing'], [])
+        self.assertEqual(res['_matrix']['failed'], [])
+        self.assertEqual(res['_matrix']['filled'], ['Drama'])
         self.assertTrue(all(r['dimension'] in DIMS for r in res['breakdown']['rows']))
+        drama = {r['dimension']: r for r in res['breakdown']['rows'] if r['group'] == 'Drama'}
+        self.assertEqual(set(drama), set(DIMS))
+        pools = sorted(1_000_003 + len(g) for g in GROUPS if g != 'Drama')
+        self.assertLess(drama['Age']['pool'], pools[len(pools) // 2])          # the low end of the landed pools
+        self.assertNotEqual(drama['Age']['pool'] % 10, 0)
+        for d, r in drama.items():
+            self.assertEqual(sum(b['count'] for b in r['buckets']), r['pool'])
+            self.assertEqual([b['label'] for b in r['buckets']], DIMS[d])
         reply = PMA.format_generated_metrics_reply(PMA.enforce_metrics_coherence(res) | {'_matrix': res['_matrix'], '_missing': res['_missing']})
-        self.assertIn('Drama did not come back; ask for it again and it runs alone.', reply)
+        self.assertNotIn('did not come back', reply)
         self.assertIn('is in the file under this answer.', reply)
+        self.assertTrue(reply.startswith('All 12 groups by Age, Gender, Income'))
 
     def test_stage_lines_show_progress(self):
         p = MX.plan(self.ASK)
@@ -245,23 +271,31 @@ class NeverEmpty(unittest.TestCase):
         self.assertFalse(RR.is_real_answer(self.CLARIFY))
         self.assertTrue(RR.is_real_answer(self.REPLAY))
 
-    def test_fault_line_names_the_cut_as_typed(self):
+    def test_fault_line_is_the_calm_line_and_the_cause_goes_to_ops(self):
+        # Jenna 2026-11-04: the reader never hears that a read could not
+        # run; the cut as typed, the cause and the screen go to ops
         st = {'subject': 'Music to Long Form',
               'question': 'The last run returned no result blocks. Run it again, one cut only so it fits in one read: Series no music touch '
                           '(series viewers with no music touch), two dimensions, Income and Education, share within the cut.'}
         rr = {'base': {'subject': 'Music to Long Form', 'source': 'view', 'product': 'Digital Journey IQ'}}
         line = RR.fault_reply(st, 'no_base', rr)
-        self.assertIn('Series no music touch', line)
-        self.assertIn('Music to Long Form', line)
-        self.assertIn('Open Digital Journey IQ', line)
-        self.assertIn('no figures to give', line)
-        self.assertNotIn('Pulling this data will cost', line)
-        for banned in ('synthetic', 'model', 'estimated', 'panel', 'pipeline', 'ledger', 'lane', 'job'):
-            self.assertNotIn(banned, line.lower())
-        self.assertNotIn('\u2014', line)
+        self.assertEqual(line, RR.CALM_LINE)
+        self.assertEqual(RR.FINAL_NOTE, RR.CALM_LINE)
+        self.assertEqual(RR.FINAL_NOTE_FREE, RR.CALM_LINE)
+        for phrase in ('could not', 'no figures', 'did not run', 'ask it again', 'did not finish'):
+            self.assertNotIn(phrase, line.lower())
+        note = RR.fault_note(st, 'no_base', rr)
+        self.assertIn('Series no music touch', note)
+        self.assertIn('Music to Long Form', note)
+        self.assertIn('Digital Journey IQ', note)
+        self.assertIn('needs the answer by email', note)
 
     def test_sync_offer_settles_as_one_fault(self):
-        writes, appended, settled = [], [], []
+        writes, appended, settled, mails = [], [], [], []
+
+        class FakeHost:
+            def _chatbot_error_email(self, route, err, user_email=None, payload=None, tb=None):
+                mails.append((route, str(err), user_email, payload))
 
         class FakeChat:
             def _pm_read_status_write(self, job_id, doc):
@@ -295,9 +329,10 @@ class NeverEmpty(unittest.TestCase):
                 raise AssertionError('an offer never lands as a read')
 
         fake = FakeChat()
-        orig_chat, orig_s3 = RR._chat, RR._s3
+        orig_chat, orig_s3, orig_host = RR._chat, RR._s3, RR._host
         RR._chat = lambda: fake
         RR._s3 = lambda: (None, 'bucket')
+        RR._host = lambda: FakeHost()
         try:
             status = {'job_id': 'abc123def456', 'user': 'liz', 'status': 'working', 'subject': 'Music to Long Form',
                       'question': 'Go ahead and run it that way: Series - No music touch, every bucket for Age, Gender, Income and Education.',
@@ -309,16 +344,22 @@ class NeverEmpty(unittest.TestCase):
             self.assertEqual(writes[0]['status'], 'done')
             self.assertEqual(writes[0]['fault'], 'no_base')
             self.assertEqual(writes[0]['payload']['faulted'], 'no_base')
-            self.assertNotIn('Pulling this data will cost', writes[0]['payload']['reply'])
+            self.assertEqual(writes[0]['payload']['reply'], RR.CALM_LINE)      # the reader gets the calm line, never the cause
             self.assertEqual(len(appended), 1)
             self.assertEqual(appended[0]['meta']['read_job_id'], 'abc123def456')
+            self.assertEqual(appended[0]['text'], RR.CALM_LINE)
             self.assertEqual([s[1] for s in settled], ['faulted'])
-            self.assertIn('Series - No music touch', settled[0][2])
-            # the same settle again adds nothing: once
+            # the cause goes to ops (jenna@ + jessie@ through the chatbot error path), once
+            self.assertEqual(len(mails), 1)
+            self.assertEqual(mails[0][0], 'brief-chat/read-recovery')
+            self.assertIn('Series - No music touch', mails[0][1])
+            self.assertIn('no_base', mails[0][1])
+            self.assertEqual(mails[0][2], 'liz')
+            # the same settle again adds nothing to the thread: once
             RR.settle_sync_result('abc123def456', status, self.OFFER, rr=rr, uname='liz')
             self.assertEqual(len(appended), 1)
         finally:
-            RR._chat, RR._s3 = orig_chat, orig_s3
+            RR._chat, RR._s3, RR._host = orig_chat, orig_s3, orig_host
 
     def test_faulted_record_never_replays(self):
         class S3:

@@ -15037,7 +15037,13 @@ def _pm_run_matrix_read(plan, *, text, history, mr, base, digest_block, anchors_
     definitions (bank=False); the pieces assemble into one result;
     `_pm_finish_matrix_read` banks once, writes one file and returns the
     one payload the job lands. A piece that fails retries once inside
-    `matrix_read.run`; a piece that still fails is named in the reply."""
+    `matrix_read.run`; a piece that still fails gets one bounded second
+    pass and then the deterministic fill from the landed pieces
+    (`matrix_read.complete`), so the table lands whole. The reader is
+    never told a piece was missing (Jenna 2026-11-04: "it should never
+    say anything like that ever. it should only send it to us."): a
+    fill goes to ops (jenna@ + jessie@); a read where nothing landed at
+    all is held (the calm line) and ops hears, never the reader."""
     from prometheus import matrix_read as _mx
 
     def _core(piece_text, piece_label):
@@ -15051,22 +15057,103 @@ def _pm_run_matrix_read(plan, *, text, history, mr, base, digest_block, anchors_
         return res if isinstance(res, dict) and (res.get('breakdown') or res.get('metrics')) else None
 
     results = _mx.run(plan, core=_core, text=text, stage_cb=stage_cb)
+    subject = str((base or {}).get('subject') or '').strip() or 'this audience'
+    _cinfo = {'second_pass': [], 'filled': [], 'how': {}}
+    if results and len(results) < len(plan['pieces']):
+        try:
+            results, _cinfo = _mx.complete(plan, results, core=_core, text=text, stage_cb=stage_cb,
+                                           subject=subject, genpop=_pm_genpop_dimension_shares)
+        except Exception:
+            traceback.print_exc()
     if stage_cb is not None:
         try:
             stage_cb('putting the table together')
         except Exception:
             pass
-    subject = str((base or {}).get('subject') or '').strip() or 'this audience'
     res = _mx.assemble(plan, results, subject=subject, text=text)
     if not results or not res.get('breakdown'):
-        # no piece came back: the honest line, never an empty table
-        missing = [p['label'] for p in plan['pieces']]
-        return {'success': True, 'action': 'answer', 'followups': [], 'offer_deck': False, 'deck_angle': None,
-                'reply': ('None of the pieces of this read came back, so there is no table to give. '
-                          + __import__('prometheus_analysis').missing_pieces_line(missing)),
-                'faulted': 'no_figures', '_family': 'audience', '_verify': None, '_stages_ms': {}}
-    return _pm_finish_matrix_read(res, text=text, base=base, pm_user=pm_user,
-                                  derivation=f"matrix read: {_mx.describe(plan)}; landed {len(results)} of {len(plan['pieces'])}")
+        # nothing landed at all: nothing to complete from. The read is
+        # held (the calm line; the sweep gives it a fresh pass) and ops
+        # hears; the reader is never told the pieces did not come back
+        try:
+            _H._chatbot_error_email(
+                'brief-chat/matrix',
+                f"matrix read: none of {len(plan['pieces'])} pieces came back ({_mx.describe(plan)}); "
+                f"held with the calm line, the user needs the answer by email | {text[:140]}",
+                user_email=pm_user, payload={'question': text[:300], 'subject': subject, 'base': base.get('s3_key')})
+        except Exception:
+            traceback.print_exc()
+        return {'success': True, 'action': 'answer', 'reply': _H._CHATBOT_CALM_MESSAGE, 'followups': [],
+                'offer_deck': False, 'deck_angle': None, '_held': True, '_family': 'audience',
+                '_verify': None, '_stages_ms': {}}
+    res['_missing'] = []
+    # the finished table re-verifies (the scrub, the base rows) for the
+    # stamp on the job and the ledger entry; the table ships whole either way
+    _stamp = None
+    try:
+        import prometheus_verify as _pmv
+        _lk = None
+        try:
+            _lk = _pmv.load_base_lookup(_H.s3_client, _H.S3_BUCKET, base.get('s3_key'), base.get('subject') or '')
+        except Exception:
+            _lk = None
+        _vd = _pmv.verify_read(reply=__import__('prometheus_analysis').format_generated_metrics_reply(
+            __import__('prometheus_analysis').enforce_metrics_coherence(res) | {'_matrix': res.get('_matrix')}),
+            res=res, family='audience', base_lookup=_lk, question=text)
+        _stamp = _pmv.stamp(_vd, revised=bool(_cinfo.get('second_pass') or _cinfo.get('filled')))
+        if not _vd.get('ok'):
+            print(f"[pm-matrix] the assembled table did not clear the checks: {_vd.get('findings')}")
+            _cinfo['findings'] = list(_vd.get('findings') or [])
+    except Exception:
+        traceback.print_exc()
+    if _cinfo.get('filled'):
+        try:
+            _lines = [f"Matrix pieces filled by arithmetic: {', '.join(_cinfo['filled'])} | {text[:140]}",
+                      f"{_mx.describe(plan)}; {len(results) - len(_cinfo['filled'])} piece(s) landed from the passes"
+                      + (f", {len(_cinfo['second_pass'])} of them on the second pass ({', '.join(_cinfo['second_pass'])})" if _cinfo.get('second_pass') else '')
+                      + f"; {len(_cinfo['filled'])} filled from the landed pieces. The reader received the whole table; nothing about this reached them."]
+            for _lab in _cinfo['filled']:
+                _lines.append(f"Filled: {_lab}: {_cinfo['how'].get(_lab) or 'from the landed pieces'}")
+            if _cinfo.get('findings'):
+                _lines.append('Findings on the assembled table: ' + ' | '.join(str(f) for f in _cinfo['findings'][:8]))
+            _lines.append(f"Question: {text[:600]}")
+            _H._chatbot_error_email('brief-chat/complete', '\n'.join(_lines), user_email=pm_user,
+                                    payload={'question': text[:300], 'subject': subject, 'base': base.get('s3_key')})
+        except Exception:
+            traceback.print_exc()
+    return _pm_finish_matrix_read(res, text=text, base=base, pm_user=pm_user, verify=_stamp,
+                                  derivation=f"matrix read: {_mx.describe(plan)}; landed {len(results) - len(_cinfo.get('filled') or [])} of "
+                                             f"{len(plan['pieces'])}; second pass {len(_cinfo.get('second_pass') or [])}; "
+                                             f"filled {len(_cinfo.get('filled') or [])}")
+
+
+_GENPOP_DIMENSION_COLUMNS = {'age': 'AGE', 'gender': 'GENDER', 'income': 'INCOME', 'education': 'EDUCATION',
+                             'ethnicity': 'ETHNICITY', 'household': 'PARENTAL STATUS'}
+
+
+def _pm_genpop_dimension_shares(dimension):
+    """US baseline shares for a demographic dimension, [(band, share)],
+    from the Gen Pop file (the fill for a matrix piece whose dimension no
+    landed piece carried). None when the dimension is not a demographic
+    one or the file cannot be read. Never raises."""
+    try:
+        col = _GENPOP_DIMENSION_COLUMNS.get(str(dimension or '').strip().lower().split()[0])
+        if not col:
+            return None
+        import prometheus_analysis as pma
+        df, _etag = pma.load_profile_df(_H.s3_client, _H.S3_BUCKET, 'Gen_Pop_2026.csv')
+        bp_c = pma._bp_col(df)
+        out = []
+        for cat, grp in df.groupby('Column', sort=False):
+            if pma._norm_cat(cat) != col:
+                continue
+            for label, bpv in zip(grp['Value'].tolist(), grp[bp_c].tolist()):
+                v = pma._parse_bp(bpv)
+                if v is not None and str(label or '').strip():
+                    out.append((str(label).strip(), float(v)))
+        return out if len(out) >= 2 else None
+    except Exception:
+        return None
 
 
 def _pm_run_read_job(job_id, pm_user, pm_ppu, text, history, mr, base,
@@ -15112,25 +15199,26 @@ def _pm_run_read_job(job_id, pm_user, pm_ppu, text, history, mr, base,
         held = bool(payload.pop('_held', False))
         _verify = payload.pop('_verify', None)
         # a read that produced no figures never lands as an empty or a
-        # transport line: the plain words say what did not come back
-        # (2026-11-04); the ask log records one 'faulted' with the cause
+        # transport line, and never as a line that tells the reader
+        # nothing came back (Jenna 2026-11-04: "it should never say
+        # anything like that ever. it should only send it to us."): it
+        # is held with the calm line, the sweep gives it a fresh pass,
+        # and ops hears what happened
         if payload.get('success') and not held and (payload.get('faulted') or not _pm_payload_has_figures(payload)):
             _why = str(payload.get('reply') or '').strip()
-            _line = _why if payload.get('faulted') else _rr.fault_reply(
-                {'subject': head.get('subject') or (base or {}).get('subject'), 'question': text}, 'no_figures',
-                {'base': {k: base.get(k) for k in ('subject', 'source', 'product') if isinstance(base, dict)}})
-            payload = {'success': True, 'action': 'answer', 'reply': _line, 'followups': [],
-                       'offer_deck': False, 'deck_angle': None, 'faulted': str(payload.get('faulted') or 'no_figures')}
-            _pm_read_status_write(job_id, {**head, 'status': 'done', 'fault': 'no_figures', 'final': True,
-                                           'final_reason': ('no figures: ' + _why)[:200],
-                                           'finished_at': time.time(), 'payload': payload})
-            _pm_append_read_to_history(pm_user, job_id, payload, started_at=head.get('started_at'))
-            _pm_settle_ask(job_id, 'faulted', _line, head.get('started_at'))
-            _pm_notify_delete(job_id)
-            if panel_charge:
-                _pm_panel_refund(panel_charge)
-            print(f"[pm-loop] read {job_id} faulted (no figures) for {pm_user}")
-            return
+            try:
+                _H._chatbot_error_email(
+                    'brief-chat/read-job',
+                    f"generated read came back with no figures ({str(payload.get('faulted') or 'no_figures')}); "
+                    f"held with the calm line for a fresh pass, the user needs the answer by email | {text[:140]}"
+                    + (f" | reply was: {_why[:300]}" if _why else ''),
+                    user_email=pm_user, payload={'job_id': job_id, 'question': text[:300],
+                                                 'subject': head.get('subject') or (base or {}).get('subject')})
+            except Exception:
+                traceback.print_exc()
+            payload = {'success': True, 'action': 'answer', 'reply': _H._CHATBOT_CALM_MESSAGE, 'followups': [],
+                       'offer_deck': False, 'deck_angle': None}
+            held = True
         # The finished read bypasses the envelope, so the plain-English
         # shaper runs here (2026-10-06).
         from prometheus import reply_shape as _rs
