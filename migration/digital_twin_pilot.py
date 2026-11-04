@@ -1643,6 +1643,11 @@ def prepare_watch(session: dict, twins_by_key: dict, *, duration_s: float = 0,
     sc['watch_source'] = source
     attach_norms(sc, fmt, session.get('genre') or 'all', s3=s3)
     session['scorecard'] = sc
+    try:   # the performance forecast rides on every scored test (Jenna 2026-11-03)
+        from migration.digital_twin_forecast import attach_forecast
+        attach_forecast(twin, session, s3=s3)
+    except Exception as _fe:
+        print(f"[pilot] forecast skipped: {_fe}")
     session['probes'] = probe_points(beats, agg, events, subject)
     guide_doc = None
     old_guide = session.get('guide') if isinstance(session.get('guide'), dict) else None
@@ -2394,7 +2399,22 @@ def session_csv(session: dict) -> str:
         if genre != 'all':
             w.writerow([f"{genre.title()} norm", '', '', (nrm.get('genre') or {}).get('excellent', {}).get('value'), (nrm.get('genre') or {}).get('total_positive', {}).get('value'),
                         (nrm.get('genre') or {}).get('definitely_recommend', {}).get('value'), (nrm.get('genre') or {}).get('finish', {}).get('value')])
-    w.writerow([])
+    fc = session.get('forecast') if isinstance(session.get('forecast'), dict) else {}
+    if fc.get('episode'):
+        ep, se, su, act = fc['episode'], fc.get('series') or {}, fc.get('subscriptions') or {}, fc.get('actual') or {}
+        w.writerow(['Forecast', 'Value', 'Low', 'High', 'Definition'])
+        w.writerow(['Week-one audience if released', ep.get('week_one_audience'), ep.get('low'), ep.get('high'), ep.get('definition')])
+        if act.get('week_one_audience'):
+            w.writerow(['Week-one audience as aired', act.get('week_one_audience'), '', '', act.get('measure')])
+        w.writerow(['Season completion %', se.get('season_completion_pct'), '', '', se.get('completion_definition')])
+        w.writerow(['Second screen %', se.get('second_screen_pct'), '', '', se.get('second_screen_definition')])
+        w.writerow(['Season average audience', se.get('season_average_audience'), '', '', 'People per episode across the season'])
+        w.writerow(['Finale audience', se.get('finale_audience'), '', '', 'People who watch the season finale'])
+        w.writerow([f"Would subscribe to {su.get('platform') or 'the service'} for it, % of people without it", su.get('subscribe_pct_of_nonsubscribers'), '', '', f"About {su.get('subscribe_people')} people"])
+        w.writerow(['Would reactivate a dormant account for it, % of dormant accounts', su.get('reactivate_pct_of_dormant'), '', '', f"About {su.get('reactivate_people')} people"])
+        for n in fc.get('notes') or []:
+            w.writerow(['Note', n, '', '', ''])
+        w.writerow([])
     dial = session.get('dial') or {}
     splits = dial.get('splits') or {}
     keys = list(splits.keys())

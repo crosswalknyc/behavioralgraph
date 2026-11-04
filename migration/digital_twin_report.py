@@ -31,6 +31,19 @@ EVENT_COLOR = {'love': GREEN, 'laugh': GREEN, 'lean-in': COBALT, 'wow': ORCHID, 
 BANNED_WORDS = ('synth', 'synthetic', 'modeled', 'estimated', 'pipeline', 'claude', 'hostmap', 's3://', 'worker', 'persona', 'agent', 'screen engine', 'nrg', 'marketcast', 'fishdog')
 
 
+def _people_short(v) -> str:
+    """8,813,888 -> 8.81M; 743,399 -> 743K; smaller stays exact."""
+    try:
+        n = float(v or 0)
+    except (TypeError, ValueError):
+        return ''
+    if n >= 1_000_000:
+        return f"{n / 1_000_000:.2f}M"
+    if n >= 10_000:
+        return f"{n / 1_000:.0f}K"
+    return f"{int(round(n)):,}"
+
+
 def _clean(text: str) -> str:
     """Report copy: no em or en dash, no door metaphor, no internal
     term. The design finish runs the same scrubs on the file; this
@@ -292,6 +305,23 @@ def report_pages(payload: dict, session: dict) -> list:
     cr = session.get('critics') or {}
     if cr.get('critic_score') is not None:
         pages.append({'kind': 'tiles', 'header': _words(f"Critic score forecast {cr['critic_score']:.0f}."), 'sub': _clean(cr.get('awards_read') or ''), 'tiles': [(f"{cr['critic_score']:.0f}", 'Critic score'), (f"{cr['range'][0]:.0f} to {cr['range'][1]:.0f}", 'Likely range')], 'body': [], 'dark': False})
+    fc = session.get('forecast') if isinstance(session.get('forecast'), dict) else {}
+    if fc.get('episode'):
+        # the performance forecast (Jenna 2026-11-03): week one if released, the season, the subscriptions it would move
+        ep, se, su = fc['episode'], fc.get('series') or {}, fc.get('subscriptions') or {}
+        plat = su.get('platform') or 'the service'
+        act = fc.get('actual') or {}
+        tiles = [(_people_short(ep.get('week_one_audience')), 'Week-one audience if released'),
+                 (f"{se.get('season_completion_pct')}%", 'Would finish the season'),
+                 (f"{se.get('second_screen_pct')}%", 'On a second screen'),
+                 (f"{su.get('subscribe_pct_of_nonsubscribers')}%", f"Of people without {plat} would subscribe for it")]
+        body = [_clean(f"Range {_people_short(ep.get('low'))} to {_people_short(ep.get('high'))} in week one; season average {_people_short(se.get('season_average_audience'))}, finale {_people_short(se.get('finale_audience'))}."),
+                _clean(f"{su.get('reactivate_pct_of_dormant')}% of dormant {plat} accounts would come back for it, about {int(su.get('reactivate_people') or 0):,} people; about {int(su.get('subscribe_people') or 0):,} would subscribe.")]
+        if act.get('week_one_audience'):
+            body.append(_clean(f"As aired: {_people_short(act['week_one_audience'])} in week one" + (f" ({'+' if float(act.get('forecast_vs_actual_pct') or 0) >= 0 else ''}{act.get('forecast_vs_actual_pct')}% against the forecast)" if act.get('forecast_vs_actual_pct') is not None else '') + '.'))
+        for n in (fc.get('notes') or [])[:2]:
+            body.append(_clean(str(n)))
+        pages.append({'kind': 'tiles', 'header': _words(_clean(f"If released, {_people_short(ep.get('week_one_audience'))} people watch in the first week.")), 'sub': _clean(ep.get('definition') or ''), 'tiles': tiles, 'body': body, 'dark': False})
     pages.append({'kind': 'bullets', 'header': 'Key conclusions and what to do next.', 'sub': '', 'body': _conclusions(session) or ['Keep the favorite moment. Look hard at the dead spot.'], 'dark': False})
     for pg in pages:
         pg['header'] = _clean(pg.get('header') or '')
