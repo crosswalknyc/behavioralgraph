@@ -37,7 +37,7 @@ newsletter_bp = Blueprint("newsletter", __name__)
 S3_BUCKET = os.environ.get("S3_BUCKET", "dashboard-inputs")
 SES_REGION = os.environ.get("SES_REGION", "us-east-2")
 FROM_EMAIL = "no_reply@crosswalknyc.com"
-DEFAULT_FROM_NAME = "The Read"
+DEFAULT_FROM_NAME = "Liz Huszarik's The Read"
 DEFAULT_REPLY_TO = "hello@crosswalknyc.com"
 DEFAULT_COMPANY_ADDRESS = "Crosswalk, 23465 Civic Center Way Bldg 9, Malibu, CA 90265"
 DEFAULT_PUBLIC_BASE = "https://dashboard.crosswalknyc.com"
@@ -1397,7 +1397,7 @@ def ensure_seeded(state=None):
             "name": "The Read / Creatorverse",
             "subject": "22.4M watched Tubi's Creatorverse in year one",
             "preheader": "Their YouTube time never moved.",
-            "from_name": "The Read",
+            "from_name": DEFAULT_FROM_NAME,
             "from_email": FROM_EMAIL,
             "reply_to": DEFAULT_REPLY_TO,
             "list_id": "the-read",
