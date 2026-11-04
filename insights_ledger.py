@@ -59,6 +59,18 @@ MAX_ENTRIES_PER_SUBJECT = 40
 MAX_METRICS_PER_ENTRY = 10
 MAX_REPLY_CHARS = 4000
 
+# Every projected US figure stands on the people in the data behind it:
+# the ten million US consumers project to 329.9M, so one person in the
+# data is 32.99 US people (bg-webapp/edit_sample_size.py, the dashboard
+# math). A stated figure is stored with that count (2026-11-04, Jenna,
+# Jay Patel's Statham thread: "the data should always be storing it so
+# that it reconciles and should always keep track").
+US_PER_SAMPLE = 32.99
+# metric units that are not projected people counts (no count behind them)
+_NON_COUNT_UNIT_RX = re.compile(
+    r"pct|percent|%|share|index|rate|ratio|usd|\$|dollar|hour|minute|second|day|week|month|year|"
+    r"title|asset|episode|season|post|brand|category|rank|score|x\b", re.I)
+
 # Test hook: when True, persist() runs inline so unit tests can assert
 # on the written index synchronously.
 _SYNC_FOR_TESTS = False
@@ -311,13 +323,69 @@ def _put_entry_object(entry):
 # Entries
 # ---------------------------------------------------------------------------
 
+def is_count_metric(metric):
+    """A metric that counts projected US people (viewers, people,
+    accounts, signups ...): the kind that has a count in the data behind
+    it. Percents, dollars, durations, ranks and titles do not."""
+    if not isinstance(metric, dict):
+        return False
+    unit = str(metric.get('unit') or 'count').strip()
+    if _NON_COUNT_UNIT_RX.search(unit):
+        return False
+    try:
+        return float(metric.get('value')) >= 100
+    except (TypeError, ValueError):
+        return False
+
+
+def sample_people_for(value, factor=US_PER_SAMPLE):
+    """The people in the data behind a projected US figure (the count
+    before projection), or None."""
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        return None
+    if v <= 0 or not factor:
+        return None
+    return max(1, int(round(v / float(factor))))
+
+
+def attach_sample_people(metrics, universe='', factor=US_PER_SAMPLE):
+    """Copies of `metrics` with the unprojected count behind every
+    projected people figure (`sample_people`) and a definition on every
+    metric that has none (the universe the read counted). A metric that
+    already carries `sample_people` keeps it (a sizing passes the count
+    itself). Never raises; the input is never mutated."""
+    out = []
+    for m in (metrics or []):
+        if not isinstance(m, dict):
+            continue
+        c = dict(m)
+        if c.get('sample_people') in (None, '') and is_count_metric(c):
+            sp = sample_people_for(c.get('value'), factor)
+            if sp:
+                c['sample_people'] = sp
+        if not str(c.get('definition') or '').strip() and str(universe or '').strip():
+            c['definition'] = str(universe).strip()
+        out.append(c)
+    return out
+
+
 def make_entry(*, subject, metric_family, question, route, metrics,
                anchors=None, window_start='', window_end='',
                window_label='', reply='', followups=None,
                base_profile_key='', cohort='', breakdown=None,
-               derivation='', provenance='', verify=None):
+               derivation='', provenance='', verify=None, universe=''):
     """Build one ledger entry. `metrics` is a list of dicts with
-    name/label/value/unit/definition (extra keys dropped).
+    name/label/value/unit/definition and, for a projected people count,
+    `sample_people`, the unprojected count behind it (extra keys
+    dropped).
+
+    `universe` (2026-11-04): the audience the figures describe, in the
+    words the reply opened with ('Jason Statham film viewers (streaming
+    and free ad-supported services)'). With the window and each metric's
+    definition and sample_people, a later ask to reconcile figures reads
+    them back from here instead of sizing anything again.
 
     `provenance` (2026-08-28): 'delivered_artifact' for figures a
     client already holds, 'distilled' for pairs recovered from old
@@ -346,13 +414,17 @@ def make_entry(*, subject, metric_family, question, route, metrics,
         val = m.get('value')
         if not isinstance(val, (int, float)):
             continue
-        clean_metrics.append({
+        cm = {
             'name': name,
             'label': str(m.get('label') or name)[:90],
             'value': val,
             'unit': str(m.get('unit') or 'count')[:24],
             'definition': str(m.get('definition') or '')[:220],
-        })
+        }
+        sp = m.get('sample_people')
+        if isinstance(sp, (int, float)) and sp > 0:
+            cm['sample_people'] = int(sp)
+        clean_metrics.append(cm)
     entry = {
         'k': entry_key(subject, metric_family, window_start, window_end),
         'subject': str(subject or '')[:120],
@@ -368,6 +440,9 @@ def make_entry(*, subject, metric_family, question, route, metrics,
         'anchors': [str(a)[:120] for a in (anchors or []) if str(a)][:6],
         'base': str(base_profile_key or '')[:220],
         'cohort': str(cohort or '')[:120],
+        # the audience the figures describe, as the reply named it
+        # (2026-11-04): what a reconcile ask reads back as the definition
+        'universe': str(universe or '')[:220],
         'breakdown': _clean_breakdown(breakdown),
         'reply': str(reply or '')[:MAX_REPLY_CHARS],
         'followups': [str(f)[:160] for f in (followups or [])
@@ -689,7 +764,11 @@ def _record_entry_now(entry):
                 for m in (e.get('metrics') or []):
                     _store.upsert_fact(e.get('subject'), entry_key(e.get('subject'), e.get('metric_family') or ''), m.get('name'), m.get('value'),
                                        unit=m.get('unit') or '', source=m.get('source') or '', window={'start': e.get('window_start'), 'end': e.get('window_end')},
-                                       as_of=e.get('ts') or '', product=str(e.get('route') or 'chat'), doc={'question': e.get('question'), 'key': e.get('key')})
+                                       as_of=e.get('ts') or '', product=str(e.get('route') or 'chat'),
+                                       doc={'question': e.get('question'), 'key': e.get('key'),
+                                            # what the figure counted and the count behind it (2026-11-04)
+                                            'definition': m.get('definition') or '', 'sample_people': m.get('sample_people'),
+                                            'universe': e.get('universe') or '', 'window_label': e.get('wl') or ''})
         except Exception:
             pass
 
@@ -768,21 +847,28 @@ def persist(*, subject, metric_family, question, route, metrics,
             anchors=None, window_start='', window_end='',
             window_label='', reply='', followups=None,
             base_profile_key='', cohort='', breakdown=None,
-            derivation='', provenance='', verify=None, sync=False):
+            derivation='', provenance='', verify=None, sync=False,
+            universe=''):
     """Persist one delivered read. Never raises; never blocks the
     caller (daemon thread) unless `sync` or _SYNC_FOR_TESTS. Batch
     jobs (the conversation distiller, the artifact ingester) pass
-    sync=True so the write lands before the process exits."""
+    sync=True so the write lands before the process exits.
+
+    Every projected people count is stored with the unprojected count
+    behind it and a definition (attach_sample_people), and the entry
+    carries the universe the reply named, so the figures reconcile later
+    (2026-11-04)."""
     try:
         entry = make_entry(
             subject=subject, metric_family=metric_family,
-            question=question, route=route, metrics=metrics,
+            question=question, route=route,
+            metrics=attach_sample_people(metrics, universe=universe or cohort or subject),
             anchors=anchors, window_start=window_start,
             window_end=window_end, window_label=window_label,
             reply=reply, followups=followups,
             base_profile_key=base_profile_key, cohort=cohort,
             breakdown=breakdown, derivation=derivation,
-            provenance=provenance, verify=verify)
+            provenance=provenance, verify=verify, universe=universe)
         if not entry['metrics'] and not entry['reply']:
             return
         if sync or _SYNC_FOR_TESTS:

@@ -236,6 +236,14 @@ def audience_label(res=None, base_label=''):
     never shown over the audience itself (2026-10-22: a Jackass: Best &
     Last read derived off another file named that file's stem)."""
     res = res if isinstance(res, dict) else {}
+    # The universe the read counted, when it was named apart from the
+    # subject (2026-11-04, Jenna on Jay Patel's Statham thread: a profile
+    # of a person counts people with digital touchpoints to him; viewers
+    # of his films are another universe, and the opener and the Base
+    # line say which one the figures describe).
+    uni = str(res.get('universe') or '').strip()
+    if uni:
+        return uni
     subj = _display.display(str(res.get('subject') or '').strip())
     cohort = _display.display(str(res.get('cohort') or '').strip())
     if subj:

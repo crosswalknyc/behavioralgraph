@@ -131,6 +131,19 @@ def is_audience_behavior_ask(text):
     return bool(_OF_THESE_RX.search(t) or _WOULD_ACT_RX.search(t))
 
 
+def is_reconcile_ask(text):
+    """A question that asks for figures already given to be squared with
+    one another (one universe, one window, the unprojected count) is a
+    reconciliation from the record, never a sizing (Jenna 2026-11-04, Jay
+    Patel's Statham thread drew three sizing blocks of the open profile
+    and of the words 'window' and 'unprojected panel')."""
+    try:
+        from . import reconcile_lane as _rcl
+        return bool(_rcl.wants_reconcile(text))
+    except Exception:
+        return False
+
+
 def wants_sizing(text):
     """A question about how many people an audience holds."""
     t = ' '.join(str(text or '').split())
@@ -138,6 +151,8 @@ def wants_sizing(text):
         return False
     if not _SIZE_WORDS_RX.search(t) or _INSTRUCTION_RX.search(t) or _NOT_SIZING_RX.search(t):
         return False
+    if is_reconcile_ask(t):
+        return False   # "reconcile these ... state one universe definition, one window, the unprojected ..." reads the record
     if is_audience_behavior_ask(t):
         return False   # "how many of these readers would sign up" is a read on the audience, not its size
     if _CONSUME_RX.search(t) and not re.search(r"\b(?:sample|incidence|data ?set)\b", t, re.I):
@@ -444,6 +459,21 @@ def _check_line(host, phrase, history, window_txt=''):
 _VERDICT_LINE_RX = re.compile(r"\n*Verdict:[^\n]*", re.I)
 
 
+def _person_profile_for_title_ask(text, phrase, hit, catalog=None):
+    """True when the held profile is a PERSON's (ACTOR, MUSICIAN/BAND,
+    creator ...) and the ask sizes viewers of their titles ('the Jason
+    Statham film audience'): that profile counts people with digital
+    touchpoints to the person, not the title audience (Jenna 2026-11-04).
+    Never raises; False when the category is unknown."""
+    try:
+        from . import page_default as _pd
+        cat = _pd.profile_category((hit or {}).get('key'), (hit or {}).get('name'), catalog)
+        words = f"{text or ''} {phrase or ''}"
+        return bool(cat) and _pd.person_page_for_title_ask(words, cat, (hit or {}).get('name'))
+    except Exception:
+        return False
+
+
 def reader_safe(msg, staff=True):
     """The sample check as a reader sees it. The verdict line is an
     operator's build-decision note and a confidence tier (never public,
@@ -464,6 +494,8 @@ def answer(text, ctx=None, *, host=None, history=None, subjects=None, staff=True
     subscribe / pay / incremental overlap of a held audience is not
     this lane: that is a Custom Ask (2026-10-21, Bria)."""
     try:
+        if is_reconcile_ask(text):
+            return None   # answered from the record by prometheus.reconcile_lane, never sized again (2026-11-04)
         try:
             from . import overlap_read as _ov
             if _ov.is_overlap_read(text):
@@ -493,6 +525,11 @@ def answer(text, ctx=None, *, host=None, history=None, subjects=None, staff=True
         window_txt = wm.group(0).strip() if wm else ''
         for phrase in subs:
             hit = None if window_txt else resolve(phrase, ctx)
+            if hit and _person_profile_for_title_ask(text, phrase, hit):
+                # a person's profile sizes the person's audience, never the
+                # viewers of their films (Jenna 2026-11-04): the title audience
+                # runs through the sample check on its own words
+                hit = None
             if hit:
                 lines.append(profile_line(hit, host))
                 chips.append(f"Open {hit['name']}")

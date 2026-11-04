@@ -202,4 +202,178 @@ def no_base_subject(text, page, bind_subject='', subj_hint='', panel_confirm=Non
     return name
 
 
-__all__ = ['EVERYONE', 'is_everyone', 'quoted_subject', 'page_rejected', 'page_base_stands', 'base_stands', 'place_in_list', 'fragment', 'not_a_subject', 'no_base_subject']
+# ---------------------------------------------------------------------------
+# A person's profile is not the audience of their films (Jenna 2026-11-04,
+# Jay Patel's Statham thread). The Jason Statham Profile IQ file counts
+# people with digital touchpoints to HIM (search, social, media, commerce,
+# owned). A question about viewers of his films, their Prime Video share or
+# "total viewers" is about another universe: the people who watched a
+# title. That read is anchored on title viewing (the trackers, the content
+# map, the read's own research), never on the person's profile, and it
+# opens by naming the universe it used. The profile stays the base when
+# the question is about the person's own audience ("his fans", "the Jason
+# Statham audience", "what do his fans watch").
+# ---------------------------------------------------------------------------
+PERSON_CATEGORIES = frozenset((
+    'ACTOR', 'ATHLETE', 'COMEDIAN', 'INFLUENCER/CREATOR', 'CREATOR/INFLUENCER', 'EMERGING TALENT',
+    'HOST/PERSONALITY', 'MUSICIAN/BAND', 'PODCASTER', 'POLITICS/ACTIVIST', 'WRITER/DIRECTOR/AUTHOR/ARTIST',
+    'TALENT', 'PERSON'))
+# the works a person is known for: a question about them is about titles
+_WORKS_RX = re.compile(
+    r"\b(?:films?|movies?|titles?|episodes?|series|shows?|filmography|catalog(?:ue)?|box office|premieres?|"
+    r"releases?|seasons?|specials?|albums?|songs?|tracks?|tour dates?|concerts?)\b", re.I)
+_PLATFORMS = (r"prime video|amazon prime(?: video)?|netflix|hulu|hbo max|max|peacock|paramount\+?|disney\+?|apple tv\+?|"
+              r"tubi|pluto tv|the roku channel|roku|youtube|starz|freevee|amc\+?|crunchyroll|discovery\+?|espn\+?|"
+              r"any streaming service|streaming|free tv|free ad-supported")
+_PLATFORM_RX = re.compile(r"\bon (?:the )?(?P<p>" + _PLATFORMS + r")\b", re.I)
+_NEGATED_BEFORE_RX = re.compile(r"(?:\bnot\b|\bnever\b|n't\b|\bno\b|\brarely\b|\bwithout\b|\bexclusive to\b)[^.?!]{0,30}$", re.I)
+_VIEW_VERBS = r"(?:watch(?:ed|es|ing)?|stream(?:ed|s|ing)?|view(?:ed|s|ing)?|play(?:ed|s|ing)?|s(?:aw|een|ee)|binge[ds]?|tuned in to)"
+
+
+def is_person_category(category):
+    return str(category or '').strip().upper() in PERSON_CATEGORIES
+
+
+def _name_rx(name):
+    toks = [re.escape(t) for t in str(name or '').split() if t]
+    return r"\s+".join(toks) if toks else ''
+
+
+def audience_of_person(text, name):
+    """The ask is about the person's own audience: his fans, the X
+    audience, people who engage with him."""
+    n = _name_rx(name)
+    if not n:
+        return False
+    t = str(text or '')
+    return bool(re.search(rf"\b{n}(?:'s)?\s+(?:fans?|audience|followers|engagers|subscribers|supporters|listeners|base)\b", t, re.I)
+                or re.search(rf"\b(?:fans|followers|audience|engagers|supporters) of\s+{n}\b", t, re.I)
+                or re.search(rf"\b(?:engag(?:e|ed|ing) with|follow(?:ed|ing)?|interact(?:ed|ing)? with)\s+{n}\b", t, re.I))
+
+
+def title_viewing_ask(text, name=''):
+    """The ask is about viewers of titles: it names the works (films,
+    movies, titles, episodes, series), or watching / streaming the person
+    on a service, or viewers of the person."""
+    t = ' '.join(str(text or '').split())
+    if not t:
+        return False
+    if _WORKS_RX.search(t):
+        return True
+    n = _name_rx(name)
+    if n:
+        if re.search(rf"\b(?:viewers|viewership|watchers|streamers) of\s+(?:a |the )?{n}\b", t, re.I):
+            return True
+        if re.search(rf"\b{_VIEW_VERBS}\s+(?:a |the |any |his |her |their )?{n}\b", t, re.I):
+            return True
+        if re.search(rf"\b{n}\s+(?:viewers|viewership|on (?:{_PLATFORMS}))\b", t, re.I):
+            return True
+    return bool(re.search(rf"\b{_VIEW_VERBS}\b[^.?!]{{0,80}}\bon (?:the )?(?:{_PLATFORMS})\b", t, re.I))
+
+
+def person_page_for_title_ask(text, category, name=''):
+    """True when a profile of a PERSON would be bound as the base of a
+    question about viewers of titles: the profile is not the anchor
+    then. False for a brand or title profile, and for a question about
+    the person's own audience."""
+    if not is_person_category(category):
+        return False
+    if audience_of_person(text, name):
+        return False
+    return title_viewing_ask(text, name)
+
+
+def profile_category(s3_key='', name='', catalog=None):
+    """The catalog's BRAND CATEGORY for a profile ('ACTOR', 'QSR', ...)
+    by s3 key, else by display name; '' when unknown. `catalog` is the
+    compact catalog list ([{s3_key, display_name, subject, category}]);
+    None reads the dashboard's own. Never raises."""
+    try:
+        if catalog is None:
+            from .legacy import chat as _chat
+            catalog = _chat._profile_catalog_for_chat()
+    except Exception:
+        catalog = []
+    key = str(s3_key or '').strip()
+    nm = _norm(str(name or '').split(' - ')[0])
+    by_name = ''
+    for e in (catalog or []):
+        if not isinstance(e, dict):
+            continue
+        if key and str(e.get('s3_key') or '').strip() == key:
+            return str(e.get('category') or '').strip().upper()
+        if nm and not by_name and (_norm(str(e.get('display_name') or '').split(' - ')[0]) == nm
+                                   or _norm(str(e.get('subject') or '').split(' - ')[0]) == nm):
+            by_name = str(e.get('category') or '').strip().upper()
+    return by_name
+
+
+def viewing_platform(text):
+    """The service the ask says the viewing happened on ('Prime Video'),
+    or '' when none is named without a negation in front of it."""
+    t = ' '.join(str(text or '').split())
+    for m in _PLATFORM_RX.finditer(t):
+        if _NEGATED_BEFORE_RX.search(t[:m.start()]):
+            continue
+        p = m.group('p')
+        low = p.lower()
+        if low in ('streaming', 'any streaming service'):
+            return 'any streaming service'
+        if low in ('free tv', 'free ad-supported'):
+            return 'free ad-supported TV'
+        return {'prime video': 'Prime Video', 'netflix': 'Netflix', 'hulu': 'Hulu', 'max': 'Max', 'hbo max': 'HBO Max',
+                'peacock': 'Peacock', 'youtube': 'YouTube', 'tubi': 'Tubi', 'pluto tv': 'Pluto TV', 'roku': 'Roku',
+                'the roku channel': 'The Roku Channel', 'starz': 'Starz', 'freevee': 'Freevee', 'crunchyroll': 'Crunchyroll'}.get(low, p)
+    return ''
+
+
+def title_universe_label(text, subject):
+    """The universe a title-viewing read on a person counts, in plain
+    words for the opener and the Base line: 'people who watched a Jason
+    Statham film on Prime Video in the window'. '' when the subject
+    already names its viewers ('Jason Statham film viewers (...)') or
+    the ask is not about titles."""
+    s = ' '.join(str(subject or '').split()).strip()
+    if not s or re.search(r"\b(?:viewers?|watchers|audience|fans?|people|users|subscribers|buyers|listeners|readers|players)\b", s, re.I):
+        return ''
+    if not title_viewing_ask(text, s) or audience_of_person(text, s):
+        return ''
+    t = str(text or '')
+    if re.search(r"\b(?:films?|movies?|box office)\b", t, re.I):
+        work = 'film'
+    elif re.search(r"\b(?:series|shows?|episodes?|seasons?)\b", t, re.I):
+        work = 'series'
+    elif re.search(r"\b(?:albums?|songs?|tracks?|concerts?|tour)\b", t, re.I):
+        work = 'song'
+    else:
+        work = 'title'
+    plat = viewing_platform(t)
+    where = f" on {plat}" if plat else ''
+    art = 'an' if work[:1] in 'aeiou' else 'a'
+    return f"people who watched {art} {s} {work}{where} in the window"
+
+
+def title_read_guidance(universe_label):
+    """The prompt block for a title-viewing read on a person: the
+    universe, what anchors it, and the one-definition, one-window rule
+    for every figure in the reply."""
+    u = str(universe_label or '').strip()
+    return (
+        'TITLE READ ON A PERSON (house rule, 2026-11-04):\n'
+        f'- The universe is {u}: the people who watched the titles. It is NOT the audience of the person '
+        '(the people with digital touchpoints to them: their search, social, media, commerce and owned activity). '
+        'Never size it from, or hold it to, the person\'s own profile.\n'
+        '- Anchor the universe on title viewing: the tracker figures carried in the grounding above when the titles '
+        'have one, where the titles are carried and watched, and public title-viewing anchors; reason the share of '
+        'US viewers from those. Size at the low end of what the anchors support.\n'
+        '- One universe definition and one window carry EVERY figure in the reply. Each count and each share states '
+        'the same base and the same window; a figure on another base (another title, another window, another cut of '
+        'the share) is labeled as such or left out.\n'
+        f'- The first sentence names the universe in plain words ("On {u}:") so the reader knows which people the '
+        'figures describe.\n')
+
+
+__all__ = ['EVERYONE', 'is_everyone', 'quoted_subject', 'page_rejected', 'page_base_stands', 'base_stands', 'place_in_list',
+           'fragment', 'not_a_subject', 'no_base_subject', 'PERSON_CATEGORIES', 'is_person_category', 'audience_of_person',
+           'title_viewing_ask', 'person_page_for_title_ask', 'profile_category', 'viewing_platform', 'title_universe_label',
+           'title_read_guidance']

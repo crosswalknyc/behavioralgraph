@@ -450,7 +450,7 @@ def accept_offered_run(history, text):
 LANE_ORDER = (
     'bpiq_wizard',
     'offer_acceptance', 'priced_offer_acceptance', 'offer_answer', 'referents', 'document',
-    'deck_conversion', 'number_provenance', 'confirm_answer', 'short_reply',
+    'deck_conversion', 'reconcile', 'number_provenance', 'confirm_answer', 'short_reply',
     'spend_cap_precheck',
     'continuation',
     'subject_set', 'pull_discussion', 'help_writing', 'dataset_build',
@@ -466,10 +466,10 @@ DETERMINISTIC_LANES = frozenset((
     'subject_set', 'pull_discussion', 'help_writing', 'dataset_build',
     'meta_check', 'standing', 'catalog_exists', 'where_watched', 'sizing_quote', 'status_fast', 'reader', 'pricing',
     'design_request', 'thread_followups', 'subiq_library', 'catalog', 'sizing_fallback', 'status',
-    'deliverable_lookup', 'email_file', 'brand_coverage', 'definitions', 'capability', 'number_provenance'))
+    'deliverable_lookup', 'email_file', 'brand_coverage', 'definitions', 'capability', 'number_provenance', 'reconcile'))
 NEVER_PRICED_LANES = frozenset(('subject_set', 'pull_discussion', 'help_writing', 'catalog_exists', 'where_watched',
                                 'status_fast', 'status', 'pricing', 'catalog', 'definitions', 'deliverable_lookup',
-                                'email_file', 'brand_coverage', 'capability', 'number_provenance'))
+                                'email_file', 'brand_coverage', 'capability', 'number_provenance', 'reconcile'))
 
 
 def lane_markers(source=None):
@@ -873,6 +873,40 @@ def ask(user, body, *, via='session'):
                 env = envelope.wrap(raw, surface='deck', decision=decision, thread_id=tid, via=via)
                 _persist_turn(persist, uname, tid, history, text, env, raw, 'deck')
                 return env, status
+
+    # lane: reconcile
+    # "Your three answers give 6.2M, 8.5M and 43.2M ... Reconcile them.
+    # State one universe definition, one window, and the unprojected
+    # sample size" is answered FROM THE RECORD (Jenna 2026-11-04, Jay
+    # Patel's Statham thread, which drew three sizing blocks of the open
+    # profile and of the words "window" and "unprojected"): the agent
+    # turns of the thread and the ledger entries that carry the figures,
+    # each with what it counted, its window and the people in the data
+    # behind it; then the one definition and window to use, the figures
+    # on that basis, and why the others do not replace it. Never a fresh
+    # sizing, never the open profile, never a model call or a charge.
+    # Ahead of number_provenance: one figure's origin is provenance, two
+    # or more that must agree is a reconciliation.
+    if not _armed(body):
+        try:
+            from . import reconcile_lane as _rcl
+            _rc_raw = _rcl.answer(text, history, ctx=ctx) if _rcl.wants_reconcile(text) else None
+        except Exception as _fx:
+            _faults.note('service.reconcile_lane', _fx)
+            _rc_raw = None
+        if _rc_raw:
+            raw = _rc_raw
+            decision = {'surface': 'analyze', 'mode': None, 'reason': 'reconcile', 'client_hint': None}
+            if str(body.get('_client_surface_sent') or body.get('surface') or '').strip().lower() == 'interpret':
+                raw = _interpret_shape(raw)
+            try:
+                host.ask_hint(route='reconcile', outcome=('answered' if (_rc_raw.get('reconcile') or {}).get('found') else 'not_found'),
+                              subject=str(_rc_raw.get('subject') or '') or None)
+            except Exception as _fx:
+                _faults.note('service', _fx)
+            env = envelope.wrap(raw, surface='analyze', decision=decision, thread_id=tid, via=via)
+            _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
+            return env, 200
 
     # lane: number_provenance
     # "Where does the 12,004,203 come from?" is answered from the thread:

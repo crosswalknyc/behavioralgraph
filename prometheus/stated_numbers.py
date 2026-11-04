@@ -54,9 +54,13 @@ _COUNT_UNIT_AFTER_RX = re.compile(
     r"^\s*(?:people|persons|viewers|users|accounts|subscribers|subs|readers|listeners|players|buyers|shoppers|"
     r"households|individuals|panelists|customers|visitors|fans|members|signups|sign-ups|transactions|rentals|"
     r"sales|views|plays|streams|hours|minutes|sessions|visits|clicks|posts|assets|creators|titles|episodes)\b", re.I)
+# A figure may be followed by a list comma ("6.2M, 8.5M and 43.2M",
+# "46.4%, 58.2%"): only a comma that opens another digit group blocks the
+# match (2026-11-04, Jay Patel's reconcile ask lost its first figure and
+# its first share to the old lookahead).
 _TOKEN_RX = re.compile(
     r"(?<![\w.,/$-])(\$?\d{1,3}(?:,\d{3})+(?:\.\d+)?|\$?\d+(?:\.\d+)?)"
-    r"(\s*(?:%|percent|pct|[KMB]\b|million|billion|thousand))?(?![\w,]|\.\d)", re.I)
+    r"(\s*(?:%|percent|pct|[KMB]\b|million|billion|thousand))?(?!\w|,\d|\.\d)", re.I)
 _YEAR_RX = re.compile(r"^(?:19|20)\d{2}$")
 _MD_PAIR_RX = re.compile(r"^\d{1,2}$")
 

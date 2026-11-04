@@ -219,17 +219,26 @@ def persist_sizing(il, *, subject, window=None, tu, avid=0, us_audience=0,
         if not tu or not str(subject or '').strip():
             return False
         ws, we = _window_tuple(window)
+        # A sizing counts people with at least one digital touchpoint with
+        # the subject in the window. The count in the data (tu) is the
+        # unprojected figure behind the US audience; it is stored on each
+        # metric so a later reconcile ask reads it back (2026-11-04).
+        universe = f"US people with at least one digital touchpoint with {subject} in the window"
         metrics = [{'name': 'subject_raw_tu', 'label': 'Audience in window', 'value': tu, 'unit': 'individuals',
-                    'definition': 'Individuals in the audience over the window.'}]
+                    'definition': f'People in the data with at least one digital touchpoint with {subject} over the window (unprojected).',
+                    'sample_people': tu}]
         if _int(avid):
             metrics.append({'name': 'subject_raw_avid', 'label': 'Avid tier', 'value': _int(avid), 'unit': 'individuals',
-                            'definition': 'The avid tier of the audience.'})
+                            'definition': 'The most engaged tier of the audience, people in the data (unprojected).',
+                            'sample_people': _int(avid)})
         if _int(us_audience):
             metrics.append({'name': 'us_audience_estimate', 'label': 'US audience', 'value': _int(us_audience),
-                            'unit': 'individuals', 'definition': 'US audience in the window.'})
+                            'unit': 'individuals', 'definition': universe + ', projected to the US.',
+                            'sample_people': tu})
         il.persist(subject=str(subject), metric_family=SIZING_FAMILY, question=str(question or f'size {subject}'),
                    route='sample_check', metrics=metrics, window_start=ws, window_end=we,
-                   base_profile_key=str(base_profile_key or ''), provenance='operator', sync=_sync())
+                   base_profile_key=str(base_profile_key or ''), provenance='operator', sync=_sync(),
+                   universe=universe)
         return True
     except Exception:
         return False

@@ -2882,6 +2882,18 @@ def _synth_chat_incidence_check(text, history=None):
         _w = _pm_window_from_labels(d.get('window_start'), d.get('window_end'))
         _anchors = _cc_ic.anchors_for(subject, window=_w, with_ledger=False)
         _pa = _cc_ic.profile_anchor(_anchors, _w)
+        # A person's profile never holds the size of a title audience
+        # (Jenna 2026-11-04): sizing viewers of an actor's films against
+        # the actor's own profile (people with digital touchpoints to
+        # him) is the wrong anchor. The profile holds a sizing of the
+        # person's audience only.
+        try:
+            if _pa and _page_default.person_page_for_title_ask(
+                    text, _page_default.profile_category(_pa.get('source_key'), subject, _profile_catalog_for_chat()), subject):
+                print(f"[incidence-check] profile anchor for {subject!r} skipped: a person's profile, a title-viewing ask")
+                _pa = None
+        except Exception:
+            traceback.print_exc()
         if _pa and _pa.get('sample_size'):
             _ps = int(_pa['sample_size'])
             _pw = _pa.get('window') or {}
@@ -12341,6 +12353,23 @@ def _pm_generation_base(subject_hint, text, ctx=None,
                   f"to the open page ({page_base.get('subject')!r}); "
                   f"page base skipped")
             page_base = None
+    # A person's profile is not the audience of their films (Jenna
+    # 2026-11-04, Jay Patel's Statham thread): with an ACTOR / MUSICIAN /
+    # creator profile open, a question about viewers of the titles, their
+    # Prime Video share or total viewers is anchored on title viewing,
+    # never on the people with digital touchpoints to the person. The
+    # profile stays the base for a question about the person's own
+    # audience (prometheus.page_default.person_page_for_title_ask).
+    if page_base is not None:
+        try:
+            _pcat = _page_default.profile_category(page_base.get('s3_key'), page_base.get('subject'),
+                                                   _profile_catalog_for_chat())
+            if _page_default.person_page_for_title_ask(text, _pcat, page_base.get('subject')):
+                print(f"[pm-base] page {page_base.get('subject')!r} is a person ({_pcat}); the ask is about "
+                      f"viewers of titles, not the person's audience; page base skipped")
+                page_base = None
+        except Exception:
+            traceback.print_exc()
     if page_base is not None and bound and not _page_default.page_base_stands(
             '', None, page_base.get('subject'), '', subject_hint, normalize=_H._normalize_for_match, stop_tokens=_PM_CLARIFY_STOP_TOKENS)[0]:
         page_base = None   # a bound subject (chip, approved quote) is the base or nothing; the quote and the read agree (2026-10-24)
@@ -12990,10 +13019,13 @@ def _pm_search_demand_response(user, text, history):
                  if str(f).strip() and str(f).strip() != pma.CSV_OFFER_CHIP][:3]
     _sd_metrics = il.metrics_from_study(study)
     try:
+        _sd_universe = (f"US people who searched for {study.get('subject')}"
+                        + (f" on {study.get('platform')}" if study.get('platform') else '') + " in the window")
         il.persist(
             subject=study.get('subject'), metric_family='search',
             question=text, route='search_demand',
-            metrics=_sd_metrics,
+            metrics=il.attach_sample_people(_sd_metrics, universe=_sd_universe),
+            universe=_sd_universe,
             anchors=[b for b in (
                 f"platform: {study.get('platform')}"
                 if study.get('platform') else None,
@@ -13148,14 +13180,19 @@ def _pm_panel_fact_response(pm_user, ppu, text, base):
     except Exception:
         traceback.print_exc()
     chips = list(ans.get('followups') or [])[:2]
+    # the profile's own universe: people with a digital touchpoint with the
+    # subject in its window; each projected count stores the people in the
+    # data behind it (2026-11-04)
+    _pf_universe = f"US people with at least one digital touchpoint with {subj} in the window"
     entry_kw = dict(
         subject=subj, metric_family=ans.get('family') or '',
         question=text, route='panel_fact',
-        metrics=ans.get('metrics') or [], reply=ans['reply'],
+        metrics=il.attach_sample_people(ans.get('metrics') or [], universe=_pf_universe), reply=ans['reply'],
         followups=chips, base_profile_key=key,
         breakdown=ans.get('breakdown'),
         window_label=str(meta.get('window') or ''),
-        derivation='exact values read from the shipped base profile')
+        derivation='exact values read from the shipped base profile',
+        universe=_pf_universe)
     try:
         il.persist(**entry_kw)
     except Exception:
@@ -13315,6 +13352,27 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
         if not _stands:   # the open profile is context, never a default subject; a name the reader said no to is no base (2026-10-06, 2026-10-24)
             print(f"[pm-base] {base.get('source')} base {base.get('subject')!r} dropped ({_why})")
             switch_page, base = (switch_page or str(base.get('subject') or '')), None
+    # The anchor is reasoned, not inherited (Jenna 2026-11-04): a profile
+    # of a PERSON (ACTOR, MUSICIAN/BAND, creator ...) counts the people with
+    # digital touchpoints to that person. A question about viewers of the
+    # person's films or titles, their Prime Video share or total viewers is
+    # a title-viewing read: it never takes the person's profile as its
+    # base, from the page or from the catalog. The read opens by naming
+    # the universe it used (prometheus.page_default.title_universe_label).
+    if base and str(base.get('source') or '') in ('page', 'catalog') \
+            and str(base.get('s3_key') or '').lower().endswith('.csv'):
+        try:
+            _pcat_b = _page_default.profile_category(base.get('s3_key'), base.get('subject'), _profile_catalog_for_chat())
+            if _page_default.person_page_for_title_ask(text, _pcat_b, base.get('subject')):
+                print(f"[pm-base] {base.get('source')} base {base.get('subject')!r} is a person ({_pcat_b}); "
+                      f"the ask is about viewers of titles; the profile is not the anchor")
+                _title_person = str(base.get('subject') or '').split(' - ')[0].strip()
+                if _title_person and not bind_subject:
+                    bind_subject = _title_person   # the read is still about this person's titles; never the page by default
+                base = None
+                digest_block = ''   # the profile's rows never ride the prompt as the anchor of a title read
+        except Exception:
+            traceback.print_exc()
     if not base:
         # RESOLUTION LADDER, last rung (2026-08-27, Jenna: "if I go
         # back and ask for toy white space it can say do you mean for
@@ -14029,6 +14087,17 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
     _is_panel = str(base.get('source') or '') == 'panel'
     if _is_panel:
         extra_blocks.append(pma.PANEL_REPORT_GUIDANCE)
+    # A title-viewing read on a person (Jenna 2026-11-04): the universe
+    # is the people who watched the titles, anchored on title viewing
+    # (the tracker figures and public title-viewing anchors), never the
+    # person's own profile; one definition and one window carry every
+    # figure in the reply, and the reply says which universe it counts.
+    try:
+        _title_uni = _page_default.title_universe_label(text, str(base.get('subject') or (mr or {}).get('subject') or ''))
+        if _title_uni:
+            extra_blocks.append(_page_default.title_read_guidance(_title_uni))
+    except Exception as _fx:
+        _faults.note('chat', _fx)
     is_strategy = False
     try:
         is_strategy = pma.detect_strategy_intent(text)
@@ -14328,6 +14397,19 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
     # drinkers who watch scary movies - Mountain Dew drinkers who watch
     # scary movies:' shipped on 2026-10-21), never a key.
     from prometheus import methodology as _meth
+    # A title-viewing read on a person names the universe it counted, not
+    # the person (Jenna 2026-11-04: the Jason Statham profile is people
+    # with digital touchpoints to him; viewers of his films are another
+    # universe). 'On people who watched a Jason Statham film on Prime
+    # Video in the window:' opens the read and the Base line says the
+    # same; the subject stays the person for the ledger and the thread.
+    try:
+        if not str(res.get('universe') or '').strip() and str(base.get('source') or '') != 'view':
+            _uni = _page_default.title_universe_label(text, _meth.audience_label(res, ''))
+            if _uni:
+                res['universe'] = _uni
+    except Exception:
+        traceback.print_exc()
     _aud = _meth.audience_label(res, '')
     if _aud and _aud.lower() not in str(reply or '')[:90].lower():
         reply = f"On {_aud}:\n\n{reply}"
@@ -14362,11 +14444,15 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
             f"playbook="
             f"{'panel_report' if _is_panel else ('strategy' if is_strategy else 'standard')}"
             + _verify_note)
+        # Every figure is stored with what it counted (the universe the
+        # opener named, each metric's definition) and the unprojected
+        # count behind it, so a later reconcile ask reads the record
+        # instead of sizing anything again (Jenna 2026-11-04).
         il.persist(
             subject=res.get('subject'),
             metric_family=fam0,
             question=text, route='reasoned_metrics',
-            metrics=res.get('metrics'),
+            metrics=il.attach_sample_people(res.get('metrics'), universe=_aud),
             anchors=anchor_names,
             window_start=res.get('window_start'),
             window_end=res.get('window_end'),
@@ -14376,7 +14462,8 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
             cohort=res.get('cohort'),
             breakdown=res.get('breakdown'),
             derivation=_derivation,
-            verify=_verify_stamp)
+            verify=_verify_stamp,
+            universe=_aud)
     except Exception:
         traceback.print_exc()
     stages['persist'] = int((time.monotonic() - _t_stage) * 1000)
