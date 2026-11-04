@@ -6982,6 +6982,14 @@ DIMENSION_BUCKETS = {
     'device': ('Connected TV', 'Mobile phone', 'Tablet', 'Desktop and laptop'),
     'daypart': ('Early morning (6am to 9am)', 'Daytime (9am to 5pm)', 'Early evening (5pm to 8pm)',
                 'Prime (8pm to 11pm)', 'Late night (11pm to 6am)'),
+    # the demographic splits use the profile schema's own buckets (the same labels every profile carries), so a
+    # split by age, gender, ethnicity or income reads back against the profile (2026-11-04)
+    'age': ('18-24', '25-34', '35-44', '45-54', '55-64', '65 or older'),
+    'gender': ('Female', 'Male', 'Non-binary and other'),
+    'ethnicity': ('White', 'Black or African American', 'Hispanic or Latino', 'Asian', 'Another race or ethnicity'),
+    'income': ('Less than $25,000', '$25,000 to $49,999', '$50,000 to $74,999', '$75,000 to $99,999',
+               '$100,000 to $149,999', '$150,000 to $249,999', '$250,000 or more'),
+    'geography': ('Northeast', 'Midwest', 'South', 'West'),
 }
 _PASTED_ROW_RE = re.compile(
     r"^\s*(?P<label>(?:\d{4}-\d{2}(?:-\d{2})?|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\.? ?\d{4}|"
@@ -7002,6 +7010,49 @@ def split_dimension(text):
         if rx.search(t):
             return name
     return ''
+
+
+# The reader's own word for each dimension in an offer or a read ('by
+# age, gender, ethnicity, household income and region', never 'by
+# geography' when five dimensions were named; Jay Patel 2026-11-04).
+_DIM_WORDS = {'device': 'device', 'daypart': 'time of day', 'geography': 'region', 'age': 'age', 'gender': 'gender',
+              'income': 'income', 'ethnicity': 'ethnicity', 'platform': 'platform'}
+
+
+def split_dimensions(text):
+    """Every dimension an ask names, in the order the ask names them
+    (['age', 'gender', 'ethnicity', 'income', 'geography'] for 'by age,
+    gender, ethnicity, household income and region'); [] when none."""
+    t = str(text or '')
+    hits = []
+    for name, rx in _DIM_SPLIT_DIMS:
+        m = rx.search(t)
+        if m:
+            hits.append((m.start(), name))
+    return [name for _, name in sorted(hits)]
+
+
+def dimension_phrase(dims, text=''):
+    """The dimensions as the reader would say them: 'age, gender,
+    ethnicity, household income and region'. One dimension comes back
+    as its own word."""
+    t = str(text or '')
+    words = []
+    for d in (dims or []):
+        w = _DIM_WORDS.get(str(d), str(d))
+        if d == 'income' and re.search(r"\bhousehold income\b", t, re.I):
+            w = 'household income'
+        if d == 'geography' and re.search(r"\b(?:dma|market)s?\b", t, re.I) and not re.search(r"\bregion", t, re.I):
+            w = 'market'
+        if d == 'geography' and re.search(r"\bstates?\b", t, re.I) and not re.search(r"\b(?:region|dma|market)", t, re.I):
+            w = 'state'
+        if w not in words:
+            words.append(w)
+    if not words:
+        return ''
+    if len(words) == 1:
+        return words[0]
+    return ', '.join(words[:-1]) + ' and ' + words[-1]
 
 
 def is_dimension_split_ask(text):
@@ -7056,11 +7107,41 @@ def extract_pasted_series(text):
 
 
 def dimension_split_guidance(text, series=None, dimension=''):
-    """Prompt block for a split-by-dimension read."""
-    dim = dimension or split_dimension(text) or 'device'
+    """Prompt block for a split-by-dimension read. ``dimension`` may be
+    one dimension or the reader's phrase for several ('age, gender,
+    ethnicity, household income and region'); every named dimension
+    gets its own breakdown."""
+    dims = split_dimensions(dimension) if dimension else []
+    if not dims:
+        dims = split_dimensions(text) or ['device']
+    if len(dims) > 1:
+        phrase = dimension_phrase(dims, dimension or text)
+        per = '; '.join(f"{_DIM_WORDS.get(d, d)}: {', '.join(DIMENSION_BUCKETS.get(d) or [])}" if DIMENSION_BUCKETS.get(d) else _DIM_WORDS.get(d, d) for d in dims)
+        lines = [
+            f'DIMENSION SPLITS (this ask breaks a delivered figure out by {len(dims)} dimensions, {phrase}; derived, never refused):',
+            '1. The figure the reader holds is the anchor. Every split reconciles to it exactly: within each dimension '
+            'the buckets of each period sum to that period\'s figure, and the total row sums to the total.',
+            f'2. Crosswalk observes each of these on every stream at the individual level, so every split is a measured '
+            'read in the same voice as the figure itself. Never say the read does not carry a dimension, never drop one '
+            'of the named dimensions, never offer the nearest figure instead, never offer a build.',
+            '3. Return one breakdown per dimension, in the order named, each with rows = the periods the reader holds '
+            '(one row per period, label spelled as they wrote it), each row with pool = that period\'s figure and buckets = '
+            f'that dimension\'s split ({per}). Bucket counts are US hours (or the unit the series is in), messy last digits, '
+            'summing exactly to the pool. Add the whole-window total as the headline metrics: total, and each bucket\'s '
+            'share of the total to one decimal, for every dimension.',
+            '4. Shares move a little period to period for real reasons and never repeat exactly across periods or across dimensions.',
+            '5. Define each dimension once in plain words in its first metric definition.',
+            '6. Hard counts and shares speak flat. The why is directional.',
+        ]
+        if series:
+            lines.append('BOUND FIGURES (the reader\'s own series; quote these exactly as the row pools):')
+            for label, v in series[:40]:
+                lines.append(f'- {label}: {v:,}')
+        return '\n'.join(lines)
+    dim = dims[0]
     buckets = DIMENSION_BUCKETS.get(dim)
     lines = [
-        f'DIMENSION SPLIT (this ask breaks a delivered figure out by {dim}; derived, never refused):',
+        f'DIMENSION SPLIT (this ask breaks a delivered figure out by {_DIM_WORDS.get(dim, dim)}; derived, never refused):',
         '1. The figure the reader holds is the anchor. Every split reconciles to it exactly: the '
         'buckets of each period sum to that period\'s figure, and the total row sums to the total.',
         f'2. Crosswalk observes {dim} on every stream at the individual level, so the split is a measured '

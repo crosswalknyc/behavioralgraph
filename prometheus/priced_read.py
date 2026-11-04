@@ -885,6 +885,8 @@ def lead_for(kind, subject, **kw):
         return f"I can pull that split for {aud}."
     if kind == 'derived':
         dim = str(kw.get('dimension') or '').strip()
+        if dim == 'geography':
+            dim = 'region'
         return (f"I can split the figures for {subj} by {dim}." if dim
                 else f"I can add that breakdown to the read on {subj}.")
     if kind == 'viewership':

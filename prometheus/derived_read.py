@@ -57,8 +57,12 @@ def plan(text, history, ctx, body, *, pma, ns, normalize, stop, plausible, consu
     confirm_derived = bool(pc and str(pc.get('kind') or '') == 'derived')
     if not (confirm_derived or pma.is_dimension_split_ask(text)):
         return None
-    dim = (str((pc or {}).get('dimension') or '').strip().lower()
-           or pma.split_dimension(text) or 'device')
+    # every dimension the ask names, in the reader's own words ('age, gender, ethnicity, household income
+    # and region'), never the first table hit alone (Jay Patel 2026-11-04 was offered 'by geography')
+    dim = str((pc or {}).get('dimension') or '').strip().lower()
+    if not dim:
+        dims = pma.split_dimensions(text) if hasattr(pma, 'split_dimensions') else []
+        dim = (pma.dimension_phrase(dims, text) if dims else '') or pma.split_dimension(text) or 'device'
 
     # subject: the ask, then the confirm / bind, then the thread, then the page
     subject = ''

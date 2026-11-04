@@ -219,6 +219,25 @@ class Desk(unittest.TestCase):
         self.assertNotIn('votes cast', ROOM.anchor_plan(q3[:4], brief, 'title')['line'], 'the sentence is for civic rooms')
 
 
+class HostFallthrough(unittest.TestCase):
+    def test_a_silent_host_client_falls_through_to_the_direct_chain(self):
+        # 2026-11-04: a re-run from a shell whose host client answers nothing (its reasoning switch off)
+        # landed yes/maybe/no options; the named chain now answers in that case
+        calls = []
+        M = ROOM.Models()
+        M._host_claude = lambda: (lambda *a, **k: None)
+        M._chain = lambda system, user, max_tokens, temperature, surface, chain, tools=None: (calls.append((surface, tuple(chain))) or ({'options': [{'id': 'a', 'label': 'x', 'lean': 'yes'}]}, chain[0]))
+        os.environ['REGRESSION_TEST_MODE'] = '0'
+        try:
+            data, rec = M.call('moderator', 'sys', '{}', max_tokens=10)
+        finally:
+            os.environ['REGRESSION_TEST_MODE'] = '1'
+        self.assertEqual(data['options'][0]['label'], 'x')
+        self.assertEqual(calls[0][0], 'twin_room_moderator')
+        self.assertEqual(calls[0][1], tuple(ROOM.MODELS['strong']))
+        self.assertTrue(rec['ok'])
+
+
 class Room(unittest.TestCase):
     def _ask(self, q, fake=fake_model):
         twin = _texas()

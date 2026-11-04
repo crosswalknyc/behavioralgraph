@@ -340,6 +340,14 @@ class Models:
             print(f"[twin-room] model call failed ({role}): {str(e)[:200]}")
             got = None
         data = got if isinstance(got, dict) and got else None
+        if data is None:
+            # the host's client answered nothing (its reasoning switch off in a local shell, a refused
+            # call): the named chain answers directly rather than the room falling back to defaults
+            # (2026-11-04: a re-run from a shell without USE_CLAUDE_REASONING landed yes/maybe/no options)
+            chain = MODELS['strong'] if role in ('research', 'media', 'moderator') else MODELS['persona']
+            data, model = self._chain(system, user, max_tokens, temperature, surface, chain, tools=research_tools)
+            if data is not None:
+                return data, self._log(role, model, self._stats_now(), t0, True)
         stats = self._stats_now()
         return data, self._log(role, stats.get('model') or '', stats, t0, data is not None)
 
