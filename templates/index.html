@@ -51921,6 +51921,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-pi-thread, #digitalTwinsIQView .dtw-pi-seatlist { padding-left: 2px; }
         /* the test bar locks at the top of the body while the page scrolls under it */
         #digitalTwinsIQView .dtw-pi-head { position: sticky; top: 0; z-index: 6; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin: -1rem -1.15rem 0; padding: 0.7rem 1.15rem 0.65rem; background: var(--dtw-raised); border-bottom: 1px solid var(--dtw-hair); border-radius: 12px 12px 0 0; }
+        /* the body's top padding shows through above a stuck bar; a page-colored strip covers it */
+        #digitalTwinsIQView .dtw-pi-head::before { content: ''; position: absolute; left: -1px; right: -1px; bottom: 100%; height: 1.2rem; background: var(--dtw-page); }
         #digitalTwinsIQView .dtw-pi-head .dtw-pi-head-l { display: flex; align-items: baseline; gap: 10px; flex: 1 1 240px; min-width: 0; flex-wrap: wrap; }
         #digitalTwinsIQView .dtw-pi-head .dtw-pi-head-l .dtw-eyebrow { align-self: center; }
         #digitalTwinsIQView .dtw-pi-head .dtw-fg-rtwrap { flex: 1 1 auto; min-width: 0; }
@@ -51936,11 +51938,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-pi-pop { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--dtw-mute); background: transparent; border: 1px solid var(--dtw-rule); border-radius: 999px; padding: 1px 8px; cursor: pointer; font-weight: 600; }
         #digitalTwinsIQView .dtw-pi-pop:hover { color: var(--dtw-ink); }
         #digitalTwinsIQView .dtw-pi-col.room.popped .dtw-pi-fn { margin: 8px 0 10px; }
-        #digitalTwinsIQView.dtw-popout { min-height: 100vh; }
-        #digitalTwinsIQView.dtw-popout .dtw-body { padding: 10px 12px 10px; height: 100vh; box-sizing: border-box; overflow: hidden; }
+        #digitalTwinsIQView.dtw-popout { height: 100vh; min-height: 0; overflow: hidden; }
+        #digitalTwinsIQView.dtw-popout .dtw-body { padding: 10px 12px 10px; flex: 1 1 0%; min-height: 0; box-sizing: border-box; overflow: hidden; }
         #digitalTwinsIQView.dtw-popout .dtw-card { margin: 0; height: 100%; box-sizing: border-box; display: flex; flex-direction: column; min-height: 0; }
-        #digitalTwinsIQView.dtw-popout .dtw-pi-room { grid-template-columns: 1fr; margin-top: 0; flex: 1 1 auto; min-height: 0; }
-        #digitalTwinsIQView.dtw-popout .dtw-pi-col.side.room { border: 0; padding: 0; background: transparent; min-height: 0; height: 100%; }
+        #digitalTwinsIQView.dtw-popout .dtw-pi-room { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr); align-items: stretch; margin-top: 0; flex: 1 1 auto; min-height: 0; }
+        #digitalTwinsIQView.dtw-popout .dtw-pi-col.side.room { border: 0; padding: 0; background: transparent; min-height: 0; height: auto; overflow: hidden; }
         #digitalTwinsIQView.dtw-popout .dtw-pi-seatlist { flex: 1 1 auto; min-height: 120px; display: flex; flex-direction: column; }
         #digitalTwinsIQView.dtw-popout .dtw-pi-seatlist .dtw-pi-thread { max-height: none; flex: 1 1 auto; min-height: 120px; }
         #digitalTwinsIQView.dtw-popout #dtwPiThread { max-height: 34vh; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
