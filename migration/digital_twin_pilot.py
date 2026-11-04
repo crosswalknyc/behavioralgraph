@@ -2028,6 +2028,31 @@ def stamp_question(rec: dict, playhead_s: float) -> dict:
     return rec
 
 
+def question_clock(rec: dict) -> str:
+    """Where the playhead stood when a question was asked: the route's
+    stamp, else the clock in the stimulus the question carried."""
+    rec = rec or {}
+    if rec.get('playhead_clock'):
+        return str(rec['playhead_clock'])
+    win = (rec.get('stimulus') or {}).get('window') if isinstance(rec.get('stimulus'), dict) else None
+    if isinstance(win, dict) and win.get('clock'):
+        return str(win['clock'])
+    return _clock(rec['playhead_s']) if rec.get('playhead_s') is not None else ''
+
+
+def question_split(rec: dict) -> list:
+    """The split on a question as [{label, pct, people, tally}]: the
+    room engine's options when they carry the published share (with the
+    seat tally, '7 of 16'), else the distribution rows."""
+    opts = (rec or {}).get('options') or []
+    rows = opts if (opts and isinstance(opts[0], dict) and 'pct' in opts[0]) else ((rec or {}).get('distribution') or [])
+    out = []
+    for r in rows:
+        if isinstance(r, dict) and str(r.get('label') or '').strip():
+            out.append({'label': r.get('label'), 'pct': r.get('pct'), 'people': r.get('people'), 'tally': str(r.get('tally') or '')})
+    return out
+
+
 def can_delete(sess: dict, username: str, is_admin: bool = False) -> bool:
     if is_admin:
         return True
@@ -2820,14 +2845,36 @@ def session_csv(session: dict) -> str:
         w.writerow([_clock(e.get('t')), e.get('t'), EVENT_LABEL.get(e.get('type'), e.get('type')),
                     e.get('name'), e.get('age'), e.get('city'), e.get('line'), e.get('intensity')])
     w.writerow([])
+    questions = [q for q in (session.get('questions') or []) if isinstance(q, dict)]
     w.writerow(['Clock', 'Question', 'Kind', 'Read'])
-    for q in session.get('questions') or []:
-        w.writerow([q.get('playhead_clock') or _clock(q.get('playhead_s')), q.get('q'), q.get('kind'), q.get('read')])
+    for q in questions:
+        w.writerow([question_clock(q), q.get('q'), q.get('kind'), q.get('read')])
     w.writerow([])
     w.writerow(['Clock', 'Question', 'Twin', 'Age', 'City', 'Line'])
-    for q in session.get('questions') or []:
+    for q in questions:
         for v in q.get('voices') or []:
-            w.writerow([q.get('playhead_clock'), q.get('q'), v.get('name'), v.get('age'), v.get('city'), v.get('line')])
+            w.writerow([question_clock(q), q.get('q'), v.get('name'), v.get('age'), v.get('city'), v.get('line')])
+    # the split on every question (2026-11-04): each answer's published share, the people behind it and the seat
+    # tally for the whole room, then the same split by segment; questions asked after the cut wrapped included
+    w.writerow([])
+    w.writerow(['Clock', 'Question', 'Segment', 'Answer', 'Share %', 'People', 'In the room'])
+    for q in questions:
+        for r in question_split(q):
+            w.writerow([question_clock(q), q.get('q'), 'Whole room', r['label'], r['pct'], r['people'], r['tally']])
+        for sr in q.get('by_segment') or []:
+            for r in (sr.get('distribution') or []) if isinstance(sr, dict) else []:
+                w.writerow([question_clock(q), q.get('q'), sr.get('segment'), r.get('label'), r.get('pct'), r.get('people'), ''])
+    # what the room knew and what people were saying, one line each (the same block Focus Group IQ carries)
+    if any((q.get('facts_used') or q.get('talk') or q.get('framing')) for q in questions):
+        w.writerow([])
+        w.writerow(['Clock', 'Question', 'Block', 'Line'])
+        for q in questions:
+            if q.get('framing'):
+                w.writerow([question_clock(q), q.get('q'), 'How it was put to the room', q.get('framing')])
+            for f in q.get('facts_used') or []:
+                w.writerow([question_clock(q), q.get('q'), 'What the room knew', f])
+            for t in q.get('talk') or []:
+                w.writerow([question_clock(q), q.get('q'), 'What people were saying', t])
     g = session.get('guide') or {}
     if g.get('questions'):
         w.writerow([])
@@ -2877,7 +2924,7 @@ __all__ = [
     'QUADRANTS', 'PHASE2_PRICE_NOTES', 'MODE_TITLE_WORD',
     'open_session', 'prepare_watch', 'apply_watch_url', 'find_reusable_session', 'charge_due', 'play_price_key', 'play_quantity',
     'mark_play_paid', 'mark_paid', 'mark_playing', 'stop_session', 'rename_session', 'set_options',
-    'stamp_question', 'can_delete', 'can_view_media', 'remove_session', 'delete_session', 'purge_media',
+    'stamp_question', 'question_clock', 'question_split', 'can_delete', 'can_view_media', 'remove_session', 'delete_session', 'purge_media',
     'deleted_pilot_key', 'media_hash', 'build_beats', 'build_scenes', 'build_beats_from_scenes', 'seat_dial', 'blend_dial', 'seat_events', 'persona_events',
     'aggregate_dial', 'split_dial', 'split_specs', 'all_splits', 'cohort_labels', 'cohort_key', 'cohort_segments', 'restore_session', 'MAX_COHORTS', 'quadrant_of', 'scorecard', 'battery_scorecard', 'norms_for', 'norm_metrics', 'record_norms',
     'auto_stop_due', 'parse_runtime', 'AUTO_STOP_GRACE_S',

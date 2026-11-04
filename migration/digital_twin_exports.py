@@ -285,6 +285,64 @@ def build_deck(payload: dict, pages: Optional[list] = None) -> bytes:
             for b in (pg.get('body') or [])[:4]:
                 text(slide, L, y, 11.4, 0.55, b, 11.5, ink if b is (pg.get('body') or [''])[-1] else body, 'Regular')
                 y += 0.6
+        elif pg['kind'] == 'question':
+            # one question the moderator put to the room (digital_twin_report, 2026-11-04): the framing, the split
+            # across the page with the seat tally, then Prometheus's read and the voices on the left and what the
+            # room knew and what people were saying on the right (the left runs full width when the right is
+            # empty); body copy at 10pt, notes at 9pt; every block stops above the footer
+            bottom = 6.85
+            if pg.get('framing'):
+                fl = min(3, lines_of(pg['framing'], 10, 11.4))
+                text(slide, L, y, 11.4, 0.18 * fl + 0.08, pg['framing'], 10, body, 'Regular')
+                y += 0.18 * fl + 0.22
+            head = pg.get('head') or ('Answer', 'Share', 'People and seats')
+            text(slide, L, y, 5.6, 0.3, str(head[0]).upper(), 8, muted, 'Medium')
+            text(slide, L + 6.0, y, 1.6, 0.3, str(head[1]).upper(), 8, muted, 'Medium', PP_ALIGN.RIGHT)
+            text(slide, L + 7.9, y, 3.5, 0.3, str(head[2]).upper(), 8, muted, 'Medium')
+            y += 0.34
+            for lab, val, note in (pg.get('rows') or [])[:8]:
+                text(slide, L, y, 5.8, 0.32, str(lab), 11, ink, 'Regular')
+                text(slide, L + 6.0, y, 1.6, 0.32, str(val), 11, accent, 'Medium', PP_ALIGN.RIGHT)
+                text(slide, L + 7.9, y, 3.6, 0.32, str(note or ''), 10, body, 'Regular')
+                y += 0.34
+            y += 0.12
+            knew, talk = (pg.get('knew') or [])[:4], (pg.get('talk') or [])[:3]
+            lw = 6.5 if (knew or talk) else (R - L)
+            rx = L + lw + 0.5
+            rw = R - rx
+            yl = yr = y
+            if pg.get('read') and yl + 0.5 < bottom:
+                text(slide, L, yl, lw, 0.22, "PROMETHEUS'S READ", 8, muted, 'Medium')
+                yl += 0.26
+                rh = max(0.3, min(0.185 * lines_of(pg['read'], 10.5, lw) + 0.1, bottom - yl))
+                text(slide, L, yl, lw, rh, pg['read'], 10.5, ink, 'Regular')
+                yl += rh + 0.12
+            voices = (pg.get('voices') or [])[:3]
+            if voices and yl + 0.5 < bottom:
+                text(slide, L, yl, lw, 0.22, 'IN THEIR WORDS', 8, muted, 'Medium')
+                yl += 0.26
+                for v in voices:
+                    h = 0.175 * min(3, lines_of(v, 10, lw)) + 0.06
+                    if yl + h > bottom:
+                        break
+                    text(slide, L, yl, lw, h, v, 10, body, 'Regular')
+                    yl += h + 0.08
+            for label, items in (('WHAT THE ROOM KNEW', knew), ('WHAT PEOPLE WERE SAYING', talk)):
+                if not items or yr + 0.5 > bottom:
+                    continue
+                text(slide, rx, yr + 0.06, rw, 0.22, label, 8, muted, 'Medium')
+                yr += 0.32
+                for it in items:
+                    h = 0.16 * min(3, lines_of(it, 9, rw - 0.16)) + 0.05
+                    if yr + h > bottom:
+                        break
+                    dot = slide.shapes.add_shape(MSO_SHAPE.OVAL, Inches(rx), Inches(yr + 0.06), Inches(0.07), Inches(0.07))
+                    dot.fill.solid()
+                    dot.fill.fore_color.rgb = rgb(accent)
+                    dot.line.fill.background()
+                    text(slide, rx + 0.16, yr, rw - 0.16, h, it, 9, body, 'Regular')
+                    yr += h + 0.05
+                yr += 0.1
     buf = io.BytesIO()
     prs.save(buf)
     return _fin(buf.getvalue(), '.pptx')

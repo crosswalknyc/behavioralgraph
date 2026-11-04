@@ -6,8 +6,12 @@ the topline with norms; the dial chart with the peaks and valleys marked
 and the event rail; the quadrants; the mode read when the test has one
 (trailer lift, title ranking, concept read, script notes); the
 characters; the components; pace, confusion and the ending; the scenes
-liked best and least with quotes; the recruit block; key conclusions and
-suggestions in plain words.
+liked best and least with quotes; the questions the moderator put to
+the room, during the cut and after it wrapped (one page each: the
+question as asked and when, the framing, the split with the seat tally,
+the read, the voices, what the room knew and what people were saying;
+Jenna 2026-11-04); the recruit block; the forecast; key conclusions
+and suggestions in plain words.
 
 One-line headers of twelve words or fewer; no source names; no doors;
 no em dashes; the chart drawn with the house palette. The finish
@@ -22,7 +26,7 @@ from typing import Optional
 
 from migration.digital_twin_engine import human_people, pct1
 from migration.digital_twin_exports import (
-    GRAPHITE, SLATE, OFFWHITE, GREEN, ORCHID, PAVEMENT, BODY_DARK, MUTED_DARK, _words, _pct, _clock, _scorecard_rows, _quadrant_rows, _norm_note, build_deck, _Doc, _fin,
+    GRAPHITE, SLATE, OFFWHITE, GREEN, OLIVE, ORCHID, PAVEMENT, BODY_DARK, MUTED_DARK, BODY_LIGHT, MUTED_LIGHT, _words, _pct, _clock, _scorecard_rows, _quadrant_rows, _norm_note, build_deck, _Doc, _fin,
 )
 
 DUSK = '#B7B3D8'
@@ -152,6 +156,212 @@ def dial_chart_png(session: dict, *, width_px: int = 3400, height_px: int = 1190
     return buf.getvalue()
 
 
+# ------------------------------------------------------- the questions
+# The moderator's questions to the room (ASK THE ROOM), on the clock during
+# the cut and after it wrapped alike. A record from the room engine
+# (digital_twin_room.ask_room) carries options with the published share,
+# the people and the seat tally, a stage, the framing, the read, the
+# voices, what the room knew (facts_used) and what people were saying
+# (talk); a record from the deterministic engine (digital_twin_panel.ask)
+# carries a distribution, a read and voices and no stage.
+PENDING_STAGES = ('researching', 'the room is thinking', 'moderator is reading', 'picking it back up')
+STILL_ANSWERING = 'still answering when this report was made'
+VOICES_ON_PAGE = 3
+KNEW_ON_PAGE = 4
+TALK_ON_PAGE = 3
+
+
+def _short(text: str, n: int) -> str:
+    """Cut at a word boundary with an ellipsis when the text runs past n."""
+    t = ' '.join(str(text or '').split())
+    if len(t) <= n:
+        return t
+    return t[:n].rsplit(' ', 1)[0].rstrip(',;:') + '...'
+
+
+def _q_stage(rec: dict) -> str:
+    """'done' (no stage means the answer landed inline), 'pending' or
+    'failed'."""
+    st = str((rec or {}).get('stage') or '').strip().lower()
+    if not st or st == 'done':
+        return 'done'
+    if st == 'failed':
+        return 'failed'
+    return 'pending'     # the in-flight stages (PENDING_STAGES) and any stage the engine adds later
+
+
+def _q_rows(rec: dict) -> list:
+    """The split: [{label, pct, people, tally}] from the room engine's
+    options when they carry shares, else from the distribution."""
+    opts = (rec or {}).get('options') or []
+    rows = opts if (opts and isinstance(opts[0], dict) and 'pct' in opts[0]) else ((rec or {}).get('distribution') or [])
+    out = []
+    for r in rows:
+        if not isinstance(r, dict) or not str(r.get('label') or '').strip():
+            continue
+        try:
+            pct = float(r.get('pct') or 0)
+        except (TypeError, ValueError):
+            pct = 0.0
+        try:
+            people = int(float(r.get('people') or 0))
+        except (TypeError, ValueError):
+            people = 0
+        out.append({'label': ' '.join(str(r['label']).split()), 'pct': pct, 'people': people, 'tally': str(r.get('tally') or '').strip()})
+    return out
+
+
+def _q_lead(rows: list) -> Optional[dict]:
+    return max(rows, key=lambda r: r['pct']) if rows else None
+
+
+def _q_clock(rec: dict) -> str:
+    """Where the playhead stood when the question was asked, from the
+    stimulus the question carried, else the stamp the route put on it."""
+    win = ((rec or {}).get('stimulus') or {}).get('window') if isinstance((rec or {}).get('stimulus'), dict) else None
+    if isinstance(win, dict) and win.get('clock'):
+        return str(win['clock'])
+    if rec.get('playhead_clock'):
+        return str(rec['playhead_clock'])
+    if rec.get('playhead_s') is not None:
+        return _clock(rec.get('playhead_s'))
+    return ''
+
+
+def _q_after_wrap(rec: dict, session: dict) -> bool:
+    """True when the question came after the cut had played out: the
+    playhead sat at the runtime, or the ask came after the stop."""
+    media = (session or {}).get('media') or {}
+    try:
+        rt = float(media.get('runtime_s') or 0)
+    except (TypeError, ValueError):
+        rt = 0.0
+    win = ((rec or {}).get('stimulus') or {}).get('window') if isinstance((rec or {}).get('stimulus'), dict) else None
+    ph = (win or {}).get('playhead_s') if isinstance(win, dict) else None
+    if ph is None:
+        ph = rec.get('playhead_s')
+    try:
+        if rt > 0 and ph is not None and float(ph) >= rt - 0.5:
+            return True
+    except (TypeError, ValueError):
+        pass
+    stopped, asked = str((session or {}).get('stopped_at') or ''), str((rec or {}).get('asked_at') or '')
+    return bool(stopped and asked and asked >= stopped)
+
+
+def _q_when(rec: dict, session: dict) -> str:
+    """'At 43:13, right after the CBS logo' from the stimulus frame;
+    'After the wrap, at 43:13, ...' once the cut had played out; the bare
+    clock when the stimulus carries no frame."""
+    win = ((rec or {}).get('stimulus') or {}).get('window') if isinstance((rec or {}).get('stimulus'), dict) else None
+    frame = ' '.join(str((win or {}).get('frame') or '').split()).rstrip('.') if isinstance(win, dict) else ''
+    if len(frame) > 160:
+        frame = frame[:160].rsplit(' ', 1)[0].rstrip(',;:')
+    clock = _q_clock(rec)
+    when = frame or (f"At {clock}" if clock else '')
+    if _q_after_wrap(rec, session) and when:
+        when = re.sub(r'^At\b', 'After the wrap, at', when) if when.startswith('At ') else f"After the wrap, {when[0].lower() + when[1:]}"
+    return when or 'Asked in the room'
+
+
+def _sorted_questions(session: dict) -> list:
+    qs = [q for q in ((session or {}).get('questions') or []) if isinstance(q, dict) and str(q.get('q') or '').strip()]
+    return sorted(qs, key=lambda q: str(q.get('asked_at') or q.get('started_at') or ''))
+
+
+def _question_header(rec: dict, rows: list) -> str:
+    """One plain sentence on the lead answer, twelve words or fewer:
+    'The silence itself took 46.2% of the room.'"""
+    lead = _q_lead(rows)
+    if lead is None:
+        return _words(str(rec.get('q') or 'What the room said'))
+    label = lead['label']
+    if len(label.split()) > 7:
+        return f"The lead answer took {_pct(lead['pct'])} of the room."
+    return _words(f"{label[0].upper() + label[1:]} took {_pct(lead['pct'])} of the room.")
+
+
+def _question_page(rec: dict, session: dict, dark: bool) -> dict:
+    rows = _q_rows(rec)
+    seats_total = rec.get('seats_total') or len(((session or {}).get('group') or {}).get('roster') or [])
+    split = []
+    for r in rows[:8]:
+        note = f"{human_people(r['people'])} people" if r['people'] else ''
+        if r['tally']:
+            note = (note + ', ' if note else '') + f"{r['tally']} in the room"
+        split.append((_clean(r['label']), _pct(r['pct']), _clean(note)))
+    voices = []
+    for v in (rec.get('voices') or [])[:VOICES_ON_PAGE]:
+        if not isinstance(v, dict) or not str(v.get('line') or '').strip():
+            continue
+        who = ', '.join(str(x) for x in (v.get('name'), v.get('age'), v.get('city')) if x not in (None, ''))
+        voices.append(_clean(f"{who}: {v['line']}" if who else str(v['line'])))
+    return {'kind': 'question', 'header': _clean(_question_header(rec, rows)), 'sub': _clean(f"{_q_when(rec, session)}. {rec.get('q')}"),
+            'framing': _clean(str(rec.get('framing') or '')), 'head': ('Answer', 'Share', 'People and seats'), 'rows': split,
+            'read': _clean(str(rec.get('read') or '')), 'voices': voices,
+            'knew': [_clean(str(f)) for f in (rec.get('facts_used') or [])[:KNEW_ON_PAGE] if str(f or '').strip()],
+            'talk': [_clean(str(t)) for t in (rec.get('talk') or [])[:TALK_ON_PAGE] if str(t or '').strip()],
+            'seats_total': seats_total, 'dark': dark}
+
+
+def _question_pages(session: dict) -> list:
+    """The section: an opener listing every question with its lead
+    answer (when there is more than one, or one is still being answered),
+    then one page per answered question, in the order they were asked."""
+    qs = _sorted_questions(session)
+    if not qs:
+        return []
+    done = [q for q in qs if _q_stage(q) == 'done']
+    pending = [q for q in qs if _q_stage(q) == 'pending']
+    failed = [q for q in qs if _q_stage(q) == 'failed']
+    notes = []
+    if pending:
+        count = 'one question' if len(pending) == 1 else f"{len(pending)} questions"
+        notes.append(f"The room was {STILL_ANSWERING} on {count}: " + '; '.join(f"\"{_short(str(q.get('q')), 80)}\"" for q in pending[:3]) + '.')
+    if failed:
+        notes.append(f"The room did not finish {'one question' if len(failed) == 1 else str(len(failed)) + ' questions'}: "
+                     + '; '.join(f"\"{_short(str(q.get('q')), 80)}\"" for q in failed[:3]) + '. Ask it again and it runs fresh.')
+    pages = []
+    if len(done) >= 2 or notes:
+        after = [bool(_q_after_wrap(q, session)) for q in done]
+        n = len(done)
+        noun = 'question' if n == 1 else 'questions'
+        if n == 0:
+            header = 'The questions put to the room.'
+        elif all(after):
+            header = f"The room answered {n} {noun} after the cut wrapped."
+        elif not any(after):
+            header = f"The room answered {n} {noun} on the clock."
+        else:
+            header = f"The room answered {n} {noun}, on the clock and after the wrap."
+        rows = []
+        for q, aw in zip(done, after):
+            lead = _q_lead(_q_rows(q))
+            clock = _q_clock(q)
+            rows.append(((f"{clock}  " if clock else '') + _clean(_short(str(q.get('q')), 64)), _pct(lead['pct']) if lead else '',
+                         _clean((lead['label'][:46] if lead else '') + (' (after the wrap)' if aw else ''))))
+        pages.append({'kind': 'table', 'header': _words(header), 'sub': 'Each question has its own page: the split, the read, the voices and what the room knew.' if done else '',
+                      'head': ('Clock and question', 'Lead share', 'Lead answer'), 'rows': rows[:12], 'body': [_clean(x) for x in notes], 'dark': True})
+    opener = bool(pages)     # the opener is dark; the question pages alternate from the other ground
+    for i, q in enumerate(done):
+        pages.append(_question_page(q, session, dark=(i % 2 == 1) if opener else (i % 2 == 0)))
+    return pages
+
+
+def _tldr_question_line(session: dict) -> str:
+    """One line for the TLDR: how many questions the room answered and
+    the lead answer on the last one, in words."""
+    done = [q for q in _sorted_questions(session) if _q_stage(q) == 'done']
+    if not done:
+        return ''
+    n = len(done)
+    lead = _q_lead(_q_rows(done[-1]))
+    noun = 'question' if n == 1 else 'questions'
+    if lead is None:
+        return f"The room answered {n} {noun}; the answers follow, one page each."
+    return f"The room answered {n} {noun}; on the last, {_pct(lead['pct'])} went with \"{lead['label']}\"."
+
+
 # ---------------------------------------------------------------- pages
 def _tldr(session: dict, payload: dict) -> list:
     head = _head(session)
@@ -174,6 +384,10 @@ def _tldr(session: dict, payload: dict) -> list:
     fav, dead = sc.get('favorite_moment') or {}, sc.get('dead_spot') or {}
     if fav.get('clock') and dead.get('clock'):
         out.append(f"Keep {fav['clock']}; look hard at {dead['clock']}.")
+    out = [x for x in out if x]
+    ql = _tldr_question_line(session)
+    if ql:
+        out = out[:4] + [ql]     # the questions line always makes the page; the page holds five
     return [_clean(x) for x in out if x][:5]
 
 
@@ -295,6 +509,8 @@ def report_pages(payload: dict, session: dict) -> list:
         nots = scenes.get('not_recommending') or []
         pages.append({'kind': 'table', 'header': 'The scenes liked least, and why some would not recommend it.', 'sub': _clean(('Reasons for not recommending: ' + '; '.join(n['line'] for n in nots[:3])) if nots else ''),
                       'head': ('Scene', 'Mentions', 'Quote'), 'rows': rows, 'dark': False})
+    # the questions the moderator put to the room, during the cut and after it wrapped (Jenna 2026-11-04)
+    pages.extend(_question_pages(session))
     rec = session.get('recruit') or {}
     if rec:
         w = rec.get('walkouts') or {}
@@ -328,11 +544,104 @@ def report_pages(payload: dict, session: dict) -> list:
         pg['sub'] = _clean(pg.get('sub') or '')
         if pg.get('body'):
             pg['body'] = [_clean(b) for b in pg['body'] if b]
+        for key in ('framing', 'read'):
+            if pg.get(key):
+                pg[key] = _clean(pg[key])
+        for key in ('voices', 'knew', 'talk'):
+            if pg.get(key):
+                pg[key] = [_clean(v) for v in pg[key] if v]
     return pages
 
 
 def build_report_deck(payload: dict, session: dict) -> bytes:
     return build_deck(payload, pages=report_pages(payload, session))
+
+
+PDF_FLOOR = 0.78 * 72     # nothing is drawn below this line; the footer sits under it
+
+
+def _ellipsize(line: str, font: str, size: float, width: float) -> str:
+    from reportlab.pdfbase.pdfmetrics import stringWidth
+    s = str(line or '')
+    while s and stringWidth(s + '...', font, size) > width:
+        s = s[:-1].rstrip()
+    return (s + '...') if s else '...'
+
+
+def _fit_para(d: _Doc, text: str, x: float, y: float, width: float, size: float, color: str, font: str = '', floor: float = PDF_FLOOR, max_lines: Optional[int] = None) -> float:
+    """A paragraph that stops at the floor (and at max_lines), the last
+    line it draws ending in an ellipsis when more remained."""
+    from reportlab.lib import colors
+    font = font or d.f['regular']
+    lines = d._wrap(text, font, size, width)
+    if max_lines and len(lines) > max_lines:
+        lines = lines[:max_lines]
+        lines[-1] = _ellipsize(lines[-1], font, size, width)
+    lead = size * 1.42
+    d.c.setFont(font, size)
+    d.c.setFillColor(colors.HexColor(color))
+    for i, line in enumerate(lines):
+        if y < floor:
+            break
+        last = (y - lead) < floor and i < len(lines) - 1
+        d.c.drawString(x, y, _ellipsize(line, font, size, width) if last else line)
+        y -= lead
+        if last:
+            break
+    return y
+
+
+def _eyebrow(d: _Doc, text: str, x: float, y: float) -> float:
+    from reportlab.lib import colors
+    d.c.setFont(d.f['medium'], 7.5)
+    d.c.setFillColor(colors.HexColor(MUTED_DARK if d.dark else MUTED_LIGHT))
+    d.c.drawString(x, y, str(text).upper())
+    return y - 12
+
+
+def _draw_question_pdf(d: _Doc, pg: dict, y: float) -> float:
+    """One question's page: the moderator's framing, the split across
+    the page with the seat tally, then Prometheus's read and the voices
+    on the left and what the room knew and what people were saying on
+    the right (the left runs the full width when the right is empty).
+    Body copy at 10pt, notes at 9pt; every block stops at the floor."""
+    from reportlab.lib import colors
+    ink = OFFWHITE if d.dark else GRAPHITE
+    body = BODY_DARK if d.dark else BODY_LIGHT
+    x, width = d.m, d.right - d.m
+    if pg.get('framing'):
+        y = _fit_para(d, pg['framing'], x, y, width, 10, body, max_lines=3) - 6
+    rows = (pg.get('rows') or [])[:8]
+    if rows:
+        y = d.table(rows, x, y, width, head=pg.get('head') or ('Answer', 'Share', 'People and seats'))
+    y -= 8
+    knew, talk = (pg.get('knew') or [])[:KNEW_ON_PAGE], (pg.get('talk') or [])[:TALK_ON_PAGE]
+    lw = width * 0.58 if (knew or talk) else width
+    rx = x + lw + 22
+    rw = d.right - rx
+    yl = yr = y
+    if pg.get('read') and yl > PDF_FLOOR + 24:
+        yl = _eyebrow(d, "Prometheus's read", x, yl)
+        yl = _fit_para(d, pg['read'], x, yl, lw, 10, ink, d.f['medium']) - 6
+    voices = (pg.get('voices') or [])[:VOICES_ON_PAGE]
+    if voices and yl > PDF_FLOOR + 24:
+        yl = _eyebrow(d, 'In their words', x, yl)
+        for v in voices:
+            if yl < PDF_FLOOR + 12:
+                break
+            yl = _fit_para(d, v, x, yl, lw, 10, body, max_lines=3) - 5
+    for label, items in (('What the room knew', knew), ('What people were saying', talk)):
+        if not items or yr < PDF_FLOOR + 30:
+            continue
+        yr = _eyebrow(d, label, rx, yr)
+        for it in items:
+            if yr < PDF_FLOOR + 10:
+                break
+            d.c.setFillColor(colors.HexColor(GREEN if d.dark else OLIVE))
+            d.c.circle(rx + 2.5, yr + 3.0, 1.6, stroke=0, fill=1)
+            yr = _fit_para(d, it, rx + 10, yr, rw - 10, 9, body, max_lines=3) - 3
+        yr -= 6
+    return min(yl, yr)
 
 
 def build_report_pdf(payload: dict, session: dict) -> bytes:
@@ -346,7 +655,9 @@ def build_report_pdf(payload: dict, session: dict) -> bytes:
             d.new_page(True, 'Pilot Testing', pg['header'], pg.get('sub') or '')
             continue
         y = d.new_page(dark, 'Pilot Testing', pg['header'], pg.get('sub') or '')
-        if pg['kind'] == 'bullets':
+        if pg['kind'] == 'question':
+            _draw_question_pdf(d, pg, y)
+        elif pg['kind'] == 'bullets':
             y = d.bullets(pg.get('body') or [], d.m, y, d.right - d.m)
         elif pg['kind'] == 'table':
             y = d.table((pg.get('rows') or [])[:12], d.m, y, d.right - d.m, head=pg.get('head') or ('', '', ''))
