@@ -98,6 +98,7 @@ def open_recut(parent: dict, twins: list, *, created_by: str = '', title: str = 
     sess['lineage'] = {'parent': parent.get('id'), 'parent_title': parent.get('title'), 'parent_cut_label': parent.get('cut_label') or 'Cut A', 'label': label, 'root': ((parent.get('lineage') or {}).get('root') or parent.get('id'))}
     sess['prior_read'] = prior_snapshot(parent)
     sess['genre'] = parent.get('genre') or ''
+    sess['norm_genre'] = sess['genre']          # cut B is read against the norm cut A was (the user's choice carries)
     sess['genre_set_by_user'] = bool(parent.get('genre_set_by_user'))
     sess['cast'] = list(parent.get('cast') or [])
     sess['comps'] = list(parent.get('comps') or [])

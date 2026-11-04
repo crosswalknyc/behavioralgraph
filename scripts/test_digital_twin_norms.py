@@ -255,16 +255,22 @@ class Lookup(unittest.TestCase):
         self.assertEqual(n['all']['excellent']['n'], 1)
 
     def test_norm_line(self):
+        # the line names the norm it reads against (2026-11-04): a chosen genre with no norm of its own reads the all-genres column and says so
         n = N.norms_for('pilot', 'comedy', s3=FakeS3())
         line = N.norm_line('definitely_recommend', 54.0, n, 'pilot', 'comedy')
-        self.assertEqual(line, 'Definitely recommend 54.0%, pilots usually land near 50%.')
+        self.assertEqual(line, 'Definitely recommend 54.0%, four points above the all-pilots norm of 50%.')
         line2 = N.norm_line('definitely_recommend', 82.0, n, 'pilot', 'comedy')
-        self.assertIn('sits well above', line2)
+        self.assertEqual(line2, 'Definitely recommend 82.0%, 32 points above the all-pilots norm of 50%.')
         fam = N.norm_line('total_positive', 80.0, N.norms_for('feature', 'family', s3=FakeS3()), 'feature', 'family')
-        self.assertEqual(fam, 'Total positive 80.0%, family features usually land near 75%.')
+        self.assertEqual(fam, 'Total positive 80.0%, five points above the family feature norm of 75%.')
+        flat = N.norm_line('total_positive', 75.3, N.norms_for('feature', 'family', s3=FakeS3()), 'feature', 'family')
+        self.assertEqual(flat, 'Total positive 75.3%, right at the family feature norm of 75%.')
         plain = N.norm_line('excellent', 20.0, N.norms_for('pilot', 'all', s3=FakeS3()), 'pilot', 'all')
-        self.assertEqual(plain, 'Excellent 20.0%, pilots usually land near 30%; this one sits below.')
-        for l in (line, line2, plain):
+        self.assertEqual(plain, 'Excellent 20.0%, ten points below the all-pilots norm of 30%.')
+        # a trailer reading the feature's character anchor names the format it borrowed
+        tr = N.norm_line('lead_character', 61.0, N.norms_for('trailer', 'all', s3=FakeS3()), 'trailer', 'all')
+        self.assertEqual(tr, 'Lead 61.0%, eleven points above the all-features norm of 50%.')
+        for l in (line, line2, fam, flat, plain, tr):
             self.assertNotIn('\u2014', l)
 
     def test_genre_and_format_aliases(self):

@@ -197,7 +197,7 @@ class Session(unittest.TestCase):
         self.assertIn('Total positive', text)
         self.assertIn('Definitely recommend', text)
         self.assertIn('Quadrant', text)
-        self.assertIn('Norm %', text)
+        self.assertIn('All trailers norm %', text)     # the norm column is named for what the test is compared to (2026-11-04)
         self.assertIn('Dial', text)
         self.assertIn('Clock', text)
         self.assertNotIn('\u2014', text)
@@ -464,13 +464,20 @@ class Battery(unittest.TestCase):
         self.assertEqual(cols['total_positive']['norm'], 65.0)
         self.assertEqual(cols['definitely_recommend']['genre_norm'], 50.0)
         self.assertTrue(sc['norm_lines'])
-        self.assertTrue(any(l.startswith('Definitely recommend') and 'pilots usually land near 50%' in l for l in sc['norm_lines']))
+        # the line names the norm it reads against (2026-11-04): no comedy pilot norm yet, so the all-pilots column, and the card says so
+        self.assertTrue(any(l.startswith('Definitely recommend') and 'the all-pilots norm of 50%' in l for l in sc['norm_lines']), sc['norm_lines'])
+        self.assertIn('No norm yet for comedy pilots (0 of 5 tests).', sc['norm_lines'])
+        self.assertEqual(sc['norm_choice']['label'], 'Comedy pilots')
+        self.assertFalse(sc['norm_choice']['has_genre_norm'])
+        self.assertFalse(cols['excellent']['genre_own'])
         for l in sc['norm_lines']:
             self.assertFalse(PI.has_banned_copy(l), l)
         # a genre with a published norm of its own reads it in the genre column
         fam = PI.attach_norms({'battery': {'headline': {'total_positive_pct': 80.0}}}, 'feature', 'family')
-        self.assertEqual(fam['norm_columns']['total_positive'], {'norm': 65.0, 'genre_norm': 75.0})
-        self.assertEqual(fam['norm_lines'], ['Total positive 80.0%, family features usually land near 75%.'])
+        self.assertEqual(fam['norm_columns']['total_positive'], {'norm': 65.0, 'genre_norm': 75.0, 'genre_own': True})
+        self.assertEqual(fam['norm_lines'], ['Total positive 80.0%, five points above the family feature norm of 75%.'])
+        self.assertEqual(fam['norm_choice']['label'], 'Family features')
+        self.assertTrue(fam['norm_choice']['has_genre_norm'])
 
     def test_norm_metrics_for_the_ledger(self):
         sess = _run('funny', sid='metrics')

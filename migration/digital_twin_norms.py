@@ -37,7 +37,9 @@ MIN_OWN_TESTS = 5         # a cell with no published anchor needs this many of o
                           # three trial runs of one pilot had become the pilot norm, 43.7 total positive)
 
 FORMATS = ('feature', 'pilot', 'episode', 'trailer', 'title', 'key_art', 'script', 'concept')
-GENRES = ('all', 'comedy', 'drama', 'action', 'horror', 'thriller', 'romance', 'family', 'animation', 'documentary', 'unscripted')
+# the norm sets a test can be compared to, in the order the Compare-to list shows them (Jenna 2026-11-04: the user
+# sets the norm; 'procedural' joined for TV, NCIS: New York read against the all-pilots column until then)
+GENRES = ('all', 'procedural', 'drama', 'comedy', 'action', 'thriller', 'horror', 'romance', 'family', 'animation', 'documentary', 'unscripted')
 METRICS = ('excellent', 'total_positive', 'definitely_recommend', 'finish', 'tune_in', 'urgency_opening',
            'lead_character', 'secondary_character', 'supporting_character',
            'component_humor', 'component_story', 'component_beginning', 'component_ending', 'component_music',
@@ -67,10 +69,29 @@ METRIC_LABEL = {
     'pace_too_slow': 'Too slow', 'beginning': 'Beginning', 'ending': 'Ending', 'key_relationship': 'Key relationship',
     'follow_second_episode': 'Would follow the lead into a second episode', 'critic_score': 'Critic score', 'walkouts': 'Walkouts',
 }
-GENRE_LABEL = {'all': 'All', 'comedy': 'Comedy', 'drama': 'Drama', 'action': 'Action', 'horror': 'Horror', 'thriller': 'Thriller',
+GENRE_LABEL = {'all': 'All', 'procedural': 'Procedural', 'comedy': 'Comedy', 'drama': 'Drama', 'action': 'Action', 'horror': 'Horror', 'thriller': 'Thriller',
                'romance': 'Romance', 'family': 'Family', 'animation': 'Animation', 'documentary': 'Documentary', 'unscripted': 'Unscripted'}
 FORMAT_LABEL = {'feature': 'features', 'pilot': 'pilots', 'episode': 'episodes', 'trailer': 'trailers', 'title': 'titles',
                 'key_art': 'key art', 'script': 'scripts', 'concept': 'concepts'}
+FORMAT_SINGULAR = {'feature': 'feature', 'pilot': 'pilot', 'episode': 'episode', 'trailer': 'trailer', 'title': 'title',
+                   'key_art': 'key art', 'script': 'script', 'concept': 'concept'}
+# the mode a test was opened in, when it is not one of the formats, for the Compare-to list
+_MODE_FORMAT = {'binge': 'episode', 'spot': 'trailer'}
+
+
+def choice_label(fmt: str, genre: str = 'all') -> str:
+    """The norm a test is compared to, in words: 'All pilots',
+    'Procedural pilots', 'All key art'."""
+    f = _fmt(_MODE_FORMAT.get(str(fmt or '').strip().lower(), fmt))
+    g = _genre(genre)
+    noun = FORMAT_LABEL.get(f, f)
+    return f"All {noun}" if g == 'all' else f"{GENRE_LABEL.get(g, g.title())} {noun}"
+
+
+def norm_options(fmt: str) -> list:
+    """The Compare-to list for a format: the all-genre column first
+    ('All pilots'), then every genre by name."""
+    return [{'value': '', 'label': choice_label(fmt, 'all')}] + [{'value': g, 'label': GENRE_LABEL.get(g, g.title())} for g in GENRES if g != 'all']
 
 # ---------------------------------------------------------------- the seed
 # Published anchors. Internal: the URL and the note never reach a page a user
@@ -139,7 +160,9 @@ def _genre(g) -> str:
     s = str(g or 'all').strip().lower()
     alias = {'comedies': 'comedy', 'sitcom': 'comedy', 'romcom': 'romance', 'rom-com': 'romance', 'romantic': 'romance', 'kids': 'family',
              'animated': 'animation', 'doc': 'documentary', 'docu': 'documentary', 'reality': 'unscripted', 'suspense': 'thriller',
-             'scifi': 'action', 'sci-fi': 'action', 'adventure': 'action', 'superhero': 'action', 'crime': 'thriller', 'mystery': 'thriller'}
+             'scifi': 'action', 'sci-fi': 'action', 'adventure': 'action', 'superhero': 'action', 'crime': 'thriller', 'mystery': 'thriller',
+             'procedurals': 'procedural', 'police procedural': 'procedural', 'crime procedural': 'procedural', 'cop': 'procedural', 'cop show': 'procedural',
+             'police': 'procedural', 'detective': 'procedural', 'dramas': 'drama', 'prestige': 'drama', 'prestige drama': 'drama'}
     s = alias.get(s, s)
     return s if s in GENRES else 'all'
 
@@ -428,12 +451,17 @@ def record(s3, fmt: str, genre: str, metrics: dict, test_id: str) -> Optional[di
                     # a format with no cell of its own starts from the nearest format's published anchor (a pilot from the recruited-screening
                     # norms), so the first test blends into the anchor instead of standing as the norm (2026-11-03)
                     near, near_fmt = _lookup(doc['cells'], fmt, g, m)
+                    near_genre = g
                     if near is None and g != 'all':
                         near, near_fmt = _lookup(doc['cells'], fmt, 'all', m)
+                        near_genre = 'all'
                     if near is not None and near.get('seed_value') is not None:
+                        # a genre cell that borrows the all-genres anchor is not a genre norm yet: it reads as one only once
+                        # MIN_OWN_TESTS of our own tests sit in it (the anchor_genre field is what _lookup checks, 2026-11-04)
                         cell.update({'seed_value': float(near['seed_value']), 'seed_weight': int(near.get('seed_weight') or SEED_WEIGHT), 'range': near.get('range'),
                                      'sources': [dict(x) for x in (near.get('sources') or []) if not str(x.get('note') or '').startswith('Seed ')],
-                                     'basis': f"{near.get('basis') or 'published norm'} ({near_fmt} {g if g != 'all' else 'all genres'} anchor)", 'as_of': near.get('as_of') or ''})
+                                     'basis': f"{near.get('basis') or 'published norm'} ({near_fmt} {near_genre if near_genre != 'all' else 'all genres'} anchor)", 'as_of': near.get('as_of') or '',
+                                     'anchor_genre': near_genre, 'anchor_format': near_fmt})
                     doc['cells'][k] = cell
                 tests = cell.setdefault('tests', [])
                 if tid in tests:
@@ -502,14 +530,83 @@ def _is_num(v) -> bool:
         return False
 
 
+def _own_anchor(cell: dict, genre: str) -> bool:
+    """A published anchor for THIS genre. A genre cell that only borrowed
+    the all-genres anchor (record() seeds one so the first test blends in)
+    does not read as a genre norm until MIN_OWN_TESTS of our tests sit in
+    it. Older ledgers carry the borrow in the basis string."""
+    if cell.get('seed_value') is None:
+        return False
+    if _genre(genre) == 'all':
+        return True
+    ag = cell.get('anchor_genre')
+    if ag is not None:
+        return str(ag) != 'all'
+    return 'all genres anchor' not in str(cell.get('basis') or '')
+
+
 def _lookup(cells: dict, fmt: str, genre: str, metric: str):
     """The cell for (format, genre, metric), walking the format fallback.
     Returns (cell, format_used) or (None, None)."""
     for f in (fmt,) + tuple(FORMAT_FALLBACK.get(fmt) or ()):
         c = cells.get(cell_key(f, genre, metric))
-        if c is not None and (c.get('seed_value') is not None or int(c.get('our_n') or 0) >= MIN_OWN_TESTS):
+        if c is not None and (_own_anchor(c, genre) or int(c.get('our_n') or 0) >= MIN_OWN_TESTS):
             return c, f
     return None, None
+
+
+def own_tests(cells: dict, fmt: str, genre: str) -> int:
+    """How many of our own tests sit in a genre's cells for a format
+    (distinct test ids across the format's cells for that genre)."""
+    fmt, genre = _fmt(fmt), _genre(genre)
+    seen = set()
+    for m in METRICS:
+        c = cells.get(cell_key(fmt, genre, m))
+        if c is not None:
+            seen.update(str(t) for t in (c.get('tests') or []))
+    return len(seen)
+
+
+def forget_test_genre(s3, test_id: str, fmt: str, genre: str) -> Optional[dict]:
+    """A test re-filed under another norm leaves the cells of the genre
+    it was filed under (the all-genres cells keep it). Same arithmetic as
+    forget_test. Never raises into a route."""
+    tid = str(test_id or '').strip()
+    fmt, genre = _fmt(fmt), _genre(genre)
+    if not tid or genre == 'all':
+        return None
+    prefix = f"{fmt}|{genre}|"
+
+    def mutate(doc):
+        changed = False
+        for k, cur in list(doc['cells'].items()):
+            if not k.startswith(prefix):
+                continue
+            tests = list(cur.get('tests') or [])
+            if tid not in tests:
+                continue
+            kept = [t for t in tests if t != tid]
+            if kept:
+                cur['our_sum'] = round(float(cur.get('our_sum') or 0.0) * len(kept) / float(len(tests)), 4)
+                cur['our_n'] = len(kept)
+                cur['tests'] = kept
+                cur['n'] = cur['our_n']
+                cur['value'] = _blend(cur)
+            elif cur.get('seed_value') is not None:
+                cur.update({'our_sum': 0.0, 'our_n': 0, 'tests': [], 'n': 0, 'seeded': True, 'value': float(cur['seed_value'])})
+                cur['sources'] = [x for x in (cur.get('sources') or []) if not str(x.get('note') or '').startswith('Seed ')]
+            else:
+                del doc['cells'][k]
+                changed = True
+                continue
+            cur['updated_at'] = _now()
+            changed = True
+        return doc if changed else None
+    try:
+        return update(s3, mutate)
+    except Exception as e:
+        print(f"[norms] re-file {tid} out of {prefix} skipped: {e}")
+        return None
 
 
 def _public(cell: dict, fmt_used: str, genre_used: str) -> dict:
@@ -543,35 +640,61 @@ def norms_for(fmt: str, genre: str = 'all', s3=None, doc: Optional[dict] = None)
             if c is not None:
                 out_genre[m] = dict(out_all[m])
     return {'format': fmt, 'genre_key': genre, 'genre_used': genre if genre_hits else 'all', 'all': out_all, 'genre': out_genre if genre != 'all' else dict(out_all),
-            'genre_label': GENRE_LABEL.get(genre, genre.title()), 'format_label': FORMAT_LABEL.get(fmt, fmt), 'from_seed_only': bool(doc.get('in_memory'))}
+            'genre_label': GENRE_LABEL.get(genre, genre.title()), 'format_label': FORMAT_LABEL.get(fmt, fmt), 'from_seed_only': bool(doc.get('in_memory')),
+            'choice': norm_choice(fmt, genre, cells, has_genre_norm=bool(genre_hits))}
+
+
+def norm_choice(fmt: str, genre: str, cells: Optional[dict] = None, has_genre_norm: Optional[bool] = None) -> dict:
+    """What a test is compared to, for the card and the dial header:
+    {genre, label ('Procedural pilots'), all_label ('All pilots'),
+    has_genre_norm, own_tests, needed, note}. The note is the honest
+    line when the chosen genre has no norm yet: 'No norm yet for
+    procedural pilots (1 of 5 tests).'"""
+    fmt, genre = _fmt(fmt), _genre(genre)
+    cells = cells if isinstance(cells, dict) else {}
+    if has_genre_norm is None:
+        has_genre_norm = genre != 'all' and any(_lookup(cells, fmt, genre, m)[0] is not None for m in METRICS)
+    n = own_tests(cells, fmt, genre) if genre != 'all' else 0
+    note = ''
+    if genre != 'all' and not has_genre_norm:
+        note = f"No norm yet for {GENRE_LABEL.get(genre, genre).lower()} {FORMAT_LABEL.get(fmt, fmt)} ({min(n, MIN_OWN_TESTS)} of {MIN_OWN_TESTS} tests)."
+    return {'genre': genre if genre != 'all' else '', 'label': choice_label(fmt, genre), 'all_label': choice_label(fmt, 'all'),
+            'has_genre_norm': bool(has_genre_norm) if genre != 'all' else False, 'own_tests': n, 'needed': MIN_OWN_TESTS, 'note': note}
+
+
+_POINT_WORDS = {0: 'right at', 1: 'one point', 2: 'two points', 3: 'three points', 4: 'four points', 5: 'five points', 6: 'six points', 7: 'seven points',
+                8: 'eight points', 9: 'nine points', 10: 'ten points', 11: 'eleven points', 12: 'twelve points'}
 
 
 def norm_line(metric: str, ours, norms: dict, fmt: Optional[str] = None, genre: Optional[str] = None) -> str:
-    """The plain comparison under a money number: 'Definitely recommend
-    68%, comedy pilots usually land near 50%.'"""
+    """The plain comparison under a money number, naming the norm it is
+    read against: 'Definitely recommend 54.0%, two points above the
+    procedural pilot norm of 52%.' A chosen genre with no norm yet reads
+    against the all-genres column and says so ('the all-pilots norm')."""
     label = METRIC_LABEL.get(metric, metric.replace('_', ' ').title())
     try:
         v = float(ours)
     except (TypeError, ValueError):
         return ''
-    fmt = fmt or (norms or {}).get('format') or 'pilot'
-    genre = genre or (norms or {}).get('genre_key') or 'all'
+    fmt = _fmt(fmt or (norms or {}).get('format') or 'pilot')
+    genre = _genre(genre or (norms or {}).get('genre_key') or 'all')
     g = ((norms or {}).get('genre') or {}).get(metric) if isinstance((norms or {}).get('genre'), dict) else None
     a = ((norms or {}).get('all') or {}).get(metric)
     pick = g if (g and g.get('genre_used') not in (None, 'all')) else a
     if not pick:
         return f"{label} {v:.1f}%."
-    noun = FORMAT_LABEL.get(fmt, fmt) if str(pick.get('format_used') or fmt) == fmt else 'screenings'
-    who = f"{GENRE_LABEL.get(genre, genre).lower()} {noun}" if (pick is g and genre != 'all') else noun
-    nv = float(pick.get('value') or 0)
-    verb = 'usually land near'
-    if v >= nv + 8:
-        tail = f"{who} {verb} {nv:.0f}%; this one sits well above."
-    elif v <= nv - 8:
-        tail = f"{who} {verb} {nv:.0f}%; this one sits below."
+    used = str(pick.get('format_used') or fmt)
+    used = used if used in FORMATS else fmt
+    if pick is g and genre != 'all':
+        who = f"the {GENRE_LABEL.get(genre, genre).lower()} {FORMAT_SINGULAR.get(used, used)} norm"
     else:
-        tail = f"{who} {verb} {nv:.0f}%."
-    return f"{label} {v:.1f}%, {tail}"
+        who = f"the all-{FORMAT_LABEL.get(used, used)} norm"
+    nv = float(pick.get('value') or 0)
+    pts = int(round(abs(v - nv)))
+    if pts == 0:
+        return f"{label} {v:.1f}%, right at {who} of {nv:.0f}%."
+    gap = _POINT_WORDS.get(pts, f"{pts} points")
+    return f"{label} {v:.1f}%, {gap} {'above' if v > nv else 'below'} {who} of {nv:.0f}%."
 
 
 def sources_report(doc: Optional[dict] = None, s3=None) -> dict:
@@ -589,5 +712,6 @@ def sources_report(doc: Optional[dict] = None, s3=None) -> dict:
     return {'cells': len(cells), 'seeded': seeded, 'accumulated': len(cells) - seeded, 'sources': len(urls), 'in_memory': bool(doc.get('in_memory'))}
 
 
-__all__ = ['NORMS_KEY', 'BACKUP_PREFIX', 'FORMATS', 'GENRES', 'METRICS', 'METRIC_LABEL', 'GENRE_LABEL', 'FORMAT_LABEL', 'SEED_CELLS', 'SEED_WEIGHT',
-           'cell_key', 'load', 'update', 'seed', 'record', 'norms_for', 'norm_line', 'sources_report']
+__all__ = ['NORMS_KEY', 'BACKUP_PREFIX', 'FORMATS', 'GENRES', 'METRICS', 'METRIC_LABEL', 'GENRE_LABEL', 'FORMAT_LABEL', 'FORMAT_SINGULAR', 'SEED_CELLS', 'SEED_WEIGHT',
+           'MIN_OWN_TESTS', 'cell_key', 'load', 'update', 'seed', 'record', 'forget_test', 'forget_test_genre', 'own_tests', 'norms_for', 'norm_choice', 'norm_line',
+           'choice_label', 'norm_options', 'sources_report']

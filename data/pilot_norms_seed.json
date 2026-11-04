@@ -2427,5 +2427,49 @@
    "instrument": "exit_poll_posttrak",
    "note": "PostTrak opening-night exit polls of wide releases as the trades reported them (2019 to 2026): a paying, self-selected audience, so far above a recruited screening of the same film. Reference only; never a scorecard norm."
   }
- ]
+ ],
+ "genre_research": {
+  "as_of": "2026-11-04",
+  "ask": "Jenna 2026-11-04: the user sets the norm a test is compared to; 'procedural' joined the genre list. Seed pilot and episode genre cells from published TV pilot-testing norms where a published figure exists.",
+  "method": "Four research passes with the project's Claude client and web search (the 2026-10-28 seed method): one per genre (procedural, drama, comedy, action, thriller; excellent, total positive, definitely recommend, tune-in, finish, lead character), then three passes on the leads the first could not reach (book excerpts, the intent-to-view patent, leaked network memos, trade features, vendor case studies, academic tables, completion benchmarks). Rule: a cell needs a published norm with its URL and a verbatim quote; a single show's score is not a norm.",
+  "result": "No published genre norm found for any genre on any measure. No pilot or episode genre cell seeded; those genres read against the all-genres column until five of our own tests sit in the genre (MIN_OWN_TESTS), and the card says so.",
+  "unseeded": [
+   "procedural",
+   "drama",
+   "comedy",
+   "action",
+   "thriller"
+  ],
+  "what_the_sources_say": [
+   {
+    "url": "http://revengeofthemaskedscheduler.blogspot.com/2016/05/setting-schedule-pilot-testing.html",
+    "note": "Former network scheduler: pilots are scored excellent to poor and compared with the average of all previously tested pilots; there are norms for leads and supporting characters; some shows test above the drama-pilot average; weaker-testing procedurals succeed more often than sci-fi because they are character driven. No figure printed."
+   },
+   {
+    "url": "http://www.thesmokinggun.com/documents/crime/nbcs-failing-grade-friends",
+    "note": "NBC's May 1994 report on the Friends pilot: 41 out of 100, graded weak. A single-show composite score on NBC's own index, not a card norm; the norm it was read against is not stated."
+   },
+   {
+    "url": "https://www.tvguide.com/news/seinfeld-research-memo-1083639/",
+    "note": "NBC's 1989 memo on The Seinfeld Chronicles: weak on a strong / moderate / weak scale, 'no segment of the audience was eager to watch the show again'. Qualitative."
+   },
+   {
+    "url": "https://luminatedata.com/blog/whats-driving-series-cancellations-in-the-streaming-era/",
+    "note": "Luminate, first-season streaming series 2024 to mid-2026: canceled series averaged 44% season retention, renewed 51%. All genres together; reference for the finish measure, never a genre cell."
+   },
+   {
+    "url": "https://www.thewrap.com/streaming-releases-binging-samba-tv-survey/",
+    "note": "Samba TV, first half of 2023: about 45% of households finished a show released in bulk, 39% multipart, 35% weekly; Succession S4 48%, Ted Lasso S3 52%. Release pattern and single shows, not genre norms."
+   },
+   {
+    "url": "https://variety.com/vip/exclusive-new-streaming-study-reveals-what-netflix-data-dump-doesnt-1235844376/",
+    "note": "Variety VIP: Wednesday 65% completion in its first 28 days; The Upshaws under 35% by 90 days. Single shows."
+   },
+   {
+    "url": "https://www.advanced-television.com/2025/05/22/report-fewer-original-series-on-streamers-since-end-of-peak-tv/",
+    "note": "Digital i, 2024 streaming season ones: 3 to 6 episodes averaged 48% completion, 11 to 15 episodes 26%. By episode count, not genre."
+   }
+  ],
+  "revisit": "Re-run the genre passes when a vendor, network or trade source prints a genre average for the card measures (the Interpret TV pilot-testing case study, the Masked Scheduler post in full and the Next TV piece could not be opened past their snippets)."
+ }
 }

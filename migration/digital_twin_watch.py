@@ -38,7 +38,7 @@ from migration.digital_twin_room import Models, scrub, regression_mode, model_av
 
 TONES = ('funny', 'tender', 'tense', 'action', 'wow', 'quiet', 'warm', 'curious')
 EVENTS = ('love', 'laugh', 'lean-in', 'confuse', 'check-out', 'wow')
-GENRES = ('comedy', 'drama', 'action', 'horror', 'thriller', 'romance', 'family', 'animation', 'documentary', 'unscripted')
+GENRES = ('procedural', 'drama', 'comedy', 'action', 'thriller', 'horror', 'romance', 'family', 'animation', 'documentary', 'unscripted')
 ACTS = ('open', 'setup', 'middle', 'turn', 'close', 'end')
 BUDGET_S = {'caption': 240.0, 'act': 170.0, 'battery': 90.0, 'guide': 60.0}
 CAPTION_BATCH = 6
@@ -119,7 +119,7 @@ def _parse(raw):
 # ------------------------------------------------------------- prompts
 CAPTION_SYSTEM = """You are the eyes of a test-screening room. You are shown a few frames from one cut, in order, each with its clock time and any dialogue heard around it. For each frame write what is on screen the way a sharp viewer would say it in one breath: who is there, what they are doing, the setting, the mood. A frame line may say who is on screen, confirmed by face, from the cut's cast list: name those people by those names, exactly as given (an actor's name, or 'actor as character' when the line gives one). Anyone the line does not name is described by role or look. Say when a joke is landing, a reveal is happening, a fight or chase is on, a quiet beat is holding, titles or credits are up, or the frame is black.
 Rules: one caption per frame, under 18 words, present tense, concrete. tone is one of: funny, tender, tense, action, wow, quiet, warm, curious. joke is true only when the frame and the words read as a joke landing. Never guess the title. Never name an actor the frame line does not give, and never guess a name from a face yourself. No em dashes.
-At the end guess the genre of the whole cut from everything you saw (one of: comedy, drama, action, horror, thriller, romance, family, animation, documentary, unscripted) and whether it reads as a pilot (TV episode), a feature, or a trailer.
+At the end guess the genre of the whole cut from everything you saw (one of: procedural, drama, comedy, action, thriller, horror, romance, family, animation, documentary, unscripted; procedural is a case-of-the-week cop, detective, forensic or legal show) and whether it reads as a pilot (TV episode), a feature, or a trailer.
 Return JSON only: {"frames": [{"k": 1, "caption": "...", "tone": "...", "joke": false, "setting": "<two or three words>", "people": <count>, "text_on_screen": "<words on screen or empty>"}], "genre_guess": "...", "format_guess": "pilot|feature|trailer"}"""
 
 WATCH_SYSTEM = """You are running a test screening. The people in the room are described to you one by one (a card each: who they are, their habits, how they came to this title). They are watching ONE act of a cut, scene by scene; for every scene you have the clock, what is on screen, the dialogue heard, the tone, and cues (a joke landing, a silence, music). Each person also carries a starting level on a 0 to 100 dial, which is where their habits alone would put them before the act plays.

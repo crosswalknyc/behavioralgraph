@@ -44,6 +44,8 @@ app.py so app.py stays small.
   POST /api/digital-twins/<key>/pilot/<sid>/ask      a question at the playhead; it carries the last 60 to 90 seconds of what played
   POST /api/digital-twins/<key>/pilot/<sid>/stop     stop, keep the scorecard, add the test to the norms, remove the file when the test asked for it
   PATCH /api/digital-twins/<key>/pilot/<sid>         rename, or set genre / mode / cut_label / rough_cut / purge_media_after
+  POST /api/digital-twins/<key>/pilot/<sid>/norm     the user sets what the test is compared to ({genre}); a stopped test's norm lines and columns
+                                                     re-read on the stored scorecard, the test re-filed in the norms, the forecast re-read; no re-run
   DELETE /api/digital-twins/<key>/pilot/<sid>        delete (30-day undo; the file follows the test into the undo copy)
   POST /api/digital-twins/<key>/pilot/<sid>/restore  the deleted test back from its undo copy (the deleter or an admin)
   POST /api/digital-twins/<key>/pilot/setups         save the setup form as a named setup on the twin (upsert by id); nothing seated or charged
@@ -1234,6 +1236,10 @@ def dt_pilot_open(key):
             except Exception:
                 traceback.print_exc()
         payload.setdefault('pilot_sessions', []).insert(0, sess)
+    if 'genre' in body:
+        # the Compare-to field on the setup form (Jenna 2026-11-04): the norm the test is read against; a pre-filled
+        # guess the person left alone keeps following the frames' vote, a value they touched is theirs
+        PI.set_norm(sess, str(body.get('genre') or ''), by_user=bool(body.get('genre_set_by_user')))
     try:
         ROOM.ensure_personas(sess, twins_by_key, session_seed=str(sess.get('id') or ''))
     except Exception:
@@ -1354,6 +1360,35 @@ def dt_pilot_rename(key, sid):
         return jsonify({'success': False, 'error': 'Nothing to change.'}), 400
     DT.save_twin(_s3(), key, payload)
     return _nocache(jsonify({'success': True, 'session': PI.public_session(sess), 'title': name or sess.get('title'), 'changed': changed}))
+
+
+@bp.route(f'{PREFIX}/<path:key>/pilot/<sid>/norm', methods=['POST', 'PATCH'])
+def dt_pilot_norm(key, sid):
+    """The user sets what the test is compared to (Jenna 2026-11-04):
+    {genre: 'procedural' | '' for the all-genres column}. On a stopped
+    test the norm lines and columns are re-read on the stored scorecard,
+    the test is re-filed under the new genre in the norms, and the
+    forecast re-reads them; nothing is re-run and nothing is charged.
+    Same access as the other pilot routes (the twin)."""
+    user, err = _gate()
+    if err:
+        return err
+    payload, err = _twin_or_404(user, key)
+    if err:
+        return err
+    from migration import digital_twin_pilot as PI
+    from migration import digital_twin_norms as N
+    sess = _pilot(payload, sid)
+    if not sess:
+        return jsonify({'success': False, 'error': 'test not found'}), 404
+    body = request.get_json(silent=True) or {}
+    raw = str(body.get('genre') if body.get('genre') is not None else body.get('norm_genre') or '').strip().lower()
+    if raw and raw != 'all' and N._genre(raw) == 'all':
+        return jsonify({'success': False, 'error': 'Pick a norm from the list.', 'options': N.norm_options(str(sess.get('mode') or 'pilot'))}), 400
+    changed = PI.set_norm(sess, raw, by_user=True, twin=payload, s3=_s3())
+    DT.save_twin(_s3(), key, payload)
+    return _nocache(jsonify({'success': True, 'session': PI.public_session(sess), 'changed': changed,
+                             'compared_to': ((sess.get('scorecard') or {}).get('norm_choice') or N.norm_choice(str((sess.get('scorecard') or {}).get('format') or PI.format_for(sess)), sess.get('genre') or 'all'))}))
 
 
 @bp.route(f'{PREFIX}/<path:key>/pilot/<sid>/upload', methods=['POST'])

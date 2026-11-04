@@ -51875,7 +51875,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-pi-mk .c { font-variant-numeric: tabular-nums; color: var(--dtw-mute); margin-right: 5px; }
         #digitalTwinsIQView .dtw-pi-mk.peak { border-color: #C7F23E; }
         #digitalTwinsIQView .dtw-pi-mk.valley { border-color: #B7B3D8; }
-        #digitalTwinsIQView .dtw-pi-gsel { appearance: none; -webkit-appearance: none; background: transparent; border: 0; border-bottom: 1px dotted var(--dtw-body); color: var(--dtw-ink); font: inherit; font-size: 11px; line-height: 14px; padding: 0 0 1px; margin: 0; width: auto; field-sizing: content; max-width: 120px; cursor: pointer; }
+        #digitalTwinsIQView .dtw-pi-gsel { appearance: none; -webkit-appearance: none; background: transparent; border: 0; border-bottom: 1px dotted var(--dtw-body); color: var(--dtw-ink); font: inherit; font-size: 11px; line-height: 14px; padding: 0 0 1px; margin: 0; width: auto; field-sizing: content; max-width: 170px; cursor: pointer; }
         #digitalTwinsIQView .dtw-pi-gsel option { background: var(--dtw-raised); color: var(--dtw-ink); }
         #digitalTwinsIQView .dtw-pi-sugg { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 8px; }
         #digitalTwinsIQView .dtw-pi-sugg:empty { display: none; }
@@ -54220,7 +54220,36 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var d = null; try { d = await r.json(); } catch (_) { d = null; }
                 return { ok: r.ok && d && d.success !== false, status: r.status, data: d || {} };
             }
-            var PI_GENRES = ['comedy', 'drama', 'action', 'horror', 'thriller', 'romance', 'family', 'animation', 'documentary', 'unscripted'];
+            // the norm sets a test can be compared to (migration/digital_twin_norms.GENRES without 'all'; scripts/test_digital_twin_norms_choice.py holds the two in step)
+            var PI_GENRES = ['procedural', 'drama', 'comedy', 'action', 'thriller', 'horror', 'romance', 'family', 'animation', 'documentary', 'unscripted'];
+            var PI_NORM_NOUN = { pilot: 'pilots', feature: 'features', episode: 'episodes', binge: 'episodes', trailer: 'trailers', spot: 'trailers', title: 'titles', key_art: 'key art', script: 'scripts', concept: 'concepts' };
+            var PI_NORM_ONE = { pilots: 'pilot', features: 'feature', episodes: 'episode', trailers: 'trailer', titles: 'title', 'key art': 'key art', scripts: 'script', concepts: 'concept' };
+            function piNormNoun(fmt) { return PI_NORM_NOUN[String(fmt || 'pilot')] || 'pilots'; }
+            function piNormLabel(fmt, genre) { return genre ? cap(genre) + ' ' + piNormNoun(fmt) : 'All ' + piNormNoun(fmt); }
+            // the norm a test is compared to (Jenna 2026-11-04: the user sets it): the card's own read when the server put one on it
+            function piNormChoice(s) {
+                var sc = (s || {}).scorecard || {}, ch = sc.norm_choice;
+                if (ch && typeof ch === 'object' && ch.label) return ch;
+                var fmt = (s || {}).format || sc.format || (s || {}).mode || 'pilot', genre = (s || {}).genre || '';
+                var has = !!genre && ((sc.norms || {}).genre_used || 'all') !== 'all';
+                return { genre: genre, label: piNormLabel(fmt, genre), all_label: piNormLabel(fmt, ''), has_genre_norm: has, own_tests: 0, needed: 5, note: (genre && !has) ? 'No norm yet for ' + genre + ' ' + piNormNoun(fmt) + '.' : '' };
+            }
+            // 'the procedural pilot norm' / 'the all-pilots norm'
+            function piNormWord(ch, which) { var lab = String((which === 'genre' ? ch.label : ch.all_label) || 'All pilots'); var parts = lab.split(' '); var noun = parts.slice(1).join(' '); return which === 'genre' ? (parts[0].toLowerCase() + ' ' + (PI_NORM_ONE[noun] || noun) + ' norm') : ('all-' + noun + ' norm'); }
+            function piNormOptions(fmt, genre) { return '<option value=""' + (!genre ? ' selected' : '') + '>' + esc(piNormLabel(fmt, '')) + '</option>' + PI_GENRES.map(function(g) { return '<option value="' + g + '"' + (genre === g ? ' selected' : '') + '>' + esc(cap(g)) + '</option>'; }).join(''); }
+            // the words in a title that suggest a norm (the same order as migration/digital_twin_pilot.keyword_genre: procedural first, drama last)
+            var PI_NORM_WORDS = [['procedural', /\b(procedurals?|cops?|cop show|detectives?|precinct|ncis|csi|fbi|law\s*&\s*order|law and order|homicide|forensics?|police drama|police procedural)\b/i], ['horror', /\b(horror|scare|scary|haunt|slasher)\b/i], ['comedy', /\b(comedy|sitcom|funny|laugh|romcom|rom-com|sketch|spoof|parody)\b/i], ['thriller', /\b(thriller|horror|scare|suspense|crime|noir|mystery)\b/i], ['action', /\b(action|heist|war|chase|fight|superhero|stunt)\b/i], ['romance', /\b(romance|love|wedding|date|affair)\b/i], ['family', /\b(family|kids|animated|animation|cartoon)\b/i], ['documentary', /\b(documentary|docuseries|true story|doc)\b/i], ['unscripted', /\b(reality|unscripted|competition|game show|dating show)\b/i], ['drama', /\b(dramas?|dramatic series|prestige)\b/i]];
+            function piGuessNorm(text) { var t = String(text || ''); for (var i = 0; i < PI_NORM_WORDS.length; i++) { if (PI_NORM_WORDS[i][1].test(t)) return PI_NORM_WORDS[i][0]; } return ''; }
+            // the Compare-to field follows the title while the person has not touched it
+            function piNormGuessSync() {
+                var sel = el('dtwPiNorm'), t = el('dtwPiNormTouched'); if (!sel) return;
+                var hint = el('dtwPiNormHint');
+                if (t && t.value === '1') { if (hint) hint.textContent = 'Every score is read against this norm. You can change it on the finished card too.'; return; }
+                var g = piGuessNorm(((el('dtwPiTitle') || {}).value || '') + ' ' + ((el('dtwPiCutTitle') || {}).value || '') + ' ' + ((el('dtwPiLogline') || {}).value || ''));
+                sel.value = g;
+                if (hint) hint.textContent = g ? 'Suggested from the title. Change it if the show is something else; the room checks it once it has watched the cut.' : 'Every score is read against this norm. The room suggests one once it has watched the cut; you can change it any time.';
+            }
+            window.dtwPilotNormTouched = function() { var t = el('dtwPiNormTouched'); if (t) t.value = '1'; piNormGuessSync(); };
             var PI_SPLIT_A = '#E682FF', PI_SPLIT_B = '#3358FF';
             // The cut plays through a signed link that lives ten minutes; the player asks for a fresh one before it expires
             // and swaps it in at the same second. The file's storage key never reaches the page.
@@ -54544,7 +54573,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 }).join('');
                 var saved = '<div class="dtw-pi-h">Saved setups <span class="n">' + setups.length + '</span></div><div class="dtw-pi-list">' + (srows || '<p class="dtw-muted" style="margin:8px 0 0;font-size:12px">Fill in the form and press Save setup to keep it here. Come back any time and open it to edit, without typing it again.</p>') + '</div>';
                 var tests = '<div class="dtw-pi-col side tests">' + saved + '<div class="dtw-pi-h">Past tests <span class="n">' + past.length + '</span></div><div class="dtw-pi-list">' + (rows || '<p class="dtw-muted" style="margin:8px 0 0;font-size:12px">No tests of this kind on this twin yet. The first one lands here.</p>') + '</div></div>';
-                var cut = '<div class="dtw-pi-col side cut"><div class="dtw-pi-h">' + esc(cutHead) + '</div>' + modeSel + stim + '</div>';
+                var normSel = '<label class="dtw-field" for="dtwPiNorm">Compare to</label><select id="dtwPiNorm" class="dtw-in" required onchange="dtwPilotNormTouched()">' + piNormOptions(mode, '') + '</select><input type="hidden" id="dtwPiNormTouched" value="">'
+                    + '<div class="dtw-pi-fn" id="dtwPiNormHint" style="margin-top:4px">Every score is read against this norm. The room suggests one once it has watched the cut; you can change it any time.</div>';
+                var cut = '<div class="dtw-pi-col side cut"><div class="dtw-pi-h">' + esc(cutHead) + '</div>' + modeSel + normSel + stim + '</div>';
                 var room = '<div class="dtw-pi-col side room"><div class="dtw-pi-h">The room' + (S.twin && twinName() ? ' <span class="n">on ' + esc(twinName()) + '</span>' : '') + '</div>'
                     + (S.twin ? '' : '<p class="dtw-p" style="margin-top:8px">Pick a twin on the Twins tab first, or build one.</p>')
                     + '<label class="dtw-field" for="dtwPiTitle">Name this test</label><input id="dtwPiTitle" class="dtw-in" placeholder="' + esc({ pilot: 'Season 2 pilot', trailer: 'Trailer A vs B', titles: 'Six titles', script: 'Second Helping, draft 3', concept: 'Second Helping' }[tab]) + '" maxlength="120" autocomplete="off">'
@@ -54619,26 +54650,28 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             function renderScorecard(s) {
                 var sc = s.scorecard || {}, bat = sc.battery || {}, hd = bat.headline || {};
                 if (hd.total_positive_pct == null) return '';
-                var genre = s.genre || '', gl = genre ? (genre.charAt(0).toUpperCase() + genre.slice(1)) : '';
+                var genre = s.genre || '', ch = piNormChoice(s), gl = !!genre && !!ch.has_genre_norm;   // gl: the chosen norm has a column of its own
+                var allW = esc(String(ch.all_label || 'All pilots')), genW = esc(String(ch.label || ''));
+                var compared = '<p class="dtw-p" style="margin-top:8px">Compared to: <b>' + genW + '</b>' + (genre && !gl && ch.note ? '. ' + esc(ch.note) + ' Read against ' + esc(String(ch.all_label || 'all pilots').toLowerCase()) + ' until then.' : '.') + '</p>';
                 var money = '<div class="dtw-pi-money">'
-                    + '<div class="m"><div class="k">Total positive</div><div class="v">' + pct1(hd.total_positive_pct) + '</div><div class="n">Excellent + very good. Norm ' + (normCell(sc, 'total_positive', 'all') || '-') + (gl ? ', ' + esc(gl.toLowerCase()) + ' norm ' + (normCell(sc, 'total_positive', 'genre') || '-') : '') + '</div></div>'
-                    + '<div class="m"><div class="k">Definitely recommend</div><div class="v">' + pct1(hd.definitely_recommend_pct) + '</div><div class="n">Norm ' + (normCell(sc, 'definitely_recommend', 'all') || '-') + (gl ? ', ' + esc(gl.toLowerCase()) + ' norm ' + (normCell(sc, 'definitely_recommend', 'genre') || '-') : '') + '</div></div>'
-                    + '<div class="m"><div class="k">Excellent</div><div class="v">' + pct1(hd.excellent_pct) + '</div><div class="n">Norm ' + (normCell(sc, 'excellent', 'all') || '-') + (gl ? ', ' + esc(gl.toLowerCase()) + ' norm ' + (normCell(sc, 'excellent', 'genre') || '-') : '') + '</div></div>'
+                    + '<div class="m"><div class="k">Total positive</div><div class="v">' + pct1(hd.total_positive_pct) + '</div><div class="n">Excellent + very good. ' + allW + ' ' + (normCell(sc, 'total_positive', 'all') || '-') + (gl ? ', ' + genW.toLowerCase() + ' ' + (normCell(sc, 'total_positive', 'genre') || '-') : '') + '</div></div>'
+                    + '<div class="m"><div class="k">Definitely recommend</div><div class="v">' + pct1(hd.definitely_recommend_pct) + '</div><div class="n">' + allW + ' ' + (normCell(sc, 'definitely_recommend', 'all') || '-') + (gl ? ', ' + genW.toLowerCase() + ' ' + (normCell(sc, 'definitely_recommend', 'genre') || '-') : '') + '</div></div>'
+                    + '<div class="m"><div class="k">Excellent</div><div class="v">' + pct1(hd.excellent_pct) + '</div><div class="n">' + allW + ' ' + (normCell(sc, 'excellent', 'all') || '-') + (gl ? ', ' + genW.toLowerCase() + ' ' + (normCell(sc, 'excellent', 'genre') || '-') : '') + '</div></div>'
                     + '</div>';
                 var lines = (sc.norm_lines || []).slice(0, 2).map(function(l) { return '<p class="dtw-p" style="margin-top:8px">' + esc(l) + '</p>'; }).join('');
                 var metricFor = { overall: { a: 'excellent' }, recommend: { a: 'definitely_recommend' }, finish: { a: 'finish' }, tune_in: { a: 'tune_in' }, urgency: { a: 'urgency_opening' }, urgency_pilot: { a: 'urgency_opening' } };
                 var trs = '';
                 (bat.questions || []).forEach(function(q) {
-                    trs += '<tr class="sub"><td colspan="6"><b>' + esc(q.label || '') + '</b></td></tr>';
+                    trs += '<tr class="sub"><td colspan="' + (gl ? 6 : 5) + '"><b>' + esc(q.label || '') + '</b></td></tr>';
                     (q.rows || []).forEach(function(r) {
                         var m = (metricFor[q.id] || {})[r.id];
-                        trs += '<tr' + (m ? ' class="money"' : '') + '><td>' + esc(r.label || '') + '</td><td>' + pct1(r.pct) + '</td><td class="n">' + fmtN(r.people) + '</td><td class="n">' + esc(r.tally || '') + '</td><td class="n">' + (m ? normCell(sc, m, 'all') : '') + '</td><td class="n">' + (m && gl ? normCell(sc, m, 'genre') : '') + '</td></tr>';
+                        trs += '<tr' + (m ? ' class="money"' : '') + '><td>' + esc(r.label || '') + '</td><td>' + pct1(r.pct) + '</td><td class="n">' + fmtN(r.people) + '</td><td class="n">' + esc(r.tally || '') + '</td><td class="n">' + (m ? normCell(sc, m, 'all') : '') + '</td>' + (gl ? '<td class="n">' + (m ? normCell(sc, m, 'genre') : '') + '</td>' : '') + '</tr>';
                     });
                     if (q.id === 'overall' && q.total_positive_pct != null) {
-                        trs += '<tr class="money"><td>Total positive</td><td>' + pct1(q.total_positive_pct) + '</td><td class="n">' + fmtN(q.total_positive_people) + '</td><td class="n"></td><td class="n">' + normCell(sc, 'total_positive', 'all') + '</td><td class="n">' + (gl ? normCell(sc, 'total_positive', 'genre') : '') + '</td></tr>';
+                        trs += '<tr class="money"><td>Total positive</td><td>' + pct1(q.total_positive_pct) + '</td><td class="n">' + fmtN(q.total_positive_people) + '</td><td class="n"></td><td class="n">' + normCell(sc, 'total_positive', 'all') + '</td>' + (gl ? '<td class="n">' + normCell(sc, 'total_positive', 'genre') + '</td>' : '') + '</tr>';
                     }
                 });
-                var table = '<table class="dtw-pi-table"><thead><tr><th>Question</th><th>Share</th><th>People</th><th>In the room</th><th>Norm</th><th>' + (gl ? esc(gl) + ' norm' : 'Genre norm') + '</th></tr></thead><tbody>' + trs + '</tbody></table>';
+                var table = '<table class="dtw-pi-table"><thead><tr><th>Question</th><th>Share</th><th>People</th><th>In the room</th><th>' + allW + '</th>' + (gl ? '<th>' + genW + '</th>' : '') + '</tr></thead><tbody>' + trs + '</tbody></table>';
                 var qt = '';
                 (bat.quadrants || []).forEach(function(qd) {
                     if (!qd.n && qd.key !== 'total') { qt += '<tr><td>' + esc(qd.label) + '</td><td class="n">0</td><td class="n"></td><td></td><td></td><td></td><td></td></tr>'; return; }
@@ -54646,8 +54679,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 });
                 var na = (sc.norms || {}).all || {}, ng = (sc.norms || {}).genre || {};
                 var pick = function(o, k) { return o && o[k] && o[k].value != null ? Number(o[k].value).toFixed(1) + '%' : ''; };
-                qt += '<tr class="sub"><td>Norm</td><td class="n"></td><td class="n"></td><td>' + pick(na, 'excellent') + '</td><td>' + pick(na, 'total_positive') + '</td><td>' + pick(na, 'definitely_recommend') + '</td><td>' + pick(na, 'finish') + '</td></tr>';
-                if (gl && ng.total_positive && ng.total_positive.genre_used && ng.total_positive.genre_used !== 'all') qt += '<tr class="sub"><td>' + esc(gl) + ' norm</td><td class="n"></td><td class="n"></td><td>' + pick(ng, 'excellent') + '</td><td>' + pick(ng, 'total_positive') + '</td><td>' + pick(ng, 'definitely_recommend') + '</td><td>' + pick(ng, 'finish') + '</td></tr>';
+                qt += '<tr class="sub"><td>' + allW + '</td><td class="n"></td><td class="n"></td><td>' + pick(na, 'excellent') + '</td><td>' + pick(na, 'total_positive') + '</td><td>' + pick(na, 'definitely_recommend') + '</td><td>' + pick(na, 'finish') + '</td></tr>';
+                if (gl && ng.total_positive && ng.total_positive.genre_used && ng.total_positive.genre_used !== 'all') qt += '<tr class="sub"><td>' + genW + '</td><td class="n"></td><td class="n"></td><td>' + pick(ng, 'excellent') + '</td><td>' + pick(ng, 'total_positive') + '</td><td>' + pick(ng, 'definitely_recommend') + '</td><td>' + pick(ng, 'finish') + '</td></tr>';
                 var quad = '<div class="dtw-eyebrow" style="margin-top:16px">By quadrant</div><table class="dtw-pi-table"><thead><tr><th>Group</th><th>Seats</th><th>People</th><th>Excellent</th><th>Total positive</th><th>Definitely recommend</th><th>Would finish</th></tr></thead><tbody>' + qt + '</tbody></table>';
                 var dialReads = '<div class="dtw-eyebrow" style="margin-top:16px">The dial</div>'
                     + '<div class="dtw-pi-scores">'
@@ -54656,7 +54689,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     + '<div class="dtw-pi-score"><div class="k">Dead spot</div><div class="v" style="font-size:16px">' + esc((sc.dead_spot || {}).clock || '') + '</div><div class="dtw-muted">' + esc((sc.dead_spot || {}).line || '') + '</div></div>'
                     + '</div>'
                     + ((sc.notes || []).map(function(n) { return '<p class="dtw-muted">' + esc(n) + '</p>'; }).join(''));
-                return '<div class="dtw-eyebrow" style="margin-top:18px">Scorecard</div>' + money + lines + table + quad + dialReads + piForecastFull(s);
+                return '<div class="dtw-eyebrow" style="margin-top:18px">Scorecard</div>' + compared + money + lines + table + quad + dialReads + piForecastFull(s);
             }
             function renderGuide(s) {
                 var g = s.guide || {}, qs = g.questions || [];
@@ -55168,9 +55201,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             function renderPilotScores(s) {
                 var scored = s.status === 'stopped' && !!s.scorecard;   // the room's scores exist only once it has watched and stopped
                 var sc = scored ? (s.scorecard || {}) : {}, hd = ((sc.battery || {}).headline || {});
-                var genre = s.genre || '', gl = genre ? cap(genre) : '', which = gl ? 'genre' : 'all', normWord = gl ? gl.toLowerCase() + ' norm' : 'norm';
+                var genre = s.genre || '', ch = piNormChoice(s), which = (genre && ch.has_genre_norm) ? 'genre' : 'all', normWord = piNormWord(ch, which);
                 var roster = ((s.group || {}).roster || []), people = Number((s.group || {}).size_people || 0);
-                var gsel = '<select class="dtw-pi-gsel" onchange="dtwPilotGenre(this.value)" aria-label="Genre"><option value=""' + (!genre ? ' selected' : '') + '>all-genre</option>' + PI_GENRES.map(function(g) { return '<option value="' + g + '"' + (genre === g ? ' selected' : '') + '>' + g + '</option>'; }).join('') + '</select>';
+                var gsel = '<select class="dtw-pi-gsel" onchange="dtwPilotGenre(this.value)" aria-label="Compare to">' + piNormOptions(s.format || sc.format || s.mode, genre) + '</select>';
+                var normNote = (genre && !ch.has_genre_norm && ch.note) ? '<div class="dtw-pi-fn">' + esc(ch.note) + ' Read against ' + esc(String(ch.all_label || 'all pilots').toLowerCase()) + ' until then.</div>' : '';
                 var out = '<div class="dtw-pi-h">This cut</div>';
                 function stat(v, label, metric) {
                     var norm = normCell(sc, metric, which), nv = norm ? parseFloat(norm) : NaN, up = isFinite(nv) && v != null && Number(v) >= nv;
@@ -55183,12 +55217,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         var norm = normCell(sc, r[2], which), nv = norm ? parseFloat(norm) : NaN, v = r[1] == null ? NaN : Number(r[1]);
                         return '<div class="dtw-pi-bar"><div class="l"><span>' + esc(r[0]) + '</span><span>' + (isFinite(v) ? v.toFixed(1) : '-') + (isFinite(nv) ? ' / ' + nv.toFixed(1) : '') + '</span></div><div class="t"><i style="width:' + (isFinite(v) ? w(v) : '0%') + '"></i></div>' + (isFinite(nv) ? '<div class="t n"><i style="width:' + w(nv) + '"></i></div>' : '') + '</div>';
                     }).join('');
-                    out += '<div class="dtw-pi-hr"></div><div class="dtw-pi-h">Against the norm</div><div class="dtw-pi-bars">' + bars + '</div><div class="dtw-pi-fn">Green is this cut. Grey is the ' + gsel + ' norm.</div>';
+                    out += '<div class="dtw-pi-hr"></div><div class="dtw-pi-h">Against the norm</div><div class="dtw-pi-bars">' + bars + '</div><div class="dtw-pi-fn">Green is this cut. Grey is the norm. Compared to: ' + gsel + '</div>' + normNote;
                     out += piForecastSide(s);
                 } else {
                     out += '<div class="dtw-pi-stat"><div class="v" id="dtwPiDialNow">-</div><div class="k">Dial now, 0 to 100</div></div>'
                         + '<div class="dtw-pi-stat"><div class="v">' + roster.length + '</div><div class="k">Seated' + (people ? ', standing for ' + fmtN(people) + ' people' : '') + '</div></div>'
-                        + '<div class="dtw-pi-hr"></div><div class="dtw-pi-fn">' + (s.status === 'preparing' ? 'The room is scoring what it watched.' : 'Scores land here when you press Stop, read against the ' + gsel + ' norm.') + '</div>';
+                        + '<div class="dtw-pi-hr"></div><div class="dtw-pi-fn">' + (s.status === 'preparing' ? 'The room is scoring what it watched.' : 'Scores land here when you press Stop. Compared to: ' + gsel) + '</div>';
                 }
                 var others = ((S.twin || {}).pilot_sessions || []).filter(function(x) { return x && x.id !== s.id; }).slice(0, 5);
                 if (others.length) {
@@ -55504,6 +55538,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var metaBits = [esc(piModeLabel(s)) + (s.rough_cut ? ', rough cut' : (s.mode === 'pilot' || s.mode === 'feature' || s.mode === 'episode' || s.mode === 'binge') ? ', locked cut' : '') + (s.critics_room ? ', critics room' : '')];
                 if (fmt && fmt !== s.mode) metaBits.push('Read as a ' + esc(fmt === 'feature' ? 'feature' : fmt.replace('_', ' ')));
                 metaBits.push(esc(s.cut_label || 'Cut A'));
+                metaBits.push('Compared to: ' + esc(String(piNormChoice(s).label || 'All pilots')));
                 if (s.lineage && s.lineage.parent) metaBits.push('<button type="button" class="dtw-link" onclick="dtwPilotPick(\'' + esc(s.lineage.parent) + '\')">against ' + esc(s.lineage.parent_cut_label || 'Cut A') + '</button>');
                 var controls = '<div class="dtw-pi-controls"><span class="dtw-pi-note" id="dtwPiNote">' + esc(preparing ? 'Preparing the cut' : (s.prepare_note || (ready ? 'Ready to play' : 'Preparing the cut'))) + '</span><button type="button" class="dtw-btn dtw-btn-primary" id="dtwPiPlayBtn" onclick="dtwPilotPlay()"' + (preparing ? ' disabled' : '') + '>' + (s.status === 'playing' ? 'Playing' : 'Play') + '</button><button type="button" class="dtw-btn" onclick="dtwPilotStop()">Stop</button><span class="dtw-pi-clock" id="dtwPiClock">' + esc(clockFmt(t0)) + '</span></div>';
                 // the controls ride in the locked test bar (2026-11-03); the meta line stays over the stage
@@ -55587,7 +55622,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             window.dtwPilotSplit = function(which, key) { S.pilotSplits = S.pilotSplits || { a: '', b: '' }; S.pilotSplits[which] = key || ''; S.pilotSplitsUser = true; drawPilotDial(playheadNow()); };
             window.dtwPilotGenre = async function(g) {
                 var s = S.pilot; if (!s || !S.key) return;
-                try { var d = await api('/' + S.key + '/pilot/' + s.id + '/rename', { method: 'POST', body: JSON.stringify({ genre: g || '' }) }); if (d.session) { adoptPilot(d.session); renderPilotConsole(); } } catch (e) { var n = el('dtwPiNote'); if (n) n.textContent = e.message; }
+                try { var d = await api('/' + S.key + '/pilot/' + s.id + '/norm', { method: 'POST', body: JSON.stringify({ genre: g || '' }) }); if (d.session) { adoptPilot(d.session); renderPilotConsole(); } } catch (e) { var n = el('dtwPiNote'); if (n) n.textContent = e.message; }
             };
             window.dtwPilotPurgeToggle = async function(on) {
                 var s = S.pilot; if (!s || !S.key) return;
@@ -55954,11 +55989,13 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (!setup || !S.key) return;
                 setup.addEventListener('input', piAutosaveSoon);
                 setup.addEventListener('change', piAutosaveSoon);
+                setup.addEventListener('input', piNormGuessSync);
                 var pending = S.piPending;
                 if (pending) {
                     if (pending.mode && PI_TABS[piTab()].indexOf(pending.mode) >= 0 && pending.mode !== S.piMode) { S.piMode = pending.mode; renderPilotConsole(); return; }
                     S.piPending = null;
                     piFormApply(pending);
+                    piNormGuessSync();
                     piLocalSave();
                     return;
                 }
@@ -55966,6 +56003,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (local && local.snap && !piSnapshotEmpty(local.snap)) {
                     if (local.setup_id && !S.piSetupId) S.piSetupId = local.setup_id;
                     piFormApply(local.snap);
+                    piNormGuessSync();
                     if (!setup.querySelector('.dtw-pi-restored')) {
                         var note = document.createElement('div'); note.className = 'dtw-pi-restored';
                         note.innerHTML = '<span>Picked up what you typed here last time.</span><button type="button" onclick="dtwPilotCloseSetup()">Start a blank form</button>';
@@ -56134,6 +56172,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (rq.comps.length) body.comps = rq.comps;
                 if ((el('dtwPiRough') || {}).checked) body.rough_cut = true;
                 if ((el('dtwPiCritics') || {}).checked) body.critics_room = true;
+                if (el('dtwPiNorm')) { body.genre = (el('dtwPiNorm').value || ''); body.genre_set_by_user = ((el('dtwPiNormTouched') || {}).value === '1'); }
                 var prior = (el('dtwPiPrior') || {}).value;
                 if (st) st.textContent = 'Seating the room...';
                 try { var d = await api('/' + key + '/pilot/open', { method: 'POST', body: JSON.stringify(body) }); } catch (e) { if (st) st.textContent = e.message; return; }

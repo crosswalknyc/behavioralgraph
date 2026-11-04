@@ -91,6 +91,10 @@ _HORROR = re.compile(r"\b(horror|scare|scary|haunt|slasher)\b", re.I)
 _FAMILY = re.compile(r"\b(family|kids|animated|animation|cartoon)\b", re.I)
 _DOC = re.compile(r"\b(documentary|docuseries|true story|doc)\b", re.I)
 _UNSCRIPTED = re.compile(r"\b(reality|unscripted|competition|game show|dating show)\b", re.I)
+# the TV norms genres words can name (Jenna 2026-11-04): a procedural is read first (NCIS: New York is a cop show before it is a
+# drama or a thriller); 'drama' is read last, once nothing more specific matched
+_PROCEDURAL = re.compile(r"\b(procedurals?|cops?|cop show|detectives?|precinct|ncis|csi|fbi|law\s*&\s*order|law and order|homicide|forensics?|police drama|police procedural)\b", re.I)
+_DRAMA = re.compile(r"\b(dramas?|dramatic series|prestige)\b", re.I)
 
 
 def _now():
@@ -144,8 +148,10 @@ def _genre(title: str, notes: str = '') -> str:
 
 
 def norms_genre(title: str = '', notes: str = '', votes: Optional[dict] = None) -> str:
-    """The norms genre: the room's own read of the frames when it has
-    one, else the words in the title and notes, else '' (all genres)."""
+    """The norms genre the system suggests: the room's own read of the
+    frames when it has one, else the words in the title and notes, else
+    '' (the all-genres column). The user's own choice on the test
+    (``genre_set_by_user``) always wins over this (set_norm)."""
     if votes:
         try:
             from migration.digital_twin_watch import genre_from_votes
@@ -154,7 +160,15 @@ def norms_genre(title: str = '', notes: str = '', votes: Optional[dict] = None) 
                 return g
         except Exception:
             pass
+    return keyword_genre(title, notes)
+
+
+def keyword_genre(title: str = '', notes: str = '') -> str:
+    """The norms genre the words in a title and notes suggest ('' when
+    they name none). Procedural first, drama last."""
     blob = f"{title or ''} {notes or ''}"
+    if _PROCEDURAL.search(blob):
+        return 'procedural'
     if _HORROR.search(blob):
         return 'horror'
     if _COMEDY.search(blob):
@@ -171,6 +185,8 @@ def norms_genre(title: str = '', notes: str = '', votes: Optional[dict] = None) 
         return 'documentary'
     if _UNSCRIPTED.search(blob):
         return 'unscripted'
+    if _DRAMA.search(blob):
+        return 'drama'
     return ''
 
 
@@ -1200,6 +1216,11 @@ def record_norms(session: dict, s3=None) -> Optional[dict]:
 
 
 def attach_norms(scorecard: dict, fmt: str, genre: str, s3=None) -> dict:
+    """The norm and genre-norm columns, the comparison lines and the
+    norm choice ('Compared to: Procedural pilots', or the honest 'No norm
+    yet for procedural pilots (1 of 5 tests).') on a scorecard. ``genre``
+    is the norm the test is compared to (the user's choice when they set
+    one); '' or 'all' reads the all-genres column."""
     from migration import digital_twin_norms as N
     norms = norms_for(fmt, genre or 'all', s3=s3)
     scorecard['norms'] = norms
@@ -1213,9 +1234,69 @@ def attach_norms(scorecard: dict, fmt: str, genre: str, s3=None) -> dict:
     for metric in N.METRICS:
         a = (norms.get('all') or {}).get(metric)
         g = (norms.get('genre') or {}).get(metric)
-        rows_norm[metric] = {'norm': a.get('value') if a else None, 'genre_norm': (g.get('value') if g else None)}
+        # genre_own: the genre column carries a norm of its own for this row (not the all-genres value standing in)
+        rows_norm[metric] = {'norm': a.get('value') if a else None, 'genre_norm': (g.get('value') if g else None),
+                             'genre_own': bool(g and g.get('genre_used') not in (None, 'all'))}
     scorecard['norm_columns'] = rows_norm
+    choice = norms.get('choice') if isinstance(norms.get('choice'), dict) else N.norm_choice(fmt, genre or 'all')
+    scorecard['norm_choice'] = choice
+    if choice.get('note'):
+        scorecard['norm_lines'] = list(scorecard['norm_lines']) + [choice['note']]
     return scorecard
+
+
+def set_norm(sess: dict, genre: str, *, by_user: bool = True, twin: Optional[dict] = None, s3=None) -> dict:
+    """The user sets what the test is compared to (Jenna 2026-11-04:
+    "let's change it to where you set what norm to compare it to").
+    ``genre`` is a norms genre or '' for the all-genres column. The
+    session's ``norm_genre`` and ``genre`` follow it, ``genre_set_by_user``
+    is True when the user touched it (the frames' vote then never
+    overrides it). On a scored test the norm lines and columns are
+    re-read on the stored scorecard, the test is re-filed in the ledger
+    under the new genre, and the forecast re-reads the norms. Nothing is
+    re-run. Returns what changed."""
+    from migration.digital_twin_norms import _genre as _ng
+    g = str(genre or '').strip().lower()
+    g = _ng(g) if g else ''
+    g = '' if g == 'all' else g
+    old = str(sess.get('genre') or '')
+    changed = {}
+    if by_user and not sess.get('genre_set_by_user'):
+        sess['genre_set_by_user'] = True
+        changed['genre_set_by_user'] = True
+    elif not by_user and not g and sess.get('genre_set_by_user'):
+        sess['genre_set_by_user'] = False      # cleared without a choice: the system's guess may fill it again
+        changed['genre_set_by_user'] = False
+    if g == old and sess.get('norm_genre') == g and not changed:
+        return changed
+    sess['genre'] = g
+    sess['norm_genre'] = g
+    changed['genre'] = g
+    sc = sess.get('scorecard') if isinstance(sess.get('scorecard'), dict) else None
+    if sc:
+        fmt = str(sc.get('format') or format_for(sess))
+        if g != old and sess.get('norms_recorded_at'):
+            # the test's reads move from the old genre's cells to the new one's (the all-genres cells keep them)
+            try:
+                from migration import digital_twin_norms as N
+                if old:
+                    N.forget_test_genre(_norms_s3(s3), str(sess.get('id') or ''), fmt, old)
+                record_norms(sess, s3=s3)
+            except Exception as e:
+                print(f"[pilot] norms re-file skipped: {e}")
+        try:
+            sc['genre'] = g
+            attach_norms(sc, fmt, g or 'all', s3=s3)
+        except Exception as e:
+            print(f"[pilot] norms refresh skipped: {e}")
+        if twin is not None:
+            try:   # the forecast reads the norm columns and the genre (completion base)
+                from migration.digital_twin_forecast import attach_forecast
+                attach_forecast(twin, sess, s3=s3)
+            except Exception as e:
+                print(f"[pilot] forecast refresh skipped: {e}")
+    sess['updated_at'] = _now()
+    return changed
 
 
 # ----------------------------------------------------------- the probes
@@ -1524,7 +1605,9 @@ def prepare_watch(session: dict, twins_by_key: dict, *, duration_s: float = 0,
     tell('laying out the beat sheet')
     scenes = build_scenes(title, dur, media_key, scenes=file_scenes, captions=captions, transcript=transcript, silences=silences, notes=notes)
     if not session.get('genre_set_by_user'):
+        # the system's best guess (the frames' vote, else the words) until the user sets the norm themselves
         session['genre'] = norms_genre(title, notes, votes=an.get('genre_votes')) or str(session.get('genre') or '')
+        session['norm_genre'] = session['genre']
     fmt = format_for(session)
     if not session.get('mode_set_by_user') and an.get('format_votes'):
         try:
@@ -1783,7 +1866,7 @@ def open_session(twins: list, *, segments: Optional[list] = None, in_room: int =
         'title': name or f"{MODE_TITLE_WORD.get(mode, 'Pilot test')}: {names}",
         'group': group, 'questions': [], 'cohorts': cohorts,
         'media': media, 'status': 'draft',
-        'mode': mode, 'genre': '', 'cut_label': 'Cut A' if mode not in ('trailer', 'spot') else 'Trailer A', 'lineage': None, 'rough_cut': bool(rough_cut),
+        'mode': mode, 'genre': '', 'norm_genre': '', 'genre_set_by_user': False, 'cut_label': 'Cut A' if mode not in ('trailer', 'spot') else 'Trailer A', 'lineage': None, 'rough_cut': bool(rough_cut),
         'critics_room': bool(critics_room),
         'cast': [], 'comps': [], 'purge_media_after': False,
         'assets': [], 'options': opts, 'logline': ' '.join(str(logline or '').split())[:600], 'text': str(text or '').strip()[:400000],
@@ -1966,20 +2049,12 @@ def set_options(sess: dict, body: dict) -> dict:
     if not isinstance(body, dict):
         return changed
     if 'genre' in body:
-        from migration.digital_twin_norms import _genre as _ng
-        g = str(body.get('genre') or '').strip().lower()
-        g = _ng(g) if g else ''
-        g = '' if g == 'all' else g
-        if g != str(sess.get('genre') or ''):
-            sess['genre'] = g
-            sess['genre_set_by_user'] = bool(g)
-            changed['genre'] = g
-            if sess.get('scorecard'):
-                try:
-                    sess['scorecard']['genre'] = g
-                    attach_norms(sess['scorecard'], str(sess['scorecard'].get('format') or format_for(sess)), g or 'all')
-                except Exception as e:
-                    print(f"[pilot] norms refresh skipped: {e}")
+        # the norm the test is compared to; 'genre_set_by_user' in the body says whether the person touched the
+        # Compare-to field (a pre-filled guess they left alone keeps following the frames' vote)
+        by_user = bool(body.get('genre_set_by_user')) if 'genre_set_by_user' in body else bool(str(body.get('genre') or '').strip())
+        got = set_norm(sess, str(body.get('genre') or ''), by_user=by_user)
+        if 'genre' in got:
+            changed['genre'] = got['genre']
     if 'mode' in body:
         m = str(body.get('mode') or 'pilot').strip().lower()
         if m in MODES and m != sess.get('mode'):
@@ -2792,28 +2867,38 @@ def session_csv(session: dict) -> str:
         f"{fav.get('clock')} {fav.get('line')}", f"{dead.get('clock')} {dead.get('line')}",
     ])
     w.writerow([])
-    w.writerow(['Question', 'Answer', 'Share %', 'People', 'In the room', 'Norm %', f"{genre.title()} norm %"])
+    # the norm columns carry the names of what the test is compared to ('All pilots', 'Procedural pilots'); a chosen genre with
+    # no norm of its own yet leaves its column blank rather than repeating the all-genres value (2026-11-04)
+    from migration.digital_twin_norms import choice_label as _choice_label
+    nch = sc.get('norm_choice') if isinstance(sc.get('norm_choice'), dict) else {}
+    fmt_csv = str(sc.get('format') or session.get('format') or session.get('mode') or 'pilot')
+    all_label = str(nch.get('all_label') or _choice_label(fmt_csv, 'all'))
+    genre_label = str(nch.get('label') or _choice_label(fmt_csv, genre))
+    gown = lambda nc: (nc or {}).get('genre_norm') if (nc and nc.get('genre_own', True) and genre != 'all') else ''   # noqa: E731
+    w.writerow(['Question', 'Answer', 'Share %', 'People', 'In the room', f"{all_label} norm %", f"{genre_label} norm %" if genre != 'all' else 'Genre norm %'])
     metric_for = {'overall': {'a': 'excellent'}, 'recommend': {'a': 'definitely_recommend'}, 'finish': {'a': 'finish'}, 'tune_in': {'a': 'tune_in'},
                   'urgency': {'a': 'urgency_opening'}, 'urgency_pilot': {'a': 'urgency_opening'}}
     for q in bat.get('questions') or []:
         for r in q.get('rows') or []:
             m = (metric_for.get(q.get('id')) or {}).get(r.get('id'))
             nc = norms.get(m) if m else None
-            w.writerow([q.get('label'), r.get('label'), r.get('pct'), r.get('people'), r.get('tally'), (nc or {}).get('norm') if nc else '', (nc or {}).get('genre_norm') if nc else ''])
+            w.writerow([q.get('label'), r.get('label'), r.get('pct'), r.get('people'), r.get('tally'), (nc or {}).get('norm') if nc else '', gown(nc)])
         if q.get('id') == 'overall':
             nc = norms.get('total_positive') or {}
-            w.writerow([q.get('label'), 'Total positive', q.get('total_positive_pct'), q.get('total_positive_people'), '', nc.get('norm'), nc.get('genre_norm')])
+            w.writerow([q.get('label'), 'Total positive', q.get('total_positive_pct'), q.get('total_positive_people'), '', nc.get('norm'), gown(nc)])
     w.writerow([])
     w.writerow(['Quadrant', 'Seats', 'People', 'Excellent %', 'Total positive %', 'Definitely recommend %', 'Would finish %'])
     for qd in bat.get('quadrants') or []:
         w.writerow([qd.get('label'), qd.get('n'), qd.get('people'), qd.get('excellent_pct'), qd.get('total_positive_pct'), qd.get('definitely_recommend_pct'), qd.get('finish_pct')])
     nrm = sc.get('norms') or {}
     if nrm:
-        w.writerow(['Norm', '', '', (nrm.get('all') or {}).get('excellent', {}).get('value'), (nrm.get('all') or {}).get('total_positive', {}).get('value'),
+        w.writerow([f"{all_label} norm", '', '', (nrm.get('all') or {}).get('excellent', {}).get('value'), (nrm.get('all') or {}).get('total_positive', {}).get('value'),
                     (nrm.get('all') or {}).get('definitely_recommend', {}).get('value'), (nrm.get('all') or {}).get('finish', {}).get('value')])
-        if genre != 'all':
-            w.writerow([f"{genre.title()} norm", '', '', (nrm.get('genre') or {}).get('excellent', {}).get('value'), (nrm.get('genre') or {}).get('total_positive', {}).get('value'),
+        if genre != 'all' and str(nrm.get('genre_used') or 'all') != 'all':
+            w.writerow([f"{genre_label} norm", '', '', (nrm.get('genre') or {}).get('excellent', {}).get('value'), (nrm.get('genre') or {}).get('total_positive', {}).get('value'),
                         (nrm.get('genre') or {}).get('definitely_recommend', {}).get('value'), (nrm.get('genre') or {}).get('finish', {}).get('value')])
+        elif genre != 'all' and nch.get('note'):
+            w.writerow([nch['note'], '', '', '', '', '', ''])
     fc = session.get('forecast') if isinstance(session.get('forecast'), dict) else {}
     if fc.get('episode'):
         ep, se, su, act = fc['episode'], fc.get('series') or {}, fc.get('subscriptions') or {}, fc.get('actual') or {}
@@ -2928,7 +3013,7 @@ __all__ = [
     'deleted_pilot_key', 'media_hash', 'build_beats', 'build_scenes', 'build_beats_from_scenes', 'seat_dial', 'blend_dial', 'seat_events', 'persona_events',
     'aggregate_dial', 'split_dial', 'split_specs', 'all_splits', 'cohort_labels', 'cohort_key', 'cohort_segments', 'restore_session', 'MAX_COHORTS', 'quadrant_of', 'scorecard', 'battery_scorecard', 'norms_for', 'norm_metrics', 'record_norms',
     'auto_stop_due', 'parse_runtime', 'AUTO_STOP_GRACE_S',
-    'attach_norms', 'probe_points', 'fallback_guide', 'question_window', 'seat_window', 'ask_stimulus', 'format_for', 'norms_genre',
+    'attach_norms', 'set_norm', 'keyword_genre', 'probe_points', 'fallback_guide', 'question_window', 'seat_window', 'ask_stimulus', 'format_for', 'norms_genre',
     'session_csv', 'session_lines', 'public_session', 'signed_media_url',
     'media_s3_key', 'accept_upload_name', 'ffmpeg_available', 'probe_duration',
     'process_local_cut', 'has_banned_copy', 'beat_step',

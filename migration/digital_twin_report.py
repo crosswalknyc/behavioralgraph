@@ -67,6 +67,20 @@ def _head(session: dict) -> dict:
     return (((session or {}).get('scorecard') or {}).get('battery') or {}).get('headline') or {}
 
 
+def _compared_to(sc: dict, session: dict) -> str:
+    """'Compared to: Procedural pilots.' for the scorecard pages (the
+    chosen norm by name; never a source)."""
+    ch = sc.get('norm_choice') if isinstance(sc.get('norm_choice'), dict) else {}
+    label = str(ch.get('label') or '')
+    if not label:
+        try:
+            from migration.digital_twin_norms import choice_label
+            label = choice_label(str(sc.get('format') or (session or {}).get('format') or (session or {}).get('mode') or 'pilot'), str(sc.get('genre') or (session or {}).get('genre') or 'all'))
+        except Exception:
+            label = ''
+    return _clean(f"Compared to: {label}.") if label else ''
+
+
 # ---------------------------------------------------------------- chart
 def dial_chart_png(session: dict, *, width_px: int = 3400, height_px: int = 1190, splits: Optional[tuple] = None) -> Optional[bytes]:
     """The dial over the cut as a PNG: the room's line, the peaks and
@@ -448,7 +462,9 @@ def report_pages(payload: dict, session: dict) -> list:
     pages.append({'kind': 'tiles', 'header': _words(f"Total positive {_pct(head.get('total_positive_pct'))}, with the norm beside every number.") if head.get('total_positive_pct') is not None else 'The scorecard.',
                   'sub': _clean(f"{g.get('in_room') or len(g.get('roster') or [])} people in the room, {human_people(sc.get('people'))} behind them. {str(sc.get('format') or 'pilot').title()}" + (f", {sc.get('genre')}." if sc.get('genre') else '.')),
                   'tiles': [t for t in tiles if t[0]][:4], 'body': [_clean(x) for x in (sc.get('norm_lines') or [])[:3]], 'dark': False})
-    pages.append({'kind': 'table', 'header': 'Every question on the card, next to its norm.', 'sub': '', 'head': ('Measure', 'Room', 'Norm'), 'rows': [(_clean(a), b, _clean(c)) for a, b, c in _scorecard_rows(sc)[:12]], 'dark': True})
+    # the norm the card is read against, named once (Jenna 2026-11-04: the user sets it); older cards compute it from the genre
+    compared = _compared_to(sc, session)
+    pages.append({'kind': 'table', 'header': 'Every question on the card, next to its norm.', 'sub': compared, 'head': ('Measure', 'Room', 'Norm'), 'rows': [(_clean(a), b, _clean(c)) for a, b, c in _scorecard_rows(sc)[:12]], 'dark': True})
     png = dial_chart_png(session)
     if png:
         fav, dead = sc.get('favorite_moment') or {}, sc.get('dead_spot') or {}
