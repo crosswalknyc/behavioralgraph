@@ -1708,6 +1708,15 @@ def ask(user, body, *, via='session'):
                                             body.get('bind_subject'))
             except Exception as _fx:
                 _faults.note('service.recent_read', _fx)
+            # the words the reader already pushed back on in this thread are
+            # never handed back as the same read (Jessie 2026-11-04)
+            try:
+                if _rr_hit and _rr_hit.get('status') == 'done':
+                    from . import user_signal as _us_rr
+                    if _us_rr.rejected_reply(_rr_hit.get('reply'), history):
+                        _rr_hit = None
+            except Exception as _fx:
+                _faults.note('service.recent_read', _fx)
             _tr = None if (_rr_hit or body.get('bind_subject')) else _sm.thread_replay(text, history)
             if _rr_hit and _rr_hit.get('status') == 'done':
                 from . import read_registry as _reg

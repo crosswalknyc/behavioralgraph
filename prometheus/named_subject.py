@@ -308,6 +308,34 @@ def page_named(text, page, normalize, stop):
     return False
 
 
+# Audience nouns that end a profile's name ("New Heights Podcast
+# LISTENERS", "Wicked Tuna VIEWERS") name the kind of audience, never
+# the subject; an ask that carries only "listeners" has not named the page.
+_PAGE_NOUN_TOKENS = frozenset((
+    'audience', 'audiences', 'viewer', 'viewers', 'fan', 'fans', 'subscriber', 'subscribers',
+    'buyer', 'buyers', 'shopper', 'shoppers', 'listener', 'listeners', 'watcher', 'watchers',
+    'follower', 'followers', 'customer', 'customers', 'consumer', 'consumers', 'user', 'users',
+    'player', 'players', 'reader', 'readers', 'member', 'members', 'owner', 'owners',
+    'total', 'universe', 'profile', 'cut'))
+
+
+def page_named_outright(text, page, normalize, stop):
+    """True when the ask writes the open page's subject out in full: every
+    distinctive word of the page's family name (its audience noun set
+    aside) is in the ask. Stricter than `page_named` (one token is
+    enough there). Used where a library file the ask also names must
+    not displace the page (Jessie 2026-11-04: "from the New Heights
+    Podcast Listeners profile, what percentage ... Tubi, Roku, Pluto"
+    ran on the TUBI file, with the New Heights profile open and named)."""
+    pg = str(page or '').split(' - ')[0]
+    toks = [w for w in normalize(pg).split()
+            if len(w) >= 3 and w not in stop and w not in _PAGE_NOUN_TOKENS]
+    if not toks:
+        return page_named(text, page, normalize, stop)
+    tl = ' ' + normalize(text) + ' '
+    return all(f' {w} ' in tl for w in toks)
+
+
 def same_family(entry, page, normalize, stop):
     a = distinct_tokens(family_name(entry), normalize, stop)
     b = distinct_tokens(str(page or '').split(' - ')[0], normalize, stop)

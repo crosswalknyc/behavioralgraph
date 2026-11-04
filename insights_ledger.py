@@ -1580,7 +1580,30 @@ _REPLAY_COMPLAINT_RX = re.compile(
     r"\b(?:not what i (?:asked|wanted|meant)|that'?s? (?:wrong|not right"
     r"|not it|incorrect)|wrong answer|try again|doesn'?t answer"
     r"|didn'?t answer|still wrong)\b", re.I)
+# An order to run it again is a request about NOW, never a repeat of a
+# stored question (Jessie 2026-11-04: "run a new ask from this base ...
+# Calculate the deduplicated percentage" replayed, by meaning, the very
+# read she had just rejected). The stored neighbours still ride the
+# constraint block; the words never replay verbatim.
+_REPLAY_FRESH_RX = re.compile(
+    r"\b(?:run|do|take|start|make|give me|give us|want|need)\s+(?:a\s+|an\s+|another\s+|one\s+|the\s+)?"
+    r"(?:new|fresh|clean|separate|second|independent|different)\s+"
+    r"(?:ask|read|look|pull|pass|run|draw|count|calculation|query|number|numbers|figure|figures)s?\b"
+    r"|\b(?:re-?run|rerun|re-?do|redo|re-?pull|re-?calculate|recalculate|re-?compute|recompute|re-?read"
+    r"|run it again|do it again|from scratch|start over|go back (?:in )?an?d?\b"
+    r"|fresh (?:ask|read|look|pull|pass|run|draw|count|numbers|data|figures?)"
+    r"|new (?:look|pull|pass|draw)(?:\s*/\s*(?:look|pull|pass|draw))?"
+    r"|again from (?:the )?(?:base|start|top|data|file)|a second look)\b", re.I)
 _REPLAY_MIN_TOPIC_TOKENS = 2
+
+
+def fresh_run_requested(question):
+    """True when the ask orders the read run again rather than asking a
+    question a stored read could answer verbatim."""
+    try:
+        return bool(_REPLAY_FRESH_RX.search(str(question or '')))
+    except Exception:
+        return False
 
 
 def replay_eligible(question):
@@ -1597,6 +1620,8 @@ def replay_eligible(question):
         if _REPLAY_COMPLAINT_RX.search(q):
             return False
         if _REPLAY_COMMAND_RX.search(q):
+            return False
+        if _REPLAY_FRESH_RX.search(q):
             return False
         qn = normalize_question(q)
         toks = [w for w in qn.split()
@@ -2057,6 +2082,7 @@ def metrics_from_study(study):
 
 __all__ = ['consult', 'persist', 'make_entry', 'render_block',
            'find_exact', 'find_semantic', 'metrics_from_study',
+           'replay_eligible', 'fresh_run_requested',
            'entry_key', 'canon_family', 'subject_key',
            'normalize_question', 'normalize_subject',
            'family_from_question', 'cohort_signature',

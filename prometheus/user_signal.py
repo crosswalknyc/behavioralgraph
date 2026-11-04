@@ -71,6 +71,82 @@ _REJECTION_RE = re.compile(
 
 _WORD_RE = re.compile(r'[a-z0-9]+')
 
+# A longer message that still says the reply was wrong (Jessie
+# 2026-11-04: "this doesnt make sense with a 6,068,313 total US audience",
+# "your analysis ... doesn't make sense, as Samsung TV Plus isn't even in
+# the data", "You're drawing conclusions based on what already exists in
+# the profile. Instead, run a new ask ..."). `is_rejection` is the short,
+# anchored form the ask log grades on; this is the thread-level form a
+# replay consults before handing the same words back.
+_PUSHBACK_RE = re.compile(
+    r"\b(?:"
+    r"does\s*n[o']?t\s+make\s+(?:any\s+)?sense|doesnt\s+make\s+sense|makes\s+no\s+sense|not\s+make\s+sense|"
+    r"is\s*n[o']?t\s+even\s+in\b|not\s+(?:even\s+)?in\s+the\s+(?:data|file|profile)|"
+    r"does\s*n[o']?t\s+add\s+up|can\s*n[o']?t\s+be\s+right|cannot\s+be\s+right|"
+    r"(?:that|this|it)(?:'s|\s+is|\s+was)?\s+(?:wrong|incorrect|not\s+right|off)|"
+    r"wrong\s+(?:answer|base|number|numbers|figure|figures|read|data)|"
+    r"not\s+what\s+i\s+(?:asked|meant|wanted|said)|"
+    r"(?:you(?:'re|\s+are)\s+)?drawing\s+conclusions|"
+    r"go\s+back\s+(?:in\s+)?an?d?\b|redo\b|re-?run\b|rerun\b|run\s+it\s+again|try\s+again|still\s+wrong|"
+    r"instead,?\s+run\b|run\s+(?:a\s+)?(?:new|fresh)\s+(?:ask|read|pull|look|pass)|"
+    r"(?:a\s+)?fresh\s+(?:ask|read|pull|look|pass)|new\s+look\s*/?\s*pull"
+    r")\b", re.IGNORECASE)
+
+
+# the widget's note for a dropped-in file; never a verdict on the reply above it
+_UPLOAD_NOTE_RE = re.compile(r"^\s*(?:uploaded|attached|attaching|here is the file|file:)\b", re.IGNORECASE)
+
+
+def pushes_back(text):
+    """True when the message says the prior reply was wrong, whatever its
+    length: the short anchored rejection, or a sentence that names what
+    did not make sense and asks for it again."""
+    t = str(text or '').strip()
+    if not t:
+        return False
+    if is_rejection(t):
+        return True
+    return bool(_PUSHBACK_RE.search(t))
+
+
+def _reply_fold(text, width=240):
+    t = str(text or '')
+    t = re.sub(r"^\s*Same read as earlier[^\n]*\n+", '', t)   # a replay lead never changes the words
+    return norm(t)[:width]
+
+
+def rejected_reply(reply, history):
+    """True when this thread already showed ``reply`` and the reader's
+    next message pushed back on it. A stored read the reader rejected is
+    never handed back again as the answer to a repeat (Jessie 2026-11-04:
+    the 62.4% FAST read came back verbatim after "isn't even in the
+    data"). Pure; never raises."""
+    try:
+        want = _reply_fold(reply)
+        if len(want) < 40:
+            return False
+        turns = [t for t in (history or []) if isinstance(t, dict)]
+        for i, t in enumerate(turns):
+            if str(t.get('role') or '') == 'user':
+                continue
+            have = _reply_fold(t.get('text') or t.get('content') or '')
+            if not have or not (have == want or have.startswith(want) or want.startswith(have)):
+                continue
+            # the reader's verdict is the first thing they SAID after it; a
+            # file they dropped in on the way ("Uploaded X.csv") is not a verdict
+            for x in turns[i + 1:]:
+                if str(x.get('role') or '') != 'user':
+                    continue
+                said = str(x.get('text') or x.get('content') or '')
+                if _UPLOAD_NOTE_RE.match(said):
+                    continue
+                if pushes_back(said):
+                    return True
+                break
+        return False
+    except Exception:
+        return False
+
 
 def norm(text):
     """Casefold, strip the date-range chip, collapse to words."""
@@ -295,4 +371,4 @@ def summarize(grades, total_asks):
 
 __all__ = ['FAILED_BY_USER', 'detect', 'grade_sequence', 'summarize',
            'is_rejection', 'is_repeat', 'is_confirm_only', 'norm',
-           'prior_turns']
+           'prior_turns', 'pushes_back', 'rejected_reply']

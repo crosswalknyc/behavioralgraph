@@ -718,6 +718,19 @@ def bind_to_evidence(reply, evidence_text, tol=0.02):
 _REJECT_RX = re.compile(r"\b(wrong|incorrect|not right|doesn'?t (?:look|seem) right|that'?s not|redo|try again|no,? that)\b", re.I)
 
 
+def _pushed_back(text):
+    """The reader said the answer was wrong: this module's short list, or
+    the longer thread-level form in prometheus.user_signal (2026-11-04)."""
+    t = str(text or '')
+    if _REJECT_RX.search(t):
+        return True
+    try:
+        from . import user_signal as _us
+        return bool(_us.pushes_back(t))
+    except Exception:
+        return False
+
+
 def _fold_q(s):
     try:
         from . import question_key as _qk
@@ -753,7 +766,7 @@ def thread_replay(text, history):
                 continue
             # an answer the reader pushed back on is never replayed
             nxt_user = next((x for x in turns[i + 1:] if str(x.get('role') or '') == 'user' and x is not turn), None)
-            if nxt_user and _REJECT_RX.search(str(nxt_user.get('text') or nxt_user.get('content') or '')):
+            if nxt_user and _pushed_back(str(nxt_user.get('text') or nxt_user.get('content') or '')):
                 continue
             when = str(nxt.get('ts') or '')
             try:

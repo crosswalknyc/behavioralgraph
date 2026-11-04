@@ -10850,6 +10850,22 @@ def _pm_replay_repeat_block(pm_user, question, window_s=1500):
         return False
 
 
+def _pm_replay_rejected_in_thread(entry, history):
+    """True when the stored entry's reply already appeared in this thread
+    and the reader's next message pushed back on it (prometheus.user_signal.
+    rejected_reply). A replay of those words is the loop Jessie hit on
+    2026-11-04; the ask runs fresh instead. Never raises."""
+    try:
+        from prometheus import user_signal as _us
+        reply = str((entry or {}).get('reply') or '')
+        if reply and _us.rejected_reply(reply, history):
+            print(f"[pm-replay] stored read {str((entry or {}).get('k') or '')!r} was pushed back on in this thread; running fresh")
+            return True
+    except Exception as _fx:
+        _faults.note('chat', _fx)
+    return False
+
+
 _PM_REFUSAL_RX = re.compile(
     r"(?:re-?\s?aim|could\s+not\s+lock|cannot\s+lock|"
     r"rather\s+than\s+guess|tell\s+me\s+the\s+specific\s+read|"
@@ -12396,8 +12412,13 @@ def _pm_generation_base(subject_hint, text, ctx=None,
         # open page.
         _hint_d = set(_tokens(subject_hint))
         _page_d = set(_tokens(page_base.get('subject')))
+        _page_outright = False
+        try:   # the page written out in full is named too: the hint is then the object, not another subject (2026-11-04)
+            _page_outright = _ns_mod.page_named_outright(text, page_base.get('subject'), _H._normalize_for_match, _PM_CLARIFY_STOP_TOKENS)
+        except Exception as _fx:
+            _faults.note('chat', _fx)
         if (len(_hint_d) >= 2 and _page_d
-                and not (_hint_d & _page_d)):
+                and not (_hint_d & _page_d) and not _page_outright):
             print(f"[pm-base] ask names its own subject "
                   f"({' '.join(sorted(_hint_d))[:60]}) with no overlap "
                   f"to the open page ({page_base.get('subject')!r}); "
@@ -12425,6 +12446,28 @@ def _pm_generation_base(subject_hint, text, ctx=None,
         page_base = None   # a bound subject (chip, approved quote) is the base or nothing; the quote and the read agree (2026-10-24)
     if page_base is not None and not prefer_catalog:
         return page_base
+    # The page written out in full in the ask is the ask's audience; a
+    # library subject the ask also names is what the read measures on it
+    # (Jessie 2026-11-04: "from the New Heights Podcast Listeners profile,
+    # what percentage ... Tubi, Roku, Pluto" carried the hint 'Tubi', the
+    # catalog tier below bound the TUBI file, and two reads ran on the
+    # wrong rows with the named profile open). A cut of the page's own
+    # family named outright still binds the cut.
+    if page_base is not None and not bound:
+        try:
+            if _ns_mod.page_named_outright(text, page_base.get('subject'), _H._normalize_for_match, _PM_CLARIFY_STOP_TOKENS):
+                _fam_hit = _ns_mod.named_entry(text, _profile_catalog_for_chat(), _H._normalize_for_match, _PM_CLARIFY_STOP_TOKENS)
+                if _fam_hit and _fam_hit.get('s3_key') \
+                        and _ns_mod.same_family(_fam_hit, page_base.get('subject'), _H._normalize_for_match, _PM_CLARIFY_STOP_TOKENS) \
+                        and str(_fam_hit.get('s3_key') or '') != str(page_base.get('s3_key') or ''):
+                    print(f"[pm-base] the ask names {_fam_hit.get('display_name')!r}, a cut of the open page's family; it is the base")
+                    return {'subject': str(_fam_hit.get('subject') or _fam_hit.get('display_name') or '').strip(),
+                            's3_key': str(_fam_hit.get('s3_key') or ''), 'source': 'catalog'}
+                print(f"[pm-base] the ask names the open page {page_base.get('subject')!r} outright; the page is the base "
+                      f"(the hint {str(subject_hint or '')[:40]!r} is what the read measures on it)")
+                return page_base
+        except Exception:
+            traceback.print_exc()
 
     q_tokens = set(_H._normalize_for_match(text).split())
     hint_tokens = set(_H._normalize_for_match(subject_hint).split())
@@ -13346,9 +13389,11 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
     bind_subject = bind_subject or _subject_rules.pinned_bind_for(text, history, str(((ctx or {}).get('primary') or {}).get('name') or ''))   # the thread's own subject, never a which-one question from cross-session memory (Emmet Riley 2026-10-26)
     bind_cohort = str(bind_cohort or '').strip()
     # A bare "this audience" that starts work binds to the audience on screen (or the thread's) and is confirmed in one line first; the confirmed name rides into the job (2026-10-26, Mark Valdez)
+    # A resumed read (the read worker) already passed this gate with the screen it had; it runs on its pinned base and never asks again (Jessie 2026-11-04)
+    _resume_pin = str((resume_base or {}).get('subject') or (resume_base or {}).get('s3_key') or '').strip() if isinstance(resume_base, dict) else ''
     try:
         _arg = _audience_referent.gate(text, bind_subject, ctx=ctx, thread=getattr(__import__('flask').g, '_pm_thread_binding', None), history=history,
-                                       confirmed=str(getattr(__import__('flask').g, '_pm_referent_confirmed', '') or ''))
+                                       confirmed=str(getattr(__import__('flask').g, '_pm_referent_confirmed', '') or ''), pinned=_resume_pin)
     except Exception as _fx:
         _faults.note('chat', _fx); _arg = None
     if _arg:
@@ -13635,6 +13680,8 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
             try:
                 _led_nb = il.consult(subject=subj_name, question=text)
                 _exact_nb = (_led_nb or {}).get('exact')
+                if _exact_nb and _pm_replay_rejected_in_thread(_exact_nb, history):
+                    _exact_nb = None   # the reader already said no to these words (2026-11-04)
                 if _exact_nb and _exact_nb.get('reply'):
                     _pm_ask_hint(outcome='answered', subject=subj_name)
                     # Served from the library: metered, never free
@@ -13831,6 +13878,12 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
     # hand back a stored reply against a fresh charge). Entries still
     # ride the prompt as binding constraints.
     if panel_charge is not None:
+        exact = None
+    # A stored read this thread already showed and the reader pushed back
+    # on is never the answer to the repeat (Jessie 2026-11-04: the 62.4%
+    # FAST read came back verbatim after "Samsung TV Plus isn't even in
+    # the data"). It still rides the constraint block; the ask runs fresh.
+    if exact and _pm_replay_rejected_in_thread(exact, history):
         exact = None
     if exact and exact.get('reply'):
         _pm_ask_hint(outcome='answered',
@@ -16896,7 +16949,8 @@ def _pm_analyze_core(user, body, text, history):
         traceback.print_exc()
     if _led_exact and _led_exact.get('reply') and _led_same_subject \
             and _led_subj and not mode and not _pm_skip_replay \
-            and not _pm_replay_repeat_block(_pm_user, text):
+            and not _pm_replay_repeat_block(_pm_user, text) \
+            and not _pm_replay_rejected_in_thread(_led_exact, history):
         _replay_subj = _led.get('subject') or _led_subj
         _pm_ask_hint(route='ledger_replay', outcome='answered',
                      subject=_replay_subj)
