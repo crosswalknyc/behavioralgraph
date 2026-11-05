@@ -3118,6 +3118,14 @@ def public_session(sess: dict) -> dict:
     pr = out.get('prior_read')
     if isinstance(pr, dict):
         out['prior_read'] = {k: v for k, v in pr.items() if k != 'seat_dials'}
+    # the forecast's calibration block and recorded actual are audit and never travel; the notes go through the guard
+    # (Jenna 2026-11-05: calibrate to published performance, never say so)
+    if isinstance(out.get('forecast'), dict):
+        try:
+            from migration.digital_twin_forecast import public_forecast
+            out['forecast'] = public_forecast(out['forecast'])
+        except Exception as e:
+            print(f"[pilot] forecast view skipped: {e}")
     # what the room said about the people the setup named follows the card's character metrics as they stand (a read built
     # against older metrics shows as the deterministic read until the next question rebuilds it with the moderator)
     try:
@@ -3186,7 +3194,8 @@ def session_csv(session: dict, payload: Optional[dict] = None) -> str:
         f"{fav.get('clock')} {fav.get('line')}", f"{dead.get('clock')} {dead.get('line')}",
         compared, nch.get('note') or '', sc.get('denominator_line') or denominator_line(seats, people),
     ])
-    for line in list(sc.get('norm_lines') or []) + list(sc.get('notes') or []):
+    from migration.digital_twin_copy import strip_calibration_lines as _no_cal
+    for line in _no_cal(list(sc.get('norm_lines') or []) + list(sc.get('notes') or [])):
         w.writerow(['Note', line])
     w.writerow([])
     w.writerow(['Question', 'Answer', 'Share %', 'People', 'In the room', first_norm_col, f"{genre_label} norm %" if genre != 'all' else 'Genre norm %'])
@@ -3307,14 +3316,14 @@ def session_csv(session: dict, payload: Optional[dict] = None) -> str:
             for q in r.get('by_quadrant') or []:
                 if isinstance(q, dict) and q.get('n'):
                     w.writerow(['', r.get('talent'), q.get('label'), q.get('n'), q.get('people'), q.get('reach_lift_pct')])
-    fc = session.get('forecast') if isinstance(session.get('forecast'), dict) else {}
+    # the forecast as a reader gets it: no calibration block, no recorded actual, the notes through the guard (Jenna 2026-11-05)
+    from migration.digital_twin_forecast import public_forecast as _public_forecast
+    fc = _public_forecast(session.get('forecast')) if isinstance(session.get('forecast'), dict) else {}
     if fc.get('episode'):
-        ep, se, su, act = fc['episode'], fc.get('series') or {}, fc.get('subscriptions') or {}, fc.get('actual') or {}
+        ep, se, su = fc['episode'], fc.get('series') or {}, fc.get('subscriptions') or {}
         w.writerow([])
         w.writerow(['Forecast', 'Value', 'Low', 'High', 'Definition'])
         w.writerow(['Week-one audience if released', ep.get('week_one_audience'), ep.get('low'), ep.get('high'), ep.get('definition')])
-        if act.get('week_one_audience'):
-            w.writerow(['Week-one audience as aired', act.get('week_one_audience'), '', '', act.get('measure')])
         w.writerow(['Season completion %', se.get('season_completion_pct'), '', '', se.get('completion_definition')])
         w.writerow(['Second screen %', se.get('second_screen_pct'), '', '', se.get('second_screen_definition')])
         w.writerow(['Season average audience', se.get('season_average_audience'), '', '', 'People per episode across the season'])
@@ -3460,7 +3469,9 @@ def session_lines(session: dict) -> list:
         out.append(f"Dead spot at {dead.get('clock')}: {dead.get('line')}")
     for n in (sc.get('notes') or [])[:3]:
         out.append(n)
-    return [x for x in out if x]
+    # no calibrated / anchored / as aired / ratings-service sentence in the short read (Jenna 2026-11-05)
+    from migration.digital_twin_copy import strip_calibration_lines
+    return strip_calibration_lines([x for x in out if x])
 
 
 def has_banned_copy(s: str) -> list:
@@ -3472,6 +3483,11 @@ def has_banned_copy(s: str) -> list:
             hits.append(tok)
     if '\u2014' in str(s or '') or '\u2013' in str(s or ''):
         hits.append('dash')
+    try:
+        from migration.digital_twin_copy import calibration_hits
+        hits.extend(calibration_hits(s))
+    except Exception:
+        pass
     return hits
 
 

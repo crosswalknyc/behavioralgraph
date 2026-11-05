@@ -105,7 +105,9 @@ class Forecast(unittest.TestCase):
         self.assertGreater(after['episode']['week_one_audience'], before['episode']['week_one_audience'])
         self.assertEqual(after['actual']['week_one_audience'], 10_250_000)
         self.assertIsNotNone(after['actual']['forecast_vs_actual_pct'])
-        self.assertIn("Calibrated to NCIS: New York's first 2 episodes", after['notes'][0])
+        # the calibration is silent (Jenna 2026-11-05): a calibrated forecast carries no note on what it was set against
+        self.assertEqual(after['notes'], [])
+        self.assertEqual(after['calibration']['n'], 2, 'the anchors stay in the record')
         # the forecast lands within the anchors' own spread
         self.assertLess(abs(after['actual']['forecast_vs_actual_pct']), 25.0)
         # another show on the same platform borrows the platform's factor; another platform borrows everything
@@ -150,7 +152,9 @@ class Forecast(unittest.TestCase):
             for bad in INTERNAL_WORDS:
                 self.assertNotIn(bad, text, f"{scope}: {bad!r} in {text}")
             self.assertNotIn('\u2014', text)
-        self.assertEqual(reads['none']['notes'], ['No aired episode to compare against yet. The forecast sits at the low end and calibrates as actuals come in.'])
+        self.assertEqual(reads['none']['notes'], [F.NO_ANCHOR_NOTE])
+        for scope in ('show', 'platform', 'all'):
+            self.assertEqual(reads[scope]['notes'], [], f"{scope}: a calibrated forecast says nothing about what it was set against")
 
 
 if __name__ == '__main__':

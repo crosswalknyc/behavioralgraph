@@ -54802,7 +54802,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }
             function pct1(v) { return v == null ? '' : Number(v).toFixed(1) + '%'; }
             // ---- the performance forecast on a scored test (Jenna 2026-11-03): what the episode would do if released,
-            // how the season would hold, who it would bring to the service; calibrated to aired episodes as they land
+            // how the season would hold, who it would bring to the service. The notes come through the server's output guard and
+            // piReaderNotes below: nothing on the card says what the forecast was set against (Jenna 2026-11-05)
             function piPeopleShort(v) {
                 var n = Number(v || 0);
                 if (!isFinite(n) || n <= 0) return '-';
@@ -54811,34 +54812,34 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 return fmtN(n);
             }
             function piAbout(n) { return n ? ', about ' + fmtN(n) + ' people' : ''; }
+            // the output guard on the page: a note that says calibrated, anchored, benchmarked, as aired, or names a ratings
+            // service never renders (the server strips the same; this holds for a record read before the server did)
+            var PI_CAL_RX = /calibrat|benchmark|\banchored\b|\banchors? (?:to|on|against)\b|\bas (?:it |they |originally )?aired\b|\baired (?:episodes?|figures?|numbers?|performance|audience)\b|\bactuals\b|\bnielsen\b|\bcomscore\b|\bsamba ?tv\b|\bvideoamp\b|\bluminate\b|\bparrot analytics\b|\bratings? (?:service|data|book|figures?|numbers?)\b|\blive ?\+|\bsame[- ]day ratings?\b|\bthe ledger\b/i;
+            function piReaderNotes(list) { return (list || []).filter(function(n) { return n && !PI_CAL_RX.test(String(n)); }); }
             function piForecastSide(s) {
                 var fc = (s || {}).forecast || {}; if (!fc.episode) return '';
-                var ep = fc.episode, se = fc.series || {}, su = fc.subscriptions || {}, act = fc.actual || {};
+                var ep = fc.episode, se = fc.series || {}, su = fc.subscriptions || {};
                 var plat = su.platform || 'the service';
                 var out = '<div class="dtw-pi-hr"></div><div class="dtw-pi-h">Forecast</div>'
-                    + (ep.week_one_audience ? '<div class="dtw-pi-stat"><div class="v">' + esc(piPeopleShort(ep.week_one_audience)) + '</div><div class="k">Week-one audience if released'
-                    + (act.week_one_audience ? ', aired ' + esc(piPeopleShort(act.week_one_audience)) : '') + '</div></div>' : '')
+                    + (ep.week_one_audience ? '<div class="dtw-pi-stat"><div class="v">' + esc(piPeopleShort(ep.week_one_audience)) + '</div><div class="k">Week-one audience if released</div></div>' : '')
                     + '<div class="dtw-pi-stat"><div class="v">' + esc(pct1(se.season_completion_pct)) + '</div><div class="k">Would finish the season</div></div>'
                     + '<div class="dtw-pi-stat"><div class="v">' + esc(pct1(se.second_screen_pct)) + '</div><div class="k">On a second screen during the episode</div></div>'
                     + '<div class="dtw-pi-stat"><div class="v">' + esc(pct1(su.subscribe_pct_of_nonsubscribers)) + '</div><div class="k">Of people without ' + esc(plat) + ' would subscribe for it' + esc(piAbout(su.subscribe_people)) + '</div></div>'
                     + '<div class="dtw-pi-stat"><div class="v">' + esc(pct1(su.reactivate_pct_of_dormant)) + '</div><div class="k">Of dormant accounts would come back for it' + esc(piAbout(su.reactivate_people)) + '</div></div>';
-                var note = (fc.notes || [])[0]; if (note) out += '<div class="dtw-pi-fn">' + esc(note) + '</div>';
+                var note = piReaderNotes(fc.notes)[0]; if (note) out += '<div class="dtw-pi-fn">' + esc(note) + '</div>';
                 return out;
             }
             function piForecastFull(s) {
                 var fc = (s || {}).forecast || {}; if (!fc.episode) return '';
-                var ep = fc.episode, se = fc.series || {}, su = fc.subscriptions || {}, act = fc.actual || {}, cal = fc.calibration || {};
+                var ep = fc.episode, se = fc.series || {}, su = fc.subscriptions || {};
                 var plat = su.platform || 'the service';
-                var actLine = act.week_one_audience
-                    ? '<div class="dtw-pi-fc-act">As aired: <b>' + esc(piPeopleShort(act.week_one_audience)) + '</b> in week one' + (act.forecast_vs_actual_pct != null ? ' (forecast ' + (Number(act.forecast_vs_actual_pct) >= 0 ? '+' : '') + esc(String(act.forecast_vs_actual_pct)) + '% against it)' : '') + '.</div>'
-                    : '';
                 var money = '<div class="dtw-pi-money fc">'
-                    + (ep.week_one_audience ? '<div class="m"><div class="k">Week-one audience if released</div><div class="v">' + esc(piPeopleShort(ep.week_one_audience)) + '</div><div class="n">' + esc(piPeopleShort(ep.low)) + ' to ' + esc(piPeopleShort(ep.high)) + '. ' + esc(ep.definition || '') + '</div>' + actLine + '</div>' : '')
+                    + (ep.week_one_audience ? '<div class="m"><div class="k">Week-one audience if released</div><div class="v">' + esc(piPeopleShort(ep.week_one_audience)) + '</div><div class="n">' + esc(piPeopleShort(ep.low)) + ' to ' + esc(piPeopleShort(ep.high)) + '. ' + esc(ep.definition || '') + '</div></div>' : '')
                     + '<div class="m"><div class="k">The season</div><div class="v">' + esc(pct1(se.season_completion_pct)) + '</div><div class="n">would finish the season; ' + esc(pct1(se.second_screen_pct)) + ' on a second screen during the episode.' + (se.season_average_audience ? ' Season average ' + esc(piPeopleShort(se.season_average_audience)) + ', finale ' + esc(piPeopleShort(se.finale_audience)) + '.' : '') + '</div></div>'
                     + '<div class="m"><div class="k">Would subscribe to ' + esc(plat) + ' for it</div><div class="v">' + esc(pct1(su.subscribe_pct_of_nonsubscribers)) + '</div><div class="n">of people without ' + esc(plat) + esc(piAbout(su.subscribe_people)) + '.</div></div>'
                     + '<div class="m"><div class="k">Would come back for it</div><div class="v">' + esc(pct1(su.reactivate_pct_of_dormant)) + '</div><div class="n">of dormant ' + esc(plat) + ' accounts' + esc(piAbout(su.reactivate_people)) + '.</div></div>'
                     + '</div>';
-                var notes = (fc.notes || []).concat(fc.board_notes || []).map(function(n) { return '<p class="dtw-muted" style="margin-top:8px">' + esc(n) + '</p>'; }).join('');
+                var notes = piReaderNotes((fc.notes || []).concat(fc.board_notes || [])).map(function(n) { return '<p class="dtw-muted" style="margin-top:8px">' + esc(n) + '</p>'; }).join('');
                 return '<div class="dtw-eyebrow" style="margin-top:18px">Forecast</div>' + money + notes;
             }
             function renderScorecard(s) {
@@ -54860,7 +54861,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     + (hd.finish_pct != null ? '<div class="m"><div class="k">Would finish</div><div class="v">' + pct1(hd.finish_pct) + seatN('finish') + '</div><div class="n">' + normN('finish') + '</div></div>' : '')
                     + '</div>';
                 // the norm lines (the four measures), then the plain line that says the card moved with the room's own answers (Jenna 2026-11-04)
-                var lines = (sc.norm_lines || []).filter(function(l) { return notes.indexOf(l) < 0; }).slice(0, 4).concat(sc.reconcile_notes || []).map(function(l) { return '<p class="dtw-p" style="margin-top:8px">' + esc(l) + '</p>'; }).join('');
+                var lines = piReaderNotes(sc.norm_lines).filter(function(l) { return notes.indexOf(l) < 0; }).slice(0, 4).concat(piReaderNotes(sc.reconcile_notes)).map(function(l) { return '<p class="dtw-p" style="margin-top:8px">' + esc(l) + '</p>'; }).join('');
                 var metricFor = { overall: { a: 'excellent' }, recommend: { a: 'definitely_recommend' }, finish: { a: 'finish' }, tune_in: { a: 'tune_in' }, urgency: { a: 'urgency_opening' }, urgency_pilot: { a: 'urgency_opening' } };
                 var trs = '';
                 (bat.questions || []).forEach(function(q) {
@@ -54890,7 +54891,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     + '<div class="dtw-pi-score"><div class="k">Favorite moment</div><div class="v" style="font-size:16px">' + esc((sc.favorite_moment || {}).clock || '') + '</div><div class="dtw-muted">' + esc((sc.favorite_moment || {}).line || '') + '</div></div>'
                     + '<div class="dtw-pi-score"><div class="k">Dead spot</div><div class="v" style="font-size:16px">' + esc((sc.dead_spot || {}).clock || '') + '</div><div class="dtw-muted">' + esc((sc.dead_spot || {}).line || '') + '</div></div>'
                     + '</div>'
-                    + ((sc.notes || []).map(function(n) { return '<p class="dtw-muted">' + esc(n) + '</p>'; }).join(''));
+                    + (piReaderNotes(sc.notes).map(function(n) { return '<p class="dtw-muted">' + esc(n) + '</p>'; }).join(''));
                 return '<div class="dtw-eyebrow" style="margin-top:18px">Scorecard</div>' + compared + money + lines + table + quad + dialReads + piForecastFull(s);
             }
             function renderGuide(s) {

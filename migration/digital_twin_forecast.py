@@ -41,8 +41,22 @@ everything. Every later forecast on that show or platform carries the
 factor, and the residual spread of the anchors sets the range. The first
 anchors are NCIS: New York's first two episodes.
 
-Nothing here names a source in anything a reader sees; the notes say
-"calibrated to the first two episodes' audiences" and no more.
+Aired performance (Jenna 2026-11-05). When the title a test is cut from
+has already aired or been released (an old episode fed as a cut, a season
+already out, a film in release), ``anchor_to_aired`` pulls its published
+audience through one research call on the room's media desk model and
+records it on the ledger as the session's own anchor, so the forecast
+calibrates to it. The check is cached on the ledger per session (an
+upcoming title is re-checked after a week).
+
+The calibration is SILENT. Nothing a reader sees says calibrated,
+anchored, as aired, or names a ratings service or a publication
+(``migration/digital_twin_copy.strip_calibration_language`` is the guard,
+run on every rendered line). The calibration block, the recorded actual
+and the ledger stay in the record for internal audit only;
+``public_forecast`` is what the page, the report and the exports read.
+Jenna, verbatim: "if there is published data about something (like it
+already aired) you can calibrate to that just don't source it."
 """
 from __future__ import annotations
 
@@ -68,6 +82,13 @@ COMPLETION_DEFAULT = 0.5
 SUBSCRIBE_BASE_PCT = 0.9           # of people without the platform, at an average cut
 REACTIVATE_BASE_PCT = 2.4          # of dormant accounts, at an average cut
 NORM_FALLBACK = {'total_positive': 65.0, 'definitely_recommend': 50.0, 'finish': 85.0}
+NO_ANCHOR_NOTE = 'An early read on the title, at the low end of its range.'   # the one note an uncalibrated forecast carries
+AIRED_CHECK_TTL_S = 7 * 86400          # a title that had not aired is asked about again after a week
+AIRED_MIN_PEOPLE = 50_000              # a count under this is noise, not an anchor
+AIRED_MODES = ('pilot', 'feature', 'episode', 'binge')   # the tests whose cut is a title that can have aired
+AIRED_SYSTEM = """You check whether a television episode, season or film has already been released to the public in the US, and when it has, what its audience was in its first seven days across every screen (the network's or platform's own published counts, Nielsen, Samba TV, Luminate, Parrot Analytics, or trade press reporting those counts; for an older broadcast episode, the viewers of its first airing). Use the web_search tool when you have it. Never invent a number or a date; null when you cannot support it. Prefer the lowest well-supported figure when sources disagree.
+Return JSON only:
+{"aired": true|false|null, "aired_on": "YYYY-MM-DD"|null, "week_one_audience": <people, or null>, "measure": "<what the count measures, plain words>", "source_class": "<platform published|Nielsen|Samba TV|Luminate|Parrot Analytics|trade press|other>", "note": "<one plain sentence>"}"""
 
 
 def _now():
@@ -344,17 +365,13 @@ def forecast_for_session(twin: dict, sess: dict, *, s3=None, ledger: Optional[di
             resid = ((out['episode']['week_one_audience'] or 0) - act) / float(act) * 100.0 if out['episode']['week_one_audience'] else None
             out['actual'] = {'week_one_audience': act, 'measure': str(actual.get('measure') or out['episode']['definition']), 'aired': str(actual.get('aired') or ''),
                              'note': str(actual.get('note') or ''), 'forecast_vs_actual_pct': (round(resid, 1) if resid is not None else None)}
-    plat = out['subscriptions']['platform'] or 'the service'
-    notes = list(notes or [])
-    if cal['scope'] == 'show':
-        notes.append(f"Calibrated to {show}'s first {cal['n']} episode{'s' if cal['n'] != 1 else ''} as aired.")
-    elif cal['scope'] == 'platform':
-        notes.append(f"Calibrated to {cal['n']} aired episode{'s' if cal['n'] != 1 else ''} on {plat}.")
-    elif cal['scope'] == 'all':
-        notes.append(f"Calibrated to {cal['n']} aired episode{'s' if cal['n'] != 1 else ''} across the library.")
-    else:
-        # plain English only: the reader never sees the word ledger (2026-11-04)
-        notes.append('No aired episode to compare against yet. The forecast sits at the low end and calibrates as actuals come in.')
+    # The notes never say what the forecast was set against (Jenna 2026-11-05: "don't ever say this on the output:
+    # Calibrated to NCIS: New York's first 2 episodes as aired"). A calibrated forecast carries no note at all; an
+    # uncalibrated one says only where in its range it sits. The guard runs over the notes a caller passed in too.
+    from migration.digital_twin_copy import strip_calibration_lines
+    notes = strip_calibration_lines(list(notes or []))
+    if cal['scope'] == 'none':
+        notes.append(NO_ANCHOR_NOTE)
     out['notes'] = notes
     return out
 
@@ -377,9 +394,147 @@ def record_actual(s3, twin: dict, sess: dict, *, people: int, measure: str, aire
     return ledger
 
 
-def attach_forecast(twin: dict, sess: dict, *, s3=None, ledger: Optional[dict] = None) -> Optional[dict]:
-    """Put the forecast on a scored session (keeps a recorded actual).
-    Never raises; None when the session has no scorecard."""
+# ------------------------------------------------------ aired performance
+def _episode_words(sess: dict) -> str:
+    """'Season 1, Episode 2' / 'the pilot' / the cut label, from the
+    session's media record (the watch URL's show, season and episode
+    when it had them) or its title."""
+    media = (sess or {}).get('media') or {}
+    season, episode = media.get('season'), media.get('episode')
+    if episode not in (None, ''):
+        return (f"Season {season}, " if season not in (None, '') else '') + f"Episode {episode}"
+    title = str(media.get('title') or sess.get('title') or '')
+    import re
+    m = re.search(r"\b(?:s(\d+)\s*e(\d+)|season\s+(\d+)\s*,?\s*episode\s+(\d+)|episode\s+(\d+)|part\s+(\d+))\b", title, re.I)
+    if m:
+        g = [x for x in m.groups() if x]
+        return f"Season {g[0]}, Episode {g[1]}" if len(g) == 2 else f"Episode {g[0]}"
+    if re.search(r"\bpilot\b", title, re.I) or str(sess.get('mode') or '') == 'pilot':
+        return 'the pilot (first episode)'
+    return str(sess.get('cut_label') or '').strip()
+
+
+def _ledger_record_for(ledger: dict, sess: dict) -> Optional[dict]:
+    sid = str((sess or {}).get('id') or '')
+    for r in (ledger or {}).get('records') or []:
+        if isinstance(r, dict) and str(r.get('session_id') or '') == sid and r.get('actual'):
+            return r
+    return None
+
+
+def _aired_check(ledger: dict, sess: dict) -> Optional[dict]:
+    """The cached answer for this session, or None when it is due."""
+    rec = ((ledger or {}).get('checks') or {}).get(str((sess or {}).get('id') or ''))
+    if not isinstance(rec, dict):
+        return None
+    if rec.get('aired') is False or rec.get('aired') is None:
+        try:
+            at = time.mktime(time.strptime(str(rec.get('at') or ''), '%Y-%m-%dT%H:%M:%SZ'))
+        except (TypeError, ValueError):
+            return None
+        if time.time() - at > AIRED_CHECK_TTL_S:
+            return None
+    return rec
+
+
+def aired_performance(twin: dict, sess: dict, *, model_fn=None) -> Optional[dict]:
+    """Whether the title behind this test has aired, and its first-week
+    audience when it has: one research call on the room's media desk model
+    (web search on), or None when no model answers. The answer is internal;
+    the reader never sees it (``public_forecast``)."""
+    try:
+        from migration.digital_twin_room import Models, model_available
+    except Exception:
+        return None
+    if not model_available(model_fn):
+        return None
+    show = _show_name(twin, sess)
+    if not show:
+        return None
+    media = (sess or {}).get('media') or {}
+    plat = str(_meta(twin).get('platform_home') or _meta(twin).get('name') or '')
+    ep = _episode_words(sess)
+    user = json.dumps({'title': show, 'episode': ep or None, 'as_filed': str(media.get('title') or sess.get('title') or ''),
+                       'network_or_platform': plat or None, 'mode': str(sess.get('mode') or 'pilot'), 'today': time.strftime('%Y-%m-%d', time.gmtime()),
+                       'question': 'Has this aired or been released to the public in the US? If so, when, and how many people watched it in its first seven days across every screen?'},
+                      ensure_ascii=False)
+    try:
+        data, _rec = Models(model_fn=model_fn).call('research', AIRED_SYSTEM, user, max_tokens=500, temperature=0.1)
+    except Exception as e:
+        print(f"[twin-forecast] aired check failed: {str(e)[:160]}")
+        return None
+    if not isinstance(data, dict):
+        return None
+    aired = data.get('aired')
+    out = {'aired': (bool(aired) if aired is not None else None), 'aired_on': str(data.get('aired_on') or '')[:10], 'people': None,
+           'measure': str(data.get('measure') or '')[:160], 'source_class': str(data.get('source_class') or '')[:40], 'note': str(data.get('note') or '')[:240]}
+    try:
+        people = int(float(data.get('week_one_audience') or 0))
+    except (TypeError, ValueError):
+        people = 0
+    if out['aired'] and people >= AIRED_MIN_PEOPLE:
+        out['people'] = people
+    return out
+
+
+def anchor_to_aired(twin: dict, sess: dict, *, s3=None, ledger: Optional[dict] = None, model_fn=None, save: bool = True) -> tuple:
+    """The silent anchor (Jenna 2026-11-05): when the title has aired, its
+    audience goes on the ledger as this session's own record, so the
+    forecast calibrates to it. Returns (ledger, actual_or_None). A session
+    already on the ledger is not asked about again; a title that had not
+    aired is asked about again after a week. Never raises."""
+    ledger = ledger if isinstance(ledger, dict) else load_ledger(s3)
+    try:
+        rec = _ledger_record_for(ledger, sess)
+        if rec:
+            return ledger, {'people': rec.get('actual'), 'measure': rec.get('measure'), 'aired': rec.get('aired'), 'note': rec.get('note')}
+        if str((sess or {}).get('mode') or 'pilot') not in AIRED_MODES:
+            return ledger, None
+        cached = _aired_check(ledger, sess)
+        if cached is not None:
+            return ledger, None
+        got = aired_performance(twin, sess, model_fn=model_fn)
+        if got is None:
+            return ledger, None
+        checks = ledger.setdefault('checks', {})
+        checks[str(sess.get('id') or '')] = {'at': _now(), 'aired': got.get('aired'), 'aired_on': got.get('aired_on'), 'show': _show_name(twin, sess),
+                                              'people': got.get('people'), 'source_class': got.get('source_class'), 'note': got.get('note')}
+        if got.get('people'):
+            ep = _episode_words(sess)
+            import re
+            m = re.search(r"episode\s+(\d+)", ep, re.I)
+            episode = int(m.group(1)) if m else (1 if 'pilot' in ep.lower() else None)
+            ledger = record_actual(s3, twin, sess, people=int(got['people']), measure=got.get('measure') or 'first-week audience, every screen',
+                                   aired=got.get('aired_on') or '', note=got.get('note') or '', episode=episode, ledger=ledger, save=save)
+            return ledger, {'people': int(got['people']), 'measure': got.get('measure'), 'aired': got.get('aired_on'), 'note': got.get('note')}
+        if save:
+            save_ledger(s3, ledger)
+        return ledger, None
+    except Exception as e:
+        print(f"[twin-forecast] aired anchor skipped: {str(e)[:160]}")
+        return ledger, None
+
+
+def public_forecast(fc: Optional[dict]) -> Optional[dict]:
+    """The forecast a reader gets: the numbers and the definitions, the
+    notes through the guard, and none of the audit (the calibration block,
+    the recorded actual). A copy; the stored record keeps everything."""
+    if not isinstance(fc, dict):
+        return fc
+    from migration.digital_twin_copy import strip_calibration_lines
+    out = {k: v for k, v in fc.items() if k not in ('calibration', 'actual')}
+    if isinstance(out.get('episode'), dict):
+        out['episode'] = {k: v for k, v in out['episode'].items() if k != 'uncalibrated'}   # the pre-anchor figure is audit too
+    for k in ('notes', 'board_notes'):
+        if k in out:
+            out[k] = strip_calibration_lines(out.get(k) or [])
+    return out
+
+
+def attach_forecast(twin: dict, sess: dict, *, s3=None, ledger: Optional[dict] = None, model_fn=None, research: bool = True) -> Optional[dict]:
+    """Put the forecast on a scored session (keeps a recorded actual, and
+    anchors to the title's aired performance when it has one). Never
+    raises; None when the session has no scorecard."""
     try:
         if not (sess or {}).get('scorecard'):
             return None
@@ -387,9 +542,15 @@ def attach_forecast(twin: dict, sess: dict, *, s3=None, ledger: Optional[dict] =
         actual = prior.get('actual') if isinstance(prior.get('actual'), dict) else None
         if actual:
             actual = {'people': actual.get('week_one_audience'), 'measure': actual.get('measure'), 'aired': actual.get('aired'), 'note': actual.get('note')}
+        ledger = ledger if isinstance(ledger, dict) else load_ledger(s3)
+        if research:
+            ledger, found = anchor_to_aired(twin, sess, s3=s3, ledger=ledger, model_fn=model_fn)
+            if found and found.get('people'):
+                actual = found
         fc = forecast_for_session(twin, sess, s3=s3, ledger=ledger, actual=actual)
         if prior.get('board_notes'):
-            fc['board_notes'] = list(prior['board_notes'])   # our own board read for the title, kept across re-reads
+            from migration.digital_twin_copy import strip_calibration_lines
+            fc['board_notes'] = strip_calibration_lines(list(prior['board_notes']))   # our own board read for the title, kept across re-reads
         sess['forecast'] = fc
         return fc
     except Exception as e:
@@ -398,4 +559,4 @@ def attach_forecast(twin: dict, sess: dict, *, s3=None, ledger: Optional[dict] =
 
 
 __all__ = ['forecast_for_session', 'attach_forecast', 'record_actual', 'load_ledger', 'save_ledger', 'factor_for', 'appeal', 'second_screen_rate',
-           'uncalibrated_week_one', 'LEDGER_KEY', 'VERSION']
+           'uncalibrated_week_one', 'aired_performance', 'anchor_to_aired', 'public_forecast', 'NO_ANCHOR_NOTE', 'LEDGER_KEY', 'VERSION']

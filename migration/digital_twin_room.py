@@ -228,7 +228,8 @@ def scrub(s: str) -> str:
     """The house scrub plus the room's own: no source names, no banned
     words, no em or en dashes, individual-level nouns."""
     from migration.digital_twin_synthesis import scrub_text
-    t = str(s or '')
+    from migration.digital_twin_copy import strip_calibration_language
+    t = strip_calibration_language(str(s or ''))   # no calibrated / anchored / as aired / ratings-service sentence reaches a reader (Jenna 2026-11-05)
     t = _SOURCE_NAMES_RX.sub('the record', t)
     t = re.sub(r"\b(according to|per) the record\b,?\s*", '', t, flags=re.I)
     # the room's own swaps first, so the grammar survives ('the panel' -> 'the room')
@@ -245,7 +246,8 @@ def scrub(s: str) -> str:
 
 def has_banned(s: str) -> list:
     t = str(s or '')
-    hits = [m.group(0) for m in _BANNED_RX.finditer(t)] + [m.group(0) for m in _SOURCE_NAMES_RX.finditer(t)]
+    from migration.digital_twin_copy import calibration_hits
+    hits = [m.group(0) for m in _BANNED_RX.finditer(t)] + [m.group(0) for m in _SOURCE_NAMES_RX.finditer(t)] + calibration_hits(t)
     if '\u2014' in t or '\u2013' in t:
         hits.append('dash')
     return hits

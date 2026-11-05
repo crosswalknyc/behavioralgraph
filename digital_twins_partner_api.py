@@ -54,6 +54,11 @@ def scrub_text(s, cap: int = 400) -> str:
     """Fail closed: a string carrying any banned token leaves as ''."""
     if s is None:
         return ''
+    try:   # no calibrated / anchored / as aired / ratings-service sentence to a key caller (Jenna 2026-11-05)
+        from migration.digital_twin_copy import strip_calibration_language
+        s = strip_calibration_language(str(s))
+    except Exception:
+        pass
     text = ' '.join(str(s).replace('\u2014', ', ').replace('\u2013', '-').split())[:cap]
     low = text.lower()
     for tok in _BANNED:

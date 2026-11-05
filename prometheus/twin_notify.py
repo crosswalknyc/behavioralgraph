@@ -91,6 +91,11 @@ def banned_tokens(text: str) -> list:
     Links are addresses, not prose: a tab id inside one is not a word."""
     s = re.sub(r'https?://\S+', ' ', str(text or ''))
     hits = [m.group(0).lower() for m in BANNED_RX.finditer(s)]
+    try:   # calibrated / anchored / as aired / a ratings service: never in a notice (Jenna 2026-11-05)
+        from migration.digital_twin_copy import calibration_hits
+        hits.extend(h.lower() for h in calibration_hits(s))
+    except Exception:
+        pass
     if '\u2014' in s:
         hits.append('em dash')
     if '\u2013' in s:
@@ -431,6 +436,11 @@ def _notify(event: str, ident: str, *, username: str, created_at, build: Callabl
             rec['reason'] = f"could not write the notice: {e}"[:200]
             return rec
         subject, body, files = str(msg.get('subject') or ''), str(msg.get('body') or ''), list(msg.get('files') or [])
+        try:   # the output guard: no calibrated / anchored / as aired / ratings-service sentence leaves in a notice (Jenna 2026-11-05)
+            from migration.digital_twin_copy import strip_calibration_language
+            subject, body = strip_calibration_language(subject), strip_calibration_language(body)
+        except Exception:
+            traceback.print_exc()
         bad = banned_tokens(subject + '\n' + body)
         if bad:
             print(f"[twin-notify] {event} {ident}: copy carries {sorted(set(bad))}; sending as written (a name the user chose)")
@@ -710,9 +720,7 @@ def _forecast_lines(sess: dict) -> list:
     if su.get('reactivate_pct_of_dormant') is not None:
         out.append(f"Would come back for it: {su.get('reactivate_pct_of_dormant')}% of dormant {plat} accounts"
                    + (f", about {_int(su.get('reactivate_people')):,} people" if su.get('reactivate_people') else ''))
-    act = fc.get('actual') if isinstance(fc.get('actual'), dict) else {}
-    if act.get('week_one_audience'):
-        out.append(f"As aired: {_int(act.get('week_one_audience')):,} in week one")
+    # the recorded actual is audit, never a line in the notice (Jenna 2026-11-05): the forecast reads as our own
     return out
 
 
