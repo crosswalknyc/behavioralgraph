@@ -488,13 +488,41 @@ def _s3():
                          region_name=os.environ.get('AWS_REGION') or 'us-east-2')
 
 
+_READ_SNAPSHOT_ATTEMPTS = 4
+_READ_SNAPSHOT_BACKOFF_S = (2.0, 5.0, 10.0)
+
+
+def _is_missing_key(exc: BaseException) -> bool:
+    code = str(((getattr(exc, 'response', None) or {}).get('Error') or {}).get('Code') or '')
+    return code in ('NoSuchKey', '404', 'NotFound')
+
+
 def _read_snapshot(source: str) -> Optional[dict]:
-    """Return the S3 snapshot at latest/{source}.json or None."""
-    try:
-        obj = _s3().get_object(Bucket=_S3_BUCKET, Key=f'{_S3_LATEST}{source}.json')
-        return json.loads(obj['Body'].read().decode('utf-8'))
-    except Exception:
-        return None
+    """Return the S3 snapshot at latest/{source}.json, or None when it
+    does not exist.
+
+    A failed read is retried, then logged and returned as None. Callers
+    that merge into the store (`snap = _read_snapshot(...) or {}`) must
+    never treat that None as an empty store; on 2026-11-05 one did on
+    the Mac lane after a 54 MB read dropped, and wrote 90 rows over
+    56,844. `_base.write_snapshot` now refuses that write as well."""
+    key = f'{_S3_LATEST}{source}.json'
+    last: Optional[BaseException] = None
+    for attempt in range(_READ_SNAPSHOT_ATTEMPTS):
+        try:
+            obj = _s3().get_object(Bucket=_S3_BUCKET, Key=key)
+            return json.loads(obj['Body'].read().decode('utf-8'))
+        except Exception as e:  # noqa: BLE001
+            if _is_missing_key(e):
+                return None
+            last = e
+            if attempt < _READ_SNAPSHOT_ATTEMPTS - 1:
+                time.sleep(_READ_SNAPSHOT_BACKOFF_S[min(attempt, len(_READ_SNAPSHOT_BACKOFF_S) - 1)])
+    logger.error('stream_estimates: read of s3://%s/%s failed after %d attempts '
+                 '(%s: %s); returning None, which no writer may treat as an '
+                 'empty store', _S3_BUCKET, key, _READ_SNAPSHOT_ATTEMPTS,
+                 type(last).__name__, last)
+    return None
 
 
 def _read_dated_snapshot(source: str, days_back: int) -> Optional[dict]:

@@ -231,6 +231,64 @@ def _s3_client():
     return boto3.client('s3', region_name=region)
 
 
+# Store shrink guard (2026-11-05). A read-modify-write pass on the Mac
+# lane lost its 54 MB read of latest/stream_estimates.json (the reader
+# swallows every error and returns None), carried on with `or {}`, and
+# wrote the 90 rows it had priced over the 56,844-row store. Every later
+# writer then read that stub and wrote it back a little larger. The board
+# only held because publishing was on hold. This is the one write
+# boundary every store writer uses, so the refusal lives here: a body
+# smaller than STORE_SHRINK_FLOOR of the store it would replace (the
+# largest of the current latest/ object and the last two dated copies,
+# so a stub already on latest/ cannot lower the bar) is refused, not
+# written. Only stores above STORE_SHRINK_MIN_BYTES are held to this;
+# small per-platform snapshots change size freely. A deliberate rebuild
+# sets TRENDS_STORE_ALLOW_SHRINK=1 for that run.
+STORE_SHRINK_FLOOR = float(os.environ.get('TRENDS_STORE_SHRINK_FLOOR') or '0.5')
+STORE_SHRINK_MIN_BYTES = int(os.environ.get('TRENDS_STORE_SHRINK_MIN_BYTES') or str(1 << 20))
+
+
+class StoreShrinkRefused(RuntimeError):
+    """Raised instead of replacing a large store with a much smaller body."""
+
+
+def _store_reference_bytes(s3, source: str, key_latest: str, now: datetime) -> int:
+    """Largest known size of this store: latest/ plus the last two dated
+    copies. Unreadable or absent objects count as zero."""
+    from datetime import timedelta
+    keys = [key_latest]
+    for back in (0, 1, 2):
+        day = (now - timedelta(days=back)).strftime('%Y-%m-%d')
+        keys.append(f'{S3_DATED_PREFIX.format(date=day)}{source}.json')
+    best = 0
+    for key in keys:
+        try:
+            best = max(best, int(s3.head_object(Bucket=S3_BUCKET, Key=key).get('ContentLength') or 0))
+        except Exception:
+            continue
+    return best
+
+
+def _refuse_store_shrink(s3, source: str, key_latest: str, body: bytes,
+                         now: datetime) -> None:
+    if (os.environ.get('TRENDS_STORE_ALLOW_SHRINK') or '').strip() == '1':
+        return
+    try:
+        ref = _store_reference_bytes(s3, source, key_latest, now)
+    except Exception:
+        return
+    if ref < STORE_SHRINK_MIN_BYTES:
+        return
+    if len(body) >= ref * STORE_SHRINK_FLOOR:
+        return
+    msg = (f'{source}: refusing to write {len(body):,} bytes over a store of '
+           f'{ref:,} bytes ({len(body) / ref:.1%}); a read-modify-write pass '
+           f'lost its read. Nothing was written. Set TRENDS_STORE_ALLOW_SHRINK=1 '
+           f'only for a deliberate rebuild.')
+    logger.error(msg)
+    raise StoreShrinkRefused(msg)
+
+
 def write_snapshot(source: str, payload: dict, *,
                    also_dated: bool = True) -> None:
     """Write the snapshot to S3. Always writes `latest/{source}.json`;
@@ -280,6 +338,7 @@ def write_snapshot(source: str, payload: dict, *,
     s3 = _s3_client()
 
     key_latest = f'{S3_LATEST_PREFIX}{source}.json'
+    _refuse_store_shrink(s3, source, key_latest, body, now)
     if reasoning is not None:
         # Merged over the existing companion, never a plain overwrite:
         # a pass that re-priced a few hundred rows holds prose for only
