@@ -58350,6 +58350,23 @@ def api_v1_profiles_status(run_id):
         return _rate_limit_response(retry_after, cur_min, cur_day,
                                      cap_min, cap_day, '/v1/status')
 
+    # A bulk list (2026-11-05): the ledger answers for the whole list
+    # (done / reused / failed / in progress, one row per subject with
+    # its key once it is in the library). Owned by its requester.
+    try:
+        from prometheus import bulk_pull as _bulk
+        if _bulk.is_bulk_id(run_id):
+            _ledger = _bulk.load_ledger(run_id, s3=s3_client, bucket=S3_BUCKET)
+            _owner = str(((_ledger or {}).get('requester') or {}).get('username') or '').strip().lower()
+            _me = str(user.get('username') or '').strip().lower()
+            if not _ledger or (user.get('_auth_via') == 'api_key' and _owner != _me):
+                return jsonify({'success': False, 'error': 'run not found', 'run_id': run_id}), 404
+            _out = {'success': True, 'run_id': run_id}
+            _out.update(_bulk.partner_status(_ledger))
+            return jsonify(_out)
+    except Exception:
+        traceback.print_exc()
+
     # Per-partner run_id ownership. Session-authenticated dashboard
     # users bypass this check because the dashboard's Select Profile
     # UX shows shared profiles to all users.

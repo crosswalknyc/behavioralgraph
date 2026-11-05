@@ -16276,6 +16276,24 @@ def _pm_analyze_core(user, body, text, history):
     _twin_resp = _twin_lane.analyze_hook(text, body, history, user, _pm_ppu, _bpiq_user, globals())   # Digital Twins IQ (2026-10-26): intake, labs, Focus Group IQ, catalog, status, directions
     if _twin_resp is not None:
         return jsonify(_twin_resp)
+    # Bulk Profile IQ pulls from an uploaded list (Jenna 2026-11-05): a
+    # names sheet on the thread plus pull words reads the list back with
+    # the price; 'Queue the list' writes the ledger the build server's
+    # feeder walks. 'How is my list going' answers from the ledger.
+    try:
+        from prometheus import bulk_pull as _bulk
+        from prometheus import pending_intake as _bulk_pi
+
+        def _bulk_pending(op, usr, flow, *args):
+            if op in ('peek', 'clear'):
+                _bu = str((usr or {}).get('username') or (usr or {}).get('email') or '').strip() if isinstance(usr, dict) else str(usr or '')
+                return _bulk_pi.peek(_H.s3_client, _H.S3_BUCKET, _bu, flow) if op == 'peek' else _bulk_pi.clear(_H.s3_client, _H.S3_BUCKET, _bu, flow)
+            return _pm_pending_intake(op, usr, flow, *args)
+        _bulk_resp = _bulk.analyze_hook(text, body, history, user, _pm_ppu, _bpiq_user, host=_H, pending=_bulk_pending)
+        if _bulk_resp is not None:
+            return jsonify(_bulk_resp)
+    except Exception as _bulk_err:
+        _faults.note('chat', _bulk_err)
     # Mid-wizard answers whose start phrase already passed still land
     # here when a leftover S3 draft is the only signal.
     _bpiq_late = _bpiq_wiz.analyze_hook(

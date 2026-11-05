@@ -267,6 +267,18 @@ def answer(text, uname, *, host, user=None, history=None):
     except Exception:
         traceback.print_exc()
         items, deliveries = [], []
+    # an active bulk list (2026-11-05) reads first: done X of Y, reused, failed, next up, time left
+    bulk_lines = []
+    try:
+        from . import bulk_pull as _bulk
+        s3 = getattr(host, 's3_client', None)
+        if s3 is not None:
+            bulk_lines = [it['line'] for it in _bulk.status_items(uname, s3=s3, bucket=(host.bucket if host.has('bucket') else 'dashboard-inputs'))]
+    except Exception:
+        bulk_lines = []
+    if bulk_lines and not items and not deliveries:
+        return {'success': True, 'action': 'answer', 'reply': '\n\n'.join(bulk_lines), 'followups': ['Email me when it lands'],
+                'offer_deck': False, 'deck_angle': None, 'status_items': [{'kind': 'bulk', 'subject': 'your list', 'status': 'running'}]}
     if not items and not deliveries:
         # Nothing on record is still a status answer, never a build draft
         # (the replay of Carolyn's "I don't see No Reservations" drafted a
@@ -340,6 +352,8 @@ def answer(text, uname, *, host, user=None, history=None):
         lines.append(f"The last thing I delivered to you was the {KIND_LABEL.get(d.get('kind'), d.get('kind'))} for {d.get('subject') or 'your request'} "
                      f"{_ago(d.get('recorded_at'))}. {d.get('where') or ''}".strip()
                      + (f" The email went to {em.get('to')}." if em.get('sent') else ''))
+    if bulk_lines:
+        lines = bulk_lines + lines
     if not lines:
         return None
     reply = '\n\n'.join(dict.fromkeys(lines))      # three failed copies of one read say it once
