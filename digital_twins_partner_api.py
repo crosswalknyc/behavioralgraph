@@ -140,6 +140,17 @@ def _s3():
     return _dt_api()._s3()
 
 
+def _portrait_fn():
+    """The portrait reader the dashboard's report route uses (the thumb
+    from the store), so the room page of a key caller's report carries
+    the faces (2026-11-04). A seat with no face falls back to its
+    initials in the page; None when portraits are off."""
+    try:
+        return _dt_api()._pilot_portrait_fn()
+    except Exception:
+        return None
+
+
 def _index_key(screening_id: str) -> str:
     return f"{INDEX_PREFIX}{re.sub(r'[^A-Za-z0-9_-]+', '', screening_id)}.json"
 
@@ -564,9 +575,10 @@ def v1_screening_report(screening_id):
         if not png:
             return jsonify({'success': False, 'error': 'The dial chart is not available for this screening.'}), 404
         return Response(png, mimetype='image/png')
+    portrait_fn = _portrait_fn()     # the faces on the room page, as the dashboard's report carries them
     if path.endswith('.pdf'):
-        return Response(R.build_report_pdf(payload, sess), mimetype='application/pdf', headers={'Content-Disposition': f'attachment; filename="{R.report_filename(payload, sess, ".pdf")}"'})
-    return Response(R.build_report_deck(payload, sess), mimetype='application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        return Response(R.build_report_pdf(payload, sess, portrait_fn=portrait_fn), mimetype='application/pdf', headers={'Content-Disposition': f'attachment; filename="{R.report_filename(payload, sess, ".pdf")}"'})
+    return Response(R.build_report_deck(payload, sess, portrait_fn=portrait_fn), mimetype='application/vnd.openxmlformats-officedocument.presentationml.presentation',
                     headers={'Content-Disposition': f'attachment; filename="{R.report_filename(payload, sess, ".pptx")}"'})
 
 

@@ -17,6 +17,9 @@ sys.path.insert(0, os.path.dirname(HERE))
 
 from migration import digital_twin_forecast as F  # noqa: E402
 
+# the words no reader of the forecast sees (the card note, the report page, the CSV); they live in code and keys only
+INTERNAL_WORDS = ('ledger', 'panel', 'sample', 'model', 'synth', 'estimat', 'research', 'pipeline', 'anchor', 'nielsen')
+
 
 def _twin(size=83_791_763, lapsing=17.9, second=61.7, loyalty=63.8, churn=54.2, name='Paramount+'):
     return {'meta': {'name': name, 'subject': name, 'size_us': size, 'platform_home': name, 'format': 'brand', 'subject_kind': 'audience'},
@@ -128,11 +131,26 @@ class Forecast(unittest.TestCase):
         self.assertIsNone(F.attach_forecast(tw, {'id': 'x', 'scorecard': None}))
 
     def test_nothing_a_reader_sees_names_a_source_or_a_method(self):
+        """Every string the card, the report page and the CSV show (the
+        notes, the labels, the definitions) is plain English, in every
+        calibration scope. 'Ledger' reached the report page body on
+        2026-11-04; the words stay in code and internal keys only."""
         tw = _twin()
-        fc = F.forecast_for_session(tw, _sess('p1', 'NCIS: New York Pilot', 19.3, 1.6, 81.9), ledger=F._empty_ledger())
-        text = json.dumps({k: v for k, v in fc.items() if k in ('episode', 'series', 'subscriptions', 'notes')}).lower()
-        for bad in ('nielsen', 'synth', 'model', 'estimat', 'panel', 'research'):
-            self.assertNotIn(bad, text)
+        pilot = _sess('p1', 'NCIS: New York Pilot', 19.3, 1.6, 81.9)
+        ep2 = _sess('e2', 'NCIS: New York Episode 2', 38.1, 30.0, 91.8, mode='episode', genre='')
+        tw['pilot_sessions'] = [pilot, ep2]
+        led = F.record_actual(_S3(), tw, pilot, people=10_250_000, measure='week-one audience, every screen', aired='2026-10-06', episode=1)
+        reads = {'none': F.forecast_for_session(tw, pilot, ledger=F._empty_ledger()),
+                 'show': F.forecast_for_session(tw, pilot, ledger=led, actual={'people': 10_250_000, 'measure': 'week-one audience, every screen'}),
+                 'platform': F.forecast_for_session(tw, _sess('o1', 'Tulsa King Pilot', 40.0, 30.0, 88.0), ledger=led),
+                 'all': F.forecast_for_session(_twin(name='Peacock'), _sess('o2', 'Poker Face Pilot', 40.0, 30.0, 88.0), ledger=led)}
+        for scope, fc in reads.items():
+            self.assertEqual(fc['calibration']['scope'], scope)
+            text = json.dumps({k: v for k, v in fc.items() if k in ('episode', 'series', 'subscriptions', 'actual', 'notes')}).lower()
+            for bad in INTERNAL_WORDS:
+                self.assertNotIn(bad, text, f"{scope}: {bad!r} in {text}")
+            self.assertNotIn('\u2014', text)
+        self.assertEqual(reads['none']['notes'], ['No aired episode to compare against yet. The forecast sits at the low end and calibrates as actuals come in.'])
 
 
 if __name__ == '__main__':

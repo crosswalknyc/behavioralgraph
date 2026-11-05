@@ -445,6 +445,49 @@ class Buttons(unittest.TestCase):
         self.assertIn('R.build_report_deck(payload, sess, portrait_fn=portrait_fn)', api)
         self.assertIn('PI.session_csv(sess, payload)', api)
 
+    def test_the_partner_route_passes_the_faces(self):
+        """A key caller's report (/api/v1/screenings/<id>/report.pdf | .pptx)
+        showed initials on the room page: the route built the report with
+        no portrait reader (flagged 2026-11-04). It now passes the same
+        reader the dashboard route uses, with the same fallback to
+        initials when a face is missing."""
+        with open(os.path.join(ROOT, 'digital_twins_partner_api.py'), 'r', encoding='utf-8') as fh:
+            api = fh.read()
+        self.assertIn('portrait_fn = _portrait_fn()', api)
+        self.assertIn('R.build_report_pdf(payload, sess, portrait_fn=portrait_fn)', api)
+        self.assertIn('R.build_report_deck(payload, sess, portrait_fn=portrait_fn)', api)
+        self.assertNotIn('R.build_report_pdf(payload, sess)', api)
+        self.assertNotIn('R.build_report_deck(payload, sess)', api)
+        try:
+            import digital_twins_api as A
+            import digital_twins_partner_api as P
+        except Exception as e:
+            self.skipTest(f'the api modules need flask: {e}')
+        faces = {'face0': _jpeg(60)}
+        reads = []
+
+        class FakePT:
+            THUMB_SIZE = 128
+            OUT_SIZE = 512
+
+            @staticmethod
+            def read_portrait(s3, h, size=512):
+                reads.append((s3, h, size))
+                return faces.get(h)
+        s3_marker = object()
+        keep = (A._portraits, A._s3)
+        try:
+            A._portraits, A._s3 = (lambda: FakePT), (lambda: s3_marker)
+            fn = P._portrait_fn()
+            self.assertTrue(callable(fn), 'the partner route hands the builders a portrait reader')
+            self.assertEqual(fn('face0'), faces['face0'])
+            self.assertIsNone(fn('face9'), 'a seat with no face comes back empty, and the room page draws its initials')
+            self.assertEqual(reads, [(s3_marker, 'face0', 128), (s3_marker, 'face9', 128)], 'the thumb from the store, through the same reader the dashboard uses')
+            A._portraits = lambda: None
+            self.assertIsNone(P._portrait_fn(), 'portraits off: the builders get None and draw initials')
+        finally:
+            A._portraits, A._s3 = keep
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

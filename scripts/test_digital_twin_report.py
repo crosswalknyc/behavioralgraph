@@ -264,6 +264,27 @@ class Files(unittest.TestCase):
             self.assertTrue(step[1], step[2][-1200:])
 
 
+class EveryPage(unittest.TestCase):
+    def test_no_page_and_no_forecast_note_carries_an_internal_word(self):
+        """The forecast note once read 'No aired episode on the ledger yet'
+        and reached the report page body (flagged 2026-11-04). Every page
+        of the report (header, sub, body, tiles, rows, the question
+        blocks), the note the test card shows and the CSV are plain
+        English; the internal words live in code and keys only."""
+        twin, sess = _session()
+        fc = sess.get('forecast') or {}
+        self.assertEqual((fc.get('calibration') or {}).get('scope'), 'none', 'a hermetic test has no aired episode to compare against')
+        self.assertEqual(fc.get('notes'), ['No aired episode to compare against yet. The forecast sits at the low end and calibrates as actuals come in.'])
+        pages = R.report_pages({'meta': twin['meta']}, sess)
+        forecast_page = next(p for p in pages if p['kind'] == 'tiles' and 'first week' in p['header'])
+        self.assertIn(fc['notes'][0], forecast_page['body'], 'the note reaches the report page, in plain words')
+        blob = _blob(pages)
+        csv = PI.session_csv(sess, {'meta': twin['meta']}).lower()
+        for tok in BANNED + ('anchor',):
+            self.assertNotIn(tok, blob, tok)
+            self.assertNotIn(tok, csv, tok)
+
+
 class Csv(unittest.TestCase):
     def test_pilot_csv_carries_the_questions_block(self):
         twin, sess = _session()

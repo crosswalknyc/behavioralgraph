@@ -353,7 +353,8 @@ def forecast_for_session(twin: dict, sess: dict, *, s3=None, ledger: Optional[di
     elif cal['scope'] == 'all':
         notes.append(f"Calibrated to {cal['n']} aired episode{'s' if cal['n'] != 1 else ''} across the library.")
     else:
-        notes.append('No aired episode on the ledger yet: the read sits at the low end until one lands.')
+        # plain English only: the reader never sees the word ledger (2026-11-04)
+        notes.append('No aired episode to compare against yet. The forecast sits at the low end and calibrates as actuals come in.')
     out['notes'] = notes
     return out
 
