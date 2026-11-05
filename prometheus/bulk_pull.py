@@ -748,42 +748,69 @@ def charge(user, uname, ledger, *, consume_credit=None, is_free=None):
 
 
 def start(user, uname, read, window, *, index, thread_id='', file_name='', ask_text='', run_avid=True, s3=None, bucket=None,
-          consume_credit=None, is_free=None, usd_each=None):
+          consume_credit=None, is_free=None, usd_each=None, source='prometheus'):
     """The one starter: plan the rows against the library, charge the new
-    builds once, write the ledger. Returns (ledger, promise, funds_error)."""
+    builds once, write the ledger. Returns (ledger, promise, funds_error).
+    ``source`` names the door the list came through ('prometheus' for the
+    chat, 'partner_api_v1' for POST /api/v1/profiles/bulk)."""
     if s3 is None:
         s3, bucket = _s3()
     email = str((user or {}).get('email') or '').strip() if isinstance(user, dict) else ''
     if usd_each is None:
         usd_each = price(uname)['usd']
     ledger = new_ledger(requester={'username': uname, 'email': email}, items=read.get('items') or [], index=index, window=window,
-                        file_name=file_name, thread_id=thread_id, ask_text=ask_text, usd_each=usd_each, run_avid=run_avid)
+                        file_name=file_name, thread_id=thread_id, ask_text=ask_text, usd_each=usd_each, run_avid=run_avid,
+                        source=str(source or 'prometheus'))
     ok, err = charge(user, uname, ledger, consume_credit=consume_credit, is_free=is_free)
     if not ok:
         return None, '', err
     if counts(ledger)['open'] == 0:
         ledger['status'] = 'done'
+        ledger['finished_at'] = time.time()
     save_ledger(ledger, s3=s3, bucket=bucket)
     return ledger, promise(ledger), None
 
 
 # ---- partner status ---------------------------------------------------
+_ROW_STATUS = {'done': 'complete', 'reused': 'complete', 'failed': 'failed', 'queued': 'queued', 'waiting': 'queued'}
+
+
+def _iso(ts):
+    try:
+        return time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(float(ts))) if ts else None
+    except Exception:
+        return None
+
+
 def partner_status(ledger):
-    """The scrubbed status document for GET /api/v1/profiles/<bulk_id>."""
+    """The status document for GET /api/v1/profiles/<bulk_id> and the
+    body of POST /api/v1/profiles/bulk: the list as a whole (running or
+    complete, the counts) and one row per subject. Row statuses are the
+    documented four: queued, running, complete, failed. A complete row
+    carries its library key and whether it was reused (never built, never
+    charged); a failed row carries the one partner-safe reason. Partner-
+    safe by construction; the route still runs the belt over it."""
     c = counts(ledger)
     st = 'complete' if str(ledger.get('status') or '') != 'active' or c['open'] == 0 else 'running'
     rows = []
     for r in ledger.get('rows') or []:
         state = r.get('state')
-        out = {'subject': r.get('subject'), 'status': {'done': 'complete', 'reused': 'complete', 'failed': 'failed'}.get(state, 'running')}
+        out = {'subject': r.get('subject'), 'status': _ROW_STATUS.get(state, 'running')}
         if state in ('done', 'reused') and r.get('key'):
             out['s3_key'] = r['key']
             out['reused'] = state == 'reused'
+            if r.get('avid_key'):
+                out['avid_s3_key'] = r['avid_key']
         if state == 'failed':
             out['reason'] = FAIL_LINE
+            out['refunded'] = bool(r.get('refunded')) or not r.get('charged')
         rows.append(out)
+    w = _normalize_window(ledger.get('window'))
     return {'bulk_id': ledger.get('bulk_id'), 'status': st, 'total': c['total'], 'complete': c['done'] + c['reused'], 'built': c['done'],
-            'reused': c['reused'], 'failed': c['failed'], 'in_progress': c['open'], 'rows': rows}
+            'reused': c['reused'], 'failed': c['failed'], 'queued': c['queued'] + c['waiting'], 'building': c['in_flight'],
+            'in_progress': c['open'], 'run_avid': bool(ledger.get('run_avid', True)), 'date_window': window_words(w),
+            'created_at': _iso(ledger.get('created_at')), 'completed_at': _iso(ledger.get('finished_at')) if st == 'complete' else None,
+            'rows': rows}
 
 
 # ---- the Prometheus door ---------------------------------------------

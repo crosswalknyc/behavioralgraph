@@ -58367,6 +58367,121 @@ def api_v1_profiles_run():
     return jsonify(resp_body)
 
 
+@app.route('/api/v1/profiles/bulk', methods=['POST'])
+def api_v1_profiles_bulk():
+    """Build profiles for a list of plain names in one call (Jenna
+    2026-11-05: the API door for bulk uploads).
+
+    Request:
+      Headers: X-Crosswalk-API-Key: <raw_key>
+               Idempotency-Key: <string>   # optional; the same key within
+                                           # 24h returns the first response
+      Body:
+        {
+          "subjects": ["Taylor Swift",
+                       {"subject": "Dolly Parton", "category": "MUSICIAN/BAND",
+                        "notes": "country icon"}],      # 1 to 1,000 names
+          "run_avid": true,                             # optional, default true
+          "date_range": {"start": "YYYY-MM-DD",
+                         "end": "YYYY-MM-DD"}           # optional; default the
+                                                        # trailing 12 months
+        }
+
+    NO OVERRIDE FLAGS (same rule as /run). Duplicates collapse; blank
+    rows, links and numbers are dropped and counted. Every name is
+    checked against the shared library first: a Total Universe of that
+    name is reused on the spot (its key on the row, reused: true, no
+    charge). The rest are new builds, charged ONCE here at this key's
+    Profile IQ build rate, written to one ledger
+    (system/bulk_pulls/<bulk_id>.json) and fed to the profile engine as
+    capacity allows by prometheus.bulk_feeder, the same throttle the
+    chat's lists share. One digest email per list goes to the key owner
+    (no email per profile). A build that cannot be completed refunds its
+    own charge. One list in progress per key: a second submission while
+    one is open returns 409 naming the open bulk id. Poll
+    GET /api/v1/profiles/<bulk_id> for the ledger.
+    """
+    user, err = _synth_chat_gate()
+    if err:
+        return err
+
+    key_id = _partner_key_id(user)
+    allowed, retry_after, cur_min, cur_day, cap_min, cap_day = _rate_limit_check(
+        key_id, '/v1/bulk')
+    if not allowed:
+        return _rate_limit_response(retry_after, cur_min, cur_day,
+                                     cap_min, cap_day, '/v1/bulk')
+
+    try:
+        body = request.get_json(force=True) or {}
+    except Exception:
+        traceback.print_exc()
+        return jsonify({'success': False,
+                         'error': 'invalid JSON body'}), 400
+
+    from prometheus import bulk_pull as _bulk
+    from prometheus import partner_bulk as _pb
+    parsed, body_err = _pb.parse_body(body)
+    if body_err:
+        return jsonify({'success': False, 'error': body_err}), 400
+
+    username = user.get('username') or 'partner_api'
+
+    # Idempotency-Key: the same list sent twice inside 24h (a timed-out
+    # POST retried) returns the first response; nothing is re-planned,
+    # re-queued or re-charged.
+    idem_key = (request.headers.get('Idempotency-Key') or '').strip()
+    if idem_key:
+        cached = _idempotency_lookup(username, idem_key)
+        if cached is not None:
+            return jsonify(cached)
+
+    read = _pb.read_from_items(parsed)
+    if not read.get('items'):
+        return jsonify({'success': False,
+                         'error': ('no usable names in "subjects": send plain '
+                                   'names (links, numbers and blank rows are '
+                                   'dropped)')}), 400
+
+    host_url = request.host_url.rstrip('/')
+
+    # One list in progress per key.
+    open_led = _pb.open_bulk_for(username, s3=s3_client, bucket=S3_BUCKET)
+    if open_led is not None:
+        return jsonify(_pb.scrub(_pb.open_bulk_error(open_led, host_url))), 409
+
+    window = parsed.get('window') or _bulk.default_window()
+    try:
+        catalog = _profile_catalog_for_chat() or []
+    except Exception:
+        traceback.print_exc()
+        catalog = []
+    index = _bulk.library_index(catalog)
+    n_new = sum(1 for r in _bulk.plan_rows(read['items'], index)
+                if r.get('state') == 'queued')
+    each_usd = float(_bulk.price(username)['usd'])
+
+    # The one starter the chat door uses: plan against the library,
+    # charge the new builds once, write the ledger the feeder walks.
+    ledger, _line, funds_err = _bulk.start(
+        user, username, read, window, index=index, file_name=_pb.FILE_NAME,
+        ask_text=f"API list: {len(read['items'])} names",
+        run_avid=bool(parsed.get('run_avid', True)), s3=s3_client,
+        bucket=S3_BUCKET, consume_credit=consume_credit, source=_pb.SOURCE)
+    if funds_err or ledger is None:
+        return jsonify(_pb.scrub(_pb.funds_error(
+            funds_err, price_usd=each_usd * n_new,
+            balance_usd=_v1_balance_usd(username), each_usd=each_usd,
+            n_new=n_new))), 402
+
+    resp_body = _pb.scrub(_pb.response_doc(
+        ledger, read=read, host_url=host_url,
+        balance_usd=_v1_balance_usd(username)))
+    if idem_key:
+        _idempotency_store(username, idem_key, resp_body)
+    return jsonify(resp_body)
+
+
 @app.route('/api/v1/profiles/<run_id>', methods=['GET'])
 def api_v1_profiles_status(run_id):
     """Poll status for a run. When status == "complete", the response
@@ -58403,15 +58518,45 @@ def api_v1_profiles_status(run_id):
     # its key once it is in the library). Owned by its requester.
     try:
         from prometheus import bulk_pull as _bulk
+        from prometheus import partner_bulk as _pb
         if _bulk.is_bulk_id(run_id):
             _ledger = _bulk.load_ledger(run_id, s3=s3_client, bucket=S3_BUCKET)
             _owner = str(((_ledger or {}).get('requester') or {}).get('username') or '').strip().lower()
             _me = str(user.get('username') or '').strip().lower()
             if not _ledger or (user.get('_auth_via') == 'api_key' and _owner != _me):
                 return jsonify({'success': False, 'error': 'run not found', 'run_id': run_id}), 404
-            _out = {'success': True, 'run_id': run_id}
-            _out.update(_bulk.partner_status(_ledger))
-            return jsonify(_out)
+            _out = _pb.status_doc(_ledger, host_url=request.host_url.rstrip('/'))
+            # A 24h download link on every complete row (the Total
+            # Universe and, when built, its Avid Fan cut). The catalog
+            # gate is read once for the whole list, not once per row.
+            try:
+                _cat_keys = {c.get('s3_key') for c in (_profile_catalog_for_chat() or []) if isinstance(c, dict)}
+            except Exception:
+                _cat_keys = set()
+            _signed = {}
+
+            def _bulk_sign(_k):
+                if not isinstance(_k, str) or not _k or '/' in _k or '..' in _k or not _k.lower().endswith('.csv'):
+                    return None
+                if _k not in _cat_keys and not _PROFILE_FILENAME_RE.match(_k):
+                    return None
+                if _k not in _signed:
+                    try:
+                        _signed[_k] = s3_client.generate_presigned_url(
+                            'get_object', Params={'Bucket': S3_BUCKET, 'Key': _k}, ExpiresIn=86400)
+                    except Exception:
+                        _signed[_k] = None
+                return _signed[_k]
+            _any_link = False
+            for _row in _out.get('rows') or []:
+                for _kf, _uf in (('s3_key', 'download_url'), ('avid_s3_key', 'avid_download_url')):
+                    _url = _bulk_sign(_row.get(_kf)) if _row.get(_kf) else None
+                    if _url:
+                        _row[_uf] = _url
+                        _any_link = True
+            if _any_link:
+                _out['download_expires_seconds'] = 86400
+            return jsonify(_pb.scrub(_out))
     except Exception:
         traceback.print_exc()
 
@@ -58666,6 +58811,71 @@ def api_v1_schema():
                     'existing_match_last_modified': 'always null',
                     'match_score': 'number or null (on existing_match)',
                     'download_url': 'string (existing_match only)',
+                },
+            },
+            'POST /api/v1/profiles/bulk': {
+                'description': ('Build profiles for a list of plain names '
+                                'in one call. Each name is checked against '
+                                'the shared library first and reused at no '
+                                'charge when we already have it; the rest '
+                                'are new builds, charged once at this '
+                                "key's build rate and run as capacity "
+                                'allows. One list in progress per key.'),
+                'request': {
+                    'subjects': {'type': 'array', 'required': True,
+                                 'min_items': 1, 'max_items': 1000,
+                                 'description': ('plain names, or objects '
+                                                 '{subject, category, notes}; '
+                                                 'duplicates collapse, links '
+                                                 'and numbers are dropped')},
+                    'run_avid': {'type': 'boolean', 'required': False,
+                                 'default': True},
+                    'date_range': {'type': 'object {start, end}',
+                                   'required': False,
+                                   'description': ('YYYY-MM-DD; default the '
+                                                   'trailing 12 months')},
+                },
+                'headers': {
+                    'Idempotency-Key': ('optional - same key within 24h '
+                                        'returns the original response '
+                                        'instead of re-charging')},
+                'response': {
+                    'bulk_id': 'string - poll it as GET /api/v1/profiles/{bulk_id}',
+                    'status': 'running or complete',
+                    'total': 'integer - names kept after duplicates',
+                    'reused': 'integer - already in the library, no charge',
+                    'queued': 'integer - new builds',
+                    'duplicates': 'integer', 'dropped': 'integer',
+                    'price_usd': 'number - new builds x price_each_usd',
+                    'price_each_usd': 'number',
+                    'charge_usd': 'number - debited now',
+                    'balance_usd': 'number or -1 on an unlimited key',
+                    'estimated_minutes': 'integer',
+                    'estimated_completion': 'string, plain words',
+                    'status_url': 'string',
+                    'rows': ('array of {subject, status, s3_key?, '
+                             'reused?, reason?}'),
+                },
+                'errors': {
+                    '400': 'bad body (the field is named)',
+                    '402': 'insufficient balance for the new builds',
+                    '409': ('a list is already in progress on this key; '
+                            'open_bulk_id names it'),
+                },
+            },
+            'GET /api/v1/profiles/{bulk_id}': {
+                'description': 'Poll a list started by /bulk.',
+                'response': {
+                    'status': 'running or complete',
+                    'total': 'integer', 'complete': 'integer',
+                    'built': 'integer', 'reused': 'integer',
+                    'failed': 'integer', 'queued': 'integer',
+                    'building': 'integer', 'in_progress': 'integer',
+                    'rows': ('array of {subject, status (queued, running, '
+                             'complete, failed), s3_key?, download_url? '
+                             '(24h), avid_s3_key?, avid_download_url?, '
+                             'reused?, reason?, refunded?}'),
+                    'download_expires_seconds': '86400 when any link is present',
                 },
             },
             'GET /api/v1/profiles/{run_id}': {

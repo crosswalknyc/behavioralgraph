@@ -1,0 +1,212 @@
+"""What Prometheus does, in one or two sentences (Jenna 2026-11-05:
+"update the prometheus client guide ... and all other updates like the
+brand partnership valuation wizard").
+
+Three questions people ask the chat about the product itself, answered
+the same way the client guide answers them, from the product as it
+reads today, with the live prices:
+
+  overview    "what can you do", "what can I ask you", "how can you help"
+  bulk_list   "can I upload a list of names", "do you do bulk profiles",
+              "how do I pull profiles for everyone on a spreadsheet"
+  valuation   "how do I value a partnership", "how does the brand
+              partnership valuation work", "what is Brand Partnership IQ"
+
+Boundaries (an order wins over this lane):
+  * a bulk order with a names sheet on the thread ("pull profiles for
+    everyone on this list" with the CSV attached) is the bulk door's
+    (prometheus.bulk_pull); the caller passes ``has_names_list`` so the
+    question form is answered here and the order form runs there;
+  * a valuation order that names its subject ("value the Gunna x Nike
+    partnership", "how do I value the Stanley deal") is the wizard's;
+    only the general question lands here;
+  * a question about an attached file, a status ask, a data question
+    and a deck ask keep their own lanes (none of them match here).
+
+Pure module: no Flask, no S3, no model. Prices come from the caller's
+``price_fn(tool_key, default_usd)`` (the live rate for the seat) and
+fall back to the published rate card. Kill switch ``PM_PRODUCT_FACTS=0``.
+"""
+from __future__ import annotations
+
+import os
+import re
+
+from . import rate_card as _rc
+
+__all__ = ['FAMILIES', 'enabled', 'looks_like', 'family_of', 'answer', 'price_fn_for', 'thread_has_names', 'facts']
+
+FAMILIES = ('overview', 'bulk_list', 'valuation')
+_MAX_LEN = 320
+
+_LEAD = r"^\W*(?:(?:hi|hey|hello|ok|okay|so|and|also|prometheus|quick question|one more|one more thing)[,!.:\s]+)*"
+_OVERVIEW_RX = re.compile(
+    _LEAD + r"(?:"
+    r"what (?:all |else )?(?:can|could|do|does) (?:you|prometheus|crosswalk|this (?:thing|tool|chat)|it) (?:do|help (?:me |us )?with|answer|handle|offer|know)\b"
+    r"|what (?:are|is) (?:you|prometheus|this) (?:able to do|for|good at|capable of)\b"
+    r"|what (?:kinds? of |sorts? of |types? of )?(?:things|questions|asks|stuff) can (?:i|we) ask(?: (?:you|here|prometheus))?\b"
+    r"|what can (?:i|we) (?:ask|do|get|run|pull|build) (?:you|here|from you|in here|with you|with prometheus)\b"
+    r"|what (?:are|is) your capabilit(?:y|ies)\b"
+    r"|(?:tell|show) me what (?:you|prometheus) (?:can do|do(?:es)?)\b"
+    r"|how (?:can|could|do) (?:you|prometheus) help(?: me| us)?\b"
+    r"|(?:give me |i want )?(?:an? )?(?:quick )?(?:overview|rundown|tour|summary) of (?:what (?:you|prometheus) (?:can )?do|prometheus|your (?:features|capabilities|products))\b"
+    r"|what (?:do|does) (?:you|prometheus) do\b"
+    r"|help me understand what (?:you|prometheus) (?:can )?do\b"
+    r")", re.I)
+
+_Q_FRAME = (r"(?:can|could|may|do|does|would|will|should|is it possible(?: for me)? to|is there (?:a|any) way (?:for me )?to|"
+            r"how (?:do|can|would|could|should) (?:i|we|you)|what (?:about|if)|are you able to|do you (?:support|allow|handle|offer|take|accept|do))")
+_LIST_NOUN = r"(?:csv|list|spreadsheet|sheet|xlsx|excel|file|roster|batch|column)"
+_PEOPLE = r"(?:names|people|talent|talents|subjects|brands|titles|profiles|creators|influencers|celebrities|celebs|athletes|artists|companies|shows|accounts|entities|rows)"
+_BULK_RX = re.compile(
+    r"(?:"
+    r"\b" + _Q_FRAME + r"\b[^?]{0,40}?\b(?:upload|attach|send|give|paste|drop|hand|load|import|submit)\b[^?]{0,30}?\b" + _LIST_NOUN + r"\b"
+    r"|\b" + _Q_FRAME + r"\b[^?]{0,50}?\b(?:profiles?|pulls?|builds?)\b[^?]{0,40}?\b(?:in bulk|for (?:a|the|my|an entire|a whole) " + _LIST_NOUN + r"|for (?:everyone|everybody|each (?:name|person|one)|all (?:of )?(?:the |these |those )?" + _PEOPLE + r"|all of them) (?:on|in) (?:a|an|the|my|our|this|that) " + _LIST_NOUN + r"|at once|all at once|in one go|from (?:a|an|the|my|our|this|that) " + _LIST_NOUN + r")"
+    r"|\b(?:bulk|batch) (?:upload|pull|pulls|build|builds|profiles?|profile iq|order|request)s?\b"
+    r"|\bprofiles? (?:in bulk|for (?:a|the|my|a whole) (?:list|csv|spreadsheet|roster))\b"
+    r"|\b(?:many|multiple|several|a lot of|dozens of|hundreds of|\d{2,4}) (?:profiles|people|names|subjects|talent|brands) (?:at once|at a time|in one (?:go|shot|call)|from (?:a|one) " + _LIST_NOUN + r")\b"
+    r"|\bupload (?:a |an |my |the )?" + _LIST_NOUN + r" of " + _PEOPLE + r"\b"
+    r")", re.I)
+_TWIN_RX = re.compile(r"\b(?:digital\s+)?twins?\b|\burls?\b|\blinks?\b", re.I)
+_STATUS_RX = re.compile(r"\b(?:how (?:is|are|'s) (?:my|the) (?:list|bulk|batch)|status of (?:my|the) (?:list|bulk|batch)|where is my (?:list|bulk))\b", re.I)
+
+_VAL_FRAME = (r"(?:how (?:do|can|would|should|could|does|did) (?:i|we|you|one|it|this|that|prometheus|crosswalk)|what (?:is|does|are|do)|"
+              r"is there a way to|can (?:i|we|you)|could (?:i|we|you)|do you|explain|walk me through|tell me (?:about|how))")
+_VALUATION_RX = re.compile(
+    r"(?:"
+    r"\b" + _VAL_FRAME + r"\b[^?]{0,60}?\b(?:value|valuation|valuing|valuate|price|measure|assess|size up|quantify)\b[^?]{0,40}?\b(?:(?:brand |talent |creator |celebrity )?partnerships?|sponsorships?|brand deals?|endorsements?|collab(?:oration)?s?)\b"
+    r"|\b" + _VAL_FRAME + r"\b[^?]{0,60}?\b(?:partnership|sponsorship)\s+(?:valuation|value)s?\b"
+    r"|\b(?:brand partnership(?: iq| valuation)?|bpiq|partnership valuation|the valuation wizard)\b[^?]{0,40}?\b(?:work|works|do|does|steps?|how|involve|include|cost|price)\b"
+    r"|\b(?:how|what) (?:does|is|do) (?:the )?(?:brand )?partnership (?:valuation|iq|tool|wizard|read)\b"
+    r")", re.I)
+_NAME_OK = frozenset(('i', 'prometheus', 'crosswalk', 'brand', 'partnership', 'partnerships', 'valuation', 'iq', 'bpiq', 'profile',
+                      'flywheel', 'digital', 'twins', 'twin', 'journey', 'attribution', 'subscriber', 'us', 'a', 'the', 'what', 'how',
+                      'can', 'is', 'does', 'do', 'explain', 'tell', 'walk', 'value', 'please', 'hi', 'hey', 'hello', 'ok', 'okay'))
+
+
+def enabled():
+    return str(os.environ.get('PM_PRODUCT_FACTS', '1')).strip().lower() not in ('0', 'false', 'no', 'off')
+
+
+def _clean(text):
+    return ' '.join(str(text or '').split())
+
+
+def _names_a_subject(t):
+    """A capitalized word that is not the product's own vocabulary, or a
+    'X x Y' pairing: the ask names its subject and is an order."""
+    if ' x ' in f" {t.lower()} ":
+        return True
+    for i, w in enumerate(re.findall(r"[A-Za-z][\w'&.+-]*", t)):
+        if i == 0:
+            continue
+        if w[:1].isupper() and w.lower() not in _NAME_OK:
+            return True
+    return False
+
+
+def family_of(text):
+    """'overview' | 'bulk_list' | 'valuation' | None."""
+    if not enabled():
+        return None
+    t = _clean(text)
+    if not t or len(t) > _MAX_LEN:
+        return None
+    if _OVERVIEW_RX.search(t):
+        return 'overview'
+    if _STATUS_RX.search(t):
+        return None
+    if _BULK_RX.search(t) and not _TWIN_RX.search(t):
+        return 'bulk_list'
+    if _VALUATION_RX.search(t) and not _names_a_subject(t):
+        return 'valuation'
+    return None
+
+
+def looks_like(text):
+    return family_of(text) is not None
+
+
+def price_fn_for(username=None):
+    """The live rate for a seat (prometheus.legacy.watch._pm_usd), or
+    None so the published rate card renders (tests, a process without
+    the web app)."""
+    if os.environ.get('REGRESSION_TEST_MODE') == '1':
+        return None
+    try:
+        from prometheus.legacy.watch import _pm_usd
+        return lambda key, dflt: _pm_usd(key, dflt, username)
+    except Exception:
+        return None
+
+
+def thread_has_names(uname, tid, host):
+    """A names sheet or text list on the thread (the bulk door's own
+    check); False when it cannot be read."""
+    try:
+        from . import bulk_pull as _bp
+        return bool(_bp.thread_has_names(uname, tid, host))
+    except Exception:
+        return False
+
+
+def _money(price_fn, key, dflt):
+    return _rc.money(_rc._price(price_fn, key, dflt))
+
+
+def facts(price_fn=None):
+    """The prices the answers quote, from the live card."""
+    profile = _rc._price(price_fn, 'profile_iq_build', _rc.default('profile_iq_build'))
+    bp_control = _rc._price(price_fn, 'brand_partnership_iq', _rc.default('brand_partnership_iq'))
+    try:
+        from . import bulk_pull as _bp
+        list_max = int(_bp.MAX_SUBJECTS)
+        build_minutes = int(_bp.BUILD_MINUTES)
+    except Exception:
+        list_max, build_minutes = 2000, 65
+    return {'profile': _rc.money(profile), 'bp_base': _rc.money(bp_control / 2.0), 'bp_control': _rc.money(bp_control),
+            'list_max': list_max, 'build_minutes': build_minutes}
+
+
+def answer(text, *, price_fn=None, has_names_list=None):
+    """{'reply', 'followups', 'family'} or None. ``has_names_list`` is a
+    callable (or bool) saying whether a names sheet sits on the thread:
+    a bulk ORDER with the list attached is never answered here."""
+    fam = family_of(text)
+    if not fam:
+        return None
+    f = facts(price_fn)
+    if fam == 'bulk_list':
+        try:
+            from . import bulk_pull as _bp
+            is_order = _bp.is_bulk_ask(_clean(text), True)
+        except Exception:
+            is_order = False
+        if is_order:
+            try:
+                has = has_names_list() if callable(has_names_list) else bool(has_names_list)
+            except Exception:
+                has = False
+            if has:
+                return None       # the door reads the list back and runs it
+        reply = (f"Yes. Attach a CSV, TXT or XLSX with one name per row (a column named subject, name, talent, brand or title, "
+                 f"else the first text column; up to {f['list_max']:,} names) and say 'pull profiles for everyone on this list'. "
+                 f"I read the list back first: how many names are already in the library (reused at no charge), how many are new builds at "
+                 f"{f['profile']} each, the window, the price and the time at the current pace (about {f['build_minutes']} minutes a build, "
+                 f"several at a time); say 'Queue the list' and the builds run as capacity allows, each profile landing in Select Profile as it "
+                 f"finishes, with a summary email as the list progresses. Ask 'how is my list going' any time.")
+        return {'reply': reply, 'followups': ['How is my list going?'], 'family': fam}
+    if fam == 'valuation':
+        reply = (f"Say 'Value a brand partnership' and I walk you through it one question at a time: the talent or property, the campaign, "
+                 f"its dates, the attribution window (the campaign dates plus 30 days, or your own), whether to include a control group, and "
+                 f"the assets (paste the links or I find them). You approve the recap with the price on it, and the valuation lands in the "
+                 f"Brand Partnership tab with one dollar figure for the partnership and the audience fit, earned media, brand lift and conversion "
+                 f"lenses behind it: {f['bp_base']}, or {f['bp_control']} with a control group.")
+        return {'reply': reply, 'followups': ['Value a brand partnership'], 'family': fam}
+    reply = (f"I answer questions about any US audience from what people actually do, in plain English: who they are, what they watch, "
+             f"stream, buy, search and subscribe to, and how two audiences compare. I also build what is not on file yet: a profile of any "
+             f"person, title, brand or behavior ({f['profile']}, about an hour), profiles for a whole list of names from an uploaded CSV, a "
+             f"Brand Partnership valuation, a Flywheel, a Digital Journey, a Subscriber IQ read and a Digital Twin, each priced before it runs. "
+             f"Every data answer comes with a CSV you can download or have emailed.")
+    return {'reply': reply, 'followups': ['Run a profile', 'Value a brand partnership', 'Build a Flywheel', 'How do I pull profiles for a list?'],
+            'family': fam}

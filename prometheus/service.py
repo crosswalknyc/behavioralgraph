@@ -461,7 +461,7 @@ LANE_ORDER = (
     'deck_conversion', 'reconcile', 'us_scope', 'number_provenance', 'confirm_answer', 'short_reply',
     'spend_cap_precheck',
     'continuation',
-    'subject_set', 'pull_discussion', 'help_writing', 'dataset_build',
+    'subject_set', 'pull_discussion', 'product_facts', 'help_writing', 'dataset_build',
     'talent_list_acceptance', 'meta_check', 'standing', 'multi_ask', 'catalog_exists', 'where_watched',
     'sizing_quote', 'status_fast',
     'reader', 'pricing', 'design_request', 'spend_cap', 'thread_followups', 'subiq_library', 'catalog',
@@ -471,12 +471,12 @@ LANE_ORDER = (
     'work_gate',
 )
 DETERMINISTIC_LANES = frozenset((
-    'subject_set', 'pull_discussion', 'help_writing', 'dataset_build',
+    'subject_set', 'pull_discussion', 'product_facts', 'help_writing', 'dataset_build',
     'meta_check', 'standing', 'catalog_exists', 'where_watched', 'sizing_quote', 'status_fast', 'reader', 'pricing',
     'design_request', 'thread_followups', 'subiq_library', 'catalog', 'sizing_fallback', 'status',
     'deliverable_lookup', 'email_file', 'brand_coverage', 'definitions', 'capability', 'number_provenance', 'reconcile',
     'us_scope'))
-NEVER_PRICED_LANES = frozenset(('subject_set', 'pull_discussion', 'help_writing', 'catalog_exists', 'where_watched',
+NEVER_PRICED_LANES = frozenset(('subject_set', 'pull_discussion', 'product_facts', 'help_writing', 'catalog_exists', 'where_watched',
                                 'status_fast', 'status', 'pricing', 'catalog', 'definitions', 'deliverable_lookup',
                                 'email_file', 'brand_coverage', 'capability', 'number_provenance', 'reconcile', 'us_scope'))
 
@@ -1235,6 +1235,38 @@ def ask(user, body, *, via='session'):
                 _faults.note('service', _fx)
             env = envelope.wrap(_out, surface='analyze', decision=decision, thread_id=tid, via=via)
             _persist_turn(persist, uname, tid, history, text, env, _out, 'analyze')
+            return env, 200
+
+    # lane: product_facts
+    # "What can you do", "can I upload a list of names", "how do I value
+    # a partnership": the facts in one or two sentences, from the product
+    # as it reads today with the live prices (Jenna 2026-11-05), the same
+    # facts the client guide carries. Never a build, never a quote. A
+    # bulk ORDER with the list attached stays the bulk door's; a valuation
+    # order that names its subject stays the wizard's.
+    if referent_decision is None and not _armed(body):
+        _pf_raw = None
+        try:
+            from . import product_facts as _pf
+            if _pf.looks_like(text):
+                _pf_raw = _pf.answer(text, price_fn=_pf.price_fn_for(uname),
+                                     has_names_list=lambda: _pf.thread_has_names(uname, tid, host))
+        except Exception as _fx:
+            _faults.note('service.product_facts', _fx)
+            _pf_raw = None
+        if _pf_raw:
+            raw = {'success': True, 'action': 'answer', 'reply': _pf_raw['reply'],
+                   'followups': list(_pf_raw.get('followups') or []), 'offer_deck': False, 'deck_angle': None}
+            decision = {'surface': 'analyze', 'mode': None, 'reason': 'product_facts', 'client_hint': None}
+            if _client_surface == 'interpret':
+                raw = _interpret_shape(raw)
+                raw['followups'] = list(_pf_raw.get('followups') or [])
+            try:
+                host.ask_hint(route='product_facts', outcome='answered')
+            except Exception as _fx:
+                _faults.note('service', _fx)
+            env = envelope.wrap(raw, surface='analyze', decision=decision, thread_id=tid, via=via)
+            _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
             return env, 200
 
     # lane: help_writing
