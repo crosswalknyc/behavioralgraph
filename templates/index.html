@@ -52039,6 +52039,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         <select id="dtwTwinSwitch" class="dtw-in dtw-switch" aria-label="Switch twin" onchange="dtwSwitchTwin(this.value)"><option value="">No twins yet</option></select>
                         <button type="button" class="dtw-btn" onclick="dtwHowtoOpen(true)">How to</button>
                         <button type="button" class="dtw-btn dtw-btn-primary" onclick="dtwBuildTwin()">Build a twin</button>
+                        <button type="button" class="dtw-btn" onclick="dtwListOpen(true)" title="Upload a list of content URLs; the twin is the people who watched, read or visited that content">Build a twin from a list</button>
                     </div>
                 </div>
                 <div class="dtw-spine-foot">
@@ -52193,6 +52194,13 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 <div class="dtw-eyebrow">Digital Twins IQ</div>
                 <h2>Build a twin</h2>
                 <div id="dtwBuildBody"></div>
+            </aside>
+            <div id="dtwListScrim" class="dtw-scrim" onclick="dtwListOpen(false)"></div>
+            <aside id="dtwListDrawer" class="dtw-drawer dtw-drawer-build" role="dialog" aria-label="Build a twin from a list" aria-hidden="true">
+                <button type="button" class="dtw-btn dtw-btn-sm dtw-drawer-x" onclick="dtwListOpen(false)">Close</button>
+                <div class="dtw-eyebrow">Digital Twins IQ</div>
+                <h2>Build a twin from a list</h2>
+                <div id="dtwListBody"></div>
             </aside>
         </div>
         <script>
@@ -52406,7 +52414,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }
             function usd(v) { v = Number(v || 0); return '$' + v.toLocaleString('en-US', { minimumFractionDigits: (Math.round(v) === v) ? 0 : 2, maximumFractionDigits: 2 }); }
             window.dtwBuildOpen = function(on) {
-                if (on) { try { dtwNewRoomOpen(false); dtwRoomsOpen(false); dtwHowtoOpen(false); } catch (_) {} if (!S.bw || (S.bw.job && S.bw.job.done)) S.bw = bwFresh(); }
+                if (on) { try { dtwNewRoomOpen(false); dtwRoomsOpen(false); dtwHowtoOpen(false); if (window.dtwListOpen) dtwListOpen(false); } catch (_) {} if (!S.bw || (S.bw.job && S.bw.job.done)) S.bw = bwFresh(); }
                 drawer('dtwBuildDrawer', 'dtwBuildScrim', on, function() { renderBuild(); if (!(S.pricing || []).length) dtwLoadList(false).then(function() { renderBuild(); }); });
             };
             window.dtwBuildTwin = function() { dtwBuildOpen(true); };
@@ -52475,6 +52483,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     + '<button type="button" class="dtw-bw-opt' + (b.source === 'demographics' ? ' on' : '') + '" onclick="dtwBwSource(\'demographics\')"><span class="k">A group you shape</span><b>By demographics</b><span>Pick gender, age, income, ethnicity, parents and markets. Prometheus builds the audience to that shape and seats the panelists from it.</span></button>'
                     + '</div>'
                     + '<div class="dtw-bw-sub" style="margin-top:0.9rem;">Or just tell Prometheus in the chat: <button type="button" class="dtw-link" onclick="dtwBuildOpen(false); dtwChatFill(\'Build a twin of \')">Build a twin of ...</button></div>'
+                    + '<div class="dtw-bw-sub" style="margin-top:0.5rem;">Have a list of content URLs? <button type="button" class="dtw-link" onclick="dtwBuildOpen(false); dtwListOpen(true)">Build a twin from a list</button>: the twin is the people who watched, read or visited that content.</div>'
                     + bwNav(!!b.source);
             }
             function bwRows() {
@@ -52622,6 +52631,116 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             window.dtwBwOpenTwin = function() { var j = S.bw && S.bw.job; dtwBuildOpen(false); if (j && j.key) { dtwLoadList(true).then(function() { dtwOpen(j.key); }); } };
             window.dtwBwAnother = function() { S.bw = bwFresh(); renderBuild(); };
             window.dtwBwRetry = function() { var b = S.bw; b.job = null; b.step = 4; renderBuild(); };
+            // ---- Build a twin from a list of content URLs (Jenna 2026-11-04). The list DEFINES the audience: the twin's people are the
+            // US people who watched, read or visited that content in the window. The list is read back (count, hosts, rows dropped, the
+            // category by the hosts, the price) before anything runs; the confirm charges once (the audience build plus the twin) and the
+            // audience is pulled first, then the twin is built from it. Same progress poll as the walkthrough.
+            function ulFresh() { var w = ulDefaultWindow(); return { name: '', text: '', file: null, fileName: '', ws: w[0], we: w[1], preview: null, busy: false, err: '', job: null }; }
+            function ulIso(d) { return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
+            function ulDefaultWindow() { var e = new Date(), s = new Date(e); s.setMonth(s.getMonth() - 12); return [ulIso(s), ulIso(e)]; }
+            window.dtwListOpen = function(on) {
+                if (on) { try { dtwBuildOpen(false); dtwNewRoomOpen(false); dtwRoomsOpen(false); dtwHowtoOpen(false); } catch (_) {} if (!S.ul || (S.ul.job && S.ul.job.done)) S.ul = ulFresh(); }
+                drawer('dtwListDrawer', 'dtwListScrim', on, function() { renderUl(); if (!(S.pricing || []).length) dtwLoadList(false).then(function() { renderUl(); }); });
+            };
+            function ulHasList() { var u = S.ul; return !!(u.file || String(u.text || '').trim()); }
+            function ulForm() {
+                var u = S.ul;
+                return '<div class="dtw-bw-q">Which content?</div><div class="dtw-bw-sub">Upload a CSV, TXT or XLSX with one URL per row (a column named url or link is best), or paste the URLs below. The twin is the US people who watched, read or visited that content in the window.</div>'
+                    + '<label class="dtw-field">The list</label><input type="file" class="dtw-in" accept=".csv,.tsv,.txt,.md,.xlsx,.xlsm" onchange="dtwUlFile(this)">'
+                    + (u.fileName ? '<div class="dtw-bw-pick"><span>File: <b>' + esc(u.fileName) + '</b></span><button type="button" class="dtw-link" onclick="dtwUlClearFile()">Remove</button></div>' : '')
+                    + '<label class="dtw-field">Or paste URLs, one per line</label><textarea class="dtw-in" rows="5" placeholder="https://www.netflix.com/title/70155618&#10;https://www.paramountplus.com/shows/landman/&#10;https://www.nytimes.com/2026/10/01/arts/television/ranch-dramas.html" oninput="dtwUlField(\'text\', this.value)">' + esc(u.text) + '</textarea>'
+                    + '<div class="dtw-bw-q" style="margin-top:1rem;">Name the audience</div><div class="dtw-bw-sub">A plain name is best.</div>'
+                    + '<input class="dtw-in" value="' + esc(u.name) + '" placeholder="Yellowstone and Landman viewers, Our fall campaign readers" oninput="dtwUlField(\'name\', this.value)">'
+                    + '<div class="dtw-bw-q" style="margin-top:1rem;">Window</div><div class="dtw-bw-sub">Trailing 12 months unless you change it.</div>'
+                    + '<div style="display:flex; gap:10px; flex-wrap:wrap;"><input type="date" class="dtw-in" style="flex:1; min-width:150px;" value="' + esc(u.ws) + '" onchange="dtwUlField(\'ws\', this.value)" aria-label="Window start"><input type="date" class="dtw-in" style="flex:1; min-width:150px;" value="' + esc(u.we) + '" onchange="dtwUlField(\'we\', this.value)" aria-label="Window end"></div>'
+                    + (u.err ? '<div class="dtw-bw-err">' + esc(u.err) + '</div>' : '')
+                    + '<div class="dtw-bw-nav"><button type="button" class="dtw-btn dtw-btn-primary dtw-right"' + (ulHasList() && !u.busy ? '' : ' disabled') + ' onclick="dtwUlPreview()">' + (u.busy ? 'Reading the list...' : 'Read the list') + '</button></div>';
+            }
+            function ulPreview() {
+                var u = S.ul, p = u.preview || {}, pr = p.price || {}, k = p.kinds || {}, hosts = p.hosts || [];
+                var shape = [];
+                if (k.watch) shape.push(k.watch + ' watch page' + (k.watch === 1 ? '' : 's'));
+                if (k.listen) shape.push(k.listen + ' listening page' + (k.listen === 1 ? '' : 's'));
+                var read = (k.article || 0) + (k.site || 0); if (read) shape.push(read + ' article' + (read === 1 ? '' : 's') + ' or site page' + (read === 1 ? '' : 's'));
+                var rows = [['Audience', u.name || 'Not named yet'], ['Defined by', fmtN(p.count) + ' URL' + (p.count === 1 ? '' : 's') + (shape.length ? ' (' + shape.join(', ') + ')' : '') + (p.dropped ? '; ' + fmtN(p.dropped) + ' row' + (p.dropped === 1 ? '' : 's') + ' with no usable link dropped' : '')],
+                            ['Hosts', hosts.map(function(h) { return h[0] + ' (' + h[1] + ')'; }).join(', ')], ['The people', 'US people who watched, read or visited this content in the window'],
+                            ['Window', p.window_words || ''], ['Category', (p.category || '') + (p.category_reason ? ' (' + p.category_reason + ')' : '')]];
+                var sum = '<div class="dtw-bw-sum">' + rows.map(function(r) { return '<div class="r"><span class="k">' + r[0] + '</span><span class="v">' + esc(r[1]) + '</span></div>'; }).join('') + '</div>';
+                var price = '<div class="dtw-bw-price">'
+                    + '<div class="r"><span><i>The audience</i>, pulled from your list</span><b>' + esc(pr.profile_label || '') + '</b></div>'
+                    + '<div class="r"><span><i>The twin</i>, with its first two runs</span><b>' + esc(pr.twin_label || '') + '</b></div>'
+                    + '<div class="r"><span><i>Each further run</i></span><b>' + esc(pr.run_label || '') + '</b></div>'
+                    + '<div class="r"><span><i>Prometheus</i>, the build and every question</span><b>Metered</b></div>'
+                    + '<div class="r total"><span>Charged now</span><b>' + esc(pr.total_label || '') + '</b></div>'
+                    + '<div class="m">The audience is pulled first (usually under an hour), then the twin is built from it. Both land on your account; Prometheus confirms in the chat and by email.</div></div>';
+                var nameIn = u.name ? '' : '<label class="dtw-field">Name the audience</label><input class="dtw-in" value="" placeholder="Yellowstone and Landman viewers" oninput="dtwUlField(\'name\', this.value, true)">';
+                return '<div class="dtw-bw-q">Here is the list, read back.</div><div class="dtw-bw-sub">Check the lines, then build.</div>' + sum + nameIn + price
+                    + (u.err ? '<div class="dtw-bw-err">' + esc(u.err) + '</div>' : '')
+                    + '<div class="dtw-bw-nav"><button type="button" class="dtw-btn" onclick="dtwUlBack()">Change the list</button><button type="button" class="dtw-btn dtw-btn-primary dtw-right"' + (u.busy ? ' disabled' : '') + ' onclick="dtwUlBuild()">' + (u.busy ? 'Starting...' : 'Build the twin') + '</button></div>';
+            }
+            function ulProgress() {
+                var j = S.ul.job || {};
+                if (j.error) return '<div class="dtw-bw-q">The twin did not finish.</div><div class="dtw-bw-sub">' + esc(j.error) + '</div><div class="dtw-bw-nav"><button type="button" class="dtw-btn dtw-btn-primary" onclick="dtwUlRetry()">Try again</button><button type="button" class="dtw-btn" onclick="dtwListOpen(false)">Close</button></div>';
+                if (j.done) return '<div class="dtw-bw-q">Your twin is ready.</div><div class="dtw-bw-sub">' + esc(j.ready || (j.subject + ' is live on the Twins tab.')) + '</div><div class="dtw-bw-nav"><button type="button" class="dtw-btn dtw-btn-primary" onclick="dtwUlOpenTwin()">Open the twin</button><button type="button" class="dtw-btn" onclick="dtwUlAnother()">Build another</button></div>';
+                return '<div class="dtw-bw-q">Building ' + esc(j.subject || 'the twin') + '.</div><div class="dtw-bw-sub">The audience your list defines is pulled first, then the twin is built from it. You can close this; it lands on the Twins tab and Prometheus confirms in the chat and by email.</div>'
+                    + '<div class="dtw-bw-prog"><div class="bar"><i></i></div><div class="stage"><span class="dtw-fg-pulse"></span><span id="dtwUlStage">' + esc(j.stage || 'queued') + '</span></div></div>'
+                    + '<div class="dtw-bw-nav"><button type="button" class="dtw-btn" onclick="dtwListOpen(false)">Close, it keeps building</button></div>';
+            }
+            function renderUl() {
+                var h = el('dtwListBody'); if (!h) return;
+                if (!S.ul) S.ul = ulFresh();
+                var u = S.ul;
+                h.innerHTML = u.job ? ulProgress() : (u.preview ? ulPreview() : ulForm());
+            }
+            window.dtwUlField = function(k, v, quiet) { S.ul[k] = String(v || ''); if (quiet) return; if (k === 'text') { var nb = document.querySelector('#dtwListBody .dtw-bw-nav .dtw-btn-primary'); if (nb) nb.disabled = !ulHasList(); } };
+            window.dtwUlFile = function(input) { var f = input && input.files && input.files[0]; S.ul.file = f || null; S.ul.fileName = f ? f.name : ''; renderUl(); };
+            window.dtwUlClearFile = function() { S.ul.file = null; S.ul.fileName = ''; renderUl(); };
+            window.dtwUlBack = function() { S.ul.preview = null; S.ul.err = ''; renderUl(); };
+            window.dtwUlPreview = async function() {
+                var u = S.ul; if (u.busy || !ulHasList()) return;
+                u.busy = true; u.err = ''; renderUl();
+                var fd = new FormData();
+                if (u.file) fd.append('file', u.file, u.file.name);
+                fd.append('text', u.text || ''); fd.append('name', u.name || ''); fd.append('window_start', u.ws || ''); fd.append('window_end', u.we || '');
+                try {
+                    var r = await fetch('/api/digital-twins/list-preview', { method: 'POST', credentials: 'same-origin', body: fd });
+                    var d = null; try { d = await r.json(); } catch (_) { d = null; }
+                    if (!r.ok || !d || d.success === false) throw new Error((d && d.error) || ('Request failed (' + r.status + ')'));
+                    u.preview = d;
+                } catch (e) { u.err = e.message; }
+                u.busy = false; renderUl();
+            };
+            window.dtwUlBuild = async function() {
+                var u = S.ul; if (u.busy || !u.preview) return;
+                u.name = String(u.name || '').trim();
+                if (!u.name) { u.err = 'Name the audience first: a plain name like Yellowstone and Landman viewers.'; renderUl(); return; }
+                u.busy = true; u.err = ''; renderUl();
+                var body = { list_token: u.preview.list_token, name: u.name, window: (u.ws && u.we) ? { start: u.ws, end: u.we } : null };
+                try { var d = await api('/build-from-list', { method: 'POST', body: JSON.stringify(body) }); }
+                catch (e) { u.busy = false; u.err = e.message; renderUl(); return; }
+                u.busy = false;
+                u.job = { id: d.job_id, subject: d.subject || u.name, stage: 'queued', done: false, key: '', error: '' };
+                renderUl();
+                ulPoll(u.job);
+            };
+            function ulPoll(job) {
+                (async function loop() {
+                    var waited = 0;
+                    while (waited < 7200000 && S.ul && S.ul.job === job && !job.done && !job.error) {
+                        await new Promise(function(res) { setTimeout(res, 5000); }); waited += 5000;
+                        var d = null; try { d = await api('/jobs/' + job.id); } catch (_) { d = null; }
+                        if (!d || !d.job) continue;
+                        var j = d.job;
+                        job.stage = j.status === 'done' ? 'done' : (j.stage || j.status || 'working');
+                        var st = el('dtwUlStage'); if (st) st.textContent = job.stage;
+                        if (j.status === 'done') { job.done = true; job.key = j.s3_key || ''; job.ready = j.ready_message || ''; renderUl(); try { await dtwLoadList(true); } catch (_) {} fgToast('Your twin is ready: ' + (j.subject || job.subject) + '.'); return; }
+                        if (j.status === 'error' || j.status === 'cancelled') { job.error = j.error || 'The twin did not finish. Nothing more is charged; try again and it runs fresh.'; renderUl(); return; }
+                    }
+                })();
+            }
+            window.dtwUlOpenTwin = function() { var j = S.ul && S.ul.job; dtwListOpen(false); if (j && j.key) { dtwLoadList(true).then(function() { dtwOpen(j.key); }); } };
+            window.dtwUlAnother = function() { S.ul = ulFresh(); renderUl(); };
+            window.dtwUlRetry = function() { var u = S.ul; u.job = null; renderUl(); };
             // the New room drawer: the seats default to the twin's panelists; the line under the field prices any past twelve
             window.dtwPnSeatsNote = function() {
                 var n = parseInt((el('dtwPnRoom') || {}).value || '', 10), h = el('dtwPnSeats'); if (!h) return;
@@ -53701,6 +53820,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (e.key !== 'Escape') return;
                 var p = el('dtwSeatPop'); if (p && p.classList.contains('open')) { dtwSeatOpen(null); return; }
                 var bd = el('dtwBuildDrawer'); if (bd && bd.classList.contains('open')) { dtwBuildOpen(false); return; }
+                var ld = el('dtwListDrawer'); if (ld && ld.classList.contains('open')) { dtwListOpen(false); return; }
                 var nd = el('dtwNewRoomDrawer'); if (nd && nd.classList.contains('open')) { dtwNewRoomOpen(false); return; }
                 var rd = el('dtwRoomsDrawer'); if (rd && rd.classList.contains('open')) { dtwRoomsOpen(false); return; }
                 // with no popover or drawer open, Escape closes the room (Jenna 2026-10-27); a first Escape inside the composer only leaves the field

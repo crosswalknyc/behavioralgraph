@@ -159,6 +159,22 @@ def run_job(job_id, username, inputs, extras=None):
                 status_write(job_id, rec)
                 return SYN.queue_profile_for_twin(subject, window, s3=s3, created_by=username or 'prometheus', progress=_progress)
 
+            from_list = bool(inputs.get('url_list_key') or isinstance(inputs.get('url_list'), dict))
+            if from_list:
+                # a twin from a list of content URLs (Jenna 2026-11-04): the audience the list defines is pulled
+                # through the profile engine first, then the twin is built from that profile. A pull that does not
+                # land ends here with the refund and the partner-safe line; nothing is held, nothing says rebuild.
+                from . import twin_url_list as _TUL
+                tu_key = _TUL.run_pull_in_job(inputs, username, job_id, rec, status_write, s3=s3, bucket=bucket, usage_extras=extras)
+                if not tu_key:
+                    _thread_note(username, inputs.get('thread_id'), _TUL.FAIL_LINE, {'twin_job_id': job_id})
+                    print(f"[twin-job {job_id}] list audience pull stopped: {rec.get('detail')}")
+                    return rec
+                inputs['source'] = 'profile'
+                inputs['profile_key'] = tu_key
+                inputs['pull_profile'] = None
+                rec['stage'] = 'building the twin from the audience'
+                status_write(job_id, rec)
             inputs.setdefault('pull_profile', _pull)
             payload = SYN.build_twin(inputs, claude_json, tools=_tools(), created_by=username or 'prometheus', s3=s3)
             if str((status_read(job_id) or {}).get('status') or '') == 'cancelled':
@@ -169,6 +185,9 @@ def run_job(job_id, username, inputs, extras=None):
             m = payload['meta']
             from migration.digital_twin_engine import human_people
             ready = f"Your twin is ready: {m.get('name')} is live on the Twins tab of Digital Twins IQ, {human_people(m.get('size_us'))} people in the US. Ask it anything here, or open it."
+            if from_list:
+                ready = (f"Your twin is ready: {m.get('name')}, built from the audience your list defines, is live on the Twins tab of Digital Twins IQ, "
+                         f"{human_people(m.get('size_us'))} people in the US. The audience itself is in Select Profile. Ask the twin anything here, or open it.")
             rec.update({'status': 'done', 'success': True, 'stage': 'done', 'finished_at': time.time(), 's3_key': key, 'subject': m.get('name'),
                         'size_us': m.get('size_us'), 'ready_message': ready})
             status_write(job_id, rec)
@@ -176,8 +195,9 @@ def run_job(job_id, username, inputs, extras=None):
                                                                        'options': [{'label': 'Open in Digital Twins IQ', 'view': 'digitalTwinsIQ', 'twin_key': key}]})
             try:
                 from .delivered import on_done
+                # a twin from a list was asked for by upload, and its requester hears back by email too (2026-11-04)
                 on_done('twin', username=username, subject=str(m.get('name') or ''), s3_key=key, payload=payload, host=host, s3_client=s3, job_id=job_id,
-                        ready_message=ready, email=False)
+                        ready_message=ready, email=from_list)
             except Exception as e:
                 print(f"[twin-job {job_id}] delivered record skipped: {e}")
             print(f"[twin-job {job_id}] built -> {key}")

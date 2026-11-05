@@ -1289,6 +1289,25 @@ def _poll_payload(rec):
 
 
 # ---------------------------------------------------------- the hook
+def _list_door(text, body, history, user, ppu, uname, g):
+    """The list door (prometheus.twin_url_list): the stash / pick go
+    through the chat's own pending-intake helper (probe-safe); peek and
+    clear read the same file directly."""
+    try:
+        from . import twin_url_list as _TUL
+        from . import pending_intake as _pi
+
+        def _pending(op, usr, flow, *args):
+            if op in ('peek', 'clear'):
+                s3, bucket = _s3()
+                return _pi.peek(s3, bucket, _uname(usr), flow) if op == 'peek' else _pi.clear(s3, bucket, _uname(usr), flow)
+            return g['_pm_pending_intake'](op, usr, flow, *args)
+        return _TUL.analyze_hook(text, body, history, user, ppu, uname, host=host, pending=_pending)
+    except Exception:
+        traceback.print_exc()
+        return None
+
+
 def analyze_hook(text, body, history, user, ppu, uname, g):
     """Serve a Digital Twins IQ ask on the analyze surface. Returns the
     reply payload, or None when the ask is not this product's. ``g`` is
@@ -1299,6 +1318,11 @@ def analyze_hook(text, body, history, user, ppu, uname, g):
         t = str(text or '').strip()
         low = _low(t)
         thread_id = str((body or {}).get('thread_id') or '')
+        # 0. a twin from a list of content URLs (Jenna 2026-11-04): the sheet or text file on the thread (or URLs in
+        # the message) plus twin words; its own flow key, so a plain 'build a twin of X' never lands here
+        lr = _list_door(t, body, history, user, ppu, uname, g)
+        if lr is not None:
+            return lr
         # 1. the confirm: the echoed card, the stashed brief, or the run chip
         confirm = (body or {}).get('twin_confirm') or g['_pm_pending_intake']('pick', user, FLOW, t)
         if isinstance(confirm, dict) and confirm.get('subject'):

@@ -440,6 +440,10 @@ def ack(rec):
     elif rec.get('kind') == 'sheet':
         body = " Ask me what is in it, for a number or a column, or how it compares with a profile you have."
         chips = ['Summarize it', 'What are the columns and what do they hold?']
+        if any((s or {}).get('url_count') for s in (rec.get('sheets') or [])):
+            # a sheet of links can define an audience (2026-11-04): the twin is the people who watched, read or visited them
+            body += " It carries links: say the word and I build a digital twin of the people who watched, read or visited them."
+            chips.append('Build a twin from these URLs')
     elif rec.get('kind') == 'pdf':
         body = (" Ask me to summarize it or pull a number or a passage from it. I read PDFs; I do not edit "
                 "them in place, but I can turn what you want changed into a new deck or document.")

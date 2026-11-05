@@ -8,6 +8,10 @@ app.py so app.py stays small.
   GET  /api/digital-twins/jobs/<job_id>              a build or run job's status
   POST /api/digital-twins/build                      queue a twin build (the walkthrough: source profile|demographics, profile_key,
                                                      demographics picks, panelists; or a bare subject from the chat)
+  POST /api/digital-twins/list-preview               a list of content URLs (csv / txt / xlsx file or pasted text) read back: count, hosts,
+                                                     rows dropped, the category by the hosts, the price; nothing charged (2026-11-04)
+  POST /api/digital-twins/build-from-list            the confirm: charge once (the audience build plus the twin), queue the job that pulls
+                                                     the audience the list defines and builds the twin from it
   POST /api/digital-twins/connect-request            the Connect accounts request record
   GET  /api/digital-twins/<key>                      the twin
   POST /api/digital-twins/<key>/run                  queue a scenario run (Launch, content, pricing, platform move, compare, ...);
@@ -481,6 +485,79 @@ def dt_build():
     rec = J.start('twin_build', job_id, _uname(user), inputs, thread_id=str(body.get('thread_id') or ''), extras=_usage_extras(user))
     return jsonify({'success': True, 'job_id': job_id, 'status': rec.get('status'), 'subject': subject, 'panelists': panelists,
                     'extra_panelists': DT.extra_panelists(panelists), 'message': J.build_promise(subject)})
+
+
+# ---- a twin from a list of content URLs (Jenna 2026-11-04) ----
+# Two calls: the list is read back first (count, hosts, rows dropped, the category by the hosts, the price;
+# nothing charged), then the confirm charges once and queues the job that pulls the audience the list defines
+# and builds the twin from it. The parsed list keeps the URLs only; nothing else in the upload is stored.
+_LIST_MAX_BYTES = 25 * 1024 * 1024
+
+
+@bp.route(f'{PREFIX}/list-preview', methods=['POST'])
+def dt_list_preview():
+    user, err = _gate()
+    if err:
+        return err
+    from prometheus import twin_url_list as TUL
+    file_name, data, text, name, ws, we = '', b'', '', '', '', ''
+    if request.files or request.form:
+        f = request.files.get('file')
+        if f and f.filename:
+            file_name, data = f.filename, f.read()
+        text = str(request.form.get('text') or '')
+        name = str(request.form.get('name') or '')
+        ws, we = str(request.form.get('window_start') or ''), str(request.form.get('window_end') or '')
+    else:
+        body = request.get_json(silent=True) or {}
+        text, name = str(body.get('text') or ''), str(body.get('name') or '')
+        w = body.get('window') if isinstance(body.get('window'), dict) else {}
+        ws, we = str(w.get('start') or ''), str(w.get('end') or '')
+    if len(data) > _LIST_MAX_BYTES:
+        return jsonify({'success': False, 'error': 'That file is larger than 25 MB. Send the URL column on its own.'}), 400
+    urls, dropped = [], 0
+    if data:
+        urls, dropped = TUL.urls_from_bytes(file_name, data)
+    if not urls and text.strip():
+        urls, dropped = TUL.urls_from_text(text)
+    if not urls:
+        return jsonify({'success': False, 'error': 'I could not find a URL in that. One link per row works best (a column named url or link), or paste the links one per line.'}), 400
+    window = {'start': ws, 'end': we} if ws and we else None
+    rec = TUL.store_list(_uname(user), TUL.classify(urls), name=name, window=window, file_name=file_name or 'pasted URLs', dropped=dropped,
+                         s3=_s3(), bucket=DT.S3_BUCKET)
+    s = rec.get('summary') or {}
+    return _nocache(jsonify({'success': True, 'list_token': rec['token'], 'count': rec['count'], 'dropped': rec['dropped'], 'hosts': (s.get('hosts') or [])[:12],
+                             'platforms': s.get('platforms') or {}, 'kinds': s.get('kinds') or {}, 'category': rec['brand_category'],
+                             'category_reason': rec['category_reason'], 'window': rec['window'], 'window_words': TUL.window_words(rec['window']),
+                             'line': TUL.list_words(rec), 'price': TUL.price(_uname(user)), 'sample': [it['url'] for it in rec['items'][:8]],
+                             'file_name': rec.get('file_name') or ''}))
+
+
+@bp.route(f'{PREFIX}/build-from-list', methods=['POST'])
+def dt_build_from_list():
+    user, err = _gate()
+    if err:
+        return err
+    from prometheus import twin_url_list as TUL
+    body = request.get_json(silent=True) or {}
+    name = ' '.join(str(body.get('name') or '').split())[:140]
+    if not name:
+        return jsonify({'success': False, 'error': "Name the audience first: a plain name like 'Yellowstone and Landman viewers' or 'Our fall campaign readers'."}), 400
+    rec = TUL.load_list(str(body.get('list_token') or ''), s3=_s3(), bucket=DT.S3_BUCKET)
+    if not rec or (str(rec.get('owner') or '') != _uname(user) and not DT.is_admin(user)):
+        return jsonify({'success': False, 'error': 'That list is not on your account any more. Upload it again and I will read it back.'}), 400
+    window = body.get('window') if isinstance(body.get('window'), dict) and body['window'].get('start') else rec.get('window')
+    try:
+        panelists = int(body.get('panelists') or 0)
+    except (TypeError, ValueError):
+        panelists = 0
+    panelists = max(2, min(panelists, DT.PANEL_SEATS_MAX)) if panelists else 0
+    job_id, line, funds = TUL.start(user, _uname(user), rec, name, window, thread_id=str(body.get('thread_id') or ''),
+                                    purpose=str(body.get('purpose') or '')[:400], panelists=panelists, ask_text=f"Build a twin of {name} from a list",
+                                    extras=_usage_extras(user))
+    if funds:
+        return jsonify({'success': False, 'guidance': True, 'error': funds}), 402
+    return jsonify({'success': True, 'job_id': job_id, 'status': 'queued', 'subject': name, 'message': line, 'price': TUL.price(_uname(user))})
 
 
 @bp.route(f'{PREFIX}/connect-request', methods=['POST'])
