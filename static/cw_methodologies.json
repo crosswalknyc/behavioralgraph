@@ -3250,6 +3250,308 @@
     ]
   },
   {
+    "title": "DIGITAL TWINS",
+    "intro": [
+      {
+        "text": "Digital Twins IQ puts a question to an audience before money is committed to it. A twin is a standing read of one audience. Rooms and runs then place a cut, a script, a concept, a title, a plan or a price in front of that audience and report what it does.",
+        "is_list": false,
+        "runs": [
+          {
+            "text": "Digital Twins IQ puts a question to an audience before money is committed to it. A twin is a standing read of one audience. Rooms and runs then place a cut, a script, a concept, a title, a plan or a price in front of that audience and report what it does.",
+            "bold": false
+          }
+        ]
+      }
+    ],
+    "subs": [
+      {
+        "title": "What a Twin Holds",
+        "paragraphs": [
+          {
+            "text": "A twin carries four things about its audience. Who they are, by demographics and markets. What they already use and buy, by platform, brand and talent. Twelve dials for how they respond. And where the audience sits in its lifecycle.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "A twin carries four things about its audience. Who they are, by demographics and markets. What they already use and buy, by platform, brand and talent. Twelve dials for how they respond. And where the audience sits in its lifecycle.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "The twelve dials are: • Finds things through social, not search • Binges rather than watching on a schedule • Reacts to price • Likely to cancel when the title ends • Comes back for the next entry • Buys the product • Phone in hand while watching • Shows up in person • Follows the people behind it • Sits through ads • Tries a new title fast • Tells other people.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "The twelve dials are: • Finds things through social, not search • Binges rather than watching on a schedule • Reacts to price • Likely to cancel when the title ends • Comes back for the next entry • Buys the product • Phone in hand while watching • Shows up in person • Follows the people behind it • Sits through ads • Tries a new title fast • Tells other people.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "Every answer a twin gives traces back to those dials. A price question moves with price sensitivity, a watch question with the platform footprint and the lifecycle position, so a room cannot contradict the audience it was built on.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Every answer a twin gives traces back to those dials. A price question moves with price sensitivity, a watch question with the platform footprint and the lifecycle position, so a room cannot contradict the audience it was built on.",
+                "bold": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "title": "How a Twin Is Built",
+        "paragraphs": [
+          {
+            "text": "A twin is built on a defined group. For a named subject, a title, a talent or a brand, it sits on that subject's Profile IQ Total Universe. If no file is on record, one is pulled first, and that file is what the twin and all of its rooms use. A twin can also be shaped directly by demographics: gender, age, income, ethnicity and markets.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "A twin is built on a defined group. For a named subject, a title, a talent or a brand, it sits on that subject's Profile IQ Total Universe. If no file is on record, one is pulled first, and that file is what the twin and all of its rooms use. A twin can also be shaped directly by demographics: gender, age, income, ethnicity and markets.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "The build reads everything already delivered on that subject: • The Total Universe and its cuts • Digital Journeys, for return behavior • Brand Partnership reads • Attribution campaigns, for the track record • Trends, for momentum • The Gen Pop baseline.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "The build reads everything already delivered on that subject: • The Total Universe and its cuts • Digital Journeys, for return behavior • Brand Partnership reads • Attribution campaigns, for the track record • Trends, for momentum • The Gen Pop baseline.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "A twin is held against those, so it never contradicts a read already delivered on the same subject.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "A twin is held against those, so it never contradicts a read already delivered on the same subject.",
+                "bold": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "title": "The Room",
+        "paragraphs": [
+          {
+            "text": "A room seats twins and takes questions in plain words. Twelve seats is the default, and the mix in the room matches the source file: gender, orientation, education and occupation. Each seat is built from those attributes and holds a stable name, age and city for the length of the session. No seat is an identified real person.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "A room seats twins and takes questions in plain words. Twelve seats is the default, and the mix in the room matches the source file: gender, orientation, education and occupation. Each seat is built from those attributes and holds a stable name, age and city for the length of the session. No seat is an identified real person.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "Questions can be asked in several shapes: • Open • Yes or no • Multiple choice • Rating, one to five • Price, would you pay this • A against B • Show of hands • Probe, why, or what would change your mind.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Questions can be asked in several shapes: • Open • Yes or no • Multiple choice • Rating, one to five • Price, would you pay this • A against B • Show of hands • Probe, why, or what would change your mind.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "Every answer comes back with the shares and the people behind them, the split by segment in the room, a one-line read, and voices from the named seats. Re-asking with something changed, a price, a cast, a platform, moves the answer the way that audience's dials say it should.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Every answer comes back with the shares and the people behind them, the split by segment in the room, a one-line read, and voices from the named seats. Re-asking with something changed, a price, a cast, a platform, moves the answer the way that audience's dials say it should.",
+                "bold": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "title": "Pilot Testing",
+        "paragraphs": [
+          {
+            "text": "The room watches a cut on the clock: a pilot, an episode, a movie or a recorded read. Every seat holds a dial from 0 to 100 and fires timestamped reactions, loved it, laughed, leaned in, lost, checked out, wow, and those land against the video clock. A question can be asked at any point in the playhead, and it carries the moment that just played.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "The room watches a cut on the clock: a pilot, an episode, a movie or a recorded read. Every seat holds a dial from 0 to 100 and fires timestamped reactions, loved it, laughed, leaned in, lost, checked out, wow, and those land against the video clock. A question can be asked at any point in the playhead, and it carries the moment that just played.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "The cut itself is read scene by scene: scene changes, a line on what is on screen in each, the dialogue with timestamps, and the silences.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "The cut itself is read scene by scene: scene changes, a line on what is on screen in each, the dialogue with timestamps, and the silences.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "After the cut the scorecard reports: • Excellent, very good and total positive • Definitely recommend • Would finish • Tune-in • Urgency • Expectations • Would pay full price. Each sits next to its format norm and its genre norm, with the favorite moment and the dead spot off the dial, splits by every demographic, the reaction list and the transcript.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "After the cut the scorecard reports: • Excellent, very good and total positive • Definitely recommend • Would finish • Tune-in • Urgency • Expectations • Would pay full price. Each sits next to its format norm and its genre norm, with the favorite moment and the dead spot off the dial, splits by every demographic, the reaction list and the transcript.",
+                "bold": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "title": "Greenlight: Script Read and Concept",
+        "paragraphs": [
+          {
+            "text": "A script read puts the script to the room on a reading clock, scene by scene, split on the sluglines. It returns a dial per scene with notes on story, structure and character: where it runs long, where a character arrives without a want, where the turn lands. A recorded table read runs like a pilot instead.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "A script read puts the script to the room on a reading clock, scene by scene, split on the sluglines. It returns a dial per scene with notes on story, structure and character: where it runs long, where a character arrives without a want, where the turn lands. A recorded table read runs like a pilot instead.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "A concept test takes a logline, a synopsis or a one-sheet. It returns interest and definite interest, how far the idea stands out, who it is for, whether they would watch, the strongest element and the biggest doubt. Each is reported against the concept norm and broken out by quadrant. Two twins can sit in the same room to read two audiences on one idea.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "A concept test takes a logline, a synopsis or a one-sheet. It returns interest and definite interest, how far the idea stands out, who it is for, whether they would watch, the strongest element and the biggest doubt. Each is reported against the concept norm and broken out by quadrant. Two twins can sit in the same room to read two audiences on one idea.",
+                "bold": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "title": "Trailers, Titles and Key Art",
+        "paragraphs": [
+          {
+            "text": "A trailer test runs assets from fifteen seconds to three minutes, up to three side by side in the same room, and reports interest in the title before and after.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "A trailer test runs assets from fifteen seconds to three minutes, up to three side by side in the same room, and reports interest in the title before and after.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "A title or key art test shows up to six options to one room. Titles return appeal from the title alone and fit once the logline is read; key art returns the same on the image.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "A title or key art test shows up to six options to one room. Titles return appeal from the title alone and fit once the logline is read; key art returns the same on the image.",
+                "bold": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "title": "Launch Lab and the Spend Engine",
+        "paragraphs": [
+          {
+            "text": "Launch Lab takes a plan and a budget and returns three plans side by side: as allocated, signal-led, and the smallest spend that still reaches the goal. Each carries odds and ranges week by week, the levers ranked by what they are worth, and a holdout sized to prove lift at the lowest spend.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Launch Lab takes a plan and a budget and returns three plans side by side: as allocated, signal-led, and the smallest spend that still reaches the goal. Each carries odds and ranges week by week, the levers ranked by what they are worth, and a holdout sized to prove lift at the lowest spend.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "The Spend Engine runs a plan forward day by day. It reports spend and signal by channel, and the single move that earns the most that day: shift money, raise or cut, or change the lead asset. The difference each move makes is stated in plain words.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "The Spend Engine runs a plan forward day by day. It reports spend and signal by channel, and the single move that earns the most that day: shift money, raise or cut, or change the lead asset. The difference each move makes is stated in plain words.",
+                "bold": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "title": "Scenarios",
+        "paragraphs": [
+          {
+            "text": "Beyond the rooms, a twin answers scenario questions: • A launch, a plan and a budget • Content, a season, sequel or episode drop • A platform move, a window or a change of home • A partnership, a brand against the audience • Pricing, a price or packaging change • A talent attach, a cast or creator • A merchandise drop.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Beyond the rooms, a twin answers scenario questions: • A launch, a plan and a budget • Content, a season, sequel or episode drop • A platform move, a window or a change of home • A partnership, a brand against the audience • Pricing, a price or packaging change • A talent attach, a cast or creator • A merchandise drop.",
+                "bold": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "title": "Norms",
+        "paragraphs": [
+          {
+            "text": "Every scorecard is read against a norm for its format and a norm for its genre. Formats covered are features, pilots, episodes, trailers, titles, key art, scripts and concepts, and each cell carries the count of tests standing behind it.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Every scorecard is read against a norm for its format and a norm for its genre. Formats covered are features, pilots, episodes, trailers, titles, key art, scripts and concepts, and each cell carries the count of tests standing behind it.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "A cell begins at an established reference point for that format and genre. As our own tests accumulate, the cell becomes the running figure from those tests. The starting point stays in, carrying the weight of a fixed number of tests. Cells are shown to one decimal.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "A cell begins at an established reference point for that format and genre. As our own tests accumulate, the cell becomes the running figure from those tests. The starting point stays in, carrying the weight of a fixed number of tests. Cells are shown to one decimal.",
+                "bold": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "title": "Repeatability",
+        "paragraphs": [
+          {
+            "text": "The same twin asked the same thing returns the same answer, so a number quoted in a meeting is the number still there a week later. No two twins land on the same figure, so two audiences read side by side are always distinguishable.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "The same twin asked the same thing returns the same answer, so a number quoted in a meeting is the number still there a week later. No two twins land on the same figure, so two audiences read side by side are always distinguishable.",
+                "bold": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "title": "What a Twin Does Not Do",
+        "paragraphs": [
+          {
+            "text": "A twin answers for the audience it was built on, over the window it was built in. It is a read on that audience rather than a count of buyers, and it does not replace a field test with recruited participants. Norms move as tests accumulate behind them. A score read against a thin cell carries less weight than one read against a deep cell, which is why the count behind every cell is shown.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "A twin answers for the audience it was built on, over the window it was built in. It is a read on that audience rather than a count of buyers, and it does not replace a field test with recruited participants. Norms move as tests accumulate behind them. A score read against a thin cell carries less weight than one read against a deep cell, which is why the count behind every cell is shown.",
+                "bold": false
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
     "title": "Compliance and Consent",
     "intro": [
       {
