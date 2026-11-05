@@ -320,10 +320,32 @@ def propose_twin_field(parsed):
     return None
 
 
-def confirm_reply(parsed, username=None):
+def audience_on_file(parsed, s3=None):
+    """The subject's Total Universe key when the catalog already holds
+    one, else '' (the audience is pulled first, 2026-11-04). Never raises."""
+    try:
+        from . import twin_named_pull as _TNP
+        if s3 is None:
+            s3, _b = _s3()
+        p = parsed if isinstance(parsed, dict) else {}
+        return _TNP.audience_on_file(s3, p.get('subject'), p.get('window') if isinstance(p.get('window'), dict) else None)
+    except Exception:
+        traceback.print_exc()
+        return ''
+
+
+def confirm_reply(parsed, username=None, on_file=None):
+    """The brief card. A subject with no audience on file says the
+    audience is pulled first, then the twin, with both prices; a subject
+    already on file prices the twin alone (``on_file`` is the key, or
+    None to look it up)."""
     from migration.digital_twin_synthesis import default_window
+    from . import twin_named_pull as _TNP
     w = parsed.get('window') if isinstance(parsed.get('window'), dict) and parsed['window'].get('start') else default_window()
     kind = str(parsed.get('subject_kind') or 'audience')
+    pullable = _TNP.pullable(parsed)
+    if on_file is None and pullable:
+        on_file = audience_on_file(parsed)
     lines = [f"Here is the twin brief:",
              f"- Subject: {parsed.get('subject')}",
              f"- Kind: {kind}" + (f", {parsed.get('format')}" if parsed.get('format') else '') + ("; whether it is IP-related is decided from the catalog at build time" if kind != 'ip' else ''),
@@ -331,7 +353,12 @@ def confirm_reply(parsed, username=None):
              f"- Window: {w.get('label') or 'Trailing 12 months'} ({w.get('start')} to {w.get('end')})"]
     if parsed.get('platform_home'):
         lines.append(f"- Home: {parsed.get('platform_home')}")
-    lines.append(f"- Price: {_price_label('digital_twins_iq', username)} for the twin and its first two runs; each further run {_price_label('digital_twin_run', username)}")
+    if pullable:
+        lines.append(_TNP.audience_line(parsed.get('subject'), on_file))
+    if on_file or not pullable:
+        lines.append(f"- Price: {_price_label('digital_twins_iq', username)} for the twin and its first two runs; each further run {_price_label('digital_twin_run', username)}")
+    else:
+        lines.append(_TNP.price_line(username, pull=True))
     lines.append(f"Say '{RUN_LABEL}' and I will line it up.")
     return '\n'.join(lines)
 
@@ -1255,6 +1282,47 @@ def catalog_reply(text, user):
                     [f"Build a twin of {subj}"] if subj else ['Build a twin of Gilmore Girls Hulu viewers'])
 
 
+def start_build(user, uname, confirm, *, thread_id='', ask_text='', extras=None, start_fn=None, consume_credit=None, is_free=None, on_file=None):
+    """The confirmed brief becomes the job. A subject with no audience on
+    file (2026-11-04) is charged for the audience build and the twin at
+    once, and its job pulls the audience first; a subject on file is
+    charged for the twin alone. Returns (job_id, promise, funds_payload):
+    funds_payload is the reply when the account cannot cover it (nothing
+    queued), else None."""
+    import secrets
+    from . import digital_twin_job as J
+    from . import twin_named_pull as _TNP
+    subject = ' '.join(str(confirm.get('subject') or '').split())[:140]
+    inputs = {**{k: confirm.get(k) for k in ('subject', 'subject_kind', 'purpose', 'platform_home', 'format', 'window')}, 'op': 'build',
+              'ask_text': str(ask_text or '')[:400]}
+    inputs['subject'] = subject
+    pullable = _TNP.pullable(inputs)
+    if on_file is None:
+        on_file = audience_on_file(inputs) if pullable else ''
+    pull = pullable and not on_file
+    job_id = uuid.uuid4().hex[:12]
+    profile_run_id = secrets.token_urlsafe(10) if pull else ''
+    if consume_credit is None and host.has('consume_credit'):
+        consume_credit = host.consume_credit
+    if is_free is None:
+        def is_free(u, n):
+            try:
+                from prometheus.priced_read import seat_is_free
+                return bool(seat_is_free(u, n, host))
+            except Exception:
+                return _is_super(u)
+    charged, funds = _TNP.charge(user, uname, subject, pull=pull, profile_run_id=profile_run_id, twin_job_id=job_id,
+                                 consume_credit=consume_credit, is_free=is_free)
+    if funds:
+        return '', '', _payload(funds)
+    email = str((user or {}).get('email') or '').strip() if isinstance(user, dict) else ''
+    inputs.update({'charged': charged, 'pull_audience': pull, 'profile_run_id': profile_run_id, 'requester_email': email})
+    if on_file:
+        inputs['profile_key'] = str(on_file)      # the twin reads the audience the card priced on
+    J.start('twin_build', job_id, uname, inputs, thread_id=thread_id, extras=extras or {}, start_fn=start_fn)
+    return job_id, (_TNP.promise(subject) if pull else J.build_promise(subject)), None
+
+
 def status_reply(user):
     from . import digital_twin_job as J
     s3, bucket = _s3()
@@ -1281,6 +1349,9 @@ def status_reply(user):
         return _payload(r.get('ready_message') or f"{subj} is ready on the Twins tab.", [OPEN_CHIP], twin_key=r.get('s3_key'), open_view='digitalTwinsIQ')
     if st in ('error', 'failed'):
         return _payload(f"{subj} did not finish. Nothing more is charged; say 'Build a twin of {subj}' and it runs fresh.")
+    if r.get('waiting_on_profile') or st == 'waiting':
+        return _payload(f"{subj} is still building: the audience is being pulled first (usually under an hour), then the twin follows. "
+                        f"It lands on the Twins tab; I will confirm here and by email.")
     return _payload(f"{subj} is still building ({r.get('stage') or st}). It lands on the Twins tab in a few minutes; I will confirm here.")
 
 
@@ -1326,13 +1397,10 @@ def analyze_hook(text, body, history, user, ppu, uname, g):
         # 1. the confirm: the echoed card, the stashed brief, or the run chip
         confirm = (body or {}).get('twin_confirm') or g['_pm_pending_intake']('pick', user, FLOW, t)
         if isinstance(confirm, dict) and confirm.get('subject'):
-            job_id = uuid.uuid4().hex[:12]
-            funds = _charge(user, 'digital_twins_iq', f"Digital Twin: {confirm.get('subject')}", job_id)
-            if funds is not None:
-                return funds
-            J.start('twin_build', job_id, uname, {**{k: confirm.get(k) for k in ('subject', 'subject_kind', 'purpose', 'platform_home', 'format', 'window')}, 'op': 'build', 'ask_text': t},
-                    thread_id=thread_id, extras=ppu or {})
-            return _payload(J.build_promise(confirm.get('subject')), [], twin_job_id=job_id, job_id=job_id, job_type='twin_build', open_view='digitalTwinsIQ')
+            job_id, promise, err = start_build(user, uname, confirm, thread_id=thread_id, ask_text=t, extras=ppu or {})
+            if err is not None:
+                return err
+            return _payload(promise, [], twin_job_id=job_id, job_id=job_id, job_type='twin_build', open_view='digitalTwinsIQ')
         # 2. the collecting intake
         if ((body or {}).get('twin_inputs') or intake_armed(history)) and not g['_pm_intake_breakout'](t) and not twin_intent(t):
             if re.match(r"^\s*(never ?mind|no( thanks?)?|not now|cancel( (that|it))?)[.! ]*$", low):

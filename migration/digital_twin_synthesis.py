@@ -34,6 +34,7 @@ import gzip
 import io
 import json
 import re
+import secrets
 import time
 import traceback
 import uuid
@@ -280,58 +281,57 @@ def hydrate_identity_from_profile(twin: dict, s3) -> bool:
 
 
 def queue_profile_for_twin(subject: str, window: Optional[dict] = None, *, s3=None, created_by: str = '',
-                           progress: Optional[Callable] = None, wait_s: int = 3000) -> str:
-    """Pull a Total Universe for the subject through the profile pipeline
-    and return its S3 key. Empty string when the queue is off or the
-    wait runs out. Hermetic tests never call this (they inject
-    ``pull_profile``)."""
+                           progress: Optional[Callable] = None, wait_s: int = 3000, kind: str = 'audience',
+                           purpose: str = '', run_id: str = '', then: Optional[dict] = None) -> str:
+    """Pull a Total Universe for the subject through the profile engine.
+
+    The twin job no longer calls this (2026-11-04): its first phase queues
+    the audience through prometheus.twin_named_pull and the engine hands
+    the twin back when the Total Universe registers. This stays for any
+    other caller and now posts a body the queue accepts: the brief goes
+    through the interpret step, _spec_from_draft converts it (subject
+    rows, demographics, a messy sample, a canonical category, the
+    standing window) and the post reaches the local listener when only
+    the secret is in the environment. Returns the S3 key when ``wait_s``
+    is positive and the audience lands inside it; '' otherwise (the run
+    id is logged either way). Hermetic tests never call this (they
+    inject ``pull_profile``)."""
     import os
     if os.environ.get('REGRESSION_TEST_MODE') == '1' or os.environ.get('DIGITAL_TWIN_PROFILE_PULL') == '0':
-        return ''
-    url = str(os.environ.get('SYNTH_QUEUE_URL') or '').rstrip('/')
-    secret = str(os.environ.get('SYNTH_QUEUE_SECRET') or '')
-    if not url or not secret:
         return ''
     name = ' '.join(str(subject or '').split()).strip()[:140]
     if not name:
         return ''
-    stem = re.sub(r"[^A-Za-z0-9]+", '_', name).strip('_')[:80] or 'Subject'
-    window = window or default_window()
-    # size: the worker's own guards re-derive from the researched anchor;
-    # a messy placeholder here only lets the job start
-    raw = messy_count(name, 'subject_raw_tu', 48_317)
-    spec = {'name': name, 'file_stem': stem, 'brand_category': 'ACTOR',
-            'subject_raw_tu': raw, 'subject_raw_avid': max(3, int(raw * 0.22)),
-            'universe_anchor': int(raw * 32.99), 'engaged_share': 1.0,
-            'anchor_source': f"US people who engaged with {name} in the window",
-            'date_range': f"{window.get('start')} TO {window.get('end')}"}
-    body = {'decision': 'new_build', 'run_avid': True, 'user_email': created_by or 'prometheus',
-            'requested_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()), 'spec': spec}
     try:
-        import requests
-        if callable(progress):
-            progress('pulling the audience first')
-        resp = requests.post(f"{url}/synth/queue", json=body, timeout=30,
-                             headers={'X-Synth-Auth': secret, 'Content-Type': 'application/json'})
-        if resp.status_code != 200:
-            print(f"[twin] profile queue returned {resp.status_code}")
-            return ''
-        run_id = str((resp.json() or {}).get('run_id') or '')
+        from prometheus import twin_named_pull as _TNP
+    except Exception as e:
+        print(f"[twin] profile queue unavailable: {e}")
+        return ''
+    window = window or default_window()
+    if callable(progress):
+        progress('pulling the audience first')
+    try:
+        prompt = _TNP.audience_prompt(name, kind, purpose, window)
+        draft = _TNP.interpret_draft(prompt) or _TNP.fallback_draft(name, kind, '', window, s3=s3)
+        rid = run_id or secrets.token_urlsafe(10)
+        body = _TNP.spec_body(draft, subject=name, kind=kind, window=window, run_id=rid, requester={'username': created_by, 'email': ''})
+        if isinstance(then, dict) and then:
+            body['then'] = then
+        rid, err = _TNP.queue_profile(body)
     except Exception as e:
         print(f"[twin] profile queue failed: {e}")
         return ''
-    if not run_id:
+    if not rid:
+        print(f"[twin] profile queue refused: {err}")
         return ''
-    deadline = time.time() + max(60, int(wait_s or 3000))
+    print(f"[twin] profile pull queued for {name} as {rid}")
+    if int(wait_s or 0) <= 0:
+        return ''
+    deadline = time.time() + max(60, int(wait_s))
     while time.time() < deadline:
         time.sleep(12)
-        try:
-            st = requests.get(f"{url}/synth/status/{run_id}", timeout=15,
-                              headers={'X-Synth-Auth': secret})
-            doc = st.json() if st.status_code == 200 else {}
-        except Exception:
-            doc = {}
-        key = str(doc.get('tu_key') or '')
+        doc = _TNP.profile_status(rid)
+        key = _TNP.landed_key(doc)
         if key:
             return key
         if str(doc.get('status') or '') in ('error', 'failed', 'cancelled'):

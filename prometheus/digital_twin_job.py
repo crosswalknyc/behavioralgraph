@@ -150,16 +150,36 @@ def run_job(job_id, username, inputs, extras=None):
             rec['stage'] = 'building the twin'
             status_write(job_id, rec)
 
-            def _progress(msg):
-                rec['stage'] = str(msg or 'pulling the audience first')
-                status_write(job_id, rec)
-
-            def _pull(subject, window):
-                rec['stage'] = 'pulling the audience first'
-                status_write(job_id, rec)
-                return SYN.queue_profile_for_twin(subject, window, s3=s3, created_by=username or 'prometheus', progress=_progress)
-
-            from_list = bool(inputs.get('from_list') or inputs.get('url_list_key') or isinstance(inputs.get('url_list'), dict))
+            # a named subject with no audience on file (Jenna 2026-10-27: a named subject always sits on a Total Universe).
+            # The confirm decided and charged this; a job that reached here without the decision (an older job document,
+            # a confirm whose catalog read failed) decides it now so the twin never builds on research alone.
+            named_pull = bool(inputs.get('pull_audience'))
+            from_list = (not named_pull) and bool(inputs.get('from_list') or inputs.get('url_list_key') or isinstance(inputs.get('url_list'), dict))
+            if not named_pull and not from_list and not str(inputs.get('profile_key') or '').strip():
+                try:
+                    from . import twin_named_pull as _TNP
+                    named_pull = _TNP.needs_pull(inputs, s3)
+                except Exception:
+                    traceback.print_exc()
+                    named_pull = False
+                if named_pull:
+                    inputs['pull_audience'] = True
+                    inputs.setdefault('charged', {'profile': 0, 'twin': 0})
+            if named_pull and not str(inputs.get('profile_key') or '').strip():
+                # phase one: the audience is queued on the profile engine (the interpret step, the converted spec, the then
+                # block) and this job stops; the engine hands the twin back to this queue with the landed profile key on
+                # the inputs the moment the Total Universe registers. A queue that refuses ends here with the refund and
+                # the partner-safe line; nothing is held, nothing says rebuild.
+                from . import twin_named_pull as _TNP
+                tu_key = _TNP.run_pull_in_job(inputs, username, job_id, rec, status_write, s3=s3, bucket=bucket, usage_extras=extras)
+                if tu_key is None:
+                    print(f"[twin-job {job_id}] audience queued as {rec.get('profile_run_id')}; the twin follows when it lands")
+                    return rec
+                if not tu_key:
+                    _thread_note(username, inputs.get('thread_id'), _TNP.FAIL_LINE, {'twin_job_id': job_id})
+                    print(f"[twin-job {job_id}] named audience pull stopped: {rec.get('detail')}")
+                    return rec
+                inputs['profile_key'] = tu_key
             if from_list and not str(inputs.get('profile_key') or '').strip():
                 # a twin from a list of content URLs (Jenna 2026-11-04), phase one: the audience the list defines
                 # is queued on the profile engine and this job stops. The engine hands the twin back to this queue
@@ -176,12 +196,13 @@ def run_job(job_id, username, inputs, extras=None):
                     print(f"[twin-job {job_id}] list audience pull stopped: {rec.get('detail')}")
                     return rec
                 inputs['profile_key'] = tu_key
-            if from_list:
+            if from_list or named_pull:
                 inputs['source'] = 'profile'
-                inputs['pull_profile'] = None
                 rec.update({'status': 'running', 'queued': False, 'stage': 'building the twin from the audience'})
                 status_write(job_id, rec)
-            inputs.setdefault('pull_profile', _pull)
+            # the in-job blocking pull is retired (2026-11-04): a missing audience is queued in phase one above and the
+            # engine hands the twin back; the build itself never waits on the profile engine
+            inputs['pull_profile'] = None
             payload = SYN.build_twin(inputs, claude_json, tools=_tools(), created_by=username or 'prometheus', s3=s3)
             if str((status_read(job_id) or {}).get('status') or '') == 'cancelled':
                 print(f"[twin-job {job_id}] cancelled while building; nothing persisted")
@@ -194,6 +215,9 @@ def run_job(job_id, username, inputs, extras=None):
             if from_list:
                 ready = (f"Your twin is ready: {m.get('name')}, built from the audience your list defines, is live on the Twins tab of Digital Twins IQ, "
                          f"{human_people(m.get('size_us'))} people in the US. The audience itself is in Select Profile. Ask the twin anything here, or open it.")
+            elif named_pull and str(m.get('profile_key') or ''):
+                from . import twin_named_pull as _TNP
+                ready = _TNP.ready_message(m.get('name'), human_people(m.get('size_us')), str(inputs.get('subject') or m.get('subject') or m.get('name')))
             rec.update({'status': 'done', 'success': True, 'stage': 'done', 'finished_at': time.time(), 's3_key': key, 'subject': m.get('name'),
                         'size_us': m.get('size_us'), 'ready_message': ready})
             status_write(job_id, rec)
@@ -201,9 +225,10 @@ def run_job(job_id, username, inputs, extras=None):
                                                                        'options': [{'label': 'Open in Digital Twins IQ', 'view': 'digitalTwinsIQ', 'twin_key': key}]})
             try:
                 from .delivered import on_done
-                # a twin from a list was asked for by upload, and its requester hears back by email too (2026-11-04)
+                # a twin from a list was asked for by upload, and its requester hears back by email too (2026-11-04); so does
+                # the requester of a twin that waited on its audience being pulled first
                 on_done('twin', username=username, subject=str(m.get('name') or ''), s3_key=key, payload=payload, host=host, s3_client=s3, job_id=job_id,
-                        ready_message=ready, email=from_list)
+                        ready_message=ready, email=from_list or named_pull)
             except Exception as e:
                 print(f"[twin-job {job_id}] delivered record skipped: {e}")
             print(f"[twin-job {job_id}] built -> {key}")

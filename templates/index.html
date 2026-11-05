@@ -52410,10 +52410,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var BW_INCLUDED = 12, BW_MAX = 40;
             function bwFresh() { return { step: 0, source: '', subject: '', profile_key: '', profile_name: '', profile_cat: '', q: '', results: null, loading: false, demo: {}, markets: '', interests: '', purpose: '', chip: '', panelists: BW_INCLUDED, busy: false, job: null, err: '' }; }
             function bwPrice(which) {
-                var lines = S.pricing || [], rx = { twin: /^digital twin\b/i, session: /^focus group iq\b/i, panelist: /^extra panelist/i }[which];
+                var lines = S.pricing || [], rx = { twin: /^digital twin\b/i, session: /^focus group iq\b/i, panelist: /^extra panelist/i, profile: /^audience build\b/i }[which];
                 var line = lines.filter(function(x) { return rx.test(x); })[0] || '';
                 var m = /\$([0-9,]+(?:\.\d+)?)/.exec(line);
-                return m ? parseFloat(m[1].replace(/,/g, '')) : { twin: 750, session: 5500, panelist: 550 }[which];
+                return m ? parseFloat(m[1].replace(/,/g, '')) : { twin: 750, session: 5500, panelist: 550, profile: 300 }[which];
             }
             function usd(v) { v = Number(v || 0); return '$' + v.toLocaleString('en-US', { minimumFractionDigits: (Math.round(v) === v) ? 0 : 2, maximumFractionDigits: 2 }); }
             window.dtwBuildOpen = function(on) {
@@ -52538,18 +52538,22 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }
             function bwStepReview() {
                 var b = S.bw, extra = Math.max(0, b.panelists - BW_INCLUDED), pt = bwPrice('twin'), ps = bwPrice('session'), pp = bwPrice('panelist');
-                var rows = [['Source', b.source === 'demographics' ? 'A group shaped by demographics' : (b.profile_key ? 'A defined group, from the profile you picked' : 'A defined group; Prometheus pulls the audience'), 0],
+                // a new subject (no profile picked) has its audience pulled first (2026-11-04): the audience build is priced with the twin
+                var pull = b.source !== 'demographics' && !b.profile_key && !!b.subject, pa = pull ? bwPrice('profile') : 0;
+                var rows = [['Source', b.source === 'demographics' ? 'A group shaped by demographics' : (b.profile_key ? 'A defined group, from the profile you picked' : 'A defined group; no audience on file yet, so Prometheus pulls it first'), 0],
                             ['Audience', bwAudienceLabel(), 1], ['Purpose', (b.chip ? b.chip : '') + (b.purpose.trim() ? (b.chip ? '. ' : '') + b.purpose.trim() : '') || 'Open', 2],
                             ['Panelists', b.panelists + ' in every room' + (extra ? ' (' + extra + ' past the ' + BW_INCLUDED + ' a session seats)' : ''), 3]];
                 var sum = '<div class="dtw-bw-sum">' + rows.map(function(r) { return '<div class="r"><span class="k">' + r[0] + '</span><span class="v">' + esc(r[1]) + '<button type="button" class="dtw-link" onclick="dtwBwGo(' + r[2] + ')">Change</button></span></div>'; }).join('') + '</div>';
                 var price = '<div class="dtw-bw-price">'
+                    + (pull ? '<div class="r"><span><i>The audience</i>, pulled first (usually under an hour)</span><b>' + usd(pa) + '</b></div>' : '')
                     + '<div class="r"><span><i>The twin</i>, with its first two runs</span><b>' + usd(pt) + '</b></div>'
                     + '<div class="r"><span><i>Each focus group session</i>, ' + BW_INCLUDED + ' questions</span><b>' + usd(ps) + '</b></div>'
                     + (extra ? '<div class="r"><span><i>Extra panelists</i>, ' + extra + ' x ' + usd(pp) + ', with each session</span><b>' + usd(extra * pp) + '</b></div>' : '')
                     + '<div class="r"><span><i>Prometheus</i>, the build and every question</span><b>Metered</b></div>'
-                    + '<div class="r total"><span>Charged now</span><b>' + usd(pt) + '</b></div>'
-                    + '<div class="m">Sessions and extra panelists bill when a room asks its first question. Prometheus usage is billed at the published rate on top.</div></div>';
-                return '<div class="dtw-bw-q">Ready to build.</div><div class="dtw-bw-sub">Check the four lines, then build. The twin lands on the Twins tab in a few minutes.</div>' + sum + price
+                    + '<div class="r total"><span>Charged now</span><b>' + usd(pt + pa) + '</b></div>'
+                    + '<div class="m">' + (pull ? 'If this audience is already on file, only the twin is charged. ' : '') + 'Sessions and extra panelists bill when a room asks its first question. Prometheus usage is billed at the published rate on top.</div></div>';
+                var when = pull ? 'The audience is pulled first (usually under an hour), then the twin is built from it; both land on the Twins tab and Prometheus confirms in the chat and by email.' : 'The twin lands on the Twins tab in a few minutes.';
+                return '<div class="dtw-bw-q">Ready to build.</div><div class="dtw-bw-sub">Check the four lines, then build. ' + when + '</div>' + sum + price
                     + (b.err ? '<div class="dtw-bw-err">' + esc(b.err) + '</div>' : '') + bwNav(!b.busy, b.busy ? 'Building...' : 'Build the twin');
             }
             function bwProgress() {
@@ -52619,7 +52623,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             function bwPoll(job) {
                 (async function loop() {
                     var waited = 0;
-                    while (waited < 1800000 && S.bw && S.bw.job === job && !job.done && !job.error) {
+                    while (waited < 7200000 && S.bw && S.bw.job === job && !job.done && !job.error) {
                         await new Promise(function(res) { setTimeout(res, 4000); }); waited += 4000;
                         var d = null; try { d = await api('/jobs/' + job.id); } catch (_) { d = null; }
                         if (!d || !d.job) continue;

@@ -584,7 +584,19 @@ def pricing_lines(price_fn=None) -> list:
 
     def money(v):
         return f"${v:,.0f}" if abs(v - round(v)) < 0.009 else f"${v:,.2f}"
+
+    def audience_build():
+        # the Profile IQ build a twin of a named subject pays for when no audience is on file yet (2026-11-04)
+        d = 300.0
+        if price_fn is None:
+            return d
+        try:
+            v = float(price_fn('api_chatbot_profile_iq_build', d) or 0)
+            return v if v > 0 else d
+        except Exception:
+            return d
     return [f"Digital Twin - {money(p('digital_twins_iq'))} for the twin and its first two runs",
+            f"Audience build - {money(audience_build())} when the twin's subject has no audience on file yet; it is pulled first, then the twin is built from it",
             f"Each further Launch, content, pricing, platform or compare run - {money(p('digital_twin_run'))}",
             f"Spend Engine - {money(p('digital_twin_spend'))} to activate a plan for its window, daily runs included",
             f"Focus Group IQ - {money(p('digital_twin_panel'))} a session with {PANEL_QUESTIONS_INCLUDED} questions, then {money(p('digital_twin_panel_more'))} for each further {PANEL_QUESTIONS_INCLUDED}",

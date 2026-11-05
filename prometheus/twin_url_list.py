@@ -688,10 +688,11 @@ def audience_prompt(name, rec, window):
             f"The content:\n" + '\n'.join(lines))
 
 
-def interpret_draft(prompt, usage_extras=None, draft_fn=None):
+def interpret_draft(prompt, usage_extras=None, draft_fn=None, tag='twin-url-list'):
     """The interpret step on the composed brief (the approve-rescue
     pattern: the prompts, the pruned rulebook, one model call). Returns
-    the draft dict with tu_demos, or None."""
+    the draft dict with tu_demos, or None. ``tag`` names the caller on
+    the usage record (the named-subject pull passes its own)."""
     if draft_fn is not None:
         try:
             d = draft_fn(prompt)
@@ -719,13 +720,13 @@ def interpret_draft(prompt, usage_extras=None, draft_fn=None):
             ceiling = 8192
         fresh = _chat._H._run_nflx_claude_agent(system_prompt=sys_p, user_prompt=usr_p, max_tokens=ceiling, temperature=0.4,
                                                  model=getattr(_chat, '_SYNTH_CHAT_INTERPRET_MODEL', None),
-                                                 usage_tag=('interpret', 'twin-url-list', usage_extras))
+                                                 usage_tag=('interpret', str(tag or 'twin-url-list'), usage_extras))
         fd = (fresh or {}).get('data') or {}
         if isinstance(fd, list):
             fd = next((d for d in fd if isinstance(d, dict)), {})
         if (fresh or {}).get('success') and isinstance(fd, dict) and fd.get('tu_demos'):
             return fd
-        print(f"[twin-url-list] interpret came back without demos: {str(fd)[:200]}")
+        print(f"[{tag or 'twin-url-list'}] interpret came back without demos: {str(fd)[:200]}")
         return None
     except Exception:
         traceback.print_exc()
@@ -906,7 +907,12 @@ def queue_profile(body, post=None):
     except Exception as e:
         return '', f"queue post failed: {e}"
     if code != 200:
-        return '', f"queue returned {code}: {str((doc or {}).get('error') or doc)[:300]}"
+        err = f"queue returned {code}: {str((doc or {}).get('error') or doc)[:300]}"
+        other = str((doc or {}).get('existing_run_id') or '') if isinstance(doc, dict) else ''
+        if other:
+            # the listener's per-subject lock names the run already building this subject
+            err += f" (existing_run_id={other})"
+        return '', err
     rid = str((doc or {}).get('run_id') or body.get('run_id') or '')
     return rid, ''
 
@@ -1024,12 +1030,11 @@ WAITING_STAGE = 'pulling the audience from your list (usually under an hour); th
 
 
 # ------------------------------------------------------------ charging
-def charge_both(user, uname, name, *, profile_run_id, twin_job_id, consume_credit=None, is_free=None):
-    """Charge the audience build and the twin once, at confirm. Returns
-    (charged, funds_error): charged = {'profile': credits, 'twin':
-    credits} (0 where the seat is free); funds_error is the plain line
-    when the account cannot cover it (nothing charged)."""
-    charged = {'profile': 0, 'twin': 0}
+def billing(user, uname, *, consume_credit=None, is_free=None):
+    """(free, consume_credit) for a seat: free seats (staff, super admins,
+    unlimited) are never charged; otherwise the app's consume_credit (or
+    the injected one). A None consume_credit means nothing can be charged
+    here, which the callers treat as free (the chat's own convention)."""
     free = False
     try:
         if is_free is None:
@@ -1040,7 +1045,7 @@ def charge_both(user, uname, name, *, profile_run_id, twin_job_id, consume_credi
     except Exception:
         free = str((user or {}).get('role') or '').lower().replace(' ', '_') in ('super_admin', 'superadmin') if isinstance(user, dict) else False
     if free:
-        return charged, None
+        return True, None
     if consume_credit is None:
         try:
             import sys as _sys
@@ -1048,7 +1053,17 @@ def charge_both(user, uname, name, *, profile_run_id, twin_job_id, consume_credi
             consume_credit = getattr(app, 'consume_credit', None)
         except Exception:
             consume_credit = None
-    if consume_credit is None:
+    return False, consume_credit
+
+
+def charge_both(user, uname, name, *, profile_run_id, twin_job_id, consume_credit=None, is_free=None):
+    """Charge the audience build and the twin once, at confirm. Returns
+    (charged, funds_error): charged = {'profile': credits, 'twin':
+    credits} (0 where the seat is free); funds_error is the plain line
+    when the account cannot cover it (nothing charged)."""
+    charged = {'profile': 0, 'twin': 0}
+    free, consume_credit = billing(user, uname, consume_credit=consume_credit, is_free=is_free)
+    if free or consume_credit is None:
         return charged, None
     pr = price(uname)
     try:

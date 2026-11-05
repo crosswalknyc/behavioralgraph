@@ -90,6 +90,7 @@ from __future__ import annotations
 
 import json
 import re
+import secrets
 import sys
 import time
 import traceback
@@ -478,13 +479,27 @@ def dt_build():
               'source': source if source in ('profile', 'demographics') else '', 'profile_key': profile_key, 'profile_name': profile_name,
               'demographics': demo_spec if source == 'demographics' else None, 'panelists': panelists}
     from prometheus import digital_twin_job as J
+    from prometheus import twin_named_pull as TNP
+    uname = _uname(user)
     job_id = uuid.uuid4().hex[:12]
-    funds = _charge(user, 'digital_twins_iq', f"Digital Twin: {subject}", job_id)
-    if funds is not None:
-        return funds
-    rec = J.start('twin_build', job_id, _uname(user), inputs, thread_id=str(body.get('thread_id') or ''), extras=_usage_extras(user))
+    # a named subject with no audience on file is pulled first (2026-11-04): the audience build and the twin are charged
+    # once here, the job queues the audience and the engine hands the twin back when it lands
+    on_file = ''
+    pullable = TNP.pullable(inputs)
+    if pullable:
+        on_file = TNP.audience_on_file(_s3(), subject, inputs.get('window'))
+        if on_file:
+            inputs['profile_key'] = on_file
+    pull = pullable and not on_file
+    profile_run_id = secrets.token_urlsafe(10) if pull else ''
+    charged, funds = TNP.charge(user, uname, subject, pull=pull, profile_run_id=profile_run_id, twin_job_id=job_id)
+    if funds:
+        return jsonify({'success': False, 'guidance': True, 'error': funds}), 402
+    inputs.update({'charged': charged, 'pull_audience': pull, 'profile_run_id': profile_run_id, 'requester_email': str((user or {}).get('email') or '').strip()})
+    rec = J.start('twin_build', job_id, uname, inputs, thread_id=str(body.get('thread_id') or ''), extras=_usage_extras(user))
     return jsonify({'success': True, 'job_id': job_id, 'status': rec.get('status'), 'subject': subject, 'panelists': panelists,
-                    'extra_panelists': DT.extra_panelists(panelists), 'message': J.build_promise(subject)})
+                    'extra_panelists': DT.extra_panelists(panelists), 'message': TNP.promise(subject) if pull else J.build_promise(subject),
+                    'pulls_audience': pull, 'price': TNP.price(uname) if pull else None})
 
 
 # ---- a twin from a list of content URLs (Jenna 2026-11-04) ----
