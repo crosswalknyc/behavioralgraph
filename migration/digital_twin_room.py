@@ -69,6 +69,30 @@ THE SEATS MIRROR THE COUNT (room-4, Jenna 2026-11-05: "why would it say 0 people
   the chat line pass ``cohere_read``: one split, stated once; a nobody / none / all twelve claim against a non-zero
   count is rewritten to the count and the seats.
 
+RESEARCH FIRST, THEN REASON (room-5, Jenna 2026-11-05: "It should do external research heavily and THEN reason. just because
+we don't have anything to anchor on internally ... it has to be smarter")
+  The P-Valley room's 'are you currently watching swat exiles?' published 7.6% keeping up weekly from the seats and the twin's
+  prior alone (trail.anchor null: no counted event, no poll, no internal read of P-Valley viewers into S.W.A.T. Exiles). Now,
+  before anything else runs, the study desk (``research_pass``, role 'study', web search, at least three distinct searches
+  and up to twelve) researches the thing asked about (premiere, schedule, episodes out, viewership and chart appearances,
+  renewal, reception, social tone), the audience's own subject (size, demographics, season timing, where its viewers sit),
+  the overlap between them (cast, genre, cross-promotion, same-night scheduling, lead-in press) and the platform's published
+  figures, with the counted reads the record already holds (``ledger_neighbors``: the asked title's own counted viewers, a
+  neighbor audience's rate onto it) in hand so nothing the room owns is re-searched. Cached per twin + question subject + day
+  (``study_key``); a pass that fails outright is retried once with narrower queries (``narrower_queries``). Its facts for the
+  room join the brief (``merge_study``) for the options desk, the seats and the read; the media desk runs after it.
+  Then the analyst (``derive_anchor``, role 'anchor', no tools) derives the count's anchor: a low and a high share for every
+  option with its basis, the engaged and current rows named, and ceilings. ``derived_plan`` enforces them: each engaged row
+  sits in the bottom third of its range (we are always lower than we think), the engaged rows together never exceed the
+  thing's reach (the analyst's high or the record's own count, whichever is lower), the current rows never exceed its
+  current reach, and the engaged rows sit under a counted neighbor's rate unless the analyst placed this audience as more
+  adjacent for a stated reason. A counted event or a poll still wins (``anchor_plan``); the derived anchor fills every
+  other question about a title, a person, a brand or an event. ``anchor_rows`` pulls the published count to it (the
+  engaged rows jitter downward only), ``mirror_seats`` allocates the seats to it, ``cohere_read`` keeps the read on one
+  split. trail.anchor carries the targets, the basis, the ceilings and the study; trail.anchor_status is result | poll |
+  derived | prior (a star scale, a probe, a question on the clock) | unresearched (the study failed twice) | unanchored
+  (the study landed but the analyst could not place the board). The read never names where any of it came from.
+
 OUTPUT SHAPE (the question record on session['questions']; the UI reads this)
   {id, q, kind, framing,
    options: [{id, label, lean, pct, people, seats: [seat ids], seats_n, tally: '8 of 12', room_pct}],   pct = published share
@@ -118,8 +142,10 @@ from typing import Callable, Optional
 
 from migration.digital_twin_engine import clamp, human_people, unit
 
-ROOM_VERSION = 'room-4'   # room-2 (2026-11-04): the media desk and the result anchor; room-3 (2026-11-04): the read opens with the room, a short read for the chat, answers stamped as they land
+ROOM_VERSION = 'room-5'   # room-2 (2026-11-04): the media desk and the result anchor; room-3 (2026-11-04): the read opens with the room, a short read for the chat, answers stamped as they land
 #                           room-4 (2026-11-05): the seats mirror the count (headline, headline_people, answers[].mirrored, trail.mirror), one split stated once
+#                           room-5 (2026-11-05): research first, then reason: the study desk researches the question's subject heavily before the seats answer and the
+#                           desk derives the count's anchor from it with ceilings (trail.study, trail.anchor, trail.anchor_status); no-anchor is no longer a legal state
 S3_BUCKET = 'dashboard-inputs'
 JOB_PREFIX = 'system/digital_twins/jobs/'
 RESEARCH_PREFIX = 'system/digital_twins/research/'
@@ -135,7 +161,8 @@ MODELS = {
     # the strong chain when the Prometheus host is not bound (a script, the box): the same candidates the analysis chain walks
     'strong': ['claude-opus-5', 'claude-opus-4-8', 'claude-opus-4-7', 'claude-opus-4-6', 'claude-sonnet-4-6'],
 }
-BUDGET_S = {'research': 75.0, 'media': 150.0, 'options': 40.0, 'persona': 50.0, 'mirror': 35.0, 'read': 50.0}   # the media desk's searches run longer than the facts desk's
+BUDGET_S = {'research': 75.0, 'media': 150.0, 'options': 40.0, 'persona': 50.0, 'mirror': 35.0, 'read': 50.0,   # the media desk's searches run longer than the facts desk's
+            'study': 420.0, 'anchor': 120.0}   # the study desk searches heavily and a question may take longer for it (Jenna 2026-11-05); the anchor reasons without tools
 MIRROR_FLOOR_SEATS = 0.5      # an option holding at least half a seat's worth of the audience (4.2% with twelve seats) holds a seat (Jenna 2026-11-05)
 MAX_OPTIONS = 5
 VOICES_N = 4
@@ -149,6 +176,20 @@ MEDIA_CACHE_TTL_S = 6 * 3600
 MEDIA_MAX_SEARCHES = 8
 ANCHOR_POLL_WEIGHT = 2.0      # a published poll outweighs the seats two to one before the event
 ANCHOR_RESULT_JITTER = 0.6    # the published split sits on the count, a few tenths off it
+# The study desk (Jenna 2026-11-05: "It should do external research heavily and THEN reason. just because we don't have
+# anything to anchor on internally ... it has to be smarter"): before the seats answer, the question's subject is researched
+# with several web searches (the thing asked about, the audience's own subject, the overlap between them, the platform's
+# published figures), and the desk derives the count's anchor from what it found, under ceilings, calibrated low. Cached
+# per twin + question subject + day.
+STUDY_PREFIX = 'system/digital_twins/study/'
+STUDY_CACHE_TTL_S = 24 * 3600
+STUDY_MAX_SEARCHES = 12
+STUDY_MIN_SEARCHES = 3        # a pass that ran fewer distinct searches than this is thin; the retry names narrower queries
+ANCHOR_LOW_POSITION = 1.0 / 3.0   # a derived anchor sits in the bottom third of the range the evidence gives (we are always lower than we think)
+ANCHOR_NEIGHBOR_MARGIN = 0.92     # a less adjacent audience lands under a counted neighbor's rate, never on it
+ANCHOR_SKIP_KINDS = ('rating', 'probe')   # a star scale and a follow-up's reasons are not shares of an audience on a thing; the prior stands there
+_STUDY_MEM: dict = {}             # the process cache of the study desk's answers (the S3 cache rides beside it)
+_LEDGER_FN: Optional[Callable] = None
 _SOURCE_NAMES_RX = re.compile(r"\b(Nielsen|Circana|NPD(?: Group)?|Statista|eMarketer|Insider Intelligence|YouGov|Pew(?: Research(?: Center)?)?|Box Office Mojo|The Numbers|Sensor Tower|data\.ai|App Annie|Comscore|Luminate|Deadline|Variety|The Hollywood Reporter|Hollywood Reporter|Media Play News|Home Media Magazine|TVLine|Vulture|Tudum|SEC filings?|10-K|earnings (?:call|report)s?|per (?:the )?trade press|trade press)\b", re.I)
 _BANNED_RX = re.compile(r"\b(synthetic|synth|modell?ed|model|estimated|estimate|research(?:ed)?|panel|panelists?|sample|confidence|pipeline|corpus|lane)\b", re.I)
 _MODEL_FN: Optional[Callable] = None
@@ -173,6 +214,13 @@ def set_model_fn(fn: Optional[Callable]):
     The dict may carry '_stats' {model, input_tokens, output_tokens}."""
     global _MODEL_FN
     _MODEL_FN = fn
+
+
+def set_ledger_fn(fn: Optional[Callable]):
+    """Tests install a fake insights ledger: fn() -> {subject_key: {'subject': str, 'entries': [{'metrics': [...]}]}}
+    (the shape of ``insights_ledger._load_index()['subjects']``)."""
+    global _LEDGER_FN
+    _LEDGER_FN = fn
 
 
 def model_available(model_fn: Optional[Callable] = None) -> bool:
@@ -334,15 +382,19 @@ class Models:
             data, model = self._chain(system, user, max_tokens, temperature, surface, MODELS['persona'])
             if data is not None:
                 return data, self._log(role, model, self._stats_now(), t0, True)
-        want = MODELS.get('research' if role == 'media' else role) if role in ('research', 'media', 'moderator') else None
-        research_tools = tools if tools is not None else (self._tools(MEDIA_MAX_SEARCHES if role == 'media' else RESEARCH_MAX_SEARCHES) if role in ('research', 'media') else None)
+        # the study desk (role 'study') is the research desk with a heavier search budget; the anchor desk (role 'anchor') reasons
+        # on the moderator's model with no tools; both ride the strong chain (Jenna 2026-11-05: model quality is not negotiable)
+        strong_roles = ('research', 'media', 'moderator', 'study', 'anchor')
+        want = MODELS.get({'media': 'research', 'study': 'research', 'anchor': 'moderator'}.get(role, role)) if role in strong_roles else None
+        search_cap = {'media': MEDIA_MAX_SEARCHES, 'study': STUDY_MAX_SEARCHES}.get(role, RESEARCH_MAX_SEARCHES)
+        research_tools = tools if tools is not None else (self._tools(search_cap) if role in ('research', 'media', 'study') else None)
         if want:
             data, model = self._chain(system, user, max_tokens, temperature, surface, [want] + [m for m in MODELS['strong'] if m != want], tools=research_tools)
             if data is not None:
                 return data, self._log(role, model, self._stats_now(), t0, True)
         cj = self._host_claude()
         if cj is None:
-            chain = MODELS['strong'] if role in ('research', 'media', 'moderator') else MODELS['persona']
+            chain = MODELS['strong'] if role in strong_roles else MODELS['persona']
             data, model = self._chain(system, user, max_tokens, temperature, surface, chain, tools=research_tools)
             return data, self._log(role, model, self._stats_now(), t0, data is not None)
         try:
@@ -358,7 +410,7 @@ class Models:
             # the host's client answered nothing (its reasoning switch off in a local shell, a refused
             # call): the named chain answers directly rather than the room falling back to defaults
             # (2026-11-04: a re-run from a shell without USE_CLAUDE_REASONING landed yes/maybe/no options)
-            chain = MODELS['strong'] if role in ('research', 'media', 'moderator') else MODELS['persona']
+            chain = MODELS['strong'] if role in strong_roles else MODELS['persona']
             data, model = self._chain(system, user, max_tokens, temperature, surface, chain, tools=research_tools)
             if data is not None:
                 return data, self._log(role, model, self._stats_now(), t0, True)
@@ -505,6 +557,41 @@ def media_key(subject: str, q: str, day: str = '') -> str:
 
 def facts_key(subject: str) -> str:
     return f"{FACTS_PREFIX}{_slug(subject)}.json"
+
+
+# the words a question spends on the act rather than the thing asked about ('are you currently watching ...', 'would you
+# subscribe for ...', 'did you catch the premiere of ...'); what is left names the subject the study desk researches
+_ASKED_STOP = {'currently', 'now', 'right', 'today', 'tonight', 'week', 'weekly', 'weekend', 'night', 'nights', 'friday', 'fridays', 'sunday', 'sundays', 'latest', 'new', 'newest',
+               'next', 'last', 'first', 'season', 'seasons', 'episode', 'episodes', 'premiere', 'finale', 'series',
+               'watch', 'watching', 'watched', 'seen', 'stream', 'streaming', 'streamed', 'binge', 'binged', 'follow', 'following', 'followed', 'keep', 'keeping', 'kept', 'start', 'started',
+               'starting', 'try', 'tried', 'trying', 'catch', 'caught', 'tune', 'tuned', 'tuning', 'listen', 'listening', 'listened', 'play', 'playing', 'played', 'read', 'reading',
+               'subscribe', 'subscribed', 'subscribing', 'subscription', 'renew', 'renewed', 'cancel', 'cancelled', 'canceled', 'sign', 'signed', 'signup', 'pay', 'paid', 'paying',
+               'plan', 'planning', 'planned', 'going', 'gonna', 'likely', 'interested', 'excited', 'aware', 'heard', 'hear', 'recommend', 'recommended', 'current', 'yet', 'already',
+               'people', 'audience', 'viewers', 'fans', 'show', 'shows', 'movie', 'film', 'title', 'app', 'service', 'month', 'months', 'year', 'years', 'day', 'days'}
+
+
+_ASKED_STOP_STEMS = _ASKED_STOP | {_stem(w) for w in _ASKED_STOP}
+
+
+def asked_tokens(q: str, subject: str = '') -> set:
+    """The words that name the thing a question asks about: the topic
+    words less the words spent on the act ('watching', 'currently',
+    'subscribe')."""
+    return {t for t in topic_tokens(q, subject) if t not in _ASKED_STOP_STEMS and _stem(t) not in _ASKED_STOP_STEMS and len(t) > 2}
+
+
+def asked_hash(q: str, subject: str = '') -> str:
+    """The key of the thing asked about, so 'are you currently watching
+    swat exiles' and 'did you catch swat exiles on friday' share one
+    study; a question with no named thing keys on its topic."""
+    toks = asked_tokens(q, subject)
+    return hashlib.sha1((' '.join(sorted(toks)) if toks else ('topic:' + topic_hash(q, subject))).encode('utf-8')).hexdigest()[:12]
+
+
+def study_key(subject: str, q: str, day: str = '') -> str:
+    """The study desk's cache key: twin subject + the thing asked about + the day."""
+    day = day or time.strftime('%Y-%m-%d', time.gmtime())
+    return f"{STUDY_PREFIX}{_slug(subject)}/{day}/{asked_hash(q, subject)}.json"
 
 
 def _twin_brief(twin: dict) -> dict:
@@ -1414,7 +1501,7 @@ READ_SYSTEM = """You are Prometheus, the moderator, writing up the room for a se
 The published share is the count: the whole audience, in percent and people. The seats in the room are allocated to that count (a share worth half a seat or more holds a seat), so the tally and the count tell one story; the seats are the voices. People always come from the share, never from the tally: 'about one in twenty, roughly 329K people' is right, '0 people' is wrong unless the count itself is zero. Say shares in plain words first ('about two in three', 'about one in ten', 'about one in twenty', 'a sliver') and cite the raw count second when it helps ('one of the twelve seats'); never print a percentage with a decimal in the read.
 State one split, once, and never contradict it: when the count gives a side a share, never write nobody, no one, none, not one, zero or 0 for that side, and never write all twelve or every seat when a seat sits elsewhere.
 Write:
-- read: one paragraph, three to five sentences, on what the room said and why, grounded in the facts and the comparables in plain words. Open with the headline's fact in your own words (the share in plain words, the people it comes to, then the seats). When the brief carries how an event came out, say so as fact in the first sentence and read the seats against it: the published split follows the count, the twelve seats are twelve people, so say what they show that the count does not. When the brief carries talk, name the loudest lines people used, in plain words. Say what the share means (who these people are, what it would take); when a small side holds a seat, that seat's own words are what makes the small share real. Vary the sentence shapes. Never name a source or a publication; never use the words research, model, modeled, synthetic, estimated, panel, sample, confidence, pipeline, data. If the prior note says the seats departed from the audience's own leaning, explain what accounts for it in the read rather than overriding the room. When the question was asked on the clock (the stimulus carries what_just_played), open the read with what the room said (the share in words and the reason that carried it), never with the clock or the scene; the reader is looking at that moment already. Keep the read about that moment and the seats' own dials.
+- read: one paragraph, three to five sentences, on what the room said and why, grounded in the facts and the comparables in plain words. Open with the headline's fact in your own words (the share in plain words, the people it comes to, then the seats). When the brief carries how an event came out, say so as fact in the first sentence and read the seats against it: the published split follows the count, the twelve seats are twelve people, so say what they show that the count does not. When the brief carries talk, name the loudest lines people used, in plain words. Say what the share means (who these people are, what it would take); when a small side holds a seat, that seat's own words are what makes the small share real. Vary the sentence shapes. Never name a source, a publication or a ratings service; never use the words research, model, modeled, synthetic, estimated, panel, sample, confidence, pipeline, data, calibrated, anchored, benchmark, published, reported, according to. What the room knows (the schedule, the premiere, the finale date, who is in it, when the audience's own show returns) is the room's own knowledge, said as plain fact with no word on where it came from. If the prior note says the seats departed from the audience's own leaning, explain what accounts for it in the read rather than overriding the room. When the question was asked on the clock (the stimulus carries what_just_played), open the read with what the room said (the share in words and the reason that carried it), never with the clock or the scene; the reader is looking at that moment already. Keep the read about that moment and the seats' own dials.
 - chat: the read for the room's chat, two or three sentences: the headline's share in words and people, and the one reason that carried it. No clock, no scene, no preamble; it opens with what the room said.
 - voices: the seat ids of the three or four most telling answers, spread across the options in proportion to the split.
 - probes_next: two follow-up questions you would ask this room next, in your own words as the moderator.
@@ -1642,6 +1729,491 @@ def research(models: Models, twin: dict, q: str, kind: str, stimulus: Optional[d
             _put_json(s3, fkey, {'subject': subject, 'slug': _slug(subject), 'subject_status': brief['subject_status'] or (facts_doc or {}).get('subject_status'),
                                  'facts': subj_facts or (facts_doc or {}).get('facts') or [], 'updated_at': _now(), 'version': ROOM_VERSION})
     return brief
+
+
+# ------------------------------------------- the study desk (room-5)
+# Jenna 2026-11-05, on the P-Valley room's 'are you currently watching swat exiles?' (7.6% keeping up weekly from the seats
+# and the twin's prior alone, no anchor): "It should do external research heavily and THEN reason. just because we don't
+# have anything to anchor on internally ... it has to be smarter. have it rethink that and redo the answer".
+STUDY_SYSTEM = (f"You are the study desk for Prometheus, the focus group moderator. Before the room answers a question you research the question's subject heavily with the web_search tool, and only then does the room reason. The room usually has nothing of its own to anchor on, so what you find is what the answer stands on: be thorough, run several distinct searches (at least {STUDY_MIN_SEARCHES}, up to {STUDY_MAX_SEARCHES}), and read past the first result.\n"
+                "Search, in this order:\n"
+                "1. THE THING ASKED ABOUT (a title, a person, a brand, a product, an event): what it is and who is in it; its platform or channel; premiere or release date and schedule; episode or installment count and how many are out by today; any reported viewership, streaming-chart or ranking appearances (platform top-ten lists, measured minutes, app-store or watch-chart ranks), audience counts, sales or attendance; renewal, cancellation or expansion news; critical and audience reception (review aggregates, user ratings); the volume and tone of social conversation.\n"
+                "2. THE AUDIENCE'S OWN SUBJECT (the title, brand or person the audience was built around): its size and demographics as reported, its season or release timing (when it last ran, when it returns), where its audience sits today (still on the platform, lapsed between seasons, elsewhere).\n"
+                "3. THE OVERLAP between the two: shared cast, creators or producers; genre adjacency; the platform's own cross-promotion; same-night or lead-in scheduling; press on carryover or lead-in audiences; fan talk that connects them; what comparable pairings did.\n"
+                "4. THE PLATFORM: its published US subscriber or user count and reach, with dates, and what else runs on it now.\n"
+                "Sources: the platform's and the studio's own published counts and announcements, SEC filings and earnings reports, Nielsen and the other measurement services, Pew, Statista, eMarketer, YouGov, Sensor Tower and data.ai, review aggregates, and the trade press (Variety, Deadline, The Hollywood Reporter, TVLine) for dates, orders and renewals. Prefer the most recent figure and say its date.\n"
+                "Rules: never fabricate a number, a date, a name or a result; what you looked for and could not support goes in not_found, said plainly. Every figure carries its value, unit, date and source class. The facts_for_the_room are plain sentences the room may say in its own voice, so they carry no source names and none of the words research, reported, published, measured, estimated, calibrated or according to. Keep every string short. List every search you ran, as you ran it.\n"
+                """Return JSON only:
+{"asked": {"name": "<the thing asked about, by its proper name>", "kind": "title|person|brand|product|event|other", "what": "<one plain sentence>", "platform": "<where it plays or sells, or empty>",
+  "premiere_date": "<yyyy-mm-dd or empty>", "schedule": "<cadence and night, or empty>", "installments_total": <n or null>, "installments_out_by_today": <n or null>, "status": "upcoming|running|ended|ongoing|unknown",
+  "reach": [{"figure": "<what was counted>", "value": <number>, "unit": "people|accounts|views|minutes|rank|units|dollars", "as_of": "<yyyy-mm-dd or empty>", "source_class": "<platform published|measurement service|chart|trade press|earnings|other>"}],
+  "reception": ["<one plain sentence each: aggregate scores, user ratings, the critical line>"], "renewal": "<renewed, cancelled, pending, with the date; or empty>",
+  "social": {"volume": "high|moderate|low|unknown", "tone": "<one plain sentence>"}},
+ "audience_subject": {"name": "<the audience's own subject>", "status": "<one plain sentence: last ran, returns when>", "size": [{"figure": "<what was counted>", "value": <number>, "unit": "<unit>", "as_of": "<date or empty>", "source_class": "<class>"}],
+  "demographics_read": "<one plain sentence>", "where_viewers_sit": "<one plain sentence: on the platform now, between seasons, lapsed>"},
+ "overlap": [{"finding": "<one plain sentence>", "direction": "toward|against|neutral", "strength": "strong|moderate|weak"}],
+ "platform": {"name": "<platform>", "us_subscribers": {"value": <number or null>, "as_of": "<date or empty>", "source_class": "<class>"}, "notes": "<one plain sentence on reach and what else runs there now, or empty>"},
+ "figures": [{"fact": "<one plain sentence with the number and its date>", "value": <number or null>, "unit": "<unit or empty>", "as_of": "<date or empty>", "source_class": "<class>", "about": "asked|audience|overlap|platform"}],
+ "facts_for_the_room": ["<four to ten plain facts in the room's own voice, no source names>"],
+ "searches_run": ["<each query, in order>"], "not_found": ["<what you looked for and could not support>"]}
+At most twelve figures, ten overlap findings, ten facts for the room; the whole answer under 2,600 tokens. Do not stop to say the budget ran out; answer with what the searches returned.""")
+
+STUDY_RETRY_SUFFIX = ("\nThis is the second attempt: the first pass returned nothing the room could use. Run the searches listed under retry.run_these_searches, one at a time and in order, and answer "
+                      "with whatever they return, even when it is thin; a partial answer with its not_found list is the right answer, an empty one is not.")
+
+ANCHOR_SYSTEM = """You are the study desk's analyst for Prometheus, the focus group moderator. The room is about to publish what share of an audience lands on each answer to a question. You derive that split from evidence, before the seats are counted: the study desk's findings, the counted reads the record already holds, and the audience's own size and makeup. You reason like a senior analyst sizing a funnel from the outside in, and you land low: when the evidence gives a range, the room takes the bottom third of it, because a share that is too high is the one error a client can catch.
+Method, in order:
+1. Name the thing asked about and the audience, and state the audience's size in US people (given).
+2. Ceilings, each with its number and basis:
+   a. REACH. The people on the options that mean the person has watched, bought, used or attended the thing asked about (the engaged options) cannot exceed the thing's plausible US reach on that platform by today: from its counted viewers on the record when the record has them, else from reported viewership, charts, ranks and the platform's size. Give low and high in people. When some options mean keeping up with it now (watching weekly, a current subscriber), those cannot exceed its CURRENT reach either: for a weekly series that is the per-episode audience (the record's premiere-window count or a measured weekly audience; the cumulative season count is never the current reach, and later episodes draw fewer than the premiere), for a service its active users. Give that too, in people.
+   b. PARENT. The audience itself cannot be larger than the reach of the thing it was built around; say whether the given size clears that.
+   c. NEIGHBOR. When the record holds a counted rate for a NEIGHBOR AUDIENCE onto the same thing (a lead-in title's viewers rolling into it, a sibling show's viewers who started it), place this audience against it: more adjacent, comparable, or less adjacent, with the reason (shared cast, genre, same night, autoplay, an active season now versus between seasons). A less adjacent audience lands below the neighbor's rate; above it only for a reason you state. The platform's overall rate (the thing's viewers over all accounts) is not a neighbor; it belongs under d.
+   d. SHARE OF THE THING'S AUDIENCE. This audience is some share of the platform's people: its size over the platform's US people (people, not accounts; when only accounts are published, about 1.8 to 2.0 people use one account). The current rows' people over the thing's current reach is this audience's share of the thing's current audience, and the engaged rows' people over the thing's reach is its share of everyone who watched. An audience that is less adjacent to the thing than the platform's average viewer holds a SMALLER share of the thing's audience than of the platform (under); an even one holds about its platform share (even); only a demonstrably more adjacent audience holds more (over), for a reason you state. Give the platform share, the platform people, and the placement.
+3. For each option on the board, a defensible low and high share of the whole audience, in percent, consistent with every ceiling above (check the engaged and current rows' people against a, c and d before you write them), with its basis in one sentence. The lows and the highs should each come near 100 in total across the options; the room normalizes. Name the engaged options and the current options by id, and the lead option (the one the question is really asking about).
+The room's habit-based leaning is given as a weak prior for the shape of the non-engaged side; the evidence governs the engaged side. Never fabricate a figure; where the study found nothing, reason from the nearest comparable and say so in the basis. Plain words, short strings, no em dashes.
+Return JSON only:
+{"asked": "<name>", "audience_people": <n>,
+ "ceilings": {"reach": {"low_people": <n or null>, "high_people": <n or null>, "basis": "<one sentence>"}, "current_reach": {"low_people": <n or null>, "high_people": <n or null>, "basis": "<one sentence or empty>"},
+              "parent": {"reach_people": <n or null>, "audience_clears_it": true|false|null, "basis": "<one sentence>"},
+              "neighbor": {"name": "<neighbor audience or empty>", "rate_pct": <number or null>, "people": <n or null>, "relation": "more adjacent|comparable|less adjacent|none", "reason": "<one sentence>"},
+              "share": {"platform_people": <n or null>, "audience_share_of_platform_pct": <number or null>, "placement": "under|even|over", "reason": "<one sentence>"}},
+ "options": [{"id": "<id>", "low_pct": <number>, "high_pct": <number>, "basis": "<one sentence>"}],
+ "engaged_option_ids": ["<ids>"], "current_option_ids": ["<ids>"], "lead_option_id": "<id>",
+ "note": "<two or three sentences, internal, on how the split was derived and what would move it>"}"""
+
+
+def _fold_initials(text: str) -> str:
+    """'S.W.A.T. Exiles' reads as 'swat exiles' for matching."""
+    return re.sub(r"\b(?:[A-Za-z]\.){2,}", lambda m: m.group(0).replace('.', ''), str(text or ''))
+
+
+def _text_stems(text: str) -> set:
+    return {_stem(w) for w in re.findall(r"[a-z0-9]+", _fold_initials(text).lower()) if len(w) > 2}
+
+
+def ledger_neighbors(asked: set, subject: str = '', limit: int = 24) -> list:
+    """The counted reads the record already holds that touch the thing
+    asked about (its own counted viewers, a neighbor audience's rate onto
+    it) or this audience: [{subject, metric, value, unit, definition,
+    hit}], the asked hits first. Fail-safe: [] when the ledger is out of
+    reach (a test without a fake never touches S3)."""
+    try:
+        if _LEDGER_FN is not None:
+            subjects = _LEDGER_FN()
+        elif regression_mode():
+            subjects = None
+        else:
+            import insights_ledger as _il
+            subjects = (_il._load_index() or {}).get('subjects')
+    except Exception as e:
+        print(f"[twin-room] ledger lookup skipped: {str(e)[:120]}")
+        subjects = None
+    if not isinstance(subjects, dict):
+        return []
+    want = {w for w in (asked or set()) if len(w) >= 3}
+    subj = {w for w in _text_stems(subject) if w not in _TOPIC_STOP and w not in ('viewer', 'fan', 'audience', 'people', 'the')}
+    need = len(want) if len(want) <= 2 else len(want) - 1
+    hits_asked, hits_aud = [], []
+    for skey, bucket in subjects.items():
+        if not isinstance(bucket, dict):
+            continue
+        name = str(bucket.get('subject') or skey)
+        head = _text_stems(f"{skey} {name}")
+        for e in (bucket.get('entries') or []):
+            if not isinstance(e, dict) or e.get('retired'):
+                continue
+            win = f"{e.get('window_start') or ''} to {e.get('window_end') or ''}".strip(' to') if (e.get('window_start') or e.get('window_end')) else ''
+            for m in (e.get('metrics') or []):
+                if not isinstance(m, dict) or m.get('value') in (None, ''):
+                    continue
+                mtext = f"{m.get('name') or ''} {m.get('label') or ''} {m.get('definition') or ''}"
+                toks = head | _text_stems(mtext)
+                row = {'subject': name[:80], 'metric': str(m.get('label') or m.get('name') or '')[:80], 'value': m.get('value'), 'unit': str(m.get('unit') or '')[:16],
+                       'definition': str(m.get('definition') or '')[:200], 'window': win[:40]}
+                if want and need and len(want & toks) >= need:
+                    row['hit'] = 'asked'
+                    row['asked_in_subject'] = bool(len(want & head) >= need)
+                    # the rows the analyst needs most come first when the record is crowded: another audience's counted rate onto
+                    # the thing (a handoff, a crossover, a carry-over), then the thing's own people counts, then the rest
+                    low = mtext.lower()
+                    row['_rank'] = (0 if re.search(r"handoff|crossover|carry|carried|started|lead[- ]in|rolled|crossed", low) else (1 if (row['asked_in_subject'] and str(m.get('unit') or '').lower() in ('people', 'viewers', 'users')) else 2))
+                    hits_asked.append(row)
+                elif subj and subj <= toks:
+                    row['hit'] = 'audience'
+                    hits_aud.append(row)
+    hits_asked.sort(key=lambda r: r['_rank'])
+    for r in hits_asked:
+        r.pop('_rank', None)
+    return (hits_asked[:limit] + hits_aud[:4])[:limit + 4]
+
+
+def record_reach_people(neighbors: list) -> Optional[float]:
+    """The thing asked about's own counted people on the record (its
+    viewers in a window), the largest count: a ceiling the engaged
+    share may never exceed. None when the record holds no such count."""
+    best = None
+    for r in neighbors or []:
+        if r.get('hit') != 'asked' or not r.get('asked_in_subject'):
+            continue
+        text = f"{r.get('metric') or ''} {r.get('definition') or ''}".lower()
+        if str(r.get('unit') or '').lower() not in ('people', 'viewers', 'users', 'persons') or re.search(r"handoff|crossover|signup|account|convert|reactivat", text):
+            continue
+        if not re.search(r"viewer|watch|audience|people|reach", text):
+            continue
+        try:
+            v = float(r.get('value'))
+        except (TypeError, ValueError):
+            continue
+        if v > 0 and (best is None or v > best):
+            best = v
+    return best
+
+
+def _study_fig(r, about: str = '') -> Optional[dict]:
+    if not isinstance(r, dict):
+        return None
+    fact = str(r.get('fact') or r.get('figure') or '').strip()
+    if not fact:
+        return None
+    try:
+        value = float(r['value']) if r.get('value') not in (None, '') else None
+    except (TypeError, ValueError):
+        value = None
+    return {'fact': fact[:240], 'value': value, 'unit': str(r.get('unit') or '')[:16], 'as_of': str(r.get('as_of') or '')[:10],
+            'source_class': str(r.get('source_class') or '')[:28], 'about': (str(r.get('about') or about) or 'asked')[:10]}
+
+
+def _norm_study(data: dict) -> dict:
+    """The study desk's answer, shaped and bounded; {} when it carries
+    nothing the room can use."""
+    if not isinstance(data, dict):
+        return {}
+    a = data.get('asked') if isinstance(data.get('asked'), dict) else {}
+
+    def _n(v):
+        try:
+            return int(float(v)) if v not in (None, '') else None
+        except (TypeError, ValueError):
+            return None
+    asked = {'name': str(a.get('name') or '').strip()[:120], 'kind': str(a.get('kind') or 'other').lower()[:12], 'what': str(a.get('what') or '').strip()[:240],
+             'platform': str(a.get('platform') or '').strip()[:80], 'premiere_date': str(a.get('premiere_date') or '')[:10], 'schedule': str(a.get('schedule') or '').strip()[:120],
+             'installments_total': _n(a.get('installments_total')), 'installments_out_by_today': _n(a.get('installments_out_by_today')), 'status': str(a.get('status') or 'unknown').lower()[:12],
+             'reach': [f for f in (_study_fig(r, 'asked') for r in (a.get('reach') or [])) if f][:8],
+             'reception': [str(x).strip()[:200] for x in (a.get('reception') or []) if str(x).strip()][:6], 'renewal': str(a.get('renewal') or '').strip()[:160],
+             'social': {'volume': str((a.get('social') or {}).get('volume') or 'unknown')[:10] if isinstance(a.get('social'), dict) else 'unknown',
+                        'tone': str((a.get('social') or {}).get('tone') or '').strip()[:200] if isinstance(a.get('social'), dict) else ''}}
+    s = data.get('audience_subject') if isinstance(data.get('audience_subject'), dict) else {}
+    audience = {'name': str(s.get('name') or '').strip()[:120], 'status': str(s.get('status') or '').strip()[:240],
+                'size': [f for f in (_study_fig(r, 'audience') for r in (s.get('size') or [])) if f][:6],
+                'demographics_read': str(s.get('demographics_read') or '').strip()[:240], 'where_viewers_sit': str(s.get('where_viewers_sit') or '').strip()[:240]}
+    overlap = [{'finding': str(o.get('finding')).strip()[:240], 'direction': str(o.get('direction') or 'neutral').lower()[:8], 'strength': str(o.get('strength') or 'weak').lower()[:9]}
+               for o in (data.get('overlap') or []) if isinstance(o, dict) and str(o.get('finding') or '').strip()][:10]
+    p = data.get('platform') if isinstance(data.get('platform'), dict) else {}
+    subs = p.get('us_subscribers') if isinstance(p.get('us_subscribers'), dict) else {}
+    platform = {'name': str(p.get('name') or '').strip()[:80], 'us_subscribers': {'value': _n(subs.get('value')), 'as_of': str(subs.get('as_of') or '')[:10], 'source_class': str(subs.get('source_class') or '')[:28]},
+                'notes': str(p.get('notes') or '').strip()[:240]}
+    figures = [f for f in (_study_fig(r) for r in (data.get('figures') or [])) if f][:12]
+    facts_room = []
+    for x in (data.get('facts_for_the_room') or []):
+        line = scrub(str(x).strip())
+        if line and line not in facts_room:
+            facts_room.append(line[:220])
+    searches = []
+    for x in (data.get('searches_run') or []):
+        qx = str(x).strip()
+        if qx and qx.lower() not in {y.lower() for y in searches}:
+            searches.append(qx[:160])
+    not_found = [str(x).strip()[:160] for x in (data.get('not_found') or []) if str(x).strip()][:8]
+    if not (asked['name'] or figures or overlap or facts_room or asked['reach']):
+        return {}
+    return {'asked': asked, 'audience_subject': audience, 'overlap': overlap, 'platform': platform, 'figures': figures, 'facts_for_the_room': facts_room[:10],
+            'searches_run': searches[:STUDY_MAX_SEARCHES + 4], 'not_found': not_found}
+
+
+def study_ok(study: dict) -> bool:
+    return bool(isinstance(study, dict) and not study.get('_failed') and ((study.get('asked') or {}).get('name') or study.get('figures') or study.get('facts_for_the_room')))
+
+
+def _asked_words_raw(q: str, subject: str) -> list:
+    """The question's words that name the thing asked about, unstemmed and
+    in order, for a search query ('swat exiles')."""
+    subj = {_stem(w) for w in re.findall(r"[a-z]+", str(subject or '').lower())}
+    out = []
+    for w in re.findall(r"[a-z0-9]+", str(q or '').lower()):
+        if len(w) <= 2 or w in _TOPIC_STOP or _stem(w) in _TOPIC_STOP or w in _ASKED_STOP_STEMS or _stem(w) in _ASKED_STOP_STEMS or _stem(w) in subj:
+            continue
+        out.append(w)
+    return out
+
+
+def narrower_queries(q: str, subject: str, tb: dict, asked_name: str = '') -> list:
+    """The retry's searches, named one by one."""
+    asked = (asked_name or ' '.join(_asked_words_raw(q, subject)) or str(q or '')).strip()
+    plat = str(tb.get('platform_home') or '').strip()
+    name = str(tb.get('name') or subject or '').strip()
+    out = [f"{asked} {plat}".strip(), f"{asked} premiere date episodes schedule", f"{asked} viewership ratings audience", f"{asked} reviews reception",
+           f"{name} audience size demographics", f"{name} {asked}".strip(), (f"{plat} subscribers {time.strftime('%Y', time.gmtime())}" if plat else f"{asked} renewal")]
+    seen, uniq = set(), []
+    for x in out:
+        k = re.sub(r"\s+", ' ', x.strip().lower())
+        if k and k not in seen:
+            seen.add(k)
+            uniq.append(x.strip())
+    return uniq[:STUDY_MAX_SEARCHES]
+
+
+def research_pass(models: Models, twin: dict, q: str, kind: str, stimulus: Optional[dict], s3, *, neighbors: Optional[list] = None, force: bool = False, log=None) -> dict:
+    """The study desk: the question's subject researched heavily before
+    the seats answer (the thing asked about, the audience's own subject,
+    the overlap, the platform). Cached per twin + subject + day; a pass
+    that fails outright is retried once with narrower queries; the
+    record of a pass that still has nothing carries _failed so the
+    question is marked unresearched on its trail."""
+    subject = str(_meta(twin).get('subject') or _twin_name(twin))
+    today = time.strftime('%Y-%m-%d', time.gmtime())
+    key = study_key(subject, q, today)
+    if not force:
+        mem = _STUDY_MEM.get(key)
+        if isinstance(mem, dict) and (time.time() - float(mem.get('at') or 0)) < STUDY_CACHE_TTL_S and study_ok(mem.get('study')):
+            return dict(mem['study'], _cached=True, _key=key, _attempts=0)
+        cached = _get_json(s3, key) if s3 is not None else None
+        if isinstance(cached, dict) and study_ok(cached.get('study')) and (time.time() - float(cached.get('at') or 0)) < STUDY_CACHE_TTL_S:
+            _STUDY_MEM[key] = {'at': float(cached.get('at') or time.time()), 'study': dict(cached['study'])}
+            return dict(cached['study'], _cached=True, _key=key, _attempts=0)
+    tb = _twin_brief(twin)
+    body = {'question': q, 'kind': kind, 'stimulus': stimulus or {}, 'today': today, 'asked_words': _asked_words_raw(q, subject),
+            'audience': {'name': tb['name'], 'subject': tb['subject'], 'kind': tb['kind'], 'format': tb['format'], 'class': subject_class(twin), 'platform_home': tb['platform_home'],
+                         'size_us': tb['size_us'], 'avid_share_pct': tb['avid_share_pct'], 'window': tb['window'], 'read': tb.get('identity_read'), 'lifecycle': tb.get('lifecycle_read'),
+                         'demographics': {k: v for k, v in (tb.get('demographics') or {}).items() if k in ('age', 'gender', 'ethnicity', 'income')}, 'anchors_on_file': tb.get('anchors')},
+            'the_record_already_holds': (neighbors or [])[:14], 'min_searches': STUDY_MIN_SEARCHES, 'max_searches': STUDY_MAX_SEARCHES}
+    data, call = models.call('study', STUDY_SYSTEM, json.dumps(body, default=str)[:9000], max_tokens=9000, temperature=0.2, tools=None)
+    if log:
+        log('study', call)
+    study = _norm_study(data)
+    attempts = 1
+    if not study:
+        body['retry'] = {'attempt': 2, 'why': 'the first pass returned nothing the room could use', 'run_these_searches': narrower_queries(q, subject, tb)}
+        data, call = models.call('study', STUDY_SYSTEM + STUDY_RETRY_SUFFIX, json.dumps(body, default=str)[:9000], max_tokens=9000, temperature=0.2, tools=None)
+        if log:
+            log('study', call)
+        study = _norm_study(data)
+        attempts = 2
+    if not study:
+        return {'_failed': True, '_attempts': attempts, '_key': key}
+    study['_key'] = key
+    study['_attempts'] = attempts
+    if len(_STUDY_MEM) > 300:
+        _STUDY_MEM.clear()
+    _STUDY_MEM[key] = {'at': time.time(), 'study': {k: v for k, v in study.items() if not k.startswith('_')}}
+    if s3 is not None:
+        _put_json(s3, key, {'subject': subject, 'question': q, 'asked_hash': asked_hash(q, subject), 'day': today, 'at': time.time(),
+                            'study': {k: v for k, v in study.items() if not k.startswith('_')}, 'version': ROOM_VERSION})
+    return study
+
+
+def merge_study(brief: dict, study: dict) -> dict:
+    """The study desk's findings folded into the facts brief: its facts
+    for the room join the facts (topic study); the thing asked about,
+    the overlap and the platform ride under brief['study'] for the
+    moderator."""
+    out = dict(brief or {})
+    if not study_ok(study):
+        return out
+    facts = list(out.get('facts') or [])
+    have = {re.sub(r'[^a-z0-9]+', ' ', str(f.get('fact') if isinstance(f, dict) else f).lower()).strip() for f in facts}
+    for line in study.get('facts_for_the_room') or []:
+        k = re.sub(r'[^a-z0-9]+', ' ', str(line).lower()).strip()
+        if k and k not in have:
+            facts.append({'fact': str(line), 'source_class': 'study', 'topic': 'study'})
+            have.add(k)
+    out['facts'] = facts[:24]
+    a = study.get('asked') or {}
+    out['study'] = {'asked': {k: a.get(k) for k in ('name', 'kind', 'what', 'platform', 'premiere_date', 'schedule', 'installments_total', 'installments_out_by_today', 'status', 'renewal') if a.get(k) not in (None, '')},
+                    'reception': list(a.get('reception') or [])[:4], 'social': a.get('social') or {},
+                    'audience_subject': {k: v for k, v in (study.get('audience_subject') or {}).items() if k != 'size' and v},
+                    'overlap': [{'finding': o['finding'], 'direction': o['direction'], 'strength': o['strength']} for o in (study.get('overlap') or [])][:8],
+                    'platform': (study.get('platform') or {}).get('notes') or '', 'figures': [f['fact'] for f in (study.get('figures') or [])][:8]}
+    nf = list(out.get('not_found') or [])
+    for x in study.get('not_found') or []:
+        if x not in nf:
+            nf.append(x)
+    out['not_found'] = nf[:12]
+    out['_study_key'] = study.get('_key')
+    out['_study_cached'] = bool(study.get('_cached'))
+    return out
+
+
+def derive_anchor(models: Models, twin: dict, q: str, kind: str, options: list, study: dict, neighbors: list, total_people: int, prior: Optional[dict] = None, log=None) -> Optional[dict]:
+    """The analyst's derivation: the count's anchor reasoned from the
+    study and the record, with ceilings. The model's answer (a dict) or
+    None after one retry."""
+    tb = _twin_brief(twin)
+    by_id = {o['id']: o for o in options}
+    body = {'question': q, 'kind': kind, 'today': time.strftime('%Y-%m-%d', time.gmtime()),
+            'options': [{'id': o['id'], 'label': o['label'], 'lean': o.get('lean') or 'other'} for o in options],
+            'audience': {'name': tb['name'], 'subject': tb['subject'], 'class': subject_class(twin), 'people_us': int(total_people), 'avid_share_pct': tb['avid_share_pct'], 'platform_home': tb['platform_home'],
+                         'read': tb.get('identity_read'), 'lifecycle': tb.get('lifecycle_read'), 'window': tb['window'],
+                         'demographics': {k: v for k, v in (tb.get('demographics') or {}).items() if k in ('age', 'gender', 'ethnicity')}, 'anchors_on_file': tb.get('anchors')},
+            'study': {k: v for k, v in (study or {}).items() if not k.startswith('_') and k != 'searches_run'},
+            'the_record_holds': (neighbors or [])[:14],
+            'the_rooms_habit_leaning_weak_prior': {by_id[k]['label']: round(float(v) * 100.0, 1) for k, v in (prior or {}).items() if k in by_id}}
+    user = json.dumps(body, default=str)[:16000]
+    for attempt in (1, 2):
+        # room for the reasoning in the bases (the first live run cut a 2,400-token answer short and fell to the next model)
+        data, call = models.call('anchor', ANCHOR_SYSTEM, user, max_tokens=4800, temperature=0.2, tools=None)
+        if log:
+            log('anchor', call)
+        if isinstance(data, dict) and data.get('options'):
+            return data
+    return None
+
+
+def _engaged_fallback(options: list) -> tuple:
+    """When the analyst did not name them: the engaged rows are the yes
+    rows and the maybe rows worded as having started or tried the thing;
+    the current rows are the yes rows."""
+    eng = [o['id'] for o in options if (o.get('lean') or '') == 'yes']
+    for o in options:
+        if (o.get('lean') or '') == 'maybe' and re.search(r"\b(started|tried|watched|seen|caught|sampled|checked (?:it )?out|an episode|a few episodes)\b", str(o.get('label') or ''), re.I):
+            eng.append(o['id'])
+    cur = [o['id'] for o in options if (o.get('lean') or '') == 'yes']
+    return eng, cur
+
+
+def derived_plan(options: list, data: Optional[dict], total_people: int, record_reach: Optional[float] = None, seed: str = '') -> dict:
+    """The derived anchor from the analyst's answer, enforced: each engaged
+    row sits in the bottom third of its range; the engaged rows together
+    never exceed the thing's reach (the analyst's high, or the record's
+    own count when it holds one, whichever is lower), the current rows
+    never exceed its current reach, and the engaged rows sit under a
+    counted neighbor's rate unless the analyst placed this audience as
+    more adjacent for a stated reason; the rest of the board shares what
+    is left in proportion to its own ranges. {'kind': 'derived',
+    'targets': {id: pct}, 'weight': None, 'fill_voting': None, 'down':
+    [engaged ids], 'line', 'basis': {...}} or {} when the answer cannot
+    place the board."""
+    if not isinstance(data, dict) or not options or int(total_people or 0) <= 0:
+        return {}
+    ids = [o['id'] for o in options]
+    labels = {o['id']: o['label'] for o in options}
+    rows = {}
+    for r in (data.get('options') or []):
+        if not isinstance(r, dict) or str(r.get('id') or '') not in ids:
+            continue
+        try:
+            lo, hi = float(r.get('low_pct')), float(r.get('high_pct'))
+        except (TypeError, ValueError):
+            continue
+        lo, hi = max(0.0, min(lo, hi)), min(100.0, max(0.0, max(lo, hi)))
+        rows[str(r['id'])] = {'low': lo, 'high': hi, 'basis': str(r.get('basis') or '')[:240]}
+    if len(rows) < 2 or len(rows) < len(ids) - 1:
+        return {}
+    eng_fb, cur_fb = _engaged_fallback(options)
+    engaged = [i for i in (data.get('engaged_option_ids') or []) if i in ids] or eng_fb
+    current = [i for i in (data.get('current_option_ids') or []) if i in ids] or [i for i in cur_fb if i in engaged]
+    for i in current:
+        if i not in engaged:
+            engaged.append(i)
+    lead = data.get('lead_option_id') if data.get('lead_option_id') in ids else (engaged[0] if engaged else max(rows, key=lambda k: rows[k]['high']))
+    if not engaged:
+        return {}
+    target = {}
+    for i in ids:
+        r = rows.get(i)
+        target[i] = None if r is None else (r['low'] + (r['high'] - r['low']) * (ANCHOR_LOW_POSITION if i in engaged else 0.5))
+    c = data.get('ceilings') if isinstance(data.get('ceilings'), dict) else {}
+
+    def _ppl(block, key):
+        try:
+            v = float((block or {}).get(key))
+            return v if v > 0 else None
+        except (TypeError, ValueError, AttributeError):
+            return None
+    ceilings = []
+
+    def _cap(subset, cap_pct, name, basis):
+        subset = [i for i in subset if target.get(i) is not None]
+        s = sum(target[i] for i in subset)
+        applied = bool(subset) and cap_pct is not None and s > cap_pct and s > 0
+        if applied:
+            f = cap_pct / s
+            for i in subset:
+                target[i] *= f
+        ceilings.append({'ceiling': name, 'cap_pct': (round(cap_pct, 2) if cap_pct is not None else None), 'rows': [labels[i] for i in subset], 'was_pct': round(s, 2), 'applied': applied, 'basis': basis[:240]})
+    # the audience's share of the platform's people, and how it sits in the thing's audience against that share: a less
+    # adjacent audience (under) holds a smaller share of the thing's viewers than of the platform; an even one about its
+    # share; over only for a stated reason (then the share ceiling does not bind)
+    sh = c.get('share') if isinstance(c.get('share'), dict) else {}
+    share_pct = _ppl(sh, 'audience_share_of_platform_pct')
+    if share_pct is not None and share_pct > 100.0:
+        share_pct = 100.0
+    placement = str(sh.get('placement') or '').lower().strip()
+    share_f = None
+    if share_pct:
+        if placement == 'over' and str(sh.get('reason') or '').strip():
+            share_f = None
+        elif placement == 'even':
+            share_f = share_pct / 100.0
+        else:
+            share_f = share_pct / 100.0 * ANCHOR_NEIGHBOR_MARGIN
+    share_why = f"{share_pct}% of the platform's people ({placement or 'under'}): {sh.get('reason') or ''}" if share_pct else ''
+    cur_hi = _ppl(c.get('current_reach'), 'high_people')
+    if cur_hi and current:
+        _cap(current, cur_hi / float(total_people) * 100.0, 'current reach', f"{int(cur_hi):,} people: " + str((c.get('current_reach') or {}).get('basis') or ''))
+        if share_f is not None:
+            _cap(current, cur_hi * share_f / float(total_people) * 100.0, 'share of current audience', f"{int(cur_hi):,} current people x " + share_why)
+    reach_hi = _ppl(c.get('reach'), 'high_people')
+    caps = [x for x in (reach_hi, record_reach) if x]
+    if caps:
+        cap_people = min(caps)
+        why = ("the record's own count of " + f"{int(record_reach):,}" if (record_reach and cap_people == record_reach) else f"{int(cap_people):,} people: " + str((c.get('reach') or {}).get('basis') or ''))
+        _cap(engaged, cap_people / float(total_people) * 100.0, 'reach', why)
+        if share_f is not None:
+            _cap(engaged, cap_people * share_f / float(total_people) * 100.0, 'share of audience', f"{int(cap_people):,} people x " + share_why)
+    if share_pct and share_f is None:
+        ceilings.append({'ceiling': 'share of audience', 'cap_pct': None, 'rows': [labels[i] for i in engaged], 'was_pct': round(sum(target[i] for i in engaged if target.get(i) is not None), 2),
+                         'applied': False, 'basis': ('over its platform share for a stated reason: ' + str(sh.get('reason') or ''))[:240]})
+    nb = c.get('neighbor') if isinstance(c.get('neighbor'), dict) else {}
+    try:
+        nb_rate = float(nb.get('rate_pct')) if nb.get('rate_pct') not in (None, '') else None
+    except (TypeError, ValueError):
+        nb_rate = None
+    rel = str(nb.get('relation') or '').lower().strip()
+    reason = str(nb.get('reason') or '').strip()
+    if nb_rate and nb_rate > 0 and rel != 'none':
+        if rel == 'more adjacent' and reason:
+            ceilings.append({'ceiling': 'neighbor', 'cap_pct': None, 'rows': [labels[i] for i in engaged], 'was_pct': round(sum(target[i] for i in engaged if target.get(i) is not None), 2), 'applied': False,
+                             'basis': f"above {nb.get('name') or 'the neighbor'} ({nb_rate}%) for a stated reason: {reason}"[:240]})
+        else:
+            cap = nb_rate if rel == 'comparable' else nb_rate * ANCHOR_NEIGHBOR_MARGIN
+            _cap(engaged, cap, 'neighbor', f"{nb.get('name') or 'the neighbor'} at {nb_rate}% ({rel or 'less adjacent'}): {reason}")
+    eng_sum = sum(target[i] for i in engaged if target.get(i) is not None)
+    rest = [i for i in ids if i not in engaged]
+    if rest:
+        known = {i: target[i] for i in rest if target.get(i) is not None}
+        if not known:
+            known = {i: 1.0 for i in rest}
+        ksum = sum(known.values()) or 1.0
+        remain = max(0.0, 100.0 - min(eng_sum, 100.0))
+        for i in rest:
+            target[i] = (known.get(i, 0.0) / ksum) * remain
+        if eng_sum > 100.0:
+            f = 100.0 / eng_sum
+            for i in engaged:
+                if target.get(i) is not None:
+                    target[i] *= f
+    else:
+        tot = sum(v for v in target.values() if v) or 1.0
+        target = {i: (target[i] or 0.0) / tot * 100.0 for i in ids}
+    targets = {i: round(max(0.0, float(target.get(i) or 0.0)), 2) for i in ids}
+    lead_pct = targets.get(lead, 0.0)
+    lead_people = int(round(lead_pct / 100.0 * float(total_people)))
+    line = (f"The split is the room's count for this audience, settled before the seats spoke: {labels[lead]} near {round(lead_pct, 1)}% (about {human_people(lead_people)} people), "
+            f"with the whole board placed the same way. The seats are allocated to the count and voice it; say what they show that the count does not.")
+    return {'kind': 'derived', 'targets': targets, 'weight': None, 'fill_voting': None, 'down': list(engaged), 'line': line, 'lead': lead,
+            'basis': {'options': {labels[i]: dict(rows[i], target_pct=targets[i]) for i in ids if i in rows}, 'engaged': [labels[i] for i in engaged], 'current': [labels[i] for i in current],
+                      'ceilings': ceilings, 'reach': c.get('reach') or {}, 'current_reach': c.get('current_reach') or {}, 'parent': c.get('parent') or {}, 'neighbor': nb, 'share': sh,
+                      'record_reach_people': record_reach, 'note': str(data.get('note') or '')[:600]}}
 
 
 def _default_options(kind: str, opts: list) -> list:
@@ -2271,9 +2843,12 @@ def anchor_rows(opts_out: list, by_segment: list, plan: dict, total_people: int,
         tsum = sum(targets.values()) or 1.0
         targets = {k: v / tsum * max(0.0, 100.0 - rest_cur) for k, v in targets.items()}
     new = {}
+    down = set(plan.get('down') or ())   # a derived anchor's engaged rows jitter downward only: a ceiling is never crossed by the jitter
     if w is None:
         for k, v in targets.items():
             j = (unit('anchor', seed, k) - 0.5) * 2.0 * ANCHOR_RESULT_JITTER
+            if k in down:
+                j = -abs(j) * 0.5
             new[k] = max(0.1, v + j)
     else:
         for k, v in targets.items():
@@ -3037,11 +3612,26 @@ def run_question(ctx: dict) -> dict:
     try:
         if ctx.get('wait_for_save'):
             _wait_for_record(s3, ctx.get('twin_key') or '', session.get('id'), rec['id'])
+        # 0. the study desk (room-5, Jenna 2026-11-05): research first, heavily, then reason. The thing asked about, the
+        #    audience's own subject, the overlap and the platform are researched before anything else runs; the counted reads
+        #    the record already holds (the ledger) ride in so the desk never re-searches what the room owns. Runs beside the
+        #    facts desk; the media desk follows with both in hand.
+        t = time.time()
+        subject = str(_meta(twin).get('subject') or _twin_name(twin))
+        base_q0 = q if kind != 'probe' else str((last or {}).get('q') or q)
+        study, neighbors, f_study, _spool = {}, [], None, None
+        if not _in_cut(stim):
+            try:
+                neighbors = ledger_neighbors(asked_tokens(base_q0, subject), subject)
+            except Exception as e:
+                print(f"[twin-room] ledger neighbors skipped: {str(e)[:120]}")
+                neighbors = []
+            from concurrent.futures import ThreadPoolExecutor as _TPE
+            _spool = _TPE(max_workers=1, thread_name_prefix='twin-study')
+            f_study = _spool.submit(research_pass, models, twin, base_q0, kind, stim, s3, neighbors=neighbors, log=log, force=bool(ctx.get('fresh_research')))
         # 1. research: a probe rides the brief of the question it follows; a second question on the same stimulus
         #    (the same topic words, or most of them) rides the brief an earlier question in this room gathered
-        t = time.time()
         brief = {}
-        subject = str(_meta(twin).get('subject') or _twin_name(twin))
         _reuse_age = 86400.0 if subject_class(twin) == 'civic' else None   # a race's facts turn over by the day
         if kind == 'probe' and last and not ctx.get('fresh_research'):
             brief = _cached_brief(s3, str(((last.get('trail') or {}).get('research_key')) or ''), _reuse_age)
@@ -3061,21 +3651,30 @@ def run_question(ctx: dict) -> dict:
             brief = {'subject_status': {'line': f"The room is watching {((stim.get('cut') or {}).get('title') or 'the cut')} and the cut was paused at {win.get('clock')}."},
                      'facts': [], 'not_found': [], 'implications': [f"Answer about the moment: {win.get('frame') or win.get('clock')}."],
                      'what_just_played': _moment_view(stim), '_in_cut': True}
-        base_q0 = q if kind != 'probe' else str((last or {}).get('q') or q)
         media = {}
         if not _in_cut(stim):
-            # the media desk runs alongside the facts desk: what the audience has been seeing, hearing and
-            # saying, and how the event came out (Jenna 2026-11-04); a cached facts brief still gets today's media
+            if not brief:
+                brief = research(models, twin, base_q0, kind, stim, s3, log=log, force=bool(ctx.get('fresh_research')))
+            # the study desk lands before the media desk runs: the event brief is gathered with the study's facts on file
+            try:
+                study = f_study.result(timeout=max(10.0, BUDGET_S['study'] - (time.time() - t))) or {}
+            except Exception as e:
+                print(f"[twin-room] study desk skipped: {str(e)[:120]}")
+                study = {'_failed': True, '_attempts': 0, '_error': str(e)[:160]}
+            timings['study_s'] = round(time.time() - t, 2)
+            if _spool is not None:
+                _spool.shutdown(wait=False)
+            # the media desk: what the audience has been seeing, hearing and saying, and how the event came out
+            # (Jenna 2026-11-04); a cached facts brief still gets today's media
             from concurrent.futures import ThreadPoolExecutor as _TPE
             _mpool = _TPE(max_workers=1, thread_name_prefix='twin-media')
             _known = []
             for earlier in [x for x in session.get('questions') or [] if x is not rec]:
                 _known += [str(f) for f in (earlier.get('facts_used') or [])[:4]]
-            f_media = _mpool.submit(media_desk, models, twin, base_q0, kind, stim, s3, log=log, known=_known[-12:])
-            if not brief:
-                brief = research(models, twin, base_q0, kind, stim, s3, log=log, force=bool(ctx.get('fresh_research')))
+            _known += [str(x) for x in (study.get('facts_for_the_room') or [])[:8]] if study_ok(study) else []
+            f_media = _mpool.submit(media_desk, models, twin, base_q0, kind, stim, s3, log=log, known=_known[-16:])
             try:
-                media = f_media.result(timeout=max(10.0, BUDGET_S['media'] - (time.time() - t))) or {}
+                media = f_media.result(timeout=BUDGET_S['media']) or {}
             except Exception as e:
                 print(f"[twin-room] media desk skipped: {str(e)[:120]}")
                 media = {}
@@ -3085,6 +3684,15 @@ def run_question(ctx: dict) -> dict:
             fallbacks.append('research')
         if media:
             brief = merge_media(brief or {'subject_status': {}, 'facts': [], 'not_found': [], 'implications': []}, media)
+        if study_ok(study):
+            brief = merge_study(brief or {'subject_status': {}, 'facts': [], 'not_found': [], 'implications': []}, study)
+        trail['study'] = {'key': study.get('_key'), 'cached': bool(study.get('_cached')), 'attempts': study.get('_attempts'), 'ok': study_ok(study),
+                          'searches': len(set(str(x).lower() for x in (study.get('searches_run') or []))), 'searches_run': list(study.get('searches_run') or []),
+                          'asked': (study.get('asked') or {}).get('name') if study_ok(study) else None,
+                          'figures': list(study.get('figures') or []), 'reach': list((study.get('asked') or {}).get('reach') or []), 'overlap': list(study.get('overlap') or []),
+                          'platform': study.get('platform') or {}, 'audience_subject': study.get('audience_subject') or {}, 'not_found': list(study.get('not_found') or []),
+                          'record_holds': neighbors, 'error': study.get('_error')}
+        timings.setdefault('study_s', 0.0)
         trail['media_key'] = media.get('_key')
         trail['media_cached'] = bool(media.get('_cached'))
         rec['talk'] = talk_lines(brief, 8)
@@ -3108,6 +3716,26 @@ def run_question(ctx: dict) -> dict:
         rec['options'] = [{'id': o['id'], 'label': o['label'], 'lean': o['lean'], 'pct': 0.0, 'people': 0, 'seats': []} for o in options]
         trail['listen_for'] = mo.get('listen_for') or []
         timings['options_s'] = round(time.time() - t, 2)
+        # 2b. then reason (room-5): with the board coded, the analyst derives the count's anchor from the study and the
+        #     record, under ceilings, calibrated low; it runs beside the seats and is applied to the published split at step 4
+        total_people = int(sum(int(sg.get('people') or 0) for sg in session['group']['segments']))
+        if total_people <= 0:
+            try:
+                from migration.digital_twin_pilot import room_people as _room_people
+                total_people = int(_room_people(roster, session['group']['segments'], twin) or 0)
+            except Exception:
+                total_people = 0
+        f_anchor, _apool, t_anchor0 = None, None, time.time()
+        anchor_eligible = bool(not _in_cut(stim) and kind not in ANCHOR_SKIP_KINDS and total_people > 0)
+        if anchor_eligible and study_ok(study):
+            try:
+                from concurrent.futures import ThreadPoolExecutor as _TPE
+                _apool = _TPE(max_workers=1, thread_name_prefix='twin-anchor')
+                _prior_hint = prior_over_options(twin, base_q0, kind, options, stim, last, seed + '|anchor-prior')
+                f_anchor = _apool.submit(derive_anchor, models, twin, q, kind, options, study, neighbors, total_people, prior=_prior_hint, log=log)
+            except Exception as e:
+                print(f"[twin-room] anchor desk not started: {str(e)[:120]}")
+                f_anchor = None
         # 3. the seats answer, in parallel
         t = time.time()
         _publish(ctx, 'the room is thinking', payload_too=True)
@@ -3161,28 +3789,55 @@ def run_question(ctx: dict) -> dict:
             priors[sgm['label']] = prior_over_options(seg_twin, base_q, kind, options, stim, last, seed + '|' + sgm['label'])
         trail['prior_over_options'] = {lab: {k: round(v, 4) for k, v in pr.items()} for lab, pr in priors.items()}
         opts_out, by_segment = weigh(rec['answers'], options, roster, session['group']['segments'], priors, seed)
-        # the anchor: a counted event sets the published split; a published poll before it leans on it (Jenna 2026-11-04)
-        plan = {}
+        # the anchor: a counted event sets the published split; a published poll before it leans on it (Jenna 2026-11-04);
+        # otherwise the desk's own derived anchor from the study (room-5): no-anchor is no longer a legal state for a question
+        # about a title, a person, a brand or an event, so a room without one is marked on its trail (anchor_status)
+        plan, derived_data = {}, None
+        t = time.time()
         try:
             plan = anchor_plan(opts_out, brief, subject_class(twin), turnout_fallback=_base_turnout_pct(twin))
-            if plan and anchor_rows(opts_out, by_segment, plan, int(sum(int(sg.get('people') or 0) for sg in session['group']['segments'])), len(roster), seed):
+        except Exception as e:
+            print(f"[twin-room] anchor plan skipped: {str(e)[:120]}")
+            plan = {}
+        if plan:
+            trail['anchor_status'] = plan['kind']
+        elif f_anchor is not None:
+            try:
+                derived_data = f_anchor.result(timeout=max(5.0, BUDGET_S['anchor'] - (time.time() - t_anchor0)))
+            except Exception as e:
+                print(f"[twin-room] anchor desk skipped: {str(e)[:120]}")
+                derived_data = None
+            try:
+                plan = derived_plan(opts_out, derived_data, total_people, record_reach=record_reach_people(neighbors), seed=seed)
+            except Exception as e:
+                traceback.print_exc()
+                print(f"[twin-room] derived anchor skipped: {str(e)[:120]}")
+                plan = {}
+            trail['anchor_status'] = 'derived' if plan else 'unanchored'
+        else:
+            trail['anchor_status'] = 'prior' if not anchor_eligible else ('unresearched' if not study_ok(study) else 'unanchored')
+        if _apool is not None:
+            _apool.shutdown(wait=False)
+        timings['anchor_s'] = round(time.time() - t, 2)
+        try:
+            if plan and anchor_rows(opts_out, by_segment, plan, total_people, len(roster), seed):
                 rec['anchor'] = {'kind': plan['kind'], 'line': plan['line'], 'targets': {next((o['label'] for o in opts_out if o['id'] == k), k): v for k, v in plan['targets'].items()}}
-                trail['anchor'] = rec['anchor']
+                trail['anchor'] = dict(rec['anchor'], status=trail.get('anchor_status'))
+                if plan.get('kind') == 'derived':
+                    trail['anchor']['basis'] = plan.get('basis') or {}
+                    trail['anchor']['study_key'] = study.get('_key')
+                    trail['anchor']['study_cached'] = bool(study.get('_cached'))
             else:
+                if plan:
+                    trail['anchor_status'] = 'unanchored'
                 plan = {}
         except Exception as e:
             print(f"[twin-room] anchor skipped: {str(e)[:120]}")
+            trail['anchor_status'] = 'unanchored'
             plan = {}
         # 4b. the seats mirror the count (Jenna 2026-11-05): the published split is the count; the seats are allocated to it
         #     by largest remainder with a seat for any side worth half a seat, and a moved seat argues its stance in character
         t = time.time()
-        total_people = int(sum(int(sg.get('people') or 0) for sg in session['group']['segments']))
-        if total_people <= 0:
-            try:
-                from migration.digital_twin_pilot import room_people as _room_people
-                total_people = int(_room_people(roster, session['group']['segments'], twin) or 0)
-            except Exception:
-                total_people = 0
         mirror = {'alloc': {}, 'moved': [], 'floor_pct': None}
         try:
             mirror = mirror_seats(opts_out, by_segment, rec['answers'], roster, session['group']['segments'])
@@ -3232,7 +3887,14 @@ def run_question(ctx: dict) -> dict:
         if plan:
             prior = dict(prior or {})
             prior['anchor'] = {'kind': plan['kind'], 'line': plan['line']}
-            prior['note'] = (plan['line'] + ' ' + str(prior.get('note') or '')).strip()
+            if plan.get('kind') == 'derived':
+                # the count is the room's own, settled from the evidence: the habit-based leaning is kept on the trail
+                # for the operator, never put to the read as a gap to explain away
+                prior['habit_note'] = str(prior.get('note') or '')
+                prior['departed'] = False
+                prior['note'] = plan['line']
+            else:
+                prior['note'] = (plan['line'] + ' ' + str(prior.get('note') or '')).strip()
         trail['prior'] = prior
         # 5. the moderator reads the room
         t = time.time()
@@ -3399,4 +4061,7 @@ __all__ = ['ask_room', 'run_question', 'all_sessions', 'find_session', 'SESSION_
            'allocate_seats', 'mirror_seats', 'retally', 'revoice_seat', 'headline_for', 'cohere_read', 'num_word', 'MIRROR_FLOOR_SEATS', 'MIRROR_SYSTEM',
            'memory_for', 'prior_note', 'drop_ruled_out', 'scrub', 'has_banned', 'chat_lines', 'short_read', 'room_enabled', 'model_available', 'set_model_fn', 'topic_hash', 'topic_tokens',
            'topics_overlap', 'research_key', 'facts_key', 'job_key', 'job_read', 'Models', 'MODELS', 'BUDGET_S', 'ALPHA_SEATS', 'STAGES', 'STAGE_LABEL', 'ROOM_VERSION',
-           'JOB_PREFIX', 'RESEARCH_PREFIX', 'FACTS_PREFIX']
+           'JOB_PREFIX', 'RESEARCH_PREFIX', 'FACTS_PREFIX',
+           # room-5: the study desk and the derived anchor
+           'research_pass', 'merge_study', 'study_ok', 'derive_anchor', 'derived_plan', 'ledger_neighbors', 'record_reach_people', 'set_ledger_fn', 'asked_tokens', 'asked_hash', 'study_key',
+           'narrower_queries', 'STUDY_SYSTEM', 'ANCHOR_SYSTEM', 'STUDY_PREFIX', 'STUDY_MIN_SEARCHES', 'STUDY_MAX_SEARCHES', 'ANCHOR_LOW_POSITION', 'ANCHOR_NEIGHBOR_MARGIN', 'ANCHOR_SKIP_KINDS']

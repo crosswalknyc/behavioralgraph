@@ -258,6 +258,13 @@ class Room(unittest.TestCase):
         roles = [c['stage'] for c in rec['trail']['call_log']]
         self.assertIn('media', roles)
         self.assertIn('research', roles)
+        # room-5: the study desk runs first (this fake answers it with nothing, so it is asked twice and the room is
+        # marked unresearched only when no count anchors it); the event brief is gathered after it
+        self.assertIn('study', roles)
+        self.assertLess(roles.index('study'), roles.index('media'), 'the research pass runs before the event brief')
+        self.assertLess(roles.index('study'), roles.index('persona'))
+        self.assertEqual(rec['trail']['anchor_status'], 'result', 'the count still anchors the published split')
+        self.assertEqual(rec['trail']['study']['attempts'], 2); self.assertFalse(rec['trail']['study']['ok'])
         self.assertTrue(rec['outcome'].startswith('James Talarico won'))
         self.assertTrue(all('what_people_like_you_have_been_hearing_and_saying' in b for b in SEEN['persona']), 'the seats hear the talk')
         self.assertTrue(all(b.get('how_it_came_out', {}).get('outcome') for b in SEEN['persona']), 'the seats know how it came out')
@@ -344,6 +351,8 @@ class Room(unittest.TestCase):
         sess, rec = self._ask('who did you vote for for us senator today', fake)
         self.assertEqual(rec['talk'], [])
         self.assertNotIn('anchor', rec)
+        self.assertEqual(rec['trail']['anchor_status'], 'unresearched', 'no count, no poll, and this fake gives the study desk nothing: marked on the trail, silent in the read')
+        self.assertNotIn('unresearched', rec['read'].lower())
         self.assertTrue(all('what_people_like_you_have_been_hearing_and_saying' not in b for b in SEEN['persona']))
         self.assertIn('media', rec['trail']['fallbacks'] + [c['stage'] for c in rec['trail']['call_log']])
         self.assertTrue(rec['options'])

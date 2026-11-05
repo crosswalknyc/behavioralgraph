@@ -243,7 +243,7 @@ class Room(unittest.TestCase):
         sess, rec = self._ask()
         self.assertEqual(rec['stage'], 'done')
         self.assertEqual([f for f in rec['trail']['fallbacks'] if f != 'read'], [])
-        self.assertEqual(rec['engine'], 'room-4')
+        self.assertEqual(rec['engine'], ROOM.ROOM_VERSION)   # room-4 landed the mirror; room-5 (the study desk) runs on top of it
         by = {o['id']: o for o in rec['options']}
         self.assertEqual(rec['anchor']['kind'], 'result')
         self.assertAlmostEqual(by['a']['pct'], 88.0, delta=1.0)
