@@ -47,7 +47,7 @@ from typing import Callable, Optional
 
 from migration.digital_twin_engine import clamp, jit, messy_count, pct1, unit, human_money, human_people
 from migration.digital_twin_pilot import (
-    QUADRANTS, _card_for, _clock, _seat_people, _trait, aggregate_dial, quadrant_of, _is_woman, _is_man, _age, VERSION,
+    QUADRANTS, _card_for, _clock, _seat_people, _trait, aggregate_dial, lower_first, quadrant_of, _is_woman, _is_man, _age, VERSION,
 )
 from migration.digital_twin_modes import publish_probs, softmax_probs, ordered_probs, _sig
 
@@ -329,7 +329,7 @@ def two_audiences(session: dict, twins_by_key: dict) -> dict:
     read = (f"{a['name']} sits at {a['mean']} on the dial, {b['name']} at {b['mean']}; total positive {pct1(a['total_positive_pct'])}% against {pct1(b['total_positive_pct'])}%. ")
     if out_splits:
         s0 = out_splits[0]
-        read += f"They split most from {s0['from_clock']} to {s0['to_clock']} ({s0['gap']:.0f} points, {s0['higher']} higher)" + (f", on {s0['on_screen'][0].lower() + s0['on_screen'][1:]}" if s0['on_screen'] else '') + '.'
+        read += f"They split most from {s0['from_clock']} to {s0['to_clock']} ({s0['gap']:.0f} points, {s0['higher']} higher)" + (f", on {lower_first(s0['on_screen'])}" if s0['on_screen'] else '') + '.'
     else:
         read += 'The two audiences track each other through the cut.'
     return {'lines': lines, 'splits': out_splits, 't': ts, 'read': read}

@@ -38,7 +38,7 @@ from typing import Optional
 
 from migration.digital_twin_engine import clamp, jit, messy_count, pct1, unit
 from migration.digital_twin_pilot import (
-    QUADRANTS, _card_for, _clock, _seat_people, _trait, quadrant_of,
+    QUADRANTS, _card_for, _clock, _seat_people, _trait, lower_first, quadrant_of,
 )
 from migration.digital_twin_modes import ordered_probs, softmax_probs, publish_probs, argmax, blend_pick, CUTS, GRADE_SPREAD, _sig
 
@@ -737,7 +737,7 @@ def pace_read(session: dict, twin: dict) -> dict:
             who = str(b.get('speaker') or '')
             on = str(b.get('caption') or b.get('action') or '')
             u = unit(seed, 'conf', e.get('seat'), e.get('t'))
-            line = (f"Who {who} was to the others at {_clock(e.get('t'))}." if who and u < 0.5 else f"What {on[0].lower() + on[1:] if on else 'that scene'} meant for the story." if u < 0.8 else f"Why they did that at {_clock(e.get('t'))}.")
+            line = (f"Who {who} was to the others at {_clock(e.get('t'))}." if who and u < 0.5 else f"What {lower_first(on) if on else 'that scene'} meant for the story." if u < 0.8 else f"Why they did that at {_clock(e.get('t'))}.")
         confused.append({'seat': e.get('seat'), 'name': e.get('name'), 'clock': _clock(e.get('t')), 't': e.get('t'), 'line': line[:160]})
     seats_confused = len({c['seat'] for c in confused})
     conf_pct = ((session.get('scorecard') or {}).get('battery') or {}).get('headline', {}).get('confusion_pct')
@@ -785,10 +785,10 @@ def _scene_reason(session: dict, seat_no: int, scene: dict, liked: bool, seed: s
     if liked:
         bank = {'funny': ('That was the laugh of the night.', 'I did not see the joke coming.'), 'tender': ('That got me.', 'The quiet in that scene is why I watch.'),
                 'action': ('Finally it moved.', 'The best stretch; I sat up.'), 'wow': ('The reveal. I would rewind it.', 'That turn earned the whole episode.'),
-                'tense': ('I was holding my breath.', 'The standoff is the show.')}.get(tone, ('That scene is the one I would tell a friend about.', f"The {on[0].lower() + on[1:]} is where it clicked."))
+                'tense': ('I was holding my breath.', 'The standoff is the show.')}.get(tone, ('That scene is the one I would tell a friend about.', f"The {lower_first(on)} is where it clicked."))
     else:
         bank = {'quiet': ('It just sat there.', 'I looked at my phone.'), 'curious': ('I did not know who anyone was yet.', 'Too much setup, not enough happening.'),
-                'tense': ('That dragged for me.', 'I lost the thread of who wanted what.')}.get(tone, ('It ran long.', f"The {on[0].lower() + on[1:]} did not land for me."))
+                'tense': ('That dragged for me.', 'I lost the thread of who wanted what.')}.get(tone, ('It ran long.', f"The {lower_first(on)} did not land for me."))
     return bank[int(u * len(bank)) % len(bank)]
 
 

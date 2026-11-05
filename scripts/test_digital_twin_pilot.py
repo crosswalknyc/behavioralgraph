@@ -1060,6 +1060,12 @@ class People(unittest.TestCase):
         self.assertEqual(PI.lower_first('I moved up in my seat'), 'I moved up in my seat')
         self.assertEqual(PI.lower_first('A'), 'a')
         self.assertEqual(PI.lower_first(''), '')
+        # the moderator's opening clause on a question keeps the caption's case (the five NCIS question pages read 'right after cBS logo')
+        sess = {'beats': [{'t': 0, 'scene_id': 1, 'caption': 'CBS logo animation glows on a black screen'}],
+                'scenes': [{'id': 1, 't_start': 0, 't_end': 10, 'caption': 'CBS logo animation glows on a black screen'}], 'dial': {'t': [0], 'value': [50]}, 'events': []}
+        self.assertEqual(PI.question_window(sess, 5)['frame'], 'At 0:05, right after CBS logo animation glows on a black screen')
+        sess['scenes'][0]['caption'] = 'The CBS logo comes up'
+        self.assertEqual(PI.question_window(sess, 5)['frame'], 'At 0:05, right after the CBS logo comes up')
 
 
 if __name__ == '__main__':

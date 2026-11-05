@@ -1464,7 +1464,8 @@ def question_window(session: dict, playhead_s: float, back_s: float = WINDOW_BAC
         if float(bt or 0) <= t and i < len(dial):
             now_v = dial[i]
     on = str((sc or {}).get('caption') or (sc or {}).get('action') or '')
-    frame = f"At {_clock(t)}" + (f", right after {on[0].lower() + on[1:] if on else ''}".rstrip(', ') if on else '')
+    # the caption runs on after the clock; an acronym or a double-capital name keeps its case ('CBS logo', 'LL Cool J')
+    frame = f"At {_clock(t)}" + (f", right after {lower_first(on)}".rstrip(', ') if on else '')
     return {'playhead_s': round(t, 3), 'clock': _clock(t), 'from_clock': _clock(a), 'from_s': round(a, 3),
             'scene': ({'id': sc.get('id'), 'clock': _clock(sc.get('t_start')), 'on_screen': on[:160], 'dialogue': str(sc.get('dialogue') or '')[:220]} if sc else None),
             'beats': rows, 'events': top, 'dial_now': round(now_v, 1) if now_v is not None else None,
