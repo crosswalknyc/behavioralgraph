@@ -1195,6 +1195,15 @@ def _kept_staff_cover(cid, camp):
     locked = (camp.get("cover_locked_by") or "").strip()
     if locked != "staff" and not name.lower().startswith(ARCHIVE_COVER_PREFIX):
         return ""
+    # A deliberate human pick is never second-guessed by the scorer.
+    # It was validated when it was chosen; it only falls away when the
+    # asset itself is gone. (2026-11-04: staff covers were re-scored on
+    # every auto pass and swapped for top-scored text cards.)
+    try:
+        if _get_bytes(ASSET_KEY.format(cid=cid, name=name)):
+            return name
+    except Exception:
+        pass
     url = _cover_url(cid, name)
     if _cover_src_ok(url, cid):
         return name
@@ -1206,11 +1215,18 @@ def lock_cover_image(cid, name=None, by="auto"):
     camp = _campaign(load_state_raw(), cid) or {}
     chosen = (name or "").strip()
     if not chosen:
-        chosen = (
-            _kept_staff_cover(cid, camp)
-            or (COVER_OVERRIDES.get(cid) or "").strip()
-            or _best_cover_name(cid, camp)
-        )
+        kept = _kept_staff_cover(cid, camp)
+        if kept:
+            # An auto pass never downgrades a staff pick: keep the name
+            # AND the staff label, or the next auto pass re-picks.
+            chosen = kept
+            if (camp.get("cover_locked_by") or "").strip() == "staff":
+                by = "staff"
+        else:
+            chosen = (
+                (COVER_OVERRIDES.get(cid) or "").strip()
+                or _best_cover_name(cid, camp)
+            )
     if not chosen:
         return ""
 
@@ -1253,6 +1269,11 @@ def public_cover_payload(cid, camp=None):
 def _public_cover_image(cid, camp):
     """A photograph that fills a tall plate. Skip slide GIFs and thin cards."""
     camp = camp or {}
+    staff_name = _kept_staff_cover(cid, camp)
+    if staff_name:
+        url = _cover_url(cid, staff_name)
+        if url:
+            return url
     for name in (
         (camp.get("cover_image") or "").strip(),
         COVER_OVERRIDES.get(cid) or "",
