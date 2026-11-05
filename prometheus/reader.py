@@ -265,8 +265,9 @@ def _page(ctx):
             if _vb.is_self_contained(vc.get('view_id')):
                 # a profile left in the picker is not open under a
                 # self-contained product; the product's title is the
-                # subject on screen (2026-10-22, Alexia)
-                name = str(vc.get('view_title') or '').strip()
+                # subject on screen (2026-10-22, Alexia): the study the
+                # view names, never the tab label with its icon (2026-11-05)
+                name = str(_vb.view_label(vc) or '').strip()
                 view = f"{_vb.product_label(vc.get('view_id')) or view}: {name}" if name else view
         except Exception:
             pass

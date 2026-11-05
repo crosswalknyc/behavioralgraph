@@ -55,7 +55,11 @@ def page_name(body):
         name = str(prim.get('name') or pc.get('subject') or '').strip()
         if not name:
             vc = (body or {}).get('view_context') or pc.get('view_context') or {}
-            name = str(vc.get('view_title') or '').strip()
+            try:
+                from .view_base import view_label as _vl
+                name = str(_vl(vc) or '').strip()   # the study on screen, icon stripped (2026-11-05)
+            except Exception:
+                name = str(vc.get('view_title') or '').strip()
         return name.split(' - ')[0].strip()
     except Exception:
         return ''

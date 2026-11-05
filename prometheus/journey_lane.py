@@ -20,7 +20,9 @@ import time
 __all__ = ['answer', 'find_journey', 'journey_vocabulary', 'VOCAB_RX']
 
 VOCAB_RX = re.compile(
-    r"\b(?:digital journey|journey|conversion(?: rate)?|click(?:ed|s)? ?through|clicked|opened the (?:\w+ )?page|title page|"
+    r"\b(?:digital journey|journey|conversion(?: rate)?|convert(?:ed|s|ing)?|touch ?points?|data ?set|dataset|funnel|"
+    r"(?:went|go|moved?) from .{1,60}? to|which (?:touchpoint|channel|platform|step|stage) (?:drove|converted|led)|"
+    r"click(?:ed|s)? ?through|clicked|opened the (?:\w+ )?page|title page|"
     r"saw (?:a|the) (?:social )?post|social post|first post|where (?:did )?the first post|posts? before|how many posts|"
     r"looked before|where (?:did )?they look|time (?:from|to|between)|same day|within (?:7|seven|30|thirty) days|first episode|"
     r"last touch|assist(?:s|ed)?|already watching|outside the (?:30|thirty)|every viewer|viewers in the window|"
@@ -77,6 +79,11 @@ def _pct(a, b, nd=1):
 
 def _tokens(s):
     return [t for t in re.findall(r"[a-z0-9]+", str(s or '').lower()) if t not in _STOP and (len(t) >= 3 or t.isdigit())]
+
+
+def _squash(s):
+    """'Music to Long Form' and 'music to longform' are one name."""
+    return re.sub(r"[^a-z0-9]+", "", str(s or '').lower())
 
 
 def journey_vocabulary(text):
@@ -143,9 +150,17 @@ def find_journey(text, *, s3, user, uname, bucket='dashboard-inputs', ctx=None):
     except Exception:
         return None
     low = ' ' + re.sub(r"[^a-z0-9]+", ' ', str(text or '').lower()) + ' '
+    squashed = _squash(text)
     page_key = ''
     try:
         page_key = str(((ctx or {}).get('journey') or {}).get('key') or (ctx or {}).get('journey_key') or '')
+        if not page_key:
+            # the widget carries the open journey's own key in the view
+            # data (2026-11-02), which is how a question about the study
+            # on screen finds it without naming it (2026-11-05)
+            _vc = (ctx or {}).get('view_context') if isinstance(ctx, dict) else None
+            _vd = (_vc or {}).get('data') if isinstance(_vc, dict) else None
+            page_key = str(((_vd or {}).get('key') if isinstance(_vd, dict) else '') or '')
     except Exception:
         page_key = ''
     visible = [r for r in runs if isinstance(r, dict) and r.get('key') and _visible(r, user, uname)]
@@ -171,7 +186,7 @@ def find_journey(text, *, s3, user, uname, bucket='dashboard-inputs', ctx=None):
         if not toks:
             continue
         present = [t for t in toks if f' {t} ' in low]
-        if len(present) == len(toks):
+        if len(present) == len(toks) or (len(toks) >= 2 and _squash(_title_of(run)) in squashed):
             score = 1.0
         elif any(len(t) >= 8 and counts.get(t, 0) == 1 for t in present) and not any(t.isdigit() and t not in present for t in toks):
             score = 0.8
@@ -312,10 +327,23 @@ def answer(text, ctx=None, *, host=None, user=None, history=None, s3=None, bucke
     """A raw reply read off the delivered journey, or None when the
     question is not about a journey the caller can see."""
     t = str(text or '').strip()
-    if not t or not journey_vocabulary(t):
+    if not t:
         return None
     if _ORDER_RX.search(t):
         return None     # an order for a new journey or campaign is the intake's, never a read off an old one (goldens g054, g057, 2026-11-02)
+    # The Music to Long Form study on the page (or named in the words)
+    # answers its own dataset questions from its file, ahead of any quote
+    # (2026-11-05, Liz Huszarik: "did the Instagram Social touchpoints
+    # convert any movie viewing" drew a $100 offer on the tab label).
+    try:
+        from . import journey_study as _js
+        _study = _js.answer(t, ctx, user=user, history=history, host=host)
+    except Exception:
+        _study = None
+    if _study is not None:
+        return _study
+    if not journey_vocabulary(t):
+        return None
     s3 = s3 or (host.s3_client if host is not None and host.has('s3_client') else None)
     if s3 is None:
         return None

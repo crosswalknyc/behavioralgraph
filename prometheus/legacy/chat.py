@@ -17116,9 +17116,21 @@ def _pm_analyze_core(user, body, text, history):
     # prompt constraints below). Mode chips (personas, exec summary,
     # ...) always run fresh - they are render-shape commands.
     _led = {'block': '', 'exact': None, 'entries': []}
-    _led_subj = str((ctx.get('primary') or {}).get('name')
-                    or (ctx.get('view_context') or {}).get('view_title')
-                    or '').strip()
+    try:
+        # the study the open view names, never the tab label with its icon
+        # (2026-11-05, Liz: a replay keyed under "🗺️ Digital Journey IQ")
+        from prometheus import view_base as _vb_led
+        _led_view_name = str(_vb_led.view_label(ctx.get('view_context') or {}) or '').strip()
+        _led_self_contained = bool(_vb_led.is_self_contained(((ctx.get('view_context') or {}).get('view_id'))))
+    except Exception:
+        _led_view_name = str((ctx.get('view_context') or {}).get('view_title') or '').strip()
+        _led_self_contained = False
+    # under a self-contained product the study on screen is the subject;
+    # a profile left in the picker is not open (2026-10-22, Alexia)
+    _led_subj = str(((_led_view_name if _led_self_contained else '')
+                     or (ctx.get('primary') or {}).get('name')
+                     or _led_view_name
+                     or '')).strip()
     _led_same_subject = True
     _t_ledger = time.monotonic()
     try:

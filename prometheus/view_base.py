@@ -74,6 +74,52 @@ def _norm(s):
     return re.sub(r"[^a-z0-9]+", " ", str(s or '').lower()).strip()
 
 
+def clean_label(label):
+    """A view or tab label without its icon ('🗺️ Digital Journey IQ' ->
+    'Digital Journey IQ'). Never raises."""
+    try:
+        from .subject_display import strip_emoji
+        return strip_emoji(label)
+    except Exception:
+        return ' '.join(str(label or '').split())
+
+
+def data_title(view_ctx):
+    """The study or dataset the open view names in its own data
+    ('Music to Long Form', the campaign title), humanized from a slug
+    when that is all the widget sent; '' when the data names nothing."""
+    vc = view_ctx if isinstance(view_ctx, dict) else {}
+    data = vc.get('data') if isinstance(vc.get('data'), dict) else {}
+    for k in ('title', 'project_name', 'target_name', 'subject', 'campaign'):
+        t = str(data.get(k) or '').strip()
+        if t:
+            if '_' in t and ' ' not in t:
+                t = t.replace('_', ' ').strip().title()
+            return clean_label(t)[:120]
+    meta = data.get('meta') if isinstance(data.get('meta'), dict) else {}
+    for k in ('project_name', 'target_name', 'title'):
+        t = str(meta.get(k) or '').strip()
+        if t:
+            return clean_label(t)[:120]
+    return ''
+
+
+def view_label(view_ctx):
+    """The subject a reply or an offer names for the open view: the
+    study or dataset in the view's data first, then the tab label with
+    its icon stripped, then the product name. Never the raw tab label
+    (2026-11-05: an offer read "I can pull that read on 🗺️ Digital
+    Journey IQ" for a question about the Music to Long Form study)."""
+    vc = view_ctx if isinstance(view_ctx, dict) else {}
+    view_id = str(vc.get('view_id') or '').strip()
+    label = product_label(view_id)
+    title = clean_label(vc.get('view_title'))
+    dt = data_title(vc)
+    if dt and (not title or _norm(title) == _norm(label) or _norm(title) == _norm(view_id)):
+        return dt
+    return title or dt or label
+
+
 # Words a view title shares with ordinary asks about any campaign, title
 # or audience. They never count toward naming the open view by tokens;
 # the whole title still does.
@@ -152,17 +198,12 @@ def view_base(view_ctx):
     if view_id not in SELF_CONTAINED:
         return None
     label = product_label(view_id)
-    title = str(vc.get('view_title') or '').strip()
-    # the widget's view title is often the product's tab label ("Digital
-    # Journey IQ"); the study on screen names itself in the data
+    # the widget's view title is often the product's tab label ("🗺️
+    # Digital Journey IQ"); the study on screen names itself in the data
     # ("Music to Long Form"), and that is the subject every pass on it
-    # binds and banks under (2026-11-04)
-    data_title = str(((vc.get('data') or {}) if isinstance(vc.get('data'), dict) else {}).get('title') or '').strip()
-    if data_title and '_' in data_title and ' ' not in data_title:
-        data_title = data_title.replace('_', ' ').strip().title()
-    if data_title and (not title or _norm(title) == _norm(label)):
-        title = data_title[:120]
-    title = title or label
+    # binds and banks under (2026-11-04). The icon never rides along
+    # (2026-11-05).
+    title = view_label(vc) or label
     return {'subject': title, 's3_key': '', 'source': 'view',
             'view_id': view_id, 'product': label,
             'domain': domain_for(view_id)}

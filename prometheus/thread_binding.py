@@ -86,6 +86,11 @@ def subject_key_for(page_context):
         return None, None, None
     label = _clean(vc.get('subject_label') or data.get('title') or data.get('subject')
                    or vc.get('view_title') or ident)
+    try:   # a tab label's icon is chrome, never part of the project's name (2026-11-05)
+        from .subject_display import strip_emoji as _se
+        label = _se(label) or label
+    except Exception:
+        pass
     kind = _VIEW_TO_KIND.get(view, view.lower())
     return f"{kind}:{ident}", label, view
 

@@ -387,6 +387,20 @@ def is_where_watched(text, history=None, ctx=None):
 
 def _page_name(ctx):
     try:
+        # under a self-contained product (Digital Journey IQ, Attribution
+        # IQ, ...) the study on screen is the page, never a profile left
+        # in the picker (2026-11-05: an approval on the Music to Long Form
+        # study ran as a read on Olipop, the picker's profile), and never
+        # the tab label with its icon
+        try:
+            from . import view_base as _vb
+            vc = (ctx or {}).get('view_context') if isinstance(ctx, dict) else None
+            if isinstance(vc, dict) and _vb.is_self_contained(vc.get('view_id')):
+                name = str(_vb.view_label(vc) or '').strip()
+                if name:
+                    return name
+        except Exception:
+            pass
         return str(((ctx or {}).get('primary') or {}).get('name') or '').strip()
     except Exception:
         return ''

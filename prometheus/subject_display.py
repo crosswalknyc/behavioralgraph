@@ -21,7 +21,26 @@ Three places share this one rule:
 import re
 
 __all__ = ['KEY_RX', 'STAMP_RX', 'looks_like_key', 'humanize_key',
-           'display', 'scrub_keys']
+           'display', 'scrub_keys', 'strip_emoji', 'EMOJI_RX']
+
+# A tab label carries its icon ("🗺️ Digital Journey IQ"); the icon is
+# chrome, never part of a subject a reader sees in a sentence
+# (2026-11-05, Liz Huszarik read "I can pull that read on 🗺️ Digital
+# Journey IQ"). Pictographs, symbols, flags, variation selectors and
+# zero-width joiners all go; letters in every script stay.
+EMOJI_RX = re.compile(
+    "[\U0001F000-\U0001FAFF\U00002600-\U000027BF\U00002B00-\U00002BFF\U0001F1E6-\U0001F1FF"
+    "\U0000FE00-\U0000FE0F\U0000200D\U000020E3\U00002300-\U000023FF\U00002190-\U000021FF\U000025A0-\U000025FF]+")
+
+
+def strip_emoji(label):
+    """'🗺️ Digital Journey IQ' -> 'Digital Journey IQ'. Never raises;
+    returns the input unchanged when it is not a string."""
+    try:
+        s = EMOJI_RX.sub(' ', str(label or ''))
+        return ' '.join(s.split()).strip(' -:|')
+    except Exception:
+        return label
 
 # UPPER_SNAKE with at least one underscore: BEST_OF_THE_BEST, 2_CHAINZ,
 # PARAMOUNT_PLUS_SUBSCRIBER_LIFECYCLE. A plain acronym (NFL, HBO) is not

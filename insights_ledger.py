@@ -430,6 +430,14 @@ def make_entry(*, subject, metric_family, question, route, metrics,
         if isinstance(sp, (int, float)) and sp > 0:
             cm['sample_people'] = int(sp)
         clean_metrics.append(cm)
+    # a quote is never an answer: an offer sentence or its chips never
+    # bank as a reply (2026-11-05); a tab icon is never part of a subject
+    reply = '' if is_offer_reply(reply) else reply
+    try:
+        from prometheus.subject_display import strip_emoji as _strip_emoji
+        subject = _strip_emoji(subject) or subject
+    except Exception:
+        pass
     entry = {
         'k': entry_key(subject, metric_family, window_start, window_end),
         'subject': str(subject or '')[:120],
@@ -1105,7 +1113,7 @@ def _find_exact_anywhere(subjects, question):
     best_key, best = None, None
     for k, v in subjects.items():
         for e in reversed(v.get('entries') or []):
-            if e.get('qn') == qn and e.get('reply'):
+            if e.get('qn') == qn and e.get('reply') and not is_retired_surface_reply(e.get('reply')):
                 if best is None or (e.get('ts') or '') > (best.get('ts')
                                                           or ''):
                     best_key, best = k, e
@@ -1805,10 +1813,27 @@ def find_semantic(entries, question):
 # a Will & Grace viewership ask (2026-10-19 and 2026-10-25, both under
 # the subject 'youtube').
 _RETIRED_SURFACE_RX = re.compile(r"^\s*Here'?s how I'?d cut this\b|\(each cut is \d+ credits", re.I)
+# A priced offer is a quote, never an answer (2026-11-05, Liz Huszarik:
+# "did the Instagram Social touchpoints convert any movie viewing" on
+# the Music to Long Form study replayed a banked "I can pull that read
+# on 🗺️ Digital Journey IQ. Pulling this data will cost $100." that a
+# distilled read job had carried as its reply). Offer copy never banks
+# and never replays, whatever bucket it sits in.
+_OFFER_COPY_RX = re.compile(
+    r"Pulling this data will cost|I can pull that read on|I can size the\b.{0,120}?\bPulling|"
+    r"I will not answer until you accept|It runs \$\s?\d|not billed to a staff account|"
+    r"^\s*Approve\s*(?:\(|/|\|)\s*(?:\$|Cancel)|^\s*(?:Approve|Accept)\s*$", re.I | re.S)
+
+
+def is_offer_reply(reply):
+    """True when the stored reply is a priced quote (the offer sentence,
+    the cost line, or the Approve / Cancel chip text) and not a read."""
+    return bool(_OFFER_COPY_RX.search(str(reply or '')[:600]))
 
 
 def is_retired_surface_reply(reply):
-    return bool(_RETIRED_SURFACE_RX.search(str(reply or '')[:400]))
+    head = str(reply or '')[:600]
+    return bool(_RETIRED_SURFACE_RX.search(head[:400])) or is_offer_reply(head)
 
 
 def find_exact(entries, question=None, key=None):
@@ -2081,7 +2106,7 @@ def metrics_from_study(study):
 
 
 __all__ = ['consult', 'persist', 'make_entry', 'render_block',
-           'find_exact', 'find_semantic', 'metrics_from_study',
+           'find_exact', 'find_semantic', 'is_offer_reply', 'is_retired_surface_reply', 'metrics_from_study',
            'replay_eligible', 'fresh_run_requested',
            'entry_key', 'canon_family', 'subject_key',
            'normalize_question', 'normalize_subject',

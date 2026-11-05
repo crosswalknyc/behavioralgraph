@@ -1478,11 +1478,22 @@ def clarify_for(text, page=''):
 def _page_name(ctx):
     try:
         prim = (ctx or {}).get('primary') or {}
+        vc = (ctx or {}).get('view_context') or {}
+        try:
+            # under a self-contained product the study on screen is the
+            # page, not a profile left in the picker (2026-10-22); its
+            # name is the data's title, never the tab label with its icon
+            # (2026-11-05)
+            from . import view_base as _vb
+            view_name = str(_vb.view_label(vc) or '').strip()
+            if view_name and _vb.is_self_contained(vc.get('view_id') if isinstance(vc, dict) else ''):
+                return view_name
+        except Exception:
+            view_name = ''
         name = str(prim.get('name') or '').strip()
         if name:
             return name
-        vc = (ctx or {}).get('view_context') or {}
-        return str(vc.get('view_title') or vc.get('subject') or '').strip()
+        return view_name or str(vc.get('subject') or '').strip()
     except Exception:
         return ''
 
