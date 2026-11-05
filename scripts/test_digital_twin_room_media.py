@@ -14,9 +14,12 @@ Two things, held here:
     saying (in their words), the latest polls, and whether the event the
     question turns on has happened and how it came out; the seats hear
     it, the page shows it;
-  * a counted event anchors the published split (the seats keep their
-    votes and their lines); a published poll before the event leans on
-    the split two to one.
+  * a counted event anchors the published split; a published poll before
+    the event leans on the split two to one. Since room-4 (Jenna
+    2026-11-05, scripts/test_digital_twin_room_seats_mirror_count.py)
+    the seats are then allocated to that split by largest remainder and
+    a moved seat argues its stance in character, so the tally and the
+    count tell one story (before that the seats kept their own votes).
 
 Hermetic: a fake model answers every desk; no S3.
 
@@ -265,8 +268,11 @@ class Room(unittest.TestCase):
         self.assertIn('Texas is not for sale', rec['talk'][0])
         by = {o['label']: o for o in rec['options']}
         pax, tal, home = by['Ken Paxton, the Republican'], by['James Talarico, the Democrat'], by['Did not cast a ballot in this election']
-        self.assertEqual(pax['seats_n'], 8, 'the seats keep their votes')
-        self.assertEqual(tal['seats_n'], 4)
+        # room-4: the seats mirror the count (eight of twelve voted Paxton freely; the count seats 3 / 4 / 5 with the stayed-home row)
+        self.assertEqual({o['id']: o['seats_n'] for o in rec['options']}, ROOM.allocate_seats({o['id']: o['pct'] for o in rec['options']}, 12))
+        self.assertEqual((pax['seats_n'], tal['seats_n'], home['seats_n']), (3, 4, 5))
+        self.assertEqual(len(rec['trail']['mirror']['moved']), 5, 'five Paxton seats moved and were voiced again')
+        self.assertTrue(all(a['option_label'] == home['label'] for a in rec['answers'] if a.get('mirrored')))
         self.assertGreater(tal['pct'], pax['pct'], 'the published split sits on the count, not the eight seats')
         self.assertAlmostEqual(tal['pct'], 50.3 / 100 * 58.4, delta=1.0)
         self.assertAlmostEqual(pax['pct'], 47.9 / 100 * 58.4, delta=1.0)
@@ -303,7 +309,8 @@ class Room(unittest.TestCase):
         self.assertAlmostEqual(pax['pct'], 47.9 / 100 * 58.4, delta=1.0)
         self.assertLess(tal['people'], 6_000_000, 'about 5.5M votes for Talarico, not 10M')
         self.assertAlmostEqual(rec['anchor']['targets']['Did not end up voting in this one'], 41.6, places=1)
-        self.assertEqual(pax['seats_n'], 8, 'the seats keep their votes')
+        self.assertEqual({o['id']: o['seats_n'] for o in rec['options']}, ROOM.allocate_seats({o['id']: o['pct'] for o in rec['options']}, 12), 'the seats mirror the count')
+        self.assertEqual(home['seats_n'], 5)
         self.assertEqual(sum(o['people'] for o in rec['options']), 18_623_931)
         self.assertNotIn('votes cast', rec['trail']['prior']['note'])
 
@@ -318,7 +325,8 @@ class Room(unittest.TestCase):
         self.assertEqual(rec['anchor']['kind'], 'poll')
         by = {o['label']: o for o in rec['options']}
         pax, tal = by['Ken Paxton, the Republican'], by['James Talarico, the Democrat']
-        self.assertEqual(pax['seats_n'], 8)
+        self.assertEqual({o['id']: o['seats_n'] for o in rec['options']}, ROOM.allocate_seats({o['id']: o['pct'] for o in rec['options']}, 12), 'the seats mirror the blended split')
+        self.assertLess(pax['seats_n'], 8, 'the poll pulls the eight free Paxton votes down to the blended split')
         self.assertLess(pax['pct'], 60.0, 'the poll pulls the eight seats down')
         self.assertGreater(pax['pct'], tal['pct'] - 12.0)
         self.assertEqual(rec['outcome'], '')

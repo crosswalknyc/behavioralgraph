@@ -60,13 +60,23 @@ THE PUBLISHED SPLIT (the seats drive the shape, the prior fills the tails)
   show 'in the room: 8 of 12' beside the projected share, and the read says shares in plain words ('about two in three',
   'a sliver').
 
+THE SEATS MIRROR THE COUNT (room-4, Jenna 2026-11-05: "why would it say 0 people would watch?")
+  The published split (after the anchor) is the count. The seats are then allocated to it (``mirror_seats``: largest
+  remainder per segment, and any side worth half a seat of the room, 4.2% with twelve, holds a seat); a seat that keeps
+  its own answer keeps its line, a seat that moves argues its new stance in character (``revoice_seat``). The headline
+  (``headline_for``: 'about one in twenty of the 6.09M viewers, roughly 329.1K people, are a yes: one of the twelve
+  seats') takes its people from the share, never from the tally; '0 people' only when the count is zero. The read and
+  the chat line pass ``cohere_read``: one split, stated once; a nobody / none / all twelve claim against a non-zero
+  count is rewritten to the count and the seats.
+
 OUTPUT SHAPE (the question record on session['questions']; the UI reads this)
   {id, q, kind, framing,
    options: [{id, label, lean, pct, people, seats: [seat ids], seats_n, tally: '8 of 12', room_pct}],   pct = published share
    option_labels: [str],                       the labels alone
    distribution: [{label, pct, people}],       the same rows for the table (older readers)
-   tally: [{label, seats, of, room_pct}], seats_total,     the raw seat tally for the console
+   tally: [{label, seats, of, room_pct}], seats_total,     the raw seat tally for the console (mirrors the count)
    by_segment: [{segment, people, distribution: [{label, pct, people}], yes_pct, tally: [{label, seats}]}],
+   headline: str, headline_people: int,        the lead side's share in words and its people (share x the room's people)
    read: str,
    voices: [{seat, name, age, city, segment, line}],
    answers: [{seat, name, option, option_label, line, confidence, reason}],     the raw seat answers
@@ -106,9 +116,10 @@ import traceback
 import uuid
 from typing import Callable, Optional
 
-from migration.digital_twin_engine import clamp, unit
+from migration.digital_twin_engine import clamp, human_people, unit
 
-ROOM_VERSION = 'room-3'   # room-2 (2026-11-04): the media desk and the result anchor; room-3 (2026-11-04): the read opens with the room, a short read for the chat, answers stamped as they land
+ROOM_VERSION = 'room-4'   # room-2 (2026-11-04): the media desk and the result anchor; room-3 (2026-11-04): the read opens with the room, a short read for the chat, answers stamped as they land
+#                           room-4 (2026-11-05): the seats mirror the count (headline, headline_people, answers[].mirrored, trail.mirror), one split stated once
 S3_BUCKET = 'dashboard-inputs'
 JOB_PREFIX = 'system/digital_twins/jobs/'
 RESEARCH_PREFIX = 'system/digital_twins/research/'
@@ -124,7 +135,8 @@ MODELS = {
     # the strong chain when the Prometheus host is not bound (a script, the box): the same candidates the analysis chain walks
     'strong': ['claude-opus-5', 'claude-opus-4-8', 'claude-opus-4-7', 'claude-opus-4-6', 'claude-sonnet-4-6'],
 }
-BUDGET_S = {'research': 75.0, 'media': 150.0, 'options': 40.0, 'persona': 50.0, 'read': 50.0}   # the media desk's searches run longer than the facts desk's
+BUDGET_S = {'research': 75.0, 'media': 150.0, 'options': 40.0, 'persona': 50.0, 'mirror': 35.0, 'read': 50.0}   # the media desk's searches run longer than the facts desk's
+MIRROR_FLOOR_SEATS = 0.5      # an option holding at least half a seat's worth of the audience (4.2% with twelve seats) holds a seat (Jenna 2026-11-05)
 MAX_OPTIONS = 5
 VOICES_N = 4
 RESEARCH_CACHE_TTL_S = 14 * 86400
@@ -1391,11 +1403,17 @@ You are also given what people like you have been hearing and saying lately (the
 When you are given what_just_played, you are in a screening and the cut was paused at that clock: answer about what you just saw, name the scene in your own words (the hallway, the diner argument), let your own dial in those seconds and what you said during them show in the answer, and never name an actor.
 Return JSON only: {"option": "<id or other>", "other_label": "<when other>", "line": "<two or three sentences>", "confidence": <1 to 5>, "reason": "<one sentence>"}"""
 
-READ_SYSTEM = """You are Prometheus, the moderator, writing up the room for a senior executive. Plain English a high school student follows; the thinking is senior consultant. You are given the question, the options with the room's split (the published share of the whole audience in percent and people, and the raw tally of the seats in the room, both already computed; never change a number), the split by segment, every seat's answer, the facts brief and a prior note.
-The published share is the room projected onto the audience: the seats drive the shape, and the small tails stand for people the twelve seats could not show, so a 1% option means a sliver of the audience, never nobody. Say shares in plain words first ('about two in three', 'about one in ten', 'a sliver') and cite the raw count when it helps ('eight of the twelve'); never print a percentage with a decimal in the read.
+MIRROR_SYSTEM = """You are one person in a focus group, answering as yourself. The moderator is Prometheus. You are given who you are (a card), what you said earlier in this session, the facts Prometheus put in front of the room, the question with its coded options, and the answer you are giving: in this audience a real share of people land on that option, and you are one of them.
+Say in two or three natural spoken sentences, in character, why that is you: what you do, what you own, what you watch and when, the way real people talk, concrete, with no lists and no hedging. Argue the answer you were given and no other; if your card leans the other way, say what makes you the exception (the friend who got you into it, the night it is on, the money, the habit). Never mention being an AI, a twin, a persona, a character or a seat, and never say you were given or assigned an answer. When this is a follow-up, stay consistent with what you said earlier. Give a confidence from 1 (unsure) to 5 (certain) and a one-sentence reason. No em dashes.
+You are also given what people like you have been hearing and saying lately; let it show the way it would in a real person.
+Return JSON only: {"line": "<two or three sentences>", "confidence": <1 to 5>, "reason": "<one sentence>"}"""
+
+READ_SYSTEM = """You are Prometheus, the moderator, writing up the room for a senior executive. Plain English a high school student follows; the thinking is senior consultant. You are given the question, the options with the room's split (the published share of the whole audience in percent and people, and the raw tally of the seats in the room, both already computed; never change a number), a headline, the split by segment, every seat's answer, the facts brief and a prior note.
+The published share is the count: the whole audience, in percent and people. The seats in the room are allocated to that count (a share worth half a seat or more holds a seat), so the tally and the count tell one story; the seats are the voices. People always come from the share, never from the tally: 'about one in twenty, roughly 329K people' is right, '0 people' is wrong unless the count itself is zero. Say shares in plain words first ('about two in three', 'about one in ten', 'about one in twenty', 'a sliver') and cite the raw count second when it helps ('one of the twelve seats'); never print a percentage with a decimal in the read.
+State one split, once, and never contradict it: when the count gives a side a share, never write nobody, no one, none, not one, zero or 0 for that side, and never write all twelve or every seat when a seat sits elsewhere.
 Write:
-- read: one paragraph, three to five sentences, on what the room said and why, grounded in the facts and the comparables in plain words. When the brief carries how an event came out, say so as fact in the first sentence and read the seats against it: the published split follows the count, the twelve seats are twelve people, so say what they show that the count does not. When the brief carries talk, name the loudest lines people used, in plain words. Say what the share means (who these people are, what it would take). Vary the sentence shapes. Never name a source or a publication; never use the words research, model, modeled, synthetic, estimated, panel, sample, confidence, pipeline, data. If the prior note says the seats departed from the audience's own leaning, explain what accounts for it in the read rather than overriding the room. When the question was asked on the clock (the stimulus carries what_just_played), open the read with what the room said (the share in words and the reason that carried it), never with the clock or the scene; the reader is looking at that moment already. Keep the read about that moment and the seats' own dials.
-- chat: the read for the room's chat, two or three sentences: the share in words and the one reason that carried it. No clock, no scene, no preamble; it opens with what the room said.
+- read: one paragraph, three to five sentences, on what the room said and why, grounded in the facts and the comparables in plain words. Open with the headline's fact in your own words (the share in plain words, the people it comes to, then the seats). When the brief carries how an event came out, say so as fact in the first sentence and read the seats against it: the published split follows the count, the twelve seats are twelve people, so say what they show that the count does not. When the brief carries talk, name the loudest lines people used, in plain words. Say what the share means (who these people are, what it would take); when a small side holds a seat, that seat's own words are what makes the small share real. Vary the sentence shapes. Never name a source or a publication; never use the words research, model, modeled, synthetic, estimated, panel, sample, confidence, pipeline, data. If the prior note says the seats departed from the audience's own leaning, explain what accounts for it in the read rather than overriding the room. When the question was asked on the clock (the stimulus carries what_just_played), open the read with what the room said (the share in words and the reason that carried it), never with the clock or the scene; the reader is looking at that moment already. Keep the read about that moment and the seats' own dials.
+- chat: the read for the room's chat, two or three sentences: the headline's share in words and people, and the one reason that carried it. No clock, no scene, no preamble; it opens with what the room said.
 - voices: the seat ids of the three or four most telling answers, spread across the options in proportion to the split.
 - probes_next: two follow-up questions you would ask this room next, in your own words as the moderator.
 - facts_used: two to five one-line facts the read leans on, in plain words with no source names.
@@ -1727,9 +1745,10 @@ def _moment_for_seat(stimulus: Optional[dict], seat_no) -> Optional[dict]:
             'what_you_said_in_these_seconds': mine.get('events') or [], 'the_cut': stimulus.get('cut') or {}}
 
 
-def seat_answer(models: Models, card: dict, q: str, framing: str, options: list, brief: dict, memory: list, seed: str, log=None, stimulus: Optional[dict] = None) -> dict:
-    """One seat's answer in character; the deterministic fallback when
-    the model is late or off."""
+def _seat_body(card: dict, q: str, framing: str, options: list, brief: dict, memory: list, stimulus: Optional[dict]) -> dict:
+    """What a seat is handed: its card, its memory, the facts, the talk,
+    how the event came out, the moment on the clock, the question and
+    the board."""
     body = {'you': _card_text(card), 'earlier_in_this_session': memory,
             'facts_the_moderator_gave_the_room': facts_lines(brief, 12), 'what_could_not_be_confirmed': (brief or {}).get('not_found') or [],
             'moderator': framing or q, 'question': q, 'options': [{'id': o['id'], 'label': o['label']} for o in options]}
@@ -1742,6 +1761,13 @@ def seat_answer(models: Models, card: dict, q: str, framing: str, options: list,
     moment = _moment_for_seat(stimulus, card.get('seat'))
     if moment:
         body['what_just_played'] = moment
+    return body
+
+
+def seat_answer(models: Models, card: dict, q: str, framing: str, options: list, brief: dict, memory: list, seed: str, log=None, stimulus: Optional[dict] = None) -> dict:
+    """One seat's answer in character; the deterministic fallback when
+    the model is late or off."""
+    body = _seat_body(card, q, framing, options, brief, memory, stimulus)
     user = json.dumps(body, default=str)[:9000]
     data, call = models.call('persona', PERSONA_SYSTEM, user, max_tokens=420, temperature=0.85, tools=None)
     if log:
@@ -2026,11 +2052,24 @@ def _room_from_segments(by_segment: list, n_rows: int, total_people: int, n_seat
         pct = round(_room_people(i) / float(total_people or 1) * 100.0, 1)
         if pct in multiples or pct < 0.1:
             _shift(i, max(1, int(round(0.0012 * total_people))))
-    if _room_people(k_max) % 10 == 0:
-        _shift(k_max, 1)
     pct_max = round(_room_people(k_max) / float(total_people or 1) * 100.0, 1)
     if pct_max in multiples:
         _shift(k_max, -max(1, int(round(0.0012 * total_people))))
+
+    def _unzero(i):
+        """A few people into row i so neither it nor the row they come from ends in 0 (2026-11-05: the old one-person
+        shift into the largest row left the donor on a 0)."""
+        j = max((k for k in range(n_rows) if k != i), key=lambda k: int(rows_big[k]['people']), default=None)
+        if j is None:
+            return
+        for d in range(1, 10):
+            if (_room_people(i) + d) % 10 != 0 and (_room_people(j) - d) % 10 != 0 and int(rows_big[j]['people']) - d >= 1:
+                _shift(i, d)
+                return
+
+    for i in sorted(range(n_rows), key=lambda k: (k == k_max, k)):
+        if _room_people(i) % 10 == 0 and _room_people(i) > 0:
+            _unzero(i)
     for sr in by_segment:
         _pcts_from_people(sr['distribution'], int(sr.get('people') or 0))
 
@@ -2040,8 +2079,9 @@ def _room_from_segments(by_segment: list, n_rows: int, total_people: int, n_seat
 # When the event the question turns on has a count, the published split sits
 # on the count (calibrate-low-anchor-to-actuals: actuals set the anchor); a
 # published poll before the event outweighs the twelve seats two to one. The
-# seats keep their votes and their lines: they are the voices, the count is
-# the count, and the read says what the seats show that the count does not.
+# seats are the voices, the count is the count, and the read says what the
+# seats show that the count does not. Since room-4 (2026-11-05) the seats are
+# allocated to the count once it is set (``mirror_seats``, below).
 _PARTY_RX = [(re.compile(r"\((?:r|rep|gop|republican)\)", re.I), ' republican '), (re.compile(r"\((?:d|dem|democrat|democratic)\)", re.I), ' democrat '),
              (re.compile(r"\((?:i|ind|independent)\)", re.I), ' independent '), (re.compile(r"\((?:l|lib|libertarian)\)", re.I), ' libertarian '),
              (re.compile(r"\((?:g|green)\)", re.I), ' green ')]
@@ -2178,7 +2218,7 @@ def anchor_plan(options: list, brief: dict, klass: str = '', turnout_fallback: O
             line = f"The published split sits on the count ({parts}; {status})."
             if klass == 'civic' and not nonvote:
                 line += " The published split is of the votes cast; the room had no stayed-home option."
-            line += " The seats are twelve people and keep their votes; say what they show that the count does not."
+            line += " The seats are allocated to the count and voice it; say what they show that the count does not."
             return {'kind': 'result', 'targets': targets, 'weight': None, 'fill_voting': (voting if nonvote in targets else None), 'line': line}
     polls = (brief or {}).get('polls') or []
     if polls and str(ev.get('status') or '') in ('upcoming', 'today', 'none'):
@@ -2303,9 +2343,362 @@ def plain_share(pct: float) -> str:
         return 'about one in five'
     if p >= 8:
         return 'about one in ten'
-    if p >= 3:
-        return 'a small share'
-    return 'a sliver'
+    if p >= 4:
+        return 'about one in twenty'
+    if p >= 2.5:
+        return 'about one in thirty'
+    if p >= 1.5:
+        return 'about one in fifty'
+    if p >= 0.7:
+        return 'about one in a hundred'
+    if p > 0:
+        return 'a sliver'
+    return 'none'
+
+
+# ------------------------------------------- the seats mirror the count
+# Jenna 2026-11-05 (the P-Valley room on S.W.A.T. Exiles: "why would it say 0
+# people would watch?"): twelve seats landed on skip against a count that said
+# about one in twenty watch most Fridays, and the read said 'nobody' beside
+# 'one in twenty'. Three rules, held here:
+#   1. people come from the audience share (share x the people the room stands
+#      for), never from the seat tally; '0 people' only when the count is zero;
+#   2. the seats are allocated to the count by largest remainder, and any side
+#      holding half a seat's worth of the audience holds a seat and speaks;
+#   3. the read states one split, once; a nobody / none / all twelve claim
+#      against a non-zero count is rewritten.
+_NUM_WORDS = ('no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen',
+              'seventeen', 'eighteen', 'nineteen', 'twenty')
+_LEAN_RANK = {'yes': 0.0, 'maybe': 1.0, 'other': 1.5, 'no': 2.0}
+
+
+def num_word(n: int) -> str:
+    n = int(n)
+    return _NUM_WORDS[n] if 0 <= n < len(_NUM_WORDS) else str(n)
+
+
+def allocate_seats(shares: dict, n_seats: int, floor_seats: float = MIRROR_FLOOR_SEATS) -> dict:
+    """Seats per option from the count: {option id: seats}, summing to
+    ``n_seats``. Largest remainder (Hamilton): each option takes the
+    whole seats in its quota (share / 100 x seats) and the leftover seats
+    go to the largest fractional remainders. Then the floor: an option
+    with no seat whose share is worth at least ``floor_seats`` of a seat
+    (half a seat, 50 / n percent: 4.2% with twelve) takes one from the
+    option holding the most seats (ties: the smaller remainder gives).
+    A zero share never holds a seat. 88 / 7 / 5 with twelve seats is
+    10 / 1 / 1; 100 / 0 / 0 is 12 / 0 / 0."""
+    ids = [k for k in shares]
+    n = int(n_seats or 0)
+    if not ids or n <= 0:
+        return {k: 0 for k in ids}
+    vals = {k: max(0.0, float(shares.get(k) or 0.0)) for k in ids}
+    tot = sum(vals.values())
+    if tot <= 0:
+        return {k: 0 for k in ids}
+    quota = {k: vals[k] / tot * n for k in ids}
+    out = {k: int(quota[k]) for k in ids}
+    rem = {k: quota[k] - out[k] for k in ids}
+    left = n - sum(out.values())
+    for k in sorted(ids, key=lambda k: (-rem[k], -vals[k], ids.index(k)))[:max(0, left)]:
+        out[k] += 1
+    floor = float(floor_seats or 0.0)
+    for k in sorted(ids, key=lambda k: -vals[k]):
+        if out[k] == 0 and vals[k] > 0 and quota[k] >= floor:
+            donors = [d for d in ids if out[d] >= 2]
+            if not donors:
+                break
+            d = max(donors, key=lambda d: (out[d], -rem[d]))
+            out[d] -= 1
+            out[k] = 1
+    return out
+
+
+def _lean_gap(a: str, b: str) -> float:
+    return abs(_LEAN_RANK.get(str(a or 'other'), 1.5) - _LEAN_RANK.get(str(b or 'other'), 1.5))
+
+
+def mirror_seats(opts_out: list, by_segment: list, answers: list, roster: list, segments: list) -> dict:
+    """Allocate the seats to the count, in place on ``answers``: in each
+    segment, largest remainder over the segment's own rows (the floor at
+    half a seat of the room), then the room-level floor (a side worth
+    half a room seat with no seat anywhere takes one in the segment
+    where it runs strongest). Seats already on an option keep it, the
+    surest first; the rest move to the nearest short option (a no moves
+    to a maybe before a yes), the least sure first. Returns the plan:
+    {'alloc': {option id: seats}, 'moved': [{seat, from, to}],
+    'floor_pct': <half a seat, as a share of the room>}; the published
+    shares and people (the count) are never touched."""
+    ids = [o['id'] for o in opts_out]
+    if not ids or not roster:
+        return {'alloc': {}, 'moved': [], 'floor_pct': None}
+    by_id = {o['id']: o for o in opts_out}
+    n_total = len(roster)
+    by_seat = {int(a['seat']): a for a in answers}
+    seg_rows = {sr['segment']: sr for sr in by_segment}
+    alloc_seg = {}
+    for s in segments:
+        rs = [r for r in roster if r.get('segment') == s['label']]
+        if not rs:
+            continue
+        sr = seg_rows.get(s['label']) or {}
+        dist = sr.get('distribution') or []
+        shares = {ids[i]: float((dist[i] or {}).get('pct') or 0.0) for i in range(min(len(ids), len(dist)))} or {o['id']: float(o.get('pct') or 0.0) for o in opts_out}
+        for k in ids:
+            shares.setdefault(k, 0.0)
+        alloc_seg[s['label']] = allocate_seats(shares, len(rs), MIRROR_FLOOR_SEATS * len(rs) / float(n_total))
+    # the room-level floor: a side worth half a room seat holds one somewhere
+    room_alloc = {k: sum(a.get(k, 0) for a in alloc_seg.values()) for k in ids}
+    for k in sorted(ids, key=lambda k: -float(by_id[k].get('pct') or 0.0)):
+        if room_alloc[k] == 0 and float(by_id[k].get('pct') or 0.0) >= 50.0 / n_total and float(by_id[k].get('pct') or 0.0) > 0:
+            best = None
+            for lab, a in alloc_seg.items():
+                dist = (seg_rows.get(lab) or {}).get('distribution') or []
+                share = float((dist[ids.index(k)] or {}).get('pct') or 0.0) if ids.index(k) < len(dist) else 0.0
+                donors = [d for d in ids if a.get(d, 0) >= 2]
+                if donors and (best is None or share > best[0]):
+                    best = (share, lab, max(donors, key=lambda d: a[d]))
+            if best:
+                _, lab, d = best
+                alloc_seg[lab][d] -= 1
+                alloc_seg[lab][k] = 1
+                room_alloc = {kk: sum(a.get(kk, 0) for a in alloc_seg.values()) for kk in ids}
+    moved = []
+    for s in segments:
+        rs = [r for r in roster if r.get('segment') == s['label']]
+        want = dict(alloc_seg.get(s['label']) or {})
+        if not rs or not want:
+            continue
+        have = {k: [] for k in ids}
+        stray = []   # seats on an option the board no longer carries ('other')
+        for r in rs:
+            a = by_seat.get(int(r['seat']))
+            oid = (a or {}).get('option') if a and a.get('option') in by_id else None
+            (have[oid] if oid else stray).append(int(r['seat']))
+        # each short option takes a seat from a side holding more than the count gives it: the nearest stance first (a no
+        # moves to a maybe before a yes), then the seat whose own words already touched that option, then the least sure
+        for k in sorted(ids, key=lambda k: -(want.get(k, 0) - len(have[k]))):
+            while len(have[k]) < want.get(k, 0):
+                cands = [(j, sid) for j in ids if len(have[j]) > want.get(j, 0) for sid in have[j]] + [(None, sid) for sid in stray]
+                if not cands:
+                    break
+
+                def _fit(c):
+                    j, sid = c
+                    a = by_seat.get(sid) or {}
+                    return (_lean_gap(by_id[j].get('lean') if j else 'other', by_id[k].get('lean')), -_label_hits(a.get('line') or '', by_id[k].get('label')), int(a.get('confidence') or 0), sid)
+                j, sid = min(cands, key=_fit)
+                (have[j] if j else stray).remove(sid)
+                have[k].append(sid)
+                a = by_seat.get(sid) or {}
+                moved.append({'seat': sid, 'from': a.get('option'), 'to': k})
+                a['option'] = k
+                a['option_label'] = by_id[k]['label']
+                a['mirrored'] = True
+    return {'alloc': room_alloc, 'moved': moved, 'floor_pct': round(50.0 / n_total, 2)}
+
+
+def retally(opts_out: list, by_segment: list, answers: list, roster: list) -> None:
+    """The raw tally on every option and segment row from the answers as
+    they stand (after the seats are mirrored); the published shares and
+    people stay."""
+    n_total = len(roster) or 1
+    by_seat = {int(a['seat']): a for a in answers}
+    for o in opts_out:
+        seats = sorted(int(a['seat']) for a in answers if a.get('option') == o['id'])
+        o['seats'], o['seats_n'], o['tally'], o['room_pct'] = seats, len(seats), f"{len(seats)} of {n_total}", round(len(seats) / n_total * 100.0, 1)
+    for sr in by_segment:
+        rs = [r for r in roster if r.get('segment') == sr.get('segment')]
+        sr['tally'] = [{'label': o['label'], 'seats': len([r for r in rs if (by_seat.get(int(r['seat'])) or {}).get('option') == o['id']])} for o in opts_out]
+
+
+def _fallback_voice(label: str, lean: str, seed: str, seat: int) -> str:
+    lines = {'yes': (f"{label}. That is me, and I am not the only one in my group chat.", f"{label}. Count me in that group; it is what my week actually looks like.",
+                     f"{label}. That is honestly where I am with it right now."),
+             'no': (f"{label}. That is me, and I do not see it changing.", f"{label}. That is honestly where I am with it.", f"{label}. Put me down for that one."),
+             'maybe': (f"{label}. That is about where I am, somewhere in the middle.", f"{label}. That is me, and it could go either way.", f"{label}. I would not swear to more than that.")}
+    pool = lines.get(str(lean or ''), lines['maybe'])
+    return pool[int(unit('mirror-voice', seed, seat) * len(pool)) % len(pool)]
+
+
+def revoice_seat(models: Models, card: dict, q: str, framing: str, options: list, option_id: str, brief: dict, memory: list, seed: str, log=None,
+                 stimulus: Optional[dict] = None, earlier: str = '') -> dict:
+    """A moved seat argues the stance the count gave it, in character;
+    the deterministic line when the model is off or late."""
+    o = next((x for x in options if x['id'] == option_id), None) or {'id': option_id, 'label': option_id, 'lean': 'other'}
+    body = _seat_body(card, q, framing, options, brief, memory, stimulus)
+    body['your_answer'] = {'id': o['id'], 'label': o['label']}
+    body['why_you_are_asked_again'] = 'A real share of this audience lands on this answer and you are one of them; say why, as yourself.'
+    data, call = models.call('persona', MIRROR_SYSTEM, json.dumps(body, default=str)[:9000], max_tokens=420, temperature=0.85, tools=None)
+    if log:
+        log('mirror', call)
+    if isinstance(data, dict) and str(data.get('line') or '').strip():
+        try:
+            conf = int(clamp(int(float(data.get('confidence') or 3)), 1, 5))
+        except (TypeError, ValueError):
+            conf = 3
+        return {'line': scrub(str(data['line']).strip())[:520], 'confidence': conf, 'reason': scrub(str(data.get('reason') or '').strip())[:240], 'fallback': False}
+    return {'line': _fallback_voice(o['label'], o.get('lean') or 'other', seed, int(card.get('seat') or 0)), 'confidence': 3, 'reason': 'one of the people who land here', 'fallback': True}
+
+
+def _lead_rows(opts_out: list) -> tuple:
+    """(the side the headline leads with, the largest other row): the yes
+    side when the board has one, else the largest row."""
+    yes = [o for o in opts_out if (o.get('lean') or 'other') == 'yes']
+    rows = sorted(opts_out, key=lambda o: -float(o.get('pct') or 0.0))
+    if yes:
+        lead = {'label': yes[0]['label'] if len(yes) == 1 else 'yes', 'pct': sum(float(o.get('pct') or 0.0) for o in yes), 'people': sum(int(o.get('people') or 0) for o in yes),
+                'seats_n': sum(int(o.get('seats_n') or len(o.get('seats') or [])) for o in yes), 'lean': 'yes', 'ids': [o['id'] for o in yes]}
+        rest = next((o for o in rows if o['id'] not in lead['ids']), None)
+    else:
+        lead = {'label': rows[0]['label'], 'pct': float(rows[0].get('pct') or 0.0), 'people': int(rows[0].get('people') or 0), 'seats_n': int(rows[0].get('seats_n') or len(rows[0].get('seats') or [])),
+                'lean': rows[0].get('lean') or 'other', 'ids': [rows[0]['id']]} if rows else {}
+        rest = rows[1] if len(rows) > 1 else None
+    return lead, rest
+
+
+def _quoted(label: str) -> str:
+    s = re.sub(r"^(?:yes|no)\b[,:]?\s*", '', str(label or '').strip(), flags=re.I).strip().rstrip('.')
+    return s[0].upper() + s[1:] if s else str(label or '')
+
+
+def _seats_words(n: int, of: int) -> str:
+    if of <= 0:
+        return ''
+    if n <= 0:
+        return 'no seat in the room'
+    if n == of:
+        return f"all {num_word(of)} seats"
+    return f"{num_word(n)} of the {num_word(of)} seats"
+
+
+def headline_for(opts_out: list, total_people: int, n_seats: int, audience: str) -> tuple:
+    """The headline and its people: the lead side's share in plain words,
+    of the people the room stands for, the people that share comes to
+    (never the seat tally), the option in the board's words, then the
+    seats; then the largest other side the same way. ('about one in
+    twenty of 6.09M P-Valley viewers, roughly 329.1K people, are a yes
+    (...): one of the twelve seats.')"""
+    if not opts_out:
+        return '', 0
+    lead, rest = _lead_rows(opts_out)
+    if not lead:
+        return '', 0
+    aud = str(audience or 'people').strip()
+    size = f"the {human_people(total_people)} {aud}" if total_people else aud
+    share = plain_share(lead['pct'])
+    if lead['people'] <= 0 and lead['pct'] <= 0:
+        if lead['lean'] == 'yes':
+            head = f"None of {size} are a yes" + (f" (\"{_quoted(lead['label'])}\")" if lead['label'] != 'yes' else '')
+        else:
+            head = f"None of {size} land on \"{_quoted(lead['label'])}\""
+        head += f": {_seats_words(0, n_seats)}." if n_seats else '.'
+    else:
+        who = f"are a yes (\"{_quoted(lead['label'])}\")" if lead['lean'] == 'yes' and lead['label'] != 'yes' else ('are a yes' if lead['lean'] == 'yes' else f"land on \"{_quoted(lead['label'])}\"")
+        head = f"{share[0].upper()}{share[1:]} of {size}, roughly {human_people(lead['people'])} people, {who}"
+        head += f": {_seats_words(lead['seats_n'], n_seats)}." if n_seats else '.'
+    if rest is not None and float(rest.get('pct') or 0.0) > 0:
+        rs = plain_share(float(rest.get('pct') or 0.0))
+        tail = f" {rs[0].upper()}{rs[1:]}, roughly {human_people(int(rest.get('people') or 0))} people, say \"{_quoted(rest['label'])}\""
+        rn = int(rest.get('seats_n') or len(rest.get('seats') or []))
+        tail += f": {_seats_words(rn, n_seats)}." if n_seats else '.'
+        head += tail
+    return scrub(head), int(lead['people'])
+
+
+_SENT_SPLIT_RX = re.compile(r'(?<=[.!?])\s+(?=[A-Z0-9"\'(])')
+_ZERO_PEOPLE_RX = re.compile(r"\b(?:nobody|no one|no-one|none of (?:them|these|those|the room|the audience|this group|the group)|not (?:a )?single (?:person|one|viewer|fan)|not one of (?:them|these)|zero people|0 people)\b", re.I)
+_ZERO_SEATS_RX = re.compile(r"\b(?:not (?:a )?single seat|no seats?|none of the (?:seats|twelve|\d{1,2})|not one (?:seat|of the seats|of the twelve)|zero seats|0 seats|0 of (?:the )?(?:\d{1,2}|twelve))\b", re.I)
+_WHOLE_ROOM_RX = re.compile(r"\b(?:the\s+)?(?:whole|entire) room\b", re.I)
+
+
+_COUNT_NOUNS = r"(?:episodes?|seasons?|months?|weeks?|days?|years?|hours?|minutes?|nights?|dollars?|bucks|shows?|films?|movies?|songs?|tracks?|albums?|games?|books?|times|seats? of)"
+
+
+def _all_seats_rx(n_seats: int):
+    """'all twelve seats', 'all 12 of them', 'every one of the twelve',
+    'every seat', 'all of the seats', 'all twelve landed': the room's
+    own seat count only, and never a count of something else ('all
+    twelve episodes' is left alone). Group 1 is set when the seats are
+    named, so the rewrite keeps the noun."""
+    n = f"(?:{num_word(n_seats)}|{int(n_seats)})"
+    return re.compile(r"\b(?:all|every one of|each of)\s+(?:(?:of\s+)?the\s+)?" + n + r"(?:\s+(seats?|of them|of the seats|of the room|in the room|people in the room)\b|\b(?!\s+" + _COUNT_NOUNS + r"\b))"
+                      r"|\b(?:all|every one of|each of)\s+(?:(?:of\s+)?the\s+)?(seats|of them|of the seats)\b|\bevery (seat)\b", re.I)
+
+
+def _label_hits(sentence: str, label: str) -> int:
+    toks = {_stem(t) for t in re.findall(r"[a-z0-9']+", str(label or '').lower()) if len(t) >= 4 and t not in _LABEL_STOP and t not in _GENERIC_LABEL}
+    sent = {_stem(t) for t in re.findall(r"[a-z0-9']+", str(sentence or '').lower())}
+    return len(toks & sent)
+
+
+def _claim_row(sentence: str, opts_out: list, lead_ids: list) -> Optional[dict]:
+    """The row a nobody / none claim is about: the non-lead row whose
+    label words sit in the sentence (stemmed, so 'watching' finds
+    'watch'); None when the sentence names no row, so a claim about
+    something else ('nobody is canceling') is left alone."""
+    cands = [o for o in opts_out if o['id'] not in lead_ids]
+    if not cands:
+        return None
+    scored = sorted(cands, key=lambda o: (-_label_hits(sentence, o.get('label')), -float(o.get('pct') or 0.0)))
+    return scored[0] if _label_hits(sentence, scored[0].get('label')) > 0 else None
+
+
+def cohere_read(text: str, opts_out: list, n_seats: int, headline: str = '') -> str:
+    """One split, stated once. A nobody / no one / none / not one / 0
+    people claim about a side the count gives a share becomes that share
+    in plain words; a no seat / 0 of twelve claim becomes the seats it
+    holds; all twelve / every seat / the whole room becomes the lead's
+    own tally when a seat sits elsewhere. A read that does not open on
+    the split opens with the headline. A zero count keeps its none."""
+    s = str(text or '').strip()
+    if not s or not opts_out:
+        return s
+    rows = sorted(opts_out, key=lambda o: -float(o.get('pct') or 0.0))
+    lead = rows[0]
+    lead_n = int(lead.get('seats_n') or len(lead.get('seats') or []))
+    all_rx = _all_seats_rx(n_seats) if n_seats else None
+    out = []
+    for sent in _SENT_SPLIT_RX.split(s):
+        t = sent
+        if _ZERO_PEOPLE_RX.search(t):
+            row = _claim_row(t, opts_out, [lead['id']])
+            if row is not None and (float(row.get('pct') or 0.0) > 0 or int(row.get('people') or 0) > 0):
+                words = plain_share(float(row.get('pct') or 0.0))
+                t = _ZERO_PEOPLE_RX.sub(lambda m: (words + ' of them') if m.group(0).lower().startswith('none of') else words, t)
+        if _ZERO_SEATS_RX.search(t):
+            row = _claim_row(t, opts_out, [lead['id']])
+            if row is not None:
+                n = int(row.get('seats_n') or len(row.get('seats') or []))
+                if n > 0:
+                    t = _ZERO_SEATS_RX.sub(lambda m: (f"{n} of {n_seats}" if re.match(r"0 of", m.group(0)) else f"{num_word(n)} seat" + ('' if n == 1 else 's')), t)
+        if all_rx is not None and lead_n < n_seats:
+            if all_rx.search(t):
+                t = all_rx.sub(lambda m: f"{num_word(lead_n)} of the {num_word(n_seats)}" + (' seats' if any(m.groups()) else ''), t)
+            if _WHOLE_ROOM_RX.search(t):
+                t = _WHOLE_ROOM_RX.sub('most of the room' if lead_n * 2 >= n_seats else 'much of the room', t)
+        t = t.strip()
+        if t and t[0].islower():
+            t = t[0].upper() + t[1:]
+        out.append(t)
+    fixed = ' '.join(x for x in out if x)
+    if headline and not _opens_on_split(fixed, opts_out):
+        fixed = (headline.strip() + ' ' + fixed).strip()
+    return re.sub(r"\s{2,}", ' ', fixed)
+
+
+def _opens_on_split(text: str, opts_out: list) -> bool:
+    """The first two sentences carry a share in words, a percent, or the
+    seats."""
+    parts = _SENT_SPLIT_RX.split(str(text or '').strip())
+    head = ' '.join(parts[:2]).lower()
+    if not head:
+        return False
+    if re.search(r"\d+(?:\.\d+)?\s*%|\bof the (?:twelve|sixteen|ten|eight|six|four|\d{1,2}) seats\b|\b(?:in|of) the room\b", head):
+        return True
+    words = {plain_share(float(o.get('pct') or 0.0)) for o in opts_out}
+    words |= {'nearly everyone', 'almost nine in ten', 'about four in five', 'about three in four', 'about two in three', 'about three in five', 'about half', 'about two in five',
+              'about one in three', 'about one in four', 'about one in five', 'about one in ten', 'about one in twenty', 'a sliver', 'none of'}
+    return any(w in head for w in words if w)
 
 
 def prior_note(twin: dict, q: str, kind: str, opts_out: list, stimulus: Optional[dict], last: Optional[dict], seed: str) -> dict:
@@ -2330,24 +2723,27 @@ def prior_note(twin: dict, q: str, kind: str, opts_out: list, stimulus: Optional
         return {}
 
 
-def _fallback_read(q: str, kind: str, opts_out: list, by_segment: list, prior: dict) -> str:
+def _fallback_read(q: str, kind: str, opts_out: list, by_segment: list, prior: dict, headline: str = '') -> str:
     rows = sorted(opts_out, key=lambda o: -float(o.get('pct') or 0))
     if not rows:
         return ''
     top = rows[0]
     n = len(top.get('seats') or [])
-    line = f"{plain_share(top['pct']).capitalize()} of this audience lands on {top['label'].lower()}" + (f" ({top.get('tally') or n} in the room)" if top.get('tally') else '') + f", about {int(top['people']):,} people"
-    if len(rows) > 1:
-        line += f"; {plain_share(rows[1]['pct'])} say {rows[1]['label'].lower()}"
+    if headline:
+        line = headline.strip()
+    else:
+        line = f"{plain_share(top['pct']).capitalize()} of this audience lands on {top['label'].lower()}" + (f" ({top.get('tally') or n} in the room)" if top.get('tally') else '') + f", about {int(top['people']):,} people"
+        if len(rows) > 1:
+            line += f"; {plain_share(rows[1]['pct'])} say {rows[1]['label'].lower()}"
+        line += '.'
     if len(rows) > 2:
         tail = [r for r in rows[2:] if float(r.get('pct') or 0) < 3.0]
         if tail:
-            line += ', and the rest is a sliver each'
+            line += ' The rest is a sliver each.'
         else:
-            line += f", {plain_share(rows[2]['pct'])} {rows[2]['label'].lower()}"
-    line += '.'
+            line += f" {plain_share(rows[2]['pct']).capitalize()} say \"{_quoted(rows[2]['label'])}\"."
     yes = sum(float(o.get('pct') or 0) for o in opts_out if o.get('lean') == 'yes')
-    if any(o.get('lean') == 'yes' for o in opts_out):
+    if any(o.get('lean') == 'yes' for o in opts_out) and sum(1 for o in opts_out if o.get('lean') == 'yes') > 1:
         line += f" Taken together, {plain_share(yes)} of the audience is a yes."
     if len(by_segment) > 1:
         best = max(by_segment, key=lambda s: float(s.get('yes_pct') or 0))
@@ -2400,15 +2796,18 @@ def short_read(text: str, n: int = 2) -> str:
     return ' '.join(out)
 
 
-def moderator_read(models: Models, twin: dict, q: str, kind: str, framing: str, opts_out: list, by_segment: list, answers: list, brief: dict, prior: dict, roster: list, log=None, in_cut: bool = False) -> dict:
+def moderator_read(models: Models, twin: dict, q: str, kind: str, framing: str, opts_out: list, by_segment: list, answers: list, brief: dict, prior: dict, roster: list, log=None, in_cut: bool = False,
+                   headline: str = '') -> dict:
     """The synthesis: read, read_short (the chat's version), voices,
     probes_next, facts_used; the deterministic write-up when the model
-    is off or late."""
+    is off or late. The read and the chat line pass ``cohere_read``: one
+    split, stated once, people from the share."""
     tb = _twin_brief(twin)
-    user = json.dumps({'question': q, 'kind': kind, 'framing': framing,
+    user = json.dumps({'question': q, 'kind': kind, 'framing': framing, 'headline': headline or None,
                        'options': [{'id': o['id'], 'label': o['label'], 'lean': o['lean'], 'published_pct': o['pct'], 'published_in_words': plain_share(o['pct']), 'people': o['people'],
                                     'in_the_room': o.get('tally') or f"{len(o['seats'])} of {len(roster)}", 'seats': o['seats']} for o in opts_out],
                        'lean_totals': {k: {'published_pct': round(sum(float(o['pct']) for o in opts_out if o['lean'] == k), 1), 'in_words': plain_share(sum(float(o['pct']) for o in opts_out if o['lean'] == k)),
+                                            'people': sum(int(o.get('people') or 0) for o in opts_out if o['lean'] == k),
                                             'in_the_room': f"{sum(len(o['seats']) for o in opts_out if o['lean'] == k)} of {len(roster)}"} for k in ('yes', 'maybe', 'no') if any(o['lean'] == k for o in opts_out)},
                        'by_segment': [{k: v for k, v in sr.items() if k != 'tally'} for sr in by_segment],
                        'answers': [{'seat': a['seat'], 'name': a['name'], 'option': a['option_label'], 'confidence': a['confidence'], 'line': a['line'], 'reason': a['reason']} for a in answers],
@@ -2425,6 +2824,9 @@ def moderator_read(models: Models, twin: dict, q: str, kind: str, framing: str, 
         if in_cut:   # a question on the clock: the read opens with the room, never the clock and the scene
             out['read'] = _drop_clock_opening(out['read'])
             out['read_short'] = _drop_clock_opening(out['read_short'])
+        out['read'] = cohere_read(out['read'], opts_out, len(roster), headline)[:1600]
+        if out['read_short']:
+            out['read_short'] = cohere_read(out['read_short'], opts_out, len(roster), short_read(headline, 1) if headline else '')[:700]
         picks = []
         for v in (data.get('voices') or [])[:VOICES_N + 1]:
             try:
@@ -2438,7 +2840,7 @@ def moderator_read(models: Models, twin: dict, q: str, kind: str, framing: str, 
         out['facts_used'] = [scrub(str(f).strip()) for f in (data.get('facts_used') or []) if str(f).strip()][:6]
     if not out['read']:
         out['fallback'] = True
-        out['read'] = _fallback_read(q, kind, opts_out, by_segment, prior)
+        out['read'] = _fallback_read(q, kind, opts_out, by_segment, prior, headline)
     if not out['read_short']:
         out['read_short'] = short_read(out['read'])
     if not out['voices']:
@@ -2769,6 +3171,53 @@ def run_question(ctx: dict) -> dict:
         except Exception as e:
             print(f"[twin-room] anchor skipped: {str(e)[:120]}")
             plan = {}
+        # 4b. the seats mirror the count (Jenna 2026-11-05): the published split is the count; the seats are allocated to it
+        #     by largest remainder with a seat for any side worth half a seat, and a moved seat argues its stance in character
+        t = time.time()
+        total_people = int(sum(int(sg.get('people') or 0) for sg in session['group']['segments']))
+        if total_people <= 0:
+            try:
+                from migration.digital_twin_pilot import room_people as _room_people
+                total_people = int(_room_people(roster, session['group']['segments'], twin) or 0)
+            except Exception:
+                total_people = 0
+        mirror = {'alloc': {}, 'moved': [], 'floor_pct': None}
+        try:
+            mirror = mirror_seats(opts_out, by_segment, rec['answers'], roster, session['group']['segments'])
+            if mirror['moved']:
+                by_seat0 = {int(a['seat']): a for a in rec['answers']}
+                mpool = ThreadPoolExecutor(max_workers=max(1, min(len(mirror['moved']), 16)))
+                mfut = {mpool.submit(revoice_seat, models, cards[int(m['seat'])], q, rec.get('framing') or '', options, m['to'], brief, memories[int(m['seat'])], seed, log, stim): int(m['seat'])
+                        for m in mirror['moved'] if int(m['seat']) in cards}
+                mpending = set(mfut)
+                mdeadline = time.time() + BUDGET_S['mirror']
+                while mpending and time.time() < mdeadline:
+                    mdone, mpending = wait(mpending, timeout=max(0.2, min(1.0, mdeadline - time.time())), return_when=FIRST_COMPLETED)
+                    for f in mdone:
+                        sid = mfut[f]
+                        try:
+                            v = f.result()
+                        except Exception as e:
+                            print(f"[twin-room] seat {sid} revoice failed: {e}")
+                            v = revoice_seat(Models(model_fn=lambda *a_, **k_: None), cards[sid], q, rec.get('framing') or '', options, by_seat0[sid]['option'], brief, [], seed)
+                        by_seat0[sid].update({'line': v['line'], 'confidence': v['confidence'], 'reason': v['reason'], 'fallback': bool(v.get('fallback'))})
+                        by_seat0[sid]['answered_at'] = round(time.time(), 3)
+                for f in mpending:
+                    f.cancel()
+                    sid = mfut[f]
+                    v = revoice_seat(Models(model_fn=lambda *a_, **k_: None), cards[sid], q, rec.get('framing') or '', options, by_seat0[sid]['option'], brief, [], seed)
+                    by_seat0[sid].update({'line': v['line'], 'confidence': v['confidence'], 'reason': v['reason'], 'fallback': True})
+                    fallbacks.append(f"seat {sid} late")
+                mpool.shutdown(wait=False)
+            retally(opts_out, by_segment, rec['answers'], roster)
+        except Exception as e:
+            traceback.print_exc()
+            print(f"[twin-room] mirror skipped: {str(e)[:120]}")
+            fallbacks.append('mirror')
+        by_label = {o['id']: o['label'] for o in opts_out}
+        trail['mirror'] = {'alloc': {by_label.get(k, k): v for k, v in (mirror.get('alloc') or {}).items()}, 'floor_pct': mirror.get('floor_pct'),
+                           'moved': [{'seat': m['seat'], 'from': by_label.get(m['from'], m['from']), 'to': by_label.get(m['to'], m['to'])} for m in mirror.get('moved') or []]}
+        timings['mirror_s'] = round(time.time() - t, 2)
         rec['options'] = opts_out
         rec['option_labels'] = [o['label'] for o in opts_out]
         rec['distribution'] = [{'label': o['label'], 'pct': o['pct'], 'people': o['people']} for o in opts_out]
@@ -2776,6 +3225,7 @@ def run_question(ctx: dict) -> dict:
         rec['seats_total'] = len(roster)
         rec['tally'] = [{'label': o['label'], 'seats': o['seats_n'], 'of': len(roster), 'room_pct': o['room_pct']} for o in opts_out]
         rec['yes_pct'] = round(sum(float(o['pct']) for o in opts_out if o['lean'] == 'yes'), 1) if any(o['lean'] == 'yes' for o in opts_out) else None
+        rec['headline'], rec['headline_people'] = headline_for(opts_out, total_people, len(roster), _twin_name(twin))
         prior = prior_note(twin, base_q, kind, opts_out, stim, last, seed)
         if plan:
             prior = dict(prior or {})
@@ -2785,7 +3235,7 @@ def run_question(ctx: dict) -> dict:
         # 5. the moderator reads the room
         t = time.time()
         _publish(ctx, 'moderator is reading', payload_too=True)
-        mr = moderator_read(models, twin, q, kind, rec.get('framing') or '', opts_out, by_segment, rec['answers'], brief, prior, roster, log=log, in_cut=_in_cut(stim))
+        mr = moderator_read(models, twin, q, kind, rec.get('framing') or '', opts_out, by_segment, rec['answers'], brief, prior, roster, log=log, in_cut=_in_cut(stim), headline=rec['headline'])
         if mr.get('fallback'):
             fallbacks.append('read')
         by_seat = {int(a['seat']): a for a in rec['answers']}
@@ -2876,6 +3326,10 @@ def _deterministic_fill(ctx: dict):
     rec['distribution'] = rows
     rec['tally'] = []
     rec['by_segment'] = old.get('by_segment') or []
+    try:
+        rec['headline'], rec['headline_people'] = headline_for(rec['options'], int(sum(int(sg.get('people') or 0) for sg in (session.get('group') or {}).get('segments') or [])), 0, _twin_name(ctx.get('twin') or {}))
+    except Exception:
+        rec['headline'], rec['headline_people'] = '', None
     rec['read'] = scrub(str(old.get('read') or ''))
     rec['read_short'] = short_read(rec['read'])
     rec['voices'] = [dict(v, seat=next((r['seat'] for r in ctx['roster'] if r['name'] == v.get('name')), None)) for v in (old.get('voices') or [])]
@@ -2908,7 +3362,7 @@ def ask_room(session: dict, twins_by_key: dict, q: str, *, kind: Optional[str] =
     qi = len(session.get('questions') or [])
     job_id = uuid.uuid4().hex[:12]
     rec = {'id': f"q{qi + 1}", 'q': q, 'kind': kind, 'framing': '', 'options': [], 'option_labels': list(cls.get('options') or []), 'distribution': [], 'by_segment': [],
-           'read': '', 'read_short': '', 'voices': [], 'answers': [], 'probes_next': [], 'facts_used': [], 'tally': [], 'seats_total': len(group.get('roster') or []), 'timings': {},
+           'read': '', 'read_short': '', 'headline': '', 'headline_people': None, 'voices': [], 'answers': [], 'probes_next': [], 'facts_used': [], 'tally': [], 'seats_total': len(group.get('roster') or []), 'timings': {},
            'stage': 'researching', 'job_id': job_id, 'topic': P.topic_of(q if kind != 'probe' else str((last or {}).get('q') or q)),
            'stimulus': stim, 'follows': last['id'] if (kind == 'probe' and last) else None, 'price': stim.get('price'), 'yes_pct': None,
            'asked_by': asked_by or session.get('created_by'), 'asked_at': _now(), 'started_at': _now(), 'finished_at': None, 'engine': ROOM_VERSION,
@@ -2940,6 +3394,7 @@ def ask_room(session: dict, twins_by_key: dict, q: str, *, kind: Optional[str] =
 
 __all__ = ['ask_room', 'run_question', 'all_sessions', 'find_session', 'SESSION_LISTS', 'research', 'media_desk', 'merge_media', 'talk_lines', 'coverage_lines',
            'match_targets', 'anchor_plan', 'anchor_rows', 'media_key', 'MEDIA_SYSTEM', 'RESEARCH_CLASS_GUIDANCE', 'moderator_options', 'seat_answer', 'moderator_read', 'weigh', 'prior_over_options', 'plain_share', 'persona_card', 'persona_bio', 'ensure_personas', 'refresh_memory',
+           'allocate_seats', 'mirror_seats', 'retally', 'revoice_seat', 'headline_for', 'cohere_read', 'num_word', 'MIRROR_FLOOR_SEATS', 'MIRROR_SYSTEM',
            'memory_for', 'prior_note', 'drop_ruled_out', 'scrub', 'has_banned', 'chat_lines', 'short_read', 'room_enabled', 'model_available', 'set_model_fn', 'topic_hash', 'topic_tokens',
            'topics_overlap', 'research_key', 'facts_key', 'job_key', 'job_read', 'Models', 'MODELS', 'BUDGET_S', 'ALPHA_SEATS', 'STAGES', 'STAGE_LABEL', 'ROOM_VERSION',
            'JOB_PREFIX', 'RESEARCH_PREFIX', 'FACTS_PREFIX']
