@@ -336,16 +336,30 @@ def _result(sess: dict, twin_name: str) -> dict:
     return out
 
 
-def _finalize_if_ready(sess, s3):
+def _finalize_if_ready(sess, s3, payload=None):
     """A key caller has no live clock: the moment the room has watched,
-    the cut has 'played' and the scorecard is final. Norms grow once."""
+    the cut has 'played' and the scorecard is final. Norms grow once;
+    the team gets the results once (twin_notify, Jenna 2026-11-05)."""
     from migration import digital_twin_pilot as PI
     if sess.get('status') in ('ready', 'playing') and sess.get('play_charged') and (sess.get('dial') or {}).get('value'):
         PI.mark_playing(sess)
         PI.stop_session(sess)
         PI.record_norms(sess, s3=s3)
+        if payload is not None and sess.get('scorecard'):
+            _team_notice('notify_pilot_results_later', payload, sess, s3=s3)
         return True
     return False
+
+
+def _team_notice(fn_name, *args, **kw):
+    """A team notice on a screening (prometheus.twin_notify): idempotent
+    per event there, never in the way of the call here."""
+    try:
+        from prometheus import twin_notify as TN
+        return getattr(TN, fn_name)(*args, **kw)
+    except Exception as e:
+        print(f"[screenings] team notice {fn_name} skipped: {e}")
+        return None
 
 
 def _load(user, screening_id: str):
@@ -503,6 +517,7 @@ def v1_screening_open():
         pass
     DT.save_twin(s3, key, payload)
     _index_write(s3, {'screening_id': sess['screening_id'], 'twin_key': key, 'session_id': sess['id'], 'key_id': _key_id(user), 'owner': A._uname(user), 'mode': mode, 'created_at': sess['created_at']})
+    _team_notice('notify_pilot_created', payload, sess, username=A._uname(user) or _key_id(user), via='api', s3=s3)   # a test created over the API
     # the watch: a file goes to the read worker; words and options run here
     job_id = None
     if (sess.get('media') or {}).get('s3_key'):
@@ -519,7 +534,7 @@ def v1_screening_open():
         try:
             PI.prepare_watch(sess, {key: payload}, duration_s=float((sess.get('media') or {}).get('runtime_s') or 0), title=str((sess.get('media') or {}).get('title') or title),
                              transcript=sess.get('transcript'), usage_extras=A._usage_extras(user), s3=s3)
-            _finalize_if_ready(sess, s3)
+            _finalize_if_ready(sess, s3, payload)
         except Exception:
             traceback.print_exc()
         DT.save_twin(s3, key, payload)
@@ -550,7 +565,7 @@ def v1_screening_get(screening_id):
             except Exception:
                 traceback.print_exc()
             changed = True
-    if _finalize_if_ready(sess, s3):
+    if _finalize_if_ready(sess, s3, payload):
         changed = True
     if changed:
         DT.save_twin(s3, key, payload)

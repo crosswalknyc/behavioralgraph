@@ -752,6 +752,27 @@ def _room_notify(body, uname):
     return {'username': uname, 'thread_id': str((body or {}).get('thread_id') or '')}
 
 
+def _via(user):
+    """'api' for a key caller, else 'chat' (the door the team notice names)."""
+    try:
+        from .twin_notify import via_for
+        return via_for(user, 'chat')
+    except Exception:
+        return 'chat'
+
+
+def _team_notice(fn_name, *args, **kw):
+    """A team notice on a twin event (prometheus.twin_notify; Jenna
+    2026-11-05): idempotent per event there, never in the way of the
+    reply here."""
+    try:
+        from . import twin_notify as TN
+        return getattr(TN, fn_name)(*args, **kw)
+    except Exception as e:
+        print(f"[twin-lane] team notice {fn_name} skipped: {e}")
+        return None
+
+
 def panel_reply(payload, session, rec, key, user):
     from migration import digital_twin_panel as P
     asked = len(session.get('questions') or [])
@@ -874,6 +895,7 @@ def run_panel(text, body, history, user, ppu=None):
     # opening is free (the session price rides the first question); an
     # empty room with the same twins, segments and seats is reused
     sess = P.find_reusable_session(payload, twins, segments, in_room, created_by=uname)
+    opened = sess is None
     if sess is None:
         sid = uuid.uuid4().hex[:10]
         sess = P.open_session(twins, segments=segments, in_room=in_room, created_by=uname, session_id=sid)
@@ -897,6 +919,8 @@ def run_panel(text, body, history, user, ppu=None):
         rec = P.ask(sess, twins_by_key, q, stimulus=_stimulus(text), voices_fn=_voices_fn(), asked_by=uname,
                     s3=s3, twin_key=key, usage_extras=ppu or None, notify=_room_notify(body, uname))
     DT.save_twin(s3, key, payload)
+    if opened:
+        _team_notice('notify_room_opened', payload, sess, username=uname, via=_via(user), s3=s3)   # a new room, once
     if _PT is not None:
         try:
             _PT.schedule_room_portraits(s3, key, sess, twins_by_key, payload)   # the faces land in the session when they finish
@@ -947,6 +971,7 @@ def run_pilot(text, body, history, user, ppu=None):
     if m:
         title = m.group(1).strip()[:120]
     sess = PI.find_reusable_session(payload, twins, title=title, created_by=uname)
+    opened = sess is None
     if sess is None:
         sess = PI.open_session(twins, title=title or 'Pilot test', created_by=uname, session_id=uuid.uuid4().hex[:10])
         sess['twin_keys'] = [str((t.get('meta') or {}).get('key') or '') for t in twins]
@@ -962,6 +987,8 @@ def run_pilot(text, body, history, user, ppu=None):
     except Exception:
         _PT = None
     DT.save_twin(s3, key, payload)
+    if opened:
+        _team_notice('notify_pilot_created', payload, sess, username=uname, via=_via(user), s3=s3)   # a test created from the chat
     if _PT is not None:
         try:
             _PT.schedule_room_portraits(s3, key, sess, {str((t.get('meta') or {}).get('key') or ''): t for t in twins}, payload)
@@ -1108,6 +1135,7 @@ def run_greenlight(text, body, history, user, ppu, thread_id='', option=''):
     except Exception:
         traceback.print_exc()
     DT.save_twin(s3, key, payload)
+    _team_notice('notify_pilot_created', payload, sess, username=uname, via=_via(user), s3=s3)   # a Script read or Concept test created from the chat
     if _PT is not None:
         try:
             _PT.schedule_room_portraits(s3, key, sess, twins_by_key, payload)
@@ -1294,7 +1322,7 @@ def start_build(user, uname, confirm, *, thread_id='', ask_text='', extras=None,
     from . import twin_named_pull as _TNP
     subject = ' '.join(str(confirm.get('subject') or '').split())[:140]
     inputs = {**{k: confirm.get(k) for k in ('subject', 'subject_kind', 'purpose', 'platform_home', 'format', 'window')}, 'op': 'build',
-              'ask_text': str(ask_text or '')[:400]}
+              'ask_text': str(ask_text or '')[:400], 'via': _via(user)}
     inputs['subject'] = subject
     pullable = _TNP.pullable(inputs)
     if on_file is None:

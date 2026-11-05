@@ -1116,10 +1116,11 @@ def refund(uname, credits, reason, refund_credit=None, job_id=''):
 
 
 def start(user, uname, rec, name, window, *, thread_id='', purpose='', panelists=0, ask_text='', extras=None,
-          start_fn=None, consume_credit=None, is_free=None):
+          start_fn=None, consume_credit=None, is_free=None, via=''):
     """The one starter both doors use: charge once, queue the twin job
     that pulls the audience and builds the twin. Returns (job_id, promise,
-    funds_error)."""
+    funds_error). ``via`` names the door for the team notice when the
+    twin lands ('dashboard'; the chat and the API are read off the user)."""
     import uuid
     from . import digital_twin_job as J
     job_id = uuid.uuid4().hex[:12]
@@ -1128,10 +1129,16 @@ def start(user, uname, rec, name, window, *, thread_id='', purpose='', panelists
     if err:
         return '', '', err
     email = str((user or {}).get('email') or '').strip() if isinstance(user, dict) else ''
+    if not via:
+        try:
+            from .twin_notify import via_for
+            via = via_for(user, 'chat')
+        except Exception:
+            via = 'chat'
     inputs = {'subject': name, 'name': name, 'subject_kind': 'audience', 'purpose': str(purpose or '')[:400], 'window': _normalize_window(window),
               'op': 'build', 'source': 'profile', 'profile_key': '', 'from_list': True, 'url_list_key': rec.get('key') or list_key(rec.get('token')),
               'profile_run_id': profile_run_id, 'charged': charged, 'requester_email': email, 'ask_text': str(ask_text or '')[:400],
-              'panelists': int(panelists or 0) or None, 'thread_id': thread_id}
+              'panelists': int(panelists or 0) or None, 'thread_id': thread_id, 'via': str(via or 'chat')}
     if not inputs['panelists']:
         inputs.pop('panelists')
     J.start('twin_build', job_id, uname, inputs, thread_id=thread_id, extras=extras or {}, start_fn=start_fn)

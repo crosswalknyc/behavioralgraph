@@ -515,6 +515,13 @@ def finish_in_background(sess: dict, twins_by_key: dict, *, key: str, payload: d
             save(key, payload)
         except Exception:
             traceback.print_exc()
+        try:
+            # the team gets the results once the live watch has scored (Jenna 2026-11-05); idempotent per test
+            if sess.get('scorecard') and sess.get('status') == 'stopped':
+                from prometheus.twin_notify import notify_pilot_results
+                notify_pilot_results(payload, sess, s3=s3)
+        except Exception:
+            traceback.print_exc()
 
     threading.Thread(target=run, name=f"pilot-live-finish-{sess.get('id')}", daemon=True).start()
 

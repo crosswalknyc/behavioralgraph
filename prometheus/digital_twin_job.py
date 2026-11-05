@@ -231,6 +231,13 @@ def run_job(job_id, username, inputs, extras=None):
                         ready_message=ready, email=from_list or named_pull)
             except Exception as e:
                 print(f"[twin-job {job_id}] delivered record skipped: {e}")
+            try:
+                # the team hears about every twin built (Jenna 2026-11-05); this is the one landing every path crosses:
+                # the Twins tab, the chat, a list of URLs, a named subject whose audience was pulled first (the then handoff)
+                from .twin_notify import notify_twin_built
+                notify_twin_built(payload, key, username=username, inputs=inputs, s3=s3)
+            except Exception as e:
+                print(f"[twin-job {job_id}] team notice skipped: {e}")
             print(f"[twin-job {job_id}] built -> {key}")
             return rec
         # a run on an existing twin

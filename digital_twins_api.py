@@ -304,6 +304,19 @@ def _nocache(resp):
     return resp
 
 
+def _team_notice(fn_name, *args, **kw):
+    """A team notice on a twin event (prometheus.twin_notify: a twin
+    built, a pilot test created, its results, a focus group room opened;
+    Jenna 2026-11-05). Idempotent per event there; never in the way of
+    the action here."""
+    try:
+        from prometheus import twin_notify as TN
+        return getattr(TN, fn_name)(*args, s3=_s3(), **kw)
+    except Exception as e:
+        print(f"[digital-twins] team notice {fn_name} skipped: {e}")
+        return None
+
+
 def _portraits():
     """The portraits module, or None when it cannot load (the room
     never depends on it)."""
@@ -502,7 +515,7 @@ def dt_build():
               'format': str(body.get('format') or ''), 'platform_home': str(body.get('platform_home') or ''), 'name': str(body.get('name') or '')[:120],
               'window': body.get('window') if isinstance(body.get('window'), dict) else None, 'ask_text': str(body.get('ask_text') or '')[:400], 'op': 'build',
               'source': source if source in ('profile', 'demographics') else '', 'profile_key': profile_key, 'profile_name': profile_name,
-              'demographics': demo_spec if source == 'demographics' else None, 'panelists': panelists}
+              'demographics': demo_spec if source == 'demographics' else None, 'panelists': panelists, 'via': 'dashboard'}
     from prometheus import digital_twin_job as J
     from prometheus import twin_named_pull as TNP
     uname = _uname(user)
@@ -594,7 +607,7 @@ def dt_build_from_list():
     panelists = max(2, min(panelists, DT.PANEL_SEATS_MAX)) if panelists else 0
     job_id, line, funds = TUL.start(user, _uname(user), rec, name, window, thread_id=str(body.get('thread_id') or ''),
                                     purpose=str(body.get('purpose') or '')[:400], panelists=panelists, ask_text=f"Build a twin of {name} from a list",
-                                    extras=_usage_extras(user))
+                                    extras=_usage_extras(user), via='dashboard')
     if funds:
         return jsonify({'success': False, 'guidance': True, 'error': funds}), 402
     return jsonify({'success': True, 'job_id': job_id, 'status': 'queued', 'subject': name, 'message': line, 'price': TUL.price(_uname(user))})
@@ -931,6 +944,8 @@ def dt_panel_open(key):
         except Exception:
             pass
     DT.save_twin(_s3(), key, payload)
+    if reused is None:
+        _team_notice('notify_room_opened', payload, sess, username=_uname(user), via='dashboard')   # a new room, once (never a question)
     first_q = str(body.get('q') or body.get('question') or '').strip()
     rec = None
     if first_q:
@@ -1172,6 +1187,7 @@ def dt_panel_duplicate(key, sid):
         except Exception:
             pass
     DT.save_twin(s3, key, payload)
+    _team_notice('notify_room_opened', payload, sess, username=_uname(user), via='dashboard')   # a duplicate is a new room
     if PT is not None:
         try:
             PT.schedule_room_portraits(s3, key, sess, twins_by_key, payload)
@@ -1381,6 +1397,9 @@ def dt_pilot_open(key):
         except Exception:
             pass
     DT.save_twin(_s3(), key, payload)
+    if reused is None:
+        # a test created (the form, a saved setup run, a duplicate run); a reused empty room is not a new test
+        _team_notice('notify_pilot_created', payload, sess, username=_uname(user), via='dashboard')
     if PT is not None:
         try:
             PT.schedule_room_portraits(_s3(), key, sess, twins_by_key, payload)
@@ -1494,6 +1513,8 @@ def _auto_stop(key, payload, sess, user) -> bool:
         if sess.get('purge_media_after') and (sess.get('media') or {}).get('s3_key'):
             PI.purge_media(_s3(), sess, reason='done')
         DT.save_twin(_s3(), key, payload)
+        if sess.get('scorecard'):
+            _team_notice('notify_pilot_results_later', payload, sess, username=str(sess.get('created_by') or _uname(user)))   # the card is final here
         return True
     except Exception:
         traceback.print_exc()
@@ -1907,6 +1928,9 @@ def dt_pilot_stop(key, sid):
     if sess.get('purge_media_after') and (sess.get('media') or {}).get('s3_key'):
         purged = PI.purge_media(_s3(), sess, reason='done')
     DT.save_twin(_s3(), key, payload)
+    if sess.get('scorecard'):
+        # the team gets the results once, at the stop, with the report attached (Jenna 2026-11-05); the card is final here
+        _team_notice('notify_pilot_results_later', payload, sess, username=str(sess.get('created_by') or _uname(user)))
     return jsonify({'success': True, 'session': PI.public_session(sess), 'media_removed': purged})
 
 
@@ -2369,6 +2393,7 @@ def dt_pilot_recut(key, sid):
         except Exception:
             pass
     DT.save_twin(_s3(), key, payload)
+    _team_notice('notify_pilot_created', payload, sess, username=_uname(user), via='dashboard')   # cut B is a new test on the same room
     return jsonify({'success': True, 'session': PI.public_session(sess), 'parent_id': parent.get('id')})
 
 
