@@ -94,6 +94,18 @@ def canonical(name) -> str:
         return str(name or '').strip()
 
 
+def fold(company) -> str:
+    """The comparison form of a company name (canonical, case folded):
+    'Acme' and 'acme' are one company, as the admin's company pages read
+    them."""
+    return canonical(company).lower()
+
+
+def same_company(a, b) -> bool:
+    fa, fb = fold(a), fold(b)
+    return bool(fa) and fa == fb
+
+
 def _username(user, username: str = '') -> str:
     if username:
         return str(username).strip()
@@ -225,7 +237,7 @@ def can_see(user, payload: Optional[dict] = None, run: Optional[dict] = None, ke
     mine = company_of_user(user, uname, data)
     if not mine:
         return False
-    return twin_company(payload, run, key, data) == mine
+    return same_company(twin_company(payload, run, key, data), mine)
 
 
 def company_label(company: str) -> str:
@@ -252,13 +264,13 @@ def filter_runs(runs: list, user, data: Optional[dict] = None, username: str = '
     uname = _username(user, username)
     out = []
     if is_staff(user, uname):
-        want = canonical(company) if company else ''
+        want = fold(company) if company else ''
         for r in runs or []:
             if not isinstance(r, dict):
                 continue
             c = twin_company(None, r, str(r.get('key') or ''), d)
             r[COMPANY_FIELD] = c
-            if want and c != want:
+            if want and fold(c) != want:
                 continue
             out.append(r)
         return out
@@ -269,7 +281,7 @@ def filter_runs(runs: list, user, data: Optional[dict] = None, username: str = '
         if not isinstance(r, dict):
             continue
         c = twin_company(None, r, str(r.get('key') or ''), d)
-        if c == mine:
+        if same_company(c, mine):
             r[COMPANY_FIELD] = c
             out.append(r)
     return out
@@ -280,14 +292,16 @@ def companies(runs: Optional[list] = None, data: Optional[dict] = None) -> list:
     in users.json, every seat's company, and the companies the twins
     resolve to. ``[{'company', 'label', 'twins'}]`` sorted by name."""
     d = data if isinstance(data, dict) else users_data()
-    counts: dict = {}
     seen: dict = {}
+    names: dict = {}
 
     def _add(c, n=0):
         c = str(c or '').strip()
         if not c:
             return
-        seen[c] = seen.get(c, 0) + n
+        f = fold(c)
+        names.setdefault(f, c)
+        seen[f] = seen.get(f, 0) + n
     _add(STAFF_COMPANY)
     comps = d.get('companies') if isinstance(d.get('companies'), dict) else {}
     for name in comps:
@@ -300,7 +314,7 @@ def companies(runs: Optional[list] = None, data: Optional[dict] = None) -> list:
         if isinstance(r, dict):
             c = r.get(COMPANY_FIELD) or twin_company(None, r, str(r.get('key') or ''), d)
             _add(c, 1)
-    out = [{'company': c, 'label': company_label(c), 'twins': int(n)} for c, n in seen.items()]
+    out = [{'company': names[f], 'label': company_label(names[f]), 'twins': int(n)} for f, n in seen.items()]
     out.sort(key=lambda x: (x['company'].startswith(OWN_PREFIX), x['label'].lower()))
     return out
 
@@ -338,5 +352,5 @@ def assign(s3, key: str, company: str, by: str = '') -> dict:
 
 
 __all__ = ['STAFF_COMPANY', 'COMPANY_FIELD', 'OWN_PREFIX', 'NOT_IN_LIBRARY', 'set_users_loader', 'reset_cache', 'users_data',
-           'canonical', 'is_staff', 'own_company', 'company_of_user', 'company_of_username', 'caller_company', 'twin_owner',
+           'canonical', 'fold', 'same_company', 'is_staff', 'own_company', 'company_of_user', 'company_of_username', 'caller_company', 'twin_owner',
            'explicit_company', 'twin_company', 'can_see', 'company_label', 'annotate', 'filter_runs', 'companies', 'assign']
