@@ -428,6 +428,12 @@ def _conclusions(session: dict) -> list:
         out.append(f"Put {lead['name']} on the key art; the lead rates {_pct(lead['excellent_pct'])} excellent against a {float(lead['norm']):.0f}% norm." if lead['vs_norm_pp'] >= 5
                    else f"The room is not sold on {lead['name']} yet ({_pct(lead['excellent_pct'])} excellent against {float(lead['norm']):.0f}%); give the lead a clearer want early." if lead['vs_norm_pp'] <= -8
                    else f"{lead['name']} holds the lead at the norm ({_pct(lead['excellent_pct'])} excellent).")
+    # the character the room said it would come back for (its own answer, when more than half named one): give that
+    # character more of the next episode (Jenna 2026-11-04)
+    draw = next((c for c in chars if c.get('draw_seats') and c is not (chars[0] if chars else None)), None)
+    if draw:
+        seats = len(((session.get('group') or {}).get('roster')) or []) or draw.get('draw_seats')
+        out.append(f"Give {draw['name']} more of the next episode, including its close: {draw['draw_seats']} of {seats} would come back for more ({_pct(draw['excellent_pct'])} excellent).")
     scenes = d.get('scenes') or {}
     if (scenes.get('liked_least') or []):
         s = scenes['liked_least'][0]

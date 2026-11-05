@@ -1366,6 +1366,8 @@ def dt_pilot_get(key, sid):
             dirty = True
     except Exception:
         traceback.print_exc()
+    if _reconcile(payload, sess):   # a finished question the scorecard has not read yet moves it (Jenna, 2026-11-04)
+        dirty = True
     if _auto_stop(key, payload, sess, user):   # the runtime ran out while nobody was here to press Stop (2026-11-03)
         return _nocache(jsonify({'success': True, 'session': PI.public_session(sess), 'auto_stopped': True}))
     if dirty:
@@ -1383,6 +1385,18 @@ def _runtime_seconds(v) -> float:
         pass
     from migration import digital_twin_pilot as PI
     return PI.parse_runtime(v)
+
+
+def _reconcile(payload, sess) -> bool:
+    """The scorecard brought into line with every finished question that
+    bears on it (the room's own answers outrank the inferred score,
+    Jenna 2026-11-04). True when something moved; never raises."""
+    try:
+        from migration.digital_twin_reconcile import reconcile_session
+        return bool(reconcile_session(sess, payload, s3=_s3()).get('changed'))
+    except Exception:
+        traceback.print_exc()
+        return False
 
 
 def _auto_stop(key, payload, sess, user) -> bool:
@@ -1403,6 +1417,7 @@ def _auto_stop(key, payload, sess, user) -> bool:
             return True
         PI.stop_session(sess)
         if sess.get('scorecard'):
+            _reconcile(payload, sess)
             PI.record_norms(sess, s3=_s3())
         if sess.get('purge_media_after') and (sess.get('media') or {}).get('s3_key'):
             PI.purge_media(_s3(), sess, reason='done')
@@ -1812,6 +1827,7 @@ def dt_pilot_stop(key, sid):
         return jsonify({'success': True, 'session': PI.public_session(sess), 'finishing': True})
     PI.stop_session(sess)
     if sess.get('scorecard'):
+        _reconcile(payload, sess)           # the room's answers during the test land on the card before it files (2026-11-04)
         PI.record_norms(sess, s3=_s3())     # every finished test grows the norms (idempotent per test)
     purged = False
     if sess.get('purge_media_after') and (sess.get('media') or {}).get('s3_key'):

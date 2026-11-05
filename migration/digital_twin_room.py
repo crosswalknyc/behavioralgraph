@@ -2558,6 +2558,13 @@ def _update_payload(s3, twin_key: str, session_id: str, rec: dict, roster: Optio
                     for k in ('persona', 'memory'):
                         if src.get(k) is not None:
                             seat[k] = src[k]
+        if rec.get('finished_at'):
+            # a finished question that bears on the scorecard moves it (Jenna 2026-11-04: the room said she was the draw)
+            try:
+                from migration.digital_twin_reconcile import after_question
+                after_question(sess, rec, payload, s3=s3, twin_key=twin_key)
+            except Exception as e:
+                print(f"[twin-room] reconcile skipped: {e}")
         if carry:
             for k, v in carry.items():
                 sess[k] = v
@@ -2814,6 +2821,14 @@ def run_question(ctx: dict) -> dict:
         refresh_memory(session)
     except Exception:
         pass
+    # a Pilot Testing question that bears on the scorecard moves it before anything reads the card (Jenna 2026-11-04: the room
+    # said she was the draw); the in-place landing below runs the same step on the stored session
+    try:
+        if session.get('scorecard'):
+            from migration.digital_twin_reconcile import after_question
+            after_question(session, rec, twin, s3=s3, twin_key=ctx.get('twin_key') or '')
+    except Exception as e:
+        print(f"[twin-room] reconcile skipped: {str(e)[:160]}")
     # a Pilot Testing question that names a person the setup named re-reads what the room said about them, against the card's
     # character metrics as they stand now (Jenna 2026-11-04); a read built against older metrics is rebuilt the same way. Last
     # before the landing so it follows every other update the question brought; the landing carries it onto the stored session.

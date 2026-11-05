@@ -24,6 +24,7 @@ messy last digits; shares are never pinned.
 """
 from __future__ import annotations
 
+import math
 import re
 from typing import Optional
 
@@ -113,30 +114,85 @@ def cast_from_session(session: dict) -> list:
     return out[:10]
 
 
-def _seat_char_score(seat_series: list, beats: list, char: dict, card: dict, twin: dict, seed: str) -> float:
-    """Where a seat puts a character: its own dial across the character's
-    scenes (the scenes carry the character), the lead's time on screen,
-    salted."""
-    idxs = [i for i, b in enumerate(beats) if b.get('scene_id') in set(char.get('scenes') or [])]
+CHAR_TOP = 59.0        # the excellent line for a character: a lead whose scenes hold an ordinary dial lands near the lead norm
+REACT_W = {'love': 1.6, 'wow': 1.6, 'lean-in': 1.2, 'laugh': 1.0, 'confuse': -1.4, 'check-out': -1.8}
+REACT_CAP = 3.0        # points of appeal the reactions in a character's scenes can move, either way
+GRADE_LINE = {'a': 0.0, 'b': -6.0, 'c': -12.0, 'd': -18.0}      # each grade's line, under CHAR_TOP
+DRAW_LIFT_MAX = 4.0    # how far past their own favorite the seats who named the draw can be rated up to put her with the lead
+
+
+def _seat_char_score(seat_series: list, beats: list, char: dict, card: dict, twin: dict, seed: str, *, events: Optional[list] = None, seat_no: Optional[int] = None,
+                     remarks: float = 0.0) -> float:
+    """Where a seat puts a character before the room's own words: the
+    seat's dial across the character's scenes (the scenes carry the
+    character), the seat's reactions in those scenes (a love, a laugh, a
+    lean-in lift it; a confusion or a check-out pulls it down, per scene so
+    time on screen is not itself a lift), the seat's remarks about the
+    character, salted. Time on screen is shown on the card and never
+    weighs on appeal (Jenna, 2026-11-04)."""
+    scene_ids = set(int(x) for x in (char.get('scenes') or []))
+    idxs = [i for i, b in enumerate(beats) if b.get('scene_id') in scene_ids]
     if idxs and seat_series:
         vals = [seat_series[i] for i in idxs if i < len(seat_series)]
         base = sum(vals) / len(vals) if vals else 50.0
     else:
         base = (sum(seat_series) / len(seat_series)) if seat_series else 50.0
-    base += clamp(float(char.get('share_pct') or 0) / 12.0, 0.0, 4.5)   # a lead with time on screen earns a little room
+    if events and seat_no is not None and scene_ids:
+        net = 0.0
+        for e in events:
+            try:
+                if int(e.get('seat') if e.get('seat') is not None else -1) != int(seat_no):
+                    continue
+            except (TypeError, ValueError):
+                continue
+            sid = e.get('scene_id')
+            if sid is None and e.get('beat') is not None:
+                try:
+                    sid = beats[int(e['beat'])].get('scene_id')
+                except (TypeError, ValueError, IndexError):
+                    sid = None
+            if sid is not None and int(sid) in scene_ids:
+                net += REACT_W.get(str(e.get('type') or ''), 0.0)
+        base += clamp(3.0 * net / math.sqrt(max(1, len(scene_ids))), -REACT_CAP, REACT_CAP)
+    base += clamp(float(remarks or 0.0), -3.0, 3.0)
     loyal = _trait(twin, 'franchise_loyalty')
     base += (loyal - 50) * 0.04
     return clamp(base + jit(-7.0, 7.0, seed, 'char', char.get('name')), 3.0, 97.0)
 
 
-def _rating_probs(s: float, top: float = 62.0) -> dict:
+def _apply_explicit(sc: dict, seat_no: int, ev: dict, seed: str) -> dict:
+    """The seat's own words on the characters over its inferred scores: a
+    floor or a ceiling per grade from a question that named the character,
+    and the draw rule (a seat who names a character as the reason to come
+    back rates that character at least as high as anyone else in the cast,
+    never below good)."""
+    if not ev:
+        return sc
+    for name, g in ((ev.get('floor') or {}).get(seat_no) or {}).items():
+        if name in sc and g in GRADE_LINE:
+            sc[name] = max(sc[name], CHAR_TOP + GRADE_LINE[g] + jit(0.3, 2.4, seed, 'floor', name, g))
+    for name, g in ((ev.get('ceiling') or {}).get(seat_no) or {}).items():
+        if name in sc and g in ('b', 'c', 'd'):
+            above = {'b': 'a', 'c': 'b', 'd': 'c'}[g]
+            sc[name] = min(sc[name], CHAR_TOP + GRADE_LINE[above] - jit(0.3, 2.4, seed, 'ceiling', name, g))
+    draw = (ev.get('draw') or {}).get(seat_no)
+    floor_at = None
+    if draw and draw in sc:
+        best_other = max([v for n, v in sc.items() if n != draw] or [sc[draw]])
+        floor_at = max(sc[draw], best_other, CHAR_TOP + GRADE_LINE['c'] + jit(0.3, 2.4, seed, 'draw-floor', draw))
+        sc[draw] = floor_at + jit(0.2, 1.2, seed, 'draw', draw)
+    for name in list(sc):
+        sc[name] = clamp(sc[name], 3.0, 97.0)
+    return clamp(floor_at, 3.0, 97.0) if floor_at is not None else None
+
+
+def _rating_probs(s: float, top: float = CHAR_TOP) -> dict:
     """Excellent to poor from a 0 to 100 score as graded probabilities;
-    ``top`` is the excellent line (an ordinary dial around the mid
-    fifties lands the lead near the published lead norm)."""
+    ``top`` is the excellent line."""
     return ordered_probs(s, (top, top - 6.0, top - 12.0, top - 18.0), [o[0] for o in RATING])
 
 
-def _rating_pick(s: float, top: float = 62.0) -> str:
+def _rating_pick(s: float, top: float = CHAR_TOP) -> str:
     return argmax(_rating_probs(s, top))
 
 
@@ -159,6 +215,35 @@ def _top_box(rows: list, ids=('a',)) -> Optional[float]:
     return round(sum(float(r.get('pct') or 0) for r in rows if r.get('id') in ids), 1)
 
 
+def _is_whole(pct) -> bool:
+    try:
+        return int(round(float(pct) * 10)) % 10 == 0
+    except (TypeError, ValueError):
+        return False
+
+
+def _messy_rows(rows: list, seed: str) -> list:
+    """No published share on the characters card lands on a whole number
+    (a 60.0 reads as a round number): a tenth moves between the row and
+    the largest other row, salted direction, and the sum holds."""
+    if len(rows) < 2:
+        return rows
+    for _pass in range(3):
+        bad = [r for r in rows if r.get('pct') is not None and _is_whole(r['pct']) and float(r['pct']) > 0.15]
+        if not bad:
+            break
+        for r in bad:
+            others = sorted((o for o in rows if o is not r), key=lambda o: -float(o.get('pct') or 0))
+            step = 0.1 if unit(seed, 'messy', r.get('id'), _pass) < 0.5 else -0.1
+            for o in others:
+                new_r, new_o = round(float(r['pct']) + step, 1), round(float(o['pct']) - step, 1)
+                if new_r < 0.1 or new_o < 0.1 or _is_whole(new_o):
+                    continue
+                r['pct'], o['pct'] = new_r, new_o
+                break
+    return rows
+
+
 def character_table(session: dict, twin: dict, norms: Optional[dict] = None) -> dict:
     roster = (session.get('group') or {}).get('roster') or []
     segments = (session.get('group') or {}).get('segments') or []
@@ -170,24 +255,8 @@ def character_table(session: dict, twin: dict, norms: Optional[dict] = None) -> 
     sid = str(session.get('id') or '')
     mk = str((session.get('media') or {}).get('hash') or '')
     seed = f"chars|{sid}|{mk}"
+    events = session.get('events') or []
     cards = {int(r['seat']): _card_for(twin, r, seed) for r in roster}
-    scores = {}
-    for r in roster:
-        sno = int(r['seat'])
-        scores[sno] = {c['name']: _seat_char_score(seat_dials.get(str(sno)) or [], beats, c, cards[sno], twin, f"{seed}|seat{sno}") for c in cast}
-    norm_cols = (session.get('scorecard') or {}).get('norm_columns') or {}
-    rows = []
-    for c in cast:
-        ans = {sno: _rating_probs(scores[sno][c['name']]) for sno in scores}
-        pub = _publish_rows(ans, RATING, roster, segments, f"{seed}|{c['name']}")
-        top = _top_box(pub)
-        pos = _top_box(pub, ('a', 'b'))
-        metric = {'lead': 'lead_character', 'second lead': 'secondary_character'}.get(c['role'], 'supporting_character')
-        nc = norm_cols.get(metric) or {}
-        rows.append({'name': c['name'], 'role': c['role'], 'turns': c['turns'], 'screen_s': c['screen_s'], 'screen_clock': _clock(c['screen_s']), 'share_pct': c['share_pct'],
-                     'excellent_pct': top, 'total_positive_pct': pos, 'rows': pub, 'norm': nc.get('norm'), 'genre_norm': nc.get('genre_norm'),
-                     'vs_norm_pp': (round(float(top) - float(nc['norm']), 1) if top is not None and nc.get('norm') is not None else None),
-                     'likability': round(sum(scores[s][c['name']] for s in scores) / len(scores), 1)})
     # the key relationship: the two characters most often in a scene together
     pair, best = None, -1
     for i in range(len(cast)):
@@ -195,37 +264,149 @@ def character_table(session: dict, twin: dict, norms: Optional[dict] = None) -> 
             shared = len(set(cast[i]['scenes']) & set(cast[j]['scenes']))
             if shared > best:
                 best, pair = shared, (cast[i], cast[j])
-    rel = None
     if (pair is None or best < 1) and len(cast) >= 2:
         pair, best = (cast[0], cast[1]), 0      # no shared scene came through: the two leads are the relationship a room is asked about
+    # the room's own words on the characters (what the seats answered when asked), over the inferred scores
+    ev = {}
+    try:
+        from migration.digital_twin_reconcile import character_evidence, room_draw, update_note, DRAW_WEIGHT
+        ev = character_evidence(session, cast, [pair[0]['name'], pair[1]['name']] if pair else []) or {}
+    except Exception as e:
+        print(f"[twin-diagnostics] room evidence skipped: {e}")
+        ev, DRAW_WEIGHT = {}, 0.86
+        room_draw = lambda _ev, _roster: None   # noqa: E731
+        update_note = lambda _clocks: ''        # noqa: E731
+    scores = {}
+    draw_floor = {}
+    for r in roster:
+        sno = int(r['seat'])
+        rem = (ev.get('remarks') or {}).get(sno) or {}
+        scores[sno] = {c['name']: _seat_char_score(seat_dials.get(str(sno)) or [], beats, c, cards[sno], twin, f"{seed}|seat{sno}", events=events, seat_no=sno,
+                                                   remarks=float(rem.get(c['name']) or 0.0)) for c in cast}
+        fl = _apply_explicit(scores[sno], sno, ev, f"{seed}|seat{sno}")
+        if fl is not None:
+            draw_floor[sno] = fl
+    names = [c['name'] for c in cast]
+
+    def publish_one(name):
+        ans = {sno: _rating_probs(scores[sno][name]) for sno in scores}
+        return _messy_rows(_publish_rows(ans, RATING, roster, segments, f"{seed}|{name}"), f"{seed}|{name}")
+    pubs = {n: publish_one(n) for n in names}
+    # the draw: more than half the room named one character as the reason it would come back; that character rates in line with
+    # the room's best-rated character (within salted tenths), the seats who named her rated up together until the room's number sits there
+    draw_name = room_draw(ev, roster) if ev else None
+    draw_lift = 0.0
+    if draw_name in names and len(names) >= 2:
+        namers = sorted(sno for sno, n in (ev.get('draw') or {}).items() if n == draw_name and sno in scores)
+        top_other = max((n for n in names if n != draw_name), key=lambda n: float(_top_box(pubs[n]) or 0))
+        band = jit(0.1, 0.6, seed, 'draw-band') * (1.0 if unit(seed, 'draw-band-sign') < 0.5 else -1.0)
+        target = float(_top_box(pubs[top_other]) or 0) + band
+        while namers and float(_top_box(pubs[draw_name]) or 0) < target and draw_lift < DRAW_LIFT_MAX:
+            draw_lift = round(draw_lift + 0.1, 1)
+            for sno in namers:
+                scores[sno][draw_name] = clamp(scores[sno][draw_name] + 0.1, 3.0, 97.0)
+            pubs[draw_name] = publish_one(draw_name)
+        # above the band the room's word still holds her at each namer's own ceiling (she is at least their favorite); the salted
+        # surplus over that comes back until she sits with the top character, so "the draw" reads as in line, not as a runaway
+        while namers and float(_top_box(pubs[draw_name]) or 0) > target + 0.7 and draw_lift > -DRAW_LIFT_MAX:
+            moved = False
+            for sno in namers:
+                lo = draw_floor.get(sno, scores[sno][draw_name])
+                if scores[sno][draw_name] - 0.1 >= lo:
+                    scores[sno][draw_name] = clamp(scores[sno][draw_name] - 0.1, 3.0, 97.0)
+                    moved = True
+            if not moved:
+                break
+            draw_lift = round(draw_lift - 0.1, 1)
+            pubs[draw_name] = publish_one(draw_name)
+    norm_cols = (session.get('scorecard') or {}).get('norm_columns') or {}
+    rows = []
+    for c in cast:
+        pub = pubs[c['name']]
+        top = _top_box(pub)
+        pos = _top_box(pub, ('a', 'b'))
+        metric = {'lead': 'lead_character', 'second lead': 'secondary_character'}.get(c['role'], 'supporting_character')
+        nc = norm_cols.get(metric) or {}
+        row = {'name': c['name'], 'role': c['role'], 'turns': c['turns'], 'screen_s': c['screen_s'], 'screen_clock': _clock(c['screen_s']), 'share_pct': c['share_pct'],
+               'excellent_pct': top, 'total_positive_pct': pos, 'rows': pub, 'norm': nc.get('norm'), 'genre_norm': nc.get('genre_norm'),
+               'vs_norm_pp': (round(float(top) - float(nc['norm']), 1) if top is not None and nc.get('norm') is not None else None),
+               'likability': round(sum(scores[s][c['name']] for s in scores) / len(scores), 1)}
+        n_draw = int((ev.get('draw_counts') or {}).get(c['name']) or 0)
+        if n_draw:
+            row['draw_seats'] = n_draw
+        rows.append(row)
+    rel = None
     if pair:
-        ans = {sno: _rating_probs((scores[sno][pair[0]['name']] + scores[sno][pair[1]['name']]) / 2.0 + jit(-3.0, 3.0, seed, 'rel', sno)) for sno in scores}
-        pub = _publish_rows(ans, RATING, roster, segments, f"{seed}|relationship")
+        rel_scores = {sno: (scores[sno][pair[0]['name']] + scores[sno][pair[1]['name']]) / 2.0 + jit(-3.0, 3.0, seed, 'rel', sno) for sno in scores}
+        for sno, g in (ev.get('rel_floor') or {}).items():
+            if sno in rel_scores and g in GRADE_LINE:
+                rel_scores[sno] = max(rel_scores[sno], CHAR_TOP + GRADE_LINE[g] + jit(0.3, 2.4, seed, 'rel-floor', sno))
+        for sno, g in (ev.get('rel_ceiling') or {}).items():
+            if sno in rel_scores and g in ('b', 'c', 'd'):
+                rel_scores[sno] = min(rel_scores[sno], CHAR_TOP + GRADE_LINE[{'b': 'a', 'c': 'b', 'd': 'c'}[g]] - jit(0.3, 2.4, seed, 'rel-ceiling', sno))
+        ans = {sno: _rating_probs(clamp(v, 3.0, 97.0)) for sno, v in rel_scores.items()}
+        pub = _messy_rows(_publish_rows(ans, RATING, roster, segments, f"{seed}|relationship"), f"{seed}|relationship")
         rel = {'pair': [pair[0]['name'], pair[1]['name']], 'scenes_together': best, 'excellent_pct': _top_box(pub), 'total_positive_pct': _top_box(pub, ('a', 'b')), 'rows': pub}
-    # who would they follow into a second episode
+    # who would they follow into a second episode: a seat's explicit pick (the character, or the pair, it said would bring it back)
+    # carries most of its leaning; the rest, and every seat that was not asked, follows its own scores
     top5 = cast[:5]
-    follow_ans = {sno: softmax_probs({c['name']: scores[sno][c['name']] + jit(-2.0, 2.0, seed, 'follow', sno, c['name']) for c in top5}, temperature=3.5) for sno in scores}
+    top5_names = [c['name'] for c in top5]
+    follow_ans = {}
+    for sno in scores:
+        base = softmax_probs({n: scores[sno][n] + jit(-2.0, 2.0, seed, 'follow', sno, n) for n in top5_names}, temperature=3.5)
+        pick = (ev.get('follow') or {}).get(sno)
+        probs = base
+        if isinstance(pick, str) and pick in base:
+            probs = {n: (1.0 - DRAW_WEIGHT) * v for n, v in base.items()}
+            probs[pick] += DRAW_WEIGHT
+        elif isinstance(pick, (tuple, list)) and len(pick) == 2 and pick[0] == 'pair' and all(n in base for n in pick[1]):
+            a_n, b_n = pick[1]
+            within = (base[a_n] + base[b_n]) or 1.0
+            probs = {n: (1.0 - DRAW_WEIGHT) * v for n, v in base.items()}
+            probs[a_n] += DRAW_WEIGHT * base[a_n] / within
+            probs[b_n] += DRAW_WEIGHT * base[b_n] / within
+        tot = sum(probs.values()) or 1.0
+        follow_ans[sno] = {n: v / tot for n, v in probs.items()}
     fopts = [(c['name'], c['name'], 'yes') for c in top5]
-    fpub = _publish_rows(follow_ans, fopts, roster, segments, f"{seed}|follow")
+    fpub = _messy_rows(_publish_rows(follow_ans, fopts, roster, segments, f"{seed}|follow"), f"{seed}|follow")
     follow = [{'name': r['id'], 'pct': round(float(r['pct']), 1), 'people': int(r['people'])} for r in sorted(fpub, key=lambda r: -float(r['pct']))]
-    # screen time against likability: who earns more time than they get
+    # screen time against likability: who earns more time than they get (a fact next to the appeal, never a weight on it)
     for r in rows:
-        r['time_vs_like'] = ('earns more time' if r['likability'] >= 60 and r['share_pct'] < 20 else 'carries the time' if r['likability'] >= 56 else 'gets more time than the room gives back' if r['share_pct'] >= 25 and r['likability'] < 50 else 'in balance')
+        r['time_vs_like'] = ('earns more time' if r['likability'] >= CHAR_TOP - 2.0 and r['share_pct'] < 20 else 'carries the time' if r['likability'] >= CHAR_TOP - 6.0
+                             else 'gets more time than the room gives back' if r['share_pct'] >= 25 and r['likability'] < CHAR_TOP - 12.0 else 'in balance')
     lead = rows[0]
     read = ''
+    draw_row = next((r for r in rows if r['name'] == draw_name), None) if draw_name else None
+    gap = None
+    if draw_row and draw_row['name'] != lead['name'] and draw_row.get('excellent_pct') is not None and lead.get('excellent_pct') is not None:
+        # the room's own word leads the read: who it would come back for, rated next to the lead
+        gap = float(draw_row['excellent_pct']) - float(lead['excellent_pct'])
+        where = f"above {lead['name']}" if gap > 0.65 else f"under {lead['name']}" if gap < -0.65 else f"in line with {lead['name']}"
+        read += (f"{draw_row['name']} is the draw: {draw_row.get('draw_seats')} of {len(roster)} would come back. "
+                 f"{draw_row['name']} rates {pct1(draw_row['excellent_pct'])}% excellent, {where}, on {pct1(draw_row['share_pct'])}% of the screen time. ")
     if lead.get('excellent_pct') is not None:
-        read = f"{lead['name']} rates {pct1(lead['excellent_pct'])}% excellent" + (f" against a lead norm of {float(lead['norm']):.0f}%" if lead.get('norm') is not None else '') + '. '
+        read += f"{lead['name']} rates {pct1(lead['excellent_pct'])}% excellent" + (f" against a lead norm of {float(lead['norm']):.0f}%" if lead.get('norm') is not None else '') + '. '
         if lead.get('vs_norm_pp') is not None and lead['vs_norm_pp'] >= 5:
-            read += f"Put {lead['name']} on the key art. "
+            read += (f"Put {lead['name']} and {draw_row['name']} on the key art. " if (gap is not None and gap >= -0.65) else f"Put {lead['name']} on the key art. ")
         elif lead.get('vs_norm_pp') is not None and lead['vs_norm_pp'] <= -8:
             read += f"The room is not sold on {lead['name']} yet; the second lead carries more. "
-    gainer = next((r for r in rows[1:] if r['time_vs_like'] == 'earns more time'), None)
+        elif gap is not None and gap > 0.65:
+            read += f"Put {draw_row['name']} on the key art. "
+    gainer = next((r for r in rows[1:] if r['time_vs_like'] == 'earns more time' and r is not draw_row), None)
     if gainer:
         read += f"{gainer['name']} earns more screen time than the cut gives ({pct1(gainer['share_pct'])}% of the time, {pct1(gainer['excellent_pct'])}% excellent). "
     if follow:
         read += f"Asked who they would follow into a second episode, {pct1(follow[0]['pct'])}% say {follow[0]['name']}."
-    return {'characters': rows, 'relationship': rel, 'follow': follow, 'read': read.strip(), 'by_seat': [{'seat': sno, 'name': next((r.get('name') for r in roster if int(r['seat']) == sno), ''),
-                                                                                                   'ratings': {n: _rating_pick(v) for n, v in sc.items()}} for sno, sc in scores.items()]}
+    out = {'characters': rows, 'relationship': rel, 'follow': follow, 'read': read.strip(), 'by_seat': [{'seat': sno, 'name': next((r.get('name') for r in roster if int(r['seat']) == sno), ''),
+                                                                                                  'ratings': {n: _rating_pick(v) for n, v in sc.items()}} for sno, sc in scores.items()]}
+    if ev.get('questions'):
+        # the plain line that says the card moved with the room's own words rides at the end of the read (the card, the report
+        # and the CSV all print the read), and stands on its own for anything that wants it alone
+        out['note'] = update_note(ev.get('clocks') or [])
+        out['read'] = (out['read'] + ' ' + out['note']).strip()
+        out['from_room'] = {'questions': [q.get('id') for q in ev['questions']], 'draw': draw_name, 'draw_seats': int((ev.get('draw_counts') or {}).get(draw_name) or 0) if draw_name else 0,
+                            'draw_lift': draw_lift}
+    return out
 
 
 # ---------------------------------------------------- pace / confusion

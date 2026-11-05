@@ -54778,7 +54778,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     + '<div class="m"><div class="k">Definitely recommend</div><div class="v">' + pct1(hd.definitely_recommend_pct) + '</div><div class="n">' + allW + ' ' + (normCell(sc, 'definitely_recommend', 'all') || '-') + (gl ? ', ' + genW.toLowerCase() + ' ' + (normCell(sc, 'definitely_recommend', 'genre') || '-') : '') + '</div></div>'
                     + '<div class="m"><div class="k">Excellent</div><div class="v">' + pct1(hd.excellent_pct) + '</div><div class="n">' + allW + ' ' + (normCell(sc, 'excellent', 'all') || '-') + (gl ? ', ' + genW.toLowerCase() + ' ' + (normCell(sc, 'excellent', 'genre') || '-') : '') + '</div></div>'
                     + '</div>';
-                var lines = (sc.norm_lines || []).slice(0, 2).map(function(l) { return '<p class="dtw-p" style="margin-top:8px">' + esc(l) + '</p>'; }).join('');
+                // the norm lines, then the plain line that says the card moved with the room's own answers (Jenna 2026-11-04)
+                var lines = (sc.norm_lines || []).slice(0, 2).concat(sc.reconcile_notes || []).map(function(l) { return '<p class="dtw-p" style="margin-top:8px">' + esc(l) + '</p>'; }).join('');
                 var metricFor = { overall: { a: 'excellent' }, recommend: { a: 'definitely_recommend' }, finish: { a: 'finish' }, tune_in: { a: 'tune_in' }, urgency: { a: 'urgency_opening' }, urgency_pilot: { a: 'urgency_opening' } };
                 var trs = '';
                 (bat.questions || []).forEach(function(q) {
