@@ -318,6 +318,24 @@ BOARD_LOCK_PATH = _default_board_lock_path()
 _BOARD_LOCK_HELD_ENV = "TRENDS_BOARD_LOCK_HELD"
 BOARD_LOCK_WAIT_S = 3 * 3600.0
 
+# The board store has writers on two hosts: the build box (the hourly
+# chart watch's sizer and gate, the nightly) and the Mac residential
+# lane (its coverage gate, chart sizer and board gate). The file lock
+# above is host-local, so on 2026-11-05 the Mac gate's bracket wrote
+# two readings at 17:25:28Z while the box watch, which had read the
+# store at 17:25:1x, was mid-pass; the box wrote the store back at
+# 17:55:36Z without them and both rows reached the coverage alert.
+# This lease is the shared half of the board lock: one S3 object,
+# created atomically (`If-None-Match: *`), naming its holder and start
+# time. A holder on the other host is waited for like a local one; a
+# lease older than BOARD_LEASE_STALE_H is a dead holder and is broken.
+# Best-effort like the file lock: no S3, no lease, the stage runs on
+# the host lock alone and says so.
+BOARD_LEASE_BUCKET = os.environ.get("TRENDS_BOARD_LEASE_BUCKET", "dashboard-inputs")
+BOARD_LEASE_KEY = os.environ.get("TRENDS_BOARD_LEASE_KEY",
+                                 "trends_iq_snapshots/system/board_writer.lock")
+BOARD_LEASE_STALE_H = float(os.environ.get("TRENDS_BOARD_LEASE_STALE_H", "6"))
+
 
 class BoardLock:
     """Blocking exclusive lock around any stage that rewrites the board
@@ -349,17 +367,19 @@ class BoardLock:
         self.waited_s = 0.0
         self._fh = None
         self._set_env = False
+        self._lease_token: Optional[str] = None
+        self.lease_held = False
 
     def __enter__(self) -> "BoardLock":
         if os.environ.get(_BOARD_LOCK_HELD_ENV):
             self.inherited = True
             self.acquired = True
             return self
+        deadline = time.monotonic() + self.wait_s
         try:
             import fcntl
             os.makedirs(os.path.dirname(self.path) or ".", exist_ok=True)
             self._fh = open(self.path, "a+")
-            deadline = time.monotonic() + self.wait_s
             while True:
                 try:
                     fcntl.flock(self._fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -394,7 +414,130 @@ class BoardLock:
             logger.warning("run_guard: could not take the board lock (%s); "
                            "continuing without it", e)
             self.acquired = True
+        # The host lock is held; now the shared one, for whatever is
+        # left of the same wait.
+        self._take_lease(deadline)
         return self
+
+    # -- the shared lease (the other host's writers) ----------------------
+    def _lease_body(self) -> bytes:
+        import json
+        import socket
+        return json.dumps({
+            "token": self._lease_token,
+            "host": socket.gethostname(),
+            "pid": os.getpid(),
+            "label": self.label,
+            "started": _now_iso(),
+        }).encode()
+
+    @staticmethod
+    def _read_lease(s3) -> dict:
+        import json
+        try:
+            raw = s3.get_object(Bucket=BOARD_LEASE_BUCKET,
+                                Key=BOARD_LEASE_KEY)["Body"].read()
+            d = json.loads(raw.decode("utf-8", "replace") or "{}")
+            return d if isinstance(d, dict) else {}
+        except Exception:
+            return {}
+
+    @staticmethod
+    def _is_precondition_failure(e: Exception) -> bool:
+        resp = getattr(e, "response", None) or {}
+        try:
+            code = str((resp.get("Error") or {}).get("Code") or "")
+            status = int((resp.get("ResponseMetadata") or {}).get("HTTPStatusCode") or 0)
+        except Exception:
+            return False
+        return code in ("PreconditionFailed", "ConditionalRequestConflict") \
+            or status in (412, 409)
+
+    def _take_lease(self, deadline: float) -> None:
+        """Create the shared lease atomically, waiting for a live holder
+        until `deadline` and breaking a dead one. Past the deadline the
+        stage goes ahead without it, with a warning, exactly like the
+        file lock: a stuck holder can never stop the board."""
+        try:
+            import uuid
+            import boto3
+            s3 = boto3.client("s3")
+        except Exception as e:
+            logger.info("run_guard: %s has no S3 client for the board lease "
+                        "(%s); on the host lock alone", self.label, e)
+            return
+        self._lease_token = uuid.uuid4().hex
+        said = False
+        while True:
+            try:
+                s3.put_object(Bucket=BOARD_LEASE_BUCKET, Key=BOARD_LEASE_KEY,
+                              Body=self._lease_body(),
+                              ContentType="application/json",
+                              IfNoneMatch="*")
+                self.lease_held = True
+                if said:
+                    logger.info("run_guard: %s took the board lease after "
+                                "%.0fs", self.label, self.waited_s)
+                return
+            except Exception as e:
+                if not self._is_precondition_failure(e):
+                    logger.info("run_guard: %s could not reach the board "
+                                "lease (%s); on the host lock alone",
+                                self.label, str(e)[:160])
+                    self._lease_token = None
+                    return
+            holder = self._read_lease(s3)
+            if holder.get("token") == self._lease_token:
+                self.lease_held = True        # ours after all
+                return
+            age_h = RunLock._holder_age_hours(holder.get("started"))
+            if holder and (age_h is None or age_h >= BOARD_LEASE_STALE_H):
+                logger.warning("run_guard: breaking a board lease %sh old "
+                               "held by %s pid %s (%s)",
+                               f"{age_h:.1f}" if age_h is not None else "?",
+                               holder.get("host") or "?",
+                               holder.get("pid") or "?",
+                               holder.get("label") or "?")
+                try:
+                    s3.delete_object(Bucket=BOARD_LEASE_BUCKET,
+                                     Key=BOARD_LEASE_KEY)
+                except Exception:
+                    pass
+                continue
+            if time.monotonic() >= deadline:
+                logger.warning("run_guard: %s waited %.0f min for the board "
+                               "lease held by %s pid %s (%s) and is going "
+                               "ahead without it", self.label,
+                               self.waited_s / 60.0,
+                               holder.get("host") or "?",
+                               holder.get("pid") or "?",
+                               holder.get("label") or "?")
+                self._lease_token = None
+                return
+            if not said:
+                logger.info("run_guard: %s is waiting for the board lease "
+                            "held by %s pid %s (%s, started %s)", self.label,
+                            holder.get("host") or "?", holder.get("pid") or "?",
+                            holder.get("label") or "?",
+                            holder.get("started") or "?")
+                said = True
+            time.sleep(5.0)
+            self.waited_s += 5.0
+
+    def _drop_lease(self) -> None:
+        """Release the shared lease, only if it is still ours."""
+        if not self._lease_token:
+            return
+        try:
+            import boto3
+            s3 = boto3.client("s3")
+            if self._read_lease(s3).get("token") == self._lease_token:
+                s3.delete_object(Bucket=BOARD_LEASE_BUCKET, Key=BOARD_LEASE_KEY)
+        except Exception as e:
+            logger.info("run_guard: board lease not released (%s); it breaks "
+                        "as stale after %.0fh", str(e)[:120], BOARD_LEASE_STALE_H)
+        self._lease_token = None
+        self.lease_held = False
 
     def _holder(self) -> Optional[str]:
         try:
@@ -407,6 +550,7 @@ class BoardLock:
     def __exit__(self, *exc) -> None:
         if self._set_env:
             os.environ.pop(_BOARD_LOCK_HELD_ENV, None)
+        self._drop_lease()
         try:
             if self._fh:
                 import fcntl

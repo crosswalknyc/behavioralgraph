@@ -24,6 +24,10 @@ mismatch". This test holds the contract that fixed it:
   5. `terminal_bracket.fill` reports skips by row with the title
      apart from the reason, so a title with a colon in it is not
      attributed to the wrong row.
+  6. `BoardLock` holds a shared S3 lease as well as the host file
+     lock, so a writer on the other host waits instead of writing the
+     store back over this one's readings (the box watch dropped the
+     Mac gate's bracket writes at 17:55Z the same day).
 
 Hermetic: S3 is a dict; no network.
 
@@ -265,6 +269,116 @@ def test_bracket_skip_rows() -> None:
               'gate-side attribution lands on the full title')
 
 
+class _LeaseS3:
+    """In-memory S3 with `If-None-Match: *` create semantics."""
+
+    def __init__(self):
+        self.objects: dict[str, bytes] = {}
+
+    def put_object(self, Bucket, Key, Body, **kw):
+        if kw.get('IfNoneMatch') == '*' and Key in self.objects:
+            from botocore.exceptions import ClientError
+            raise ClientError({'Error': {'Code': 'PreconditionFailed',
+                                         'Message': 'exists'},
+                               'ResponseMetadata': {'HTTPStatusCode': 412}},
+                              'PutObject')
+        self.objects[Key] = Body if isinstance(Body, bytes) else str(Body).encode()
+        return {}
+
+    def get_object(self, Bucket, Key):
+        if Key not in self.objects:
+            raise _NoKey(Key)
+        body = self.objects[Key]
+        return {'Body': types.SimpleNamespace(read=lambda: body)}
+
+    def delete_object(self, Bucket, Key):
+        self.objects.pop(Key, None)
+        return {}
+
+
+def test_board_lease() -> None:
+    print('6. BoardLock holds a shared lease across hosts')
+    import json
+    import tempfile
+    import threading
+    from scripts.trends_scrapers import run_guard as rg
+    s3 = _LeaseS3()
+    key = rg.BOARD_LEASE_KEY
+    d = tempfile.mkdtemp()
+    path_a = os.path.join(d, 'a.lock')
+    path_b = os.path.join(d, 'b.lock')     # a second host: its own file lock
+    os.environ.pop(rg._BOARD_LOCK_HELD_ENV, None)
+    with mock.patch('boto3.client', return_value=s3), \
+         mock.patch.object(rg.time, 'sleep', lambda s: None):
+        with rg.BoardLock('host A', path=path_a, wait_s=0) as a:
+            check(a.acquired and a.lease_held, 'first writer takes the lease')
+            body = json.loads(s3.objects[key])
+            check(body.get('label') == 'host A' and body.get('token'),
+                  'lease names its holder')
+            # Re-entrant child inherits, never touches the lease.
+            with rg.BoardLock('child', path=path_a) as c:
+                check(c.inherited and not c.lease_held,
+                      'a child of the holder passes through')
+            # Simulate the other host in this process: drop the
+            # re-entrancy marker so B does not pass through as a child.
+            os.environ.pop(rg._BOARD_LOCK_HELD_ENV, None)
+            # The other host: own file lock free, lease taken, no wait.
+            with rg.BoardLock('host B', path=path_b, wait_s=0) as b:
+                check(b.acquired and not b.lease_held,
+                      'other host past its wait goes ahead without the lease')
+            check(json.loads(s3.objects[key]).get('label') == 'host A',
+                  'the holder\'s lease survives the other host\'s pass')
+            os.environ[rg._BOARD_LOCK_HELD_ENV] = str(os.getpid())
+        os.environ.pop(rg._BOARD_LOCK_HELD_ENV, None)
+        check(key not in s3.objects, 'lease released on exit')
+
+        # The other host waits while the holder works, then takes over.
+        order: list[str] = []
+        held = threading.Event()
+        release = threading.Event()
+
+        def _holder():
+            with rg.BoardLock('host A', path=path_a, wait_s=0):
+                os.environ.pop(rg._BOARD_LOCK_HELD_ENV, None)
+                held.set()
+                release.wait(5)
+                order.append('A done')
+                os.environ[rg._BOARD_LOCK_HELD_ENV] = str(os.getpid())
+            os.environ.pop(rg._BOARD_LOCK_HELD_ENV, None)
+
+        t = threading.Thread(target=_holder)
+        t.start()
+        held.wait(5)
+        # Let B spin a few polls, then release A.
+        real_sleep = __import__('time').sleep
+
+        def _poll_sleep(sec):
+            real_sleep(0.01)
+            release.set()
+        with mock.patch.object(rg.time, 'sleep', _poll_sleep):
+            with rg.BoardLock('host B', path=path_b, wait_s=30) as b:
+                order.append('B in')
+                check(b.lease_held, 'other host took the lease once free')
+        t.join(5)
+        os.environ.pop(rg._BOARD_LOCK_HELD_ENV, None)
+        check(order == ['A done', 'B in'], f'B waited for A: {order}')
+
+        # A dead holder is broken.
+        s3.objects[key] = json.dumps({'token': 'x', 'host': 'gone', 'pid': 1,
+                                      'label': 'crashed',
+                                      'started': '2020-01-01T00:00:00+00:00'}).encode()
+        with rg.BoardLock('host B', path=path_b, wait_s=0) as b:
+            check(b.lease_held, 'a stale lease is broken and taken')
+        os.environ.pop(rg._BOARD_LOCK_HELD_ENV, None)
+
+    # No S3 at all: the stage runs on the host lock alone.
+    with mock.patch('boto3.client', side_effect=RuntimeError('no creds')):
+        with rg.BoardLock('host A', path=path_a, wait_s=0) as a:
+            check(a.acquired and not a.lease_held,
+                  'no S3: host lock alone, never blocks')
+    os.environ.pop(rg._BOARD_LOCK_HELD_ENV, None)
+
+
 def main() -> int:
     prev = trends_iq.use_live_store(False)
     try:
@@ -273,6 +387,7 @@ def main() -> int:
         test_invalidate_publishes_first()
         test_run_gate_restores_mode()
         test_bracket_skip_rows()
+        test_board_lease()
     finally:
         trends_iq.use_live_store(prev)
     if _FAILS:
