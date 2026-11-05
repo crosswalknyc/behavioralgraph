@@ -338,9 +338,18 @@ def fill(payload: dict, still_missing: list[tuple[str, str]],
     from scripts.trends_scrapers import _base
 
     stats: dict[str, Any] = {'written': 0, 'entries_created': 0,
-                             'skipped': [], 'trail': []}
+                             'skipped': [], 'skipped_rows': [], 'trail': []}
     if not still_missing:
         return stats
+
+    def _skip(path: str, title: str, why: str) -> None:
+        # `skipped` keeps the `(path, '<title>: <why>')` shape callers
+        # and tests read; `skipped_rows` carries the title apart from
+        # the reason, because a title with a colon in it ('Taken:
+        # Natalee Holloway') cannot be split back out of the string and
+        # the gate's alert was attributing its skip to the wrong row.
+        stats['skipped'].append((path, f'{title}: {why}'))
+        stats['skipped_rows'].append((path, title, why))
     want = {(p, t) for p, t in still_missing}
 
     cards = (payload or {}).get('cards') or {}
@@ -409,7 +418,7 @@ def fill(payload: dict, still_missing: list[tuple[str, str]],
             cands = cg._entry_key_candidates(se, row_kind, title, artist)
             key = next((c for c in cands if c in items), None) or cands[0]
             if not key:
-                stats['skipped'].append((path, f'{title}: no key'))
+                _skip(path, title, 'no key')
                 continue
             if service and (key, service) in written_blocks:
                 continue
@@ -428,7 +437,7 @@ def fill(payload: dict, still_missing: list[tuple[str, str]],
             key, artist = resolved[i]
             v = reasoned.get(i)
             if not v:
-                stats['skipped'].append((path, f'{title}: no bracket held'))
+                _skip(path, title, 'no bracket held')
                 continue
             entry = items.get(key)
             created = False
@@ -477,9 +486,8 @@ def fill(payload: dict, still_missing: list[tuple[str, str]],
                     # in the store, so the row is blank for a render-
                     # side reason, not a data one. Named in the log;
                     # writing over it would hide that reason.
-                    stats['skipped'].append(
-                        (path, f'{title}: stored reading {had:,} on '
-                               f'{service} renders blank'))
+                    _skip(path, title, f'stored reading {had:,} on '
+                                       f'{service} renders blank')
                     continue
                 # A stored reading under the credibility floor with no
                 # first-party basis is the failed research call the
@@ -496,7 +504,7 @@ def fill(payload: dict, still_missing: list[tuple[str, str]],
                      'us_estimate_high': int(v * 1.38),
                      'confidence': 'low', 'note': note})
                 if not isinstance(blk, dict) or not blk.get('us_estimate'):
-                    stats['skipped'].append((path, f'{title}: block rejected'))
+                    _skip(path, title, 'block rejected')
                     continue
                 blk['est_basis'] = BASIS
                 blk['as_of_date'] = target_date_iso

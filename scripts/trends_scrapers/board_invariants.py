@@ -749,15 +749,25 @@ def terminal_fix(payload: dict, *, write: bool = True) -> dict[str, Any]:
 
 
 def _fresh_view() -> Optional[dict]:
+    """The board as the store now holds it.
+
+    Rendered from latest/, the copy this module writes, never from the
+    dashboard's published/ copy: a gate that audits the published copy
+    after writing latest/ sees the board it just corrected still
+    broken and re-seats it every hour (2026-11-05). The dashboard's
+    own caches are refreshed from published/ by the invalidation,
+    which publishes first unless the nightly run holds the flip.
+    """
     try:
         import trends_iq  # noqa: E402
         try:
             trends_iq.invalidate_live_compute_view_caches()
         except Exception:
             pass
-        return trends_iq.compute_view(
-            {'geo_type': 'National', 'geo_value': '', 'lookback_days': 1},
-            force_refresh=True)
+        with trends_iq.live_store_reads():
+            return trends_iq.compute_view(
+                {'geo_type': 'National', 'geo_value': '', 'lookback_days': 1},
+                force_refresh=True)
     except Exception:
         logger.exception('board invariants: could not compute the view')
         return None
@@ -965,9 +975,10 @@ def main(argv: Optional[list] = None) -> int:
         payload = json.load(open(args.view))
     else:
         import trends_iq  # noqa: E402
-        payload = trends_iq.compute_view(
-            {'geo_type': 'National', 'geo_value': '', 'lookback_days': 1},
-            force_refresh=True)
+        with trends_iq.live_store_reads():
+            payload = trends_iq.compute_view(
+                {'geo_type': 'National', 'geo_value': '', 'lookback_days': 1},
+                force_refresh=True)
     res = audit(payload)
     if args.json:
         print(json.dumps({k: v for k, v in res.items() if k != 'rails'},

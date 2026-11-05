@@ -532,6 +532,63 @@ _SNAPSHOT_MAX_AGE_S = int(os.environ.get('TRENDS_IQ_SNAPSHOT_MAX_AGE_S',
 # does not hold yet (an ad-hoc source, the first day) is read from latest/ as before.
 _SNAPSHOT_PREFIX    = 'trends_iq_snapshots/published/'
 _SNAPSHOT_LIVE_PREFIX = 'trends_iq_snapshots/latest/'
+
+# Which store a live render reads. The dashboard reads published/. A
+# process that WRITES the store and then renders to measure its own
+# result (the coverage gate's tally and its terminal bracket rounds,
+# the board gate, the chart watch) has to read latest/, the copy it
+# just wrote: rendering published/ there measures the board as it was
+# before the write, so every row the bracket had just filled still
+# tallied as missing and 45 rows reached the alert on 2026-11-05 as
+# "bracket written, row still renders blank" the day after the
+# published/ split landed. Writers enter `live_store_reads()` for
+# their own renders; those renders cache under `S3_CACHE_LIVE_PREFIX`,
+# never under the keys the dashboard serves, so a writer measuring an
+# unpublished board can never put it in front of a reader early.
+_READ_LIVE_STORE = (os.environ.get('TRENDS_IQ_READ_LIVE_STORE') or '').strip() == '1'
+S3_CACHE_LIVE_PREFIX = S3_CACHE_PREFIX.rstrip('/') + '_live/'
+
+
+def reads_live_store() -> bool:
+    """True when live renders in this process read latest/ (the store
+    the writers write) instead of published/ (what the dashboard
+    shows)."""
+    return bool(_READ_LIVE_STORE)
+
+
+def use_live_store(on: bool = True) -> bool:
+    """Switch this process's live renders between latest/ and
+    published/. Returns the previous setting so a caller can restore
+    it; prefer the `live_store_reads()` context manager."""
+    global _READ_LIVE_STORE
+    prev = bool(_READ_LIVE_STORE)
+    _READ_LIVE_STORE = bool(on)
+    return prev
+
+
+class live_store_reads:
+    """`with trends_iq.live_store_reads(): ...` renders latest/ inside
+    the block and restores the previous setting on exit, whatever
+    happens inside. `live_store_reads(False)` forces published/."""
+
+    def __init__(self, on: bool = True) -> None:
+        self._on = bool(on)
+        self._prev = False
+
+    def __enter__(self):
+        self._prev = use_live_store(self._on)
+        return self
+
+    def __exit__(self, *exc) -> bool:
+        use_live_store(self._prev)
+        return False
+
+
+def _snapshot_read_prefix() -> str:
+    """The prefix a live (asof=None) snapshot read resolves to."""
+    return _SNAPSHOT_LIVE_PREFIX if _READ_LIVE_STORE else _SNAPSHOT_PREFIX
+
+
 # Historic snapshots (dated). Every scraper writes to BOTH
 # `latest/{source}.json` and `{YYYY-MM-DD}/{source}.json` via
 # scripts/trends_scrapers/_base.py::write_snapshot, so the daily archive
@@ -714,6 +771,10 @@ def _cache_key(filters: dict) -> str:
         'lookback_days': int(filters.get('lookback_days') or DEFAULT_LOOKBACK_DAYS),
     }, sort_keys=True)
     h = hashlib.sha256(payload.encode('utf-8')).hexdigest()[:16]
+    # A writer's own render of latest/ caches apart from what the
+    # dashboard serves (see `_READ_LIVE_STORE`).
+    if _READ_LIVE_STORE:
+        return f"{S3_CACHE_LIVE_PREFIX}{h}.json"
     return f"{S3_CACHE_PREFIX}{h}.json"
 
 
@@ -835,7 +896,52 @@ def invalidate_live_compute_view_caches() -> int:
     Returns the number of live cache entries refreshed or deleted (0
     when nothing to invalidate or when S3 isn't reachable - callers
     can safely ignore the return value).
+
+    2026-11-05: the dashboard reads published/, a copy of latest/
+    (`publish_board`). Every caller of this function has just written
+    latest/ and wants the reader to see it, so the copy is made here
+    first, unless a nightly run holds publishing for the 12:01 AM
+    Pacific flip, in which case nothing the dashboard reads has
+    changed and this returns 0. The refresh itself always renders
+    published/, whatever store the calling process reads for its own
+    measurements (`live_store_reads`), so a writer's unpublished board
+    never lands under a key the dashboard serves.
     """
+    outcome = _publish_store_for_dashboard()
+    if outcome == 'held':
+        logger.info("live compute_view cache: publishing is held for the "
+                    "flip; the dashboard keeps the current board, nothing "
+                    "refreshed")
+        return 0
+    with live_store_reads(False):
+        return _refresh_dashboard_caches()
+
+
+def _publish_store_for_dashboard() -> str:
+    """Copy latest/ onto published/ for the dashboard, unless a nightly
+    run holds publishing until the flip. Returns 'published', 'held'
+    or 'skipped' (the copy could not run; the refresh proceeds on
+    whatever published/ holds, which is the previous board, never a
+    dark one)."""
+    try:
+        from scripts.trends_scrapers import publish_board as _pb
+    except Exception as e:
+        logger.debug("publish_board unavailable (%s); refreshing published/ as is", e)
+        return 'skipped'
+    try:
+        if _pb.read_hold():
+            return 'held'
+        _pb.copy_latest('writer')
+        return 'published'
+    except Exception as e:
+        logger.warning("publish before cache refresh failed (%s); refreshing "
+                       "published/ as is", e)
+        return 'skipped'
+
+
+def _refresh_dashboard_caches() -> int:
+    """The refresh-in-place over the dashboard's live cache entries
+    (`S3_CACHE_PREFIX`). See `invalidate_live_compute_view_caches`."""
     s3 = _s3_client()
     if s3 is None:
         return 0
@@ -1007,13 +1113,13 @@ def _read_snapshot(source: str, asof: Optional[str] = None) -> Optional[dict]:
         prefix = _SNAPSHOT_DATED_PREFIX.format(
             date=_folder_for_measured_day(asof))
     else:
-        prefix = _SNAPSHOT_PREFIX
+        prefix = _snapshot_read_prefix()
     key = f'{prefix}{source}.json'
     try:
         resp = s3.get_object(Bucket=S3_CACHE_BUCKET, Key=key)
     except Exception:
         resp = None
-        if asof is None:
+        if asof is None and prefix != _SNAPSHOT_LIVE_PREFIX:
             # not published yet (an ad-hoc source, or the first day of the published/ copy): the scrapers' own file
             try:
                 resp = s3.get_object(Bucket=S3_CACHE_BUCKET, Key=f'{_SNAPSHOT_LIVE_PREFIX}{source}.json')
@@ -1328,7 +1434,7 @@ def _dated_stream_day_is_latest(day_iso: str) -> bool:
     try:
         latest = s3.head_object(
             Bucket=S3_CACHE_BUCKET,
-            Key=f'{_SNAPSHOT_PREFIX}stream_estimates.json')
+            Key=f'{_snapshot_read_prefix()}stream_estimates.json')
         dated = s3.head_object(
             Bucket=S3_CACHE_BUCKET,
             Key=(f'{_SNAPSHOT_DATED_PREFIX.format(date=day_iso)}'

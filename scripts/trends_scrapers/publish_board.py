@@ -128,6 +128,22 @@ def copy_latest(reason: str, s3=None) -> dict:
     return stamp
 
 
+def _refresh_dashboard(copied: int) -> None:
+    """Re-render the dashboard's live cache entries from the copy just
+    published, so the board turns over when published/ does and not at
+    the next writer's invalidation (the 12:01 AM flip used to show on
+    the dashboard only when the :25 board gate re-rendered, 2026-11-05).
+    The invalidation publishes first itself; after a flip that is an
+    ETag no-op."""
+    if not copied:
+        return
+    try:
+        import trends_iq  # noqa: E402
+        trends_iq.invalidate_live_compute_view_caches()
+    except Exception as e:
+        logger.warning('publish: dashboard caches not refreshed (%s)', str(e)[:160])
+
+
 def flip() -> int:
     """12:01 AM Pacific: the new day's boards go live with the data, and the hold is lifted."""
     s3 = _s3()
@@ -136,6 +152,7 @@ def flip() -> int:
         s3.delete_object(Bucket=BUCKET, Key=HOLD_KEY)
     except Exception:
         pass
+    _refresh_dashboard(int(stamp.get('copied') or 0))
     return 0 if stamp.get('failed', 0) == 0 else 2
 
 
@@ -147,6 +164,7 @@ def hourly() -> int:
         logger.info('publish hourly: held (nightly run started %s for %s); nothing copied', h.get('started'), h.get('measured') or '?')
         return 0
     stamp = copy_latest('hourly', s3)
+    _refresh_dashboard(int(stamp.get('copied') or 0))
     return 0 if stamp.get('failed', 0) == 0 else 2
 
 

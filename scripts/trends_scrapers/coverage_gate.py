@@ -1325,7 +1325,24 @@ def run_gate(dry_run: bool = False, *,
     fix for a coverage alert (2026-10-09): the rows the alert names
     are re-bracketed today, under the board lock, without paying for
     the research pass again.
+
+    Every render inside the gate reads latest/, the store the gate
+    writes (`trends_iq.live_store_reads`). The dashboard reads
+    published/, a copy made at the flip and hourly between flips;
+    measuring that copy here tallied the board as it stood before
+    each write, so on 2026-11-05 every row the bracket had just
+    filled still read as missing and 45 reached the alert as a
+    render-side mismatch. The dashboard's own caches are refreshed
+    from published/ by `invalidate_live_compute_view_caches`, which
+    publishes first unless a nightly run holds the flip.
     """
+    import trends_iq
+    with trends_iq.live_store_reads():
+        return _run_gate_impl(dry_run, terminal_only=terminal_only)
+
+
+def _run_gate_impl(dry_run: bool = False, *,
+                   terminal_only: bool = False) -> dict[str, Any]:
     import trends_iq
     from scripts.trends_scrapers import stream_estimates as se
     from scripts.trends_scrapers import headline_estimates as he
@@ -1546,8 +1563,12 @@ def run_gate(dry_run: bool = False, *,
             for path, why in tb_stats['skipped']:
                 logger.warning("coverage_gate bracket skipped: %s  [%s]",
                                why, path)
-                title = why.split(': ', 1)[0]
-                bracket_skipped[(path, title)] = why
+            # Attribution by row, with the title carried apart from the
+            # reason: splitting '<title>: <why>' on the first colon put
+            # 'Taken: Natalee Holloway' under the title 'Taken' and the
+            # alert then read the row as unexplained.
+            for path, title, why in tb_stats.get('skipped_rows') or []:
+                bracket_skipped[(path, title)] = f'{title}: {why}'
             if not tb_stats['written']:
                 break
             try:

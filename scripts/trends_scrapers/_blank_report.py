@@ -21,11 +21,15 @@ if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
 
 
-def build(force_refresh: bool = True, lookback: int = 1) -> dict:
+def build(force_refresh: bool = True, lookback: int = 1,
+          published: bool = False) -> dict:
+    """Render the board. From latest/ (the store a fix just wrote) by
+    default; `published=True` renders the copy the dashboard shows."""
     import trends_iq
-    return trends_iq.compute_view(
-        {'geo_type': 'National', 'geo_value': '', 'lookback_days': lookback},
-        force_refresh=force_refresh)
+    with trends_iq.live_store_reads(not published):
+        return trends_iq.compute_view(
+            {'geo_type': 'National', 'geo_value': '', 'lookback_days': lookback},
+            force_refresh=force_refresh)
 
 
 def report(payload: dict, show: int = 6) -> dict:
@@ -56,9 +60,13 @@ def main(argv=None) -> int:
                     help='only print rails whose path contains this')
     ap.add_argument('--json-out', default='')
     ap.add_argument('--show', type=int, default=6)
+    ap.add_argument('--published', action='store_true',
+                    help='render the published/ copy the dashboard shows '
+                         'instead of latest/')
     a = ap.parse_args(argv)
 
-    payload = build(force_refresh=not a.cached, lookback=a.lookback)
+    payload = build(force_refresh=not a.cached, lookback=a.lookback,
+                    published=a.published)
     by_rail = report(payload)
 
     tot = sum(v['total'] for v in by_rail.values())
