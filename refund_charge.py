@@ -261,7 +261,8 @@ def apply_refund(data, username, *, job_id="", credits=0, reason="",
     # and a job never refunds past its charge.
     prior = prior_refunds(user, jid, cjid) if (jid or cjid) else []
     desc = f"REFUND: {reason}"
-    if jid and any(str(p.get("description") or "") == desc for p in prior):
+    if jid and any(str(p.get("description") or "") == desc and str(p.get("job_id") or "").strip() == jid
+                   for p in prior):
         res.update(already_refunded=True, note="refund already recorded for this job and reason")
         return res
     charge_credits = _num(row.get("credits_used"), 0) if row else 0

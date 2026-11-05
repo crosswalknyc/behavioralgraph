@@ -290,7 +290,7 @@ class Chaining(unittest.TestCase):
     def _run(self, inputs, post, status_fn=None, on_file=None, refunds=None, job_id='job1'):
         status = {}
         s3 = FakeS3()
-        fake_app = types.SimpleNamespace(refund_credit=lambda uname, credits=0, reason='': (refunds if refunds is not None else []).append((uname, credits, reason)) or True)
+        fake_app = types.SimpleNamespace(refund_credit=lambda uname, credits=0, reason='', **kw: (refunds if refunds is not None else []).append((uname, credits, reason)) or True)
         saved = sys.modules.get('app')
         sys.modules['app'] = fake_app
         try:

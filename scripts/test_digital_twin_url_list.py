@@ -540,7 +540,7 @@ class Chaining(unittest.TestCase):
         inputs = self._inputs(rec, s3)
         refunds = []
         import types
-        fake_app = types.SimpleNamespace(refund_credit=lambda uname, credits=0, reason='': refunds.append((uname, credits, reason)) or True)
+        fake_app = types.SimpleNamespace(refund_credit=lambda uname, credits=0, reason='', **kw: refunds.append((uname, credits, reason)) or True)
         saved = sys.modules.get('app')
         sys.modules['app'] = fake_app
         try:
@@ -569,7 +569,7 @@ class Chaining(unittest.TestCase):
         inputs = self._inputs(rec, s3)
         refunds = []
         import types
-        fake_app = types.SimpleNamespace(refund_credit=lambda uname, credits=0, reason='': refunds.append(credits) or True)
+        fake_app = types.SimpleNamespace(refund_credit=lambda uname, credits=0, reason='', **kw: refunds.append(credits) or True)
         saved = sys.modules.get('app')
         sys.modules['app'] = fake_app
         try:
