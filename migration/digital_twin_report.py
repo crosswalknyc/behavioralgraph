@@ -276,7 +276,9 @@ def _q_when(rec: dict, session: dict) -> str:
     clock = _q_clock(rec)
     when = frame or (f"At {clock}" if clock else '')
     if _q_after_wrap(rec, session) and when:
-        when = re.sub(r'^At\b', 'After the wrap, at', when) if when.startswith('At ') else f"After the wrap, {when[0].lower() + when[1:]}"
+        # the frame runs on after the lead-in; an acronym or a name that opens with two capitals keeps its case ('CBS logo', 'LL Cool J')
+        from migration.digital_twin_pilot import lower_first
+        when = re.sub(r'^At\b', 'After the wrap, at', when) if when.startswith('At ') else f"After the wrap, {lower_first(when)}"
     return when or 'Asked in the room'
 
 
@@ -423,7 +425,9 @@ def _conclusions(session: dict) -> list:
     if slow:
         out.append(f"Trim the {slow[0]['label'].lower()} ({slow[0]['from_clock']} to {slow[0]['to_clock']}); {_pct(slow[0]['too_slow_pct'])} found it slow.")
     if (pace.get('confusion_pct') or 0) >= 15 and pace.get('confusions'):
-        out.append(f"Clear up {pace['confusions'][0]['line'][0].lower() + pace['confusions'][0]['line'][1:]}")
+        # the seat's own words ride as a quote after a colon, never glued into the sentence
+        line = ' '.join(str(pace['confusions'][0].get('line') or '').split()).rstrip('.')
+        out.append(f"Clear up what lost {_pct(pace['confusion_pct'])} of the room: \"{line}.\"" if line else f"Clear up what lost {_pct(pace['confusion_pct'])} of the room.")
     chars = (d.get('characters') or {}).get('characters') or []
     # the lead is the part the cut is built around (the role on the row); the card itself ranks the cast by the room's rating
     lead = next((c for c in chars if c.get('role') == 'lead'), chars[0] if chars else None)
@@ -478,8 +482,11 @@ def _talent_pages(session: dict) -> list:
     return pages
 
 
-def _attach_room_line(rec: dict) -> str:
-    """What the room gave the name, in a few words for the table cell."""
+def _attach_room_line(rec: dict, cell: bool = False) -> str:
+    """What the room gave the name, in a few words for the table cell.
+    ``cell`` keeps it to the two shares that fit the column (the follow
+    share and excellent); the draw clause rides in the full sentence
+    under the table, never clipped mid-phrase."""
     o = rec.get('outputs') or {}
     v = o.get('room') or {}
     room = rec.get('room') if isinstance(rec.get('room'), dict) else None
@@ -493,8 +500,10 @@ def _attach_room_line(rec: dict) -> str:
         bits.append(f"{_pct(parts['follow'])} would follow")
     if parts.get('excellent') is not None:
         bits.append(f"{_pct(parts['excellent'])} excellent")
-    if v.get('is_draw'):
+    if v.get('is_draw') and not cell:
         bits.append(f"{room.get('draw_seats')} of {room.get('seats')} the reason to come back")
+    elif v.get('is_draw') and not bits:
+        bits.append('the draw')
     return ', '.join(bits) or f"{_pct(v.get('verdict_pct'))} against an even room"
 
 
@@ -507,7 +516,7 @@ def _attach_pages(session: dict) -> list:
     if not recs:
         return []
     recs = sorted(recs, key=lambda r: -float((r['outputs'].get('reach_lift_pct') or 0)))
-    rows = [(_clean(f"{r['talent']} (billed {r.get('role') or 'lead'})"), f"+{_pct(r['outputs'].get('reach_lift_pct'))}", _clean(f"{_people_short(r['outputs'].get('expected'))} more people; {_attach_room_line(r)}")) for r in recs[:8]]
+    rows = [(_clean(f"{r['talent']} (billed {r.get('role') or 'lead'})"), f"+{_pct(r['outputs'].get('reach_lift_pct'))}", _clean(f"{_people_short(r['outputs'].get('expected'))} more people; {_attach_room_line(r, cell=True)}")) for r in recs[:8]]
     top = recs[0]
     header = _words(_clean(f"{top['talent']} adds the most to the first month, {_pct(top['outputs'].get('reach_lift_pct'))}.")) if len(recs) > 1 else _words(_clean(f"{top['talent']} adds {_pct(top['outputs'].get('reach_lift_pct'))} to the first month."))
     return [{'kind': 'table', 'header': header, 'sub': "Each name's pull with this audience and what the room made of them, in one lift. Billing is shown, never weighed.",
@@ -535,8 +544,15 @@ def report_pages(payload: dict, session: dict, portrait_fn=None, with_chart: boo
              (_pct(head.get('definitely_recommend_pct')) or '', 'Definitely recommend'), (_pct(head.get('excellent_pct')) or '', 'Excellent')]
     if head.get('finish_pct') is not None:
         tiles.append((_pct(head.get('finish_pct')), 'Would finish'))
+    # the people behind the room: the segments' people (the battery's whole-room total), never a stored stand-in; no count when no source carries one
+    try:
+        from migration.digital_twin_pilot import session_people
+        behind = session_people(session, payload)
+    except Exception:
+        behind = None
+    seated = g.get('in_room') or len(g.get('roster') or [])
     pages.append({'kind': 'tiles', 'header': _words(f"Total positive {_pct(head.get('total_positive_pct'))}, with the norm beside every number.") if head.get('total_positive_pct') is not None else 'The scorecard.',
-                  'sub': _clean(f"The room seated {g.get('in_room') or len(g.get('roster') or [])} people, with {human_people(sc.get('people'))} behind them. {str(sc.get('format') or 'pilot').title()}" + (f", {sc.get('genre')}." if sc.get('genre') else '.')),     # opens with a word: the copy scrub capitalizes the word after a leading count
+                  'sub': _clean((f"The room seated {seated} people, with {human_people(behind)} behind them. " if behind else f"The room seated {seated} people. ") + f"{str(sc.get('format') or 'pilot').title()}" + (f", {sc.get('genre')}." if sc.get('genre') else '.')),     # opens with a word: the copy scrub capitalizes the word after a leading count
                   'tiles': [t for t in tiles if t[0]][:4], 'body': [_clean(x) for x in (sc.get('norm_lines') or [])[:3]], 'dark': False})
     # the norm the card is read against, named once (Jenna 2026-11-04: the user sets it); older cards compute it from the genre
     compared = _compared_to(sc, session)
@@ -614,8 +630,13 @@ def report_pages(payload: dict, session: dict, portrait_fn=None, with_chart: boo
     rec = session.get('recruit') or {}
     if rec:
         w = rec.get('walkouts') or {}
-        tiles = [(str(rec.get('seated') or g.get('in_room') or ''), 'Seated'), (f"{rec.get('invited'):,}" if rec.get('invited') else str(rec.get('seated') or ''), 'Invited' if rec.get('invited') else 'Seated'),
-                 (str(w.get('count') if w.get('count') is not None else 0), 'Walked out'), (rec.get('invite_ratio_n') and f"{rec['invite_ratio_n']} : 1" or '1 : 1', 'Invite ratio')]
+        # seated once; the invited count and the invite ratio only when the recruit recorded them (never a stand-in 1 : 1)
+        tiles = [(str(rec.get('seated') or g.get('in_room') or ''), 'Seated')]
+        if rec.get('invited'):
+            tiles.append((f"{int(rec['invited']):,}", 'Invited'))
+        tiles.append((str(w.get('count') if w.get('count') is not None else 0), 'Walked out'))
+        if rec.get('invite_ratio_n'):
+            tiles.append((f"{rec['invite_ratio_n']} : 1", 'Invite ratio'))
         pages.append({'kind': 'tiles', 'header': _words(_clean(f"Recruited to {rec.get('concept') or 'the twin'}.")), 'sub': _clean(rec.get('stats_line') or ''), 'tiles': tiles[:4],
                       'body': [_clean(f"{q['quota']}: {q['target_pct']}% asked for, {q['seated_pct']}% seated") for q in (rec.get('quotas_met') or [])[:3]] + ([_clean(w.get('read'))] if w.get('read') else []), 'dark': True})
     pages.extend(_room_pages(session, portrait_fn=portrait_fn, clean=_clean))     # who was seated: the faces, the segments, the roster line
@@ -628,12 +649,14 @@ def report_pages(payload: dict, session: dict, portrait_fn=None, with_chart: boo
         ep, se, su = fc['episode'], fc.get('series') or {}, fc.get('subscriptions') or {}
         plat = su.get('platform') or 'the service'
         act = fc.get('actual') or {}
+        # the tile label fits the tile ('Would subscribe for it'); the base (people without the service) is named in the line under
         tiles = [(_people_short(ep.get('week_one_audience')), 'Week-one audience if released'),
                  (f"{se.get('season_completion_pct')}%", 'Would finish the season'),
                  (f"{se.get('second_screen_pct')}%", 'On a second screen'),
-                 (f"{su.get('subscribe_pct_of_nonsubscribers')}%", f"Of people without {plat} would subscribe for it")]
+                 (f"{su.get('subscribe_pct_of_nonsubscribers')}%", 'Would subscribe for it')]
         body = [_clean(f"Range {_people_short(ep.get('low'))} to {_people_short(ep.get('high'))} in week one; season average {_people_short(se.get('season_average_audience'))}, finale {_people_short(se.get('finale_audience'))}."),
-                _clean(f"{su.get('reactivate_pct_of_dormant')}% of dormant {plat} accounts would come back for it, about {int(su.get('reactivate_people') or 0):,} people; about {int(su.get('subscribe_people') or 0):,} would subscribe.")]
+                _clean(f"{su.get('reactivate_pct_of_dormant')}% of dormant {plat} accounts would come back for it, about {int(su.get('reactivate_people') or 0):,} people; "
+                       f"{su.get('subscribe_pct_of_nonsubscribers')}% of people without {plat}, about {int(su.get('subscribe_people') or 0):,}, would subscribe for it.")]
         if act.get('week_one_audience'):
             body.append(_clean(f"As aired: {_people_short(act['week_one_audience'])} in week one" + (f" ({'+' if float(act.get('forecast_vs_actual_pct') or 0) >= 0 else ''}{act.get('forecast_vs_actual_pct')}% against the forecast)" if act.get('forecast_vs_actual_pct') is not None else '') + '.'))
         for n in (fc.get('notes') or [])[:2]:

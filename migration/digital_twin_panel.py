@@ -621,6 +621,7 @@ def recompute_group_sizes(sess: dict, twins_by_key: dict) -> bool:
         s.pop('_filter', None)
     after = [(s.get('people'), s.get('share_pct'), dict(s.get('filter') or {})) for s in segs] + [g.get('size_people')]
     if after != before:
+        spread_seat_people(g.get('roster') or [], segs, seed)     # the seats follow their segment's new people
         sess['updated_at'] = _now()
         return True
     return False
@@ -782,8 +783,44 @@ def build_group(twins: list, segments: Optional[list] = None, in_room: int = DEF
             else:   # the bank is spent in a big room: a last initial keeps the seat distinct
                 r['name'] = f"{base} {chr(ord('A') + (k - len(bank)) % 26)}."
         seen.add(r['name'])
+    spread_seat_people(roster, segs, seed)
     return {'twins': [_twin_key(t) for t in twins], 'segments': [{k: v for k, v in s.items()} for s in segs],
             'size_people': total_people, 'in_room': in_room, 'roster': roster}
+
+
+def spread_seat_people(roster: list, segments: list, seed: str = '') -> None:
+    """Every seat carries the people it stands for: its segment's people
+    over the seats in that segment, as messy integers that add up to the
+    segment exactly (2026-11-04, so a card never has to stand a count in
+    for the seats). Each seat sits within about half a percent of the
+    equal share, so no two seats print the same count; the last seat in
+    the segment takes the rounding remainder. Seats whose segment carries
+    no people are left as they are."""
+    seg_people = {}
+    for s in segments or []:
+        if isinstance(s, dict):
+            try:
+                seg_people[str(s.get('label'))] = int(float(s.get('people') or 0))
+            except (TypeError, ValueError):
+                seg_people[str(s.get('label'))] = 0
+    by_seg = {}
+    for r in roster or []:
+        if isinstance(r, dict):
+            by_seg.setdefault(str(r.get('segment')), []).append(r)
+    for lab, seats in by_seg.items():
+        total = seg_people.get(lab, 0)
+        if total <= 0:
+            continue
+        base = total / float(len(seats))
+        if base < 20:
+            for r in seats:
+                r['people'] = max(1, int(round(base)))
+            continue
+        vals = [max(1, int(round(base * (1.0 + (unit(seed, 'seat-people', lab, r.get('seat')) - 0.5) * 0.012)))) for r in seats]
+        vals = [natural_count(seed, f"seat|{lab}|{r.get('seat')}|people", v) for r, v in zip(seats, vals)]
+        vals[-1] = max(1, vals[-1] + (total - sum(vals)))
+        for r, v in zip(seats, vals):
+            r['people'] = int(v)
 
 
 def _age_in_bucket(label, u):

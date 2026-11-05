@@ -919,7 +919,9 @@ def format_for(session: dict) -> str:
 
 
 def _seat_people(roster: list, segments: list) -> dict:
-    """{seat: people} from the segment's people spread over its seats."""
+    """{seat: people}: the seat's own people when the room was built with
+    them (each seat stands for its share of its segment), else the
+    segment's people spread over its seats."""
     seg_people = {str(s.get('label')): int(s.get('people') or 0) for s in segments or []}
     seg_n = {}
     for r in roster:
@@ -927,8 +929,58 @@ def _seat_people(roster: list, segments: list) -> dict:
     out = {}
     for r in roster:
         lab = str(r.get('segment'))
-        out[int(r['seat'])] = int(round(seg_people.get(lab, 0) / float(seg_n.get(lab) or 1)))
+        own = _int_or_zero(r.get('people'))
+        out[int(r['seat'])] = own if own > 0 else int(round(seg_people.get(lab, 0) / float(seg_n.get(lab) or 1)))
     return out
+
+
+def _int_or_zero(v) -> int:
+    try:
+        return int(float(v or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+def room_people(roster: list, segments: list, twin: Optional[dict] = None, *, quadrant_total=None) -> Optional[int]:
+    """The people the seated room stands for, from the first source that
+    carries them (2026-11-04: the NCIS: New York Pilot card read '12.7K
+    behind them', sixteen seats times a stand-in 800, next to 22.35M on
+    the quadrants): the segments' people, else the seats' own people,
+    else the whole-room total the battery published, else the twin's US
+    size. None when no source carries one; a count is never made up
+    from the seat count."""
+    segs = sum(_int_or_zero(s.get('people')) for s in (segments or []) if isinstance(s, dict))
+    if segs > 0:
+        return segs
+    seats = sum(_int_or_zero(r.get('people')) for r in (roster or []) if isinstance(r, dict))
+    if seats > 0:
+        return seats
+    if _int_or_zero(quadrant_total) > 0:
+        return _int_or_zero(quadrant_total)
+    size = _int_or_zero(((twin or {}).get('meta') or {}).get('size_us'))
+    return size if size > 0 else None
+
+
+def session_people(session: dict, twin: Optional[dict] = None) -> Optional[int]:
+    """``room_people`` for a saved test: the scorecard page, the room page,
+    the CSV and the API all read this one figure, so they agree. The
+    battery's whole-room quadrant is the published total when the group
+    carries no people of its own."""
+    g = (session or {}).get('group') or {}
+    quads = (((session or {}).get('scorecard') or {}).get('battery') or {}).get('quadrants') or []
+    total = next((q.get('people') for q in quads if isinstance(q, dict) and q.get('key') == 'total'), None)
+    return room_people(g.get('roster') or [], g.get('segments') or [], twin, quadrant_total=total)
+
+
+def lower_first(text: str) -> str:
+    """The first letter lowered to run on after a colon or a lead-in,
+    unless the word is an acronym or a name that opens with two capitals
+    ('CBS logo', 'LL Cool J', 'I moved' keep their case; 'The room' runs
+    on as 'the room')."""
+    s = str(text or '')
+    if len(s) < 2:
+        return s.lower()
+    return (s[0].lower() + s[1:]) if s[1].islower() else s
 
 
 def _battery_prior(qid: str, mean_dial: float, options: list) -> dict:
@@ -1061,7 +1113,8 @@ def battery_scorecard(twin: dict, roster: list, segments: list, seat_dials: dict
         seat_ans[sno] = got
         seat_conf[sno] = _confidence(cards[sno], series, seed)
     people_by_seat = _seat_people(roster, segments)
-    room_people = sum(int(s.get('people') or 0) for s in segments) or sum(people_by_seat.values()) or len(roster) * 800
+    # the whole room's people: the segments, else the seats, else the twin's US size; never the seat count times a stand-in
+    room_total = room_people(roster, segments, twin) or 0
 
     def mean_of(seat_ids):
         vals = []
@@ -1086,8 +1139,8 @@ def battery_scorecard(twin: dict, roster: list, segments: list, seat_dials: dict
             out[qid] = _question_result(qid, qlabel, kind, rows)
         return out, m
     all_ids = [int(r['seat']) for r in roster]
-    room_q, room_mean = run(all_ids, 'Whole room', room_people, 'room')
-    quadrants = [{'key': 'total', 'label': 'Total', 'n': len(roster), 'people': int(room_people), **_money(room_q)}]
+    room_q, room_mean = run(all_ids, 'Whole room', room_total, 'room')
+    quadrants = [{'key': 'total', 'label': 'Total', 'n': len(roster), 'people': int(room_total), **_money(room_q)}]
     seg_people = {str(sg.get('label')): int(sg.get('people') or 0) for sg in (segments or []) if isinstance(sg, dict)}
     for lab in cohort_labels(roster):   # the cohorts the room was cut into, each read on its own
         ids = [int(r['seat']) for r in roster if str(r.get('segment') or '') == lab]
@@ -1455,9 +1508,11 @@ def ask_stimulus(session: dict, playhead_s: float, extra: Optional[dict] = None)
 
 # ------------------------------------------------------------ scorecard
 def scorecard(twin: dict, roster: list, beats: list, dial: list, events: list,
-              seat_dials: dict, subject: str, media_key: str) -> dict:
+              seat_dials: dict, subject: str, media_key: str, segments: Optional[list] = None) -> dict:
     """The dial reads: the dial average, favorite moment, dead spot,
-    notes, people. The battery is attached by prepare_watch."""
+    notes, people (the room's segments, else the seats' own people, else
+    the twin's US size; never a stand-in). The battery is attached by
+    prepare_watch."""
     if not dial:
         dial = [50.0]
     tail_n = max(3, int(len(dial) * 0.22))
@@ -1485,7 +1540,7 @@ def scorecard(twin: dict, roster: list, beats: list, dial: list, events: list,
     vb = beats[valley_i] if valley_i < len(beats) else {}
     dead_on = str(vb.get('caption') or '')
     lost_near = [e for e in events if e.get('beat') is not None and abs(int(e['beat']) - valley_i) <= max(2, len(dial) // 24) and e.get('type') in ('confuse', 'check-out')]
-    dead_line = (lost_near[0].get('line') if lost_near else ('The room dipped here' + (f": {dead_on[0].lower() + dead_on[1:]}" if dead_on else '. A few seats looked away.')))
+    dead_line = (lost_near[0].get('line') if lost_near else ('The room dipped here' + (f": {lower_first(dead_on)}" if dead_on else '. A few seats looked away.')))
     dead = {'t': vb.get('t', 0), 'clock': _clock(vb.get('t', 0)), 'line': str(dead_line)[:200], 'dial': dial[valley_i], 'on_screen': dead_on[:140]}
     notes = []
     if loves >= max(3, len(roster) // 2):
@@ -1503,7 +1558,7 @@ def scorecard(twin: dict, roster: list, beats: list, dial: list, events: list,
                 notes.append('Women in the room sat higher on the dial than the men.')
             elif gap <= -3.2:
                 notes.append('Men in the room sat higher on the dial than the women.')
-    people = messy_count(subject, 'pilot-room', sum(int(s.get('people') or 0) for s in roster) or len(roster) * 800)
+    people = room_people(roster, segments or [], twin)
     return {
         'overall_like': overall,
         'favorite_moment': {
@@ -1696,7 +1751,7 @@ def prepare_watch(session: dict, twins_by_key: dict, *, duration_s: float = 0,
     session['voices_live'] = live_voices(events, roster)
     # the scorecard: dial reads plus the battery, published against the norms
     tell('the room is scoring')
-    sc = scorecard(twin, roster, beats, agg, events, seat_dials, subject, media_key)
+    sc = scorecard(twin, roster, beats, agg, events, seat_dials, subject, media_key, segments=segments)
     answers_in, why_in = {}, {}
     cached_card = (watch.get('card') if cached and isinstance(watch.get('card'), dict) else None)
     if cached_card and cached_card.get('format') == fmt and cached_card.get('answers'):
@@ -1719,6 +1774,8 @@ def prepare_watch(session: dict, twins_by_key: dict, *, duration_s: float = 0,
                                     'worst': {str(k): v for k, v in (locals().get('worst_in') or (cached_card or {}).get('worst') or {}).items()}}
     sc['battery'] = battery_scorecard(twin, roster, segments, seat_dials, beats, scenes, events, fmt=fmt, subject=subject, media_key=media_key,
                                       session_seed=seed, cards=cards, answers_in=answers_in, why_in=why_in)
+    # the card's people is the figure the battery published for the whole room (the same chain of sources; it agrees with the quadrants)
+    sc['people'] = room_people(roster, segments, twin, quadrant_total=next((q.get('people') for q in sc['battery'].get('quadrants') or [] if q.get('key') == 'total'), None))
     head = sc['battery']['headline']
     sc['recommend_pct'] = head.get('definitely_recommend_pct')     # older readers: the money number
     sc['finish_intent_pct'] = head.get('finish_pct')
@@ -2900,7 +2957,7 @@ def session_csv(session: dict, payload: Optional[dict] = None) -> str:
     dead = sc.get('dead_spot') or {}
     w.writerow([
         session.get('id'), session.get('title'), session.get('cut_label') or 'Cut A', sc.get('format') or session.get('format') or '', genre,
-        (session.get('media') or {}).get('runtime_s'), sc.get('people'), sc.get('overall_like'), head.get('excellent_pct'), head.get('total_positive_pct'),
+        (session.get('media') or {}).get('runtime_s'), session_people(session, payload), sc.get('overall_like'), head.get('excellent_pct'), head.get('total_positive_pct'),
         head.get('definitely_recommend_pct'), head.get('finish_pct'),
         f"{fav.get('clock')} {fav.get('line')}", f"{dead.get('clock')} {dead.get('line')}",
         genre_label if genre != 'all' else all_label, nch.get('note') or '',

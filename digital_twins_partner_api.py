@@ -245,10 +245,15 @@ def _result(sess: dict, twin_name: str) -> dict:
     head = bat.get('headline') or {}
     norm_cols = sc.get('norm_columns') or {}
     status = STATUS_OUT.get(str(sess.get('status') or 'draft'), 'queued')
+    try:   # the people the room stands for: the same figure as the card, the report and the CSV (the segments' people, never a stand-in)
+        from migration.digital_twin_pilot import session_people
+        people = session_people(sess)
+    except Exception:
+        people = sc.get('people')
     out = {'screening_id': str(sess.get('screening_id') or sess.get('id') or ''), 'status': status, 'mode': str(sess.get('mode') or 'pilot'),
            'title': scrub_text(sess.get('title'), 160), 'audience': scrub_text(twin_name, 120), 'cut_label': scrub_text(sess.get('cut_label'), 40),
            'genre': scrub_text(sess.get('genre'), 40), 'format': scrub_text(sc.get('format') or sess.get('format'), 20),
-           'seats': int((sess.get('group') or {}).get('in_room') or len((sess.get('group') or {}).get('roster') or [])), 'people': sc.get('people'),
+           'seats': int((sess.get('group') or {}).get('in_room') or len((sess.get('group') or {}).get('roster') or [])), 'people': people,
            'runtime_s': (sess.get('media') or {}).get('runtime_s'), 'created_at': sess.get('created_at'), 'updated_at': sess.get('updated_at'),
            'price_usd': sess.get('price_usd'), 'progress': scrub_text(sess.get('prepare_stage') or sess.get('prepare_note'), 120) if status != 'complete' else 'complete'}
     if status not in ('ready', 'complete') or head.get('total_positive_pct') is None and sc.get('overall_like') is None:

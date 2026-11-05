@@ -1002,5 +1002,65 @@ class Duplicate(unittest.TestCase):
             self.assertNotIn(tok, blob.lower(), tok)
 
 
+class People(unittest.TestCase):
+    """The people behind the room come from the room, never from the seat
+    count (2026-11-04: the NCIS: New York Pilot card read '12.7K behind
+    them', sixteen seats times a stand-in 800, next to 22.35M on the
+    quadrants and 83.79M on the room page)."""
+
+    def test_sources_in_order_and_never_a_stand_in(self):
+        roster = [{'seat': 1, 'segment': 'A', 'people': 400}, {'seat': 2, 'segment': 'A', 'people': 410}, {'seat': 3, 'segment': 'B'}]
+        segs = [{'label': 'A', 'people': 810}, {'label': 'B', 'people': 1_190}]
+        twin = {'meta': {'size_us': 50_000}}
+        self.assertEqual(PI.room_people(roster, segs, twin), 2_000, 'the segments first')
+        self.assertEqual(PI.room_people(roster, [], twin), 810, "then the seats' own people")
+        self.assertEqual(PI.room_people([{'seat': 1, 'segment': 'A'}], [], twin, quadrant_total=22_347_641), 22_347_641, "then the battery's whole-room total")
+        self.assertEqual(PI.room_people([{'seat': 1, 'segment': 'A'}], [{'label': 'A'}], twin), 50_000, "then the twin's US size")
+        self.assertIsNone(PI.room_people([{'seat': i} for i in range(16)], [], {}), 'no source: no count, never sixteen times a stand-in')
+        self.assertIsNone(PI.room_people([], [], None))
+
+    def test_seats_carry_their_share_and_the_card_agrees_with_the_quadrants(self):
+        twin = _beals()
+        sess = PI.open_session([twin], title='Second Helping pilot', in_room=12)
+        g = sess['group']
+        seg = g['segments'][0]
+        own = [r.get('people') for r in g['roster']]
+        self.assertTrue(all(isinstance(p, int) and p > 0 for p in own), own)
+        self.assertEqual(sum(own), seg['people'], 'the seats add up to their segment exactly')
+        self.assertGreaterEqual(len(set(own)), len(own) - 2, 'messy per-seat counts, not one value stamped down the column')
+        for p in own:
+            self.assertAlmostEqual(p, seg['people'] / 12.0, delta=seg['people'] / 12.0 * 0.01)
+        PI.prepare_watch(sess, {'jb': twin}, duration_s=600, title='A comedy pilot')
+        sc = sess['scorecard']
+        total = next(q['people'] for q in sc['battery']['quadrants'] if q['key'] == 'total')
+        self.assertEqual(sc['people'], seg['people'])
+        self.assertEqual(sc['people'], total, 'the card and the whole-room quadrant carry one figure')
+        self.assertEqual(PI.session_people(sess, twin), total)
+        self.assertNotEqual(sc['people'], 12 * 800)
+        # a saved test from before the seats carried people still reads from its segments, then the battery, then the twin
+        for r in g['roster']:
+            r.pop('people', None)
+        self.assertEqual(PI.session_people(sess, twin), seg['people'])
+        seg_people = seg.pop('people')
+        self.assertEqual(PI.session_people(sess, twin), total, 'no segment people: the battery total')
+        sc['battery']['quadrants'] = []
+        self.assertIsNone(PI.session_people(sess, twin), 'nothing on file and no US size on the twin: no count')
+        self.assertEqual(PI.session_people(sess, {'meta': {'size_us': 83_791_763}}), 83_791_763)
+        seg['people'] = seg_people
+        # the CSV's People cell is the same figure
+        header, first = PI.session_csv(sess, {'meta': twin['meta']}).splitlines()[:2]
+        self.assertEqual(header.split(',')[6], 'People')
+        self.assertEqual(first.split(',')[6], str(seg_people))
+
+    def test_lower_first_keeps_an_acronym_and_a_double_capital_name(self):
+        self.assertEqual(PI.lower_first('The room dipped'), 'the room dipped')
+        self.assertEqual(PI.lower_first('At 43:13'), 'at 43:13')
+        self.assertEqual(PI.lower_first('CBS logo animation glows on a black screen'), 'CBS logo animation glows on a black screen')
+        self.assertEqual(PI.lower_first('LL Cool J stands alone against a dark background'), 'LL Cool J stands alone against a dark background')
+        self.assertEqual(PI.lower_first('I moved up in my seat'), 'I moved up in my seat')
+        self.assertEqual(PI.lower_first('A'), 'a')
+        self.assertEqual(PI.lower_first(''), '')
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=1)

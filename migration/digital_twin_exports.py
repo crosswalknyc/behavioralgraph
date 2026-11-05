@@ -901,10 +901,23 @@ def room_pages(session: dict, portrait_fn=None, clean=None) -> list:
     for label, share, people, seat_n in segment_shares(session):
         rows.append((clean(label), _pct(share), clean(f"{human_people(people)} people, {seat_n} seats")))
     n = len(roster)
-    size_people = g.get('size_people')
+    # the people the room stands for: the same figure as the scorecard page and the battery's whole-room total
+    # (the segments' people), so the pages agree; the audience the seats were drawn from rides in the sub when it is larger
+    try:
+        from migration.digital_twin_pilot import session_people as _session_people
+        people = _session_people(session)
+    except Exception:
+        people = None
+    try:
+        size_people = int(float(g.get('size_people') or 0))
+    except (TypeError, ValueError):
+        size_people = 0
+    people = people or size_people or None
     # the header opens with a word, not the count: the copy scrub capitalizes the first word after a leading number
-    header = f"The room seated {n} people, standing for {human_people(size_people)}." if size_people else f"The room seated {n} people."
+    header = f"The room seated {n} people, standing for {human_people(people)}." if people else f"The room seated {n} people."
     sub = 'Who was seated, and the share of the room each group held.'
+    if people and size_people and size_people > people * 1.05:
+        sub += f" The {n} were drawn from an audience of {human_people(size_people)}."
     chunks = [seats[i:i + ROSTER_FACES] for i in range(0, n, ROSTER_FACES)]     # a page holds sixteen faces; a bigger room continues
     if len(chunks) > 1:
         sub += f" Seats 1 to {ROSTER_FACES} of {n}; the rest follow."

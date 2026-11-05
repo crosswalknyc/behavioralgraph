@@ -285,6 +285,109 @@ class EveryPage(unittest.TestCase):
             self.assertNotIn(tok, csv, tok)
 
 
+class PeopleAndCopy(unittest.TestCase):
+    """The scorecard page, the whole-room quadrant and the room page carry
+    one people figure (the room's segments), and the small copy slips
+    found on the NCIS: New York Pilot report (2026-11-04) stay fixed."""
+
+    def test_scorecard_page_quadrant_total_and_room_page_agree(self):
+        twin, sess = _session(with_questions=False)
+        segs = sess['group']['segments']
+        people = sum(int(s['people']) for s in segs)
+        total = next(q['people'] for q in sess['scorecard']['battery']['quadrants'] if q['key'] == 'total')
+        self.assertEqual(people, total)
+        pages = R.report_pages({'meta': twin['meta']}, sess, with_chart=False)
+        tiles = next(p for p in pages if p['kind'] == 'tiles')
+        room = next(p for p in pages if p['kind'] == 'roster')
+        shown = R.human_people(people)
+        self.assertTrue(tiles['sub'].startswith(f"The room seated 12 people, with {shown} behind them. Pilot"), tiles['sub'])
+        self.assertEqual(room['header'], f"The room seated 12 people, standing for {shown}.")
+        self.assertEqual(room['sub'], 'Who was seated, and the share of the room each group held.', 'a plain room is the audience; nothing to add')
+        # a stored stand-in on the card (sixteen seats times 800, the old fallback) never reaches the page
+        sess['scorecard']['people'] = 9_613
+        pages = R.report_pages({'meta': twin['meta']}, sess, with_chart=False)
+        self.assertNotIn('9.61K', next(p for p in pages if p['kind'] == 'tiles')['sub'])
+        header, first = PI.session_csv(sess, {'meta': twin['meta']}).splitlines()[:2]
+        self.assertEqual(header.split(',')[6], 'People')
+        self.assertEqual(first.split(',')[6], str(people), 'the CSV carries the same figure, never the stored stand-in')
+
+    def test_a_cohort_room_names_the_audience_it_was_drawn_from(self):
+        twin, sess = _session(with_questions=False)
+        g = sess['group']
+        g['size_people'] = 83_791_763          # the cohorts were cut from a wider audience
+        pages = R.report_pages({'meta': twin['meta']}, sess, with_chart=False)
+        room = next(p for p in pages if p['kind'] == 'roster')
+        shown = R.human_people(sum(int(s['people']) for s in g['segments']))
+        self.assertEqual(room['header'], f"The room seated 12 people, standing for {shown}.")
+        self.assertTrue(room['sub'].endswith('The 12 were drawn from an audience of 83.79M.'), room['sub'])
+        self.assertIn(f"with {shown} behind them", next(p for p in pages if p['kind'] == 'tiles')['sub'])
+
+    def test_no_source_prints_no_count(self):
+        twin, sess = _session(with_questions=False)
+        for s in sess['group']['segments']:
+            s.pop('people', None)
+        for r in sess['group']['roster']:
+            r.pop('people', None)
+        sess['scorecard']['battery']['quadrants'] = []
+        sess['group']['size_people'] = 0
+        pages = R.report_pages({'meta': twin['meta']}, sess, with_chart=False)
+        self.assertTrue(next(p for p in pages if p['kind'] == 'tiles')['sub'].startswith('The room seated 12 people. Pilot'))
+        self.assertEqual(next(p for p in pages if p['kind'] == 'roster')['header'], 'The room seated 12 people.')
+
+    def test_recruit_page_prints_seated_once_and_no_stand_in_ratio(self):
+        twin, sess = _session(with_questions=False)
+        rec = sess['recruit']
+        self.assertIsNone(rec.get('invited'))
+        pages = R.report_pages({'meta': twin['meta']}, sess, with_chart=False)
+        pg = next(p for p in pages if p['header'].startswith('Recruited to'))
+        labels = [lab for _v, lab in pg['tiles']]
+        self.assertEqual(labels.count('Seated'), 1, labels)
+        self.assertNotIn('Invite ratio', labels)
+        self.assertNotIn('Invited', labels)
+        self.assertIn('Walked out', labels)
+        rec['invited'] = 41
+        rec['invite_ratio_n'] = 3
+        pg = next(p for p in R.report_pages({'meta': twin['meta']}, sess, with_chart=False) if p['header'].startswith('Recruited to'))
+        self.assertEqual([lab for _v, lab in pg['tiles']], ['Seated', 'Invited', 'Walked out', 'Invite ratio'])
+        self.assertEqual(pg['tiles'][3][0], '3 : 1')
+
+    def test_after_the_wrap_keeps_an_acronym_in_the_frame(self):
+        twin, sess = _session()
+        q = next(x for x in sess['questions'] if x['id'] == 'q2')
+        q['stimulus']['window']['frame'] = 'CBS logo animation glows on a black screen, marking the end of the episode'
+        pages = R.report_pages({'meta': twin['meta']}, sess, with_chart=False)
+        pg = next(p for p in pages if p['kind'] == 'question' and 'silent ending' in p['sub'])
+        self.assertTrue(pg['sub'].startswith('After the wrap, CBS logo animation glows'), pg['sub'])
+        q['stimulus']['window']['frame'] = 'The CBS logo comes up'
+        pg = next(p for p in R.report_pages({'meta': twin['meta']}, sess, with_chart=False) if p['kind'] == 'question' and 'silent ending' in p['sub'])
+        self.assertTrue(pg['sub'].startswith('After the wrap, the CBS logo comes up'), pg['sub'])
+
+    def test_forecast_tile_label_fits_and_the_base_is_named_under_it(self):
+        twin, sess = _session(with_questions=False)
+        pages = R.report_pages({'meta': twin['meta']}, sess, with_chart=False)
+        fc = next(p for p in pages if p['kind'] == 'tiles' and 'first week' in p['header'])
+        self.assertEqual(fc['tiles'][3][1], 'Would subscribe for it')
+        self.assertTrue(any('% of people without Jennifer Beals, about ' in b and 'would subscribe for it' in b for b in fc['body']), fc['body'])
+
+    def test_a_confusion_quote_rides_after_a_colon_in_quotes(self):
+        twin, sess = _session(with_questions=False)
+        pace = sess['diagnostics']['pace']
+        pace['confusion_pct'] = 56.1
+        pace['confusions'] = [{'line': 'Three missed calls from Jack Halloway. I have no idea who that is', 'pct': 56.1}]
+        pages = R.report_pages({'meta': twin['meta']}, sess, with_chart=False)
+        line = next(b for b in pages[-1]['body'] if b.startswith('Clear up'))
+        self.assertEqual(line, 'Clear up what lost 56.1% of the room: "Three missed calls from Jack Halloway. I have no idea who that is."')
+
+    def test_attach_cell_keeps_to_the_shares_that_fit(self):
+        rec = {'talent': 'Jennifer Beals', 'role': 'supporting', 'outputs': {'reach_lift_pct': 12.1, 'expected': 2_112_345, 'room': {'parts': {'follow': 60.1, 'excellent': 57.2}, 'is_draw': True, 'verdict_pct': 59.7}},
+               'room': {'seen': True, 'draw_seats': 10, 'seats': 16}, 'read': 'Jennifer Beals (billed supporting) lifts first-month reach 12.1%; in the room she was the draw (10 of 16 named her as the reason to come back).'}
+        self.assertEqual(R._attach_room_line(rec, cell=True), '60.1% would follow, 57.2% excellent')
+        self.assertEqual(R._attach_room_line(rec), '60.1% would follow, 57.2% excellent, 10 of 16 the reason to come back')
+        pg = R._attach_pages({'talent_attach': [rec]})[0]
+        self.assertEqual(pg['rows'][0], ('Jennifer Beals (billed supporting)', '+12.1%', '2.11M more people; 60.1% would follow, 57.2% excellent'))
+        self.assertIn('10 of 16 named her as the reason to come back', pg['body'][0])
+
+
 class Csv(unittest.TestCase):
     def test_pilot_csv_carries_the_questions_block(self):
         twin, sess = _session()

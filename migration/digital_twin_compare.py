@@ -488,8 +488,13 @@ def apply_quotas(session: dict, twins: list, quotas: dict, seed: str = '') -> di
             sg = dict(sg)
             sg['seats'] = len(taken)
             segs.append(sg)
-    # people: the quota cells against the twin's size, so the room still stands for its people
+    # people: the quota cells against the twin's size, so the room still stands for its people; every seat carries its share of its cell
     total_people = sum(int(sg.get('people') or 0) for sg in segs) or int(g.get('size_people') or 0)
+    try:
+        from migration.digital_twin_panel import spread_seat_people
+        spread_seat_people(roster, segs, seed)
+    except Exception:
+        pass
     # fans of the lead
     fans_n = int(round(n * (q['fans_of_lead_pct'] or 0) / 100.0)) if q['fans_of_lead_pct'] is not None else None
     if fans_n is not None:
