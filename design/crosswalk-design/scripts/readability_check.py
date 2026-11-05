@@ -209,12 +209,16 @@ def clever_flags(header: str) -> list[str]:
 Page = tuple[str, list[str]]  # (label, written units on that page, title excluded)
 
 
-def load_pptx(path: Path) -> tuple[list[str], list[str], list[Page]]:
+def load_pptx(path: Path) -> tuple[list[str], list[str], list[Page], int]:
+    """Headers, body text, pages, and the slide count (so the caller can tell
+    a deck with no detected titles from a deck with none to check)."""
     from pptx import Presentation  # type: ignore
 
     prs = Presentation(str(path))
     headers, bodies, pages = [], [], []
+    slide_count = 0
     for idx, slide in enumerate(prs.slides, start=1):
+        slide_count = idx
         title_text = None
         body_parts = []
 
@@ -228,6 +232,12 @@ def load_pptx(path: Path) -> tuple[list[str], list[str], list[Page]]:
         cands = [sh for sh in slide.shapes if sh.has_text_frame and sh.text_frame.text.strip()
                  and len(sh.text_frame.text.split()) <= 25 and biggest(sh) >= 20]
         fallback = max(cands, key=biggest) if cands else None
+        # python-pptx builds a new shape proxy on every pass over slide.shapes, so `shape is fallback`
+        # was never true and decks without title placeholders (cw_deck.js / pptxgenjs) reported no
+        # headers at all (2026-11-05, Twin IQ v3). The underlying XML element is stable while a
+        # reference to it is held, so compare that. (shape_id is not safe: pptxgenjs reuses an id on
+        # the slide-number box, so ids repeat within a slide.)
+        fallback_el = fallback._element if fallback is not None else None
         for shape in slide.shapes:
             if not shape.has_text_frame:
                 continue
@@ -240,7 +250,7 @@ def load_pptx(path: Path) -> tuple[list[str], list[str], list[Page]]:
                 is_title = ph.type in (1, 3)  # TITLE, CENTER_TITLE
             except Exception:
                 is_title = False
-            if not is_title and title_text is None and shape is fallback:
+            if not is_title and title_text is None and fallback_el is not None and shape._element is fallback_el:
                 is_title = True
             if is_title and title_text is None:
                 title_text = txt
@@ -254,7 +264,7 @@ def load_pptx(path: Path) -> tuple[list[str], list[str], list[Page]]:
             closed = [p if p.endswith((".", "!", "?")) else p + "." for p in body_parts]
             bodies.append(" ".join(closed))
             pages.append((f"slide {idx}", body_parts))
-    return headers, bodies, pages
+    return headers, bodies, pages, slide_count
 
 
 def load_html(text: str) -> tuple[list[str], list[str], list[Page]]:
@@ -574,12 +584,13 @@ def main() -> int:
     ap.add_argument("--text", help="check a single string (treated as a header)")
     args = ap.parse_args()
 
+    slide_count = None  # set for a .pptx only
     if args.text:
         headers, bodies, pages = [args.text], [], []
     elif args.path:
         p = Path(args.path)
         if p.suffix.lower() == ".pptx":
-            headers, bodies, pages = load_pptx(p)
+            headers, bodies, pages, slide_count = load_pptx(p)
         elif p.suffix.lower() == ".docx":
             headers, bodies, pages = load_docx(p)
         elif p.suffix.lower() in (".html", ".htm"):
@@ -593,11 +604,13 @@ def main() -> int:
     flags = 0
 
     print("HEADERS")
+    examined = 0
     for h in headers:
         label, _, text = h.partition(": ") if h.startswith("slide ") else ("", "", h)
         text = text or h
         if text.strip().lower().rstrip(".") in STOP_TITLES:
             continue
+        examined += 1
         n = len(text.split())
         issues = []
         if n > HEADER_WORD_CEILING:
@@ -614,6 +627,19 @@ def main() -> int:
         print(f"  [{mark}] {prefix}{text}" + (f"    <- {'; '.join(issues)}" if issues else ""))
     if not headers:
         print("  (none found)")
+    # Always say how many headers were checked. This section used to pass silently when the title
+    # detection found nothing (2026-11-05, Twin IQ v3); on a deck of two or more slides, zero
+    # headers is a flag, not a pass.
+    skipped = len(headers) - examined
+    tail = f" ({skipped} skipped: agenda, appendix, contents, sources, thank you)" if skipped else ""
+    plural = "s" if examined != 1 else ""
+    if slide_count is None:
+        print(f"  [info] {examined} header{plural} examined{tail}")
+    elif not headers and slide_count >= 2:
+        flags += 1
+        print(f"  [FLAG] 0 headers found on a {slide_count}-slide deck; no title was detected, so no header was checked")
+    else:
+        print(f"  [info] {examined} header{plural} examined on {slide_count} slide{'s' if slide_count != 1 else ''}{tail}")
 
     print("\nBODY")
     all_body = FOOTER_RE.sub(" ", " ".join(bodies))
