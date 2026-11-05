@@ -51930,6 +51930,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-pi-seatrow:hover, #digitalTwinsIQView .dtw-pi-seatrow:focus-within { background: rgba(233,232,225,0.05); }
         #digitalTwinsIQView .dtw-pi-seatrow .circ { width: 30px; height: 30px; flex: 0 0 30px; border-radius: 50%; background: var(--hue, #3358FF); color: #E9E8E1; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 12px; position: relative; overflow: hidden; }
         #digitalTwinsIQView .dtw-pi-seatrow .circ img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 25%; }
+        /* the photo is the one thing in the room that opens who they are (Jenna 2026-11-04: a click, never a hover) */
+        #digitalTwinsIQView .dtw-pi-seatrow .circ[role="button"], #digitalTwinsIQView .dtw-pi-chip { cursor: pointer; }
+        #digitalTwinsIQView .dtw-pi-seatrow .circ[role="button"]:focus-visible, #digitalTwinsIQView .dtw-pi-chip:focus-visible { outline: 2px solid #3358FF; outline-offset: 1px; }
         #digitalTwinsIQView .dtw-pi-seatrow .txt { min-width: 0; flex: 1 1 auto; }
         #digitalTwinsIQView .dtw-pi-seatrow .who { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; font-weight: 600; color: var(--dtw-ink); line-height: 15px; }
         #digitalTwinsIQView .dtw-pi-seatrow .who .nm { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -54838,7 +54841,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     + '<label><span class="sw" style="background:' + oc0[1] + '"></span><select class="dtw-in" style="display:inline-block;width:auto;padding:3px 6px" onchange="dtwPilotSplit(\'b\', this.value)">' + opts(S.pilotSplits.b) + '</select></label>'
                     + '<span class="dtw-muted">Overlay any two groups on the room.</span></div>';
             }
-            // ---- the control room (Jenna 2026-10-30): the seats carry the generated portrait and the person's latest line on the clock; hover or focus opens who they are.
+            // ---- the control room (Jenna 2026-10-30): the seats carry the generated portrait and the person's latest line on the clock; a click on the portrait opens who they are (hover only follows the seat's line).
             function piSeatLine(s, r, t) {
                 var ev = ((s || {}).events || []).filter(function(e) { return Number(e.seat) === Number(r.seat) && Number(e.t || 0) <= t + 0.05; });
                 if (ev.length) { var e = ev[ev.length - 1]; return { line: e.line || (PI_EVT[e.type] || e.type || ''), lit: true, clock: clockFmt(e.t) }; }
@@ -54944,18 +54947,20 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 return PI_COHORT_COLORS[(cs.length + at) % PI_COHORT_COLORS.length];
             }
             function piSeatRowHtml(r, i, sl, opts) {
-                // a seat before the first remark opens who they are on hover (it is the room); a remark in the chat does not
-                // (Jenna 2026-11-04), so it carries no who-they-are label either. The card itself is one per window: piBioShow.
+                // a seat in the room (before the first remark) opens who they are on a click of its photo, never on hover
+                // (Jenna 2026-11-04: "only have bios pop up if you click on a user's icon not just on hover"); hover only
+                // follows the seat's line. A remark in the chat never opens the card, so its photo is not a button. The
+                // card itself is one per window: piBioShow / piBioToggle.
                 opts = opts || {};
                 var hue = seatHue(r, i), url = r.portrait_url || '', nm = titleCase(r.name || ''), coh = piRoomHasCohorts() ? piCohortColorFor(r) : '';
                 var pinned = piView().seat != null && piView().seat === Number(r.seat);
-                return '<div class="dtw-pi-seatrow' + (sl.lit ? ' lit' : '') + (opts.now ? ' now' : '') + (opts.remark ? ' remark' : '') + (opts.answer ? ' ans' : '') + (coh ? ' coh' : '') + (pinned ? ' pinned' : '') + '" tabindex="0" data-seat="' + Number(r.seat) + '" style="--hue:' + hue + (coh ? ';--coh:' + coh : '') + '"' + (opts.remark ? '' : ' aria-label="Who ' + esc(nm) + ' is"') + '>'
-                    + '<span class="circ">' + esc(initials(nm)) + (url ? '<img src="' + esc(thumb(url)) + '" alt="" loading="lazy" onerror="this.remove()">' : '') + '</span>'
+                return '<div class="dtw-pi-seatrow' + (sl.lit ? ' lit' : '') + (opts.now ? ' now' : '') + (opts.remark ? ' remark' : '') + (opts.answer ? ' ans' : '') + (coh ? ' coh' : '') + (pinned ? ' pinned' : '') + '"' + (opts.remark ? ' tabindex="0"' : '') + ' data-seat="' + Number(r.seat) + '" style="--hue:' + hue + (coh ? ';--coh:' + coh : '') + '">'
+                    + '<span class="circ"' + (opts.remark ? '' : ' role="button" tabindex="0" aria-label="Who ' + esc(nm) + ' is"') + '>' + esc(initials(nm)) + (url ? '<img src="' + esc(thumb(url)) + '" alt="" loading="lazy" onerror="this.remove()">' : '') + '</span>'
                     + '<div class="txt"><div class="who"><span class="nm">' + esc(nm) + ', ' + esc(r.age || '') + (piRoomHasCohorts() && r.segment ? ' <span class="cohort">' + esc(r.segment) + '</span>' : '') + '</span>' + (sl.clock ? '<span class="c">' + esc(sl.clock) + '</span>' : '') + '</div><div class="say">' + piSayHtml(sl) + '</div></div></div>';
             }
             function piChipHtml(r, i) {
                 var hue = seatHue(r, i), url = r.portrait_url || '', nm = titleCase(r.name || ''), coh = piRoomHasCohorts() ? piCohortColorFor(r) : '';
-                return '<div class="dtw-pi-seatrow dtw-pi-chip' + (coh ? ' coh' : '') + '" tabindex="0" data-seat="' + Number(r.seat) + '" style="--hue:' + hue + (coh ? ';--coh:' + coh : '') + '" aria-label="Who ' + esc(nm) + ' is">'
+                return '<div class="dtw-pi-seatrow dtw-pi-chip' + (coh ? ' coh' : '') + '" role="button" tabindex="0" data-seat="' + Number(r.seat) + '" style="--hue:' + hue + (coh ? ';--coh:' + coh : '') + '" aria-label="Who ' + esc(nm) + ' is">'
                     + '<span class="circ">' + esc(initials(nm)) + (url ? '<img src="' + esc(thumb(url)) + '" alt="" loading="lazy" onerror="this.remove()">' : '') + '</span></div>';
             }
             function renderPilotSeats(s, t) {
@@ -55027,11 +55032,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }
             // ---- the who-they-are card (Jenna 2026-11-04: "if you have the people toggle on and hover over a line it should
             // show you who the person is and their bio. but if you hover over the person here in chat it should NOT show you
-            // the bio. but if you hover here [the room] it can"). One card per window, filled from the roster as it opens: a
-            // seat in the room (the grid, or the seats before the first remark) and a seat's own line on the dial open it; a
+            // the bio"; then, the same day: "only have bios pop up if you click on a user's icon not just on hover"). One card
+            // per window, filled from the roster as it opens. In the room (the grid, or the seats before the first remark) a
+            // click on the seat's photo opens it beside the seat and it stays (stuck) until the same photo is clicked again, a
+            // click lands outside the card, Escape is pressed, or another photo is clicked; hover only follows the seat's line.
+            // A seat's own line on the dial still opens it by the pointer on hover, and that card leaves with the pointer. A
             // remark in the chat only follows the line. It is placed on the viewport (the thread scrolls, and a scrolling box
-            // clips anything positioned inside it) and stays a moment after the pointer leaves, so a long bio can be scrolled.
-            var PI_BIO = { timer: 0, doc: null, seat: null, over: false };
+            // clips anything positioned inside it); a hover card stays a moment after the pointer leaves, so it can be scrolled.
+            var PI_BIO = { timer: 0, doc: null, seat: null, over: false, stuck: false };
             function piSeatByNo(seatNo) {
                 var n = Number(seatNo), roster = (((S.pilot || {}).group || {}).roster || []);
                 for (var i = 0; i < roster.length; i++) { if (Number(roster[i].seat) === n) return { r: roster[i], i: i }; }
@@ -55052,7 +55060,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             function piBioShow(seatNo, doc, at) {
                 // at: {rect} the seat's box in the room, or {x, y, avoid} the pointer on the dial and the dial's box, in that window's viewport
                 doc = doc || document;
-                var hit = piSeatByNo(seatNo), card = piBioCard(doc); if (!hit || !card) return;
+                var hit = piSeatByNo(seatNo), card = piBioCard(doc); if (!hit || !card) return false;
                 piBioHold();
                 if (PI_BIO.doc && PI_BIO.doc !== doc) piBioHide(PI_BIO.doc);   // one card open at a time, page or popped-out room
                 var n = Number(seatNo), same = card.getAttribute('data-seat') === String(n) && card.classList.contains('on'), keep = same ? card.scrollTop : 0;
@@ -55065,6 +55073,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 card.scrollTop = keep;
                 PI_BIO.doc = doc; PI_BIO.seat = n;
                 piBioPlace(card, doc.defaultView || window, at);
+                return true;
             }
             function piBioPlace(card, win, at) {
                 var w = Math.min(320, Math.max(200, win.innerWidth - 24));
@@ -55090,12 +55099,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             function piBioHide(doc) {
                 var docs = doc ? [doc] : [document].concat(PI_BIO.doc && PI_BIO.doc !== document ? [PI_BIO.doc] : []);
                 docs.forEach(function(d) { try { var c = d.getElementById('dtwPiBioCard'); if (c) { c.classList.remove('on'); c.removeAttribute('data-seat'); } } catch (_) {} });
-                if (!doc || doc === PI_BIO.doc) { PI_BIO.doc = null; PI_BIO.seat = null; PI_BIO.over = false; }
+                if (!doc || doc === PI_BIO.doc) { PI_BIO.doc = null; PI_BIO.seat = null; PI_BIO.over = false; PI_BIO.stuck = false; }
             }
             function piBioHold() { if (PI_BIO.timer) { clearTimeout(PI_BIO.timer); PI_BIO.timer = 0; } }
             function piBioRelease(ms) {
                 piBioHold();
-                if (PI_BIO.over) return;   // the pointer is on the card itself
+                if (PI_BIO.over || PI_BIO.stuck) return;   // the pointer is on the card itself, or a click opened the card and it waits to be closed
                 PI_BIO.timer = setTimeout(function() { PI_BIO.timer = 0; if (!PI_BIO.over) piBioHide(); }, ms == null ? 160 : ms);
             }
             function piBioRefresh() {
@@ -55447,13 +55456,24 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (v.mode === 'people' || v.cohort) drawPilotDial(playheadNow());
             }
             function piRowOf(t) { return t && t.closest ? t.closest('#dtwPiSeats .dtw-pi-seatrow[data-seat]') : null; }   // a Prometheus line has no seat
+            function piBioTrigger(t, row) {
+                // the one thing in the room that opens who they are: the seat's photo (or initials), or a chip in the strip,
+                // which is the photo; a remark in the chat has none
+                if (!row || row.classList.contains('remark')) return null;
+                if (row.classList.contains('dtw-pi-chip')) return row;
+                var c = t && t.closest ? t.closest('.circ') : null;
+                return c && row.contains(c) ? c : null;
+            }
+            function piBioToggle(row) {
+                // the photo clicked: open who they are beside the seat and keep it open; the same photo again closes it
+                var n = Number(row.getAttribute('data-seat')), doc = row.ownerDocument || document;
+                if (PI_BIO.stuck && PI_BIO.seat === n && PI_BIO.doc === doc && piBioOn(doc)) { piBioHide(); return; }
+                PI_BIO.stuck = !!piBioShow(n, doc, { rect: row.getBoundingClientRect() });
+            }
             function piSeatRowOver(e) {
-                // a seat in the room: follow the line and open who they are; a remark in the chat: follow the line only
+                // a seat in the room, or a remark in the chat: follow the line; the card never opens on hover here
                 var row = piRowOf(e.target); if (!row) return;
-                var n = row.getAttribute('data-seat');
-                piHoverSeat(n);
-                if (row.classList.contains('remark')) { piBioRelease(); return; }
-                piBioShow(n, row.ownerDocument || document, { rect: row.getBoundingClientRect() });
+                piHoverSeat(row.getAttribute('data-seat'));
             }
             function piSeatRowOut(e) {
                 var row = piRowOf(e.target); if (!row) return;
@@ -55462,8 +55482,21 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 piHoverSeat(null); piBioRelease();
             }
             function piSeatRowClick(e) {
-                var row = piRowOf(e.target); if (!row) return;
+                // the photo opens (or closes) who they are; a click anywhere else closes an open card, and on the rest of a
+                // seat's row (the name, the text, a remark) it pins the seat, as before
+                var row = piRowOf(e.target), inCard = !!(e.target && e.target.closest && e.target.closest('#dtwPiBioCard'));
+                if (row && piBioTrigger(e.target, row)) { piBioToggle(row); return; }
+                if (PI_BIO.stuck && !inCard) piBioHide();
+                if (!row) return;
                 if (!(e.target.closest && e.target.closest('button, a, input, select'))) dtwPilotViewSeat(row.getAttribute('data-seat'));
+            }
+            function piSeatRowKey(e) {
+                // Escape closes an open card; Enter or Space on a focused photo opens (or closes) it, as a click does
+                if (e.key === 'Escape' || e.key === 'Esc') { if (PI_BIO.doc) piBioHide(); return; }
+                if (e.key !== 'Enter' && e.key !== ' ' && e.key !== 'Spacebar') return;
+                var row = piRowOf(e.target), trig = piBioTrigger(e.target, row);
+                if (!trig || trig !== e.target) return;
+                e.preventDefault(); piBioToggle(row);
             }
             // ---- the pointer on the dial: on the People view (or a cut cohort) the seat whose line it is on is followed, who
             // they are opens beside the pointer, and a click pins the seat, the way a seat in the room does.
@@ -55512,8 +55545,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var rect = c.getBoundingClientRect(), n = piSeatHit(c, e.clientX - rect.left, e.clientY - rect.top, playheadNow());
                 c.style.cursor = n != null ? 'pointer' : '';
                 if (n == null) { piHoverSeat(null); piBioRelease(); return; }
-                // the card opens once beside the pointer and stays put while the same line is followed, so it can be read or scrolled
-                var fresh = PI_BIO.seat !== n || PI_BIO.doc !== document || !piBioOn(document);
+                // the card opens once beside the pointer and stays put while the same line is followed, so it can be read or
+                // scrolled; a card a photo in the room opened moves to the pointer here and leaves with it, as any hover card does
+                var fresh = PI_BIO.stuck || PI_BIO.seat !== n || PI_BIO.doc !== document || !piBioOn(document);
+                PI_BIO.stuck = false;
                 piHoverSeat(n);
                 if (fresh) piBioShow(n, document, { x: e.clientX, y: e.clientY, avoid: rect }); else piBioHold();
             }
@@ -55524,6 +55559,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 document.addEventListener('mouseout', piSeatRowOut, true);
                 document.addEventListener('focusout', piSeatRowOut, true);
                 document.addEventListener('click', piSeatRowClick, true);
+                document.addEventListener('keydown', piSeatRowKey, true);
                 document.addEventListener('mousemove', function(e) { var c = e.target; if (c && c.id === 'dtwPiDial') piDialHover(c, e); }, true);
                 document.addEventListener('mouseout', function(e) { var c = e.target; if (!c || c.id !== 'dtwPiDial') return; var to = e.relatedTarget; if (to && to.closest && to.closest('#dtwPiBioCard')) return; c.style.cursor = ''; piHoverSeat(null); piBioRelease(); }, true);
                 document.addEventListener('click', function(e) { var c = e.target; if (!c || c.id !== 'dtwPiDial') return; var rect = c.getBoundingClientRect(), n = piSeatHit(c, e.clientX - rect.left, e.clientY - rect.top, playheadNow()); if (n != null) dtwPilotViewSeat(n); }, true);
@@ -55532,7 +55568,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var sp = ((s || {}).dial || {}).splits || {}, keys = Object.keys(sp);
                 var v = piView();
                 var room = piViewControl(s) + '<span><i class="sw" style="background:#E9E8E1"></i>Room</span>';
-                if (v.mode === 'people') room += '<span class="hint">Every seat, in its cohort color. Hover a line, or a seat in the room, to see who they are; click to pin.</span>';
+                if (v.mode === 'people') room += '<span class="hint">Every seat, in its cohort color. Hover a line, or click a seat\'s photo in the room, to see who they are; click a line to pin.</span>';
                 // the cohort chips ride in every view (Jenna 2026-11-04: the Room view used to hide them, which read as
                 // cohorts missing); they ride on the room's own cohorts, so a live test has them before its first frame lands
                 var cs = piCohortSplits(s), cutOn = v.mode === 'cohorts' && !!v.cohort && cs.some(function(c) { return c.key === v.cohort; });
@@ -55612,13 +55648,15 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 doc.close();
                 S.roomPop = { win: w, id: s.id };
                 try {
-                    // the room's seats answer in that window too: hover follows the line and opens who they are (a remark in the
-                    // chat does not), a click pins; the card lives in that window, made there by piBioCard on first use
+                    // the room's seats answer in that window too: hover follows the line, a click on the photo opens who they
+                    // are (a remark in the chat never does), a click on the rest of the row pins, Escape closes the card; the
+                    // card lives in that window, made there by piBioCard on first use
                     doc.addEventListener('mouseover', piSeatRowOver, true);
                     doc.addEventListener('focusin', piSeatRowOver, true);
                     doc.addEventListener('mouseout', piSeatRowOut, true);
                     doc.addEventListener('focusout', piSeatRowOut, true);
                     doc.addEventListener('click', piSeatRowClick, true);
+                    doc.addEventListener('keydown', piSeatRowKey, true);
                     w.addEventListener('pagehide', function() { piBioHide(); setTimeout(function() { if (!piRoomPopped()) { S.roomPop = null; if (S.pilot) renderPilotConsole(); } }, 60); });
                 } catch (_) {}
                 if (S.roomPopTimer) { try { clearInterval(S.roomPopTimer); } catch (_) {} }
