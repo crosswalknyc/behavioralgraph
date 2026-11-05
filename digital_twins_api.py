@@ -956,18 +956,23 @@ def _charge_question(user, payload, sess):
     if funds is not None:
         if extra:
             sess.pop('panelists_paid', None)
-            _refund(user, CREDITS['digital_twin_panelist'] * extra, f"Focus Group IQ seats returned, the session could not be covered: {name}")
+            _refund(user, CREDITS['digital_twin_panelist'] * extra, f"Focus Group IQ seats returned, the session could not be covered: {name}", job_id=f"{sid}-seats")
         return funds
     P.mark_paid(sess, DT.PANEL_QUESTIONS_INCLUDED)
     return None
 
 
-def _refund(user, credits, reason):
+def _refund(user, credits, reason, job_id=''):
+    """Hand a charge back through the host's refund_credit (the unit the
+    charge took, idempotent by `job_id`: the seats' charge id)."""
     a = _app()
     if a is None or not hasattr(a, 'refund_credit') or _role(user) == 'super_admin':
         return
     try:
-        a.refund_credit(_uname(user), credits=credits, reason=reason)
+        if job_id:
+            a.refund_credit(_uname(user), credits=credits, reason=reason, job_id=str(job_id))
+        else:
+            a.refund_credit(_uname(user), credits=credits, reason=reason)
     except Exception:
         traceback.print_exc()
 
@@ -1230,7 +1235,7 @@ def _charge_pilot(user, payload, sess, *, for_play=False):
     if funds is not None:
         if extra:
             sess.pop('panelists_paid', None)
-            _refund(user, CREDITS['digital_twin_panelist'] * extra, f"{label} seats returned, the session could not be covered: {name}")
+            _refund(user, CREDITS['digital_twin_panelist'] * extra, f"{label} seats returned, the session could not be covered: {name}", job_id=f"{sid}-seats")
         return funds
     if is_play:
         PI.mark_play_paid(sess, DT.PANEL_QUESTIONS_INCLUDED)

@@ -13287,10 +13287,15 @@ def _pm_panel_refund(panel_charge):
         u = str(panel_charge.get('user') or '').strip()
         n = int(panel_charge.get('credits') or 0)
         if u and n > 0:
+            # The charge carried no job id; its ledger description and
+            # pull type locate it so the refund restores the unit it
+            # took (credits or dollars; refund_charge.py 2026-11-05).
             _H.refund_credit(
                 u, credits=n,
                 reason=('Research report did not deliver - '
-                        f"{panel_charge.get('subject') or 'read'}"))
+                        f"{panel_charge.get('subject') or 'read'}"),
+                charge_description=str(panel_charge.get('description') or ''),
+                pull_type=str(panel_charge.get('pull_type') or ''))
             print(f"[pm-panel] refunded {n} credits to {u}")
     except Exception:
         traceback.print_exc()
@@ -18305,7 +18310,7 @@ def _pm_run_fw_job(job_id, username, inputs, extras):
         traceback.print_exc()
         refunded = False
         try:   # the build could not be completed: the credits go back (no "snag", no hold)
-            _H.refund_credit(username, credits=_PM_FW_CREDITS, reason=f"Flywheel did not deliver - {(inputs or {}).get('subject') or 'flywheel'}")
+            _H.refund_credit(username, credits=_PM_FW_CREDITS, reason=f"Flywheel did not deliver - {(inputs or {}).get('subject') or 'flywheel'}", job_id=str(job_id or ''))
             refunded = True
         except Exception as _rx:
             _faults.note('chat', _rx)

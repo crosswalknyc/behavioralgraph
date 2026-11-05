@@ -3235,81 +3235,109 @@ def _stamp_paid_profile_after_consume(username, description, pull_type):
     _users_cas_mutate(_stamp)
 
 
-def refund_credit(username, credits=1, reason=''):
-    """Reverse a previously-taken credit charge. Used when a downstream
-    step (queue POST, worker enqueue, etc.) fails AFTER we've charged
-    the user. Symmetric with consume_credit - mutates a freshly-read
-    users.json under compare-and-swap (see _users_cas_mutate),
-    decrements the used counters, adds an audit-log entry, saves.
+def refund_credit(username, credits=1, reason='', job_id='', amount_usd=None,
+                  charge_job_id='', charge_description='', pull_type=''):
+    """Reverse a previously-taken charge. Used when a downstream step
+    (queue POST, worker enqueue, etc.) fails AFTER we've charged the
+    user. Symmetric with consume_credit through refund_charge.py
+    (2026-11-05): the refund restores the UNIT the charge took (credits,
+    the company pool, the seat's dollar wallet, or the company wallet),
+    writes one history row naming the job, and is idempotent on
+    (username, job_id, reason). Runs under compare-and-swap
+    (_users_cas_mutate).
 
-    Returns True on success. Safe to call when the original charge
-    used a company pool: the pool's used counter is also decremented.
+    `job_id` is the run / job the refund is for; `charge_job_id` or
+    `charge_description` locate the charge when it was recorded under a
+    different id (a bulk list charges once per list, refunds per row;
+    partner API charges carry job_id=''). `amount_usd` pins the dollars
+    on a wallet seat when the caller knows them.
+
+    Returns True when the refund landed or was already recorded.
     """
-    if credits is None or credits <= 0:
+    if credits is None or int(credits) <= 0:
         return True
+    import refund_charge as _rc
+    res = _rc.refund_charge(
+        username, job_id or '', int(credits), reason or 'downstream failure',
+        amount_usd=amount_usd, charge_job_id=charge_job_id or '',
+        charge_description=charge_description or '', pull_type=pull_type or '',
+        mutate=_users_cas_mutate, notify=_refund_unit_assumed_alert)
+    return bool(res.get('refunded') or res.get('already_refunded'))
 
-    entry = {
-        'used_at': _credit_history_ts(),
-        'description': f'REFUND: {reason or "downstream failure"}',
-        'job_id': '',
-        'pull_type': 'refund',
-        'credits_used': -int(credits),
-    }
-    outcome = {'ok': False}
 
-    def _refund(data):
-        outcome['ok'] = False
+def _refund_unit_assumed_alert(details):
+    """Ops alert when a refund could not find its charge record and had
+    to restore the seat's current billing unit (refund_charge.py)."""
+    try:
+        _chatbot_error_email(
+            'refund_charge: unit assumed',
+            RuntimeError(f"refund for {details.get('username')} job {details.get('job_id') or '-'} "
+                         f"found no charge record; restored {details.get('credits')} credit(s)"
+                         + (f" / ${float(details.get('usd') or 0):.2f}" if details.get('usd') else '')
+                         + f" as {details.get('unit')}"),
+            user_email=details.get('username'), payload=details)
+    except Exception:
+        traceback.print_exc()
+
+
+def _stamp_charge_run_id(username, description, pull_type, run_id):
+    """Backfill the run id onto a charge recorded before the engine
+    handed one back (the partner API charges with job_id=''). Names the
+    run on the seat's history row and on the wallet deduct it rides, so
+    the worker's refund by run id finds the charge and its unit. One
+    compare-and-swap write; never raises."""
+    rid = str(run_id or '').strip()
+    desc = str(description or '').strip()
+    if not rid or not desc:
+        return False
+    done = {'ok': False}
+
+    def _stamp(data):
         user = (data.get('users') or {}).get(username)
-        if not user:
+        if not isinstance(user, dict):
             return None
-
-        company = (user.get('company') or '').strip()
-        pool = _get_company_pool(data, company)
-        has_personal_override = user.get('credit_source') == 'personal'
-
-        if pool is not None and not has_personal_override:
-            pool_used = _credit_num(pool.get('credit_pool_used'), 0)
-            pool_unlimited = _credit_num(pool.get('credit_pool'), 0) == -1
-            if not pool_unlimited:
-                pool['credit_pool_used'] = max(0, pool_used - int(credits))
-            user_used = _credit_num(user.get('credits_used'), 0)
-            user['credits_used'] = max(0, user_used - int(credits))
-        else:
-            user_unlimited = _numeric_credits_balance(user) == -1
-            if not user_unlimited:
-                user['credits'] = _numeric_credits_balance(user) + int(credits)
-            user['credits_used'] = max(0, _credit_num(user.get('credits_used'), 0) - int(credits))
-
-        history = user.setdefault('credit_usage_history', [])
-        if entry.get('amount_usd') is None:
-            for prev in history:
-                if not isinstance(prev, dict):
-                    continue
-                if str(prev.get('pull_type') or '').lower() == 'refund':
-                    continue
-                w = prev.get('wallet_charged_usd')
-                if w is None:
-                    w = prev.get('amount_usd')
-                if w is None:
-                    continue
-                try:
-                    entry['amount_usd'] = -abs(float(w))
-                    entry['wallet_charged_usd'] = -abs(float(w))
-                except (TypeError, ValueError):
-                    pass
-                break
-        history.insert(0, entry)
-        user['credit_usage_history'] = history[:500]
-
-        outcome['ok'] = True
+        changed = False
+        for row in user.get('credit_usage_history') or []:
+            if not isinstance(row, dict) or str(row.get('pull_type') or '').lower() == 'refund':
+                continue
+            if str(row.get('job_id') or '').strip():
+                continue
+            if str(row.get('description') or '').strip() != desc:
+                continue
+            if pull_type and str(row.get('pull_type') or '') != str(pull_type):
+                continue
+            row['job_id'] = rid
+            changed = True
+            break
+        try:
+            import wallet as _w
+            subject, _kind, _key = _w.resolve_billing_subject(user, data)
+            for rec in ([subject] if isinstance(subject, dict) and subject is not user else []) + [user]:
+                hit = False
+                for txn in rec.get('wallet_transactions') or []:
+                    if not isinstance(txn, dict) or str(txn.get('kind') or '') != 'deduct':
+                        continue
+                    if str(txn.get('job_id') or '').strip():
+                        continue
+                    if str(txn.get('description') or '').strip() != desc:
+                        continue
+                    txn['job_id'] = rid
+                    changed = hit = True
+                    break
+                if hit:
+                    break
+        except Exception:
+            traceback.print_exc()
+        if not changed:
+            return None
+        done['ok'] = True
         return data
 
     try:
-        _users_cas_mutate(_refund)
+        _users_cas_mutate(_stamp)
     except Exception:
         traceback.print_exc()
-        return False
-    return outcome['ok']
+    return done['ok']
 
 
 def _normalize_role(role):
@@ -52665,6 +52693,7 @@ _V1_RATE_LIMITS = {
     # (per_minute_cap, per_day_cap)
     '/v1/check': (60, 500),
     '/v1/run':   (30, 200),
+    '/v1/bulk':  (10, 100),     # a list of up to 1,000 names; one in progress per key
     '/v1/status': (300, 5000),  # polling is expected to be frequent
     '/v1/genpop': (10, 300),    # baseline file downloads
 }
@@ -58153,19 +58182,26 @@ def api_v1_profiles_run():
     # AND the window where a run got queued but credits were never
     # taken.
     charged = False
+    _v1_charge_desc = f"Chatbot Profile IQ [{decision}] - {spec.get('name', 'profile')}"
+    _v1_charge_pull_type = f'Chatbot Profile IQ v1 ({decision})'
+    # The worker's refund locates this charge by run id once
+    # _stamp_charge_run_id has named it (below), or by this description
+    # before that (refund_charge.py, 2026-11-05).
+    payload['charge_description'] = _v1_charge_desc
     if price > 0:
         try:
             charged = bool(consume_credit(
                 username,
-                description=f"Chatbot Profile IQ [{decision}] - {spec.get('name', 'profile')}",
-                # run_id is not known yet at charge time, so this
-                # ledger entry cannot be found by run_id later. The
+                description=_v1_charge_desc,
+                # run_id is not known yet at charge time; it is stamped
+                # onto this row and its wallet deduct as soon as the
+                # engine hands one back (_stamp_charge_run_id). The
                 # exact amount rides the queue payload as
                 # credits_charged and ownership rides
                 # system/api_run_owners.json - the refund helper uses
                 # both, never the decision-tier fallback.
                 job_id='',
-                pull_type=f'Chatbot Profile IQ v1 ({decision})',
+                pull_type=_v1_charge_pull_type,
                 credits_used=price,
                 addon_cuts=len(_v1_run_cuts or []),
             ))
@@ -58208,7 +58244,9 @@ def api_v1_profiles_run():
             if charged:
                 try:
                     refund_credit(username, credits=price,
-                                    reason=f'v1 engine rejected ({resp.status_code})')
+                                  reason=f'v1 engine rejected ({resp.status_code})',
+                                  charge_description=_v1_charge_desc,
+                                  pull_type=_v1_charge_pull_type)
                 except Exception:
                     traceback.print_exc()
             return jsonify({
@@ -58222,7 +58260,9 @@ def api_v1_profiles_run():
         if charged:
             try:
                 refund_credit(username, credits=price,
-                                reason='v1 engine handoff exception')
+                              reason='v1 engine handoff exception',
+                              charge_description=_v1_charge_desc,
+                              pull_type=_v1_charge_pull_type)
             except Exception:
                 traceback.print_exc()
         return jsonify({'success': False,
@@ -58244,7 +58284,9 @@ def api_v1_profiles_run():
         if charged:
             try:
                 refund_credit(username, credits=price,
-                              reason='v1 engine 200 without run_id')
+                              reason='v1 engine 200 without run_id',
+                              charge_description=_v1_charge_desc,
+                              pull_type=_v1_charge_pull_type)
             except Exception:
                 traceback.print_exc()
         return jsonify({
@@ -58257,6 +58299,12 @@ def api_v1_profiles_run():
     # ownership write. `_record_run_owner` writes both in-memory and
     # to S3 synchronously.
     _record_run_owner(run_id, username)
+    if charged:
+        try:
+            _stamp_charge_run_id(username, _v1_charge_desc,
+                                 _v1_charge_pull_type, run_id)
+        except Exception:
+            traceback.print_exc()
 
     _, credits_left = check_user_credits(username)
     _charge_usd = _v1_price_usd_for(

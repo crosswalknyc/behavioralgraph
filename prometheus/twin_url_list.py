@@ -1084,7 +1084,7 @@ def charge_both(user, uname, name, *, profile_run_id, twin_job_id, consume_credi
         traceback.print_exc()
         ok = False
     if not ok:
-        refund(uname, PROFILE_CREDITS, f"Digital Twin audience build: {name} (not started)")
+        refund(uname, PROFILE_CREDITS, f"Digital Twin audience build: {name} (not started)", job_id=str(profile_run_id))
         charged['profile'] = 0
         return charged, (f"That build runs {pr['total_label']} and your account cannot cover the twin part right now. "
                          f"Add funds or ask your admin, and it runs the moment you are set.")
@@ -1092,9 +1092,12 @@ def charge_both(user, uname, name, *, profile_run_id, twin_job_id, consume_credi
     return charged, None
 
 
-def refund(uname, credits, reason, refund_credit=None):
+def refund(uname, credits, reason, refund_credit=None, job_id=''):
     """Give a charge back (the twin, or both when the audience never
-    queued). Never raises."""
+    queued) through the host's refund_credit, which restores the unit
+    the charge took (credits or dollars) and is idempotent by job id.
+    `job_id` is the run / twin job the charge was recorded under. Never
+    raises."""
     try:
         if int(credits or 0) <= 0:
             return False
@@ -1104,6 +1107,8 @@ def refund(uname, credits, reason, refund_credit=None):
             refund_credit = getattr(app, 'refund_credit', None)
         if refund_credit is None:
             return False
+        if job_id:
+            return bool(refund_credit(uname, credits=int(credits), reason=reason, job_id=str(job_id)))
         return bool(refund_credit(uname, credits=int(credits), reason=reason))
     except Exception:
         traceback.print_exc()
@@ -1161,8 +1166,8 @@ def run_pull_in_job(inputs, username, job_id, rec, status_write, *, s3=None, buc
         # the audience never reached the engine: both charges come back here. (A run the engine itself refused
         # or the requester stopped returns both from the engine: the audience charge by its run id, the twin's
         # through the then block.)
-        refund(username, int(charged.get('twin') or 0), f"Digital Twin: {name}")
-        refund(username, int(charged.get('profile') or 0), f"Digital Twin audience build: {name}")
+        refund(username, int(charged.get('twin') or 0), f"Digital Twin: {name}", job_id=str(job_id))
+        refund(username, int(charged.get('profile') or 0), f"Digital Twin audience build: {name}", job_id=str(rec.get('profile_run_id') or ''))
     rec.update({'status': 'error', 'stage': 'stopped', 'finished_at': time.time(), 'error': FAIL_LINE, 'detail': str(res.get('error') or res.get('state') or '')[:300]})
     status_write(job_id, rec)
     return ''

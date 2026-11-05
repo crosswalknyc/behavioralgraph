@@ -2555,11 +2555,51 @@ def apply_wallet_topup(user: dict, amount_usd: float, *,
 
 def apply_wallet_refund(user: dict, amount_usd: float, *,
                         description: str = "",
-                        stripe_ref: str = "") -> dict:
-    """Refund a previous deduction. Positive dollars adds to wallet."""
-    return apply_wallet_topup(user, amount_usd,
-                              description=description or "Refund",
-                              stripe_ref=stripe_ref, kind="refund")
+                        stripe_ref: str = "",
+                        job_id: str = "",
+                        tool_key: str = "",
+                        billed_via_username: str = "") -> dict:
+    """Refund a previous deduction. Positive dollars adds to wallet.
+
+    `job_id` / `tool_key` name the charge being reversed (the run id the
+    deduct carried); `billed_via_username` is the seat the refund is for
+    when `user` is a company record (refund_charge.py, 2026-11-05).
+    """
+    txn = apply_wallet_topup(user, amount_usd,
+                             description=description or "Refund",
+                             stripe_ref=stripe_ref, kind="refund")
+    if txn:
+        if job_id:
+            txn["job_id"] = str(job_id)
+        if tool_key:
+            txn["tool"] = str(tool_key)
+        if billed_via_username:
+            txn["billed_via_username"] = str(billed_via_username)
+    return txn
+
+
+def existing_wallet_refund(subject: dict, *, job_id: str = "",
+                           description: str = ""):
+    """The refund row already written for this job (and description,
+    when given) on a wallet record, or None. The second idempotency
+    guard behind the credit_usage_history row (refund_charge.py)."""
+    if not isinstance(subject, dict):
+        return None
+    jid = str(job_id or "").strip()
+    if not jid:
+        return None
+    desc = str(description or "").strip()
+    for txn in subject.get("wallet_transactions") or []:
+        if not isinstance(txn, dict):
+            continue
+        if str(txn.get("kind") or "") != "refund":
+            continue
+        if str(txn.get("job_id") or "").strip() != jid:
+            continue
+        if desc and str(txn.get("description") or "").strip() != desc:
+            continue
+        return txn
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -5391,6 +5431,7 @@ __all__ = [
     "existing_wallet_deduct",
     "usage_row_usd", "credit_usage_for_modal",
     "apply_wallet_deduct", "apply_wallet_topup", "apply_wallet_refund",
+    "existing_wallet_refund",
     "should_charge_wallet", "wallet_can_absorb",     "needs_auto_reload",
     "claim_topup_notice",
     "try_auto_reload",

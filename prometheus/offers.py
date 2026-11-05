@@ -326,14 +326,19 @@ def _ops_email(err, *, username='', payload=None):
             return False
 
 
-def _refund(username, credits, reason):
+def _refund(username, credits, reason, job_id=''):
     """Reverse a charge that has no run behind it (host refund_credit,
     the same reversal the build flow uses when a downstream step fails
-    after the charge). Returns True when it posted."""
+    after the charge; it restores the unit the charge took and is
+    idempotent by `job_id`). Returns True when it posted."""
     try:
         from prometheus.legacy import H as _h
         fn = _h.get('refund_credit')
-        return bool(fn(username, credits=int(credits), reason=reason)) if callable(fn) else False
+        if not callable(fn):
+            return False
+        if job_id:
+            return bool(fn(username, credits=int(credits), reason=reason, job_id=str(job_id)))
+        return bool(fn(username, credits=int(credits), reason=reason))
     except Exception:
         traceback.print_exc()
         return False
@@ -394,9 +399,9 @@ def decide(app, oid, action, *, via='email', user_text='', append=True):
     result = attempts[-1]
     ok = launched(result)
     refunded = 0
-    for a in attempts:
+    for i, a in enumerate(attempts):
         n = _charged_without_run(a)
-        if n and _refund(doc.get('username'), n, f"offer {oid}: charged with no run id"):
+        if n and _refund(doc.get('username'), n, f"offer {oid}: charged with no run id", job_id=f"offer-{oid}-{i}"):
             refunded += n
     if ok:
         state = 'launched'

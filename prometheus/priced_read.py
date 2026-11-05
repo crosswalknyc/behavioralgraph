@@ -1350,7 +1350,8 @@ def offer_or_charge(*, text, subject, kind, panel_confirm, username, user=None,
     if not ok:
         return 'error', out_of_credits(subj, label)
     return 'charged', {'user': username, 'credits': credits, 'subject': subj,
-                       'kind': kind, 'pull_type': pull_type, 'label': label}
+                       'kind': kind, 'pull_type': pull_type, 'label': label,
+                       'description': desc}
 
 
 def service_turn(text, *, user=None, ctx=None, history=None, host=None,

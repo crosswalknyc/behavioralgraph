@@ -146,12 +146,17 @@ def _parent_module(name):
 def refund_row(ledger, row, reason, refund_fn=None, log=_log):
     """Give one row's charge back, once (idempotent by the row's run id
     through the shared refund helper; the ledger flag is the second
-    guard). Returns True when a refund was recorded now."""
+    guard). The list was charged once under the bulk id, so the bulk id
+    locates the charge (and its unit: credits or dollars) while the
+    row's run id names the refund; usd_each pins the dollars on a
+    wallet seat. Returns True when a refund was recorded now."""
     if not row.get('charged') or row.get('refunded'):
         return False
     uname = str((ledger.get('requester') or {}).get('username') or '')
     credits = int((ledger.get('charged') or {}).get('per_build') or BP.PROFILE_CREDITS)
     usd = float((ledger.get('charged') or {}).get('usd_each') or 0.0)
+    bulk_id = str(ledger.get('bulk_id') or '')
+    run_id = str(row.get('run_id') or f"{bulk_id}-row{row.get('i')}")
     ok = False
     try:
         if refund_fn is not None:
@@ -159,13 +164,15 @@ def refund_row(ledger, row, reason, refund_fn=None, log=_log):
         else:
             mod = _parent_module('credit_refunds')
             if mod is not None:
-                res = mod.refund_run_credits(str(row.get('run_id')), decision='new_build', reason=reason, username=uname, credits=credits) or {}
+                res = mod.refund_run_credits(run_id, decision='new_build', reason=reason, username=uname, credits=credits,
+                                             charge_job_id=bulk_id, amount_usd=usd or None) or {}
                 ok = bool(res.get('refunded') or res.get('already_refunded'))
             else:
                 import sys as _sys
                 app = _sys.modules.get('app')
                 fn = getattr(app, 'refund_credit', None)
-                ok = bool(fn(uname, credits=credits, reason=reason)) if fn else False
+                ok = bool(fn(uname, credits=credits, reason=reason, job_id=run_id, charge_job_id=bulk_id,
+                             amount_usd=usd or None)) if fn else False
     except Exception:
         traceback.print_exc()
         ok = False

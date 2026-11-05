@@ -528,7 +528,7 @@ def run_pull_in_job(inputs, username, job_id, rec, status_write, *, s3=None, buc
     if res.get('tu_key'):
         if res.get('state') == 'on_file' and int(charged.get('profile') or 0) > 0:
             # the audience was never pulled for this twin: its charge comes back here
-            refund(username, int(charged.get('profile') or 0), f"Digital Twin audience build: {subject} (already on file)")
+            refund(username, int(charged.get('profile') or 0), f"Digital Twin audience build: {subject} (already on file)", job_id=str(rec.get('profile_run_id') or ''))
             charged['profile'] = 0
             inputs['charged'] = charged
         rec['profile_key'] = res['tu_key']
@@ -545,8 +545,8 @@ def run_pull_in_job(inputs, username, job_id, rec, status_write, *, s3=None, buc
         # the audience never reached the engine: both charges come back here. (A run the engine itself refused
         # or the requester stopped returns both from the engine: the audience charge by its run id, the twin's
         # through the then block.)
-        refund(username, int(charged.get('twin') or 0), f"Digital Twin: {subject}")
-        refund(username, int(charged.get('profile') or 0), f"Digital Twin audience build: {subject}")
+        refund(username, int(charged.get('twin') or 0), f"Digital Twin: {subject}", job_id=str(job_id))
+        refund(username, int(charged.get('profile') or 0), f"Digital Twin audience build: {subject}", job_id=str(rec.get('profile_run_id') or ''))
     rec.update({'status': 'error', 'stage': 'stopped', 'finished_at': time.time(), 'error': FAIL_LINE,
                 'detail': str(res.get('error') or res.get('state') or '')[:300]})
     status_write(job_id, rec)
