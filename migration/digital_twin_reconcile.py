@@ -44,10 +44,12 @@ come back, that character rates in line with the room's best-rated
 character (within salted tenths): the seats who named her rate her with
 the lead, and the aggregate follows. Deterministic, salted, messy digits;
 the rating rows sum to 100.0, the follow shares do not (a seat can follow
-more than one person, see ``digital_twin_diagnostics.follow_shares``);
-norms and the forecast are re-attached; the card carries one plain line
-("Updated after the room's answer at 43:13.") so the change is visible
-and explainable.
+more than one person, see ``digital_twin_diagnostics.follow_shares``); no
+two characters land on the same tenth of excellent, total positive or
+likability (the recompute here is ``character_table`` itself, which
+settles the rows through ``distinct_cast_tenths``); norms and the
+forecast are re-attached; the card carries one plain line ("Updated after
+the room's answer at 43:13.") so the change is visible and explainable.
 
 Who they would follow into a second episode (Jenna, 2026-11-04: "this
 should be as high as jennifer if not higher for ll cool j ... make him

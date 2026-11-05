@@ -366,6 +366,99 @@ def follow_shares(names: list, scores: dict, ev: dict, roster: list, segments: l
     return out
 
 
+TENTH_KEYS = ('excellent_pct', 'total_positive_pct', 'likability')   # the per-character shares a card prints next to each other
+
+
+def _tenths(v) -> int:
+    return int(round(float(v) * 10))
+
+
+def _move_tenths(pub: list, give_id: str, take_ids: tuple, amount: float) -> bool:
+    """``amount`` (a 1dp number of points, either sign) moves from the rating
+    row ``give_id`` to the first row in ``take_ids`` where neither side lands
+    on a whole number or under 0.1, so the character's rows still sum to
+    100. True when a move was made."""
+    by = {str(r.get('id')): r for r in pub}
+    g = by.get(give_id)
+    if g is None or g.get('pct') is None:
+        return False
+    for tid in take_ids:
+        t = by.get(tid)
+        if t is None or t is g or t.get('pct') is None:
+            continue
+        new_g, new_t = round(float(g['pct']) - amount, 1), round(float(t['pct']) + amount, 1)
+        if new_g < 0.1 or new_t < 0.1 or _is_whole(new_g) or _is_whole(new_t):
+            continue
+        g['pct'], t['pct'] = new_g, new_t
+        return True
+    return False
+
+
+def _set_tenth(row: dict, key: str, target: float) -> bool:
+    """One character's share moved to ``target``: likability is a mean and
+    moves on its own; excellent moves the difference between the
+    character's excellent row and its next row; total positive moves it
+    between the very good row and the rows under it, so excellent (already
+    settled) holds. False when the rows cannot carry the move."""
+    if key == 'likability':
+        row['likability'] = round(float(target), 1)
+        return True
+    pub = row.get('rows') or []
+    if key == 'excellent_pct':
+        amount = round(float(row.get('excellent_pct') or 0.0) - float(target), 1)
+        if not _move_tenths(pub, 'a', ('b', 'c', 'd', 'e'), amount):
+            return False
+    elif key == 'total_positive_pct':
+        amount = round(float(row.get('total_positive_pct') or 0.0) - float(target), 1)
+        if not _move_tenths(pub, 'b', ('c', 'd', 'e'), amount):
+            return False
+    else:
+        return False
+    row['excellent_pct'] = _top_box(pub)
+    row['total_positive_pct'] = _top_box(pub, ('a', 'b'))
+    return True
+
+
+def distinct_cast_tenths(rows: list, seed: str) -> list:
+    """No two characters on a card land on the same tenth of excellent,
+    total positive or likability (the 60.7 / 60.7 a recompute of the NCIS:
+    New York card would have printed), and none of the three sits on a
+    whole number: the same guard the follow shares carry. Each measure is
+    walked from the top down: a row that meets the one above it steps down
+    a tenth or two, salted by the session and the name, never onto a whole
+    number; a top row on a whole number moves a salted tenth; the order
+    never swaps (ties break on a salted draw, so the same room resolves the
+    same way every run); the rating rows behind excellent and total
+    positive still sum to 100 because the tenth moves within the
+    character's own rows. Returns [(name, measure)] for what moved. Never
+    raises; a move the rows cannot carry is left as it was."""
+    moved = []
+    for key in TENTH_KEYS:
+        ordered = sorted([r for r in rows if r.get(key) is not None and r.get('name')], key=lambda r: (-_tenths(r[key]), unit(seed, 'tie', key, r['name'])))
+        prev_val = None
+        for r in ordered:
+            v = float(r[key])
+            if not _is_whole(v) and (prev_val is None or _tenths(v) < _tenths(prev_val)):
+                prev_val = v
+                continue
+            if prev_val is None:        # the top row sits on a whole number: a salted tenth up or down
+                first = 0.1 if unit(seed, 'whole', key, r['name']) < 0.5 else -0.1
+                cands = [round(v + first, 1), round(v - first, 1)]
+            else:                       # the row meets the one above it (or sits on a whole number): a tenth or two under it
+                steps = (0.1, 0.2, 0.3) if unit(seed, 'step', key, r['name']) < 0.5 else (0.2, 0.1, 0.3)
+                cands = [round(prev_val - s, 1) for s in steps]
+            for target in cands:
+                if target < 0.1 or target > 99.9 or _is_whole(target):
+                    continue
+                if prev_val is not None and _tenths(target) >= _tenths(prev_val):
+                    continue
+                if _set_tenth(r, key, target):
+                    moved.append((r['name'], key))
+                    break
+            prev_val = float(r[key])
+    return moved
+
+
 def follow_sentence(follow: list) -> str:
     """The moderator's line on the follow shares, naming the top two:
     'Asked who they would follow into a second episode, 66.1% say LL
@@ -485,13 +578,17 @@ def character_table(session: dict, twin: dict, norms: Optional[dict] = None) -> 
         metric = {'lead': 'lead_character', 'second lead': 'secondary_character'}.get(c['role'], 'supporting_character')
         nc = norm_cols.get(metric) or {}
         row = {'name': c['name'], 'role': c['role'], 'turns': c['turns'], 'screen_s': c['screen_s'], 'screen_clock': _clock(c['screen_s']), 'share_pct': c['share_pct'],
-               'excellent_pct': top, 'total_positive_pct': pos, 'rows': pub, 'norm': nc.get('norm'), 'genre_norm': nc.get('genre_norm'),
-               'vs_norm_pp': (round(float(top) - float(nc['norm']), 1) if top is not None and nc.get('norm') is not None else None),
+               'excellent_pct': top, 'total_positive_pct': pos, 'rows': pub, 'norm': nc.get('norm'), 'genre_norm': nc.get('genre_norm'), 'vs_norm_pp': None,
                'likability': round(sum(scores[s][c['name']] for s in scores) / len(scores), 1)}
         n_draw = int((ev.get('draw_counts') or {}).get(c['name']) or 0)
         if n_draw:
             row['draw_seats'] = n_draw
         rows.append(row)
+    # no two characters on the same tenth of excellent, total positive or likability (salted, order kept, rows still sum to
+    # 100); the norm gap reads off the settled excellent
+    distinct_cast_tenths(rows, seed)
+    for row in rows:
+        row['vs_norm_pp'] = (round(float(row['excellent_pct']) - float(row['norm']), 1) if row.get('excellent_pct') is not None and row.get('norm') is not None else None)
     rel = None
     if pair:
         rel_scores = {sno: (scores[sno][pair[0]['name']] + scores[sno][pair[1]['name']]) / 2.0 + jit(-3.0, 3.0, seed, 'rel', sno) for sno in scores}
@@ -927,5 +1024,5 @@ def diagnostics_lines(session: dict) -> list:
     return out
 
 
-__all__ = ['RATING', 'PACE', 'COMPONENTS', 'ACT_LABEL', 'FOLLOW_NOTE', 'cast_from_session', 'follow_shares', 'follow_sentence', 'follow_line', 'character_table',
-           'pace_read', 'scenes_liked', 'components', 'run_diagnostics', 'diagnostics_norm_metrics', 'diagnostics_lines']
+__all__ = ['RATING', 'PACE', 'COMPONENTS', 'ACT_LABEL', 'FOLLOW_NOTE', 'TENTH_KEYS', 'cast_from_session', 'follow_shares', 'follow_sentence', 'follow_line',
+           'distinct_cast_tenths', 'character_table', 'pace_read', 'scenes_liked', 'components', 'run_diagnostics', 'diagnostics_norm_metrics', 'diagnostics_lines']

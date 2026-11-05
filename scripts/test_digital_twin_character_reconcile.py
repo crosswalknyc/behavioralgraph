@@ -496,6 +496,125 @@ class FollowShares(unittest.TestCase):
         self.assertEqual(_no_banned(pages), [])
 
 
+def _tenths(v) -> int:
+    return int(round(float(v) * 10))
+
+
+class DistinctTenths(unittest.TestCase):
+    """No two characters on a card land on the same tenth of excellent,
+    total positive or likability, and none sits on a whole number (the
+    60.7 / 60.7 a recompute of the NCIS: New York card would have printed):
+    a salted nudge of a tenth or two, deterministic per session and name,
+    the order kept, each character's rating rows still summing to 100."""
+
+    NAMES = (LEAD, SECOND, SUPPORT)
+    CANNED = (60.7, 16.9, 12.1, 6.2, 4.1)        # one character's rating rows, excellent to poor; no whole numbers, sums to 100
+
+    @classmethod
+    def _pub(cls, vals=None):
+        return [{'id': i, 'label': lab, 'lean': lean, 'pct': v, 'people': 1_000_001 + k, 'seats_n': 3, 'tally': '3 of 16'} for k, ((i, lab, lean), v) in enumerate(zip(D.RATING, vals or cls.CANNED))]
+
+    def _tied_rows(self, likability=61.0):
+        rows = []
+        for name in self.NAMES:
+            p = self._pub()
+            rows.append({'name': name, 'role': 'lead', 'rows': p, 'excellent_pct': D._top_box(p), 'total_positive_pct': D._top_box(p, ('a', 'b')), 'likability': likability})
+        return rows
+
+    def _check(self, rows, where=''):
+        for key in D.TENTH_KEYS:
+            vals = [r[key] for r in rows]
+            self.assertEqual(len({_tenths(v) for v in vals}), len(vals), (where, key, vals))
+            for v in vals:
+                self.assertFalse(_whole(v), (where, key, v))
+                self.assertEqual(round(float(v), 1), v, (where, key, v))
+        for r in rows:
+            by = {x['id']: x['pct'] for x in r['rows']}
+            self.assertAlmostEqual(sum(by.values()), 100.0, places=6, msg=(where, r['name']))
+            self.assertEqual(r['excellent_pct'], round(by['a'], 1), (where, r['name']))
+            self.assertEqual(r['total_positive_pct'], round(by['a'] + by['b'], 1), (where, r['name']))
+            self.assertFalse(any(_whole(v) for v in by.values() if v > 0.15), (where, r['name'], by))
+
+    def test_a_cast_whose_scores_tie_lands_on_distinct_tenths_with_order_and_sums_held(self):
+        rows = self._tied_rows()
+        moved = D.distinct_cast_tenths(rows, 'chars|tie0001|abc')
+        self.assertTrue(moved)
+        self._check(rows, 'tied')
+        # the nudge is a tenth or two per step: a three-way tie fans out in steps of 0.1 to 0.3, so the last row sits within
+        # 0.6 of where it started and the top row keeps its value (it was not on a whole number)
+        for key, start in (('excellent_pct', 60.7), ('total_positive_pct', 77.6), ('likability', 61.0)):
+            vals = sorted((r[key] for r in rows), reverse=True)
+            self.assertLessEqual(start - vals[-1], 0.6, (key, vals))
+            for hi, lo in zip(vals, vals[1:]):
+                self.assertGreaterEqual(round(hi - lo, 1), 0.1, (key, vals))
+                self.assertLessEqual(round(hi - lo, 1), 0.3, (key, vals))
+        self.assertEqual(max(r['excellent_pct'] for r in rows), 60.7)
+        self.assertEqual(max(r['total_positive_pct'] for r in rows), 77.6)
+        self.assertNotIn(61.0, [r['likability'] for r in rows], 'a mean on a whole number moves a salted tenth')
+        # stable across runs: the same session and names resolve the same way
+        again = self._tied_rows()
+        D.distinct_cast_tenths(again, 'chars|tie0001|abc')
+        self.assertEqual([(r['name'], r['excellent_pct'], r['total_positive_pct'], r['likability']) for r in rows],
+                         [(r['name'], r['excellent_pct'], r['total_positive_pct'], r['likability']) for r in again])
+        # another session resolves its own way, and still cleanly
+        other = self._tied_rows()
+        D.distinct_cast_tenths(other, 'chars|tie0002|abc')
+        self._check(other, 'other session')
+
+    def test_distinct_values_are_left_alone_and_order_never_swaps(self):
+        rows = self._tied_rows()
+        for r, vals, like in zip(rows, ((63.4, 14.1, 12.1, 6.3, 4.1), (55.1, 20.4, 14.1, 6.3, 4.1), (41.7, 30.8, 17.1, 6.3, 4.1)), (61.3, 59.8, 55.2)):
+            r['rows'] = self._pub(vals)
+            r['excellent_pct'], r['total_positive_pct'], r['likability'] = D._top_box(r['rows']), D._top_box(r['rows'], ('a', 'b')), like
+        before = copy.deepcopy(rows)
+        self.assertEqual(D.distinct_cast_tenths(rows, 'chars|tie0003|abc'), [])
+        self.assertEqual(rows, before)
+        # a tie on one measure breaks on that measure alone, and the measures that were ordered keep their order
+        rows[1]['rows'] = self._pub((58.3, 19.2, 12.1, 6.3, 4.1))       # total positive 77.5
+        rows[2]['rows'] = self._pub((58.2, 19.3, 12.1, 6.3, 4.1))       # total positive 77.5, excellent a tenth under
+        for r in rows[1:]:
+            r['excellent_pct'], r['total_positive_pct'] = D._top_box(r['rows']), D._top_box(r['rows'], ('a', 'b'))
+        moved = D.distinct_cast_tenths(rows, 'chars|tie0004|abc')
+        self.assertEqual({m[1] for m in moved}, {'total_positive_pct'}, moved)
+        self._check(rows, 'near tie')
+        self.assertEqual([r['excellent_pct'] for r in rows], [63.4, 58.3, 58.2], 'excellent was ordered and is untouched')
+        self.assertEqual([r['likability'] for r in rows], [61.3, 59.8, 55.2])
+        for r in rows[1:]:
+            self.assertLessEqual(abs(r['total_positive_pct'] - 77.5), 0.3, r)
+
+    def test_the_card_and_the_reconcile_recompute_hold_the_guard(self):
+        """Every character publishes the same rating rows and the same
+        mean score: the card still prints distinct tenths, through the
+        first build and through the recompute a landing question runs."""
+        twin, sess = _scored()
+        canned = self.CANNED
+        orig_publish, orig_score = D._publish_rows, D._seat_char_score
+
+        def publish(probs_by_seat, options, roster, segments, seed):
+            if seed.split('|')[-1] in self.NAMES:
+                return self._pub(canned)
+            return orig_publish(probs_by_seat, options, roster, segments, seed)
+        D._publish_rows = publish
+        D._seat_char_score = lambda *a, **k: 61.0
+        try:
+            ch = D.character_table(sess, twin)
+            self._check(ch['characters'], 'card')
+            self.assertEqual([c['name'] for c in ch['characters']], [c['name'] for c in sorted(ch['characters'], key=lambda c: (-c['excellent_pct'], -c['total_positive_pct'], -c['likability'], c['name']))])
+            for c in ch['characters']:
+                if c.get('norm') is not None:
+                    self.assertEqual(c['vs_norm_pp'], round(c['excellent_pct'] - float(c['norm']), 1), 'the norm gap reads off the settled excellent')
+            again = D.character_table(copy.deepcopy(sess), twin)
+            self.assertEqual([(c['name'], c['excellent_pct'], c['total_positive_pct'], c['likability']) for c in ch['characters']],
+                             [(c['name'], c['excellent_pct'], c['total_positive_pct'], c['likability']) for c in again['characters']])
+            sess['questions'] = [_watch_more(range(1, 11), range(11, 16), [16])]
+            out = RC.reconcile_session(sess, twin)
+            self.assertTrue(out['changed'])
+            self._check(sess['diagnostics']['characters']['characters'], 'reconcile')
+            self.assertEqual(_no_banned(sess['diagnostics']['characters']), [])
+        finally:
+            D._publish_rows, D._seat_char_score = orig_publish, orig_score
+
+
 class Report(unittest.TestCase):
     def test_the_report_and_lines_carry_the_draw(self):
         from migration import digital_twin_report as REP
