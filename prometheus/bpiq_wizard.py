@@ -435,9 +435,11 @@ def _body_draft(body, thread_id='', history=None):
     The widget keeps the draft in page state (and sessionStorage), so it
     follows the reader across threads (Jenna 2026-11-05: a valuation
     armed on one thread read her questions on another). A draft stamped
-    with another thread's id is not this thread's; an unstamped one
-    (minted before the stamp) counts only when this thread's own last
-    agent turn asked a step, or no thread is known."""
+    with another thread's id is not this thread's. An echo counts only
+    when this thread's own last agent turn asked a step (or carried the
+    way back to one); the server's store and the thread are the truth,
+    the echo fills in when the store missed. With no thread known (a
+    direct call) the echo stands on its own."""
     body = body or {}
     extra = body.get('extra') if isinstance(body.get('extra'), dict) else {}
     hit = body.get('bpiq_wizard') or extra.get('bpiq_wizard')
@@ -447,7 +449,7 @@ def _body_draft(body, thread_id='', history=None):
     tid = str(thread_id or '').strip()
     if own and tid and own != tid:
         return None
-    if not own and tid and not last_agent_is_wizard(history):
+    if tid and not last_agent_is_wizard(history):
         return None
     return dict(hit)
 

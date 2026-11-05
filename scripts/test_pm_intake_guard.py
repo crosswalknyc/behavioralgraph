@@ -235,15 +235,19 @@ def test_per_thread():
                                                       other, store=W.MemoryStore(), user='tester', thread_id='B'))
     out = hook('Dark Matter', W.MemoryStore(), body={'bpiq_inputs': True}, history=other, thread_id='B')
     check("collect flag alone does not arm a thread whose last turn is a notice", out is None)
-    out = hook('Dark Matter', W.MemoryStore(), body={'bpiq_wizard': echoed}, history=[], thread_id='A')
-    check("the echo arms its own thread (a name at the dates step is asked for dates again, plainly)",
+    out = hook('Dark Matter', W.MemoryStore(), body={'bpiq_wizard': echoed}, history=wizard_history(W.STEP_DATES), thread_id='A')
+    check("the echo fills in on its own thread when the store missed (a name at the dates step is asked for dates again, plainly)",
           out is not None and out['reply'] == W.ASK_DATES)
-    # an unstamped echo (minted before the stamp) arms only a thread whose last agent turn asked a step
+    out = hook('Dark Matter', W.MemoryStore(), body={'bpiq_wizard': echoed}, history=other, thread_id='A')
+    check("the echo alone does not arm a thread that moved on (the store and the thread are the truth)", out is None)
+    # an unstamped echo (minted before the stamp) follows the same rule
     bare = {k: v for k, v in dA.items() if k != 'thread_id'}
     out = hook('Dark Matter', W.MemoryStore(), body={'bpiq_wizard': bare}, history=other, thread_id='B')
     check("unstamped echo on a thread that moved on does not arm it", out is None)
     out = hook('October 7 - 28', W.MemoryStore(), body={'bpiq_wizard': bare}, history=wizard_history(W.STEP_DATES), thread_id='B')
     check("unstamped echo on a thread whose last turn asked the step still works", out is not None)
+    out = hook('Dark Matter', W.MemoryStore(), body={'bpiq_wizard': bare}, history=[], thread_id='')
+    check("with no thread known (a direct call) the echo stands on its own", out is not None)
     # the S3 stash shape: a stash stamped A is not B's
     doc = dict(dA, thread_id='A')
     check("stash rule: A answers A", W._same_thread(doc.get('thread_id'), 'A'))
