@@ -3089,6 +3089,56 @@ _CARD_CONFIG: dict[str, dict] = {
         },
         "paths_conversion_noun": "sponsor site visit",
     },
+    # USA TODAY x Chime sponsor story (2026-11-05). One paid story on the
+    # national USA TODAY site for Chime. Same funnel as the local-paper
+    # read with a national fintech as the sponsor: looking Chime up away
+    # from USA TODAY, then reaching chime.com, the Chime app listing, a
+    # page Chime runs elsewhere, or the Chime Prime membership page.
+    "usa_today_chime_sponsor_story": {
+        "kind": "brand",
+        "ticketer_partition_surfaces": ["Chime website", "Chime app store listing",
+                                          "Chime's own pages on other platforms",
+                                          "Chime Prime membership page"],
+        "infoseek_overlap_surfaces":   ["Google search for Chime", "Instagram, TikTok or Facebook search",
+                                          "Reddit threads", "Review and comparison sites",
+                                          "News coverage of Chime"],
+        "assist_touchpoints":          ["Story read", "More from Chime module",
+                                          "Chime search", "Second Chime story on USA TODAY"],
+        "leak_competing_label":        "Reached a competing bank or fintech instead",
+        "leak_competing_note":         ("Looked Chime up within 14d and reached a different bank's "
+                                          "or fintech's site instead"),
+        "nest_labels": {
+            "2_infoseek": "Mid funnel: Looked Chime up within 14d",
+            "3_ticketer": "Lower funnel: Reached a Chime property within 14d",
+            "4_paid":     "Reached chime.com within 14d",
+        },
+        "fork_questions": {
+            "1_exposed":  "Read the story to the end",
+            "2_infoseek": "Looked Chime up on more than one surface",
+            "3_ticketer": "Reached more than one Chime property",
+        },
+        "archetypes": [
+            {"archetype": "Straight-through",
+             "description": "Story to chime.com through an in-article link, no research step"},
+            {"archetype": "Researched",
+             "description": "Story to a Google or social search for Chime to chime.com"},
+            {"archetype": "Re-exposed",
+             "description": "Left after the story and came back after seeing it again in the Branded Stories hub or the More from Chime module"},
+            {"archetype": "Compared",
+             "description": "Looked Chime up on Reddit or a review site before reaching chime.com"},
+        ],
+        "leak_labels": {
+            "infoseek_no_conv": (
+                "Looked Chime up, no Chime property",
+                "Searched for Chime within 14d but never reached one of its own properties",
+            ),
+            "conv_visit_no_pay": (
+                "Chime property, no website",
+                "Reached the Chime app listing or a Chime page on another platform within 14d but not chime.com",
+            ),
+        },
+        "paths_conversion_noun": "Chime site visit",
+    },
 }
 
 
