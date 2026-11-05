@@ -522,6 +522,16 @@ def finish_in_background(sess: dict, twins_by_key: dict, *, key: str, payload: d
                 notify_pilot_results(payload, sess, s3=s3)
         except Exception:
             traceback.print_exc()
+        try:
+            # every minute's read and the five-minute averages (Jenna 2026-11-05), after the scorecard is out so the
+            # page is never held for them; saved once they are written
+            if sess.get('status') == 'stopped':
+                from migration import digital_twin_minutes as MIN
+                from migration.digital_twin_room import Models
+                MIN.precompute(sess, models=Models(usage_extras=usage_extras))
+                save(key, payload)
+        except Exception:
+            traceback.print_exc()
 
     threading.Thread(target=run, name=f"pilot-live-finish-{sess.get('id')}", daemon=True).start()
 

@@ -51707,6 +51707,38 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-pi-dialwrap { position: relative; height: 132px; border: 1px solid var(--dtw-rule); border-radius: 10px; background: var(--dtw-raised); overflow: hidden; }
         #digitalTwinsIQView .dtw-pi-dialwrap canvas { width: 100%; height: 100%; display: block; }
         #digitalTwinsIQView .dtw-pi-dialnum { position: absolute; right: 10px; top: 8px; font-size: 22px; font-weight: 300; font-variant-numeric: tabular-nums; color: var(--dtw-ink); pointer-events: none; }
+        /* the ticker under the dial (2026-11-05): the runtime across the width, a mark every minute, the playhead or the stop point */
+        #digitalTwinsIQView .dtw-pi-ticker { position: relative; height: 26px; margin: 3px 0 2px; user-select: none; }
+        #digitalTwinsIQView .dtw-pi-ticker .ax { position: absolute; left: 0; right: 0; top: 0; height: 1px; background: var(--dtw-rule); }
+        #digitalTwinsIQView .dtw-pi-ticker .tk { position: absolute; top: 0; width: 1px; height: 5px; margin-left: -0.5px; background: var(--dtw-mute); opacity: 0.5; pointer-events: none; }
+        #digitalTwinsIQView .dtw-pi-ticker .tk.maj { height: 9px; opacity: 0.9; }
+        #digitalTwinsIQView .dtw-pi-ticker .lb { position: absolute; top: 11px; transform: translateX(-50%); font-size: 10px; line-height: 12px; color: var(--dtw-mute); font-variant-numeric: tabular-nums; white-space: nowrap; pointer-events: none; }
+        #digitalTwinsIQView .dtw-pi-ticker .lb.l0 { transform: none; }
+        #digitalTwinsIQView .dtw-pi-ticker .lb.lend { transform: translateX(-100%); }
+        #digitalTwinsIQView .dtw-pi-ticker .hit { position: absolute; top: 0; height: 100%; appearance: none; border: 0; padding: 0; margin: 0; background: transparent; cursor: pointer; border-radius: 4px; }
+        #digitalTwinsIQView .dtw-pi-ticker .hit:hover, #digitalTwinsIQView .dtw-pi-ticker .hit:focus-visible { background: rgba(233,232,225,0.07); outline: none; }
+        #digitalTwinsIQView .dtw-pi-ticker .hit.on { background: rgba(199,242,62,0.12); box-shadow: inset 0 2px 0 #C7F23E; }
+        #digitalTwinsIQView .dtw-pi-ticker .ph { position: absolute; top: -3px; width: 2px; height: 13px; margin-left: -1px; background: var(--dtw-ink); pointer-events: none; }
+        #digitalTwinsIQView .dtw-pi-ticker .ph.stop { background: #C7F23E; }
+        .dtw-pi-tip { position: fixed; z-index: 1200; max-width: 320px; min-width: 200px; background: #15252A; color: #E9E8E1; border: 1px solid rgba(233,232,225,0.14); border-radius: 10px; padding: 9px 11px; font-size: 12px; line-height: 16px; box-shadow: 0 10px 28px rgba(0,0,0,0.38); pointer-events: none; font-family: 'Crosswalk Inter', Inter, system-ui, sans-serif; }
+        body[data-theme="light"] .dtw-pi-tip { background: #FFFFFF; color: #0C1618; border-color: #C9C6BA; box-shadow: 0 10px 28px rgba(12,22,24,0.18); }
+        .dtw-pi-tip .k { display: flex; justify-content: space-between; gap: 12px; font-variant-numeric: tabular-nums; align-items: baseline; }
+        .dtw-pi-tip .k b { font-weight: 600; }
+        .dtw-pi-tip .k .sw { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; vertical-align: baseline; }
+        .dtw-pi-tip .m { color: #9AA09B; font-size: 11px; margin-top: 2px; }
+        body[data-theme="light"] .dtw-pi-tip .m { color: #5C6560; }
+        .dtw-pi-tip .r { margin-top: 6px; }
+        .dtw-pi-tip .r.wait { color: #9AA09B; }
+        .dtw-pi-tip .lean { display: inline-block; margin-left: 6px; padding: 0 7px; border-radius: 999px; font-size: 10px; line-height: 16px; font-weight: 600; background: rgba(233,232,225,0.12); color: inherit; white-space: nowrap; }
+        .dtw-pi-tip .lean.warm { background: rgba(199,242,62,0.2); color: #C7F23E; }
+        body[data-theme="light"] .dtw-pi-tip .lean.warm { color: #5E7E12; }
+        .dtw-pi-tip .lean.cool { background: rgba(183,179,216,0.22); color: #B7B3D8; }
+        body[data-theme="light"] .dtw-pi-tip .lean.cool { color: #8E3FA8; }
+        .dtw-pi-tip .lean.split { background: rgba(230,130,255,0.18); color: #E682FF; }
+        body[data-theme="light"] .dtw-pi-tip .lean.split { color: #8E3FA8; }
+        /* the chat lit for one minute (a click on the ticker or the dial): the lines from that minute full, the rest dimmed */
+        #digitalTwinsIQView .dtw-pi-thread.minute-on .dtw-pi-seatrow.remark { opacity: 0.38; transition: opacity 0.15s; }
+        #digitalTwinsIQView .dtw-pi-thread.minute-on .dtw-pi-seatrow.remark.minute-hit { opacity: 1; background: rgba(199,242,62,0.08); box-shadow: inset 2px 0 0 #C7F23E; }
         #digitalTwinsIQView .dtw-pi-rail { position: relative; height: 28px; margin-top: 8px; background: var(--dtw-track); border-radius: 999px; }
         #digitalTwinsIQView .dtw-pi-mark { position: absolute; top: 4px; width: 10px; height: 20px; margin-left: -5px; border: 0; border-radius: 3px; cursor: pointer; padding: 0; }
         #digitalTwinsIQView .dtw-pi-mark.love, #digitalTwinsIQView .dtw-pi-mark.wow { background: #C7F23E; }
@@ -54519,6 +54551,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             function revealPilot(t) {
                 S.pilotClock.t = t;
                 drawPilotDial(t);
+                paintPilotTicker(t);
                 paintPilotRail(t);
                 paintPilotLive(t);
                 paintPilotSeats(t);
@@ -54560,7 +54593,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (c.width !== w) c.width = w; if (c.height !== h) c.height = h;
                 var ctx = c.getContext('2d'); if (!ctx) return;
                 ctx.clearRect(0, 0, w, h);
-                var dur = Number((s.media || {}).runtime_s || (ts.length ? ts[ts.length - 1] : 1)) || 1;
+                var dur = piDur(s);
                 function X(sec) { return (sec / dur) * w; }
                 function Y(v) { return h - 10 - (Math.max(0, Math.min(100, v)) / 100) * (h - 20); }
                 ctx.strokeStyle = 'rgba(233,232,225,0.12)'; ctx.lineWidth = 1;
@@ -54607,7 +54640,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     seatsOf(cut.key).forEach(function(r, i) { var ss = piSeatSeries(s, r.seat); if (ss) lineT(ss.t, ss.v, piAlpha(cut.color, Number(r.seat) === focusSeat ? 0.95 : 0.35), Number(r.seat) === focusSeat ? 2.0 : 1.0); });
                     line(cut.value, cut.color, 2.0);
                 } else if (view.mode === 'cohorts') {
-                    cohorts.forEach(function(c) { line(c.value, c.color, 1.6); });
+                    var hovKey = S.piCohortHover && S.piCohortHover.sid === s.id ? S.piCohortHover.key : '';
+                    cohorts.forEach(function(c) { if (c.key !== hovKey) line(c.value, hovKey ? piAlpha(c.color, 0.5) : c.color, 1.6); });
+                    if (hovKey) cohorts.forEach(function(c) { if (c.key === hovKey) line(c.value, c.color, 2.4); });
                 }
                 var oc = piOverlayColors(s);
                 if (sl.a) line(sl.a.value, oc[0], 1.4);
@@ -54617,6 +54652,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var last = 0;
                 for (var j = 0; j < ts.length; j++) { if (ts[j] <= upto) last = j; }
                 if (vs.length) { ctx.beginPath(); ctx.arc(X(ts[last] || 0), Y(vs[last] || 0), 3.5, 0, Math.PI * 2); ctx.fill(); }
+                piDrawBuckets(ctx, s, view, X, Y, upto, dur, w, h);
             }
             function paintPilotRail(t) {
                 var rail = el('dtwPiRail'); if (!rail) return;
@@ -55007,7 +55043,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             function piPromRowHtml(text, opts) {
                 // a Prometheus line in the thread: the question as typed, or the short read; no seat behind it, so no card, no pin
                 opts = opts || {};
-                return '<div class="dtw-pi-seatrow remark prom' + (opts.cls ? ' ' + opts.cls : '') + (opts.now ? ' now' : '') + '">'
+                return '<div class="dtw-pi-seatrow remark prom' + (opts.cls ? ' ' + opts.cls : '') + (opts.now ? ' now' : '') + '"' + (opts.t != null && isFinite(Number(opts.t)) ? ' data-t="' + Number(opts.t) + '"' : '') + '>'
                     + '<span class="circ">' + MARK_SVG + '</span>'
                     + '<div class="txt"><div class="who"><span class="nm">Prometheus</span>' + (opts.clock ? '<span class="c">' + esc(opts.clock) + '</span>' : '') + '</div><div class="say">' + esc(text) + '</div></div></div>';
             }
@@ -55033,7 +55069,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 opts = opts || {};
                 var hue = seatHue(r, i), url = r.portrait_url || '', nm = titleCase(r.name || ''), coh = piRoomHasCohorts() ? piCohortColorFor(r) : '';
                 var pinned = piView().seat != null && piView().seat === Number(r.seat);
-                return '<div class="dtw-pi-seatrow' + (sl.lit ? ' lit' : '') + (opts.now ? ' now' : '') + (opts.remark ? ' remark' : '') + (opts.answer ? ' ans' : '') + (coh ? ' coh' : '') + (pinned ? ' pinned' : '') + '"' + (opts.remark ? ' tabindex="0"' : '') + ' data-seat="' + Number(r.seat) + '" style="--hue:' + hue + (coh ? ';--coh:' + coh : '') + '">'
+                return '<div class="dtw-pi-seatrow' + (sl.lit ? ' lit' : '') + (opts.now ? ' now' : '') + (opts.remark ? ' remark' : '') + (opts.answer ? ' ans' : '') + (coh ? ' coh' : '') + (pinned ? ' pinned' : '') + '"' + (opts.remark ? ' tabindex="0"' : '') + ' data-seat="' + Number(r.seat) + '"' + (opts.t != null && isFinite(Number(opts.t)) ? ' data-t="' + Number(opts.t) + '"' : '') + ' style="--hue:' + hue + (coh ? ';--coh:' + coh : '') + '">'
                     + '<span class="circ"' + (opts.remark ? '' : ' role="button" tabindex="0" aria-label="Who ' + esc(nm) + ' is"') + '>' + esc(initials(nm)) + (url ? '<img src="' + esc(thumb(url)) + '" alt="" loading="lazy" onerror="this.remove()">' : '') + '</span>'
                     + '<div class="txt"><div class="who"><span class="nm">' + esc(nm) + ', ' + esc(r.age || '') + (piRoomHasCohorts() && r.segment ? ' <span class="cohort">' + esc(r.segment) + '</span>' : '') + '</span>' + (sl.clock ? '<span class="c">' + esc(sl.clock) + '</span>' : '') + '</div><div class="say">' + piSayHtml(sl) + '</div></div></div>';
             }
@@ -55056,15 +55092,15 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     if (it.kind === 'event') {
                         var e = it.e, hit = bySeat[Number(e.seat)] || {};
                         var r = hit.r || { seat: e.seat, name: e.name, age: e.age, city: e.city, gender: e.gender, segment: e.segment };
-                        return piSeatRowHtml(r, hit.i || 0, { line: e.line || (PI_EVT[e.type] || e.type || ''), lit: true, clock: clockFmt(e.t) }, { now: it === last, remark: true });
+                        return piSeatRowHtml(r, hit.i || 0, { line: e.line || (PI_EVT[e.type] || e.type || ''), lit: true, clock: clockFmt(e.t) }, { now: it === last, remark: true, t: it.t });
                     }
-                    if (it.kind === 'ask') return piPromRowHtml(it.q.q, { cls: 'ask', clock: it.clock, now: it === last });
+                    if (it.kind === 'ask') return piPromRowHtml(it.q.q, { cls: 'ask', clock: it.clock, now: it === last, t: it.t });
                     if (it.kind === 'answer') {
                         var a = it.a, ah = bySeat[Number(a.seat)] || {};
                         var ar = ah.r || { seat: a.seat, name: a.name };
-                        return piSeatRowHtml(ar, ah.i || 0, { line: a.line, lit: true, clock: it.clock }, { now: it === last, remark: true, answer: true });
+                        return piSeatRowHtml(ar, ah.i || 0, { line: a.line, lit: true, clock: it.clock }, { now: it === last, remark: true, answer: true, t: it.t });
                     }
-                    return piPromRowHtml(it.read, { cls: 'read', now: it === last });
+                    return piPromRowHtml(it.read, { cls: 'read', now: it === last, t: it.t });
                 }).join('');
                 return strip + '<div class="dtw-pi-thread">' + rows + '</div>';
             }
@@ -55086,6 +55122,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         var keep = (th && !pinned) ? th.scrollTop : null;
                         box.innerHTML = renderPilotSeats(s, t);
                         box.setAttribute('data-k', key);
+                        piMinuteApply(box, false);
                         if (pinned) piThreadFollow(box);
                         else { var th2 = box.querySelector('.dtw-pi-thread'); if (th2 && keep != null) th2.scrollTop = keep; }
                     } else if (!((s.events || []).length)) {
@@ -55601,7 +55638,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var s = S.pilot || {}, d = s.dial || {}, ts = d.t || [], view = piView();
                 var seats = piDrawnSeats(s, view); if (!seats.length) return null;
                 var w = c.clientWidth || c.width || 640, h = c.clientHeight || c.height || 132;
-                var dur = Number((s.media || {}).runtime_s || (ts.length ? ts[ts.length - 1] : 1)) || 1;
+                var dur = piDur(s);
                 var tol = 6, best = null, bestD = Infinity, hold = view.hover != null ? view.hover : view.seat, holdD = Infinity;
                 seats.forEach(function(r) {
                     var ss = piSeatSeries(s, r.seat); if (!ss) return;
@@ -55644,6 +55681,251 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 document.addEventListener('mouseout', function(e) { var c = e.target; if (!c || c.id !== 'dtwPiDial') return; var to = e.relatedTarget; if (to && to.closest && to.closest('#dtwPiBioCard')) return; c.style.cursor = ''; piHoverSeat(null); piBioRelease(); }, true);
                 document.addEventListener('click', function(e) { var c = e.target; if (!c || c.id !== 'dtwPiDial') return; var rect = c.getBoundingClientRect(), n = piSeatHit(c, e.clientX - rect.left, e.clientY - rect.top, playheadNow()); if (n != null) dtwPilotViewSeat(n); }, true);
             }
+            // ---- the ticker under the dial, the five-minute averages, the minute under the pointer, and the chat lit for a minute
+            // (Jenna 2026-11-05: "it needs to show a ticker with duration and time across the bottom so you can see where things
+            // happen against minutes. if you hover over a certain minute it should open a summary of what people were saying at
+            // that point so that you can get a read on sentiment there. every 5 minutes it needs to give you the average rating
+            // based on room/cohort/people whatever you're on and hovering over. and then if you click on it it would highlight
+            // the chats from that time so you could read them"). The ticker spans the runtime: a mark every minute, labels every
+            // minute (every five past thirty minutes of runtime), the playhead while the room watches, the stop point once it has
+            // stopped. The averages and the minute read follow the active line: the room on Room; on Cohorts the hovered line or
+            // chip, else the cut cohort, else the room; on People the followed seat. The read comes from the test
+            // (GET .../pilot/<id>/minute) and is kept per test, line and minute; a finished test carries every Room minute already.
+            // Hovering a minute never opens who someone is: that stays on a click of the photo.
+            function piDur(s) { s = s || S.pilot || {}; var ts = ((s.dial || {}).t || []); return Number((s.media || {}).runtime_s || (ts.length ? ts[ts.length - 1] : 1)) || 1; }
+            function piFinished(s) { s = s || S.pilot || {}; return s.status === 'stopped' || liveFinished(s); }
+            function piStopPoint(s) { s = s || S.pilot || {}; var ts = ((s.dial || {}).t || []); return ts.length ? Number(ts[ts.length - 1]) : piDur(s); }
+            function piTickPlan(dur) {
+                // a mark every minute; labels every minute up to thirty minutes of runtime, every five past that
+                dur = Math.max(1, Number(dur) || 0);
+                var every = dur > 1800 ? 5 : 1, ticks = [];
+                for (var m = 0; m * 60 <= dur + 0.001; m++) ticks.push({ t: m * 60, m: m, major: m % 5 === 0, label: m % every === 0 ? clockFmt(m * 60) : '' });
+                return { dur: dur, every: every, ticks: ticks };
+            }
+            function piMinuteWindow(m, margin) { margin = margin == null ? 30 : Number(margin); return { a: m * 60 - margin, b: (m + 1) * 60 + margin }; }
+            function piMinuteAvgOf(tArr, vArr, m) {
+                // the line's average over one minute (points with m:00 <= t < m+1:00); null when it has none there
+                var sum = 0, n = 0;
+                for (var i = 0; i < (tArr || []).length && i < (vArr || []).length; i++) { var t = Number(tArr[i]), v = Number(vArr[i]); if (!isFinite(t) || !isFinite(v)) continue; if (t >= m * 60 && t < (m + 1) * 60) { sum += v; n++; } }
+                return n ? { avg: sum / n, n: n } : null;
+            }
+            function piBucketMarks(tArr, vArr, dur, upto, finished, width) {
+                // the average over the five minutes before each five-minute mark the line has reached, and the end once finished
+                width = width || 300; dur = Math.max(1, Number(dur) || 0);
+                var end = Math.max(0, Math.min(Number(upto) || 0, dur)), marks = [], out = [];
+                if (!tArr || !tArr.length || !vArr || !vArr.length) return out;
+                for (var k = width; k <= end + 0.001; k += width) marks.push(k);
+                if (finished && end > 0 && (!marks.length || end - marks[marks.length - 1] > 45)) marks.push(end);
+                marks.forEach(function(te) {
+                    var a = te - width, sum = 0, n = 0;
+                    for (var i = 0; i < tArr.length && i < vArr.length; i++) { var t = Number(tArr[i]), v = Number(vArr[i]); if (!isFinite(t) || !isFinite(v)) continue; if (t > a && t <= te + 0.001) { sum += v; n++; } }
+                    if (n) out.push({ t: te, from: Math.max(0, a), avg: sum / n, n: n });
+                });
+                return out;
+            }
+            function piActiveSeries(s, view) {
+                // the line the averages and the minute read follow
+                s = s || S.pilot || {}; view = view || piView();
+                var d = s.dial || {}, room = { mode: 'room', id: '', label: 'Room', color: '#E9E8E1', t: d.t || [], v: d.value || [] };
+                var seatNo = view.hover != null ? view.hover : view.seat;
+                if ((view.mode === 'people' || (view.mode === 'cohorts' && view.cohort)) && seatNo != null) {
+                    var ss = piSeatSeries(s, seatNo), hit = piSeatByNo(seatNo);
+                    if (ss) return { mode: 'person', id: String(seatNo), label: hit ? titleCase(hit.r.name || '') : ('Seat ' + seatNo), color: hit ? piSeatLineColor(s, hit.r, hit.i) : '#E9E8E1', t: ss.t, v: ss.v };
+                }
+                if (view.mode === 'cohorts') {
+                    var hov = S.piCohortHover && S.piCohortHover.sid === s.id ? S.piCohortHover.key : '', key = hov || view.cohort;
+                    if (key) { var c = piCohortSplits(s).filter(function(x) { return x.key === key; })[0]; if (c) return { mode: 'cohort', id: c.key, label: c.label, color: c.color, t: d.t || [], v: c.value || [] }; }
+                }
+                return room;
+            }
+            function piSeriesSeats(s, act) {
+                // the seats whose lines a minute lights: every seat for the room, the cohort's seats, the one seat
+                if (!act || act.mode === 'room') return null;
+                if (act.mode === 'person') return [Number(act.id)];
+                return piCohortSeats(s, act.id).map(function(r) { return Number(r.seat); });
+            }
+            function piCohortHit(c, mx, my, upto) {
+                // the cohort whose line passes within a few pixels of the pointer (the Cohorts view, none cut)
+                var s = S.pilot || {}, d = s.dial || {}, ts = d.t || [], cs = piCohortSplits(s); if (!cs.length) return '';
+                var w = c.clientWidth || c.width || 640, h = c.clientHeight || c.height || 132, dur = piDur(s), tol = 6, best = '', bestD = Infinity;
+                cs.forEach(function(co) {
+                    var vals = co.value || [], px = null, py = null, dd = Infinity;
+                    for (var i = 0; i < ts.length && i < vals.length; i++) {
+                        if (ts[i] > upto) break;
+                        var yv = Number(vals[i]); if (!isFinite(yv)) continue;
+                        var x = (ts[i] / dur) * w, y = h - 10 - (Math.max(0, Math.min(100, yv)) / 100) * (h - 20);
+                        if (px == null) { if (Math.abs(x - mx) <= tol) dd = Math.min(dd, Math.sqrt((x - mx) * (x - mx) + (y - my) * (y - my))); }
+                        else if (mx >= Math.min(px, x) - tol && mx <= Math.max(px, x) + tol) dd = Math.min(dd, piSegDist(mx, my, px, py, x, y));
+                        px = x; py = y;
+                        if (x > mx + tol) break;
+                    }
+                    if (dd <= tol && dd < bestD) { bestD = dd; best = co.key; }
+                });
+                return best;
+            }
+            function piDrawBuckets(ctx, s, view, X, Y, upto, dur, w, h) {
+                // the five-minute averages on the active line: a dot on the line, the figure beside it, one decimal
+                var fin = piFinished(s), act = piActiveSeries(s, view);
+                var marks = piBucketMarks(act.t, act.v, dur, fin ? Math.min(upto, piStopPoint(s)) : upto, fin);
+                if (!marks.length) return;
+                ctx.save();
+                ctx.font = '600 10px "Crosswalk Inter", Inter, system-ui, sans-serif'; ctx.textBaseline = 'middle';
+                marks.forEach(function(b) {
+                    var x = X(b.t), y = Y(b.avg), label = b.avg.toFixed(1), tw = ctx.measureText(label).width;
+                    ctx.globalAlpha = 0.96; ctx.fillStyle = act.color;
+                    ctx.beginPath(); ctx.arc(x, y, 2.8, 0, Math.PI * 2); ctx.fill();
+                    var lx = x + 6; if (lx + tw + 4 > w) lx = x - tw - 6;
+                    var ly = y - 10; if (ly < 9) ly = y + 10;
+                    ctx.fillStyle = 'rgba(12,22,24,0.72)'; ctx.fillRect(lx - 3, ly - 7, tw + 6, 14);
+                    ctx.fillStyle = act.color; ctx.fillText(label, lx, ly);
+                });
+                ctx.restore();
+            }
+            function piMinuteSel(s) { var sel = S.piMinuteSel; return sel && sel.sid === ((s || S.pilot || {}).id) ? sel : null; }
+            function paintPilotTicker(t) {
+                var box = el('dtwPiTicker'); if (!box) return;
+                var s = S.pilot || {}, dur = piDur(s), fin = piFinished(s), w = box.clientWidth || 640, plan = piTickPlan(dur);
+                // the labels thin out when the box is too narrow for one every minute
+                var every = plan.every; while (every < 60 && (w * 60 * every / dur) < 34) every = every === 1 ? 2 : (every === 2 ? 5 : every * 2);
+                var sel = piMinuteSel(s), key = [s.id, dur.toFixed(2), w, every, fin ? 1 : 0, sel ? sel.minute : -1].join('|');
+                if (box.getAttribute('data-k') !== key) {
+                    var html = '<div class="ax"></div>', n = Math.ceil(dur / 60);
+                    plan.ticks.forEach(function(k) {
+                        var left = (k.t / dur * 100).toFixed(3);
+                        html += '<i class="tk' + (k.major ? ' maj' : '') + '" style="left:' + left + '%"></i>';
+                        // the end is always labeled; a minute label within 100 s of it gives way
+                        var isEnd = dur - k.t < 60, lab = isEnd || (k.m % every === 0 && (k.m === 0 || dur - k.t > 100));
+                        if (lab) html += '<span class="lb' + (k.m === 0 ? ' l0' : (dur - k.t < dur * 0.04 ? ' lend' : '')) + '" style="left:' + left + '%">' + clockFmt(k.t) + '</span>';
+                    });
+                    for (var m = 0; m < n; m++) {
+                        var a = (m * 60 / dur * 100).toFixed(3), bw = (Math.min(60, dur - m * 60) / dur * 100).toFixed(3);
+                        html += '<button type="button" class="hit' + (sel && sel.minute === m ? ' on' : '') + '" data-m="' + m + '" style="left:' + a + '%;width:' + bw + '%" aria-label="Minute ' + clockFmt(m * 60) + '" onmouseenter="dtwPilotMinuteOver(' + m + ')" onfocus="dtwPilotMinuteOver(' + m + ')" onmouseleave="dtwPilotMinuteOut()" onblur="dtwPilotMinuteOut()" onclick="dtwPilotMinuteClick(' + m + ')"></button>';
+                    }
+                    html += '<i class="ph' + (fin ? ' stop' : '') + '" id="dtwPiTickHead"></i>';
+                    box.innerHTML = html; box.setAttribute('data-k', key);
+                }
+                var ph = el('dtwPiTickHead'); if (!ph) return;
+                var at = Math.max(0, Math.min(dur, fin ? piStopPoint(s) : (Number(t) || 0)));
+                ph.style.left = (at / dur * 100).toFixed(3) + '%';
+                ph.title = (fin ? 'Stopped at ' : '') + clockFmt(at);
+            }
+            // the minute tip: the time, the active line's average in that minute, how many seats were talking, and the read
+            var PI_TIP = { minute: null, key: '', el: null };
+            function piTipEl() {
+                var tip = PI_TIP.el; if (tip && tip.isConnected) return tip;
+                tip = document.createElement('div'); tip.className = 'dtw-pi-tip'; tip.id = 'dtwPiTip'; tip.setAttribute('role', 'status'); tip.style.display = 'none';
+                document.body.appendChild(tip); PI_TIP.el = tip; return tip;
+            }
+            function piLeanClass(lean) { lean = String(lean || ''); return /warm/.test(lean) ? 'warm' : (/cool/.test(lean) ? 'cool' : (lean === 'split' ? 'split' : '')); }
+            function piMinuteCacheKey(s, act, m) { return [s.id, act.mode, act.id, m].join('|'); }
+            function piMinuteLocal(s, act, m) {
+                // what the test already carries for this minute (a finished test has every Room minute written at stop)
+                var rec = ((s || {}).minute_digests || {})[act.mode + ':' + act.id + ':' + m];
+                return rec && rec.summary ? { summary: rec.summary, lean: rec.lean || '', n: null, local: true } : null;
+            }
+            function piMinuteTipHtml(s, act, m, got) {
+                var dur = piDur(s), a = piMinuteAvgOf(act.t, act.v, m), avg = a ? a.avg : (got && got.avg != null ? Number(got.avg) : null);
+                var head = '<div class="k"><b>' + esc(clockFmt(m * 60)) + ' to ' + esc(clockFmt(Math.min(dur, (m + 1) * 60))) + '</b><span><i class="sw" style="background:' + esc(act.color) + '"></i>' + esc(act.label) + ' ' + (avg != null ? avg.toFixed(1) : '-') + '</span></div>';
+                var talk = got && got.n != null ? ('<div class="m">' + (got.n ? (got.n + (got.n === 1 ? ' seat' : ' seats') + ' talking') : 'Nobody spoke up') + '</div>') : '';
+                var body = got ? ('<div class="r">' + esc(got.summary || '') + (got.lean ? ' <span class="lean ' + piLeanClass(got.lean) + '">' + esc(got.lean) + '</span>' : '') + '</div>') : '<div class="r wait">Reading the minute.</div>';
+                return head + talk + body + '<div class="m">Click to light the chat from this minute.</div>';
+            }
+            function piMinuteTipPlace(tip, m) {
+                var tk = el('dtwPiTicker'), ref = tk || el('dtwPiDial'); if (!ref) return;
+                var r = ref.getBoundingClientRect(), dur = piDur(S.pilot || {}), x = r.left + (Math.min(dur, m * 60 + 30) / dur) * r.width;
+                tip.style.display = 'block';
+                var tw = tip.offsetWidth || 260, th = tip.offsetHeight || 80;
+                var left = Math.max(8, Math.min(window.innerWidth - tw - 8, x - tw / 2)), top = r.bottom + 8;
+                if (top + th > window.innerHeight - 8) top = Math.max(8, r.top - th - 8);
+                tip.style.left = left + 'px'; tip.style.top = top + 'px';
+            }
+            function piMinuteTipShow(m) {
+                var s = S.pilot || {}; if (!s.id || m == null || m < 0) { piMinuteTipHide(); return; }
+                if (m * 60 > (piFinished(s) ? piStopPoint(s) : playheadNow()) + 0.5) { piMinuteTipHide(); return; }   // a minute the room has not reached
+                var act = piActiveSeries(s, piView()), key = piMinuteCacheKey(s, act, m), tip = piTipEl();
+                PI_TIP.minute = m; PI_TIP.key = key;
+                var cache = S.piMinuteCache || (S.piMinuteCache = {}), got = cache[key];
+                // the minute the room is in keeps changing while it watches: its read is asked for again after a moment
+                if (got && !piFinished(s) && m >= Math.floor(playheadNow() / 60) - 1 && (Date.now() - (got.at || 0)) > 20000) got = null;
+                tip.innerHTML = piMinuteTipHtml(s, act, m, got || piMinuteLocal(s, act, m));
+                piMinuteTipPlace(tip, m);
+                if (!got) piMinuteFetch(s, act, m, key);
+            }
+            function piMinuteTipHide() { PI_TIP.minute = null; PI_TIP.key = ''; if (PI_TIP.el) PI_TIP.el.style.display = 'none'; }
+            function piMinuteFetch(s, act, m, key) {
+                if (!S.key) return;
+                var flights = S.piMinuteFlights || (S.piMinuteFlights = {}); if (flights[key]) return;
+                flights[key] = true;
+                var q = '/' + S.key + '/pilot/' + s.id + '/minute?t=' + encodeURIComponent(m * 60) + '&mode=' + encodeURIComponent(act.mode) + (act.id ? '&id=' + encodeURIComponent(act.id) : '');
+                api(q).then(function(d) {
+                    delete flights[key];
+                    if (!d || !d.success) return;
+                    var rec = { summary: d.summary || '', lean: d.lean || '', n: d.n, avg: d.avg, lines: d.lines || [], at: Date.now() };
+                    (S.piMinuteCache || (S.piMinuteCache = {}))[key] = rec;
+                    if (PI_TIP.key === key && PI_TIP.el && PI_TIP.el.style.display !== 'none') { PI_TIP.el.innerHTML = piMinuteTipHtml(S.pilot || {}, act, m, rec); piMinuteTipPlace(PI_TIP.el, m); }
+                }).catch(function() { delete flights[key]; });
+            }
+            function piMinuteAt(c, mx) {
+                // the minute under the pointer on the dial, or null past where the room has reached
+                var s = S.pilot || {}, dur = piDur(s), w = c.clientWidth || c.width || 640, sec = Math.max(0, Math.min(dur, mx / w * dur));
+                var reach = piFinished(s) ? piStopPoint(s) : playheadNow();
+                if (sec > reach + 0.5) return null;
+                return Math.floor(sec / 60);
+            }
+            function piMinuteDialMove(c, e) {
+                var rect = c.getBoundingClientRect(), mx = e.clientX - rect.left, my = e.clientY - rect.top, view = piView();
+                if (view.mode === 'cohorts' && !view.cohort) dtwPilotCohortOver(piCohortHit(c, mx, my, playheadNow()));
+                var m = piMinuteAt(c, mx);
+                if (m == null) { piMinuteTipHide(); return; }
+                if (PI_TIP.minute !== m || PI_TIP.key !== piMinuteCacheKey(S.pilot || {}, piActiveSeries(S.pilot || {}, view), m)) piMinuteTipShow(m);
+            }
+            window.dtwPilotMinuteOver = function(m) { piMinuteTipShow(Number(m)); };
+            window.dtwPilotMinuteOut = function() { piMinuteTipHide(); };
+            window.dtwPilotCohortOver = function(key) {
+                var s = S.pilot || {}; key = key || '';
+                var cur = S.piCohortHover || {}; if ((cur.key || '') === key && cur.sid === s.id) return;
+                S.piCohortHover = { sid: s.id, key: key };
+                drawPilotDial(playheadNow());
+            };
+            window.dtwPilotMinuteClick = function(m) {
+                // the chat lines from that minute lit, the rest dimmed; the same minute again clears; another minute moves it
+                var s = S.pilot || {}; if (!s.id) return;
+                m = Number(m); var act = piActiveSeries(s, piView()), cur = piMinuteSel(s);
+                if (cur && cur.minute === m && cur.mode === act.mode && cur.id === act.id) S.piMinuteSel = null;
+                else S.piMinuteSel = { sid: s.id, minute: m, mode: act.mode, id: act.id, label: act.label, seats: piSeriesSeats(s, act) };
+                piMinuteApplyAll(true);
+                paintPilotTicker(playheadNow());
+            };
+            function piMinuteClear() { if (!S.piMinuteSel) return; S.piMinuteSel = null; piMinuteApplyAll(false); paintPilotTicker(playheadNow()); }
+            function piMinuteApply(box, scroll) {
+                // the lines from the minute (30 seconds either side) on the active line lit, every other remark dimmed; the first
+                // scrolled into view; a repaint of the thread calls this again so the lit minute survives it
+                if (!box) return;
+                var th = box.querySelector('.dtw-pi-thread'); if (!th) return;
+                var sel = piMinuteSel(S.pilot || {});
+                if (!sel) { th.classList.remove('minute-on'); th.querySelectorAll('.minute-hit').forEach(function(r) { r.classList.remove('minute-hit'); }); return; }
+                var win = piMinuteWindow(sel.minute), seats = sel.seats, first = null;
+                th.classList.add('minute-on');
+                th.querySelectorAll('.dtw-pi-seatrow[data-t]').forEach(function(row) {
+                    var t = Number(row.getAttribute('data-t')), sn = row.getAttribute('data-seat');
+                    var on = isFinite(t) && t >= win.a && t < win.b && (seats == null || sn == null || seats.indexOf(Number(sn)) >= 0);
+                    row.classList.toggle('minute-hit', on);
+                    if (on && !first) first = row;
+                });
+                if (scroll && first) { try { th.scrollTop = Math.max(0, th.scrollTop + first.getBoundingClientRect().top - th.getBoundingClientRect().top - 24); } catch (_) {} }
+            }
+            function piMinuteApplyAll(scroll) {
+                piMinuteApply(el('dtwPiSeats'), scroll);
+                var p = S.roomPop; if (p && p.win && !p.win.closed) { try { piMinuteApply(p.win.document.getElementById('dtwPiSeats'), scroll); } catch (_) {} }
+            }
+            if (!window._piMinuteWired) {
+                window._piMinuteWired = true;
+                document.addEventListener('mousemove', function(e) { var c = e.target; if (c && c.id === 'dtwPiDial') piMinuteDialMove(c, e); }, true);
+                document.addEventListener('mouseout', function(e) { var c = e.target; if (!c || c.id !== 'dtwPiDial') return; piMinuteTipHide(); if (S.piCohortHover && S.piCohortHover.key) dtwPilotCohortOver(''); }, true);
+                document.addEventListener('click', function(e) { var c = e.target; if (!c || c.id !== 'dtwPiDial') return; var rect = c.getBoundingClientRect(), m = piMinuteAt(c, e.clientX - rect.left); if (m != null) dtwPilotMinuteClick(m); }, true);
+                document.addEventListener('keydown', function(e) { if (e.key === 'Escape' || e.key === 'Esc') piMinuteClear(); }, true);
+                window.addEventListener('resize', function() { if (S.pilot && el('dtwPiTicker')) paintPilotTicker(playheadNow()); });
+            }
             function splitLegend(s) {
                 var sp = ((s || {}).dial || {}).splits || {}, keys = Object.keys(sp);
                 var v = piView();
@@ -55654,7 +55936,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var cs = piCohortSplits(s), cutOn = v.mode === 'cohorts' && !!v.cohort && cs.some(function(c) { return c.key === v.cohort; });
                 cs.forEach(function(c) {
                     var cls = 'coh' + (cutOn ? (v.cohort === c.key ? ' cut' : ' dim') : '');
-                    room += '<button type="button" class="' + cls + '" onclick="dtwPilotViewCohort(\'' + esc(c.key) + '\')" title="' + (v.mode === 'cohorts' ? 'Cut the dial to this cohort' : 'Show the cohorts and cut the dial to this one') + '"><i class="sw" style="background:' + c.color + '"></i>' + esc(c.label) + ' (' + esc(c.n) + ')</button>';
+                    room += '<button type="button" class="' + cls + '" onclick="dtwPilotViewCohort(\'' + esc(c.key) + '\')" onmouseenter="dtwPilotCohortOver(\'' + esc(c.key) + '\')" onmouseleave="dtwPilotCohortOver(\'\')" title="' + (v.mode === 'cohorts' ? 'Cut the dial to this cohort' : 'Show the cohorts and cut the dial to this one') + '"><i class="sw" style="background:' + c.color + '"></i>' + esc(c.label) + ' (' + esc(c.n) + ')</button>';
                 });
                 if (!keys.length) return '<div class="dtw-pi-legend">' + room + '</div>';
                 splitLines(s);
@@ -55708,6 +55990,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     piPopoutShims(p.win, html);
                     var keep = piScrollKeep(box);
                     box.innerHTML = html;
+                    piMinuteApply(box.querySelector('#dtwPiSeats'), false);
                     piScrollRestore(box, keep);
                     var seats = box.querySelector('#dtwPiSeats'); if (seats) { seats.setAttribute('data-k', piThreadKey(S.pilot || {}, playheadNow())); if (keep.thread != null) piThreadRestore(box, keep); else piThreadFollow(seats); }
                 } catch (e) { console.warn('[pilot] popout paint', e); }
@@ -55833,6 +56116,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var stage = '<div class="dtw-pi-stage"><video id="dtwPiVideo" playsinline controls controlsList="nodownload" disablePictureInPicture preload="metadata" style="display:none" oncontextmenu="return false"></video><iframe id="dtwPiFrame" class="dtw-pi-frame" title="The episode" allow="autoplay; fullscreen; encrypted-media; picture-in-picture" referrerpolicy="no-referrer-when-downgrade" style="display:none"></iframe><div id="dtwPiSlate" class="dtw-pi-slate"><div class="t">' + esc((s.media || {}).title || s.title || 'The cut') + '</div><div class="c" id="dtwPiSlateClock">' + esc(clockFmt(t0)) + '</div><div class="s" id="dtwPiOn"></div><div class="s">' + esc(hint) + '</div>' + (slateBtns ? '<div class="dtw-pi-slatebtns">' + slateBtns + '</div>' : '') + '</div></div>';
                 var center = '<div class="dtw-pi-col center">' + topbar + stage + prep
                     + '<div class="dtw-pi-dialwrap"><canvas id="dtwPiDial"></canvas><div class="dtw-pi-dialnum" id="dtwPiDialNum"></div></div>'
+                    + '<div class="dtw-pi-ticker" id="dtwPiTicker" aria-label="Minutes"></div>'
                     + splitLegend(s)
                     + '<div class="dtw-pi-marks" id="dtwPiMarks">' + renderPilotMarks(s, t0) + '</div></div>';
                 var kindSel = piKindSel();

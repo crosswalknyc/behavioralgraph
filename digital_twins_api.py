@@ -47,6 +47,8 @@ app.py so app.py stays small.
   POST /api/digital-twins/<key>/pilot/<sid>/play     first Play charges; then the room is live on the clock (409 preparing while the worker watches)
   POST /api/digital-twins/<key>/pilot/<sid>/ask      a question at the playhead; it carries the last 60 to 90 seconds of what played
   POST /api/digital-twins/<key>/pilot/<sid>/stop     stop, keep the scorecard, add the test to the norms, remove the file when the test asked for it
+  GET  /api/digital-twins/<key>/pilot/<sid>/minute   ?t=<seconds>&mode=room|cohort|person&id=<cohort key or seat>: the minute under the pointer
+                                                     ({t, avg, n, lines, summary, lean}); the read is cached on the test, a finished test has every minute ready
   PATCH /api/digital-twins/<key>/pilot/<sid>         rename, or set genre / mode / cut_label / rough_cut / purge_media_after
   POST /api/digital-twins/<key>/pilot/<sid>/norm     the user sets what the test is compared to ({genre}); a stopped test's norm lines and columns
                                                      re-read on the stored scorecard, the test re-filed in the norms, the forecast re-read; no re-run
@@ -2004,7 +2006,50 @@ def dt_pilot_stop(key, sid):
     if sess.get('scorecard'):
         # the team gets the results once, at the stop, with the report attached (Jenna 2026-11-05); the card is final here
         _team_notice('notify_pilot_results_later', payload, sess, username=str(sess.get('created_by') or _uname(user)))
+    try:
+        # every minute's read and the five-minute averages, ready before anyone hovers the finished test (Jenna 2026-11-05)
+        from migration import digital_twin_minutes as MIN
+        MIN.precompute_in_background(sess, key=key, payload=payload, save=lambda k, p: DT.save_twin(_s3(), k, p), usage_extras=_usage_extras(user))
+    except Exception:
+        traceback.print_exc()
     return jsonify({'success': True, 'session': PI.public_session(sess), 'media_removed': purged})
+
+
+@bp.route(f'{PREFIX}/<path:key>/pilot/<sid>/minute', methods=['GET'])
+def dt_pilot_minute(key, sid):
+    """The minute under the pointer on the dial (Jenna 2026-11-05): the
+    average for the line the page is on, how many seats were talking,
+    their lines, and a one or two sentence read with its lean. The read
+    is one small call, cached on the test so a second hover is instant;
+    a finished test had every Room minute written at stop."""
+    user, err = _gate()
+    if err:
+        return err
+    payload, err = _twin_or_404(user, key)
+    if err:
+        return err
+    from migration import digital_twin_minutes as MIN
+    from migration.digital_twin_room import Models
+    sess = _pilot(payload, sid)
+    if not sess:
+        return jsonify({'success': False, 'error': 'test not found'}), 404
+    try:
+        t = float(request.args.get('t') or 0)
+    except (TypeError, ValueError):
+        t = 0.0
+    mode = str(request.args.get('mode') or 'room').strip().lower()
+    if mode not in MIN.MODES:
+        return jsonify({'success': False, 'error': 'mode is room, cohort or person'}), 400
+    ident = str(request.args.get('id') or '')
+    if mode != 'room' and not ident:
+        return jsonify({'success': False, 'error': 'id names the cohort or the seat'}), 400
+    out = MIN.digest(sess, max(0.0, t), mode, ident, models=Models(usage_extras=_usage_extras(user)), memo_key=f"{key}|{sid}")
+    if out.pop('fresh', False):
+        try:
+            DT.save_twin(_s3(), key, payload)
+        except Exception:
+            traceback.print_exc()
+    return _nocache(jsonify(dict({'success': True}, **out)))
 
 
 @bp.route(f'{PREFIX}/<path:key>/pilot/<sid>', methods=['DELETE'])
