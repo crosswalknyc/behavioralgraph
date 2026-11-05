@@ -189,10 +189,55 @@ def convert(docx_path, output_path=None):
     return sections
 
 
+DEFAULT_OUT = 'bg-webapp/static/cw_methodologies.json'
+
+
+def _existing_titles(path):
+    try:
+        return [s.get('title') for s in json.loads(Path(path).read_text(encoding='utf-8'))]
+    except Exception:
+        return []
+
+
 if __name__ == '__main__':
-    docx = sys.argv[1] if len(sys.argv) > 1 else '/Users/jennamenking/Downloads/CW Product Methodologies July_28_2026A.docx'
-    out = sys.argv[2] if len(sys.argv) > 2 else 'bg-webapp/static/cw_methodologies.json'
-    sections = convert(docx, out)
+    # The source document must be named. This used to default to one
+    # person's Downloads folder, so a bare run regenerated the whole
+    # methodology from whatever vintage of the Word file happened to be
+    # sitting there (Jenna 2026-11-05, after the file was lost for eight
+    # days to an unrelated commit).
+    if len(sys.argv) < 2:
+        print(__doc__.strip())
+        print('\nUsage: build_methodology_json.py <source.docx> [out.json]')
+        print('\nName the .docx explicitly. There is no default: sections added')
+        print('straight to the JSON since the last Word export would be lost')
+        print('silently if this regenerated from a stale document.')
+        sys.exit(2)
+
+    docx = sys.argv[1]
+    out = sys.argv[2] if len(sys.argv) > 2 else DEFAULT_OUT
+
+    before = _existing_titles(out)
+    sections = convert(docx, None)
+    after = [s.get('title') for s in sections]
+    dropped = [t for t in before if t and t not in after]
+
+    # Naming the file is not enough on its own: pointing this at the old
+    # export is the likeliest way to regenerate, and that is exactly the
+    # run that quietly deletes the newer sections.
+    if dropped and '--allow-drop' not in sys.argv:
+        print('Refusing to write %s.' % out)
+        print('\n%d section(s) in the current file are absent from %s:'
+              % (len(dropped), docx))
+        for t in dropped:
+            print('  - %s' % t)
+        print('\nFold them into the source document first, or pass --allow-drop')
+        print('if losing them is genuinely what you want.')
+        sys.exit(1)
+
+    Path(out).write_text(
+        json.dumps(sections, indent=2, ensure_ascii=False),
+        encoding='utf-8',
+    )
     print(f'Wrote {out} with {len(sections)} sections:')
     for s in sections:
         subs = len(s.get('subs') or [])
