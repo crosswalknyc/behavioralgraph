@@ -951,6 +951,10 @@ def components(session: dict, twin: dict) -> dict:
         nc = norm_cols.get(f"component_{key}") or {}
         rows.append({'key': key, 'label': label, 'excellent_pct': top, 'norm': nc.get('norm'), 'genre_norm': nc.get('genre_norm'),
                      'vs_norm_pp': (round(float(top) - float(nc['norm']), 1) if top is not None and nc.get('norm') is not None else None), 'beats_n': len(idxs)})
+    return {'rows': rows, 'read': _components_read(rows)}
+
+
+def _components_read(rows: list) -> str:
     strong = sorted([r for r in rows if r.get('vs_norm_pp') is not None], key=lambda r: -r['vs_norm_pp'])
     weak = sorted([r for r in rows if r.get('vs_norm_pp') is not None], key=lambda r: r['vs_norm_pp'])
     read = ''
@@ -958,7 +962,50 @@ def components(session: dict, twin: dict) -> dict:
         read += f"{strong[0]['label']} is the strongest component at {pct1(strong[0]['excellent_pct'])}% excellent" + (f" ({'+' if strong[0]['vs_norm_pp'] >= 0 else ''}{strong[0]['vs_norm_pp']} on the norm)" if strong[0].get('vs_norm_pp') is not None else '') + '. '
     if weak and weak[0] is not (strong[0] if strong else None):
         read += f"{weak[0]['label']} is the softest at {pct1(weak[0]['excellent_pct'])}%."
-    return {'rows': rows, 'read': read.strip()}
+    return read.strip()
+
+
+def refresh_norm_refs(session: dict) -> dict:
+    """The character and component rows carry the norm column as it
+    stands now (a norm re-set on the card, a re-filed ledger cell, a
+    column that turned from a stand-in into a norm of the format): the
+    norm, the genre norm and the gap on every row, the components read
+    rebuilt from the rows, and the lead-norm figure in the characters
+    read. Nothing else is re-run. Returns what moved."""
+    out = {'characters': 0, 'components': 0}
+    sc = (session or {}).get('scorecard') if isinstance((session or {}).get('scorecard'), dict) else {}
+    cols = (sc or {}).get('norm_columns') or {}
+    d = (session or {}).get('diagnostics') if isinstance((session or {}).get('diagnostics'), dict) else {}
+    if not cols or not d:
+        return out
+    chars = d.get('characters') if isinstance(d.get('characters'), dict) else {}
+    for row in (chars.get('characters') or []):
+        metric = {'lead': 'lead_character', 'second lead': 'secondary_character'}.get(row.get('role'), 'supporting_character')
+        nc = cols.get(metric) or {}
+        if not nc:
+            continue
+        new_norm = nc.get('norm')
+        if row.get('norm') != new_norm or row.get('genre_norm') != nc.get('genre_norm'):
+            out['characters'] += 1
+        row['norm'], row['genre_norm'] = new_norm, nc.get('genre_norm')
+        row['vs_norm_pp'] = (round(float(row['excellent_pct']) - float(new_norm), 1) if row.get('excellent_pct') is not None and new_norm is not None else None)
+    lead = next((r for r in (chars.get('characters') or []) if r.get('role') == 'lead'), None)
+    if lead and lead.get('norm') is not None and chars.get('read'):
+        chars['read'] = re.sub(r'against a lead norm of \d+%', f"against a lead norm of {float(lead['norm']):.0f}%", str(chars['read']))
+    comps = d.get('components') if isinstance(d.get('components'), dict) else {}
+    rows = comps.get('rows') or []
+    for row in rows:
+        nc = cols.get(f"component_{row.get('key')}") or {}
+        if not nc:
+            continue
+        new_norm = nc.get('norm')
+        if row.get('norm') != new_norm or row.get('genre_norm') != nc.get('genre_norm'):
+            out['components'] += 1
+        row['norm'], row['genre_norm'] = new_norm, nc.get('genre_norm')
+        row['vs_norm_pp'] = (round(float(row['excellent_pct']) - float(new_norm), 1) if row.get('excellent_pct') is not None and new_norm is not None else None)
+    if rows:
+        comps['read'] = _components_read(rows)
+    return out
 
 
 # ------------------------------------------------------------- the glue
@@ -1025,4 +1072,4 @@ def diagnostics_lines(session: dict) -> list:
 
 
 __all__ = ['RATING', 'PACE', 'COMPONENTS', 'ACT_LABEL', 'FOLLOW_NOTE', 'TENTH_KEYS', 'cast_from_session', 'follow_shares', 'follow_sentence', 'follow_line',
-           'distinct_cast_tenths', 'character_table', 'pace_read', 'scenes_liked', 'components', 'run_diagnostics', 'diagnostics_norm_metrics', 'diagnostics_lines']
+           'distinct_cast_tenths', 'character_table', 'pace_read', 'scenes_liked', 'components', 'run_diagnostics', 'refresh_norm_refs', 'diagnostics_norm_metrics', 'diagnostics_lines']

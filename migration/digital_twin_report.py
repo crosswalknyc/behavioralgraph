@@ -69,18 +69,95 @@ def _head(session: dict) -> dict:
     return (((session or {}).get('scorecard') or {}).get('battery') or {}).get('headline') or {}
 
 
-def _compared_to(sc: dict, session: dict) -> str:
-    """'Compared to: Procedural pilots.' for the scorecard pages (the
-    chosen norm by name; never a source)."""
+def _choice(sc: dict, session: dict) -> dict:
+    """The norm choice on the card; an older card without one is read
+    from its norm columns (the genre has a norm only when the columns
+    say so; the all column is a stand-in when its money cells are)."""
     ch = sc.get('norm_choice') if isinstance(sc.get('norm_choice'), dict) else {}
-    label = str(ch.get('label') or '')
-    if not label:
-        try:
-            from migration.digital_twin_norms import choice_label
-            label = choice_label(str(sc.get('format') or (session or {}).get('format') or (session or {}).get('mode') or 'pilot'), str(sc.get('genre') or (session or {}).get('genre') or 'all'))
-        except Exception:
-            label = ''
-    return _clean(f"Compared to: {label}.") if label else ''
+    if ch.get('compared_label') or (ch.get('label') and 'stand_in' in ch):
+        return ch
+    try:
+        from migration import digital_twin_norms as N
+        norms = sc.get('norms') if isinstance(sc.get('norms'), dict) else {}
+        fmt = str(sc.get('format') or (session or {}).get('format') or (session or {}).get('mode') or 'pilot')
+        genre = str(sc.get('genre') or (session or {}).get('genre') or 'all')
+        has = str(norms.get('genre_used') or 'all') not in ('', 'all')
+        stand_in = N._column_stand_in(norms.get('all') or {}) if norms else ''
+        fresh = N.norm_choice(fmt, genre, has_genre_norm=has, stand_in=stand_in)
+        if ch:
+            fresh.update({k: v for k, v in ch.items() if k in ('own_tests',)})
+        return fresh
+    except Exception:
+        return ch
+
+
+def _compared_to(sc: dict, session: dict) -> str:
+    """'Compared to all pilots.' / 'Compared to procedural pilots.' /
+    'Compared to feature screenings.' for the scorecard pages: the norm
+    the card is actually read against, from the one helper the card and
+    the CSV use (never a source)."""
+    try:
+        from migration.digital_twin_norms import compared_line
+        line = compared_line(_choice(sc, session))
+    except Exception:
+        line = ''
+    return _clean(line) if line else ''
+
+
+def _denominator(session: dict, sc: dict, seats: int, people) -> str:
+    """The plain statement of what the shares are of, once on the
+    scorecard page and once on the TLDR."""
+    if sc.get('denominator_line'):
+        return str(sc['denominator_line'])
+    try:
+        from migration.digital_twin_pilot import denominator_line
+        return denominator_line(seats, people)
+    except Exception:
+        return ''
+
+
+def _tallies(sc: dict) -> dict:
+    try:
+        from migration.digital_twin_pilot import battery_tallies
+        return battery_tallies(sc.get('battery') or {})
+    except Exception:
+        return {}
+
+
+def _norm_name(sc: dict, metric: str) -> str:
+    """'the feature screening norm' while the row's column is a stand-in,
+    'the procedural pilot norm' when the genre has one, else 'the
+    all-pilots norm' (from the choice), for a page's sub-line."""
+    col = ((sc.get('norm_columns') or {}).get(metric)) or {}
+    si = str(col.get('stand_in') or '')
+    if si and not col.get('genre_own'):
+        return f"the {si} norm"
+    try:
+        from migration.digital_twin_norms import norm_word
+        ch = _choice(sc, {})
+        if col.get('genre_own') or not ch.get('stand_in'):
+            return norm_word(dict(ch, stand_in=''))
+        return norm_word(ch)
+    except Exception:
+        return 'the norm'
+
+
+def _norm_cell(sc: dict, metric: str, value) -> str:
+    """'norm 51%' / 'feature screening norm 50%' for a table cell."""
+    if value is None:
+        return ''
+    col = ((sc.get('norm_columns') or {}).get(metric)) or {}
+    si = str(col.get('stand_in') or '')
+    return f"{si} norm {float(value):.0f}%" if (si and not col.get('genre_own')) else f"norm {float(value):.0f}%"
+
+
+def _headline(session: dict) -> dict:
+    try:
+        from migration.digital_twin_pilot import headline_read
+        return headline_read(session) or {}
+    except Exception as e:
+        print(f"[twin-report] headline skipped: {e}")
+        return {}
 
 
 # ---------------------------------------------------------------- chart
@@ -382,15 +459,22 @@ def _tldr_question_line(session: dict) -> str:
 
 # ---------------------------------------------------------------- pages
 def _tldr(session: dict, payload: dict) -> list:
+    """The TLDR opens on the strongest honest finding (headline_read:
+    intent against a soft Excellent when every money measure sits under
+    its norm; the norm beaten when the card clears it), with the seat
+    tally beside every share."""
     head = _head(session)
     sc = session.get('scorecard') or {}
     d = session.get('diagnostics') or {}
     mr = session.get('mode_read') or {}
     out = []
-    if head.get('total_positive_pct') is not None:
+    hl = _headline(session)
+    if hl.get('lines'):
+        out.extend(hl['lines'][:3])
+    elif head.get('total_positive_pct') is not None:
         out.append(f"Total positive {_pct(head.get('total_positive_pct'))}, definitely recommend {_pct(head.get('definitely_recommend_pct'))}" + (f", excellent {_pct(head.get('excellent_pct'))}." if head.get('excellent_pct') is not None else '.'))
-    for l in (sc.get('norm_lines') or [])[:1]:
-        out.append(l)
+        for l in (sc.get('norm_lines') or [])[:1]:
+            out.append(l)
     if mr.get('read') and mr.get('mode') not in ('pilot', 'feature', 'episode', 'binge'):
         out.append(str(mr['read']).split('. ')[0].rstrip('.') + '.')
     ch = (d.get('characters') or {}).get('read')
@@ -415,11 +499,20 @@ def _conclusions(session: dict) -> list:
     d = session.get('diagnostics') or {}
     out = []
     norms = (sc.get('norm_columns') or {})
+    t = _tallies(sc)
     tp = head.get('total_positive_pct')
-    tpn = (norms.get('total_positive') or {}).get('norm')
+    tpc = norms.get('total_positive') or {}
+    tpn = tpc.get('genre_norm') if tpc.get('genre_own') else tpc.get('norm')
     if tp is not None and tpn is not None:
         gap = float(tp) - float(tpn)
-        out.append(f"The cut plays {'above' if gap >= 3 else 'below' if gap <= -3 else 'at'} the norm on total positive ({_pct(tp)} against {float(tpn):.0f}%)." if abs(gap) >= 3 else f"The cut plays at the norm on total positive ({_pct(tp)}).")
+        who = _norm_name(sc, 'total_positive')
+        seats = f", {t['total_positive']} seats" if t.get('total_positive') else ''
+        out.append(f"The cut plays {'above' if gap >= 3 else 'below'} {who} on total positive ({_pct(tp)}{seats}, against {float(tpn):.0f}%)." if abs(gap) >= 3
+                   else f"The cut plays at {who} on total positive ({_pct(tp)}{seats}).")
+        hl = _headline(session)
+        if hl.get('lead') == 'intent' and head.get('finish_pct') is not None:
+            out.append(f"Intent is the strength: {_pct(head.get('finish_pct'))} would finish" + (f" ({t['finish']} seats)" if t.get('finish') else '')
+                       + (f" and {_pct(head.get('tune_in_pct'))} would watch a second episode" + (f" ({t['tune_in']} seats)" if head.get('tune_in_pct') is not None and t.get('tune_in') else '') if head.get('tune_in_pct') is not None else '') + '; the next episode is the thing to sell.')
     pace = d.get('pace') or {}
     slow = sorted([a for a in pace.get('acts') or [] if (a.get('too_slow_pct') or 0) >= 25], key=lambda a: -(a.get('too_slow_pct') or 0))
     if slow:
@@ -432,8 +525,10 @@ def _conclusions(session: dict) -> list:
     # the lead is the part the cut is built around (the role on the row); the card itself ranks the cast by the room's rating
     lead = next((c for c in chars if c.get('role') == 'lead'), chars[0] if chars else None)
     if lead and lead.get('vs_norm_pp') is not None:
-        out.append(f"Put {lead['name']} on the key art; the lead rates {_pct(lead['excellent_pct'])} excellent against a {float(lead['norm']):.0f}% norm." if lead['vs_norm_pp'] >= 5
-                   else f"The room is not sold on {lead['name']} yet ({_pct(lead['excellent_pct'])} excellent against {float(lead['norm']):.0f}%); give the lead a clearer want early." if lead['vs_norm_pp'] <= -8
+        si = str(((sc.get('norm_columns') or {}).get('lead_character') or {}).get('stand_in') or '')
+        lead_norm = f"the {si + ' ' if si else ''}lead norm of {float(lead['norm']):.0f}%"   # 'the lead norm of 51%' or 'the feature screening lead norm of 50%'
+        out.append(f"Put {lead['name']} on the key art; the lead rates {_pct(lead['excellent_pct'])} excellent against {lead_norm}." if lead['vs_norm_pp'] >= 5
+                   else f"The room is not sold on {lead['name']} yet ({_pct(lead['excellent_pct'])} excellent against {lead_norm}); give the lead a clearer want early." if lead['vs_norm_pp'] <= -8
                    else f"{lead['name']} holds the lead at the norm ({_pct(lead['excellent_pct'])} excellent).")
     # the character the room said it would come back for (its own answer, when more than half named one): give that
     # character more of the next episode (Jenna 2026-11-04)
@@ -448,7 +543,10 @@ def _conclusions(session: dict) -> list:
     comps = (d.get('components') or {}).get('rows') or []
     weak = sorted([c for c in comps if c.get('vs_norm_pp') is not None], key=lambda c: c['vs_norm_pp'])
     if weak and weak[0]['vs_norm_pp'] <= -5:
-        out.append(f"{weak[0]['label']} is the component under the norm ({_pct(weak[0]['excellent_pct'])} against {float(weak[0]['norm']):.0f}%).")
+        under = [c for c in weak if c['vs_norm_pp'] <= -5][:2]
+        who = _norm_name(sc, f"component_{under[0].get('key')}")
+        parts = ' and '.join(f"{c['label']} ({_pct(c['excellent_pct'])} against {float(c['norm']):.0f}%)" for c in under)
+        out.append(f"{parts} {'are the components' if len(under) > 1 else 'is the component'} under {who}; that is where the gap sits.")
     mk = session.get('marketing_read') or {}
     if mk.get('trailer_moments'):
         out.append('For the trailer, start from ' + ', '.join(m['clock'] for m in mk['trailer_moments'][:3]) + '.')
@@ -538,12 +636,6 @@ def report_pages(payload: dict, session: dict, portrait_fn=None, with_chart: boo
     mr = session.get('mode_read') or {}
     mode = str(session.get('mode') or 'pilot')
     g = session.get('group') or {}
-    pages = [{'kind': 'cover', 'header': f"{_clean(title)} x {name}", 'sub': _clean(f"What the {name} audience made of {session.get('cut_label') or 'the cut'}, in the room, on the clock."), 'dark': True}]
-    pages.append({'kind': 'bullets', 'header': 'What we found, and what to do.', 'sub': '', 'body': _tldr(session, payload) or ['The room watched the cut; the scorecard follows.'], 'dark': True})
-    tiles = [(_pct(head.get('total_positive_pct')) or f"{float(sc.get('overall_like') or 0):.1f}", 'Total positive' if head.get('total_positive_pct') is not None else 'Dial average'),
-             (_pct(head.get('definitely_recommend_pct')) or '', 'Definitely recommend'), (_pct(head.get('excellent_pct')) or '', 'Excellent')]
-    if head.get('finish_pct') is not None:
-        tiles.append((_pct(head.get('finish_pct')), 'Would finish'))
     # the people behind the room: the segments' people (the battery's whole-room total), never a stored stand-in; no count when no source carries one
     try:
         from migration.digital_twin_pilot import session_people
@@ -551,12 +643,28 @@ def report_pages(payload: dict, session: dict, portrait_fn=None, with_chart: boo
     except Exception:
         behind = None
     seated = g.get('in_room') or len(g.get('roster') or [])
-    pages.append({'kind': 'tiles', 'header': _words(f"Total positive {_pct(head.get('total_positive_pct'))}, with the norm beside every number.") if head.get('total_positive_pct') is not None else 'The scorecard.',
-                  'sub': _clean((f"The room seated {seated} people, with {human_people(behind)} behind them. " if behind else f"The room seated {seated} people. ") + f"{str(sc.get('format') or 'pilot').title()}" + (f", {sc.get('genre')}." if sc.get('genre') else '.')),     # opens with a word: the copy scrub capitalizes the word after a leading count
-                  'tiles': [t for t in tiles if t[0]][:4], 'body': [_clean(x) for x in (sc.get('norm_lines') or [])[:3]], 'dark': False})
-    # the norm the card is read against, named once (Jenna 2026-11-04: the user sets it); older cards compute it from the genre
+    # what the shares are of, said once on the TLDR and once on the scorecard page (Liz Huszarik 2026-11-05: 16 seats cannot
+    # produce 49.4%, so say which denominator the shares use and keep the seat tally beside every share)
+    denom = _denominator(session, sc, seated, behind) if head.get('total_positive_pct') is not None else ''
+    pages = [{'kind': 'cover', 'header': f"{_clean(title)} x {name}", 'sub': _clean(f"What the {name} audience made of {session.get('cut_label') or 'the cut'}, in the room, on the clock."), 'dark': True}]
+    pages.append({'kind': 'bullets', 'header': 'What we found, and what to do.', 'sub': _clean(denom), 'body': _tldr(session, payload) or ['The room watched the cut; the scorecard follows.'], 'dark': True})
+    t = _tallies(sc)
+    seat_note = lambda key, label: f"{label}, {t[key]}" if t.get(key) else label   # noqa: E731   the seats themselves beside the share
+    tiles = [(_pct(head.get('total_positive_pct')) or f"{float(sc.get('overall_like') or 0):.1f}", seat_note('total_positive', 'Total positive') if head.get('total_positive_pct') is not None else 'Dial average'),
+             (_pct(head.get('definitely_recommend_pct')) or '', seat_note('definitely_recommend', 'Definitely recommend')), (_pct(head.get('excellent_pct')) or '', seat_note('excellent', 'Excellent'))]
+    if head.get('finish_pct') is not None:
+        tiles.append((_pct(head.get('finish_pct')), seat_note('finish', 'Would finish')))
+    # the norm the card is read against, named from the one helper the card and the CSV use (Jenna 2026-11-04: the user sets
+    # it; Liz Huszarik 2026-11-05: never 'Pilot, procedural' next to an all-pilots footnote); older cards compute it from the columns
     compared = _compared_to(sc, session)
-    pages.append({'kind': 'table', 'header': 'Every question on the card, next to its norm.', 'sub': compared, 'head': ('Measure', 'Room', 'Norm'), 'rows': [(_clean(a), b, _clean(c)) for a, b, c in _scorecard_rows(sc)[:12]], 'dark': True})
+    hl = _headline(session)
+    pages.append({'kind': 'tiles', 'header': _words(hl.get('header') or 'The scorecard.') if head.get('total_positive_pct') is not None else 'The scorecard.',
+                  'sub': _clean(' '.join(x for x in (denom, compared) if x)) if denom else _clean((f"The room seated {seated} people, with {human_people(behind)} behind them. " if behind else f"The room seated {seated} people. ") + (compared or '')),
+                  'tiles': [tl for tl in tiles if tl[0]][:4], 'body': [_clean(x) for x in (sc.get('norm_lines') or [])[:4]], 'dark': False})
+    ch = _choice(sc, session)
+    notes = [str(x) for x in (ch.get('notes') or ([ch['note']] if ch.get('note') else [])) if x]
+    pages.append({'kind': 'table', 'header': 'Every question on the card, next to its norm.', 'sub': compared, 'head': ('Measure', 'Share, and seats', 'Norm'),
+                  'rows': [(_clean(a), b, _clean(c)) for a, b, c in _scorecard_rows(sc)[:12]], 'body': [_clean(x) for x in notes][:3], 'dark': True})
     png = dial_chart_png(session) if with_chart else None
     if png:
         fav, dead = sc.get('favorite_moment') or {}, sc.get('dead_spot') or {}
@@ -565,7 +673,8 @@ def report_pages(payload: dict, session: dict, portrait_fn=None, with_chart: boo
     pages.extend(_moments_pages(session, clean=_clean))     # the strongest reactions, seat by seat (the room export's moments page)
     qrows = _quadrant_rows(sc)
     if qrows:
-        pages.append({'kind': 'table', 'header': 'The four quadrants, side by side.', 'sub': 'Total positive, with definitely recommend and excellent beside it.', 'head': ('Group', 'Total positive', 'And'), 'rows': qrows[:10], 'dark': False})
+        pages.append({'kind': 'table', 'header': 'The four quadrants, side by side.', 'sub': "Total positive, with definitely recommend and excellent beside it. Each group's shares are of the people its seats stand for; the seat count is in the label.",
+                      'head': ('Group', 'Total positive', 'And'), 'rows': qrows[:10], 'dark': False})
     # the mode read
     if mode in ('trailer', 'spot') and mr.get('interest_after_pct') is not None:
         pages.append({'kind': 'tiles', 'header': _words(f"Definite interest moves {'+' if (mr.get('definite_interest_lift_pp') or 0) >= 0 else ''}{mr.get('definite_interest_lift_pp')} points after the trailer."),
@@ -594,7 +703,8 @@ def report_pages(payload: dict, session: dict, portrait_fn=None, with_chart: boo
     # characters
     chars = (d.get('characters') or {}).get('characters') or []
     if chars:
-        rows = [(f"{c['name']} ({c['role']})", _pct(c.get('excellent_pct')), _clean(f"norm {float(c['norm']):.0f}%, {c['screen_clock']} on screen, {c['time_vs_like']}") if c.get('norm') is not None else _clean(f"{c['screen_clock']} on screen, {c['time_vs_like']}")) for c in chars[:8]]
+        _cm = lambda c: {'lead': 'lead_character', 'second lead': 'secondary_character'}.get(c.get('role'), 'supporting_character')   # noqa: E731
+        rows = [(f"{c['name']} ({c['role']})", _pct(c.get('excellent_pct')), _clean(f"{_norm_cell(sc, _cm(c), c['norm'])}, {c['screen_clock']} on screen, {c['time_vs_like']}") if c.get('norm') is not None else _clean(f"{c['screen_clock']} on screen, {c['time_vs_like']}")) for c in chars[:8]]
         fol = (d.get('characters') or {}).get('follow') or []
         # the follow shares are per person (a seat can follow more than one), so the sub-line says so and never reads as a split
         from migration.digital_twin_diagnostics import FOLLOW_NOTE, follow_line
@@ -607,8 +717,11 @@ def report_pages(payload: dict, session: dict, portrait_fn=None, with_chart: boo
     pages.extend(_attach_pages(session))
     comps = (d.get('components') or {}).get('rows') or []
     if comps:
-        pages.append({'kind': 'table', 'header': _words(_clean((d['components'].get('read') or 'The components, next to their norms.').split('. ')[0] + '.')), 'sub': 'Top box (excellent) for each component, with the norm.',
-                      'head': ('Component', 'Excellent', 'Norm'), 'rows': [(c['label'], _pct(c.get('excellent_pct')), (f"norm {float(c['norm']):.0f}%" + (f" ({'+' if c['vs_norm_pp'] >= 0 else ''}{c['vs_norm_pp']})" if c.get('vs_norm_pp') is not None else '')) if c.get('norm') is not None else 'no norm yet') for c in comps], 'dark': True})
+        # the norm each component is read against is named for what it is (the feature screening card while the column is a stand-in)
+        comp_norm_word = _norm_name(sc, 'component_story')
+        pages.append({'kind': 'table', 'header': _words(_clean((d['components'].get('read') or 'The components, next to their norms.').split('. ')[0] + '.')),
+                      'sub': _clean(f"Top box (excellent) for each component, with {comp_norm_word}."),
+                      'head': ('Component', 'Excellent', 'Norm'), 'rows': [(c['label'], _pct(c.get('excellent_pct')), (_norm_cell(sc, f"component_{c.get('key')}", c['norm']) + (f" ({'+' if c['vs_norm_pp'] >= 0 else ''}{c['vs_norm_pp']})" if c.get('vs_norm_pp') is not None else '')) if c.get('norm') is not None else 'no norm yet') for c in comps], 'dark': True})
     pace = d.get('pace') or {}
     if pace.get('acts'):
         rows = [(a['label'] + f" ({a['from_clock']} to {a['to_clock']})", _pct(a.get('just_right_pct')) + ' just right', f"{_pct(a.get('too_slow_pct'))} too slow, {_pct(a.get('too_fast_pct'))} too fast") for a in pace['acts']]

@@ -42,7 +42,7 @@ import uuid
 from typing import Callable, Optional
 
 from migration.digital_twin_engine import (
-    VERSION, clamp, jit, messy_count, natural_count, pct1, unit,
+    VERSION, clamp, human_people, jit, messy_count, natural_count, pct1, unit,
 )
 from migration.digital_twin_panel import (
     DEFAULT_IN_ROOM, MAX_IN_ROOM, build_group, clean_room_title, copy_name,
@@ -1268,34 +1268,218 @@ def record_norms(session: dict, s3=None) -> Optional[dict]:
         return None
 
 
+def _tally_of(tally: str) -> int:
+    """'5 of 16' -> 16; 0 when the string carries no total."""
+    m = re.search(r'\bof\s+(\d+)', str(tally or ''))
+    return int(m.group(1)) if m else 0
+
+
+def battery_tallies(bat: dict) -> dict:
+    """The seat tally behind every share on the card, from the battery's
+    rows: {'excellent': '1 of 16', 'total_positive': '8 of 16',
+    'definitely_recommend': '5 of 16', 'finish': '16 of 16', 'tune_in':
+    '13 of 16', 'urgency_opening': '6 of 16', 'better_than_expected':
+    '6 of 16', 'seats': 16}. A share is of the people the seats stand
+    for; the tally is the seats themselves (Liz Huszarik 2026-11-05: 16
+    seats cannot produce 49.4%, so say which is which). '' for a row an
+    older card never tallied."""
+    out = {'seats': 0}
+    seats = 0
+    for q in (bat or {}).get('questions') or []:
+        for r in q.get('rows') or []:
+            seats = max(seats, _tally_of(r.get('tally')))
+    out['seats'] = seats
+    for q in (bat or {}).get('questions') or []:
+        rows = q.get('rows') or []
+        if not rows:
+            continue
+        top = rows[0]
+        top_t = str(top.get('tally') or '')
+        qid = q.get('id')
+        if qid == 'overall':
+            out['excellent'] = top_t
+            if len(rows) >= 2 and top_t and str(rows[1].get('tally') or ''):
+                n = int(top.get('seats_n') or 0) + int(rows[1].get('seats_n') or 0)
+                out['total_positive'] = f"{n} of {_tally_of(top_t) or seats}"
+            else:
+                out['total_positive'] = ''
+        elif qid == 'recommend':
+            out['definitely_recommend'] = top_t
+        elif qid == 'finish':
+            out['finish'] = top_t
+        elif qid == 'tune_in':
+            out['tune_in'] = top_t
+        elif qid in ('urgency', 'urgency_pilot'):
+            out['urgency_opening'] = top_t
+        elif qid == 'expectations':
+            out['better_than_expected'] = top_t
+        elif qid == 'full_price':
+            out['full_price'] = top_t
+    return out
+
+
+def denominator_line(seats: int, people: Optional[int]) -> str:
+    """The one plain statement of what the shares are of, for the
+    scorecard page, the TLDR, the card and the CSV: 'Shares are of the
+    22.35M people the 16 seats stand for; the count beside each share
+    is the seats themselves.' Without a people figure the shares are of
+    the audience the seats stand for."""
+    try:
+        n = int(seats or 0)
+    except (TypeError, ValueError):
+        n = 0
+    seat_words = f"the {n} seats" if n else 'the seats'
+    if people:
+        return f"Shares are of the {human_people(people)} people {seat_words} stand for; the count beside each share is the seats themselves."
+    return f"Shares are of the audience {seat_words} stand for; the count beside each share is the seats themselves."
+
+
 def attach_norms(scorecard: dict, fmt: str, genre: str, s3=None) -> dict:
     """The norm and genre-norm columns, the comparison lines and the
-    norm choice ('Compared to: Procedural pilots', or the honest 'No norm
-    yet for procedural pilots (1 of 5 tests).') on a scorecard. ``genre``
-    is the norm the test is compared to (the user's choice when they set
-    one); '' or 'all' reads the all-genres column."""
+    norm choice ('Compared to all pilots', 'Compared to feature
+    screenings' while the all column is a stand-in, and the honest 'No
+    procedural norm yet; it fills as tests are filed under procedural, 1
+    of 5 so far.') on a scorecard. ``genre`` is the norm the test is
+    compared to (the user's choice when they set one); '' or 'all'
+    reads the all-genres column. Every money line carries the seat tally
+    beside the share; would finish gets its line (a norm, or the honest
+    'no norm yet' in the same words), never a blank."""
     from migration import digital_twin_norms as N
     norms = norms_for(fmt, genre or 'all', s3=s3)
     scorecard['norms'] = norms
-    head = ((scorecard.get('battery') or {}).get('headline')) or {}
+    bat = scorecard.get('battery') or {}
+    head = bat.get('headline') or {}
+    tallies = battery_tallies(bat)
     lines = []
-    for metric, key in (('definitely_recommend', 'definitely_recommend_pct'), ('total_positive', 'total_positive_pct'), ('excellent', 'excellent_pct')):
+    for metric, key in (('definitely_recommend', 'definitely_recommend_pct'), ('total_positive', 'total_positive_pct'), ('excellent', 'excellent_pct'), ('finish', 'finish_pct')):
         if head.get(key) is not None:
-            lines.append(N.norm_line(metric, head[key], norms, fmt, genre or 'all'))
+            lines.append(N.norm_line(metric, head[key], norms, fmt, genre or 'all', tally=tallies.get(metric) or ''))
     scorecard['norm_lines'] = [l for l in lines if l]
     rows_norm = {}
+    pending = norms.get('pending') if isinstance(norms.get('pending'), dict) else {}
     for metric in N.METRICS:
         a = (norms.get('all') or {}).get(metric)
         g = (norms.get('genre') or {}).get(metric)
         # genre_own: the genre column carries a norm of its own for this row (not the all-genres value standing in)
-        rows_norm[metric] = {'norm': a.get('value') if a else None, 'genre_norm': (g.get('value') if g else None),
-                             'genre_own': bool(g and g.get('genre_used') not in (None, 'all'))}
+        genre_own = bool(g and g.get('genre_used') not in (None, 'all'))
+        pend = pending.get(metric) if isinstance(pending.get(metric), dict) else {}
+        rows_norm[metric] = {'norm': a.get('value') if a else None, 'genre_norm': (g.get('value') if g else None), 'genre_own': genre_own,
+                             # stand_in: the instrument the row's norm borrows ('feature screening') while it is not a norm of the format
+                             'stand_in': ('' if genre_own else str((a or {}).get('stand_in') or '')),
+                             'own_tests': int(pend.get('own_tests') or 0) if pend else None,
+                             'note': str(pend.get('note') or '') if (pend and not a and not g) else ''}
     scorecard['norm_columns'] = rows_norm
     choice = norms.get('choice') if isinstance(norms.get('choice'), dict) else N.norm_choice(fmt, genre or 'all')
     scorecard['norm_choice'] = choice
-    if choice.get('note'):
-        scorecard['norm_lines'] = list(scorecard['norm_lines']) + [choice['note']]
+    for note in (choice.get('notes') or ([choice['note']] if choice.get('note') else [])):
+        if note and note not in scorecard['norm_lines']:
+            scorecard['norm_lines'] = list(scorecard['norm_lines']) + [note]
+    seats = tallies.get('seats') or len(bat.get('by_seat') or []) or 0
+    people = next((q.get('people') for q in (bat.get('quadrants') or []) if isinstance(q, dict) and q.get('key') == 'total'), None) or scorecard.get('people')
+    scorecard['denominator_line'] = denominator_line(seats, people)
+    scorecard['tallies'] = {k: v for k, v in tallies.items() if k != 'seats'}
     return scorecard
+
+
+def _share_word(v, high: str, mid: str, high_at: float = 90.0, mid_at: float = 65.0) -> str:
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return ''
+    return high if f >= high_at else mid if f >= mid_at else f"{f:.1f}%"
+
+
+def _with_tally(v, tally: str) -> str:
+    return f"{pct1(v)}%" + (f" ({tally})" if tally else '')
+
+
+def headline_read(session: dict) -> dict:
+    """The strongest honest finding, for the TLDR's first lines and the
+    scorecard page's header (Liz Huszarik 2026-11-05). Deterministic:
+
+    * every money measure with a norm sits under it: lead with intent
+      (would finish, would watch a second episode) against a soft
+      Excellent, with the components under the norm as the explanation;
+    * every money measure with a norm clears it: lead with total
+      positive against the norm;
+    * otherwise: total positive with the norm beside every number.
+
+    Returns {lead, header, lines, norm_word}. Headers are one sentence
+    of twelve words or fewer, sentence case, a full stop. Shares carry
+    the seat tally beside them; the words name the norm they are read
+    against ('the feature screening norm', 'the all-pilots norm')."""
+    from migration import digital_twin_norms as N
+    sc = (session or {}).get('scorecard') or {}
+    bat = sc.get('battery') or {}
+    head = bat.get('headline') or {}
+    if head.get('total_positive_pct') is None:
+        return {'lead': 'none', 'header': 'The scorecard.', 'lines': [], 'norm_word': ''}
+    cols = sc.get('norm_columns') or {}
+    choice = sc.get('norm_choice') if isinstance(sc.get('norm_choice'), dict) else {}
+    tallies = battery_tallies(bat)
+    who = N.norm_word(choice) if choice else 'the norm'
+
+    def norm_of(metric):
+        col = cols.get(metric) or {}
+        v = col.get('genre_norm') if col.get('genre_own') else col.get('norm')
+        try:
+            return float(v) if v is not None else None
+        except (TypeError, ValueError):
+            return None
+
+    gaps = {}
+    for metric, key in (('excellent', 'excellent_pct'), ('total_positive', 'total_positive_pct'), ('definitely_recommend', 'definitely_recommend_pct')):
+        nv = norm_of(metric)
+        if nv is not None and head.get(key) is not None:
+            gaps[metric] = float(head[key]) - nv
+    tp, dr, ex, fin, tune = head.get('total_positive_pct'), head.get('definitely_recommend_pct'), head.get('excellent_pct'), head.get('finish_pct'), head.get('tune_in_pct')
+    t = lambda m: tallies.get(m) or ''   # noqa: E731
+    money = f"total positive {_with_tally(tp, t('total_positive'))}, definitely recommend {_with_tally(dr, t('definitely_recommend'))}, excellent {_with_tally(ex, t('excellent'))}"
+    intent_bits = []
+    if fin is not None:
+        intent_bits.append(f"{_with_tally(fin, t('finish'))} would finish")
+    if tune is not None:
+        intent_bits.append(f"{_with_tally(tune, t('tune_in'))} would watch a second episode")
+    intent = ' and '.join(intent_bits)
+    lines = []
+    if gaps and all(g <= -3 for g in gaps.values()) and fin is not None:
+        lead = 'intent'
+        f_word = _share_word(fin, 'Nearly everyone', 'Most')
+        w_word = _share_word(tune, 'nearly everyone', 'most') if tune is not None else ''
+        header = f"{f_word} would finish" + (f" and {w_word} would watch again" if w_word else '') + "; Excellent is soft."
+        lines.append(f"{intent[0].upper() + intent[1:]}.")
+        ex_n = norm_of('excellent')
+        pts = int(round(abs(gaps['excellent']))) if 'excellent' in gaps else None
+        soft = f"Excellent is soft at {_with_tally(ex, t('excellent'))}" + (f", {pts} points below {who} of {ex_n:.0f}%" if pts is not None and ex_n is not None else '')
+        others = [f"total positive {_with_tally(tp, t('total_positive'))}", f"definitely recommend {_with_tally(dr, t('definitely_recommend'))}"]
+        lines.append(soft + f"; {' and '.join(others)} also sit under it.")
+        comps = ((session.get('diagnostics') or {}).get('components') or {}).get('rows') or []
+        weak = sorted([c for c in comps if c.get('vs_norm_pp') is not None and float(c['vs_norm_pp']) <= -5], key=lambda c: float(c['vs_norm_pp']))[:2]
+        if weak:
+            parts = [f"{c['label'].lower()} ({pct1(c.get('excellent_pct'))}% against {float(c['norm']):.0f}%)" for c in weak if c.get('norm') is not None]
+            if parts:
+                joined = ' and '.join(parts)
+                verb = 'are the components' if len(parts) > 1 else 'is the component'
+                lines.append(f"{joined[0].upper() + joined[1:]} {verb} under the norm; that is where the gap sits.")
+    elif gaps and all(g >= 3 for g in gaps.values()):
+        lead = 'beats'
+        tp_n = norm_of('total_positive')
+        pts = int(round(gaps['total_positive'])) if 'total_positive' in gaps else None
+        header = f"Total positive {pct1(tp)}%, {pts} points above {who}." if pts is not None else f"Total positive {pct1(tp)}% clears the norm."
+        lines.append(f"Total positive {_with_tally(tp, t('total_positive'))}" + (f", {pts} points above {who} of {tp_n:.0f}%" if pts is not None and tp_n is not None else '')
+                     + f"; definitely recommend {_with_tally(dr, t('definitely_recommend'))} and excellent {_with_tally(ex, t('excellent'))} also clear it.")
+        if intent:
+            lines.append(f"{intent[0].upper() + intent[1:]}.")
+    else:
+        lead = 'mixed'
+        header = f"Total positive {pct1(tp)}%, with the norm beside every number."
+        lines.append(f"{money[0].upper() + money[1:]}.")
+        if intent:
+            lines.append(f"{intent[0].upper() + intent[1:]}.")
+    header = ' '.join(header.split()[:12]).rstrip(',;:')
+    if not header.endswith('.'):
+        header += '.'
+    return {'lead': lead, 'header': header, 'lines': lines, 'norm_word': who}
 
 
 def set_norm(sess: dict, genre: str, *, by_user: bool = True, twin: Optional[dict] = None, s3=None) -> dict:
@@ -1342,6 +1526,11 @@ def set_norm(sess: dict, genre: str, *, by_user: bool = True, twin: Optional[dic
             attach_norms(sc, fmt, g or 'all', s3=s3)
         except Exception as e:
             print(f"[pilot] norms refresh skipped: {e}")
+        try:   # the character and component rows carry the norm as it stands now
+            from migration.digital_twin_diagnostics import refresh_norm_refs
+            refresh_norm_refs(sess)
+        except Exception as e:
+            print(f"[pilot] norm refs refresh skipped: {e}")
         if twin is not None:
             try:   # the forecast reads the norm columns and the genre (completion base)
                 from migration.digital_twin_forecast import attach_forecast
@@ -2944,29 +3133,39 @@ def session_csv(session: dict, payload: Optional[dict] = None) -> str:
     head = bat.get('headline') or {}
     norms = sc.get('norm_columns') or {}
     genre = str(session.get('genre') or '') or 'all'
-    # the norm columns carry the names of what the test is compared to ('All pilots', 'Procedural pilots'); a chosen genre with
-    # no norm of its own yet leaves its column blank rather than repeating the all-genres value (2026-11-04)
-    from migration.digital_twin_norms import choice_label as _choice_label
+    # the norm columns carry the name of what the test is compared to, from the one helper the card and the report use
+    # ('All pilots', 'Procedural pilots', 'Feature screening' while the all column is a stand-in); a chosen genre with no
+    # norm of its own yet leaves its column blank rather than repeating the all-genres value (2026-11-04)
+    from migration import digital_twin_norms as N
     nch = sc.get('norm_choice') if isinstance(sc.get('norm_choice'), dict) else {}
     fmt_csv = str(sc.get('format') or session.get('format') or session.get('mode') or 'pilot')
-    all_label = str(nch.get('all_label') or _choice_label(fmt_csv, 'all'))
-    genre_label = str(nch.get('label') or _choice_label(fmt_csv, genre))
+    if not nch:
+        nch = N.norm_choice(fmt_csv, genre, (sc.get('norms') or {}).get('cells') if isinstance(sc.get('norms'), dict) else None)
+    all_label = str(nch.get('all_label') or N.choice_label(fmt_csv, 'all'))
+    genre_label = str(nch.get('label') or N.choice_label(fmt_csv, genre))
+    compared = N.compared_label(nch)
+    stand_in = str(nch.get('stand_in') or '')
+    first_norm_col = f"{stand_in.capitalize()} norm %" if stand_in else f"{all_label} norm %"
     gown = lambda nc: (nc or {}).get('genre_norm') if (nc and nc.get('genre_own', True) and genre != 'all') else ''   # noqa: E731
-    w.writerow(['Test', 'Title', 'Cut', 'Format', 'Genre', 'Runtime s', 'People', 'Dial average', 'Excellent %', 'Total positive %', 'Definitely recommend %',
-                'Would finish %', 'Favorite moment', 'Dead spot', 'Compared to', 'Norm note'])
+    tallies = battery_tallies(bat)
+    seats = tallies.get('seats') or len(((session.get('group') or {}).get('roster')) or [])
+    people = session_people(session, payload)
+    w.writerow(['Test', 'Title', 'Cut', 'Format', 'Genre', 'Runtime s', 'Seats', 'People', 'Dial average', 'Excellent %', 'Excellent seats', 'Total positive %', 'Total positive seats',
+                'Definitely recommend %', 'Definitely recommend seats', 'Would finish %', 'Would finish seats', 'Favorite moment', 'Dead spot', 'Compared to', 'Norm note', 'Shares are of'])
     fav = sc.get('favorite_moment') or {}
     dead = sc.get('dead_spot') or {}
     w.writerow([
         session.get('id'), session.get('title'), session.get('cut_label') or 'Cut A', sc.get('format') or session.get('format') or '', genre,
-        (session.get('media') or {}).get('runtime_s'), session_people(session, payload), sc.get('overall_like'), head.get('excellent_pct'), head.get('total_positive_pct'),
-        head.get('definitely_recommend_pct'), head.get('finish_pct'),
+        (session.get('media') or {}).get('runtime_s'), seats, people, sc.get('overall_like'),
+        head.get('excellent_pct'), tallies.get('excellent') or '', head.get('total_positive_pct'), tallies.get('total_positive') or '',
+        head.get('definitely_recommend_pct'), tallies.get('definitely_recommend') or '', head.get('finish_pct'), tallies.get('finish') or '',
         f"{fav.get('clock')} {fav.get('line')}", f"{dead.get('clock')} {dead.get('line')}",
-        genre_label if genre != 'all' else all_label, nch.get('note') or '',
+        compared, nch.get('note') or '', sc.get('denominator_line') or denominator_line(seats, people),
     ])
     for line in list(sc.get('norm_lines') or []) + list(sc.get('notes') or []):
         w.writerow(['Note', line])
     w.writerow([])
-    w.writerow(['Question', 'Answer', 'Share %', 'People', 'In the room', f"{all_label} norm %", f"{genre_label} norm %" if genre != 'all' else 'Genre norm %'])
+    w.writerow(['Question', 'Answer', 'Share %', 'People', 'In the room', first_norm_col, f"{genre_label} norm %" if genre != 'all' else 'Genre norm %'])
     metric_for = {'overall': {'a': 'excellent'}, 'recommend': {'a': 'definitely_recommend'}, 'finish': {'a': 'finish'}, 'tune_in': {'a': 'tune_in'},
                   'urgency': {'a': 'urgency_opening'}, 'urgency_pilot': {'a': 'urgency_opening'}}
     for q in bat.get('questions') or []:
@@ -2978,18 +3177,20 @@ def session_csv(session: dict, payload: Optional[dict] = None) -> str:
             nc = norms.get('total_positive') or {}
             w.writerow([q.get('label'), 'Total positive', q.get('total_positive_pct'), q.get('total_positive_people'), '', nc.get('norm'), gown(nc)])
     w.writerow([])
-    w.writerow(['Quadrant', 'Seats', 'People', 'Excellent %', 'Total positive %', 'Definitely recommend %', 'Would finish %'])
+    # each quadrant's shares are of its own people (the seats' projection); the seat count sits in its own column
+    w.writerow(['Quadrant', 'Seats', 'People (shares are of these)', 'Excellent %', 'Total positive %', 'Definitely recommend %', 'Would finish %'])
     for qd in bat.get('quadrants') or []:
         w.writerow([qd.get('label'), qd.get('n'), qd.get('people'), qd.get('excellent_pct'), qd.get('total_positive_pct'), qd.get('definitely_recommend_pct'), qd.get('finish_pct')])
     nrm = sc.get('norms') or {}
     if nrm:
-        w.writerow([f"{all_label} norm", '', '', (nrm.get('all') or {}).get('excellent', {}).get('value'), (nrm.get('all') or {}).get('total_positive', {}).get('value'),
-                    (nrm.get('all') or {}).get('definitely_recommend', {}).get('value'), (nrm.get('all') or {}).get('finish', {}).get('value')])
+        fin_norm = (nrm.get('all') or {}).get('finish', {}).get('value')
+        w.writerow([first_norm_col.replace(' %', ''), '', '', (nrm.get('all') or {}).get('excellent', {}).get('value'), (nrm.get('all') or {}).get('total_positive', {}).get('value'),
+                    (nrm.get('all') or {}).get('definitely_recommend', {}).get('value'), fin_norm if fin_norm is not None else ((norms.get('finish') or {}).get('note') or N.metric_note('finish', 0))])
         if genre != 'all' and str(nrm.get('genre_used') or 'all') != 'all':
             w.writerow([f"{genre_label} norm", '', '', (nrm.get('genre') or {}).get('excellent', {}).get('value'), (nrm.get('genre') or {}).get('total_positive', {}).get('value'),
                         (nrm.get('genre') or {}).get('definitely_recommend', {}).get('value'), (nrm.get('genre') or {}).get('finish', {}).get('value')])
-        elif genre != 'all' and nch.get('note'):
-            w.writerow([nch['note'], '', '', '', '', '', ''])
+        for note in (nch.get('notes') or ([nch['note']] if nch.get('note') else [])):
+            w.writerow([note, '', '', '', '', '', ''])
     # the diagnostics blocks the report carries (2026-11-04): the characters, the components, pace by act, the scenes
     d = session.get('diagnostics') if isinstance(session.get('diagnostics'), dict) else {}
     chars_doc = d.get('characters') if isinstance(d.get('characters'), dict) else {}
@@ -2997,7 +3198,7 @@ def session_csv(session: dict, payload: Optional[dict] = None) -> str:
     if chars:
         w.writerow([])
         follow = {str(f.get('name')): f.get('pct') for f in (chars_doc.get('follow') or []) if isinstance(f, dict)}
-        w.writerow(['Character', 'Role', 'Excellent %', 'Total positive %', 'Norm %', 'Vs norm pp', 'On screen', 'Screen time against the rating', 'Would follow into a second episode %'])
+        w.writerow(['Character', 'Role', 'Excellent %', 'Total positive %', first_norm_col, 'Vs norm pp', 'On screen', 'Screen time against the rating', 'Would follow into a second episode %'])
         for c in chars:
             w.writerow([c.get('name'), c.get('role'), c.get('excellent_pct'), c.get('total_positive_pct'), c.get('norm'), c.get('vs_norm_pp'), c.get('screen_clock'), c.get('time_vs_like'), follow.get(str(c.get('name')), '')])
         rel = chars_doc.get('relationship') if isinstance(chars_doc.get('relationship'), dict) else {}
@@ -3012,9 +3213,11 @@ def session_csv(session: dict, payload: Optional[dict] = None) -> str:
     comps = [c for c in ((d.get('components') or {}).get('rows') or []) if isinstance(c, dict)]
     if comps:
         w.writerow([])
-        w.writerow(['Component', 'Excellent %', f"{all_label} norm %", f"{genre_label} norm %" if genre != 'all' else 'Genre norm %', 'Vs norm pp'])
+        w.writerow(['Component', 'Excellent %', first_norm_col, f"{genre_label} norm %" if genre != 'all' else 'Genre norm %', 'Vs norm pp'])
         for c in comps:
-            w.writerow([c.get('label'), c.get('excellent_pct'), c.get('norm'), c.get('genre_norm') if genre != 'all' else '', c.get('vs_norm_pp')])
+            # the genre column stays blank while the genre has no norm of its own (never the all column's value under the genre's name)
+            gcol = (norms.get(f"component_{c.get('key')}") or {})
+            w.writerow([c.get('label'), c.get('excellent_pct'), c.get('norm'), (c.get('genre_norm') if (genre != 'all' and gcol.get('genre_own')) else ''), c.get('vs_norm_pp')])
         if (d.get('components') or {}).get('read'):
             w.writerow(['Components read', d['components']['read']])
     pace = d.get('pace') if isinstance(d.get('pace'), dict) else {}
@@ -3217,8 +3420,12 @@ def session_lines(session: dict) -> list:
     dead = sc.get('dead_spot') or {}
     out = [str(session.get('title') or 'Pilot test')]
     if head.get('total_positive_pct') is not None:
-        out.append(f"Excellent {pct1(head.get('excellent_pct'))}%, total positive {pct1(head.get('total_positive_pct'))}%, definitely recommend {pct1(head.get('definitely_recommend_pct'))}%"
-                   + (f", would finish {pct1(head.get('finish_pct'))}%." if head.get('finish_pct') is not None else '.'))
+        t = battery_tallies(sc.get('battery') or {})
+        out.append(f"Excellent {_with_tally(head.get('excellent_pct'), t.get('excellent') or '')}, total positive {_with_tally(head.get('total_positive_pct'), t.get('total_positive') or '')}, "
+                   f"definitely recommend {_with_tally(head.get('definitely_recommend_pct'), t.get('definitely_recommend') or '')}"
+                   + (f", would finish {_with_tally(head.get('finish_pct'), t.get('finish') or '')}." if head.get('finish_pct') is not None else '.'))
+        if sc.get('denominator_line'):
+            out.append(str(sc['denominator_line']))
     else:
         out.append(f"Dial average {pct1(sc.get('overall_like'))}.")
     for l in (sc.get('norm_lines') or [])[:2]:
@@ -3254,7 +3461,7 @@ __all__ = [
     'deleted_pilot_key', 'media_hash', 'build_beats', 'build_scenes', 'build_beats_from_scenes', 'seat_dial', 'blend_dial', 'seat_events', 'persona_events',
     'aggregate_dial', 'split_dial', 'split_specs', 'all_splits', 'cohort_labels', 'cohort_key', 'cohort_segments', 'restore_session', 'MAX_COHORTS', 'quadrant_of', 'scorecard', 'battery_scorecard', 'norms_for', 'norm_metrics', 'record_norms',
     'auto_stop_due', 'parse_runtime', 'AUTO_STOP_GRACE_S',
-    'attach_norms', 'set_norm', 'keyword_genre', 'probe_points', 'fallback_guide', 'question_window', 'seat_window', 'ask_stimulus', 'format_for', 'norms_genre',
+    'attach_norms', 'battery_tallies', 'denominator_line', 'headline_read', 'set_norm', 'keyword_genre', 'probe_points', 'fallback_guide', 'question_window', 'seat_window', 'ask_stimulus', 'format_for', 'norms_genre',
     'session_csv', 'session_lines', 'public_session', 'signed_media_url',
     'media_s3_key', 'accept_upload_name', 'ffmpeg_available', 'probe_duration',
     'process_local_cut', 'has_banned_copy', 'beat_step',

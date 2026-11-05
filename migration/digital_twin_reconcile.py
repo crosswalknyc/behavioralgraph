@@ -678,14 +678,11 @@ def reconcile_session(session: dict, twin: Optional[dict] = None, *, s3=None, tw
                     PI.attach_norms(sc, str(sc.get('format') or PI.format_for(session)), str(session.get('genre') or 'all') or 'all', s3=s3)
                 except Exception as e:
                     print(f"[twin-reconcile] ledger re-file skipped: {e}")
-            # the character rows carry the norm column as it stands after the re-file
-            cols = sc.get('norm_columns') or {}
-            for row in ((d.get('characters') or {}).get('characters') or []):
-                metric = {'lead': 'lead_character', 'second lead': 'secondary_character'}.get(row.get('role'), 'supporting_character')
-                nc = cols.get(metric) or {}
-                if nc:
-                    row['norm'], row['genre_norm'] = nc.get('norm'), nc.get('genre_norm')
-                    row['vs_norm_pp'] = (round(float(row['excellent_pct']) - float(nc['norm']), 1) if row.get('excellent_pct') is not None and nc.get('norm') is not None else None)
+            # the character and component rows carry the norm column as it stands after the re-file
+            try:
+                DIAG.refresh_norm_refs(session)
+            except Exception as e:
+                print(f"[twin-reconcile] norm refs refresh skipped: {e}")
         state = session.get('reconcile') if isinstance(session.get('reconcile'), dict) else {}
         applied = dict(state.get('applied') or {})
         for rec, b in pending:

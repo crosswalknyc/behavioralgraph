@@ -1,7 +1,7 @@
 {
  "version": 2,
- "as_of": "2026-11-03",
- "note": "Internal. Published anchors for the Pilot Testing norms ledger; sources never reach a page a user reads. v2 (2026-11-03, Jenna: the norms felt off): one instrument per cell (the recruited-screening card for features and pilots; trailer, title, key art and concept tests for theirs); the PostTrak exit-poll genre averages and the blockbuster-comedy benchmark left the norm cells for the reference lists; the NRG five-year family norms seed family and animation; the pilot cells carry the recruited-screening anchors so our own tests blend in instead of standing alone.",
+ "as_of": "2026-11-05",
+ "note": "Internal. Published anchors for the Pilot Testing norms ledger; sources never reach a page a user reads. v2 (2026-11-03, Jenna: the norms felt off): one instrument per cell (the recruited-screening card for features and pilots; trailer, title, key art and concept tests for theirs); the PostTrak exit-poll genre averages and the blockbuster-comedy benchmark left the norm cells for the reference lists; the NRG five-year family norms seed family and animation; the pilot cells carry the recruited-screening anchors so our own tests blend in instead of standing alone. v3 (2026-11-05, Liz Huszarik's review of the NCIS: New York report: the 48% definitely recommend norm was the feature figure presented as the pilot norm): the pilot cells carry stand_in 'feature screening' and read on the card as 'the feature screening norm' at the published value, never as 'the pilot norm', until five pilot tests of our own sit in them (digital_twin_norms._stand_in); nothing new seeded, see recommend_research.",
  "cells": [
   {
    "format": "feature",
@@ -1140,6 +1140,7 @@
    ],
    "n_hint": null,
    "basis": "published norm (nearest instrument)",
+   "stand_in": "feature screening",
    "as_of": "2014-05",
    "context": "recruited_screening",
    "instrument": "recruited_screening",
@@ -1177,6 +1178,7 @@
    ],
    "n_hint": null,
    "basis": "published norm (nearest instrument)",
+   "stand_in": "feature screening",
    "as_of": "2014-05",
    "context": "recruited_screening",
    "instrument": "recruited_screening",
@@ -1214,6 +1216,7 @@
    ],
    "n_hint": null,
    "basis": "published norm (nearest instrument)",
+   "stand_in": "feature screening",
    "as_of": "2014-05",
    "context": "recruited_screening",
    "instrument": "recruited_screening",
@@ -1248,6 +1251,7 @@
    "range": null,
    "n_hint": null,
    "basis": "published norm (nearest instrument)",
+   "stand_in": "feature screening",
    "as_of": "2014-05",
    "context": "recruited_screening",
    "instrument": "recruited_screening",
@@ -1282,6 +1286,7 @@
    "range": null,
    "n_hint": null,
    "basis": "published norm (nearest instrument)",
+   "stand_in": "feature screening",
    "as_of": "2014-05",
    "context": "recruited_screening",
    "instrument": "recruited_screening",
@@ -1316,6 +1321,7 @@
    "range": null,
    "n_hint": null,
    "basis": "published norm (nearest instrument)",
+   "stand_in": "feature screening",
    "as_of": "2014-05",
    "context": "recruited_screening",
    "instrument": "recruited_screening",
@@ -1350,6 +1356,7 @@
    "range": null,
    "n_hint": null,
    "basis": "published norm (nearest instrument)",
+   "stand_in": "feature screening",
    "as_of": "2014-05",
    "context": "recruited_screening",
    "instrument": "recruited_screening",
@@ -1387,6 +1394,7 @@
    ],
    "n_hint": null,
    "basis": "published norm (nearest instrument)",
+   "stand_in": "feature screening",
    "as_of": "2014-05",
    "context": "recruited_screening",
    "instrument": "recruited_screening",
@@ -1424,6 +1432,7 @@
    ],
    "n_hint": null,
    "basis": "published norm (nearest instrument)",
+   "stand_in": "feature screening",
    "as_of": "2014-05",
    "context": "recruited_screening",
    "instrument": "recruited_screening",
@@ -1461,6 +1470,7 @@
    ],
    "n_hint": null,
    "basis": "published norm (nearest instrument)",
+   "stand_in": "feature screening",
    "as_of": "2014-05",
    "context": "recruited_screening",
    "instrument": "recruited_screening",
@@ -1498,6 +1508,7 @@
    ],
    "n_hint": null,
    "basis": "published norm (nearest instrument)",
+   "stand_in": "feature screening",
    "as_of": "2014-05",
    "context": "recruited_screening",
    "instrument": "recruited_screening",
@@ -1532,6 +1543,7 @@
    "range": null,
    "n_hint": null,
    "basis": "published norm (nearest instrument)",
+   "stand_in": "feature screening",
    "as_of": "2014-05",
    "context": "recruited_screening",
    "instrument": "recruited_screening",
@@ -1566,6 +1578,7 @@
    "range": null,
    "n_hint": null,
    "basis": "published norm (nearest instrument)",
+   "stand_in": "feature screening",
    "as_of": "2014-05",
    "context": "recruited_screening",
    "instrument": "recruited_screening",
@@ -1603,6 +1616,7 @@
    ],
    "n_hint": null,
    "basis": "published norm (nearest instrument)",
+   "stand_in": "feature screening",
    "as_of": "2014-05",
    "context": "recruited_screening",
    "instrument": "recruited_screening",
@@ -2471,5 +2485,51 @@
    }
   ],
   "revisit": "Re-run the genre passes when a vendor, network or trade source prints a genre average for the card measures (the Interpret TV pilot-testing case study, the Masked Scheduler post in full and the Next TV piece could not be opened past their snippets)."
+ },
+ "recommend_research": {
+  "as_of": "2026-11-05",
+  "ask": "Liz Huszarik (via Jenna, 2026-11-05): 'The 48% definitely recommend norm is too high. Industry norms for definitely recommend sit in the 20s to low 30s; 48% is closer to a top-two-box figure. Have Jenna check where that number came from.'",
+  "provenance": "The pilot|all|definitely_recommend seed (50; the card showed 48 after this one pilot test blended into the running mean) is the 'Yes, definitely recommend' Industry Benchmarks figure printed on Screen Engine recruited FEATURE screening toplines (The Interview 5.13.14 and 4.2.14, The Wedding Ringer 5.21.14) and the Nielsen NRG five-year all-movies norms column on The Equalizer RA1 12.16.13 (Excellent 30, Very Good 35, Total Highly Favorable 65, Definitely Recommend 50). It is a TOP-BOX figure ('Yes, definitely' alone; 'Yes, probably' is the second box), for FEATURE FILMS in recruited screenings, not a pilot figure and not a top-two-box figure. The pilot cells borrowed it as the nearest instrument on 2026-11-03 (basis 'published norm (nearest instrument)').",
+  "method": "Three passes with the project's Claude client and web search (the 2026-10-28 seed method), approved sources only (trade press, published screening-research methodology, network research write-ups and memos printed by the press, books, patents, academic), plus a direct read of the one network research memo the search surfaced: (1) pilot 'definitely recommend' as a top-box norm, with excellent and total positive; (2) 'would finish' / 'would watch again' / intent-to-view norms and first-episode completion benchmarks; (3) the deep leads (Interpret case study, the Masked Scheduler post, Next TV 2000, Vulture, Variety, THR 2014, Planet Money, the intent-to-view patent, Magid, academic journals). Rule: a cell needs a published norm printed as a norm or average, with its URL and the box it sits on; a single show's score is not a norm.",
+  "result": "No published TV pilot norm exists for definitely recommend on any box, nor for excellent, total positive, would finish or would watch again. Network pilot tests measure intent to view ('special effort to watch again', 'definitely would watch'), not recommend; the trades describe pilots scored against proprietary vendor norms and never print the values. Nothing re-seeded. The pilot cells stay feature-screening stand-ins and the card says so ('Compared to feature screenings', 'the feature screening norm of 50%', 'No pilot norm yet; it fills as pilot tests are filed, 1 of 5 so far').",
+  "what_the_sources_say": [
+   {
+    "url": "https://www.earthprime.com/wp-content/uploads/2025/12/SLIDERS-Recruit-to-View-Test.pdf",
+    "note": "ICR recruit-to-view test for the Sci-Fi Channel, Oct 6 1998 (two aired episodes of Sliders, 214 viewers 18-49, in-home viewing with telephone follow-up). The one network research document found that PRINTS television norms: overall rating Excellent 'Drama Average 11', 'AVG-ALL PRIOR TESTS 10' (Very Good 26 / 25, Fair/Poor 30 / 34, so excellent + very good 37 / 35); 'make a special effort to watch the program again' above 'our current drama norm (38%)' (top box of a four-point intent scale); episodes 'viewed in their entirety at levels that were on par with drama norms (61%)'; tune-out due to dislike 'comparable to our drama norm (24%)'; character 'Excellent' averages leading 18, supporting 14; unaided recall norm for a lead about 48. No recommend question. Held as a REFERENCE, not seeded: an in-home phone instrument on episodes of a returning cable series in 1998, a different instrument from a captive screening card and from a pilot test; it shows television excellent and intent norms sitting far under the feature screening card, which is the direction of Liz's note."
+   },
+   {
+    "url": "https://www.tvguide.com/news/seinfeld-research-memo-1083639/",
+    "note": "NBC's 1989 memo on The Seinfeld Chronicles: strong / moderate / weak; a large majority of NBC pilots rated weak. A verbal scale, no figure."
+   },
+   {
+    "url": "http://www.thesmokinggun.com/documents/celebrity/test-audiences-hated-friends-687543",
+    "note": "NBC's May 1994 report on the Friends pilot: 'scored a 41' on NBC's own index, no norm printed beside it; a single show."
+   },
+   {
+    "url": "https://www.nexttv.com/news/tvs-test-pilots-89501",
+    "note": "Broadcasting & Cable 2000 on pilot-testing methods (ASI dials, in-home cable tests, Magid VCR tests); no norm figure."
+   },
+   {
+    "url": "https://interpret.la/case-study/tv-pilot-testing/",
+    "note": "Interpret TV pilot-testing case study: in-person dial testing and competitive benchmarking described; no percentage printed."
+   },
+   {
+    "url": "http://revengeofthemaskedscheduler.blogspot.com/2016/05/setting-schedule-pilot-testing.html",
+    "note": "Former network scheduler: pilots scored Excellent to Poor against the average of all previously tested pilots, with norms for leads and supporting characters and a special-effort question; no figure printed."
+   },
+   {
+    "url": "https://digital-i.com/insight-articles/content-trend-report-are-you-still-watching",
+    "note": "Digital i 2024: season-one completion averages by episode count (3 to 6 episodes 48%, 11 to 15 episodes 26%). Measured season completion, not the would-finish card question; reference only."
+   },
+   {
+    "url": "https://www.thewrap.com/streaming-releases-binging-samba-tv-survey/",
+    "note": "Samba TV H1 2023: 45% finished bulk releases, 39% multipart, 35% weekly. Series completion by release pattern; reference only."
+   },
+   {
+    "url": "https://silentbobspeaks.com/?p=254",
+    "note": "Kevin Smith on the Clerks II NRG screening (2006): 'definite recommends' norm 45, excellent average 25, top two boxes average 55. A FEATURE recruited screening relayed by the filmmaker; confirms the feature figure is top box (definitely alone, with 'probably' the next box)."
+   }
+  ],
+  "revisit": "Re-run the passes when a vendor, network or trade source prints a pilot-test norm for definitely recommend, excellent, total positive or intent to view; a published pilot figure re-seeds pilot|all (and episode|all) and the stand-in label drops on its own. Liz's recollection of definitely recommend pilot norms in the 20s to low 30s is consistent with the ICR memo's direction but is not a published figure and was not seeded."
  }
 }

@@ -749,44 +749,82 @@ def _top_events(events: list, n: int) -> list:
 
 
 def _norm_note(sc: dict, metric: str) -> str:
-    """'norm 50, comedy norm 71' for a scorecard row, from the norm
-    columns (never a source)."""
+    """'norm 50%', 'feature screening norm 50%' while the column is a
+    stand-in, 'procedural norm 52%' beside it when the genre has one,
+    or the honest 'no would-finish norm yet; it fills as tests are
+    filed, 1 of 5 so far' for a measure with no norm yet (never a
+    blank), from the norm columns (never a source)."""
     col = ((sc.get('norm_columns') or {}).get(metric)) or {}
     genre = str(sc.get('genre') or '')
     parts = []
     if col.get('norm') is not None:
-        parts.append(f"norm {float(col['norm']):.0f}%")
-    if genre and col.get('genre_norm') is not None and col.get('genre_norm') != col.get('norm'):
+        si = str(col.get('stand_in') or '')
+        parts.append(f"{si} norm {float(col['norm']):.0f}%" if si else f"norm {float(col['norm']):.0f}%")
+    if genre and col.get('genre_own') and col.get('genre_norm') is not None:
         parts.append(f"{genre} norm {float(col['genre_norm']):.0f}%")
+    if not parts:
+        note = str(col.get('note') or '')
+        if not note and metric:
+            try:
+                from migration.digital_twin_norms import metric_note
+                note = metric_note(metric, int(col.get('own_tests') or 0))
+            except Exception:
+                note = 'no norm yet'
+        if metric != 'finish' and note:
+            # the other measures with no norm yet take the short form, so one page does not read five of the same sentence
+            m = re.search(r'(\d+ of \d+ so far)', note)
+            return f"no norm yet, {m.group(1)}" if m else 'no norm yet'
+        return note[0].lower() + note[1:] if note else ''
     return ', '.join(parts)
 
 
+def _tallies(sc: dict) -> dict:
+    try:
+        from migration.digital_twin_pilot import battery_tallies
+        return battery_tallies(sc.get('battery') or {})
+    except Exception:
+        return {}
+
+
+def _share_and_seats(v, tally: str) -> str:
+    """'49.4%, 8 of 16 seats': the share of the people the room stands
+    for, with the seat tally beside it, never under one set of decimals."""
+    s = _pct(v)
+    return f"{s}, {tally} seats" if (s and tally) else s
+
+
 def _scorecard_rows(sc: dict) -> list:
-    """(label, value, note) rows for the studio battery with the norm
-    beside each money number."""
+    """(label, share and seats, note) rows for the studio battery with
+    the norm beside each money number and the seat tally beside each
+    share."""
     bat = sc.get('battery') or {}
     head = bat.get('headline') or {}
+    t = _tallies(sc)
     rows = []
     if head.get('excellent_pct') is not None:
-        rows.append(('Excellent', _pct(head.get('excellent_pct')), _norm_note(sc, 'excellent')))
-        rows.append(('Total positive (excellent + very good)', _pct(head.get('total_positive_pct')), _norm_note(sc, 'total_positive')))
+        rows.append(('Excellent', _share_and_seats(head.get('excellent_pct'), t.get('excellent') or ''), _norm_note(sc, 'excellent')))
+        rows.append(('Total positive (excellent + very good)', _share_and_seats(head.get('total_positive_pct'), t.get('total_positive') or ''), _norm_note(sc, 'total_positive')))
     if head.get('definitely_recommend_pct') is not None:
-        rows.append(('Definitely recommend', _pct(head.get('definitely_recommend_pct')), _norm_note(sc, 'definitely_recommend')))
+        rows.append(('Definitely recommend', _share_and_seats(head.get('definitely_recommend_pct'), t.get('definitely_recommend') or ''), _norm_note(sc, 'definitely_recommend')))
     for q in bat.get('questions') or []:
         if q.get('id') in ('overall', 'recommend'):
             continue
+        top = (q.get('rows') or [{}])[0]
         if q.get('kind') == 'yes_no':
             metric = 'finish' if q.get('id') == 'finish' else ('tune_in' if q.get('id') == 'tune_in' else '')
-            rows.append((q.get('label'), _pct(q.get('yes_pct')), _norm_note(sc, metric) if metric else ''))
+            rows.append((q.get('label'), _share_and_seats(q.get('yes_pct'), str(top.get('tally') or '')), _norm_note(sc, metric) if metric else ''))
         elif q.get('rows'):
-            top = q['rows'][0]
             metric = 'urgency_opening' if q.get('id') in ('urgency', 'urgency_pilot') else ''
-            rows.append((f"{q.get('label')}: {top.get('label')}", _pct(top.get('pct')), _norm_note(sc, metric) if metric else ''))
+            # a question the ledger keeps no norm for says so, never a blank cell
+            rows.append((f"{q.get('label')}: {top.get('label')}", _share_and_seats(top.get('pct'), str(top.get('tally') or '')), _norm_note(sc, metric) if metric else 'no norm kept for this question'))
     rows.append(('Dial average', f"{float(sc.get('overall_like') or 0):.1f}", 'where the room sat on the dial'))
     return rows
 
 
 def _quadrant_rows(sc: dict) -> list:
+    """Each group's shares are of its own people; the seat count sits in
+    the label. The norm row is named for what it is ('Feature screening
+    norm', 'All pilots norm', 'Procedural pilots norm')."""
     bat = sc.get('battery') or {}
     rows = []
     for qd in bat.get('quadrants') or []:
@@ -795,12 +833,15 @@ def _quadrant_rows(sc: dict) -> list:
         rows.append((f"{qd.get('label')} ({qd.get('n')} seats)", _pct(qd.get('total_positive_pct')), f"definitely recommend {_pct(qd.get('definitely_recommend_pct'))}, excellent {_pct(qd.get('excellent_pct'))}"))
     norms = sc.get('norms') or {}
     a = norms.get('all') or {}
+    ch = sc.get('norm_choice') if isinstance(sc.get('norm_choice'), dict) else {}
     if a.get('total_positive'):
-        rows.append(('Norm', _pct((a.get('total_positive') or {}).get('value')), f"definitely recommend {_pct((a.get('definitely_recommend') or {}).get('value'))}, excellent {_pct((a.get('excellent') or {}).get('value'))}"))
+        si = str((a.get('total_positive') or {}).get('stand_in') or ch.get('stand_in') or '')
+        label = f"{si.capitalize()} norm" if si else f"{ch.get('all_label') or 'All ' + str(norms.get('format_label') or 'pilots')} norm"
+        rows.append((label, _pct((a.get('total_positive') or {}).get('value')), f"definitely recommend {_pct((a.get('definitely_recommend') or {}).get('value'))}, excellent {_pct((a.get('excellent') or {}).get('value'))}"))
     g = norms.get('genre') or {}
     genre = str(sc.get('genre') or '')
     if genre and g.get('total_positive') and (g.get('total_positive') or {}).get('genre_used') not in (None, 'all'):
-        rows.append((f"{genre.title()} norm", _pct((g.get('total_positive') or {}).get('value')), f"definitely recommend {_pct((g.get('definitely_recommend') or {}).get('value'))}, excellent {_pct((g.get('excellent') or {}).get('value'))}"))
+        rows.append((f"{ch.get('label') or genre.title()} norm", _pct((g.get('total_positive') or {}).get('value')), f"definitely recommend {_pct((g.get('definitely_recommend') or {}).get('value'))}, excellent {_pct((g.get('excellent') or {}).get('value'))}"))
     return rows
 
 

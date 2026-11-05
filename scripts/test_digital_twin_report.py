@@ -300,16 +300,21 @@ class PeopleAndCopy(unittest.TestCase):
         tiles = next(p for p in pages if p['kind'] == 'tiles')
         room = next(p for p in pages if p['kind'] == 'roster')
         shown = R.human_people(people)
-        self.assertTrue(tiles['sub'].startswith(f"The room seated 12 people, with {shown} behind them. Pilot"), tiles['sub'])
+        # the scorecard page states what the shares are of (Liz Huszarik 2026-11-05), then the norm the card is read against
+        self.assertEqual(tiles['sub'], f"Shares are of the {shown} people the 12 seats stand for; the count beside each share is the seats themselves. Compared to feature screenings.")
+        self.assertEqual(pages[1]['sub'], f"Shares are of the {shown} people the 12 seats stand for; the count beside each share is the seats themselves.", 'the TLDR carries it once too')
         self.assertEqual(room['header'], f"The room seated 12 people, standing for {shown}.")
         self.assertEqual(room['sub'], 'Who was seated, and the share of the room each group held.', 'a plain room is the audience; nothing to add')
         # a stored stand-in on the card (sixteen seats times 800, the old fallback) never reaches the page
         sess['scorecard']['people'] = 9_613
+        sess['scorecard'].pop('denominator_line', None)
         pages = R.report_pages({'meta': twin['meta']}, sess, with_chart=False)
         self.assertNotIn('9.61K', next(p for p in pages if p['kind'] == 'tiles')['sub'])
+        self.assertIn(shown, next(p for p in pages if p['kind'] == 'tiles')['sub'])
         header, first = PI.session_csv(sess, {'meta': twin['meta']}).splitlines()[:2]
-        self.assertEqual(header.split(',')[6], 'People')
-        self.assertEqual(first.split(',')[6], str(people), 'the CSV carries the same figure, never the stored stand-in')
+        self.assertEqual(header.split(',')[6:8], ['Seats', 'People'])
+        import csv as _csv
+        self.assertEqual(next(_csv.reader([first]))[7], str(people), 'the CSV carries the same figure, never the stored stand-in')
 
     def test_a_cohort_room_names_the_audience_it_was_drawn_from(self):
         twin, sess = _session(with_questions=False)
@@ -320,7 +325,7 @@ class PeopleAndCopy(unittest.TestCase):
         shown = R.human_people(sum(int(s['people']) for s in g['segments']))
         self.assertEqual(room['header'], f"The room seated 12 people, standing for {shown}.")
         self.assertTrue(room['sub'].endswith('The 12 were drawn from an audience of 83.79M.'), room['sub'])
-        self.assertIn(f"with {shown} behind them", next(p for p in pages if p['kind'] == 'tiles')['sub'])
+        self.assertIn(f"Shares are of the {shown} people the 12 seats stand for", next(p for p in pages if p['kind'] == 'tiles')['sub'])
 
     def test_no_source_prints_no_count(self):
         twin, sess = _session(with_questions=False)
@@ -329,9 +334,10 @@ class PeopleAndCopy(unittest.TestCase):
         for r in sess['group']['roster']:
             r.pop('people', None)
         sess['scorecard']['battery']['quadrants'] = []
+        sess['scorecard'].pop('denominator_line', None)
         sess['group']['size_people'] = 0
         pages = R.report_pages({'meta': twin['meta']}, sess, with_chart=False)
-        self.assertTrue(next(p for p in pages if p['kind'] == 'tiles')['sub'].startswith('The room seated 12 people. Pilot'))
+        self.assertTrue(next(p for p in pages if p['kind'] == 'tiles')['sub'].startswith('Shares are of the audience the 12 seats stand for; the count beside each share is the seats themselves.'))
         self.assertEqual(next(p for p in pages if p['kind'] == 'roster')['header'], 'The room seated 12 people.')
 
     def test_recruit_page_prints_seated_once_and_no_stand_in_ratio(self):
@@ -386,6 +392,102 @@ class PeopleAndCopy(unittest.TestCase):
         pg = R._attach_pages({'talent_attach': [rec]})[0]
         self.assertEqual(pg['rows'][0], ('Jennifer Beals (billed supporting)', '+12.1%', '2.11M more people; 60.1% would follow, 57.2% excellent'))
         self.assertIn('10 of 16 named her as the reason to come back', pg['body'][0])
+
+
+class LizReview(unittest.TestCase):
+    """Liz Huszarik's review of the NCIS: New York report (2026-11-05):
+    the norm label never contradicts the subhead; a feature figure is
+    never called the pilot norm; the denominator is stated once on the
+    scorecard page and once on the TLDR with the seat tally beside every
+    share; would finish gets a norm or the honest line; the headline
+    opens on the strongest honest finding."""
+
+    def _ncis_like(self):
+        twin, sess = _session(with_questions=False)
+        PI.set_norm(sess, 'procedural', by_user=True)
+        head = sess['scorecard']['battery']['headline']
+        return twin, sess, head
+
+    def test_label_denominator_and_tallies_hold_through_every_page(self):
+        twin, sess, head = self._ncis_like()
+        pages = R.report_pages({'meta': twin['meta']}, sess, with_chart=False)
+        blob = _blob(pages)
+        tiles = next(p for p in pages if p['kind'] == 'tiles')
+        t = PI.battery_tallies(sess['scorecard']['battery'])
+        self.assertEqual([lab for _v, lab in tiles['tiles']], [f"Total positive, {t['total_positive']}", f"Definitely recommend, {t['definitely_recommend']}", f"Excellent, {t['excellent']}", f"Would finish, {t['finish']}"])
+        self.assertTrue(tiles['sub'].startswith('Shares are of the ') and 'seats stand for; the count beside each share is the seats themselves. Compared to feature screenings.' in tiles['sub'], tiles['sub'])
+        self.assertNotIn('pilot, procedural', blob)
+        self.assertNotIn('all-pilots norm', blob)
+        self.assertNotIn('compared to: procedural', blob)
+        self.assertEqual(blob.count('the count beside each share is the seats themselves'), 2, 'stated once on the TLDR and once on the scorecard page')
+        # every money line on the scorecard page carries its tally and names the norm for what it is
+        for b in tiles['body'][:3]:
+            self.assertRegex(b, r'^(Definitely recommend|Total positive|Excellent) \d+\.\d% \(\d+ of 12\), .* the feature screening norm of \d+%\.$')
+        self.assertRegex(tiles['body'][3], r'^Would finish \d+\.\d% \(\d+ of 12\)\. No would-finish norm yet; it fills as tests are filed, 0 of 5 so far\.$')
+        # the card table: share and seats never under one set of decimals; would finish never a blank norm cell
+        table = next(p for p in pages if p['header'] == 'Every question on the card, next to its norm.')
+        self.assertEqual(table['head'], ('Measure', 'Share, and seats', 'Norm'))
+        self.assertEqual(table['sub'], 'Compared to feature screenings.')
+        rows = {r[0]: r for r in table['rows']}
+        self.assertRegex(rows['Excellent'][1], r'^\d+\.\d%, \d+ of 12 seats$')
+        self.assertEqual(rows['Excellent'][2], 'Feature screening norm 30%')
+        self.assertEqual(rows['Definitely recommend'][2], 'Feature screening norm 50%')
+        fin = next(r for k, r in rows.items() if k.startswith('Would finish'))
+        self.assertRegex(fin[1], r'^\d+\.\d%, \d+ of 12 seats$')
+        self.assertEqual(fin[2], 'No would-finish norm yet; it fills as tests are filed, 0 of 5 so far.')
+        self.assertTrue(all(r[2] for r in table['rows']), [r for r in table['rows'] if not r[2]])
+        self.assertEqual(table['body'], ['No pilot norm yet; it fills as pilot tests are filed, 0 of 5 so far.', 'No procedural norm yet; it fills as tests are filed under procedural, 0 of 5 so far.'])
+        # the quadrants name the norm row for what it is, and say each group's shares are of its own people
+        quads = next(p for p in pages if p['header'] == 'The four quadrants, side by side.')
+        self.assertIn("Each group's shares are of the people its seats stand for; the seat count is in the label.", quads['sub'])
+        self.assertEqual(quads['rows'][-1][0], 'Feature screening norm')
+        # the characters and components pages name the feature screening norm beside every row that has one
+        chars = next(p for p in pages if p['head'] == ('Character', 'Excellent', 'Norm and screen time')) if any(p.get('head') == ('Character', 'Excellent', 'Norm and screen time') for p in pages) else None
+        if chars:
+            self.assertTrue(all('feature screening norm' in r[2] for r in chars['rows']), chars['rows'])
+        comps = next(p for p in pages if p.get('head') == ('Component', 'Excellent', 'Norm'))
+        self.assertEqual(comps['sub'], 'Top box (excellent) for each component, with the feature screening norm.')
+        self.assertTrue(all(r[2].startswith('feature screening norm ') for r in comps['rows']), comps['rows'])
+        # the CSV says the same
+        csv = PI.session_csv(sess, {'meta': twin['meta']})
+        self.assertIn('Feature screening norm %', csv)
+        self.assertIn(',Feature screenings,', csv)
+        self.assertIn('Shares are of the ', csv)
+        self.assertNotIn('All pilots norm', csv)
+        self.assertIn('No would-finish norm yet; it fills as tests are filed, 0 of 5 so far.', csv)
+
+    def test_the_headline_opens_on_intent_when_every_money_measure_sits_under_its_norm(self):
+        twin, sess, head = self._ncis_like()
+        head.update({'excellent_pct': 6.5, 'total_positive_pct': 49.4, 'definitely_recommend_pct': 29.8, 'finish_pct': 96.7, 'tune_in_pct': 78.4})
+        comps = sess['diagnostics']['components']['rows']
+        for c in comps:
+            c['norm'] = 40.0
+            c['vs_norm_pp'] = round(float(c['excellent_pct']) - 40.0, 1)
+        comps[0].update({'excellent_pct': 30.8, 'norm': 40.0, 'vs_norm_pp': -9.2})     # two components under the norm: the explanation
+        comps[1].update({'excellent_pct': 36.5, 'norm': 45.0, 'vs_norm_pp': -8.5})
+        pages = R.report_pages({'meta': twin['meta']}, sess, with_chart=False)
+        tiles = next(p for p in pages if p['kind'] == 'tiles')
+        self.assertEqual(tiles['header'], 'Nearly everyone would finish and most would watch again; Excellent is soft.')
+        self.assertLessEqual(len(tiles['header'].split()), 12)
+        tldr = pages[1]['body']
+        self.assertTrue(tldr[0].startswith('96.7% (') and 'would finish and 78.4% (' in tldr[0] and tldr[0].endswith(') would watch a second episode.'), tldr[0])
+        self.assertTrue(tldr[1].startswith('Excellent is soft at 6.5% (') and '24 points below the feature screening norm of 30%' in tldr[1] and 'also sit under it.' in tldr[1], tldr[1])
+        self.assertTrue(tldr[2].endswith('under the norm; that is where the gap sits.'), tldr[2])
+        self.assertLessEqual(len(tldr), 5)
+        concl = pages[-1]['body']
+        self.assertTrue(concl[0].startswith('The cut plays below the feature screening norm on total positive (49.4%, '), concl[0])
+        self.assertTrue(concl[1].startswith('Intent is the strength: 96.7% would finish (') and concl[1].endswith('; the next episode is the thing to sell.'), concl[1])
+        # when the card clears the norm, the page opens on that instead
+        head.update({'excellent_pct': 41.2, 'total_positive_pct': 72.1, 'definitely_recommend_pct': 58.3})
+        pages = R.report_pages({'meta': twin['meta']}, sess, with_chart=False)
+        self.assertEqual(next(p for p in pages if p['kind'] == 'tiles')['header'], 'Total positive 72.1%, 7 points above the feature screening norm.')
+        self.assertTrue(pages[1]['body'][0].startswith('Total positive 72.1% ('), pages[1]['body'][0])
+        for p in pages[1:]:     # the cover is 'Title x Twin', every other header is one sentence of twelve words or fewer
+            self.assertLessEqual(len(p['header'].split()), 12, p['header'])
+            self.assertTrue(p['header'].endswith('.'), p['header'])
+        blob = _blob(pages)
+        for tok in BANNED:
+            self.assertNotIn(tok, blob, tok)
 
 
 class Csv(unittest.TestCase):

@@ -212,8 +212,11 @@ class OnePageList(unittest.TestCase):
         self.assertEqual(pages.index(mo), kinds.index('image') + 1, 'right after the dial page')
         # what the old export lacked
         card = next(p for p in pages if p['header'] == 'Every question on the card, next to its norm.')
-        self.assertEqual(card['sub'], 'Compared to: Comedy pilots.')
-        self.assertTrue(any(r[2].startswith('Norm ') for r in card['rows']), 'the norm beside the number')
+        # the norm named for what it is: no comedy pilot norm yet and the pilot column is still the feature recruited-screening card
+        # standing in (Liz Huszarik 2026-11-05), so the card is compared to feature screenings and says so once
+        self.assertEqual(card['sub'], 'Compared to feature screenings.')
+        self.assertTrue(any(r[2].startswith('Feature screening norm ') for r in card['rows']), 'the norm beside the number, named')
+        self.assertEqual(card['body'][-1], 'No comedy norm yet; it fills as tests are filed under comedy, 0 of 5 so far.')
         self.assertTrue(any(h.startswith('If released, ') for h in heads), 'the forecast')
         q1 = next(p for p in pages if p['kind'] == 'question' and 'keep watching' in p['sub'])
         self.assertEqual(q1['knew'][0], 'The show was ordered to series in May.')
@@ -222,7 +225,7 @@ class OnePageList(unittest.TestCase):
         self.assertEqual(heads[-1], 'Key conclusions and what to do next.')
         self.assertEqual(heads[1], 'What we found, and what to do.')
         tiles = pages[2]
-        self.assertTrue(tiles['sub'].startswith('The room seated 12 people, with '), tiles['sub'])
+        self.assertTrue(tiles['sub'].startswith('Shares are of the ') and 'people the 12 seats stand for' in tiles['sub'], tiles['sub'])   # what the shares are of, stated (Liz Huszarik 2026-11-05)
         self.assertNotIn('People in the room', tiles['sub'])
         blob = _blob(pages)
         for tok in BANNED:
@@ -323,23 +326,25 @@ class Csv(unittest.TestCase):
         csv = PI.session_csv(sess, payload)
         lines = csv.splitlines()
         # the test line names the norm it is compared to
-        self.assertTrue(lines[0].endswith(',Favorite moment,Dead spot,Compared to,Norm note'), lines[0])
-        self.assertIn(',Comedy pilots,No norm yet for comedy pilots (0 of 5 tests).', lines[1])
-        # the scorecard: every measure with the all-formats norm and the chosen norm beside it
-        self.assertIn('Question,Answer,Share %,People,In the room,All pilots norm %,Comedy pilots norm %', lines)
+        self.assertTrue(lines[0].endswith(',Favorite moment,Dead spot,Compared to,Norm note,Shares are of'), lines[0])
+        self.assertIn(',Feature screenings,"No pilot norm yet; it fills as pilot tests are filed, 0 of 5 so far. No comedy norm yet; it fills as tests are filed under comedy, 0 of 5 so far.",', lines[1])
+        self.assertIn(',Seats,People,', lines[0])
+        self.assertRegex(lines[1], r',\d+ of 12,')        # the seat tally beside the shares
+        # the scorecard: every measure with the norm it is read against (the feature screening card, until pilot tests accumulate) and the chosen norm beside it
+        self.assertIn('Question,Answer,Share %,People,In the room,Feature screening norm %,Comedy pilots norm %', lines)
         self.assertTrue(any(l.startswith('Overall rating,Excellent,') and l.count(',') == 6 and l.split(',')[5] == '30.0' for l in lines), 'the excellent row with its norm columns')
         self.assertTrue(any(',Total positive,' in l and ',65.0,' in l for l in lines), 'total positive against the 65 norm')
         import csv as _csv
         rows = [row for row in _csv.reader(io.StringIO(csv)) if row]
         self.assertTrue(any(row[0] == 'Note' and row[1].startswith('Definitely recommend ') and 'norm of 50%' in row[1] for row in rows), 'the norm lines')
         # the characters
-        self.assertIn('Character,Role,Excellent %,Total positive %,Norm %,Vs norm pp,On screen,Screen time against the rating,Would follow into a second episode %', lines)
+        self.assertIn('Character,Role,Excellent %,Total positive %,Feature screening norm %,Vs norm pp,On screen,Screen time against the rating,Would follow into a second episode %', lines)
         self.assertTrue(any(l.startswith('Mae,lead,') for l in lines))
         self.assertTrue(any(l.startswith('Ray,second lead,') for l in lines))
         self.assertTrue(any(l.startswith('Mae and Ray,relationship,') for l in lines))
         self.assertTrue(any(l.startswith('Characters read,') for l in lines))
         # the components, pace and scenes
-        self.assertIn('Component,Excellent %,All pilots norm %,Comedy pilots norm %,Vs norm pp', lines)
+        self.assertIn('Component,Excellent %,Feature screening norm %,Comedy pilots norm %,Vs norm pp', lines)
         self.assertTrue(any(l.startswith('Humor,') for l in lines))
         self.assertIn('Stretch,From,To,Too slow %,Just right %,Too fast %,Excellent %,Line', lines)
         self.assertTrue(any(l.startswith('Beginning,0:00,') for l in lines))
@@ -377,7 +382,7 @@ class Csv(unittest.TestCase):
             self.assertIn(b, seconds, b)
         for b in pages[-1]['body']:
             self.assertIn(b, seconds, b)
-        self.assertIn('Compared to: Comedy pilots.', seconds)
+        self.assertIn('Compared to feature screenings.', seconds)
         self.assertIn('Every question on the card, next to its norm.', first_cells)
         self.assertTrue(any(c.startswith('If released, ') for c in first_cells), 'the forecast page')
         self.assertIn('The moments that moved the room, seat by seat.', first_cells)

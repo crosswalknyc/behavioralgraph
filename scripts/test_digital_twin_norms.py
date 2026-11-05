@@ -255,23 +255,83 @@ class Lookup(unittest.TestCase):
         self.assertEqual(n['all']['excellent']['n'], 1)
 
     def test_norm_line(self):
-        # the line names the norm it reads against (2026-11-04): a chosen genre with no norm of its own reads the all-genres column and says so
+        # the line names the norm it reads against (2026-11-04): a chosen genre with no norm of its own reads the all-genres
+        # column and says so; the pilot column is a feature-screening stand-in until five pilot tests sit in it, and says
+        # THAT (Liz Huszarik 2026-11-05: the feature figure is never called the pilot norm)
         n = N.norms_for('pilot', 'comedy', s3=FakeS3())
         line = N.norm_line('definitely_recommend', 54.0, n, 'pilot', 'comedy')
-        self.assertEqual(line, 'Definitely recommend 54.0%, four points above the all-pilots norm of 50%.')
-        line2 = N.norm_line('definitely_recommend', 82.0, n, 'pilot', 'comedy')
-        self.assertEqual(line2, 'Definitely recommend 82.0%, 32 points above the all-pilots norm of 50%.')
+        self.assertEqual(line, 'Definitely recommend 54.0%, four points above the feature screening norm of 50%.')
+        line2 = N.norm_line('definitely_recommend', 82.0, n, 'pilot', 'comedy', tally='9 of 12')
+        self.assertEqual(line2, 'Definitely recommend 82.0% (9 of 12), 32 points above the feature screening norm of 50%.')
         fam = N.norm_line('total_positive', 80.0, N.norms_for('feature', 'family', s3=FakeS3()), 'feature', 'family')
         self.assertEqual(fam, 'Total positive 80.0%, five points above the family feature norm of 75%.')
         flat = N.norm_line('total_positive', 75.3, N.norms_for('feature', 'family', s3=FakeS3()), 'feature', 'family')
         self.assertEqual(flat, 'Total positive 75.3%, right at the family feature norm of 75%.')
         plain = N.norm_line('excellent', 20.0, N.norms_for('pilot', 'all', s3=FakeS3()), 'pilot', 'all')
-        self.assertEqual(plain, 'Excellent 20.0%, ten points below the all-pilots norm of 30%.')
+        self.assertEqual(plain, 'Excellent 20.0%, ten points below the feature screening norm of 30%.')
+        # the feature column is a norm of its own format: 'the all-features norm'
+        feat = N.norm_line('excellent', 20.0, N.norms_for('feature', 'all', s3=FakeS3()), 'feature', 'all')
+        self.assertEqual(feat, 'Excellent 20.0%, ten points below the all-features norm of 30%.')
         # a trailer reading the feature's character anchor names the format it borrowed
         tr = N.norm_line('lead_character', 61.0, N.norms_for('trailer', 'all', s3=FakeS3()), 'trailer', 'all')
         self.assertEqual(tr, 'Lead 61.0%, eleven points above the all-features norm of 50%.')
-        for l in (line, line2, fam, flat, plain, tr):
+        # a measure with no norm yet says so in words, never a bare figure
+        fin = N.norm_line('finish', 96.7, N.norms_for('pilot', 'all', s3=FakeS3()), 'pilot', 'all', tally='16 of 16')
+        self.assertEqual(fin, 'Would finish 96.7% (16 of 16). No would-finish norm yet; it fills as tests are filed, 0 of 5 so far.')
+        for l in (line, line2, fam, flat, plain, feat, tr, fin):
             self.assertNotIn('\u2014', l)
+
+    def test_a_stand_in_reads_at_its_published_value_until_five_tests_of_the_format(self):
+        """The pilot cells carry the feature recruited-screening card. One
+        pilot test blended in (50 -> 47.8 in the running mean) must not
+        read as 'the all-pilots norm of 48%': the column is a feature
+        screening stand-in at 50 until five pilot tests sit in it, then
+        the running mean reads as the pilot norm."""
+        s3 = FakeS3()
+        N.seed(s3)
+        N.record(s3, 'pilot', 'procedural', {'definitely_recommend': 29.8, 'excellent': 6.5, 'total_positive': 49.4}, 'ncis')
+        n = N.norms_for('pilot', 'procedural', s3=s3)
+        self.assertEqual(n['stand_in'], 'feature screening')
+        self.assertEqual(n['all']['definitely_recommend'], {'value': 50.0, 'n': 1, 'seeded': False, 'format_used': 'pilot', 'genre_used': 'all', 'stand_in': 'feature screening'})
+        self.assertEqual(N.norm_line('definitely_recommend', 29.8, n, 'pilot', 'procedural', tally='5 of 16'),
+                         'Definitely recommend 29.8% (5 of 16), 20 points below the feature screening norm of 50%.')
+        ch = n['choice']
+        self.assertEqual(ch['compared_label'], 'Feature screenings')
+        self.assertEqual(ch['compared_line'], 'Compared to feature screenings.')
+        self.assertEqual(ch['notes'], ['No pilot norm yet; it fills as pilot tests are filed, 1 of 5 so far.',
+                                       'No procedural norm yet; it fills as tests are filed under procedural, 1 of 5 so far.'])
+        self.assertEqual(N.norm_word(ch), 'the feature screening norm')
+        # the ledger itself still blends (the running mean is the pilot norm in the making)
+        cell = json.loads(s3.objs[N.NORMS_KEY].decode('utf-8'))['cells'][N.cell_key('pilot', 'all', 'definitely_recommend')]
+        self.assertAlmostEqual(cell['value'], (50.0 * N.SEED_WEIGHT + 29.8) / (N.SEED_WEIGHT + 1), places=3)
+        self.assertEqual(cell['stand_in'], 'feature screening')
+        # four more pilot tests: the column is a pilot norm, read at the running mean, named for its format
+        for i in range(N.MIN_OWN_TESTS - 1):
+            N.record(s3, 'pilot', 'all', {'definitely_recommend': 30.0 + i, 'excellent': 10.0 + i, 'total_positive': 50.0 + i}, f'p{i}')
+        n = N.norms_for('pilot', 'all', s3=s3)
+        self.assertEqual(n['stand_in'], '')
+        self.assertEqual(n['all']['definitely_recommend']['stand_in'], '')
+        self.assertEqual(n['all']['definitely_recommend']['n'], N.MIN_OWN_TESTS)
+        self.assertLess(n['all']['definitely_recommend']['value'], 50.0)
+        self.assertIn('the all-pilots norm of', N.norm_line('definitely_recommend', 40.0, n, 'pilot', 'all'))
+        self.assertEqual(n['choice']['compared_label'], 'All pilots')
+        self.assertEqual(n['choice']['notes'], [])
+        # a feature cell is a norm of its own format from the first look
+        f = N.norms_for('feature', 'all', s3=s3)
+        self.assertEqual(f['stand_in'], '')
+        self.assertEqual(f['all']['definitely_recommend']['stand_in'], '')
+
+    def test_the_honest_lines_share_one_shape(self):
+        self.assertEqual(N.genre_note('pilot', 'procedural', 1), 'No procedural norm yet; it fills as tests are filed under procedural, 1 of 5 so far.')
+        self.assertEqual(N.format_note('pilot', 0), 'No pilot norm yet; it fills as pilot tests are filed, 0 of 5 so far.')
+        self.assertEqual(N.metric_note('finish', 1), 'No would-finish norm yet; it fills as tests are filed, 1 of 5 so far.')
+        self.assertEqual(N.metric_note('tune_in', 7), 'No second-episode norm yet; it fills as tests are filed, 5 of 5 so far.')
+        n = N.norms_for('pilot', 'all', s3=FakeS3())
+        self.assertEqual(n['pending']['finish'], {'own_tests': 0, 'needed': N.MIN_OWN_TESTS, 'note': 'No would-finish norm yet; it fills as tests are filed, 0 of 5 so far.'})
+        self.assertNotIn('definitely_recommend', n['pending'])
+        for line in (N.genre_note('pilot', 'drama', 2), N.format_note('episode', 3), N.metric_note('finish', 0)):
+            self.assertNotIn('\u2014', line)
+            self.assertTrue(line.endswith('so far.'))
 
     def test_genre_and_format_aliases(self):
         self.assertEqual(N._genre('Rom-Com'), 'romance')

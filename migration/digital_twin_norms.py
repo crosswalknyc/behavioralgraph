@@ -14,6 +14,17 @@ is keyed by format x genre x metric. Two kinds of cell:
   (``SEED_WEIGHT`` tests), ``seeded`` flips to False, and the seed stays
   in the note. Displayed at one decimal.
 
+* stand-in (2026-11-05, Liz Huszarik's review of the NCIS: New York
+  report): a cell whose anchor is the NEAREST instrument's (the pilot
+  cells carry the feature recruited-screening card) reads as 'the
+  feature screening norm' at its published value, never as 'the pilot
+  norm', until MIN_OWN_TESTS of our own tests of that format sit in it.
+  ``compared_label`` / ``compared_line`` / ``norm_word`` are the one
+  source of the comparison's name for the card, the report and the CSV;
+  ``format_note`` / ``genre_note`` / ``metric_note`` are the honest
+  'no norm yet' lines, so no page shows a blank or a borrowed figure
+  under the wrong name.
+
 Public surface for the pilot module and Phase 2 (modes, a Norms tab):
 ``norms_for(format, genre)``, ``record(format, genre, metrics, test_id)``,
 ``seed()``. Reads fall back to the in-memory seed when the bucket has no
@@ -86,6 +97,105 @@ def choice_label(fmt: str, genre: str = 'all') -> str:
     g = _genre(genre)
     noun = FORMAT_LABEL.get(f, f)
     return f"All {noun}" if g == 'all' else f"{GENRE_LABEL.get(g, g.title())} {noun}"
+
+
+# ------------------------------------------------- stand-ins and the honest lines
+# A cell whose published anchor is the NEAREST instrument's (the pilot and episode cells
+# carry the feature recruited-screening card: excellent 30, total positive 65, definitely
+# recommend 50, the character and component norms) is a STAND-IN. It reads as 'the feature
+# screening norm' at its published value, never as 'the pilot norm', until MIN_OWN_TESTS of
+# our own tests of that format sit in it; then the running mean reads as the format's norm.
+# Liz Huszarik, 2026-11-05, on the NCIS: New York report: the 48% definitely recommend
+# 'norm' was the feature figure (top box, films) presented as the all-pilots norm.
+STAND_IN_FEATURE = 'feature screening'
+STAND_IN_PLURAL = {'feature screening': 'feature screenings', 'pilot test': 'pilot tests', 'episode test': 'episode tests'}
+_STAND_IN_BASIS = 'nearest instrument'
+# the short adjective a measure takes in the honest line ('No would-finish norm yet')
+METRIC_SHORT = {'finish': 'would-finish', 'tune_in': 'second-episode', 'urgency_opening': 'how-soon', 'confusion': 'confusion',
+                'component_pace_just_right': 'pace', 'follow_second_episode': 'would-follow', 'walkouts': 'walkout'}
+MONEY_METRICS = ('excellent', 'total_positive', 'definitely_recommend')
+
+
+def _stand_in(cell: Optional[dict]) -> str:
+    """The instrument a cell borrows ('feature screening') while it is not
+    yet a norm of its own format; '' for a true anchor or a cell with
+    MIN_OWN_TESTS of our own tests in it."""
+    if not isinstance(cell, dict):
+        return ''
+    if int(cell.get('our_n') or 0) >= MIN_OWN_TESTS:
+        return ''
+    si = str(cell.get('stand_in') or '').strip().lower()
+    if si:
+        return si
+    return STAND_IN_FEATURE if _STAND_IN_BASIS in str(cell.get('basis') or '') else ''
+
+
+def _count_words(n: int) -> str:
+    return f"{min(max(int(n or 0), 0), MIN_OWN_TESTS)} of {MIN_OWN_TESTS} so far"
+
+
+def genre_note(fmt: str, genre: str, n: int) -> str:
+    """'No procedural norm yet; it fills as tests are filed under
+    procedural, 1 of 5 so far.'"""
+    g = GENRE_LABEL.get(_genre(genre), str(genre or '').title()).lower()
+    return f"No {g} norm yet; it fills as tests are filed under {g}, {_count_words(n)}."
+
+
+def format_note(fmt: str, n: int) -> str:
+    """'No pilot norm yet; it fills as pilot tests are filed, 1 of 5 so
+    far.' (the all column is still a stand-in from another instrument)."""
+    one = FORMAT_SINGULAR.get(_fmt(fmt), str(fmt or 'pilot'))
+    return f"No {one} norm yet; it fills as {one} tests are filed, {_count_words(n)}."
+
+
+def metric_note(metric: str, n: int) -> str:
+    """'No would-finish norm yet; it fills as tests are filed, 1 of 5 so
+    far.' for a measure with no published anchor and too few tests."""
+    m = str(metric or '').strip().lower()
+    short = METRIC_SHORT.get(m) or METRIC_LABEL.get(m, m.replace('_', ' ')).lower()
+    return f"No {short} norm yet; it fills as tests are filed, {_count_words(n)}."
+
+
+def compared_label(choice: dict) -> str:
+    """The norm a card is actually read against, from its norm choice:
+    'Procedural pilots' when the genre has a norm, 'All pilots' when the
+    all column is a norm of the format, 'Feature screenings' while the
+    all column is a stand-in. One source for the card, the report pages
+    and the CSV."""
+    ch = choice if isinstance(choice, dict) else {}
+    if ch.get('compared_label'):
+        return str(ch['compared_label'])
+    if ch.get('has_genre_norm') and ch.get('label'):
+        return str(ch['label'])
+    si = str(ch.get('stand_in') or '').strip().lower()
+    if si:
+        return STAND_IN_PLURAL.get(si, si + 's').capitalize()
+    return str(ch.get('all_label') or 'All pilots')
+
+
+def compared_line(choice: dict) -> str:
+    """'Compared to all pilots.' / 'Compared to procedural pilots.' /
+    'Compared to feature screenings.'"""
+    lab = compared_label(choice)
+    return f"Compared to {lab[0].lower() + lab[1:]}." if lab else ''
+
+
+def norm_word(choice: dict) -> str:
+    """'the feature screening norm' / 'the all-pilots norm' / 'the
+    procedural pilot norm': the words a comparison sentence uses."""
+    ch = choice if isinstance(choice, dict) else {}
+    si = str(ch.get('stand_in') or '').strip().lower()
+    if si and not ch.get('has_genre_norm'):
+        return f"the {si} norm"
+    lab = compared_label(ch)
+    parts = lab.split(' ', 1)
+    if len(parts) == 2 and parts[0].lower() == 'all':
+        return f"the all-{parts[1].lower()} norm"
+    if len(parts) == 2:
+        noun = parts[1].lower()
+        one = next((FORMAT_SINGULAR[f] for f, p in FORMAT_LABEL.items() if p == noun), noun)
+        return f"the {parts[0].lower()} {one} norm"
+    return f"the {lab.lower()} norm"
 
 
 def norm_options(fmt: str) -> list:
@@ -317,16 +427,20 @@ def _seed_cell(c: dict) -> dict:
     v = _r1(c.get('value'))
     rng = c.get('range')
     srcs = [{'url': str(s.get('url') or ''), 'note': str(s.get('note') or '')} for s in (c.get('sources') or []) if isinstance(s, dict) and s.get('url')]
+    basis = str(c.get('basis') or 'published norm')
+    # the instrument a nearest-instrument anchor borrows (the seed names it; an older seed file carries it in the basis)
+    stand_in = str(c.get('stand_in') or (STAND_IN_FEATURE if _STAND_IN_BASIS in basis else '')).strip().lower()
     return {'value': v, 'n': 0, 'seeded': True, 'seed_value': v, 'seed_weight': int(c.get('seed_weight') or SEED_WEIGHT),
             'seed_n_hint': c.get('n_hint'), 'range': ([_r1(rng[0]), _r1(rng[1])] if isinstance(rng, (list, tuple)) and len(rng) == 2 and rng[0] is not None else None),
-            'our_sum': 0.0, 'our_n': 0, 'tests': [], 'sources': srcs, 'basis': str(c.get('basis') or 'published norm'),
+            'our_sum': 0.0, 'our_n': 0, 'tests': [], 'sources': srcs, 'basis': basis, 'stand_in': stand_in,
             'as_of': str(c.get('as_of') or ''), 'context': str(c.get('context') or ''), 'populations': list(c.get('populations') or []), 'updated_at': _now()}
 
 
 def _same_seed(cur: dict, want: dict) -> bool:
     return (_r1(cur.get('seed_value')) == _r1(want.get('seed_value')) and (cur.get('range') or None) == (want.get('range') or None)
             and [s.get('url') for s in cur.get('sources') or []] == [s.get('url') for s in want.get('sources') or []]
-            and [s.get('note') for s in cur.get('sources') or []] == [s.get('note') for s in want.get('sources') or []])
+            and [s.get('note') for s in cur.get('sources') or []] == [s.get('note') for s in want.get('sources') or []]
+            and str(cur.get('stand_in') or '') == str(want.get('stand_in') or ''))
 
 
 def seed(s3=None, cells: Optional[list] = None, dry_run: bool = False, drop_tests: Optional[list] = None, prune_unseeded: bool = False) -> dict:
@@ -398,7 +512,7 @@ def seed(s3=None, cells: Optional[list] = None, dry_run: bool = False, drop_test
                 # our own tests already blend in: keep the accumulated value, refresh the seed fields only
                 if not _same_seed(cur, want):
                     cur.update({'seed_value': want['seed_value'], 'seed_weight': want['seed_weight'], 'range': want['range'], 'sources': want['sources'],
-                                'basis': want['basis'], 'as_of': want['as_of']})
+                                'basis': want['basis'], 'as_of': want['as_of'], 'stand_in': want.get('stand_in') or ''})
                     cur['value'] = _blend(cur)
                     cur['updated_at'] = _now()
                     changed = True
@@ -458,10 +572,13 @@ def record(s3, fmt: str, genre: str, metrics: dict, test_id: str) -> Optional[di
                     if near is not None and near.get('seed_value') is not None:
                         # a genre cell that borrows the all-genres anchor is not a genre norm yet: it reads as one only once
                         # MIN_OWN_TESTS of our own tests sit in it (the anchor_genre field is what _lookup checks, 2026-11-04)
+                        # a cell of another format borrows that format's instrument too: a pilot cell started from the feature
+                        # card is a feature-screening stand-in until MIN_OWN_TESTS pilot tests sit in it
+                        borrowed = _stand_in(dict(near, our_n=0)) or (STAND_IN_FEATURE if near_fmt == 'feature' and fmt != 'feature' else '')
                         cell.update({'seed_value': float(near['seed_value']), 'seed_weight': int(near.get('seed_weight') or SEED_WEIGHT), 'range': near.get('range'),
                                      'sources': [dict(x) for x in (near.get('sources') or []) if not str(x.get('note') or '').startswith('Seed ')],
                                      'basis': f"{near.get('basis') or 'published norm'} ({near_fmt} {near_genre if near_genre != 'all' else 'all genres'} anchor)", 'as_of': near.get('as_of') or '',
-                                     'anchor_genre': near_genre, 'anchor_format': near_fmt})
+                                     'anchor_genre': near_genre, 'anchor_format': near_fmt, 'stand_in': borrowed})
                     doc['cells'][k] = cell
                 tests = cell.setdefault('tests', [])
                 if tid in tests:
@@ -610,20 +727,43 @@ def forget_test_genre(s3, test_id: str, fmt: str, genre: str) -> Optional[dict]:
 
 
 def _public(cell: dict, fmt_used: str, genre_used: str) -> dict:
-    return {'value': _r1(cell.get('value')), 'n': int(cell.get('n') or cell.get('our_n') or 0), 'seeded': bool(cell.get('seeded', True)),
-            'format_used': fmt_used, 'genre_used': genre_used}
+    """The cell as a page reads it. A stand-in reads at its PUBLISHED
+    value (the feature screening norm is 50, not 50 blended with one
+    pilot) and names the instrument it borrows; a norm of the format
+    reads at the running mean."""
+    si = _stand_in(cell)
+    value = _r1(cell.get('seed_value')) if (si and cell.get('seed_value') is not None) else _r1(cell.get('value'))
+    return {'value': value, 'n': int(cell.get('n') or cell.get('our_n') or 0), 'seeded': bool(cell.get('seeded', True)),
+            'format_used': fmt_used, 'genre_used': genre_used, 'stand_in': si}
+
+
+def _pending(cells: dict, fmt: str, genre: str, metric: str) -> dict:
+    """How far a measure with no norm yet has come: {own_tests, needed}
+    from the cell our tests are filling (the genre's, else the all
+    column's)."""
+    n = 0
+    for g in ((genre, 'all') if genre != 'all' else ('all',)):
+        c = cells.get(cell_key(fmt, g, metric))
+        if isinstance(c, dict):
+            n = max(n, int(c.get('our_n') or 0))
+    return {'own_tests': n, 'needed': MIN_OWN_TESTS, 'note': metric_note(metric, n)}
 
 
 def norms_for(fmt: str, genre: str = 'all', s3=None, doc: Optional[dict] = None) -> dict:
-    """{format, genre, genre_used, all: {metric: {value, n, seeded}},
-    genre: {metric: ...}} with no sources. ``genre`` falls back to all
-    when the genre has no cell; a format falls back to its nearest
-    format. Values at one decimal."""
+    """{format, genre, genre_used, all: {metric: {value, n, seeded,
+    stand_in}}, genre: {metric: ...}, pending: {metric: {own_tests,
+    needed, note}}, stand_in, choice} with no sources. ``genre`` falls
+    back to all when the genre has no cell; a format falls back to its
+    nearest format. Values at one decimal. ``pending`` carries the
+    measures with no norm yet (no anchor, fewer than MIN_OWN_TESTS of
+    our tests) so a page can say so in words instead of leaving a
+    blank; ``stand_in`` names the instrument the all column borrows
+    while it is not yet a norm of the format ('feature screening')."""
     fmt = _fmt(fmt)
     genre = _genre(genre)
     doc = doc if isinstance(doc, dict) and isinstance(doc.get('cells'), dict) else load(s3)
     cells = doc['cells']
-    out_all, out_genre = {}, {}
+    out_all, out_genre, pending = {}, {}, {}
     genre_hits = 0
     for m in METRICS:
         c, f = _lookup(cells, fmt, 'all', m)
@@ -639,38 +779,78 @@ def norms_for(fmt: str, genre: str = 'all', s3=None, doc: Optional[dict] = None)
         else:
             if c is not None:
                 out_genre[m] = dict(out_all[m])
+        if c is None and (genre == 'all' or m not in out_genre):
+            pending[m] = _pending(cells, fmt, genre, m)
+    stand_in = _column_stand_in(out_all)
     return {'format': fmt, 'genre_key': genre, 'genre_used': genre if genre_hits else 'all', 'all': out_all, 'genre': out_genre if genre != 'all' else dict(out_all),
+            'pending': pending, 'stand_in': stand_in,
             'genre_label': GENRE_LABEL.get(genre, genre.title()), 'format_label': FORMAT_LABEL.get(fmt, fmt), 'from_seed_only': bool(doc.get('in_memory')),
-            'choice': norm_choice(fmt, genre, cells, has_genre_norm=bool(genre_hits))}
+            'choice': norm_choice(fmt, genre, cells, has_genre_norm=bool(genre_hits), stand_in=stand_in)}
 
 
-def norm_choice(fmt: str, genre: str, cells: Optional[dict] = None, has_genre_norm: Optional[bool] = None) -> dict:
-    """What a test is compared to, for the card and the dial header:
-    {genre, label ('Procedural pilots'), all_label ('All pilots'),
-    has_genre_norm, own_tests, needed, note}. The note is the honest
-    line when the chosen genre has no norm yet: 'No norm yet for
-    procedural pilots (1 of 5 tests).'"""
+def _column_stand_in(column: dict) -> str:
+    """The instrument the money cells of a column borrow, when they all
+    do ('feature screening'); '' when the column is a norm of the
+    format (or carries no money cell)."""
+    sis = [str((column.get(m) or {}).get('stand_in') or '') for m in MONEY_METRICS if column.get(m)]
+    return sis[0] if sis and all(sis) and len(set(sis)) == 1 else ''
+
+
+def norm_choice(fmt: str, genre: str, cells: Optional[dict] = None, has_genre_norm: Optional[bool] = None, stand_in: Optional[str] = None) -> dict:
+    """What a test is compared to, for the card, the report pages, the
+    CSV and the dial header: {genre, label ('Procedural pilots', the
+    chosen genre), all_label ('All pilots'), has_genre_norm, own_tests,
+    needed, stand_in, compared_label, compared_line, notes, note}.
+
+    ``compared_label`` is the norm the card is actually read against:
+    the genre's when it has a norm, else 'All pilots' when the all
+    column is a norm of the format, else the instrument the all column
+    borrows ('Feature screenings'). ``notes`` are the honest lines, each
+    once: 'No pilot norm yet; it fills as pilot tests are filed, 1 of 5
+    so far.' while the all column is a stand-in, and 'No procedural
+    norm yet; it fills as tests are filed under procedural, 1 of 5 so
+    far.' when the chosen genre has none. ``note`` joins them."""
     fmt, genre = _fmt(fmt), _genre(genre)
     cells = cells if isinstance(cells, dict) else {}
     if has_genre_norm is None:
         has_genre_norm = genre != 'all' and any(_lookup(cells, fmt, genre, m)[0] is not None for m in METRICS)
+    if stand_in is None:
+        col = {}
+        for m in MONEY_METRICS:
+            c, f = _lookup(cells, fmt, 'all', m)
+            if c is not None:
+                col[m] = _public(c, f, 'all')
+        stand_in = _column_stand_in(col)
+    has_genre_norm = bool(has_genre_norm) if genre != 'all' else False
     n = own_tests(cells, fmt, genre) if genre != 'all' else 0
-    note = ''
+    n_all = own_tests(cells, fmt, 'all')
+    notes = []
+    if not has_genre_norm and stand_in:
+        notes.append(format_note(fmt, n_all))
     if genre != 'all' and not has_genre_norm:
-        note = f"No norm yet for {GENRE_LABEL.get(genre, genre).lower()} {FORMAT_LABEL.get(fmt, fmt)} ({min(n, MIN_OWN_TESTS)} of {MIN_OWN_TESTS} tests)."
-    return {'genre': genre if genre != 'all' else '', 'label': choice_label(fmt, genre), 'all_label': choice_label(fmt, 'all'),
-            'has_genre_norm': bool(has_genre_norm) if genre != 'all' else False, 'own_tests': n, 'needed': MIN_OWN_TESTS, 'note': note}
+        notes.append(genre_note(fmt, genre, n))
+    out = {'genre': genre if genre != 'all' else '', 'label': choice_label(fmt, genre), 'all_label': choice_label(fmt, 'all'),
+           'has_genre_norm': has_genre_norm, 'own_tests': n, 'needed': MIN_OWN_TESTS, 'stand_in': stand_in if not has_genre_norm else ''}
+    out['compared_label'] = compared_label(out)
+    out['compared_line'] = compared_line(out)
+    out['notes'] = notes
+    out['note'] = ' '.join(notes)
+    return out
 
 
 _POINT_WORDS = {0: 'right at', 1: 'one point', 2: 'two points', 3: 'three points', 4: 'four points', 5: 'five points', 6: 'six points', 7: 'seven points',
                 8: 'eight points', 9: 'nine points', 10: 'ten points', 11: 'eleven points', 12: 'twelve points'}
 
 
-def norm_line(metric: str, ours, norms: dict, fmt: Optional[str] = None, genre: Optional[str] = None) -> str:
+def norm_line(metric: str, ours, norms: dict, fmt: Optional[str] = None, genre: Optional[str] = None, tally: str = '') -> str:
     """The plain comparison under a money number, naming the norm it is
     read against: 'Definitely recommend 54.0%, two points above the
     procedural pilot norm of 52%.' A chosen genre with no norm yet reads
-    against the all-genres column and says so ('the all-pilots norm')."""
+    against the all-genres column and says so ('the all-pilots norm');
+    a column that is still a stand-in names the instrument it borrows
+    ('the feature screening norm'). A measure with no norm yet says so
+    in words, never a bare figure. ``tally`` ('5 of 16') rides beside
+    the share when given."""
     label = METRIC_LABEL.get(metric, metric.replace('_', ' ').title())
     try:
         v = float(ours)
@@ -681,20 +861,25 @@ def norm_line(metric: str, ours, norms: dict, fmt: Optional[str] = None, genre: 
     g = ((norms or {}).get('genre') or {}).get(metric) if isinstance((norms or {}).get('genre'), dict) else None
     a = ((norms or {}).get('all') or {}).get(metric)
     pick = g if (g and g.get('genre_used') not in (None, 'all')) else a
+    shown = f"{label} {v:.1f}%" + (f" ({tally})" if tally else '')
     if not pick:
-        return f"{label} {v:.1f}%."
+        pend = ((norms or {}).get('pending') or {}).get(metric) if isinstance((norms or {}).get('pending'), dict) else None
+        return f"{shown}. {pend['note']}" if isinstance(pend, dict) and pend.get('note') else f"{shown}."
     used = str(pick.get('format_used') or fmt)
     used = used if used in FORMATS else fmt
-    if pick is g and genre != 'all':
+    si = str(pick.get('stand_in') or '')
+    if si and not (pick is g and genre != 'all'):
+        who = f"the {si} norm"
+    elif pick is g and genre != 'all':
         who = f"the {GENRE_LABEL.get(genre, genre).lower()} {FORMAT_SINGULAR.get(used, used)} norm"
     else:
         who = f"the all-{FORMAT_LABEL.get(used, used)} norm"
     nv = float(pick.get('value') or 0)
     pts = int(round(abs(v - nv)))
     if pts == 0:
-        return f"{label} {v:.1f}%, right at {who} of {nv:.0f}%."
+        return f"{shown}, right at {who} of {nv:.0f}%."
     gap = _POINT_WORDS.get(pts, f"{pts} points")
-    return f"{label} {v:.1f}%, {gap} {'above' if v > nv else 'below'} {who} of {nv:.0f}%."
+    return f"{shown}, {gap} {'above' if v > nv else 'below'} {who} of {nv:.0f}%."
 
 
 def sources_report(doc: Optional[dict] = None, s3=None) -> dict:
@@ -713,5 +898,6 @@ def sources_report(doc: Optional[dict] = None, s3=None) -> dict:
 
 
 __all__ = ['NORMS_KEY', 'BACKUP_PREFIX', 'FORMATS', 'GENRES', 'METRICS', 'METRIC_LABEL', 'GENRE_LABEL', 'FORMAT_LABEL', 'FORMAT_SINGULAR', 'SEED_CELLS', 'SEED_WEIGHT',
-           'MIN_OWN_TESTS', 'cell_key', 'load', 'update', 'seed', 'record', 'forget_test', 'forget_test_genre', 'own_tests', 'norms_for', 'norm_choice', 'norm_line',
-           'choice_label', 'norm_options', 'sources_report']
+           'MIN_OWN_TESTS', 'MONEY_METRICS', 'STAND_IN_FEATURE', 'cell_key', 'load', 'update', 'seed', 'record', 'forget_test', 'forget_test_genre', 'own_tests',
+           'norms_for', 'norm_choice', 'norm_line', 'choice_label', 'norm_options', 'sources_report',
+           'compared_label', 'compared_line', 'norm_word', 'genre_note', 'format_note', 'metric_note']

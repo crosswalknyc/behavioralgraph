@@ -464,20 +464,101 @@ class Battery(unittest.TestCase):
         self.assertEqual(cols['total_positive']['norm'], 65.0)
         self.assertEqual(cols['definitely_recommend']['genre_norm'], 50.0)
         self.assertTrue(sc['norm_lines'])
-        # the line names the norm it reads against (2026-11-04): no comedy pilot norm yet, so the all-pilots column, and the card says so
-        self.assertTrue(any(l.startswith('Definitely recommend') and 'the all-pilots norm of 50%' in l for l in sc['norm_lines']), sc['norm_lines'])
-        self.assertIn('No norm yet for comedy pilots (0 of 5 tests).', sc['norm_lines'])
+        # the line names the norm it reads against (2026-11-04): no comedy pilot norm yet, so the all column; and the all column is
+        # still the feature recruited-screening card standing in, so it is called that (Liz Huszarik 2026-11-05), never the pilot norm
+        self.assertTrue(any(l.startswith('Definitely recommend') and 'the feature screening norm of 50%' in l for l in sc['norm_lines']), sc['norm_lines'])
+        self.assertFalse(any('all-pilots norm' in l for l in sc['norm_lines']))
+        self.assertIn('No comedy norm yet; it fills as tests are filed under comedy, 0 of 5 so far.', sc['norm_lines'])
+        self.assertIn('No pilot norm yet; it fills as pilot tests are filed, 0 of 5 so far.', sc['norm_lines'])
         self.assertEqual(sc['norm_choice']['label'], 'Comedy pilots')
+        self.assertEqual(sc['norm_choice']['compared_label'], 'Feature screenings')
         self.assertFalse(sc['norm_choice']['has_genre_norm'])
         self.assertFalse(cols['excellent']['genre_own'])
+        self.assertEqual(cols['excellent']['stand_in'], 'feature screening')
+        # every money share carries its seat tally; would finish gets its line, never a blank
+        tallies = sc['tallies']
+        for key in ('excellent', 'total_positive', 'definitely_recommend', 'finish'):
+            self.assertRegex(tallies[key], r'^\d+ of 12$', key)
+        self.assertTrue(any(l.startswith('Would finish ') and f"({tallies['finish']})" in l and 'No would-finish norm yet; it fills as tests are filed, 0 of 5 so far.' in l for l in sc['norm_lines']), sc['norm_lines'])
+        self.assertIsNone(cols['finish']['norm'])
+        self.assertEqual(cols['finish']['note'], 'No would-finish norm yet; it fills as tests are filed, 0 of 5 so far.')
+        self.assertTrue(sc['denominator_line'].startswith('Shares are of the ') and sc['denominator_line'].endswith('the 12 seats stand for; the count beside each share is the seats themselves.'), sc['denominator_line'])
         for l in sc['norm_lines']:
             self.assertFalse(PI.has_banned_copy(l), l)
-        # a genre with a published norm of its own reads it in the genre column
+        # a genre with a published norm of its own reads it in the genre column, and the lines name it
         fam = PI.attach_norms({'battery': {'headline': {'total_positive_pct': 80.0}}}, 'feature', 'family')
-        self.assertEqual(fam['norm_columns']['total_positive'], {'norm': 65.0, 'genre_norm': 75.0, 'genre_own': True})
+        self.assertEqual(fam['norm_columns']['total_positive'], {'norm': 65.0, 'genre_norm': 75.0, 'genre_own': True, 'stand_in': '', 'own_tests': None, 'note': ''})
         self.assertEqual(fam['norm_lines'], ['Total positive 80.0%, five points above the family feature norm of 75%.'])
         self.assertEqual(fam['norm_choice']['label'], 'Family features')
+        self.assertEqual(fam['norm_choice']['compared_label'], 'Family features')
         self.assertTrue(fam['norm_choice']['has_genre_norm'])
+        self.assertEqual(fam['norm_choice']['notes'], [])
+        self.assertEqual(fam['denominator_line'], 'Shares are of the audience the seats stand for; the count beside each share is the seats themselves.')
+
+    def test_battery_tallies_read_the_rows(self):
+        bat = {'questions': [
+            {'id': 'overall', 'rows': [{'id': 'a', 'label': 'Excellent', 'pct': 6.5, 'seats_n': 1, 'tally': '1 of 16'}, {'id': 'b', 'label': 'Very good', 'pct': 42.9, 'seats_n': 7, 'tally': '7 of 16'},
+                                       {'id': 'c', 'label': 'Good', 'pct': 32.5, 'seats_n': 5, 'tally': '5 of 16'}]},
+            {'id': 'recommend', 'rows': [{'id': 'a', 'label': 'Definitely', 'pct': 29.8, 'seats_n': 5, 'tally': '5 of 16'}]},
+            {'id': 'finish', 'kind': 'yes_no', 'rows': [{'id': 'a', 'label': 'Yes', 'pct': 96.7, 'seats_n': 16, 'tally': '16 of 16'}]},
+            {'id': 'tune_in', 'kind': 'yes_no', 'rows': [{'id': 'a', 'label': 'Yes', 'pct': 78.4, 'seats_n': 13, 'tally': '13 of 16'}]},
+            {'id': 'urgency_pilot', 'rows': [{'id': 'a', 'label': 'Live or the same week', 'pct': 36.1, 'seats_n': 6, 'tally': '6 of 16'}]},
+            {'id': 'expectations', 'rows': [{'id': 'a', 'label': 'Better than I expected', 'pct': 36.7, 'seats_n': 6, 'tally': '6 of 16'}]}]}
+        self.assertEqual(PI.battery_tallies(bat), {'seats': 16, 'excellent': '1 of 16', 'total_positive': '8 of 16', 'definitely_recommend': '5 of 16', 'finish': '16 of 16',
+                                                   'tune_in': '13 of 16', 'urgency_opening': '6 of 16', 'better_than_expected': '6 of 16'})
+        # an older card whose rows carry no tally gives '' (never an invented count)
+        old = {'questions': [{'id': 'overall', 'rows': [{'id': 'a', 'pct': 6.5}, {'id': 'b', 'pct': 42.9}]}, {'id': 'recommend', 'rows': [{'id': 'a', 'pct': 29.8}]}]}
+        self.assertEqual(PI.battery_tallies(old), {'seats': 0, 'excellent': '', 'total_positive': '', 'definitely_recommend': ''})
+        self.assertEqual(PI.denominator_line(16, 22_347_641), 'Shares are of the 22.35M people the 16 seats stand for; the count beside each share is the seats themselves.')
+        self.assertEqual(PI.denominator_line(0, None), 'Shares are of the audience the seats stand for; the count beside each share is the seats themselves.')
+
+    def test_headline_leads_with_the_strongest_honest_finding(self):
+        """Liz Huszarik 2026-11-05: when every money measure sits under its
+        norm the honest lead is intent against a soft Excellent, with the
+        component gaps as the explanation; when the card beats the norm,
+        open on that. Deterministic, twelve words, sentence case, a full
+        stop; shares carry the seat tally; the norm is named for what it
+        is."""
+        head = {'excellent_pct': 6.5, 'total_positive_pct': 49.4, 'definitely_recommend_pct': 29.8, 'finish_pct': 96.7, 'tune_in_pct': 78.4}
+        bat = {'headline': head, 'questions': [
+            {'id': 'overall', 'rows': [{'id': 'a', 'pct': 6.5, 'seats_n': 1, 'tally': '1 of 16'}, {'id': 'b', 'pct': 42.9, 'seats_n': 7, 'tally': '7 of 16'}]},
+            {'id': 'recommend', 'rows': [{'id': 'a', 'pct': 29.8, 'seats_n': 5, 'tally': '5 of 16'}]},
+            {'id': 'finish', 'kind': 'yes_no', 'rows': [{'id': 'a', 'pct': 96.7, 'seats_n': 16, 'tally': '16 of 16'}]},
+            {'id': 'tune_in', 'kind': 'yes_no', 'rows': [{'id': 'a', 'pct': 78.4, 'seats_n': 13, 'tally': '13 of 16'}]}]}
+        cols = {'excellent': {'norm': 30.0, 'genre_norm': 30.0, 'genre_own': False, 'stand_in': 'feature screening'},
+                'total_positive': {'norm': 65.0, 'genre_norm': 65.0, 'genre_own': False, 'stand_in': 'feature screening'},
+                'definitely_recommend': {'norm': 50.0, 'genre_norm': 50.0, 'genre_own': False, 'stand_in': 'feature screening'}}
+        choice = {'genre': 'procedural', 'label': 'Procedural pilots', 'all_label': 'All pilots', 'has_genre_norm': False, 'stand_in': 'feature screening', 'compared_label': 'Feature screenings'}
+        comps = {'rows': [{'key': 'humor', 'label': 'Humor', 'excellent_pct': 30.8, 'norm': 40.0, 'vs_norm_pp': -9.2}, {'key': 'action', 'label': 'Action', 'excellent_pct': 36.5, 'norm': 45.0, 'vs_norm_pp': -8.5},
+                          {'key': 'story', 'label': 'Story', 'excellent_pct': 40.4, 'norm': 35.0, 'vs_norm_pp': 5.4}]}
+        sess = {'scorecard': {'battery': bat, 'norm_columns': cols, 'norm_choice': choice}, 'diagnostics': {'components': comps}}
+        hl = PI.headline_read(sess)
+        self.assertEqual(hl['lead'], 'intent')
+        self.assertEqual(hl['header'], 'Nearly everyone would finish and most would watch again; Excellent is soft.')
+        self.assertLessEqual(len(hl['header'].split()), 12)
+        self.assertEqual(hl['lines'], ['96.7% (16 of 16) would finish and 78.4% (13 of 16) would watch a second episode.',
+                                       'Excellent is soft at 6.5% (1 of 16), 24 points below the feature screening norm of 30%; total positive 49.4% (8 of 16) and definitely recommend 29.8% (5 of 16) also sit under it.',
+                                       'Humor (30.8% against 40%) and action (36.5% against 45%) are the components under the norm; that is where the gap sits.'])
+        # the card beats the norm on every money measure: open on that
+        head2 = dict(head, excellent_pct=41.2, total_positive_pct=72.1, definitely_recommend_pct=58.3)
+        sess2 = {'scorecard': {'battery': dict(bat, headline=head2), 'norm_columns': cols, 'norm_choice': dict(choice, stand_in='', compared_label='All pilots')}, 'diagnostics': {}}
+        hl2 = PI.headline_read(sess2)
+        self.assertEqual(hl2['lead'], 'beats')
+        self.assertEqual(hl2['header'], 'Total positive 72.1%, 7 points above the all-pilots norm.')
+        self.assertTrue(hl2['lines'][0].startswith('Total positive 72.1% (8 of 16), 7 points above the all-pilots norm of 65%; definitely recommend 58.3% (5 of 16) and excellent 41.2% (1 of 16) also clear it.'), hl2['lines'])
+        # mixed: total positive with the norm beside every number
+        head3 = dict(head, excellent_pct=41.2)
+        hl3 = PI.headline_read({'scorecard': {'battery': dict(bat, headline=head3), 'norm_columns': cols, 'norm_choice': choice}, 'diagnostics': {}})
+        self.assertEqual(hl3['lead'], 'mixed')
+        self.assertEqual(hl3['header'], 'Total positive 49.4%, with the norm beside every number.')
+        for h in (hl, hl2, hl3):
+            self.assertTrue(h['header'][0].isupper() and h['header'].endswith('.'), h['header'])
+            self.assertNotIn('\u2014', ' '.join([h['header']] + h['lines']))
+        # a genre with a norm of its own is named in the sentence
+        cols_g = {k: dict(v, genre_norm={'excellent': 28.0, 'total_positive': 60.0, 'definitely_recommend': 35.0}[k], genre_own=True, stand_in='') for k, v in cols.items()}
+        hl4 = PI.headline_read({'scorecard': {'battery': bat, 'norm_columns': cols_g, 'norm_choice': dict(choice, has_genre_norm=True, stand_in='', compared_label='Procedural pilots')}, 'diagnostics': {}})
+        self.assertEqual(hl4['lead'], 'intent')
+        self.assertIn('22 points below the procedural pilot norm of 28%', hl4['lines'][1])
 
     def test_norm_metrics_for_the_ledger(self):
         sess = _run('funny', sid='metrics')
@@ -1021,7 +1102,8 @@ class People(unittest.TestCase):
 
     def test_seats_carry_their_share_and_the_card_agrees_with_the_quadrants(self):
         twin = _beals()
-        sess = PI.open_session([twin], title='Second Helping pilot', in_room=12)
+        # a fixed id: the per-seat people are salted on the session id, and a random one lands outside the one percent band about one run in three
+        sess = PI.open_session([twin], title='Second Helping pilot', in_room=12, session_id='people-1')
         g = sess['group']
         seg = g['segments'][0]
         own = [r.get('people') for r in g['roster']]
@@ -1047,10 +1129,15 @@ class People(unittest.TestCase):
         self.assertIsNone(PI.session_people(sess, twin), 'nothing on file and no US size on the twin: no count')
         self.assertEqual(PI.session_people(sess, {'meta': {'size_us': 83_791_763}}), 83_791_763)
         seg['people'] = seg_people
-        # the CSV's People cell is the same figure
+        # the CSV's People cell is the same figure, with the seat count in its own column and the denominator stated
         header, first = PI.session_csv(sess, {'meta': twin['meta']}).splitlines()[:2]
-        self.assertEqual(header.split(',')[6], 'People')
-        self.assertEqual(first.split(',')[6], str(seg_people))
+        self.assertEqual(header.split(',')[6:8], ['Seats', 'People'])
+        import csv as _csv
+        cells = next(_csv.reader([first]))
+        self.assertEqual(cells[7], str(seg_people))
+        self.assertEqual(cells[6], str(len(g['roster'])))
+        self.assertEqual(header.split(',')[-1], 'Shares are of')
+        self.assertTrue(cells[-1].startswith('Shares are of the ') and f"the {len(g['roster'])} seats stand for" in cells[-1], cells[-1])
 
     def test_lower_first_keeps_an_acronym_and_a_double_capital_name(self):
         self.assertEqual(PI.lower_first('The room dipped'), 'the room dipped')
