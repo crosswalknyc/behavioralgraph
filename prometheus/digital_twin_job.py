@@ -159,21 +159,27 @@ def run_job(job_id, username, inputs, extras=None):
                 status_write(job_id, rec)
                 return SYN.queue_profile_for_twin(subject, window, s3=s3, created_by=username or 'prometheus', progress=_progress)
 
-            from_list = bool(inputs.get('url_list_key') or isinstance(inputs.get('url_list'), dict))
-            if from_list:
-                # a twin from a list of content URLs (Jenna 2026-11-04): the audience the list defines is pulled
-                # through the profile engine first, then the twin is built from that profile. A pull that does not
-                # land ends here with the refund and the partner-safe line; nothing is held, nothing says rebuild.
+            from_list = bool(inputs.get('from_list') or inputs.get('url_list_key') or isinstance(inputs.get('url_list'), dict))
+            if from_list and not str(inputs.get('profile_key') or '').strip():
+                # a twin from a list of content URLs (Jenna 2026-11-04), phase one: the audience the list defines
+                # is queued on the profile engine and this job stops. The engine hands the twin back to this queue
+                # with the landed profile key on the inputs the moment the Total Universe registers (phase two runs
+                # the build below). A queue that refuses ends here with the refund and the partner-safe line;
+                # nothing is held, nothing says rebuild.
                 from . import twin_url_list as _TUL
                 tu_key = _TUL.run_pull_in_job(inputs, username, job_id, rec, status_write, s3=s3, bucket=bucket, usage_extras=extras)
+                if tu_key is None:
+                    print(f"[twin-job {job_id}] audience queued as {rec.get('profile_run_id')}; the twin follows when it lands")
+                    return rec
                 if not tu_key:
                     _thread_note(username, inputs.get('thread_id'), _TUL.FAIL_LINE, {'twin_job_id': job_id})
                     print(f"[twin-job {job_id}] list audience pull stopped: {rec.get('detail')}")
                     return rec
-                inputs['source'] = 'profile'
                 inputs['profile_key'] = tu_key
+            if from_list:
+                inputs['source'] = 'profile'
                 inputs['pull_profile'] = None
-                rec['stage'] = 'building the twin from the audience'
+                rec.update({'status': 'running', 'queued': False, 'stage': 'building the twin from the audience'})
                 status_write(job_id, rec)
             inputs.setdefault('pull_profile', _pull)
             payload = SYN.build_twin(inputs, claude_json, tools=_tools(), created_by=username or 'prometheus', s3=s3)

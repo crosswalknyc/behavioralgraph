@@ -877,7 +877,14 @@ _SEED_URL_CAP = 400
 
 # ---------------------------------------------------------- the build
 def _queue_env():
-    return str(os.environ.get('SYNTH_QUEUE_URL') or '').rstrip('/'), str(os.environ.get('SYNTH_QUEUE_SECRET') or '')
+    """(url, secret) for the engine's queue. The web tier names the URL
+    in its env; on the build server the read worker has the secret and
+    the listener is local (SYNTH_LISTENER_PORT, 8765 by default)."""
+    url = str(os.environ.get('SYNTH_QUEUE_URL') or '').rstrip('/')
+    secret = str(os.environ.get('SYNTH_QUEUE_SECRET') or '')
+    if not url and secret:
+        url = f"http://127.0.0.1:{str(os.environ.get('SYNTH_LISTENER_PORT') or '8765').strip()}"
+    return url, secret
 
 
 def queue_profile(body, post=None):
@@ -904,42 +911,57 @@ def queue_profile(body, post=None):
     return rid, ''
 
 
-def wait_for_profile(run_id, *, wait_s=3600, poll_s=12, status_fn=None, progress=None, sleep=time.sleep):
-    """Poll the run until its Total Universe is registered. Returns
-    (tu_key, state): state is 'done', 'failed', 'cancelled' or
-    'timeout'. ``progress(stage)`` keeps the twin job's heartbeat."""
+def profile_status(run_id, status_fn=None):
+    """The engine's status document for a run, or {} (unknown / unreachable)."""
     url, secret = _queue_env()
     if status_fn is None:
+        if not url or not secret:
+            return {}
         import requests
 
         def status_fn(rid):
             r = requests.get(f"{url}/synth/status/{rid}", timeout=15, headers={'X-Synth-Auth': secret})
             return r.json() if r.status_code == 200 else {}
-    deadline = time.time() + max(60, int(wait_s or 3600))
-    while time.time() < deadline:
-        sleep(poll_s)
-        try:
-            doc = status_fn(run_id) or {}
-        except Exception:
-            doc = {}
-        key = str(doc.get('tu_key') or doc.get('tu_s3_key') or doc.get('s3_key') or '')
-        st = str(doc.get('status') or '')
-        if key and (doc.get('tu_registered_in_dashboard') or st in ('tu_done', 'completed', 'complete', 'done')):
-            return key, 'done'
-        if st in ('error', 'failed', 'cancelled'):
-            return '', 'cancelled' if st == 'cancelled' else 'failed'
-        if callable(progress):
-            # every poll writes the stage: the heartbeat the job sweeper reads
-            progress({'queued': 'the audience is lined up'}.get(st, 'pulling the audience from your list'))
-    return '', 'timeout'
+    try:
+        doc = status_fn(run_id) or {}
+    except Exception:
+        doc = {}
+    return doc if isinstance(doc, dict) else {}
 
 
-def pull_profile_for_twin(inputs, *, username, run_id='', s3=None, bucket=None, progress=None, usage_extras=None,
-                          draft_fn=None, spec_from_draft=None, post=None, status_fn=None, sleep=time.sleep, wait_s=3600,
-                          connect_fn=None, fetch=None, log=print):
-    """The whole pull: titles for the list, the brief, the draft, the spec
-    body, the seed file, the queue, the wait. Returns a dict with
-    tu_key (empty on failure), run_id, state and body."""
+def landed_key(doc):
+    """The registered Total Universe key on an engine status document, or ''."""
+    doc = doc if isinstance(doc, dict) else {}
+    key = str(doc.get('tu_key') or doc.get('tu_s3_key') or doc.get('s3_key') or '')
+    st = str(doc.get('status') or '')
+    if key and (doc.get('tu_registered_in_dashboard') or st in ('tu_done', 'completed', 'complete', 'done')):
+        return key
+    return ''
+
+
+def then_block(inputs, *, job_id, username, extras=None):
+    """What rides the queue body as ``then``: the twin that waits on the
+    audience. The engine hands it to the read worker, with the landed
+    profile key on the inputs, the moment the Total Universe registers;
+    on a genuine build failure it ends the twin with the same line and
+    returns the twin's own charge."""
+    keep = {k: v for k, v in dict(inputs or {}).items() if k not in ('pull_profile',)}
+    keep['from_list'] = True
+    keep['profile_key'] = ''
+    keep['source'] = 'profile'
+    keep['op'] = 'build'
+    return {'kind': 'twin_build', 'job_id': str(job_id), 'username': str(username or ''), 'inputs': keep,
+            'extras': dict(extras or {}), 'charged': dict((inputs or {}).get('charged') or {})}
+
+
+def queue_profile_for_twin_job(inputs, *, job_id, username, run_id='', s3=None, bucket=None, progress=None, usage_extras=None,
+                               draft_fn=None, spec_from_draft=None, post=None, status_fn=None, connect_fn=None, fetch=None, log=print):
+    """Phase one of a list build, run inside the twin job: titles for the
+    list, the brief, the draft, the spec body (with the ``then`` block),
+    the seed file, the queue post. Returns a dict with state 'queued'
+    (run_id set), 'landed' (tu_key set: an earlier attempt's audience
+    already registered), 'not_queued' (error set) or 'no_list'. Never
+    waits: the engine hands the twin back when the audience lands."""
     rec = inputs.get('url_list') if isinstance(inputs.get('url_list'), dict) else None
     if rec is None:
         rec = load_list(str(inputs.get('url_list_key') or ''), s3=s3, bucket=bucket)
@@ -948,6 +970,18 @@ def pull_profile_for_twin(inputs, *, username, run_id='', s3=None, bucket=None, 
     name = ' '.join(str(inputs.get('subject') or inputs.get('name') or rec.get('name') or '').split())[:140]
     window = _normalize_window(inputs.get('window') or rec.get('window'))
     run_id = run_id or str(inputs.get('profile_run_id') or '') or secrets.token_urlsafe(10)
+    # a restarted job never posts the same audience twice: the run it already queued is the run
+    prior = profile_status(run_id, status_fn=status_fn)
+    if prior:
+        key = landed_key(prior)
+        st = str(prior.get('status') or '')
+        if key:
+            return {'tu_key': key, 'run_id': run_id, 'state': 'landed', 'body': None}
+        if st in ('error', 'failed', 'cancelled'):
+            return {'tu_key': '', 'run_id': run_id, 'state': 'cancelled' if st == 'cancelled' else 'failed', 'body': None}
+        if st and st != 'unknown':
+            log(f"[{run_id}] url-list: the audience is already {st}; waiting on it")
+            return {'tu_key': '', 'run_id': run_id, 'state': 'queued', 'body': None, 'resumed': True}
     if callable(progress):
         progress('reading the titles on your list')
     items = rec['items']
@@ -968,6 +1002,7 @@ def pull_profile_for_twin(inputs, *, username, run_id='', s3=None, bucket=None, 
     requester = {'username': username, 'email': str(inputs.get('requester_email') or '')}
     body = spec_body(draft, name=name, rec=rec, window=window, run_id=run_id, seed_key=seed_key, requester=requester,
                      spec_from_draft=spec_from_draft, prompt=str(inputs.get('ask_text') or ''))
+    body['then'] = then_block(inputs, job_id=job_id, username=username, extras=usage_extras)
     if s3 is not None:
         try:
             s3.put_object(Bucket=bucket or BUCKET, Key=seed_key, Body=seed_csv_bytes(items), ContentType='text/csv')
@@ -977,10 +1012,15 @@ def pull_profile_for_twin(inputs, *, username, run_id='', s3=None, bucket=None, 
         progress('the audience is lined up')
     rid, err = queue_profile(body, post=post)
     if not rid:
+        if 'already in progress' in str(err):
+            log(f"[{run_id}] url-list: the audience is already building; waiting on it")
+            return {'tu_key': '', 'run_id': run_id, 'state': 'queued', 'body': body, 'resumed': True}
         log(f"[{run_id}] url-list: {err}")
         return {'tu_key': '', 'run_id': run_id, 'state': 'not_queued', 'error': err, 'body': body}
-    key, state = wait_for_profile(rid, wait_s=wait_s, status_fn=status_fn, progress=progress, sleep=sleep)
-    return {'tu_key': key, 'run_id': rid, 'state': state, 'body': body}
+    return {'tu_key': '', 'run_id': rid, 'state': 'queued', 'body': body}
+
+
+WAITING_STAGE = 'pulling the audience from your list (usually under an hour); the twin follows'
 
 
 # ------------------------------------------------------------ charging
@@ -1069,7 +1109,7 @@ def start(user, uname, rec, name, window, *, thread_id='', purpose='', panelists
         return '', '', err
     email = str((user or {}).get('email') or '').strip() if isinstance(user, dict) else ''
     inputs = {'subject': name, 'name': name, 'subject_kind': 'audience', 'purpose': str(purpose or '')[:400], 'window': _normalize_window(window),
-              'op': 'build', 'source': 'profile', 'profile_key': '', 'url_list_key': rec.get('key') or list_key(rec.get('token')),
+              'op': 'build', 'source': 'profile', 'profile_key': '', 'from_list': True, 'url_list_key': rec.get('key') or list_key(rec.get('token')),
               'profile_run_id': profile_run_id, 'charged': charged, 'requester_email': email, 'ask_text': str(ask_text or '')[:400],
               'panelists': int(panelists or 0) or None, 'thread_id': thread_id}
     if not inputs['panelists']:
@@ -1079,12 +1119,16 @@ def start(user, uname, rec, name, window, *, thread_id='', purpose='', panelists
 
 
 def run_pull_in_job(inputs, username, job_id, rec, status_write, *, s3=None, bucket=None, usage_extras=None, log=print, **kw):
-    """The twin job's pull step for a list build. Returns the tu_key, or
-    '' after writing the failure (refund, the partner-safe line)."""
+    """The twin job's first phase for a list build. Returns the profile
+    key when the audience already registered (the build continues), None
+    when the audience is queued (the job stops here; the engine hands
+    the twin back with the key when the Total Universe registers), or
+    '' after a genuine failure (refund, the partner-safe line)."""
     def _progress(msg):
         rec['stage'] = str(msg or 'pulling the audience from your list')
         status_write(job_id, rec)
-    res = pull_profile_for_twin(inputs, username=username, s3=s3, bucket=bucket, progress=_progress, usage_extras=usage_extras, log=log, **kw)
+    res = queue_profile_for_twin_job(inputs, job_id=job_id, username=username, s3=s3, bucket=bucket, progress=_progress,
+                                     usage_extras=usage_extras, log=log, **kw)
     rec['profile_run_id'] = res.get('run_id') or inputs.get('profile_run_id') or ''
     rec['profile_state'] = res.get('state')
     if res.get('tu_key'):
@@ -1092,12 +1136,17 @@ def run_pull_in_job(inputs, username, job_id, rec, status_write, *, s3=None, buc
         rec['stage'] = 'the audience is in; building the twin'
         status_write(job_id, rec)
         return res['tu_key']
+    if res.get('state') == 'queued':
+        rec.update({'status': 'waiting', 'queued': False, 'stage': WAITING_STAGE, 'waiting_on_profile': True})
+        status_write(job_id, rec)
+        return None
     charged = inputs.get('charged') if isinstance(inputs.get('charged'), dict) else {}
     name = str(inputs.get('subject') or inputs.get('name') or 'the audience')
-    # the twin charge comes back here; the audience charge comes back from the engine when it refused the
-    # build itself, and from here when the audience never queued or timed out
-    refund(username, int(charged.get('twin') or 0), f"Digital Twin: {name}")
-    if res.get('state') in ('not_queued', 'timeout', 'no_list'):
+    if res.get('state') in ('not_queued', 'no_list'):
+        # the audience never reached the engine: both charges come back here. (A run the engine itself refused
+        # or the requester stopped returns both from the engine: the audience charge by its run id, the twin's
+        # through the then block.)
+        refund(username, int(charged.get('twin') or 0), f"Digital Twin: {name}")
         refund(username, int(charged.get('profile') or 0), f"Digital Twin audience build: {name}")
     rec.update({'status': 'error', 'stage': 'stopped', 'finished_at': time.time(), 'error': FAIL_LINE, 'detail': str(res.get('error') or res.get('state') or '')[:300]})
     status_write(job_id, rec)
@@ -1298,6 +1347,7 @@ def analyze_hook(text, body, history, user, ppu, uname, *, host, pending, start_
 __all__ = ['FLOW', 'RUN_LABEL', 'ASK_NAME', 'ASK_LIST', 'FAIL_LINE', 'urls_from_text', 'urls_from_rows', 'urls_from_bytes', 'classify', 'summarize',
            'brand_category_for', 'seed_platforms', 'seed_urls', 'resolve_titles', 'titles_from_pages', 'titles_from_content_map', 'default_window',
            'window_from_text', 'window_words', 'store_list', 'load_list', 'list_key', 'seed_csv_bytes', 'price', 'list_words', 'confirm_reply', 'promise',
-           'audience_prompt', 'interpret_draft', 'fallback_draft', 'spec_body', 'queue_profile', 'wait_for_profile', 'pull_profile_for_twin',
+           'audience_prompt', 'interpret_draft', 'fallback_draft', 'spec_body', 'queue_profile', 'profile_status', 'landed_key', 'then_block',
+           'queue_profile_for_twin_job', 'WAITING_STAGE',
            'charge_both', 'refund', 'start', 'run_pull_in_job', 'is_list_twin_ask', 'name_from_text', 'bare_name', 'intake_armed', 'analyze_hook',
            'thread_has_url_rows']

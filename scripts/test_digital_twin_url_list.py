@@ -412,37 +412,68 @@ class SpecBody(unittest.TestCase):
 class Chaining(unittest.TestCase):
     def _inputs(self, rec, s3):
         s3.put_object(Bucket='b', Key=rec['key'], Body=json.dumps(rec))
-        return {'subject': 'Yellowstone and Landman viewers', 'name': 'Yellowstone and Landman viewers', 'source': 'profile', 'url_list_key': rec['key'],
-                'profile_run_id': 'run_xyz', 'charged': {'profile': 5, 'twin': 15}, 'requester_email': 'carolyn@example.com', 'window': T.default_window()}
+        return {'subject': 'Yellowstone and Landman viewers', 'name': 'Yellowstone and Landman viewers', 'source': 'profile', 'from_list': True,
+                'url_list_key': rec['key'], 'profile_run_id': 'run_xyz', 'charged': {'profile': 5, 'twin': 15}, 'requester_email': 'carolyn@example.com',
+                'window': T.default_window(), 'thread_id': 't1', 'purpose': 'a new season'}
 
-    def test_queue_then_landing_hands_back_the_profile_key(self):
+    def test_phase_one_queues_the_audience_with_the_twin_on_the_body_and_stops(self):
         s3 = FakeS3()
         rec = _rec(WATCH + READ)
         inputs = self._inputs(rec, s3)
-        posted, polls, stages = [], [], []
+        posted, stages, status = [], [], {}
 
         def post(body):
             posted.append(body)
             return 200, {'run_id': body['run_id'], 'status': 'queued'}
-        seq = [{'status': 'queued'}, {'status': 'running'}, {'status': 'tu_done', 'tu_key': 'Yellowstone_and_Landman_viewers_11_04_2026_18_00.csv', 'tu_registered_in_dashboard': True}]
-
-        def status_fn(rid):
-            polls.append(rid)
-            return seq[min(len(polls), len(seq)) - 1]
-        res = T.pull_profile_for_twin(inputs, username='carolyn', s3=s3, bucket='b', progress=stages.append, draft_fn=lambda p: None,
-                                      spec_from_draft=_fake_spec_from_draft, post=post, status_fn=status_fn, sleep=lambda s: None, wait_s=600)
-        self.assertEqual(res['state'], 'done')
-        self.assertEqual(res['tu_key'], 'Yellowstone_and_Landman_viewers_11_04_2026_18_00.csv')
-        self.assertEqual(res['run_id'], 'run_xyz')
+        out = T.run_pull_in_job(inputs, 'carolyn', 'job1', {'job_id': 'job1'}, lambda j, r: status.update(r), s3=s3, bucket='b', usage_extras={'user': 'carolyn'},
+                                draft_fn=lambda p: None, spec_from_draft=_fake_spec_from_draft, post=post, status_fn=lambda rid: {'status': 'unknown'})
+        self.assertIsNone(out)                      # the job stops; the engine hands the twin back when the audience lands
+        self.assertEqual(status['status'], 'waiting')
+        self.assertEqual(status['stage'], T.WAITING_STAGE)
+        self.assertEqual(status['profile_run_id'], 'run_xyz')
         body = posted[0]
         self.assertEqual(body['run_id'], 'run_xyz')
         self.assertEqual(body['spec']['seed_file'], 'system/universe_seeds/run_xyz.csv')
-        self.assertIn('system/universe_seeds/run_xyz.csv', s3.objs)
         self.assertTrue(s3.objs['system/universe_seeds/run_xyz.csv'].startswith(b'url,host,platform,kind,title'))
         self.assertEqual(body['spec']['brand_category'], 'STREAMING/PLATFORM')
         self.assertTrue(body['spec']['persona_notes'].startswith('UNIVERSE DEFINITION'))
-        self.assertIn('pulling the audience from your list', stages)
-        self.assertIn('the audience is lined up', stages)
+        then = body['then']
+        self.assertEqual((then['kind'], then['job_id'], then['username']), ('twin_build', 'job1', 'carolyn'))
+        self.assertEqual(then['inputs']['profile_key'], '')
+        self.assertTrue(then['inputs']['from_list'])
+        self.assertEqual(then['inputs']['url_list_key'], rec['key'])
+        self.assertEqual(then['charged'], {'profile': 5, 'twin': 15})
+        self.assertEqual(then['extras'], {'user': 'carolyn'})
+        self.assertNotIn('pull_profile', then['inputs'])
+
+    def test_a_restarted_job_never_posts_the_same_audience_twice(self):
+        s3 = FakeS3()
+        rec = _rec(WATCH + READ)
+        inputs = self._inputs(rec, s3)
+        posted, status = [], {}
+        out = T.run_pull_in_job(inputs, 'carolyn', 'job1', {'job_id': 'job1'}, lambda j, r: status.update(r), s3=s3, bucket='b', draft_fn=lambda p: None,
+                                spec_from_draft=_fake_spec_from_draft, post=lambda b: posted.append(b) or (200, {'run_id': 'x'}),
+                                status_fn=lambda rid: {'status': 'running', 'run_id': rid})
+        self.assertIsNone(out)
+        self.assertEqual(posted, [])
+        self.assertEqual(status['status'], 'waiting')
+        # the engine's duplicate guard reads the same way
+        out2 = T.run_pull_in_job(inputs, 'carolyn', 'job1', {'job_id': 'job1'}, lambda j, r: status.update(r), s3=s3, bucket='b', draft_fn=lambda p: None,
+                                 spec_from_draft=_fake_spec_from_draft, post=lambda b: (409, {'error': 'a build for this subject is already in progress'}),
+                                 status_fn=lambda rid: {'status': 'unknown'})
+        self.assertIsNone(out2)
+        self.assertEqual(status['status'], 'waiting')
+
+    def test_an_audience_that_already_landed_continues_into_the_build(self):
+        s3 = FakeS3()
+        rec = _rec(WATCH + READ)
+        inputs = self._inputs(rec, s3)
+        status = {}
+        out = T.run_pull_in_job(inputs, 'carolyn', 'job1', {'job_id': 'job1'}, lambda j, r: status.update(r), s3=s3, bucket='b', draft_fn=lambda p: None,
+                                spec_from_draft=_fake_spec_from_draft, post=lambda b: (200, {'run_id': 'x'}),
+                                status_fn=lambda rid: {'status': 'tu_done', 'tu_key': 'Yellowstone_and_Landman_viewers_11_04_2026_18_00.csv', 'tu_registered_in_dashboard': True})
+        self.assertEqual(out, 'Yellowstone_and_Landman_viewers_11_04_2026_18_00.csv')
+        self.assertEqual(status['profile_key'], out)
 
     def test_the_twin_is_built_from_the_landed_profile(self):
         from migration import digital_twin_synthesis as SYN
@@ -469,6 +500,40 @@ class Chaining(unittest.TestCase):
         gender = {r['label'].lower(): r['pct'] for r in payload['identity']['demographics']['gender']}
         self.assertAlmostEqual(gender['female'], 52.1, delta=0.5)
 
+    def test_phase_two_runs_the_build_on_the_handed_back_key(self):
+        """The engine's handoff: the job comes back queued with the landed
+        profile key on its inputs; run_job skips the pull, builds from
+        that profile, and the requester hears back by email too."""
+        from prometheus import digital_twin_job as J
+        from prometheus import host as _hostmod
+        from migration import digital_twin_synthesis as SYN
+        import prometheus.delivered as _delivered
+        s3 = FakeS3()
+        _hostmod.host.bind(s3_client=s3, bucket='b', ask_hint=lambda **k: None)
+        seen = {}
+        saved = (SYN.build_twin, SYN.persist, J._grant, J._thread_note, _delivered.on_done)
+        try:
+            SYN.build_twin = lambda inputs, cj, **kw: seen.setdefault('inputs', dict(inputs)) and {'meta': {'name': inputs['subject'], 'size_us': 2_345_671, 'profile_key': inputs['profile_key']}}
+            SYN.persist = lambda s3_, payload, username, job_id: 'digital_twins/runs/yl.json.gz'
+            J._grant = lambda username, key: seen.setdefault('grant', (username, key))
+            J._thread_note = lambda username, tid, text, meta: seen.setdefault('note', text)
+            _delivered.on_done = lambda kind, **kw: seen.setdefault('email', kw.get('email'))
+            inputs = {'subject': 'Yellowstone and Landman viewers', 'name': 'Yellowstone and Landman viewers', 'source': 'profile', 'from_list': True,
+                      'profile_key': 'Yellowstone_and_Landman_viewers_11_04_2026_18_00.csv', 'url_list_key': 'system/digital_twins/url_lists/tok.json',
+                      'profile_run_id': 'run_xyz', 'charged': {'profile': 5, 'twin': 15}, 'thread_id': 't1', 'op': 'build'}
+            s3.put_object(Bucket='b', Key=f"{J.JOB_PREFIX}job2.json", Body=json.dumps({'job_id': 'job2', 'user': 'carolyn', 'status': 'queued', 'queued': True, 'inputs': inputs}))
+            rec = J.run_job('job2', 'carolyn', inputs, {})
+        finally:
+            SYN.build_twin, SYN.persist, J._grant, J._thread_note, _delivered.on_done = saved
+        self.assertEqual(rec['status'], 'done')
+        self.assertEqual(seen['inputs']['profile_key'], 'Yellowstone_and_Landman_viewers_11_04_2026_18_00.csv')
+        self.assertEqual(seen['inputs']['source'], 'profile')
+        self.assertIsNone(seen['inputs'].get('pull_profile'))
+        self.assertIs(seen['email'], True)
+        self.assertIn('built from the audience your list defines', rec['ready_message'])
+        self.assertIn('The audience itself is in Select Profile', seen['note'])
+        self.assertEqual(seen['grant'], ('carolyn', 'digital_twins/runs/yl.json.gz'))
+
     def test_a_pull_that_never_queues_refunds_both_with_the_partner_safe_line(self):
         s3 = FakeS3()
         rec = _rec(WATCH + READ)
@@ -480,12 +545,9 @@ class Chaining(unittest.TestCase):
         sys.modules['app'] = fake_app
         try:
             status = {}
-
-            def status_write(job_id, rec_):
-                status.update(rec_)
-            tu = T.run_pull_in_job(inputs, 'carolyn', 'job1', {'job_id': 'job1'}, status_write, s3=s3, bucket='b', draft_fn=lambda p: None,
+            tu = T.run_pull_in_job(inputs, 'carolyn', 'job1', {'job_id': 'job1'}, lambda j, r: status.update(r), s3=s3, bucket='b', draft_fn=lambda p: None,
                                    spec_from_draft=_fake_spec_from_draft, post=lambda b: (400, {'error': 'spec validation: tu_demos must be a non-empty dict'}),
-                                   sleep=lambda s: None)
+                                   status_fn=lambda rid: {'status': 'unknown'})
         finally:
             if saved is not None:
                 sys.modules['app'] = saved
@@ -498,7 +560,10 @@ class Chaining(unittest.TestCase):
         for banned in ('rebuild', 'rerun', 'held', 'queue', 'spec'):
             self.assertNotIn(banned, status['error'].lower())
 
-    def test_an_engine_failure_refunds_the_twin_only(self):
+    def test_an_engine_failure_is_the_engines_refund(self):
+        """A prior attempt's run the engine already refused: the twin ends
+        with the line here and nothing is refunded twice (the engine
+        returned both charges through the run id and the then block)."""
         s3 = FakeS3()
         rec = _rec(WATCH + READ)
         inputs = self._inputs(rec, s3)
@@ -511,22 +576,15 @@ class Chaining(unittest.TestCase):
             status = {}
             tu = T.run_pull_in_job(inputs, 'carolyn', 'job2', {'job_id': 'job2'}, lambda j, r: status.update(r), s3=s3, bucket='b', draft_fn=lambda p: None,
                                    spec_from_draft=_fake_spec_from_draft, post=lambda b: (200, {'run_id': b['run_id']}),
-                                   status_fn=lambda rid: {'status': 'failed'}, sleep=lambda s: None)
+                                   status_fn=lambda rid: {'status': 'failed'})
         finally:
             if saved is not None:
                 sys.modules['app'] = saved
             else:
                 sys.modules.pop('app', None)
         self.assertEqual(tu, '')
-        self.assertEqual(refunds, [15])     # the engine refunds the audience charge itself, by the run id
+        self.assertEqual(refunds, [])
         self.assertEqual(status['error'], T.FAIL_LINE)
-
-
-class Price(unittest.TestCase):
-    def test_the_line(self):
-        p = T.price(None)
-        self.assertEqual(p['total_usd'], 1050.0)
-        self.assertEqual(p['line'], 'Price: $1,050 charged now ($300 for the audience build and $750 for the twin with its first two runs); each further run $100.')
 
 
 class UploadAck(unittest.TestCase):
