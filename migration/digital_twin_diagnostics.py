@@ -6,9 +6,12 @@ What a studio reads after the topline:
                (names, speaker turns, time on screen); every named
                character rated excellent to poor by every seat; the key
                relationship rated; screen time against likability; who
-               the room would follow into a second episode; norms for the
-               lead, the second lead and the supporting cast; a plain read
-               ("put her on the key art").
+               the room would follow into a second episode, as a share of
+               the room per person (a seat can follow more than one
+               person, so the shares do not add to 100; see
+               ``follow_shares``); norms for the lead, the second lead and
+               the supporting cast; a plain read ("put her on the key
+               art").
   pace         pace by act (too slow / just right / too fast), confusion
                with each seat's written confusion, the beginning and the
                ending rated on their own, a running-time read.
@@ -119,6 +122,10 @@ def cast_from_session(session: dict) -> list:
     return out[:10]
 
 
+FOLLOW_NOTE = 'A seat can follow more than one person.'   # the sub-line under the follow shares on the card, the report and the CSV
+FOLLOW_CONF_FLOOR = 0.8   # a seat's word at confidence 1 carries 0.8 of its people, 1.0 at 5 (the room's own convention)
+FOLLOW_MAYBE = 0.5        # a seat that would come back only on a condition ('only if the next case has a hook') follows at half
+FOLLOW_LIST_MAX = 5       # the people the card lists; anyone a seat named always has a row
 CHAR_TOP = 59.0        # the excellent line for a character: a lead whose scenes hold an ordinary dial lands near the lead norm
 REACT_W = {'love': 1.6, 'wow': 1.6, 'lean-in': 1.2, 'laugh': 1.0, 'confuse': -1.4, 'check-out': -1.8}
 REACT_CAP = 3.0        # points of appeal the reactions in a character's scenes can move, either way
@@ -251,6 +258,136 @@ def _messy_rows(rows: list, seed: str) -> list:
     return rows
 
 
+def _conf_weight(conf) -> float:
+    """A seat's confidence (1 to 5) as the weight its word carries:
+    FOLLOW_CONF_FLOOR at 1, 1.0 at 5."""
+    try:
+        c = int(conf)
+    except (TypeError, ValueError):
+        c = 3
+    return FOLLOW_CONF_FLOOR + (1.0 - FOLLOW_CONF_FLOOR) * (max(1, min(5, c)) - 1) / 4.0
+
+
+def _seat_follow(name: str, seat_score: float, named: set, asked_about: set, intent: float, conf_w: float) -> float:
+    """How far one seat follows one character into a second episode, 0 to
+    1. Spoken first: a seat that named the character (alone or in a
+    pair) as its reason to come back follows at its confidence; a seat
+    asked about the character by name that named someone else has spoken
+    on them and does not follow. Otherwise the inferred read: the seat
+    rates the character excellent and would come back, weighted by how
+    sure it is of that excellent rating, by its intent to come back and
+    by its confidence. Time on screen is not a term here."""
+    if name in named:
+        return conf_w
+    if name in asked_about:
+        return 0.0
+    probs = _rating_probs(seat_score)
+    if argmax(probs) != 'a' or intent <= 0:
+        return 0.0
+    return clamp(float(probs['a']) * intent * conf_w, 0.0, 1.0)
+
+
+def follow_shares(names: list, scores: dict, ev: dict, roster: list, segments: list, seed: str, battery_by_seat: Optional[list] = None) -> list:
+    """Who the room would follow into a second episode, as a share of the
+    room PER PERSON (Jenna, 2026-11-04: "this should be as high as
+    jennifer if not higher for ll cool j"). Never a split: a seat can
+    follow more than one person, so the shares do not add to 100 and are
+    never renormalized.
+
+    A seat follows a character when it named that character, or a pair
+    including them, as its reason to come back (or picked them on a
+    follow question); or when it rates them excellent and said something
+    would bring it back. Spoken answers outrank the inferred rating: a
+    seat asked about a person by name that named someone else does not
+    follow that person. Each seat's word is weighted by its confidence
+    (0.8 at 1, 1.0 at 5) and by the people it stands for; an inferred
+    follow is also weighted by how sure the seat is of its excellent
+    rating, and halved when the seat would come back only on a
+    condition. A seat that answered no come-back question takes its
+    intent from its own battery card (would it watch the next one).
+
+    Returns [{name, pct, people, seats}] ordered by share, salted messy
+    tenths, never a whole number, no two rows on the same tenth."""
+    people = _seat_people(roster, segments)
+    total = float(sum(people.get(int(r['seat']), 0) for r in roster) or 1.0)
+    come = (ev or {}).get('come_back') or {}
+    picks = (ev or {}).get('follow') or {}
+    tune = {}
+    for row in battery_by_seat or []:
+        try:
+            tune[int(row.get('seat'))] = str((row.get('answers') or {}).get('tune_in') or '')
+        except (TypeError, ValueError, AttributeError):
+            continue
+    acc = {n: 0.0 for n in names}
+    seats = {n: 0 for n in names}
+    for r in roster:
+        sno = int(r['seat'])
+        if sno not in scores:
+            continue
+        w_people = float(people.get(sno) or 1)
+        cb = come.get(sno) if isinstance(come.get(sno), dict) else None
+        if cb:
+            lean = str(cb.get('lean') or 'other')
+            intent = 1.0 if lean == 'yes' else 0.0 if lean == 'no' else FOLLOW_MAYBE
+            conf_w = _conf_weight(cb.get('conf'))
+            asked_about = {str(n) for n in (cb.get('asked_about') or [])}
+        else:
+            t = tune.get(sno)
+            intent = 0.0 if t == 'b' else 1.0
+            conf_w = _conf_weight(3)
+            asked_about = set()
+        pick = picks.get(sno)
+        named = set()
+        if isinstance(pick, str):
+            named.add(pick)
+        elif isinstance(pick, (tuple, list)) and len(pick) == 2 and pick[0] == 'pair':
+            named.update(str(x) for x in pick[1])
+        for n in names:
+            w = _seat_follow(n, float(scores[sno].get(n, 50.0)), named, asked_about, intent, conf_w)
+            acc[n] += w_people * w
+            if w >= 0.5:
+                seats[n] += 1
+    out = []
+    for n in names:
+        share = clamp(100.0 * acc[n] / total + jit(-0.25, 0.25, seed, 'share', n), 0.1, 99.9)
+        pct = round(share, 1)
+        if _is_whole(pct):
+            pct = round(clamp(pct + (0.1 if unit(seed, 'whole', n) < 0.5 else -0.1), 0.1, 99.9), 1)
+        out.append({'name': n, 'pct': pct, 'seats': seats[n]})
+    out.sort(key=lambda r: (-r['pct'], r['name']))
+    for i in range(1, len(out)):      # no two people on the same tenth: the lower row steps down a tenth, never onto a whole number
+        if out[i]['pct'] >= out[i - 1]['pct']:
+            v = round(out[i - 1]['pct'] - 0.1, 1)
+            if _is_whole(v):
+                v = round(v - 0.1, 1)
+            out[i]['pct'] = max(0.1, v)
+    for r in out:
+        r['people'] = messy_count(seed, f"follow-{r['name']}", total * r['pct'] / 100.0)
+    return out
+
+
+def follow_sentence(follow: list) -> str:
+    """The moderator's line on the follow shares, naming the top two:
+    'Asked who they would follow into a second episode, 66.1% say LL
+    Cool J and 60.1% say Jennifer Beals.'"""
+    rows = [f for f in (follow or []) if isinstance(f, dict) and f.get('name') and f.get('pct') is not None]
+    if not rows:
+        return ''
+    head = f"Asked who they would follow into a second episode, {pct1(rows[0]['pct'])}% say {rows[0]['name']}"
+    if len(rows) >= 2:
+        head += f" and {pct1(rows[1]['pct'])}% say {rows[1]['name']}"
+    return head + '.'
+
+
+def follow_line(follow: list, limit: int = 3) -> str:
+    """The card's follow line: 'Would follow into a second episode: LL
+    Cool J 66.1%, Jennifer Beals 60.1%, Scott Caan 58.4%.'"""
+    rows = [f for f in (follow or []) if isinstance(f, dict) and f.get('name') and f.get('pct') is not None][:limit]
+    if not rows:
+        return ''
+    return 'Would follow into a second episode: ' + ', '.join(f"{f['name']} {pct1(f['pct'])}%" for f in rows) + '.'
+
+
 def character_table(session: dict, twin: dict, norms: Optional[dict] = None) -> dict:
     roster = (session.get('group') or {}).get('roster') or []
     segments = (session.get('group') or {}).get('segments') or []
@@ -289,11 +426,11 @@ def character_table(session: dict, twin: dict, norms: Optional[dict] = None) -> 
     # the room's own words on the characters (what the seats answered when asked), over the inferred scores
     ev = {}
     try:
-        from migration.digital_twin_reconcile import character_evidence, room_draw, update_note, DRAW_WEIGHT
+        from migration.digital_twin_reconcile import character_evidence, room_draw, update_note
         ev = character_evidence(session, cast, [pair[0]['name'], pair[1]['name']] if pair else []) or {}
     except Exception as e:
         print(f"[twin-diagnostics] room evidence skipped: {e}")
-        ev, DRAW_WEIGHT = {}, 0.86
+        ev = {}
         room_draw = lambda _ev, _roster: None   # noqa: E731
         update_note = lambda _clocks: ''        # noqa: E731
     scores = {}
@@ -367,44 +504,26 @@ def character_table(session: dict, twin: dict, norms: Optional[dict] = None) -> 
         ans = {sno: _rating_probs(clamp(v, 3.0, 97.0)) for sno, v in rel_scores.items()}
         pub = _messy_rows(_publish_rows(ans, RATING, roster, segments, f"{seed}|relationship"), f"{seed}|relationship")
         rel = {'pair': [pair[0]['name'], pair[1]['name']], 'scenes_together': best, 'excellent_pct': _top_box(pub), 'total_positive_pct': _top_box(pub, ('a', 'b')), 'rows': pub}
-    # who would they follow into a second episode: a seat's explicit pick (the character, or the pair, it said would bring it back)
-    # carries most of its leaning; the rest, and every seat that was not asked, follows its own scores. The characters on offer
-    # are the five the room itself puts highest (who it named as the reason to come back, then its own appeal), never the five
-    # with the most time on screen; a character a seat picked out loud always has its option
-    mean_score = {n: sum(scores[s][n] for s in scores) / max(1, len(scores)) for n in names}
+    # who would they follow into a second episode: a share of the room per person, never a split (a seat can follow more
+    # than one person, so the shares do not add to 100); the room's spoken come-back answers first, the seats' own excellent
+    # ratings behind them, each seat weighted by its confidence and the people it stands for (see follow_shares). The card
+    # lists the people the room puts highest, never the five with the most time on screen; anyone a seat named has a row
     picked = set()
     for pick in (ev.get('follow') or {}).values():
         if isinstance(pick, str):
             picked.add(pick)
         elif isinstance(pick, (tuple, list)) and len(pick) == 2 and pick[0] == 'pair':
             picked.update(str(n) for n in pick[1])
-    ranked = sorted(names, key=lambda n: (-int((ev.get('draw_counts') or {}).get(n) or 0), -mean_score[n], n))
-    top5_names = ranked[:5]
-    for n in ranked[5:]:
-        if n in picked and n not in top5_names:
-            drop = next((m for m in reversed(top5_names) if m not in picked), None)
+    bat_seats = ((session.get('scorecard') or {}).get('battery') or {}).get('by_seat') or []
+    follow_all = follow_shares(names, scores, ev, roster, segments, f"{seed}|follow", battery_by_seat=bat_seats)
+    follow = follow_all[:FOLLOW_LIST_MAX]
+    for row in follow_all[FOLLOW_LIST_MAX:]:
+        if row['name'] in picked:
+            drop = next((f for f in reversed(follow) if f['name'] not in picked), None)
             if drop is None:
                 break
-            top5_names[top5_names.index(drop)] = n
-    follow_ans = {}
-    for sno in scores:
-        base = softmax_probs({n: scores[sno][n] + jit(-2.0, 2.0, seed, 'follow', sno, n) for n in top5_names}, temperature=3.5)
-        pick = (ev.get('follow') or {}).get(sno)
-        probs = base
-        if isinstance(pick, str) and pick in base:
-            probs = {n: (1.0 - DRAW_WEIGHT) * v for n, v in base.items()}
-            probs[pick] += DRAW_WEIGHT
-        elif isinstance(pick, (tuple, list)) and len(pick) == 2 and pick[0] == 'pair' and all(n in base for n in pick[1]):
-            a_n, b_n = pick[1]
-            within = (base[a_n] + base[b_n]) or 1.0
-            probs = {n: (1.0 - DRAW_WEIGHT) * v for n, v in base.items()}
-            probs[a_n] += DRAW_WEIGHT * base[a_n] / within
-            probs[b_n] += DRAW_WEIGHT * base[b_n] / within
-        tot = sum(probs.values()) or 1.0
-        follow_ans[sno] = {n: v / tot for n, v in probs.items()}
-    fopts = [(n, n, 'yes') for n in top5_names]
-    fpub = _messy_rows(_publish_rows(follow_ans, fopts, roster, segments, f"{seed}|follow"), f"{seed}|follow")
-    follow = [{'name': r['id'], 'pct': round(float(r['pct']), 1), 'people': int(r['people'])} for r in sorted(fpub, key=lambda r: -float(r['pct']))]
+            follow[follow.index(drop)] = row
+    follow.sort(key=lambda r: (-float(r['pct']), r['name']))
     # screen time against likability: who earns more time than they get (a fact next to the appeal, never a weight on it)
     for r in rows:
         r['time_vs_like'] = ('earns more time' if r['likability'] >= CHAR_TOP - 2.0 and r['share_pct'] < 20 else 'carries the time' if r['likability'] >= CHAR_TOP - 6.0
@@ -435,9 +554,9 @@ def character_table(session: dict, twin: dict, norms: Optional[dict] = None) -> 
     if gainer:
         read += f"{gainer['name']} earns more screen time than the cut gives ({pct1(gainer['share_pct'])}% of the time, {pct1(gainer['excellent_pct'])}% excellent). "
     if follow:
-        read += f"Asked who they would follow into a second episode, {pct1(follow[0]['pct'])}% say {follow[0]['name']}."
-    out = {'characters': rows, 'relationship': rel, 'follow': follow, 'read': read.strip(), 'by_seat': [{'seat': sno, 'name': next((r.get('name') for r in roster if int(r['seat']) == sno), ''),
-                                                                                                  'ratings': {n: _rating_pick(v) for n, v in sc.items()}} for sno, sc in scores.items()]}
+        read += follow_sentence(follow)
+    out = {'characters': rows, 'relationship': rel, 'follow': follow, 'follow_note': FOLLOW_NOTE, 'read': read.strip(),
+           'by_seat': [{'seat': sno, 'name': next((r.get('name') for r in roster if int(r['seat']) == sno), ''), 'ratings': {n: _rating_pick(v) for n, v in sc.items()}} for sno, sc in scores.items()]}
     if ev.get('questions'):
         # the plain line that says the card moved with the room's own words rides at the end of the read (the card, the report
         # and the CSV all print the read), and stands on its own for anything that wants it alone
@@ -778,7 +897,12 @@ def diagnostics_norm_metrics(session: dict) -> dict:
         out['key_relationship'] = float(rel['excellent_pct'])
     fol = (d.get('characters') or {}).get('follow') or []
     if fol:
-        out['follow_second_episode'] = float(fol[0]['pct'])
+        # the ledger's cell is the LEAD's share ('Would follow the lead into a second episode' in the norms copy), the part
+        # the cut is built around: the follow is a per-person share ordered by size, so the top row may be a supporting
+        # character the room named; the lead's row is filed, the top row only when the lead has none
+        lead_name = next((c.get('name') for c in chars if c.get('role') == 'lead'), None)
+        row = next((f for f in fol if f.get('name') == lead_name and f.get('pct') is not None), None) or fol[0]
+        out['follow_second_episode'] = float(row['pct'])
     pace = d.get('pace') or {}
     if (pace.get('overall') or {}).get('just_right_pct') is not None:
         out['component_pace_just_right'] = float(pace['overall']['just_right_pct'])
@@ -803,5 +927,5 @@ def diagnostics_lines(session: dict) -> list:
     return out
 
 
-__all__ = ['RATING', 'PACE', 'COMPONENTS', 'ACT_LABEL', 'cast_from_session', 'character_table', 'pace_read', 'scenes_liked', 'components', 'run_diagnostics',
-           'diagnostics_norm_metrics', 'diagnostics_lines']
+__all__ = ['RATING', 'PACE', 'COMPONENTS', 'ACT_LABEL', 'FOLLOW_NOTE', 'cast_from_session', 'follow_shares', 'follow_sentence', 'follow_line', 'character_table',
+           'pace_read', 'scenes_liked', 'components', 'run_diagnostics', 'diagnostics_norm_metrics', 'diagnostics_lines']

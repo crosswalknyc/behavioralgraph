@@ -42,10 +42,19 @@ recomputed from them:
 When more than half the room names one character as the reason it would
 come back, that character rates in line with the room's best-rated
 character (within salted tenths): the seats who named her rate her with
-the lead, and the aggregate follows. Deterministic, salted, messy digits,
-shares sum to 100.0; norms and the forecast are re-attached; the card
-carries one plain line ("Updated after the room's answer at 43:13.") so
-the change is visible and explainable.
+the lead, and the aggregate follows. Deterministic, salted, messy digits;
+the rating rows sum to 100.0, the follow shares do not (a seat can follow
+more than one person, see ``digital_twin_diagnostics.follow_shares``);
+norms and the forecast are re-attached; the card carries one plain line
+("Updated after the room's answer at 43:13.") so the change is visible
+and explainable.
+
+Who they would follow into a second episode (Jenna, 2026-11-04: "this
+should be as high as jennifer if not higher for ll cool j ... make him
+66.1") is a per-person share of the room, never a split: each seat's
+come-back answer (what it named, the lean, its confidence) is recorded
+here as ``come_back`` and the shares are derived in the diagnostics from
+that record and the seats' own ratings.
 
 Runs when a room question lands (digital_twin_room.run_question and its
 in-place landing on the twin), on every read of a test, and when a test
@@ -62,7 +71,7 @@ from migration.digital_twin_engine import VERSION, clamp, jit
 RECONCILE_VERSION = 1
 GRADES = ('a', 'b', 'c', 'd', 'e')          # excellent, very good, good, fair, poor
 _GRADE_RANK = {g: i for i, g in enumerate(GRADES)}
-DRAW_WEIGHT = 0.86                         # the share of a seat's follow leaning its explicit pick carries
+DRAW_WEIGHT = 0.86                         # kept for older readers; the follow is a per-person share since 2026-11-04 and no longer splits a seat's leaning
 REMARK_STEP = 1.5                          # one plainly positive or negative remark about a character, in dial points
 REMARK_CAP = 3.0
 
@@ -290,11 +299,19 @@ def _remark(line: str, name: str, single: bool) -> float:
 def character_evidence(session: dict, cast: Optional[list] = None, pair: Optional[list] = None) -> dict:
     """Every finished question's explicit word on the characters:
     {draw: {seat: name}, follow: {seat: name | ('pair', [a, b])},
+    come_back: {seat: {lean, conf, named, asked_about}},
     floor: {seat: {name: grade}}, ceiling: {seat: {name: grade}},
     rel_floor: {seat: grade}, rel_ceiling: {seat: grade},
     remarks: {seat: {name: points}}, draw_counts: {name: n},
-    questions: [{id, kind, clock}], clocks: [..]}."""
-    ev = {'draw': {}, 'follow': {}, 'floor': {}, 'ceiling': {}, 'rel_floor': {}, 'rel_ceiling': {}, 'remarks': {}, 'draw_counts': {}, 'questions': [], 'clocks': []}
+    questions: [{id, kind, clock}], clocks: [..]}.
+
+    ``come_back`` is the seat's own answer on the latest come-back
+    question it finished: the lean of what it picked (yes, maybe, no,
+    other), its confidence (1 to 5), the character or pair it named as
+    its reason (None when it named nobody), and the cast members the
+    question itself named in its text (a seat asked about a person by
+    name and picking someone else has spoken on that person)."""
+    ev = {'draw': {}, 'follow': {}, 'come_back': {}, 'floor': {}, 'ceiling': {}, 'rel_floor': {}, 'rel_ceiling': {}, 'remarks': {}, 'draw_counts': {}, 'questions': [], 'clocks': []}
     if cast is None or pair is None:
         cast, pair = cast_and_pair(session)
     if not cast:
@@ -324,13 +341,22 @@ def character_evidence(session: dict, cast: Optional[list] = None, pair: Optiona
             lean = leans.get(oid, 'other')
             if b['kind'] == 'watch_more':
                 tgt = (b.get('option_character') or {}).get(oid)
+                try:
+                    conf = int(a.get('confidence') if a.get('confidence') is not None else 3)
+                except (TypeError, ValueError):
+                    conf = 3
+                named_here = None
                 if isinstance(tgt, str) and tgt in names:
                     ev['draw'][seat] = tgt
                     ev['follow'][seat] = tgt
                     ev['draw_counts'][tgt] = ev['draw_counts'].get(tgt, 0) + 1
                     floor(seat, tgt, 'c')
+                    named_here = tgt
                 elif isinstance(tgt, tuple) and tgt[0] == 'pair' and len(tgt[1]) == 2 and all(n in names for n in tgt[1]):
                     ev['follow'][seat] = ('pair', list(tgt[1]))
+                    named_here = ('pair', list(tgt[1]))
+                ev['come_back'][seat] = {'lean': lean if lean in ('yes', 'maybe', 'no') else 'other', 'conf': max(1, min(5, conf)), 'named': named_here,
+                                         'asked_about': [n for n in (b.get('named') or []) if n in names]}
                 for n in names:
                     w = _remark(str(a.get('line') or ''), n, single == n)
                     if w:

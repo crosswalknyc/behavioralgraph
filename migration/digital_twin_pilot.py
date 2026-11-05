@@ -2945,6 +2945,10 @@ def session_csv(session: dict, payload: Optional[dict] = None) -> str:
         rel = chars_doc.get('relationship') if isinstance(chars_doc.get('relationship'), dict) else {}
         if rel.get('pair'):
             w.writerow([' and '.join(str(p) for p in rel['pair']), 'relationship', rel.get('excellent_pct'), rel.get('total_positive_pct'), '', '', '', f"{rel.get('scenes_together') or 0} scenes together", ''])
+        if follow:
+            # the follow shares are per person, never a split: the note rides under the rows so the column is never read as one
+            from migration.digital_twin_diagnostics import FOLLOW_NOTE
+            w.writerow(['Would follow into a second episode', FOLLOW_NOTE + ' The shares do not add to 100.'])
         if chars_doc.get('read'):
             w.writerow(['Characters read', chars_doc['read']])
     comps = [c for c in ((d.get('components') or {}).get('rows') or []) if isinstance(c, dict)]

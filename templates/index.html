@@ -56660,7 +56660,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     out += '<div class="dtw-card"><div class="dtw-eyebrow">Characters</div><p class="dtw-p" style="margin-top:6px">' + esc(ch.read || '') + '</p>'
                         + piTable(['Character', 'Excellent', 'Norm', 'On screen'], ch.characters.map(function(c) { return [esc(c.name) + ' <span class="dtw-muted">' + esc(c.role) + '</span>', pct1(c.excellent_pct), piNorm(c.norm), esc(c.screen_clock) + ' <span class="dtw-muted">' + esc(c.time_vs_like) + '</span>']; }))
                         + (ch.relationship ? '<p class="dtw-muted" style="margin-top:6px">The key relationship, ' + esc(ch.relationship.pair.join(' and ')) + ': ' + pct1(ch.relationship.excellent_pct) + ' excellent.</p>' : '')
-                        + ((ch.follow || []).length ? '<p class="dtw-muted">Who they would follow into a second episode: ' + ch.follow.map(function(f) { return esc(f.name) + ' ' + pct1(f.pct); }).join(', ') + '.</p>' : '')
+                        + ((ch.follow || []).length ? '<p class="dtw-muted">Would follow into a second episode: ' + ch.follow.map(function(f) { return esc(f.name) + ' ' + pct1(f.pct); }).join(', ') + '.</p><p class="dtw-muted" style="margin-top:2px;font-size:11px">' + esc(ch.follow_note || 'A seat can follow more than one person.') + '</p>' : '')
                         + piRoomSaid(ch)
                         + '</div>';
                 } else if (ch.read) {

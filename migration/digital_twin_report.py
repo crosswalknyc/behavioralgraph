@@ -544,7 +544,10 @@ def report_pages(payload: dict, session: dict, portrait_fn=None, with_chart: boo
     if chars:
         rows = [(f"{c['name']} ({c['role']})", _pct(c.get('excellent_pct')), _clean(f"norm {float(c['norm']):.0f}%, {c['screen_clock']} on screen, {c['time_vs_like']}") if c.get('norm') is not None else _clean(f"{c['screen_clock']} on screen, {c['time_vs_like']}")) for c in chars[:8]]
         fol = (d.get('characters') or {}).get('follow') or []
-        pages.append({'kind': 'table', 'header': _words(_clean((d['characters'].get('read') or 'The characters, rated.').split('. ')[0] + '.')), 'sub': _clean(('Who they would follow into a second episode: ' + ', '.join(f"{f['name']} {_pct(f['pct'])}" for f in fol[:3]) + '.') if fol else ''),
+        # the follow shares are per person (a seat can follow more than one), so the sub-line says so and never reads as a split
+        from migration.digital_twin_diagnostics import FOLLOW_NOTE, follow_line
+        pages.append({'kind': 'table', 'header': _words(_clean((d['characters'].get('read') or 'The characters, rated.').split('. ')[0] + '.')),
+                      'sub': _clean(f"{follow_line(fol)} {FOLLOW_NOTE}") if fol else '',
                       'head': ('Character', 'Excellent', 'Norm and screen time'), 'rows': rows, 'dark': False})
     # what the room said about the people the setup named (Jenna 2026-11-04), three to a page, right after their metrics
     pages.extend(_talent_pages(session))

@@ -22,6 +22,11 @@ What this file holds:
   3. the appeal formula carries no scene-count or duration term, and the
      follow question never drops a character for having little time.
 
+The follow is a share of the room per person (2026-11-04): a seat can
+follow more than one person, so the shares do not add to 100; the ledger
+files the lead's share under 'Would follow the lead into a second
+episode'.
+
 Hermetic (REGRESSION_TEST_MODE=1, no model, no network). The standing
 rule lives in the parent repo at
 .cursor/rules/screen-time-never-weights-appeal.mdc.
@@ -250,9 +255,13 @@ class TheCameoLeadsTheCard(unittest.TestCase):
         self.assertGreater(her['excellent_pct'], lead['excellent_pct'])
         self.assertGreater(her['excellent_pct'], second['excellent_pct'])
         self.assertGreater(her['total_positive_pct'], lead['total_positive_pct'])
+        # the follow is a share of the room per person (a seat can follow more than one): twelve of sixteen named her, so she
+        # leads it; the leads carry their own shares and the three do not add to 100
         self.assertEqual(ch['follow'][0]['name'], CAMEO)
         self.assertGreaterEqual(ch['follow'][0]['pct'], 60.0, ch['follow'])
-        self.assertAlmostEqual(sum(f['pct'] for f in ch['follow']), 100.0, places=6)
+        self.assertEqual(ch['follow'][0]['seats'], 12)
+        self.assertGreater(sum(f['pct'] for f in ch['follow']), 100.0, ch['follow'])
+        self.assertEqual(ch['follow_note'], 'A seat can follow more than one person.')
         # the read leads with the room's word, and the clock rides as a fact in prose
         self.assertTrue(ch['read'].startswith(f"{CAMEO} is the draw: 12 of 16 would come back."), ch['read'])
         self.assertIn('of the screen time', ch['read'])
@@ -281,7 +290,12 @@ class TheCameoLeadsTheCard(unittest.TestCase):
         self.assertEqual(m['lead_character'], rows[LEAD]['excellent_pct'])
         self.assertEqual(m['secondary_character'], rows[SECOND]['excellent_pct'])
         self.assertEqual(m['supporting_character'], rows[CAMEO]['excellent_pct'])
-        self.assertEqual(m['follow_second_episode'], sess['diagnostics']['characters']['follow'][0]['pct'])
+        # the ledger's follow cell is the lead's share ('Would follow the lead into a second episode'), not the top of a list
+        # the cameo leads
+        follow = {f['name']: f['pct'] for f in sess['diagnostics']['characters']['follow']}
+        self.assertEqual(sess['diagnostics']['characters']['follow'][0]['name'], CAMEO)
+        self.assertEqual(m['follow_second_episode'], follow[LEAD])
+        self.assertNotEqual(m['follow_second_episode'], follow[CAMEO])
 
 
 class TheFormula(unittest.TestCase):
@@ -314,9 +328,16 @@ class TheFormula(unittest.TestCase):
         ch = D.character_table(sess, twin)
         names = [f['name'] for f in ch['follow']]
         self.assertIn(CAMEO, names, names)
-        self.assertEqual(names[0], CAMEO, ch['follow'])
         self.assertEqual(len(names), 5)
-        self.assertAlmostEqual(sum(f['pct'] for f in ch['follow']), 100.0, places=6)
+        # her share is the nine seats that named her, at their confidence, by the people they stand for; the extras with far
+        # more minutes sit under her, and the shares are per person (never a split that her minutes could squeeze)
+        her = next(f for f in ch['follow'] if f['name'] == CAMEO)
+        self.assertEqual(her['seats'], 9)
+        self.assertGreaterEqual(her['pct'], 50.0, ch['follow'])
+        for f in ch['follow']:
+            if f['name'] in EXTRAS:
+                self.assertLess(f['pct'], her['pct'], (f, her))
+        self.assertGreater(sum(f['pct'] for f in ch['follow']), 100.0, ch['follow'])
         # the ledger's supporting mark is the mean of every supporting row, not the row with the most minutes
         sess['diagnostics']['characters'] = ch
         supp = [c['excellent_pct'] for c in ch['characters'] if c['role'] == 'supporting']

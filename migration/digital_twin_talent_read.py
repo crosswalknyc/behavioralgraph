@@ -32,11 +32,13 @@ moderator model. When the model is off the deterministic read writes from
 the two most-mentioned themes per person, the room's answer to the
 question that named them, and the top quote.
 
-The read agrees with the character metrics on the card: the person who
-leads 'who they would follow into a second episode' is never called
-forgettable; the person at the bottom of it is never called the draw. The
-metrics ride into the call as constraints and the sentences are checked
-after; a read that breaks them falls back to the deterministic one. The
+The read agrees with the character metrics on the card: the people who
+lead 'who they would follow into a second episode' (anyone within a few
+points of the top; the shares are per person and a seat can follow more
+than one, so they do not add to 100) are never called forgettable; the
+person at the bottom of it, clearly under the top, is never called the
+draw. The metrics ride into the call as constraints and the sentences are
+checked after; a read that breaks them falls back to the deterministic one. The
 metrics and the questions it was built against sign the read, so it is
 regenerated whenever the metrics move (the reconcile that lets the room's
 spoken answers outrank the inferred scores) or a question that names a
@@ -63,6 +65,7 @@ QUOTE_MAX = 230
 EVIDENCE_LINES_MAX = 28      # remarks per person handed to the model
 ANSWERS_MAX = 16             # answers per bound question handed to the model
 MODEL_MAX_TOKENS = 3000      # three people at three sentences and a quote each; the first chain model ran past 1800 on the NCIS test
+FOLLOW_LEAD_BAND = 5.0       # points under the top follow share within which a person still leads it (the shares are per person, not a split)
 
 _ROLE_NOUNS = r"(?:woman|man|guy|lady|girl|boy|boss|chief|agent|partner|lead|captain|lieutenant|detective|cop|officer|kid|mother|mom|father|dad|wife|husband|son|daughter|doctor|nurse|lawyer|teacher|coach|rookie|veteran|sergeant|director|analyst|hacker|killer|suspect|victim)"
 _ROLE_PHRASE_RX = re.compile(r"\b(the " + _ROLE_NOUNS + r"(?: (?:running|leading|heading|in charge of|behind|at|in|on|with|from|who runs|who leads) the [a-z]+(?: [a-z]+)?)?)\b", re.I)
@@ -94,11 +97,11 @@ _FORGETTABLE_RX = re.compile(r"\b(forgettable|barely registered|did not register
 _DRAW_RX = re.compile(r"\b(the draw\b|the reason (?:they|the room|most|many|people) (?:would|will|'d) (?:come|be|tune|press|open|watch|keep)|reason to come back|brings? them back|bring(?:s)? the room back|why they would come back|why they'd come back|carr(?:y|ies|ied) the (?:show|pilot|episode)|the anchor of the (?:show|pilot|episode)|who they would follow|the one they would follow|the one they are following|the reason they would watch)\b", re.I)
 
 TALENT_SYSTEM = """You are Prometheus, the moderator, writing up for a senior executive what the room said and thought about the people the client named before the screening. Plain English a high school student follows; the thinking is senior consultant.
-You are given, for each named person: the role they carried in the cut, the character metrics from the card (the share rating them excellent against the usual mark for the part, time on screen, where they stand on who the room would follow into a second episode), the seats' remarks about them during the watch with the clock on each, the room's answers and voices on every question that bears on them (a role phrase like 'the woman running the team' is resolved for you), how the seats rated them, and how the dial moved in their scenes.
+You are given, for each named person: the role they carried in the cut, the character metrics from the card (the share rating them excellent against the usual mark for the part, time on screen, the share of the room that would follow them into a second episode and where that stands among the people named), the seats' remarks about them during the watch with the clock on each, the room's answers and voices on every question that bears on them (a role phrase like 'the woman running the team' is resolved for you), how the seats rated them, and how the dial moved in their scenes. The follow shares are per person: a seat can follow more than one person, so they do not add to 100 and two people can both carry most of the room.
 Write, for each person:
 - said: two or three short sentences (each under 25 words, the whole under 70 words), in the room's own terms, on what they felt about this person and why: what landed, what they wanted more or less of, what they would come back for. One idea per sentence; no lists inside a sentence. Say shares in plain words with the count when it helps ('ten of sixteen said more of her brings them back'). Ground every claim in the evidence given; never invent a remark, a scene or a number. Speak of the person the way the room did, by name; never write 'the actor' or 'the actress', never name a source, say 'the usual mark' rather than 'norm', never use the words research, model, synthetic, estimated, panel, sample, confidence, data, persona, twin.
 - quote: one line a seat actually said, copied word for word from the remarks or the answers given (you may stop it early at a sentence end), with that seat's number.
-Constraints you never break: the person who leads 'follow into a second episode' is the draw and is never written as forgettable, a miss, or someone who did not register; the person at the bottom of it is never written as the draw, the anchor, or the reason the room would come back. If the room's answers pull the other way, say what the room said as the room's words and keep your own framing inside the card's numbers. Time on screen is a fact you may state, never a reason anyone rates higher or lower and never a reason to doubt what the room said: a cameo can be the best part of the show.
+Constraints you never break: anyone who leads 'follow into a second episode' (within a few points of the top; leads_follow is true) is never written as forgettable, a miss, or someone who did not register; the person at the bottom of it, clearly under the top (bottom_of_follow is true), is never written as the draw, the anchor, or the reason the room would come back. Say the follow share in plain words when it helps ('two in three would follow him into a second episode'). If the room's answers pull the other way, say what the room said as the room's words and keep your own framing inside the card's numbers. Time on screen is a fact you may state, never a reason anyone rates higher or lower and never a reason to doubt what the room said: a cameo can be the best part of the show.
 No em dashes. Return JSON only: {"people": [{"name": "<as given>", "said": "<two or three sentences>", "quote": "<a seat's line>", "quote_seat": <seat number>}]}"""
 
 
@@ -129,6 +132,29 @@ def _count_words(n: int, of: int) -> str:
 
 def _ordinal(i: int) -> str:
     return {1: 'first', 2: 'second', 3: 'third', 4: 'fourth', 5: 'fifth'}.get(int(i), f"{int(i)}th")
+
+
+def share_words(pct) -> str:
+    """A share of the room in plain words: 66.1 reads 'two in three'."""
+    try:
+        v = float(pct)
+    except (TypeError, ValueError):
+        return ''
+    if v >= 90.0:
+        return 'nearly all'
+    if v >= 72.0:
+        return 'three in four'
+    if v >= 60.0:
+        return 'two in three'
+    if v >= 45.0:
+        return 'about half'
+    if v >= 30.0:
+        return 'one in three'
+    if v >= 20.0:
+        return 'one in four'
+    if v >= 10.0:
+        return 'one in eight'
+    return 'fewer than one in ten'
 
 
 def _scrub(s: str) -> str:
@@ -444,16 +470,22 @@ def _metrics(session: dict, people: list) -> dict:
                           'in_relationship': bool(rel and any(_same(x, p['name']) for x in (rel.get('pair') or []))), 'relationship_excellent_pct': rel.get('excellent_pct') if rel else None,
                           'relationship_with': next((x for x in (rel.get('pair') or []) if not _same(x, p['name'])), '') if rel and any(_same(x, p['name']) for x in (rel.get('pair') or [])) else ''}
     fol_named.sort(key=lambda kv: -kv[1])
-    for i, (n, _p) in enumerate(fol_named, 1):
+    # the follow shares are per person (a seat can follow more than one, so they do not add to 100): anyone within a few
+    # points of the top leads it; the bottom is the lowest share only when it sits clearly under the top
+    top = fol_named[0][1] if fol_named else None
+    low = fol_named[-1][1] if fol_named else None
+    for i, (n, p) in enumerate(fol_named, 1):
         out[n]['follow_rank'] = i
         out[n]['follow_of'] = len(fol_named)
-        out[n]['follow_leads'] = (i == 1 and len(fol_named) >= 2)
-        out[n]['follow_bottom'] = (i == len(fol_named) and len(fol_named) >= 2)
+        out[n]['follow_leads'] = bool(len(fol_named) >= 2 and top is not None and p >= top - FOLLOW_LEAD_BAND)
+        out[n]['follow_bottom'] = bool(len(fol_named) >= 2 and p == low and top is not None and p < top - FOLLOW_LEAD_BAND)
+        out[n]['follow_words'] = share_words(p)
     for p in people:
         out[p['name']].setdefault('follow_rank', None)
         out[p['name']].setdefault('follow_of', len(fol_named))
         out[p['name']].setdefault('follow_leads', False)
         out[p['name']].setdefault('follow_bottom', False)
+        out[p['name']].setdefault('follow_words', '')
     return out
 
 
@@ -617,10 +649,13 @@ def _fallback_said(ev: dict, people: Optional[list] = None) -> str:
     # the card, inside the constraints
     if m.get('excellent_pct') is not None:
         line = f"{name} rates {float(m['excellent_pct']):.1f}% excellent" + (f" ({float(m['norm']):.0f}% is the usual mark for a {_part(m.get('role'))})" if m.get('norm') is not None else '')
-        if m.get('follow_leads'):
-            line += " and leads on who the room would follow into a second episode."
+        words = f" ({m['follow_words']} would)" if m.get('follow_words') else ''
+        if m.get('follow_leads') and m.get('follow_rank') == 1:
+            line += f" and leads on who the room would follow into a second episode{words}."
+        elif m.get('follow_leads'):
+            line += f" and sits with the leaders on who the room would follow into a second episode{words}."
         elif m.get('follow_rank') and int(m.get('follow_of') or 0) >= 2:
-            line += f" and sits {_ordinal(m['follow_rank'])} of {m['follow_of']} on who the room would follow into a second episode."
+            line += f" and sits {_ordinal(m['follow_rank'])} of {m['follow_of']} on who the room would follow into a second episode{words}."
         else:
             line += '.'
         out.append(line)
@@ -713,7 +748,7 @@ def _user_payload(session: dict, evidence: list) -> str:
         people.append({
             'name': ev['name'], 'character': ev.get('character') or '', 'role_in_cut': m.get('role') or '', 'role_phrases_the_room_used': ev.get('role_phrases') or [],
             'card': {'excellent_pct': m.get('excellent_pct'), 'usual_mark_for_the_part_pct': m.get('norm'), 'on_screen': m.get('screen_clock'), 'time_against_liking': m.get('time_vs_like'),
-                     'follow_into_second_episode_pct': m.get('follow_pct'), 'follow_rank_among_named': m.get('follow_rank'), 'follow_rank_of': m.get('follow_of'),
+                     'follow_into_second_episode_pct': m.get('follow_pct'), 'follow_in_words': m.get('follow_words') or '', 'follow_rank_among_named': m.get('follow_rank'), 'follow_rank_of': m.get('follow_of'),
                      'leads_follow': bool(m.get('follow_leads')), 'bottom_of_follow': bool(m.get('follow_bottom')),
                      'key_relationship_with': m.get('relationship_with') or '', 'key_relationship_excellent_pct': m.get('relationship_excellent_pct') if m.get('in_relationship') else None},
             'seat_ratings': ev.get('ratings') or {}, 'dial_in_their_scenes': ev.get('dial') or {},
@@ -721,7 +756,8 @@ def _user_payload(session: dict, evidence: list) -> str:
             'questions_that_bear_on_them': [{'question': q['q'], 'asked_at': q['clock'], 'bound_by': q['how'], 'split': q['split'], 'moderator_read': q['read'],
                                              'answers': [{'seat': a['seat'], 'name': a['name'], 'picked': a['option'], 'line': a['line']} for a in q['answers']]} for q in ev.get('questions') or []],
         })
-    return json.dumps({'title': media.get('title') or session.get('title') or 'the cut', 'seats_in_room': len(_roster(session)), 'people': people}, default=str)[:60000]
+    return json.dumps({'title': media.get('title') or session.get('title') or 'the cut', 'seats_in_room': len(_roster(session)),
+                       'follow_shares': 'per person; a seat can follow more than one person, so the shares do not add to 100', 'people': people}, default=str)[:60000]
 
 
 def talent_read(session: dict, twin: Optional[dict] = None, *, models=None, usage_extras: Optional[dict] = None, log=None, deterministic: bool = False) -> dict:
@@ -933,5 +969,5 @@ def report_lines(session: dict) -> list:
     return out
 
 
-__all__ = ['TALENT_SYSTEM', 'TALENT_READ_VERSION', 'named_people', 'role_phrases', 'gather_evidence', 'signature', 'talent_read', 'attach_talent_read', 'stamp_rows', 'is_stale',
-           'question_names_talent', 'breaks_constraints', 'fresh_read', 'public_view', 'report_lines']
+__all__ = ['TALENT_SYSTEM', 'TALENT_READ_VERSION', 'FOLLOW_LEAD_BAND', 'named_people', 'role_phrases', 'gather_evidence', 'signature', 'talent_read', 'attach_talent_read',
+           'stamp_rows', 'is_stale', 'question_names_talent', 'breaks_constraints', 'share_words', 'fresh_read', 'public_view', 'report_lines']

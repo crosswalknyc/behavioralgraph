@@ -111,12 +111,14 @@ def _metrics(sess, beals_leads: bool):
     rows = [{'name': 'LL Cool J', 'role': 'lead', 'excellent_pct': 55.3, 'norm': 50.7, 'vs_norm_pp': 4.6, 'screen_clock': '6:50', 'time_vs_like': 'carries the time', 'share_pct': 46.4, 'likability': 63.8},
             {'name': 'Scott Caan', 'role': 'second lead', 'excellent_pct': 47.5, 'norm': 45.2, 'vs_norm_pp': 2.3, 'screen_clock': '6:25', 'time_vs_like': 'carries the time', 'share_pct': 43.5, 'likability': 61.4},
             {'name': 'Jennifer Beals', 'role': 'supporting', 'excellent_pct': 54.1 if beals_leads else 25.2, 'norm': 38.4, 'vs_norm_pp': 15.7 if beals_leads else -13.2, 'screen_clock': '1:30', 'time_vs_like': 'earns more time', 'share_pct': 10.1, 'likability': 54.9}]
-    follow = ([{'name': 'Jennifer Beals', 'pct': 48.6, 'people': 10_871_002}, {'name': 'LL Cool J', 'pct': 33.1, 'people': 7_404_113}, {'name': 'Scott Caan', 'pct': 18.3, 'people': 4_093_337}] if beals_leads
-              else [{'name': 'LL Cool J', 'pct': 53.3, 'people': 11_924_523}, {'name': 'Scott Caan', 'pct': 36.9, 'people': 8_242_111}, {'name': 'Jennifer Beals', 'pct': 9.8, 'people': 2_181_006}])
+    # the follow is a share of the room per person (a seat can follow more than one), so the three do not add to 100
+    follow = ([{'name': 'Jennifer Beals', 'pct': 60.1, 'people': 13_412_387, 'seats': 10}, {'name': 'LL Cool J', 'pct': 52.4, 'people': 11_710_233, 'seats': 9}, {'name': 'Scott Caan', 'pct': 41.7, 'people': 9_318_961, 'seats': 7}] if beals_leads
+              else [{'name': 'LL Cool J', 'pct': 66.1, 'people': 14_771_789, 'seats': 11}, {'name': 'Scott Caan', 'pct': 58.4, 'people': 13_051_023, 'seats': 9}, {'name': 'Jennifer Beals', 'pct': 31.2, 'people': 6_972_463, 'seats': 5}])
     roster = sess['group']['roster']
     by_seat = [{'seat': int(r['seat']), 'name': r['name'], 'ratings': {'LL Cool J': 'a', 'Scott Caan': 'a' if int(r['seat']) % 3 else 'c', 'Jennifer Beals': 'a' if (beals_leads or int(r['seat']) % 2) else 'c'}} for r in roster]
     sess.setdefault('diagnostics', {})['characters'] = {'characters': rows, 'relationship': {'pair': ['LL Cool J', 'Scott Caan'], 'scenes_together': 5, 'excellent_pct': 52.8}, 'follow': follow,
-                                                         'read': f"LL Cool J rates 55.3% excellent against a lead norm of 51%. Asked who they would follow into a second episode, {follow[0]['pct']}% say {follow[0]['name']}.", 'by_seat': by_seat}
+                                                         'follow_note': 'A seat can follow more than one person.',
+                                                         'read': f"LL Cool J rates 55.3% excellent against a lead norm of 51%. Asked who they would follow into a second episode, {follow[0]['pct']}% say {follow[0]['name']} and {follow[1]['pct']}% say {follow[1]['name']}.", 'by_seat': by_seat}
 
 
 def _session(beals_leads=True, with_questions=True):
@@ -235,9 +237,46 @@ class DeterministicRead(unittest.TestCase):
         tr = TR.attach_talent_read(sess, twin)
         said = tr['people'][2]['said']
         self.assertIn('sits third of 3', said, said)
+        self.assertIn('(one in three would)', said, said)
         m = next(e['metrics'] for e in TR.gather_evidence(sess) if e['name'] == 'Jennifer Beals')
         self.assertTrue(m['follow_bottom'])
         self.assertEqual(TR.breaks_constraints(said, m), [])
+        # LL Cool J leads it at two in three, and the deterministic line says so in plain words
+        ll = tr['people'][0]['said']
+        self.assertIn('leads on who the room would follow into a second episode (two in three would)', ll, ll)
+
+    def test_follow_shares_are_per_person_and_the_leaders_are_a_band(self):
+        """The shares do not add to 100 and a seat can follow more than one
+        person: anyone within a few points of the top leads the follow;
+        the bottom is the lowest share only when it sits clearly under."""
+        twin, sess = _session(beals_leads=True)
+        ch = sess['diagnostics']['characters']
+        self.assertGreater(sum(f['pct'] for f in ch['follow']), 100.0)
+        # two leaders within the band, one clearly under
+        ch['follow'] = [{'name': 'LL Cool J', 'pct': 66.1, 'people': 14_771_789, 'seats': 11}, {'name': 'Jennifer Beals', 'pct': 62.8, 'people': 14_034_311, 'seats': 10},
+                        {'name': 'Scott Caan', 'pct': 41.7, 'people': 9_318_961, 'seats': 7}]
+        m = {e['name']: e['metrics'] for e in TR.gather_evidence(sess)}
+        self.assertTrue(m['LL Cool J']['follow_leads'] and m['Jennifer Beals']['follow_leads'], m)
+        self.assertFalse(m['Jennifer Beals']['follow_bottom'])
+        self.assertTrue(m['Scott Caan']['follow_bottom'])
+        self.assertEqual((m['LL Cool J']['follow_rank'], m['Jennifer Beals']['follow_rank'], m['Scott Caan']['follow_rank']), (1, 2, 3))
+        self.assertEqual((m['LL Cool J']['follow_words'], m['Jennifer Beals']['follow_words'], m['Scott Caan']['follow_words']), ('two in three', 'two in three', 'one in three'))
+        self.assertEqual(TR.breaks_constraints('Jennifer Beals barely registered.', m['Jennifer Beals']), ['leads follow, written as forgettable'], 'a co-leader is never forgettable')
+        self.assertEqual(TR.breaks_constraints('Jennifer Beals is the reason they would come back.', m['Jennifer Beals']), [], 'a co-leader may be the draw')
+        self.assertEqual(TR.breaks_constraints('Scott Caan is the reason they would come back.', m['Scott Caan']), ['bottom of follow, written as the draw'])
+        tr = TR.talent_read(sess, twin, deterministic=True)
+        self.assertIn('sits with the leaders on who the room would follow into a second episode (two in three would)', tr['people'][2]['said'], tr['people'][2]['said'])
+        self.assertIn('leads on who the room would follow into a second episode (two in three would)', tr['people'][0]['said'])
+        # all three within the band: everyone leads, nobody is the bottom, so nobody is barred from being the draw
+        ch['follow'] = [{'name': 'LL Cool J', 'pct': 66.1, 'people': 14_771_789, 'seats': 11}, {'name': 'Jennifer Beals', 'pct': 64.3, 'people': 14_034_311, 'seats': 10},
+                        {'name': 'Scott Caan', 'pct': 61.9, 'people': 13_318_961, 'seats': 10}]
+        m = {e['name']: e['metrics'] for e in TR.gather_evidence(sess)}
+        self.assertTrue(all(v['follow_leads'] for v in m.values()), m)
+        self.assertFalse(any(v['follow_bottom'] for v in m.values()), m)
+        self.assertEqual(TR.breaks_constraints('Scott Caan is the reason they would come back.', m['Scott Caan']), [])
+        # the plain words for a share
+        self.assertEqual([TR.share_words(v) for v in (95.0, 80.2, 66.1, 50.5, 33.0, 24.9, 12.0, 4.4)],
+                         ['nearly all', 'three in four', 'two in three', 'about half', 'one in three', 'one in four', 'one in eight', 'fewer than one in ten'])
 
     def test_no_cast_no_read(self):
         twin, sess = _session()

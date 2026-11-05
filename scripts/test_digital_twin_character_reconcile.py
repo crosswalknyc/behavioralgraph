@@ -166,23 +166,27 @@ class TheDraw(unittest.TestCase):
         self.assertGreaterEqual(supp['excellent_pct'] - top_other, -0.7, (supp['excellent_pct'], lead['excellent_pct'], second['excellent_pct']))
         self.assertLessEqual(supp['excellent_pct'] - top_other, 1.4, (supp['excellent_pct'], lead['excellent_pct'], second['excellent_pct']))
         self.assertEqual(supp['draw_seats'], 10)
-        # she leads the follow with a share that says ten of sixteen named her; the three shares sum to 100.0
-        follow = ch['follow']
-        self.assertEqual(follow[0]['name'], SUPPORT)
-        self.assertGreaterEqual(follow[0]['pct'], 55.0)
-        self.assertLessEqual(follow[0]['pct'], 62.0)
-        self.assertAlmostEqual(sum(f['pct'] for f in follow), 100.0, places=6)
+        # the follow is a share of the room per person, never a split: her share says ten of sixteen named her (by the people
+        # those seats stand for, at their confidence); the leads carry their own shares from the seats that named the pair and
+        # the seats that rate them excellent and would come back, so the three do not add to 100
+        follow = {f['name']: f for f in ch['follow']}
+        self.assertGreaterEqual(follow[SUPPORT]['pct'], 55.0, follow)
+        self.assertLessEqual(follow[SUPPORT]['pct'], 62.0, follow)
+        self.assertEqual(follow[SUPPORT]['seats'], 10)
+        self.assertGreater(sum(f['pct'] for f in ch['follow']), 100.0, ch['follow'])
+        self.assertEqual(ch['follow_note'], 'A seat can follow more than one person.')
         # messy digits everywhere the card prints a share
-        for v in [supp['excellent_pct'], lead['excellent_pct'], second['excellent_pct']] + [f['pct'] for f in follow] + [ch['relationship']['excellent_pct']]:
+        for v in [supp['excellent_pct'], lead['excellent_pct'], second['excellent_pct']] + [f['pct'] for f in ch['follow']] + [ch['relationship']['excellent_pct']]:
             self.assertFalse(_whole(v), v)
         for c in ch['characters']:
             self.assertAlmostEqual(sum(r['pct'] for r in c['rows']), 100.0, places=6)
-        # the note and the read
+        # the note and the read: the moderator's follow line names the top two
         self.assertEqual(ch['note'], "Updated after the room's answer at 9:55.")
         self.assertTrue(ch['read'].endswith(ch['note']))
         self.assertIn(f"{SUPPORT} is the draw: 10 of 16 would come back.", ch['read'])
         self.assertTrue(any(w in ch['read'] for w in (f"in line with {LEAD}", f"above {LEAD}")), ch['read'])
-        self.assertIn(f"say {SUPPORT}", ch['read'])
+        top2 = ch['follow'][:2]
+        self.assertIn(f"Asked who they would follow into a second episode, {top2[0]['pct']}% say {top2[0]['name']} and {top2[1]['pct']}% say {top2[1]['name']}.", ch['read'])
         self.assertEqual(ch['from_room']['draw'], SUPPORT)
         # the lead rows moved only as much as that forced
         self.assertLess(abs(lead['excellent_pct'] - by_name[LEAD]['excellent_pct']), 3.0)
@@ -322,7 +326,7 @@ class Landing(unittest.TestCase):
         self.assertNotIn('note', sess['diagnostics']['characters'], 'the in-memory copy is not the stored one')
         got = SYN.load_twin(s3, key)['pilot_sessions'][0]
         ch = got['diagnostics']['characters']
-        self.assertEqual(ch['follow'][0]['name'], SUPPORT)
+        self.assertGreaterEqual(next(f['pct'] for f in ch['follow'] if f['name'] == SUPPORT), 55.0, ch['follow'])
         self.assertEqual(ch['from_room']['draw'], SUPPORT)
         self.assertEqual(got['reconcile']['applied'], {'q1': NOW})
         self.assertEqual(got['questions'][0]['id'], 'q1')
@@ -332,6 +336,164 @@ class Landing(unittest.TestCase):
         out = RC.after_question(sess, {'id': 'q1', 'finished_at': NOW}, {})
         self.assertFalse(out['changed'])
         self.assertNotIn('reconcile', sess)
+
+
+class FollowShares(unittest.TestCase):
+    """Who they would follow into a second episode is a share of the room
+    per person (Jenna, 2026-11-04: "this should be as high as jennifer if
+    not higher for ll cool j ... make him 66.1"): a seat can follow more
+    than one person, so the shares do not add to 100 and are never
+    renormalized; a seat naming a pair counts toward both; spoken answers
+    outrank the inferred rating; messy tenths."""
+
+    ROSTER = [{'seat': s, 'name': f"Seat {s}", 'segment': 'Room'} for s in range(1, 9)]
+    SEGMENTS = [{'label': 'Room', 'people': 8_000_000}]
+
+    def _ev(self, follow=None, come_back=None):
+        return {'follow': follow or {}, 'come_back': come_back or {}, 'draw': {}, 'draw_counts': {}}
+
+    def test_a_seat_naming_a_pair_counts_toward_both_and_the_shares_add_past_100(self):
+        names = ['Ann', 'Bo', 'Cy']
+        scores = {s: {n: 30.0 for n in names} for s in range(1, 9)}          # nobody is rated excellent: the spoken word alone
+        pair = ('pair', ['Ann', 'Bo'])
+        ev = self._ev(follow={s: pair for s in (1, 2, 3, 4)}, come_back={s: {'lean': 'yes', 'conf': 5, 'named': pair, 'asked_about': []} for s in (1, 2, 3, 4)})
+        rows = {r['name']: r for r in D.follow_shares(names, scores, ev, self.ROSTER, self.SEGMENTS, 'seed|pair')}
+        self.assertAlmostEqual(rows['Ann']['pct'], 50.0, delta=0.4)        # four of eight seats at full confidence, salted off the whole number
+        self.assertAlmostEqual(rows['Bo']['pct'], 50.0, delta=0.4)
+        self.assertEqual((rows['Ann']['seats'], rows['Bo']['seats'], rows['Cy']['seats']), (4, 4, 0))
+        self.assertLess(rows['Cy']['pct'], 0.5)
+        self.assertGreater(rows['Ann']['pct'] + rows['Bo']['pct'] + rows['Cy']['pct'], 100.0, 'never renormalized to 100')
+        for r in rows.values():
+            self.assertFalse(_whole(r['pct']), r)
+        self.assertNotEqual(rows['Ann']['pct'], rows['Bo']['pct'], 'no two people on the same tenth')
+
+    def test_confidence_weights_the_spoken_word(self):
+        names = ['Ann', 'Bo']
+        scores = {s: {n: 30.0 for n in names} for s in range(1, 9)}
+        sure = self._ev(follow={s: 'Ann' for s in range(1, 9)}, come_back={s: {'lean': 'yes', 'conf': 5, 'named': 'Ann', 'asked_about': []} for s in range(1, 9)})
+        unsure = self._ev(follow={s: 'Ann' for s in range(1, 9)}, come_back={s: {'lean': 'yes', 'conf': 1, 'named': 'Ann', 'asked_about': []} for s in range(1, 9)})
+        a_sure = next(r for r in D.follow_shares(names, scores, sure, self.ROSTER, self.SEGMENTS, 'seed|conf') if r['name'] == 'Ann')
+        a_unsure = next(r for r in D.follow_shares(names, scores, unsure, self.ROSTER, self.SEGMENTS, 'seed|conf') if r['name'] == 'Ann')
+        self.assertGreater(a_sure['pct'], 99.0)
+        self.assertAlmostEqual(a_unsure['pct'], 80.0, delta=0.4, msg='a seat sure at 1 of 5 carries 0.8 of its people')
+        self.assertFalse(_whole(a_sure['pct']) or _whole(a_unsure['pct']))
+
+    def test_an_excellent_rating_follows_only_when_the_seat_would_come_back_and_the_spoken_word_outranks_it(self):
+        names = ['Ann', 'Bo']
+        hi = {'Ann': 80.0, 'Bo': 80.0}                                      # both rated excellent by every seat, and surely so
+        scores = {s: dict(hi) for s in range(1, 9)}
+        # four seats would come back for Bo (named), four would come back only if the case hooks (maybe): Ann is followed
+        # by her excellent ratings alone, the maybes at half
+        ev = self._ev(follow={s: 'Bo' for s in (1, 2, 3, 4)},
+                      come_back={**{s: {'lean': 'yes', 'conf': 4, 'named': 'Bo', 'asked_about': []} for s in (1, 2, 3, 4)},
+                                 **{s: {'lean': 'maybe', 'conf': 4, 'named': None, 'asked_about': []} for s in (5, 6, 7, 8)}})
+        rows = {r['name']: r for r in D.follow_shares(names, scores, ev, self.ROSTER, self.SEGMENTS, 'seed|inferred')}
+        self.assertGreater(rows['Bo']['pct'], rows['Ann']['pct'], 'the four who named Bo follow him in full; Ann rides on her ratings')
+        self.assertGreater(rows['Ann']['pct'], 40.0, rows)
+        # the same room, but every seat was asked about Ann by name and named Bo instead: it has spoken on Ann, and her
+        # excellent ratings no longer stand in for a follow
+        asked = self._ev(follow={s: 'Bo' for s in range(1, 9)}, come_back={s: {'lean': 'yes', 'conf': 4, 'named': 'Bo', 'asked_about': ['Ann']} for s in range(1, 9)})
+        rows2 = {r['name']: r for r in D.follow_shares(names, scores, asked, self.ROSTER, self.SEGMENTS, 'seed|asked')}
+        self.assertLess(rows2['Ann']['pct'], 0.5, rows2)
+        self.assertGreater(rows2['Bo']['pct'], 90.0)
+        # and a seat that would not come back follows nobody, however it rated them
+        gone = self._ev(come_back={s: {'lean': 'no', 'conf': 5, 'named': None, 'asked_about': []} for s in range(1, 9)})
+        rows3 = {r['name']: r for r in D.follow_shares(names, scores, gone, self.ROSTER, self.SEGMENTS, 'seed|gone')}
+        self.assertTrue(all(r['pct'] < 0.5 for r in rows3.values()), rows3)
+
+    def _room(self, lead_strength: str):
+        """The NCIS: New York shape: ten of sixteen name the supporting
+        character as what brings them back, five name the two leads
+        together, one wants a hook. ``lead_strength`` 'strong' lifts the
+        room through the lead's scenes (every seat rates the lead
+        excellent, surely); 'weak' sinks it (few do)."""
+        twin, sess = _scored(quiet_support=True)
+        cast = {c['name']: c for c in D.cast_from_session(sess)}
+        his = set(cast[LEAD]['scenes']) - set(cast[SECOND]['scenes']) - set(cast[SUPPORT]['scenes'])
+        first = min(his)
+        roster = sess['group']['roster']
+        for sno, series in sess['seat_dials'].items():
+            for i, b in enumerate(sess['beats']):
+                if i < len(series) and b.get('scene_id') in his:
+                    series[i] = min(97.0, series[i] + 14.0) if lead_strength == 'strong' else max(3.0, series[i] - 16.0)
+        sess['events'] = [e for e in sess['events'] if e.get('scene_id') not in his]
+        for r in roster:
+            sno = int(r['seat'])
+            kinds = ('love', 'lean-in') if lead_strength == 'strong' else ('check-out', 'confuse')
+            for kind in kinds:
+                sess['events'].append({'t': 12.0, 'type': kind, 'seat': sno, 'name': r.get('name'), 'scene_id': first, 'line': 'Him.', 'live': True})
+        sess['events'].sort(key=lambda e: float(e.get('t') or 0))
+        D.run_diagnostics(sess, twin)
+        PI.stop_session(sess)
+        lines = {s: 'She held the room every time she was in it, I want more of her running it.' for s in range(1, 11)}
+        sess['questions'] = [_watch_more(range(1, 11), range(11, 16), [16], lines=lines)]
+        self.assertTrue(RC.reconcile_session(sess, twin)['changed'])
+        return twin, sess
+
+    def test_the_lead_everyone_rates_excellent_lands_at_or_above_the_supporting_character_named_by_ten(self):
+        twin, sess = self._room('strong')
+        ch = sess['diagnostics']['characters']
+        by = {r['seat']: r['ratings'] for r in ch['by_seat']}
+        self.assertEqual(sum(1 for s in by if by[s][LEAD] == 'a'), 16, by)
+        follow = {f['name']: f for f in ch['follow']}
+        self.assertGreaterEqual(follow[LEAD]['pct'], follow[SUPPORT]['pct'], follow)
+        self.assertGreaterEqual(follow[LEAD]['pct'], 60.0, follow)
+        self.assertGreaterEqual(follow[SUPPORT]['pct'], 55.0, follow)
+        self.assertLessEqual(follow[SUPPORT]['pct'], 62.0, follow)
+        self.assertGreaterEqual(follow[LEAD]['seats'], 15, 'every seat that would come back follows him; the one that wants a hook first follows at half')
+        self.assertEqual(follow[SUPPORT]['seats'], 10)
+        self.assertEqual(ch['from_room']['draw'], SUPPORT, 'she is still the draw: ten of sixteen named her')
+        self.assertGreater(sum(f['pct'] for f in ch['follow']), 100.0)
+        self.assertEqual(ch['follow'][0]['name'], LEAD)
+        self.assertTrue(ch['read'].split('Asked who')[1].startswith(f" they would follow into a second episode, {follow[LEAD]['pct']}% say {LEAD} and"), ch['read'])
+        self.assertEqual(_no_banned(ch), [])
+
+    def test_a_lead_few_rate_excellent_sits_under_the_supporting_character_named_by_ten(self):
+        twin, sess = self._room('weak')
+        ch = sess['diagnostics']['characters']
+        follow = {f['name']: f for f in ch['follow']}
+        self.assertLess(follow[LEAD]['pct'], follow[SUPPORT]['pct'], follow)
+        self.assertGreaterEqual(follow[SUPPORT]['pct'], 55.0)
+        self.assertLess(follow[LEAD]['seats'], 16)
+
+    def test_messy_tenths_and_no_two_people_on_one_tenth(self):
+        twin, sess = self._room('strong')
+        pcts = [f['pct'] for f in sess['diagnostics']['characters']['follow']]
+        self.assertEqual(len(pcts), len(set(pcts)), pcts)
+        for v in pcts:
+            self.assertFalse(_whole(v), v)
+            self.assertEqual(round(v, 1), v)
+
+    def test_the_ledger_files_the_leads_share(self):
+        twin, sess = self._room('weak')
+        ch = sess['diagnostics']['characters']
+        self.assertNotEqual(ch['follow'][0]['name'], LEAD, 'the top of the list is not the lead here')
+        m = D.diagnostics_norm_metrics(sess)
+        self.assertEqual(m['follow_second_episode'], next(f['pct'] for f in ch['follow'] if f['name'] == LEAD))
+        from migration.digital_twin_norms import METRIC_LABEL
+        self.assertEqual(METRIC_LABEL['follow_second_episode'], 'Would follow the lead into a second episode')
+
+    def test_the_report_and_the_csv_carry_the_per_person_wording(self):
+        import csv
+        import io
+        from migration import digital_twin_report as REP
+        twin, sess = self._room('strong')
+        ch = sess['diagnostics']['characters']
+        pages = REP.report_pages(twin, sess, with_chart=False)
+        page = next(p for p in pages if p.get('head') == ('Character', 'Excellent', 'Norm and screen time'))
+        self.assertTrue(page['sub'].startswith(f"Would follow into a second episode: {LEAD} {ch['follow'][0]['pct']}%, "), page['sub'])
+        self.assertTrue(page['sub'].endswith('A seat can follow more than one person.'), page['sub'])
+        self.assertNotIn('Who they would follow', page['sub'])
+        text = PI.session_csv(sess)
+        table = list(csv.reader(io.StringIO(text)))
+        head_i = next(i for i, r in enumerate(table) if r and r[0] == 'Character')
+        self.assertEqual(table[head_i][-1], 'Would follow into a second episode %')
+        shares = {r[0]: r[-1] for r in table[head_i + 1:head_i + 4]}
+        for f in ch['follow']:
+            self.assertEqual(shares[f['name']], str(f['pct']))
+        note = next(r for r in table[head_i:] if r and r[0] == 'Would follow into a second episode')
+        self.assertEqual(note[1], 'A seat can follow more than one person. The shares do not add to 100.')
+        self.assertEqual(_no_banned(pages), [])
 
 
 class Report(unittest.TestCase):
