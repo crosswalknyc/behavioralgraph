@@ -442,6 +442,33 @@ def _conclusions(session: dict) -> list:
     return [_clean(x) for x in out if x][:6]
 
 
+TALENT_PER_PAGE = 3
+
+
+def _talent_pages(session: dict) -> list:
+    """What the room said about each person the setup named (Jenna
+    2026-11-04): the sentences and one seat's line, three people to a
+    page, right after the characters table. [] when the setup named
+    nobody or the read is not on the test yet."""
+    try:
+        from migration.digital_twin_talent_read import report_lines
+        people = report_lines(session)
+    except Exception as e:
+        print(f"[twin-report] talent read skipped: {e}")
+        people = []
+    if not people:
+        return []
+    pages = []
+    for i in range(0, len(people), TALENT_PER_PAGE):
+        chunk = people[i:i + TALENT_PER_PAGE]
+        names = ', '.join(p['name'] for p in chunk)
+        pages.append({'kind': 'talent', 'header': 'What the room said about the people you named.' if i == 0 else 'What the room said, continued.',
+                      'sub': _clean(f"{names}: in the room's own words, with one line from a seat for each."),
+                      'people': [{'name': _clean(p['name']), 'role': _clean(p.get('role') or ''), 'said': _clean(p.get('said') or ''), 'quote': _clean(p.get('quote') or ''), 'who': _clean(p.get('who') or '')} for p in chunk],
+                      'dark': True})
+    return pages
+
+
 def report_pages(payload: dict, session: dict) -> list:
     m = payload.get('meta') or {}
     name = str(m.get('name') or m.get('subject') or 'the twin')
@@ -505,6 +532,8 @@ def report_pages(payload: dict, session: dict) -> list:
         fol = (d.get('characters') or {}).get('follow') or []
         pages.append({'kind': 'table', 'header': _words(_clean((d['characters'].get('read') or 'The characters, rated.').split('. ')[0] + '.')), 'sub': _clean(('Who they would follow into a second episode: ' + ', '.join(f"{f['name']} {_pct(f['pct'])}" for f in fol[:3]) + '.') if fol else ''),
                       'head': ('Character', 'Excellent', 'Norm and screen time'), 'rows': rows, 'dark': False})
+    # what the room said about the people the setup named (Jenna 2026-11-04), three to a page, right after their metrics
+    pages.extend(_talent_pages(session))
     comps = (d.get('components') or {}).get('rows') or []
     if comps:
         pages.append({'kind': 'table', 'header': _words(_clean((d['components'].get('read') or 'The components, next to their norms.').split('. ')[0] + '.')), 'sub': 'Top box (excellent) for each component, with the norm.',
@@ -660,6 +689,39 @@ def _draw_question_pdf(d: _Doc, pg: dict, y: float) -> float:
     return min(yl, yr)
 
 
+def _draw_talent_pdf(d: _Doc, pg: dict, y: float) -> float:
+    """The people the setup named, side by side (up to three columns):
+    the name and the part as the eyebrow, what the room said, then the
+    seat's line with who said it and when. Every block stops at the
+    floor."""
+    from reportlab.lib import colors
+    people = (pg.get('people') or [])[:TALENT_PER_PAGE]
+    if not people:
+        return y
+    ink = OFFWHITE if d.dark else GRAPHITE
+    body = BODY_DARK if d.dark else BODY_LIGHT
+    n = len(people)
+    gutter = 20.0
+    width = d.right - d.m
+    cw = (width - gutter * (n - 1)) / n
+    bottom = y
+    for i, p in enumerate(people):
+        x = d.m + i * (cw + gutter)
+        yy = _eyebrow(d, f"{p.get('name') or ''}" + (f", {p['role']}" if p.get('role') else ''), x, y)
+        yy = _fit_para(d, p.get('said') or '', x, yy, cw, 10, ink, d.f['medium']) - 8
+        if p.get('quote') and yy > PDF_FLOOR + 30:
+            d.c.setFillColor(colors.HexColor(GREEN if d.dark else OLIVE))
+            d.c.rect(x, yy - 2, 1.6, 12, stroke=0, fill=1)
+            yy = _fit_para(d, f"\"{p['quote']}\"", x + 8, yy, cw - 8, 9.5, body, max_lines=8) - 3
+            if p.get('who') and yy > PDF_FLOOR + 10:
+                d.c.setFont(d.f['regular'], 8)
+                d.c.setFillColor(colors.HexColor(MUTED_DARK if d.dark else MUTED_LIGHT))
+                d.c.drawString(x + 8, yy, str(p['who'])[:60])
+                yy -= 12
+        bottom = min(bottom, yy)
+    return bottom
+
+
 def build_report_pdf(payload: dict, session: dict) -> bytes:
     from reportlab.lib import colors
     from reportlab.lib.utils import ImageReader
@@ -673,6 +735,8 @@ def build_report_pdf(payload: dict, session: dict) -> bytes:
         y = d.new_page(dark, 'Pilot Testing', pg['header'], pg.get('sub') or '')
         if pg['kind'] == 'question':
             _draw_question_pdf(d, pg, y)
+        elif pg['kind'] == 'talent':
+            _draw_talent_pdf(d, pg, y)
         elif pg['kind'] == 'bullets':
             y = d.bullets(pg.get('body') or [], d.m, y, d.right - d.m)
         elif pg['kind'] == 'table':

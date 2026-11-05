@@ -285,6 +285,34 @@ def build_deck(payload: dict, pages: Optional[list] = None) -> bytes:
             for b in (pg.get('body') or [])[:4]:
                 text(slide, L, y, 11.4, 0.55, b, 11.5, ink if b is (pg.get('body') or [''])[-1] else body, 'Regular')
                 y += 0.6
+        elif pg['kind'] == 'talent':
+            # what the room said about the people the setup named (digital_twin_report, Jenna 2026-11-04): up to three
+            # columns, each the name and the part, what the room said, then one seat's line with who said it and when
+            people = (pg.get('people') or [])[:3]
+            n = max(1, len(people))
+            gutter = 0.32
+            cw = (R - L - gutter * (n - 1)) / n
+            bottom = 6.85
+            for j, p in enumerate(people):
+                x = L + j * (cw + gutter)
+                yy = y
+                text(slide, x, yy, cw, 0.22, (str(p.get('name') or '') + (f", {p['role']}" if p.get('role') else '')).upper(), 8, muted, 'Medium')
+                yy += 0.3
+                sl = lines_of(p.get('said') or '', 10.5, cw)
+                sh = max(0.3, min(0.19 * sl + 0.1, bottom - yy))
+                text(slide, x, yy, cw, sh, p.get('said') or '', 10.5, ink, 'Medium')
+                yy += sh + 0.16
+                if p.get('quote') and yy + 0.5 < bottom:
+                    bar = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(x), Inches(yy), Inches(0.03), Inches(min(0.18 * lines_of(p['quote'], 10, cw - 0.16) + 0.1, bottom - yy)))
+                    bar.fill.solid()
+                    bar.fill.fore_color.rgb = rgb(accent)
+                    bar.line.fill.background()
+                    ql = lines_of(p['quote'], 10, cw - 0.16)
+                    qh = max(0.3, min(0.18 * ql + 0.1, bottom - yy))
+                    text(slide, x + 0.16, yy, cw - 0.16, qh, f"\"{p['quote']}\"", 10, body, 'Regular')
+                    yy += qh + 0.06
+                    if p.get('who') and yy + 0.2 < bottom:
+                        text(slide, x + 0.16, yy, cw - 0.16, 0.2, str(p['who']), 9, muted, 'Regular')   # a note: 9pt is the lint's floor for notes
         elif pg['kind'] == 'question':
             # one question the moderator put to the room (digital_twin_report, 2026-11-04): the framing, the split
             # across the page with the seat tally, then Prometheus's read and the voices on the left and what the

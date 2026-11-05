@@ -1760,6 +1760,11 @@ def prepare_watch(session: dict, twins_by_key: dict, *, duration_s: float = 0,
         DIAG.run_diagnostics(session, twin, s3=s3)
     except Exception as e:
         print(f"[pilot] diagnostics skipped: {e}")
+    try:   # what the room said about the people the setup named, next to their metrics (Jenna 2026-11-04)
+        from migration import digital_twin_talent_read as TR
+        TR.attach_talent_read(session, twin, models=models, usage_extras=usage_extras, reason='prepared')
+    except Exception as e:
+        print(f"[pilot] talent read skipped: {e}")
     # the preview stats block (walkouts join the recruit), the critics room's forecast, two audiences on one cut
     try:
         from migration import digital_twin_compare as CMP
@@ -2842,6 +2847,13 @@ def public_session(sess: dict) -> dict:
     pr = out.get('prior_read')
     if isinstance(pr, dict):
         out['prior_read'] = {k: v for k, v in pr.items() if k != 'seat_dials'}
+    # what the room said about the people the setup named follows the card's character metrics as they stand (a read built
+    # against older metrics shows as the deterministic read until the next question rebuilds it with the moderator)
+    try:
+        from migration.digital_twin_talent_read import public_view
+        public_view(sess, out)
+    except Exception as e:
+        print(f"[pilot] talent read view skipped: {e}")
     return out
 
 
@@ -2899,6 +2911,18 @@ def session_csv(session: dict) -> str:
                         (nrm.get('genre') or {}).get('definitely_recommend', {}).get('value'), (nrm.get('genre') or {}).get('finish', {}).get('value')])
         elif genre != 'all' and nch.get('note'):
             w.writerow([nch['note'], '', '', '', '', '', ''])
+    # what the room said about the people the setup named, one row each (Jenna 2026-11-04)
+    try:
+        from migration.digital_twin_talent_read import report_lines as _talent_lines
+        talent_rows = _talent_lines(session)
+    except Exception as e:
+        print(f"[pilot] csv talent read skipped: {e}")
+        talent_rows = []
+    if talent_rows:
+        w.writerow([])
+        w.writerow(['What the room said', 'Role', 'In the room\'s words', 'A seat\'s line', 'Said by'])
+        for p in talent_rows:
+            w.writerow([p.get('name'), p.get('role'), p.get('said'), p.get('quote'), p.get('who')])
     fc = session.get('forecast') if isinstance(session.get('forecast'), dict) else {}
     if fc.get('episode'):
         ep, se, su, act = fc['episode'], fc.get('series') or {}, fc.get('subscriptions') or {}, fc.get('actual') or {}

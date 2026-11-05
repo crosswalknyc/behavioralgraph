@@ -2520,7 +2520,17 @@ def find_session(payload: Optional[dict], session_id: str) -> Optional[dict]:
     return next((s for s in all_sessions(payload) if str(s.get('id') or '') == sid), None)
 
 
-def _update_payload(s3, twin_key: str, session_id: str, rec: dict, roster: Optional[list] = None):
+def _carry(session: dict) -> dict:
+    """What a question's landing carries onto the stored session besides
+    the record: the talent read (what the room said about the people the
+    setup named), rebuilt when the question named one of them."""
+    out = {}
+    if isinstance(session, dict) and isinstance(session.get('talent_read'), dict):
+        out['talent_read'] = session['talent_read']
+    return out
+
+
+def _update_payload(s3, twin_key: str, session_id: str, rec: dict, roster: Optional[list] = None, carry: Optional[dict] = None):
     """The record in the twin payload, replaced in place (load, modify,
     save) so the page's session read sees the stage."""
     if s3 is None or not twin_key:
@@ -2548,6 +2558,15 @@ def _update_payload(s3, twin_key: str, session_id: str, rec: dict, roster: Optio
                     for k in ('persona', 'memory'):
                         if src.get(k) is not None:
                             seat[k] = src[k]
+        if carry:
+            for k, v in carry.items():
+                sess[k] = v
+            if 'talent_read' in carry:
+                try:
+                    from migration.digital_twin_talent_read import stamp_rows
+                    stamp_rows(sess)
+                except Exception:
+                    pass
         sess['updated_at'] = _now()
         SYN.save_twin(s3, twin_key, payload)
         return True
@@ -2589,7 +2608,7 @@ def _publish(ctx: dict, stage: str, status: str = 'running', extra: Optional[dic
             doc.update(extra)
         _put_json(s3, job_key(ctx['job_id']), doc)
         if payload_too:
-            _update_payload(s3, ctx.get('twin_key') or '', ctx['session'].get('id'), rec, (ctx['session'].get('group') or {}).get('roster'))
+            _update_payload(s3, ctx.get('twin_key') or '', ctx['session'].get('id'), rec, (ctx['session'].get('group') or {}).get('roster'), carry=_carry(ctx['session']))
 
 
 def run_question(ctx: dict) -> dict:
@@ -2795,6 +2814,16 @@ def run_question(ctx: dict) -> dict:
         refresh_memory(session)
     except Exception:
         pass
+    # a Pilot Testing question that names a person the setup named re-reads what the room said about them, against the card's
+    # character metrics as they stand now (Jenna 2026-11-04); a read built against older metrics is rebuilt the same way. Last
+    # before the landing so it follows every other update the question brought; the landing carries it onto the stored session.
+    try:
+        if str(session.get('kind') or '') == 'pilot' and session.get('scorecard'):
+            from migration import digital_twin_talent_read as TR
+            if TR.question_names_talent(session, rec) or TR.is_stale(session):
+                TR.attach_talent_read(session, twin, models=models, reason=f"question {rec.get('id')}", log=log)
+    except Exception as e:
+        print(f"[twin-room] talent read skipped: {str(e)[:160]}")
     ready = '\n'.join(chat_lines(session, rec))
     _publish(ctx, 'done', status='done', extra={'success': True, 'finished_at': time.time(), 'ready_message': ready, 'cost_usd': tot['cost_usd']}, payload_too=True)
     notify = ctx.get('notify') or {}
