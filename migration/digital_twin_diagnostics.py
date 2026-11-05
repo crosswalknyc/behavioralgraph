@@ -21,10 +21,15 @@ What a studio reads after the topline:
 Deterministic from the seats' own dials and events when no model read
 the cut; the persona read's words carry through when it did. Counts keep
 messy last digits; shares are never pinned.
+
+Screen time is a fact the card shows and never a term in any formula here
+(Jenna, 2026-11-04: "screen time should never affect appeal or anything.
+a cameo could be the best part of a show"); the standing rule is
+``.cursor/rules/screen-time-never-weights-appeal.mdc`` in the parent repo
+and ``scripts/test_digital_twin_screen_time_rule.py`` holds it.
 """
 from __future__ import annotations
 
-import math
 import re
 from typing import Optional
 
@@ -124,12 +129,14 @@ DRAW_LIFT_MAX = 4.0    # how far past their own favorite the seats who named the
 def _seat_char_score(seat_series: list, beats: list, char: dict, card: dict, twin: dict, seed: str, *, events: Optional[list] = None, seat_no: Optional[int] = None,
                      remarks: float = 0.0) -> float:
     """Where a seat puts a character before the room's own words: the
-    seat's dial across the character's scenes (the scenes carry the
-    character), the seat's reactions in those scenes (a love, a laugh, a
-    lean-in lift it; a confusion or a check-out pulls it down, per scene so
-    time on screen is not itself a lift), the seat's remarks about the
-    character, salted. Time on screen is shown on the card and never
-    weighs on appeal (Jenna, 2026-11-04)."""
+    seat's dial across the character's scenes (a mean, so a long part and
+    a cameo read on the same scale), the seat's reactions in those scenes
+    (a love, a laugh, a lean-in lift it; a confusion or a check-out pulls
+    it down; capped), the seat's remarks about the character, salted.
+    Time on screen, scene count and seconds on screen are shown on the
+    card and never enter this formula: the same reactions earn the same
+    lift whether the character carried one scene or twenty (Jenna,
+    2026-11-04: "a cameo could be the best part of a show")."""
     scene_ids = set(int(x) for x in (char.get('scenes') or []))
     idxs = [i for i, b in enumerate(beats) if b.get('scene_id') in scene_ids]
     if idxs and seat_series:
@@ -153,7 +160,7 @@ def _seat_char_score(seat_series: list, beats: list, char: dict, card: dict, twi
                     sid = None
             if sid is not None and int(sid) in scene_ids:
                 net += REACT_W.get(str(e.get('type') or ''), 0.0)
-        base += clamp(3.0 * net / math.sqrt(max(1, len(scene_ids))), -REACT_CAP, REACT_CAP)
+        base += clamp(3.0 * net, -REACT_CAP, REACT_CAP)   # no scene-count or duration term: the reactions alone, capped
     base += clamp(float(remarks or 0.0), -3.0, 3.0)
     loyal = _trait(twin, 'franchise_loyalty')
     base += (loyal - 50) * 0.04
@@ -257,15 +264,28 @@ def character_table(session: dict, twin: dict, norms: Optional[dict] = None) -> 
     seed = f"chars|{sid}|{mk}"
     events = session.get('events') or []
     cards = {int(r['seat']): _card_for(twin, r, seed) for r in roster}
-    # the key relationship: the two characters most often in a scene together
+    # the key relationship: the two characters most often in a scene together; when no two share a scene (a transcript on the
+    # clock grid gives every scene one speaker), the two most often in back-to-back scenes (a conversation across a cut). Which
+    # pair is the relationship comes from the cut's structure, never from the clock; how the room rates it comes from the seats.
+    by_name = sorted(cast, key=lambda c: c['name'])      # ties between pairs break on the name, never on who has more time
     pair, best = None, -1
-    for i in range(len(cast)):
-        for j in range(i + 1, len(cast)):
-            shared = len(set(cast[i]['scenes']) & set(cast[j]['scenes']))
+    for i in range(len(by_name)):
+        for j in range(i + 1, len(by_name)):
+            shared = len(set(by_name[i]['scenes']) & set(by_name[j]['scenes']))
             if shared > best:
-                best, pair = shared, (cast[i], cast[j])
+                best, pair = shared, (by_name[i], by_name[j])
     if (pair is None or best < 1) and len(cast) >= 2:
-        pair, best = (cast[0], cast[1]), 0      # no shared scene came through: the two leads are the relationship a room is asked about
+        near, pair, best = -1, None, 0
+        for i in range(len(by_name)):
+            for j in range(i + 1, len(by_name)):
+                a_ids, b_ids = set(int(x) for x in by_name[i]['scenes']), set(int(x) for x in by_name[j]['scenes'])
+                close = sum(1 for x in a_ids if any(abs(x - y) <= 2 for y in b_ids))
+                if close > near:
+                    near, pair = close, (by_name[i], by_name[j])
+        if pair is None or near < 1:
+            pair = (cast[0], cast[1])      # nobody comes near anyone else in the cut: the two leads are the relationship a room is asked about
+    if pair is not None:
+        pair = tuple(sorted(pair, key=lambda c: cast.index(c)))      # printed lead first, a fact of the cut, after the pair is chosen
     # the room's own words on the characters (what the seats answered when asked), over the inferred scores
     ev = {}
     try:
@@ -348,9 +368,24 @@ def character_table(session: dict, twin: dict, norms: Optional[dict] = None) -> 
         pub = _messy_rows(_publish_rows(ans, RATING, roster, segments, f"{seed}|relationship"), f"{seed}|relationship")
         rel = {'pair': [pair[0]['name'], pair[1]['name']], 'scenes_together': best, 'excellent_pct': _top_box(pub), 'total_positive_pct': _top_box(pub, ('a', 'b')), 'rows': pub}
     # who would they follow into a second episode: a seat's explicit pick (the character, or the pair, it said would bring it back)
-    # carries most of its leaning; the rest, and every seat that was not asked, follows its own scores
-    top5 = cast[:5]
-    top5_names = [c['name'] for c in top5]
+    # carries most of its leaning; the rest, and every seat that was not asked, follows its own scores. The characters on offer
+    # are the five the room itself puts highest (who it named as the reason to come back, then its own appeal), never the five
+    # with the most time on screen; a character a seat picked out loud always has its option
+    mean_score = {n: sum(scores[s][n] for s in scores) / max(1, len(scores)) for n in names}
+    picked = set()
+    for pick in (ev.get('follow') or {}).values():
+        if isinstance(pick, str):
+            picked.add(pick)
+        elif isinstance(pick, (tuple, list)) and len(pick) == 2 and pick[0] == 'pair':
+            picked.update(str(n) for n in pick[1])
+    ranked = sorted(names, key=lambda n: (-int((ev.get('draw_counts') or {}).get(n) or 0), -mean_score[n], n))
+    top5_names = ranked[:5]
+    for n in ranked[5:]:
+        if n in picked and n not in top5_names:
+            drop = next((m for m in reversed(top5_names) if m not in picked), None)
+            if drop is None:
+                break
+            top5_names[top5_names.index(drop)] = n
     follow_ans = {}
     for sno in scores:
         base = softmax_probs({n: scores[sno][n] + jit(-2.0, 2.0, seed, 'follow', sno, n) for n in top5_names}, temperature=3.5)
@@ -367,14 +402,18 @@ def character_table(session: dict, twin: dict, norms: Optional[dict] = None) -> 
             probs[b_n] += DRAW_WEIGHT * base[b_n] / within
         tot = sum(probs.values()) or 1.0
         follow_ans[sno] = {n: v / tot for n, v in probs.items()}
-    fopts = [(c['name'], c['name'], 'yes') for c in top5]
+    fopts = [(n, n, 'yes') for n in top5_names]
     fpub = _messy_rows(_publish_rows(follow_ans, fopts, roster, segments, f"{seed}|follow"), f"{seed}|follow")
     follow = [{'name': r['id'], 'pct': round(float(r['pct']), 1), 'people': int(r['people'])} for r in sorted(fpub, key=lambda r: -float(r['pct']))]
     # screen time against likability: who earns more time than they get (a fact next to the appeal, never a weight on it)
     for r in rows:
         r['time_vs_like'] = ('earns more time' if r['likability'] >= CHAR_TOP - 2.0 and r['share_pct'] < 20 else 'carries the time' if r['likability'] >= CHAR_TOP - 6.0
                              else 'gets more time than the room gives back' if r['share_pct'] >= 25 and r['likability'] < CHAR_TOP - 12.0 else 'in balance')
-    lead = rows[0]
+    # the card ranks the cast by the room's rating, never by minutes on screen; the lead is the part the cut is built around
+    # (a fact carried on the row as the role), not the top row
+    rows.sort(key=lambda r: (-float(r['excellent_pct'] if r.get('excellent_pct') is not None else -1.0), -float(r['total_positive_pct'] if r.get('total_positive_pct') is not None else -1.0),
+                             -float(r['likability']), r['name']))
+    lead = next((r for r in rows if r['role'] == 'lead'), rows[0])
     read = ''
     draw_row = next((r for r in rows if r['name'] == draw_name), None) if draw_name else None
     gap = None
@@ -392,7 +431,7 @@ def character_table(session: dict, twin: dict, norms: Optional[dict] = None) -> 
             read += f"The room is not sold on {lead['name']} yet; the second lead carries more. "
         elif gap is not None and gap > 0.65:
             read += f"Put {draw_row['name']} on the key art. "
-    gainer = next((r for r in rows[1:] if r['time_vs_like'] == 'earns more time' and r is not draw_row), None)
+    gainer = next((r for r in rows if r['time_vs_like'] == 'earns more time' and r is not draw_row and r is not lead), None)
     if gainer:
         read += f"{gainer['name']} earns more screen time than the cut gives ({pct1(gainer['share_pct'])}% of the time, {pct1(gainer['excellent_pct'])}% excellent). "
     if follow:
@@ -725,10 +764,15 @@ def diagnostics_norm_metrics(session: dict) -> dict:
     d = (session or {}).get('diagnostics') or {}
     out = {}
     chars = (d.get('characters') or {}).get('characters') or []
+    # the ledger files one mark per part: the lead and the second lead are one row each (the role the cut assigned); the
+    # supporting part is the mean of every supporting row, so neither the card's order nor anyone's minutes picks the number
+    marks = {}
     for c in chars:
         m = {'lead': 'lead_character', 'second lead': 'secondary_character'}.get(c.get('role'), 'supporting_character')
-        if c.get('excellent_pct') is not None and m not in out:
-            out[m] = float(c['excellent_pct'])
+        if c.get('excellent_pct') is not None:
+            marks.setdefault(m, []).append(float(c['excellent_pct']))
+    for m, vals in marks.items():
+        out[m] = round(sum(vals) / len(vals), 1) if m == 'supporting_character' else vals[0]
     rel = (d.get('characters') or {}).get('relationship') or {}
     if rel.get('excellent_pct') is not None:
         out['key_relationship'] = float(rel['excellent_pct'])
