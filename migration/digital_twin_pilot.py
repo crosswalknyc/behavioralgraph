@@ -2857,7 +2857,25 @@ def public_session(sess: dict) -> dict:
     return out
 
 
-def session_csv(session: dict) -> str:
+def _csv_payload_for(session: dict) -> dict:
+    """A payload stand-in for the report pages when the route did not pass
+    the twin: the first segment's twin name is the name on the cover."""
+    segs = ((session or {}).get('group') or {}).get('segments') or []
+    name = next((str(s.get('twin_name') or s.get('label')) for s in segs if isinstance(s, dict) and (s.get('twin_name') or s.get('label'))), 'the twin')
+    return {'meta': {'name': name, 'subject': name}}
+
+
+def session_csv(session: dict, payload: Optional[dict] = None) -> str:
+    """The complete record of a test as CSV (2026-11-04: every insight the
+    report carries, in every format). Blocks, each under its own header
+    row: the test line with the norm it is compared to; the scorecard
+    battery with the norm columns; the quadrants; the characters; the
+    components; pace by act; the scenes liked best and least; the
+    forecast; the recruit; the room; the dial second by second; every
+    reaction; the questions put to the room (the read, the voices, the
+    split, what the room knew and what people were saying); the guide;
+    and the report page by page, so a block added to the report lands
+    here too."""
     import csv
     import io
     from migration.digital_twin_norms import METRIC_LABEL
@@ -2868,17 +2886,6 @@ def session_csv(session: dict) -> str:
     head = bat.get('headline') or {}
     norms = sc.get('norm_columns') or {}
     genre = str(session.get('genre') or '') or 'all'
-    w.writerow(['Test', 'Title', 'Cut', 'Format', 'Genre', 'Runtime s', 'People', 'Dial average', 'Excellent %', 'Total positive %', 'Definitely recommend %',
-                'Would finish %', 'Favorite moment', 'Dead spot'])
-    fav = sc.get('favorite_moment') or {}
-    dead = sc.get('dead_spot') or {}
-    w.writerow([
-        session.get('id'), session.get('title'), session.get('cut_label') or 'Cut A', sc.get('format') or session.get('format') or '', genre,
-        (session.get('media') or {}).get('runtime_s'), sc.get('people'), sc.get('overall_like'), head.get('excellent_pct'), head.get('total_positive_pct'),
-        head.get('definitely_recommend_pct'), head.get('finish_pct'),
-        f"{fav.get('clock')} {fav.get('line')}", f"{dead.get('clock')} {dead.get('line')}",
-    ])
-    w.writerow([])
     # the norm columns carry the names of what the test is compared to ('All pilots', 'Procedural pilots'); a chosen genre with
     # no norm of its own yet leaves its column blank rather than repeating the all-genres value (2026-11-04)
     from migration.digital_twin_norms import choice_label as _choice_label
@@ -2887,6 +2894,20 @@ def session_csv(session: dict) -> str:
     all_label = str(nch.get('all_label') or _choice_label(fmt_csv, 'all'))
     genre_label = str(nch.get('label') or _choice_label(fmt_csv, genre))
     gown = lambda nc: (nc or {}).get('genre_norm') if (nc and nc.get('genre_own', True) and genre != 'all') else ''   # noqa: E731
+    w.writerow(['Test', 'Title', 'Cut', 'Format', 'Genre', 'Runtime s', 'People', 'Dial average', 'Excellent %', 'Total positive %', 'Definitely recommend %',
+                'Would finish %', 'Favorite moment', 'Dead spot', 'Compared to', 'Norm note'])
+    fav = sc.get('favorite_moment') or {}
+    dead = sc.get('dead_spot') or {}
+    w.writerow([
+        session.get('id'), session.get('title'), session.get('cut_label') or 'Cut A', sc.get('format') or session.get('format') or '', genre,
+        (session.get('media') or {}).get('runtime_s'), sc.get('people'), sc.get('overall_like'), head.get('excellent_pct'), head.get('total_positive_pct'),
+        head.get('definitely_recommend_pct'), head.get('finish_pct'),
+        f"{fav.get('clock')} {fav.get('line')}", f"{dead.get('clock')} {dead.get('line')}",
+        genre_label if genre != 'all' else all_label, nch.get('note') or '',
+    ])
+    for line in list(sc.get('norm_lines') or []) + list(sc.get('notes') or []):
+        w.writerow(['Note', line])
+    w.writerow([])
     w.writerow(['Question', 'Answer', 'Share %', 'People', 'In the room', f"{all_label} norm %", f"{genre_label} norm %" if genre != 'all' else 'Genre norm %'])
     metric_for = {'overall': {'a': 'excellent'}, 'recommend': {'a': 'definitely_recommend'}, 'finish': {'a': 'finish'}, 'tune_in': {'a': 'tune_in'},
                   'urgency': {'a': 'urgency_opening'}, 'urgency_pilot': {'a': 'urgency_opening'}}
@@ -2911,6 +2932,60 @@ def session_csv(session: dict) -> str:
                         (nrm.get('genre') or {}).get('definitely_recommend', {}).get('value'), (nrm.get('genre') or {}).get('finish', {}).get('value')])
         elif genre != 'all' and nch.get('note'):
             w.writerow([nch['note'], '', '', '', '', '', ''])
+    # the diagnostics blocks the report carries (2026-11-04): the characters, the components, pace by act, the scenes
+    d = session.get('diagnostics') if isinstance(session.get('diagnostics'), dict) else {}
+    chars_doc = d.get('characters') if isinstance(d.get('characters'), dict) else {}
+    chars = [c for c in (chars_doc.get('characters') or []) if isinstance(c, dict)]
+    if chars:
+        w.writerow([])
+        follow = {str(f.get('name')): f.get('pct') for f in (chars_doc.get('follow') or []) if isinstance(f, dict)}
+        w.writerow(['Character', 'Role', 'Excellent %', 'Total positive %', 'Norm %', 'Vs norm pp', 'On screen', 'Screen time against the rating', 'Would follow into a second episode %'])
+        for c in chars:
+            w.writerow([c.get('name'), c.get('role'), c.get('excellent_pct'), c.get('total_positive_pct'), c.get('norm'), c.get('vs_norm_pp'), c.get('screen_clock'), c.get('time_vs_like'), follow.get(str(c.get('name')), '')])
+        rel = chars_doc.get('relationship') if isinstance(chars_doc.get('relationship'), dict) else {}
+        if rel.get('pair'):
+            w.writerow([' and '.join(str(p) for p in rel['pair']), 'relationship', rel.get('excellent_pct'), rel.get('total_positive_pct'), '', '', '', f"{rel.get('scenes_together') or 0} scenes together", ''])
+        if chars_doc.get('read'):
+            w.writerow(['Characters read', chars_doc['read']])
+    comps = [c for c in ((d.get('components') or {}).get('rows') or []) if isinstance(c, dict)]
+    if comps:
+        w.writerow([])
+        w.writerow(['Component', 'Excellent %', f"{all_label} norm %", f"{genre_label} norm %" if genre != 'all' else 'Genre norm %', 'Vs norm pp'])
+        for c in comps:
+            w.writerow([c.get('label'), c.get('excellent_pct'), c.get('norm'), c.get('genre_norm') if genre != 'all' else '', c.get('vs_norm_pp')])
+        if (d.get('components') or {}).get('read'):
+            w.writerow(['Components read', d['components']['read']])
+    pace = d.get('pace') if isinstance(d.get('pace'), dict) else {}
+    if pace.get('acts'):
+        w.writerow([])
+        w.writerow(['Stretch', 'From', 'To', 'Too slow %', 'Just right %', 'Too fast %', 'Excellent %', 'Line'])
+        for a in pace['acts']:
+            if isinstance(a, dict):
+                w.writerow([a.get('label'), a.get('from_clock'), a.get('to_clock'), a.get('too_slow_pct'), a.get('just_right_pct'), a.get('too_fast_pct'), '', ''])
+        w.writerow(['Beginning on its own', '', '', '', '', '', (pace.get('beginning') or {}).get('excellent_pct'), ''])
+        w.writerow(['Ending on its own', '', '', '', '', '', (pace.get('ending') or {}).get('excellent_pct'), ''])
+        w.writerow(['Confused somewhere', '', '', '', '', '', '', f"{pace.get('confusion_pct')}% of the room"])
+        for cf in pace.get('confusions') or []:
+            if isinstance(cf, dict):
+                w.writerow(['Confusion', cf.get('clock') or '', '', '', '', '', '', cf.get('line')])
+        for key, label in (('running_time_read', 'Running time'), ('read', 'Pace read')):
+            if pace.get(key):
+                w.writerow([label, '', '', '', '', '', '', pace[key]])
+    scenes = d.get('scenes') if isinstance(d.get('scenes'), dict) else {}
+    if scenes.get('liked_best') or scenes.get('liked_least') or scenes.get('not_recommending'):
+        w.writerow([])
+        w.writerow(['Scenes', 'Clock', 'On screen', 'Mentions', 'People', 'In their words'])
+        for label, key in (('Liked best', 'liked_best'), ('Liked least', 'liked_least')):
+            for s in scenes.get(key) or []:
+                if not isinstance(s, dict):
+                    continue
+                q = next((x for x in (s.get('quotes') or []) if isinstance(x, dict) and x.get('line')), {})
+                w.writerow([label, s.get('clock'), s.get('on_screen'), s.get('mentions'), s.get('people'), f"{q.get('name')}: {q.get('line')}" if q else ''])
+        for n in scenes.get('not_recommending') or []:
+            if isinstance(n, dict):
+                w.writerow(['Would not recommend', '', '', '', '', f"{n.get('name')}: {n.get('line')}"])
+        if scenes.get('read'):
+            w.writerow(['Scenes read', '', '', '', '', scenes['read']])
     # what the room said about the people the setup named, one row each (Jenna 2026-11-04)
     try:
         from migration.digital_twin_talent_read import report_lines as _talent_lines
@@ -2926,6 +3001,7 @@ def session_csv(session: dict) -> str:
     fc = session.get('forecast') if isinstance(session.get('forecast'), dict) else {}
     if fc.get('episode'):
         ep, se, su, act = fc['episode'], fc.get('series') or {}, fc.get('subscriptions') or {}, fc.get('actual') or {}
+        w.writerow([])
         w.writerow(['Forecast', 'Value', 'Low', 'High', 'Definition'])
         w.writerow(['Week-one audience if released', ep.get('week_one_audience'), ep.get('low'), ep.get('high'), ep.get('definition')])
         if act.get('week_one_audience'):
@@ -2938,8 +3014,67 @@ def session_csv(session: dict) -> str:
         w.writerow(['Would reactivate a dormant account for it, % of dormant accounts', su.get('reactivate_pct_of_dormant'), '', '', f"About {su.get('reactivate_people')} people"])
         for n in fc.get('notes') or []:
             w.writerow(['Note', n, '', '', ''])
+    # the recruit and the room (2026-11-04): who was asked for, who was seated
+    rec = session.get('recruit') if isinstance(session.get('recruit'), dict) else {}
+    if rec:
         w.writerow([])
+        w.writerow(['Recruit', 'Value'])
+        for label, key in (('Recruited to', 'concept'), ('Invited', 'invited'), ('Showed', 'showed'), ('Seated', 'seated'), ('Invite ratio', 'invite_ratio')):
+            if rec.get(key) not in (None, ''):
+                w.writerow([label, rec.get(key)])
+        wo = rec.get('walkouts') if isinstance(rec.get('walkouts'), dict) else {}
+        w.writerow(['Walked out', wo.get('count') if wo.get('count') is not None else 0])
+        if wo.get('read'):
+            w.writerow(['Walkouts', wo['read']])
+        for q in rec.get('quotas_met') or []:
+            if isinstance(q, dict):
+                w.writerow([f"Quota: {q.get('quota')}", f"{q.get('target_pct')}% asked for, {q.get('seated_pct')}% seated"])
+        for c in rec.get('cells') or []:
+            if isinstance(c, dict):
+                w.writerow([f"Cell: {c.get('label')}", f"{c.get('seats')} seats"])
+        if rec.get('stats_line'):
+            w.writerow(['Recruit line', rec['stats_line']])
+    grp = session.get('group') if isinstance(session.get('group'), dict) else {}
+    if grp.get('roster'):
+        from migration.digital_twin_exports import segment_shares as _segment_shares
+        w.writerow([])
+        w.writerow(['Segment', 'Share of room %', 'People', 'Seats'])
+        for label, share, people, seats in _segment_shares(session):
+            w.writerow([label, share, people, seats])
+        w.writerow([])
+        w.writerow(['Seat', 'Name', 'Age', 'City', 'Gender', 'Segment'])
+        for r in grp['roster']:
+            if isinstance(r, dict):
+                w.writerow([r.get('seat'), r.get('name'), r.get('age'), r.get('city'), r.get('gender_label') or r.get('gender'), r.get('segment')])
+    # the report, page by page: the same list the deck and the PDF are drawn from, so a block added to the report lands in
+    # the CSV too (the questions keep their own blocks below; here they carry the header and the sub line only)
+    try:
+        from migration.digital_twin_report import report_pages as _report_pages
+        rpages = _report_pages(payload or _csv_payload_for(session), session, with_chart=False)
+    except Exception as e:
+        print(f"[pilot] csv report block skipped: {e}")
+        rpages = []
+    if rpages:
+        w.writerow([])
+        w.writerow(['Report page', 'Line', 'Value', 'Note'])
+        for pg in rpages:
+            if not isinstance(pg, dict) or pg.get('kind') == 'cover':
+                continue
+            w.writerow([pg.get('header') or '', pg.get('sub') or '', '', ''])
+            if pg.get('kind') == 'question':
+                continue
+            for b in pg.get('body') or []:
+                w.writerow(['', b, '', ''])
+            for val, lab in pg.get('tiles') or []:
+                w.writerow(['', lab, val, ''])
+            if pg.get('rows'):
+                hd = tuple(pg.get('head') or ('', '', ''))
+                w.writerow(['', hd[0], hd[1], hd[2]])
+                for row in pg['rows']:
+                    lab, val, note = (list(row) + ['', '', ''])[:3]
+                    w.writerow(['', lab, val, note])
     dial = session.get('dial') or {}
+    w.writerow([])
     splits = dial.get('splits') or {}
     keys = list(splits.keys())
     w.writerow(['Clock', 'Seconds', 'On screen', 'Dial'] + [splits[k].get('label') or k for k in keys])

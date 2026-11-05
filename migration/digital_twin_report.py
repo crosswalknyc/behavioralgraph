@@ -28,6 +28,8 @@ from migration.digital_twin_engine import human_people, pct1
 from migration.digital_twin_exports import (
     GRAPHITE, SLATE, OFFWHITE, GREEN, OLIVE, ORCHID, PAVEMENT, BODY_DARK, MUTED_DARK, BODY_LIGHT, MUTED_LIGHT, _words, _pct, _clock, _scorecard_rows, _quadrant_rows, _norm_note, build_deck, _Doc, _fin,
 )
+# the room pages ride inside report_pages so every format carries them (2026-11-04)
+from migration.digital_twin_exports import room_pages as _room_pages, moments_pages as _moments_pages, draw_roster_pdf as _draw_roster_pdf
 
 DUSK = '#B7B3D8'
 COBALT = '#3358FF'
@@ -475,7 +477,11 @@ def _talent_pages(session: dict) -> list:
     return pages
 
 
-def report_pages(payload: dict, session: dict) -> list:
+def report_pages(payload: dict, session: dict, portrait_fn=None, with_chart: bool = True) -> list:
+    """The one page list every export of a test is drawn from: the deck,
+    the PDF and the CSV's report block (2026-11-04). ``portrait_fn(hash)
+    -> JPEG bytes`` puts the faces on the room page; ``with_chart=False``
+    skips drawing the dial image (the CSV carries the dial as numbers)."""
     m = payload.get('meta') or {}
     name = str(m.get('name') or m.get('subject') or 'the twin')
     sc = session.get('scorecard') or {}
@@ -493,16 +499,17 @@ def report_pages(payload: dict, session: dict) -> list:
     if head.get('finish_pct') is not None:
         tiles.append((_pct(head.get('finish_pct')), 'Would finish'))
     pages.append({'kind': 'tiles', 'header': _words(f"Total positive {_pct(head.get('total_positive_pct'))}, with the norm beside every number.") if head.get('total_positive_pct') is not None else 'The scorecard.',
-                  'sub': _clean(f"{g.get('in_room') or len(g.get('roster') or [])} people in the room, {human_people(sc.get('people'))} behind them. {str(sc.get('format') or 'pilot').title()}" + (f", {sc.get('genre')}." if sc.get('genre') else '.')),
+                  'sub': _clean(f"The room seated {g.get('in_room') or len(g.get('roster') or [])} people, with {human_people(sc.get('people'))} behind them. {str(sc.get('format') or 'pilot').title()}" + (f", {sc.get('genre')}." if sc.get('genre') else '.')),     # opens with a word: the copy scrub capitalizes the word after a leading count
                   'tiles': [t for t in tiles if t[0]][:4], 'body': [_clean(x) for x in (sc.get('norm_lines') or [])[:3]], 'dark': False})
     # the norm the card is read against, named once (Jenna 2026-11-04: the user sets it); older cards compute it from the genre
     compared = _compared_to(sc, session)
     pages.append({'kind': 'table', 'header': 'Every question on the card, next to its norm.', 'sub': compared, 'head': ('Measure', 'Room', 'Norm'), 'rows': [(_clean(a), b, _clean(c)) for a, b, c in _scorecard_rows(sc)[:12]], 'dark': True})
-    png = dial_chart_png(session)
+    png = dial_chart_png(session) if with_chart else None
     if png:
         fav, dead = sc.get('favorite_moment') or {}, sc.get('dead_spot') or {}
         pages.append({'kind': 'image', 'header': _words(f"The room peaked at {fav.get('clock') or '-'} and dipped at {dead.get('clock') or '-'}."), 'sub': 'The dial second by second, the peaks and valleys marked, every reaction on the rail under it.',
                       'image': png, 'body': [_clean(f"Favorite moment, {fav.get('clock')}: {fav.get('line')}"), _clean(f"Dead spot, {dead.get('clock')}: {dead.get('line')}")], 'dark': True})
+    pages.extend(_moments_pages(session, clean=_clean))     # the strongest reactions, seat by seat (the room export's moments page)
     qrows = _quadrant_rows(sc)
     if qrows:
         pages.append({'kind': 'table', 'header': 'The four quadrants, side by side.', 'sub': 'Total positive, with definitely recommend and excellent beside it.', 'head': ('Group', 'Total positive', 'And'), 'rows': qrows[:10], 'dark': False})
@@ -569,6 +576,7 @@ def report_pages(payload: dict, session: dict) -> list:
                  (str(w.get('count') if w.get('count') is not None else 0), 'Walked out'), (rec.get('invite_ratio_n') and f"{rec['invite_ratio_n']} : 1" or '1 : 1', 'Invite ratio')]
         pages.append({'kind': 'tiles', 'header': _words(_clean(f"Recruited to {rec.get('concept') or 'the twin'}.")), 'sub': _clean(rec.get('stats_line') or ''), 'tiles': tiles[:4],
                       'body': [_clean(f"{q['quota']}: {q['target_pct']}% asked for, {q['seated_pct']}% seated") for q in (rec.get('quotas_met') or [])[:3]] + ([_clean(w.get('read'))] if w.get('read') else []), 'dark': True})
+    pages.extend(_room_pages(session, portrait_fn=portrait_fn, clean=_clean))     # who was seated: the faces, the segments, the roster line
     cr = session.get('critics') or {}
     if cr.get('critic_score') is not None:
         pages.append({'kind': 'tiles', 'header': _words(f"Critic score forecast {cr['critic_score']:.0f}."), 'sub': _clean(cr.get('awards_read') or ''), 'tiles': [(f"{cr['critic_score']:.0f}", 'Critic score'), (f"{cr['range'][0]:.0f} to {cr['range'][1]:.0f}", 'Likely range')], 'body': [], 'dark': False})
@@ -604,8 +612,8 @@ def report_pages(payload: dict, session: dict) -> list:
     return pages
 
 
-def build_report_deck(payload: dict, session: dict) -> bytes:
-    return build_deck(payload, pages=report_pages(payload, session))
+def build_report_deck(payload: dict, session: dict, portrait_fn=None) -> bytes:
+    return build_deck(payload, pages=report_pages(payload, session, portrait_fn=portrait_fn))
 
 
 PDF_FLOOR = 0.78 * 72     # nothing is drawn below this line; the footer sits under it
@@ -728,11 +736,11 @@ def _draw_talent_pdf(d: _Doc, pg: dict, y: float) -> float:
     return bottom
 
 
-def build_report_pdf(payload: dict, session: dict) -> bytes:
+def build_report_pdf(payload: dict, session: dict, portrait_fn=None) -> bytes:
     from reportlab.lib import colors
     from reportlab.lib.utils import ImageReader
     d = _Doc()
-    pages = report_pages(payload, session)
+    pages = report_pages(payload, session, portrait_fn=portrait_fn)
     for i, pg in enumerate(pages, 1):
         dark = bool(pg.get('dark'))
         if pg['kind'] == 'cover':
@@ -743,6 +751,8 @@ def build_report_pdf(payload: dict, session: dict) -> bytes:
             _draw_question_pdf(d, pg, y)
         elif pg['kind'] == 'talent':
             _draw_talent_pdf(d, pg, y)
+        elif pg['kind'] == 'roster':
+            _draw_roster_pdf(d, pg, y)
         elif pg['kind'] == 'bullets':
             y = d.bullets(pg.get('body') or [], d.m, y, d.right - d.m)
         elif pg['kind'] == 'table':

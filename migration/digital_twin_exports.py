@@ -8,6 +8,15 @@ page, headers of twelve words or fewer in plain English, the TLDR page
 first, and every dollar printed exact with its cents. Each file leaves
 through ``design_skill.finish_bytes`` (fonts embedded and checked, the
 lint run); the bytes always come back, never held.
+
+Pilot Testing (2026-11-04, Jenna: "confirming the deck will have all of
+this insight when I click to export it in any format"): every export of
+a test is drawn from ONE page list, ``digital_twin_report.report_pages``.
+``build_pilot_deck`` and ``build_pilot_pdf`` are that report; the room
+pages this module adds (``room_pages``: the faces, the segments;
+``moments_pages``: the strongest reactions seat by seat) ride inside
+that list, so a block added to the report lands in the deck, the PDF
+and the CSV alike, and nothing the older room export carried is lost.
 """
 from __future__ import annotations
 
@@ -313,6 +322,52 @@ def build_deck(payload: dict, pages: Optional[list] = None) -> bytes:
                     yy += qh + 0.06
                     if p.get('who') and yy + 0.2 < bottom:
                         text(slide, x + 0.16, yy, cw - 0.16, 0.2, str(p['who']), 9, muted, 'Regular')   # a note: 9pt is the lint's floor for notes
+        elif pg['kind'] == 'roster':
+            # the room (2026-11-04): a grid of faces (the portrait cropped to a circle, or a disc with the
+            # initials), the name and the age and city under each, then the segments table and the roster line
+            seats = (pg.get('seats') or [])[:ROSTER_FACES]
+            per_row, size = ROSTER_PER_ROW, 0.72
+            gap = (R - L - per_row * size) / max(1, per_row - 1)
+            step = size + 0.66
+            for j, s in enumerate(seats):
+                x = L + (j % per_row) * (size + gap)
+                yy = y + (j // per_row) * step
+                drawn = False
+                if s.get('portrait'):
+                    try:
+                        pic = slide.shapes.add_picture(io.BytesIO(s['portrait']), Inches(x), Inches(yy), width=Inches(size), height=Inches(size))
+                        pic.auto_shape_type = MSO_SHAPE.OVAL
+                        drawn = True
+                    except Exception:
+                        drawn = False
+                if not drawn:
+                    disc = slide.shapes.add_shape(MSO_SHAPE.OVAL, Inches(x), Inches(yy), Inches(size), Inches(size))
+                    disc.fill.solid()
+                    disc.fill.fore_color.rgb = rgb(SLATE if dark else '#DDDCD4')
+                    disc.line.fill.background()
+                    text(slide, x, yy + size / 2 - 0.16, size, 0.32, _initials(s.get('name')), 13, accent, 'Bold', PP_ALIGN.CENTER)
+                # the name at body size, the age and city at note size (the brand lint's floor for each)
+                text(slide, x - 0.2, yy + size + 0.05, size + 0.4, 0.22, str(s.get('name') or ''), 10, ink, 'Medium', PP_ALIGN.CENTER)
+                text(slide, x - 0.2, yy + size + 0.27, size + 0.4, 0.2, _cut(_seat_line(s), 26), 9, body, 'Regular', PP_ALIGN.CENTER)
+            if seats:
+                y += ((len(seats) + per_row - 1) // per_row) * step + 0.1
+            rows = pg.get('rows') or []
+            fit = int((6.92 - y) / 0.34) - 1
+            if rows and fit >= 1:
+                head = pg.get('head') or ('', '', '')
+                text(slide, L, y, 5.6, 0.3, str(head[0]).upper(), 8, muted, 'Medium')
+                text(slide, L + 6.0, y, 1.6, 0.3, str(head[1]).upper(), 8, muted, 'Medium', PP_ALIGN.RIGHT)
+                text(slide, L + 7.9, y, 3.5, 0.3, str(head[2]).upper(), 8, muted, 'Medium')
+                y += 0.34
+                for lab, val, note in rows[:fit]:
+                    text(slide, L, y, 5.8, 0.32, str(lab), 11, ink, 'Regular')
+                    text(slide, L + 6.0, y, 1.6, 0.32, str(val), 11, accent, 'Medium', PP_ALIGN.RIGHT)
+                    text(slide, L + 7.9, y, 3.6, 0.32, str(note or ''), 9.5, body, 'Regular')
+                    y += 0.34
+            for b in (pg.get('body') or [])[:1]:
+                bl = lines_of(b, 10, 11.4)
+                if y + 0.18 * bl + 0.1 < 6.98:
+                    text(slide, L, y + 0.08, 11.4, 0.18 * bl + 0.1, b, 10, body, 'Regular')
         elif pg['kind'] == 'question':
             # one question the moderator put to the room (digital_twin_report, 2026-11-04): the framing, the split
             # across the page with the seat tally, then Prometheus's read and the voices on the left and what the
@@ -749,114 +804,211 @@ def _quadrant_rows(sc: dict) -> list:
     return rows
 
 
-def _pilot_pages(payload: dict, session: dict) -> list:
-    m = payload.get('meta') or {}
-    name = str(m.get('name') or m.get('subject') or 'the twin')
-    sc = session.get('scorecard') or {}
-    head = ((sc.get('battery') or {}).get('headline')) or {}
-    fav = sc.get('favorite_moment') or {}
-    dead = sc.get('dead_spot') or {}
-    media = session.get('media') or {}
-    title = str(session.get('title') or media.get('title') or 'Pilot test')
-    tiles = [(_pct(head.get('total_positive_pct')) or f"{float(sc.get('overall_like') or 0):.1f}", 'Total positive' if head.get('total_positive_pct') is not None else 'Dial average'),
-             (_pct(head.get('definitely_recommend_pct')) or '', 'Definitely recommend'),
-             (_pct(head.get('excellent_pct')) or '', 'Excellent')]
-    pages = [
-        {'kind': 'tiles', 'header': f"{name} watched {title}.",
-         'sub': 'The scorecard, with the norm beside each number.',
-         'tiles': [t for t in tiles if t[0]],
-         'body': list(sc.get('norm_lines') or [])[:3] or list(sc.get('notes') or [])[:3], 'dark': True},
-        {'kind': 'table', 'header': 'The scorecard.', 'sub': f"{(session.get('cut_label') or 'Cut A')}. {str(sc.get('format') or 'pilot').title()}" + (f", {sc.get('genre')}." if sc.get('genre') else '.'),
-         'head': ('Measure', 'Room', 'Norm'), 'rows': _scorecard_rows(sc)[:12], 'dark': False},
-    ]
-    qrows = _quadrant_rows(sc)
-    if qrows:
-        pages.append({'kind': 'table', 'header': 'By quadrant.', 'sub': 'Total positive, with definitely recommend and excellent beside it.',
-                      'head': ('Group', 'Total positive', 'And'), 'rows': qrows[:12], 'dark': True})
-    pages.append({'kind': 'bullets', 'header': 'The moments that moved the room.',
-                  'sub': f"Favorite at {fav.get('clock') or _clock(fav.get('t'))}. Dead spot at {dead.get('clock') or _clock(dead.get('t'))}.",
-                  'body': [
-                      f"Favorite moment: {fav.get('line') or 'The room peaked here.'}",
-                      f"Dead spot: {dead.get('line') or 'The room dipped.'}",
-                  ] + [f"{_clock(e.get('t'))}  {e.get('name')}: {str(e.get('line') or '')[:90]}" for e in _top_events(session.get('events') or [], 3)],
-                  'dark': False})
-    qs = session.get('questions') or []
-    if qs:
-        pages.append({'kind': 'bullets', 'header': 'What they said when asked.',
-                      'sub': 'Questions sit on the playhead.',
-                      'body': [f"{q.get('playhead_clock') or _clock(q.get('playhead_s'))}: {str(q.get('q') or '')[:70]}  {str(q.get('read') or '')[:110]}" for q in qs[:4]],
-                      'dark': True})
-    pages.append({'kind': 'bullets', 'header': 'What this means for the cut.',
-                  'sub': '',
-                  'body': [
-                      f"{int(sc.get('people') or 0):,} people sit behind this room." if sc.get('people') else 'The room stands for the twin.',
-                  ] + list(sc.get('notes') or [])[:2] + ['Keep the favorite moment. Look hard at the dead spot.'],
-                  'dark': False})
+# ------------------------------------------------------ the room pages
+# Pilot Testing's room pages (2026-11-04). They ride inside
+# ``digital_twin_report.report_pages`` so the deck, the PDF and the CSV
+# carry them from the one list: the room (the faces when portraits are
+# on, the name, the age and the city under each, the segments and the
+# share of the room each held) and the strongest reactions seat by seat.
+# These are what the older room export carried that the report did not.
+ROSTER_FACES = 16        # the faces grid holds two rows of eight; a bigger room continues on the next page
+ROSTER_PER_ROW = 8
+ROSTER_NAMES = 40        # the roster line names everyone a room can seat (MAX_IN_ROOM)
+MOMENTS_ON_PAGE = 10
+
+
+def _cut(text, n: int) -> str:
+    """Cut at a word boundary with an ellipsis when the text runs past n."""
+    t = ' '.join(str(text or '').split())
+    if len(t) <= n:
+        return t
+    return t[:n].rsplit(' ', 1)[0].rstrip(',;:') + '...'
+
+
+def _initials(name) -> str:
+    parts = [p for p in str(name or '').split() if p]
+    return ''.join(p[0] for p in parts[:2]).upper() or '?'
+
+
+def _seat_line(s: dict) -> str:
+    return ', '.join(str(v) for v in ((s or {}).get('age'), (s or {}).get('city')) if v not in (None, ''))
+
+
+def _portrait_bytes(portrait_fn):
+    """A memoized reader: hash -> image bytes or None. Every failure is a
+    missing face, never a failed export."""
+    cache = {}
+
+    def read(h):
+        if not h or portrait_fn is None:
+            return None
+        if h in cache:
+            return cache[h]
+        data = None
+        try:
+            got = portrait_fn(h)
+            data = bytes(got) if got else None
+        except Exception:
+            data = None
+        cache[h] = data
+        return data
+    return read
+
+
+def segment_shares(session: dict) -> list:
+    """[(label, share_of_room_pct, people, seats)] for the room's segments.
+    The share is the seats' share of the room (a quota cell is built as
+    its own sub-room and stores 100 for itself); the stored share stands
+    in only when no seats are recorded."""
+    g = (session or {}).get('group') or {}
+    segs = [s for s in (g.get('segments') or []) if isinstance(s, dict) and str(s.get('label') or '').strip()]
+    seats = []
+    for s in segs:
+        try:
+            seats.append(int(s.get('seats') or 0))
+        except (TypeError, ValueError):
+            seats.append(0)
+    total = sum(seats)
+    out = []
+    for s, n in zip(segs, seats):
+        try:
+            stored = float(s.get('share_pct') or 0)
+        except (TypeError, ValueError):
+            stored = 0.0
+        share = round(100.0 * n / total, 1) if total else stored
+        out.append((str(s.get('label')), share, s.get('people'), n))
+    return out
+
+
+def room_pages(session: dict, portrait_fn=None, clean=None) -> list:
+    """The room, one page: who was seated (``portrait_fn(hash) -> JPEG
+    bytes`` puts the faces on it; without it, or when a face is absent,
+    a disc with the initials stands in), the segments with the share of
+    the room each held, and the roster line. [] when there is no roster.
+    ``clean`` is the report's copy scrub; the page dict is the same for
+    the deck and the PDF."""
+    clean = clean or (lambda s: s)
+    g = (session or {}).get('group') or {}
+    roster = [r for r in (g.get('roster') or []) if isinstance(r, dict)]
+    if not roster:
+        return []
+    read = _portrait_bytes(portrait_fn)
+    seats = []
+    for r in roster:
+        seats.append({'seat': r.get('seat'), 'name': clean(str(r.get('name') or '')), 'age': r.get('age'), 'city': clean(str(r.get('city') or '')),
+                      'segment': clean(str(r.get('segment') or '')), 'portrait': read(r.get('portrait_hash'))})
+    rows = []
+    for label, share, people, seat_n in segment_shares(session):
+        rows.append((clean(label), _pct(share), clean(f"{human_people(people)} people, {seat_n} seats")))
+    n = len(roster)
+    size_people = g.get('size_people')
+    # the header opens with a word, not the count: the copy scrub capitalizes the first word after a leading number
+    header = f"The room seated {n} people, standing for {human_people(size_people)}." if size_people else f"The room seated {n} people."
+    sub = 'Who was seated, and the share of the room each group held.'
+    chunks = [seats[i:i + ROSTER_FACES] for i in range(0, n, ROSTER_FACES)]     # a page holds sixteen faces; a bigger room continues
+    if len(chunks) > 1:
+        sub += f" Seats 1 to {ROSTER_FACES} of {n}; the rest follow."
+    names = ', '.join(f"{r.get('name')} ({_seat_line(r)})" if _seat_line(r) else str(r.get('name') or '') for r in roster[:ROSTER_NAMES])
+    if n > ROSTER_NAMES:
+        names += f", and {n - ROSTER_NAMES} more"
+    pages = [{'kind': 'roster', 'header': clean(header), 'sub': clean(sub), 'seats': chunks[0], 'head': ('Segment', 'Share of room', 'People and seats'), 'rows': rows,
+              'body': [clean('In the room: ' + names + '.')], 'dark': True}]
+    for k, chunk in enumerate(chunks[1:], 1):
+        lo = k * ROSTER_FACES + 1
+        pages.append({'kind': 'roster', 'header': 'The room, continued.', 'sub': clean(f"Seats {lo} to {lo + len(chunk) - 1} of {n}."), 'seats': chunk, 'head': ('', '', ''), 'rows': [], 'body': [], 'dark': True})
     return pages
 
 
-def build_pilot_deck(payload: dict, session: dict) -> bytes:
-    return build_deck(payload, pages=_pilot_pages(payload, session))
+def moments_pages(session: dict, clean=None) -> list:
+    """The strongest reactions on the clock, seat by seat: the clock and
+    what the seat did, who, and what they said; the scorecard's notes
+    under the table. One table page; [] when the room had no reactions."""
+    clean = clean or (lambda s: s)
+    events = [e for e in ((session or {}).get('events') or []) if isinstance(e, dict)]
+    if not events:
+        return []
+    try:
+        from migration.digital_twin_pilot import EVENT_LABEL as labels
+    except Exception:
+        labels = {}
+    picked = _top_events(events, MOMENTS_ON_PAGE)
+    rows = []
+    for e in picked:
+        kind = str(e.get('type') or '')
+        who = ', '.join(str(x) for x in (e.get('name'), e.get('age')) if x not in (None, ''))
+        rows.append((clean(f"{_clock(e.get('t'))}  {labels.get(kind) or kind.replace('-', ' ').title()}"), clean(who), clean(_cut(e.get('line'), 56))))
+    words = {10: 'ten', 9: 'nine', 8: 'eight', 7: 'seven', 6: 'six', 5: 'five', 4: 'four', 3: 'three', 2: 'two', 1: 'one'}.get(len(rows), str(len(rows)))
+    sub = (f"The {words} strongest of {len(events)} reactions on the clock, and who in the room had each one." if len(events) > len(rows)
+           else f"Every reaction on the clock, and who in the room had it.")
+    notes = [clean(str(x)) for x in (((session or {}).get('scorecard') or {}).get('notes') or [])[:2] if str(x or '').strip()]
+    return [{'kind': 'table', 'header': 'The moments that moved the room, seat by seat.', 'sub': clean(sub), 'head': ('Clock and reaction', 'Who', 'In their words'),
+             'rows': rows, 'body': notes, 'dark': False}]
+
+
+def draw_roster_pdf(d: '_Doc', pg: dict, y: float) -> float:
+    """The room page in the PDF: the faces grid (the portrait in a circle,
+    or a disc with the initials), the name and the age and city under
+    each, then the segments table and the roster line. Nothing is drawn
+    under the footer line."""
+    from reportlab.lib import colors
+    floor = 0.78 * 72
+    seats = (pg.get('seats') or [])[:ROSTER_FACES]
+    ink = OFFWHITE if d.dark else GRAPHITE
+    body = BODY_DARK if d.dark else BODY_LIGHT
+    width = d.right - d.m
+    if seats:
+        per_row = ROSTER_PER_ROW
+        size = 0.50 * 72
+        gap = (width - per_row * size) / max(1, per_row - 1)
+        step = size + 34
+        yy = y - size
+        for j, s in enumerate(seats):
+            if j and j % per_row == 0:
+                yy -= step
+            if yy < floor + 22:
+                break
+            xx = d.m + (j % per_row) * (size + gap)
+            d.c.setFillColor(colors.HexColor(SLATE if d.dark else '#DDDCD4'))
+            d.c.circle(xx + size / 2.0, yy + size / 2.0, size / 2.0, stroke=0, fill=1)
+            drawn = False
+            if s.get('portrait'):
+                try:
+                    from reportlab.lib.utils import ImageReader
+                    drawn = _draw_round_portrait(d.c, ImageReader(io.BytesIO(s['portrait'])), xx, yy, size)
+                except Exception:
+                    drawn = False
+            if not drawn:
+                d.c.setFont(d.f['bold'], 11)
+                d.c.setFillColor(colors.HexColor(GREEN if d.dark else OLIVE))
+                d.c.drawCentredString(xx + size / 2.0, yy + size / 2.0 - 4, _initials(s.get('name')))
+            d.c.setFont(d.f['medium'], 7.5)
+            d.c.setFillColor(colors.HexColor(ink))
+            d.c.drawCentredString(xx + size / 2.0, yy - 10, str(s.get('name') or '')[:14])
+            d.c.setFont(d.f['regular'], 6.5)
+            d.c.setFillColor(colors.HexColor(body))
+            d.c.drawCentredString(xx + size / 2.0, yy - 19, _cut(_seat_line(s), 26))
+        y = yy - 40
+    rows = (pg.get('rows') or [])[:6]
+    if rows and y - 14.5 * (len(rows) + 1) > floor:
+        y = d.table(rows, d.m, y, width, head=pg.get('head') or ('', '', ''))
+    for b in (pg.get('body') or [])[:1]:
+        if y - 32 > floor:
+            y = d.paragraph(b, d.m, y - 6, width, size=10)
+    return y
+
+
+def build_pilot_deck(payload: dict, session: dict, portrait_fn=None) -> bytes:
+    """The Pilot Testing deck: the studio report, room pages included.
+    One page list for every format (``digital_twin_report.report_pages``)."""
+    from migration.digital_twin_report import build_report_deck
+    return build_report_deck(payload, session, portrait_fn=portrait_fn)
 
 
 def build_pilot_pdf(payload: dict, session: dict, portrait_fn=None) -> bytes:
-    d = _Doc()
-    m = payload.get('meta') or {}
-    g = session.get('group') or {}
-    sc = session.get('scorecard') or {}
-    fav = sc.get('favorite_moment') or {}
-    dead = sc.get('dead_spot') or {}
-    read = _portrait_reader(portrait_fn)
-    d.new_page(True, 'Pilot Testing', _words(f"{session.get('title') or 'The cut'}"),
-               f"{g.get('in_room')} twins in the room. Moderated by Prometheus." + (f" {str(sc.get('format') or '').title()}" + (f", {sc.get('genre')}." if sc.get('genre') else '.') if sc.get('format') else ''))
-    y = d.y
-    rows = _scorecard_rows(sc)[:9] + [
-        ('Favorite moment', f"{fav.get('clock') or ''}", str(fav.get('line') or '')[:80]),
-        ('Dead spot', f"{dead.get('clock') or ''}", str(dead.get('line') or '')[:80]),
-    ]
-    y = d.table(rows, d.m, y, d.right - d.m, head=('Measure', 'Room', 'Norm'))
-    for n in (sc.get('norm_lines') or [])[:2] + (sc.get('notes') or [])[:2]:
-        y = d.paragraph(n, d.m, y - 4, d.right - d.m, size=10)
-    qrows = _quadrant_rows(sc)
-    if qrows:
-        y = d.new_page(False, 'Pilot Testing', _words('By quadrant'), 'Total positive, with definitely recommend and excellent beside it.')
-        y = d.table(qrows[:10], d.m, y, d.right - d.m, head=('Group', 'Total positive', 'And'))
-    roster_rows = (g.get('roster') or [])[:16]
-    faces = [(r, read(r.get('portrait_hash'))) for r in roster_rows]
-    if any(img is not None for _r, img in faces):
-        size, gap = 0.40 * 72, 0.10 * 72
-        per_row = max(1, int((d.right - d.m + gap) // (size + gap)))
-        yy = y - 8 - size
-        for j, (r, img) in enumerate(faces):
-            xx = d.m + (j % per_row) * (size + gap)
-            if j and j % per_row == 0:
-                yy -= size + gap + 12
-            from reportlab.lib import colors
-            d.c.setFillColor(colors.HexColor(SLATE))
-            d.c.circle(xx + size / 2.0, yy + size / 2.0, size / 2.0, stroke=0, fill=1)
-            if img is not None:
-                _draw_round_portrait(d.c, img, xx, yy, size)
-            d.c.setFont(d.f['regular'], 6.5)
-            d.c.setFillColor(colors.HexColor(BODY_DARK))
-            d.c.drawCentredString(xx + size / 2.0, yy - 8, str(r.get('name') or '')[:12])
-        y = yy - 20
-    events = session.get('events') or []
-    if events:
-        y = d.new_page(False, 'Pilot Testing', _words('Moments on the clock'))
-        y = d.table(
-            [(f"{_clock(e.get('t'))} {e.get('type')}", f"{e.get('name')}, {e.get('age')}", str(e.get('line') or '')[:70])
-             for e in events[:18]],
-            d.m, y, d.right - d.m, head=('Clock', 'Twin', 'Line'))
-    for i, q in enumerate(session.get('questions') or []):
-        y = d.new_page(i % 2 == 0, 'Pilot Testing', _words(q.get('read') or q.get('q')),
-                       f"At {q.get('playhead_clock') or _clock(q.get('playhead_s'))}: {q.get('q')}")
-        y = d.table([(r['label'], f"{r['pct']}%", f"{int(r.get('people') or 0):,} people")
-                     for r in (q.get('distribution') or [])[:8]],
-                    d.m, y, d.right - d.m, head=('Answer', 'Share', 'People'))
-        for v in (q.get('voices') or [])[:4]:
-            y = d.paragraph(f"{v.get('name')}, {v.get('age')}, {v.get('city')}: {v.get('line')}",
-                            d.m, y - 6, d.right - d.m, size=10, color=OFFWHITE if d.dark else GRAPHITE, font=d.f['medium'])
-    return _fin(d.finish(), '.pdf')
+    """The Pilot Testing PDF: the studio report, room pages included.
+    ``portrait_fn(hash) -> JPEG bytes`` puts the faces on the room page."""
+    from migration.digital_twin_report import build_report_pdf
+    return build_report_pdf(payload, session, portrait_fn=portrait_fn)
 
 
 def pilot_pdf_filename(payload: dict, session: dict) -> str:
@@ -870,4 +1022,5 @@ def pilot_deck_filename(payload: dict, session: dict) -> str:
 
 
 __all__ = ['build_deck', 'deck_filename', 'build_pdf', 'pdf_filename', 'build_panel_pdf', 'panel_pdf_filename',
-           'build_pilot_pdf', 'pilot_pdf_filename', 'build_pilot_deck', 'pilot_deck_filename']
+           'build_pilot_pdf', 'pilot_pdf_filename', 'build_pilot_deck', 'pilot_deck_filename',
+           'room_pages', 'moments_pages', 'segment_shares', 'draw_roster_pdf', 'ROSTER_FACES', 'MOMENTS_ON_PAGE']

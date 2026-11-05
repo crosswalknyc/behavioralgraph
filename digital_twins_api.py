@@ -2479,12 +2479,22 @@ def dt_pilot_csv(key, sid):
         return jsonify({'success': False, 'error': 'test not found'}), 404
     from migration import digital_twin_pilot as PI
     name = str((payload.get('meta') or {}).get('name') or 'twin').replace(' ', '_')
-    return Response(PI.session_csv(sess), mimetype='text/csv',
+    return Response(PI.session_csv(sess, payload), mimetype='text/csv',
                     headers={'Content-Disposition': f'attachment; filename="{name}_pilot_{sid}.csv"'})
+
+
+def _pilot_portrait_fn():
+    """``hash -> JPEG bytes`` for the room page of a test's report (the
+    thumb); None when portraits are off. A missing face never fails an
+    export."""
+    PT = _portraits()
+    return (lambda h: PT.read_portrait(_s3(), h, PT.THUMB_SIZE)) if PT is not None else None
 
 
 @bp.route(f'{PREFIX}/<path:key>/pilot/<sid>/export.pdf', methods=['GET'])
 def dt_pilot_pdf(key, sid):
+    """The same report as report.pdf (one page list for every format,
+    2026-11-04); the route stays for older links."""
     user, err = _gate()
     if err:
         return err
@@ -2495,14 +2505,13 @@ def dt_pilot_pdf(key, sid):
     if not sess:
         return jsonify({'success': False, 'error': 'test not found'}), 404
     from migration import digital_twin_exports as X
-    PT = _portraits()
-    portrait_fn = (lambda h: PT.read_portrait(_s3(), h, PT.THUMB_SIZE)) if PT is not None else None
-    return Response(X.build_pilot_pdf(payload, sess, portrait_fn=portrait_fn), mimetype='application/pdf',
+    return Response(X.build_pilot_pdf(payload, sess, portrait_fn=_pilot_portrait_fn()), mimetype='application/pdf',
                     headers={'Content-Disposition': f'attachment; filename="{X.pilot_pdf_filename(payload, sess)}"'})
 
 
 @bp.route(f'{PREFIX}/<path:key>/pilot/<sid>/export.pptx', methods=['GET'])
 def dt_pilot_pptx(key, sid):
+    """The same report as report.pptx; the route stays for older links."""
     user, err = _gate()
     if err:
         return err
@@ -2513,7 +2522,7 @@ def dt_pilot_pptx(key, sid):
     if not sess:
         return jsonify({'success': False, 'error': 'test not found'}), 404
     from migration import digital_twin_exports as X
-    return Response(X.build_pilot_deck(payload, sess),
+    return Response(X.build_pilot_deck(payload, sess, portrait_fn=_pilot_portrait_fn()),
                     mimetype='application/vnd.openxmlformats-officedocument.presentationml.presentation',
                     headers={'Content-Disposition': f'attachment; filename="{X.pilot_deck_filename(payload, sess)}"'})
 
@@ -2522,7 +2531,8 @@ def dt_pilot_pptx(key, sid):
 @bp.route(f'{PREFIX}/<path:key>/pilot/<sid>/report.pdf', methods=['GET'])
 @bp.route(f'{PREFIX}/<path:key>/pilot/<sid>/dial.png', methods=['GET'])
 def dt_pilot_report(key, sid):
-    """The studio report (deck or PDF) and the dial chart image."""
+    """The studio report (deck or PDF, the room page with its faces
+    included) and the dial chart image."""
     user, err = _gate()
     if err:
         return err
@@ -2541,9 +2551,10 @@ def dt_pilot_report(key, sid):
         resp = Response(png, mimetype='image/png')
         resp.headers['Cache-Control'] = 'private, max-age=120'
         return resp
+    portrait_fn = _pilot_portrait_fn()
     if path.endswith('.pdf'):
-        return Response(R.build_report_pdf(payload, sess), mimetype='application/pdf', headers={'Content-Disposition': f'attachment; filename="{R.report_filename(payload, sess, ".pdf")}"'})
-    return Response(R.build_report_deck(payload, sess), mimetype='application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        return Response(R.build_report_pdf(payload, sess, portrait_fn=portrait_fn), mimetype='application/pdf', headers={'Content-Disposition': f'attachment; filename="{R.report_filename(payload, sess, ".pdf")}"'})
+    return Response(R.build_report_deck(payload, sess, portrait_fn=portrait_fn), mimetype='application/vnd.openxmlformats-officedocument.presentationml.presentation',
                     headers={'Content-Disposition': f'attachment; filename="{R.report_filename(payload, sess, ".pptx")}"'})
 
 
