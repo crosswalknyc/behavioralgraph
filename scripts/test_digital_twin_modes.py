@@ -261,15 +261,26 @@ class Diagnostics(unittest.TestCase):
     def test_character_table_from_transcript_with_norms(self):
         twin, sess = self._pilot_with_cast()
         d = sess['diagnostics']['characters']
-        names = [c['name'] for c in d['characters']]
+        chars = d['characters']
+        names = [c['name'] for c in chars]
         self.assertIn('Mae', names)
         self.assertIn('Ray', names)
         self.assertIn('Mayor', names)
-        lead = d['characters'][0]
-        self.assertEqual(lead['role'], 'lead')
+        # the card ranks the cast by the room's rating (excellent, then total positive, then likability), never by time on
+        # screen or by role; the lead is the part the cut is built around, carried on its row as the role, not the top row
+        by_rating = sorted(chars, key=lambda c: (-float(c['excellent_pct']), -float(c['total_positive_pct']), -float(c['likability']), c['name']))
+        self.assertEqual(names, [c['name'] for c in by_rating], [(c['name'], c['role'], c['excellent_pct']) for c in chars])
+        roles = [c['role'] for c in chars]
+        self.assertEqual(roles.count('lead'), 1)
+        self.assertEqual(roles.count('second lead'), 1)
+        lead = next(c for c in chars if c['role'] == 'lead')
+        second = next(c for c in chars if c['role'] == 'second lead')
         self.assertIsNotNone(lead['excellent_pct'])
         self.assertEqual(lead['norm'], 50.0)
-        self.assertEqual(d['characters'][1]['norm'], 45.0)
+        self.assertEqual(second['norm'], 45.0)
+        for c in chars:
+            if c['role'] == 'supporting':
+                self.assertEqual(c['norm'], 40.0)
         self.assertTrue(d['relationship'])
         self.assertTrue(d['follow'])
         self.assertTrue(d['read'])
