@@ -170,7 +170,19 @@ def custom_work(text):
     t = ' '.join(str(text or '').split())
     if not t or is_talk(t) or is_single_figure(t):
         return False
-    return bool(_CUSTOM_WORK_RX.search(t)) or is_ranked_list(t) or bool(_INC_RX.search(t))
+    if _CUSTOM_WORK_RX.search(t) or is_ranked_list(t) or _INC_RX.search(t):
+        return True
+    # A viewing chain between titles (what the viewers of one title did
+    # next, how many went on, how many finished) is the content-journey
+    # read on the titles in the words (Jenna 2026-11-05: "how many power
+    # raising kanan season 5 viewers autoplay'ed into fightland and then
+    # of those what percent completed that entire season of fightland"
+    # was sized as the profile on screen).
+    try:
+        from . import sizing_lane as _sz
+        return bool(_sz.is_viewing_chain_ask(t))
+    except Exception:
+        return False
 
 
 def is_accept(text):
@@ -312,7 +324,11 @@ def sizes_open_page(text, ctx=None):
         if not page:
             return False
         subs = [s for s in _sz.subjects(text, ctx) if s and not _sz.is_panel_noun(s)]
-        return bool(subs) and all(s == '__page__' or s.strip().lower() == page.lower() for s in subs)
+        if not subs or not all(s == '__page__' or s.strip().lower() == page.lower() for s in subs):
+            return False
+        # the page is the subject only when the words name nothing else
+        # (a title, a person, a chain of titles): Jenna 2026-11-05
+        return not _sz.names_other_subject(text, [page], ctx)
     except Exception:
         return False
 

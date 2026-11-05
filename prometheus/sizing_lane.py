@@ -131,6 +131,87 @@ def is_audience_behavior_ask(text):
     return bool(_OF_THESE_RX.search(t) or _WOULD_ACT_RX.search(t))
 
 
+# A viewing chain (Jenna 2026-11-05, with Howie Mandel open: "how many
+# power raising kanan season 5 viewers autoplay'ed into fightland and
+# then of those what percent completed that entire season of fightland"
+# was sized as Howie Mandel from the profile on screen). The question
+# names the titles and the steps between them: what the viewers of one
+# title did next, how many went on, how many finished. That is a
+# content-journey read on the titles in the words, never an audience
+# size, and never the open page.
+_CHAIN_STEP_RX = re.compile(
+    r"\bauto-?play(?:ed|'ed|’ed|s|ing)?\b|\bthen (?:watched|streamed|played|started|finished|completed|binged|went|moved|proceeded|tuned|came|stayed|kept)\b|"
+    r"\bproceed(?:ed|s)? to (?:watch|stream|play|start|finish|binge)\b|\bwent (?:on|back|over|straight|directly)? ?(?:to|and) (?:watch|stream|play|start|finish|binge)\b|"
+    r"\bwent (?:on|back) (?:to|and)\b|\b(?:complet|finish)(?:ed|es|e|ing)? (?:the |that |this |a |an |their |its )?(?:entire |whole |full |same |rest of (?:the |that )?)?(?:season|series|show|run|episodes?|arc|title|film|movie|book|trilogy|saga)\b|"
+    r"\bbinge[ds]?\b|\bbinge-?watch(?:ed|es|ing)?\b|\bconvert(?:ed|s|ing)?\b|\b(?:directly|right|immediately|straight) after\b|"
+    r"\bwatch(?:ed)? next\b|\bof those(?:,| who| that| what| how| viewers| people| watchers)\b|\bof (?:them|these)[, ]+(?:what|how)\b|"
+    r"\bstuck around (?:for|to)\b|\bstayed (?:for|on|with|through)\b|\bdropped (?:off|out)\b|\bfell off\b|\bchurned (?:after|out|off)\b|\bcarried over\b|"
+    r"\b(?:flowed|moved|migrated|rolled|funnel(?:ed|led)?|led|leaked|crossed) (?:into|over to|on to|through to)\b|\bfrom (?:one|the first|season \d+) (?:to|into) (?:the next|another|season \d+)\b", re.I)
+# "how many <title> viewers <did a thing>": the title's viewers are the
+# base and the verb is the step; the words after the noun decide.
+_TITLE_VIEWERS_RX = re.compile(
+    r"\bhow many (?:of (?:the |our |your )?)?(?:[\w&'’.+:!-]+ ){1,8}?(?:viewers|watchers|streamers|subscribers|fans|audience|readers|listeners|players) "
+    r"(?:(?:who|that|then|also|ever|have|had|has) )?(?:auto-?play|watch|stream|play|complet|finish|binge|convert|went|proceed|tune|start|came|stay|stuck|return|kept|drop|churn|move|roll|carr)", re.I)
+# a title a chain names after its step ("into Fightland", "to watch SWAT Exiles")
+_CHAIN_INTO_RX = re.compile(
+    r"\b(?:auto-?play(?:ed|'ed|’ed|s|ing)? (?:into|to|onto)|into|(?:proceed(?:ed|s)?|went (?:on|back|over)?|then) (?:to )?(?:watch|stream|play|start|binge)|then watched|rolled into|carried over to|moved (?:on )?to)\s+"
+    r"(?P<t>[\w&'’.+:!-]+(?: [\w&'’.+:!-]+){0,5}?)(?=\s*(?:,|;|\.|\?|$|\band\b|\bthen\b|\bon (?:netflix|hulu|max|hbo|peacock|paramount|starz|prime|apple|disney|amc|tubi|roku|youtube)\b|\bdirectly\b|\bright\b|\bimmediately\b|\bafter\b|\bnext\b|\bwithin\b|\bof those\b|\bwhat\b|\bhow\b))", re.I)
+
+
+def is_viewing_chain_ask(text):
+    """True when the words describe a viewing chain between titles: what
+    the viewers of one title did next (autoplayed into, then watched,
+    proceeded to watch, went back and watched, converted, binged,
+    completed the season, of those ...). The subject is in the words;
+    the read is the content journey, never a size and never the page."""
+    t = ' '.join(str(text or '').split())
+    if not t or len(t) > 800:
+        return False
+    if _TITLE_VIEWERS_RX.search(t):
+        return True
+    steps = _CHAIN_STEP_RX.findall(t)
+    if not steps:
+        return False
+    # one chain word beside a viewing base ("viewers", "watched", "people
+    # who watched", a season or episode) is the chain; a lone "converted"
+    # in a brand question is not
+    base = re.search(r"\b(?:viewers?|watchers?|streamers?|watch(?:ed|es|ing)?|stream(?:ed|s|ing)?|season|episodes?|series|show|film|movie|title|binge|"
+                     r"premiere|finale|pilot|autoplay|playback|of those|of them)\b", t, re.I)
+    return bool(base)
+
+
+def chain_titles(text):
+    """The titles a viewing chain names, in order: the base ("Power
+    Raising Kanan Season 5" from "how many power raising kanan season 5
+    viewers ...") then each title a step lands on ("Fightland" from
+    "autoplay'ed into fightland"). Plain words, as written, deduped;
+    [] when the words hold no chain."""
+    t = ' '.join(str(text or '').split())
+    out = []
+    if not t or not is_viewing_chain_ask(t):
+        return out
+    m = re.search(r"\bhow many (?:of (?:the |our |your )?)?(?P<b>[\w&'’.+:!-]+(?: [\w&'’.+:!-]+){0,7}?) "
+                  r"(?:viewers|watchers|streamers|subscribers|fans|audience|readers|listeners|players)\b", t, re.I)
+    if not m:
+        m = re.search(r"\b(?:people|viewers|users|fans|subscribers|anyone|those) (?:who|that) (?:watched|streamed|saw|played|finished|binged|started) "
+                      r"(?P<b>[\w&'’.+:!-]+(?: [\w&'’.+:!-]+){0,6}?)(?=\s+(?:on|then|and|,|;|$|directly|before|first|last)\b|\s*[,;?.]|$)", t, re.I)
+    if m:
+        b = m.group('b').strip(" ,;.?'’")
+        if b and b.lower() not in ('the', 'those', 'these', 'them', 'people'):
+            out.append(b)
+    for mm in _CHAIN_INTO_RX.finditer(t):
+        cand = mm.group('t').strip(" ,;.?'’")
+        if not cand:
+            continue
+        low = cand.lower()
+        if low in ('it', 'that', 'this', 'them', 'those', 'these', 'the', 'a', 'an', 'another', 'the next', 'the same'):
+            continue
+        if any(low == o.lower() for o in out):
+            continue
+        out.append(cand)
+    return out[:4]
+
+
 def is_reconcile_ask(text):
     """A question that asks for figures already given to be squared with
     one another (one universe, one window, the unprojected count) is a
@@ -168,6 +249,8 @@ def wants_sizing(text):
         return False   # "is that the US audience size or global?" is a definition of what the figure covers
     if is_audience_behavior_ask(t):
         return False   # "how many of these readers would sign up" is a read on the audience, not its size
+    if is_viewing_chain_ask(t):
+        return False   # "how many <title> viewers autoplayed into <title>, of those what percent completed ..." is a content journey (2026-11-05)
     if _CONSUME_RX.search(t) and not re.search(r"\b(?:sample|incidence|data ?set)\b", t, re.I):
         return False   # "how many people watched X" is a viewership read
     if _EVENT_RX.search(t):
@@ -192,6 +275,8 @@ def _clean(phrase):
         if q == p:
             break
         p = q
+    # "Howie Mandel's audience" -> "Howie Mandel" once the noun is gone
+    p = re.sub(r"(?:'|’)s$", '', p.strip(' ?.!,;:"\''))
     return p.strip(' ?.!,;:"\'')
 
 
@@ -282,9 +367,95 @@ def subjects(text, ctx=None):
                 res.append(page)
         elif s not in res:
             res.append(s)
-    if not res and page and re.search(r"\b(?:this|that|it|here|the open)\b", t, re.I):
+    # The open page is the subject only when the words point at it and
+    # name nothing else ("how big is it", "what's the size of this one").
+    # A pronoun standing before a noun ("that entire season of Fightland")
+    # is not a pointer at the page (Jenna 2026-11-05: a chain question
+    # about Power: Raising Kanan and Fightland was sized as Howie Mandel,
+    # the profile on screen, off the word "that").
+    if not res and page and points_at_page(t):
         res.append(page)
     return res[:4]
+
+
+# The pronoun as the thing being sized: "how big is it", "how many people
+# are in this", "the size of that one", "size this", "incidence of the open
+# profile". Never a determiner ("that season", "this show", "it rolled").
+_PAGE_POINTER_RX = re.compile(
+    r"\bhow (?:big|large|many)(?: (?:people|users|panelists|individuals|folks|of them|of these|of those))?(?: (?:is|are|was|were|does|do|did))?"
+    r"(?: (?:in|inside|within|for|on))?(?: (?:the|this|that))? (?P<p>it|this|that|here|this one|that one|the open (?:one|profile|page|file)|"
+    r"(?:this|that) (?:one|profile|page|audience|file|universe|pull|data ?set))\b(?!\s+(?:season|series|show|episode|title|film|movie|book|brand|campaign))|"
+    r"\b(?:sizes?|sizing|incidence|headcount|head count|reach|sample[- ]size|audience[- ]size|universe[- ]size|projected band|band) (?:of|for|on) "
+    r"(?P<q>it|this|that|here|this one|that one|the open (?:one|profile|page|file)|(?:this|that) (?:one|profile|page|audience|file|universe|pull|data ?set))\b"
+    r"(?!\s+(?:season|series|show|episode|title|film|movie|book|brand|campaign))|"
+    r"\b(?:it|this|that|this one|that one)(?:'s| is| has|’s) (?:a |an |the )?(?:total |projected |overall )?(?:sizes?|incidence|headcount|head count|sample[- ]size|audience[- ]size|universe[- ]size|band|reach)\b|"
+    r"^\W*(?:(?:please |can you |could you )?(?:sizes?|sizing|size (?:it|this|that|this one)|incidence|how big|how large|how many|headcount|sample size|audience size)\W*)$", re.I)
+def _fold_subject(s):
+    s = strip_audience_nouns(str(s or '')) or str(s or '')
+    s = re.sub(r"\b(?:season|series|s)\s*\d+\b", ' ', s, flags=re.I)
+    return re.sub(r"[^a-z0-9]+", '', s.lower())
+
+
+def _same_subject(a, b):
+    fa, fb = _fold_subject(a), _fold_subject(b)
+    if not fa or not fb:
+        return False
+    if fa == fb or (len(fa) >= 4 and fa in fb) or (len(fb) >= 4 and fb in fa):
+        return True
+    return difflib.SequenceMatcher(None, fa, fb).ratio() >= 0.84
+
+
+def names_other_subject(text, sized, ctx=None, history=None):
+    """True when the words name a subject (a title, a person, a chain of
+    titles) that is not among the subjects about to be sized. The output
+    guard of the sizing lane (Jenna 2026-11-05): a sizing reply never
+    ships on the open page, or on any subject, when the question is
+    about something else."""
+    t = ' '.join(str(text or '').split())
+    sized = [str(s or '') for s in (sized or []) if str(s or '').strip()]
+    if not t or not sized:
+        return False
+    try:
+        titles = chain_titles(t)
+    except Exception:
+        titles = []
+    if titles and not any(_same_subject(a, s) for a in titles for s in sized):
+        return True
+    try:
+        from . import subject_rules as _sr
+        page = ''
+        try:
+            page = str(((ctx or {}).get('primary') or {}).get('name') or '').strip()
+        except Exception:
+            page = ''
+        s = _sr.bind(t, history, page)
+        if s and s.source == 'words' and s.name and str(s.kind or '') in ('title', 'person'):
+            if not any(_same_subject(s.name, z) or _same_subject(s.display or '', z) for z in sized):
+                return True
+    except Exception:
+        pass
+    return False
+
+
+def points_at_page(text):
+    """True when a sizing ask points at the open page and names nothing
+    else: a pronoun in the subject slot, or a bare size word."""
+    t = ' '.join(str(text or '').split())
+    if not t or len(t) > 240:
+        return False
+    if not _PAGE_POINTER_RX.search(t):
+        return False
+    # a title word or a named thing beside the pronoun means the words
+    # name their own subject ("how big is that season of Fightland")
+    rest = _PAGE_POINTER_RX.sub(' ', t)
+    rest = re.sub(r"\b(?:how (?:big|large|many)|sizes?|sizing|incidence|headcount|head count|sample[- ]size|audience[- ]size|universe[- ]size|band|reach|"
+                  r"people|users|panelists|individuals|folks|audience|profile|page|file|open|one|the|a|an|of|for|on|in|is|are|was|were|does|do|did|"
+                  r"what|whats|what's|tell|give|show|me|us|please|thanks|projected|total|overall|exactly|roughly|about|now|again|and|also|so|just|"
+                  r"this|that|it|here|these|those|them|its|be|would|could|can|i|we|you|have|has|get|know|see|want|need|sample|size|data|set|dataset|universe|"
+                  r"pull|count|number|figure|figures|numbers|band|window|year|months?|trailing|last|past|days?|weeks?|within|inside|hold|holds|contain|contains|"
+                  r"big|large|many|much|up|out|there|then|currently|selected|current|loaded|displayed|shown|showing|whole|entire|full|same|own|my|our|your|their)\b", ' ', rest, flags=re.I)
+    rest = re.sub(r"[^A-Za-z]+", ' ', rest).strip()
+    return not any(len(w) >= 3 for w in rest.split())
 
 
 # ------------------------------------------------------------ resolve
@@ -533,6 +704,11 @@ def answer(text, ctx=None, *, host=None, history=None, subjects=None, staff=True
             subs = [x for x in globals()['subjects'](text, ctx) if not _is_panel_self(x)]
         if not subs:
             return None   # a question about the ten million panel itself is the product fact's
+        if is_viewing_chain_ask(text) or names_other_subject(text, subs, ctx, history):
+            # the words are about other titles or people than the ones about to
+            # be sized (a chain question sized as the open profile, 2026-11-05):
+            # no sizing reply ships; the content-journey read answers it
+            return None
         lines, chips, sizing = [], [], []
         # a window of its own ("over 90 days", "in 2025") is the sample
         # check's: the catalog line is the profile's trailing year
