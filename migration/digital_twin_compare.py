@@ -21,10 +21,17 @@ Pilot Testing, 2026-10-28).
                     stated reviewer lens; a critic score forecast and an
                     awards read.
   hooks             talent attach by quadrant with "who would you watch
-                    this with"; an activation brief in the Spend Engine
-                    handoff shape. (The concept-test-from-a-Greenlight-run
-                    hook left with the old Greenlight run on 2026-10-28;
-                    a concept test opens from the Greenlight tab itself.)
+                    this with": the name's pull with this audience and,
+                    once the room has watched, the room's own verdict on
+                    the person read off the session (the follow share,
+                    excellent, who named them as the reason to come
+                    back); the billing role is a fact in the sentence
+                    and never a weight (Jenna 2026-11-04; the derivation
+                    is in ``digital_twin_engine``). An activation brief
+                    in the Spend Engine handoff shape. (The concept-test-
+                    from-a-Greenlight-run hook left with the old
+                    Greenlight run on 2026-10-28; a concept test opens
+                    from the Greenlight tab itself.)
 
 Deterministic per (twin, seat, stimulus); counts keep messy last digits;
 nothing here holds or quarantines a prepared test.
@@ -659,17 +666,175 @@ def talent_fit_overlap(s3, talent: str, bucket: Optional[str] = None) -> Optiona
     return None
 
 
+def _same_name(a, b) -> bool:
+    """One person under two spellings ('jennifer beals' / 'Jennifer Beals',
+    'LL Cool J as Sam Hanna' / 'LL Cool J')."""
+    try:
+        from migration.digital_twin_cast import same_person, parse_cast
+        aa = (parse_cast([str(a or '')]) or [{'actor': str(a or '')}])[0]['actor']
+        bb = (parse_cast([str(b or '')]) or [{'actor': str(b or '')}])[0]['actor']
+        return bool(same_person(aa, bb))
+    except Exception:
+        return ' '.join(str(a or '').lower().split()) == ' '.join(str(b or '').lower().split())
+
+
+def room_for(session: dict, talent: str) -> Optional[dict]:
+    """What the room holds on a person once it has watched, read off the
+    session as it stands (never recomputed here): the character row's
+    excellent and total positive, the per-person 'follow into a second
+    episode' share, how many seats named them as the reason to come back
+    (and whether the room was asked), and what the room said about them.
+    None before the room watched; {'seen': False} when the room watched
+    a cut that did not carry the name."""
+    if not (session or {}).get('scorecard'):
+        return None
+    ch = ((session.get('diagnostics') or {}).get('characters') or {}) if isinstance(session.get('diagnostics'), dict) else {}
+    rows = [r for r in (ch.get('characters') or []) if isinstance(r, dict)]
+    row = next((r for r in rows if _same_name(r.get('name'), talent)), None)
+    fol = next((f for f in (ch.get('follow') or []) if isinstance(f, dict) and _same_name(f.get('name'), talent)), None)
+    if row is None and fol is None:
+        return {'seen': False}
+    roster = (session.get('group') or {}).get('roster') or []
+    seats = len(roster) or int((session.get('group') or {}).get('in_room') or 0)
+    from_room = ch.get('from_room') if isinstance(ch.get('from_room'), dict) else {}
+    draw_asked = bool(from_room.get('draw')) or any(r.get('draw_seats') for r in rows)
+    said = ''
+    if row and isinstance(row.get('room_said'), dict):
+        said = str(row['room_said'].get('said') or '')
+    if not said:
+        for p in ((session.get('talent_read') or {}).get('people') or []):
+            if isinstance(p, dict) and _same_name(p.get('name'), talent):
+                said = str(p.get('said') or '')
+                break
+    quote = ''
+    if row and isinstance(row.get('room_said'), dict) and isinstance(row['room_said'].get('quote'), dict):
+        quote = str(row['room_said']['quote'].get('line') or '')
+    return {'seen': True, 'name': str((row or {}).get('name') or (fol or {}).get('name') or talent), 'card_role': str((row or {}).get('role') or ''),
+            'excellent_pct': (row or {}).get('excellent_pct'), 'total_positive_pct': (row or {}).get('total_positive_pct'),
+            'follow_pct': (float(fol['pct']) if fol and fol.get('pct') is not None else None), 'draw_seats': int((row or {}).get('draw_seats') or 0),
+            'seats': int(seats), 'draw_asked': draw_asked, 'said': said, 'quote': quote}
+
+
+_SHE_RX = re.compile(r"\b(she|her|hers|herself)\b", re.I)
+_HE_RX = re.compile(r"\b(he|him|his|himself)\b", re.I)
+
+
+def _pronouns(*texts) -> tuple:
+    """(subject, object) pronouns for the sentence, read off how the room
+    itself spoke of the person; they / them when the room did not say."""
+    t = ' '.join(str(x or '') for x in texts)
+    she, he = len(_SHE_RX.findall(t)), len(_HE_RX.findall(t))
+    if she > he:
+        return ('she', 'her')
+    if he > she:
+        return ('he', 'him')
+    return ('they', 'them')
+
+
+def _overlap_pct(overlap) -> Optional[float]:
+    """The Talent Fit IQ overlap as a share of the audience, when the
+    result file carries a number (a fraction under 1 reads as a share)."""
+    v = (overlap or {}).get('overlap') if isinstance(overlap, dict) else None
+    if isinstance(v, dict):
+        v = v.get('pct') or v.get('overlap_pct') or v.get('share')
+    try:
+        f = float(str(v).strip().rstrip('%'))
+    except (TypeError, ValueError, AttributeError):
+        return None
+    if 0 < f <= 1:
+        f *= 100.0
+    return f if 0 < f <= 100 else None
+
+
+def _possessive(name: str) -> str:
+    return f"{name}'s"
+
+
+def attach_read(talent: str, role: str, out: dict, best_q: Optional[dict], room: Optional[dict]) -> str:
+    """The sentence: the lift as a fact with the billing in brackets, the
+    quadrant it lands hardest in, then what the room said about the
+    person in one clause (or that no room has watched yet)."""
+    lift = f"{talent} (billed {role}) lifts first-month reach {pct1(out.get('reach_lift_pct'))}% ({human_people(out.get('expected'))} more people)"
+    if best_q:
+        lift += f", most among {best_q['label'].lower()} ({pct1(best_q['reach_lift_pct'])}%)"
+    verdict = out.get('room') or {}
+    if room is None:
+        return lift + " on the name's pull alone, before the room watched."
+    if not room.get('seen') or not verdict:
+        return lift + f" on the name's pull alone; the room did not see {talent} in this cut."
+    subj, obj = _pronouns(room.get('said'), room.get('quote'))
+    parts = verdict.get('parts') or {}
+    clauses = []
+    if parts.get('follow') is not None:
+        clauses.append(f"{pct1(parts['follow'])}% would follow {obj} into a second episode")
+    if parts.get('excellent') is not None:
+        clauses.append(f"{pct1(parts['excellent'])}% rated {obj} excellent")
+    said = ' and '.join(clauses) if clauses else f"the room put {obj} at {pct1(verdict.get('verdict_pct'))}% against an even room's 50%"
+    if verdict.get('is_draw'):
+        return lift + f"; in the room {subj} {'were' if subj == 'they' else 'was'} the draw ({room.get('draw_seats')} of {room.get('seats')} named {obj} as the reason to come back): {said}."
+    return lift + f"; in the room {said}."
+
+
+def contrast_lines(session: dict) -> int:
+    """When the name's pull and the room's verdict point in opposite
+    directions, one plain line says so on every record it concerns:
+    across the names attached to this test ("Scott Caan's name draws more
+    today; Jennifer Beals drew more in the room") or, with one name, on
+    its own. Rewrites each record's read from its base sentence; returns
+    how many records carry a line."""
+    recs = [r for r in ((session or {}).get('talent_attach') or []) if isinstance(r, dict) and isinstance(r.get('outputs'), dict)]
+    for r in recs:
+        r['contrast'] = ''
+    for i, a in enumerate(recs):
+        oa, ra = a['outputs'], (a['outputs'].get('room') or {})
+        for b in recs[i + 1:]:
+            ob, rb = b['outputs'], (b['outputs'].get('room') or {})
+            if not ra or not rb or _same_name(a.get('talent'), b.get('talent')):
+                continue
+            pull_gap = int(oa.get('already_follow_index') or 100) - int(ob.get('already_follow_index') or 100)
+            room_gap = float(ra.get('verdict_pct') or 0) - float(rb.get('verdict_pct') or 0)
+            # a name pull five index points apart is a real gap; a verdict two points apart is more than the salt
+            if pull_gap >= 5 and room_gap <= -2.0:
+                line = f"{_possessive(a['talent'])} name draws more today; {b['talent']} drew more in the room."
+            elif pull_gap <= -5 and room_gap >= 2.0:
+                line = f"{_possessive(b['talent'])} name draws more today; {a['talent']} drew more in the room."
+            else:
+                continue
+            for r in (a, b):
+                if not r['contrast']:
+                    r['contrast'] = line
+    n = 0
+    for r in recs:
+        o, v = r['outputs'], (r['outputs'].get('room') or {})
+        if not r['contrast'] and v:
+            # one name on its own: the audience follows the name (a row of its own) and the room's verdict came in under an even room
+            idx, factor = int(o.get('already_follow_index') or 100), float(v.get('factor') or 1.0)
+            if idx >= 105 and factor < 0.9:
+                r['contrast'] = f"{_possessive(r['talent'])} name draws with this audience today; the performance drew less in the room."
+        base = r.get('read_base') or r.get('read') or ''
+        r['read'] = (base + (' ' + r['contrast'] if r['contrast'] else '')).strip()
+        n += 1 if r['contrast'] else 0
+    return n
+
+
 def talent_attach(session: dict, twin: dict, talent: str, role: str = 'lead', *, s3=None) -> dict:
-    """How much a name lifts interest, by quadrant, with the audience
-    overlap Talent Fit IQ holds when it has one, and the room's answer
-    to "who would you watch this with"."""
+    """How much a name lifts first-month reach, by quadrant: the name's
+    pull with this audience (the twin's own row for the name, the Talent
+    Fit IQ overlap when a result file carries one) and, once the room has
+    watched, the room's own verdict on the person read off the session
+    (``room_for``), plus the room's answer to "who would you watch this
+    with". The billing role is in the sentence and never in the number.
+    One record per person on the test; a second attach of the same name
+    replaces the first."""
     from migration.digital_twin_engine import run_talent_attach
     talent = ' '.join(str(talent or '').split())[:80]
     if not talent:
         return {}
     sid = str(session.get('id') or '')
     seed = f"{sid}|talent|{talent.lower()}"
-    base = run_talent_attach(twin, {'talent': talent, 'role': role}, seed)
+    overlap = talent_fit_overlap(s3, talent)
+    room = room_for(session, talent)
+    base = run_talent_attach(twin, {'talent': talent, 'role': role, 'room': (room if room and room.get('seen') else None), 'overlap_pct': _overlap_pct(overlap)}, seed)
     out = base.get('outputs') or {}
     roster = (session.get('group') or {}).get('roster') or []
     segments = (session.get('group') or {}).get('segments') or []
@@ -704,19 +869,70 @@ def talent_attach(session: dict, twin: dict, talent: str, role: str = 'lead', *,
         probs[int(r['seat'])] = softmax_probs(sc, temperature=5.0)
     with_rows = publish_probs(probs, opts, roster, segments, f"{seed}|with") if roster else []
     with_rows_sorted = sorted(with_rows, key=lambda r: -float(r['pct']))
-    overlap = talent_fit_overlap(s3, talent)
     best_q = max([q for q in by_quad if q.get('reach_lift_pct') is not None], key=lambda q: q['reach_lift_pct'], default=None)
-    read = (f"{talent} as {role} lifts first-month reach {pct1(out.get('reach_lift_pct'))}% ({human_people(out.get('expected'))} more people)" + (f", most among {best_q['label'].lower()} ({pct1(best_q['reach_lift_pct'])}%)." if best_q else '.'))
+    read = attach_read(talent, role, out, best_q, room)
     if with_rows_sorted:
         read += f" Asked who they would watch it with: {with_rows_sorted[0]['label'].lower()} ({pct1(with_rows_sorted[0]['pct'])}%)."
     if overlap and overlap.get('overlap') is not None:
         read += f" Talent Fit IQ puts the audience overlap at {overlap['overlap']}."
     rec = {'talent': talent, 'role': role, 'outputs': out, 'drivers': base.get('drivers'), 'recommendation': base.get('recommendation'), 'by_quadrant': by_quad, 'watch_with': with_rows,
-           'talent_fit': overlap, 'read': read, 'at': _now()}
-    session.setdefault('talent_attach', []).append(rec)
-    session['talent_attach'] = session['talent_attach'][-6:]
+           'talent_fit': overlap, 'room': room, 'read_base': read, 'read': read, 'contrast': '', 'at': _now()}
+    kept = [r for r in (session.get('talent_attach') or []) if isinstance(r, dict) and not _same_name(r.get('talent'), talent)]
+    kept.append(rec)
+    session['talent_attach'] = kept[-6:]
+    contrast_lines(session)
     session['updated_at'] = _now()
     return rec
+
+
+def _room_key(room) -> Optional[tuple]:
+    """What a record's lift was read from (the numbers, not the words)."""
+    if not isinstance(room, dict):
+        return None
+    if not room.get('seen'):
+        return ('unseen',)
+    return (room.get('follow_pct'), room.get('excellent_pct'), room.get('total_positive_pct'), int(room.get('draw_seats') or 0), int(room.get('seats') or 0), bool(room.get('draw_asked')))
+
+
+def talent_attach_stale(session: dict) -> bool:
+    """True when a name attached to the test was read against a room that
+    has since moved (a question landed, the card reconciled, the follow
+    shares changed) or was written before the lift read the room at all."""
+    recs = [r for r in ((session or {}).get('talent_attach') or []) if isinstance(r, dict) and r.get('talent')]
+    if not recs:
+        return False
+    for r in recs:
+        if 'read_base' not in r or 'room' not in r or not isinstance(r.get('outputs'), dict) or 'basis' not in r['outputs']:
+            return True
+        if _room_key(room_for(session, r['talent'])) != _room_key(r.get('room')):
+            return True
+    return False
+
+
+def recompute_talent_attach(session: dict, twin: dict, *, s3=None) -> list:
+    """Every name attached to the test, recomputed against the session as
+    it stands now (the room's verdict moves when a question lands and the
+    card reconciles). Each name keeps the billing the client entered. The
+    records stay in their order; returns them. Never raises."""
+    recs = [r for r in ((session or {}).get('talent_attach') or []) if isinstance(r, dict) and r.get('talent')]
+    if not recs:
+        return []
+    try:
+        names = []
+        for r in recs:
+            hit = next((e for e in names if _same_name(e[0], r['talent'])), None)
+            if hit:   # a later attach of the same name carries the spelling and the billing the client entered last
+                hit[0], hit[1] = str(r['talent']), str(r.get('role') or hit[1])
+            else:
+                names.append([str(r['talent']), str(r.get('role') or 'lead')])
+        session['talent_attach'] = []
+        for name, role in names:
+            talent_attach(session, twin, name, role, s3=s3)
+        return list(session.get('talent_attach') or [])
+    except Exception as e:
+        print(f"[twin-compare] talent attach recompute skipped: {str(e)[:160]}")
+        session['talent_attach'] = recs
+        return recs
 
 
 def activation_brief(session: dict, twin: dict) -> dict:
@@ -780,5 +996,5 @@ def activation_brief(session: dict, twin: dict) -> dict:
 
 
 __all__ = ['CRITIC_RX', 'REVIEWER_LENS', 'prior_snapshot', 'open_recut', 'align_scenes', 'compare_recut', 'two_audiences', 'comp_set', 'screener_titles', 'apply_quotas', 'walkouts',
-           'finish_recruit_block', 'find_critics_twin', 'seat_critics', 'critic_forecast', 'talent_fit_overlap', 'talent_attach',
-           'activation_brief']
+           'finish_recruit_block', 'find_critics_twin', 'seat_critics', 'critic_forecast', 'talent_fit_overlap', 'room_for', 'attach_read', 'contrast_lines',
+           'talent_attach', 'talent_attach_stale', 'recompute_talent_attach', 'activation_brief']

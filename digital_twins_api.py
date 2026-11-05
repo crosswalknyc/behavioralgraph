@@ -1368,6 +1368,8 @@ def dt_pilot_get(key, sid):
         traceback.print_exc()
     if _reconcile(payload, sess):   # a finished question the scorecard has not read yet moves it (Jenna, 2026-11-04)
         dirty = True
+    if _refresh_talent_attach(payload, sess):   # the names attached read the room's verdict; a room that moved re-reads them (Jenna, 2026-11-04)
+        dirty = True
     if _auto_stop(key, payload, sess, user):   # the runtime ran out while nobody was here to press Stop (2026-11-03)
         return _nocache(jsonify({'success': True, 'session': PI.public_session(sess), 'auto_stopped': True}))
     if dirty:
@@ -1394,6 +1396,23 @@ def _reconcile(payload, sess) -> bool:
     try:
         from migration.digital_twin_reconcile import reconcile_session
         return bool(reconcile_session(sess, payload, s3=_s3()).get('changed'))
+    except Exception:
+        traceback.print_exc()
+        return False
+
+
+def _refresh_talent_attach(payload, sess) -> bool:
+    """The names attached to a test are read against the room's verdict
+    (follow, excellent, who named them as the reason to come back); when
+    the card has moved since a name was attached, every attached name is
+    recomputed against the session as it stands. True when it ran; never
+    raises."""
+    try:
+        from migration import digital_twin_compare as CMP
+        if not sess.get('talent_attach') or not CMP.talent_attach_stale(sess):
+            return False
+        CMP.recompute_talent_attach(sess, payload, s3=_s3())
+        return True
     except Exception:
         traceback.print_exc()
         return False

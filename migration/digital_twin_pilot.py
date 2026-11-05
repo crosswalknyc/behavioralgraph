@@ -3002,6 +3002,26 @@ def session_csv(session: dict, payload: Optional[dict] = None) -> str:
         w.writerow(['What the room said', 'Role', 'In the room\'s words', 'A seat\'s line', 'Said by'])
         for p in talent_rows:
             w.writerow([p.get('name'), p.get('role'), p.get('said'), p.get('quote'), p.get('who')])
+    # what each name attached to the test adds to the first month: the name's pull and the room's verdict in one lift, the
+    # billing a fact in its own column (Jenna 2026-11-04)
+    attached = [r for r in (session.get('talent_attach') or []) if isinstance(r, dict) and isinstance(r.get('outputs'), dict) and r.get('talent')]
+    if attached:
+        w.writerow([])
+        w.writerow(['Talent attach', 'Billed', 'First-month reach lift %', 'More people', 'Low', 'High', 'Return lift %', 'Name pull index',
+                    'Would follow into a second episode %', 'Excellent %', 'Named as the reason to come back', 'Read'])
+        for r in attached:
+            o = r['outputs']
+            v = o.get('room') if isinstance(o.get('room'), dict) else {}
+            parts = v.get('parts') or {}
+            rm = r.get('room') if isinstance(r.get('room'), dict) else {}
+            named = (f"{rm.get('draw_seats')} of {rm.get('seats')}" if rm.get('seen') and rm.get('draw_asked') else '')
+            w.writerow([r.get('talent'), r.get('role'), o.get('reach_lift_pct'), o.get('expected'), o.get('low'), o.get('high'), o.get('return_lift_pct'), o.get('already_follow_index'),
+                        parts.get('follow', ''), parts.get('excellent', ''), named, r.get('read')])
+        w.writerow(['Talent attach by quadrant', 'Name', 'Quadrant', 'Seats', 'People', 'Reach lift %'])
+        for r in attached:
+            for q in r.get('by_quadrant') or []:
+                if isinstance(q, dict) and q.get('n'):
+                    w.writerow(['', r.get('talent'), q.get('label'), q.get('n'), q.get('people'), q.get('reach_lift_pct')])
     fc = session.get('forecast') if isinstance(session.get('forecast'), dict) else {}
     if fc.get('episode'):
         ep, se, su, act = fc['episode'], fc.get('series') or {}, fc.get('subscriptions') or {}, fc.get('actual') or {}

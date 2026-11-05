@@ -2839,6 +2839,14 @@ def run_question(ctx: dict) -> dict:
                 TR.attach_talent_read(session, twin, models=models, reason=f"question {rec.get('id')}", log=log)
     except Exception as e:
         print(f"[twin-room] talent read skipped: {str(e)[:160]}")
+    # the names attached to the test read the room's verdict (the follow share, excellent, who named them as the reason to come
+    # back), so they are recomputed against the card as it stands after the question (Jenna 2026-11-04, the Beals / Caan lift)
+    try:
+        if session.get('talent_attach') and session.get('scorecard'):
+            from migration import digital_twin_compare as CMP
+            CMP.recompute_talent_attach(session, twin, s3=s3)
+    except Exception as e:
+        print(f"[twin-room] talent attach refresh skipped: {str(e)[:160]}")
     ready = '\n'.join(chat_lines(session, rec))
     _publish(ctx, 'done', status='done', extra={'success': True, 'finished_at': time.time(), 'ready_message': ready, 'cost_usd': tot['cost_usd']}, payload_too=True)
     notify = ctx.get('notify') or {}

@@ -38,6 +38,45 @@ Numeric discipline (hard, every run): counts end in 1-9 on a tile,
 percentages carry one decimal in prose and four in tables, chains stay
 coherent (low <= expected <= high, shares sum to the total), and
 everything is deterministic per (twin, scenario, version).
+
+Talent attach (``run_talent_attach``, revised 2026-11-04 after Jenna asked
+how Jennifer Beals could lift less than Scott Caan when the room scored
+her higher everywhere else). The lift a name adds to the first month is
+the twin's calibrated base lift (``response.cast_attach_lift``, what a
+name this audience already follows adds before anyone has watched) times
+two pulls:
+
+  name pull    how much this audience already follows the name before
+               anyone watched: the twin's own row for the name in
+               ``identity.talent`` (the share of the audience that
+               follows them) and, when a caller hands one, the Talent
+               Fit IQ overlap. A row at a fifth of the audience doubles
+               the pull; the factor runs 1.1 to 2.5 so a thin row still
+               counts and a mass following cannot run away. No row, no
+               overlap: the name pulls at the base (index 100).
+  room verdict the room's own answers about the person once it has
+               watched: the share who would follow them into a second
+               episode (the question that asks exactly what an attach
+               buys, so it carries half the verdict), the share rating
+               them excellent (how well the performance landed, the
+               check on the follow, three tenths), and the share that
+               named them as the reason to come back when the room was
+               asked (the strongest single answer a seat gives, but one
+               name per seat, so two tenths). The verdict is read
+               against an even room, half the seats, which is also the
+               card's own line for "the draw": a name an even room
+               would follow lifts what the calibration says; a name the
+               room would follow at 60% of seats and rates 57% excellent
+               lifts more than one at 14% and 47%.
+
+The billing role (lead, second lead, supporting, host) is the client's
+input and a fact in the sentence. It never multiplies, floors or caps the
+number (the 0.55 on a supporting billing is gone, the same way screen
+time left the character card). When no room has watched (an attach asked
+before Play, or a name the cut did not carry) the name pull stands alone
+and the sentence says so. The lift lands on salted messy tenths inside
+[0.5, 60]; the people, the quadrant split and the return lift follow from
+it.
 """
 from __future__ import annotations
 
@@ -1029,29 +1068,120 @@ def run_pricing(twin: dict, inputs: dict, seed: str) -> dict:
     return {'outputs': outputs, 'drivers': drivers, 'comparison': comparison, 'recommendation': rec}
 
 
+# Talent attach: the name's pull with this audience, then the room's verdict once it has watched. The billing role is a fact
+# in the sentence and never a term in the number (Jenna 2026-11-04, the Beals / Caan question on the NCIS: New York test).
+NAME_PULL_SHARE_DOUBLES = 20.0     # a name a fifth of this audience already follows pulls twice the base; the identity rows top out near there for a mass name
+NAME_PULL_BAND = (0.1, 1.5)        # a thin row still counts for something; a mass following cannot run past two and a half times the base
+ROOM_EVEN_SHARE = 50.0             # an even room: half the seats, the same line the character card draws for "the draw"
+ROOM_WEIGHTS = {'follow': 0.5,     # "would you follow them into a second episode" asks exactly what an attach buys, so it is half the verdict
+                'excellent': 0.3,  # the share rating the performance excellent is the check on the follow
+                'draw': 0.2}       # named as the reason to come back: the strongest answer a seat gives, but one name per seat, so the smallest share
+_ROOM_PART_LABEL = {'follow': 'would follow them into a second episode', 'excellent': 'rated them excellent', 'draw': 'named them as the reason to come back'}
+REACH_LIFT_BAND = (0.5, 60.0)
+RETURN_LIFT_BAND = (0.2, 30.0)
+
+
+def messy_tenths(x: float, lo: float, hi: float, *parts) -> float:
+    """A percentage on one decimal whose tenths digit is never 0, salted
+    on ``parts`` so two names with the same inputs never collide, held
+    inside [lo, hi]."""
+    v = clamp(float(x) * (1 + (unit('mt', *parts) - 0.5) * 0.05), lo, hi)
+    v = round(v, 1)
+    if int(round(v * 10)) % 10 == 0:
+        step = 0.1 * (1 + seed_int('mt2', *parts) % 3)
+        v = round(v - step if v + step > hi or (unit('mt3', *parts) < 0.5 and v - step >= lo) else v + step, 1)
+    return clamp(v, lo, hi)
+
+
+def name_pull(twin: dict, talent: str, inputs: Optional[dict] = None) -> dict:
+    """How much this audience already follows the name before anyone
+    watched. The twin's own ``identity.talent`` row for the name is the
+    share of the audience that follows them; a Talent Fit IQ overlap the
+    caller hands in (``inputs['overlap_pct']``) is read the same way and
+    the larger of the two stands. Returns {factor, index,
+    audience_share_pct, basis}; no row and no overlap is the base pull
+    (index 100)."""
+    inputs = inputs or {}
+    share = None
+    basis = 'base'
+    for t in (((twin or {}).get('identity') or {}).get('talent') or []):
+        if str(talent or '').lower() and str(talent).lower() in str(t.get('label') or '').lower():
+            try:
+                share, basis = float(t.get('pct') or 0), 'audience row'
+            except (TypeError, ValueError):
+                share = None
+            break
+    try:
+        ov = float(inputs.get('overlap_pct')) if inputs.get('overlap_pct') is not None else None
+    except (TypeError, ValueError):
+        ov = None
+    if ov is not None and 0 < ov <= 100 and (share is None or ov > share):
+        share, basis = ov, 'talent fit overlap'
+    factor = float(inputs.get('fame') or 1.0)
+    if share is not None:
+        factor *= 1 + clamp(share / NAME_PULL_SHARE_DOUBLES, *NAME_PULL_BAND)
+    return {'factor': factor, 'index': int(round(factor * 100)), 'audience_share_pct': (round(share, 1) if share is not None else None), 'basis': basis}
+
+
+def room_verdict(room: Optional[dict]) -> Optional[dict]:
+    """The room's own verdict on a person as a factor against an even
+    room. ``room`` carries what the session holds for them: follow_pct
+    (would follow into a second episode), excellent_pct, draw_seats and
+    seats (how many named them as the reason to come back, out of how
+    many were asked), draw_asked (whether the room was asked at all).
+    None when the room has nothing on the person."""
+    if not isinstance(room, dict):
+        return None
+    parts = {}
+    for key, src in (('follow', 'follow_pct'), ('excellent', 'excellent_pct')):
+        try:
+            if room.get(src) is not None:
+                parts[key] = clamp(float(room[src]), 0.0, 100.0)
+        except (TypeError, ValueError):
+            pass
+    seats = int(room.get('seats') or 0)
+    if seats > 0 and (room.get('draw_asked') or room.get('draw_seats')):
+        parts['draw'] = clamp(100.0 * float(room.get('draw_seats') or 0) / seats, 0.0, 100.0)
+    if not parts:
+        return None
+    wsum = sum(ROOM_WEIGHTS[k] for k in parts)
+    verdict = sum(ROOM_WEIGHTS[k] * v for k, v in parts.items()) / wsum
+    return {'verdict_pct': round(verdict, 1), 'factor': verdict / ROOM_EVEN_SHARE, 'parts': {k: round(v, 1) for k, v in parts.items()},
+            'is_draw': bool(seats > 0 and 2 * int(room.get('draw_seats') or 0) > seats)}
+
+
 def run_talent_attach(twin: dict, inputs: dict, seed: str) -> dict:
+    """What a name adds to the first month: the calibrated base lift times
+    the name's pull with this audience times the room's verdict once it
+    has watched (``inputs['room']``, see ``room_verdict``). Role is shown,
+    never weighed. The derivation is in the module docstring."""
     size = _size(twin)
     talent = str(inputs.get('talent') or inputs.get('name') or 'the name')
     role = str(inputs.get('role') or 'lead')
     rc = (twin or {}).get('response') or {}
     cal = rc.get('cast_attach_lift') or {}
-    fame = float(inputs.get('fame') or 1.0)
-    talent_rows = ((twin or {}).get('identity') or {}).get('talent') or []
-    for t in talent_rows:
-        if talent.lower() in str(t.get('label') or '').lower():
-            fame *= 1 + clamp(float(t.get('pct') or 0) / 20.0, 0.1, 1.5)
-            break
-    reach_lift = clamp(float(cal.get('reach_lift_pct') or 6) * fame * (1.0 if role.lower() in ('lead', 'star', 'host') else 0.55), 0.5, 60)
-    return_lift = clamp(float(cal.get('return_lift_pct') or 2) * fame, 0.2, 30)
+    base_reach = float(cal.get('reach_lift_pct') or 6)
+    base_return = float(cal.get('return_lift_pct') or 2)
+    pull = name_pull(twin, talent, inputs)
+    room = room_verdict(inputs.get('room'))
+    room_factor = room['factor'] if room else 1.0
+    reach_lift = messy_tenths(base_reach * pull['factor'] * room_factor, REACH_LIFT_BAND[0], REACH_LIFT_BAND[1], seed, 'reach')
+    return_lift = messy_tenths(base_return * pull['factor'] * room_factor, RETURN_LIFT_BAND[0], RETURN_LIFT_BAND[1], seed, 'return')
     base_first_month = size * (0.14 + 0.36 * trait(twin, 'trial_speed') / 100.0) * 0.6
     added = base_first_month * reach_lift / 100.0
     sigma = _sigma(twin) * 0.7
     outputs = {'talent': talent, 'role': role, 'reach_lift_pct': pct1(reach_lift), 'return_lift_pct': pct1(return_lift),
                'expected': messy_count(seed, 'ta|exp', added), 'low': messy_count(seed, 'ta|low', added * math.exp(-sigma)),
                'high': messy_count(seed, 'ta|high', added * math.exp(sigma)), 'base_first_month': messy_count(seed, 'ta|base', base_first_month),
-               'already_follow_index': int(round(fame * 100))}
+               'already_follow_index': pull['index'], 'name_pull': pull, 'room': room, 'base_reach_lift_pct': pct1(base_reach),
+               'basis': 'name and room' if room else 'name only'}
     outputs['low'], outputs['high'] = min(outputs['low'], outputs['expected'] - 1), max(outputs['high'], outputs['expected'] + 1)
-    drivers = [f"{talent} as {role} lifts first-month reach {pct1(reach_lift)}% and the share that comes back {pct1(return_lift)}%.",
+    billed = f"{talent} (billed {role})"
+    drivers = [f"{billed} lifts first-month reach {pct1(reach_lift)}% and the share that comes back {pct1(return_lift)}%.",
+               (f"The name pulls at {pull['index']} against the base of 100 with this audience" + (f" ({pull['audience_share_pct']}% already follow them)" if pull.get('audience_share_pct') is not None else '') + '.'),
+               ((f"The room's verdict runs {room['verdict_pct']}% against an even room's 50%: "
+                 + ', '.join((f"{v}% {_ROOM_PART_LABEL[k]}" if v > 0 else f"nobody {_ROOM_PART_LABEL[k]}") for k, v in room['parts'].items()) + '.') if room
+                else 'No room has watched a cut with this name yet; the lift is the name\'s pull alone.'),
                ('This group follows the people behind a title, so a name they know pays.' if trait(twin, 'creator_follow') >= 55 else 'This group follows the title more than the names; the lift is real but modest.')]
     comparison = {'baseline_label': 'the first month without the attach', 'baseline_value': outputs['base_first_month'], 'index': int(round(100 + reach_lift)),
                   'read': f"With {talent} attached the first month indexes {int(round(100 + reach_lift))} against the title alone (100)."}

@@ -478,6 +478,42 @@ def _talent_pages(session: dict) -> list:
     return pages
 
 
+def _attach_room_line(rec: dict) -> str:
+    """What the room gave the name, in a few words for the table cell."""
+    o = rec.get('outputs') or {}
+    v = o.get('room') or {}
+    room = rec.get('room') if isinstance(rec.get('room'), dict) else None
+    if room is None:
+        return 'before the room watched'
+    if not room.get('seen') or not v:
+        return 'not in this cut'
+    parts = v.get('parts') or {}
+    bits = []
+    if parts.get('follow') is not None:
+        bits.append(f"{_pct(parts['follow'])} would follow")
+    if parts.get('excellent') is not None:
+        bits.append(f"{_pct(parts['excellent'])} excellent")
+    if v.get('is_draw'):
+        bits.append(f"{room.get('draw_seats')} of {room.get('seats')} the reason to come back")
+    return ', '.join(bits) or f"{_pct(v.get('verdict_pct'))} against an even room"
+
+
+def _attach_pages(session: dict) -> list:
+    """What each name attached to the test adds to the first month: the
+    name's pull with this audience and the room's verdict in one lift,
+    the billing shown as a fact (Jenna 2026-11-04). [] when no name was
+    attached."""
+    recs = [r for r in ((session or {}).get('talent_attach') or []) if isinstance(r, dict) and isinstance(r.get('outputs'), dict) and r.get('talent')]
+    if not recs:
+        return []
+    recs = sorted(recs, key=lambda r: -float((r['outputs'].get('reach_lift_pct') or 0)))
+    rows = [(_clean(f"{r['talent']} (billed {r.get('role') or 'lead'})"), f"+{_pct(r['outputs'].get('reach_lift_pct'))}", _clean(f"{_people_short(r['outputs'].get('expected'))} more people; {_attach_room_line(r)}")) for r in recs[:8]]
+    top = recs[0]
+    header = _words(_clean(f"{top['talent']} adds the most to the first month, {_pct(top['outputs'].get('reach_lift_pct'))}.")) if len(recs) > 1 else _words(_clean(f"{top['talent']} adds {_pct(top['outputs'].get('reach_lift_pct'))} to the first month."))
+    return [{'kind': 'table', 'header': header, 'sub': "Each name's pull with this audience and what the room made of them, in one lift. Billing is shown, never weighed.",
+             'head': ('Name', 'First-month lift', 'People, and the room'), 'rows': rows, 'body': [_clean(r.get('read') or '') for r in recs[:3]], 'dark': True}]
+
+
 def report_pages(payload: dict, session: dict, portrait_fn=None, with_chart: bool = True) -> list:
     """The one page list every export of a test is drawn from: the deck,
     the PDF and the CSV's report block (2026-11-04). ``portrait_fn(hash)
@@ -551,6 +587,8 @@ def report_pages(payload: dict, session: dict, portrait_fn=None, with_chart: boo
                       'head': ('Character', 'Excellent', 'Norm and screen time'), 'rows': rows, 'dark': False})
     # what the room said about the people the setup named (Jenna 2026-11-04), three to a page, right after their metrics
     pages.extend(_talent_pages(session))
+    # what each name attached to the test adds to the first month, the room's verdict inside the lift (Jenna 2026-11-04)
+    pages.extend(_attach_pages(session))
     comps = (d.get('components') or {}).get('rows') or []
     if comps:
         pages.append({'kind': 'table', 'header': _words(_clean((d['components'].get('read') or 'The components, next to their norms.').split('. ')[0] + '.')), 'sub': 'Top box (excellent) for each component, with the norm.',
