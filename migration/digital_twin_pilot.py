@@ -1193,15 +1193,37 @@ def _norms_s3(s3=None):
         return None
 
 
-def norms_for(fmt: str, genre: str = 'all', s3=None) -> dict:
+def norms_for(fmt: str, genre: str = 'all', s3=None, company: Optional[str] = None) -> dict:
     """The norm and genre norm columns for a format and genre (no
-    sources). Public for Phase 2 (modes, a Norms tab)."""
+    sources). Public for Phase 2 (modes, a Norms tab). ``company`` reads
+    the own-test side from that company's finished tests only (company
+    scope, Jenna 2026-11-05); None is every company's (the staff view)."""
     from migration import digital_twin_norms as N
     try:
-        return N.norms_for(fmt, genre or 'all', s3=_norms_s3(s3))
+        return N.norms_for(fmt, genre or 'all', s3=_norms_s3(s3), company=company)
     except Exception as e:
         print(f"[pilot] norms read failed: {e}")
-        return N.norms_for(fmt, genre or 'all', doc=N.load(None))
+        return N.norms_for(fmt, genre or 'all', doc=N.load(None), company=company)
+
+
+def twin_company(twin: Optional[dict]) -> str:
+    """The company a twin belongs to (company scope); '' when unknown."""
+    try:
+        from migration import digital_twin_company as CO
+        return CO.twin_company(twin, None, str(((twin or {}).get('meta') or {}).get('key') or '')) if isinstance(twin, dict) else ''
+    except Exception:
+        return ''
+
+
+def session_company(session: Optional[dict], twin: Optional[dict] = None) -> str:
+    """The company a test files its norms under: the twin's when the
+    twin is at hand (stamped on the session), else the stamp."""
+    co = twin_company(twin) if isinstance(twin, dict) else ''
+    if co and isinstance(session, dict):
+        session['company'] = co
+    if not co and isinstance(session, dict):
+        co = str(session.get('company') or '')
+    return co
 
 
 def norm_metrics(session: dict) -> dict:
@@ -1250,16 +1272,18 @@ def forget_norms(session: dict, s3=None) -> Optional[dict]:
         return None
 
 
-def record_norms(session: dict, s3=None) -> Optional[dict]:
-    """Every stopped test adds to the ledger (format x genre x metric).
-    Idempotent per test id. Never raises."""
+def record_norms(session: dict, s3=None, company: Optional[str] = None, twin: Optional[dict] = None) -> Optional[dict]:
+    """Every stopped test adds to the ledger (format x genre x metric),
+    filed under its company's own bucket as well. Idempotent per test id.
+    Never raises."""
     try:
         from migration import digital_twin_norms as N
         metrics = norm_metrics(session)
         if not metrics:
             return None
         fmt = str((session.get('scorecard') or {}).get('format') or format_for(session))
-        doc = N.record(_norms_s3(s3), fmt, str(session.get('genre') or 'all') or 'all', metrics, str(session.get('id') or ''))
+        co = str(company or '') or session_company(session, twin)
+        doc = N.record(_norms_s3(s3), fmt, str(session.get('genre') or 'all') or 'all', metrics, str(session.get('id') or ''), company=co)
         if doc is not None:
             session['norms_recorded_at'] = _now()
         return doc
@@ -1334,7 +1358,7 @@ def denominator_line(seats: int, people: Optional[int]) -> str:
     return f"Shares are of the audience {seat_words} stand for; the count beside each share is the seats themselves."
 
 
-def attach_norms(scorecard: dict, fmt: str, genre: str, s3=None) -> dict:
+def attach_norms(scorecard: dict, fmt: str, genre: str, s3=None, company: Optional[str] = None) -> dict:
     """The norm and genre-norm columns, the comparison lines and the
     norm choice ('Compared to all pilots', 'Compared to feature
     screenings' while the all column is a stand-in, and the honest 'No
@@ -1345,7 +1369,7 @@ def attach_norms(scorecard: dict, fmt: str, genre: str, s3=None) -> dict:
     beside the share; would finish gets its line (a norm, or the honest
     'no norm yet' in the same words), never a blank."""
     from migration import digital_twin_norms as N
-    norms = norms_for(fmt, genre or 'all', s3=s3)
+    norms = norms_for(fmt, genre or 'all', s3=s3, company=company)
     scorecard['norms'] = norms
     bat = scorecard.get('battery') or {}
     head = bat.get('headline') or {}
@@ -1523,7 +1547,7 @@ def set_norm(sess: dict, genre: str, *, by_user: bool = True, twin: Optional[dic
                 print(f"[pilot] norms re-file skipped: {e}")
         try:
             sc['genre'] = g
-            attach_norms(sc, fmt, g or 'all', s3=s3)
+            attach_norms(sc, fmt, g or 'all', s3=s3, company=session_company(sess))
         except Exception as e:
             print(f"[pilot] norms refresh skipped: {e}")
         try:   # the character and component rows carry the norm as it stands now
@@ -1972,7 +1996,7 @@ def prepare_watch(session: dict, twins_by_key: dict, *, duration_s: float = 0,
     sc['format'] = fmt
     sc['genre'] = session.get('genre') or ''
     sc['watch_source'] = source
-    attach_norms(sc, fmt, session.get('genre') or 'all', s3=s3)
+    attach_norms(sc, fmt, session.get('genre') or 'all', s3=s3, company=session_company(session, twin))
     session['scorecard'] = sc
     try:   # the performance forecast rides on every scored test (Jenna 2026-11-03)
         from migration.digital_twin_forecast import attach_forecast
@@ -2945,7 +2969,7 @@ def restore_session(s3, twin_key: str, payload: dict, sid: str, restored_by: str
     sess['updated_at'] = _now()
     payload.setdefault('pilot_sessions', []).insert(0, sess)
     if str(sess.get('status') or '') in ('stopped', 'done', 'finished', 'complete'):
-        record_norms(sess, s3)     # a restored finished test joins the ledger again (it left when it was deleted)
+        record_norms(sess, s3, twin=payload)     # a restored finished test joins its company's ledger again (it left when it was deleted)
     try:
         s3.delete_object(Bucket='dashboard-inputs', Key=undo_key)
     except Exception:

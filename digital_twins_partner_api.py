@@ -374,6 +374,8 @@ def _load(user, screening_id: str):
     payload = DT.load_twin(s3, rec['twin_key'])
     if not payload:
         return None, None, None, (jsonify({'success': False, 'error': 'screening not found'}), 404)
+    if not DT.in_company(user, str(rec['twin_key']), None, payload):    # the key's company only (company scope, 2026-11-05)
+        return None, None, None, (jsonify({'success': False, 'error': 'screening not found'}), 404)
     sess = A._pilot(payload, rec['session_id'])
     if not sess:
         return None, None, None, (jsonify({'success': False, 'error': 'screening not found'}), 404)

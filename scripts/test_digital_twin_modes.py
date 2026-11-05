@@ -629,8 +629,9 @@ class PartnerSurface(unittest.TestCase):
         s3 = FakeS3()
         s3.list_objects_v2 = lambda **kw: {'Contents': [{'Key': k, 'LastModified': '2026'} for k in list(s3.objs) if k.startswith(kw.get('Prefix', ''))]}
         twin = _beals()
-        twin['meta']['created_by'] = 'jenna'
-        key = 'digital-twins/jenna/Jennifer_Beals_20261028_120000_abc123def0.json.gz'
+        # company scope (2026-11-05): a key screens on its own company's twins, so the twin here is the key owner's
+        twin['meta']['created_by'] = 'acme'
+        key = 'digital-twins/acme/Jennifer_Beals_20261028_120000_abc123def0.json.gz'
         SYN.save_twin(s3, key, twin)
         user = {'username': 'acme', 'role': 'user', 'has_digital_twins_iq_access': True, '_auth_via': 'api_key', 'api_key_id': 'k1', 'api_key_scopes': ['ask', 'build']}
         charges = []

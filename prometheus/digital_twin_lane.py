@@ -414,6 +414,10 @@ def _recent_twin_key(history):
     return ''
 
 
+_GENERIC_TWIN_WORDS = frozenset({'same', 'other', 'open', 'current', 'active', 'first', 'second', 'last', 'new', 'newest', 'latest', 'that', 'this', 'my',
+                                 'our', 'digital', 'existing', 'previous', 'original', 'main', 'selected', 'chosen', 'right', 'whole', 'full', 'entire'})
+
+
 def resolve_twins(text, body, history, user, limit=2, strict=False):
     """The twins the words mean: named, then the one open on the page,
     then the one this thread was about, then the reader's newest.
@@ -437,6 +441,10 @@ def resolve_twins(text, body, history, user, limit=2, strict=False):
             found.append(hit)
     if strict:
         return found[:limit], runs
+    # a twin named in the words that is not in the seat's company's library is not found; the open page, the thread
+    # and the seat's own twin never stand in for it (company scope, Jenna 2026-11-05: another company's twin is never reused)
+    if not found and any(nm.strip().lower() not in _GENERIC_TWIN_WORDS for nm in names if nm and nm.strip()):
+        return [], runs
     if len(found) < limit:
         k = _open_twin_key(body)
         if k and not any(r.get('key') == k for r in found):
@@ -491,10 +499,29 @@ def set_active_twin(user, key):
         pass
 
 
-def _which_twin(runs, what='run this'):
+def _asked_twin_name(text):
+    """The twin the words name ('with the Acme Show twin'), or ''."""
+    low = str(text or '')
+    for rx in (_WITH_TWIN_RX, _THE_X_TWIN_RX):
+        m = rx.search(low)
+        if m and m.group('name'):
+            return ' '.join(m.group('name').split())
+    return ''
+
+
+def _which_twin(runs, what='run this', text=''):
+    """Nothing resolved. A name the words asked for that is not in the
+    seat's company's library reads as not there, with the priced build
+    offered (company scope, Jenna 2026-11-05): another company's twin is
+    never named or reused."""
     names = [str(r.get('name') or r.get('subject')) for r in runs[:5]]
+    asked = _asked_twin_name(text)
+    if asked:
+        return _payload(f"There is no {asked} twin in your company's library. Say 'Build a twin of {asked}' and I will build one ({_price_label('digital_twins_iq', None)}, with its first two runs)."
+                        + (f" Twins you can {what} on now: " + ', '.join(names) + '.' if names else ''),
+                        [f"Build a twin of {asked}"] + [f"The {n} twin" for n in names[:3]])
     if not names:
-        return _payload(f"There is no twin in the library yet. Say 'Build a twin of <subject>' and I will build one ({_price_label('digital_twins_iq', None)}, with its first two runs).",
+        return _payload(f"There is no twin in your company's library yet. Say 'Build a twin of <subject>' and I will build one ({_price_label('digital_twins_iq', None)}, with its first two runs).",
                         ['Build a twin of Gilmore Girls Hulu viewers'])
     return _payload(f"Which twin should I {what} on? " + ', '.join(names) + '.', [f"The {n} twin" for n in names[:4]])
 
@@ -838,6 +865,8 @@ def run_panel(text, body, history, user, ppu=None):
         if not active or not _PANEL_ASK_RX.search(str(text or '').strip()):
             return None
         payload = DT.load_twin(s3, active['key'])
+        if payload and not DT.can_open(user, str(active['key']), None, payload):    # the room's twin left the seat's company
+            payload = None
         sess = next((s for s in (payload or {}).get('panel_sessions') or [] if s.get('id') == active['sid']), None) if payload else None
         if not payload or not sess:
             return None
@@ -877,11 +906,11 @@ def run_panel(text, body, history, user, ppu=None):
         return panel_reply(payload, sess, rec, active['key'], user)
     found, runs = resolve_twins(text, body, history, user, limit=3)
     if not found:
-        return _which_twin(runs, 'open the room')
+        return _which_twin(runs, 'open the room', text)
     key = found[0]['key']
     payload = DT.load_twin(s3, key)
     if not payload:
-        return _which_twin(runs, 'open the room')
+        return _which_twin(runs, 'open the room', text)
     twins = [payload]
     for r in found[1:]:
         t = DT.load_twin(s3, r['key'])
@@ -956,11 +985,11 @@ def run_pilot(text, body, history, user, ppu=None):
     uname = _uname(user)
     found, runs = resolve_twins(text, body, history, user, limit=2)
     if not found:
-        return _which_twin(runs, 'open Pilot Testing')
+        return _which_twin(runs, 'open Pilot Testing', text)
     key = found[0]['key']
     payload = DT.load_twin(s3, key)
     if not payload:
-        return _which_twin(runs, 'open Pilot Testing')
+        return _which_twin(runs, 'open Pilot Testing', text)
     twins = [payload]
     for r in found[1:]:
         t = DT.load_twin(s3, r['key'])
@@ -1083,11 +1112,11 @@ def run_greenlight(text, body, history, user, ppu, thread_id='', option=''):
     uname = _uname(user)
     found, runs = resolve_twins(text, body, history, user, limit=2)
     if not found:
-        return _which_twin(runs, 'open Greenlight')
+        return _which_twin(runs, 'open Greenlight', text)
     key = found[0]['key']
     payload = DT.load_twin(s3, key)
     if not payload:
-        return _which_twin(runs, 'open Greenlight')
+        return _which_twin(runs, 'open Greenlight', text)
     name = str((payload.get('meta') or {}).get('name') or found[0].get('name') or found[0].get('subject'))
     doc_text = attached_text(uname, thread_id, limit=60000)
     option = option if option in ('script', 'concept') else greenlight_option(text, doc_text)
@@ -1172,14 +1201,14 @@ def run_lab(kind, text, body, history, user, ppu, thread_id=''):
     uname = _uname(user)
     found, runs = resolve_twins(text, body, history, user, limit=2 if kind == 'compare' else 1)
     if not found:
-        return _which_twin(runs, f"run {KIND_LABEL.get(kind, kind)}")
+        return _which_twin(runs, f"run {KIND_LABEL.get(kind, kind)}", text)
     key = found[0]['key']
     name = str(found[0].get('name') or found[0].get('subject'))
     doc_text = attached_text(uname, thread_id)
     if kind == 'spend':
         payload = DT.load_twin(s3, key)
         if not payload:
-            return _which_twin(runs, 'activate the plan')
+            return _which_twin(runs, 'activate the plan', text)
         si = spend_inputs(text, doc_text)
         plan, source = si['plan'], 'manual'
         if not plan.get('channels'):
@@ -1227,7 +1256,7 @@ def run_lab(kind, text, body, history, user, ppu, thread_id=''):
         scenario = {'kind': 'launch', 'question': str(text)[:300], 'inputs': li}
     elif kind == 'compare':
         if len(found) < 2:
-            return _which_twin(runs, 'compare')
+            return _which_twin(runs, 'compare', text)
         inner = question_kind(re.sub(r"\btwins?\b", '', text)) or 'greenlight'
         if inner == 'greenlight':
             # two twins on one idea or one script: a Greenlight test with both twins in the room, never the retired odds run
@@ -1515,7 +1544,7 @@ def deck_from_twin(text, ctx, user, uname, s3, bucket):
         if not key:
             return None
         payload = DT.load_twin(s3, key)
-        if not payload:
+        if not payload or not DT.can_open(user, key, None, payload):    # a key off the page still has to be in the seat's company
             return None
         c = DT.deck_context(None, payload)
         c['view_context']['data']['key'] = key

@@ -116,13 +116,28 @@ METRIC_SHORT = {'finish': 'would-finish', 'tune_in': 'second-episode', 'urgency_
 MONEY_METRICS = ('excellent', 'total_positive', 'definitely_recommend')
 
 
-def _stand_in(cell: Optional[dict]) -> str:
+def _own(cell: Optional[dict], company: Optional[str] = None) -> dict:
+    """The own-test stats a view reads: a company's bucket
+    (``cell['companies'][company]``: tests, our_sum, our_n) when a
+    company is named, else the all-companies aggregate on the cell.
+    Company scope (Jenna 2026-11-05): a company's norms draw only on its
+    own finished tests; the published anchors are shared."""
+    if not isinstance(cell, dict):
+        return {'tests': [], 'our_sum': 0.0, 'our_n': 0}
+    if company:
+        buckets = cell.get('companies') if isinstance(cell.get('companies'), dict) else {}
+        b = buckets.get(str(company))
+        return b if isinstance(b, dict) else {'tests': [], 'our_sum': 0.0, 'our_n': 0}
+    return cell
+
+
+def _stand_in(cell: Optional[dict], company: Optional[str] = None) -> str:
     """The instrument a cell borrows ('feature screening') while it is not
     yet a norm of its own format; '' for a true anchor or a cell with
     MIN_OWN_TESTS of our own tests in it."""
     if not isinstance(cell, dict):
         return ''
-    if int(cell.get('our_n') or 0) >= MIN_OWN_TESTS:
+    if int(_own(cell, company).get('our_n') or 0) >= MIN_OWN_TESTS:
         return ''
     si = str(cell.get('stand_in') or '').strip().lower()
     if si:
@@ -532,22 +547,26 @@ def seed(s3=None, cells: Optional[list] = None, dry_run: bool = False, drop_test
     return stats
 
 
-def _blend(cell: dict) -> float:
-    our_n = int(cell.get('our_n') or 0)
-    our_sum = float(cell.get('our_sum') or 0.0)
+def _blend(cell: dict, company: Optional[str] = None) -> float:
+    own = _own(cell, company)
+    our_n = int(own.get('our_n') or 0)
+    our_sum = float(own.get('our_sum') or 0.0)
     if cell.get('seed_value') is not None:
         w = float(cell.get('seed_weight') or SEED_WEIGHT)
         return round((float(cell['seed_value']) * w + our_sum) / (w + our_n), 4) if (w + our_n) > 0 else float(cell['seed_value'])
     return round(our_sum / our_n, 4) if our_n else 0.0
 
 
-def record(s3, fmt: str, genre: str, metrics: dict, test_id: str) -> Optional[dict]:
+def record(s3, fmt: str, genre: str, metrics: dict, test_id: str, company: str = '') -> Optional[dict]:
     """One finished test joins the ledger: every metric lands in the
     genre cell and in the all-genres cell for the format (running mean,
-    n + 1). A test id is counted once per cell. Returns the written doc."""
+    n + 1). A test id is counted once per cell. ``company`` files the
+    test in that company's own bucket on each cell as well, so the
+    company's norms read from its own tests only. Returns the written doc."""
     fmt = _fmt(fmt)
     genre = _genre(genre)
     tid = str(test_id or '').strip()
+    company = str(company or '').strip()
     rows = {str(k).strip().lower(): float(v) for k, v in (metrics or {}).items() if k in METRICS and v is not None and _is_num(v)}
     if not rows or not tid:
         return None
@@ -581,7 +600,28 @@ def record(s3, fmt: str, genre: str, metrics: dict, test_id: str) -> Optional[di
                                      'anchor_genre': near_genre, 'anchor_format': near_fmt, 'stand_in': borrowed})
                     doc['cells'][k] = cell
                 tests = cell.setdefault('tests', [])
-                if tid in tests:
+                bucket = None
+                if company:
+                    buckets = cell.get('companies') if isinstance(cell.get('companies'), dict) else {}
+                    cell['companies'] = buckets
+                    bucket = buckets.get(company)
+                    if not isinstance(bucket, dict):
+                        bucket = {'tests': [], 'our_sum': 0.0, 'our_n': 0}
+                        buckets[company] = bucket
+                new_all = tid not in tests
+                new_co = bucket is not None and tid not in (bucket.get('tests') or [])
+                if not new_all and not new_co:
+                    continue
+                if new_co:
+                    bt = bucket.setdefault('tests', [])
+                    bt.append(tid)
+                    if len(bt) > MAX_TESTS_PER_CELL:
+                        del bt[:len(bt) - MAX_TESTS_PER_CELL]
+                    bucket['our_sum'] = round(float(bucket.get('our_sum') or 0.0) + max(0.0, min(100.0, v)), 4)
+                    bucket['our_n'] = int(bucket.get('our_n') or 0) + 1
+                if not new_all:
+                    cell['updated_at'] = _now()
+                    changed = True
                     continue
                 tests.append(tid)
                 if len(tests) > MAX_TESTS_PER_CELL:
@@ -597,6 +637,28 @@ def record(s3, fmt: str, genre: str, metrics: dict, test_id: str) -> Optional[di
                 changed = True
         return doc if changed else None
     return update(s3, mutate)
+
+
+def _forget_in_buckets(cur: dict, tid: str) -> None:
+    """The test leaves every company bucket on the cell (same scaling
+    as the aggregate)."""
+    buckets = cur.get('companies') if isinstance(cur.get('companies'), dict) else None
+    if not buckets:
+        return
+    for co, b in list(buckets.items()):
+        if not isinstance(b, dict):
+            buckets.pop(co, None)
+            continue
+        bt = list(b.get('tests') or [])
+        if tid not in bt:
+            continue
+        kept = [t for t in bt if t != tid]
+        if kept:
+            b['our_sum'] = round(float(b.get('our_sum') or 0.0) * len(kept) / float(len(bt)), 4)
+            b['our_n'] = len(kept)
+            b['tests'] = kept
+        else:
+            buckets.pop(co, None)
 
 
 def forget_test(s3, test_id: str) -> Optional[dict]:
@@ -615,6 +677,7 @@ def forget_test(s3, test_id: str) -> Optional[dict]:
             tests = list(cur.get('tests') or [])
             if tid not in tests:
                 continue
+            _forget_in_buckets(cur, tid)
             kept = [t for t in tests if t != tid]
             if kept:
                 cur['our_sum'] = round(float(cur.get('our_sum') or 0.0) * len(kept) / float(len(tests)), 4)
@@ -662,25 +725,27 @@ def _own_anchor(cell: dict, genre: str) -> bool:
     return 'all genres anchor' not in str(cell.get('basis') or '')
 
 
-def _lookup(cells: dict, fmt: str, genre: str, metric: str):
+def _lookup(cells: dict, fmt: str, genre: str, metric: str, company: Optional[str] = None):
     """The cell for (format, genre, metric), walking the format fallback.
-    Returns (cell, format_used) or (None, None)."""
+    Returns (cell, format_used) or (None, None). With ``company`` the
+    own-test count is that company's."""
     for f in (fmt,) + tuple(FORMAT_FALLBACK.get(fmt) or ()):
         c = cells.get(cell_key(f, genre, metric))
-        if c is not None and (_own_anchor(c, genre) or int(c.get('our_n') or 0) >= MIN_OWN_TESTS):
+        if c is not None and (_own_anchor(c, genre) or int(_own(c, company).get('our_n') or 0) >= MIN_OWN_TESTS):
             return c, f
     return None, None
 
 
-def own_tests(cells: dict, fmt: str, genre: str) -> int:
+def own_tests(cells: dict, fmt: str, genre: str, company: Optional[str] = None) -> int:
     """How many of our own tests sit in a genre's cells for a format
-    (distinct test ids across the format's cells for that genre)."""
+    (distinct test ids across the format's cells for that genre); a
+    company's own tests when ``company`` is named."""
     fmt, genre = _fmt(fmt), _genre(genre)
     seen = set()
     for m in METRICS:
         c = cells.get(cell_key(fmt, genre, m))
         if c is not None:
-            seen.update(str(t) for t in (c.get('tests') or []))
+            seen.update(str(t) for t in (_own(c, company).get('tests') or []))
     return len(seen)
 
 
@@ -702,6 +767,7 @@ def forget_test_genre(s3, test_id: str, fmt: str, genre: str) -> Optional[dict]:
             tests = list(cur.get('tests') or [])
             if tid not in tests:
                 continue
+            _forget_in_buckets(cur, tid)
             kept = [t for t in tests if t != tid]
             if kept:
                 cur['our_sum'] = round(float(cur.get('our_sum') or 0.0) * len(kept) / float(len(tests)), 4)
@@ -726,18 +792,30 @@ def forget_test_genre(s3, test_id: str, fmt: str, genre: str) -> Optional[dict]:
         return None
 
 
-def _public(cell: dict, fmt_used: str, genre_used: str) -> dict:
+def _public(cell: dict, fmt_used: str, genre_used: str, company: Optional[str] = None) -> dict:
     """The cell as a page reads it. A stand-in reads at its PUBLISHED
     value (the feature screening norm is 50, not 50 blended with one
     pilot) and names the instrument it borrows; a norm of the format
-    reads at the running mean."""
-    si = _stand_in(cell)
-    value = _r1(cell.get('seed_value')) if (si and cell.get('seed_value') is not None) else _r1(cell.get('value'))
-    return {'value': value, 'n': int(cell.get('n') or cell.get('our_n') or 0), 'seeded': bool(cell.get('seeded', True)),
-            'format_used': fmt_used, 'genre_used': genre_used, 'stand_in': si}
+    reads at the running mean. With ``company`` the mean blends the
+    anchor with that company's own tests only."""
+    si = _stand_in(cell, company)
+    if si and cell.get('seed_value') is not None:
+        value = _r1(cell.get('seed_value'))
+    elif company:
+        own = _own(cell, company)
+        value = _r1(_blend(cell, company)) if (int(own.get('our_n') or 0) or cell.get('seed_value') is not None) else _r1(cell.get('value'))
+    else:
+        value = _r1(cell.get('value'))
+    if company:
+        n = int(_own(cell, company).get('our_n') or 0)
+        seeded = n == 0
+    else:
+        n = int(cell.get('n') or cell.get('our_n') or 0)
+        seeded = bool(cell.get('seeded', True))
+    return {'value': value, 'n': n, 'seeded': seeded, 'format_used': fmt_used, 'genre_used': genre_used, 'stand_in': si}
 
 
-def _pending(cells: dict, fmt: str, genre: str, metric: str) -> dict:
+def _pending(cells: dict, fmt: str, genre: str, metric: str, company: Optional[str] = None) -> dict:
     """How far a measure with no norm yet has come: {own_tests, needed}
     from the cell our tests are filling (the genre's, else the all
     column's)."""
@@ -745,11 +823,11 @@ def _pending(cells: dict, fmt: str, genre: str, metric: str) -> dict:
     for g in ((genre, 'all') if genre != 'all' else ('all',)):
         c = cells.get(cell_key(fmt, g, metric))
         if isinstance(c, dict):
-            n = max(n, int(c.get('our_n') or 0))
+            n = max(n, int(_own(c, company).get('our_n') or 0))
     return {'own_tests': n, 'needed': MIN_OWN_TESTS, 'note': metric_note(metric, n)}
 
 
-def norms_for(fmt: str, genre: str = 'all', s3=None, doc: Optional[dict] = None) -> dict:
+def norms_for(fmt: str, genre: str = 'all', s3=None, doc: Optional[dict] = None, company: Optional[str] = None) -> dict:
     """{format, genre, genre_used, all: {metric: {value, n, seeded,
     stand_in}}, genre: {metric: ...}, pending: {metric: {own_tests,
     needed, note}}, stand_in, choice} with no sources. ``genre`` falls
@@ -758,21 +836,24 @@ def norms_for(fmt: str, genre: str = 'all', s3=None, doc: Optional[dict] = None)
     measures with no norm yet (no anchor, fewer than MIN_OWN_TESTS of
     our tests) so a page can say so in words instead of leaving a
     blank; ``stand_in`` names the instrument the all column borrows
-    while it is not yet a norm of the format ('feature screening')."""
+    while it is not yet a norm of the format ('feature screening').
+    ``company`` reads the own-test side from that company's tests only
+    (company scope); None is every company's tests (the staff view)."""
     fmt = _fmt(fmt)
     genre = _genre(genre)
+    company = str(company or '').strip() or None
     doc = doc if isinstance(doc, dict) and isinstance(doc.get('cells'), dict) else load(s3)
     cells = doc['cells']
     out_all, out_genre, pending = {}, {}, {}
     genre_hits = 0
     for m in METRICS:
-        c, f = _lookup(cells, fmt, 'all', m)
+        c, f = _lookup(cells, fmt, 'all', m, company)
         if c is not None:
-            out_all[m] = _public(c, f, 'all')
+            out_all[m] = _public(c, f, 'all', company)
         if genre != 'all':
-            cg, fg = _lookup(cells, fmt, genre, m)
+            cg, fg = _lookup(cells, fmt, genre, m, company)
             if cg is not None:
-                out_genre[m] = _public(cg, fg, genre)
+                out_genre[m] = _public(cg, fg, genre, company)
                 genre_hits += 1
             elif c is not None:
                 out_genre[m] = dict(out_all[m], genre_used='all')
@@ -780,12 +861,12 @@ def norms_for(fmt: str, genre: str = 'all', s3=None, doc: Optional[dict] = None)
             if c is not None:
                 out_genre[m] = dict(out_all[m])
         if c is None and (genre == 'all' or m not in out_genre):
-            pending[m] = _pending(cells, fmt, genre, m)
+            pending[m] = _pending(cells, fmt, genre, m, company)
     stand_in = _column_stand_in(out_all)
     return {'format': fmt, 'genre_key': genre, 'genre_used': genre if genre_hits else 'all', 'all': out_all, 'genre': out_genre if genre != 'all' else dict(out_all),
-            'pending': pending, 'stand_in': stand_in,
+            'pending': pending, 'stand_in': stand_in, 'company': company or '',
             'genre_label': GENRE_LABEL.get(genre, genre.title()), 'format_label': FORMAT_LABEL.get(fmt, fmt), 'from_seed_only': bool(doc.get('in_memory')),
-            'choice': norm_choice(fmt, genre, cells, has_genre_norm=bool(genre_hits), stand_in=stand_in)}
+            'choice': norm_choice(fmt, genre, cells, has_genre_norm=bool(genre_hits), stand_in=stand_in, company=company)}
 
 
 def _column_stand_in(column: dict) -> str:
@@ -796,7 +877,8 @@ def _column_stand_in(column: dict) -> str:
     return sis[0] if sis and all(sis) and len(set(sis)) == 1 else ''
 
 
-def norm_choice(fmt: str, genre: str, cells: Optional[dict] = None, has_genre_norm: Optional[bool] = None, stand_in: Optional[str] = None) -> dict:
+def norm_choice(fmt: str, genre: str, cells: Optional[dict] = None, has_genre_norm: Optional[bool] = None, stand_in: Optional[str] = None,
+                company: Optional[str] = None) -> dict:
     """What a test is compared to, for the card, the report pages, the
     CSV and the dial header: {genre, label ('Procedural pilots', the
     chosen genre), all_label ('All pilots'), has_genre_norm, own_tests,
@@ -812,18 +894,19 @@ def norm_choice(fmt: str, genre: str, cells: Optional[dict] = None, has_genre_no
     far.' when the chosen genre has none. ``note`` joins them."""
     fmt, genre = _fmt(fmt), _genre(genre)
     cells = cells if isinstance(cells, dict) else {}
+    company = str(company or '').strip() or None
     if has_genre_norm is None:
-        has_genre_norm = genre != 'all' and any(_lookup(cells, fmt, genre, m)[0] is not None for m in METRICS)
+        has_genre_norm = genre != 'all' and any(_lookup(cells, fmt, genre, m, company)[0] is not None for m in METRICS)
     if stand_in is None:
         col = {}
         for m in MONEY_METRICS:
-            c, f = _lookup(cells, fmt, 'all', m)
+            c, f = _lookup(cells, fmt, 'all', m, company)
             if c is not None:
-                col[m] = _public(c, f, 'all')
+                col[m] = _public(c, f, 'all', company)
         stand_in = _column_stand_in(col)
     has_genre_norm = bool(has_genre_norm) if genre != 'all' else False
-    n = own_tests(cells, fmt, genre) if genre != 'all' else 0
-    n_all = own_tests(cells, fmt, 'all')
+    n = own_tests(cells, fmt, genre, company) if genre != 'all' else 0
+    n_all = own_tests(cells, fmt, 'all', company)
     notes = []
     if not has_genre_norm and stand_in:
         notes.append(format_note(fmt, n_all))

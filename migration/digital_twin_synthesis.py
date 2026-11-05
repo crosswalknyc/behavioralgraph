@@ -1468,7 +1468,9 @@ def index_entry(key: str, payload: dict) -> dict:
             'source': m.get('source') or '', 'panelists': m.get('panelists') or 0,
             'runs': len(E.product_runs(payload)), 'spend_plans': len(((payload.get('labs') or {}).get('spend')) or []),
             'panel_sessions': len(payload.get('panel_sessions') or []),
-            'pilot_sessions': len(payload.get('pilot_sessions') or [])}
+            'pilot_sessions': len(payload.get('pilot_sessions') or []),
+            # the company a staff assign wrote on the twin (company scope, 2026-11-05); '' = the builder's company
+            'company': str(m.get('company') or '')}
 
 
 def update_index(s3, key: str, payload: dict) -> None:

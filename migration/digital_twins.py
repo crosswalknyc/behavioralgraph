@@ -246,10 +246,22 @@ def tab_allowed(user, tab) -> bool:
     return bool(k) and k in set(grant)
 
 
-def can_open(user, key: str, run: Optional[dict] = None) -> bool:
+def in_company(user, key: str, run: Optional[dict] = None, payload: Optional[dict] = None, users_data: Optional[dict] = None) -> bool:
+    """Company scope (Jenna 2026-11-05): a seat sees its own company's
+    twins only; Crosswalk staff see every company. Fails closed."""
+    try:
+        from migration import digital_twin_company as CO
+        return CO.can_see(user, payload=payload, run=run, key=str(key or ''), data=users_data)
+    except Exception:
+        return False
+
+
+def can_open(user, key: str, run: Optional[dict] = None, payload: Optional[dict] = None, users_data: Optional[dict] = None) -> bool:
     if not isinstance(user, dict):
         return False
     uname = str(user.get('username') or '')
+    if not in_company(user, key, run, payload, users_data):
+        return False
     if is_admin(user):
         return True
     if run and uname and str(run.get('created_by') or '') == uname:
@@ -262,8 +274,17 @@ def can_open(user, key: str, run: Optional[dict] = None) -> bool:
     return key in allowed or (run and str(run.get('name') or '') in allowed)
 
 
-def visible_runs(runs: list, user) -> list:
-    return [r for r in runs if can_open(user, str(r.get('key') or ''), r)]
+def visible_runs(runs: list, user, company: Optional[str] = None) -> list:
+    """The index entries this seat may open: its company's twins (every
+    company for staff; one company when staff pass ``company``), then
+    the per-seat allow-list. Each entry carries its ``company``."""
+    try:
+        from migration import digital_twin_company as CO
+        data = CO.users_data()
+        scoped = CO.filter_runs(list(runs or []), user, data, company=company)
+    except Exception:
+        return []
+    return [r for r in scoped if can_open(user, str(r.get('key') or ''), r, users_data=data)]
 
 
 DELETED_TWINS_PREFIX = 'system/digital_twins/deleted_twins/'

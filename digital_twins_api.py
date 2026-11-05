@@ -99,6 +99,7 @@ import uuid
 from flask import Blueprint, Response, g, jsonify, request, session
 
 from migration import digital_twins as DT
+from migration import digital_twin_company as CO
 from migration import digital_twin_synthesis as SYN
 
 bp = Blueprint('digital_twins_api', __name__)
@@ -161,6 +162,12 @@ def _gate():
         return None, (jsonify({'success': False, 'error': 'Sign in to use Digital Twins IQ.'}), 401)
     user = dict(user)
     user['role'] = _role(user)
+    # the users.json record has no username field (the dict key is the username): the company scope and the
+    # creator checks compare usernames, so the session's rides on the record
+    try:
+        user.setdefault('username', _uname(user))
+    except Exception:
+        pass
     if _menu_locked(user):
         return None, (jsonify({'success': False, 'error': 'Digital Twins IQ is not open for this account yet.'}), 403)
     if not DT.has_access(user):
@@ -202,12 +209,39 @@ def _twin_or_404(user, key):
         return None, (jsonify({'success': False, 'error': 'twin not found'}), 404)
     runs = DT.list_runs(_s3())
     run = next((r for r in runs if r.get('key') == key), None)
+    # company scope (Jenna 2026-11-05): another company's twin reads as not there, in plain words
+    if not DT.in_company(user, key, run):
+        return None, (jsonify({'success': False, 'error': CO.NOT_IN_LIBRARY}), 404)
     if not DT.can_open(user, key, run):
         return None, (jsonify({'success': False, 'error': 'This twin is not on your list. Ask your admin to add it.'}), 403)
     payload = DT.load_twin(_s3(), key)
     if not isinstance(payload, dict):
         return None, (jsonify({'success': False, 'error': 'twin not found'}), 404)
+    if not DT.in_company(user, key, run, payload):
+        return None, (jsonify({'success': False, 'error': CO.NOT_IN_LIBRARY}), 404)
     return payload, None
+
+
+def _company_filter(user):
+    """The ``?company=`` a staff seat asked for on a listing; everyone
+    else is their own company and the parameter is ignored."""
+    if not CO.is_staff(user, _uname(user)):
+        return None
+    c = str(request.args.get('company') or '').strip()
+    return c or None
+
+
+def _twin_company(payload, key):
+    return CO.twin_company(payload, None, str(key or ''))
+
+
+def _norms_company(user):
+    """Whose own tests the norms read from: the caller's company; for
+    staff the ``?company=`` filter, else every company (the view Jenna
+    has today)."""
+    if CO.is_staff(user, _uname(user)):
+        return _company_filter(user)
+    return CO.caller_company(user, _uname(user))
 
 
 def _price_fn(username):
@@ -352,14 +386,52 @@ def dt_list():
     if err:
         return err
     runs = DT.list_runs(_s3())
-    vis = DT.visible_runs(runs, user)
+    staff = CO.is_staff(user, _uname(user))
+    vis = DT.visible_runs(runs, user, company=_company_filter(user))
     try:
         from migration.digital_twin_covers import schedule_missing
         schedule_missing(_s3(), vis)
     except Exception:
         traceback.print_exc()
-    return _nocache(jsonify({'success': True, 'runs': vis, 'is_admin': DT.is_admin(user), 'allow_all': DT.is_admin(user) or '*' in DT.allowed_keys(user),
-                             'pricing': DT.pricing_lines(_price_fn(_uname(user)))}))
+    out = {'success': True, 'runs': vis, 'is_admin': DT.is_admin(user), 'allow_all': DT.is_admin(user) or '*' in DT.allowed_keys(user),
+           'pricing': DT.pricing_lines(_price_fn(_uname(user))),
+           'company': CO.caller_company(user, _uname(user)), 'is_staff': staff}
+    if staff:
+        # the company filter for staff (default: every company) and, for a super admin, the assign control's choices
+        out['company_filter'] = _company_filter(user) or ''
+        out['companies'] = CO.companies(CO.annotate(list(runs)))
+        out['can_assign'] = _role(user) == 'super_admin'
+    return _nocache(jsonify(out))
+
+
+@bp.route(f'{PREFIX}/<path:key>/company', methods=['POST', 'PATCH'])
+def dt_assign_company(key):
+    """Assign a twin to a company (super admin only). Its pilots, rooms,
+    saved setups and reports live on the twin and move with it. Body:
+    ``{company}``. Nothing is emailed."""
+    user, err = _gate()
+    if err:
+        return err
+    if _role(user) != 'super_admin':
+        return jsonify({'success': False, 'error': 'Only a Crosswalk super admin can assign a twin to a company.'}), 403
+    body = request.get_json(silent=True) or {}
+    company = str(body.get('company') or request.form.get('company') or '').strip()
+    if not company:
+        return jsonify({'success': False, 'error': 'Name the company.'}), 400
+    try:
+        rec = CO.assign(_s3(), str(key or ''), company, by=_uname(user))
+    except ValueError as e:
+        msg = str(e)
+        return jsonify({'success': False, 'error': 'twin not found' if 'not found' in msg else msg}), 404 if 'not found' in msg else 400
+    except Exception:
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': 'The twin could not be assigned. Try again in a minute.'}), 500
+    try:
+        CO.reset_cache()
+    except Exception:
+        pass
+    return _nocache(jsonify({'success': True, **rec, 'label': CO.company_label(rec.get('company') or ''),
+                             'message': f"The twin now belongs to {CO.company_label(rec.get('company') or '')}, with its tests, rooms and saved setups."}))
 
 
 @bp.route(f'{PREFIX}/how-to', methods=['GET'])
@@ -1572,6 +1644,7 @@ def dt_pilot_norm(key, sid):
     raw = str(body.get('genre') if body.get('genre') is not None else body.get('norm_genre') or '').strip().lower()
     if raw and raw != 'all' and N._genre(raw) == 'all':
         return jsonify({'success': False, 'error': 'Pick a norm from the list.', 'options': N.norm_options(str(sess.get('mode') or 'pilot'))}), 400
+    PI.session_company(sess, payload)      # the test files its norms under the twin's company (company scope)
     changed = PI.set_norm(sess, raw, by_user=True, twin=payload, s3=_s3())
     DT.save_twin(_s3(), key, payload)
     return _nocache(jsonify({'success': True, 'session': PI.public_session(sess), 'changed': changed,
@@ -1923,7 +1996,7 @@ def dt_pilot_stop(key, sid):
     PI.stop_session(sess)
     if sess.get('scorecard'):
         _reconcile(payload, sess)           # the room's answers during the test land on the card before it files (2026-11-04)
-        PI.record_norms(sess, s3=_s3())     # every finished test grows the norms (idempotent per test)
+        PI.record_norms(sess, s3=_s3(), twin=payload)     # every finished test grows its company's norms (idempotent per test)
     purged = False
     if sess.get('purge_media_after') and (sess.get('media') or {}).get('s3_key'):
         purged = PI.purge_media(_s3(), sess, reason='done')
@@ -2449,7 +2522,7 @@ def dt_pilot_comps(key, sid):
             sess['comps'] = [({'title': str(c)} if not isinstance(c, dict) else c) for c in body['comps'] if str(c).strip()][:8]
             sess['updated_at'] = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
     try:
-        catalog = DT.list_runs(_s3())
+        catalog = DT.visible_runs(DT.list_runs(_s3()), user)    # comps come from the company's own library (company scope, 2026-11-05)
     except Exception:
         catalog = []
     comps = CMP.comp_set(payload, sess, catalog_runs=catalog, load_twin=(lambda k: DT.load_twin(_s3(), k)))
@@ -2477,7 +2550,7 @@ def dt_pilot_critics(key, sid):
     if sess.get('play_charged'):
         return jsonify({'success': False, 'error': 'This test has played. Open a new test for the critics room.'}), 400
     try:
-        critics_twin = CMP.find_critics_twin(DT.list_runs(_s3()))
+        critics_twin = CMP.find_critics_twin(DT.visible_runs(DT.list_runs(_s3()), user))    # only a critics twin the company can open
     except Exception:
         critics_twin = None
     CMP.seat_critics(sess, seed=f"critics|{sess['id']}")
@@ -2542,9 +2615,10 @@ def dt_pilot_norms_all():
     from migration import digital_twin_pilot as PI
     genre = str(request.args.get('genre') or 'all')
     out = {}
+    company = _norms_company(user)
     for fmt in N.FORMATS:
         try:
-            out[fmt] = PI.norms_for(fmt, genre, s3=_s3())
+            out[fmt] = PI.norms_for(fmt, genre, s3=_s3(), company=company)
         except Exception:
             traceback.print_exc()
             out[fmt] = {}
@@ -2562,7 +2636,8 @@ def dt_pilot_norms():
     if err:
         return err
     from migration import digital_twin_pilot as PI
-    return _nocache(jsonify({'success': True, 'norms': PI.norms_for(str(request.args.get('format') or 'pilot'), str(request.args.get('genre') or 'all'), s3=_s3())}))
+    return _nocache(jsonify({'success': True, 'norms': PI.norms_for(str(request.args.get('format') or 'pilot'), str(request.args.get('genre') or 'all'), s3=_s3(),
+                                                                     company=_norms_company(user))}))
 
 
 @bp.route(f'{PREFIX}/<path:key>/pilot/<sid>/export.csv', methods=['GET'])
