@@ -13914,14 +13914,18 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
         # before any model-written label is consulted (2026-11-04,
         # Liz's gender by door: each pass had persisted under its own
         # label, so no pass ever saw the one before it).
+        # The thread rides along (2026-11-05, Jenna's Kanan S5 -> Fightland
+        # ask): a viewing-chain follow-up ("what percent of those watched
+        # the full season") binds to the question it follows, and a banked
+        # journey read is reused only for the same whole journey.
         if _view_base and str(base.get('subject') or '').strip():
             led = il.consult(subject=str(base.get('subject')), question=text,
-                             metric_family=mr.get('metric_family'))
+                             metric_family=mr.get('metric_family'), history=history)
         if not led.get('entries'):
             led = il.consult(subject=subj_hint or None, question=text,
-                             metric_family=mr.get('metric_family'))
+                             metric_family=mr.get('metric_family'), history=history)
         if not led.get('entries') and subj_hint:
-            led = il.consult(question=text)
+            led = il.consult(question=text, history=history)
         if not led.get('entries') and base.get('subject'):
             # The ask itself may name no subject ("what are parents
             # of kids 4-7 buying in terms of toy categories"); the
@@ -13929,7 +13933,7 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
             # (2026-08-27, rephrased toy ask).
             led = il.consult(subject=base.get('subject'),
                              question=text,
-                             metric_family=mr.get('metric_family'))
+                             metric_family=mr.get('metric_family'), history=history)
     except Exception:
         traceback.print_exc()
     _pm_ask_stage('ledger', t0=_t_ledger)
@@ -13945,6 +13949,13 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
     # FAST read came back verbatim after "Samsung TV Plus isn't even in
     # the data"). It still rides the constraint block; the ask runs fresh.
     if exact and _pm_replay_rejected_in_thread(exact, history):
+        exact = None
+    # The same question re-asked minutes after a replay means the stored
+    # read did not satisfy; it runs fresh, as on the analyze path
+    # (2026-11-05: the same stale entry was served three times in four
+    # minutes, the third on an Approve of the identical question).
+    if exact and _pm_replay_repeat_block(_pm_user, text):
+        print(f"[pm-replay] {str(exact.get('k') or '')!r} was already served for this question minutes ago; running fresh")
         exact = None
     if exact and exact.get('reply'):
         _pm_ask_hint(outcome='answered',
@@ -14755,7 +14766,11 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
             breakdown=res.get('breakdown'),
             derivation=_derivation,
             verify=_verify_stamp,
-            universe=_aud)
+            universe=_aud,
+            # a viewing-chain read banks under both titles and the metric; a
+            # follow-up's chain is completed from the question it followed
+            # (2026-11-05)
+            journey=il.ask_journey(text, history=history))
     except Exception:
         traceback.print_exc()
     stages['persist'] = int((time.monotonic() - _t_stage) * 1000)
@@ -17140,9 +17155,11 @@ def _pm_analyze_core(user, body, text, history):
     _t_ledger = time.monotonic()
     try:
         import insights_ledger as _il_an
-        _led = _il_an.consult(subject=_led_subj or None, question=text)
+        # the thread rides along so a viewing-chain follow-up binds to the
+        # question it follows (2026-11-05)
+        _led = _il_an.consult(subject=_led_subj or None, question=text, history=history)
         if not _led.get('entries'):
-            _led = _il_an.consult(question=text)
+            _led = _il_an.consult(question=text, history=history)
             _led_same_subject = False
     except Exception:
         traceback.print_exc()

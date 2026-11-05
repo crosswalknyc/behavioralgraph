@@ -150,12 +150,15 @@ def normalize_question(question):
                   str(question or '').lower()).strip()[:300]
 
 
-def entry_key(subject, metric_family, window_start=None, window_end=None):
+def entry_key(subject, metric_family, window_start=None, window_end=None, journey=None):
     ws = str(window_start or '').strip() or 'any'
     we = str(window_end or '').strip() or 'any'
     # the folded title keys the entry (2026-10-13), so the same ask under
-    # another spelling of the subject supersedes instead of coexisting
-    return f"{(fold_subject(subject).replace(' ', '_')[:80] or subject_key(subject))}|{canon_family(metric_family)}|{ws}|{we}"
+    # another spelling of the subject supersedes instead of coexisting.
+    # A viewing-chain read carries both titles and the metric in its key
+    # (2026-11-05), so it never shares a key with the title's plain read.
+    return (f"{(fold_subject(subject).replace(' ', '_')[:80] or subject_key(subject))}|{canon_family(metric_family)}|{ws}|{we}"
+            + _j_key_part(journey))
 
 
 # ---------------------------------------------------------------------------
@@ -380,11 +383,19 @@ def make_entry(*, subject, metric_family, question, route, metrics,
                anchors=None, window_start='', window_end='',
                window_label='', reply='', followups=None,
                base_profile_key='', cohort='', breakdown=None,
-               derivation='', provenance='', verify=None, universe=''):
+               derivation='', provenance='', verify=None, universe='',
+               journey=None):
     """Build one ledger entry. `metrics` is a list of dicts with
     name/label/value/unit/definition and, for a projected people count,
     `sample_people`, the unprojected count behind it (extra keys
     dropped).
+
+    `journey` (2026-11-05): the viewing chain the read answers (source
+    title, destination title, seasons, platform, metrics), as
+    ``ask_journey`` resolves it, including a follow-up completed from the
+    question it followed. Read off the question when not given. Banked
+    on the entry and folded into its key so the read is reused only for
+    the same whole journey.
 
     `universe` (2026-11-04): the audience the figures describe, in the
     words the reply opened with ('Jason Statham film viewers (streaming
@@ -438,8 +449,17 @@ def make_entry(*, subject, metric_family, question, route, metrics,
         subject = _strip_emoji(subject) or subject
     except Exception:
         pass
+    _j = journey if isinstance(journey, dict) and journey.get('src') and journey.get('dst') \
+        else journey_signature(question)
+    if isinstance(_j, dict) and (_j.get('anaphoric') or not _j.get('src') or not _j.get('dst')):
+        _j = None   # an unresolved "of those" banks no chain; it never replays as one
+    if _j and not _j.get('platform'):
+        # the question named no service but the read did ("On ... viewers on Starz:")
+        _pm = _J_PLATFORM_RX.search(_j_fold(f"{universe or ''} | {str(reply or '')[:300]}"))
+        if _pm:
+            _j = dict(_j, platform=_pm.group('p'))
     entry = {
-        'k': entry_key(subject, metric_family, window_start, window_end),
+        'k': entry_key(subject, metric_family, window_start, window_end, journey=_j),
         'subject': str(subject or '')[:120],
         'family': canon_family(metric_family),
         'q': str(question or '')[:300],
@@ -467,6 +487,8 @@ def make_entry(*, subject, metric_family, question, route, metrics,
         'derivation': str(derivation or '')[:600],
         'prov': canon_provenance(provenance),
     }
+    if _j:
+        entry['journey'] = _j_compact(_j)
     # Verification stamp (2026-08-28, p3-verify): the pre-banking pass
     # outcome for generated reads. Audit trail only; render_block never
     # includes it.
@@ -890,7 +912,7 @@ def persist(*, subject, metric_family, question, route, metrics,
             window_label='', reply='', followups=None,
             base_profile_key='', cohort='', breakdown=None,
             derivation='', provenance='', verify=None, sync=False,
-            universe=''):
+            universe='', journey=None):
     """Persist one delivered read. Never raises; never blocks the
     caller (daemon thread) unless `sync` or _SYNC_FOR_TESTS. Batch
     jobs (the conversation distiller, the artifact ingester) pass
@@ -899,7 +921,9 @@ def persist(*, subject, metric_family, question, route, metrics,
     Every projected people count is stored with the unprojected count
     behind it and a definition (attach_sample_people), and the entry
     carries the universe the reply named, so the figures reconcile later
-    (2026-11-04)."""
+    (2026-11-04). ``journey`` is the resolved viewing chain for a chain
+    read (see make_entry); callers on a thread pass
+    ``ask_journey(question, history=history)``."""
     try:
         entry = make_entry(
             subject=subject, metric_family=metric_family,
@@ -910,7 +934,8 @@ def persist(*, subject, metric_family, question, route, metrics,
             reply=reply, followups=followups,
             base_profile_key=base_profile_key, cohort=cohort,
             breakdown=breakdown, derivation=derivation,
-            provenance=provenance, verify=verify, universe=universe)
+            provenance=provenance, verify=verify, universe=universe,
+            journey=journey)
         if not entry['metrics'] and not entry['reply']:
             return
         if sync or _SYNC_FOR_TESTS:
@@ -1760,7 +1785,403 @@ def _entry_span_days(e):
         return None
 
 
-def find_semantic(entries, question):
+# ---------------------------------------------------------------------------
+# Viewing chains (2026-11-05, Jenna: "I keep asking this question and it
+# keeps giving me the way wrong read"). "How many Power: Raising Kanan
+# season 5 viewers autoplayed into Fightland, and of those what percent
+# completed the season" was answered three times with the banked
+# Fightland -> S.W.A.T. Exiles autoplay read: the two asks share a title
+# and a family, so the semantic match took the stored read. A journey
+# read is about a SOURCE audience moving to a DESTINATION title, and it is
+# reused only when the whole journey matches: source title (with its
+# season when one is stated), destination title (with season), platform,
+# the metric asked (autoplay handoff, completion, discovery, drop-off),
+# and a compatible window. A shared title on the wrong side of the
+# journey is not a match. A follow-up ("of those", "what percent of
+# those") binds to the read produced for the question it follows, never
+# to the most recent banked entry that shares a title.
+# ---------------------------------------------------------------------------
+
+_J_AUDIENCE_NOUNS = (r"(?:viewers?|watchers?|streamers?|subscribers?|fans?|audience|readers?|listeners?|"
+                     r"players?|households?|accounts?|people|users?)")
+_J_PLATFORM_RX = re.compile(
+    r"\bon (?:the )?(?P<p>starz|netflix|hulu|hbo max|max|peacock|paramount plus|paramount|prime video|amazon prime|"
+    r"amazon|apple tv plus|apple tv|disney plus|disney|amc plus|amc|tubi|roku|youtube|pluto|discovery plus|espn|"
+    r"showtime|mgm plus|britbox|acorn|crunchyroll|fubo|sling|philo|freevee|plex|xumo)\b")
+# where a title span stops (folded text: punctuation is already a bar)
+_J_STOP = (r"(?=\s*(?:\||$|\b(?:and|then|next|on|onto|into|to|of those|of them|of these|what|how|who|that|which|"
+           r"directly|right|immediately|straight|after|before|within|because|since|during|from|at|with|via|"
+           r"through|over|versus|vs|compared|in the|last|past|trailing|this|between|once|when|while|where|"
+           r"also|ever|still|went|go|goes|going|gone|came|come|watch\w*|stream\w*|play\w*|autoplay\w*|auto|proceed\w*|"
+           r"roll\w*|mov\w*|convert\w*|cross\w*|finish\w*|complet\w*|binge\w*|start\w*|stay\w*|stuck|drop\w*|"
+           r"churn\w*|carr\w*|flow\w*|jump\w*|switch\w*|continu\w*|tune\w*|return\w*|kept|keep|were|was|are|is|"
+           r"did|do|does|have|has|had|would|will|could|should)\b))")
+_J_TITLE = r"(?P<t>[a-z0-9]+(?: [a-z0-9]+){0,7}?)"
+_J_SOURCE_RXS = (
+    re.compile(r"\bhow many (?:of (?:the |our |your )?)?" + _J_TITLE + r" " + _J_AUDIENCE_NOUNS + r"\b"),
+    re.compile(r"\b(?:" + _J_AUDIENCE_NOUNS + r") (?:who|that) (?:watched|streamed|saw|played|finished|binged|started|viewed|completed|"
+               r"were watching|had watched|have watched|are watching) " + _J_TITLE + _J_STOP),
+    re.compile(r"\b(?:" + _J_AUDIENCE_NOUNS + r") (?:of|for) " + _J_TITLE + _J_STOP),
+    re.compile(r"^(?:\s*(?:what|how) (?:percent(?:age)?|share|many|much) of (?:the |our |your )?)?" + _J_TITLE + r" " + _J_AUDIENCE_NOUNS +
+               r" (?:who|that|then|also|ever|have|had|has|on|in|from|autoplay|auto|watch|stream|went|go|proceed|complet|finish|binge|convert|roll|move|carr|cross|stay|stuck|drop|churn|continu|jump|switch)"),
+)
+_J_ANAPHORA_RX = re.compile(r"\b(?:of|among|from) (?:those|them|these)\b|\b(?:those|these) (?:same )?" + _J_AUDIENCE_NOUNS + r"\b|"
+                            r"\bhow many of (?:those|them|these)\b|\bthey\b|\bthat (?:group|cohort|audience)\b")
+_J_DEST_RXS = (
+    # a step that lands on a title
+    re.compile(r"\b(?:auto ?play(?:ed|s|ing)? (?:into|to|onto|in to)|auto played (?:into|to)|rolled (?:straight |right |directly )?(?:into|over to|on to|onto)|"
+               r"carried over (?:to|into)|moved (?:on |over |straight |back )?(?:to|into)|(?:went|go|goes|going|came|come) (?:on |over |straight |directly |right |back )?(?:to|into|and) "
+               r"(?:watch(?:ing|ed)? |stream(?:ing|ed)? |play(?:ing|ed)? |start(?:ing|ed)? |binge(?:ing|d)? |see |finish(?:ed)? )?|"
+               r"(?:proceed(?:ed|s|ing)?|went on|go on|continue[ds]?|continuing) (?:to )?(?:watch|stream|play|start|binge|view)(?:ed|ing)? |"
+               r"then (?:watched|streamed|played|started|binged|viewed|saw|tried|began) |cross(?:ed)? (?:over )?(?:to|into) |"
+               r"convert(?:ed|s|ing)? (?:to|into|over to) |handed (?:off |over )?(?:to|into) |flow(?:ed|s)? (?:into|to) |funnel(?:ed|led|s)? (?:into|to) |"
+               r"jump(?:ed|s)? (?:to|into|over to) |switch(?:ed|es)? (?:to|over to) |(?:in|over) to watch |into |onto )" + _J_TITLE + _J_STOP),
+    # a completion target: "the full season of Fightland", "finished Fightland season 1"
+    re.compile(r"\b(?:season|series|show|run|arc|episodes?|eps?)(?: \d+)? of " + _J_TITLE + _J_STOP),
+    re.compile(r"\b(?:complet(?:ed|es|e|ing)?|finish(?:ed|es|ing)?|binge[ds]?|binge watch(?:ed|ing)?) (?:all of |the whole of |the rest of |watching )?" + _J_TITLE + _J_STOP),
+)
+_J_DEST_JUNK = {'it', 'that', 'this', 'them', 'those', 'these', 'the', 'a', 'an', 'another', 'the next', 'the same', 'the show',
+                'the series', 'the season', 'the title', 'the rest', 'next', 'same', 'more', 'something', 'anything', 'all',
+                'the full season', 'the whole season', 'the entire season', 'the end', 'the finale', 'episode', 'episodes', 'one',
+                'each', 'every', 'any', 'their', 'its', 'other', 'others', 'the other', 'the first', 'the second',
+                'whole', 'entire', 'full', 'complete', 'rest', 'finale', 'end', 'season', 'series', 'show', 'run', 'title',
+                'first', 'second', 'third', 'last', 'both', 'either', 'neither', 'none', 'some', 'most', 'many', 'few'}
+_J_NOUN_SET = {'viewer', 'viewers', 'watcher', 'watchers', 'streamer', 'streamers', 'subscriber', 'subscribers', 'fan', 'fans',
+               'audience', 'reader', 'readers', 'listener', 'listeners', 'player', 'players', 'household', 'households',
+               'account', 'accounts', 'people', 'user', 'users'}
+_J_SEASON_TAIL_RX = re.compile(r"^(?P<title>.+?) (?:season|series|s) (?P<n>\d{1,2})(?: (?:episodes?|eps?)(?: \d+)?)?$")
+_J_ORDINALS = {'first': 1, 'second': 2, 'third': 3, 'fourth': 4, 'fifth': 5, 'sixth': 6, 'seventh': 7, 'eighth': 8,
+               'ninth': 9, 'tenth': 10, 'final': None, 'latest': None, 'new': None, 'newest': None, 'current': None}
+_J_SEASON_HEAD_RX = re.compile(r"^(?:the )?(?:(?:season|series|s) (?P<n>\d{1,2})|(?P<ord>first|second|third|fourth|fifth|sixth|seventh|"
+                               r"eighth|ninth|tenth|final|latest|new|newest|current) (?:season|series)|season|series|run|episodes|"
+                               r"(?:whole|entire|full|complete|rest) (?:of the )?(?:season|series|run)) of (?P<title>.+)$")
+_J_BARE_SEASON_RX = re.compile(r"^(?:the )?(?:season|series|s) ?(?P<n>\d{1,2})$")
+_J_LEAD_JUNK_RX = re.compile(r"^(?:the |all |any |every |each |a |an |that |this |those |these |of |same |new |most |many |"
+                             r"whole |entire |full |complete |rest of |first |last |next |second |third |other |another )+")
+_J_TAIL_JUNK_RX = re.compile(r"(?: (?:the|a|an|then|and|or|of|to|into|that|this|who|viewers?|watchers?|audience|fans?|people|users?|"
+                             r"episodes?|eps?|title|show|series|season|run|all|again|too|also|ever|still|yet|now|here|there|next|same|"
+                             r"entire|whole|full|complete|rest|first|second|third|last))+$")
+_J_METRIC_RXS = (
+    ('autoplay', re.compile(r"\bauto ?play\w*\b|\bauto played\b|\bend card\b|\bautostart\w*\b|\bpost ?play\b")),
+    ('completion', re.compile(r"\b(?:complet\w*|finish\w*)\b(?:\W+\w+){0,6}?\W+(?:season|series|show|run|episodes?|eps?|title|it|arc|book|film|movie)\b|"
+                              r"\b(?:entire|whole|full|complete|all \w+) (?:season|series|run|show)\b|\bcompletion\b|\ball (?:\d+|\w+teen|eight|ten|six|twelve) episodes\b|"
+                              r"\b(?:binge[ds]?|binge watch\w*)\b|\bthrough (?:the|to the) (?:finale|end|last episode)\b|\bwatched (?:the )?(?:whole|full|entire|complete)\b")),
+    ('discovery', re.compile(r"\bdiscover\w*\b|\bfirst touch\b|\bfound (?:the|it|them)\b|\bhow did they find\b|\blast touch\b|\bentry point\b|\bfirst (?:title|play|watch)\b")),
+    ('dropoff', re.compile(r"\bdrop\w* ?(?:off|out)\b|\bfell off\b|\bchurn\w*\b|\bstuck around\b|\bstayed (?:for|on|with|through)\b|\bbail\w*\b|\babandon\w*\b|\bquit\b")),
+    ('handoff', re.compile(r"\bthen (?:watched|streamed|played|started|binged|viewed|saw)\b|\bproceed\w*\b|\bwent on\b|\bcross(?:ed)? ?over\b|\bcrossover\b|"
+                           r"\b(?:went|go|goes|came) (?:back |on |over |straight )?(?:to|and) (?:watch|stream|play|see|start|binge)\w*\b|"
+                           r"\bconvert\w*\b|\bcarried over\b|\brolled (?:straight |right )?(?:into|over|on)\b|\bwatch(?:ed)? next\b|\bnext (?:title|show|series|play|watch)\b|"
+                           r"\bmoved (?:on |over )?(?:to|into)\b|\bflow\w* (?:into|to)\b|\bfunnel\w*\b|\bhanded (?:off|over)?\b|\bjump\w* (?:to|into)\b|"
+                           r"\bswitch\w* (?:to|over)\b|\b(?:into|onto|in to) \w+|\bauto ?play\w*\b|\bauto played\b")),
+)
+
+
+def _j_fold(text):
+    """Lower-cased words; dotted initialisms joined (S.W.A.T. -> swat),
+    apostrophes dropped (autoplay'ed -> autoplayed), '+' spelled out,
+    sentence punctuation kept as a bar so a title never runs past it."""
+    t = str(text or '').lower()
+    t = re.sub(r"(?<![a-z0-9])((?:[a-z]\.){2,})", lambda m: m.group(1).replace('.', ''), t)
+    t = re.sub(r"['\u2018\u2019\u02bc`]", '', t)
+    t = t.replace('+', ' plus ').replace('&', ' and ')
+    t = re.sub(r"[,;.?!]+", ' | ', t)
+    t = re.sub(r"[^a-z0-9|]+", ' ', t)
+    t = re.sub(r"\bs(\d{1,2})\b", r"season \1", t)   # S5 -> season 5
+    return re.sub(r"\s+", ' ', t).strip()
+
+
+def _j_title(raw):
+    """(title, season) from a captured span; ('', None) when the span is
+    only junk words."""
+    s = re.sub(r"\s+", ' ', str(raw or '')).strip()
+    season = None
+    m = _J_SEASON_HEAD_RX.match(s)
+    if m:
+        s = m.group('title')
+        season = int(m.group('n')) if m.group('n') else _J_ORDINALS.get(m.group('ord') or '')
+    s = _J_LEAD_JUNK_RX.sub('', s)
+    m = _J_SEASON_TAIL_RX.match(s)
+    if m:
+        s, season = m.group('title'), int(m.group('n'))
+    s = _J_PLATFORM_RX.sub(' ', ' ' + s).strip()
+    s = _J_TAIL_JUNK_RX.sub('', s).strip()
+    s = _J_LEAD_JUNK_RX.sub('', s)
+    if not s or s in _J_DEST_JUNK or s in _J_NOUN_SET or re.fullmatch(r"(?:season|series|episode|show)(?: \d+)?", s):
+        return '', season
+    if len(s) < 3 or re.fullmatch(r"\d+", s):
+        return '', season
+    return s, season
+
+
+def journey_signature(text):
+    """The viewing chain an ask (or a stored question) describes, or None
+    when the words hold no chain. {'src', 'src_season', 'dst',
+    'dst_season', 'platform', 'metrics', 'anaphoric'}: titles folded to
+    plain words ('power raising kanan', 'swat exiles'); 'anaphoric' is a
+    follow-up whose source audience is "those" / "them" and must be read
+    off the question it follows. Never raises."""
+    try:
+        t = _j_fold(text)
+        if not t or len(t) > 1200:
+            return None
+        src, src_season, src_end = '', None, 0
+        for rx in _J_SOURCE_RXS:
+            m = rx.search(t)
+            if not m:
+                continue
+            cand, season = _j_title(m.group('t'))
+            if cand:
+                src, src_season, src_end = cand, season, m.end()
+                break
+        anaphoric = bool(_J_ANAPHORA_RX.search(t)) and not src
+        dst, dst_season, self_dst = '', None, None
+        for rx in _J_DEST_RXS:
+            for m in rx.finditer(t):
+                span = m.group('t').strip()
+                bare = _J_BARE_SEASON_RX.match(span)
+                if bare and src:
+                    # "went back and watched season 1": the same title,
+                    # another season
+                    cand, season = src, int(bare.group('n'))
+                    if season != src_season:
+                        dst, dst_season = cand, season
+                        break
+                    continue
+                cand, season = _j_title(span)
+                if not cand or cand in _J_DEST_JUNK:
+                    continue
+                if src and _j_same_title(cand, src):
+                    # "fightland viewers who finished fightland": the
+                    # title's own completion, not a second title
+                    if self_dst is None:
+                        self_dst = (cand, season)
+                    continue
+                dst, dst_season = cand, season
+                break
+            if dst:
+                break
+        metrics = sorted({name for name, rx in _J_METRIC_RXS if rx.search(t)})
+        if 'autoplay' in metrics and 'handoff' not in metrics:
+            metrics.append('handoff'); metrics.sort()
+        if not dst:
+            if src and (self_dst or 'completion' in metrics):
+                # the title's own completion read
+                dst, dst_season = (self_dst if self_dst else (src, src_season))
+                if dst_season is None:
+                    dst_season = src_season
+            elif anaphoric and metrics:
+                # "of those, what percent completed the whole season": the
+                # chain is the one the previous question named; both
+                # titles come from it (resolve_followup_journey)
+                dst = ''
+            else:
+                return None
+        if not src and not anaphoric:
+            return None
+        pm = _J_PLATFORM_RX.search(t)
+        return {'src': src, 'src_season': src_season, 'dst': dst, 'dst_season': dst_season,
+                'platform': (pm.group('p') if pm else ''), 'metrics': metrics, 'anaphoric': anaphoric}
+    except Exception:
+        return None
+
+
+def _j_same_title(a, b):
+    """Two folded titles name the same work: equal, or the shorter one is
+    a contiguous run of the longer one's words with enough of its own
+    ('raising kanan' in 'power raising kanan'; never 'power' alone)."""
+    a, b = str(a or '').strip(), str(b or '').strip()
+    if not a or not b:
+        return False
+    if a == b:
+        return True
+    short, long_ = (a, b) if len(a) <= len(b) else (b, a)
+    st, lt = short.split(), long_.split()
+    if len(st) == 1 and len(short) < 7:
+        return False
+    if len(st) < 1 or len(short) < 5:
+        return False
+    for i in range(0, len(lt) - len(st) + 1):
+        if lt[i:i + len(st)] == st:
+            return True
+    return False
+
+
+def _j_compact(sig):
+    """The signature as stored on an entry (lists, no None)."""
+    if not isinstance(sig, dict):
+        return None
+    return {'src': str(sig.get('src') or '')[:80], 'src_season': sig.get('src_season'),
+            'dst': str(sig.get('dst') or '')[:80], 'dst_season': sig.get('dst_season'),
+            'platform': str(sig.get('platform') or '')[:24],
+            'metrics': [str(m)[:12] for m in (sig.get('metrics') or [])][:6]}
+
+
+def _j_key_part(sig):
+    """The key tail that carries both titles and the metric, so a journey
+    read never shares a key with the title's plain read."""
+    if not isinstance(sig, dict) or not sig.get('dst'):
+        return ''
+    def _slug(s, n):
+        s = str(s or '').strip().replace(' ', '_')[:40]
+        return s + (f"_s{n}" if n else '')
+    mets = '+'.join(sorted(str(m) for m in (sig.get('metrics') or []))) or 'journey'
+    return f"|j:{_slug(sig.get('src'), sig.get('src_season'))}>{_slug(sig.get('dst'), sig.get('dst_season'))}:{mets}"
+
+
+def entry_journey(entry):
+    """The viewing chain a stored entry answers: the signature banked on
+    it (new entries), else read off its own question (older entries), else
+    off the head of its reply. None for a read that is not a journey."""
+    if not isinstance(entry, dict):
+        return None
+    j = entry.get('journey')
+    if isinstance(j, dict) and j.get('dst'):
+        sig = {'src': j.get('src') or '', 'src_season': j.get('src_season'), 'dst': j.get('dst') or '',
+               'dst_season': j.get('dst_season'), 'platform': j.get('platform') or '',
+               'metrics': list(j.get('metrics') or []), 'anaphoric': False}
+    else:
+        sig = journey_signature(entry.get('q') or '')
+        if sig and sig.get('anaphoric'):
+            return sig
+        if not sig:
+            head = str(entry.get('reply') or '')[:600]
+            if head:
+                sig2 = journey_signature(head)
+                if sig2 and sig2.get('src') and not sig2.get('anaphoric'):
+                    sig = sig2
+    if sig and not sig.get('platform'):
+        # the question named no service but the read did ("On Power:
+        # Raising Kanan season 5 viewers on Starz:")
+        pm = _J_PLATFORM_RX.search(_j_fold(f"{entry.get('universe') or ''} | {str(entry.get('reply') or '')[:300]}"))
+        if pm:
+            sig = dict(sig, platform=pm.group('p'))
+    return sig
+
+
+def _j_season_ok(ask_season, entry_season):
+    """The season the ask states must be the season the entry read; an
+    ask that names none accepts any."""
+    if ask_season is None:
+        return True
+    return entry_season == ask_season
+
+
+def resolve_followup_journey(sig, prior_sig):
+    """A follow-up's chain completed from the question it follows: "what
+    percent of those watched the full season of Fightland" after the
+    Kanan S5 -> Fightland ask is Kanan S5 -> Fightland, completion."""
+    if not isinstance(sig, dict) or not sig.get('anaphoric'):
+        return sig
+    if not isinstance(prior_sig, dict) or not prior_sig.get('src'):
+        return sig
+    out = dict(sig)
+    out['src'], out['src_season'] = prior_sig.get('src') or '', prior_sig.get('src_season')
+    if not out.get('dst') or _j_same_title(out['dst'], prior_sig.get('src') or '~'):
+        out['dst'], out['dst_season'] = prior_sig.get('dst') or '', prior_sig.get('dst_season')
+    if out.get('dst_season') is None and _j_same_title(out.get('dst') or '', prior_sig.get('dst') or '~'):
+        out['dst_season'] = prior_sig.get('dst_season')
+    if not out.get('platform'):
+        out['platform'] = prior_sig.get('platform') or ''
+    out['anaphoric'] = False
+    return out
+
+
+def journey_match(entry, ask_sig):
+    """True when the stored entry may answer this ask under the viewing
+    chain rule. An ask with no chain is unconstrained unless the entry is
+    itself a journey read (a journey read answers only a journey ask). A
+    follow-up whose source audience is still unresolved ("of those" with
+    nothing to bind to) never matches a banked entry."""
+    try:
+        esig = entry_journey(entry)
+        if not isinstance(ask_sig, dict):
+            return esig is None
+        if ask_sig.get('anaphoric') or not ask_sig.get('src'):
+            return False
+        if not esig or not esig.get('src'):
+            return False
+        if not _j_same_title(ask_sig.get('src'), esig.get('src')):
+            return False
+        if not _j_same_title(ask_sig.get('dst'), esig.get('dst')):
+            return False
+        if not _j_season_ok(ask_sig.get('src_season'), esig.get('src_season')):
+            return False
+        if not _j_season_ok(ask_sig.get('dst_season'), esig.get('dst_season')):
+            return False
+        ap, ep = str(ask_sig.get('platform') or ''), str(esig.get('platform') or '')
+        if ap and ep and ap != ep:
+            return False
+        # every metric the ask names is one the stored read carries
+        want = set(ask_sig.get('metrics') or [])
+        have = set(esig.get('metrics') or [])
+        if 'autoplay' in have:
+            have.add('handoff')
+        if want and not want <= have:
+            return False
+        return True
+    except Exception:
+        return False
+
+
+def _find_journey_anywhere(subjects, ask_sig, question=None):
+    """The stored read on the same whole journey, wherever it was filed
+    (a chain names two titles and the bucket it landed in is whichever
+    the lane resolved; a follow-up may name neither). Provenance wins,
+    then recency. None when the ask is not a resolved chain."""
+    if not isinstance(ask_sig, dict) or ask_sig.get('anaphoric') or not ask_sig.get('src') or not ask_sig.get('dst'):
+        return None, None
+    qn = normalize_question(question) if question else ''
+    q_years = _years_in(qn)
+    best_key, best, best_rank = None, None, None
+    for k, v in (subjects or {}).items():
+        for e in reversed(v.get('entries') or []):
+            if not isinstance(e, dict) or e.get('retired') or not e.get('reply') or is_retired_surface_reply(e.get('reply')):
+                continue
+            if e.get('route') == ANCHOR_ROUTE or entry_journey(e) is None:
+                continue
+            if q_years and not _window_covers(e, q_years):
+                continue
+            if not journey_match(e, ask_sig):
+                continue
+            r = provenance_rank(e)
+            if best is None or r > best_rank or (r == best_rank and (e.get('ts') or '') > (best.get('ts') or '')):
+                best_key, best, best_rank = k, e, r
+    return best_key, best
+
+
+def _prior_user_question(history, question=None):
+    """The user turn before this ask in the thread, or ''. The ask's own
+    turn (already appended by some callers) is skipped."""
+    qn = normalize_question(question) if question else ''
+    seen_self = False
+    for t in reversed(list(history or [])):
+        if not isinstance(t, dict) or str(t.get('role') or '') != 'user':
+            continue
+        txt = str(t.get('text') or t.get('content') or '').strip()
+        if not txt:
+            continue
+        if qn and not seen_self and normalize_question(txt) == qn:
+            seen_self = True
+            continue
+        return txt
+    return ''
+
+
+def ask_journey(question, prior_question=None, history=None):
+    """The chain this ask is about, follow-ups completed from the question
+    they follow (``prior_question``, else the previous user turn in
+    ``history``). None when the ask names no chain."""
+    sig = journey_signature(question)
+    if not sig:
+        return None
+    if sig.get('anaphoric'):
+        prev = str(prior_question or '').strip() or _prior_user_question(history, question)
+        if prev:
+            sig = resolve_followup_journey(sig, journey_signature(prev))
+    return sig
+
+
+def find_semantic(entries, question, ask_sig=None):
     """Meaning-level replay candidate: the best stored read whose
     (family, cohort, slice dimension) matches the ask. Overlapping
     age ranges bind the closest stored cohort; at equal cohort
@@ -1776,11 +2197,18 @@ def find_semantic(entries, question):
     qn = normalize_question(question)
     qsig = cohort_signature(question)
     q_years = _years_in(qn)
+    if ask_sig is None:
+        ask_sig = ask_journey(question)
     best, best_dist, best_rank = None, None, None
     for e in reversed(entries):   # newest first; ties keep the newest
         if not isinstance(e, dict) or not e.get('reply') or is_retired_surface_reply(e.get('reply')):
             continue
         if e.get('route') == ANCHOR_ROUTE:
+            continue
+        # A journey read is reused only for the same whole journey
+        # (2026-11-05, Kanan S5 -> Fightland served Fightland -> S.W.A.T.
+        # Exiles): source, destination, seasons, platform, metric.
+        if not journey_match(e, ask_sig):
             continue
         # Same base, same window, same answer (Jenna 2026-09-24): an
         # ask that names a year only replays a read whose window
@@ -1874,7 +2302,7 @@ def is_retired_surface_reply(reply):
     return bool(_RETIRED_SURFACE_RX.search(head[:400])) or is_offer_reply(head)
 
 
-def find_exact(entries, question=None, key=None):
+def find_exact(entries, question=None, key=None, ask_sig=None):
     """Best stored entry matching this exact ask: normalized question
     match first (strongest), else normalized key match with a
     non-empty stored reply whose own words are about the ask (a key is
@@ -1882,13 +2310,19 @@ def find_exact(entries, question=None, key=None):
     On conflicting matches, provenance wins (delivered_artifact >
     operator > distilled), then recency; with the historical
     single-provenance corpus this is exactly the old newest-first
-    behavior."""
+    behavior. A viewing-chain ask (``ask_sig``, derived from the
+    question when not given) only takes an entry on the same whole
+    journey; a follow-up with an unresolved "of those" takes none."""
     qn = normalize_question(question) if question else None
+    if ask_sig is None and question:
+        ask_sig = ask_journey(question)
 
     def _best(match_fn):
         best, best_rank = None, None
         for e in reversed(entries):     # newest first; ties keep newest
             if not (match_fn(e) and e.get('reply')) or is_retired_surface_reply(e.get('reply')):
+                continue
+            if question and not journey_match(e, ask_sig):
                 continue
             r = provenance_rank(e)
             if best is None or r > best_rank:
@@ -1962,7 +2396,8 @@ def _exact_if_fresh(e):
 
 
 def consult(subject=None, question=None, metric_family=None,
-            window_start=None, window_end=None):
+            window_start=None, window_end=None, prior_question=None,
+            history=None):
     """Look up ledger history for this ask.
 
     Returns {'subject', 'skey', 'entries', 'block', 'exact'}:
@@ -1970,6 +2405,11 @@ def consult(subject=None, question=None, metric_family=None,
     - block:   PUBLISHED MEASUREMENTS body ('' when no history)
     - exact:   entry to replay verbatim, or None (a rolling-window
       entry older than its own span never replays verbatim)
+    ``prior_question`` / ``history`` (2026-11-05): the question this
+    ask follows, so a follow-up on a viewing chain ("what percent of
+    those watched the full season of Fightland") binds to the read
+    produced for that question and never to a banked entry that merely
+    shares a title. Without either, a chain follow-up replays nothing.
     Never raises; empty result on any failure.
     """
     empty = {'subject': None, 'skey': None, 'entries': [],
@@ -1981,11 +2421,18 @@ def consult(subject=None, question=None, metric_family=None,
         # (2026-10-02 S5). Commands, generic screen asks, and
         # complaints still get their history in the block.
         _can_replay = replay_eligible(question)
+        _ask_sig = ask_journey(question, prior_question=prior_question, history=history)
         skey = _resolve_subject(doc, subject=subject, question=question)
         if not skey:
             # Exact-ask replay must not depend on subject resolution:
             # scan all buckets for this normalized question.
             gkey, gexact = _find_exact_anywhere(subjects, question)
+            if gexact is not None and not journey_match(gexact, _ask_sig):
+                gexact = None
+            if not gexact:
+                # a chain read is filed under whichever title the lane
+                # resolved; the same whole journey is the same read
+                gkey, gexact = _find_journey_anywhere(subjects, _ask_sig, question)
             if not gexact:
                 return empty
             bucket = subjects.get(gkey) or {}
@@ -2008,18 +2455,32 @@ def consult(subject=None, question=None, metric_family=None,
             key = entry_key(bucket.get('subject') or subject or '',
                             metric_family, window_start, window_end)
         match = None
-        exact = find_exact(entries, question=question, key=key)
+        exact = find_exact(entries, question=question, key=key, ask_sig=_ask_sig)
         if exact:
             match = 'exact'
         if not exact:
             gkey, gexact = _find_exact_anywhere(subjects, question)
-            if gexact:
+            if gexact and journey_match(gexact, _ask_sig):
                 exact = gexact
                 match = 'exact'
+        if not exact and _ask_sig:
+            # The same whole journey is the same read whichever title it
+            # was filed under (2026-11-05): a Kanan S5 -> Fightland read
+            # filed under Power: Raising Kanan answers the ask that
+            # resolved to the Fightland bucket, and a follow-up that
+            # names no title at all.
+            jkey, jexact = _find_journey_anywhere(subjects, _ask_sig, question)
+            if jexact is not None:
+                exact, match = jexact, 'semantic'
+                if jkey and jkey != skey:
+                    jb = subjects.get(jkey) or {}
+                    jents = [e for e in (jb.get('entries') or []) if isinstance(e, dict) and not e.get('retired')]
+                    if jents:
+                        skey, bucket, entries = jkey, jb, jents
         if not exact:
             # Meaning-level replay (2026-08-27): same family + cohort +
             # slice dimension = the same read, whatever the wording.
-            exact = find_semantic(entries, question)
+            exact = find_semantic(entries, question, ask_sig=_ask_sig)
             if exact:
                 match = 'semantic'
         if not _can_replay:
