@@ -1458,11 +1458,32 @@ def analyze_hook(text, body, history, user, ppu, uname, g):
             if err is not None:
                 return err
             return _payload(promise, [], twin_job_id=job_id, job_id=job_id, job_type='twin_build', open_view='digitalTwinsIQ')
-        # 2. the collecting intake
-        if ((body or {}).get('twin_inputs') or intake_armed(history)) and not g['_pm_intake_breakout'](t) and not twin_intent(t):
-            if re.match(r"^\s*(never ?mind|no( thanks?)?|not now|cancel( (that|it))?)[.! ]*$", low):
-                return _payload('No problem, nothing was charged. Ask me anything else when ready.')
-            return g['_pm_intake_turn'](FLOW, t, body, history, user, ppu, first=False)
+        # 2. the collecting intake. The widget's twin_inputs flag is page state and follows the reader across
+        # threads (Jenna 2026-11-05): it arms this turn only when the thread itself could be waiting; a question
+        # typed while the intake collects routes on its own and the reply carries 'Back to the twin'.
+        _flag = bool((body or {}).get('twin_inputs'))
+        if _flag:
+            try:
+                from . import intake_guard as _ig
+                _flag = bool(_ig.armed_flag_applies(history))
+            except Exception:
+                pass
+        if (_flag or intake_armed(history)) and not twin_intent(t):
+            _breakout = False
+            try:
+                _breakout = bool(g['_pm_intake_breakout'](t, FLOW))
+            except TypeError:
+                _breakout = bool(g['_pm_intake_breakout'](t))
+                if _breakout:
+                    try:
+                        from . import intake_guard as _ig
+                        _ig.mark_resume(FLOW)
+                    except Exception:
+                        pass
+            if not _breakout:
+                if re.match(r"^\s*(never ?mind|no( thanks?)?|not now|cancel( (that|it))?)[.! ]*$", low):
+                    return _payload('No problem, nothing was charged. Ask me anything else when ready.')
+                return g['_pm_intake_turn'](FLOW, t, body, history, user, ppu, first=False)
         if not twin_intent(t) and not (active_session(user) and _PANEL_ASK_RX.search(t)) and not (DT.is_how_to_ask(t)):
             # a free question on an open twin that maps to a run
             key = _open_twin_key(body)

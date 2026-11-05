@@ -471,6 +471,71 @@ def _host_cap(host, *names):
     return None
 
 
+def _same_thread(doc_thread_id, thread_id):
+    try:
+        from . import intake_guard as _ig
+        return bool(_ig.same_thread(doc_thread_id, thread_id))
+    except Exception:
+        a, b = str(doc_thread_id or '').strip(), str(thread_id or '').strip()
+        return not a or not b or a == b
+
+
+# The intake guard (prometheus.intake_guard, Jenna 2026-11-05): a step
+# consumes a message only when it reads as an answer to that step. The
+# kind each step waits on.
+_STEP_KIND = {STEP_ENTRY: 'text', STEP_ECOSYSTEM: 'short', STEP_DATES: 'dates', STEP_EXISTS: 'text', STEP_CONFIRM: 'choice'}
+
+
+def answers_step(text, draft, today=None):
+    """True when `text` reads as the answer to the draft's open step
+    (its chips, a control word, dates at the dates step, a one-line
+    entry at the entry step). A question is not."""
+    try:
+        from . import intake_guard as _ig
+    except Exception:
+        return True
+    d = dict(draft or {})
+    step = d.get('step') or next_step(d)
+    try:
+        _reply, chips = step_prompt(d)
+    except Exception:
+        chips = ['Cancel']
+    patterns = (_REBUILD_RX, _OPEN_RX, _YES_RX, _OTHER_ECO_RX) if step == STEP_EXISTS else (_YES_RX, _OTHER_ECO_RX, _OTHER_RX)
+    if step == STEP_ECOSYSTEM:
+        # any company name answers the ecosystem step ('Warner Bros. Discovery', 'Paramount Skydance')
+        low = _low(text)
+        if low in _ECOSYSTEMS or low in _PLATFORMS:
+            return True
+    if step == STEP_DATES and (_TRAILING_RX.search(str(text or '')) or _CAL_YEAR_RX.search(str(text or ''))):
+        return True
+    return _ig.is_answer_to_step(text, _STEP_KIND.get(step, 'text'), chips=list(chips) + [RUN_CHIP, REBUILD_CHIP, 'Build this window'],
+                                 answer_patterns=patterns)
+
+
+def last_agent_is_wizard(history):
+    """The last agent turn in the thread asked a flywheel step (or
+    carried the way back to one)."""
+    try:
+        from . import intake_guard as _ig
+        turn = _ig.last_agent_turn(history)
+    except Exception:
+        turn = None
+    if not turn:
+        return False
+    txt = str(turn.get('text') or turn.get('content') or '').strip()
+    if any(txt.startswith(p[:40]) for p in (ASK_ENTRY, ASK_ECOSYSTEM, ASK_DATES, ASK_ECOSYSTEM_OTHER, OTHER_DATES_REPLY, "Here's the Flywheel I'll build")):
+        return True
+    if txt.startswith('Got it: ') or txt.startswith('A flywheel for ') or txt.startswith('It is on the Flywheel IQ page'):
+        return True
+    meta = turn.get('meta') if isinstance(turn.get('meta'), dict) else {}
+    want = 'back to the flywheel'
+    for o in (meta.get('options') or turn.get('options') or turn.get('followups') or []):
+        lbl = (o.get('send') or o.get('label')) if isinstance(o, dict) else o
+        if str(lbl or '').strip().lower() == want:
+            return True
+    return False
+
+
 class MemoryStore:
     def __init__(self):
         self.d = {}
@@ -502,7 +567,14 @@ def _s3_store(host):
             try:
                 from . import pending_intake as pi
                 hit = pi.peek(s3, self._bucket(), user, WIZARD_FLOW)
-                return hit if isinstance(hit, dict) and hit.get('step') else None
+                if not (isinstance(hit, dict) and hit.get('step')):
+                    return None
+                # the stash is per reader; it answers only for the thread it
+                # was saved on (Jenna 2026-11-05: an intake armed on one
+                # thread never reads a message on another)
+                if not _same_thread(hit.get('thread_id'), thread_id):
+                    return None
+                return hit
             except Exception:
                 return None
 
@@ -583,8 +655,24 @@ def _analyze_hook(text, body, history, user, ppu, uname, g, first=None, store=No
     thread_id = str((body or {}).get('thread_id') or '')
     if store is None:
         store = store_for(body, g)
+    # The widget's collect flag (fw_inputs) is page state and follows the
+    # reader across threads; it arms this turn only when the thread
+    # itself could be waiting (its last agent turn is not a job notice,
+    # and when it asked anything it asked a flywheel step). The store is
+    # per (reader, thread). (Jenna 2026-11-05)
     collecting = bool((body or {}).get('fw_inputs'))
+    if collecting:
+        try:
+            from . import intake_guard as _ig
+            if not _ig.armed_flag_applies(history):
+                collecting = False
+            elif _ig.last_agent_turn(history) is not None and not last_agent_is_wizard(history):
+                collecting = False
+        except Exception:
+            pass
     draft = store.load(uname, thread_id) if store is not None else None
+    if not draft and not collecting and last_agent_is_wizard(history):
+        collecting = True
     if is_start(t) or (first is True and not draft and not collecting):
         # a start always opens fresh; the words after the verb fill ahead ("run a flywheel for Gilmore Girls on PV")
         d = apply_ahead(empty_draft(), t, today=today)
@@ -598,6 +686,25 @@ def _analyze_hook(text, body, history, user, ppu, uname, g, first=None, store=No
     d = dict(draft) if isinstance(draft, dict) else empty_draft()
     if not d.get('step'):
         d['step'] = next_step(d)
+    # The intake guard (Jenna 2026-11-05): a message that does not read
+    # as the answer to the open step (a question, an order on something
+    # else) is not the wizard's. None; the draft stays at its step; the
+    # service routes the words and the reply carries 'Back to the
+    # flywheel'. 'Back to the flywheel' or 'back to it' re-asks the step.
+    try:
+        from . import intake_guard as _ig
+        if _ig.is_resume(t):
+            if store is not None:
+                store.save(uname, thread_id, d)
+            reply, chips = step_prompt(d)
+            if d.get('step') == STEP_EXISTS:
+                return exists_reply(d, d.get('existing') or [], again=True)
+            return _payload(reply or ASK_ENTRY, chips or ['Cancel'], fw_collect=True)
+        if first is not True and not answers_step(t, d, today=today):
+            _ig.mark_resume(FLOW, step=str(d.get('step') or ''))
+            return None
+    except Exception:
+        traceback.print_exc()
     if d.get('step') == STEP_EXISTS:
         # the study is already on the page: build anyway, open it, or stop
         if _REBUILD_RX.match(t) or _YES_RX.match(t):

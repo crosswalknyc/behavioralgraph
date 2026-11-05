@@ -493,6 +493,14 @@ def ask(user, body, *, via='session'):
     body = body if isinstance(body, dict) else {}
     text = str(body.get('text') or '').strip()
     uname = username_of(user)
+    # The intake guard's mark is per ask (prometheus.intake_guard, Jenna
+    # 2026-11-05): a flow that steps aside for a question says so here,
+    # the reply carries the way back; nothing leaks into the next ask.
+    try:
+        from . import intake_guard as _ig0
+        _ig0.reset_resume()
+    except Exception:
+        pass
     # Standing preferences in the ask ("always", "from now on") are kept
     # as rules for every later answer (2026-10-13 audit).
     try:
@@ -527,11 +535,19 @@ def ask(user, body, *, via='session'):
         return env, 200
 
     # Thread: explicit id must belong to the caller; else the active one.
+    # The dashboard names the thread its tab is on (2026-11-05: before
+    # this the server took its own active thread, which another tab may
+    # have moved, and a wizard armed there read the asks typed here); a
+    # tab holding an id the rail has since retired falls back to the
+    # active one instead of a 404 the widget cannot act on.
     tid = str(body.get('thread_id') or '').strip() or None
     if tid and not thread_exists(uname, tid):
-        return envelope.wrap({'success': False, 'error': 'unknown thread'},
-                             surface='interpret',
-                             decision={'reason': 'bad_thread'}, via=via), 404
+        if client == 'dashboard':
+            tid = None
+        else:
+            return envelope.wrap({'success': False, 'error': 'unknown thread'},
+                                 surface='interpret',
+                                 decision={'reason': 'bad_thread'}, via=via), 404
     if not tid:
         tid = active_thread_id(uname)
     # The project this thread is bound to rides the request (2026-10-21,
@@ -582,10 +598,13 @@ def ask(user, body, *, via='session'):
 
     # lane: bpiq_wizard
     # Chip "Value a brand partnership" always opens step 1 (Jenna
-    # 2026-10-28). While a draft is open on this thread, EVERY later
-    # turn stays in the wizard (Jenna 2026-10-28 5:48pm: "Jennifer
-    # Beals" was read as a new subject). Peek the shared store first.
-    # Only Cancel (or Decline on the recap) leaves.
+    # 2026-10-28). While a draft is open on THIS thread, a later turn
+    # that reads as the answer to the open step stays in the wizard
+    # (Jenna 2026-10-28 5:48pm: "Jennifer Beals" was read as a new
+    # subject). A question typed mid-wizard is not the wizard's (Jenna
+    # 2026-11-05, prometheus.intake_guard): it routes below, the reply
+    # carries 'Back to the valuation', the draft stays at its step. Peek
+    # the shared store first. Only Cancel (or Decline on the recap) leaves.
     try:
         from prometheus import bpiq_wizard as _bwiz
         _bw_store = _bwiz.store_for(body, {'_H': host})
@@ -612,7 +631,13 @@ def ask(user, body, *, via='session'):
                 text, dict(body, thread_id=tid or ''), history, user,
                 {}, uname, _g, first=_bwiz.is_start(text),
                 store=_bw_store)
-            if _hit is None:
+            _stood_aside = False
+            try:
+                from prometheus import intake_guard as _ig1
+                _stood_aside = _hit is None and _ig1.pending_resume() is not None
+            except Exception:
+                _stood_aside = False
+            if _hit is None and not _stood_aside:
                 _hit = _bwiz.hold_payload(
                     history, _bw_store, uname, tid or '')
             if _hit is not None:
@@ -1974,9 +1999,19 @@ def ask(user, body, *, via='session'):
         try:
             from . import send_file as _sf
             # the name typed in answer to the lane's own "Which file?" is the order completed, never a new ask
-            # (Carolyn Bisson, 2026-11-02: it went to the reader and started a cold read on a title in her library)
+            # (Carolyn Bisson, 2026-11-02: it went to the reader and started a cold read on a title in her library);
+            # a question typed there is a question (the intake guard, 2026-11-05): it routes below with the way back
+            _sf_follow = False
+            if not _sf.parse(text) and _sf.follows_clarifier(history) and len(' '.join(str(text or '').split())) <= 90:
+                try:
+                    from . import intake_guard as _ig_sf
+                    _sf_follow = not _ig_sf.is_question_shaped(text)
+                    if not _sf_follow:
+                        _ig_sf.mark_resume('send_file')
+                except Exception:
+                    _sf_follow = True
             _sf_raw = (_sf.answer(text, uname, user=user, ctx=ctx, history=history, host=host)
-                       if (_sf.parse(text) or (_sf.follows_clarifier(history) and len(' '.join(str(text or '').split())) <= 90)) else None)
+                       if (_sf.parse(text) or _sf_follow) else None)
         except Exception as e:
             _faults.note('service.send_file_lane', e)
             _sf_raw = None
@@ -2586,7 +2621,7 @@ def _last_agent_turn(history):
 
 _UTILITY_CHIP_RX = re.compile(
     r'^(?:email\s+me|send\s+me|save|download|something\s+else|'
-    r'cancel|no\b|none\b|skip|new\s+thread|start\s+over)', re.I)
+    r'cancel|no\b|none\b|skip|new\s+thread|start\s+over|back\s+to\b)', re.I)   # 'Back to the valuation' is the way back, never a pick (2026-11-05)
 
 
 def _option_labels(turn):

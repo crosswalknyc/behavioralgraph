@@ -17,6 +17,7 @@ from urllib.parse import urlparse
 
 FLOW = 'brand_partnership'
 WIZARD_FLOW = 'brand_partnership_wizard'
+DRAFT_TTL_S = 24 * 3600      # a draft waits a day, then the thread is free (matches pending_intake.TTL_S)
 CHIP = 'Value a brand partnership'
 CHIP_ALIASES = (
     CHIP,
@@ -86,6 +87,10 @@ CHIP_PASTE = "I'll paste links"
 CHIP_FIND = 'Find the assets'
 CHIP_DECLINE = 'Decline'
 CHIP_CANCEL = 'Cancel'
+# The way back after a question typed mid-wizard was answered on its own
+# (Jenna 2026-11-05). The draft stays at its step; this chip, or 'back
+# to it', re-asks it.
+RESUME_CHIP = 'Back to the valuation'
 
 _MONTHS = {
     'jan': 1, 'january': 1, 'feb': 2, 'february': 2, 'mar': 3, 'march': 3,
@@ -348,6 +353,130 @@ def step_from_prompt(text):
     return None
 
 
+# The intake guard (prometheus.intake_guard, Jenna 2026-11-05): a step
+# consumes a message only when it reads as an answer to that step. The
+# kind each step waits on, and the step's own answer shapes that always
+# count (an 'I'll paste links' phrasing at the assets step, an accept at
+# the window or the recap).
+_STEP_KIND = {
+    STEP_TALENT: 'name', STEP_CAMPAIGN: 'short', STEP_DATES: 'dates',
+    STEP_ATTR: 'choice', STEP_ATTR_CUSTOM: 'dates', STEP_CONTROL: 'yes_no',
+    STEP_ASSETS: 'choice', STEP_LINKS: 'links', STEP_CHARGE: 'choice',
+}
+_STEP_ANSWER_PATTERNS = {
+    STEP_ATTR: (_ACCEPT_RE, re.compile(r'\bdifferent\b', re.I), _YES_RE),
+    STEP_ASSETS: (_PASTE_RE, _FIND_RE, _YES_RE, _NO_RE),
+    STEP_CHARGE: (_ACCEPT_RE, _DECLINE_RE),
+    STEP_CONTROL: (_YES_RE, _NO_RE),
+}
+
+
+def _bpiq_intent(text):
+    """A fresh valuation ask in the words themselves ('can you value
+    Gunna x Nike? campaign ran June through August'): the wizard's turn
+    even when it reads as a question, it fills ahead."""
+    try:
+        from prometheus import intents as _intents
+        return bool(_intents.bpiq_intent(text, CHIP))
+    except Exception:
+        return is_chip(text)
+
+
+def answers_step(text, draft, today=None):
+    """The intake guard for the wizard: True when `text` reads as the
+    answer to the draft's open step (its chips, its control words, its
+    own answer shapes, a dates attempt at a dates step, a short name at
+    a name step). A question or an order on something else is not."""
+    try:
+        from prometheus import intake_guard as _ig
+    except Exception:
+        return True
+    d = dict(draft or empty_draft())
+    step = d.get('step') or next_step(d)
+    try:
+        _reply, chips = step_prompt(d, today=today)
+    except Exception:
+        chips = [CHIP_CANCEL]
+    return _ig.is_answer_to_step(text, _STEP_KIND.get(step, 'text'), chips=chips,
+                                 answer_patterns=_STEP_ANSWER_PATTERNS.get(step))
+
+
+def _stand_aside(draft):
+    """Note for the service that the wizard let this message through as a
+    new question: the reply carries the way back; the draft stays."""
+    try:
+        from prometheus import intake_guard as _ig
+        _ig.mark_resume(FLOW, RESUME_CHIP, step=str((draft or {}).get('step') or ''))
+    except Exception:
+        pass
+
+
+def _is_resume(text):
+    try:
+        from prometheus import intake_guard as _ig
+        return bool(_ig.is_resume(text))
+    except Exception:
+        return False
+
+
+def _same_thread(doc_thread_id, thread_id):
+    """A stored draft belongs to this thread when either side is unknown
+    or the ids agree (prometheus.intake_guard.same_thread)."""
+    try:
+        from prometheus import intake_guard as _ig
+        return bool(_ig.same_thread(doc_thread_id, thread_id))
+    except Exception:
+        a, b = str(doc_thread_id or '').strip(), str(thread_id or '').strip()
+        return not a or not b or a == b
+
+
+def _body_draft(body, thread_id='', history=None):
+    """The draft the widget echoed back, when it belongs to THIS thread.
+    The widget keeps the draft in page state (and sessionStorage), so it
+    follows the reader across threads (Jenna 2026-11-05: a valuation
+    armed on one thread read her questions on another). A draft stamped
+    with another thread's id is not this thread's; an unstamped one
+    (minted before the stamp) counts only when this thread's own last
+    agent turn asked a step, or no thread is known."""
+    body = body or {}
+    extra = body.get('extra') if isinstance(body.get('extra'), dict) else {}
+    hit = body.get('bpiq_wizard') or extra.get('bpiq_wizard')
+    if not (isinstance(hit, dict) and hit.get('step')):
+        return None
+    own = str(hit.get('thread_id') or '').strip()
+    tid = str(thread_id or '').strip()
+    if own and tid and own != tid:
+        return None
+    if not own and tid and not last_agent_is_wizard(history):
+        return None
+    return dict(hit)
+
+
+def _stamp(draft, thread_id=''):
+    """The thread a draft belongs to rides on it, so the widget's echo
+    can be told from another thread's."""
+    if isinstance(draft, dict) and thread_id and not draft.get('thread_id'):
+        draft['thread_id'] = str(thread_id)
+    return draft
+
+
+def open_draft(body, history, store, user, thread_id='', today=None):
+    """The draft a mid-wizard turn would answer, or None when the wizard
+    is not open on this thread: the body's own draft (this thread's),
+    the store's (this thread's), the last agent turn's, a replay of the
+    thread, else an empty draft at the step the last agent turn asked.
+    A collect flag on the body alone never arms a thread (it is the
+    widget's page state and follows the reader). One store read."""
+    d = _load_draft(store, user, thread_id or '', body, history, today=today)
+    if d:
+        return d
+    if not last_agent_is_wizard(history):
+        return None
+    d = empty_draft()
+    d['step'] = step_from_prompt(str((last_agent_turn(history) or {}).get('text') or '')) or STEP_TALENT
+    return d
+
+
 def last_agent_is_wizard(history):
     turn = last_agent_turn(history)
     if not turn:
@@ -363,6 +492,16 @@ def last_agent_is_wizard(history):
         return True
     if 'needs funds on the account first' in low:
         return True
+    # a reply that answered a question typed mid-wizard carries the way
+    # back; the step behind it is still open (2026-11-05)
+    try:
+        want = RESUME_CHIP.lower()
+        for o in (meta.get('options') or turn.get('options') or turn.get('followups') or []):
+            lbl = (o.get('send') or o.get('label')) if isinstance(o, dict) else o
+            if str(lbl or '').strip().lower() == want:
+                return True
+    except Exception:
+        pass
     return False
 
 
@@ -406,6 +545,11 @@ def replay_history(history, today=None):
             return None
         if pending:
             d['step'] = pending
+            if not answers_step(txt, d, today=today):
+                # a question typed while the step waited (2026-11-05): it
+                # was answered on its own; the step stays open
+                saw = True
+                continue
             d2, err = apply_answer(d, txt, today=today)
             if not err:
                 d = d2
@@ -419,30 +563,33 @@ def replay_history(history, today=None):
 
 def wants(text, body=None, history=None, store=None, user=None,
           thread_id=''):
-    """True when this turn belongs to the wizard: a start phrase, an
-    armed body, a draft on the shared store, or the last agent turn
-    already asked a wizard step."""
+    """True when this turn belongs to the wizard: a start phrase, a
+    confirm payload, or an open draft (an armed body, the shared store,
+    the last agent turn asked a step) AND the message reads as the
+    answer to the open step (prometheus.intake_guard, Jenna 2026-11-05).
+    A question typed while a step waits is not the wizard's: this
+    returns False, the draft stays where it is, and the reply that
+    answers the question carries the 'Back to the valuation' chip."""
     if is_start(text):
         return True
     body = body or {}
     extra = body.get('extra') if isinstance(body.get('extra'), dict) else {}
-    if any((body.get(k) or extra.get(k)) for k in (
-            'bpiq_wizard', 'bpiq_inputs', 'bpiq_confirm')):
-        return True
-    if last_agent_is_wizard(history):
+    if body.get('bpiq_confirm') or extra.get('bpiq_confirm'):
         return True
     if store is None and user:
         try:
             store = store_for(body)
         except Exception:
             store = None
-    if store is not None:
-        try:
-            hit = store.load(user, thread_id or '')
-            if isinstance(hit, dict) and hit.get('step'):
-                return True
-        except Exception:
-            pass
+    draft = open_draft(body, history, store, user, thread_id)
+    if draft is None:
+        return False
+    t = str(text or '').strip()
+    if _is_resume(t) or is_cancel(t) or is_decline(t) or is_chip(t) or _bpiq_intent(t):
+        return True
+    if answers_step(t, draft):
+        return True
+    _stand_aside(draft)
     return False
 
 
@@ -774,7 +921,7 @@ def hold_payload(history=None, store=None, user=None, thread_id='',
         draft = empty_draft()
         draft['step'] = STEP_TALENT
     reply, chips = step_prompt(draft, today=today)
-    return _payload(reply, chips, draft=draft)
+    return _payload(reply, chips, draft=_stamp(draft, thread_id))
 
 
 def step_prompt(draft, today=None):
@@ -828,6 +975,15 @@ def apply_answer(draft, text, today=None):
     elif step == STEP_DATES:
         start, end = parse_dates(t, today=today)
         if not (start and end):
+            # the could-not-read line is for an attempt at dates; a reply
+            # that never tried is asked plainly (2026-11-05)
+            try:
+                from prometheus import intake_guard as _ig
+                tried = _ig.is_dates_attempt(t)
+            except Exception:
+                tried = True
+            if not tried:
+                return d, ASK_DATES
             return d, ('I could not read those dates. Try something like '
                        'October 7 - 28.')
         d['campaign_start'], d['campaign_end'] = start, end
@@ -922,13 +1078,21 @@ class MemoryStore:
         return f"{user or ''}|{thread_id or ''}"
 
     def load(self, user, thread_id=''):
-        return self.rows.get(self._key(user, thread_id)) or self.rows.get(
-            self._key(user, ''))
+        hit = self.rows.get(self._key(user, thread_id))
+        if hit:
+            return hit
+        # the per-user copy serves a caller that knows no thread, or the
+        # thread it was saved on; never another thread (2026-11-05)
+        hit = self.rows.get(self._key(user, ''))
+        if hit and not _same_thread(hit.get('thread_id'), thread_id):
+            return None
+        return hit
 
     def save(self, user, thread_id, draft):
-        self.rows[self._key(user, thread_id)] = dict(draft or {})
+        doc = dict(draft or {}, thread_id=str(thread_id or ''))
+        self.rows[self._key(user, thread_id)] = dict(doc)
         if thread_id:
-            self.rows[self._key(user, '')] = dict(draft or {})
+            self.rows[self._key(user, '')] = dict(doc)
         return True
 
     def clear(self, user, thread_id=''):
@@ -1018,26 +1182,38 @@ def _s3_store(host):
             try:
                 from prometheus import pending_intake as pi
                 hit = pi.peek(s3, bucket, user, WIZARD_FLOW)
-                if isinstance(hit, dict) and hit.get('step'):
-                    stash_tid = str(hit.get('thread_id') or '')
-                    if thread_id and stash_tid and stash_tid != str(thread_id):
-                        pass
-                    else:
-                        return hit
+                # the shared stash is per reader; it answers only for the
+                # thread it was saved on (Jenna 2026-11-05: an intake armed
+                # on one thread never reads a message on another)
+                if isinstance(hit, dict) and hit.get('step') and _same_thread(hit.get('thread_id'), thread_id):
+                    return hit
             except Exception:
                 pass
             try:
                 obj = s3.get_object(Bucket=bucket, Key=self._key(user, thread_id))
                 import json
                 doc = json.loads(obj['Body'].read().decode('utf-8'))
-                return doc if isinstance(doc, dict) else None
+                if not isinstance(doc, dict):
+                    return None
+                # the per-thread copy keeps a day, like the shared stash
+                # (2026-11-05): a draft left open weeks ago never arms
+                # the thread again. A copy with no stamp is stale.
+                import time as _time
+                try:
+                    ts = float(doc.get('ts') or 0)
+                except (TypeError, ValueError):
+                    ts = 0.0
+                if not ts or _time.time() - ts > DRAFT_TTL_S:
+                    return None
+                return doc
             except Exception:
                 return None
 
         def save(self, user, thread_id, draft):
             s3 = self._s3()
             bucket = self._bucket()
-            doc = dict(draft or {}, thread_id=thread_id or '')
+            import time as _time
+            doc = dict(draft or {}, thread_id=thread_id or '', ts=_time.time())
             if s3 is None:
                 return False
             ok = False
@@ -1110,10 +1286,13 @@ def _s3_store(host):
 
 
 def _load_draft(store, user, thread_id, body, history, today=None):
-    if isinstance((body or {}).get('bpiq_wizard'), dict):
-        hit = dict(body['bpiq_wizard'])
-        if hit.get('step'):
-            return hit
+    """The open draft for THIS thread: the body's echo when it is this
+    thread's (_body_draft), the store's copy for (user, thread), the
+    last agent turn's meta, else a replay of the thread. Keyed by
+    (user, thread) throughout (Jenna 2026-11-05)."""
+    hit = _body_draft(body, thread_id, history)
+    if hit:
+        return hit
     if store is not None:
         try:
             hit = store.load(user, thread_id)
@@ -1121,6 +1300,11 @@ def _load_draft(store, user, thread_id, body, history, today=None):
                 return dict(hit)
         except Exception:
             pass
+    # the thread's own turns: only when its last agent turn asked a step
+    # or carried the way back to one (a thread that moved on is not
+    # replayed into an old wizard)
+    if not last_agent_is_wizard(history):
+        return None
     for turn in reversed(list(history or [])):
         if not isinstance(turn, dict):
             continue
@@ -1393,12 +1577,19 @@ def analyze_hook(text, body, history, user, ppu, uname, g,
                  first=None, today=None, store=None, charge_fn=None,
                  start_fn=None, registry=None):
     """One wizard turn. Returns a chat payload, or None when this is
-    not a Brand Partnership Valuation ask and no draft is open."""
+    not a Brand Partnership Valuation ask and no draft is open (or the
+    message is a question the open step does not own: the service
+    routes it and the reply carries the way back)."""
     try:
-        return _analyze_hook(
+        hit = _analyze_hook(
             text, body, history, user, ppu, uname, g,
             first=first, today=today, store=store,
             charge_fn=charge_fn, start_fn=start_fn, registry=registry)
+        # the draft the widget echoes back names its thread, so another
+        # thread can tell it is not its own (2026-11-05)
+        if isinstance(hit, dict) and isinstance(hit.get('bpiq_wizard'), dict):
+            _stamp(hit['bpiq_wizard'], str((body or {}).get('thread_id') or ''))
+        return hit
     except Exception:
         traceback.print_exc()
         return None
@@ -1437,7 +1628,15 @@ def _analyze_hook(text, body, history, user, ppu, uname, g,
     if first is True:
         intent = True
     confirm = (body or {}).get('bpiq_confirm')
-    collecting = bool((body or {}).get('bpiq_inputs')) or bool(draft)
+    # The widget's collect flag (bpiq_inputs) is page state and follows
+    # the reader across threads; it never arms a thread on its own. A
+    # thread is collecting when ITS draft is open: the store's copy, the
+    # body's echo for this thread, its last agent turn (2026-11-05).
+    if not draft and last_agent_is_wizard(history):
+        draft = empty_draft()
+        draft['step'] = step_from_prompt(
+            str((last_agent_turn(history) or {}).get('text') or '')) or STEP_TALENT
+    collecting = bool(draft)
 
     if is_cancel(t) and (draft or collecting or intent):
         if store is not None:
@@ -1507,20 +1706,23 @@ def _analyze_hook(text, body, history, user, ppu, uname, g,
             store.clear(uname or user, thread_id)
         return _payload(DECLINE_REPLY, [], draft=None, bpiq_collect=False)
 
-    # Only Cancel (or Decline on the recap) leaves. A bare name, a
-    # new-looking ask, or a subject-shaped reply is the next answer.
-    if not draft:
-        draft = replay_history(history, today=today)
-        if draft:
-            collecting = True
-    if not draft and last_agent_is_wizard(history):
-        draft = empty_draft()
-        step = step_from_prompt(
-            str((last_agent_turn(history) or {}).get('text') or ''))
-        draft['step'] = step or STEP_TALENT
-        collecting = True
+    # Only Cancel (or Decline on the recap) leaves. A bare name or a
+    # subject-shaped reply is the next answer; a question is not (the
+    # guard below). The draft was resolved for this thread above.
     if not draft and not intent and not collecting:
         return None
+
+    # The intake guard (Jenna 2026-11-05). 'Back to the valuation' or
+    # 'back to it' re-asks the open step. A message that does not read
+    # as the answer to that step (a question, an order on something
+    # else) is not the wizard's: None, the draft stays at its step, and
+    # the service routes the words normally with the way back as a chip.
+    if draft and not intent and not is_chip(t):
+        if _is_resume(t):
+            return hold_payload(history, store, uname or user, thread_id, today)
+        if not answers_step(t, draft, today=today):
+            _stand_aside(draft)
+            return None
 
     if not draft or (intent and is_chip(t)):
         draft = empty_draft()

@@ -9265,13 +9265,76 @@ def _pm_intake_last_agent_stalled(history):
 from prometheus.intake_reader import missing_labels as _ir_labels  # noqa: E402  (plain words for missing intake fields)
 
 
-def _pm_intake_breakout(text):
+def _pm_intake_breakout(text, flow=''):
     """A new ask typed while a guided intake is collecting leaves the
     intake (2026-10-07 Eliot: "is there a way to build an audience of
     people who have attended a Gunna concert?" was read as journey
-    fields and answered "I still need platform")."""
+    fields and answered "I still need platform"). The intake guard
+    (prometheus.intake_guard, Jenna 2026-11-05) widens this to every
+    question-shaped message: an interrogative opener, a question mark,
+    a figure asked, an order on something else. When `flow` is named
+    the reply that answers the question carries the way back to the
+    intake ('Back to the journey'); the brief it had read so far stays
+    stashed for the reader."""
     from prometheus.intake_reader import is_new_ask
-    return is_new_ask(text)
+    out = is_new_ask(text)
+    if not out:
+        try:
+            from prometheus import intake_guard as _ig
+            out = bool(_ig.is_new_ask_for_brief(text))
+        except Exception:
+            out = False
+    if out and flow:
+        try:
+            from prometheus import intake_guard as _ig
+            _ig.mark_resume(flow)
+        except Exception:
+            pass
+    return out
+
+
+def _pm_intake_resume_reply(flow, history):
+    """Re-ask the open step of a brief-reading intake (a journey, a
+    campaign, a twin) after a question typed mid-intake was answered on
+    its own (2026-11-05): the last prompt this flow gave in the thread,
+    verbatim, with its chips and the collect flag; the opener when the
+    thread holds none. The brief read so far stays stashed for the
+    reader and the earlier answers stay in the thread, so the next
+    answer completes it."""
+    kind, confirm_name, run_label, payload_key, collect_key, labels = _PM_INTAKE_UI[flow]
+    ask_copy = _pm_intake_flow_table()[flow][3]
+    base = {'success': True, 'action': 'answer', 'offer_deck': False, 'deck_angle': None}
+    heads = (str(ask_copy or '')[:40], 'Almost there - I still need', 'One question before I line it up', 'Do you want this ',
+             "Here's what I'll run", 'Here is what I will run')
+    for t in reversed([x for x in (history or []) if isinstance(x, dict)]):
+        if str(t.get('role') or '') not in ('agent', 'assistant'):
+            continue
+        txt = ' '.join(str(t.get('text') or t.get('content') or '').split())
+        if not txt or not any(h and txt.startswith(h) for h in heads):
+            continue
+        meta = t.get('meta') if isinstance(t.get('meta'), dict) else {}
+        chips = []
+        for o in (meta.get('options') or t.get('options') or []):
+            lbl = (o.get('send') or o.get('label')) if isinstance(o, dict) else o
+            lbl = str(lbl or '').strip()
+            if lbl and not lbl.lower().startswith('back to'):
+                chips.append(lbl)
+        return {**base, 'reply': txt, collect_key: True, 'followups': chips or ['Cancel']}
+    return {**base, 'reply': ask_copy, collect_key: True, 'followups': ['Cancel']}
+
+
+def _pm_collect_flag_applies(body, key, history):
+    """The widget's collect flag (`jiq_inputs`, `fw_inputs`, ...) is page
+    state and follows the reader across threads (Jenna 2026-11-05). It
+    arms this turn only when the thread itself could be waiting: no
+    agent turn yet, or a last agent turn that is not a job notice."""
+    if not (body or {}).get(key):
+        return False
+    try:
+        from prometheus import intake_guard as _ig
+        return bool(_ig.armed_flag_applies(history))
+    except Exception:
+        return True
 
 
 def _pm_intake_resolve(flow, text, history, parse_fn, complete_fn,
@@ -9491,6 +9554,12 @@ def _pm_intake_turn(flow, text, body, history, user, ppu, first):
             if hit.get('fw_confirm_payload'):
                 _pm_pending_intake('stash', user, 'flywheel', hit['fw_confirm_payload'], _fw_wiz.RUN_CHIP)   # "run the flywheel" typed later still finds it
             return hit
+        try:
+            from prometheus import intake_guard as _ig
+            if _ig.pending_resume():
+                return None   # the wizard let a question through (2026-11-05): the router answers it, the reply carries the way back
+        except Exception:
+            pass
         return {'success': True, 'action': 'answer', 'reply': _fw_wiz.ASK_ENTRY,
                 'followups': ['Cancel'], 'offer_deck': False, 'deck_angle': None, 'fw_collect': True}
     kind, confirm_name, run_label, payload_key, collect_key, labels = _PM_INTAKE_UI[flow]
@@ -16293,6 +16362,24 @@ def _pm_analyze_core(user, body, text, history):
                             return jsonify(_tj)
         except Exception:
             traceback.print_exc()
+    # The way back to an open intake (prometheus.intake_guard, Jenna 2026-11-05). A question typed while a
+    # guided flow waited was answered on its own, with 'Back to the flywheel' (the journey, the campaign
+    # setup, the twin, the valuation) on the reply. That chip, or 'back to it', re-asks the open step.
+    try:
+        from prometheus import intake_guard as _ig_resume
+        if _ig_resume.is_resume(text):
+            _rflow = _ig_resume.resume_flow(text, history)
+            if _rflow == 'flywheel':
+                _r = _pm_intake_turn('flywheel', text, dict(body, fw_inputs=True), history, user, _pm_ppu, first=False)
+                if _r is not None:
+                    return jsonify(_r)
+            elif _rflow == 'brand_partnership':
+                return jsonify(_bpiq_wiz.hold_payload(history, _bpiq_wiz.store_for(body, globals()), _bpiq_user,
+                                                      str(body.get('thread_id') or '')))
+            elif _rflow in ('digital_journey', 'attribution', 'digital_twin'):
+                return jsonify(_pm_intake_resume_reply(_rflow, history))
+    except Exception as _rx:
+        _faults.note('chat', _rx)
     _twin_resp = _twin_lane.analyze_hook(text, body, history, user, _pm_ppu, _bpiq_user, globals())   # Digital Twins IQ (2026-10-26): intake, labs, Focus Group IQ, catalog, status, directions
     if _twin_resp is not None:
         return jsonify(_twin_resp)
@@ -16366,7 +16453,7 @@ def _pm_analyze_core(user, body, text, history):
                          if _adays else '')),
             'aiq_job_id': _aiq_job,
             'followups': [], 'offer_deck': False, 'deck_angle': None})
-    if body.get('aiq_inputs') and not _pm_intake_breakout(text):
+    if _pm_collect_flag_applies(body, 'aiq_inputs', history) and not _pm_intake_breakout(text, 'attribution'):
         return jsonify(_pm_intake_turn('attribution', text, body, history, user, _pm_ppu, first=False))
     if _pm_aiq_stop_intent(text):
         try:
@@ -16443,8 +16530,10 @@ def _pm_analyze_core(user, body, text, history):
             'reply': _fw_line,
             'fw_job_id': _fw_job,
             'followups': [], 'offer_deck': False, 'deck_angle': None})
-    if body.get('fw_inputs') and not _pm_intake_breakout(text):
-        return jsonify(_pm_intake_turn('flywheel', text, body, history, user, _pm_ppu, first=False))
+    if _pm_collect_flag_applies(body, 'fw_inputs', history) and not _pm_intake_breakout(text, 'flywheel'):
+        _fw_turn = _pm_intake_turn('flywheel', text, body, history, user, _pm_ppu, first=False)
+        if _fw_turn is not None:   # None: the wizard let a question through; it routes below (2026-11-05)
+            return jsonify(_fw_turn)
     if _pm_fw_intent(text):
         return jsonify(_pm_intake_turn('flywheel', text, body, history, user, _pm_ppu, first=True))
     _jiq_confirm = body.get('jiq_confirm') or _pm_pending_intake('pick', user, 'digital_journey', text)
@@ -16478,7 +16567,7 @@ def _pm_analyze_core(user, body, text, history):
                       'will confirm here when it is ready.'),
             'jiq_job_id': _jiq_job,
             'followups': [], 'offer_deck': False, 'deck_angle': None})
-    if body.get('jiq_inputs') and not _pm_intake_breakout(text):
+    if _pm_collect_flag_applies(body, 'jiq_inputs', history) and not _pm_intake_breakout(text, 'digital_journey'):
         return jsonify(_pm_intake_turn('digital_journey', text, body, history, user, _pm_ppu, first=False))
     # An explicit Profile IQ order never stays on the analyze surface
     # (2026-10-20 Jenna: "run a profile on mountain dew", typed while a

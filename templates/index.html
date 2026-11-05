@@ -93204,6 +93204,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var b = Object.assign({}, body || {});
             b.surface = surface;
             b.client = 'dashboard';
+            // the ask names the thread this tab is on, the same way the history save does (2026-11-05):
+            // before this the server took its own active thread, which another tab may have moved, and a
+            // guided flow armed there read the questions typed here
+            try {
+                if (!b.thread_id && typeof _pmThreadsIdx !== 'undefined' && _pmThreadsIdx && _pmThreadsIdx.active) {
+                    b.thread_id = String(_pmThreadsIdx.active);
+                }
+            } catch (_) {}
             try {
                 if (_pmCarried && _pmCarried.from && _pmCarried.count < 4 &&
                     (Date.now() - _pmCarried.at) < 30 * 60 * 1000) {

@@ -185,4 +185,17 @@ def wrap(raw, *, surface, decision, thread_id=None, via='session'):
         env['_raw'] = raw          # the v1 contract reads facts off it, then drops it
     else:
         env['raw'] = raw
+    # A guided flow that let this message through as a new question
+    # (prometheus.intake_guard, Jenna 2026-11-05) gets its one chip
+    # back on the reply that answers it: 'Back to the valuation', 'Back
+    # to the flywheel'. The flow stays pending on the server at its
+    # step. Fail-safe; a reply that is the flow's own never carries it.
+    try:
+        from . import intake_guard as _ig
+        hit = _ig.pending_resume()
+        if hit and not (raw.get('bpiq_wizard') or raw.get('bpiq_collect') or raw.get('fw_collect')
+                        or raw.get('jiq_collect') or raw.get('aiq_collect') or raw.get('twin_collect')):
+            _ig.attach_resume_chip(env, hit)
+    except Exception:
+        pass
     return env
