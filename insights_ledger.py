@@ -1647,6 +1647,42 @@ def _topic_stem(w):
     return w
 
 
+def _fold_title(s):
+    s = re.sub(r"\b(?:season|series|s)\s*\d+\b", ' ', str(s or ''), flags=re.I)
+    return re.sub(r'[^a-z0-9]+', '', s.lower())
+
+
+def _chain_titles_ok(entry, question):
+    """A viewing-chain ask (the viewers of one title who went on to
+    another: autoplayed into, then watched, completed the season, of
+    those ...) replays a stored read only when every title in its chain
+    is in that read's own words. Jenna 2026-11-05: "how many power
+    raising kanan season 5 viewers autoplay'ed into fightland and then of
+    those what percent completed that entire season of fightland" was
+    answered with the banked Fightland into S.W.A.T. Exiles read; the
+    topic words (autoplay, viewers, fightland, completion) overlapped
+    and the base title, Power: Raising Kanan, was nowhere in it. Never
+    raises; True when the ask names no chain."""
+    try:
+        from prometheus.sizing_lane import chain_titles
+        titles = chain_titles(question)
+    except Exception:
+        return True
+    if not titles:
+        return True
+    try:
+        etext = ' '.join((str(entry.get('subject') or ''), str(entry.get('cohort') or ''),
+                          str(entry.get('qn') or entry.get('q') or ''), str(entry.get('reply') or '')[:4000]))
+        efold = _fold_title(etext)
+        for t in titles:
+            tf = _fold_title(t)
+            if len(tf) >= 4 and tf not in efold:
+                return False
+        return True
+    except Exception:
+        return True
+
+
 def _topical_overlap_ok(entry, qn, floor=0.34):
     """A meaning-level replay must actually be ABOUT the ask
     (2026-09-28, Casey's second-screen ask replayed a genre table
@@ -1799,6 +1835,8 @@ def find_semantic(entries, question):
             continue
         if not _topical_overlap_ok(e, qn):
             continue
+        if not _chain_titles_ok(e, question):
+            continue   # a chain between other titles is another read (2026-11-05)
         rank = provenance_rank(e)
         if best is None or dist < best_dist \
                 or (dist == best_dist and rank > best_rank):
@@ -1862,7 +1900,7 @@ def find_exact(entries, question=None, key=None):
         if hit is not None:
             return hit
     if key:
-        return _best(lambda e: e.get('k') == key and (not qn or _topical_overlap_ok(e, qn)))
+        return _best(lambda e: e.get('k') == key and (not qn or (_topical_overlap_ok(e, qn) and _chain_titles_ok(e, question))))
     return None
 
 

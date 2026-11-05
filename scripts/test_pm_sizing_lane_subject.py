@@ -156,6 +156,39 @@ class Routing(unittest.TestCase):
         self.assertFalse(P.custom_work("how big is Howie Mandel's audience"))
 
 
+class LedgerReplay(unittest.TestCase):
+    """The banked Fightland into S.W.A.T. Exiles read (thread d438bcf8a8,
+    21:19Z) was replayed for Jenna's Raising Kanan into Fightland question
+    when it ran fresh through the lane: the topic words overlapped and the
+    base title was nowhere in the stored read. A chain between other
+    titles is another read."""
+
+    ENTRY = {
+        'subject': 'Fightland', 'k': 'fightland|engagement|2026-09-25|2026-10-29', 'family': 'engagement',
+        'q': 'what percentage of people who watched fightland on starz then proceeded to watch swat exiles directly after because it was auto played?',
+        'qn': 'what percentage of people who watched fightland on starz then proceeded to watch swat exiles directly after because it was auto played',
+        'cohort': '', 'ws': '2026-09-25', 'we': '2026-10-29', 'wl': 'Jul 31 2026 to Oct 29 2026, handoff window Sep 25 to Oct 29 2026',
+        'route': 'reasoned_metrics', 'ts': '2026-11-05T21:19:09Z',
+        'reply': ('On people who watched a Fightland title on Starz in the window:\n\n8.8% of Fightland viewers who were still '
+                  'playing episodes once S.W.A.T. Exiles was live rolled straight into it on the end card autoplay, 73,118 people.\n'
+                  '- Fightland US viewers on Starz: 1,418,263\n- Autoplay handoff into S.W.A.T. Exiles: 73,118\n'
+                  '- Second screen on S.W.A.T. Exiles runs 61.1% and completion runs 64.8%.'),
+    }
+
+    def test_a_chain_between_other_titles_never_replays(self):
+        import insights_ledger as il
+        self.assertIsNone(il.find_semantic([self.ENTRY], JENNA))
+        self.assertIsNone(il.find_exact([self.ENTRY], question=JENNA, key=self.ENTRY['k']))
+        self.assertFalse(il._chain_titles_ok(self.ENTRY, JENNA))
+
+    def test_the_same_chain_still_replays(self):
+        import insights_ledger as il
+        self.assertIs(il.find_exact([self.ENTRY], question=self.ENTRY['q'], key=self.ENTRY['k']), self.ENTRY)
+        self.assertIs(il.find_semantic([self.ENTRY], 'what share of fightland viewers on starz autoplayed into swat exiles'), self.ENTRY)
+        self.assertTrue(il._chain_titles_ok(self.ENTRY, SWAT))
+        self.assertTrue(il._chain_titles_ok(self.ENTRY, 'how big is the Fightland audience'))   # no chain: the gate stays open
+
+
 class ServiceEndToEnd(unittest.TestCase):
     """service.ask with a stub host: Jenna's question leaves through the
     work gate's content-journey offer, not through either sizing lane."""
