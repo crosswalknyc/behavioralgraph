@@ -734,11 +734,14 @@ def run_forever(stop_event=None, *, tick_s=None, log=_log):
     stop = stop_event or threading.Event()
     tick_s = float(tick_s or TICK_S)
     log(f"started (tick every {int(tick_s)}s, cap {BP.in_flight_cap()})")
+    n = 0
     while not stop.is_set():
         try:
             s3, bucket = BP._s3()
             out = tick(s3, bucket, log=log)
-            if out.get('ledgers') or out.get('posted'):
+            n += 1
+            # a line when something moved, and a heartbeat every 20 ticks while a list is active
+            if out.get('posted') or out.get('moved') or out.get('digests') or out.get('completed') or (out.get('ledgers') and n % 20 == 0):
                 log(f"tick: {out}")
         except Exception:
             traceback.print_exc()
