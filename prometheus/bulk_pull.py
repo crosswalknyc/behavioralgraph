@@ -58,7 +58,7 @@ PROFILE_CREDITS = _TUL.PROFILE_CREDITS            # 5 credits = one Chatbot Prof
 PROFILE_PULL_TYPE = _TUL.PROFILE_PULL_TYPE        # 'Chatbot Profile IQ (new_build)'
 PRICE_KEY, PRICE_DEFAULT = _TUL.PROFILE_PRICE_KEY, _TUL.PROFILE_PRICE_DEFAULT
 FAIL_LINE = _TUL.FAIL_LINE
-BUILD_MINUTES = 45                                # a build at the current pace, start to Select Profile
+BUILD_MINUTES = 65                                # a build at the current pace, start to Select Profile (measured 61 to 67 min on the batch lane, 2026-11-05)
 DEFAULT_IN_FLIGHT = 10                            # bulk builds in flight at once (the feeder reads the live cap)
 DIGEST_EVERY = 25                                 # completions per digest
 DIGEST_HOURS = 1.0                                # or an hour with new completions, whichever first

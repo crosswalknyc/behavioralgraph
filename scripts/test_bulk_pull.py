@@ -587,7 +587,7 @@ class Copy(unittest.TestCase):
         self.assertIn('1 name already in the library: reused as is, no charge. 2 new builds.', text)
         self.assertIn('Trailing 12 months', text)
         self.assertIn('$600 charged now (2 new builds at $300 each; reused profiles are free)', text)
-        self.assertIn('about 45 minutes', text)
+        self.assertIn('about 1 hour at the current pace', text)
         self.assertIn(f"Say '{BP.RUN_LABEL}'", text)
         ledger, line, err, calls = _ledger(s3, ['Taylor Swift', 'MrBeast', 'Pedro Pascal'])
         self.assertIsNone(err)
@@ -613,9 +613,9 @@ class Copy(unittest.TestCase):
 
     def test_eta_words(self):
         self.assertEqual(BP.eta_words(0), 'no build time: every name is already in the library')
-        self.assertEqual(BP.eta_words(1, cap=10), 'about 45 minutes')
+        self.assertEqual(BP.eta_words(1, cap=10), 'about 1 hour')
         self.assertEqual(BP.eta_words(20, cap=10), 'about 2 hours')
-        self.assertEqual(BP.eta_words(1000, cap=10), 'about 3 days')
+        self.assertEqual(BP.eta_words(1000, cap=10), 'about 4.5 days')
 
     def test_funds_error_and_free_seat(self):
         s3 = FakeS3()
