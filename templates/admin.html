@@ -3943,7 +3943,23 @@
                                 <span style="font-weight: 600;">🧬 DIGITAL TWINS IQ</span>
                             </label>
                         </div>
-                        <div style="padding:0.4rem 1rem 0.2rem;font-size:0.78rem;color:var(--text-secondary);">Twins, Greenlight (script reads and concept tests), Launch Lab, Spend Engine, Focus Group IQ and Pilot Testing. Every twin joins the shared library; the user sees all twins unless an explicit list is set through the API.</div>
+                        <div style="padding:0.4rem 1rem 0.85rem;font-size:0.78rem;color:var(--text-secondary);">Twins, Greenlight, Launch, Focus Group IQ and Pilot Testing. Uncheck ALL TABS to hide the ones they should not see.</div>
+                        <div style="padding:0 1rem 0.85rem;">
+                            <label class="checkbox-group" style="margin:0 0 0.45rem;">
+                                <input type="checkbox" id="allowAllDigitalTwinsTabs" checked onchange="onAllowAllDigitalTwinsTabsChanged()">
+                                <span>ALL TABS</span>
+                            </label>
+                            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:0.3rem;">
+                                <label class="checkbox-group allowed-dtw-tab-row" style="padding:0.4rem 0.5rem;background:var(--bg-card);border-radius:6px;border:1px solid var(--border-color);"><input type="checkbox" class="allowed-dtw-tab-checkbox" data-tab="twins"><span>Twins</span></label>
+                                <label class="checkbox-group allowed-dtw-tab-row" style="padding:0.4rem 0.5rem;background:var(--bg-card);border-radius:6px;border:1px solid var(--border-color);"><input type="checkbox" class="allowed-dtw-tab-checkbox" data-tab="panel"><span>Focus Group IQ</span></label>
+                                <label class="checkbox-group allowed-dtw-tab-row" style="padding:0.4rem 0.5rem;background:var(--bg-card);border-radius:6px;border:1px solid var(--border-color);"><input type="checkbox" class="allowed-dtw-tab-checkbox" data-tab="pilot"><span>Pilot Testing</span></label>
+                                <label class="checkbox-group allowed-dtw-tab-row" style="padding:0.4rem 0.5rem;background:var(--bg-card);border-radius:6px;border:1px solid var(--border-color);"><input type="checkbox" class="allowed-dtw-tab-checkbox" data-tab="greenlight"><span>Greenlight</span></label>
+                                <label class="checkbox-group allowed-dtw-tab-row" style="padding:0.4rem 0.5rem;background:var(--bg-card);border-radius:6px;border:1px solid var(--border-color);"><input type="checkbox" class="allowed-dtw-tab-checkbox" data-tab="launch"><span>Launch</span></label>
+                                <label class="checkbox-group allowed-dtw-tab-row" style="padding:0.4rem 0.5rem;background:var(--bg-card);border-radius:6px;border:1px solid var(--border-color);"><input type="checkbox" class="allowed-dtw-tab-checkbox" data-tab="trailer"><span>Trailers</span></label>
+                                <label class="checkbox-group allowed-dtw-tab-row" style="padding:0.4rem 0.5rem;background:var(--bg-card);border-radius:6px;border:1px solid var(--border-color);"><input type="checkbox" class="allowed-dtw-tab-checkbox" data-tab="titles"><span>Titles and Key Art</span></label>
+                                <label class="checkbox-group allowed-dtw-tab-row" style="padding:0.4rem 0.5rem;background:var(--bg-card);border-radius:6px;border:1px solid var(--border-color);"><input type="checkbox" class="allowed-dtw-tab-checkbox" data-tab="norms"><span>Norms</span></label>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Digital Journey IQ Access -->
@@ -10432,6 +10448,7 @@
             populateAllowedLensesCheckboxes([]);
             populateAllowedTrendsTabsCheckboxes(['*']);
             populateAllowedRankersTabsCheckboxes(['*']);
+            populateAllowedDigitalTwinsTabsCheckboxes(['*']);
             syncTrendsTabAccessVisibility();
             syncRankersTabAccessVisibility();
             document.getElementById('hasTalentFitAccess').checked = false;
@@ -10712,6 +10729,7 @@
             populateAllowedLensesCheckboxes(user.allowed_lenses);
             populateAllowedTrendsTabsCheckboxes(user.allowed_trends_tabs);
             populateAllowedRankersTabsCheckboxes(user.allowed_rankers_tabs);
+            populateAllowedDigitalTwinsTabsCheckboxes(user.allowed_digital_twins_tabs);
             syncTrendsTabAccessVisibility();
             var cbpiqAccess = document.getElementById('hasChatbotProfileIQAccess');
             if (cbpiqAccess) cbpiqAccess.checked = user.has_chatbot_profile_iq_access === true; // Default false
@@ -13997,6 +14015,26 @@
             });
             return out;
         }
+        function populateAllowedDigitalTwinsTabsCheckboxes(allowed) {
+            _populateTabGrantCheckboxes(allowed, 'allowAllDigitalTwinsTabs', '.allowed-dtw-tab-checkbox');
+        }
+        function onAllowAllDigitalTwinsTabsChanged() {
+            const isAll = !!(document.getElementById('allowAllDigitalTwinsTabs') && document.getElementById('allowAllDigitalTwinsTabs').checked);
+            document.querySelectorAll('.allowed-dtw-tab-checkbox').forEach(cb => {
+                cb.disabled = isAll;
+                if (isAll) cb.checked = true;
+            });
+            document.querySelectorAll('.allowed-dtw-tab-row').forEach(row => { row.style.opacity = isAll ? '0.55' : '1'; });
+        }
+        function getAllowedDigitalTwinsTabsPayload() {
+            const allCb = document.getElementById('allowAllDigitalTwinsTabs');
+            if (allCb && allCb.checked) return ['*'];
+            const out = [];
+            document.querySelectorAll('.allowed-dtw-tab-checkbox').forEach(cb => {
+                if (cb.checked && cb.dataset.tab) out.push(cb.dataset.tab);
+            });
+            return out;
+        }
         function syncTrendsTabAccessVisibility() {
             const on = !!(document.getElementById('hasTrendsIQAccess') && document.getElementById('hasTrendsIQAccess').checked);
             const section = document.getElementById('trendsIQTabsSection');
@@ -15071,6 +15109,7 @@
                 allowed_lenses: getAllowedLensesPayload(),
                 allowed_trends_tabs: getAllowedTrendsTabsPayload(),
                 allowed_rankers_tabs: getAllowedRankersTabsPayload(),
+                allowed_digital_twins_tabs: getAllowedDigitalTwinsTabsPayload(),
                 has_chatbot_profile_iq_access: !!(document.getElementById('hasChatbotProfileIQAccess') && document.getElementById('hasChatbotProfileIQAccess').checked),
                 prometheus_access: (document.getElementById('prometheusAccessPullsOnly') && document.getElementById('prometheusAccessPullsOnly').checked) ? 'pulls_only' : 'full',
                 // Prometheus mode (2026-09-03, Jenna): analysis / pull / both.

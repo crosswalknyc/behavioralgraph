@@ -96,7 +96,7 @@ import time
 import traceback
 import uuid
 
-from flask import Blueprint, Response, jsonify, request, session
+from flask import Blueprint, Response, g, jsonify, request, session
 
 from migration import digital_twins as DT
 from migration import digital_twin_synthesis as SYN
@@ -141,6 +141,19 @@ def _role(user):
         return str((user or {}).get('role') or 'user')
 
 
+class _TabDenied(Exception):
+    """This seat does not have the Digital Twins tab this path needs."""
+
+
+def _denied_tab_reply():
+    return jsonify({'success': False, 'error': 'That part of Digital Twins IQ is not on this account.'}), 403
+
+
+def _tab_from_request():
+    """Product tab this path belongs to, or None when the path is shared."""
+    return DT.tab_for_api_path(str(getattr(request, 'path', None) or ''))
+
+
 def _gate():
     """(user, err_response). The product flag or admin, else 403."""
     user = _user()
@@ -152,7 +165,19 @@ def _gate():
         return None, (jsonify({'success': False, 'error': 'Digital Twins IQ is not open for this account yet.'}), 403)
     if not DT.has_access(user):
         return None, (jsonify({'success': False, 'error': 'Digital Twins IQ access required. Ask your admin to switch it on for your account.'}), 403)
+    need = _tab_from_request()
+    if need and not DT.tab_allowed(user, need):
+        return None, _denied_tab_reply()
+    try:
+        g.dt_user = user
+    except Exception:
+        pass
     return user, None
+
+
+@bp.errorhandler(_TabDenied)
+def _on_tab_denied(_e):
+    return _denied_tab_reply()
 
 
 def _menu_locked(user):
@@ -1193,7 +1218,13 @@ _PORTRAIT_HASH_RX = re.compile(r"^[0-9a-f]{16,64}$")
 
 # -------------------------------------------- pilot testing
 def _pilot(payload, sid):
-    return next((s for s in payload.get('pilot_sessions') or [] if s.get('id') == sid), None)
+    sess = next((s for s in payload.get('pilot_sessions') or [] if s.get('id') == sid), None)
+    if sess is None:
+        return None
+    user = getattr(g, 'dt_user', None)
+    if user is not None and not DT.tab_allowed(user, DT.tab_for_pilot_mode(sess.get('mode'))):
+        raise _TabDenied()
+    return sess
 
 
 _PLAY_KEYS = frozenset({'digital_twin_pilot', 'digital_twin_trailer', 'digital_twin_title', 'digital_twin_key_art', 'digital_twin_concept', 'digital_twin_script', 'digital_twin_recut'})
@@ -1286,6 +1317,8 @@ def dt_pilot_open(key):
     title = str(body.get('title') or '')[:120]
     mode = str(body.get('mode') or 'pilot').strip().lower()
     mode = mode if mode in PI.MODES else 'pilot'
+    if not DT.tab_allowed(user, DT.tab_for_pilot_mode(mode)):
+        return _denied_tab_reply()
     watch_url = str(body.get('watch_url') or body.get('url') or '').strip()
     # a test started from a saved setup that carries a cut (a duplicate of a test, 2026-11-04): the file comes
     # onto the new test here, so nothing is uploaded again; the person who saved the setup, or an admin
@@ -1481,6 +1514,8 @@ def dt_pilot_rename(key, sid):
     if not sess:
         return jsonify({'success': False, 'error': 'test not found'}), 404
     body = request.get_json(silent=True) or {}
+    if body.get('mode') and not DT.tab_allowed(user, DT.tab_for_pilot_mode(body.get('mode'))):
+        return _denied_tab_reply()
     changed = PI.set_options(sess, body)   # genre chip, mode, cut label, rough cut, remove-the-file-when-done
     name = ''
     if body.get('title') or body.get('name'):

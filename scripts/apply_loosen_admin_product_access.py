@@ -150,6 +150,7 @@ ADMIN_OLD_1 = """        // Per Jenna 2026-08-25: "only let super admins grant a
             'has_trends_iq_access','has_microdramas_iq_access',
             'allowed_lenses',
             'allowed_trends_tabs','allowed_rankers_tabs',
+            'allowed_digital_twins_tabs',
             'has_chatbot_profile_iq_access',
             'prometheus_access',
             'auto_access_new'

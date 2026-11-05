@@ -51111,6 +51111,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-seg { appearance: none; background: transparent; border: 0; border-bottom: 2px solid transparent; color: var(--dtw-mute); padding: 0.62rem 0; margin: 0 1.8rem -1px 0; font-size: 0.7rem; font-weight: 600; letter-spacing: 0.13em; text-transform: uppercase; cursor: pointer; white-space: nowrap; transition: color .14s, border-color .14s; }
         #digitalTwinsIQView .dtw-seg:hover { color: var(--dtw-ink); }
         #digitalTwinsIQView .dtw-seg.active { color: var(--dtw-ink); border-bottom-color: var(--dtw-accent); }
+        #digitalTwinsIQView .dtw-seg[hidden] { display: none !important; }
         /* Greenlight's two options (Jenna 2026-10-28): Script read and Concept, picked at the top of the pane. */
         #digitalTwinsIQView .dtw-gl-opts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.8rem; margin-bottom: 1rem; }
         #digitalTwinsIQView .dtw-gl-opt { appearance: none; text-align: left; background: var(--dtw-raised); border: 1px solid var(--dtw-rule); border-radius: 12px; padding: 0.95rem 1.1rem 0.9rem; cursor: pointer; color: var(--dtw-body); display: flex; flex-direction: column; gap: 0.3rem; min-width: 0; transition: border-color .14s, background .14s; }
@@ -52298,6 +52299,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     HIDE_IDS.forEach(function(id) { var e = document.getElementById(id); if (e) e.style.display = 'none'; });
                     try { if (typeof hideLLMOIQView === 'function') hideLLMOIQView(); } catch (_) {}
                     var v = el('digitalTwinsIQView'); if (v) { v.style.display = 'flex'; v.style.visibility = 'visible'; }
+                    try { if (typeof window.dtwApplyTabGrant === 'function') window.dtwApplyTabGrant(); } catch (_) {}
                     try { localStorage.setItem('bg_last_product', 'digitalTwinsIQ'); } catch (_) {}
                 } catch (_) {}
                 var fromUrl = null;
@@ -52322,6 +52324,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (tab === 'spend') { S.laOption = 'spend'; tab = 'launch'; }
                 else if (tab === 'launch' && S.laOption !== 'spend') { S.laOption = 'plan'; }
                 if (TABS.indexOf(tab) < 0) tab = 'twins';
+                if (typeof window.dtwTabAllowed === 'function' && !window.dtwTabAllowed(tab)) {
+                    var _first = (typeof window.dtwFirstAllowedTab === 'function') ? window.dtwFirstAllowedTab() : 'twins';
+                    if (_first && _first !== tab) { dtwTab(_first); return; }
+                    return;
+                }
                 S.tab = tab;
                 document.querySelectorAll('#digitalTwinsIQView .dtw-seg').forEach(function(b) { b.classList.toggle('active', b.getAttribute('data-tab') === tab); });
                 document.querySelectorAll('#digitalTwinsIQView .dtw-pane').forEach(function(p) { p.classList.remove('active'); });
@@ -62828,6 +62835,30 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         // Per-tab grants for Trends / Rankers. ['*'] or missing = every tab.
         window.__allowedTrendsTabs = {{ allowed_trends_tabs | default(['*'], true) | tojson | safe }};
         window.__allowedRankersTabs = {{ allowed_rankers_tabs | default(['*'], true) | tojson | safe }};
+        window.__allowedDigitalTwinsTabs = {{ allowed_digital_twins_tabs | default(['*'], true) | tojson | safe }};
+        window.dtwTabAllowed = function(key) {
+            if (typeof isSuperAdmin !== 'undefined' && isSuperAdmin) return true;
+            var list = window.__allowedDigitalTwinsTabs;
+            if (!Array.isArray(list) || list.indexOf('*') !== -1) return true;
+            var aliases = {create:'twins', creation:'twins', twins_creation:'twins', twin:'twins',
+                focus:'panel', focus_group:'panel', focus_group_iq:'panel', spend:'launch',
+                script:'greenlight', concept:'greenlight'};
+            var k = aliases[key] || key;
+            return list.indexOf(k) !== -1;
+        };
+        window.dtwFirstAllowedTab = function() {
+            var order = ['twins', 'panel', 'pilot', 'greenlight', 'launch', 'trailer', 'titles', 'norms'];
+            for (var i = 0; i < order.length; i++) { if (window.dtwTabAllowed(order[i])) return order[i]; }
+            return 'twins';
+        };
+        window.dtwApplyTabGrant = function() {
+            document.querySelectorAll('#digitalTwinsIQView .dtw-seg').forEach(function(b) {
+                b.hidden = !window.dtwTabAllowed(b.getAttribute('data-tab'));
+            });
+            if (window._dtw && !window.dtwTabAllowed(window._dtw.tab || 'twins')) {
+                try { window.dtwTab(window.dtwFirstAllowedTab()); } catch (_) {}
+            }
+        };
         function _tiqTabAllowed(key, product) {
             if (isSuperAdmin) return true;
             var list = (product === 'rankers') ? window.__allowedRankersTabs : window.__allowedTrendsTabs;
@@ -63534,6 +63565,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     window.hasShareOfTimeRunAccess = !!d.has_share_of_time_run_access && (d.has_share_of_time_access !== false);
                     if (Array.isArray(d.allowed_trends_tabs)) window.__allowedTrendsTabs = d.allowed_trends_tabs;
                     if (Array.isArray(d.allowed_rankers_tabs)) window.__allowedRankersTabs = d.allowed_rankers_tabs;
+                    if (Array.isArray(d.allowed_digital_twins_tabs)) {
+                        window.__allowedDigitalTwinsTabs = d.allowed_digital_twins_tabs;
+                        try { if (typeof window.dtwApplyTabGrant === 'function') window.dtwApplyTabGrant(); } catch (_) {}
+                    }
                     if (typeof sotApplyRunAccessVisibility === 'function') sotApplyRunAccessVisibility();
                     // Store Fin IQ data cutoff date for filtering
                     window.hedgeFundIQDataCutoff = d.hedge_fund_iq_data_cutoff || null;
@@ -90180,11 +90215,15 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             if (viewId === 'digitalTwinsIQ') {
                 var tw = _pmSanitizeChipText(data.twin || '');
                 var dt = [
-                    { t: 'Test a concept in Greenlight on the ' + (tw || 'open') + ' twin', hot: true },
-                    { t: 'Open a focus group with the ' + (tw || 'open') + ' twin and ask whether they would watch a new season' },
-                    { t: 'How do I use Greenlight on a twin?' },
+                    { t: 'Test a concept in Greenlight on the ' + (tw || 'open') + ' twin', hot: true, need: 'greenlight' },
+                    { t: 'Open a focus group with the ' + (tw || 'open') + ' twin and ask whether they would watch a new season', need: 'panel' },
+                    { t: 'How do I use Greenlight on a twin?', need: 'greenlight' },
+                    { t: 'Build a twin of this audience', need: 'twins' },
                     { t: 'Analyze the data on this screen' }
                 ];
+                if (typeof window.dtwTabAllowed === 'function') {
+                    dt = dt.filter(function(x) { return !x.need || window.dtwTabAllowed(x.need); });
+                }
                 return dt;
             }
             if (viewId === 'journeyIQ') {

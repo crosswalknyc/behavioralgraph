@@ -3454,6 +3454,7 @@ _PRODUCT_ACCESS_FIELDS = frozenset([
     'has_sentiment_iq_access',
     'has_journey_iq_access', 'allowed_journey_iq_runs',
     'has_digital_twins_iq_access', 'allowed_digital_twin_runs',   # Digital Twins IQ (Jenna 2026-10-26)
+    'allowed_digital_twins_tabs',
     'allowed_flywheel_iq_runs', 'allowed_subscriber_iq_runs',
     'has_intent_iq_access', 'allowed_intent_iq_runs',
     'has_share_of_time_access', 'has_share_of_time_run_access',
@@ -6206,6 +6207,9 @@ def create_user():
             'allowed_journey_iq_runs': req_data.get('allowed_journey_iq_runs', cd.get('allowed_journey_iq_runs', ['*']) if cd else ['*']),
             'has_digital_twins_iq_access': req_data.get('has_digital_twins_iq_access', cd.get('has_digital_twins_iq_access', False) if cd else False),
             'allowed_digital_twin_runs': req_data.get('allowed_digital_twin_runs', cd.get('allowed_digital_twin_runs', ['*']) if cd else ['*']),
+            'allowed_digital_twins_tabs': __import__('migration.digital_twins', fromlist=['store_tab_grant']).store_tab_grant(
+                req_data['allowed_digital_twins_tabs'] if isinstance(req_data.get('allowed_digital_twins_tabs'), list)
+                else (cd.get('allowed_digital_twins_tabs') if cd else None)),
             'has_intent_iq_access': req_data.get('has_intent_iq_access', cd.get('has_intent_iq_access', True) if cd else True),
             'allowed_intent_iq_runs': req_data.get('allowed_intent_iq_runs', cd.get('allowed_intent_iq_runs', ['*']) if cd else ['*']),
             'has_share_of_time_access': req_data.get('has_share_of_time_access', cd.get('has_share_of_time_access', True) if cd else True),
@@ -6497,6 +6501,9 @@ def update_user(username):
         if 'allowed_digital_twin_runs' in req_data:
             _adtr = req_data.get('allowed_digital_twin_runs')
             user['allowed_digital_twin_runs'] = [str(x) for x in _adtr if str(x).strip()] if isinstance(_adtr, list) else ['*']
+        if 'allowed_digital_twins_tabs' in req_data:
+            from migration.digital_twins import store_tab_grant as _store_dtw_tabs
+            user['allowed_digital_twins_tabs'] = _store_dtw_tabs(req_data.get('allowed_digital_twins_tabs'))
         if 'allowed_journey_iq_runs' in req_data:
             # Per-user gate for Digital Journey IQ runs. ['*'] = all visible,
             # explicit list = only those keys. Unset / missing also = all
@@ -7342,6 +7349,7 @@ def restore_defaults_all_users():
             user['has_microdramas_iq_access'] = False
             user['allowed_trends_tabs'] = ['*']
             user['allowed_rankers_tabs'] = ['*']
+            user['allowed_digital_twins_tabs'] = ['*']
             count += 1
         save_users(data)
         return jsonify({'success': True, 'message': f'Restored defaults for {count} user(s)', 'count': count})
@@ -8234,6 +8242,14 @@ def api_set_company_defaults(company_name):
         data = load_users()
         if 'company_defaults' not in data:
             data['company_defaults'] = {}
+        _cd_prev = data['company_defaults'].get(company_name) or {}
+        from migration.digital_twins import store_tab_grant as _store_dtw_tabs
+        if 'allowed_digital_twins_tabs' in req:
+            _cd_dtw_tabs = _store_dtw_tabs(req.get('allowed_digital_twins_tabs'))
+        elif 'allowed_digital_twins_tabs' in _cd_prev:
+            _cd_dtw_tabs = _store_dtw_tabs(_cd_prev.get('allowed_digital_twins_tabs'))
+        else:
+            _cd_dtw_tabs = ['*']
         data['company_defaults'][company_name] = {
             'allowed_categories': req.get('allowed_categories', ['*']),
             'allowed_runs': req.get('allowed_runs', ['*']),
@@ -8257,6 +8273,7 @@ def api_set_company_defaults(company_name):
             'has_sentiment_iq_access': req.get('has_sentiment_iq_access', False),
             'has_journey_iq_access': req.get('has_journey_iq_access', False),
             'has_digital_twins_iq_access': req.get('has_digital_twins_iq_access', False),
+            'allowed_digital_twins_tabs': _cd_dtw_tabs,
             'has_share_of_time_access': req.get('has_share_of_time_access', True),
             'has_share_of_time_run_access': req.get('has_share_of_time_run_access', True),
             'has_blue_iq_access': req.get('has_blue_iq_access', False),
@@ -8327,6 +8344,8 @@ def api_reset_company_users(company_name):
                 user['has_sentiment_iq_access'] = cd.get('has_sentiment_iq_access', False)
                 user['has_journey_iq_access'] = cd.get('has_journey_iq_access', False)
                 user['has_digital_twins_iq_access'] = cd.get('has_digital_twins_iq_access', False)
+                user['allowed_digital_twins_tabs'] = __import__('migration.digital_twins', fromlist=['store_tab_grant']).store_tab_grant(
+                    cd.get('allowed_digital_twins_tabs'))
                 user['has_share_of_time_access'] = cd.get('has_share_of_time_access', True)
                 user['has_share_of_time_run_access'] = cd.get('has_share_of_time_run_access', True)
                 user['has_blue_iq_access'] = cd.get('has_blue_iq_access', False)
@@ -10738,6 +10757,7 @@ def compute_product_access_flags(user, role):
             'has_journey_iq_access': True,
             'has_digital_twins_iq_access': True,
             'allowed_digital_twin_runs': ['*'],
+            'allowed_digital_twins_tabs': ['*'],
             'has_workspace_access': True,
             'has_share_of_time_access': True,
             'has_share_of_time_run_access': True,
@@ -10806,6 +10826,7 @@ def compute_product_access_flags(user, role):
         # Digital Twins IQ (Jenna 2026-10-26): admins always; others by the flag; runs default to every twin
         'has_digital_twins_iq_access': role == 'admin' or bool(u.get('has_digital_twins_iq_access', False)),
         'allowed_digital_twin_runs': (list(u['allowed_digital_twin_runs']) if isinstance(u.get('allowed_digital_twin_runs'), list) else ['*']),
+        'allowed_digital_twins_tabs': _emit_tiq_tab_grant(u.get('allowed_digital_twins_tabs')),
         'has_flywheel_iq_access': bool(u.get('has_flywheel_iq_access', False)),
         # has_workspace_access retained ONLY as legacy plumbing for
         # /api/collab/* deck-collab routes (2026-09-03 Workspace product
@@ -11051,6 +11072,7 @@ def index():
                            has_sentiment_iq_access=has_sentiment_iq,
                            has_journey_iq_access=has_journey_iq,
                            has_digital_twins_iq_access=has_digital_twins_iq,
+                           allowed_digital_twins_tabs=_acc.get('allowed_digital_twins_tabs', ['*']),
                            digital_twins_locked=_digital_twins_menu_locked(user),
                            has_share_of_time_access=has_share_of_time,
                            has_share_of_time_run_access=has_share_of_time_run,

@@ -3192,6 +3192,7 @@ _PROMETHEUS_ONLY_EMPTY_LISTS = (
     "allowed_intent_iq_runs",
     "allowed_trends_tabs",
     "allowed_rankers_tabs",
+    "allowed_digital_twins_tabs",
     "analysis_iq_modules",
     "rankers_iq_options",
     "hedge_fund_iq_tabs",

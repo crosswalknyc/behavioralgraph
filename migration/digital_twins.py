@@ -32,6 +32,21 @@ JOBS_PREFIX = 'system/digital_twins/jobs/'
 REQUESTS_PREFIX = 'system/digital_twins/requests/'
 ACCESS_FLAG = 'has_digital_twins_iq_access'
 RUNS_FIELD = 'allowed_digital_twin_runs'
+TABS_FIELD = 'allowed_digital_twins_tabs'
+# Visible strip on Digital Twins IQ. ['*'] is every current and future tab.
+TAB_KEYS = (
+    'twins', 'panel', 'pilot', 'greenlight', 'launch', 'trailer', 'titles', 'norms',
+)
+TAB_ALIASES = {
+    'twin': 'twins', 'create': 'twins', 'creation': 'twins',
+    'twins_creation': 'twins', 'twin_creation': 'twins',
+    'focus': 'panel', 'focus_group': 'panel', 'focus_group_iq': 'panel',
+    'pilot_testing': 'pilot',
+    'script': 'greenlight', 'concept': 'greenlight',
+    'spend': 'launch', 'spend_engine': 'launch', 'launch_lab': 'launch',
+    'trailers': 'trailer',
+    'key_art': 'titles', 'titles_and_key_art': 'titles',
+}
 PRODUCT_KEY = 'digitalTwinsIQ'
 PRODUCT_LABEL = 'Digital Twins IQ'
 
@@ -143,6 +158,92 @@ def allowed_keys(user):
     if isinstance(raw, list):
         return raw
     return ['*']
+
+
+def normalize_tab(raw) -> Optional[str]:
+    """Fold a tab name or alias onto a TAB_KEYS value."""
+    s = str(raw or '').strip().lower().replace(' ', '_').replace('-', '_')
+    if s in TAB_KEYS:
+        return s
+    return TAB_ALIASES.get(s)
+
+
+def store_tab_grant(raw):
+    """Normalize a tab-grant payload for users.json.
+
+    ['*'] = every current and future tab. Missing / non-list defaults
+    to ['*'] so existing seats are not locked out. An explicit empty
+    list is stored as [] (product on, no tabs).
+    """
+    if not isinstance(raw, list):
+        return ['*']
+    if any(str(v) == '*' for v in raw):
+        return ['*']
+    out = []
+    seen = set()
+    for v in raw:
+        k = normalize_tab(v)
+        if k and k not in seen:
+            seen.add(k)
+            out.append(k)
+    return out
+
+
+def emit_tab_grant(raw):
+    """Resolved grant for product-access / the frontend.
+
+    Missing or non-list -> ['*']. Empty explicit list is preserved.
+    """
+    if not isinstance(raw, list):
+        return ['*']
+    if any(str(v) == '*' for v in raw):
+        return ['*']
+    return [str(v) for v in raw]
+
+
+def tab_for_pilot_mode(mode) -> str:
+    """Pilot-room mode -> the product tab that owns it."""
+    try:
+        from migration.digital_twin_modes import MODE_SPECS
+        spec = MODE_SPECS.get(str(mode or 'pilot').strip().lower()) or {}
+        tab = str(spec.get('tab') or 'pilot')
+    except Exception:
+        tab = 'pilot'
+    return normalize_tab(tab) or 'pilot'
+
+
+def tab_for_api_path(path: str):
+    """Product tab an /api/digital-twins path belongs to, or None when shared."""
+    path = str(path or '')
+    prefix = '/api/digital-twins'
+    if not path.startswith(prefix):
+        return None
+    rest = path[len(prefix):]
+    if rest.startswith('/pilot-norms'):
+        return 'norms'
+    if '/spend' in rest:
+        return 'launch'
+    if rest.endswith('/run') or '/run/' in rest:
+        return 'launch'
+    if '/panel/' in rest or rest.endswith('/panel/open'):
+        return 'panel'
+    if '/pilot/' in rest or rest.endswith('/pilot/open') or '/pilot/setups' in rest:
+        return None
+    if (rest.startswith('/how-to') or rest.startswith('/pricing')
+            or rest.startswith('/jobs/') or rest.startswith('/portrait/')):
+        return None
+    return 'twins'
+
+
+def tab_allowed(user, tab) -> bool:
+    """Admins and ['*'] see every tab. Everyone else is the explicit list."""
+    if is_admin(user):
+        return True
+    grant = emit_tab_grant((user or {}).get(TABS_FIELD))
+    if '*' in grant:
+        return True
+    k = normalize_tab(tab)
+    return bool(k) and k in set(grant)
 
 
 def can_open(user, key: str, run: Optional[dict] = None) -> bool:
