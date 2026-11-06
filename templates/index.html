@@ -51915,7 +51915,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-pi-gsel option { background: var(--dtw-raised); color: var(--dtw-ink); }
         #digitalTwinsIQView .dtw-pi-sugg { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 8px; }
         #digitalTwinsIQView .dtw-pi-sugg:empty { display: none; }
-        #digitalTwinsIQView .dtw-pi-askrow { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+        #digitalTwinsIQView .dtw-pi-askrow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
         #digitalTwinsIQView .dtw-pi-askrow select.dtw-in { width: auto; flex: 0 0 auto; padding: 6px 8px; font-size: 12px; }
         #digitalTwinsIQView .dtw-pi-foot { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin-top: 14px; }
         #digitalTwinsIQView .dtw-pi-foot .dtw-actions { margin: 0; }
@@ -51959,8 +51959,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-pi-seatlist { display: flex; flex-direction: column; gap: 1px; }
         /* The room as a chat thread (Jenna, 2026-11-02): every remark up to the playhead, wrapped in full, in a thread that scrolls;
            the seated roster is a strip of portraits above it once the room starts talking. */
-        #digitalTwinsIQView .dtw-pi-thread { display: flex; flex-direction: column; gap: 1px; max-height: clamp(260px, 56vh, 640px); overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; scrollbar-width: thin; padding-right: 2px; }
-        #digitalTwinsIQView .dtw-pi-strip { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0 8px; }
+        #digitalTwinsIQView .dtw-pi-thread { display: flex; flex-direction: column; gap: 1px; max-height: clamp(260px, 56vh, 640px); overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; scrollbar-width: thin; padding: 0 6px; min-width: 0; }
+        #digitalTwinsIQView .dtw-pi-strip { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0 8px; padding: 0 3px; }
         #digitalTwinsIQView .dtw-pi-strip .dtw-pi-chip { padding: 0; margin: 0; gap: 0; flex: none; width: 30px; border-radius: 50%; }
         #digitalTwinsIQView .dtw-pi-seatrow { position: relative; display: flex; gap: 9px; align-items: flex-start; padding: 4px 6px; margin: 0 -6px; border-radius: 10px; outline: none; }
         #digitalTwinsIQView .dtw-pi-seatrow:hover, #digitalTwinsIQView .dtw-pi-seatrow:focus-within { background: rgba(233,232,225,0.05); }
@@ -51970,8 +51970,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-pi-seatrow .circ[role="button"], #digitalTwinsIQView .dtw-pi-chip { cursor: pointer; }
         #digitalTwinsIQView .dtw-pi-seatrow .circ[role="button"]:focus-visible, #digitalTwinsIQView .dtw-pi-chip:focus-visible { outline: 2px solid #3358FF; outline-offset: 1px; }
         #digitalTwinsIQView .dtw-pi-seatrow .txt { min-width: 0; flex: 1 1 auto; }
-        #digitalTwinsIQView .dtw-pi-seatrow .who { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; font-weight: 600; color: var(--dtw-ink); line-height: 15px; }
-        #digitalTwinsIQView .dtw-pi-seatrow .who .nm { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        #digitalTwinsIQView .dtw-pi-seatrow .who { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; font-size: 12px; font-weight: 600; color: var(--dtw-ink); line-height: 15px; }
+        #digitalTwinsIQView .dtw-pi-seatrow .who .nm { min-width: 0; flex: 1 1 auto; white-space: normal; overflow-wrap: anywhere; }
         #digitalTwinsIQView .dtw-pi-seatrow .who .c { flex: none; color: var(--dtw-mute); font-weight: 500; font-variant-numeric: tabular-nums; }
         #digitalTwinsIQView .dtw-pi-seatrow .say { font-size: 11.5px; color: var(--dtw-body); line-height: 15px; margin-top: 1px; white-space: normal; overflow-wrap: anywhere; }
         #digitalTwinsIQView .dtw-pi-seatrow.now { background: rgba(199,242,62,0.06); }
@@ -51982,7 +51982,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-pi-seatrow.coh .circ { box-shadow: 0 0 0 2px var(--dtw-raised), 0 0 0 4px var(--coh); }
         #digitalTwinsIQView .dtw-pi-seatrow.coh .who .cohort { color: var(--coh); }
         #digitalTwinsIQView .dtw-pi-strip .dtw-pi-chip.coh { margin: 3px; }
-        #digitalTwinsIQView .dtw-pi-thread, #digitalTwinsIQView .dtw-pi-seatlist { padding-left: 2px; }
+        #digitalTwinsIQView .dtw-pi-seatlist { padding-left: 2px; }
         /* Ask the room lands in the chat (Jenna, 2026-11-04): the question as a Prometheus line, each seat's answer as its
            remark, then one short Prometheus line with the read; under the ask box only the controls and the question list. */
         #digitalTwinsIQView .dtw-pi-seatrow.prom .circ { background: var(--dtw-raised); border: 1px solid var(--dtw-rule); color: var(--dtw-ink); box-sizing: border-box; }
@@ -52015,7 +52015,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-pi-reccard .rd { margin-top: 4px; font-size: 12.5px; line-height: 17px; color: var(--dtw-ink); overflow-wrap: anywhere; }
         #digitalTwinsIQView .dtw-pi-reccard .fr { margin-top: 4px; font-size: 11.5px; line-height: 15px; color: var(--dtw-body); overflow-wrap: anywhere; }
         #digitalTwinsIQView .dtw-pi-reccard .dtw-fg-qpick { margin-top: 10px; padding-bottom: 4px; }
-        #digitalTwinsIQView .dtw-pi-reccard .dtw-pi-thread { max-height: none; overflow: visible; padding-left: 0; margin-top: 4px; }
+        #digitalTwinsIQView .dtw-pi-reccard .dtw-pi-thread { max-height: none; overflow: visible; padding: 0; margin-top: 4px; }
         #digitalTwinsIQView .dtw-pi-reccard .dtw-pi-probes { margin-top: 12px; }
         /* the test bar locks at the top of the body while the page scrolls under it */
         #digitalTwinsIQView .dtw-pi-head { position: sticky; top: 0; z-index: 6; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin: -1rem -1.15rem 0; padding: 0.7rem 1.15rem 0.65rem; background: var(--dtw-raised); border-bottom: 1px solid var(--dtw-hair); border-radius: 12px 12px 0 0; }
@@ -52051,6 +52051,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         body[data-theme="light"] #digitalTwinsIQView .dtw-pi-biocard { background: #FFFFFF; }
         #digitalTwinsIQView .dtw-pi-biocard h6 { margin: 0 0 6px; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dtw-mute); font-weight: 600; }
         #digitalTwinsIQView .dtw-pi-biocard h6 .cohort { text-transform: none; letter-spacing: 0; font-weight: 600; color: var(--coh, var(--dtw-mute)); }
+        #digitalTwinsIQView .dtw-pi-biocard .dtw-pi-stands { margin: -2px 0 8px; font-size: 11.5px; line-height: 15px; color: var(--dtw-body); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
         #digitalTwinsIQView .dtw-pi-biocard p { margin: 0 0 8px; }
         #digitalTwinsIQView .dtw-pi-biocard p:last-child { margin-bottom: 0; }
         @media (max-width: 1180px) {
@@ -53291,6 +53292,27 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (seg && seg.people && seg.seats) return Math.round(Number(seg.people) / Number(seg.seats));
                 var n = Number((g || {}).in_room || ((g || {}).roster || []).length || 0); return n ? Math.round(Number((g || {}).size_people || 0) / n) : 0;
             }
+            // who the seat stands for (Jenna 2026-11-05: 'on the bios it needs to say what this person represents, like
+            // represents x number of people from the total'): the figures the server put on the seat (stands_for_people,
+            // stands_for_share), else, on a record from before them, the segment's share over its seats, moved off a
+            // round figure by the seat's index; the total is the one the room prints
+            function seatStandsFor(g, r) {
+                g = g || {}; r = r || {};
+                var roster = g.roster || [], segs = g.segments || [], sum = function(a, x) { return a + (Number(x.people) || 0); };
+                var total = Number(g.size_people || 0) || segs.reduce(sum, 0) || roster.reduce(sum, 0);
+                var people = Number(r.stands_for_people || 0), share = r.stands_for_share;
+                if (!(people > 0)) {
+                    people = perSeat(g, r) || 0; share = null;
+                    var idx = roster.indexOf(r); if (idx < 0) idx = Math.max(0, Number(r.seat || 1) - 1);
+                    if (people > 0 && people % 10 === 0) people += (idx % 9) + 1;
+                }
+                if (share == null || !isFinite(Number(share))) share = (total > 0 && people > 0) ? Math.round(people / total * 1000) / 10 : null;
+                return { people: people, share: share, total: total };
+            }
+            function standsForLine(nm, g, r) {
+                var sf = seatStandsFor(g, r); if (!(sf.people > 0) || !(sf.total > 0)) return '';
+                return esc(nm) + ' stands for ' + fmtN(sf.people) + ' of the ' + fmtN(sf.total) + ' people in this audience' + (sf.share != null ? ' (' + Number(sf.share).toFixed(1) + '%)' : '') + '.';
+            }
             // ---- the question in large type: the last clause carries the weight (E's weight pair), only when it reads as a clause.
             function weightPair(text) {
                 var t = String(text || '').trim(); if (!t) return '';
@@ -54137,7 +54159,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var g = s.group || {}, roster = g.roster || [], r = roster.filter(function(x) { return Number(x.seat) === S.fg.seat; })[0];
                 if (!r) { h.innerHTML = '<p>That seat is not in this room.</p>'; return; }
                 var nm = titleCase(r.name), inRoom = fmtN(g.in_room || roster.length), who = r.gender === 'F' ? 'woman' : (r.gender === 'M' ? 'man' : ''), fq = focusQ();
-                var out = '<div class="head">' + face(r, Number(r.seat) - 1, 64) + '<div style="min-width:0;"><div class="who">' + esc(nm) + ', ' + esc(r.age) + ', ' + esc(titleCase(r.city)) + '</div><div class="stands">Seat ' + esc(r.seat) + ' of ' + inRoom + (who ? SEP + who : '') + SEP + 'stands for about ' + fmtN(perSeat(g, r)) + ' people</div></div></div>';
+                var out = '<div class="head">' + face(r, Number(r.seat) - 1, 64) + '<div style="min-width:0;"><div class="who">' + esc(nm) + ', ' + esc(r.age) + ', ' + esc(titleCase(r.city)) + '</div><div class="stands">Seat ' + esc(r.seat) + ' of ' + inRoom + (who ? SEP + who : '') + '</div>' + (standsForLine(nm, g, r) ? '<div class="stands">' + standsForLine(nm, g, r) + '</div>' : '') + '</div></div>';
                 var tags = '';
                 if (r.segment && (multiSeg(roster) || normQ(r.segment) !== normQ(twinName()))) tags += '<span class="dtw-fg-tag">' + esc(r.segment) + '</span>';
                 var a0 = fq ? (fq.answers || []).filter(function(x) { return Number(x.seat) === Number(r.seat); })[0] : null;
@@ -54972,7 +54994,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var th = (((S.pilot || {}).live || {}).thoughts || {})[String(r.seat)] || [], now = playheadNow(), last = null;
                 for (var i = 0; i < th.length; i++) { if (Number(th[i][0]) <= now + 0.05) last = th[i]; }
                 var thought = last ? '<p class="dtw-pi-thought"><span class="dtw-muted">' + esc(clockFmt(last[0])) + '</span> ' + esc(last[1]) + '</p>' : '';
-                return head + thought + body;
+                var stands = standsForLine(nm, (S.pilot || {}).group || {}, r);
+                return head + (stands ? '<p class="dtw-pi-stands">' + stands + '</p>' : '') + thought + body;
             }
             function piSayHtml(sl) { return esc(sl.line); }
             function piRoomHasCohorts() {

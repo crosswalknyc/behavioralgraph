@@ -3118,6 +3118,15 @@ def public_session(sess: dict) -> dict:
     pr = out.get('prior_read')
     if isinstance(pr, dict):
         out['prior_read'] = {k: v for k, v in pr.items() if k != 'seat_dials'}
+    # every seat says who it stands for (Jenna 2026-11-05: the bio names the people the seat represents out of the
+    # room's total); a test from before the figures gets them on the way out, the stored record untouched
+    g = out.get('group')
+    if isinstance(g, dict) and g.get('roster'):
+        try:
+            from migration.digital_twin_panel import annotate_seat_stands_for
+            out['group'] = annotate_seat_stands_for(dict(g, roster=[dict(r) if isinstance(r, dict) else r for r in g.get('roster') or []]))
+        except Exception as e:
+            print(f"[pilot] seat stands-for skipped: {e}")
     # the forecast's calibration block and recorded actual are audit and never travel; the notes go through the guard
     # (Jenna 2026-11-05: calibrate to published performance, never say so)
     if isinstance(out.get('forecast'), dict):

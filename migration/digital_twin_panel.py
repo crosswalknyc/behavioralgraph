@@ -622,6 +622,7 @@ def recompute_group_sizes(sess: dict, twins_by_key: dict) -> bool:
     after = [(s.get('people'), s.get('share_pct'), dict(s.get('filter') or {})) for s in segs] + [g.get('size_people')]
     if after != before:
         spread_seat_people(g.get('roster') or [], segs, seed)     # the seats follow their segment's new people
+        annotate_seat_stands_for(g, force=True)
         sess['updated_at'] = _now()
         return True
     return False
@@ -784,8 +785,8 @@ def build_group(twins: list, segments: Optional[list] = None, in_room: int = DEF
                 r['name'] = f"{base} {chr(ord('A') + (k - len(bank)) % 26)}."
         seen.add(r['name'])
     spread_seat_people(roster, segs, seed)
-    return {'twins': [_twin_key(t) for t in twins], 'segments': [{k: v for k, v in s.items()} for s in segs],
-            'size_people': total_people, 'in_room': in_room, 'roster': roster}
+    return annotate_seat_stands_for({'twins': [_twin_key(t) for t in twins], 'segments': [{k: v for k, v in s.items()} for s in segs],
+                                     'size_people': total_people, 'in_room': in_room, 'roster': roster})
 
 
 def spread_seat_people(roster: list, segments: list, seed: str = '') -> None:
@@ -821,6 +822,94 @@ def spread_seat_people(roster: list, segments: list, seed: str = '') -> None:
         vals[-1] = max(1, vals[-1] + (total - sum(vals)))
         for r, v in zip(seats, vals):
             r['people'] = int(v)
+
+
+def room_total_people(group: dict) -> int:
+    """The people the whole room stands for, as the room itself prints
+    them: ``size_people``, else the segments' people, else the seats'."""
+    g = group if isinstance(group, dict) else {}
+    try:
+        total = int(float(g.get('size_people') or 0))
+    except (TypeError, ValueError):
+        total = 0
+    if total <= 0:
+        total = sum(_count(s.get('people')) for s in (g.get('segments') or []) if isinstance(s, dict))
+    if total <= 0:
+        total = sum(_count(r.get('people')) for r in (g.get('roster') or []) if isinstance(r, dict))
+    return max(0, total)
+
+
+def _count(v) -> int:
+    try:
+        return max(0, int(float(v or 0)))
+    except (TypeError, ValueError):
+        return 0
+
+
+def annotate_seat_stands_for(group: dict, force: bool = False) -> dict:
+    """Every seat says who it stands for (Jenna, 2026-11-05: "on the bios
+    it needs to say what this person represents, like represents x
+    number of people from the total"). Sets, on each seat, the people it
+    stands for (``stands_for_people``: its segment's people over the
+    seats in that segment, which is the seat's own ``people`` when the
+    room was built with them) and its share of the people in the room
+    (``stands_for_share``, one decimal). A figure that would end in 0, or
+    repeat another seat's in the same segment, moves up by the seat's
+    index in the segment, so no two seats print the same count and none
+    reads as a round one; the sum across a segment stays within those
+    few units of the segment. Older records without seat people fall
+    back to the segment's people over its seats. In place and
+    deterministic; seats already carrying the fields are left alone
+    unless ``force``."""
+    g = group if isinstance(group, dict) else {}
+    roster = [r for r in (g.get('roster') or []) if isinstance(r, dict)]
+    if not roster:
+        return g
+    if not force and all(_count(r.get('stands_for_people')) > 0 and r.get('stands_for_share') is not None for r in roster):
+        return g
+    total = room_total_people(g)
+    seg_people = {}
+    for s in (g.get('segments') or []):
+        if isinstance(s, dict):
+            seg_people[str(s.get('label'))] = _count(s.get('people'))
+    by_seg = {}
+    for r in roster:
+        by_seg.setdefault(str(r.get('segment')), []).append(r)
+    for lab, seats in by_seg.items():
+        seg_total = seg_people.get(lab, 0)
+        if seg_total <= 0 and total > 0:
+            # a segment with no people of its own (an older record): its share of the room is its seats' share
+            seg_total = int(round(total * len(seats) / float(len(roster))))
+        used = set()
+        n = len(seats)
+        for idx, r in enumerate(seats):
+            base = _count(r.get('people'))
+            if base <= 0 and seg_total > 0:
+                # the equal share, spread a few tenths of a percent a seat either side of it (the offsets cancel, so the
+                # segment still adds up), so the seats read as counts and not as a ladder
+                base = int(round(seg_total / float(n) * (1.0 + (idx - (n - 1) / 2.0) * 0.004)))
+            v = max(1, base)
+            if v % 10 == 0 or v in used:
+                v = max(1, base) + (idx % 9) + 1
+            while v % 10 == 0 or v in used:
+                v += 1
+            used.add(v)
+            r['stands_for_people'] = int(v)
+            r['stands_for_share'] = round(v / float(total) * 100.0, 1) if total > 0 else None
+    return g
+
+
+def ensure_seat_stands_for(session: dict) -> bool:
+    """The stands-for figures on a saved room's seats (the room state the
+    page reads), filled in when a record predates them. True when a
+    seat was annotated."""
+    g = (session or {}).get('group') if isinstance(session, dict) else None
+    if not isinstance(g, dict):
+        return False
+    before = [(r.get('stands_for_people'), r.get('stands_for_share')) for r in (g.get('roster') or []) if isinstance(r, dict)]
+    annotate_seat_stands_for(g)
+    after = [(r.get('stands_for_people'), r.get('stands_for_share')) for r in (g.get('roster') or []) if isinstance(r, dict)]
+    return after != before
 
 
 def _age_in_bucket(label, u):

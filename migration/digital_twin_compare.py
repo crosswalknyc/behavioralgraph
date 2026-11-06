@@ -532,6 +532,11 @@ def apply_quotas(session: dict, twins: list, quotas: dict, seed: str = '') -> di
     if must and titles:
         concept += f"; must have seen {must} of {', '.join(titles[:4])}"
     session['group'] = {'twins': g.get('twins') or [str(((t or {}).get('meta') or {}).get('key') or '') for t in twins], 'segments': segs, 'size_people': total_people or int(g.get('size_people') or 0), 'in_room': len(roster) or n, 'roster': roster}
+    try:   # the seats' stands-for figures against this room's total, not the cells' sub-rooms they were drawn from
+        from migration.digital_twin_panel import annotate_seat_stands_for
+        annotate_seat_stands_for(session['group'], force=True)
+    except Exception:
+        pass
     session['quotas'] = q
     session['recruit'] = {'concept': concept, 'quotas': q, 'invited': invited, 'showed': showed, 'seated': len(roster), 'invite_ratio': f"{ratio} invited for every seat", 'invite_ratio_n': ratio,
                           'screener': {'titles': titles, 'must_have_seen': must, 'replaced': replaced}, 'cells': [{'label': lab, 'seats': cnt} for lab, _f, cnt in cells if cnt > 0],

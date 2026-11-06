@@ -960,7 +960,14 @@ def dt_spend_handoff(key, plan_id):
 
 # -------------------------------------------- focus group iq (the panel routes)
 def _session(payload, sid):
-    return next((s for s in payload.get('panel_sessions') or [] if s.get('id') == sid), None)
+    sess = next((s for s in payload.get('panel_sessions') or [] if s.get('id') == sid), None)
+    if sess:
+        try:   # every seat says who it stands for (Jenna 2026-11-05); a room from before the figures gets them here
+            from migration import digital_twin_panel as P
+            P.ensure_seat_stands_for(sess)
+        except Exception:
+            pass
+    return sess
 
 
 @bp.route(f'{PREFIX}/<path:key>/panel/open', methods=['POST'])
@@ -1003,6 +1010,7 @@ def dt_panel_open(key):
         sess = reused
         if P.needs_reseat(sess, twins):
             P.rebuild_group(sess, twins, seed=str(sess.get('id') or ''))
+        P.ensure_seat_stands_for(sess)
     else:
         sess = P.open_session(twins, segments=segments, in_room=in_room, title=title, created_by=_uname(user), session_id=uuid.uuid4().hex[:10])
         sess['twin_keys'] = [str((t.get('meta') or {}).get('key') or '') for t in twins]
