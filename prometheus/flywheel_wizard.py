@@ -162,6 +162,20 @@ def is_cancel(text):
     return bool(_CANCEL_RX.match(str(text or '')))
 
 
+def _drop_everything(user, thread_id):
+    """Cancel means gone (Jenna 2026-11-05). A cancel that reaches the
+    wizard through any door other than the global intake_cancel lane
+    drops the reader's other armed intakes and the thread's open priced
+    offers too, through the one module that knows every store
+    (prometheus.intake_reset). The wizard's own draft was cleared by the
+    caller. Never raises into the turn."""
+    try:
+        from . import intake_reset as _ir
+        _ir.drop_all(user, thread_id, close_offers=True)
+    except Exception:
+        traceback.print_exc()
+
+
 def is_start(text):
     """The chip, or a build-verb flywheel ask ('run a flywheel for Gilmore Girls on PV')."""
     low = _low(text)
@@ -682,6 +696,8 @@ def _analyze_hook(text, body, history, user, ppu, uname, g, first=None, store=No
     if is_cancel(t):
         if store is not None:
             store.clear(uname, thread_id)
+        # the other flows and this thread's open offers go with it
+        _drop_everything(uname, thread_id)
         return _payload(CANCEL_REPLY, [], fw_collect=False)
     d = dict(draft) if isinstance(draft, dict) else empty_draft()
     if not d.get('step'):

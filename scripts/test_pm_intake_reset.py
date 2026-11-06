@@ -331,6 +331,69 @@ class CancelLane(unittest.TestCase):
         self.assertNotEqual(PI.active_flows(self.s3, BUCKET, USER), [])
 
 
+class WizardOwnCancel(unittest.TestCase):
+    """A cancel that reaches a wizard through its own hook (not the
+    intake_cancel lane) still drops the other flows and this thread's
+    open offers. The wizard's reply text stays its own."""
+
+    def setUp(self):
+        self.s3 = FakeS3()
+        _bind(self.s3, _idx())
+
+    def _offers(self):
+        from prometheus import pending_offers as PO
+        PO.record(USER, 'thr1', {'panel_offer': {'subject': 'Gunna', 'kind': 'read', 'price_label': '$100'}}, 'how big is Gunna')
+        PO.record(USER, 'thr2', {'panel_offer': {'subject': 'Nike', 'kind': 'read', 'price_label': '$100'}}, 'how big is Nike')
+        return PO
+
+    def test_bpiq_wizard_cancel_drops_the_brief_and_the_offer(self):
+        PO = self._offers()
+        _arm(self.s3)                                   # the wizard's draft on thr1 + a journey brief
+        store = W._s3_store(host)
+        out = W.analyze_hook('Cancel', {'thread_id': 'thr1'}, WIZARD_HISTORY, USER, {}, USER,
+                             {'_pm_bpiq_intent': W.is_chip}, first=None, store=store)
+        self.assertIsNotNone(out)
+        self.assertEqual(out['reply'], W.CANCEL_REPLY)          # the wizard's own words, unchanged
+        self.assertEqual(out['followups'], [])
+        self.assertFalse(out['bpiq_collect'])
+        self.assertIsNone(store.load(USER, 'thr1'))
+        self.assertNotIn(f"system/pm_pending_intake/{_uk()}/bpiq_wizard_thr1.json", self.s3.objs)
+        self.assertEqual(PI.active_flows(self.s3, BUCKET, USER), [])        # the journey brief went too
+        self.assertEqual([o['status'] for o in PO._load(USER)['offers']], ['cancelled', 'open'])  # this thread's offer only
+        self.assertEqual(IR.armed(USER, 'thr1'), [])
+
+    def test_flywheel_wizard_cancel_drops_the_brief_and_the_offer(self):
+        from prometheus import flywheel_wizard as FW
+        PO = self._offers()
+        store = FW._s3_store(host)
+        store.save(USER, 'thr1', dict(FW.empty_draft(), step=FW.STEP_ECOSYSTEM, entry_point='watched Gilmore Girls on Prime Video'))
+        PI.stash(self.s3, BUCKET, USER, 'digital_journey', {'subject': 'Landman', 'platform': 'Paramount+'}, 'Run the journey')
+        self.assertEqual(set(IR.armed(USER, 'thr1')), {'flywheel_wizard', 'digital_journey'})
+        hist = [{'role': 'user', 'text': 'Build a Flywheel'}, {'role': 'agent', 'text': FW.ASK_ECOSYSTEM}]
+        out = FW.analyze_hook('Cancel', {'thread_id': 'thr1'}, hist, USER, None, USER, {}, first=False, store=store)
+        self.assertIsNotNone(out)
+        self.assertEqual(out['reply'], FW.CANCEL_REPLY)         # the wizard's own words, unchanged
+        self.assertFalse(out['fw_collect'])
+        self.assertIsNone(store.load(USER, 'thr1'))
+        self.assertEqual(PI.active_flows(self.s3, BUCKET, USER), [])        # the journey brief went too
+        self.assertEqual([o['status'] for o in PO._load(USER)['offers']], ['cancelled', 'open'])  # this thread's offer only
+        self.assertEqual(IR.armed(USER, 'thr1'), [])
+
+    def test_a_probe_cancel_through_the_wizard_writes_nothing(self):
+        # the golden set and the canary keep their drafts in-process; a real reader's stores stay as they were
+        PO = self._offers()
+        _arm(self.s3)
+        mem = W.MemoryStore()
+        mem.save('canary:golden', 'p1', dict(W.empty_draft(), step=W.STEP_DATES, talent='Gunna'))
+        out = W.analyze_hook('Cancel', {'thread_id': 'p1', 'persist': False}, [], 'canary:golden', {}, 'canary:golden',
+                             {'_pm_bpiq_intent': W.is_chip}, first=None, store=mem)
+        self.assertEqual(out['reply'], W.CANCEL_REPLY)
+        self.assertIsNone(mem.load('canary:golden', 'p1'))
+        self.assertEqual(self.s3.deleted, [])
+        self.assertNotEqual(PI.active_flows(self.s3, BUCKET, USER), [])
+        self.assertEqual([o['status'] for o in PO._load(USER)['offers']], ['open', 'open'])
+
+
 class Hooks(unittest.TestCase):
     def test_threads_new_route_and_bind_call_the_reset(self):
         import inspect

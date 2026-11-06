@@ -617,6 +617,21 @@ def is_cancel(text):
     return bool(_CANCEL_RE.match(str(text or '')))
 
 
+def _drop_everything(user, thread_id):
+    """Cancel means gone (Jenna 2026-11-05). A cancel that reaches the
+    wizard through any door other than the global intake_cancel lane
+    (the widget's own Cancel chip echoing a draft, a probe turn, a
+    direct hook call) drops the reader's other armed intakes and the
+    thread's open priced offers too, through the one module that knows
+    every store (prometheus.intake_reset). The wizard's own draft was
+    cleared by the caller. Never raises into the turn."""
+    try:
+        from . import intake_reset as _ir
+        _ir.drop_all(user, thread_id, close_offers=True)
+    except Exception:
+        traceback.print_exc()
+
+
 def is_decline(text):
     return bool(_DECLINE_RE.match(str(text or ''))) or _low(text) == 'decline'
 
@@ -1643,6 +1658,8 @@ def _analyze_hook(text, body, history, user, ppu, uname, g,
     if is_cancel(t) and (draft or collecting or intent):
         if store is not None:
             store.clear(uname or user, thread_id)
+        # the other flows and this thread's open offers go with it
+        _drop_everything(uname or user, thread_id)
         return _payload(CANCEL_REPLY, [], draft=None, bpiq_collect=False)
 
     if draft and draft.get('step') == STEP_CHARGE and is_decline(t):
