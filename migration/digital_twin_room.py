@@ -2555,6 +2555,15 @@ def drop_ruled_out(options: list, brief: dict) -> list:
 def moderator_options(models: Models, twin: dict, q: str, kind: str, opts: list, stimulus: Optional[dict], brief: dict, last: Optional[dict], log=None) -> dict:
     """{options: [{id, label, lean}], framing, listen_for, fallback, fixed}."""
     fixed = _default_options(kind, opts)
+    if kind == 'ab' and isinstance(stimulus, dict) and stimulus.get('ab_assets'):
+        try:   # two pieces of content side by side (Jenna 2026-11-05): the preference split over A / B / neither / no difference
+            from migration.digital_twin_assets import ab_options
+            board = ab_options(stimulus)
+            if board:
+                labels = ' or '.join(str(o['label']) for o in board[:2])
+                return {'options': board, 'framing': f"You have seen both. Which do you prefer, {labels}?", 'listen_for': [], 'fallback': False, 'fixed': True}
+        except Exception as e:
+            print(f"[twin-room] content board skipped: {str(e)[:120]}")
     if kind in ('rating', 'ab') or (kind == 'multiple_choice' and len(opts) >= 2):
         return {'options': fixed, 'framing': '', 'listen_for': [], 'fallback': False, 'fixed': True}
     tb = _twin_brief(twin)
@@ -2642,6 +2651,10 @@ def _seat_body(card: dict, q: str, framing: str, options: list, brief: dict, mem
     moment = _moment_for_seat(stimulus, card.get('seat'))
     if moment:
         body['what_just_played'] = moment
+    # content in the room (Jenna 2026-11-05): a video, an image or an audio file the moderator put in front of the room rides
+    # with every later question, so the seat answers with it in mind; a question naming A or B carries that one
+    if isinstance(stimulus, dict) and stimulus.get('assets'):
+        body['what_you_were_shown'] = [v for v in stimulus.get('assets') or [] if isinstance(v, dict)][:3]
     return body
 
 
@@ -4169,7 +4182,17 @@ def run_question(ctx: dict) -> dict:
         subject = str(_meta(twin).get('subject') or _twin_name(twin))
         base_q0 = q if kind != 'probe' else str((last or {}).get('q') or q)
         study, neighbors, f_study, _spool = {}, [], None, None
-        if not _in_cut(stim):
+        # content in the room (Jenna 2026-11-05): a question about the content itself (one naming A or B, an A/B of the two,
+        # 'would you click this thumbnail?') runs on the content alone, no desk research; other questions carry it as context
+        _shown, _no_desks = None, _in_cut(stim)
+        try:
+            from migration.digital_twin_assets import stimulus_context as _asset_ctx
+            _shown = _asset_ctx(stim)
+            if _shown and _shown.get('focus'):
+                _no_desks = True
+        except Exception:
+            _shown = None
+        if not _no_desks:
             try:
                 neighbors = ledger_neighbors(asked_tokens(base_q0, subject), subject)
             except Exception as e:
@@ -4200,8 +4223,11 @@ def run_question(ctx: dict) -> dict:
             brief = {'subject_status': {'line': f"The room is watching {((stim.get('cut') or {}).get('title') or 'the cut')} and the cut was paused at {win.get('clock')}."},
                      'facts': [], 'not_found': [], 'implications': [f"Answer about the moment: {win.get('frame') or win.get('clock')}."],
                      'what_just_played': _moment_view(stim), '_in_cut': True}
+        if not brief and _shown and _shown.get('focus'):
+            from migration.digital_twin_assets import asset_brief
+            brief = asset_brief(stim)
         media = {}
-        if not _in_cut(stim):
+        if not _no_desks:
             if not brief:
                 brief = research(models, twin, base_q0, kind, stim, s3, log=log, force=bool(ctx.get('fresh_research')))
             # the study desk lands before the media desk runs: the event brief is gathered with the study's facts on file
@@ -4235,6 +4261,10 @@ def run_question(ctx: dict) -> dict:
             brief = merge_media(brief or {'subject_status': {}, 'facts': [], 'not_found': [], 'implications': []}, media)
         if study_ok(study):
             brief = merge_study(brief or {'subject_status': {}, 'facts': [], 'not_found': [], 'implications': []}, study)
+        if _shown:
+            brief = dict(brief or {'subject_status': {}, 'facts': [], 'not_found': [], 'implications': []})
+            brief['what_the_room_was_shown'] = _shown['shown']
+            trail['content'] = {'labels': [str(v.get('label') or '') for v in _shown['shown']], 'focus': bool(_shown.get('focus')), 'ab': bool(_shown.get('ab'))}
         trail['study'] = {'key': study.get('_key'), 'cached': bool(study.get('_cached')), 'attempts': study.get('_attempts'), 'ok': study_ok(study),
                           'searches': len(set(str(x).lower() for x in (study.get('searches_run') or []))), 'searches_run': list(study.get('searches_run') or []),
                           'asked': (study.get('asked') or {}).get('name') if study_ok(study) else None,
@@ -4277,7 +4307,7 @@ def run_question(ctx: dict) -> dict:
             except Exception:
                 total_people = 0
         f_anchor, _apool, t_anchor0 = None, None, time.time()
-        anchor_eligible = bool(not _in_cut(stim) and kind not in ANCHOR_SKIP_KINDS and total_people > 0)
+        anchor_eligible = bool(not _no_desks and kind not in ANCHOR_SKIP_KINDS and total_people > 0)
         # the plan is reproducible: the same board on the same day, with the record as it stood, takes the plan already derived
         pkey = plan_key(subject, base_q0, options) if anchor_eligible else ''
         fingerprint = record_fingerprint(neighbors, total_people)
@@ -4636,6 +4666,11 @@ def ask_room(session: dict, twins_by_key: dict, q: str, *, kind: Optional[str] =
     from migration.digital_twin_engine import VERSION
     q = ' '.join(str(q or '').split())[:400]
     last = session['questions'][-1] if session.get('questions') else None
+    try:   # content in the room (Jenna 2026-11-05): every question carries it; 'A or B' runs the preference split
+        from migration.digital_twin_assets import attach_question_assets
+        stimulus, kind, options = attach_question_assets(session, q, stimulus, kind, options)
+    except Exception as e:
+        print(f"[twin-room] content context skipped: {str(e)[:120]}")
     cls = P.classify_question(q, options, last, kind)
     kind = cls['kind']
     stim = dict(stimulus or {})

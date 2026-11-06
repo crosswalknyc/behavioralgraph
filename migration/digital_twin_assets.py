@@ -301,22 +301,13 @@ def represented_people(session: dict, twin: Optional[dict] = None) -> int:
     when the panel carries one (the cuts, never the full twin for a cut
     room), else the room's own total."""
     g = (session or {}).get('group') or {}
-    for mod, name in (('migration.digital_twin_panel', 'represented_people'), ('migration.digital_twin_panel', 'represented_audience'),
-                      ('migration.digital_twin_pilot', 'represented_people'), ('migration.digital_twin_pilot', 'represented_audience')):
-        try:
-            import importlib
-            fn = getattr(importlib.import_module(mod), name, None)
-            if callable(fn):
-                try:
-                    got = fn(session, twin)
-                except TypeError:
-                    got = fn(session)
-                if isinstance(got, dict):
-                    got = got.get('people') or got.get('total') or got.get('size_people')
-                if got and int(float(got)) > 0:
-                    return int(float(got))
-        except Exception:
-            continue
+    sz = g.get('sizing') if isinstance(g.get('sizing'), dict) else {}
+    try:   # a room sized to its cuts (digital_twin_sizing, 2026-11-05) stands for the represented people
+        n = int(float(sz.get('people') or 0))
+        if n > 0:
+            return n
+    except (TypeError, ValueError):
+        pass
     try:
         from migration.digital_twin_panel import room_total_people
         n = int(room_total_people(g) or 0)

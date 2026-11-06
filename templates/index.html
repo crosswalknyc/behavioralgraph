@@ -51462,6 +51462,33 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-fg-old .chev { color: var(--dtw-mute); font-size: 12px; margin-top: 2px; transition: transform .15s; flex: none; }
         #digitalTwinsIQView .dtw-fg-old.open .chev { transform: rotate(180deg); }
         #digitalTwinsIQView .dtw-fg-empty-t { padding: 10px 0 10px 40px; font-size: 12.5px; line-height: 17px; color: var(--dtw-body); }
+        /* content in the room (Jenna 2026-11-05): the strip of what the room was shown and the Add content control sit above the question bar */
+        #digitalTwinsIQView .dtw-fg-addc { margin-bottom: 8px; border: 1px dashed var(--dtw-rule); border-radius: 8px; padding: 8px 10px; background: var(--dtw-raised); }
+        #digitalTwinsIQView .dtw-fg-addc.over { border-color: var(--dtw-accent); }
+        #digitalTwinsIQView .dtw-fg-assets { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+        #digitalTwinsIQView .dtw-fg-assets:empty { display: none; }
+        #digitalTwinsIQView .dtw-fg-asset { appearance: none; position: relative; display: inline-flex; align-items: center; gap: 8px; padding: 4px 26px 4px 4px; border-radius: 8px; border: 1px solid var(--dtw-rule); background: var(--dtw-page); color: var(--dtw-ink); font-family: inherit; font-size: 11.5px; line-height: 14px; cursor: pointer; max-width: 260px; text-align: left; }
+        #digitalTwinsIQView .dtw-fg-asset.ready:hover, #digitalTwinsIQView .dtw-fg-asset.on { border-color: var(--dtw-accent); }
+        #digitalTwinsIQView .dtw-fg-asset .th { flex: none; width: 54px; height: 38px; border-radius: 5px; background: var(--dtw-raised); display: flex; align-items: center; justify-content: center; overflow: hidden; color: var(--dtw-mute); }
+        #digitalTwinsIQView .dtw-fg-asset .th img { width: 100%; height: 100%; object-fit: cover; display: block; }
+        #digitalTwinsIQView .dtw-fg-asset .th svg { width: 26px; height: 20px; display: block; }
+        #digitalTwinsIQView .dtw-fg-asset .body { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+        #digitalTwinsIQView .dtw-fg-asset .lb { font-weight: 600; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        #digitalTwinsIQView .dtw-fg-asset .st { color: var(--dtw-mute); font-size: 10.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 5px; }
+        #digitalTwinsIQView .dtw-fg-asset.failed .st { color: #E682FF; }
+        #digitalTwinsIQView .dtw-fg-asset .x { position: absolute; right: 4px; top: 4px; width: 16px; height: 16px; border-radius: 999px; border: 0; background: transparent; color: var(--dtw-mute); font-size: 13px; line-height: 16px; cursor: pointer; padding: 0; }
+        #digitalTwinsIQView .dtw-fg-asset .x:hover { color: var(--dtw-ink); background: var(--dtw-raised); }
+        #digitalTwinsIQView .dtw-fg-addrow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+        #digitalTwinsIQView .dtw-fg-addrow .dtw-fg-act.add { border-style: solid; color: var(--dtw-ink); }
+        #digitalTwinsIQView .dtw-fg-addrow input.dtw-in { height: 26px; font-size: 11.5px; padding: 0 8px; min-width: 0; }
+        #digitalTwinsIQView .dtw-fg-addrow input.url { flex: 1 1 220px; }
+        #digitalTwinsIQView .dtw-fg-addrow input.lab { flex: 0 0 150px; }
+        #digitalTwinsIQView .dtw-fg-addrow .hint { flex: 1 1 100%; font-size: 10.5px; color: var(--dtw-mute); line-height: 14px; }
+        #digitalTwinsIQView .dtw-fg-ard { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--dtw-rule); display: grid; gap: 5px; font-size: 12px; line-height: 16px; color: var(--dtw-body); }
+        #digitalTwinsIQView .dtw-fg-ard b { color: var(--dtw-ink); font-weight: 600; }
+        #digitalTwinsIQView .dtw-fg-ard .pics { display: flex; gap: 6px; margin: 2px 0 4px; }
+        #digitalTwinsIQView .dtw-fg-ard .pics img { height: 72px; width: auto; max-width: 128px; object-fit: cover; border-radius: 5px; background: var(--dtw-raised); }
+        #digitalTwinsIQView .dtw-popout .dtw-fg-addc { margin: 8px 0; }
         /* the composer: the kind chips above the field, Ask the room as the one Signal Green button */
         #digitalTwinsIQView .dtw-fg-composer { position: sticky; bottom: -1rem; z-index: 6; padding: 10px 0 calc(1rem + 2px); background: var(--dtw-page); border-top: 1px solid var(--dtw-rule); }
         #digitalTwinsIQView .dtw-fg-kinds { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
@@ -53368,7 +53395,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // before is kept: open, resume, ask (with the identical-text guard, the duplicate note and the failed line), delete with its
             // confirm, save, export, the job poll every 4 s while a question is in flight, the 20 s / 75 s portrait re-reads.
             var KINDS = [['yes_no', 'Yes / no'], ['multiple_choice', 'Multiple choice'], ['rating', 'Rate 1 to 5'], ['price', 'Would you pay $X'], ['ab', 'A vs B'], ['show_of_hands', 'Show of hands'], ['open', 'Open question'], ['probe', 'Probe']];
-            var KIND_WORDS = { yes_no: 'Yes / no', multiple_choice: 'Multiple choice', rating: 'Rate 1 to 5', price: 'Price', ab: 'A vs B', show_of_hands: 'Show of hands', open: 'Open question', probe: 'Probe' };
+            var KIND_WORDS = { yes_no: 'Yes / no', multiple_choice: 'Multiple choice', rating: 'Rate 1 to 5', price: 'Price', ab: 'A vs B', show_of_hands: 'Show of hands', open: 'Open question', probe: 'Probe', asset_read: 'Content read' };
             // The five series: the lead answer (by published share) in Signal Green, then Orchid, Cobalt, Dusk, Pavement for the rest;
             // on a light page the Signal and Orchid twins (Olive, Amethyst) take over through the view's variables.
             var SERIES = ['var(--dtw-s1)', 'var(--dtw-s2)', 'var(--dtw-s3)', 'var(--dtw-s4)', 'var(--dtw-s5)'];
@@ -53769,8 +53796,151 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }
             function readMsg(q) {
                 var n = (q.answers || []).length;
-                return '<div class="dtw-fg-readmsg">' + modav() + '<div class="dtw-fg-bubble"><div class="lab">The read<span>Prometheus' + SEP + (n ? 'after the ' + esc(ordWord(n)) + ' answer' : 'after the room answered') + '</span></div><p>' + readHtml(q.read) + '</p>' + (q.moderator_note ? '<div class="note"><b>A note from Prometheus.</b> ' + esc(q.moderator_note) + '</div>' : '') + '</div></div>';
+                return '<div class="dtw-fg-readmsg">' + modav() + '<div class="dtw-fg-bubble"><div class="lab">The read<span>Prometheus' + SEP + (n ? 'after the ' + esc(ordWord(n)) + ' answer' : 'after the room answered') + '</span></div><p>' + readHtml(q.read) + '</p>' + (q.moderator_note ? '<div class="note"><b>A note from Prometheus.</b> ' + esc(q.moderator_note) + '</div>' : '') + assetReadExtras(q) + '</div></div>';
             }
+            // ---- content in the room (Jenna 2026-11-05: 'upload content into the focus group (a video, image, mp3) and it should assess it for
+            // you the same way the pilot assesses video. so that you could then ask questions about the content as an a/b testing kind of thing').
+            function fgAssets(s) { return ((s || {}).assets || []).filter(function(a) { return a && a.status && (a.kind === 'video' || a.kind === 'image' || a.kind === 'audio'); }); }
+            function assetImgUrl(s, a, n) { return '/api/digital-twins/' + encodeURIComponent(S.key || '') + '/panel/' + encodeURIComponent((s || {}).id || '') + '/assets/' + encodeURIComponent(a.id) + '/image?n=' + (n || 0); }
+            var ASSET_ICON = { audio: '<svg viewBox="0 0 26 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 10h2M6 6v8M10 3v14M14 7v6M18 4v12M22 8v4"/></svg>',
+                               video: '<svg viewBox="0 0 26 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="2" y="3" width="16" height="14" rx="2"/><path d="M18 8l6-3v10l-6-3z"/></svg>',
+                               image: '<svg viewBox="0 0 26 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="2" width="20" height="16" rx="2"/><path d="M3 14l6-5 5 4 3-2 6 5"/><circle cx="17" cy="7" r="1.6"/></svg>' };
+            function assetStatusHtml(a) {
+                if (a.status === 'processing') return '<span class="dtw-fg-pulse"></span>' + esc(a.stage || 'taking it in');
+                if (a.status === 'failed') return esc(a.note || 'could not be taken in');
+                return a.read_id ? 'read' + SEP + 'open' : 'ready';
+            }
+            function assetChipHtml(s, a) {
+                var th = a.has_thumb ? '<img src="' + esc(assetImgUrl(s, a, 0)) + '" alt="" loading="lazy" onerror="this.remove()">' : (ASSET_ICON[a.kind] || '');
+                var on = S.fg.tallyQ && a.read_id === S.fg.tallyQ ? ' on' : '';
+                var ttl = (a.kind === 'video' ? 'Video' : a.kind === 'audio' ? 'Audio' : 'Image') + (a.filename && a.source !== 'url' ? ': ' + a.filename : '') + (a.read_id ? '. Open what the room made of it.' : '');
+                return '<button type="button" class="dtw-fg-asset ' + esc(a.status || '') + on + '" data-asset="' + esc(a.id) + '" title="' + esc(ttl) + '" onclick="dtwPanelAssetOpen(\'' + esc(jsq(a.id)) + '\')"><span class="th">' + th + '</span><span class="body"><span class="lb">' + esc(a.label || '') + '</span><span class="st">' + assetStatusHtml(a) + '</span></span>'
+                    + '<span class="x" role="button" aria-label="Remove ' + esc(a.label || 'this') + '" title="Remove from the room" onclick="event.stopPropagation(); dtwPanelAssetDelete(\'' + esc(jsq(a.id)) + '\')">&#215;</span></button>';
+            }
+            function assetsStripHtml(s, compact) {
+                var list = fgAssets(s);
+                if (compact) return list.length ? '<div class="dtw-fg-addc"><div class="dtw-fg-assets">' + list.map(function(a) { return assetChipHtml(s, a); }).join('') + '</div></div>' : '';
+                var accept = '.mp4,.mov,.webm,.png,.jpg,.jpeg,.webp,.mp3,.m4a,.wav,video/mp4,video/quicktime,video/webm,image/png,image/jpeg,image/webp,audio/mpeg,audio/mp4,audio/wav';
+                var ready = list.filter(function(a) { return a.status === 'ready'; });
+                var hint = !list.length ? 'A video, an image or an audio file (or a direct link to one). The room takes it in and reacts; then ask about it. A second one makes it an A or B.'
+                    : (ready.length >= 2 ? 'Ask about ' + esc(ready[0].label) + ', ' + esc(ready[1].label) + ' or both: \'which do you prefer, ' + esc(ready[0].label) + ' or ' + esc(ready[1].label) + '?\'' : (ready.length ? 'Ask about ' + esc(ready[0].label) + ' in plain words, or add a second one for an A or B.' : 'The room is taking it in; its read lands in the thread in a minute or two.'));
+                return '<div class="dtw-fg-addc" id="dtwFgAddC" ondragover="event.preventDefault(); this.classList.add(\'over\');" ondragleave="this.classList.remove(\'over\');" ondrop="dtwPanelAssetDrop(event)">'
+                    + '<div class="dtw-fg-assets" id="dtwFgAssets">' + list.map(function(a) { return assetChipHtml(s, a); }).join('') + '</div>'
+                    + '<div class="dtw-fg-addrow"><label class="dtw-fg-act add" title="A video (mp4, mov, webm), an image (png, jpg, webp) or audio (mp3, m4a, wav)">Add content<input type="file" accept="' + accept + '" hidden onchange="dtwPanelAssetAdd(this.files[0]); this.value=\'\';"></label>'
+                    + '<input id="dtwFgAssetUrl" class="dtw-in url" placeholder="or paste a direct link to a video, image or audio file" aria-label="Link to the file" onkeydown="if(event.key===\'Enter\'){event.preventDefault();dtwPanelAssetUrl();}">'
+                    + '<input id="dtwFgAssetLabel" class="dtw-in lab" maxlength="40" placeholder="Label: A, B or a name" aria-label="Label" value="' + esc(S.fg.assetLabel || '') + '" oninput="S.fg.assetLabel=this.value">'
+                    + '<span class="hint" id="dtwFgAssetHint">' + hint + '</span></div></div>';
+            }
+            function assetReadExtras(q) {
+                if (!q || q.kind !== 'asset_read') return '';
+                var s = S.session, a = fgAssets(s).filter(function(x) { return x.id === q.asset_id; })[0], out = '';
+                if (a && a.kind === 'image' && a.has_thumb) out += '<div class="pics"><img src="' + esc(assetImgUrl(s, a, 0)) + '" alt="" onerror="this.parentNode.remove()"></div>';
+                else if (a && a.kind === 'video' && a.frames_n) { out += '<div class="pics">'; for (var i = 1; i <= Math.min(4, a.frames_n); i++) out += '<img src="' + esc(assetImgUrl(s, a, i)) + '" alt="" loading="lazy" onerror="this.remove()">'; out += '</div>'; }
+                var cl = q.clarity || {};
+                if (cl.about) out += '<div><b>What it is about.</b> ' + esc(cl.about) + '</div>';
+                if (cl.for_whom) out += '<div><b>Who it is for.</b> ' + esc(cl.for_whom) + (cl.clear ? ' (' + esc(cl.clear) + ')' : '') + '</div>';
+                if ((q.stood_out || []).length) out += '<div><b>Stood out.</b> ' + esc(q.stood_out.join('; ')) + '</div>';
+                if ((q.fell_flat || []).length) out += '<div><b>Fell flat.</b> ' + esc(q.fell_flat.join('; ')) + '</div>';
+                (q.lean_by_segment || []).slice(0, 4).forEach(function(r) { if (r && r.line) out += '<div>' + esc(r.line) + '</div>'; });
+                if (a && a.kind === 'audio' && a.transcript_excerpt) out += '<div><b>Heard.</b> ' + esc(String(a.transcript_excerpt).slice(0, 320)) + '</div>';
+                return out ? '<div class="dtw-fg-ard">' + out + '</div>' : '';
+            }
+            function anyAssetProcessing() { return fgAssets(S.session).some(function(a) { return a.status === 'processing'; }); }
+            function clearAssetPoll() { if (S.assetPollTimer) { clearTimeout(S.assetPollTimer); S.assetPollTimer = null; } }
+            // the room takes a file in on its own time: re-read the session every few seconds until every piece is ready or failed, and adopt the read it lands
+            function scheduleAssetPoll() {
+                clearAssetPoll();
+                var s = S.session; if (!s || !S.key || !anyAssetProcessing()) return;
+                var sid = s.id, key = S.key;
+                var tick = async function() {
+                    S.assetPollTimer = null;
+                    if (!S.session || S.session.id !== sid || S.key !== key) return;
+                    var changed = false;
+                    try {
+                        var d = await api('/' + key + '/panel/' + sid);
+                        var fresh = (d.session || {}).assets || [];
+                        if (JSON.stringify(fresh) !== JSON.stringify(S.session.assets || [])) { S.session.assets = fresh; changed = true; }
+                        ((d.session || {}).questions || []).forEach(function(fq) { if (adoptQuestion(fq)) changed = true; });
+                        if (d.session && d.session.updated_at) S.session.updated_at = d.session.updated_at;
+                    } catch (_) {}
+                    if (!S.session || S.session.id !== sid) return;
+                    if (changed) {
+                        var landed = (S.session.questions || []).filter(function(q) { return q.kind === 'asset_read'; }).slice(-1)[0];
+                        if (landed && landed.id && !S.fg.assetSeen) { S.fg.tallyQ = landed.id; }
+                        fgRefresh();
+                        var ss = (S.twin || {}).panel_sessions || []; for (var k = 0; k < ss.length; k++) { if (ss[k].id === sid) ss[k] = S.session; }
+                        renderPanelSessions();
+                    }
+                    if (anyAssetProcessing()) S.assetPollTimer = setTimeout(tick, 5000);
+                };
+                S.assetPollTimer = setTimeout(tick, 5000);
+            }
+            function assetLabelTyped() { var inp = el('dtwFgAssetLabel'); var v = inp ? inp.value.trim() : (S.fg.assetLabel || ''); S.fg.assetLabel = ''; if (inp) inp.value = ''; return v; }
+            async function assetPost(fd) {
+                var r = await fetch('/api/digital-twins/' + encodeURIComponent(S.key) + '/panel/' + encodeURIComponent(S.session.id) + '/assets', { method: 'POST', credentials: 'same-origin', body: fd });
+                var u = null; try { u = await r.json(); } catch (_) { u = null; }
+                if (!r.ok || !u || u.success === false) { var e = new Error((u && u.error) || 'The file could not be stored.'); e.doc = u; throw e; }
+                return u;
+            }
+            function assetAdopt(u) {
+                if (!S.session) return;
+                if (u.assets) S.session.assets = u.assets;
+                if (u.session && u.session.questions_paid != null) S.session.questions_paid = u.session.questions_paid;
+                fgRefresh();
+                scheduleAssetPoll();
+                liveNote((u.asset && u.asset.label ? u.asset.label : 'It') + ' is in the room. The room is taking it in; what it made of it lands in the thread in a minute or two.');
+            }
+            function assetFail(e) {
+                liveNote(e.message);
+                if (e.doc && e.doc.upgrade) liveNoteHtml(esc(e.doc.upgrade.line || e.message) + ' <button type="button" class="dtw-link" onclick="dtwPanelUpgrade()">Move it to 1-40 for ' + esc(e.doc.upgrade.label || '') + '</button>');
+                else if (e.doc && e.doc.add_funds_url) liveNoteHtml(esc(e.message) + ' <a class="dtw-link" href="' + esc(e.doc.add_funds_url) + '">Add funds</a>');
+            }
+            window.dtwPanelAssetAdd = async function(file) {
+                if (!S.session || !S.key || !file) return;
+                if (S.assetBusy) { liveNote('One piece of content at a time; the last one is still going in.'); return; }
+                if (!/\.(mp4|mov|webm|m4v|png|jpe?g|webp|mp3|m4a|wav)$/i.test(file.name || '')) { liveNote('Use a video (mp4, mov, webm), an image (png, jpg, webp) or audio (mp3, m4a, wav).'); return; }
+                S.assetBusy = true;
+                liveNote('Storing ' + (file.name || 'the file') + '...');
+                var fd = new FormData(); fd.append('file', file); var lab = assetLabelTyped(); if (lab) fd.append('label', lab);
+                try { assetAdopt(await assetPost(fd)); } catch (e) { assetFail(e); }
+                S.assetBusy = false;
+            };
+            window.dtwPanelAssetUrl = async function() {
+                var inp = el('dtwFgAssetUrl'), url = inp ? inp.value.trim() : ''; if (!S.session || !url) return;
+                if (!/^https?:\/\//i.test(url)) { liveNote('Paste a direct link to the file (https://...).'); return; }
+                if (S.assetBusy) { liveNote('One piece of content at a time; the last one is still going in.'); return; }
+                S.assetBusy = true;
+                liveNote('Fetching the file...');
+                var fd = new FormData(); fd.append('url', url); var lab = assetLabelTyped(); if (lab) fd.append('label', lab);
+                try { assetAdopt(await assetPost(fd)); if (inp) inp.value = ''; } catch (e) { assetFail(e); }
+                S.assetBusy = false;
+            };
+            window.dtwPanelAssetDrop = function(ev) {
+                try { ev.preventDefault(); } catch (_) {}
+                var box = el('dtwFgAddC'); if (box) box.classList.remove('over');
+                var f = ev && ev.dataTransfer && ev.dataTransfer.files && ev.dataTransfer.files[0];
+                if (f) { dtwPanelAssetAdd(f); return; }
+                var txt = ev && ev.dataTransfer ? (ev.dataTransfer.getData('text/uri-list') || ev.dataTransfer.getData('text/plain') || '') : '';
+                if (/^https?:\/\//i.test(txt.trim())) { var inp = el('dtwFgAssetUrl'); if (inp) inp.value = txt.trim(); dtwPanelAssetUrl(); }
+            };
+            window.dtwPanelAssetOpen = function(id) {
+                var a = fgAssets(S.session).filter(function(x) { return x.id === id; })[0]; if (!a) return;
+                if (a.status === 'failed') { liveNote(a.note || 'The room could not take this one in. Add it again and it runs fresh.'); return; }
+                if (!a.read_id) { liveNote(a.status === 'processing' ? 'The room is still taking ' + (a.label || 'it') + ' in; what it made of it lands in the thread in a minute or two.' : 'The read for ' + (a.label || 'it') + ' is on its way.'); return; }
+                S.fg.tallyQ = a.read_id; S.fg.open[a.read_id] = true;
+                fgRefresh();
+                var blk = document.querySelector('#dtwPnTranscript [data-q="' + esc(a.read_id) + '"]'); if (blk) fgScrollTo(blk);
+                var inp = el('dtwPnQ'); if (inp) { try { inp.focus(); } catch (_) {} }
+            };
+            window.dtwPanelAssetDelete = async function(id) {
+                if (!S.session || !S.key) return;
+                var a = fgAssets(S.session).filter(function(x) { return x.id === id; })[0]; if (!a) return;
+                if (!confirm('Take ' + (a.label || 'this') + ' out of the room? What the room made of it stays in the thread.')) return;
+                try { var d = await api('/' + S.key + '/panel/' + S.session.id + '/assets/' + encodeURIComponent(id), { method: 'DELETE' }); }
+                catch (e1) { try { d = await api('/' + S.key + '/panel/' + S.session.id + '/assets/' + encodeURIComponent(id) + '/delete', { method: 'POST', body: '{}' }); } catch (e2) { liveNote(e2.message); return; } }
+                if (d && d.assets) S.session.assets = d.assets;
+                fgRefresh();
+            };
             function failedMsg(q, isLast) { return '<div class="dtw-fg-failed" data-q="' + esc(q.id || '') + '"><span>' + esc(q.read || 'The room did not finish this question. Ask it again and it runs fresh.') + '</span>' + (isLast ? '<button type="button" class="dtw-fg-chip" onclick="dtwPanelAsk(\'' + esc(jsq(q.q)) + '\', true)">Ask again</button>' : '') + '</div>'; }
             function oldHead(q, i, open) {
                 var seats = seatsTotal(q), nA = (q.answers || []).length;
@@ -53908,9 +54078,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             };
             // ---- the composer, under the thread, as the Prometheus chat: the kind chips, the field, Ask the room as the one Signal Green button.
             function composerHtml(typed, typedOpts) {
-                var out = '<div class="dtw-fg-composer"><div id="dtwPnKinds" class="dtw-fg-kinds">' + KINDS.map(function(k) { return '<button type="button" class="dtw-fg-chip' + (S.panelKind === k[0] ? ' on' : '') + '" data-k="' + k[0] + '" onclick="dtwPanelKind(\'' + k[0] + '\')">' + k[1] + '</button>'; }).join('') + '</div>';
+                var ready = fgAssets(S.session).filter(function(a) { return a.status === 'ready'; });
+                var ph = ready.length >= 2 ? 'Ask about ' + ready[0].label + ', ' + ready[1].label + ' or both.' : (ready.length ? 'Ask about ' + ready[0].label + ', or anything else in plain words.' : 'Ask the room anything in plain words.');
+                var out = '<div class="dtw-fg-composer">' + assetsStripHtml(S.session) + '<div id="dtwPnKinds" class="dtw-fg-kinds">' + KINDS.map(function(k) { return '<button type="button" class="dtw-fg-chip' + (S.panelKind === k[0] ? ' on' : '') + '" data-k="' + k[0] + '" onclick="dtwPanelKind(\'' + k[0] + '\')">' + k[1] + '</button>'; }).join('') + '</div>';
                 out += '<textarea id="dtwPnOptions" class="dtw-in dtw-fg-opts" style="display:' + ((S.panelKind === 'multiple_choice' || S.panelKind === 'ab') ? 'block' : 'none') + ';" placeholder="Options, one per line (or comma separated)">' + esc(typedOpts) + '</textarea>';
-                out += '<div class="dtw-fg-field"><input id="dtwPnQ" value="' + esc(typed) + '" placeholder="Ask the room anything in plain words." aria-label="Ask the room" onkeydown="if(event.key===\'Enter\'){dtwPanelAsk();}"><button type="button" id="dtwPnAskBtn" class="dtw-fg-send" onclick="dtwPanelAsk()">Ask the room<span class="arr"></span></button></div>';
+                out += '<div class="dtw-fg-field"><input id="dtwPnQ" value="' + esc(typed) + '" placeholder="' + esc(ph) + '" aria-label="Ask the room" onkeydown="if(event.key===\'Enter\'){dtwPanelAsk();}"><button type="button" id="dtwPnAskBtn" class="dtw-fg-send" onclick="dtwPanelAsk()">Ask the room<span class="arr"></span></button></div>';
                 out += '<div class="dtw-fg-live" id="dtwPnLive"></div></div>';
                 return out;
             }
@@ -53996,6 +54168,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (S.fg.seat != null) { renderSeatPanel(); placePop(); }
                 schedulePortraitRefresh();
                 scheduleRoomPoll();
+                scheduleAssetPoll();
             }
             // A refresh while the room works or a portrait lands: the band, the thread and the tally redraw; the composer keeps what was typed.
             function fgRefresh() {
@@ -56086,6 +56259,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var standing = Number((s.group || {}).size_people || 0);
                 return '<div class="dtw-pi-h">The room <span class="n">' + roster.length + ' seated' + (standing ? ', standing for ' + fmtN(standing) + ' people' : '') + '</span>' + popBtn + '</div>'
                     + roomStandsForNote(s.group)
+                    + (typeof assetsStripHtml === 'function' ? assetsStripHtml(s, true) : '')
                     + '<div id="dtwPiSeats" class="dtw-pi-seatlist">' + renderPilotSeats(s, t0) + '</div>'
                     + '<div class="dtw-pi-hr"></div><div class="dtw-pi-h">Ask the room at <span class="n" id="dtwPiAskClock">' + esc(clockFmt(t0)) + '</span></div>'
                     + '<div class="dtw-pi-sugg" id="dtwPiSugg">' + renderPilotSuggest(s, t0) + '</div>'
