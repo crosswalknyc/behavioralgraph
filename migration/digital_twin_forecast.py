@@ -254,23 +254,62 @@ def factor_for(ledger: dict, twin: dict, sess: dict) -> dict:
 
 
 # ----------------------------------------------------------------- the read
-def _base_people(twin: dict) -> int:
+def _twin_people(twin: dict) -> int:
     try:
         return int(float(_meta(twin).get('size_us') or 0))
     except (TypeError, ValueError):
         return 0
 
 
+def _base_people(twin: dict, sess: Optional[dict] = None) -> int:
+    """The people behind the room: what the room stands for when it was
+    sized to its cuts (``group.sizing``, Jenna 2026-11-05), else the
+    twin's US size."""
+    g = (sess or {}).get('group') if isinstance(sess, dict) else None
+    sz = (g or {}).get('sizing') if isinstance(g, dict) else None
+    if isinstance(sz, dict):
+        try:
+            v = int(float(sz.get('people') or 0))
+            if v > 0:
+                return v
+        except (TypeError, ValueError):
+            pass
+    return _twin_people(twin)
+
+
+def _room_shares(sess: dict) -> tuple:
+    """(share of the title's audience, share of the twin) the sized room
+    stands for; (1, 1) for a room on the whole twin."""
+    try:
+        from migration.digital_twin_sizing import share_of_title_for
+        title_share = share_of_title_for(sess)
+    except Exception:
+        title_share = 1.0
+    sz = ((sess or {}).get('group') or {}).get('sizing') if isinstance(sess, dict) else None
+    try:
+        twin_share = float((sz or {}).get('share_of_twin') or 1.0)
+    except (TypeError, ValueError):
+        twin_share = 1.0
+    return clamp(title_share, 0.0, 1.0) or 1.0, clamp(twin_share, 0.0, 1.0) or 1.0
+
+
 def uncalibrated_week_one(twin: dict, sess: dict) -> dict:
     """The week-one audience before any calibration: the people behind the
-    room, the prior reach rate, the cut's appeal, the episode's position."""
+    room, the prior reach rate, the cut's appeal, the episode's position.
+    ``whole`` is the figure on the whole twin (what the ledger records, so
+    a show's calibration carries between a room on the whole audience and
+    a room on a cut); ``people`` is the room's own: the whole scaled to
+    the cuts' share of the title's audience."""
     sc = sess.get('scorecard') or {}
     a = appeal(sc)
-    base = _base_people(twin)
+    twin_people = _twin_people(twin)
+    base = _base_people(twin, sess)
     mode = str(sess.get('mode') or 'pilot')
     pos = POSITION.get(mode, 0.9)
-    raw = base * PRIOR_REACH_RATE * (a['score'] ** APPEAL_ELASTICITY) * pos
-    return {'people': raw, 'appeal': a, 'position_factor': pos, 'base_people': base}
+    whole = twin_people * PRIOR_REACH_RATE * (a['score'] ** APPEAL_ELASTICITY) * pos
+    title_share, _twin_share = _room_shares(sess)
+    raw = whole * title_share if base != twin_people else whole
+    return {'people': raw, 'whole': whole, 'appeal': a, 'position_factor': pos, 'base_people': base, 'twin_people': twin_people, 'title_share': title_share}
 
 
 def forecast_for_session(twin: dict, sess: dict, *, s3=None, ledger: Optional[dict] = None, actual: Optional[dict] = None, notes: Optional[list] = None) -> dict:
@@ -304,8 +343,12 @@ def forecast_for_session(twin: dict, sess: dict, *, s3=None, ledger: Optional[di
         lapsing = float(lc.get('lapsing_pct') or 18.0) / 100.0
     except (TypeError, ValueError):
         lapsing = 0.18
-    non_subs = max(int(US_ADULTS * 0.3), US_ADULTS - base)
-    dormant = int(base * lapsing)
+    # the people without the platform, and its dormant accounts, that the room speaks for: the whole platform's when
+    # the room stands for the whole twin, the cuts' share of them when it was sized to its cuts
+    _title_share, twin_share = _room_shares(sess)
+    twin_people = unc.get('twin_people') or base
+    non_subs = int(max(int(US_ADULTS * 0.3), US_ADULTS - twin_people) * twin_share)
+    dormant = int(twin_people * twin_share * lapsing)
     # the season that follows: a procedural's episodes settle to about three quarters of week one, and the finale
     # holds the completers
     season_avg = week_one * clamp(0.62 + 0.25 * completion, 0.55, 0.9)
@@ -362,9 +405,11 @@ def forecast_for_session(twin: dict, sess: dict, *, s3=None, ledger: Optional[di
         except (TypeError, ValueError):
             act = 0
         if act > 0:
-            resid = ((out['episode']['week_one_audience'] or 0) - act) / float(act) * 100.0 if out['episode']['week_one_audience'] else None
-            out['actual'] = {'week_one_audience': act, 'measure': str(actual.get('measure') or out['episode']['definition']), 'aired': str(actual.get('aired') or ''),
-                             'note': str(actual.get('note') or ''), 'forecast_vs_actual_pct': (round(resid, 1) if resid is not None else None)}
+            # the room's forecast is read against the room's share of what the whole title did
+            act_room = act * float(unc.get('title_share') or 1.0)
+            resid = ((out['episode']['week_one_audience'] or 0) - act_room) / float(act_room) * 100.0 if (out['episode']['week_one_audience'] and act_room > 0) else None
+            out['actual'] = {'week_one_audience': act, 'week_one_audience_for_room': int(round(act_room)), 'measure': str(actual.get('measure') or out['episode']['definition']),
+                             'aired': str(actual.get('aired') or ''), 'note': str(actual.get('note') or ''), 'forecast_vs_actual_pct': (round(resid, 1) if resid is not None else None)}
     # The notes never say what the forecast was set against (Jenna 2026-11-05: "don't ever say this on the output:
     # Calibrated to NCIS: New York's first 2 episodes as aired"). A calibrated forecast carries no note at all; an
     # uncalibrated one says only where in its range it sits. The guard runs over the notes a caller passed in too.
@@ -382,9 +427,11 @@ def record_actual(s3, twin: dict, sess: dict, *, people: int, measure: str, aire
     ledger = ledger if isinstance(ledger, dict) else load_ledger(s3)
     unc = uncalibrated_week_one(twin, sess)
     show = _show_name(twin, sess)
+    # the ledger holds the whole-twin prediction against the whole title's actual, so the factor carries between a
+    # room sized to its cuts and a room on the whole audience
     rec = {'show': show, 'show_key': _show_key(show), 'episode': episode, 'session_id': str(sess.get('id') or ''), 'twin': str(_meta(twin).get('name') or ''),
            'platform': str(_meta(twin).get('platform_home') or _meta(twin).get('name') or ''), 'mode': str(sess.get('mode') or ''),
-           'predicted_uncalibrated': int(round(unc['people'])), 'appeal': unc['appeal'], 'actual': int(people), 'measure': str(measure or ''),
+           'predicted_uncalibrated': int(round(unc.get('whole') or unc['people'])), 'appeal': unc['appeal'], 'actual': int(people), 'measure': str(measure or ''),
            'aired': str(aired or ''), 'note': str(note or ''), 'recorded_at': _now()}
     recs = [r for r in ledger.get('records') or [] if not (isinstance(r, dict) and str(r.get('session_id')) == rec['session_id'])]
     recs.append(rec)

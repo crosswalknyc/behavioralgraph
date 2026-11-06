@@ -539,17 +539,25 @@ def _filter_clean(f: dict) -> dict:
     return {k: (list(v) if isinstance(v, tuple) else v) for k, v in (f or {}).items()}
 
 
-def _size_segments(segs: list, by_key: dict, seed: str, cohorts: bool = False) -> int:
+def _size_segments(segs: list, by_key: dict, seed: str, cohorts: bool = False, sizing_out: Optional[dict] = None) -> int:
     """People per segment from each twin's size: a segment with no filter
     stands for the whole twin, a filtered one for its share; the
     segments of one twin together never exceed that twin (overlap is
     taken out in proportion). Sets ``people`` and ``share_pct``; returns
-    the room's size, which equals the sum of the segments.
+    the room's size.
 
     ``cohorts`` (Jenna, 2026-11-02): the segments are cohorts the user
     cut from one audience and may overlap (men, and men with children).
-    Each keeps its own share of the twin, ``share_pct`` is that share
-    of the whole twin audience, and the room stands for the twin."""
+    Each keeps its own share of the twin and ``share_pct`` is that share
+    of the whole twin audience.
+
+    The room's size (Jenna, 2026-11-05) is what the cuts stand for: the
+    union of the cuts inside each twin (``represented_sizing``), never
+    the whole twin when the room was cut and never the cuts added up.
+    Each segment keeps the people its cut holds in the twin as
+    ``twin_people``; its ``people`` is its part of the room's size, so
+    the segments add up to the room. ``sizing_out`` receives the sizing
+    record when given."""
     for s in segs:
         t = by_key.get(s['twin']) or {}
         s['_raw'] = max(50.0, float(_meta(t).get('size_us') or 1_000_000) * _segment_share(t, s.get('_filter') or {}))
@@ -575,13 +583,23 @@ def _size_segments(segs: list, by_key: dict, seed: str, cohorts: bool = False) -
             big['people'] = max(1, big['people'] + (cap - sum(s['people'] for s in group)))
     for s in segs:
         s.pop('_raw', None)
-    if cohorts:
-        twins_total = sum(int(float(_meta(by_key.get(k) or {}).get('size_us') or 0) or 0) for k in by_twin)
-        return twins_total or (sum(s['people'] for s in segs) or 1)
-    total_people = sum(s['people'] for s in segs) or 1
-    for s in segs:
-        s['share_pct'] = pct1(s['people'] / total_people * 100.0)
-    return total_people
+        s['twin_people'] = int(s['people'])          # the people the cut holds in the twin, before the room is sized
+    if not cohorts:
+        total_people = sum(s['people'] for s in segs) or 1
+        for s in segs:
+            s['share_pct'] = pct1(s['people'] / total_people * 100.0)
+    # the room stands for the cuts as one union (a cut inside another counted once), per twin
+    from migration.digital_twin_pilot import represented_sizing
+    from migration.digital_twin_sizing import _partition
+    sz = represented_sizing([t for t in by_key.values() if isinstance(t, dict)], segs, seed=seed)
+    for tkey, group in by_twin.items():
+        part = int(((sz.get('by_twin') or {}).get(tkey) or {}).get('people') or 0)
+        if part > 0 and sum(s['people'] for s in group) != part:
+            _partition(group, part, f"{seed}|{tkey}")
+    if isinstance(sizing_out, dict):
+        sizing_out.clear()
+        sizing_out.update(sz)
+    return int(sz.get('people') or 0) or (sum(s['people'] for s in segs) or 1)
 
 
 def recompute_group_sizes(sess: dict, twins_by_key: dict) -> bool:
@@ -616,13 +634,22 @@ def recompute_group_sizes(sess: dict, twins_by_key: dict) -> bool:
         s['_filter'] = f
         s['filter'] = _filter_clean(f)
     seed = f"panel|{sess.get('id')}|{'|'.join(str(k) for k in (sess.get('twin_keys') or g.get('twins') or []))}|{VERSION}"
-    g['size_people'] = _size_segments(segs, by_key, seed, cohorts=any(s.get('composition') for s in segs))
+    sizing = {}
+    g['size_people'] = _size_segments(segs, by_key, seed, cohorts=any(s.get('composition') for s in segs), sizing_out=sizing)
     for s in segs:
         s.pop('_filter', None)
+    # a title's own audience the room was sized to earlier still holds it (no new research on a recompute)
+    prior = g.get('sizing') if isinstance(g.get('sizing'), dict) else {}
+    basis = dict(prior.get('basis') or {}) if isinstance(prior.get('basis'), dict) else {}
+    people = int(g['size_people'] or 0)
+    basis['step'] = 'cuts' if sizing.get('is_cut') else 'twin'
+    cap = int(basis.get('title_cut_people') or 0)
+    if cap > 0 and cap < people:
+        people, basis['step'] = cap, 'title'
+    from migration.digital_twin_sizing import apply_sizing
+    apply_sizing(g, people, dict(sizing, basis=basis, step=basis['step']), seed)
     after = [(s.get('people'), s.get('share_pct'), dict(s.get('filter') or {})) for s in segs] + [g.get('size_people')]
     if after != before:
-        spread_seat_people(g.get('roster') or [], segs, seed)     # the seats follow their segment's new people
-        annotate_seat_stands_for(g, force=True)
         sess['updated_at'] = _now()
         return True
     return False
@@ -653,7 +680,8 @@ def build_group(twins: list, segments: Optional[list] = None, in_room: int = DEF
         segs.append({'label': label or _twin_name(t), 'twin': _twin_key(t), 'twin_name': _twin_name(t), 'filter': _filter_clean(f), '_filter': f,
                      'composition': composition, 'people': 0, 'share_pct': 0.0, 'seats': 0, '_want': max(0, want_seats)})
     is_cohorts = any(s.get('composition') for s in segs)
-    total_people = _size_segments(segs, by_key, seed, cohorts=is_cohorts)
+    sizing = {}
+    total_people = _size_segments(segs, by_key, seed, cohorts=is_cohorts, sizing_out=sizing)
     for s in segs:
         s.pop('_filter', None)
     wants = [s.pop('_want', 0) for s in segs]
@@ -785,8 +813,13 @@ def build_group(twins: list, segments: Optional[list] = None, in_room: int = DEF
                 r['name'] = f"{base} {chr(ord('A') + (k - len(bank)) % 26)}."
         seen.add(r['name'])
     spread_seat_people(roster, segs, seed)
+    from migration.digital_twin_sizing import sizing_line
+    sizing = dict(sizing or {}, version=1)
+    sizing['basis'] = {'step': str(sizing.get('step') or 'twin')}
+    sizing['line'] = sizing_line(sizing)
     return annotate_seat_stands_for({'twins': [_twin_key(t) for t in twins], 'segments': [{k: v for k, v in s.items()} for s in segs],
-                                     'size_people': total_people, 'in_room': in_room, 'roster': roster})
+                                     'size_people': total_people, 'twin_people': int(sizing.get('twin_people') or 0), 'sizing': sizing,
+                                     'in_room': in_room, 'roster': roster})
 
 
 def spread_seat_people(roster: list, segments: list, seed: str = '') -> None:

@@ -1093,8 +1093,13 @@ def run_panel(text, body, history, user, ppu=None):
         return panel_reply(payload, sess, rec, key, user)
     g = sess['group']
     roster = ', '.join(f"{r['name']} ({r['age']}, {r['city']})" for r in g['roster'][:8])
+    try:   # a room sized to its cuts says what it stands for (Jenna 2026-11-05)
+        from migration.digital_twin_sizing import sizing_line
+        stands = sizing_line(g.get('sizing')) if isinstance(g.get('sizing'), dict) else ''
+    except Exception:
+        stands = ''
     return _payload(f"The room is open: {g['in_room']} twins standing for {g['size_people']:,} people, "
-                    + '; '.join(f"{s['label']} {s['share_pct']}%" for s in g['segments']) + f". In the room: {roster}. "
+                    + '; '.join(f"{s['label']} {s['share_pct']}%" for s in g['segments']) + '. ' + (stands + ' ' if stands else '') + f"In the room: {roster}. "
                     + f"One group, {PR.tier_label(PR.group_tier(sess, plan))}" + (" (charged at open)" if PR.group_charge(sess) and not _is_super(user) else '') + ". What should I ask them?",
                     ['Would you watch a new season?', 'Would you pay $29 for the box?', 'Show of hands, who watched season 1?', 'Open Focus Group IQ'],
                     panel_session={'key': key, 'sid': sid}, open_view='digitalTwinsIQ', twin_key=key, action_hint={'view': 'digitalTwinsIQ', 'tab': 'panel', 'twin_key': key, 'session_id': sid})

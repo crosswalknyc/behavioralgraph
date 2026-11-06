@@ -53300,6 +53300,16 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             function kindWord(k) { return KIND_WORDS[String(k || '')] || cap(String(k || '').replace(/_/g, ' ')); }
             function roomTitle(s) { var t = String((s || {}).title || '').replace(/\s+/g, ' ').trim(); return t || 'Room'; }
             function seatsTotal(q) { return Number((q || {}).seats_total || ((S.session || {}).group || {}).in_room || (((S.session || {}).group || {}).roster || []).length || 0); }
+            function roomStandsForLine(g) {
+                // what the room stands for when it was cut (Jenna 2026-11-05: 'the room would need to be sized accordingly'): the
+                // server's one plain line, 'Standing for the 4 groups you chose: 9.6M of the 83.8M people in this audience.'
+                var sz = (g || {}).sizing || {};
+                return sz && sz.line ? String(sz.line) : '';
+            }
+            function roomStandsForNote(g, cls) {
+                var line = roomStandsForLine(g);
+                return line ? '<div class="' + (cls || 'dtw-pi-fn') + '">' + esc(line) + '</div>' : '';
+            }
             function perSeat(g, r) {
                 var seg = r ? ((g || {}).segments || []).filter(function(x) { return x.label === r.segment; })[0] : null;
                 if (seg && seg.people && seg.seats) return Math.round(Number(seg.people) / Number(seg.seats));
@@ -53540,10 +53550,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     meta = '<span>Question ' + n + (fq.kind ? SEP + esc(kindWord(fq.kind)) : '');
                     if (qFailed(fq)) meta += SEP + 'did not finish';
                     else meta += SEP + '<b>' + nA + (total ? ' of ' + total : '') + '</b> answered' + (took != null ? ' in ' + took + 's' : '');
-                    meta += SEP + fmtN(g.in_room || roster.length) + ' twins standing for <b>' + fmtN(g.size_people) + '</b> people' + (s.updated_at ? SEP + 'Saved ' + esc(fmtDay(s.updated_at)) : '') + '</span>';
+                    meta += SEP + fmtN(g.in_room || roster.length) + ' twins standing for <b>' + fmtN(g.size_people) + '</b> people' + (roomStandsForLine(g) ? SEP + esc(roomStandsForLine(g)) : '') + (s.updated_at ? SEP + 'Saved ' + esc(fmtDay(s.updated_at)) : '') + '</span>';
                     if (fly) meta += SEP + '<span class="dtw-fg-pulse"></span><span>Question ' + (qsAll.indexOf(fly) + 1) + ' is working</span>';
                 } else {
-                    meta = '<span>' + fmtN(g.in_room || roster.length) + ' twins standing for <b>' + fmtN(g.size_people) + '</b> people' + SEP + 'Ask the first question below; the shares, the read and the voices come back in a minute or two.</span>';
+                    meta = '<span>' + fmtN(g.in_room || roster.length) + ' twins standing for <b>' + fmtN(g.size_people) + '</b> people' + (roomStandsForLine(g) ? SEP + esc(roomStandsForLine(g)) : '') + SEP + 'Ask the first question below; the shares, the read and the voices come back in a minute or two.</span>';
                 }
                 return '<div class="dtw-fg-acts" id="dtwFgDockActs"></div><div class="dtw-fg-htext"><div class="dtw-fg-rtwrap"><input id="dtwFgTitle" class="dtw-fg-rt" value="' + esc(roomTitle(s)) + '" size="' + Math.max(8, String(roomTitle(s) || '').length + 1) + '" maxlength="120" aria-label="Room name" placeholder="Name this room" onfocus="this.dataset.dirty=\'1\'" oninput="this.dataset.dirty=\'1\';this.size=Math.max(8,this.value.length+1)" onkeydown="if(event.key===\'Enter\'){event.preventDefault();this.blur();}" onblur="dtwPanelRename(this.value)"><button type="button" class="dtw-fg-rt-edit" onclick="event.preventDefault();var t=document.getElementById(\'dtwFgTitle\');if(t){t.focus();t.select();}">Edit</button></div><div class="dtw-fg-fm" id="dtwFgFm">' + meta + '</div></div>';
             }
@@ -55479,10 +55489,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         return '<div class="dtw-pi-bar"><div class="l"><span>' + esc(r[0]) + '</span><span>' + (isFinite(v) ? v.toFixed(1) : '-') + (isFinite(nv) ? ' / ' + nv.toFixed(1) : '') + '</span></div><div class="t"><i style="width:' + (isFinite(v) ? w(v) : '0%') + '"></i></div>' + (isFinite(nv) ? '<div class="t n"><i style="width:' + w(nv) + '"></i></div>' : '') + '</div>';
                     }).join('');
                     out += '<div class="dtw-pi-hr"></div><div class="dtw-pi-h">Against the norm</div><div class="dtw-pi-bars">' + bars + '</div><div class="dtw-pi-fn">Green is this cut. Grey is the norm. Compared to: ' + gsel + '</div>' + normNote;
+                    out += roomStandsForNote(s.group);
                     out += piForecastSide(s);
                 } else {
                     out += '<div class="dtw-pi-stat"><div class="v" id="dtwPiDialNow">-</div><div class="k">Dial now, 0 to 100</div></div>'
                         + '<div class="dtw-pi-stat"><div class="v">' + roster.length + '</div><div class="k">Seated' + (people ? ', standing for ' + fmtN(people) + ' people' : '') + '</div></div>'
+                        + roomStandsForNote(s.group)
                         + '<div class="dtw-pi-hr"></div><div class="dtw-pi-fn">' + (s.status === 'preparing' ? 'The room is scoring what it watched.' : 'Scores land here when you press Stop. Compared to: ' + gsel) + '</div>';
                 }
                 var others = ((S.twin || {}).pilot_sessions || []).filter(function(x) { return x && x.id !== s.id; }).slice(0, 5);
@@ -55965,7 +55977,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 kindSel = kindSel || piKindSel();
                 var popBtn = piRoomPopped() ? '<button type="button" class="dtw-pi-pop" onclick="dtwRoomPopIn()" title="Bring the room back into the page">Back to page</button>'
                                             : '<button type="button" class="dtw-pi-pop" onclick="dtwRoomPopOut()" title="Open the room in its own window">Pop out</button>';
-                return '<div class="dtw-pi-h">The room <span class="n">' + roster.length + ' seated</span>' + popBtn + '</div>'
+                var standing = Number((s.group || {}).size_people || 0);
+                return '<div class="dtw-pi-h">The room <span class="n">' + roster.length + ' seated' + (standing ? ', standing for ' + fmtN(standing) + ' people' : '') + '</span>' + popBtn + '</div>'
+                    + roomStandsForNote(s.group)
                     + '<div id="dtwPiSeats" class="dtw-pi-seatlist">' + renderPilotSeats(s, t0) + '</div>'
                     + '<div class="dtw-pi-hr"></div><div class="dtw-pi-h">Ask the room at <span class="n" id="dtwPiAskClock">' + esc(clockFmt(t0)) + '</span></div>'
                     + '<div class="dtw-pi-sugg" id="dtwPiSugg">' + renderPilotSuggest(s, t0) + '</div>'

@@ -89,7 +89,17 @@ class Room(unittest.TestCase):
         t = _twin()
         g = P.build_group([t], segments=PI.cohort_segments(COHORTS, t['meta']['key']), in_room=12, seed='t|cohorts')
         self.assertEqual(g['in_room'], 14)                               # the seats asked for, not the field above them
-        self.assertEqual(g['size_people'], 83_791_763)                   # the room stands for the whole audience
+        # the room stands for the people inside its cuts as one union (Jenna 2026-11-05): men and women together are
+        # 99% of this twin's rows, dads sit inside men and Spanish speakers inside both; never the whole twin, never
+        # the cuts added up
+        self.assertEqual(g['size_people'], 82_984_783)
+        self.assertEqual(g['twin_people'], 83_791_763)
+        self.assertLess(g['size_people'], 83_791_763)
+        self.assertLess(g['size_people'], sum(s['twin_people'] for s in g['segments']))
+        self.assertEqual(sum(s['people'] for s in g['segments']), g['size_people'])      # the segments partition what the room stands for
+        self.assertEqual(g['sizing']['people'], g['size_people'])
+        self.assertTrue(g['sizing']['is_cut'])
+        self.assertEqual(g['sizing']['line'], 'Standing for the 4 groups you chose: 83.0M of the 83.8M people in this audience.')
         segs = {s['label']: s for s in g['segments']}
         self.assertEqual([s['seats'] for s in g['segments']], [4, 4, 3, 3])
         self.assertAlmostEqual(segs['Men']['share_pct'], 49.3, delta=0.2)             # share of the whole twin, not of the sum

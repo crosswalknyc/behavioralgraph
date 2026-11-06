@@ -965,13 +965,247 @@ def room_people(roster: list, segments: list, twin: Optional[dict] = None, *, qu
 
 def session_people(session: dict, twin: Optional[dict] = None) -> Optional[int]:
     """``room_people`` for a saved test: the scorecard page, the room page,
-    the CSV and the API all read this one figure, so they agree. The
-    battery's whole-room quadrant is the published total when the group
-    carries no people of its own."""
+    the CSV and the API all read this one figure, so they agree. A room
+    sized to its cuts (``group.sizing``, Jenna 2026-11-05) stands for the
+    represented people first; else the battery's whole-room quadrant is
+    the published total when the group carries no people of its own."""
     g = (session or {}).get('group') or {}
+    sized = _int_or_zero(((g.get('sizing') or {}) if isinstance(g.get('sizing'), dict) else {}).get('people'))
+    carried = any(_int_or_zero(x.get('people')) > 0 for x in list(g.get('segments') or []) + list(g.get('roster') or []) if isinstance(x, dict))
+    if sized > 0 and _int_or_zero(g.get('size_people')) > 0 and carried:
+        return sized
     quads = (((session or {}).get('scorecard') or {}).get('battery') or {}).get('quadrants') or []
     total = next((q.get('people') for q in quads if isinstance(q, dict) and q.get('key') == 'total'), None)
     return room_people(g.get('roster') or [], g.get('segments') or [], twin, quadrant_total=total)
+
+
+# ------------------------------------------------- the represented audience
+# Jenna, 2026-11-05: "somewhere we need to show a total of what the audience in the focus group or panel represents if
+# the audience has been cut like in the ncis pilot. it wouldn't project up to that full sample size because that sample
+# size is cumulative of all people not just the cuts I made ... so the room would need to be sized accordingly."
+# A room built on cuts stands for the people inside those cuts, as one union (a cut inside another cut is counted
+# once), never for the whole twin and never for the cuts added up. A room with no cuts stands for the whole twin.
+_ETH_VALUE = {'hispanic': 'Hispanic or Latino', 'latino': 'Hispanic or Latino', 'black': 'Black or African American', 'asian': 'Asian', 'white': 'White'}
+_MAX_EXACT_CUTS = 10          # inclusion-exclusion runs exactly up to this many cuts on one twin; beyond it, pairwise overlap only
+
+
+def _demo_values(key: str) -> list:
+    from migration import digital_twin_demos as D
+    return next((list(d['values']) for d in D.DEMOS if d['key'] == key), [])
+
+
+def _buckets_overlapping(key: str, lo, hi) -> list:
+    """The picker buckets of an age or income span (a legacy (lo, hi)
+    filter) that meet the span."""
+    from migration import digital_twin_demos as D
+    bounds = D._AGE_BOUNDS if key == 'AGE' else D._INCOME_BOUNDS
+    try:
+        lo, hi = float(lo), float(hi)
+    except (TypeError, ValueError):
+        return []
+    return [v for v in _demo_values(key) if v in bounds and not (bounds[v][1] < lo or bounds[v][0] > hi)]
+
+
+def cut_of(segment_filter: dict) -> dict:
+    """A segment's filter as one cut: ``{'demos': {KEY: set(values)},
+    'scalars': {key: value}}``. The standard-demographics selection is
+    the cut; a legacy filter (gender 'F', age (45, 80), ethnicity
+    'hispanic', parent True, ...) is read into the same vocabulary so two
+    cuts can be intersected. Place, lifecycle, party and urbanicity stay
+    scalars (equal or disjoint). An empty filter is the whole twin."""
+    from migration import digital_twin_demos as D
+    f = dict(segment_filter or {})
+    demos, scalars = {}, {}
+    for key, vals in (f.get('demos') or {}).items() if isinstance(f.get('demos'), dict) else []:
+        canon = [D.canon_value(str(key).upper(), v) for v in (vals or [])]
+        canon = [v for v in canon if v]
+        if canon:
+            demos[str(key).upper()] = set(canon)
+    g = str(f.get('gender') or '').upper()
+    if g in ('M', 'F', 'X') and 'GENDER' not in demos:
+        demos['GENDER'] = {'M': 'Male', 'F': 'Female', 'X': 'Non-Binary'}[g]
+        demos['GENDER'] = {demos['GENDER']}
+    if f.get('age') and 'AGE' not in demos:
+        try:
+            lo, hi = f['age'][0], f['age'][1]
+            b = _buckets_overlapping('AGE', lo, hi)
+            if b:
+                demos['AGE'] = set(b)
+        except (TypeError, IndexError, KeyError):
+            pass
+    if f.get('ethnicity') and 'ETHNICITY' not in demos:
+        v = _ETH_VALUE.get(str(f['ethnicity']).lower())
+        if v:
+            demos['ETHNICITY'] = {v}
+        else:
+            scalars['ethnicity'] = str(f['ethnicity'])
+    if f.get('parent') is not None and 'PARENTAL_STATUS' not in demos:
+        demos['PARENTAL_STATUS'] = {'Has Children' if f['parent'] else 'No Children'}
+    if str(f.get('language') or '') == 'Spanish' and 'PRIMARY_LANGUAGE' not in demos:
+        demos['PRIMARY_LANGUAGE'] = {'Spanish'}
+    if f.get('college') is not None and 'EDUCATION' not in demos:
+        demos['EDUCATION'] = {'Bachelors Degree', 'Graduate or Professional Degree'} if f['college'] else {'High School or Less', 'Some College / Associate Degree'}
+    if (f.get('income_min') or f.get('income_max')) and 'INCOME' not in demos:
+        b = _buckets_overlapping('INCOME', f.get('income_min') or 0, f.get('income_max') or 10_000_000)
+        if b:
+            demos['INCOME'] = set(b)
+    if f.get('lgbtq') and 'SEXUAL_ORIENTATION' not in demos:
+        demos['SEXUAL_ORIENTATION'] = {v for v in _demo_values('SEXUAL_ORIENTATION') if v != 'Straight / Heterosexual'}
+    if f.get('relationship') and 'RELATIONSHIP' not in demos:
+        demos['RELATIONSHIP'] = {'Married', 'In a Relationship'} if str(f['relationship']).lower() == 'married' else {'Single', 'Divorced or Separated', 'Widowed'}
+    for k in ('city', 'lifecycle', 'party', 'urbanicity'):
+        if f.get(k):
+            scalars[k] = str(f[k]).strip().lower()
+    return {'demos': demos, 'scalars': scalars}
+
+
+def intersect_cuts(a: dict, b: dict) -> Optional[dict]:
+    """The people in both cuts, as a cut; None when no one can be in
+    both (a dimension the two name with no value in common)."""
+    demos = {}
+    for key in set(a.get('demos') or {}) | set(b.get('demos') or {}):
+        va, vb = (a.get('demos') or {}).get(key), (b.get('demos') or {}).get(key)
+        v = (set(va) & set(vb)) if (va and vb) else set(va or vb or [])
+        if not v:
+            return None
+        demos[key] = v
+    scalars = {}
+    for key in set(a.get('scalars') or {}) | set(b.get('scalars') or {}):
+        va, vb = (a.get('scalars') or {}).get(key), (b.get('scalars') or {}).get(key)
+        if va and vb and va != vb:
+            return None
+        scalars[key] = va or vb
+    return {'demos': demos, 'scalars': scalars}
+
+
+def cut_share(twin: dict, cut: dict) -> float:
+    """The share of the twin inside a cut, from the twin's own
+    demographic rows (the same read the segments were sized with)."""
+    from migration.digital_twin_panel import _demos_share, _segment_share
+    share = 1.0
+    demos = {k: sorted(v) for k, v in (cut.get('demos') or {}).items() if v}
+    if demos:
+        share *= _demos_share(twin, demos)
+    scalars = {k: v for k, v in (cut.get('scalars') or {}).items() if v}
+    if scalars:
+        share *= _segment_share(twin, scalars)
+    return clamp(share, 0.0, 1.0)
+
+
+def union_share(twin: dict, cuts: list, share_fn=None) -> float:
+    """The share of the twin inside any of the cuts: inclusion-exclusion
+    over the cuts' intersections (exact up to ten cuts, pairwise beyond),
+    so a cut nested in another is counted once. ``share_fn(twin, cut)``
+    reads one cut's share (the twin's own composition by default)."""
+    share_fn = share_fn or cut_share
+    cuts = [c for c in cuts if isinstance(c, dict)]
+    if not cuts:
+        return 1.0
+    if any(not (c.get('demos') or c.get('scalars')) for c in cuts):
+        return 1.0                      # a cut with no filter is the whole twin
+    singles = [share_fn(twin, c) for c in cuts]
+    if len(cuts) == 1:
+        return clamp(singles[0], 0.0, 1.0)
+    total = 0.0
+    if len(cuts) <= _MAX_EXACT_CUTS:
+        from itertools import combinations
+        for k in range(1, len(cuts) + 1):
+            sign = 1.0 if k % 2 == 1 else -1.0
+            for idx in combinations(range(len(cuts)), k):
+                inter = cuts[idx[0]]
+                for j in idx[1:]:
+                    inter = intersect_cuts(inter, cuts[j])
+                    if inter is None:
+                        break
+                if inter is None:
+                    continue
+                total += sign * (singles[idx[0]] if k == 1 else share_fn(twin, inter))
+    else:
+        total = sum(singles)
+        for i in range(len(cuts)):
+            for j in range(i + 1, len(cuts)):
+                inter = intersect_cuts(cuts[i], cuts[j])
+                if inter is not None:
+                    total -= share_fn(twin, inter)
+    return clamp(total, max(singles) if singles else 0.0, 1.0)
+
+
+def cuts_disjoint(cuts: list) -> bool:
+    """True when no two cuts can share a person."""
+    cuts = [c for c in cuts if isinstance(c, dict)]
+    for i in range(len(cuts)):
+        for j in range(i + 1, len(cuts)):
+            if intersect_cuts(cuts[i], cuts[j]) is not None:
+                return False
+    return True
+
+
+def segment_cut(segment: dict, twin: dict) -> dict:
+    """The cut a saved segment stands for: its stored filter, else its
+    composition or label read with the twin's own words taken out."""
+    from migration.digital_twin_panel import parse_segment, strip_twin_words
+    s = segment if isinstance(segment, dict) else {}
+    f = dict(s.get('filter') or {})
+    if not f:
+        words = str(s.get('composition') or s.get('label') or '')
+        f = parse_segment(strip_twin_words(words, twin)) if words else {}
+    return cut_of(f)
+
+
+def represented_sizing(twin, segments_or_cuts, *, seed: str = '', share_fn=None) -> dict:
+    """What the chosen cuts stand for, from the twin's composition. ``twin``
+    is one twin or the list of twins a room seats; the segments name
+    theirs by key. Per twin: the union of its cuts (a cut's own share of
+    the twin, overlaps removed, a cut with no filter is the whole twin),
+    as people. Disjoint cuts add up to exactly the people the segments
+    already carry; a room with no cuts stands for the whole twin.
+    Returns {people, footprint, twin_people, share_of_twin, cuts_n,
+    is_cut, by_twin, step}; ``people`` equals ``footprint`` here (a
+    title's own audience may lower it later, see digital_twin_sizing)."""
+    twins = twin if isinstance(twin, (list, tuple)) else [twin]
+    twins = [t for t in twins if isinstance(t, dict)]
+    by_key = {_twin_key(t): t for t in twins}
+    segs = [s for s in (segments_or_cuts or []) if isinstance(s, dict)]
+    groups = {}
+    for s in segs:
+        tkey = str(s.get('twin') or s.get('twin_key') or '')
+        if tkey not in by_key and twins:
+            tkey = _twin_key(twins[0]) if len(twins) == 1 else (next((k for k, t in by_key.items() if _twin_name(t).lower() in str(s.get('label') or '').lower()), _twin_key(twins[0])))
+        groups.setdefault(tkey, []).append(s)
+    for k in by_key:
+        groups.setdefault(k, [])
+    by_twin, footprint, twin_people, cuts_n = {}, 0, 0, 0
+    for tkey, group in groups.items():
+        t = by_key.get(tkey) or {}
+        size = _int_or_zero(_meta(t).get('size_us'))
+        cuts = [segment_cut(s, t) for s in group]
+        real = [c for c in cuts if c.get('demos') or c.get('scalars')]
+        cuts_n += len(real)
+        if not group or len(real) < len(cuts) or size <= 0:
+            # no segments, or a segment with no filter: the whole twin
+            fp = size if size > 0 else sum(_int_or_zero(s.get('twin_people') or s.get('people')) for s in group)
+            share = 1.0
+        else:
+            share = union_share(t, cuts, share_fn)
+            carried = [_int_or_zero(s.get('twin_people') or s.get('people')) or int(round(size * cut_share(t, c))) for s, c in zip(group, cuts)]
+            if cuts_disjoint(cuts):
+                fp = min(size, sum(carried))           # cuts that cannot overlap add up exactly
+            else:
+                fp = messy_count(seed or tkey, f"footprint|{tkey}", size * share)      # a headline count, never on a round figure
+                fp = int(clamp(fp, max(carried) if carried else 1, size))
+        by_twin[tkey] = {'people': int(fp), 'twin_people': int(size), 'share': round(share, 6), 'cuts_n': len(real)}
+        footprint += int(fp)
+        twin_people += int(size)
+    return {'people': int(footprint), 'footprint': int(footprint), 'twin_people': int(twin_people),
+            'share_of_twin': (round(footprint / float(twin_people), 6) if twin_people > 0 else 1.0),
+            'cuts_n': int(cuts_n), 'is_cut': bool(cuts_n > 0 and footprint < twin_people), 'by_twin': by_twin,
+            'step': 'cuts' if (cuts_n > 0 and footprint < twin_people) else 'twin'}
+
+
+def represented_people(twin, segments_or_cuts, *, seed: str = '') -> int:
+    """The people the chosen cuts stand for (the union of the cuts inside
+    the twin's audience); the whole twin when there are no cuts."""
+    return int(represented_sizing(twin, segments_or_cuts, seed=seed).get('people') or 0)
 
 
 def lower_first(text: str) -> str:
@@ -2112,10 +2346,13 @@ def cohort_segments(cohorts, twin_key: str) -> list:
 def open_session(twins: list, *, segments: Optional[list] = None, in_room: int = DEFAULT_IN_ROOM,
                  title: str = '', created_by: str = '', session_id: str = '',
                  media: Optional[dict] = None, mode: str = 'pilot', logline: str = '', text: str = '',
-                 options: Optional[list] = None, rough_cut: bool = False, critics_room: bool = False, group: Optional[dict] = None) -> dict:
+                 options: Optional[list] = None, rough_cut: bool = False, critics_room: bool = False, group: Optional[dict] = None,
+                 research: bool = True, model_fn=None, s3=None) -> dict:
     """A new Pilot Testing session in any screening mode. Opening is
     free. ``group`` reuses a prior test's room (a recut re-test keeps
-    the same seats and personas)."""
+    the same seats and personas). The room is sized to what it stands
+    for (its cuts; a title that has aired, when ``research`` is on and a
+    model answers) before the record is returned."""
     sid = session_id or uuid.uuid4().hex[:10]
     seed = f"pilot|{sid}|{'|'.join(_twin_key(t) for t in twins)}|{VERSION}"
     mode = str(mode or 'pilot').lower()
@@ -2136,13 +2373,10 @@ def open_session(twins: list, *, segments: Optional[list] = None, in_room: int =
             opts = []
     note = {'title': 'Name the test, type the titles and the logline.', 'key_art': 'Name the test and upload the art.', 'script': 'Name the test and add the script.',
             'concept': 'Name the test and paste the concept.', 'trailer': 'Name the test and add the trailer.', 'spot': 'Name the test and add the spot.'}.get(mode, 'Name the test and add the cut, or paste a watch link.')
-    cohorts = [{'label': str(sg.get('label') or ''), 'composition': str(sg.get('composition') or ''), 'seats': int(sg.get('seats') or 0),
-                'people': int(sg.get('people') or 0), 'share_pct': float(sg.get('share_pct') or 0), 'filter': dict(sg.get('filter') or {})}
-               for sg in (group.get('segments') or []) if isinstance(sg, dict) and sg.get('composition')]
-    return {
+    sess = {
         'id': sid, 'kind': 'pilot',
         'title': name or f"{MODE_TITLE_WORD.get(mode, 'Pilot test')}: {names}",
-        'group': group, 'questions': [], 'cohorts': cohorts,
+        'group': group, 'questions': [], 'cohorts': [],
         'media': media, 'status': 'draft',
         'mode': mode, 'genre': '', 'norm_genre': '', 'genre_set_by_user': False, 'cut_label': 'Cut A' if mode not in ('trailer', 'spot') else 'Trailer A', 'lineage': None, 'rough_cut': bool(rough_cut),
         'critics_room': bool(critics_room),
@@ -2156,6 +2390,17 @@ def open_session(twins: list, *, segments: Optional[list] = None, in_room: int =
         'created_at': _now(), 'updated_at': _now(), 'version': VERSION, 'pilot_version': PILOT_VERSION,
         'prepare_note': note,
     }
+    # the room stands for its cuts, and for a title that has aired no more than that title's own audience in those
+    # cuts (Jenna 2026-11-05); a reused room is sized again for this test's title
+    try:
+        from migration.digital_twin_sizing import size_session
+        size_session(twins[0] if twins else {}, sess, twins=twins, model_fn=model_fn, s3=s3, research=research, seed=seed)
+    except Exception as e:
+        print(f"[pilot] sizing skipped: {e}")
+    sess['cohorts'] = [{'label': str(sg.get('label') or ''), 'composition': str(sg.get('composition') or ''), 'seats': int(sg.get('seats') or 0),
+                        'people': int(sg.get('people') or 0), 'share_pct': float(sg.get('share_pct') or 0), 'filter': dict(sg.get('filter') or {})}
+                       for sg in (group.get('segments') or []) if isinstance(sg, dict) and sg.get('composition')]
+    return sess
 
 
 def apply_watch_url(sess: dict, raw: str, *, hint_title: str = '', runtime_s: float = 0,
@@ -3131,6 +3376,13 @@ def public_session(sess: dict) -> dict:
             out['group'] = annotate_seat_stands_for(dict(g, roster=[dict(r) if isinstance(r, dict) else r for r in g.get('roster') or []]))
         except Exception as e:
             print(f"[pilot] seat stands-for skipped: {e}")
+    # what the room stands for travels as its figures and its one line; the basis (what was looked up) never does
+    if isinstance(out.get('group'), dict) and isinstance(out['group'].get('sizing'), dict):
+        try:
+            from migration.digital_twin_sizing import public_sizing
+            out['group'] = dict(out['group'], sizing=public_sizing(out['group']['sizing']))
+        except Exception as e:
+            print(f"[pilot] sizing view skipped: {e}")
     # the forecast's calibration block and recorded actual are audit and never travel; the notes go through the guard
     # (Jenna 2026-11-05: calibrate to published performance, never say so)
     if isinstance(out.get('forecast'), dict):

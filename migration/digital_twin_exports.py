@@ -822,7 +822,12 @@ def build_panel_pdf(payload: dict, session: dict, portrait_fn=None) -> bytes:
     m = payload.get('meta') or {}
     g = session.get('group') or {}
     read = _portrait_reader(portrait_fn)
-    d.new_page(True, 'Focus Group IQ', _words(f"{session.get('title') or 'The room'}"), f"{g.get('in_room')} twins in the room, standing for {int(g.get('size_people') or 0):,} people. Moderated by {session.get('created_by')}.")
+    try:   # a room sized to its cuts says what it stands for (Jenna 2026-11-05)
+        from migration.digital_twin_sizing import sizing_line
+        stands = sizing_line(g.get('sizing')) if isinstance(g.get('sizing'), dict) else ''
+    except Exception:
+        stands = ''
+    d.new_page(True, 'Focus Group IQ', _words(f"{session.get('title') or 'The room'}"), f"{g.get('in_room')} twins in the room, standing for {int(g.get('size_people') or 0):,} people. " + (stands + ' ' if stands else '') + f"Moderated by {session.get('created_by')}.")
     y = d.y
     y = d.table([(s['label'], f"{s['share_pct']}%", f"{int(s['people']):,} people, {s.get('seats')} seats") for s in g.get('segments') or []], d.m, y, d.right - d.m, head=('Segment', 'Share of room', ''))
     roster_rows = (g.get('roster') or [])[:16]
@@ -1127,7 +1132,15 @@ def room_pages(session: dict, portrait_fn=None, clean=None) -> list:
     # the header opens with a word, not the count: the copy scrub capitalizes the first word after a leading number
     header = f"The room seated {n} people, standing for {human_people(people)}." if people else f"The room seated {n} people."
     sub = 'Who was seated, and the share of the room each group held.'
-    if people and size_people and size_people > people * 1.05:
+    sizing_note = ''
+    try:   # a room sized to its cuts says what it stands for (Jenna 2026-11-05), in the plain line the page prints
+        from migration.digital_twin_sizing import sizing_line
+        sizing_note = sizing_line(g.get('sizing')) if isinstance(g.get('sizing'), dict) else ''
+    except Exception:
+        sizing_note = ''
+    if sizing_note:
+        sub += ' ' + sizing_note
+    elif people and size_people and size_people > people * 1.05:
         sub += f" The {n} were drawn from an audience of {human_people(size_people)}."
     chunks = [seats[i:i + ROSTER_FACES] for i in range(0, n, ROSTER_FACES)]     # a page holds sixteen faces; a bigger room continues
     if len(chunks) > 1:

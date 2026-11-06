@@ -582,6 +582,18 @@ def _seats_line(sess: dict) -> str:
     return line
 
 
+def _stands_for_line(sess: dict) -> str:
+    """The one plain line a room sized to its cuts carries (Jenna
+    2026-11-05): what the seats stand for, out of the whole audience.
+    Empty for a room on the whole twin."""
+    g = sess.get('group') if isinstance(sess.get('group'), dict) else {}
+    try:
+        from migration.digital_twin_sizing import sizing_line
+        return sizing_line(g.get('sizing')) if isinstance(g.get('sizing'), dict) else ''
+    except Exception:
+        return ''
+
+
 def _names(items) -> list:
     out = []
     for c in items or []:
@@ -612,6 +624,8 @@ def _pilot_body(payload: dict, sess: dict, st: dict, via: str, s3=None) -> str:
              f"Twin: {_twin_names(payload, sess, s3)}",
              f"Mode: {_mode_line(sess)}",
              f"Seats: {_seats_line(sess)}"]
+    if _stands_for_line(sess):
+        lines.append(_stands_for_line(sess))
     rt = _runtime_text(media.get('runtime_s'))
     if rt:
         lines.append(f"Runtime: {rt}")
@@ -796,6 +810,8 @@ def _results_body(payload: dict, sess: dict, st: dict, files: list, s3=None) -> 
              f"Run by: {_who_line(st)}",
              f"Mode: {_mode_line(sess)}",
              f"Seats: {_seats_line(sess)}"]
+    if _stands_for_line(sess):
+        lines.append(_stands_for_line(sess))
     rt = _runtime_text(((sess.get('media') or {}).get('runtime_s')))
     if rt:
         lines.append(f"Runtime: {rt}")
@@ -896,6 +912,8 @@ def _room_body(payload: dict, sess: dict, st: dict, via: str, s3=None) -> str:
     seats = _int(g.get('in_room')) or len(g.get('roster') or [])
     people = _int(g.get('size_people'))
     lines.append(f"Seats: {seats}" + (f", standing for {people:,} people" if people else ''))
+    if _stands_for_line(sess):
+        lines.append(_stands_for_line(sess))
     if sess.get('duplicated_from'):
         lines.append('Opened as a duplicate of an earlier room.')
     lines.append(f"Opened through: {VIA_WORDS.get(via, VIA_WORDS['dashboard'])}")

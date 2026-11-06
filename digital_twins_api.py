@@ -1080,7 +1080,9 @@ def dt_spend_handoff(key, plan_id):
 def _session(payload, sid):
     sess = next((s for s in payload.get('panel_sessions') or [] if s.get('id') == sid), None)
     if sess:
-        try:   # every seat says who it stands for (Jenna 2026-11-05); a room from before the figures gets them here
+        try:   # the room stands for its cuts (Jenna 2026-11-05); a room from before the sizing gets it here, then every seat says who it stands for
+            from migration import digital_twin_sizing as SZ
+            SZ.ensure_sizing(payload, sess)
             from migration import digital_twin_panel as P
             P.ensure_seat_stands_for(sess)
         except Exception:
@@ -1627,6 +1629,8 @@ def dt_pilot_open(key):
             from migration import digital_twin_compare as CMP
             try:
                 CMP.apply_quotas(sess, twins, body['quotas'], seed=f"recruit|{sess['id']}")
+                from migration import digital_twin_sizing as SZ
+                SZ.size_session(payload, sess, twins=twins, s3=s3)     # the recruited cells stand for their people, sized the same way
             except Exception:
                 traceback.print_exc()
         PR.record_tier(sess, tier, plan)
@@ -1688,6 +1692,11 @@ def dt_pilot_get(key, sid):
         return jsonify({'success': False, 'error': 'test not found'}), 404
     _attach_portraits(payload, key, sess)
     dirty = False
+    try:   # a test from before the sizing stands for its cuts from here on (Jenna 2026-11-05)
+        from migration import digital_twin_sizing as SZ
+        dirty = SZ.ensure_sizing(payload, sess) or dirty
+    except Exception:
+        pass
     if sess.get('status') == 'preparing':
         _prepare_job_live(sess)             # a worker job that ended without a ready test flips the test back to draft
         try:
@@ -3051,6 +3060,12 @@ def dt_get(key):
         return err
     out = {k: v for k, v in payload.items() if k != 'diagnostics'}
     out['runs'] = DT.product_runs(payload)       # stored runs of the retired Greenlight kind stay on the twin, never on the page
+    try:   # a test's sizing travels as its figures and its line, never its basis (what was looked up for the title)
+        from migration.digital_twin_sizing import public_sizing
+        out['pilot_sessions'] = [(dict(s, group=dict(s['group'], sizing=public_sizing(s['group'].get('sizing')))) if isinstance(s, dict) and isinstance(s.get('group'), dict) and isinstance(s['group'].get('sizing'), dict) else s)
+                                 for s in (payload.get('pilot_sessions') or [])]
+    except Exception:
+        pass
     if payload.get('pilot_setups'):
         from migration import digital_twin_pilot as PI
         out['pilot_setups'] = PI.public_setups(payload)   # a saved setup's carried cut travels as has_file, never as its storage key
