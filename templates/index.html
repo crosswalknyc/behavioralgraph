@@ -52378,6 +52378,31 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 return tok;
             }
             function dtwStage(tok, text) { if (!tok || !tok.line) return; tok.line.classList.remove('err'); tok.line.innerHTML = dtwBusyHtml(text || 'Working'); }
+            function dtwLabel(tok, label) { if (tok && tok.btn && dtwIsBusy(tok.btn)) tok.btn.innerHTML = dtwBusyHtml(label); }
+            // more controls held with this one, outside its row (the test bar's Exit test / Duplicate / Delete while Play starts)
+            function dtwHoldMore(tok, sel) {
+                if (!tok || !sel) return;
+                var root = (tok.btn && tok.btn.ownerDocument) || document, nodes = [];
+                try { nodes = Array.prototype.slice.call(root.querySelectorAll(sel)); } catch (_) { nodes = []; }
+                nodes.forEach(function(o) {
+                    if (o === tok.btn || dtwIsBusy(o)) return;
+                    if (o.tagName === 'A') { if (o.classList.contains('dtw-held')) return; o.classList.add('dtw-held'); o.setAttribute('aria-disabled', 'true'); }
+                    else { if (o.disabled) return; o.disabled = true; }
+                    tok.held.push(o);
+                });
+            }
+            // play() with the same ceiling: a stalled media link never holds the controls (the player keeps loading on its own)
+            function dtwPlayWait(v, ms) { return Promise.race([Promise.resolve().then(function() { return v.play(); }), new Promise(function(res) { setTimeout(res, ms || 8000); })]); }
+            // the moment the player shows a frame (a frame is already decoded, or playing / loadeddata fires), with a ceiling so a silent stream never holds the page
+            function dtwFirstFrame(v, ms) {
+                return new Promise(function(res) {
+                    if (!v || v.readyState >= 2) { res(true); return; }
+                    var done = false, t = setTimeout(function() { fin(false); }, ms || 6000);
+                    function fin(ok) { if (done) return; done = true; clearTimeout(t); try { v.removeEventListener('playing', onp); v.removeEventListener('loadeddata', onp); } catch (_) {} res(ok); }
+                    function onp() { fin(true); }
+                    v.addEventListener('playing', onp); v.addEventListener('loadeddata', onp);
+                });
+            }
             // what the reader sees on a failure: the request's own line when it is plain, else one calm sentence
             function dtwSafeErr(e, fallback) {
                 var m = (e == null) ? '' : (typeof e === 'string' ? e : String(e.message || ''));
@@ -54729,18 +54754,25 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var s = S.pilot; if (!s || !S.key) return;
                 var note = el('dtwPiNote');
                 if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) { if (note) note.textContent = 'This browser cannot mirror a tab. Use Chrome or Edge on a computer.'; return; }
+                // the mirror start shows it is working too (Jenna 2026-11-05): the button spins through the picker, the handshake and the first frame
+                var tok = dtwBusy(dtwBtn('.dtw-pi-slatebtns .dtw-btn-primary'), 'Mirroring', note); if (tok === false) return;
+                dtwHoldMore(tok, '.dtw-pi-controls button:not(#dtwPiPlayBtn), .dtw-pi-head-r button');
+                dtwStage(tok, 'Connecting the room');
                 var stream;
                 try {
                     stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: { ideal: 5, max: 10 } }, audio: false, selfBrowserSurface: 'exclude', surfaceSwitching: 'include' });
-                } catch (e) { if (note) note.textContent = 'The mirror was not started. Pick the tab or window with the episode.'; return; }
+                } catch (e) { dtwIdle(tok, 'The mirror was not started. Pick the tab or window with the episode.'); return; }
                 stopLiveMirror();
                 S.pilotLive = { stream: stream, sid: s.id, lastSent: 0, busy: false, sent: 0, failed: 0, running: false, t0: 0 };
                 var track = stream.getVideoTracks()[0];
                 if (track) track.addEventListener('ended', function() { dtwPilotMirrorEnded(); });
                 attachLiveMirror(s);
                 if (s.status !== 'playing') { await dtwPilotPlay(true); }
-                if (!S.pilotLive || !S.pilotLive.stream) return;
+                if (!S.pilotLive || !S.pilotLive.stream) { dtwIdle(tok); return; }
+                dtwStage(tok, 'First frame');
                 startLiveClock();
+                await dtwFirstFrame(el('dtwPiVideo'));
+                dtwIdle(tok);
                 var n2 = el('dtwPiNote'); if (n2) n2.textContent = 'The room is watching with you.';
                 var b = el('dtwPiPlayBtn'); if (b) b.textContent = 'Playing';
             };
@@ -57115,31 +57147,39 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var s = S.pilot; if (!s || !S.key) return;
                 var note = el('dtwPiNote');
                 if (s.status === 'preparing') { if (note) note.textContent = 'Preparing the cut. Play is ready the moment the room has watched it.'; pollPilotPrepare(); return; }
-                if (note) note.textContent = s.play_charged ? 'Playing' : 'Starting the room...';
+                // Play shows it is working (Jenna 2026-11-05: 'same when you click play here'): the button disables at once with the spinner,
+                // Stop / Exit test / Duplicate / Delete are held until the player is actually playing, the note reports the stage
+                // (Connecting the room, then First frame), a second click is ignored, and a failure puts Play back with a plain line.
+                var tok = dtwBusy(dtwBtn('#dtwPiPlayBtn'), 'Starting', note); if (tok === false) return;
+                dtwHoldMore(tok, '.dtw-pi-head-r button');
+                dtwStage(tok, 'Connecting the room');
                 var r = await apiRaw('/' + encodeURIComponent(S.key) + '/pilot/' + encodeURIComponent(s.id) + '/play', { method: 'POST', body: JSON.stringify({ runtime_s: (s.media || {}).runtime_s || 0 }) });
                 if (!r.ok) {
-                    if (r.data && r.data.preparing) { if (r.data.session) adoptPilot(r.data.session); renderPilotConsole(); return; }
-                    if (note) note.textContent = (r.data || {}).error || 'Play did not start.'; return;
+                    if (r.data && r.data.preparing) { dtwIdle(tok); if (r.data.session) adoptPilot(r.data.session); renderPilotConsole(); return; }
+                    dtwIdle(tok, (r.data || {}).error || 'Play did not start.'); return;
                 }
                 adoptPilot(r.data.session);
                 if (!resume || s.status !== 'playing') piFocusScroll(true);   // play starts, or PLAYING is pressed: the page settles on the player once (a resume after a question never moves it)
                 var v = el('dtwPiVideo');
                 var wm = watchMedia(S.pilot);
                 if (v && hasMedia(S.pilot)) {
+                    dtwStage(tok, 'First frame');
                     if (!mediaUrl(S.pilot)) { await fetchMediaUrl(S.pilot); }
                     bindPilotMedia();
-                    if (mediaUrl(S.pilot)) { try { await v.play(); } catch (_) {} }
+                    if (mediaUrl(S.pilot)) { try { await dtwPlayWait(v); } catch (_) {} }
                 } else if (wm && isLiveSess(S.pilot) && wm.kind !== 'video') {
                     // a mirrored watch: the clock and the frames run while the mirror does
-                    if (S.pilotLive && S.pilotLive.stream && S.pilotLive.sid === S.pilot.id) { attachLiveMirror(S.pilot); startLiveClock(); piLegendRepaint(); }
+                    if (S.pilotLive && S.pilotLive.stream && S.pilotLive.sid === S.pilot.id) { dtwLabel(tok, 'Mirroring'); dtwStage(tok, 'First frame'); attachLiveMirror(S.pilot); startLiveClock(); piLegendRepaint(); }
                     else { if (!resume) openWatchWithRoom(S.pilot); renderPilotConsole(); }
+                    if (S.pilotLive && S.pilotLive.stream) await dtwFirstFrame(v);   // the held controls come back when the mirror shows its first frame
+                    dtwIdle(tok);
                     var ln = el('dtwPiNote'); if (ln) ln.textContent = (S.pilotLive && S.pilotLive.stream) ? 'The room is watching with you.' : 'Open the episode, press play there, then mirror it here.';
                     var lb = el('dtwPiPlayBtn'); if (lb) lb.textContent = 'Playing';
                     return;
                 } else if (wm) {
                     bindWatchLink(S.pilot);
                     if (!resume) openWatchWithRoom(S.pilot);
-                    if (v && wm.kind === 'video' && v.src) { try { await v.play(); } catch (_) {} }
+                    if (v && wm.kind === 'video' && v.src) { dtwStage(tok, 'First frame'); try { await dtwPlayWait(v); } catch (_) {} }
                 }
                 if (!(v && mediaUrl(S.pilot)) && !(wm && wm.kind === 'video' && v && v.src)) {
                     S.pilotClock.slate = true;
@@ -57155,6 +57195,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         S.pilotClock.raf = requestAnimationFrame(tick);
                     })();
                 }
+                dtwIdle(tok);
                 if (note) note.textContent = 'The room is live.';
                 var btn = el('dtwPiPlayBtn'); if (btn) btn.textContent = 'Playing';
             };
