@@ -145,8 +145,13 @@ class NumberProvenance(unittest.TestCase):
         self.assertIsNone(NP.answer('how many people watched Mutiny in 2025?', self.HIST))
 
     def test_read_turns_keep_their_ledger(self):
+        # the landed turn's meta (the figure ledger with it) is built by
+        # prometheus/read_landing.py since 2026-11-05, so a read lands once
+        # whether the tab is open or not; land.py reads it from there
         src = open(os.path.join(ROOT, 'prometheus', 'legacy', 'land.py'), encoding='utf-8').read()
-        self.assertIn("_meta['figures'] = [", src)
+        self.assertIn("_meta = _rl.read_meta(job_id, payload)", src)
+        landing = open(os.path.join(ROOT, 'prometheus', 'read_landing.py'), encoding='utf-8').read()
+        self.assertIn("meta['figures'] = [", landing)
         svc = open(os.path.join(ROOT, 'prometheus', 'service.py'), encoding='utf-8').read()
         self.assertLess(svc.index('# lane: number_provenance'), svc.index('_refs.answer_merge(history, text)'))
 

@@ -123,11 +123,18 @@ def test_ordering():
 def test_platform_caps():
     print('no row above its own service cap')
 
+    # the levels come from the platform table (re-anchored as the panel
+    # moves); the contract pinned here is daily = published weekly // 7
+    from scripts.trends_scrapers import stream_estimates as _se
+    _weekly = {p['key']: int(p['ceiling']) for p in _se._platforms_for_kind('tv') + _se._platforms_for_kind('film')
+               if p.get('key') in ('britbox', 'mgmplus')}
     cap = tq._platform_daily_cap('tv', 'britbox')
-    check(cap is not None and cap == 1_500_000 // 7,
+    check(cap is not None and _weekly.get('britbox', 0) > 0 and cap == _weekly['britbox'] // 7,
           f'BritBox daily cap derives from its weekly one ({cap})')
-    check(tq._platform_daily_cap('film', 'mgmplus') == 2_000_000 // 7,
+    check(_weekly.get('mgmplus', 0) > 0 and tq._platform_daily_cap('film', 'mgmplus') == _weekly['mgmplus'] // 7,
           'MGM+ daily cap derives from its weekly one')
+    inside = cap // 2                      # a reading inside the cap, whatever the level
+    yesterday = cap - cap // 3             # a sane reading of its own yesterday
     check(tq._platform_daily_cap('tv', 'not_a_service') is None,
           'a service with no published cap is left alone')
 
@@ -137,14 +144,14 @@ def test_platform_caps():
                 # Far above its cap, with a sane reading of its own
                 # yesterday: the chip has to read against that.
                 {'title': 'Shameless', 'rank': 1, 'category_display': 'TV',
-                 'us_streams': {'us_estimate': 1_822_805,
-                                 'prev_estimate': 83_156,
+                 'us_streams': {'us_estimate': cap * 31 + 5,
+                                 'prev_estimate': yesterday,
                                  'prev_date': '2026-09-14',
                                  'method': 'old reasoning',
                                  'sources': ['http://example.test']}},
                 # Inside its cap: untouched.
                 {'title': 'Shetland', 'rank': 2, 'category_display': 'TV',
-                 'us_streams': {'us_estimate': 120_000,
+                 'us_streams': {'us_estimate': inside,
                                  'method': 'keep me',
                                  'sources': ['http://example.test']}},
             ]},
@@ -157,9 +164,9 @@ def test_platform_caps():
     check(stats['corrected'] == 1, 'exactly the breaching row is corrected')
     check(fixed['us_estimate'] <= cap,
           f"corrected row sits inside the cap ({fixed['us_estimate']})")
-    check(kept['us_estimate'] == 120_000, 'a row inside its cap does not move')
+    check(kept['us_estimate'] == inside, 'a row inside its cap does not move')
     check(kept.get('method') == 'keep me', 'its reasoning survives')
-    check(fixed['us_estimate'] != 83_156,
+    check(fixed['us_estimate'] != yesterday,
           'the corrected row is not a repeat of yesterday')
     check(abs(fixed.get('delta_pct') or 0) < 1.0,
           f"the chip is a real move, not the correction "
@@ -199,19 +206,20 @@ def test_platform_caps():
           'a windowed row says how many days it covers')
     check(tq._cap_days_covered({'window_days_total': 30}) == 30,
           'and falls back to the window length')
+    seven_inside = cap * 7 - cap // 2      # a seven-day sum inside seven days of cap
     weekly = {'streaming_trending': {'britbox': {'items': [
         {'title': 'Shetland', 'rank': 1, 'category_display': 'TV',
-         'us_streams': {'us_estimate': 900_000, 'window_days_covered': 7,
+         'us_streams': {'us_estimate': seven_inside, 'window_days_covered': 7,
                         'method': 'keep me'}},
         {'title': 'Outlier', 'rank': 2, 'category_display': 'TV',
-         'us_streams': {'us_estimate': 9_000_000,
+         'us_streams': {'us_estimate': cap * 7 * 10 + 3,
                         'window_days_covered': 7}},
     ]}}}
     st = tq._enforce_platform_caps(weekly)
     rows2 = weekly['streaming_trending']['britbox']['items']
     check(st['corrected'] == 1,
           'a seven-day sum inside seven days of cap is left alone')
-    check(rows2[0]['us_streams']['us_estimate'] == 900_000,
+    check(rows2[0]['us_streams']['us_estimate'] == seven_inside,
           'and keeps its exact value')
     check(rows2[1]['us_streams']['us_estimate'] <= cap * 7,
           'while a genuine breach still comes inside')

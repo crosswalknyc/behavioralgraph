@@ -657,7 +657,7 @@ class OffersHold(unittest.TestCase):
         OF._s3 = lambda: (self.s3, 'bucket')
         OF._sleep = self.sleeps.append
         OF._ops_email = lambda err, username='', payload=None: (self.mails.append((err, username, payload)) or True)
-        OF._refund = lambda username, credits, reason: (self.refunds.append((username, credits, reason)) or True)
+        OF._refund = lambda username, credits, reason, job_id='': (self.refunds.append((username, credits, reason, job_id)) or True)
         OF.append_turns = lambda doc, turns: self.turns.extend(turns)
         self.doc, _links = OF.create('eliot', label='Gunna Concert Goers', prompt='people who attended a Gunna concert',
                                      spec_draft={'subject': 'Gunna Concert Goers', 'decision': 'new_build'}, thread_id='t1')
@@ -749,7 +749,10 @@ class OffersHold(unittest.TestCase):
         state, reply, doc = OF.decide(None, self.doc['id'], 'yes', via='email')
         self.assertEqual(state, 'held')
         self.assertEqual(reply, OF.CALM_LINE)
-        self.assertEqual(self.refunds, [('eliot', 275, f"offer {self.doc['id']}: charged with no run id")] * 2)
+        # one refund per attempt, each with its own idempotency key so a
+        # replayed decision can never reverse the same charge twice
+        self.assertEqual(self.refunds, [('eliot', 275, f"offer {self.doc['id']}: charged with no run id",
+                                         f"offer-{self.doc['id']}-{i}") for i in range(2)])
         self.assertEqual(doc['last_attempt']['refunded_credits'], 550)
         self.assertEqual(len(self.mails), 1)
         self.assertIn('refunded 550 credit(s) charged with no run', self.mails[0][0])

@@ -243,10 +243,15 @@ def test_merge_holds(monkey):
         'display_title': 'Southpaw', 'artist': '', 'best_rank': 9,
         'platforms': {'lionsgateplus'}, 'rows': ['x'],
     }]
-    # Sub-100 is the same credibility floor the other merge applies.
+    # The same credibility floor the other merge applies: 100 on a mass
+    # rail, a thousandth of the rail's own daily cap on a small one
+    # (Lionsgate+ caps in the low thousands a day, so its floor is a
+    # few people and a reading of 8 there is honest, 2026-10-09). A
+    # reading under the rail's floor is a failed research call.
+    floor = max(se.credibility_floor('lionsgateplus'), 1)
     stats = cg._merge_cap_platform_blocks(
         {'film:southpaw': {'by_platform': {
-            'lionsgateplus': {'us_estimate': 8}}}}, targets, '2026-09-21')
+            'lionsgateplus': {'us_estimate': floor - 1}}}}, targets, '2026-09-21')
     check(stats['blocks'] == 0, 'a degenerate reading is not written')
     check(stats['no_block'] == ['film:southpaw@lionsgateplus'],
           'and is named so the run log says which row held')
