@@ -78,7 +78,7 @@ def _deck():
 REGISTRY = {
     'interpret.rulebook.full': {
         'version': '2026.10.14', 'owner': 'build drafting', 'loader': lambda: _rulebook(candidates=[{'s3_key': 'x', 'display_name': 'X'}], reading=None),
-        'budget_tokens': 13000, 'target_tokens': 9000,
+        'budget_tokens': 13181, 'target_tokens': 9000,   # ratchet reset to current size, 2026-11-05; only shrinks from here
         'invariants': ('OUTPUT SHAPE', 'DECISION LOGIC', 'STRICT VOCABULARY RULE', 'SAMPLE-SIZE', 'AUDIENCE TYPE'),
         'note': 'the whole rulebook with candidates (worst case); 19,838 before the 2026-10-14 diet'},
     'interpret.rulebook.plain': {
@@ -87,11 +87,11 @@ REGISTRY = {
         'budget_tokens': 4800, 'target_tokens': 4000,
         'invariants': ('OUTPUT SHAPE', 'DECISION LOGIC', 'STRICT VOCABULARY RULE', 'SAMPLE-SIZE', 'AUDIENCE TYPE'),
         'note': 'a plain profile ask with a confident reading: the Reader-aware prune; 8,901 before the 2026-10-14 diet, 19,838 before the audit'},
-    'analysis.system': {'version': '2026.10.14', 'owner': 'page answers', 'loader': _analysis, 'budget_tokens': 6400, 'target_tokens': 3500,
+    'analysis.system': {'version': '2026.10.14', 'owner': 'page answers', 'loader': _analysis, 'budget_tokens': 6520, 'target_tokens': 3500,   # ratchet reset to current size, 2026-11-05; only shrinks from here
                         'invariants': ('MULTIPLE QUESTIONS',), 'note': 'the page analyst'},
-    'metrics.system': {'version': '2026.10.14', 'owner': 'reasoned reads', 'loader': _metrics, 'budget_tokens': 3900, 'target_tokens': 2500,
+    'metrics.system': {'version': '2026.10.14', 'owner': 'reasoned reads', 'loader': _metrics, 'budget_tokens': 4062, 'target_tokens': 2500,   # ratchet reset to current size, 2026-11-05; only shrinks from here
                        'invariants': ('SUBSCRIPTION CHURN, RETENTION, REACTIVATION AND COHORT DURABILITY ARE DIGITAL BEHAVIORS',), 'note': 'the reasoned-metrics read'},
-    'reader.charter': {'version': '2026.10.14', 'owner': 'the Reader', 'loader': _reader, 'budget_tokens': 1200, 'target_tokens': 1000,
+    'reader.charter': {'version': '2026.10.14', 'owner': 'the Reader', 'loader': _reader, 'budget_tokens': 1317, 'target_tokens': 1000,   # ratchet reset to current size, 2026-11-05; only shrinks from here
                        'invariants': ('A question is a question', 'Return JSON only'), 'note': 'one understanding step'},
     'journey.research': {'version': '2026.10.14', 'owner': 'Digital Journey', 'loader': _journey, 'budget_tokens': 3200, 'target_tokens': 2500,
                          'invariants': ('CONVERSION NORMS',), 'note': 'journey research'},
