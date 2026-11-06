@@ -207,6 +207,20 @@ class TheReadLaneBase(unittest.TestCase):
         b = _base('Starz', 'Starz', ctx=STARZ, prefer_catalog=True, bound=True)
         self.assertEqual(((b or {}).get('subject'), (b or {}).get('s3_key')), ('Starz', STARZ_KEY))
 
+    def test_the_approved_universe_never_draws_a_partial_name_file(self):
+        """The Approve carries 'Potential Paw Patrol Consumers' back as the
+        bound subject; the partial-name tier handed it the Paw Patrol Ticket
+        Purchasers file (2 of its 3 tokens). A ticket purchaser is not a
+        potential consumer: the read runs on the universe the quote named."""
+        for q in ('Potential Paw Patrol Consumers', 'potential Paw Patrol consumers'):
+            self.assertIsNone(_base(q, q, ctx=None, prefer_catalog=True, bound=True), q)
+        self.assertTrue(QU.names_other_universe(JENNA, 'Paw Patrol Ticket Purchasers'))
+        self.assertTrue(QU.names_other_universe(JENNA, 'Potential Toy Purchasers Parents Moms'))
+        self.assertEqual(QU.base_leak("On Paw Patrol Ticket Purchasers:\n\n...", {'subject': 'Paw Patrol Ticket Purchasers'},
+                                      ['Paw Patrol Ticket Purchasers'], text=JENNA), 'Paw Patrol Ticket Purchasers')
+        # the whole name written out still names the file
+        self.assertFalse(QU.names_other_universe('what do Paw Patrol ticket purchasers buy for the holidays', 'Paw Patrol Ticket Purchasers'))
+
     def test_a_population_behavior_keeps_the_title_it_nearly_names(self):
         b = _base('', 'how many people watched godzila minus one', ctx=STARZ)
         self.assertEqual((b or {}).get('subject'), 'Godzilla Minus One')

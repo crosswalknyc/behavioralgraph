@@ -137,13 +137,17 @@ def page_pointer(text, strong_only=False):
 
 
 # ------------------------------------------------------------ the page named
+# Fillers and interchangeable audience nouns: a profile is named when its
+# other tokens are. A token that defines a different universe ('ticket' in
+# Paw Patrol Ticket Purchasers, 'parents' and 'moms' in Potential Toy
+# Purchasers Parents Moms) is never a filler: a question about potential
+# Paw Patrol consumers does not name the ticket purchasers (2026-11-06).
 _PAGE_GENERIC = frozenset(('the', 'a', 'an', 'of', 'and', 'or', 'on', 'in', 'for', 'to', 'at', 'by', 'with',
                            'audience', 'audiences', 'profile', 'fans', 'fan', 'viewers', 'viewer', 'users', 'user',
                            'customers', 'customer', 'buyers', 'buyer', 'shoppers', 'shopper', 'consumers', 'consumer',
                            'subscribers', 'subscriber', 'members', 'member', 'people', 'total', 'universe', 'avid',
                            'casual', 'cut', 'cuts', 'tu', 'potential', 'us', 'iq', 'q1', 'q2', 'q3', 'q4',
-                           'ticket', 'purchasers', 'purchaser', 'listeners', 'readers', 'players', 'parents', 'moms',
-                           'children', 'kids', 'twin', 'room'))
+                           'purchasers', 'purchaser', 'listeners', 'readers', 'players', 'twin', 'room'))
 
 
 def _page_tokens(page):

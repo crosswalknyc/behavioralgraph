@@ -12570,7 +12570,11 @@ def _pm_generation_base(subject_hint, text, ctx=None,
     try:
         _qu = _question_universe.question_universe(text, str((page_base or {}).get('subject') or ''))
         _qu_named = bool(_qu.kind == 'named') and not bound
-        _qu_explicit = _qu_named and bool(_qu.explicit)   # an audience named outright: no file is guessed in for it
+        # an audience named outright: no file is guessed in for it, on the
+        # ask and on the Approve that carries the quoted universe back
+        # (2026-11-06: 'Potential Paw Patrol Consumers' approved drew the
+        # Paw Patrol Ticket Purchasers file out of the partial-name tier)
+        _qu_explicit = bool(_qu.kind == 'named') and bool(_qu.explicit)
     except Exception as _fx:
         _faults.note('chat', _fx)
     if page_base is not None and _qu_named:
