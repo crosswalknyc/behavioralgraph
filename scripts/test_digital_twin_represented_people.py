@@ -234,6 +234,25 @@ class TheTitle(unittest.TestCase):
         self.assertEqual(off['group']['sizing']['step'], 'cuts')
         self.assertEqual(off['group']['size_people'], off['group']['sizing']['footprint'])
 
+    def test_a_title_with_no_profile_borrows_its_franchises(self):
+        twin = _twin()
+        SZ.clear_cache()
+        CALLS.clear()
+        bare = dict(RESEARCH, skews={'female_pct': None, 'age_45_plus_pct': None, 'age_under_35_pct': None, 'hispanic_pct': None, 'black_pct': None, 'median_age': None})
+        franchise = {'basis': 'the franchise NCIS', 'female_pct': 57.0, 'age_45_plus_pct': None, 'age_under_35_pct': None, 'hispanic_pct': None, 'black_pct': None, 'median_age': 61, 'note': 'NCIS median age 61.'}
+
+        def fn(role, system, user, **kw):
+            CALLS.append({'role': role, 'system': system[:40]})
+            return dict(franchise if system.startswith('You look up the published audience profile') else bare)
+        res = SZ.title_audience(twin, 'NCIS: New York', model_fn=fn)
+        self.assertEqual(len(CALLS), 2, 'the title pass, then one narrow look-up for the franchise')
+        self.assertEqual(res['skews']['female_pct'], 57.0)
+        self.assertEqual(res['skews']['age_45_plus_pct'], 66.5, 'a median age of 61 puts about two thirds past 45, read low')
+        self.assertEqual(res['skews_basis'], 'the franchise NCIS')
+        again = SZ.title_audience(twin, 'NCIS: New York', model_fn=fn)
+        self.assertEqual(len(CALLS), 2, 'cached with the borrowed profile')
+        self.assertEqual(again['skews'], res['skews'])
+
     def test_skew_index_moves_a_cut_by_the_titles_published_shares(self):
         twin = _twin()
         res = SZ._normalize_research(RESEARCH, 'NCIS: New York')

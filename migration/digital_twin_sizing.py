@@ -78,6 +78,10 @@ Return JSON only:
  "skews_basis": "<this title|its franchise <name>|its prior season|none>",
  "note": "<one plain sentence>"}"""
 
+SKEWS_SYSTEM = """You look up the published audience profile of a television title, or of the franchise it belongs to when the title itself has none yet (a spin-off reads like its franchise; a new season like its last). Use the web_search tool. Sources: Nielsen, the network's or platform's own published audience figures, and trade press reporting them (Variety, Deadline, The Hollywood Reporter, TVLine, TV by the Numbers). Never invent a number; null when nothing is published. A median age may be given even when shares are not: a median age of 60 or more means well over half the audience is 45 or older (give age_45_plus_pct from the median when a share is not published, and say so in basis).
+Return JSON only, no preamble:
+{"basis": "<this title|the franchise <name>|the prior season|none>", "female_pct": <0-100 or null>, "age_45_plus_pct": <0-100 or null>, "age_under_35_pct": <0-100 or null>, "hispanic_pct": <0-100 or null>, "black_pct": <0-100 or null>, "median_age": <years or null>, "note": "<one plain sentence>"}"""
+
 _MEMO: dict = {}
 
 
@@ -241,9 +245,37 @@ def title_audience(twin: dict, title: str, *, episode_words: str = '', platform:
     if not isinstance(data, dict):
         return None
     doc = _normalize_research(data, title)
+    if doc.get('released') and not any(v is not None for v in (doc.get('skews') or {}).values()):
+        # a released title with no profile of its own: one narrow look-up for the franchise's or the prior season's
+        _franchise_skews(doc, title, platform=platform, model_fn=model_fn, tools=tools)
     if doc.get('released') is not None:
         _cache_put(s3, key, doc)        # a definite answer holds for the day; an answer that could not be supported is asked again
     return doc
+
+
+def _franchise_skews(doc: dict, title: str, *, platform: str = '', model_fn=None, tools=None) -> None:
+    """The title's (or its franchise's) published audience skews onto
+    ``doc['skews']`` when the first pass found none. Never raises."""
+    try:
+        from migration.digital_twin_room import Models
+        user = json.dumps({'title': title, 'network_or_platform': platform or None, 'question': 'What is the published audience profile of this title, or of its franchise or prior season when the title has none yet: share female, share 45 or older, share under 35, share Hispanic, share Black, median age?'}, ensure_ascii=False)
+        data, _rec = Models(model_fn=model_fn).call('research', SKEWS_SYSTEM, user, max_tokens=1200, temperature=0.1, tools=tools)
+        if not isinstance(data, dict):
+            return
+        skews = {k: _pct(data.get(k)) for k in ('female_pct', 'age_45_plus_pct', 'age_under_35_pct', 'hispanic_pct', 'black_pct')}
+        try:
+            skews['median_age'] = float(data.get('median_age')) if data.get('median_age') not in (None, '') else None
+        except (TypeError, ValueError):
+            skews['median_age'] = None
+        if skews.get('age_45_plus_pct') is None and skews.get('median_age') and skews['median_age'] >= 55:
+            # a median of 55 or more puts well over half the audience past 45; the low end of what that implies
+            skews['age_45_plus_pct'] = round(clamp(50.0 + (skews['median_age'] - 50.0) * 1.5, 55.0, 80.0), 1)
+        if any(v is not None for v in skews.values()):
+            doc['skews'] = skews
+            doc['skews_basis'] = str(data.get('basis') or 'franchise')[:120]
+            doc['skews_note'] = str(data.get('note') or '')[:240]
+    except Exception as e:
+        print(f"[twin-sizing] skews look-up skipped: {str(e)[:160]}")
 
 
 # ------------------------------------------------------- the cuts' share
