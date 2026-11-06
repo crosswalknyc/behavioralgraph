@@ -739,9 +739,19 @@ def _fold_q(s):
         return re.sub(r"[^a-z0-9 ]", ' ', str(s or '').lower()).split()
 
 
+def _is_promise_turn(text):
+    """The ack's own words (the promise the job will land), never an answer."""
+    try:
+        from .thread_merge import is_promise as _ip
+        return bool(_ip({'text': text}))
+    except Exception:
+        return bool(re.match(r"^\s*(?:On it\b|Already on it\b|Working on it\b|Still on it\b)", str(text or '')))
+
+
 def thread_replay(text, history):
     """The earlier answer to this exact question in this thread, with when
-    it was given, or None."""
+    it was given, or None. Never a promise line, never a read that was
+    retired or corrected in place."""
     try:
         q = _fold_q(text)
         if len(q) < 3:
@@ -757,6 +767,25 @@ def thread_replay(text, history):
                 continue
             ans = str(nxt.get('text') or nxt.get('content') or '').strip()
             meta = nxt.get('meta') or {}
+            # A promise ("On it: reading X now ... the read will land right
+            # here") is not the earlier answer; the landed turn of its job is
+            # (2026-11-06: Jenna's re-asked holiday toy question was handed
+            # back her own "On it" line as "the same read as earlier").
+            if _is_promise_turn(ans):
+                job = str(meta.get('read_job_id') or '')
+                nxt = next((x for x in turns[i + 1:]
+                            if str(x.get('role') or '') != 'user' and x is not nxt
+                            and not _is_promise_turn(str(x.get('text') or x.get('content') or ''))
+                            and ((job and str((x.get('meta') or {}).get('read_job_id') or '') == job)
+                                 or (not job and str((x.get('meta') or {}).get('kind') or '') == 'read'))), None)
+                if not nxt:
+                    continue
+                ans = str(nxt.get('text') or nxt.get('content') or '').strip()
+                meta = nxt.get('meta') or {}
+            # a read that was retired or corrected in place is never handed
+            # back as the earlier answer; the question runs again
+            if meta.get('corrected_at') or meta.get('retired'):
+                continue
             # a landed read carries its follow-up chips as options; it is the
             # answer, not a question with chips (2026-10-26)
             landed = bool(meta.get('read_job_id')) or str(meta.get('kind') or '') == 'read'

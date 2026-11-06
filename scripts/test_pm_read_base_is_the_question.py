@@ -304,6 +304,37 @@ class ThePlanHalf(unittest.TestCase):
         self.assertIn('extra_blocks.append(pma.MEDIA_PLAN_GUIDANCE)', src)
 
 
+class TheRetiredTurn(unittest.TestCase):
+    """Re-asking the question on the thread runs it again: the promise line
+    is not the earlier answer, and a retired read is never handed back."""
+
+    THREAD = [
+        {'role': 'user', 'ts': '2026-11-06T17:22:31.967Z', 'text': JENNA, 'turn_id': 'u1'},
+        {'role': 'agent', 'ts': '2026-11-06T17:22:47.593Z', 'turn_id': 'a1',
+         'text': ('On it: reading When People Start Christmas Holiday Toy Shopping and Potential Paw Patrol Consumers now. '
+                  'This one takes a real look at the data, so give me a moment - the read will land right here when it is ready.')},
+        {'role': 'agent', 'ts': '2026-11-06T17:33:21.000Z',
+         'text': 'This read was retired. The read below is on the US audience.',
+         'meta': {'kind': 'read', 'read_job_id': '7c623cbc5192', 'landed_at': '2026-11-06T17:33:21.019Z',
+                  'corrected_at': '2026-11-06T18:33:45Z', 'retired': 'read again on the US audience', 'options': [], 'figures': []}},
+    ]
+
+    def test_the_promise_is_never_the_earlier_answer(self):
+        from prometheus import smarter as SM
+        self.assertIsNone(SM.thread_replay(JENNA, self.THREAD))
+        self.assertIsNone(SM.thread_replay(JENNA, self.THREAD[:2]))
+
+    def test_a_landed_read_still_replays_when_it_was_not_retired(self):
+        from prometheus import smarter as SM
+        landed = [dict(self.THREAD[0]), dict(self.THREAD[1]),
+                  {'role': 'agent', 'ts': '2026-11-06T17:33:21.000Z',
+                   'text': 'On potential Paw Patrol consumers in the US:\n\nThe median first holiday toy order moved earlier ...',
+                   'meta': {'kind': 'read', 'read_job_id': 'abc123', 'landed_at': '2026-11-06T17:33:21.019Z'}}]
+        hit = SM.thread_replay(JENNA, landed)
+        self.assertTrue(hit and 'potential Paw Patrol consumers' in hit['reply'])
+        self.assertNotIn('On it:', hit['reply'])
+
+
 class TheReaderPrompt(unittest.TestCase):
     def test_the_reader_carries_the_rule(self):
         from prometheus import reader as R
