@@ -77,7 +77,9 @@ _PRIOR_RX = re.compile(
     r"\b(?:three|two|3|2) (?:different )?(?:answers|numbers|figures|totals|reads)\b|"
     r"\b(?:these|those|them|the) (?:numbers|figures|totals|answers|counts|shares|reads)\b|\bwhich of (?:these|those|them)\b|"
     r"\b(?:these|those|they) (?:differ|are different|do not|don'?t|disagree)\b", re.I)
-_NOT_RX = re.compile(r"\b(?:deck|slides?|email (?:me|it)|send me|download|csv|build a profile|run a profile|journey|valuation)\b", re.I)
+# a box office reconcile is the standing refusal's (Jenna 2026-10-05: we never predict or reconcile to box
+# office, however the ask is put); that lane answers it with the ticketing-site count, not this one
+_NOT_RX = re.compile(r"\b(?:deck|slides?|email (?:me|it)|send me|download|csv|build a profile|run a profile|journey|valuation|box[- ]?office|gross(?:es|ed)?)\b", re.I)
 # a turn this lane wrote is never part of the record it reads
 _OWN_RX = re.compile(re.escape(HEADER) + r"|" + re.escape(_ONE_HEADER))
 _PROMISE_RX = re.compile(r"^\s*On it\b|\bthe read will land right here\b|\bWorking on it\b|^\s*Already on it\b", re.I)

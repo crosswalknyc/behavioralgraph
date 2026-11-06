@@ -14976,8 +14976,8 @@ def _pm_persist_identity(res, base):
                 return anchor, ' - '.join(dict.fromkeys(bits))[:120]
             if anchor:
                 return anchor, coh
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('chat', _fx)
     return subj, coh
 
 
@@ -15034,8 +15034,8 @@ def _pm_finish_matrix_read(res, *, text, base, pm_user, followups=None, verify=N
         traceback.print_exc()
     try:
         _pm_remember_ask(pm_user, text, subject=res.get('subject'), cohort=res.get('cohort'), route='generated')
-    except Exception:
-        pass
+    except Exception as _fx:
+        _faults.note('chat', _fx)
     _file_payload = {}
     try:
         _fe = {'subject': res.get('subject'), 'cohort': res.get('cohort'), 'question': text,
