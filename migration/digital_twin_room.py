@@ -4308,12 +4308,20 @@ def run_question(ctx: dict) -> dict:
                 total_people = 0
         f_anchor, _apool, t_anchor0 = None, None, time.time()
         anchor_eligible = bool(not _no_desks and kind not in ANCHOR_SKIP_KINDS and total_people > 0)
-        # the plan is reproducible: the same board on the same day, with the record as it stood, takes the plan already derived
+        # the plan is reproducible: the same board on the same day, with the record as it stood, takes the plan already derived.
+        # The plan belongs to the board the room answered on: a coding kind's board is built from the answers (step 3b), so its
+        # plan is derived after the coder; any other board starts the analyst now and re-derives if the coder changes the set
+        try:
+            from migration import digital_twin_board as _BOARD
+            coding_kind = str(kind or '') in _BOARD.CODING_KINDS
+        except Exception:
+            coding_kind = False
+        board_hash_pre = options_hash(options)
         pkey = plan_key(subject, base_q0, options) if anchor_eligible else ''
         fingerprint = record_fingerprint(neighbors, total_people)
         anchor_seed = f"{_slug(subject)}|{asked_hash(base_q0, subject)}|{options_hash(options)}|{_today()}"   # the anchor's jitter is salted by the plan, not the room
-        plan_hit = cached_plan(s3, pkey, options, fingerprint) if (pkey and not ctx.get('fresh_research')) else None
-        if anchor_eligible and study_ok(study) and plan_hit is None:
+        plan_hit = cached_plan(s3, pkey, options, fingerprint) if (pkey and not coding_kind and not ctx.get('fresh_research')) else None
+        if anchor_eligible and study_ok(study) and plan_hit is None and not coding_kind:
             try:
                 from concurrent.futures import ThreadPoolExecutor as _TPE
                 _apool = _TPE(max_workers=1, thread_name_prefix='twin-anchor')
@@ -4387,6 +4395,17 @@ def run_question(ctx: dict) -> dict:
                 fallbacks.append('coding')
         trail['coding'] = coded.get('trail') or {'mode': None}
         timings['coding_s'] = round(time.time() - t, 2)
+        board_changed = bool(options_hash(options) != board_hash_pre)
+        if anchor_eligible and (board_changed or coding_kind):
+            # the coder settled a different board (the Good Influence re-runs widened it): the plan is keyed, cached and derived
+            # on the coded board; a plan looked up or started on the pre-coding board is set aside
+            pkey = plan_key(subject, base_q0, options)
+            anchor_seed = f"{_slug(subject)}|{asked_hash(base_q0, subject)}|{options_hash(options)}|{_today()}"
+            plan_hit = cached_plan(s3, pkey, options, fingerprint) if not ctx.get('fresh_research') else None
+            if f_anchor is not None:
+                f_anchor.cancel()
+                f_anchor = None
+        trail['anchor_board'] = {'pre_coding_hash': board_hash_pre, 'coded_hash': options_hash(options), 'changed_by_coder': board_changed, 'coding_kind': coding_kind}
         # 4. the arithmetic: the seat votes smoothed with each segment twin's prior over the moderator's options
         base_q = q if kind != 'probe' else str((last or {}).get('q') or q)
         priors = {}
@@ -4412,12 +4431,22 @@ def run_question(ctx: dict) -> dict:
             plan = plan_hit
             derived_data = plan.get('analyst')
             trail['anchor_status'] = plan.get('kind') or 'derived'
-        elif f_anchor is not None:
-            try:
-                derived_data = f_anchor.result(timeout=max(5.0, BUDGET_S['anchor'] - (time.time() - t_anchor0)))
-            except Exception as e:
-                print(f"[twin-room] anchor desk skipped: {str(e)[:120]}")
-                derived_data = None
+        elif anchor_eligible and study_ok(study):
+            if f_anchor is not None:
+                # the analyst started beside the seats on a board the coder left as it was
+                try:
+                    derived_data = f_anchor.result(timeout=max(5.0, BUDGET_S['anchor'] - (time.time() - t_anchor0)))
+                except Exception as e:
+                    print(f"[twin-room] anchor desk skipped: {str(e)[:120]}")
+                    derived_data = None
+            else:
+                # a coding kind, or a board the coder changed: the analyst reasons now, on the board the room answered on
+                try:
+                    _prior_hint = prior_over_options(twin, base_q0, kind, options, stim, last, seed + '|anchor-prior')
+                    derived_data = derive_anchor(models, twin, q, kind, options, study, neighbors, total_people, prior=_prior_hint, log=log)
+                except Exception as e:
+                    print(f"[twin-room] anchor desk skipped on the coded board: {str(e)[:120]}")
+                    derived_data = None
             try:
                 plan = derived_plan(opts_out, derived_data, total_people, record_reach=record_reach_people(neighbors), seed=anchor_seed, house=house_read(neighbors, subject))
             except Exception as e:
@@ -4440,7 +4469,8 @@ def run_question(ctx: dict) -> dict:
         try:
             if plan and anchor_rows(opts_out, by_segment, plan, total_people, len(roster), anchor_seed):
                 rec['anchor'] = {'kind': plan['kind'], 'line': plan['line'], 'targets': {next((o['label'] for o in opts_out if o['id'] == k), k): v for k, v in plan['targets'].items()}}
-                trail['anchor'] = dict(rec['anchor'], status=trail.get('anchor_status'), plan_key=plan.get('key'), plan_cached=bool(plan.get('cached')), record_fingerprint=fingerprint)
+                trail['anchor'] = dict(rec['anchor'], status=trail.get('anchor_status'), plan_key=plan.get('key'), plan_cached=bool(plan.get('cached')), record_fingerprint=fingerprint,
+                                       board_changed_by_coder=bool(board_changed), coded_board_hash=options_hash(options))
                 if plan.get('kind') in ('derived', 'house'):
                     trail['anchor']['basis'] = plan.get('basis') or {}
                     trail['anchor']['study_key'] = study.get('_key')

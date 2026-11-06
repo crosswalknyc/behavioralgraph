@@ -847,5 +847,119 @@ class Room(unittest.TestCase):
             self.assertNotIn(w, low, w)
 
 
+NEW_ROW = 'Only if it drops the week P-Valley is back'
+BESIDE: dict = {'seats': set(), 'names': {}}
+
+
+def _coder_fake(role, system, user, **kw):
+    """The research-first desks plus a room whose seats answer beside the
+    board: the coder (the board guard's model call) widens the board with
+    NEW_ROW and codes those seats onto it; the analyst places whatever
+    board it is handed."""
+    d = json.loads(user)
+    if role == 'moderator' and 'mode' in d and 'seats' in d:
+        SEEN.setdefault('coding', []).append(d)
+        beside = [s['seat'] for s in d['seats'] if s['picked'] == 'other']
+        board = [dict(o) for o in d['board']] + [{'id': 'f', 'label': NEW_ROW, 'lean': 'maybe'}]
+        return {'options': board, 'multi': False, 'coding': {str(s): {'primary': 'f', 'all': ['f']} for s in beside}, 'note': 'the room named the week it comes back'}
+    if role == 'anchor':
+        SEEN['anchor'].append(d)
+        out = copy.deepcopy(ANALYST)
+        rows, engaged, current = [], [], []
+        for o in d['options']:
+            lab, lean = str(o['label']).lower(), o.get('lean')
+            if lean == 'yes':
+                rows.append({'id': o['id'], 'low_pct': 2.0, 'high_pct': 4.5, 'basis': 'weekly'}); engaged.append(o['id']); current.append(o['id'])
+            elif re.search(r"started|watched an episode|caught up|behind", lab):
+                rows.append({'id': o['id'], 'low_pct': 3.0, 'high_pct': 7.0, 'basis': 'sampled'}); engaged.append(o['id'])
+            elif o['id'] == 'f':
+                rows.append({'id': o['id'], 'low_pct': 4.0, 'high_pct': 8.0, 'basis': 'the week it is back'})
+            elif lean == 'no':
+                rows.append({'id': o['id'], 'low_pct': 20.0, 'high_pct': 34.0, 'basis': 'no'})
+            else:
+                rows.append({'id': o['id'], 'low_pct': 20.0, 'high_pct': 30.0, 'basis': 'parked'})
+        out['options'] = rows
+        out['engaged_option_ids'] = engaged; out['current_option_ids'] = current; out['lead_option_id'] = (current or engaged or [rows[0]['id']])[0]
+        return out
+    if role == 'persona' and 'your_answer' not in d:
+        name = str(d['you']).split(',')[0].strip()
+        if BESIDE['names'].get(name) in BESIDE['seats']:
+            SEEN['persona'].append(d)
+            return {'option': 'other', 'other_label': NEW_ROW, 'line': 'Only if it drops the week P-Valley is back, then maybe.', 'confidence': 3, 'reason': 'the week'}
+    return fake_model(role, system, user, **kw)
+
+
+class CodedBoard(unittest.TestCase):
+    """The board guard (digital_twin_board) codes the seats' free answers onto named options and can widen the board. The plan
+    belongs to the board the room answered on: it is keyed, cached and derived on the coded set (the Good Influence re-runs
+    published unanchored because the plan was placed on the pre-coding board)."""
+
+    def _room(self, q, beside, kind=None, sid='room-coded-1'):
+        twin = _pvalley()
+        sess = P.open_session([twin], in_room=12, title='Exiles coded', session_id=sid)
+        BESIDE['seats'] = set(beside)
+        BESIDE['names'] = {str(r['name']): int(r['seat']) for r in sess['group']['roster']}
+        SEEN['coding'] = []
+        rec = ROOM.ask_room(sess, {twin['meta']['key']: twin}, q, kind=kind, s3=None, twin_key='pv', run_async=False, model_fn=_coder_fake)
+        return sess, rec
+
+    def test_a_widened_board_still_gets_a_derived_anchor_on_the_coded_options(self):
+        _reset()
+        bare = {k: v for k, v in copy.deepcopy(LEDGER).items() if k != 'p_valley_viewers_and_w_a_t_exiles_overlap'}
+        ROOM.set_ledger_fn(lambda: copy.deepcopy(bare))
+        sess, rec = self._room('what would get you to watch swat exiles?', beside=range(3, 13), kind='open')
+        self.assertEqual(rec['trail']['coding']['mode'], 'open'); self.assertTrue(SEEN['coding'], 'the coder ran')
+        labels = [o['label'] for o in rec['options']]
+        self.assertIn(NEW_ROW, labels, 'the coder widened the board')
+        self.assertEqual(rec['trail']['anchor_status'], 'derived', 'the plan is placed on the coded board, not left unanchored')
+        self.assertIn(NEW_ROW, rec['anchor']['targets'])
+        stages = [c['stage'] for c in rec['trail']['call_log']]
+        self.assertLess(stages.index('coding'), stages.index('anchor'), 'a coding kind derives its plan after the coder')
+        self.assertEqual(len(SEEN['anchor']), 1)
+        self.assertEqual([o['id'] for o in SEEN['anchor'][0]['options']], [o['id'] for o in rec['options']], 'the analyst was handed the coded board')
+        self.assertEqual(rec['trail']['anchor']['plan_key'], ROOM.plan_key('PValley on Starz Viewers', 'what would get you to watch swat exiles?', rec['options']), 'keyed on the coded set')
+        self.assertTrue(rec['trail']['anchor_board']['coding_kind']); self.assertTrue(rec['trail']['anchor']['board_changed_by_coder'])
+        self.assertEqual(sum(o['people'] for o in rec['options']), PEOPLE)
+        self.assertEqual({o['id']: o['seats_n'] for o in rec['options']}, ROOM.allocate_seats({o['id']: o['pct'] for o in rec['options']}, 12))
+        # the same coded board on the same day takes the plan already derived
+        sess2, rec2 = self._room('what would get you to watch swat exiles?', beside=range(3, 13), kind='open', sid='room-coded-2')
+        self.assertTrue(rec2['trail']['anchor']['plan_cached']); self.assertEqual(len(SEEN['anchor']), 1)
+        self.assertEqual([(o['label'], o['pct'], o['people']) for o in rec2['options']], [(o['label'], o['pct'], o['people']) for o in rec['options']])
+
+    def test_a_pre_coding_plan_is_not_reused_once_the_coder_changed_the_set(self):
+        _reset()
+        bare = {k: v for k, v in copy.deepcopy(LEDGER).items() if k != 'p_valley_viewers_and_w_a_t_exiles_overlap'}
+        ROOM.set_ledger_fn(lambda: copy.deepcopy(bare))
+        sess, rec1 = self._room('are you currently watching swat exiles?', beside=set())   # every seat on the board: the plan is cached for this board
+        k1 = rec1['trail']['anchor']['plan_key']
+        self.assertEqual(len(SEEN['anchor']), 1); self.assertFalse(rec1['trail']['anchor']['board_changed_by_coder'])
+        # three seats answer beside the board (past the Other cap): the coder widens it, and the pre-coding plan does not apply
+        sess, rec2 = self._room('are you currently watching swat exiles?', beside={3, 7, 11}, sid='room-coded-3')
+        self.assertEqual(rec2['trail']['coding']['mode'], 'cap')
+        self.assertIn(NEW_ROW, [o['label'] for o in rec2['options']])
+        self.assertTrue(rec2['trail']['anchor']['board_changed_by_coder'])
+        self.assertNotEqual(rec2['trail']['anchor']['plan_key'], k1, 'the coded board is another plan')
+        self.assertFalse(rec2['trail']['anchor']['plan_cached'])
+        self.assertEqual(len(SEEN['anchor']), 2, 'the analyst reasons again, on the coded board')
+        self.assertEqual(rec2['trail']['anchor_status'], 'derived')
+        self.assertIn(NEW_ROW, rec2['anchor']['targets'])
+        self.assertEqual(rec2['trail']['anchor']['plan_key'], ROOM.plan_key('PValley on Starz Viewers', 'are you currently watching swat exiles?', rec2['options']))
+
+    def test_the_pinned_house_read_survives_coding(self):
+        _reset()   # the record holds the overlap read
+        sess, rec = self._room('are you currently watching swat exiles?', beside={3, 7, 11}, sid='room-coded-4')
+        self.assertEqual(rec['trail']['coding']['mode'], 'cap'); self.assertIn(NEW_ROW, [o['label'] for o in rec['options']])
+        self.assertEqual(rec['trail']['anchor_status'], 'house')
+        by = {o['label']: o for o in rec['options']}
+        eng = by[LABELS['a']]['people'] + by[LABELS['b']]['people']
+        self.assertLessEqual(abs(eng - 679241), 300, f"the engaged rows on the coded board still land on the house figure ({eng:,})")
+        self.assertAlmostEqual(by[LABELS['a']]['pct'] + by[LABELS['b']]['pct'], 11.1, places=1)
+        self.assertEqual(rec['watched_any']['rows'], [LABELS['a'], LABELS['b']])
+        self.assertNotIn(NEW_ROW, rec['watched_any']['rows'], 'the new row is not an engaged row')
+        self.assertGreater(by[NEW_ROW]['pct'], 0.0)
+        self.assertEqual(sum(o['people'] for o in rec['options']), PEOPLE)
+        self.assertTrue(rec['trail']['anchor']['board_changed_by_coder'])
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=1)

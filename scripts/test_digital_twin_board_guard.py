@@ -139,6 +139,7 @@ def _ask(coder='model', q=Q):
     sess = P.open_session([twin], in_room=12, title='Campaign Recap', session_id='room-board-1')
     for k in SEEN:
         SEEN[k].clear()
+    ROOM.clear_room_caches()   # each test's room starts from nothing (the day caches would serve another test's board or plan)
     pubs = []
     real = ROOM._publish
 
