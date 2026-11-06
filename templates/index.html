@@ -153470,6 +153470,15 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         window._piqV4Esc = function(s) {
             return String(s == null ? '' : s).replace(/</g, '');
         };
+        // innerHTML reads back serialized (& -> &amp;), so compare against the
+        // parsed form; a raw-string compare never matches and every write
+        // re-fires the dress observers in a tight loop.
+        window._piqV4SetHtml = function(el, html) {
+            if (!el) return;
+            var t = document.createElement('template');
+            t.innerHTML = html;
+            if (el.innerHTML !== t.innerHTML) el.innerHTML = html;
+        };
         window._piqV4Attr = function(s) {
             return String(s == null ? '' : s)
                 .replace(/&/g, '&amp;')
@@ -153848,7 +153857,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                             '<span class="gp">' + window._piqV4Pct(r.gp) + '</span>' +
                             '<span class="idx ' + window._piqV4IdxCls(r.idx) + '">' + Math.round(r.idx) + '</span></div>';
                     });
-                    if (host.innerHTML !== html) host.innerHTML = html;
+                    window._piqV4SetHtml(host, html);
                     if (diffCard) diffCard.classList.remove('piq-no-data');
                 } else {
                     if (host.innerHTML) host.innerHTML = '';
@@ -153934,7 +153943,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         '<span class="gp">' + _demoGpDisp(gp) + '</span>' +
                         '<span class="idx ' + window._piqV4IdxCls(ix) + '">' + idxHtml + '</span></div>';
                 });
-                if (list.innerHTML !== rowsHtml) list.innerHTML = rowsHtml;
+                window._piqV4SetHtml(list, rowsHtml);
                 visibleN += 1;
                 var chead = card.querySelector('.piq-chart-head');
                 var num = (visibleN < 10 ? '0' : '') + visibleN;
@@ -154075,7 +154084,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 });
                 var lead = names.length ? names.join(', ') : 'Top brands on this file';
                 var next = '<span class="lbl">Cross-category read</span>' + window._piqV4Esc(lead) + ' lead the first category. Over-index brands in those lanes read native.';
-                if (call.innerHTML !== next) call.innerHTML = next;
+                window._piqV4SetHtml(call, next);
             }
         };
         window._piqV4DressInterests = function() {
@@ -154121,7 +154130,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             if (p2.length) {
                 html += '<div class="piq-callout orchid"><span class="lbl">Avoid</span>' + window._piqV4Esc(p2.join(', ')) + ' under-index. Not the natural fit here.</div>';
             }
-            if (rail.innerHTML !== html) rail.innerHTML = html;
+            window._piqV4SetHtml(rail, html);
         };
         // Grid rows are shared across columns, so a short card next to a tall
         // one inherits the tall row and leaves a dead block under it. Give each
@@ -154169,7 +154178,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 }
                 var csv = (csvType && window._piqV4CsvBtn) ? window._piqV4CsvBtn(csvType, csvCat) : '';
                 var actions = window._piqV4HeadActions ? window._piqV4HeadActions(csvCat || title, csv) : csv;
-                h.innerHTML = '<div class="stack"><div class="piq-eyebrow"><span class="num">' + num + '</span>' + eyebrow + '</div><h3>' + title + '</h3></div>' + actions;
+                window._piqV4SetHtml(h, '<div class="stack"><div class="piq-eyebrow"><span class="num">' + num + '</span>' + eyebrow + '</div><h3>' + title + '</h3></div>' + actions);
             }
             fillLocHead(tab.querySelector('#allLocationsContainer'), 'piqLocAllHead', '01', 'All Locations by penetration', 'Top DMAs', 'location', 'All Locations');
             fillLocHead(tab.querySelector('.heatmap-container'), 'piqLocMapHead', '02', 'DMA Concentration Map', 'US bubble map');
@@ -154191,7 +154200,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             if (call && hot.length) {
                 var names = hot.map(function(l) { return l.name; });
                 var next = '<span class="lbl">One read</span>' + window._piqV4Esc(names.join(', ')) + ' lead the over-index set. Layer national with a DMA multiplier on those markets.';
-                if (call.innerHTML !== next) call.innerHTML = next;
+                window._piqV4SetHtml(call, next);
             }
         };
         window._piqV4PinChrome = function() {
