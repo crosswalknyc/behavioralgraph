@@ -1,7 +1,7 @@
 {
  "version": 1,
- "content_hash": "181352f4ea66cf217c5048eafa1f848e49e04c783a6d90e1410ee4eefabe90ba",
- "examples_hash": "ea4bdc4d88889695d3469ff23e0296e3c6614d1beac63ff3a5f43a9c5a515ffa",
+ "content_hash": "00800942730ba68953c1f7059c573ae6d6170560d80449e6f1f66966859c967d",
+ "examples_hash": "03bc26bf213a4fbf2c48ebac74c55ecb74ed46cb6916fee13b882356616b6ff9",
  "source_hashes": {
   ".cursor/rules/analysis-confidence-calibration.mdc": "3f2d33886bf77e54adde67cbf78f3256fa23fcb86d1ae32dd5ce7294088521f0",
   ".cursor/rules/avid-and-cut-skin-rules.mdc": "d5c01e23c4db2669558c41efdf5c706c722fae827c8d78871989ef259a16eaf0",
@@ -30,8 +30,8 @@
   ".cursor/skills/crosswalk-panel-analyst/references/numbers.md": "2857e3623a4e64134f621fbaf54dc37ad5b8e921bd59510c96d2ee4e05c75773",
   ".cursor/skills/crosswalk-panel-analyst/references/asks.md": "5a36b47f843163fefe4500de88488e1ad1ec971f5df54308e4a29bddd599f005",
   ".cursor/skills/crosswalk-panel-analyst/references/prior-work.md": "d143ac1c06efbf12a41bbb87bdacf93912580a1a70774c848e4d8606d572dbb5",
-  ".cursor/skills/crosswalk-panel-analyst/references/prometheus-brain.md": "bfb62a48d129afddfe940df35d5219a1b1ff1d11fd6e565cfc145b5c194f09a0",
-  ".cursor/skills/crosswalk-design/SKILL.md": "7f27eccce915e3ad7b178e6aee924d9f8cb8a0016bacf42bf1ebf9b68bcb6fc3",
+  ".cursor/skills/crosswalk-panel-analyst/references/prometheus-brain.md": "64b5f1894a0f7f475cdf92b5edc583089cbd911282b10c8e91cadfe6d801705e",
+  ".cursor/skills/crosswalk-design/SKILL.md": "3820d5b6a581e967d3272d7652cc9cbc9f9d7166945597965ba654114f4d75ad",
   ".cursor/skills/crosswalk-design/references/company.md": "ac29b7962918715d9b337a01f23befb4990b4af6c7afb3cf50fdb6a493b64d83"
  },
  "canon": [
@@ -143,16 +143,16 @@
  },
  "examples": {
   "audience_profile": {
-   "subject": "Amazon Prime Video",
-   "title": "Amazon Prime Video | Oct 19 2025 to Oct 19 2026",
-   "q": "who are the top 25 non-Preschool YouTube EN-speaking creators that can drive the most incrementality for Prime Video",
-   "text": "On Amazon Prime Video:\n\nAcross the 25 English-language, non-preschool YouTube creators that move the most new audience, MrBeast delivers the largest single block at 157,580,428 US people who do not stream Prime Video in the window, and the 25 together reach 174,926,183 unduplicated non-streamers.\n\nYouTube penetration of the Prime Video audience: 79.5%, Prime Video viewers active on YouTube: 101,874,242, Unduplicated incremental people across the 25 creators: 174,926,183.\n\nYouTube creator mix, Oct 19 2025 to Oct 19 2026 (share of the 25-creator set's incremental US people (people with no Prime Video streaming in ..."
+   "subject": "Olipop",
+   "title": "Olipop | Oct 31 2025 to Oct 31 2026",
+   "q": "Give me the Audience Demographic Age profile for each series",
+   "text": "On Olipop:\n\nThe age profile is front-loaded on 25-34: 2,756,599 people, 29.7% of the audience and an index of 225 against the average American.\n\nProjected US audience: 9,281,209, Core 25-44 audience: 4,926,301, Share under 35: 50.6%.\n\nAge band mix, Oct 31 2025 to Oct 31 2026 (share of the projected US audience)\n- 25-34: 29.7% share. largest band, index 225, 2,756,599 people\n- 35-44: 23.4% share. index 173, 2,169,702 people\n- 18-24: 18.3% share. index 188, 1,695,498 people\n- 45-54: 14.2% share. index 111, 1,316,595 people\n- 55-64: 7.7% share. index 62, 715,711 people\n- 65 or older: 4.1% share. index 22, 382,915 ..."
   },
   "audience_sizing": {
-   "subject": "Everybody Loves Raymond (Amazon Prime Video) Viewers",
-   "title": "Everybody Loves Raymond (Amazon Prime Video) Viewers | Sep 1 2026 to Sep 30 2026",
-   "q": "For the Everybody Loves Raymond Amazon Prime Video audience in this profile, what are the top 10 other scripted TV series they watched during September 2026? Show audience penetration, index versus U.S. Gen Pop, and projected audience for each title in a table",
-   "text": "On Everybody Loves Raymond (Amazon Prime Video) Viewers:\n\nThe King of Queens is the strongest co-watch in the Everybody Loves Raymond audience, reaching 34.2% of them (790,717 US viewers) in September 2026 at an index of 612 vs the US average.\n\nEverybody Loves Raymond viewers, projected US audience: 2,312,038, Watched at least one other scripted series: 2,194,127, Median other scripted series watched per viewer: 4.\n\nScripted series mix, Sep 1 2026 to Sep 30 2026 (share of this audience's other-scripted-series viewing signals across the top 10 titles, Sep 1 2026 to Sep 30 2026)\n- The King of Queens: 14.1% share, ..."
+   "subject": "My Life with the Walter Boys",
+   "title": "My Life with the Walter Boys | US Wattpad readers of My Life with the Walter Boys | Dec 7 2023 to Nov 5 2026",
+   "q": "how many wattpad readers of my life with the walter boys watched any episode of any season on netflix and in turn did people who watched the show drive readership of the wattpad?",
+   "text": "149,739 of the 219,237 US Wattpad readers of My Life with the Walter Boys watched an episode on Netflix, and the traffic ran harder the other way: 97,418 people opened the Wattpad original for the first time only after the show.\n\nUS Wattpad readers of the title: 219,237, Readers who watched the Netflix series: 149,739, Reader to viewer crossover rate: 68.3%.\n\nReading start window relative to the series mix, Dec 7 2023 to Nov 5 2026 (share of the 97,418 show-driven first reads on Wattpad)\n- Season 1 premiere month (Dec 7 2023 to Jan 7 2024): 38.4% share. 37,409 first reads, the largest spike in the series ..."
   },
   "category_demand": {
    "subject": "Paw Patrol Series",
@@ -161,10 +161,10 @@
    "text": "Action Figures and Playsets lead toy purchasing among parents of 4-to-6-year-old Paw Patrol viewers at 22.3% of category signals, with Preschool Toys close behind at 19.8%.\n\nShare of audience, parents of kids 4-6: 34.1%, Projected US people, parents of kids 4-6: 5,476,469, Toy purchase signal penetration: 83.7%.\n\nToy category mix, Jul 1 2025 to Jun 30 2026 (Share of the cohort's toy purchase signals)\n- Action Figures & Playsets: 22.3% share, 64.1% penetration. Spin Master Paw Patrol vehicles and figures dominate, followed by Hasbro Transformers and Mattel Jurassic World\n- Preschool Toys: 19.8% share, 57.3% ..."
   },
   "competitive_overlap": {
-   "subject": "Golden Axe (Paramount+)",
-   "title": "Golden Axe (Paramount+) | Golden Axe viewers on Paramount+ | Sep 16 2026 to Sep 30 2026",
-   "q": "re-reun in the time frame 9/16 - 9/30",
-   "text": "On Golden Axe (Paramount+) - Golden Axe viewers on Paramount+:\n\nIn the September 16 to September 30 window, 106,147 of the 118,463 US viewers who started Golden Axe on Paramount+ also started a title on another service, and Invincible on Prime Video leads that crossover at 40.3% of them.\n\nUnique US Golden Axe viewers (Sep 16 to Sep 30): 118,463, Golden Axe viewers with off-platform title starts: 106,147, Crossover rate: 89.6%.\n\nCrossover title mix, Sep 16 2026 to Sep 30 2026 (share of the cohort's off-platform title starts in the window)\n- Invincible (Prime Video): 35.2% share, 40.3% penetration. strongest ..."
+   "subject": "HBO Max and Paramount+ overlap",
+   "title": "HBO Max and Paramount+ overlap | Nov 2025 to Nov 4 2026",
+   "q": "the overlap for hbo and paramount+",
+   "text": "On HBO Max and Paramount+ overlap:\n\nThe HBO Max and Paramount+ shared audience has climbed every month of the window, from 45,213,554 people in November 2025 to 51,131,927 at the November 4 2026 read, a gain of 5,918,373 people.\n\nShared audience, current read: 51,131,927, Shared audience, November 2025: 45,213,554, Twelve-month gain: 5,918,373.\n\nMonth mix, Nov 2025 to Nov 4 2026 (shared audience as a share of the Paramount+ audience that month (penetration_pct is the same overlap as a share of the )\n- Nov 2026 (through Nov 4): 8.1% share, 27.0% penetration. current read\n- Oct 2026: 8.1% share, 26.7% penetration. ..."
   },
   "event_impact": {
    "subject": "The Spiderwick Chronicles (Roku Channel)",
@@ -173,10 +173,10 @@
    "text": "The Spiderwick Chronicles pulled 14.7M US viewers onto The Roku Channel across the three years, and 3,148,627 of them opened the app for the first time on the series.\n\nMEASURED READ (Sep 29 2023 to Sep 29 2026)\n- Unique US viewers on The Roku Channel: 14,712,483 (distinct US individuals with at least one play of a Spiderwick Chronicles episode on The Roku Channel in the window)\n- First-ever Roku Channel users acquired on the series: 3,148,627 (viewers whose first recorded Roku Channel session in the window was a Spiderwick Chronicles play)\n- Share of series viewers who were new to the app: 21.4% (first-ever Roku ..."
   },
   "ip_assessment": {
-   "subject": "The Kiss Quotient (Helen Hoang) as an Amazon Original adaptation",
-   "title": "The Kiss Quotient (Helen Hoang) as an Amazon Original adaptation | Oct 19 2025 to Oct 19 2026",
-   "q": "what is the audience demographic for the book 'the kiss quotient'? how incremental would this audience be to amazon prime video's existing userbase if it were adapted to an amazon original movie?",
-   "text": "On The Kiss Quotient (Helen Hoang) as an Amazon Original adaptation:\n\nThe Kiss Quotient carries 287,413 US people with a digital touchpoint in the trailing 12 months, and 53,496 of them sit outside Prime Video today, so an Amazon Original adaptation buys roughly one new viewer for every four it already reaches.\n\nThe Kiss Quotient US audience: 287,413, Already Prime Video viewers: 81.4%, Incremental to Prime Video: 53,496.\n\nAge band mix, Oct 19 2025 to Oct 19 2026 (share of The Kiss Quotient's US digital audience)\n- 25-34: 33.5% share, 1.9% penetration. core romance-reader block, heaviest ebook and audiobook ..."
+   "subject": "Book-to-screen adaptations: pre-release signal study (24 titles, 9 matched pairs)",
+   "title": "Book-to-screen adaptations: pre-release signal study (24 titles, 9 matched pairs) | Jun 1 2023 to Nov 2 2026, each title measured across its own 12 months before re",
+   "q": "for a set of successful and underperforming book-to screen adaptations, analyze the observable audience behaviors during the 12 months before each adptation's release. identify which signals differentiated successful adaptations from underperformers, controlling where possible for IP awareness, mark",
+   "text": "On Book-to-screen adaptations: pre-release signal study (24 titles, 9 matched pairs):\n\nAcross 24 adaptations, the signal that separated winners from underperformers was not how big the pre-release book audience was but how much of it was new: 41.3% of the successful titles' pre-release audience had no prior touchpoint with the IP before the T-12 window.\n\nAdaptations in the set: 24, Unique US people measured: 38,417,629, Median pre-release base per title: 1,284,637.\n\n- Net-new IP entrants (T-12): 21.4% share, 98.3% penetration. 41.3% on winners vs 15.8%; 22 of 24 titles carry a complete series; readable at T-24\n- ..."
   },
   "journey_path": {
    "subject": "Mark Rober / CrunchLabs build kits on CrunchLabs DTC site",
@@ -185,10 +185,10 @@
    "text": "Digital Journey journey-iq/debip/Mark_Rober_CrunchLabs_build_kits_on_CrunchLabs_DTC_site_20261021_192708_cead01cd9658.json.gz"
   },
   "sponsorship_fit": {
-   "subject": "Shark Tank",
-   "title": "Shark Tank | Shark Tank engagers | Jul 1 2025 to Jun 30 2026",
-   "q": "Which specific Shark Tank brand categories (CPG, pet, beauty, travel) show the highest purchase index among engagers for a category-level sponsorship pitch?",
-   "text": "Pet products are the standout purchase category for Shark Tank engagers. Ranked by purchase index against the US general population, matched brand for brand on the same data behind the credit and investment reads already delivered (American Express 289, Apple Credit 347, E-Trade 636):\n\n1. Pets, index 177. The deepest lift of the four, and it is show-made: tank-alumni brands carry it (Maev 3.3% pen, Little Hunter 3.2% pen, Maxbone 2.7% pen, each running several times its national baseline).\n2. Beauty and wellness, index 127. Broad lift across 300+ matched brands, with the sharpest signals on premium and niche ..."
+   "subject": "Howie Mandel",
+   "title": "Howie Mandel | Jan 1 2025 to Dec 31 2025",
+   "q": "what brand partnerships make sense for Howie Mandell?",
+   "text": "On Howie Mandel:\n\nTheme parks and live experience is the sharpest partnership lane on this file: Universal Orlando Resort runs 32.4% of the audience at index 901, or 1,302,276 US people.\n\nProjected US audience reachable through a Howie Mandel partnership: 4,027,331, Universal Orlando Resort audience: 1,302,276, Carfax users: 1,852,929.\n\nPartnership category mix, Jan 1 2025 to Dec 31 2025 (share of the audience's above-average brand purchase and usage signals)\n- Theme parks and live experience: 18.3% share, 32.4% penetration. Universal Orlando Resort (901) and Universal Studios Hollywood (637) lead\n- Footwear and ..."
   },
   "subscriber_churn": {
    "subject": "Dark Matter (Apple TV+), Season 1 and Season 2",
@@ -197,10 +197,10 @@
    "text": "On matched first 30 days, Season 2 pulled 238,417 attributed new US signups against Season 1's 146,643, 91,774 more accounts (62.6%), off a conversion rate that fell from 4.9% to 4.1%.\n\nMEASURED READ (Season 1 first 30 days May 8 to Jun 7 2024 vs Season 2 first 30 days Aug 28 to S)\n- Season 1 attributed new US signups, first 30 days: 146,643 (new paid US Apple TV accounts activated May 8 to Jun 7 2024 whose first title played within 72 hours of activation was a Dark Matter Season 1 episode)\n- Season 2 attributed new US signups, first 30 days: 238,417 (new paid US Apple TV accounts activated Aug 28 to Sep 27 2026 ..."
   },
   "talent_value": {
-   "subject": "S.W.A.T. Exiles (Starz, Season 1)",
-   "title": "S.W.A.T. Exiles (Starz, Season 1) | Starz viewers of S.W.A.T. Exiles Season 1, new signups separated from pre-existing subscribers | Sep 25 2026 to Oct 2 2026, Season 1 flight to date, signups credited through Oct",
-   "q": "Analyze SWAT Exiles. What are the top 3 insights based on this data?",
-   "text": "On S.W.A.T. Exiles (Starz, Season 1) - Starz viewers of S.W.A.T. Exiles Season 1, new signups separated from pre-existing subscribers:\n\nS.W.A.T. Exiles Season 1 pulled 378,815 Starz watchers in its opening window and converted 13,097 clean new signups, a 3.46% clean conversion rate against Outlander: Blood of My Blood's 2.41%.\n\nTotal US watchers: 378,815, New signups attributed: 14,416, Clean new signups: 13,097.\n\nWatcher pool subscriber status mix, Sep 25 2026 to Oct 2 2026, Season 1 flight to date, signups credited through Oct (share of S.W.A.T. Exiles Season 1 watchers)\n- Pre-existing Starz subscribers: 96.2% ..."
+   "subject": "Starz",
+   "title": "Starz | Starz Subscriber IQ library as of Oct 29, 2026",
+   "q": "How does S.W.A.T. Exiles Season 1 (49,782 signups, 2.66%) benchmark against the other Starz series reads?",
+   "text": "S.W.A.T. Exiles Season 1 to date converts 2.66%, first of three Starz season reads (Blood of My Blood S1 2.58%, P-Valley S2 0.98%) and third of six Starz reads overall; its premiere weekend 2.72% is second of three premieres behind Blood of My Blood S2's returning-season 3.60%. Library median conversion 2.65%, range 0.98% to 3.60%. Signups per aired episode 9,956.4, the highest in the library; first-time share 77.8%, also the highest."
   },
   "white_space": {
    "subject": "Austin Sprinz",
@@ -209,5 +209,5 @@
    "text": "Athletic footwear and apparel is the largest open sponsorship category for Austin Sprinz: it carries 14.3% of his audience's brand purchase signals at 67.3% category penetration with no endorsement running against it in the window.\n\nProjected US audience (Total Universe): 24,716,483, Avid US audience: 6,382,947, Brand purchase signal penetration: 89.7%.\n\nSponsor category (audience demand vs current Sprinz coverage mix, Oct 12 2025 to Oct 12 2026 (share of the audience's brand purchase and category signals)\n- Athletic Footwear & Apparel: 14.3% share, 67.3% penetration. Nike, adidas, Under Armour, New Balance lead ..."
   }
  },
- "generated_at": "2026-10-22T20:31:47Z"
+ "generated_at": "2026-11-06T04:41:14Z"
 }
