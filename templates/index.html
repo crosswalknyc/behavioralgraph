@@ -51792,7 +51792,6 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         @keyframes dtwPiPrep { from { transform: translateX(-30%); } to { transform: translateX(240%); } }
         #digitalTwinsIQView .dtw-pi-splitbar { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin-top: 8px; font-size: 12px; color: var(--dtw-body); }
         #digitalTwinsIQView .dtw-pi-splitbar select { max-width: 180px; }
-        #digitalTwinsIQView .dtw-pi-splitbar .sw { display: inline-block; width: 14px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
         #digitalTwinsIQView .dtw-pi-on { font-size: 12px; color: var(--dtw-body); margin-top: 6px; min-height: 16px; }
         #digitalTwinsIQView .dtw-pi-probes { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
         #digitalTwinsIQView .dtw-pi-probe { appearance: none; border: 1px solid var(--dtw-rule); background: var(--dtw-raised); color: var(--dtw-ink); border-radius: 999px; padding: 4px 10px; font-size: 11.5px; cursor: pointer; font-family: inherit; }
@@ -51848,7 +51847,6 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-pi-slate .s:empty { display: none; }
         #digitalTwinsIQView .dtw-pi-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; font-size: 11px; color: var(--dtw-body); }
         #digitalTwinsIQView .dtw-pi-legend .sw { display: inline-block; width: 14px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
-        #digitalTwinsIQView .dtw-pi-legend select.dtw-in { display: inline-block; width: auto; padding: 2px 6px; font-size: 11px; background: transparent; }
         /* cohorts (2026-11-02): the builder rows in the setup form, the cohort tag on a seat, the cohort chips under the dial */
         #digitalTwinsIQView .dtw-pi-cohorts { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 2px; }
         #digitalTwinsIQView .dtw-pi-cohort { display: grid; grid-template-columns: minmax(0, 1fr) 56px; grid-template-areas: 'name seats' 'comp comp' 'pick pick'; gap: 4px 6px; align-items: center; padding-bottom: 6px; border-bottom: 1px solid var(--dtw-hair, var(--dtw-rule)); }
@@ -51897,9 +51895,6 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #digitalTwinsIQView .dtw-pi-legend button.coh.dim { opacity: 0.38; }
         #digitalTwinsIQView .dtw-pi-legend button.coh.cut { color: var(--dtw-ink); }
         #digitalTwinsIQView .dtw-pi-legend .hint { color: var(--dtw-mute); }
-        #digitalTwinsIQView .dtw-pi-legend .ovl { display: inline-flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; margin-left: auto; padding-left: 6px; }
-        #digitalTwinsIQView .dtw-pi-legend .ovl .lbl { color: var(--dtw-mute); white-space: nowrap; }
-        #digitalTwinsIQView .dtw-pi-legend .ovl label { white-space: nowrap; }
         @media (max-width: 600px) { #digitalTwinsIQView .dtw-pi-views { max-width: 100%; } #digitalTwinsIQView .dtw-pi-views button { padding: 6px 11px; } }
         #digitalTwinsIQView .dtw-pi-seatrow.pinned { background: rgba(233,232,225,0.07); box-shadow: inset 2px 0 0 var(--coh, var(--hue, #3358FF)); }
         #digitalTwinsIQView .dtw-pi-biocard .dtw-pi-thought { margin: 0 0 8px; padding: 6px 8px; border-left: 2px solid var(--coh, var(--hue, #3358FF)); background: rgba(233,232,225,0.04); font-style: normal; color: var(--dtw-ink); }
@@ -54379,7 +54374,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (s.live.frames.some(function(f) { return Number(f.t) === Number(d.t); })) return;
                 var modesBefore = piViewModesKey(s);
                 if (d.dial) { s.dial.t.push(Number(d.dial.t)); s.dial.value.push(Number(d.dial.value)); }
-                var hadSplits = Object.keys(s.dial.splits).length > 0, meta = d.split_meta || {};
+                var meta = d.split_meta || {};
                 Object.keys(d.splits || {}).forEach(function(k) {
                     // a new split row takes the label and group the room gave it: a cohort row is a cohort, not a gender (2026-11-04)
                     var m = meta[k] || {};
@@ -54388,7 +54383,6 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     while (row.value.length < s.dial.value.length - 1) row.value.push(row.value.length ? row.value[row.value.length - 1] : Number(d.splits[k]));
                     row.value.push(Number(d.splits[k]));
                 });
-                if (!hadSplits && Object.keys(s.dial.splits).length) S.pilotSplits = null;   // the legend picks women and men up
                 // every seat's own reading at this frame: the People and Cohorts views draw it while the room is still watching
                 Object.keys(d.seats || {}).forEach(function(sno) {
                     var v = Number(d.seats[sno]); if (!isFinite(v)) return;
@@ -54591,23 +54585,6 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (on) { var sc = sceneAt(s, t); var cap = sc ? (sc.caption || '') : ''; on.textContent = cap ? ('On screen: ' + cap) : ''; }
                 var tg = document.querySelector('.dtw-pane.active .dtw-pi .dtw-pi-wm.a .tag'); if (tg) tg.textContent = wmText(s) + '  ' + clockFmt(t);
             }
-            function splitLines(s) {
-                var d = (s || {}).dial || {}, sp = d.splits || {};
-                var keys = Object.keys(sp);
-                if (!S.pilotSplits || !S.pilotSplitsUser) {
-                    // the defaults follow the room until the reader picks a line: with cohorts the cohorts are the lines
-                    // (Jenna 2026-11-03: men and women were doubled up), without them women and men
-                    var hasCohorts = keys.some(function(k) { return sp[k].group === 'cohort'; });
-                    S.pilotSplits = hasCohorts ? { a: '', b: '' } : { a: keys.indexOf('women') >= 0 ? 'women' : '', b: keys.indexOf('men') >= 0 ? 'men' : '' };
-                }
-                return { a: S.pilotSplits.a && sp[S.pilotSplits.a] ? sp[S.pilotSplits.a] : null, b: S.pilotSplits.b && sp[S.pilotSplits.b] ? sp[S.pilotSplits.b] : null };
-            }
-            function piOverlayColors(s) {
-                // the two overlay lines take the first palette colors no cohort is wearing
-                var used = {}; piCohortSplits(s || S.pilot || {}).forEach(function(c) { used[String(c.color).toLowerCase()] = 1; });
-                var free = PI_COHORT_COLORS.filter(function(c) { return !used[String(c).toLowerCase()]; });
-                return [free[0] || PI_SPLIT_A, free[1] || PI_SPLIT_B];
-            }
             function drawPilotDial(upto) {
                 var c = el('dtwPiDial'); if (!c) return;
                 var s = S.pilot || {}, d = s.dial || {}, ts = d.t || [], vs = d.value || [];
@@ -54646,7 +54623,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     }
                     if (started) ctx.stroke();
                 }
-                var sl = splitLines(s), view = piView();
+                var view = piView();
                 // live or scored, the three views draw from one source: the live frame readings while the room is watching (the
                 // room line is the mean of every seat, a cohort line the mean of its seats), the scored series once the test is scored
                 var cohorts = piCohortSplits(s), roster = ((s.group || {}).roster || []);
@@ -54666,9 +54643,6 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     cohorts.forEach(function(c) { if (c.key !== hovKey) line(c.value, hovKey ? piAlpha(c.color, 0.5) : c.color, 1.6); });
                     if (hovKey) cohorts.forEach(function(c) { if (c.key === hovKey) line(c.value, c.color, 2.4); });
                 }
-                var oc = piOverlayColors(s);
-                if (sl.a) line(sl.a.value, oc[0], 1.4);
-                if (sl.b) line(sl.b.value, oc[1], 1.4);
                 line(vs, '#E9E8E1', view.mode === 'people' ? 1.6 : 2.2);
                 ctx.fillStyle = '#E9E8E1';
                 var last = 0;
@@ -54958,25 +54932,6 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 return '<div class="dtw-eyebrow" style="margin-top:16px">Moderator guide</div><div class="dtw-pi-guide">' + qs.map(function(q) {
                     return '<div class="g"><span class="c">' + esc(q.clock || clockFmt(q.t)) + '</span><span>' + esc(q.q || '') + (q.why ? ' <span class="dtw-muted">(' + esc(q.why) + ')</span>' : '') + '</span><button type="button" class="dtw-btn dtw-btn-sm" onclick="dtwPilotAskAt(' + Number(q.t || 0) + ', \'' + esc(jsq(q.q || '')) + '\', \'' + esc(q.kind || '') + '\')">Ask</button></div>';
                 }).join('') + (g.battery && g.battery.length ? '<div class="dtw-muted" style="margin-top:6px">At the end the room fills in the card: ' + esc(g.battery.join('; ')) + '.</div>' : '') + '</div>';
-            }
-            function splitPicker(s) {
-                var sp = ((s || {}).dial || {}).splits || {}, keys = Object.keys(sp);
-                if (!keys.length) return '';
-                splitLines(s);
-                var groups = {};
-                keys.forEach(function(k) { var g = sp[k].group || 'other'; (groups[g] = groups[g] || []).push(k); });
-                var order = ['cohort', 'gender', 'quadrant', 'age', 'ethnicity', 'orientation', 'education', 'lifecycle', 'fanship', 'other'];
-                var label = { cohort: 'Cohort', gender: 'Gender', quadrant: 'Quadrant', age: 'Age', ethnicity: 'Ethnicity', orientation: 'Orientation', education: 'Education', lifecycle: 'Where they are with the title', fanship: 'Fanship', other: 'Other' };
-                function opts(sel) {
-                    var o = '<option value="">Add a line</option>';
-                    order.forEach(function(g) { if (!groups[g]) return; o += '<optgroup label="' + esc(label[g] || g) + '">' + groups[g].map(function(k) { return '<option value="' + esc(k) + '"' + (sel === k ? ' selected' : '') + '>' + esc(sp[k].label || k) + ' (' + esc(sp[k].n) + ')</option>'; }).join('') + '</optgroup>'; });
-                    return o;
-                }
-                var oc0 = piOverlayColors(s);
-                return '<div class="dtw-pi-splitbar"><span><span class="sw" style="background:#E9E8E1"></span>Room</span>'
-                    + '<label><span class="sw" style="background:' + oc0[0] + '"></span><select class="dtw-in" style="display:inline-block;width:auto;padding:3px 6px" onchange="dtwPilotSplit(\'a\', this.value)">' + opts(S.pilotSplits.a) + '</select></label>'
-                    + '<label><span class="sw" style="background:' + oc0[1] + '"></span><select class="dtw-in" style="display:inline-block;width:auto;padding:3px 6px" onchange="dtwPilotSplit(\'b\', this.value)">' + opts(S.pilotSplits.b) + '</select></label>'
-                    + '<span class="dtw-muted">Overlay any two groups on the room.</span></div>';
             }
             // ---- the control room (Jenna 2026-10-30): the seats carry the generated portrait and the person's latest line on the clock; a click on the portrait opens who they are (hover only follows the seat's line).
             function piSeatLine(s, r, t) {
@@ -55324,7 +55279,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 } else if (s && s.status === 'preparing') {
                     note = title + ' is still scoring. Open it again for the scorecard when that lands.';
                 }
-                S.pilot = null; S.pilotSplits = null; S.pilotMedia = null; S.pilotCompare = null;
+                S.pilot = null; S.pilotMedia = null; S.pilotCompare = null;
                 renderPilotConsole();
                 if (note) fgToast(note);
             };
@@ -55950,7 +55905,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 window.addEventListener('resize', function() { if (S.pilot && el('dtwPiTicker')) paintPilotTicker(playheadNow()); });
             }
             function splitLegend(s) {
-                var sp = ((s || {}).dial || {}).splits || {}, keys = Object.keys(sp);
+                // the legend lists every group (the view control, the room, the cohort chips); the overlay pickers that sat here
+                // are gone (Jenna 2026-11-05: "it's not needed since all groups are already listed")
                 var v = piView();
                 var room = piViewControl(s) + '<span><i class="sw" style="background:#E9E8E1"></i>Room</span>';
                 if (v.mode === 'people') room += '<span class="hint">Every seat, in its cohort color. Hover a line, or click a seat\'s photo in the room, to see who they are; click a line to pin.</span>';
@@ -55961,22 +55917,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     var cls = 'coh' + (cutOn ? (v.cohort === c.key ? ' cut' : ' dim') : '');
                     room += '<button type="button" class="' + cls + '" onclick="dtwPilotViewCohort(\'' + esc(c.key) + '\')" onmouseenter="dtwPilotCohortOver(\'' + esc(c.key) + '\')" onmouseleave="dtwPilotCohortOver(\'\')" title="' + (v.mode === 'cohorts' ? 'Cut the dial to this cohort' : 'Show the cohorts and cut the dial to this one') + '"><i class="sw" style="background:' + c.color + '"></i>' + esc(c.label) + ' (' + esc(c.n) + ')</button>';
                 });
-                if (!keys.length) return '<div class="dtw-pi-legend">' + room + '</div>';
-                splitLines(s);
-                var groups = {};
-                keys.forEach(function(k) { var g = sp[k].group || 'other'; (groups[g] = groups[g] || []).push(k); });
-                var order = ['cohort', 'gender', 'quadrant', 'age', 'ethnicity', 'orientation', 'education', 'lifecycle', 'fanship', 'other'];
-                var label = { cohort: 'Cohort', gender: 'Gender', quadrant: 'Quadrant', age: 'Age', ethnicity: 'Ethnicity', orientation: 'Orientation', education: 'Education', lifecycle: 'Where they are with the title', fanship: 'Fanship', other: 'Other' };
-                function opts(sel) {
-                    var o = '<option value="">Add a line</option>';
-                    order.forEach(function(g) { if (!groups[g]) return; o += '<optgroup label="' + esc(label[g] || g) + '">' + groups[g].map(function(k) { return '<option value="' + esc(k) + '"' + (sel === k ? ' selected' : '') + '>' + esc(sp[k].label || k) + ' (' + esc(sp[k].n) + ')</option>'; }).join('') + '</optgroup>'; });
-                    return o;
-                }
-                var oc = piOverlayColors(s);
-                return '<div class="dtw-pi-legend">' + room
-                    + '<span class="ovl"><span class="lbl">Overlay up to two more lines on this view</span>'
-                    + '<label title="Overlay a line"><i class="sw" style="background:' + oc[0] + '"></i><select class="dtw-in" onchange="dtwPilotSplit(\'a\', this.value)">' + opts(S.pilotSplits.a) + '</select></label>'
-                    + '<label title="Overlay a second line"><i class="sw" style="background:' + oc[1] + '"></i><select class="dtw-in" onchange="dtwPilotSplit(\'b\', this.value)">' + opts(S.pilotSplits.b) + '</select></label></span></div>';
+                return '<div class="dtw-pi-legend">' + room + '</div>';
             }
             function piKindSel() {
                 return '<select id="dtwPiKindSel" class="dtw-in" onchange="dtwPilotKindSel(this.value)" aria-label="Kind of question"><option value=""' + (!S.pilotKind ? ' selected' : '') + '>Open</option><option value="yes_no"' + (S.pilotKind === 'yes_no' ? ' selected' : '') + '>Yes / no</option><option value="rating"' + (S.pilotKind === 'rating' ? ' selected' : '') + '>Rating</option><option value="show_of_hands"' + (S.pilotKind === 'show_of_hands' ? ' selected' : '') + '>Show of hands</option></select>';
@@ -56233,7 +56174,6 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 }, 4000);
             }
             window.dtwPilotKind = function(k) { S.pilotKind = (S.pilotKind === k) ? '' : k; document.querySelectorAll('#dtwPiKinds .dtw-chip').forEach(function(b) { b.classList.toggle('on', b.getAttribute('data-k') === S.pilotKind); }); };
-            window.dtwPilotSplit = function(which, key) { S.pilotSplits = S.pilotSplits || { a: '', b: '' }; S.pilotSplits[which] = key || ''; S.pilotSplitsUser = true; drawPilotDial(playheadNow()); };
             window.dtwPilotGenre = async function(g) {
                 var s = S.pilot; if (!s || !S.key) return;
                 try { var d = await api('/' + S.key + '/pilot/' + s.id + '/norm', { method: 'POST', body: JSON.stringify({ genre: g || '' }) }); if (d.session) { adoptPilot(d.session); renderPilotConsole(); } } catch (e) { var n = el('dtwPiNote'); if (n) n.textContent = e.message; }
@@ -56245,7 +56185,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             window.dtwPilotPick = function(sid) {
                 var s = ((S.twin || {}).pilot_sessions || []).filter(function(x) { return x.id === sid; })[0] || null;
                 S.pilot = s;
-                S.pilotSplits = null; S.pilotMedia = null; S.pilotCompare = null;
+                S.pilotMedia = null; S.pilotCompare = null;
                 var tab = piTabFor((s || {}).mode);
                 S.piTab = tab;
                 dtwTab(tab); renderPilotConsole();
@@ -56693,7 +56633,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var v = el('dtwPiVideo'); if (v) { try { v.pause(); } catch (_) {} }
                 if (S.pilotQPoll) { try { clearTimeout(S.pilotQPoll); } catch (_) {} S.pilotQPoll = null; }
                 if (S.pilotPrep && S.pilotPrep.timer) { try { clearTimeout(S.pilotPrep.timer); } catch (_) {} S.pilotPrep.timer = null; }
-                S.pilotSplits = null; S.pilotMedia = null; S.pilotCompare = null;
+                S.pilotMedia = null; S.pilotCompare = null;
             }
             function piAdoptDuplicate(d, stay) {
                 if (S.twin) S.twin.pilot_setups = d.setups || (S.twin.pilot_setups || []);
@@ -56792,7 +56732,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 try { var d = await api('/' + key + '/pilot/open', { method: 'POST', body: JSON.stringify(body) }); } catch (e) { if (st) st.textContent = e.message; return; }
                 adoptPilot(d.session);
                 piLocalClear(); S.piPending = null;      // the test is open; the saved setup (if any) stays on the twin for next time
-                S.pilotSplits = null; S.pilotMedia = null; S.pilotCompare = null;
+                S.pilotMedia = null; S.pilotCompare = null;
                 var sid = d.session.id;
                 if (purgeNew) { try { await api('/' + key + '/pilot/' + sid + '/rename', { method: 'POST', body: JSON.stringify({ purge_media_after: true }) }); } catch (_) {} }
                 if (prior) {
@@ -56981,7 +56921,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 try { await api('/' + S.key + '/pilot/' + encodeURIComponent(sid) + '/delete', { method: 'POST', body: '{}' }); }
                 catch (e) { fgToast(e && e.message ? e.message : 'That test could not be deleted just now.'); return; }
                 if (S.twin) S.twin.pilot_sessions = list.filter(function(x) { return x.id !== sid; });
-                if (S.pilot && S.pilot.id === sid) { S.pilot = null; S.pilotSplits = null; S.pilotMedia = null; S.pilotCompare = null; }
+                if (S.pilot && S.pilot.id === sid) { S.pilot = null; S.pilotMedia = null; S.pilotCompare = null; }
                 renderPilotConsole();
                 fgToast('Deleted ' + title + '.', { label: 'Undo', onclick: function() { dtwPilotRestoreId(sid); } });
             };

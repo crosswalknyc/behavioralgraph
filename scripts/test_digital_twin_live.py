@@ -364,13 +364,17 @@ class PageLiveViews(unittest.TestCase):
             self.assertIn(must, merge)
         self.assertIn('piRosterCohorts(s)', self._fn('piCohortSplits'))
         legend = self._fn('splitLegend')
-        self.assertLess(legend.find('cs.forEach'), legend.find('if (!keys.length) return'), 'the cohort chips do not wait for the split rows')
-        # Jenna 2026-11-04: the cohort chips ride in every view (the Room view used to hide them), and the two
-        # overlay selects carry a one-line label and travel as one group
+        self.assertIn('cs.forEach', legend)
+        self.assertNotIn('.splits', legend, 'the cohort chips do not wait for the split rows; the legend reads none of them now')
+        # Jenna 2026-11-04: the cohort chips ride in every view (the Room view used to hide them). Jenna 2026-11-05: the
+        # 'Overlay up to two more lines' pickers are gone ("not needed since all groups are already listed"): no overlay
+        # state, no overlay series on the dial, no dead CSS for the row
         self.assertNotIn("if (v.mode !== 'room')", legend)
-        self.assertIn('class="ovl"', legend)
-        self.assertIn('Overlay up to two more lines on this view', legend)
-        self.assertIn('.dtw-pi-legend .ovl .lbl', self.page)
+        self.assertNotIn('class="ovl"', legend)
+        self.assertNotIn('Add a line', legend)
+        for gone in ('Overlay up to two more lines', 'Overlay any two groups', 'splitLines(', 'piOverlayColors(', 'pilotSplits', 'dtwPilotSplit', 'splitPicker(', '.dtw-pi-legend .ovl'):
+            self.assertNotIn(gone, self.page, gone)
+        self.assertNotIn('splitLines', self._fn('drawPilotDial'))
         self.assertIn('piLegendRepaint(); }', self.page[self.page.find('window.dtwPilotPlay = async'):self.page.find('window.dtwPilotStop = async')])
         for blob in (gate, merge, legend, self._fn('piCohortSplits'), self._fn('piSeatSeries'), self._fn('piLiveSeries')):
             self.assertNotIn('\u2014', blob)

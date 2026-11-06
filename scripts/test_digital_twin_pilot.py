@@ -801,8 +801,9 @@ class UIStrings(unittest.TestCase):
         low = blob.lower()
         for tok in ('synth', 'modeled', 'estimated', 'pipeline', 'claude', 'hostmap', 's3', 'panel-projected', 'screen engine', 'nrg', 'marketcast', 'fishdog'):
             self.assertNotIn(tok, low, tok)
-        for must in ('Scorecard', 'By quadrant', 'Moderator guide', 'Overlay any two groups', 'Preparing the cut', 'Total positive', 'Definitely recommend'):
+        for must in ('Scorecard', 'By quadrant', 'Moderator guide', 'Preparing the cut', 'Total positive', 'Definitely recommend'):
             self.assertIn(must, blob)
+        self.assertNotIn('Overlay any two groups', blob)   # the overlay pickers are gone (Jenna 2026-11-05)
         css = page[page.find('.dtw-pi-wm {'):page.find('.dtw-pi-wm {') + 4000]
         self.assertNotIn('\u2014', css)
 
