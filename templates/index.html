@@ -75292,16 +75292,15 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var wpLabels = { wattpad_hot: 'Hot Stories', wattpad_originals: 'Originals',
                              wattpad_romance: 'Romance', wattpad_teen_fiction: 'Teen Fiction',
                              wattpad_fanfiction: 'Fanfiction', wattpad_fantasy: 'Fantasy' };
-            var wpPresent = wpKeys.filter(function(k) { return books[k]; });
-            if (wpPresent.length) {
-                var wk = (window.__trendsIQ && window.__trendsIQ.activeWattpad);
-                if (wpPresent.indexOf(wk) === -1) wk = wpPresent[0];
-                var wp = books[wk] || {};
-                if (wp.available && (wp.items || []).length) {
+            // Every Wattpad pill, not just the active one (approved exception
+            // in .cursor/rules/downloads-onscreen-only.mdc, 2026-11-06).
+            wpKeys.forEach(function(wk) {
+                var wp = books[wk];
+                if (wp && wp.available && (wp.items || []).length) {
                     rows = rows.concat(_tiqListRows(tabLabel, 'Wattpad - ' + (wpLabels[wk] || wk),
                                                     wp.items, false, byAuthor, _tiqBookGenreKeep));
                 }
-            }
+            });
             return { cols: _TIQ_LIST_COLS, rows: rows };
         }
 

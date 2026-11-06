@@ -45,5 +45,10 @@ bones and strict; loosen only case by case, by name, in the Exceptions list belo
 
 ## Exceptions (approved loosenings)
 
-None yet. Add each approved exception here: product, export, what's allowed,
-and the date approved.
+Add each approved exception here: product, export, what's allowed, and the
+date approved.
+
+- **Trends IQ, Books tab, "Download all":** the Wattpad section exports every
+  Wattpad category pill (Hot Stories, Originals, Romance, Teen Fiction,
+  Fanfiction, Fantasy), one section each, not only the selected pill. Columns
+  still follow rule 2. Approved 2026-11-06.
