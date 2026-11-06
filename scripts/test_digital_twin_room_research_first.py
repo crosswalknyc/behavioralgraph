@@ -86,6 +86,13 @@ LEDGER = {
         {'name': 'Starz signups attributed', 'value': 49782, 'unit': 'accounts', 'definition': 'Starz accounts opened or reopened after a S.W.A.T. Exiles touchpoint'}]}]},
     's_w_a_t_exiles_starz_season_1_opening_window': {'subject': 'S.W.A.T. Exiles (Starz, Season 1) opening window', 'entries': [{'metrics': [
         {'name': 'US viewers in window', 'value': 474957, 'unit': 'people', 'definition': 'US people who watched the S.W.A.T. Exiles premiere on Starz, Sep 25 to Sep 28, 2026'}]}]},
+    # the overlap read the live record turned out to hold (banked earlier the same day): this audience's own people on the title
+    'p_valley_viewers_and_w_a_t_exiles_overlap': {'subject': 'P-Valley Viewers and S.W.A.T. Exiles overlap on Starz', 'entries': [{'metrics': [
+        {'name': 'shared_audience', 'label': 'Shared audience, P-Valley and S.W.A.T. Exiles', 'value': 679241, 'unit': 'viewers', 'definition': 'distinct US people with at least one play of P-Valley in the trailing 12 months and at least one play of S.W.A.T. Exiles Season 1 on Starz'},
+        {'name': 'avid_overlap', 'label': 'Avid P-Valley fans in the overlap', 'value': 355831, 'unit': 'viewers', 'definition': 'people inside the Avid P-Valley tier who also watched S.W.A.T. Exiles Season 1'},
+        {'name': 'combined_unique', 'label': 'Combined unique reach of the two titles', 'value': 7287185, 'unit': 'viewers', 'definition': 'distinct US people who watched either title'}]}]},
+    'fightland_x_exiles': {'subject': 'Fightland viewers and S.W.A.T. Exiles overlap on Starz', 'entries': [{'metrics': [
+        {'name': 'shared', 'label': 'Shared audience, Fightland and S.W.A.T. Exiles', 'value': 324176, 'unit': 'viewers', 'definition': 'distinct US people with at least one play of Fightland and at least one play of S.W.A.T. Exiles on Starz'}]}]},
     'pvalley_on_starz_viewers': {'subject': 'PValley on Starz Viewers', 'entries': [{'metrics': [
         {'name': 'twin audience, US people', 'value': 6094342.0, 'unit': 'people', 'definition': 'people in the US in the twin'}]}]},
     'texas_registered_voters': {'subject': 'Texas registered voters', 'entries': [{'metrics': [{'name': 'registered', 'value': 18623931, 'unit': 'people', 'definition': 'on the rolls'}]}]},
@@ -234,7 +241,11 @@ class Ledger(unittest.TestCase):
         self.assertIn('twin audience, US people', metrics, 'the audience itself')
         self.assertNotIn('registered', metrics, 'an unrelated subject stays out')
         self.assertTrue(all(r['hit'] == 'asked' for r in rows if 'Exiles' in r['definition'] or 'Exiles' in r['subject']))
-        self.assertEqual(ROOM.record_reach_people(rows), 1872084, "the asked title's largest counted viewers, never a neighbor's count or a signup count")
+        self.assertEqual(ROOM.record_reach_people(rows), 1872084, "the asked title's largest counted viewers, never a neighbor's count, a signup count or the combined reach of two titles")
+        self.assertEqual(ROOM.record_overlap_people(rows, 'PValley on Starz Viewers'), 679241, "this audience's own counted people on the title, never the Fightland overlap or the avid slice")
+        self.assertEqual(ROOM.record_overlap_people(rows, 'Fightland viewers'), 324176)
+        self.assertEqual(ROOM.record_overlap_people(rows, 'Starz'), None, 'the platform name alone never claims an overlap read')
+        self.assertEqual(ROOM.record_overlap_people(rows, 'Outlander viewers'), None)
         # a crowded record (the live index carries a dozen Exiles tracker rows under 'Starz'): the neighbor's rate rows and the
         # title's own counts come first, so the analyst always sees them inside the limit
         crowded = copy.deepcopy(LEDGER)
@@ -267,6 +278,7 @@ class Derived(unittest.TestCase):
         self.assertFalse(any(c['applied'] for c in plan['basis']['ceilings']), 'no ceiling binds on this answer')
         self.assertEqual({c['ceiling'] for c in plan['basis']['ceilings']}, {'current reach', 'share of current audience', 'reach', 'share of audience', 'neighbor'})
         self.assertEqual(plan['basis']['record_reach_people'], 1872084)
+        self.assertIsNone(plan['basis']['record_overlap_people'])
         self.assertEqual(ROOM.has_banned(plan['line']), [], 'the line feeds the read; it carries no source language')
 
     def test_the_ceilings_bind(self):
@@ -333,6 +345,18 @@ class Derived(unittest.TestCase):
         self.assertTrue(any(c['ceiling'] == 'share of audience' and not c['applied'] and 'stated reason' in c['basis'] for c in p3['basis']['ceilings']))
         a4 = copy.deepcopy(a); a4['ceilings'].pop('share')
         self.assertAlmostEqual(ROOM.derived_plan(self.OPTS, a4, PEOPLE, seed='s')['targets']['a'], 3.0 + 4.0 / 3.0, places=1, msg='no share, no share ceiling')
+
+    def test_the_records_own_overlap_count_caps_the_engaged_rows(self):
+        a = copy.deepcopy(ANALYST)
+        a['options'][1].update(low_pct=12.0, high_pct=16.0)   # started: 13.3%, with the yes row 16.2% engaged against a counted 679,241 (11.1%)
+        a['ceilings']['share'].update(placement='over', reason='the counted overlap runs past the platform share')
+        plan = ROOM.derived_plan(self.OPTS, a, PEOPLE, record_reach=1872084, seed='s', record_overlap=679241)
+        self.assertLessEqual(plan['targets']['a'] + plan['targets']['b'], 679241 / PEOPLE * 100.0 + 0.01)
+        ro = next(c for c in plan['basis']['ceilings'] if c['ceiling'] == 'record overlap')
+        self.assertTrue(ro['applied']); self.assertIn('679,241', ro['basis'])
+        self.assertEqual(plan['basis']['record_overlap_people'], 679241)
+        plan2 = ROOM.derived_plan(self.OPTS, copy.deepcopy(ANALYST), PEOPLE, record_reach=1872084, seed='s', record_overlap=679241)
+        self.assertFalse(next(c for c in plan2['basis']['ceilings'] if c['ceiling'] == 'record overlap')['applied'], 'under it, nothing moves')
 
     def test_an_answer_that_cannot_place_the_board_is_no_plan(self):
         self.assertEqual(ROOM.derived_plan(self.OPTS, None, PEOPLE), {})
@@ -437,8 +461,9 @@ class Room(unittest.TestCase):
         self.assertEqual(tr['status'], 'derived')
         self.assertEqual(tr['basis']['neighbor']['rate_pct'], 22.9)
         self.assertEqual(tr['basis']['record_reach_people'], 1872084)
-        self.assertEqual({c['ceiling'] for c in tr['basis']['ceilings']}, {'current reach', 'share of current audience', 'reach', 'share of audience', 'neighbor'})
+        self.assertEqual({c['ceiling'] for c in tr['basis']['ceilings']}, {'current reach', 'share of current audience', 'reach', 'share of audience', 'record overlap', 'neighbor'})
         self.assertEqual(tr['basis']['share']['placement'], 'under')
+        self.assertEqual(tr['basis']['record_overlap_people'], 679241, "the record's overlap read rode into the room's ceilings")
         self.assertIn(LABELS['a'], rec['anchor']['targets'])
         self.assertIn('the count', rec['trail']['prior']['note'])
 

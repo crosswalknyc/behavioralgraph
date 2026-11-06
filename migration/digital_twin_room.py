@@ -1855,8 +1855,9 @@ def record_reach_people(neighbors: list) -> Optional[float]:
     for r in neighbors or []:
         if r.get('hit') != 'asked' or not r.get('asked_in_subject'):
             continue
-        text = f"{r.get('metric') or ''} {r.get('definition') or ''}".lower()
-        if str(r.get('unit') or '').lower() not in ('people', 'viewers', 'users', 'persons') or re.search(r"handoff|crossover|signup|account|convert|reactivat", text):
+        text = f"{r.get('subject') or ''} | {r.get('metric') or ''} {r.get('definition') or ''}".lower()
+        # a read of two titles together (an overlap, a combined reach, a shared audience) is not the thing's own count
+        if str(r.get('unit') or '').lower() not in ('people', 'viewers', 'users', 'persons') or re.search(r"handoff|crossover|signup|account|convert|reactivat|overlap|combined|shared|either|both|two titles", text):
             continue
         if not re.search(r"viewer|watch|audience|people|reach", text):
             continue
@@ -1865,6 +1866,35 @@ def record_reach_people(neighbors: list) -> Optional[float]:
         except (TypeError, ValueError):
             continue
         if v > 0 and (best is None or v > best):
+            best = v
+    return best
+
+
+def record_overlap_people(neighbors: list, subject: str) -> Optional[float]:
+    """The record's own count of THIS audience's people who watched the
+    thing asked about (an overlap or shared-audience read that names
+    both): the engaged rows may never exceed it. The smallest such count
+    when there are several; None when the record holds none."""
+    # the audience's own distinctive words (never the platform's name: a Fightland x Exiles overlap 'on Starz' is not this audience's)
+    subj = {w for w in _text_stems(subject) if w not in _TOPIC_STOP and w not in ('viewer', 'fan', 'audience', 'people', 'the', 'on', 'app') and w not in _PLATFORM_NAMES and len(w) >= 4}
+    if not subj:
+        return None
+    best = None
+    for r in neighbors or []:
+        if r.get('hit') != 'asked' or str(r.get('unit') or '').lower() not in ('people', 'viewers', 'users', 'persons'):
+            continue
+        text = f"{r.get('subject') or ''} | {r.get('metric') or ''} {r.get('definition') or ''}"
+        low = text.lower()
+        if not re.search(r"overlap|shared|both|also watched|and at least one play", low) or re.search(r"combined|either|unique reach|avid|signup|account", low):
+            continue
+        toks = {t for t in _text_stems(text) if len(t) >= 4}
+        if not any((s in t or t in s) for s in subj for t in toks):   # 'pvalley' meets 'valley'
+            continue
+        try:
+            v = float(r.get('value'))
+        except (TypeError, ValueError):
+            continue
+        if v > 0 and (best is None or v < best):
             best = v
     return best
 
@@ -2080,7 +2110,7 @@ def _engaged_fallback(options: list) -> tuple:
     return eng, cur
 
 
-def derived_plan(options: list, data: Optional[dict], total_people: int, record_reach: Optional[float] = None, seed: str = '') -> dict:
+def derived_plan(options: list, data: Optional[dict], total_people: int, record_reach: Optional[float] = None, seed: str = '', record_overlap: Optional[float] = None) -> dict:
     """The derived anchor from the analyst's answer, enforced: each engaged
     row sits in the bottom third of its range; the engaged rows together
     never exceed the thing's reach (the analyst's high, or the record's
@@ -2173,6 +2203,9 @@ def derived_plan(options: list, data: Optional[dict], total_people: int, record_
     if share_pct and share_f is None:
         ceilings.append({'ceiling': 'share of audience', 'cap_pct': None, 'rows': [labels[i] for i in engaged], 'was_pct': round(sum(target[i] for i in engaged if target.get(i) is not None), 2),
                          'applied': False, 'basis': ('over its platform share for a stated reason: ' + str(sh.get('reason') or ''))[:240]})
+    if record_overlap and record_overlap > 0:
+        # the record's own count of this audience's people who watched the thing: the engaged rows never exceed it
+        _cap(engaged, float(record_overlap) / float(total_people) * 100.0, 'record overlap', f"the record's own count of {int(record_overlap):,} of this audience who watched it")
     nb = c.get('neighbor') if isinstance(c.get('neighbor'), dict) else {}
     try:
         nb_rate = float(nb.get('rate_pct')) if nb.get('rate_pct') not in (None, '') else None
@@ -2213,7 +2246,7 @@ def derived_plan(options: list, data: Optional[dict], total_people: int, record_
     return {'kind': 'derived', 'targets': targets, 'weight': None, 'fill_voting': None, 'down': list(engaged), 'line': line, 'lead': lead,
             'basis': {'options': {labels[i]: dict(rows[i], target_pct=targets[i]) for i in ids if i in rows}, 'engaged': [labels[i] for i in engaged], 'current': [labels[i] for i in current],
                       'ceilings': ceilings, 'reach': c.get('reach') or {}, 'current_reach': c.get('current_reach') or {}, 'parent': c.get('parent') or {}, 'neighbor': nb, 'share': sh,
-                      'record_reach_people': record_reach, 'note': str(data.get('note') or '')[:600]}}
+                      'record_reach_people': record_reach, 'record_overlap_people': record_overlap, 'note': str(data.get('note') or '')[:600]}}
 
 
 def _default_options(kind: str, opts: list) -> list:
@@ -3808,7 +3841,7 @@ def run_question(ctx: dict) -> dict:
                 print(f"[twin-room] anchor desk skipped: {str(e)[:120]}")
                 derived_data = None
             try:
-                plan = derived_plan(opts_out, derived_data, total_people, record_reach=record_reach_people(neighbors), seed=seed)
+                plan = derived_plan(opts_out, derived_data, total_people, record_reach=record_reach_people(neighbors), seed=seed, record_overlap=record_overlap_people(neighbors, subject))
             except Exception as e:
                 traceback.print_exc()
                 print(f"[twin-room] derived anchor skipped: {str(e)[:120]}")
