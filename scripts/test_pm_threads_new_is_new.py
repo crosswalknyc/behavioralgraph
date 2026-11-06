@@ -285,6 +285,45 @@ class WidgetSource(unittest.TestCase):
         # priced-read offer keep the broad regex
         self.assertEqual(self.html.count("no( thanks?)?|not now|cancel( (that|it))?)[.! ]*$/i.test("), 5)
 
+    def test_switching_threads_lets_the_leaving_save_land_first(self):
+        """pmSwitchThread (and the project follow) activate only after the save
+        of the thread being left answered: the two used to race on the server's
+        index and the save could put the thread just left back as active."""
+        import shutil
+        import subprocess
+        import tempfile
+        node = shutil.which('node')
+        if not node:
+            self.skipTest('node not installed')
+        js = '\n'.join([
+            "var calls = [], adopted = null;",
+            "var window = {}; var _pmCarried = null; var synthChatHistory = [{ role: 'user', text: 'x' }];",
+            "var _pmThreadsIdx = { active: 'old1', threads: [] }; var _pmFollow = { key: '' };",
+            "function _pmHistorySave(o) { calls.push('save'); return new Promise(function (r) { setTimeout(function () { calls.push('saved'); r({ success: true }); }, 30); }); }",
+            "function _pmAdoptHistory(h) { adopted = h; }",
+            "function _pmProjectIdentity() { return null; }",
+            "function _pmThreadsRender() {} function _pmThreadsLoad() {}",
+            "function fetch(url, opts) { calls.push('fetch:' + url); return Promise.resolve({ json: function () { return Promise.resolve({ success: true, active: 'thr2', history: [{ role: 'user', text: 'old' }] }); } }); }",
+            self._fn('pmSwitchThread'),
+            "pmSwitchThread('thr2');",
+            "setTimeout(function () { console.log(JSON.stringify({ calls: calls, active: _pmThreadsIdx.active, adopted: adopted })); }, 300);",
+        ])
+        with tempfile.NamedTemporaryFile('w', suffix='.js', delete=False) as fh:
+            fh.write(js)
+            path = fh.name
+        try:
+            out = subprocess.run([node, path], capture_output=True, text=True, timeout=30)
+        finally:
+            os.unlink(path)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        got = json.loads(out.stdout.strip().splitlines()[-1])
+        self.assertEqual(got['calls'], ['save', 'saved', 'fetch:/api/brief-chat/threads/activate'])
+        self.assertEqual(got['active'], 'thr2')
+        self.assertEqual(len(got['adopted']), 1)
+        follow = self._fn('_pmThreadFollow')
+        self.assertLess(follow.index('_pmHistorySave({ leaving: true'), follow.index("fetch('/api/brief-chat/threads/bind'"))
+        self.assertIn('Promise.race', follow)
+
     def test_the_spliced_functions_run(self):
         """The widget functions, run in Node against stubs: a new chat waits for
         the leaving save, releases every armed step, posts to threads/new,
