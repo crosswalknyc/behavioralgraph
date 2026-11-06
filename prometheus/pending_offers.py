@@ -208,6 +208,15 @@ def _offer_turn(turn):
     meta = turn.get('meta') if isinstance(turn.get('meta'), dict) else {}
     if isinstance(meta.get('panel_offer'), dict):
         return True
+    try:
+        # the talent list's own offer (its chip or offer doc) quotes the
+        # same price line but is not a priced panel read: its lane owns
+        # the yes right after it (2026-10-15), so it never binds here
+        from . import talent_list_job as _tl
+        if _tl.last_offer([turn]):
+            return False
+    except Exception:
+        pass
     labels = []
     for o in (meta.get('options') or turn.get('options') or []):
         lbl = str((o.get('send') or o.get('label')) if isinstance(o, dict) else o or '').strip().lower()

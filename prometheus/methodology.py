@@ -183,7 +183,9 @@ def _fmt_date(v):
 # figure) within a few words of a viewing word. The word alone is not
 # one (Jay Patel 2026-10-30: a build quote that said "4 or more views"
 # and "the streaming surge" drew the whole counting block).
-_FIGURE_RX = re.compile(r"(?:\d{1,3}(?:,\d{3})+|\d{4,}|\d+(?:\.\d+)?\s*(?:million|m\b|k\b))", re.I)
+# a figure: a comma-grouped count, four or more digits, or a number with a
+# unit word ("2.4 billion hours" is a viewership figure too)
+_FIGURE_RX = re.compile(r"(?:\d{1,3}(?:,\d{3})+|\d{4,}|\d+(?:\.\d+)?\s*(?:billion|million|bn\b|m\b|k\b))", re.I)
 
 
 def carries_view_figure(text):
