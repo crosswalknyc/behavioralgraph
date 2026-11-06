@@ -2371,6 +2371,11 @@ def _exact_if_fresh(e):
     if not e:
         return None
     q = f"{e.get('q') or ''} {e.get('wl') or ''}"
+    # the subject's own name is not a window ("USA Today" read as the
+    # rolling word "today" and its banked answers aged out of replay)
+    subj = str(e.get('subject') or '').strip()
+    if subj:
+        q = re.sub(re.escape(subj), ' ', q, flags=re.IGNORECASE)
     if not _ROLLING_WINDOW_RX.search(q):
         return e
     try:
