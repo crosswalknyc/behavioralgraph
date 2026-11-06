@@ -68,6 +68,7 @@ def main():
     ap.add_argument('--twin', help='one twin key')
     ap.add_argument('--dry-run', action='store_true')
     ap.add_argument('--no-research', action='store_true', help='step 1 only (the cuts), no title research')
+    ap.add_argument('--force', action='store_true', help='rewrite a twin even while one of its tests is playing or preparing')
     args = ap.parse_args()
     import boto3
     from migration import digital_twin_sizing as SZ
@@ -78,11 +79,22 @@ def main():
     ts = time.strftime('%Y%m%d_%H%M%S', time.gmtime())
     report = []
     for key in _twins(s3, args.twin):
+        if not args.dry_run and not args.no_research:
+            # the research is the slow part: warm the day's cache on a throwaway copy, then size a fresh load and save at once,
+            # so a test playing on the page is not overwritten with a stale record
+            warm = load_twin(s3, key)
+            for sess in (warm or {}).get('pilot_sessions') or []:
+                if isinstance(sess, dict) and isinstance(sess.get('group'), dict):
+                    SZ.size_session(warm, sess, s3=s3, research=True)
         raw = s3.get_object(Bucket=BUCKET, Key=key)['Body'].read()
         twin = load_twin(s3, key)
         if not twin:
             continue
         name = (twin.get('meta') or {}).get('name')
+        live = [s.get('id') for s in (twin.get('pilot_sessions') or []) if isinstance(s, dict) and str(s.get('status') or '') in ('playing', 'preparing')]
+        if live and not args.dry_run and not args.force:
+            print(f"[{name}] skipped: a test is {'playing or preparing'} ({live}); run again when it has stopped, or pass --force")
+            continue
         changed = []
         for kind in ('pilot_sessions', 'panel_sessions'):
             for sess in twin.get(kind) or []:
