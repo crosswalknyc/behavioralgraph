@@ -680,7 +680,8 @@ _ASK_LEAD_RX = re.compile(
     r"^\W*(?:(?:hey|hi|ok|okay|so)[,\s]+)?"
     r"(?:please\s+|can you\s+|could you\s+|would you\s+|can we\s+|i want (?:you )?to\s+|i need (?:you )?to\s+|"
     r"i'?d like (?:you )?to\s+|let'?s\s+|i want a\s+|i need a\s+)?"
-    r"(?:(?:please\s+)?(?:value|valuate|valuation(?: of| on| for)?|price|appraise|assess|size up|run a valuation (?:on|of|for)|"
+    r"(?:(?:please\s+)?(?:value|valuate|valuation(?: of| on| for)?|price|appraise|assess|size up|"
+    r"(?:run|pull|do|start)\s+(?:a\s+|the\s+)?(?:brand[- ]partnership\s+|bpiq\s+)?valuation\s+(?:on|of|for)|"
     r"what(?:'s| is| was) the value of|how much (?:is|was)|what(?:'s| is| was))\s+)"
     r"(?:the\s+|a\s+|this\s+|our\s+|my\s+)?", re.I)
 _ASK_TAIL_RX = re.compile(
@@ -699,6 +700,16 @@ def _strip_ask_frame(rest):
     Nike"; "Value the Stanley x Target partnership. is" -> "Stanley x
     Target". A message with no lead is returned as given."""
     r = str(rest or '')
+    # A blank line ends the ask; what follows is context ("MMG x Lowe's
+    # \n\n MMG partnered with Lowe's during their ...", Jenna 2026-10-16,
+    # "my ask was so explicit"). Without this cut the prose was glued
+    # onto the brand partner.
+    paras = [x for x in re.split(r'\n\s*\n', r) if x.strip()]
+    if len(paras) > 1 and re.search(r'[A-Za-z]', paras[0]):
+        r = paras[0]
+    # A parenthetical after a name is an aside (a platform list:
+    # "MMG (YouTube, IG, TikTok) x Lowe's"), never a second name.
+    r = re.sub(r'[ \t]{2,}', ' ', re.sub(r'\s*\([^()]{0,80}\)', ' ', r))
     m = _ASK_LEAD_RX.match(r)
     if m and m.end() > 0:
         r = r[m.end():]
