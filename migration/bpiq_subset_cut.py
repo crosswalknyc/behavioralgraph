@@ -813,14 +813,24 @@ def build_subset_payload(
 
     if projected_universe is None:
         # Rule 5: subset projected universe = subset audience x parent
-        # projection weight. Same subject_id yields the same jitter,
-        # so peer brand reads land on byte-identical projected size.
+        # projection weight. The audience count already carries the
+        # subject-salted jitter, so the projected count follows it
+        # exactly and only a trailing zero is broken (a few units, salted
+        # by subject_id, so peer brand reads land on byte-identical
+        # projected sizes). A second, independent salt on the projected
+        # count moved the ratio about one percent off the parent weight
+        # once the shared helper started salting every value (2026-10-22)
+        # and tripped the Rule 5 verifier on every subset.
         raw_proj = int(round(new_panel * projection_weight))
+        new_projected = raw_proj
+        if new_projected > 0 and new_projected % 10 == 0:
+            new_projected += 1 + int(hashlib.sha256(
+                f"{subject_id}|projected|{raw_proj}".encode()).hexdigest()[:4], 16) % 9
     else:
         raw_proj = int(projected_universe)
-    new_projected = int(ensure_messy_sample_size(
-        f"{subject_id}|projected", raw_proj
-    ))
+        new_projected = int(ensure_messy_sample_size(
+            f"{subject_id}|projected", raw_proj
+        ))
 
     # For downstream per-row projected counts, use the parent's
     # canonical weight when available; fall back to the derived
