@@ -295,6 +295,12 @@ def thread_for_subject(uname, subject_key, subject_label=None, product=None, *, 
     host.s3_put_json(host.threads_index_key(uname), idx)
     if out.get('created'):
         host.s3_put_json(host.thread_key(uname, out['tid']), [])
+        # a thread the page just opened starts clean (Jenna 2026-11-05)
+        try:
+            from . import intake_reset as _ireset
+            _ireset.on_new_thread(uname, out['tid'])
+        except Exception as _fx:
+            _faults.note('service', _fx)
     for gone in out.get('retired') or []:
         try:
             host.s3_client.delete_object(Bucket=host.bucket, Key=host.thread_key(uname, gone))
@@ -456,6 +462,7 @@ def accept_offered_run(history, text):
 # "# lane: <name>" marker; scripts/test_pm_custom_ask_pricing.py holds
 # the source order to this tuple.
 LANE_ORDER = (
+    'intake_cancel',
     'bpiq_wizard',
     'offer_acceptance', 'priced_offer_acceptance', 'offer_answer', 'referents', 'document',
     'deck_conversion', 'reconcile', 'us_scope', 'number_provenance', 'confirm_answer', 'short_reply',
@@ -476,7 +483,7 @@ DETERMINISTIC_LANES = frozenset((
     'design_request', 'thread_followups', 'subiq_library', 'catalog', 'sizing_fallback', 'status',
     'deliverable_lookup', 'email_file', 'brand_coverage', 'definitions', 'capability', 'number_provenance', 'reconcile',
     'us_scope'))
-NEVER_PRICED_LANES = frozenset(('subject_set', 'pull_discussion', 'product_facts', 'help_writing', 'catalog_exists', 'where_watched',
+NEVER_PRICED_LANES = frozenset(('intake_cancel', 'subject_set', 'pull_discussion', 'product_facts', 'help_writing', 'catalog_exists', 'where_watched',
                                 'status_fast', 'status', 'pricing', 'catalog', 'definitions', 'deliverable_lookup',
                                 'email_file', 'brand_coverage', 'capability', 'number_provenance', 'reconcile', 'us_scope'))
 
@@ -595,6 +602,45 @@ def ask(user, body, *, via='session'):
         open_tabs = len((ctx or {}).get('other_tabs') or [])
     except Exception as _fx:
         _faults.note('service', _fx)
+
+    # lane: intake_cancel
+    # Cancel means gone, and a new thread starts clean (Jenna 2026-11-05:
+    # "if you cancel a wizard or open a new thread it should drop the
+    # wizard not just keep it open"). The first message on a thread no
+    # agent turn has landed in drops every armed intake the reader has
+    # (the client minted the id, or the idle rotation opened it). A
+    # cancel word while anything is armed (a store, the body the widget
+    # sent, the thread's last agent turn) drops everything for this
+    # reader and thread and answers with one plain line and no chips.
+    # With nothing armed the word routes on as it always did (a priced
+    # offer's own cancel line, the short-reply lane).
+    try:
+        from . import intake_reset as _ireset
+        _own_hist = [t for t in history if not (isinstance(t, dict) and t.get('carried'))]
+        if not _own_hist:
+            _ireset.on_fresh_thread(uname, tid, _own_hist)
+        if _ireset.is_cancel_text(text) or body.get('intake_cancel'):
+            _ic_armed = _ireset.armed(uname, tid, body=body, history=history)
+            if _ic_armed:
+                _res = _ireset.drop_all(uname, tid, close_offers=True, body=body, history=history)
+                raw = _ireset.cancel_payload(_res, confirm=bool(body.get('intake_confirm')))
+                _cs = str(body.get('_client_surface_sent') or body.get('surface') or '').strip().lower()
+                if _cs == 'interpret':
+                    raw = dict(_interpret_shape(raw), intake_dropped=raw['intake_dropped'], followups=[])
+                decision = {'surface': 'analyze', 'mode': None,
+                            'reason': 'intake_cancel', 'client_hint': None}
+                try:
+                    host.ask_hint(route='intake_cancel', outcome='dropped')
+                except Exception as _fx:
+                    _faults.note('service', _fx)
+                env = envelope.wrap(raw, surface='analyze',
+                                    decision=decision, thread_id=tid,
+                                    via=via)
+                _persist_turn(persist, uname, tid, history, text, env,
+                              raw, 'analyze')
+                return env, 200
+    except Exception as e:
+        _faults.note('service.intake_cancel', e)
 
     # lane: bpiq_wizard
     # Chip "Value a brand partnership" always opens step 1 (Jenna

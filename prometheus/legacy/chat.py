@@ -2088,11 +2088,18 @@ def _pm_new_thread_into(username, idx):
     threads = idx.setdefault('threads', [])
     act = next((t for t in threads if t.get('id') == idx.get('active')),
                None)
+    # Reuse only a thread that is empty where it is stored, and never
+    # wipe it (2026-11-05, Jenna: "if you click for a new one it opens
+    # a new thread not an old one"). The index's turn count lags the
+    # thread body: the widget's save of the thread it is leaving and
+    # its New-thread call race, and a count still at 0 made this hand
+    # back the SAME id and write [] over the turns the save then
+    # merged straight back in. The new thread was the old one.
     if act and not act.get('turns') \
-            and act.get('title') in (None, '', 'New chat'):
+            and act.get('title') in (None, '', 'New chat') \
+            and not (_pm_s3_json(_pm_thread_key(username, act['id']), []) or []):
         act['updated'] = now
         _pm_s3_put_json(_pm_threads_index_key(username), idx)
-        _pm_s3_put_json(_pm_thread_key(username, act['id']), [])
         return act['id']
     tid = uuid.uuid4().hex[:10]
     threads.append({'id': tid, 'title': 'New chat', 'created': now,

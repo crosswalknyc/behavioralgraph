@@ -87822,10 +87822,19 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             _pmThreadHeaderRefresh();
         }
         function _pmResetArmedStates() {
+            // Every armed step goes with the thread it was armed on (Jenna 2026-11-05: a new
+            // thread "should drop the wizard not just keep it open"). Before this only four of
+            // the twenty were cleared here; the valuation wizard's draft (_pmBpiqWizard, also in
+            // sessionStorage) survived a new thread and rode on every ask of it as
+            // body.bpiq_wizard, which re-armed the wizard on the server for each message.
+            try { _pmReleaseArmedSteps(); } catch (_) {}
             try { _pmMemoryConfirm = null; } catch (_) {}
             try { _pmPanelOffer = null; } catch (_) {}
             try { _pmAiqConfirm = null; } catch (_) {}
             try { _pmFwConfirm = null; } catch (_) {}
+            try { _pmBpiqWizard = null; _pmBpiqCollect = false; _pmBpiqConfirm = null; } catch (_) {}
+            try { sessionStorage.removeItem('pmBpiqWiz'); } catch (_) {}
+            try { _pmPpuOffer = null; } catch (_) {}
         }
         function _pmAdoptHistory(hist) {
             synthChatHistory = Array.isArray(hist) ? hist : [];
@@ -87884,16 +87893,31 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         function pmNewChat(done) {
             _pmCarried = null;   // a fresh chat starts clean (2026-10-30)
             window._pmLastActivityAt = Date.now();
-            // the thread being left keeps what was typed in it
+            // The thread being left keeps what was typed in it, and that save lands BEFORE the
+            // new thread is asked for (2026-11-05). The two used to race: the server reuses an
+            // active thread whose turn count it still read as 0, so when New landed first it
+            // handed back the SAME id, wiped its body, and the save then merged the old turns
+            // straight back in. The "new" thread was the old one. A save that does not answer
+            // within 1.5s no longer holds the new thread up.
+            var _leaving = null;
             try {
                 if (Array.isArray(synthChatHistory) && synthChatHistory.length) {
-                    _pmHistorySave({ leaving: true, keepalive: true });
+                    _leaving = _pmHistorySave({ leaving: true, keepalive: true });
                 }
             } catch (_) {}
-            fetch('/api/brief-chat/threads/new', {
-                method: 'POST', credentials: 'same-origin',
-                headers: { 'Content-Type': 'application/json' },
-                body: '{}',
+            // every armed step (the valuation wizard, a clarify, an offer) goes with the thread it
+            // was armed on, before anything can be typed into the new one (Jenna 2026-11-05)
+            try { _pmReleaseArmedSteps(); } catch (_) {}
+            var _wait = Promise.race([
+                Promise.resolve(_leaving).catch(function () { return null; }),
+                new Promise(function (res) { setTimeout(res, 1500); })
+            ]);
+            _wait.then(function () {
+                return fetch('/api/brief-chat/threads/new', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: '{}',
+                });
             }).then(function (r) { return r.json(); })
               .then(function (d) {
                     if (!d || !d.success) return;
@@ -87903,7 +87927,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     try { var idn = _pmProjectIdentity(); _pmFollow.key = idn ? idn.subject_key : ''; } catch (_) {}
                     _pmThreadsRender();
                     var inp = document.getElementById('synthChatInput');
-                    if (inp) inp.focus();
+                    if (inp) {
+                        inp.value = '';   // the composer starts clean with the thread
+                        try { inp.style.height = ''; } catch (_) {}
+                        inp.focus();
+                    }
                     if (typeof done === 'function') { try { done(d); } catch (_) {} }
               }).catch(function () {});
         }
@@ -91482,6 +91510,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (extra && extra.bpiq_confirm) {
                     _abody.bpiq_confirm = extra.bpiq_confirm;
                 }
+                if (extra && extra.intake_cancel) {
+                    _abody.intake_cancel = extra.intake_cancel;   // Cancel on an armed intake reaches the server, naming it (2026-11-05)
+                    if (extra.intake_confirm) _abody.intake_confirm = true;   // declined at the priced confirm step
+                }
                 if (extra && extra.bpiq_wizard) {
                     _abody.bpiq_wizard = extra.bpiq_wizard;
                 } else if (_pmBpiqWizard) {
@@ -91571,6 +91603,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     // it; the next message runs it, builds the
                     // profile instead, or declines.
                     _pmPanelOffer = data.panel_offer;
+                }
+                if (data.intake_dropped) {
+                    // the server dropped every armed intake (a cancel, Jenna 2026-11-05):
+                    // nothing in this tab may re-arm it on the next ask
+                    try { _pmReleaseArmedSteps(); } catch (_) {}
                 }
                 if (data.bpiq_wizard) {
                     _pmBpiqWizard = data.bpiq_wizard;
@@ -92269,10 +92306,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     return;
                 }
                 if (/^(never ?mind|no( thanks?)?|not now|cancel( (that|it))?)[.! ]*$/i.test(_aqLow)) {
+                    // the decline reaches the server, which drops the stashed brief so a later
+                    // bare "go ahead" can never pick it up and run it (Jenna 2026-11-05)
                     _pmAiqConfirm = null;
-                    synthChatPushTurn('agent',
-                        'Understood. Nothing is queued and nothing was charged. Ask me ' +
-                        'anything else when ready.');
+                    await _pmAnalyze(text, _pmCollectPageContext(), '', { intake_cancel: 'attribution', intake_confirm: true });
                     return;
                 }
                 _pmAiqConfirm = null;
@@ -92282,9 +92319,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }
             if (_pmAiqCollect) {
                 _pmAiqCollect = false;
-                if (/^(never ?mind|no( thanks?)?|not now|cancel( (that|it))?)[.! ]*$/i.test(text.trim())) {
-                    synthChatPushTurn('agent',
-                        'No problem. Ask me anything else when ready.');
+                if (/^(never ?mind|not now|cancel( (that|it))?)[.! ]*$/i.test(text.trim())) {
+                    // Cancel reaches the server, which drops the stashed brief and answers with one
+                    // plain line (Jenna 2026-11-05); a bare "no" is an answer to a step, never a cancel
+                    await _pmAnalyze(text, _pmCollectPageContext(), '', { intake_cancel: 'attribution' });
                     return;
                 }
                 await _pmAnalyze(text, _pmCollectPageContext(), '',
@@ -92309,10 +92347,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     return;
                 }
                 if (/^(never ?mind|no( thanks?)?|not now|cancel( (that|it))?)[.! ]*$/i.test(_fwLow)) {
+                    // the decline reaches the server, which drops the stashed brief so a later
+                    // bare "go ahead" can never pick it up and run it (Jenna 2026-11-05)
                     _pmFwConfirm = null;
-                    synthChatPushTurn('agent',
-                        'Understood. Nothing is queued and nothing was charged. Ask me ' +
-                        'anything else when ready.');
+                    await _pmAnalyze(text, _pmCollectPageContext(), '', { intake_cancel: 'flywheel', intake_confirm: true });
                     return;
                 }
                 _pmFwConfirm = null;
@@ -92322,9 +92360,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }
             if (_pmFwCollect) {
                 _pmFwCollect = false;
-                if (/^(never ?mind|no( thanks?)?|not now|cancel( (that|it))?)[.! ]*$/i.test(text.trim())) {
-                    synthChatPushTurn('agent',
-                        'No problem. Ask me anything else when ready.');
+                if (/^(never ?mind|not now|cancel( (that|it))?)[.! ]*$/i.test(text.trim())) {
+                    // Cancel reaches the server, which drops the stashed brief and answers with one
+                    // plain line (Jenna 2026-11-05); a bare "no" is an answer to a step, never a cancel
+                    await _pmAnalyze(text, _pmCollectPageContext(), '', { intake_cancel: 'flywheel' });
                     return;
                 }
                 await _pmAnalyze(text, _pmCollectPageContext(), '',
@@ -92355,10 +92394,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     return;
                 }
                 if (/^(never ?mind|no( thanks?)?|not now|cancel( (that|it))?)[.! ]*$/i.test(_twLow)) {
+                    // the decline reaches the server, which drops the stashed brief so a later
+                    // bare "go ahead" can never pick it up and run it (Jenna 2026-11-05)
                     _pmTwinConfirm = null;
-                    synthChatPushTurn('agent',
-                        'Understood. Nothing is queued and nothing was charged. Ask me ' +
-                        'anything else when ready.');
+                    await _pmAnalyze(text, _pmCollectPageContext(), '', { intake_cancel: 'digital_twin', intake_confirm: true });
                     return;
                 }
                 _pmTwinConfirm = null;
@@ -92368,9 +92407,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }
             if (_pmTwinCollect) {
                 _pmTwinCollect = false;
-                if (/^(never ?mind|no( thanks?)?|not now|cancel( (that|it))?)[.! ]*$/i.test(text.trim())) {
-                    synthChatPushTurn('agent',
-                        'No problem. Ask me anything else when ready.');
+                if (/^(never ?mind|not now|cancel( (that|it))?)[.! ]*$/i.test(text.trim())) {
+                    // Cancel reaches the server, which drops the stashed brief and answers with one
+                    // plain line (Jenna 2026-11-05); a bare "no" is an answer to a step, never a cancel
+                    await _pmAnalyze(text, _pmCollectPageContext(), '', { intake_cancel: 'digital_twin' });
                     return;
                 }
                 await _pmAnalyze(text, _pmCollectPageContext(), '',
@@ -92391,10 +92431,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     return;
                 }
                 if (/^(never ?mind|no( thanks?)?|not now|cancel( (that|it))?)[.! ]*$/i.test(_jqLow)) {
+                    // the decline reaches the server, which drops the stashed brief so a later
+                    // bare "go ahead" can never pick it up and run it (Jenna 2026-11-05)
                     _pmJiqConfirm = null;
-                    synthChatPushTurn('agent',
-                        'Understood. Nothing is queued and nothing was charged. Ask me ' +
-                        'anything else when ready.');
+                    await _pmAnalyze(text, _pmCollectPageContext(), '', { intake_cancel: 'digital_journey', intake_confirm: true });
                     return;
                 }
                 _pmJiqConfirm = null;
@@ -92404,9 +92444,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }
             if (_pmJiqCollect) {
                 _pmJiqCollect = false;
-                if (/^(never ?mind|no( thanks?)?|not now|cancel( (that|it))?)[.! ]*$/i.test(text.trim())) {
-                    synthChatPushTurn('agent',
-                        'No problem. Ask me anything else when ready.');
+                if (/^(never ?mind|not now|cancel( (that|it))?)[.! ]*$/i.test(text.trim())) {
+                    // Cancel reaches the server, which drops the stashed brief and answers with one
+                    // plain line (Jenna 2026-11-05); a bare "no" is an answer to a step, never a cancel
+                    await _pmAnalyze(text, _pmCollectPageContext(), '', { intake_cancel: 'digital_journey' });
                     return;
                 }
                 await _pmAnalyze(text, _pmCollectPageContext(), '',
@@ -92439,12 +92480,15 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         { bpiq_inputs: true, bpiq_wizard: _pmBpiqWizard || undefined });
                     return;
                 }
-                if (/^(never ?mind|no( thanks?)?|not now|cancel( (that|it))?)[.! ]*$/i.test(_bqLow)) {
+                if (/^(never ?mind|not now|cancel( (that|it))?)[.! ]*$/i.test(_bqLow)) {
+                    // Cancel means gone on the server too (Jenna 2026-11-05). The draft also
+                    // lives in the thread's store; a local line here left it armed, and the
+                    // next message walked straight back into the wizard. A bare "no" is an
+                    // answer to a step, never a cancel.
                     _pmBpiqConfirm = null;
                     _pmBpiqWizard = null;
                     try { sessionStorage.removeItem('pmBpiqWiz'); } catch (_) {}
-                    synthChatPushTurn('agent',
-                        'No problem. Ask me anything else when ready.');
+                    await _pmAnalyze(text, _pmCollectPageContext(), '', { intake_cancel: 'brand_partnership_wizard' });
                     return;
                 }
                 // Anything else reads as edited inputs: re-parse.
@@ -92455,11 +92499,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }
             if (_pmBpiqCollect) {
                 _pmBpiqCollect = false;
-                if (/^(never ?mind|no( thanks?)?|not now|cancel( (that|it))?)[.! ]*$/i.test(text.trim())) {
+                if (/^(never ?mind|not now|cancel( (that|it))?)[.! ]*$/i.test(text.trim())) {
+                    // the Cancel chip reaches the server, which drops the draft everywhere it
+                    // lives and answers with one plain line (Jenna 2026-11-05)
                     _pmBpiqWizard = null;
                     try { sessionStorage.removeItem('pmBpiqWiz'); } catch (_) {}
-                    synthChatPushTurn('agent',
-                        'No problem. Ask me anything else when ready.');
+                    await _pmAnalyze(text, _pmCollectPageContext(), '', { intake_cancel: 'brand_partnership_wizard' });
                     return;
                 }
                 await _pmAnalyze(text, _pmCollectPageContext(), '',
@@ -92819,6 +92864,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     var _gLead = _gMsg.trim().slice(0, 5);
                     if (_gLead.indexOf('{') === 0 || _gLead.indexOf('[') === 0 || _gLead.indexOf('```') === 0) {
                         _gMsg = '';
+                    }
+                    if (data.intake_dropped) {
+                        try { _pmReleaseArmedSteps(); } catch (_) {}   // the server dropped the armed intake (2026-11-05)
                     }
                     if (data.memory_confirm) {
                         // Cross-session memory confirm riding the

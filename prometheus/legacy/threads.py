@@ -138,6 +138,14 @@ def api_synth_chat_threads_new():
     uname = session.get('username') or ''
     idx = _load_threads_index(uname)
     tid = _C._pm_new_thread_into(uname, idx)
+    # a new thread starts clean: every armed intake (the valuation wizard,
+    # the flywheel, a stashed brief) goes with the thread it was on
+    # (Jenna 2026-11-05, prometheus.intake_reset)
+    try:
+        from prometheus import intake_reset as _ireset
+        _ireset.on_new_thread(uname, tid)
+    except Exception:
+        pass
     return jsonify({'success': True, 'active': tid,
                     'threads': sorted(idx['threads'],
                                       key=lambda t: str(t.get('updated') or ''),

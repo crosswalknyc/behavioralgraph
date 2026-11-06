@@ -325,7 +325,9 @@ def test_other_paths():
     check("dashboard asks fall back to the active thread on an unknown id", "if client == 'dashboard':" in svc)
     env_src = open(os.path.join(ROOT, 'prometheus', 'envelope.py'), encoding='utf-8').read()
     check("every reply passes the attach", 'attach_resume_chip(env, hit)' in env_src)
-    check("LANE_ORDER still opens with the wizard", S.LANE_ORDER[0] == 'bpiq_wizard')
+    # the global cancel (Jenna 2026-11-05, prometheus.intake_reset) is the one lane ahead of the wizard
+    check("LANE_ORDER still opens with the wizard, after the cancel lane",
+          S.LANE_ORDER[0] == 'intake_cancel' and S.LANE_ORDER[1] == 'bpiq_wizard')
 
 
 # ------------------------------------------------- 6. service end to end

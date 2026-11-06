@@ -341,8 +341,10 @@ def test_router_start_beats_pair_read():
     from prometheus.intents import bpiq_intent
     from prometheus import understand
     from prometheus.service import LANE_ORDER, lane_markers
-    check("LANE_ORDER leads with the wizard",
-          LANE_ORDER[0] == 'bpiq_wizard')
+    # only the global cancel (Jenna 2026-11-05: "cancel ... should drop the
+    # wizard") runs ahead of the wizard; nothing else may eat its turns
+    check("LANE_ORDER leads with the wizard, after the cancel lane",
+          LANE_ORDER[0] == 'intake_cancel' and LANE_ORDER[1] == 'bpiq_wizard')
     check("LANE_ORDER matches ask() markers",
           list(LANE_ORDER) == lane_markers())
     check("intents treat the chip as BPIQ",
