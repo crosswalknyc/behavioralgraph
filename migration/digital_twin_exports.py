@@ -204,16 +204,132 @@ _SENTENCE_END = re.compile(r'[.!?]["\'\u201d\u2019)]*(?=\s)')
 QUOTE_CAP = 520     # the room stores a seat's line to this many characters (digital_twin_room); a line that long was cut there
 
 
-def question_header(q: str) -> str:
+# A name the record knows prints with its own casing wherever a question prints (Jenna 2026-11-05: 'jennifer beals' on
+# the NCIS: New York report, typed that way). Whole-word spans, matched case-insensitively; everything else stays as typed.
+_AMBIGUOUS_NAMES = frozenset('target prime max general gap chase shell subway discover total mint dove tide bounty crest sprint boost bolt ring nest slack zoom'.split())
+_TITLE_TAIL = re.compile(r'[\s,:;-]+(?:the\s+)?(?:pilot|episode|ep|cut|trailer|teaser|season|part|clip|spot|test|screener|rough cut)\b.*$', re.I)
+
+
+def proper_case(text, names=(), labels=()) -> str:
+    """``text`` with every whole-word span that matches a known name,
+    case aside, replaced by the name's own spelling. ``names`` are the
+    proper nouns (people, characters, titles, platforms, brands): the
+    whole span takes the canonical form ('jennifer beals' -> 'Jennifer
+    Beals', 'ncis: new york' -> 'NCIS: New York'); a multi-word name with
+    nothing but a leading capital ('A comedy pilot') is left alone, since
+    nothing inside it is known to be a name. ``labels`` are cohort labels:
+    their inner casing is restored and the typed first letter stays
+    ('from the good influence's creators' -> 'from The Good Influence's
+    creators', never 'Voters' mid-sentence). A canonical form with no
+    capital, a two-letter form, and a lone word that reads as an ordinary
+    one (target, prime, max) change nothing. Never title-cases the text."""
+    s = str(text or '')
+    if not s.strip():
+        return s
+    items = [(' '.join(str(n or '').split()), False) for n in (names or [])] + [(' '.join(str(n or '').split()), True) for n in (labels or [])]
+    seen = set()
+    for canon, label_style in sorted(items, key=lambda t: -len(t[0])):
+        key = canon.lower()
+        if len(canon) < 3 or key in seen or canon == key:
+            continue
+        seen.add(key)
+        inner = canon[1:] != canon[1:].lower()
+        if ' ' not in canon and key in _AMBIGUOUS_NAMES:
+            continue
+        if ' ' in canon and not inner:
+            continue     # only a leading capital: a label or a sentence-style title, not a name to force mid-sentence
+        rx = re.compile(r'(?<![A-Za-z0-9])' + re.escape(canon).replace(r'\ ', r'\s+') + r'(?![A-Za-z0-9])', re.I)
+
+        def rep(m, canon=canon, label_style=label_style):
+            got = m.group(0)
+            if got == canon:
+                return got
+            return (got[0] + canon[1:]) if label_style else canon
+        s = rx.sub(rep, s)
+    return s
+
+
+def known_names(session: dict, payload: Optional[dict] = None) -> dict:
+    """The names a room or test record knows, for ``proper_case``:
+    {'names': [...], 'labels': [...]}. Names: the twin, the title (and
+    the title without its 'Pilot' / 'episode 2' tail), the people the
+    setup named and their characters, the talent read and the talent
+    attached, the characters rated, the comps, the platforms and brands
+    the twin carries. Labels: the cohort labels on the room."""
+    s = session if isinstance(session, dict) else {}
+    p = payload if isinstance(payload, dict) else {}
+    names, labels = [], []
+
+    def add(bucket, v):
+        if isinstance(v, dict):
+            v = v.get('label') or v.get('name') or v.get('title') or v.get('actor')
+        v = ' '.join(str(v or '').split())
+        if v:
+            bucket.append(v)
+    meta = p.get('meta') or {}
+    add(names, meta.get('name'))
+    add(names, meta.get('subject'))
+    media = s.get('media') or {}
+    for t in (s.get('title'), media.get('title'), media.get('platform_label')):     # never the cut label ('Cut A' would catch 'cut a scene')
+        add(names, t)
+        short = _TITLE_TAIL.sub('', str(t or '')).strip(' ,:;-')
+        if short and short.lower() != str(t or '').strip().lower():
+            add(names, short)
+    try:
+        from migration.digital_twin_talent_read import named_people
+        for e in named_people(s):
+            add(names, e.get('name'))
+            add(names, e.get('character'))
+    except Exception:
+        for c in s.get('cast') or []:
+            for part in re.split(r'\s+as\s+', str(c or ''), maxsplit=1):
+                add(names, part)
+    tr = s.get('talent_read') if isinstance(s.get('talent_read'), dict) else {}
+    for e in tr.get('people') or []:
+        add(names, e)
+    for r in s.get('talent_attach') or []:
+        if isinstance(r, dict):
+            add(names, r.get('talent'))
+    chars = ((s.get('diagnostics') or {}).get('characters') or {}) if isinstance(s.get('diagnostics'), dict) else {}
+    for c in chars.get('characters') or []:
+        add(names, c)
+    for c in s.get('comps') or []:
+        add(names, c)
+    ident = p.get('identity') or {}
+    for row in list(ident.get('platforms') or []) + list(ident.get('purchase') or []) + list(ident.get('talent') or []) + list(p.get('people') or []):
+        add(names, row)
+    g = s.get('group') or {}
+    for sg in g.get('segments') or []:
+        add(labels, sg)
+    for r in g.get('roster') or []:
+        if isinstance(r, dict):
+            add(labels, r.get('segment'))
+            add(labels, r.get('cohort'))
+    for c in s.get('cohorts') or []:
+        add(labels, c)
+
+    def dedupe(xs):
+        out, seen = [], set()
+        for x in xs:
+            if x.lower() not in seen:
+                seen.add(x.lower())
+                out.append(x)
+        return out
+    return {'names': dedupe(names), 'labels': dedupe(labels)}
+
+
+def question_header(q: str, names=(), labels=()) -> str:
     """The header of a question page: the question as the moderator
     asked it (Jenna 2026-11-05: "the header on each page should just be
-    the question"), whitespace collapsed, the first letter capitalized,
+    the question"), whitespace collapsed, the names the record knows in
+    their own casing (``proper_case``), the first letter capitalized,
     the question mark kept, never shortened. A question typed with no
     end mark gets one ('?' when it opens like a question, else a full
     stop)."""
     s = ' '.join(str(q or '').split())
     if not s:
         return 'What the room was asked.'
+    s = proper_case(s, names, labels)
     s = s[0].upper() + s[1:]
     if not s.endswith(_TERMINAL):
         first = re.sub(r'[^a-z]', '', s.split()[0].lower())
@@ -377,7 +493,7 @@ def _pages(payload: dict) -> list:
             q = qs[-1]
             # the header is the question as asked, never a sentence drawn from the read (Jenna 2026-11-05)
             lead = question_lead_line(q.get('distribution'))
-            pages.append({'kind': 'table', 'eyebrow': f"Question {len(qs)}", 'header': question_header(q.get('q')), 'sub': f"Focus Group IQ, {ps.get('title')}." + (f" {lead}" if lead else ''),
+            pages.append({'kind': 'table', 'eyebrow': f"Question {len(qs)}", 'header': question_header(q.get('q'), **known_names(ps, payload)), 'sub': f"Focus Group IQ, {ps.get('title')}." + (f" {lead}" if lead else ''),
                           'rows': [(r['label'], f"{r['pct']}%", f"{r['people']:,} people") for r in (q.get('distribution') or [])[:8]], 'head': ('Answer', 'Share', 'People'),
                           'body': [f"{v['name']}, {v['age']}, {v['city']}: {clean_quote(v.get('line'))}" for v in (q.get('voices') or [])[:3]], 'dark': True})
     pages.append({'kind': 'bullets', 'header': 'What to do next.', 'sub': '', 'body': list(rd.get('what_to_do') or [])[:4], 'dark': False})
@@ -1019,9 +1135,10 @@ def build_panel_pdf(payload: dict, session: dict, portrait_fn=None) -> bytes:
     size, pic, floor = 10, 0.34 * 72, PANEL_FLOOR
     lead = size * 1.42
     font = d.f['medium']
+    kn = known_names(session, payload)     # a name the record knows prints in its own casing, however it was typed
     for i, q in enumerate(session.get('questions') or []):
         n = i + 1
-        header = question_header(q.get('q'))
+        header = question_header(q.get('q'), **kn)
         y = d.new_page(i % 2 == 1, f"Question {n}", header, question_lead_line(q.get('distribution')))
         rows = [(r['label'], f"{r['pct']}%", f"{int(r['people']):,} people") for r in (q.get('distribution') or [])[:8]]
         if rows:
@@ -1800,5 +1917,5 @@ def pilot_deck_filename(payload: dict, session: dict) -> str:
 __all__ = ['build_deck', 'deck_filename', 'build_pdf', 'pdf_filename', 'build_panel_pdf', 'panel_pdf_filename',
            'build_pilot_pdf', 'pilot_pdf_filename', 'build_pilot_deck', 'pilot_deck_filename',
            'room_pages', 'moments_pages', 'segment_shares', 'draw_roster_pdf', 'ROSTER_FACES', 'MOMENTS_ON_PAGE',
-           'question_header', 'question_lead_line', 'clean_quote', 'fit_quote', 'QUOTE_CAP', 'PANEL_FLOOR',
+           'question_header', 'question_lead_line', 'clean_quote', 'fit_quote', 'QUOTE_CAP', 'PANEL_FLOOR', 'proper_case', 'known_names',
            'seat_pages', 'seat_entries', 'draw_seats_pdf', 'bio_paragraphs', 'SEATS_PER_PAGE', 'SEATS_HEADER', 'SEATS_HEADER_MORE']

@@ -27,7 +27,7 @@ from typing import Optional
 from migration.digital_twin_engine import human_people, pct1
 from migration.digital_twin_exports import (
     GRAPHITE, SLATE, OFFWHITE, GREEN, OLIVE, ORCHID, PAVEMENT, BODY_DARK, MUTED_DARK, BODY_LIGHT, MUTED_LIGHT, _words, _pct, _clock, _scorecard_rows, _quadrant_rows, _norm_note, build_deck, _Doc, _fin,
-    question_header, question_lead_line, fit_quote,
+    question_header, question_lead_line, fit_quote, proper_case, known_names,
 )
 # the room pages ride inside report_pages so every format carries them (2026-11-04)
 from migration.digital_twin_exports import room_pages as _room_pages, moments_pages as _moments_pages, draw_roster_pdf as _draw_roster_pdf
@@ -372,12 +372,14 @@ def _sorted_questions(session: dict) -> list:
     return sorted(qs, key=lambda q: str(q.get('asked_at') or q.get('started_at') or ''))
 
 
-def _question_page(rec: dict, session: dict, dark: bool, n: Optional[int] = None) -> dict:
+def _question_page(rec: dict, session: dict, dark: bool, n: Optional[int] = None, kn: Optional[dict] = None) -> dict:
     """One question's page: the eyebrow 'Question N', the header the
     question as the moderator asked it (Jenna 2026-11-05: never a
-    sentence drawn from the lead answer), the sub when it was asked and
-    the lead answer with its share and people."""
+    sentence drawn from the lead answer; a name the record knows in its
+    own casing), the sub when it was asked and the lead answer with its
+    share and people."""
     rows = _q_rows(rec)
+    kn = kn or {}
     seats_total = rec.get('seats_total') or len(((session or {}).get('group') or {}).get('roster') or [])
     split = []
     for r in rows[:8]:
@@ -392,7 +394,7 @@ def _question_page(rec: dict, session: dict, dark: bool, n: Optional[int] = None
         who = ', '.join(str(x) for x in (v.get('name'), v.get('age'), v.get('city')) if x not in (None, ''))
         voices.append(_clean(f"{who}: {v['line']}" if who else str(v['line'])))
     lead_line = question_lead_line(rows, people_fmt=human_people)
-    return {'kind': 'question', 'eyebrow': f"Question {n}" if n else 'Question', 'header': _clean(question_header(rec.get('q'))),
+    return {'kind': 'question', 'eyebrow': f"Question {n}" if n else 'Question', 'header': _clean(question_header(rec.get('q'), kn.get('names') or (), kn.get('labels') or ())),
             'sub': _clean(f"{_q_when(rec, session)}." + (f" {lead_line}" if lead_line else '')),
             'framing': _clean(str(rec.get('framing') or '')), 'head': ('Answer', 'Share', 'People and seats'), 'rows': split,
             'read': _clean(str(rec.get('read') or '')), 'voices': voices,
@@ -401,23 +403,27 @@ def _question_page(rec: dict, session: dict, dark: bool, n: Optional[int] = None
             'seats_total': seats_total, 'dark': dark}
 
 
-def _question_pages(session: dict) -> list:
+def _question_pages(session: dict, kn: Optional[dict] = None) -> list:
     """The section: an opener listing every question with its lead
     answer (when there is more than one, or one is still being answered),
-    then one page per answered question, in the order they were asked."""
+    then one page per answered question, in the order they were asked.
+    ``kn`` (``known_names``) puts the names the record knows in their own
+    casing wherever a question prints."""
     qs = _sorted_questions(session)
     if not qs:
         return []
+    kn = kn or {}
+    cased = lambda q: proper_case(' '.join(str(q.get('q') or '').split()), kn.get('names') or (), kn.get('labels') or ())   # noqa: E731
     done = [q for q in qs if _q_stage(q) == 'done']
     pending = [q for q in qs if _q_stage(q) == 'pending']
     failed = [q for q in qs if _q_stage(q) == 'failed']
     notes = []
     if pending:
         count = 'one question' if len(pending) == 1 else f"{len(pending)} questions"
-        notes.append(f"The room was {STILL_ANSWERING} on {count}: " + '; '.join(f"\"{_short(str(q.get('q')), 80)}\"" for q in pending[:3]) + '.')
+        notes.append(f"The room was {STILL_ANSWERING} on {count}: " + '; '.join(f"\"{_short(cased(q), 80)}\"" for q in pending[:3]) + '.')
     if failed:
         notes.append(f"The room did not finish {'one question' if len(failed) == 1 else str(len(failed)) + ' questions'}: "
-                     + '; '.join(f"\"{_short(str(q.get('q')), 80)}\"" for q in failed[:3]) + '. Ask it again and it runs fresh.')
+                     + '; '.join(f"\"{_short(cased(q), 80)}\"" for q in failed[:3]) + '. Ask it again and it runs fresh.')
     pages = []
     if len(done) >= 2 or notes:
         after = [bool(_q_after_wrap(q, session)) for q in done]
@@ -435,14 +441,14 @@ def _question_pages(session: dict) -> list:
         for q, aw in zip(done, after):
             lead = _q_lead(_q_rows(q))
             clock = _q_clock(q)
-            rows.append(((f"{clock}  " if clock else '') + _clean(_short(str(q.get('q')), 64)), _pct(lead['pct']) if lead else '',
+            rows.append(((f"{clock}  " if clock else '') + _clean(_short(cased(q), 64)), _pct(lead['pct']) if lead else '',
                          _clean((lead['label'][:46] if lead else '') + (' (after the wrap)' if aw else ''))))
         pages.append({'kind': 'table', 'header': _words(header), 'sub': 'Each question has its own page: the split, the read, the voices and what the room knew.' if done else '',
                       'head': ('Clock and question', 'Lead share', 'Lead answer'), 'rows': rows[:12], 'body': [_clean(x) for x in notes], 'dark': True})
     opener = bool(pages)     # the opener is dark; the question pages alternate from the other ground
     number = {id(q): k + 1 for k, q in enumerate(qs)}     # 'Question N' counts every question as asked, so the numbers match the room
     for i, q in enumerate(done):
-        pages.append(_question_page(q, session, dark=(i % 2 == 1) if opener else (i % 2 == 0), n=number.get(id(q))))
+        pages.append(_question_page(q, session, dark=(i % 2 == 1) if opener else (i % 2 == 0), n=number.get(id(q)), kn=kn))
     return pages
 
 
@@ -742,8 +748,9 @@ def report_pages(payload: dict, session: dict, portrait_fn=None, with_chart: boo
         nots = scenes.get('not_recommending') or []
         pages.append({'kind': 'table', 'header': 'The scenes liked least, and why some would not recommend it.', 'sub': _clean(('Reasons for not recommending: ' + '; '.join(n['line'] for n in nots[:3])) if nots else ''),
                       'head': ('Scene', 'Mentions', 'Quote'), 'rows': rows, 'dark': False})
-    # the questions the moderator put to the room, during the cut and after it wrapped (Jenna 2026-11-04)
-    pages.extend(_question_pages(session))
+    # the questions the moderator put to the room, during the cut and after it wrapped (Jenna 2026-11-04); a name the
+    # record knows (the cast, the title, the characters, the platforms, the cohorts) prints in its own casing however typed
+    pages.extend(_question_pages(session, kn=known_names(session, payload)))
     # who was in the room, seat by seat (Jenna 2026-11-05): the face, who they are, the cohort they stood in for, the people
     # each one stands for (of the people the room stands for, the same figure as the scorecard page), and the bio
     pages.extend(_seat_pages(session, portrait_fn=portrait_fn, clean=_clean, people_total=room_total, start_dark=not bool(pages[-1].get('dark'))))

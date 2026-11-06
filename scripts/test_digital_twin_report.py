@@ -99,6 +99,12 @@ def _blob(pages):
     return json.dumps([{k: v for k, v in p.items() if k != 'image'} for p in pages], default=str).lower()
 
 
+def _slides_text(deck: bytes) -> list:
+    import io
+    from pptx import Presentation
+    return [' '.join(sh.text_frame.text for sh in sl.shapes if sh.has_text_frame) for sl in Presentation(io.BytesIO(deck)).slides]
+
+
 class QuestionPages(unittest.TestCase):
     def test_one_page_per_answered_question_in_asked_order(self):
         twin, sess = _session()
@@ -141,6 +147,17 @@ class QuestionPages(unittest.TestCase):
         self.assertEqual(q1['talk'][0], 'People online keep posting the diner fight clip.')
         self.assertNotIn('fifth fact', _blob([q1]))
         self.assertNotIn('fourth talk', _blob([q1]))
+
+    def test_a_name_the_record_knows_prints_in_its_own_casing(self):
+        twin, sess = _session()
+        sess['cast'] = ['Mae', 'Ray']
+        sess['questions'][1]['q'] = 'did you want more of mae or ray after the diner fight?'     # q1, typed lowercase
+        pages = R.report_pages({'meta': twin['meta']}, sess)
+        q1 = next(p for p in pages if p['kind'] == 'question' and 'diner fight' in p['header'])
+        self.assertEqual(q1['header'], 'Did you want more of Mae or Ray after the diner fight?', 'the cast names restored, the rest as typed (Jenna 2026-11-05)')
+        opener = next(p for p in pages if p['header'].startswith('The room answered'))
+        self.assertIn('Did you want more of Mae or Ray after the diner fight?'[:40], ' '.join(r[0] for r in opener['rows']))
+        self.assertIn('Did you want more of Mae or Ray after the diner fight?', ' '.join(_slides_text(R.build_report_deck({'meta': twin['meta']}, sess))))
 
     def test_a_question_after_the_wrap_says_so(self):
         twin, sess = _session()

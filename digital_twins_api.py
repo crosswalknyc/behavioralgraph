@@ -1269,6 +1269,18 @@ def dt_panel_rename(key, sid):
     return _nocache(jsonify({'success': True, 'session': sess, 'title': name}))
 
 
+def _cased_question(q: str, sess: dict, payload: dict) -> str:
+    """The question as typed, with the names the room or test knows (the
+    cast, the title, the characters, the platforms, the cohorts) in
+    their own casing, so the thread's echo and every export print
+    'Jennifer Beals' however it was typed. Never fails an ask."""
+    try:
+        from migration.digital_twin_exports import known_names, proper_case
+        return proper_case(q, **known_names(sess, payload)) or q
+    except Exception:
+        return q
+
+
 @bp.route(f'{PREFIX}/<path:key>/panel/<sid>/ask', methods=['POST'])
 def dt_panel_ask(key, sid):
     user, err = _gate()
@@ -1284,6 +1296,7 @@ def dt_panel_ask(key, sid):
     q = ' '.join(str(body.get('q') or body.get('question') or '').split())
     if not q:
         return jsonify({'success': False, 'error': 'Ask the room something.'}), 400
+    q = _cased_question(q, sess, payload)     # a name the record knows keeps its own casing in the thread and the exports (Jenna 2026-11-05)
     stimulus = body.get('stimulus') if isinstance(body.get('stimulus'), dict) else None
     ask_again = bool(body.get('ask_again'))
     if not ask_again:
@@ -2173,6 +2186,7 @@ def dt_pilot_ask(key, sid):
     q = ' '.join(str(body.get('q') or body.get('question') or '').split())
     if not q:
         return jsonify({'success': False, 'error': 'Ask the room something.'}), 400
+    q = _cased_question(q, sess, payload)     # a name the record knows keeps its own casing in the thread and the exports (Jenna 2026-11-05)
     if not sess.get('play_charged'):
         return jsonify({'success': False, 'error': 'Press Play first. The room answers once the cut is running.'}), 400
     funds = _charge_pilot(user, payload, sess, for_play=False, body=body)      # the tier cap and the upgrade

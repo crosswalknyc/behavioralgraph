@@ -334,6 +334,70 @@ class WhoWasInTheRoom(unittest.TestCase):
             self.assertEqual(low, [], low[:3])
 
 
+class KnownNames(unittest.TestCase):
+    """A name the record knows prints in its own casing wherever a
+    question prints (Jenna 2026-11-05: 'jennifer beals' on the NCIS: New
+    York report, typed that way); everything else stays as typed."""
+    NAMES = ['Jennifer Beals', 'LL Cool J', 'Scott Caan', 'Lena', 'NCIS: New York', 'A comedy pilot', 'Paramount+', 'Netflix', 'Target', 'Mae']
+    LABELS = ["Voters who engaged with organic social media content from The Good Influence's creators", 'Women under 35']
+
+    def test_names_the_record_knows_take_their_own_casing(self):
+        self.assertEqual(X.question_header('what would make you watch another episode? if you knew there was more jennifer beals?', self.NAMES),
+                         'What would make you watch another episode? if you knew there was more Jennifer Beals?')
+        self.assertEqual(X.question_header('how did you feel about ll cool j and scott caan?', self.NAMES), 'How did you feel about LL Cool J and Scott Caan?')
+        self.assertEqual(X.question_header('did ncis: new york hold you after the cold open', self.NAMES), 'Did NCIS: New York hold you after the cold open?', 'the title, when it is on the record')
+        self.assertEqual(X.question_header('did ncis: new york hold you after the cold open', ['Jennifer Beals']), 'Did ncis: new york hold you after the cold open?', 'not when it is not')
+        self.assertEqual(X.question_header('was lena the reason you stayed, or the boat deck?', self.NAMES), 'Was Lena the reason you stayed, or the boat deck?')
+        self.assertEqual(X.question_header("what about jennifer beals' last scene?", self.NAMES), "What about Jennifer Beals' last scene?", 'a possessive still matches the whole-word span')
+        self.assertEqual(X.question_header('WAS JENNIFER BEALS the draw?', self.NAMES), 'Was JENNIFER BEALS the draw?'.replace('JENNIFER BEALS', 'Jennifer Beals').replace('Was', 'WAS'), 'the canonical spelling either way; the rest as typed')
+
+    def test_unknown_words_and_the_rest_stay_as_typed(self):
+        self.assertEqual(X.question_header('is the ending too long?', self.NAMES), 'Is the ending too long?')
+        self.assertEqual(X.question_header('did the detective or the captain land better?', self.NAMES), 'Did the detective or the captain land better?', 'an unknown lowercase word stays')
+        self.assertEqual(X.question_header('would you watch a comedy pilot like this on netflix or paramount+?', self.NAMES), 'Would you watch a comedy pilot like this on Netflix or Paramount+?',
+                         'a title with nothing but a leading capital is never forced mid-sentence; the platforms are')
+        self.assertEqual(X.question_header('is target the store you think of first?', self.NAMES), 'Is target the store you think of first?', 'a lone word that reads as an ordinary one stays')
+        self.assertEqual(X.question_header('did women under 35 like lena more than mae did?', self.NAMES, self.LABELS), 'Did women under 35 like Lena more than Mae did?')
+        self.assertEqual(X.question_header("what do voters who engaged with organic social media content from the good influence's creators think?", self.NAMES, self.LABELS),
+                         "What do voters who engaged with organic social media content from The Good Influence's creators think?", 'a cohort label keeps the typed first letter; the names inside it are restored')
+        self.assertEqual(X.proper_case('Jennifer Beals is already right.', self.NAMES), 'Jennifer Beals is already right.')
+        self.assertEqual(X.proper_case('', self.NAMES), '')
+        self.assertNotEqual(X.question_header('what did you make of the pilot?', self.NAMES), 'What Did You Make Of The Pilot?', 'never title-cased')
+
+    def test_known_names_come_from_the_record(self):
+        from test_digital_twin_talent_read import _session as _ncis
+        twin, sess = _ncis()
+        kn = X.known_names(sess, twin)
+        for n in ('Jennifer Beals', 'LL Cool J', 'Scott Caan', 'Lena', 'NCIS: New York Pilot', 'NCIS: New York'):
+            self.assertIn(n, kn['names'], n)
+        self.assertNotIn('Cut A', kn['names'], "the cut label is not a name ('cut a scene')")
+        twin['identity']['platforms'] = [{'label': 'Paramount+', 'reach_pct': 40.0}]
+        twin['identity']['purchase'] = [{'label': 'Old Navy', 'pct': 12.0}]
+        kn = X.known_names(sess, twin)
+        self.assertIn('Paramount+', kn['names'])
+        self.assertIn('Old Navy', kn['names'])
+        self.assertEqual(X.known_names({}, {}), {'names': [], 'labels': []})
+        pages = R.report_pages({'meta': twin['meta']}, sess)
+        heads = [p['header'] for p in pages if p['kind'] == 'question']
+        self.assertIn('How did you feel about LL Cool J and Scott Caan?', heads)
+        self.assertIn('What would make you watch another episode? if you knew there was more Jennifer Beals?', heads)
+        opener = next(p for p in pages if p['header'].startswith('The room answered'))
+        self.assertTrue(any('LL Cool J and Scott Caan' in r[0] for r in opener['rows']), 'the opener rows too')
+
+    def test_the_room_export_and_the_ask_route_carry_the_casing(self):
+        sess = _session()
+        sess['questions'][0]['q'] = 'did good influence content from the voters cohort sway you?'
+        pdf = X.build_panel_pdf({'meta': {'name': 'Good Influence', 'subject': 'Good Influence'}}, sess)
+        page = next(p for p in _pdf_pages(pdf) if p.startswith('QUESTION 1 '))
+        self.assertIn('Did Good Influence content from the voters cohort sway you?', page, "the twin's name from the record; 'voters' as typed")
+        try:
+            import digital_twins_api as API
+        except Exception as e:
+            self.skipTest(f'api module not importable here: {e}')
+        self.assertEqual(API._cased_question('how did jennifer beals land?', {'cast': ['Jennifer Beals as Lena']}, {'meta': {}}), 'how did Jennifer Beals land?', 'the thread echoes the question with the name restored and nothing else changed')
+        self.assertEqual(API._cased_question('how did it land?', {}, {}), 'how did it land?')
+
+
 class TwinDeckPanelPage(unittest.TestCase):
     def test_the_twin_deck_panel_page_is_headed_by_the_question(self):
         sess = _session()
