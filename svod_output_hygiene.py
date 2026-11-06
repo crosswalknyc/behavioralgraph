@@ -57,6 +57,8 @@ N_COLS = 10
 
 _TOUCH_RE = re.compile(r"^(\d+)(?:st|nd|rd|th) Touchpoint$")
 _MONTH_RE = re.compile(r"^\d{4}-\d{2}$")
+_EP_RE = re.compile(r"^Episode \d+$")
+_TIMING_LABEL_RE = re.compile(r"^(Same Day|Day \d+|\d+ Days? Later)$")
 
 # Residual tolerances: differences at or below these are rounding
 # artifacts of the panel-scale divisor and are safe to reconcile in
@@ -194,6 +196,21 @@ class _Doc:
             "before": str(before), "after": after, "klass": klass,
         })
 
+    def set_text(self, i, col, text: str, label: str, klass: str):
+        """Set a non-numeric cell (percentages) with change tracking."""
+        r = self.rows[i]
+        if len(r) < N_COLS:
+            r += [""] * (N_COLS - len(r))
+            self.rows[i] = r
+        before = str(r[col])
+        if before.strip() == text:
+            return
+        r[col] = text
+        self.changes.append({
+            "row": i, "col": col, "label": label,
+            "before": before, "after": text, "klass": klass,
+        })
+
     def flag(self, msg):
         self.flags.append(msg)
 
@@ -208,6 +225,10 @@ class _Doc:
         self.monthly = []          # (row idx, 'signups'|'churned', month str)
         self.demo = {}             # group -> [row idx, ...]
         self.competitive = []      # row idxs in file order
+        self.episode_table = []    # (row idx, 'Episode N') in the global table
+        self.ep_blocks = {}        # 'Episode N' -> [row idxs] (timing curves)
+        self.timing_global = []    # row idxs in the show-level timing table
+
         self.is_tracker = False
 
         headline_labels = {
@@ -220,11 +241,13 @@ class _Doc:
 
         section = ""
         demo_group = None
+        ep_block = None
         for i, r in enumerate(self.rows):
             cat = str(r[C_CAT]).strip() if len(r) > C_CAT else ""
             col2 = str(r[C_COUNT]).strip() if len(r) > C_COUNT else ""
             if not cat and col2 and not col2.startswith("(") and _pi(col2) is None:
                 section = col2
+                ep_block = None
                 if section.startswith("SHOW-TO-PLATFORM ATTRIBUTION"):
                     self.is_tracker = True
                 continue
@@ -240,6 +263,17 @@ class _Doc:
                 self.touch.append((i, int(_TOUCH_RE.match(cat).group(1))))
             elif cat == "Total Platform Signups":
                 self.touch_total = i
+            elif _EP_RE.match(cat):
+                if str(self.cell(i, 1)).strip() and _pi(col2) is not None:
+                    self.episode_table.append((i, cat))
+                elif section.startswith("SIGNUP TIMING PER EPISODE"):
+                    ep_block = cat
+                    self.ep_blocks.setdefault(cat, [])
+            elif _TIMING_LABEL_RE.match(cat) and _pi(col2) is not None:
+                if section.startswith("SIGNUP TIMING PER EPISODE") and ep_block:
+                    self.ep_blocks[ep_block].append(i)
+                elif section.startswith("SIGNUP TIMING"):
+                    self.timing_global.append(i)
             elif section.startswith("MONTHLY PLATFORM SIGNUPS") and _MONTH_RE.match(cat):
                 self.monthly.append((i, "signups", cat))
             elif section.startswith("MONTHLY PLATFORM CHURN") and _MONTH_RE.match(cat):
@@ -775,6 +809,174 @@ def _recouple_conversion(doc: _Doc):
             })
 
 
+def _snap_gp(doc: _Doc, i, c, ratio, label):
+    """Projection carries its count at the file's panel ratio. One
+    deterministic clean target per cell: drifted cells snap to it, cells
+    already within rounding tolerance of it are left alone unless they
+    end in 0 (then they land exactly on it, which never ends in 0, so a
+    second pass is a no-op)."""
+    want = int(round(ratio * c))
+    if want <= 0:
+        return
+    if want % 10 == 0:
+        d = _pick_delta(_hash(doc.salt, label, C_GP, want),
+                        [lambda d: _ok(want + d)])
+        if d is not None:
+            want += d
+    g = doc.gp(i)
+    if g is None or abs(g - want) > max(9, int(round(0.002 * want))):
+        doc.set(i, C_GP, want, label, "gp_recouple")
+    elif g % 10 == 0:
+        doc.set(i, C_GP, want, label, "trailing_zero")
+
+
+def _fix_episode_attribution(doc: _Doc):
+    """Episode attribution coherence (Dark Matter vet, 2026-11-05). Three
+    defects shipped together on weekly trackers: the episode table summed
+    off New Platform Signups, every per-episode timing curve under-summed
+    its episode's signups (curves were drawn independently of the totals,
+    2-9% short), and episode/timing projections kept pre-final counts.
+
+    This pass makes the family coherent: episode table sums to signups,
+    headline episode counts keep natural last digits (at most one
+    salt-chosen zero survives; a cluster of zeros is the placeholder
+    tell), each timing curve apportions to its episode total with its
+    shape preserved, percentages recompute from the final counts, and
+    every projection in the family carries its count at the file's panel
+    ratio. The show-level timing table's counts stay as shipped (its
+    30-day window is structural and legitimately under-sums signups on a
+    weekly show); only its projections and stale percentages re-derive.
+    """
+    if not doc.episode_table:
+        return
+    ni = doc.headline.get("New Platform Signups")
+    nps = doc.geti(ni, C_COUNT) if ni is not None else None
+    wi = doc.headline.get("Total Show Watchers")
+    ratio = 32.99
+    if wi is not None:
+        wc, wg = doc.geti(wi, C_COUNT), doc.gp(wi)
+        if wc and wg:
+            ratio = wg / wc
+
+    counts, names = {}, {}
+    for i, name in doc.episode_table:
+        c = doc.geti(i, C_COUNT)
+        if c is None or c <= 0:
+            doc.flag("episode table has a non-numeric count (left as shipped)")
+            return
+        counts[i], names[i] = c, name
+
+    # (a) The episode table sums to New Platform Signups.
+    if nps:
+        diff = nps - sum(counts.values())
+        if diff and abs(diff) <= max(5 * len(counts), int(round(0.02 * nps))):
+            order = sorted(counts, key=lambda j: -counts[j])
+            step = 1 if diff > 0 else -1
+            for _ in range(200):
+                if not diff:
+                    break
+                for j in order:
+                    others = [counts[m] for m in counts if m != j]
+                    nv = counts[j] + step
+                    if nv > 0 and nv % 10 != 0 and nv not in others:
+                        counts[j] = nv
+                        diff -= step
+                        if not diff:
+                            break
+        elif diff:
+            doc.flag(f"episode table off from signups by {diff} "
+                     f"(structural, left as shipped)")
+
+    # (b) Headline episode counts keep natural last digits.
+    zeros = sorted(j for j in counts if counts[j] % 10 == 0)
+    if zeros:
+        keep = zeros[_hash(doc.salt, "episode zero keep", len(zeros)) % len(zeros)]
+        for j in zeros:
+            if j == keep:
+                continue
+            h = _hash(doc.salt, "episode dezero", names[j], counts[j])
+            moved = False
+            for k in sorted((m for m in counts if m != j),
+                            key=lambda m: -counts[m]):
+                others = [counts[m] for m in counts if m not in (j, k)]
+                d = _pick_delta(h, [
+                    lambda d: _ok(counts[j] + d),
+                    lambda d, k=k: _ok(counts[k] - d),
+                    lambda d, k=k: (counts[j] + d) != (counts[k] - d),
+                    lambda d: (counts[j] + d) not in others,
+                    lambda d, k=k: (counts[k] - d) not in others,
+                ])
+                if d is not None:
+                    counts[j] += d
+                    counts[k] -= d
+                    moved = True
+                    break
+            if not moved:
+                doc.flag(f"could not de-zero {names[j]} signups (left as shipped)")
+
+    for i, name in doc.episode_table:
+        c = counts[i]
+        doc.set(i, C_COUNT, c, f"{name} signups", "episode_sum")
+        if nps:
+            doc.set_text(i, C_PCT, f"{c * 100.0 / nps:.1f}%",
+                         f"{name} pct", "pct_recouple")
+        _snap_gp(doc, i, c, ratio, f"{name} projection")
+
+    # (c) Each per-episode timing curve sums to its episode's signups.
+    name_count = {names[i]: counts[i] for i in counts}
+    for bname, idxs in doc.ep_blocks.items():
+        target = name_count.get(bname)
+        subs = [(j, doc.geti(j, C_COUNT)) for j in idxs
+                if doc.geti(j, C_COUNT) is not None]
+        if not subs or not target:
+            continue
+        orig = dict(subs)
+        total = sum(c for _, c in subs)
+        vals = dict(subs)
+        if 0 < total != target:
+            quotas = [(j, target * (c / total)) for j, c in subs]
+            vals = {j: int(q) for j, q in quotas}
+            rem = target - sum(vals.values())
+            for j, q in sorted(quotas, key=lambda x: x[1] - int(x[1]),
+                               reverse=True):
+                if rem <= 0:
+                    break
+                vals[j] += 1
+                rem -= 1
+            # Shape-invisible +/-1 shifts keep moved cells off trailing zeros.
+            order = [j for j, _ in sorted(quotas, key=lambda x: -x[1])]
+            for j in order:
+                if vals[j] > 0 and vals[j] % 10 == 0 and vals[j] != orig[j]:
+                    for k in order:
+                        if k != j and vals[k] > 1 and (vals[j] - 1) % 10 != 0 \
+                                and (vals[k] + 1) % 10 != 0:
+                            vals[j] -= 1
+                            vals[k] += 1
+                            break
+        for j, c0 in subs:
+            lbl = str(doc.cell(j, C_CAT)).strip()
+            if vals[j] != c0:
+                doc.set(j, C_COUNT, vals[j], f"{bname} {lbl} signups",
+                        "episode_curve")
+            doc.set_text(j, C_PCT, f"{vals[j] * 100.0 / target:.2f}%",
+                         f"{bname} {lbl} pct", "pct_recouple")
+            _snap_gp(doc, j, vals[j], ratio, f"{bname} {lbl} projection")
+
+    # (d) Show-level timing table: projections and stale percentages only.
+    for j in doc.timing_global:
+        c = doc.geti(j, C_COUNT)
+        if c is None or c <= 0:
+            continue
+        lbl = str(doc.cell(j, C_CAT)).strip()
+        _snap_gp(doc, j, c, ratio, f"{lbl} projection")
+        if nps:
+            p = _pct_val(doc.cell(j, C_PCT))
+            want = c * 100.0 / nps
+            if p is not None and abs(p - want) > 0.02:
+                doc.set_text(j, C_PCT, f"{want:.2f}%", f"{lbl} pct",
+                             "pct_recouple")
+
+
 def _fix_gp_chain(doc: _Doc):
     """Projection chain: New Platform Signups = TOTAL SIGNUPS =
     1st Touchpoint = Attributed + Dormant projections. Returns
@@ -1044,6 +1246,7 @@ def process_rows(rows, salt=None):
     _recouple_touch_pcts(doc)
     _recouple_monthly_engaged(doc)
     _recouple_conversion(doc)
+    _fix_episode_attribution(doc)
     chain_locked, t1_aliased = _fix_gp_chain(doc)
     if not chain_locked:
         # No usable chain: the signups projection is a free cell.
