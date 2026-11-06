@@ -286,6 +286,24 @@ class SizingLaneStillHolds(unittest.TestCase):
         self.assertIsNone(P.classify(JENNA, [], STARZ))
 
 
+class ThePlanHalf(unittest.TestCase):
+    """The second half of Jenna's question is a plan: the read answers the
+    figures, then the plan as Prometheus's own reasoning on them."""
+
+    def test_a_plan_asked_beside_the_figures_gets_the_playbook(self):
+        import prometheus_analysis as PMA
+        self.assertTrue(PMA.is_media_plan_ask(JENNA))
+        self.assertTrue(PMA.is_media_plan_ask('how do we reach them on tiktok'))
+        for t in ('how many people watched Carrie on Prime Video', 'run a profile on mountain dew',
+                  'build me a deck with a social media strategy'):
+            self.assertFalse(PMA.is_media_plan_ask(t), t)
+        for word in ('WHO', 'WHERE', 'WHEN', 'WHAT TO SAY', 'imperative verb', 'no source names', 'no em dashes'):
+            self.assertIn(word, PMA.MEDIA_PLAN_GUIDANCE)
+        src = open(os.path.join(ROOT, 'prometheus', 'legacy', 'chat.py'), encoding='utf-8').read()
+        self.assertIn('pma.is_media_plan_ask(text)', src)
+        self.assertIn('extra_blocks.append(pma.MEDIA_PLAN_GUIDANCE)', src)
+
+
 class TheReaderPrompt(unittest.TestCase):
     def test_the_reader_carries_the_rule(self):
         from prometheus import reader as R

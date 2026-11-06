@@ -4603,6 +4603,55 @@ SO_WHAT_GUIDANCE = (
     '(never a round number).\n')
 
 
+# A plan asked for beside a read (Jenna 2026-11-06: "give me a social
+# media and paid search strategy to hit potential paw patrol consumers"):
+# the figures first, then the plan as Prometheus's own reasoning on them.
+_MEDIA_PLAN_RX = re.compile(
+    r"\b(?:social(?:\s+media)?|paid\s+search|search|media|marketing|ad(?:vertising)?|campaign|channel|outreach|activation|"
+    r"go[- ]to[- ]market|gtm|creative|messaging|targeting|launch)\s+(?:strategy|plan|playbook|approach|mix|calendar|flight(?:ing)?)\b"
+    r"|\b(?:strategy|plan|playbook)\s+(?:to|for)\s+(?:hit|reach|target|win|convert|acquire|get to|find)\b"
+    r"|\bhow\s+(?:do|can|should|would)\s+(?:i|we)\s+(?:reach|target|hit|find|get to|win|convert|acquire)\b", re.I)
+
+
+def is_media_plan_ask(text):
+    """True when the ask wants a social, search or media plan (alone or
+    beside a read). Build phrasing and deck asks are excluded as for the
+    other playbooks."""
+    t = str(text or '').strip()
+    if not t or len(t) > 900:
+        return False
+    if not _MEDIA_PLAN_RX.search(t):
+        return False
+    try:
+        if _is_build_request(t) or detect_deck_intent(t):
+            return False
+    except Exception as _fx:
+        _faults.note('analysis', _fx)
+    return True
+
+
+MEDIA_PLAN_GUIDANCE = (
+    'MEDIA PLAN PLAYBOOK (this ask wants a plan beside the figures):\n'
+    'Answer the measured part of the question first, in full, with its '
+    'figures. Then the plan, as your own reasoning on those figures, '
+    'stated plainly, in the "reads":\n'
+    '- WHO: the audience lean in one or two sentences, built from the '
+    'figures (who buys, who gives, the age and household shape), never '
+    'from a profile the question did not name.\n'
+    '- WHERE: the platforms, each tied to a figure that earns it.\n'
+    '- WHEN: the flight timing by window, read straight off the timing '
+    'figures (when the starts cluster, when they thin out), with the '
+    'weight of spend per window.\n'
+    '- WHAT TO SAY: the creative angles, two or three, each tied to a '
+    'figure; for paid search, the term groups to buy and the ones to '
+    'skip, with when each group goes live.\n'
+    '- Each move starts with an imperative verb and carries the number '
+    'that justifies it. Plain words a smart 16-year-old follows. No '
+    'methodology, no hedging on the moves, no source names, no em dashes. '
+    'Every count messy (never a round number); every share a share of the '
+    'universe this read names.\n')
+
+
 _DOLLAR_RESULT_RX = re.compile(r'(=\s*)(?<!\$)(\d{1,3}(?:,\d{3})+|\d{4,})(?![\d,]*\s*(?:people|viewers|seats|buyers|users|accounts|companies|signups|%))')
 _PER_THOUSAND_RX = re.compile(r'(?<![\$\d])(\d{1,3}(?:\.\d+)?)(\s+per\s+thousand)')
 

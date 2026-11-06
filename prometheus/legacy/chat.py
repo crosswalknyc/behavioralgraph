@@ -14562,6 +14562,11 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
     _is_so_what = pma.is_so_what_ask(text)  # so-what asks answer as a plan
     if _is_so_what:
         extra_blocks.append(pma.SO_WHAT_GUIDANCE)
+    try:   # a social / search / media plan asked for beside the figures (2026-11-06)
+        if pma.is_media_plan_ask(text) and not _is_so_what:
+            extra_blocks.append(pma.MEDIA_PLAN_GUIDANCE)
+    except Exception as _fx:
+        _faults.note('chat', _fx)
     _multi_qs = pma.split_questions(text)  # several questions: answer all
     if _multi_qs:
         extra_blocks.append(pma.multi_question_guidance(_multi_qs))
