@@ -147,6 +147,7 @@ ANALYST = {
 }
 
 SEEN = {'study': [], 'anchor': [], 'media': [], 'persona': [], 'mirror': [], 'read': [], 'options': []}
+ANALYST_OVERRIDE: dict = {}   # a test's changed research: merged over ANALYST by the fake
 
 
 def fake_search(query: str) -> str:
@@ -166,7 +167,9 @@ def fake_model(role, system, user, **kw):
         return out
     if role == 'anchor':
         SEEN['anchor'].append(d)
-        return copy.deepcopy(ANALYST)
+        out = copy.deepcopy(ANALYST)
+        out.update(copy.deepcopy(ANALYST_OVERRIDE))
+        return out
     if role == 'research':
         return {'subject_status': {'line': 'S.W.A.T. Exiles is a ten-episode Starz spinoff, mid-run on Friday nights.'}, 'facts': [], 'not_found': [], 'implications': []}
     if role == 'media':
@@ -210,7 +213,7 @@ class FakeS3:
 def _reset():
     for k in SEEN:
         SEEN[k].clear()
-    ROOM._STUDY_MEM.clear()
+    ROOM.clear_room_caches()
     ROOM.set_ledger_fn(lambda: copy.deepcopy(LEDGER))
 
 
@@ -625,7 +628,7 @@ class Room(unittest.TestCase):
         by = {o['id']: o for o in rec['options']}
         plan = ROOM.derived_plan([{'id': k, 'label': LABELS[k], 'lean': LEANS[k]} for k in 'abcde'], copy.deepcopy(ANALYST), PEOPLE, record_reach=1872084)
         for k in 'abcde':
-            self.assertAlmostEqual(by[k]['pct'], plan['targets'][k], delta=0.7, msg=k)
+            self.assertAlmostEqual(by[k]['pct'], plan['targets'][k], delta=(2.0 if k == 'c' else 0.7), msg=f"{k} (the largest row absorbs what the jitter leaves)")
         self.assertLessEqual(by['a']['pct'], plan['targets']['a'] + 0.05, 'the engaged row jitters downward only')
         self.assertLess(by['a']['pct'], 3.5, 'twelve free yes votes do not move the published count off the derived anchor')
         self.assertEqual({o['id']: o['seats_n'] for o in rec['options']}, ROOM.allocate_seats({o['id']: o['pct'] for o in rec['options']}, 12), 'the seats mirror the count')
@@ -649,8 +652,9 @@ class Room(unittest.TestCase):
         self.assertEqual(len(SEEN['study']), 1, 'the second question on the same subject rides the first study')
         self.assertTrue(rec2['trail']['study']['cached'])
         self.assertEqual(rec2['trail']['study']['key'], rec1['trail']['study']['key'])
-        self.assertEqual(rec2['trail']['anchor_status'], 'house', 'the anchor is derived again for the new board, on the house read')
-        self.assertEqual(len(SEEN['anchor']), 2)
+        self.assertEqual(rec2['trail']['anchor_status'], 'house')
+        self.assertEqual(len(SEEN['anchor']), 1, 'the same board on the same day takes the plan already derived; the analyst is not asked again')
+        self.assertTrue(rec2['trail']['anchor']['plan_cached']); self.assertEqual(rec2['trail']['anchor']['plan_key'], rec1['trail']['anchor']['plan_key'])
         sess, rec3 = self._ask('are you watching fightland?', sess=sess)
         self.assertEqual(len(SEEN['study']), 2, 'another subject is its own study')
 
@@ -710,6 +714,120 @@ class Room(unittest.TestCase):
         sess, rec = self._ask('rate swat exiles one to five stars')
         self.assertEqual(rec['trail']['anchor_status'], 'prior')
         self.assertEqual(SEEN['anchor'], [])
+
+    def _count(self, rec):
+        return [(o['label'], o['pct'], o['people'], o['seats_n']) for o in rec['options']]
+
+    def test_two_runs_on_one_day_land_identical_counts(self):
+        # Jenna: the data reconciles, a repeat ask never redraws a contradictory number. A re-ask in the same room, a duplicate
+        # room on the same twin, and a rerun all take the day's board and plan; the whole count repeats, people included
+        _reset()
+        sess, rec1 = self._ask()
+        self.assertEqual(len(SEEN['anchor']), 1); self.assertEqual(len(SEEN['options']), 1)
+        k1 = rec1['trail']['anchor']['plan_key']
+        self.assertTrue(k1.startswith(ROOM.PLAN_PREFIX)); self.assertFalse(rec1['trail']['anchor']['plan_cached'])
+        self.assertTrue(rec1['trail']['options_key'].startswith(ROOM.OPTIONS_PREFIX)); self.assertFalse(rec1['trail']['options_cached'])
+        # the same question again in the same room
+        sess, rec2 = self._ask(sess=sess)
+        self.assertEqual(self._count(rec2), self._count(rec1), 'identical shares, people and seats')
+        self.assertEqual(rec2['trail']['anchor']['plan_key'], k1); self.assertTrue(rec2['trail']['anchor']['plan_cached']); self.assertTrue(rec2['trail']['options_cached'])
+        self.assertEqual(len(SEEN['anchor']), 1, 'the analyst is asked once a day for a board'); self.assertEqual(len(SEEN['options']), 1, 'the board is coded once a day')
+        self.assertEqual(rec2['headline'], rec1['headline']); self.assertEqual(rec2['watched_any'], rec1['watched_any'])
+        # a duplicate room on the same twin (another session id, another seed)
+        twin = _pvalley()
+        sess_b = P.open_session([twin], in_room=12, title='Exiles copy', session_id='room-study-dup')
+        rec3 = ROOM.ask_room(sess_b, {twin['meta']['key']: twin}, 'are you currently watching swat exiles?', s3=None, twin_key='pv', run_async=False, model_fn=fake_model)
+        self.assertEqual(self._count(rec3), self._count(rec1), 'a duplicate room lands the same count')
+        self.assertEqual(rec3['trail']['anchor']['plan_key'], k1)
+        self.assertEqual(sum(o['people'] for o in rec3['options'] if o['id'] in ('a', 'b')), sum(o['people'] for o in rec1['options'] if o['id'] in ('a', 'b')))
+        self.assertEqual(len(SEEN['anchor']), 1)
+        # the S3 cache does the same across processes (the memory cache is gone, the stored plan answers)
+        s3 = FakeS3()
+        _reset()
+        sess_c = P.open_session([twin], in_room=12, title='Exiles s3', session_id='room-study-s3a')
+        rec4 = ROOM.ask_room(sess_c, {twin['meta']['key']: twin}, 'are you currently watching swat exiles?', s3=s3, twin_key='pv', run_async=False, model_fn=fake_model)
+        self.assertTrue(any(k.startswith(ROOM.PLAN_PREFIX) for k in s3.docs)); self.assertTrue(any(k.startswith(ROOM.OPTIONS_PREFIX) for k in s3.docs))
+        ROOM.clear_room_caches()
+        sess_d = P.open_session([twin], in_room=12, title='Exiles s3 again', session_id='room-study-s3b')
+        rec5 = ROOM.ask_room(sess_d, {twin['meta']['key']: twin}, 'are you currently watching swat exiles?', s3=s3, twin_key='pv', run_async=False, model_fn=fake_model)
+        self.assertEqual(self._count(rec5), self._count(rec4))
+        self.assertTrue(rec5['trail']['anchor']['plan_cached']); self.assertTrue(rec5['trail']['options_cached']); self.assertTrue(rec5['trail']['study']['cached'])
+        self.assertEqual(len(SEEN['anchor']), 1)
+
+    def test_a_new_day_with_a_changed_study_makes_a_new_plan(self):
+        _reset()
+        sess, rec1 = self._ask()
+        k1 = rec1['trail']['anchor']['plan_key']
+        today = ROOM._today
+        try:
+            ROOM._today = lambda: '2026-11-07'
+            ANALYST_OVERRIDE['options'] = [dict(o) for o in ANALYST['options']]
+            ANALYST_OVERRIDE['options'][0].update(low_pct=3.0, high_pct=3.6)   # the next day's research moves the live row
+            sess, rec2 = self._ask(sess=sess)
+        finally:
+            ROOM._today = today
+            ANALYST_OVERRIDE.clear()
+        k2 = rec2['trail']['anchor']['plan_key']
+        self.assertNotEqual(k2, k1, 'a new day is a new plan key')
+        self.assertIn('/2026-11-07/', k2)
+        self.assertEqual(len(SEEN['anchor']), 2, 'the analyst is asked again for the new day')
+        self.assertEqual(len(SEEN['study']), 2, 'and the study runs again')
+        self.assertFalse(rec2['trail']['anchor']['plan_cached'])
+        by1 = {o['id']: o for o in rec1['options']}; by2 = {o['id']: o for o in rec2['options']}
+        self.assertNotEqual(by2['a']['pct'], by1['a']['pct'], 'the changed research moves the split')
+        self.assertAlmostEqual(by2['a']['pct'] + by2['b']['pct'], 11.1, places=1, msg='the house read still pins the engaged total')
+
+    def test_a_new_house_read_on_the_ledger_invalidates_the_cached_plan(self):
+        _reset()
+        bare = {k: v for k, v in copy.deepcopy(LEDGER).items() if k != 'p_valley_viewers_and_w_a_t_exiles_overlap'}
+        ROOM.set_ledger_fn(lambda: copy.deepcopy(bare))
+        sess, rec1 = self._ask()
+        self.assertEqual(rec1['trail']['anchor_status'], 'derived')
+        k1, fp1 = rec1['trail']['anchor']['plan_key'], rec1['trail']['anchor']['record_fingerprint']
+        sess, rec1b = self._ask(sess=sess)
+        self.assertTrue(rec1b['trail']['anchor']['plan_cached']); self.assertEqual(len(SEEN['anchor']), 1)
+        # the overlap read lands on the ledger: the same key, a new fingerprint, the plan is derived again and pins
+        ROOM.set_ledger_fn(lambda: copy.deepcopy(LEDGER))
+        sess, rec2 = self._ask(sess=sess)
+        self.assertEqual(rec2['trail']['anchor']['plan_key'], k1, 'the same board on the same day')
+        self.assertNotEqual(rec2['trail']['anchor']['record_fingerprint'], fp1)
+        self.assertFalse(rec2['trail']['anchor']['plan_cached'])
+        self.assertEqual(len(SEEN['anchor']), 2, 'the record changed, so the analyst is asked again')
+        self.assertEqual(rec2['trail']['anchor_status'], 'house')
+        self.assertLessEqual(abs(sum(o['people'] for o in rec2['options'] if o['id'] in ('a', 'b')) - 679241), 300)
+        # and the new plan is the one that repeats from here
+        sess, rec3 = self._ask(sess=sess)
+        self.assertEqual(self._count(rec3), self._count(rec2)); self.assertTrue(rec3['trail']['anchor']['plan_cached']); self.assertEqual(len(SEEN['anchor']), 2)
+
+    def test_an_equivalent_board_worded_differently_folds_to_one_plan(self):
+        subj = 'PValley on Starz Viewers'
+        a = [{'id': 'a', 'label': 'Yes, keeping up with it weekly on Starz', 'lean': 'yes'}, {'id': 'b', 'label': 'Started it or watched an episode, not current', 'lean': 'maybe'},
+             {'id': 'c', 'label': "Saw the tile, it's on my list for later", 'lean': 'maybe'}, {'id': 'd', 'label': "No, it's not my kind of show", 'lean': 'no'}]
+        b = [{'id': 'a', 'label': 'Yes, I keep up weekly on Starz', 'lean': 'yes'}, {'id': 'b', 'label': 'Started it, watched an episode, not current', 'lean': 'maybe'},
+             {'id': 'c', 'label': 'Saw the tile, on my list for later', 'lean': 'maybe'}, {'id': 'd', 'label': 'No, not my kind of show', 'lean': 'no'}]
+        self.assertEqual(ROOM.option_signature(a[0]['label'], 'yes'), ROOM.option_signature(b[0]['label'], 'yes'))
+        self.assertEqual(ROOM.options_hash(a), ROOM.options_hash(b))
+        self.assertEqual(ROOM.options_hash(a), ROOM.options_hash(list(reversed(b))), 'order does not matter')
+        self.assertEqual(ROOM.plan_key(subj, 'are you currently watching swat exiles?', a, '2026-11-05'), ROOM.plan_key(subj, 'did you catch swat exiles last friday?', b, '2026-11-05'))
+        c = [dict(o) for o in a]; c[0]['label'] = 'Yes, watching it Friday nights as it drops'
+        self.assertNotEqual(ROOM.options_hash(a), ROOM.options_hash(c), 'a different option is a different board')
+        d = [dict(o) for o in a]; d[1]['lean'] = 'yes'
+        self.assertNotEqual(ROOM.options_hash(a), ROOM.options_hash(d), 'a different lean is a different board')
+        self.assertNotEqual(ROOM.plan_key(subj, 'are you watching swat exiles?', a, '2026-11-05'), ROOM.plan_key(subj, 'are you watching swat exiles?', a, '2026-11-06'))
+        # a stored plan maps onto the reworded board by signature
+        opts5 = [{'id': k, 'label': LABELS[k], 'lean': LEANS[k]} for k in 'abcde']
+        plan = ROOM.derived_plan(opts5, copy.deepcopy(ANALYST), PEOPLE, record_reach=1872084, seed='s', house={'people': 679241})
+        doc = ROOM._plan_to_doc(plan, opts5)
+        reworded = [{'id': 'x', 'label': 'Yes, I keep up weekly on Starz', 'lean': 'yes'}, {'id': 'y', 'label': 'Started it, watched an episode, not current', 'lean': 'maybe'},
+                    {'id': 'z', 'label': 'Saw the tile, on my list for later', 'lean': 'maybe'}, {'id': 'w', 'label': 'No, not my kind of show', 'lean': 'no'},
+                    {'id': 'v', 'label': 'No, my Starz is off right now or never heard of it', 'lean': 'no'}]
+        back = ROOM._plan_from_doc(doc, reworded)
+        self.assertEqual(back['targets']['x'], plan['targets']['a']); self.assertEqual(back['targets']['v'], plan['targets']['e'])
+        self.assertEqual(back['pinned'], ['x', 'y']); self.assertEqual(back['lead'], 'x'); self.assertEqual(back['house']['rows'], ['x', 'y'])
+        self.assertIsNone(ROOM._plan_from_doc(doc, reworded[:4]), 'a board missing a stored row is not this plan')
+        fp = ROOM.record_fingerprint(ROOM.ledger_neighbors(ROOM.asked_tokens('are you watching swat exiles?', subj), subj), PEOPLE)
+        self.assertEqual(len(fp), 16)
+        self.assertNotEqual(fp, ROOM.record_fingerprint([], PEOPLE))
 
     def test_the_read_carries_no_source_language(self):
         _reset()

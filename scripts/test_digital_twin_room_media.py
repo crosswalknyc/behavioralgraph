@@ -248,6 +248,7 @@ class Room(unittest.TestCase):
         SEATS.clear()
         SEATS.update({str(r['name']): int(r['seat']) for r in sess['group']['roster']})
         SEEN['persona'].clear(); SEEN['options'].clear()
+        ROOM.clear_room_caches()   # each test's room starts from nothing (the day caches would serve another test's board)
         rec = ROOM.ask_room(sess, {twin['meta']['key']: twin}, q, s3=None, twin_key='txv', run_async=False, model_fn=fake)
         return sess, rec
 

@@ -232,6 +232,7 @@ class Coherence(unittest.TestCase):
 
 class Room(unittest.TestCase):
     def _ask(self, q='are you currently watching swat exiles?', fake=fake_model):
+        ROOM.clear_room_caches()   # each test's room starts from nothing (the day caches would serve another test's board)
         twin = _pvalley()
         sess = P.open_session([twin], in_room=12, title='P-Valley', session_id='room-mirror-1')
         for k in SEEN:

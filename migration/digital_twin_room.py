@@ -98,6 +98,14 @@ we don't have anything to anchor on internally ... it has to be smarter")
   the ceilings, the house read and the study; trail.anchor_status is result | poll | house | derived | prior (a star
   scale, a probe, a question on the clock) | unresearched (the study failed twice) | unanchored (the study landed but
   the analyst could not place the board). The read never names where any of it came from.
+  THE PLAN IS REPRODUCIBLE (Jenna: the data reconciles, a repeat ask never redraws a contradictory number). The moderator's
+  board is cached per twin + topic + day (``coded_options``) and the analyst's plan per twin + question subject + the
+  normalized option set + day (``plan_key``, rows keyed by ``option_signature`` so a board worded the same way maps onto it),
+  beside the day's study; the anchor's jitter is salted by the plan, not the room. A re-ask in the same room, a duplicate room
+  on the same twin or a rerun on the same day lands identical shares and people. The cached plan carries the record's
+  fingerprint (``record_fingerprint``: every counted figure on the ledger that touches the thing asked about, and the
+  audience's size); a new house read or counted result landing there invalidates it, and a new day's research starts over.
+  trail.anchor.plan_key and plan_cached say which plan a question used.
 
 OUTPUT SHAPE (the question record on session['questions']; the UI reads this)
   {id, q, kind, framing,
@@ -2344,6 +2352,176 @@ def derived_plan(options: list, data: Optional[dict], total_people: int, record_
     return plan
 
 
+# ------------------------------------------ the plan is reproducible
+# Jenna's standing rule: the data reconciles, and a repeat ask never redraws a contradictory number. The analyst's plan
+# (targets, split, ceilings, basis) is cached beside the day's study, keyed by twin + question subject + the normalized
+# option set + day, and the moderator's board for a question is cached by twin + topic + day, so a re-ask in the same room,
+# a duplicate room on the same twin, or a rerun on the same day lands identical shares and people (weigh, anchor_rows and
+# mirror_seats derive deterministically from the plan plus a plan-salted jitter). Only a new day's research, or a new house
+# read or counted figure landing on the ledger for the subject (the record fingerprint), moves it.
+PLAN_PREFIX = 'system/digital_twins/plans/'
+OPTIONS_PREFIX = 'system/digital_twins/options/'
+PLAN_CACHE_TTL_S = 24 * 3600
+_PLAN_MEM: dict = {}
+_OPTIONS_MEM: dict = {}
+_SIG_STOP = _TOPIC_STOP | {'up', 'now', 'right', 'its', 'ive', 'im', 'been', 'being', 'than', 'then', 'there', 'here', 'so', 'but', 'yet', 'but', 'with', 'into', 'onto', 'off',
+                           'out', 'until', 'till', 'when', 'while', 'again', 'already', 'actually', 'honestly', 'pretty', 'much', 'very', 'too', 'also', 'even', 'ever'}
+
+
+def clear_room_caches() -> None:
+    """Tests start each room from nothing: the study, the plan and the board caches of this process."""
+    _STUDY_MEM.clear()
+    _PLAN_MEM.clear()
+    _OPTIONS_MEM.clear()
+
+
+def option_signature(label: str, lean: str = '') -> str:
+    """An option as the plan knows it: its lean and the stems of its
+    content words, so 'Yes, keeping up with it weekly on Starz' and 'Yes,
+    I keep up weekly on Starz' are one option. Builds on the label
+    normalization match_targets uses (_label_tokens)."""
+    toks = sorted({_stem(w) for w in _label_tokens(label) if len(w) >= 3 and w not in _SIG_STOP and _stem(w) not in _SIG_STOP})
+    return f"{str(lean or 'other').lower()}:{' '.join(toks)}"
+
+
+def options_hash(options: list) -> str:
+    sigs = sorted(option_signature(o.get('label'), o.get('lean')) for o in (options or []) if isinstance(o, dict) and o.get('label'))
+    return hashlib.sha1('|'.join(sigs).encode('utf-8')).hexdigest()[:12]
+
+
+def plan_key(subject: str, q: str, options: list, day: str = '') -> str:
+    """The analyst's plan for this twin, this question's subject, this
+    board (by signature) and this day."""
+    day = day or _today()
+    return f"{PLAN_PREFIX}{_slug(subject)}/{day}/{asked_hash(q, subject)}-{options_hash(options)}.json"
+
+
+def options_key(subject: str, q: str, kind: str, supplied: Optional[list], stimulus: Optional[dict], day: str = '') -> str:
+    """The moderator's board for this twin, this question's topic, kind and
+    supplied choices (and a stimulus that is not a cut on the clock), and
+    this day."""
+    day = day or _today()
+    stim = {k: v for k, v in (stimulus or {}).items() if k not in ('in_cut', 'window', 'seat_windows', 'cut')} if isinstance(stimulus, dict) else {}
+    body = json.dumps({'topic': topic_hash(q, subject), 'kind': str(kind or ''), 'supplied': sorted(str(x) for x in (supplied or [])), 'stimulus': stim}, sort_keys=True, default=str)
+    return f"{OPTIONS_PREFIX}{_slug(subject)}/{day}/{hashlib.sha1(body.encode('utf-8')).hexdigest()[:12]}.json"
+
+
+def record_fingerprint(neighbors: list, total_people: int = 0) -> str:
+    """What the record held when a plan was derived: every counted figure
+    that touches the thing asked about, plus the audience's size. A new
+    house read or counted result landing on the ledger changes it, and
+    the cached plan for that subject no longer applies."""
+    rows = sorted((str(r.get('subject') or ''), str(r.get('metric') or ''), str(r.get('value') or ''), str(r.get('unit') or '')) for r in (neighbors or []) if isinstance(r, dict))
+    return hashlib.sha1(json.dumps({'rows': rows, 'people': int(total_people or 0)}, sort_keys=True).encode('utf-8')).hexdigest()[:16]
+
+
+def _plan_to_doc(plan: dict, options: list) -> dict:
+    """The plan with its rows keyed by option signature, so another board
+    worded the same way maps back onto it."""
+    sig = {o['id']: option_signature(o.get('label'), o.get('lean')) for o in options if isinstance(o, dict) and o.get('id')}
+    doc = {k: v for k, v in plan.items() if k not in ('targets', 'down', 'pinned', 'lead', 'house')}
+    doc['targets_by_sig'] = {sig.get(k, k): v for k, v in (plan.get('targets') or {}).items()}
+    doc['down_sigs'] = [sig.get(k, k) for k in (plan.get('down') or [])]
+    doc['pinned_sigs'] = [sig.get(k, k) for k in (plan.get('pinned') or [])]
+    doc['lead_sig'] = sig.get(plan.get('lead'), plan.get('lead'))
+    if plan.get('house'):
+        h = dict(plan['house'])
+        h['rows'] = [sig.get(k, k) for k in (h.get('rows') or [])]
+        doc['house'] = h
+    return doc
+
+
+def _plan_from_doc(doc: dict, options: list) -> Optional[dict]:
+    """A stored plan mapped onto this board's ids; None when a stored row
+    has no match on the board (a different board, however its key read)."""
+    if not isinstance(doc, dict) or not doc.get('targets_by_sig'):
+        return None
+    by_sig = {}
+    for o in options:
+        if isinstance(o, dict) and o.get('id'):
+            by_sig.setdefault(option_signature(o.get('label'), o.get('lean')), o['id'])
+    targets = {}
+    for s, v in doc['targets_by_sig'].items():
+        if s not in by_sig:
+            return None
+        targets[by_sig[s]] = v
+    plan = {k: v for k, v in doc.items() if k not in ('targets_by_sig', 'down_sigs', 'pinned_sigs', 'lead_sig', 'house')}
+    plan['targets'] = targets
+    plan['down'] = [by_sig[s] for s in (doc.get('down_sigs') or []) if s in by_sig]
+    plan['pinned'] = [by_sig[s] for s in (doc.get('pinned_sigs') or []) if s in by_sig]
+    plan['lead'] = by_sig.get(doc.get('lead_sig'))
+    if doc.get('house'):
+        h = dict(doc['house'])
+        h['rows'] = [by_sig[s] for s in (h.get('rows') or []) if s in by_sig]
+        plan['house'] = h
+    return plan
+
+
+def cached_plan(s3, key: str, options: list, fingerprint: str) -> Optional[dict]:
+    """The day's plan for this board when the record it was derived from
+    still stands (the fingerprint matches); None otherwise."""
+    doc = _PLAN_MEM.get(key)
+    if not isinstance(doc, dict) and s3 is not None:
+        doc = _get_json(s3, key)
+        if isinstance(doc, dict):
+            _PLAN_MEM[key] = doc
+    if not isinstance(doc, dict) or not doc.get('plan'):
+        return None
+    if (time.time() - float(doc.get('at') or 0)) > PLAN_CACHE_TTL_S:
+        return None
+    if str(doc.get('record_fingerprint') or '') != str(fingerprint or ''):
+        return None   # a new house read or counted figure landed on the ledger: the plan is derived again
+    plan = _plan_from_doc(doc['plan'], options)
+    if plan is None:
+        return None
+    plan['key'] = key
+    plan['cached'] = True
+    plan['analyst'] = doc.get('analyst')
+    return plan
+
+
+def store_plan(s3, key: str, plan: dict, options: list, fingerprint: str, *, analyst: Optional[dict] = None, study_key: str = '', subject: str = '', q: str = '') -> None:
+    doc = {'subject': subject, 'question': q, 'day': _today(), 'at': time.time(), 'record_fingerprint': fingerprint, 'study_key': study_key, 'version': ROOM_VERSION,
+           'plan': _plan_to_doc(plan, options), 'analyst': analyst}
+    if len(_PLAN_MEM) > 300:
+        _PLAN_MEM.clear()
+    _PLAN_MEM[key] = doc
+    if s3 is not None:
+        _put_json(s3, key, doc)
+
+
+def coded_options(models: Models, twin: dict, q: str, kind: str, opts: list, stimulus: Optional[dict], brief: dict, last: Optional[dict], s3=None, *, log=None, force: bool = False) -> dict:
+    """The moderator's board, cached per twin + topic + day so a re-ask
+    gets the same board (a probe and a question on the clock are never
+    cached: they belong to their own room and moment). The dict
+    moderator_options returns, plus _key and _cached."""
+    cacheable = bool(kind != 'probe' and not _in_cut(stimulus))
+    subject = str(_meta(twin).get('subject') or _twin_name(twin))
+    key = options_key(subject, q, kind, opts, stimulus) if cacheable else ''
+    if cacheable and not force:
+        doc = _OPTIONS_MEM.get(key)
+        if not isinstance(doc, dict) and s3 is not None:
+            doc = _get_json(s3, key)
+            if isinstance(doc, dict):
+                _OPTIONS_MEM[key] = doc
+        if isinstance(doc, dict) and doc.get('options') and (time.time() - float(doc.get('at') or 0)) <= PLAN_CACHE_TTL_S:
+            out = {'options': [dict(o) for o in doc['options']], 'framing': str(doc.get('framing') or ''), 'listen_for': list(doc.get('listen_for') or []),
+                   'fallback': False, 'fixed': bool(doc.get('fixed')), '_key': key, '_cached': True}
+            return out
+    mo = moderator_options(models, twin, q, kind, opts, stimulus, brief, last, log=log)
+    mo['_key'] = key
+    mo['_cached'] = False
+    if cacheable and not mo.get('fallback') and mo.get('options'):
+        doc = {'subject': subject, 'question': q, 'kind': kind, 'day': _today(), 'at': time.time(), 'options': [dict(o) for o in mo['options']], 'framing': mo.get('framing') or '',
+               'listen_for': list(mo.get('listen_for') or []), 'fixed': bool(mo.get('fixed')), 'version': ROOM_VERSION}
+        if len(_OPTIONS_MEM) > 300:
+            _OPTIONS_MEM.clear()
+        _OPTIONS_MEM[key] = doc
+        if s3 is not None:
+            _put_json(s3, key, doc)
+    return mo
+
+
 def _default_options(kind: str, opts: list) -> list:
     if kind == 'rating':
         return [{'id': chr(97 + i), 'label': f"{s} star{'s' if s != 1 else ''}", 'lean': ('yes' if s >= 4 else 'maybe' if s == 3 else 'no')} for i, s in enumerate(range(1, 6))]
@@ -4077,10 +4255,12 @@ def run_question(ctx: dict) -> dict:
         timings['research_s'] = round(time.time() - t, 2)
         # 2. the moderator codes the options
         t = time.time()
-        mo = moderator_options(models, twin, q, kind, list(rec.get('option_labels') or []), stim, brief, last, log=log)
+        mo = coded_options(models, twin, q, kind, list(rec.get('option_labels') or []), stim, brief, last, s3, log=log, force=bool(ctx.get('fresh_research')))
         if mo.get('fallback'):
             fallbacks.append('options')
         options = mo['options']
+        trail['options_key'] = mo.get('_key')
+        trail['options_cached'] = bool(mo.get('_cached'))
         rec['framing'] = mo.get('framing') or ''
         rec['option_labels'] = [o['label'] for o in options]
         rec['options'] = [{'id': o['id'], 'label': o['label'], 'lean': o['lean'], 'pct': 0.0, 'people': 0, 'seats': []} for o in options]
@@ -4097,7 +4277,12 @@ def run_question(ctx: dict) -> dict:
                 total_people = 0
         f_anchor, _apool, t_anchor0 = None, None, time.time()
         anchor_eligible = bool(not _in_cut(stim) and kind not in ANCHOR_SKIP_KINDS and total_people > 0)
-        if anchor_eligible and study_ok(study):
+        # the plan is reproducible: the same board on the same day, with the record as it stood, takes the plan already derived
+        pkey = plan_key(subject, base_q0, options) if anchor_eligible else ''
+        fingerprint = record_fingerprint(neighbors, total_people)
+        anchor_seed = f"{_slug(subject)}|{asked_hash(base_q0, subject)}|{options_hash(options)}|{_today()}"   # the anchor's jitter is salted by the plan, not the room
+        plan_hit = cached_plan(s3, pkey, options, fingerprint) if (pkey and not ctx.get('fresh_research')) else None
+        if anchor_eligible and study_ok(study) and plan_hit is None:
             try:
                 from concurrent.futures import ThreadPoolExecutor as _TPE
                 _apool = _TPE(max_workers=1, thread_name_prefix='twin-anchor')
@@ -4171,6 +4356,11 @@ def run_question(ctx: dict) -> dict:
             plan = {}
         if plan:
             trail['anchor_status'] = plan['kind']
+            plan['key'] = f"{plan['kind']}:{trail.get('media_key') or ''}"
+        elif plan_hit is not None:
+            plan = plan_hit
+            derived_data = plan.get('analyst')
+            trail['anchor_status'] = plan.get('kind') or 'derived'
         elif f_anchor is not None:
             try:
                 derived_data = f_anchor.result(timeout=max(5.0, BUDGET_S['anchor'] - (time.time() - t_anchor0)))
@@ -4178,21 +4368,28 @@ def run_question(ctx: dict) -> dict:
                 print(f"[twin-room] anchor desk skipped: {str(e)[:120]}")
                 derived_data = None
             try:
-                plan = derived_plan(opts_out, derived_data, total_people, record_reach=record_reach_people(neighbors), seed=seed, house=house_read(neighbors, subject))
+                plan = derived_plan(opts_out, derived_data, total_people, record_reach=record_reach_people(neighbors), seed=anchor_seed, house=house_read(neighbors, subject))
             except Exception as e:
                 traceback.print_exc()
                 print(f"[twin-room] derived anchor skipped: {str(e)[:120]}")
                 plan = {}
             trail['anchor_status'] = (plan.get('kind') or 'derived') if plan else 'unanchored'
+            if plan and pkey:
+                try:
+                    store_plan(s3, pkey, plan, opts_out, fingerprint, analyst=derived_data, study_key=str(study.get('_key') or ''), subject=subject, q=base_q0)
+                except Exception as e:
+                    print(f"[twin-room] plan not stored: {str(e)[:120]}")
+                plan['key'] = pkey
+                plan['cached'] = False
         else:
             trail['anchor_status'] = 'prior' if not anchor_eligible else ('unresearched' if not study_ok(study) else 'unanchored')
         if _apool is not None:
             _apool.shutdown(wait=False)
         timings['anchor_s'] = round(time.time() - t, 2)
         try:
-            if plan and anchor_rows(opts_out, by_segment, plan, total_people, len(roster), seed):
+            if plan and anchor_rows(opts_out, by_segment, plan, total_people, len(roster), anchor_seed):
                 rec['anchor'] = {'kind': plan['kind'], 'line': plan['line'], 'targets': {next((o['label'] for o in opts_out if o['id'] == k), k): v for k, v in plan['targets'].items()}}
-                trail['anchor'] = dict(rec['anchor'], status=trail.get('anchor_status'))
+                trail['anchor'] = dict(rec['anchor'], status=trail.get('anchor_status'), plan_key=plan.get('key'), plan_cached=bool(plan.get('cached')), record_fingerprint=fingerprint)
                 if plan.get('kind') in ('derived', 'house'):
                     trail['anchor']['basis'] = plan.get('basis') or {}
                     trail['anchor']['study_key'] = study.get('_key')
@@ -4448,5 +4645,6 @@ __all__ = ['ask_room', 'run_question', 'all_sessions', 'find_session', 'SESSION_
            'JOB_PREFIX', 'RESEARCH_PREFIX', 'FACTS_PREFIX',
            # room-5: the study desk and the derived anchor
            'research_pass', 'merge_study', 'study_ok', 'derive_anchor', 'derived_plan', 'ledger_neighbors', 'record_reach_people', 'record_overlap_people', 'house_read', 'set_ledger_fn', 'asked_tokens', 'asked_hash', 'study_key',
-           'PLAIN_SHARE_TOLERANCE', 'HOUSE_PIN_JITTER',
+           'PLAIN_SHARE_TOLERANCE', 'HOUSE_PIN_JITTER', 'coded_options', 'cached_plan', 'store_plan', 'plan_key', 'options_key', 'options_hash', 'option_signature', 'record_fingerprint',
+           'clear_room_caches', 'PLAN_PREFIX', 'OPTIONS_PREFIX',
            'narrower_queries', 'STUDY_SYSTEM', 'ANCHOR_SYSTEM', 'STUDY_PREFIX', 'STUDY_MIN_SEARCHES', 'STUDY_MAX_SEARCHES', 'ANCHOR_LOW_POSITION', 'ANCHOR_NEIGHBOR_MARGIN', 'ANCHOR_SKIP_KINDS']
