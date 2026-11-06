@@ -31,6 +31,8 @@ from migration.digital_twin_exports import (
 )
 # the room pages ride inside report_pages so every format carries them (2026-11-04)
 from migration.digital_twin_exports import room_pages as _room_pages, moments_pages as _moments_pages, draw_roster_pdf as _draw_roster_pdf
+# who was in the room, seat by seat, after the questions (2026-11-05)
+from migration.digital_twin_exports import seat_pages as _seat_pages, draw_seats_pdf as _draw_seats_pdf
 
 DUSK = '#B7B3D8'
 COBALT = '#3358FF'
@@ -641,8 +643,9 @@ def report_pages(payload: dict, session: dict, portrait_fn=None, with_chart: boo
     try:
         from migration.digital_twin_pilot import session_people
         behind = session_people(session, payload)
+        room_total = session_people(session)     # the people the seated room stands for, never the twin's size (the seat pages' denominator)
     except Exception:
-        behind = None
+        behind = room_total = None
     seated = g.get('in_room') or len(g.get('roster') or [])
     # what the shares are of, said once on the TLDR and once on the scorecard page (Liz Huszarik 2026-11-05: 16 seats cannot
     # produce 49.4%, so say which denominator the shares use and keep the seat tally beside every share)
@@ -741,6 +744,9 @@ def report_pages(payload: dict, session: dict, portrait_fn=None, with_chart: boo
                       'head': ('Scene', 'Mentions', 'Quote'), 'rows': rows, 'dark': False})
     # the questions the moderator put to the room, during the cut and after it wrapped (Jenna 2026-11-04)
     pages.extend(_question_pages(session))
+    # who was in the room, seat by seat (Jenna 2026-11-05): the face, who they are, the cohort they stood in for, the people
+    # each one stands for (of the people the room stands for, the same figure as the scorecard page), and the bio
+    pages.extend(_seat_pages(session, portrait_fn=portrait_fn, clean=_clean, people_total=room_total, start_dark=not bool(pages[-1].get('dark'))))
     rec = session.get('recruit') or {}
     if rec:
         w = rec.get('walkouts') or {}
@@ -936,6 +942,8 @@ def build_report_pdf(payload: dict, session: dict, portrait_fn=None) -> bytes:
             _draw_talent_pdf(d, pg, y)
         elif pg['kind'] == 'roster':
             _draw_roster_pdf(d, pg, y)
+        elif pg['kind'] == 'seats':
+            _draw_seats_pdf(d, pg, y)
         elif pg['kind'] == 'bullets':
             y = d.bullets(pg.get('body') or [], d.m, y, d.right - d.m)
         elif pg['kind'] == 'table':

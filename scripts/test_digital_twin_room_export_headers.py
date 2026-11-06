@@ -172,7 +172,8 @@ class RoomExport(unittest.TestCase):
         for c in cont:
             self.assertIn(ASKED[3], c, 'a continuation page is headed by the question too')
             self.assertGreaterEqual(len(_quotes(c)), 1)
-        self.assertEqual(len(self.pages), 1 + len(ASKED) + len(cont), 'the room page, one page per question, the continuations')
+        who = [p for p in self.pages if 'Who was in the room' in p]
+        self.assertEqual(len(self.pages), 1 + len(ASKED) + len(cont) + len(who), 'the room page, one page per question, the continuations, then who was in the room')
         self.assertEqual([i for i, p in enumerate(self.pages) if p.startswith('QUESTION 4')], list(range(4, 5 + len(cont))), 'the continuations follow their question')
         quotes = _quotes(first) + [q for c in cont for q in _quotes(c)]
         self.assertEqual(len(quotes), 4, 'every quote printed, each whole with who said it')
@@ -203,6 +204,132 @@ class RoomExport(unittest.TestCase):
             def visit(text, cm, tm, fd, fs, _low=low):
                 if text.strip() and tm[5] < X.PANEL_FLOOR - 1 and 'CROSSWALK' not in text and not re.fullmatch(r'\d\d', text.strip()):
                     _low.append((text, tm[5]))
+            page.extract_text(visitor_text=visit)
+            self.assertEqual(low, [], low[:3])
+
+
+BIOS = {
+    1: ("Yara, 42, lives in Kansas City. She is a nurse on night shifts. She is married with two children at home, earning $75,000 to $99,999 a year.\n\n"
+        "She found the creators through a cousin and keeps a running list of comfort shows for sick days. On money she watches price but pays for the right thing."),
+    2: "Jamal, 29, lives in Houston. He works in logistics. " + ' '.join(["He has a group chat that has been going since college and sends the family a watch list every Thanksgiving."] * 7),
+    3: "Isaiah, 35, lives in Dallas. He is a paralegal. He is single with no children at home.\n\nHe plays bar trivia on Tuesdays and takes it seriously.",
+    4: "",
+}
+
+
+def _room_session():
+    """The fixture room with bios on the seats: two written as two
+    paragraphs, one as a single long paragraph (the page splits it), one
+    with no bio; three seats carry their stands-for figures, the fourth
+    does not (an older record)."""
+    sess = _session()
+    for r in sess['group']['roster']:
+        r['persona'] = BIOS[r['seat']]
+        r['gender'] = 'F' if r['seat'] == 1 else 'M'
+        r['stands_for_people'] = {1: 952_577, 2: 952_581, 3: 952_583}.get(r['seat'])
+        r['stands_for_share'] = {1: 25.0, 2: 25.0, 3: 25.0}.get(r['seat'])
+    return sess
+
+
+class WhoWasInTheRoom(unittest.TestCase):
+    def setUp(self):
+        self.sess = _room_session()
+        self.total = 3_810_307
+        self.pdf = X.build_panel_pdf({'meta': {'name': 'Good Influence', 'subject': 'Good Influence'}}, self.sess)
+        self.pages = _pdf_pages(self.pdf)
+
+    def test_bio_paragraphs_as_the_room_shows_them(self):
+        self.assertEqual(X.bio_paragraphs(BIOS[1]), [p.strip() for p in BIOS[1].split('\n\n')], 'two written paragraphs stay two')
+        self.assertEqual(X.bio_paragraphs(BIOS[3]), ['Isaiah, 35, lives in Dallas. He is a paralegal. He is single with no children at home.', 'He plays bar trivia on Tuesdays and takes it seriously.'])
+        long = X.bio_paragraphs(BIOS[2])
+        self.assertEqual(len(long), 3, 'one long paragraph is split by sentence into three, the way the seat card does it')
+        self.assertEqual(' '.join(long), ' '.join(BIOS[2].split()), 'nothing lost, nothing cut')
+        short = 'Ethan, 51, lives in El Paso. He is retired.'
+        self.assertEqual(X.bio_paragraphs(short), [short])
+        self.assertEqual(X.bio_paragraphs(''), [])
+
+    def test_entries_carry_who_tag_stands_for_and_bio(self):
+        entries, total = X.seat_entries(self.sess)
+        self.assertEqual(total, self.total, "the people the room stands for, the room's own figure")
+        self.assertEqual([e['seat'] for e in entries], [1, 2, 3, 4], 'every seat, in order')
+        yara = entries[0]
+        self.assertEqual(yara['who'], 'Yara, 42, Kansas City')
+        self.assertEqual(yara['tag'], 'Seat 1 of 4, woman. Voters.')
+        self.assertEqual(yara['stands'], 'Stands for 952,577 of the 3,810,307 people in this audience (25.0%).', "the seat's own figure, kept")
+        self.assertEqual(yara['paragraphs'], X.bio_paragraphs(BIOS[1]))
+        ethan = entries[3]
+        self.assertGreater(ethan['people'], 0, 'a seat without the figures is filled in from its segment and the room total')
+        self.assertNotEqual(ethan['people'] % 10, 0)
+        self.assertRegex(ethan['stands'], r'^Stands for \d{3},\d{3} of the 3,810,307 people in this audience \(\d+\.\d%\)\.$')
+        self.assertEqual(ethan['paragraphs'], ['Ethan holds seat 4 in this room.'], 'no bio on file: one plain line')
+        self.assertEqual([r.get('stands_for_people') for r in self.sess['group']['roster']][3], None, 'the stored record is never changed by rendering')
+        self.assertLessEqual(abs(sum(e['people'] for e in entries) - total), 10 * len(entries), 'the people the seats stand for sum to the room total within rounding (the filled seat takes the remainder)')
+        self.assertEqual([e['people'] for e in entries][:3], [952_577, 952_581, 952_583])
+        # an older record with no figures at all: every seat is filled the way the room fills them, and they still sum to the room
+        old = _room_session()
+        for r in old['group']['roster']:
+            r.pop('stands_for_people'), r.pop('stands_for_share')
+        entries, total = X.seat_entries(old)
+        self.assertTrue(all(e['people'] > 0 and e['people'] % 10 and e['stands'] for e in entries))
+        self.assertEqual(len({e['people'] for e in entries}), 4, 'no two seats print the same count')
+        self.assertLessEqual(abs(sum(e['people'] for e in entries) - total), 10 * len(entries))
+        # a record whose seats already carry the figures prints them as stored
+        full = _room_session()
+        for r in full['group']['roster']:
+            r['stands_for_people'], r['stands_for_share'] = 950_000 + r['seat'] * 1_003, 24.9
+        self.assertEqual([e['people'] for e in X.seat_entries(full)[0]], [951_003, 952_006, 953_009, 954_012])
+
+    def test_closing_pages_list_every_seat_once_with_bio_and_stands_for(self):
+        who = [p for p in self.pages if 'Who was in the room' in p]
+        self.assertGreaterEqual(len(who), 1)
+        last_q = max(i for i, p in enumerate(self.pages) if p.startswith('QUESTION'))
+        self.assertEqual([i for i, p in enumerate(self.pages) if 'Who was in the room' in p], list(range(last_q + 1, len(self.pages))), 'the closing pages, after the last question page')
+        self.assertTrue(who[0].startswith('FOCUS GROUP IQ'))
+        self.assertIn('Who was in the room. Every seat in order: who they are, the cohort they stood in for, and the people each one stands for.', who[0])
+        for p in who[1:]:
+            self.assertIn('Who was in the room, continued.', p)
+        blob = ' '.join(who)
+        entries, total = X.seat_entries(self.sess)
+        for e in entries:
+            self.assertEqual(blob.count(e['who']), 1, f"{e['who']} listed once")
+            self.assertIn(e['tag'], blob)
+            self.assertEqual(blob.count(e['stands']), 1, e['stands'])
+            for para in e['paragraphs']:
+                self.assertIn(para, blob, 'the bio as the room shows it, whole; never cut mid-word')
+        self.assertIn('She found the creators through a cousin', blob)
+        self.assertIn('He plays bar trivia on Tuesdays and takes it seriously.', blob)
+        self.assertNotIn('Who was in the room', ' '.join(self.pages[:last_q + 1]))
+
+    def test_two_or_three_seats_to_a_page(self):
+        pages = X.seat_pages(self.sess, eyebrow='Focus Group IQ')
+        self.assertEqual([p['header'] for p in pages], ['Who was in the room.'] + ['Who was in the room, continued.'] * (len(pages) - 1))
+        self.assertEqual([s['seat'] for p in pages for s in p['seats']], [1, 2, 3, 4])
+        for p in pages:
+            self.assertTrue(1 <= len(p['seats']) <= 3, len(p['seats']))
+            self.assertEqual(p['eyebrow'], 'Focus Group IQ')
+            self.assertEqual(p['people_total'], self.total)
+        self.assertGreaterEqual(len(pages[0]['seats']), 2, 'the first page holds at least two of these seats')
+        self.assertEqual(pages[1]['sub'], 'Seat 4 of 4.' if len(pages[0]['seats']) == 3 else 'Seats 3 to 4 of 4.')
+        self.assertEqual([p['dark'] for p in pages[:2]], [pages[0]['dark'], not pages[0]['dark']], 'the grounds alternate')
+        self.assertEqual(X.seat_pages({'group': {'roster': []}}), [])
+
+    def test_a_bio_longer_than_a_page_keeps_whole_sentences(self):
+        sess = _room_session()
+        sess['group']['roster'][1]['persona'] = ' '.join(['He has a group chat that has been going since college and sends the family a watch list every Thanksgiving.'] * 60)
+        pages = X.seat_pages(sess)
+        jamal = next(s for p in pages for s in p['seats'] if s['seat'] == 2)
+        text = ' '.join(jamal['paragraphs'])
+        self.assertLess(len(text), 60 * 100)
+        self.assertTrue(text.endswith('every Thanksgiving.'), 'ends at a complete sentence')
+        self.assertEqual(len(next(p for p in pages if any(s['seat'] == 2 for s in p['seats']))['seats']), 1, 'alone on its page')
+        pdf = X.build_panel_pdf({'meta': {'name': 'Good Influence'}}, sess)
+        import pypdf
+        for page in pypdf.PdfReader(io.BytesIO(pdf)).pages:
+            low = []
+
+            def visit(t, cm, tm, fd, fs, _low=low):
+                if t.strip() and tm[5] < X.PANEL_FLOOR - 1 and 'CROSSWALK' not in t and not re.fullmatch(r'\d\d', t.strip()):
+                    _low.append((t, tm[5]))
             page.extract_text(visitor_text=visit)
             self.assertEqual(low, [], low[:3])
 

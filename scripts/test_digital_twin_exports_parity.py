@@ -137,6 +137,11 @@ def _pdf_pages(pdf: bytes) -> int:
     return len(pypdf.PdfReader(io.BytesIO(pdf)).pages)
 
 
+def _pdf_pages_text(pdf: bytes) -> list:
+    import pypdf
+    return [_norm(pg.extract_text() or '') for pg in pypdf.PdfReader(io.BytesIO(pdf)).pages]
+
+
 def _blob(pages) -> str:
     return json.dumps([{k: v for k, v in p.items() if k not in ('image', 'seats')} for p in pages], default=str).lower()
 
@@ -241,6 +246,35 @@ class OnePageList(unittest.TestCase):
                 continue
             self.assertLessEqual(len(p['header'].split()), 16, p['header'])
             self.assertTrue(p['header'].endswith('.') or p['kind'] == 'cover', p['header'])
+
+    def test_every_seat_is_listed_once_with_its_bio_and_stands_for_line_in_every_format(self):
+        """Who was in the room (Jenna 2026-11-05): the closing pages after the questions carry every seat once, with
+        the bio and the people it stands for, in the page list, the deck and the PDF alike."""
+        twin, sess = _session()
+        payload = {'meta': twin['meta']}
+        pages = R.report_pages(payload, sess, portrait_fn=_portrait_fn)
+        sp = [p for p in pages if p['kind'] == 'seats']
+        seats = [s for p in sp for s in p['seats']]
+        self.assertEqual([s['seat'] for s in seats], [r['seat'] for r in sess['group']['roster']])
+        self.assertEqual(sum(1 for s in seats if s['portrait']), 3, 'the faces that came back ride beside their seats')
+        from migration.digital_twin_pilot import session_people
+        total = session_people(sess)
+        self.assertLessEqual(abs(sum(s['people'] for s in seats) - total), 10 * len(seats))
+        slides = _slides(X.build_pilot_deck(payload, sess, portrait_fn=_portrait_fn))
+        pdf_pages = _pdf_pages_text(X.build_pilot_pdf(payload, sess, portrait_fn=_portrait_fn))
+        deck_blob = _norm(' '.join(s for s in slides if 'Who was in the room' in s))
+        pdf_blob = _norm(' '.join(p for p in pdf_pages if 'Who was in the room' in p))
+        self.assertEqual(sum(1 for s in slides if 'Who was in the room' in s), len(sp))
+        self.assertEqual(sum(1 for p in pdf_pages if 'Who was in the room' in p), len(sp))
+        for s in seats:
+            for fmt, blob in (('deck', deck_blob), ('pdf', pdf_blob)):
+                self.assertEqual(blob.count(s['who']), 1, f"{s['who']} once in the {fmt}")
+                self.assertIn(s['stands'], blob, fmt)
+                for para in s['paragraphs']:
+                    self.assertIn(_norm(para), blob, f"the bio whole in the {fmt}")
+        for tok in BANNED_NEW:
+            self.assertNotIn(tok, deck_blob.lower(), tok)
+            self.assertNotIn(tok, pdf_blob.lower(), tok)
 
     def test_the_room_page_renders_with_and_without_portraits(self):
         from pptx.enum.shapes import MSO_SHAPE

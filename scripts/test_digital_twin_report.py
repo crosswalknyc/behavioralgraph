@@ -239,6 +239,49 @@ class QuestionPages(unittest.TestCase):
         self.assertEqual(_blob(R.report_pages({'meta': twin['meta']}, sess)), _blob(pages))
 
 
+class SeatPages(unittest.TestCase):
+    """Who was in the room (Jenna 2026-11-05): every panelist, their bio
+    and the people they stood in for, right after the question pages."""
+
+    def test_every_seat_listed_once_after_the_questions(self):
+        twin, sess = _session()
+        pages = R.report_pages({'meta': twin['meta']}, sess)
+        kinds = [p['kind'] for p in pages]
+        sp = [p for p in pages if p['kind'] == 'seats']
+        self.assertTrue(sp)
+        last_q = max(i for i, k in enumerate(kinds) if k == 'question')
+        self.assertEqual(kinds[last_q + 1], 'seats', 'the seat pages follow the question pages directly')
+        self.assertEqual(kinds[last_q + 1:last_q + 1 + len(sp)], ['seats'] * len(sp), 'and run together')
+        self.assertLess(kinds.index('seats'), next(i for i, p in enumerate(pages) if p['header'].startswith('Recruited to')))
+        self.assertEqual(sp[0]['header'], 'Who was in the room.')
+        self.assertEqual(sp[0]['sub'], 'Every seat in order: who they are, the cohort they stood in for, and the people each one stands for.')
+        self.assertTrue(all(p['header'] == 'Who was in the room, continued.' for p in sp[1:]))
+        roster = sess['group']['roster']
+        seats = [s for p in sp for s in p['seats']]
+        self.assertEqual([s['seat'] for s in seats], [r['seat'] for r in roster], 'every seat once, in order')
+        self.assertEqual([s['name'] for s in seats], [r['name'] for r in roster])
+        for p in sp:
+            self.assertTrue(1 <= len(p['seats']) <= 3, 'two or three to a page as the layout allows')
+        from migration.digital_twin_pilot import session_people
+        total = session_people(sess)
+        for s in seats:
+            self.assertRegex(s['who'], r'^[A-Za-z]+, \d+, [A-Za-z .]+$')
+            self.assertRegex(s['tag'], r'^Seat \d+ of 12, (woman|man)\. .+\.$')
+            self.assertEqual(s['stands'], f"Stands for {s['people']:,} of the {total:,} people in this audience ({s['share']:.1f}%).")
+            self.assertTrue(s['paragraphs'] and all(p.strip() for p in s['paragraphs']), 'the bio, as the room shows it')
+            self.assertTrue(all(p.endswith(('.', '!', '?')) for p in s['paragraphs']), 'every paragraph ends at a sentence')
+        self.assertLessEqual(abs(sum(s['people'] for s in seats) - total), 10 * len(seats), 'the seats sum to the people the room stands for')
+        blob = _blob(sp)
+        for tok in BANNED:
+            self.assertNotIn(tok, blob, tok)
+
+    def test_a_room_without_seats_adds_no_page(self):
+        twin, sess = _session(with_questions=False)
+        sess['group']['roster'] = []
+        pages = R.report_pages({'meta': twin['meta']}, sess)
+        self.assertFalse(any(p['kind'] == 'seats' for p in pages))
+
+
 class Files(unittest.TestCase):
     def test_pdf_and_deck_carry_the_question_pages(self):
         twin, sess = _session()

@@ -409,9 +409,7 @@ def build_deck(payload: dict, pages: Optional[list] = None) -> bytes:
         except Exception:
             return w
 
-    def lines_of(s, size, w):
-        per = max(8, int(w * 72 / (size * 0.52)))
-        return max(1, -(-len(str(s or '')) // per))
+    lines_of = _deck_lines
 
     def slidenum(slide, x, y, w, h, size, color):
         from lxml import etree
@@ -610,6 +608,50 @@ def build_deck(payload: dict, pages: Optional[list] = None) -> bytes:
                 bl = lines_of(b, 10, 11.4)
                 if y + 0.18 * bl + 0.1 < 6.98:
                     text(slide, L, y + 0.08, 11.4, 0.18 * bl + 0.1, b, 10, body, 'Regular')
+        elif pg['kind'] == 'seats':
+            # who was in the room (Jenna 2026-11-05): each seat's face (the portrait cropped to a circle, or a disc with the
+            # initials), who they are, the cohort line, the people they stand for, and the bio paragraphs; the page list
+            # already holds what fits (measured), and every block still stops above the footer
+            k = _SEAT_DECK
+            bottom = _DECK_BOTTOM
+            tx = L + SEAT_PIC_IN + 0.18
+            tw = R - tx
+            for s in pg.get('seats') or []:
+                if y + SEAT_PIC_IN > bottom:
+                    break
+                drawn = False
+                if s.get('portrait'):
+                    try:
+                        pic = slide.shapes.add_picture(io.BytesIO(s['portrait']), Inches(L), Inches(y), width=Inches(SEAT_PIC_IN), height=Inches(SEAT_PIC_IN))
+                        pic.auto_shape_type = MSO_SHAPE.OVAL
+                        drawn = True
+                    except Exception:
+                        drawn = False
+                if not drawn:
+                    disc = slide.shapes.add_shape(MSO_SHAPE.OVAL, Inches(L), Inches(y), Inches(SEAT_PIC_IN), Inches(SEAT_PIC_IN))
+                    disc.fill.solid()
+                    disc.fill.fore_color.rgb = rgb(SLATE if dark else '#DDDCD4')
+                    disc.line.fill.background()
+                    text(slide, L, y + SEAT_PIC_IN / 2 - 0.15, SEAT_PIC_IN, 0.3, _initials(s.get('name')), 12, accent, 'Bold', PP_ALIGN.CENTER)
+                yy = y + k['top']
+                text(slide, tx, yy, tw, 0.26, s.get('who') or '', 11.5, ink, 'Bold')
+                yy += k['name']
+                if s.get('tag'):
+                    text(slide, tx, yy, tw, 0.2, s['tag'], 9, muted, 'Regular')     # a note: 9pt is the lint's floor for notes
+                    yy += k['tag']
+                if s.get('stands'):
+                    text(slide, tx, yy, tw, 0.22, s['stands'], 9.5, accent, 'Medium')
+                    yy += k['stands']
+                yy += 0.04
+                for p in s.get('paragraphs') or []:
+                    room = int((bottom - yy) / k['line'])
+                    p = fit_quote(p, lambda t: _deck_lines(t, k['size'], tw), room) if room >= 1 else ''
+                    if not p:
+                        break
+                    h = k['line'] * _deck_lines(p, k['size'], tw) + k['para_gap']
+                    text(slide, tx, yy, tw, h, p, k['size'], body, 'Regular')
+                    yy += h
+                y = max(yy, y + SEAT_PIC_IN + 0.1) + k['gap']
         elif pg['kind'] == 'question':
             # one question the moderator put to the room (digital_twin_report, 2026-11-04): the framing, the split
             # across the page with the seat tally, then Prometheus's read and the voices on the left and what the
@@ -714,6 +756,30 @@ def _fonts():
     return out
 
 
+def _wrap_text(text, font, size, width) -> list:
+    """Word wrap by the registered font's metrics; a word is never split."""
+    from reportlab.pdfbase.pdfmetrics import stringWidth
+    words, lines, cur = str(text or '').split(), [], ''
+    for w in words:
+        trial = (cur + ' ' + w).strip()
+        if stringWidth(trial, font, size) <= width:
+            cur = trial
+        else:
+            if cur:
+                lines.append(cur)
+            cur = w
+    if cur:
+        lines.append(cur)
+    return lines or ['']
+
+
+def _deck_lines(s, size, w) -> int:
+    """The lines a string takes on a slide at ``size`` points across ``w``
+    inches (the estimate every deck page is laid out with)."""
+    per = max(8, int(w * 72 / (size * 0.52)))
+    return max(1, -(-len(str(s or '')) // per))
+
+
 class _Doc:
     def __init__(self):
         from reportlab.lib.pagesizes import landscape, letter
@@ -728,19 +794,7 @@ class _Doc:
         self.dark = True
 
     def _wrap(self, text, font, size, width):
-        from reportlab.pdfbase.pdfmetrics import stringWidth
-        words, lines, cur = str(text or '').split(), [], ''
-        for w in words:
-            trial = (cur + ' ' + w).strip()
-            if stringWidth(trial, font, size) <= width:
-                cur = trial
-            else:
-                if cur:
-                    lines.append(cur)
-                cur = w
-        if cur:
-            lines.append(cur)
-        return lines or ['']
+        return _wrap_text(text, font, size, width)
 
     def new_page(self, dark, eyebrow, header, sub=''):
         from reportlab.lib import colors
@@ -998,6 +1052,10 @@ def build_panel_pdf(payload: dict, session: dict, portrait_fn=None) -> bytes:
             yy = d.paragraph(text, x, y - 6, width, size=size, color=OFFWHITE if d.dark else GRAPHITE, font=font)
             y = min(yy, y - 6 - pic + 9 - 8) if img is not None else yy
             fresh = False
+    # the closing pages (Jenna 2026-11-05): every panelist, their bio and the people they stood in for
+    for pg in seat_pages(session, portrait_fn=portrait_fn, people_total=_room_total(_light_group(session)), eyebrow='Focus Group IQ', start_dark=not d.dark):
+        y = d.new_page(bool(pg.get('dark')), pg.get('eyebrow') or 'Focus Group IQ', pg['header'], pg.get('sub') or '')
+        draw_seats_pdf(d, pg, y)
     return _fin(d.finish(), '.pdf')
 
 
@@ -1338,6 +1396,383 @@ def draw_roster_pdf(d: '_Doc', pg: dict, y: float) -> float:
     return y
 
 
+# -------------------------------------------------- who was in the room
+# Every panelist at the end of the export (Jenna 2026-11-05: "at the end of the focus group export it should list each
+# panelist, their bio and the sample they stood in for"): the face, who they are, the cohort they stood in for, the
+# people they stand for, and the bio as the room shows it. Two or three seats to a page, measured for the PDF (the
+# font's own metrics) and the deck (its line estimate) so both formats split the pages the same way.
+SEAT_PIC = 0.62 * 72          # the portrait beside a seat on the PDF, points
+SEAT_PIC_IN = 0.62            # and on the deck, inches
+SEATS_PER_PAGE = 3
+SEATS_HEADER = 'Who was in the room.'
+SEATS_HEADER_MORE = 'Who was in the room, continued.'
+SEATS_SUB = 'Every seat in order: who they are, the cohort they stood in for, and the people each one stands for.'
+# the bio at note size (9pt, the house floor) so two seats with the room's usual twelve-sentence bios share a page
+_SEAT_PDF = {'top': 10.0, 'name': 14.0, 'tag': 11.0, 'stands': 14.0, 'line': 12.0, 'para_gap': 4.0, 'gap': 12.0, 'name_size': 11.5, 'tag_size': 8.0, 'stands_size': 9.5, 'size': 9.0}
+_SEAT_DECK = {'top': 0.0, 'name': 0.23, 'tag': 0.18, 'stands': 0.2, 'line': 0.16, 'para_gap': 0.03, 'gap': 0.18, 'size': 9}
+_PDF_W, _PDF_H = 792.0, 612.0
+_PDF_TEXT_W = _PDF_W - 0.587 * 72 - 0.92 * 72
+_DECK_L, _DECK_R, _DECK_BOTTOM = 0.92, 12.413, 6.85
+
+
+def bio_paragraphs(text) -> list:
+    """The bio as the room shows it on the seat card: the paragraphs the
+    text carries, or one long paragraph split by sentence into two or
+    three, the way the page does it."""
+    import math
+    parts = [p.strip() for p in re.split(r'\n+', str(text or '')) if p.strip()]
+    if len(parts) == 1 and len(parts[0]) > 380:
+        sents = re.findall(r"[^.!?]+[.!?]+[\"']?(?:\s+|$)", parts[0]) or [parts[0]]
+        per = math.ceil(len(sents) / min(3, math.ceil(len(sents) / 3)))
+        parts = [''.join(sents[i:i + per]).strip() for i in range(0, len(sents), per)]
+    return [' '.join(p.split()) for p in parts if p.strip()]
+
+
+def _room_clean(s) -> str:
+    """The export's copy scrub when the caller brings none: no em or en
+    dash, no calibration language, whitespace collapsed."""
+    t = str(s or '').replace('\u2014', ', ').replace('\u2013', '-')
+    try:
+        from migration.digital_twin_copy import strip_calibration_language
+        t = strip_calibration_language(t)
+    except Exception:
+        pass
+    return ' '.join(t.split())
+
+
+def _light_group(session: dict) -> dict:
+    """A copy of the room's group with what the seat pages read (the
+    seats without their memory), so filling in a missing stands-for
+    figure never touches the stored record."""
+    g = (session or {}).get('group') or {}
+    return {'in_room': g.get('in_room'), 'size_people': g.get('size_people'),
+            'segments': [dict(s) for s in (g.get('segments') or []) if isinstance(s, dict)],
+            'roster': [{k: v for k, v in r.items() if k != 'memory'} for r in (g.get('roster') or []) if isinstance(r, dict)]}
+
+
+def _room_total(group: dict) -> int:
+    try:
+        from migration.digital_twin_panel import room_total_people
+        return int(room_total_people(group) or 0)
+    except Exception:
+        pass
+    for src in ((group.get('size_people'),), [s.get('people') for s in group.get('segments') or []], [r.get('people') for r in group.get('roster') or []]):
+        total = 0
+        for v in src:
+            try:
+                total += max(0, int(float(v or 0)))
+            except (TypeError, ValueError):
+                pass
+        if total > 0:
+            return total
+    return 0
+
+
+def _fill_stands_for(group: dict) -> None:
+    """A seat without its stands-for figures (an older record) gets them
+    the way the room does (``annotate_seat_stands_for``: the segment's
+    people over its seats, moved off a round figure by the seat's index);
+    a seat that carries them keeps them."""
+    roster = group.get('roster') or []
+    kept = {}
+    for i, r in enumerate(roster):
+        try:
+            if int(float(r.get('stands_for_people') or 0)) > 0:
+                kept[i] = (r.get('stands_for_people'), r.get('stands_for_share'))
+        except (TypeError, ValueError):
+            pass
+    if len(kept) == len(roster):
+        return
+    try:
+        from migration.digital_twin_panel import annotate_seat_stands_for
+        annotate_seat_stands_for(group)
+        for i, (people, share) in kept.items():
+            roster[i]['stands_for_people'], roster[i]['stands_for_share'] = people, share
+        if kept:
+            _fill_remainder(group, kept)
+        return
+    except Exception:
+        pass
+    total = _room_total(group)
+    seg_people, seg_seats = {}, {}
+    for s in group.get('segments') or []:
+        try:
+            seg_people[str(s.get('label'))] = int(float(s.get('people') or 0))
+        except (TypeError, ValueError):
+            seg_people[str(s.get('label'))] = 0
+    for r in roster:
+        seg_seats[str(r.get('segment'))] = seg_seats.get(str(r.get('segment')), 0) + 1
+    for idx, r in enumerate(roster):
+        try:
+            people = int(float(r.get('stands_for_people') or 0))
+        except (TypeError, ValueError):
+            people = 0
+        if people <= 0:
+            lab = str(r.get('segment'))
+            people = int(round(seg_people.get(lab, 0) / float(seg_seats.get(lab) or 1))) if seg_people.get(lab) else int(round(total / float(len(roster) or 1)))
+            if people > 0 and people % 10 == 0:
+                people += (idx % 9) + 1
+            r['stands_for_people'] = people
+        if r.get('stands_for_share') is None and total > 0 and people > 0:
+            r['stands_for_share'] = round(people / float(total) * 100.0, 1)
+
+
+def _fill_remainder(group: dict, kept: dict) -> None:
+    """A record with the figures on some seats and not others: the seats
+    filled in take what is left of their segment after the stored ones,
+    in proportion, so the seats still sum to the room."""
+    roster = group.get('roster') or []
+    total = _room_total(group)
+    seg_people = {}
+    for s in group.get('segments') or []:
+        try:
+            seg_people[str(s.get('label'))] = int(float(s.get('people') or 0))
+        except (TypeError, ValueError):
+            pass
+    by_seg = {}
+    for i, r in enumerate(roster):
+        by_seg.setdefault(str(r.get('segment')), []).append(i)
+    for lab, idxs in by_seg.items():
+        filled = [i for i in idxs if i not in kept]
+        stored = [i for i in idxs if i in kept]
+        seg_total = seg_people.get(lab) or (int(round(total * len(idxs) / float(len(roster)))) if total > 0 else 0)
+        if not filled or not stored or seg_total <= 0:
+            continue
+        rem = seg_total - sum(int(float(roster[i].get('stands_for_people') or 0)) for i in stored)
+        base = sum(int(float(roster[i].get('stands_for_people') or 0)) for i in filled)
+        if rem <= 0 or base <= 0:
+            continue
+        for i in filled:
+            v = max(1, int(round(int(float(roster[i].get('stands_for_people') or 0)) * rem / float(base))))
+            if v % 10 == 0:
+                v += (i % 9) + 1
+            roster[i]['stands_for_people'] = v
+            roster[i]['stands_for_share'] = round(v / float(total) * 100.0, 1) if total > 0 else None
+
+
+def seat_entries(session: dict, portrait_fn=None, clean=None, people_total=None) -> Tuple[list, int]:
+    """One entry per seat, in seat order: {seat, name, age, city, who,
+    tag, stands, paragraphs, portrait, people, share}, and the people
+    the room stands for (``people_total`` when the caller has the room's
+    own figure, else the group's). The stands-for line is the seat's
+    figure against that total; a record without one is filled in on a
+    copy."""
+    clean = clean or _room_clean
+    g = _light_group(session)
+    roster = sorted(g.get('roster') or [], key=lambda r: (int(r.get('seat') or 0) if str(r.get('seat') or '').lstrip('-').isdigit() else 10 ** 6))
+    if not roster:
+        return [], 0
+    g['roster'] = roster
+    _fill_stands_for(g)
+    try:
+        total = int(float(people_total or 0))
+    except (TypeError, ValueError):
+        total = 0
+    total = total if total > 0 else _room_total(g)
+    read = _portrait_bytes(portrait_fn)
+    n = len(roster)
+    out = []
+    for r in roster:
+        name = clean(str(r.get('name') or f"Seat {r.get('seat')}"))
+        who = ', '.join(str(v) for v in (name, r.get('age'), clean(str(r.get('city') or ''))) if v not in (None, ''))
+        gender = str(r.get('gender') or '').upper()
+        bits = [f"Seat {r.get('seat')} of {n}"]
+        if gender in ('F', 'M'):
+            bits[0] += ', ' + ('woman' if gender == 'F' else 'man')
+        tag = bits[0] + '.'
+        cohort = clean(str(r.get('segment') or ''))
+        extra = clean(str(r.get('cohort') or ''))
+        if extra and extra.lower() != cohort.lower():
+            cohort = f"{cohort}, {extra}" if cohort else extra
+        if cohort:
+            tag += f" {cohort.rstrip('.')}."
+        try:
+            people = int(float(r.get('stands_for_people') or 0))
+        except (TypeError, ValueError):
+            people = 0
+        share = round(people / float(total) * 100.0, 1) if (total > 0 and people > 0) else r.get('stands_for_share')
+        if people > 0 and total > 0:
+            stands = f"Stands for {people:,} of the {total:,} people in this audience" + (f" ({float(share):.1f}%)." if share is not None else '.')
+        elif people > 0:
+            stands = f"Stands for {people:,} people in this audience."
+        else:
+            stands = ''
+        paras = [clean(p) for p in bio_paragraphs(r.get('persona')) if clean(p)]
+        if not paras:
+            paras = [clean(f"{name} holds seat {r.get('seat')} in this room.")]
+        out.append({'seat': r.get('seat'), 'name': name, 'age': r.get('age'), 'city': clean(str(r.get('city') or '')), 'who': who, 'tag': tag, 'stands': stands,
+                    'paragraphs': paras, 'portrait': read(r.get('portrait_hash')), 'people': people, 'share': share})
+    return out, total
+
+
+def _seat_height_pdf(e: dict, fonts: dict) -> float:
+    k = _SEAT_PDF
+    width = _PDF_TEXT_W - SEAT_PIC - 14
+    h = k['top'] + k['name'] + (k['tag'] if e.get('tag') else 0) + (k['stands'] if e.get('stands') else 0)
+    for p in e.get('paragraphs') or []:
+        h += len(_wrap_text(p, fonts['regular'], k['size'], width)) * k['line'] + k['para_gap']
+    return max(h, SEAT_PIC + 8)
+
+
+def _seat_height_deck(e: dict) -> float:
+    k = _SEAT_DECK
+    width = _DECK_R - _DECK_L - SEAT_PIC_IN - 0.18
+    h = k['top'] + k['name'] + (k['tag'] if e.get('tag') else 0) + (k['stands'] if e.get('stands') else 0) + 0.04
+    for p in e.get('paragraphs') or []:
+        h += _deck_lines(p, k['size'], width) * k['line'] + k['para_gap']
+    return max(h, SEAT_PIC_IN + 0.1)
+
+
+def _fit_paragraphs(paras: list, lines_of, max_lines: int) -> list:
+    """The paragraphs that fit in ``max_lines`` lines: whole ones while
+    they fit, the first that does not ending at the last complete
+    sentence that does (``fit_quote``), the rest dropped. Never mid-word."""
+    out, left = [], max(0, int(max_lines))
+    for p in paras or []:
+        n = lines_of(p)
+        if n <= left:
+            out.append(p)
+            left -= n
+            continue
+        cut = fit_quote(p, lines_of, left) if left >= 1 else ''
+        if cut:
+            out.append(cut)
+        break
+    return out
+
+
+def _pdf_budget(header: str, sub: str, fonts: dict) -> float:
+    """The points between a page's header block and the footer line, as
+    ``_Doc.new_page`` lays it out."""
+    y = _PDF_H - 1.35 * 72 - 26 * len(_wrap_text(header, fonts['bold'], 20, _PDF_TEXT_W))
+    if sub:
+        y -= 15 * min(4, len(_wrap_text(sub, fonts['regular'], 10.5, _PDF_TEXT_W)))
+    return y - 18 - PANEL_FLOOR
+
+
+def _deck_budget(header: str, sub: str) -> float:
+    y = 1.05 + 0.42 * _deck_lines(header, 26, 11.4) + 0.22
+    if sub:
+        y += 0.2 * _deck_lines(sub, 11.5, 11.4) + 0.3
+    return _DECK_BOTTOM - y
+
+
+def seat_pages(session: dict, portrait_fn=None, clean=None, people_total=None, eyebrow=None, start_dark: bool = True) -> list:
+    """The closing pages: every seat in order, two or three to a page as
+    the layout allows (measured for the PDF and the deck, so both split
+    the same way), 'Who was in the room.' then 'Who was in the room,
+    continued.' A seat longer than a page keeps the paragraphs that fit,
+    the last ending at a complete sentence. [] when there is no roster."""
+    entries, total = seat_entries(session, portrait_fn=portrait_fn, clean=clean, people_total=people_total)
+    if not entries:
+        return []
+    fonts = _fonts()
+    n = len(entries)
+    pages, i, k = [], 0, 0
+    while i < n:
+        header = SEATS_HEADER if k == 0 else SEATS_HEADER_MORE
+        sub = SEATS_SUB if k == 0 else f"Seats {i + 1} to {n} of {n}."     # one line either way; the real range is set once the page is packed
+        bp, bd = _pdf_budget(header, sub, fonts), _deck_budget(header, sub)
+        take, used_p, used_d = [], 0.0, 0.0
+        while i < n and len(take) < SEATS_PER_PAGE:
+            e = entries[i]
+            hp, hd = _seat_height_pdf(e, fonts), _seat_height_deck(e)
+            gp = _SEAT_PDF['gap'] if take else 0.0
+            gd = _SEAT_DECK['gap'] if take else 0.0
+            if take and (used_p + gp + hp > bp or used_d + gd + hd > bd):
+                break
+            if not take and (hp > bp or hd > bd):
+                # longer than a page on its own: the paragraphs that fit, the last ending at a complete sentence
+                e = dict(e)
+                width_p = _PDF_TEXT_W - SEAT_PIC - 14
+                fixed_p = _SEAT_PDF['top'] + _SEAT_PDF['name'] + (_SEAT_PDF['tag'] if e.get('tag') else 0) + (_SEAT_PDF['stands'] if e.get('stands') else 0)
+                lines_p = int((bp - fixed_p - _SEAT_PDF['para_gap'] * len(e['paragraphs'])) // _SEAT_PDF['line'])
+                e['paragraphs'] = _fit_paragraphs(e['paragraphs'], lambda t: len(_wrap_text(t, fonts['regular'], _SEAT_PDF['size'], width_p)), lines_p)
+                width_d = _DECK_R - _DECK_L - SEAT_PIC_IN - 0.18
+                fixed_d = _SEAT_DECK['name'] + (_SEAT_DECK['tag'] if e.get('tag') else 0) + (_SEAT_DECK['stands'] if e.get('stands') else 0) + 0.04
+                lines_d = int((bd - fixed_d - _SEAT_DECK['para_gap'] * len(e['paragraphs'])) // _SEAT_DECK['line'])
+                e['paragraphs'] = _fit_paragraphs(e['paragraphs'], lambda t: _deck_lines(t, _SEAT_DECK['size'], width_d), lines_d)
+                hp, hd = _seat_height_pdf(e, fonts), _seat_height_deck(e)
+            take.append(e)
+            used_p += gp + hp
+            used_d += gd + hd
+            i += 1
+        lo, hi = i - len(take) + 1, i
+        if k:
+            sub = f"Seat {lo} of {n}." if lo == hi else f"Seats {lo} to {hi} of {n}."
+        pg = {'kind': 'seats', 'header': header, 'sub': sub, 'seats': take, 'people_total': total, 'dark': bool(start_dark) if k % 2 == 0 else not bool(start_dark)}
+        if eyebrow:
+            pg['eyebrow'] = eyebrow
+        pages.append(pg)
+        k += 1
+    return pages
+
+
+def draw_seats_pdf(d: '_Doc', pg: dict, y: float) -> float:
+    """A 'Who was in the room' page in the PDF: for each seat the face
+    (or the initials), who they are, the cohort line, the stands-for
+    line and the bio paragraphs. Every line stops above the footer; a
+    word is never split."""
+    from reportlab.lib import colors
+    from reportlab.lib.utils import ImageReader
+    k = _SEAT_PDF
+    ink = OFFWHITE if d.dark else GRAPHITE
+    body = BODY_DARK if d.dark else BODY_LIGHT
+    muted = MUTED_DARK if d.dark else MUTED_LIGHT
+    accent = GREEN if d.dark else OLIVE
+    floor = PANEL_FLOOR
+    x = d.m + SEAT_PIC + 14
+    width = d.right - x
+    for s in pg.get('seats') or []:
+        if y - SEAT_PIC < floor:
+            break
+        top = y
+        d.c.setFillColor(colors.HexColor(SLATE if d.dark else '#DDDCD4'))
+        d.c.circle(d.m + SEAT_PIC / 2.0, top - SEAT_PIC / 2.0, SEAT_PIC / 2.0, stroke=0, fill=1)
+        drawn = False
+        if s.get('portrait'):
+            try:
+                drawn = _draw_round_portrait(d.c, ImageReader(io.BytesIO(s['portrait'])), d.m, top - SEAT_PIC, SEAT_PIC)
+            except Exception:
+                drawn = False
+        if not drawn:
+            d.c.setFont(d.f['bold'], 13)
+            d.c.setFillColor(colors.HexColor(accent))
+            d.c.drawCentredString(d.m + SEAT_PIC / 2.0, top - SEAT_PIC / 2.0 - 4.5, _initials(s.get('name')))
+        yy = top - k['top']
+        d.c.setFont(d.f['bold'], k['name_size'])
+        d.c.setFillColor(colors.HexColor(ink))
+        d.c.drawString(x, yy, _wrap_text(s.get('who') or '', d.f['bold'], k['name_size'], width)[0])
+        yy -= k['name']
+        if s.get('tag'):
+            d.c.setFont(d.f['medium'], k['tag_size'])
+            d.c.setFillColor(colors.HexColor(muted))
+            d.c.drawString(x, yy, _wrap_text(s['tag'], d.f['medium'], k['tag_size'], width)[0])
+            yy -= k['tag']
+        if s.get('stands'):
+            d.c.setFont(d.f['medium'], k['stands_size'])
+            d.c.setFillColor(colors.HexColor(accent))
+            d.c.drawString(x, yy, _wrap_text(s['stands'], d.f['medium'], k['stands_size'], width)[0])
+            yy -= k['stands']
+        d.c.setFont(d.f['regular'], k['size'])
+        d.c.setFillColor(colors.HexColor(body))
+        for p in s.get('paragraphs') or []:
+            room = int((yy - floor) // k['line']) + 1
+            if room < 1:
+                break
+            p = fit_quote(p, lambda t: len(_wrap_text(t, d.f['regular'], k['size'], width)), room)
+            if not p:
+                break
+            for line in _wrap_text(p, d.f['regular'], k['size'], width):
+                if yy < floor:
+                    break
+                d.c.drawString(x, yy, line)
+                yy -= k['line']
+            yy -= k['para_gap']
+        y = min(yy, top - SEAT_PIC - 8) - k['gap']
+    return y
+
+
 def build_pilot_deck(payload: dict, session: dict, portrait_fn=None) -> bytes:
     """The Pilot Testing deck: the studio report, room pages included.
     One page list for every format (``digital_twin_report.report_pages``)."""
@@ -1365,4 +1800,5 @@ def pilot_deck_filename(payload: dict, session: dict) -> str:
 __all__ = ['build_deck', 'deck_filename', 'build_pdf', 'pdf_filename', 'build_panel_pdf', 'panel_pdf_filename',
            'build_pilot_pdf', 'pilot_pdf_filename', 'build_pilot_deck', 'pilot_deck_filename',
            'room_pages', 'moments_pages', 'segment_shares', 'draw_roster_pdf', 'ROSTER_FACES', 'MOMENTS_ON_PAGE',
-           'question_header', 'question_lead_line', 'clean_quote', 'fit_quote', 'QUOTE_CAP', 'PANEL_FLOOR']
+           'question_header', 'question_lead_line', 'clean_quote', 'fit_quote', 'QUOTE_CAP', 'PANEL_FLOOR',
+           'seat_pages', 'seat_entries', 'draw_seats_pdf', 'bio_paragraphs', 'SEATS_PER_PAGE', 'SEATS_HEADER', 'SEATS_HEADER_MORE']
