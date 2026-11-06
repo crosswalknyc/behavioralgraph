@@ -219,8 +219,9 @@ def repair_thread_labels(uname, idx=None, persist=True):
 
 
 def list_threads(uname, subject_key=None):
+    from . import thread_presence as _tp
     idx, _changed = repair_thread_labels(uname)
-    threads = sorted(idx.get('threads', []),
+    threads = sorted(_tp.visible_threads(idx.get('threads', [])),   # an empty chat is never listed (2026-11-06)
                      key=lambda t: str(t.get('updated') or ''),
                      reverse=True)
     if subject_key:
@@ -292,6 +293,8 @@ def thread_for_subject(uname, subject_key, subject_label=None, product=None, *, 
             host.s3_put_json(host.threads_index_key(uname), idx)
         out['history'] = []
         return out
+    if out.get('switched') or out.get('created'):
+        idx.pop('fresh_at', None)   # the pane followed the page into a thread (prometheus.thread_presence)
     host.s3_put_json(host.threads_index_key(uname), idx)
     if out.get('created'):
         host.s3_put_json(host.thread_key(uname, out['tid']), [])

@@ -77,7 +77,7 @@ class CarriedContext(unittest.TestCase):
         html = open(os.path.join(ROOT, 'templates', 'index.html'), encoding='utf-8').read()
         self.assertIn('b.carried_from = _pmCarried.from', html)
         self.assertIn("_pmCarried = (_prevActive && _prevActive !== d.active)", html)
-        self.assertEqual(html.count('_pmCarried = null;'), 4)   # the declaration, expiry, a thread opened by hand, a new chat
+        self.assertEqual(html.count('_pmCarried = null;'), 5)   # the declaration, expiry, a thread opened by hand, a new chat, a fresh pane (_pmGoFresh, 2026-11-06)
 
     def test_carried_turns_bind_the_follow_up(self):
         carried = [dict(t, carried=True) for t in GG_READ]

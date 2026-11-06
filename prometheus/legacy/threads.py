@@ -14,7 +14,7 @@ from flask import jsonify, request, session
 from prometheus.legacy import H as _H, C as _C  # noqa: E402
 from prometheus import seams as _seams  # noqa: E402
 
-__all__ = ['api_synth_chat_threads', 'api_synth_chat_threads_new', 'api_synth_chat_threads_activate', 'api_synth_chat_threads_bind', 'api_synth_chat_threads_rename', 'api_synth_chat_threads_delete', '_pm_threads_index_key', '_pm_thread_key', '_pm_thread_title_from', '_pm_project_label', '_load_threads_index', '_turn_epoch', '_is_server_turn', 'keep_server_turns', 'fill_blank_agent_turns']
+__all__ = ['api_synth_chat_threads', 'api_synth_chat_threads_fresh', 'api_synth_chat_threads_new', 'api_synth_chat_threads_activate', 'api_synth_chat_threads_bind', 'api_synth_chat_threads_rename', 'api_synth_chat_threads_delete', '_pm_threads_index_key', '_pm_thread_key', '_pm_thread_title_from', '_pm_project_label', '_load_threads_index', '_turn_epoch', '_is_server_turn', 'keep_server_turns', 'fill_blank_agent_turns']
 
 
 # The dashboard's display name for a project key (2026-10-22, Scott's
@@ -101,12 +101,13 @@ def api_synth_chat_threads_bind():
         sk, label, product = sk or '', label or '', product or ''
     out = _svc.thread_for_subject(uname, sk, label, product, create=True)
     idx = _load_threads_index(uname)
+    from prometheus import thread_presence as _tp
     return jsonify({'success': True, 'active': out.get('tid'),
                     'switched': bool(out.get('switched')),
                     'created': bool(out.get('created')),
                     'binding': out.get('binding'),
                     'history': out.get('history') or [],
-                    'threads': sorted(idx.get('threads', []),
+                    'threads': sorted(_tp.visible_threads(idx.get('threads', [])),
                                       key=lambda t: str(t.get('updated') or ''),
                                       reverse=True)})
 
@@ -121,12 +122,47 @@ def api_synth_chat_threads():
         return err
     uname = session.get('username') or ''
     from prometheus import service as _svc
+    from prometheus import thread_presence as _tp
     idx, _changed = _svc.repair_thread_labels(uname)   # a stale label never survives the next look (2026-10-22)
-    threads = sorted(idx.get('threads', []),
+    # an empty chat is never a rail entry (Jenna 2026-11-06): empties older
+    # than fifteen minutes go (once per ten minutes), the rest stay hidden
+    try:
+        _tp.sweep_for_user(uname, idx)
+    except Exception:
+        pass
+    threads = sorted(_tp.visible_threads(idx.get('threads', [])),
                      key=lambda t: str(t.get('updated') or ''),
                      reverse=True)
     return jsonify({'success': True, 'active': idx.get('active'),
                     'threads': threads})
+
+
+@_H.app.route('/api/brief-chat/threads/fresh', methods=['POST'])
+@_H.requires_auth
+def api_synth_chat_threads_fresh():
+    """The reader asked for a new chat (Jenna 2026-11-06: "if a chat
+    window is empty there is no need to save it to the left rail").
+    Nothing is created; the index remembers the request so a reload or
+    another tab opens the same empty pane. The thread is minted on the
+    first message (threads/new from the send path). Session-only."""
+    user, err = _C._synth_chat_gate(allow_api_key=False)
+    if err:
+        return err
+    uname = session.get('username') or ''
+    from prometheus import thread_presence as _tp
+    idx = _load_threads_index(uname)
+    _tp.mark_fresh(idx)
+    _C._pm_s3_put_json(_pm_threads_index_key(uname), idx)
+    # the armed intakes go with the thread that was left (prometheus.intake_reset)
+    try:
+        from prometheus import intake_reset as _ireset
+        _ireset.on_new_thread(uname, None)
+    except Exception:
+        pass
+    return jsonify({'success': True, 'fresh': True, 'active': None,
+                    'threads': sorted(_tp.visible_threads(idx.get('threads', [])),
+                                      key=lambda t: str(t.get('updated') or ''),
+                                      reverse=True)})
 
 
 @_H.app.route('/api/brief-chat/threads/new', methods=['POST'])
@@ -146,8 +182,9 @@ def api_synth_chat_threads_new():
         _ireset.on_new_thread(uname, tid)
     except Exception:
         pass
+    from prometheus import thread_presence as _tp
     return jsonify({'success': True, 'active': tid,
-                    'threads': sorted(idx['threads'],
+                    'threads': sorted(_tp.visible_threads(idx['threads']),
                                       key=lambda t: str(t.get('updated') or ''),
                                       reverse=True)})
 
@@ -165,10 +202,12 @@ def api_synth_chat_threads_activate():
     if not any(t.get('id') == tid for t in idx.get('threads', [])):
         return jsonify({'success': False, 'error': 'unknown thread'}), 404
     idx['active'] = tid
+    idx.pop('fresh_at', None)   # the reader is in a thread again (prometheus.thread_presence)
     now = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
     for t in idx.get('threads', []):
         if t.get('id') == tid:
             t['opened'] = now
+            t['last_seen'] = now   # opened from the rail by hand: activity
             break
     _C._pm_s3_put_json(_pm_threads_index_key(uname), idx)
     history = _C._pm_s3_json(_pm_thread_key(uname, tid), [])
@@ -236,9 +275,10 @@ def api_synth_chat_threads_delete():
     else:
         history = None
     _C._pm_s3_put_json(_pm_threads_index_key(uname), idx)
+    from prometheus import thread_presence as _tp
     return jsonify({'success': True, 'active': idx['active'],
                     'history': history,
-                    'threads': sorted(idx['threads'],
+                    'threads': sorted(_tp.visible_threads(idx['threads']),
                                       key=lambda t: str(t.get('updated') or ''),
                                       reverse=True)})
 

@@ -87252,8 +87252,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // prometheus after having it collapsed for more than 2 minutes
             // it needs to open a fresh thread, catalog the old thread in
             // the side bar and then ask me the chip questions. not just
-            // pick up a random thread." The collapse time is kept in
-            // localStorage so a reload while collapsed still counts.
+            // pick up a random thread." Superseded 2026-11-06 (Jenna: a
+            // fresh pane only after 15 minutes inactive, and never a saved
+            // empty thread): the decision is the server's (_pmReopenCheck,
+            // prometheus.thread_presence). The collapse stamp stays for
+            // the launcher; _pmCollapsedFor is no longer consulted.
             var CKEY = 'pmCollapsedAt';
             var _PM_FRESH_ON_RETURN_MS = 2 * 60 * 1000;
             function _pmCollapsedFor() {
@@ -87266,7 +87269,6 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var l = _el('prometheusLauncher'), w = _el('prometheusWidget');
                 if (!w) return;
                 var wasOpen = w.classList.contains('pm-on');
-                var away = wasOpen ? 0 : _pmCollapsedFor();
                 try { localStorage.removeItem(CKEY); } catch (_) {}
                 window._pmCollapsedAt = 0;
                 if (l) l.classList.remove('pm-on');
@@ -87280,15 +87282,18 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     window._pmRailGrowOpen(w);
                 }
                 try { localStorage.setItem(OKEY, '1'); } catch (_) {}
+                var _booting = !window.__synthChatBooted;
                 if (typeof synthChatInit === 'function') synthChatInit();
-                if (away >= _PM_FRESH_ON_RETURN_MS && typeof pmNewChat === 'function') {
-                    // the thread it was on stays in the rail; the fresh one
-                    // opens with the greeting and its chips
-                    window._pmFreshOpenedAt = Date.now();
-                    pmNewChat(function () {
-                        if (typeof _synthChatShowWelcomeBack === 'function') _synthChatShowWelcomeBack(true);
-                    });
-                } else if (typeof _synthChatShowWelcomeBack === 'function') {
+                // Reopen resumes unless idle 15 minutes (Jenna 2026-11-06: "if you reopen
+                // prometheus it should only go to a new window if it has been inactive for 15m
+                // or more"). The server decides from the thread's last turn and the last time a
+                // widget was open on it; a fresh pane names no thread and creates none until the
+                // first message. The first boot's own history load makes the same call (open=1).
+                // The two-minute rule of 2026-10-30 (a new server thread on every return) is
+                // what stacked empty 'New chat' entries in the rail.
+                if (!wasOpen && !_booting && typeof _pmReopenCheck === 'function') {
+                    _pmReopenCheck();
+                } else if (!_booting && typeof _synthChatShowWelcomeBack === 'function') {
                     _synthChatShowWelcomeBack();
                 }
                 var m = _el('synthChatMessages');
@@ -87432,14 +87437,24 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             if (window.__synthChatBooted) return;
             window.__synthChatBooted = true;
             synthChatMicInit();
-            fetch('/api/brief-chat/history', { credentials: 'same-origin' })
+            // open=1: the server says whether the thread the reader was last in resumes (its last
+            // turn or the last time a widget was open on it under 15 minutes ago) or the pane
+            // opens fresh with no thread (Jenna 2026-11-06, prometheus.thread_presence)
+            fetch('/api/brief-chat/history?open=1', { credentials: 'same-origin' })
                 .then(function(r) { return r.ok ? r.json() : { history: [] }; })
                 .then(function(d) {
-                    // A return after two minutes collapsed opened a fresh
-                    // thread while this was in flight (2026-10-30): the
-                    // thread this fetch read is the one just parked, so it
+                    // A fresh pane opened while this was in flight (2026-10-30):
+                    // the thread this fetch read is the one just parked, so it
                     // is not adopted over the fresh one.
                     if (window._pmFreshOpenedAt && Date.now() - window._pmFreshOpenedAt < 15000) {
+                        _synthChatResumeIfInFlight();
+                        try { _pmResumeReadJobs(); } catch (_) {}
+                        return;
+                    }
+                    if (d && d.fresh) {
+                        // idle fifteen minutes, or a new chat asked for and never typed into:
+                        // an empty pane, no thread until the first message, the greeting and its chips
+                        _pmGoFresh(d, true);
                         _synthChatResumeIfInFlight();
                         try { _pmResumeReadJobs(); } catch (_) {}
                         return;
@@ -87869,7 +87884,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     // (2026-11-04: taking the server's active here sent one tab's saves to the thread
                     // another tab had opened). Only a rotation or a resync adopts the server's active.
                     var mine = (!adoptActive && _pmThreadsIdx && _pmThreadsIdx.active) ? String(_pmThreadsIdx.active) : '';
-                    if (mine && (d.threads || []).some(function (t) { return String(t.id) === mine; })) d.active = mine;
+                    // the rail lists only threads with turns (2026-11-06), so membership no longer
+                    // says whether this tab's thread exists; a lost thread is found by the 404 on
+                    // its own save or pull. A fresh pane names no thread whatever the server's
+                    // active pointer says.
+                    if (_pmPendingNew) d.active = null;
+                    else if (mine) d.active = mine;
                     _pmThreadsIdx = d;
                     _pmThreadsRender();
                 }).catch(function () {});
@@ -88028,6 +88048,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var leaving = !!(opts && opts.leaving);
             var sent = synthChatHistory;
             var tid = (_pmThreadsIdx && _pmThreadsIdx.active) || null;
+            // a fresh pane has no thread and nothing to save (2026-11-06): the first message mints
+            // the thread (_pmEnsureThread) before anything is pushed; a save never lands on the
+            // server's active thread by default
+            if (_pmPendingNew || !tid) return Promise.resolve(null);
             try {
                 return fetch('/api/brief-chat/history', {
                     method: 'POST', credentials: 'same-origin', keepalive: !!(opts && opts.keepalive),
@@ -88147,7 +88171,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     _pmFollow.key = key;
                     var _prevActive = _pmThreadsIdx && _pmThreadsIdx.active;
                     _pmThreadsIdx = { active: d.active, threads: d.threads || [] };
+                    // a fresh pane stays a fresh pane unless the conversation actually moved
+                    // to the project's thread (2026-11-06)
+                    if (_pmPendingNew && !(d.switched || d.created)) _pmThreadsIdx.active = null;
                     if (d.switched || d.created) {
+                        _pmPendingNew = false;
                         window._pmLastActivityAt = Date.now();
                         // the conversation this switch left rides as context for
                         // the first asks in the new thread (2026-10-30)
@@ -88235,22 +88263,88 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         // server owns the decision (it also runs on every page load);
         // this asks it when a tab comes back after a long gap. Mirrors
         // _PM_IDLE_NEW_THREAD_SECONDS in app.py.
-        var _PM_IDLE_NEW_THREAD_MS = 2 * 60 * 60 * 1000;
+        var _PM_IDLE_NEW_THREAD_MS = 15 * 60 * 1000;
         var _pmIdleCheckAt = 0;
         function _pmIdleCheck() {
-            var last = window._pmLastActivityAt || 0;
-            if (!last || Date.now() - last < _PM_IDLE_NEW_THREAD_MS) return;
-            if (Date.now() - _pmIdleCheckAt < 60000) return;
-            _pmIdleCheckAt = Date.now();
-            fetch('/api/brief-chat/history', { credentials: 'same-origin' })
+            // Retired 2026-11-06 (Jenna): the fresh pane is a REOPEN decision (the Prometheus
+            // button, a page load, a product switch: _pmReopenCheck / synthChatInit), never a
+            // browser tab coming back to a widget that stayed open. The two-hour rotation this
+            // ran created a server thread on every return; those are the empty 'New chat'
+            // entries that stacked in the rail. The listeners that call this stay harmless.
+            return;
+        }
+        // An empty chat is a pane, not a thread (Jenna 2026-11-06). _pmPendingNew: the pane is
+        // fresh and names no thread; the first message mints one (threads/new) before anything
+        // is pushed or saved, so nothing joins the rail until the reader has said something.
+        var _pmPendingNew = false;
+        var _pmReopenBusy = false;
+        function _pmGoFresh(d, greet) {
+            _pmPendingNew = true;
+            _pmCarried = null;
+            window._pmFreshOpenedAt = Date.now();
+            window._pmLastActivityAt = Date.now();
+            _pmThreadsIdx = Object.assign({}, _pmThreadsIdx || { threads: [] }, { active: null });
+            _pmAdoptHistory([]);
+            // the fresh pane stays put until the project on screen actually changes
+            try { var idn = _pmProjectIdentity(); _pmFollow.key = idn ? idn.subject_key : ''; } catch (_) {}
+            var inp = document.getElementById('synthChatInput');
+            if (inp) { inp.value = ''; try { inp.style.height = ''; } catch (_) {} }
+            _pmThreadsRender();
+            try { _pmThreadsLoad(); } catch (_) {}
+            if (greet) { try { if (typeof _synthChatShowWelcomeBack === 'function') _synthChatShowWelcomeBack(true); } catch (_) {} }
+        }
+        function _pmReopenCheck() {
+            // the widget is opening on a thread: resume it (under 15 minutes since its last turn
+            // or the last time a widget was open on it) or open fresh; the server decides from
+            // the index so a new tab or device lands the same way
+            if (_pmReopenBusy) return;
+            _pmReopenBusy = true;
+            var tid = (_pmThreadsIdx && _pmThreadsIdx.active && !_pmPendingNew) ? String(_pmThreadsIdx.active) : '';
+            var url = '/api/brief-chat/history?open=1' + (tid ? '&thread_id=' + encodeURIComponent(tid) : '');
+            fetch(url, { credentials: 'same-origin' })
                 .then(function (r) { return r.ok ? r.json() : null; })
                 .then(function (d) {
-                    if (!d || !d.rotated) return;
+                    _pmReopenBusy = false;
+                    if (!d || !d.success) { try { _synthChatShowWelcomeBack(); } catch (_) {} return; }
+                    if (d.fresh) {
+                        if (_pmPendingNew && !synthChatHistory.length) { try { _synthChatShowWelcomeBack(true); } catch (_) {} return; }
+                        _pmGoFresh(d, true);
+                        return;
+                    }
                     window._pmLastActivityAt = Date.now();
-                    _pmAdoptHistory([]);
-                    _pmHistoryTrack(d, true);
-                    try { _pmThreadsLoad(true); } catch (_) {}
-                }).catch(function () {});
+                    if (d.thread_id && (!tid || String(d.thread_id) !== tid)) {
+                        // the tab had no thread (a fresh pane, a first open): the one the reader was last in
+                        _pmPendingNew = false;
+                        _pmThreadsIdx = Object.assign({}, _pmThreadsIdx || { threads: [] }, { active: String(d.thread_id) });
+                        _pmAdoptHistory(d.history || []);
+                        if (d.rev) _pmHistoryRev = String(d.rev);
+                        try { _pmThreadsLoad(); } catch (_) {}
+                    } else if (Array.isArray(d.history)) {
+                        _pmHistoryMergeIn(d.history);
+                        if (d.rev) _pmHistoryRev = String(d.rev);
+                    }
+                    try { _synthChatShowWelcomeBack(); } catch (_) {}
+                }).catch(function () { _pmReopenBusy = false; });
+        }
+        function _pmEnsureThread() {
+            // the thread is minted on the first message, never on New chat
+            if (!_pmPendingNew && _pmThreadsIdx && _pmThreadsIdx.active) return Promise.resolve(String(_pmThreadsIdx.active));
+            return fetch('/api/brief-chat/threads/new', {
+                method: 'POST', credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: '{}',
+            }).then(function (r) { return r.json(); })
+              .then(function (d) {
+                    if (!d || !d.success || !d.active) return null;
+                    _pmPendingNew = false;
+                    _pmThreadsIdx = Object.assign({}, _pmThreadsIdx || {}, {
+                        active: String(d.active),
+                        threads: d.threads || (_pmThreadsIdx && _pmThreadsIdx.threads) || [] });
+                    _pmHistoryRev = null;
+                    try { var idn = _pmProjectIdentity(); _pmFollow.key = idn ? idn.subject_key : ''; } catch (_) {}
+                    _pmThreadsRender();
+                    return String(d.active);
+              }).catch(function () { return null; });
         }
         // New chat shortcut (2026-10-01 Jenna: "the button with N").
         // Option/Alt+N while the chat is open; Cmd/Ctrl+Shift+O from
@@ -88292,32 +88386,31 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // every armed step (the valuation wizard, a clarify, an offer) goes with the thread it
             // was armed on, before anything can be typed into the new one (Jenna 2026-11-05)
             try { _pmReleaseArmedSteps(); } catch (_) {}
-            var _wait = Promise.race([
+            // An empty chat is a pane, not a thread (Jenna 2026-11-06: "if a chat window is empty
+            // there is no need to save it to the left rail"): nothing is created and nothing
+            // joins the rail until the first message mints the thread. The server only notes the
+            // request (threads/fresh) so a reload or another tab opens the same empty pane.
+            _pmGoFresh(null, false);
+            var inp = document.getElementById('synthChatInput');
+            if (inp) inp.focus();
+            Promise.race([
                 Promise.resolve(_leaving).catch(function () { return null; }),
                 new Promise(function (res) { setTimeout(res, 1500); })
-            ]);
-            _wait.then(function () {
-                return fetch('/api/brief-chat/threads/new', {
+            ]).then(function () {
+                return fetch('/api/brief-chat/threads/fresh', {
                     method: 'POST', credentials: 'same-origin',
                     headers: { 'Content-Type': 'application/json' },
                     body: '{}',
                 });
             }).then(function (r) { return r.json(); })
               .then(function (d) {
-                    if (!d || !d.success) return;
-                    _pmThreadsIdx = d;
-                    _pmAdoptHistory([]);
-                    // a new chat stays put until the project on screen actually changes
-                    try { var idn = _pmProjectIdentity(); _pmFollow.key = idn ? idn.subject_key : ''; } catch (_) {}
-                    _pmThreadsRender();
-                    var inp = document.getElementById('synthChatInput');
-                    if (inp) {
-                        inp.value = '';   // the composer starts clean with the thread
-                        try { inp.style.height = ''; } catch (_) {}
-                        inp.focus();
+                    if (d && d.success && Array.isArray(d.threads) && _pmThreadsIdx) {
+                        _pmThreadsIdx.threads = d.threads;
+                        if (_pmPendingNew) _pmThreadsIdx.active = null;
+                        _pmThreadsRender();
                     }
                     if (typeof done === 'function') { try { done(d); } catch (_) {} }
-              }).catch(function () {});
+              }).catch(function () { if (typeof done === 'function') { try { done(null); } catch (_) {} } });
         }
         function pmSwitchThread(tid) {
             _pmCarried = null;   // a thread opened by hand carries nothing over (2026-10-30)
@@ -88342,6 +88435,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }).then(function (r) { return r.json(); })
               .then(function (d) {
                     if (!d || !d.success) return;
+                    _pmPendingNew = false;   // the reader is in a thread again (2026-11-06)
                     if (_pmThreadsIdx) _pmThreadsIdx.active = tid;
                     _pmAdoptHistory(d.history || []);
                     // opened by hand: the page stays; only the NEXT project change moves the thread.
@@ -88362,7 +88456,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
               .then(function (d) {
                     if (!d || !d.success) return;
                     _pmThreadsIdx = d;
-                    if (d.history !== null && d.history !== undefined) {
+                    if (_pmPendingNew) _pmThreadsIdx.active = null;   // a fresh pane names no thread (2026-11-06)
+                    if (d.history !== null && d.history !== undefined && !_pmPendingNew) {
                         _pmAdoptHistory(d.history);
                     }
                     _pmThreadsRender();
@@ -89315,7 +89410,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (!tid) return;
                 var mine = synthChatHistory;
                 _pmServerPullBusy = true;
-                fetch('/api/brief-chat/history?thread_id=' + encodeURIComponent(tid), { credentials: 'same-origin' })
+                // seen=1 while the tab is on screen: the thread's last_seen is what a reopen measures
+                // its fifteen minutes against (prometheus.thread_presence, 2026-11-06)
+                var _seen = (document.visibilityState === 'visible') ? '&seen=1' : '';
+                fetch('/api/brief-chat/history?thread_id=' + encodeURIComponent(tid) + _seen, { credentials: 'same-origin' })
                     .then(function (r) {
                         if (r.status === 404) { _pmServerPullBusy = false; _pmHistoryResync(); return null; }
                         return r.ok ? r.json() : null;
@@ -92314,6 +92412,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var text = (input && input.value || '').trim();
             if (!text) return;
             input.value = '';
+            // a fresh pane gets its thread now, on the first message (2026-11-06)
+            try { await _pmEnsureThread(); } catch (_) {}
             synthChatPushTurn('user', text);
 
             // Pay-as-you-go offer follow-through (2026-08-26, Jenna).
@@ -94090,6 +94190,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             if (!list.length || _synthChatUploading) return;
             _synthChatUploading = true;
             var names = list.map(function(f) { return f.name; }).join(', ');
+            try { await _pmEnsureThread(); } catch (_) {}   // a file joins a thread, so a fresh pane gets one first (2026-11-06)
             synthChatPushTurn('user', 'Uploaded ' + names);
             var _end = null;
             try { _end = _synthChatBeginThinking('upload'); } catch (_) {}
@@ -94097,8 +94198,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var fd = new FormData();
                 list.slice(0, 5).forEach(function(f) { fd.append('file', f, f.name); });
                 try {
-                    var _tid = (typeof _pmActiveThreadId === 'function') ? _pmActiveThreadId()
-                             : (window._pmThreadId || '');
+                    var _tid = (_pmThreadsIdx && _pmThreadsIdx.active) ? String(_pmThreadsIdx.active) : '';
                     if (_tid) fd.append('thread_id', _tid);
                 } catch (_) {}
                 var r = await fetch('/api/prometheus/v1/upload', { method: 'POST', body: fd, credentials: 'same-origin' });

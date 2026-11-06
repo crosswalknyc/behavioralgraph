@@ -2047,10 +2047,14 @@ def _load_synth_chat_history(username):
 
 # Idle rotation (2026-10-01 Jenna: "if you've been gone for a while
 # and come back it should open a new thread like ChatGPT or Claude
-# and move the tired thread to the side bar"). A thread with turns
-# that nobody has written to or opened for this long stays in the
-# rail and a fresh New chat becomes active on the next history load.
-_PM_IDLE_NEW_THREAD_SECONDS = 2 * 3600
+# and move the tired thread to the side bar"). Since 2026-11-06 the
+# decision is prometheus.thread_presence.fresh_decision, read on the
+# widget's open (history GET with open=1): a thread idle this long opens
+# a FRESH PANE, and no thread is created until the reader sends
+# something (Jenna: "if a chat window is empty there is no need to save
+# it to the left rail ... only go to a new window if it has been
+# inactive for 15m or more").
+_PM_IDLE_NEW_THREAD_SECONDS = 15 * 60
 
 
 def _pm_parse_iso(s):
@@ -2095,15 +2099,19 @@ def _pm_new_thread_into(username, idx):
     # its New-thread call race, and a count still at 0 made this hand
     # back the SAME id and write [] over the turns the save then
     # merged straight back in. The new thread was the old one.
+    # the reader is in a thread again: a pending fresh-pane request is
+    # over, and the thread is seen now (prometheus.thread_presence)
+    idx.pop('fresh_at', None)
     if act and not act.get('turns') \
             and act.get('title') in (None, '', 'New chat') \
             and not (_pm_s3_json(_pm_thread_key(username, act['id']), []) or []):
         act['updated'] = now
+        act['last_seen'] = now
         _pm_s3_put_json(_pm_threads_index_key(username), idx)
         return act['id']
     tid = uuid.uuid4().hex[:10]
     threads.append({'id': tid, 'title': 'New chat', 'created': now,
-                    'updated': now, 'turns': 0})
+                    'updated': now, 'last_seen': now, 'turns': 0})
     # Bound growth: the oldest empty-or-stale threads roll off.
     if len(threads) > _PM_MAX_THREADS:
         idx['threads'] = sorted(
@@ -2116,33 +2124,14 @@ def _pm_new_thread_into(username, idx):
 
 
 def _pm_rotate_idle_thread(username):
-    """Park the active thread and open a fresh one when it has been
-    idle past _PM_IDLE_NEW_THREAD_SECONDS. Idle counts from the later
-    of the last save and the last open from the rail. Returns the
-    parked thread's title, or None when nothing moved."""
-    try:
-        idx = _load_threads_index(username)
-        tid = idx.get('active')
-        th = next((t for t in idx.get('threads', [])
-                   if t.get('id') == tid), None)
-        if not th or not th.get('turns') or (isinstance(th.get('binding'), dict) and th['binding'].get('subject_key')):
-            return None   # a project's thread stays the project's thread; the idle rule is for the general chat (2026-10-21)
-        stamps = [d for d in (_pm_parse_iso(th.get('updated')),
-                              _pm_parse_iso(th.get('opened')))
-                  if d is not None]
-        if not stamps:
-            return None
-        idle = (datetime.now(timezone.utc) - max(stamps)).total_seconds()
-        if idle < _PM_IDLE_NEW_THREAD_SECONDS:
-            return None
-        if _pm_history_has_running_job(
-                _pm_s3_json(_pm_thread_key(username, tid), [])):
-            return None
-        _pm_new_thread_into(username, idx)
-        return str(th.get('title') or 'New chat')
-    except Exception as e:
-        print(f"[synth-chat] idle rotation skipped for {username}: {e}")
-        return None
+    """Retired 2026-11-06 (Jenna: an empty chat is never saved to the
+    rail). The two-hour rotation created a New chat on the server the
+    moment a thread went idle; those are the empty 'New chat' entries
+    that stacked in the rail. The idle decision now lives in
+    prometheus.thread_presence.fresh_decision and opens a fresh PANE
+    (no thread until the first message). Kept as a no-op for the
+    callers and tests that grew up on it."""
+    return None
 
 
 def _pm_keep_corrected_turns(username, tid, incoming):
@@ -2183,11 +2172,19 @@ def _save_synth_chat_history(username, history, thread_id=None):
         tid = want or idx.get('active') or (idx['threads'][0]['id'] if idx.get('threads') else None)
         if not tid:
             return False
+        # a greeting is a bubble the widget draws, never a turn: a save with
+        # no user turn into a thread that holds nothing writes nothing, so
+        # an empty pane never becomes a rail entry (Jenna 2026-11-06)
+        if not any(isinstance(t, dict) and str(t.get('role') or '') == 'user' for t in history):
+            stored = _pm_s3_json(_pm_thread_key(username, tid), []) or []
+            if not stored:
+                return {'thread_id': tid, 'history': []}
         merged = _pm_merge_save_thread(username, tid, history)
         now = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
         for th in idx.get('threads', []):
             if th.get('id') == tid:
                 th['updated'] = now
+                th['last_seen'] = now   # a turn is activity (prometheus.thread_presence)
                 th['turns'] = len(merged)
                 if th.get('title') in (None, '', 'New chat'):
                     th['title'] = _pm_thread_title_from(merged)
@@ -8769,13 +8766,44 @@ def api_synth_chat_history():
     uname = user.get('username') or user.get('email') or 'anon'
     from prometheus import thread_merge as _tm
     if request.method == 'GET':
-        # One thread by id, read only (2026-11-04): a tab pulling its own
-        # thread's turns moves nothing (no rotation, no active switch).
+        from prometheus import thread_presence as _tp
+        _flag = lambda k: str(request.args.get(k) or '').strip() in ('1', 'true', 'yes')   # noqa: E731
+        opening = _flag('open')     # the widget is opening: resume or a fresh pane (2026-11-06)
+        seen = _flag('seen')        # the open widget's pull: the thread is on screen
         want = str(request.args.get('thread_id') or '').strip()
-        if want:
-            idx = _load_threads_index(uname)
-            if not any(t.get('id') == want for t in idx.get('threads', [])):
+        idx = _load_threads_index(uname)
+        if want and not any(t.get('id') == want for t in idx.get('threads', [])):
+            if not opening:
                 return jsonify({'success': False, 'error': 'unknown thread'}), 404
+            want = ''   # a tab opening on a thread the rail retired decides on the active one
+        if opening:
+            # Reopen resumes unless idle 15 minutes (Jenna 2026-11-06): the
+            # decision is the index's; a fresh pane names no thread and
+            # creates none. The resumed thread is seen now. The reader's
+            # empty threads older than fifteen minutes go on the same load.
+            fresh, why = _tp.fresh_decision(idx, tid=want or None)
+            tid = want or idx.get('active') or (idx['threads'][0]['id'] if idx.get('threads') else None)
+            try:
+                if _tp.sweep_due(idx):
+                    swept = _tp.sweep_for_user(uname, idx, force=True)   # writes the index itself
+                    if swept is not None and tid and not any(t.get('id') == tid for t in idx.get('threads', [])):
+                        tid = idx.get('active')
+            except Exception as _fx:
+                _faults.note('chat.sweep', _fx)
+            if fresh:
+                return jsonify({'success': True, 'history': [], 'thread_id': None, 'fresh': True,
+                                'fresh_from': tid, 'why': why, 'rev': ''})
+            if tid and _tp.mark_seen(idx, tid, min_gap_s=0):
+                _pm_s3_put_json(_pm_threads_index_key(uname), idx)
+            hist = (_pm_s3_json(_pm_thread_key(uname, tid), []) or []) if tid else []
+            return jsonify({'success': True, 'history': hist, 'thread_id': tid, 'resumed': True,
+                            'why': why, 'rev': _tm.thread_rev(hist)})
+        if want:
+            # One thread by id, read only (2026-11-04): a tab pulling its own
+            # thread's turns moves nothing (no rotation, no active switch).
+            # seen=1 stamps the thread as on screen (prometheus.thread_presence).
+            if seen and _tp.mark_seen(idx, want):
+                _pm_s3_put_json(_pm_threads_index_key(uname), idx)
             hist = _pm_s3_json(_pm_thread_key(uname, want), []) or []
             return jsonify({'success': True, 'history': hist, 'thread_id': want,
                             'rev': _tm.thread_rev(hist)})

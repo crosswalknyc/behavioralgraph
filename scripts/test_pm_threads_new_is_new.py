@@ -95,8 +95,11 @@ class Harness:
     def _ns(self):
         import uuid
         s3 = self.s3
+        class _Faults:
+            def note(self, *a, **k):
+                return 0
         ns = {'datetime': datetime, 'timezone': timezone, 'uuid': uuid, 'json': json, 'traceback': __import__('traceback'),
-              '_H': _Host(s3), 'jsonify': lambda d: d, 'session': {'username': 'jay'},
+              '_H': _Host(s3), 'jsonify': lambda d: d, 'session': {'username': 'jay'}, '_faults': _Faults(),
               'SYNTH_CHAT_THREADS_PREFIX': PREFIX, '_PM_MAX_THREADS': 40}
 
         def _pm_safe_user(u):
@@ -132,7 +135,8 @@ class Harness:
                      'api_synth_chat_history'):
             exec(_grab(CHAT, name), ns)
         _C._pm_new_thread_into = staticmethod(ns['_pm_new_thread_into'])
-        for name in ('api_synth_chat_threads_new', 'api_synth_chat_threads_activate', 'api_synth_chat_threads'):
+        for name in ('api_synth_chat_threads_new', 'api_synth_chat_threads_activate', 'api_synth_chat_threads',
+                     'api_synth_chat_threads_fresh'):
             exec(_grab_route(THR, name), ns)
         # the route imports prometheus.intake_reset; record the call instead of touching stores
         import types
@@ -143,7 +147,11 @@ class Harness:
         fake_svc = types.ModuleType('prometheus.service')
         fake_svc.repair_thread_labels = lambda u: (ns['_load_threads_index'](u), [])
         fake_pkg.service = fake_svc
-        self._mods = {'prometheus': fake_pkg, 'prometheus.intake_reset': fake_reset, 'prometheus.service': fake_svc}
+        from prometheus import thread_presence as _real_tp, thread_merge as _real_tm
+        fake_pkg.thread_presence = _real_tp
+        fake_pkg.thread_merge = _real_tm
+        self._mods = {'prometheus': fake_pkg, 'prometheus.intake_reset': fake_reset, 'prometheus.service': fake_svc,
+                      'prometheus.thread_presence': _real_tp, 'prometheus.thread_merge': _real_tm}
         return ns
 
     def call(self, name, body=None, args=None, method='POST'):
@@ -178,8 +186,10 @@ class NewThreadIsNew(unittest.TestCase):
         self.assertNotEqual(out['active'], 'old1')
         self.assertEqual(h.thread('old1'), OLD_TURNS)                       # intact, not wiped
         self.assertEqual(h.thread(out['active']), [])                       # the new document exists and is empty
-        self.assertEqual([t['id'] for t in out['threads']][0], out['active'])   # new one on top
-        self.assertEqual(len(out['threads']), 2)
+        # the rail lists only threads with turns (2026-11-06): the new one is hidden until its first
+        # turn (old1's lagging count is the sweep's to repair on the next rail load, see SweepAndPresence)
+        self.assertNotIn(out['active'], [t['id'] for t in out['threads']])
+        self.assertEqual({t['id'] for t in h.index()['threads']}, {'old1', out['active']})
         self.assertEqual(h.index()['active'], out['active'])
         self.assertEqual(h.reset_calls, [('jay', out['active'])])         # the intakes went with the old thread
 
@@ -187,7 +197,8 @@ class NewThreadIsNew(unittest.TestCase):
         h = Harness(bodies={'old1': []})
         out, st = h.call('api_synth_chat_threads_new')
         self.assertEqual(out['active'], 'old1')
-        self.assertEqual(len(out['threads']), 1)
+        self.assertEqual(len(h.index()['threads']), 1)
+        self.assertEqual(out['threads'], [])                                # an empty thread is never listed
         self.assertEqual(h.thread('old1'), [])
         self.assertEqual(h.reset_calls, [('jay', 'old1')])
 
@@ -237,6 +248,185 @@ class NewThreadIsNew(unittest.TestCase):
         self.assertEqual(st, 404)
 
 
+def _ago(seconds, now=None):
+    from datetime import timedelta
+    from prometheus import thread_presence as TP
+    return TP.iso((now or TP.now_utc()) - timedelta(seconds=seconds))
+
+
+class SweepAndPresence(unittest.TestCase):
+    """Jenna 2026-11-06: an empty chat is never saved to the rail; a reopen
+    resumes unless the thread has been idle 15 minutes."""
+
+    def _idx(self, now):
+        return {'active': 'live', 'threads': [
+            {'id': 'live', 'title': 'Build a Flywheel', 'created': _ago(3600, now), 'updated': _ago(120, now), 'turns': 18},
+            {'id': 'e_old', 'title': 'New chat', 'created': _ago(3600, now), 'updated': _ago(3600, now), 'turns': 0},
+            {'id': 'e_new', 'title': 'New chat', 'created': _ago(60, now), 'updated': _ago(60, now), 'turns': 0},
+            {'id': 'lag', 'title': 'New chat', 'created': _ago(3600, now), 'updated': _ago(3600, now), 'turns': 0},
+            {'id': 'proj', 'title': 'Costco', 'created': _ago(7200, now), 'updated': _ago(7200, now), 'turns': 4,
+             'binding': {'subject_key': 'profile:Costco.csv', 'subject_label': 'Costco'}}]}
+
+    def test_new_chat_creates_nothing_until_the_first_message(self):
+        from prometheus import thread_presence as TP
+        h = Harness(bodies={'old1': OLD_TURNS})
+        idx = h.index(); idx['threads'][0]['turns'] = 4; h.put(f'{PREFIX}/jay/index.json', idx)
+        n_before = len(h.index()['threads'])
+        out, st = h.call('api_synth_chat_threads_fresh')
+        self.assertEqual((st, out['success'], out['fresh'], out['active']), (200, True, True, None))
+        self.assertEqual(len(h.index()['threads']), n_before)                 # no thread, no document
+        self.assertEqual(sorted(k for k in h.s3.objs if k.startswith(f'{PREFIX}/jay/')), [f'{PREFIX}/jay/index.json', f'{PREFIX}/jay/old1.json'])
+        self.assertTrue(h.index().get('fresh_at'))
+        self.assertEqual(h.reset_calls, [('jay', None)])                       # the armed intakes went with the thread left
+        # a reload lands on the same empty pane: the open decides fresh, names no thread
+        got, st = h.call('api_synth_chat_history', args={'open': '1'}, method='GET')
+        self.assertEqual((st, got['fresh'], got['thread_id'], got['history']), (200, True, None, []))
+        self.assertEqual(got['why'], 'fresh_requested')
+        # the first message mints the thread and ends the request
+        out, st = h.call('api_synth_chat_threads_new')
+        new = out['active']
+        self.assertNotEqual(new, 'old1')
+        self.assertNotIn('fresh_at', h.index())
+        self.assertEqual(TP.thread_of(h.index(), new)['last_seen'][:2], '20')
+        saved, st = h.call('api_synth_chat_history', {'history': NEW_TURNS, 'thread_id': new})
+        self.assertEqual(st, 200)
+        lst, _ = h.call('api_synth_chat_threads', method='GET')
+        self.assertIn(new, [t['id'] for t in lst['threads']])                 # listed once it has a turn
+
+    def test_the_greeting_alone_persists_nothing(self):
+        h = Harness(bodies={'old1': []})
+        greet = [{'role': 'agent', 'text': 'Good afternoon - Costco is open. Want me to dig into the data?',
+                  'ts': '2026-11-06T17:00:00.000Z', 'meta': {'greeting': True}}]
+        saved, st = h.call('api_synth_chat_history', {'history': greet, 'thread_id': 'old1'})
+        self.assertEqual(st, 200)
+        self.assertEqual(h.thread('old1'), [])                                  # nothing written
+        self.assertEqual(h.index()['threads'][0]['turns'], 0)
+        lst, _ = h.call('api_synth_chat_threads', method='GET')
+        self.assertEqual(lst['threads'], [])                                    # and nothing in the rail
+        # a reader's turn is what makes a thread
+        saved, st = h.call('api_synth_chat_history', {'history': greet + [T('2026-11-06T17:01:00.000Z', 'user', 'how big is Costco')], 'thread_id': 'old1'})
+        self.assertEqual(len(h.thread('old1')), 2)
+        lst, _ = h.call('api_synth_chat_threads', method='GET')
+        self.assertEqual([t['id'] for t in lst['threads']], ['old1'])
+
+    def test_list_hides_zero_turn_threads(self):
+        from prometheus import thread_presence as TP
+        now = TP.now_utc()
+        idx = self._idx(now)
+        self.assertEqual([t['id'] for t in TP.visible_threads(idx['threads'])], ['live', 'proj'])
+        h = Harness(idx=idx, bodies={'live': OLD_TURNS, 'proj': OLD_TURNS, 'e_old': [], 'e_new': [], 'lag': NEW_TURNS})
+        lst, _ = h.call('api_synth_chat_threads', method='GET')
+        self.assertEqual(sorted(t['id'] for t in lst['threads']), ['live', 'proj'])
+
+    def test_sweep_removes_stale_empties_keeps_the_rest_and_repairs_a_lagging_count(self):
+        from prometheus import thread_presence as TP
+        now = TP.now_utc()
+        idx = self._idx(now)
+        store = {'live': OLD_TURNS, 'proj': OLD_TURNS, 'e_old': [], 'e_new': [], 'lag': NEW_TURNS}
+        deleted = []
+        res = TP.sweep_empty_threads(idx, load=lambda k: store.get(k.split('/')[-1][:-5]), put=lambda k, o: None,
+                                     delete=lambda k: deleted.append(k.split('/')[-1][:-5]), key_for=lambda tid: f'x/{tid}.json',
+                                     now=now, title_from=lambda body: 'how big is the Gunna audience')
+        self.assertEqual(res['removed'], ['e_old'])                            # stale and truly empty: gone
+        self.assertEqual(deleted, ['e_old'])
+        self.assertEqual(res['kept_recent'], ['e_new'])                        # sixty seconds old: still being typed into
+        self.assertEqual(res['repaired'], ['lag'])                             # a body with turns is never deleted: the count is fixed
+        lag = TP.thread_of(idx, 'lag')
+        self.assertEqual((lag['turns'], lag['title']), (2, 'how big is the Gunna audience'))
+        self.assertEqual([t['id'] for t in idx['threads']], ['live', 'e_new', 'lag', 'proj'])
+        self.assertEqual(idx['active'], 'live')
+        self.assertTrue(idx.get('swept_at'))
+        self.assertFalse(TP.sweep_due(idx, now))                               # once per ten minutes
+        # the active empty thread and the last remaining thread are kept
+        idx2 = {'active': 'only', 'threads': [{'id': 'only', 'title': 'New chat', 'created': _ago(9000, now), 'updated': _ago(9000, now), 'turns': 0}]}
+        res2 = TP.sweep_empty_threads(idx2, load=lambda k: [], put=lambda k, o: None, delete=lambda k: deleted.append(k), key_for=lambda t: t, now=now)
+        self.assertEqual(res2['removed'], [])
+        self.assertEqual(len(idx2['threads']), 1)
+
+    def test_sweep_through_the_host_writes_the_index_once(self):
+        from prometheus import thread_presence as TP
+        from prometheus.host import host
+        now = TP.now_utc()
+        s3 = FakeS3()
+
+        def s3_json(key, default=None):
+            try:
+                return json.loads(s3.objs[key].decode('utf-8'))
+            except KeyError:
+                return default
+
+        def s3_put_json(key, obj):
+            s3.objs[key] = json.dumps(obj).encode('utf-8')
+        host.bind(s3_client=s3, bucket='b', s3_json=s3_json, s3_put_json=s3_put_json,
+                  thread_key=lambda u, t: f'{PREFIX}/{u}/{t}.json', threads_index_key=lambda u: f'{PREFIX}/{u}/index.json',
+                  load_threads_index=lambda u: s3_json(f'{PREFIX}/{u}/index.json', {}), thread_title_from=lambda b: 'titled')
+        idx = self._idx(now)
+        s3_put_json(f'{PREFIX}/kim/index.json', idx)
+        for tid, body in (('live', OLD_TURNS), ('proj', OLD_TURNS), ('e_old', []), ('e_new', []), ('lag', NEW_TURNS)):
+            s3_put_json(f'{PREFIX}/kim/{tid}.json', body)
+        res = TP.sweep_for_user('kim', now=now)
+        self.assertEqual(res['removed'], ['e_old'])
+        self.assertNotIn(f'{PREFIX}/kim/e_old.json', s3.objs)
+        self.assertIn(f'{PREFIX}/kim/e_new.json', s3.objs)
+        after = s3_json(f'{PREFIX}/kim/index.json')
+        self.assertEqual([t['id'] for t in after['threads']], ['live', 'e_new', 'lag', 'proj'])
+        self.assertEqual(TP.thread_of(after, 'lag')['turns'], 2)
+        self.assertIsNone(TP.sweep_for_user('kim', now=now))                  # not due again
+
+    def test_reopen_within_fifteen_minutes_resumes_the_same_thread(self):
+        from prometheus import thread_presence as TP
+        now = TP.now_utc()
+        idx = self._idx(now)
+        h = Harness(idx=idx, bodies={'live': OLD_TURNS})
+        got, st = h.call('api_synth_chat_history', args={'open': '1'}, method='GET')
+        self.assertEqual((st, got.get('fresh'), got['thread_id'], len(got['history'])), (200, None, 'live', 4))
+        self.assertTrue(got['resumed'])
+        self.assertEqual(got['why'], 'recent')
+        self.assertTrue(TP.thread_of(h.index(), 'live').get('last_seen'))     # the open is activity
+        # the tab names its own thread: the decision is that thread's
+        got, st = h.call('api_synth_chat_history', args={'open': '1', 'thread_id': 'proj'}, method='GET')
+        self.assertEqual((st, got.get('fresh'), got['thread_id']), (200, True, None))   # proj idle two hours
+        got, st = h.call('api_synth_chat_history', args={'open': '1', 'thread_id': 'live'}, method='GET')
+        self.assertEqual((got.get('fresh'), got['thread_id']), (None, 'live'))
+        # a faked clock: the same index, fourteen minutes later, still resumes
+        self.assertEqual(TP.fresh_decision(idx, now=TP.parse_iso(_ago(-14 * 60 + 120, now))), (False, 'recent'))
+
+    def test_reopen_after_fifteen_minutes_opens_fresh_and_the_old_thread_stays_listed(self):
+        from prometheus import thread_presence as TP
+        now = TP.now_utc()
+        idx = self._idx(now)
+        idx['threads'][0]['updated'] = _ago(16 * 60, now)                    # last turn sixteen minutes ago, never seen since
+        h = Harness(idx=idx, bodies={'live': OLD_TURNS, 'proj': OLD_TURNS})
+        got, st = h.call('api_synth_chat_history', args={'open': '1'}, method='GET')
+        self.assertEqual((st, got['fresh'], got['thread_id'], got['history'], got['fresh_from']), (200, True, None, [], 'live'))
+        self.assertEqual(got['why'], 'idle')
+        self.assertEqual(len([k for k in h.s3.objs if k.startswith(f'{PREFIX}/jay/')]), 3)   # nothing created
+        lst, _ = h.call('api_synth_chat_threads', method='GET')
+        self.assertIn('live', [t['id'] for t in lst['threads']])             # one click away in the rail
+        self.assertEqual(h.index()['active'], 'live')
+        # the widget open on it keeps it live: the pull's seen=1 stamps last_seen (throttled)
+        got, st = h.call('api_synth_chat_history', args={'thread_id': 'live', 'seen': '1'}, method='GET')
+        self.assertEqual(st, 200)
+        self.assertTrue(TP.thread_of(h.index(), 'live').get('last_seen'))
+        self.assertEqual(TP.fresh_decision(h.index(), now=now), (False, 'recent'))
+        before = h.s3.puts
+        h.call('api_synth_chat_history', args={'thread_id': 'live', 'seen': '1'}, method='GET')
+        self.assertEqual(h.s3.puts, before)                                    # a stamp younger than a minute is not rewritten
+        # the faked clock: fifteen minutes later with no turn and no widget, fresh again
+        self.assertEqual(TP.fresh_decision(h.index(), now=TP.parse_iso(_ago(-15 * 60 - 1, now)))[0], True)
+
+    def test_opened_by_the_project_follow_is_not_activity(self):
+        from prometheus import thread_presence as TP
+        now = TP.now_utc()
+        th = {'id': 'p', 'turns': 3, 'updated': _ago(3600, now), 'opened': _ago(5, now)}
+        self.assertEqual(TP.fresh_decision({'active': 'p', 'threads': [th]}, now=now), (True, 'idle'))
+        th['last_seen'] = _ago(5, now)
+        self.assertEqual(TP.fresh_decision({'active': 'p', 'threads': [th]}, now=now), (False, 'recent'))
+        # an empty thread is the empty pane already, never 'fresh'
+        self.assertEqual(TP.fresh_decision({'active': 'e', 'threads': [{'id': 'e', 'turns': 0, 'updated': _ago(9000, now)}]}, now=now), (False, 'empty_thread'))
+        self.assertEqual(TP.fresh_decision({'active': 'x', 'threads': []}, now=now), (False, 'no_thread'))
+
+
 class WidgetSource(unittest.TestCase):
     """The spliced widget: the new thread drops every armed step, the save of
     the thread being left lands first, every ask names its thread, Cancel
@@ -259,11 +449,16 @@ class WidgetSource(unittest.TestCase):
 
     def test_new_chat_waits_for_the_leaving_save_and_releases(self):
         src = self._fn('pmNewChat')
-        self.assertLess(src.index('_pmHistorySave({ leaving: true'), src.index("fetch('/api/brief-chat/threads/new'"))
+        # a pane, not a thread (2026-11-06): the leaving save lands, then threads/fresh; never threads/new
+        self.assertNotIn("threads/new", src)
+        self.assertLess(src.index('_pmHistorySave({ leaving: true'), src.index("fetch('/api/brief-chat/threads/fresh'"))
         self.assertIn('Promise.race', src)
         self.assertIn('_pmReleaseArmedSteps()', src)
-        self.assertIn("inp.value = ''", src)
-        self.assertIn('_pmAdoptHistory([])', src)
+        self.assertIn('_pmGoFresh(null, false)', src)
+        gf = self._fn('_pmGoFresh')
+        self.assertIn("inp.value = ''", gf)
+        self.assertIn('_pmAdoptHistory([])', gf)
+        self.assertIn('_pmPendingNew = true', gf)
 
     def test_every_ask_names_its_thread(self):
         src = self._fn('_pmV1Request')
@@ -325,10 +520,11 @@ class WidgetSource(unittest.TestCase):
         self.assertIn('Promise.race', follow)
 
     def test_the_spliced_functions_run(self):
-        """The widget functions, run in Node against stubs: a new chat waits for
-        the leaving save, releases every armed step, posts to threads/new,
-        adopts an empty history and clears the composer; the ask body names
-        the active thread."""
+        """The widget functions, run in Node against stubs and a faked clock:
+        New chat creates no thread (threads/fresh only), the pane is fresh, the
+        first message mints the thread once (threads/new), a fresh pane saves
+        nothing, the reopen check resumes or goes fresh on the server's word,
+        and the ask body names the thread once one exists."""
         import shutil
         import subprocess
         import tempfile
@@ -336,23 +532,44 @@ class WidgetSource(unittest.TestCase):
         if not node:
             self.skipTest('node not installed')
         js = '\n'.join([
-            "var calls = [], released = 0, adopted = null, rendered = 0, inp = { value: 'half typed', style: {}, focus: function () { calls.push('focus'); } };",
-            "var document = { getElementById: function (id) { return id === 'synthChatInput' ? inp : null; } };",
+            "var clock = 1000000; Date.now = function () { return clock; };",
+            "var calls = [], released = 0, adopted = null, rendered = 0, greeted = [], inp = { value: 'half typed', style: {}, focus: function () { calls.push('focus'); } };",
+            "var document = { getElementById: function (id) { return id === 'synthChatInput' ? inp : null; }, visibilityState: 'visible', addEventListener: function () {} };",
             "var window = {}; var _pmCarried = { from: 'a' }; var synthChatHistory = [{ role: 'user', text: 'x' }];",
-            "var _pmThreadsIdx = { active: 'old1', threads: [] }; var _pmFollow = { key: null };",
-            "function _pmHistorySave(o) { calls.push('save:' + JSON.stringify(o)); return new Promise(function (r) { setTimeout(function () { calls.push('saved'); r({ success: true }); }, 30); }); }",
+            "var _pmThreadsIdx = { active: 'old1', threads: [{ id: 'old1', turns: 2 }] }; var _pmFollow = { key: null }; var _pmHistoryRev = null;",
+            "var synthChatInflightController = null, _pmDeckInFlight = false; function _pmHistoryBody(h) { return JSON.stringify({ history: h, thread_id: _pmThreadsIdx.active }); }",
             "function _pmReleaseArmedSteps() { released++; }",
-            "function _pmAdoptHistory(h) { adopted = h; }",
+            "function _pmAdoptHistory(h) { adopted = h; synthChatHistory = h; }",
             "function _pmProjectIdentity() { return null; }",
             "function _pmThreadsRender() { rendered++; }",
-            "function fetch(url, opts) { calls.push('fetch:' + url); return Promise.resolve({ json: function () { return Promise.resolve({ success: true, active: 'new9', threads: [{ id: 'new9' }, { id: 'old1' }] }); } }); }",
+            "function _pmThreadsLoad() { calls.push('threadsLoad'); }",
+            "function _pmHistoryMergeIn(h) { calls.push('mergeIn:' + h.length); return false; }",
+            "function _synthChatShowWelcomeBack(force) { greeted.push(!!force); }",
+            "var serverSays = { success: true, fresh: true, thread_id: null, history: [] };",
+            "function fetch(url, opts) { calls.push('fetch:' + url); if (url.indexOf('threads/new') !== -1) return Promise.resolve({ json: function () { return Promise.resolve({ success: true, active: 'new9', threads: [] }); } }); if (url.indexOf('threads/fresh') !== -1) return Promise.resolve({ json: function () { return Promise.resolve({ success: true, fresh: true, active: null, threads: [{ id: 'old1', turns: 2 }] }); } }); return Promise.resolve({ ok: true, json: function () { return Promise.resolve(serverSays); } }); }",
             "var _PM_V1_SURFACES = { '/api/brief-chat/analyze': 'analyze' };",
+            self._fn('_pmHistorySave'),
+            self._fn('_pmIdleCheck'),
+            self._fn('_pmGoFresh'),
+            self._fn('_pmReopenCheck'),
+            self._fn('_pmEnsureThread'),
             self._fn('pmNewChat'),
             self._fn('_pmV1Request'),
+            "var out = {};",
             "pmNewChat(function (d) {",
-            "  var req = _pmV1Request('/api/brief-chat/analyze', { text: 'hi' });",
-            "  console.log(JSON.stringify({ calls: calls, released: released, adopted: adopted, rendered: rendered, input: inp.value,",
-            "    active: _pmThreadsIdx.active, carried: _pmCarried, askUrl: req.url, askTid: req.body.thread_id }));",
+            "  out.newchat = { calls: calls.slice(), pending: _pmPendingNew, active: _pmThreadsIdx.active, adopted: adopted, input: inp.value, released: released, greeted: greeted.slice() };",
+            "  var saved = _pmHistorySave(); saved.then(function (v) { out.saveWhilePending = { value: v, fetched: calls.filter(function (c) { return c === 'fetch:/api/brief-chat/history'; }).length };",
+            "  calls.length = 0;",
+            "  _pmEnsureThread().then(function (tid) { out.ensure = { tid: tid, pending: _pmPendingNew, active: _pmThreadsIdx.active, calls: calls.slice() };",
+            "    return _pmEnsureThread(); }).then(function (tid2) { out.ensureAgain = { tid: tid2, calls: calls.slice() };",
+            "    out.ask = _pmV1Request('/api/brief-chat/analyze', { text: 'hi' }).body.thread_id;",
+            "    /* reopen within fifteen minutes: the server resumes the thread the reader was last in */",
+            "    calls.length = 0; clock += 60 * 1000; serverSays = { success: true, resumed: true, thread_id: 'new9', history: [{ role: 'user', text: 'hi' }, { role: 'agent', text: 'Hello.' }], rev: 'r1' };",
+            "    _pmReopenCheck(); return new Promise(function (r) { setTimeout(r, 20); }); }).then(function () { out.reopenRecent = { calls: calls.slice(), active: _pmThreadsIdx.active, pending: _pmPendingNew, hist: synthChatHistory.length };",
+            "    /* reopen after fifteen minutes: the server says fresh; the pane empties, no thread is created */",
+            "    calls.length = 0; clock += 16 * 60 * 1000; serverSays = { success: true, fresh: true, thread_id: null, history: [], fresh_from: 'new9' };",
+            "    _pmReopenCheck(); return new Promise(function (r) { setTimeout(r, 20); }); }).then(function () { out.reopenIdle = { calls: calls.slice(), active: _pmThreadsIdx.active, pending: _pmPendingNew, hist: synthChatHistory.length, greeted: greeted.slice(-1) };",
+            "    console.log(JSON.stringify(out)); }); });",
             "});",
         ])
         with tempfile.NamedTemporaryFile('w', suffix='.js', delete=False) as fh:
@@ -364,17 +581,50 @@ class WidgetSource(unittest.TestCase):
             os.unlink(path)
         self.assertEqual(out.returncode, 0, out.stderr)
         got = json.loads(out.stdout.strip().splitlines()[-1])
-        # the save of the thread being left lands before the new thread is asked for
-        self.assertEqual(got['calls'][:3], ['save:{"leaving":true,"keepalive":true}', 'saved', 'fetch:/api/brief-chat/threads/new'])
-        self.assertGreaterEqual(got['released'], 1)
-        self.assertEqual(got['adopted'], [])
-        self.assertEqual(got['input'], '')
-        self.assertEqual(got['active'], 'new9')
-        self.assertIsNone(got['carried'])
-        # the next ask names the new thread
-        self.assertEqual(got['askUrl'], '/api/prometheus/v1/ask')
-        self.assertEqual(got['askTid'], 'new9')
+        nc = got['newchat']
+        # New chat: the leaving save, then threads/fresh; never threads/new; the pane is fresh and empty
+        self.assertNotIn('fetch:/api/brief-chat/threads/new', nc['calls'])
+        self.assertIn('fetch:/api/brief-chat/threads/fresh', nc['calls'])
+        self.assertLess(nc['calls'].index('fetch:/api/brief-chat/history'), nc['calls'].index('fetch:/api/brief-chat/threads/fresh'))
+        self.assertTrue(nc['pending'])
+        self.assertIsNone(nc['active'])
+        self.assertEqual(nc['adopted'], [])
+        self.assertEqual(nc['input'], '')
+        self.assertGreaterEqual(nc['released'], 1)
+        self.assertEqual(nc['greeted'], [])                          # New chat shows the empty-state panel, not the greeting
+        # a fresh pane saves nothing
+        self.assertIsNone(got['saveWhilePending']['value'])
+        self.assertEqual(got['saveWhilePending']['fetched'], 1)      # only the leaving save before the pane went fresh
+        # the first message mints the thread exactly once
+        self.assertEqual(got['ensure']['tid'], 'new9')
+        self.assertFalse(got['ensure']['pending'])
+        self.assertEqual(got['ensure']['active'], 'new9')
+        self.assertEqual(got['ensure']['calls'], ['fetch:/api/brief-chat/threads/new'])
+        self.assertEqual(got['ensureAgain']['tid'], 'new9')
+        self.assertEqual(got['ensureAgain']['calls'], ['fetch:/api/brief-chat/threads/new'])
+        self.assertEqual(got['ask'], 'new9')
+        # a reopen inside fifteen minutes resumes the same thread and names it to the server
+        rr = got['reopenRecent']
+        self.assertEqual(rr['calls'], ['fetch:/api/brief-chat/history?open=1&thread_id=new9', 'mergeIn:2'])   # the server's turns fold in
+        self.assertEqual((rr['active'], rr['pending']), ('new9', False))
+        # a reopen after fifteen minutes opens fresh: no thread, empty pane, the greeting with its chips
+        ri = got['reopenIdle']
+        self.assertEqual(ri['calls'][0], 'fetch:/api/brief-chat/history?open=1&thread_id=new9')
+        self.assertNotIn('fetch:/api/brief-chat/threads/new', ri['calls'])
+        self.assertEqual((ri['active'], ri['pending'], ri['hist']), (None, True, 0))
+        self.assertEqual(ri['greeted'], [True])
 
+    def test_the_idle_rotation_on_tab_return_is_retired(self):
+        src = self._fn('_pmIdleCheck')
+        self.assertNotIn('fetch(', src)
+        self.assertIn('return;', src)
+        self.assertIn("'/api/brief-chat/history?open=1'", self._fn('synthChatInit'))
+        self.assertIn('_pmReopenCheck()', self.html[self.html.index('window.prometheusExpand = function()'):self.html.index('window.prometheusCollapse = function()')])
+        self.assertNotIn('pmNewChat(', self.html[self.html.index('window.prometheusExpand = function()'):self.html.index('window.prometheusCollapse = function()')])
+        self.assertIn("'&seen=1'", self._fn('_pmServerTurnsPull'))
+        sub = self.html[self.html.index('async function synthChatSubmit()'):]
+        sub = sub[:sub.index('\n        }\n', 0) + 1] if '\n        }\n' in sub[:20000] else sub[:20000]
+        self.assertLess(sub.index('await _pmEnsureThread()'), sub.index("synthChatPushTurn('user', text)"))
 
 if __name__ == '__main__':
     unittest.main(verbosity=1)
