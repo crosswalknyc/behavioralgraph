@@ -1235,13 +1235,33 @@ def dt_panel_get(key, sid):
     if not sess:
         return jsonify({'success': False, 'error': 'session not found'}), 404
     _attach_portraits(payload, key, sess)
+    dirty = False
     try:   # an in-flight question whose job stalled is picked back up once, or marked failed with a plain line (never 'researching' forever)
         from migration import digital_twin_room_jobs as RJ
         if RJ.sweep_session(_s3(), key, sess):
-            DT.save_twin(_s3(), key, payload)
+            dirty = True
     except Exception:
         traceback.print_exc()
-    return _nocache(jsonify({'success': True, 'session': sess}))
+    try:   # content left 'processing' after its thread died reads as failed with plain copy
+        if _assets_module().sweep_assets(sess):
+            dirty = True
+    except Exception:
+        traceback.print_exc()
+    if dirty:
+        DT.save_twin(_s3(), key, payload)
+    return _nocache(jsonify({'success': True, 'session': _panel_public(sess)}))
+
+
+def _panel_public(sess):
+    """The room for the page: the content without its storage keys."""
+    if not isinstance(sess, dict) or not sess.get('assets'):
+        return sess
+    try:
+        out = dict(sess)
+        out['assets'] = _assets_module().public_assets(sess)
+        return out
+    except Exception:
+        return sess
 
 
 @bp.route(f'{PREFIX}/<path:key>/panel/<sid>', methods=['PATCH'])
@@ -1362,6 +1382,149 @@ def dt_panel_upgrade(key, sid):
         return funds
     DT.save_twin(_s3(), key, payload)
     return _nocache(jsonify({'success': True, 'session': sess, **PR.public_fields(sess, plan)}))
+
+
+# ---- content in the room (Jenna 2026-11-05: "upload content into the focus group (a video, image, mp3) and it should assess it
+# for you the same way the pilot assesses video ... then ask questions about the content as an a/b testing kind of thing").
+# One file at a time (multipart ``file``, or ``url`` to a hosted file), a label ('A', 'B' or the user's name for it); the room
+# stores it, takes it in on a background thread (a video's frames on the read worker when ffmpeg is not here), reacts to it and
+# lands the read as a question-like record. The read counts toward the group's question cap as one question, so the cap gate
+# runs before the file is taken. Nothing else is charged: content is included in the group.
+def _assets_module():
+    from migration import digital_twin_assets as A
+    return A
+
+
+@bp.route(f'{PREFIX}/<path:key>/panel/<sid>/assets', methods=['GET'])
+def dt_panel_assets_list(key, sid):
+    user, err = _gate()
+    if err:
+        return err
+    payload, err = _twin_or_404(user, key)
+    if err:
+        return err
+    sess = _session(payload, sid)
+    if not sess:
+        return jsonify({'success': False, 'error': 'session not found'}), 404
+    A = _assets_module()
+    if A.sweep_assets(sess):
+        DT.save_twin(_s3(), key, payload)
+    return _nocache(jsonify({'success': True, 'assets': A.public_assets(sess), 'session_id': sid}))
+
+
+@bp.route(f'{PREFIX}/<path:key>/panel/<sid>/assets', methods=['POST'])
+def dt_panel_assets_add(key, sid):
+    user, err = _gate()
+    if err:
+        return err
+    payload, err = _twin_or_404(user, key)
+    if err:
+        return err
+    sess = _session(payload, sid)
+    if not sess:
+        return jsonify({'success': False, 'error': 'session not found'}), 404
+    A = _assets_module()
+    body = request.get_json(silent=True) or {}
+    label = ' '.join(str(request.form.get('label') or body.get('label') or '').split())[:A.MAX_LABEL]
+    url = str(request.form.get('url') or body.get('url') or '').strip()
+    f = request.files.get('file') or request.files.get('asset') or request.files.get('content')
+    if (f is None or not getattr(f, 'filename', '')) and not url:
+        return jsonify({'success': False, 'error': 'Attach a video, an image or an audio file, or paste a direct link to one.'}), 400
+    if f is not None and getattr(f, 'filename', '') and not A.accept(f.filename, getattr(f, 'mimetype', '') or ''):
+        return jsonify({'success': False, 'error': 'Use a video (mp4, mov, webm), an image (png, jpg, webp) or audio (mp3, m4a, wav).'}), 400
+    if sess.get('created_by') and str(sess.get('created_by')) != _uname(user) and not DT.is_admin(user):
+        return jsonify({'success': False, 'error': 'Only the person who opened this room can add content to it.'}), 403
+    inflight = [q for q in (sess.get('questions') or []) if str(q.get('stage') or '') in ('researching', 'the room is thinking', 'moderator is reading', 'picking it back up') and not q.get('finished_at')]
+    if inflight:
+        return jsonify({'success': False, 'error': 'The room is still working on the last question. Add the content when it lands.'}), 409
+    # the read is one question on the cap (the group if never charged, then the tier cap and the upgrade offer)
+    funds = _question_gate(user, payload, sess, {**body, **{k: request.form.get(k) for k in ('accept_upgrade', 'tier') if request.form.get(k) is not None}}, kind='panel')
+    if funds is not None:
+        DT.save_twin(_s3(), key, payload)
+        return funds
+    s3 = _s3()
+    if f is not None and getattr(f, 'filename', ''):
+        raw = f.read()
+        asset, aerr = A.store_upload(s3, sess, twin_key=key, raw=raw, filename=f.filename, content_type=getattr(f, 'mimetype', '') or '', label=label, added_by=_uname(user))
+    else:
+        asset, aerr = A.store_url(s3, sess, twin_key=key, url=url, label=label, added_by=_uname(user))
+    if asset is None:
+        return jsonify({'success': False, 'error': aerr or A.FAILED_LINE}), 400
+    sess['updated_at'] = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
+    DT.save_twin(s3, key, payload)          # the record is on the room before the thread starts
+    try:
+        where = A.start_processing(s3, key, sid, asset, username=_uname(user), usage_extras=_usage_extras(user))
+    except Exception:
+        traceback.print_exc()
+        where = {'where': 'none', 'job_id': None}
+    if asset.get('job_id') or asset.get('stage'):
+        DT.save_twin(s3, key, payload)
+    return _nocache(jsonify({'success': True, 'asset': A.public_asset(asset), 'assets': A.public_assets(sess), 'session_id': sid, 'processing': where.get('where'),
+                             'questions_asked': PR.questions_asked(sess), 'question_cap': PR.question_cap(sess, _plan(user)), 'session': _panel_public(sess)}))
+
+
+@bp.route(f'{PREFIX}/<path:key>/panel/<sid>/assets/<aid>/image', methods=['GET'])
+def dt_panel_asset_image(key, sid, aid):
+    """The thumbnail (``n=0``) or a page frame (``n=1..``) of a piece of
+    content, for the strip and the asset read."""
+    user, err = _gate()
+    if err:
+        return err
+    payload, err = _twin_or_404(user, key)
+    if err:
+        return err
+    sess = _session(payload, sid)
+    if not sess:
+        return jsonify({'success': False, 'error': 'session not found'}), 404
+    A = _assets_module()
+    asset = A.asset_by_id(sess, aid)
+    if not asset:
+        return jsonify({'success': False, 'error': 'content not found'}), 404
+    try:
+        n = int(request.args.get('n') or 0)
+    except (TypeError, ValueError):
+        n = 0
+    raw = A.image_bytes(_s3(), asset, n)
+    if not raw:
+        return jsonify({'success': False, 'error': 'no image for this one'}), 404
+    from flask import Response
+    resp = Response(raw, mimetype='image/jpeg')
+    resp.headers['Cache-Control'] = 'private, max-age=3600'
+    return resp
+
+
+@bp.route(f'{PREFIX}/<path:key>/panel/<sid>/assets/<aid>', methods=['DELETE'])
+@bp.route(f'{PREFIX}/<path:key>/panel/<sid>/assets/<aid>/delete', methods=['POST'])
+def dt_panel_asset_delete(key, sid, aid):
+    """Take a piece of content out of the room. Its read stays on the
+    record as a question the room answered; later questions no longer
+    carry it."""
+    user, err = _gate()
+    if err:
+        return err
+    payload, err = _twin_or_404(user, key)
+    if err:
+        return err
+    sess = _session(payload, sid)
+    if not sess:
+        return jsonify({'success': False, 'error': 'session not found'}), 404
+    if sess.get('created_by') and str(sess.get('created_by')) != _uname(user) and not DT.is_admin(user):
+        return jsonify({'success': False, 'error': 'Only the person who opened this room can remove content from it.'}), 403
+    A = _assets_module()
+    asset = A.asset_by_id(sess, aid)
+    if not asset:
+        return jsonify({'success': False, 'error': 'content not found'}), 404
+    sess['assets'] = [a for a in (sess.get('assets') or []) if not (isinstance(a, dict) and str(a.get('id')) == str(aid))]
+    s3 = _s3()
+    for k in [asset.get('s3_key'), asset.get('thumb_key')] + list(asset.get('frame_keys') or []):
+        if k and s3 is not None:
+            try:
+                s3.delete_object(Bucket=DT.S3_BUCKET, Key=k)
+            except Exception:
+                pass
+    sess['updated_at'] = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
+    DT.save_twin(s3, key, payload)
+    return _nocache(jsonify({'success': True, 'assets': A.public_assets(sess), 'session': _panel_public(sess)}))
 
 
 @bp.route(f'{PREFIX}/<path:key>/panel/<sid>', methods=['DELETE'])
