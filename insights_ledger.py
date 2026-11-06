@@ -1245,6 +1245,17 @@ ROW_LINES_PER_ENTRY = 48
 BLOCK_LINES_MAX = 120
 
 
+def _pool_noun(entry):
+    """The noun for a stored entry's pool counts, from the one helper
+    (prometheus.methodology.pool_noun) on the entry's family and words;
+    'people' when the helper is unavailable."""
+    try:
+        from prometheus import methodology as _meth
+        return _meth.pool_noun_for(entry, question=str((entry or {}).get('q') or (entry or {}).get('question') or ''))
+    except Exception:
+        return 'people'
+
+
 def render_block(entries, limit=12):
     """PUBLISHED MEASUREMENTS body for the prompt builders: one line
     per stored metric. Delivered-deck anchor entries render first
@@ -1277,8 +1288,12 @@ def render_block(entries, limit=12):
         # plain share rows after; the block stays bounded.
         with_b = [r for r in brows if isinstance(r.get('buckets'), list) and r.get('buckets')]
         plain = [r for r in brows if r not in with_b]
+        # the pool noun follows the entry's family (2026-11-06), so a
+        # stored toy shopping table reads back as buyers, never viewers
+        noun = _pool_noun(e) if with_b else ''
         for r in with_b[:ROW_LINES_PER_ENTRY]:
-            pool = f" (pool {int(r['pool']):,})" if isinstance(r.get('pool'), (int, float)) and r.get('pool') else ''
+            pool = (f" (pool {int(r['pool']):,} {noun})".replace(' )', ')')
+                    if isinstance(r.get('pool'), (int, float)) and r.get('pool') else '')
             cells = ' | '.join(
                 f"{b.get('label')} {float(b.get('share_pct') or 0):.1f}%"
                 + (f" ({int(b['count']):,})" if isinstance(b.get('count'), (int, float)) else '')

@@ -15099,7 +15099,8 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
             _fe = {'subject': res.get('subject'), 'cohort': res.get('cohort'),
                    'question': text, 'metrics': res.get('metrics'),
                    'breakdown': res.get('breakdown'), 'ws': res.get('window_start'),
-                   'we': res.get('window_end'), 'wl': res.get('window_label')}
+                   'we': res.get('window_end'), 'wl': res.get('window_label'),
+                   'family': res.get('metric_family')}   # the file's pool noun and note follow the family (2026-11-06)
             _fn, _fcsv = pma.build_generated_csv(_fe)
             _frng = ''
             if _fe.get('ws') and _fe.get('we'):
@@ -15258,7 +15259,8 @@ def _pm_finish_matrix_read(res, *, text, base, pm_user, followups=None, verify=N
     try:
         _fe = {'subject': res.get('subject'), 'cohort': res.get('cohort'), 'question': text,
                'metrics': res.get('metrics'), 'breakdown': res.get('breakdown'),
-               'ws': res.get('window_start'), 'we': res.get('window_end'), 'wl': res.get('window_label')}
+               'ws': res.get('window_start'), 'we': res.get('window_end'), 'wl': res.get('window_label'),
+               'family': fam}   # the file's pool noun and note follow the family (2026-11-06)
         _file_payload = _pm_answer_file_payload(_fe, auto_save=bool(_PM_FILE_ASK_RE.search(str(text or ''))),
                                                 username=pm_user, question=text)
         if _file_payload and 'Email me this file' not in followups:

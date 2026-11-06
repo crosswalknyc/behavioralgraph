@@ -11715,6 +11715,13 @@ the 79.4M projected base; every absolute count is the panel n times 32.99.
 """.strip()
 
 
+# The reasoning client's missing-credentials line (2026-11-06). One
+# sentence, no product or client names, the same everywhere it is
+# raised or reported.
+_REASONING_CREDENTIALS_MESSAGE = ('Reasoning credentials are not configured '
+                                  'in this process.')
+
+
 def _run_nflx_claude_agent(*, system_prompt, user_prompt, max_tokens=8192,
                            temperature=0.4, model=None,
                            salvage_arrays=False, usage_tag=None,
@@ -11741,10 +11748,10 @@ def _run_nflx_claude_agent(*, system_prompt, user_prompt, max_tokens=8192,
                 'error': 'Reasoning service not available: {0}'.format(exc)}
 
     if not is_claude_reasoning_enabled():
+        # One plain line, no product or client names (2026-11-06; the
+        # earlier wording surfaced in a chatbot error alert).
         return {'success': False, 'status': 503,
-                'error': 'Reasoning service is not enabled on this server. '
-                         'Configure the reasoning credentials '
-                         'to activate the Netflix ad-sales agents.'}
+                'error': _REASONING_CREDENTIALS_MESSAGE}
 
     chosen_model = (model
                     or os.environ.get('CLAUDE_REASONING_MODEL')
@@ -51313,6 +51320,53 @@ _CHATBOT_ERROR_EMAIL_COOLDOWN_S = 900  # per route+signature, 15 minutes
 _CHATBOT_ERROR_STAMP_FILE = '/tmp/chatbot_error_email_stamps.json'
 _chatbot_error_email_stamps = {}
 _chatbot_error_email_lock = threading.Lock()
+# Tests read the composed alert here instead of SES (a list to append
+# to); None in production. Nothing is sent while it is set.
+_CHATBOT_ERROR_EMAIL_CAPTURE = None
+
+
+def _chatbot_error_origin(user_email=None):
+    """Where the failing request came from, so the alert says at a
+    glance whether a user was affected (2026-11-06): 'dashboard
+    session' for a logged-in web session, 'partner API' for a key on
+    the API door, 'web request without a session' for a web request
+    nobody is logged into, and 'operator process' when there is no
+    web request at all (the read worker, a script, a shell), naming the
+    process and the user a background job ran for. Never raises."""
+    try:
+        from flask import g as _g, has_request_context as _hrc
+        in_request = bool(_hrc())
+    except Exception:
+        _g, in_request = None, False
+    try:
+        if in_request:
+            try:
+                if (request.headers.get('X-Crosswalk-API-Key')
+                        or str(request.path or '').startswith('/api/v1/')
+                        or getattr(_g, '_pm_api_key_owner', '')):
+                    return 'partner API'
+            except Exception:
+                pass
+            try:
+                if session.get('username') or session.get('email'):
+                    return 'dashboard session'
+            except Exception:
+                pass
+            return 'web request without a session'
+        if os.environ.get('PM_READ_WORKER'):
+            proc = 'read worker'
+        else:
+            proc = os.path.basename(str((sys.argv or [''])[0] or '')).strip() or 'python'
+            if proc in ('gunicorn', 'flask', 'app.py', 'wsgi.py'):
+                proc = 'background job in the web process'
+        origin = (proc if proc.startswith('background job')
+                  else f"operator process ({proc})")
+        who = str(user_email or '').strip()
+        if who and not who.startswith('canary:'):
+            origin += f", a job for {who}"
+        return origin
+    except Exception:
+        return 'unknown'
 
 
 def _chatbot_calm_payload(**extra):
@@ -51378,7 +51432,9 @@ def _chatbot_error_email(route, err, user_email=None, payload=None,
     """
     try:
         from prometheus.mail_guard import sending_allowed, suppressed_note
-        if not sending_allowed():   # a test or replay process never reaches SES (2026-10-16)
+        # a test or replay process never reaches SES (2026-10-16); a test
+        # that set the capture list still gets the composed mail
+        if not sending_allowed() and _CHATBOT_ERROR_EMAIL_CAPTURE is None:
             print(suppressed_note('error alert', route))
             return
     except Exception:
@@ -51557,8 +51613,13 @@ def _chatbot_error_email(route, err, user_email=None, payload=None,
                 + (f"Earlier replies the user did not accept:\n{_prior_txt}" if _prior_txt else '')
                 + "Suggested path: " + (_path or ("the read on the bound subject (reasoned read with bind_subject), "
                                                   "or the one-question clarify when no subject bound.")) + "\n\n")
+        # Where the request came from (2026-11-06): a sessionless alert
+        # says 'operator process' or 'partner API' so Jenna can tell at
+        # a glance whether a user was affected.
+        _origin = _chatbot_error_origin(user_email)
         body_text = (
             f"User: {user_email or '(unknown)'}\n"
+            f"Origin: {_origin}\n"
             f"Question: {query_text}\n"
             f"\n"
             f"{promise_block}"
@@ -51570,6 +51631,10 @@ def _chatbot_error_email(route, err, user_email=None, payload=None,
             f"Request payload (truncated):\n{payload_str}\n\n"
             f"Traceback:\n{str(tb)[:12000]}\n"
         )
+        if _CHATBOT_ERROR_EMAIL_CAPTURE is not None:
+            _CHATBOT_ERROR_EMAIL_CAPTURE.append({'subject': subject_line, 'body': body_text,
+                                                 'to': list(_CHATBOT_ERROR_EMAIL_TO)})
+            return True
 
         def _send():
             try:

@@ -11,6 +11,14 @@ appended at the reply formatter, so a viewership read never ships
 without it, whatever the model wrote. Vocabulary follows the standing
 rules: no vendor names (the citation scrub would drop the sentence),
 "panel" never appears (the scrub rewrites it), counts are persons.
+
+The block fits the read's family (2026-11-06): the family the lane
+stamps on the read (metric_family, the ledger family) picks the lines.
+Viewing reads keep the view, threshold, carriage and session lines;
+purchase reads carry the order definition; engagement reads the
+engagement definition; sizing reads the people, window and base lines.
+`pool_noun` is the one helper for the noun on a pool count (viewers,
+people, buyers, shoppers, listeners, readers, players, subscribers).
 """
 from __future__ import annotations
 
@@ -154,9 +162,10 @@ MODEL_RULES = (
     '- Name the carriage paths the figure includes when they differ '
     '(direct app and site; channel storefronts such as Prime Video '
     'Channels). Never claim a path the measurement cannot see.\n'
-    '- The server appends the standard counting block (window, base, '
-    'unit, threshold, carriage, session rules); do not restate it, and '
-    'never name a ratings vendor.\n'
+    '- The server appends the counting block for the read\'s family '
+    '(window, base, and the view, order, engagement or people definition; '
+    'threshold, carriage and session rules on a viewing read); do not '
+    'restate it, and never name a ratings vendor.\n'
     '- Most Purchased Brands and the rows that mirror it (CPG, Apparel/'
     'Footwear, Beauty/Wellness, Home/Outdoor, Accessories, Pets, Toys, '
     'Technology Brand, Where They Shop) are confirmed purchases: an order '
@@ -214,9 +223,240 @@ def is_viewership_read(text='', res=None, question=''):
     return carries_view_figure(text) or carries_view_figure(question)
 
 
+# ---------------------------------------------------------------------------
+# The counting family (2026-11-06). The block under a read describes what
+# the read counted, and the family the lane stamps on the read decides
+# which lines it carries. A holiday toy shopping read (admin, thread
+# 2b1e503248, job 4706e7014b72) shipped with the view, threshold,
+# carriage and session lines; the only viewing word in it was the pool
+# noun. Viewing and streaming reads keep the view, threshold, carriage
+# and session lines; shopping and purchase reads carry the order
+# definition; search and social engagement reads carry the engagement
+# definition; sizing and audience reads carry the people, window and
+# base lines only. The words decide only when nothing is stamped, and
+# then the viewing set needs a viewing figure in the read or the ask.
+# ---------------------------------------------------------------------------
+VIEWING, PURCHASE, ENGAGEMENT, SIZING = 'viewing', 'purchase', 'engagement', 'sizing'
+FAMILIES = (VIEWING, PURCHASE, ENGAGEMENT, SIZING)
+
+# the lane's metric_family vocabulary and the ledger's canonical families,
+# plus the other stamps a read can carry; 'strategy' stays unstamped so the
+# words decide, as before
+_FAMILY_MAP = (
+    (VIEWING, ('viewing', 'viewership', 'consumption', 'journey', 'streaming',
+               'view', 'watch', 'stream', 'play', 'listen', 'tune', 'binge')),
+    (PURCHASE, ('purchase', 'purchases', 'shopping', 'shop', 'buy', 'bought',
+                'order', 'sale', 'ecommerce', 'e-commerce', 'transaction',
+                'rent', 'revenue', 'spend', 'checkout')),
+    (ENGAGEMENT, ('engagement', 'engag', 'search', 'social', 'session',
+                  'visit', 'follow', 'quer', 'demand', 'app activity')),
+    (SIZING, ('sizing', 'size', 'audience', 'reach', 'fans', 'cohort',
+              'profile', 'subscri', 'signup', 'sign up', 'sign-up', 'member',
+              'churn', 'dimension split', 'brand_partnership', 'delivered',
+              'twin')),
+)
+
+ORDER_HEADER = 'What we count as an order:'
+ORDER_DEFINITION = (
+    "An order is one person with at least one checkout, confirmed by an order confirmation, "
+    "that named the brand or category inside the window, counted once however many orders, "
+    "devices or sessions they placed. Browsing, carting or visiting a store or a brand site "
+    "without a checkout is not an order. Marketplaces and brand sites both count where the "
+    "brand is attributable. Counts are US buyers (persons), not accounts or transactions, so "
+    "they are not comparable to a retailer's order totals or unit sales.")
+ENGAGEMENT_HEADER = 'What we count as engagement:'
+ENGAGEMENT_DEFINITION = (
+    "An engaged person is one person with at least one search or social touch on the subject "
+    "inside the window: a search naming it, a visit to its own site or app, or a social view, "
+    "follow, like, comment, share or click on it, counted once however many touches, devices "
+    "or sessions they used. Counts are US people (persons), not accounts, impressions or "
+    "sessions, so they are not comparable to follower counts, impression totals or search "
+    "volume.")
+PEOPLE = ("Counts are US people (persons), each counted once inside the window however many "
+          "devices or sessions they used; they are not accounts, households or impressions.")
+ORDER_NOTE_SHORT = ("Orders here are US buyers (persons) with at least one checkout naming the brand or "
+                    "category in the window, counted once per person; browsing without a checkout is not "
+                    "an order.")
+ENGAGEMENT_NOTE_SHORT = ("Engagement here is US people (persons) with at least one search or social touch on "
+                         "the subject in the window, counted once per person; not impressions, sessions or "
+                         "follower counts.")
+
+_SESSIONS_RX = re.compile(r"\bsessions?\b", re.I)
+
+
+def canon_counting_family(family):
+    """One of FAMILIES for a lane or ledger family label, '' when the
+    label is empty or names no counting family ('strategy')."""
+    f = str(family or '').strip().lower()
+    if not f:
+        return ''
+    if f in FAMILIES:
+        return f
+    for fam, keys in _FAMILY_MAP:
+        if f in keys:
+            return fam
+    for fam, keys in _FAMILY_MAP:
+        if any(k in f for k in keys):
+            return fam
+    return ''
+
+
+def stamped_family(res):
+    """The counting family the lane stamped on the read (metric_family,
+    the ledger family), '' when none is stamped."""
+    res = res if isinstance(res, dict) else {}
+    for key in ('counting_family', 'metric_family', 'family', '_family'):
+        fam = canon_counting_family(res.get(key))
+        if fam:
+            return fam
+    return ''
+
+
+def read_family(res=None, text='', question=''):
+    """The counting family of a read: what the lane stamped, else the
+    words. Unstamped, the viewing set needs a viewing figure in the
+    reply or the ask (a title, a platform, a count beside a viewing
+    word); a purchase figure reads purchase; everything else sizes
+    people."""
+    fam = stamped_family(res)
+    if fam:
+        return fam
+    if is_viewership_read(text, res, question):
+        return VIEWING
+    if carries_purchase_figure(text) or mentions_purchase(question):
+        return PURCHASE
+    return SIZING
+
+
+def counts_sessions(text=''):
+    """True when the read counts sessions (the Sessions line rides)."""
+    return bool(_SESSIONS_RX.search(str(text or '')))
+
+
+# The noun for a pool count (2026-11-06): viewers for viewing, people for
+# sizing and audiences, buyers or shoppers for purchase reads (buyers when
+# the pool is people who ordered, shoppers when it is people who browsed),
+# listeners for audio, readers for text, players for games, subscribers
+# where the read is subscriptions. One helper for the reply formatter, the
+# ledger block, the chart and the CSV header.
+# the medium words are the ones that name the act or the surface, never
+# a bare 'book', 'song' or 'game' (a film adapted from a book is watched,
+# 'the game' on a sports read is watched, a music study can count film
+# viewers); a text or print word only moves a sizing or engagement pool
+_AUDIO_RX = re.compile(
+    r"\b(?:podcasts?|podcasters?|listen(?:ed|ers?|ing|s)?|listenership|audio|radio|"
+    r"spotify|apple music|amazon music|pandora|sirius ?xm|iheart(?:radio)?|audible|"
+    r"audiobooks?|streaming music)\b", re.I)
+_TEXT_RX = re.compile(
+    r"\b(?:readers?|readership|e-?books?|kindle|booktok|webtoons?|manga|graphic novels?)\b", re.I)
+_TEXT_SOFT_RX = re.compile(
+    r"\b(?:books?|novels?|articles?|newsletters?|substack|blogs?|comics?|magazines?)\b", re.I)
+_GAMES_RX = re.compile(
+    r"\b(?:video ?games?|mobile games?|gamers?|players?|gameplay|playthroughs?|xbox|playstation|"
+    r"nintendo|roblox|fortnite|minecraft|esports|consoles?)\b", re.I)
+_UNIT_NOUNS = ('viewers', 'listeners', 'readers', 'players', 'subscribers', 'buyers', 'shoppers')
+_SUBSCRIPTION_RX = re.compile(
+    r"\b(?:subscribers?|subscriptions?|subs|sign-?ups?|signed up|churn(?:ed|ers?)?|cancel(?:led|lations?|s)?)\b", re.I)
+_BROWSED_RX = re.compile(
+    r"\b(?:brows(?:e|ed|es|ing|ers?)|shopped around|window[- ]?shopp\w*|consider(?:ed|ing|ation)|visit(?:ed|ors?|s)?|"
+    r"carted|cart abandon\w*|without (?:a )?(?:checkout|purchase|buying|an order))\b", re.I)
+_ORDERED_RX = re.compile(
+    r"\b(?:order(?:ed|s)?|bought|purchas(?:e|ed|es|ers?|ing)|buyers?|checkouts?|checked out|paid|"
+    r"transactions?|spent|spend)\b", re.I)
+_PURCHASE_WORDS_RX = re.compile(r"\b(?:bought|buy|buys|buyers?|purchas\w*|shop(?:s|ped|pers?|ping)?|orders?|ordered|checkout)\b", re.I)
+# 'without a checkout' names no order; the phrase comes off before the
+# ordered words are looked for
+_WITHOUT_RX = re.compile(r"\b(?:without|no|never|not)\s+(?:a |an |any )?(?:checkout|purchas\w*|order\w*|buying|bought|paid|transaction\w*)", re.I)
+
+
+def _ordered_or_browsed(ctx):
+    """'buyers' when the words say the pool ordered, 'shoppers' when they
+    say it only browsed, 'buyers' when they say neither (a purchase
+    family counts confirmed orders)."""
+    if _ORDERED_RX.search(_WITHOUT_RX.sub(' ', ctx)):
+        return 'buyers'
+    return 'shoppers' if _BROWSED_RX.search(ctx) else 'buyers'
+
+
+def pool_noun(family=None, context=''):
+    """The noun for a pool count in the read's family. `family` is the
+    lane or ledger family label (or one of FAMILIES); `context` is the
+    words around the pool (question, dimension, share basis, labels,
+    subject) that pick the medium and, for a purchase read, whether the
+    pool ordered or browsed. Never raises."""
+    try:
+        raw = str(family or '').strip().lower()
+        ctx = str(context or '')
+        fam = canon_counting_family(raw)
+        if raw and ('subscri' in raw or 'signup' in raw or 'sign up' in raw or 'sign-up' in raw or 'churn' in raw):
+            return 'subscribers'
+        if fam == PURCHASE:
+            return _ordered_or_browsed(ctx)
+        if _AUDIO_RX.search(ctx):
+            return 'listeners'
+        if _TEXT_RX.search(ctx) or (fam != VIEWING and _TEXT_SOFT_RX.search(ctx)):
+            return 'readers'
+        if _GAMES_RX.search(ctx):
+            return 'players'
+        if fam == VIEWING:
+            return 'viewers'
+        if fam in (SIZING, ENGAGEMENT):
+            if fam == SIZING and _SUBSCRIPTION_RX.search(ctx) and not VIEWERSHIP_RX.search(ctx):
+                return 'subscribers'
+            return 'people'
+        # nothing stamped: the words
+        if _PURCHASE_WORDS_RX.search(ctx):
+            return _ordered_or_browsed(ctx)
+        if VIEWERSHIP_RX.search(ctx):
+            return 'viewers'
+        return 'people'
+    except Exception:
+        return 'people'
+
+
+def pool_context(res):
+    """The words around a read's pools, for pool_noun: question, subject,
+    cohort, universe, headline, dimension, share basis, metric labels
+    and units."""
+    res = res if isinstance(res, dict) else {}
+    bd = res.get('breakdown') if isinstance(res.get('breakdown'), dict) else {}
+    bits = [res.get('question'), res.get('_question'), res.get('subject'), res.get('cohort'),
+            res.get('universe'), res.get('headline'), bd.get('dimension'), bd.get('share_basis')]
+    for m in (res.get('metrics') or [])[:12]:
+        if isinstance(m, dict):
+            bits.extend([m.get('label'), m.get('unit')])
+    return ' '.join(str(b) for b in bits if b)
+
+
+def pool_noun_for(res, question=''):
+    """pool_noun for a read dict (the formatter, the CSV, the chart). A
+    count metric whose unit already names the people (viewers,
+    listeners, readers, players, subscribers) is the lane's own
+    statement of what it counted and wins over the words; a purchase
+    read keeps buyers / shoppers."""
+    res = res if isinstance(res, dict) else {}
+    fam = ''
+    for key in ('counting_family', 'metric_family', 'family', '_family'):
+        if res.get(key):
+            fam = str(res.get(key))
+            break
+    if canon_counting_family(fam) != PURCHASE:
+        for m in (res.get('metrics') or [])[:12]:
+            unit = str((m or {}).get('unit') or '').strip().lower() if isinstance(m, dict) else ''
+            if unit in _UNIT_NOUNS:
+                return unit
+    return pool_noun(fam, ' '.join([str(question or ''), pool_context(res)]))
+
+
 def block(window_start=None, window_end=None, window_label='',
-          base_label='', base_people=None, text=''):
-    """The counting block as lines (header first)."""
+          base_label='', base_people=None, text='', family=None, noun=''):
+    """The counting block as lines (header first). `family` is one of
+    FAMILIES (or a lane family label); callers that name none get the
+    viewing block, as before. `noun` is the Base line's people noun
+    (pool_noun); unset, viewing reads say viewers and the other
+    families take the noun their words pick."""
+    fam = canon_counting_family(family) or VIEWING
+    noun = str(noun or '').strip() or ('viewers' if fam == VIEWING else pool_noun(fam, text))
     win = str(window_label or '').strip()
     if not win and window_start and window_end:
         win = f"{_fmt_date(window_start)} to {_fmt_date(window_end)}"
@@ -245,18 +485,47 @@ def block(window_start=None, window_end=None, window_label='',
     if base:
         who = base if _NAMES_PEOPLE_RX.search(base) else f"the {base} audience"
         if people:
-            lines.append(f"- Base: {who} ({people:,} US viewers), "
+            lines.append(f"- Base: {who} ({people:,} US {noun}), "
                          f"{BASE_SAMPLE}.")
         else:
             lines.append(f"- Base: {who}, {BASE_SAMPLE}.")
     else:
         lines.append(f"- Base: {BASE_SAMPLE[0].upper() + BASE_SAMPLE[1:]}.")
-    lines.append(f"- {VIEW_HEADER} {VIEW_DEFINITION}")
-    if THRESHOLD_RX.search(str(text or '')):
-        lines.append(f"- Threshold: {THRESHOLD}")
-    lines.append(f"- {CARRIAGE}")
-    lines.append(f"- Sessions: {SESSION}")
+    # the family's own definition; the shared Sessions line rides where
+    # sessions are counted (always on a viewing read)
+    if fam == VIEWING:
+        lines.append(f"- {VIEW_HEADER} {VIEW_DEFINITION}")
+        if THRESHOLD_RX.search(str(text or '')):
+            lines.append(f"- Threshold: {THRESHOLD}")
+        lines.append(f"- {CARRIAGE}")
+        lines.append(f"- Sessions: {SESSION}")
+        return lines
+    if fam == PURCHASE:
+        lines.append(f"- {ORDER_HEADER} {ORDER_DEFINITION}")
+    elif fam == ENGAGEMENT:
+        lines.append(f"- {ENGAGEMENT_HEADER} {ENGAGEMENT_DEFINITION}")
+    else:
+        lines.append(f"- People: {PEOPLE}")
+    if counts_sessions(text):
+        lines.append(f"- Sessions: {SESSION}")
     return lines
+
+
+def carries_family_definition(text, family=None):
+    """True when the text already carries the family's own definition
+    line (the view definition for viewing or an unnamed family)."""
+    t = str(text or '')
+    fam = canon_counting_family(family) or VIEWING
+    if fam == PURCHASE:
+        return ORDER_HEADER in t
+    if fam == ENGAGEMENT:
+        return ENGAGEMENT_HEADER in t
+    if fam == SIZING:
+        return f"- People: {PEOPLE}" in t
+    return carries_definition(t)
+
+
+_ANY_FIGURE_RX = re.compile(r"\d+(?:\.\d+)?\s?%|\d{1,3}(?:,\d{3})+|\d{4,}")
 
 
 # Period totals next to their quarters (2026-10-09, item 6; Bria's
@@ -367,9 +636,19 @@ def ensure(reply, res=None, question='', base_label='', base_people=None,
             except Exception:
                 lines = []
             return (text.rstrip() + '\n\n' + '\n'.join(lines)) if lines else reply
-        if not is_viewership_read(text, res, question):
+        # The family the lane stamped picks the block (2026-11-06). A
+        # stamped read with figures always carries its family's block;
+        # an unstamped reply keeps the old trigger: the viewing block
+        # when it carries a viewing figure, else only the purchase line
+        # when it carries a purchase figure.
+        fam = stamped_family(res)
+        if not fam:
+            if not is_viewership_read(text, res, question):
+                return ensure_purchase_note(reply)
+            fam = VIEWING
+        elif fam != VIEWING and not _ANY_FIGURE_RX.search(text):
             return ensure_purchase_note(reply)
-        if carries_definition(text):
+        if carries_definition(text) or carries_family_definition(text, fam):
             return ensure_purchase_note(reply)
         lines = block(window_start=res.get('window_start'),
                       window_end=res.get('window_end'),
@@ -377,7 +656,8 @@ def ensure(reply, res=None, question='', base_label='', base_people=None,
                       base_label=audience_label(res, base_label),
                       base_people=base_people if base_people is not None
                       else res.get('_base_people'),
-                      text=text)
+                      text=text, family=fam,
+                      noun=pool_noun_for(res, question))
         body = text.rstrip()
         if HEADER in body:
             # merge under the existing header

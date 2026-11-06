@@ -135,7 +135,8 @@ def _fmt_people(v):
     return f"{int(v)}"
 
 
-def render_distribution(rows, *, title, subtitle='', footer='', x_label='', y_label='Share of each pool'):
+def render_distribution(rows, *, title, subtitle='', footer='', x_label='', y_label='Share of each pool',
+                        pool_noun='viewers'):
     """Small multiples: one histogram per row (service), bars = bucket
     share of that row's pool, the mode in Orchid. PNG bytes."""
     import matplotlib
@@ -174,9 +175,9 @@ def render_distribution(rows, *, title, subtitle='', footer='', x_label='', y_la
         pool = ''
         m = re.search(r"pool\s+([\d,]+)", str(row.get('note') or ''), re.I)
         if m:
-            pool = f"{_fmt_people(m.group(1).replace(',', ''))} viewers"
+            pool = f"{_fmt_people(m.group(1).replace(',', ''))} {pool_noun}"
         elif row.get('pool'):
-            pool = f"{_fmt_people(row.get('pool'))} viewers"
+            pool = f"{_fmt_people(row.get('pool'))} {pool_noun}"
         head = str(row.get('label') or '')
         ax.text(0, 1.13, head, transform=ax.transAxes, fontsize=10.5, color=OFF_WHITE,
                 fontweight='bold', ha='left', va='bottom')
@@ -254,17 +255,29 @@ def chart_for_read(res, question='', force=False):
         window = str(res.get('window_label') or '').strip()
         if not window and res.get('window_start') and res.get('window_end'):
             window = f"{res['window_start']} to {res['window_end']}"
+        # the footnote and the pool noun follow the read's family
+        # (2026-11-06): an order note on a purchase read, never the view
+        # note because the cohort was named by what it watched
+        pool_noun = 'people'
         try:
             from prometheus import methodology as _meth
-            footer = _meth.VIEW_NOTE_SHORT if _meth.mentions_views(
-                ' '.join([question, str(bd.get('dimension') or ''), str(bd.get('share_basis') or '')])) else ''
+            fam = _meth.stamped_family(res)
+            pool_noun = _meth.pool_noun_for(res, question)
+            if fam == _meth.PURCHASE:
+                footer = _meth.ORDER_NOTE_SHORT
+            elif fam == _meth.ENGAGEMENT:
+                footer = _meth.ENGAGEMENT_NOTE_SHORT
+            else:
+                footer = _meth.VIEW_NOTE_SHORT if _meth.mentions_views(
+                    ' '.join([question, str(bd.get('dimension') or ''), str(bd.get('share_basis') or '')])) else ''
         except Exception:
             footer = ''
         dim = str(bd.get('dimension') or 'Breakdown').strip()
         if has_distribution(res):
             title = f"{subject}: {dim}" if subject else dim
             png = render_distribution(rows, title=title, subtitle=window, footer=footer,
-                                      x_label=str(bd.get('bucket_label') or ''), y_label='Share of each pool')
+                                      x_label=str(bd.get('bucket_label') or ''), y_label='Share of each pool',
+                                      pool_noun=pool_noun)
             kind = 'histogram'
         else:
             title = f"{subject}: {dim}" if subject else dim

@@ -6633,6 +6633,19 @@ def breakdown_header(bd, win):
     return head
 
 
+def pool_noun_for_read(res, question=''):
+    """The noun for a pool count in this read's family (one helper,
+    prometheus.methodology.pool_noun): viewers on a viewing read, buyers
+    or shoppers on a purchase read, people on a sizing or audience read,
+    listeners / readers / players by medium, subscribers where the read
+    is subscriptions. 'people' when the helper is unavailable."""
+    try:
+        from prometheus import methodology as _meth
+        return _meth.pool_noun_for(res, question)
+    except Exception:
+        return 'people'
+
+
 def format_generated_metrics_reply(res):
     """Render the coherence-checked measurement read as the plain-text
     Prometheus reply. When the read carries a breakdown, the ranked
@@ -6662,6 +6675,10 @@ def format_generated_metrics_reply(res):
             lines.append('')
         lines.append(breakdown_header(bd, win))
         all_rows = list(bd['rows'] or [])
+        # the pool noun follows the read's family (2026-11-06): viewers
+        # on a viewing read, buyers or shoppers on a purchase read,
+        # people on a sizing, listeners / readers / players by medium
+        pool_noun = pool_noun_for_read(res)
         # the chat stays readable: the top rows here, every row in the
         # file (never a silent cut; the line below says where the rest is)
         shown = all_rows if len(all_rows) <= CHAT_BREAKDOWN_ROWS else all_rows[:CHAT_BREAKDOWN_ROWS]
@@ -6673,7 +6690,7 @@ def format_generated_metrics_reply(res):
                 ln += f". {r['note']}"
             if isinstance(r.get('buckets'), list) and r['buckets']:
                 if r.get('pool'):
-                    ln += f". Pool {int(r['pool']):,} viewers"
+                    ln += f". Pool {int(r['pool']):,} {pool_noun}"
                 ln += '. ' + ' | '.join(
                     f"{b['label']}: {int(b['count']):,} ({b['share_pct']:.1f}%)"
                     + (' most common' if b.get('mode') else '')
@@ -6718,13 +6735,14 @@ def _csv_slug(s):
     return s.strip('_')
 
 
-def _bucket_rows_csv(w, rows, subject, cohort, dim, share_col_basis):
+def _bucket_rows_csv(w, rows, subject, cohort, dim, share_col_basis, pool_noun='people'):
     """Long-format export for distribution rows: one line per group x
     dimension x bucket, every row and every bucket (2026-11-04, the
     whole answer in one file). Columns: Group, Dimension, Bucket, Count,
-    Share within the group %, Group pool, Row share of total %."""
+    Share within the group %, Group pool (<noun>), Row share of total %.
+    The pool noun follows the read's family (2026-11-06)."""
     w.writerow(['Group', 'Dimension', 'Bucket', 'Count',
-                'Share within the group %', 'Group pool',
+                'Share within the group %', f"Group pool ({pool_noun})",
                 f"Row share of total % ({subject}{', ' + cohort if cohort else ''})"])
     for r in rows:
         label = scrub_user_text(str(r.get('label') or ''))
@@ -6777,7 +6795,8 @@ def build_generated_csv(entry):
         # and every bucket, long format, never the first 16
         dim = scrub_user_text(
             str(bd.get('dimension') or 'Category').strip()) or 'Category'
-        _bucket_rows_csv(w, rows, subject, cohort, dim, str(bd.get('share_basis') or ''))
+        _bucket_rows_csv(w, rows, subject, cohort, dim, str(bd.get('share_basis') or ''),
+                         pool_noun=pool_noun_for_read(entry, question=str(entry.get('question') or '')))
         name_bits = [subject, cohort, dim]
     elif rows:
         dim = scrub_user_text(
@@ -6838,13 +6857,25 @@ def build_generated_csv(entry):
         name_bits = [subject, cohort, entry.get('family') or 'read']
     stem = '_'.join(_csv_slug(b) for b in name_bits if b)[:80].strip('_')
     text_out = buf.getvalue()
-    try:   # views carry what a view means (Jenna 2026-10-08)
+    try:   # views carry what a view means (Jenna 2026-10-08); the note
+        # follows the read's family (2026-11-06): an order definition on a
+        # purchase read, the engagement definition on an engagement read,
+        # the view definition on a viewing read or an unstamped file that
+        # mentions views
         from prometheus import methodology as _meth
+        fam = _meth.stamped_family(entry)
         probe = ' '.join([str(entry.get('question') or ''), str(entry.get('reply') or ''),
                           str(entry.get('family') or ''), text_out])
-        if _meth.mentions_views(probe):
+        note = ''
+        if fam == _meth.PURCHASE:
+            note = _meth.ORDER_HEADER + ' ' + _meth.ORDER_DEFINITION
+        elif fam == _meth.ENGAGEMENT:
+            note = _meth.ENGAGEMENT_HEADER + ' ' + _meth.ENGAGEMENT_DEFINITION
+        elif _meth.mentions_views(probe):
+            note = _meth.VIEW_HEADER + ' ' + _meth.VIEW_DEFINITION
+        if note:
             w.writerow([])
-            w.writerow(['Note', _meth.VIEW_HEADER + ' ' + _meth.VIEW_DEFINITION])
+            w.writerow(['Note', note])
             text_out = buf.getvalue()
     except Exception as _fx:
         _faults.note('analysis', _fx)
