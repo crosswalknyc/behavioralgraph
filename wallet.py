@@ -504,14 +504,20 @@ MODULE_CATALOG = [
     ("panel_report",               "Custom Ask (first on a subject)",
      "pulls", 1, 100.0, "has_prometheus_access"),
     # 2026-10-21 (Jenna): each later custom ask on the same subject in
-    # the same thread is the follow-up price.
+    # the same thread was the $50 follow-up price. 2026-10-30 (Jenna):
+    # follow-ups are metered, not priced; the row stays so old ledgers
+    # resolve and the panel shows the metered note (default 0 = no flat
+    # price, matching DEFAULT_PRICING and prometheus/rate_card.py).
     ("panel_report_followup",      "Custom Ask (follow-up, same subject: metered)",
-     "pulls", 1, 50.0, "has_prometheus_access"),
+     "pulls", 0, 0.0, "has_prometheus_access"),
     # 2026-10-08 (Jenna): a viewership-over-time read (monthly viewers,
-    # hours watched, consumption by month) is 500 per year of window,
-    # charged in the seat's currency. Quantity = years.
+    # hours watched, consumption by month) was 500 per year of window.
+    # 2026-10-30 (Jenna): one flat 100 for the first viewership ask on a
+    # subject, metered follow-ups; the default here mirrors
+    # DEFAULT_PRICING so the billing panel's default badge and the rate
+    # card never disagree.
     ("viewership_read",            "Viewership Read (first ask on a subject)",
-     "pulls", 5, 500.0, "has_prometheus_access"),
+     "pulls", 1, 100.0, "has_prometheus_access"),
     # 2026-10-12 (Jenna): a delivered figure split by device / daypart /
     # geography / demographic is a derived read at the derived-cut
     # price, charged in the seat's currency.

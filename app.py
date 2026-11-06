@@ -2215,8 +2215,8 @@ CREDITS_CHATBOT_DECK = 0      # metered, not per-pull
 # $100/credit build rate. Admin-tunable via pricing settings
 # ('panel_report') and the billing panel's per-tool USD row.
 CREDITS_PANEL_REPORT = 1
-PANEL_REPORT_USD = 100.0   # Jenna 2026-10-21: the first custom ask on a subject is 100, then 50 per follow-up
-PANEL_REPORT_FOLLOWUP_USD = 50.0
+PANEL_REPORT_USD = 100.0   # Jenna 2026-10-21: the first custom ask on a subject is 100
+PANEL_REPORT_FOLLOWUP_USD = 0.0   # Jenna 2026-10-30: follow-ups on the same subject are metered, not priced (was 50)
 
 # Pricing settings S3 key
 PRICING_SETTINGS_KEY = 'system/pricing_settings.json'
